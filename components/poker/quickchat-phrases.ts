@@ -126,6 +126,20 @@ export const QUICKCHAT_PHRASES_BY_CATEGORY: Record<string, string[]> = {
     'Learning curves',
     'Poker wisdom',
   ],
+  'Blackjack': [
+    '21!',
+    'Blackjack!',
+    'Busted again...',
+    'Hit me!',
+    'Stand pat.',
+    'Double down!',
+    'Insurance? No thanks.',
+    'Split it!',
+    'Push...',
+    'Dealer bust!',
+    'Natural!',
+    'Five-card Charlie!',
+  ],
   'Leaving / Signing Off': [
     'See ya',
     'Later, losers',
@@ -139,6 +153,24 @@ export const QUICKCHAT_PHRASES_BY_CATEGORY: Record<string, string[]> = {
     'Until then',
   ],
 };
+
+/** Default QuickChat phrases for multiplayer blackjack — blackjack flavour mixed with general. */
+export const DEFAULT_BLACKJACK_QUICKCHAT_PHRASES: string[] = [
+  '21!',
+  'Blackjack!',
+  'Busted again...',
+  'Hit me!',
+  'Stand pat.',
+  'Double down!',
+  'Insurance? No thanks.',
+  'Nice hand',
+  'Good luck',
+  'Unlucky!',
+  'HAHA!',
+  'Good game!',
+  'Wow',
+  'Thanks',
+];
 
 /** Flat list of all phrases (for quick lookup / dedupe). */
 export const ALL_QUICKCHAT_PHRASES: string[] = Object.values(

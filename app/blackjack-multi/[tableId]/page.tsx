@@ -24,12 +24,13 @@ import BlackjackMultiRealTimeBetChart, {
 import AvatarView from '@/components/poker/avatar/AvatarView';
 import type { Emotion } from '@/components/poker/avatar/AvatarView';
 import type { AvatarConfig } from '@/lib/websocket-client';
-import { UserPlus, MessageCircle, Volume2, VolumeX, BarChart3, HelpCircle, History, Music, Play, Pause, SkipForward, Settings2, Mic, MicOff, ArrowLeft, Flame, Frown, LogOut, Smile, SmilePlus, Trophy, UserRound, Wallet, Zap } from 'lucide-react';
+import { UserPlus, MessageCircle, Volume2, VolumeX, BarChart3, HelpCircle, History, Music, Play, Pause, SkipForward, Settings2, Mic, MicOff, ArrowLeft, Flame, Frown, LogOut, Palette, Smile, SmilePlus, Trophy, UserRound, Wallet, Zap } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
 import { RadialMenuFloating, type RadialMenuItem } from '@/components/ui/radial-menu';
 import { useQuickChatPhrases } from '@/hooks/useQuickChatPhrases';
 import { EditQuickChatModal } from '@/components/poker/EditQuickChatModal';
+import { DEFAULT_BLACKJACK_QUICKCHAT_PHRASES } from '@/components/poker/quickchat-phrases';
 import { AnimatePresence, motion } from 'framer-motion';
 import { GameFAQ } from '@/components/shared/GameFAQ';
 import { BLACKJACK_ADDRESS, MORBIUS_TOKEN_ADDRESS } from '@/lib/contracts';
@@ -41,6 +42,8 @@ import { usePlayerStatsEnhanced } from '@/hooks/use-blackjack-stats';
 import { useBlackjackTables } from '@/hooks/use-blackjack-tables';
 import { IconButton } from '@/components/animate-ui/components/buttons/icon';
 import { toast } from 'sonner';
+import { BLACKJACK_FACTS } from '@/app/blackjack-multi/blackjack-facts';
+import { EncryptedText } from '@/components/ui/encrypted-text';
 
 const TURN_TIMEOUT = 30;
 const BETTING_TIMEOUT = 15;
@@ -119,6 +122,15 @@ const EMOTION_RADIAL_ICONS: Record<string, LucideIcon> = {
 const PHRASE_OVERLAY_DURATION_MS = 2000;
 const LOCAL_EMOTION_DURATION_MS_RADIAL = 3000;
 
+// Blackjack celebration text color palettes — matches single-player
+const BLACKJACK_COLORS = [
+  { encrypted: 'text-amber-400/60', revealed: 'bg-gradient-to-r from-amber-300 via-yellow-400 to-amber-500 bg-clip-text text-transparent' },
+  { encrypted: 'text-purple-400/60', revealed: 'bg-gradient-to-r from-purple-400 via-fuchsia-400 to-pink-500 bg-clip-text text-transparent' },
+  { encrypted: 'text-cyan-400/60', revealed: 'bg-gradient-to-r from-cyan-300 via-teal-400 to-emerald-400 bg-clip-text text-transparent' },
+  { encrypted: 'text-rose-400/60', revealed: 'bg-gradient-to-r from-rose-400 via-red-400 to-orange-400 bg-clip-text text-transparent' },
+  { encrypted: 'text-emerald-400/60', revealed: 'bg-gradient-to-r from-emerald-300 via-green-400 to-lime-400 bg-clip-text text-transparent' },
+];
+
 
 function indexToCard(idx: number) {
   const rank = (idx % 13) + 1;
@@ -184,7 +196,7 @@ function Seat({
   onSendChatMessage?: (msg: string) => void;
 }) {
   // Rotation angle — left seat faces right toward dealer, right seat faces left
-  const seatRotation = position === 0 ? 12 : position === 2 ? -12 : 0;
+  const seatRotation = position === 0 ? 30 : position === 2 ? -30 : 0;
   const turnRemaining = useCountdown(isActing ? turnStartedAt : null, TURN_TIMEOUT);
   const betRemaining = useCountdown(phase === 'betting' && !isEmpty ? bettingStartedAt : null, BETTING_TIMEOUT);
   const resultColor = (r: string | null | undefined) =>
@@ -199,7 +211,11 @@ function Seat({
 
   // Radial menu state — matches poker pattern
   const [playerRadialOpen, setPlayerRadialOpen] = useState(false);
-  const [playerRadialPage, setPlayerRadialPage] = useState<'main' | 'expressions'>('main');
+  const [playerRadialPage, setPlayerRadialPage] = useState<'main' | 'expressions' | 'settings'>('main');
+
+  // Long-press for QuickChat (right-click on desktop, long-press on mobile)
+  const longPressTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const longPressTriggered = useRef(false);
 
   // QuickChat state
   const [quickChatPickerOpen, setQuickChatPickerOpen] = useState(false);
@@ -207,7 +223,7 @@ function Seat({
   const [overlayPhrase, setOverlayPhrase] = useState<string | null>(null);
   const phraseOverlayTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const menuContainerRef = useRef<HTMLDivElement | null>(null);
-  const [quickChatPhrases, setQuickChatPhrases] = useQuickChatPhrases();
+  const [quickChatPhrases, setQuickChatPhrases] = useQuickChatPhrases('morb_blackjack_quickchat', DEFAULT_BLACKJACK_QUICKCHAT_PHRASES);
 
   // Emotion radial items
   const emotionRadialItems = useMemo(
@@ -225,15 +241,22 @@ function Seat({
     [emotionRadialItems],
   );
 
-  // Player main menu items
+  // Player main menu items — QuickChat moved to right-click/long-press on avatar
   const playerMainMenuItems = useMemo((): RadialMenuItem[] => {
     const items: RadialMenuItem[] = [];
-    if (onSendChatMessage) items.push({ id: 'quickchat', label: 'Chat', icon: MessageCircle });
     items.push({ id: 'expressions', label: 'Moves', icon: Smile });
-    if (onToggleSoundPanel) items.push({ id: 'sounds', label: 'Sounds', icon: Volume2 });
+    items.push({ id: 'settings', label: 'Settings', icon: Settings2 });
     if (onLeaveSeat) items.push({ id: 'leave', label: 'Leave', icon: LogOut });
     return items;
-  }, [onSendChatMessage, onToggleSoundPanel, onLeaveSeat]);
+  }, [onLeaveSeat]);
+
+  // Settings submenu items
+  const settingsMenuItems = useMemo((): RadialMenuItem[] => [
+    { id: '_back', label: 'Back', icon: ArrowLeft },
+    { id: 'theme', label: 'Theme', icon: Palette },
+    { id: 'sounds', label: 'Sounds', icon: Volume2 },
+    { id: 'edit_quickchat', label: 'QuickChat', icon: MessageCircle },
+  ], []);
 
   // Auto-emotion based on round result
   const resultEmotion: Emotion = useMemo(() => {
@@ -275,28 +298,31 @@ function Seat({
   const handlePlayerRadialSelect = useCallback(
     (item: RadialMenuItem) => {
       const id = String(item.id);
+
+      // ── Expressions page ──
       if (playerRadialPage === 'expressions') {
-        if (id === '_back') {
-          setPlayerRadialPage('main');
-          return;
-        }
+        if (id === '_back') { setPlayerRadialPage('main'); return; }
         handleAnimationSelect(item.id as Emotion);
         setPlayerRadialOpen(false);
         setPlayerRadialPage('main');
         return;
       }
-      if (id === 'expressions') {
-        setPlayerRadialPage('expressions');
-        return;
-      }
-      if (id === 'quickchat') {
+
+      // ── Settings page ──
+      if (playerRadialPage === 'settings') {
+        if (id === '_back') { setPlayerRadialPage('main'); return; }
+        if (id === 'sounds') onToggleSoundPanel?.();
+        else if (id === 'edit_quickchat') setEditQuickChatOpen(true);
+        else if (id === 'theme') toast.info('Table theme picker coming soon');
         setPlayerRadialOpen(false);
         setPlayerRadialPage('main');
-        setQuickChatPickerOpen(true);
         return;
       }
-      if (id === 'sounds') onToggleSoundPanel?.();
-      else if (id === 'leave') onLeaveSeat?.();
+
+      // ── Main page ──
+      if (id === 'expressions') { setPlayerRadialPage('expressions'); return; }
+      if (id === 'settings') { setPlayerRadialPage('settings'); return; }
+      if (id === 'leave') onLeaveSeat?.();
       setPlayerRadialOpen(false);
       setPlayerRadialPage('main');
     },
@@ -394,12 +420,12 @@ function Seat({
                         <div className={`flex items-center gap-2 transition-transform duration-300 ${
                           showOutcomeLabel && (hand.result === 'win' || hand.result === 'blackjack') ? 'card-counter-winner' : ''
                         }`} style={{ marginBottom: -10, zIndex: 0 }}>
-                          <div className={`glass-counter relative w-14 h-14 flex items-center justify-center rounded-full transition-all duration-300 ${
+                          <div className={`glass-counter relative w-16 h-16 flex items-center justify-center rounded-full transition-all duration-300 ${
                             isActing && seat.activeHandIndex === hi ? 'card-counter-active' : ''
                           }`}>
                             <span className={`font-black relative z-10 transition-all duration-500 ${
                               hand.isBust ? 'text-red-400' : hand.isBlackjack ? 'text-yellow-400' : showOutcomeLabel && (hand.result === 'win' || hand.result === 'blackjack') ? 'text-emerald-400' : isActiveHand ? 'text-white/90' : hasSplit ? 'text-white/50' : 'text-white/90'
-                            } ${hand.hasAce && !hand.isBlackjack && !hand.isBust && hand.total <= 21 ? 'text-lg' : 'text-2xl'}`}>
+                            } ${hand.hasAce && !hand.isBlackjack && !hand.isBust && hand.total <= 21 ? 'text-xl' : 'text-3xl'}`}>
                               {hand.hasAce && !hand.isBlackjack && !hand.isBust && hand.total <= 21
                                 ? <>{hand.total - 10}<span className="text-white/40">/</span>{hand.total}</>
                                 : hand.total}
@@ -473,6 +499,7 @@ function Seat({
                   cursor: isMe || canOpenProfile ? 'pointer' : 'default',
                 }}
                 onClick={() => {
+                  if (longPressTriggered.current) { longPressTriggered.current = false; return; }
                   if (isMe && playerMainMenuItems.length > 0) {
                     setPlayerRadialPage('main');
                     setPlayerRadialOpen(true);
@@ -482,7 +509,29 @@ function Seat({
                     onOpenProfile(seat.playerAddress);
                   }
                 }}
-                title={isMe ? 'Tap for player menu' : undefined}
+                onContextMenu={(e) => {
+                  if (isMe && onSendChatMessage) {
+                    e.preventDefault();
+                    setPlayerRadialOpen(false);
+                    setQuickChatPickerOpen(true);
+                  }
+                }}
+                onTouchStart={() => {
+                  if (!isMe || !onSendChatMessage) return;
+                  longPressTriggered.current = false;
+                  longPressTimerRef.current = setTimeout(() => {
+                    longPressTriggered.current = true;
+                    setPlayerRadialOpen(false);
+                    setQuickChatPickerOpen(true);
+                  }, 500);
+                }}
+                onTouchEnd={() => {
+                  if (longPressTimerRef.current) { clearTimeout(longPressTimerRef.current); longPressTimerRef.current = null; }
+                }}
+                onTouchMove={() => {
+                  if (longPressTimerRef.current) { clearTimeout(longPressTimerRef.current); longPressTimerRef.current = null; }
+                }}
+                title={isMe ? 'Tap for menu · Right-click for QuickChat' : undefined}
               >
                 {seat?.avatarConfig ? (
                   <AvatarView
@@ -546,9 +595,9 @@ function Seat({
                 if (!o) setPlayerRadialPage('main');
               }}
               anchorRef={avatarRef}
-              menuItems={playerRadialPage === 'main' ? playerMainMenuItems : emotionMenuWithBack}
+              menuItems={playerRadialPage === 'main' ? playerMainMenuItems : playerRadialPage === 'expressions' ? emotionMenuWithBack : settingsMenuItems}
               onSelect={handlePlayerRadialSelect}
-              size={playerRadialPage === 'expressions' ? 220 : 260}
+              size={playerRadialPage === 'expressions' ? 220 : playerRadialPage === 'settings' ? 240 : 260}
               iconSize={playerRadialPage === 'expressions' ? 13 : 16}
               bandWidth={playerRadialPage === 'expressions' ? 38 : 44}
               showLabels
@@ -763,6 +812,10 @@ export default function BlackjackMultiTablePage() {
 
   // Win notification — reuses WinNotification from single player
   const [showWin, setShowWin] = useState<{ amount: bigint; isBlackjack: boolean } | null>(null);
+  // Blackjack celebration animation (EncryptedText + glass panel)
+  const [showBlackjackText, setShowBlackjackText] = useState(false);
+  const [blackjackColorIndex, setBlackjackColorIndex] = useState(0);
+  const [blackjackAnimKey, setBlackjackAnimKey] = useState(0); // key to force EncryptedText remount for replay
   const prevPhaseRef = useRef<string>('');
   const chartRef = useRef<BlackjackMultiRealTimeBetChartRef>(null);
   const chartSessionStartTime = useRef<number>(Date.now());
@@ -852,6 +905,9 @@ export default function BlackjackMultiTablePage() {
     if (state.phase !== 'completed' && showSeatOutcomeLabels) {
       setShowSeatOutcomeLabels(false);
     }
+    if (state.phase !== 'completed' && showBlackjackText) {
+      setShowBlackjackText(false);
+    }
     const prevPhase = prevPhaseRef.current;
     prevPhaseRef.current = state.phase;
     if (!prevPhase) return;
@@ -888,6 +944,16 @@ export default function BlackjackMultiTablePage() {
 
     // ── Round completes: outcome voice + win toast — deferred until dealer reveal finishes (flushPendingDealerOutcome) ──
     if (prevPhase !== 'completed' && state.phase === 'completed') {
+      // Blackjack animation — show if ANY seat at the table got blackjack
+      const anyBlackjack = state.seats.some(s =>
+        s.playerAddress && s.hands.some(h => h.result === 'blackjack')
+      );
+      if (anyBlackjack) {
+        setBlackjackColorIndex(Math.floor(Math.random() * BLACKJACK_COLORS.length));
+        setBlackjackAnimKey(k => k + 1);
+        setShowBlackjackText(true);
+      }
+
       const seat = state.seats.find(s =>
         s.playerAddress && address && s.playerAddress.toLowerCase() === address.toLowerCase()
       );
@@ -1061,6 +1127,76 @@ export default function BlackjackMultiTablePage() {
   const roomId = `blackjack:table:${tableId}`;
   const { messages: chatMessages, sendMessage: sendChatMessage } = useChat(roomId, { wsClient, wsConnected });
 
+  // ── System chat messages (welcome, FactBot, idle warnings) ──
+  const [systemChatMessages, setSystemChatMessages] = useState<SystemChatMessage[]>([]);
+  const factBotUsedIndices = useRef<Set<number>>(new Set());
+
+  // Welcome message — on first connect
+  const welcomeSentRef = useRef(false);
+  useEffect(() => {
+    if (!wsConnected || !state || welcomeSentRef.current) return;
+    welcomeSentRef.current = true;
+    const minBet = formatMorbius(state.minBet ?? '0');
+    const maxBet = formatMorbius(state.maxBet ?? '0');
+    setSystemChatMessages(prev => [...prev, {
+      id: 'welcome',
+      type: 'welcome',
+      text: `Welcome to <b>Morbius.IO</b> — PulseChain's Premier Gaming Platform! 🎲<br/><br/>` +
+        `<b>Quick Tips:</b><br/>` +
+        `• Tap your avatar to open the player menu (sounds, expressions, settings, leave)<br/>` +
+        `• Right-click or long-press your avatar for QuickChat<br/>` +
+        `• Min bet: <b>${minBet}</b> · Max bet: <b>${maxBet}</b> MORBIUS<br/><br/>` +
+        `<b>Socials:</b><br/>` +
+        `• X: <a href="https://x.com/MorbiusIO" target="_blank" rel="noopener" class="underline text-cyan-400">x.com/MorbiusIO</a><br/>` +
+        `• Telegram: <a href="https://t.me/MorbiusIO" target="_blank" rel="noopener" class="underline text-cyan-400">t.me/MorbiusIO</a>`,
+      timestamp: Date.now(),
+    }]);
+  }, [wsConnected, state]);
+
+  // FactBot — random fact every 5 minutes
+  useEffect(() => {
+    if (!wsConnected) return;
+    const addFact = () => {
+      let idx: number;
+      if (factBotUsedIndices.current.size >= BLACKJACK_FACTS.length) {
+        factBotUsedIndices.current.clear();
+      }
+      do { idx = Math.floor(Math.random() * BLACKJACK_FACTS.length); } while (factBotUsedIndices.current.has(idx));
+      factBotUsedIndices.current.add(idx);
+      setSystemChatMessages(prev => [...prev, {
+        id: `factbot-${Date.now()}`,
+        type: 'factbot',
+        text: BLACKJACK_FACTS[idx],
+        timestamp: Date.now(),
+      }]);
+    };
+    const id = setInterval(addFact, 5 * 60 * 1000);
+    // First fact after 30 seconds
+    const firstTimeout = setTimeout(addFact, 30_000);
+    return () => { clearInterval(id); clearTimeout(firstTimeout); };
+  }, [wsConnected]);
+
+  // Idle warnings — notify chat when any player has high idle count
+  const prevIdleCounts = useRef<Record<number, number>>({});
+  useEffect(() => {
+    if (!state) return;
+    for (const seat of state.seats) {
+      if (!seat.playerAddress) continue;
+      const ct = seat.consecutiveTimeouts ?? 0;
+      const prev = prevIdleCounts.current[seat.position] ?? 0;
+      if (ct > prev && ct >= 2) {
+        const name = seat.displayName ?? seat.playerAddress.slice(0, 6) + '…';
+        setSystemChatMessages(p => [...p, {
+          id: `idle-${seat.position}-${Date.now()}`,
+          type: 'idle_warning',
+          text: `${name} is idle (${ct}/${AFK_TIMEOUTS_BEFORE_KICK}). They will be removed after ${AFK_TIMEOUTS_BEFORE_KICK} timeouts.`,
+          timestamp: Date.now(),
+        }]);
+      }
+      prevIdleCounts.current[seat.position] = ct;
+    }
+  }, [state]);
+
   const mySeat = state?.seats.find(s =>
     s.playerAddress && address && s.playerAddress.toLowerCase() === address.toLowerCase()
   ) ?? null;
@@ -1230,7 +1366,7 @@ export default function BlackjackMultiTablePage() {
           }
         }
         .glass-counter {
-          background: rgba(255, 255, 255, 0.1);
+          background: rgba(0, 0, 0, 0.2);
           border: 1.5px solid rgba(255, 255, 255, 0.25);
           backdrop-filter: blur(4px);
           -webkit-backdrop-filter: blur(4px);
@@ -1249,6 +1385,26 @@ export default function BlackjackMultiTablePage() {
         }
         .card-counter-winner {
           transform: scale(1.25);
+        }
+        /* Blackjack celebration animation */
+        @keyframes blackjackFloat {
+          0% { opacity: 0; transform: translateY(20px) scale(0.9); }
+          30% { opacity: 1; transform: translateY(-4px) scale(1.02); }
+          50% { transform: translateY(0px) scale(1); }
+          100% { transform: translateY(0px) scale(1); }
+        }
+        .blackjack-text-enter {
+          animation: blackjackFloat 0.7s cubic-bezier(0.34, 1.56, 0.64, 1) forwards;
+        }
+        .glass-distort-panel {
+          background: rgba(255, 255, 255, 0.1);
+          border: 1.5px solid rgba(255, 255, 255, 0.25);
+          backdrop-filter: url(#glass-distort-multi) blur(4px);
+          -webkit-backdrop-filter: url(#glass-distort-multi) blur(4px);
+          box-shadow:
+            inset 0 0 10px 3px rgba(255, 255, 255, 0.3),
+            0 8px 32px rgba(0, 0, 0, 0.4),
+            0 2px 8px rgba(0, 0, 0, 0.2);
         }
       `}</style>
       {/* 2-column layout on md+: table (left) + sidebar controls (right) — matches single player */}
@@ -1277,6 +1433,16 @@ export default function BlackjackMultiTablePage() {
 
         {/* Dark overlay */}
         <div className="absolute inset-0" style={{ zIndex: 1, background: 'linear-gradient(145deg, rgba(0,0,0,0.22), rgba(0,0,0,0.12))' }} />
+
+        {/* SVG filter for glass-distort panel (blackjack animation) */}
+        <svg width="0" height="0" style={{ position: 'absolute' }}>
+          <defs>
+            <filter id="glass-distort-multi">
+              <feTurbulence type="turbulence" baseFrequency="0.04" numOctaves="2" seed="2" result="turbulence" />
+              <feDisplacementMap in="SourceGraphic" in2="turbulence" scale="6" xChannelSelector="R" yChannelSelector="G" />
+            </filter>
+          </defs>
+        </svg>
 
         {/* Content — always 800×450, scaled to fill the container */}
         <div
@@ -1421,6 +1587,25 @@ export default function BlackjackMultiTablePage() {
             />
           )}
 
+          {/* Blackjack celebration animation — EncryptedText with glass panel */}
+          {showBlackjackText && (
+            <div className="absolute inset-0 z-[35] flex items-center justify-center pointer-events-none blackjack-text-enter">
+              <div className="px-8 py-4 sm:px-12 sm:py-5 rounded-2xl glass-distort-panel">
+                <div style={{ fontFamily: '"Orbitron", sans-serif' }}>
+                  <EncryptedText
+                    key={blackjackAnimKey}
+                    text="BLACKJACK"
+                    revealDelayMs={100}
+                    flipDelayMs={35}
+                    className="text-4xl sm:text-5xl md:text-6xl font-black tracking-wider"
+                    encryptedClassName={BLACKJACK_COLORS[blackjackColorIndex].encrypted}
+                    revealedClassName={BLACKJACK_COLORS[blackjackColorIndex].revealed}
+                  />
+                </div>
+              </div>
+            </div>
+          )}
+
           {/* ── Play area ── */}
           <div className="flex-1 flex flex-col justify-center items-center gap-4 px-4 pb-4">
 
@@ -1468,10 +1653,10 @@ export default function BlackjackMultiTablePage() {
                 const isDealerTurn = state.phase === 'dealer_turn';
                 return (
                   <div className={`flex items-center gap-2 transition-transform duration-300`} style={{ marginTop: -14, zIndex: 10 }}>
-                    <div className={`glass-counter relative w-16 h-16 flex items-center justify-center rounded-full transition-all duration-300 ${
+                    <div className={`glass-counter relative w-20 h-20 flex items-center justify-center rounded-full transition-all duration-300 ${
                       isDealerTurn ? 'card-counter-active' : ''
                     }`}>
-                      <span className={`font-black text-3xl relative z-10 transition-all duration-500 ${
+                      <span className={`font-black text-4xl relative z-10 transition-all duration-500 ${
                         bust ? 'text-red-400' : naturalBj ? 'text-yellow-400' : 'text-white/90'
                       }`}>
                         {shown}
@@ -1505,8 +1690,8 @@ export default function BlackjackMultiTablePage() {
                 const align =
                   pos === 0 ? 'flex justify-start' : pos === 2 ? 'flex justify-end' : 'flex justify-center';
                 const seatNudge =
-                  pos === 0 ? { transform: 'translate(30px, -14px)' } :
-                  pos === 2 ? { transform: 'translate(-30px, -14px)' } : {};
+                  pos === 0 ? { transform: 'translate(60px, -36px)' } :
+                  pos === 2 ? { transform: 'translate(-60px, -36px)' } : {};
                 return (
                   <div key={pos} className={`min-w-0 ${align}`} style={seatNudge}>
                     <Seat
@@ -1789,29 +1974,21 @@ export default function BlackjackMultiTablePage() {
             {/* Tab content area — relative wrapper so chart can be absolutely positioned when hidden */}
             <div className="relative md:flex-1 md:min-h-0 md:overflow-y-auto">
               {/* Chat tab */}
-              <TabsContent value="chat" className="mt-0 p-3 space-y-2">
-                <div className="flex items-center justify-between gap-2">
+              <TabsContent value="chat" className="mt-0 flex flex-col h-full">
+                <div className="flex items-center justify-between gap-2 px-3 pt-3 pb-1">
                   <h3 className="text-xs font-semibold text-cyan-300/90 uppercase tracking-wide">Table chat</h3>
                   {chatMessages.length > 0 && (
                     <span className="text-[10px] text-white/40 tabular-nums">{chatMessages.length} msgs</span>
                   )}
                 </div>
-                <div className="max-h-48 overflow-y-auto space-y-0.5 min-h-[140px] pr-1">
-                  {chatMessages.slice(-24).map(m => (
-                    <div key={m.id} className="text-xs text-white/75 break-words">
-                      <span className="text-cyan-400 font-medium">{m.displayName ?? m.senderAddress?.slice(0, 6)}: </span>
-                      {m.text}
-                    </div>
-                  ))}
-                  {chatMessages.length === 0 && (
-                    <div className="text-xs text-white/35 text-center py-6">No messages yet</div>
+                <ChatMessages messages={chatMessages} systemMessages={systemChatMessages} />
+                <div className="px-3 pb-3 pt-1 mt-auto border-t border-white/5">
+                  {address && wsConnected ? (
+                    <ChatInput onSend={sendChatMessage} />
+                  ) : (
+                    <p className="text-[11px] text-white/40 text-center py-1">Connect wallet to chat</p>
                   )}
                 </div>
-                {address && wsConnected ? (
-                  <ChatInput onSend={sendChatMessage} />
-                ) : (
-                  <p className="text-[11px] text-white/40 text-center py-1">Connect wallet to chat</p>
-                )}
               </TabsContent>
 
               {/* Chart — always mounted so ref survives for addGameResult; hidden via opacity when inactive (visibility:hidden + absolute keeps dimensions for Recharts) */}
@@ -1966,10 +2143,103 @@ export default function BlackjackMultiTablePage() {
   );
 }
 
+// ── System chat message types ────────────────────────────────────────────────
+type SystemChatMessage = {
+  id: string;
+  type: 'welcome' | 'factbot' | 'idle_warning';
+  text: string;
+  sender?: string;
+  timestamp: number;
+};
+
+/** ChatMessages — renders player messages + system messages merged by timestamp, auto-scrolls */
+function ChatMessages({ messages, systemMessages }: { messages: { id: string; displayName?: string | null; senderAddress: string | null; text: string; timestamp: string }[]; systemMessages: SystemChatMessage[] }) {
+  const scrollRef = useRef<HTMLDivElement>(null);
+  const wasAtBottomRef = useRef(true);
+
+  // Check if scrolled to bottom before update
+  useEffect(() => {
+    const el = scrollRef.current;
+    if (!el) return;
+    if (wasAtBottomRef.current) {
+      el.scrollTop = el.scrollHeight;
+    }
+  }, [messages.length, systemMessages.length]);
+
+  const handleScroll = () => {
+    const el = scrollRef.current;
+    if (!el) return;
+    wasAtBottomRef.current = el.scrollHeight - el.scrollTop - el.clientHeight < 32;
+  };
+
+  // Merge and sort
+  type MergedMsg = { key: string; ts: number } & (
+    | { kind: 'player'; displayName?: string | null; senderAddress: string | null; text: string }
+    | { kind: 'system'; type: SystemChatMessage['type']; sender?: string; text: string }
+  );
+
+  const merged: MergedMsg[] = useMemo(() => {
+    const items: MergedMsg[] = [
+      ...messages.map(m => ({
+        key: m.id,
+        ts: new Date(m.timestamp).getTime(),
+        kind: 'player' as const,
+        displayName: m.displayName,
+        senderAddress: m.senderAddress,
+        text: m.text,
+      })),
+      ...systemMessages.map(m => ({
+        key: m.id,
+        ts: m.timestamp,
+        kind: 'system' as const,
+        type: m.type,
+        sender: m.sender,
+        text: m.text,
+      })),
+    ];
+    items.sort((a, b) => a.ts - b.ts);
+    return items;
+  }, [messages, systemMessages]);
+
+  return (
+    <div ref={scrollRef} onScroll={handleScroll} className="flex-1 overflow-y-auto space-y-0.5 min-h-[100px] px-3 py-1 pr-1.5">
+      {merged.map(m => {
+        if (m.kind === 'player') {
+          return (
+            <div key={m.key} className="text-xs text-white/75 break-words">
+              <span className="text-cyan-400 font-medium">{m.displayName ?? m.senderAddress?.slice(0, 6)}: </span>
+              {m.text}
+            </div>
+          );
+        }
+        // system messages
+        const isWelcome = m.type === 'welcome';
+        const isFactBot = m.type === 'factbot';
+        const isIdle = m.type === 'idle_warning';
+        return (
+          <div key={m.key} className={`text-xs break-words py-0.5 ${isWelcome ? 'text-yellow-300/80' : isFactBot ? 'text-emerald-400/80' : 'text-orange-400/80'}`}>
+            {isWelcome && <span className="font-bold text-yellow-400">🎰 Morbius: </span>}
+            {isFactBot && <span className="font-bold text-emerald-400">FactBot: </span>}
+            {isIdle && <span className="font-bold text-orange-400">⚠ System: </span>}
+            {isWelcome ? (
+              <span dangerouslySetInnerHTML={{ __html: m.text }} />
+            ) : (
+              m.text
+            )}
+          </div>
+        );
+      })}
+      {merged.length === 0 && (
+        <div className="text-xs text-white/35 text-center py-6">No messages yet</div>
+      )}
+    </div>
+  );
+}
+
 const CHAT_MAX_LENGTH = 150;
 const CHAT_BURST_LIMIT = 7;
 const CHAT_COOLDOWN_MS = 30_000;
-/** Don’t spam toast if user keeps tapping Send while on cooldown */
+/** Don't spam toast if user keeps tapping Send while on cooldown */
 const CHAT_COOLDOWN_TOAST_THROTTLE_MS = 4000;
 
 function ChatInput({ onSend }: { onSend: (text: string) => void }) {
@@ -1998,7 +2268,7 @@ function ChatInput({ onSend }: { onSend: (text: string) => void }) {
         lastCooldownToastAt.current = now;
         const s = Math.max(1, Math.ceil((cooldownEnd - now) / 1000));
         toast.message('Chat cooldown', {
-          description: `Wait ${s}s — you’re sending messages too fast.`,
+          description: `Wait ${s}s — you're sending messages too fast.`,
         });
       }
       return;

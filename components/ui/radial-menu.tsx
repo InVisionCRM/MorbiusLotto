@@ -64,6 +64,10 @@ const SLICE_HEX: Record<string, string> = {
   profile: '#a855f7',
   follow: '#3b82f6',
   gift: '#f43f5e',
+  settings: '#64748b',
+  theme: '#a855f7',
+  edit_quickchat: '#3b82f6',
+  sounds: '#14b8a6',
   _back: '#64748b',
 };
 
