@@ -8,6 +8,7 @@ import { getWebSocketUrlOptional } from '@/lib/api-urls';
 import GlobalMainNav from '@/components/shared/GlobalMainNav';
 import { BlackjackWebSocketClient } from '@/lib/websocket-client';
 import { CreatorDashboard } from '@/components/Creators/CreatorDashboard';
+import { MorbiusLoadingChip } from '@/components/shared/MorbiusLoadingChip';
 
 export default function CreatorsPage() {
   const { address, isConnected } = useAccount();
@@ -82,15 +83,18 @@ export default function CreatorsPage() {
 
         {/* Connecting WS */}
         {isConnected && connecting && (
-          <div className="flex items-center justify-center py-20">
-            <div className="text-center">
-              <svg className="animate-spin h-8 w-8 text-cyan-400 mx-auto mb-3" viewBox="0 0 24 24">
-                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" />
-                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
-              </svg>
-              <p className="text-gray-400">Connecting to server...</p>
+          <>
+            <MorbiusLoadingChip />
+            <div className="flex items-center justify-center py-20">
+              <div className="text-center">
+                <svg className="animate-spin h-8 w-8 text-cyan-400 mx-auto mb-3" viewBox="0 0 24 24">
+                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" />
+                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+                </svg>
+                <p className="text-gray-400">Connecting to server...</p>
+              </div>
             </div>
-          </div>
+          </>
         )}
 
         {/* WS Error */}

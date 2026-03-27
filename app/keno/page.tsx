@@ -33,6 +33,7 @@ import GlobalMainNav from '@/components/shared/GlobalMainNav'
 import { PlayerProfileModal } from '@/components/shared/PlayerProfileModal'
 import { useKenoPlayerStats } from '@/hooks/use-keno-results'
 import { AdSpace } from '@/components/shared/AdSpace'
+import { MorbiusLoadingChip } from '@/components/shared/MorbiusLoadingChip'
 
 const ALL_NUMBERS = Array.from({ length: 80 }, (_, i) => i + 1)
 
@@ -147,6 +148,7 @@ function KenoIntroScreen({ onComplete }: { onComplete: () => void }) {
         </div>
         </div>
       </div>
+      <MorbiusLoadingChip />
       <style jsx>{`
         @keyframes kenoCellIn {
           0% {

@@ -18,6 +18,7 @@ import { PixelImage } from "../ui/pixel-image";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "../ui/dialog";
 import { Button } from "../ui/button";
 import { ScrollArea } from "../ui/scroll-area";
+import { MorbiusLoadingChip } from "@/components/shared/MorbiusLoadingChip";
 
 interface LotteryBentoGridProps {
   onPlayNow?: () => void;
@@ -483,6 +484,7 @@ const MORBIUSStats = () => {
             <div className="text-white/70 text-sm font-mono">Loading MORBIUS...</div>
           </div>
         </div>
+        <MorbiusLoadingChip />
       </div>
     )
   }

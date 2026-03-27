@@ -32,6 +32,7 @@ import { useTokenApproval } from '@/hooks/use-token-approval';
 import { useNativeBalance } from '@/hooks/use-native-balance';
 import { usePlsQuote } from '@/hooks/use-pls-quote';
 import { BIGWHEEL_ADDRESS, MORBIUS_TOKEN_ADDRESS } from '@/lib/contracts';
+import { MorbiusLoadingChip } from '@/components/shared/MorbiusLoadingChip';
 
 // Intro screen component
 function IntroScreen({ onComplete }: { onComplete: () => void }) {
@@ -147,6 +148,7 @@ function IntroScreen({ onComplete }: { onComplete: () => void }) {
           </div>
         </div>
       </div>
+      <MorbiusLoadingChip />
     </div>
   );
 }

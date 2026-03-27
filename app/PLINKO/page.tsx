@@ -40,6 +40,7 @@ import { PlinkoRecentGames } from '@/components/PLINKO/PlinkoRecentGames';
 import { PlinkoPlayerDashboard } from '@/components/PLINKO/PlinkoPlayerDashboard';
 import { PlayerProfileModal } from '@/components/shared/PlayerProfileModal';
 import { AdSpace } from '@/components/shared/AdSpace';
+import { MorbiusLoadingChip } from '@/components/shared/MorbiusLoadingChip';
 
 // BallDropped event ABI for decoding
 const BALL_DROPPED_EVENT_ABI = {
@@ -104,6 +105,7 @@ function IntroScreen({ onComplete }: IntroScreenProps) {
         </div>
         </div>
       </div>
+      <MorbiusLoadingChip />
       <style jsx>{`
         @keyframes plinkoBallDrop {
           0% {

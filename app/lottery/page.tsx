@@ -28,6 +28,7 @@ import { toast } from 'sonner'
 import type { InstantLotteryResultRow } from '@/hooks/use-instant-lottery'
 import { AdSpace } from '@/components/shared/AdSpace'
 import { FloatingPokerChips } from '@/components/home/FloatingPokerChips'
+import { MorbiusLoadingChip } from '@/components/shared/MorbiusLoadingChip'
 
 const ZERO = '0x0000000000000000000000000000000000000000'
 const isDeployed = (LOTTERY_INSTANT_ADDRESS as string) !== ZERO
@@ -73,6 +74,7 @@ function LotteryIntroScreen({ onComplete }: { onComplete: () => void }) {
         </div>
         </div>
       </div>
+      <MorbiusLoadingChip />
       <style jsx>{`
         @keyframes lotteryBallIn {
           0% { transform: scale(0); opacity: 0; }

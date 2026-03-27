@@ -61,6 +61,10 @@ export function PokerBetaSplash() {
               off, please tell us — it helps a lot.
             </p>
             <p>
+              <span className="text-slate-200 font-medium">Best on larger screens:</span>{' '}
+              multiplayer Poker is easiest to follow on a desktop or tablet; phones work, but the layout is tight.
+            </p>
+            <p>
               <span className="text-slate-200 font-medium">Fastest response:</span>{' '}
               report bugs on{' '}
               <a

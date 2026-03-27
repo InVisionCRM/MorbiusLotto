@@ -33,6 +33,7 @@ import { useQueryClient } from '@tanstack/react-query';
 import { IconButton } from '@/components/animate-ui/components/buttons/icon';
 import { toast } from 'sonner';
 import { PokerBetaSplash } from '@/components/poker/PokerBetaSplash';
+import { MorbiusLoadingChip } from '@/components/shared/MorbiusLoadingChip';
 
 const POKER_CHAT_BUBBLE_DURATION_MS = 5000;
 const POKER_QUICK_REACTION_DURATION_MS = 2000;
@@ -925,9 +926,12 @@ export default function PokerTablePage() {
                 onOpenEditQuickChat={() => setShowEditQuickChatModal(true)}
               />
             ) : !error ? (
-              <div className="absolute inset-0 flex items-center justify-center text-[var(--poker-text-muted)] text-sm">
-                Loading table...
-              </div>
+              <>
+                <div className="absolute inset-0 flex items-center justify-center text-[var(--poker-text-muted)] text-sm">
+                  Loading table...
+                </div>
+                <MorbiusLoadingChip />
+              </>
             ) : null}
             {error && (
               <div className="absolute inset-0 flex items-center justify-center px-4">

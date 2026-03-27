@@ -21,6 +21,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from 
 import { Button } from "../../components/ui/button";
 import { ScrollArea } from "../../components/ui/scroll-area";
 import { useMorbiusBurned } from "@/hooks/use-morbius-burned";
+import { MorbiusLoadingChip } from "@/components/shared/MorbiusLoadingChip";
 
 interface KenoBentoGridProps {
   onPlayNow?: () => void;
@@ -437,6 +438,7 @@ const MORBIUSStats = () => {
             <div className="text-white/70 text-sm font-mono">Loading MORBIUS...</div>
           </div>
         </div>
+        <MorbiusLoadingChip />
       </div>
     )
   }

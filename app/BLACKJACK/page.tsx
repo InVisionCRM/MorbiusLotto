@@ -56,6 +56,7 @@ import { useTokenApproval } from '@/hooks/use-token-approval';
 import { useAudio, AudioManager } from '@/hooks/use-audio';
 import { useBlackjackTables } from '@/hooks/use-blackjack-tables';
 import { AdSpace } from '@/components/shared/AdSpace';
+import { MorbiusLoadingChip } from '@/components/shared/MorbiusLoadingChip';
 
 // Intro screen component
 function IntroScreen({ onComplete }: { onComplete: () => void }) {
@@ -126,6 +127,7 @@ function IntroScreen({ onComplete }: { onComplete: () => void }) {
           }
         }
       `}</style>
+      <MorbiusLoadingChip />
     </div>
   );
 }

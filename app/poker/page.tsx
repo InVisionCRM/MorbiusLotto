@@ -21,6 +21,7 @@ import {
   POKER_CASH_MIN_BUY_IN_BB,
 } from '@/lib/poker-buy-in';
 import { PokerBetaSplash } from '@/components/poker/PokerBetaSplash';
+import { MorbiusLoadingChip } from '@/components/shared/MorbiusLoadingChip';
 // import { PokerTournamentLobby } from '@/components/poker/tournament/PokerTournamentLobby';
 
 /** Format a wei string to human-readable chips (e.g. "10000000000000000000" -> "10") */
@@ -120,6 +121,7 @@ function IntroScreen({ onComplete }: { onComplete: () => void }) {
           }
         }
       `}</style>
+      <MorbiusLoadingChip />
     </div>
   );
 }
