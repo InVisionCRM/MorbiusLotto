@@ -9,12 +9,14 @@ import { LotteryPlayerDashboard } from '@/components/lottery/LotteryPlayerDashbo
 import { KenoPlayerDashboard } from '@/components/CryptoKeno/KenoPlayerDashboard'
 import { PlinkoPlayerDashboard } from '@/components/PLINKO/PlinkoPlayerDashboard'
 import { AllStatsDashboard } from '@/components/shared/AllStatsDashboard'
+import { PokerPlayerDashboard } from '@/components/poker/PokerPlayerDashboard'
 
-export type PlayerProfileGame = 'all' | 'blackjack' | 'lottery' | 'keno' | 'plinko'
+export type PlayerProfileGame = 'all' | 'blackjack' | 'poker' | 'lottery' | 'keno' | 'plinko'
 
 const GAME_LABELS: Record<PlayerProfileGame, string> = {
   all: 'All stats',
   blackjack: 'Blackjack',
+  poker: 'Poker',
   lottery: 'Lottery',
   keno: 'Keno',
   plinko: 'Plinko',
@@ -83,6 +85,7 @@ export function PlayerProfileDashboard({
   const isLottery = selectedGame === 'lottery'
   const isKeno = selectedGame === 'keno'
   const isPlinko = selectedGame === 'plinko'
+  const isPoker = selectedGame === 'poker'
   const isLoading = isLottery ? lotteryStats.isLoading : statsLoading
 
   return (
@@ -107,6 +110,8 @@ export function PlayerProfileDashboard({
 
       {isAll ? (
         <AllStatsDashboard playerAddress={address} />
+      ) : isPoker ? (
+        <PokerPlayerDashboard playerAddress={address} />
       ) : isPlinko ? (
         <PlinkoPlayerDashboard playerAddress={address} />
       ) : isKeno ? (

@@ -52,15 +52,6 @@ const BETTING_TIMEOUT = 15;
 /** Must match server BJ_MULTI_AFK_KICK_AFTER — shown in seat UI */
 const AFK_TIMEOUTS_BEFORE_KICK = 3;
 
-function resolveTheme(kind: 'video' | 'image', id: string) {
-  if (kind === 'video') {
-    const v = BLACKJACK_VIDEO_BACKGROUNDS.find(v => v.id === id);
-    return { kind: 'video' as const, src: v?.src ?? BLACKJACK_VIDEO_BACKGROUNDS[0].src };
-  }
-  const img = BLACKJACK_IMAGE_BACKGROUNDS.find(i => i.id === id);
-  return { kind: 'image' as const, src: img?.src ?? BLACKJACK_IMAGE_BACKGROUNDS[0].src };
-}
-
 function CircularTimerRing({ size, timeLeft, maxTime }: { size: number; timeLeft: number; maxTime: number }) {
   const pad = 5;
   const total = size + pad * 2;
@@ -1304,8 +1295,11 @@ export default function BlackjackMultiTablePage() {
     catch (e) { setError((e as Error).message); }
   }, [wsClient, tableId, mySeat, playSound]);
 
-  const theme = resolveTheme(state?.themeKind ?? 'video', state?.themeId ?? 'glowingTable');
   const { getThemeInfo, getTableProfile } = useBlackjackTables();
+  const theme = getThemeInfo({
+    kind: (state?.themeKind ?? 'video') as 'video' | 'image',
+    id: state?.themeId ?? 'glowingTable',
+  });
 
   // Scale board content to fill the 16:9 container at any size
   const tableRef = useRef<HTMLDivElement>(null);

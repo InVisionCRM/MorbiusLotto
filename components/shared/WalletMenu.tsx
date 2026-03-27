@@ -1,17 +1,18 @@
 'use client'
 
-import React, { useState, useRef, useEffect, useCallback } from 'react'
-import { useRouter } from 'next/navigation'
+import React, { useState, useRef, useEffect, useCallback, lazy, Suspense } from 'react'
 import { ConnectButton } from '@rainbow-me/rainbowkit'
 import { useAccount, useDisconnect } from 'wagmi'
 import { useProfile } from '@/hooks/use-player-profile'
 import AvatarView from '@/components/poker/avatar/AvatarView'
 import { DEFAULT_AVATAR_CONFIG } from '@/components/poker/avatar/CharacterCreator'
 
+const GameWalletModal = lazy(() => import('@/components/shared/GameWalletModal').then(m => ({ default: m.GameWalletModal })))
+
 export interface WalletMenuProps {
   /**
    * When provided, Deposit/Withdraw calls this (e.g. in-game modal).
-   * When omitted, the menu still shows Deposit/Withdraw and navigates to Blackjack with the deposit modal opened.
+   * When omitted, the menu opens a local game wallet modal in-place.
    */
   onOpenDepositModal?: () => void
   /** When provided, shows balance line in dropdown (in MORBIUS, 18 decimals) */
@@ -48,13 +49,13 @@ export function WalletMenu({
   variant = 'default',
   sidebarOpen = true,
 }: WalletMenuProps) {
-  const router = useRouter()
   const { address, isConnected } = useAccount()
   const { disconnect } = useDisconnect()
   const { profileDisplayName: profileDisplayNameFromHook, profileImageUrl: profileImageUrlFromHook, avatarConfig } = useProfile()
   const effectiveProfileDisplayName = profileDisplayName ?? profileDisplayNameFromHook
   const effectiveProfileImageUrl = profileImageUrl ?? profileImageUrlFromHook
   const [isWalletDropdownOpen, setIsWalletDropdownOpen] = useState(false)
+  const [isGameWalletOpen, setIsGameWalletOpen] = useState(false)
   const [copied, setCopied] = useState(false)
   const walletDropdownRef = useRef<HTMLDivElement>(null)
 
@@ -99,13 +100,14 @@ export function WalletMenu({
     if (onOpenDepositModal) {
       onOpenDepositModal()
     } else {
-      router.push('/BLACKJACK?open=deposit')
+      setIsGameWalletOpen(true)
     }
     setIsWalletDropdownOpen(false)
-  }, [onOpenDepositModal, router])
+  }, [onOpenDepositModal])
 
   return (
-    <div className={`flex items-center flex-shrink-0 relative ${className}`} ref={walletDropdownRef}>
+    <>
+      <div className={`flex items-center flex-shrink-0 relative ${className}`} ref={walletDropdownRef}>
       {isConnected && address ? (
         <>
           <button
@@ -250,6 +252,16 @@ export function WalletMenu({
           )}
         </ConnectButton.Custom>
       )}
-    </div>
+      </div>
+      <Suspense fallback={null}>
+        {isGameWalletOpen && (
+          <GameWalletModal
+            isOpen={isGameWalletOpen}
+            onClose={() => setIsGameWalletOpen(false)}
+            reserveBalance={reserveBalance}
+          />
+        )}
+      </Suspense>
+    </>
   )
 }

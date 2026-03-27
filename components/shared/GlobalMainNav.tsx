@@ -30,6 +30,7 @@ import '@/lib/error-log';
 const ThemeSelectionModal = lazy(() => import('@/components/BLACKJACK/ThemeSelectionModal'));
 const HowToPlayModal = lazy(() => import('@/components/PLINKO/HowToPlayModal'));
 const SwapModal = lazy(() => import('@/components/PLINKO/SwapModal'));
+const GameWalletModal = lazy(() => import('@/components/shared/GameWalletModal').then(m => ({ default: m.GameWalletModal })));
 const SelfExclusionModal = lazy(() => import('@/components/ResponsibleGaming/SelfExclusionModal').then(m => ({ default: m.SelfExclusionModal })));
 const ReportModal = lazy(() => import('@/components/shared/ReportModal').then(m => ({ default: m.ReportModal })));
 const ProfileAvatarModal = lazy(() => import('@/components/shared/ProfileAvatarModal').then(m => ({ default: m.ProfileAvatarModal })));
@@ -591,6 +592,7 @@ export default function GlobalMainNav({
   const [internalThemeModalOpen, setInternalThemeModalOpen] = useState(false);
   const [howToPlayOpen, setHowToPlayOpen] = useState(false);
   const [swapOpen, setSwapOpen] = useState(false);
+  const [gameWalletOpen, setGameWalletOpen] = useState(false);
   const [profileAvatarModalOpen, setProfileAvatarModalOpen] = useState(false);
   const queryClient = useQueryClient();
 
@@ -636,7 +638,15 @@ export default function GlobalMainNav({
     [onOpenSwap],
   );
   const handleOpenReport = useCallback(() => setReportOpen(true), []);
+  const handleOpenGameWallet = useCallback(() => {
+    if (onOpenDepositModal) {
+      onOpenDepositModal();
+      return;
+    }
+    setGameWalletOpen(true);
+  }, [onOpenDepositModal]);
   const handleOpenProfileModal = useCallback(() => setProfileAvatarModalOpen(true), []);
+  const handleCloseGameWallet = useCallback(() => setGameWalletOpen(false), []);
   const handleCloseThemeModal = useCallback(() => setThemeModalOpen(false), [setThemeModalOpen]);
   const handleCloseResponsibleGaming = useCallback(() => setResponsibleGamingOpen(false), []);
   const handleCloseReport = useCallback(() => setReportOpen(false), []);
@@ -653,7 +663,7 @@ export default function GlobalMainNav({
     () => (
       <div className="flex items-center gap-2 min-w-0">
         <WalletMenu
-          onOpenDepositModal={onOpenDepositModal}
+          onOpenDepositModal={handleOpenGameWallet}
           profileDisplayName={effectiveProfileDisplayName}
           profileImageUrl={effectiveProfileImageUrl}
           onOpenProfileSettings={effectiveOnOpenProfileSettings}
@@ -663,7 +673,7 @@ export default function GlobalMainNav({
         />
       </div>
     ),
-    [onOpenDepositModal, effectiveProfileDisplayName, effectiveProfileImageUrl, effectiveOnOpenProfileSettings],
+    [handleOpenGameWallet, effectiveProfileDisplayName, effectiveProfileImageUrl, effectiveOnOpenProfileSettings],
   );
 
   return (
@@ -672,7 +682,7 @@ export default function GlobalMainNav({
         <SidebarBody className="shrink-0" style={SIDEBAR_PANEL_STYLE}>
           <NavContent
             page={page}
-            onOpenDepositModal={onOpenDepositModal}
+            onOpenDepositModal={handleOpenGameWallet}
             currentView={currentView}
             onViewChange={onViewChange}
             setThemeModalOpen={setThemeModalOpen}
@@ -741,6 +751,12 @@ export default function GlobalMainNav({
         )}
         {page === 'plinko' && howToPlayOpen && <HowToPlayModal open={howToPlayOpen} onOpenChange={setHowToPlayOpen} />}
         {(page === 'plinko' || page === 'lottery') && swapOpen && <SwapModal open={swapOpen} onOpenChange={setSwapOpen} />}
+        {gameWalletOpen && (
+          <GameWalletModal
+            isOpen={gameWalletOpen}
+            onClose={handleCloseGameWallet}
+          />
+        )}
         {responsibleGamingOpen && (
           <SelfExclusionModal isOpen={responsibleGamingOpen} onClose={handleCloseResponsibleGaming} />
         )}

@@ -1,12 +1,12 @@
 import Image from 'next/image'
 import { cn } from '@/lib/utils'
 
-/** Rotating Morbius chip for loading states — viewport bottom quarter, centered, clockwise spin. */
+/** Rotating Morbius chip for loading states — lower viewport, centered, clockwise spin. */
 export function MorbiusLoadingChip({ className }: { className?: string }) {
   return (
     <div
       className={cn(
-        'pointer-events-none fixed bottom-[25%] left-1/2 z-[100] -translate-x-1/2',
+        'pointer-events-none fixed bottom-[15%] left-1/2 z-[100] -translate-x-1/2',
         className
       )}
       aria-hidden
@@ -16,7 +16,7 @@ export function MorbiusLoadingChip({ className }: { className?: string }) {
         alt=""
         width={160}
         height={160}
-        className="h-40 w-40 opacity-50 animate-[spin_4s_linear_infinite]"
+        className="h-40 w-40 opacity-50 animate-[spin_8s_linear_infinite]"
         sizes="160px"
         priority
       />

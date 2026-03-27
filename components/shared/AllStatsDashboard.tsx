@@ -25,6 +25,7 @@ import { usePlayerProfileStats } from '@/hooks/use-player-profile'
 import { useLotteryPlayerStats, useInstantLotteryResults } from '@/hooks/use-instant-lottery'
 import { useKenoPlayerStats } from '@/hooks/use-keno-results'
 import { usePlinkoPlayerStats } from '@/hooks/use-plinko-results'
+import { usePokerPlayerHands, usePokerPlayerStats } from '@/hooks/use-poker-stats'
 import { usePlayerProfileGames } from '@/hooks/use-player-profile'
 import { useQuery } from '@tanstack/react-query'
 import { getApiUrlOptional } from '@/lib/api-urls'
@@ -47,7 +48,7 @@ function formatMorbius(wei: bigint): string {
 
 export type UnifiedHistoryRow = {
   sortKey: number
-  type: 'blackjack' | 'lottery' | 'keno' | 'plinko' | 'deposit' | 'withdrawal'
+  type: 'blackjack' | 'poker' | 'lottery' | 'keno' | 'plinko' | 'deposit' | 'withdrawal'
   gameLabel: string
   wager?: bigint
   payout?: bigint
@@ -91,6 +92,8 @@ export function AllStatsDashboard({ playerAddress }: AllStatsDashboardProps) {
   const lotteryStats = useLotteryPlayerStats(lotteryAddress)
   const kenoStats = useKenoPlayerStats(lotteryAddress)
   const plinkoStats = usePlinkoPlayerStats(lotteryAddress)
+  const pokerStats = usePokerPlayerStats(address)
+  const pokerHands = usePokerPlayerHands(address, 200)
   const { results: lotteryResults } = useInstantLotteryResults({ playerAddress: lotteryAddress, limit: 25000 })
   const { data: bjGames } = usePlayerProfileGames(address, 25000)
 
@@ -128,10 +131,13 @@ export function AllStatsDashboard({ playerAddress }: AllStatsDashboardProps) {
     const plinkoWagered = plinkoStats?.totalWagered ?? 0n
     const plinkoWon = plinkoStats?.totalWon ?? 0n
     const plinkoPlays = Number(plinkoStats?.totalPlays ?? 0n)
+    const pokerWagered = BigInt(pokerStats.data?.total_wagered ?? '0')
+    const pokerWon = BigInt(pokerStats.data?.total_won ?? '0')
+    const pokerPlays = Number(pokerStats.data?.total_hands ?? 0)
 
-    const totalWagered = bjBet + lotWagered + kenoW + plinkoWagered
-    const totalWon = bjWin + lotWon + kenoWonB + plinkoWon
-    const totalGames = bjGamesCount + lotPlays + kenoP + plinkoPlays
+    const totalWagered = bjBet + lotWagered + kenoW + plinkoWagered + pokerWagered
+    const totalWon = bjWin + lotWon + kenoWonB + plinkoWon + pokerWon
+    const totalGames = bjGamesCount + lotPlays + kenoP + plinkoPlays + pokerPlays
     const profitLoss = totalWon - totalWagered
 
     return {
@@ -141,7 +147,7 @@ export function AllStatsDashboard({ playerAddress }: AllStatsDashboardProps) {
       profitLoss,
       winRate: totalGames > 0 ? (Number(totalWon) / Number(totalWagered)) * 100 : 0,
     }
-  }, [bjStats, lotteryStats, kenoStats, plinkoStats])
+  }, [bjStats, lotteryStats, kenoStats, plinkoStats, pokerStats.data])
 
   const combinedHistory = useMemo((): UnifiedHistoryRow[] => {
     const rows: UnifiedHistoryRow[] = []
@@ -202,6 +208,20 @@ export function AllStatsDashboard({ playerAddress }: AllStatsDashboardProps) {
       })
     })
 
+    pokerHands.data?.forEach((h) => {
+      const ts = h.completed_at ? new Date(h.completed_at).getTime() : 0
+      rows.push({
+        sortKey: ts,
+        type: 'poker',
+        gameLabel: 'Poker',
+        wager: BigInt(h.myContributed ?? '0'),
+        payout: BigInt(h.myWon ?? '0'),
+        profit: BigInt(h.myWon ?? '0') - BigInt(h.myContributed ?? '0'),
+        txHash: null,
+        createdAt: h.completed_at ?? '',
+      })
+    })
+
     txHistory?.forEach((t) => {
       const created = new Date(t.created_at).getTime()
       const amount = BigInt(t.amount ?? 0)
@@ -217,7 +237,7 @@ export function AllStatsDashboard({ playerAddress }: AllStatsDashboardProps) {
 
     rows.sort((a, b) => b.sortKey - a.sortKey)
     return rows
-  }, [bjGames, lotteryResults, kenoStats?.results, plinkoStats?.results, txHistory])
+  }, [bjGames, lotteryResults, kenoStats?.results, plinkoStats?.results, pokerHands.data, txHistory])
 
   const cumulativeChartData = useMemo(() => {
     const gameRows = combinedHistory.filter(
@@ -271,7 +291,8 @@ export function AllStatsDashboard({ playerAddress }: AllStatsDashboardProps) {
   const isLoading =
     (bjStats === undefined && address) ||
     (lotteryStats?.isLoading) ||
-    (kenoStats?.results === undefined)
+    (kenoStats?.results === undefined) ||
+    pokerStats.isLoading
 
   if (isLoading && aggregated.totalGames === 0 && combinedHistory.length === 0) {
     return (

@@ -25,6 +25,10 @@ interface BJMultiTableSummary {
   emptySeats: number;
 }
 
+function isUuidLike(value: string): boolean {
+  return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value);
+}
+
 export default function AdminBJMultiTab() {
   const { address } = useAccount();
   const { imageOptions, videoOptions } = useBlackjackTables({ enabledOnly: false });
@@ -247,6 +251,7 @@ export default function AdminBJMultiTab() {
             >
               {themeList.map((t) => {
                 const selected = themeId === t.id;
+                const showId = !isUuidLike(t.id);
                 return (
                   <button
                     key={t.id}
@@ -261,9 +266,11 @@ export default function AdminBJMultiTab() {
                     }`}
                   >
                     <span className="text-sm font-semibold leading-snug text-white break-words">{t.label}</span>
-                    <span className="text-[11px] text-slate-300/90 font-mono truncate mt-0.5" title={t.id}>
-                      {t.id}
-                    </span>
+                    {showId && (
+                      <span className="text-[11px] text-slate-300/90 font-mono truncate mt-0.5" title={t.id}>
+                        {t.id}
+                      </span>
+                    )}
                   </button>
                 );
               })}
