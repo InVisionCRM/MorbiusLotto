@@ -1113,6 +1113,16 @@ async function initializeServices() {
       }
     });
 
+    /** Live WS presence per game category (home page cards, etc.) */
+    app.get('/api/analytics/live-presence', (_req, res) => {
+      try {
+        sendJson(res, wsService.getLivePresenceByGame());
+      } catch (error) {
+        logger.error('Error fetching live presence:', error);
+        res.status(500).json({ error: 'Internal server error' });
+      }
+    });
+
     // Public: recent Blackjack wins (for Latest Wins feed)
     app.get('/api/analytics/recent-wins', async (req, res) => {
       const limit = Math.min(parseInt(req.query.limit as string) || 20, 50);

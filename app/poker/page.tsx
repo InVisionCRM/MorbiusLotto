@@ -789,7 +789,6 @@ export default function PokerLobbyPage() {
                 <div className="rounded-lg bg-slate-800/80 border border-cyan-500/20 px-3 py-2.5 space-y-1">
                   <p className="text-[11px] text-slate-400 leading-relaxed">
                     <span className="text-cyan-400/90 font-medium">Cash buy-in:</span>{' '}
-                    {POKER_CASH_MIN_BUY_IN_BB} BB – {POKER_CASH_MAX_BUY_IN_BB} BB (industry standard).{' '}
                     {joinModal ? (
                       <>
                         For this table:{' '}

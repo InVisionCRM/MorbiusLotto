@@ -2062,6 +2062,74 @@ export class WebSocketService {
     return this.wss.clients.size;
   }
 
+  /**
+   * WebSocket clients currently in each game’s rooms (chat + table rooms).
+   * One browser tab ≈ one connection; not deduped by wallet.
+   */
+  public getLivePresenceByGame(): {
+    poker: number;
+    blackjackMulti: number;
+    blackjack: number;
+    plinko: number;
+    keno: number;
+    lottery: number;
+    bigWheel: number;
+  } {
+    let poker = 0;
+    let blackjackMulti = 0;
+    for (const [roomId, set] of this.roomToClients.entries()) {
+      const n = set.size;
+      if (roomId.startsWith('poker:table:') || roomId.startsWith('poker_tournament:')) {
+        poker += n;
+      } else if (roomId.startsWith('blackjack:table:')) {
+        blackjackMulti += n;
+      }
+    }
+    return {
+      poker,
+      blackjackMulti,
+      blackjack: this.roomToClients.get('blackjack')?.size ?? 0,
+      plinko: this.roomToClients.get('plinko')?.size ?? 0,
+      keno: this.roomToClients.get('keno')?.size ?? 0,
+      lottery: this.roomToClients.get('lottery')?.size ?? 0,
+      bigWheel: this.roomToClients.get('bigwheel')?.size ?? 0,
+    };
+  }
+
+  /**
+   * WebSocket clients currently in each game’s rooms (chat + table rooms).
+   * One browser tab ≈ one connection; not deduped by wallet.
+   */
+  public getLivePresenceByGame(): {
+    poker: number;
+    blackjackMulti: number;
+    blackjack: number;
+    plinko: number;
+    keno: number;
+    lottery: number;
+    bigWheel: number;
+  } {
+    let poker = 0;
+    let blackjackMulti = 0;
+    for (const [roomId, set] of this.roomToClients.entries()) {
+      const n = set.size;
+      if (roomId.startsWith('poker:table:') || roomId.startsWith('poker_tournament:')) {
+        poker += n;
+      } else if (roomId.startsWith('blackjack:table:')) {
+        blackjackMulti += n;
+      }
+    }
+    return {
+      poker,
+      blackjackMulti,
+      blackjack: this.roomToClients.get('blackjack')?.size ?? 0,
+      plinko: this.roomToClients.get('plinko')?.size ?? 0,
+      keno: this.roomToClients.get('keno')?.size ?? 0,
+      lottery: this.roomToClients.get('lottery')?.size ?? 0,
+      bigWheel: this.roomToClients.get('bigwheel')?.size ?? 0,
+    };
+  }
+
   // ============================================
   // Responsible Gaming / Self-Exclusion Handlers
   // ============================================

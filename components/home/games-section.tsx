@@ -1,8 +1,10 @@
 'use client'
 
+import type { ReactNode } from 'react'
 import Image from 'next/image'
 import Link from 'next/link'
 import { useAccount } from 'wagmi'
+import { useQuery } from '@tanstack/react-query'
 import { IconBrandTelegram, IconBrandX } from '@tabler/icons-react'
 import { Carousel } from '@/components/ui/apple-cards-carousel'
 import { PaymentBadges } from '@/components/home/payment-badges'
@@ -10,13 +12,87 @@ import { cn } from '@/lib/utils'
 import { isAdminWallet } from '@/lib/admin'
 import { homeSectionTitleClass, homeSectionTitleGradientClass } from '@/lib/home-section-typography'
 
+type LivePresence = {
+  poker: number
+  blackjackMulti: number
+  blackjack: number
+  plinko: number
+  keno: number
+  lottery: number
+  bigWheel: number
+}
+
+type PresenceKey = keyof LivePresence
+
+const EMPTY_PRESENCE: LivePresence = {
+  poker: 0,
+  blackjackMulti: 0,
+  blackjack: 0,
+  plinko: 0,
+  keno: 0,
+  lottery: 0,
+  bigWheel: 0,
+}
+
+function LivePlayersBadge({ count }: { count: number }) {
+  return (
+    <div
+      className="pointer-events-none absolute top-2.5 left-2.5 z-20 flex items-center gap-1.5 rounded-full border border-emerald-500/45 bg-black/60 px-2 py-0.5 shadow-[0_0_12px_rgba(16,185,129,0.25)] backdrop-blur-sm"
+      aria-label={`${count} connected in this game right now`}
+    >
+      <span className="relative flex h-2 w-2 shrink-0">
+        <span
+          className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400 opacity-50"
+          style={{ animationDuration: '2.2s' }}
+        />
+        <span className="relative inline-flex h-2 w-2 rounded-full bg-emerald-400 shadow-[0_0_10px_rgba(52,211,153,0.95)]" />
+      </span>
+      <span className="text-[10px] md:text-[11px] font-semibold tabular-nums text-emerald-100/95">
+        {count.toLocaleString()} live
+      </span>
+    </div>
+  )
+}
+
 export function GamesSection() {
   const { address } = useAccount()
   const isAdmin = isAdminWallet(address)
+  const { data: presence = EMPTY_PRESENCE } = useQuery({
+    queryKey: ['livePresence'],
+    queryFn: async (): Promise<LivePresence> => {
+      const res = await fetch('/api/analytics/live-presence')
+      if (!res.ok) return EMPTY_PRESENCE
+      const json = (await res.json()) as Partial<LivePresence>
+      return {
+        poker: Number(json.poker) || 0,
+        blackjackMulti: Number(json.blackjackMulti) || 0,
+        blackjack: Number(json.blackjack) || 0,
+        plinko: Number(json.plinko) || 0,
+        keno: Number(json.keno) || 0,
+        lottery: Number(json.lottery) || 0,
+        bigWheel: Number(json.bigWheel) || 0,
+      }
+    },
+    refetchInterval: 15_000,
+    staleTime: 5_000,
+  })
+
   const baseCardClassName =
     'relative overflow-hidden rounded-3xl h-72 w-52 md:h-[30rem] md:w-96 transition-all duration-300 bg-gradient-to-br from-slate-900 to-slate-800 border border-cyan-500/30 shadow-2xl'
 
-  const gameCards = [
+  const gameCards: Array<{
+    key: string
+    href: string
+    title: string
+    image: string
+    imageAlt: string
+    titleClassName: string
+    badge: string | null
+    disabled: boolean
+    presenceKey?: PresenceKey
+    isGradientCard?: boolean
+    customContent?: ReactNode
+  }> = [
     {
       key: 'poker',
       href: '/poker',
@@ -26,6 +102,7 @@ export function GamesSection() {
       titleClassName: 'text-xl md:text-3xl font-orbitron tracking-wide',
       badge: 'NEW!' as string | null,
       disabled: false,
+      presenceKey: 'poker',
     },
     {
       key: 'multiplayer-blackjack',
@@ -36,6 +113,7 @@ export function GamesSection() {
       titleClassName: 'text-lg md:text-2xl font-krona-one leading-tight',
       badge: 'NEW!' as string | null,
       disabled: false,
+      presenceKey: 'blackjackMulti',
     },
     {
       key: 'blackjack',
@@ -46,6 +124,7 @@ export function GamesSection() {
       titleClassName: 'text-xl md:text-3xl font-jost',
       badge: 'NEW!' as string | null,
       disabled: false,
+      presenceKey: 'blackjack',
     },
     {
       key: 'plinko',
@@ -56,6 +135,7 @@ export function GamesSection() {
       titleClassName: 'text-xl md:text-3xl font-autour-one',
       badge: 'NEW!' as string | null,
       disabled: false,
+      presenceKey: 'plinko',
     },
     {
       key: 'keno',
@@ -66,6 +146,7 @@ export function GamesSection() {
       titleClassName: 'text-xl md:text-3xl font-climate-crisis',
       badge: null as string | null,
       disabled: false,
+      presenceKey: 'keno',
     },
     {
       key: 'lotto',
@@ -76,6 +157,7 @@ export function GamesSection() {
       titleClassName: 'text-xl md:text-3xl font-monoton',
       badge: null as string | null,
       disabled: false,
+      presenceKey: 'lottery',
     },
     {
       key: 'coming-soon',
@@ -120,6 +202,9 @@ export function GamesSection() {
   const items = gameCards.map((game) => {
     const cardBody = (
       <div className={cn(baseCardClassName, game.disabled && 'opacity-90 cursor-not-allowed')}>
+        {game.presenceKey != null && !game.disabled ? (
+          <LivePlayersBadge count={presence[game.presenceKey]} />
+        ) : null}
         {game.badge ? (
           <div
             className={cn(
