@@ -35,7 +35,7 @@ const ReportModal = lazy(() => import('@/components/shared/ReportModal').then(m 
 const ProfileAvatarModal = lazy(() => import('@/components/shared/ProfileAvatarModal').then(m => ({ default: m.ProfileAvatarModal })));
 const ProfileSettingsModal = lazy(() => import('@/components/shared/ProfileSettingsModal'));
 
-export type NavPage = 'blackjack' | 'plinko' | 'lottery' | 'keno' | 'home';
+export type NavPage = 'blackjack' | 'plinko' | 'lottery' | 'keno' | 'home' | 'poker' | 'blackjackMulti';
 
 const PATH_TO_PAGE: Record<string, NavPage> = {
   '/BLACKJACK': 'blackjack',
@@ -44,6 +44,18 @@ const PATH_TO_PAGE: Record<string, NavPage> = {
   '/lottery': 'lottery',
   '/keno': 'keno',
   '/keno-dashboard': 'keno',
+  '/poker': 'poker',
+  '/blackjack-multi': 'blackjackMulti',
+};
+
+/** Map Other Games href → NavPage so the current route hides its own link. */
+const OTHER_GAME_HREF_TO_PAGE: Partial<Record<string, NavPage>> = {
+  '/BLACKJACK': 'blackjack',
+  '/PLINKO': 'plinko',
+  '/lottery': 'lottery',
+  '/keno': 'keno',
+  '/poker': 'poker',
+  '/blackjack-multi': 'blackjackMulti',
 };
 
 type OtherGameNavItem =
@@ -57,6 +69,8 @@ function isOtherGameLinked(g: OtherGameNavItem): g is Extract<OtherGameNavItem, 
 const OTHER_GAMES: readonly OtherGameNavItem[] = [
   { label: 'Plinko', href: '/PLINKO', icon: 'fa-circle' },
   { label: 'Blackjack', href: '/BLACKJACK', icon: 'blackjack' },
+  { label: "Texas Hold'em", href: '/poker', icon: 'fa-dice' },
+  { label: 'Multiplayer BJ', href: '/blackjack-multi', icon: 'fa-user-friends' },
   { label: 'Lottery', href: '/lottery', icon: 'fa-ticket-alt' },
   { label: 'Keno', href: '/keno', icon: 'fa-th' },
 ];
@@ -284,8 +298,7 @@ const NavContent = React.memo(function NavContent(props: NavContentProps) {
       OTHER_GAMES.filter((g) => {
         if ('comingSoon' in g && g.comingSoon) return true;
         if (!isOtherGameLinked(g)) return false;
-        const gamePage =
-          g.href === '/BLACKJACK' ? 'blackjack' : g.href === '/PLINKO' ? 'plinko' : g.href === '/lottery' ? 'lottery' : 'keno';
+        const gamePage = OTHER_GAME_HREF_TO_PAGE[g.href] ?? 'home';
         return gamePage !== page;
       }),
     [page],

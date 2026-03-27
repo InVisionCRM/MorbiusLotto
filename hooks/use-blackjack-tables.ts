@@ -42,11 +42,29 @@ function normalizeSrc(src: string): string {
   return `https://${src}`;
 }
 
+/** DB rows first (sort_order), then static ids missing from DB so pickers always include bundled tables. */
+function mergeWithStatic(
+  apiMapped: TableOption[],
+  staticDefs: readonly { id: string; label: string; src: string }[]
+): TableOption[] {
+  const apiIds = new Set(apiMapped.map((r) => r.id));
+  const extra = staticDefs
+    .filter((x) => !apiIds.has(x.id))
+    .map((x) => ({ id: x.id, label: x.label, src: normalizeSrc(x.src) }));
+  return [...apiMapped, ...extra];
+}
+
+export type UseBlackjackTablesOptions = {
+  /** When false, includes disabled marketing tables (e.g. admin pickers). Default true for players. */
+  enabledOnly?: boolean;
+};
+
 /**
  * Fetches blackjack table list from API when available; falls back to static constants.
  * Use for table picker and resolving theme to label/src.
  */
-export function useBlackjackTables() {
+export function useBlackjackTables(options?: UseBlackjackTablesOptions) {
+  const enabledOnly = options?.enabledOnly ?? true;
   const [imageOptions, setImageOptions] = useState<TableOption[]>(() =>
     BLACKJACK_IMAGE_BACKGROUNDS.map((x) => ({ id: x.id, label: x.label, src: x.src }))
   );
@@ -58,8 +76,9 @@ export function useBlackjackTables() {
   useEffect(() => {
     let cancelled = false;
     setLoading(true);
+    const q = enabledOnly ? 'enabledOnly=true' : 'enabledOnly=false';
     // Same-origin proxy (app/api/blackjack/tables) → Express + DB. Works when only BLACKJACK_SERVER_URL is set on the server.
-    fetch('/api/blackjack/tables?enabledOnly=true')
+    fetch(`/api/blackjack/tables?${q}`)
       .then((res) => (res.ok ? res.json() : Promise.reject(new Error('Failed to fetch'))))
       .then((rows: Array<{ id: string; kind: string; name: string; src: string; description?: string; token_contract_address?: string; logo_url?: string; ticker?: string; iframe_url?: string; website_url?: string }>) => {
         if (cancelled || !Array.isArray(rows)) return;
@@ -76,10 +95,8 @@ export function useBlackjackTables() {
         });
         const images = rows.filter((r) => r.kind === 'image').map(mapRow);
         const videos = rows.filter((r) => r.kind === 'video').map(mapRow);
-        if (images.length > 0 || videos.length > 0) {
-          setImageOptions(images.length > 0 ? images : BLACKJACK_IMAGE_BACKGROUNDS.map((x) => ({ id: x.id, label: x.label, src: x.src })));
-          setVideoOptions(videos.length > 0 ? videos : BLACKJACK_VIDEO_BACKGROUNDS.map((x) => ({ id: x.id, label: x.label, src: x.src })));
-        }
+        setImageOptions(mergeWithStatic(images, BLACKJACK_IMAGE_BACKGROUNDS));
+        setVideoOptions(mergeWithStatic(videos, BLACKJACK_VIDEO_BACKGROUNDS));
       })
       .catch(() => {
         if (!cancelled) {
@@ -91,7 +108,7 @@ export function useBlackjackTables() {
         if (!cancelled) setLoading(false);
       });
     return () => { cancelled = true; };
-  }, []);
+  }, [enabledOnly]);
 
   const resolveThemeSource = useCallback(
     (kind: 'image' | 'video', id: string): string | null => {

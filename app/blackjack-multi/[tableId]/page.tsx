@@ -1311,7 +1311,7 @@ export default function BlackjackMultiTablePage() {
   if (!tableId) return null;
 
   return (
-    <GlobalMainNav page="blackjack" showBackArrow backArrowHref="/blackjack-multi" backArrowLabel="Lobby">
+    <GlobalMainNav page="blackjackMulti" showBackArrow backArrowHref="/blackjack-multi" backArrowLabel="Lobby">
       <BlackjackMultiBetaSplash />
       <style>{`
         /* Desktop: overlapping card margins — tighter for small cards */

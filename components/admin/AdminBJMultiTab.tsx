@@ -3,7 +3,7 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import { useAccount } from 'wagmi';
 import { formatEther, parseEther } from 'viem';
-import { BLACKJACK_VIDEO_BACKGROUNDS, BLACKJACK_IMAGE_BACKGROUNDS } from '@/app/BLACKJACK/constants';
+import { useBlackjackTables } from '@/hooks/use-blackjack-tables';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -27,6 +27,7 @@ interface BJMultiTableSummary {
 
 export default function AdminBJMultiTab() {
   const { address } = useAccount();
+  const { imageOptions, videoOptions } = useBlackjackTables({ enabledOnly: false });
   const [tables, setTables] = useState<BJMultiTableSummary[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -54,6 +55,16 @@ export default function AdminBJMultiTab() {
   }, []);
 
   useEffect(() => { fetchTables(); }, [fetchTables]);
+
+  const themeList = themeKind === 'video' ? videoOptions : imageOptions;
+
+  useEffect(() => {
+    const list = themeKind === 'video' ? videoOptions : imageOptions;
+    if (list.length === 0) return;
+    if (!list.some((t) => t.id === themeId)) {
+      setThemeId(list[0].id);
+    }
+  }, [themeKind, videoOptions, imageOptions, themeId]);
 
   const handleCreate = async () => {
     setCreating(true);
@@ -183,7 +194,7 @@ export default function AdminBJMultiTab() {
       </Card>
 
       <Dialog open={showCreate} onOpenChange={setShowCreate}>
-        <DialogContent className="bg-slate-900 border-slate-700 max-w-sm">
+        <DialogContent className="bg-slate-900 border-slate-700 max-h-[min(92vh,900px)] w-[calc(100vw-1.25rem)] max-w-md sm:max-w-lg overflow-y-auto overscroll-contain p-4 sm:p-6">
           <DialogHeader>
             <DialogTitle className="text-slate-200 text-sm">Create Multiplayer Blackjack Table</DialogTitle>
             <DialogDescription className="text-slate-400 text-xs">
@@ -216,24 +227,47 @@ export default function AdminBJMultiTab() {
             <div className="flex gap-2">
               <button
                 type="button"
-                onClick={() => { setThemeKind('video'); setThemeId('glowingTable'); }}
-                className={`flex-1 text-xs py-1.5 rounded-md border transition-colors ${themeKind === 'video' ? 'border-cyan-500 bg-cyan-900/30 text-cyan-300' : 'border-slate-600 text-slate-400 hover:border-slate-500'}`}
+                onClick={() => setThemeKind('video')}
+                className={`flex-1 text-sm font-medium py-2.5 rounded-md border transition-colors ${themeKind === 'video' ? 'border-cyan-500 bg-cyan-900/40 text-white' : 'border-slate-600 bg-slate-800 text-slate-200 hover:border-slate-500'}`}
               >Video</button>
               <button
                 type="button"
-                onClick={() => { setThemeKind('image'); setThemeId('High-Roller-2'); }}
-                className={`flex-1 text-xs py-1.5 rounded-md border transition-colors ${themeKind === 'image' ? 'border-cyan-500 bg-cyan-900/30 text-cyan-300' : 'border-slate-600 text-slate-400 hover:border-slate-500'}`}
+                onClick={() => setThemeKind('image')}
+                className={`flex-1 text-sm font-medium py-2.5 rounded-md border transition-colors ${themeKind === 'image' ? 'border-cyan-500 bg-cyan-900/40 text-white' : 'border-slate-600 bg-slate-800 text-slate-200 hover:border-slate-500'}`}
               >Image</button>
             </div>
-            <select
-              value={themeId}
-              onChange={e => setThemeId(e.target.value)}
-              className="w-full bg-slate-800 border border-slate-600 text-slate-200 text-xs h-8 rounded-md px-2"
+            <p className="text-xs text-slate-400">
+              {themeList.length} {themeKind === 'video' ? 'video' : 'image'} tables (same list as single-player). Tap one to select.
+            </p>
+            <div
+              role="listbox"
+              aria-label={themeKind === 'video' ? 'Video table theme' : 'Image table theme'}
+              className="max-h-[min(52vh,340px)] overflow-y-auto overscroll-contain rounded-lg border border-slate-600 bg-slate-950/90 p-1.5 space-y-1.5"
+              style={{ WebkitOverflowScrolling: 'touch' }}
             >
-              {(themeKind === 'video' ? BLACKJACK_VIDEO_BACKGROUNDS : BLACKJACK_IMAGE_BACKGROUNDS).map(t => (
-                <option key={t.id} value={t.id}>{t.label}</option>
-              ))}
-            </select>
+              {themeList.map((t) => {
+                const selected = themeId === t.id;
+                return (
+                  <button
+                    key={t.id}
+                    type="button"
+                    role="option"
+                    aria-selected={selected}
+                    onClick={() => setThemeId(t.id)}
+                    className={`w-full min-h-[48px] flex flex-col justify-center rounded-md px-3 py-2.5 text-left transition-colors border sm:min-h-[44px] ${
+                      selected
+                        ? 'bg-cyan-900/50 text-white border-cyan-500/70 shadow-[0_0_0_1px_rgba(34,211,238,0.25)]'
+                        : 'bg-slate-800 text-slate-100 border-slate-600 hover:bg-slate-700 active:bg-slate-600'
+                    }`}
+                  >
+                    <span className="text-sm font-semibold leading-snug text-white break-words">{t.label}</span>
+                    <span className="text-[11px] text-slate-300/90 font-mono truncate mt-0.5" title={t.id}>
+                      {t.id}
+                    </span>
+                  </button>
+                );
+              })}
+            </div>
           </div>
           {error && <p className="text-xs text-red-400">{error}</p>}
           <DialogFooter>

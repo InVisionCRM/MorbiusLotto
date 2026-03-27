@@ -197,6 +197,7 @@ export function GameWalletModal({
   const [txError, setTxError] = useState<string | null>(null);
   const [txLoaded, setTxLoaded] = useState(false);
   const [reportOpen, setReportOpen] = useState(false);
+  const [showDepositRefreshPrompt, setShowDepositRefreshPrompt] = useState(false);
 
   // ── Wallet balances ────────────────────────────────────────────────────
   const { balance: morbiusBalance } = useTokenBalance(address);
@@ -304,6 +305,7 @@ export function GameWalletModal({
       setDepositConfirmations(0);
       setDepositTxHash(null);
       setDepositNotifyAmountWei(null);
+      setShowDepositRefreshPrompt(false);
     } else {
       if (isSelfManaged) fetchBalance();
       setTxLoaded(false);
@@ -366,6 +368,7 @@ export function GameWalletModal({
           setDepositBlockNumber(null);
           setDepositTxHash(null);
           setDepositNotifyAmountWei(null);
+          setShowDepositRefreshPrompt(true);
           setTimeout(() => setDepositPhase('idle'), 2000);
           return;
         }
@@ -1290,6 +1293,51 @@ export function GameWalletModal({
         onClose={() => setReportOpen(false)}
         balance={displayBalance ?? undefined}
       />
+
+      {showDepositRefreshPrompt && (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm">
+          <div
+            className="relative bg-gradient-to-br from-slate-900 to-slate-800 border-2 border-cyan-500/30 rounded-2xl shadow-2xl max-w-md w-full overflow-hidden p-6"
+            style={{
+              boxShadow:
+                '0 4px 16px rgba(0, 0, 0, 0.6), inset 0 1px 0 rgba(255, 255, 255, 0.05)',
+            }}
+            role="alertdialog"
+            aria-modal="true"
+            aria-labelledby="deposit-refresh-title"
+            aria-describedby="deposit-refresh-desc"
+          >
+            <div className="absolute inset-0 bg-[radial-gradient(circle_at_50%_50%,rgba(34,211,238,0.15),transparent_70%)] pointer-events-none rounded-2xl" />
+            <div className="relative">
+              <div className="flex items-center gap-2 mb-3">
+                <Check className="w-8 h-8 text-green-400 shrink-0" aria-hidden />
+                <h3 id="deposit-refresh-title" className="text-lg font-semibold text-white">
+                  Deposit confirmed
+                </h3>
+              </div>
+              <p id="deposit-refresh-desc" className="text-sm text-slate-300 mb-6">
+                Refresh the page to see your updated MORBIUS balance in the game.
+              </p>
+              <div className="flex flex-col sm:flex-row gap-2 sm:justify-end">
+                <button
+                  type="button"
+                  onClick={() => setShowDepositRefreshPrompt(false)}
+                  className="w-full sm:w-auto px-4 py-2.5 rounded-xl text-sm font-medium text-slate-300 bg-white/5 border border-white/10 hover:bg-white/10 transition-colors"
+                >
+                  Later
+                </button>
+                <button
+                  type="button"
+                  onClick={() => window.location.reload()}
+                  className="w-full sm:w-auto px-4 py-2.5 rounded-xl text-sm font-medium text-white bg-gradient-to-r from-cyan-600 to-blue-600 hover:from-cyan-500 hover:to-blue-500 transition-colors shadow-lg"
+                >
+                  Refresh page
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </>
   );
 }

@@ -95,6 +95,8 @@ export interface BJMultiTableSummary {
   maxBet: string;
   seatedCount: number;
   emptySeats: number;
+  themeKind: 'video' | 'image';
+  themeId: string;
 }
 
 // ---------------------------------------------------------------------------

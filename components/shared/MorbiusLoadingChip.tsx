@@ -14,10 +14,10 @@ export function MorbiusLoadingChip({ className }: { className?: string }) {
       <Image
         src="/morbius/MorbiusChip.png"
         alt=""
-        width={44}
-        height={44}
-        className="h-11 w-11 animate-spin opacity-80"
-        sizes="44px"
+        width={160}
+        height={160}
+        className="h-40 w-40 opacity-50 animate-[spin_4s_linear_infinite]"
+        sizes="160px"
         priority
       />
     </div>

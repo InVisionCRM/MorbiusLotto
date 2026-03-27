@@ -15,6 +15,7 @@ import { BLACKJACK_ADDRESS, MORBIUS_TOKEN_ADDRESS } from '@/lib/contracts';
 import { Users, ArrowRight, Filter } from 'lucide-react';
 import { BlackjackMultiBetaSplash } from '@/components/BLACKJACK/BlackjackMultiBetaSplash';
 import { MorbiusLoadingChip } from '@/components/shared/MorbiusLoadingChip';
+import { useBlackjackTables } from '@/hooks/use-blackjack-tables';
 
 function formatMorbius(wei: string): string {
   try {
@@ -29,6 +30,7 @@ type SeatFilter = 'all' | 'has_seats' | 'full';
 export default function BlackjackMultiLobbyPage() {
   const router = useRouter();
   const { address } = useAccount();
+  const { getThemeInfo } = useBlackjackTables();
   const [tables, setTables] = useState<BJMultiTableSummary[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -71,7 +73,7 @@ export default function BlackjackMultiLobbyPage() {
   const activeFilterCount = (statusFilter !== 'all' ? 1 : 0) + (seatFilter !== 'all' ? 1 : 0);
 
   return (
-    <GlobalMainNav page="home" showBackArrow backArrowHref="/" backArrowLabel="Back">
+    <GlobalMainNav page="blackjackMulti" showBackArrow backArrowHref="/" backArrowLabel="Back">
       <BlackjackMultiBetaSplash />
       <div className="min-h-screen bg-slate-950 text-white">
         <main className="container mx-auto px-4 py-8 max-w-3xl">
@@ -149,13 +151,17 @@ export default function BlackjackMultiLobbyPage() {
           )}
 
           <div className="space-y-3">
-            {filteredTables.map(table => (
+            {filteredTables.map(table => {
+              const kind = table.themeKind ?? 'video';
+              const themeId = table.themeId ?? 'glowingTable';
+              const theme = getThemeInfo({ kind, id: themeId });
+              return (
               <div
                 key={table.id}
-                className="bg-slate-800/60 border border-slate-700 rounded-xl px-5 py-4 flex items-center justify-between"
+                className="bg-slate-800/60 border border-slate-700 rounded-xl px-5 py-4 flex items-center justify-between gap-3"
               >
-                <div className="space-y-1">
-                  <div className="flex items-center gap-2">
+                <div className="space-y-1 min-w-0 flex-1">
+                  <div className="flex items-center gap-2 flex-wrap">
                     <span className={`text-[10px] px-2 py-0.5 rounded-full font-medium ${
                       table.status === 'waiting' ? 'bg-slate-700 text-slate-300' :
                       table.status === 'betting' ? 'bg-yellow-800/60 text-yellow-300' :
@@ -164,12 +170,18 @@ export default function BlackjackMultiLobbyPage() {
                       {table.status === 'waiting' ? 'Open' : table.status === 'betting' ? 'Betting' : 'In Progress'}
                     </span>
                     <span className="text-slate-400 text-xs flex items-center gap-1">
-                      <Users className="w-3 h-3" />
+                      <Users className="w-3 h-3 shrink-0" />
                       {table.seatedCount}/3
                     </span>
                   </div>
                   <p className="text-slate-300 text-xs">
                     {formatMorbius(table.minBet)} – {formatMorbius(table.maxBet)} MORBIUS
+                  </p>
+                  <p className="text-slate-500 text-[11px] leading-snug">
+                    <span className="text-slate-500">Table: </span>
+                    <span className="text-cyan-400/90 font-medium">{theme.label}</span>
+                    <span className="text-slate-600"> · </span>
+                    <span className="text-slate-400">{theme.kind === 'video' ? 'Video' : 'Image'}</span>
                   </p>
                 </div>
                 <Link href={`/blackjack-multi/${table.id}`}>
@@ -178,7 +190,8 @@ export default function BlackjackMultiLobbyPage() {
                   </Button>
                 </Link>
               </div>
-            ))}
+            );
+            })}
           </div>
 
           <div className="mt-6">
