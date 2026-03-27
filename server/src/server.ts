@@ -24,7 +24,7 @@ import { CosmeticsService } from './services/cosmetics.service';
 import { isAdminWallet, getLockedFields, ITEM_CATALOG } from './lib/cosmetics-catalog';
 import { getPokerChipWei } from './lib/poker-chip-scale';
 import { logger } from './utils/logger';
-import { signWithdrawApproval, MIN_WITHDRAWAL_WEI } from './utils/withdraw-sign';
+import { MIN_WITHDRAWAL_WEI } from './utils/withdraw-sign';
 import { getPublicClient } from './utils/chain-client';
 import { blackjackAbi } from './abi/blackjack';
 import { createWalletClient, http, decodeEventLog, getAddress } from 'viem';
@@ -2626,57 +2626,105 @@ async function initializeServices() {
     });
 
     // Deposit notify: record deposit as pending; balance is credited only after N block confirmations (reorg protection).
-    // Amount is derived from on-chain DepositMORBIUS event when possible so credited amount matches chain regardless of client.
+    // Amount MUST come from chain (Deposit or DepositMORBIUS from BLACKJACK_ADDRESS) — never trust client body (PLS path had no MORBIUS decode before).
+    const DEPOSIT_PLS_ABI = [
+      {
+        type: 'event',
+        name: 'Deposit',
+        inputs: [
+          { name: 'player', type: 'address', indexed: true },
+          { name: 'morbiusAmount', type: 'uint256', indexed: false },
+          { name: 'plsAmount', type: 'uint256', indexed: false },
+        ],
+      },
+    ] as const;
     const DEPOSIT_MORBIUS_ABI = [
       { type: 'event', name: 'DepositMORBIUS', inputs: [{ name: 'player', type: 'address', indexed: true }, { name: 'amount', type: 'uint256', indexed: false }] },
     ] as const;
     app.post('/api/deposit/notify', async (req, res) => {
       try {
-        const { walletAddress, txHash, amount, blockNumber } = req.body;
+        const { walletAddress, txHash } = req.body;
         if (!walletAddress || typeof walletAddress !== 'string' || !/^0x[0-9a-fA-F]{40}$/.test(walletAddress)) {
           return res.status(400).json({ error: 'Invalid wallet address' });
         }
         if (!txHash || typeof txHash !== 'string' || !/^0x[0-9a-fA-F]{64}$/.test(txHash)) {
           return res.status(400).json({ error: 'Invalid tx hash' });
         }
-        if (!amount || typeof amount !== 'string') {
-          return res.status(400).json({ error: 'Amount required' });
-        }
-        let amountBigInt: bigint;
-        try { amountBigInt = BigInt(amount); } catch { return res.status(400).json({ error: 'Invalid amount' }); }
-        if (amountBigInt <= 0n) return res.status(400).json({ error: 'Amount must be positive' });
         const confirmationsRequired = Number(process.env.DEPOSIT_CONFIRMATIONS_REQUIRED || '3');
-        let blockNum: bigint | null = null;
         const publicClient = getPublicClient();
-        let receipt: Awaited<ReturnType<typeof publicClient.getTransactionReceipt>> | null = null;
+        const hash = txHash as `0x${string}`;
+        const blackjackAddr = getAddress(BLACKJACK_ADDRESS);
+
+        let receipt: Awaited<ReturnType<typeof publicClient.getTransactionReceipt>>;
         try {
-          receipt = await publicClient.getTransactionReceipt({ hash: txHash as `0x${string}` });
-          if (receipt?.blockNumber != null) blockNum = receipt.blockNumber;
+          receipt = await publicClient.getTransactionReceipt({ hash });
         } catch {
-          if (blockNumber != null) {
-            try { blockNum = BigInt(blockNumber); } catch { /* ignore */ }
-          }
+          return res.status(400).json({ error: 'Transaction not found or not yet mined' });
         }
-        // Prefer on-chain amount from Blackjack DepositMORBIUS event so credit matches chain (avoids client typos/units).
-        if (receipt?.logs) {
-          const walletLower = walletAddress.toLowerCase();
-          for (const log of receipt.logs) {
-            if (log.address?.toLowerCase() !== BLACKJACK_ADDRESS.toLowerCase()) continue;
-            try {
-              const decoded = decodeEventLog({
-                abi: DEPOSIT_MORBIUS_ABI,
-                data: log.data,
-                topics: log.topics,
-              });
-              if (decoded.eventName === 'DepositMORBIUS' && (decoded.args as { player: string; amount: bigint }).player?.toLowerCase() === walletLower) {
-                amountBigInt = (decoded.args as { player: string; amount: bigint }).amount;
+        if (receipt.status !== 'success') {
+          return res.status(400).json({ error: 'Transaction reverted on-chain' });
+        }
+
+        let txTo: `0x${string}`;
+        try {
+          const tx = await publicClient.getTransaction({ hash });
+          if (!tx.to) {
+            return res.status(400).json({ error: 'Invalid transaction (no contract target)' });
+          }
+          txTo = getAddress(tx.to);
+        } catch {
+          return res.status(400).json({ error: 'Could not load transaction' });
+        }
+        if (txTo !== blackjackAddr) {
+          return res.status(400).json({ error: 'Transaction not sent to the Blackjack contract' });
+        }
+
+        const blockNum = receipt.blockNumber;
+        const walletLower = walletAddress.toLowerCase();
+        let amountBigInt: bigint | null = null;
+
+        for (const log of receipt.logs) {
+          if (log.address?.toLowerCase() !== BLACKJACK_ADDRESS.toLowerCase()) continue;
+          try {
+            const decoded = decodeEventLog({
+              abi: DEPOSIT_MORBIUS_ABI,
+              data: log.data,
+              topics: log.topics,
+            });
+            if (decoded.eventName === 'DepositMORBIUS') {
+              const args = decoded.args as { player: string; amount: bigint };
+              if (args.player?.toLowerCase() === walletLower) {
+                amountBigInt = args.amount;
                 break;
               }
-            } catch {
-              /* not this event */
             }
+          } catch {
+            /* try Deposit */
+          }
+          try {
+            const decoded = decodeEventLog({
+              abi: DEPOSIT_PLS_ABI,
+              data: log.data,
+              topics: log.topics,
+            });
+            if (decoded.eventName === 'Deposit') {
+              const args = decoded.args as { player: string; morbiusAmount: bigint; plsAmount: bigint };
+              if (args.player?.toLowerCase() === walletLower) {
+                amountBigInt = args.morbiusAmount;
+                break;
+              }
+            }
+          } catch {
+            /* not this log */
           }
         }
+
+        if (amountBigInt == null || amountBigInt <= 0n) {
+          return res.status(400).json({
+            error: 'Could not verify deposit amount on-chain (no matching Deposit or DepositMORBIUS for this wallet)',
+          });
+        }
+
         await dbService.insertPendingDeposit(walletAddress, amountBigInt, txHash, blockNum, confirmationsRequired);
         return res.status(200).json({ ok: true, message: 'Deposit recorded; balance will update after confirmations' });
       } catch (error) {
@@ -2725,7 +2773,7 @@ async function initializeServices() {
       }
     });
 
-    // Withdraw prepare: server signs withdrawal approval (amount = min(DB balance, contract reserve))
+    // Shared RPC client (balance checks, legacy pending_withdrawal nonce verification, hot-wallet liquidity).
     const publicClient = getPublicClient();
     const blackjackContractAddress = BLACKJACK_ADDRESS;
     console.log('[Server] Using BLACKJACK_ADDRESS:', blackjackContractAddress);
@@ -2771,7 +2819,7 @@ async function initializeServices() {
         });
       }
     } else {
-      logger.warn('SETTLEMENT_PRIVATE_KEY not set — withdrawals will fail');
+      logger.info('SETTLEMENT_PRIVATE_KEY not set — hot-wallet withdrawals do not require it; legacy contract flows might');
     }
 
     // Startup: process any orphaned pending withdrawals with on-chain nonce verification.
@@ -3011,8 +3059,10 @@ async function initializeServices() {
           if (blockNumber == null) continue;
           const confirmations = Number(currentBlock - blockNumber);
           if (confirmations >= row.confirmations_required) {
-            await dbService.creditPendingDeposit(row.id);
-            logger.info('Deposit confirmed and credited', { wallet: row.wallet_address, txHash: row.tx_hash, confirmations });
+            const credited = await dbService.creditPendingDeposit(row.id);
+            if (credited) {
+              logger.info('Deposit confirmed and credited', { wallet: row.wallet_address, txHash: row.tx_hash, confirmations });
+            }
           }
         }
       } catch (err) {
@@ -3021,7 +3071,6 @@ async function initializeServices() {
     }, 10_000); // every 10s
 
     // Contract daily snapshot scheduler: take on-chain cumulative stats once per hour.
-    // Run immediately on startup so today's row exists, then repeat every hour.
     const runContractSnapshot = async () => {
       try {
         const saved = await chainAnalytics.takeAndSaveDailySnapshots();
@@ -3036,9 +3085,8 @@ async function initializeServices() {
     // Prime the BJ totals cache on startup (runs in background, non-blocking)
     refreshBjTotalsBackground(chainAnalytics);
 
-    // Authoritative balance over HTTP (survives refresh; no WebSocket required).
-    // Resolves pending withdrawals (mark completed if nonce used on-chain), then returns
-    // DB balance, syncing from contract when no active games and contract > DB (catches missed deposits).
+    // Authoritative playable balance over HTTP (survives refresh; no WebSocket required).
+    // Legacy: if an old signature-based pending_withdrawal exists, reconcile nonce on-chain then return DB balance.
     app.get('/api/player/:address/balance', async (req, res) => {
       try {
         const rawAddress = req.params.address;
@@ -3076,12 +3124,7 @@ async function initializeServices() {
           }
         }
 
-        // Return DB balance directly. Deposit syncing is handled exclusively by
-        // sync_balance (delta-based) to prevent the bounce-back exploit where
-        // gaming losses (which lower DB but never touch on-chain reserve) would
-        // be falsely treated as uncredited deposits.
         const balance = await dbService.getPlayerBalance(normalizedAddress);
-
         return res.status(200).json({ balance: balance.toString() });
       } catch (error) {
         logger.error('Error fetching player balance:', error);
@@ -3089,228 +3132,7 @@ async function initializeServices() {
       }
     });
 
-    app.post('/api/withdraw/prepare', async (req, res) => {
-      try {
-        const { address, requestedAmount } = req.body;
-
-        if (!address || typeof address !== 'string') {
-          return res.status(400).json({ error: 'Address required' });
-        }
-
-        const normalizedAddress = address.toLowerCase().startsWith('0x')
-          ? address.toLowerCase()
-          : `0x${address.toLowerCase()}`;
-
-        if (normalizedAddress.length !== 42) {
-          return res.status(400).json({ error: 'Invalid address' });
-        }
-
-        // Do NOT refund existing pending here — that allows double withdrawal. Only allow one pending at a time.
-        const existingPending = await dbService.getActivePendingWithdrawal(normalizedAddress);
-        if (existingPending) {
-          return res.status(409).json({
-            error: 'You have a pending withdrawal. Wait for it to complete or wait until the signed withdrawal expires (about 15 minutes) before requesting another.',
-          });
-        }
-
-        // Get database balance for this specific wallet
-        const dbBalance = await dbService.getPlayerBalance(normalizedAddress);
-
-        // Get contract reserve for this specific wallet
-        const contractReserve = await publicClient.readContract({
-          address: blackjackContractAddress,
-          abi: blackjackAbi,
-          functionName: 'getPlayerReserve',
-          args: [normalizedAddress as `0x${string}`],
-        }) as bigint;
-
-        // Check the contract's actual MORBIUS token balance — if the contract doesn't hold
-        // enough tokens, the on-chain tx will revert with "Insufficient contract balance".
-        // Catch this early so we don't deduct the DB balance and leave the user waiting
-        // until the signed withdrawal expires (~15 min) for the cron to refund.
-        let contractTokenBalance: bigint;
-        try {
-          contractTokenBalance = await publicClient.readContract({
-            address: MORBIUS_TOKEN_ADDRESS,
-            abi: ERC20_BALANCE_OF_ABI,
-            functionName: 'balanceOf',
-            args: [blackjackContractAddress],
-          }) as bigint;
-        } catch (rpcErr) {
-          logger.error('withdraw/prepare: failed to read contract token balance', {
-            error: rpcErr instanceof Error ? rpcErr.message : String(rpcErr),
-          });
-          return res.status(503).json({ error: 'Cannot verify contract liquidity. Try again shortly.' });
-        }
-
-        logger.info('withdraw/prepare: contract MORBIUS balance read', {
-          blackjackContract: blackjackContractAddress,
-          contractTokenBalance: contractTokenBalance.toString(),
-          balanceMorbius: Number(contractTokenBalance) / 1e18,
-        });
-
-        // Cap withdrawal to DB balance only. Contract supports off-chain payouts (house bankroll)
-        // and enforces daily limits (1M per user, 10M global); liquidity is operator's responsibility.
-        const requested = requestedAmount != null ? BigInt(String(requestedAmount)) : dbBalance;
-        const amount = requested < dbBalance ? requested : dbBalance;
-
-        if (amount < MIN_WITHDRAWAL_WEI) {
-          return res.status(400).json({
-            error: 'Insufficient withdrawable balance',
-            dbBalance: dbBalance.toString(),
-            contractReserve: contractReserve.toString(),
-          });
-        }
-
-        // Reject early if the contract doesn't hold enough MORBIUS to pay out.
-        // This prevents the user from waiting 2 min for the expiry cron to refund.
-        if (contractTokenBalance < amount) {
-          logger.warn('withdraw/prepare: contract liquidity too low', {
-            address: normalizedAddress,
-            requestedAmount: amount.toString(),
-            contractTokenBalance: contractTokenBalance.toString(),
-            blackjackContract: blackjackContractAddress,
-          });
-          return res.status(400).json({
-            error: `Contract liquidity is too low. The contract holds ${(Number(contractTokenBalance) / 1e18).toLocaleString(undefined, { maximumFractionDigits: 0 })} MORBIUS but you requested ${(Number(amount) / 1e18).toLocaleString(undefined, { maximumFractionDigits: 0 })}. Try a smaller amount or contact support.`,
-            contractTokenBalance: contractTokenBalance.toString(),
-            requestedAmount: amount.toString(),
-            blackjackContractAddress: blackjackContractAddress,
-            hint: 'Verify the contract MORBIUS balance on the block explorer. If the balance is higher there, the server may be using a different contract address (check BLACKJACK_ADDRESS in server .env) or an RPC returned stale data.',
-          });
-        }
-
-        const privateKey = process.env.SETTLEMENT_PRIVATE_KEY as `0x${string}`;
-        if (!privateKey) {
-          logger.error('SETTLEMENT_PRIVATE_KEY not set');
-          return res.status(500).json({ error: 'Server configuration error' });
-        }
-
-        // Generate unique nonce using timestamp + random
-        const nonce = BigInt(Date.now()) * BigInt(1e6) + BigInt(Math.floor(Math.random() * 1e6));
-
-        const withdrawExpirySeconds = Number(process.env.WITHDRAW_SIGNATURE_EXPIRY_SECONDS ?? '900'); // default 15 min
-        const expiryTimestamp = Math.floor(Date.now() / 1000) + withdrawExpirySeconds;
-
-        // Atomically deduct balance AND create pending withdrawal record in one transaction.
-        // If either step fails (e.g. insufficient balance or DB error), both are rolled back —
-        // preventing permanent balance loss from a partial failure between the two operations.
-        try {
-          await dbService.deductAndCreatePendingWithdrawal(
-            normalizedAddress,
-            nonce,
-            amount,
-            new Date(expiryTimestamp * 1000),
-          );
-        } catch (deductErr) {
-          return res.status(400).json({
-            error: 'Insufficient balance for withdrawal',
-            dbBalance: dbBalance.toString(),
-          });
-        }
-
-        let domainSeparatorHex: `0x${string}` | undefined;
-        try {
-          domainSeparatorHex = await publicClient.readContract({
-            address: blackjackContractAddress,
-            abi: blackjackAbi,
-            functionName: 'DOMAIN_SEPARATOR',
-          }) as `0x${string}`;
-        } catch (rpcErr) {
-          logger.warn('Withdrawal signing: could not read DOMAIN_SEPARATOR from contract, using signTypedData', {
-            error: rpcErr instanceof Error ? rpcErr.message : String(rpcErr),
-          });
-        }
-
-        const signerAddress = privateKeyToAccount(privateKey).address;
-        logger.info('Withdrawal signing (EIP-712)', {
-          verifyingContract: blackjackContractAddress,
-          chainId,
-          player: normalizedAddress,
-          useContractDomain: !!domainSeparatorHex,
-          signerAddress,
-        });
-        const payload = await signWithdrawApproval(
-          normalizedAddress,
-          amount,
-          nonce,
-          expiryTimestamp,
-          blackjackContractAddress,
-          chainId,
-          privateKey,
-          domainSeparatorHex,
-        );
-
-        logger.info('Withdrawal prepared (balance deducted)', {
-          address: normalizedAddress,
-          amount: amount.toString(),
-          dbBalance: dbBalance.toString(),
-          contractReserve: contractReserve.toString(),
-        });
-
-        sendJson(res, payload);
-      } catch (error) {
-        logger.error('Error preparing withdrawal:', error);
-        res.status(500).json({ error: 'Internal server error' });
-      }
-    });
-
-    app.post('/api/withdraw/confirm', async (req, res) => {
-      try {
-        const { address, nonce, txHash } = req.body;
-        if (!address || typeof address !== 'string') {
-          return res.status(400).json({ error: 'Address required' });
-        }
-        if (nonce == null || (typeof nonce !== 'string' && typeof nonce !== 'number')) {
-          return res.status(400).json({ error: 'Nonce required' });
-        }
-        if (!txHash || typeof txHash !== 'string' || !/^0x[0-9a-fA-F]{64}$/.test(txHash)) {
-          return res.status(400).json({ error: 'Valid txHash required' });
-        }
-        const normalizedAddress = address.toLowerCase().startsWith('0x')
-          ? address.toLowerCase()
-          : `0x${address.toLowerCase()}`;
-        if (normalizedAddress.length !== 42) {
-          return res.status(400).json({ error: 'Invalid address' });
-        }
-        const nonceBigInt = BigInt(String(nonce));
-
-        // SECURITY: Verify the nonce was actually used on-chain before marking completed.
-        // Without this check, anyone could call confirm to permanently destroy a victim's balance.
-        try {
-          const nonceUsed = await publicClient.readContract({
-            address: blackjackContractAddress,
-            abi: USED_NONCES_ABI,
-            functionName: 'usedNonces',
-            args: [nonceBigInt],
-          }) as boolean;
-
-          if (!nonceUsed) {
-            logger.warn('Withdraw confirm rejected: nonce not used on-chain', {
-              address: normalizedAddress, nonce: nonceBigInt.toString(), txHash,
-            });
-            return res.status(400).json({ error: 'Nonce not yet used on-chain. Wait for tx confirmation.' });
-          }
-        } catch (rpcErr) {
-          logger.error('Withdraw confirm: failed to verify nonce on-chain', {
-            address: normalizedAddress, nonce: nonceBigInt.toString(),
-            error: rpcErr instanceof Error ? rpcErr.message : String(rpcErr),
-          });
-          return res.status(503).json({ error: 'Cannot verify on-chain. Try again shortly.' });
-        }
-
-        const updated = await dbService.markPendingWithdrawalCompleted(normalizedAddress, nonceBigInt, txHash);
-        if (updated) {
-          logger.info('Withdrawal confirmed (on-chain verified)', { address: normalizedAddress, nonce: nonceBigInt.toString(), txHash });
-        }
-        return res.status(200).json({ ok: true });
-      } catch (error) {
-        logger.error('Error confirming withdrawal:', error);
-        return res.status(500).json({ error: 'Internal server error' });
-      }
-    });
-
-    // Hot-wallet auto-withdrawal (Stake/Rollbit model): enqueue only; worker broadcasts; confirmation worker finalizes.
+    // Hot-wallet auto-withdrawal: payouts are ERC20 transfers from HOT_WALLET — not from the Blackjack contract.
     app.post('/api/withdraw', async (req, res) => {
       try {
         const { address, amount } = req.body;
@@ -3339,6 +3161,32 @@ async function initializeServices() {
         const feeBps = 500n; // 5%
         const feeAmount = (amountBigInt * feeBps) / 10000n;
         const netToUser = amountBigInt - feeAmount;
+
+        const hotWalletAddress = walletClient.account!.address;
+        let hotMorbiusBalance: bigint;
+        try {
+          hotMorbiusBalance = await publicClient.readContract({
+            address: MORBIUS_TOKEN_ADDRESS,
+            abi: ERC20_BALANCE_OF_ABI,
+            functionName: 'balanceOf',
+            args: [hotWalletAddress],
+          }) as bigint;
+        } catch (rpcErr) {
+          logger.error('withdraw: failed to read hot wallet MORBIUS balance', {
+            error: rpcErr instanceof Error ? rpcErr.message : String(rpcErr),
+          });
+          return res.status(503).json({ error: 'Cannot verify withdrawal liquidity. Try again shortly.' });
+        }
+        if (hotMorbiusBalance < netToUser) {
+          logger.warn('withdraw: hot wallet cannot cover net payout', {
+            hotWallet: hotWalletAddress,
+            balanceWei: hotMorbiusBalance.toString(),
+            netToUserWei: netToUser.toString(),
+          });
+          return res.status(503).json({
+            error: 'Withdrawals are temporarily limited (hot wallet liquidity). Try a smaller amount or later.',
+          });
+        }
 
         const jobId = await dbService.enqueueHotWithdrawal(
           normalizedAddress,

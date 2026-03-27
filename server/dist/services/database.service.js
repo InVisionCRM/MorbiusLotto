@@ -235,19 +235,6 @@ class DatabaseService {
     async addPlayerBalance(walletAddress, amount) {
         return await this.updatePlayerBalance(walletAddress, amount, 'add');
     }
-    /** Returns null if the player has never been synced (first-time baseline needed). */
-    async getLastSyncedReserve(walletAddress) {
-        const normalized = this.normalizeAddress(walletAddress);
-        const result = await this.pool.query(`SELECT last_synced_reserve FROM players WHERE LOWER(wallet_address) = LOWER($1)`, [normalized]);
-        if (result.rows.length === 0)
-            return null;
-        const val = result.rows[0].last_synced_reserve;
-        return val === null ? null : BigInt(val);
-    }
-    async updateLastSyncedReserve(walletAddress, reserve) {
-        const normalized = this.normalizeAddress(walletAddress);
-        await this.pool.query(`UPDATE players SET last_synced_reserve = $2::NUMERIC WHERE LOWER(wallet_address) = LOWER($1)`, [normalized, reserve.toString()]);
-    }
     /** Credit an address (e.g. fee wallet). Upserts a player row if missing. */
     async addBalanceToAddress(walletAddress, amount) {
         if (amount <= 0n)
@@ -467,7 +454,9 @@ class DatabaseService {
             created_at: r.created_at instanceof Date ? r.created_at.toISOString() : String(r.created_at),
         }));
     }
-    /** Mark pending deposit as credited and credit players.balance. */
+    /**
+     * Mark pending deposit as credited and credit players.balance — single writer for deposits.
+     */
     async creditPendingDeposit(jobId) {
         const client = await this.pool.connect();
         try {
@@ -481,19 +470,12 @@ class DatabaseService {
                 return false;
             }
             const { wallet_address, amount_wei, tx_hash, block_number } = row.rows[0];
-            await client.query(`UPDATE players
-         SET balance = balance + $2::NUMERIC,
-             -- Advance last_synced_reserve by the deposit amount so that a
-             -- subsequent sync_balance call doesn't see the same delta and
-             -- double-credit the deposit.  Only update when already baselined
-             -- (IS NOT NULL); if still NULL the next sync_balance call will
-             -- baseline without crediting, which is correct.
-             last_synced_reserve = CASE
-               WHEN last_synced_reserve IS NOT NULL
-               THEN last_synced_reserve + $2::NUMERIC
-               ELSE NULL
-             END
-         WHERE LOWER(wallet_address) = LOWER($1)`, [wallet_address, amount_wei]);
+            const normWallet = this.normalizeAddress(wallet_address);
+            await client.query(`INSERT INTO players (wallet_address, balance)
+         VALUES ($1, $2::NUMERIC)
+         ON CONFLICT (wallet_address) DO UPDATE SET
+           balance = players.balance + $2::NUMERIC,
+           last_seen = NOW()`, [normWallet, amount_wei]);
             await client.query(`INSERT INTO player_deposits (wallet_address, amount, tx_hash, block_number)
          VALUES ($1, $2::NUMERIC, $3, $4)
          ON CONFLICT (tx_hash) DO NOTHING`, [wallet_address, amount_wei, tx_hash, block_number ?? null]);

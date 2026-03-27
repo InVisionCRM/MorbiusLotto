@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect } from 'react'
 import { usePlayerProfileStats } from '@/hooks/use-player-profile'
-import { usePlayerReserveForAddress } from '@/hooks/use-blackjack-contract'
+import { usePlayerServerBalance } from '@/hooks/use-player-server-balance'
 import { PlayerStatsDashboard } from '@/components/BLACKJACK/PlayerStatsDashboard'
 import { useLotteryPlayerStats, useInstantLotteryResults } from '@/hooks/use-instant-lottery'
 import { LotteryPlayerDashboard } from '@/components/lottery/LotteryPlayerDashboard'
@@ -50,7 +50,7 @@ export function PlayerProfileDashboard({
   }, [initialGame, modalOpen])
 
   const { data: stats, isLoading: statsLoading } = usePlayerProfileStats(selectedGame === 'blackjack' ? address : null)
-  const { data: reserveBalance } = usePlayerReserveForAddress(selectedGame === 'blackjack' ? address : null)
+  const { data: reserveBalance } = usePlayerServerBalance(selectedGame === 'blackjack' ? address : null)
   const lotteryAddress = address ? ((address.startsWith('0x') ? address : `0x${address}`) as `0x${string}`) : undefined
   const lotteryStats = useLotteryPlayerStats(selectedGame === 'lottery' || selectedGame === 'all' ? lotteryAddress : undefined)
   const { results: lotteryResults } = useInstantLotteryResults(

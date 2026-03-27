@@ -75,7 +75,7 @@ interface PlayerStatsDashboardProps {
   isLoading?: boolean
   playerAddress?: string | null // Optional: if provided, fetch game history for cumulative chart
   wsClient?: BlackjackWebSocketClient | null // Optional: if provided, show Creator tab
-  /** Player's balance in reserves (wei) — when provided, shown as top stat */
+  /** Playable server balance (wei) — when provided, shown as top stat */
   reserveBalance?: bigint
 }
 
@@ -135,10 +135,10 @@ export function PlayerStatsDashboard({ stats, isLoading, playerAddress, wsClient
     ...(reserveBalance !== undefined
       ? [
           {
-            title: 'Reserve',
+            title: 'Balance',
             value: `${formatCurrency(reserveBalance)} MORBIUS`,
             icon: Wallet,
-            subtitle: 'Balance available to wager',
+            subtitle: 'Playable balance (server)',
             valueClassName: 'text-cyan-300'
           }
         ]

@@ -177,9 +177,6 @@ export declare class DatabaseService {
     updatePlayerBalance(walletAddress: string, amount: bigint, operation: 'add' | 'subtract' | 'set'): Promise<bigint>;
     deductPlayerBalance(walletAddress: string, amount: bigint): Promise<bigint>;
     addPlayerBalance(walletAddress: string, amount: bigint): Promise<bigint>;
-    /** Returns null if the player has never been synced (first-time baseline needed). */
-    getLastSyncedReserve(walletAddress: string): Promise<bigint | null>;
-    updateLastSyncedReserve(walletAddress: string, reserve: bigint): Promise<void>;
     /** Credit an address (e.g. fee wallet). Upserts a player row if missing. */
     addBalanceToAddress(walletAddress: string, amount: bigint): Promise<void>;
     getActivePendingWithdrawal(walletAddress: string): Promise<{
@@ -281,7 +278,9 @@ export declare class DatabaseService {
         status: string;
         created_at: string;
     }>>;
-    /** Mark pending deposit as credited and credit players.balance. */
+    /**
+     * Mark pending deposit as credited and credit players.balance — single writer for deposits.
+     */
     creditPendingDeposit(jobId: string): Promise<boolean>;
     /** Update pending deposit block_number (e.g. after fetching from chain). */
     updatePendingDepositBlockNumber(jobId: string, blockNumber: bigint): Promise<void>;

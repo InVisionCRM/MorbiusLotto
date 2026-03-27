@@ -378,8 +378,6 @@ export default function BlackjackPage() {
     deposit,
     depositMORBIUS,
     withdraw,
-    playerReserve,
-    refetchPlayerReserve,
     isPaused: contractIsPaused,
     emergencyPaused: contractEmergencyPaused,
     contractPaused: contractOzPaused,
@@ -388,7 +386,7 @@ export default function BlackjackPage() {
   // Off-chain balance state (like Stake.com)
   const [offChainBalance, setOffChainBalance] = useState<bigint>(BigInt(0));
 
-  // Authoritative balance via HTTP — survives refresh; server resolves pending withdrawals and syncs from chain.
+  // Authoritative playable balance via HTTP — survives refresh; server resolves pending withdrawals; DB is source of truth.
   const fetchBalanceFromApi = useCallback(async () => {
     const apiUrl = getApiUrlOptional();
     if (!apiUrl || !address) return;
@@ -715,16 +713,11 @@ export default function BlackjackPage() {
       const balanceBigInt = BigInt(balance);
       setOffChainBalance(balanceBigInt);
       setGameState(prev => ({ ...prev, balance: balanceBigInt }));
-      
-      // Also refetch contract reserve to ensure it's in sync
-      if (refetchPlayerReserve) {
-        await refetchPlayerReserve();
-      }
     } catch (error) {
       console.error('Failed to sync balance:', error);
       throw error;
     }
-  }, [wsClient, wsConnected, refetchPlayerReserve]);
+  }, [wsClient, wsConnected]);
 
   // Win notification state
   const [showWinNotification, setShowWinNotification] = useState(false);
@@ -837,7 +830,9 @@ export default function BlackjackPage() {
     splitRate: Number(globalAnalyticsData.split_rate) || 0,
     doubleDownRate: Number(globalAnalyticsData.double_down_rate) || 0,
     surrenderRate: Number(globalAnalyticsData.surrender_rate) || 0,
-    reserveBalance: typeof playerReserve === 'bigint' ? playerReserve : BigInt(0), // From contract
+    // Deployer financial tab needs a bigint; was wrongly wired to on-chain player reserve.
+    // Global API has no single “house MORBIUS balance” here — volume is a neutral placeholder for ratio checks.
+    reserveBalance: globalAnalyticsData.total_volume || BigInt(0),
     pendingSettlements: Number(globalAnalyticsData.pending_settlements) || 0,
     failedSettlements: Number(globalAnalyticsData.failed_settlements) || 0,
     averageSettlementTime: 0, // Not available from database yet
@@ -3109,7 +3104,7 @@ export default function BlackjackPage() {
         <DepositWithdrawModal
           isOpen={showDepositModal}
           onClose={() => setShowDepositModal(false)}
-          balanceLabel="Reserve Balance"
+          balanceLabel="Balance"
           onBalanceSync={async () => {
             await fetchBalanceFromApi();
             await syncBalance().catch(() => {});
@@ -3118,8 +3113,10 @@ export default function BlackjackPage() {
             await fetchBalanceFromApi();
             await fetchBalance().catch(() => {});
           }}
-          onWithdrawSuccess={async () => { await refetchPlayerReserve(); clearPendingJob(); }}
-          contractReserve={typeof playerReserve === 'bigint' ? playerReserve : BigInt(0)}
+          onWithdrawSuccess={async () => {
+            await fetchBalanceFromApi();
+            clearPendingJob();
+          }}
           externalBalance={offChainBalance}
           externalWithdrawLock={!!pendingJob}
         />

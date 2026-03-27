@@ -19,7 +19,8 @@ export function isLegacyAddress(addr: string | undefined): addr is `0x${string}`
 // ============ Read Hooks ============
 
 /**
- * Get player's MORBIUS reserve balance
+ * On-chain `playerReserves` for the Blackjack contract — not the playable server balance.
+ * For wagering balance in the app, prefer `usePlayerServerBalance`.
  */
 export function usePlayerReserve() {
   const { address } = useAccount()
@@ -38,7 +39,8 @@ export function usePlayerReserve() {
 }
 
 /**
- * Get a specific player's MORBIUS reserve balance (for modals/profile viewing another address).
+ * On-chain `playerReserves` for another address — not playable DB balance.
+ * Prefer `usePlayerServerBalance` for Blackjack profile/stats UI.
  */
 export function usePlayerReserveForAddress(playerAddress: string | null) {
   const isValidAddress = (BLACKJACK_ADDRESS as string) !== '0x0000000000000000000000000000000000000000'
@@ -315,8 +317,7 @@ export function useWatchGameSettlements(onSettlement?: (player: string, amount: 
 export function useBlackjackContract() {
   const { address } = useAccount()
 
-  // Read hooks
-  const playerReserve = usePlayerReserve()
+  // Read hooks (per-player on-chain reserve intentionally omitted — server DB is playable balance)
   const totalReserves = useTotalReserves()
   const emergencyPaused = useEmergencyPaused()
   const contractPaused = useContractPaused()
@@ -435,7 +436,6 @@ export function useBlackjackContract() {
 
   return {
     // Data
-    playerReserve: playerReserve.data,
     totalReserves: totalReserves.data,
     emergencyPaused: emergencyPaused.data,
     contractPaused: contractPaused.data,
@@ -443,7 +443,7 @@ export function useBlackjackContract() {
     dailyWithdrawalInfo: dailyWithdrawalInfo.data,
 
     // Loading states
-    isLoading: playerReserve.isLoading || totalReserves.isLoading,
+    isLoading: totalReserves.isLoading,
 
     // Functions
     deposit,
@@ -462,7 +462,5 @@ export function useBlackjackContract() {
     revealSeedTx: revealSeedContract,
     placeBetTx: placeBetContract,
 
-    // Refetch functions
-    refetchPlayerReserve: playerReserve.refetch,
   }
 }

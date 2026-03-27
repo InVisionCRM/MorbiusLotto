@@ -7,7 +7,8 @@ import { createPublicClient, http, formatUnits } from 'viem';
 import { pulsechain } from 'viem/chains';
 import { PLINKO_ADDRESS } from '@/lib/contracts';
 import { PLINKO_ABI } from '@/abi/plinko';
-import { usePlayerReserveForAddress } from '@/hooks/use-blackjack-contract';
+import { Wallet, Target, DollarSign, Trophy, TrendingDown, Activity } from 'lucide-react';
+import { usePlayerServerBalance } from '@/hooks/use-player-server-balance';
 import { usePlayerProfileGames } from '@/hooks/use-player-profile';
 import { isAdminWallet } from '@/lib/admin';
 import { PlayerAuditView } from '@/components/BLACKJACK/PlayerAuditView';
@@ -86,7 +87,7 @@ export function PlayerStatsModal({ address, displayName, onClose }: PlayerStatsM
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<'blackjack' | 'plinko' | 'audit'>('blackjack');
-  const { data: reserveBalance } = usePlayerReserveForAddress(address);
+  const { data: serverBalance } = usePlayerServerBalance(address);
   const { data: games = [], isLoading: gamesLoading } = usePlayerProfileGames(address, 1000);
 
   useEffect(() => {
@@ -252,11 +253,11 @@ export function PlayerStatsModal({ address, displayName, onClose }: PlayerStatsM
                   {/* Main Stats Grid */}
                   <PlayerStatsFeatureGrid
                     items={[
-                      ...(reserveBalance !== undefined
+                      ...(serverBalance !== undefined && serverBalance !== null
                         ? [{
-                            title: 'Reserve',
-                            value: `${formatMorbius(reserveBalance.toString())} MORBIUS`,
-                            subtitle: 'Balance available to wager',
+                            title: 'Balance',
+                            value: `${formatMorbius(serverBalance.toString())} MORBIUS`,
+                            subtitle: 'Playable balance (server)',
                             icon: Wallet,
                             valueClassName: 'text-cyan-300',
                           }]
@@ -451,7 +452,7 @@ export function PlayerStatsModal({ address, displayName, onClose }: PlayerStatsM
                   playerAddress={address}
                   games={games}
                   gamesLoading={gamesLoading}
-                  actualBalance={reserveBalance ?? undefined}
+                  actualBalance={serverBalance ?? undefined}
                   showEventsColumn={isAdmin}
                 />
               )}

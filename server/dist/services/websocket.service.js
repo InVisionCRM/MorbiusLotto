@@ -14,16 +14,6 @@ const crypto_1 = __importDefault(require("crypto"));
 const viem_1 = require("viem");
 const chain_client_1 = require("../utils/chain-client");
 const contracts_1 = require("../config/contracts");
-// Minimal ABI for getPlayerReserve - avoids full ABI parse issues in readContract
-const GET_PLAYER_RESERVE_ABI = [
-    {
-        inputs: [{ name: 'player', type: 'address' }],
-        name: 'getPlayerReserve',
-        outputs: [{ type: 'uint256' }],
-        stateMutability: 'view',
-        type: 'function',
-    },
-];
 // Minimal ABI for usedNonces - check if a withdrawal nonce was used on-chain
 const USED_NONCES_ABI = [
     {
@@ -1001,74 +991,14 @@ class WebSocketService {
             // actually completed on-chain (nonce used). If so, mark it completed to prevent
             // the expiry cron from refunding it (which would duplicate funds).
             await this.resolvePendingWithdrawals(ws.playerAddress);
-            // Normalize address (checksum) to avoid viem encodeFunctionData issues
-            const playerAddress = (0, viem_1.getAddress)(ws.playerAddress);
-            // Delta-based deposit sync: we track the last on-chain reserve value we
-            // saw at sync time (last_synced_reserve). A new deposit means the reserve
-            // has grown since then — we add only that delta to the DB balance.
-            // This prevents the "bounce-back" bug where gaming losses (which lower
-            // DB balance but never touch the on-chain reserve) were mistakenly
-            // treated as uncredited deposits.
-            const currentDbBalance = await this.dbService.getPlayerBalance(ws.playerAddress);
-            const lastSyncedReserve = await this.dbService.getLastSyncedReserve(ws.playerAddress);
-            // Read contract reserve, retrying once if the RPC returns a stale value.
-            let contractBalance = await this.publicClient.readContract({
-                address: this.contractAddress,
-                abi: GET_PLAYER_RESERVE_ABI,
-                functionName: 'getPlayerReserve',
-                args: [playerAddress],
-            });
-            if (lastSyncedReserve !== null && contractBalance <= lastSyncedReserve) {
-                // Possibly stale node — wait 1s and retry once
-                await new Promise(resolve => setTimeout(resolve, 1000));
-                contractBalance = await this.publicClient.readContract({
-                    address: this.contractAddress,
-                    abi: GET_PLAYER_RESERVE_ABI,
-                    functionName: 'getPlayerReserve',
-                    args: [playerAddress],
-                });
-            }
-            let newBalance = currentDbBalance;
-            if (lastSyncedReserve === null) {
-                // First sync ever (migration just ran, or brand-new player):
-                // baseline without crediting so we don't double-credit existing balance.
-                await this.dbService.updateLastSyncedReserve(ws.playerAddress, contractBalance);
-                logger_1.logger.debug('Balance sync: baselined last_synced_reserve', {
-                    playerAddress: ws.playerAddress,
-                    contractBalance: contractBalance.toString(),
-                });
-            }
-            else if (contractBalance > lastSyncedReserve) {
-                // Reserve grew — a real deposit occurred. Credit the delta only.
-                const depositDelta = contractBalance - lastSyncedReserve;
-                newBalance = currentDbBalance + depositDelta;
-                await this.dbService.addPlayerBalance(ws.playerAddress, depositDelta);
-                await this.dbService.updateLastSyncedReserve(ws.playerAddress, contractBalance);
-                logger_1.logger.info('Balance sync: deposit detected', {
-                    playerAddress: ws.playerAddress,
-                    depositDelta: depositDelta.toString(),
-                    newBalance: newBalance.toString(),
-                });
-            }
-            else if (contractBalance < lastSyncedReserve) {
-                // Reserve shrank (on-chain withdrawal confirmed) — update snapshot so
-                // the next deposit delta is computed correctly.
-                await this.dbService.updateLastSyncedReserve(ws.playerAddress, contractBalance);
-            }
-            // contractBalance === lastSyncedReserve → no change needed.
-            logger_1.logger.debug('Balance synced', {
-                playerAddress: ws.playerAddress,
-                contractBalance: contractBalance.toString(),
-                lastSyncedReserve: lastSyncedReserve?.toString() ?? 'null',
-                previousDbBalance: currentDbBalance.toString(),
-                newBalance: newBalance.toString(),
-            });
+            const balance = await this.dbService.getPlayerBalance(ws.playerAddress);
+            logger_1.logger.debug('Balance synced', { playerAddress: ws.playerAddress, balance: balance.toString() });
             this.sendMessage(ws, {
                 type: 'balance_synced',
                 payload: {
-                    balance: newBalance.toString()
+                    balance: balance.toString(),
                 },
-                requestId: message.requestId
+                requestId: message.requestId,
             });
         }
         catch (error) {
@@ -1085,17 +1015,14 @@ class WebSocketService {
             // CRITICAL: Before reading balance, resolve any pending withdrawals that
             // completed on-chain but weren't confirmed to the server.
             await this.resolvePendingWithdrawals(ws.playerAddress);
-            // Deposits trigger an explicit sync_balance call which handles reserve
-            // sync. Never overwrite the DB balance here — doing so restores gaming
-            // losses whenever the on-chain reserve (unchanged by gameplay) exceeds
-            // the post-loss DB balance (the "bounce-back" exploit).
+            // Deposit credits only through confirmed pending_deposits; DB is source of truth.
             const balance = await this.dbService.getPlayerBalance(ws.playerAddress);
             this.sendMessage(ws, {
                 type: 'balance',
                 payload: {
-                    balance: balance.toString()
+                    balance: balance.toString(),
                 },
-                requestId: message.requestId
+                requestId: message.requestId,
             });
         }
         catch (error) {
