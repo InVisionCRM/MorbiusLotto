@@ -6,7 +6,8 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { formatEther, parseEther } from 'viem';
-import { Activity, RefreshCw, CheckCircle, XCircle, Loader2, Gift, X } from 'lucide-react';
+import { Activity, RefreshCw, CheckCircle, XCircle, Loader2, Gift, X, Server, Wifi, SquareStack, CircleDot, Grid3x3, Ticket, Wallet } from 'lucide-react';
+import { FeaturesSectionGrid, type FeatureGridItem } from '@/components/features-section-demo-2';
 import { CopyButton } from '@/components/ui/copy-button';
 import { Tooltip, Legend, ResponsiveContainer, Area, AreaChart, XAxis, YAxis, CartesianGrid } from 'recharts';
 import {
@@ -38,7 +39,6 @@ import { blackjackAbi } from '@/abi/blackjack';
 import { ERC20_ABI } from '@/abi/erc20';
 import { pulsechain } from '@/lib/chains';
 import { toast } from 'sonner';
-import FeaturesSectionDemo from '@/components/features-section-demo-2';
 
 export interface BlackjackContractReserves {
   contractAddress: string;
@@ -1221,6 +1221,67 @@ export default function AdminHealthTab() {
     return [];
   }, [data?.blackjackReservesByContract, data?.blackjackReserves, data?.contractAddresses?.blackjack]);
 
+  /** Feature grid (features-section-demo-2) — same inset panel treatment as game overview cards */
+  const healthFeatureItems = useMemo((): FeatureGridItem[] => {
+    if (!data) return [];
+    const rpcLine = (game: 'blackjack' | 'plinko' | 'keno' | 'lottery') =>
+      data.games[game]?.rpc === 'ok'
+        ? 'RPC read succeeded'
+        : (data.games[game]?.error ?? 'RPC check failed');
+    const hot = hotWalletDisplay;
+    const hotLine =
+      hot != null
+        ? `${formatMorbius(hot.morbiusWei)} MORBIUS${hot.lowWarning ? ' · low balance' : ''}`
+        : '—';
+    const tips = data.tipStats;
+    const tipsLine =
+      tips && tips.tipCount > 0
+        ? `${formatMorbius(tips.totalTipAmountWei)} MORBIUS across ${tips.tipCount} tip${tips.tipCount !== 1 ? 's' : ''}`
+        : 'No recorded tips yet';
+    return [
+      {
+        title: 'API',
+        description: data.api === 'ok' ? 'Backend responding' : 'Check deployment / logs',
+        icon: <Server className="w-6 h-6" strokeWidth={1.75} />,
+      },
+      {
+        title: 'WebSocket',
+        description: data.ws === 'up' ? 'Realtime channel up' : `Status: ${data.ws}`,
+        icon: <Wifi className="w-6 h-6" strokeWidth={1.75} />,
+      },
+      {
+        title: 'Blackjack',
+        description: rpcLine('blackjack'),
+        icon: <SquareStack className="w-6 h-6" strokeWidth={1.75} />,
+      },
+      {
+        title: 'Plinko',
+        description: rpcLine('plinko'),
+        icon: <CircleDot className="w-6 h-6" strokeWidth={1.75} />,
+      },
+      {
+        title: 'Keno',
+        description: rpcLine('keno'),
+        icon: <Grid3x3 className="w-6 h-6" strokeWidth={1.75} />,
+      },
+      {
+        title: 'Lottery',
+        description: rpcLine('lottery'),
+        icon: <Ticket className="w-6 h-6" strokeWidth={1.75} />,
+      },
+      {
+        title: 'Hot wallet',
+        description: hotLine,
+        icon: <Wallet className="w-6 h-6" strokeWidth={1.75} />,
+      },
+      {
+        title: 'Dealer tips',
+        description: tipsLine,
+        icon: <Gift className="w-6 h-6" strokeWidth={1.75} />,
+      },
+    ];
+  }, [data, hotWalletDisplay]);
+
 
   if (!address) {
     return (
@@ -1273,19 +1334,6 @@ export default function AdminHealthTab() {
               <span className={data.ws === 'up' ? 'text-emerald-400' : 'text-amber-400'}>{data.ws}</span>
             </div>
             <div>
-              <p className="text-slate-500 mb-2">Feature highlights</p>
-              <div
-                className="rounded-lg border border-cyan-500/20 px-2"
-                style={{
-                  background: 'linear-gradient(325deg, rgba(20, 20, 20, 0.8), rgba(40, 40, 40, 0.6))',
-                  boxShadow: 'inset 0 3px 6px rgba(0, 0, 0, 0.8), inset 0 -3px 6px rgba(255, 255, 255, 0.1), 0 1px 3px rgba(0, 0, 0, 0.5)',
-                  border: '1px inset rgba(60, 60, 60, 0.5)',
-                }}
-              >
-                <FeaturesSectionDemo />
-              </div>
-            </div>
-            <div>
               <p className="text-slate-500 mb-1">RPC / contract</p>
               <div className="flex flex-wrap gap-2">
                 {(['blackjack', 'plinko', 'keno', 'lottery'] as const).map((game) => (
@@ -1297,6 +1345,20 @@ export default function AdminHealthTab() {
                     {game}
                   </span>
                 ))}
+              </div>
+            </div>
+            <div>
+              <p className="text-slate-500 mb-2">Platform status</p>
+              <div
+                className="rounded-lg border border-cyan-500/20 overflow-hidden"
+                style={{
+                  background: 'linear-gradient(325deg, rgba(20, 20, 20, 0.8), rgba(40, 40, 40, 0.6))',
+                  boxShadow:
+                    'inset 0 3px 6px rgba(0, 0, 0, 0.8), inset 0 -3px 6px rgba(255, 255, 255, 0.1), 0 1px 3px rgba(0, 0, 0, 0.5)',
+                  border: '1px inset rgba(60, 60, 60, 0.5)',
+                }}
+              >
+                <FeaturesSectionGrid variant="admin" features={healthFeatureItems} />
               </div>
             </div>
             <div>

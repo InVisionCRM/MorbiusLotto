@@ -5,7 +5,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { X, Loader2, ArrowDownCircle, ArrowUpCircle, RefreshCw, Check, Flag } from 'lucide-react';
 import { CopyButton } from '@/components/ui/copy-button';
 import { useAccount, usePublicClient } from 'wagmi';
-import { parseEther, formatEther } from 'viem';
+import { parseEther, formatEther, WaitForTransactionReceiptTimeoutError } from 'viem';
 import {
   useBlackjackContract,
   useLegacyPlayerReserveAt,
@@ -113,6 +113,51 @@ export interface GameWalletModalProps {
 // ── Component ──────────────────────────────────────────────────────────────
 
 const DEPOSIT_CONFIRMATIONS_REQUIRED = 3;
+/** Default viem receipt wait is 3 minutes — too short for congested mempools; match long wallet pending windows. */
+const DEPOSIT_RECEIPT_WAIT_MS = 48 * 60 * 60 * 1000; // 48h
+const PENDING_BJ_DEPOSIT_KEY = 'morblotto_bj_pending_deposit_v1';
+
+type PendingDepositStorage = {
+  walletAddress: string;
+  txHash: `0x${string}`;
+  submittedAt: number;
+};
+
+function readPendingDepositFromStorage(): PendingDepositStorage | null {
+  if (typeof sessionStorage === 'undefined') return null;
+  try {
+    const raw = sessionStorage.getItem(PENDING_BJ_DEPOSIT_KEY);
+    if (!raw) return null;
+    const p = JSON.parse(raw) as PendingDepositStorage;
+    if (
+      typeof p.walletAddress === 'string' &&
+      typeof p.txHash === 'string' &&
+      p.txHash.startsWith('0x') &&
+      p.txHash.length === 66
+    ) {
+      return { ...p, txHash: p.txHash as `0x${string}` };
+   }
+    return null;
+  } catch {
+    return null;
+  }
+}
+
+function savePendingDepositToStorage(walletAddress: string, txHash: `0x${string}`) {
+  if (typeof sessionStorage === 'undefined') return;
+  const payload: PendingDepositStorage = {
+    walletAddress: walletAddress.toLowerCase(),
+    txHash,
+    submittedAt: Date.now(),
+  };
+  sessionStorage.setItem(PENDING_BJ_DEPOSIT_KEY, JSON.stringify(payload));
+}
+
+function clearPendingDepositStorage() {
+  if (typeof sessionStorage === 'undefined') return;
+  sessionStorage.removeItem(PENDING_BJ_DEPOSIT_KEY);
+}
+
 const LEGACY_MAX_WITHDRAW_WEI = BigInt(1_000_000) * BigInt(1e18);
 const MIN_LEGACY_MORBIUS_WEI = BigInt(500) * BigInt(1e18);
 
@@ -178,6 +223,8 @@ export function GameWalletModal({
   const [depositTxHash, setDepositTxHash] = useState<string | null>(null);
   const [depositNotifyAmountWei, setDepositNotifyAmountWei] = useState<bigint | null>(null);
   const depositToastIdRef = useRef<string | number | null>(null);
+  /** Bumps when deposit resume effect cleans up so in-flight async from Strict Mode / re-open does not apply stale state. */
+  const resumeDepositGenRef = useRef(0);
 
   const [withdrawPhase, setWithdrawPhase] = useState<WithdrawPhase>('idle');
   const [withdrawError, setWithdrawError] = useState<string | null>(null);
@@ -321,6 +368,63 @@ export function GameWalletModal({
     }
   }, [isApprovalSuccess]);
 
+  // Resume a submitted deposit after mempool delay / tab close (tx hash persisted in sessionStorage).
+  useEffect(() => {
+    if (!isOpen || !address || !publicClient) return;
+    const pending = readPendingDepositFromStorage();
+    if (!pending || pending.walletAddress.toLowerCase() !== address.toLowerCase()) return;
+
+    const gen = ++resumeDepositGenRef.current;
+    let cancelled = false;
+
+    const run = async () => {
+      try {
+        const tid = toast.loading('Resuming deposit — waiting for blockchain…', {
+          description: 'If your transaction was delayed, this can take a while.',
+        });
+        depositToastIdRef.current = tid;
+        setDepositPhase('confirming_on_chain');
+        const receipt = await publicClient.waitForTransactionReceipt({
+          hash: pending.txHash,
+          timeout: DEPOSIT_RECEIPT_WAIT_MS,
+        });
+        if (cancelled || gen !== resumeDepositGenRef.current) return;
+        if (receipt.status === 'reverted') {
+          clearPendingDepositStorage();
+          toast.error('Deposit transaction reverted', { id: tid });
+          setDepositPhase('idle');
+          return;
+        }
+        const finalHash = receipt.transactionHash;
+        setDepositTxHash(finalHash);
+        setDepositNotifyAmountWei(0n);
+        setDepositBlockNumber(receipt.blockNumber);
+        setDepositConfirmations(0);
+        toast.loading('Confirming…', { id: tid, description: '0/3 confirmations' });
+      } catch (e) {
+        if (cancelled || gen !== resumeDepositGenRef.current) return;
+        if (e instanceof WaitForTransactionReceiptTimeoutError) {
+          toast.message('Deposit still pending', {
+            description:
+              'The network is slow or your wallet is still queuing the transaction. Reopen this dialog later — we will resume automatically when the tx is submitted from this browser.',
+            duration: 12_000,
+          });
+        } else {
+          toast.error('Could not resume deposit', {
+            description: e instanceof Error ? e.message : undefined,
+          });
+          clearPendingDepositStorage();
+        }
+        setDepositPhase('idle');
+      }
+    };
+
+    void run();
+    return () => {
+      cancelled = true;
+    };
+  }, [isOpen, address, publicClient]);
+
   // ── Deposit confirmation polling ───────────────────────────────────────
   useEffect(() => {
     if (
@@ -346,6 +450,23 @@ export function GameWalletModal({
           });
         }
         if (confirmations >= DEPOSIT_CONFIRMATIONS_REQUIRED) {
+          const notifyResult = await notifyDeposit(depositTxHash, depositNotifyAmountWei);
+          if (!notifyResult.ok) {
+            if (notifyResult.status >= 400 && notifyResult.status < 500) {
+              if (depositToastIdRef.current != null) {
+                toast.error('Could not record deposit', {
+                  id: depositToastIdRef.current,
+                  description: notifyResult.message,
+                  duration: 8000,
+                });
+              }
+              setDepositPhase('error');
+              setDepositError(notifyResult.message);
+              return;
+            }
+            return;
+          }
+          clearPendingDepositStorage();
           if (depositToastIdRef.current != null) {
             toast.success('Deposit successful', {
               id: depositToastIdRef.current,
@@ -353,7 +474,6 @@ export function GameWalletModal({
               duration: 5000,
             });
           }
-          await notifyDeposit(depositTxHash, depositNotifyAmountWei);
           if (onBalanceSync) {
             try { await onBalanceSync(); } catch {
               if (onRefreshBalance) onRefreshBalance().catch(() => {});
@@ -404,17 +524,38 @@ export function GameWalletModal({
   }, [tab, txLoaded, txLoading, fetchTxHistory]);
 
   // ── Notify deposit ─────────────────────────────────────────────────────
-  const notifyDeposit = async (txHash: string, amountWei: bigint) => {
-    if (!address) return;
+  const notifyDeposit = async (
+    txHash: string,
+    amountWei: bigint,
+  ): Promise<{ ok: true } | { ok: false; status: number; message: string }> => {
+    if (!address) return { ok: false, status: 0, message: 'Wallet not connected' };
     try {
-      await fetch(`${serverUrl}/api/deposit/notify`, {
+      const res = await fetch(`${serverUrl}/api/deposit/notify`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ walletAddress: address, txHash, amount: amountWei.toString() }),
       });
+      let body: { error?: string } = {};
+      try {
+        body = (await res.json()) as { error?: string };
+      } catch {
+        /* non-JSON */
+      }
+      if (!res.ok) {
+        return {
+          ok: false,
+          status: res.status,
+          message: typeof body.error === 'string' ? body.error : `HTTP ${res.status}`,
+        };
+      }
       setTxLoaded(false);
-    } catch {
-      // silent
+      return { ok: true };
+    } catch (e) {
+      return {
+        ok: false,
+        status: 0,
+        message: e instanceof Error ? e.message : 'Network error',
+      };
     }
   };
 
@@ -429,15 +570,36 @@ export function GameWalletModal({
     depositToastIdRef.current = toastId;
     try {
       const txHash = await deposit(plsEquivalent);
+      savePendingDepositToStorage(address, txHash);
       setDepositPhase('confirming_on_chain');
-      toast.loading('Confirming...', { id: toastId, description: '0/3 confirmations' });
-      const receipt = await publicClient.waitForTransactionReceipt({ hash: txHash });
+      toast.loading('Confirming...', {
+        id: toastId,
+        description: 'Waiting for block inclusion (can take a long time if the network is busy).',
+      });
+      const receipt = await publicClient.waitForTransactionReceipt({
+        hash: txHash,
+        timeout: DEPOSIT_RECEIPT_WAIT_MS,
+      });
       if (receipt.status === 'reverted') throw new Error('Transaction reverted on-chain.');
-      setDepositTxHash(txHash);
+      const finalHash = receipt.transactionHash;
+      setDepositTxHash(finalHash);
       setDepositNotifyAmountWei(plsEquivalent);
       setDepositBlockNumber(receipt.blockNumber);
       setDepositConfirmations(0);
+      toast.loading('Confirming...', { id: toastId, description: '0/3 confirmations' });
     } catch (err: any) {
+      if (err instanceof WaitForTransactionReceiptTimeoutError) {
+        toast.message('Deposit still pending', {
+          id: toastId,
+          description:
+            'Your transaction is taking longer than usual. You can close this window; reopen Deposit to resume, or wait here.',
+          duration: 12_000,
+        });
+        setDepositPhase('idle');
+        setTimeout(() => { setDepositError(null); }, 4000);
+        return;
+      }
+      clearPendingDepositStorage();
       const isCancel = err?.message?.includes('rejected') || err?.message?.includes('denied');
       setDepositPhase('error');
       setDepositError(isCancel ? 'Cancelled' : 'Deposit failed');
@@ -462,20 +624,42 @@ export function GameWalletModal({
     depositToastIdRef.current = toastId;
     try {
       const txHash = await depositMORBIUS(amountWei);
+      savePendingDepositToStorage(address, txHash);
       setDepositPhase('confirming_on_chain');
-      toast.loading('Confirming...', { id: toastId, description: '0/3 confirmations' });
-      const receipt = await publicClient.waitForTransactionReceipt({ hash: txHash });
+      toast.loading('Confirming...', {
+        id: toastId,
+        description: 'Waiting for block inclusion (can take a long time if the network is busy).',
+      });
+      const receipt = await publicClient.waitForTransactionReceipt({
+        hash: txHash,
+        timeout: DEPOSIT_RECEIPT_WAIT_MS,
+      });
       if (receipt.status === 'reverted') throw new Error('Transaction reverted on-chain.');
-      setDepositTxHash(txHash);
+      const finalHash = receipt.transactionHash;
+      setDepositTxHash(finalHash);
       setDepositNotifyAmountWei(amountWei);
       setDepositBlockNumber(receipt.blockNumber);
       setDepositConfirmations(0);
+      toast.loading('Confirming...', { id: toastId, description: '0/3 confirmations' });
     } catch (err: any) {
+      if (err instanceof WaitForTransactionReceiptTimeoutError) {
+        toast.message('Deposit still pending', {
+          id: toastId,
+          description:
+            'Your transaction is taking longer than usual. You can close this window; reopen Deposit to resume, or wait here.',
+          duration: 12_000,
+        });
+        setDepositPhase('idle');
+        setTimeout(() => { setDepositError(null); }, 4000);
+        return;
+      }
       if (err?.message?.includes('allowance') || err?.message?.includes('ERC20')) {
+        clearPendingDepositStorage();
         setDepositPhase('idle');
         toast.error('Approval required', { id: toastId, description: 'Please approve MORBIUS spending first' });
         setShowApprovalModal(true);
       } else {
+        clearPendingDepositStorage();
         const isCancel = err?.message?.includes('rejected') || err?.message?.includes('denied');
         setDepositPhase('error');
         setDepositError(isCancel ? 'Cancelled' : 'Deposit failed');
