@@ -33,6 +33,7 @@ import { useQueryClient } from '@tanstack/react-query';
 import { IconButton } from '@/components/animate-ui/components/buttons/icon';
 import { toast } from 'sonner';
 import { PokerBetaSplash } from '@/components/poker/PokerBetaSplash';
+import { PokerHowToPlayModal } from '@/components/poker/PokerHowToPlayModal';
 import { MorbiusLoadingChip } from '@/components/shared/MorbiusLoadingChip';
 
 const POKER_CHAT_BUBBLE_DURATION_MS = 5000;
@@ -71,6 +72,7 @@ export default function PokerTablePage() {
   const [showLeaveConfirm, setShowLeaveConfirm] = useState(false);
   const [showDashboard, setShowDashboard] = useState(false);
   const [showMyStats, setShowMyStats] = useState(false);
+  const [showHowToPlay, setShowHowToPlay] = useState(false);
   const [opponentProfileAddress, setOpponentProfileAddress] = useState<string | null>(null);
   const isAdmin = isAdminWallet(address);
   /** Chat bubbles above seats: id, senderAddress (lowercase), text, expiresAt. Cleared after 5s. */
@@ -705,6 +707,20 @@ export default function PokerTablePage() {
             )}
             {!state && <div className="min-w-0" />}
             <div className="flex items-center justify-end gap-1.5 shrink-0 relative">
+              <button
+                type="button"
+                onClick={() => { setShowHowToPlay(true); setSettingsMenuOpen(false); setStatsMenuOpen(false); }}
+                className="h-9 px-2.5 sm:px-3 rounded-sm text-[10px] sm:text-[11px] font-bold tracking-wide transition-all hover:brightness-125 active:scale-[0.97] whitespace-nowrap"
+                style={{
+                  background: 'rgba(255,255,255,0.07)',
+                  color: 'rgba(255,255,255,0.75)',
+                  border: '1px solid rgba(255,255,255,0.1)',
+                  boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.08)',
+                }}
+                aria-haspopup="dialog"
+              >
+                How to Play
+              </button>
               {/* Settings dropdown — includes Table Appearance, Sounds, Edit QuickChat */}
               <div className="relative">
                 <button
@@ -1037,6 +1053,7 @@ export default function PokerTablePage() {
           selectedPhrases={quickChatPhrases}
           onSave={setQuickChatPhrases}
         />
+        <PokerHowToPlayModal isOpen={showHowToPlay} onClose={() => setShowHowToPlay(false)} />
         {/* Leave table confirmation (non-tournament): shows leaving amount and asks to confirm */}
         {showLeaveConfirm && mySeat && (
           <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
