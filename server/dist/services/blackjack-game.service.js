@@ -829,57 +829,233 @@ class BlackjackGameService {
     async verifyGame(gameId) {
         return this.getGameResult(gameId);
     }
+    /** Parse JSONB hands from a multiplayer round_seat row. */
+    parseMultiHands(rs) {
+        const raw = rs?.hands;
+        if (!raw)
+            return [];
+        const arr = typeof raw === 'string' ? JSON.parse(raw) : raw;
+        return Array.isArray(arr) ? arr : [];
+    }
+    /**
+     * Replay multiplayer card draws in table order: initial deal, then player events (by timestamp),
+     * then dealer hits — must match the shuffled deck from server_seed + client_seed + round_number.
+     */
+    verifyMultiplayerProvablyFair(round, seatsOrdered) {
+        try {
+            const serverSeed = round.server_seed;
+            const clientSeed = round.client_seed || 'default';
+            const roundNum = Number(round.round_number);
+            if (!serverSeed || typeof serverSeed !== 'string' || !Number.isFinite(roundNum))
+                return false;
+            const expectedHash = this.pfService.createServerSeedHash(serverSeed);
+            if (expectedHash.toLowerCase() !== String(round.server_seed_hash).toLowerCase())
+                return false;
+            const deck = this.pfService.fisherYatesShuffle(serverSeed, clientSeed, roundNum);
+            const dealerCards = typeof round.dealer_cards === 'string' ? JSON.parse(round.dealer_cards) : round.dealer_cards;
+            if (!Array.isArray(dealerCards) || dealerCards.length < 2)
+                return false;
+            const n = seatsOrdered.length;
+            if (n < 1)
+                return false;
+            let dp = 0;
+            const toNum = (c) => {
+                if (typeof c === 'number' && !Number.isNaN(c))
+                    return c;
+                const x = Number(c);
+                return Number.isFinite(x) ? x : NaN;
+            };
+            for (let i = 0; i < n; i++) {
+                const hands = this.parseMultiHands(seatsOrdered[i]);
+                const c0 = toNum(hands[0]?.cards?.[0]);
+                if (!Number.isFinite(c0) || deck[dp++] !== c0)
+                    return false;
+            }
+            if (deck[dp++] !== toNum(dealerCards[0]))
+                return false;
+            for (let i = 0; i < n; i++) {
+                const hands = this.parseMultiHands(seatsOrdered[i]);
+                const c1 = toNum(hands[0]?.cards?.[1]);
+                if (!Number.isFinite(c1) || deck[dp++] !== c1)
+                    return false;
+            }
+            if (deck[dp++] !== toNum(dealerCards[1]))
+                return false;
+            const events = [];
+            for (const rs of seatsOrdered) {
+                const hands = this.parseMultiHands(rs);
+                for (const hand of hands) {
+                    for (const a of hand.actions ?? []) {
+                        if (a.type === 'hit' && a.card !== undefined) {
+                            events.push({ ts: Number(a.timestamp) || 0, cards: [toNum(a.card)] });
+                        }
+                        else if (a.type === 'double_down' && a.card !== undefined) {
+                            events.push({ ts: Number(a.timestamp) || 0, cards: [toNum(a.card)] });
+                        }
+                    }
+                }
+                let hi = 0;
+                while (hi < hands.length - 1) {
+                    const a0 = hands[hi].actions?.find((x) => x.type === 'split');
+                    const a1 = hands[hi + 1].actions?.find((x) => x.type === 'split');
+                    if (a0 && a1 && a0.timestamp === a1.timestamp) {
+                        const cA = toNum(hands[hi].cards[1]);
+                        const cB = toNum(hands[hi + 1].cards[1]);
+                        if (!Number.isFinite(cA) || !Number.isFinite(cB))
+                            return false;
+                        events.push({ ts: Number(a0.timestamp) || 0, cards: [cA, cB] });
+                        hi += 2;
+                    }
+                    else {
+                        hi += 1;
+                    }
+                }
+            }
+            events.sort((a, b) => a.ts - b.ts);
+            for (const ev of events) {
+                for (const c of ev.cards) {
+                    if (deck[dp++] !== c)
+                        return false;
+                }
+            }
+            for (let di = 2; di < dealerCards.length; di++) {
+                const c = toNum(dealerCards[di]);
+                if (!Number.isFinite(c) || deck[dp++] !== c)
+                    return false;
+            }
+            return dp <= deck.length;
+        }
+        catch {
+            return false;
+        }
+    }
+    /**
+     * Verification payload for multiplayer blackjack (history id = blackjack_multi_round_seats.id),
+     * or round id when exactly one player had a seat that round.
+     */
+    async getMultiplayerVerificationPayload(requestId) {
+        const seatRound = await this.dbService.getBlackjackMultiRoundSeatWithRound(requestId);
+        let round;
+        let focusSeat;
+        let allSeats;
+        if (seatRound) {
+            round = seatRound.round;
+            focusSeat = seatRound.seat;
+            const ws = await this.dbService.getBlackjackMultiRoundWithSeats(round.id);
+            if (!ws)
+                return null;
+            allSeats = ws.seats;
+        }
+        else {
+            const ws = await this.dbService.getBlackjackMultiRoundWithSeats(requestId);
+            if (!ws)
+                return null;
+            round = ws.round;
+            allSeats = ws.seats;
+            if (allSeats.length !== 1)
+                return null;
+            focusSeat = allSeats[0];
+        }
+        if (round.status !== 'completed')
+            return null;
+        if (!focusSeat.result)
+            return null;
+        const serverCardsVerified = this.verifyMultiplayerProvablyFair(round, allSeats);
+        const hands = this.parseMultiHands(focusSeat);
+        const totalBet = hands.reduce((sum, h) => sum + BigInt(h.betAmount || '0'), 0n);
+        const totalPayout = BigInt(focusSeat.payout || '0');
+        const roundNumber = Number(round.round_number);
+        const rngVersion = 2;
+        return {
+            gameId: focusSeat.id,
+            roundId: round.id,
+            tableId: round.table_id,
+            seatPosition: focusSeat.seat_position,
+            bettingSeatCount: allSeats.length,
+            gameMode: 'multiplayer',
+            playerHands: hands.map(h => ({
+                cards: h.cards,
+                total: h.total,
+                result: h.result,
+                payout: BigInt(h.payout || '0'),
+                actions: h.actions || []
+            })),
+            dealerCards: typeof round.dealer_cards === 'string' ? JSON.parse(round.dealer_cards) : round.dealer_cards,
+            dealerTotal: round.dealer_total,
+            totalPayout,
+            betAmount: totalBet,
+            timestamp: round.created_at ? new Date(round.created_at).getTime() : undefined,
+            serverSeedHash: round.server_seed_hash ? `0x${String(round.server_seed_hash)}` : undefined,
+            serverSeed: round.server_seed,
+            clientSeed: round.client_seed || 'default',
+            gameNumber: roundNumber,
+            rngVersion,
+            baseNonce: roundNumber * BlackjackGameService.GAME_NONCE_MULTIPLIER,
+            nonce: roundNumber,
+            serverCardsVerified,
+            nonceScheme: {
+                type: 'fisher-yates-52',
+                nonce: roundNumber,
+                note: 'Multiplayer: Fisher-Yates shuffle; nonce = round_number. Initial deal order is all seats (first card), dealer up-card, all seats (second card), dealer hole; then player actions (timestamp order), then dealer draws.',
+            },
+            actions: [],
+            dealerActions: [],
+            result: focusSeat.result
+        };
+    }
     /**
      * Get game result for verification
      */
     async getGameResult(gameId) {
         try {
             const id = typeof gameId === 'string' ? gameId.trim() : gameId;
+            if (!id)
+                return null;
             const game = await this.dbService.getGame(id);
-            if (!game)
-                return null;
-            if (!game.result || game.result === 'ongoing')
-                return null;
-            const hands = await this.dbService.getGameHands(id);
-            const seedReveal = await this.dbService.getSeedReveal(id);
-            const rngVersion = Number(game.rng_version ?? 1);
-            const baseNonce = game.game_number * BlackjackGameService.GAME_NONCE_MULTIPLIER;
-            return {
-                gameId: game.id,
-                playerHands: hands.map(h => ({
-                    cards: h.cards,
-                    total: h.total,
-                    result: h.result,
-                    payout: h.payout,
-                    actions: h.actions || []
-                })),
-                dealerCards: game.dealer_cards,
-                dealerTotal: game.dealer_total,
-                totalPayout: game.total_payout,
-                betAmount: game.total_bet_amount,
-                timestamp: game.created_at ? new Date(game.created_at).getTime() : undefined,
-                serverSeedHash: seedReveal?.server_seed_hash ? `0x${seedReveal.server_seed_hash}` : undefined,
-                serverSeed: seedReveal?.server_seed,
-                clientSeed: game.client_seed_commitment || 'default',
-                gameNumber: game.game_number,
-                rngVersion,
-                baseNonce,
-                nonce: rngVersion === 2 ? game.game_number : Number(baseNonce),
-                nonceScheme: rngVersion === 2
-                    ? {
-                        type: 'fisher-yates-52',
-                        nonce: game.game_number,
-                        note: 'Fisher-Yates shuffle of 52-card deck. nonce = gameNumber. Cards dealt sequentially from shuffled deck.',
-                    }
-                    : {
-                        baseNonceMultiplier: BlackjackGameService.GAME_NONCE_MULTIPLIER,
-                        initialDealOrder: ['player', 'dealer', 'player', 'dealer'],
-                        note: 'Each card draw uses nonce = baseNonce + drawIndex; drawIndex increments globally per game.',
-                    },
-                actions: game.actions || [],
-                dealerActions: game.dealer_actions || [],
-                result: game.result
-            };
+            if (game && game.result && game.result !== 'ongoing') {
+                const hands = await this.dbService.getGameHands(id);
+                const seedReveal = await this.dbService.getSeedReveal(id);
+                const rngVersion = Number(game.rng_version ?? 1);
+                const baseNonce = game.game_number * BlackjackGameService.GAME_NONCE_MULTIPLIER;
+                return {
+                    gameId: game.id,
+                    gameMode: 'single',
+                    playerHands: hands.map(h => ({
+                        cards: h.cards,
+                        total: h.total,
+                        result: h.result,
+                        payout: h.payout,
+                        actions: h.actions || []
+                    })),
+                    dealerCards: game.dealer_cards,
+                    dealerTotal: game.dealer_total,
+                    totalPayout: game.total_payout,
+                    betAmount: game.total_bet_amount,
+                    timestamp: game.created_at ? new Date(game.created_at).getTime() : undefined,
+                    serverSeedHash: seedReveal?.server_seed_hash ? `0x${seedReveal.server_seed_hash}` : undefined,
+                    serverSeed: seedReveal?.server_seed,
+                    clientSeed: game.client_seed_commitment || 'default',
+                    gameNumber: game.game_number,
+                    rngVersion,
+                    baseNonce,
+                    nonce: rngVersion === 2 ? game.game_number : Number(baseNonce),
+                    nonceScheme: rngVersion === 2
+                        ? {
+                            type: 'fisher-yates-52',
+                            nonce: game.game_number,
+                            note: 'Fisher-Yates shuffle of 52-card deck. nonce = gameNumber. Cards dealt sequentially from shuffled deck.',
+                        }
+                        : {
+                            baseNonceMultiplier: BlackjackGameService.GAME_NONCE_MULTIPLIER,
+                            initialDealOrder: ['player', 'dealer', 'player', 'dealer'],
+                            note: 'Each card draw uses nonce = baseNonce + drawIndex; drawIndex increments globally per game.',
+                        },
+                    actions: game.actions || [],
+                    dealerActions: game.dealer_actions || [],
+                    result: game.result
+                };
+            }
+            return await this.getMultiplayerVerificationPayload(id);
         }
         catch (error) {
             logger_1.logger.error('Error getting game result:', error);

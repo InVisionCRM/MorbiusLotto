@@ -272,6 +272,15 @@ export declare class DatabaseService {
         block_number: number | null;
         confirmations_required: number;
     }>>;
+    /** List pending_deposits rows for admin tables with pagination. */
+    listPendingDeposits(limit?: number, offset?: number): Promise<Array<{
+        id: string;
+        wallet_address: string;
+        amount_wei: string;
+        tx_hash: string | null;
+        status: string;
+        created_at: string;
+    }>>;
     /** Mark pending deposit as credited and credit players.balance. */
     creditPendingDeposit(jobId: string): Promise<boolean>;
     /** Update pending deposit block_number (e.g. after fetching from chain). */
@@ -347,6 +356,16 @@ export declare class DatabaseService {
         nonce: string;
         amount: string;
     }>>;
+    /** List pending_withdrawals rows for admin tables with pagination. */
+    listPendingWithdrawals(limit?: number, offset?: number): Promise<Array<{
+        id: string;
+        wallet_address: string;
+        amount: string;
+        tx_hash: string | null;
+        nonce: string;
+        status: string;
+        created_at: string;
+    }>>;
     /**
      * Get one expired pending withdrawal for a wallet (oldest first).
      * Used by admin to manually trigger refund when cron couldn't verify (e.g. RPC issues).
@@ -382,7 +401,8 @@ export declare class DatabaseService {
         created_at?: Date;
     }>>;
     getPlayerGames(walletAddress: string, limit?: number, offset?: number): Promise<Game[]>;
-    /** Recent completed games globally (all players) for "Recent Play" feed. */
+    /** Recent completed games globally (all players) for "Recent Play" feed.
+     *  Includes both single-player and multiplayer blackjack games. */
     getRecentGamesGlobal(limit?: number): Promise<Array<{
         id: string;
         wallet_address: string;
@@ -400,10 +420,26 @@ export declare class DatabaseService {
     setSessionServerSeed(sessionId: string, serverSeed: string, serverSeedHash: string): Promise<void>;
     createGame(sessionId: string, gameData: Partial<Game>): Promise<Game>;
     createGameHand(gameId: string, handData: Partial<GameHand>): Promise<GameHand>;
+    /**
+     * Insert a game_hand row using a provided transaction client.
+     * Used by multiplayer settlement to fan out JSONB hands into normalised rows
+     * inside the same transaction that settles balances.
+     */
+    createGameHandInTx(client: any, gameId: string, handData: Partial<GameHand>): Promise<void>;
     updateGameHand(handId: string, updates: Partial<GameHand>): Promise<void>;
     getGameHands(gameId: string): Promise<GameHand[]>;
     updateGame(gameId: string, updates: Partial<Game>): Promise<void>;
     getGame(gameId: string): Promise<Game | null>;
+    /** Multiplayer blackjack: one row per player per round (used as history `id` for verify links). */
+    getBlackjackMultiRoundSeatWithRound(seatId: string): Promise<{
+        seat: any;
+        round: any;
+    } | null>;
+    /** Load a completed round and all seats (seat_position ASC). Used for verify-by-round-id when exactly one seat. */
+    getBlackjackMultiRoundWithSeats(roundId: string): Promise<{
+        round: any;
+        seats: any[];
+    } | null>;
     getSessionGames(sessionId: string): Promise<Game[]>;
     revealServerSeed(gameId: string, serverSeedHash: string, serverSeed: string): Promise<void>;
     getSeedReveal(gameId: string): Promise<{
@@ -428,9 +464,25 @@ export declare class DatabaseService {
     getProfile(walletAddress: string): Promise<{
         displayName: string;
         profileImageUrl: string | null;
+        avatarConfig: Record<string, unknown> | null;
+        bio: string | null;
+        xHandle: string | null;
+        tgHandle: string | null;
     } | null>;
-    setDisplayName(walletAddress: string, displayName: string, profileImageUrl?: string | null): Promise<void>;
+    setDisplayName(walletAddress: string, displayName: string, profileImageUrl?: string | null, avatarConfig?: Record<string, unknown> | null, bio?: string | null, xHandle?: string | null, tgHandle?: string | null): Promise<void>;
+    /**
+     * Sets avatar_config only when it is currently null (for new players or those who never set an avatar).
+     * If no row exists, inserts one with empty display_name and the given config.
+     */
+    setDefaultAvatarIfNull(walletAddress: string, avatarConfig: Record<string, unknown>): Promise<void>;
+    /** Explicitly update social/bio fields — allows clearing (pass empty string → stored as null). */
+    updateProfileSocial(walletAddress: string, bio: string | null, xHandle: string | null, tgHandle: string | null): Promise<void>;
     getDisplayNames(walletAddresses: string[]): Promise<Map<string, string>>;
+    getProfiles(walletAddresses: string[]): Promise<Map<string, {
+        displayName: string;
+        profileImageUrl: string | null;
+        avatarConfig: Record<string, unknown> | null;
+    }>>;
     getBlockedAddresses(): Promise<string[]>;
     isAddressBlocked(walletAddress: string): Promise<boolean>;
     addBlockedAddress(walletAddress: string): Promise<void>;
@@ -558,6 +610,149 @@ export declare class DatabaseService {
         total_wagered: string;
         total_payouts: string;
         contract_reserve: string;
+    }>>;
+    /** Completed poker hands for a player (for history modal). */
+    getPokerPlayerHands(address: string, limit?: number, offset?: number): Promise<Array<{
+        id: string;
+        table_id: string;
+        hand_number: number;
+        pot_amount: string;
+        community_cards: number[];
+        result: {
+            winners: Array<{
+                address: string;
+                amount: string;
+                handName?: string;
+            }>;
+        } | null;
+        rakeAmount: string;
+        completed_at: string;
+        myContributed: string;
+        myWon: string;
+        resultType: 'win' | 'loss' | 'fold';
+    }>>;
+    /** Aggregate poker stats for a player (from completed hands). */
+    getPokerPlayerStats(address: string): Promise<{
+        total_hands: number;
+        hands_won: number;
+        win_rate: number;
+        total_wagered: string;
+        total_won: string;
+        profit_loss: string;
+        roi: number;
+        current_streak: number;
+        best_streak: number;
+        biggest_pot_won: string;
+        biggest_loss: string;
+    }>;
+    /** Aggregate poker stats for a player at a specific table (from completed hands). */
+    getPokerPlayerTableStats(tableId: string, address: string): Promise<{
+        total_hands: number;
+        hands_won: number;
+        win_rate: number;
+        total_wagered: string;
+        total_won: string;
+        profit_loss: string;
+        roi: number;
+        current_streak: number;
+        best_streak: number;
+        biggest_pot_won: string;
+        biggest_loss: string;
+        hands_history: Array<{
+            hand_number: number;
+            completed_at: string;
+            my_contributed: string;
+            my_won: string;
+            result_type: 'win' | 'loss' | 'fold';
+        }>;
+    }>;
+    /** Single hand detail for replay (actions + hole cards for requesting player). */
+    getPokerHandDetail(handId: string, playerAddress: string): Promise<{
+        id: string;
+        table_id: string;
+        hand_number: number;
+        pot_amount: string;
+        community_cards: number[];
+        result: {
+            winners: Array<{
+                address: string;
+                amount: string;
+                handName?: string;
+            }>;
+        } | null;
+        completed_at: string;
+        actions: Array<{
+            street: string;
+            player_address: string;
+            action: string;
+            amount: string;
+        }>;
+        holeCards: number[] | null;
+    } | null>;
+    getPokerTableDashboardStats(tableId: string): Promise<{
+        table: {
+            id: string;
+            small_blind: string;
+            big_blind: string;
+            max_seats: number;
+            hand_number: number;
+            created_at: string;
+        } | null;
+        seats: Array<{
+            position: number;
+            player_address: string;
+            stack: string;
+            status: string;
+            joined_at: string;
+        }>;
+        stats: {
+            total_hands: number;
+            total_rake: string;
+            total_pot_volume: string;
+            avg_pot: string;
+            avg_hand_duration_seconds: number;
+            biggest_pot: string;
+            hands_today: number;
+            hands_this_hour: number;
+        };
+        player_stats: Array<{
+            player_address: string;
+            hands_played: number;
+            hands_won: number;
+            total_wagered: string;
+            total_won: string;
+            net_pnl: string;
+            vpip_pct: number;
+        }>;
+        recent_hands: Array<{
+            id: string;
+            hand_number: number;
+            pot_amount: string;
+            rake_amount: string;
+            street: string;
+            community_cards: number[];
+            result: any;
+            completed_at: string;
+            duration_seconds: number;
+            player_count: number;
+        }>;
+    }>;
+    followPlayer(followerAddress: string, followingAddress: string): Promise<void>;
+    unfollowPlayer(followerAddress: string, followingAddress: string): Promise<void>;
+    isFollowing(followerAddress: string, followingAddress: string): Promise<boolean>;
+    getFollowCounts(address: string): Promise<{
+        followerCount: number;
+        followingCount: number;
+    }>;
+    getFollowers(address: string, limit?: number, offset?: number): Promise<Array<{
+        address: string;
+        displayName: string | null;
+        avatarConfig: Record<string, unknown> | null;
+    }>>;
+    getFollowing(address: string, limit?: number, offset?: number): Promise<Array<{
+        address: string;
+        displayName: string | null;
+        avatarConfig: Record<string, unknown> | null;
     }>>;
 }
 //# sourceMappingURL=database.service.d.ts.map

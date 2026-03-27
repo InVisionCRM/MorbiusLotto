@@ -138,6 +138,18 @@ export declare class BlackjackGameService {
      * Verify game result (alias for getGameResult for API compatibility)
      */
     verifyGame(gameId: string): Promise<any>;
+    /** Parse JSONB hands from a multiplayer round_seat row. */
+    private parseMultiHands;
+    /**
+     * Replay multiplayer card draws in table order: initial deal, then player events (by timestamp),
+     * then dealer hits — must match the shuffled deck from server_seed + client_seed + round_number.
+     */
+    private verifyMultiplayerProvablyFair;
+    /**
+     * Verification payload for multiplayer blackjack (history id = blackjack_multi_round_seats.id),
+     * or round id when exactly one player had a seat that round.
+     */
+    private getMultiplayerVerificationPayload;
     /**
      * Get game result for verification
      */

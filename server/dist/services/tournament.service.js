@@ -36,6 +36,7 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.TournamentService = exports.TOURNAMENT_CONFIG = void 0;
 const viem_1 = require("viem");
 const logger_1 = require("../utils/logger");
+const safe_bigint_1 = require("../utils/safe-bigint");
 function formatWei(w) {
     return Number((0, viem_1.formatEther)(w)).toLocaleString(undefined, { maximumFractionDigits: 2 });
 }
@@ -58,15 +59,16 @@ exports.TOURNAMENT_CONFIG = {
 };
 class TournamentService {
     pool;
+    // Set after construction to avoid circular dependency
+    pokerTournamentService = null;
     constructor(pool) {
         this.pool = pool;
     }
+    setPokerTournamentService(service) {
+        this.pokerTournamentService = service;
+    }
     toBigInt(value) {
-        if (typeof value === 'bigint')
-            return value;
-        if (value === null || value === undefined)
-            return 0n;
-        return BigInt(String(value));
+        return (0, safe_bigint_1.toBigIntSafe)(value);
     }
     normalizeAddress(address) {
         return address?.toLowerCase() || address;
@@ -371,6 +373,7 @@ class TournamentService {
       WHERE LOWER(te.player_address) = LOWER($1)
         AND t.status = 'active'
         AND te.status = 'playing'
+        AND (t.game_type IS NULL OR t.game_type = 'blackjack')
       ORDER BY te.bought_in_at DESC
       LIMIT 1
     `;
@@ -1564,6 +1567,7 @@ class TournamentService {
       LEFT JOIN tournament_leaderboard tl ON tl.entry_id = te.id
       WHERE LOWER(te.player_address) = LOWER($1)
         AND t.status = 'active'
+        AND (t.game_type IS NULL OR t.game_type = 'blackjack')
       ORDER BY te.bought_in_at DESC
       LIMIT 1
     `;
@@ -1619,6 +1623,13 @@ class TournamentService {
                     break;
                 case 'reentry_close':
                     // No-op: reentry window is time-based; closing is implicit
+                    break;
+                case 'poker_start':
+                    if (!this.pokerTournamentService) {
+                        logger_1.logger.warn('executeScheduledEvent: poker_start fired but pokerTournamentService not set — retrying next poll');
+                        return; // Leave pending so next poll retries
+                    }
+                    await this.pokerTournamentService.activateTournament(tournamentId);
                     break;
                 default:
                     logger_1.logger.warn('executeScheduledEvent: unknown event_type %s', eventType);

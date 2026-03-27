@@ -52,10 +52,15 @@ const freeroll_scheduler_service_1 = require("./services/freeroll-scheduler.serv
 const tournament_scheduler_service_1 = require("./services/tournament-scheduler.service");
 const websocket_service_1 = require("./services/websocket.service");
 const poker_game_service_1 = require("./services/poker-game.service");
+const poker_tournament_service_1 = require("./services/poker-tournament.service");
+const blackjack_multi_game_service_1 = require("./services/blackjack-multi-game.service");
 const chain_analytics_service_1 = require("./services/chain-analytics.service");
 const instant_lottery_service_1 = require("./services/instant-lottery.service");
 const merkle_drops_service_1 = require("./services/merkle-drops.service");
 const merkle_lp_drops_service_1 = require("./services/merkle-lp-drops.service");
+const cosmetics_service_1 = require("./services/cosmetics.service");
+const cosmetics_catalog_1 = require("./lib/cosmetics-catalog");
+const poker_chip_scale_1 = require("./lib/poker-chip-scale");
 const logger_1 = require("./utils/logger");
 const withdraw_sign_1 = require("./utils/withdraw-sign");
 const chain_client_1 = require("./utils/chain-client");
@@ -94,15 +99,7 @@ function refreshBjTotalsBackground(chainAnalytics) {
         .catch(() => { })
         .finally(() => { _bjTotalsRefreshing = false; });
 }
-const ADMIN_WALLETS = (process.env.ADMIN_WALLETS || '')
-    .split(',')
-    .map((a) => a.trim().toLowerCase())
-    .filter(Boolean);
-function isAdminWallet(addr) {
-    if (!addr)
-        return false;
-    return ADMIN_WALLETS.includes(addr.toLowerCase());
-}
+const ADMIN_SECRET = process.env.AP;
 const app = (0, express_1.default)();
 const server = (0, http_1.createServer)(app);
 const PORT = process.env.PORT || 3001;
@@ -203,11 +200,15 @@ const uploadMulter = (0, multer_1.default)({
         cb(null, true);
     },
 });
-// Admin API: require x-admin-wallet header and that it's in ADMIN_WALLETS
+// Admin API: require x-admin-secret header matching AP env var
 app.use('/api/admin', (req, res, next) => {
-    const wallet = req.headers['x-admin-wallet']?.trim();
-    if (!wallet || !isAdminWallet(wallet)) {
-        res.status(403).json({ error: 'Forbidden', message: 'Admin wallet required' });
+    if (!ADMIN_SECRET) {
+        res.status(503).json({ error: 'Admin access not configured on server' });
+        return;
+    }
+    const secret = req.headers['x-admin-secret']?.trim();
+    if (!secret || secret !== ADMIN_SECRET) {
+        res.status(403).json({ error: 'Forbidden' });
         return;
     }
     next();
@@ -263,8 +264,9 @@ async function initializeServices() {
         const pokerGameService = new poker_game_service_1.PokerGameService(dbService, pfService);
         const existingTables = await pokerGameService.listTables();
         if (existingTables.length === 0) {
-            await pokerGameService.createTable(10n, 20n, 6);
-            logger_1.logger.info('Poker: created default table (10/20, 6 seats)');
+            const pcw = (0, poker_chip_scale_1.getPokerChipWei)();
+            await pokerGameService.createTable(pcw * 10n, pcw * 20n, 6);
+            logger_1.logger.info('Poker: created default table (10/20 chips, 6 seats; chip wei = %s)', pcw.toString());
         }
         // Clear stale/incomplete poker hands from previous server sessions.
         // Bot intervals and in-flight state are lost on restart, so any hand
@@ -283,10 +285,22 @@ async function initializeServices() {
         catch (err) {
             logger_1.logger.warn(`Poker: failed to clear stale hands on startup: ${err.message}`);
         }
+        // Initialize multiplayer blackjack service
+        const bjMultiService = new blackjack_multi_game_service_1.BlackjackMultiGameService(dbService, pfService);
         // Initialize WebSocket service
-        const wsService = new websocket_service_1.WebSocketService(server, gameService, dbService, tournamentService, pokerGameService);
+        const wsService = new websocket_service_1.WebSocketService(server, gameService, dbService, tournamentService, pokerGameService, bjMultiService);
         // Wire broadcast so bot actions (which bypass the WS handler) still push state to clients
         pokerGameService.setBroadcastCallback((tableId) => wsService.broadcastPokerTableState(tableId));
+        // Wire notifications for AFK kick/sit-out events
+        pokerGameService.setNotifyCallback((room, type, payload) => wsService.broadcastToRoom(room, { type, payload }));
+        // Initialize poker tournament service and wire into WebSocket + post-hand callback
+        const pokerTournamentService = new poker_tournament_service_1.PokerTournamentService(dbService.getPool(), tournamentService, pokerGameService);
+        wsService.setPokerTournamentService(pokerTournamentService);
+        tournamentService.setPokerTournamentService(pokerTournamentService);
+        pokerTournamentService.setBroadcastCallback((room, msg) => wsService.broadcastToRoom(room, msg));
+        pokerGameService.setPostHandCallback((tableId, handNumber) => pokerTournamentService.syncAfterHand(tableId, handNumber));
+        // Wire BJ multi broadcast callback
+        bjMultiService.setBroadcastCallback((tableId) => wsService.broadcastBJMultiTableState(tableId));
         // Freeroll scheduler (polls pending scheduled events: start, end)
         freerollScheduler = new freeroll_scheduler_service_1.FreerollSchedulerService(dbService.getPool(), tournamentService);
         freerollScheduler.start();
@@ -308,6 +322,7 @@ async function initializeServices() {
         }
         // Merkle LP drops service (LP token holder epoch rewards)
         merkleDropsLPService = new merkle_lp_drops_service_1.MerkleDropsLPService(dbService.getPool());
+        const cosmeticsService = new cosmetics_service_1.CosmeticsService(dbService.getPool());
         if (process.env.MERKLE_LP_DROP_CRON_ENABLED === 'true') {
             merkleDropsLPService.startCron();
         }
@@ -333,10 +348,517 @@ async function initializeServices() {
             try {
                 const { address } = req.params;
                 const profile = await dbService.getProfile(address);
-                sendJson(res, profile ?? { displayName: null, profileImageUrl: null });
+                sendJson(res, profile ?? { displayName: null, profileImageUrl: null, avatarConfig: null });
             }
             catch (error) {
                 logger_1.logger.error('Error fetching player profile:', error);
+                res.status(500).json({ error: 'Internal server error' });
+            }
+        });
+        // Update profile by address (display name, profile image URL, avatar config). No signature required.
+        app.post('/api/player/profile', express_1.default.json(), async (req, res) => {
+            try {
+                const { address, displayName: rawDisplayName, profileImageUrl: rawProfileImageUrl, avatarConfig: rawAvatarConfig, bio: rawBio, xHandle: rawXHandle, tgHandle: rawTgHandle } = req.body ?? {};
+                if (!address || typeof address !== 'string') {
+                    return res.status(400).json({ error: 'address required' });
+                }
+                const normalizedAddress = (0, viem_1.getAddress)(address);
+                const displayName = typeof rawDisplayName === 'string' ? rawDisplayName.trim() : '';
+                if (displayName.length < 3 || displayName.length > 32) {
+                    return res.status(400).json({ error: 'Display name must be 3–32 characters' });
+                }
+                const profileImageUrl = rawProfileImageUrl !== undefined
+                    ? (typeof rawProfileImageUrl === 'string' ? rawProfileImageUrl : null)
+                    : undefined;
+                const avatarConfig = rawAvatarConfig !== undefined
+                    ? (rawAvatarConfig !== null && typeof rawAvatarConfig === 'object' ? rawAvatarConfig : null)
+                    : undefined;
+                const bio = rawBio !== undefined ? (typeof rawBio === 'string' ? rawBio.trim().slice(0, 200) || null : null) : undefined;
+                const xHandle = rawXHandle !== undefined ? (typeof rawXHandle === 'string' ? rawXHandle.trim().replace(/^@/, '').slice(0, 50) || null : null) : undefined;
+                const tgHandle = rawTgHandle !== undefined ? (typeof rawTgHandle === 'string' ? rawTgHandle.trim().replace(/^@/, '').slice(0, 50) || null : null) : undefined;
+                // Cosmetics ownership check (skip for admin wallets)
+                if (avatarConfig && !(0, cosmetics_catalog_1.isAdminWallet)(normalizedAddress)) {
+                    const inventory = await cosmeticsService.getInventory(normalizedAddress);
+                    const ownedSet = new Set(inventory);
+                    const locked = (0, cosmetics_catalog_1.getLockedFields)(avatarConfig, ownedSet);
+                    if (locked.length > 0) {
+                        const names = locked.map((l) => l.displayName ?? l.itemKey ?? l.value).join(', ');
+                        return res.status(403).json({
+                            error: `Avatar contains items you don\'t own: ${names}`,
+                            lockedItems: locked,
+                        });
+                    }
+                    // DB-created items check (colors added via the builder won't be in the static catalog)
+                    const dbValueMap = await cosmeticsService.getDbValueMap();
+                    if (dbValueMap.size > 0) {
+                        const config = avatarConfig;
+                        const dbLocked = [];
+                        for (const [key, itemKey] of dbValueMap) {
+                            const [field, value] = key.split(':');
+                            if (config[field] === value && !ownedSet.has(itemKey)) {
+                                dbLocked.push(itemKey);
+                            }
+                        }
+                        if (dbLocked.length > 0) {
+                            return res.status(403).json({
+                                error: `Avatar contains items you don't own: ${dbLocked.join(', ')}`,
+                                lockedItems: dbLocked.map((k) => ({ itemKey: k, value: null, field: null })),
+                            });
+                        }
+                    }
+                }
+                await dbService.setDisplayName(normalizedAddress, displayName, profileImageUrl, avatarConfig, bio, xHandle, tgHandle);
+                const profile = await dbService.getProfile(normalizedAddress);
+                sendJson(res, profile ?? { displayName: null, profileImageUrl: null, avatarConfig: null });
+            }
+            catch (error) {
+                logger_1.logger.error('Error updating player profile:', error);
+                res.status(500).json({ error: 'Internal server error' });
+            }
+        });
+        // ── Cosmetics ─────────────────────────────────────────────────────────────
+        // GET /api/cosmetics/items — full catalog with tier + pricing + live minted counts
+        // ?adminAddress= — when wallet is admin, includes delisted items + shopListed on each row
+        app.get('/api/cosmetics/items', async (req, res) => {
+            try {
+                const adminAddress = typeof req.query.adminAddress === 'string' ? req.query.adminAddress : '';
+                const includeDelisted = Boolean(adminAddress && (0, cosmetics_catalog_1.isAdminWallet)(adminAddress));
+                const items = await cosmeticsService.getAllItems({ includeDelisted });
+                res.json(items);
+            }
+            catch (error) {
+                logger_1.logger.error('Error fetching cosmetic items:', error);
+                res.status(500).json({ error: 'Internal server error' });
+            }
+        });
+        // GET /api/cosmetics/inventory/:address — player's owned item keys
+        app.get('/api/cosmetics/inventory/:address', async (req, res) => {
+            try {
+                const { address } = req.params;
+                const inventory = await cosmeticsService.getInventory(address);
+                sendJson(res, { address, items: inventory });
+            }
+            catch (error) {
+                logger_1.logger.error('Error fetching cosmetic inventory:', error);
+                res.status(500).json({ error: 'Internal server error' });
+            }
+        });
+        // POST /api/cosmetics/purchase — verify on-chain payment and record ownership
+        // Body: { walletAddress, itemKey, txHash, currency: 'PLS' | 'MORBIUS' }
+        app.post('/api/cosmetics/purchase', express_1.default.json(), async (req, res) => {
+            try {
+                const { walletAddress, itemKey, txHash, currency } = req.body ?? {};
+                if (!walletAddress || !itemKey || !txHash || !currency) {
+                    return res.status(400).json({ error: 'walletAddress, itemKey, txHash, and currency required' });
+                }
+                if (currency !== 'PLS' && currency !== 'MORBIUS') {
+                    return res.status(400).json({ error: 'currency must be PLS or MORBIUS' });
+                }
+                const result = await cosmeticsService.recordPurchase(walletAddress, itemKey, txHash, currency);
+                const statusMap = {
+                    not_found: 404,
+                    not_listed: 403,
+                    already_owned: 409,
+                    tx_already_used: 409,
+                    tx_not_found: 422,
+                    tx_wrong_sender: 422,
+                    tx_wrong_recipient: 422,
+                    tx_insufficient_amount: 422,
+                    tx_reverted: 422,
+                };
+                if (result !== 'ok') {
+                    const status = statusMap[result] ?? 422;
+                    return res.status(status).json({ error: result.replace(/_/g, ' ') });
+                }
+                const inventory = await cosmeticsService.getInventory(walletAddress);
+                sendJson(res, { success: true, items: inventory });
+            }
+            catch (error) {
+                logger_1.logger.error('Error recording cosmetic purchase:', error);
+                res.status(500).json({ error: 'Internal server error' });
+            }
+        });
+        // POST /api/cosmetics/gift — transfer item from one player to another
+        // Body: { fromAddress, toAddress, itemKey }
+        app.post('/api/cosmetics/gift', express_1.default.json(), async (req, res) => {
+            try {
+                const { fromAddress, toAddress, itemKey } = req.body ?? {};
+                if (!fromAddress || !toAddress || !itemKey) {
+                    return res.status(400).json({ error: 'fromAddress, toAddress, and itemKey required' });
+                }
+                if (fromAddress.toLowerCase() === toAddress.toLowerCase()) {
+                    return res.status(400).json({ error: 'Cannot gift to yourself' });
+                }
+                const result = await cosmeticsService.giftItem(fromAddress, toAddress, itemKey);
+                if (result === 'not_owned')
+                    return res.status(403).json({ error: 'You do not own this item' });
+                if (result === 'already_owned')
+                    return res.status(409).json({ error: 'Recipient already owns this item' });
+                const inventory = await cosmeticsService.getInventory(fromAddress);
+                sendJson(res, { success: true, items: inventory });
+            }
+            catch (error) {
+                logger_1.logger.error('Error gifting cosmetic item:', error);
+                res.status(500).json({ error: 'Internal server error' });
+            }
+        });
+        // POST /api/cosmetics/grant — admin-only: grant item to a player for free
+        // Body: { targetAddress, itemKey, adminKey }
+        app.post('/api/cosmetics/grant', express_1.default.json(), async (req, res) => {
+            try {
+                const { targetAddress, itemKey, adminAddress } = req.body ?? {};
+                if (!targetAddress || !itemKey || !adminAddress) {
+                    return res.status(400).json({ error: 'targetAddress, itemKey, and adminAddress required' });
+                }
+                if (!(0, cosmetics_catalog_1.isAdminWallet)(adminAddress)) {
+                    return res.status(403).json({ error: 'Unauthorized' });
+                }
+                const result = await cosmeticsService.grantItem(targetAddress, itemKey, null);
+                const inventory = await cosmeticsService.getInventory(targetAddress);
+                sendJson(res, { success: true, alreadyOwned: !result, items: inventory });
+            }
+            catch (error) {
+                logger_1.logger.error('Error granting cosmetic item:', error);
+                res.status(500).json({ error: 'Internal server error' });
+            }
+        });
+        // POST /api/cosmetics/admin/create-item — create a new dynamic item (admin only)
+        // Body: { adminAddress, itemKey, displayName, tier, priceMorbius, maxSupply, unlocksField, unlocksValue }
+        app.post('/api/cosmetics/admin/create-item', express_1.default.json(), async (req, res) => {
+            try {
+                const { adminAddress, itemKey, displayName, tier, priceMorbius, maxSupply, unlocksField, unlocksValue } = req.body ?? {};
+                if (!adminAddress || !itemKey || !displayName || !tier || !unlocksField || !unlocksValue) {
+                    return res.status(400).json({ error: 'Missing required fields' });
+                }
+                if (!(0, cosmetics_catalog_1.isAdminWallet)(adminAddress)) {
+                    return res.status(403).json({ error: 'Unauthorized' });
+                }
+                const result = await cosmeticsService.createItem({
+                    itemKey, displayName, tier,
+                    priceMorbius: Number(priceMorbius),
+                    maxSupply: Number(maxSupply),
+                    unlocksField, unlocksValue,
+                });
+                if (result === 'duplicate_key')
+                    return res.status(409).json({ error: `Item key "${itemKey}" already exists` });
+                if (result === 'duplicate_value')
+                    return res.status(409).json({ error: `A "${unlocksField}" item with value "${unlocksValue}" already exists` });
+                sendJson(res, { success: true, itemKey });
+            }
+            catch (error) {
+                logger_1.logger.error('Error creating cosmetic item:', error);
+                res.status(500).json({ error: 'Internal server error' });
+            }
+        });
+        // PATCH /api/cosmetics/admin/item — update tier/price/maxSupply/shopListed (admin only)
+        // Body: { adminAddress, itemKey, tier?, priceMorbius?, maxSupply?, shopListed? }
+        app.patch('/api/cosmetics/admin/item', express_1.default.json(), async (req, res) => {
+            try {
+                const { adminAddress, itemKey, tier, priceMorbius, maxSupply, shopListed } = req.body ?? {};
+                if (!adminAddress || !itemKey) {
+                    return res.status(400).json({ error: 'adminAddress and itemKey required' });
+                }
+                if (!(0, cosmetics_catalog_1.isAdminWallet)(adminAddress)) {
+                    return res.status(403).json({ error: 'Unauthorized' });
+                }
+                const result = await cosmeticsService.updateItem(itemKey, {
+                    tier,
+                    priceMorbius,
+                    maxSupply,
+                    shopListed: typeof shopListed === 'boolean' ? shopListed : undefined,
+                });
+                if (result === 'not_found')
+                    return res.status(404).json({ error: 'Item not found' });
+                if (result === 'supply_below_minted')
+                    return res.status(409).json({ error: 'New max supply cannot be below current minted count' });
+                sendJson(res, { success: true });
+            }
+            catch (error) {
+                logger_1.logger.error('Error updating cosmetic item:', error);
+                res.status(500).json({ error: 'Internal server error' });
+            }
+        });
+        // POST /api/cosmetics/admin/bulk-shop-listed — batch shop_listed from variant review (admin only)
+        // Body: { adminAddress, updates: [{ itemKey, shopListed: boolean }, ...] }
+        app.post('/api/cosmetics/admin/bulk-shop-listed', express_1.default.json(), async (req, res) => {
+            try {
+                const { adminAddress, updates } = req.body ?? {};
+                if (!adminAddress || !Array.isArray(updates)) {
+                    return res.status(400).json({ error: 'adminAddress and updates array required' });
+                }
+                if (!(0, cosmetics_catalog_1.isAdminWallet)(adminAddress)) {
+                    return res.status(403).json({ error: 'Unauthorized' });
+                }
+                const max = 500;
+                if (updates.length > max) {
+                    return res.status(400).json({ error: `At most ${max} updates per request` });
+                }
+                const pairs = [];
+                for (const u of updates) {
+                    if (!u || typeof u.itemKey !== 'string' || u.itemKey.length > 120 || typeof u.shopListed !== 'boolean') {
+                        return res.status(400).json({ error: 'Each update must have itemKey (string) and shopListed (boolean)' });
+                    }
+                    if (!/^[a-z0-9_]+$/.test(u.itemKey)) {
+                        return res.status(400).json({ error: 'Invalid itemKey format' });
+                    }
+                    pairs.push({ itemKey: u.itemKey, shopListed: u.shopListed });
+                }
+                const { updated, notFound } = await cosmeticsService.bulkSetShopListed(pairs);
+                sendJson(res, { success: true, updatedCount: updated, notFound });
+            }
+            catch (error) {
+                logger_1.logger.error('Error bulk-updating shop_listed:', error);
+                res.status(500).json({ error: 'Internal server error' });
+            }
+        });
+        // PATCH /api/cosmetics/admin/tier-pricing — set MORBIUS price for all items of a tier (admin only)
+        // Body: { adminAddress, tier, priceMorbius }
+        app.patch('/api/cosmetics/admin/tier-pricing', express_1.default.json(), async (req, res) => {
+            try {
+                const { adminAddress, tier, priceMorbius } = req.body ?? {};
+                if (!adminAddress || !tier || priceMorbius === undefined) {
+                    return res.status(400).json({ error: 'adminAddress, tier, and priceMorbius required' });
+                }
+                if (!(0, cosmetics_catalog_1.isAdminWallet)(adminAddress)) {
+                    return res.status(403).json({ error: 'Unauthorized' });
+                }
+                const validTiers = ['common', 'uncommon', 'rare', 'legendary'];
+                if (!validTiers.includes(tier)) {
+                    return res.status(400).json({ error: 'Invalid tier' });
+                }
+                const price = Number(priceMorbius);
+                if (!Number.isFinite(price) || price <= 0) {
+                    return res.status(400).json({ error: 'priceMorbius must be a positive number' });
+                }
+                const count = await cosmeticsService.updateTierPricing(tier, price);
+                sendJson(res, { success: true, updatedCount: count });
+            }
+            catch (error) {
+                logger_1.logger.error('Error updating tier pricing:', error);
+                res.status(500).json({ error: 'Internal server error' });
+            }
+        });
+        // GET /api/cosmetics/admin/item-owners?adminAddress=&itemKey= — list wallets that own an item (admin only)
+        app.get('/api/cosmetics/admin/item-owners', async (req, res) => {
+            try {
+                const adminAddress = typeof req.query.adminAddress === 'string' ? req.query.adminAddress : '';
+                const itemKey = typeof req.query.itemKey === 'string' ? req.query.itemKey : '';
+                if (!adminAddress || !itemKey) {
+                    return res.status(400).json({ error: 'adminAddress and itemKey query params required' });
+                }
+                if (!(0, cosmetics_catalog_1.isAdminWallet)(adminAddress)) {
+                    return res.status(403).json({ error: 'Unauthorized' });
+                }
+                const owners = await cosmeticsService.getOwnersForItem(itemKey);
+                sendJson(res, { owners });
+            }
+            catch (error) {
+                logger_1.logger.error('Error listing cosmetic item owners:', error);
+                res.status(500).json({ error: 'Internal server error' });
+            }
+        });
+        // ── Marketplace ───────────────────────────────────────────────────────────
+        // GET /api/cosmetics/market — active listings (optional ?itemKey=&sellerAddress=)
+        app.get('/api/cosmetics/market', async (req, res) => {
+            try {
+                const { itemKey, sellerAddress } = req.query;
+                const listings = await cosmeticsService.getListings({
+                    itemKey: itemKey || undefined,
+                    sellerAddress: sellerAddress || undefined,
+                });
+                res.json({ listings });
+            }
+            catch (error) {
+                logger_1.logger.error('Error fetching market listings:', error);
+                res.status(500).json({ error: 'Internal server error' });
+            }
+        });
+        // POST /api/cosmetics/market/list — create a listing
+        // Body: { sellerAddress, itemKey, priceMorbius }
+        app.post('/api/cosmetics/market/list', express_1.default.json(), async (req, res) => {
+            try {
+                const { sellerAddress, itemKey, priceMorbius } = req.body ?? {};
+                if (!sellerAddress || !itemKey || !priceMorbius) {
+                    return res.status(400).json({ error: 'sellerAddress, itemKey, and priceMorbius required' });
+                }
+                const price = parseInt(priceMorbius, 10);
+                if (isNaN(price) || price <= 0) {
+                    return res.status(400).json({ error: 'priceMorbius must be a positive number' });
+                }
+                const result = await cosmeticsService.createListing(sellerAddress, itemKey, price);
+                if (result === 'not_owned')
+                    return res.status(403).json({ error: 'You do not own this item' });
+                if (result === 'already_listed')
+                    return res.status(409).json({ error: 'Item already listed for sale' });
+                if (result === 'item_not_found')
+                    return res.status(404).json({ error: 'Item not found' });
+                res.json({ success: true });
+            }
+            catch (error) {
+                logger_1.logger.error('Error creating market listing:', error);
+                res.status(500).json({ error: 'Internal server error' });
+            }
+        });
+        // POST /api/cosmetics/market/cancel — cancel a listing
+        // Body: { sellerAddress, listingId }
+        app.post('/api/cosmetics/market/cancel', express_1.default.json(), async (req, res) => {
+            try {
+                const { sellerAddress, listingId } = req.body ?? {};
+                if (!sellerAddress || !listingId) {
+                    return res.status(400).json({ error: 'sellerAddress and listingId required' });
+                }
+                const result = await cosmeticsService.cancelListing(sellerAddress, parseInt(listingId, 10));
+                if (result === 'not_found')
+                    return res.status(404).json({ error: 'Listing not found' });
+                if (result === 'not_yours')
+                    return res.status(403).json({ error: 'Not your listing' });
+                res.json({ success: true });
+            }
+            catch (error) {
+                logger_1.logger.error('Error cancelling market listing:', error);
+                res.status(500).json({ error: 'Internal server error' });
+            }
+        });
+        // POST /api/cosmetics/market/update-price — update listing price
+        // Body: { sellerAddress, listingId, newPrice }
+        app.post('/api/cosmetics/market/update-price', express_1.default.json(), async (req, res) => {
+            try {
+                const { sellerAddress, listingId, newPrice } = req.body ?? {};
+                if (!sellerAddress || !listingId || !newPrice) {
+                    return res.status(400).json({ error: 'sellerAddress, listingId, and newPrice required' });
+                }
+                const p = Number(newPrice);
+                if (!Number.isFinite(p) || p <= 0) {
+                    return res.status(400).json({ error: 'newPrice must be a positive number' });
+                }
+                const result = await cosmeticsService.updateListingPrice(sellerAddress, parseInt(listingId, 10), p);
+                if (result === 'not_found')
+                    return res.status(404).json({ error: 'Listing not found or already sold/cancelled' });
+                if (result === 'not_yours')
+                    return res.status(403).json({ error: 'Not your listing' });
+                res.json({ success: true });
+            }
+            catch (error) {
+                logger_1.logger.error('Error updating listing price:', error);
+                res.status(500).json({ error: 'Internal server error' });
+            }
+        });
+        // POST /api/cosmetics/market/buy — buy a marketplace listing
+        // Body: { buyerAddress, listingId, txHash }
+        app.post('/api/cosmetics/market/buy', express_1.default.json(), async (req, res) => {
+            try {
+                const { buyerAddress, listingId, txHash } = req.body ?? {};
+                if (!buyerAddress || !listingId || !txHash) {
+                    return res.status(400).json({ error: 'buyerAddress, listingId, and txHash required' });
+                }
+                const result = await cosmeticsService.buyListing(buyerAddress, parseInt(listingId, 10), txHash);
+                const errorMap = {
+                    listing_not_found: [404, 'Listing not found'],
+                    already_sold: [409, 'Listing already sold or cancelled'],
+                    seller_no_longer_owns: [409, 'Seller no longer owns this item'],
+                    tx_already_used: [409, 'Transaction already used'],
+                    tx_not_found: [400, 'Transaction not found on chain'],
+                    tx_wrong_sender: [400, 'Transaction not sent from your wallet'],
+                    tx_wrong_recipient: [400, 'Transaction sent to wrong address'],
+                    tx_insufficient_amount: [400, 'Transaction amount is too low'],
+                    tx_reverted: [400, 'Transaction was reverted'],
+                };
+                if (result !== 'ok') {
+                    const [status, message] = errorMap[result] ?? [500, 'Unknown error'];
+                    return res.status(status).json({ error: message });
+                }
+                const inventory = await cosmeticsService.getInventory(buyerAddress);
+                res.json({ success: true, items: inventory });
+            }
+            catch (error) {
+                logger_1.logger.error('Error buying market listing:', error);
+                res.status(500).json({ error: 'Internal server error' });
+            }
+        });
+        // ── Follow system ─────────────────────────────────────────────────────────
+        // Follow a player (body: { follower: string })
+        app.post('/api/player/:address/follow', express_1.default.json(), async (req, res) => {
+            try {
+                const following = req.params.address;
+                const { follower } = req.body ?? {};
+                if (!follower || typeof follower !== 'string')
+                    return res.status(400).json({ error: 'follower address required' });
+                if (follower.toLowerCase() === following.toLowerCase())
+                    return res.status(400).json({ error: 'Cannot follow yourself' });
+                await dbService.followPlayer(follower, following);
+                const counts = await dbService.getFollowCounts(following);
+                sendJson(res, { success: true, ...counts });
+            }
+            catch (error) {
+                logger_1.logger.error('Error following player:', error);
+                res.status(500).json({ error: 'Internal server error' });
+            }
+        });
+        // Unfollow a player (body: { follower: string })
+        app.delete('/api/player/:address/follow', express_1.default.json(), async (req, res) => {
+            try {
+                const following = req.params.address;
+                const { follower } = req.body ?? {};
+                if (!follower || typeof follower !== 'string')
+                    return res.status(400).json({ error: 'follower address required' });
+                await dbService.unfollowPlayer(follower, following);
+                const counts = await dbService.getFollowCounts(following);
+                sendJson(res, { success: true, ...counts });
+            }
+            catch (error) {
+                logger_1.logger.error('Error unfollowing player:', error);
+                res.status(500).json({ error: 'Internal server error' });
+            }
+        });
+        // Check follow status (?follower=address)
+        app.get('/api/player/:address/is-following', async (req, res) => {
+            try {
+                const following = req.params.address;
+                const follower = req.query.follower;
+                if (!follower)
+                    return res.status(400).json({ error: 'follower query param required' });
+                const isFollowing = await dbService.isFollowing(follower, following);
+                sendJson(res, { isFollowing });
+            }
+            catch (error) {
+                logger_1.logger.error('Error checking follow status:', error);
+                res.status(500).json({ error: 'Internal server error' });
+            }
+        });
+        // Get follow counts for a player
+        app.get('/api/player/:address/follow-counts', async (req, res) => {
+            try {
+                const counts = await dbService.getFollowCounts(req.params.address);
+                sendJson(res, counts);
+            }
+            catch (error) {
+                logger_1.logger.error('Error fetching follow counts:', error);
+                res.status(500).json({ error: 'Internal server error' });
+            }
+        });
+        // Get followers of a player
+        app.get('/api/player/:address/followers', async (req, res) => {
+            try {
+                const limit = Math.min(100, parseInt(req.query.limit) || 50);
+                const offset = parseInt(req.query.offset) || 0;
+                const followers = await dbService.getFollowers(req.params.address, limit, offset);
+                sendJson(res, followers);
+            }
+            catch (error) {
+                logger_1.logger.error('Error fetching followers:', error);
+                res.status(500).json({ error: 'Internal server error' });
+            }
+        });
+        // Get who a player is following
+        app.get('/api/player/:address/following', async (req, res) => {
+            try {
+                const limit = Math.min(100, parseInt(req.query.limit) || 50);
+                const offset = parseInt(req.query.offset) || 0;
+                const following = await dbService.getFollowing(req.params.address, limit, offset);
+                sendJson(res, following);
+            }
+            catch (error) {
+                logger_1.logger.error('Error fetching following:', error);
                 res.status(500).json({ error: 'Internal server error' });
             }
         });
@@ -348,6 +870,37 @@ async function initializeServices() {
             }
             catch (error) {
                 logger_1.logger.error('Error fetching player stats:', error);
+                res.status(500).json({ error: 'Internal server error' });
+            }
+        });
+        app.get('/api/tips/stats', async (req, res) => {
+            try {
+                const pool = dbService.getPool();
+                const tipAgg = await pool.query(`SELECT COALESCE(SUM((payload->>'amount')::numeric), 0)::text AS total_wei,
+                  COUNT(*)::text AS tip_count
+           FROM blackjack_multi_audit_log WHERE action_type = 'tip_dealer'`);
+                const tipByPlayer = await pool.query(`SELECT a.player_address,
+                  SUM((a.payload->>'amount')::numeric)::text AS total_wei,
+                  COUNT(*)::text AS cnt,
+                  p.display_name
+           FROM blackjack_multi_audit_log a
+           LEFT JOIN player_profiles p ON LOWER(p.wallet_address) = LOWER(a.player_address)
+           WHERE a.action_type = 'tip_dealer'
+           GROUP BY a.player_address, p.display_name
+           ORDER BY SUM((a.payload->>'amount')::numeric) DESC LIMIT 20`);
+                sendJson(res, {
+                    totalTipAmountWei: tipAgg.rows[0]?.total_wei ?? '0',
+                    tipCount: parseInt(tipAgg.rows[0]?.tip_count ?? '0', 10),
+                    tippers: tipByPlayer.rows.map(r => ({
+                        address: r.player_address,
+                        displayName: r.display_name || null,
+                        totalWei: r.total_wei,
+                        count: parseInt(r.cnt, 10),
+                    })),
+                });
+            }
+            catch (error) {
+                logger_1.logger.error('Error fetching tip stats:', error);
                 res.status(500).json({ error: 'Internal server error' });
             }
         });
@@ -566,6 +1119,16 @@ async function initializeServices() {
                 res.status(500).json({ error: 'Internal server error' });
             }
         });
+        /** Live WS presence per game category (home page cards, etc.) */
+        app.get('/api/analytics/live-presence', (_req, res) => {
+            try {
+                sendJson(res, wsService.getLivePresenceByGame());
+            }
+            catch (error) {
+                logger_1.logger.error('Error fetching live presence:', error);
+                res.status(500).json({ error: 'Internal server error' });
+            }
+        });
         // Public: recent Blackjack wins (for Latest Wins feed)
         app.get('/api/analytics/recent-wins', async (req, res) => {
             const limit = Math.min(parseInt(req.query.limit) || 20, 50);
@@ -710,6 +1273,93 @@ async function initializeServices() {
                 res.status(500).json({ error: 'Internal server error' });
             }
         });
+        // Poker player hands and stats
+        app.get('/api/poker/player/:address/hands', async (req, res) => {
+            try {
+                const { address } = req.params;
+                if (!address || !/^0x[a-fA-F0-9]{40}$/.test(address)) {
+                    return res.status(400).json({ error: 'Invalid address' });
+                }
+                const limit = Math.min(parseInt(req.query.limit) || 50, 200);
+                const offset = parseInt(req.query.offset) || 0;
+                const hands = await dbService.getPokerPlayerHands(address, limit, offset);
+                sendJson(res, hands);
+            }
+            catch (error) {
+                logger_1.logger.error('Error fetching poker player hands:', error);
+                res.status(500).json({ error: 'Internal server error' });
+            }
+        });
+        app.get('/api/poker/player/:address/stats', async (req, res) => {
+            try {
+                const { address } = req.params;
+                if (!address || !/^0x[a-fA-F0-9]{40}$/.test(address)) {
+                    return res.status(400).json({ error: 'Invalid address' });
+                }
+                const stats = await dbService.getPokerPlayerStats(address);
+                sendJson(res, stats);
+            }
+            catch (error) {
+                logger_1.logger.error('Error fetching poker player stats:', error);
+                res.status(500).json({ error: 'Internal server error' });
+            }
+        });
+        const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+        app.get('/api/poker/table/:tableId/dashboard', async (req, res) => {
+            try {
+                const { tableId } = req.params;
+                if (!tableId || !UUID_REGEX.test(tableId)) {
+                    return res.status(400).json({ error: 'Invalid table ID' });
+                }
+                const data = await dbService.getPokerTableDashboardStats(tableId);
+                if (!data.table) {
+                    return res.status(404).json({ error: 'Table not found' });
+                }
+                sendJson(res, data);
+            }
+            catch (error) {
+                logger_1.logger.error('Error fetching poker table dashboard:', error);
+                res.status(500).json({ error: 'Internal server error' });
+            }
+        });
+        app.get('/api/poker/table/:tableId/player/:address/stats', async (req, res) => {
+            try {
+                const { tableId, address } = req.params;
+                if (!tableId || !UUID_REGEX.test(tableId)) {
+                    return res.status(400).json({ error: 'Invalid table ID' });
+                }
+                if (!address || !/^0x[a-fA-F0-9]{40}$/.test(address)) {
+                    return res.status(400).json({ error: 'Invalid address' });
+                }
+                const data = await dbService.getPokerPlayerTableStats(tableId, address);
+                sendJson(res, data);
+            }
+            catch (error) {
+                logger_1.logger.error('Error fetching poker player table stats:', error);
+                res.status(500).json({ error: 'Internal server error' });
+            }
+        });
+        app.get('/api/poker/hands/:handId', async (req, res) => {
+            try {
+                const { handId } = req.params;
+                const playerAddress = req.query.playerAddress;
+                if (!handId || !UUID_REGEX.test(handId)) {
+                    return res.status(400).json({ error: 'Invalid hand ID' });
+                }
+                if (!playerAddress || !/^0x[a-fA-F0-9]{40}$/.test(playerAddress)) {
+                    return res.status(400).json({ error: 'Invalid playerAddress query' });
+                }
+                const detail = await dbService.getPokerHandDetail(handId, playerAddress);
+                if (!detail) {
+                    return res.status(404).json({ error: 'Hand not found' });
+                }
+                sendJson(res, detail);
+            }
+            catch (error) {
+                logger_1.logger.error('Error fetching poker hand detail:', error);
+                res.status(500).json({ error: 'Internal server error' });
+            }
+        });
         // Blackjack global recent games (for Recent Play feed)
         app.get('/api/blackjack/recent-games', async (req, res) => {
             try {
@@ -847,6 +1497,7 @@ async function initializeServices() {
                     logo_url: r.logo_url,
                     ticker: r.ticker,
                     iframe_url: r.iframe_url,
+                    website_url: r.website_url,
                     sort_order: r.sort_order,
                     enabled: r.enabled,
                 })));
@@ -1101,6 +1752,86 @@ async function initializeServices() {
                 res.status(msg ? 503 : 500).json({ error: msg || 'Internal server error' });
             }
         });
+        // Admin: Multiplayer Blackjack table management
+        app.get('/api/admin/bj-multi/tables', async (req, res) => {
+            try {
+                const tables = await bjMultiService.listTables();
+                res.json({ tables });
+            }
+            catch (error) {
+                logger_1.logger.error('Error fetching BJ multi tables:', error);
+                res.status(500).json({ error: 'Internal server error' });
+            }
+        });
+        app.post('/api/admin/bj-multi/tables', async (req, res) => {
+            try {
+                const { minBet, maxBet, themeKind, themeId } = req.body;
+                const min = minBet ? BigInt(minBet) : BigInt('1000000000000000000');
+                const max = maxBet ? BigInt(maxBet) : BigInt('50000000000000000000000');
+                const table = await bjMultiService.createTable(min, max, themeKind, themeId);
+                res.json({ tableId: table.id });
+            }
+            catch (error) {
+                logger_1.logger.error('Error creating BJ multi table:', error);
+                res.status(500).json({ error: 'Internal server error' });
+            }
+        });
+        app.delete('/api/admin/bj-multi/tables/:tableId', async (req, res) => {
+            try {
+                const { tableId } = req.params;
+                const ok = await bjMultiService.deleteTable(tableId);
+                if (!ok) {
+                    res.status(404).json({ error: 'Table not found' });
+                    return;
+                }
+                res.json({ ok: true });
+            }
+            catch (error) {
+                logger_1.logger.error('Error deleting BJ multi table:', error);
+                res.status(500).json({ error: 'Internal server error' });
+            }
+        });
+        // Admin: all poker tables (including tournament tables hidden from public lobby)
+        app.get('/api/admin/poker/tables', async (req, res) => {
+            try {
+                const result = await dbService.getPool().query(`SELECT pt.id, pt.small_blind, pt.big_blind, pt.max_seats, pt.status,
+                  pt.tournament_mode, pt.tournament_id, pt.hand_number,
+                  COUNT(ps.id) AS seated_count
+           FROM poker_tables pt
+           LEFT JOIN poker_seats ps ON ps.table_id = pt.id
+           GROUP BY pt.id
+           ORDER BY pt.created_at DESC
+           LIMIT 100`);
+                res.json({ tables: result.rows });
+            }
+            catch (error) {
+                logger_1.logger.error('Error fetching all poker tables:', error);
+                res.status(500).json({ error: 'Internal server error' });
+            }
+        });
+        // Admin: all poker tournaments (all statuses)
+        app.get('/api/admin/poker/tournaments', async (req, res) => {
+            try {
+                const result = await dbService.getPool().query(`SELECT t.id AS tournament_id, t.name, t.status, t.buy_in_amount,
+                  t.prize_pool, t.min_players, t.max_players, t.starting_chips,
+                  t.scheduled_start_at, t.created_at, t.creator_address,
+                  t.prize_distribution_type,
+                  COUNT(te.id) FILTER (WHERE te.status = 'playing') AS active_players,
+                  COUNT(te.id) AS total_entries,
+                  (SELECT pt.id FROM poker_tables pt WHERE pt.tournament_id = t.id LIMIT 1) AS table_id
+           FROM tournaments t
+           LEFT JOIN tournament_entries te ON te.tournament_id = t.id
+           WHERE t.game_type = 'poker'
+           GROUP BY t.id
+           ORDER BY t.created_at DESC
+           LIMIT 100`);
+                res.json({ tournaments: result.rows });
+            }
+            catch (error) {
+                logger_1.logger.error('Error fetching poker tournaments:', error);
+                res.status(500).json({ error: 'Internal server error' });
+            }
+        });
         // Admin: game health (API, WS, RPC, MORBIUS per contract, Blackjack reserves for current + all legacy)
         // MORBIUS in contract = MORBIUS_TOKEN.balanceOf(gameContract) for each game (canonical addresses in config/contracts.ts).
         app.get('/api/admin/health', async (req, res) => {
@@ -1257,6 +1988,25 @@ async function initializeServices() {
                     '24h': bj24h,
                     '7d': bj7d,
                 };
+                // Tip stats — aggregate from audit log
+                let tipStats = { totalTipAmountWei: '0', tipCount: 0, tippers: [] };
+                try {
+                    const pool = dbService.getPool();
+                    const tipAgg = await pool.query(`SELECT COALESCE(SUM((payload->>'amount')::numeric), 0)::text AS total_wei,
+                    COUNT(*)::text AS tip_count
+             FROM blackjack_multi_audit_log WHERE action_type = 'tip_dealer'`);
+                    const tipByPlayer = await pool.query(`SELECT player_address,
+                    SUM((payload->>'amount')::numeric)::text AS total_wei,
+                    COUNT(*)::text AS cnt
+             FROM blackjack_multi_audit_log WHERE action_type = 'tip_dealer'
+             GROUP BY player_address ORDER BY SUM((payload->>'amount')::numeric) DESC LIMIT 50`);
+                    tipStats = {
+                        totalTipAmountWei: tipAgg.rows[0]?.total_wei ?? '0',
+                        tipCount: parseInt(tipAgg.rows[0]?.tip_count ?? '0', 10),
+                        tippers: tipByPlayer.rows.map(r => ({ address: r.player_address, totalWei: r.total_wei, count: parseInt(r.cnt, 10) })),
+                    };
+                }
+                catch { /* ignore if table doesn't exist yet */ }
                 sendJson(res, {
                     api,
                     ws,
@@ -1269,6 +2019,7 @@ async function initializeServices() {
                     blackjackDeposited,
                     blackjackWithdrawn,
                     blackjackTimeframes,
+                    tipStats,
                 });
             }
             catch (error) {
@@ -1330,6 +2081,29 @@ async function initializeServices() {
             }
             catch (error) {
                 logger_1.logger.error('Error fetching contract snapshots:', error);
+                res.status(500).json({ error: 'Internal server error' });
+            }
+        });
+        // Admin: pending deposits/withdrawals tables (paginated)
+        app.get('/api/admin/pending-transfers', async (req, res) => {
+            try {
+                const type = String(req.query.type || 'deposits').toLowerCase();
+                const limit = Math.min(Math.max(parseInt(String(req.query.limit || '25'), 10) || 25, 1), 100);
+                const offset = Math.max(parseInt(String(req.query.offset || '0'), 10) || 0, 0);
+                if (type !== 'deposits' && type !== 'withdrawals') {
+                    res.status(400).json({ error: 'type must be "deposits" or "withdrawals"' });
+                    return;
+                }
+                if (type === 'deposits') {
+                    const rows = await dbService.listPendingDeposits(limit, offset);
+                    sendJson(res, { type, rows, limit, offset, hasMore: rows.length === limit });
+                    return;
+                }
+                const rows = await dbService.listPendingWithdrawals(limit, offset);
+                sendJson(res, { type, rows, limit, offset, hasMore: rows.length === limit });
+            }
+            catch (error) {
+                logger_1.logger.error('Error fetching admin pending transfers:', error);
                 res.status(500).json({ error: 'Internal server error' });
             }
         });

@@ -2,6 +2,13 @@ import { DatabaseService } from './database.service';
 import { BlackjackGameService } from './blackjack-game.service';
 import { TournamentService } from './tournament.service';
 import { PokerGameService } from './poker-game.service';
+import { PokerTournamentService } from './poker-tournament.service';
+import { BlackjackMultiGameService } from './blackjack-multi-game.service';
+interface WebSocketMessage {
+    type: string;
+    payload: any;
+    requestId?: string;
+}
 export declare class WebSocketService {
     private gameService;
     private dbService;
@@ -16,8 +23,14 @@ export declare class WebSocketService {
     private contractAddress;
     private tournamentService?;
     private pokerGameService;
+    private pokerTournamentService;
+    private bjMultiService;
+    private bjMultiTimerInterval;
+    private bjMultiActionTimestamps;
     private betLimitsCache;
-    constructor(server: any, gameService: BlackjackGameService, dbService: DatabaseService, tournamentService?: TournamentService, pokerGameService?: PokerGameService | null);
+    constructor(server: any, gameService: BlackjackGameService, dbService: DatabaseService, tournamentService?: TournamentService, pokerGameService?: PokerGameService | null, bjMultiService?: BlackjackMultiGameService | null);
+    /** Wire in the PokerTournamentService after construction. */
+    setPokerTournamentService(service: PokerTournamentService): void;
     /** Prune addresses with no timestamps in the current window to avoid unbounded map growth. */
     private cleanupChatRateLimitMap;
     /** Resolve Blackjack min/max bet from admin config (cached). Uses defaults if missing/invalid. */
@@ -55,7 +68,11 @@ export declare class WebSocketService {
     private handlePokerAddChips;
     private handlePokerAction;
     private handlePokerGetState;
+    private handlePokerQuickReaction;
+    private static readonly POKER_AVATAR_EMOTIONS;
+    private handlePokerAvatarEmotion;
     private handlePokerCreateTable;
+    private handlePokerUpdateTableLogo;
     private handleGetChatHistory;
     private handleSetDisplayName;
     private handleGetProfile;
@@ -64,13 +81,31 @@ export declare class WebSocketService {
     private sendError;
     private broadcastToPlayer;
     private broadcastToAll;
-    private broadcastToRoom;
+    broadcastToRoom(roomId: string, message: WebSocketMessage): void;
     /** Called by admin API when a message is soft-deleted; notifies all clients in the room. */
     broadcastChatMessageDeleted(roomId: string, messageId: string): void;
     /** Broadcast current poker table state to room (e.g. after API adds bots so UI updates). */
     broadcastPokerTableState(tableId: string): Promise<void>;
+    private handlePokerTournamentList;
+    private handlePokerTournamentCreate;
+    private handlePokerTournamentJoin;
+    private handlePokerTournamentGetState;
+    private handlePokerTournamentCancel;
     getConnectionCount(): number;
     getActivePlayersCount(): Promise<number>;
+    /**
+     * WebSocket clients currently in each game’s rooms (chat + table rooms).
+     * One browser tab ≈ one connection; not deduped by wallet.
+     */
+    getLivePresenceByGame(): {
+        poker: number;
+        blackjackMulti: number;
+        blackjack: number;
+        plinko: number;
+        keno: number;
+        lottery: number;
+        bigWheel: number;
+    };
     private handleCheckExclusionStatus;
     private handleSetExclusion;
     private handleGetExclusionHistory;
@@ -101,5 +136,29 @@ export declare class WebSocketService {
     private handleRecentGlobalWins;
     private getPrizePercentagesForType;
     shutdown(): void;
+    /** Broadcast current BJ multi table state to room. */
+    broadcastBJMultiTableState(tableId: string): Promise<void>;
+    /** Timer tick: check for expired turns and betting timeouts across all active BJ multi tables. */
+    private tickBJMultiTimers;
+    private handleBJMultiListTables;
+    private handleBJMultiJoinTable;
+    private handleBJMultiLeaveTable;
+    private handleBJMultiPlaceBet;
+    private handleBJMultiAction;
+    private handleBJMultiGetState;
+    private handleBJMultiTipDealer;
+    /**
+     * Generic tip dealer — works from any game page (solo blackjack, poker, etc.)
+     * Deducts from player balance and credits the deployer wallet.
+     */
+    private handleGenericTipDealer;
+    private handleBJMultiTableHistory;
+    /** Auto-stand a disconnected player if it's currently their turn. */
+    private handleBJMultiDisconnect;
+    private handleBJMultiCreateTable;
+    private handleBJMultiDeleteTable;
+    private handleBJMultiQuickReaction;
+    private handleBJMultiAvatarEmotion;
 }
+export {};
 //# sourceMappingURL=websocket.service.d.ts.map

@@ -4,9 +4,10 @@ exports.DatabaseService = void 0;
 const pg_1 = require("pg");
 const viem_1 = require("viem");
 const logger_1 = require("../utils/logger");
+const safe_bigint_1 = require("../utils/safe-bigint");
 function formatWei(wei) {
     try {
-        const n = Number((0, viem_1.formatEther)(BigInt(wei)));
+        const n = Number((0, viem_1.formatEther)((0, safe_bigint_1.toBigIntSafe)(wei)));
         return n.toLocaleString(undefined, { maximumFractionDigits: 2 });
     }
     catch {
@@ -41,12 +42,7 @@ class DatabaseService {
         });
     }
     toBigInt(value) {
-        if (typeof value === 'bigint')
-            return value;
-        if (value === null || value === undefined)
-            return 0n;
-        // pg returns NUMERIC/INT8 as string by default
-        return BigInt(String(value));
+        return (0, safe_bigint_1.toBigIntSafe)(value);
     }
     normalizePlayer(row) {
         return {
@@ -454,6 +450,23 @@ class DatabaseService {
        WHERE status = 'pending_confirmation'`);
         return result.rows;
     }
+    /** List pending_deposits rows for admin tables with pagination. */
+    async listPendingDeposits(limit = 25, offset = 0) {
+        const safeLimit = Math.min(Math.max(Number(limit) || 25, 1), 100);
+        const safeOffset = Math.max(Number(offset) || 0, 0);
+        const result = await this.pool.query(`SELECT id, wallet_address, amount_wei::TEXT AS amount_wei, tx_hash, status, created_at
+       FROM pending_deposits
+       ORDER BY created_at DESC
+       LIMIT $1 OFFSET $2`, [safeLimit, safeOffset]);
+        return result.rows.map((r) => ({
+            id: String(r.id),
+            wallet_address: r.wallet_address ?? '',
+            amount_wei: r.amount_wei ?? '0',
+            tx_hash: r.tx_hash ?? null,
+            status: r.status ?? 'unknown',
+            created_at: r.created_at instanceof Date ? r.created_at.toISOString() : String(r.created_at),
+        }));
+    }
     /** Mark pending deposit as credited and credit players.balance. */
     async creditPendingDeposit(jobId) {
         const client = await this.pool.connect();
@@ -702,6 +715,24 @@ class DatabaseService {
         const result = await this.pool.query(query);
         return result.rows;
     }
+    /** List pending_withdrawals rows for admin tables with pagination. */
+    async listPendingWithdrawals(limit = 25, offset = 0) {
+        const safeLimit = Math.min(Math.max(Number(limit) || 25, 1), 100);
+        const safeOffset = Math.max(Number(offset) || 0, 0);
+        const result = await this.pool.query(`SELECT id, wallet_address, amount::TEXT AS amount, tx_hash, nonce::TEXT AS nonce, status, created_at
+       FROM pending_withdrawals
+       ORDER BY created_at DESC
+       LIMIT $1 OFFSET $2`, [safeLimit, safeOffset]);
+        return result.rows.map((r) => ({
+            id: String(r.id),
+            wallet_address: r.wallet_address ?? '',
+            amount: r.amount ?? '0',
+            tx_hash: r.tx_hash ?? null,
+            nonce: r.nonce ?? '0',
+            status: r.status ?? 'unknown',
+            created_at: r.created_at instanceof Date ? r.created_at.toISOString() : String(r.created_at),
+        }));
+    }
     /**
      * Get one expired pending withdrawal for a wallet (oldest first).
      * Used by admin to manually trigger refund when cron couldn't verify (e.g. RPC issues).
@@ -788,21 +819,36 @@ class DatabaseService {
     }
     async getTopPlayers(limit = 25) {
         const query = `
-      WITH agg AS (
-        SELECT
-          p.wallet_address,
-          COUNT(g.*)::BIGINT AS total_games,
-          COALESCE(SUM(g.total_bet_amount), 0)::NUMERIC(78, 0) AS total_bet,
-          COALESCE(SUM(g.total_payout), 0)::NUMERIC(78, 0) AS total_win,
-          (COALESCE(SUM(g.total_payout), 0) - COALESCE(SUM(g.total_bet_amount), 0))::NUMERIC(78, 0) AS profit_loss,
-          CASE WHEN COUNT(g.*) > 0 THEN
-            ROUND((COUNT(*) FILTER (WHERE g.result IN ('win', 'blackjack'))::DECIMAL / COUNT(*)::DECIMAL) * 100, 2)
-          ELSE 0 END AS win_rate
+      WITH all_game_rows AS (
+        -- Single-player
+        SELECT LOWER(p.wallet_address) AS addr,
+               g.total_bet_amount, g.total_payout, g.result
         FROM players p
         JOIN game_sessions gs ON gs.player_id = p.id
         JOIN games g ON g.session_id = gs.id AND g.result IS NOT NULL AND g.result != 'ongoing'
-        GROUP BY p.id, p.wallet_address
-        HAVING COUNT(g.*) >= 10
+
+        UNION ALL
+
+        -- Multiplayer
+        SELECT LOWER(s.player_address) AS addr,
+               s.bet_amount AS total_bet_amount, s.payout AS total_payout, s.result
+        FROM blackjack_multi_round_seats s
+        JOIN blackjack_multi_rounds r ON s.round_id = r.id
+        WHERE s.result IS NOT NULL AND r.status = 'completed'
+      ),
+      agg AS (
+        SELECT
+          addr AS wallet_address,
+          COUNT(*)::BIGINT AS total_games,
+          COALESCE(SUM(total_bet_amount), 0)::NUMERIC(78, 0) AS total_bet,
+          COALESCE(SUM(total_payout), 0)::NUMERIC(78, 0) AS total_win,
+          (COALESCE(SUM(total_payout), 0) - COALESCE(SUM(total_bet_amount), 0))::NUMERIC(78, 0) AS profit_loss,
+          CASE WHEN COUNT(*) > 0 THEN
+            ROUND((COUNT(*) FILTER (WHERE result IN ('win', 'blackjack'))::DECIMAL / COUNT(*)::DECIMAL) * 100, 2)
+          ELSE 0 END AS win_rate
+        FROM all_game_rows
+        GROUP BY addr
+        HAVING COUNT(*) >= 10
       )
       SELECT ROW_NUMBER() OVER (ORDER BY profit_loss DESC, win_rate DESC)::INTEGER AS rank, *
       FROM agg
@@ -983,6 +1029,7 @@ class DatabaseService {
         const normalizedAddress = this.normalizeAddress(walletAddress);
         // Fallback: when total_bet_amount/total_payout are 0 (e.g. tournament games), sum from game_hands.
         // Tournament chip amounts are 1:1; scale by 1e18 so formatEther displays correctly.
+        // UNIONs multiplayer blackjack round seats so both game types appear in history.
         const query = `
       WITH gh_agg AS (
         SELECT game_id,
@@ -990,29 +1037,68 @@ class DatabaseService {
           SUM(payout) AS payout_sum
         FROM game_hands
         GROUP BY game_id
+      ),
+      combined AS (
+        -- Single-player games
+        SELECT
+          g.id::text, g.session_id::text, g.game_number,
+          CASE WHEN COALESCE(g.total_bet_amount, 0) = 0 THEN (COALESCE(gh.bet_sum, 0) * 1000000000000000000::numeric) ELSE g.total_bet_amount END AS total_bet_amount,
+          g.dealer_cards, g.dealer_total, g.result,
+          CASE WHEN COALESCE(g.total_payout, 0) = 0 THEN (COALESCE(gh.payout_sum, 0) * 1000000000000000000::numeric) ELSE g.total_payout END AS total_payout,
+          g.dealer_actions, g.actions, g.created_at, g.completed_at, g.server_seed_revealed,
+          g.client_seed_commitment, g.dealer_seed, g.hand_count, g.current_hand_index,
+          g.rng_counter, g.rng_version, g.perfect_pairs_bet_amount, g.perfect_pairs_payout,
+          gs.player_id::text,
+          'single' AS game_mode
+        FROM games g
+        JOIN game_sessions gs ON g.session_id = gs.id
+        JOIN players p ON gs.player_id = p.id
+        LEFT JOIN gh_agg gh ON gh.game_id = g.id
+        WHERE LOWER(p.wallet_address) = LOWER($1)
+
+        UNION ALL
+
+        -- Multiplayer games
+        SELECT
+          s.id::text                      AS id,
+          r.id::text                      AS session_id,
+          r.round_number                  AS game_number,
+          s.bet_amount                    AS total_bet_amount,
+          r.dealer_cards                  AS dealer_cards,
+          r.dealer_total                  AS dealer_total,
+          s.result                        AS result,
+          s.payout                        AS total_payout,
+          '[]'::jsonb                     AS dealer_actions,
+          '[]'::jsonb                     AS actions,
+          r.created_at                    AS created_at,
+          r.completed_at                  AS completed_at,
+          FALSE                           AS server_seed_revealed,
+          NULL                            AS client_seed_commitment,
+          NULL                            AS dealer_seed,
+          1                               AS hand_count,
+          0                               AS current_hand_index,
+          0                               AS rng_counter,
+          1                               AS rng_version,
+          0::numeric                      AS perfect_pairs_bet_amount,
+          0::numeric                      AS perfect_pairs_payout,
+          NULL::text                      AS player_id,
+          'multi' AS game_mode
+        FROM blackjack_multi_round_seats s
+        JOIN blackjack_multi_rounds r ON s.round_id = r.id
+        WHERE LOWER(s.player_address) = LOWER($1)
+          AND s.result IS NOT NULL
+          AND r.status = 'completed'
       )
-      SELECT
-        g.id, g.session_id, g.game_number,
-        CASE WHEN COALESCE(g.total_bet_amount, 0) = 0 THEN (COALESCE(gh.bet_sum, 0) * 1000000000000000000::numeric) ELSE g.total_bet_amount END AS total_bet_amount,
-        g.dealer_cards, g.dealer_total, g.result,
-        CASE WHEN COALESCE(g.total_payout, 0) = 0 THEN (COALESCE(gh.payout_sum, 0) * 1000000000000000000::numeric) ELSE g.total_payout END AS total_payout,
-        g.dealer_actions, g.actions, g.created_at, g.completed_at, g.server_seed_revealed,
-        g.client_seed_commitment, g.dealer_seed, g.hand_count, g.current_hand_index,
-        g.rng_counter, g.rng_version, g.perfect_pairs_bet_amount, g.perfect_pairs_payout,
-        gs.player_id
-      FROM games g
-      JOIN game_sessions gs ON g.session_id = gs.id
-      JOIN players p ON gs.player_id = p.id
-      LEFT JOIN gh_agg gh ON gh.game_id = g.id
-      WHERE LOWER(p.wallet_address) = LOWER($1)
-      ORDER BY g.created_at DESC
+      SELECT * FROM combined
+      ORDER BY created_at DESC
       LIMIT $2 OFFSET $3
     `;
         const result = await this.pool.query(query, [normalizedAddress, limit, offset]);
         const games = result.rows.map((r) => this.normalizeGame(r));
         return games;
     }
-    /** Recent completed games globally (all players) for "Recent Play" feed. */
+    /** Recent completed games globally (all players) for "Recent Play" feed.
+     *  Includes both single-player and multiplayer blackjack games. */
     async getRecentGamesGlobal(limit = 20) {
         const query = `
       WITH gh_agg AS (
@@ -1021,20 +1107,38 @@ class DatabaseService {
           SUM(payout) AS payout_sum
         FROM game_hands
         GROUP BY game_id
+      ),
+      combined AS (
+        -- Single-player games
+        SELECT
+          g.id::text,
+          p.wallet_address,
+          g.result,
+          CASE WHEN COALESCE(g.total_bet_amount, 0) = 0 THEN (COALESCE(gh.bet_sum, 0) * 1000000000000000000::numeric) ELSE g.total_bet_amount END AS total_bet_amount,
+          CASE WHEN COALESCE(g.total_payout, 0) = 0 THEN (COALESCE(gh.payout_sum, 0) * 1000000000000000000::numeric) ELSE g.total_payout END AS total_payout,
+          g.created_at
+        FROM games g
+        JOIN game_sessions gs ON g.session_id = gs.id
+        JOIN players p ON gs.player_id = p.id
+        LEFT JOIN gh_agg gh ON gh.game_id = g.id
+        WHERE g.result IS NOT NULL AND g.result != 'ongoing'
+
+        UNION ALL
+
+        -- Multiplayer games
+        SELECT
+          s.id::text            AS id,
+          s.player_address      AS wallet_address,
+          s.result,
+          s.bet_amount          AS total_bet_amount,
+          s.payout              AS total_payout,
+          r.created_at
+        FROM blackjack_multi_round_seats s
+        JOIN blackjack_multi_rounds r ON s.round_id = r.id
+        WHERE s.result IS NOT NULL AND r.status = 'completed'
       )
-      SELECT
-        g.id,
-        p.wallet_address,
-        g.result,
-        CASE WHEN COALESCE(g.total_bet_amount, 0) = 0 THEN (COALESCE(gh.bet_sum, 0) * 1000000000000000000::numeric) ELSE g.total_bet_amount END AS total_bet_amount,
-        CASE WHEN COALESCE(g.total_payout, 0) = 0 THEN (COALESCE(gh.payout_sum, 0) * 1000000000000000000::numeric) ELSE g.total_payout END AS total_payout,
-        g.created_at
-      FROM games g
-      JOIN game_sessions gs ON g.session_id = gs.id
-      JOIN players p ON gs.player_id = p.id
-      LEFT JOIN gh_agg gh ON gh.game_id = g.id
-      WHERE g.result IS NOT NULL AND g.result != 'ongoing'
-      ORDER BY g.created_at DESC
+      SELECT * FROM combined
+      ORDER BY created_at DESC
       LIMIT $1
     `;
         const result = await this.pool.query(query, [limit]);
@@ -1198,6 +1302,34 @@ class DatabaseService {
         const result = await this.pool.query(query, values);
         return this.normalizeGameHand(result.rows[0]);
     }
+    /**
+     * Insert a game_hand row using a provided transaction client.
+     * Used by multiplayer settlement to fan out JSONB hands into normalised rows
+     * inside the same transaction that settles balances.
+     */
+    async createGameHandInTx(client, gameId, handData) {
+        const query = `
+      INSERT INTO game_hands (
+        game_id, hand_index, cards, total, has_ace, is_blackjack, is_bust,
+        bet_amount, result, payout, actions, completed_at
+      )
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8::NUMERIC, $9, $10::NUMERIC, $11, NOW())
+    `;
+        const values = [
+            gameId,
+            handData.hand_index ?? 0,
+            JSON.stringify(handData.cards ?? []),
+            handData.total ?? 0,
+            handData.has_ace ?? false,
+            handData.is_blackjack ?? false,
+            handData.is_bust ?? false,
+            (handData.bet_amount ?? 0n).toString(),
+            handData.result ?? 'loss',
+            (handData.payout ?? 0n).toString(),
+            JSON.stringify(handData.actions ?? []),
+        ];
+        await client.query(query, values);
+    }
     async updateGameHand(handId, updates) {
         const fields = [];
         const values = [];
@@ -1254,14 +1386,46 @@ class DatabaseService {
         await this.pool.query(query, values);
     }
     async getGameHands(gameId) {
+        // game_hands now stores both single-player and multiplayer hands
+        // (multiplayer hands are fanned out at settlement time).
         const query = `
       SELECT * FROM game_hands
       WHERE game_id = $1
       ORDER BY hand_index ASC
     `;
         const result = await this.pool.query(query, [gameId]);
-        const hands = result.rows.map((r) => this.normalizeGameHand(r));
-        return hands;
+        if (result.rows.length > 0) {
+            return result.rows.map((r) => this.normalizeGameHand(r));
+        }
+        // Legacy fallback for multiplayer games settled before migration 084.
+        // Reads hands from the JSONB column on blackjack_multi_round_seats.
+        const multiQuery = `
+      SELECT s.id, s.round_id AS game_id, s.hands, s.result AS seat_result, s.payout AS seat_payout
+      FROM blackjack_multi_round_seats s
+      WHERE s.id = $1
+    `;
+        const multiResult = await this.pool.query(multiQuery, [gameId]);
+        if (multiResult.rows.length === 0)
+            return [];
+        const row = multiResult.rows[0];
+        const rawHands = typeof row.hands === 'string' ? JSON.parse(row.hands) : (row.hands ?? []);
+        if (!Array.isArray(rawHands) || rawHands.length === 0)
+            return [];
+        return rawHands.map((h, idx) => ({
+            id: `${row.id}-${idx}`,
+            game_id: gameId,
+            hand_index: idx,
+            cards: Array.isArray(h.cards) ? h.cards : [],
+            total: Number(h.total ?? 0),
+            has_ace: Boolean(h.hasAce),
+            is_blackjack: Boolean(h.isBlackjack),
+            is_bust: Boolean(h.isBust),
+            bet_amount: this.toBigInt(h.betAmount ?? '0'),
+            result: h.result ?? row.seat_result ?? 'loss',
+            payout: this.toBigInt(h.payout ?? '0'),
+            actions: Array.isArray(h.actions) ? h.actions : [],
+            created_at: new Date(),
+        }));
     }
     async updateGame(gameId, updates) {
         const fields = [];
@@ -1345,6 +1509,32 @@ class DatabaseService {
         const query = `SELECT * FROM games WHERE id = $1`;
         const result = await this.pool.query(query, [id]);
         return result.rows[0] ? this.normalizeGame(result.rows[0]) : null;
+    }
+    /** Multiplayer blackjack: one row per player per round (used as history `id` for verify links). */
+    async getBlackjackMultiRoundSeatWithRound(seatId) {
+        const id = typeof seatId === 'string' ? seatId.trim() : seatId;
+        if (!id)
+            return null;
+        const seatResult = await this.pool.query(`SELECT * FROM blackjack_multi_round_seats WHERE id = $1`, [id]);
+        if (!seatResult.rows[0])
+            return null;
+        const seat = seatResult.rows[0];
+        const roundResult = await this.pool.query(`SELECT * FROM blackjack_multi_rounds WHERE id = $1`, [seat.round_id]);
+        if (!roundResult.rows[0])
+            return null;
+        return { seat, round: roundResult.rows[0] };
+    }
+    /** Load a completed round and all seats (seat_position ASC). Used for verify-by-round-id when exactly one seat. */
+    async getBlackjackMultiRoundWithSeats(roundId) {
+        const id = typeof roundId === 'string' ? roundId.trim() : roundId;
+        if (!id)
+            return null;
+        const roundResult = await this.pool.query(`SELECT * FROM blackjack_multi_rounds WHERE id = $1`, [id]);
+        if (!roundResult.rows[0])
+            return null;
+        const round = roundResult.rows[0];
+        const seatsResult = await this.pool.query(`SELECT * FROM blackjack_multi_round_seats WHERE round_id = $1 ORDER BY seat_position ASC`, [id]);
+        return { round, seats: seatsResult.rows };
     }
     async getSessionGames(sessionId) {
         const query = `
@@ -1518,33 +1708,62 @@ class DatabaseService {
     }
     async getProfile(walletAddress) {
         const normalized = this.normalizeAddress(walletAddress);
-        const query = `SELECT display_name, profile_image_url FROM chat_display_names WHERE wallet_address = $1`;
-        const result = await this.pool.query(query, [normalized]);
+        const result = await this.pool.query(`SELECT display_name, profile_image_url, avatar_config, bio, x_handle, tg_handle FROM chat_display_names WHERE wallet_address = $1`, [normalized]);
         const row = result.rows[0];
         if (!row)
             return null;
-        return { displayName: row.display_name, profileImageUrl: row.profile_image_url ?? null };
+        const avatarConfig = row.avatar_config != null && typeof row.avatar_config === 'object' ? row.avatar_config : null;
+        return {
+            displayName: row.display_name,
+            profileImageUrl: row.profile_image_url ?? null,
+            avatarConfig,
+            bio: row.bio ?? null,
+            xHandle: row.x_handle ?? null,
+            tgHandle: row.tg_handle ?? null,
+        };
     }
-    async setDisplayName(walletAddress, displayName, profileImageUrl) {
+    async setDisplayName(walletAddress, displayName, profileImageUrl, avatarConfig, bio, xHandle, tgHandle) {
         const normalized = this.normalizeAddress(walletAddress);
-        if (profileImageUrl === undefined) {
-            const query = `
-        INSERT INTO chat_display_names (wallet_address, display_name)
-        VALUES ($1, $2)
-        ON CONFLICT (wallet_address)
-        DO UPDATE SET display_name = $2, updated_at = NOW()
-      `;
-            await this.pool.query(query, [normalized, displayName]);
-        }
-        else {
-            const query = `
-        INSERT INTO chat_display_names (wallet_address, display_name, profile_image_url)
-        VALUES ($1, $2, $3)
-        ON CONFLICT (wallet_address)
-        DO UPDATE SET display_name = $2, updated_at = NOW(), profile_image_url = $3
-      `;
-            await this.pool.query(query, [normalized, displayName, profileImageUrl]);
-        }
+        // Always upsert all provided fields; NULL params fall back to COALESCE of existing value
+        // so callers that don't know a field's current value won't accidentally clear it.
+        await this.pool.query(`INSERT INTO chat_display_names (wallet_address, display_name, profile_image_url, avatar_config, bio, x_handle, tg_handle)
+       VALUES ($1, $2, $3, $4, $5, $6, $7)
+       ON CONFLICT (wallet_address) DO UPDATE SET
+         display_name      = $2,
+         updated_at        = NOW(),
+         profile_image_url = COALESCE($3, chat_display_names.profile_image_url),
+         avatar_config     = COALESCE($4::jsonb, chat_display_names.avatar_config),
+         bio               = COALESCE($5, chat_display_names.bio),
+         x_handle          = COALESCE($6, chat_display_names.x_handle),
+         tg_handle         = COALESCE($7, chat_display_names.tg_handle)`, [
+            normalized,
+            displayName,
+            profileImageUrl ?? null,
+            avatarConfig != null ? JSON.stringify(avatarConfig) : null,
+            bio ?? null,
+            xHandle ?? null,
+            tgHandle ?? null,
+        ]);
+    }
+    /**
+     * Sets avatar_config only when it is currently null (for new players or those who never set an avatar).
+     * If no row exists, inserts one with empty display_name and the given config.
+     */
+    async setDefaultAvatarIfNull(walletAddress, avatarConfig) {
+        const normalized = this.normalizeAddress(walletAddress);
+        const configJson = JSON.stringify(avatarConfig);
+        await this.pool.query(`INSERT INTO chat_display_names (wallet_address, display_name, profile_image_url, avatar_config, bio, x_handle, tg_handle)
+       VALUES ($1, '', NULL, $2::jsonb, NULL, NULL, NULL)
+       ON CONFLICT (wallet_address) DO UPDATE SET
+         avatar_config = COALESCE(chat_display_names.avatar_config, EXCLUDED.avatar_config),
+         updated_at = NOW()`, [normalized, configJson]);
+    }
+    /** Explicitly update social/bio fields — allows clearing (pass empty string → stored as null). */
+    async updateProfileSocial(walletAddress, bio, xHandle, tgHandle) {
+        const normalized = this.normalizeAddress(walletAddress);
+        await this.pool.query(`UPDATE chat_display_names
+       SET bio = $2, x_handle = $3, tg_handle = $4, updated_at = NOW()
+       WHERE wallet_address = $1`, [normalized, bio || null, xHandle || null, tgHandle || null]);
     }
     async getDisplayNames(walletAddresses) {
         if (walletAddresses.length === 0)
@@ -1555,6 +1774,23 @@ class DatabaseService {
         const map = new Map();
         for (const row of result.rows) {
             map.set(row.wallet_address, row.display_name);
+        }
+        return map;
+    }
+    async getProfiles(walletAddresses) {
+        if (walletAddresses.length === 0)
+            return new Map();
+        const normalized = [...new Set(walletAddresses.map(a => this.normalizeAddress(a)))];
+        const query = `SELECT wallet_address, display_name, profile_image_url, avatar_config FROM chat_display_names WHERE wallet_address = ANY($1)`;
+        const result = await this.pool.query(query, [normalized]);
+        const map = new Map();
+        for (const row of result.rows) {
+            const avatarConfig = row.avatar_config != null && typeof row.avatar_config === 'object' ? row.avatar_config : null;
+            map.set(row.wallet_address, {
+                displayName: row.display_name,
+                profileImageUrl: row.profile_image_url ?? null,
+                avatarConfig,
+            });
         }
         return map;
     }
@@ -2180,6 +2416,485 @@ class DatabaseService {
        WHERE snapshot_hour >= NOW() - make_interval(hours => $1::int)
        ORDER BY snapshot_hour ASC, game ASC`, [hours]);
         return result.rows;
+    }
+    // ── Poker player hands and stats ───────────────────────────────────────────
+    /** Completed poker hands for a player (for history modal). */
+    async getPokerPlayerHands(address, limit = 50, offset = 0) {
+        const normalized = this.normalizeAddress(address);
+        const query = `
+      SELECT
+        h.id,
+        h.table_id,
+        h.hand_number,
+        h.pot_amount::TEXT,
+        h.community_cards,
+        h.result,
+        h.rake_amount::TEXT AS rake_amount,
+        h.completed_at AT TIME ZONE 'UTC' AS completed_at,
+        (SELECT COALESCE(SUM(a.amount), 0)::TEXT FROM poker_hand_actions a WHERE a.hand_id = h.id AND LOWER(a.player_address) = LOWER($1)) AS my_contributed,
+        (SELECT COALESCE(SUM((w->>'amount')::numeric), 0)::TEXT FROM jsonb_array_elements(COALESCE(h.result->'winners', '[]'::jsonb)) w WHERE LOWER(w->>'address') = LOWER($1)) AS my_won,
+        CASE
+          WHEN (SELECT COALESCE(SUM((w->>'amount')::numeric), 0) FROM jsonb_array_elements(COALESCE(h.result->'winners', '[]'::jsonb)) w WHERE LOWER(w->>'address') = LOWER($1)) > 0 THEN 'win'
+          WHEN EXISTS (SELECT 1 FROM poker_hand_actions a WHERE a.hand_id = h.id AND LOWER(a.player_address) = LOWER($1) AND a.action = 'fold') THEN 'fold'
+          ELSE 'loss'
+        END AS result_type
+      FROM poker_hands h
+      INNER JOIN (SELECT DISTINCT hand_id FROM poker_hand_actions WHERE LOWER(player_address) = LOWER($1)) part ON part.hand_id = h.id
+      WHERE h.completed_at IS NOT NULL
+      ORDER BY h.completed_at DESC
+      LIMIT $2 OFFSET $3
+    `;
+        const result = await this.pool.query(query, [normalized, limit, offset]);
+        return result.rows.map((r) => ({
+            id: r.id,
+            table_id: r.table_id,
+            hand_number: r.hand_number,
+            pot_amount: String(r.pot_amount ?? '0'),
+            community_cards: Array.isArray(r.community_cards) ? r.community_cards : (r.community_cards ? JSON.parse(JSON.stringify(r.community_cards)) : []),
+            result: r.result,
+            rakeAmount: String(r.rake_amount ?? '0'),
+            completed_at: r.completed_at ? new Date(r.completed_at).toISOString() : '',
+            myContributed: String(r.my_contributed ?? '0'),
+            myWon: String(r.my_won ?? '0'),
+            resultType: r.result_type,
+        }));
+    }
+    /** Aggregate poker stats for a player (from completed hands). */
+    async getPokerPlayerStats(address) {
+        const normalized = this.normalizeAddress(address);
+        const aggQuery = `
+      WITH player_hands AS (
+        SELECT h.id, h.completed_at,
+          (SELECT COALESCE(SUM(a.amount), 0) FROM poker_hand_actions a WHERE a.hand_id = h.id AND LOWER(a.player_address) = LOWER($1)) AS my_contributed,
+          (SELECT COALESCE(SUM((w->>'amount')::numeric), 0) FROM jsonb_array_elements(COALESCE(h.result->'winners', '[]'::jsonb)) w WHERE LOWER(w->>'address') = LOWER($1)) AS my_won,
+          CASE
+            WHEN (SELECT COALESCE(SUM((w->>'amount')::numeric), 0) FROM jsonb_array_elements(COALESCE(h.result->'winners', '[]'::jsonb)) w WHERE LOWER(w->>'address') = LOWER($1)) > 0 THEN 'win'
+            WHEN EXISTS (SELECT 1 FROM poker_hand_actions a WHERE a.hand_id = h.id AND LOWER(a.player_address) = LOWER($1) AND a.action = 'fold') THEN 'fold'
+            ELSE 'loss'
+          END AS result_type
+        FROM poker_hands h
+        INNER JOIN (SELECT DISTINCT hand_id FROM poker_hand_actions WHERE LOWER(player_address) = LOWER($1)) part ON part.hand_id = h.id
+        WHERE h.completed_at IS NOT NULL
+      ),
+      totals AS (
+        SELECT
+          COUNT(*)::INT AS total_hands,
+          COUNT(*) FILTER (WHERE result_type = 'win')::INT AS hands_won,
+          COALESCE(SUM(my_contributed), 0)::TEXT AS total_wagered,
+          COALESCE(SUM(my_won), 0)::TEXT AS total_won,
+          COALESCE(MAX(my_won) FILTER (WHERE result_type = 'win'), 0)::TEXT AS biggest_pot_won,
+          COALESCE(MAX(my_contributed) FILTER (WHERE result_type != 'win'), 0)::TEXT AS biggest_loss
+        FROM player_hands
+      )
+      SELECT * FROM totals
+    `;
+        const aggResult = await this.pool.query(aggQuery, [normalized]);
+        const row = aggResult.rows[0];
+        if (!row || Number(row.total_hands) === 0) {
+            return {
+                total_hands: 0,
+                hands_won: 0,
+                win_rate: 0,
+                total_wagered: '0',
+                total_won: '0',
+                profit_loss: '0',
+                roi: 0,
+                current_streak: 0,
+                best_streak: 0,
+                biggest_pot_won: '0',
+                biggest_loss: '0',
+            };
+        }
+        const totalHands = Number(row.total_hands);
+        const handsWon = Number(row.hands_won);
+        const totalWagered = BigInt(row.total_wagered ?? '0');
+        const totalWon = BigInt(row.total_won ?? '0');
+        const profitLoss = totalWon - totalWagered;
+        const roi = totalWagered > 0n ? Number((profitLoss * 10000n) / totalWagered) / 100 : 0;
+        const orderedQuery = `
+      WITH player_hands AS (
+        SELECT
+          h.completed_at,
+          CASE
+            WHEN (SELECT COALESCE(SUM((w->>'amount')::numeric), 0) FROM jsonb_array_elements(COALESCE(h.result->'winners', '[]'::jsonb)) w WHERE LOWER(w->>'address') = LOWER($1)) > 0 THEN 1
+            WHEN EXISTS (SELECT 1 FROM poker_hand_actions a WHERE a.hand_id = h.id AND LOWER(a.player_address) = LOWER($1) AND a.action = 'fold') THEN 0
+            ELSE -1
+          END AS outcome
+        FROM poker_hands h
+        INNER JOIN (SELECT DISTINCT hand_id FROM poker_hand_actions WHERE LOWER(player_address) = LOWER($1)) part ON part.hand_id = h.id
+        WHERE h.completed_at IS NOT NULL
+      )
+      SELECT outcome FROM player_hands ORDER BY completed_at DESC
+    `;
+        const orderedResult = await this.pool.query(orderedQuery, [normalized]);
+        const outcomes = orderedResult.rows.map((r) => Number(r.outcome));
+        let currentStreak = 0;
+        let bestStreak = 0;
+        let run = 0;
+        for (const outcome of outcomes) {
+            if (outcome === 1) {
+                run = run >= 0 ? run + 1 : 1;
+                bestStreak = Math.max(bestStreak, run);
+            }
+            else {
+                run = run <= 0 ? run - 1 : -1;
+            }
+        }
+        currentStreak = run;
+        return {
+            total_hands: totalHands,
+            hands_won: handsWon,
+            win_rate: totalHands > 0 ? (handsWon / totalHands) * 100 : 0,
+            total_wagered: totalWagered.toString(),
+            total_won: totalWon.toString(),
+            profit_loss: profitLoss.toString(),
+            roi,
+            current_streak: currentStreak,
+            best_streak: bestStreak,
+            biggest_pot_won: String(row.biggest_pot_won ?? '0'),
+            biggest_loss: String(row.biggest_loss ?? '0'),
+        };
+    }
+    /** Aggregate poker stats for a player at a specific table (from completed hands). */
+    async getPokerPlayerTableStats(tableId, address) {
+        const normalized = this.normalizeAddress(address);
+        const aggQuery = `
+      WITH player_hands AS (
+        SELECT h.id, h.hand_number, h.completed_at,
+          (SELECT COALESCE(SUM(a.amount), 0) FROM poker_hand_actions a WHERE a.hand_id = h.id AND LOWER(a.player_address) = LOWER($1)) AS my_contributed,
+          (SELECT COALESCE(SUM((w->>'amount')::numeric), 0) FROM jsonb_array_elements(COALESCE(h.result->'winners', '[]'::jsonb)) w WHERE LOWER(w->>'address') = LOWER($1)) AS my_won,
+          CASE
+            WHEN (SELECT COALESCE(SUM((w->>'amount')::numeric), 0) FROM jsonb_array_elements(COALESCE(h.result->'winners', '[]'::jsonb)) w WHERE LOWER(w->>'address') = LOWER($1)) > 0 THEN 'win'
+            WHEN EXISTS (SELECT 1 FROM poker_hand_actions a WHERE a.hand_id = h.id AND LOWER(a.player_address) = LOWER($1) AND a.action = 'fold') THEN 'fold'
+            ELSE 'loss'
+          END AS result_type
+        FROM poker_hands h
+        INNER JOIN (SELECT DISTINCT hand_id FROM poker_hand_actions WHERE LOWER(player_address) = LOWER($1)) part ON part.hand_id = h.id
+        WHERE h.completed_at IS NOT NULL AND h.table_id = $2
+      ),
+      totals AS (
+        SELECT
+          COUNT(*)::INT AS total_hands,
+          COUNT(*) FILTER (WHERE result_type = 'win')::INT AS hands_won,
+          COALESCE(SUM(my_contributed), 0)::TEXT AS total_wagered,
+          COALESCE(SUM(my_won), 0)::TEXT AS total_won,
+          COALESCE(MAX(my_won) FILTER (WHERE result_type = 'win'), 0)::TEXT AS biggest_pot_won,
+          COALESCE(MAX(my_contributed) FILTER (WHERE result_type != 'win'), 0)::TEXT AS biggest_loss
+        FROM player_hands
+      )
+      SELECT * FROM totals
+    `;
+        const aggResult = await this.pool.query(aggQuery, [normalized, tableId]);
+        const row = aggResult.rows[0];
+        if (!row || Number(row.total_hands) === 0) {
+            return {
+                total_hands: 0, hands_won: 0, win_rate: 0,
+                total_wagered: '0', total_won: '0', profit_loss: '0',
+                roi: 0, current_streak: 0, best_streak: 0,
+                biggest_pot_won: '0', biggest_loss: '0', hands_history: [],
+            };
+        }
+        const totalHands = Number(row.total_hands);
+        const handsWon = Number(row.hands_won);
+        const totalWagered = BigInt(row.total_wagered ?? '0');
+        const totalWon = BigInt(row.total_won ?? '0');
+        const profitLoss = totalWon - totalWagered;
+        const roi = totalWagered > 0n ? Number((profitLoss * 10000n) / totalWagered) / 100 : 0;
+        // Fetch ordered outcomes for streak + chart data in one query
+        const orderedQuery = `
+      WITH player_hands AS (
+        SELECT
+          h.hand_number,
+          h.completed_at,
+          (SELECT COALESCE(SUM(a.amount), 0)::TEXT FROM poker_hand_actions a WHERE a.hand_id = h.id AND LOWER(a.player_address) = LOWER($1)) AS my_contributed,
+          (SELECT COALESCE(SUM((w->>'amount')::numeric), 0)::TEXT FROM jsonb_array_elements(COALESCE(h.result->'winners', '[]'::jsonb)) w WHERE LOWER(w->>'address') = LOWER($1)) AS my_won,
+          CASE
+            WHEN (SELECT COALESCE(SUM((w->>'amount')::numeric), 0) FROM jsonb_array_elements(COALESCE(h.result->'winners', '[]'::jsonb)) w WHERE LOWER(w->>'address') = LOWER($1)) > 0 THEN 'win'
+            WHEN EXISTS (SELECT 1 FROM poker_hand_actions a WHERE a.hand_id = h.id AND LOWER(a.player_address) = LOWER($1) AND a.action = 'fold') THEN 'fold'
+            ELSE 'loss'
+          END AS result_type
+        FROM poker_hands h
+        INNER JOIN (SELECT DISTINCT hand_id FROM poker_hand_actions WHERE LOWER(player_address) = LOWER($1)) part ON part.hand_id = h.id
+        WHERE h.completed_at IS NOT NULL AND h.table_id = $2
+      )
+      SELECT hand_number, completed_at, my_contributed, my_won, result_type FROM player_hands ORDER BY completed_at ASC
+    `;
+        const orderedResult = await this.pool.query(orderedQuery, [normalized, tableId]);
+        const handsHistory = orderedResult.rows.map((r) => ({
+            hand_number: r.hand_number,
+            completed_at: r.completed_at ? new Date(r.completed_at).toISOString() : '',
+            my_contributed: String(r.my_contributed ?? '0'),
+            my_won: String(r.my_won ?? '0'),
+            result_type: r.result_type,
+        }));
+        // Compute streaks from chronological order (reversed for current streak)
+        let currentStreak = 0;
+        let bestStreak = 0;
+        let run = 0;
+        const reversed = [...handsHistory].reverse();
+        for (const h of reversed) {
+            const outcome = h.result_type === 'win' ? 1 : -1;
+            if (outcome === 1) {
+                run = run >= 0 ? run + 1 : 1;
+                bestStreak = Math.max(bestStreak, run);
+            }
+            else {
+                run = run <= 0 ? run - 1 : -1;
+            }
+        }
+        currentStreak = run;
+        return {
+            total_hands: totalHands,
+            hands_won: handsWon,
+            win_rate: totalHands > 0 ? (handsWon / totalHands) * 100 : 0,
+            total_wagered: totalWagered.toString(),
+            total_won: totalWon.toString(),
+            profit_loss: profitLoss.toString(),
+            roi,
+            current_streak: currentStreak,
+            best_streak: bestStreak,
+            biggest_pot_won: String(row.biggest_pot_won ?? '0'),
+            biggest_loss: String(row.biggest_loss ?? '0'),
+            hands_history: handsHistory,
+        };
+    }
+    /** Single hand detail for replay (actions + hole cards for requesting player). */
+    async getPokerHandDetail(handId, playerAddress) {
+        const normalized = this.normalizeAddress(playerAddress);
+        const handResult = await this.pool.query(`SELECT id, table_id, hand_number, pot_amount::TEXT, community_cards, result, completed_at
+       FROM poker_hands WHERE id = $1 AND completed_at IS NOT NULL`, [handId]);
+        if (handResult.rows.length === 0)
+            return null;
+        const h = handResult.rows[0];
+        const actionsResult = await this.pool.query(`SELECT street, player_address, action, amount::TEXT AS amount
+       FROM poker_hand_actions WHERE hand_id = $1 ORDER BY "order" ASC`, [handId]);
+        const holeResult = await this.pool.query(`SELECT cards FROM poker_hand_hole_cards WHERE hand_id = $1 AND LOWER(player_address) = LOWER($2)`, [handId, normalized]);
+        const holeCards = holeResult.rows.length > 0 && holeResult.rows[0].cards != null
+            ? (Array.isArray(holeResult.rows[0].cards) ? holeResult.rows[0].cards : JSON.parse(JSON.stringify(holeResult.rows[0].cards)))
+            : null;
+        const communityCards = Array.isArray(h.community_cards) ? h.community_cards : (h.community_cards ? JSON.parse(JSON.stringify(h.community_cards)) : []);
+        return {
+            id: h.id,
+            table_id: h.table_id,
+            hand_number: h.hand_number,
+            pot_amount: String(h.pot_amount ?? '0'),
+            community_cards: communityCards,
+            result: h.result,
+            completed_at: h.completed_at ? new Date(h.completed_at).toISOString() : '',
+            actions: actionsResult.rows.map((r) => ({
+                street: r.street,
+                player_address: r.player_address,
+                action: r.action,
+                amount: String(r.amount ?? '0'),
+            })),
+            holeCards,
+        };
+    }
+    // ── Poker table-level dashboard stats (admin) ─────────────────────────────
+    async getPokerTableDashboardStats(tableId) {
+        // Table info
+        const tableResult = await this.pool.query(`SELECT id, small_blind::TEXT, big_blind::TEXT, max_seats, hand_number,
+              created_at AT TIME ZONE 'UTC' AS created_at
+       FROM poker_tables WHERE id = $1`, [tableId]);
+        if (tableResult.rows.length === 0) {
+            return { table: null, seats: [], stats: { total_hands: 0, total_rake: '0', total_pot_volume: '0', avg_pot: '0', avg_hand_duration_seconds: 0, biggest_pot: '0', hands_today: 0, hands_this_hour: 0 }, player_stats: [], recent_hands: [] };
+        }
+        const table = tableResult.rows[0];
+        // Current seats
+        const seatsResult = await this.pool.query(`SELECT position, player_address, stack::TEXT, status,
+              joined_at AT TIME ZONE 'UTC' AS joined_at
+       FROM poker_seats WHERE table_id = $1 ORDER BY position`, [tableId]);
+        // Aggregate stats
+        const aggResult = await this.pool.query(`
+      SELECT
+        COUNT(*)::INT AS total_hands,
+        COALESCE(SUM(rake_amount), 0)::TEXT AS total_rake,
+        COALESCE(SUM(pot_amount), 0)::TEXT AS total_pot_volume,
+        COALESCE(AVG(pot_amount), 0)::TEXT AS avg_pot,
+        COALESCE(AVG(EXTRACT(EPOCH FROM (completed_at - created_at))), 0)::FLOAT AS avg_hand_duration_seconds,
+        COALESCE(MAX(pot_amount), 0)::TEXT AS biggest_pot,
+        COUNT(*) FILTER (WHERE completed_at >= NOW() - INTERVAL '1 day')::INT AS hands_today,
+        COUNT(*) FILTER (WHERE completed_at >= NOW() - INTERVAL '1 hour')::INT AS hands_this_hour
+      FROM poker_hands
+      WHERE table_id = $1 AND completed_at IS NOT NULL
+    `, [tableId]);
+        const agg = aggResult.rows[0];
+        // Per-player stats at this table
+        const playerStatsResult = await this.pool.query(`
+      WITH hand_players AS (
+        SELECT DISTINCT a.player_address, a.hand_id
+        FROM poker_hand_actions a
+        INNER JOIN poker_hands h ON h.id = a.hand_id
+        WHERE h.table_id = $1 AND h.completed_at IS NOT NULL
+      ),
+      player_agg AS (
+        SELECT
+          hp.player_address,
+          COUNT(DISTINCT hp.hand_id)::INT AS hands_played,
+          COUNT(DISTINCT hp.hand_id) FILTER (WHERE (
+            SELECT COALESCE(SUM((w->>'amount')::numeric), 0)
+            FROM jsonb_array_elements(COALESCE(h.result->'winners', '[]'::jsonb)) w
+            WHERE LOWER(w->>'address') = LOWER(hp.player_address)
+          ) > 0)::INT AS hands_won,
+          COALESCE(SUM(a_sum.total_wagered), 0)::TEXT AS total_wagered,
+          COALESCE(SUM(
+            (SELECT COALESCE(SUM((w->>'amount')::numeric), 0)
+             FROM jsonb_array_elements(COALESCE(h.result->'winners', '[]'::jsonb)) w
+             WHERE LOWER(w->>'address') = LOWER(hp.player_address))
+          ), 0)::TEXT AS total_won,
+          COUNT(DISTINCT hp.hand_id) FILTER (WHERE EXISTS (
+            SELECT 1 FROM poker_hand_actions vp
+            WHERE vp.hand_id = hp.hand_id
+              AND LOWER(vp.player_address) = LOWER(hp.player_address)
+              AND vp.action IN ('call', 'bet', 'raise')
+              AND (vp.blind_type IS NULL OR vp.blind_type = '')
+          ))::INT AS vpip_hands
+        FROM hand_players hp
+        INNER JOIN poker_hands h ON h.id = hp.hand_id
+        LEFT JOIN LATERAL (
+          SELECT COALESCE(SUM(amount), 0) AS total_wagered
+          FROM poker_hand_actions
+          WHERE hand_id = hp.hand_id AND LOWER(player_address) = LOWER(hp.player_address)
+        ) a_sum ON TRUE
+        GROUP BY hp.player_address
+      )
+      SELECT
+        player_address,
+        hands_played,
+        hands_won,
+        total_wagered,
+        total_won,
+        (total_won::numeric - total_wagered::numeric)::TEXT AS net_pnl,
+        CASE WHEN hands_played > 0 THEN ROUND(vpip_hands::numeric / hands_played * 100, 1)::FLOAT ELSE 0 END AS vpip_pct
+      FROM player_agg
+      ORDER BY hands_played DESC
+    `, [tableId]);
+        // Recent hands (last 50)
+        const recentResult = await this.pool.query(`
+      SELECT
+        h.id,
+        h.hand_number,
+        h.pot_amount::TEXT,
+        h.rake_amount::TEXT AS rake_amount,
+        h.street,
+        h.community_cards,
+        h.result,
+        h.completed_at AT TIME ZONE 'UTC' AS completed_at,
+        EXTRACT(EPOCH FROM (h.completed_at - h.created_at))::INT AS duration_seconds,
+        (SELECT COUNT(DISTINCT player_address)::INT FROM poker_hand_actions WHERE hand_id = h.id) AS player_count
+      FROM poker_hands h
+      WHERE h.table_id = $1 AND h.completed_at IS NOT NULL
+      ORDER BY h.completed_at DESC
+      LIMIT 50
+    `, [tableId]);
+        return {
+            table: {
+                id: table.id,
+                small_blind: table.small_blind,
+                big_blind: table.big_blind,
+                max_seats: table.max_seats,
+                hand_number: table.hand_number,
+                created_at: new Date(table.created_at).toISOString(),
+            },
+            seats: seatsResult.rows.map((r) => ({
+                position: r.position,
+                player_address: r.player_address,
+                stack: r.stack,
+                status: r.status,
+                joined_at: new Date(r.joined_at).toISOString(),
+            })),
+            stats: {
+                total_hands: Number(agg.total_hands),
+                total_rake: String(agg.total_rake),
+                total_pot_volume: String(agg.total_pot_volume),
+                avg_pot: String(agg.avg_pot),
+                avg_hand_duration_seconds: Number(agg.avg_hand_duration_seconds),
+                biggest_pot: String(agg.biggest_pot),
+                hands_today: Number(agg.hands_today),
+                hands_this_hour: Number(agg.hands_this_hour),
+            },
+            player_stats: playerStatsResult.rows.map((r) => ({
+                player_address: r.player_address,
+                hands_played: r.hands_played,
+                hands_won: r.hands_won,
+                total_wagered: r.total_wagered,
+                total_won: r.total_won,
+                net_pnl: r.net_pnl,
+                vpip_pct: Number(r.vpip_pct),
+            })),
+            recent_hands: recentResult.rows.map((r) => ({
+                id: r.id,
+                hand_number: r.hand_number,
+                pot_amount: String(r.pot_amount),
+                rake_amount: String(r.rake_amount ?? '0'),
+                street: r.street,
+                community_cards: Array.isArray(r.community_cards) ? r.community_cards : [],
+                result: r.result,
+                completed_at: r.completed_at ? new Date(r.completed_at).toISOString() : '',
+                duration_seconds: Number(r.duration_seconds ?? 0),
+                player_count: Number(r.player_count),
+            })),
+        };
+    }
+    // ── Follow system ──────────────────────────────────────────────────────────
+    async followPlayer(followerAddress, followingAddress) {
+        const follower = followerAddress.toLowerCase();
+        const following = followingAddress.toLowerCase();
+        if (follower === following)
+            throw new Error('Cannot follow yourself');
+        await this.pool.query(`INSERT INTO player_follows (follower_address, following_address)
+       VALUES ($1, $2)
+       ON CONFLICT DO NOTHING`, [follower, following]);
+    }
+    async unfollowPlayer(followerAddress, followingAddress) {
+        await this.pool.query(`DELETE FROM player_follows
+       WHERE LOWER(follower_address) = LOWER($1)
+         AND LOWER(following_address) = LOWER($2)`, [followerAddress, followingAddress]);
+    }
+    async isFollowing(followerAddress, followingAddress) {
+        const result = await this.pool.query(`SELECT 1 FROM player_follows
+       WHERE LOWER(follower_address) = LOWER($1)
+         AND LOWER(following_address) = LOWER($2)`, [followerAddress, followingAddress]);
+        return result.rowCount > 0;
+    }
+    async getFollowCounts(address) {
+        const result = await this.pool.query(`SELECT
+         (SELECT COUNT(*) FROM player_follows WHERE LOWER(following_address) = LOWER($1)) AS follower_count,
+         (SELECT COUNT(*) FROM player_follows WHERE LOWER(follower_address)  = LOWER($1)) AS following_count`, [address]);
+        return {
+            followerCount: Number(result.rows[0]?.follower_count ?? 0),
+            followingCount: Number(result.rows[0]?.following_count ?? 0),
+        };
+    }
+    async getFollowers(address, limit = 50, offset = 0) {
+        const result = await this.pool.query(`SELECT pf.follower_address AS address,
+              cdn.display_name,
+              cdn.avatar_config
+       FROM player_follows pf
+       LEFT JOIN chat_display_names cdn ON LOWER(cdn.wallet_address) = LOWER(pf.follower_address)
+       WHERE LOWER(pf.following_address) = LOWER($1)
+       ORDER BY pf.created_at DESC
+       LIMIT $2 OFFSET $3`, [address, limit, offset]);
+        return result.rows.map((r) => ({
+            address: r.address,
+            displayName: r.display_name ?? null,
+            avatarConfig: r.avatar_config ?? null,
+        }));
+    }
+    async getFollowing(address, limit = 50, offset = 0) {
+        const result = await this.pool.query(`SELECT pf.following_address AS address,
+              cdn.display_name,
+              cdn.avatar_config
+       FROM player_follows pf
+       LEFT JOIN chat_display_names cdn ON LOWER(cdn.wallet_address) = LOWER(pf.following_address)
+       WHERE LOWER(pf.follower_address) = LOWER($1)
+       ORDER BY pf.created_at DESC
+       LIMIT $2 OFFSET $3`, [address, limit, offset]);
+        return result.rows.map((r) => ({
+            address: r.address,
+            displayName: r.display_name ?? null,
+            avatarConfig: r.avatar_config ?? null,
+        }));
     }
 }
 exports.DatabaseService = DatabaseService;

@@ -6,7 +6,9 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.WebSocketService = void 0;
 const ws_1 = require("ws");
 const tournament_service_1 = require("./tournament.service");
+const cosmetics_catalog_1 = require("../lib/cosmetics-catalog");
 const logger_1 = require("../utils/logger");
+const safe_bigint_1 = require("../utils/safe-bigint");
 const uuid_1 = require("uuid");
 const crypto_1 = __importDefault(require("crypto"));
 const viem_1 = require("viem");
@@ -57,6 +59,10 @@ const ALLOWED_CHAT_ROOMS = new Set([
 function isTournamentRoom(room) {
     return room.startsWith('tournament:') && room.length > 'tournament:'.length;
 }
+// Check if a room ID is a multiplayer blackjack table room (blackjack:table:{uuid})
+function isBlackjackTableRoom(room) {
+    return room.startsWith('blackjack:table:') && room.length > 'blackjack:table:'.length;
+}
 function getTournamentIdFromRoom(room) {
     return room.slice('tournament:'.length);
 }
@@ -94,18 +100,23 @@ class WebSocketService {
     contractAddress;
     tournamentService;
     pokerGameService = null;
+    pokerTournamentService = null;
+    bjMultiService = null;
+    bjMultiTimerInterval = null;
+    // Per-action rate limiting for BJ multi: address -> timestamp array (5 actions per 3s window)
+    bjMultiActionTimestamps = new Map();
     betLimitsCache = null;
-    constructor(server, gameService, dbService, tournamentService, pokerGameService) {
+    constructor(server, gameService, dbService, tournamentService, pokerGameService, bjMultiService) {
         this.gameService = gameService;
         this.dbService = dbService;
         this.tournamentService = tournamentService;
         this.pokerGameService = pokerGameService ?? null;
+        this.bjMultiService = bjMultiService ?? null;
         this.wss = new ws_1.WebSocketServer({ server });
         // Initialize public client for reading contract state
         this.publicClient = (0, chain_client_1.getPublicClient)();
         this.contractAddress = contracts_1.BLACKJACK_ADDRESS;
-        console.log('[WebSocketService] Using BLACKJACK_ADDRESS:', this.contractAddress);
-        console.log('[WebSocketService] REQUIRE_WS_AUTH:', REQUIRE_WS_AUTH, 'DISABLE_WS_AUTH:', DISABLE_WS_AUTH);
+        logger_1.logger.info('WebSocketService init', { contractAddress: this.contractAddress, REQUIRE_WS_AUTH, DISABLE_WS_AUTH });
         this.wss.on('connection', this.handleConnection.bind(this));
         // Heartbeat to keep connections alive
         this.heartbeatInterval = setInterval(() => {
@@ -134,7 +145,26 @@ class WebSocketService {
                 }
             }, 5000);
         }
+        // Multiplayer blackjack turn timer + betting timeout enforcement (5s poll)
+        if (this.bjMultiService) {
+            this.bjMultiTimerInterval = setInterval(async () => {
+                try {
+                    await this.tickBJMultiTimers();
+                }
+                catch (err) {
+                    logger_1.logger.error('BJMulti timer watchdog error', err);
+                }
+            }, 5000);
+        }
         logger_1.logger.info('WebSocket service initialized');
+    }
+    /** Wire in the PokerTournamentService after construction. */
+    setPokerTournamentService(service) {
+        this.pokerTournamentService = service;
+        // Wire broadcast so the tournament service can push WS events
+        service.setBroadcastCallback((room, message) => {
+            this.broadcastToRoom(room, message);
+        });
     }
     /** Prune addresses with no timestamps in the current window to avoid unbounded map growth. */
     cleanupChatRateLimitMap() {
@@ -229,6 +259,13 @@ class WebSocketService {
         // Handle disconnection
         ws.on('close', () => {
             if (ws.connectionId) {
+                // Blackjack-multi: auto-stand if disconnected player is acting
+                if (ws.currentRoom?.startsWith('blackjack:table:') && ws.playerAddress && this.bjMultiService) {
+                    const tableId = ws.currentRoom.replace('blackjack:table:', '');
+                    this.handleBJMultiDisconnect(tableId, ws.playerAddress).catch(err => {
+                        logger_1.logger.error('BJMulti disconnect handler error', { tableId, error: err });
+                    });
+                }
                 if (ws.currentRoom) {
                     const set = this.roomToClients.get(ws.currentRoom);
                     if (set) {
@@ -252,7 +289,7 @@ class WebSocketService {
             // Strict mode: generate auth challenge, client must sign to proceed
             const authNonce = crypto_1.default.randomBytes(32).toString('hex');
             ws.authNonce = authNonce;
-            console.log('[WS Auth] Strict mode: sending auth_challenge', { connectionId, claimedAddress, noncePrefix: authNonce.slice(0, 8) });
+            logger_1.logger.info('WS Auth: sending auth_challenge', { connectionId, claimedAddress, noncePrefix: authNonce.slice(0, 8) });
             this.sendMessage(ws, {
                 type: 'auth_challenge',
                 payload: { connectionId, nonce: authNonce, claimedAddress }
@@ -260,11 +297,11 @@ class WebSocketService {
         }
         else {
             // No challenge: trust query-param address (DISABLE_WS_AUTH or REQUIRE_WS_AUTH=false)
-            console.log('[WS Auth] No challenge:', DISABLE_WS_AUTH ? 'DISABLE_WS_AUTH' : 'REQUIRE_WS_AUTH=false', 'claimedAddress=', claimedAddress, 'connectionId=', connectionId);
+            logger_1.logger.info('WS Auth: no challenge', { reason: DISABLE_WS_AUTH ? 'DISABLE_WS_AUTH' : 'REQUIRE_WS_AUTH=false', claimedAddress, connectionId });
             if (claimedAddress) {
                 ws.playerAddress = claimedAddress;
                 ws.isAuthenticated = true;
-                console.log('[WS Auth] Auto-auth for', claimedAddress);
+                logger_1.logger.info('WS Auth: auto-auth', { claimedAddress });
                 try {
                     const player = await this.dbService.getOrCreatePlayer(claimedAddress);
                     await this.dbService.addActiveConnection(player.id, connectionId);
@@ -525,6 +562,107 @@ class WebSocketService {
                         return;
                     await this.handlePokerCreateTable(ws, message);
                     break;
+                case 'poker_update_table_logo':
+                    if (!this.requireAuth(ws, message))
+                        return;
+                    await this.handlePokerUpdateTableLogo(ws, message);
+                    break;
+                case 'poker_quick_reaction':
+                    if (!this.requireAuth(ws, message))
+                        return;
+                    await this.handlePokerQuickReaction(ws, message);
+                    break;
+                case 'poker_avatar_emotion':
+                    if (!this.requireAuth(ws, message))
+                        return;
+                    await this.handlePokerAvatarEmotion(ws, message);
+                    break;
+                // Poker Tournaments
+                case 'poker_tournament_list':
+                    await this.handlePokerTournamentList(ws, message);
+                    break;
+                case 'poker_tournament_create':
+                    if (!this.requireAuth(ws, message))
+                        return;
+                    await this.handlePokerTournamentCreate(ws, message);
+                    break;
+                case 'poker_tournament_join':
+                    if (!this.requireAuth(ws, message))
+                        return;
+                    await this.handlePokerTournamentJoin(ws, message);
+                    break;
+                case 'poker_tournament_get_state':
+                    await this.handlePokerTournamentGetState(ws, message);
+                    break;
+                case 'poker_tournament_cancel':
+                    if (!this.requireAuth(ws, message))
+                        return;
+                    await this.handlePokerTournamentCancel(ws, message);
+                    break;
+                // Multiplayer Blackjack
+                case 'bj_multi_list_tables':
+                    await this.handleBJMultiListTables(ws, message);
+                    break;
+                case 'bj_multi_join_table':
+                    if (!this.requireAuth(ws, message))
+                        return;
+                    await this.handleBJMultiJoinTable(ws, message);
+                    break;
+                case 'bj_multi_leave_table':
+                    if (!this.requireAuth(ws, message))
+                        return;
+                    await this.handleBJMultiLeaveTable(ws, message);
+                    break;
+                case 'bj_multi_place_bet':
+                    if (!this.requireAuth(ws, message))
+                        return;
+                    await this.handleBJMultiPlaceBet(ws, message);
+                    break;
+                case 'bj_multi_action':
+                    if (!this.requireAuth(ws, message))
+                        return;
+                    await this.handleBJMultiAction(ws, message);
+                    break;
+                case 'bj_multi_get_state':
+                    if (!this.requireAuth(ws, message))
+                        return;
+                    await this.handleBJMultiGetState(ws, message);
+                    break;
+                case 'bj_multi_create_table':
+                    if (!this.requireAuth(ws, message))
+                        return;
+                    await this.handleBJMultiCreateTable(ws, message);
+                    break;
+                case 'bj_multi_delete_table':
+                    if (!this.requireAuth(ws, message))
+                        return;
+                    await this.handleBJMultiDeleteTable(ws, message);
+                    break;
+                case 'bj_multi_table_history':
+                    if (!this.requireAuth(ws, message))
+                        return;
+                    await this.handleBJMultiTableHistory(ws, message);
+                    break;
+                case 'bj_multi_tip_dealer':
+                    if (!this.requireAuth(ws, message))
+                        return;
+                    await this.handleBJMultiTipDealer(ws, message);
+                    break;
+                case 'bj_multi_quick_reaction':
+                    if (!this.requireAuth(ws, message))
+                        return;
+                    await this.handleBJMultiQuickReaction(ws, message);
+                    break;
+                case 'bj_multi_avatar_emotion':
+                    if (!this.requireAuth(ws, message))
+                        return;
+                    await this.handleBJMultiAvatarEmotion(ws, message);
+                    break;
+                case 'tip_dealer':
+                    if (!this.requireAuth(ws, message))
+                        return;
+                    await this.handleGenericTipDealer(ws, message);
+                    break;
                 default:
                     this.sendError(ws, 'Unknown message type', message.requestId);
             }
@@ -564,17 +702,17 @@ class WebSocketService {
     async handleAuthResponse(ws, message) {
         try {
             const { address, signature } = message.payload;
-            console.log('[WS Auth] Received auth_response', { connectionId: ws.connectionId, address, signaturePrefix: signature?.slice(0, 10) });
+            logger_1.logger.info('WS Auth: received auth_response', { connectionId: ws.connectionId, address, signaturePrefix: signature?.slice(0, 10) });
             if (!address || !signature) {
-                console.log('[WS Auth] Missing address or signature');
+                logger_1.logger.warn('WS Auth: missing address or signature');
                 return this.sendError(ws, 'address and signature required', message.requestId);
             }
             if (!ws.authNonce) {
-                console.log('[WS Auth] No auth nonce pending for connection', ws.connectionId);
+                logger_1.logger.warn('WS Auth: no auth nonce pending', { connectionId: ws.connectionId });
                 return this.sendError(ws, 'No auth challenge pending', message.requestId);
             }
             const normalizedAddress = address.toLowerCase();
-            console.log('[WS Auth] Verifying EIP-712 signature for', normalizedAddress, 'nonce:', ws.authNonce.slice(0, 8));
+            logger_1.logger.info('WS Auth: verifying EIP-712 signature', { address: normalizedAddress, noncePrefix: ws.authNonce.slice(0, 8) });
             // Verify EIP-712 typed data signature
             const valid = await (0, viem_1.verifyTypedData)({
                 address: normalizedAddress,
@@ -585,11 +723,11 @@ class WebSocketService {
                 signature,
             });
             if (!valid) {
-                console.log('[WS Auth] Signature verification FAILED for', normalizedAddress);
+                logger_1.logger.warn('WS Auth: signature verification failed', { address: normalizedAddress });
                 return this.sendError(ws, 'Invalid signature', message.requestId);
             }
             // Auth successful
-            console.log('[WS Auth] Signature verified, auth successful for', normalizedAddress);
+            logger_1.logger.info('WS Auth: auth successful', { address: normalizedAddress });
             ws.playerAddress = normalizedAddress;
             ws.isAuthenticated = true;
             ws.authNonce = undefined; // consume nonce
@@ -668,33 +806,10 @@ class WebSocketService {
                 return this.sendError(ws, `Account is self-excluded${expiryMsg}. Gaming is disabled during this period.`, message.requestId);
             }
             const payload = message.payload;
-            // Convert betAmount from string to bigint if needed
-            let betAmount;
-            try {
-                if (typeof payload.betAmount === 'string') {
-                    betAmount = BigInt(payload.betAmount);
-                }
-                else if (typeof payload.betAmount === 'bigint') {
-                    betAmount = payload.betAmount;
-                }
-                else {
-                    betAmount = BigInt(payload.betAmount || '0');
-                }
-            }
-            catch (error) {
-                logger_1.logger.error('Invalid betAmount format', { payload, error });
-                return this.sendError(ws, 'Invalid bet amount format', message.requestId);
-            }
-            let perfectPairsBetAmount = 0n;
-            try {
-                if (payload.perfectPairsBetAmount != null && payload.perfectPairsBetAmount !== '') {
-                    perfectPairsBetAmount = typeof payload.perfectPairsBetAmount === 'string'
-                        ? BigInt(payload.perfectPairsBetAmount) : BigInt(payload.perfectPairsBetAmount);
-                }
-            }
-            catch {
-                perfectPairsBetAmount = 0n;
-            }
+            const betAmount = (0, safe_bigint_1.toBigIntSafe)(payload.betAmount ?? 0);
+            let perfectPairsBetAmount = payload.perfectPairsBetAmount != null && payload.perfectPairsBetAmount !== ''
+                ? (0, safe_bigint_1.toBigIntSafe)(payload.perfectPairsBetAmount)
+                : 0n;
             if (perfectPairsBetAmount < 0n)
                 perfectPairsBetAmount = 0n;
             const PP_MAX_BET = 10000n * 10n ** 18n; // 10,000 MORBIUS
@@ -1018,7 +1133,8 @@ class WebSocketService {
             }
             const normalized = roomId.toLowerCase().trim();
             const isPokerTableRoom = normalized.startsWith('poker:table:');
-            if (!ALLOWED_CHAT_ROOMS.has(normalized) && !isTournamentRoom(normalized) && !isPokerTableRoom) {
+            const isBJMultiRoom = isBlackjackTableRoom(normalized);
+            if (!ALLOWED_CHAT_ROOMS.has(normalized) && !isTournamentRoom(normalized) && !isPokerTableRoom && !isBJMultiRoom) {
                 return this.sendError(ws, 'Invalid room', message.requestId);
             }
             // Tournament rooms require participant check
@@ -1046,23 +1162,29 @@ class WebSocketService {
                 this.roomToClients.set(normalized, new Set());
             }
             this.roomToClients.get(normalized).add(ws.connectionId);
-            const recent = isPokerTableRoom ? [] : await this.dbService.getRecentChatMessages(normalized, CHAT_RECENT_MESSAGES_LIMIT);
+            const recent = (isPokerTableRoom || isBJMultiRoom) ? [] : await this.dbService.getRecentChatMessages(normalized, CHAT_RECENT_MESSAGES_LIMIT);
             const addresses = [...new Set(recent.map(m => m.sender_address).filter(Boolean))];
-            const displayNames = await this.dbService.getDisplayNames(addresses);
+            const profiles = await this.dbService.getProfiles(addresses);
             const config = await this.dbService.getAdminGameConfig();
             const chatPaused = config['chat_paused'] === 'true';
             this.sendMessage(ws, {
                 type: 'room_joined',
                 payload: {
                     roomId: normalized,
-                    recentMessages: recent.map(m => ({
-                        id: m.id,
-                        roomId: m.room_id,
-                        senderAddress: m.sender_address,
-                        displayName: m.sender_address ? displayNames.get(m.sender_address.toLowerCase()) ?? null : null,
-                        text: m.text,
-                        timestamp: m.created_at
-                    })),
+                    recentMessages: recent.map(m => {
+                        const addr = m.sender_address?.toLowerCase();
+                        const p = addr ? profiles.get(addr) : undefined;
+                        return {
+                            id: m.id,
+                            roomId: m.room_id,
+                            senderAddress: m.sender_address,
+                            displayName: p?.displayName ?? null,
+                            profileImageUrl: p?.profileImageUrl ?? null,
+                            avatarConfig: p?.avatarConfig ?? null,
+                            text: m.text,
+                            timestamp: m.created_at
+                        };
+                    }),
                     chatPaused
                 },
                 requestId: message.requestId
@@ -1099,7 +1221,8 @@ class WebSocketService {
             if (!buyInChips || typeof buyInChips !== 'string') {
                 return this.sendError(ws, 'buyInChips required', message.requestId);
             }
-            const state = await this.pokerGameService.joinTable(tableId, ws.playerAddress, buyInChips);
+            const pinCode = payload?.pinCode && typeof payload.pinCode === 'string' ? payload.pinCode : undefined;
+            const state = await this.pokerGameService.joinTable(tableId, ws.playerAddress, buyInChips, pinCode);
             const roomId = `poker:table:${tableId}`;
             if (ws.currentRoom && ws.connectionId) {
                 const prevSet = this.roomToClients.get(ws.currentRoom);
@@ -1223,10 +1346,84 @@ class WebSocketService {
             this.sendError(ws, error.message || 'Failed to get state', message.requestId);
         }
     }
+    async handlePokerQuickReaction(ws, message) {
+        try {
+            if (!this.pokerGameService || !ws.playerAddress) {
+                return this.sendError(ws, 'Poker not available or wallet required', message.requestId);
+            }
+            const payload = message.payload;
+            const { tableId, type, value } = payload ?? {};
+            if (!tableId || typeof tableId !== 'string') {
+                return this.sendError(ws, 'tableId required', message.requestId);
+            }
+            if (type !== 'phrase') {
+                return this.sendError(ws, 'type must be phrase', message.requestId);
+            }
+            const val = typeof value === 'string' ? value.trim() : '';
+            if (!val || val.length > 200) {
+                return this.sendError(ws, 'value required (max 200 chars)', message.requestId);
+            }
+            const state = await this.pokerGameService.getTableState(tableId, null);
+            const seatIndex = state.seats.findIndex((s) => s.playerAddress && s.playerAddress.toLowerCase() === ws.playerAddress.toLowerCase());
+            if (seatIndex < 0) {
+                return this.sendError(ws, 'Not seated at this table', message.requestId);
+            }
+            const roomId = `poker:table:${tableId}`;
+            this.broadcastToRoom(roomId, {
+                type: 'poker_quick_reaction',
+                payload: { tableId, seatIndex, type, value: val },
+            });
+        }
+        catch (error) {
+            logger_1.logger.error('Error handling poker quick reaction:', error);
+            this.sendError(ws, error.message || 'Failed to send reaction', message.requestId);
+        }
+    }
+    static POKER_AVATAR_EMOTIONS = new Set([
+        'neutral', 'happy', 'sad', 'angry', 'surprised', 'wink',
+        'dance', 'flex', 'jump', 'spin', 'think', 'love', 'money',
+        'sick', 'cool', 'sleepy', 'shock', 'ghost', 'ninja', 'king',
+        'poker', 'jackpot', 'chips', 'cards', 'dice',
+        'yawn', 'nod', 'shrug',
+        'breathe', 'lean', 'tilt',
+    ]);
+    async handlePokerAvatarEmotion(ws, message) {
+        try {
+            if (!this.pokerGameService || !ws.playerAddress) {
+                return this.sendError(ws, 'Poker not available or wallet required', message.requestId);
+            }
+            const payload = message.payload;
+            const { tableId, emotion } = payload ?? {};
+            if (!tableId || typeof tableId !== 'string') {
+                return this.sendError(ws, 'tableId required', message.requestId);
+            }
+            const emo = typeof emotion === 'string' ? emotion.toLowerCase().trim() : '';
+            if (!WebSocketService.POKER_AVATAR_EMOTIONS.has(emo)) {
+                return this.sendError(ws, 'Invalid emotion', message.requestId);
+            }
+            const state = await this.pokerGameService.getTableState(tableId, null);
+            const seatIndex = state.seats.findIndex((s) => s.playerAddress && s.playerAddress.toLowerCase() === ws.playerAddress.toLowerCase());
+            if (seatIndex < 0) {
+                return this.sendError(ws, 'Not seated at this table', message.requestId);
+            }
+            const roomId = `poker:table:${tableId}`;
+            this.broadcastToRoom(roomId, {
+                type: 'poker_avatar_emotion',
+                payload: { tableId, seatIndex, emotion: emo },
+            });
+        }
+        catch (error) {
+            logger_1.logger.error('Error handling poker avatar emotion:', error);
+            this.sendError(ws, error.message || 'Failed to send avatar emotion', message.requestId);
+        }
+    }
     async handlePokerCreateTable(ws, message) {
         try {
             if (!this.pokerGameService || !ws.playerAddress) {
                 return this.sendError(ws, 'Poker not available or wallet required', message.requestId);
+            }
+            if (!(0, cosmetics_catalog_1.isAdminWallet)(ws.playerAddress)) {
+                return this.sendError(ws, 'Only admins can create poker tables', message.requestId);
             }
             const payload = message.payload;
             const smallBlindStr = payload?.smallBlind != null ? String(payload.smallBlind) : undefined;
@@ -1234,18 +1431,44 @@ class WebSocketService {
             if (!smallBlindStr || !bigBlindStr) {
                 return this.sendError(ws, 'smallBlind and bigBlind required', message.requestId);
             }
-            const smallBlind = BigInt(smallBlindStr);
-            const bigBlind = BigInt(bigBlindStr);
+            const smallBlind = (0, safe_bigint_1.toBigIntSafe)(smallBlindStr);
+            const bigBlind = (0, safe_bigint_1.toBigIntSafe)(bigBlindStr);
             if (smallBlind <= 0n || bigBlind <= 0n || bigBlind < smallBlind) {
                 return this.sendError(ws, 'Invalid blinds: must be positive and bigBlind >= smallBlind', message.requestId);
             }
             const maxSeats = Math.min(10, Math.max(2, Number(payload?.maxSeats) || 6));
-            const tableId = await this.pokerGameService.createTable(smallBlind, bigBlind, maxSeats);
+            const pinCode = payload?.pinCode && typeof payload.pinCode === 'string' ? payload.pinCode : undefined;
+            const tableId = await this.pokerGameService.createTable(smallBlind, bigBlind, maxSeats, pinCode);
             this.sendMessage(ws, { type: 'poker_create_table', payload: { tableId }, requestId: message.requestId });
         }
         catch (error) {
             logger_1.logger.error('Error creating poker table:', error);
             this.sendError(ws, error.message || 'Failed to create table', message.requestId);
+        }
+    }
+    async handlePokerUpdateTableLogo(ws, message) {
+        try {
+            if (!this.pokerGameService || !ws.playerAddress) {
+                return this.sendError(ws, 'Poker not available or wallet required', message.requestId);
+            }
+            if (!(0, cosmetics_catalog_1.isAdminWallet)(ws.playerAddress)) {
+                return this.sendError(ws, 'Only admins can update table logo', message.requestId);
+            }
+            const payload = message.payload;
+            const tableId = payload?.tableId;
+            if (!tableId) {
+                return this.sendError(ws, 'tableId required', message.requestId);
+            }
+            const logo = payload.logo ?? null;
+            const opacity = typeof payload.opacity === 'number' ? payload.opacity : 0.12;
+            await this.pokerGameService.updateTableLogo(tableId, logo, opacity);
+            this.sendMessage(ws, { type: 'poker_update_table_logo', payload: { success: true }, requestId: message.requestId });
+            // Broadcast updated state so all players see the new logo
+            await this.broadcastPokerTableState(tableId);
+        }
+        catch (error) {
+            logger_1.logger.error('Error updating poker table logo:', error);
+            this.sendError(ws, error.message || 'Failed to update table logo', message.requestId);
         }
     }
     async handleGetChatHistory(ws, message) {
@@ -1260,7 +1483,7 @@ class WebSocketService {
             }
             const normalized = roomId.toLowerCase().trim();
             const isPokerTableRoom = normalized.startsWith('poker:table:');
-            if (!ALLOWED_CHAT_ROOMS.has(normalized) && !isTournamentRoom(normalized) && !isPokerTableRoom) {
+            if (!ALLOWED_CHAT_ROOMS.has(normalized) && !isTournamentRoom(normalized) && !isPokerTableRoom && !isBlackjackTableRoom(normalized)) {
                 return this.sendError(ws, 'Invalid room', message.requestId);
             }
             const limitNum = typeof limit === 'number' && limit > 0 && limit <= CHAT_RECENT_MESSAGES_LIMIT
@@ -1268,15 +1491,21 @@ class WebSocketService {
                 : 50;
             const older = await this.dbService.getChatMessagesBefore(normalized, beforeId, limitNum);
             const addresses = [...new Set(older.map(m => m.sender_address).filter(Boolean))];
-            const displayNames = await this.dbService.getDisplayNames(addresses);
-            const messages = older.map(m => ({
-                id: m.id,
-                roomId: m.room_id,
-                senderAddress: m.sender_address,
-                displayName: m.sender_address ? displayNames.get(m.sender_address.toLowerCase()) ?? null : null,
-                text: m.text,
-                timestamp: m.created_at
-            }));
+            const profiles = await this.dbService.getProfiles(addresses);
+            const messages = older.map(m => {
+                const addr = m.sender_address?.toLowerCase();
+                const p = addr ? profiles.get(addr) : undefined;
+                return {
+                    id: m.id,
+                    roomId: m.room_id,
+                    senderAddress: m.sender_address,
+                    displayName: p?.displayName ?? null,
+                    profileImageUrl: p?.profileImageUrl ?? null,
+                    avatarConfig: p?.avatarConfig ?? null,
+                    text: m.text,
+                    timestamp: m.created_at
+                };
+            });
             this.sendMessage(ws, {
                 type: 'chat_history',
                 payload: { messages },
@@ -1314,13 +1543,23 @@ class WebSocketService {
             const profileImageUrl = payload.profileImageUrl !== undefined
                 ? (typeof payload.profileImageUrl === 'string' ? payload.profileImageUrl : null)
                 : undefined;
-            await this.dbService.setDisplayName(ws.playerAddress, displayName, profileImageUrl);
+            const avatarConfig = payload.avatarConfig !== undefined
+                ? (payload.avatarConfig !== null && typeof payload.avatarConfig === 'object' ? payload.avatarConfig : null)
+                : undefined;
+            const bio = payload.bio !== undefined ? (typeof payload.bio === 'string' ? payload.bio.trim().slice(0, 200) || null : null) : undefined;
+            const xHandle = payload.xHandle !== undefined ? (typeof payload.xHandle === 'string' ? payload.xHandle.trim().replace(/^@/, '').slice(0, 50) || null : null) : undefined;
+            const tgHandle = payload.tgHandle !== undefined ? (typeof payload.tgHandle === 'string' ? payload.tgHandle.trim().replace(/^@/, '').slice(0, 50) || null : null) : undefined;
+            await this.dbService.setDisplayName(ws.playerAddress, displayName, profileImageUrl, avatarConfig, bio, xHandle, tgHandle);
             const profile = await this.dbService.getProfile(ws.playerAddress);
             this.sendMessage(ws, {
                 type: 'display_name_set',
                 payload: {
                     displayName,
-                    profileImageUrl: profile?.profileImageUrl ?? null
+                    profileImageUrl: profile?.profileImageUrl ?? null,
+                    avatarConfig: profile?.avatarConfig ?? null,
+                    bio: profile?.bio ?? null,
+                    xHandle: profile?.xHandle ?? null,
+                    tgHandle: profile?.tgHandle ?? null,
                 },
                 requestId: message.requestId
             });
@@ -1339,8 +1578,8 @@ class WebSocketService {
             this.sendMessage(ws, {
                 type: 'profile',
                 payload: profile
-                    ? { displayName: profile.displayName, profileImageUrl: profile.profileImageUrl }
-                    : { displayName: null, profileImageUrl: null },
+                    ? { displayName: profile.displayName, profileImageUrl: profile.profileImageUrl, avatarConfig: profile.avatarConfig, bio: profile.bio, xHandle: profile.xHandle, tgHandle: profile.tgHandle }
+                    : { displayName: null, profileImageUrl: null, avatarConfig: null, bio: null, xHandle: null, tgHandle: null },
                 requestId: message.requestId
             });
         }
@@ -1368,7 +1607,7 @@ class WebSocketService {
             }
             const normalizedRoom = roomId.toLowerCase().trim();
             const isPokerTableRoom = normalizedRoom.startsWith('poker:table:');
-            if (!ALLOWED_CHAT_ROOMS.has(normalizedRoom) && !isTournamentRoom(normalizedRoom) && !isPokerTableRoom) {
+            if (!ALLOWED_CHAT_ROOMS.has(normalizedRoom) && !isTournamentRoom(normalizedRoom) && !isPokerTableRoom && !isBlackjackTableRoom(normalizedRoom)) {
                 return this.sendError(ws, 'Invalid room', message.requestId);
             }
             // Tournament rooms require participant check on send
@@ -1401,14 +1640,25 @@ class WebSocketService {
                 }
             }
             const row = await this.dbService.insertChatMessage(normalizedRoom, senderAddress, trimmed);
-            const displayName = row.sender_address
-                ? await this.dbService.getDisplayName(row.sender_address)
-                : null;
+            let displayName = null;
+            let profileImageUrl = null;
+            let avatarConfig = null;
+            if (row.sender_address) {
+                const profile = await this.dbService.getProfile(row.sender_address);
+                if (profile) {
+                    const dn = profile.displayName?.trim();
+                    displayName = dn ? dn : null;
+                    profileImageUrl = profile.profileImageUrl;
+                    avatarConfig = profile.avatarConfig;
+                }
+            }
             const broadcastPayload = {
                 id: row.id,
                 roomId: row.room_id,
                 senderAddress: row.sender_address,
                 displayName,
+                profileImageUrl,
+                avatarConfig,
                 text: row.text,
                 timestamp: row.created_at
             };
@@ -1535,6 +1785,126 @@ class WebSocketService {
             logger_1.logger.error('broadcastPokerTableState failed', { tableId, error: err });
         }
     }
+    // ---------------------------------------------------------------------------
+    // Poker Tournament handlers
+    // ---------------------------------------------------------------------------
+    async handlePokerTournamentList(ws, message) {
+        try {
+            if (!this.pokerTournamentService) {
+                return this.sendError(ws, 'Poker tournaments not available', message.requestId);
+            }
+            const tournaments = await this.pokerTournamentService.listPokerTournaments(ws.playerAddress ?? undefined);
+            this.sendMessage(ws, { type: 'poker_tournament_list', payload: { tournaments }, requestId: message.requestId });
+        }
+        catch (error) {
+            logger_1.logger.error('Error listing poker tournaments:', error);
+            this.sendError(ws, error.message || 'Failed to list tournaments', message.requestId);
+        }
+    }
+    async handlePokerTournamentCreate(ws, message) {
+        try {
+            if (!this.pokerTournamentService || !ws.playerAddress) {
+                return this.sendError(ws, 'Poker tournaments not available or wallet required', message.requestId);
+            }
+            const p = message.payload;
+            if (!p.name)
+                return this.sendError(ws, 'name required', message.requestId);
+            if (!p.buyInAmount)
+                return this.sendError(ws, 'buyInAmount required', message.requestId);
+            if (!p.prizeDistributionType)
+                return this.sendError(ws, 'prizeDistributionType required', message.requestId);
+            if (!p.config)
+                return this.sendError(ws, 'config required', message.requestId);
+            const scheduledStartAt = p.scheduledStartAt ? new Date(p.scheduledStartAt) : null;
+            if (scheduledStartAt && isNaN(scheduledStartAt.getTime())) {
+                return this.sendError(ws, 'Invalid scheduledStartAt date', message.requestId);
+            }
+            const result = await this.pokerTournamentService.createPokerTournament({
+                creatorAddress: ws.playerAddress,
+                name: p.name,
+                buyInAmount: BigInt(p.buyInAmount),
+                prizeDistributionType: p.prizeDistributionType,
+                config: p.config,
+                isPrivate: p.isPrivate ?? false,
+                pinCode: p.pinCode ?? null,
+                scheduledStartAt,
+            });
+            this.sendMessage(ws, { type: 'poker_tournament_created', payload: result, requestId: message.requestId });
+        }
+        catch (error) {
+            logger_1.logger.error('Error creating poker tournament:', error);
+            this.sendError(ws, error.message || 'Failed to create tournament', message.requestId);
+        }
+    }
+    async handlePokerTournamentJoin(ws, message) {
+        try {
+            if (!this.pokerTournamentService || !ws.playerAddress) {
+                return this.sendError(ws, 'Poker tournaments not available or wallet required', message.requestId);
+            }
+            const { tournamentId, pinCode } = message.payload;
+            if (!tournamentId)
+                return this.sendError(ws, 'tournamentId required', message.requestId);
+            let result = null;
+            try {
+                result = await this.pokerTournamentService.joinPokerTournament(tournamentId, ws.playerAddress, pinCode);
+            }
+            catch (joinErr) {
+                const msg = joinErr.message ?? '';
+                // If already registered, just re-subscribe to the room without error
+                if (msg.toLowerCase().includes('already registered')) {
+                    logger_1.logger.info('Player already registered — re-subscribing to tournament room', { tournamentId, player: ws.playerAddress });
+                    // fall through to room subscription below with null result
+                }
+                else {
+                    throw joinErr;
+                }
+            }
+            // Always add client to the tournament room (handles reconnects)
+            const roomId = `poker_tournament:${tournamentId}`;
+            if (ws.connectionId) {
+                if (!this.roomToClients.has(roomId))
+                    this.roomToClients.set(roomId, new Set());
+                this.roomToClients.get(roomId).add(ws.connectionId);
+            }
+            this.sendMessage(ws, { type: 'poker_tournament_joined', payload: result ?? { autoStarted: false, tableId: null, alreadyRegistered: true }, requestId: message.requestId });
+        }
+        catch (error) {
+            logger_1.logger.error('Error joining poker tournament:', error);
+            this.sendError(ws, error.message || 'Failed to join tournament', message.requestId);
+        }
+    }
+    async handlePokerTournamentGetState(ws, message) {
+        try {
+            if (!this.pokerTournamentService) {
+                return this.sendError(ws, 'Poker tournaments not available', message.requestId);
+            }
+            const { tournamentId } = message.payload;
+            if (!tournamentId)
+                return this.sendError(ws, 'tournamentId required', message.requestId);
+            const state = await this.pokerTournamentService.getTournamentState(tournamentId);
+            this.sendMessage(ws, { type: 'poker_tournament_state', payload: state, requestId: message.requestId });
+        }
+        catch (error) {
+            logger_1.logger.error('Error getting poker tournament state:', error);
+            this.sendError(ws, error.message || 'Failed to get tournament state', message.requestId);
+        }
+    }
+    async handlePokerTournamentCancel(ws, message) {
+        try {
+            if (!this.pokerTournamentService || !ws.playerAddress) {
+                return this.sendError(ws, 'Poker tournaments not available or wallet required', message.requestId);
+            }
+            const { tournamentId } = message.payload;
+            if (!tournamentId)
+                return this.sendError(ws, 'tournamentId required', message.requestId);
+            await this.pokerTournamentService.cancelPokerTournament(tournamentId, ws.playerAddress);
+            this.sendMessage(ws, { type: 'poker_tournament_cancelled', payload: { tournamentId }, requestId: message.requestId });
+        }
+        catch (error) {
+            logger_1.logger.error('Error cancelling poker tournament:', error);
+            this.sendError(ws, error.message || 'Failed to cancel tournament', message.requestId);
+        }
+    }
     // Get connection count
     getConnectionCount() {
         return this.wss.clients.size;
@@ -1543,6 +1913,32 @@ class WebSocketService {
     async getActivePlayersCount() {
         const result = await this.dbService.cleanupOldConnections();
         return this.wss.clients.size;
+    }
+    /**
+     * WebSocket clients currently in each game’s rooms (chat + table rooms).
+     * One browser tab ≈ one connection; not deduped by wallet.
+     */
+    getLivePresenceByGame() {
+        let poker = 0;
+        let blackjackMulti = 0;
+        for (const [roomId, set] of this.roomToClients.entries()) {
+            const n = set.size;
+            if (roomId.startsWith('poker:table:') || roomId.startsWith('poker_tournament:')) {
+                poker += n;
+            }
+            else if (roomId.startsWith('blackjack:table:')) {
+                blackjackMulti += n;
+            }
+        }
+        return {
+            poker,
+            blackjackMulti,
+            blackjack: this.roomToClients.get('blackjack')?.size ?? 0,
+            plinko: this.roomToClients.get('plinko')?.size ?? 0,
+            keno: this.roomToClients.get('keno')?.size ?? 0,
+            lottery: this.roomToClients.get('lottery')?.size ?? 0,
+            bigWheel: this.roomToClients.get('bigwheel')?.size ?? 0,
+        };
     }
     // ============================================
     // Responsible Gaming / Self-Exclusion Handlers
@@ -2084,12 +2480,8 @@ class WebSocketService {
                 return this.sendError(ws, 'Tournament mode not available', message.requestId);
             }
             const payload = message.payload;
-            // Convert buyInAmount string to bigint
-            let buyInAmount;
-            try {
-                buyInAmount = BigInt(payload.buyInAmount);
-            }
-            catch {
+            const buyInAmount = (0, safe_bigint_1.toBigIntSafe)(payload.buyInAmount);
+            if (buyInAmount <= 0n) {
                 return this.sendError(ws, 'Invalid buy-in amount', message.requestId);
             }
             const tournament = await this.tournamentService.createTournament({
@@ -2702,11 +3094,448 @@ class WebSocketService {
         if (this.pokerAutoFoldInterval) {
             clearInterval(this.pokerAutoFoldInterval);
         }
+        if (this.bjMultiTimerInterval) {
+            clearInterval(this.bjMultiTimerInterval);
+        }
         this.wss.clients.forEach((client) => {
             client.close(1000, 'Server shutdown');
         });
         this.wss.close();
         logger_1.logger.info('WebSocket service shut down');
+    }
+    // ---------------------------------------------------------------------------
+    // Multiplayer Blackjack handlers
+    // ---------------------------------------------------------------------------
+    /** Broadcast current BJ multi table state to room. */
+    async broadcastBJMultiTableState(tableId) {
+        if (!this.bjMultiService)
+            return;
+        try {
+            const state = await this.bjMultiService.getTableState(tableId);
+            const roomId = `blackjack:table:${tableId}`;
+            const roomSize = this.roomToClients.get(roomId)?.size ?? 0;
+            const seatedCount = state.seats.filter((s) => s.playerAddress).length;
+            state.viewerCount = Math.max(0, roomSize - seatedCount);
+            this.broadcastToRoom(roomId, { type: 'bj_multi_table_state', payload: state });
+        }
+        catch (err) {
+            logger_1.logger.error('broadcastBJMultiTableState failed', { tableId, error: err });
+        }
+    }
+    /** Timer tick: check for expired turns and betting timeouts across all active BJ multi tables. */
+    async tickBJMultiTimers() {
+        if (!this.bjMultiService)
+            return;
+        const pool = this.dbService.getPool();
+        // Find tables with an active round that has an expired turn (playing + turn_started_at + 30s < NOW())
+        const timedOutTurns = await pool.query(`
+      SELECT DISTINCT r.table_id
+      FROM blackjack_multi_rounds r
+      WHERE r.status = 'playing'
+        AND r.acting_seat_position IS NOT NULL
+        AND r.turn_started_at < NOW() - INTERVAL '30 seconds'
+    `);
+        for (const row of timedOutTurns.rows) {
+            try {
+                await this.bjMultiService.autoStandTimedOut(row.table_id);
+                await this.broadcastBJMultiTableState(row.table_id);
+            }
+            catch (err) {
+                logger_1.logger.error('BJMulti auto-stand error', { tableId: row.table_id, error: err });
+            }
+        }
+        // Find tables in 'betting' status where the round is older than 30s and at least one seat has a bet
+        const expiredBetting = await pool.query(`
+      SELECT DISTINCT r.table_id
+      FROM blackjack_multi_rounds r
+      WHERE r.status = 'betting'
+        AND r.created_at < NOW() - INTERVAL '15 seconds'
+    `);
+        for (const row of expiredBetting.rows) {
+            try {
+                await this.bjMultiService.handleBettingTimeout(row.table_id);
+                await this.broadcastBJMultiTableState(row.table_id);
+            }
+            catch (err) {
+                logger_1.logger.error('BJMulti betting timeout error', { tableId: row.table_id, error: err });
+            }
+        }
+        // Also handle tables stuck in 'betting' with no active round (e.g. table.status = 'betting' but no round)
+        const stuckBetting = await pool.query(`
+      SELECT t.id AS table_id
+      FROM blackjack_multi_tables t
+      WHERE t.status = 'betting'
+        AND NOT EXISTS (
+          SELECT 1 FROM blackjack_multi_rounds r WHERE r.table_id = t.id AND r.status = 'betting'
+        )
+    `);
+        for (const row of stuckBetting.rows) {
+            try {
+                await this.bjMultiService.handleBettingTimeout(row.table_id);
+                await this.broadcastBJMultiTableState(row.table_id);
+            }
+            catch (err) {
+                logger_1.logger.error('BJMulti stuck betting error', { tableId: row.table_id, error: err });
+            }
+        }
+        // Transition waiting/completed tables with seated players to betting (so next round can start)
+        const waitingWithSeats = await pool.query(`
+      SELECT t.id AS table_id
+      FROM blackjack_multi_tables t
+      WHERE t.status IN ('waiting', 'completed')
+        AND EXISTS (SELECT 1 FROM blackjack_multi_seats s WHERE s.table_id = t.id)
+    `);
+        for (const row of waitingWithSeats.rows) {
+            try {
+                await this.bjMultiService.startBettingPhase(row.table_id);
+                await this.broadcastBJMultiTableState(row.table_id);
+            }
+            catch (err) {
+                logger_1.logger.error('BJMulti start betting phase error', { tableId: row.table_id, error: err });
+            }
+        }
+    }
+    async handleBJMultiListTables(ws, message) {
+        try {
+            if (!this.bjMultiService)
+                return this.sendError(ws, 'BJ multi not available', message.requestId);
+            const tables = await this.bjMultiService.listTables();
+            this.sendMessage(ws, { type: 'bj_multi_table_list', payload: { tables }, requestId: message.requestId });
+        }
+        catch (error) {
+            logger_1.logger.error('BJ multi list tables error:', error);
+            this.sendError(ws, error.message || 'Failed to list tables', message.requestId);
+        }
+    }
+    async handleBJMultiJoinTable(ws, message) {
+        try {
+            if (!this.bjMultiService || !ws.playerAddress) {
+                return this.sendError(ws, 'BJ multi not available or wallet required', message.requestId);
+            }
+            const { tableId, seatPosition } = (message.payload ?? {});
+            if (!tableId)
+                return this.sendError(ws, 'tableId required', message.requestId);
+            if (seatPosition === undefined || seatPosition === null) {
+                return this.sendError(ws, 'seatPosition required', message.requestId);
+            }
+            const state = await this.bjMultiService.joinTable(tableId, ws.playerAddress, seatPosition);
+            // Assign connection to room
+            const roomId = `blackjack:table:${tableId}`;
+            if (ws.currentRoom && ws.connectionId) {
+                const prev = this.roomToClients.get(ws.currentRoom);
+                if (prev) {
+                    prev.delete(ws.connectionId);
+                    if (prev.size === 0)
+                        this.roomToClients.delete(ws.currentRoom);
+                }
+            }
+            ws.currentRoom = roomId;
+            if (!this.roomToClients.has(roomId))
+                this.roomToClients.set(roomId, new Set());
+            this.roomToClients.get(roomId).add(ws.connectionId);
+            this.sendMessage(ws, { type: 'bj_multi_table_state', payload: state, requestId: message.requestId });
+            const broadcastState = await this.bjMultiService.getTableState(tableId);
+            this.broadcastToRoom(roomId, { type: 'bj_multi_table_state', payload: broadcastState });
+        }
+        catch (error) {
+            logger_1.logger.error('BJ multi join table error:', error);
+            this.sendError(ws, error.message || 'Failed to join table', message.requestId);
+        }
+    }
+    async handleBJMultiLeaveTable(ws, message) {
+        try {
+            if (!this.bjMultiService || !ws.playerAddress) {
+                return this.sendError(ws, 'BJ multi not available or wallet required', message.requestId);
+            }
+            const { tableId } = (message.payload ?? {});
+            if (!tableId)
+                return this.sendError(ws, 'tableId required', message.requestId);
+            const state = await this.bjMultiService.leaveTable(tableId, ws.playerAddress);
+            const roomId = `blackjack:table:${tableId}`;
+            if (ws.connectionId) {
+                const set = this.roomToClients.get(roomId);
+                if (set) {
+                    set.delete(ws.connectionId);
+                    if (set.size === 0)
+                        this.roomToClients.delete(roomId);
+                }
+            }
+            ws.currentRoom = undefined;
+            this.sendMessage(ws, { type: 'bj_multi_table_state', payload: state, requestId: message.requestId });
+            const broadcastState = await this.bjMultiService.getTableState(tableId);
+            this.broadcastToRoom(roomId, { type: 'bj_multi_table_state', payload: broadcastState });
+        }
+        catch (error) {
+            logger_1.logger.error('BJ multi leave table error:', error);
+            this.sendError(ws, error.message || 'Failed to leave table', message.requestId);
+        }
+    }
+    async handleBJMultiPlaceBet(ws, message) {
+        try {
+            if (!this.bjMultiService || !ws.playerAddress) {
+                return this.sendError(ws, 'BJ multi not available or wallet required', message.requestId);
+            }
+            const { tableId, amount } = (message.payload ?? {});
+            if (!tableId)
+                return this.sendError(ws, 'tableId required', message.requestId);
+            if (!amount)
+                return this.sendError(ws, 'amount required', message.requestId);
+            const betAmount = (0, safe_bigint_1.toBigIntSafe)(amount);
+            const state = await this.bjMultiService.placeBet(tableId, ws.playerAddress, betAmount);
+            // Skip the betting timer if every seated player has already bet — no one to wait for
+            const allBet = await this.bjMultiService.allSeatedPlayersHaveBet(tableId);
+            if (allBet) {
+                await this.bjMultiService.startRound(tableId);
+            }
+            this.sendMessage(ws, { type: 'bj_multi_table_state', payload: state, requestId: message.requestId });
+            const roomId = `blackjack:table:${tableId}`;
+            const broadcastState = await this.bjMultiService.getTableState(tableId);
+            this.broadcastToRoom(roomId, { type: 'bj_multi_table_state', payload: broadcastState });
+        }
+        catch (error) {
+            logger_1.logger.error('BJ multi place bet error:', error);
+            this.sendError(ws, error.message || 'Failed to place bet', message.requestId);
+        }
+    }
+    async handleBJMultiAction(ws, message) {
+        try {
+            if (!this.bjMultiService || !ws.playerAddress) {
+                return this.sendError(ws, 'BJ multi not available or wallet required', message.requestId);
+            }
+            // Per-action rate limit: max 5 actions per 3s sliding window
+            const addr = ws.playerAddress.toLowerCase();
+            const now = Date.now();
+            const timestamps = this.bjMultiActionTimestamps.get(addr) ?? [];
+            const windowStart = now - 3000;
+            const recent = timestamps.filter(t => t > windowStart);
+            if (recent.length >= 5) {
+                return this.sendError(ws, 'Too many actions, slow down', message.requestId);
+            }
+            recent.push(now);
+            this.bjMultiActionTimestamps.set(addr, recent);
+            const { tableId, action, handIndex, actionId } = (message.payload ?? {});
+            if (!tableId)
+                return this.sendError(ws, 'tableId required', message.requestId);
+            if (!action || !['hit', 'stand', 'double_down', 'split'].includes(action)) {
+                return this.sendError(ws, 'action must be hit, stand, double_down, or split', message.requestId);
+            }
+            const state = await this.bjMultiService.playerAction(tableId, ws.playerAddress, action, handIndex, actionId);
+            this.sendMessage(ws, { type: 'bj_multi_table_state', payload: state, requestId: message.requestId });
+            const roomId = `blackjack:table:${tableId}`;
+            const broadcastState = await this.bjMultiService.getTableState(tableId);
+            this.broadcastToRoom(roomId, { type: 'bj_multi_table_state', payload: broadcastState });
+        }
+        catch (error) {
+            logger_1.logger.error('BJ multi action error:', error);
+            this.sendError(ws, error.message || 'Action failed', message.requestId);
+        }
+    }
+    async handleBJMultiGetState(ws, message) {
+        try {
+            if (!this.bjMultiService)
+                return this.sendError(ws, 'BJ multi not available', message.requestId);
+            const { tableId } = (message.payload ?? {});
+            if (!tableId)
+                return this.sendError(ws, 'tableId required', message.requestId);
+            // Inline watchdog: if a turn has been stalled >30s, auto-stand before returning state
+            try {
+                const pool = this.dbService.getPool();
+                const stalled = await pool.query(`
+          SELECT id FROM blackjack_multi_rounds
+          WHERE table_id = $1 AND status = 'playing'
+            AND acting_seat_position IS NOT NULL
+            AND turn_started_at < NOW() - INTERVAL '30 seconds'
+          LIMIT 1
+        `, [tableId]);
+                if (stalled.rows.length > 0) {
+                    await this.bjMultiService.autoStandTimedOut(tableId);
+                    await this.broadcastBJMultiTableState(tableId);
+                }
+            }
+            catch (watchdogErr) {
+                logger_1.logger.error('BJMulti inline watchdog error', { tableId, error: watchdogErr });
+            }
+            const state = await this.bjMultiService.getTableState(tableId);
+            const roomId = `blackjack:table:${tableId}`;
+            const roomSize = this.roomToClients.get(roomId)?.size ?? 0;
+            const seatedCount = state.seats.filter((s) => s.playerAddress).length;
+            state.viewerCount = Math.max(0, roomSize - seatedCount);
+            this.sendMessage(ws, { type: 'bj_multi_table_state', payload: state, requestId: message.requestId });
+        }
+        catch (error) {
+            logger_1.logger.error('BJ multi get state error:', error);
+            this.sendError(ws, error.message || 'Failed to get state', message.requestId);
+        }
+    }
+    async handleBJMultiTipDealer(ws, message) {
+        try {
+            if (!this.bjMultiService || !ws.playerAddress) {
+                return this.sendError(ws, 'BJ multi not available or wallet required', message.requestId);
+            }
+            const { tableId, amount } = (message.payload ?? {});
+            if (!tableId || !amount)
+                return this.sendError(ws, 'tableId and amount required', message.requestId);
+            const tipAmount = BigInt(amount);
+            const result = await this.bjMultiService.tipDealer(tableId, ws.playerAddress, tipAmount);
+            this.sendMessage(ws, { type: 'bj_multi_tip_result', payload: result, requestId: message.requestId });
+            // Broadcast a tip notification to the room
+            const roomId = `blackjack:table:${tableId}`;
+            this.broadcastToRoom(roomId, {
+                type: 'bj_multi_tip_notification',
+                payload: { playerAddress: ws.playerAddress, amount: amount },
+            });
+        }
+        catch (error) {
+            logger_1.logger.error('BJ multi tip dealer error:', error);
+            this.sendError(ws, error.message || 'Tip failed', message.requestId);
+        }
+    }
+    /**
+     * Generic tip dealer — works from any game page (solo blackjack, poker, etc.)
+     * Deducts from player balance and credits the deployer wallet.
+     */
+    async handleGenericTipDealer(ws, message) {
+        try {
+            if (!ws.playerAddress) {
+                return this.sendError(ws, 'Wallet required', message.requestId);
+            }
+            const { amount } = (message.payload ?? {});
+            if (!amount)
+                return this.sendError(ws, 'amount required', message.requestId);
+            const tipAmount = BigInt(amount);
+            if (tipAmount <= 0n)
+                return this.sendError(ws, 'Invalid tip amount', message.requestId);
+            const deployerWallet = (process.env.NEXT_PUBLIC_BLACKJACK_DEPLOYER_WALLET || process.env.BLACKJACK_DEPLOYER_WALLET || '').toLowerCase();
+            if (!deployerWallet)
+                return this.sendError(ws, 'Deployer wallet not configured', message.requestId);
+            const normalized = ws.playerAddress.toLowerCase();
+            await this.dbService.deductPlayerBalance(normalized, tipAmount);
+            await this.dbService.addPlayerBalance(deployerWallet, tipAmount);
+            // Log to audit table so admin can track tips
+            const pool = this.dbService.getPool();
+            await pool.query(`INSERT INTO blackjack_multi_audit_log (table_id, round_id, player_address, action_type, payload)
+         VALUES ('00000000-0000-0000-0000-000000000000', NULL, $1, 'tip_dealer', $2)`, [normalized, JSON.stringify({ amount: amount, recipient: deployerWallet, source: 'generic' })]).catch(() => { }); // don't fail the tip if logging fails
+            this.sendMessage(ws, { type: 'tip_dealer_result', payload: { success: true }, requestId: message.requestId });
+        }
+        catch (error) {
+            logger_1.logger.error('Generic tip dealer error:', error);
+            this.sendError(ws, error.message || 'Tip failed', message.requestId);
+        }
+    }
+    async handleBJMultiTableHistory(ws, message) {
+        try {
+            if (!this.bjMultiService)
+                return this.sendError(ws, 'BJ multi not available', message.requestId);
+            const { tableId, limit } = (message.payload ?? {});
+            if (!tableId)
+                return this.sendError(ws, 'tableId required', message.requestId);
+            const rounds = await this.bjMultiService.getTableHistory(tableId, Math.min(limit ?? 20, 50));
+            this.sendMessage(ws, { type: 'bj_multi_table_history', payload: { rounds }, requestId: message.requestId });
+        }
+        catch (error) {
+            logger_1.logger.error('BJ multi table history error:', error);
+            this.sendError(ws, error.message || 'Failed to get history', message.requestId);
+        }
+    }
+    /** Auto-stand a disconnected player if it's currently their turn. */
+    async handleBJMultiDisconnect(tableId, playerAddress) {
+        if (!this.bjMultiService)
+            return;
+        const pool = this.dbService.getPool();
+        // Check if there's a playing round where this player is the acting seat
+        const result = await pool.query(`
+      SELECT r.id AS round_id, r.acting_seat_position, rs.seat_position
+      FROM blackjack_multi_rounds r
+      JOIN blackjack_multi_round_seats rs ON rs.round_id = r.id
+      WHERE r.table_id = $1 AND r.status = 'playing'
+        AND LOWER(rs.player_address) = LOWER($2)
+        AND r.acting_seat_position = rs.seat_position
+      ORDER BY r.round_number DESC LIMIT 1
+    `, [tableId, playerAddress]);
+        if (result.rows.length === 0)
+            return; // not their turn — nothing to do
+        logger_1.logger.info('BJMulti: player disconnected during their turn, auto-standing', {
+            tableId, playerAddress, seat: result.rows[0].seat_position,
+        });
+        try {
+            await this.bjMultiService.playerAction(tableId, playerAddress, 'stand');
+            await this.broadcastBJMultiTableState(tableId);
+        }
+        catch (err) {
+            logger_1.logger.error('BJMulti: disconnect auto-stand failed', { tableId, playerAddress, error: err });
+        }
+    }
+    async handleBJMultiCreateTable(ws, message) {
+        try {
+            if (!this.bjMultiService)
+                return this.sendError(ws, 'BJ multi not available', message.requestId);
+            if (!ws.playerAddress || !(0, cosmetics_catalog_1.isAdminWallet)(ws.playerAddress)) {
+                return this.sendError(ws, 'Admin required', message.requestId);
+            }
+            const { minBet, maxBet } = (message.payload ?? {});
+            const min = minBet ? (0, safe_bigint_1.toBigIntSafe)(minBet) : BigInt('1000000000000000000');
+            const max = maxBet ? (0, safe_bigint_1.toBigIntSafe)(maxBet) : BigInt('50000000000000000000000');
+            const table = await this.bjMultiService.createTable(min, max);
+            const tables = await this.bjMultiService.listTables();
+            this.sendMessage(ws, { type: 'bj_multi_table_created', payload: { tableId: table.id, tables }, requestId: message.requestId });
+        }
+        catch (error) {
+            logger_1.logger.error('BJ multi create table error:', error);
+            this.sendError(ws, error.message || 'Failed to create table', message.requestId);
+        }
+    }
+    async handleBJMultiDeleteTable(ws, message) {
+        try {
+            if (!this.bjMultiService)
+                return this.sendError(ws, 'BJ multi not available', message.requestId);
+            if (!ws.playerAddress || !(0, cosmetics_catalog_1.isAdminWallet)(ws.playerAddress)) {
+                return this.sendError(ws, 'Admin required', message.requestId);
+            }
+            const { tableId } = (message.payload ?? {});
+            if (!tableId)
+                return this.sendError(ws, 'tableId required', message.requestId);
+            const ok = await this.bjMultiService.deleteTable(tableId);
+            if (!ok)
+                return this.sendError(ws, 'Table not found', message.requestId);
+            const tables = await this.bjMultiService.listTables();
+            this.sendMessage(ws, { type: 'bj_multi_table_deleted', payload: { tableId, tables }, requestId: message.requestId });
+        }
+        catch (error) {
+            logger_1.logger.error('BJ multi delete table error:', error);
+            this.sendError(ws, error.message || 'Failed to delete table', message.requestId);
+        }
+    }
+    async handleBJMultiQuickReaction(ws, message) {
+        try {
+            if (!ws.playerAddress)
+                return this.sendError(ws, 'Wallet required', message.requestId);
+            const { tableId, type, value } = (message.payload ?? {});
+            if (!tableId)
+                return this.sendError(ws, 'tableId required', message.requestId);
+            this.broadcastToRoom(`blackjack:table:${tableId}`, {
+                type: 'bj_multi_quick_reaction',
+                payload: { tableId, playerAddress: ws.playerAddress, reactionType: type, value },
+            });
+        }
+        catch (error) {
+            logger_1.logger.error('BJ multi quick reaction error:', error);
+        }
+    }
+    async handleBJMultiAvatarEmotion(ws, message) {
+        try {
+            if (!ws.playerAddress)
+                return this.sendError(ws, 'Wallet required', message.requestId);
+            const { tableId, emotion } = (message.payload ?? {});
+            if (!tableId)
+                return this.sendError(ws, 'tableId required', message.requestId);
+            this.broadcastToRoom(`blackjack:table:${tableId}`, {
+                type: 'bj_multi_avatar_emotion',
+                payload: { tableId, playerAddress: ws.playerAddress, emotion },
+            });
+        }
+        catch (error) {
+            logger_1.logger.error('BJ multi avatar emotion error:', error);
+        }
     }
 }
 exports.WebSocketService = WebSocketService;

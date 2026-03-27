@@ -225,7 +225,11 @@ export interface PrizeDistribution {
 }
 export declare class TournamentService {
     private pool;
+    private pokerTournamentService;
     constructor(pool: Pool);
+    setPokerTournamentService(service: {
+        activateTournament(tournamentId: string): Promise<string>;
+    }): void;
     private toBigInt;
     private normalizeAddress;
     private normalizeTournament;
