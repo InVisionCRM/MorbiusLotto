@@ -24,6 +24,7 @@ import {
   Legend,
 } from 'recharts'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { PlayerStatsFeatureGrid } from '@/components/ui/player-stats-feature-grid'
 import AvatarView from '@/components/poker/avatar/AvatarView'
 import {
   Table,
@@ -33,9 +34,8 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table'
-import { useAccount } from 'wagmi'
 import { useProfileForAddress } from '@/hooks/use-player-profile'
-import { usePlinkoHistory } from '@/hooks/use-plinko-history'
+import { usePlinkoPlayerDashboard } from '@/hooks/use-plinko-player-dashboard'
 import type { PlinkoDrop } from '@/lib/plinko-types'
 
 const PANEL_STYLE = {
@@ -57,14 +57,7 @@ interface PlinkoPlayerDashboardProps {
 }
 
 export function PlinkoPlayerDashboard({ playerAddress }: PlinkoPlayerDashboardProps) {
-  const { address: connectedAddress } = useAccount()
-  const normalizedViewing = playerAddress
-    ? (playerAddress.startsWith('0x') ? playerAddress : `0x${playerAddress}`).toLowerCase()
-    : ''
-  const normalizedConnected = connectedAddress ? connectedAddress.toLowerCase() : ''
-  const isViewingSelf = !!normalizedViewing && normalizedViewing === normalizedConnected
-
-  const { drops, stats, isLoading } = usePlinkoHistory()
+  const { drops, stats, isLoading } = usePlinkoPlayerDashboard(playerAddress, 200)
 
   const [activeTab, setActiveTab] = useState<'stats' | 'history'>('stats')
   const [historySort, setHistorySort] = useState<'newest' | 'oldest' | 'profit'>('newest')
@@ -126,49 +119,6 @@ export function PlinkoPlayerDashboard({ playerAddress }: PlinkoPlayerDashboardPr
 
   if (!playerAddress) return null
 
-  if (!isViewingSelf) {
-    return (
-      <div className="space-y-6">
-        {playerAddress && (
-          <div className="flex flex-wrap items-center gap-2 sm:gap-3 min-w-0">
-            {avatarConfig ? (
-              <div className="h-8 w-8 sm:h-9 sm:w-9 shrink-0 flex items-center justify-center rounded overflow-hidden bg-black/30">
-                <AvatarView config={avatarConfig} compact className="h-8 w-8 sm:h-9 sm:w-9" />
-              </div>
-            ) : profileImageUrl ? (
-              <img
-                src={profileImageUrl}
-                alt=""
-                className="h-8 w-8 sm:h-9 sm:w-9 rounded-full object-cover shrink-0"
-              />
-            ) : null}
-            {displayName && (
-              <span className="text-sm font-medium text-white shrink-0">{displayName}</span>
-            )}
-            <span className="font-mono text-xs sm:text-sm text-cyan-300/90 break-all min-w-0" title={playerAddress}>
-              {playerAddress}
-            </span>
-            <CopyButton
-              content={playerAddress}
-              copyToast="Address copied"
-              variant="ghost"
-              size="default"
-              className="p-1.5 h-9 w-9 text-white/60 hover:text-white"
-              title="Copy address"
-              aria-label="Copy address"
-            />
-          </div>
-        )}
-        <div
-          className="rounded-xl border border-cyan-500/30 bg-slate-900/80 p-6 text-center text-white/70"
-          style={{ boxShadow: '0 4px 16px rgba(0, 0, 0, 0.6)' }}
-        >
-          <p>Plinko stats are only available for the connected wallet. Connect as this player to see their dashboard.</p>
-        </div>
-      </div>
-    )
-  }
-
   const totalDrops = stats?.totalDrops ?? 0
   const totalWagered = stats?.totalWagered ?? 0
   const totalWon = stats?.totalWon ?? 0
@@ -181,42 +131,42 @@ export function PlinkoPlayerDashboard({ playerAddress }: PlinkoPlayerDashboardPr
       title: 'Total Drops',
       value: totalDrops.toString(),
       icon: Activity,
-      color: 'text-blue-400',
+      valueClassName: 'text-cyan-300',
       subtitle: 'Balls dropped',
     },
     {
       title: 'Win Rate',
       value: `${winRate.toFixed(1)}%`,
       icon: Target,
-      color: winRate >= 50 ? 'text-green-400' : winRate >= 30 ? 'text-yellow-400' : 'text-red-400',
+      valueClassName: winRate >= 50 ? 'text-green-400' : winRate >= 30 ? 'text-yellow-400' : 'text-red-400',
       subtitle: 'Drops with payout',
     },
     {
       title: 'Profit/Loss',
       value: `${netProfit >= 0 ? '+' : ''}${formatMorbius(netProfit >= 0 ? netProfit : -netProfit)} MORBIUS`,
       icon: netProfit >= 0 ? TrendingUp : TrendingDown,
-      color: netProfit >= 0 ? 'text-emerald-400' : 'text-red-400',
+      valueClassName: netProfit >= 0 ? 'text-emerald-400' : 'text-red-400',
       subtitle: `${roi >= 0 ? '+' : ''}${roi.toFixed(1)}% ROI`,
     },
     {
       title: 'Total Wagered',
       value: `${formatMorbius(totalWagered)} MORBIUS`,
       icon: DollarSign,
-      color: 'text-purple-400',
+      valueClassName: 'text-neutral-100',
       subtitle: 'Total bet',
     },
     {
       title: 'Total Won',
       value: `${formatMorbius(totalWon)} MORBIUS`,
       icon: Trophy,
-      color: 'text-green-400',
+      valueClassName: 'text-cyan-300',
       subtitle: 'Total payout',
     },
     {
       title: 'Biggest Win',
       value: stats ? `${formatMorbius(stats.biggestWin)} MORBIUS` : '—',
       icon: Zap,
-      color: 'text-cyan-400',
+      valueClassName: 'text-cyan-300',
       subtitle: stats ? `Best mult. ${stats.biggestMultiplier.toFixed(2)}x` : '—',
     },
   ]
@@ -287,24 +237,10 @@ export function PlinkoPlayerDashboard({ playerAddress }: PlinkoPlayerDashboardPr
             </div>
           ) : (
             <>
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                {statsCards.map((stat) => (
-                  <Card
-                    key={stat.title}
-                    className="bg-gradient-to-br from-gray-900 to-black border-gray-700"
-                    style={PANEL_STYLE}
-                  >
-                    <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                      <CardTitle className="text-sm font-medium text-gray-400">{stat.title}</CardTitle>
-                      <stat.icon className={`h-4 w-4 ${stat.color}`} />
-                    </CardHeader>
-                    <CardContent>
-                      <div className={`text-2xl font-bold ${stat.color} mb-1`}>{stat.value}</div>
-                      <p className="text-xs text-gray-500">{stat.subtitle}</p>
-                    </CardContent>
-                  </Card>
-                ))}
-              </div>
+              <PlayerStatsFeatureGrid
+                items={statsCards}
+                className="border border-white/10 rounded-xl overflow-hidden"
+              />
 
               <Card className="bg-gradient-to-br from-gray-900 to-black border-gray-700" style={PANEL_STYLE}>
                 <CardHeader>

@@ -1361,6 +1361,36 @@ async function initializeServices() {
       }
     });
 
+    app.get('/api/plinko/player/:address/drops', async (req, res) => {
+      try {
+        const { address } = req.params;
+        if (!address || !/^0x[a-fA-F0-9]{40}$/.test(address)) {
+          return res.status(400).json({ error: 'Invalid address' });
+        }
+        const limit = Math.min(Math.max(parseInt(req.query.limit as string) || 100, 1), 300);
+        const offset = Math.max(parseInt(req.query.offset as string) || 0, 0);
+        const drops = await chainAnalytics.getPlinkoPlayerDrops(address, limit, offset);
+        sendJson(res, drops);
+      } catch (error) {
+        logger.error('Error fetching plinko player drops:', error);
+        res.status(500).json({ error: 'Internal server error' });
+      }
+    });
+
+    app.get('/api/plinko/player/:address/stats', async (req, res) => {
+      try {
+        const { address } = req.params;
+        if (!address || !/^0x[a-fA-F0-9]{40}$/.test(address)) {
+          return res.status(400).json({ error: 'Invalid address' });
+        }
+        const stats = await chainAnalytics.getPlinkoPlayerStats(address);
+        sendJson(res, stats);
+      } catch (error) {
+        logger.error('Error fetching plinko player stats:', error);
+        res.status(500).json({ error: 'Internal server error' });
+      }
+    });
+
     // Blackjack global recent games (for Recent Play feed)
     app.get('/api/blackjack/recent-games', async (req, res) => {
       try {

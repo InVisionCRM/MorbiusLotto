@@ -38,6 +38,7 @@ import { blackjackAbi } from '@/abi/blackjack';
 import { ERC20_ABI } from '@/abi/erc20';
 import { pulsechain } from '@/lib/chains';
 import { toast } from 'sonner';
+import FeaturesSectionDemo from '@/components/features-section-demo-2';
 
 export interface BlackjackContractReserves {
   contractAddress: string;
@@ -1270,6 +1271,19 @@ export default function AdminHealthTab() {
               <span className={data.api === 'ok' ? 'text-emerald-400' : 'text-red-400'}>{data.api === 'ok' ? <CheckCircle className="w-3.5 h-3.5 inline mr-0.5" /> : <XCircle className="w-3.5 h-3.5 inline mr-0.5" />}{data.api}</span>
               <span className="text-slate-500">WebSocket</span>
               <span className={data.ws === 'up' ? 'text-emerald-400' : 'text-amber-400'}>{data.ws}</span>
+            </div>
+            <div>
+              <p className="text-slate-500 mb-2">Feature highlights</p>
+              <div
+                className="rounded-lg border border-cyan-500/20 px-2"
+                style={{
+                  background: 'linear-gradient(325deg, rgba(20, 20, 20, 0.8), rgba(40, 40, 40, 0.6))',
+                  boxShadow: 'inset 0 3px 6px rgba(0, 0, 0, 0.8), inset 0 -3px 6px rgba(255, 255, 255, 0.1), 0 1px 3px rgba(0, 0, 0, 0.5)',
+                  border: '1px inset rgba(60, 60, 60, 0.5)',
+                }}
+              >
+                <FeaturesSectionDemo />
+              </div>
             </div>
             <div>
               <p className="text-slate-500 mb-1">RPC / contract</p>

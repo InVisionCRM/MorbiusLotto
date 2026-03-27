@@ -21,6 +21,7 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table'
+import { PlayerStatsFeatureGrid, type PlayerStatsFeatureItem } from '@/components/ui/player-stats-feature-grid'
 import { usePlayerProfileStats } from '@/hooks/use-player-profile'
 import { useLotteryPlayerStats, useInstantLotteryResults } from '@/hooks/use-instant-lottery'
 import { useKenoPlayerStats } from '@/hooks/use-keno-results'
@@ -37,6 +38,12 @@ const PANEL_STYLE = {
   boxShadow:
     'inset 0 3px 6px rgba(0, 0, 0, 0.8), inset 0 -3px 6px rgba(255, 255, 255, 0.1), 0 1px 3px rgba(0, 0, 0, 0.5)',
   border: '1px inset rgba(60, 60, 60, 0.5)',
+}
+
+const STATS_SURFACE_STYLE: React.CSSProperties = {
+  background: 'linear-gradient(325deg, rgba(20, 20, 20, 0.8), rgba(40, 40, 40, 0.6))',
+  boxShadow: 'inset 0 2px 4px rgba(0, 0, 0, 0.5)',
+  border: '1px solid rgba(60, 60, 60, 0.5)',
 }
 
 function formatMorbius(wei: bigint): string {
@@ -58,15 +65,25 @@ export type UnifiedHistoryRow = {
   createdAt: string
 }
 
+type UnifiedHistoryRowWithComputed = UnifiedHistoryRow & {
+  delta: bigint
+  balance: bigint
+}
+
 function downloadCsvRows(rows: UnifiedHistoryRow[], address: string, label: string) {
-  const header = 'timestamp,game,wager,payout,profit,amount,tx_hash'
+  const header = 'timestamp,kind,game,wager,payout,profit,amount,delta,balance,tx_hash'
   const lines = rows.map((r) => [
     r.createdAt,
+    (r as UnifiedHistoryRowWithComputed).type,
     r.gameLabel,
     r.wager != null ? formatEther(r.wager) : '',
     r.payout != null ? formatEther(r.payout) : '',
     r.profit != null ? formatEther(r.profit >= 0n ? r.profit : -r.profit) + (r.profit < 0n ? ' (loss)' : '') : '',
     r.amount != null ? formatEther(r.amount) : '',
+    formatEther((r as UnifiedHistoryRowWithComputed).delta ?? 0n),
+    ((r as UnifiedHistoryRowWithComputed).balance ?? 0n) != null
+      ? formatEther(((r as UnifiedHistoryRowWithComputed).balance ?? 0n))
+      : '',
     r.txHash ?? '',
   ].join(','))
   const csv = [header, ...lines].join('\n')
@@ -84,6 +101,48 @@ interface AllStatsDashboardProps {
 }
 
 export function AllStatsDashboard({ playerAddress }: AllStatsDashboardProps) {
+  const getTypeColorClass = (type: UnifiedHistoryRow['type']) => {
+    switch (type) {
+      case 'deposit':
+        return 'bg-green-400'
+      case 'withdrawal':
+        return 'bg-amber-400'
+      case 'blackjack':
+        return 'bg-cyan-400'
+      case 'poker':
+        return 'bg-violet-400'
+      case 'lottery':
+        return 'bg-blue-400'
+      case 'keno':
+        return 'bg-fuchsia-400'
+      case 'plinko':
+        return 'bg-teal-400'
+      default:
+        return 'bg-white/40'
+    }
+  }
+
+  const getTypeLabel = (type: UnifiedHistoryRow['type']) => {
+    switch (type) {
+      case 'deposit':
+        return 'Deposit'
+      case 'withdrawal':
+        return 'Withdrawal'
+      case 'blackjack':
+        return 'Blackjack'
+      case 'poker':
+        return 'Poker'
+      case 'lottery':
+        return 'Lottery'
+      case 'keno':
+        return 'Keno'
+      case 'plinko':
+        return 'Plinko'
+      default:
+        return 'Unknown'
+    }
+  }
+
   const addr = playerAddress.startsWith('0x') ? playerAddress : `0x${playerAddress}`
   const address = playerAddress as string | null
   const lotteryAddress = addr as `0x${string}`
@@ -280,13 +339,84 @@ export function AllStatsDashboard({ playerAddress }: AllStatsDashboardProps) {
   const [activeTab, setActiveTab] = useState<'stats' | 'history'>('stats')
   const [dateFrom, setDateFrom] = useState('')
   const [dateTo, setDateTo] = useState('')
+  const [historyTypeFilter, setHistoryTypeFilter] = useState<
+    'all' | 'games' | 'cash' | UnifiedHistoryRow['type']
+  >('all')
+  const [historyClassFilter, setHistoryClassFilter] = useState<'all' | 'game' | 'credit' | 'debit'>('all')
+
+  const historyWithBalance = useMemo((): UnifiedHistoryRowWithComputed[] => {
+    const asc = [...combinedHistory].sort((a, b) => a.sortKey - b.sortKey)
+    let runningBalance = 0n
+    const ascWithBalance = asc.map((row) => {
+      let delta = 0n
+      if (row.type === 'deposit') delta = row.amount ?? 0n
+      else if (row.type === 'withdrawal') delta = -(row.amount ?? 0n)
+      else delta = row.profit ?? ((row.payout ?? 0n) - (row.wager ?? 0n))
+      runningBalance += delta
+      return { ...row, balance: runningBalance, delta }
+    })
+    return ascWithBalance.sort((a, b) => b.sortKey - a.sortKey)
+  }, [combinedHistory])
 
   const filteredHistory = useMemo(() => {
-    if (!dateFrom && !dateTo) return combinedHistory
+    const byType = historyWithBalance.filter((r) => {
+      if (historyTypeFilter === 'all') return true
+      if (historyTypeFilter === 'games') return r.type !== 'deposit' && r.type !== 'withdrawal'
+      if (historyTypeFilter === 'cash') return r.type === 'deposit' || r.type === 'withdrawal'
+      return r.type === historyTypeFilter
+    })
+
+    const byClass = byType.filter((r) => {
+      if (historyClassFilter === 'all') return true
+      if (historyClassFilter === 'credit') return r.type === 'deposit'
+      if (historyClassFilter === 'debit') return r.type === 'withdrawal'
+      return r.type !== 'deposit' && r.type !== 'withdrawal'
+    })
+
+    if (!dateFrom && !dateTo) return byClass
     const from = dateFrom ? new Date(dateFrom).getTime() : 0
     const to = dateTo ? new Date(dateTo + 'T23:59:59').getTime() : Infinity
-    return combinedHistory.filter((r) => r.sortKey >= from && r.sortKey <= to)
-  }, [combinedHistory, dateFrom, dateTo])
+    return byClass.filter((r) => r.sortKey >= from && r.sortKey <= to)
+  }, [historyWithBalance, dateFrom, dateTo, historyTypeFilter, historyClassFilter])
+
+  const statsFeatureItems = useMemo<PlayerStatsFeatureItem[]>(() => {
+    const pnlPositive = aggregated.profitLoss >= 0n
+    return [
+      {
+        title: 'Total wagered',
+        value: `${formatMorbius(aggregated.totalWagered)} MORBIUS`,
+        icon: BarChart3,
+      },
+      {
+        title: 'Total games',
+        value: aggregated.totalGames.toLocaleString(),
+        icon: History,
+      },
+      {
+        title: 'Total won',
+        value: `${formatMorbius(aggregated.totalWon)} MORBIUS`,
+        icon: TrendingUp,
+      },
+      {
+        title: 'P&L',
+        value: `${pnlPositive ? '+' : '-'}${formatMorbius(pnlPositive ? aggregated.profitLoss : -aggregated.profitLoss)} MORBIUS`,
+        icon: pnlPositive ? TrendingUp : TrendingDown,
+        valueClassName: pnlPositive ? 'text-emerald-400' : 'text-red-400',
+      },
+      {
+        title: 'Total claimed',
+        value: `${formatMorbius(totalClaimed)} MORBIUS`,
+        icon: ArrowDownCircle,
+      },
+      {
+        title: 'Claimable',
+        value: `${formatMorbius(merkleClaimable)} MORBIUS`,
+        icon: ArrowUpCircle,
+        subtitle: 'Staking / holder drops',
+        valueClassName: 'text-emerald-400',
+      },
+    ]
+  }, [aggregated.profitLoss, aggregated.totalGames, aggregated.totalWagered, aggregated.totalWon, totalClaimed, merkleClaimable])
 
   const isLoading =
     (bjStats === undefined && address) ||
@@ -307,88 +437,41 @@ export function AllStatsDashboard({ playerAddress }: AllStatsDashboardProps) {
 
   return (
     <div className="space-y-6">
-      <div className="flex gap-2 border-b border-white/10 pb-2">
+      <div className="flex gap-2 border-b border-white/10 mb-4">
         <button
           type="button"
           onClick={() => setActiveTab('stats')}
-          className={`px-4 py-2 rounded-lg text-sm font-medium transition ${
+          className={`px-4 py-2 font-semibold transition-colors flex items-center gap-2 ${
             activeTab === 'stats'
-              ? 'bg-cyan-500/20 text-cyan-300 border border-cyan-500/30'
-              : 'text-white/70 hover:bg-white/5'
+              ? 'text-cyan-400 border-b-2 border-cyan-400'
+              : 'text-white/60 hover:text-white'
           }`}
         >
-          <BarChart3 className="inline-block w-4 h-4 mr-2 align-middle" />
+          <BarChart3 className="w-4 h-4" />
           All Stats
         </button>
         <button
           type="button"
           onClick={() => setActiveTab('history')}
-          className={`px-4 py-2 rounded-lg text-sm font-medium transition ${
+          className={`px-4 py-2 font-semibold transition-colors flex items-center gap-2 ${
             activeTab === 'history'
-              ? 'bg-cyan-500/20 text-cyan-300 border border-cyan-500/30'
-              : 'text-white/70 hover:bg-white/5'
+              ? 'text-cyan-400 border-b-2 border-cyan-400'
+              : 'text-white/60 hover:text-white'
           }`}
         >
-          <History className="inline-block w-4 h-4 mr-2 align-middle" />
+          <History className="w-4 h-4" />
           History
         </button>
       </div>
 
       {activeTab === 'stats' && (
         <>
-          <Card className="overflow-hidden" style={PANEL_STYLE}>
-            <CardHeader>
-              <CardTitle className="text-lg text-white flex items-center gap-2">
-                <BarChart3 className="w-5 h-5 text-cyan-400" />
-                All games combined
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="grid grid-cols-2 md:grid-cols-4 gap-4">
-              <div className="rounded-lg bg-black/20 p-4 border border-white/10">
-                <p className="text-xs text-white/60 uppercase tracking-wider">Total wagered</p>
-                <p className="text-xl font-bold text-white mt-1">{formatMorbius(aggregated.totalWagered)} MORBIUS</p>
-              </div>
-              <div className="rounded-lg bg-black/20 p-4 border border-white/10">
-                <p className="text-xs text-white/60 uppercase tracking-wider">Total games</p>
-                <p className="text-xl font-bold text-white mt-1">{aggregated.totalGames.toLocaleString()}</p>
-              </div>
-              <div className="rounded-lg bg-black/20 p-4 border border-white/10">
-                <p className="text-xs text-white/60 uppercase tracking-wider">Total won</p>
-                <p className="text-xl font-bold text-white mt-1">{formatMorbius(aggregated.totalWon)} MORBIUS</p>
-              </div>
-              <div className="rounded-lg bg-black/20 p-4 border border-white/10">
-                <p className="text-xs text-white/60 uppercase tracking-wider">P&L</p>
-                <p className={`text-xl font-bold mt-1 flex items-center gap-1 ${aggregated.profitLoss >= 0n ? 'text-green-400' : 'text-red-400'}`}>
-                  {aggregated.profitLoss >= 0n ? <TrendingUp className="w-5 h-5" /> : <TrendingDown className="w-5 h-5" />}
-                  {formatMorbius(aggregated.profitLoss >= 0n ? aggregated.profitLoss : -aggregated.profitLoss)} MORBIUS
-                </p>
-              </div>
-            </CardContent>
-          </Card>
+          <PlayerStatsFeatureGrid
+            items={statsFeatureItems}
+            className="max-w-none"
+          />
 
-          <Card className="overflow-hidden" style={PANEL_STYLE}>
-            <CardHeader>
-              <CardTitle className="text-lg text-white flex items-center gap-2">
-                <BarChart3 className="w-5 h-5 text-cyan-400" />
-                Holder rewards (Earn)
-              </CardTitle>
-              <p className="text-xs text-white/50 mt-1">
-                Total claimed and claimable from staking / holder drops
-              </p>
-            </CardHeader>
-            <CardContent className="grid grid-cols-2 gap-4">
-              <div className="rounded-lg bg-black/20 p-4 border border-white/10">
-                <p className="text-xs text-white/60 uppercase tracking-wider">Total claimed</p>
-                <p className="text-xl font-bold text-white mt-1">{formatMorbius(totalClaimed)} MORBIUS</p>
-              </div>
-              <div className="rounded-lg bg-black/20 p-4 border border-white/10">
-                <p className="text-xs text-white/60 uppercase tracking-wider">Claimable</p>
-                <p className="text-xl font-bold text-emerald-400 mt-1">{formatMorbius(merkleClaimable)} MORBIUS</p>
-              </div>
-            </CardContent>
-          </Card>
-
-          <Card className="overflow-hidden" style={PANEL_STYLE}>
+          <Card className="overflow-hidden" style={STATS_SURFACE_STYLE}>
             <CardHeader>
               <CardTitle className="text-lg text-white flex items-center gap-2">
                 <BarChart3 className="w-5 h-5 text-cyan-400" />
@@ -399,7 +482,10 @@ export function AllStatsDashboard({ playerAddress }: AllStatsDashboardProps) {
               </p>
             </CardHeader>
             <CardContent>
-              <div className="h-[320px] w-full min-w-0">
+              <div
+                className="h-[320px] w-full min-w-0 rounded-lg p-2"
+                style={STATS_SURFACE_STYLE}
+              >
                 {cumulativeChartData.length > 0 ? (
                   <ResponsiveContainer width="100%" height="100%">
                     <AreaChart
@@ -484,7 +570,80 @@ export function AllStatsDashboard({ playerAddress }: AllStatsDashboardProps) {
                 Combined history (all games + deposits & withdrawals)
               </CardTitle>
               <div className="flex flex-wrap items-center gap-2">
-                <div className="flex items-center gap-1.5 bg-black/20 border border-white/10 rounded-lg px-2 py-1">
+                <div className="relative group/feature rounded-lg border border-white/10 bg-black/20 p-2">
+                  <div className="opacity-0 group-hover/feature:opacity-100 transition duration-200 absolute inset-0 h-full w-full bg-gradient-to-t from-neutral-900/70 to-transparent pointer-events-none rounded-lg" />
+                  <p className="text-[10px] text-white/50 uppercase tracking-wider mb-1 relative z-10 pl-3">
+                    <span className="absolute left-0 inset-y-0 h-4 w-1 my-auto rounded-tr-full rounded-br-full bg-neutral-700 group-hover/feature:bg-cyan-500 transition-all duration-200 origin-center" />
+                    Type
+                  </p>
+                  <div className="flex flex-wrap items-center gap-1.5 mr-1 relative z-10">
+                  {[
+                    { id: 'all', label: 'All' },
+                    { id: 'games', label: 'Games' },
+                    { id: 'cash', label: 'Cashflow' },
+                    { id: 'blackjack', label: 'Blackjack' },
+                    { id: 'poker', label: 'Poker' },
+                    { id: 'plinko', label: 'Plinko' },
+                    { id: 'keno', label: 'Keno' },
+                    { id: 'lottery', label: 'Lottery' },
+                  ].map((chip) => (
+                    <button
+                      key={chip.id}
+                      type="button"
+                      onClick={() =>
+                        setHistoryTypeFilter(
+                          chip.id as 'all' | 'games' | 'cash' | UnifiedHistoryRow['type']
+                        )
+                      }
+                      className={`px-2.5 py-1 rounded-md text-xs border transition-colors ${
+                        historyTypeFilter === chip.id
+                          ? 'bg-cyan-500/20 border-cyan-500/40 text-cyan-300'
+                          : 'bg-black/20 border-white/10 text-white/70 hover:text-white hover:bg-white/10'
+                      }`}
+                    >
+                      {chip.label}
+                    </button>
+                  ))}
+                </div>
+                </div>
+                <div className="relative group/feature rounded-lg border border-white/10 bg-black/20 p-2">
+                  <div className="opacity-0 group-hover/feature:opacity-100 transition duration-200 absolute inset-0 h-full w-full bg-gradient-to-t from-neutral-900/70 to-transparent pointer-events-none rounded-lg" />
+                  <p className="text-[10px] text-white/50 uppercase tracking-wider mb-1 relative z-10 pl-3">
+                    <span className="absolute left-0 inset-y-0 h-4 w-1 my-auto rounded-tr-full rounded-br-full bg-neutral-700 group-hover/feature:bg-cyan-500 transition-all duration-200 origin-center" />
+                    Class
+                  </p>
+                  <div className="flex flex-wrap items-center gap-1.5 mr-1 relative z-10">
+                  {[
+                    { id: 'all', label: 'All Classes' },
+                    { id: 'game', label: 'Game' },
+                    { id: 'credit', label: 'Deposit' },
+                    { id: 'debit', label: 'Withdrawal' },
+                  ].map((chip) => (
+                    <button
+                      key={chip.id}
+                      type="button"
+                      onClick={() =>
+                        setHistoryClassFilter(chip.id as 'all' | 'game' | 'credit' | 'debit')
+                      }
+                      className={`px-2.5 py-1 rounded-md text-xs border transition-colors ${
+                        historyClassFilter === chip.id
+                          ? 'bg-cyan-500/20 border-cyan-500/40 text-cyan-300'
+                          : 'bg-black/20 border-white/10 text-white/70 hover:text-white hover:bg-white/10'
+                      }`}
+                    >
+                      {chip.label}
+                    </button>
+                  ))}
+                </div>
+                </div>
+                <div className="relative group/feature rounded-lg border border-white/10 bg-black/20 p-2">
+                  <div className="opacity-0 group-hover/feature:opacity-100 transition duration-200 absolute inset-0 h-full w-full bg-gradient-to-t from-neutral-900/70 to-transparent pointer-events-none rounded-lg" />
+                  <p className="text-[10px] text-white/50 uppercase tracking-wider mb-1 relative z-10 pl-3">
+                    <span className="absolute left-0 inset-y-0 h-4 w-1 my-auto rounded-tr-full rounded-br-full bg-neutral-700 group-hover/feature:bg-cyan-500 transition-all duration-200 origin-center" />
+                    Date Range
+                  </p>
+                  <div className="flex flex-wrap items-center gap-1.5 relative z-10">
+                    <div className="flex items-center gap-1.5 bg-black/20 border border-white/10 rounded-lg px-2 py-1">
                   <Calendar className="w-3.5 h-3.5 text-gray-400 shrink-0" />
                   <input
                     type="date"
@@ -495,7 +654,7 @@ export function AllStatsDashboard({ playerAddress }: AllStatsDashboardProps) {
                   />
                 </div>
                 <span className="text-gray-500 text-xs">–</span>
-                <div className="flex items-center gap-1.5 bg-black/20 border border-white/10 rounded-lg px-2 py-1">
+                    <div className="flex items-center gap-1.5 bg-black/20 border border-white/10 rounded-lg px-2 py-1">
                   <Calendar className="w-3.5 h-3.5 text-gray-400 shrink-0" />
                   <input
                     type="date"
@@ -513,6 +672,8 @@ export function AllStatsDashboard({ playerAddress }: AllStatsDashboardProps) {
                     Clear
                   </button>
                 )}
+                  </div>
+                </div>
                 <button
                   onClick={() => downloadCsvRows(filteredHistory, playerAddress, dateFrom || dateTo ? 'history_filtered' : 'history_full')}
                   disabled={filteredHistory.length === 0}
@@ -525,29 +686,38 @@ export function AllStatsDashboard({ playerAddress }: AllStatsDashboardProps) {
             </div>
           </CardHeader>
           <CardContent>
-            <div className="rounded-lg border border-white/10 overflow-hidden">
+            <div className="rounded-lg border border-white/10 overflow-hidden bg-black/20">
               <Table>
                 <TableHeader>
                   <TableRow className="border-white/10 hover:bg-transparent">
-                    <TableHead className="text-white/80">Date</TableHead>
-                    <TableHead className="text-white/80">Type</TableHead>
-                    <TableHead className="text-white/80 text-right">Wager / Amount</TableHead>
-                    <TableHead className="text-white/80 text-right">Payout / —</TableHead>
-                    <TableHead className="text-white/80 text-right">P&L</TableHead>
-                    <TableHead className="text-white/80 w-8">Tx</TableHead>
+                    <TableHead className="text-white/80 text-center w-8">Tag</TableHead>
+                    <TableHead className="text-white/80 text-center">Date</TableHead>
+                    <TableHead className="text-white/80 text-center">Type</TableHead>
+                    <TableHead className="text-white/80 text-center">Class</TableHead>
+                    <TableHead className="text-white/80 text-center">Wager / Amount</TableHead>
+                    <TableHead className="text-white/80 text-center">Payout</TableHead>
+                    <TableHead className="text-white/80 text-center">Delta</TableHead>
+                    <TableHead className="text-white/80 text-center">Balance</TableHead>
+                    <TableHead className="text-white/80 text-center w-8">Tx</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
                   {filteredHistory.length === 0 ? (
                     <TableRow>
-                      <TableCell colSpan={6} className="text-white/50 text-center py-8">
+                      <TableCell colSpan={9} className="text-white/50 text-center py-8">
                         {dateFrom || dateTo ? 'No history in the selected date range.' : 'No history yet.'}
                       </TableCell>
                     </TableRow>
                   ) : (
                     filteredHistory.map((row, i) => (
-                      <TableRow key={`${row.type}-${row.sortKey}-${i}`} className="border-white/10">
-                        <TableCell className="text-white/90 text-sm">
+                      <TableRow key={`${row.type}-${row.sortKey}-${i}`} className="border-white/10 hover:bg-white/5">
+                        <TableCell className="text-center">
+                          <span
+                            className={`inline-block h-2.5 w-2.5 rounded-full ${getTypeColorClass(row.type)}`}
+                            title={getTypeLabel(row.type)}
+                          />
+                        </TableCell>
+                        <TableCell className="text-white/90 text-xs font-mono whitespace-nowrap text-center">
                           {row.createdAt
                             ? new Date(row.createdAt).toLocaleString(undefined, {
                                 dateStyle: 'short',
@@ -555,28 +725,48 @@ export function AllStatsDashboard({ playerAddress }: AllStatsDashboardProps) {
                               })
                             : '—'}
                         </TableCell>
-                        <TableCell className="text-white/90">
-                          {row.type === 'deposit' && <ArrowDownCircle className="inline w-4 h-4 text-green-400 mr-1" />}
-                          {row.type === 'withdrawal' && <ArrowUpCircle className="inline w-4 h-4 text-amber-400 mr-1" />}
-                          {row.gameLabel}
+                        <TableCell className="text-white/90 text-sm text-center">
+                          {getTypeLabel(row.type)}
                         </TableCell>
-                        <TableCell className="text-right text-white/90">
+                        <TableCell className="text-white/80 text-xs text-center">
+                          {row.type === 'deposit' ? (
+                            <span className="inline-flex items-center gap-1">
+                              <ArrowDownCircle className="w-3.5 h-3.5 text-green-400" />
+                              Deposit
+                            </span>
+                          ) : row.type === 'withdrawal' ? (
+                            <span className="inline-flex items-center gap-1">
+                              <ArrowUpCircle className="w-3.5 h-3.5 text-amber-400" />
+                              Withdrawal
+                            </span>
+                          ) : (
+                            'Game'
+                          )}
+                        </TableCell>
+                        <TableCell className="text-center text-white/90 tabular-nums">
                           {row.wager != null ? formatMorbius(row.wager) : row.amount != null ? formatMorbius(row.amount) : '—'}
                         </TableCell>
-                        <TableCell className="text-right text-white/90">
+                        <TableCell className="text-center text-white/90 tabular-nums">
                           {row.type !== 'deposit' && row.type !== 'withdrawal' && row.payout != null ? formatMorbius(row.payout) : '—'}
                         </TableCell>
-                        <TableCell className="text-right">
-                          {row.profit != null && (
-                            <span className={row.profit >= 0n ? 'text-green-400' : 'text-red-400'}>
-                              {row.profit >= 0n ? '+' : ''}{formatMorbius(row.profit >= 0n ? row.profit : -row.profit)}
-                            </span>
-                          )}
-                          {row.type === 'deposit' && <span className="text-green-400">+{row.amount != null ? formatMorbius(row.amount) : '—'}</span>}
-                          {row.type === 'withdrawal' && <span className="text-amber-400">−{row.amount != null ? formatMorbius(row.amount) : '—'}</span>}
-                          {row.type !== 'deposit' && row.type !== 'withdrawal' && row.profit == null && '—'}
+                        <TableCell className="text-center tabular-nums">
+                          <span
+                            className={
+                              row.delta > 0n
+                                ? 'text-green-400'
+                                : row.delta < 0n
+                                  ? 'text-red-400'
+                                  : 'text-yellow-400'
+                            }
+                          >
+                            {row.delta > 0n ? '+' : row.delta < 0n ? '−' : ''}
+                            {formatMorbius(row.delta >= 0n ? row.delta : -row.delta)}
+                          </span>
                         </TableCell>
-                        <TableCell>
+                        <TableCell className="text-center text-white/90 tabular-nums">
+                          {formatMorbius(row.balance)}
+                        </TableCell>
+                        <TableCell className="text-center">
                           {row.txHash && (
                             <a
                               href={`https://scan.pulsechain.com/tx/${row.txHash}`}

@@ -22,7 +22,18 @@ const WITHDRAWAL_EVENT = parseAbiItem('event Withdrawal(address indexed player, 
 const INSTANT_LOTTERY_RESULT_EVENT = parseAbiItem(
   'event InstantLotteryResult(address indexed player, uint8[6] playerNumbers, uint8[6] winningNumbers, uint8 matchCount, uint256 wager, uint256 grossPayout, uint256 netPayout)'
 );
+const PLINKO_BALL_DROPPED_EVENT = parseAbiItem(
+  'event BallDropped(address indexed player, uint256 seed, uint8 bucket, uint256 multiplier, uint256 payout, uint8 riskLevel)'
+);
 const CHUNK_SIZE = 50000;
+const PLINKO_SCAN_START_BLOCK = BigInt(process.env.PLINKO_SCAN_START_BLOCK || '0');
+const PLINKO_MAX_SCAN_CHUNKS = Number(process.env.PLINKO_MAX_SCAN_CHUNKS || 400);
+
+const PLINKO_RISK_NAMES: Record<number, 'GREEN' | 'YELLOW' | 'RED'> = {
+  0: 'GREEN',
+  1: 'YELLOW',
+  2: 'RED',
+};
 
 export interface PlinkoChainStats {
   totalDrops: bigint;
@@ -32,6 +43,31 @@ export interface PlinkoChainStats {
   contractReserve: bigint;
   minWagerPerBall?: bigint;
   maxWagerPerBall?: bigint;
+}
+
+export interface PlinkoPlayerDropChain {
+  id: string;
+  player: string;
+  seed: string;
+  bucketIndex: number;
+  multiplierBps: string;
+  payout: string;
+  wager: string;
+  profit: string;
+  riskLevel: 'GREEN' | 'YELLOW' | 'RED';
+  blockNumber: string;
+  transactionHash: string;
+  timestamp: number;
+}
+
+export interface PlinkoPlayerStatsChain {
+  totalDrops: number;
+  totalWagered: string;
+  totalWon: string;
+  netProfit: string;
+  biggestWin: string;
+  biggestMultiplierBps: string;
+  winRate: number;
 }
 
 export interface KenoChainStats {
@@ -60,6 +96,117 @@ export interface BigWheelChainStats {
 
 export class ChainAnalyticsService {
   constructor(private readonly dbService: DatabaseService) {}
+
+  async getPlinkoPlayerDrops(playerAddress: string, limit: number = 100, offset: number = 0): Promise<PlinkoPlayerDropChain[]> {
+    const normalized = playerAddress.toLowerCase() as `0x${string}`;
+    const client = getPublicClient();
+    const toBlock = await client.getBlockNumber();
+
+    const targetCount = Math.max(0, limit) + Math.max(0, offset);
+    const logs: Array<{
+      args: any;
+      blockNumber: bigint;
+      transactionHash: `0x${string}`;
+      logIndex: number;
+    }> = [];
+
+    let chunksScanned = 0;
+    let cursor = toBlock;
+    while (cursor >= PLINKO_SCAN_START_BLOCK && logs.length < targetCount && chunksScanned < PLINKO_MAX_SCAN_CHUNKS) {
+      const fromBlock = cursor > BigInt(CHUNK_SIZE) ? cursor - BigInt(CHUNK_SIZE) + 1n : 0n;
+      const boundedFrom = fromBlock < PLINKO_SCAN_START_BLOCK ? PLINKO_SCAN_START_BLOCK : fromBlock;
+
+      const chunkLogs = await client.getLogs({
+        address: PLINKO_ADDRESS,
+        event: PLINKO_BALL_DROPPED_EVENT,
+        args: { player: normalized },
+        fromBlock: boundedFrom,
+        toBlock: cursor,
+      });
+
+      logs.push(
+        ...chunkLogs.map((l: any) => ({
+          args: l.args,
+          blockNumber: l.blockNumber as bigint,
+          transactionHash: l.transactionHash as `0x${string}`,
+          logIndex: Number(l.logIndex ?? 0),
+        }))
+      );
+
+      if (boundedFrom === 0n || boundedFrom === PLINKO_SCAN_START_BLOCK) break;
+      cursor = boundedFrom - 1n;
+      chunksScanned += 1;
+    }
+
+    logs.sort((a, b) => {
+      if (a.blockNumber !== b.blockNumber) return a.blockNumber > b.blockNumber ? -1 : 1;
+      return b.logIndex - a.logIndex;
+    });
+
+    const sliced = logs.slice(offset, offset + limit);
+    const uniqueBlocks = [...new Set(sliced.map((l) => String(l.blockNumber)))];
+    const blockEntries = await Promise.all(
+      uniqueBlocks.map(async (bn) => {
+        const block = await client.getBlock({ blockNumber: BigInt(bn) });
+        return [bn, Number(block.timestamp)] as const;
+      })
+    );
+    const blockToTs = Object.fromEntries(blockEntries);
+
+    return sliced.map((log) => {
+      const args = log.args as Record<string, unknown>;
+      const multiplier = BigInt(args.multiplier ?? 0);
+      const payout = BigInt(args.payout ?? 0);
+      const wager = multiplier > 0n ? (payout * 100n) / multiplier : 0n;
+      const riskLevelNum = Number(args.riskLevel ?? 0);
+      return {
+        id: `${log.transactionHash}-${log.logIndex}`,
+        player: String(args.player ?? normalized),
+        seed: String(args.seed ?? '0'),
+        bucketIndex: Number(args.bucket ?? 0),
+        multiplierBps: String(multiplier),
+        payout: String(payout),
+        wager: String(wager),
+        profit: String(payout - wager),
+        riskLevel: PLINKO_RISK_NAMES[riskLevelNum] ?? 'GREEN',
+        blockNumber: String(log.blockNumber),
+        transactionHash: log.transactionHash,
+        timestamp: blockToTs[String(log.blockNumber)] ?? 0,
+      };
+    });
+  }
+
+  async getPlinkoPlayerStats(playerAddress: string): Promise<PlinkoPlayerStatsChain> {
+    const drops = await this.getPlinkoPlayerDrops(playerAddress, 5000, 0);
+    let totalWagered = 0n;
+    let totalWon = 0n;
+    let biggestWin = 0n;
+    let biggestMultiplier = 0n;
+    let winningDrops = 0;
+
+    for (const d of drops) {
+      const wager = BigInt(d.wager);
+      const payout = BigInt(d.payout);
+      const profit = BigInt(d.profit);
+      const multiplier = BigInt(d.multiplierBps);
+      totalWagered += wager;
+      totalWon += payout;
+      if (profit > 0n) winningDrops += 1;
+      if (payout > biggestWin) biggestWin = payout;
+      if (multiplier > biggestMultiplier) biggestMultiplier = multiplier;
+    }
+
+    return {
+      totalDrops: drops.length,
+      totalWagered: String(totalWagered),
+      totalWon: String(totalWon),
+      netProfit: String(totalWon - totalWagered),
+      biggestWin: String(biggestWin),
+      biggestMultiplierBps: String(biggestMultiplier),
+      winRate: drops.length > 0 ? (winningDrops / drops.length) * 100 : 0,
+    };
+  }
+
   async getPlinkoStats(): Promise<PlinkoChainStats | null> {
     try {
       const client = getPublicClient();

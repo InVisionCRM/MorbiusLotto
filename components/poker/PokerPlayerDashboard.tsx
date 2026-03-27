@@ -6,6 +6,7 @@ import { Activity, Target, Trophy, DollarSign, TrendingUp, TrendingDown, History
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { usePokerPlayerHands, usePokerPlayerStats } from '@/hooks/use-poker-stats'
 import { toBigIntSafe } from '@/lib/safe-bigint'
+import { PlayerStatsFeatureGrid } from '@/components/ui/player-stats-feature-grid'
 
 function formatChips(wei: string | number): string {
   try {
@@ -27,6 +28,13 @@ function getProfitColor(value: string): string {
 
 interface PokerPlayerDashboardProps {
   playerAddress: string
+}
+
+const PANEL_STYLE = {
+  background: 'linear-gradient(145deg, rgb(16, 26, 35), rgb(35, 36, 41))',
+  boxShadow:
+    'inset 0 3px 6px rgba(0, 0, 0, 0.8), inset 0 -3px 6px rgba(255, 255, 255, 0.1), 0 1px 3px rgba(0, 0, 0, 0.5)',
+  border: '1px inset rgba(60, 60, 60, 0.5)',
 }
 
 export function PokerPlayerDashboard({ playerAddress }: PokerPlayerDashboardProps) {
@@ -55,65 +63,53 @@ export function PokerPlayerDashboard({ playerAddress }: PokerPlayerDashboardProp
       value: stats.total_hands.toLocaleString(),
       subtitle: `${stats.hands_won.toLocaleString()} won`,
       icon: Activity,
-      color: 'text-cyan-300',
+      valueClassName: 'text-cyan-300',
     },
     {
       title: 'Win Rate',
       value: `${Math.round(stats.win_rate)}%`,
       subtitle: `${stats.current_streak > 0 ? '+' : ''}${stats.current_streak} current streak`,
       icon: Target,
-      color: stats.win_rate >= 50 ? 'text-green-400' : stats.win_rate >= 40 ? 'text-yellow-400' : 'text-red-400',
+      valueClassName: stats.win_rate >= 50 ? 'text-green-400' : stats.win_rate >= 40 ? 'text-yellow-400' : 'text-red-400',
     },
     {
       title: 'Profit / Loss',
       value: `${toBigIntSafe(stats.profit_loss) >= 0n ? '+' : ''}${formatChips(stats.profit_loss)}`,
       subtitle: `${stats.roi >= 0 ? '+' : ''}${Math.round(stats.roi)}% ROI`,
       icon: toBigIntSafe(stats.profit_loss) >= 0n ? TrendingUp : TrendingDown,
-      color: getProfitColor(stats.profit_loss),
+      valueClassName: getProfitColor(stats.profit_loss),
     },
     {
       title: 'Total Wagered',
       value: `${formatChips(stats.total_wagered)} MORBIUS`,
       subtitle: 'Chips contributed',
       icon: DollarSign,
-      color: 'text-purple-300',
+      valueClassName: 'text-neutral-100',
     },
     {
       title: 'Total Won',
       value: `${formatChips(stats.total_won)} MORBIUS`,
       subtitle: 'Chips won from pots',
       icon: Trophy,
-      color: 'text-green-300',
+      valueClassName: 'text-cyan-300',
     },
     {
       title: 'Best Streak',
       value: stats.best_streak.toLocaleString(),
       subtitle: `Biggest pot won: ${formatChips(stats.biggest_pot_won)}`,
       icon: History,
-      color: 'text-cyan-300',
+      valueClassName: 'text-cyan-300',
     },
   ]
 
   return (
     <div className="space-y-6">
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-        {cards.map((item) => (
-          <Card key={item.title} className="bg-gradient-to-br from-gray-900 to-black border-gray-700">
-            <CardHeader className="pb-2">
-              <CardTitle className="text-sm text-gray-400 flex items-center justify-between">
-                {item.title}
-                <item.icon className={`h-4 w-4 ${item.color}`} />
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className={`text-xl font-bold ${item.color}`}>{item.value}</div>
-              <p className="text-xs text-gray-500 mt-1">{item.subtitle}</p>
-            </CardContent>
-          </Card>
-        ))}
-      </div>
+      <PlayerStatsFeatureGrid
+        items={cards}
+        className="border border-white/10 rounded-xl overflow-hidden"
+      />
 
-      <Card className="bg-gradient-to-br from-gray-900 to-black border-gray-700">
+      <Card className="bg-gradient-to-br from-gray-900 to-black border-gray-700" style={PANEL_STYLE}>
         <CardHeader>
           <CardTitle className="text-white flex items-center gap-2">
             <History className="w-5 h-5 text-cyan-400" />

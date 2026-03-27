@@ -138,7 +138,7 @@ export function PlayerStatsDashboard({ stats, isLoading, playerAddress, wsClient
             title: 'Balance',
             value: `${formatCurrency(reserveBalance)} MORBIUS`,
             icon: Wallet,
-            subtitle: 'Playable balance (server)',
+            subtitle: 'Playable balance',
             valueClassName: 'text-cyan-300'
           }
         ]
