@@ -481,7 +481,7 @@ export function PokerActivityFeed({
       return (
         <div
           key={entry.id}
-          className="px-2.5 py-1 text-[12px] md:text-[13px] leading-snug whitespace-pre-line"
+          className="px-2.5 py-1 text-[10px] md:text-[11px] leading-snug whitespace-pre-line"
           style={{
             color: isWelcome
               ? 'rgba(250,204,21,0.9)'
@@ -531,7 +531,7 @@ export function PokerActivityFeed({
           style={{ background: 'rgba(34,197,94,0.08)', border: '1px solid rgba(34,197,94,0.2)' }}
         >
           {/* Winner line */}
-          <div className="flex items-center gap-1 text-[12px] md:text-[13px]">
+          <div className="flex items-center gap-1 text-[10px] md:text-[11px]">
             <span style={{ color: 'rgba(34,197,94,0.9)' }}>🏆</span>
             <span className="font-mono" style={{ color: 'rgba(255,255,255,0.7)' }}>{name}</span>
             <span style={{ color: 'rgba(34,197,94,0.9)' }}>won</span>
@@ -553,7 +553,7 @@ export function PokerActivityFeed({
                     {entry.holeCards.map((c, i) => <TinyCard key={i} idx={c} />)}
                   </div>
                   {entry.handName && (
-                    <span className="text-[10px] italic" style={{ color: 'rgba(251,191,36,0.85)' }}>
+                    <span className="text-[9px] italic" style={{ color: 'rgba(251,191,36,0.85)' }}>
                       {entry.handName}
                     </span>
                   )}
@@ -570,7 +570,7 @@ export function PokerActivityFeed({
       const name = entry.playerAddr ? shortAddr(entry.playerAddr) : seatLabel(entry.seatIndex, state);
       const amtStr = entry.amount ? fmtWei(entry.amount) : '';
       return (
-        <div key={entry.id} className="flex items-baseline gap-1 px-2.5 py-[2px] text-[12px] md:text-[13px] leading-snug">
+        <div key={entry.id} className="flex items-baseline gap-1 px-2.5 py-[2px] text-[10px] md:text-[11px] leading-snug">
           <span className="font-mono shrink-0" style={{ color: 'rgba(255,255,255,0.5)' }}>{name}</span>
           <span className="shrink-0 font-medium" style={{ color }}>{label}</span>
           {amtStr && (
@@ -582,7 +582,7 @@ export function PokerActivityFeed({
     if (entry.kind === 'reaction') {
       const name = seatLabel(entry.seatIndex, state);
       return (
-        <div key={entry.id} className="flex items-baseline gap-1 px-2.5 py-[2px] text-[12px] md:text-[13px] leading-snug">
+        <div key={entry.id} className="flex items-baseline gap-1 px-2.5 py-[2px] text-[10px] md:text-[11px] leading-snug">
           <span className="font-mono shrink-0" style={{ color: 'rgba(255,255,255,0.5)' }}>{name}</span>
           <span style={{ color: 'rgba(255,255,255,0.75)' }}>{entry.value}</span>
         </div>
@@ -591,7 +591,7 @@ export function PokerActivityFeed({
     // chat
     const name = entry.displayName?.trim() || shortAddr(entry.sender);
     return (
-      <div key={entry.id} className="px-2.5 py-[2px] text-[12px] md:text-[13px] leading-snug">
+      <div key={entry.id} className="px-2.5 py-[2px] text-[10px] md:text-[11px] leading-snug">
         <span className="font-medium" style={{ color: 'rgba(34,211,238,0.8)' }}>{name}: </span>
         <span className="break-words" style={{ color: 'rgba(255,255,255,0.8)' }}>{entry.text}</span>
       </div>
@@ -610,7 +610,7 @@ export function PokerActivityFeed({
           borderBottom: '1px solid rgba(255,255,255,0.07)',
         }}
       >
-        <span className="text-[10px] font-bold uppercase tracking-widest" style={{ color: 'rgba(255,255,255,0.4)' }}>
+        <span className="text-[9px] font-bold uppercase tracking-widest" style={{ color: 'rgba(255,255,255,0.4)' }}>
           Activity
         </span>
         <div className="flex items-center gap-1">
@@ -618,7 +618,7 @@ export function PokerActivityFeed({
           <button
             type="button"
             onClick={() => setExpanded((v) => !v)}
-            className="hidden md:flex w-5 h-5 items-center justify-center rounded text-[11px] transition hover:bg-white/10"
+            className="hidden md:flex w-5 h-5 items-center justify-center rounded text-[10px] transition hover:bg-white/10"
             style={{ color: 'rgba(255,255,255,0.4)' }}
             aria-label={expanded ? 'Collapse' : 'Expand'}
           >
@@ -628,7 +628,7 @@ export function PokerActivityFeed({
           <button
             type="button"
             onClick={() => setMobileOpen(false)}
-            className="flex md:hidden w-5 h-5 items-center justify-center rounded text-[11px] transition hover:bg-white/10"
+            className="flex md:hidden w-5 h-5 items-center justify-center rounded text-[10px] transition hover:bg-white/10"
             style={{ color: 'rgba(255,255,255,0.35)' }}
             aria-label="Close"
           >
@@ -640,7 +640,7 @@ export function PokerActivityFeed({
       {/* Feed */}
       <div
         ref={listRef}
-        className="flex-1 overflow-y-auto min-h-0 py-1 text-[12px] md:text-[13px] leading-snug"
+        className="flex-1 overflow-y-auto min-h-0 py-1 text-[10px] md:text-[11px] leading-snug"
         style={{ scrollbarWidth: 'thin', scrollbarColor: 'rgba(255,255,255,0.08) transparent' }}
       >
         {entries.length === 0 && (
@@ -665,7 +665,7 @@ export function PokerActivityFeed({
           placeholder={connected ? 'Message…' : 'Connecting…'}
           disabled={!connected}
           maxLength={CHAT_MAX_LEN}
-          className="flex-1 min-w-0 px-2.5 py-1.5 rounded text-[12px] md:text-[13px] text-white placeholder-white/25 focus:outline-none focus:ring-1 focus:ring-cyan-500/50 transition"
+          className="flex-1 min-w-0 px-2.5 py-1.5 rounded text-[10px] md:text-[11px] text-white placeholder-white/25 focus:outline-none focus:ring-1 focus:ring-cyan-500/50 transition"
           style={{
             background: 'rgba(255,255,255,0.07)',
             border: '1px solid rgba(255,255,255,0.1)',
@@ -674,7 +674,7 @@ export function PokerActivityFeed({
         <button
           type="submit"
           disabled={!connected || !input.trim()}
-          className="shrink-0 px-2.5 py-1.5 rounded text-[12px] md:text-[13px] font-semibold text-white transition-colors disabled:opacity-25 disabled:pointer-events-none"
+          className="shrink-0 px-2.5 py-1.5 rounded text-[10px] md:text-[11px] font-semibold text-white transition-colors disabled:opacity-25 disabled:pointer-events-none"
           style={{ background: 'rgba(34,211,238,0.7)' }}
         >
           Send
