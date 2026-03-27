@@ -13,6 +13,7 @@ import {
   Activity,
   Zap,
   TrendingUp,
+  X,
 } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import type { PokerTableState } from '@/lib/websocket-client';
@@ -101,11 +102,12 @@ interface DashboardData {
 export interface PokerPlayerTableDashboardProps {
   tableId: string;
   state: PokerTableState | null;
+  onClose?: () => void;
 }
 
 // ── Component ───────────────────────────────────────────────────────────────
 
-export function PokerPlayerTableDashboard({ tableId, state }: PokerPlayerTableDashboardProps) {
+export function PokerPlayerTableDashboard({ tableId, state, onClose }: PokerPlayerTableDashboardProps) {
   // Fetch table metadata & history from the dashboard API (proxied through Next.js)
   const { data, isLoading } = useQuery<DashboardData>({
     queryKey: ['pokerTableInfo', tableId],
@@ -139,10 +141,25 @@ export function PokerPlayerTableDashboard({ tableId, state }: PokerPlayerTableDa
 
   const tableUptime = data?.table?.created_at ? timeSince(data.table.created_at) : '—';
 
+  const closeHeader = onClose ? (
+    <div className="flex items-center justify-between gap-3 border-b border-white/10 pb-3 -mt-1 mb-1">
+      <h2 className="text-sm font-bold text-white tracking-tight">Table stats</h2>
+      <button
+        type="button"
+        onClick={onClose}
+        className="shrink-0 p-2 rounded-lg text-white/70 hover:text-white hover:bg-white/10 border border-transparent hover:border-cyan-500/30 transition-colors"
+        aria-label="Close table stats"
+      >
+        <X className="w-5 h-5" />
+      </button>
+    </div>
+  ) : null;
+
   // Loading skeleton
   if (isLoading && !state) {
     return (
       <div className="p-4 space-y-4">
+        {closeHeader}
         <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
           {Array.from({ length: 4 }).map((_, i) => (
             <Card key={i} className="bg-gradient-to-br from-gray-900 to-black border-gray-700">
@@ -159,6 +176,7 @@ export function PokerPlayerTableDashboard({ tableId, state }: PokerPlayerTableDa
 
   return (
     <div className="p-4 space-y-4 overflow-y-auto">
+      {closeHeader}
       {/* ── Table Info Bar ──────────────────────────────────────────── */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
         {[

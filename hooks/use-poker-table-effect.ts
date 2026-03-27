@@ -9,8 +9,8 @@ const COLOR_STORAGE_KEY = 'poker-table-felt-color';
 const RAIL_COLOR_STORAGE_KEY = 'poker-table-rail-color';
 
 export const TABLE_EFFECT_OPTIONS: { id: TableEffectId; label: string; description: string }[] = [
-  { id: 'beams', label: 'Energy Beams', description: 'Animated light beams with color cycling' },
   { id: 'none', label: 'None', description: 'Clean felt, no animation' },
+  { id: 'beams', label: 'Energy Beams', description: 'Animated light beams with color cycling' },
 ];
 
 /** Preset felt colors — navy is the current default. */
@@ -109,7 +109,7 @@ interface TableEffectState {
 const TableEffectContext = createContext<TableEffectState | null>(null);
 
 export function PokerTableEffectProvider({ children }: { children: React.ReactNode }) {
-  const [effect, setEffectState] = useState<TableEffectId>('beams');
+  const [effect, setEffectState] = useState<TableEffectId>('none');
   const [feltColor, setFeltColorState] = useState('navy');
   const [railColor, setRailColorState] = useState('gold');
 

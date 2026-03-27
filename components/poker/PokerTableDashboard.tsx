@@ -16,6 +16,7 @@ import {
   Trophy,
   Users,
   Zap,
+  X,
 } from 'lucide-react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { CardDisplay } from '@/components/poker/CardDisplay'
@@ -116,9 +117,10 @@ function getPnlColor(pnl: string): string {
 
 interface PokerTableDashboardProps {
   tableId: string
+  onClose?: () => void
 }
 
-export function PokerTableDashboard({ tableId }: PokerTableDashboardProps) {
+export function PokerTableDashboard({ tableId, onClose }: PokerTableDashboardProps) {
   const [activeTab, setActiveTab] = useState<'overview' | 'players' | 'hands'>('overview')
 
   const { data, isLoading, error } = useQuery<TableDashboardData>({
@@ -132,9 +134,25 @@ export function PokerTableDashboard({ tableId }: PokerTableDashboardProps) {
     refetchInterval: 10_000,
   })
 
+  const closeHeader = onClose ? (
+    <div className="flex items-center justify-between gap-3 border-b border-white/10 pb-3 mb-4">
+      <h2 className="text-sm font-bold text-white tracking-tight">Poker dashboard</h2>
+      <button
+        type="button"
+        onClick={onClose}
+        className="shrink-0 p-2 rounded-lg text-white/70 hover:text-white hover:bg-white/10 border border-transparent hover:border-cyan-500/30 transition-colors"
+        aria-label="Close dashboard"
+      >
+        <X className="w-5 h-5" />
+      </button>
+    </div>
+  ) : null
+
   if (isLoading) {
     return (
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+      <div className="px-4 pb-4 pt-3">
+        {closeHeader}
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
         {Array.from({ length: 6 }).map((_, i) => (
           <Card key={i} className="bg-gradient-to-br from-gray-900 to-black border-gray-700">
             <CardHeader className="pb-3">
@@ -146,14 +164,18 @@ export function PokerTableDashboard({ tableId }: PokerTableDashboardProps) {
             </CardContent>
           </Card>
         ))}
+        </div>
       </div>
     )
   }
 
   if (error || !data) {
     return (
-      <div className="text-center py-12 text-white/60">
-        Failed to load table dashboard.
+      <div className="px-4 pb-4 pt-3">
+        {closeHeader}
+        <div className="text-center py-12 text-white/60">
+          Failed to load table dashboard.
+        </div>
       </div>
     )
   }
@@ -212,7 +234,8 @@ export function PokerTableDashboard({ tableId }: PokerTableDashboardProps) {
   ]
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 px-4 pb-4 pt-3">
+      {closeHeader}
       {/* Tabs */}
       <div className="flex gap-2 border-b border-white/10 mb-6">
         {tabs.map((tab) => (
