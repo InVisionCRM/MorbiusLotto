@@ -44,6 +44,7 @@ import { IconButton } from '@/components/animate-ui/components/buttons/icon';
 import { toast } from 'sonner';
 import { BLACKJACK_FACTS } from '@/app/blackjack-multi/blackjack-facts';
 import { EncryptedText } from '@/components/ui/encrypted-text';
+import { BlackjackMultiBetaSplash } from '@/components/BLACKJACK/BlackjackMultiBetaSplash';
 
 const TURN_TIMEOUT = 30;
 const BETTING_TIMEOUT = 15;
@@ -196,7 +197,7 @@ function Seat({
   onSendChatMessage?: (msg: string) => void;
 }) {
   // Rotation angle — left seat faces right toward dealer, right seat faces left
-  const seatRotation = position === 0 ? 30 : position === 2 ? -30 : 0;
+  const seatRotation = position === 0 ? 45 : position === 2 ? -45 : 0;
   const turnRemaining = useCountdown(isActing ? turnStartedAt : null, TURN_TIMEOUT);
   const betRemaining = useCountdown(phase === 'betting' && !isEmpty ? bettingStartedAt : null, BETTING_TIMEOUT);
   const resultColor = (r: string | null | undefined) =>
@@ -447,7 +448,7 @@ function Seat({
                             <BetChip
                               label={formatChipLabel(Math.floor(Number(formatEther(seatTableBetWei(seat)))))}
                               size="clamp(32px, 6vw, 40px)"
-                              chipSrc="/PokerChips/greenpokerchip005.png"
+                              chipSrc="/morbius/MorbiusChip.png"
                             />
                           </div>
                         )}
@@ -477,7 +478,7 @@ function Seat({
               <BetChip
                 label={formatChipLabel(Math.floor(Number(formatEther(seatTableBetWei(seat)))))}
                 size="clamp(44px, 8vw, 56px)"
-                chipSrc="/PokerChips/greenpokerchip005.png"
+                chipSrc="/morbius/MorbiusChip.png"
               />
             </div>
           )}
@@ -1310,6 +1311,7 @@ export default function BlackjackMultiTablePage() {
 
   return (
     <GlobalMainNav page="blackjack" showBackArrow backArrowHref="/blackjack-multi" backArrowLabel="Lobby">
+      <BlackjackMultiBetaSplash />
       <style>{`
         /* Desktop: overlapping card margins — tighter for small cards */
         @media (min-width: 641px) {
@@ -1408,7 +1410,7 @@ export default function BlackjackMultiTablePage() {
         }
       `}</style>
       {/* 2-column layout on md+: table (left) + sidebar controls (right) — matches single player */}
-      <div className="grid grid-cols-1 md:grid-cols-[minmax(0,3fr)_minmax(360px,1.2fr)] md:items-stretch gap-2 md:gap-4 min-h-0 pt-11 md:pt-14" style={{ scrollbarGutter: 'stable both-edges' }}>
+      <div className="grid grid-cols-1 md:grid-cols-[minmax(0,3fr)_minmax(360px,1.2fr)] md:items-stretch gap-2 md:gap-4 min-h-0" style={{ scrollbarGutter: 'stable both-edges' }}>
 
       {/* ── Table container — locked to 16:9 so full table image is always visible ── */}
       <div
@@ -1690,8 +1692,8 @@ export default function BlackjackMultiTablePage() {
                 const align =
                   pos === 0 ? 'flex justify-start' : pos === 2 ? 'flex justify-end' : 'flex justify-center';
                 const seatNudge =
-                  pos === 0 ? { transform: 'translate(60px, -36px)' } :
-                  pos === 2 ? { transform: 'translate(-60px, -36px)' } : {};
+                  pos === 0 ? { transform: 'translate(30px, -36px)' } :
+                  pos === 2 ? { transform: 'translate(-30px, -36px)' } : {};
                 return (
                   <div key={pos} className={`min-w-0 ${align}`} style={seatNudge}>
                     <Seat

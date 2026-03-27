@@ -1329,7 +1329,7 @@ export class WebSocketService {
       if (!this.pokerGameService || !ws.playerAddress) {
         return this.sendError(ws, 'Poker not available or wallet required', message.requestId);
       }
-      const payload = message.payload as { tableId?: string; buyInChips?: string };
+      const payload = message.payload as { tableId?: string; buyInChips?: string; pinCode?: string };
       const { tableId, buyInChips } = payload ?? {};
       if (!tableId || typeof tableId !== 'string') {
         return this.sendError(ws, 'tableId required', message.requestId);
@@ -1337,7 +1337,8 @@ export class WebSocketService {
       if (!buyInChips || typeof buyInChips !== 'string') {
         return this.sendError(ws, 'buyInChips required', message.requestId);
       }
-      const state = await this.pokerGameService.joinTable(tableId, ws.playerAddress, buyInChips);
+      const pinCode = payload?.pinCode && typeof payload.pinCode === 'string' ? payload.pinCode : undefined;
+      const state = await this.pokerGameService.joinTable(tableId, ws.playerAddress, buyInChips, pinCode);
 
       const roomId = `poker:table:${tableId}`;
       if (ws.currentRoom && ws.connectionId) {
@@ -1546,7 +1547,7 @@ export class WebSocketService {
       if (!isAdminWallet(ws.playerAddress)) {
         return this.sendError(ws, 'Only admins can create poker tables', message.requestId);
       }
-      const payload = message.payload as { smallBlind?: string; bigBlind?: string; maxSeats?: number };
+      const payload = message.payload as { smallBlind?: string; bigBlind?: string; maxSeats?: number; pinCode?: string };
       const smallBlindStr = payload?.smallBlind != null ? String(payload.smallBlind) : undefined;
       const bigBlindStr = payload?.bigBlind != null ? String(payload.bigBlind) : undefined;
       if (!smallBlindStr || !bigBlindStr) {
@@ -1558,7 +1559,8 @@ export class WebSocketService {
         return this.sendError(ws, 'Invalid blinds: must be positive and bigBlind >= smallBlind', message.requestId);
       }
       const maxSeats = Math.min(10, Math.max(2, Number(payload?.maxSeats) || 6));
-      const tableId = await this.pokerGameService.createTable(smallBlind, bigBlind, maxSeats);
+      const pinCode = payload?.pinCode && typeof payload.pinCode === 'string' ? payload.pinCode : undefined;
+      const tableId = await this.pokerGameService.createTable(smallBlind, bigBlind, maxSeats, pinCode);
       this.sendMessage(ws, { type: 'poker_create_table', payload: { tableId }, requestId: message.requestId });
     } catch (error) {
       logger.error('Error creating poker table:', error);

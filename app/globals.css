@@ -473,6 +473,17 @@ body {
   font-style: normal;
 }
 
+/* Orbitron - poker game card */
+.font-orbitron {
+  font-family: "Orbitron", sans-serif;
+  font-weight: 700;
+}
+
+/* Krona One - multiplayer blackjack game card */
+.font-krona-one {
+  font-family: "Krona One", sans-serif;
+}
+
 /* Tip chip fly animation — chip floats up and fades out */
 @keyframes tipChipFly {
   0% { transform: translateY(0); opacity: 1; }
@@ -484,6 +495,203 @@ body {
 
 /* RainbowKit Modal Fix - No longer needed since transform moved to wrapper */
 /* Modals render to body, which is now untransformed, so they center correctly */
+
+/* ── Hero Section reveal animations ── */
+.hero-title-line {
+  transition: opacity 1.15s ease, transform 1.15s cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+
+.hero-title-line-hidden {
+  opacity: 0;
+  transform: translateY(-16px);
+}
+
+.hero-title-line-visible {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+.hero-cta-item {
+  transition: opacity 0.95s ease, transform 1.05s cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+
+.hero-cta-item-hidden {
+  opacity: 0;
+  transform: translateY(24px);
+}
+
+.hero-cta-item-visible {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+.hero-glass-btn::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  background: rgba(255, 255, 255, 0.025);
+  -webkit-backdrop-filter: blur(10px) saturate(135%);
+  backdrop-filter: blur(10px) saturate(135%);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.36), inset 0 -1px 0 rgba(255, 255, 255, 0.08);
+  z-index: 0;
+}
+
+.hero-glass-btn > span {
+  position: relative;
+  z-index: 1;
+}
+
+.hero-typewriter-line {
+  display: inline-block;
+  white-space: nowrap;
+  overflow: hidden;
+  width: 0;
+}
+
+.hero-typewriter-hidden {
+  opacity: 0;
+}
+
+.hero-typewriter-visible {
+  opacity: 1;
+}
+
+.hero-typewriter-visible.hero-typewriter-welcome {
+  animation: hero-typewriter-reveal 950ms steps(13, end) 220ms forwards;
+}
+
+.hero-typewriter-visible.hero-typewriter-name {
+  animation: hero-typewriter-reveal 1100ms steps(20, end) 780ms forwards;
+}
+
+@keyframes hero-typewriter-reveal {
+  from {
+    width: 0;
+  }
+  to {
+    width: 100%;
+  }
+}
+
+/* ── Morbius Info Section: word-by-word blur reveal ── */
+.blur-reveal-word {
+  display: inline-block;
+  opacity: 0;
+  filter: blur(10px);
+  transform: translateY(6px);
+  transition: opacity 0.5s ease, filter 0.6s ease, transform 0.5s ease;
+}
+
+.blur-reveal-word[data-visible] {
+  opacity: 1;
+  filter: blur(0);
+  transform: translateY(0);
+}
+
+/* ── Morbius Info Section: typewriter cursor ── */
+.typewriter-cursor {
+  display: inline-block;
+  color: transparent;
+  background: linear-gradient(180deg, #a855f7, #6366f1);
+  background-clip: text;
+  -webkit-background-clip: text;
+  animation: cursor-blink 530ms step-end infinite;
+  margin-left: 1px;
+  font-weight: 400;
+}
+
+@keyframes cursor-blink {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0; }
+}
+
+/* ── Morbius Info Section: staggered slide-up segments ── */
+.slide-up-word {
+  display: inline-block;
+  opacity: 0;
+  transform: translateY(14px);
+  transition: opacity 0.45s ease, transform 0.5s cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+
+.slide-up-word[data-visible] {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+/* ── Shared slide-down reveal ── */
+.slide-down-reveal {
+  opacity: 0;
+  transform: translateY(-20px);
+  transition: opacity 0.5s ease, transform 0.55s cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+
+.slide-down-reveal[data-visible] {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+/* ── Social logo drop-in (stronger than generic slide-down) ── */
+.socials-logo-drop {
+  opacity: 0;
+  transform: translateY(-56px);
+  transition: opacity 0.55s ease, transform 0.7s cubic-bezier(0.2, 0.8, 0.2, 1);
+  will-change: transform, opacity;
+}
+
+.socials-logo-drop[data-visible] {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+/* ── Socials Section: letter-by-letter title reveal ── */
+.socials-title-letter {
+  display: inline-block;
+  opacity: 0;
+  transform: translateY(20px) scale(0.7) rotateX(40deg);
+  filter: blur(6px);
+  transition: opacity 0.4s ease, transform 0.55s cubic-bezier(0.2, 0.8, 0.2, 1), filter 0.4s ease;
+}
+
+.socials-title-letter[data-visible] {
+  opacity: 1;
+  transform: translateY(0) scale(1) rotateX(0deg);
+  filter: blur(0);
+}
+
+/* ── Socials Section: icon scale + fade reveal ── */
+.socials-icon-reveal {
+  opacity: 0;
+  transform: scale(0.3);
+  transition: opacity 0.5s ease, transform 0.7s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+}
+
+.socials-icon-reveal[data-visible] {
+  opacity: 1;
+  transform: scale(1);
+}
+
+/* ── Socials Section: icon glow pulse on reveal ── */
+.socials-icon-glow {
+  opacity: 0;
+  box-shadow: 0 0 0 0 rgba(147, 51, 234, 0);
+  transition: opacity 0.4s ease, box-shadow 0.6s ease;
+}
+
+.socials-icon-glow[data-visible] {
+  animation: socials-glow-pulse 1.4s ease-out 0.8s forwards;
+}
+
+@keyframes socials-glow-pulse {
+  0% {
+    opacity: 1;
+    box-shadow: 0 0 20px 8px rgba(147, 51, 234, 0.5), 0 0 60px 20px rgba(147, 51, 234, 0.2);
+  }
+  100% {
+    opacity: 0;
+    box-shadow: 0 0 40px 24px rgba(147, 51, 234, 0), 0 0 80px 40px rgba(147, 51, 234, 0);
+  }
+}
 
 /* ── Sidebar collapse: CSS transitions instead of per-element Framer Motion ── */
 .sidebar-label {

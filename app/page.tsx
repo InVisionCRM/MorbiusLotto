@@ -5,6 +5,7 @@ import Image from 'next/image'
 import GlobalMainNav from '@/components/shared/GlobalMainNav'
 import { FirstVisitNotification } from '@/components/ui/first-visit-notification'
 import { useAuth } from '@/hooks/use-auth'
+import { useProfile } from '@/hooks/use-player-profile'
 import { LoginModal } from '@/components/auth/LoginModal'
 import { PlayerProfileModal } from '@/components/shared/PlayerProfileModal'
 import { HeroSection } from '@/components/home/hero-section'
@@ -21,13 +22,26 @@ import { MorbItSection } from '@/components/home/morbit-section'
 import Footer from '@/components/PLINKO/Footer'
 
 /** Fixed full-viewport background (very subtle at 5% opacity) */
-const HOME_FIXED_BG = '/BlackJack/TourCards/TourCard2.png' as const
+const HOME_FIXED_BG = '/Marketing%20/Hero-Background.jpeg' as const
+
+function HomeSectionDivider() {
+  return (
+    <div className="relative mx-auto w-full max-w-5xl px-4" aria-hidden>
+      <div className="h-px w-full bg-gradient-to-r from-transparent via-cyan-400/40 to-transparent" />
+      <div className="pointer-events-none absolute left-1/2 top-1/2 h-2.5 w-2.5 -translate-x-1/2 -translate-y-1/2 rounded-full bg-cyan-300/60 blur-[1px]" />
+    </div>
+  )
+}
 
 export default function HomePage() {
   const [loginOpen, setLoginOpen] = useState(false)
   const [playerProfileOpen, setPlayerProfileOpen] = useState(false)
   const [playerProfileGame, setPlayerProfileGame] = useState<'all' | 'blackjack' | 'lottery' | 'keno' | 'plinko'>('all')
   const { address, isAuthenticated, signIn, signOut, isSigning } = useAuth()
+  const { profileDisplayName } = useProfile()
+  const welcomeName = address
+    ? (profileDisplayName?.trim() || `${address.slice(0, 6)}...${address.slice(-4)}`)
+    : null
 
   return (
     <GlobalMainNav
@@ -69,6 +83,8 @@ export default function HomePage() {
             <HeroSection
               onOpenPlayerProfile={address ? () => { setPlayerProfileGame('all'); setPlayerProfileOpen(true) } : undefined}
               onOpenAuthModal={() => setLoginOpen(true)}
+              showWelcome={!!address}
+              welcomeName={welcomeName}
             />
 
             {/* Dev log — temporarily disabled
@@ -82,22 +98,31 @@ export default function HomePage() {
             </section>
 
             <div className="flex w-full flex-col items-center gap-y-20 px-4 py-12 md:gap-y-28 md:py-20">
+              <HomeSectionDivider />
               <MorbiusInfoSection />
 
+              <HomeSectionDivider />
               <SocialsSection />
 
+              <HomeSectionDivider />
               <TokenomicsSection />
 
+              <HomeSectionDivider />
               <PulseChainSection />
 
+              <HomeSectionDivider />
               <TableShowcaseDisplay />
 
+              <HomeSectionDivider />
               <AvatarShowcaseSection />
 
+              <HomeSectionDivider />
               <MorbItSection />
 
+              <HomeSectionDivider />
               <ResponsibleGamingSection />
 
+              <HomeSectionDivider />
               <Footer />
             </div>
           </div>

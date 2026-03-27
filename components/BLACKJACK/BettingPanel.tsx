@@ -73,15 +73,7 @@ const BettingPanel: React.FC<BettingPanelProps> = ({
     const chipValueWei = parseEther(chipValue.toString());
     return remainingBalance >= chipValueWei;
   };
-  const getChipImage = (value: number) => {
-    switch (value) {
-      case 500: return '/PokerChips/greenpokerchip005.png';
-      case 5000: return '/PokerChips/bluepokerchip010.png';
-      case 25000: return '/PokerChips/redpokerchip015.png';
-      case 50000: return '/PokerChips/blackpokerchip000.png';
-      default: return '/PokerChips/greenpokerchip005.png';
-    }
-  };
+  const getChipImage = (_value: number) => '/morbius/MorbiusChip.png';
 
   return (
     <div className="w-full">

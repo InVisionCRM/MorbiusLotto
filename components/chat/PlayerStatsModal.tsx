@@ -11,6 +11,7 @@ import { usePlayerReserveForAddress } from '@/hooks/use-blackjack-contract';
 import { usePlayerProfileGames } from '@/hooks/use-player-profile';
 import { isAdminWallet } from '@/lib/admin';
 import { PlayerAuditView } from '@/components/BLACKJACK/PlayerAuditView';
+import { PlayerStatsFeatureGrid } from '@/components/ui/player-stats-feature-grid';
 
 function MorbiusIcon({ size = 16 }: { size?: number }) {
   return (
@@ -249,18 +250,49 @@ export function PlayerStatsModal({ address, displayName, onClose }: PlayerStatsM
                   )}
 
                   {/* Main Stats Grid */}
-                  <div className="grid grid-cols-2 gap-3">
-                    {reserveBalance !== undefined && (
-                      <StatCard
-                        label="Reserve"
-                        value={<>{formatMorbius(reserveBalance.toString())} <MorbiusIcon /></>}
-                      />
-                    )}
-                    <StatCard label="Games Played" value={stats.total_games.toString()} />
-                    <StatCard label="Win Rate" value={`${stats.win_rate.toFixed(1)}%`} />
-                    <StatCard label="Total Wagered" value={<>{formatMorbius(stats.total_bet)} <MorbiusIcon /></>} />
-                    <StatCard label="Total Won" value={<>{formatMorbius(stats.total_win)} <MorbiusIcon /></>} />
-                  </div>
+                  <PlayerStatsFeatureGrid
+                    items={[
+                      ...(reserveBalance !== undefined
+                        ? [{
+                            title: 'Reserve',
+                            value: `${formatMorbius(reserveBalance.toString())} MORBIUS`,
+                            subtitle: 'Balance available to wager',
+                            icon: Wallet,
+                            valueClassName: 'text-cyan-300',
+                          }]
+                        : []),
+                      {
+                        title: 'Games Played',
+                        value: stats.total_games.toString(),
+                        subtitle: `${stats.games_today ?? 0} today, ${stats.games_this_week ?? 0} this week`,
+                        icon: Activity,
+                        valueClassName: 'text-cyan-300',
+                      },
+                      {
+                        title: 'Win Rate',
+                        value: `${stats.win_rate.toFixed(1)}%`,
+                        subtitle: `${stats.blackjack_count} blackjacks`,
+                        icon: Target,
+                        valueClassName:
+                          stats.win_rate >= 50 ? 'text-green-400' : stats.win_rate >= 40 ? 'text-yellow-400' : 'text-red-400',
+                      },
+                      {
+                        title: 'Total Wagered',
+                        value: `${formatMorbius(stats.total_bet)} MORBIUS`,
+                        subtitle: 'All-time wagered',
+                        icon: DollarSign,
+                        valueClassName: 'text-neutral-100',
+                      },
+                      {
+                        title: 'Total Won',
+                        value: `${formatMorbius(stats.total_win)} MORBIUS`,
+                        subtitle: 'All-time payout',
+                        icon: Trophy,
+                        valueClassName: 'text-cyan-300',
+                      },
+                    ]}
+                    className="border border-white/10 rounded-xl overflow-hidden mb-3"
+                  />
 
                   {/* Profit/Loss */}
                   <div
@@ -328,24 +360,39 @@ export function PlayerStatsModal({ address, displayName, onClose }: PlayerStatsM
               {activeTab === 'plinko' && plinkoStats && (
                 <>
                   {/* Main Stats Grid */}
-                  <div className="grid grid-cols-2 gap-3">
-                    <StatCard
-                      label="Total Drops"
-                      value={plinkoStats.totalDrops.toString()}
-                    />
-                    <StatCard
-                      label="Ball Balance"
-                      value={plinkoStats.ballBalance.toString()}
-                    />
-                    <StatCard
-                      label="Balls Purchased"
-                      value={<>{formatMorbius(plinkoStats.totalPurchased.toString())} <MorbiusIcon /></>}
-                    />
-                    <StatCard
-                      label="Total Won"
-                      value={<>{formatMorbius(plinkoStats.totalWon.toString())} <MorbiusIcon /></>}
-                    />
-                  </div>
+                  <PlayerStatsFeatureGrid
+                    items={[
+                      {
+                        title: 'Total Drops',
+                        value: plinkoStats.totalDrops.toString(),
+                        subtitle: 'Lifetime Plinko drops',
+                        icon: TrendingDown,
+                        valueClassName: 'text-cyan-300',
+                      },
+                      {
+                        title: 'Ball Balance',
+                        value: plinkoStats.ballBalance.toString(),
+                        subtitle: 'Current balls',
+                        icon: Activity,
+                        valueClassName: 'text-neutral-100',
+                      },
+                      {
+                        title: 'Balls Purchased',
+                        value: `${formatMorbius(plinkoStats.totalPurchased.toString())} MORBIUS`,
+                        subtitle: 'Total spent on balls',
+                        icon: DollarSign,
+                        valueClassName: 'text-neutral-100',
+                      },
+                      {
+                        title: 'Total Won',
+                        value: `${formatMorbius(plinkoStats.totalWon.toString())} MORBIUS`,
+                        subtitle: 'Total payout from Plinko',
+                        icon: Trophy,
+                        valueClassName: 'text-cyan-300',
+                      },
+                    ]}
+                    className="border border-white/10 rounded-xl overflow-hidden mb-3"
+                  />
 
                   {/* Plinko Profit/Loss */}
                   {(() => {

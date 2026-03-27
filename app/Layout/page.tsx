@@ -25,7 +25,7 @@ import { BlackjackMobileActionBar } from '@/components/BLACKJACK/BlackjackMobile
 import { BettingPanelMobile } from '@/components/BLACKJACK/BettingPanelMobile'
 import { Action } from '@/app/BLACKJACK/types'
 
-const CHIP_SRC = '/PokerChips/blackpokerchip000.png'
+const CHIP_SRC = '/morbius/MorbiusChip.png'
 const CHIP_SIZE = 120
 
 // ─── Parallax Example 1: Sticky scroll-in-place (layers move at different rates) ───

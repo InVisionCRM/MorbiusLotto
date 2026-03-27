@@ -2,7 +2,6 @@
 
 import React, { useMemo, useState } from 'react'
 import { useAccount } from 'wagmi'
-import { motion } from 'framer-motion'
 import { usePlayerProfileGames, useProfileForAddress } from '@/hooks/use-player-profile'
 import { useQuery } from '@tanstack/react-query'
 import { isAdminWallet } from '@/lib/admin'
@@ -34,7 +33,7 @@ import {
   Legend,
 } from 'recharts'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
-import { Progress } from '@/components/ui/progress'
+import { PlayerStatsFeatureGrid } from '@/components/ui/player-stats-feature-grid'
 import { GameHistory } from '@/components/BLACKJACK/GameHistory'
 import { CreatorDashboard } from '@/components/Creators/CreatorDashboard'
 import { PlayerAuditView } from '@/components/BLACKJACK/PlayerAuditView'
@@ -140,7 +139,7 @@ export function PlayerStatsDashboard({ stats, isLoading, playerAddress, wsClient
             value: `${formatCurrency(reserveBalance)} MORBIUS`,
             icon: Wallet,
             subtitle: 'Balance available to wager',
-            color: 'text-cyan-400'
+            valueClassName: 'text-cyan-300'
           }
         ]
       : []),
@@ -149,43 +148,42 @@ export function PlayerStatsDashboard({ stats, isLoading, playerAddress, wsClient
       value: stats.totalGames.toLocaleString(),
       icon: Activity,
       subtitle: `${stats.gamesToday} today, ${stats.gamesThisWeek} this week`,
-      color: 'text-blue-400'
+      valueClassName: 'text-cyan-300'
     },
     {
       title: 'Win Rate',
       value: `${Math.round(stats.winRate)}%`,
       icon: Target,
       subtitle: `${stats.blackjackCount} blackjacks`,
-      color: getWinRateColor(stats.winRate),
-      progress: stats.winRate
+      valueClassName: getWinRateColor(stats.winRate)
     },
     {
       title: 'Profit/Loss',
       value: `${stats.profitLoss > 0 ? '+' : ''}${formatProfitLoss(stats.profitLoss)} MORBIUS`,
       icon: stats.profitLoss >= 0 ? TrendingUp : TrendingDown,
       subtitle: `${stats.roi > 0 ? '+' : ''}${Math.round(stats.roi)}% ROI`,
-      color: getProfitColor(stats.profitLoss)
+      valueClassName: getProfitColor(stats.profitLoss)
     },
     {
       title: 'Total Wagered',
       value: `${formatCurrency(stats.totalBet)} MORBIUS`,
       icon: DollarSign,
       subtitle: `Avg bet: ${formatCurrency(stats.averageBet)} MORBIUS`,
-      color: 'text-purple-400'
+      valueClassName: 'text-neutral-100'
     },
     {
       title: 'Total Won',
       value: `${formatCurrency(stats.totalWin)} MORBIUS`,
       icon: Trophy,
       subtitle: `Avg payout: ${formatCurrency(stats.averagePayout)} MORBIUS`,
-      color: 'text-green-400'
+      valueClassName: 'text-cyan-300'
     },
     {
       title: 'Current Streak',
       value: stats.currentStreak.toString(),
       icon: BarChart3,
       subtitle: `Best: ${stats.bestStreak} wins`,
-      color: stats.currentStreak > 0 ? 'text-green-400' : 'text-red-400'
+      valueClassName: stats.currentStreak > 0 ? 'text-green-400' : 'text-red-400'
     }
   ]
 
@@ -405,42 +403,10 @@ export function PlayerStatsDashboard({ stats, isLoading, playerAddress, wsClient
       {activeTab === 'stats' && (
         <>
       {/* Main Stats Grid */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-        {statsCards.map((stat, index) => (
-          <motion.div
-            key={stat.title}
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: index * 0.1 }}
-          >
-            <Card className="bg-gradient-to-br from-gray-900 to-black border-gray-700 hover:border-gray-600 transition-colors">
-              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                <CardTitle className="text-sm font-medium text-gray-400">
-                  {stat.title}
-                </CardTitle>
-                <stat.icon className={`h-4 w-4 ${stat.color}`} />
-              </CardHeader>
-              <CardContent>
-                <div className={`text-2xl font-bold ${stat.color} mb-1`}>
-                  {stat.value}
-                </div>
-                <p className="text-xs text-gray-500">
-                  {stat.subtitle}
-                </p>
-                {stat.progress !== undefined && (
-                  <Progress
-                    value={stat.progress}
-                    className="mt-2 h-1"
-                    style={{
-                      background: 'rgba(55, 65, 81, 0.5)'
-                    }}
-                  />
-                )}
-              </CardContent>
-            </Card>
-          </motion.div>
-        ))}
-      </div>
+      <PlayerStatsFeatureGrid
+        items={statsCards}
+        className="border border-white/10 rounded-xl overflow-hidden"
+      />
 
       {/* Cumulative Investment vs Winnings Chart */}
       <Card className="bg-gradient-to-br from-gray-900 to-black border-gray-700">

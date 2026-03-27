@@ -2,16 +2,11 @@
 
 import React from 'react';
 
-// ── Chip image by amount (ether value) ──────────────────────────────────────
-const CHIP_SRCS = [
-  { min: 1000, src: '/PokerChips/blackpokerchip000.png' },
-  { min: 100,  src: '/PokerChips/redpokerchip015.png'   },
-  { min: 10,   src: '/PokerChips/greenpokerchip005.png' },
-  { min: 0,    src: '/PokerChips/bluepokerchip010.png'  },
-] as const;
+// ── Chip image ──────────────────────────────────────────────────────────────
+const MORBIUS_CHIP_SRC = '/morbius/MorbiusChip.png';
 
-function getChipSrc(amount: number): string {
-  return (CHIP_SRCS.find(c => amount >= c.min) ?? CHIP_SRCS[CHIP_SRCS.length - 1]).src;
+function getChipSrc(_amount: number): string {
+  return MORBIUS_CHIP_SRC;
 }
 
 /** Format a number to max 4 characters: 500, 1k, 23.4k, 1.5M, etc. */

@@ -1,5 +1,6 @@
 'use client'
 
+import type { ReactNode } from 'react'
 import { motion } from 'framer-motion'
 import { cn } from '@/lib/utils'
 import { homeSectionSubtitleClass, homeSectionTitleClass, homeSectionTitleGradientClass } from '@/lib/home-section-typography'
@@ -63,20 +64,36 @@ const CARDS = [
   },
 ]
 
-const cardVariants = {
-  hidden: { opacity: 0, y: 36 },
-  visible: {
-    opacity: 1,
-    y: 0,
-    transition: { duration: 0.5, ease: [0.22, 1, 0.36, 1] },
-  },
-}
-
-const containerVariants = {
-  hidden: {},
-  visible: {
-    transition: { staggerChildren: 0.1, staggerDirection: 1 },
-  },
+function FeatureCard({
+  title,
+  description,
+  icon,
+  index,
+}: {
+  title: string
+  description: ReactNode
+  icon: ReactNode
+  index: number
+}) {
+  return (
+    <div
+      className={cn(
+        'flex flex-col py-6 md:py-8 relative group/feature border-cyan-500/20 md:border-r md:border-b',
+        index % 3 === 0 && 'md:border-l',
+        index >= 3 && 'md:border-b-0',
+      )}
+    >
+      <div className="opacity-0 group-hover/feature:opacity-100 transition duration-200 absolute inset-0 h-full w-full bg-gradient-to-t from-cyan-950/35 to-transparent pointer-events-none" />
+      <div className="mb-4 relative z-10 px-5 md:px-6 text-purple-400">{icon}</div>
+      <div className="text-lg font-semibold mb-2 relative z-10 px-5 md:px-6">
+        <div className="absolute left-0 inset-y-0 h-6 group-hover/feature:h-8 w-1 rounded-tr-full rounded-br-full bg-cyan-500/40 group-hover/feature:bg-cyan-400 transition-all duration-200 origin-center" />
+        <span className="group-hover/feature:translate-x-2 transition duration-200 inline-block text-cyan-300/95 font-russo-one">
+          {title}
+        </span>
+      </div>
+      <p className="text-sm text-white/85 leading-relaxed relative z-10 px-5 md:px-6 max-w-sm">{description}</p>
+    </div>
+  )
 }
 
 export function ResponsibleGamingSection() {
@@ -98,40 +115,20 @@ export function ResponsibleGamingSection() {
           </p>
         </motion.div>
 
-        <motion.div
-          className="grid grid-cols-2 lg:grid-cols-3 gap-3 md:gap-4"
-          variants={containerVariants}
-          initial="hidden"
-          whileInView="visible"
-          viewport={{ once: true, margin: '-80px' }}
-        >
-          {CARDS.map((card) => {
+        <div className="grid grid-cols-1 md:grid-cols-3 border border-cyan-500/20 rounded-2xl overflow-hidden">
+          {CARDS.map((card, index) => {
             const Icon = card.Icon
             return (
-            <motion.div
-              key={card.title}
-              className="group relative rounded-xl border border-cyan-500/20 p-3 md:p-4 transition-all duration-300 hover:border-cyan-400/40"
-              variants={cardVariants}
-            >
-              <div>
-                <div className="flex justify-center mb-2">
-                  <Icon
-                    className="w-10 h-10 md:w-12 md:h-12 text-purple-400"
-                    strokeWidth={1.5}
-                    aria-hidden
-                  />
-                </div>
-                <h3 className="text-lg font-semibold text-cyan-300/95 mb-1 font-russo-one">
-                  {card.title}
-                </h3>
-                <p className="text-white/85 text-sm leading-relaxed">
-                  {'content' in card && card.content ? card.content : card.text}
-                </p>
-              </div>
-            </motion.div>
+              <FeatureCard
+                key={card.title}
+                index={index}
+                title={card.title}
+                description={'content' in card && card.content ? card.content : card.text}
+                icon={<Icon className="w-10 h-10 md:w-12 md:h-12" strokeWidth={1.5} aria-hidden />}
+              />
             )
           })}
-        </motion.div>
+        </div>
       </div>
     </section>
   )

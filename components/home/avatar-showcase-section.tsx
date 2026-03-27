@@ -74,6 +74,26 @@ const fadeUp = {
   transition: { duration: 0.45, ease: [0.22, 1, 0.36, 1] as const },
 }
 
+const controlRow = {
+  hidden: {},
+  visible: {
+    transition: {
+      staggerChildren: 0.06,
+      delayChildren: 0.04,
+    },
+  },
+}
+
+const controlItem = {
+  hidden: { opacity: 0, y: -14, scale: 0.95 },
+  visible: {
+    opacity: 1,
+    y: 0,
+    scale: 1,
+    transition: { duration: 0.35, ease: [0.22, 1, 0.36, 1] as const },
+  },
+}
+
 export function AvatarShowcaseSection() {
   const [config, setConfig] = useState<AvatarConfig>(DEMO_BASE)
   const [emotion, setEmotion] = useState<Emotion>('neutral')
@@ -161,102 +181,155 @@ export function AvatarShowcaseSection() {
 
               <div className="lg:w-[min(100%,340px)] flex flex-col gap-5 shrink-0 justify-center">
                 <div>
-                  <p className="text-[10px] font-semibold uppercase tracking-widest text-zinc-500 mb-2">Moves</p>
-                  <div className="flex flex-wrap gap-2">
-                    <MotionButton
-                      type="button"
-                      hoverScale={1.04}
-                      tapScale={0.96}
-                      className={cn(
-                        'rounded-xl px-3.5 py-2 text-sm font-semibold border transition-colors',
-                        config.accessory === 'Sunglasses'
-                          ? 'border-indigo-400/70 bg-indigo-600/35 text-white'
-                          : 'border-white/10 bg-black/40 text-zinc-200 hover:border-cyan-500/40 hover:bg-white/5'
-                      )}
-                      onClick={handleShades}
-                    >
-                      Shades
-                    </MotionButton>
-                    {EMOTION_MOVES.map(({ id, label }) => (
+                  <motion.p
+                    className="text-[10px] font-semibold uppercase tracking-widest text-zinc-500 mb-2"
+                    variants={controlItem}
+                    initial="hidden"
+                    whileInView="visible"
+                    viewport={{ once: true, margin: '-20px' }}
+                  >
+                    Moves
+                  </motion.p>
+                  <motion.div
+                    className="flex flex-wrap gap-2"
+                    variants={controlRow}
+                    initial="hidden"
+                    whileInView="visible"
+                    viewport={{ once: true, margin: '-20px' }}
+                  >
+                    <motion.div variants={controlItem}>
                       <MotionButton
-                        key={id}
                         type="button"
                         hoverScale={1.04}
                         tapScale={0.96}
                         className={cn(
                           'rounded-xl px-3.5 py-2 text-sm font-semibold border transition-colors',
-                          emotion === id
-                            ? 'border-cyan-400/70 bg-cyan-500/20 text-cyan-50'
+                          config.accessory === 'Sunglasses'
+                            ? 'border-indigo-400/70 bg-indigo-600/35 text-white'
                             : 'border-white/10 bg-black/40 text-zinc-200 hover:border-cyan-500/40 hover:bg-white/5'
                         )}
-                        onClick={() => setEmotion((e) => (e === id ? 'neutral' : id))}
+                        onClick={handleShades}
                       >
-                        {label}
+                        Shades
                       </MotionButton>
-                    ))}
-                  </div>
-                </div>
-                <div>
-                  <p className="text-[10px] font-semibold uppercase tracking-widest text-zinc-500 mb-2">Skin</p>
-                  <div className="flex flex-wrap gap-2">
-                    {SKIN_PRESETS.map(({ label, patch, tier }) => (
-                      <MotionButton
-                        key={label}
-                        type="button"
-                        hoverScale={1.04}
-                        tapScale={0.96}
-                        className={cn(
-                          'rounded-xl px-3.5 py-2 text-sm font-semibold border inline-flex items-center gap-2',
-                          config.skinColor === patch.skinColor
-                            ? 'border-cyan-400/70 bg-cyan-500/20 text-cyan-50'
-                            : 'border-white/10 bg-black/40 text-zinc-200 hover:border-cyan-500/40'
-                        )}
-                        onClick={() => applyCosmetic(patch)}
-                      >
-                        <span
+                    </motion.div>
+                    {EMOTION_MOVES.map(({ id, label }) => (
+                      <motion.div key={id} variants={controlItem}>
+                        <MotionButton
+                          type="button"
+                          hoverScale={1.04}
+                          tapScale={0.96}
                           className={cn(
-                            'size-3.5 rounded-md border border-white/20 shrink-0 shadow-inner',
-                            patch.skinColor === RAINBOW_SKIN &&
-                              'bg-gradient-to-r from-rose-500 via-amber-300 to-cyan-400'
+                            'rounded-xl px-3.5 py-2 text-sm font-semibold border transition-colors',
+                            emotion === id
+                              ? 'border-cyan-400/70 bg-cyan-500/20 text-cyan-50'
+                              : 'border-white/10 bg-black/40 text-zinc-200 hover:border-cyan-500/40 hover:bg-white/5'
                           )}
-                          style={
-                            patch.skinColor === RAINBOW_SKIN ? undefined : { backgroundColor: patch.skinColor }
-                          }
-                          aria-hidden
-                        />
-                        {label}
-                        {tier === 'legendary' ? (
-                          <span className="text-[9px] uppercase tracking-wide text-amber-300/90">L</span>
-                        ) : null}
-                      </MotionButton>
+                          onClick={() => setEmotion((e) => (e === id ? 'neutral' : id))}
+                        >
+                          {label}
+                        </MotionButton>
+                      </motion.div>
                     ))}
-                  </div>
+                  </motion.div>
                 </div>
                 <div>
-                  <p className="text-[10px] font-semibold uppercase tracking-widest text-zinc-500 mb-2">Hat</p>
-                  <div className="flex flex-wrap gap-2">
-                    {HAT_PRESETS.map(({ label, patch }) => (
-                      <MotionButton
-                        key={label}
-                        type="button"
-                        hoverScale={1.04}
-                        tapScale={0.96}
-                        className={cn(
-                          'rounded-xl px-3.5 py-2 text-sm font-semibold border',
-                          hatMatches(patch)
-                            ? 'border-cyan-400/70 bg-cyan-500/20 text-cyan-50'
-                            : 'border-white/10 bg-black/40 text-zinc-200 hover:border-cyan-500/40'
-                        )}
-                        onClick={() => applyCosmetic(patch)}
-                      >
-                        {label}
-                      </MotionButton>
+                  <motion.p
+                    className="text-[10px] font-semibold uppercase tracking-widest text-zinc-500 mb-2"
+                    variants={controlItem}
+                    initial="hidden"
+                    whileInView="visible"
+                    viewport={{ once: true, margin: '-20px' }}
+                  >
+                    Skin
+                  </motion.p>
+                  <motion.div
+                    className="flex flex-wrap gap-2"
+                    variants={controlRow}
+                    initial="hidden"
+                    whileInView="visible"
+                    viewport={{ once: true, margin: '-20px' }}
+                  >
+                    {SKIN_PRESETS.map(({ label, patch, tier }) => (
+                      <motion.div key={label} variants={controlItem}>
+                        <MotionButton
+                          type="button"
+                          hoverScale={1.04}
+                          tapScale={0.96}
+                          className={cn(
+                            'rounded-xl px-3.5 py-2 text-sm font-semibold border inline-flex items-center gap-2',
+                            config.skinColor === patch.skinColor
+                              ? 'border-cyan-400/70 bg-cyan-500/20 text-cyan-50'
+                              : 'border-white/10 bg-black/40 text-zinc-200 hover:border-cyan-500/40'
+                          )}
+                          onClick={() => applyCosmetic(patch)}
+                        >
+                          <span
+                            className={cn(
+                              'size-3.5 rounded-md border border-white/20 shrink-0 shadow-inner',
+                              patch.skinColor === RAINBOW_SKIN &&
+                                'bg-gradient-to-r from-rose-500 via-amber-300 to-cyan-400'
+                            )}
+                            style={
+                              patch.skinColor === RAINBOW_SKIN ? undefined : { backgroundColor: patch.skinColor }
+                            }
+                            aria-hidden
+                          />
+                          {label}
+                          {tier === 'legendary' ? (
+                            <span className="text-[9px] uppercase tracking-wide text-amber-300/90">L</span>
+                          ) : null}
+                        </MotionButton>
+                      </motion.div>
                     ))}
-                  </div>
+                  </motion.div>
                 </div>
-                <p className="text-xs text-zinc-500 leading-snug">
+                <div>
+                  <motion.p
+                    className="text-[10px] font-semibold uppercase tracking-widest text-zinc-500 mb-2"
+                    variants={controlItem}
+                    initial="hidden"
+                    whileInView="visible"
+                    viewport={{ once: true, margin: '-20px' }}
+                  >
+                    Hat
+                  </motion.p>
+                  <motion.div
+                    className="flex flex-wrap gap-2"
+                    variants={controlRow}
+                    initial="hidden"
+                    whileInView="visible"
+                    viewport={{ once: true, margin: '-20px' }}
+                  >
+                    {HAT_PRESETS.map(({ label, patch }) => (
+                      <motion.div key={label} variants={controlItem}>
+                        <MotionButton
+                          type="button"
+                          hoverScale={1.04}
+                          tapScale={0.96}
+                          className={cn(
+                            'rounded-xl px-3.5 py-2 text-sm font-semibold border',
+                            hatMatches(patch)
+                              ? 'border-cyan-400/70 bg-cyan-500/20 text-cyan-50'
+                              : 'border-white/10 bg-black/40 text-zinc-200 hover:border-cyan-500/40'
+                          )}
+                          onClick={() => applyCosmetic(patch)}
+                        >
+                          {label}
+                        </MotionButton>
+                      </motion.div>
+                    ))}
+                  </motion.div>
+                </div>
+                <motion.p
+                  className="text-xs text-zinc-500 leading-snug"
+                  variants={controlItem}
+                  initial="hidden"
+                  whileInView="visible"
+                  viewport={{ once: true, margin: '-20px' }}
+                >
                   Demo: tux · messy hair · cigar. Shades matches profile editor (toggle + drop-in). Connect for full wardrobe.
-                </p>
+                </motion.p>
               </div>
             </div>
           </div>

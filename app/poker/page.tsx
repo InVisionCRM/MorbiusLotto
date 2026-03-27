@@ -15,6 +15,12 @@ import { GameWalletModal } from '@/components/shared/GameWalletModal';
 import { GameFAQ } from '@/components/shared/GameFAQ';
 import { MORBIUS_TOKEN_ADDRESS } from '@/lib/contracts';
 import { isAdminWallet } from '@/lib/admin';
+import {
+  getCashBuyInBoundsWei,
+  POKER_CASH_MAX_BUY_IN_BB,
+  POKER_CASH_MIN_BUY_IN_BB,
+} from '@/lib/poker-buy-in';
+import { PokerBetaSplash } from '@/components/poker/PokerBetaSplash';
 // import { PokerTournamentLobby } from '@/components/poker/tournament/PokerTournamentLobby';
 
 /** Format a wei string to human-readable chips (e.g. "10000000000000000000" -> "10") */
@@ -126,10 +132,11 @@ export default function PokerLobbyPage() {
   const [tables, setTables] = useState<PokerTableSummary[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [joinModal, setJoinModal] = useState<{ tableId: string } | null>(null);
-  const [buyIn, setBuyIn] = useState('1000');
+  const [joinModal, setJoinModal] = useState<{ tableId: string; hasPin: boolean; bigBlindWei: string } | null>(null);
+  const [buyIn, setBuyIn] = useState('');
+  const [joinPin, setJoinPin] = useState('');
   const [balance, setBalance] = useState<string | null>(null);
-  const [createModal, setCreateModal] = useState<{ smallBlind: string; bigBlind: string; maxSeats: number } | null>(null);
+  const [createModal, setCreateModal] = useState<{ smallBlind: string; bigBlind: string; maxSeats: number; pinCode: string; pinEnabled: boolean } | null>(null);
   const [creating, setCreating] = useState(false);
   const [showHowToPlay, setShowHowToPlay] = useState(false);
   const [showDepositModal, setShowDepositModal] = useState(false);
@@ -142,6 +149,17 @@ export default function PokerLobbyPage() {
 
   const clientRef = React.useRef<BlackjackWebSocketClient | null>(null);
   const isAdmin = isAdminWallet(address);
+
+  const joinBuyInOutOfRange = React.useMemo(() => {
+    if (!joinModal) return false;
+    try {
+      const w = parseEther(buyIn.trim().replace(/,/g, '') || '0');
+      const { minWei, maxWei } = getCashBuyInBoundsWei(BigInt(joinModal.bigBlindWei));
+      return w < minWei || w > maxWei;
+    } catch {
+      return true;
+    }
+  }, [joinModal, buyIn]);
 
   const fetchTablePlayers = React.useCallback((tableId: string) => {
     const client = clientRef.current;
@@ -266,6 +284,10 @@ export default function PokerLobbyPage() {
   const handleJoin = () => {
     if (!joinModal || !address) return;
     setError(null);
+    if (joinModal.hasPin && !/^\d{4}$/.test(joinPin)) {
+      setError('Enter the 4-digit PIN to join this private table');
+      return;
+    }
     let buyInWei: string;
     try {
       buyInWei = parseEther(buyIn.trim().replace(/,/g, '') || '0').toString();
@@ -273,13 +295,29 @@ export default function PokerLobbyPage() {
       setError('Invalid buy-in amount');
       return;
     }
+    const bbWei = BigInt(joinModal.bigBlindWei);
+    const { minWei, maxWei } = getCashBuyInBoundsWei(bbWei);
+    const bi = BigInt(buyInWei);
+    if (bi < minWei || bi > maxWei) {
+      setError(
+        `Buy-in must be between ${POKER_CASH_MIN_BUY_IN_BB} and ${POKER_CASH_MAX_BUY_IN_BB} big blinds (${formatEther(minWei)}–${formatEther(maxWei)} MORBIUS).`
+      );
+      return;
+    }
     const targetTableId = joinModal.tableId;
+    const pin = joinModal.hasPin ? joinPin : '';
     setJoinModal(null);
-    router.push(`/poker/${targetTableId}?join=1&buyIn=${encodeURIComponent(buyInWei)}`);
+    setJoinPin('');
+    const pinParam = pin ? `&pin=${encodeURIComponent(pin)}` : '';
+    router.push(`/poker/${targetTableId}?join=1&buyIn=${encodeURIComponent(buyInWei)}${pinParam}`);
   };
 
   const handleCreateTable = async () => {
     if (!createModal || !address || !wsClient) return;
+    if (createModal.pinEnabled && !/^\d{4}$/.test(createModal.pinCode)) {
+      setError('PIN must be exactly 4 digits');
+      return;
+    }
     setCreating(true);
     setError(null);
     try {
@@ -291,16 +329,21 @@ export default function PokerLobbyPage() {
         try { return parseEther(createModal.bigBlind.trim().replace(/,/g, '') || '0').toString(); }
         catch { return createModal.bigBlind; }
       })();
-      const { tableId } = await wsClient.pokerCreateTable(sbWei, bbWei, createModal.maxSeats);
+      const pinCode = createModal.pinEnabled ? createModal.pinCode : undefined;
+      const { tableId } = await wsClient.pokerCreateTable(sbWei, bbWei, createModal.maxSeats, pinCode);
+      const createdPin = pinCode || '';
       setCreateModal(null);
-      // Navigate with join params so the table page seats the creator automatically
-      let buyInWei: string;
+      // Auto-join creator at max buy-in (100 BB) — matches cash-game rules
+      let bbBig: bigint;
       try {
-        buyInWei = parseEther(buyIn.trim().replace(/,/g, '') || '0').toString();
+        bbBig = parseEther(createModal.bigBlind.trim().replace(/,/g, '') || '0');
       } catch {
-        buyInWei = parseEther('1000').toString();
+        bbBig = 0n;
       }
-      router.push(`/poker/${tableId}?join=1&buyIn=${encodeURIComponent(buyInWei)}`);
+      const { maxWei } = getCashBuyInBoundsWei(bbBig);
+      const buyInWei = maxWei.toString();
+      const pinParam = createdPin ? `&pin=${encodeURIComponent(createdPin)}` : '';
+      router.push(`/poker/${tableId}?join=1&buyIn=${encodeURIComponent(buyInWei)}${pinParam}`);
     } catch (err) {
       setError((err as Error).message ?? 'Failed to create table');
     } finally {
@@ -314,6 +357,7 @@ export default function PokerLobbyPage() {
 
   return (
     <>
+      <PokerBetaSplash />
       <div className="relative min-h-screen h-full w-full flex flex-col bg-gradient-to-b from-[#080c14] via-slate-950 to-[#080c14] text-white">
         <div className="absolute inset-0 h-full min-h-screen w-full bg-[radial-gradient(ellipse_80%_60%_at_50%_0%,rgba(34,211,238,0.10),transparent_70%)] pointer-events-none" />
         <div className="relative flex-1 w-full max-w-4xl mx-auto px-3 py-4 sm:px-4 sm:py-8">
@@ -436,7 +480,7 @@ export default function PokerLobbyPage() {
                   {isConnected && (
                     <button
                       type="button"
-                      onClick={() => setCreateModal({ smallBlind: '10', bigBlind: '20', maxSeats: 6 })}
+                      onClick={() => setCreateModal({ smallBlind: '10', bigBlind: '20', maxSeats: 6, pinCode: '', pinEnabled: false })}
                       className="flex items-center gap-2 px-7 py-3.5 rounded-2xl text-white text-sm font-bold hover:-translate-y-0.5 transition-all"
                       style={{
                         background: 'linear-gradient(135deg, #06b6d4, #3b82f6)',
@@ -548,13 +592,24 @@ export default function PokerLobbyPage() {
                       >
                         ♠
                       </div>
-                      <div
-                        className="px-3 py-1.5 rounded-full bg-[#e0e5ec]"
-                        style={{ boxShadow: '2px 2px 4px rgba(163,177,198,0.4), -2px -2px 4px rgba(255,255,255,0.4)' }}
-                      >
-                        <span className={`text-[10px] font-bold uppercase tracking-wider ${isPlaying ? 'text-emerald-600' : 'text-slate-500'}`}>
-                          {isPlaying ? 'In Progress' : 'Waiting'}
-                        </span>
+                      <div className="flex items-center gap-1.5">
+                        {t.hasPin && (
+                          <div
+                            className="w-8 h-8 rounded-full bg-[#e0e5ec] flex items-center justify-center"
+                            style={{ boxShadow: '2px 2px 4px rgba(163,177,198,0.4), -2px -2px 4px rgba(255,255,255,0.4)' }}
+                            title="Private table — PIN required"
+                          >
+                            <svg className="w-3.5 h-3.5 text-amber-600" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2C9.24 2 7 4.24 7 7v3H6a2 2 0 00-2 2v8a2 2 0 002 2h12a2 2 0 002-2v-8a2 2 0 00-2-2h-1V7c0-2.76-2.24-5-5-5zm0 2c1.66 0 3 1.34 3 3v3H9V7c0-1.66 1.34-3 3-3zm0 10c1.1 0 2 .9 2 2s-.9 2-2 2-2-.9-2-2 .9-2 2-2z" /></svg>
+                          </div>
+                        )}
+                        <div
+                          className="px-3 py-1.5 rounded-full bg-[#e0e5ec]"
+                          style={{ boxShadow: '2px 2px 4px rgba(163,177,198,0.4), -2px -2px 4px rgba(255,255,255,0.4)' }}
+                        >
+                          <span className={`text-[10px] font-bold uppercase tracking-wider ${isPlaying ? 'text-emerald-600' : 'text-slate-500'}`}>
+                            {isPlaying ? 'In Progress' : 'Waiting'}
+                          </span>
+                        </div>
                       </div>
                     </div>
 
@@ -643,7 +698,13 @@ export default function PokerLobbyPage() {
                         {isConnected && (
                           <button
                             type="button"
-                            onClick={() => setJoinModal({ tableId: t.id })}
+                            onClick={() => {
+                              const bb = BigInt(t.bigBlind);
+                              const { maxWei } = getCashBuyInBoundsWei(bb);
+                              setBuyIn(formatEther(maxWei));
+                              setJoinModal({ tableId: t.id, hasPin: t.hasPin, bigBlindWei: t.bigBlind });
+                              setJoinPin('');
+                            }}
                             className="flex-1 py-3 rounded-2xl font-bold uppercase tracking-widest text-xs text-white transition-all duration-200 active:scale-95 shadow"
                             style={{ background: 'linear-gradient(135deg, #06b6d4, #3b82f6)', boxShadow: '2px 2px 6px rgba(0,0,0,0.2)' }}
                           >
@@ -686,9 +747,32 @@ export default function PokerLobbyPage() {
               style={Theme.panel?.base}
             >
               <div className="p-4 border-b border-cyan-500/30">
-                <h3 className="text-lg font-semibold text-cyan-400">Join Table</h3>
+                <h3 className="text-lg font-semibold text-cyan-400 flex items-center gap-2">
+                  Join Table
+                  {joinModal.hasPin && (
+                    <span className="flex items-center gap-1 text-xs font-medium text-amber-400">
+                      <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2C9.24 2 7 4.24 7 7v3H6a2 2 0 00-2 2v8a2 2 0 002 2h12a2 2 0 002-2v-8a2 2 0 00-2-2h-1V7c0-2.76-2.24-5-5-5zm0 2c1.66 0 3 1.34 3 3v3H9V7c0-1.66 1.34-3 3-3zm0 10c1.1 0 2 .9 2 2s-.9 2-2 2-2-.9-2-2 .9-2 2-2z" /></svg>
+                      Private
+                    </span>
+                  )}
+                </h3>
               </div>
               <div className="p-4 space-y-4">
+                {joinModal.hasPin && (
+                  <div>
+                    <label className="block text-sm text-slate-400 mb-1">Table PIN</label>
+                    <input
+                      type="text"
+                      inputMode="numeric"
+                      maxLength={4}
+                      value={joinPin}
+                      onChange={(e) => setJoinPin(e.target.value.replace(/\D/g, '').slice(0, 4))}
+                      placeholder="Enter 4-digit PIN"
+                      className="w-full rounded-lg bg-slate-800 border border-amber-500/40 px-3 py-2 text-white text-center tracking-[0.5em] text-lg font-mono"
+                      autoFocus
+                    />
+                  </div>
+                )}
                 {balance != null && (() => {
                   try {
                     return parseEther(buyIn.trim().replace(/,/g, '') || '0') > BigInt(balance);
@@ -700,14 +784,39 @@ export default function PokerLobbyPage() {
                     Insufficient balance. <button type="button" onClick={() => setShowDepositModal(true)} className="underline hover:text-amber-300">Get chips</button>
                   </p>
                 )}
+                <div className="rounded-lg bg-slate-800/80 border border-cyan-500/20 px-3 py-2.5 space-y-1">
+                  <p className="text-[11px] text-slate-400 leading-relaxed">
+                    <span className="text-cyan-400/90 font-medium">Cash buy-in:</span>{' '}
+                    {POKER_CASH_MIN_BUY_IN_BB} BB – {POKER_CASH_MAX_BUY_IN_BB} BB (industry standard).{' '}
+                    {joinModal ? (
+                      <>
+                        For this table:{' '}
+                        <span className="text-slate-300 tabular-nums">
+                          {formatEther(getCashBuyInBoundsWei(BigInt(joinModal.bigBlindWei)).minWei)} –{' '}
+                          {formatEther(getCashBuyInBoundsWei(BigInt(joinModal.bigBlindWei)).maxWei)}
+                        </span>{' '}
+                        MORBIUS.
+                      </>
+                    ) : null}
+                  </p>
+                  <p className="text-[10px] text-slate-500">
+                    No in-table top-ups — leave and rejoin to change your stack.
+                  </p>
+                </div>
                 <label className="block text-sm text-slate-400">Buy-in (MORBIUS)</label>
                 <input
                   type="text"
                   value={buyIn}
                   onChange={(e) => setBuyIn(e.target.value)}
-                  placeholder="e.g. 1000"
+                  placeholder="e.g. 100"
                   className="w-full rounded-lg bg-slate-800 border border-cyan-500/30 px-3 py-2 text-white"
                 />
+                {joinBuyInOutOfRange && buyIn.trim() !== '' && (
+                  <p className="text-amber-400/90 text-xs">
+                    Enter an amount between {formatEther(getCashBuyInBoundsWei(BigInt(joinModal.bigBlindWei)).minWei)} and{' '}
+                    {formatEther(getCashBuyInBoundsWei(BigInt(joinModal.bigBlindWei)).maxWei)} MORBIUS.
+                  </p>
+                )}
                 <div className="flex gap-2">
                   <button
                     type="button"
@@ -719,13 +828,17 @@ export default function PokerLobbyPage() {
                   <button
                     type="button"
                     onClick={handleJoin}
-                    disabled={balance != null && (() => {
-                      try {
-                        return parseEther(buyIn.trim().replace(/,/g, '') || '0') > BigInt(balance);
-                      } catch {
-                        return false;
-                      }
-                    })()}
+                    disabled={
+                      joinBuyInOutOfRange
+                      || (joinModal.hasPin && !/^\d{4}$/.test(joinPin))
+                      || (balance != null && (() => {
+                        try {
+                          return parseEther(buyIn.trim().replace(/,/g, '') || '0') > BigInt(balance);
+                        } catch {
+                          return false;
+                        }
+                      })())
+                    }
                     className="flex-1 py-2 rounded-lg bg-gradient-to-r from-cyan-600 to-blue-600 text-white disabled:opacity-50"
                   >
                     Join
@@ -883,6 +996,38 @@ export default function PokerLobbyPage() {
                   onChange={(e) => setCreateModal((m) => m ? { ...m, maxSeats: Math.min(10, Math.max(2, Number(e.target.value) || 6)) } : null)}
                   className="w-full rounded-lg bg-slate-800 border border-cyan-500/30 px-3 py-2 text-white"
                 />
+                {/* Private table PIN toggle */}
+                <div className="flex items-center justify-between pt-1">
+                  <div className="flex items-center gap-2">
+                    <svg className="w-4 h-4 text-slate-500" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2C9.24 2 7 4.24 7 7v3H6a2 2 0 00-2 2v8a2 2 0 002 2h12a2 2 0 002-2v-8a2 2 0 00-2-2h-1V7c0-2.76-2.24-5-5-5zm0 2c1.66 0 3 1.34 3 3v3H9V7c0-1.66 1.34-3 3-3zm0 10c1.1 0 2 .9 2 2s-.9 2-2 2-2-.9-2-2 .9-2 2-2z" /></svg>
+                    <span className="text-sm text-slate-400">Private table</span>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setCreateModal((m) => m ? { ...m, pinEnabled: !m.pinEnabled, pinCode: '' } : null)}
+                    className={`relative w-10 h-5 rounded-full transition-colors ${createModal.pinEnabled ? 'bg-cyan-500' : 'bg-slate-700'}`}
+                  >
+                    <span className={`absolute top-0.5 left-0.5 w-4 h-4 rounded-full bg-white transition-transform ${createModal.pinEnabled ? 'translate-x-5' : ''}`} />
+                  </button>
+                </div>
+                {createModal.pinEnabled && (
+                  <div>
+                    <label className="block text-sm text-slate-400 mb-1">4-digit PIN</label>
+                    <input
+                      type="text"
+                      inputMode="numeric"
+                      maxLength={4}
+                      value={createModal.pinCode}
+                      onChange={(e) => {
+                        const v = e.target.value.replace(/\D/g, '').slice(0, 4);
+                        setCreateModal((m) => m ? { ...m, pinCode: v } : null);
+                      }}
+                      placeholder="0000"
+                      className="w-full rounded-lg bg-slate-800 border border-cyan-500/30 px-3 py-2 text-white text-center tracking-[0.5em] text-lg font-mono"
+                    />
+                    <p className="text-[11px] text-slate-600 mt-1">Share this PIN with players you want to invite.</p>
+                  </div>
+                )}
                 <div className="flex gap-2">
                   <button
                     type="button"
@@ -894,7 +1039,7 @@ export default function PokerLobbyPage() {
                   <button
                     type="button"
                     onClick={handleCreateTable}
-                    disabled={creating || !createModal.smallBlind || !createModal.bigBlind}
+                    disabled={creating || !createModal.smallBlind || !createModal.bigBlind || (createModal.pinEnabled && !/^\d{4}$/.test(createModal.pinCode))}
                     className="flex-1 py-2 rounded-lg bg-gradient-to-r from-cyan-600 to-blue-600 text-white disabled:opacity-50"
                   >
                     {creating ? 'Creating...' : 'Create'}

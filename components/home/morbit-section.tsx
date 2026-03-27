@@ -31,7 +31,7 @@ export function MorbItSection() {
           variants={fadeIn}
         >
           <h2 className="text-4xl font-russo-one font-normal text-cyan-500 md:text-5xl lg:text-6xl mb-2">
-            MORB-IT
+            The MORB NATION
           </h2>
           <p className="text-white/50 text-sm">
             Community Tools

@@ -16,6 +16,11 @@ import {
   totalPotChips,
   weiToEngineChips,
 } from '../lib/poker-chip-scale';
+import {
+  getCashBuyInBoundsWei,
+  POKER_CASH_MAX_BUY_IN_BB,
+  POKER_CASH_MIN_BUY_IN_BB,
+} from '../lib/poker-cash-buy-in';
 import { logger } from '../utils/logger';
 import crypto from 'crypto';
 
@@ -29,6 +34,7 @@ export interface PokerTableSummary {
   status: string;
   seatedCount: number;
   emptySeats: number;
+  hasPin: boolean;
 }
 
 export interface PokerSeatState {
@@ -36,6 +42,7 @@ export interface PokerSeatState {
   playerAddress: string | null;
   stack: string;
   status: string;
+  consecutiveTimeouts?: number;
   isDealer: boolean;
   isSmallBlind: boolean;
   isBigBlind: boolean;
@@ -217,7 +224,7 @@ export class PokerGameService {
   async listTables(): Promise<PokerTableSummary[]> {
     const pool = this.getPool();
     const result = await pool.query(
-      `SELECT t.id, t.small_blind, t.big_blind, t.max_seats, t.status,
+      `SELECT t.id, t.small_blind, t.big_blind, t.max_seats, t.status, t.pin_code,
               COUNT(s.id) FILTER (WHERE s.player_address IS NOT NULL) AS seated_count
        FROM poker_tables t
        LEFT JOIN poker_seats s ON s.table_id = t.id
@@ -232,17 +239,21 @@ export class PokerGameService {
       status: r.status,
       seatedCount: Number(r.seated_count) || 0,
       emptySeats: Math.max(0, (Number(r.max_seats) || 6) - (Number(r.seated_count) || 0)),
+      hasPin: !!r.pin_code,
     }));
   }
 
-  async createTable(smallBlind: bigint, bigBlind: bigint, maxSeats: number): Promise<string> {
+  async createTable(smallBlind: bigint, bigBlind: bigint, maxSeats: number, pinCode?: string): Promise<string> {
     assertCashBlindsValid(smallBlind, bigBlind);
+    if (pinCode != null && !/^\d{4}$/.test(pinCode)) {
+      throw new Error('PIN must be exactly 4 digits');
+    }
     const pool = this.getPool();
     const r = await pool.query(
-      `INSERT INTO poker_tables (small_blind, big_blind, max_seats, status)
-       VALUES ($1::NUMERIC, $2::NUMERIC, $3, 'waiting')
+      `INSERT INTO poker_tables (small_blind, big_blind, max_seats, status, pin_code)
+       VALUES ($1::NUMERIC, $2::NUMERIC, $3, 'waiting', $4)
        RETURNING id`,
-      [smallBlind.toString(), bigBlind.toString(), maxSeats]
+      [smallBlind.toString(), bigBlind.toString(), maxSeats, pinCode ?? null]
     );
     return r.rows[0].id;
   }
@@ -285,14 +296,13 @@ export class PokerGameService {
   // Seat management
   // ---------------------------------------------------------------------------
 
-  async joinTable(tableId: string, playerAddress: string, buyInChips: string): Promise<PokerTableState> {
-    return this.withTableLock(tableId, () => this._joinTable(tableId, playerAddress, buyInChips));
+  async joinTable(tableId: string, playerAddress: string, buyInChips: string, pinCode?: string): Promise<PokerTableState> {
+    return this.withTableLock(tableId, () => this._joinTable(tableId, playerAddress, buyInChips, pinCode));
   }
 
-  private async _joinTable(tableId: string, playerAddress: string, buyInChips: string): Promise<PokerTableState> {
+  private async _joinTable(tableId: string, playerAddress: string, buyInChips: string, pinCode?: string): Promise<PokerTableState> {
     const normalized = this.normalizeAddress(playerAddress);
     const buyIn = BigInt(buyInChips);
-    assertCashChipMultiple(buyIn, 'Buy-in');
 
     const position = await this.dbService.withTransaction(async (client) => {
       // Lock the player row first — serializes concurrent join attempts by the same wallet
@@ -315,11 +325,31 @@ export class PokerGameService {
       }
 
       const tableResult = await client.query(
-        'SELECT id, small_blind, big_blind, max_seats FROM poker_tables WHERE id = $1',
+        'SELECT id, small_blind, big_blind, max_seats, pin_code, tournament_mode FROM poker_tables WHERE id = $1',
         [tableId]
       );
       if (tableResult.rows.length === 0) throw new Error('Table not found');
-      const maxSeats = Number(tableResult.rows[0].max_seats) || 6;
+      const tblRow = tableResult.rows[0];
+      const maxSeats = Number(tblRow.max_seats) || 6;
+
+      const tournamentMode = !!tblRow.tournament_mode;
+      if (!tournamentMode) {
+        const bbWei = BigInt(tblRow.big_blind ?? '0');
+        const { minWei, maxWei } = getCashBuyInBoundsWei(bbWei);
+        if (buyIn < minWei || buyIn > maxWei) {
+          throw new Error(
+            `Buy-in must be between ${POKER_CASH_MIN_BUY_IN_BB} and ${POKER_CASH_MAX_BUY_IN_BB} big blinds (min ${minWei.toString()} wei, max ${maxWei.toString()} wei).`
+          );
+        }
+      }
+      assertCashChipMultiple(buyIn, 'Buy-in');
+
+      // Validate PIN for private tables
+      if (tblRow.pin_code) {
+        if (!pinCode || pinCode !== tblRow.pin_code) {
+          throw new Error('Incorrect PIN');
+        }
+      }
 
       const existing = await client.query(
         'SELECT id FROM poker_seats WHERE table_id = $1 AND player_address = $2',
@@ -517,52 +547,10 @@ export class PokerGameService {
     return this.withTableLock(tableId, () => this._addChips(tableId, playerAddress, amount));
   }
 
-  private async _addChips(tableId: string, playerAddress: string, amount: string): Promise<PokerTableState> {
-    const normalized = this.normalizeAddress(playerAddress);
-    const chips = BigInt(amount);
-    assertCashChipMultiple(chips, 'Amount');
-
-    const pool = this.getPool();
-
-    // Block adding chips while a hand is in progress — syncSeatsFromTable would overwrite them
-    const activeHand = await pool.query(
-      'SELECT id FROM poker_hands WHERE table_id = $1 AND completed_at IS NULL LIMIT 1',
-      [tableId]
+  private async _addChips(_tableId: string, _playerAddress: string, _amount: string): Promise<PokerTableState> {
+    throw new Error(
+      `In-table top-ups are disabled. Leave the table and rejoin with a buy-in between ${POKER_CASH_MIN_BUY_IN_BB} and ${POKER_CASH_MAX_BUY_IN_BB} big blinds.`
     );
-    if (activeHand.rows.length > 0) {
-      throw new Error('Cannot add chips while a hand is in progress. Wait for the current hand to finish.');
-    }
-
-    await this.dbService.withTransaction(async (client) => {
-      // Lock the player row to serialize concurrent addChips calls
-      const playerLock = await client.query(
-        `SELECT id FROM players WHERE LOWER(wallet_address) = LOWER($1) FOR UPDATE`,
-        [normalized]
-      );
-      if (playerLock.rows.length === 0) throw new Error('Player not found');
-
-      const seatResult = await client.query(
-        'SELECT id FROM poker_seats WHERE table_id = $1 AND player_address = $2',
-        [tableId, normalized]
-      );
-      if (seatResult.rows.length === 0) throw new Error('Not seated at this table');
-
-      const deductResult = await client.query(
-        `UPDATE players SET balance = balance - $2::NUMERIC
-         WHERE LOWER(wallet_address) = LOWER($1) AND balance >= $2::NUMERIC
-         RETURNING balance`,
-        [normalized, chips.toString()]
-      );
-      if (deductResult.rows.length === 0) throw new Error('Insufficient balance');
-
-      await client.query(
-        'UPDATE poker_seats SET stack = stack + $3::NUMERIC WHERE table_id = $1 AND player_address = $2',
-        [tableId, normalized, chips.toString()]
-      );
-    });
-
-    logger.info('Poker add chips', { tableId, playerAddress: normalized, amount: chips.toString() });
-    return this.getTableState(tableId, normalized);
   }
 
   // ---------------------------------------------------------------------------
@@ -585,15 +573,16 @@ export class PokerGameService {
 
     // Load DB seats
     const seatsResult = await pool.query(
-      'SELECT position, player_address, stack, status FROM poker_seats WHERE table_id = $1 ORDER BY position',
+      'SELECT position, player_address, stack, status, consecutive_timeouts FROM poker_seats WHERE table_id = $1 ORDER BY position',
       [tableId]
     );
-    const dbSeatMap = new Map<number, { playerAddress: string; stack: string; status: string }>();
+    const dbSeatMap = new Map<number, { playerAddress: string; stack: string; status: string; consecutiveTimeouts: number }>();
     for (const r of seatsResult.rows) {
       dbSeatMap.set(r.position, {
         playerAddress: r.player_address,
         stack: r.stack?.toString() ?? '0',
         status: r.status,
+        consecutiveTimeouts: Number(r.consecutive_timeouts ?? 0),
       });
     }
 
@@ -625,6 +614,7 @@ export class PokerGameService {
         playerAddress: s?.playerAddress ?? null,
         stack,
         status: s?.status ?? 'empty',
+        consecutiveTimeouts: s?.consecutiveTimeouts ?? 0,
         isDealer: false,
         isSmallBlind: false,
         isBigBlind: false,

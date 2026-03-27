@@ -12,11 +12,7 @@ import {
 // ── Asset sources ──────────────────────────────────────────────
 
 const chipSrcs = [
-  '/PokerChips/greenpokerchip005.png',
-  '/PokerChips/redpokerchip015.png',
-  '/PokerChips/cyanpokerchip020.png',
-  '/PokerChips/blackpokerchip000.png',
-  '/PokerChips/bluepokerchip010.png',
+  '/morbius/MorbiusChip.png',
 ]
 
 const cardSrcs = [

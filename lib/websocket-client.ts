@@ -106,6 +106,7 @@ export interface PokerTableSummary {
   status: string;
   seatedCount: number;
   emptySeats: number;
+  hasPin: boolean;
 }
 
 export interface PokerSeatState {
@@ -113,6 +114,7 @@ export interface PokerSeatState {
   playerAddress: string | null;
   stack: string;
   status: string;
+  consecutiveTimeouts?: number;
   isDealer: boolean;
   isSmallBlind: boolean;
   isBigBlind: boolean;
@@ -735,8 +737,8 @@ export class BlackjackWebSocketClient {
   }
 
   /** Join a table with buy-in chips. Auth required. Subscribe to 'poker_table_state' for broadcasts. */
-  async pokerJoinTable(tableId: string, buyInChips: string): Promise<PokerTableState> {
-    return this.sendRequest('poker_join_table', { tableId, buyInChips });
+  async pokerJoinTable(tableId: string, buyInChips: string, pinCode?: string): Promise<PokerTableState> {
+    return this.sendRequest('poker_join_table', { tableId, buyInChips, ...(pinCode ? { pinCode } : {}) });
   }
 
   /** Leave a table (stack is credited back to balance). Auth required. */
@@ -762,8 +764,8 @@ export class BlackjackWebSocketClient {
   }
 
   /** Create a new table. Auth required. Returns the new table id. */
-  async pokerCreateTable(smallBlind: string, bigBlind: string, maxSeats: number = 6): Promise<{ tableId: string }> {
-    return this.sendRequest('poker_create_table', { smallBlind, bigBlind, maxSeats });
+  async pokerCreateTable(smallBlind: string, bigBlind: string, maxSeats: number = 6, pinCode?: string): Promise<{ tableId: string }> {
+    return this.sendRequest('poker_create_table', { smallBlind, bigBlind, maxSeats, ...(pinCode ? { pinCode } : {}) });
   }
 
   /** Admin-only: update the marketing logo displayed on the table felt. */

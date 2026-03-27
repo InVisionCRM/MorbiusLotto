@@ -6,6 +6,7 @@ import { toBigIntSafe } from '@/lib/safe-bigint';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useChat } from '@/hooks/use-chat';
 import type { BlackjackWebSocketClient, PokerTableState } from '@/lib/websocket-client';
+import { POKER_FACTS } from '@/app/poker/poker-facts';
 
 // ── Types ──────────────────────────────────────────────────────────────────
 
@@ -44,7 +45,14 @@ type ShowdownEntry = {
   holeCards?: number[];
   ts: number;
 };
-type Entry = ChatEntry | ActionEntry | ReactionEntry | DividerEntry | ShowdownEntry;
+type SystemEntry = {
+  kind: 'system';
+  id: string;
+  type: 'welcome' | 'factbot' | 'player_event' | 'idle_warning';
+  text: string;
+  ts: number;
+};
+type Entry = ChatEntry | ActionEntry | ReactionEntry | DividerEntry | ShowdownEntry | SystemEntry;
 
 // ── Constants ─────────────────────────────────────────────────────────────
 
@@ -71,6 +79,21 @@ const ACTION_LABELS: Record<string, string> = {
 function shortAddr(addr: string): string {
   if (!addr) return '???';
   return `…${addr.slice(-4).toUpperCase()}`;
+}
+
+function fallbackLast4(addr: string): string {
+  if (!addr) return '????';
+  return addr.slice(-4).toUpperCase();
+}
+
+function displayPlayerName(displayName?: string | null, addr?: string | null): string {
+  const trimmed = (displayName ?? '').trim();
+  if (trimmed.length > 0) return trimmed;
+  return fallbackLast4(addr ?? '');
+}
+
+function formatEventTime(ts: number): string {
+  return new Date(ts).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
 }
 
 function fmtWei(wei: string | number): string {
@@ -123,6 +146,7 @@ export interface PokerActivityFeedProps {
 /** Desktop fixed panel heights: expanded vs collapsed. */
 const DESKTOP_ACTIVITY_HEIGHT_EXPANDED = 'min(520px, calc(100dvh - 112px))';
 const DESKTOP_ACTIVITY_HEIGHT_COLLAPSED = 'min(180px, calc((100dvh - 112px) * 0.33))';
+const POKER_AFK_TIMEOUTS_BEFORE_KICK = 6;
 
 export function PokerActivityFeed({
   wsClient, wsConnected, roomId, tableId, state, embedInLayout = false,
@@ -147,6 +171,171 @@ export function PokerActivityFeed({
   const lastActionKeyRef = useRef<string | null>(null);
   const lastHandIdRef = useRef<string | null>(null);
   const lastShowdownHandRef = useRef<string | null>(null);
+  const welcomeSentRef = useRef(false);
+  const factUsedIndicesRef = useRef<Set<number>>(new Set());
+  const prevSeatSnapshotRef = useRef<Array<{
+    playerAddress: string | null;
+    status: string;
+    displayName?: string | null;
+    consecutiveTimeouts: number;
+  }> | null>(null);
+
+  // Reset one-time system message state when room changes.
+  useEffect(() => {
+    welcomeSentRef.current = false;
+    factUsedIndicesRef.current.clear();
+    prevSeatSnapshotRef.current = null;
+  }, [roomId]);
+
+  // ── System feed messages: welcome + periodic FactBot ─────────────────────
+  useEffect(() => {
+    if (!connected || !tableId || welcomeSentRef.current) return;
+    welcomeSentRef.current = true;
+    const sb = state?.smallBlind ? fmtWei(state.smallBlind) : '?';
+    const bb = state?.bigBlind ? fmtWei(state.bigBlind) : '?';
+    setEntries((prev) => [
+      ...prev,
+      {
+        kind: 'system',
+        id: `welcome-${tableId}`,
+        type: 'welcome',
+        text:
+          'Welcome to Morbius.IO Poker on PulseChain!\\n\\n' +
+          'Quick Tips:\\n' +
+          `- Blinds: ${sb}/${bb}\\n` +
+          '- Tap your avatar for settings and quick reactions\\n' +
+          '- Use Activity chat to coordinate and banter\\n\\n' +
+          'Socials:\\n' +
+          '- X: https://x.com/MorbiusIO\\n' +
+          '- Telegram: https://t.me/MorbiusIO',
+        ts: Date.now(),
+      } satisfies SystemEntry,
+    ].slice(-MAX_ENTRIES));
+  }, [connected, tableId, state?.smallBlind, state?.bigBlind]);
+
+  useEffect(() => {
+    if (!connected) return;
+
+    const addFact = () => {
+      if (POKER_FACTS.length === 0) return;
+      if (factUsedIndicesRef.current.size >= POKER_FACTS.length) {
+        factUsedIndicesRef.current.clear();
+      }
+
+      let idx = Math.floor(Math.random() * POKER_FACTS.length);
+      while (factUsedIndicesRef.current.has(idx) && factUsedIndicesRef.current.size < POKER_FACTS.length) {
+        idx = Math.floor(Math.random() * POKER_FACTS.length);
+      }
+      factUsedIndicesRef.current.add(idx);
+
+      setEntries((prev) => [
+        ...prev,
+        {
+          kind: 'system',
+          id: `factbot-${Date.now()}-${idx}`,
+          type: 'factbot',
+          text: POKER_FACTS[idx],
+          ts: Date.now(),
+        } satisfies SystemEntry,
+      ].slice(-MAX_ENTRIES));
+    };
+
+    const intervalId = setInterval(addFact, 5 * 60 * 1000);
+    const firstTimeout = setTimeout(addFact, 30_000);
+    return () => {
+      clearInterval(intervalId);
+      clearTimeout(firstTimeout);
+    };
+  }, [connected]);
+
+  // ── Player system events: join / leave / watch + idle warnings ───────────
+  useEffect(() => {
+    if (!state?.seats?.length) return;
+
+    const prev = prevSeatSnapshotRef.current;
+    const next = state.seats.map((seat) => ({
+      playerAddress: seat.playerAddress?.toLowerCase() ?? null,
+      status: seat.status,
+      displayName: seat.displayName ?? null,
+      consecutiveTimeouts: Number(seat.consecutiveTimeouts ?? 0),
+    }));
+
+    if (!prev) {
+      prevSeatSnapshotRef.current = next;
+      return;
+    }
+
+    const now = Date.now();
+    const nowLabel = formatEventTime(now);
+    const updates: SystemEntry[] = [];
+
+    for (let i = 0; i < next.length; i++) {
+      const p = prev[i];
+      const n = next[i];
+      if (!p || !n) continue;
+
+      // Join / leave / watch transitions
+      if (!p.playerAddress && n.playerAddress) {
+        const name = displayPlayerName(n.displayName, n.playerAddress);
+        const actionText = n.status === 'sitting_out' ? 'is now watching' : 'joined the table';
+        updates.push({
+          kind: 'system',
+          id: `player-join-${i}-${now}-${n.playerAddress}`,
+          type: 'player_event',
+          text: `${name} ${actionText} at ${nowLabel}`,
+          ts: now,
+        });
+      } else if (p.playerAddress && !n.playerAddress) {
+        const name = displayPlayerName(p.displayName, p.playerAddress);
+        updates.push({
+          kind: 'system',
+          id: `player-leave-${i}-${now}-${p.playerAddress}`,
+          type: 'player_event',
+          text: `${name} left the table at ${nowLabel}`,
+          ts: now,
+        });
+      } else if (p.playerAddress && n.playerAddress && p.playerAddress === n.playerAddress && p.status !== n.status) {
+        const name = displayPlayerName(n.displayName ?? p.displayName, n.playerAddress);
+        if (n.status === 'sitting_out') {
+          updates.push({
+            kind: 'system',
+            id: `player-watch-${i}-${now}-${n.playerAddress}`,
+            type: 'player_event',
+            text: `${name} is now watching at ${nowLabel}`,
+            ts: now,
+          });
+        } else if (p.status === 'sitting_out' && n.status === 'active') {
+          updates.push({
+            kind: 'system',
+            id: `player-back-${i}-${now}-${n.playerAddress}`,
+            type: 'player_event',
+            text: `${name} rejoined from watching at ${nowLabel}`,
+            ts: now,
+          });
+        }
+      }
+
+      // Idle warnings (same idea as blackjack: warn when timeout count increases and is high)
+      if (n.playerAddress) {
+        const prevTimeouts = p.consecutiveTimeouts ?? 0;
+        const currentTimeouts = n.consecutiveTimeouts ?? 0;
+        if (currentTimeouts > prevTimeouts && currentTimeouts >= 2) {
+          const name = displayPlayerName(n.displayName, n.playerAddress);
+          updates.push({
+            kind: 'system',
+            id: `idle-${i}-${now}-${n.playerAddress}-${currentTimeouts}`,
+            type: 'idle_warning',
+            text: `${name} is idle (${currentTimeouts}/${POKER_AFK_TIMEOUTS_BEFORE_KICK}) at ${nowLabel}.`,
+            ts: now,
+          });
+        }
+      }
+    }
+
+    prevSeatSnapshotRef.current = next;
+    if (updates.length === 0) return;
+    setEntries((prevEntries) => [...prevEntries, ...updates].slice(-MAX_ENTRIES));
+  }, [state]);
 
   // ── Sync chat messages into unified feed ──────────────────────────────────
   useEffect(() => {
@@ -285,6 +474,42 @@ export function PokerActivityFeed({
 
   // ── Entry renderer ────────────────────────────────────────────────────────
   function renderEntry(entry: Entry) {
+    if (entry.kind === 'system') {
+      const isWelcome = entry.type === 'welcome';
+      const isFact = entry.type === 'factbot';
+      const isPlayerEvent = entry.type === 'player_event';
+      return (
+        <div
+          key={entry.id}
+          className="px-2.5 py-1 text-[12px] md:text-[13px] leading-snug whitespace-pre-line"
+          style={{
+            color: isWelcome
+              ? 'rgba(250,204,21,0.9)'
+              : isFact
+                ? 'rgba(52,211,153,0.9)'
+                : isPlayerEvent
+                  ? 'rgba(56,189,248,0.92)'
+                  : 'rgba(251,146,60,0.92)',
+          }}
+        >
+          <span
+            className="font-semibold"
+            style={{
+              color: isWelcome
+                ? 'rgba(250,204,21,1)'
+                : isFact
+                  ? 'rgba(52,211,153,1)'
+                  : isPlayerEvent
+                    ? 'rgba(34,211,238,1)'
+                    : 'rgba(251,146,60,1)',
+            }}
+          >
+            {isWelcome ? 'Morbius: ' : isFact ? 'FactBot: ' : entry.type === 'player_event' ? 'Table: ' : 'System: '}
+          </span>
+          {entry.text}
+        </div>
+      );
+    }
     if (entry.kind === 'divider') {
       return (
         <div key={entry.id} className="flex items-center gap-1 py-0.5 mx-2 select-none">

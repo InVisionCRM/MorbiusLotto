@@ -106,6 +106,8 @@ export interface GameWalletModalProps {
   currentStack?: string;
   /** Called with new table state after a successful re-up. */
   onReupSuccess?: (state: PokerTableState) => void;
+  /** When false (default), hide the Re-up tab — e.g. cash poker MVP: leave table to change buy-in. */
+  enablePokerReup?: boolean;
 }
 
 // ── Component ──────────────────────────────────────────────────────────────
@@ -127,6 +129,7 @@ export function GameWalletModal({
   tableId,
   currentStack,
   onReupSuccess,
+  enablePokerReup = false,
   externalWithdrawLock = false,
 }: GameWalletModalProps) {
   const { address } = useAccount();
@@ -694,10 +697,16 @@ export function GameWalletModal({
   const controlsDisabled = isDepositLoading || isPreparingWithdraw || isLegacyWithdrawLoading || externalWithdrawLock;
 
   const atTable = !!wsClient && !!tableId;
+  const showReupTab = atTable && enablePokerReup;
+
+  useEffect(() => {
+    if (isOpen && tab === 'reup' && !showReupTab) setTab('deposit');
+  }, [isOpen, tab, showReupTab]);
+
   const tabs: { id: Tab; label: string }[] = [
     { id: 'deposit', label: 'Deposit' },
     { id: 'withdraw', label: 'Withdraw' },
-    ...(atTable ? [{ id: 'reup' as Tab, label: 'Re-up' }] : []),
+    ...(showReupTab ? [{ id: 'reup' as Tab, label: 'Re-up' }] : []),
     { id: 'history', label: 'History' },
   ];
 
@@ -1029,8 +1038,8 @@ export function GameWalletModal({
                     </div>
                   )}
 
-                  {/* ── Re-up ── */}
-                  {tab === 'reup' && (
+                  {/* ── Re-up (optional; disabled for cash poker MVP — leave table to change buy-in) ── */}
+                  {tab === 'reup' && showReupTab && (
                     <div className="space-y-4">
                       <div className="bg-gray-50 rounded-2xl p-4 space-y-1 text-sm">
                         <div className="flex justify-between">

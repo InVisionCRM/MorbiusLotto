@@ -36,6 +36,7 @@ import AvatarView from '@/components/poker/avatar/AvatarView'
 import { useProfileForAddress } from '@/hooks/use-player-profile'
 import { useKenoPlayerStats } from '@/hooks/use-keno-results'
 import { TOKEN_DECIMALS } from '@/lib/contracts'
+import { PlayerStatsFeatureGrid } from '@/components/ui/player-stats-feature-grid'
 
 const PANEL_STYLE = {
   background: 'linear-gradient(145deg, rgb(16, 26, 35), rgb(35, 36, 41))',
@@ -140,35 +141,35 @@ export function KenoPlayerDashboard({ playerAddress }: KenoPlayerDashboardProps)
       title: 'Total Plays',
       value: totalPlays.toString(),
       icon: Activity,
-      color: 'text-blue-400',
+      valueClassName: 'text-cyan-300',
       subtitle: 'Keno games played',
     },
     {
       title: 'Win Rate',
       value: `${winRate.toFixed(1)}%`,
       icon: Target,
-      color: winRate >= 50 ? 'text-green-400' : winRate >= 30 ? 'text-yellow-400' : 'text-red-400',
+      valueClassName: winRate >= 50 ? 'text-green-400' : winRate >= 30 ? 'text-yellow-400' : 'text-red-400',
       subtitle: 'Games with payout',
     },
     {
       title: 'Profit/Loss',
       value: `${profitLoss >= 0n ? '+' : ''}${formatMorbius(profitLoss >= 0n ? profitLoss : -profitLoss)} MORBIUS`,
       icon: profitLoss >= 0n ? TrendingUp : TrendingDown,
-      color: profitLoss >= 0n ? 'text-emerald-400' : 'text-red-400',
+      valueClassName: profitLoss >= 0n ? 'text-emerald-400' : 'text-red-400',
       subtitle: `${roi >= 0 ? '+' : ''}${roi.toFixed(1)}% ROI`,
     },
     {
       title: 'Total Wagered',
       value: `${formatMorbius(totalWagered)} MORBIUS`,
       icon: DollarSign,
-      color: 'text-purple-400',
+      valueClassName: 'text-neutral-100',
       subtitle: 'Total bet',
     },
     {
       title: 'Total Won',
       value: `${formatMorbius(totalWon)} MORBIUS`,
       icon: Trophy,
-      color: 'text-green-400',
+      valueClassName: 'text-cyan-300',
       subtitle: 'Total payout',
     },
   ]
@@ -235,24 +236,10 @@ export function KenoPlayerDashboard({ playerAddress }: KenoPlayerDashboardProps)
 
       {activeTab === 'stats' && (
         <>
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-            {statsCards.map((stat) => (
-              <Card
-                key={stat.title}
-                className="bg-gradient-to-br from-gray-900 to-black border-gray-700"
-                style={PANEL_STYLE}
-              >
-                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                  <CardTitle className="text-sm font-medium text-gray-400">{stat.title}</CardTitle>
-                  <stat.icon className={`h-4 w-4 ${stat.color}`} />
-                </CardHeader>
-                <CardContent>
-                  <div className={`text-2xl font-bold ${stat.color} mb-1`}>{stat.value}</div>
-                  <p className="text-xs text-gray-500">{stat.subtitle}</p>
-                </CardContent>
-              </Card>
-            ))}
-          </div>
+          <PlayerStatsFeatureGrid
+            items={statsCards}
+            className="border border-white/10 rounded-xl overflow-hidden"
+          />
 
           <Card className="bg-gradient-to-br from-gray-900 to-black border-gray-700" style={PANEL_STYLE}>
             <CardHeader>

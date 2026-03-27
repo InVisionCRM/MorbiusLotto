@@ -880,22 +880,8 @@ const BlackjackTable: React.FC<BlackjackTableProps> = ({
     return total;
   };
 
-  // Map chip values to PNG images for table display
-  // Color mapping: Green=500, Blue=1000, Red=2500, Black=10000, Cyan=100000
-  // Use the new poker chip image for all tournament chips
-  const getChipImage = (value: number) => {
-    // Use the new poker chip image for tournament mode (or all chips)
-    return '/PokerChips/tablepokerchip001-ezgif.com-gif-maker.png';
-    // Original mapping kept for reference:
-    // switch (value) {
-    //   case 500: return '/PokerChips/tablepokerchip006-ezgif.com-gif-maker.png'; // Green chip
-    //   case 1000: return '/PokerChips/tablepokerchip001-ezgif.com-gif-maker.png'; // Blue chip
-    //   case 2500: return '/PokerChips/tablepokerchip016-ezgif.com-gif-maker.png'; // Red chip
-    //   case 10000: return '/PokerChips/tablepokerchip001-ezgif.com-gif-maker.png'; // Black chip
-    //   case 100000: return '/PokerChips/tablepokerchip021-ezgif.com-rotate.png'; // Cyan chip for 100000
-    //   default: return '/PokerChips/tablepokerchip001-ezgif.com-gif-maker.png';
-    // }
-  };
+  // Use MorbiusChip for all table chip displays
+  const getChipImage = (_value: number) => '/morbius/MorbiusChip.png';
 
   // Debug logging (removed dealer card exposure)
 

@@ -32,9 +32,32 @@ type EncryptedTextProps = {
 const DEFAULT_CHARSET =
   "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789!@#$%^&*()_+-={}[];:,.<>/?";
 
-function generateRandomCharacter(charset: string): string {
-  const index = Math.floor(Math.random() * charset.length);
-  return charset.charAt(index);
+function generateRandomCharacter(
+  charset: string,
+  excludeChar?: string,
+): string {
+  if (!charset) return "";
+  if (charset.length === 1) return charset;
+
+  let next = charset.charAt(Math.floor(Math.random() * charset.length));
+  if (!excludeChar) return next;
+
+  // Prevent unrevealed characters from "accidentally" showing the final char.
+  let guard = 0;
+  while (next === excludeChar && guard < 8) {
+    next = charset.charAt(Math.floor(Math.random() * charset.length));
+    guard += 1;
+  }
+
+  if (next === excludeChar) {
+    const idx = charset.indexOf(excludeChar);
+    if (idx >= 0) {
+      const fallback = (idx + 1) % charset.length;
+      next = charset.charAt(fallback);
+    }
+  }
+
+  return next;
 }
 
 function generateGibberishPreservingSpaces(
@@ -45,7 +68,7 @@ function generateGibberishPreservingSpaces(
   let result = "";
   for (let i = 0; i < original.length; i += 1) {
     const ch = original[i];
-    result += ch === " " ? " " : generateRandomCharacter(charset);
+    result += ch === " " ? " " : generateRandomCharacter(charset, ch);
   }
   return result;
 }
@@ -53,7 +76,7 @@ function generateGibberishPreservingSpaces(
 export const EncryptedText: React.FC<EncryptedTextProps> = ({
   text,
   className,
-  revealDelayMs = 50,
+  revealDelayMs = 1000,
   charset = DEFAULT_CHARSET,
   flipDelayMs = 50,
   encryptedClassName,
@@ -64,6 +87,7 @@ export const EncryptedText: React.FC<EncryptedTextProps> = ({
   const isInView = useInView(ref, { once: true });
 
   const [revealCount, setRevealCount] = useState<number>(0);
+  const [, setScrambleTick] = useState<number>(0);
   const animationFrameRef = useRef<number | null>(null);
   const startTimeRef = useRef<number>(0);
   const lastFlipTimeRef = useRef<number>(0);
@@ -109,14 +133,18 @@ export const EncryptedText: React.FC<EncryptedTextProps> = ({
 
       const totalLength = text.length;
 
+      let currentRevealCount = revealCount;
+
       // Only reveal if hold has been released
       if (holdReleasedRef.current && startTimeRef.current > 0) {
         const elapsedMs = now - startTimeRef.current;
-        const currentRevealCount = Math.min(
+        currentRevealCount = Math.min(
           totalLength,
           Math.floor(elapsedMs / Math.max(1, revealDelayMs)),
         );
-        setRevealCount(currentRevealCount);
+        setRevealCount((prev) =>
+          prev === currentRevealCount ? prev : currentRevealCount,
+        );
 
         if (currentRevealCount >= totalLength) {
           return;
@@ -126,18 +154,19 @@ export const EncryptedText: React.FC<EncryptedTextProps> = ({
       // Re-randomize unrevealed scramble characters on an interval
       const timeSinceLastFlip = now - lastFlipTimeRef.current;
       if (timeSinceLastFlip >= Math.max(0, flipDelayMs)) {
-        const currentRevealed = holdReleasedRef.current ? revealCount : 0;
+        const currentRevealed = holdReleasedRef.current ? currentRevealCount : 0;
         for (let index = 0; index < totalLength; index += 1) {
           if (index >= currentRevealed) {
             if (text[index] !== " ") {
               scrambleCharsRef.current[index] =
-                generateRandomCharacter(charset);
+                generateRandomCharacter(charset, text[index]);
             } else {
               scrambleCharsRef.current[index] = " ";
             }
           }
         }
         lastFlipTimeRef.current = now;
+        setScrambleTick((prev) => prev + 1);
       }
 
       animationFrameRef.current = requestAnimationFrame(update);
@@ -170,7 +199,7 @@ export const EncryptedText: React.FC<EncryptedTextProps> = ({
           : char === " "
             ? " "
             : (scrambleCharsRef.current[index] ??
-              generateRandomCharacter(charset));
+              generateRandomCharacter(charset, char));
 
         return (
           <span

@@ -1,6 +1,6 @@
 'use client'
 
-import { motion, useReducedMotion } from 'framer-motion'
+import { useEffect, useRef, useState } from 'react'
 import { cn } from '@/lib/utils'
 import { homeSectionTitleClass, homeSectionTitleGradientClass } from '@/lib/home-section-typography'
 
@@ -12,44 +12,64 @@ function TelegramIcon({ className }: { className?: string }) {
   )
 }
 
-const edgeSpring = {
-  type: 'spring' as const,
-  stiffness: 380,
-  damping: 14,
-  mass: 0.85,
-}
-
 export function SocialsSection() {
-  const reduceMotion = useReducedMotion()
+  const sectionRef = useRef<HTMLElement>(null)
+  const [isVisible, setIsVisible] = useState(false)
+
+  useEffect(() => {
+    const el = sectionRef.current
+    if (!el) return
+
+    const observer = new IntersectionObserver(
+      ([entry]) => {
+        if (entry.isIntersecting) {
+          setIsVisible(true)
+          observer.disconnect()
+        }
+      },
+      { threshold: 0.3 },
+    )
+
+    observer.observe(el)
+    return () => observer.disconnect()
+  }, [])
 
   const iconClass =
     'w-[5.5rem] h-[5.5rem] sm:w-28 sm:h-28 md:w-36 md:h-36 lg:w-40 lg:h-40'
 
   return (
-    <section className="pt-6 pb-16 md:pb-24 px-4 overflow-x-clip">
+    <section ref={sectionRef} className="pt-6 pb-16 md:pb-24 px-4 overflow-hidden">
       <div className="container mx-auto max-w-4xl">
         <div className="rounded-2xl p-8 md:p-10">
+          {/* ── Title: slide-down reveal ── */}
           <div className="text-center mb-10 md:mb-12">
             <h2 className={cn(homeSectionTitleClass)}>
-              <span className={homeSectionTitleGradientClass}>Join the Community</span>
+              <span
+                className={cn(homeSectionTitleGradientClass, 'slide-down-reveal')}
+                style={{ transitionDelay: isVisible ? '150ms' : '0ms' }}
+                data-visible={isVisible ? '' : undefined}
+              >
+                JOIN THE MORB NATION!
+              </span>
             </h2>
           </div>
 
+          {/* ── Social icons ── */}
           <div className="flex justify-center items-center gap-16 md:gap-24 lg:gap-32">
-            <motion.a
+            <a
               href="https://x.com/morbius_io"
               target="_blank"
               rel="noopener noreferrer"
-              className="group flex flex-col items-center gap-5 will-change-transform"
-              initial={
-                reduceMotion
-                  ? false
-                  : { x: '-92vw', opacity: 0, scale: 0.88, rotate: -10 }
-              }
-              animate={{ x: 0, opacity: 1, scale: 1, rotate: 0 }}
-              transition={{ ...edgeSpring, delay: 0.06 }}
+              className={cn('group flex flex-col items-center gap-5')}
+              style={{ transitionDelay: isVisible ? '700ms' : '0ms' }}
+              data-visible={isVisible ? '' : undefined}
             >
-              <div className="text-purple-500 group-hover:text-cyan-400 transition-colors duration-300 drop-shadow-[0_0_32px_rgba(34,211,238,0.35)]">
+              <div
+                className="relative text-purple-500 group-hover:text-cyan-400 transition-colors duration-300 socials-logo-drop"
+                style={{ transitionDelay: isVisible ? '700ms' : '0ms' }}
+                data-visible={isVisible ? '' : undefined}
+              >
+                <div className="socials-icon-glow absolute inset-0 rounded-full" data-visible={isVisible ? '' : undefined} />
                 <svg className={iconClass} viewBox="0 0 24 24" fill="currentColor" aria-hidden>
                   <path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z" />
                 </svg>
@@ -57,28 +77,28 @@ export function SocialsSection() {
               <span className="text-lg md:text-xl font-medium text-white group-hover:text-cyan-400 transition-colors duration-300">
                 X.com
               </span>
-            </motion.a>
+            </a>
 
-            <motion.a
+            <a
               href="https://t.me/morbius_cash"
               target="_blank"
               rel="noopener noreferrer"
-              className="group flex flex-col items-center gap-5 will-change-transform"
-              initial={
-                reduceMotion
-                  ? false
-                  : { x: '92vw', opacity: 0, scale: 0.88, rotate: 10 }
-              }
-              animate={{ x: 0, opacity: 1, scale: 1, rotate: 0 }}
-              transition={{ ...edgeSpring, delay: 0.18 }}
+              className={cn('group flex flex-col items-center gap-5')}
+              style={{ transitionDelay: isVisible ? '900ms' : '0ms' }}
+              data-visible={isVisible ? '' : undefined}
             >
-              <div className="text-purple-500 group-hover:text-cyan-400 transition-colors duration-300 drop-shadow-[0_0_32px_rgba(34,211,238,0.35)]">
+              <div
+                className="relative text-purple-500 group-hover:text-cyan-400 transition-colors duration-300 socials-logo-drop"
+                style={{ transitionDelay: isVisible ? '900ms' : '0ms' }}
+                data-visible={isVisible ? '' : undefined}
+              >
+                <div className="socials-icon-glow absolute inset-0 rounded-full" data-visible={isVisible ? '' : undefined} />
                 <TelegramIcon className={iconClass} />
               </div>
               <span className="text-lg md:text-xl font-medium text-white group-hover:text-cyan-400 transition-colors duration-300">
                 Telegram
               </span>
-            </motion.a>
+            </a>
           </div>
         </div>
       </div>

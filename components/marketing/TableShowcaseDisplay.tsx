@@ -46,38 +46,21 @@ const SHOWCASES: ShowcaseData[] = [
 
 function BrowserMockup({ data, index }: { data: ShowcaseData; index: number }) {
   const isRight = data.rotateY < 0
-  const slideX = index === 0 ? -120 : index === 2 ? 120 : 0
+  const slideX = index % 2 === 0 ? -72 : 72
 
   return (
     <motion.div
       className="relative flex flex-col items-center"
-      initial={{ opacity: 0, x: slideX, y: 64 }}
-      whileInView={{ opacity: 1, x: 0, y: 0 }}
+      initial={{ opacity: 0, x: slideX }}
+      whileInView={{ opacity: 1, x: 0 }}
       viewport={{ once: true, margin: '-80px', amount: 0.2 }}
       transition={{
-        opacity: {
-          duration: 2.1,
-          delay: index * 0.42,
-          ease: [0.12, 0.55, 0.18, 1],
-        },
-        x: {
-          type: 'spring',
-          stiffness: 16,
-          damping: 50,
-          mass: 4.5,
-          delay: index * 0.42,
-          restDelta: 0.5,
-          restSpeed: 0.5,
-        },
-        y: {
-          type: 'spring',
-          stiffness: 16,
-          damping: 50,
-          mass: 4.5,
-          delay: index * 0.42,
-          restDelta: 0.5,
-          restSpeed: 0.5,
-        },
+        duration: 0.55,
+        delay: index * 0.08,
+        type: 'spring',
+        stiffness: 120,
+        damping: 18,
+        mass: 0.8,
       }}
     >
       {/* Outer wrapper gives space for floating cards */}

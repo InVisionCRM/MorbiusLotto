@@ -3,6 +3,8 @@
 import Image from 'next/image'
 import Link from 'next/link'
 import { useAccount } from 'wagmi'
+import { IconBrandTelegram, IconBrandX } from '@tabler/icons-react'
+import { Carousel } from '@/components/ui/apple-cards-carousel'
 import { PaymentBadges } from '@/components/home/payment-badges'
 import { cn } from '@/lib/utils'
 import { isAdminWallet } from '@/lib/admin'
@@ -11,6 +13,174 @@ import { homeSectionTitleClass, homeSectionTitleGradientClass } from '@/lib/home
 export function GamesSection() {
   const { address } = useAccount()
   const isAdmin = isAdminWallet(address)
+  const baseCardClassName =
+    'relative overflow-hidden rounded-3xl h-72 w-52 md:h-[30rem] md:w-96 transition-all duration-300 bg-gradient-to-br from-slate-900 to-slate-800 border border-cyan-500/30 shadow-2xl'
+
+  const gameCards = [
+    {
+      key: 'poker',
+      href: '/poker',
+      title: "Texas Hold'em",
+      image: '/morbius/morbius-poker-screenshot.png',
+      imageAlt: "Texas Hold'em",
+      titleClassName: 'text-xl md:text-3xl font-orbitron tracking-wide',
+      badge: 'NEW!' as string | null,
+      disabled: false,
+    },
+    {
+      key: 'multiplayer-blackjack',
+      href: '/blackjack-multi',
+      title: 'Multiplayer Blackjack',
+      image: '/morbius/multi-blackjack-screenshot.png',
+      imageAlt: 'Multiplayer Blackjack',
+      titleClassName: 'text-lg md:text-2xl font-krona-one leading-tight',
+      badge: 'NEW!' as string | null,
+      disabled: false,
+    },
+    {
+      key: 'blackjack',
+      href: '/BLACKJACK',
+      title: 'BlackJack',
+      image: '/BlackJack/TableBackground1.png',
+      imageAlt: 'BlackJack',
+      titleClassName: 'text-xl md:text-3xl font-jost',
+      badge: 'NEW!' as string | null,
+      disabled: false,
+    },
+    {
+      key: 'plinko',
+      href: '/PLINKO',
+      title: 'Plinko',
+      image: '/morbius/plinkoscreenshot.png',
+      imageAlt: 'Plinko',
+      titleClassName: 'text-xl md:text-3xl font-autour-one',
+      badge: 'NEW!' as string | null,
+      disabled: false,
+    },
+    {
+      key: 'keno',
+      href: '/keno',
+      title: 'KENO',
+      image: '/morbius/KENOscreenshot.png',
+      imageAlt: 'KENO',
+      titleClassName: 'text-xl md:text-3xl font-climate-crisis',
+      badge: null as string | null,
+      disabled: false,
+    },
+    {
+      key: 'lotto',
+      href: '/lottery',
+      title: 'Lotto',
+      image: '/morbius/Lottoscreenshot.png',
+      imageAlt: 'Mega Morbius Lotto',
+      titleClassName: 'text-xl md:text-3xl font-monoton',
+      badge: null as string | null,
+      disabled: false,
+    },
+    {
+      key: 'coming-soon',
+      href: '',
+      title: 'More Games Coming Soon',
+      image: '/Marketing%20/Hero-Background.jpeg',
+      imageAlt: 'More games coming soon',
+      titleClassName: 'text-lg md:text-2xl font-jost leading-tight',
+      badge: null as string | null,
+      disabled: true,
+      customContent: (
+        <div className="mt-2 flex flex-col items-center gap-2 text-center">
+          <p className="max-w-[16rem] text-[11px] md:text-xs text-cyan-100/90 leading-relaxed">
+            Got a game you really want to see on Morbius? Reach out to us directly on X.com or Telegram and
+            we will do our best to get it added!
+          </p>
+          <div className="flex items-center gap-2">
+            <a
+              href="https://x.com/morbiusfinance"
+              target="_blank"
+              rel="noopener noreferrer"
+              aria-label="Morbius on X"
+              className="inline-flex items-center justify-center h-8 w-8 rounded-full bg-black/50 border border-cyan-400/40 text-cyan-200 hover:text-white hover:border-cyan-300 transition-colors"
+            >
+              <IconBrandX size={16} />
+            </a>
+            <a
+              href="https://t.me/morbiusfinance"
+              target="_blank"
+              rel="noopener noreferrer"
+              aria-label="Morbius on Telegram"
+              className="inline-flex items-center justify-center h-8 w-8 rounded-full bg-black/50 border border-cyan-400/40 text-cyan-200 hover:text-white hover:border-cyan-300 transition-colors"
+            >
+              <IconBrandTelegram size={16} />
+            </a>
+          </div>
+        </div>
+      ),
+    },
+  ]
+
+  const items = gameCards.map((game) => {
+    const cardBody = (
+      <div className={cn(baseCardClassName, game.disabled && 'opacity-90 cursor-not-allowed')}>
+        {game.badge ? (
+          <div
+            className={cn(
+              'absolute top-2.5 right-2.5 md:top-3 md:right-3 z-20 text-[10px] md:text-xs px-2 py-1 rounded-full shadow-lg border',
+              game.disabled
+                ? 'bg-black/55 text-amber-200/95 border-amber-500/40 font-semibold'
+                : 'bg-gradient-to-r from-cyan-400 to-blue-500 text-white border-cyan-300/50 font-bold',
+            )}
+          >
+            {game.badge}
+          </div>
+        ) : null}
+
+        <div className="absolute inset-0">
+          {game.isGradientCard ? (
+            <div className="h-full w-full bg-gradient-to-br from-slate-900 via-slate-800 to-slate-950" />
+          ) : (
+            <Image
+              src={game.image}
+              alt={game.imageAlt}
+              fill
+              className={cn(
+                'object-cover',
+                game.disabled ? 'opacity-40 grayscale' : 'opacity-95',
+              )}
+            />
+          )}
+        </div>
+        <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/35 to-transparent" />
+        {game.isGradientCard ? (
+          <div className="absolute inset-0 bg-[radial-gradient(circle_at_50%_50%,rgba(34,211,238,0.2),transparent_65%)]" />
+        ) : null}
+
+        {!game.disabled ? <PaymentBadges /> : null}
+
+        <div className="absolute inset-0 flex flex-col items-center justify-center px-3 text-center">
+          <h3 className={cn('text-white drop-shadow-lg', game.titleClassName)}>{game.title}</h3>
+          {'customContent' in game && game.customContent ? game.customContent : null}
+        </div>
+      </div>
+    )
+
+    if (game.disabled || !game.href) {
+      return (
+        <div
+          key={game.key}
+          className="block"
+          role="group"
+          aria-label={`${game.title} — under construction`}
+        >
+          {cardBody}
+        </div>
+      )
+    }
+
+    return (
+      <Link key={game.key} href={game.href} className="block">
+        {cardBody}
+      </Link>
+    )
+  })
 
   return (
     <main className="w-full px-4 py-6 md:py-8 relative z-10 overflow-hidden" id="games">
@@ -21,180 +191,7 @@ export function GamesSection() {
           </h2>
         </div>
 
-        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-1.5 sm:gap-2 max-w-6xl mx-auto">
-          <Link href="/lottery" className="group block">
-            <div className="relative overflow-hidden rounded-xl w-full aspect-square max-w-xs transition-all duration-300 hover:scale-105 bg-white/5 backdrop-blur-md border border-white/10">
-              <div className="relative h-full w-full rounded-xl overflow-hidden">
-                <Image
-                  src="/morbius/Lottoscreenshot.png"
-                  alt="Mega Morbius Lotto"
-                  fill
-                  className="object-cover opacity-30 group-hover:opacity-100 transition-opacity duration-300"
-                />
-                <div className="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent" />
-                <PaymentBadges />
-                <div className="absolute inset-0 flex items-center justify-center">
-                  <h3 className="text-lg sm:text-xl lg:text-2xl font-monoton text-white drop-shadow-lg">Lotto</h3>
-                </div>
-              </div>
-            </div>
-          </Link>
-
-          <Link href="/keno" className="group block">
-            <div className="relative overflow-hidden rounded-xl w-full aspect-square max-w-xs transition-all duration-300 hover:scale-105 bg-white/5 backdrop-blur-md border border-white/10">
-              <div className="relative h-full w-full rounded-xl overflow-hidden">
-                <Image
-                  src="/morbius/KENOscreenshot.png"
-                  alt="KENO"
-                  fill
-                  className="object-cover opacity-30 group-hover:opacity-100 transition-opacity duration-300"
-                />
-                <div className="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent" />
-                <PaymentBadges />
-                <div className="absolute inset-0 flex items-center justify-center">
-                  <h3 className="text-lg sm:text-xl lg:text-2xl font-climate-crisis text-white drop-shadow-lg">KENO</h3>
-                </div>
-              </div>
-            </div>
-          </Link>
-
-          <Link href="/PLINKO" className="group block">
-            <div className="relative overflow-hidden rounded-xl w-full aspect-square max-w-xs transition-all duration-300 hover:scale-105 bg-white/5 backdrop-blur-md border border-white/10">
-              <div className="absolute top-1.5 right-1.5 z-10 bg-gradient-to-r from-cyan-400 to-purple-500 text-white font-bold text-xs px-1.5 py-0.5 rounded-full shadow-lg border border-cyan-300/50">
-                NEW!
-              </div>
-              <div className="relative h-full w-full rounded-xl overflow-hidden">
-                <Image
-                  src="/morbius/plinkoscreenshot.png"
-                  alt="Plinko"
-                  fill
-                  className="object-cover opacity-30 group-hover:opacity-100 transition-opacity duration-300"
-                />
-                <div className="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent" />
-                <PaymentBadges />
-                <div className="absolute inset-0 flex items-center justify-center">
-                  <h3 className="text-lg sm:text-xl lg:text-2xl font-autour-one text-white drop-shadow-lg">Plinko</h3>
-                </div>
-              </div>
-            </div>
-          </Link>
-
-          <Link href="/BLACKJACK" className="group block">
-            <div className="relative overflow-hidden rounded-xl w-full aspect-square max-w-xs transition-all duration-300 hover:scale-105 bg-white/5 backdrop-blur-md border border-white/10">
-              <div className="absolute top-1.5 right-1.5 z-10 bg-gradient-to-r from-cyan-400 to-purple-500 text-white font-bold text-xs px-1.5 py-0.5 rounded-full shadow-lg border border-cyan-300/50">
-                NEW!
-              </div>
-              <div className="relative h-full w-full rounded-xl overflow-hidden">
-                <Image
-                  src="/BlackJack/TableBackground1.png"
-                  alt="BlackJack"
-                  fill
-                  className="object-cover opacity-30 group-hover:opacity-100 transition-opacity duration-300"
-                />
-                <div className="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent" />
-                <PaymentBadges />
-                <div className="absolute inset-0 flex items-center justify-center">
-                  <h3 className="text-lg sm:text-xl lg:text-2xl font-jost text-white drop-shadow-lg">BlackJack</h3>
-                </div>
-              </div>
-            </div>
-          </Link>
-
-          {isAdmin ? (
-            <Link href="/blackjack-multi" className="group block">
-              <div className="relative overflow-hidden rounded-xl w-full aspect-square max-w-xs transition-all duration-300 hover:scale-105 bg-white/5 backdrop-blur-md border border-white/10">
-                <div className="absolute top-1.5 right-1.5 z-10 bg-gradient-to-r from-cyan-400 to-purple-500 text-white font-bold text-xs px-1.5 py-0.5 rounded-full shadow-lg border border-cyan-300/50">
-                  ADMIN
-                </div>
-                <div className="relative h-full w-full rounded-xl overflow-hidden">
-                  <Image
-                    src="/BlackJack/TableBackground1.png"
-                    alt="Multiplayer Blackjack"
-                    fill
-                    className="object-cover opacity-30 group-hover:opacity-100 transition-opacity duration-300"
-                  />
-                  <div className="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent" />
-                  <PaymentBadges />
-                  <div className="absolute inset-0 flex items-center justify-center">
-                    <h3 className="text-base sm:text-lg lg:text-xl font-jost text-white drop-shadow-lg leading-tight">
-                      Multiplayer Blackjack
-                    </h3>
-                  </div>
-                </div>
-              </div>
-            </Link>
-          ) : (
-            <div
-              className="group block cursor-not-allowed"
-              role="group"
-              aria-label="Multiplayer Blackjack — under construction"
-            >
-              <div className="relative overflow-hidden rounded-xl w-full aspect-square max-w-xs bg-white/5 backdrop-blur-md border border-white/10 border-dashed border-amber-500/35">
-                <div className="absolute top-1.5 right-1.5 z-10 bg-black/50 text-amber-200/95 font-semibold text-[10px] sm:text-xs px-1.5 py-0.5 rounded-md border border-amber-500/40">
-                  Under construction
-                </div>
-                <div className="relative h-full w-full rounded-xl overflow-hidden">
-                  <Image
-                    src="/BlackJack/TableBackground1.png"
-                    alt=""
-                    fill
-                    className="object-cover opacity-20 grayscale"
-                  />
-                  <div className="absolute inset-0 bg-gradient-to-t from-black/75 via-black/45 to-black/30" />
-                  <div className="absolute inset-0 flex flex-col items-center justify-center gap-1 px-2 text-center">
-                    <h3 className="text-base sm:text-lg lg:text-xl font-jost text-white drop-shadow-lg leading-tight">
-                      Multiplayer Blackjack
-                    </h3>
-                    <p className="text-[10px] sm:text-xs text-amber-200/90 font-medium uppercase tracking-wide">
-                      Under construction
-                    </p>
-                  </div>
-                </div>
-              </div>
-            </div>
-          )}
-
-          {isAdmin ? (
-            <Link href="/poker" className="group block">
-              <div className="relative overflow-hidden rounded-xl w-full aspect-square max-w-xs transition-all duration-300 hover:scale-105 bg-white/5 backdrop-blur-md border border-white/10">
-                <div className="absolute top-1.5 right-1.5 z-10 bg-gradient-to-r from-cyan-400 to-purple-500 text-white font-bold text-xs px-1.5 py-0.5 rounded-full shadow-lg border border-cyan-300/50">
-                  ADMIN
-                </div>
-                <div className="relative h-full w-full rounded-xl overflow-hidden bg-gradient-to-br from-slate-900 via-slate-800 to-slate-950">
-                  <div className="absolute inset-0 bg-[radial-gradient(circle_at_50%_50%,rgba(34,211,238,0.12),transparent_65%)]" />
-                  <div className="absolute inset-0 flex items-center justify-center">
-                    <h3 className="text-lg sm:text-xl lg:text-2xl font-jost text-white drop-shadow-lg">
-                      Texas Hold&apos;em
-                    </h3>
-                  </div>
-                </div>
-              </div>
-            </Link>
-          ) : (
-            <div
-              className="group block cursor-not-allowed"
-              role="group"
-              aria-label="Texas Hold'em — under construction"
-            >
-              <div className="relative overflow-hidden rounded-xl w-full aspect-square max-w-xs bg-white/5 backdrop-blur-md border border-white/10 border-dashed border-amber-500/35">
-                <div className="absolute top-1.5 right-1.5 z-10 bg-black/50 text-amber-200/95 font-semibold text-[10px] sm:text-xs px-1.5 py-0.5 rounded-md border border-amber-500/40">
-                  Under construction
-                </div>
-                <div className="relative h-full w-full rounded-xl overflow-hidden bg-gradient-to-br from-slate-900 via-slate-800 to-slate-950">
-                  <div className="absolute inset-0 bg-[radial-gradient(circle_at_50%_50%,rgba(34,211,238,0.12),transparent_65%)]" />
-                  <div className="absolute inset-0 flex flex-col items-center justify-center gap-1 px-2 text-center">
-                    <h3 className="text-base sm:text-lg lg:text-xl font-jost text-white drop-shadow-lg leading-tight">
-                      Texas Hold&apos;em
-                    </h3>
-                    <p className="text-[10px] sm:text-xs text-amber-200/90 font-medium uppercase tracking-wide">
-                      Under construction
-                    </p>
-                  </div>
-                </div>
-              </div>
-            </div>
-          )}
-        </div>
+        <Carousel items={items} />
       </div>
     </main>
   )

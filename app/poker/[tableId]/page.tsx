@@ -32,6 +32,7 @@ import { PokerPlayerTableDashboard } from '@/components/poker/PokerPlayerTableDa
 import { useQueryClient } from '@tanstack/react-query';
 import { IconButton } from '@/components/animate-ui/components/buttons/icon';
 import { toast } from 'sonner';
+import { PokerBetaSplash } from '@/components/poker/PokerBetaSplash';
 
 const POKER_CHAT_BUBBLE_DURATION_MS = 5000;
 const POKER_QUICK_REACTION_DURATION_MS = 2000;
@@ -47,6 +48,7 @@ export default function PokerTablePage() {
   const { signTypedDataAsync } = useSignTypedData();
   const joinFromLobby = searchParams.get('join') === '1';
   const buyInParam = searchParams.get('buyIn');
+  const pinParam = searchParams.get('pin');
 
   const [state, setState] = useState<PokerTableState | null>(null);
   const [wsConnected, setWsConnected] = useState(false);
@@ -128,7 +130,7 @@ export default function PokerTablePage() {
         setWsConnected(true);
         if (joinFromLobby && buyInParam && normalizedAddress) {
           return client
-            .pokerJoinTable(tableId, buyInParam)
+            .pokerJoinTable(tableId, buyInParam, pinParam || undefined)
             .catch((err) => {
               // Already seated is fine — just load current state
               const msg: string = err?.message ?? '';
@@ -661,6 +663,7 @@ export default function PokerTablePage() {
   return (
     <PokerThemeProvider themeId={pokerTheme}>
       <PokerTableEffectProvider>
+        <PokerBetaSplash />
         <div
           className={`flex flex-col ${cyberpunk ? 'font-mono uppercase' : ''}`}
           style={{
@@ -913,7 +916,7 @@ export default function PokerTablePage() {
                 broadcastEmotionBySeatIndex={broadcastEmotionBySeatIndex}
                 onPhraseReaction={mySeatIndex >= 0 ? onPhraseReaction : undefined}
                 onAnimationReaction={mySeatIndex >= 0 ? onAnimationReaction : undefined}
-                onReUpClick={mySeat ? () => setShowDepositModal(true) : undefined}
+                onReUpClick={undefined}
                 onMenuClick={mySeat ? () => setShowAvatarModal(true) : undefined}
                 onOpponentClick={(addr) => setOpponentProfileAddress(addr)}
                 onOpponentRadialAction={onOpponentRadialAction}

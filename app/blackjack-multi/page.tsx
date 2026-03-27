@@ -13,6 +13,7 @@ import { Button } from '@/components/ui/button';
 import { GameFAQ } from '@/components/shared/GameFAQ';
 import { BLACKJACK_ADDRESS, MORBIUS_TOKEN_ADDRESS } from '@/lib/contracts';
 import { Users, ArrowRight, Filter } from 'lucide-react';
+import { BlackjackMultiBetaSplash } from '@/components/BLACKJACK/BlackjackMultiBetaSplash';
 
 function formatMorbius(wei: string): string {
   try {
@@ -70,6 +71,7 @@ export default function BlackjackMultiLobbyPage() {
 
   return (
     <GlobalMainNav page="home" showBackArrow backArrowHref="/" backArrowLabel="Back">
+      <BlackjackMultiBetaSplash />
       <div className="min-h-screen bg-slate-950 text-white">
         <main className="container mx-auto px-4 py-8 max-w-3xl">
           <div className="mb-6 text-center">

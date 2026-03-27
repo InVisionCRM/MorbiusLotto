@@ -1,8 +1,6 @@
 import { type ComponentPropsWithoutRef, type ReactNode } from "react"
-import { ArrowRightIcon } from "@radix-ui/react-icons"
 
 import { cn } from "@/lib/utils"
-import { Button } from "@/components/ui/button"
 
 interface BentoGridProps extends ComponentPropsWithoutRef<"div"> {
   children: ReactNode
@@ -15,18 +13,17 @@ interface BentoCardProps extends ComponentPropsWithoutRef<"div"> {
   background: ReactNode
   Icon: React.ElementType
   description: string
-  href: string
-  cta: string
 }
 
 /** Embossed glass panel — matches home tokenomics / Plinko grey surfaces */
 const BENTO_CARD_SURFACE = cn(
-  "border border-white/[0.08] bg-black/35 shadow-[0_8px_32px_rgba(0,0,0,0.35)]",
-  "backdrop-blur-xl backdrop-saturate-150",
-  "[background:linear-gradient(155deg,rgba(18,22,28,0.72),rgba(28,32,40,0.45))]",
-  "dark:border-white/[0.1] dark:bg-black/40",
-  "dark:[box-shadow:inset_0_2px_6px_rgba(0,0,0,0.55),inset_0_-2px_5px_rgba(255,255,255,0.06),0_8px_32px_rgba(0,0,0,0.4)]"
+  "border border-white/35 bg-refraction/50",
 )
+
+const BENTO_CARD_SURFACE_STYLE = {
+  boxShadow:
+    "inset 0 -2px 3px rgba(74, 8, 137, 0.85), inset 0 -50px 50px rgba(112, 14, 209, 0.9), inset 0 1px 0 rgba(116, 15, 193, 0.96)), 0 10px 24px rgba(0, 0, 0, 0.51)",
+} as const
 
 const BentoGrid = ({ children, className, ...props }: BentoGridProps) => {
   return (
@@ -48,8 +45,7 @@ const BentoCard = ({
   background,
   Icon,
   description,
-  href,
-  cta,
+  style,
   ...props
 }: BentoCardProps) => (
   <div
@@ -59,6 +55,7 @@ const BentoCard = ({
       BENTO_CARD_SURFACE,
       className
     )}
+    style={{ ...BENTO_CARD_SURFACE_STYLE, ...style }}
     {...props}
   >
     <div className="pointer-events-none absolute inset-0 overflow-hidden">{background}</div>
@@ -69,32 +66,6 @@ const BentoCard = ({
         <h3 className="text-lg font-semibold tracking-tight text-white/95 md:text-xl">{name}</h3>
         <p className="max-w-lg text-sm leading-relaxed text-white/50">{description}</p>
       </div>
-
-      <div
-        className={cn(
-          "pointer-events-none flex w-full translate-y-0 transform-gpu flex-row items-center pt-2 transition-all duration-300 group-hover:opacity-100 lg:hidden"
-        )}
-      >
-        <Button variant="link" asChild size="sm" className="pointer-events-auto h-auto p-0 text-cyan-400 hover:text-cyan-300">
-          <a href={href}>
-            {cta}
-            <ArrowRightIcon className="ms-2 h-4 w-4 rtl:rotate-180" />
-          </a>
-        </Button>
-      </div>
-    </div>
-
-    <div
-      className={cn(
-        "pointer-events-none absolute bottom-0 z-10 hidden w-full translate-y-10 transform-gpu flex-row items-center p-5 opacity-0 transition-all duration-300 group-hover:translate-y-0 group-hover:opacity-100 lg:flex"
-      )}
-    >
-      <Button variant="link" asChild size="sm" className="pointer-events-auto h-auto p-0 text-cyan-400 hover:text-cyan-300">
-        <a href={href}>
-          {cta}
-          <ArrowRightIcon className="ms-2 h-4 w-4 rtl:rotate-180" />
-        </a>
-      </Button>
     </div>
 
     <div className="pointer-events-none absolute inset-0 z-[1] rounded-2xl transition-all duration-300 group-hover:bg-white/[0.04]" />

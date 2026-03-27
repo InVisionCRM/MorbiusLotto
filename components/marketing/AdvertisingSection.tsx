@@ -1,6 +1,7 @@
 'use client'
 
 import { useState } from 'react'
+import { motion } from 'framer-motion'
 import {
   Crown,
   Flame,
@@ -41,6 +42,31 @@ interface PlacementCard {
   traffic: TrafficLevel
   tiers: PriceTier[]
   note?: string
+}
+
+const adHeaderContainer = {
+  hidden: {},
+  visible: {
+    transition: {
+      staggerChildren: 0.14,
+      delayChildren: 0.08,
+    },
+  },
+}
+
+const dropIn = {
+  hidden: { opacity: 0, y: -26 },
+  visible: { opacity: 1, y: 0, transition: { duration: 0.55, ease: [0.2, 0.8, 0.2, 1] } },
+}
+
+const popIn = {
+  hidden: { opacity: 0, scale: 0.9, y: -10 },
+  visible: { opacity: 1, scale: 1, y: 0, transition: { duration: 0.45, ease: [0.2, 0.8, 0.2, 1] } },
+}
+
+const riseIn = {
+  hidden: { opacity: 0, y: 20 },
+  visible: { opacity: 1, y: 0, transition: { duration: 0.6, ease: [0.2, 0.8, 0.2, 1] } },
 }
 
 // ── Data ──────────────────────────────────────────────────────────────────────
@@ -396,35 +422,52 @@ export function AdvertisingSection() {
       <div className="max-w-5xl mx-auto">
 
         {/* Header */}
-        <div className="text-center mb-12">
-          <div className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full border text-xs font-semibold uppercase tracking-wider mb-5"
+        <motion.div
+          className="text-center mb-12"
+          initial="hidden"
+          whileInView="visible"
+          viewport={{ once: true, margin: '-70px' }}
+          variants={adHeaderContainer}
+        >
+          <motion.div
+            className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full border text-xs font-semibold uppercase tracking-wider mb-5"
             style={{ background: 'rgba(99,102,241,0.1)', borderColor: 'rgba(99,102,241,0.3)', color: '#a5b4fc' }}>
+            variants={dropIn}
             <BarChart2 className="w-3.5 h-3.5" />
-            Advertising — Reach PulseChain Traders
-          </div>
+            Custom Blackjack Tables - Limited Spots
+          </motion.div>
 
-          <h2 className={cn(homeSectionTitleClass, 'mb-3')}>
-            <span className="text-white">Want to Advertise on </span>
-            <span className={homeSectionTitleGradientClass}>Morbius?</span>
-          </h2>
-          <p className={cn(homeSectionSubtitleClass, 'max-w-xl mb-5')}>
-            Put your token in front of active PulseChain players. Tap any price to purchase
-            directly — payment is in PLS at the live rate.
-          </p>
+          <motion.div variants={popIn}>
+            <span className="text-red-300 font-bold text-sm">Limited Time - 50% Off All Packages!</span>
+          </motion.div>
+
+          <motion.h2 className={cn(homeSectionTitleClass, 'mb-1 mt-4')} variants={dropIn}>
+            <span className="text-white">Bring Your Brand</span>
+          </motion.h2>
+
+          <motion.h2 className={cn(homeSectionTitleClass, 'mb-3')} variants={dropIn}>
+            <span className={homeSectionTitleGradientClass}>To The Table</span>
+          </motion.h2>
+
+          <motion.p className={cn(homeSectionSubtitleClass, 'max-w-3xl mb-5 mx-auto')} variants={riseIn}>
+            Morbius builds a fully branded game table for your token - live in 24 hours, with a token
+            profile, Gold Badge, and your design auto-applied to every future game we launch.
+          </motion.p>
 
           {/* Limited time sale banner */}
-          <div
+          <motion.div
             className="inline-flex items-center gap-2.5 px-5 py-2.5 rounded-xl"
             style={{
               background: 'linear-gradient(135deg, rgba(239,68,68,0.15), rgba(220,38,38,0.08))',
               border: '1px solid rgba(239,68,68,0.3)',
             }}
+            variants={popIn}
           >
             <Tag className="w-4 h-4 text-red-400" />
             <span className="text-red-300 font-bold text-sm">LIMITED TIME — All prices 50% off!</span>
             <span className="text-red-500 text-xs">Crossed-out prices show regular rates</span>
-          </div>
-        </div>
+          </motion.div>
+        </motion.div>
 
         {/* Cards */}
         <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-5 mb-5">

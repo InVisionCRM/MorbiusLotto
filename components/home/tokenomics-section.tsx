@@ -1,10 +1,9 @@
 'use client'
 
-import { type ReactNode, useEffect, useState } from 'react'
+import { type ReactNode } from 'react'
 import { motion } from 'framer-motion'
 import { CalendarDays, Flame, Network, PieChart } from 'lucide-react'
 
-import { MorbiusBurnedDisplay } from '@/components/shared/MorbiusBurnedDisplay'
 import { TokenomicsRouterBeamHub } from '@/components/home/tokenomics-router-beam'
 import { AnimatedList } from '@/components/ui/animated-list'
 
@@ -13,14 +12,22 @@ const TokenomicsFlowBackground = TokenomicsRouterBeamHub
 import { BentoCard, BentoGrid } from '@/components/ui/bento-grid'
 import { Marquee } from '@/components/ui/marquee'
 import { ShinyButton } from '@/components/ui/shiny-button'
-import { getApiUrlOptional } from '@/lib/api-urls'
 import { cn } from '@/lib/utils'
 import { homeSectionSubtitleClass, homeSectionTitleClass, homeSectionTitleGradientClass } from '@/lib/home-section-typography'
-import { formatEther } from 'viem'
 
-const fadeIn = {
-  hidden: { opacity: 0, y: 30 },
+const slideDownFadeIn = {
+  hidden: { opacity: 0, y: -30 },
   visible: { opacity: 1, y: 0, transition: { duration: 0.5 } },
+}
+
+const slideDownHeaderContainer = {
+  hidden: {},
+  visible: {
+    transition: {
+      staggerChildren: 0.12,
+      delayChildren: 0.05,
+    },
+  },
 }
 
 /** Decorative “live fee” copy for the Burns / pools bento (not on-chain data). */
@@ -221,58 +228,6 @@ const feeStreams = [
   },
 ]
 
-function MorbiusEarnedDisplay({ className = '' }: { className?: string }) {
-  const [totalEarned, setTotalEarned] = useState<bigint>(0n)
-  const [isLoading, setIsLoading] = useState(true)
-  const apiBase = getApiUrlOptional()
-
-  useEffect(() => {
-    if (!apiBase) {
-      setIsLoading(false)
-      return
-    }
-
-    fetch(`${apiBase}/api/merkle/epochs`)
-      .then((r) => r.json())
-      .then((data) => {
-        if (Array.isArray(data)) {
-          const sum = data.reduce(
-            (acc: bigint, e: { total_reward_amount?: string }) =>
-              acc + BigInt(e.total_reward_amount || '0'),
-            0n
-          )
-          setTotalEarned(sum)
-        }
-        setIsLoading(false)
-      })
-      .catch(() => setIsLoading(false))
-  }, [apiBase])
-
-  const BASE_EARNED = 1_000_000
-  const earnedTokens = BASE_EARNED + Math.floor(Number(formatEther(totalEarned)))
-
-  return (
-    <div className={cn('text-center', className)}>
-      <div className="mb-2 flex items-center justify-center gap-2">
-        <span className="text-sm font-bold uppercase tracking-wider text-white/60">
-          Total earned
-        </span>
-      </div>
-      <div className="flex items-center justify-center gap-2">
-        {isLoading ? (
-          <span className="animate-pulse text-2xl font-black text-cyan-400 md:text-3xl">
-            …
-          </span>
-        ) : (
-          <span className="text-2xl font-black tabular-nums text-transparent bg-gradient-to-r from-cyan-400 to-purple-500 bg-clip-text md:text-3xl">
-            {earnedTokens.toLocaleString()}
-          </span>
-        )}
-      </div>
-    </div>
-  )
-}
-
 /** Static miniature of `app/claim/page.tsx` hero + tabs + analytics strip (decorative). */
 function ClaimPageMiniSnapshot({ className }: { className?: string }) {
   return (
@@ -354,8 +309,6 @@ const bentoFeatures = [
     name: 'Where every wager goes',
     description:
       '5% total on eligible wagers and withdrawals — split across holders, burn, platform, and LP incentives.',
-    href: '/claim',
-    cta: 'Claim rewards',
     className: 'col-span-3 lg:col-span-1',
     background: (
       <Marquee
@@ -389,8 +342,6 @@ const bentoFeatures = [
     name: 'Burns, pools, and payouts',
     description:
       'Eligible wagers and withdrawals split across holder rewards, LP incentives, platform fee, and burn.',
-    href: '/PLINKO',
-    cta: 'Play Plinko',
     className: 'col-span-3 lg:col-span-2',
     background: (
       <div className="absolute top-4 right-0 h-[280px] w-full [mask-image:linear-gradient(to_top,transparent_8%,#000_100%)]">
@@ -409,8 +360,6 @@ const bentoFeatures = [
     name: 'New Game, New Opportunity',
     description:
       'Any time a new game is deployed on MORBIUS.io, it will retain the same fee structure and result in more fee generation.',
-    href: '/BLACKJACK',
-    cta: 'Open Blackjack',
     className: 'col-span-3 lg:col-span-2',
     background: (
       <TokenomicsFlowBackground className="pointer-events-none absolute inset-0 [mask-image:linear-gradient(to_top,transparent_12%,#000_100%)] transition-transform duration-300 ease-out group-hover:scale-[1.02]" />
@@ -421,8 +370,6 @@ const bentoFeatures = [
     name: 'Claims on your schedule',
     description:
       'Nothing is airdropped automatically — open Claims when you want to collect MORBIUS and see holder and LP stats.',
-    href: '/claim',
-    cta: 'Open claims',
     className: 'col-span-3 lg:col-span-1',
     background: (
       <div className="absolute inset-0 [mask-image:linear-gradient(to_top,transparent_30%,#000_100%)]">
@@ -442,31 +389,23 @@ export function TokenomicsSection() {
           initial="hidden"
           whileInView="visible"
           viewport={{ once: true, margin: '-80px' }}
-          variants={fadeIn}
+          variants={slideDownHeaderContainer}
         >
-          <h2 className={cn(homeSectionTitleClass, 'mb-3')}>
-            <span className="text-white">MORBIUS </span>
-            <span className={homeSectionTitleGradientClass}>tokenomics</span>
-          </h2>
-          <p className={cn(homeSectionSubtitleClass, 'mx-auto mb-8 max-w-2xl')}>
-            Every game burns and earns MORBIUS. Fees are transparent, on-chain, and routed through a single
+          <motion.h2 className={cn(homeSectionTitleClass, 'mb-3')} variants={slideDownFadeIn}>
+            <span className="text-white">$Morbius </span>
+            <span className={homeSectionTitleGradientClass}>TOKENOMICS</span>
+          </motion.h2>
+          <motion.p className={cn(homeSectionSubtitleClass, 'mx-auto mb-8 max-w-2xl')} variants={slideDownFadeIn}>
+            Every game burns and earns $Morbius. Fees are transparent, on-chain, and routed through a single
             5% curve — then you choose when to claim.
-          </p>
-          <div className="mx-auto grid max-w-2xl grid-cols-1 gap-6 sm:grid-cols-2">
-            <div className="rounded-2xl border border-cyan-500/30 bg-transparent p-5">
-              <MorbiusBurnedDisplay variant="card" showLogo={false} useAnimatedNumbers={false} />
-            </div>
-            <div className="rounded-2xl border border-cyan-500/30 bg-transparent p-5">
-              <MorbiusEarnedDisplay />
-            </div>
-          </div>
+          </motion.p>
         </motion.div>
 
         <motion.div
           initial="hidden"
           whileInView="visible"
           viewport={{ once: true, margin: '-40px' }}
-          variants={fadeIn}
+          variants={slideDownFadeIn}
         >
           <BentoGrid className="auto-rows-[minmax(20rem,22rem)] lg:auto-rows-[22rem]">
             {bentoFeatures.map((feature) => (
@@ -480,7 +419,7 @@ export function TokenomicsSection() {
           initial="hidden"
           whileInView="visible"
           viewport={{ once: true }}
-          variants={fadeIn}
+          variants={slideDownFadeIn}
         >
           <ShinyButton
             href="/claim"
