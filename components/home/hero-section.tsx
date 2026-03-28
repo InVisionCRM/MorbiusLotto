@@ -54,7 +54,7 @@ export function HeroSection({ onOpenPlayerProfile, onOpenAuthModal, showWelcome 
           </p>
         </div>
       ) : (
-        <h1 className="font-russo-one pointer-events-none absolute left-4 top-1/4 z-10 w-[min(92vw,1100px)] px-2 text-left sm:left-8 sm:px-0">
+        <h1 className="font-russo-one pointer-events-none absolute left-4 top-1/4 z-10 hidden w-[min(92vw,1100px)] px-2 text-left sm:left-8 sm:px-0 md:block">
           <span
             className={`hero-title-line block text-4xl font-black uppercase leading-none tracking-tight text-white drop-shadow-[0_2px_16px_rgba(0,0,0,0.85)] sm:text-5xl md:text-6xl lg:text-7xl ${isReady ? 'hero-title-line-visible' : 'hero-title-line-hidden'}`}
             style={{ transitionDelay: '260ms' }}

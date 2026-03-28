@@ -89,6 +89,11 @@ const POSITIONS = [0, 1, 2] as const;
 /** Avatars in bottom-left table dock */
 const DOCK_AVATAR_SIZE = 40;
 
+/** Fixed seat frame (px in 800×450 board space) — stable rotation pivot; tag not tied to card height */
+const SEAT_TAG_BAR_PX = 44;
+const SEAT_CARD_ZONE_PX = 144;
+const SEAT_FRAME_H = SEAT_TAG_BAR_PX + SEAT_CARD_ZONE_PX;
+
 // Avatar animation constants — matches poker system
 const AVATAR_EMOTION_DURATION_MS = 3000;
 const AVATAR_EMOTION_WINK_MS = 1200;
@@ -517,12 +522,28 @@ function Seat({
     return null;
   })();
 
+  /** New hits extend toward table outside edge, not toward neighbor seats */
+  const handCardRowClass =
+    position === 0
+      ? 'relative flex w-full min-w-0 flex-row-reverse flex-nowrap items-end justify-start'
+      : position === 2
+        ? 'relative flex w-full min-w-0 flex-row flex-nowrap items-end justify-start'
+        : 'relative flex w-full min-w-0 flex-row flex-nowrap items-end justify-center';
+
+  const placeholderRowClass =
+    position === 0 ? 'flex h-full w-full items-end justify-end pb-1' :
+    position === 2 ? 'flex h-full w-full items-end justify-start pb-1' :
+    'flex h-full w-full items-end justify-center pb-1';
+
   return (
     <div
-      className="relative flex flex-col items-center gap-0 min-w-0 h-[248px] justify-end pb-[40px]"
+      className="relative flex min-h-0 w-full flex-col items-center gap-0 justify-end pb-[40px] pt-1 h-[248px]"
     >
-      {/* Cards area — side seats tilt toward dealer */}
+      {/* Full column width = stable transform-origin bottom center (side seats stop drifting on hit) */}
       <div
+        className={`flex w-full min-w-0 shrink-0 items-end ${
+          position === 0 ? 'justify-start' : position === 2 ? 'justify-end' : 'justify-center'
+        }`}
         style={{
           transform: seatRotation ? `rotate(${seatRotation}deg)` : undefined,
           transformOrigin: 'center bottom',
@@ -530,7 +551,7 @@ function Seat({
       >
         {isEmpty ? (
           <div
-            className={`flex flex-col items-center justify-center gap-2 rounded-xl px-4 py-4 min-h-[80px] border-2 border-dashed transition-all ${
+            className={`flex min-h-[80px] flex-col items-center justify-center gap-2 rounded-xl border-2 border-dashed px-4 py-4 transition-all ${
               canTakeSeat
                 ? 'border-cyan-400/70 bg-cyan-900/20 hover:border-cyan-300 hover:bg-cyan-800/30 cursor-pointer hover:scale-105 shadow-[0_0_15px_rgba(6,182,212,0.15)]'
                 : 'border-white/25 bg-white/[0.03]'
@@ -547,166 +568,192 @@ function Seat({
             {!canTakeSeat && <span className="text-xs text-white/35 font-medium">Seat {position + 1}</span>}
           </div>
         ) : (
-          <>
-            <div className="relative inline-flex max-w-full flex-col items-center">
-            {/* Hands */}
-            {seat && seat.hands.length > 0 ? (
-              <div className={`flex min-h-[80px] justify-center items-start ${seat.hands.length > 1 ? 'flex-row gap-2' : 'flex-col items-center gap-1'}`}>
-                {seat.hands.map((hand, hi) => {
-                  const hasSplit = seat.hands.length > 1;
-                  const isActiveHand = hasSplit && isActing && seat.activeHandIndex === hi;
-                  const isCompletedHand = hasSplit && isActing && (hand.isBust || hi < seat.activeHandIndex);
-                  return (
-                    <div
-                      key={hi}
-                      className={`flex flex-col items-center gap-1 ${hasSplit ? 'px-1.5 py-1 rounded-md transition-all duration-300' : ''}`}
-                      style={
-                        hasSplit
-                          ? {
-                              background: isActiveHand
-                                ? 'linear-gradient(145deg, rgba(6, 182, 212, 0.15), rgba(6, 182, 212, 0.05))'
-                                : isCompletedHand
-                                  ? 'linear-gradient(145deg, rgba(100, 100, 100, 0.1), rgba(50, 50, 50, 0.05))'
-                                  : 'transparent',
-                              border: isActiveHand
-                                ? '2px solid rgba(6, 182, 212, 0.5)'
-                                : isCompletedHand
-                                  ? '1px solid rgba(100, 100, 100, 0.3)'
-                                  : '1px solid rgba(60, 60, 60, 0.35)',
-                              boxShadow: isActiveHand
-                                ? '0 0 16px rgba(6, 182, 212, 0.28), inset 0 0 8px rgba(6, 182, 212, 0.08)'
-                                : 'none',
-                              opacity: isCompletedHand ? 0.72 : 1,
-                              transform: isActiveHand ? 'scale(1.02)' : 'scale(1)',
-                            }
-                          : undefined
-                      }
-                    >
-                      {hasSplit && (
-                        <div className="mb-0 flex items-center gap-1">
-                          <span
-                            className={`text-[9px] font-bold uppercase tracking-wider ${
-                              isActiveHand ? 'text-cyan-400' : 'text-white/45'
-                            }`}
-                          >
-                            Hand {hi + 1}
-                          </span>
-                          {isActiveHand && <span className="w-1.5 h-1.5 bg-cyan-400 rounded-full animate-pulse" aria-hidden />}
-                        </div>
-                      )}
-                      <div className="flex flex-col items-center">
-                        {/* Score counter — above cards, matching single-player glass-counter style */}
-                        {hand.cards.length > 0 && (
-                          <div className={`flex items-center gap-2 transition-transform duration-300 ${
-                            showOutcomeLabel && (hand.result === 'win' || hand.result === 'blackjack') ? 'card-counter-winner' : ''
-                          }`} style={{ marginBottom: -10, zIndex: 0 }}>
-                            <div className={`glass-counter relative w-16 h-16 flex items-center justify-center rounded-full transition-all duration-300 ${
-                              isActing && seat.activeHandIndex === hi ? 'card-counter-active' : ''
-                            }`}>
-                              <span className={`font-black relative z-10 transition-all duration-500 ${
-                                hand.isBust ? 'text-red-400' : hand.isBlackjack ? 'text-yellow-400' : showOutcomeLabel && (hand.result === 'win' || hand.result === 'blackjack') ? 'text-emerald-400' : isActiveHand ? 'text-white/90' : hasSplit ? 'text-white/50' : 'text-white/90'
-                              } ${hand.hasAce && !hand.isBlackjack && !hand.isBust && hand.total <= 21 ? 'text-xl' : 'text-3xl'}`}>
-                                {hand.hasAce && !hand.isBlackjack && !hand.isBust && hand.total <= 21
-                                  ? <>{hand.total - 10}<span className="text-white/40">/</span>{hand.total}</>
-                                  : hand.total}
+          <div className="flex flex-col items-center">
+            {/* Fixed frame: tag + card zone — dimensions do not change when card count changes */}
+            <div
+              className="relative box-border w-full max-w-[228px] shrink-0 overflow-visible"
+              style={{ height: SEAT_FRAME_H }}
+            >
+              {/* Card + counter zone — pinned above tag */}
+              <div
+                className="absolute inset-x-0 top-0 flex flex-col justify-end overflow-visible"
+                style={{ bottom: SEAT_TAG_BAR_PX }}
+              >
+                {seat && seat.hands.length > 0 ? (
+                  <div
+                    className={`flex min-h-0 w-full items-end ${
+                      seat.hands.length > 1 ? 'flex-row justify-center gap-1 px-0.5' : 'flex-col items-stretch'
+                    }`}
+                  >
+                    {seat.hands.map((hand, hi) => {
+                      const hasSplit = seat.hands.length > 1;
+                      const isActiveHand = hasSplit && isActing && seat.activeHandIndex === hi;
+                      const isCompletedHand = hasSplit && isActing && (hand.isBust || hi < seat.activeHandIndex);
+                      return (
+                        <div
+                          key={hi}
+                          className={`flex min-w-0 flex-col items-center gap-0.5 ${hasSplit ? 'max-w-[50%] flex-1 px-0.5 py-0.5 rounded-md' : 'w-full'}`}
+                          style={
+                            hasSplit
+                              ? {
+                                  background: isActiveHand
+                                    ? 'linear-gradient(145deg, rgba(6, 182, 212, 0.15), rgba(6, 182, 212, 0.05))'
+                                    : isCompletedHand
+                                      ? 'linear-gradient(145deg, rgba(100, 100, 100, 0.1), rgba(50, 50, 50, 0.05))'
+                                      : 'transparent',
+                                  border: isActiveHand
+                                    ? '2px solid rgba(6, 182, 212, 0.5)'
+                                    : isCompletedHand
+                                      ? '1px solid rgba(100, 100, 100, 0.3)'
+                                      : '1px solid rgba(60, 60, 60, 0.35)',
+                                  boxShadow: isActiveHand
+                                    ? '0 0 16px rgba(6, 182, 212, 0.28), inset 0 0 8px rgba(6, 182, 212, 0.08)'
+                                    : 'none',
+                                  opacity: isCompletedHand ? 0.72 : 1,
+                                }
+                              : undefined
+                          }
+                        >
+                          {hasSplit && (
+                            <div className="mb-0 flex items-center gap-1">
+                              <span
+                                className={`text-[9px] font-bold uppercase tracking-wider ${
+                                  isActiveHand ? 'text-cyan-400' : 'text-white/45'
+                                }`}
+                              >
+                                Hand {hi + 1}
                               </span>
-                            </div>
-                            {hand.isBlackjack && <span className="text-yellow-400 font-black text-sm">BJ!</span>}
-                            {hand.isBust && <span className="text-red-400 font-black text-sm">BUST</span>}
-                          </div>
-                        )}
-                        <div className="relative flex">
-                          {hand.cards.map((c, ci) => (
-                            <div key={ci} className={ci > 0 ? 'card-overlap-player' : ''} style={{ zIndex: ci }}>
-                              <PlayingCard card={indexToCard(c)} owner="player" className="" size="small" />
-                            </div>
-                          ))}
-                          {/* BetChip — overlays top-right of 2nd hole card */}
-                          {!hasSplit && seat && seatTableBetWei(seat) > 0n && hand.cards.length >= 2 && (
-                            <div className="absolute -top-2 -right-3" style={{ zIndex: 20 }}>
-                              <BetChip
-                                label={formatChipLabel(Math.floor(Number(formatEther(seatTableBetWei(seat)))))}
-                                size="clamp(32px, 6vw, 40px)"
-                                chipSrc="/morbius/MorbiusChip.png"
-                              />
+                              {isActiveHand && <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-cyan-400" aria-hidden />}
                             </div>
                           )}
+                          <div className="flex w-full min-w-0 flex-col items-center">
+                            {hand.cards.length > 0 && (
+                              <div
+                                className={`z-0 flex items-center gap-2 ${
+                                  showOutcomeLabel && (hand.result === 'win' || hand.result === 'blackjack') ? 'card-counter-winner' : ''
+                                }`}
+                                style={{ marginBottom: -10 }}
+                              >
+                                <div
+                                  className={`glass-counter relative flex h-16 w-16 items-center justify-center rounded-full ${
+                                    isActing && seat.activeHandIndex === hi ? 'card-counter-active' : ''
+                                  }`}
+                                >
+                                  <span
+                                    className={`relative z-10 font-black ${
+                                      hand.isBust
+                                        ? 'text-red-400'
+                                        : hand.isBlackjack
+                                          ? 'text-yellow-400'
+                                          : showOutcomeLabel && (hand.result === 'win' || hand.result === 'blackjack')
+                                            ? 'text-emerald-400'
+                                            : isActiveHand
+                                              ? 'text-white/90'
+                                              : hasSplit
+                                                ? 'text-white/50'
+                                                : 'text-white/90'
+                                    } ${hand.hasAce && !hand.isBlackjack && !hand.isBust && hand.total <= 21 ? 'text-xl' : 'text-3xl'}`}
+                                  >
+                                    {hand.hasAce && !hand.isBlackjack && !hand.isBust && hand.total <= 21 ? (
+                                      <>
+                                        {hand.total - 10}
+                                        <span className="text-white/40">/</span>
+                                        {hand.total}
+                                      </>
+                                    ) : (
+                                      hand.total
+                                    )}
+                                  </span>
+                                </div>
+                                {hand.isBlackjack && <span className="text-sm font-black text-yellow-400">BJ!</span>}
+                                {hand.isBust && <span className="text-sm font-black text-red-400">BUST</span>}
+                              </div>
+                            )}
+                            <div className={handCardRowClass}>
+                              {hand.cards.map((c, ci) => (
+                                <div key={ci} className={ci > 0 ? 'card-overlap-player' : ''} style={{ zIndex: ci }}>
+                                  <PlayingCard card={indexToCard(c)} owner="player" className="" size="small" />
+                                </div>
+                              ))}
+                              {!hasSplit && seat && seatTableBetWei(seat) > 0n && hand.cards.length >= 2 && (
+                                <div className="absolute -top-2 -right-3" style={{ zIndex: 20 }}>
+                                  <BetChip
+                                    label={formatChipLabel(Math.floor(Number(formatEther(seatTableBetWei(seat)))))}
+                                    size="clamp(32px, 6vw, 40px)"
+                                    chipSrc="/morbius/MorbiusChip.png"
+                                  />
+                                </div>
+                              )}
+                            </div>
+                          </div>
+                          {hasSplit && phase !== 'betting' && BigInt(hand.betAmount || '0') > 0n && (
+                            <span className="mt-0.5 text-[10px] font-bold text-white/70" style={{ textShadow: '1px 1px 2px rgba(0,0,0,0.8)' }}>
+                              {formatMorbius(hand.betAmount)}
+                            </span>
+                          )}
                         </div>
-                      </div>
-                      {hasSplit && phase !== 'betting' && BigInt(hand.betAmount || '0') > 0n && (
-                        <span className="text-[10px] font-bold text-white/70 mt-0.5" style={{ textShadow: '1px 1px 2px rgba(0,0,0,0.8)' }}>
-                          {formatMorbius(hand.betAmount)}
-                        </span>
-                      )}
-                    </div>
-                  );
-                })}
-              </div>
-            ) : (
-              /* Placeholder cards when seated but no hand yet */
-              <div className="flex gap-0 min-h-[80px] items-center justify-center">
-                {phase !== 'waiting' && phase !== 'betting' ? null : (
-                  <div className="w-14 h-20 rounded-lg border border-dashed border-white/10" />
-                )}
-              </div>
-            )}
-
-            {/* Player tag — overlays bottom ~1/4 of card stack */}
-            <div
-              className="pointer-events-none absolute inset-x-0 bottom-0 z-[15] flex flex-col justify-end"
-              style={{ height: '28%', minHeight: 28 }}
-            >
-              <div
-                className={`pointer-events-auto w-full rounded-b-sm border-t border-cyan-500/25 px-1 py-1 text-center ${
-                  canOpenProfile ? 'cursor-pointer' : ''
-                }`}
-                style={{
-                  background: 'rgba(0, 0, 0, 0.9)',
-                  boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.06), 0 -4px 14px rgba(0,0,0,0.55)',
-                }}
-                onClick={() => {
-                  if (canOpenProfile && seat?.playerAddress) onOpenProfile(seat.playerAddress);
-                }}
-                onKeyDown={(e) => {
-                  if (canOpenProfile && (e.key === 'Enter' || e.key === ' ') && seat?.playerAddress) {
-                    e.preventDefault();
-                    onOpenProfile(seat.playerAddress);
-                  }
-                }}
-                role={canOpenProfile ? 'button' : undefined}
-                tabIndex={canOpenProfile ? 0 : undefined}
-              >
-                <span className="line-clamp-2 text-[10px] font-semibold leading-tight text-white/95 sm:text-[11px]">
-                  {seat?.displayName ?? (seat?.playerAddress ? `${seat.playerAddress.slice(0, 6)}…` : '—')}
-                  {isMe && <span className="ml-1 text-[9px] text-cyan-200/90">(you)</span>}
-                </span>
-                {balanceLabel != null && (
-                  <span className="mt-0.5 block text-[10px] tabular-nums text-white/85">{balanceLabel}</span>
-                )}
-                {seat && (seat.consecutiveTimeouts ?? 0) > 0 && (
-                  <span
-                    className={`mt-0.5 inline-block max-w-full rounded px-1 py-0.5 text-[8px] font-semibold leading-tight ${
-                      (seat.consecutiveTimeouts ?? 0) >= AFK_TIMEOUTS_BEFORE_KICK - 1
-                        ? 'border border-orange-500/40 bg-orange-950/60 text-orange-100/95'
-                        : 'border border-cyan-500/25 bg-slate-900/80 text-cyan-100/90'
-                    }`}
-                    title="Missed betting or turn timeouts. At 3 you are removed and chips refunded."
-                  >
-                    {(seat.consecutiveTimeouts ?? 0)}/{AFK_TIMEOUTS_BEFORE_KICK} idle{isMe ? ' — act' : ''}
-                  </span>
-                )}
-                {showOutcomeLabel && seatOutcomeLabel && (
-                  <div className={`mt-0.5 text-[10px] font-bold leading-tight ${seatOutcomeLabel.cls}`}>
-                    {seatOutcomeLabel.text}
+                      );
+                    })}
+                  </div>
+                ) : (
+                  <div className={placeholderRowClass}>
+                    {phase !== 'waiting' && phase !== 'betting' ? null : (
+                      <div className="h-20 w-14 shrink-0 rounded-lg border border-dashed border-white/10" />
+                    )}
                   </div>
                 )}
               </div>
-            </div>
+
+              {/* Nametag — fixed strip; does not resize with card count */}
+              <div className="pointer-events-none absolute inset-x-0 bottom-0 z-[15] flex h-[44px] flex-col justify-end border-t border-cyan-500/25 bg-black/90 px-1 py-0.5">
+                <div
+                  className={`pointer-events-auto w-full text-center ${canOpenProfile ? 'cursor-pointer' : ''}`}
+                  style={{
+                    boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.06)',
+                  }}
+                  onClick={() => {
+                    if (canOpenProfile && seat?.playerAddress) onOpenProfile(seat.playerAddress);
+                  }}
+                  onKeyDown={(e) => {
+                    if (canOpenProfile && (e.key === 'Enter' || e.key === ' ') && seat?.playerAddress) {
+                      e.preventDefault();
+                      onOpenProfile(seat.playerAddress);
+                    }
+                  }}
+                  role={canOpenProfile ? 'button' : undefined}
+                  tabIndex={canOpenProfile ? 0 : undefined}
+                >
+                  <span className="line-clamp-2 text-[10px] font-semibold leading-tight text-white/95 sm:text-[11px]">
+                    {seat?.displayName ?? (seat?.playerAddress ? `${seat.playerAddress.slice(0, 6)}…` : '—')}
+                    {isMe && <span className="ml-1 text-[9px] text-cyan-200/90">(you)</span>}
+                  </span>
+                  {balanceLabel != null && (
+                    <span className="mt-0.5 block text-[10px] tabular-nums text-white/85">{balanceLabel}</span>
+                  )}
+                  {seat && (seat.consecutiveTimeouts ?? 0) > 0 && (
+                    <span
+                      className={`mt-0.5 inline-block max-w-full rounded px-1 py-0.5 text-[8px] font-semibold leading-tight ${
+                        (seat.consecutiveTimeouts ?? 0) >= AFK_TIMEOUTS_BEFORE_KICK - 1
+                          ? 'border border-orange-500/40 bg-orange-950/60 text-orange-100/95'
+                          : 'border border-cyan-500/25 bg-slate-900/80 text-cyan-100/90'
+                      }`}
+                      title="Missed betting or turn timeouts. At 3 you are removed and chips refunded."
+                    >
+                      {(seat.consecutiveTimeouts ?? 0)}/{AFK_TIMEOUTS_BEFORE_KICK} idle{isMe ? ' — act' : ''}
+                    </span>
+                  )}
+                  {showOutcomeLabel && seatOutcomeLabel && (
+                    <div className={`mt-0.5 text-[10px] font-bold leading-tight ${seatOutcomeLabel.cls}`}>
+                      {seatOutcomeLabel.text}
+                    </div>
+                  )}
+                </div>
+              </div>
             </div>
 
-            {/* BetChip for split hands — shown below cards */}
+            {/* Split total chip — below fixed frame (stable) */}
             {seat && seat.hands.length > 1 && seatTableBetWei(seat) > 0n && (
-              <div className="flex flex-col items-center mt-1">
+              <div className="mt-1 flex max-w-[228px] flex-col items-center">
                 <BetChip
                   label={formatChipLabel(Math.floor(Number(formatEther(seatTableBetWei(seat)))))}
                   size="clamp(44px, 8vw, 56px)"
@@ -716,9 +763,9 @@ function Seat({
             )}
 
             {seat?.seatStatus === 'sitting_out' && (
-              <span className="text-[9px] text-white/30">sitting out</span>
+              <span className="mt-0.5 text-[9px] text-white/30">sitting out</span>
             )}
-          </>
+          </div>
         )}
       </div>
     </div>
