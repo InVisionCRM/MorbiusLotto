@@ -661,7 +661,7 @@ function Seat({
                   canOpenProfile ? 'cursor-pointer' : ''
                 }`}
                 style={{
-                  background: 'linear-gradient(to top, rgba(0,0,0,0.92) 0%, rgba(0,0,0,0.72) 55%, rgba(0,0,0,0.2) 100%)',
+                  background: 'rgba(0, 0, 0, 0.9)',
                   boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.06), 0 -4px 14px rgba(0,0,0,0.55)',
                 }}
                 onClick={() => {
@@ -1559,9 +1559,9 @@ export default function BlackjackMultiTablePage() {
             </div>
           </div>
 
-          {/* Tip dealer button — top center */}
+          {/* Tip dealer button — below header, horizontal quarter from left */}
           {address && wsConnected && wsClient && myPosition !== null && (
-            <div className="flex flex-col items-center" style={{ position: 'relative', zIndex: 12 }}>
+            <div className="pointer-events-auto absolute left-1/4 top-12 z-[12] flex -translate-x-1/2 flex-col items-center">
               <IconButton
                 variant="tip"
                 size="tip"
@@ -1758,8 +1758,8 @@ export default function BlackjackMultiTablePage() {
                 const align =
                   pos === 0 ? 'flex justify-start' : pos === 2 ? 'flex justify-end' : 'flex justify-center';
                 const seatNudge =
-                  pos === 0 ? { transform: 'translate(30px, -36px)' } :
-                  pos === 2 ? { transform: 'translate(12px, -36px)' } : {};
+                  pos === 0 ? { transform: 'translate(0px, -66px)' } :
+                  pos === 2 ? { transform: 'translate(42px, -66px)' } : {};
                 return (
                   <div key={pos} className={`min-w-0 ${align}`} style={seatNudge}>
                     <Seat
