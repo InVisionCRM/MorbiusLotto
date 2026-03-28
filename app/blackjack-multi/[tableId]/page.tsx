@@ -87,6 +87,8 @@ function useCountdown(startedAt: string | null, maxSeconds: number) {
 
 const POSITIONS = [0, 1, 2] as const;
 const AVATAR_SIZE = 68;
+/** Flow margin below hands so the absolute avatar + tag stack does not cover cards */
+const SEAT_HANDS_CLEARANCE_BOTTOM_PX = 120;
 
 // Avatar animation constants — matches poker system
 const AVATAR_EMOTION_DURATION_MS = 3000;
@@ -340,10 +342,16 @@ function Seat({
 
   return (
     <div
-      className="relative flex flex-col items-center gap-0 min-w-0 h-[220px] justify-end pb-[48px]"
+      className="relative flex flex-col items-center gap-0 min-w-0 h-[292px] justify-end pb-[48px]"
     >
-      {/* Cards area (rotates), avatar/name remain fixed */}
-      <div style={{ transform: seatRotation ? `rotate(${seatRotation}deg)` : undefined, transformOrigin: 'center bottom' }}>
+      {/* Cards area — side seats tilt toward dealer (same angle as avatar stack below) */}
+      <div
+        style={{
+          transform: seatRotation ? `rotate(${seatRotation}deg)` : undefined,
+          transformOrigin: 'center bottom',
+          ...(!isEmpty ? { marginBottom: SEAT_HANDS_CLEARANCE_BOTTOM_PX } : {}),
+        }}
+      >
         {isEmpty ? (
           <div
             className={`flex flex-col items-center justify-center gap-2 rounded-xl px-4 py-4 min-h-[80px] border-2 border-dashed transition-all ${
@@ -486,7 +494,7 @@ function Seat({
 
       {!isEmpty && (
         <>
-          {/* Player avatar + name — pinned to bottom; tag stacked under avatar (all seats) */}
+          {/* Player avatar + name — pinned to bottom; side seats share seatRotation with cards */}
           <div
             className={`absolute flex flex-col items-center gap-1 ${
               isRightSeat
@@ -495,10 +503,51 @@ function Seat({
                   ? 'bottom-1/4 left-4'
                   : 'bottom-[4px] left-1/2 -translate-x-1/2'
             }`}
-            style={{ zIndex: 25 }}
+            style={{
+              zIndex: 25,
+              ...(seatRotation
+                ? { transform: `rotate(${seatRotation}deg)`, transformOrigin: 'center bottom' }
+                : {}),
+            }}
           >
             <div className="flex flex-col items-center gap-0.5">
               <div className="relative flex-shrink-0" style={{ width: AVATAR_SIZE, height: AVATAR_SIZE }}>
+                {/* QuickChat + phrase: anchor to avatar head; inherit seat tilt */}
+                <div
+                  className="pointer-events-none absolute bottom-full left-1/2 z-50 mb-2 w-max max-w-[min(220px,85vw)] -translate-x-1/2"
+                >
+                  <div ref={menuContainerRef} className="pointer-events-auto w-max min-w-[120px]">
+                    <AnimatePresence>
+                      {isMe && quickChatPickerOpen && (
+                        <motion.div initial={{ opacity: 0, scale: 0.9 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 0.9 }} transition={{ type: 'spring', stiffness: 400, damping: 28 }}>
+                          <div className="rounded-xl overflow-hidden max-h-[min(280px,60vh)] overflow-y-auto min-w-[160px] max-w-[220px]"
+                            style={{ background: 'rgba(10,10,10,0.96)', border: '1px solid rgba(255,255,255,0.12)', boxShadow: '0 4px 20px rgba(0,0,0,0.6)' }}>
+                            {quickChatPhrases.map((phrase) => (
+                              <button key={phrase} type="button" onClick={() => handleQuickChatSelect(phrase)}
+                                className="w-full px-3 py-2 text-sm text-center hover:bg-white/10 transition-colors truncate text-white/80">{phrase}</button>
+                            ))}
+                            <button type="button" onClick={() => { setQuickChatPickerOpen(false); setEditQuickChatOpen(true); }}
+                              className="w-full px-3 py-2.5 text-sm font-medium text-center hover:bg-white/10 transition-colors flex items-center justify-center gap-2 border-t border-white/10 text-white/80">
+                              <span className="text-cyan-400">✎</span> Edit QuickChat
+                            </button>
+                          </div>
+                        </motion.div>
+                      )}
+                    </AnimatePresence>
+                  </div>
+                </div>
+                <AnimatePresence>
+                  {overlayPhrase && (
+                    <motion.div
+                      className="pointer-events-none absolute bottom-full left-1/2 z-40 mb-1 -translate-x-1/2 whitespace-nowrap rounded-lg border border-white/15 bg-black/90 px-3 py-1.5 text-xs font-medium text-white"
+                      initial={{ opacity: 0, y: 4 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      exit={{ opacity: 0, y: -4 }}
+                    >
+                      {overlayPhrase}
+                    </motion.div>
+                  )}
+                </AnimatePresence>
                 {isActing && <CircularTimerRing size={AVATAR_SIZE} timeLeft={turnRemaining} maxTime={TURN_TIMEOUT} />}
                 {!isActing && phase === 'betting' && <CircularTimerRing size={AVATAR_SIZE} timeLeft={betRemaining} maxTime={BETTING_TIMEOUT} />}
                 <div
@@ -614,29 +663,6 @@ function Seat({
             />
           )}
 
-          {/* QuickChat picker — appears above avatar */}
-          <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2" style={{ zIndex: 50 }}>
-            <div ref={menuContainerRef} className="w-max min-w-[120px]">
-              <AnimatePresence>
-                {isMe && quickChatPickerOpen && (
-                  <motion.div initial={{ opacity: 0, scale: 0.9 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 0.9 }} transition={{ type: 'spring', stiffness: 400, damping: 28 }}>
-                    <div className="rounded-xl overflow-hidden max-h-[min(280px,60vh)] overflow-y-auto min-w-[160px] max-w-[220px]"
-                      style={{ background: 'rgba(10,10,10,0.96)', border: '1px solid rgba(255,255,255,0.12)', boxShadow: '0 4px 20px rgba(0,0,0,0.6)' }}>
-                      {quickChatPhrases.map((phrase) => (
-                        <button key={phrase} type="button" onClick={() => handleQuickChatSelect(phrase)}
-                          className="w-full px-3 py-2 text-sm text-center hover:bg-white/10 transition-colors truncate text-white/80">{phrase}</button>
-                      ))}
-                      <button type="button" onClick={() => { setQuickChatPickerOpen(false); setEditQuickChatOpen(true); }}
-                        className="w-full px-3 py-2.5 text-sm font-medium text-center hover:bg-white/10 transition-colors flex items-center justify-center gap-2 border-t border-white/10 text-white/80">
-                        <span className="text-cyan-400">✎</span> Edit QuickChat
-                      </button>
-                    </div>
-                  </motion.div>
-                )}
-              </AnimatePresence>
-            </div>
-          </div>
-
           {/* QuickChat backdrop */}
           <AnimatePresence>
             {isMe && quickChatPickerOpen && (
@@ -649,21 +675,6 @@ function Seat({
                 onClick={() => setQuickChatPickerOpen(false)}
                 aria-hidden
               />
-            )}
-          </AnimatePresence>
-
-          {/* Phrase overlay bubble */}
-          <AnimatePresence>
-            {overlayPhrase && (
-              <motion.div
-                className="absolute bottom-full left-1/2 -translate-x-1/2 mb-1 px-3 py-1.5 rounded-lg bg-black/90 border border-white/15 text-white text-xs font-medium whitespace-nowrap"
-                initial={{ opacity: 0, y: 4 }}
-                animate={{ opacity: 1, y: 0 }}
-                exit={{ opacity: 0, y: -4 }}
-                style={{ zIndex: 40 }}
-              >
-                {overlayPhrase}
-              </motion.div>
             )}
           </AnimatePresence>
 
@@ -2126,6 +2137,7 @@ export default function BlackjackMultiTablePage() {
             getThemeInfo={getThemeInfo}
             getTableProfile={getTableProfile}
             onChangeTableClick={() => router.push('/blackjack-multi')}
+            naturalProfileHeight
           />
         </div>
         <div className="flex min-h-0 flex-col lg:h-full">

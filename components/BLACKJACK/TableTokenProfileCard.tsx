@@ -18,6 +18,11 @@ export interface TableTokenProfileCardProps {
   onChangeTableClick?: () => void;
   /** Shorter min-height for sidebars (e.g. multiplayer table page) */
   compact?: boolean;
+  /**
+   * When true, TableProfile does not use fillHeight (fixed min iframe / natural stack height).
+   * Use when the card sits in a layout where lg:h-full + flex-1 would collapse (e.g. some grid/flex parents).
+   */
+  naturalProfileHeight?: boolean;
 }
 
 const PANEL_STYLE = {
@@ -37,17 +42,20 @@ export function TableTokenProfileCard({
   getTableProfile,
   onChangeTableClick,
   compact = false,
+  naturalProfileHeight = false,
 }: TableTokenProfileCardProps) {
   const profile = getTableProfile(themeKind, themeId);
 
-  const stretchProfile = !compact
+  const stretchProfile = !compact && !naturalProfileHeight;
 
   return (
     <div
       className={`rounded-xl min-w-0 flex flex-col border border-cyan-500/30 ${
         compact
           ? 'min-h-[280px] overflow-hidden md:min-h-[300px]'
-          : 'min-h-[320px] overflow-hidden lg:h-full lg:min-h-0'
+          : naturalProfileHeight
+            ? 'min-h-[320px] overflow-hidden'
+            : 'min-h-[320px] overflow-hidden lg:h-full lg:min-h-0'
       }`}
       style={PANEL_STYLE}
     >
@@ -71,7 +79,9 @@ export function TableTokenProfileCard({
         className={
           stretchProfile
             ? 'flex min-h-0 flex-1 flex-col overflow-hidden p-2'
-            : 'min-h-0 flex-1 overflow-auto p-2'
+            : naturalProfileHeight
+              ? 'flex flex-col overflow-auto p-2'
+              : 'min-h-0 flex-1 overflow-auto p-2'
         }
       >
         <TableProfile

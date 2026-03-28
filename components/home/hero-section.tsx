@@ -36,27 +36,6 @@ export function HeroSection({ onOpenPlayerProfile, onOpenAuthModal, showWelcome 
 
       <div className="pointer-events-none absolute inset-0 z-[2] bg-gradient-to-b from-black/50 via-black/35 to-black/55" aria-hidden />
 
-      <div className="absolute right-4 top-4 z-10 sm:right-8">
-        <button
-          type="button"
-          onClick={() => {
-            if (onOpenPlayerProfile) {
-              onOpenPlayerProfile()
-              return
-            }
-            onOpenAuthModal?.()
-          }}
-          className={`${HERO_GLASS_BTN} hero-cta-item ${isReady ? 'hero-cta-item-visible' : 'hero-cta-item-hidden'}`}
-          style={{ transitionDelay: '520ms' }}
-        >
-          <span
-            className={`${HERO_BTN_LABEL} group-hover:from-rose-500 group-hover:via-red-500 group-hover:to-orange-500`}
-          >
-            My Dashboard
-          </span>
-        </button>
-      </div>
-
       {showWelcome && welcomeName ? (
         <div className="pointer-events-none absolute left-4 top-4 z-10 w-[min(95vw,1000px)] px-2 text-left sm:left-8 sm:top-6 sm:px-0">
           <p
@@ -92,7 +71,7 @@ export function HeroSection({ onOpenPlayerProfile, onOpenAuthModal, showWelcome 
       )}
 
       <div className="absolute bottom-1/4 left-0 right-0 z-10 flex justify-center px-2">
-        <div className="mx-auto grid w-full max-w-md grid-cols-2 gap-3 sm:max-w-xl sm:gap-4">
+        <div className="mx-auto grid w-full max-w-md grid-cols-1 gap-3 sm:max-w-5xl sm:grid-cols-3 sm:gap-4">
           <Link
             href="/#games"
             className={`${HERO_GLASS_BTN} hero-cta-item ${isReady ? 'hero-cta-item-visible' : 'hero-cta-item-hidden'}`}
@@ -115,6 +94,24 @@ export function HeroSection({ onOpenPlayerProfile, onOpenAuthModal, showWelcome 
               Poker Room
             </span>
           </Link>
+          <button
+            type="button"
+            onClick={() => {
+              if (onOpenPlayerProfile) {
+                onOpenPlayerProfile()
+                return
+              }
+              onOpenAuthModal?.()
+            }}
+            className={`${HERO_GLASS_BTN} hero-cta-item ${isReady ? 'hero-cta-item-visible' : 'hero-cta-item-hidden'}`}
+            style={{ transitionDelay: '840ms' }}
+          >
+            <span
+              className={`${HERO_BTN_LABEL} group-hover:from-rose-500 group-hover:via-red-500 group-hover:to-orange-500`}
+            >
+              My Dashboard
+            </span>
+          </button>
         </div>
       </div>
 
