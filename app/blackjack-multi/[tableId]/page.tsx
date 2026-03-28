@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
-import { useParams } from 'next/navigation';
+import { useParams, useRouter } from 'next/navigation';
 import { useAccount, useSignTypedData } from 'wagmi';
 import { formatEther, parseEther } from 'viem';
 import { getWebSocketUrlOptional, getApiUrlOptional } from '@/lib/api-urls';
@@ -486,92 +486,93 @@ function Seat({
 
       {!isEmpty && (
         <>
-          {/* Player avatar + name — pinned to bottom, overlays cards */}
+          {/* Player avatar + name — pinned to bottom; tag stacked under avatar (all seats) */}
           <div
-            className={`absolute flex items-center gap-2 ${
+            className={`absolute flex flex-col items-center gap-1 ${
               isRightSeat
-                ? 'bottom-1/4 right-4 flex-row-reverse'
+                ? 'bottom-1/4 right-4'
                 : isLeftSeat
                   ? 'bottom-1/4 left-4'
                   : 'bottom-[4px] left-1/2 -translate-x-1/2'
             }`}
             style={{ zIndex: 25 }}
           >
-            <div className="relative flex-shrink-0" style={{ width: AVATAR_SIZE, height: AVATAR_SIZE }}>
-              {isActing && <CircularTimerRing size={AVATAR_SIZE} timeLeft={turnRemaining} maxTime={TURN_TIMEOUT} />}
-              {!isActing && phase === 'betting' && <CircularTimerRing size={AVATAR_SIZE} timeLeft={betRemaining} maxTime={BETTING_TIMEOUT} />}
-              <div
-                ref={avatarRef}
-                className="w-full h-full rounded-full overflow-hidden bg-slate-800"
-                style={{
-                  border: isMe ? '2px solid rgba(34,211,238,0.6)' : isActing ? '2px solid transparent' : '2px solid rgba(255,255,255,0.15)',
-                  cursor: isMe || canOpenProfile ? 'pointer' : 'default',
-                }}
-                onClick={() => {
-                  if (longPressTriggered.current) { longPressTriggered.current = false; return; }
-                  if (isMe && playerMainMenuItems.length > 0) {
-                    setPlayerRadialPage('main');
-                    setPlayerRadialOpen(true);
-                    return;
-                  }
-                  if (canOpenProfile && seat?.playerAddress) {
-                    onOpenProfile(seat.playerAddress);
-                  }
-                }}
-                onContextMenu={(e) => {
-                  if (isMe && onSendChatMessage) {
-                    e.preventDefault();
-                    setPlayerRadialOpen(false);
-                    setQuickChatPickerOpen(true);
-                  }
-                }}
-                onTouchStart={() => {
-                  if (!isMe || !onSendChatMessage) return;
-                  longPressTriggered.current = false;
-                  longPressTimerRef.current = setTimeout(() => {
-                    longPressTriggered.current = true;
-                    setPlayerRadialOpen(false);
-                    setQuickChatPickerOpen(true);
-                  }, 500);
-                }}
-                onTouchEnd={() => {
-                  if (longPressTimerRef.current) { clearTimeout(longPressTimerRef.current); longPressTimerRef.current = null; }
-                }}
-                onTouchMove={() => {
-                  if (longPressTimerRef.current) { clearTimeout(longPressTimerRef.current); longPressTimerRef.current = null; }
-                }}
-                title={isMe ? 'Tap for menu · Right-click for QuickChat' : undefined}
-              >
-                {seat?.avatarConfig ? (
-                  <AvatarView
-                    config={seat.avatarConfig as unknown as AvatarConfig}
-                    emotion={activeEmotion}
-                    trackMouse={isMe}
-                    roamEyes={!isMe && !isActing}
-                    forceAsleep={seat?.seatStatus === 'sitting_out'}
-                    compact
-                    className="w-full h-full"
-                  />
-                ) : (
-                  <div className="w-full h-full flex items-center justify-center text-[10px] font-bold text-slate-400">
-                    {seat?.displayName?.[0]?.toUpperCase() ?? '?'}
-                  </div>
-                )}
+            <div className="flex flex-col items-center gap-0.5">
+              <div className="relative flex-shrink-0" style={{ width: AVATAR_SIZE, height: AVATAR_SIZE }}>
+                {isActing && <CircularTimerRing size={AVATAR_SIZE} timeLeft={turnRemaining} maxTime={TURN_TIMEOUT} />}
+                {!isActing && phase === 'betting' && <CircularTimerRing size={AVATAR_SIZE} timeLeft={betRemaining} maxTime={BETTING_TIMEOUT} />}
+                <div
+                  ref={avatarRef}
+                  className="w-full h-full rounded-full overflow-hidden bg-slate-800"
+                  style={{
+                    border: isMe ? '2px solid rgba(34,211,238,0.6)' : isActing ? '2px solid transparent' : '2px solid rgba(255,255,255,0.15)',
+                    cursor: isMe || canOpenProfile ? 'pointer' : 'default',
+                  }}
+                  onClick={() => {
+                    if (longPressTriggered.current) { longPressTriggered.current = false; return; }
+                    if (isMe && playerMainMenuItems.length > 0) {
+                      setPlayerRadialPage('main');
+                      setPlayerRadialOpen(true);
+                      return;
+                    }
+                    if (canOpenProfile && seat?.playerAddress) {
+                      onOpenProfile(seat.playerAddress);
+                    }
+                  }}
+                  onContextMenu={(e) => {
+                    if (isMe && onSendChatMessage) {
+                      e.preventDefault();
+                      setPlayerRadialOpen(false);
+                      setQuickChatPickerOpen(true);
+                    }
+                  }}
+                  onTouchStart={() => {
+                    if (!isMe || !onSendChatMessage) return;
+                    longPressTriggered.current = false;
+                    longPressTimerRef.current = setTimeout(() => {
+                      longPressTriggered.current = true;
+                      setPlayerRadialOpen(false);
+                      setQuickChatPickerOpen(true);
+                    }, 500);
+                  }}
+                  onTouchEnd={() => {
+                    if (longPressTimerRef.current) { clearTimeout(longPressTimerRef.current); longPressTimerRef.current = null; }
+                  }}
+                  onTouchMove={() => {
+                    if (longPressTimerRef.current) { clearTimeout(longPressTimerRef.current); longPressTimerRef.current = null; }
+                  }}
+                  title={isMe ? 'Tap for menu · Right-click for QuickChat' : undefined}
+                >
+                  {seat?.avatarConfig ? (
+                    <AvatarView
+                      config={seat.avatarConfig as unknown as AvatarConfig}
+                      emotion={activeEmotion}
+                      trackMouse={isMe}
+                      roamEyes={!isMe && !isActing}
+                      forceAsleep={seat?.seatStatus === 'sitting_out'}
+                      compact
+                      className="w-full h-full"
+                    />
+                  ) : (
+                    <div className="w-full h-full flex items-center justify-center text-[10px] font-bold text-slate-400">
+                      {seat?.displayName?.[0]?.toUpperCase() ?? '?'}
+                    </div>
+                  )}
+                </div>
               </div>
-
               {showOutcomeLabel && seatOutcomeLabel && (
-                <div className={`absolute left-1/2 -translate-x-1/2 top-full mt-[2px] text-[11px] font-bold whitespace-nowrap ${seatOutcomeLabel.cls}`}>
+                <div className={`text-[11px] font-bold whitespace-nowrap text-center ${seatOutcomeLabel.cls}`}>
                   {seatOutcomeLabel.text}
                 </div>
               )}
             </div>
             <div
-              className={`flex flex-col min-w-0 shrink-0 rounded-md px-2 py-1 bg-black/35 backdrop-blur-sm border border-white/10 ${canOpenProfile ? 'cursor-pointer hover:bg-black/45 transition-colors' : ''}`}
+              className={`flex flex-col min-w-0 max-w-[140px] items-center text-center rounded-md px-2 py-1 bg-black/35 backdrop-blur-sm border border-white/10 ${canOpenProfile ? 'cursor-pointer hover:bg-black/45 transition-colors' : ''}`}
               onClick={() => {
                 if (canOpenProfile && seat?.playerAddress) onOpenProfile(seat.playerAddress);
               }}
             >
-              <span className="text-[12px] font-semibold truncate max-w-[120px] leading-tight text-white/90">
+              <span className="text-[12px] font-semibold truncate w-full leading-tight text-white/90">
                 {seat?.displayName ?? (seat?.playerAddress ? seat.playerAddress.slice(0, 6) + '…' : '—')}
                 {isMe && <span className="text-[9px] text-white/90 ml-1">(you)</span>}
               </span>
@@ -580,7 +581,7 @@ function Seat({
               )}
               {seat && (seat.consecutiveTimeouts ?? 0) > 0 && (
                 <span
-                  className={`text-[9px] font-semibold tabular-nums mt-0.5 leading-tight rounded px-1.5 py-0.5 border max-w-[118px] ${
+                  className={`text-[9px] font-semibold tabular-nums mt-0.5 leading-tight rounded px-1.5 py-0.5 border max-w-[132px] ${
                     (seat.consecutiveTimeouts ?? 0) >= AFK_TIMEOUTS_BEFORE_KICK - 1
                       ? 'border-orange-500/45 bg-orange-950/55 text-orange-100/95'
                       : 'border-cyan-500/30 bg-gradient-to-r from-slate-900/90 to-slate-800/90 text-cyan-100/85'
@@ -678,6 +679,7 @@ function Seat({
 // ──────────────────────────────────────────────────────────────────────────────
 export default function BlackjackMultiTablePage() {
   const params = useParams();
+  const router = useRouter();
   const tableId = typeof params.tableId === 'string' ? params.tableId : '';
   const { address } = useAccount();
   const { signTypedDataAsync } = useSignTypedData();
@@ -1420,7 +1422,8 @@ export default function BlackjackMultiTablePage() {
             0 2px 8px rgba(0, 0, 0, 0.2);
         }
       `}</style>
-      {/* 2-column layout on md+: table (left) + sidebar controls (right) — matches single player */}
+      <main className="w-full max-w-full mx-0 px-2 sm:px-4 pt-2 sm:pt-4 pb-4 sm:pb-8 overflow-x-hidden overflow-y-auto no-scrollbar">
+      {/* 2-column layout on md+: table (left) + sidebar controls (right) — same shell as app/BLACKJACK/page.tsx */}
       <div className="grid grid-cols-1 md:grid-cols-[minmax(0,3fr)_minmax(360px,1.2fr)] md:items-stretch gap-2 md:gap-4 min-h-0" style={{ scrollbarGutter: 'stable both-edges' }}>
 
       {/* ── Table container — locked to 16:9 so full table image is always visible ── */}
@@ -2111,15 +2114,18 @@ export default function BlackjackMultiTablePage() {
         )}
 
       </div>
+      </div>
 
-      {/* Table token profile + player dashboard */}
-      <section className="md:col-span-2 grid grid-cols-1 items-stretch gap-4 lg:grid-cols-2 lg:gap-6">
+      {/* Table profile + player dashboard — same block as app/BLACKJACK/page.tsx (outside game grid so heights aren’t collapsed) */}
+      <section className="mt-4 grid grid-cols-1 items-stretch gap-4 lg:grid-cols-2 lg:gap-6">
         <div className="flex min-h-0 flex-col lg:h-full">
           <TableTokenProfileCard
+            key={`${(state?.themeKind ?? 'video')}-${state?.themeId ?? 'glowingTable'}`}
             themeKind={(state?.themeKind ?? 'video') as 'image' | 'video'}
             themeId={state?.themeId ?? 'glowingTable'}
             getThemeInfo={getThemeInfo}
             getTableProfile={getTableProfile}
+            onChangeTableClick={() => router.push('/blackjack-multi')}
           />
         </div>
         <div className="flex min-h-0 flex-col lg:h-full">
@@ -2128,6 +2134,7 @@ export default function BlackjackMultiTablePage() {
               stats={playerStats}
               isLoading={playerStatsLoading}
               playerAddress={address}
+              wsClient={wsConnected ? wsClient : null}
               reserveBalance={BigInt(playerBalance)}
             />
           ) : (
@@ -2152,7 +2159,7 @@ export default function BlackjackMultiTablePage() {
         game="blackjack"
       />
 
-      </div>{/* close grid */}
+      </main>
     </GlobalMainNav>
   );
 }
