@@ -1280,7 +1280,7 @@ async function initializeServices() {
                 if (!address || !/^0x[a-fA-F0-9]{40}$/.test(address)) {
                     return res.status(400).json({ error: 'Invalid address' });
                 }
-                const limit = Math.min(parseInt(req.query.limit) || 50, 200);
+                const limit = Math.min(Math.max(parseInt(req.query.limit) || 50, 1), 25_000);
                 const offset = parseInt(req.query.offset) || 0;
                 const hands = await dbService.getPokerPlayerHands(address, limit, offset);
                 sendJson(res, hands);
@@ -1357,6 +1357,36 @@ async function initializeServices() {
             }
             catch (error) {
                 logger_1.logger.error('Error fetching poker hand detail:', error);
+                res.status(500).json({ error: 'Internal server error' });
+            }
+        });
+        app.get('/api/plinko/player/:address/drops', async (req, res) => {
+            try {
+                const { address } = req.params;
+                if (!address || !/^0x[a-fA-F0-9]{40}$/.test(address)) {
+                    return res.status(400).json({ error: 'Invalid address' });
+                }
+                const limit = Math.min(Math.max(parseInt(req.query.limit) || 100, 1), 300);
+                const offset = Math.max(parseInt(req.query.offset) || 0, 0);
+                const drops = await chainAnalytics.getPlinkoPlayerDrops(address, limit, offset);
+                sendJson(res, drops);
+            }
+            catch (error) {
+                logger_1.logger.error('Error fetching plinko player drops:', error);
+                res.status(500).json({ error: 'Internal server error' });
+            }
+        });
+        app.get('/api/plinko/player/:address/stats', async (req, res) => {
+            try {
+                const { address } = req.params;
+                if (!address || !/^0x[a-fA-F0-9]{40}$/.test(address)) {
+                    return res.status(400).json({ error: 'Invalid address' });
+                }
+                const stats = await chainAnalytics.getPlinkoPlayerStats(address);
+                sendJson(res, stats);
+            }
+            catch (error) {
+                logger_1.logger.error('Error fetching plinko player stats:', error);
                 res.status(500).json({ error: 'Internal server error' });
             }
         });

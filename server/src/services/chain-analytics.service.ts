@@ -35,6 +35,22 @@ const PLINKO_RISK_NAMES: Record<number, 'GREEN' | 'YELLOW' | 'RED'> = {
   2: 'RED',
 };
 
+/** viem log args are untyped; narrow before BigInt() (strict TS rejects unknown). */
+function abiUintToBigInt(v: unknown): bigint {
+  if (v == null) return 0n;
+  if (typeof v === 'bigint') return v;
+  if (typeof v === 'number' && Number.isFinite(v)) return BigInt(Math.trunc(v));
+  if (typeof v === 'string') {
+    try {
+      return BigInt(v);
+    } catch {
+      return 0n;
+    }
+  }
+  if (typeof v === 'boolean') return v ? 1n : 0n;
+  return 0n;
+}
+
 export interface PlinkoChainStats {
   totalDrops: bigint;
   totalBallsSold: bigint;
@@ -155,8 +171,8 @@ export class ChainAnalyticsService {
 
     return sliced.map((log) => {
       const args = log.args as Record<string, unknown>;
-      const multiplier = BigInt(args.multiplier ?? 0);
-      const payout = BigInt(args.payout ?? 0);
+      const multiplier = abiUintToBigInt(args.multiplier);
+      const payout = abiUintToBigInt(args.payout);
       const wager = multiplier > 0n ? (payout * 100n) / multiplier : 0n;
       const riskLevelNum = Number(args.riskLevel ?? 0);
       return {

@@ -53,6 +53,9 @@ export function PlayerProfileDashboard({
 
   const { data: stats, isLoading: statsLoading } = usePlayerProfileStats(selectedGame === 'blackjack' ? address : null)
   const { data: reserveBalance } = usePlayerServerBalance(selectedGame === 'blackjack' ? address : null)
+  const { data: allStatsServerBalance, isFetched: allStatsBalanceFetched } = usePlayerServerBalance(
+    selectedGame === 'all' ? address : null
+  )
   const lotteryAddress = address ? ((address.startsWith('0x') ? address : `0x${address}`) as `0x${string}`) : undefined
   const lotteryStats = useLotteryPlayerStats(selectedGame === 'lottery' || selectedGame === 'all' ? lotteryAddress : undefined)
   const { results: lotteryResults } = useInstantLotteryResults(
@@ -109,7 +112,12 @@ export function PlayerProfileDashboard({
       </div>
 
       {isAll ? (
-        <AllStatsDashboard playerAddress={address} />
+        <AllStatsDashboard
+          playerAddress={address}
+          serverBalanceAnchor={
+            allStatsBalanceFetched && typeof allStatsServerBalance === 'bigint' ? allStatsServerBalance : undefined
+          }
+        />
       ) : isPoker ? (
         <PokerPlayerDashboard playerAddress={address} />
       ) : isPlinko ? (

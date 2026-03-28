@@ -70,6 +70,23 @@ type UnifiedHistoryRowWithComputed = UnifiedHistoryRow & {
   balance: bigint
 }
 
+function ledgerDelta(row: UnifiedHistoryRow): bigint {
+  if (row.type === 'deposit') return row.amount ?? 0n
+  if (row.type === 'withdrawal') return -(row.amount ?? 0n)
+  return row.profit ?? ((row.payout ?? 0n) - (row.wager ?? 0n))
+}
+
+/** Oldest-first; tie-break for stable running balance. */
+function compareHistoryChronological(a: UnifiedHistoryRow, b: UnifiedHistoryRow): number {
+  const k = a.sortKey - b.sortKey
+  if (k !== 0) return k
+  const t = a.createdAt.localeCompare(b.createdAt)
+  if (t !== 0) return t
+  const ty = a.type.localeCompare(b.type)
+  if (ty !== 0) return ty
+  return a.gameLabel.localeCompare(b.gameLabel)
+}
+
 function downloadCsvRows(rows: UnifiedHistoryRow[], address: string, label: string) {
   const header = 'timestamp,kind,game,wager,payout,profit,amount,delta,balance,tx_hash'
   const lines = rows.map((r) => [
@@ -98,9 +115,14 @@ function downloadCsvRows(rows: UnifiedHistoryRow[], address: string, label: stri
 
 interface AllStatsDashboardProps {
   playerAddress: string
+  /**
+   * When set, running balance is anchored so the chronologically newest row equals this
+   * server `players.balance` (after summing all row deltas in the table).
+   */
+  serverBalanceAnchor?: bigint
 }
 
-export function AllStatsDashboard({ playerAddress }: AllStatsDashboardProps) {
+export function AllStatsDashboard({ playerAddress, serverBalanceAnchor }: AllStatsDashboardProps) {
   const getTypeColorClass = (type: UnifiedHistoryRow['type']) => {
     switch (type) {
       case 'deposit':
@@ -152,7 +174,7 @@ export function AllStatsDashboard({ playerAddress }: AllStatsDashboardProps) {
   const kenoStats = useKenoPlayerStats(lotteryAddress)
   const plinkoStats = usePlinkoPlayerStats(lotteryAddress)
   const pokerStats = usePokerPlayerStats(address)
-  const pokerHands = usePokerPlayerHands(address, 200)
+  const pokerHands = usePokerPlayerHands(address, 25_000)
   const { results: lotteryResults } = useInstantLotteryResults({ playerAddress: lotteryAddress, limit: 25000 })
   const { data: bjGames } = usePlayerProfileGames(address, 25000)
 
@@ -294,7 +316,7 @@ export function AllStatsDashboard({ playerAddress }: AllStatsDashboardProps) {
       })
     })
 
-    rows.sort((a, b) => b.sortKey - a.sortKey)
+    rows.sort((a, b) => -compareHistoryChronological(a, b))
     return rows
   }, [bjGames, lotteryResults, kenoStats?.results, plinkoStats?.results, pokerHands.data, txHistory])
 
@@ -303,7 +325,7 @@ export function AllStatsDashboard({ playerAddress }: AllStatsDashboardProps) {
       (r): r is UnifiedHistoryRow =>
         r.type !== 'deposit' && r.type !== 'withdrawal' && (r.wager != null || r.payout != null)
     )
-    const sorted = [...gameRows].sort((a, b) => a.sortKey - b.sortKey)
+    const sorted = [...gameRows].sort(compareHistoryChronological)
     if (sorted.length === 0) {
       return [
         { play: 0, date: 'Start', totalInvested: 0, totalWon: 0 },
@@ -344,19 +366,22 @@ export function AllStatsDashboard({ playerAddress }: AllStatsDashboardProps) {
   >('all')
   const [historyClassFilter, setHistoryClassFilter] = useState<'all' | 'game' | 'credit' | 'debit'>('all')
 
+  const ledgerAnchored = serverBalanceAnchor !== undefined
+
   const historyWithBalance = useMemo((): UnifiedHistoryRowWithComputed[] => {
-    const asc = [...combinedHistory].sort((a, b) => a.sortKey - b.sortKey)
-    let runningBalance = 0n
-    const ascWithBalance = asc.map((row) => {
-      let delta = 0n
-      if (row.type === 'deposit') delta = row.amount ?? 0n
-      else if (row.type === 'withdrawal') delta = -(row.amount ?? 0n)
-      else delta = row.profit ?? ((row.payout ?? 0n) - (row.wager ?? 0n))
-      runningBalance += delta
-      return { ...row, balance: runningBalance, delta }
+    const asc = [...combinedHistory].sort(compareHistoryChronological)
+    const deltas = asc.map(ledgerDelta)
+    const totalDelta = deltas.reduce((sum, d) => sum + d, 0n)
+    const openingBalance =
+      serverBalanceAnchor !== undefined ? serverBalanceAnchor - totalDelta : 0n
+    let running = openingBalance
+    const ascWithBalance = asc.map((row, i) => {
+      const delta = deltas[i]!
+      running += delta
+      return { ...row, balance: running, delta }
     })
-    return ascWithBalance.sort((a, b) => b.sortKey - a.sortKey)
-  }, [combinedHistory])
+    return ascWithBalance.sort((a, b) => -compareHistoryChronological(a, b))
+  }, [combinedHistory, serverBalanceAnchor])
 
   const filteredHistory = useMemo(() => {
     const byType = historyWithBalance.filter((r) => {
@@ -565,10 +590,31 @@ export function AllStatsDashboard({ playerAddress }: AllStatsDashboardProps) {
         <Card className="overflow-hidden" style={PANEL_STYLE}>
           <CardHeader>
             <div className="flex flex-wrap items-start justify-between gap-3">
-              <CardTitle className="text-lg text-white flex items-center gap-2">
-                <History className="w-5 h-5 text-cyan-400" />
-                Combined history (all games + deposits & withdrawals)
-              </CardTitle>
+              <div>
+                <CardTitle className="text-lg text-white flex items-center gap-2">
+                  <History className="w-5 h-5 text-cyan-400" />
+                  Combined history (all games + deposits & withdrawals)
+                </CardTitle>
+                <p className="text-xs text-white/50 mt-2 max-w-3xl">
+                  {ledgerAnchored ? (
+                    <>
+                      <span className="text-cyan-400/90">Balance</span> is a running server-ledger total: the newest row
+                      matches your current playable balance. Older rows may still be approximate if some activity is
+                      outside this list or on-chain only.
+                    </>
+                  ) : (
+                    <>
+                      <span className="text-amber-400/90">Balance</span> is unanchored (server balance still loading or
+                      unavailable); values assume zero before the oldest row shown.
+                    </>
+                  )}{' '}
+                  {(dateFrom || dateTo) && (
+                    <span className="text-white/60">
+                      Date filters hide rows but keep each row&apos;s balance as-of that moment in full history.
+                    </span>
+                  )}
+                </p>
+              </div>
               <div className="flex flex-wrap items-center gap-2">
                 <div className="relative group/feature rounded-lg border border-white/10 bg-black/20 p-2">
                   <div className="opacity-0 group-hover/feature:opacity-100 transition duration-200 absolute inset-0 h-full w-full bg-gradient-to-t from-neutral-900/70 to-transparent pointer-events-none rounded-lg" />

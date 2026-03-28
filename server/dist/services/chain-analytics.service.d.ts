@@ -8,6 +8,29 @@ export interface PlinkoChainStats {
     minWagerPerBall?: bigint;
     maxWagerPerBall?: bigint;
 }
+export interface PlinkoPlayerDropChain {
+    id: string;
+    player: string;
+    seed: string;
+    bucketIndex: number;
+    multiplierBps: string;
+    payout: string;
+    wager: string;
+    profit: string;
+    riskLevel: 'GREEN' | 'YELLOW' | 'RED';
+    blockNumber: string;
+    transactionHash: string;
+    timestamp: number;
+}
+export interface PlinkoPlayerStatsChain {
+    totalDrops: number;
+    totalWagered: string;
+    totalWon: string;
+    netProfit: string;
+    biggestWin: string;
+    biggestMultiplierBps: string;
+    winRate: number;
+}
 export interface KenoChainStats {
     totalWagered: bigint;
     totalWon: bigint;
@@ -32,6 +55,8 @@ export interface BigWheelChainStats {
 export declare class ChainAnalyticsService {
     private readonly dbService;
     constructor(dbService: DatabaseService);
+    getPlinkoPlayerDrops(playerAddress: string, limit?: number, offset?: number): Promise<PlinkoPlayerDropChain[]>;
+    getPlinkoPlayerStats(playerAddress: string): Promise<PlinkoPlayerStatsChain>;
     getPlinkoStats(): Promise<PlinkoChainStats | null>;
     getKenoStats(): Promise<KenoChainStats | null>;
     getLotteryStats(): Promise<LotteryChainStats | null>;

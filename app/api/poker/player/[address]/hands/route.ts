@@ -16,7 +16,8 @@ export async function GET(
 ) {
   const { address } = await params;
   const { searchParams } = new URL(request.url);
-  const limit = Math.min(parseInt(searchParams.get('limit') || '50'), 200);
+  const parsedLimit = parseInt(searchParams.get('limit') ?? '50', 10);
+  const limit = Math.min(Math.max(Number.isFinite(parsedLimit) ? parsedLimit : 50, 1), 25_000);
   const offset = parseInt(searchParams.get('offset') || '0');
 
   if (!address || !/^0x[a-fA-F0-9]{40}$/.test(address)) {
