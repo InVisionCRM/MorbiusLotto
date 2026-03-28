@@ -309,7 +309,7 @@ function BlackjackMultiAvatarDock({
   return (
     <>
       <div
-        className="pointer-events-auto absolute left-2 bottom-[92px] z-[22] flex flex-row items-end gap-1.5 rounded-xl border border-cyan-500/30 px-2 py-1.5"
+        className="pointer-events-auto absolute bottom-2 left-2 z-[22] flex flex-row items-end gap-1.5 rounded-xl border border-cyan-500/30 px-2 py-1.5"
         style={{
           background: 'linear-gradient(325deg, rgba(20, 20, 20, 0.88), rgba(40, 40, 40, 0.72))',
           boxShadow: 'inset 0 2px 4px rgba(0,0,0,0.75), 0 4px 14px rgba(0,0,0,0.45)',
