@@ -1,8 +1,7 @@
 'use client';
 
 import { useState, useEffect, useRef, useCallback, type CSSProperties } from 'react';
-import { formatEther } from 'viem';
-import { toBigIntSafe } from '@/lib/safe-bigint';
+import { formatMorbiusFloor } from '@/lib/format-morbius-display';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useChat } from '@/hooks/use-chat';
 import type { BlackjackWebSocketClient, PokerTableState } from '@/lib/websocket-client';
@@ -98,11 +97,10 @@ function formatEventTime(ts: number): string {
 
 function fmtWei(wei: string | number): string {
   try {
-    const n = Number(formatEther(toBigIntSafe(wei)));
-    if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1)}M`;
-    if (n >= 1_000) return `${(n / 1_000).toFixed(1)}k`;
-    return Number.isInteger(n) ? n.toString() : n.toFixed(2);
-  } catch { return ''; }
+    return formatMorbiusFloor(wei);
+  } catch {
+    return '';
+  }
 }
 
 function seatLabel(seatIndex: number, state: PokerTableState | null): string {

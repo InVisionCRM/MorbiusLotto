@@ -2,8 +2,8 @@
 
 import React, { useMemo, useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { formatEther } from 'viem';
 import { toBigIntSafe } from '@/lib/safe-bigint';
+import { formatMorbiusFloor } from '@/lib/format-morbius-display';
 import {
   Activity,
   BarChart3,
@@ -30,10 +30,7 @@ import {
 
 function formatChips(wei: string | number): string {
   try {
-    const num = Number(formatEther(toBigIntSafe(wei)));
-    return Number.isInteger(num)
-      ? num.toLocaleString(undefined, { maximumFractionDigits: 0 })
-      : num.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    return formatMorbiusFloor(wei, { compact: false });
   } catch {
     return String(wei);
   }

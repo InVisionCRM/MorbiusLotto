@@ -1,7 +1,8 @@
 'use client';
 
 import React, { useEffect, useMemo } from 'react';
-import { formatEther } from 'viem';
+import { toBigIntSafe } from '@/lib/safe-bigint';
+import { floorMorbiusWholeFromWei } from '@/lib/format-morbius-display';
 import { CardDisplay } from './CardDisplay';
 import { motion, AnimatePresence, useMotionValue, useSpring, useTransform } from 'framer-motion';
 
@@ -14,18 +15,21 @@ export interface PokerBoardProps {
   dataTutorialTargetPot?: boolean;
 }
 
-function parsePotNum(wei: string): number {
-  try { return Number(formatEther(BigInt(wei))); } catch { return 0; }
+function parsePotWholeMorbius(wei: string): number {
+  try {
+    const whole = floorMorbiusWholeFromWei(toBigIntSafe(wei));
+    return whole <= BigInt(Number.MAX_SAFE_INTEGER) ? Number(whole) : Number.MAX_SAFE_INTEGER;
+  } catch {
+    return 0;
+  }
 }
 
 function AnimatedPotValue({ pot }: { pot: string }) {
-  const potNum = useMemo(() => parsePotNum(pot), [pot]);
+  const potNum = useMemo(() => parsePotWholeMorbius(pot), [pot]);
   const mv = useMotionValue(potNum);
   const spring = useSpring(mv, { stiffness: 180, damping: 28 });
   const display = useTransform(spring, (v) =>
-    Number.isInteger(Math.round(v))
-      ? Math.round(v).toLocaleString(undefined, { maximumFractionDigits: 0 })
-      : v.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+    Math.floor(v).toLocaleString(undefined, { maximumFractionDigits: 0 })
   );
 
   useEffect(() => { mv.set(potNum); }, [potNum, mv]);
@@ -41,7 +45,7 @@ function AnimatedPotValue({ pot }: { pot: string }) {
 }
 
 export function PokerBoard({ communityCards, pot, winningCardIndices, dataTutorialTargetPot }: PokerBoardProps) {
-  const potNum = useMemo(() => parsePotNum(pot), [pot]);
+  const potNum = useMemo(() => parsePotWholeMorbius(pot), [pot]);
 
   const potInner = (
     <div

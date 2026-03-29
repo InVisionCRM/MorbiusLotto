@@ -1,8 +1,8 @@
 'use client';
 
 import React from 'react';
-import { formatEther } from 'viem';
 import type { PokerTournamentPlayer } from '@/hooks/use-poker-tournament';
+import { formatMorbiusFloor } from '@/lib/format-morbius-display';
 
 interface Props {
   players: PokerTournamentPlayer[];
@@ -22,8 +22,7 @@ function formatChips(n: number): string {
 
 function formatPrize(wei: string): string {
   try {
-    const eth = Number(formatEther(BigInt(wei)));
-    return eth.toLocaleString(undefined, { maximumFractionDigits: 2 }) + ' MORBIUS';
+    return `${formatMorbiusFloor(wei, { compact: false })} MORBIUS`;
   } catch {
     return '—';
   }

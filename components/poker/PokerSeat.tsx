@@ -1,8 +1,8 @@
 'use client';
 
 import React, { useRef, useState, useEffect, useCallback, useMemo } from 'react';
-import { formatEther } from 'viem';
 import { toBigIntSafe } from '@/lib/safe-bigint';
+import { floorMorbiusWholeFromWei, formatMorbiusFloor } from '@/lib/format-morbius-display';
 import { BetChip, formatChipLabel } from '@/components/ui/BetChip';
 import { CardDisplay } from './CardDisplay';
 import type { PokerSeatState as SeatState } from '@/lib/websocket-client';
@@ -39,13 +39,11 @@ const LOCAL_EMOTION_DURATION_MS = 3000;
 
 function formatChips(wei: string | number): string {
   try {
-    const num = Number(formatEther(toBigIntSafe(wei)));
-    if (!Number.isFinite(num) || num < 0) return '0';
-    return Number.isInteger(num)
-      ? num.toLocaleString(undefined, { maximumFractionDigits: 0 })
-      : num.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    const w = toBigIntSafe(wei);
+    if (w < 0n) return '0';
+    return formatMorbiusFloor(w);
   } catch {
-    return typeof wei === 'number' ? wei.toFixed(0) : String(wei);
+    return typeof wei === 'number' ? String(Math.floor(wei)) : String(wei);
   }
 }
 
@@ -55,29 +53,40 @@ function shortAddr(addr: string): string {
 
 // ── Color-coded action system ──────────────────────────────────────────────
 
-const ACTION_STYLE: Record<string, { bg: string; label: string }> = {
-  fold:     { bg: '#2d4a6b', label: 'FOLD' },
-  check:    { bg: '#0c5f70', label: 'CHECK' },
-  call:     { bg: '#14532d', label: 'CALL' },
-  bet:      { bg: '#92400e', label: 'BET' },
-  raise:    { bg: '#9a3412', label: 'RAISE' },
-  'all-in': { bg: '#7f1d1d', label: 'ALL-IN' },
-  allin:    { bg: '#7f1d1d', label: 'ALL-IN' },
+const ACTION_STYLE: Record<string, { bg: string; verb: string }> = {
+  fold:     { bg: '#2d4a6b', verb: 'Folded' },
+  check:    { bg: '#0c5f70', verb: 'Checked' },
+  call:     { bg: '#14532d', verb: 'Called' },
+  bet:      { bg: '#92400e', verb: 'Bet' },
+  raise:    { bg: '#9a3412', verb: 'Raised' },
+  'all-in': { bg: '#7f1d1d', verb: 'All-In' },
+  allin:    { bg: '#7f1d1d', verb: 'All-In' },
 };
 
 function getActionStyle(action: string) {
-  return ACTION_STYLE[action.toLowerCase()] ?? { bg: '#374151', label: action.toUpperCase() };
+  return ACTION_STYLE[action.toLowerCase()] ?? { bg: '#374151', verb: action };
+}
+
+function formatActionLabel(action: string, amount?: string): string {
+  const style = getActionStyle(action);
+  const normalized = action.toLowerCase();
+  const showAmount = ['call', 'bet', 'raise', 'all-in', 'allin'].includes(normalized)
+    && toBigIntSafe(amount ?? 0) > 0n;
+  return showAmount ? `${style.verb} ${formatChips(amount ?? '0')}` : style.verb;
 }
 
 // ── Chip stack (exported for use at table level) ──────────────────────────
 
 export function PokerChipStack({ weiAmount }: { weiAmount: string }) {
   let amount = 0;
-  try { amount = Number(formatEther(toBigIntSafe(weiAmount))); } catch {}
+  try {
+    const whole = floorMorbiusWholeFromWei(toBigIntSafe(weiAmount));
+    amount = whole <= BigInt(Number.MAX_SAFE_INTEGER) ? Number(whole) : Number.MAX_SAFE_INTEGER;
+  } catch { /* noop */ }
   if (amount <= 0) return null;
 
   return (
-    <BetChip label={formatChipLabel(Math.floor(amount))} amount={amount} size={26} />
+    <BetChip label={formatChipLabel(amount)} amount={amount} size="clamp(34px, 3vw, 44px)" />
   );
 }
 
@@ -273,6 +282,7 @@ export function PokerSeat({ seat, holeCards, isCurrentPlayer, showCardBacks, win
 
   const isActing  = !!seat.isActing && !empty && !seat.folded;
   const isFolded  = !!seat.folded && !empty;
+  const stackEmpty = !empty && toBigIntSafe(seat.stack ?? 0) <= 0n;
 
   const displayName = empty
     ? 'Open'
@@ -491,9 +501,13 @@ export function PokerSeat({ seat, holeCards, isCurrentPlayer, showCardBacks, win
   }, [isCurrentPlayer, quickChatPickerOpen]);
 
   const activeAction =
-    lastAction && lastAction.action !== 'blind' ? lastAction.action :
-    isFolded ? 'fold' : null;
-  const actionStyle = activeAction ? getActionStyle(activeAction) : null;
+    lastAction && lastAction.action !== 'blind'
+      ? lastAction
+      : isFolded
+        ? { action: 'fold', amount: '0' }
+        : null;
+  const actionStyle = activeAction ? getActionStyle(activeAction.action) : null;
+  const actionLabel = activeAction ? formatActionLabel(activeAction.action, activeAction.amount) : null;
 
   const displayPhrase = propsOverlayPhrase != null && propsOverlayPhrase !== '' ? propsOverlayPhrase : overlayPhrase;
 
@@ -867,16 +881,18 @@ export function PokerSeat({ seat, holeCards, isCurrentPlayer, showCardBacks, win
                 style={{ color: '#fbbf24', fontSize: 'clamp(9px, 1.8vw, 11px)', whiteSpace: 'nowrap' }}
               >
                 {formatChips(seat.stack)}
-                {/* eslint-disable-next-line @next/next/no-img-element */}
                 <img src="/morbius/MorbiusLogo%20(3).png" alt="" aria-hidden className="shrink-0" style={{ height: '1em', width: 'auto', verticalAlign: 'middle' }} />
               </div>
             </div>
           </div>
           <AnimatePresence mode="wait">
-            {actionStyle && (
-              <motion.div key={activeAction} initial={{ height: 0, opacity: 0 }} animate={{ height: 'auto', opacity: 1 }} exit={{ height: 0, opacity: 0 }} transition={{ duration: 0.15 }} className="overflow-hidden">
-                <div className="text-center font-bold uppercase tracking-widest py-0.5" style={{ background: actionStyle.bg, color: '#fff', fontSize: 'clamp(9px, 1.6vw, 10px)' }}>
-                  {actionStyle.label}
+            {actionStyle && actionLabel && (
+              <motion.div key={`${activeAction?.action}-${actionLabel}`} initial={{ height: 0, opacity: 0 }} animate={{ height: 'auto', opacity: 1 }} exit={{ height: 0, opacity: 0 }} transition={{ duration: 0.15 }} className="overflow-hidden">
+                <div
+                  className="text-center font-bold px-2 py-1 leading-tight break-words"
+                  style={{ background: actionStyle.bg, color: '#fff', fontSize: 'clamp(8px, 1.55vw, 10px)' }}
+                >
+                  {actionLabel}
                 </div>
               </motion.div>
             )}
@@ -899,6 +915,21 @@ export function PokerSeat({ seat, holeCards, isCurrentPlayer, showCardBacks, win
           }
           return badgeEl;
         })()}
+
+        {isCurrentPlayer && stackEmpty && onReUpClick && (
+          <button
+            type="button"
+            onClick={onReUpClick}
+            className="mt-1 w-full rounded-md px-2 py-1 text-[10px] font-bold uppercase tracking-wide transition-colors"
+            style={{
+              background: 'linear-gradient(180deg, #0ea5e9 0%, #2563eb 100%)',
+              color: '#fff',
+              boxShadow: '0 2px 8px rgba(14,165,233,0.35)',
+            }}
+          >
+            Rebuy In
+          </button>
+        )}
 
       </div>
     </div>

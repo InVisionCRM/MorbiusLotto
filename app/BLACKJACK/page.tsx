@@ -205,18 +205,27 @@ export default function BlackjackPage() {
   // before the player's saved custom table ID has been validated and applied.
   const prefLoadedRef = useRef(false);
   const [soundEnabled, setSoundEnabled] = useState(true);
-  const { playSound } = useAudio(soundEnabled);
+  const [dealerVoiceEnabled, setDealerVoiceEnabled] = useState(true);
+  const [sfxEnabled, setSfxEnabled] = useState(true);
+  const { playSound: playSoundBase } = useAudio(soundEnabled);
+  const playSfx = useCallback(
+    (path: string, volume?: number) => {
+      if (!sfxEnabled) return;
+      playSoundBase(path, volume);
+    },
+    [sfxEnabled, playSoundBase]
+  );
   const dealerVoiceRef = useRef<{ source: AudioBufferSourceNode; gain: GainNode } | null>(null);
 
   // Play a dealer voice line on a dedicated channel (stops any currently playing voice)
   const playDealerVoice = useCallback(async (path: string, volume = 0.5) => {
-    if (!soundEnabled) return;
+    if (!soundEnabled || !dealerVoiceEnabled) return;
     if (dealerVoiceRef.current) {
       try { dealerVoiceRef.current.source.stop(); } catch { /* already stopped */ }
       dealerVoiceRef.current = null;
     }
     const ctx = AudioManager.getContext();
-    if (!ctx || ctx.state !== 'running') { playSound(path, volume); return; }
+    if (!ctx || ctx.state !== 'running') { playSoundBase(path, volume); return; }
     try {
       const buf = await AudioManager.loadSound(path);
       if (!buf) return;
@@ -230,9 +239,9 @@ export default function BlackjackPage() {
       source.start(0);
       dealerVoiceRef.current = { source, gain };
     } catch {
-      playSound(path, volume);
+      playSoundBase(path, volume);
     }
-  }, [soundEnabled, playSound]);
+  }, [soundEnabled, dealerVoiceEnabled, playSoundBase]);
 
   const [videoSource, setVideoSource] = useState<string>('glowingTable');
   const [videoSyncToClock, setVideoSyncToClock] = useState(true);
@@ -1605,7 +1614,7 @@ export default function BlackjackPage() {
       for (let i = prevPlayerCardCount.current; i < currentPlayerCardCount; i++) {
         newIndices.add(i);
       }
-      if (soundEnabled) playSound('/BlackJack/sounds/cards.wav');
+      playSfx('/BlackJack/sounds/cards.wav');
       setNewCardIndices(prev => ({ ...prev, player: newIndices }));
       // Clear animation flags after animation completes
       // Account for staggered delay (250ms per card index) + animation duration (600ms) + buffer (100ms)
@@ -1628,7 +1637,7 @@ export default function BlackjackPage() {
       for (let i = prevDealerCardCount.current; i < currentDealerCardCount; i++) {
         newIndices.add(i);
       }
-      if (soundEnabled) playSound('/BlackJack/sounds/cards.wav');
+      playSfx('/BlackJack/sounds/cards.wav');
       setNewCardIndices(prev => ({ ...prev, dealer: newIndices }));
       // Clear animation flags after animation completes
       // Account for staggered delay (250ms per card index) + animation duration (600ms) + buffer (100ms)
@@ -1651,7 +1660,7 @@ export default function BlackjackPage() {
     
     // Return the processed localGame so it can be used immediately
     return localGame;
-  }, [address, gameState.clientSeed, soundEnabled, playSound]);
+  }, [address, gameState.clientSeed, playSfx]);
 
   // Wrapper: normal flow or phased deal for player blackjack (cards animate with same delay as other hands)
   const updateGameStateFromServer = useCallback((serverGameState: any) => {
@@ -1933,21 +1942,19 @@ export default function BlackjackPage() {
       chipResultRef.current = pendingChipResult; // Store in ref for use in animation complete callback
       setCurrentGameResult(pendingChipResult);
       setPendingChipResult(null);
-      // Dealer voice outcome sounds
-      if (soundEnabled) {
-        if (pendingChipResult === 'dealer_blackjack') {
-          playDealerVoice(pickRandom(SOUNDS_DEALER_BLACKJACK));
-        } else if (pendingChipResult === 'loss') {
-          if (SOUNDS_DEALER_WINS.length > 0) {
-            playDealerVoice(pickRandom(SOUNDS_DEALER_WINS));
-          }
-        } else if (pendingChipResult === 'blackjack') {
-          playDealerVoice(pickRandom(SOUNDS_PLAYER_BLACKJACK));
-        } else if (pendingChipResult === 'win') {
-          playDealerVoice(pickRandom(SOUNDS_PLAYER_WINS));
-        } else if (pendingChipResult === 'push') {
-          playDealerVoice(SOUND_PUSH);
+      // Dealer voice outcome sounds (playDealerVoice no-ops when master or dealer voice is off)
+      if (pendingChipResult === 'dealer_blackjack') {
+        playDealerVoice(pickRandom(SOUNDS_DEALER_BLACKJACK));
+      } else if (pendingChipResult === 'loss') {
+        if (SOUNDS_DEALER_WINS.length > 0) {
+          playDealerVoice(pickRandom(SOUNDS_DEALER_WINS));
         }
+      } else if (pendingChipResult === 'blackjack') {
+        playDealerVoice(pickRandom(SOUNDS_PLAYER_BLACKJACK));
+      } else if (pendingChipResult === 'win') {
+        playDealerVoice(pickRandom(SOUNDS_PLAYER_WINS));
+      } else if (pendingChipResult === 'push') {
+        playDealerVoice(SOUND_PUSH);
       }
     }
 
@@ -2051,7 +2058,7 @@ export default function BlackjackPage() {
     // Refresh game history lists so Recent Games / Recent Plays update immediately
     queryClient.invalidateQueries({ queryKey: ['playerGames'] });
     queryClient.invalidateQueries({ queryKey: ['blackjackRecentGamesGlobal'] });
-  }, [pendingWinData, pendingChipResult, soundEnabled, playSound, playDealerVoice, fetchBalance, address, tournament, queryClient]);
+  }, [pendingWinData, pendingChipResult, playDealerVoice, fetchBalance, address, tournament, queryClient]);
 
   // Handle intro completion
   const handleIntroComplete = useCallback(() => {
@@ -2721,7 +2728,7 @@ export default function BlackjackPage() {
               onOpenDepositModal={handleOpenDepositModal}
               onOpenTableThemeSelector={() => setThemeModalOpen(true)}
               soundEnabled={soundEnabled}
-              onPlaySfx={playSound}
+              onPlaySfx={playSfx}
               hideBettingPanel={true}
               completedGameId={currentGame?.state === GameState.COMPLETE ? currentGame?.id : undefined}
               onCardsClearComplete={handleCardsClearComplete}
@@ -2745,7 +2752,7 @@ export default function BlackjackPage() {
                   size="tip"
                   onClick={async () => {
                     if (tipAnimating) return;
-                    playSound('/Poker/PokerSounds/PlayerClickConfirmation.mp3');
+                    playSfx('/Poker/PokerSounds/PlayerClickConfirmation.mp3');
                     setTipAnimating(true);
                     try {
                       await wsClient.sendRequest('tip_dealer', {
@@ -2841,7 +2848,7 @@ export default function BlackjackPage() {
                   chipStackLength={chipStack.length}
                   lastBetAmount={lastBetAmount}
                   soundEnabled={soundEnabled}
-                  onPlaySfx={playSound}
+                  onPlaySfx={playSfx}
                   alwaysVisible
                   perfectPairsBet={perfectPairsBet}
                   onPerfectPairsBetChange={setPerfectPairsBet}
@@ -2858,6 +2865,21 @@ export default function BlackjackPage() {
             wsClient={wsClient}
             wsConnected={wsConnected}
             onVerifyGameRequest={openVerifyView}
+            soundEnabled={soundEnabled}
+            onSoundEnabledChange={setSoundEnabled}
+            dealerVoiceEnabled={dealerVoiceEnabled}
+            onDealerVoiceChange={setDealerVoiceEnabled}
+            sfxEnabled={sfxEnabled}
+            onSfxEnabledChange={setSfxEnabled}
+            isMusicPlaying={isMusicPlaying}
+            onToggleMusic={toggleMusic}
+            onNextTrack={nextTrack}
+            musicVolume={musicVolume}
+            onMusicVolumeChange={setMusicVolume}
+            musicTrackDisplayName={
+              BLACKJACK_MUSIC_PLAYLIST[musicTrackIndex].split('/').pop()?.replace('.mp3', '').replace(/-/g, ' ') ??
+              'Music'
+            }
             inTournament={tournament.tournamentState.inTournament}
             tournamentTabContent={
               tournament.tournamentState.inTournament ? (

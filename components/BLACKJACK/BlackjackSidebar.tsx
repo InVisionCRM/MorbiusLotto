@@ -1,7 +1,21 @@
 'use client'
 
 import React, { useState, useEffect } from 'react'
-import { History, BookOpen, TrendingUp, Zap, Gamepad2 } from 'lucide-react'
+import {
+  History,
+  BookOpen,
+  TrendingUp,
+  Zap,
+  Gamepad2,
+  Volume2,
+  VolumeX,
+  Mic,
+  MicOff,
+  Music,
+  Play,
+  Pause,
+  SkipForward,
+} from 'lucide-react'
 import QuickHistory from '@/components/BLACKJACK/QuickHistory'
 import BlackjackRealTimeBetChart from '@/components/BLACKJACK/RealTimeBetChart'
 import GlobalWinsFeed from '@/components/BLACKJACK/GlobalWinsFeed'
@@ -27,6 +41,7 @@ const BASE_TABS = [
   { id: 'recent', label: 'Recent', shortLabel: 'Recent', icon: History },
   { id: 'wins', label: 'Global', shortLabel: 'Global', icon: Zap },
   { id: 'chart', label: 'Chart', shortLabel: 'Chart', icon: TrendingUp },
+  { id: 'sounds', label: 'Sounds', shortLabel: 'Sounds', icon: Volume2 },
   { id: 'howto', label: 'How to Play', shortLabel: 'How', icon: BookOpen },
 ] as const
 
@@ -46,6 +61,19 @@ interface BlackjackSidebarProps {
   inTournament?: boolean
   /** Content for the tournament tab (TournamentHUD + TournamentBetPanel) */
   tournamentTabContent?: React.ReactNode
+  /** Sounds tab — audio controls (single-player sidebar) */
+  soundEnabled: boolean
+  onSoundEnabledChange: (enabled: boolean) => void
+  dealerVoiceEnabled: boolean
+  onDealerVoiceChange: (enabled: boolean) => void
+  sfxEnabled: boolean
+  onSfxEnabledChange: (enabled: boolean) => void
+  isMusicPlaying: boolean
+  onToggleMusic: () => void
+  onNextTrack: () => void
+  musicVolume: number
+  onMusicVolumeChange: (volume: number) => void
+  musicTrackDisplayName: string
 }
 
 export default function BlackjackSidebar({
@@ -58,6 +86,18 @@ export default function BlackjackSidebar({
   onVerifyGameRequest,
   inTournament = false,
   tournamentTabContent,
+  soundEnabled,
+  onSoundEnabledChange,
+  dealerVoiceEnabled,
+  onDealerVoiceChange,
+  sfxEnabled,
+  onSfxEnabledChange,
+  isMusicPlaying,
+  onToggleMusic,
+  onNextTrack,
+  musicVolume,
+  onMusicVolumeChange,
+  musicTrackDisplayName,
 }: BlackjackSidebarProps) {
   const isDesktop = useIsDesktop()
   const [activeTab, setActiveTab] = useState<BlackjackSidebarTabId>(() => 'chart')
@@ -92,7 +132,9 @@ export default function BlackjackSidebar({
       `}</style>
       {/* Tab buttons — fixed at top */}
       <div
-        className={`grid gap-2 p-3 shrink-0 items-start bg-black/20 ${tabs.length === 5 ? 'grid-cols-5' : 'grid-cols-4'}`}
+        className={`grid gap-2 p-3 shrink-0 items-start bg-black/20 ${
+          tabs.length >= 6 ? 'grid-cols-6' : tabs.length === 5 ? 'grid-cols-5' : 'grid-cols-4'
+        }`}
       >
         {tabs.map((tab) => {
           const { id, label, icon: Icon } = tab
@@ -119,7 +161,13 @@ export default function BlackjackSidebar({
       {/* Scrollable content — min-h-0 required so this flex child can shrink and show scrollbar */}
       <div
         className={`${PANEL_CLASS} flex-1 min-h-0 overflow-auto no-scrollbar border-t border-white/10 ${
-          activeTab === 'howto' || activeTab === 'chart' || activeTab === 'wins' || activeTab === 'tournament-play' ? 'p-4' : ''
+          activeTab === 'howto' ||
+          activeTab === 'chart' ||
+          activeTab === 'wins' ||
+          activeTab === 'sounds' ||
+          activeTab === 'tournament-play'
+            ? 'p-4'
+            : ''
         }`}
       >
         {activeTab === 'recent' && (
@@ -143,6 +191,103 @@ export default function BlackjackSidebar({
               ref={chartRef}
               sessionStartTime={chartSessionStartTime ?? Date.now()}
             />
+          </div>
+        )}
+        {activeTab === 'sounds' && (
+          <div className="space-y-3 text-sm">
+            <h3 className="text-base font-semibold text-cyan-300/95">Sounds</h3>
+            <p className="text-xs text-white/55 leading-relaxed">
+              Master turns all audio off. You can keep background music while muting effects or dealer lines.
+            </p>
+            <label className="flex items-center justify-between cursor-pointer group">
+              <span className="text-[11px] text-white/70 font-medium uppercase tracking-wide">Master</span>
+              <button
+                type="button"
+                onClick={() => onSoundEnabledChange(!soundEnabled)}
+                className={`w-8 h-4.5 rounded-full relative transition-colors ${soundEnabled ? 'bg-cyan-600' : 'bg-white/15'}`}
+                aria-pressed={soundEnabled}
+              >
+                <span
+                  className={`absolute top-0.5 w-3.5 h-3.5 rounded-full bg-white shadow transition-all ${soundEnabled ? 'left-[calc(100%-18px)]' : 'left-0.5'}`}
+                />
+              </button>
+            </label>
+            <label className="flex items-center justify-between cursor-pointer">
+              <span className="text-[11px] text-white/60 flex items-center gap-1.5">
+                {dealerVoiceEnabled ? <Mic className="w-3 h-3" /> : <MicOff className="w-3 h-3 text-red-400" />}
+                Dealer voice
+              </span>
+              <button
+                type="button"
+                onClick={() => onDealerVoiceChange(!dealerVoiceEnabled)}
+                disabled={!soundEnabled}
+                className={`w-8 h-4.5 rounded-full relative transition-colors ${dealerVoiceEnabled && soundEnabled ? 'bg-cyan-600' : 'bg-white/15'} disabled:opacity-40`}
+                aria-pressed={dealerVoiceEnabled}
+              >
+                <span
+                  className={`absolute top-0.5 w-3.5 h-3.5 rounded-full bg-white shadow transition-all ${dealerVoiceEnabled && soundEnabled ? 'left-[calc(100%-18px)]' : 'left-0.5'}`}
+                />
+              </button>
+            </label>
+            <label className="flex items-center justify-between cursor-pointer">
+              <span className="text-[11px] text-white/60 flex items-center gap-1.5">
+                <Volume2 className="w-3 h-3" />
+                Sound effects
+              </span>
+              <button
+                type="button"
+                onClick={() => onSfxEnabledChange(!sfxEnabled)}
+                disabled={!soundEnabled}
+                className={`w-8 h-4.5 rounded-full relative transition-colors ${sfxEnabled && soundEnabled ? 'bg-cyan-600' : 'bg-white/15'} disabled:opacity-40`}
+                aria-pressed={sfxEnabled}
+              >
+                <span
+                  className={`absolute top-0.5 w-3.5 h-3.5 rounded-full bg-white shadow transition-all ${sfxEnabled && soundEnabled ? 'left-[calc(100%-18px)]' : 'left-0.5'}`}
+                />
+              </button>
+            </label>
+            <div className="border-t border-white/10 pt-3 space-y-2">
+              <div className="flex items-center justify-between">
+                <span className="text-[11px] text-white/70 font-medium uppercase tracking-wide flex items-center gap-1.5">
+                  <Music className="w-3 h-3" />
+                  Music
+                </span>
+                <div className="flex items-center gap-1">
+                  <button
+                    type="button"
+                    onClick={onToggleMusic}
+                    className="p-1 rounded hover:bg-white/10 text-white/60 hover:text-white transition-colors"
+                    title={isMusicPlaying ? 'Pause' : 'Play'}
+                  >
+                    {isMusicPlaying ? <Pause className="w-3.5 h-3.5" /> : <Play className="w-3.5 h-3.5" />}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={onNextTrack}
+                    className="p-1 rounded hover:bg-white/10 text-white/60 hover:text-white transition-colors"
+                    title="Next track"
+                  >
+                    <SkipForward className="w-3.5 h-3.5" />
+                  </button>
+                </div>
+              </div>
+              <div className="text-[10px] text-white/40 truncate" title={musicTrackDisplayName}>
+                {musicTrackDisplayName}
+              </div>
+              <div className="flex items-center gap-2">
+                <VolumeX className="w-3 h-3 text-white/30 shrink-0" />
+                <input
+                  type="range"
+                  min={0}
+                  max={100}
+                  value={musicVolume}
+                  onChange={(e) => onMusicVolumeChange(Number(e.target.value))}
+                  className="w-full h-1 rounded-full appearance-none bg-white/15 accent-cyan-500 cursor-pointer"
+                  style={{ accentColor: '#06b6d4' }}
+                />
+                <Volume2 className="w-3 h-3 text-white/30 shrink-0" />
+              </div>
+            </div>
           </div>
         )}
         {activeTab === 'howto' && (

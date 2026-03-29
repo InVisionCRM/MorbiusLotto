@@ -2,7 +2,6 @@
 
 import React, { useMemo } from 'react';
 import { motion } from 'framer-motion';
-import { formatEther } from 'viem';
 import { useQuery } from '@tanstack/react-query';
 import {
   Users,
@@ -18,17 +17,13 @@ import {
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import type { PokerTableState } from '@/lib/websocket-client';
 import { CardDisplay } from '@/components/poker/CardDisplay';
+import { formatMorbiusFloor } from '@/lib/format-morbius-display';
 
 // ── Helpers ─────────────────────────────────────────────────────────────────
 
 function fmtWei(wei: string | number): string {
   try {
-    const n = Number(formatEther(BigInt(String(wei || '0'))));
-    if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1)}M`;
-    if (n >= 1_000) return `${(n / 1_000).toFixed(1)}K`;
-    return Number.isInteger(n)
-      ? n.toLocaleString(undefined, { maximumFractionDigits: 0 })
-      : n.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    return formatMorbiusFloor(wei);
   } catch {
     return '0';
   }

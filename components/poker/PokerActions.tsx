@@ -3,6 +3,7 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { formatEther, parseEther } from 'viem';
 import { toBigIntSafe } from '@/lib/safe-bigint';
+import { formatMorbiusFloor } from '@/lib/format-morbius-display';
 import { usePokerSounds } from '@/hooks/use-poker-sounds';
 
 type Amount = bigint;
@@ -28,10 +29,7 @@ function clampAmount(value: Amount, min: Amount, max: Amount): Amount {
 }
 
 function formatAmount(v: Amount): string {
-  const n = Number(formatEther(v));
-  return Number.isInteger(n)
-    ? n.toLocaleString(undefined, { maximumFractionDigits: 0 })
-    : n.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  return formatMorbiusFloor(v, { compact: false });
 }
 
 /** Convert a wei bigint to a plain chip number for slider math */
@@ -79,7 +77,6 @@ export function PokerActions({
   useEffect(() => {
     const current = safeParseAmount(customAmount);
     if (current == null || current < minRaiseAmt) setCustomAmount(formatAmount(minRaiseAmt));
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [minRaiseAmt]);
 
   // ── Derived values ─────────────────────────────────────────────────────────
@@ -87,10 +84,11 @@ export function PokerActions({
   const clamped = parsed == null ? null : clampAmount(parsed, minRaiseAmt, stackAmt);
   const hasValidAmount = clamped != null && stackAmt > 0n;
 
-  const minChips   = toChips(minRaiseAmt);
-  const maxChips   = toChips(stackAmt);
-  const stepChips  = Math.max(1, Math.round(minChips / 10)); // ~10% of min as step
-  const sliderVal  = clamped != null ? Math.max(minChips, Math.min(maxChips, toChips(clamped))) : minChips;
+  const minChips = toChips(minRaiseAmt);
+  const maxChips = toChips(stackAmt);
+  const maxOffsetChips = Math.max(0, maxChips - minChips);
+  const stepChips = Math.max(1, Math.round(Math.max(minChips, 1) / 10)); // ~10% of min as step
+  const sliderOffset = clamped != null ? Math.max(0, toChips(clamped) - minChips) : 0;
 
   // ── Quick size presets ─────────────────────────────────────────────────────
   const quickSizes: Array<{ label: string; value: Amount }> = [
@@ -119,7 +117,9 @@ export function PokerActions({
 
   const handleSlider = (e: React.ChangeEvent<HTMLInputElement>) => {
     const val = parseFloat(e.target.value);
-    setCustomAmount(val.toLocaleString(undefined, { maximumFractionDigits: 2 }));
+    setCustomAmount(
+      Math.floor(minChips + val).toLocaleString(undefined, { maximumFractionDigits: 0 })
+    );
   };
 
   const nudge = (dir: 1 | -1) => {
@@ -129,11 +129,7 @@ export function PokerActions({
     setCustomAmount(formatAmount(next));
   };
 
-  const primaryLabel = isFacingBet
-    ? `Raise To ${hasValidAmount && clamped ? formatAmount(clamped) : '—'}`
-    : `Bet ${hasValidAmount && clamped ? formatAmount(clamped) : '—'}`;
-
-  const secondaryLabel = canCheck ? 'Check' : `Call ${formatAmount(callAmt)}`;
+  const sliderFillPct = maxOffsetChips > 0 ? (sliderOffset / maxOffsetChips) * 100 : 0;
 
   const handleFoldWithSound = () => {
     playSound('call', '/POKER/PokerSounds/PlayerClickConfirmation.mp3');
@@ -234,19 +230,31 @@ export function PokerActions({
               type="button"
               onClick={handleSecondary}
               disabled={!canAct}
-              className={`flex-1 h-11 min-w-0 rounded-sm text-xs font-bold tracking-wide transition-all hover:brightness-110 active:scale-[0.97] truncate px-1 ${checkBtnClass}`}
+              className={`flex-1 h-11 min-w-0 rounded-sm text-[11px] font-bold tracking-wide transition-all hover:brightness-110 active:scale-[0.97] px-1 ${checkBtnClass}`}
               style={checkBtnStyle}
             >
-              {secondaryLabel}
+              {canCheck ? (
+                'Check'
+              ) : (
+                <span className="flex flex-col items-center justify-center leading-tight whitespace-normal">
+                  <span>Call</span>
+                  <span className="text-[10px] font-semibold normal-case">{formatAmount(callAmt)}</span>
+                </span>
+              )}
             </button>
             <button
               type="button"
               onClick={handlePrimary}
               disabled={!canAct || !hasValidAmount}
-              className={`flex-1 h-11 min-w-0 rounded-sm text-xs font-bold tracking-wide transition-all hover:brightness-110 active:scale-[0.97] truncate px-1 ${primaryBtnClass}`}
+              className={`flex-1 h-11 min-w-0 rounded-sm text-[11px] font-bold tracking-wide transition-all hover:brightness-110 active:scale-[0.97] px-1 ${primaryBtnClass}`}
               style={primaryBtnStyle}
             >
-              {primaryLabel}
+              <span className="flex flex-col items-center justify-center leading-tight whitespace-normal">
+                <span>{isFacingBet ? 'Raise To' : 'Bet'}</span>
+                <span className="text-[10px] font-semibold normal-case">
+                  {hasValidAmount && clamped ? formatAmount(clamped) : '—'}
+                </span>
+              </span>
             </button>
           </div>
           <div className="flex items-center gap-1 shrink-0" style={{ width: '42%' }}>
@@ -273,10 +281,10 @@ export function PokerActions({
             <div className="flex-1 min-w-0 relative flex items-center">
               <input
                 type="range"
-                min={minChips}
-                max={maxChips || minChips + 1}
+                min={0}
+                max={maxOffsetChips || 1}
                 step={stepChips}
-                value={sliderVal}
+                value={sliderOffset}
                 onChange={handleSlider}
                 disabled={!canAct || stackAmt === 0n}
                 className="poker-slider poker-slider-mobile w-full disabled:pointer-events-none"
@@ -330,22 +338,34 @@ export function PokerActions({
               type="button"
               onClick={handleSecondary}
               disabled={!canAct}
-              className={`flex-1 h-12 md:h-14 min-w-0 rounded-sm text-sm md:text-base font-bold tracking-wide transition-all hover:brightness-110 active:scale-[0.97] truncate px-2 ${checkBtnClass}`}
+              className={`flex-1 h-12 md:h-14 min-w-0 rounded-sm text-sm md:text-base font-bold tracking-wide transition-all hover:brightness-110 active:scale-[0.97] px-2 ${checkBtnClass}`}
               style={checkBtnStyle}
             >
-              {secondaryLabel}
+              {canCheck ? (
+                'Check'
+              ) : (
+                <span className="flex flex-col items-center justify-center leading-tight whitespace-normal">
+                  <span>Call</span>
+                  <span className="text-[11px] md:text-xs font-semibold normal-case">{formatAmount(callAmt)}</span>
+                </span>
+              )}
             </button>
             <button
               type="button"
               onClick={handlePrimary}
               disabled={!canAct || !hasValidAmount}
-              className={`flex-1 h-12 md:h-14 min-w-0 rounded-sm text-sm md:text-base font-bold tracking-wide transition-all hover:brightness-110 active:scale-[0.97] truncate px-2 ${primaryBtnClass}`}
+              className={`flex-1 h-12 md:h-14 min-w-0 rounded-sm text-sm md:text-base font-bold tracking-wide transition-all hover:brightness-110 active:scale-[0.97] px-2 ${primaryBtnClass}`}
               style={primaryBtnStyle}
             >
-              {primaryLabel}
+              <span className="flex flex-col items-center justify-center leading-tight whitespace-normal">
+                <span>{isFacingBet ? 'Raise To' : 'Bet'}</span>
+                <span className="text-[11px] md:text-xs font-semibold normal-case">
+                  {hasValidAmount && clamped ? formatAmount(clamped) : '—'}
+                </span>
+              </span>
             </button>
           </div>
-          <div className="flex items-center gap-1 md:gap-1.5 shrink-0 w-[44%] md:w-[48%] min-w-0">
+          <div className="flex items-center gap-1 md:gap-1.5 shrink-0 w-[48%] md:w-[52%] min-w-0">
             <input
               inputMode="numeric"
               pattern="[0-9,]*"
@@ -369,10 +389,10 @@ export function PokerActions({
             <div className="flex-1 min-w-0 relative flex items-center">
               <input
                 type="range"
-                min={minChips}
-                max={maxChips || minChips + 1}
+                min={0}
+                max={maxOffsetChips || 1}
                 step={stepChips}
-                value={sliderVal}
+                value={sliderOffset}
                 onChange={handleSlider}
                 disabled={!canAct || stackAmt === 0n}
                 className="poker-slider poker-slider-desktop w-full disabled:pointer-events-none"
@@ -402,8 +422,8 @@ export function PokerActions({
           cursor: pointer;
           background: linear-gradient(
             to right,
-            #c0392b ${((sliderVal - minChips) / Math.max(1, maxChips - minChips)) * 100}%,
-            rgba(255,255,255,0.18) ${((sliderVal - minChips) / Math.max(1, maxChips - minChips)) * 100}%
+            #c0392b ${sliderFillPct}%,
+            rgba(255,255,255,0.18) ${sliderFillPct}%
           );
         }
         .poker-slider-desktop {

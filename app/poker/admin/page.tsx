@@ -3,7 +3,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import Link from 'next/link';
 import { useAccount } from 'wagmi';
-import { formatEther } from 'viem';
+import { formatMorbiusFloor } from '@/lib/format-morbius-display';
 import { isAdminWallet } from '@/lib/admin';
 
 // ---------------------------------------------------------------------------
@@ -81,9 +81,10 @@ const TEST_SUITES = [
 function fmt(wei: string | null | undefined): string {
   if (!wei) return '0';
   try {
-    const n = Number(formatEther(BigInt(wei)));
-    return n.toLocaleString(undefined, { maximumFractionDigits: 0 });
-  } catch { return wei; }
+    return formatMorbiusFloor(wei, { compact: false });
+  } catch {
+    return wei;
+  }
 }
 
 function shortAddr(addr: string | null | undefined): string {

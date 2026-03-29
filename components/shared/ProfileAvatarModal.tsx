@@ -227,7 +227,7 @@ export function ProfileAvatarModal({ open, onClose, wsClient: wsClientProp, onSa
         onClick={onClose}
       >
         <motion.div
-          className="bg-gradient-to-br from-slate-900 to-slate-800 border-2 border-cyan-500/30 rounded-none sm:rounded-2xl shadow-2xl max-w-4xl w-full mt-14 h-[calc(100dvh-3.5rem)] sm:mt-0 sm:h-auto sm:max-h-[85vh] overflow-hidden flex flex-col"
+          className="bg-gradient-to-br from-slate-900 to-slate-800 border-2 border-cyan-500/30 rounded-none sm:rounded-2xl shadow-2xl max-w-5xl w-full mt-14 h-[calc(100dvh-3.5rem)] sm:mt-0 sm:h-auto sm:max-h-[88vh] overflow-hidden flex flex-col"
           initial={{ scale: 0.95, opacity: 0 }}
           animate={{ scale: 1, opacity: 1 }}
           exit={{ scale: 0.95, opacity: 0 }}

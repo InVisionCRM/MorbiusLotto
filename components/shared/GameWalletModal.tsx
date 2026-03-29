@@ -79,6 +79,7 @@ function fmt(wei: string | bigint | undefined | null): string {
 export interface GameWalletModalProps {
   isOpen: boolean;
   onClose: () => void;
+  defaultTab?: Tab;
 
   /** Label shown above the balance hero. Defaults to "Balance". */
   balanceLabel?: string;
@@ -164,6 +165,7 @@ const MIN_LEGACY_MORBIUS_WEI = BigInt(500) * BigInt(1e18);
 export function GameWalletModal({
   isOpen,
   onClose,
+  defaultTab = 'deposit',
   balanceLabel = 'Balance',
   externalBalance,
   contractReserve,
@@ -352,13 +354,13 @@ export function GameWalletModal({
       setDepositTxHash(null);
       setDepositNotifyAmountWei(null);
     } else {
+      setTab(defaultTab);
       if (isSelfManaged) fetchBalance();
       setTxLoaded(false);
       setTxHistory([]);
       setTxError(null);
     }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isOpen]);
+  }, [isOpen, defaultTab]);
 
   // ── Approval success ───────────────────────────────────────────────────
   useEffect(() => {
@@ -496,7 +498,6 @@ export function GameWalletModal({
     poll();
     const interval = setInterval(poll, 2000);
     return () => { cancelled = true; clearInterval(interval); };
-  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [depositBlockNumber, depositPhase, publicClient, depositTxHash, depositNotifyAmountWei]);
 
   // ── Tx history ─────────────────────────────────────────────────────────
@@ -720,7 +721,6 @@ export function GameWalletModal({
     if (onRefreshBalance) await onRefreshBalance();
     else if (isSelfManaged) await fetchBalance();
     setTimeout(() => { setWithdrawPhase('idle'); setWithdrawError(null); }, 4000);
-  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [serverUrl, onRefreshBalance, isSelfManaged, onWithdrawSuccess]);
 
   // ── Resume in-progress withdrawal after page refresh ───────────────────
@@ -750,7 +750,6 @@ export function GameWalletModal({
     };
     checkPending();
     return () => { cancelled = true; };
-  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isOpen, address]);
 
   // ── Withdraw ───────────────────────────────────────────────────────────
@@ -1279,7 +1278,7 @@ export function GameWalletModal({
                         )}
                       </button>
                       <p className="text-[11px] text-gray-400 text-center">
-                        Chips are added instantly. Takes effect next hand if one is in progress.
+                        Re-ups are available between hands and apply to your next deal immediately.
                       </p>
                     </div>
                   )}

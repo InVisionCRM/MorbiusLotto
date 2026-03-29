@@ -4,7 +4,7 @@ import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useAccount, useSignTypedData } from 'wagmi';
-import { formatEther, parseEther } from 'viem';
+import { parseEther } from 'viem';
 import { getApiUrlOptional, getWebSocketUrlOptional } from '@/lib/api-urls';
 import { BlackjackWebSocketClient } from '@/lib/websocket-client';
 import type { PokerTableSummary, PokerSeatState } from '@/lib/websocket-client';
@@ -19,18 +19,17 @@ import {
   POKER_CASH_MAX_BUY_IN_BB,
   POKER_CASH_MIN_BUY_IN_BB,
 } from '@/lib/poker-buy-in';
+import { floorMorbiusWholeFromWei, formatMorbiusFloor, formatMorbiusFloorPlain } from '@/lib/format-morbius-display';
 import { PokerBetaSplash } from '@/components/poker/PokerBetaSplash';
 import { PokerHowToPlayModal } from '@/components/poker/PokerHowToPlayModal';
 import { MorbiusLoadingChip } from '@/components/shared/MorbiusLoadingChip';
+import GlobalMainNav from '@/components/shared/GlobalMainNav';
 // import { PokerTournamentLobby } from '@/components/poker/tournament/PokerTournamentLobby';
 
-/** Format a wei string to human-readable chips (e.g. "10000000000000000000" -> "10") */
+/** Format a wei string to whole MORBIUS (floored) for display */
 function formatChips(wei: string): string {
   try {
-    const num = Number(formatEther(BigInt(wei)));
-    return Number.isInteger(num)
-      ? num.toLocaleString(undefined, { maximumFractionDigits: 0 })
-      : num.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    return formatMorbiusFloor(wei, { compact: false });
   } catch {
     return wei;
   }
@@ -47,7 +46,7 @@ const BLIND_COLORS = [
 ];
 function getBlindAccentColor(bigBlindWei: string): string {
   try {
-    const total = Number(formatEther(BigInt(bigBlindWei)));
+    const total = Number(floorMorbiusWholeFromWei(BigInt(bigBlindWei)));
     const tier = BLIND_COLORS.find((t) => total <= t.max) ?? BLIND_COLORS[BLIND_COLORS.length - 1];
     return tier.color;
   } catch {
@@ -302,7 +301,7 @@ export default function PokerLobbyPage() {
     const bi = BigInt(buyInWei);
     if (bi < minWei || bi > maxWei) {
       setError(
-        `Buy-in must be between ${POKER_CASH_MIN_BUY_IN_BB} and ${POKER_CASH_MAX_BUY_IN_BB} big blinds (${formatEther(minWei)}–${formatEther(maxWei)} MORBIUS).`
+        `Buy-in must be between ${POKER_CASH_MIN_BUY_IN_BB} and ${POKER_CASH_MAX_BUY_IN_BB} big blinds (${formatMorbiusFloor(minWei, { compact: false })}–${formatMorbiusFloor(maxWei, { compact: false })} MORBIUS).`
       );
       return;
     }
@@ -360,260 +359,227 @@ export default function PokerLobbyPage() {
   return (
     <>
       <PokerBetaSplash />
-      <div className="relative min-h-screen h-full w-full flex flex-col bg-gradient-to-b from-[#080c14] via-slate-950 to-[#080c14] text-white">
-        <div className="absolute inset-0 h-full min-h-screen w-full bg-[radial-gradient(ellipse_80%_60%_at_50%_0%,rgba(34,211,238,0.10),transparent_70%)] pointer-events-none" />
-        <div className="relative flex-1 w-full max-w-4xl mx-auto px-3 py-4 sm:px-4 sm:py-8">
-          {/* ── Hero Section ── */}
-          <div
-            className="relative rounded-3xl overflow-hidden mb-6 sm:mb-8 border border-cyan-400/10"
-            style={{
-              background: 'linear-gradient(170deg, #0c1929 0%, #0a0f1a 40%, #0d1117 100%)',
-              boxShadow: '0 0 80px rgba(34,211,238,0.07), 0 2px 40px rgba(0,0,0,0.5), inset 0 1px 0 rgba(34,211,238,0.1)',
-            }}
-          >
-            {/* Top glow line */}
-            <div className="h-px bg-gradient-to-r from-transparent via-cyan-400/40 to-transparent" />
+      <GlobalMainNav page="poker">
+        <div className="relative min-h-screen h-full w-full flex flex-col bg-gradient-to-b from-[#080c14] via-slate-950 to-[#080c14] text-white">
+          <div className="absolute inset-0 h-full min-h-screen w-full bg-[radial-gradient(ellipse_80%_60%_at_50%_0%,rgba(34,211,238,0.10),transparent_70%)] pointer-events-none" />
+          <div className="relative flex-1 w-full max-w-4xl mx-auto px-3 py-4 sm:px-4 sm:py-8">
+            {/* ── Hero Section ── */}
+            <div
+              className="relative rounded-3xl overflow-hidden mb-6 sm:mb-8 border border-cyan-400/10"
+              style={{
+                background: 'linear-gradient(170deg, #0c1929 0%, #0a0f1a 40%, #0d1117 100%)',
+                boxShadow: '0 0 80px rgba(34,211,238,0.07), 0 2px 40px rgba(0,0,0,0.5), inset 0 1px 0 rgba(34,211,238,0.1)',
+              }}
+            >
+              {/* Top glow line */}
+              <div className="h-px bg-gradient-to-r from-transparent via-cyan-400/40 to-transparent" />
 
-            {/* Decorative card fan — positioned behind content */}
-            <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-[45%] pointer-events-none select-none opacity-[0.04]">
-              <div className="relative w-[400px] h-[300px]">
-                {[
-                  { r: -25, x: -60, y: 0 },
-                  { r: -10, x: -20, y: -10 },
-                  { r: 5, x: 20, y: -10 },
-                  { r: 20, x: 60, y: 0 },
-                ].map((c, i) => (
-                  <div
-                    key={i}
-                    className="absolute left-1/2 top-1/2 w-[140px] h-[200px] rounded-2xl border-2 border-white/30 bg-white/10"
-                    style={{
-                      transform: `translate(-50%, -50%) rotate(${c.r}deg) translateX(${c.x}px) translateY(${c.y}px)`,
-                    }}
-                  />
-                ))}
+              {/* Decorative card fan — positioned behind content */}
+              <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-[45%] pointer-events-none select-none opacity-[0.04]">
+                <div className="relative w-[400px] h-[300px]">
+                  {[
+                    { r: -25, x: -60, y: 0 },
+                    { r: -10, x: -20, y: -10 },
+                    { r: 5, x: 20, y: -10 },
+                    { r: 20, x: 60, y: 0 },
+                  ].map((c, i) => (
+                    <div
+                      key={i}
+                      className="absolute left-1/2 top-1/2 w-[140px] h-[200px] rounded-2xl border-2 border-white/30 bg-white/10"
+                      style={{
+                        transform: `translate(-50%, -50%) rotate(${c.r}deg) translateX(${c.x}px) translateY(${c.y}px)`,
+                      }}
+                    />
+                  ))}
+                </div>
               </div>
-            </div>
 
-            <div className="relative overflow-hidden">
-              {/* Layered radial glows */}
-              <div className="absolute inset-0 bg-[radial-gradient(ellipse_70%_50%_at_50%_-10%,rgba(34,211,238,0.18),transparent_70%)] pointer-events-none" />
-              <div className="absolute inset-0 bg-[radial-gradient(ellipse_40%_60%_at_20%_100%,rgba(59,130,246,0.08),transparent_60%)] pointer-events-none" />
-              <div className="absolute inset-0 bg-[radial-gradient(ellipse_40%_60%_at_80%_100%,rgba(99,102,241,0.06),transparent_60%)] pointer-events-none" />
+              <div className="relative overflow-hidden">
+                {/* Layered radial glows */}
+                <div className="absolute inset-0 bg-[radial-gradient(ellipse_70%_50%_at_50%_-10%,rgba(34,211,238,0.18),transparent_70%)] pointer-events-none" />
+                <div className="absolute inset-0 bg-[radial-gradient(ellipse_40%_60%_at_20%_100%,rgba(59,130,246,0.08),transparent_60%)] pointer-events-none" />
+                <div className="absolute inset-0 bg-[radial-gradient(ellipse_40%_60%_at_80%_100%,rgba(99,102,241,0.06),transparent_60%)] pointer-events-none" />
 
-              {/* Subtle grid overlay */}
-              <div
-                className="absolute inset-0 pointer-events-none opacity-[0.03]"
-                style={{
-                  backgroundImage: 'linear-gradient(rgba(255,255,255,0.1) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,0.1) 1px, transparent 1px)',
-                  backgroundSize: '40px 40px',
-                }}
-              />
+                {/* Subtle grid overlay */}
+                <div
+                  className="absolute inset-0 pointer-events-none opacity-[0.03]"
+                  style={{
+                    backgroundImage: 'linear-gradient(rgba(255,255,255,0.1) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,0.1) 1px, transparent 1px)',
+                    backgroundSize: '40px 40px',
+                  }}
+                />
 
-              {/* Top bar */}
-              <div className="relative flex justify-between items-center px-5 sm:px-10 pt-5 sm:pt-8">
-                <Link href="/" className="inline-flex items-center gap-2 text-slate-500 hover:text-cyan-400 text-xs sm:text-sm font-medium transition-colors">
-                  <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}><path d="M19 12H5M12 19l-7-7 7-7" /></svg>
-                  Back to Home
-                </Link>
-                {isConnected && (
-                  <div className="flex items-center gap-2.5">
-                    {balance != null && (
-                      <div
-                        className="flex items-center gap-2 px-4 py-2 rounded-full border border-cyan-500/20"
-                        style={{ background: 'rgba(8,12,20,0.8)', boxShadow: 'inset 0 1px 0 rgba(34,211,238,0.08)' }}
+                {/* Centered hero content */}
+                <div className="relative text-center px-5 sm:px-10 pt-12 sm:pt-14 pb-12 sm:pb-16">
+                  {/* Live badge */}
+                  <div
+                    className="inline-flex items-center gap-2.5 px-5 py-2 rounded-full mb-6 sm:mb-8"
+                    style={{
+                      background: 'rgba(34,211,238,0.06)',
+                      border: '1px solid rgba(34,211,238,0.15)',
+                      boxShadow: '0 0 20px rgba(34,211,238,0.08)',
+                    }}
+                  >
+                    <span className="relative flex h-2 w-2">
+                      <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-cyan-400 opacity-75" />
+                      <span className="relative inline-flex rounded-full h-2 w-2 bg-cyan-400" />
+                    </span>
+                    <span className="text-[11px] sm:text-xs font-bold tracking-[0.2em] uppercase text-cyan-400">
+                      {tables.length > 0 ? `${tables.length} Live Table${tables.length !== 1 ? 's' : ''}` : 'No Active Tables'}
+                    </span>
+                  </div>
+
+                  {/* Main title */}
+                  <h1
+                    className="text-5xl sm:text-6xl md:text-7xl font-black tracking-[-3px] leading-[1] mb-4"
+                    style={{
+                      background: 'linear-gradient(180deg, #ffffff 0%, #e2e8f0 40%, #64748b 100%)',
+                      WebkitBackgroundClip: 'text',
+                      WebkitTextFillColor: 'transparent',
+                      filter: 'drop-shadow(0 2px 8px rgba(0,0,0,0.3))',
+                    }}
+                  >
+                    Texas Hold&apos;em
+                  </h1>
+                  <p className="text-sm sm:text-base text-slate-500 mb-10 sm:mb-12 max-w-md mx-auto">
+                    No-limit multiplayer poker. Join a table or start your own.
+                  </p>
+
+                  {/* CTA buttons */}
+                  <div className="flex justify-center gap-3 flex-wrap">
+                    {isConnected && (
+                      <button
+                        type="button"
+                        onClick={() => setCreateModal({ smallBlind: '10', bigBlind: '20', maxSeats: 6, pinCode: '', pinEnabled: false })}
+                        className="flex items-center gap-2 px-7 py-3.5 rounded-2xl text-white text-sm font-bold hover:-translate-y-0.5 transition-all"
+                        style={{
+                          background: 'linear-gradient(135deg, #06b6d4, #3b82f6)',
+                          boxShadow: '0 4px 24px rgba(6,182,212,0.3), 0 1px 2px rgba(0,0,0,0.2), inset 0 1px 0 rgba(255,255,255,0.15)',
+                        }}
                       >
-                        <span className="text-sm font-bold text-cyan-400 tabular-nums">{formatChips(balance)}</span>
-                        <span className="text-[11px] text-slate-500 font-medium">MORBIUS</span>
-                      </div>
+                        <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.5}><path d="M12 5v14M5 12h14" /></svg>
+                        Create Table
+                      </button>
                     )}
                     <button
                       type="button"
-                      onClick={() => setShowDepositModal(true)}
-                      className="px-4 py-2 rounded-full text-white text-xs sm:text-sm font-semibold hover:-translate-y-0.5 transition-all"
+                      onClick={() => setShowHowToPlay(true)}
+                      className="flex items-center gap-2 px-6 py-3.5 rounded-2xl text-slate-400 text-sm font-medium hover:text-white transition-all"
                       style={{
-                        background: 'linear-gradient(135deg, #06b6d4, #3b82f6)',
-                        boxShadow: '0 2px 12px rgba(6,182,212,0.3), inset 0 1px 0 rgba(255,255,255,0.15)',
+                        background: 'rgba(30,41,59,0.5)',
+                        border: '1px solid rgba(51,65,85,0.5)',
+                        boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.03)',
                       }}
                     >
-                      + Get Chips
+                      <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}><circle cx="12" cy="12" r="10" /><path d="M12 16v-4M12 8h.01" /></svg>
+                      How to Play
                     </button>
+                    <Link
+                      href="/poker/demo?tutorial=1"
+                      className="flex items-center px-5 py-3.5 rounded-2xl text-slate-600 hover:text-slate-300 text-sm font-medium transition-colors"
+                    >
+                      Tutorial
+                    </Link>
                   </div>
-                )}
-              </div>
-
-              {/* Centered hero content */}
-              <div className="relative text-center px-5 sm:px-10 pt-10 sm:pt-14 pb-12 sm:pb-16">
-                {/* Live badge */}
-                <div
-                  className="inline-flex items-center gap-2.5 px-5 py-2 rounded-full mb-6 sm:mb-8"
-                  style={{
-                    background: 'rgba(34,211,238,0.06)',
-                    border: '1px solid rgba(34,211,238,0.15)',
-                    boxShadow: '0 0 20px rgba(34,211,238,0.08)',
-                  }}
-                >
-                  <span className="relative flex h-2 w-2">
-                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-cyan-400 opacity-75" />
-                    <span className="relative inline-flex rounded-full h-2 w-2 bg-cyan-400" />
-                  </span>
-                  <span className="text-[11px] sm:text-xs font-bold tracking-[0.2em] uppercase text-cyan-400">
-                    {tables.length > 0 ? `${tables.length} Live Table${tables.length !== 1 ? 's' : ''}` : 'No Active Tables'}
-                  </span>
                 </div>
-
-                {/* Main title */}
-                <h1
-                  className="text-5xl sm:text-6xl md:text-7xl font-black tracking-[-3px] leading-[1] mb-4"
-                  style={{
-                    background: 'linear-gradient(180deg, #ffffff 0%, #e2e8f0 40%, #64748b 100%)',
-                    WebkitBackgroundClip: 'text',
-                    WebkitTextFillColor: 'transparent',
-                    filter: 'drop-shadow(0 2px 8px rgba(0,0,0,0.3))',
-                  }}
+              </div>
+              {/* Tab bar */}
+              <div className="flex items-center gap-1 px-5 sm:px-10 py-3.5 sm:py-4 border-t border-white/[0.04]" style={{ background: 'rgba(0,0,0,0.2)' }}>
+                <button
+                  type="button"
+                  onClick={() => setActiveTab('cash')}
+                  className={`px-5 py-2.5 rounded-xl text-xs sm:text-sm font-semibold transition-all ${
+                    activeTab === 'cash'
+                      ? 'bg-cyan-500/[0.12] text-cyan-400'
+                      : 'text-slate-600 hover:text-slate-400'
+                  }`}
                 >
-                  Texas Hold&apos;em
-                </h1>
-                <p className="text-sm sm:text-base text-slate-500 mb-10 sm:mb-12 max-w-md mx-auto">
-                  No-limit multiplayer poker. Join a table or start your own.
-                </p>
-
-                {/* CTA buttons */}
-                <div className="flex justify-center gap-3 flex-wrap">
-                  {isConnected && (
-                    <button
-                      type="button"
-                      onClick={() => setCreateModal({ smallBlind: '10', bigBlind: '20', maxSeats: 6, pinCode: '', pinEnabled: false })}
-                      className="flex items-center gap-2 px-7 py-3.5 rounded-2xl text-white text-sm font-bold hover:-translate-y-0.5 transition-all"
-                      style={{
-                        background: 'linear-gradient(135deg, #06b6d4, #3b82f6)',
-                        boxShadow: '0 4px 24px rgba(6,182,212,0.3), 0 1px 2px rgba(0,0,0,0.2), inset 0 1px 0 rgba(255,255,255,0.15)',
-                      }}
-                    >
-                      <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.5}><path d="M12 5v14M5 12h14" /></svg>
-                      Create Table
-                    </button>
+                  Cash Games
+                  {tables.length > 0 && activeTab === 'cash' && (
+                    <span className="ml-2 text-[11px] font-bold px-2.5 py-0.5 rounded-full bg-cyan-500/15 text-cyan-400">{tables.length}</span>
                   )}
-                  <button
-                    type="button"
-                    onClick={() => setShowHowToPlay(true)}
-                    className="flex items-center gap-2 px-6 py-3.5 rounded-2xl text-slate-400 text-sm font-medium hover:text-white transition-all"
-                    style={{
-                      background: 'rgba(30,41,59,0.5)',
-                      border: '1px solid rgba(51,65,85,0.5)',
-                      boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.03)',
-                    }}
-                  >
-                    <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}><circle cx="12" cy="12" r="10" /><path d="M12 16v-4M12 8h.01" /></svg>
-                    How to Play
-                  </button>
-                  <Link
-                    href="/poker/demo?tutorial=1"
-                    className="flex items-center px-5 py-3.5 rounded-2xl text-slate-600 hover:text-slate-300 text-sm font-medium transition-colors"
-                  >
-                    Tutorial
-                  </Link>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setActiveTab('tournaments')}
+                  className={`relative px-5 py-2.5 rounded-xl text-xs sm:text-sm font-semibold transition-all ${
+                    activeTab === 'tournaments'
+                      ? 'bg-cyan-500/[0.12] text-cyan-400'
+                      : 'text-slate-600 hover:text-slate-400'
+                  }`}
+                >
+                  Tournaments
+                  <span className="ml-2 text-[9px] sm:text-[10px] font-bold tracking-wider uppercase text-amber-400/80">Soon</span>
+                </button>
+              </div>
+            </div>
+            {/* Tournament Coming Soon */}
+            {activeTab === 'tournaments' && (
+              <div className="flex flex-col items-center justify-center py-16 sm:py-24 text-center">
+                <div className="w-16 h-16 sm:w-20 sm:h-20 rounded-2xl bg-cyan-500/[0.08] border border-cyan-500/15 flex items-center justify-center text-3xl sm:text-4xl mb-5">
+                  🏆
+                </div>
+                <h3 className="text-xl sm:text-2xl font-bold text-slate-200 mb-2">Tournaments Coming Soon</h3>
+                <p className="text-sm sm:text-base text-slate-500 max-w-md leading-relaxed mb-6">
+                  Multi-table tournaments with structured blind levels, guaranteed prize pools, and satellite qualifiers are on the way.
+                </p>
+                <div className="flex items-center gap-2 px-4 py-2 rounded-full bg-amber-500/10 border border-amber-500/20">
+                  <span className="relative flex h-2 w-2">
+                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-amber-400 opacity-75" />
+                    <span className="relative inline-flex rounded-full h-2 w-2 bg-amber-400" />
+                  </span>
+                  <span className="text-xs sm:text-sm font-medium text-amber-400/90">In Development</span>
                 </div>
               </div>
-            </div>
+            )}
 
-            {/* Tab bar */}
-            <div className="flex items-center gap-1 px-5 sm:px-10 py-3.5 sm:py-4 border-t border-white/[0.04]" style={{ background: 'rgba(0,0,0,0.2)' }}>
-              <button
-                type="button"
-                onClick={() => setActiveTab('cash')}
-                className={`px-5 py-2.5 rounded-xl text-xs sm:text-sm font-semibold transition-all ${
-                  activeTab === 'cash'
-                    ? 'bg-cyan-500/[0.12] text-cyan-400'
-                    : 'text-slate-600 hover:text-slate-400'
-                }`}
-              >
-                Cash Games
-                {tables.length > 0 && activeTab === 'cash' && (
-                  <span className="ml-2 text-[11px] font-bold px-2.5 py-0.5 rounded-full bg-cyan-500/15 text-cyan-400">{tables.length}</span>
-                )}
-              </button>
-              <button
-                type="button"
-                onClick={() => setActiveTab('tournaments')}
-                className={`relative px-5 py-2.5 rounded-xl text-xs sm:text-sm font-semibold transition-all ${
-                  activeTab === 'tournaments'
-                    ? 'bg-cyan-500/[0.12] text-cyan-400'
-                    : 'text-slate-600 hover:text-slate-400'
-                }`}
-              >
-                Tournaments
-                <span className="ml-2 text-[9px] sm:text-[10px] font-bold tracking-wider uppercase text-amber-400/80">Soon</span>
-              </button>
-            </div>
-          </div>
-
-          {/* Tournament Coming Soon */}
-          {activeTab === 'tournaments' && (
-            <div className="flex flex-col items-center justify-center py-16 sm:py-24 text-center">
-              <div className="w-16 h-16 sm:w-20 sm:h-20 rounded-2xl bg-cyan-500/[0.08] border border-cyan-500/15 flex items-center justify-center text-3xl sm:text-4xl mb-5">
-                🏆
-              </div>
-              <h3 className="text-xl sm:text-2xl font-bold text-slate-200 mb-2">Tournaments Coming Soon</h3>
-              <p className="text-sm sm:text-base text-slate-500 max-w-md leading-relaxed mb-6">
-                Multi-table tournaments with structured blind levels, guaranteed prize pools, and satellite qualifiers are on the way.
+            {activeTab === 'cash' && error && <p className="text-red-400 mb-4">{error}</p>}
+            {activeTab === 'cash' && !loading && tables.length === 0 && !error && (
+              <p className="text-slate-400">
+                No tables available. {isConnected ? 'Click "Create table" above to start one.' : 'Connect your wallet to create a table.'}
               </p>
-              <div className="flex items-center gap-2 px-4 py-2 rounded-full bg-amber-500/10 border border-amber-500/20">
-                <span className="relative flex h-2 w-2">
-                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-amber-400 opacity-75" />
-                  <span className="relative inline-flex rounded-full h-2 w-2 bg-amber-400" />
-                </span>
-                <span className="text-xs sm:text-sm font-medium text-amber-400/90">In Development</span>
-              </div>
-            </div>
-          )}
-
-          {activeTab === 'cash' && error && <p className="text-red-400 mb-4">{error}</p>}
-          {activeTab === 'cash' && !loading && tables.length === 0 && !error && (
-            <p className="text-slate-400">
-              No tables available. {isConnected ? 'Click "Create table" above to start one.' : 'Connect your wallet to create a table.'}
-            </p>
-          )}
-          {activeTab === 'cash' && !loading && tables.length > 0 && (
-            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-2">
-              {tables.map((t) => {
-                const isPlaying = t.status === 'playing';
-                const openSeats = t.maxSeats - t.seatedCount;
-                const accentSolid = getBlindAccentSolid(t.bigBlind);
-                return (
-                  <div
-                    key={t.id}
-                    className="relative bg-[#e0e5ec] rounded-[2rem] p-6 flex flex-col justify-between gap-6 overflow-hidden"
-                    style={{ boxShadow: '2px 2px 6px rgba(163,177,198,0.25), -2px -2px 6px rgba(255,255,255,0.25)' }}
-                  >
-                    {/* Content */}
-                    <div className="relative z-10 flex flex-col justify-between gap-6">
-                    <div className="flex justify-between items-center">
-                      <div
-                        className="w-11 h-11 rounded-full bg-[#e0e5ec] flex items-center justify-center text-lg"
-                        style={{ boxShadow: 'inset 2px 2px 4px rgba(163,177,198,0.5), inset -2px -2px 4px rgba(255,255,255,0.4)', color: accentSolid }}
-                      >
-                        ♠
-                      </div>
-                      <div className="flex items-center gap-1.5">
-                        {t.hasPin && (
-                          <div
-                            className="w-8 h-8 rounded-full bg-[#e0e5ec] flex items-center justify-center"
-                            style={{ boxShadow: '2px 2px 4px rgba(163,177,198,0.4), -2px -2px 4px rgba(255,255,255,0.4)' }}
-                            title="Private table — PIN required"
-                          >
-                            <svg className="w-3.5 h-3.5 text-amber-600" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2C9.24 2 7 4.24 7 7v3H6a2 2 0 00-2 2v8a2 2 0 002 2h12a2 2 0 002-2v-8a2 2 0 00-2-2h-1V7c0-2.76-2.24-5-5-5zm0 2c1.66 0 3 1.34 3 3v3H9V7c0-1.66 1.34-3 3-3zm0 10c1.1 0 2 .9 2 2s-.9 2-2 2-2-.9-2-2 .9-2 2-2z" /></svg>
-                          </div>
-                        )}
+            )}
+            {activeTab === 'cash' && !loading && tables.length > 0 && (
+              <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-2">
+                {tables.map((t) => {
+                  const isPlaying = t.status === 'playing';
+                  const openSeats = t.maxSeats - t.seatedCount;
+                  const accentSolid = getBlindAccentSolid(t.bigBlind);
+                  return (
+                    <div
+                      key={t.id}
+                      className="relative bg-[#e0e5ec] rounded-[2rem] p-6 flex flex-col justify-between gap-6 overflow-hidden"
+                      style={{ boxShadow: '2px 2px 6px rgba(163,177,198,0.25), -2px -2px 6px rgba(255,255,255,0.25)' }}
+                    >
+                      {/* Content */}
+                      <div className="relative z-10 flex flex-col justify-between gap-6">
+                      <div className="flex justify-between items-center">
                         <div
-                          className="px-3 py-1.5 rounded-full bg-[#e0e5ec]"
-                          style={{ boxShadow: '2px 2px 4px rgba(163,177,198,0.4), -2px -2px 4px rgba(255,255,255,0.4)' }}
+                          className="w-11 h-11 rounded-full bg-[#e0e5ec] flex items-center justify-center text-lg"
+                          style={{ boxShadow: 'inset 2px 2px 4px rgba(163,177,198,0.5), inset -2px -2px 4px rgba(255,255,255,0.4)', color: accentSolid }}
                         >
-                          <span className={`text-[10px] font-bold uppercase tracking-wider ${isPlaying ? 'text-emerald-600' : 'text-slate-500'}`}>
-                            {isPlaying ? 'In Progress' : 'Waiting'}
-                          </span>
+                          ♠
+                        </div>
+                        <div className="flex items-center gap-1.5">
+                          {t.hasPin && (
+                            <div
+                              className="w-8 h-8 rounded-full bg-[#e0e5ec] flex items-center justify-center"
+                              style={{ boxShadow: '2px 2px 4px rgba(163,177,198,0.4), -2px -2px 4px rgba(255,255,255,0.4)' }}
+                              title="Private table — PIN required"
+                            >
+                              <svg className="w-3.5 h-3.5 text-amber-600" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2C9.24 2 7 4.24 7 7v3H6a2 2 0 00-2 2v8a2 2 0 002 2h12a2 2 0 002-2v-8a2 2 0 00-2-2h-1V7c0-2.76-2.24-5-5-5zm0 2c1.66 0 3 1.34 3 3v3H9V7c0-1.66 1.34-3 3-3zm0 10c1.1 0 2 .9 2 2s-.9 2-2 2-2-.9-2-2 .9-2 2-2z" /></svg>
+                            </div>
+                          )}
+                          <div
+                            className="px-3 py-1.5 rounded-full bg-[#e0e5ec]"
+                            style={{ boxShadow: '2px 2px 4px rgba(163,177,198,0.4), -2px -2px 4px rgba(255,255,255,0.4)' }}
+                          >
+                            <span className={`text-[10px] font-bold uppercase tracking-wider ${isPlaying ? 'text-emerald-600' : 'text-slate-500'}`}>
+                              {isPlaying ? 'In Progress' : 'Waiting'}
+                            </span>
+                          </div>
                         </div>
                       </div>
-                    </div>
 
                     {/* Middle: blinds + game type */}
                     <div className="text-center">
@@ -703,7 +669,7 @@ export default function PokerLobbyPage() {
                             onClick={() => {
                               const bb = BigInt(t.bigBlind);
                               const { maxWei } = getCashBuyInBoundsWei(bb);
-                              setBuyIn(formatEther(maxWei));
+                              setBuyIn(formatMorbiusFloorPlain(maxWei));
                               setJoinModal({ tableId: t.id, hasPin: t.hasPin, bigBlindWei: t.bigBlind });
                               setJoinPin('');
                             }}
@@ -725,24 +691,24 @@ export default function PokerLobbyPage() {
                         </button>
                       )}
                     </div>
+                      </div>
                     </div>
-                  </div>
-                );
-              })}
+                  );
+                })}
+              </div>
+            )}
+
+            <div className="mt-6">
+              <GameFAQ
+                game="poker"
+                addresses={[
+                  { label: 'MORBIUS Token', address: MORBIUS_TOKEN_ADDRESS },
+                ]}
+              />
             </div>
-          )}
-
-          <div className="mt-6">
-            <GameFAQ
-              game="poker"
-              addresses={[
-                { label: 'MORBIUS Token', address: MORBIUS_TOKEN_ADDRESS },
-              ]}
-            />
           </div>
-        </div>
 
-        {joinModal && (
+          {joinModal && (
           <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
             <div
               className="bg-gradient-to-br from-slate-900 to-slate-800 border-2 border-cyan-500/30 rounded-2xl shadow-2xl max-w-sm w-full overflow-hidden"
@@ -793,8 +759,8 @@ export default function PokerLobbyPage() {
                       <>
                         For this table:{' '}
                         <span className="text-slate-300 tabular-nums">
-                          {formatEther(getCashBuyInBoundsWei(BigInt(joinModal.bigBlindWei)).minWei)} –{' '}
-                          {formatEther(getCashBuyInBoundsWei(BigInt(joinModal.bigBlindWei)).maxWei)}
+                          {formatMorbiusFloor(getCashBuyInBoundsWei(BigInt(joinModal.bigBlindWei)).minWei, { compact: false })} –{' '}
+                          {formatMorbiusFloor(getCashBuyInBoundsWei(BigInt(joinModal.bigBlindWei)).maxWei, { compact: false })}
                         </span>{' '}
                         MORBIUS.
                       </>
@@ -814,8 +780,8 @@ export default function PokerLobbyPage() {
                 />
                 {joinBuyInOutOfRange && buyIn.trim() !== '' && (
                   <p className="text-amber-400/90 text-xs">
-                    Enter an amount between {formatEther(getCashBuyInBoundsWei(BigInt(joinModal.bigBlindWei)).minWei)} and{' '}
-                    {formatEther(getCashBuyInBoundsWei(BigInt(joinModal.bigBlindWei)).maxWei)} MORBIUS.
+                    Enter an amount between {formatMorbiusFloor(getCashBuyInBoundsWei(BigInt(joinModal.bigBlindWei)).minWei, { compact: false })} and{' '}
+                    {formatMorbiusFloor(getCashBuyInBoundsWei(BigInt(joinModal.bigBlindWei)).maxWei, { compact: false })} MORBIUS.
                   </p>
                 )}
                 <div className="flex gap-2">
@@ -850,9 +816,9 @@ export default function PokerLobbyPage() {
           </div>
         )}
 
-        <PokerHowToPlayModal isOpen={showHowToPlay} onClose={() => setShowHowToPlay(false)} />
+          <PokerHowToPlayModal isOpen={showHowToPlay} onClose={() => setShowHowToPlay(false)} />
 
-        {createModal && (
+          {createModal && (
           <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
             <div
               className="bg-gradient-to-br from-slate-900 to-slate-800 border-2 border-cyan-500/30 rounded-2xl shadow-2xl max-w-sm w-full overflow-hidden"
@@ -940,8 +906,9 @@ export default function PokerLobbyPage() {
           </div>
         )}
 
-        <Footer />
-      </div>
+          <Footer />
+        </div>
+      </GlobalMainNav>
 
       <GameWalletModal
         isOpen={showDepositModal}

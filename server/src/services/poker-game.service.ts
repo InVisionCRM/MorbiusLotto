@@ -61,6 +61,8 @@ export interface PokerCurrentHand {
   pot: string;
   actingPosition: number | null;
   lastAction: { position: number; action: string; amount: string } | null;
+  /** Latest non-blind action for each seat on the current street, keyed by seat position. */
+  streetActions?: Record<number, { action: string; amount: string }>;
   minRaise: string;
   /** Amount the acting player must put in to call (0 if can check). */
   toCall: string;
@@ -129,6 +131,8 @@ function chevtekStreetToPoker(round: BettingRound | undefined, hasWinners: boole
 // Rake configuration (cash games only — tournaments use virtual chips)
 // ---------------------------------------------------------------------------
 const RAKE_PERCENT = 5; // 5% of each pot
+const SHOWDOWN_DELAY_MS = 15_000;
+const SHOWDOWN_DELAY_SECONDS = SHOWDOWN_DELAY_MS / 1000;
 
 // ---------------------------------------------------------------------------
 // PokerGameService
@@ -521,7 +525,7 @@ export class PokerGameService {
       setTimeout(async () => {
         await this.tryStartNextHand(tableId);
         await this.broadcastState(tableId);
-      }, 5000);
+      }, SHOWDOWN_DELAY_MS);
     } else if (!table.currentRound) {
       // No winners yet but round ended — update acting position
       await pool.query(
@@ -548,9 +552,94 @@ export class PokerGameService {
   }
 
   private async _addChips(_tableId: string, _playerAddress: string, _amount: string): Promise<PokerTableState> {
-    throw new Error(
-      `In-table top-ups are disabled. Leave the table and rejoin with a buy-in between ${POKER_CASH_MIN_BUY_IN_BB} and ${POKER_CASH_MAX_BUY_IN_BB} big blinds.`
+    const tableId = _tableId;
+    const playerAddress = this.normalizeAddress(_playerAddress);
+    const amount = BigInt(_amount);
+    if (amount <= 0n) throw new Error('Re-up amount must be greater than zero');
+
+    const scaling = await this.getTableScaling(tableId);
+    if (scaling.tournament) throw new Error('Tournament tables do not support re-ups');
+    assertCashChipMultiple(amount, 'Re-up');
+
+    await this.dbService.withTransaction(async (client) => {
+      const playerLock = await client.query(
+        `SELECT id FROM players WHERE LOWER(wallet_address) = LOWER($1) FOR UPDATE`,
+        [playerAddress]
+      );
+      if (playerLock.rows.length === 0) throw new Error('Player not found');
+
+      const seatResult = await client.query(
+        `SELECT s.stack, t.big_blind
+         FROM poker_seats s
+         JOIN poker_tables t ON t.id = s.table_id
+         WHERE s.table_id = $1 AND LOWER(s.player_address) = LOWER($2)
+         FOR UPDATE`,
+        [tableId, playerAddress]
+      );
+      if (seatResult.rows.length === 0) throw new Error('You are not seated at this table');
+
+      const activeHand = await client.query(
+        'SELECT id FROM poker_hands WHERE table_id = $1 AND completed_at IS NULL LIMIT 1',
+        [tableId]
+      );
+      if (activeHand.rows.length > 0) {
+        throw new Error('Re-ups are only available between hands');
+      }
+
+      const currentStack = BigInt(seatResult.rows[0].stack ?? '0');
+      const bigBlindWei = BigInt(seatResult.rows[0].big_blind ?? '0');
+      const { minWei, maxWei } = getCashBuyInBoundsWei(bigBlindWei);
+      const nextStack = currentStack + amount;
+
+      if (currentStack === 0n && (amount < minWei || amount > maxWei)) {
+        throw new Error(
+          `Rebuy must be between ${POKER_CASH_MIN_BUY_IN_BB} and ${POKER_CASH_MAX_BUY_IN_BB} big blinds.`
+        );
+      }
+      if (nextStack > maxWei) {
+        throw new Error(`Stack cannot exceed ${POKER_CASH_MAX_BUY_IN_BB} big blinds after a re-up.`);
+      }
+
+      const deductResult = await client.query(
+        `UPDATE players SET balance = balance - $2::NUMERIC
+         WHERE LOWER(wallet_address) = LOWER($1) AND balance >= $2::NUMERIC
+         RETURNING balance`,
+        [playerAddress, amount.toString()]
+      );
+      if (deductResult.rows.length === 0) throw new Error('Insufficient balance');
+
+      await client.query(
+        `UPDATE poker_seats
+         SET stack = stack + $3::NUMERIC
+         WHERE table_id = $1 AND LOWER(player_address) = LOWER($2)`,
+        [tableId, playerAddress, amount.toString()]
+      );
+    });
+
+    const pool = this.getPool();
+    const seatsResult = await pool.query(
+      'SELECT stack FROM poker_seats WHERE table_id = $1',
+      [tableId]
     );
+    const withStack = seatsResult.rows.filter((r: any) => BigInt(r.stack ?? '0') > 0n);
+    if (withStack.length >= 2) {
+      const activeHand = await pool.query(
+        'SELECT id FROM poker_hands WHERE table_id = $1 AND completed_at IS NULL LIMIT 1',
+        [tableId]
+      );
+      const recentShowdown = await pool.query(
+        `SELECT id FROM poker_hands
+         WHERE table_id = $1 AND street = 'showdown'
+           AND completed_at > NOW() - INTERVAL '${SHOWDOWN_DELAY_SECONDS} seconds'
+         LIMIT 1`,
+        [tableId]
+      );
+      if (activeHand.rows.length === 0 && recentShowdown.rows.length === 0) {
+        await this.startHand(tableId);
+      }
+    }
+
+    return this.getTableState(tableId, playerAddress);
   }
 
   // ---------------------------------------------------------------------------
@@ -662,7 +751,7 @@ export class PokerGameService {
       `SELECT id, hand_number, button_position, community_cards, pot_amount, street,
               acting_position, turn_started_at, result, last_raise_size
        FROM poker_hands WHERE table_id = $1
-         AND (completed_at IS NULL OR (street = 'showdown' AND completed_at > NOW() - INTERVAL '8 seconds'))
+         AND (completed_at IS NULL OR (street = 'showdown' AND completed_at > NOW() - INTERVAL '${SHOWDOWN_DELAY_SECONDS} seconds'))
        ORDER BY CASE WHEN completed_at IS NULL THEN 0 ELSE 1 END, created_at DESC LIMIT 1`,
       [tableId]
     );
@@ -768,6 +857,22 @@ export class PokerGameService {
         }
       }
 
+      const streetActionsResult = await pool.query(
+        `SELECT player_address, action, amount FROM poker_hand_actions
+         WHERE hand_id = $1 AND street = $2 AND action NOT IN ('blind')
+         ORDER BY "order" DESC`,
+        [handId, street]
+      );
+      const streetActions: Record<number, { action: string; amount: string }> = {};
+      for (const row of streetActionsResult.rows) {
+        const pos = seats.findIndex((s) => s.playerAddress === row.player_address);
+        if (pos < 0 || streetActions[pos]) continue;
+        streetActions[pos] = {
+          action: row.action,
+          amount: row.amount?.toString() ?? '0',
+        };
+      }
+
       // Pot: prefer live table total
       const potStr = liveTable && liveTable.currentRound
         ? (scaling.tournament
@@ -802,6 +907,7 @@ export class PokerGameService {
         pot: potStr,
         actingPosition,
         lastAction,
+        streetActions,
         minRaise,
         toCall,
         turnStartedAt: h.turn_started_at ? new Date(h.turn_started_at).toISOString() : null,
@@ -1205,7 +1311,7 @@ export class PokerGameService {
       setTimeout(async () => {
         await this.tryStartNextHand(tableId);
         await this.broadcastState(tableId);
-      }, 5000);
+      }, SHOWDOWN_DELAY_MS);
     } else {
       // Update community cards, pot, acting position, street
       const communityInts = table.communityCards.map(cardToInt);
@@ -1280,12 +1386,16 @@ export class PokerGameService {
         rakedWinnerAmounts.set(addr, ch);
       }
     } else {
+      // Rake in whole engine chips so (grossWei - rakeWei) stays 0 mod chipWei; wei-level
+      // 5% left sub-chip remainders that broke weiToEngineChips / assertCashChipMultiple.
+      const pct = BigInt(RAKE_PERCENT);
       for (const [addr, ch] of winnerChips) {
-        const grossWei = ch * chipWei;
-        const rake = (grossWei * BigInt(RAKE_PERCENT)) / 100n;
-        rakedWinnerAmounts.set(addr, grossWei - rake);
-        rakeByAddr.set(addr, rake);
-        totalRake += rake;
+        const rakeChips = (ch * pct) / 100n;
+        const rakeWei = rakeChips * chipWei;
+        const netChips = ch - rakeChips;
+        rakedWinnerAmounts.set(addr, netChips * chipWei);
+        rakeByAddr.set(addr, rakeWei);
+        totalRake += rakeWei;
       }
     }
 
@@ -1421,7 +1531,7 @@ export class PokerGameService {
             setTimeout(async () => {
               await this.tryStartNextHand(tid);
               await this.broadcastState(tid);
-            }, 5000);
+            }, SHOWDOWN_DELAY_MS);
           } else {
             const communityInts = table.communityCards.map(cardToInt);
             const potChips = totalPotChips(table);

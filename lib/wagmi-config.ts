@@ -2,6 +2,7 @@ import { connectorsForWallets } from '@rainbow-me/rainbowkit'
 import type { Wallet } from '@rainbow-me/rainbowkit'
 import { createConfig, http, fallback } from 'wagmi'
 import { injected } from '@wagmi/core'
+import type { EIP1193Provider } from 'viem'
 import { pulsechain } from './chains'
 import {
   metaMaskWallet,
@@ -10,7 +11,7 @@ import {
   rainbowWallet,
 } from '@rainbow-me/rainbowkit/wallets'
 
-type InternetMoneyProvider = {
+type InternetMoneyProvider = EIP1193Provider & {
   isInternetMoney?: boolean
   _isInternetMoney?: boolean
   eip6963ProviderDetails?: {
@@ -30,10 +31,17 @@ const isInternetMoneyProvider = (
   return provider.eip6963ProviderDetails?.info?.rdns === 'io.internetmoney'
 }
 
-const getInternetMoneyProvider = () => {
-  if (typeof window === 'undefined') return undefined
+const getInternetMoneyProvider = (
+  walletWindow?: Pick<Window, 'ethereum'>
+): InternetMoneyProvider | undefined => {
+  const ethereum =
+    walletWindow?.ethereum as InternetMoneyProvider | undefined ??
+    (typeof window !== 'undefined'
+      ? (window.ethereum as InternetMoneyProvider | undefined)
+      : undefined)
 
-  const ethereum = window.ethereum as InternetMoneyProvider | undefined
+  if (!ethereum) return undefined
+
   if (Array.isArray(ethereum?.providers)) {
     const providerFromArray = ethereum.providers.find(isInternetMoneyProvider)
     if (providerFromArray) return providerFromArray
@@ -62,7 +70,7 @@ const internetMoneyWallet = (): Wallet => ({
       target: {
         id: 'internetMoney',
         name: 'Internet Money',
-        provider: () => getInternetMoneyProvider(),
+        provider: (walletWindow) => getInternetMoneyProvider(walletWindow),
       },
     }),
 })

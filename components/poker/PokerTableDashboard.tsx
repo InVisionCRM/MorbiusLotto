@@ -2,7 +2,6 @@
 
 import React, { useState, useMemo } from 'react'
 import { useQuery } from '@tanstack/react-query'
-import { formatEther } from 'viem'
 import { motion } from 'framer-motion'
 import {
   Activity,
@@ -20,6 +19,7 @@ import {
 } from 'lucide-react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { CardDisplay } from '@/components/poker/CardDisplay'
+import { formatMorbiusFloor } from '@/lib/format-morbius-display'
 
 // ---------------------------------------------------------------------------
 // Types
@@ -79,10 +79,11 @@ interface TableDashboardData {
 // ---------------------------------------------------------------------------
 
 function fmtWei(wei: string): string {
-  const n = Number(formatEther(BigInt(wei || '0')))
-  if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1)}M`
-  if (n >= 1_000) return `${(n / 1_000).toFixed(1)}k`
-  return Number.isInteger(n) ? n.toString() : n.toFixed(2)
+  try {
+    return formatMorbiusFloor(wei || '0')
+  } catch {
+    return '0'
+  }
 }
 
 function fmtAddr(addr: string): string {

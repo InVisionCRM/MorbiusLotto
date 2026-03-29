@@ -3,8 +3,8 @@
 import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { useParams, useRouter, useSearchParams } from 'next/navigation';
 import { useAccount, useSignTypedData } from 'wagmi';
-import { formatEther } from 'viem';
 import { toBigIntSafe } from '@/lib/safe-bigint';
+import { formatMorbiusFloor } from '@/lib/format-morbius-display';
 import { motion, AnimatePresence } from 'framer-motion';
 import { getWebSocketUrlOptional } from '@/lib/api-urls';
 import { BlackjackWebSocketClient } from '@/lib/websocket-client';
@@ -66,6 +66,7 @@ export default function PokerTablePage() {
   const [error, setError] = useState<string | null>(null);
   const [disconnected, setDisconnected] = useState(false);
   const [showDepositModal, setShowDepositModal] = useState(false);
+  const [depositModalTab, setDepositModalTab] = useState<'deposit' | 'reup'>('deposit');
   const [showStatsModal, setShowStatsModal] = useState(false);
   const [statsModalAddress, setStatsModalAddress] = useState<string | null>(null);
   const [showAvatarModal, setShowAvatarModal] = useState(false);
@@ -172,7 +173,6 @@ export default function PokerTablePage() {
       setWsConnected(false);
       profileWs?.setWsClient(null);
     };
-  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [tableId, normalizedAddress, signTypedDataAsync]);
 
   useEffect(() => {
@@ -337,7 +337,6 @@ export default function PokerTablePage() {
       // Also leave when the React component unmounts (Next.js client-side nav)
       leaveOnUnload();
     };
-  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [tableId, normalizedAddress]);
 
   const handleFold = useCallback(() => {
@@ -511,6 +510,7 @@ export default function PokerTablePage() {
   );
 
   const mySeat = mySeatIndex >= 0 && state ? state.seats[mySeatIndex] : null;
+  const canReup = !!mySeat && (!hand || hand.street === 'showdown');
   const canAct =
     !!hand &&
     hand.actingPosition != null &&
@@ -574,7 +574,6 @@ export default function PokerTablePage() {
     } else if (la.action === 'check') {
       sounds.play('opponent_checks', ps('OpponentChecks.mp3'));
     }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [hand?.lastAction, hand?.handId]);
 
   // ── Player wins sound ─────────────────────────────────────────────────────
@@ -607,7 +606,6 @@ export default function PokerTablePage() {
       }
     }
     prevSeatAddrsRef.current = current;
-  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [state?.seats]);
 
   // ── Turn timer countdown ──────────────────────────────────────────────────
@@ -650,9 +648,10 @@ export default function PokerTablePage() {
 
   const fmtChips = (wei: string | number) => {
     try {
-      const n = Number(formatEther(toBigIntSafe(wei)));
-      return Number.isInteger(n) ? n.toLocaleString() : n.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-    } catch { return String(wei); }
+      return formatMorbiusFloor(wei, { compact: false });
+    } catch {
+      return String(wei);
+    }
   };
 
   const sharedActions = state && mySeat && (
@@ -670,6 +669,11 @@ export default function PokerTablePage() {
       onRaise={handleRaise}
     />
   );
+
+  const openReupModal = useCallback(() => {
+    setDepositModalTab('reup');
+    setShowDepositModal(true);
+  }, []);
 
   return (
     <PokerThemeProvider themeId={pokerTheme}>
@@ -970,7 +974,7 @@ export default function PokerTablePage() {
                 broadcastEmotionBySeatIndex={broadcastEmotionBySeatIndex}
                 onPhraseReaction={mySeatIndex >= 0 ? onPhraseReaction : undefined}
                 onAnimationReaction={mySeatIndex >= 0 ? onAnimationReaction : undefined}
-                onReUpClick={undefined}
+                onReUpClick={canReup ? openReupModal : undefined}
                 onMenuClick={mySeat ? () => setShowAvatarModal(true) : undefined}
                 onOpponentClick={(addr) => setOpponentProfileAddress(addr)}
                 onOpponentRadialAction={onOpponentRadialAction}
@@ -995,7 +999,7 @@ export default function PokerTablePage() {
 
           {/* Bottom row: md+ 3-col grid (empty | empty | betting); Activity overlays bottom-left so table keeps full height */}
           <div
-            className="flex-shrink-0 grid grid-cols-1 md:grid-cols-[minmax(260px,1fr)_1fr_minmax(280px,1fr)] gap-0 min-h-0"
+            className="flex-shrink-0 grid grid-cols-1 md:grid-cols-[minmax(220px,0.8fr)_minmax(80px,0.25fr)_minmax(420px,1.7fr)] gap-0 min-h-0"
           >
             {/* Col 1: empty — Activity feed is overlay (fixed) on md+, not in flow */}
             <div className="hidden md:block min-w-0 md:order-1" />
@@ -1023,11 +1027,13 @@ export default function PokerTablePage() {
         <PokerDepositModal
           isOpen={showDepositModal}
           onClose={() => setShowDepositModal(false)}
+          defaultTab={depositModalTab}
           balanceLabel="Poker Balance"
           wsClient={mySeat ? wsClient : undefined}
           tableId={mySeat ? tableId : undefined}
           currentStack={mySeat?.stack}
           onReupSuccess={(s) => { if (s) setState(s); }}
+          enablePokerReup={canReup}
         />
         <PokerStatsModal
           isOpen={showStatsModal}

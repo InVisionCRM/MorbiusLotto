@@ -3,8 +3,9 @@
 import React, { useState, useRef, useEffect } from 'react';
 import Link from 'next/link';
 import { useSearchParams, useRouter } from 'next/navigation';
-import { formatEther, parseEther } from 'viem';
+import { parseEther } from 'viem';
 import { toBigIntSafe } from '@/lib/safe-bigint';
+import { formatMorbiusFloor } from '@/lib/format-morbius-display';
 import { PokerActions } from '@/components/poker/PokerActions';
 import { PokerTutorialOverlay } from '@/components/poker/PokerTutorialOverlay';
 import { PokerTable } from '@/components/poker/PokerTable';
@@ -314,8 +315,7 @@ export default function PokerDemoPage() {
 
   const fmtChips = (wei: string) => {
     try {
-      const n = Number(formatEther(toBigIntSafe(wei)));
-      return Number.isInteger(n) ? n.toLocaleString() : n.toLocaleString(undefined, { maximumFractionDigits: 2 });
+      return formatMorbiusFloor(wei, { compact: false });
     } catch {
       return wei;
     }

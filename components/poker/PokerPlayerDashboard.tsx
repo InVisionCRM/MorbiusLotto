@@ -1,19 +1,16 @@
 'use client'
 
 import React from 'react'
-import { formatEther } from 'viem'
 import { Activity, Target, Trophy, DollarSign, TrendingUp, TrendingDown, History } from 'lucide-react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { usePokerPlayerHands, usePokerPlayerStats } from '@/hooks/use-poker-stats'
 import { toBigIntSafe } from '@/lib/safe-bigint'
+import { formatMorbiusFloor } from '@/lib/format-morbius-display'
 import { PlayerStatsFeatureGrid } from '@/components/ui/player-stats-feature-grid'
 
 function formatChips(wei: string | number): string {
   try {
-    const num = Number(formatEther(toBigIntSafe(wei)))
-    return Number.isInteger(num)
-      ? num.toLocaleString(undefined, { maximumFractionDigits: 0 })
-      : num.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+    return formatMorbiusFloor(wei, { compact: false })
   } catch {
     return String(wei)
   }
@@ -74,7 +71,7 @@ export function PokerPlayerDashboard({ playerAddress }: PokerPlayerDashboardProp
     },
     {
       title: 'Profit / Loss',
-      value: `${toBigIntSafe(stats.profit_loss) >= 0n ? '+' : ''}${formatChips(stats.profit_loss)}`,
+      value: `${toBigIntSafe(stats.profit_loss) >= 0n ? '+' : ''}${formatMorbiusFloor(stats.profit_loss, { compact: false })}`,
       subtitle: `${stats.roi >= 0 ? '+' : ''}${Math.round(stats.roi)}% ROI`,
       icon: toBigIntSafe(stats.profit_loss) >= 0n ? TrendingUp : TrendingDown,
       valueClassName: getProfitColor(stats.profit_loss),
@@ -137,8 +134,8 @@ export function PokerPlayerDashboard({ playerAddress }: PokerPlayerDashboardProp
                     </div>
                     <div className="text-right">
                       <p className={`text-sm font-semibold ${profit >= 0n ? 'text-green-400' : 'text-red-400'}`}>
-                        {profit >= 0n ? '+' : '-'}
-                        {formatChips(profit >= 0n ? profit : -profit)} MORBIUS
+                        {profit >= 0n ? '+' : ''}
+                        {formatMorbiusFloor(profit, { compact: false })} MORBIUS
                       </p>
                       <p className="text-xs text-gray-500">{new Date(hand.completed_at).toLocaleString()}</p>
                     </div>

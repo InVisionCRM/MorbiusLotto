@@ -1,8 +1,8 @@
 'use client';
 
 import React, { useRef, useState, useEffect } from 'react';
-import { formatEther } from 'viem';
 import { toBigIntSafe } from '@/lib/safe-bigint';
+import { formatMorbiusFloor } from '@/lib/format-morbius-display';
 import { motion, AnimatePresence } from 'framer-motion';
 import { PokerSeat, PokerChipStack } from './PokerSeat';
 import { PokerBoard } from './PokerBoard';
@@ -29,10 +29,7 @@ function shortAddr(addr: string): string {
 
 function formatChips(wei: string | number): string {
   try {
-    const num = Number(formatEther(toBigIntSafe(wei)));
-    return Number.isInteger(num)
-      ? num.toLocaleString(undefined, { maximumFractionDigits: 0 })
-      : num.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    return formatMorbiusFloor(wei);
   } catch {
     return String(wei);
   }
@@ -44,14 +41,15 @@ const RIGHT_ADJACENT_SEAT_HORIZONTAL_NUDGE_PX = 25;
 const LEFT_ADJACENT_SEAT_HORIZONTAL_NUDGE_PX = -25;
 
 // Compute evenly-spaced seat positions around the table oval for any seat count.
-// Seat 0 is always bottom-center (current player); seats go clockwise.
+// Seat 0 is always bottom-center (current player); action then moves to the left,
+// which matches standard clockwise Hold'em flow from the hero seat.
 // When `mobileNudge` is true, seat 0 (bottom-center) is pushed down so it
 // sits just above the betting controls on narrow viewports.
 function computeSeatAnchors(n: number, mobileNudge = false): Array<{ fx: number; fy: number }> {
   const cx = 0.50, cy = 0.45;
   const rx = 0.44, ry = 0.36;
   return Array.from({ length: n }, (_, i) => {
-    const theta = Math.PI / 2 - (i / n) * 2 * Math.PI;
+    const theta = Math.PI / 2 + (i / n) * 2 * Math.PI;
     let fy = parseFloat((cy + ry * Math.sin(theta)).toFixed(4));
     // Push bottom player (i=0) closer to the controls on mobile
     if (i === 0 && mobileNudge) fy = Math.min(0.92, fy + 0.10);
@@ -156,7 +154,6 @@ export function PokerTable({ state, currentPlayerAddress, timeLeft, chatBubbleBy
         setActiveBeamLayer('A');
       }
     }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [hand?.handId]);
 
   const mySeatIndex = state.seats.findIndex(s => s.playerAddress === currentPlayerAddress);
@@ -185,6 +182,7 @@ export function PokerTable({ state, currentPlayerAddress, timeLeft, chatBubbleBy
     const seat = state.seats[idx];
     const inHand = !!hand && seat.playerAddress && !seat.folded;
     const isWinnerSeat = !!firstWinnerAddr && seat.playerAddress === firstWinnerAddr;
+    const seatStreetAction = hand?.streetActions?.[idx] ?? null;
     return {
       seat,
       index: idx,
@@ -195,10 +193,7 @@ export function PokerTable({ state, currentPlayerAddress, timeLeft, chatBubbleBy
       isCurrentPlayer: idx === mySeatIndex,
       showCardBacks: !!(inHand && idx !== mySeatIndex && !hand?.showdownHands?.[seat.playerAddress!]),
       winningCardIndices: isWinnerSeat ? winningCardIndices : undefined,
-      lastAction:
-        hand?.lastAction?.position === idx
-          ? { action: hand.lastAction.action, amount: hand.lastAction.amount }
-          : null,
+      lastAction: seatStreetAction,
       timeLeft: actingPosition === idx ? timeLeft : undefined,
       chatBubble: chatBubbleBySeatIndex?.[idx] ?? null,
       onReUpClick,
@@ -502,8 +497,8 @@ export function PokerTable({ state, currentPlayerAddress, timeLeft, chatBubbleBy
           : idx;
         const anchor = seatAnchors[displaySlot];
         if (!anchor) return null;
-        const isRightAdjacentSeat = displaySlot === 1;
-        const isLeftAdjacentSeat = displaySlot === state.seats.length - 1;
+        const isLeftAdjacentSeat = displaySlot === 1;
+        const isRightAdjacentSeat = displaySlot === state.seats.length - 1;
         const seatTranslateX = isRightAdjacentSeat
           ? RIGHT_ADJACENT_SEAT_HORIZONTAL_NUDGE_PX
           : isLeftAdjacentSeat

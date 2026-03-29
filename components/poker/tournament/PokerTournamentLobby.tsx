@@ -1,7 +1,6 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
-import { formatEther } from 'viem';
 import {
   usePokerTournament,
   POKER_TOURNAMENT_DEFAULT_CONFIG,
@@ -9,6 +8,7 @@ import {
   type CreatePokerTournamentParams,
 } from '@/hooks/use-poker-tournament';
 import type { BlackjackWebSocketClient } from '@/lib/websocket-client';
+import { formatMorbiusFloor } from '@/lib/format-morbius-display';
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -26,9 +26,10 @@ function parseMorbiusInput(val: string): bigint {
 
 function formatMorbius(wei: string | bigint): string {
   try {
-    const n = Number(formatEther(typeof wei === 'bigint' ? wei : BigInt(wei)));
-    return n.toLocaleString(undefined, { maximumFractionDigits: 2 });
-  } catch { return '0'; }
+    return formatMorbiusFloor(wei, { compact: false });
+  } catch {
+    return '0';
+  }
 }
 
 // ---------------------------------------------------------------------------

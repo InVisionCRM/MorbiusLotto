@@ -133,6 +133,7 @@ export interface PokerCurrentHand {
   pot: string;
   actingPosition: number | null;
   lastAction: { position: number; action: string; amount: string } | null;
+  streetActions?: Record<number, { action: string; amount: string }>;
   minRaise: string;
   toCall: string;
   /** ISO timestamp when the current player's turn started (for 30s timer). */
