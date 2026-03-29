@@ -70,7 +70,6 @@ function isOtherGameLinked(g: OtherGameNavItem): g is Extract<OtherGameNavItem, 
 const OTHER_GAMES: readonly OtherGameNavItem[] = [
   { label: 'Plinko', href: '/PLINKO', icon: 'fa-circle' },
   { label: 'Blackjack', href: '/BLACKJACK', icon: 'blackjack' },
-  { label: "Texas Hold'em", href: '/poker', icon: 'fa-dice' },
   { label: 'Multiplayer BJ', href: '/blackjack-multi', icon: 'fa-user-friends' },
   { label: 'Lottery', href: '/lottery', icon: 'fa-ticket-alt' },
   { label: 'Keno', href: '/keno', icon: 'fa-th' },

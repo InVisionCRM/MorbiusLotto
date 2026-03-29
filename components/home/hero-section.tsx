@@ -71,7 +71,7 @@ export function HeroSection({ onOpenPlayerProfile, onOpenAuthModal, showWelcome 
       )}
 
       <div className="absolute bottom-1/4 left-0 right-0 z-10 flex justify-center px-2">
-        <div className="mx-auto grid w-full max-w-md grid-cols-1 gap-3 sm:max-w-5xl sm:grid-cols-3 sm:gap-4">
+        <div className="mx-auto grid w-full max-w-md grid-cols-1 gap-3 sm:max-w-5xl sm:grid-cols-2 sm:gap-4">
           <Link
             href="/#games"
             className={`${HERO_GLASS_BTN} hero-cta-item ${isReady ? 'hero-cta-item-visible' : 'hero-cta-item-hidden'}`}
@@ -81,17 +81,6 @@ export function HeroSection({ onOpenPlayerProfile, onOpenAuthModal, showWelcome 
               className={`${HERO_BTN_LABEL} group-hover:from-cyan-300 group-hover:via-cyan-400 group-hover:to-teal-400`}
             >
               All Games
-            </span>
-          </Link>
-          <Link
-            href="/poker"
-            className={`${HERO_GLASS_BTN} hero-cta-item ${isReady ? 'hero-cta-item-visible' : 'hero-cta-item-hidden'}`}
-            style={{ transitionDelay: '680ms' }}
-          >
-            <span
-              className={`${HERO_BTN_LABEL} group-hover:from-fuchsia-400 group-hover:via-purple-400 group-hover:to-indigo-400`}
-            >
-              Poker Room
             </span>
           </Link>
           <button
@@ -104,7 +93,7 @@ export function HeroSection({ onOpenPlayerProfile, onOpenAuthModal, showWelcome 
               onOpenAuthModal?.()
             }}
             className={`${HERO_GLASS_BTN} hero-cta-item ${isReady ? 'hero-cta-item-visible' : 'hero-cta-item-hidden'}`}
-            style={{ transitionDelay: '840ms' }}
+            style={{ transitionDelay: '680ms' }}
           >
             <span
               className={`${HERO_BTN_LABEL} group-hover:from-rose-500 group-hover:via-red-500 group-hover:to-orange-500`}
