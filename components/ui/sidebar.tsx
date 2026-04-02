@@ -1,8 +1,11 @@
 "use client";
 import { cn } from "@/lib/utils";
-import React, { useState, createContext, useContext, useCallback } from "react";
+import React, { useState, createContext, useContext, useCallback, useEffect, useRef } from "react";
 import { AnimatePresence, motion } from "motion/react";
 import { IconMenu2, IconX } from "@tabler/icons-react";
+
+const DESKTOP_SIDEBAR_PIN_STORAGE_KEY = "global-main-nav-desktop-pinned";
+
 interface Links {
   label: string;
   href: string;
@@ -103,15 +106,95 @@ export const DesktopSidebar = ({
   children,
   style,
 }: React.ComponentProps<typeof motion.div>) => {
-  const { open, setOpen, animate } = useSidebar();
-  const handleMouseEnter = useCallback(() => setOpen(true), [setOpen]);
-  const handleMouseLeave = useCallback(() => setOpen(false), [setOpen]);
+  const { open, setOpen, animate, disabled } = useSidebar();
+  const [pinned, setPinned] = useState(false);
+  const [pinPreferenceLoaded, setPinPreferenceLoaded] = useState(false);
+  const openTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const closeTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const clearOpenTimer = useCallback(() => {
+    if (!openTimerRef.current) return;
+    clearTimeout(openTimerRef.current);
+    openTimerRef.current = null;
+  }, []);
+
+  const clearCloseTimer = useCallback(() => {
+    if (!closeTimerRef.current) return;
+    clearTimeout(closeTimerRef.current);
+    closeTimerRef.current = null;
+  }, []);
+
+  const handleMouseEnter = useCallback(() => {
+    if (disabled || pinned) return;
+    if (!animate) {
+      setOpen(true);
+      return;
+    }
+    clearCloseTimer();
+    clearOpenTimer();
+    openTimerRef.current = setTimeout(() => setOpen(true), 90);
+  }, [animate, clearCloseTimer, clearOpenTimer, disabled, pinned, setOpen]);
+
+  const handleMouseLeave = useCallback(() => {
+    if (disabled || pinned) return;
+    if (!animate) {
+      setOpen(false);
+      return;
+    }
+    clearOpenTimer();
+    clearCloseTimer();
+    closeTimerRef.current = setTimeout(() => setOpen(false), 140);
+  }, [animate, clearCloseTimer, clearOpenTimer, disabled, pinned, setOpen]);
+
+  const handleTogglePinned = useCallback(() => {
+    if (disabled) return;
+    clearOpenTimer();
+    clearCloseTimer();
+    setPinned((prev) => {
+      const next = !prev;
+      setOpen(next);
+      return next;
+    });
+  }, [clearCloseTimer, clearOpenTimer, disabled, setOpen]);
+
+  useEffect(() => () => {
+    clearOpenTimer();
+    clearCloseTimer();
+  }, [clearOpenTimer, clearCloseTimer]);
+
+  useEffect(() => {
+    try {
+      const raw = window.localStorage.getItem(DESKTOP_SIDEBAR_PIN_STORAGE_KEY);
+      const persistedPinned = raw === "1";
+      setPinned(persistedPinned);
+      setOpen(persistedPinned);
+    } catch {
+      // Ignore storage errors and continue with default unpinned behavior.
+    } finally {
+      setPinPreferenceLoaded(true);
+    }
+  }, [setOpen]);
+
+  useEffect(() => {
+    if (!pinPreferenceLoaded) return;
+    try {
+      window.localStorage.setItem(DESKTOP_SIDEBAR_PIN_STORAGE_KEY, pinned ? "1" : "0");
+    } catch {
+      // Ignore storage write failures.
+    }
+  }, [pinned, pinPreferenceLoaded]);
+
+  useEffect(() => {
+    if (!disabled) return;
+    setPinned(false);
+  }, [disabled]);
+
   return (
     <>
       <div
         className={cn(
           // z-20: sit above page-level fixed full-viewport layers (e.g. home bg) that share the viewport
-          "min-h-screen px-3 py-4 hidden md:flex md:flex-col shrink-0 overflow-hidden rounded-r-xl relative z-20 transition-[width] duration-200 ease-in-out",
+          "min-h-screen px-3 py-4 hidden md:flex md:flex-col shrink-0 overflow-hidden rounded-r-xl relative z-20",
           className
         )}
         style={{
@@ -122,6 +205,23 @@ export const DesktopSidebar = ({
         onMouseEnter={handleMouseEnter}
         onMouseLeave={handleMouseLeave}
       >
+        <button
+          type="button"
+          onClick={handleTogglePinned}
+          className={cn(
+            "absolute right-2 top-2 z-30 h-7 rounded-md px-2 text-[10px] font-semibold tracking-wide border",
+            "transition-colors",
+            pinned
+              ? "text-cyan-300 border-cyan-400/60 bg-cyan-500/15"
+              : "text-white/70 border-white/20 bg-black/20 hover:text-white hover:bg-white/10",
+            disabled ? "pointer-events-none opacity-40" : undefined
+          )}
+          aria-label={pinned ? "Unpin sidebar" : "Pin sidebar"}
+          aria-pressed={pinned}
+          title={pinned ? "Unpin sidebar" : "Pin sidebar"}
+        >
+          {pinned ? "PINNED" : "PIN"}
+        </button>
         {children as React.ReactNode}
       </div>
     </>
@@ -228,7 +328,7 @@ export const SidebarLink = React.memo(({
       {...props}
     >
       {link.icon}
-      <span className="sidebar-label text-inherit text-sm group-hover/sidebar:translate-x-1 transition-transform duration-150 !p-0 !m-0">
+      <span className="sidebar-label text-inherit text-sm !p-0 !m-0">
         {link.label}
       </span>
     </a>
@@ -261,7 +361,7 @@ export const SidebarButton = React.memo(({
       )}
     >
       {icon}
-      <span className="sidebar-label text-inherit text-sm group-hover/sidebar:translate-x-1 transition-transform duration-150 !p-0 !m-0">
+      <span className="sidebar-label text-inherit text-sm !p-0 !m-0">
         {label}
       </span>
     </button>

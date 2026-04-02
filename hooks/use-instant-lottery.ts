@@ -13,6 +13,7 @@ import { INSTANT_LOTTERY_6OF55_ABI } from '@/abi/instant-lottery-6of55'
 import { LOTTERY_INSTANT_ADDRESS } from '@/lib/contracts'
 import { pulsechain } from '@/lib/chains'
 import { getApiUrlOptional } from '@/lib/api-urls'
+import { toBigIntSafe } from '@/lib/safe-bigint'
 
 const ZERO = '0x0000000000000000000000000000000000000000'
 const isDeployed = (LOTTERY_INSTANT_ADDRESS as string) !== ZERO
@@ -153,9 +154,9 @@ function parseResultLog(args: {
     playerNumbers: pn,
     winningNumbers: wn,
     matchCount: Number(args.matchCount ?? 0),
-    wager: BigInt(args.wager ?? 0),
-    grossPayout: BigInt(args.grossPayout ?? 0),
-    netPayout: BigInt(args.netPayout ?? 0),
+    wager: toBigIntSafe(args.wager),
+    grossPayout: toBigIntSafe(args.grossPayout),
+    netPayout: toBigIntSafe(args.netPayout),
     blockNumber,
     transactionHash,
   }
@@ -204,31 +205,30 @@ export function useInstantLotteryResults(options: {
           address: LOTTERY_INSTANT_ADDRESS,
           abi: INSTANT_LOTTERY_6OF55_ABI,
           eventName: 'InstantLotteryResult',
+          args: playerAddress ? { player: playerAddress } : undefined,
           fromBlock,
           toBlock,
         })
-        let rows: InstantLotteryResultRow[] = logs.map((l) =>
+        const rows: InstantLotteryResultRow[] = logs.map((l) =>
           parseResultLog(
             (l.args || {}) as Record<string, unknown>,
             l.blockNumber,
             l.transactionHash
           )
         )
-        const blockNumbers = [...new Set(rows.map((r) => r.blockNumber).filter((b): b is bigint => b != null))]
+
+        const recentRows = rows.slice(-limit).reverse()
+        const blockNumbers = [...new Set(recentRows.map((r) => r.blockNumber).filter((b): b is bigint => b != null))]
         if (blockNumbers.length > 0) {
           const blocks = await Promise.all(blockNumbers.map((b) => publicClient.getBlock({ blockNumber: b })))
           const blockToTime = Object.fromEntries(blocks.map((b) => [String(b.number), Number(b.timestamp)]))
-          rows = rows.map((r) => ({
+          const withTimestamps = recentRows.map((r) => ({
             ...r,
             timestamp: r.blockNumber != null ? blockToTime[String(r.blockNumber)] : undefined,
           }))
-        }
-        if (playerAddress) {
-          const addr = playerAddress.toLowerCase()
-          const filtered = rows.filter((r) => r.player?.toLowerCase() === addr)
-          if (!cancelled) setResults(filtered.slice(-limit).reverse())
+          if (!cancelled) setResults(withTimestamps)
         } else {
-          if (!cancelled) setResults(rows.slice(-limit).reverse())
+          if (!cancelled) setResults(recentRows)
         }
       } catch {
         if (!cancelled) setResults([])
@@ -301,9 +301,9 @@ export function useLotteryTopPlayers(limit: number = 25) {
         rank: Number(row.rank ?? 0),
         wallet_address: String(row.wallet_address ?? ''),
         total_games: Number(row.total_games ?? 0),
-        total_bet: BigInt(row.total_bet ?? 0),
-        total_win: BigInt(row.total_win ?? 0),
-        profit_loss: BigInt(row.profit_loss ?? 0),
+        total_bet: toBigIntSafe(row.total_bet),
+        total_win: toBigIntSafe(row.total_win),
+        profit_loss: toBigIntSafe(row.profit_loss),
         win_rate: Number(row.win_rate ?? 0),
       }))
     },
@@ -347,9 +347,9 @@ export function usePlayerInstantLotteryStats(playerAddress: `0x${string}` | unde
     query: { enabled: isDeployed && !!playerAddress },
   })
   return {
-    totalPlays: plays.data ?? 0n,
-    totalWagered: wagered.data ?? 0n,
-    totalWon: won.data ?? 0n,
+    totalPlays: toBigIntSafe(plays.data),
+    totalWagered: toBigIntSafe(wagered.data),
+    totalWon: toBigIntSafe(won.data),
     isLoading: plays.isLoading || wagered.isLoading || won.isLoading,
   }
 }

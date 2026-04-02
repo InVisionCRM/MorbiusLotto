@@ -188,7 +188,8 @@ class DatabaseService {
         const query = `UPDATE players SET last_seen = NOW() WHERE id = $1`;
         await this.pool.query(query, [playerId]);
     }
-    // Off-chain balance operations
+    // Off-chain balance operations.
+    // NOTE: Money workflow callers should be routed through MoneyService's MoneyDatabasePort boundary.
     async getPlayerBalance(walletAddress) {
         const normalizedAddress = this.normalizeAddress(walletAddress);
         const query = `SELECT balance FROM players WHERE LOWER(wallet_address) = LOWER($1)`;

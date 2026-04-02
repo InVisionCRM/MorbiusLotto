@@ -213,7 +213,8 @@ class BlackjackGameService {
                 initialHand.result = 'loss';
                 initialHand.payout = 0n;
             }
-            // Deduct total stake (main + Perfect Pairs) from off-chain balance
+            // Game-domain balance authority remains here (Phase 7 reviews full authority concentration).
+            // Deduct total stake (main + Perfect Pairs) from off-chain balance.
             await this.dbService.deductPlayerBalance(request.playerAddress, totalStake);
             logger_1.logger.debug('Deducted stake from balance', {
                 playerAddress: request.playerAddress,

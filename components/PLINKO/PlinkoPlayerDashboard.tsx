@@ -25,7 +25,7 @@ import {
 } from 'recharts'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { PlayerStatsFeatureGrid } from '@/components/ui/player-stats-feature-grid'
-import AvatarView from '@/components/poker/avatar/AvatarView'
+import { AvatarView } from '@/components/avatar'
 import {
   Table,
   TableBody,

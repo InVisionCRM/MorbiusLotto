@@ -8,7 +8,7 @@ import { parseEther } from 'viem';
 import { getApiUrlOptional, getWebSocketUrlOptional } from '@/lib/api-urls';
 import { BlackjackWebSocketClient } from '@/lib/websocket-client';
 import type { PokerTableSummary, PokerSeatState } from '@/lib/websocket-client';
-import Footer from '@/components/BIG-WHEEL/Footer';
+import { Footer } from '@/components/shared/footer';
 import { Theme } from '@/lib/theme';
 import { GameWalletModal } from '@/components/shared/GameWalletModal';
 import { GameFAQ } from '@/components/shared/GameFAQ';
@@ -474,12 +474,13 @@ export default function PokerLobbyPage() {
                       <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}><circle cx="12" cy="12" r="10" /><path d="M12 16v-4M12 8h.01" /></svg>
                       How to Play
                     </button>
-                    <Link
-                      href="/poker/demo?tutorial=1"
+                    <button
+                      type="button"
+                      onClick={() => setShowHowToPlay(true)}
                       className="flex items-center px-5 py-3.5 rounded-2xl text-slate-600 hover:text-slate-300 text-sm font-medium transition-colors"
                     >
                       Tutorial
-                    </Link>
+                    </button>
                   </div>
                 </div>
               </div>

@@ -9,12 +9,6 @@ import type { KenoResultRow } from '@/hooks/use-keno-results'
 
 const PAGE_SIZE = 25
 
-const panelStyle = {
-  background: 'linear-gradient(145deg, rgb(16, 26, 35), rgb(35, 36, 41))',
-  boxShadow: 'inset 0 3px 6px rgba(0, 0, 0, 0.8), inset 0 -3px 6px rgba(255, 255, 255, 0.1), 0 1px 3px rgba(0, 0, 0, 0.5)',
-  border: '1px inset rgba(60, 60, 60, 0.5)',
-}
-
 function formatTime(ts: number | undefined): string {
   if (ts == null) return '—'
   return new Date(ts * 1000).toLocaleString(undefined, { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })
@@ -73,7 +67,7 @@ export function KenoRecentPlays({
   const hasMore = displayCount < results.length
 
   return (
-    <div className="rounded-xl overflow-hidden w-full max-w-xl" style={panelStyle}>
+    <div className="surface-panel-sidebar w-full max-w-xl overflow-hidden rounded-xl">
       <div className="px-3 py-2 border-b border-white/10">
         <h3 className="text-cyan-300 font-semibold text-sm">{title}</h3>
       </div>

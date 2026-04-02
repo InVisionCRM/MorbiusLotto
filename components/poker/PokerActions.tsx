@@ -40,10 +40,12 @@ function toChips(v: Amount): number {
 export interface PokerActionsProps {
   canAct: boolean;
   canCheck: boolean;
+  preAction?: PreActionOption;
   minRaise: string;
   stack: string;
   callAmount: string;
   pot: string;
+  onPreActionChange?: (next: PreActionOption) => void;
   onFold: () => void;
   onCheck: () => void;
   onCall: () => void;
@@ -51,13 +53,17 @@ export interface PokerActionsProps {
   onRaise: (amount: string) => void;
 }
 
+export type PreActionOption = 'check_fold' | 'check' | 'call_any' | null;
+
 export function PokerActions({
   canAct,
   canCheck,
+  preAction = null,
   minRaise,
   stack,
   callAmount,
   pot,
+  onPreActionChange = () => {},
   onFold,
   onCheck,
   onCall,
@@ -143,9 +149,9 @@ export function PokerActions({
   };
 
   const barStyle = {
-    background: '#000',
-    border: '1px solid rgba(255,255,255,0.07)',
-    boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.02)',
+    background: 'transparent',
+    border: 'none',
+    boxShadow: 'none',
   };
   const actionBtnBaseStyle = {
     border: '1px solid rgba(255,255,255,0.12)',
@@ -182,13 +188,19 @@ export function PokerActions({
     'disabled:bg-slate-900/50',
     'disabled:text-slate-400',
   ].join(' ');
+  const preActionLabelClass = 'inline-flex items-center gap-1 text-[10px] md:text-[11px] font-jost text-white/90';
+
+  const togglePreAction = (option: Exclude<PreActionOption, null>) => {
+    onPreActionChange(preAction === option ? null : option);
+  };
 
   // ── Render ─────────────────────────────────────────────────────────────────
   return (
     <div
+      data-testid="poker-actions"
       className="w-full select-none"
       style={{
-        borderTop: '1px solid rgba(255,255,255,0.07)',
+        borderTop: 'none',
         opacity: canAct ? 1 : 0.45,
         position: 'relative',
         zIndex: 30,
@@ -201,9 +213,45 @@ export function PokerActions({
         className="sm:hidden"
         style={{ ...barStyle, paddingBottom: 'max(8px, env(safe-area-inset-bottom, 8px))', paddingLeft: 'max(8px, env(safe-area-inset-left, 8px))', paddingRight: 'max(8px, env(safe-area-inset-right, 8px))' }}
       >
+        <div className="flex items-center justify-end gap-2 px-0.5 pt-1">
+          <label className={preActionLabelClass}>
+            <input
+              data-testid="poker-pre-action-check-fold"
+              type="checkbox"
+              checked={preAction === 'check_fold'}
+              onChange={() => togglePreAction('check_fold')}
+              disabled={canAct}
+              className="h-3 w-3 accent-cyan-400 rounded-sm"
+            />
+            <span>Check/Fold</span>
+          </label>
+          <label className={preActionLabelClass}>
+            <input
+              data-testid="poker-pre-action-check"
+              type="checkbox"
+              checked={preAction === 'check'}
+              onChange={() => togglePreAction('check')}
+              disabled={canAct || !canCheck}
+              className="h-3 w-3 accent-cyan-400 rounded-sm"
+            />
+            <span>Check</span>
+          </label>
+          <label className={preActionLabelClass}>
+            <input
+              data-testid="poker-pre-action-call-any"
+              type="checkbox"
+              checked={preAction === 'call_any'}
+              onChange={() => togglePreAction('call_any')}
+              disabled={canAct}
+              className="h-3 w-3 accent-cyan-400 rounded-sm"
+            />
+            <span>Call Any</span>
+          </label>
+        </div>
         <div className="grid grid-cols-4 gap-1 pt-1.5 pb-1 px-0.5">
           {quickSizes.map((q) => (
             <button
+              data-testid={`poker-quick-size-${q.label.toLowerCase().replace(/[^a-z0-9]+/g, '-')}`}
               key={q.label}
               type="button"
               onClick={() => setCustomAmount(formatAmount(clampAmount(q.value, minRaiseAmt, stackAmt)))}
@@ -218,6 +266,7 @@ export function PokerActions({
         <div className="flex items-stretch gap-1.5 pb-2 pt-1">
           <div className="flex gap-1.5 flex-1 min-w-0">
             <button
+              data-testid="poker-action-fold"
               type="button"
               onClick={handleFoldWithSound}
               disabled={!canAct}
@@ -227,10 +276,11 @@ export function PokerActions({
               Fold
             </button>
             <button
+              data-testid="poker-action-secondary"
               type="button"
               onClick={handleSecondary}
               disabled={!canAct}
-              className={`flex-1 h-11 min-w-0 rounded-sm text-[11px] font-bold tracking-wide transition-all hover:brightness-110 active:scale-[0.97] px-1 ${checkBtnClass}`}
+              className={`flex-[0.8] h-10 min-w-0 rounded-sm text-[10px] font-bold tracking-wide transition-all hover:brightness-110 active:scale-[0.97] px-1 ${checkBtnClass}`}
               style={checkBtnStyle}
             >
               {canCheck ? (
@@ -243,6 +293,7 @@ export function PokerActions({
               )}
             </button>
             <button
+              data-testid="poker-action-primary"
               type="button"
               onClick={handlePrimary}
               disabled={!canAct || !hasValidAmount}
@@ -259,6 +310,7 @@ export function PokerActions({
           </div>
           <div className="flex items-center gap-1 shrink-0" style={{ width: '42%' }}>
             <input
+              data-testid="poker-action-amount-input"
               inputMode="numeric"
               pattern="[0-9,]*"
               type="text"
@@ -270,6 +322,7 @@ export function PokerActions({
               aria-label={isFacingBet ? 'Raise amount' : 'Bet amount'}
             />
             <button
+              data-testid="poker-action-nudge-down"
               type="button"
               onClick={() => nudge(-1)}
               disabled={!canAct || !hasValidAmount}
@@ -280,6 +333,7 @@ export function PokerActions({
             </button>
             <div className="flex-1 min-w-0 relative flex items-center">
               <input
+                data-testid="poker-action-slider"
                 type="range"
                 min={0}
                 max={maxOffsetChips || 1}
@@ -292,6 +346,7 @@ export function PokerActions({
               />
             </div>
             <button
+              data-testid="poker-action-nudge-up"
               type="button"
               onClick={() => nudge(1)}
               disabled={!canAct || !hasValidAmount}
@@ -306,6 +361,41 @@ export function PokerActions({
 
       {/* ── Desktop / tablet (sm+): larger touch targets on md+ for readability ── */}
       <div className="hidden sm:block" style={barStyle}>
+        <div className="flex items-center justify-end gap-2.5 md:gap-3 px-2 md:px-3 pt-1 md:pt-1.5">
+          <label className={preActionLabelClass}>
+            <input
+              data-testid="poker-pre-action-check-fold"
+              type="checkbox"
+              checked={preAction === 'check_fold'}
+              onChange={() => togglePreAction('check_fold')}
+              disabled={canAct}
+              className="h-3.5 w-3.5 accent-cyan-400 rounded-sm"
+            />
+            <span>Check/Fold</span>
+          </label>
+          <label className={preActionLabelClass}>
+            <input
+              data-testid="poker-pre-action-check"
+              type="checkbox"
+              checked={preAction === 'check'}
+              onChange={() => togglePreAction('check')}
+              disabled={canAct || !canCheck}
+              className="h-3.5 w-3.5 accent-cyan-400 rounded-sm"
+            />
+            <span>Check</span>
+          </label>
+          <label className={preActionLabelClass}>
+            <input
+              data-testid="poker-pre-action-call-any"
+              type="checkbox"
+              checked={preAction === 'call_any'}
+              onChange={() => togglePreAction('call_any')}
+              disabled={canAct}
+              className="h-3.5 w-3.5 accent-cyan-400 rounded-sm"
+            />
+            <span>Call Any</span>
+          </label>
+        </div>
         <div className="flex items-center justify-end gap-1.5 px-2 md:px-3 pt-1.5 md:pt-2">
           {quickSizes.map((q) => (
             <button
@@ -326,6 +416,7 @@ export function PokerActions({
         >
           <div className="flex gap-1.5 md:gap-2 flex-1 min-w-0">
             <button
+              data-testid="poker-action-fold"
               type="button"
               onClick={handleFoldWithSound}
               disabled={!canAct}
@@ -335,10 +426,11 @@ export function PokerActions({
               Fold
             </button>
             <button
+              data-testid="poker-action-secondary"
               type="button"
               onClick={handleSecondary}
               disabled={!canAct}
-              className={`flex-1 h-12 md:h-14 min-w-0 rounded-sm text-sm md:text-base font-bold tracking-wide transition-all hover:brightness-110 active:scale-[0.97] px-2 ${checkBtnClass}`}
+              className={`flex-[0.82] md:flex-[0.72] h-10 md:h-10 min-w-0 rounded-sm text-xs md:text-[13px] font-bold tracking-wide transition-all hover:brightness-110 active:scale-[0.97] px-1.5 md:px-1.5 ${checkBtnClass}`}
               style={checkBtnStyle}
             >
               {canCheck ? (
@@ -346,11 +438,12 @@ export function PokerActions({
               ) : (
                 <span className="flex flex-col items-center justify-center leading-tight whitespace-normal">
                   <span>Call</span>
-                  <span className="text-[11px] md:text-xs font-semibold normal-case">{formatAmount(callAmt)}</span>
+                  <span className="text-[10px] md:text-[11px] font-semibold normal-case">{formatAmount(callAmt)}</span>
                 </span>
               )}
             </button>
             <button
+              data-testid="poker-action-primary"
               type="button"
               onClick={handlePrimary}
               disabled={!canAct || !hasValidAmount}
@@ -367,6 +460,7 @@ export function PokerActions({
           </div>
           <div className="flex items-center gap-1 md:gap-1.5 shrink-0 w-[48%] md:w-[52%] min-w-0">
             <input
+              data-testid="poker-action-amount-input"
               inputMode="numeric"
               pattern="[0-9,]*"
               type="text"
@@ -378,6 +472,7 @@ export function PokerActions({
               aria-label={isFacingBet ? 'Raise amount' : 'Bet amount'}
             />
             <button
+              data-testid="poker-action-nudge-down"
               type="button"
               onClick={() => nudge(-1)}
               disabled={!canAct || !hasValidAmount}
@@ -388,6 +483,7 @@ export function PokerActions({
             </button>
             <div className="flex-1 min-w-0 relative flex items-center">
               <input
+                data-testid="poker-action-slider"
                 type="range"
                 min={0}
                 max={maxOffsetChips || 1}
@@ -400,6 +496,7 @@ export function PokerActions({
               />
             </div>
             <button
+              data-testid="poker-action-nudge-up"
               type="button"
               onClick={() => nudge(1)}
               disabled={!canAct || !hasValidAmount}

@@ -1,35 +1,121 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { Suspense, useEffect, useMemo, useState } from 'react';
 import { useAccount } from 'wagmi';
 import Link from 'next/link';
+import dynamic from 'next/dynamic';
+import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { isAdminWallet } from '@/lib/admin';
 import GlobalMainNav from '@/components/shared/GlobalMainNav';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { ArrowLeft, LayoutGrid, Heart, BarChart3, Settings, ShieldX, FileCode, Wallet, MessageSquare, ImageIcon, Flag, Gift, Droplets, Megaphone, Package, ArrowDownUp } from 'lucide-react';
-import AdminTablesTab from '@/components/admin/AdminTablesTab';
-import AdminCosmeticsTab from '@/components/admin/AdminCosmeticsTab';
-import AdminAdvertisingTab from '@/components/admin/AdminAdvertisingTab';
-import AdminHealthTab from '@/components/admin/AdminHealthTab';
-import AdminMetricsTab from '@/components/admin/AdminMetricsTab';
-import AdminConfigTab from '@/components/admin/AdminConfigTab';
-import AdminContractsTab from '@/components/admin/AdminContractsTab';
-import { AdminEscrowTab } from '@/components/admin/AdminEscrowTab';
-import AdminChatTab from '@/components/admin/AdminChatTab';
-import AdminMemesTab from '@/components/admin/AdminMemesTab';
-import AdminReportsTab from '@/components/admin/AdminReportsTab';
-import AdminLPStakingTab from '@/components/admin/AdminLPStakingTab';
-import AdminMerkleDropsTab from '@/components/admin/AdminMerkleDropsTab';
-import AdminBJMultiTab from '@/components/admin/AdminBJMultiTab';
+import {
+  ArrowLeft,
+  LayoutGrid,
+  Heart,
+  Settings,
+  ShieldX,
+  FileCode,
+  MessageSquare,
+  ImageIcon,
+  Flag,
+  Gift,
+  Droplets,
+  Megaphone,
+  Package,
+  ArrowDownUp,
+  type LucideIcon,
+} from 'lucide-react';
 import AdminPlayerLookup from '@/components/admin/AdminPlayerLookup';
-import AdminPendingTransfersTab from '@/components/admin/AdminPendingTransfersTab';
 
-export default function AdminPage() {
+const AdminTablesTab = dynamic(() => import('@/components/admin/AdminTablesTab'));
+const AdminCosmeticsTab = dynamic(() => import('@/components/admin/AdminCosmeticsTab'));
+const AdminAdvertisingTab = dynamic(() => import('@/components/admin/AdminAdvertisingTab'));
+const AdminHealthTab = dynamic(() => import('@/components/admin/AdminHealthTab'));
+const AdminConfigTab = dynamic(() => import('@/components/admin/AdminConfigTab'));
+const AdminContractsTab = dynamic(() => import('@/components/admin/AdminContractsTab'));
+const AdminChatTab = dynamic(() => import('@/components/admin/AdminChatTab'));
+const AdminMemesTab = dynamic(() => import('@/components/admin/AdminMemesTab'));
+const AdminReportsTab = dynamic(() => import('@/components/admin/AdminReportsTab'));
+const AdminLPStakingTab = dynamic(() => import('@/components/admin/AdminLPStakingTab'));
+const AdminMerkleDropsTab = dynamic(() => import('@/components/admin/AdminMerkleDropsTab'));
+const AdminBJMultiTab = dynamic(() => import('@/components/admin/AdminBJMultiTab'));
+const AdminPendingTransfersTab = dynamic(
+  () => import('@/components/admin/AdminPendingTransfersTab')
+);
+
+type AdminTabValue =
+  | 'tables'
+  | 'health'
+  | 'config'
+  | 'contracts'
+  | 'pending-transfers'
+  | 'chat'
+  | 'memes'
+  | 'reports'
+  | 'drops'
+  | 'lp-staking'
+  | 'advertising'
+  | 'cosmetics'
+  | 'bj-multi';
+
+type AdminTabDefinition = {
+  value: AdminTabValue;
+  label: string;
+  accentClass: string;
+  icon?: LucideIcon;
+  Component: React.ComponentType;
+};
+
+const ADMIN_TABS: AdminTabDefinition[] = [
+  { value: 'tables', label: 'Tables', icon: LayoutGrid, accentClass: 'data-[state=active]:bg-cyan-600/80 data-[state=active]:text-white', Component: AdminTablesTab },
+  { value: 'health', label: 'Health', icon: Heart, accentClass: 'data-[state=active]:bg-emerald-600/80 data-[state=active]:text-white', Component: AdminHealthTab },
+  { value: 'config', label: 'Config', icon: Settings, accentClass: 'data-[state=active]:bg-amber-600/80 data-[state=active]:text-white', Component: AdminConfigTab },
+  { value: 'contracts', label: 'Contracts', icon: FileCode, accentClass: 'data-[state=active]:bg-blue-600/80 data-[state=active]:text-white', Component: AdminContractsTab },
+  { value: 'pending-transfers', label: 'Pending', icon: ArrowDownUp, accentClass: 'data-[state=active]:bg-cyan-600/80 data-[state=active]:text-white', Component: AdminPendingTransfersTab },
+  { value: 'chat', label: 'Chat', icon: MessageSquare, accentClass: 'data-[state=active]:bg-cyan-600/80 data-[state=active]:text-white', Component: AdminChatTab },
+  { value: 'memes', label: 'Memes', icon: ImageIcon, accentClass: 'data-[state=active]:bg-pink-600/80 data-[state=active]:text-white', Component: AdminMemesTab },
+  { value: 'reports', label: 'Reports', icon: Flag, accentClass: 'data-[state=active]:bg-red-600/80 data-[state=active]:text-white', Component: AdminReportsTab },
+  { value: 'drops', label: 'Drops', icon: Gift, accentClass: 'data-[state=active]:bg-emerald-600/80 data-[state=active]:text-white', Component: AdminMerkleDropsTab },
+  { value: 'lp-staking', label: 'LP', icon: Droplets, accentClass: 'data-[state=active]:bg-blue-600/80 data-[state=active]:text-white', Component: AdminLPStakingTab },
+  { value: 'advertising', label: 'Ads', icon: Megaphone, accentClass: 'data-[state=active]:bg-amber-600/80 data-[state=active]:text-white', Component: AdminAdvertisingTab },
+  { value: 'cosmetics', label: 'Items', icon: Package, accentClass: 'data-[state=active]:bg-purple-600/80 data-[state=active]:text-white', Component: AdminCosmeticsTab },
+  { value: 'bj-multi', label: 'BJ Multi', accentClass: 'data-[state=active]:bg-red-700/80 data-[state=active]:text-white', Component: AdminBJMultiTab },
+];
+
+const ADMIN_TAB_VALUES = new Set<AdminTabValue>(ADMIN_TABS.map((tab) => tab.value));
+
+function isAdminTabValue(value: string | null): value is AdminTabValue {
+  return value != null && ADMIN_TAB_VALUES.has(value as AdminTabValue);
+}
+
+function AdminPageContent() {
   const { address } = useAccount();
   const isAdmin = isAdminWallet(address);
-  const [activeTab, setActiveTab] = useState('tables');
+  const router = useRouter();
+  const pathname = usePathname();
+  const searchParams = useSearchParams();
+
+  const initialTab = useMemo<AdminTabValue>(() => {
+    const tabParam = searchParams.get('tab');
+    return isAdminTabValue(tabParam) ? tabParam : 'tables';
+  }, [searchParams]);
+
+  const [activeTab, setActiveTab] = useState<AdminTabValue>(initialTab);
+
+  useEffect(() => {
+    if (initialTab !== activeTab) {
+      setActiveTab(initialTab);
+    }
+  }, [initialTab, activeTab]);
+
+  const handleTabChange = (nextTab: string) => {
+    if (!isAdminTabValue(nextTab)) return;
+    setActiveTab(nextTab);
+    const params = new URLSearchParams(searchParams.toString());
+    params.set('tab', nextTab);
+    router.replace(`${pathname}?${params.toString()}`, { scroll: false });
+  };
 
   if (!isAdmin) {
     return (
@@ -53,117 +139,42 @@ export default function AdminPage() {
       <div className="min-h-screen bg-slate-950 text-white pt-4 md:pt-2">
         <main className="container mx-auto px-3 py-3 max-w-6xl">
         <AdminPlayerLookup />
-        <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
+        <Tabs value={activeTab} onValueChange={handleTabChange} className="w-full">
           <TabsList className="h-auto w-full flex flex-wrap bg-slate-800/80 border border-slate-700/50 rounded-md p-0.5 text-xs gap-0.5">
-            <TabsTrigger value="tables" className="rounded data-[state=active]:bg-cyan-600/80 data-[state=active]:text-white py-1.5 text-[11px] sm:text-xs">
-              <LayoutGrid className="w-3 h-3 mr-1 hidden sm:inline" /> Tables
-            </TabsTrigger>
-            <TabsTrigger value="health" className="rounded data-[state=active]:bg-emerald-600/80 data-[state=active]:text-white py-1.5 text-[11px] sm:text-xs">
-              <Heart className="w-3 h-3 mr-1 hidden sm:inline" /> Health
-            </TabsTrigger>
-            <TabsTrigger value="metrics" className="rounded data-[state=active]:bg-violet-600/80 data-[state=active]:text-white py-1.5 text-[11px] sm:text-xs">
-              <BarChart3 className="w-3 h-3 mr-1 hidden sm:inline" /> Metrics
-            </TabsTrigger>
-            <TabsTrigger value="config" className="rounded data-[state=active]:bg-amber-600/80 data-[state=active]:text-white py-1.5 text-[11px] sm:text-xs">
-              <Settings className="w-3 h-3 mr-1 hidden sm:inline" /> Config
-            </TabsTrigger>
-            <TabsTrigger value="contracts" className="rounded data-[state=active]:bg-blue-600/80 data-[state=active]:text-white py-1.5 text-[11px] sm:text-xs">
-              <FileCode className="w-3 h-3 mr-1 hidden sm:inline" /> Contracts
-            </TabsTrigger>
-            <TabsTrigger value="escrow" className="rounded data-[state=active]:bg-yellow-600/80 data-[state=active]:text-white py-1.5 text-[11px] sm:text-xs">
-              <Wallet className="w-3 h-3 mr-1 hidden sm:inline" /> Escrow
-            </TabsTrigger>
-            <TabsTrigger value="pending-transfers" className="rounded data-[state=active]:bg-cyan-600/80 data-[state=active]:text-white py-1.5 text-[11px] sm:text-xs">
-              <ArrowDownUp className="w-3 h-3 mr-1 hidden sm:inline" /> Pending
-            </TabsTrigger>
-            <TabsTrigger value="chat" className="rounded data-[state=active]:bg-cyan-600/80 data-[state=active]:text-white py-1.5 text-[11px] sm:text-xs">
-              <MessageSquare className="w-3 h-3 mr-1 hidden sm:inline" /> Chat
-            </TabsTrigger>
-            <TabsTrigger value="memes" className="rounded data-[state=active]:bg-pink-600/80 data-[state=active]:text-white py-1.5 text-[11px] sm:text-xs">
-              <ImageIcon className="w-3 h-3 mr-1 hidden sm:inline" /> Memes
-            </TabsTrigger>
-            <TabsTrigger value="reports" className="rounded data-[state=active]:bg-red-600/80 data-[state=active]:text-white py-1.5 text-[11px] sm:text-xs">
-              <Flag className="w-3 h-3 mr-1 hidden sm:inline" /> Reports
-            </TabsTrigger>
-            <TabsTrigger value="drops" className="rounded data-[state=active]:bg-emerald-600/80 data-[state=active]:text-white py-1.5 text-[11px] sm:text-xs">
-              <Gift className="w-3 h-3 mr-1 hidden sm:inline" /> Drops
-            </TabsTrigger>
-            <TabsTrigger value="lp-staking" className="rounded data-[state=active]:bg-blue-600/80 data-[state=active]:text-white py-1.5 text-[11px] sm:text-xs">
-              <Droplets className="w-3 h-3 mr-1 hidden sm:inline" /> LP
-            </TabsTrigger>
-            <TabsTrigger value="advertising" className="rounded data-[state=active]:bg-amber-600/80 data-[state=active]:text-white py-1.5 text-[11px] sm:text-xs">
-              <Megaphone className="w-3 h-3 mr-1 hidden sm:inline" /> Ads
-            </TabsTrigger>
-            <TabsTrigger value="cosmetics" className="rounded data-[state=active]:bg-purple-600/80 data-[state=active]:text-white py-1.5 text-[11px] sm:text-xs">
-              <Package className="w-3 h-3 mr-1 hidden sm:inline" /> Items
-            </TabsTrigger>
-            <TabsTrigger value="bj-multi" className="rounded data-[state=active]:bg-red-700/80 data-[state=active]:text-white py-1.5 text-[11px] sm:text-xs">
-              BJ Multi
-            </TabsTrigger>
+            {ADMIN_TABS.map((tab) => {
+              const Icon = tab.icon;
+              return (
+                <TabsTrigger
+                  key={tab.value}
+                  value={tab.value}
+                  className={`rounded py-1.5 text-[11px] sm:text-xs ${tab.accentClass}`}
+                >
+                  {Icon ? <Icon className="w-3 h-3 mr-1 hidden sm:inline" /> : null}
+                  {tab.label}
+                </TabsTrigger>
+              );
+            })}
           </TabsList>
 
-          <TabsContent value="tables" className="mt-3 focus-visible:outline-none">
-            <AdminTablesTab />
-          </TabsContent>
-
-          <TabsContent value="health" className="mt-3 focus-visible:outline-none">
-            <AdminHealthTab />
-          </TabsContent>
-
-          <TabsContent value="metrics" className="mt-3 focus-visible:outline-none">
-            <AdminMetricsTab />
-          </TabsContent>
-
-          <TabsContent value="config" className="mt-3 focus-visible:outline-none">
-            <AdminConfigTab />
-          </TabsContent>
-
-          <TabsContent value="contracts" className="mt-3 focus-visible:outline-none">
-            <AdminContractsTab />
-          </TabsContent>
-
-          <TabsContent value="escrow" className="mt-3 focus-visible:outline-none">
-            <AdminEscrowTab />
-          </TabsContent>
-
-          <TabsContent value="pending-transfers" className="mt-3 focus-visible:outline-none">
-            <AdminPendingTransfersTab />
-          </TabsContent>
-
-          <TabsContent value="chat" className="mt-3 focus-visible:outline-none">
-            <AdminChatTab />
-          </TabsContent>
-
-          <TabsContent value="memes" className="mt-3 focus-visible:outline-none">
-            <AdminMemesTab />
-          </TabsContent>
-
-          <TabsContent value="reports" className="mt-3 focus-visible:outline-none">
-            <AdminReportsTab />
-          </TabsContent>
-
-          <TabsContent value="drops" className="mt-3 focus-visible:outline-none">
-            <AdminMerkleDropsTab />
-          </TabsContent>
-
-          <TabsContent value="lp-staking" className="mt-3 focus-visible:outline-none">
-            <AdminLPStakingTab />
-          </TabsContent>
-
-          <TabsContent value="advertising" className="mt-3 focus-visible:outline-none">
-            <AdminAdvertisingTab />
-          </TabsContent>
-
-          <TabsContent value="cosmetics" className="mt-3 focus-visible:outline-none">
-            <AdminCosmeticsTab />
-          </TabsContent>
-
-          <TabsContent value="bj-multi" className="mt-3 focus-visible:outline-none">
-            <AdminBJMultiTab />
-          </TabsContent>
+          {ADMIN_TABS.map((tab) => {
+            const TabComponent = tab.Component;
+            return (
+              <TabsContent key={tab.value} value={tab.value} className="mt-3 focus-visible:outline-none">
+                <TabComponent />
+              </TabsContent>
+            );
+          })}
         </Tabs>
         </main>
       </div>
     </GlobalMainNav>
+  );
+}
+
+export default function AdminPage() {
+  return (
+    <Suspense fallback={<div className="min-h-screen bg-slate-950" />}>
+      <AdminPageContent />
+    </Suspense>
   );
 }

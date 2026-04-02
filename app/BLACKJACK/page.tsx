@@ -6,50 +6,33 @@ import { useAccount, usePublicClient, useSignTypedData } from 'wagmi';
 import { useGameLock } from '@/contexts/game-lock-context';
 import { toast } from 'sonner';
 import { keccak256, toHex, encodePacked } from 'viem';
-import BlackjackTable from '@/components/BLACKJACK/BlackjackTable';
-import BlackjackTopPlayers from '@/components/BLACKJACK/BlackjackTopPlayers';
-import { BlackjackRecentPlays } from '@/components/BLACKJACK/BlackjackRecentPlays';
-import { BlackjackRecentGames } from '@/components/BLACKJACK/BlackjackRecentGames';
-import { TableTokenProfileCard } from '@/components/BLACKJACK/TableTokenProfileCard';
-import { TournamentListSidebar } from '@/components/BLACKJACK/TournamentListSidebar';
-import BettingPanelMobile from '@/components/BLACKJACK/BettingPanelMobile';
 import GlobalMainNav from '@/components/shared/GlobalMainNav';
-import Footer from '@/components/BIG-WHEEL/Footer'; // Reuse footer
-import WinNotification from '@/components/BLACKJACK/WinNotification';
+import { Footer } from '@/components/shared/footer';
 import { DepositWithdrawModal } from '@/components/BLACKJACK/DepositWithdrawModal';
 import { CustomApprovalModal } from '@/components/BLACKJACK/CustomApprovalModal';
-import { PlayerStatsDashboard } from '@/components/BLACKJACK/PlayerStatsDashboard';
-import { GlobalAnalyticsDashboard } from '@/components/BLACKJACK/GlobalAnalyticsDashboard';
+import { BlackjackAuxViews } from '@/components/BLACKJACK/BlackjackAuxViews';
 // GameVerificationTools removed - use /BLACKJACK/verify page instead
-import { GameFAQ } from '@/components/shared/GameFAQ';
 import BlackjackRealTimeBetChart, { BlackjackRealTimeBetChartRef } from '@/components/BLACKJACK/RealTimeBetChart';
-import BlackjackMobileActionBar from '@/components/BLACKJACK/BlackjackMobileActionBar';
-import BlackjackSidebar from '@/components/BLACKJACK/BlackjackSidebar';
+import { BlackjackStatusOverlays } from '@/components/BLACKJACK/BlackjackStatusOverlays';
+import { BlackjackTournamentOverlays } from '@/components/BLACKJACK/BlackjackTournamentOverlays';
+import { BlackjackGameView } from '@/components/BLACKJACK/BlackjackGameView';
 import { useProfileSettingsModal } from '@/components/shared/ProfileSettingsModalContext';
-import { IconButton } from '@/components/animate-ui/components/buttons/icon';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Card, Hand, Game, GameState, Action, GameResult, GameStateUI } from './types';
-import { useTournament, TOURNAMENT_CONFIG } from '@/hooks/use-tournament';
+import { useTournament } from '@/hooks/use-tournament';
 import {
-  TournamentEntry,
   TournamentHUD,
-  TournamentLeaderboard,
-  TournamentComplete,
-  TournamentBetPanel,
-  TournamentCreator,
-  TournamentBrowser,
-  TournamentPinEntry,
 } from '@/components/BLACKJACK/Tournament';
-import { CreateTournamentRequest, TournamentListItem } from '@/lib/tournament-types';
-import { ANIMATION_TIMINGS, BET_LIMITS, BLACKJACK_DEPLOYER_WALLET, DEFAULT_BLACKJACK_IMAGE_ID, BlackjackThemeKind, SOUNDS_PLAYER_WINS, SOUNDS_PLAYER_BLACKJACK, SOUNDS_DEALER_WINS, SOUNDS_DEALER_BLACKJACK, SOUNDS_TIP, SOUND_PUSH, pickRandom } from './constants';
+import { TournamentListItem } from '@/lib/tournament-types';
+import { BET_LIMITS, BLACKJACK_DEPLOYER_WALLET, DEFAULT_BLACKJACK_IMAGE_ID, BlackjackThemeKind, SOUNDS_TIP } from './constants';
 // import { useBlackjackContract } from '@/hooks/use-blackjack-contract';
 import { useBlackjackContract, useWatchDeposits, useWatchDepositsMORBIUS, useWatchWithdrawals } from '@/hooks/use-blackjack-contract';
+import { useBlackjackServerSync } from '@/hooks/use-blackjack-server-sync';
+import { useBlackjackCompletionOrchestrator } from '@/hooks/use-blackjack-completion-orchestrator';
 import { BLACKJACK_ADDRESS, MORBIUS_TOKEN_ADDRESS } from '@/lib/contracts';
 import { getApiUrlOptional, getWebSocketUrlOptional } from '@/lib/api-urls';
 import { usePendingWithdrawal } from '@/hooks/use-pending-withdrawal';
 import { BlackjackWebSocketClient, GameState as ServerGameState } from '@/lib/websocket-client';
 import { formatEther, parseEther } from 'viem';
-import { toBigIntSafe } from '@/lib/safe-bigint';
 import { useQueryClient } from '@tanstack/react-query';
 import { usePlayerStatsEnhanced, useGlobalAnalytics, usePlayerGames } from '@/hooks/use-blackjack-stats';
 import { useTokenApproval } from '@/hooks/use-token-approval';
@@ -322,7 +305,6 @@ export default function BlackjackPage() {
           ? await defaultRes.json().catch(() => ({ themeKind: 'image' as const, tableId: DEFAULT_BLACKJACK_IMAGE_ID }))
           : { themeKind: 'image', tableId: DEFAULT_BLACKJACK_IMAGE_ID };
       if (cancelled) return;
-      let themeToUse = apiDefault.themeKind;
       let imageToUse = apiDefault.themeKind === 'image' ? apiDefault.tableId : DEFAULT_BLACKJACK_IMAGE_ID;
       let videoToUse = apiDefault.themeKind === 'video' ? apiDefault.tableId : 'glowingTable';
       if (key) {
@@ -330,7 +312,6 @@ export default function BlackjackPage() {
           const raw = localStorage.getItem(key);
           if (raw) {
             const prefs = JSON.parse(raw) as { theme?: string; imageSource?: string; videoSource?: string };
-            if (prefs.theme === 'image' || prefs.theme === 'video') themeToUse = prefs.theme;
             if (prefs.imageSource && validImageIds.has(prefs.imageSource)) imageToUse = prefs.imageSource;
             if (prefs.videoSource && validVideoIds.has(prefs.videoSource)) videoToUse = prefs.videoSource;
           }
@@ -342,7 +323,7 @@ export default function BlackjackPage() {
       if (!validVideoIds.has(videoToUse)) videoToUse = 'glowingTable';
       if (cancelled) return;
       prefLoadedRef.current = true;
-      setTheme(themeToUse);
+      setTheme('image');
       setImageSource(imageToUse);
       setVideoSource(videoToUse);
     })();
@@ -1452,613 +1433,46 @@ export default function BlackjackPage() {
     }
   }, [address]);
 
-  // Convert server game state (off-chain) to local UI format
-  // Optional maxPlayerCards/maxDealerCards for phased deal (player blackjack) - limits visible cards per phase
-  const updateGameStateFromServerCore = useCallback((serverGameState: any, maxPlayerCards?: number, maxDealerCards?: number) => {
-    if (!address) return null;
+  const { updateGameStateFromServer, applyPhasedBlackjackDeal } = useBlackjackServerSync({
+    address,
+    clientSeed: gameState.clientSeed,
+    setGameState,
+    playSfx,
+    prevPlayerCardCountRef: prevPlayerCardCount,
+    prevDealerCardCountRef: prevDealerCardCount,
+    setNewCardIndices,
+    createCard,
+    calculateHandTotal,
+  });
 
-    const gameId = String(serverGameState.gameId || serverGameState.id || '');
-    const status = String(serverGameState.status || 'waiting');
-    const currentHandIndex = Number(serverGameState.currentHandIndex ?? 0);
-
-    const suits: Array<Card['suit']> = ['hearts', 'diamonds', 'clubs', 'spades'];
-    const suitFor = (idx: number) => {
-      const salt = gameId.length;
-      return suits[(idx + salt) % suits.length];
-    };
-    // Detect RNG version from server state to decode card format (default 2 so 0-51 indices decode correctly)
-    const isV2 = (serverGameState.rngVersion ?? 2) === 2;
-    // V2: card index 0-51 (rank = idx%13+1, suit = floor(idx/13))
-    // V1: encoded cards value*10+suit (10-133); or raw value 1-13
-    const toCard = (raw: number, idx: number, hidden = false): Card => {
-      const n = Number(raw);
-      if (isV2 && n >= 0 && n <= 51) {
-        const rank = (n % 13) + 1;
-        const suitIndex = Math.floor(n / 13);
-        return createCard(rank, suits[suitIndex % 4], hidden);
-      }
-      if (n >= 10 && n <= 133) {
-        const value = Math.floor(n / 10);
-        const suitIndex = n % 10;
-        return createCard(value, suits[suitIndex % 4], hidden);
-      }
-      return createCard(n, suitFor(idx), hidden);
-    };
-
-    const totalBetAmount = toBigIntSafe(serverGameState.totalBetAmount ?? serverGameState.betAmount);
-    const totalPayout = toBigIntSafe(serverGameState.totalPayout ?? serverGameState.payout);
-
-    const rawHands = Array.isArray(serverGameState.playerHands)
-      ? serverGameState.playerHands
-      : [];
-
-    const playerHands: Hand[] = rawHands.map((h: any, handIdx: number) => {
-      const rawCards: number[] = Array.isArray(h.cards) ? h.cards.map((c: any) => Number(c)) : [];
-      const cards = rawCards.map((c, idx) => toCard(c, handIdx * 10 + idx));
-      const totals = calculateHandTotal(cards);
-      // Prefer total computed from cards (correct multi-ace logic); derive bust from that total so 15 never shows BUST
-      return {
-        id: String(h.id || `${gameId}-hand-${handIdx}`),
-        cards,
-        total: totals.total,
-        hasAce: totals.hasAce,
-        isBlackjack: Boolean(h.isBlackjack ?? false),
-        isBust: totals.total > 21,
-        betAmount: toBigIntSafe(h.betAmount ?? totalBetAmount),
-        result: h.result,
-        payout: toBigIntSafe(h.payout),
-        actions: Array.isArray(h.actions) ? h.actions : [],
-        canHit: Boolean(h.canHit ?? true),
-        canStand: Boolean(h.canStand ?? true),
-        canDoubleDown: Boolean(h.canDoubleDown ?? false),
-        canSplit: Boolean(h.canSplit ?? false),
-      };
-    });
-
-    const activePlayerHand = playerHands[currentHandIndex] || playerHands[0];
-
-    // Phased deal: limit visible cards when maxPlayerCards/maxDealerCards provided (player blackjack)
-    const playerHandsSliced = maxPlayerCards != null
-      ? playerHands.map(h => {
-          const slicedCards = h.cards.slice(0, maxPlayerCards);
-          const totals = calculateHandTotal(slicedCards);
-          return { ...h, cards: slicedCards, total: totals.total, hasAce: totals.hasAce };
-        })
-      : playerHands;
-    const activePlayerHandSliced = playerHandsSliced[currentHandIndex] || playerHandsSliced[0];
-
-    // Dealer cards - server sends only visible card(s) during player turn for security
-    // When game completes, server sends all dealer cards for reveal animation
-    const rawDealerCards: number[] = Array.isArray(serverGameState.dealerCards)
-      ? serverGameState.dealerCards.map((c: any) => Number(c))
-      : [];
-    
-    const dealerCardsRaw = rawDealerCards.map((c, idx) => toCard(c, 100 + idx));
-    const dealerCards = maxDealerCards != null ? dealerCardsRaw.slice(0, maxDealerCards) : dealerCardsRaw;
-    const dealerTotals = calculateHandTotal(dealerCardsRaw);
-    const dealerTotalNum = Number(serverGameState.dealerTotal ?? dealerTotals.total);
-    const dealerHasBlackjack = status === 'completed' && dealerCardsRaw.length === 2 && dealerTotalNum === 21;
-    const dealerHand: Hand = {
-      id: `${gameId}-dealer`,
-      cards: dealerCards, // Sliced when phased deal
-      total: dealerTotalNum,
-      hasAce: Boolean(serverGameState.dealerHasAce ?? dealerTotals.hasAce),
-      isBlackjack: dealerHasBlackjack,
-      isBust: dealerTotalNum > 21,
-      betAmount: BigInt(0),
-      payout: BigInt(0),
-      actions: Array.isArray(serverGameState.dealerActions) ? serverGameState.dealerActions : [],
-      canHit: false,
-      canStand: false,
-      canDoubleDown: false,
-      canSplit: false,
-    };
-
-    const mappedState = status === 'player_turn'
-      ? GameState.PLAYER_TURN
-      : status === 'dealer_turn'
-        ? GameState.DEALER_TURN
-        : status === 'completed'
-          ? GameState.COMPLETE
-          : GameState.WAITING;
-    
-    const localGame: any = {
-      id: gameId,
-      player: address,
-      betAmount: totalBetAmount,
-      state: mappedState,
-      // Keep the legacy single-hand fields used throughout the page (use sliced for phased deal)
-      playerHand: activePlayerHandSliced || {
-        id: `${gameId}-hand-0`,
-        cards: [],
-        total: 0,
-        hasAce: false,
-        isBlackjack: false,
-        isBust: false,
-        betAmount: BigInt(0),
-        payout: BigInt(0),
-        actions: [],
-        canHit: false,
-        canStand: false,
-        canDoubleDown: false,
-        canSplit: false,
-      },
-      dealerHand,
-      // Also keep multi-hand data for split support (use sliced for phased deal)
-      playerHands: playerHandsSliced,
-      currentHandIndex,
-      totalBetAmount,
-      totalPayout,
-      canSplit: Boolean(serverGameState.canSplit ?? activePlayerHand?.canSplit ?? false),
-      isBlackjack: Boolean(serverGameState.isBlackjack ?? activePlayerHand?.isBlackjack ?? false),
-      perfectPairsBetAmount: serverGameState.perfectPairsBetAmount != null ? toBigIntSafe(serverGameState.perfectPairsBetAmount) : undefined,
-      perfectPairsResult: serverGameState.perfectPairsResult ?? undefined,
-      perfectPairsPayout: serverGameState.perfectPairsPayout != null ? toBigIntSafe(serverGameState.perfectPairsPayout) : undefined,
-      timestamp: Date.now(),
-      clientSeed: gameState.clientSeed,
-    };
-
-    // Keep isPlaying true when status is 'completed' until dealer reveal finishes (handleDealerRevealComplete)
-    setGameState(prev => ({
-      ...prev,
-      currentGame: localGame,
-      isPlaying: status === 'completed' ? true : status === 'player_turn' || status === 'dealer_turn',
-    }));
-    
-    // Track new cards for animations (use sliced counts for phased deal)
-    const currentPlayerCardCount = activePlayerHandSliced?.cards.length || 0;
-    const currentDealerCardCount = dealerCards.length;
-    
-    if (currentPlayerCardCount > prevPlayerCardCount.current) {
-      const newIndices = new Set<number>();
-      for (let i = prevPlayerCardCount.current; i < currentPlayerCardCount; i++) {
-        newIndices.add(i);
-      }
-      playSfx('/BlackJack/sounds/cards.wav');
-      setNewCardIndices(prev => ({ ...prev, player: newIndices }));
-      // Clear animation flags after animation completes
-      // Account for staggered delay (250ms per card index) + animation duration (600ms) + buffer (100ms)
-      const indicesArray = Array.from(newIndices);
-      const maxIndex = indicesArray.length > 0 ? Math.max(...indicesArray) : 0;
-      const animationDelay = maxIndex * 250; // Staggered delay in ms
-      const animationDuration = ANIMATION_TIMINGS.CARD_DEAL;
-      const totalTime = animationDelay + animationDuration + 100; // 100ms buffer
-      setTimeout(() => {
-        setNewCardIndices(prev => {
-          const updated = new Set(prev.player);
-          newIndices.forEach(idx => updated.delete(idx));
-          return { ...prev, player: updated };
-        });
-      }, totalTime);
-    }
-    
-    if (currentDealerCardCount > prevDealerCardCount.current) {
-      const newIndices = new Set<number>();
-      for (let i = prevDealerCardCount.current; i < currentDealerCardCount; i++) {
-        newIndices.add(i);
-      }
-      playSfx('/BlackJack/sounds/cards.wav');
-      setNewCardIndices(prev => ({ ...prev, dealer: newIndices }));
-      // Clear animation flags after animation completes
-      // Account for staggered delay (250ms per card index) + animation duration (600ms) + buffer (100ms)
-      const indicesArray = Array.from(newIndices);
-      const maxIndex = indicesArray.length > 0 ? Math.max(...indicesArray) : 0;
-      const animationDelay = maxIndex * 250; // Staggered delay in ms
-      const animationDuration = ANIMATION_TIMINGS.CARD_DEAL;
-      const totalTime = animationDelay + animationDuration + 100; // 100ms buffer
-      setTimeout(() => {
-        setNewCardIndices(prev => {
-          const updated = new Set(prev.dealer);
-          newIndices.forEach(idx => updated.delete(idx));
-          return { ...prev, dealer: updated };
-        });
-      }, totalTime);
-    }
-    
-    prevPlayerCardCount.current = currentPlayerCardCount;
-    prevDealerCardCount.current = currentDealerCardCount;
-    
-    // Return the processed localGame so it can be used immediately
-    return localGame;
-  }, [address, gameState.clientSeed, playSfx]);
-
-  // Wrapper: normal flow or phased deal for player blackjack (cards animate with same delay as other hands)
-  const updateGameStateFromServer = useCallback((serverGameState: any) => {
-    return updateGameStateFromServerCore(serverGameState);
-  }, [updateGameStateFromServerCore]);
-
-  // Phased deal for player blackjack: simulate deal order (player, dealer, player, dealer)
-  const DEAL_PHASE_MS = 250;
-  const applyPhasedBlackjackDeal = useCallback((serverGameState: any, onComplete: (localGame: any) => void) => {
-    const p1 = updateGameStateFromServerCore(serverGameState, 1, 0);
-    if (!p1) { onComplete(null!); return; }
-    const t1 = setTimeout(() => {
-      updateGameStateFromServerCore(serverGameState, 2, 0);
-      const t2 = setTimeout(() => {
-        updateGameStateFromServerCore(serverGameState, 2, 1);
-        const t3 = setTimeout(() => {
-          const final = updateGameStateFromServerCore(serverGameState);
-          onComplete(final!);
-        }, DEAL_PHASE_MS);
-      }, DEAL_PHASE_MS);
-    }, DEAL_PHASE_MS);
-    return () => { clearTimeout(t1); };
-  }, [updateGameStateFromServerCore]);
-
-  // Handle game completion
-  const handleGameCompletion = useCallback((data: any) => {
-    try {
-      const payout: bigint =
-        typeof data?.payout === 'bigint' ? data.payout : BigInt(String(data?.payout || '0'));
-      const betAmount: bigint =
-        typeof data?.betAmount === 'bigint' ? data.betAmount : BigInt(String(data?.betAmount || '0'));
-      const profit: bigint = payout - betAmount;
-
-      // Save last bet amount using the initial bet (before double-down/split inflated it)
-      const betInMorbius = initialBetRef.current > 0 ? initialBetRef.current : Math.floor(Number(formatEther(betAmount)));
-      setLastBetAmount(betInMorbius.toString());
-
-      // Determine game result for chip animations (will be set after dealer reveal)
-      let chipAnimResult: 'win' | 'loss' | 'push' | 'blackjack' | 'dealer_blackjack' | null = null;
-      if (data.result === 'blackjack') {
-        chipAnimResult = 'blackjack';
-      } else if (data.result === 'dealer_blackjack') {
-        chipAnimResult = 'dealer_blackjack';
-      } else if (data.result === 'loss' || (payout === BigInt(0) && betAmount > BigInt(0))) {
-        // Check if dealer had blackjack from processedGame or gameState
-        const dHand = data.processedGame?.dealerHand || data.gameState?.dealerHand;
-        const dealerHadBJ = dHand?.isBlackjack || (dHand?.total === 21 && dHand?.cards?.length === 2);
-        chipAnimResult = dealerHadBJ ? 'dealer_blackjack' : 'loss';
-      } else if (profit > BigInt(0)) {
-        chipAnimResult = 'win';
-      } else if (profit < BigInt(0)) {
-        chipAnimResult = 'loss';
-      } else {
-        chipAnimResult = 'push';
-      }
-      
-      // Don't clear chips here - wait until after animation completes
-      // Store as pending - will be applied after dealer reveal completes
-      setPendingChipResult(chipAnimResult);
-
-      // Chart + history updates are deferred to handleDealerRevealComplete for immersion
-
-      // Extract player and dealer hands from the provided processedGame or gameState or use currentGame
-      let playerHand: Hand = createEmptyHand();
-      let dealerHand: Hand = createEmptyHand();
-      
-      // Prefer processedGame (from updateGameStateFromServer) as it has cards already extracted
-      if (data.processedGame) {
-        console.log('handleGameCompletion: Using processedGame', {
-          gameId: data.processedGame.id,
-          playerHand: data.processedGame.playerHand,
-          dealerHand: data.processedGame.dealerHand,
-          playerHandCards: data.processedGame.playerHand?.cards.map(c => c.value),
-          dealerHandCards: data.processedGame.dealerHand?.cards.map(c => c.value)
-        });
-        
-        if (data.processedGame.playerHand && data.processedGame.playerHand.cards.length > 0) {
-          playerHand = {
-            ...data.processedGame.playerHand,
-            betAmount: data.processedGame.playerHand.betAmount || betAmount
-          };
-        }
-        if (data.processedGame.dealerHand && data.processedGame.dealerHand.cards.length > 0) {
-          dealerHand = data.processedGame.dealerHand;
-        }
-      } else if (data.gameState) {
-        // Try to get cards from gameState first, then fallback to currentGame
-        // Use a ref to get the latest currentGame state since React state updates are async
-        let extractedPlayerHand: Hand | null = null;
-        let extractedDealerHand: Hand | null = null;
-        // Use the fresh gameState data passed from game_updated event
-        const serverGameState = data.gameState;
-        const gameId = String(serverGameState.gameId || serverGameState.id || '');
-        const currentHandIndex = Number(serverGameState.currentHandIndex ?? 0);
-        
-        const suits: Array<Card['suit']> = ['hearts', 'diamonds', 'clubs', 'spades'];
-        const suitFor = (idx: number) => {
-          const salt = gameId.length;
-          return suits[(idx + salt) % suits.length];
-        };
-        const completionIsV2 = serverGameState.rngVersion === 2;
-        const toCard = (value: number, idx: number, hidden = false): Card => {
-          const n = Number(value);
-          if (completionIsV2 && n >= 0 && n <= 51) {
-            const rank = (n % 13) + 1;
-            const suitIndex = Math.floor(n / 13);
-            return createCard(rank, suits[suitIndex % 4], hidden);
-          }
-          if (n >= 10 && n <= 133) {
-            const v = Math.floor(n / 10);
-            const suitIndex = n % 10;
-            return createCard(v, suits[suitIndex % 4], hidden);
-          }
-          return createCard(n, suitFor(idx), hidden);
-        };
-
-        const rawHands = Array.isArray(serverGameState.playerHands) ? serverGameState.playerHands : [];
-        if (rawHands.length > 0) {
-          const playerHands: Hand[] = rawHands.map((h: any, handIdx: number) => {
-            const rawCards: number[] = Array.isArray(h.cards) ? h.cards.map((c: any) => Number(c)) : [];
-            const cards = rawCards.map((c, idx) => toCard(c, handIdx * 10 + idx));
-            const totals = calculateHandTotal(cards);
-            return {
-              id: String(h.id || `${gameId}-hand-${handIdx}`),
-              cards,
-              total: Number(h.total ?? totals.total),
-              hasAce: Boolean(h.hasAce ?? totals.hasAce),
-              isBlackjack: Boolean(h.isBlackjack ?? false),
-              isBust: Boolean(h.isBust ?? false),
-              betAmount: toBigIntSafe(h.betAmount ?? betAmount),
-              result: h.result,
-              payout: toBigIntSafe(h.payout),
-              actions: Array.isArray(h.actions) ? h.actions : [],
-              canHit: false,
-              canStand: false,
-              canDoubleDown: false,
-              canSplit: false,
-            };
-          });
-          
-          const activePlayerHand = playerHands[currentHandIndex] || playerHands[0];
-          if (activePlayerHand && activePlayerHand.cards.length > 0) {
-            extractedPlayerHand = {
-              ...activePlayerHand,
-              betAmount: activePlayerHand.betAmount || betAmount
-            };
-          }
-        }
-        
-        // Dealer cards
-        const rawDealerCards: number[] = Array.isArray(serverGameState.dealerCards)
-          ? serverGameState.dealerCards.map((c: any) => Number(c))
-          : [];
-        
-        if (rawDealerCards.length > 0) {
-          const dealerCards = rawDealerCards.map((c, idx) => toCard(c, 100 + idx));
-          const dealerTotals = calculateHandTotal(dealerCards);
-          extractedDealerHand = {
-            id: `${gameId}-dealer`,
-            cards: dealerCards,
-            total: Number(serverGameState.dealerTotal ?? dealerTotals.total),
-            hasAce: Boolean(serverGameState.dealerHasAce ?? dealerTotals.hasAce),
-            isBlackjack: false,
-            isBust: Number(serverGameState.dealerTotal ?? dealerTotals.total) > 21,
-            betAmount: BigInt(0),
-            payout: BigInt(0),
-            actions: Array.isArray(serverGameState.dealerActions) ? serverGameState.dealerActions : [],
-            canHit: false,
-            canStand: false,
-            canDoubleDown: false,
-            canSplit: false,
-          };
-        }
-        
-        // Use extracted hands if available, otherwise fallback to currentGame
-        if (extractedPlayerHand && extractedPlayerHand.cards.length > 0) {
-          playerHand = extractedPlayerHand;
-        } else {
-          const currentPlayerHand = gameState.currentGame?.playerHand || createEmptyHand();
-          playerHand = {
-            ...currentPlayerHand,
-            betAmount: currentPlayerHand.betAmount || betAmount
-          };
-        }
-        
-        if (extractedDealerHand && extractedDealerHand.cards.length > 0) {
-          dealerHand = extractedDealerHand;
-        } else {
-          dealerHand = gameState.currentGame?.dealerHand || createEmptyHand();
-        }
-      } else {
-        const currentPlayerHand = gameState.currentGame?.playerHand || createEmptyHand();
-        playerHand = {
-          ...currentPlayerHand,
-          betAmount: currentPlayerHand.betAmount || betAmount
-        };
-        dealerHand = gameState.currentGame?.dealerHand || createEmptyHand();
-      }
-
-      // Detect split/double — prefer processedGame (fresh, synchronously returned by updateGameStateFromServer)
-      // over gameState.currentGame which is from a stale React closure and will be the *previous* game
-      // when the user clicks rebet quickly (setGameState is async, closure captures old value).
-      const freshHands = data.processedGame?.playerHands;
-      const allPlayerHands = freshHands && freshHands.length > 0
-        ? freshHands
-        : [playerHand];
-      const wasSplit = allPlayerHands.length > 1;
-      const wasDoubleDown = allPlayerHands.some((h: Hand) =>
-        Array.isArray(h.actions) && h.actions.some((a: any) => a.type === 'double_down'));
-
-      // For tournament: store bet/payout in chips for history display (QuickHistory uses chips, not wei)
-      const isTournament = !!data.isTournament;
-      // Use `payout` directly — it already holds processedGame.totalPayout (includes Perfect Pairs).
-      // currentGame?.totalPayout is from a stale React closure and would be the *previous* game's
-      // payout when the user clicks rebet quickly, corrupting the QuickHistory balance column.
-      const payoutForHistory = isTournament
-        ? BigInt(Math.floor(Number(payout) / 1e18))
-        : payout;
-
-      // Add to history
-      const gameResult: GameResult = {
-        gameId: data?.gameId ? String(data.gameId) : `game-${Date.now()}`,
-        playerHand,
-        dealerHand,
-        payout: payoutForHistory,
-        isBlackjack: data.result === 'blackjack',
-        timestamp: Date.now(),
-        ...(allPlayerHands.length > 0 && { playerHands: allPlayerHands }),
-        ...(wasSplit && { wasSplit: true }),
-        ...(wasDoubleDown && { wasDoubleDown: true }),
-        ...(isTournament && { isTournament: true }),
-      };
-
-      // Store game result + chart data in ref — flushed in handleDealerRevealComplete for immersion
-      pendingGameCompletionRef.current = {
-        gameResult,
-        chartBetAmount: betAmount,
-        chartPayout: payout,
-        chartMeta: {
-          gameId: data?.gameId ? String(data.gameId) : undefined,
-          result: data?.result ? String(data.result) : undefined,
-        },
-        ppResult: data.processedGame?.perfectPairsResult,
-      };
-
-      if (profit > BigInt(0)) {
-        setPendingWinData({
-          amount: profit,
-          isBlackjack: data.result === 'blackjack'
-        });
-      }
-    } catch (error) {
-      console.error('Error in handleGameCompletion:', error);
-      // ignore malformed payload
-    }
-  }, [gameState.currentGame, manageChipStack]);
-
-  // Handle dealer reveal completion - show win notification and trigger chip animation
   const handleCardsClearComplete = useCallback(() => {
     setGameState(prev => ({ ...prev, currentGame: null }));
   }, []);
-
-  const handleDealerRevealComplete = useCallback(() => {
-    // Commit displayed tournament state (chips, rank, hands) so sidebar doesn't show change until now
-    if (tournament.tournamentState.inTournament) {
-      tournament.commitDisplayState();
-    }
-    // Allow REBET/DEAL only after dealer hand is fully revealed.
-    // Do NOT overwrite if user already started a new game (avoids race where DEAL was pressed
-    // before reveal timeout fired — we'd incorrectly hide the action buttons).
-    setGameState(prev => {
-      if (prev.currentGame?.state === GameState.COMPLETE) {
-        return { ...prev, isPlaying: false };
-      }
-      return prev;
-    });
-    // Trigger chip animation now that dealer reveal is complete
-    if (pendingChipResult) {
-      chipResultRef.current = pendingChipResult; // Store in ref for use in animation complete callback
-      setCurrentGameResult(pendingChipResult);
-      setPendingChipResult(null);
-      // Dealer voice outcome sounds (playDealerVoice no-ops when master or dealer voice is off)
-      if (pendingChipResult === 'dealer_blackjack') {
-        playDealerVoice(pickRandom(SOUNDS_DEALER_BLACKJACK));
-      } else if (pendingChipResult === 'loss') {
-        if (SOUNDS_DEALER_WINS.length > 0) {
-          playDealerVoice(pickRandom(SOUNDS_DEALER_WINS));
-        }
-      } else if (pendingChipResult === 'blackjack') {
-        playDealerVoice(pickRandom(SOUNDS_PLAYER_BLACKJACK));
-      } else if (pendingChipResult === 'win') {
-        playDealerVoice(pickRandom(SOUNDS_PLAYER_WINS));
-      } else if (pendingChipResult === 'push') {
-        playDealerVoice(SOUND_PUSH);
-      }
-    }
-
-    // Show win notification
-    if (pendingWinData) {
-      setWinAmount(pendingWinData.amount);
-      setIsBlackjackWin(pendingWinData.isBlackjack);
-      setShowWinNotification(true);
-      setPendingWinData(null);
-    }
-
-    // Flush pending game completion to history + chart (deferred for immersion)
-    const pending = pendingGameCompletionRef.current;
-    if (pending) {
-      pendingGameCompletionRef.current = null;
-
-      // Update P&L chart
-      chartRef.current?.addGameResult(pending.chartBetAmount, pending.chartPayout, pending.chartMeta);
-
-      // PP toasts
-      const ppResult = pending.ppResult;
-      if (ppResult === 'perfect') toast.success('Perfect Pair! 10:1', { description: 'Exact match — same rank and suit!' });
-      else if (ppResult === 'colored') toast.success('Colored Pair! 12:1', { description: 'Same rank, same color!' });
-      else if (ppResult === 'mixed') toast.success('Mixed Pair! 5:1', { description: 'Same rank, different color!' });
-
-      // Add to history
-      const gameResult = pending.gameResult;
-      setGameState(prev => {
-        const existingIndex = prev.history.findIndex(h => h.gameId === gameResult.gameId);
-        if (existingIndex >= 0) {
-          const shouldUpdate = gameResult.playerHand.cards.length > 0 || gameResult.dealerHand.cards.length > 0;
-          if (shouldUpdate) {
-            const updatedHistory = [...prev.history];
-            updatedHistory[existingIndex] = gameResult;
-            return { ...prev, history: updatedHistory, lastResult: gameResult };
-          }
-          return prev;
-        }
-        const newHistory = [gameResult, ...prev.history].slice(0, 50);
-
-        // Persist to localStorage as backup (keyed by wallet address)
-        if (address && typeof window !== 'undefined') {
-          try {
-            const storageKey = `blackjack_history_${address.toLowerCase()}`;
-            const historyToStore = newHistory.map(result => ({
-              gameId: result.gameId,
-              playerHand: {
-                id: result.playerHand.id,
-                cards: result.playerHand.cards.map(c => ({ value: c.value, suit: c.suit })),
-                total: result.playerHand.total,
-                hasAce: result.playerHand.hasAce,
-                isBlackjack: result.playerHand.isBlackjack,
-                isBust: result.playerHand.isBust,
-                betAmount: result.playerHand.betAmount.toString(),
-                payout: result.playerHand.payout.toString(),
-                result: result.playerHand.result,
-                actions: result.playerHand.actions,
-              },
-              dealerHand: {
-                id: result.dealerHand.id,
-                cards: result.dealerHand.cards.map(c => ({ value: c.value, suit: c.suit })),
-                total: result.dealerHand.total,
-                hasAce: result.dealerHand.hasAce,
-                isBlackjack: result.dealerHand.isBlackjack,
-                isBust: result.dealerHand.isBust,
-                betAmount: result.dealerHand.betAmount.toString(),
-                payout: result.dealerHand.payout.toString(),
-                actions: result.dealerHand.actions,
-              },
-              payout: result.payout.toString(),
-              isBlackjack: result.isBlackjack,
-              timestamp: result.timestamp,
-              ...(result.playerHands && { playerHands: result.playerHands.map(h => ({
-                id: h.id,
-                cards: h.cards.map(c => ({ value: c.value, suit: c.suit })),
-                total: h.total,
-                hasAce: h.hasAce,
-                isBlackjack: h.isBlackjack,
-                isBust: h.isBust,
-                betAmount: h.betAmount.toString(),
-                payout: h.payout.toString(),
-                result: h.result,
-                actions: h.actions,
-              })) }),
-              ...(result.wasSplit && { wasSplit: true }),
-              ...(result.wasDoubleDown && { wasDoubleDown: true }),
-              ...(result.isTournament && { isTournament: true }),
-            }));
-            localStorage.setItem(storageKey, JSON.stringify(historyToStore));
-          } catch (error) {
-            console.error('Failed to save history to localStorage:', error);
-          }
-        }
-
-        return { ...prev, history: newHistory, lastResult: gameResult };
-      });
-    }
-
-    // Refresh reserve display only after dealer hand is fully revealed (preserves immersion)
-    fetchBalance().catch(() => {});
-    // Refresh game history lists so Recent Games / Recent Plays update immediately
-    queryClient.invalidateQueries({ queryKey: ['playerGames'] });
-    queryClient.invalidateQueries({ queryKey: ['blackjackRecentGamesGlobal'] });
-  }, [pendingWinData, pendingChipResult, playDealerVoice, fetchBalance, address, tournament, queryClient]);
+  const { handleGameCompletion, handleDealerRevealComplete } = useBlackjackCompletionOrchestrator({
+    currentGame: gameState.currentGame,
+    address,
+    initialBetRef,
+    chipResultRef,
+    pendingGameCompletionRef,
+    pendingChipResult,
+    pendingWinData,
+    setPendingChipResult,
+    setPendingWinData,
+    setCurrentGameResult,
+    setWinAmount,
+    setIsBlackjackWin,
+    setShowWinNotification,
+    setLastBetAmount,
+    setGameState,
+    playDealerVoice,
+    fetchBalance,
+    tournament,
+    queryClient,
+    chartRef,
+    createCard,
+    createEmptyHand,
+    calculateHandTotal,
+  });
 
   // Handle intro completion
   const handleIntroComplete = useCallback(() => {
@@ -2583,457 +1997,122 @@ export default function BlackjackPage() {
         onNextTrack={nextTrack}
       >
 
-      {/* Splash Screen Overlay - Dismissible */}
-      {showSplash && (
-        <div className="fixed inset-0 z-[150] p-4 bg-black/80 backdrop-blur-sm">
-          <div className="absolute top-[50px] left-1/2 -translate-x-1/2 bg-black border border-white/20 rounded-xl p-6 max-w-md w-full shadow-2xl relative">
-            {/* Close Button */}
-            <button
-              onClick={() => setSplashDismissed(true)}
-              className="absolute top-4 right-4 text-white/60 hover:text-white transition-colors"
-              aria-label="Close"
-            >
-              <i className="fas fa-times text-xl"></i>
-            </button>
-
-            <div className="text-center space-y-4">
-              {/* Beta Badge */}
-              <div className="inline-block px-3 py-1 bg-yellow-500/20 border border-yellow-500/50 rounded-lg">
-                <span className="text-yellow-400 font-bold text-xs uppercase tracking-wider">BETA</span>
-              </div>
-
-              {/* Main Heading */}
-              <h2 className="text-2xl font-bold text-white">
-                Welcome to Blackjack
-              </h2>
-
-              {/* Instructions */}
-              <div className="text-white/90 text-sm leading-relaxed space-y-2 text-left">
-                <p className="text-center">
-                  Blackjack is currently in <span className="font-semibold text-yellow-400">BETA</span>.
-                </p>
-                <div className="bg-white/5 border border-white/10 rounded-lg p-4 space-y-2">
-                  <div className="flex items-start gap-2">
-                    <span className="text-white/60 mt-0.5 text-xs">•</span>
-                    <p className="flex-1 text-xs">Bet only the <span className="font-semibold text-white">minimum amount</span> while testing</p>
-                  </div>
-                  <div className="flex items-start gap-2">
-                    <span className="text-white/60 mt-0.5 text-xs">•</span>
-                    <p className="flex-1 text-xs">Always <span className="font-semibold text-white">withdraw your entire balance</span> when done playing</p>
-                  </div>
-                  <div className="flex items-start gap-2">
-                    <span className="text-white/60 mt-0.5 text-xs">•</span>
-                    <p className="flex-1 text-xs">Withdrawals via <span className="font-semibold text-white">game menu</span> or <span className="font-semibold text-white">clicking reserve balance</span> at top</p>
-                  </div>
-                </div>
-              </div>
-
-              {/* Deposit Button */}
-              <button
-                onClick={() => {
-                  handleOpenDepositModal();
-                  setSplashDismissed(true);
-                }}
-                className="w-full px-6 py-3 bg-white text-black font-bold text-sm rounded-lg hover:bg-white/90 transition-colors shadow-lg"
-              >
-                Deposit MORBIUS to Play
-              </button>
-
-              {/* Footer Note */}
-              <p className="text-white/60 text-xs">
-                Deposit MORBIUS to your reserve to start playing
-              </p>
-            </div>
-          </div>
-        </div>
-      )}
+      <BlackjackStatusOverlays
+        showSplash={showSplash}
+        onDismissSplash={() => setSplashDismissed(true)}
+        onDepositFromSplash={() => {
+          handleOpenDepositModal();
+          setSplashDismissed(true);
+        }}
+        pendingJob={pendingJob}
+      />
 
       <main className="w-full max-w-full mx-0 px-2 sm:px-4 pt-2 sm:pt-4 pb-4 sm:pb-8 overflow-x-hidden overflow-y-auto no-scrollbar">
         {/* View-specific content */}
         {currentView === 'game' && (
           <>
-        {/* Show when smart contract is paused (on-chain) */}
-        {contractIsPaused && (
-          <div className="mb-3 px-3 py-2 rounded-lg bg-red-500/20 border border-red-500/40 text-red-200 text-sm">
-            <strong>Blackjack contract is paused.</strong> Deposits, withdrawals, and betting are disabled on-chain.
-            {contractEmergencyPaused && ' Emergency pause is active (emergency admin must call setEmergencyPause(false)).'}
-            {contractOzPaused && !contractEmergencyPaused && ' Owner has paused the contract (owner must call unpause()).'}
-          </div>
-        )}
-        {/* Show when game server is not configured (so user knows why they can't connect) */}
-        {!getWebSocketUrlOptional() && (
-          <div className="mb-3 px-3 py-2 rounded-lg bg-amber-500/20 border border-amber-500/40 text-amber-200 text-sm">
-            <strong>Game server not connected.</strong>{' '}
-            {typeof process !== 'undefined' && process.env.NODE_ENV === 'production' ? (
-              <>Set <code className="font-mono text-xs bg-black/30 px-1 rounded">NEXT_PUBLIC_WEBSOCKET_URL</code> and <code className="font-mono text-xs bg-black/30 px-1 rounded">NEXT_PUBLIC_API_URL</code> in your deployment (e.g. Vercel → Project → Settings → Environment Variables). Use your backend URL: <code className="font-mono text-xs bg-black/30 px-1 rounded">https://your-api.com</code> and <code className="font-mono text-xs bg-black/30 px-1 rounded">wss://your-api.com</code>. Then <strong>redeploy</strong> — Next.js bakes these in at build time.</>
-            ) : (
-              <>Set <code className="font-mono text-xs bg-black/30 px-1 rounded">NEXT_PUBLIC_WEBSOCKET_URL</code> and <code className="font-mono text-xs bg-black/30 px-1 rounded">NEXT_PUBLIC_API_URL</code> in <code className="font-mono text-xs bg-black/30 px-1 rounded">.env.local</code> (e.g. <code className="font-mono text-xs bg-black/30 px-1 rounded">http://localhost:3001</code> and <code className="font-mono text-xs bg-black/30 px-1 rounded">ws://localhost:3001</code>), then restart the dev server. Run the backend with <code className="font-mono text-xs bg-black/30 px-1 rounded">cd server && npm run dev</code>.</>
-            )}
-          </div>
-        )}
-        {/* Game layout: table + betting fit when possible; min height so table stays usable */}
-        <div className="grid grid-cols-1 md:grid-cols-[2fr_1fr] grid-rows-[1fr_auto_auto] md:grid-rows-[1fr_auto] gap-2 md:gap-4 min-h-0">
-          {/* 1. Table + mobile controls (right of table on mobile) */}
-          <div className="min-w-0 flex flex-row md:flex-col min-h-0 pb-0 -mx-2 sm:mx-0 order-1 md:order-none md:row-start-1 md:col-start-1 gap-2 md:gap-0">
-          <div className="relative flex-1 min-w-0 min-h-[60vh] sm:min-h-0 flex flex-col">
-            <BlackjackTable
-              playerHand={currentGame?.playerHand || { cards: [], total: 0, hasAce: false, isBlackjack: false, isBust: false }}
-              playerHands={currentGame?.playerHands}
-              currentHandIndex={currentGame?.currentHandIndex || 0}
-              dealerHand={currentGame?.dealerHand || { cards: [], total: 0, hasAce: false, isBlackjack: false, isBust: false }}
-              gameState={currentGame?.state || GameState.WAITING}
-              onAction={tournament.tournamentState.inTournament ? handleTournamentPlayerAction : handlePlayerAction}
-              canHit={canHit}
-              canStand={canStand}
-              canDoubleDown={canDoubleDown && (!tournament.tournamentState.inTournament || tournament.tournamentState.chips >= (currentGame?.playerHand?.betAmount ? Number(currentGame.playerHand.betAmount) : 0))}
-              canSplit={canSplit && (!tournament.tournamentState.inTournament || tournament.tournamentState.chips >= (currentGame?.playerHand?.betAmount ? Number(currentGame.playerHand.betAmount) : 0))}
-              reserveBalance={tournament.tournamentState.inTournament ? BigInt((tournament.displayedTournamentState ?? tournament.tournamentState).chips) : offChainBalance}
-              usePLS={false}
-              newCardIndices={newCardIndices}
-              chipStack={tournament.tournamentState.inTournament ? tournamentChipStack : chipStack}
-              onClearBet={tournament.tournamentState.inTournament ? () => {} : () => manageChipStack('', undefined, true)}
-              onStartGame={tournament.tournamentState.inTournament
-                ? () => handleStartTournamentGame(TOURNAMENT_CONFIG.MIN_BET)
-                : handleDealClick}
-              isPlaying={gameState.isPlaying}
-              onDealerRevealComplete={handleDealerRevealComplete}
-              gameResult={currentGameResult === 'dealer_blackjack' ? 'loss' : currentGameResult}
-              onChipAnimationComplete={handleChipAnimationComplete}
-              history={gameState.history}
-              totalPayout={currentGame?.totalPayout || BigInt(0)}
-              onDoubleDownChips={tournament.tournamentState.inTournament ? () => {} : handleDoubleDownChips}
-              onSplitChips={tournament.tournamentState.inTournament ? () => {} : handleSplitChips}
-              onRebet={tournament.tournamentState.inTournament ? () => {} : handleRebet}
-              onRebetAndDeal={tournament.tournamentState.inTournament ? undefined : handleRebetAndDeal}
-              onHalfBet={tournament.tournamentState.inTournament ? () => {} : handleHalfBet}
-              onDoubleBet={tournament.tournamentState.inTournament ? () => {} : handleDoubleBet}
-              isMusicPlaying={isMusicPlaying}
-              onToggleMusic={toggleMusic}
-              onNextTrack={nextTrack}
-              musicVolume={musicVolume}
-              onMusicVolumeChange={setMusicVolume}
-              canDeal={tournament.tournamentState.inTournament
-                ? !gameState.isPlaying && (tournament.displayedTournamentState ?? tournament.tournamentState).handsRemaining > 0
-                : !gameState.isPlaying && totalBetAmount > 0}
-              onBetAmountChange={tournament.tournamentState.inTournament ? () => {} : manageChipStack}
-              currentBetAmount={tournament.tournamentState.inTournament ? String(TOURNAMENT_CONFIG.MIN_BET) : displayBetAmount}
-              lastBetAmount={lastBetAmount}
-              useVideoBackground={useVideoBackground}
-              imageSource={imageSource}
-              videoSource={videoSource}
-              imageSrc={getThemeInfo({ kind: 'image', id: imageSource }).src}
-              videoSrc={getThemeInfo({ kind: 'video', id: videoSource }).src}
-              videoSyncToClock={videoSyncToClock}
-              videoPosition={videoPosition}
-              onOpenDepositModal={handleOpenDepositModal}
-              onOpenTableThemeSelector={() => setThemeModalOpen(true)}
-              soundEnabled={soundEnabled}
-              onPlaySfx={playSfx}
-              hideBettingPanel={true}
-              completedGameId={currentGame?.state === GameState.COMPLETE ? currentGame?.id : undefined}
-              onCardsClearComplete={handleCardsClearComplete}
-              perfectPairsBet={tournament.tournamentState.inTournament ? 0 : perfectPairsBet}
-              onPerfectPairsBetChange={tournament.tournamentState.inTournament ? undefined : setPerfectPairsBet}
-              perfectPairsResult={tournament.tournamentState.inTournament ? undefined : currentGame?.perfectPairsResult}
-              tournamentHandSummary={tournament.tournamentState.inTournament ? tournament.lastHandSummary : null}
-              onDismissTournamentSummary={tournament.clearLastHandSummary}
-              onOpenTournamentHistory={() => {
-                setTournamentBrowserInitialTab('history');
-                setShowTournamentBrowser(true);
-              }}
-              inTournament={tournament.tournamentState.inTournament}
-            />
-
-            {/* Tip dealer button — top center overlay */}
-            {address && wsConnected && wsClient && (
-              <div className="absolute top-2 left-1/2 -translate-x-1/2 z-10 flex flex-col items-center">
-                <IconButton
-                  variant="tip"
-                  size="tip"
-                  onClick={async () => {
-                    if (tipAnimating) return;
-                    playSfx('/Poker/PokerSounds/PlayerClickConfirmation.mp3');
-                    setTipAnimating(true);
-                    try {
-                      await wsClient.sendRequest('tip_dealer', {
-                        amount: (BigInt(2000) * BigInt('1000000000000000000')).toString(),
-                      });
-                      playDealerVoice(pickRandom(SOUNDS_TIP));
-                      fetchBalance();
-                      const base = getApiUrlOptional();
-                      if (base) fetch(`${base}/api/tips/stats`).then(r => r.json()).then(d => setTipStats(d)).catch(() => {});
-                    } catch { setTipAnimating(false); }
-                    setTimeout(() => setTipAnimating(false), 900);
-                  }}
-                  disabled={tipAnimating}
-                >
-                  Tip 2,000
-                </IconButton>
-                {tipAnimating && (
-                  <div
-                    className="absolute pointer-events-none"
-                    style={{ top: 0, left: '50%', transform: 'translateX(-50%)' }}
-                    onAnimationEnd={() => setTipAnimating(false)}
-                  >
-                    <div className="tip-chip-fly">
-                      <div className="w-6 h-6 rounded-full border-2 border-amber-400 bg-amber-600 flex items-center justify-center shadow-lg shadow-amber-500/40">
-                        <span className="text-white text-[8px] font-bold">$</span>
-                      </div>
-                    </div>
-                  </div>
-                )}
-              </div>
-            )}
-
-            {/* Win Notification */}
-            {showWinNotification && (
-              <WinNotification
-                amount={winAmount}
-                isBlackjack={isBlackjackWin}
-                onComplete={() => setShowWinNotification(false)}
-              />
-            )}
-
-          </div>
-
-        </div>
-
-          {/* 3. Betting panel (always visible) + tabbed sidebar */}
-          <div className="min-w-0 order-3 md:order-none md:row-start-1 md:col-start-2 flex flex-col gap-2 overflow-hidden">
-          {tournament.tournamentState.inTournament ? (
-            <TournamentBetPanel
-              chips={(tournament.displayedTournamentState ?? tournament.tournamentState).chips}
-              onStartGame={handleStartTournamentGame}
-              isPlaying={gameState.isPlaying}
-              handsRemaining={(tournament.displayedTournamentState ?? tournament.tournamentState).handsRemaining}
-              gameResult={currentGameResult === 'dealer_blackjack' ? 'loss' : currentGameResult}
-              onHit={() => handleTournamentPlayerAction(Action.HIT)}
-              onStand={() => handleTournamentPlayerAction(Action.STAND)}
-              onDoubleDown={() => handleTournamentPlayerAction(Action.DOUBLE_DOWN)}
-              onSplit={() => handleTournamentPlayerAction(Action.SPLIT)}
-              canHit={canHit}
-              canStand={canStand}
-              canDoubleDown={canDoubleDown && (tournament.displayedTournamentState ?? tournament.tournamentState).chips >= (currentGame?.playerHand?.betAmount ? Number(currentGame.playerHand.betAmount) : 0)}
-              canSplit={canSplit && (tournament.displayedTournamentState ?? tournament.tournamentState).chips >= (currentGame?.playerHand?.betAmount ? Number(currentGame.playerHand.betAmount) : 0)}
-            />
-          ) : (
-            <div className="flex flex-row md:flex-col items-stretch w-full">
-              <div className="w-1/2 md:w-full md:border-r-0 md:border-b border-r border-white/10 flex items-center min-w-0">
-                <BettingPanelMobile
-                  onStartGame={(betBigInt, _clientSeed) => {
-                    const ppBetWei = perfectPairsBet > 0 ? BigInt(perfectPairsBet) * BigInt(10 ** 18) : undefined;
-                    handleStartGame(betBigInt, clientSeed, ppBetWei);
-                  }}
-                  isPlaying={gameState.isPlaying}
-                  onBetAmountChange={manageChipStack}
-                currentBetAmount={displayBetAmount}
-                onHalfBet={handleHalfBet}
-                  onDoubleBet={handleDoubleBet}
-                  playerReserves={offChainBalance}
-                />
-              </div>
-              <div className="w-1/2 md:w-full flex items-stretch min-w-0">
-                <BlackjackMobileActionBar
-                  onRebetAndDeal={handleRebetAndDeal}
-                  onStartGame={handleDealClick}
-                  onAction={handlePlayerAction}
-                  onDoubleDownChips={handleDoubleDownChips}
-                  onSplitChips={handleSplitChips}
-                  isPlaying={gameState.isPlaying}
-                  canHit={canHit}
-                  canStand={canStand}
-                  canDoubleDown={canDoubleDown}
-                  canSplit={canSplit}
-                  canDeal={!gameState.isPlaying && totalBetAmount > 0}
-                  chipStackLength={chipStack.length}
-                  lastBetAmount={lastBetAmount}
-                  soundEnabled={soundEnabled}
-                  onPlaySfx={playSfx}
-                  alwaysVisible
-                  perfectPairsBet={perfectPairsBet}
-                  onPerfectPairsBetChange={setPerfectPairsBet}
-                />
-              </div>
-            </div>
-          )}
-          <div className="md:h-[420px] overflow-hidden rounded-xl">
-            <BlackjackSidebar
-              history={gameState.history}
-            reserveBalance={offChainBalance}
-            chartRef={chartRef}
-            chartSessionStartTime={chartSessionStartTime.current}
-            wsClient={wsClient}
-            wsConnected={wsConnected}
-            onVerifyGameRequest={openVerifyView}
-            soundEnabled={soundEnabled}
-            onSoundEnabledChange={setSoundEnabled}
-            dealerVoiceEnabled={dealerVoiceEnabled}
-            onDealerVoiceChange={setDealerVoiceEnabled}
-            sfxEnabled={sfxEnabled}
-            onSfxEnabledChange={setSfxEnabled}
-            isMusicPlaying={isMusicPlaying}
-            onToggleMusic={toggleMusic}
-            onNextTrack={nextTrack}
-            musicVolume={musicVolume}
-            onMusicVolumeChange={setMusicVolume}
-            musicTrackDisplayName={
-              BLACKJACK_MUSIC_PLAYLIST[musicTrackIndex].split('/').pop()?.replace('.mp3', '').replace(/-/g, ' ') ??
-              'Music'
-            }
-            inTournament={tournament.tournamentState.inTournament}
-            tournamentTabContent={
-              tournament.tournamentState.inTournament ? (
-                <TournamentHUD
-                  state={tournament.displayedTournamentState ?? tournament.tournamentState}
-                  onLeave={async () => {
-                    if (!confirm('Forfeit tournament? You will not be able to rejoin. This cannot be undone.')) return;
-                    const success = await tournament.leaveTournament();
-                    if (success) {
-                      setShowTournamentComplete(false);
-                      setIsTournamentMode(false);
-                      fetchBalance().catch(() => {}); // Refresh balance after leaving
-                      toast.success('Left tournament successfully');
-                    } else {
-                      toast.error('Failed to leave tournament');
-                    }
-                  }}
-                />
-              ) : null
-            }
-            />
-          </div>
-        </div>
-        </div>
-
-        {/* Table profile + player dashboard — items-stretch + h-full so token card / iframe match dashboard height */}
-        <section className="mt-4 grid grid-cols-1 items-stretch gap-4 lg:grid-cols-2 lg:gap-6">
-          <div className="flex min-h-0 flex-col lg:h-full">
-            <TableTokenProfileCard
-              key={`${theme}-${useVideoBackground ? videoSource : imageSource}`}
-              themeKind={theme}
-              themeId={useVideoBackground ? videoSource : imageSource}
-              getThemeInfo={getThemeInfo}
-              getTableProfile={getTableProfile}
-              onChangeTableClick={() => setThemeModalOpen(true)}
-            />
-          </div>
-          <div className="flex min-h-0 flex-col lg:h-full">
-            {address && playerStats ? (
-              <PlayerStatsDashboard
-                stats={playerStats}
-                isLoading={playerStatsLoading}
-                playerAddress={address}
-                wsClient={wsConnected ? wsClient : null}
-                reserveBalance={offChainBalance}
-              />
-            ) : (
-              <div
-                className="flex min-h-[420px] flex-1 items-center justify-center overflow-hidden rounded-xl px-6 text-center text-white/60 lg:min-h-[520px] lg:h-full"
-                style={{
-                  background: 'linear-gradient(145deg, rgb(16, 26, 35), rgb(35, 36, 41))',
-                  boxShadow: 'inset 0 3px 6px rgba(0, 0, 0, 0.8), inset 0 -3px 6px rgba(255, 255, 255, 0.1), 0 1px 3px rgba(0, 0, 0, 0.5)',
-                  border: '1px inset rgba(60, 60, 60, 0.5)',
+        <BlackjackGameView
+          contractIsPaused={contractIsPaused}
+          contractEmergencyPaused={contractEmergencyPaused}
+          contractOzPaused={contractOzPaused}
+          tournament={tournament}
+          currentGame={currentGame}
+          gameState={gameState}
+          canHit={canHit}
+          canStand={canStand}
+          canDoubleDown={canDoubleDown}
+          canSplit={canSplit}
+          offChainBalance={offChainBalance}
+          newCardIndices={newCardIndices}
+          tournamentChipStack={tournamentChipStack}
+          chipStack={chipStack}
+          manageChipStack={manageChipStack}
+          handleStartTournamentGame={handleStartTournamentGame}
+          handleDealClick={handleDealClick}
+          handleDealerRevealComplete={handleDealerRevealComplete}
+          currentGameResult={currentGameResult}
+          handleChipAnimationComplete={handleChipAnimationComplete}
+          handleDoubleDownChips={handleDoubleDownChips}
+          handleSplitChips={handleSplitChips}
+          handleRebet={handleRebet}
+          handleRebetAndDeal={handleRebetAndDeal}
+          handleHalfBet={handleHalfBet}
+          handleDoubleBet={handleDoubleBet}
+          isMusicPlaying={isMusicPlaying}
+          toggleMusic={toggleMusic}
+          nextTrack={nextTrack}
+          musicVolume={musicVolume}
+          setMusicVolume={setMusicVolume}
+          totalBetAmount={totalBetAmount}
+          displayBetAmount={displayBetAmount}
+          lastBetAmount={lastBetAmount}
+          imageSource={imageSource}
+          videoSource={videoSource}
+          theme={theme}
+          getThemeInfo={getThemeInfo}
+          getTableProfile={getTableProfile}
+          videoSyncToClock={videoSyncToClock}
+          videoPosition={videoPosition}
+          handleOpenDepositModal={handleOpenDepositModal}
+          setThemeModalOpen={setThemeModalOpen}
+          soundEnabled={soundEnabled}
+          playSfx={playSfx}
+          handleCardsClearComplete={handleCardsClearComplete}
+          perfectPairsBet={perfectPairsBet}
+          setPerfectPairsBet={setPerfectPairsBet}
+          setTournamentBrowserInitialTab={setTournamentBrowserInitialTab}
+          setShowTournamentBrowser={setShowTournamentBrowser}
+          handleStartGame={handleStartGame}
+          clientSeed={clientSeed}
+          handleTournamentPlayerAction={handleTournamentPlayerAction}
+          handlePlayerAction={handlePlayerAction}
+          address={address}
+          wsConnected={wsConnected}
+          wsClient={wsClient}
+          tipAnimating={tipAnimating}
+          setTipAnimating={setTipAnimating}
+          playDealerVoice={playDealerVoice}
+          fetchBalance={fetchBalance}
+          setTipStats={setTipStats}
+          showWinNotification={showWinNotification}
+          winAmount={winAmount}
+          isBlackjackWin={isBlackjackWin}
+          setShowWinNotification={setShowWinNotification}
+          chartRef={chartRef}
+          chartSessionStartTime={chartSessionStartTime.current}
+          openVerifyView={openVerifyView}
+          setSoundEnabled={setSoundEnabled}
+          dealerVoiceEnabled={dealerVoiceEnabled}
+          setDealerVoiceEnabled={setDealerVoiceEnabled}
+          sfxEnabled={sfxEnabled}
+          setSfxEnabled={setSfxEnabled}
+          BLACKJACK_MUSIC_PLAYLIST={BLACKJACK_MUSIC_PLAYLIST}
+          musicTrackIndex={musicTrackIndex}
+          tournamentTabContent={
+            tournament.tournamentState.inTournament ? (
+              <TournamentHUD
+                state={tournament.displayedTournamentState ?? tournament.tournamentState}
+                onLeave={async () => {
+                  if (!confirm('Forfeit tournament? You will not be able to rejoin. This cannot be undone.')) return;
+                  const success = await tournament.leaveTournament();
+                  if (success) {
+                    setShowTournamentComplete(false);
+                    setIsTournamentMode(false);
+                    fetchBalance().catch(() => {});
+                    toast.success('Left tournament successfully');
+                  } else {
+                    toast.error('Failed to leave tournament');
+                  }
                 }}
-              >
-                Connect wallet to view your player dashboard.
-              </div>
-            )}
-          </div>
-        </section>
-
-        {/* Dealer Tip Leaderboard */}
-        {tipStats && tipStats.tipCount > 0 && (
-          <div className="mt-4 rounded-xl overflow-hidden" style={{ background: 'linear-gradient(145deg, rgb(16, 26, 35), rgb(35, 36, 41))', border: '1px solid rgba(217, 119, 6, 0.2)' }}>
-            <div className="px-4 py-3 border-b border-amber-600/20 flex items-center justify-between">
-              <div className="flex items-center gap-2">
-                <span className="text-amber-400 text-lg">🎩</span>
-                <span className="text-amber-300 font-semibold text-sm">Dealer Tips</span>
-              </div>
-              <div className="flex items-center gap-3 text-xs text-gray-400">
-                <span>{tipStats.tipCount} tip{tipStats.tipCount !== 1 ? 's' : ''}</span>
-                <span className="text-amber-400 font-medium">
-                  {Number(formatEther(BigInt(tipStats.totalTipAmountWei))).toLocaleString()} MORBIUS
-                </span>
-              </div>
-            </div>
-            {tipStats.tippers.length > 0 && (
-              <div className="px-4 py-2 space-y-1.5 max-h-[180px] overflow-y-auto">
-                {tipStats.tippers.map((t, i) => (
-                  <div key={t.address} className="flex items-center justify-between text-xs">
-                    <div className="flex items-center gap-2 min-w-0">
-                      <span className={`font-bold w-4 text-right ${i === 0 ? 'text-amber-400' : i === 1 ? 'text-gray-300' : i === 2 ? 'text-amber-700' : 'text-gray-500'}`}>{i + 1}</span>
-                      <span className="text-gray-300 truncate">{t.displayName || `${t.address.slice(0, 6)}...${t.address.slice(-4)}`}</span>
-                    </div>
-                    <div className="flex items-center gap-2 shrink-0">
-                      <span className="text-gray-500">{t.count}x</span>
-                      <span className="text-amber-400 font-medium">{Number(formatEther(BigInt(t.totalWei))).toLocaleString()}</span>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
-        )}
-
-        {/* FAQ + Recent tabs */}
-        <section className="mt-4 grid grid-cols-1 lg:grid-cols-2 gap-4 lg:gap-6 items-start">
-          <div className="w-full">
-            <GameFAQ
-              game="blackjack"
-              addresses={[
-                { label: 'Blackjack Contract', address: BLACKJACK_ADDRESS },
-                { label: 'MORBIUS Token', address: MORBIUS_TOKEN_ADDRESS },
-              ]}
-            />
-          </div>
-          <div className="px-0">
-            <div
-              className="relative rounded-2xl overflow-hidden"
-              style={{
-                background: 'linear-gradient(325deg, rgba(20, 20, 20, 0.8), rgba(40, 40, 40, 0.6))',
-                boxShadow: 'inset 0 3px 6px rgba(0, 0, 0, 0.8), inset 0 -3px 6px rgba(255, 255, 255, 0.1), 0 1px 3px rgba(0, 0, 0, 0.5)',
-                border: '1px inset rgba(60, 60, 60, 0.5)',
-              }}
-            >
-              <div className="absolute inset-0 bg-[radial-gradient(circle_at_50%_50%,rgba(34,211,238,0.3),transparent_70%)] pointer-events-none" />
-
-              <Tabs defaultValue="recent-games" className="relative p-3 sm:p-4">
-                <TabsList className="grid h-11 w-full max-w-full grid-cols-3 gap-1 rounded-xl border border-cyan-500/30 bg-black/40 p-1">
-                  <TabsTrigger
-                    value="recent-games"
-                    className="font-jost min-w-0 w-full justify-center rounded-lg px-1 py-2 text-center text-[11px] font-bold leading-tight text-white/80 transition-all data-[state=active]:bg-gradient-to-r data-[state=active]:from-cyan-600 data-[state=active]:to-blue-600 data-[state=active]:text-white sm:px-2 sm:text-[13px]"
-                  >
-                    Recent Games
-                  </TabsTrigger>
-                  <TabsTrigger
-                    value="recent-play"
-                    className="font-jost min-w-0 w-full justify-center rounded-lg px-1 py-2 text-center text-[11px] font-bold leading-tight text-white/80 transition-all data-[state=active]:bg-gradient-to-r data-[state=active]:from-cyan-600 data-[state=active]:to-blue-600 data-[state=active]:text-white sm:px-2 sm:text-[13px]"
-                  >
-                    Recent Play
-                  </TabsTrigger>
-                  <TabsTrigger
-                    value="leaderboard"
-                    className="font-jost min-w-0 w-full justify-center rounded-lg px-1 py-2 text-center text-[11px] font-bold leading-tight text-white/80 transition-all data-[state=active]:bg-gradient-to-r data-[state=active]:from-cyan-600 data-[state=active]:to-blue-600 data-[state=active]:text-white sm:px-2 sm:text-[13px]"
-                  >
-                    Leaderboard
-                  </TabsTrigger>
-                </TabsList>
-
-                <TabsContent value="recent-games" className="mt-4 min-h-[260px] focus-visible:outline-none lg:min-h-[300px]">
-                  <BlackjackRecentGames compact title="Recent Games" />
-                </TabsContent>
-
-                <TabsContent value="recent-play" className="mt-4 min-h-[260px] focus-visible:outline-none lg:min-h-[300px]">
-                  <BlackjackRecentPlays compact title="Recent Play" />
-                </TabsContent>
-
-                <TabsContent value="leaderboard" className="mt-4 min-h-[260px] focus-visible:outline-none lg:min-h-[300px]">
-                  <BlackjackTopPlayers />
-                </TabsContent>
-              </Tabs>
-            </div>
-          </div>
-        </section>
+              />
+            ) : null
+          }
+          playerStats={playerStats}
+          playerStatsLoading={playerStatsLoading}
+          tipStats={tipStats}
+          blackjackAddress={BLACKJACK_ADDRESS}
+          morbiusTokenAddress={MORBIUS_TOKEN_ADDRESS}
+        />
 
         {/* Tournament card - commented out
           <div
@@ -3093,35 +2172,6 @@ export default function BlackjackPage() {
           </div>
           */}
 
-        {/* Tournament Leaderboard (shown when in tournament) */}
-        {tournament.tournamentState.inTournament && (
-          <div className="mt-4">
-            <TournamentLeaderboard
-              leaderboard={tournament.leaderboard}
-              playerAddress={address}
-              playerEntry={tournament.leaderboard.find(e =>
-                e.player_address.toLowerCase() === address?.toLowerCase()
-              )}
-              onRefresh={() => tournament.fetchLeaderboard()}
-            />
-          </div>
-        )}
-
-        {/* Pending withdrawal banner — visible after page refresh without opening modal */}
-        {pendingJob && (
-          <div className="fixed bottom-4 left-1/2 -translate-x-1/2 z-50 flex items-center gap-3 bg-black text-white text-sm px-4 py-3 rounded-xl shadow-lg border border-white/10 max-w-sm w-full">
-            <svg className="animate-spin h-4 w-4 shrink-0 text-white/70" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-              <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-              <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z" />
-            </svg>
-            <span className="flex-1">
-              {pendingJob.status === 'pending_confirmation'
-                ? <>Withdrawal confirming on chain&hellip; {pendingJob.txHash && <span className="text-white/50">{pendingJob.txHash.slice(0, 10)}…</span>}</>
-                : 'Withdrawal processing\u2026'}
-            </span>
-          </div>
-        )}
-
         {/* Deposit/Withdraw Modal (available on all views) */}
         <DepositWithdrawModal
           isOpen={showDepositModal}
@@ -3156,248 +2206,45 @@ export default function BlackjackPage() {
           spenderName="Blackjack Game"
         />
 
-        {/* Tournament Entry Modal */}
-        <TournamentEntry
-          isOpen={showTournamentEntry}
-          onClose={() => setShowTournamentEntry(false)}
-          onEnter={async () => {
-            const success = await tournament.enterTournament();
-            if (success) {
-              setShowTournamentEntry(false);
-              setIsTournamentMode(true);
-              toast.success('Welcome to the tournament!');
-              // Sync balance after buy-in
-              fetchBalance().catch(() => {});
-            }
-          }}
-          isLoading={tournament.isLoading}
-          playerBalance={offChainBalance}
-          prizePool={tournament.tournamentInfo?.prizePool}
-          entryCount={tournament.tournamentInfo?.entryCount}
-        />
-
-        {/* Tournament Complete Modal */}
-        <TournamentComplete
-          isOpen={showTournamentComplete}
-          onClose={async () => {
-            // If still in tournament, actually leave it
-            if (tournament.tournamentState.inTournament) {
-              const success = await tournament.leaveTournament();
-              if (success) {
-                toast.success('Left tournament successfully');
-              } else {
-                toast.error('Failed to leave tournament');
-              }
-            }
-            setShowTournamentComplete(false);
-            setIsTournamentMode(false);
-            fetchBalance(); // Refresh balance after tournament ends
-          }}
-          onPlayAgain={() => {
-            setShowTournamentComplete(false);
-            setShowTournamentEntry(true);
-          }}
-          onBrowseTournaments={() => {
-            setShowTournamentComplete(false);
-            setShowTournamentBrowser(true);
-            setIsTournamentMode(false);
-          }}
-          state={tournament.tournamentState}
-          tournamentName={tournament.tournamentInfo?.name}
-          prizeWon={tournament.tournamentState.status === 'completed' && tournament.tournamentState.currentRank <= 10
-            ? tournament.getPrizeForRank(tournament.tournamentState.currentRank, BigInt(tournament.tournamentInfo?.prizePool || '0'))
-            : 0n}
-          prizePool={tournament.tournamentInfo?.prizePool}
-        />
-
-        {/* Tournament Browser Modal */}
-        <TournamentBrowser
-          isOpen={showTournamentBrowser}
-          initialTab={tournamentBrowserInitialTab}
-          onClose={() => setShowTournamentBrowser(false)}
-          getThemeInfo={getThemeInfo}
-          currentTournamentId={tournament.tournamentState.inTournament ? tournament.tournamentState.tournamentId : null}
-          onJoin={(t) => {
-            // Already in this tournament — resume without re-joining (no sign, no pay)
-            if (tournament.tournamentState.inTournament && tournament.tournamentState.tournamentId === t.id) {
-              setShowTournamentBrowser(false);
-              toast.success('Resuming tournament');
-              return;
-            }
-            if (t.isPrivate) {
-              setPendingJoinTournament(t);
-              setShowTournamentPinEntry(true);
-            } else {
-              tournament.joinTournament(t.id, undefined, { onChainTournamentId: t.onChainTournamentId ?? undefined, buyInAmount: t.buyInAmount }).then(success => {
-                if (success) {
-                  setShowTournamentBrowser(false);
-                  setIsTournamentMode(true);
-                  toast.success('Joined tournament!');
-                  fetchBalance().catch(() => {});
-                }
-              });
-            }
-          }}
-          onCreateNew={() => {
-            setShowTournamentBrowser(false);
-            setShowTournamentCreator(true);
-          }}
-          onRefresh={() => tournament.fetchTournamentList()}
-          onFetchLeaderboard={(tournamentId) => tournament.fetchTournamentLeaderboard(tournamentId)}
-          tournaments={tournament.tournamentList}
-          isLoading={tournament.isLoading}
-          isJoinLoading={tournament.isJoinLoading}
-          playerBalance={offChainBalance}
-          playerAddress={address ?? null}
+        <BlackjackTournamentOverlays
+          tournament={tournament}
+          showTournamentEntry={showTournamentEntry}
+          setShowTournamentEntry={setShowTournamentEntry}
+          showTournamentComplete={showTournamentComplete}
+          setShowTournamentComplete={setShowTournamentComplete}
+          showTournamentBrowser={showTournamentBrowser}
+          setShowTournamentBrowser={setShowTournamentBrowser}
+          tournamentBrowserInitialTab={tournamentBrowserInitialTab}
+          showTournamentCreator={showTournamentCreator}
+          setShowTournamentCreator={setShowTournamentCreator}
+          showTournamentPinEntry={showTournamentPinEntry}
+          setShowTournamentPinEntry={setShowTournamentPinEntry}
+          pendingJoinTournament={pendingJoinTournament}
+          setPendingJoinTournament={setPendingJoinTournament}
+          setIsTournamentMode={setIsTournamentMode}
+          offChainBalance={offChainBalance}
+          address={address}
           wsClient={wsClient}
-          onFreerollJoined={async (tournamentId) => {
-            setShowTournamentBrowser(false);
-            await tournament.fetchTournamentState();
-            await tournament.fetchTournamentInfo();
-            setIsTournamentMode(true);
-            toast.success('Joined freeroll!');
-          }}
-          tournamentHistory={tournament.tournamentHistory}
-          isHistoryLoading={tournament.isHistoryLoading}
-          onFetchHistory={tournament.fetchTournamentHistory}
-          onUnregister={async (tournamentId) => {
-            const success = await tournament.unregisterTournament(tournamentId);
-            if (success) {
-              await tournament.fetchTournamentList();
-              fetchBalance().catch(() => {});
-            }
-            return success;
-          }}
+          getThemeInfo={getThemeInfo}
+          fetchBalance={fetchBalance}
         />
 
-        {/* Tournament Creator Modal */}
-        <TournamentCreator
-          isOpen={showTournamentCreator}
-          onClose={() => setShowTournamentCreator(false)}
-          onCreate={async (params: CreateTournamentRequest) => {
-            const result = await tournament.createTournament(params);
-            if (result) {
-              toast.success('Tournament created!');
-              await tournament.fetchTournamentList();
-              return result;
-            }
-            return null;
-          }}
-          onCreateFreeroll={async (params) => {
-            const result = await tournament.createFreeroll(params);
-            if (result) {
-              toast.success('Freeroll created!');
-              await tournament.fetchTournamentList();
-              return result;
-            }
-            return null;
-          }}
-          isLoading={tournament.isLoading}
-          playerBalance={offChainBalance}
+        <BlackjackAuxViews
+          currentView={currentView}
+          isDeployer={isDeployer}
+          playerStatsLoading={playerStatsLoading}
+          playerStatsError={playerStatsError}
+          refetchPlayerStats={refetchPlayerStats}
+          playerStats={playerStats}
+          address={address}
+          wsConnected={wsConnected}
+          wsClient={wsClient}
+          offChainBalance={offChainBalance}
+          globalAnalyticsLoading={globalAnalyticsLoading}
+          globalAnalyticsError={globalAnalyticsError}
+          refetchGlobalAnalytics={refetchGlobalAnalytics}
+          globalAnalytics={globalAnalytics}
         />
-
-        {/* Confirm Join overlay (Phase 2 of buy-in tournament join — fires fresh user gesture for wallet popup) */}
-        {tournament.joinApprovalReady && (
-          <div className="fixed bottom-6 right-6 z-[200] rounded-2xl border border-cyan-400/60 shadow-2xl shadow-cyan-500/30 p-5 w-72" style={{ background: 'rgba(10,20,40,0.97)' }}>
-            <p className="text-cyan-300 font-semibold mb-1">Approval confirmed!</p>
-            <p className="text-gray-400 text-sm mb-4">Click below to complete your tournament join.</p>
-            <button
-              onClick={() => {
-                tournament.confirmJoin().then(success => {
-                  if (success) {
-                    setShowTournamentBrowser(false);
-                    setIsTournamentMode(true);
-                    toast.success('Joined tournament!');
-                    fetchBalance().catch(() => {});
-                  }
-                });
-              }}
-              disabled={tournament.isJoinLoading}
-              className="w-full py-2.5 rounded-xl font-semibold bg-gradient-to-r from-cyan-500 to-purple-500 hover:from-cyan-400 hover:to-purple-400 text-white disabled:opacity-50 disabled:cursor-not-allowed transition-all"
-            >
-              {tournament.isJoinLoading ? 'Confirming...' : 'Confirm Join'}
-            </button>
-          </div>
-        )}
-
-        {/* Tournament PIN Entry Modal */}
-        <TournamentPinEntry
-          isOpen={showTournamentPinEntry}
-          onClose={() => {
-            setShowTournamentPinEntry(false);
-            setPendingJoinTournament(null);
-          }}
-          onSubmit={async (pin) => {
-            if (!pendingJoinTournament) return false;
-            const success = await tournament.joinTournament(pendingJoinTournament.id, pin, {
-              onChainTournamentId: pendingJoinTournament.onChainTournamentId ?? undefined,
-              buyInAmount: pendingJoinTournament.buyInAmount,
-            });
-            if (success) {
-              setShowTournamentPinEntry(false);
-              setShowTournamentBrowser(false);
-              setPendingJoinTournament(null);
-              setIsTournamentMode(true);
-              toast.success('Joined private tournament!');
-              fetchBalance().catch(() => {});
-            }
-            return success;
-          }}
-          isLoading={tournament.isJoinLoading}
-        />
-
-        {currentView === 'stats' && (
-          <div className="max-w-[1800px] mx-auto">
-            {playerStatsLoading ? (
-              <div className="text-center py-12 text-cyan-300">Loading player statistics...</div>
-            ) : playerStatsError ? (
-              <div className="text-center py-12">
-                <div className="text-red-400 mb-2">Error loading statistics</div>
-                <div className="text-gray-400 text-sm">{playerStatsError instanceof Error ? playerStatsError.message : 'Unknown error'}</div>
-                <button
-                  onClick={() => refetchPlayerStats()}
-                  className="mt-4 px-4 py-2 bg-cyan-600 hover:bg-cyan-700 rounded-lg text-white"
-                >
-                  Retry
-                </button>
-              </div>
-            ) : playerStats ? (
-              <PlayerStatsDashboard stats={playerStats} isLoading={playerStatsLoading} playerAddress={address ?? null} wsClient={wsConnected ? wsClient : null} reserveBalance={offChainBalance} />
-            ) : (
-              <div className="text-center py-12 text-cyan-300">No statistics available. Play some games to see your stats!</div>
-            )}
-          </div>
-        )}
-
-        {currentView === 'analytics' && isDeployer && (
-          <div className="max-w-[1800px] mx-auto">
-            {globalAnalyticsLoading ? (
-              <div className="text-center py-12 text-cyan-300">Loading global analytics...</div>
-            ) : globalAnalyticsError ? (
-              <div className="text-center py-12">
-                <div className="text-red-400 mb-2">Error loading analytics</div>
-                <div className="text-gray-400 text-sm">{globalAnalyticsError instanceof Error ? globalAnalyticsError.message : 'Unknown error'}</div>
-                <button
-                  onClick={() => refetchGlobalAnalytics()}
-                  className="mt-4 px-4 py-2 bg-cyan-600 hover:bg-cyan-700 rounded-lg text-white"
-                >
-                  Retry
-                </button>
-              </div>
-            ) : globalAnalytics ? (
-              <GlobalAnalyticsDashboard 
-                analytics={globalAnalytics} 
-                isLoading={globalAnalyticsLoading}
-                onRefresh={() => {
-                  refetchPlayerStats();
-                  refetchGlobalAnalytics();
-                }}
-              />
-            ) : (
-              <div className="text-center py-12 text-cyan-300">No analytics available yet.</div>
-            )}
-          </div>
-        )}
 
       </main>
 

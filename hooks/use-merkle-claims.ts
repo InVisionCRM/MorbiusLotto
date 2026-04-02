@@ -6,7 +6,7 @@ import { formatEther } from 'viem';
 import { toast } from 'sonner';
 import { merkleClaimMorbiusAbi } from '@/abi/merkle-claim-morbius';
 import { MERKLE_CLAIM_MORBIUS_ADDRESS } from '@/lib/contracts';
-import { getApiUrlOptional } from '@/lib/api-urls';
+import { getMerkleClaimPath, getMerkleEpochsPath } from '@/lib/api-urls';
 import { pulsechain } from 'viem/chains';
 
 export interface PublishedEpoch {
@@ -44,7 +44,6 @@ interface UseMerkleClaimsReturn {
 
 export function useMerkleClaims(): UseMerkleClaimsReturn {
   const { address } = useAccount();
-  const apiBase = getApiUrlOptional();
 
   const [publishedEpochs, setPublishedEpochs] = useState<PublishedEpoch[]>([]);
   const [proofMap, setProofMap] = useState<Map<number, { amount: string; proof: string[]; supersededByEpochNumber: number | null }>>(new Map());
@@ -55,25 +54,22 @@ export function useMerkleClaims(): UseMerkleClaimsReturn {
 
   // ── Fetch published epochs ──────────────────────────────────────────────────
   useEffect(() => {
-    if (!apiBase) return;
-    fetch(`${apiBase}/api/merkle/epochs`)
+    fetch(getMerkleEpochsPath(), { cache: 'no-store' })
       .then((r) => r.json())
       .then((data) => setPublishedEpochs(Array.isArray(data) ? data : []))
       .catch(() => { /* non-critical */ });
-  }, [apiBase, refreshKey]);
+  }, [refreshKey]);
 
   // ── Fetch proofs for the connected wallet ───────────────────────────────────
   useEffect(() => {
-    if (!apiBase || !address || publishedEpochs.length === 0) return;
+    if (!address || publishedEpochs.length === 0) return;
 
     const fetchProofs = async () => {
       const newMap = new Map<number, { amount: string; proof: string[]; supersededByEpochNumber: number | null }>();
       await Promise.allSettled(
         publishedEpochs.map(async (epoch) => {
           try {
-            const res = await fetch(
-              `${apiBase}/api/merkle/claim/${epoch.epoch_number}/${address}`,
-            );
+            const res = await fetch(getMerkleClaimPath(epoch.epoch_number, address), { cache: 'no-store' });
             if (res.ok) {
               const data = await res.json();
               newMap.set(epoch.id, {
@@ -89,7 +85,7 @@ export function useMerkleClaims(): UseMerkleClaimsReturn {
     };
 
     fetchProofs();
-  }, [apiBase, address, publishedEpochs, refreshKey]);
+  }, [address, publishedEpochs, refreshKey]);
 
   // ── Read hasClaimed for each epoch from contract ────────────────────────────
   const contractAddress = MERKLE_CLAIM_MORBIUS_ADDRESS || undefined;

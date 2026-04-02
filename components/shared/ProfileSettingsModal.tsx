@@ -5,8 +5,8 @@ import { createPortal } from 'react-dom'
 import { toast } from 'sonner'
 import { useProfile } from '@/hooks/use-player-profile'
 import { useQueryClient } from '@tanstack/react-query'
-import AvatarView from '@/components/poker/avatar/AvatarView'
-import { DEFAULT_AVATAR_CONFIG } from '@/components/poker/avatar/CharacterCreator'
+import { AvatarView } from '@/components/avatar'
+import { DEFAULT_AVATAR_CONFIG } from '@/components/avatar'
 import { ProfileAvatarModal } from '@/components/shared/ProfileAvatarModal'
 
 const DISPLAY_NAME_MIN = 3

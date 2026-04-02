@@ -118,7 +118,7 @@ export const BLACKJACK_IMAGE_BACKGROUNDS = [
   { id: 'DrDoge', label: 'Dr. Doge', src: '/BlackJack/BrandedTable/Dr.Doge.png' },
   { id: 'EMIT', label: 'EMIT', src: '/BlackJack/BrandedTable/EMIT.png' },
   { id: 'GreenWick', label: 'Green Wick', src: '/BlackJack/BrandedTable/GreenWick.png' },
-  { id: 'H9gh-Roller-2', label: 'H9gh Roller 2', src: '/BlackJack/BrandedTable/H9gh-Roller-2.png' },
+  { id: 'High-Roller-2', label: 'High Roller 2', src: '/BlackJack/BrandedTable/High-Roller-2.png' },
   { id: 'high-roller-3', label: 'High Roller 3', src: '/BlackJack/BrandedTable/high-roller-3.png' },
   { id: 'High-Roller', label: 'High Roller', src: '/BlackJack/BrandedTable/High-Roller.png' },
   { id: 'High-Roller-2', label: 'High Roller 2', src: '/BlackJack/BrandedTable/High-Roller-2.png' },

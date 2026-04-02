@@ -35,8 +35,6 @@ export declare const KENO_GET_CONTRACT_RESERVE_ABI: readonly [{
     readonly stateMutability: "view";
     readonly type: "function";
 }];
-/** Full Lottery 6-of-55 V2 ABI from contracts/abi/lottery6of55-v2.json. */
-export declare const LOTTERY_STATS_ABI: readonly unknown[];
 /** Instant Lottery 6-of-55 ABI (totalPlays, totalWagered, totalPayouts). */
 export declare const INSTANT_LOTTERY_STATS_ABI: readonly unknown[];
 /** Minimal Blackjack stats ABI for snapshot reads (fee totals, off-chain payouts, reserves). */

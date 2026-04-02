@@ -765,74 +765,69 @@ export function useTournament(options: UseTournamentOptions) {
       const hasPublicClient = !!publicClient;
 
       // Contract interaction is always required (address is hardcoded)
-      if (MORBIUS_TOURNAMENT_ADDRESS && MORBIUS_TOURNAMENT_ADDRESS !== MORBIUS_TOURNAMENT_ZERO) {
-        if (!hasWriteContract) {
-          throw new Error('Wallet connection required for on-chain tournament creation. Please connect your wallet.');
-        }
-        if (!hasPublicClient) {
-          throw new Error('Public client required for on-chain tournament creation. Please ensure your wallet is connected.');
-        }
+      if (!hasWriteContract) {
+        throw new Error('Wallet connection required for on-chain tournament creation. Please connect your wallet.');
+      }
+      if (!hasPublicClient) {
+        throw new Error('Public client required for on-chain tournament creation. Please ensure your wallet is connected.');
+      }
 
-        console.log('Creating tournament on-chain...', {
+      console.log('Creating tournament on-chain...', {
+        address: MORBIUS_TOURNAMENT_ADDRESS,
+        buyInAmount: params.buyInAmount,
+        maxPlayers: params.maxPlayers,
+      });
+
+      const buyInAmount = BigInt(params.buyInAmount);
+      const maxPlayers = params.maxPlayers ?? 0;
+      const prizeToken = (params.prizeTokenAddress?.trim() || MORBIUS_TOURNAMENT_ZERO) as `0x${string}`;
+      const prizeAmount = params.prizeAmount ? BigInt(params.prizeAmount) : 0n;
+
+      try {
+        const hash = await writeContractAsync({
           address: MORBIUS_TOURNAMENT_ADDRESS,
-          buyInAmount: params.buyInAmount,
-          maxPlayers: params.maxPlayers,
+          abi: morbiusTournamentAbi,
+          functionName: 'createTournament',
+          args: [buyInAmount, BigInt(maxPlayers), prizeToken, prizeAmount],
+          chain: pulsechain,
+          maxPriorityFeePerGas: 200_000n, // PulseChain tip
         });
 
-        const buyInAmount = BigInt(params.buyInAmount);
-        const maxPlayers = params.maxPlayers ?? 0;
-        const prizeToken = (params.prizeTokenAddress?.trim() || MORBIUS_TOURNAMENT_ZERO) as `0x${string}`;
-        const prizeAmount = params.prizeAmount ? BigInt(params.prizeAmount) : 0n;
+        console.log('Tournament creation transaction sent:', hash);
 
-        try {
-          const hash = await writeContractAsync({
-            address: MORBIUS_TOURNAMENT_ADDRESS,
-            abi: morbiusTournamentAbi,
-            functionName: 'createTournament',
-            args: [buyInAmount, BigInt(maxPlayers), prizeToken, prizeAmount],
-            chain: pulsechain,
-            maxPriorityFeePerGas: 200_000n, // PulseChain tip
-          });
-
-          console.log('Tournament creation transaction sent:', hash);
-
-          const receipt = await publicClient.waitForTransactionReceipt({ hash });
-          const matchedLog = receipt.logs.find((l) => {
-            try {
-              const logEntry = l as unknown as { data: `0x${string}`; topics: [`0x${string}`, ...`0x${string}`[]] };
-              decodeEventLog({
-                abi: morbiusTournamentAbi,
-                data: logEntry.data,
-                topics: logEntry.topics,
-              });
-              return true;
-            } catch {
-              return false;
-            }
-          });
-          if (!matchedLog) {
-            throw new Error('TournamentCreated event not found in transaction receipt. Tournament may not have been created on-chain.');
+        const receipt = await publicClient.waitForTransactionReceipt({ hash });
+        const matchedLog = receipt.logs.find((l) => {
+          try {
+            const logEntry = l as unknown as { data: `0x${string}`; topics: [`0x${string}`, ...`0x${string}`[]] };
+            decodeEventLog({
+              abi: morbiusTournamentAbi,
+              data: logEntry.data,
+              topics: logEntry.topics,
+            });
+            return true;
+          } catch {
+            return false;
           }
-          const typedLog = matchedLog as unknown as { data: `0x${string}`; topics: [`0x${string}`, ...`0x${string}`[]] };
-          const decoded = decodeEventLog({
-            abi: morbiusTournamentAbi,
-            data: typedLog.data,
-            topics: typedLog.topics,
-          });
-          if (decoded.eventName === 'TournamentCreated' && 'tournamentId' in decoded.args) {
-            onChainTournamentId = Number(decoded.args.tournamentId);
-            console.log('On-chain tournament created with ID:', onChainTournamentId);
-          } else {
-            throw new Error('Could not parse tournament ID from TournamentCreated event');
-          }
-        } catch (error: any) {
-          // Contract interaction failed - fail loudly
-          const errorMessage = error?.message || 'Unknown error during on-chain tournament creation';
-          throw new Error(`Failed to create tournament on-chain: ${errorMessage}. Tournament creation cancelled.`);
+        });
+        if (!matchedLog) {
+          throw new Error('TournamentCreated event not found in transaction receipt. Tournament may not have been created on-chain.');
         }
-      } else {
-        // This should never happen since address is hardcoded
-        throw new Error('MORBIUS_TOURNAMENT_ADDRESS is not configured. This should not happen.');
+        const typedLog = matchedLog as unknown as { data: `0x${string}`; topics: [`0x${string}`, ...`0x${string}`[]] };
+        const decoded = decodeEventLog({
+          abi: morbiusTournamentAbi,
+          data: typedLog.data,
+          topics: typedLog.topics,
+        });
+        if (decoded.eventName === 'TournamentCreated' && 'tournamentId' in decoded.args) {
+          onChainTournamentId = Number(decoded.args.tournamentId);
+          console.log('On-chain tournament created with ID:', onChainTournamentId);
+        } else {
+          throw new Error('Could not parse tournament ID from TournamentCreated event');
+        }
+      } catch (error: any) {
+        // Contract interaction failed - fail loudly
+        const errorMessage = error?.message || 'Unknown error during on-chain tournament creation';
+        throw new Error(`Failed to create tournament on-chain: ${errorMessage}. Tournament creation cancelled.`);
       }
 
       const response = await wsClient.sendRequest('tournament_create', {

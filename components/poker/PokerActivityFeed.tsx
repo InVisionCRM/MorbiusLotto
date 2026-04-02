@@ -108,14 +108,14 @@ function seatLabel(seatIndex: number, state: PokerTableState | null): string {
   return seat?.playerAddress ? shortAddr(seat.playerAddress) : `S${seatIndex + 1}`;
 }
 
-const CARD_RANKS = ['A','2','3','4','5','6','7','8','9','10','J','Q','K'];
-const CARD_SUITS = ['H','D','C','S'];
+const CARD_RANKS = ['2','3','4','5','6','7','8','9','10','J','Q','K','A'];
+const CARD_SUITS = ['C','D','H','S'];
 
 function TinyCard({ idx }: { idx: number }) {
   const rank = CARD_RANKS[idx % 13];
   const suit = CARD_SUITS[Math.floor(idx / 13)];
   return (
-    // eslint-disable-next-line @next/next/no-img-element
+     
     <img
       src={`/BlackJack/Cards/PNG/${rank}${suit}.png`}
       alt={`${rank}${suit}`}
@@ -390,7 +390,7 @@ export function PokerActivityFeed({
 
       return next.slice(-MAX_ENTRIES);
     });
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+   
   }, [state?.currentHand?.lastAction, state?.currentHand?.handId]);
 
   // ── Track QuickChat phrases ───────────────────────────────────────────────
@@ -444,7 +444,7 @@ export function PokerActivityFeed({
         ts: Date.now(),
       } satisfies ShowdownEntry,
     ].slice(-MAX_ENTRIES));
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+   
   }, [state?.currentHand?.street, state?.currentHand?.handId, state?.currentHand?.winners]);
 
   // ── Auto-scroll ───────────────────────────────────────────────────────────
@@ -695,12 +695,17 @@ export function PokerActivityFeed({
       <div
         className={
           embedInLayout
-            ? 'hidden md:flex flex-col rounded-lg overflow-hidden h-full min-h-0 w-full'
+            ? 'hidden md:flex flex-col rounded-lg overflow-hidden min-h-0 w-full self-end'
             : 'hidden md:flex fixed z-30 flex-col rounded-lg overflow-hidden'
         }
         style={
           embedInLayout
-            ? { ...desktopPanelStyle, height: '100%' }
+            ? {
+                ...desktopPanelStyle,
+                height: expanded ? DESKTOP_ACTIVITY_HEIGHT_EXPANDED : DESKTOP_ACTIVITY_HEIGHT_COLLAPSED,
+                maxHeight: 'calc(100dvh - 112px)',
+                transition: 'height 0.25s ease',
+              }
             : {
                 ...desktopPanelStyle,
                 width: 300,

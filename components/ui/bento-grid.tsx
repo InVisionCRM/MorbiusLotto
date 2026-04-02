@@ -7,12 +7,17 @@ interface BentoGridProps extends ComponentPropsWithoutRef<"div"> {
   className?: string
 }
 
-interface BentoCardProps extends ComponentPropsWithoutRef<"div"> {
-  name: string
-  className: string
-  background: ReactNode
-  Icon: React.ElementType
-  description: string
+interface BentoCardProps extends Omit<ComponentPropsWithoutRef<"div">, "title"> {
+  name?: ReactNode
+  /** Backward-compatible alias used by some existing callers */
+  title?: ReactNode
+  className?: string
+  background?: ReactNode
+  /** Backward-compatible alias used by some existing callers */
+  header?: ReactNode
+  Icon?: React.ElementType
+  description?: ReactNode
+  children?: ReactNode
 }
 
 /** Embossed glass panel — matches home tokenomics / Plinko grey surfaces */
@@ -41,35 +46,53 @@ const BentoGrid = ({ children, className, ...props }: BentoGridProps) => {
 
 const BentoCard = ({
   name,
+  title,
   className,
   background,
+  header,
   Icon,
   description,
+  children,
   style,
   ...props
-}: BentoCardProps) => (
-  <div
-    className={cn(
-      "group relative col-span-3 flex min-h-0 flex-col overflow-hidden rounded-2xl",
-      "transform-gpu",
-      BENTO_CARD_SURFACE,
-      className
-    )}
-    style={{ ...BENTO_CARD_SURFACE_STYLE, ...style }}
-    {...props}
-  >
-    <div className="pointer-events-none absolute inset-0 overflow-hidden">{background}</div>
+}: BentoCardProps) => {
+  const hasCustomChildren = children != null
+  const hasMeta = !!(Icon || name || title || description)
 
-    <div className="relative z-10 mt-auto p-5 pt-8">
-      <div className="pointer-events-none flex transform-gpu flex-col gap-1.5 transition-all duration-300 lg:group-hover:-translate-y-10">
-        <Icon className="h-10 w-10 origin-left text-white/55 transition-all duration-300 ease-in-out group-hover:scale-90 [&_svg]:stroke-[1.25]" />
-        <h3 className="text-lg font-semibold tracking-tight text-white/95 md:text-xl">{name}</h3>
-        <p className="max-w-lg text-sm leading-relaxed text-white/50">{description}</p>
-      </div>
+  return (
+    <div
+      className={cn(
+        "group relative col-span-3 flex min-h-0 flex-col overflow-hidden rounded-2xl",
+        "transform-gpu",
+        BENTO_CARD_SURFACE,
+        className
+      )}
+      style={{ ...BENTO_CARD_SURFACE_STYLE, ...style }}
+      {...props}
+    >
+      <div className="pointer-events-none absolute inset-0 overflow-hidden">{background ?? header}</div>
+
+      {hasCustomChildren ? <div className="relative z-10 min-h-0 flex-1">{children}</div> : null}
+
+      {!hasCustomChildren && hasMeta ? (
+        <div className="relative z-10 mt-auto p-5 pt-8">
+          <div className="pointer-events-none flex transform-gpu flex-col gap-1.5 transition-all duration-300 lg:group-hover:-translate-y-10">
+            {Icon ? (
+              <Icon className="h-10 w-10 origin-left text-white/55 transition-all duration-300 ease-in-out group-hover:scale-90 [&_svg]:stroke-[1.25]" />
+            ) : null}
+            {(name ?? title) ? (
+              <h3 className="text-lg font-semibold tracking-tight text-white/95 md:text-xl">{name ?? title}</h3>
+            ) : null}
+            {description ? <p className="max-w-lg text-sm leading-relaxed text-white/50">{description}</p> : null}
+          </div>
+        </div>
+      ) : null}
+
+      <div className="pointer-events-none absolute inset-0 z-[1] rounded-2xl transition-all duration-300 group-hover:bg-white/[0.04]" />
     </div>
+  )
+}
 
-    <div className="pointer-events-none absolute inset-0 z-[1] rounded-2xl transition-all duration-300 group-hover:bg-white/[0.04]" />
-  </div>
-)
+const BentoGridItem = BentoCard
 
-export { BentoCard, BentoGrid }
+export { BentoCard, BentoGrid, BentoGridItem }

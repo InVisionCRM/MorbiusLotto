@@ -4,8 +4,9 @@ import React, { useState, useRef, useEffect, useCallback, lazy, Suspense } from 
 import { ConnectButton } from '@rainbow-me/rainbowkit'
 import { useAccount, useDisconnect } from 'wagmi'
 import { useProfile } from '@/hooks/use-player-profile'
-import AvatarView from '@/components/poker/avatar/AvatarView'
-import { DEFAULT_AVATAR_CONFIG } from '@/components/poker/avatar/CharacterCreator'
+import Image from 'next/image'
+import { AvatarView } from '@/components/avatar'
+import { DEFAULT_AVATAR_CONFIG } from '@/components/avatar'
 
 const GameWalletModal = lazy(() => import('@/components/shared/GameWalletModal').then(m => ({ default: m.GameWalletModal })))
 
@@ -29,8 +30,8 @@ export interface WalletMenuProps {
   dropdownPlacement?: 'viewport-right' | 'below'
   /** When true, use white text in dropdown (for dark sidebar) */
   variant?: 'default' | 'sidebar'
-  /** When variant=sidebar, pass sidebar open state so label animates with collapse */
-  sidebarOpen?: boolean
+  /** When true, always render avatar as a static image/icon (no animated AvatarView) */
+  staticAvatarOnly?: boolean
 }
 
 /**
@@ -47,7 +48,7 @@ export function WalletMenu({
   className = '',
   dropdownPlacement = 'viewport-right',
   variant = 'default',
-  sidebarOpen = true,
+  staticAvatarOnly = false,
 }: WalletMenuProps) {
   const { address, isConnected } = useAccount()
   const { disconnect } = useDisconnect()
@@ -121,12 +122,28 @@ export function WalletMenu({
             style={variant !== 'sidebar' ? { background: 'linear-gradient(145deg,rgba(44, 149, 156, 0.11),rgba(87, 107, 113, 0.15))' } : undefined}
             aria-label={isWalletDropdownOpen ? 'Close wallet menu' : 'Open wallet menu'}
           >
-            <div className={`rounded-full overflow-hidden flex-shrink-0 transition-all duration-200 ${variant === 'sidebar' ? (sidebarOpen ? 'w-5 h-5' : 'w-[34px] h-[34px]') : 'w-7 h-7'}`}>
-              <AvatarView
-                config={avatarConfig ?? DEFAULT_AVATAR_CONFIG}
-                compact
-                className="w-full h-full"
-              />
+            <div className="rounded-full overflow-hidden flex-shrink-0 w-7 h-7">
+              {staticAvatarOnly ? (
+                effectiveProfileImageUrl ? (
+                  <Image
+                    src={effectiveProfileImageUrl}
+                    alt={effectiveProfileDisplayName ? `${effectiveProfileDisplayName} avatar` : 'User avatar'}
+                    width={64}
+                    height={64}
+                    className="w-full h-full object-cover"
+                  />
+                ) : (
+                  <div className="w-full h-full bg-slate-700 flex items-center justify-center">
+                    <i className="fas fa-user text-[10px] text-white/80" aria-hidden />
+                  </div>
+                )
+              ) : (
+                <AvatarView
+                  config={avatarConfig ?? DEFAULT_AVATAR_CONFIG}
+                  compact
+                  className="w-full h-full"
+                />
+              )}
             </div>
             {variant === 'sidebar' ? (
               <>

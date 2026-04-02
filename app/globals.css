@@ -3,26 +3,26 @@
 @custom-variant dark (&:is(.dark *));
 
 @theme inline {
-  --color-background: 0 0% 90%;
-  --color-foreground: 0 0% 3.9%;
-  --color-card: 0 0% 100%;
-  --color-card-foreground: 0 0% 3.9%;
-  --color-popover: 0 0% 100%;
-  --color-popover-foreground: 0 0% 3.9%;
-  --color-primary: 280 50% 60%;
-  --color-primary-foreground: 0 0% 98%;
-  --color-secondary: 0 0% 96.1%;
-  --color-secondary-foreground: 0 0% 9%;
-  --color-muted: 0 0% 96.1%;
-  --color-muted-foreground: 0 0% 45.1%;
-  --color-accent: 280 30% 85%;
-  --color-accent-foreground: 0 0% 9%;
-  --color-destructive: 0 84.2% 60.2%;
-  --color-destructive-foreground: 0 0% 98%;
-  --color-border: 0 0% 20%;
-  --color-input: 0 0% 20%;
-  --color-ring: 280 50% 60%;
-  --radius: 0.5rem;
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-destructive-foreground: var(--destructive-foreground);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+  --radius: var(--radius);
 
   --animate-meteor-effect: meteor 5s linear infinite;
 
@@ -87,30 +87,6 @@
   to {
     transform: translateY(calc(-100% - var(--gap)));}}}
 
-@media (prefers-color-scheme: dark) {
-  @theme inline {
-    --color-background: 0 0% 0%;
-    --color-foreground: 0 0% 98%;
-    --color-card: 0 0% 5%;
-    --color-card-foreground: 0 0% 98%;
-    --color-popover: 0 0% 5%;
-    --color-popover-foreground: 0 0% 98%;
-    --color-primary: 280 50% 70%;
-    --color-primary-foreground: 0 0% 98%;
-    --color-secondary: 0 0% 10%;
-    --color-secondary-foreground: 0 0% 98%;
-    --color-muted: 0 0% 15%;
-    --color-muted-foreground: 0 0% 70%;
-    --color-accent: 280 30% 20%;
-    --color-accent-foreground: 0 0% 98%;
-    --color-destructive: 0 62.8% 30.6%;
-    --color-destructive-foreground: 0 0% 98%;
-    --color-border: 0 0% 25%;
-    --color-input: 0 0% 25%;
-    --color-ring: 280 50% 70%;
-  }
-}
-
 /* Infinite moving cards scroll animation (content is duplicated, so -50% loops) */
 @keyframes scroll {
   0% {
@@ -127,7 +103,7 @@
 }
 
 * {
-  border-color: hsl(var(--color-border));
+  border-color: var(--color-border);
 }
 
 html {
@@ -147,7 +123,7 @@ body {
   background-size: 140% auto;
   background-repeat: no-repeat;
   background-attachment: fixed;
-  color: hsl(var(--color-foreground));
+  color: var(--color-foreground);
   font-feature-settings: "rlig" 1, "calt" 1;
 }
 
@@ -420,6 +396,39 @@ body {
   --sidebar-accent-foreground: oklch(0.985 0 0);
   --sidebar-border: oklch(1 0 0 / 10%);
   --sidebar-ring: oklch(0.556 0 0);}
+
+/* Shared surface utilities for visual consistency across games */
+.surface-panel {
+  background: linear-gradient(325deg, rgba(20, 20, 20, 0.8), rgba(40, 40, 40, 0.6));
+  box-shadow: inset 0 3px 6px rgba(0, 0, 0, 0.8), inset 0 -3px 6px rgba(255, 255, 255, 0.1), 0 1px 3px rgba(0, 0, 0, 0.5);
+  border: 1px inset rgba(60, 60, 60, 0.5);
+}
+
+.surface-panel-sidebar {
+  background: linear-gradient(145deg, rgb(16, 26, 35), rgb(35, 36, 41));
+  box-shadow: inset 0 3px 6px rgba(0, 0, 0, 0.8), inset 0 -3px 6px rgba(255, 255, 255, 0.1), 0 1px 3px rgba(0, 0, 0, 0.5);
+  border: 1px inset rgba(60, 60, 60, 0.5);
+}
+
+.surface-cyan-glow {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background: radial-gradient(circle at 50% 50%, rgba(34, 211, 238, 0.3), transparent 70%);
+}
+
+.surface-modal-shell {
+  @apply fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-4 backdrop-blur-sm;
+}
+
+.surface-modal-card {
+  @apply w-full max-w-lg overflow-hidden rounded-2xl border-2 border-cyan-500/30 bg-gradient-to-br from-slate-900 to-slate-800 shadow-2xl;
+}
+
+.surface-toast-card {
+  @apply w-full max-w-xs rounded-xl border border-cyan-500/30 bg-gradient-to-r from-slate-900/90 to-slate-800/90 p-3 shadow-xl backdrop-blur-sm;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.6), inset 0 1px 0 rgba(255, 255, 255, 0.05);
+}
 
 /* Prosto One Font */
 .font-prosto-one {
@@ -700,7 +709,6 @@ body {
   opacity: 1;
   overflow: hidden;
   white-space: nowrap;
-  transition: max-width 0.2s ease-in-out, opacity 0.2s ease-in-out;
 }
 [data-sidebar-open="false"] .sidebar-label {
   max-width: 0;
@@ -711,6 +719,13 @@ body {
   gap: 0;
 }
 [data-sidebar-open="true"] .sidebar-item {
+  justify-content: flex-start;
+  gap: 0.5rem;
+}
+
+/* Keep icon anchors stable in the main nav while labels collapse/expand */
+.global-main-nav-sidebar[data-sidebar-open="false"] .sidebar-item,
+.global-main-nav-sidebar[data-sidebar-open="true"] .sidebar-item {
   justify-content: flex-start;
   gap: 0.5rem;
 }

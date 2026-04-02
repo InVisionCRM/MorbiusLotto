@@ -143,6 +143,7 @@ export class PokerGameService {
   private postHandCallback: ((tableId: string, handNumber: number) => Promise<void>) | null = null;
   private notifyCallback: ((room: string, type: string, payload: any) => void) | null = null;
   private activeTables: Map<string, Table> = new Map();
+  private nextHandTimers: Map<string, NodeJS.Timeout> = new Map();
   /** Per-table mutex to serialize playerAction / autoFold / leaveTable calls. */
   private tableLocks: Map<string, Promise<void>> = new Map();
 
@@ -213,6 +214,56 @@ export class PokerGameService {
 
   private normalizeAddress(addr: string): string {
     return (addr || '').trim().toLowerCase();
+  }
+
+  /**
+   * DB remains the canonical source of poker hand/seat state.
+   * In-memory table state is an execution cache and can be reconstructed.
+   */
+  private async getOrReconstructActiveTable(
+    tableId: string,
+    pool: Pool,
+    reason: 'player_action' | 'timeout_autofold',
+  ): Promise<Table> {
+    let table = this.activeTables.get(tableId);
+    if (!table) {
+      try {
+        table = await this.reconstructTable(tableId, pool);
+        this.activeTables.set(tableId, table);
+        logger.warn('Poker table cache miss recovered via DB reconstruction', { tableId, reason });
+      } catch (error) {
+        logger.error('Poker table reconstruction failed', { tableId, reason, error });
+        throw error;
+      }
+    }
+    return table;
+  }
+
+  private clearScheduledNextHand(tableId: string): void {
+    const timer = this.nextHandTimers.get(tableId);
+    if (timer) {
+      clearTimeout(timer);
+      this.nextHandTimers.delete(tableId);
+    }
+  }
+
+  /**
+   * Keep showdown delay transition behavior centralized for deterministic restart/reconnect handling.
+   */
+  private scheduleNextHandAfterShowdown(tableId: string): void {
+    if (this.nextHandTimers.has(tableId)) return;
+
+    const timer = setTimeout(async () => {
+      this.nextHandTimers.delete(tableId);
+      try {
+        await this.tryStartNextHand(tableId);
+        await this.broadcastState(tableId);
+      } catch (error) {
+        logger.error('Failed to transition to next poker hand after showdown delay', { tableId, error });
+      }
+    }, SHOWDOWN_DELAY_MS);
+
+    this.nextHandTimers.set(tableId, timer);
   }
 
   private async broadcastState(tableId: string): Promise<void> {
@@ -290,6 +341,7 @@ export class PokerGameService {
       await client.query('DELETE FROM poker_tables WHERE id = $1', [tableId]);
     });
 
+    this.clearScheduledNextHand(tableId);
     this.activeTables.delete(tableId);
     this.invalidateTableScaling(tableId);
     logger.info('Poker admin delete table', { tableId });
@@ -522,10 +574,7 @@ export class PokerGameService {
     if (!table.currentRound && table.winners) {
       await this.persistShowdown(pool, tableId, handId, table);
       await this.broadcastState(tableId);
-      setTimeout(async () => {
-        await this.tryStartNextHand(tableId);
-        await this.broadcastState(tableId);
-      }, SHOWDOWN_DELAY_MS);
+      this.scheduleNextHandAfterShowdown(tableId);
     } else if (!table.currentRound) {
       // No winners yet but round ended — update acting position
       await pool.query(
@@ -1195,17 +1244,26 @@ export class PokerGameService {
 
     const scaling = await this.getTableScaling(tableId);
 
-    // Get or reconstruct live table
-    let table = this.activeTables.get(tableId);
-    if (!table) {
-      table = await this.reconstructTable(tableId, pool);
-      this.activeTables.set(tableId, table);
-    }
+    // In-memory table is recoverable; reconstruct from DB when cache is missing.
+    const table = await this.getOrReconstructActiveTable(tableId, pool, 'player_action');
 
     // Validate it's this player's turn
     const actor = table.currentActor;
     if (!actor) throw new Error('No acting player');
     if (actor.id !== normalized) throw new Error('Not your turn');
+
+    // Pre-validate action against engine's legal actions before executing
+    const legal = actor.legalActions();
+    const requestedAction = action === 'bet' || action === 'raise'
+      ? (legal.includes(action) ? action : (action === 'bet' && legal.includes('raise') ? 'raise' : action))
+      : action;
+    if (!legal.includes(requestedAction) && requestedAction !== 'fold') {
+      logger.warn('Poker illegal action rejected', {
+        tableId, handId, player: normalized, action,
+        legalActions: legal, currentBet: table.currentBet, playerBet: actor.bet,
+      });
+      throw new Error(`Illegal action: "${action}" is not allowed. Legal: ${legal.join(', ')}`);
+    }
 
     // Capture street before action (for DB recording)
     const streetBefore = chevtekStreetToPoker(table.currentRound, !!table.winners);
@@ -1308,10 +1366,7 @@ export class PokerGameService {
       // Persist showdown results
       await this.persistShowdown(pool, tableId, handId, table);
       await this.broadcastState(tableId);
-      setTimeout(async () => {
-        await this.tryStartNextHand(tableId);
-        await this.broadcastState(tableId);
-      }, SHOWDOWN_DELAY_MS);
+      this.scheduleNextHandAfterShowdown(tableId);
     } else {
       // Update community cards, pot, acting position, street
       const communityInts = table.communityCards.map(cardToInt);
@@ -1495,11 +1550,7 @@ export class PokerGameService {
         // Serialize with player actions on the same table
         await this.withTableLock(row.table_id, async () => {
           const scaling = await this.getTableScaling(row.table_id);
-          let table = this.activeTables.get(row.table_id);
-          if (!table) {
-            table = await this.reconstructTable(row.table_id, pool);
-            this.activeTables.set(row.table_id, table);
-          }
+          const table = await this.getOrReconstructActiveTable(row.table_id, pool, 'timeout_autofold');
 
           const actor = table.currentActor;
           if (!actor) return;
@@ -1527,11 +1578,7 @@ export class PokerGameService {
           if (!table.currentRound && table.winners) {
             await this.persistShowdown(pool, row.table_id, row.hand_id, table);
             await this.broadcastState(row.table_id);
-            const tid = row.table_id;
-            setTimeout(async () => {
-              await this.tryStartNextHand(tid);
-              await this.broadcastState(tid);
-            }, SHOWDOWN_DELAY_MS);
+            this.scheduleNextHandAfterShowdown(row.table_id);
           } else {
             const communityInts = table.communityCards.map(cardToInt);
             const potChips = totalPotChips(table);
@@ -1799,18 +1846,28 @@ export class PokerGameService {
 
     // Replay non-blind actions to advance chevtek's state
     const nonBlindActions = actionsResult.rows.filter((r: any) => r.action !== 'blind');
+    const totalActions = nonBlindActions.length;
+    let replayedCount = 0;
+    let replayFailed = false;
+
     for (const actionRow of nonBlindActions) {
       const actor = table.currentActor;
-      if (!actor) break;
+      if (!actor) {
+        logger.warn('Reconstruct: no currentActor mid-replay', {
+          tableId, replayed: replayedCount, total: totalActions,
+          currentRound: table.currentRound, hasWinners: !!table.winners,
+        });
+        break;
+      }
 
       const addr = (actionRow.player_address || '').toLowerCase();
       if (actor.id !== addr) {
-        // State mismatch — stop replay
         logger.warn('Reconstruct: actor mismatch during replay', {
-          tableId,
-          expected: actor.id,
-          got: addr,
+          tableId, expected: actor.id, got: addr,
+          replayed: replayedCount, total: totalActions,
+          currentBet: table.currentBet, actorBet: actor.bet,
         });
+        replayFailed = true;
         break;
       }
 
@@ -1834,9 +1891,55 @@ export class PokerGameService {
             break;
           }
         }
+        replayedCount++;
       } catch (err) {
-        logger.warn('Reconstruct: replay action failed', { tableId, action: actionRow.action, err });
+        logger.warn('Reconstruct: replay action failed', {
+          tableId, action: actionRow.action, player: addr,
+          replayed: replayedCount, total: totalActions,
+          currentBet: table.currentBet, actorBet: actor.bet,
+          legalActions: actor.legalActions(),
+          err,
+        });
+        replayFailed = true;
         break;
+      }
+    }
+
+    // If replay was incomplete, patch engine state from DB so currentBet/bets are correct.
+    // This prevents the engine from allowing illegal checks after a partial replay.
+    if (replayFailed && replayedCount < totalActions) {
+      logger.warn('Reconstruct: patching engine state after partial replay', {
+        tableId, replayed: replayedCount, total: totalActions,
+      });
+
+      // Recompute per-player committed amounts for the current street only
+      const dbStreet = hand.street as string;
+      const streetContribResult = await pool.query(
+        `SELECT player_address, SUM(amount) AS total FROM poker_hand_actions
+         WHERE hand_id = $1 AND street = $2 AND action IN ('bet','raise','call','blind')
+         GROUP BY player_address`,
+        [hand.id, dbStreet]
+      );
+      let maxContrib = 0;
+      for (const row of streetContribResult.rows) {
+        const chips = scaling.tournament
+          ? Number(row.total ?? 0)
+          : weiToEngineChips(BigInt(row.total ?? '0'));
+        if (chips > maxContrib) maxContrib = chips;
+        const p = table.players.find((pl) => pl?.id === (row.player_address || '').toLowerCase());
+        if (p) p.bet = chips;
+      }
+      if (maxContrib > 0) {
+        table.currentBet = maxContrib;
+      }
+
+      // Advance community cards to match DB street
+      const targetCommunity = communityCardInts.map(intToCard);
+      table.communityCards = targetCommunity;
+
+      // Set acting position from DB
+      if (hand.acting_position != null) {
+        (table as any).currentPosition = Number(hand.acting_position);
       }
     }
 
@@ -1848,6 +1951,7 @@ export class PokerGameService {
   // ---------------------------------------------------------------------------
 
   private async tryStartNextHand(tableId: string): Promise<void> {
+    this.clearScheduledNextHand(tableId);
     return this.withTableLock(tableId, async () => {
       const pool = this.getPool();
 
@@ -1989,6 +2093,7 @@ export class PokerGameService {
    */
   async deleteTableTournament(tableId: string): Promise<void> {
     const pool = this.getPool();
+    this.clearScheduledNextHand(tableId);
     this.activeTables.delete(tableId);
     this.invalidateTableScaling(tableId);
     await pool.query('DELETE FROM poker_tables WHERE id = $1', [tableId]);

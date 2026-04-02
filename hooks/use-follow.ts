@@ -25,6 +25,7 @@ export function useFollowCounts(address: string | null) {
     },
     enabled: !!address,
     staleTime: 30_000,
+    refetchOnWindowFocus: false,
   });
 }
 
@@ -41,6 +42,7 @@ export function useIsFollowing(myAddress: string | null, targetAddress: string |
     },
     enabled: !!myAddress && !!targetAddress && myAddress.toLowerCase() !== targetAddress.toLowerCase(),
     staleTime: 60_000,
+    refetchOnWindowFocus: false,
   });
 }
 
@@ -54,6 +56,7 @@ export function useFollowers(address: string | null, limit = 50) {
     },
     enabled: !!address,
     staleTime: 30_000,
+    refetchOnWindowFocus: false,
   });
 }
 
@@ -67,6 +70,7 @@ export function useFollowing(address: string | null, limit = 50) {
     },
     enabled: !!address,
     staleTime: 30_000,
+    refetchOnWindowFocus: false,
   });
 }
 

@@ -2,7 +2,7 @@
 
 import React, { useCallback, useState } from 'react'
 import type { AvatarConfig } from '@/lib/websocket-client'
-import AvatarView, { type Emotion } from '@/components/poker/avatar/AvatarView'
+import { AvatarView, type Emotion } from '@/components/avatar'
 import { MAX_SUPPLY, type ItemTier } from '@/lib/cosmetics-catalog'
 import { cn } from '@/lib/utils'
 import { homeSectionSubtitleClass, homeSectionTitleClass, homeSectionTitleGradientClass } from '@/lib/home-section-typography'

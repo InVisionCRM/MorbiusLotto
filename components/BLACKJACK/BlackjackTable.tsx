@@ -5,8 +5,10 @@ import Image from 'next/image';
 import { Hand, GameState, Action, GameResult, Card } from '@/app/BLACKJACK/types';
 import type { CardValue, Suit } from '@/app/BLACKJACK/types';
 import PlayingCard from './PlayingCard';
+import DealerSection from './DealerSection';
 import BettingPanel from './BettingPanel';
-import { BLACKJACK_IMAGE_BACKGROUNDS, BLACKJACK_VIDEO_BACKGROUNDS, DEFAULT_BLACKJACK_IMAGE_ID, ANIMATION_TIMINGS } from '@/app/BLACKJACK/constants';
+import { useBlackjackRevealCompletion } from '@/hooks/use-blackjack-reveal-completion';
+import { BLACKJACK_IMAGE_BACKGROUNDS, DEFAULT_BLACKJACK_IMAGE_ID, ANIMATION_TIMINGS } from '@/app/BLACKJACK/constants';
 import { BetChip, formatChipLabel } from '@/components/ui/BetChip';
 import { EncryptedText } from '@/components/ui/encrypted-text';
 import { useAccount } from 'wagmi';
@@ -137,13 +139,13 @@ const BlackjackTable: React.FC<BlackjackTableProps> = ({
   onBetAmountChange,
   currentBetAmount = '0',
   lastBetAmount = '0',
-  useVideoBackground = true,
+  useVideoBackground: _useVideoBackground = true,
   imageSource = DEFAULT_BLACKJACK_IMAGE_ID,
-  videoSource = 'glowingTable',
+  videoSource: _videoSource = 'glowingTable',
   imageSrc: imageSrcProp,
-  videoSrc: videoSrcProp,
-  videoSyncToClock = true,
-  videoPosition = 50,
+  videoSrc: _videoSrcProp,
+  videoSyncToClock: _videoSyncToClock = true,
+  videoPosition: _videoPosition = 50,
   onOpenDepositModal,
   onOpenTableThemeSelector,
   soundEnabled = true,
@@ -219,7 +221,6 @@ const BlackjackTable: React.FC<BlackjackTableProps> = ({
   }, [testHandIndex]);
   // ── End admin layout test ───────────────────────────────────────────────────
 
-  const videoSrc = videoSrcProp ?? BLACKJACK_VIDEO_BACKGROUNDS.find((v) => v.id === videoSource)?.src ?? BLACKJACK_VIDEO_BACKGROUNDS[0].src;
   const imageSrc = imageSrcProp ?? BLACKJACK_IMAGE_BACKGROUNDS.find((img) => img.id === imageSource)?.src ?? BLACKJACK_IMAGE_BACKGROUNDS.find((img) => img.id === DEFAULT_BLACKJACK_IMAGE_ID)?.src ?? BLACKJACK_IMAGE_BACKGROUNDS[0].src;
   const isExternalImage = /^https?:\/\//.test(imageSrc);
   // State for progressive dealer card reveal
@@ -265,7 +266,6 @@ const BlackjackTable: React.FC<BlackjackTableProps> = ({
       }
     }
   }
-  const tableVideoRef = useRef<HTMLVideoElement | null>(null);
   const tableContainerRef = useRef<HTMLDivElement>(null);
   const [showBlackjackText, setShowBlackjackText] = useState(false);
   const [blackjackColorIndex, setBlackjackColorIndex] = useState(0);
@@ -479,58 +479,6 @@ const BlackjackTable: React.FC<BlackjackTableProps> = ({
     }
   }, [isDragging, dragStart, widgetPosition, isHorizontal]);
 
-  // Sync video to clock: 24-hour loop for table videos, 10-minute loop for glowingLogo
-  const syncVideoToClock = (video: HTMLVideoElement | null) => {
-    if (!video || !Number.isFinite(video.duration)) return;
-    const now = new Date();
-    const hours = now.getHours();
-    const minutes = now.getMinutes();
-    const seconds = now.getSeconds();
-    const milliseconds = now.getMilliseconds();
-    const totalSeconds = hours * 3600 + minutes * 60 + seconds + milliseconds / 1000;
-
-    let progress: number;
-    if (videoSource === 'glowingLogo') {
-      // 10-minute cycle: full video loop every 10 minutes
-      const tenMinutes = 10 * 60;
-      progress = (totalSeconds % tenMinutes) / tenMinutes;
-    } else {
-      // 24-hour cycle: Noon = 0%, Midnight = 50%, next Noon = 100%
-      let secondsSinceNoon = (hours - 12) * 3600 + minutes * 60 + seconds + milliseconds / 1000;
-      if (secondsSinceNoon < 0) secondsSinceNoon += 86400;
-      progress = secondsSinceNoon / 86400;
-    }
-    video.currentTime = progress * video.duration;
-  };
-
-  // Apply manual video position (when sync to clock is off)
-  const applyManualVideoPosition = (video: HTMLVideoElement | null) => {
-    if (!video || !Number.isFinite(video.duration)) return;
-    const pos = Math.max(0, Math.min(100, videoPosition ?? 50)) / 100;
-    video.currentTime = pos * video.duration;
-  };
-
-  // Re-sync video: when sync to clock, run clock sync (24h or 10min by video); when manual, apply position
-  useEffect(() => {
-    const video = tableVideoRef.current;
-    if (!video) return;
-    if (videoSyncToClock) {
-      syncVideoToClock(video);
-    } else {
-      applyManualVideoPosition(video);
-    }
-  }, [videoSyncToClock, videoPosition, videoSource]);
-
-  // Re-sync video position every 60s when sync to clock is on (10min video still correct; 24h needs periodic sync)
-  useEffect(() => {
-    if (!videoSyncToClock) return;
-    if (tableVideoRef.current) {
-      syncVideoToClock(tableVideoRef.current);
-    }
-    const interval = setInterval(() => syncVideoToClock(tableVideoRef.current), 60_000);
-    return () => clearInterval(interval);
-  }, [videoSyncToClock, videoSource]);
-
   // Handle chip animations when game result changes
   useEffect(() => {
     if (gameResult && gameResult !== prevGameResult.current) {
@@ -604,14 +552,7 @@ const BlackjackTable: React.FC<BlackjackTableProps> = ({
     prevPpResult.current = gameResult ?? undefined;
   }, [gameResult, perfectPairsResult, ppChipStack.length]);
 
-  // Store callback in ref to avoid re-triggering useEffect
-  const onDealerRevealCompleteRef = useRef(onDealerRevealComplete);
-  const hasCalledRevealCompleteRef = useRef(false);
-  // State mirror of hasCalledRevealCompleteRef — triggers re-render so card-clear effect can gate on it
-  const [revealComplete, setRevealComplete] = useState(false);
-  useEffect(() => {
-    onDealerRevealCompleteRef.current = onDealerRevealComplete;
-  }, [onDealerRevealComplete]);
+  const { revealComplete, scheduleRevealComplete, resetRevealComplete } = useBlackjackRevealCompletion(onDealerRevealComplete);
 
   // Manage dealer card visibility based on game state
   // Industry standard: Show only first card during play, reveal all when complete
@@ -623,7 +564,7 @@ const BlackjackTable: React.FC<BlackjackTableProps> = ({
     // Reset "called" flag when leaving COMPLETE so next completion can trigger
     const stateTransitionedAway = prevState === GameState.COMPLETE && gameState !== GameState.COMPLETE;
     if (stateTransitionedAway) {
-      hasCalledRevealCompleteRef.current = false; setRevealComplete(false);
+      resetRevealComplete();
       lastCompletedGameIdRef.current = undefined;
       if (revealTimeoutRef.current) {
         clearTimeout(revealTimeoutRef.current);
@@ -634,7 +575,7 @@ const BlackjackTable: React.FC<BlackjackTableProps> = ({
     // New completed game (e.g. back-to-back blackjack): reset so we run reveal completion for this game
     if (gameState === GameState.COMPLETE && completedGameId && completedGameId !== lastCompletedGameIdRef.current) {
       lastCompletedGameIdRef.current = completedGameId;
-      hasCalledRevealCompleteRef.current = false; setRevealComplete(false);
+      resetRevealComplete();
       if (revealTimeoutRef.current) {
         clearTimeout(revealTimeoutRef.current);
         revealTimeoutRef.current = null;
@@ -653,14 +594,11 @@ const BlackjackTable: React.FC<BlackjackTableProps> = ({
     // Do NOT run this when totalCards < 2 — phased blackjack deal sends 0 then 1 then 2 cards; calling early would
     // freeze the reveal (hole card never shown, cards never clear).
     const noRevealNeeded = gameState === GameState.COMPLETE && totalCards >= 2 && visibleDealerCards >= totalCards;
-    if (noRevealNeeded && !hasCalledRevealCompleteRef.current) {
+    if (noRevealNeeded && !revealComplete) {
       // Delay to ensure dealer hand animation is fully visible before unlocking DEAL/REBET buttons.
       // Tournament: longer delay (2.5s) to avoid race where pressing DEAL too soon causes cards to deal but action buttons not to appear.
       const delayMs = inTournament ? 2500 : 1500;
-      revealTimeoutRef.current = setTimeout(() => {
-        hasCalledRevealCompleteRef.current = true; setRevealComplete(true);
-        onDealerRevealCompleteRef.current?.();
-      }, delayMs);
+      scheduleRevealComplete(delayMs);
     }
     else if (shouldStartReveal) {
       if (revealTimeoutRef.current) {
@@ -688,8 +626,7 @@ const BlackjackTable: React.FC<BlackjackTableProps> = ({
               const postRevealDelayMs = inTournament ? 2500 : 1500;
               revealTimeoutRef.current = setTimeout(() => {
                 setIsRevealing(false);
-                hasCalledRevealCompleteRef.current = true; setRevealComplete(true);
-                onDealerRevealCompleteRef.current?.();
+                scheduleRevealComplete(postRevealDelayMs);
               }, postRevealDelayMs);
             }
           };
@@ -703,10 +640,7 @@ const BlackjackTable: React.FC<BlackjackTableProps> = ({
           setVisibleDealerCards(totalCards);
           setIsRevealing(false);
           const delayMs = inTournament ? 1000 : 500;
-          revealTimeoutRef.current = setTimeout(() => {
-            hasCalledRevealCompleteRef.current = true; setRevealComplete(true);
-            onDealerRevealCompleteRef.current?.();
-          }, delayMs);
+          scheduleRevealComplete(delayMs);
         } else {
           // Player blackjack or other 2-card complete: ensure first card visible, then reveal hole card
           if (visibleDealerCards < 1 && totalCards >= 1) {
@@ -717,8 +651,7 @@ const BlackjackTable: React.FC<BlackjackTableProps> = ({
             setVisibleDealerCards(2);
             revealTimeoutRef.current = setTimeout(() => {
               setIsRevealing(false);
-              hasCalledRevealCompleteRef.current = true; setRevealComplete(true);
-              onDealerRevealCompleteRef.current?.();
+              scheduleRevealComplete(postRevealDelayMs);
             }, postRevealDelayMs);
           }, 1000);
         }
@@ -774,7 +707,17 @@ const BlackjackTable: React.FC<BlackjackTableProps> = ({
       // 1. Component unmounts (React will handle this)
       // 2. State transitions away from COMPLETE (handled above)
     };
-  }, [gameState, dealerHand.cards.length, isRevealing, visibleDealerCards, completedGameId, inTournament]);
+  }, [
+    gameState,
+    dealerHand.cards.length,
+    isRevealing,
+    visibleDealerCards,
+    completedGameId,
+    inTournament,
+    revealComplete,
+    scheduleRevealComplete,
+    resetRevealComplete,
+  ]);
 
   // Track visibleDealerCards changes
   useEffect(() => {
@@ -896,46 +839,15 @@ const BlackjackTable: React.FC<BlackjackTableProps> = ({
     >
       {/* Table surface: flex-1 with min height so table stays a good size */}
       <div className="flex-1 min-h-[380px] sm:min-h-[600px] relative">
-      {/* Looping video background — key forces remount when src changes */}
-      {useVideoBackground ? (
-        <video
-          key={videoSrc}
-          ref={tableVideoRef}
-          autoPlay
-          muted
-          loop
-          playsInline
-          className="absolute inset-0 w-full h-full object-cover object-center pointer-events-none"
-          style={{ zIndex: 0 }}
-          onLoadedMetadata={(e) => {
-            const el = e.currentTarget;
-            if (videoSyncToClock) syncVideoToClock(el);
-            else applyManualVideoPosition(el);
-            el.play().catch(() => {});
-          }}
-          onCanPlay={(e) => {
-            const el = e.currentTarget;
-            if (videoSyncToClock) syncVideoToClock(el);
-            else applyManualVideoPosition(el);
-            el.play().catch(() => {});
-          }}
-          onError={(e) => {
-            console.error('Video failed to load:', e.currentTarget.error);
-          }}
-        >
-          <source src={videoSrc} type="video/mp4" />
-        </video>
-      ) : (
-        <Image
-          src={imageSrc}
-          alt="Table Background"
-          fill
-          className="absolute inset-0 w-full h-full object-cover object-center pointer-events-none"
-          style={{ zIndex: 0 }}
-          priority
-          unoptimized={isExternalImage}
-        />
-      )}
+      <Image
+        src={imageSrc}
+        alt="Table Background"
+        fill
+        className="absolute inset-0 w-full h-full object-cover object-center pointer-events-none"
+        style={{ zIndex: 0 }}
+        priority
+        unoptimized={isExternalImage}
+      />
 
       {/* Subtle dark overlay to keep text readable */}
       <div
@@ -1021,28 +933,21 @@ const BlackjackTable: React.FC<BlackjackTableProps> = ({
               px-4 py-2 sm:px-8 sm:py-4 rounded-xl sm:rounded-2xl backdrop-blur-md
               transform transition-all duration-500 ease-out
               animate-result-banner
-              ${gameResult === 'blackjack' ? 'bg-gradient-to-r from-yellow-500/90 via-amber-400/90 to-yellow-500/90 border-2 border-yellow-300' :
-                gameResult === 'win' ? 'bg-gradient-to-r from-green-600/90 via-emerald-500/90 to-green-600/90 border-2 border-green-400' :
+              ${gameResult === 'win' ? 'bg-gradient-to-r from-green-600/90 via-emerald-500/90 to-green-600/90 border-2 border-green-400' :
                 gameResult === 'loss' ? 'bg-gradient-to-r from-red-600/90 via-red-500/90 to-red-600/90 border-2 border-red-400' :
-                gameResult === 'push' ? 'bg-gradient-to-r from-blue-600/90 via-blue-500/90 to-blue-600/90 border-2 border-blue-400' :
-                'bg-gradient-to-r from-blue-500/90 via-blue-400/90 to-blue-500/90 border-2 border-blue-400'}
+                'bg-gradient-to-r from-blue-600/90 via-blue-500/90 to-blue-600/90 border-2 border-blue-400'}
             `}
             style={{
-              boxShadow: gameResult === 'blackjack'
-                ? '0 0 40px rgba(251, 191, 36, 0.6), 0 0 80px rgba(251, 191, 36, 0.3), inset 0 2px 4px rgba(255,255,255,0.3)'
-                : gameResult === 'win'
+              boxShadow: gameResult === 'win'
                 ? '0 0 40px rgba(34, 197, 94, 0.5), 0 0 80px rgba(34, 197, 94, 0.2), inset 0 2px 4px rgba(255,255,255,0.3)'
                 : gameResult === 'loss'
                 ? '0 0 40px rgba(239, 68, 68, 0.5), 0 0 80px rgba(239, 68, 68, 0.2), inset 0 2px 4px rgba(255,255,255,0.2)'
-                : gameResult === 'push'
-                ? '0 0 30px rgba(4, 92, 170, 0.4), inset 0 2px 4px rgba(32, 32, 157, 0.2).2)'
                 : '0 0 30px rgba(4, 92, 170, 0.4), inset 0 2px 4px rgba(32, 32, 157, 0.2).2)',
             }}
           >
             <div className="flex flex-col items-center gap-0.5 sm:gap-1">
               {/* Result Icon */}
               <div className="text-2xl sm:text-4xl mb-0.5 sm:mb-1">
-                {gameResult === 'blackjack' && '🃏✨'}
                 {gameResult === 'win' && '🎉'}
                 {gameResult === 'loss' && '😔'}
                 {gameResult === 'push' && '🤝'}
@@ -1051,37 +956,27 @@ const BlackjackTable: React.FC<BlackjackTableProps> = ({
               {/* Result Text */}
               <h2
                 className={`text-2xl sm:text-4xl font-black uppercase tracking-wider
-                  ${gameResult === 'blackjack' ? 'text-yellow-900' :
-                    gameResult === 'win' ? 'text-white' :
+                  ${gameResult === 'win' ? 'text-white' :
                     gameResult === 'loss' ? 'text-white' :
-                    gameResult === 'push' ? 'text-blue-800' :
                     'text-blue-800'}
                 `}
                 style={{
-                  textShadow: gameResult === 'blackjack'
-                    ? '2px 2px 0 rgba(255,255,255,0.5)'
-                    : '2px 2px 4px rgba(0,0,0,0.3)',
+                  textShadow: '2px 2px 4px rgba(0,0,0,0.3)',
                 }}
               >
-                {gameResult === 'blackjack' ? 'BLACKJACK!' :
-                 gameResult === 'win' ? 'YOU WIN!' :
+                {gameResult === 'win' ? 'YOU WIN!' :
                  gameResult === 'loss' ? 'DEALER WINS' :
-                 gameResult === 'push' ? 'PUSH' :
                  'PUSH'}
               </h2>
 
               {/* Subtitle */}
               <p className={`text-sm font-medium mt-1 opacity-80
-                ${gameResult === 'blackjack' ? 'text-yellow-800' :
-                  gameResult === 'win' ? 'text-green-500' :
+                ${gameResult === 'win' ? 'text-green-500' :
                   gameResult === 'loss' ? 'text-red-500' :
-                  gameResult === 'push' ? 'text-blue-600' :
                   'text-blue-600'}
               `}>
-                {gameResult === 'blackjack' ? 'Natural 21 - 3:2 Payout!' :
-                 gameResult === 'win' ? 'Congratulations!' :
+                {gameResult === 'win' ? 'Congratulations!' :
                  gameResult === 'loss' ? 'Better luck next time' :
-                 gameResult === 'push' ? 'Bet returned' :
                  'Bet returned'}
               </p>
             </div>
@@ -1175,44 +1070,19 @@ const BlackjackTable: React.FC<BlackjackTableProps> = ({
             const dealerIsWinner = gameCompleteAndRevealed && gameResult === 'loss';
             return (
               <div className="flex flex-col items-center justify-center" style={{ transform: 'translateY(-30px)' }}>
-                <div className="flex gap-1 sm:gap-0">
-                  {dealerHand.cards.map((card, index) => {
-                    if (index >= visibleDealerCards) return null;
-                    const isHoleCard = hideHoleCard && index === 1;
-                    return (
-                      <div
-                        key={`dealer-card-${index}`}
-                        className={index > 0 ? 'card-overlap-dealer' : ''}
-                        style={{ zIndex: index }}
-                      >
-                        <PlayingCard
-                          card={card}
-                          owner="dealer"
-                          hidden={isHoleCard}
-                          className=""
-                          index={index}
-                          isNewCard={index >= 2 && index === visibleDealerCards - 1}
-                          exiting={cardsExiting}
-                          exitDelay={0}
-                          size="normal"
-                        />
-                      </div>
-                    );
-                  })}
-                </div>
-                {visibleDealerCards > 0 && (
-                  <div className={`flex items-center gap-2 transition-transform duration-300 ${dealerIsWinner ? 'card-counter-winner' : ''}`} style={{ marginTop: -14, zIndex: 10 }}>
-                    <div className={`glass-counter relative w-24 h-24 flex items-center justify-center rounded-full transition-all duration-300 ${
-                      gameState === GameState.DEALER_TURN ? 'card-counter-active' : ''
-                    }`}>
-                      <span className={`font-black relative z-10 transition-all duration-500 ${dealerIsWinner ? 'text-emerald-400 text-7xl' : 'text-white/90 text-6xl'}`}>
-                        {dealerHand.isBlackjack ? dealerHand.total : (isRevealing ? getVisibleDealerTotal() : (gameState === GameState.COMPLETE ? dealerHand.total : getVisibleDealerTotal()))}
-                      </span>
-                    </div>
-                    {gameState === GameState.COMPLETE && !isRevealing && visibleDealerCards >= dealerHand.cards.length && dealerHand.isBust && <span className="text-red-400 font-black text-base sm:text-lg">BUST</span>}
-                    {gameState === GameState.COMPLETE && !isRevealing && visibleDealerCards >= dealerHand.cards.length && dealerHand.isBlackjack && <span className="text-yellow-400 font-black text-base sm:text-lg">BJ</span>}
-                  </div>
-                )}
+                <DealerSection
+                  cards={dealerHand.cards}
+                  visibleCards={visibleDealerCards}
+                  hideHoleCard={hideHoleCard}
+                  cardsExiting={cardsExiting}
+                  cardSize="normal"
+                  counterValue={dealerHand.isBlackjack ? dealerHand.total : (isRevealing ? getVisibleDealerTotal() : (gameState === GameState.COMPLETE ? dealerHand.total : getVisibleDealerTotal()))}
+                  isBust={gameState === GameState.COMPLETE && !isRevealing && visibleDealerCards >= dealerHand.cards.length && dealerHand.isBust}
+                  isBlackjack={gameState === GameState.COMPLETE && !isRevealing && visibleDealerCards >= dealerHand.cards.length && dealerHand.isBlackjack}
+                  counterActive={gameState === GameState.DEALER_TURN}
+                  winnerHighlight={dealerIsWinner}
+                  badgeSize="large"
+                />
               </div>
             );
           })()}

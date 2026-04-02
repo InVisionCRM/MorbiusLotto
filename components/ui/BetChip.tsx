@@ -72,7 +72,7 @@ export function BetChip({
         ...style,
       }}
     >
-      {/* eslint-disable-next-line @next/next/no-img-element */}
+      { }
       <img
         src={src}
         alt=""
@@ -92,8 +92,8 @@ export function BetChip({
           alignItems: 'center',
           justifyContent: 'center',
           color: '#ffffff',
-          fontSize: '20cqmin',
-          fontWeight: 800,
+          fontSize: '24cqmin',
+          fontWeight: 900,
           fontVariantNumeric: 'tabular-nums',
           lineHeight: 1,
           textShadow: '0 1px 3px rgba(0,0,0,0.9), 0 0 6px rgba(0,0,0,0.7)',

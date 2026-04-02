@@ -10,7 +10,6 @@ import {
   PLINKO_GET_GLOBAL_STATS_ABI,
   KENO_GET_GLOBAL_STATS_ABI,
   KENO_GET_CONTRACT_RESERVE_ABI,
-  LOTTERY_STATS_ABI,
   INSTANT_LOTTERY_STATS_ABI,
   BIGWHEEL_GET_GLOBAL_STATS_ABI,
   BLACKJACK_STATS_ABI,
@@ -28,6 +27,9 @@ const PLINKO_BALL_DROPPED_EVENT = parseAbiItem(
 const CHUNK_SIZE = 50000;
 const PLINKO_SCAN_START_BLOCK = BigInt(process.env.PLINKO_SCAN_START_BLOCK || '0');
 const PLINKO_MAX_SCAN_CHUNKS = Number(process.env.PLINKO_MAX_SCAN_CHUNKS || 400);
+const BLOCK_TIMESTAMP_CACHE_TTL_MS = 5 * 60 * 1000;
+const BLOCK_TIMESTAMP_CACHE_MAX_SIZE = 5000;
+const LATEST_BLOCK_CACHE_TTL_MS = 2_000;
 
 const PLINKO_RISK_NAMES: Record<number, 'GREEN' | 'YELLOW' | 'RED'> = {
   0: 'GREEN',
@@ -111,12 +113,75 @@ export interface BigWheelChainStats {
 }
 
 export class ChainAnalyticsService {
+  private readonly blockTimestampCache = new Map<string, { timestamp: number; cachedAt: number }>();
+  private readonly inFlightBlockTimestampReads = new Map<string, Promise<number>>();
+  private latestBlockCache: { blockNumber: bigint; cachedAt: number } | null = null;
+  private inFlightLatestBlockRead: Promise<bigint> | null = null;
+
   constructor(private readonly dbService: DatabaseService) {}
+
+  private async getCachedBlockTimestamp(
+    client: ReturnType<typeof getPublicClient>,
+    blockNumber: bigint,
+  ): Promise<number> {
+    const key = blockNumber.toString();
+    const now = Date.now();
+    const cached = this.blockTimestampCache.get(key);
+    if (cached && now - cached.cachedAt <= BLOCK_TIMESTAMP_CACHE_TTL_MS) {
+      return cached.timestamp;
+    }
+
+    const pending = this.inFlightBlockTimestampReads.get(key);
+    if (pending) return pending;
+
+    const readPromise = (async () => {
+      const block = await client.getBlock({ blockNumber });
+      const timestamp = Number(block.timestamp);
+      this.blockTimestampCache.set(key, { timestamp, cachedAt: now });
+
+      if (this.blockTimestampCache.size > BLOCK_TIMESTAMP_CACHE_MAX_SIZE) {
+        const oldestKey = this.blockTimestampCache.keys().next().value as string | undefined;
+        if (oldestKey) this.blockTimestampCache.delete(oldestKey);
+      }
+      return timestamp;
+    })();
+
+    this.inFlightBlockTimestampReads.set(key, readPromise);
+    try {
+      return await readPromise;
+    } finally {
+      this.inFlightBlockTimestampReads.delete(key);
+    }
+  }
+
+  private async getCachedLatestBlockNumber(client: ReturnType<typeof getPublicClient>): Promise<bigint> {
+    const now = Date.now();
+    const cached = this.latestBlockCache;
+    if (cached && now - cached.cachedAt <= LATEST_BLOCK_CACHE_TTL_MS) {
+      return cached.blockNumber;
+    }
+
+    if (this.inFlightLatestBlockRead) {
+      return this.inFlightLatestBlockRead;
+    }
+
+    const readPromise = (async () => {
+      const blockNumber = await client.getBlockNumber();
+      this.latestBlockCache = { blockNumber, cachedAt: Date.now() };
+      return blockNumber;
+    })();
+    this.inFlightLatestBlockRead = readPromise;
+    try {
+      return await readPromise;
+    } finally {
+      this.inFlightLatestBlockRead = null;
+    }
+  }
 
   async getPlinkoPlayerDrops(playerAddress: string, limit: number = 100, offset: number = 0): Promise<PlinkoPlayerDropChain[]> {
     const normalized = playerAddress.toLowerCase() as `0x${string}`;
     const client = getPublicClient();
-    const toBlock = await client.getBlockNumber();
+    const toBlock = await this.getCachedLatestBlockNumber(client);
 
     const targetCount = Math.max(0, limit) + Math.max(0, offset);
     const logs: Array<{
@@ -163,8 +228,8 @@ export class ChainAnalyticsService {
     const uniqueBlocks = [...new Set(sliced.map((l) => String(l.blockNumber)))];
     const blockEntries = await Promise.all(
       uniqueBlocks.map(async (bn) => {
-        const block = await client.getBlock({ blockNumber: BigInt(bn) });
-        return [bn, Number(block.timestamp)] as const;
+        const timestamp = await this.getCachedBlockTimestamp(client, BigInt(bn));
+        return [bn, timestamp] as const;
       })
     );
     const blockToTs = Object.fromEntries(blockEntries);
@@ -313,34 +378,19 @@ export class ChainAnalyticsService {
 
   async getLotteryStats(): Promise<LotteryChainStats | null> {
     const client = getPublicClient();
-    const useInstant = LOTTERY_INSTANT_ADDRESS && LOTTERY_INSTANT_ADDRESS !== '0x0000000000000000000000000000000000000000';
-    if (useInstant) {
-      try {
-        const [totalPlays, totalWagered, totalPayouts] = await Promise.all([
-          client.readContract({ address: LOTTERY_INSTANT_ADDRESS, abi: INSTANT_LOTTERY_STATS_ABI, functionName: 'totalPlays' }) as Promise<bigint>,
-          client.readContract({ address: LOTTERY_INSTANT_ADDRESS, abi: INSTANT_LOTTERY_STATS_ABI, functionName: 'totalWagered' }) as Promise<bigint>,
-          client.readContract({ address: LOTTERY_INSTANT_ADDRESS, abi: INSTANT_LOTTERY_STATS_ABI, functionName: 'totalPayouts' }) as Promise<bigint>,
-        ]);
-        return { totalTicketsEver: totalPlays, totalCollected: totalWagered, totalClaimed: totalPayouts };
-      } catch (err) {
-        console.error('ChainAnalyticsService getLotteryStats (instant):', err);
-        return null;
-      }
+    const isConfigured = LOTTERY_INSTANT_ADDRESS && LOTTERY_INSTANT_ADDRESS !== '0x0000000000000000000000000000000000000000';
+    if (!isConfigured) return null;
+    try {
+      const [totalPlays, totalWagered, totalPayouts] = await Promise.all([
+        client.readContract({ address: LOTTERY_INSTANT_ADDRESS, abi: INSTANT_LOTTERY_STATS_ABI, functionName: 'totalPlays' }) as Promise<bigint>,
+        client.readContract({ address: LOTTERY_INSTANT_ADDRESS, abi: INSTANT_LOTTERY_STATS_ABI, functionName: 'totalWagered' }) as Promise<bigint>,
+        client.readContract({ address: LOTTERY_INSTANT_ADDRESS, abi: INSTANT_LOTTERY_STATS_ABI, functionName: 'totalPayouts' }) as Promise<bigint>,
+      ]);
+      return { totalTicketsEver: totalPlays, totalCollected: totalWagered, totalClaimed: totalPayouts };
+    } catch (err) {
+      console.error('ChainAnalyticsService getLotteryStats (instant):', err);
+      return null;
     }
-    const read = async (fn: 'totalTicketsEver' | 'totalMORBIUSEverCollected' | 'totalMORBIUSEverClaimed'): Promise<bigint> => {
-      try {
-        const result = await client.readContract({ address: LOTTERY_INSTANT_ADDRESS, abi: LOTTERY_STATS_ABI, functionName: fn });
-        return result as bigint;
-      } catch {
-        return 0n;
-      }
-    };
-    const [totalTicketsEver, totalCollected, totalClaimed] = await Promise.all([
-      read('totalTicketsEver'),
-      read('totalMORBIUSEverCollected'),
-      read('totalMORBIUSEverClaimed'),
-    ]);
-    return { totalTicketsEver, totalCollected, totalClaimed };
   }
 
   async getBigWheelStats(): Promise<BigWheelChainStats | null> {
@@ -393,7 +443,7 @@ export class ChainAnalyticsService {
     const runFullScan = async (): Promise<{ totalDeposited: bigint; totalWithdrawn: bigint; toBlock: bigint }> => {
       let totalDeposited = 0n;
       let totalWithdrawn = 0n;
-      const toBlock = await client.getBlockNumber();
+      const toBlock = await this.getCachedLatestBlockNumber(client);
       let fromBlock = 0n;
       while (fromBlock <= toBlock) {
         const end = fromBlock + BigInt(CHUNK_SIZE) > toBlock ? toBlock : fromBlock + BigInt(CHUNK_SIZE);
@@ -432,7 +482,7 @@ export class ChainAnalyticsService {
         return { totalDeposited, totalWithdrawn };
       }
 
-      const toBlock = await client.getBlockNumber();
+      const toBlock = await this.getCachedLatestBlockNumber(client);
       if (toBlock <= stored.lastScannedBlock) {
         return { totalDeposited: stored.totalDeposited, totalWithdrawn: stored.totalWithdrawn };
       }
@@ -482,7 +532,7 @@ export class ChainAnalyticsService {
     }
     const client = getPublicClient();
     const stored = await this.dbService.getInstantLotteryScanState();
-    const toBlock = await client.getBlockNumber();
+    const toBlock = await this.getCachedLatestBlockNumber(client);
     let fromBlock: bigint;
     if (!stored || stored.lastScannedBlock == null) {
       fromBlock = toBlock > BigInt(CHUNK_SIZE) ? toBlock - BigInt(CHUNK_SIZE) : 0n;

@@ -4,13 +4,16 @@ Commands are from the **repo root** unless noted. Set required env in `contracts
 
 ---
 
-## Lottery (6-of-55)
+## Lottery (Instant 6-of-55)
 
 | Script | Command | Notes |
 |--------|---------|--------|
-| Deploy lottery V2 | `cd contracts && npx hardhat run scripts/lottery/deploy/deploy-6of55-v2.js --network pulsechain` | Set KEEPER_WALLET etc. in .env |
-| Keeper (buy tickets / finalize rounds) | `cd contracts && node scripts/lottery/other/lottery-keeper.js` | PRIVATE_KEY, LOTTERY_INSTANT_ADDRESS; runs every ~5 min |
-| Legacy deploy (old) | `cd contracts && npx hardhat run scripts/legacy/deploy-6of55.js --network pulsechain` | Legacy script |
+| Deploy instant lottery | `cd contracts && npx hardhat run scripts/lottery/deploy/deploy-instant-lottery.js --network pulsechain` | Uses LOTTERY_INSTANT_* env values |
+| Verify instant lottery | `cd contracts && npx hardhat run scripts/lottery/verify/verify-instant-lottery.js --network pulsechain` | Verifies deployed contract |
+| Fund instant lottery | `cd contracts && npx hardhat run scripts/lottery/fund/fund-instant-lottery.js --network pulsechain` | Tops up reserve bankroll |
+| Set operator | `cd contracts && npx hardhat run scripts/lottery/set-operator-instant-lottery.js --network pulsechain` | Owner/admin only |
+| Approve treasury | `cd contracts && npx hardhat run scripts/lottery/configure/approve-instant-lottery-treasury.js --network pulsechain` | Treasury allowance setup |
+| Emergency withdraw | `cd contracts && npx hardhat run scripts/lottery/withdraw/emergency-withdraw-instant-lottery.js --network pulsechain` | Emergency admin action |
 
 ---
 
@@ -24,15 +27,6 @@ Commands are from the **repo root** unless noted. Set required env in `contracts
 | Start first round | `cd contracts && node scripts/lottery/other/start-first-round.js` | New deployment; set KENO_ADDRESS in script or env |
 | Start next round | `cd contracts && node scripts/lottery/other/start-next-round.js` | |
 | Check Keno contract | `cd contracts && node scripts/keno/check/check-keno-contract.js` | |
-| Check round | `cd contracts && node scripts/lottery/check/check-round.js` | |
-| Check round state | `cd contracts && node scripts/lottery/check/check-round-state.js` | |
-| Check round details | `cd contracts && node scripts/lottery/check/check-round-details.js` | |
-| Check latest | `cd contracts && node scripts/lottery/check/check-latest.js` | |
-| Check burn pending | `cd contracts && node scripts/lottery/check/check-burn-pending.js` | |
-| Check correct contract | `cd contracts && node scripts/lottery/check/check-correct-contract.js` | |
-| Check full accounting | `cd contracts && node scripts/lottery/check/check-full-accounting.js` | |
-| Check historical totals | `cd contracts && node scripts/lottery/check/check-historical-totals.js` | |
-| Check new contract | `cd contracts && node scripts/lottery/check/check-new-contract.js` | |
 
 ---
 
@@ -169,14 +163,8 @@ After redeploying MerkleClaim or MerkleClaimLP: update **lib/contracts.ts** and 
 | Script | Command | Notes |
 |--------|---------|--------|
 | Check events (Plinko) | `cd contracts && npx hardhat run scripts/lottery/check/check-events.js --network pulsechain` | BallDropped topic hash / Plinko address in script |
-| Check transaction | `cd contracts && node scripts/lottery/check/check-transaction.js` | |
 | Check tx buckets | `cd contracts && node scripts/plinko/test/check-tx-buckets.cjs` | |
 | Check tx events | `cd contracts && node scripts/lottery/check/check-tx-events.cjs` | |
-| Check wallets | `cd contracts && node scripts/utils/check/check-wallets.js` | |
-| Diagnose stuck funds | `cd contracts && node scripts/utils/debug/diagnose-stuck-funds.js` | |
-| Final diagnosis | `cd contracts && node scripts/utils/debug/final-diagnosis.js` | |
-| Trace stuck funds | `cd contracts && node scripts/utils/debug/trace-stuck-funds.js` | |
-| Systematic analysis | `cd contracts && node scripts/utils/debug/systematic-analysis.js` | |
 | Test network | `cd contracts && npx hardhat run scripts/utils/test/test-network.js --network pulsechain` | |
 | Cancel stuck txs | `cd contracts && npx hardhat run scripts/utils/debug/cancel-stuck-txs.js --network pulsechain` | |
 
@@ -198,4 +186,3 @@ After redeploying MerkleClaim or MerkleClaimLP: update **lib/contracts.ts** and 
 - **Hardhat scripts**: Run from `contracts/` with `npx hardhat run scripts/<path>.js --network pulsechain`.
 - **Node-only scripts**: Run from `contracts/` with `node scripts/<path>.js` or `node scripts/<path>.cjs`.
 - **Env**: Most scripts read `contracts/.env` (Hardhat loads it when run from `contracts/`). Root scripts may use root `.env`.
-- **Legacy**: `contracts/scripts/legacy/` contains older deploy scripts (e.g. deploy-6of55.js).

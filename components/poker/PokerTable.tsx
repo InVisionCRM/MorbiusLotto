@@ -12,7 +12,7 @@ import { PokerTournamentHUD } from './tournament/PokerTournamentHUD';
 import type { PokerTournamentState } from '@/hooks/use-poker-tournament';
 import { BackgroundBeams, type BeamColorPalette } from '@/components/ui/background-beams';
 import { usePokerTableEffect } from '@/hooks/use-poker-table-effect';
-import { EncryptedText } from '@/components/ui/encrypted-text';
+import { PokerWinnerNotificationCard } from './PokerWinnerNotificationCard';
 
 const BEAM_PALETTES: BeamColorPalette[] = [
   { primary: '#18CCFC', accent: '#6344F5', tail: '#AE48FF' }, // cyan → purple → magenta
@@ -35,10 +35,15 @@ function formatChips(wei: string | number): string {
   }
 }
 
-const POT_ANCHOR = { fx: 0.50, fy: 0.47 };
-const ADJACENT_SEAT_VERTICAL_NUDGE_PX = 50;
-const RIGHT_ADJACENT_SEAT_HORIZONTAL_NUDGE_PX = 25;
-const LEFT_ADJACENT_SEAT_HORIZONTAL_NUDGE_PX = -25;
+const POT_ANCHOR = { fx: 0.50, fy: 0.51 };
+const ADJACENT_SEAT_VERTICAL_NUDGE_PX = 100;
+const SECOND_ADJACENT_SEAT_VERTICAL_NUDGE_PX = 100;
+const HERO_SEAT_VERTICAL_NUDGE_PX = 40;
+const TOP_ADJACENT_SEAT_HORIZONTAL_NUDGE_PX = 60;
+const TOP_ADJACENT_SEAT_VERTICAL_NUDGE_PX = -50;
+const TOP_CENTER_SEAT_VERTICAL_NUDGE_PX = -15;
+const RIGHT_ADJACENT_SEAT_HORIZONTAL_NUDGE_PX = -50;
+const LEFT_ADJACENT_SEAT_HORIZONTAL_NUDGE_PX = 50;
 
 // Compute evenly-spaced seat positions around the table oval for any seat count.
 // Seat 0 is always bottom-center (current player); action then moves to the left,
@@ -75,11 +80,11 @@ export interface PokerTableProps {
   /** Per-seat QuickChat phrase to show above seat; key = seat index. */
   reactionBySeatIndex?: Record<number, string>;
   /** Per-seat avatar emotion broadcast to table (so all players see the same animation). */
-  broadcastEmotionBySeatIndex?: Record<number, import('@/components/poker/avatar/AvatarView').Emotion>;
+  broadcastEmotionBySeatIndex?: Record<number, import('@/components/avatar').Emotion>;
   /** Called when current player selects a QuickChat phrase (broadcast to table). */
   onPhraseReaction?: (phrase: string) => void;
   /** Called when current player selects an avatar emotion (broadcast to table). */
-  onAnimationReaction?: (emotion: import('@/components/poker/avatar/AvatarView').Emotion) => void;
+  onAnimationReaction?: (emotion: import('@/components/avatar').Emotion) => void;
   /** Called when any player clicks an opponent's avatar. */
   onOpponentClick?: (address: string) => void;
   /** Right-click radial on opponent (profile / follow / gift). */
@@ -96,7 +101,7 @@ export interface PokerTableProps {
   onOpenEditQuickChat?: () => void;
   /** Open Activity drawer on mobile (narrow viewport); parent bumps `PokerActivityFeed` serial. */
   onRequestMobileActivity?: () => void;
-  /** Add `data-tutorial-target` on table, board, seats (for `/poker/demo` tutorial). */
+  /** Add `data-tutorial-target` on table, board, seats (for poker tutorial overlay). */
   tutorialTargets?: boolean;
   /** Wrap pot for tutorial spotlight (forwarded to `PokerBoard`). */
   dataTutorialTargetPot?: boolean;
@@ -104,18 +109,9 @@ export interface PokerTableProps {
 
 export function PokerTable({ state, currentPlayerAddress, timeLeft, chatBubbleBySeatIndex, onReUpClick, onMenuClick, reactionBySeatIndex, broadcastEmotionBySeatIndex, onPhraseReaction, onAnimationReaction, onOpponentClick, onOpponentRadialAction, tournamentHUD, quickChatPhrases, setQuickChatPhrases, onOpenEditQuickChat, onLeave, onRequestMobileActivity, tutorialTargets, dataTutorialTargetPot }: PokerTableProps) {
   const tableRef = useRef<HTMLDivElement>(null);
-  const [, setDims] = useState({ w: 640, h: 500 });
-  /** Below Tailwind `md` — hide heavy seat avatars to reduce crowding on phones. */
-  const [hideSeatAvatars, setHideSeatAvatars] = useState(false);
+  const [dims, setDims] = useState({ w: 640, h: 500 });
+  const hideSeatAvatars = false;
   const { effect: tableEffect, feltGradient, railStyle } = usePokerTableEffect();
-
-  useEffect(() => {
-    const mq = window.matchMedia('(max-width: 767px)');
-    const sync = () => setHideSeatAvatars(mq.matches);
-    sync();
-    mq.addEventListener('change', sync);
-    return () => mq.removeEventListener('change', sync);
-  }, []);
 
   useEffect(() => {
     const el = tableRef.current;
@@ -128,6 +124,12 @@ export function PokerTable({ state, currentPlayerAddress, timeLeft, chatBubbleBy
   }, []);
 
   const hand = state.currentHand;
+  const [stickySeatActions, setStickySeatActions] = useState<Record<number, { action: string; amount: string }>>({});
+  const stickyActionKeyRef = useRef<string | null>(null);
+  const lastKnownCardVisualRef = useRef<Record<number, { holeCards?: number[]; showBacks: boolean }>>({});
+  const previousFoldedBySeatRef = useRef<Record<number, boolean>>({});
+  const [foldFlyouts, setFoldFlyouts] = useState<Array<{ id: string; from: { fx: number; fy: number }; holeCards?: number[]; showBacks: boolean }>>([]);
+  const foldFlyoutTimeoutsRef = useRef<Array<ReturnType<typeof setTimeout>>>([]);
 
   // ── Beam color cycling: cross-fade two layers every 5 hands over 15s ─
   // Two permanent beam layers (A/B). `activeBeamLayer` toggles which is
@@ -157,7 +159,9 @@ export function PokerTable({ state, currentPlayerAddress, timeLeft, chatBubbleBy
   }, [hand?.handId]);
 
   const mySeatIndex = state.seats.findIndex(s => s.playerAddress === currentPlayerAddress);
+  const seatNudgeScale = Math.max(0.62, Math.min(1, dims.w / 1200));
   const seatAnchors = computeSeatAnchors(state.seats.length, hideSeatAvatars);
+  const toDisplaySlot = (seatIdx: number) => (mySeatIndex >= 0 ? (seatIdx - mySeatIndex + state.seats.length) % state.seats.length : seatIdx);
   const actingPosition = hand?.actingPosition ?? null;
   const isShowdownWithWinners = hand?.street === 'showdown' && hand?.winners?.length;
   const winnerSeatIndices = isShowdownWithWinners
@@ -171,29 +175,103 @@ export function PokerTable({ state, currentPlayerAddress, timeLeft, chatBubbleBy
   const firstWinnerAddr = firstWinner?.address ?? null;
   const isCurrentPlayerWinner = firstWinnerAddr && currentPlayerAddress && firstWinnerAddr === currentPlayerAddress.toLowerCase();
   const firstWinnerSeat = firstWinnerAddr ? state.seats.find((s) => s.playerAddress === firstWinnerAddr) : null;
-  const winnerStack = firstWinnerSeat?.stack ?? '0';
   const winnerAmount = firstWinner?.amount ?? hand?.pot ?? '0';
   const winnerHandName = firstWinner?.handName;
   const winningCardIndices = firstWinner?.winningCardIndices ?? [];
+  const firstWinnerAddrLower = firstWinnerAddr?.toLowerCase() ?? null;
+  const winnerHoleCards = firstWinnerAddrLower ? hand?.showdownHands?.[firstWinnerAddrLower] ?? [] : [];
+  const splitWinner = isShowdownWithWinners
+    ? hand!.winners!.find((w) => w.address.toLowerCase() !== firstWinnerAddrLower)
+    : undefined;
+  const splitSeat = splitWinner ? state.seats.find((s) => s.playerAddress === splitWinner.address) : null;
+  const winnerAddressSet = new Set((isShowdownWithWinners ? hand!.winners! : []).map((w) => w.address.toLowerCase()));
   // Showdown chip destination: land above winner cards (not avatar center).
   const winnerChipYOffsetPx = hideSeatAvatars ? 62 : 86;
+
+  useEffect(() => {
+    setStickySeatActions(hand?.streetActions ? { ...hand.streetActions } : {});
+    stickyActionKeyRef.current = null;
+    setFoldFlyouts([]);
+    previousFoldedBySeatRef.current = {};
+    lastKnownCardVisualRef.current = {};
+    for (const t of foldFlyoutTimeoutsRef.current) clearTimeout(t);
+    foldFlyoutTimeoutsRef.current = [];
+  }, [hand?.handId]);
+
+  useEffect(() => {
+    const lastAction = hand?.lastAction;
+    if (!hand || !lastAction || lastAction.action === 'blind') return;
+    const key = `${hand.handId}:${hand.street}:${lastAction.position}:${lastAction.action}:${lastAction.amount}`;
+    if (key === stickyActionKeyRef.current) return;
+    stickyActionKeyRef.current = key;
+    setStickySeatActions((prev) => ({
+      ...prev,
+      [lastAction.position]: { action: lastAction.action, amount: lastAction.amount },
+    }));
+  }, [hand?.handId, hand?.street, hand?.lastAction]);
+
+  useEffect(() => {
+    for (let idx = 0; idx < state.seats.length; idx += 1) {
+      const seat = state.seats[idx];
+      if (!seat.playerAddress || !hand) continue;
+      const showdownCards = hand.showdownHands?.[seat.playerAddress];
+      const possibleHoleCards =
+        mySeatIndex === idx
+          ? (state.myHoleCards ?? showdownCards ?? undefined)
+          : (showdownCards ?? undefined);
+      const showBacks = !!(idx !== mySeatIndex && !showdownCards);
+      if ((possibleHoleCards && possibleHoleCards.length > 0) || showBacks) {
+        lastKnownCardVisualRef.current[idx] = { holeCards: possibleHoleCards, showBacks };
+      }
+    }
+  }, [state.seats, state.myHoleCards, hand, mySeatIndex]);
+
+  useEffect(() => {
+    if (!hand) return;
+    const nextFolded: Record<number, boolean> = {};
+    state.seats.forEach((seat, idx) => {
+      const nowFolded = !!seat.playerAddress && !!seat.folded;
+      const wasFolded = previousFoldedBySeatRef.current[idx] ?? nowFolded;
+      if (nowFolded && !wasFolded) {
+        const anchor = seatAnchors[toDisplaySlot(idx)];
+        const visual = lastKnownCardVisualRef.current[idx] ?? { showBacks: true };
+        if (anchor) {
+          const id = `${hand.handId}-fold-${idx}-${Date.now()}`;
+          setFoldFlyouts((prev) => [...prev, { id, from: anchor, holeCards: visual.holeCards, showBacks: visual.showBacks }]);
+          const timeout = setTimeout(() => {
+            setFoldFlyouts((prev) => prev.filter((item) => item.id !== id));
+          }, 700);
+          foldFlyoutTimeoutsRef.current.push(timeout);
+        }
+      }
+      nextFolded[idx] = nowFolded;
+    });
+    previousFoldedBySeatRef.current = nextFolded;
+  }, [state.seats, hand, seatAnchors, mySeatIndex]);
+
+  useEffect(() => () => {
+    for (const t of foldFlyoutTimeoutsRef.current) clearTimeout(t);
+  }, []);
 
   const seatProps = (idx: number) => {
     const seat = state.seats[idx];
     const inHand = !!hand && seat.playerAddress && !seat.folded;
     const isWinnerSeat = !!firstWinnerAddr && seat.playerAddress === firstWinnerAddr;
-    const seatStreetAction = hand?.streetActions?.[idx] ?? null;
+    const isHandWinnerSeat = !!seat.playerAddress && isShowdownWithWinners && winnerAddressSet.has(seat.playerAddress.toLowerCase());
     return {
       seat,
       index: idx,
       holeCards:
-        mySeatIndex === idx
+        seat.folded
+          ? undefined
+          : mySeatIndex === idx
           ? (state.myHoleCards ?? hand?.showdownHands?.[seat.playerAddress!] ?? undefined)
           : (hand?.showdownHands?.[seat.playerAddress!] ?? undefined),
       isCurrentPlayer: idx === mySeatIndex,
       showCardBacks: !!(inHand && idx !== mySeatIndex && !hand?.showdownHands?.[seat.playerAddress!]),
       winningCardIndices: isWinnerSeat ? winningCardIndices : undefined,
-      lastAction: seatStreetAction,
+      isHandWinner: isHandWinnerSeat,
+      lastAction: stickySeatActions[idx] ?? null,
       timeLeft: actingPosition === idx ? timeLeft : undefined,
       chatBubble: chatBubbleBySeatIndex?.[idx] ?? null,
       onReUpClick,
@@ -217,6 +295,7 @@ export function PokerTable({ state, currentPlayerAddress, timeLeft, chatBubbleBy
   return (
     <div
       ref={tableRef}
+      data-testid="poker-table-root"
       className="absolute inset-0"
       style={{ overflow: 'visible' }}
       {...(tutorialTargets ? { 'data-tutorial-target': 'table' } : {})}
@@ -352,7 +431,7 @@ export function PokerTable({ state, currentPlayerAddress, timeLeft, chatBubbleBy
       {/* Community board — center of felt */}
       <div
         className="absolute flex items-center justify-center"
-        style={{ left: '20%', top: '38%', width: '60%', height: '22%', zIndex: 25 }}
+        style={{ left: '20%', top: '41%', width: '60%', height: '22%', zIndex: 25 }}
         {...(tutorialTargets ? { 'data-tutorial-target': 'community-cards' } : {})}
       >
         {hand ? (
@@ -372,55 +451,20 @@ export function PokerTable({ state, currentPlayerAddress, timeLeft, chatBubbleBy
         )}
       </div>
 
-      {/* Winner announcement — minimal banner above pot (cards stay visible with cyan highlight) */}
-      <AnimatePresence>
-        {isShowdownWithWinners && firstWinnerAddr && hand && (
-          <motion.div
-            key="winner-banner"
-            className="fixed left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 pointer-events-none z-[120] w-[min(92vw,560px)]"
-            initial={{ opacity: 0, y: 8 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: 4 }}
-            transition={{ type: 'spring', stiffness: 300, damping: 26 }}
-          >
-            <div
-              className="px-4 py-2 rounded-xl flex flex-wrap items-center justify-center gap-x-3 gap-y-1"
-              style={{
-                background: 'linear-gradient(145deg, rgba(16, 26, 35, 0.95), rgba(35, 36, 41, 0.95))',
-                boxShadow: 'inset 0 3px 6px rgba(0, 0, 0, 0.8), inset 0 -3px 6px rgba(255, 255, 255, 0.06), 0 4px 20px rgba(0,0,0,0.6)',
-                border: '1px solid rgba(34, 211, 238, 0.35)',
-              }}
-            >
-              <EncryptedText
-                text={isCurrentPlayerWinner ? 'You win!' : `${shortAddr(firstWinnerAddr)} wins`}
-                className="font-bold text-white"
-                revealDelayMs={26}
-                flipDelayMs={20}
-                encryptedClassName="text-cyan-200/80"
-                revealedClassName="text-white"
-              />
-              <EncryptedText
-                text={`+${formatChips(winnerAmount)}`}
-                className="font-semibold tabular-nums"
-                revealDelayMs={22}
-                flipDelayMs={18}
-                encryptedClassName="text-emerald-300/80"
-                revealedClassName="text-emerald-400"
-              />
-              {winnerHandName && (
-                <EncryptedText
-                  text={winnerHandName}
-                  className="text-[11px] sm:text-xs uppercase tracking-wide"
-                  revealDelayMs={24}
-                  flipDelayMs={20}
-                  encryptedClassName="text-cyan-300/70"
-                  revealedClassName="text-white/75"
-                />
-              )}
-            </div>
-          </motion.div>
-        )}
-      </AnimatePresence>
+      <PokerWinnerNotificationCard
+        isOpen={!!(isShowdownWithWinners && firstWinnerAddr && hand)}
+        winnerName={firstWinnerSeat?.displayName || (isCurrentPlayerWinner ? 'You' : shortAddr(firstWinnerAddr ?? ''))}
+        winnerAmount={winnerAmount}
+        winnerHandName={winnerHandName}
+        winnerAddress={firstWinnerAddr ?? undefined}
+        winnerAvatarUrl={firstWinnerSeat?.profileImageUrl}
+        winnerHoleCards={winnerHoleCards}
+        communityCards={hand?.communityCards ?? []}
+        winningCardIndices={winningCardIndices}
+        splitLabel={splitWinner ? `Split: ${splitSeat?.displayName || shortAddr(splitWinner.address)}` : undefined}
+        splitAmount={splitWinner ? `+${formatChips(splitWinner.amount)}` : undefined}
+        formatChips={formatChips}
+      />
 
       {/* Chips sliding from pot to winner at showdown */}
       <AnimatePresence>
@@ -490,6 +534,57 @@ export function PokerTable({ state, currentPlayerAddress, timeLeft, chatBubbleBy
       </AnimatePresence>
       )}
 
+      {/* Folded cards: fly from seat to center, then vanish */}
+      <AnimatePresence>
+        {foldFlyouts.map((flyout) => (
+          <motion.div
+            key={flyout.id}
+            className="absolute z-40 pointer-events-none"
+            style={{
+              left: `${flyout.from.fx * 100}%`,
+              top: `${flyout.from.fy * 100}%`,
+              transform: 'translate(-50%, -50%)',
+            }}
+            initial={{ opacity: 1, scale: 1 }}
+            animate={{
+              left: `${POT_ANCHOR.fx * 100}%`,
+              top: `${POT_ANCHOR.fy * 100}%`,
+              opacity: 0,
+              scale: 0.78,
+            }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: 0.55, ease: 'easeInOut' }}
+          >
+            <div
+              className="relative"
+              style={{
+                width: flyout.holeCards?.length ? '74px' : '52px',
+                height: flyout.holeCards?.length ? '92px' : '66px',
+              }}
+            >
+              {[0, 1].map((ci) => (
+                <div
+                  key={`${flyout.id}-${ci}`}
+                  className="absolute"
+                  style={{
+                    left: ci === 0 ? 0 : '18px',
+                    bottom: 0,
+                    transform: `rotate(${ci === 0 ? -12 : 12}deg)`,
+                    transformOrigin: 'bottom center',
+                    width: flyout.holeCards?.length ? '56px' : '40px',
+                    height: flyout.holeCards?.length ? '74px' : '50px',
+                  }}
+                >
+                  {flyout.holeCards?.length
+                    ? <CardDisplay cardIndex={flyout.holeCards[ci] ?? null} />
+                    : <CardDisplay cardIndex={null} small faceDown={!flyout.holeCards?.length || flyout.showBacks} />}
+                </div>
+              ))}
+            </div>
+          </motion.div>
+        ))}
+      </AnimatePresence>
+
       {/* Seats */}
       {state.seats.map((_, idx) => {
         const displaySlot = mySeatIndex >= 0
@@ -499,18 +594,41 @@ export function PokerTable({ state, currentPlayerAddress, timeLeft, chatBubbleBy
         if (!anchor) return null;
         const isLeftAdjacentSeat = displaySlot === 1;
         const isRightAdjacentSeat = displaySlot === state.seats.length - 1;
-        const seatTranslateX = isRightAdjacentSeat
+        const isLeftSecondAdjacentSeat = displaySlot === 2;
+        const isRightSecondAdjacentSeat = displaySlot === state.seats.length - 2;
+        const topCenterSlot = Math.floor(state.seats.length / 2);
+        const isTopCenterSeat = displaySlot === topCenterSlot;
+        const isTopLeftAdjacentSeat = displaySlot === topCenterSlot - 1;
+        const isTopRightAdjacentSeat = displaySlot === topCenterSlot + 1;
+        const isHeroSeat = displaySlot === 0;
+        const seatTranslateXBase = isRightAdjacentSeat
           ? RIGHT_ADJACENT_SEAT_HORIZONTAL_NUDGE_PX
           : isLeftAdjacentSeat
             ? LEFT_ADJACENT_SEAT_HORIZONTAL_NUDGE_PX
+            : isTopLeftAdjacentSeat
+              ? TOP_ADJACENT_SEAT_HORIZONTAL_NUDGE_PX
+              : isTopRightAdjacentSeat
+                ? -TOP_ADJACENT_SEAT_HORIZONTAL_NUDGE_PX
             : 0;
-        const seatTranslateY = (isRightAdjacentSeat || isLeftAdjacentSeat)
+        const seatTranslateYBase = (isRightAdjacentSeat || isLeftAdjacentSeat)
           ? ADJACENT_SEAT_VERTICAL_NUDGE_PX
-          : 0;
+          : (isLeftSecondAdjacentSeat || isRightSecondAdjacentSeat)
+            ? SECOND_ADJACENT_SEAT_VERTICAL_NUDGE_PX
+          : isTopCenterSeat
+            ? TOP_CENTER_SEAT_VERTICAL_NUDGE_PX
+          : (isTopLeftAdjacentSeat || isTopRightAdjacentSeat)
+            ? TOP_ADJACENT_SEAT_VERTICAL_NUDGE_PX
+          : isHeroSeat
+            ? HERO_SEAT_VERTICAL_NUDGE_PX
+            : 0;
+        const seatTranslateX = Math.round(seatTranslateXBase * seatNudgeScale);
+        const seatTranslateY = Math.round(seatTranslateYBase * seatNudgeScale);
         return (
           <div
             key={idx}
             className="absolute z-20"
+            data-seat-slot={displaySlot}
+            data-seat-position={state.seats[idx]?.position ?? idx}
             style={{
               left: `${anchor.fx * 100}%`,
               top:  `${anchor.fy * 100}%`,

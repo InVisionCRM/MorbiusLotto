@@ -39,6 +39,15 @@ export declare class WebSocketService {
     private checkPerAddressChatLimit;
     private handleConnection;
     private handleMessage;
+    private routeAuthMessage;
+    private routePublicMessage;
+    private routeBlackjackMessage;
+    private routeChatMessage;
+    private routeTournamentMessage;
+    private routePokerMessage;
+    private routeBJMultiMessage;
+    private dispatchDomainMessage;
+    private handlePing;
     /**
      * Check if client is authenticated. If not, send error and return false.
      * In grace period (REQUIRE_WS_AUTH=false), accepts legacy query-param auth.

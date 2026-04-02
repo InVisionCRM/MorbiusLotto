@@ -122,7 +122,7 @@ function AiBrowserMockup({
         </div>
 
         {/* Screenshot */}
-        {/* eslint-disable-next-line @next/next/no-img-element */}
+        { }
         <img src={src} alt={label} className="w-full block" />
       </div>
     </div>

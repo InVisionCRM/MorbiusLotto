@@ -1,17 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-
-function getBackendUrl(): string {
-  const url =
-    process.env.BLACKJACK_SERVER_URL ||
-    process.env.NEXT_PUBLIC_API_URL ||
-    process.env.NEXT_PUBLIC_BLACKJACK_SERVER_URL;
-  if (!url || url.trim() === '') {
-    throw new Error(
-      'Missing backend URL. Set BLACKJACK_SERVER_URL or NEXT_PUBLIC_API_URL in your deployment.'
-    );
-  }
-  return url.trim().replace(/\/$/, '');
-}
+import { proxyJson } from '@/app/api/_utils/backend';
 
 export async function GET(
   request: NextRequest,
@@ -24,9 +12,8 @@ export async function GET(
   }
 
   try {
-    const backendUrl = getBackendUrl();
-    const res = await fetch(`${backendUrl}/api/player/${address}/profile`, {
-      headers: { 'Content-Type': 'application/json' },
+    const res = await proxyJson(request, `/api/player/${address}/profile`, {
+      method: 'GET',
       next: { revalidate: 60 }, // Cache for 60 seconds
     });
 

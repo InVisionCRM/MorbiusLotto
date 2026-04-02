@@ -133,12 +133,7 @@ export function KenoPrizePoolModal({ open, onOpenChange }: KenoPrizePoolModalPro
           ].map(({ spot, rows, odds }) => (
             <div
               key={spot}
-              className="rounded-lg overflow-hidden relative"
-              style={{
-                background: 'linear-gradient(325deg, rgba(20, 20, 20, 0.8), rgba(40, 40, 40, 0.6))',
-                boxShadow: 'inset 0 3px 6px rgba(0, 0, 0, 0.8), inset 0 -3px 6px rgba(255, 255, 255, 0.1), 0 1px 3px rgba(0, 0, 0, 0.5)',
-                border: '1px inset rgba(60, 60, 60, 0.5)',
-              }}
+              className="surface-panel relative overflow-hidden rounded-lg"
             >
               {/* Radial gradient overlay */}
               <div className="relative z-10">
@@ -180,12 +175,7 @@ export function KenoPrizePoolModal({ open, onOpenChange }: KenoPrizePoolModalPro
         </div>
 
         <div
-          className="mt-6 p-4 rounded-lg relative"
-          style={{
-            background: 'linear-gradient(325deg, rgba(20, 20, 20, 0.8), rgba(40, 40, 40, 0.6))',
-            boxShadow: 'inset 0 3px 6px rgba(0, 0, 0, 0.8), inset 0 -3px 6px rgba(255, 255, 255, 0.1), 0 1px 3px rgba(0, 0, 0, 0.5)',
-            border: '1px inset rgba(60, 60, 60, 0.5)',
-          }}
+          className="surface-panel relative mt-6 rounded-lg p-4"
         >
           {/* Radial gradient overlay */}
           <div className="relative z-10">

@@ -1,0 +1,1 @@
+{"version":3,"file":"money.routes.d.ts","sourceRoot":"","sources":["../../src/routes/money.routes.ts"],"names":[],"mappings":"AAAA,OAAO,KAAK,EAAE,OAAO,EAAE,MAAM,SAAS,CAAC;AAGvC,OAAO,EAAE,YAAY,EAAE,MAAM,2BAA2B,CAAC;AAEzD,UAAU,0BAA0B;IAClC,GAAG,EAAE,OAAO,CAAC;IACb,YAAY,EAAE,YAAY,CAAC;CAC5B;AAaD,wBAAgB,mBAAmB,CAAC,EAAE,GAAG,EAAE,YAAY,EAAE,EAAE,0BAA0B,GAAG,IAAI,CAiJ3F"}

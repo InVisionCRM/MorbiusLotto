@@ -1,11 +1,16 @@
 "use strict";
+var __importDefault = (this && this.__importDefault) || function (mod) {
+    return (mod && mod.__esModule) ? mod : { "default": mod };
+};
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.BlackjackMultiGameService = void 0;
 const cosmetics_service_1 = require("./cosmetics.service");
 const cosmetics_catalog_1 = require("../lib/cosmetics-catalog");
 const logger_1 = require("../utils/logger");
+const crypto_1 = __importDefault(require("crypto"));
 /** Kick from table after this many consecutive timeouts (betting window + in-round auto-stand). */
 const BJ_MULTI_AFK_KICK_AFTER = 3;
+const BJ_MULTI_BETTING_RESTART_GRACE_MS = 3000;
 // ---------------------------------------------------------------------------
 // Shared per-key mutex (copied from blackjack-game.service.ts pattern)
 // ---------------------------------------------------------------------------
@@ -38,6 +43,11 @@ class BlackjackMultiGameService {
     setBroadcastCallback(cb) {
         this.broadcastCallback = cb;
     }
+    async broadcastTableState(tableId, reason) {
+        if (!this.broadcastCallback)
+            return;
+        await this.broadcastCallback(tableId).catch(err => logger_1.logger.error('BJMulti: broadcast error', { tableId, reason, error: err }));
+    }
     get pool() {
         return this.dbService.getPool();
     }
@@ -50,6 +60,11 @@ class BlackjackMultiGameService {
     /** Fire-and-forget audit log entry — never throws. */
     audit(tableId, actionType, roundId, playerAddress, payload) {
         this.pool.query(`INSERT INTO blackjack_multi_audit_log (table_id, round_id, player_address, action_type, payload) VALUES ($1, $2, $3, $4, $5)`, [tableId, roundId ?? null, playerAddress ?? null, actionType, JSON.stringify(payload ?? {})]).catch(err => logger_1.logger.error('BJMulti audit log write failed', { tableId, actionType, error: err }));
+    }
+    /** Clear in-memory runtime metadata owned by this service for a table lifecycle transition. */
+    clearTableRuntimeState(tableId) {
+        this.stateVersions.delete(tableId);
+        this.tableLocks.delete(tableId);
     }
     // --------------------------------------------------------------------------
     // Admin helpers
@@ -81,7 +96,7 @@ class BlackjackMultiGameService {
     async deleteTable(tableId) {
         const release = await this.tableLocks.acquire(tableId);
         try {
-            return await this.dbService.withTransaction(async (client) => {
+            const deleted = await this.dbService.withTransaction(async (client) => {
                 // Lock the table row
                 const tableResult = await client.query(`SELECT id FROM blackjack_multi_tables WHERE id = $1 FOR UPDATE`, [tableId]);
                 if (tableResult.rows.length === 0)
@@ -109,6 +124,10 @@ class BlackjackMultiGameService {
                 await client.query(`DELETE FROM blackjack_multi_tables WHERE id = $1`, [tableId]);
                 return true;
             });
+            if (deleted) {
+                this.clearTableRuntimeState(tableId);
+            }
+            return deleted;
         }
         finally {
             this.tableLocks.delete(tableId);
@@ -129,6 +148,7 @@ class BlackjackMultiGameService {
         const deployerWallet = (process.env.NEXT_PUBLIC_BLACKJACK_DEPLOYER_WALLET || process.env.BLACKJACK_DEPLOYER_WALLET || '').toLowerCase();
         if (!deployerWallet)
             throw new Error('Deployer wallet not configured');
+        // Game-domain balance authority remains in bj-multi service in current architecture.
         await this.dbService.deductPlayerBalance(normalized, amount);
         await this.dbService.addPlayerBalance(deployerWallet, amount);
         this.audit(tableId, 'tip_dealer', null, normalized, { amount: amount.toString(), recipient: deployerWallet });
@@ -547,14 +567,42 @@ class BlackjackMultiGameService {
         finally {
             release();
         }
-        if (this.broadcastCallback) {
-            await this.broadcastCallback(tableId).catch(err => logger_1.logger.error('BJMulti: broadcast error after auto-stand', err));
-        }
+        await this.broadcastTableState(tableId, 'auto_stand_timeout');
     }
     /**
      * Called by the timer watchdog: transition a table from waiting to betting when
      * there are seated players, so the next round can start (15s betting timer applies).
      */
+    async loadLatestRoundMeta(tableId) {
+        const lastRoundResult = await this.pool.query(`SELECT status, completed_at, round_number
+       FROM blackjack_multi_rounds
+       WHERE table_id = $1
+       ORDER BY round_number DESC
+       LIMIT 1`, [tableId]);
+        if (lastRoundResult.rows.length === 0)
+            return null;
+        const row = lastRoundResult.rows[0];
+        return {
+            status: String(row.status),
+            completedAt: row.completed_at ? new Date(row.completed_at) : null,
+            roundNumber: Number(row.round_number ?? 0),
+        };
+    }
+    canCreateBettingRound(latestRound) {
+        if (!latestRound)
+            return true;
+        if (latestRound.status !== 'completed')
+            return false;
+        if (!latestRound.completedAt)
+            return true;
+        return Date.now() - latestRound.completedAt.getTime() >= BJ_MULTI_BETTING_RESTART_GRACE_MS;
+    }
+    async createPlaceholderBettingRound(tableId, roundNumber) {
+        const placeholderSeed = crypto_1.default.randomBytes(32).toString('hex');
+        const placeholderHash = crypto_1.default.createHash('sha256').update(placeholderSeed).digest('hex');
+        await this.pool.query(`INSERT INTO blackjack_multi_rounds (table_id, round_number, status, server_seed, server_seed_hash)
+       VALUES ($1, $2, 'betting', $3, $4)`, [tableId, roundNumber, placeholderSeed, placeholderHash]);
+    }
     async startBettingPhase(tableId) {
         const release = await this.tableLocks.acquire(tableId);
         try {
@@ -567,27 +615,12 @@ class BlackjackMultiGameService {
             const seatsResult = await this.pool.query(`SELECT id FROM blackjack_multi_seats WHERE table_id = $1`, [tableId]);
             if (seatsResult.rows.length === 0)
                 return;
-            // Only start a new round when the previous round actually completed (not when we reverted
-            // to waiting because no one bet — in that case the last round is still 'betting' and we
-            // must not create a new round every timer tick).
-            const lastRoundResult = await this.pool.query(`SELECT status, completed_at FROM blackjack_multi_rounds
-         WHERE table_id = $1 ORDER BY round_number DESC LIMIT 1`, [tableId]);
-            if (lastRoundResult.rows.length > 0) {
-                const last = lastRoundResult.rows[0];
-                if (last.status !== 'completed')
-                    return; // last round still betting/playing/dealer_turn — do not create another
-                if (last.completed_at) {
-                    const completedAt = last.completed_at instanceof Date ? last.completed_at.getTime() : new Date(last.completed_at).getTime();
-                    if (Date.now() - completedAt < 3000)
-                        return; // wait 3s after completion before next betting phase
-                }
-            }
-            const roundNumResult = await this.pool.query(`SELECT COALESCE(MAX(round_number), 0) + 1 AS next_num FROM blackjack_multi_rounds WHERE table_id = $1`, [tableId]);
-            const roundNumber = Number(roundNumResult.rows[0].next_num);
-            const placeholderSeed = require('crypto').randomBytes(32).toString('hex');
-            const placeholderHash = require('crypto').createHash('sha256').update(placeholderSeed).digest('hex');
-            await this.pool.query(`INSERT INTO blackjack_multi_rounds (table_id, round_number, status, server_seed, server_seed_hash)
-         VALUES ($1, $2, 'betting', $3, $4)`, [tableId, roundNumber, placeholderSeed, placeholderHash]);
+            // Only create a fresh betting round when transition guard passes.
+            const latestRound = await this.loadLatestRoundMeta(tableId);
+            if (!this.canCreateBettingRound(latestRound))
+                return;
+            const roundNumber = (latestRound?.roundNumber ?? 0) + 1;
+            await this.createPlaceholderBettingRound(tableId, roundNumber);
             await this.pool.query(`UPDATE blackjack_multi_tables SET status = 'betting' WHERE id = $1`, [tableId]);
         }
         finally {
@@ -647,13 +680,29 @@ class BlackjackMultiGameService {
         finally {
             release();
         }
-        if (this.broadcastCallback) {
-            await this.broadcastCallback(tableId).catch(err => logger_1.logger.error('BJMulti: broadcast error after betting timeout', err));
-        }
+        await this.broadcastTableState(tableId, 'betting_timeout');
     }
     // --------------------------------------------------------------------------
     // State query
     // --------------------------------------------------------------------------
+    /**
+     * Round snapshot authority:
+     * - while playing/dealer_turn, prefer non-betting rounds so UI never "resets" to a placeholder betting round.
+     * - otherwise, latest round is authoritative.
+     */
+    async loadAuthorityRoundForSnapshot(tableId, tableStatus) {
+        if (!['betting', 'playing', 'dealer_turn', 'completed'].includes(tableStatus)) {
+            return null;
+        }
+        if (tableStatus === 'playing' || tableStatus === 'dealer_turn') {
+            const roundResult = await this.pool.query(`SELECT * FROM blackjack_multi_rounds
+         WHERE table_id = $1 AND status IN ('playing', 'dealer_turn', 'completed')
+         ORDER BY round_number DESC LIMIT 1`, [tableId]);
+            return roundResult.rows[0] ?? null;
+        }
+        const roundResult = await this.pool.query(`SELECT * FROM blackjack_multi_rounds WHERE table_id = $1 ORDER BY round_number DESC LIMIT 1`, [tableId]);
+        return roundResult.rows[0] ?? null;
+    }
     async getTableState(tableId) {
         const tableResult = await this.pool.query(`SELECT * FROM blackjack_multi_tables WHERE id = $1`, [tableId]);
         if (tableResult.rows.length === 0)
@@ -661,25 +710,12 @@ class BlackjackMultiGameService {
         const table = tableResult.rows[0];
         const seatsResult = await this.pool.query(`SELECT * FROM blackjack_multi_seats WHERE table_id = $1 ORDER BY position ASC`, [tableId]);
         const dbSeats = seatsResult.rows;
-        // Load active round if any. When table is playing/dealer_turn, only consider rounds in that phase
-        // so we never show a newly created 'betting' round (which would look like a reset).
-        let round = null;
+        // Load active round snapshot from the authority rule above.
+        const round = await this.loadAuthorityRoundForSnapshot(tableId, table.status);
         let roundSeats = [];
-        if (['betting', 'playing', 'dealer_turn', 'completed'].includes(table.status)) {
-            let roundResult;
-            if (table.status === 'playing' || table.status === 'dealer_turn') {
-                roundResult = await this.pool.query(`SELECT * FROM blackjack_multi_rounds
-           WHERE table_id = $1 AND status IN ('playing', 'dealer_turn', 'completed')
-           ORDER BY round_number DESC LIMIT 1`, [tableId]);
-            }
-            else {
-                roundResult = await this.pool.query(`SELECT * FROM blackjack_multi_rounds WHERE table_id = $1 ORDER BY round_number DESC LIMIT 1`, [tableId]);
-            }
-            if (roundResult.rows.length > 0) {
-                round = roundResult.rows[0];
-                const rsResult = await this.pool.query(`SELECT * FROM blackjack_multi_round_seats WHERE round_id = $1`, [round.id]);
-                roundSeats = rsResult.rows;
-            }
+        if (round) {
+            const rsResult = await this.pool.query(`SELECT * FROM blackjack_multi_round_seats WHERE round_id = $1`, [round.id]);
+            roundSeats = rsResult.rows;
         }
         // Enrich with profiles
         const addresses = dbSeats.map(s => s.player_address).filter(Boolean);

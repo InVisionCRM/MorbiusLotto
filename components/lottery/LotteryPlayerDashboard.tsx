@@ -24,7 +24,7 @@ import {
   Legend,
 } from 'recharts'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
-import AvatarView from '@/components/poker/avatar/AvatarView'
+import { AvatarView } from '@/components/avatar'
 import {
   Table,
   TableBody,
@@ -37,12 +37,6 @@ import { useProfileForAddress } from '@/hooks/use-player-profile'
 import type { InstantLotteryResultRow } from '@/hooks/use-instant-lottery'
 import type { LotteryPlayerStatsResult } from '@/hooks/use-instant-lottery'
 import { TOKEN_DECIMALS } from '@/lib/contracts'
-
-const PANEL_STYLE = {
-  background: 'linear-gradient(145deg, rgb(16, 26, 35), rgb(35, 36, 41))',
-  boxShadow: 'inset 0 3px 6px rgba(0, 0, 0, 0.8), inset 0 -3px 6px rgba(255, 255, 255, 0.1), 0 1px 3px rgba(0, 0, 0, 0.5)',
-  border: '1px inset rgba(60, 60, 60, 0.5)',
-}
 
 function formatMorbius(wei: bigint): string {
   return parseFloat(formatUnits(wei, TOKEN_DECIMALS)).toLocaleString(undefined, {
@@ -244,8 +238,7 @@ export function LotteryPlayerDashboard({
             {statsCards.map((stat) => (
               <Card
                 key={stat.title}
-                className="bg-gradient-to-br from-gray-900 to-black border-gray-700"
-                style={PANEL_STYLE}
+                className="surface-panel-sidebar"
               >
                 <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
                   <CardTitle className="text-sm font-medium text-gray-400">{stat.title}</CardTitle>
@@ -260,7 +253,7 @@ export function LotteryPlayerDashboard({
           </div>
 
           {/* Cumulative chart */}
-          <Card className="bg-gradient-to-br from-gray-900 to-black border-gray-700" style={PANEL_STYLE}>
+          <Card className="surface-panel-sidebar">
             <CardHeader>
               <CardTitle className="text-white flex items-center gap-2">
                 <BarChart3 className="w-5 h-5 text-cyan-400" />
@@ -353,7 +346,7 @@ export function LotteryPlayerDashboard({
 
       {/* History Tab */}
       {activeTab === 'history' && (
-        <Card className="bg-gradient-to-br from-gray-900 to-black border-gray-700 overflow-hidden" style={PANEL_STYLE}>
+        <Card className="surface-panel-sidebar overflow-hidden">
           <CardHeader className="flex flex-row items-center justify-between gap-4 flex-wrap">
             <CardTitle className="text-white flex items-center gap-2">
               <History className="w-5 h-5" />

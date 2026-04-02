@@ -86,14 +86,14 @@ export function PokerSoundsSettingsModal({ isOpen, onClose }: PokerSoundsSetting
 
   return (
     <div
-      className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4"
+      className="surface-modal-shell"
       role="dialog"
       aria-modal="true"
       aria-label="Poker sounds settings"
       onClick={(e) => e.target === e.currentTarget && onClose()}
     >
       <div
-        className="bg-gradient-to-br from-slate-900 to-slate-800 border-2 border-cyan-500/30 rounded-2xl shadow-2xl max-w-lg w-full overflow-hidden"
+        className="surface-modal-card"
         style={{ boxShadow: '0 4px 16px rgba(0, 0, 0, 0.6), inset 0 1px 0 rgba(255, 255, 255, 0.05)' }}
         onClick={(e) => e.stopPropagation()}
       >

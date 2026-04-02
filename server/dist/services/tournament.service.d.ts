@@ -232,6 +232,15 @@ export declare class TournamentService {
     }): void;
     private toBigInt;
     private normalizeAddress;
+    /**
+     * Single authority helper for tournament row locking in mutating flows.
+     * Returns null when tournament does not exist.
+     */
+    private getTournamentForUpdate;
+    private hasTournamentStatus;
+    private hasTournamentStatusValue;
+    private assertTournamentCancelable;
+    private runScheduledEventHandler;
     private normalizeTournament;
     private normalizeEntry;
     /**

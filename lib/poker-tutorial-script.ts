@@ -1,5 +1,5 @@
 /**
- * Script for the poker interactive tutorial (demo page).
+ * Script for the poker interactive tutorial overlay.
  * Each step defines full state for the demo table plus highlight target and copy.
  */
 

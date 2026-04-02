@@ -1052,6 +1052,25 @@ async function initializeServices() {
                 if (play == null) {
                     return res.status(404).json({ error: 'Play not found', message: 'No provably-fair play with this tx hash' });
                 }
+                const hasReveal = typeof play.server_seed === 'string' && play.server_seed.length > 0;
+                const computedServerSeedHash = hasReveal ? pfService.createServerSeedHash(play.server_seed) : null;
+                const nonceNumber = Number(play.nonce);
+                const canVerifyDraw = hasReveal &&
+                    Number.isSafeInteger(nonceNumber) &&
+                    Array.isArray(play.winning_numbers) &&
+                    play.winning_numbers.length === 6;
+                const recomputedWinningNumbers = canVerifyDraw
+                    ? pfService.generate6of55WinningNumbers(play.server_seed, play.client_seed || 'default', nonceNumber)
+                    : null;
+                const verification = {
+                    revealAvailable: hasReveal,
+                    nonceSafeInteger: Number.isSafeInteger(nonceNumber),
+                    serverSeedHashMatches: hasReveal ? computedServerSeedHash === play.server_seed_hash : null,
+                    winningNumbersMatch: recomputedWinningNumbers != null
+                        ? JSON.stringify(recomputedWinningNumbers) === JSON.stringify(play.winning_numbers)
+                        : null,
+                    recomputed_winning_numbers: recomputedWinningNumbers,
+                };
                 sendJson(res, {
                     wallet_address: play.wallet_address,
                     wager: play.wager.toString(),
@@ -1064,6 +1083,7 @@ async function initializeServices() {
                     server_seed: play.server_seed,
                     client_seed: play.client_seed,
                     nonce: play.nonce,
+                    verification,
                 });
             }
             catch (error) {

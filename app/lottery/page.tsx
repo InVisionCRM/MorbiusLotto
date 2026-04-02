@@ -112,14 +112,17 @@ export default function LotteryPage() {
     const currentTx = results[0]?.transactionHash ?? null
     if (!initialResultsSeenRef.current) {
       initialResultsSeenRef.current = true
-      if (currentTx) lastAnimatedTxRef.current = currentTx
-      return
+      // Treat first loaded row as history unless it matches a locally-known play.
+      if (currentTx && lastPlayResult?.transactionHash !== currentTx) {
+        lastAnimatedTxRef.current = currentTx
+        return
+      }
     }
     if (currentTx && currentTx !== lastAnimatedTxRef.current) {
       lastAnimatedTxRef.current = currentTx
       setResultToAnimate(results[0])
     }
-  }, [results])
+  }, [lastPlayResult?.transactionHash, results])
 
   const onResult = useCallback(
     (result: { playerNumbers: number[]; winningNumbers: number[]; matchCount: number; wager: bigint; netPayout: bigint; txHash?: string }) => {

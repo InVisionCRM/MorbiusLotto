@@ -1,4 +1,4 @@
-/* eslint-disable react/forbid-dom-props */
+ 
 import React from 'react';
 
 interface BallResultProps {

@@ -35,14 +35,24 @@ export function AnimatedList({
   ...props
 }: AnimatedListProps) {
   const [index, setIndex] = useState(0)
-  const childrenArray = useMemo(() => React.Children.toArray(children), [children])
+  const keyedChildren = useMemo(
+    () =>
+      React.Children.toArray(children).map((item, originalIndex) => {
+        const stableKey =
+          React.isValidElement(item) && item.key != null && item.key !== ""
+            ? String(item.key)
+            : `animated-list-static-${originalIndex}`
+        return { item, stableKey }
+      }),
+    [children]
+  )
 
   useEffect(() => {
-    if (childrenArray.length <= 1) return
+    if (keyedChildren.length <= 1) return
 
     const id = window.setInterval(() => {
       setIndex((prev) => {
-        if (prev >= childrenArray.length - 1) {
+        if (prev >= keyedChildren.length - 1) {
           return loop ? 0 : prev
         }
         return prev + 1
@@ -50,23 +60,19 @@ export function AnimatedList({
     }, delay)
 
     return () => window.clearInterval(id)
-  }, [childrenArray.length, delay, loop])
+  }, [keyedChildren.length, delay, loop])
 
   const itemsToShow = useMemo(() => {
-    const slice = childrenArray.slice(0, index + 1)
+    const slice = keyedChildren.slice(0, index + 1)
     return [...slice].reverse()
-  }, [index, childrenArray])
+  }, [index, keyedChildren])
 
   return (
     <div className={cn("flex flex-col items-center gap-4", className)} {...props}>
-      <AnimatePresence>
-        {itemsToShow.map((item, idx) => {
-          const k =
-            React.isValidElement(item) && item.key != null && item.key !== ""
-              ? String(item.key)
-              : `animated-list-${idx}`
+      <AnimatePresence initial={false}>
+        {itemsToShow.map(({ item, stableKey }) => {
           return (
-            <AnimatedListItem key={k}>
+            <AnimatedListItem key={stableKey}>
               {item}
             </AnimatedListItem>
           )

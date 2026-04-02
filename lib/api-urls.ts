@@ -46,3 +46,35 @@ export function getBlackjackServerUrl(): string {
   if (api) return api;
   return requireEnv('NEXT_PUBLIC_API_URL');
 }
+
+export function getPlayerBalancePath(address: string): string {
+  return `/api/player/${address}/balance`;
+}
+
+export function getPendingWithdrawalPath(address: string): string {
+  return `/api/withdraw/pending?address=${encodeURIComponent(address)}`;
+}
+
+export function getMerkleEpochsPath(): string {
+  return '/api/merkle/epochs';
+}
+
+export function getMerkleClaimPath(epochNumber: number | string, address: string): string {
+  return `/api/merkle/claim/${epochNumber}/${address}`;
+}
+
+export function getMerkleSchedulePath(): string {
+  return '/api/merkle/schedule';
+}
+
+export function getMerkleLpEpochsPath(): string {
+  return '/api/merkle-lp/epochs';
+}
+
+export function getMerkleLpClaimPath(epochNumber: number | string, address: string): string {
+  return `/api/merkle-lp/claim/${epochNumber}/${address}`;
+}
+
+export function getMerkleLpSchedulePath(): string {
+  return '/api/merkle-lp/schedule';
+}

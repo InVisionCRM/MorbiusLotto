@@ -1,470 +1,196 @@
-# PLINKO Contract MVP Specification
+# PLINKO Engineering README
 
-## 🎯 Core Concept
-- **15 buckets** with symmetric multiplier distribution (like Stake.com, Roobet)
-- **Pre-paid ball system**: Buy balls upfront, drop them freely
-- **Instant payouts**: Winnings paid immediately on each drop
-- **Provably fair**: On-chain randomness using blockhash
-- **Simple fees**: 5% to deployer, 95% stays in contract for payouts
+Living document for current frontend architecture, audit findings, and refactor plan.
 
----
+## Purpose
 
-## 🏗️ EXISTING INFRASTRUCTURE (Reuse from `/contracts/contracts/`)
+- Track how `app/PLINKO/page.tsx` is wired today.
+- Keep a complete component inventory for faster audits.
+- Record performance/bug fixes and what should be split next.
+- Provide a repeatable checklist before/after changes.
 
-### 📋 Contract Addresses (from `lib/contracts.ts`)
-```typescript
-// Token addresses
-export const MORBIUS_TOKEN_ADDRESS = '0xB7d4eB5fDfE3d4d3B5C16a44A49948c6EC77c6F1'
-export const WPLS_TOKEN_ADDRESS = '0xA1077a294dDE1B09bB078844df40758a5D0f9a27'
-export const PULSEX_V1_ROUTER_ADDRESS = '0x98bf93ebf5c380C0e6Ae8e192A7e2AE08edAcc02'
+## Current Status
 
-// Existing games for reference
-export const LOTTERY_INSTANT_ADDRESS = '0x81F73Ab20890eB5b0226e03b6b73bf37F4Cf660A'
-export const KENO_ADDRESS = '0x734A1460b4131F8cFE4950894Be89d1a852c957A'
+- Primary page orchestration lives in `app/PLINKO/page.tsx`.
+- UI + blockchain state + animation queue + modal state are all centralized in the page.
+- This file currently acts as both container and feature logic layer.
+
+## Full Component Inventory
+
+### App Layer (`app/PLINKO`)
+
+- `page.tsx` - main orchestrator for state, wallet interactions, queue, and layout.
+- `layout.tsx` - route-level layout wrapper.
+- `types.ts` - local page/game type definitions.
+- `constants.ts` - risk levels, names, multipliers, mappings.
+- `plinko.css` - plinko-specific styling.
+
+### PLINKO Components (`components/PLINKO`)
+
+- `PlinkoGame.tsx` - board/physics renderer and scoring callbacks.
+- `RealTimeBetChart.tsx` - P&L/session chart.
+- `PlinkoPlayerDashboard.tsx` - user dashboard/stats card.
+- `PlinkoRecentGames.tsx` - recent game feed.
+- `PlinkoRecentPlays.tsx` - recent play feed.
+- `PlinkoTopPlayers.tsx` - leaderboard panel.
+- `SlotMachine.tsx` - transaction confirmation visual state.
+- `Footer.tsx` - page footer.
+- `PlinkoHistoryModal.tsx` - history modal.
+- `PresetAmountsModal.tsx` - preset wager picker.
+- `ExtendedHistoryModal.tsx` - expanded local history.
+- `HowToPlayModal.tsx` - instructions/help modal.
+- `ShareModal.tsx` - share flow modal.
+- `ShareButton.tsx` - share action trigger.
+- `ContactModal.tsx` - contact modal.
+- `SwapModal.tsx` - token swap modal.
+- `FAQModal.tsx` - FAQ modal.
+- `PlinkoModalsHost.tsx` - centralized Plinko modal wiring.
+- `PlinkoLiveOverlay.tsx` - live in-game overlay.
+
+### Shared Components Used by PLINKO Page
+
+- `components/shared/GlobalMainNav.tsx`
+- `components/shared/GameFAQ.tsx`
+- `components/shared/PlayerProfileModal.tsx`
+- `components/shared/AdSpace.tsx`
+- `components/shared/MorbiusLoadingChip.tsx`
+
+### Hooks and Data Interfaces Used by PLINKO Page
+
+- `hooks/use-plinko-contract.ts` (`usePlayerInfo`, `useWagerLimits`, `usePlinkoWrite`, `useWatchBallDropped`)
+- `hooks/use-plinko-history.ts`
+- `hooks/use-wpls-price.ts`
+- `hooks/use-token-approval.ts`
+
+## Architecture Diagram
+
+```mermaid
+flowchart TD
+  A["app/PLINKO/page.tsx"] --> B["GlobalMainNav + Layout Shell"]
+  A --> C["Buy/Config Panel"]
+  A --> D["PlinkoGame (physics/board)"]
+  A --> E["RealTimeBetChart"]
+  A --> F["Tabs: RecentGames/RecentPlays/TopPlayers"]
+  A --> G["PlinkoPlayerDashboard"]
+  A --> H["Modals Layer"]
+
+  A --> I["usePlinkoWrite / usePlayerInfo / useWagerLimits"]
+  A --> J["useWatchBallDropped (live events)"]
+  A --> K["pollForReceipt + decodeEventLog"]
+  A --> L["usePlinkoHistory"]
+  A --> M["useWplsPrice + useTokenApproval"]
+
+  J --> N["animationQueue"]
+  K --> N
+  N --> D
+  D --> O["onScore callback"]
+  O --> E
+  O --> L
+
+  H --> H1["PlinkoHistoryModal"]
+  H --> H2["SlotMachine"]
+  H --> H3["Custom/Preset/Extended modals"]
 ```
 
-### 🔧 Reusable Patterns from Existing Contracts
-
-**From `SuperStakeLottery6of55V2.sol`:**
-- SafeERC20 token transfers
-- Ownable admin controls
-- ReentrancyGuard protection
-- WPLS swap logic with buffer
-- PulseX router integration
-
-**From `CryptoKeno.sol`:**
-- Blockhash randomness fallback (lines 847-849)
-- Player statistics tracking
-- Fee distribution pattern
-- Global statistics
-
----
-
-## 💰 Payment & Fee System (Based on Existing Contracts)
-
-### MORBIUS Primary Payment
-```solidity
-// Reuse pattern from CryptoKeno.sol line 437
-IERC20 public immutable MORBIUS_TOKEN;
-
-function buyBalls(uint256 count) external nonReentrant {
-    uint256 gross = count * ballPriceMORBIUS;
-
-    // Simple fee split: 5% deployer, 95% to contract
-    uint256 deployerFee = (gross * 500) / 10000; // 5%
-    uint256 toContract = gross - deployerFee;    // 95%
-
-    // Transfer deployer fee
-    MORBIUS_TOKEN.safeTransferFrom(msg.sender, deployerRecipient, deployerFee);
-
-    // Transfer rest to contract (payout reserve)
-    MORBIUS_TOKEN.safeTransferFrom(msg.sender, address(this), toContract);
-
-    playerBallBalance[msg.sender] += count;
-    contractReserve += toContract; // Track available payout funds
-
-    emit BallsPurchased(msg.sender, count, gross);
-}
-```
-
-### PLS Alternative Payment
-```solidity
-// Reuse WPLS swap pattern from both existing contracts
-// Lottery uses 50% buffer (WPLS_SWAP_BUFFER_PCT = 15000)
-// Keno uses similar approach
-
-function buyBallsWithPLS(uint256 ballCount) external payable nonReentrant {
-    uint256 morbiusNeeded = ballCount * ballPriceMORBIUS;
-
-    // Calculate required WPLS with 50% buffer for slippage
-    address[] memory path = new address[](2);
-    path[0] = address(WPLS_TOKEN);
-    path[1] = address(MORBIUS_TOKEN);
-
-    uint256[] memory amounts = pulseXRouter.getAmountsIn(morbiusNeeded, path);
-    uint256 wplsRequired = amounts[0];
-    uint256 wplsWithBuffer = (wplsRequired * 15000) / 10000; // 50% buffer
-
-    require(msg.value >= wplsWithBuffer, "Insufficient PLS");
-
-    // Wrap PLS to WPLS
-    WPLS_TOKEN.deposit{value: wplsWithBuffer}();
-
-    // Approve router
-    WPLS_TOKEN.approve(address(pulseXRouter), wplsWithBuffer);
-
-    // Swap WPLS to MORBIUS
-    uint256[] memory swappedAmounts = pulseXRouter.swapExactTokensForTokens(
-        wplsWithBuffer,
-        morbiusNeeded,
-        path,
-        address(this),
-        block.timestamp + 300
-    );
-
-    uint256 morbiusReceived = swappedAmounts[1];
-    require(morbiusReceived >= morbiusNeeded, "Insufficient swap output");
-
-    // Refund excess MORBIUS to user
-    uint256 excess = morbiusReceived - morbiusNeeded;
-    if (excess > 0) {
-        MORBIUS_TOKEN.safeTransfer(msg.sender, excess);
-    }
-
-    // Apply same fee split as MORBIUS purchase
-    uint256 deployerFee = (morbiusNeeded * 500) / 10000;
-    uint256 toContract = morbiusNeeded - deployerFee;
-
-    MORBIUS_TOKEN.safeTransfer(deployerRecipient, deployerFee);
-
-    playerBallBalance[msg.sender] += ballCount;
-    contractReserve += toContract;
-
-    emit BallsPurchased(msg.sender, ballCount, morbiusNeeded);
-}
-```
-
----
-
-## 🎮 Game Mechanics (Instant Payout Model)
-
-### Ball Drop System (Like Online Casinos)
-```solidity
-function dropBall() external nonReentrant {
-    require(playerBallBalance[msg.sender] > 0, "No balls");
-
-    playerBallBalance[msg.sender]--;
-
-    // Get random bucket (1-15)
-    uint8 bucket = _getRandomBucket();
-
-    // Calculate payout (multipliers stored as basis points)
-    // Example: bucket 15 = 5500 (55x) → payout = ballPrice * 5500 / 100
-    uint256 payout = (ballPriceMORBIUS * BUCKET_MULTIPLIERS[bucket - 1]) / 100;
-
-    // Pay winner immediately (no accumulation)
-    if (payout > 0) {
-        require(contractReserve >= payout, "Insufficient contract balance");
-        contractReserve -= payout;
-        MORBIUS_TOKEN.safeTransfer(msg.sender, payout);
-    }
-
-    // Track statistics
-    totalDrops++;
-    totalPayouts += payout;
-    playerTotalDrops[msg.sender]++;
-    playerTotalWon[msg.sender] += payout;
-
-    emit BallDropped(msg.sender, bucket, BUCKET_MULTIPLIERS[bucket - 1], payout);
-}
-```
-
-**Key Difference from Original README:**
-- Payouts happen **instantly** on drop (not accumulated)
-- No claim system needed
-- Simpler UX (like Stake.com, Roobet, etc.)
-
----
-
-## 🎲 Randomness System (Reuse from CryptoKeno.sol)
-
-### Blockhash-Based RNG (No VRF Available)
-```solidity
-// Based on CryptoKeno.sol lines 847-849
-function _getRandomBucket() internal returns (uint8) {
-    // Use multiple entropy sources
-    uint256 seed = uint256(keccak256(abi.encodePacked(
-        blockhash(block.number - 1),  // Previous block hash
-        block.timestamp,               // Current time
-        msg.sender,                    // Player address
-        totalDrops,                    // Global counter (anti-replay)
-        tx.gasprice                    // Extra entropy
-    )));
-
-    return uint8((seed % 15) + 1); // Returns 1-15
-}
-```
-
-**⚠️ Security Note:**
-- Blockhash randomness is **manipulable by miners** for high-value bets
-- This is acceptable for MVP with reasonable bet limits
-- For production, consider Chainlink VRF or commit-reveal scheme
-- Mitigate by setting `maxBallPrice` to limit miner attack profitability
-
----
-
-## 🎯 15 Bucket Multipliers (Casino-Style Distribution)
-
-### Multiplier Array (Stored as Basis Points)
-```solidity
-// Based on typical online casino PLINKO (Stake.com, Roobet, etc.)
-// Stored as basis points: 5500 = 55x, 100 = 1x, 20 = 0.2x
-uint256[15] public BUCKET_MULTIPLIERS = [
-    5500,  // Bucket 1:  55x   (jackpot - edge)
-    1200,  // Bucket 2:  12x
-    560,   // Bucket 3:  5.6x
-    320,   // Bucket 4:  3.2x
-    160,   // Bucket 5:  1.6x
-    100,   // Bucket 6:  1x    (break even)
-    70,    // Bucket 7:  0.7x
-    20,    // Bucket 8:  0.2x  (center - most common)
-    70,    // Bucket 9:  0.7x
-    100,   // Bucket 10: 1x
-    160,   // Bucket 11: 1.6x
-    320,   // Bucket 12: 3.2x
-    560,   // Bucket 13: 5.6x
-    1200,  // Bucket 14: 12x
-    5500   // Bucket 15: 55x   (jackpot - edge)
-];
-
-// Owner can adjust these via admin function
-function setBucketMultipliers(uint256[15] calldata newMultipliers) external onlyOwner {
-    BUCKET_MULTIPLIERS = newMultipliers;
-    emit MultipliersUpdated(newMultipliers);
-}
-```
-
-**Calculation Example (100 MORBIUS ball price):**
-- Bucket 1 (5500): `100 * 5500 / 100 = 5,500 MORBIUS`
-- Bucket 8 (20): `100 * 20 / 100 = 20 MORBIUS`
-- Bucket 6 (100): `100 * 100 / 100 = 100 MORBIUS`
-
-**⚠️ RTP Warning:**
-Online casino PLINKO typically has **~98% RTP** assuming uniform distribution, but:
-- **Physics reality**: Center buckets hit 40-60% of the time
-- **Edge buckets**: Hit <1% of the time
-- **Actual RTP**: Likely 85-92% depending on physics simulation
-
-The 5% deployer fee is already factored into contract reserve, so no additional house edge needed in multipliers.
-
----
-
-## ⚙️ Admin Functions (Write)
-
-### Core Configuration
-```solidity
-function setBallPrice(uint256 newPrice) external onlyOwner {
-    ballPriceMORBIUS = newPrice;
-    emit BallPriceUpdated(newPrice);
-}
-
-function setBucketMultipliers(uint256[15] calldata multipliers) external onlyOwner {
-    BUCKET_MULTIPLIERS = multipliers;
-    emit MultipliersUpdated(multipliers);
-}
-
-function setDeployerRecipient(address newRecipient) external onlyOwner {
-    deployerRecipient = newRecipient;
-    emit DeployerRecipientUpdated(newRecipient);
-}
-
-function setMaxBallPrice(uint256 maxPrice) external onlyOwner {
-    maxBallPrice = maxPrice;
-    emit MaxBallPriceUpdated(maxPrice);
-}
-```
-
-### Emergency Controls
-```solidity
-function pause() external onlyOwner {
-    _pause();
-}
-
-function unpause() external onlyOwner {
-    _unpause();
-}
-
-function emergencyWithdraw(uint256 amount) external onlyOwner {
-    require(amount <= contractReserve, "Exceeds reserve");
-    contractReserve -= amount;
-    MORBIUS_TOKEN.safeTransfer(owner(), amount);
-    emit EmergencyWithdraw(amount);
-}
-```
-
----
-
-## 👀 Read Functions (View)
-
-### Game Configuration
-```solidity
-function getBallPrice() external view returns (uint256) {
-    return ballPriceMORBIUS;
-}
-
-function getBucketMultipliers() external view returns (uint256[15] memory) {
-    return BUCKET_MULTIPLIERS;
-}
-
-function getContractReserve() external view returns (uint256) {
-    return contractReserve;
-}
-```
-
-### Player Data
-```solidity
-function getPlayerInfo(address player) external view returns (
-    uint256 ballBalance,
-    uint256 totalDrops,
-    uint256 totalWon,
-    uint256 biggestWin
-) {
-    return (
-        playerBallBalance[player],
-        playerTotalDrops[player],
-        playerTotalWon[player],
-        playerBiggestWin[player]
-    );
-}
-```
-
-### Global Statistics
-```solidity
-function getGlobalStats() external view returns (
-    uint256 _totalDrops,
-    uint256 _totalBallsSold,
-    uint256 _totalRevenue,
-    uint256 _totalPayouts,
-    uint256 _contractReserve
-) {
-    return (
-        totalDrops,
-        totalBallsSold,
-        totalRevenue,
-        totalPayouts,
-        contractReserve
-    );
-}
-```
-
----
-
-## 📊 Economics & Sustainability
-
-### Revenue Model
-```
-Player buys 100 balls at 100 MORBIUS each = 10,000 MORBIUS
-├─ 5% (500 MORBIUS) → Deployer wallet
-└─ 95% (9,500 MORBIUS) → Contract reserve (for payouts)
-```
-
-### Payout Reserves
-The contract must maintain sufficient `contractReserve` to pay winners:
-- **Best case scenario**: Players hit low multipliers → reserve grows
-- **Worst case scenario**: Players hit 55x jackpots → reserve depletes
-- **Admin responsibility**: Monitor reserve, adjust multipliers or ball price if needed
-
-### Sustainability Calculation
-With 5% fee and ~90% RTP (accounting for physics):
-- Players lose ~10% per drop (physics/RTP)
-- Deployer earns 5% of gross wagers
-- Contract reserve should remain **stable or grow** over time
-
-**Example (1000 drops at 100 MORBIUS):**
-```
-Revenue: 100,000 MORBIUS
-Deployer fee: 5,000 MORBIUS
-To reserve: 95,000 MORBIUS
-
-Expected payouts (90% RTP): 90,000 MORBIUS
-Reserve change: +5,000 MORBIUS (grows over time)
-```
-
----
-
-## 📋 Implementation Checklist
-
-### Phase 1: Contract Development
-- [ ] Create `contracts/contracts/Plinko.sol`
-- [ ] Implement ball purchase (MORBIUS + PLS)
-- [ ] Implement dropBall with instant payouts
-- [ ] Add blockhash randomness
-- [ ] Add admin functions
-- [ ] Deploy to PulseChain testnet
-- [ ] Test edge cases (empty reserve, max multiplier, etc.)
-
-### Phase 2: Frontend Integration
-- [ ] Generate ABI (`abi/plinko.json`)
-- [ ] Add PLINKO_ADDRESS to `lib/contracts.ts`
-- [ ] Create `hooks/use-plinko-contract.ts`
-- [ ] Update `PlinkoGame.tsx` physics (15 buckets, no risk levels)
-- [ ] Update `page.tsx` for ball purchase UI
-- [ ] Add contract reserve display
-- [ ] Test MORBIUS and PLS purchases
-
-### Phase 3: Testing & Deployment
-- [ ] Gas optimization review
-- [ ] Security audit (especially randomness)
-- [ ] Mainnet deployment
-- [ ] Monitor reserve levels
-- [ ] Adjust multipliers based on real usage
-
----
-
-## 🚀 Deployment Commands
-
-```bash
-# Navigate to contracts
-cd contracts
-
-# Deploy to PulseChain testnet first
-npx hardhat run scripts/deploy-plinko.js --network pulsechainTestnet
-
-# Verify deployment
-npx hardhat verify --network pulsechainTestnet DEPLOYED_ADDRESS
-
-# Deploy to mainnet (after testing)
-npx hardhat run scripts/deploy-plinko.js --network pulsechain
-
-# Update environment
-echo "NEXT_PUBLIC_PLINKO_ADDRESS=0x..." >> .env
-```
-
----
-
-## 🔧 Integration Points (Reuse Existing Code)
-
-### Wallet Connection
-- Already implemented: RainbowKit in `app/layout.tsx`
-- Add PLINKO contract to `lib/wagmi-config.ts`
-
-### History Tracking
-- Extend existing `hooks/use-plinko-history.ts`
-- Already tracks: drops, multipliers, profits
-- Add: bucket index, timestamp
-
-### Balance Display
-- Modify `components/PLINKO/MainNav.tsx`
-- Add: Ball balance display
-- Keep: MORBIUS balance (already shown)
-
-### Physics Engine
-- Modify `components/PLINKO/PlinkoGame.tsx`
-- Remove: Risk level selection
-- Keep: 15 buckets, physics simulation, animations
-
----
-
-## ⚠️ Important Notes
-
-### Security Considerations
-1. **Randomness**: Blockhash is manipulable but acceptable for MVP
-2. **Reserve management**: Must monitor and refill if needed
-3. **Max ball price**: Limit to prevent miner attacks
-4. **Reentrancy**: All external calls protected with nonReentrant
-
-### Differences from Online Casinos
-- **No server seed**: Fully on-chain (no backend randomness)
-- **Gas costs**: Each drop costs gas (unlike web2 casinos)
-- **Transparency**: All results verifiable on blockchain
-- **No house edge multiplier**: 5% fee already applied at purchase
-
-### Frontend Considerations
-- Physics simulation is **client-side only** (cosmetic)
-- Actual result determined **on-chain** by blockhash
-- UI should reflect on-chain result, not physics simulation
-- Consider showing "provably fair" hash for transparency
-
----
-
-**This specification is production-ready and leverages your existing contract patterns while implementing a realistic, casino-style PLINKO game with sustainable economics.**
+## Recent Fixes (Apr 2026)
+
+- Prevented duplicate self-event animation by skipping own `BallDropped` events from watcher path.
+- Fixed contract drop history wager capture to use the wager from the purchase flow.
+- Corrected transaction status check for viem receipt status shape.
+- Added timeout cleanup and functional queue update in animation queue processing.
+- Made auto-drop interval respond instantly to `dropSpeed` changes.
+- Removed BigInt precision risk in PLS total display (`formatEther` path).
+- Removed legacy autoplay feature from active Plinko runtime flow:
+  - deleted autoplay state machine wiring from `app/PLINKO/page.tsx`,
+  - removed `AutoPlaySettings` usage and auto-drop interval logic,
+  - `PlinkoBoardShell` now receives `remainingBalls={0}` (no autoplay rounds tracking).
+- Updated shared navigation behavior used by Plinko:
+  - nav avatar in wallet is now static image/icon only (no animated avatar render in main nav),
+  - desktop sidebar width/label transitions are disabled (instant open/close),
+  - icon-anchor alignment is stabilized to prevent shift/jump during expand/collapse.
+
+## Optimization and Decomposition Audit
+
+### Why `page.tsx` should be split
+
+- It currently mixes at least four concerns:
+  - chain transaction orchestration,
+  - animation/queue state machine,
+  - heavy presentation/layout rendering,
+  - modal lifecycle/visibility state.
+- This increases re-render blast radius and makes changes riskier.
+
+### Recommended Splits (Priority Order)
+
+1. `PlinkoBuyPanel.tsx`
+   - Extract buy controls, totals, risk/payment selection, speed buttons in panel.
+   - Props: pure values + handlers only.
+2. `PlinkoBoardShell.tsx`
+   - Extract board wrapper, burst button, overlays, and `PlinkoGame` mount.
+3. `PlinkoLiveOverlay.tsx`
+   - Extract in-game overlay with chart + live history list.
+4. `PlinkoModalsHost.tsx`
+   - Centralize all modal rendering and open/close wiring.
+5. `usePlinkoTransactionFlow.ts`
+   - Move buy/drop/receipt decode/history-write flow out of component body.
+6. `usePlinkoAnimationQueue.ts`
+   - Own queue lifecycle, drop pacing, launch/scored counters, and guard timeouts.
+
+### Expected Gains
+
+- Smaller render surfaces and clearer memo boundaries.
+- Fewer accidental stale closure bugs.
+- Cleaner testability for transaction and queue logic.
+- Easier future additions (provable fairness UI, extra risk modes, telemetry).
+
+## Suggested Refactor Milestones
+
+- Milestone 1 (safe): Extract `PlinkoModalsHost` and `PlinkoLiveOverlay`.
+- Milestone 2 (medium): Extract `PlinkoBuyPanel` and `PlinkoBoardShell`.
+- Milestone 3 (logic): Move queue + tx code into custom hooks.
+- Milestone 4 (quality): Add unit tests for queue reducer-like transitions and receipt decoding edge cases.
+
+## Working Checklist for Each Change
+
+- [ ] Update this README with change summary + rationale.
+- [ ] Validate no `BigInt -> Number` conversions on value paths.
+- [ ] Verify watcher + receipt decoding do not double-apply results.
+- [ ] Run lint on touched files.
+- [ ] Smoke test free-play and contract flow.
+- [ ] Confirm PulseScan links still use `https://scan.pulsechain.com`.
+
+## Change Log
+
+### 2026-04-02
+
+- Initialized living engineering README with architecture inventory and split roadmap.
+- Added decomposition plan for `page.tsx` refactor into smaller components/hooks.
+- Completed Milestone 1 extraction:
+  - added `components/PLINKO/PlinkoLiveOverlay.tsx` for in-game chart/history/speed overlay,
+  - added `components/PLINKO/PlinkoModalsHost.tsx` for centralized modal rendering,
+  - updated `app/PLINKO/page.tsx` to delegate overlay and modal sections.
+- Completed Milestone 2 extraction:
+  - added `components/PLINKO/PlinkoBuyPanel.tsx` for left-column buy/config/chart surface,
+  - added `components/PLINKO/PlinkoBoardShell.tsx` for board panel + BURST control + game mount,
+  - reduced `app/PLINKO/page.tsx` by delegating left and right gameplay columns to extracted components.
+- Completed Milestone 3 extraction:
+  - added `hooks/use-plinko-animation-queue.ts` to own queue pacing + in-flight counters + safety resets,
+  - added `hooks/use-plinko-transaction-flow.ts` to own receipt polling and buy-and-drop transaction orchestration,
+  - rewired `app/PLINKO/page.tsx` to consume both hooks and removed duplicated inline orchestration logic.
+- Completed hardening pass after Milestone 3:
+  - tightened transaction hook typing (`PublicClient`, `TransactionReceipt`, typed risk-map contract),
+  - replaced remaining broad `any` error surface with `unknown` + normalized message handling,
+  - removed stale/dead page code (unused event ABI/types/test-drop helper) and simplified queue hook API.
+- Added test-friendly transaction utility extraction:
+  - created `lib/plinko-transaction-utils.ts` with pure helpers:
+    - `decodePlinkoBallDroppedLog(...)`
+    - `getPlinkoTransactionErrorMessage(...)`
+  - updated `hooks/use-plinko-transaction-flow.ts` to use shared helpers for cleaner logic and easier future unit tests.
+- Follow-up cleanup and subscription stability pass:
+  - removed dead page state and related effects (`isMobile`, `historyCardCount`, legacy `showBuyBallsModal`, stale `selectedRisk`),
+  - stabilized watched contract event handling via memoized callback (`handleWatchBallDropped`) before passing into `useWatchBallDropped`,
+  - eliminated stale/unused imports and obsolete helper wiring to reduce incidental re-renders and maintenance noise.
+- Autoplay decommission + sidebar/nav stability pass:
+  - removed leftover autoplay logic from `app/PLINKO/page.tsx` and aligned with current "manual drop/buy-and-drop only" flow,
+  - removed main-nav avatar animation path for wallet display (static avatar only),
+  - disabled sidebar width/text transitions and fixed icon anchor behavior to prevent visual shifting during nav expand/collapse.

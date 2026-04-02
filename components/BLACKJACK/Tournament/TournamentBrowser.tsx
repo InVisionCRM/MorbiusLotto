@@ -15,7 +15,7 @@ import {
   PrizeDistributionType,
   TIME_LIMIT_LABELS,
 } from '@/lib/tournament-types';
-import { getTableThemeInfo } from '@/app/BLACKJACK/constants';
+import { getTableThemeInfo, BLACKJACK_IMAGE_BACKGROUNDS } from '@/app/BLACKJACK/constants';
 import type { TableThemeInfo } from '@/hooks/use-blackjack-tables';
 import { FreerollList } from './FreerollList';
 import { TournamentCancelReclaim } from './TournamentCancelReclaim';
@@ -780,22 +780,11 @@ function ExpandedCardContent({
           <SectionHeader>Table Theme</SectionHeader>
           <div className="flex items-center gap-3">
             <div className="w-24 h-16 rounded-lg overflow-hidden border border-gray-700 bg-gray-800 shrink-0">
-              {themeInfo.kind === 'video' ? (
-                <video
-                  src={themeInfo.src}
-                  muted
-                  playsInline
-                  className="w-full h-full object-cover"
-                  onMouseOver={(e) => (e.target as HTMLVideoElement).play()}
-                  onMouseOut={(e) => {
-                    const v = e.target as HTMLVideoElement;
-                    v.pause();
-                    v.currentTime = 0;
-                  }}
-                />
-              ) : (
-                <img src={themeInfo.src} alt={themeInfo.label} className="w-full h-full object-cover" />
-              )}
+              <img
+                src={themeInfo.kind === 'video' ? BLACKJACK_IMAGE_BACKGROUNDS[0].src : themeInfo.src}
+                alt={themeInfo.label}
+                className="w-full h-full object-cover"
+              />
             </div>
             <span className="text-gray-300 text-sm">{themeInfo.label}</span>
           </div>

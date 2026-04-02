@@ -212,7 +212,7 @@ export function LiveKenoBoard({
   useEffect(() => {
     if (active) startSequence()
     return clearTimers
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+     
   }, [active, orderedWinning.join(','), orderedPlus3.join(','), roundId])
 
   useEffect(() => {
@@ -230,26 +230,19 @@ export function LiveKenoBoard({
   }, [nextDrawTime])
 
   return (
-    <Card
-      className="relative overflow-hidden"
-      style={{
-        background: 'linear-gradient(325deg, rgba(20, 20, 20, 0.8), rgba(40, 40, 40, 0.6))',
-        boxShadow: 'inset 0 3px 6px rgba(0, 0, 0, 0.8), inset 0 -3px 6px rgba(255, 255, 255, 0.1), 0 1px 3px rgba(0, 0, 0, 0.5)',
-        border: '1px inset rgba(60, 60, 60, 0.5)',
-      }}
-    >
+    <Card className="surface-panel relative overflow-hidden">
       {/* Radial gradient overlay */}
 
 
       <div className="relative z-10 px-4 py-3">
-        <BentoGrid className="max-w-none">
+        <BentoGrid className="max-w-none grid-cols-1 auto-rows-auto gap-3">
           <BentoGridItem
             title={
               <span className="font-russo-one text-2xl md:text-3xl tracking-wide text-white drop-shadow-[0_0_8px_rgba(34,211,238,0.4)]">
                 KENO
               </span>
             }
-            className="md:row-start-1 md:col-span-2"
+            className="relative overflow-hidden"
             header={
               <>
                 {/* Flying ball overlay */}
@@ -282,13 +275,9 @@ export function LiveKenoBoard({
               ref={gridRef}
               className={cn(
                 "relative z-0 grid grid-cols-10 gap-0 p-0 pb-3 pt-3 backdrop-blur transition-opacity",
-                'opacity-100'
+                'opacity-100',
+                'surface-panel'
               )}
-              style={{
-                background: 'linear-gradient(325deg, rgba(20, 20, 20, 0.8), rgba(40, 40, 40, 0.6))',
-                boxShadow: 'inset 0 3px 6px rgba(0, 0, 0, 0.8), inset 0 -3px 6px rgba(255, 255, 255, 0.1), 0 1px 3px rgba(0, 0, 0, 0.5)',
-                border: '1px inset rgba(60, 60, 60, 0.5)',
-              }}
             >
               {ALL_NUMBERS.map((n) => {
                 const isHit = drawnNumbers.includes(n)
@@ -335,14 +324,7 @@ export function LiveKenoBoard({
                     exit={{ opacity: 0 }}
                     className="pointer-events-auto absolute inset-0 z-40 flex items-center justify-center"
                   >
-                    <div
-                      className="w-full h-full rounded-2xl backdrop-blur-md p-3 text-white overflow-hidden"
-                      style={{
-                        background: 'linear-gradient(325deg, rgba(20, 20, 20, 0.8), rgba(40, 40, 40, 0.6))',
-                        boxShadow: 'inset 0 3px 6px rgba(0, 0, 0, 0.8), inset 0 -3px 6px rgba(255, 255, 255, 0.1), 0 1px 3px rgba(0, 0, 0, 0.5)',
-                        border: '1px inset rgba(60, 60, 60, 0.5)',
-                      }}
-                    >
+                    <div className="surface-panel h-full w-full overflow-hidden rounded-2xl p-3 text-white backdrop-blur-md">
                       {/* Radial gradient overlay */}
                       <div className="relative">
                       <div className="grid grid-cols-5 gap-2 justify-items-center mb-3">
@@ -409,7 +391,7 @@ export function LiveKenoBoard({
 
           <BentoGridItem
             title="Your Numbers"
-            className="md:row-start-2 md:col-span-2 relative overflow-hidden"
+            className="relative overflow-hidden"
             description={`${currentTicket?.drawsRemaining ?? 0} draws remaining`}
           >
             <DottedGlowBackground

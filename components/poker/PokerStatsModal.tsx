@@ -171,7 +171,7 @@ export function PokerStatsModal({ isOpen, onClose, playerAddress }: PokerStatsMo
   return (
     <>
       <div
-        className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4"
+        className="surface-modal-shell"
         onClick={onClose}
         aria-hidden
       />
@@ -182,7 +182,7 @@ export function PokerStatsModal({ isOpen, onClose, playerAddress }: PokerStatsMo
         initial={{ opacity: 0, scale: 0.96 }}
         animate={{ opacity: 1, scale: 1 }}
         exit={{ opacity: 0, scale: 0.96 }}
-        className="fixed left-1/2 top-1/2 z-50 w-full max-w-2xl max-h-[90vh] -translate-x-1/2 -translate-y-1/2 overflow-hidden rounded-2xl shadow-2xl border-2 border-cyan-500/30 bg-gradient-to-br from-slate-900 to-slate-800 flex flex-col"
+        className="surface-modal-card fixed left-1/2 top-1/2 z-50 flex max-h-[90vh] w-full max-w-2xl -translate-x-1/2 -translate-y-1/2 flex-col"
         onClick={(e) => e.stopPropagation()}
       >
         <div className="flex-shrink-0 flex items-center justify-between px-4 py-3 border-b border-cyan-500/30 bg-slate-900/80">

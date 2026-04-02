@@ -1,13 +1,14 @@
 'use client'
 
-import { useState, useCallback, useEffect, useMemo } from 'react'
+import { useState, useCallback, useEffect, useMemo, useRef } from 'react'
 import { useAccount, useBalance, useWaitForTransactionReceipt } from 'wagmi'
-import { parseEther, formatUnits } from 'viem'
+import { parseEther, formatUnits, decodeEventLog } from 'viem'
 import { MORBIUS_TOKEN_ADDRESS, LOTTERY_INSTANT_ADDRESS } from '@/lib/contracts'
 import { useContractReserve, useWagerLimits, usePlayLottery, usePlayLotteryWithPLS, useMaxPayoutForWager } from '@/hooks/use-instant-lottery'
 import { useTokenApproval } from '@/hooks/use-token-approval'
 import { useReadContract } from 'wagmi'
 import { ERC20_ABI } from '@/abi/erc20'
+import { INSTANT_LOTTERY_6OF55_ABI } from '@/abi/instant-lottery-6of55'
 import { useNetworkValidation } from '@/hooks/use-network-validation'
 import { useWplsPrice, calculateWplsAmount } from '@/hooks/use-wpls-price'
 import { getApiUrlOptional } from '@/lib/api-urls'
@@ -16,6 +17,8 @@ import { toast } from 'sonner'
 import { Loader2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Theme } from '@/lib/theme'
+import { PaymentMethodToggle } from '@/components/shared/PaymentMethodToggle'
+import { GameTransactionButton } from '@/components/shared/GameTransactionButton'
 
 const USE_PROVABLY_FAIR_API =
   typeof process !== 'undefined' &&
@@ -33,10 +36,35 @@ const PAYOUT_ROWS: { matches: number; mult: string }[] = [
   { matches: 1, mult: '0.5×' },
   { matches: 2, mult: '1.5×' },
   { matches: 3, mult: '5×' },
-  { matches: 4, mult: '25×' },
-  { matches: 5, mult: '500×' },
-  { matches: 6, mult: '10,000×' },
+  { matches: 4, mult: '15×' },
+  { matches: 5, mult: '50×' },
+  { matches: 6, mult: '100×' },
 ]
+
+function toBigIntSafe(value: unknown): bigint {
+  if (typeof value === 'bigint') return value
+  if (typeof value === 'number' && Number.isFinite(value)) return BigInt(Math.trunc(value))
+  if (typeof value === 'string') {
+    try {
+      return BigInt(value)
+    } catch {
+      return 0n
+    }
+  }
+  if (typeof value === 'boolean') return value ? 1n : 0n
+  return 0n
+}
+
+function toNumberSafe(value: unknown): number {
+  if (typeof value === 'number' && Number.isFinite(value)) return value
+  if (typeof value === 'bigint') return Number(value)
+  if (typeof value === 'string') {
+    const parsed = Number(value)
+    return Number.isFinite(parsed) ? parsed : 0
+  }
+  if (typeof value === 'boolean') return value ? 1 : 0
+  return 0
+}
 
 type Ticket = [number, number, number, number, number, number]
 
@@ -127,7 +155,13 @@ export function InstantLotteryPlayPanel({
   const useApiPlay = USE_PROVABLY_FAIR_API && !!apiUrl && paymentMethod === 'MORBIUS'
 
   const playTxHash = playTxHashMorbius ?? playTxHashPLS
-  const { isLoading: isPlayConfirming, isSuccess: isPlayConfirmed, isError: isPlayReceiptError } = useWaitForTransactionReceipt({ hash: playTxHash })
+  const {
+    data: playReceipt,
+    isLoading: isPlayConfirming,
+    isSuccess: isPlayConfirmed,
+    isError: isPlayReceiptError,
+  } = useWaitForTransactionReceipt({ hash: playTxHash })
+  const lastResultForwardedTxRef = useRef<string | null>(null)
 
   useEffect(() => {
     if (isPlayConfirmed) {
@@ -145,6 +179,47 @@ export function InstantLotteryPlayPanel({
   useEffect(() => {
     if (isPlayReceiptError) toast.error('Transaction failed. Try again or use MORBIUS.')
   }, [isPlayReceiptError])
+
+  useEffect(() => {
+    if (!onResult || useApiPlay || !playTxHash || !playReceipt) return
+    const txHash = playTxHash.toLowerCase()
+    if (lastResultForwardedTxRef.current === txHash) return
+
+    const lotteryAddress = (LOTTERY_INSTANT_ADDRESS as string).toLowerCase()
+    for (const log of playReceipt.logs) {
+      if (log.address.toLowerCase() !== lotteryAddress) continue
+      try {
+        const decoded = decodeEventLog({
+          abi: INSTANT_LOTTERY_6OF55_ABI,
+          data: log.data,
+          topics: log.topics,
+        })
+        if (decoded.eventName !== 'InstantLotteryResult') continue
+
+        const args = decoded.args as Record<string, unknown>
+        const playerNumbers = Array.isArray(args.playerNumbers) ? args.playerNumbers.map((n) => Number(n)) : []
+        const winningNumbers = Array.isArray(args.winningNumbers) ? args.winningNumbers.map((n) => Number(n)) : []
+        if (playerNumbers.length !== NUMBERS_PER_TICKET || winningNumbers.length !== NUMBERS_PER_TICKET) continue
+
+        const matchCount = toNumberSafe(args.matchCount)
+        const wager = toBigIntSafe(args.wager)
+        const netPayout = toBigIntSafe(args.netPayout)
+
+        onResult({
+          playerNumbers,
+          winningNumbers,
+          matchCount,
+          wager,
+          netPayout,
+          txHash: playTxHash,
+        })
+        lastResultForwardedTxRef.current = txHash
+        break
+      } catch {
+        // Ignore unrelated logs in the receipt and continue scanning.
+      }
+    }
+  }, [onResult, playReceipt, playTxHash, useApiPlay])
 
   const canPlayMorbius = address && selected.length === NUMBERS_PER_TICKET && wagerWei >= minWager && wagerWei <= maxWager && (morbiusBalance ?? 0n) >= wagerWei && reserveOk && (!needsApproval || allowance >= wagerWei)
   const canPlayPLS = address && selected.length === NUMBERS_PER_TICKET && paymentMethod === 'PLS' && wagerWei >= minWager && wagerWei <= maxWager && reserveOk && plsRequiredWei > 0n && (plsBalance?.value ?? 0n) >= plsRequiredWei
@@ -242,14 +317,8 @@ export function InstantLotteryPlayPanel({
   const isPending = isPendingMorbius || isPendingPLS
   const buttonBusy = approveClicked || playClicked || isPending || isPlayConfirming || apiPlaying
 
-  const panelStyle = {
-    background: 'linear-gradient(325deg, rgba(20, 20, 20, 0.8), rgba(40, 40, 40, 0.6))',
-    boxShadow: 'inset 0 3px 6px rgba(0, 0, 0, 0.8), inset 0 -3px 6px rgba(255, 255, 255, 0.1), 0 1px 3px rgba(0, 0, 0, 0.5)',
-    border: '1px inset rgba(60, 60, 60, 0.5)',
-  }
-
   return (
-    <div className="rounded-2xl overflow-hidden w-full max-w-2xl mx-auto" style={panelStyle}>
+    <div className="surface-panel mx-auto w-full max-w-2xl overflow-hidden rounded-2xl">
       <div className="p-4 space-y-4">
         <div className="flex items-center justify-between gap-2 mb-1">
           <h3 className="text-white text-base sm:text-lg uppercase tracking-wider" style={{ fontFamily: "'Russo One', sans-serif" }}>
@@ -331,33 +400,7 @@ export function InstantLotteryPlayPanel({
               />
             </div>
           </div>
-          <div className="flex items-center justify-center gap-2">
-            <button
-              type="button"
-              onClick={() => setPaymentMethod('MORBIUS')}
-              className={cn(
-                'mitr-bold text-2xl sm:text-3xl transition-all duration-300 cursor-pointer',
-                paymentMethod === 'MORBIUS'
-                  ? 'bg-gradient-to-r from-cyan-400 to-cyan-600 bg-clip-text text-transparent'
-                  : 'text-white/50 hover:text-white/70'
-              )}
-            >
-              MORBIUS
-            </button>
-            <span className="text-white/40 text-2xl sm:text-3xl font-bold select-none">/</span>
-            <button
-              type="button"
-              onClick={() => setPaymentMethod('PLS')}
-              className={cn(
-                'mitr-bold text-2xl sm:text-3xl transition-all duration-300 cursor-pointer',
-                paymentMethod === 'PLS'
-                  ? 'bg-gradient-to-r from-purple-400 to-purple-600 bg-clip-text text-transparent'
-                  : 'text-white/50 hover:text-white/70'
-              )}
-            >
-              PLS
-            </button>
-          </div>
+          <PaymentMethodToggle value={paymentMethod} onChange={setPaymentMethod} />
 
           {/* PLS price / conversion (same pattern as Plinko) */}
           {paymentMethod === 'PLS' && isLoadingPlsPrice && (
@@ -401,48 +444,46 @@ export function InstantLotteryPlayPanel({
           {paymentMethod === 'MORBIUS' && (
             <>
               {needsApproval ? (
-                <button
+                <GameTransactionButton
                   type="button"
                   disabled={!address || approveClicked || isApproving || wagerWei <= 0n}
                   onClick={() => {
                     setApproveClicked(true)
                     approve()
                   }}
-                  className="w-full px-6 py-2.5 rounded-xl bg-cyan-600 hover:bg-cyan-500 text-white font-medium disabled:opacity-50 flex items-center justify-center gap-2"
+                  isLoading={approveClicked || isApproving}
+                  variant="approve"
                 >
-                  {(approveClicked || isApproving) ? <Loader2 className="w-4 h-4 animate-spin shrink-0" /> : null}
                   {(approveClicked || isApproving) ? (approveTxHash ? 'Confirming…' : 'Confirm in wallet…') : 'Approve MORBIUS'}
-                </button>
+                </GameTransactionButton>
               ) : null}
-              <button
+              <GameTransactionButton
                 type="button"
                 disabled={!canPlayMorbius || buttonBusy}
                 onClick={handlePlayMorbius}
-                className="w-full px-6 py-2.5 rounded-xl bg-gradient-to-r from-cyan-600 to-blue-600 hover:from-cyan-500 hover:to-blue-500 text-white font-medium disabled:opacity-50 flex items-center justify-center gap-2"
+                isLoading={isPending || isPlayConfirming || apiPlaying}
               >
-                {(isPending || isPlayConfirming || apiPlaying) ? <Loader2 className="w-5 h-5 animate-spin shrink-0" /> : null}
                 {apiPlaying ? 'Playing…' : isPending ? 'Confirm in wallet…' : isPlayConfirming ? 'Confirming…' : isPlayConfirmed ? 'Success!' : (
                   <>
                     Play <img src="/morbius/OfficialMorbiusLogo.png" alt="MORBIUS" className="h-9 w-auto object-contain inline-block align-middle" />
                   </>
                 )}
-              </button>
+              </GameTransactionButton>
             </>
           )}
           {paymentMethod === 'PLS' && (
-            <button
+            <GameTransactionButton
               type="button"
               disabled={!canPlayPLS || buttonBusy}
               onClick={handlePlayPLS}
-              className="w-full px-6 py-2.5 rounded-xl bg-gradient-to-r from-cyan-600 to-blue-600 hover:from-cyan-500 hover:to-blue-500 text-white font-medium disabled:opacity-50 flex items-center justify-center gap-2"
+              isLoading={isPending || isPlayConfirming}
             >
-              {(isPending || isPlayConfirming) ? <Loader2 className="w-5 h-5 animate-spin shrink-0" /> : null}
               {isPending ? 'Confirm in wallet…' : isPlayConfirming ? 'Confirming…' : isPlayConfirmed ? 'Success!' : (
                 <>
                   Play <img src="/Pulse Branding/Logo/ball.png" alt="PLS" className="h-9 w-auto object-contain inline-block align-middle" />
                 </>
               )}
-            </button>
+            </GameTransactionButton>
           )}
         </div>
       </div>

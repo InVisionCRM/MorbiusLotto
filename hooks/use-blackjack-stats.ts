@@ -1,8 +1,6 @@
 import { useQuery } from '@tanstack/react-query';
 import { useAccount } from 'wagmi';
 
-import { getApiUrlOptional } from '@/lib/api-urls';
-
 export interface EnhancedPlayerStats {
   total_games: number;
   total_bet: bigint;
@@ -62,16 +60,14 @@ function defaultEnhancedStats(): EnhancedPlayerStats {
 
 export function usePlayerStatsEnhanced() {
   const { address } = useAccount();
-  const apiUrl = getApiUrlOptional();
 
   return useQuery<EnhancedPlayerStats>({
-    queryKey: ['playerStatsEnhanced', address, !!apiUrl],
+    queryKey: ['playerStatsEnhanced', address],
     queryFn: async () => {
       if (!address) throw new Error('Wallet not connected');
-      if (!apiUrl) return defaultEnhancedStats();
 
       try {
-        const response = await fetch(`${apiUrl}/api/player/${address}/stats/enhanced`);
+        const response = await fetch(`/api/player/${address}/stats`, { cache: 'no-store' });
         if (!response.ok) {
           const errorText = await response.text();
           let errorMessage = 'Failed to fetch player stats';
@@ -96,14 +92,13 @@ export function usePlayerStatsEnhanced() {
           favorite_bet_amount: BigInt(data.favorite_bet_amount || 0),
         };
       } catch (error) {
-        if (error instanceof TypeError && error.message === 'Failed to fetch') {
-          throw new Error(`Cannot connect to backend server at ${apiUrl}. Make sure the server is running.`);
-        }
         throw error;
       }
     },
     enabled: !!address,
     refetchInterval: 30000, // Refetch every 30 seconds
+    refetchOnWindowFocus: false,
+    staleTime: 15_000,
     retry: 1, // Only retry once
   });
 }
@@ -123,15 +118,13 @@ function defaultGlobalAnalytics(): GlobalAnalytics {
  * Only fetches when enabled (e.g. when deployer is viewing analytics tab) to reduce server load.
  */
 export function useGlobalAnalytics(options?: { enabled?: boolean }) {
-  const apiUrl = getApiUrlOptional();
   const enabled = options?.enabled !== false;
   return useQuery<GlobalAnalytics>({
-    queryKey: ['globalAnalytics', !!apiUrl],
-    enabled: enabled && !!apiUrl,
+    queryKey: ['globalAnalytics'],
+    enabled,
     queryFn: async () => {
-      if (!apiUrl) return defaultGlobalAnalytics();
       try {
-        const response = await fetch(`${apiUrl}/api/analytics/global`);
+        const response = await fetch('/api/analytics/global', { cache: 'no-store' });
         if (!response.ok) {
           const errorText = await response.text();
           let errorMessage = 'Failed to fetch global analytics';
@@ -157,13 +150,12 @@ export function useGlobalAnalytics(options?: { enabled?: boolean }) {
           largest_payout: BigInt(data.largest_payout || 0),
         };
       } catch (error) {
-        if (error instanceof TypeError && error.message === 'Failed to fetch') {
-          throw new Error(`Cannot connect to backend server at ${apiUrl}. Make sure the server is running.`);
-        }
         throw error;
       }
     },
     refetchInterval: 180000, // Refetch every 3 minutes when enabled (reduces server load)
+    refetchOnWindowFocus: false,
+    staleTime: 60_000,
     retry: 1, // Only retry once
   });
 }
@@ -183,13 +175,11 @@ export interface TopPlayerEntry {
  * Only runs when API URL is configured.
  */
 export function useBlackjackTopPlayers(limit: number = 10) {
-  const apiUrl = getApiUrlOptional();
   return useQuery<TopPlayerEntry[]>({
-    queryKey: ['blackjackTopPlayers', limit, !!apiUrl],
+    queryKey: ['blackjackTopPlayers', limit],
     queryFn: async () => {
-      if (!apiUrl) return [];
       try {
-        const response = await fetch(`${apiUrl}/api/analytics/top-players?limit=${limit}`);
+        const response = await fetch(`/api/analytics/top-players?limit=${limit}`, { cache: 'no-store' });
         const text = await response.text();
         if (!response.ok) {
           let body = text;
@@ -214,14 +204,12 @@ export function useBlackjackTopPlayers(limit: number = 10) {
         if (error instanceof SyntaxError) {
           throw new Error('Top players: invalid JSON from server');
         }
-        if (error instanceof TypeError && error.message === 'Failed to fetch') {
-          throw new Error(`Cannot reach backend at ${apiUrl}. Check CORS and that the server is running.`);
-        }
         throw error;
       }
     },
-    enabled: !!apiUrl,
     refetchInterval: 60000,
+    refetchOnWindowFocus: false,
+    staleTime: 30_000,
     retry: 1,
   });
 }
@@ -253,23 +241,22 @@ export interface RecentGameGlobalRow {
  */
 export function usePlayerGames(limit: number = 50, offset: number = 0) {
   const { address } = useAccount();
-  const apiUrl = getApiUrlOptional();
 
   return useQuery<PlayerGameRow[]>({
-    queryKey: ['playerGames', address, limit, offset, !!apiUrl],
+    queryKey: ['playerGames', address, limit, offset],
     queryFn: async () => {
       if (!address) throw new Error('Wallet not connected');
-      if (!apiUrl) return [];
 
       const response = await fetch(
-        `${apiUrl}/api/player/${address}/games?limit=${limit}&offset=${offset}`
+        `/api/player/${address}/games?limit=${limit}&offset=${offset}`,
+        { cache: 'no-store' }
       );
       if (!response.ok) {
         throw new Error('Failed to fetch player games');
       }
       return response.json();
     },
-    enabled: !!address && !!apiUrl,
+    enabled: !!address,
   });
 }
 
@@ -277,17 +264,16 @@ export function usePlayerGames(limit: number = 50, offset: number = 0) {
  * Hook to fetch global recent blackjack games (all players) for Recent Play feed.
  */
 export function useBlackjackRecentGamesGlobal(limit: number = 50) {
-  const apiUrl = getApiUrlOptional();
   return useQuery<RecentGameGlobalRow[]>({
-    queryKey: ['blackjackRecentGamesGlobal', limit, !!apiUrl],
+    queryKey: ['blackjackRecentGamesGlobal', limit],
     queryFn: async () => {
-      if (!apiUrl) return [];
-      const response = await fetch(`${apiUrl}/api/blackjack/recent-games?limit=${limit}`);
+      const response = await fetch(`/api/blackjack/recent-games?limit=${limit}`, { cache: 'no-store' });
       if (!response.ok) throw new Error('Failed to fetch recent games');
       return response.json();
     },
-    enabled: !!apiUrl,
     refetchInterval: 30000,
+    refetchOnWindowFocus: false,
+    staleTime: 15_000,
   });
 }
 
@@ -295,21 +281,20 @@ export function useBlackjackRecentGamesGlobal(limit: number = 50) {
  * Hook to fetch settlements
  */
 export function useSettlements(status?: string, limit: number = 100) {
-  const apiUrl = getApiUrlOptional();
   return useQuery({
-    queryKey: ['settlements', status, limit, !!apiUrl],
+    queryKey: ['settlements', status, limit],
     queryFn: async () => {
-      if (!apiUrl) return [];
-      const url = new URL(`${apiUrl}/api/settlements`);
-      if (status) url.searchParams.set('status', status);
-      url.searchParams.set('limit', limit.toString());
-
-      const response = await fetch(url.toString());
+      const params = new URLSearchParams();
+      if (status) params.set('status', status);
+      params.set('limit', limit.toString());
+      const response = await fetch(`/api/settlements?${params.toString()}`, { cache: 'no-store' });
       if (!response.ok) {
         throw new Error('Failed to fetch settlements');
       }
       return response.json();
     },
     refetchInterval: 30000, // Refetch every 30 seconds
+    refetchOnWindowFocus: false,
+    staleTime: 15_000,
   });
 }

@@ -71,11 +71,14 @@ export declare class BlackjackMultiGameService {
     private readonly stateVersions;
     constructor(dbService: DatabaseService, pfService: ProvablyFairService);
     setBroadcastCallback(cb: (tableId: string) => Promise<void>): void;
+    private broadcastTableState;
     private get pool();
     /** Bump and return the monotonic state version for a table. */
     private bumpStateVersion;
     /** Fire-and-forget audit log entry — never throws. */
     private audit;
+    /** Clear in-memory runtime metadata owned by this service for a table lifecycle transition. */
+    private clearTableRuntimeState;
     listTables(): Promise<BJMultiTableSummary[]>;
     createTable(minBet: bigint, maxBet: bigint, themeKind?: string, themeId?: string): Promise<{
         id: string;
@@ -114,12 +117,21 @@ export declare class BlackjackMultiGameService {
      * Called by the timer watchdog: transition a table from waiting to betting when
      * there are seated players, so the next round can start (15s betting timer applies).
      */
+    private loadLatestRoundMeta;
+    private canCreateBettingRound;
+    private createPlaceholderBettingRound;
     startBettingPhase(tableId: string): Promise<void>;
     /**
      * Called by the timer watchdog: handle betting phase timeout.
      * Seats that haven't bet sit out (or get kicked), then start round if any bets exist.
      */
     handleBettingTimeout(tableId: string): Promise<void>;
+    /**
+     * Round snapshot authority:
+     * - while playing/dealer_turn, prefer non-betting rounds so UI never "resets" to a placeholder betting round.
+     * - otherwise, latest round is authoritative.
+     */
+    private loadAuthorityRoundForSnapshot;
     getTableState(tableId: string): Promise<BJMultiTableState>;
     /** Compute current deck position from all cards already in play for this round. */
     private computeDeckPosition;

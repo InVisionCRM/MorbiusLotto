@@ -39,14 +39,14 @@ export function PokerBetaSplash() {
 
   return (
     <div
-      className="fixed inset-0 bg-black/80 backdrop-blur-sm z-[100] flex items-center justify-center p-4"
+      className="surface-modal-shell z-[100]"
       role="dialog"
       aria-modal="true"
       aria-labelledby="poker-beta-splash-title"
       aria-describedby="poker-beta-splash-desc"
     >
       <div
-        className="bg-gradient-to-br from-slate-900 to-slate-800 border-2 border-cyan-500/30 rounded-2xl shadow-2xl max-w-lg w-full overflow-hidden"
+        className="surface-modal-card"
         style={{ boxShadow: '0 4px 16px rgba(0, 0, 0, 0.6), inset 0 1px 0 rgba(255, 255, 255, 0.05)' }}
       >
         <div className="absolute inset-0 pointer-events-none bg-[radial-gradient(circle_at_50%_0%,rgba(34,211,238,0.12),transparent_55%)]" />

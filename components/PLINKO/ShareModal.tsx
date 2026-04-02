@@ -136,8 +136,8 @@ export const ShareModal: React.FC<ShareModalProps> = ({
   };
 
   return (
-    <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-      <div className="bg-gradient-to-br from-slate-900 to-slate-800 border-2 border-cyan-500/30 rounded-2xl shadow-2xl max-w-sm w-full overflow-hidden">
+    <div className="surface-modal-shell">
+      <div className="surface-modal-card max-w-sm">
         <div className="p-4">
           {/* Header */}
           <div className="flex items-center justify-between mb-3">

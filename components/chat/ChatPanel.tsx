@@ -4,7 +4,7 @@ import { useState, useRef, useEffect } from 'react';
 import { useAccount } from 'wagmi';
 import { useChat } from '@/hooks/use-chat';
 import { useProfileSettingsModal } from '@/components/shared/ProfileSettingsModalContext';
-import AvatarView from '@/components/poker/avatar/AvatarView';
+import { AvatarView } from '@/components/avatar';
 import { PlayerProfileModal } from '@/components/shared/PlayerProfileModal';
 import { parseAvatarPayload } from '@/lib/avatar-payload';
 import type { BlackjackWebSocketClient, ChatMessagePayload } from '@/lib/websocket-client';
@@ -99,7 +99,7 @@ function ChatMessageAvatar({
       {avatarPayload ? (
         <AvatarView config={msg.avatarConfig} compact className="h-full w-full" emotion="neutral" />
       ) : imgUrl ? (
-        // eslint-disable-next-line @next/next/no-img-element
+         
         <img src={imgUrl} alt="" className="h-full w-full object-cover" />
       ) : (
         <span className="flex h-full w-full items-center justify-center text-[9px] font-semibold uppercase tracking-tight text-slate-500">
@@ -351,8 +351,8 @@ export function ChatPanel({
             if (compact) {
               return (
                 <div key={msg.id} className="text-left flex gap-1.5 items-baseline font-sans">
-                  <span className="text-[11px] text-slate-500 shrink-0">{senderLabel(msg)}:</span>
-                  <span className="text-[13px] text-slate-200 break-words min-w-0">{msg.text}</span>
+                  <span className="text-[11px] text-slate-500 shrink-0" style={{ fontFamily: "'Montserrat', sans-serif", fontWeight: 500 }}>{senderLabel(msg)}:</span>
+                  <span className="text-[13px] text-white/95 break-words min-w-0" style={{ fontFamily: "'Montserrat', sans-serif", fontWeight: 500 }}>{msg.text}</span>
                 </div>
               );
             }
@@ -405,7 +405,7 @@ export function ChatPanel({
                     {formatRelative(msg.timestamp)}
                   </span>
                 </div>
-                <p className="text-slate-200 text-sm break-words pl-0 mt-0.5 leading-relaxed">{msg.text}</p>
+                <p className="text-white/95 text-sm break-words pl-0 mt-0.5 leading-relaxed" style={{ fontFamily: "'Montserrat', sans-serif", fontWeight: 500 }}>{msg.text}</p>
               </div>
             </div>
             );

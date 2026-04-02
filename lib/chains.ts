@@ -12,13 +12,13 @@ export const pulsechain = defineChain({
     default: {
       http: [
         'https://rpc.pulsechain.com',
-        'https://pulsechain-rpc.publicnode.com', // Fallback RPC
+        'https://rpc-pulsechain.g4mm4.io', // Fallback RPC
       ],
     },
     public: {
       http: [
         'https://rpc.pulsechain.com',
-        'https://pulsechain-rpc.publicnode.com', // Fallback RPC
+        'https://rpc-pulsechain.g4mm4.io', // Fallback RPC
       ],
     },
   },

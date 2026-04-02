@@ -230,6 +230,7 @@ export function GameWalletModal({
 
   const [withdrawPhase, setWithdrawPhase] = useState<WithdrawPhase>('idle');
   const [withdrawError, setWithdrawError] = useState<string | null>(null);
+  const [withdrawTxHash, setWithdrawTxHash] = useState<string | null>(null);
   const [isPreparingWithdraw, setIsPreparingWithdraw] = useState(false);
 
   const [isReupPending, setIsReupPending] = useState(false);
@@ -682,9 +683,11 @@ export function GameWalletModal({
       const { status, txHash } = statusData;
       if (status === 'completed') {
         setWithdrawPhase('success');
+        if (typeof txHash === 'string' && txHash.length > 0) setWithdrawTxHash(txHash);
         toast.success('Withdrawal successful!', {
           id: toastId,
-          description: txHash ? `Tx: ${txHash.slice(0, 10)}…` : 'Sent to your wallet.',
+          description: txHash ? `Tx: ${txHash}` : 'Sent to your wallet.',
+          descriptionClassName: txHash ? 'break-all font-mono text-[11px] leading-snug' : undefined,
         });
         if (onRefreshBalance) await onRefreshBalance();
         else if (isSelfManaged) await fetchBalance();
@@ -693,10 +696,12 @@ export function GameWalletModal({
         setTxLoaded(false);
         await new Promise((r) => setTimeout(r, 2000));
         setWithdrawPhase('idle');
+        setWithdrawTxHash(null);
         return;
       }
       if (status === 'failed') {
         setWithdrawPhase('error');
+        setWithdrawTxHash(null);
         setWithdrawError(statusData.error || 'Withdrawal failed. Contact support.');
         toast.error('Withdrawal failed', {
           id: toastId,
@@ -709,13 +714,19 @@ export function GameWalletModal({
       }
       if (status === 'pending_confirmation' && txHash) {
         setWithdrawPhase('confirming');
-        toast.loading('Confirming on chain...', { id: toastId, description: `Tx: ${txHash.slice(0, 10)}…` });
+        setWithdrawTxHash(txHash);
+        toast.loading('Confirming on chain...', {
+          id: toastId,
+          description: `Tx: ${txHash}`,
+          descriptionClassName: 'break-all font-mono text-[11px] leading-snug',
+        });
       } else {
         toast.loading('Processing withdrawal...', { id: toastId });
       }
       await new Promise((r) => setTimeout(r, 2000));
     }
     setWithdrawPhase('error');
+    setWithdrawTxHash(null);
     setWithdrawError('Withdrawal timed out. Contact support.');
     toast.error('Withdrawal timed out', { id: toastId });
     if (onRefreshBalance) await onRefreshBalance();
@@ -768,6 +779,7 @@ export function GameWalletModal({
       return;
     }
     setWithdrawError(null);
+    setWithdrawTxHash(null);
     setWithdrawPhase('queued');
     setIsPreparingWithdraw(true);
     const toastId = toast.loading('Withdrawal queued...');
@@ -784,6 +796,7 @@ export function GameWalletModal({
       await pollWithdrawJob(jobId, toastId);
     } catch (err: any) {
       setWithdrawPhase('error');
+      setWithdrawTxHash(null);
       setWithdrawError(err?.message ?? 'Withdrawal failed');
       toast.error('Withdrawal failed', { id: toastId, description: err?.message });
       if (onRefreshBalance) await onRefreshBalance();
@@ -955,11 +968,21 @@ export function GameWalletModal({
                           <>
                             <Loader2 className="w-10 h-10 animate-spin text-cyan-500 mx-auto mb-3" />
                             <p className="text-sm font-medium text-gray-900">Confirming on chain...</p>
+                            {withdrawTxHash && (
+                              <p className="text-xs text-gray-600 mt-3 font-mono break-all text-left max-w-full px-1">
+                                Tx: {withdrawTxHash}
+                              </p>
+                            )}
                           </>
                         ) : withdrawPhase === 'success' ? (
                           <>
                             <Check className="w-10 h-10 text-green-500 mx-auto mb-3" />
                             <p className="text-sm font-medium text-gray-900">Withdrawal successful</p>
+                            {withdrawTxHash && (
+                              <p className="text-xs text-gray-600 mt-3 font-mono break-all text-left max-w-full px-1">
+                                Tx: {withdrawTxHash}
+                              </p>
+                            )}
                           </>
                         ) : withdrawPhase === 'error' ? (
                           <>

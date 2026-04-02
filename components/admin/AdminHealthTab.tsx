@@ -6,10 +6,9 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { formatEther, parseEther } from 'viem';
-import { Activity, RefreshCw, CheckCircle, XCircle, Loader2, Gift, X, Server, Wifi, SquareStack, CircleDot, Grid3x3, Ticket, Wallet } from 'lucide-react';
+import { Activity, RefreshCw, Loader2, Gift, X, Server, Wifi, SquareStack, CircleDot, Grid3x3, Ticket } from 'lucide-react';
 import { FeaturesSectionGrid, type FeatureGridItem } from '@/components/features-section-demo-2';
 import { CopyButton } from '@/components/ui/copy-button';
-import { Tooltip, Legend, ResponsiveContainer, Area, AreaChart, XAxis, YAxis, CartesianGrid } from 'recharts';
 import {
   BLACKJACK_ADDRESS,
   BLACKJACK_LEGACY_ADDRESS,
@@ -138,278 +137,6 @@ const FUNDABLE_GAMES: { key: FundableGameKey; label: string; address: `0x${strin
   { key: 'bigwheel', label: 'Big Wheel', address: BIGWHEEL_ADDRESS as `0x${string}`, useFundContract: false },
   { key: 'blackjack', label: 'Blackjack', address: BLACKJACK_ADDRESS as `0x${string}`, useFundContract: false, useDepositMorbius: true },
 ];
-
-/** Last N days in YYYY-MM-DD, then formatted for display (e.g. "3/4"). */
-function getLast7Days(): { date: string; label: string }[] {
-  const out: { date: string; label: string }[] = [];
-  for (let i = 6; i >= 0; i--) {
-    const d = new Date();
-    d.setDate(d.getDate() - i);
-    const date = d.toISOString().slice(0, 10);
-    const label = `${d.getMonth() + 1}/${d.getDate()}`;
-    out.push({ date, label });
-  }
-  return out;
-}
-
-// ── Snapshot types ──────────────────────────────────────────────────────────
-
-interface ContractSnapshot {
-  snapshot_date: string;
-  game: string;
-  total_wagered: string;
-  total_payouts: string;
-  contract_reserve: string;
-}
-
-interface ContractSnapshotHourly {
-  snapshot_hour: string;
-  game: string;
-  total_wagered: string;
-  total_payouts: string;
-  contract_reserve: string;
-}
-
-/** Last 24 hours (hour buckets), label e.g. "0h" … "23h" or "14:00". */
-function getLast24Hours(): { date: string; label: string }[] {
-  const out: { date: string; label: string }[] = [];
-  const now = new Date();
-  for (let i = 23; i >= 0; i--) {
-    const d = new Date(now);
-    d.setHours(d.getHours() - i, 0, 0, 0);
-    const hourKey = d.toISOString().slice(0, 13) + ':00:00.000Z';
-    const label = `${d.getHours()}h`;
-    out.push({ date: hourKey, label });
-  }
-  return out;
-}
-
-function normalizeHourKey(isoOrPg: string): string {
-  const d = new Date(isoOrPg);
-  return d.toISOString().slice(0, 13) + ':00:00.000Z';
-}
-
-/** Build per-game hourly chart data from hourly snapshots. Reserve = point-in-time; single/dual = deltas. */
-function buildGameChartDataHourly(
-  hours: { date: string; label: string }[],
-  snapshots: ContractSnapshotHourly[],
-  game: string,
-): {
-  single:  { date: string; label: string; value: number }[];
-  dual:    { date: string; label: string; wagers: number; payouts: number }[];
-  reserve: { date: string; label: string; value: number }[];
-} {
-  const byHour = new Map<string, ContractSnapshotHourly>();
-  for (const s of snapshots) {
-    if (s.game === game) byHour.set(normalizeHourKey(s.snapshot_hour), s);
-  }
-
-  let prevWagered = 0n;
-  let prevPayouts = 0n;
-
-  const single:  { date: string; label: string; value: number }[] = [];
-  const dual:   { date: string; label: string; wagers: number; payouts: number }[] = [];
-  const reserve: { date: string; label: string; value: number }[] = [];
-
-  for (const hour of hours) {
-    const snap = byHour.get(hour.date);
-    const curWagered = snap ? BigInt(snap.total_wagered) : prevWagered;
-    const curPayouts = snap ? BigInt(snap.total_payouts) : prevPayouts;
-    const curReserve = snap ? BigInt(snap.contract_reserve) : 0n;
-
-    const deltaWagered = curWagered > prevWagered ? curWagered - prevWagered : 0n;
-    const deltaPayouts = curPayouts > prevPayouts ? curPayouts - prevPayouts : 0n;
-    const deltaRevenue = deltaWagered > deltaPayouts ? deltaWagered - deltaPayouts : 0n;
-
-    single.push({ ...hour, value: Number(formatEther(deltaRevenue)) });
-    dual.push({ ...hour, wagers: Number(formatEther(deltaWagered)), payouts: Number(formatEther(deltaPayouts)) });
-    reserve.push({ ...hour, value: Number(formatEther(curReserve)) });
-
-    prevWagered = curWagered;
-    prevPayouts = curPayouts;
-  }
-
-  return { single, dual, reserve };
-}
-
-/** Build per-game daily chart data from DB snapshots.
- *  Computes day-over-day DELTA of cumulative totals so each bar represents
- *  actual activity on that calendar day, not the running total.
- *  Days with no snapshot carry the previous day's cumulative (delta = 0). */
-function buildGameChartData(
-  days: { date: string; label: string }[],
-  snapshots: ContractSnapshot[],
-  game: string,
-): {
-  single:  { date: string; label: string; value: number }[];
-  dual:    { date: string; label: string; wagers: number; payouts: number }[];
-  reserve: { date: string; label: string; value: number }[];
-} {
-  const byDate = new Map<string, ContractSnapshot>();
-  for (const s of snapshots) {
-    if (s.game === game) byDate.set(s.snapshot_date, s);
-  }
-
-  let prevWagered = 0n;
-  let prevPayouts = 0n;
-
-  const single:  { date: string; label: string; value: number }[] = [];
-  const dual:    { date: string; label: string; wagers: number; payouts: number }[] = [];
-  const reserve: { date: string; label: string; value: number }[] = [];
-
-  for (const day of days) {
-    const snap = byDate.get(day.date);
-    const curWagered = snap ? BigInt(snap.total_wagered) : prevWagered;
-    const curPayouts = snap ? BigInt(snap.total_payouts) : prevPayouts;
-    const curReserve = snap ? BigInt(snap.contract_reserve) : 0n;
-
-    const deltaWagered = curWagered > prevWagered ? curWagered - prevWagered : 0n;
-    const deltaPayouts = curPayouts > prevPayouts ? curPayouts - prevPayouts : 0n;
-    const deltaRevenue = deltaWagered > deltaPayouts ? deltaWagered - deltaPayouts : 0n;
-
-    single.push({ ...day, value: Number(formatEther(deltaRevenue)) });
-    dual.push({ ...day, wagers: Number(formatEther(deltaWagered)), payouts: Number(formatEther(deltaPayouts)) });
-    reserve.push({ ...day, value: Number(formatEther(curReserve)) });
-
-    prevWagered = curWagered;
-    prevPayouts = curPayouts;
-  }
-
-  return { single, dual, reserve };
-}
-
-const CHART_HEIGHT = 140;
-
-/** Single-series daily area chart (Revenue or Reserve). */
-function DailySingleChart({
-  title,
-  data,
-  gradientId,
-  dataKey,
-}: {
-  title: string;
-  data: { date: string; label: string; value: number }[];
-  gradientId: string;
-  dataKey: string;
-}) {
-  if (!data.length) return null;
-  return (
-    <div
-      className="rounded-lg border border-cyan-500/20 p-2"
-      style={{
-        background: '#000',
-        boxShadow: 'inset 0 2px 8px rgba(0, 255, 255, 0.05), 0 0 20px rgba(0, 0, 0, 0.8)',
-      }}
-    >
-      <p className="text-cyan-400 text-[10px] font-semibold mb-1 tracking-wide truncate">{title}</p>
-      <ResponsiveContainer width="100%" height={CHART_HEIGHT}>
-        <AreaChart data={data} margin={{ top: 8, right: 8, left: 0, bottom: 20 }}>
-          <defs>
-            <linearGradient id={gradientId} x1="0" y1="0" x2="0" y2="1">
-              <stop offset="0%" stopColor="rgba(0, 255, 255, 0.35)" />
-              <stop offset="100%" stopColor="rgba(0, 255, 255, 0.02)" />
-            </linearGradient>
-          </defs>
-          <CartesianGrid strokeDasharray="2 2" stroke="rgba(255,255,255,0.05)" />
-          <XAxis
-            dataKey="label"
-            tick={{ fontSize: 8, fill: 'rgba(0, 255, 255, 0.6)', fontFamily: 'monospace' }}
-            stroke="rgba(0, 255, 255, 0.15)"
-            axisLine={{ stroke: 'rgba(0, 255, 255, 0.15)' }}
-            tickLine={false}
-            interval={0}
-          />
-          <YAxis
-            width={32}
-            tick={{ fontSize: 8, fill: 'rgba(255,255,255,0.4)', fontFamily: 'monospace' }}
-            axisLine={false}
-            tickLine={false}
-            tickFormatter={(v) => (v >= 1e6 ? `${(v / 1e6).toFixed(0)}M` : v >= 1e3 ? `${(v / 1e3).toFixed(0)}k` : String(Math.round(v)))}
-          />
-          <Tooltip
-            contentStyle={{ background: 'rgba(0,0,0,0.9)', border: '1px solid rgba(34, 211, 238, 0.3)', borderRadius: 8, fontSize: 10 }}
-            labelStyle={{ color: 'rgba(34, 211, 238, 0.9)' }}
-            formatter={(value: number) => [value >= 1e6 ? `${(value / 1e6).toFixed(2)}M` : value >= 1e3 ? `${(value / 1e3).toFixed(2)}k` : value.toFixed(2), dataKey]}
-            labelFormatter={(label) => `Date: ${label}`}
-          />
-          <Area
-            type="monotone"
-            dataKey={dataKey}
-            stroke="#22d3ee"
-            fill={`url(#${gradientId})`}
-            strokeWidth={1.5}
-            isAnimationActive={false}
-          />
-        </AreaChart>
-      </ResponsiveContainer>
-    </div>
-  );
-}
-
-/** Two-series daily area chart (Payouts vs Wagers). */
-function DailyDualChart({
-  title,
-  data,
-  gradientIdWagers,
-  gradientIdPayouts,
-}: {
-  title: string;
-  data: { date: string; label: string; wagers: number; payouts: number }[];
-  gradientIdWagers: string;
-  gradientIdPayouts: string;
-}) {
-  if (!data.length) return null;
-  return (
-    <div
-      className="rounded-lg border border-cyan-500/20 p-2"
-      style={{
-        background: '#000',
-        boxShadow: 'inset 0 2px 8px rgba(0, 255, 255, 0.05), 0 0 20px rgba(0, 0, 0, 0.8)',
-      }}
-    >
-      <p className="text-cyan-400 text-[10px] font-semibold mb-1 tracking-wide truncate">{title}</p>
-      <ResponsiveContainer width="100%" height={CHART_HEIGHT}>
-        <AreaChart data={data} margin={{ top: 8, right: 8, left: 0, bottom: 20 }}>
-          <defs>
-            <linearGradient id={gradientIdWagers} x1="0" y1="0" x2="0" y2="1">
-              <stop offset="0%" stopColor="rgba(34, 211, 238, 0.4)" />
-              <stop offset="100%" stopColor="rgba(34, 211, 238, 0.02)" />
-            </linearGradient>
-            <linearGradient id={gradientIdPayouts} x1="0" y1="0" x2="0" y2="1">
-              <stop offset="0%" stopColor="rgba(34, 197, 94, 0.35)" />
-              <stop offset="100%" stopColor="rgba(34, 197, 94, 0.02)" />
-            </linearGradient>
-          </defs>
-          <CartesianGrid strokeDasharray="2 2" stroke="rgba(255,255,255,0.05)" />
-          <XAxis
-            dataKey="label"
-            tick={{ fontSize: 8, fill: 'rgba(0, 255, 255, 0.6)', fontFamily: 'monospace' }}
-            stroke="rgba(0, 255, 255, 0.15)"
-            axisLine={{ stroke: 'rgba(0, 255, 255, 0.15)' }}
-            tickLine={false}
-            interval={0}
-          />
-          <YAxis
-            width={32}
-            tick={{ fontSize: 8, fill: 'rgba(255,255,255,0.4)', fontFamily: 'monospace' }}
-            axisLine={false}
-            tickLine={false}
-            tickFormatter={(v) => (v >= 1e6 ? `${(v / 1e6).toFixed(0)}M` : v >= 1e3 ? `${(v / 1e3).toFixed(0)}k` : String(Math.round(v)))}
-          />
-          <Tooltip
-            contentStyle={{ background: 'rgba(0,0,0,0.9)', border: '1px solid rgba(34, 211, 238, 0.3)', borderRadius: 8, fontSize: 10 }}
-            labelStyle={{ color: 'rgba(34, 211, 238, 0.9)' }}
-            formatter={(value: number, name: string) => [value >= 1e6 ? `${(value / 1e6).toFixed(2)}M` : value >= 1e3 ? `${(value / 1e3).toFixed(2)}k` : value.toFixed(2), name === 'wagers' ? 'Wagers' : 'Payouts']}
-            labelFormatter={(label) => `Date: ${label}`}
-          />
-          <Legend wrapperStyle={{ fontSize: 9 }} formatter={(v) => (v === 'wagers' ? 'Wagers' : 'Payouts')} />
-          <Area type="monotone" dataKey="wagers" stroke="#22d3ee" fill={`url(#${gradientIdWagers})`} strokeWidth={1.5} isAnimationActive={false} name="wagers" />
-          <Area type="monotone" dataKey="payouts" stroke="#22c55e" fill={`url(#${gradientIdPayouts})`} strokeWidth={1.5} isAnimationActive={false} name="payouts" />
-        </AreaChart>
-      </ResponsiveContainer>
-    </div>
-  );
-}
 
 const HEALTH_CARD_CLASS = 'rounded-xl border border-slate-700/60 bg-slate-900/70 p-4 flex flex-col gap-3';
 
@@ -635,6 +362,84 @@ function BlackjackContractsMergedCard({ contracts }: { contracts: BlackjackContr
   );
 }
 
+type RewardsClaimRow = {
+  walletAddress: string;
+  rewardAmount: string;
+  claimedAt: string;
+  epochNumber: number;
+};
+
+function RewardsClaimsTableCard({
+  title,
+  emptyText,
+  claims,
+}: {
+  title: string;
+  emptyText: string;
+  claims: RewardsClaimRow[];
+}) {
+  return (
+    <div
+      className="rounded-lg border border-slate-600 overflow-hidden"
+      style={{
+        background: 'linear-gradient(325deg, rgba(20, 20, 20, 0.8), rgba(40, 40, 40, 0.6))',
+        boxShadow: 'inset 0 3px 6px rgba(0, 0, 0, 0.8), inset 0 -3px 6px rgba(255, 255, 255, 0.1), 0 1px 3px rgba(0, 0, 0, 0.5)',
+        border: '1px inset rgba(60, 60, 60, 0.5)',
+      }}
+    >
+      <p className="text-cyan-400/90 text-[10px] font-semibold uppercase tracking-wider px-3 py-2 border-b border-slate-600">
+        {title}
+      </p>
+      <div className="max-h-48 overflow-y-auto">
+        {claims.length === 0 ? (
+          <p className="text-slate-500 text-[11px] px-3 py-4">{emptyText}</p>
+        ) : (
+          <table className="w-full text-[11px]">
+            <thead>
+              <tr className="text-slate-500 border-b border-slate-700">
+                <th className="text-left py-2 px-3">Wallet</th>
+                <th className="text-right py-2 px-3">Amount</th>
+                <th className="text-center py-2 px-3">Epoch</th>
+                <th className="text-left py-2 px-3">Claimed at</th>
+              </tr>
+            </thead>
+            <tbody>
+              {claims.map((claim, i) => (
+                <tr
+                  key={`${claim.walletAddress}-${claim.claimedAt}-${claim.epochNumber}-${i}`}
+                  className="border-b border-slate-700/50 hover:bg-slate-800/50"
+                >
+                  <td className="py-1.5 px-3">
+                    <div className="font-mono text-cyan-300/90 hover:text-cyan-200 flex items-center gap-1">
+                      <CopyButton
+                        content={claim.walletAddress}
+                        copyToast="Copied to clipboard"
+                        variant="ghost"
+                        size="xs"
+                        className="h-5 w-5 shrink-0 p-0 text-cyan-300/90 hover:text-cyan-200"
+                        title="Copy"
+                        aria-label="Copy address"
+                      />
+                      {truncateAddress(claim.walletAddress, 8, 6)}
+                    </div>
+                  </td>
+                  <td className="py-1.5 px-3 text-right font-mono text-slate-300">
+                    {formatMorbius(claim.rewardAmount)} MORBIUS
+                  </td>
+                  <td className="py-1.5 px-3 text-center text-slate-400">{claim.epochNumber}</td>
+                  <td className="py-1.5 px-3 text-slate-400">
+                    {new Date(claim.claimedAt).toLocaleString()}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        )}
+      </div>
+    </div>
+  );
+}
+
 export default function AdminHealthTab() {
   const { address } = useAccount();
   const [data, setData] = useState<AdminHealthData | null>(null);
@@ -644,9 +449,6 @@ export default function AdminHealthTab() {
   const [fundingGame, setFundingGame] = useState<FundableGameKey | null>(null);
   const [actionGame, setActionGame] = useState<FundableGameKey | null>(null);
   const [actionType, setActionType] = useState<'pause' | 'unpause' | 'withdraw' | null>(null);
-  const [snapshots, setSnapshots] = useState<ContractSnapshot[]>([]);
-  const [hourlySnapshots, setHourlySnapshots] = useState<ContractSnapshotHourly[]>([]);
-  const [chartGranularity, setChartGranularity] = useState<'daily' | 'hourly'>('daily');
   const [bjTimeframe, setBjTimeframe] = useState<'allTime' | '1h' | '24h' | '7d'>('allTime');
   const [rewardsClaimsOpen, setRewardsClaimsOpen] = useState(false);
   const [rewardsClaimsLoading, setRewardsClaimsLoading] = useState(false);
@@ -722,12 +524,6 @@ export default function AdminHealthTab() {
     address: BLACKJACK_ADDRESS,
     abi: blackjackAbi,
     functionName: 'totalPlatformFeesCollected',
-  }) as { data: bigint | undefined };
-
-  const { data: bjTotalReserves } = useReadContract({
-    address: BLACKJACK_ADDRESS,
-    abi: blackjackAbi,
-    functionName: 'totalReserves',
   }) as { data: bigint | undefined };
 
   const { data: plinkoPaused } = useReadContract({
@@ -848,40 +644,15 @@ export default function AdminHealthTab() {
     return games;
   }, [plinkoData, kenoData, lotteryData, bjTotalPayouts, bjBurnFees, bjDistFees, bjLpFees, bjPlatformFees]);
 
-  const CHART_GAMES = useMemo(() => [
-    { key: 'plinko', label: 'Plinko' },
-    { key: 'keno', label: 'Keno' },
-    { key: 'lottery', label: 'Lottery' },
-    { key: 'blackjack', label: 'Blackjack' },
-    { key: 'bigwheel', label: 'Big Wheel' },
-  ], []);
-
-  // Chart data — daily (7 days) or hourly (24h) from DB snapshots
-  const chartData = useMemo(() => {
-    if (chartGranularity === 'hourly') {
-      const hours = getLast24Hours();
-      return { games: CHART_GAMES.map((g) => ({ ...g, ...buildGameChartDataHourly(hours, hourlySnapshots, g.key) })) };
-    }
-    const days = getLast7Days();
-    return { games: CHART_GAMES.map((g) => ({ ...g, ...buildGameChartData(days, snapshots, g.key) })) };
-  }, [chartGranularity, snapshots, hourlySnapshots, CHART_GAMES]);
-
   const fetchHealth = useCallback(async () => {
     if (!address) return;
     setLoading(true);
     setError(null);
     try {
-      const [healthRes, snapshotRes] = await Promise.all([
-        fetch('/api/admin/health', { headers: { 'x-admin-wallet': address } }),
-        fetch('/api/admin/analytics/contract-snapshots?days=7', { headers: { 'x-admin-wallet': address } }),
-      ]);
+      const healthRes = await fetch('/api/admin/health', { headers: { 'x-admin-wallet': address } });
       if (!healthRes.ok) throw new Error(`HTTP ${healthRes.status}`);
       const json = await healthRes.json();
       setData(json);
-      if (snapshotRes.ok) {
-        const snap = await snapshotRes.json();
-        setSnapshots(snap.snapshots ?? []);
-      }
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Failed to load health');
       setData(null);
@@ -893,25 +664,6 @@ export default function AdminHealthTab() {
   useEffect(() => {
     fetchHealth();
   }, [fetchHealth]);
-
-  // Fetch hourly snapshots when viewing hourly charts
-  useEffect(() => {
-    if (chartGranularity !== 'hourly' || !address) return;
-    let cancelled = false;
-    (async () => {
-      try {
-        const res = await fetch('/api/admin/analytics/contract-snapshots?granularity=hour&hours=24', {
-          headers: { 'x-admin-wallet': address },
-        });
-        if (!res.ok || cancelled) return;
-        const json = await res.json();
-        if (!cancelled) setHourlySnapshots(json.snapshots ?? []);
-      } catch {
-        if (!cancelled) setHourlySnapshots([]);
-      }
-    })();
-    return () => { cancelled = true; };
-  }, [chartGranularity, address]);
 
   const fetchRewardsClaims = useCallback(async () => {
     if (!address) return;
@@ -1228,16 +980,6 @@ export default function AdminHealthTab() {
       data.games[game]?.rpc === 'ok'
         ? 'RPC read succeeded'
         : (data.games[game]?.error ?? 'RPC check failed');
-    const hot = hotWalletDisplay;
-    const hotLine =
-      hot != null
-        ? `${formatMorbius(hot.morbiusWei)} MORBIUS${hot.lowWarning ? ' · low balance' : ''}`
-        : '—';
-    const tips = data.tipStats;
-    const tipsLine =
-      tips && tips.tipCount > 0
-        ? `${formatMorbius(tips.totalTipAmountWei)} MORBIUS across ${tips.tipCount} tip${tips.tipCount !== 1 ? 's' : ''}`
-        : 'No recorded tips yet';
     return [
       {
         title: 'API',
@@ -1269,18 +1011,8 @@ export default function AdminHealthTab() {
         description: rpcLine('lottery'),
         icon: <Ticket className="w-6 h-6" strokeWidth={1.75} />,
       },
-      {
-        title: 'Hot wallet',
-        description: hotLine,
-        icon: <Wallet className="w-6 h-6" strokeWidth={1.75} />,
-      },
-      {
-        title: 'Dealer tips',
-        description: tipsLine,
-        icon: <Gift className="w-6 h-6" strokeWidth={1.75} />,
-      },
     ];
-  }, [data, hotWalletDisplay]);
+  }, [data]);
 
 
   if (!address) {
@@ -1327,26 +1059,6 @@ export default function AdminHealthTab() {
           {loading && !data && <p className="text-[11px] text-slate-500">Loading…</p>}
           {data && (
             <div className="space-y-3 text-[11px]">
-            <div className="grid grid-cols-2 gap-x-4 gap-y-1 left-align">
-              <span className="text-slate-500">API</span>
-              <span className={data.api === 'ok' ? 'text-emerald-400' : 'text-red-400'}>{data.api === 'ok' ? <CheckCircle className="w-3.5 h-3.5 inline mr-0.5" /> : <XCircle className="w-3.5 h-3.5 inline mr-0.5" />}{data.api}</span>
-              <span className="text-slate-500">WebSocket</span>
-              <span className={data.ws === 'up' ? 'text-emerald-400' : 'text-amber-400'}>{data.ws}</span>
-            </div>
-            <div>
-              <p className="text-slate-500 mb-1">RPC / contract</p>
-              <div className="flex flex-wrap gap-2">
-                {(['blackjack', 'plinko', 'keno', 'lottery'] as const).map((game) => (
-                  <span
-                    key={game}
-                    className={`px-2 py-0.5 rounded capitalize ${data.games[game]?.rpc === 'ok' ? 'bg-emerald-500/20 text-emerald-400' : 'bg-red-500/20 text-red-400'}`}
-                    title={data.games[game]?.error}
-                  >
-                    {game}
-                  </span>
-                ))}
-              </div>
-            </div>
             <div>
               <p className="text-slate-500 mb-2">Platform status</p>
               <div
@@ -1540,69 +1252,6 @@ export default function AdminHealthTab() {
                 </div>
               )}
             </div>
-            {/* MORBIUS contract flow: Reserves first, then Revenue, then Payouts vs Wagers. Toggle Daily / Hourly. */}
-            <div>
-              <div className="flex flex-wrap items-center gap-2 mb-2">
-                <p className="text-slate-500">
-                  MORBIUS contract flow — {chartGranularity === 'hourly' ? 'last 24h' : 'daily activity'}
-                  {(chartGranularity === 'daily' ? snapshots.length : hourlySnapshots.length) === 0 ? ' (no snapshots yet — populates hourly)' : ''}
-                </p>
-                <div className="flex rounded border border-slate-600 overflow-hidden">
-                  <button
-                    type="button"
-                    onClick={() => setChartGranularity('daily')}
-                    className={`px-2.5 py-1 text-[10px] font-medium ${chartGranularity === 'daily' ? 'bg-cyan-600/80 text-white' : 'bg-slate-800 text-slate-400 hover:text-white'}`}
-                  >
-                    Daily
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setChartGranularity('hourly')}
-                    className={`px-2.5 py-1 text-[10px] font-medium ${chartGranularity === 'hourly' ? 'bg-cyan-600/80 text-white' : 'bg-slate-800 text-slate-400 hover:text-white'}`}
-                  >
-                    Hourly
-                  </button>
-                </div>
-              </div>
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-                <div className="space-y-2">
-                  <p className="text-cyan-400/80 text-[10px] font-semibold uppercase tracking-wider mb-1">Reserve ({chartGranularity === 'hourly' ? 'per hour' : 'end-of-day'})</p>
-                  {chartData.games.map((game) => (
-                    <DailySingleChart
-                      key={game.key}
-                      title={game.label}
-                      data={game.reserve}
-                      gradientId={`health-${game.key}-reserve`}
-                      dataKey="value"
-                    />
-                  ))}
-                </div>
-                <div className="space-y-2">
-                  <p className="text-cyan-400/80 text-[10px] font-semibold uppercase tracking-wider mb-1">Revenue ({chartGranularity === 'hourly' ? 'per hour' : 'daily'})</p>
-                  {chartData.games.map((game) => (
-                    <DailySingleChart
-                      key={game.key}
-                      title={game.label}
-                      data={game.single}
-                      gradientId={`health-${game.key}-revenue`}
-                      dataKey="value"
-                    />
-                  ))}
-                </div>
-                <div className="space-y-2">
-                  <p className="text-cyan-400/80 text-[10px] font-semibold uppercase tracking-wider mb-1">Payouts vs Wagers ({chartGranularity === 'hourly' ? 'per hour' : 'daily'})</p>
-                  {chartData.games.map((game) => (
-                    <DailyDualChart
-                      key={game.key}
-                      title={game.label}
-                      data={game.dual}
-                      gradientIdWagers={`health-${game.key}-wagers`}
-                      gradientIdPayouts={`health-${game.key}-payouts`}
-                    />
-                  ))}
-                </div>
-              </div>
-            </div>
             <div>
               <p className="text-slate-500 mb-1">Contract addresses (from lib/contracts, click to copy)</p>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-1.5">
@@ -1735,116 +1384,16 @@ export default function AdminHealthTab() {
               )}
               {!rewardsClaimsLoading && rewardsClaimsData && (
                 <>
-                  <div
-                    className="rounded-lg border border-slate-600 overflow-hidden"
-                    style={{
-                      background: 'linear-gradient(325deg, rgba(20, 20, 20, 0.8), rgba(40, 40, 40, 0.6))',
-                      boxShadow: 'inset 0 3px 6px rgba(0, 0, 0, 0.8), inset 0 -3px 6px rgba(255, 255, 255, 0.1), 0 1px 3px rgba(0, 0, 0, 0.5)',
-                      border: '1px inset rgba(60, 60, 60, 0.5)',
-                    }}
-                  >
-                    <p className="text-cyan-400/90 text-[10px] font-semibold uppercase tracking-wider px-3 py-2 border-b border-slate-600">
-                      Holder rewards (Merkle claim)
-                    </p>
-                    <div className="max-h-48 overflow-y-auto">
-                      {rewardsClaimsData.holderClaims.length === 0 ? (
-                        <p className="text-slate-500 text-[11px] px-3 py-4">No holder claims yet.</p>
-                      ) : (
-                        <table className="w-full text-[11px]">
-                          <thead>
-                            <tr className="text-slate-500 border-b border-slate-700">
-                              <th className="text-left py-2 px-3">Wallet</th>
-                              <th className="text-right py-2 px-3">Amount</th>
-                              <th className="text-center py-2 px-3">Epoch</th>
-                              <th className="text-left py-2 px-3">Claimed at</th>
-                            </tr>
-                          </thead>
-                          <tbody>
-                            {rewardsClaimsData.holderClaims.map((c, i) => (
-                              <tr key={`h-${i}-${c.walletAddress}-${c.claimedAt}`} className="border-b border-slate-700/50 hover:bg-slate-800/50">
-                                <td className="py-1.5 px-3">
-                                  <div className="font-mono text-cyan-300/90 hover:text-cyan-200 flex items-center gap-1">
-                                    <CopyButton
-                                      content={c.walletAddress}
-                                      copyToast="Copied to clipboard"
-                                      variant="ghost"
-                                      size="xs"
-                                      className="h-5 w-5 shrink-0 p-0 text-cyan-300/90 hover:text-cyan-200"
-                                      title="Copy"
-                                      aria-label="Copy address"
-                                    />
-                                    {truncateAddress(c.walletAddress, 8, 6)}
-                                  </div>
-                                </td>
-                                <td className="py-1.5 px-3 text-right font-mono text-slate-300">
-                                  {formatMorbius(c.rewardAmount)} MORBIUS
-                                </td>
-                                <td className="py-1.5 px-3 text-center text-slate-400">{c.epochNumber}</td>
-                                <td className="py-1.5 px-3 text-slate-400">
-                                  {new Date(c.claimedAt).toLocaleString()}
-                                </td>
-                              </tr>
-                            ))}
-                          </tbody>
-                        </table>
-                      )}
-                    </div>
-                  </div>
-                  <div
-                    className="rounded-lg border border-slate-600 overflow-hidden"
-                    style={{
-                      background: 'linear-gradient(325deg, rgba(20, 20, 20, 0.8), rgba(40, 40, 40, 0.6))',
-                      boxShadow: 'inset 0 3px 6px rgba(0, 0, 0, 0.8), inset 0 -3px 6px rgba(255, 255, 255, 0.1), 0 1px 3px rgba(0, 0, 0, 0.5)',
-                      border: '1px inset rgba(60, 60, 60, 0.5)',
-                    }}
-                  >
-                    <p className="text-cyan-400/90 text-[10px] font-semibold uppercase tracking-wider px-3 py-2 border-b border-slate-600">
-                      LP rewards (Merkle LP claim)
-                    </p>
-                    <div className="max-h-48 overflow-y-auto">
-                      {rewardsClaimsData.lpClaims.length === 0 ? (
-                        <p className="text-slate-500 text-[11px] px-3 py-4">No LP claims yet.</p>
-                      ) : (
-                        <table className="w-full text-[11px]">
-                          <thead>
-                            <tr className="text-slate-500 border-b border-slate-700">
-                              <th className="text-left py-2 px-3">Wallet</th>
-                              <th className="text-right py-2 px-3">Amount</th>
-                              <th className="text-center py-2 px-3">Epoch</th>
-                              <th className="text-left py-2 px-3">Claimed at</th>
-                            </tr>
-                          </thead>
-                          <tbody>
-                            {rewardsClaimsData.lpClaims.map((c, i) => (
-                              <tr key={`lp-${i}-${c.walletAddress}-${c.claimedAt}`} className="border-b border-slate-700/50 hover:bg-slate-800/50">
-                                <td className="py-1.5 px-3">
-                                  <div className="font-mono text-cyan-300/90 hover:text-cyan-200 flex items-center gap-1">
-                                    <CopyButton
-                                      content={c.walletAddress}
-                                      copyToast="Copied to clipboard"
-                                      variant="ghost"
-                                      size="xs"
-                                      className="h-5 w-5 shrink-0 p-0 text-cyan-300/90 hover:text-cyan-200"
-                                      title="Copy"
-                                      aria-label="Copy address"
-                                    />
-                                    {truncateAddress(c.walletAddress, 8, 6)}
-                                  </div>
-                                </td>
-                                <td className="py-1.5 px-3 text-right font-mono text-slate-300">
-                                  {formatMorbius(c.rewardAmount)} MORBIUS
-                                </td>
-                                <td className="py-1.5 px-3 text-center text-slate-400">{c.epochNumber}</td>
-                                <td className="py-1.5 px-3 text-slate-400">
-                                  {new Date(c.claimedAt).toLocaleString()}
-                                </td>
-                              </tr>
-                            ))}
-                          </tbody>
-                        </table>
-                      )}
-                    </div>
-                  </div>
+                  <RewardsClaimsTableCard
+                    title="Holder rewards (Merkle claim)"
+                    emptyText="No holder claims yet."
+                    claims={rewardsClaimsData.holderClaims}
+                  />
+                  <RewardsClaimsTableCard
+                    title="LP rewards (Merkle LP claim)"
+                    emptyText="No LP claims yet."
+                    claims={rewardsClaimsData.lpClaims}
+                  />
                 </>
               )}
             </div>

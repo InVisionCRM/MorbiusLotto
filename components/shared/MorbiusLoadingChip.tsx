@@ -6,7 +6,7 @@ export function MorbiusLoadingChip({ className }: { className?: string }) {
   return (
     <div
       className={cn(
-        'pointer-events-none fixed bottom-[15%] left-1/2 z-[100] -translate-x-1/2',
+        'pointer-events-none fixed bottom-12 left-1/2 z-0 -translate-x-1/2',
         className
       )}
       aria-hidden

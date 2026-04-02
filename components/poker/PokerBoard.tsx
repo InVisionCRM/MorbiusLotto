@@ -49,6 +49,7 @@ export function PokerBoard({ communityCards, pot, winningCardIndices, dataTutori
 
   const potInner = (
     <div
+      data-testid="poker-pot"
       className="flex flex-col items-center px-4 py-1.5 rounded-xl"
       style={{
         background: 'rgba(255,255,255,0.04)',
@@ -61,7 +62,7 @@ export function PokerBoard({ communityCards, pot, winningCardIndices, dataTutori
       <span className="font-jost-normal text-[var(--poker-danger)] text-[10px] tracking-[var(--poker-tracking)] uppercase">POT</span>
       <div className="flex items-center gap-1.5">
         <AnimatedPotValue pot={pot} />
-        {/* eslint-disable-next-line @next/next/no-img-element */}
+        { }
         <img src="/morbius/MorbiusLogo (3).png" alt="MORBIUS" className="w-5 h-5 sm:w-6 sm:h-6 rounded-full" />
       </div>
     </div>
@@ -94,17 +95,19 @@ export function PokerBoard({ communityCards, pot, winningCardIndices, dataTutori
       <div className="flex gap-2 sm:gap-3">
         {[0, 1, 2, 3, 4].map((i) => (
           <AnimatePresence key={i} mode="wait">
-            {communityCards[i] != null ? (
-              <CardDisplay
-                key={communityCards[i]}
-                cardIndex={communityCards[i]}
-                dealDelay={i * 0.07}
-                isWinningCard={winningCardIndices?.includes(communityCards[i])}
-                showCenterRankSuitOverlay
-              />
-            ) : (
-              <CardDisplay key={`empty-${i}`} cardIndex={undefined} />
-            )}
+            <div data-testid="poker-community-cards">
+              {communityCards[i] != null ? (
+                <CardDisplay
+                  key={communityCards[i]}
+                  cardIndex={communityCards[i]}
+                  dealDelay={i * 0.07}
+                  isWinningCard={winningCardIndices?.includes(communityCards[i])}
+                  showCenterRankSuitOverlay
+                />
+              ) : (
+                <CardDisplay key={`empty-${i}`} cardIndex={undefined} />
+              )}
+            </div>
           </AnimatePresence>
         ))}
       </div>

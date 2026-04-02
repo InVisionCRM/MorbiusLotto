@@ -1,0 +1,441 @@
+'use client';
+
+import type { ReactNode } from 'react';
+import { getApiUrlOptional, getWebSocketUrlOptional } from '@/lib/api-urls';
+import { GameState, Action } from '@/app/BLACKJACK/types';
+import { TOURNAMENT_CONFIG } from '@/hooks/use-tournament';
+import { SOUNDS_TIP, pickRandom } from '@/app/BLACKJACK/constants';
+import BlackjackTable from '@/components/BLACKJACK/BlackjackTable';
+import BettingPanelMobile from '@/components/BLACKJACK/BettingPanelMobile';
+import BlackjackMobileActionBar from '@/components/BLACKJACK/BlackjackMobileActionBar';
+import BlackjackSidebar from '@/components/BLACKJACK/BlackjackSidebar';
+import WinNotification from '@/components/BLACKJACK/WinNotification';
+import { TournamentBetPanel } from '@/components/BLACKJACK/Tournament';
+import { IconButton } from '@/components/animate-ui/components/buttons/icon';
+import { BlackjackGameSecondaryPanels } from '@/components/BLACKJACK/BlackjackGameSecondaryPanels';
+import type { TableThemeInfo } from '@/hooks/use-blackjack-tables';
+
+interface BlackjackGameViewProps {
+  contractIsPaused: boolean;
+  contractEmergencyPaused: boolean;
+  contractOzPaused: boolean;
+  tournament: any;
+  currentGame: any;
+  gameState: any;
+  canHit: boolean;
+  canStand: boolean;
+  canDoubleDown: boolean;
+  canSplit: boolean;
+  offChainBalance: bigint;
+  newCardIndices: { player: Set<number>; dealer: Set<number> };
+  tournamentChipStack: number[];
+  chipStack: number[];
+  manageChipStack: (betAmount?: string, chipValue?: number, clearAll?: boolean) => void;
+  handleStartTournamentGame: (betAmount: number) => Promise<void>;
+  handleDealClick: () => void;
+  handleDealerRevealComplete: () => void;
+  currentGameResult: 'win' | 'loss' | 'push' | 'blackjack' | 'dealer_blackjack' | null;
+  handleChipAnimationComplete: () => void;
+  handleDoubleDownChips: () => void;
+  handleSplitChips: () => void;
+  handleRebet: () => void;
+  handleRebetAndDeal: () => void;
+  handleHalfBet: () => void;
+  handleDoubleBet: () => void;
+  isMusicPlaying: boolean;
+  toggleMusic: () => void;
+  nextTrack: () => void;
+  musicVolume: number;
+  setMusicVolume: (volume: number) => void;
+  totalBetAmount: number;
+  displayBetAmount: string;
+  lastBetAmount: string;
+  imageSource: string;
+  videoSource: string;
+  theme: 'image' | 'video';
+  getThemeInfo: (theme: { kind: 'image' | 'video'; id: string }) => TableThemeInfo;
+  getTableProfile: (theme: { kind: 'image' | 'video'; id: string }) => unknown;
+  videoSyncToClock: boolean;
+  videoPosition: number;
+  handleOpenDepositModal: () => void;
+  setThemeModalOpen: (open: boolean) => void;
+  soundEnabled: boolean;
+  playSfx: (path: string, volume?: number) => void;
+  handleCardsClearComplete: () => void;
+  perfectPairsBet: number;
+  setPerfectPairsBet: (value: number) => void;
+  setTournamentBrowserInitialTab: (tab: 'join' | 'history') => void;
+  setShowTournamentBrowser: (open: boolean) => void;
+  handleStartGame: (betAmount: bigint, clientSeed: string, perfectPairsBetAmount?: bigint) => Promise<void>;
+  clientSeed: string;
+  handleTournamentPlayerAction: (action: Action) => Promise<void>;
+  handlePlayerAction: (action: Action) => Promise<void>;
+  address: string | undefined;
+  wsConnected: boolean;
+  wsClient: any;
+  tipAnimating: boolean;
+  setTipAnimating: (value: boolean) => void;
+  playDealerVoice: (path: string, volume?: number) => Promise<void>;
+  fetchBalance: () => Promise<void> | void;
+  setTipStats: (stats: any) => void;
+  showWinNotification: boolean;
+  winAmount: bigint;
+  isBlackjackWin: boolean;
+  setShowWinNotification: (show: boolean) => void;
+  chartRef: any;
+  chartSessionStartTime: number;
+  openVerifyView: (gameId: string) => void;
+  setSoundEnabled: (enabled: boolean) => void;
+  dealerVoiceEnabled: boolean;
+  setDealerVoiceEnabled: (enabled: boolean) => void;
+  sfxEnabled: boolean;
+  setSfxEnabled: (enabled: boolean) => void;
+  BLACKJACK_MUSIC_PLAYLIST: readonly string[];
+  musicTrackIndex: number;
+  tournamentTabContent: ReactNode;
+  playerStats: any;
+  playerStatsLoading: boolean;
+  tipStats: any;
+  blackjackAddress: string;
+  morbiusTokenAddress: string;
+}
+
+export function BlackjackGameView(props: BlackjackGameViewProps) {
+  const {
+    contractIsPaused,
+    contractEmergencyPaused,
+    contractOzPaused,
+    tournament,
+    currentGame,
+    gameState,
+    canHit,
+    canStand,
+    canDoubleDown,
+    canSplit,
+    offChainBalance,
+    newCardIndices,
+    tournamentChipStack,
+    chipStack,
+    manageChipStack,
+    handleStartTournamentGame,
+    handleDealClick,
+    handleDealerRevealComplete,
+    currentGameResult,
+    handleChipAnimationComplete,
+    handleDoubleDownChips,
+    handleSplitChips,
+    handleRebet,
+    handleRebetAndDeal,
+    handleHalfBet,
+    handleDoubleBet,
+    isMusicPlaying,
+    toggleMusic,
+    nextTrack,
+    musicVolume,
+    setMusicVolume,
+    totalBetAmount,
+    displayBetAmount,
+    lastBetAmount,
+    imageSource,
+    videoSource,
+    theme,
+    getThemeInfo,
+    getTableProfile,
+    videoSyncToClock,
+    videoPosition,
+    handleOpenDepositModal,
+    setThemeModalOpen,
+    soundEnabled,
+    playSfx,
+    handleCardsClearComplete,
+    perfectPairsBet,
+    setPerfectPairsBet,
+    setTournamentBrowserInitialTab,
+    setShowTournamentBrowser,
+    handleStartGame,
+    clientSeed,
+    handleTournamentPlayerAction,
+    handlePlayerAction,
+    address,
+    wsConnected,
+    wsClient,
+    tipAnimating,
+    setTipAnimating,
+    playDealerVoice,
+    fetchBalance,
+    setTipStats,
+    showWinNotification,
+    winAmount,
+    isBlackjackWin,
+    setShowWinNotification,
+    chartRef,
+    chartSessionStartTime,
+    openVerifyView,
+    setSoundEnabled,
+    dealerVoiceEnabled,
+    setDealerVoiceEnabled,
+    sfxEnabled,
+    setSfxEnabled,
+    BLACKJACK_MUSIC_PLAYLIST,
+    musicTrackIndex,
+    tournamentTabContent,
+    playerStats,
+    playerStatsLoading,
+    tipStats,
+    blackjackAddress,
+    morbiusTokenAddress,
+  } = props;
+
+  return (
+    <>
+      {contractIsPaused && (
+        <div className="mb-3 px-3 py-2 rounded-lg bg-red-500/20 border border-red-500/40 text-red-200 text-sm">
+          <strong>Blackjack contract is paused.</strong> Deposits, withdrawals, and betting are disabled on-chain.
+          {contractEmergencyPaused && ' Emergency pause is active (emergency admin must call setEmergencyPause(false)).'}
+          {contractOzPaused && !contractEmergencyPaused && ' Owner has paused the contract (owner must call unpause()).'}
+        </div>
+      )}
+
+      {!getWebSocketUrlOptional() && (
+        <div className="mb-3 px-3 py-2 rounded-lg bg-amber-500/20 border border-amber-500/40 text-amber-200 text-sm">
+          <strong>Game server not connected.</strong>{' '}
+          {typeof process !== 'undefined' && process.env.NODE_ENV === 'production' ? (
+            <>Set <code className="font-mono text-xs bg-black/30 px-1 rounded">NEXT_PUBLIC_WEBSOCKET_URL</code> and <code className="font-mono text-xs bg-black/30 px-1 rounded">NEXT_PUBLIC_API_URL</code> in your deployment (e.g. Vercel → Project → Settings → Environment Variables). Use your backend URL: <code className="font-mono text-xs bg-black/30 px-1 rounded">https://your-api.com</code> and <code className="font-mono text-xs bg-black/30 px-1 rounded">wss://your-api.com</code>. Then <strong>redeploy</strong> — Next.js bakes these in at build time.</>
+          ) : (
+            <>Set <code className="font-mono text-xs bg-black/30 px-1 rounded">NEXT_PUBLIC_WEBSOCKET_URL</code> and <code className="font-mono text-xs bg-black/30 px-1 rounded">NEXT_PUBLIC_API_URL</code> in <code className="font-mono text-xs bg-black/30 px-1 rounded">.env.local</code> (e.g. <code className="font-mono text-xs bg-black/30 px-1 rounded">http://localhost:3001</code> and <code className="font-mono text-xs bg-black/30 px-1 rounded">ws://localhost:3001</code>), then restart the dev server. Run the backend with <code className="font-mono text-xs bg-black/30 px-1 rounded">cd server && npm run dev</code>.</>
+          )}
+        </div>
+      )}
+
+      <div className="grid grid-cols-1 md:grid-cols-[2fr_1fr] grid-rows-[1fr_auto_auto] md:grid-rows-[1fr_auto] gap-2 md:gap-4 min-h-0">
+        <div className="min-w-0 flex flex-row md:flex-col min-h-0 pb-0 -mx-2 sm:mx-0 order-1 md:order-none md:row-start-1 md:col-start-1 gap-2 md:gap-0">
+          <div className="relative flex-1 min-w-0 min-h-[60vh] sm:min-h-0 flex flex-col">
+            <BlackjackTable
+              playerHand={currentGame?.playerHand || { cards: [], total: 0, hasAce: false, isBlackjack: false, isBust: false }}
+              playerHands={currentGame?.playerHands}
+              currentHandIndex={currentGame?.currentHandIndex || 0}
+              dealerHand={currentGame?.dealerHand || { cards: [], total: 0, hasAce: false, isBlackjack: false, isBust: false }}
+              gameState={currentGame?.state || GameState.WAITING}
+              onAction={tournament.tournamentState.inTournament ? handleTournamentPlayerAction : handlePlayerAction}
+              canHit={canHit}
+              canStand={canStand}
+              canDoubleDown={canDoubleDown && (!tournament.tournamentState.inTournament || tournament.tournamentState.chips >= (currentGame?.playerHand?.betAmount ? Number(currentGame.playerHand.betAmount) : 0))}
+              canSplit={canSplit && (!tournament.tournamentState.inTournament || tournament.tournamentState.chips >= (currentGame?.playerHand?.betAmount ? Number(currentGame.playerHand.betAmount) : 0))}
+              reserveBalance={tournament.tournamentState.inTournament ? BigInt((tournament.displayedTournamentState ?? tournament.tournamentState).chips) : offChainBalance}
+              usePLS={false}
+              newCardIndices={newCardIndices}
+              chipStack={tournament.tournamentState.inTournament ? tournamentChipStack : chipStack}
+              onClearBet={tournament.tournamentState.inTournament ? () => {} : () => manageChipStack('', undefined, true)}
+              onStartGame={tournament.tournamentState.inTournament
+                ? () => handleStartTournamentGame(TOURNAMENT_CONFIG.MIN_BET)
+                : handleDealClick}
+              isPlaying={gameState.isPlaying}
+              onDealerRevealComplete={handleDealerRevealComplete}
+              gameResult={currentGameResult === 'dealer_blackjack' ? 'loss' : currentGameResult}
+              onChipAnimationComplete={handleChipAnimationComplete}
+              history={gameState.history}
+              totalPayout={currentGame?.totalPayout || BigInt(0)}
+              onDoubleDownChips={tournament.tournamentState.inTournament ? () => {} : handleDoubleDownChips}
+              onSplitChips={tournament.tournamentState.inTournament ? () => {} : handleSplitChips}
+              onRebet={tournament.tournamentState.inTournament ? () => {} : handleRebet}
+              onRebetAndDeal={tournament.tournamentState.inTournament ? undefined : handleRebetAndDeal}
+              onHalfBet={tournament.tournamentState.inTournament ? () => {} : handleHalfBet}
+              onDoubleBet={tournament.tournamentState.inTournament ? () => {} : handleDoubleBet}
+              isMusicPlaying={isMusicPlaying}
+              onToggleMusic={toggleMusic}
+              onNextTrack={nextTrack}
+              musicVolume={musicVolume}
+              onMusicVolumeChange={setMusicVolume}
+              canDeal={tournament.tournamentState.inTournament
+                ? !gameState.isPlaying && (tournament.displayedTournamentState ?? tournament.tournamentState).handsRemaining > 0
+                : !gameState.isPlaying && totalBetAmount > 0}
+              onBetAmountChange={tournament.tournamentState.inTournament ? () => {} : manageChipStack}
+              currentBetAmount={tournament.tournamentState.inTournament ? String(TOURNAMENT_CONFIG.MIN_BET) : displayBetAmount}
+              lastBetAmount={lastBetAmount}
+              useVideoBackground={false}
+              imageSource={imageSource}
+              videoSource={videoSource}
+              imageSrc={getThemeInfo({ kind: 'image', id: imageSource }).src}
+              videoSrc={getThemeInfo({ kind: 'video', id: videoSource }).src}
+              videoSyncToClock={videoSyncToClock}
+              videoPosition={videoPosition}
+              onOpenDepositModal={handleOpenDepositModal}
+              onOpenTableThemeSelector={() => setThemeModalOpen(true)}
+              soundEnabled={soundEnabled}
+              onPlaySfx={playSfx}
+              hideBettingPanel={true}
+              completedGameId={currentGame?.state === GameState.COMPLETE ? currentGame?.id : undefined}
+              onCardsClearComplete={handleCardsClearComplete}
+              perfectPairsBet={tournament.tournamentState.inTournament ? 0 : perfectPairsBet}
+              onPerfectPairsBetChange={tournament.tournamentState.inTournament ? undefined : setPerfectPairsBet}
+              perfectPairsResult={tournament.tournamentState.inTournament ? undefined : currentGame?.perfectPairsResult}
+              tournamentHandSummary={tournament.tournamentState.inTournament ? tournament.lastHandSummary : null}
+              onDismissTournamentSummary={tournament.clearLastHandSummary}
+              onOpenTournamentHistory={() => {
+                setTournamentBrowserInitialTab('history');
+                setShowTournamentBrowser(true);
+              }}
+              inTournament={tournament.tournamentState.inTournament}
+            />
+
+            {address && wsConnected && wsClient && (
+              <div className="absolute top-2 left-1/2 -translate-x-1/2 z-10 flex flex-col items-center">
+                <IconButton
+                  variant="tip"
+                  size="tip"
+                  onClick={async () => {
+                    if (tipAnimating) return;
+                    playSfx('/Poker/PokerSounds/PlayerClickConfirmation.mp3');
+                    setTipAnimating(true);
+                    try {
+                      await wsClient.sendRequest('tip_dealer', {
+                        amount: (BigInt(2000) * BigInt('1000000000000000000')).toString(),
+                      });
+                      playDealerVoice(pickRandom(SOUNDS_TIP));
+                      fetchBalance();
+                      const base = getApiUrlOptional();
+                      if (base) fetch(`${base}/api/tips/stats`).then(r => r.json()).then(d => setTipStats(d)).catch(() => {});
+                    } catch {
+                      setTipAnimating(false);
+                    }
+                    setTimeout(() => setTipAnimating(false), 900);
+                  }}
+                  disabled={tipAnimating}
+                >
+                  Tip 2,000
+                </IconButton>
+                {tipAnimating && (
+                  <div
+                    className="absolute pointer-events-none"
+                    style={{ top: 0, left: '50%', transform: 'translateX(-50%)' }}
+                    onAnimationEnd={() => setTipAnimating(false)}
+                  >
+                    <div className="tip-chip-fly">
+                      <div className="w-6 h-6 rounded-full border-2 border-amber-400 bg-amber-600 flex items-center justify-center shadow-lg shadow-amber-500/40">
+                        <span className="text-white text-[8px] font-bold">$</span>
+                      </div>
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {showWinNotification && (
+              <WinNotification
+                amount={winAmount}
+                isBlackjack={isBlackjackWin}
+                onComplete={() => setShowWinNotification(false)}
+              />
+            )}
+          </div>
+        </div>
+
+        <div className="min-w-0 order-3 md:order-none md:row-start-1 md:col-start-2 flex flex-col gap-2 overflow-hidden">
+          {tournament.tournamentState.inTournament ? (
+            <TournamentBetPanel
+              chips={(tournament.displayedTournamentState ?? tournament.tournamentState).chips}
+              onStartGame={handleStartTournamentGame}
+              isPlaying={gameState.isPlaying}
+              handsRemaining={(tournament.displayedTournamentState ?? tournament.tournamentState).handsRemaining}
+              gameResult={currentGameResult === 'dealer_blackjack' ? 'loss' : currentGameResult}
+              onHit={() => handleTournamentPlayerAction(Action.HIT)}
+              onStand={() => handleTournamentPlayerAction(Action.STAND)}
+              onDoubleDown={() => handleTournamentPlayerAction(Action.DOUBLE_DOWN)}
+              onSplit={() => handleTournamentPlayerAction(Action.SPLIT)}
+              canHit={canHit}
+              canStand={canStand}
+              canDoubleDown={canDoubleDown && (tournament.displayedTournamentState ?? tournament.tournamentState).chips >= (currentGame?.playerHand?.betAmount ? Number(currentGame.playerHand.betAmount) : 0)}
+              canSplit={canSplit && (tournament.displayedTournamentState ?? tournament.tournamentState).chips >= (currentGame?.playerHand?.betAmount ? Number(currentGame.playerHand.betAmount) : 0)}
+            />
+          ) : (
+            <div className="flex flex-row md:flex-col items-stretch w-full">
+              <div className="w-1/2 md:w-full md:border-r-0 md:border-b border-r border-white/10 flex items-center min-w-0">
+                <BettingPanelMobile
+                  onStartGame={(betBigInt, _clientSeed) => {
+                    const ppBetWei = perfectPairsBet > 0 ? BigInt(perfectPairsBet) * BigInt(10 ** 18) : undefined;
+                    handleStartGame(betBigInt, clientSeed, ppBetWei);
+                  }}
+                  isPlaying={gameState.isPlaying}
+                  onBetAmountChange={manageChipStack}
+                  currentBetAmount={displayBetAmount}
+                  onHalfBet={handleHalfBet}
+                  onDoubleBet={handleDoubleBet}
+                  playerReserves={offChainBalance}
+                />
+              </div>
+              <div className="w-1/2 md:w-full flex items-stretch min-w-0">
+                <BlackjackMobileActionBar
+                  onRebetAndDeal={handleRebetAndDeal}
+                  onStartGame={handleDealClick}
+                  onAction={handlePlayerAction}
+                  onDoubleDownChips={handleDoubleDownChips}
+                  onSplitChips={handleSplitChips}
+                  isPlaying={gameState.isPlaying}
+                  canHit={canHit}
+                  canStand={canStand}
+                  canDoubleDown={canDoubleDown}
+                  canSplit={canSplit}
+                  canDeal={!gameState.isPlaying && totalBetAmount > 0}
+                  chipStackLength={chipStack.length}
+                  lastBetAmount={lastBetAmount}
+                  soundEnabled={soundEnabled}
+                  onPlaySfx={playSfx}
+                  alwaysVisible
+                  perfectPairsBet={perfectPairsBet}
+                  onPerfectPairsBetChange={setPerfectPairsBet}
+                />
+              </div>
+            </div>
+          )}
+          <div className="md:h-[420px] overflow-hidden rounded-xl">
+            <BlackjackSidebar
+              history={gameState.history}
+              reserveBalance={offChainBalance}
+              chartRef={chartRef}
+              chartSessionStartTime={chartSessionStartTime}
+              wsClient={wsClient}
+              wsConnected={wsConnected}
+              onVerifyGameRequest={openVerifyView}
+              soundEnabled={soundEnabled}
+              onSoundEnabledChange={setSoundEnabled}
+              dealerVoiceEnabled={dealerVoiceEnabled}
+              onDealerVoiceChange={setDealerVoiceEnabled}
+              sfxEnabled={sfxEnabled}
+              onSfxEnabledChange={setSfxEnabled}
+              isMusicPlaying={isMusicPlaying}
+              onToggleMusic={toggleMusic}
+              onNextTrack={nextTrack}
+              musicVolume={musicVolume}
+              onMusicVolumeChange={setMusicVolume}
+              musicTrackDisplayName={
+                BLACKJACK_MUSIC_PLAYLIST[musicTrackIndex].split('/').pop()?.replace('.mp3', '').replace(/-/g, ' ') ??
+                'Music'
+              }
+              inTournament={tournament.tournamentState.inTournament}
+              tournamentTabContent={tournamentTabContent}
+            />
+          </div>
+        </div>
+      </div>
+
+      <BlackjackGameSecondaryPanels
+        theme={theme}
+        imageSource={imageSource}
+        videoSource={videoSource}
+        getThemeInfo={getThemeInfo}
+        getTableProfile={getTableProfile}
+        onChangeTableClick={() => setThemeModalOpen(true)}
+        address={address}
+        playerStats={playerStats}
+        playerStatsLoading={playerStatsLoading}
+        wsConnected={wsConnected}
+        wsClient={wsClient}
+        offChainBalance={offChainBalance}
+        tipStats={tipStats}
+        blackjackAddress={blackjackAddress}
+        morbiusTokenAddress={morbiusTokenAddress}
+        tournament={tournament}
+      />
+    </>
+  );
+}

@@ -304,7 +304,7 @@ export default function BlackjackSidebar({
                   }}
                 >
                   0
-                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  { }
                   <img src="/morbius/MorbiusLogo (3).png" alt="" width={16} height={16} className="object-contain" />
                   <i className="fas fa-chevron-down text-white/60" style={{ fontSize: 7 }} />
                 </span>

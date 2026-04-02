@@ -117,7 +117,7 @@ export const InfiniteMovingCards = ({
                     {imageItem.src ? (
                       <>
                         <div className="relative w-full h-[120px] sm:h-[150px] md:h-[180px] lg:h-[220px] bg-black/30 shrink-0 overflow-hidden">
-                          {/* eslint-disable-next-line @next/next/no-img-element */}
+                          { }
                           <img
                             src={imageItem.src}
                             alt={imageItem.name}

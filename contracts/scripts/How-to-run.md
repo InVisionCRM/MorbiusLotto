@@ -2,7 +2,6 @@
 npx hardhat run scripts/blackjack/deploy/deploy-blackjack-v2.js --network pulsechain
 
 # Node (e.g. keepers)
-node scripts/lottery/other/lottery-keeper.js
 node scripts/keno/other/keno-keeper-fixed.cjs
 
 

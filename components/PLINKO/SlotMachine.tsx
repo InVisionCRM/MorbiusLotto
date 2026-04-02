@@ -18,7 +18,7 @@ const SYMBOLS = [
 // Create extended reel strip
 const REEL_STRIP = [...SYMBOLS, ...SYMBOLS, ...SYMBOLS, ...SYMBOLS, ...SYMBOLS];
 
-interface SlotMachineProps {
+export interface SlotMachineProps {
   isSpinning?: boolean;
   onSpinComplete?: (result: { symbols: string[]; isWinner: boolean; multiplier: number }) => void;
   confirmationStage?: 'broadcast' | 'mempool' | 'mined' | null;

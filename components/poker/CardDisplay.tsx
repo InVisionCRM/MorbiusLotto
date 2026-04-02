@@ -4,10 +4,10 @@ import React from 'react';
 import Image from 'next/image';
 import { motion } from 'framer-motion';
 
-/** Card index 0-51: rank = (idx % 13), suit = floor(idx/13) */
-const RANK_NAMES = ['A', '2', '3', '4', '5', '6', '7', '8', '9', '10', 'J', 'Q', 'K'];
-const SUIT_LETTERS = ['H', 'D', 'C', 'S'];
-const SUIT_NAMES = ['hearts', 'diamonds', 'clubs', 'spades'];
+/** Card index 0-51: rank = (idx % 13), suit = floor(idx/13) — matches server cardToInt encoding */
+const RANK_NAMES = ['2', '3', '4', '5', '6', '7', '8', '9', '10', 'J', 'Q', 'K', 'A'];
+const SUIT_LETTERS = ['C', 'D', 'H', 'S'];
+const SUIT_NAMES = ['clubs', 'diamonds', 'hearts', 'spades'];
 
 function getCardImagePath(cardIndex: number): string {
   const rank = cardIndex % 13;
@@ -56,18 +56,18 @@ const dealVariants = {
 function getSuitSymbol(suit: number): string {
   switch (suit) {
     case 0:
-      return '♥';
+      return '♣';
     case 1:
       return '♦';
     case 2:
-      return '♣';
+      return '♥';
     default:
       return '♠';
   }
 }
 
 function getSuitColor(suit: number): string {
-  return suit === 0 || suit === 1 ? '#dc2626' : '#111827';
+  return suit === 1 || suit === 2 ? '#dc2626' : '#111827';
 }
 
 export function CardDisplay({

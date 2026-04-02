@@ -5,7 +5,7 @@ import { useConnectModal } from '@rainbow-me/rainbowkit';
 import { useAccount } from 'wagmi';
 import type { AvatarConfig } from '@/lib/websocket-client';
 import type { BlackjackWebSocketClient } from '@/lib/websocket-client';
-import CharacterCreator, { DEFAULT_AVATAR_CONFIG } from '@/components/poker/avatar/CharacterCreator';
+import { CharacterCreator, DEFAULT_AVATAR_CONFIG } from '@/components/avatar';
 import { parseAvatarPayload } from '@/lib/avatar-payload';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useProfileWs } from '@/contexts/profile-ws-context';
@@ -23,6 +23,7 @@ import { GiftItemModal } from '@/components/shared/GiftItemModal';
 import { Gift, Package, Tag } from 'lucide-react';
 import { createListing } from '@/hooks/use-cosmetics';
 import { toast } from 'sonner';
+import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 
 const TIER_BADGE: Record<ItemTier, string> = {
   common:    'bg-zinc-700 text-zinc-300',
@@ -224,45 +225,51 @@ export function ProfileAvatarModal({ open, onClose, wsClient: wsClientProp, onSa
         initial={{ opacity: 0 }}
         animate={{ opacity: 1 }}
         exit={{ opacity: 0 }}
-        onClick={onClose}
+        onClick={(e) => {
+          // Close only when the backdrop itself is clicked, never inner controls.
+          if (e.target === e.currentTarget) onClose();
+        }}
       >
         <motion.div
-          className="bg-gradient-to-br from-slate-900 to-slate-800 border-2 border-cyan-500/30 rounded-none sm:rounded-2xl shadow-2xl max-w-5xl w-full mt-14 h-[calc(100dvh-3.5rem)] sm:mt-0 sm:h-auto sm:max-h-[88vh] overflow-hidden flex flex-col"
-          initial={{ scale: 0.95, opacity: 0 }}
-          animate={{ scale: 1, opacity: 1 }}
-          exit={{ scale: 0.95, opacity: 0 }}
+          className="bg-white border border-gray-100 text-gray-900 rounded-none sm:rounded-[2rem] shadow-2xl max-w-xl w-full mt-14 h-[calc(100dvh-3.5rem)] sm:mt-0 sm:h-auto sm:max-h-[62vh] overflow-hidden flex flex-col"
+          initial={{ y: 12, opacity: 0 }}
+          animate={{ y: 0, opacity: 1 }}
+          exit={{ y: 8, opacity: 0 }}
           transition={{ type: 'spring', damping: 25, stiffness: 300 }}
+          onMouseDown={(e) => e.stopPropagation()}
+          onPointerDown={(e) => e.stopPropagation()}
           onClick={(e) => e.stopPropagation()}
         >
-          <div className="flex px-4 py-2.5 border-b border-white/10 items-center gap-3 flex-shrink-0">
-            {/* Tab switcher */}
-            <div className="flex gap-1 bg-zinc-800/60 rounded-lg p-0.5">
-              <button
-                type="button"
-                onClick={() => setView('avatar')}
-                className={`px-3 py-1.5 rounded-md text-xs font-medium transition-colors ${view === 'avatar' ? 'bg-zinc-700 text-white' : 'text-zinc-400 hover:text-zinc-200'}`}
-              >
-                Avatar
-              </button>
-              <button
-                type="button"
-                onClick={() => setView('items')}
-                className={`px-3 py-1.5 rounded-md text-xs font-medium transition-colors flex items-center gap-1.5 ${view === 'items' ? 'bg-zinc-700 text-white' : 'text-zinc-400 hover:text-zinc-200'}`}
-              >
-                <Package size={11} />
-                My Items
-                {ownedItemKeys.length > 0 && (
-                  <span className="bg-amber-500/20 text-amber-300 text-[9px] font-bold px-1 rounded">
-                    {ownedItemKeys.length}
+          <div className="flex px-4 py-2.5 border-b border-gray-100 items-center gap-3 flex-shrink-0 bg-white">
+            <Tabs value={view} onValueChange={(value) => setView(value as 'avatar' | 'items')}>
+              <TabsList className="h-auto gap-1 rounded-2xl bg-gray-50 p-1">
+                <TabsTrigger
+                  value="avatar"
+                  className="rounded-xl px-3 py-1.5 text-sm font-medium text-gray-500 data-[state=active]:border data-[state=active]:border-gray-100 data-[state=active]:bg-white data-[state=active]:text-gray-900 data-[state=active]:shadow-sm"
+                >
+                  Avatar
+                </TabsTrigger>
+                <TabsTrigger
+                  value="items"
+                  className="rounded-xl px-3 py-1.5 text-sm font-medium text-gray-500 data-[state=active]:border data-[state=active]:border-gray-100 data-[state=active]:bg-white data-[state=active]:text-gray-900 data-[state=active]:shadow-sm"
+                >
+                  <span className="inline-flex items-center gap-1.5">
+                    <Package size={11} />
+                    My Items
+                    {ownedItemKeys.length > 0 && (
+                      <span className="bg-amber-500/20 text-amber-300 text-[9px] font-bold px-1 rounded">
+                        {ownedItemKeys.length}
+                      </span>
+                    )}
                   </span>
-                )}
-              </button>
-            </div>
+                </TabsTrigger>
+              </TabsList>
+            </Tabs>
             <button
               type="button"
               onClick={() => setMarketOpen(true)}
               title="Player Marketplace"
-              className="px-3 py-1.5 rounded-md text-xs font-medium bg-cyan-600 hover:bg-cyan-500 text-white transition-colors touch-manipulation shrink-0"
+              className="px-3 py-1.5 rounded-xl text-xs font-medium text-white border border-violet-400/40 bg-[length:200%_100%] bg-[linear-gradient(90deg,#6d28d9,#7c3aed,#6366f1,#7c3aed)] animate-shimmer shadow-[0_8px_20px_rgba(99,102,241,0.28)] hover:brightness-110 transition-all touch-manipulation shrink-0"
             >
               Marketplace
             </button>
@@ -270,7 +277,7 @@ export function ProfileAvatarModal({ open, onClose, wsClient: wsClientProp, onSa
             <button
               type="button"
               onClick={onClose}
-              className="hidden sm:flex text-white/70 hover:text-white p-2 -m-2 rounded min-w-[44px] min-h-[44px] items-center justify-center touch-manipulation"
+              className="hidden sm:flex text-gray-500 hover:text-gray-700 p-2 -m-2 rounded min-w-[44px] min-h-[44px] items-center justify-center touch-manipulation"
               aria-label="Close"
             >
               <span className="text-2xl leading-none">&times;</span>
@@ -290,7 +297,7 @@ export function ProfileAvatarModal({ open, onClose, wsClient: wsClientProp, onSa
                       <p className="text-sm">No items yet — visit the marketplace to get started!</p>
                       <button
                         onClick={() => setMarketOpen(true)}
-                        className="mt-1 flex items-center gap-2 px-4 py-2 rounded-xl bg-cyan-600 hover:bg-cyan-500 text-white text-sm font-bold transition-colors"
+                        className="mt-1 flex items-center gap-2 px-4 py-2 rounded-xl text-white text-sm font-bold border border-violet-400/40 bg-[length:200%_100%] bg-[linear-gradient(90deg,#6d28d9,#7c3aed,#6366f1,#7c3aed)] animate-shimmer shadow-[0_8px_20px_rgba(99,102,241,0.28)] hover:brightness-110 transition-all"
                       >
                         Marketplace
                       </button>

@@ -33,13 +33,31 @@ var __importStar = (this && this.__importStar) || (function () {
     };
 })();
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.MIN_WITHDRAWAL_WEI = void 0;
+exports.HOT_WITHDRAW_QUEUE_INTERVAL_MS_DEFAULT = exports.PENDING_DEPOSIT_CONFIRM_WORKER_INTERVAL_MS = exports.HOT_WITHDRAW_CONFIRM_WORKER_INTERVAL_MS = exports.HOT_WITHDRAW_CONFIRMATION_TIMEOUT_MS = exports.MIN_WITHDRAWAL_WEI = void 0;
+exports.resolveDepositConfirmationsRequired = resolveDepositConfirmationsRequired;
+exports.resolveHotWithdrawQueueIntervalMs = resolveHotWithdrawQueueIntervalMs;
 exports.signWithdrawApproval = signWithdrawApproval;
 const accounts_1 = require("viem/accounts");
 const viem_1 = require("viem");
 exports.MIN_WITHDRAWAL_WEI = BigInt('1000000000000000000'); // 1 MORBIUS
+exports.HOT_WITHDRAW_CONFIRMATION_TIMEOUT_MS = 15 * 60 * 1000;
+exports.HOT_WITHDRAW_CONFIRM_WORKER_INTERVAL_MS = 30_000;
+exports.PENDING_DEPOSIT_CONFIRM_WORKER_INTERVAL_MS = 10_000;
+exports.HOT_WITHDRAW_QUEUE_INTERVAL_MS_DEFAULT = 3000;
 // Must match contract: keccak256("WithdrawApproval(address player,uint256 amount,uint256 nonce,uint256 expiryTimestamp)")
 const WITHDRAW_APPROVAL_TYPE_STRING = 'WithdrawApproval(address player,uint256 amount,uint256 nonce,uint256 expiryTimestamp)';
+function resolveDepositConfirmationsRequired(rawValue) {
+    const parsed = Number(rawValue ?? '');
+    if (!Number.isFinite(parsed) || parsed <= 0)
+        return 3;
+    return Math.floor(parsed);
+}
+function resolveHotWithdrawQueueIntervalMs(rawValue) {
+    const parsed = Number(rawValue ?? '');
+    if (!Number.isFinite(parsed) || parsed <= 0)
+        return exports.HOT_WITHDRAW_QUEUE_INTERVAL_MS_DEFAULT;
+    return Math.floor(parsed);
+}
 /**
  * Build EIP-712 digest exactly as BlackjackV2 contract does, then sign it.
  * When domainSeparatorHex is provided (read from contract), the signature is guaranteed

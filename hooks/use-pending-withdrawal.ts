@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect, useCallback } from 'react';
+import { getPendingWithdrawalPath } from '@/lib/api-urls';
 
 export interface PendingWithdrawalJob {
   jobId: string;
@@ -14,14 +15,14 @@ export interface PendingWithdrawalJob {
  * Used to show a page-level banner and disable deposit/withdraw controls
  * after a page refresh mid-withdrawal.
  */
-export function usePendingWithdrawal(address: string | undefined, serverUrl: string | undefined) {
+export function usePendingWithdrawal(address: string | undefined, _serverUrl: string | undefined) {
   const [job, setJob] = useState<PendingWithdrawalJob | null>(null);
   const [checked, setChecked] = useState(false);
 
   const check = useCallback(async () => {
-    if (!address || !serverUrl) return;
+    if (!address) return;
     try {
-      const res = await fetch(`${serverUrl}/api/withdraw/pending?address=${address}`);
+      const res = await fetch(getPendingWithdrawalPath(address), { cache: 'no-store' });
       if (!res.ok) return;
       const data = await res.json();
       setJob(data.job ?? null);
@@ -30,7 +31,7 @@ export function usePendingWithdrawal(address: string | undefined, serverUrl: str
     } finally {
       setChecked(true);
     }
-  }, [address, serverUrl]);
+  }, [address]);
 
   // Initial check on mount / address change
   useEffect(() => {

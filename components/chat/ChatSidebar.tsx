@@ -10,15 +10,8 @@ const PATH_TO_ROOM: Record<string, { roomId: string; title: string }> = {
   '/': { roomId: 'main', title: 'Lobby Chat' },
   '/BLACKJACK': { roomId: 'blackjack', title: 'Blackjack Chat' },
   '/PLINKO': { roomId: 'plinko', title: 'Plinko Chat' },
-  '/plinko-dashboard': { roomId: 'plinko', title: 'Plinko Chat' },
-  '/plinko-stats': { roomId: 'plinko', title: 'Plinko Chat' },
-  '/plinko-simulator': { roomId: 'plinko', title: 'Plinko Chat' },
-  '/plinko-verifier': { roomId: 'plinko', title: 'Plinko Chat' },
   '/keno': { roomId: 'keno', title: 'Keno Chat' },
-  '/keno-dashboard': { roomId: 'keno', title: 'Keno Chat' },
   '/lottery': { roomId: 'lottery', title: 'Lottery Chat' },
-  '/lottery-purchase-showcase': { roomId: 'lottery', title: 'Lottery Chat' },
-  '/BIG-WHEEL': { roomId: 'bigwheel', title: 'Big Wheel Chat' },
   '/Morb-It': { roomId: 'morb-it', title: 'Morb-It Chat' },
 };
 
@@ -69,7 +62,7 @@ export function ChatSidebar() {
     const isHome = pathname === '/' || pathname === '';
     const isDesktop = window.innerWidth >= 768;
     if (isHome && isDesktop) setOpen(true);
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+   
   }, []);
 
   const closeButton = (
@@ -123,9 +116,9 @@ export function ChatSidebar() {
           <motion.div
             className="fixed right-0 top-0 bottom-0 z-[500] flex flex-col overflow-hidden text-slate-200"
             style={{ ...CHAT_DRAWER_STYLE, width: 300 }}
-            initial={{ x: '100%' }}
-            animate={{ x: 0 }}
-            exit={{ x: '100%' }}
+            initial={{ x: '100%', opacity: 0 }}
+            animate={{ x: 0, opacity: 1 }}
+            exit={{ x: '100%', opacity: 0 }}
             transition={{ duration: 0.25, ease: 'easeInOut' }}
           >
             {hasGameChat && (
@@ -168,9 +161,9 @@ export function ChatSidebar() {
           <motion.div
             className="md:hidden fixed right-0 top-0 bottom-0 z-[9002] flex flex-col overflow-hidden text-slate-200"
             style={{ ...CHAT_DRAWER_STYLE, width: 'min(85vw, 320px)' }}
-            initial={{ x: '100%' }}
-            animate={{ x: 0 }}
-            exit={{ x: '100%' }}
+            initial={{ x: '100%', opacity: 0 }}
+            animate={{ x: 0, opacity: 1 }}
+            exit={{ x: '100%', opacity: 0 }}
             transition={{ duration: 0.3, ease: 'easeInOut' }}
           >
             {/* Spacer below mobile top bar */}

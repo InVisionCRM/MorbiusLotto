@@ -99,7 +99,7 @@ function BrowserMockup({ data, index }: { data: ShowcaseData; index: number }) {
           </div>
 
           {/* Page screenshot */}
-          {/* eslint-disable-next-line @next/next/no-img-element */}
+          { }
           <img
             src={data.pageImg}
             alt={`${data.name} page view`}
@@ -125,7 +125,7 @@ function BrowserMockup({ data, index }: { data: ShowcaseData; index: number }) {
             </div>
             <span className="text-[8px] text-slate-500 ml-1">Table</span>
           </div>
-          {/* eslint-disable-next-line @next/next/no-img-element */}
+          { }
           <img src={data.tableImg} alt={`${data.name} custom blackjack table`} className="w-full block" />
         </div>
 
@@ -146,7 +146,7 @@ function BrowserMockup({ data, index }: { data: ShowcaseData; index: number }) {
             </div>
             <span className="text-[8px] text-slate-500 ml-1">Token Profile</span>
           </div>
-          {/* eslint-disable-next-line @next/next/no-img-element */}
+          { }
           <img src={data.tpImg} alt={`${data.name} token profile`} className="w-full block" />
         </div>
       </div>

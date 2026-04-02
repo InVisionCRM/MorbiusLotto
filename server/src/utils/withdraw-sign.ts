@@ -2,6 +2,10 @@ import { privateKeyToAccount, sign } from 'viem/accounts';
 import { keccak256, concat, encodeAbiParameters, stringToHex, padHex } from 'viem';
 
 export const MIN_WITHDRAWAL_WEI = BigInt('1000000000000000000'); // 1 MORBIUS
+export const HOT_WITHDRAW_CONFIRMATION_TIMEOUT_MS = 15 * 60 * 1000;
+export const HOT_WITHDRAW_CONFIRM_WORKER_INTERVAL_MS = 30_000;
+export const PENDING_DEPOSIT_CONFIRM_WORKER_INTERVAL_MS = 10_000;
+export const HOT_WITHDRAW_QUEUE_INTERVAL_MS_DEFAULT = 3000;
 
 export interface WithdrawSignaturePayload {
   amount: string;
@@ -15,6 +19,18 @@ export interface WithdrawSignaturePayload {
 // Must match contract: keccak256("WithdrawApproval(address player,uint256 amount,uint256 nonce,uint256 expiryTimestamp)")
 const WITHDRAW_APPROVAL_TYPE_STRING =
   'WithdrawApproval(address player,uint256 amount,uint256 nonce,uint256 expiryTimestamp)';
+
+export function resolveDepositConfirmationsRequired(rawValue?: string): number {
+  const parsed = Number(rawValue ?? '');
+  if (!Number.isFinite(parsed) || parsed <= 0) return 3;
+  return Math.floor(parsed);
+}
+
+export function resolveHotWithdrawQueueIntervalMs(rawValue?: string): number {
+  const parsed = Number(rawValue ?? '');
+  if (!Number.isFinite(parsed) || parsed <= 0) return HOT_WITHDRAW_QUEUE_INTERVAL_MS_DEFAULT;
+  return Math.floor(parsed);
+}
 
 /**
  * Build EIP-712 digest exactly as BlackjackV2 contract does, then sign it.

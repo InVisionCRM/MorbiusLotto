@@ -38,6 +38,9 @@ export interface AvatarConfig {
   overlayImage: string;
   faceShape: string;
   customPattern: string;
+  customMouthFeatureId?: string;
+  customNoseFeatureId?: string;
+  customHairFeatureId?: string;
 }
 
 /** Alias for stored/parsed avatar — v1 only; kept for call-site clarity. */
@@ -65,6 +68,9 @@ export const AVATAR_V1_DEFAULTS: AvatarConfig = {
   overlayImage: '',
   faceShape: 'Square',
   customPattern: '',
+  customMouthFeatureId: '',
+  customNoseFeatureId: '',
+  customHairFeatureId: '',
 };
 
 /** Stored layered avatar JSON (removed feature) — detect and fall back to v1 defaults. */
@@ -149,6 +155,9 @@ export function mergeV1AvatarPartial(raw: unknown): AvatarConfig {
     overlayImage: str('overlayImage', AVATAR_V1_DEFAULTS.overlayImage),
     faceShape: str('faceShape', AVATAR_V1_DEFAULTS.faceShape),
     customPattern: str('customPattern', AVATAR_V1_DEFAULTS.customPattern),
+    customMouthFeatureId: str('customMouthFeatureId', AVATAR_V1_DEFAULTS.customMouthFeatureId ?? ''),
+    customNoseFeatureId: str('customNoseFeatureId', AVATAR_V1_DEFAULTS.customNoseFeatureId ?? ''),
+    customHairFeatureId: str('customHairFeatureId', AVATAR_V1_DEFAULTS.customHairFeatureId ?? ''),
   };
 }
 

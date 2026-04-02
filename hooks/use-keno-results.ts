@@ -20,19 +20,44 @@ export type KenoResultRow = {
   timestamp?: number
 }
 
+function toBigInt(value: unknown): bigint {
+  if (typeof value === 'bigint') return value
+  if (typeof value === 'number' || typeof value === 'string' || typeof value === 'boolean') {
+    try {
+      return BigInt(value)
+    } catch {
+      return 0n
+    }
+  }
+  return 0n
+}
+
+function toNumber(value: unknown): number {
+  if (typeof value === 'number') return Number.isFinite(value) ? value : 0
+  if (typeof value === 'bigint' || typeof value === 'string' || typeof value === 'boolean') {
+    const parsed = Number(value)
+    return Number.isFinite(parsed) ? parsed : 0
+  }
+  return 0
+}
+
+function toAddress(value: unknown): `0x${string}` {
+  return typeof value === 'string' && value.startsWith('0x') ? (value as `0x${string}`) : '0x0'
+}
+
 function parseKenoPlayedLog(
   args: Record<string, unknown>,
   blockNumber?: bigint,
   transactionHash?: `0x${string}`
 ): KenoResultRow {
   return {
-    player: (args.player as `0x${string}`) ?? '0x0',
-    ticketId: BigInt(args.ticketId ?? 0),
-    spotSize: Number(args.spotSize ?? 0),
-    wager: BigInt(args.wager ?? 0),
-    hits: Number(args.hits ?? 0),
-    grossPayout: BigInt(args.grossPayout ?? 0),
-    netPayout: BigInt(args.netPayout ?? 0),
+    player: toAddress(args.player),
+    ticketId: toBigInt(args.ticketId),
+    spotSize: toNumber(args.spotSize),
+    wager: toBigInt(args.wager),
+    hits: toNumber(args.hits),
+    grossPayout: toBigInt(args.grossPayout),
+    netPayout: toBigInt(args.netPayout),
     paidWithPLS: Boolean(args.paidWithPLS),
     blockNumber,
     transactionHash,

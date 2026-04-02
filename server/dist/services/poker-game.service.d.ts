@@ -38,6 +38,11 @@ export interface PokerCurrentHand {
         action: string;
         amount: string;
     } | null;
+    /** Latest non-blind action for each seat on the current street, keyed by seat position. */
+    streetActions?: Record<number, {
+        action: string;
+        amount: string;
+    }>;
     minRaise: string;
     /** Amount the acting player must put in to call (0 if can check). */
     toCall: string;
@@ -75,6 +80,7 @@ export declare class PokerGameService {
     private postHandCallback;
     private notifyCallback;
     private activeTables;
+    private nextHandTimers;
     /** Per-table mutex to serialize playerAction / autoFold / leaveTable calls. */
     private tableLocks;
     constructor(dbService: DatabaseService, pfService: ProvablyFairService);
@@ -95,6 +101,16 @@ export declare class PokerGameService {
     private invalidateTableScaling;
     private getTableScaling;
     private normalizeAddress;
+    /**
+     * DB remains the canonical source of poker hand/seat state.
+     * In-memory table state is an execution cache and can be reconstructed.
+     */
+    private getOrReconstructActiveTable;
+    private clearScheduledNextHand;
+    /**
+     * Keep showdown delay transition behavior centralized for deterministic restart/reconnect handling.
+     */
+    private scheduleNextHandAfterShowdown;
     private broadcastState;
     listTables(): Promise<PokerTableSummary[]>;
     createTable(smallBlind: bigint, bigBlind: bigint, maxSeats: number, pinCode?: string): Promise<string>;

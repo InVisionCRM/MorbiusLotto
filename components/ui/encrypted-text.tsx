@@ -180,7 +180,7 @@ export const EncryptedText: React.FC<EncryptedTextProps> = ({
         cancelAnimationFrame(animationFrameRef.current);
       }
     };
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+   
   }, [isInView, text, revealDelayMs, charset, flipDelayMs, hold]);
 
   if (!text) return null;

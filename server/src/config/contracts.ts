@@ -5,12 +5,10 @@
  * Local copies in server/src/abi/ for Railway builds (which only include server/ directory).
  * All ABIs use TypeScript wrappers for consistency and reusability.
  */
-import { lotteryAbi } from '../abi/lottery';
 import { instantLotteryAbi } from '../abi/instant-lottery';
 import { plinkoAbi } from '../abi/plinko';
 import { kenoAbi } from '../abi/keno';
 
-const LOTTERY_ABI = lotteryAbi;
 const PLINKO_ABI = plinkoAbi;
 const KENO_ABI = kenoAbi;
 export const MORBIUS_TOKEN_ADDRESS = (process.env.MORBIUS_TOKEN_ADDRESS || '0xB7d4eB5fDfE3d4d3B5C16a44A49948c6EC77c6F1') as `0x${string}`;
@@ -68,8 +66,6 @@ export const KENO_GET_CONTRACT_RESERVE_ABI = [
   { inputs: [], name: 'getContractReserve', outputs: [{ internalType: 'uint256', name: '', type: 'uint256' }], stateMutability: 'view', type: 'function' },
 ] as const;
 
-/** Full Lottery 6-of-55 V2 ABI from contracts/abi/lottery6of55-v2.json. */
-export const LOTTERY_STATS_ABI = LOTTERY_ABI;
 /** Instant Lottery 6-of-55 ABI (totalPlays, totalWagered, totalPayouts). */
 export const INSTANT_LOTTERY_STATS_ABI = instantLotteryAbi;
 

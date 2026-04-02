@@ -41,18 +41,27 @@ export interface DisplayProfile {
   tgHandle: string | null
 }
 
+const EMPTY_DISPLAY_PROFILE: DisplayProfile = {
+  displayName: null,
+  profileImageUrl: null,
+  avatarConfig: null,
+  bio: null,
+  xHandle: null,
+  tgHandle: null,
+}
+
 /**
  * Hook to fetch display profile (name + avatar) for the connected wallet.
  * Use for WalletMenu on any nav so avatar and name show consistently.
  */
 export function useProfile() {
   const { address } = useAccount()
-  const query = useQuery<DisplayProfile>({
+  const query = useQuery<DisplayProfile, Error, DisplayProfile>({
     queryKey: ['playerProfile', address],
     queryFn: async () => {
-      if (!address) return { displayName: null, profileImageUrl: null, avatarConfig: null }
+      if (!address) return EMPTY_DISPLAY_PROFILE
       const res = await fetch(`/api/player/${address}/profile`)
-      if (!res.ok) return { displayName: null, profileImageUrl: null, avatarConfig: null }
+      if (!res.ok) return EMPTY_DISPLAY_PROFILE
       const data = await res.json()
       return {
         displayName: data.displayName ?? null,
@@ -65,6 +74,7 @@ export function useProfile() {
     },
     enabled: !!address,
     staleTime: 60_000,
+    refetchOnWindowFocus: false,
   })
   return {
     profileDisplayName: query.data?.displayName ?? null,
@@ -82,12 +92,12 @@ export function useProfile() {
  * Use for LatestWins, leaderboards, etc. to show profile name when set.
  */
 export function useProfileForAddress(address: string | null) {
-  const query = useQuery<DisplayProfile>({
+  const query = useQuery<DisplayProfile, Error, DisplayProfile>({
     queryKey: ['playerProfile', address],
     queryFn: async () => {
-      if (!address) return { displayName: null, profileImageUrl: null, avatarConfig: null }
+      if (!address) return EMPTY_DISPLAY_PROFILE
       const res = await fetch(`/api/player/${address}/profile`)
-      if (!res.ok) return { displayName: null, profileImageUrl: null, avatarConfig: null }
+      if (!res.ok) return EMPTY_DISPLAY_PROFILE
       const data = await res.json()
       return {
         displayName: data.displayName ?? null,
@@ -100,6 +110,7 @@ export function useProfileForAddress(address: string | null) {
     },
     enabled: !!address,
     staleTime: 60_000,
+    refetchOnWindowFocus: false,
   })
   return {
     displayName: query.data?.displayName ?? null,
@@ -149,6 +160,8 @@ export function usePlayerProfileStats(address: string | null) {
     },
     enabled: !!address,
     refetchInterval: 10000,
+    refetchOnWindowFocus: false,
+    staleTime: 5_000,
   })
 }
 
@@ -187,5 +200,7 @@ export function usePlayerProfileGames(address: string | null, limit: number = 50
     },
     enabled: !!address,
     refetchInterval: 30000,
+    refetchOnWindowFocus: false,
+    staleTime: 15_000,
   })
 }

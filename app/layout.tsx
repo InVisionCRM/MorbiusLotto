@@ -2,9 +2,6 @@ import type { Metadata, Viewport } from "next";
 import "./globals.css";
 import { Analytics } from "@vercel/analytics/next";
 
-// Force dynamic rendering to prevent WagmiProviderNotFoundError during static prerender.
-// Wagmi/RainbowKit hooks require client context that isn't available during SSG.
-export const dynamic = 'force-dynamic';
 import { Providers } from "./providers";
 import { Toaster } from "sonner";
 import { BreakReminderWrapper } from "@/components/ResponsibleGaming";
@@ -47,14 +44,14 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en">
+    <html lang="en" className="dark">
       <head>
-        {/* Google Fonts */}
-        <link rel="preconnect" href="https://fonts.googleapis.com" />
-        <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
-        <link href="https://fonts.googleapis.com/css2?family=Autour+One&family=Climate+Crisis:YEAR@1979&family=Grandstander:ital,wght@0,700;1,700&family=Jost:wght@400;700&family=Monoton&family=Noto+Sans+Mono:wdth,wght@95.2,100..900&family=Poppins:wght@400;500;600;700&family=Prosto+One&family=Mitr:wght@700&family=Russo+One&family=Krona+One&family=Orbitron:wght@400;700;900&display=swap" rel="stylesheet" />
         {/* Font Awesome for PLINKO icons */}
         <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" />
+        {/* Montserrat for chat messages */}
+        <link rel="preconnect" href="https://fonts.googleapis.com" />
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
+        <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@500&display=swap" rel="stylesheet" />
       </head>
       <body
         className={`${geistSans.variable} ${geistMono.variable} antialiased`}

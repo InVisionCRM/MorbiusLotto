@@ -54,7 +54,13 @@ export interface BigWheelChainStats {
 }
 export declare class ChainAnalyticsService {
     private readonly dbService;
+    private readonly blockTimestampCache;
+    private readonly inFlightBlockTimestampReads;
+    private latestBlockCache;
+    private inFlightLatestBlockRead;
     constructor(dbService: DatabaseService);
+    private getCachedBlockTimestamp;
+    private getCachedLatestBlockNumber;
     getPlinkoPlayerDrops(playerAddress: string, limit?: number, offset?: number): Promise<PlinkoPlayerDropChain[]>;
     getPlinkoPlayerStats(playerAddress: string): Promise<PlinkoPlayerStatsChain>;
     getPlinkoStats(): Promise<PlinkoChainStats | null>;

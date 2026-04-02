@@ -55,14 +55,14 @@ export function Footer() {
               <Link href="/PLINKO" className="text-white/90 hover:text-cyan-500/80 transition-colors">
                 Plinko
               </Link>
-              <Link href="/plinko-dashboard" className="text-white/90 hover:text-cyan-500/80 transition-colors">
-                Dashboard
+              <Link href="/BLACKJACK" className="text-white/90 hover:text-cyan-500/80 transition-colors">
+                Blackjack
               </Link>
-              <Link href="/plinko-verifier" className="text-white/90 hover:text-cyan-500/80 transition-colors">
-                Verifier
+              <Link href="/poker" className="text-white/90 hover:text-cyan-500/80 transition-colors">
+                Poker
               </Link>
-              <Link href="/donate" className="text-white/90 hover:text-cyan-500/80 transition-colors">
-                Donate
+              <Link href="/blackjack-multi" className="text-white/90 hover:text-cyan-500/80 transition-colors">
+                Multiplayer BJ
               </Link>
               <Link href="/swap" className="text-white/90 hover:text-cyan-500/80 transition-colors">
                 Buy Morbius

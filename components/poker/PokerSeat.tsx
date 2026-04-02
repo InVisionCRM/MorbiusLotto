@@ -26,7 +26,7 @@ import {
   Wallet,
   Zap,
 } from 'lucide-react';
-import AvatarView, { type Emotion } from './avatar/AvatarView';
+import { AvatarView, type Emotion } from '@/components/avatar';
 import { RadialMenu, RadialMenuFloating, type RadialMenuItem } from '@/components/ui/radial-menu';
 import { useQuickChatPhrases } from '@/hooks/useQuickChatPhrases';
 import { EditQuickChatModal } from '@/components/poker/EditQuickChatModal';
@@ -90,35 +90,20 @@ export function PokerChipStack({ weiAmount }: { weiAmount: string }) {
   );
 }
 
-// ── Role token ────────────────────────────────────────────────────────────
+const AVATAR_SIZE_PX = 84;
+const ROLE_CRESCENT_HEIGHT_PX = Math.round(AVATAR_SIZE_PX * 0.28);
 
-const ROLE_TOKEN_STYLE = {
-  D:  { bg: '#ffffff', color: '#1a1a1a', border: '#d4af37', size: 22, fontSize: 11 },
-  SB: { bg: '#1d4ed8', color: '#ffffff', border: '#60a5fa', size: 20, fontSize: 9  },
-  BB: { bg: '#b45309', color: '#ffffff', border: '#fbbf24', size: 20, fontSize: 9  },
+const ROLE_CRESCENT_STYLE = {
+  DEALER: { bg: '#f4e7b6', text: '#1a1a1a', rim: '#d4af37' },
+  SB: { bg: '#1d4ed8', text: '#ffffff', rim: '#60a5fa' },
+  BB: { bg: '#b45309', text: '#ffffff', rim: '#fbbf24' },
+  'DEALER/SB': { bg: '#1f2a44', text: '#f8fafc', rim: '#a7b6d9' },
 } as const;
-
-function RoleToken({ label }: { label: keyof typeof ROLE_TOKEN_STYLE }) {
-  const s = ROLE_TOKEN_STYLE[label];
-  return (
-    <div style={{
-      width: s.size, height: s.size,
-      borderRadius: '50%',
-      background: s.bg,
-      border: `2px solid ${s.border}`,
-      color: s.color,
-      fontSize: s.fontSize,
-      fontWeight: 800,
-      display: 'flex', alignItems: 'center', justifyContent: 'center',
-      boxShadow: '0 1px 6px rgba(0,0,0,0.8)',
-      letterSpacing: '-0.5px',
-      userSelect: 'none',
-      flexShrink: 0,
-    }}>
-      {label}
-    </div>
-  );
-}
+const WINNER_CRESCENT_STYLE = {
+  bg: '#14532d',
+  text: '#ecfccb',
+  rim: '#22c55e',
+} as const;
 
 // ── Circular timer ring around avatar ──────────────────────────────────────
 
@@ -242,6 +227,8 @@ export interface PokerSeatProps {
   showCardBacks?: boolean;
   /** At showdown: 5 card indices that form this seat's winning hand (for cyan highlight on hole cards) */
   winningCardIndices?: number[];
+  /** True only when this seat is in current hand winner list at showdown. */
+  isHandWinner?: boolean;
   lastAction?: { action: string; amount: string } | null;
   timeLeft?: number;
   maxTime?: number;
@@ -274,7 +261,7 @@ export interface PokerSeatProps {
 
 const CHAT_BUBBLE_MAX_LENGTH = 80;
 
-export function PokerSeat({ seat, holeCards, isCurrentPlayer, showCardBacks, winningCardIndices, lastAction, timeLeft, maxTime = 30, chatBubble, onReUpClick, onMenuClick, overlayPhrase: propsOverlayPhrase, overlayEmotion: propsOverlayEmotion, onPhraseReaction, onAnimationReaction, onOpponentClick, onOpponentRadialAction, quickChatPhrases: propsQuickChatPhrases, setQuickChatPhrases: propsSetQuickChatPhrases, onOpenEditQuickChat, hideSeatAvatar = false, onLeaveTable, onRequestMobileActivity, includeActivityInPlayerRadial = false }: PokerSeatProps) {
+export function PokerSeat({ seat, index, holeCards, isCurrentPlayer, showCardBacks, winningCardIndices, isHandWinner = false, lastAction, timeLeft, maxTime = 30, chatBubble, onReUpClick, onMenuClick, overlayPhrase: propsOverlayPhrase, overlayEmotion: propsOverlayEmotion, onPhraseReaction, onAnimationReaction, onOpponentClick, onOpponentRadialAction, quickChatPhrases: propsQuickChatPhrases, setQuickChatPhrases: propsSetQuickChatPhrases, onOpenEditQuickChat, hideSeatAvatar = false, onLeaveTable, onRequestMobileActivity, includeActivityInPlayerRadial = false }: PokerSeatProps) {
   const empty = !seat.playerAddress;
   const showMyCards = !!(holeCards && holeCards.length > 0);
   const showBacks   = !!(showCardBacks && !showMyCards && !empty && !seat.folded);
@@ -381,6 +368,16 @@ export function PokerSeat({ seat, holeCards, isCurrentPlayer, showCardBacks, win
 
   // Active emotion: menu-open slouch > broadcast (from server) > local (just clicked) > action-driven
   const activeEmotion: Emotion = hasMenuOpen ? 'neutral' : (propsOverlayEmotion ?? localEmotion ?? avatarEmotion);
+  const roleLabel: keyof typeof ROLE_CRESCENT_STYLE | null = seat.isBigBlind
+    ? 'BB'
+    : (seat.isDealer && seat.isSmallBlind)
+      ? 'DEALER/SB'
+      : seat.isDealer
+        ? 'DEALER'
+        : seat.isSmallBlind
+          ? 'SB'
+          : null;
+  const roleStyle = roleLabel ? ROLE_CRESCENT_STYLE[roleLabel] : null;
 
   const longPressTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const phraseOverlayTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -528,6 +525,7 @@ export function PokerSeat({ seat, holeCards, isCurrentPlayer, showCardBacks, win
   /* ── Occupied seat ── */
   return (
     <div
+      data-testid={`poker-seat-${index}`}
       className={`poker-seat relative flex flex-col items-center gap-0.5 select-none transition-opacity ${isFolded ? 'opacity-50' : 'opacity-100'}`}
       aria-label={`Seat ${displayName}`}
     >
@@ -584,11 +582,12 @@ export function PokerSeat({ seat, holeCards, isCurrentPlayer, showCardBacks, win
       {/* ── Cards — peek out from behind avatar ── */}
       {hasCards && (
         <div
+          data-testid={`poker-seat-cards-${index}`}
           className="relative flex-shrink-0"
           style={{
             width: showMyCards ? 'clamp(84px, 20vw, 110px)' : 'clamp(58px, 14vw, 74px)',
             height: showMyCards ? 'clamp(72px, 18vw, 96px)' : 'clamp(50px, 12vw, 66px)',
-            marginBottom: hideSeatAvatar ? -10 : -55,
+            marginBottom: hideSeatAvatar ? -10 : -44,
             zIndex: 0,
           }}
         >
@@ -605,6 +604,10 @@ export function PokerSeat({ seat, holeCards, isCurrentPlayer, showCardBacks, win
                 transform: `rotate(${ci === 0 ? -12 : 12}deg)`,
                 transformOrigin: 'bottom center',
                 filter: isFolded ? 'grayscale(1) opacity(0.5)' : undefined,
+                borderRadius: 8,
+                boxShadow: isActing
+                  ? '0 0 0 2px rgba(34, 211, 238, 0.95), 0 0 14px rgba(34, 211, 238, 0.85), 0 0 22px rgba(56, 189, 248, 0.65)'
+                  : undefined,
               }}
             >
               {showMyCards
@@ -633,7 +636,7 @@ export function PokerSeat({ seat, holeCards, isCurrentPlayer, showCardBacks, win
 
           {/* Circular timer ring around avatar */}
           {isActing && timeLeft != null && (
-            <CircularTimerRing size={100} timeLeft={timeLeft} maxTime={maxTime} />
+            <CircularTimerRing size={AVATAR_SIZE_PX} timeLeft={timeLeft} maxTime={maxTime} />
           )}
 
           {/* Avatar — current player: tap opens action radial; opponent: context radial + click profile */}
@@ -643,8 +646,8 @@ export function PokerSeat({ seat, holeCards, isCurrentPlayer, showCardBacks, win
                 ref={avatarRef}
                 className="relative select-none overflow-hidden rounded-full outline-none"
                 style={{
-                  width: 100,
-                  height: 100,
+                  width: AVATAR_SIZE_PX,
+                  height: AVATAR_SIZE_PX,
                   border: isActing
                     ? '2px solid transparent'
                     : isCurrentPlayer
@@ -701,6 +704,58 @@ export function PokerSeat({ seat, holeCards, isCurrentPlayer, showCardBacks, win
                 {isCurrentPlayer && (
                   <div className="pointer-events-none absolute inset-0 rounded-full bg-black/0 transition-colors hover:bg-black/20" />
                 )}
+                {isHandWinner && (
+                  <div
+                    className="pointer-events-none absolute left-1/2 top-0 -translate-x-1/2 flex items-center justify-center"
+                    style={{
+                      width: '84%',
+                      height: Math.max(16, Math.round(ROLE_CRESCENT_HEIGHT_PX * 0.78)),
+                      borderRadius: '42px 42px 9999px 9999px / 18px 18px 12px 12px',
+                      background: WINNER_CRESCENT_STYLE.bg,
+                      borderBottom: `1px solid ${WINNER_CRESCENT_STYLE.rim}`,
+                      boxShadow:
+                        'inset 0 2px 4px rgba(255,255,255,0.08), inset 0 -7px 12px rgba(0,0,0,0.85), 0 1px 4px rgba(0,0,0,0.55)',
+                    }}
+                  >
+                    <span
+                      style={{
+                        color: WINNER_CRESCENT_STYLE.text,
+                        fontSize: 9,
+                        fontWeight: 900,
+                        letterSpacing: '0.5px',
+                        lineHeight: 1,
+                      }}
+                    >
+                      WINNER
+                    </span>
+                  </div>
+                )}
+                {roleLabel && roleStyle && (
+                  <div
+                    className="pointer-events-none absolute left-1/2 bottom-0 -translate-x-1/2 flex items-center justify-center"
+                    style={{
+                      width: '92%',
+                      height: ROLE_CRESCENT_HEIGHT_PX,
+                      borderRadius: '9999px 9999px 42px 42px / 14px 14px 22px 22px',
+                      background: roleStyle.bg,
+                      borderTop: `1px solid ${roleStyle.rim}`,
+                      boxShadow:
+                        'inset 0 -3px 6px rgba(0,0,0,0.48), 0 2px 4px rgba(0,0,0,0.26)',
+                    }}
+                  >
+                    <span
+                      style={{
+                        color: roleStyle.text,
+                        fontSize: roleLabel === 'DEALER/SB' ? 8 : roleLabel === 'DEALER' ? 9 : 11,
+                        fontWeight: 900,
+                        letterSpacing: roleLabel === 'DEALER/SB' ? '-0.4px' : roleLabel === 'DEALER' ? '-0.2px' : '0.2px',
+                        lineHeight: 1,
+                      }}
+                    >
+                      {roleLabel}
+                    </span>
+                  </div>
+                )}
               </div>
             );
 
@@ -719,26 +774,9 @@ export function PokerSeat({ seat, holeCards, isCurrentPlayer, showCardBacks, win
             }
             return avatarCard;
           })()}
-
-          {/* Role badges — bottom of avatar */}
-          {(seat.isDealer || seat.isSmallBlind || seat.isBigBlind) && (
-            <div className="absolute -bottom-2 left-0 right-0 flex justify-center gap-1 z-10">
-              {seat.isDealer     && <RoleToken label="D"  />}
-              {seat.isSmallBlind && <RoleToken label="SB" />}
-              {seat.isBigBlind   && <RoleToken label="BB" />}
-            </div>
-          )}
         </div>
       ) : (
-        <div className="relative flex flex-col items-center flex-shrink-0 gap-0.5" style={{ zIndex: 1 }}>
-          {(seat.isDealer || seat.isSmallBlind || seat.isBigBlind) && (
-            <div className="flex justify-center gap-0.5">
-              {seat.isDealer     && <RoleToken label="D"  />}
-              {seat.isSmallBlind && <RoleToken label="SB" />}
-              {seat.isBigBlind   && <RoleToken label="BB" />}
-            </div>
-          )}
-        </div>
+        <div className="relative flex flex-col items-center flex-shrink-0 gap-0.5" style={{ zIndex: 1 }} />
       )}
 
       {isCurrentPlayer && playerMainMenuItems.length > 0 && (
@@ -757,26 +795,6 @@ export function PokerSeat({ seat, holeCards, isCurrentPlayer, showCardBacks, win
           showLabels
         />
       )}
-
-      {/* "Your Turn" banner */}
-      <AnimatePresence>
-        {isActing && isCurrentPlayer && (
-          <motion.div
-            key="your-turn"
-            initial={{ opacity: 0, scale: 0.7, y: -4 }}
-            animate={{ opacity: 1, scale: 1, y: 0 }}
-            exit={{ opacity: 0, scale: 0.7, y: -4 }}
-            transition={{ type: 'spring', stiffness: 320, damping: 22 }}
-          >
-            <span
-              className="text-[10px] font-bold tracking-widest uppercase px-2 py-0.5 rounded-full"
-              style={{ color: 'var(--poker-bg)', background: 'var(--poker-accent)', boxShadow: '0 0 8px var(--poker-accent-muted)' }}
-            >
-              Your Turn
-            </span>
-          </motion.div>
-        )}
-      </AnimatePresence>
 
       {/* ── Buttons + badge ── */}
       <div style={{ position: 'relative', display: 'inline-block' }}>
@@ -866,7 +884,8 @@ export function PokerSeat({ seat, holeCards, isCurrentPlayer, showCardBacks, win
                 background: 'rgba(0,0,0,0.88)',
                 border: `1px solid ${isActing ? 'transparent' : isCurrentPlayer ? 'rgba(251,191,36,0.5)' : 'rgba(255,255,255,0.12)'}`,
                 borderRadius: 6,
-                minWidth: 88,
+                width: 112,
+                minWidth: 112,
                 boxShadow: '0 2px 8px rgba(0,0,0,0.7)',
                 ...((isCurrentPlayer || opponentTapProfile) ? { cursor: 'pointer' } : {}),
               }}
@@ -885,18 +904,27 @@ export function PokerSeat({ seat, holeCards, isCurrentPlayer, showCardBacks, win
               </div>
             </div>
           </div>
-          <AnimatePresence mode="wait">
-            {actionStyle && actionLabel && (
-              <motion.div key={`${activeAction?.action}-${actionLabel}`} initial={{ height: 0, opacity: 0 }} animate={{ height: 'auto', opacity: 1 }} exit={{ height: 0, opacity: 0 }} transition={{ duration: 0.15 }} className="overflow-hidden">
-                <div
-                  className="text-center font-bold px-2 py-1 leading-tight break-words"
-                  style={{ background: actionStyle.bg, color: '#fff', fontSize: 'clamp(8px, 1.55vw, 10px)' }}
+          <div className="h-[22px] overflow-hidden">
+            <AnimatePresence mode="wait">
+              {actionStyle && actionLabel && (
+                <motion.div
+                  key={`${activeAction?.action}-${actionLabel}`}
+                  initial={{ opacity: 0, y: 4 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, y: -4 }}
+                  transition={{ duration: 0.15 }}
                 >
-                  {actionLabel}
-                </div>
-              </motion.div>
-            )}
-          </AnimatePresence>
+                  <div
+                    data-testid={`poker-seat-action-${index}`}
+                    className="h-[22px] text-center font-bold px-2 py-1 leading-tight break-words"
+                    style={{ background: actionStyle.bg, color: '#fff', fontSize: 'clamp(8px, 1.55vw, 10px)' }}
+                  >
+                    {actionLabel}
+                  </div>
+                </motion.div>
+              )}
+            </AnimatePresence>
+          </div>
             </div>
           );
 

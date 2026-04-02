@@ -1,5 +1,6 @@
 import { Pool } from 'pg';
 import { formatEther } from 'viem';
+import type { MoneyDatabasePort } from './money-database.port';
 import { logger } from '../utils/logger';
 import { toBigIntSafe } from '../utils/safe-bigint';
 
@@ -178,7 +179,9 @@ export interface BlackjackTableRow {
   updated_at: Date;
 }
 
-export class DatabaseService {
+export interface MoneyDatabaseQueries extends MoneyDatabasePort {}
+
+export class DatabaseService implements MoneyDatabaseQueries {
   private pool: Pool;
 
   /**
@@ -370,7 +373,8 @@ export class DatabaseService {
     await this.pool.query(query, [playerId]);
   }
 
-  // Off-chain balance operations
+  // Off-chain balance operations.
+  // NOTE: Money workflow callers should be routed through MoneyService's MoneyDatabasePort boundary.
   async getPlayerBalance(walletAddress: string): Promise<bigint> {
     const normalizedAddress = this.normalizeAddress(walletAddress);
     const query = `SELECT balance FROM players WHERE LOWER(wallet_address) = LOWER($1)`;

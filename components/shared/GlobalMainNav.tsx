@@ -41,18 +41,6 @@ export type NavPage = 'blackjack' | 'plinko' | 'lottery' | 'keno' | 'home' | 'po
 const PATH_TO_PAGE: Record<string, NavPage> = {
   '/BLACKJACK': 'blackjack',
   '/PLINKO': 'plinko',
-  '/plinko-dashboard': 'plinko',
-  '/lottery': 'lottery',
-  '/keno': 'keno',
-  '/keno-dashboard': 'keno',
-  '/poker': 'poker',
-  '/blackjack-multi': 'blackjackMulti',
-};
-
-/** Map Other Games href → NavPage so the current route hides its own link. */
-const OTHER_GAME_HREF_TO_PAGE: Partial<Record<string, NavPage>> = {
-  '/BLACKJACK': 'blackjack',
-  '/PLINKO': 'plinko',
   '/lottery': 'lottery',
   '/keno': 'keno',
   '/poker': 'poker',
@@ -74,13 +62,6 @@ const OTHER_GAMES: readonly OtherGameNavItem[] = [
   { label: 'Lottery', href: '/lottery', icon: 'fa-ticket-alt' },
   { label: 'Keno', href: '/keno', icon: 'fa-th' },
 ];
-
-const SIDEBAR_PANEL_STYLE = {
-  background: 'rgba(50, 76, 96, 0.49)',
-  backdropFilter: 'blur(4px)',
-  boxShadow: 'inset 0 3px 6px rgba(0, 0, 0, 0.67), inset 0 -3px 6px rgba(0, 0, 0, 0.65), 0 1px 3px rgba(17, 179, 208, 0.86)',
-  border: '1px inset rgba(60, 60, 60, 0.5)',
-} as const;
 
 /** Section header — uses CSS .sidebar-label for transition, no context needed */
 const SectionLabel = React.memo(function SectionLabel({ label }: { label: string }) {
@@ -206,13 +187,14 @@ const otherGameIcon = (g: OtherGameNavItem) =>
     <i className={`fas ${g.icon} w-5 text-center text-white shrink-0`} aria-hidden />
   );
 
+const NAV_ITEM_CLASS = 'text-white hover:bg-white/5 rounded-lg px-2 py-2 transition-colors';
+
 interface NavContentProps {
   page: NavPage;
   onOpenDepositModal?: () => void;
   currentView?: string;
   onViewChange?: (view: 'game' | 'history' | 'stats' | 'analytics') => void;
   setThemeModalOpen: (open: boolean) => void;
-  onTournamentLobby?: () => void;
   onThemeChange?: (theme: BlackjackThemeKind) => void;
   soundEnabled?: boolean;
   onSoundChange?: (enabled: boolean) => void;
@@ -225,13 +207,11 @@ interface NavContentProps {
   onNextTrack?: () => void;
   isDeployer: boolean;
   isAdmin: boolean;
-  isConnected: boolean;
   onShowPlinkoHistory?: () => void;
   onOpenHowToPlay?: () => void;
   onOpenSwap?: () => void;
   onPlinkoSoundToggle?: () => void;
   plinkoSoundEnabled?: boolean;
-  onShowLotteryHistory?: () => void;
   onShowLotteryDashboard?: () => void;
   onShowKenoPrizePool?: () => void;
   onShowKenoHistory?: () => void;
@@ -255,7 +235,6 @@ const NavContent = React.memo(function NavContent(props: NavContentProps) {
     currentView = 'game',
     onViewChange,
     setThemeModalOpen,
-    onTournamentLobby,
     onThemeChange,
     soundEnabled = true,
     onSoundChange,
@@ -268,13 +247,11 @@ const NavContent = React.memo(function NavContent(props: NavContentProps) {
     onNextTrack,
     isDeployer,
     isAdmin,
-    isConnected,
     onShowPlinkoHistory,
     onOpenHowToPlay,
     onOpenSwap,
     onPlinkoSoundToggle,
     plinkoSoundEnabled = true,
-    onShowLotteryHistory,
     onShowLotteryDashboard,
     onShowKenoPrizePool,
     onShowKenoHistory,
@@ -298,7 +275,7 @@ const NavContent = React.memo(function NavContent(props: NavContentProps) {
       OTHER_GAMES.filter((g) => {
         if ('comingSoon' in g && g.comingSoon) return true;
         if (!isOtherGameLinked(g)) return false;
-        const gamePage = OTHER_GAME_HREF_TO_PAGE[g.href] ?? 'home';
+        const gamePage = PATH_TO_PAGE[g.href] ?? 'home';
         return gamePage !== page;
       }),
     [page],
@@ -316,7 +293,7 @@ const NavContent = React.memo(function NavContent(props: NavContentProps) {
   const handleOpenProfileModal = useCallback(() => onOpenProfileModal?.(), [onOpenProfileModal]);
 
   return (
-    <div className="flex flex-col h-full overflow-hidden">
+    <div className="flex flex-col h-full overflow-hidden [&_*]:animate-none [&_*]:transition-none">
       {/* Back arrow (when showBackArrow) */}
       {showBackArrow && backArrowHref && (
         <div className="shrink-0 py-2">
@@ -355,12 +332,12 @@ const NavContent = React.memo(function NavContent(props: NavContentProps) {
           onOpenProfileSettings={onOpenProfileSettings}
           dropdownPlacement="below"
           variant="sidebar"
-          sidebarOpen={open}
+          staticAvatarOnly
         />
       </div>
 
       <nav className="flex-1 min-h-0 overflow-y-auto overflow-x-hidden py-2 space-y-0.5">
-        <SidebarLink link={{ label: 'Home', href: '/', icon: <i className="fas fa-home w-5 text-center text-white shrink-0" aria-hidden /> }} className="text-white hover:bg-white/5 rounded-lg px-2 py-2 transition-colors" />
+        <SidebarLink link={{ label: 'Home', href: '/', icon: <i className="fas fa-home w-5 text-center text-white shrink-0" aria-hidden /> }} className={NAV_ITEM_CLASS} />
 
         {/* Page-specific primary nav */}
         {page === 'blackjack' && (
@@ -370,16 +347,16 @@ const NavContent = React.memo(function NavContent(props: NavContentProps) {
               <SidebarButton label="Analytics" icon={<i className={`fas fa-chart-line w-5 text-center shrink-0 ${currentView === 'analytics' ? 'text-cyan-400' : 'text-white'}`} aria-hidden />} onClick={() => onViewChange?.('analytics')} active={currentView === 'analytics'} className={`rounded-lg px-2 py-2 transition-colors ${btnClass(currentView === 'analytics')}`} />
             )}
             {onThemeChange && (
-              <SidebarButton label="Table theme" icon={<i className="fas fa-palette w-5 text-center text-white shrink-0" aria-hidden />} onClick={handleOpenThemeModal} className="text-white hover:bg-white/5 rounded-lg px-2 py-2 transition-colors" />
+              <SidebarButton label="Table theme" icon={<i className="fas fa-palette w-5 text-center text-white shrink-0" aria-hidden />} onClick={handleOpenThemeModal} className={NAV_ITEM_CLASS} />
             )}
             {onSoundChange !== undefined && (
-              <SidebarButton label={soundEnabled ? 'Sound On' : 'Sound Off'} icon={<i className={`fas ${soundEnabled ? 'fa-volume-up' : 'fa-volume-mute'} w-5 text-center shrink-0 ${soundEnabled ? 'text-cyan-400' : 'text-white'}`} aria-hidden />} onClick={handleToggleSound} className="text-white hover:bg-white/5 rounded-lg px-2 py-2 transition-colors" />
+              <SidebarButton label={soundEnabled ? 'Sound On' : 'Sound Off'} icon={<i className={`fas ${soundEnabled ? 'fa-volume-up' : 'fa-volume-mute'} w-5 text-center shrink-0 ${soundEnabled ? 'text-cyan-400' : 'text-white'}`} aria-hidden />} onClick={handleToggleSound} className={NAV_ITEM_CLASS} />
             )}
           </>
         )}
 
         {page === 'plinko' && onPlinkoSoundToggle !== undefined && (
-          <SidebarButton label={plinkoSoundEnabled ? 'Sound On' : 'Sound Off'} icon={<i className={`fas ${plinkoSoundEnabled ? 'fa-volume-up' : 'fa-volume-mute'} w-5 text-center shrink-0 ${plinkoSoundEnabled ? 'text-cyan-400' : 'text-white'}`} aria-hidden />} onClick={onPlinkoSoundToggle} className="text-white hover:bg-white/5 rounded-lg px-2 py-2 transition-colors" />
+          <SidebarButton label={plinkoSoundEnabled ? 'Sound On' : 'Sound Off'} icon={<i className={`fas ${plinkoSoundEnabled ? 'fa-volume-up' : 'fa-volume-mute'} w-5 text-center shrink-0 ${plinkoSoundEnabled ? 'text-cyan-400' : 'text-white'}`} aria-hidden />} onClick={onPlinkoSoundToggle} className={NAV_ITEM_CLASS} />
         )}
 
         {/* My Stuff */}
@@ -392,41 +369,45 @@ const NavContent = React.memo(function NavContent(props: NavContentProps) {
 
           {page === 'plinko' && (
             <>
-              {onOpenHowToPlay && <SidebarButton label="How to Play" icon={<i className="fas fa-question-circle w-5 text-center text-white shrink-0" aria-hidden />} onClick={onOpenHowToPlay} className="text-white hover:bg-white/5 rounded-lg px-2 py-2 transition-colors" />}
+              {onOpenHowToPlay && <SidebarButton label="How to Play" icon={<i className="fas fa-question-circle w-5 text-center text-white shrink-0" aria-hidden />} onClick={onOpenHowToPlay} className={NAV_ITEM_CLASS} />}
               {onOpenPlayerProfile ? (
-                <SidebarButton label="My History" icon={<i className="fas fa-chart-bar w-5 text-center text-white shrink-0" aria-hidden />} onClick={handleOpenPlinkoProfile} className="text-white hover:bg-white/5 rounded-lg px-2 py-2 transition-colors" />
+                <SidebarButton label="My History" icon={<i className="fas fa-chart-bar w-5 text-center text-white shrink-0" aria-hidden />} onClick={handleOpenPlinkoProfile} className={NAV_ITEM_CLASS} />
+              ) : onShowPlinkoHistory ? (
+                <SidebarButton label="My History" icon={<i className="fas fa-chart-bar w-5 text-center text-white shrink-0" aria-hidden />} onClick={onShowPlinkoHistory} className={NAV_ITEM_CLASS} />
               ) : (
-                <SidebarLink link={{ label: 'My History', href: '/plinko-dashboard', icon: <i className="fas fa-chart-bar w-5 text-center text-white shrink-0" aria-hidden /> }} className="text-white hover:bg-white/5 rounded-lg px-2 py-2 transition-colors" />
+                <SidebarLink link={{ label: 'My History', href: '/PLINKO', icon: <i className="fas fa-chart-bar w-5 text-center text-white shrink-0" aria-hidden /> }} className={NAV_ITEM_CLASS} />
               )}
-              {onOpenSwap && <SidebarButton label="Buy Morbius" icon={<i className="fas fa-exchange-alt w-5 text-center text-white shrink-0" aria-hidden />} onClick={onOpenSwap} className="text-white hover:bg-white/5 rounded-lg px-2 py-2 transition-colors" />}
+              {onOpenSwap && <SidebarButton label="Buy Morbius" icon={<i className="fas fa-exchange-alt w-5 text-center text-white shrink-0" aria-hidden />} onClick={onOpenSwap} className={NAV_ITEM_CLASS} />}
             </>
           )}
 
           {page === 'lottery' && (
             <>
-              {onShowLotteryDashboard && <SidebarButton label="My History" icon={<i className="fas fa-chart-bar w-5 text-center text-white shrink-0" aria-hidden />} onClick={onShowLotteryDashboard} className="text-white hover:bg-white/5 rounded-lg px-2 py-2 transition-colors" />}
-              {onOpenSwap && <SidebarButton label="Buy Morbius" icon={<i className="fas fa-exchange-alt w-5 text-center text-white shrink-0" aria-hidden />} onClick={onOpenSwap} className="text-white hover:bg-white/5 rounded-lg px-2 py-2 transition-colors" />}
+              {onShowLotteryDashboard && <SidebarButton label="My History" icon={<i className="fas fa-chart-bar w-5 text-center text-white shrink-0" aria-hidden />} onClick={onShowLotteryDashboard} className={NAV_ITEM_CLASS} />}
+              {onOpenSwap && <SidebarButton label="Buy Morbius" icon={<i className="fas fa-exchange-alt w-5 text-center text-white shrink-0" aria-hidden />} onClick={onOpenSwap} className={NAV_ITEM_CLASS} />}
             </>
           )}
 
           {page === 'keno' && (
             <>
-              {onShowKenoPrizePool && <SidebarButton label="Prize Pool" icon={<i className="fas fa-trophy w-5 text-center text-white shrink-0" aria-hidden />} onClick={onShowKenoPrizePool} className="text-white hover:bg-white/5 rounded-lg px-2 py-2 transition-colors" />}
+              {onShowKenoPrizePool && <SidebarButton label="Prize Pool" icon={<i className="fas fa-trophy w-5 text-center text-white shrink-0" aria-hidden />} onClick={onShowKenoPrizePool} className={NAV_ITEM_CLASS} />}
               {onOpenPlayerProfile ? (
-                <SidebarButton label="My History" icon={<i className="fas fa-chart-bar w-5 text-center text-white shrink-0" aria-hidden />} onClick={handleOpenKenoProfile} className="text-white hover:bg-white/5 rounded-lg px-2 py-2 transition-colors" />
+                <SidebarButton label="My History" icon={<i className="fas fa-chart-bar w-5 text-center text-white shrink-0" aria-hidden />} onClick={handleOpenKenoProfile} className={NAV_ITEM_CLASS} />
+              ) : onShowKenoHistory ? (
+                <SidebarButton label="My History" icon={<i className="fas fa-chart-bar w-5 text-center text-white shrink-0" aria-hidden />} onClick={onShowKenoHistory} className={NAV_ITEM_CLASS} />
               ) : (
-                <SidebarLink link={{ label: 'My History', href: '/keno-dashboard', icon: <i className="fas fa-chart-bar w-5 text-center text-white shrink-0" aria-hidden /> }} className="text-white hover:bg-white/5 rounded-lg px-2 py-2 transition-colors" />
+                <SidebarLink link={{ label: 'My History', href: '/keno', icon: <i className="fas fa-chart-bar w-5 text-center text-white shrink-0" aria-hidden /> }} className={NAV_ITEM_CLASS} />
               )}
             </>
           )}
 
           {page === 'home' && onOpenPlayerProfile && (
-            <SidebarButton label="Player Dashboard" icon={<i className="fas fa-chart-pie w-5 text-center text-white shrink-0" aria-hidden />} onClick={handleOpenAllProfile} className="text-white hover:bg-white/5 rounded-lg px-2 py-2 transition-colors" />
+            <SidebarButton label="Player Dashboard" icon={<i className="fas fa-chart-pie w-5 text-center text-white shrink-0" aria-hidden />} onClick={handleOpenAllProfile} className={NAV_ITEM_CLASS} />
           )}
 
-          <SidebarButton label="Profile" icon={<i className="fas fa-user-edit w-5 text-center text-white shrink-0" aria-hidden />} onClick={handleOpenProfileOrModal} className="text-white hover:bg-white/5 rounded-lg px-2 py-2 transition-colors" />
-          <SidebarButton label="Avatar" icon={<i className="fas fa-user-circle w-5 text-center text-white shrink-0" aria-hidden />} onClick={handleOpenProfileModal} className="text-white hover:bg-white/5 rounded-lg px-2 py-2 transition-colors" />
-          <SidebarLink link={{ label: 'Claim Morbius', href: '/claim', icon: <i className="fas fa-gift w-5 text-center text-white shrink-0" aria-hidden /> }} className="text-white hover:bg-white/5 rounded-lg px-2 py-2 transition-colors" />
+          <SidebarButton label="Profile" icon={<i className="fas fa-user-edit w-5 text-center text-white shrink-0" aria-hidden />} onClick={handleOpenProfileOrModal} className={NAV_ITEM_CLASS} />
+          <SidebarButton label="Avatar" icon={<i className="fas fa-user-circle w-5 text-center text-white shrink-0" aria-hidden />} onClick={handleOpenProfileModal} className={NAV_ITEM_CLASS} />
+          <SidebarLink link={{ label: 'Claim Morbius', href: '/claim', icon: <i className="fas fa-gift w-5 text-center text-white shrink-0" aria-hidden /> }} className={NAV_ITEM_CLASS} />
         </div>
 
         {/* Other Games */}
@@ -453,7 +434,7 @@ const NavContent = React.memo(function NavContent(props: NavContentProps) {
                   href: g.href,
                   icon: otherGameIcon(g),
                 }}
-                className="text-white hover:bg-white/5 rounded-lg px-2 py-2 transition-colors"
+                className={NAV_ITEM_CLASS}
               />
             ) : null
           )}
@@ -462,19 +443,19 @@ const NavContent = React.memo(function NavContent(props: NavContentProps) {
         {/* Advertising */}
         <div className="pt-2 mt-2 border-t border-white/10">
           <SectionLabel label="Advertising" />
-          <SidebarLink link={{ label: 'Add Table', href: '/marketing', icon: <i className="fas fa-plus-square w-5 text-center text-white shrink-0" aria-hidden /> }} className="text-white hover:bg-white/5 rounded-lg px-2 py-2 transition-colors" />
-          <SidebarLink link={{ label: 'Marketing', href: '/marketing', icon: <i className="fas fa-bullhorn w-5 text-center text-white shrink-0" aria-hidden /> }} className="text-white hover:bg-white/5 rounded-lg px-2 py-2 transition-colors" />
+          <SidebarLink link={{ label: 'Add Table', href: '/marketing', icon: <i className="fas fa-plus-square w-5 text-center text-white shrink-0" aria-hidden /> }} className={NAV_ITEM_CLASS} />
+          <SidebarLink link={{ label: 'Marketing', href: '/marketing', icon: <i className="fas fa-bullhorn w-5 text-center text-white shrink-0" aria-hidden /> }} className={NAV_ITEM_CLASS} />
         </div>
 
         {/* Other */}
         <div className="pt-2 mt-2 border-t border-white/10">
           <SectionLabel label="Other" />
-          <SidebarButton label="Responsible Gaming" icon={<i className="fas fa-shield-alt w-5 text-center text-white shrink-0" aria-hidden />} onClick={onOpenResponsibleGaming} className="text-white hover:bg-white/5 rounded-lg px-2 py-2 transition-colors" />
-          <SidebarButton label="Report Issue" icon={<i className="fas fa-flag w-5 text-center text-red-400/80 shrink-0" aria-hidden />} onClick={onOpenReport} className="text-white hover:bg-white/5 rounded-lg px-2 py-2 transition-colors" />
-          <SidebarLink link={{ label: 'Token Analyzer', href: 'https://scan.morbius.io', icon: <i className="fas fa-search w-5 text-center text-white shrink-0" aria-hidden /> }} className="text-white hover:bg-white/5 rounded-lg px-2 py-2 transition-colors" target="_blank" rel="noopener noreferrer" />
-          <SidebarLink link={{ label: 'Morb-It', href: '/Morb-It', icon: <i className="fas fa-gamepad w-5 text-center text-white shrink-0" aria-hidden /> }} className="text-white hover:bg-white/5 rounded-lg px-2 py-2 transition-colors" />
+          <SidebarButton label="Responsible Gaming" icon={<i className="fas fa-shield-alt w-5 text-center text-white shrink-0" aria-hidden />} onClick={onOpenResponsibleGaming} className={NAV_ITEM_CLASS} />
+          <SidebarButton label="Report Issue" icon={<i className="fas fa-flag w-5 text-center text-red-400/80 shrink-0" aria-hidden />} onClick={onOpenReport} className={NAV_ITEM_CLASS} />
+          <SidebarLink link={{ label: 'Token Analyzer', href: 'https://scan.morbius.io', icon: <i className="fas fa-search w-5 text-center text-white shrink-0" aria-hidden /> }} className={NAV_ITEM_CLASS} target="_blank" rel="noopener noreferrer" />
+          <SidebarLink link={{ label: 'Morb-It', href: '/Morb-It', icon: <i className="fas fa-gamepad w-5 text-center text-white shrink-0" aria-hidden /> }} className={NAV_ITEM_CLASS} />
           {isAdmin && (
-            <SidebarLink link={{ label: 'Admin', href: '/admin', icon: <i className="fas fa-cog w-5 text-center text-white shrink-0" aria-hidden /> }} className="text-white hover:bg-white/5 rounded-lg px-2 py-2 transition-colors" />
+            <SidebarLink link={{ label: 'Admin', href: '/admin', icon: <i className="fas fa-cog w-5 text-center text-white shrink-0" aria-hidden /> }} className={NAV_ITEM_CLASS} />
           )}
         </div>
 
@@ -497,20 +478,20 @@ const NavContent = React.memo(function NavContent(props: NavContentProps) {
               </div>
             </>
           )}
-          <SidebarLink link={{ label: 'Claim', href: '/claim', icon: <i className="fas fa-coins w-5 text-center text-white shrink-0" aria-hidden /> }} className="text-white hover:bg-white/5 rounded-lg px-2 py-2 transition-colors" />
-          <SidebarLink link={{ label: 'Swap', href: '/swap', icon: <i className="fas fa-exchange-alt w-5 text-center text-white shrink-0" aria-hidden /> }} className="text-white hover:bg-white/5 rounded-lg px-2 py-2 transition-colors" />
-          <SidebarLink link={{ label: 'Provide LP', href: 'https://pulsex.com', icon: <i className="fas fa-tint w-5 text-center text-white shrink-0" aria-hidden /> }} className="text-white hover:bg-white/5 rounded-lg px-2 py-2 transition-colors" target="_blank" rel="noopener noreferrer" />
-          <SidebarLink link={{ label: 'Chart', href: 'https://scan.morbius.io/geicko?address=0xB7d4eB5fDfE3d4d3B5C16a44A49948c6EC77c6F1&tab=chart', icon: <i className="fas fa-chart-line w-5 text-center text-white shrink-0" aria-hidden /> }} className="text-white hover:bg-white/5 rounded-lg px-2 py-2 transition-colors" target="_blank" rel="noopener noreferrer" />
+          <SidebarLink link={{ label: 'Claim', href: '/claim', icon: <i className="fas fa-coins w-5 text-center text-white shrink-0" aria-hidden /> }} className={NAV_ITEM_CLASS} />
+          <SidebarLink link={{ label: 'Swap', href: '/swap', icon: <i className="fas fa-exchange-alt w-5 text-center text-white shrink-0" aria-hidden /> }} className={NAV_ITEM_CLASS} />
+          <SidebarLink link={{ label: 'Provide LP', href: 'https://pulsex.com', icon: <i className="fas fa-tint w-5 text-center text-white shrink-0" aria-hidden /> }} className={NAV_ITEM_CLASS} target="_blank" rel="noopener noreferrer" />
+          <SidebarLink link={{ label: 'Chart', href: 'https://scan.morbius.io/geicko?address=0xB7d4eB5fDfE3d4d3B5C16a44A49948c6EC77c6F1&tab=chart', icon: <i className="fas fa-chart-line w-5 text-center text-white shrink-0" aria-hidden /> }} className={NAV_ITEM_CLASS} target="_blank" rel="noopener noreferrer" />
         </div>
       </nav>
 
       {/* Bottom: Music (Blackjack only) + Auth (home) */}
       <div className="shrink-0 pt-2 border-t border-white/10 space-y-2">
         {page === 'home' && onOpenAuthModal && !isAuthenticated && (
-          <SidebarButton label="Sign In" icon={<i className="fas fa-shield w-5 text-center text-cyan-400 shrink-0" aria-hidden />} onClick={onOpenAuthModal} className="text-white hover:bg-white/5 rounded-lg px-2 py-2 transition-colors" />
+          <SidebarButton label="Sign In" icon={<i className="fas fa-shield w-5 text-center text-cyan-400 shrink-0" aria-hidden />} onClick={onOpenAuthModal} className={NAV_ITEM_CLASS} />
         )}
         {page === 'home' && onSignOut && isAuthenticated && (
-          <SidebarButton label="Sign Out" icon={<i className="fas fa-sign-out-alt w-5 text-center text-white shrink-0" aria-hidden />} onClick={onSignOut} className="text-white hover:bg-white/5 rounded-lg px-2 py-2 transition-colors" />
+          <SidebarButton label="Sign Out" icon={<i className="fas fa-sign-out-alt w-5 text-center text-white shrink-0" aria-hidden />} onClick={onSignOut} className={NAV_ITEM_CLASS} />
         )}
         {page === 'blackjack' && musicTrackName && onToggleMusic && open && (
           <div className="px-2 py-2 rounded-lg bg-white/5 border border-cyan-500/20 flex items-center gap-2">
@@ -583,7 +564,7 @@ export default function GlobalMainNav({
 }: GlobalMainNavProps) {
   const { gameLocked } = useGameLock();
   const page = useNavPage(pageProp);
-  const { address, isConnected } = useAccount();
+  const { address } = useAccount();
   const { profileDisplayName: profileDisplayNameFromHook, profileImageUrl: profileImageUrlFromHook, bio: bioFromHook, xHandle: xHandleFromHook, tgHandle: tgHandleFromHook } = useProfile();
   const [responsibleGamingOpen, setResponsibleGamingOpen] = useState(false);
   const [reportOpen, setReportOpen] = useState(false);
@@ -669,6 +650,7 @@ export default function GlobalMainNav({
           dropdownPlacement="below"
           variant="default"
           className="shrink-0"
+          staticAvatarOnly
         />
       </div>
     ),
@@ -678,14 +660,13 @@ export default function GlobalMainNav({
   return (
     <Sidebar mobileBarContent={mobileBarContent} mobileBarCenterContent={mobileBarCenterContent} disabled={sidebarDisabled || gameLocked}>
       <div className="flex flex-col md:flex-row min-h-screen w-full">
-        <SidebarBody className="shrink-0" style={SIDEBAR_PANEL_STYLE}>
+        <SidebarBody className="shrink-0 surface-panel-sidebar global-main-nav-sidebar">
           <NavContent
             page={page}
             onOpenDepositModal={handleOpenGameWallet}
             currentView={currentView}
             onViewChange={onViewChange}
             setThemeModalOpen={setThemeModalOpen}
-            onTournamentLobby={onTournamentLobby}
             onThemeChange={onThemeChange}
             soundEnabled={soundEnabled}
             onSoundChange={onSoundChange}
@@ -698,13 +679,11 @@ export default function GlobalMainNav({
             onNextTrack={onNextTrack}
             isDeployer={isDeployer}
             isAdmin={isAdmin}
-            isConnected={isConnected}
             onShowPlinkoHistory={onShowPlinkoHistory}
             onOpenHowToPlay={page === 'plinko' ? handleOpenHowToPlay : undefined}
             onOpenSwap={(page === 'plinko' || page === 'lottery') ? handleOpenSwap : undefined}
             onPlinkoSoundToggle={onPlinkoSoundToggle}
             plinkoSoundEnabled={plinkoSoundEnabled}
-            onShowLotteryHistory={onShowLotteryHistory}
             onShowLotteryDashboard={onShowLotteryDashboard}
             onShowKenoPrizePool={onShowKenoPrizePool}
             onShowKenoHistory={onShowKenoHistory}

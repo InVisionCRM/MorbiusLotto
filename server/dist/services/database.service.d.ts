@@ -1,4 +1,5 @@
 import { Pool } from 'pg';
+import type { MoneyDatabasePort } from './money-database.port';
 export interface Player {
     id: string;
     wallet_address: string;
@@ -153,7 +154,9 @@ export interface BlackjackTableRow {
     created_at: Date;
     updated_at: Date;
 }
-export declare class DatabaseService {
+export interface MoneyDatabaseQueries extends MoneyDatabasePort {
+}
+export declare class DatabaseService implements MoneyDatabaseQueries {
     private pool;
     /**
      * Get the underlying connection pool (for use by other services)

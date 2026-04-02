@@ -1,6 +1,7 @@
 import { logger } from './logger';
 import type { AvatarConfig, AvatarPayload } from './avatar-payload';
 import { parseAvatarPayload, mergeV1AvatarPartial, AVATAR_V1_DEFAULTS } from './avatar-payload';
+import { WS_KNOWN_EVENT_TYPES, WS_MESSAGE_TYPES } from './websocket-message-types';
 
 export type { AvatarConfig, AvatarPayload };
 export { parseAvatarPayload, mergeV1AvatarPartial, AVATAR_V1_DEFAULTS };
@@ -215,6 +216,8 @@ export interface BJMultiTableState {
   bettingStartedAt: string | null;
   themeKind: 'video' | 'image';
   themeId: string;
+  stateVersion?: number;
+  viewerCount?: number;
 }
 
 export interface BJMultiTableSummary {
@@ -312,7 +315,7 @@ export class BlackjackWebSocketClient {
         try {
           const msg = JSON.parse(event.data as string);
 
-          if (msg.type === 'auth_challenge' && !settled) {
+          if (msg.type === WS_MESSAGE_TYPES.authChallenge && !settled) {
             const skipAuth = typeof process !== 'undefined' && process.env.NEXT_PUBLIC_SKIP_WS_AUTH === 'true';
             if (skipAuth) {
               settled = true;
@@ -351,7 +354,7 @@ export class BlackjackWebSocketClient {
             return;
           }
 
-          if (msg.type === 'auth_success' && !settled) {
+          if (msg.type === WS_MESSAGE_TYPES.authSuccess && !settled) {
             settled = true;
             logger.info('WebSocket authenticated successfully via EIP-712');
             resolve();
@@ -360,7 +363,7 @@ export class BlackjackWebSocketClient {
           }
 
           // Legacy servers that don't send auth_challenge send connection_established
-          if (msg.type === 'connection_established' && !settled) {
+          if (msg.type === WS_MESSAGE_TYPES.connectionEstablished && !settled) {
             settled = true;
             logger.info('WebSocket connected (legacy server, no auth challenge)');
             resolve();
@@ -443,7 +446,7 @@ export class BlackjackWebSocketClient {
 
     if (this.ws?.readyState === WebSocket.OPEN) {
       this.ws.send(JSON.stringify({
-        type: 'auth_response',
+        type: WS_MESSAGE_TYPES.authResponse,
         payload: {
           address: this.playerAddress,
           signature,
@@ -495,8 +498,8 @@ export class BlackjackWebSocketClient {
       }
 
       // Set timeout (poker_get_state and tournament join can be slow on cold DB / many players)
-      const timeoutMs = type === 'poker_get_state' ? 60000
-        : type === 'poker_tournament_join' ? 60000
+      const timeoutMs = type === WS_MESSAGE_TYPES.pokerGetState ? 60000
+        : type === WS_MESSAGE_TYPES.pokerTournamentJoin ? 60000
         : 30000;
       const timeout = setTimeout(() => {
         this.requestPromises.delete(requestId);
@@ -580,7 +583,7 @@ export class BlackjackWebSocketClient {
         } else {
           // Only warn if it's not an event type that shouldn't have requestId
           // Some events might incorrectly include requestId - handle gracefully
-          if (message.type !== 'game_completed' && message.type !== 'game_updated') {
+          if (message.type !== WS_MESSAGE_TYPES.gameCompleted && message.type !== WS_MESSAGE_TYPES.gameUpdated) {
             logger.warn('Received response for unknown request', { requestId: message.requestId, type: message.type });
           }
           // Fall through to event handling even if requestId exists but no promise found
@@ -594,19 +597,7 @@ export class BlackjackWebSocketClient {
         handlers.forEach((h) => h(message.payload));
       } else {
         // Known broadcast types (handled by optional listeners like GlobalWinsFeed) — don't warn.
-        const knownEventTypes = new Set([
-          'connection_established',
-          'pong',
-          'global_game_completed',
-          'chat_message',
-          'chat_message_deleted',
-          'room_joined',
-          'poker_table_state',
-          'poker_table_list',
-          'poker_quick_reaction',
-          'poker_avatar_emotion',
-        ]);
-        if (!knownEventTypes.has(message.type)) {
+        if (!WS_KNOWN_EVENT_TYPES.has(message.type)) {
           logger.warn('Unhandled message type:', message.type);
         }
       }
@@ -681,7 +672,7 @@ export class BlackjackWebSocketClient {
    * Get server seed hash for current session (to generate game hash)
    */
   async getServerSeedHash(): Promise<{ serverSeedHash: string; nonce: number }> {
-    return this.sendRequest('get_server_seed_hash', {});
+    return this.sendRequest(WS_MESSAGE_TYPES.getServerSeedHash, {});
   }
 
   /**
@@ -701,22 +692,22 @@ export class BlackjackWebSocketClient {
     if (perfectPairsBetAmount != null && perfectPairsBetAmount > 0n) {
       payload.perfectPairsBetAmount = perfectPairsBetAmount.toString();
     }
-    return this.sendRequest('create_game', payload);
+    return this.sendRequest(WS_MESSAGE_TYPES.createGame, payload);
   }
 
   async getBalance(): Promise<{ balance: string }> {
-    return this.sendRequest('get_balance', {});
+    return this.sendRequest(WS_MESSAGE_TYPES.getBalance, {});
   }
 
   async syncBalance(): Promise<{ balance: string }> {
-    return this.sendRequest('sync_balance', {});
+    return this.sendRequest(WS_MESSAGE_TYPES.syncBalance, {});
   }
 
   /**
    * Perform a player action
    */
   async playerAction(gameId: string, action: 'hit' | 'stand' | 'double_down' | 'split', clientSeed?: string): Promise<GameState> {
-    return this.sendRequest('player_action', {
+    return this.sendRequest(WS_MESSAGE_TYPES.playerAction, {
       gameId,
       action,
       clientSeed
@@ -727,51 +718,51 @@ export class BlackjackWebSocketClient {
    * Get game result for verification
    */
   async getGameResult(gameId: string): Promise<any> {
-    return this.sendRequest('get_game_state', { gameId });
+    return this.sendRequest(WS_MESSAGE_TYPES.getGameState, { gameId });
   }
 
   // === Poker API (MVP multiplayer Texas Hold'em) ===
 
   /** List available poker tables (no auth required). */
   async pokerListTables(): Promise<{ tables: PokerTableSummary[] }> {
-    return this.sendRequest('poker_list_tables', {});
+    return this.sendRequest(WS_MESSAGE_TYPES.pokerListTables, {});
   }
 
   /** Join a table with buy-in chips. Auth required. Subscribe to 'poker_table_state' for broadcasts. */
   async pokerJoinTable(tableId: string, buyInChips: string, pinCode?: string): Promise<PokerTableState> {
-    return this.sendRequest('poker_join_table', { tableId, buyInChips, ...(pinCode ? { pinCode } : {}) });
+    return this.sendRequest(WS_MESSAGE_TYPES.pokerJoinTable, { tableId, buyInChips, ...(pinCode ? { pinCode } : {}) });
   }
 
   /** Leave a table (stack is credited back to balance). Auth required. */
   async pokerLeaveTable(tableId: string): Promise<PokerTableState | null> {
-    return this.sendRequest('poker_leave_table', { tableId });
+    return this.sendRequest(WS_MESSAGE_TYPES.pokerLeaveTable, { tableId });
   }
 
   /** Add chips to an existing seat (deducted from balance, takes effect immediately). Auth required. */
   async pokerAddChips(tableId: string, amount: string): Promise<PokerTableState> {
-    return this.sendRequest('poker_add_chips', { tableId, amount });
+    return this.sendRequest(WS_MESSAGE_TYPES.pokerAddChips, { tableId, amount });
   }
 
   /** Send a poker action: fold, check, call, bet, raise. For bet/raise pass amount as string. Auth required. */
   async pokerAction(tableId: string, handId: string, action: string, amount?: string): Promise<PokerTableState> {
     const payload: { tableId: string; handId: string; action: string; amount?: string } = { tableId, handId, action };
     if (amount != null) payload.amount = amount;
-    return this.sendRequest('poker_action', payload);
+    return this.sendRequest(WS_MESSAGE_TYPES.pokerAction, payload);
   }
 
   /** Get current table state (e.g. after reconnect). Auth required. */
   async pokerGetState(tableId: string): Promise<PokerTableState> {
-    return this.sendRequest('poker_get_state', { tableId });
+    return this.sendRequest(WS_MESSAGE_TYPES.pokerGetState, { tableId });
   }
 
   /** Create a new table. Auth required. Returns the new table id. */
   async pokerCreateTable(smallBlind: string, bigBlind: string, maxSeats: number = 6, pinCode?: string): Promise<{ tableId: string }> {
-    return this.sendRequest('poker_create_table', { smallBlind, bigBlind, maxSeats, ...(pinCode ? { pinCode } : {}) });
+    return this.sendRequest(WS_MESSAGE_TYPES.pokerCreateTable, { smallBlind, bigBlind, maxSeats, ...(pinCode ? { pinCode } : {}) });
   }
 
   /** Admin-only: update the marketing logo displayed on the table felt. */
   async pokerUpdateTableLogo(tableId: string, logo: string | null, opacity: number): Promise<{ success: boolean }> {
-    return this.sendRequest('poker_update_table_logo', { tableId, logo, opacity });
+    return this.sendRequest(WS_MESSAGE_TYPES.pokerUpdateTableLogo, { tableId, logo, opacity });
   }
 
   /**
@@ -779,7 +770,7 @@ export class BlackjackWebSocketClient {
    * Must be seated. Use on('poker_quick_reaction', handler) to receive; payload is { tableId, seatIndex, type: 'phrase', value: string }.
    */
   sendPokerQuickPhrase(tableId: string, phrase: string): void {
-    this.send({ type: 'poker_quick_reaction', payload: { tableId, type: 'phrase', value: phrase } });
+    this.send({ type: WS_MESSAGE_TYPES.pokerQuickReaction, payload: { tableId, type: 'phrase', value: phrase } });
   }
 
   /**
@@ -787,7 +778,7 @@ export class BlackjackWebSocketClient {
    * Emotion must be one of: happy, sad, angry, surprised, wink.
    */
   sendPokerAvatarEmotion(tableId: string, emotion: string): void {
-    this.send({ type: 'poker_avatar_emotion', payload: { tableId, emotion } });
+    this.send({ type: WS_MESSAGE_TYPES.pokerAvatarEmotion, payload: { tableId, emotion } });
   }
 
   // === Chat API (main + per-game rooms) ===
@@ -797,7 +788,7 @@ export class BlackjackWebSocketClient {
    * Returns recent messages for that room. Subscribe to 'chat_message' for live messages.
    */
   async joinRoom(roomId: string): Promise<RoomJoinedPayload> {
-    return this.sendRequest('join_room', { roomId });
+    return this.sendRequest(WS_MESSAGE_TYPES.joinRoom, { roomId });
   }
 
   /**
@@ -805,7 +796,7 @@ export class BlackjackWebSocketClient {
    * Server broadcasts to room; use on('chat_message', handler) to receive messages.
    */
   sendChatMessage(roomId: string, text: string): void {
-    this.send({ type: 'chat_message', payload: { roomId, text } });
+    this.send({ type: WS_MESSAGE_TYPES.chatMessage, payload: { roomId, text } });
   }
 
   /**
@@ -820,14 +811,14 @@ export class BlackjackWebSocketClient {
     if (bio !== undefined) payload.bio = bio;
     if (xHandle !== undefined) payload.xHandle = xHandle;
     if (tgHandle !== undefined) payload.tgHandle = tgHandle;
-    return this.sendRequest('set_display_name', payload);
+    return this.sendRequest(WS_MESSAGE_TYPES.setDisplayName, payload);
   }
 
   /**
    * Get current profile (display name, profile image URL, avatar config, bio, social handles) for the connected wallet.
    */
   async getProfile(): Promise<{ displayName: string | null; profileImageUrl: string | null; avatarConfig: AvatarPayload | null; bio: string | null; xHandle: string | null; tgHandle: string | null }> {
-    return this.sendRequest('get_profile', {});
+    return this.sendRequest(WS_MESSAGE_TYPES.getProfile, {});
   }
 
   /**
@@ -835,14 +826,14 @@ export class BlackjackWebSocketClient {
    * Returns messages in chronological order (oldest first).
    */
   async getChatHistory(roomId: string, beforeId: string, limit: number = 50): Promise<{ messages: ChatMessagePayload[] }> {
-    return this.sendRequest('get_chat_history', { roomId, beforeId, limit });
+    return this.sendRequest(WS_MESSAGE_TYPES.getChatHistory, { roomId, beforeId, limit });
   }
 
   /**
    * Send ping to keep connection alive
    */
   ping(): void {
-    this.send({ type: 'ping', payload: {} });
+    this.send({ type: WS_MESSAGE_TYPES.ping, payload: {} });
   }
 
   /**
@@ -864,7 +855,7 @@ export class BlackjackWebSocketClient {
     durationLabel: string | null;
     createdAt: string | null;
   }> {
-    return this.sendRequest('check_exclusion_status', {});
+    return this.sendRequest(WS_MESSAGE_TYPES.checkExclusionStatus, {});
   }
 
   /**
@@ -882,7 +873,7 @@ export class BlackjackWebSocketClient {
     expiresAt: string | null;
     durationLabel: string | null;
   }> {
-    return this.sendRequest('set_exclusion', { durationType, reason });
+    return this.sendRequest(WS_MESSAGE_TYPES.setExclusion, { durationType, reason });
   }
 
   /**
@@ -898,6 +889,6 @@ export class BlackjackWebSocketClient {
       isActive: boolean;
     }>;
   }> {
-    return this.sendRequest('get_exclusion_history', {});
+    return this.sendRequest(WS_MESSAGE_TYPES.getExclusionHistory, {});
   }
 }

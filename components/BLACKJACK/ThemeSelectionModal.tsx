@@ -35,6 +35,47 @@ export interface ThemeSelectionModalProps {
   videoOptions?: TableOption[]
 }
 
+function normalizeThemeSrc(src: string): string {
+  const trimmed = src.trim()
+  if (!trimmed) return ''
+  const withoutProtocol = trimmed.replace(/^https?:\/\//i, '')
+  return withoutProtocol.toLowerCase()
+}
+
+function dedupeThemeOptions(options: TableOption[], selectedId: string): TableOption[] {
+  const unique: TableOption[] = []
+  const bySrc = new Map<string, number>()
+  const byId = new Map<string, number>()
+  const byLabel = new Map<string, number>()
+
+  options.forEach((option) => {
+    const srcKey = normalizeThemeSrc(option.src)
+    const idKey = option.id.trim().toLowerCase()
+    const labelKey = option.label.trim().toLowerCase()
+
+    const existingIndex =
+      (srcKey && bySrc.get(srcKey)) ??
+      (idKey && byId.get(idKey)) ??
+      (labelKey && byLabel.get(labelKey))
+
+    if (existingIndex == null) {
+      const nextIndex = unique.push(option) - 1
+      if (srcKey) bySrc.set(srcKey, nextIndex)
+      if (idKey) byId.set(idKey, nextIndex)
+      if (labelKey) byLabel.set(labelKey, nextIndex)
+      return
+    }
+
+    const existing = unique[existingIndex]
+    // If duplicates exist, keep the option currently selected by the player.
+    if (existing.id !== selectedId && option.id === selectedId) {
+      unique[existingIndex] = option
+    }
+  })
+
+  return unique
+}
+
 export default function ThemeSelectionModal({
   open,
   onClose,
@@ -51,7 +92,7 @@ export default function ThemeSelectionModal({
   imageOptions: imageOptionsProp,
   videoOptions: videoOptionsProp,
 }: ThemeSelectionModalProps) {
-  const [activeTab, setActiveTab] = useState<'images' | 'videos'>('images')
+  const [activeTab, setActiveTab] = useState<'images'>('images')
   const [expandSrc, setExpandSrc] = useState<string | null>(null)
   const [expandVideo, setExpandVideo] = useState<boolean>(false)
   const [mounted, setMounted] = useState(false)
@@ -59,8 +100,15 @@ export default function ThemeSelectionModal({
   const [sortOrder, setSortOrder] = useState<'a-z' | 'z-a'>('a-z')
   useEffect(() => setMounted(true), [])
 
-  const imageList = imageOptionsProp ?? BLACKJACK_IMAGE_BACKGROUNDS.map((x) => ({ id: x.id, label: x.label, src: x.src }))
-  const videoList = videoOptionsProp ?? BLACKJACK_VIDEO_BACKGROUNDS.map((x) => ({ id: x.id, label: x.label, src: x.src }))
+  const imageList = React.useMemo(() => {
+    const source = imageOptionsProp ?? BLACKJACK_IMAGE_BACKGROUNDS.map((x) => ({ id: x.id, label: x.label, src: x.src }))
+    return dedupeThemeOptions(source, imageSource)
+  }, [imageOptionsProp, imageSource])
+
+  const videoList = React.useMemo(() => {
+    const source = videoOptionsProp ?? BLACKJACK_VIDEO_BACKGROUNDS.map((x) => ({ id: x.id, label: x.label, src: x.src }))
+    return dedupeThemeOptions(source, videoSource)
+  }, [videoOptionsProp, videoSource])
 
   const filteredImages = React.useMemo(() => {
     let list = [...imageList]
@@ -144,17 +192,6 @@ export default function ThemeSelectionModal({
               }`}
             >
               Images
-            </button>
-            <button
-              type="button"
-              onClick={() => setActiveTab('videos')}
-              className={`px-4 py-3 text-sm font-medium transition-colors ${
-                activeTab === 'videos'
-                  ? 'text-cyan-300 border-b-2 border-cyan-400 bg-cyan-500/10'
-                  : 'text-white/60 hover:text-white'
-              }`}
-            >
-              Videos
             </button>
           </div>
 
@@ -251,104 +288,6 @@ export default function ThemeSelectionModal({
               </div>
             )}
 
-            {activeTab === 'videos' && (
-              <div className="space-y-4">
-                <div className="grid grid-cols-2 sm:grid-cols-5 gap-3">
-                  {filteredVideos.length === 0 ? (
-                    <div className="col-span-full py-12 text-center text-white/50 text-sm">
-                      No videos match &quot;{search}&quot;
-                    </div>
-                  ) : (
-                  filteredVideos.map((v) => {
-                    const isSelected = theme === 'video' && videoSource === v.id
-                    return (
-                      <div
-                        key={v.id}
-                        className="relative aspect-video rounded-lg overflow-hidden bg-black/60 border-2 border-transparent transition-all"
-                        style={isSelected ? { borderColor: 'rgba(34, 211, 238, 0.6)' } : undefined}
-                      >
-                        <video
-                          src={v.src}
-                          className="w-full h-full object-cover pointer-events-none"
-                          muted
-                          loop
-                          playsInline
-                          preload="metadata"
-                          poster=""
-                        />
-                        <button
-                          type="button"
-                          onClick={() => handleSelectVideo(v.id)}
-                          className="absolute inset-0 z-[5] cursor-pointer"
-                          aria-label={`Select ${v.label}`}
-                          title="Select and apply"
-                        />
-                        <div
-                          className="absolute top-1.5 left-1.5 z-10 flex items-center justify-center w-4 h-4 rounded-full bg-white border border-cyan-400/60 pointer-events-none"
-                          aria-hidden
-                        >
-                          {isSelected ? (
-                            <svg className="w-4 h-4 text-cyan-600" fill="currentColor" viewBox="0 0 20 20">
-                              <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
-                            </svg>
-                          ) : (
-                            <span className="w-4 h-4 border border-slate-400 rounded-full" />
-                          )}
-                        </div>
-                        <button
-                          type="button"
-                          onClick={(e) => {
-                            e.stopPropagation()
-                            setExpandSrc(v.src)
-                            setExpandVideo(true)
-                          }}
-                          className="absolute top-1.5 right-1.5 z-10 w-6 h-6 rounded bg-white border border-slate-300 flex items-center justify-center text-slate-700 hover:bg-slate-100 transition-colors cursor-pointer"
-                          title="Expand"
-                          aria-label={`Expand ${v.label}`}
-                        >
-                          <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 8V4m0 0h4M4 4l5 5m11-1v4m0 0h-4m4 0l-5-5M4 16v4m0 0h4m-4 0l5-5m11 5l-5-5m5 5v-4m0 4h-4" />
-                          </svg>
-                        </button>
-                        <span className="absolute bottom-0 left-0 right-0 py-1 px-2 text-[10px] font-medium text-white bg-black/70 truncate pointer-events-none">
-                          {v.label}
-                        </span>
-                      </div>
-                    )
-                  })
-                  )}
-                </div>
-                {onVideoSyncToClockChange !== undefined && onVideoPositionChange !== undefined && (
-                  <div className="border-t border-white/10 space-y-0">
-                    <label className="flex items-center gap-3 cursor-pointer text-white/90 text-sm">
-                      <input
-                        type="checkbox"
-                        checked={videoSyncToClock}
-                        onChange={(e) => onVideoSyncToClockChange(e.target.checked)}
-                        className="w-4 h-4 rounded border-gray-500 bg-slate-800 text-cyan-500 focus:ring-cyan-500/50"
-                      />
-                      Sync to clock
-                    </label>
-                    <div className="space-y-1">
-                      <div className="flex justify-between text-xs text-white/60">
-                        <span>Background position</span>
-                        <span>{videoSyncToClock ? '—' : `${videoPosition}%`}</span>
-                      </div>
-                      <input
-                        type="range"
-                        min={0}
-                        max={100}
-                        value={videoPosition}
-                        onChange={(e) => onVideoPositionChange(Number(e.target.value))}
-                        disabled={videoSyncToClock}
-                        aria-label="Background position (0-100%)"
-                        className="w-full h-2 rounded-lg appearance-none cursor-pointer disabled:opacity-50 bg-slate-700 accent-cyan-500"
-                      />
-                    </div>
-                  </div>
-                )}
-              </div>
-            )}
           </div>
         </div>
       </div>

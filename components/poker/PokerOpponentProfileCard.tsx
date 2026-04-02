@@ -9,7 +9,7 @@ import { usePokerPlayerStats } from '@/hooks/use-poker-stats';
 import { useIsFollowing, useFollowMutation, useFollowCounts } from '@/hooks/use-follow';
 import { useProfileForAddress } from '@/hooks/use-player-profile';
 import { useAccount } from 'wagmi';
-import AvatarView from '@/components/poker/avatar/AvatarView';
+import { AvatarView } from '@/components/avatar';
 import type { AvatarPayload } from '@/lib/websocket-client';
 
 function formatChips(wei: string | number): string {

@@ -14,16 +14,15 @@ const crypto_1 = __importDefault(require("crypto"));
 const viem_1 = require("viem");
 const chain_client_1 = require("../utils/chain-client");
 const contracts_1 = require("../config/contracts");
-// Minimal ABI for usedNonces - check if a withdrawal nonce was used on-chain
-const USED_NONCES_ABI = [
-    {
-        inputs: [{ name: '', type: 'uint256' }],
-        name: 'usedNonces',
-        outputs: [{ type: 'bool' }],
-        stateMutability: 'view',
-        type: 'function',
-    },
-];
+const message_routing_1 = require("./websocket/message-routing");
+const message_parser_1 = require("./websocket/message-parser");
+const message_types_1 = require("./websocket/message-types");
+const auth_router_1 = require("./websocket/auth-router");
+const chat_router_1 = require("./websocket/chat-router");
+const blackjack_router_1 = require("./websocket/blackjack-router");
+const tournament_router_1 = require("./websocket/tournament-router");
+const poker_router_1 = require("./websocket/poker-router");
+const bj_multi_router_1 = require("./websocket/bj-multi-router");
 // EIP-712 domain and types for WebSocket authentication
 const AUTH_EIP712_DOMAIN = {
     name: 'MORBlotto Blackjack',
@@ -313,362 +312,98 @@ class WebSocketService {
     }
     async handleMessage(ws, data) {
         try {
-            const message = JSON.parse(data.toString());
+            const message = (0, message_parser_1.parseIncomingWebSocketMessage)(data);
             logger_1.logger.debug('Received WebSocket message', {
                 type: message.type,
                 connectionId: ws.connectionId,
                 requestId: message.requestId
             });
-            if (message.type === 'get_balance' ||
-                message.type === 'sync_balance' ||
-                message.type === 'tournament_info' ||
-                message.type === 'tournament_list') {
+            if (!(0, message_types_1.isKnownWebSocketMessageType)(message.type)) {
+                this.sendError(ws, 'Unknown message type', message.requestId);
+                return;
             }
-            switch (message.type) {
-                // Auth response is always allowed (unauthenticated clients need it)
-                case 'auth_response':
-                    await this.handleAuthResponse(ws, message);
-                    break;
-                case 'ping':
-                    this.sendMessage(ws, { type: 'pong', payload: {}, requestId: message.requestId });
-                    break;
-                // All handlers below require authentication
-                case 'get_server_seed_hash':
+            const domain = (0, message_routing_1.classifyWebSocketMessageType)(message.type);
+            switch (domain) {
+                case 'auth':
+                    await this.routeAuthMessage(ws, message);
+                    return;
+                case 'public':
+                    await this.routePublicMessage(ws, message);
+                    return;
+                case 'blackjack':
                     if (!this.requireAuth(ws, message))
                         return;
-                    await this.handleGetServerSeedHash(ws, message);
-                    break;
-                case 'create_game':
+                    await this.routeBlackjackMessage(ws, message);
+                    return;
+                case 'chat':
                     if (!this.requireAuth(ws, message))
                         return;
-                    await this.handleCreateGame(ws, message);
-                    break;
-                case 'player_action':
+                    await this.routeChatMessage(ws, message);
+                    return;
+                case 'tournament':
                     if (!this.requireAuth(ws, message))
                         return;
-                    await this.handlePlayerAction(ws, message);
-                    break;
-                case 'get_game_state':
-                    if (!this.requireAuth(ws, message))
-                        return;
-                    await this.handleGetGameState(ws, message);
-                    break;
-                case 'sync_balance':
-                    if (!this.requireAuth(ws, message))
-                        return;
-                    await this.handleSyncBalance(ws, message);
-                    break;
-                case 'get_balance':
-                    if (!this.requireAuth(ws, message))
-                        return;
-                    await this.handleGetBalance(ws, message);
-                    break;
-                case 'join_room':
-                    // No auth required for viewing chat; handleJoinRoom enforces wallet for tournament rooms
-                    await this.handleJoinRoom(ws, message);
-                    break;
-                case 'chat_message':
-                    if (!this.requireAuth(ws, message))
-                        return;
-                    await this.handleChatMessage(ws, message);
-                    break;
-                case 'set_display_name':
-                    if (!this.requireAuth(ws, message))
-                        return;
-                    await this.handleSetDisplayName(ws, message);
-                    break;
-                case 'get_profile':
-                    if (!this.requireAuth(ws, message))
-                        return;
-                    await this.handleGetProfile(ws, message);
-                    break;
-                case 'get_chat_history':
-                    // No auth required for viewing chat history (load more)
-                    await this.handleGetChatHistory(ws, message);
-                    break;
-                // Responsible Gaming / Self-Exclusion
-                case 'check_exclusion_status':
-                    if (!this.requireAuth(ws, message))
-                        return;
-                    await this.handleCheckExclusionStatus(ws, message);
-                    break;
-                case 'set_exclusion':
-                    if (!this.requireAuth(ws, message))
-                        return;
-                    await this.handleSetExclusion(ws, message);
-                    break;
-                case 'get_exclusion_history':
-                    if (!this.requireAuth(ws, message))
-                        return;
-                    await this.handleGetExclusionHistory(ws, message);
-                    break;
-                // Tournament Mode
-                case 'tournament_enter':
-                    if (!this.requireAuth(ws, message))
-                        return;
-                    await this.handleTournamentEnter(ws, message);
-                    break;
-                case 'tournament_leave':
-                    if (!this.requireAuth(ws, message))
-                        return;
-                    await this.handleTournamentLeave(ws, message);
-                    break;
-                case 'tournament_state':
-                    if (!this.requireAuth(ws, message))
-                        return;
-                    await this.handleGetTournamentState(ws, message);
-                    break;
-                case 'tournament_game_start':
-                    if (!this.requireAuth(ws, message))
-                        return;
-                    await this.handleTournamentGameStart(ws, message);
-                    break;
-                case 'tournament_player_action':
-                    if (!this.requireAuth(ws, message))
-                        return;
-                    await this.handleTournamentPlayerAction(ws, message);
-                    break;
-                case 'tournament_leaderboard':
-                    if (!this.requireAuth(ws, message))
-                        return;
-                    await this.handleTournamentLeaderboard(ws, message);
-                    break;
-                case 'tournament_leaderboard_by_id':
-                    if (!this.requireAuth(ws, message))
-                        return;
-                    await this.handleTournamentLeaderboardById(ws, message);
-                    break;
-                case 'tournament_info':
-                    if (!this.requireAuth(ws, message))
-                        return;
-                    await this.handleGetTournamentInfo(ws, message);
-                    break;
-                // Tournament Creator - New handlers
-                case 'tournament_create':
-                    if (!this.requireAuth(ws, message))
-                        return;
-                    await this.handleTournamentCreate(ws, message);
-                    break;
-                case 'create_freeroll':
-                    if (!this.requireAuth(ws, message))
-                        return;
-                    await this.handleCreateFreeroll(ws, message);
-                    break;
-                case 'tournament_list':
-                    if (!this.requireAuth(ws, message))
-                        return;
-                    await this.handleTournamentList(ws, message);
-                    break;
-                case 'tournament_join':
-                    if (!this.requireAuth(ws, message))
-                        return;
-                    await this.handleTournamentJoin(ws, message);
-                    break;
-                case 'tournament_unregister':
-                    if (!this.requireAuth(ws, message))
-                        return;
-                    await this.handleTournamentUnregister(ws, message);
-                    break;
-                case 'tournament_get_info':
-                    if (!this.requireAuth(ws, message))
-                        return;
-                    await this.handleTournamentGetInfo(ws, message);
-                    break;
-                case 'freeroll_list':
-                    if (!this.requireAuth(ws, message))
-                        return;
-                    await this.handleFreerollList(ws, message);
-                    break;
-                case 'freeroll_register':
-                    if (!this.requireAuth(ws, message))
-                        return;
-                    await this.handleFreerollRegister(ws, message);
-                    break;
-                case 'freeroll_join':
-                    if (!this.requireAuth(ws, message))
-                        return;
-                    await this.handleFreerollJoin(ws, message);
-                    break;
-                case 'tournament_entries_list':
-                    if (!this.requireAuth(ws, message))
-                        return;
-                    await this.handleTournamentEntriesList(ws, message);
-                    break;
-                case 'creator_tournaments':
-                    if (!this.requireAuth(ws, message))
-                        return;
-                    await this.handleCreatorTournaments(ws, message);
-                    break;
-                case 'creator_earnings':
-                    if (!this.requireAuth(ws, message))
-                        return;
-                    await this.handleCreatorEarnings(ws, message);
-                    break;
-                case 'tournament_cancel':
-                    if (!this.requireAuth(ws, message))
-                        return;
-                    await this.handleTournamentCancel(ws, message);
-                    break;
-                case 'tournament_reclaim':
-                    if (!this.requireAuth(ws, message))
-                        return;
-                    await this.handleTournamentReclaim(ws, message);
-                    break;
-                case 'recent_global_wins':
-                    // No auth required for public global wins feed
-                    await this.handleRecentGlobalWins(ws, message);
-                    break;
-                // Poker
-                case 'poker_list_tables':
-                    await this.handlePokerListTables(ws, message);
-                    break;
-                case 'poker_join_table':
-                    if (!this.requireAuth(ws, message))
-                        return;
-                    await this.handlePokerJoinTable(ws, message);
-                    break;
-                case 'poker_leave_table':
-                    if (!this.requireAuth(ws, message))
-                        return;
-                    await this.handlePokerLeaveTable(ws, message);
-                    break;
-                case 'poker_add_chips':
-                    if (!this.requireAuth(ws, message))
-                        return;
-                    await this.handlePokerAddChips(ws, message);
-                    break;
-                case 'poker_action':
-                    if (!this.requireAuth(ws, message))
-                        return;
-                    await this.handlePokerAction(ws, message);
-                    break;
-                case 'poker_get_state':
-                    if (!this.requireAuth(ws, message))
-                        return;
-                    await this.handlePokerGetState(ws, message);
-                    break;
-                case 'poker_create_table':
-                    if (!this.requireAuth(ws, message))
-                        return;
-                    await this.handlePokerCreateTable(ws, message);
-                    break;
-                case 'poker_update_table_logo':
-                    if (!this.requireAuth(ws, message))
-                        return;
-                    await this.handlePokerUpdateTableLogo(ws, message);
-                    break;
-                case 'poker_quick_reaction':
-                    if (!this.requireAuth(ws, message))
-                        return;
-                    await this.handlePokerQuickReaction(ws, message);
-                    break;
-                case 'poker_avatar_emotion':
-                    if (!this.requireAuth(ws, message))
-                        return;
-                    await this.handlePokerAvatarEmotion(ws, message);
-                    break;
-                // Poker Tournaments
-                case 'poker_tournament_list':
-                    await this.handlePokerTournamentList(ws, message);
-                    break;
-                case 'poker_tournament_create':
-                    if (!this.requireAuth(ws, message))
-                        return;
-                    await this.handlePokerTournamentCreate(ws, message);
-                    break;
-                case 'poker_tournament_join':
-                    if (!this.requireAuth(ws, message))
-                        return;
-                    await this.handlePokerTournamentJoin(ws, message);
-                    break;
-                case 'poker_tournament_get_state':
-                    await this.handlePokerTournamentGetState(ws, message);
-                    break;
-                case 'poker_tournament_cancel':
-                    if (!this.requireAuth(ws, message))
-                        return;
-                    await this.handlePokerTournamentCancel(ws, message);
-                    break;
-                // Multiplayer Blackjack
-                case 'bj_multi_list_tables':
-                    await this.handleBJMultiListTables(ws, message);
-                    break;
-                case 'bj_multi_join_table':
-                    if (!this.requireAuth(ws, message))
-                        return;
-                    await this.handleBJMultiJoinTable(ws, message);
-                    break;
-                case 'bj_multi_leave_table':
-                    if (!this.requireAuth(ws, message))
-                        return;
-                    await this.handleBJMultiLeaveTable(ws, message);
-                    break;
-                case 'bj_multi_place_bet':
-                    if (!this.requireAuth(ws, message))
-                        return;
-                    await this.handleBJMultiPlaceBet(ws, message);
-                    break;
-                case 'bj_multi_action':
-                    if (!this.requireAuth(ws, message))
-                        return;
-                    await this.handleBJMultiAction(ws, message);
-                    break;
-                case 'bj_multi_get_state':
-                    if (!this.requireAuth(ws, message))
-                        return;
-                    await this.handleBJMultiGetState(ws, message);
-                    break;
-                case 'bj_multi_create_table':
-                    if (!this.requireAuth(ws, message))
-                        return;
-                    await this.handleBJMultiCreateTable(ws, message);
-                    break;
-                case 'bj_multi_delete_table':
-                    if (!this.requireAuth(ws, message))
-                        return;
-                    await this.handleBJMultiDeleteTable(ws, message);
-                    break;
-                case 'bj_multi_table_history':
-                    if (!this.requireAuth(ws, message))
-                        return;
-                    await this.handleBJMultiTableHistory(ws, message);
-                    break;
-                case 'bj_multi_tip_dealer':
-                    if (!this.requireAuth(ws, message))
-                        return;
-                    await this.handleBJMultiTipDealer(ws, message);
-                    break;
-                case 'bj_multi_quick_reaction':
-                    if (!this.requireAuth(ws, message))
-                        return;
-                    await this.handleBJMultiQuickReaction(ws, message);
-                    break;
-                case 'bj_multi_avatar_emotion':
-                    if (!this.requireAuth(ws, message))
-                        return;
-                    await this.handleBJMultiAvatarEmotion(ws, message);
-                    break;
-                case 'tip_dealer':
-                    if (!this.requireAuth(ws, message))
-                        return;
-                    await this.handleGenericTipDealer(ws, message);
-                    break;
+                    await this.routeTournamentMessage(ws, message);
+                    return;
+                case 'poker':
+                    await this.routePokerMessage(ws, message);
+                    return;
+                case 'bj_multi':
+                    await this.routeBJMultiMessage(ws, message);
+                    return;
                 default:
                     this.sendError(ws, 'Unknown message type', message.requestId);
+                    return;
             }
         }
         catch (error) {
             logger_1.logger.error('Error handling WebSocket message:', error);
-            let requestId;
-            try {
-                const parsed = JSON.parse(data.toString());
-                requestId = parsed?.requestId;
-            }
-            catch {
-                // ignore
-            }
+            const requestId = (0, message_parser_1.extractRequestIdFromRawMessage)(data);
             this.sendError(ws, error?.message || 'Invalid message format', requestId);
         }
+    }
+    async routeAuthMessage(ws, message) {
+        await this.dispatchDomainMessage(ws, message, auth_router_1.AUTH_MESSAGE_HANDLER_MAP, 'auth');
+    }
+    async routePublicMessage(ws, message) {
+        await this.dispatchDomainMessage(ws, message, chat_router_1.PUBLIC_MESSAGE_HANDLER_MAP, 'public');
+    }
+    async routeBlackjackMessage(ws, message) {
+        await this.dispatchDomainMessage(ws, message, blackjack_router_1.BLACKJACK_MESSAGE_HANDLER_MAP, 'blackjack');
+    }
+    async routeChatMessage(ws, message) {
+        await this.dispatchDomainMessage(ws, message, chat_router_1.CHAT_MESSAGE_HANDLER_MAP, 'chat');
+    }
+    async routeTournamentMessage(ws, message) {
+        await this.dispatchDomainMessage(ws, message, tournament_router_1.TOURNAMENT_MESSAGE_HANDLER_MAP, 'tournament');
+    }
+    async routePokerMessage(ws, message) {
+        const requiresAuth = message.type !== 'poker_tournament_list' && message.type !== 'poker_tournament_get_state';
+        if (requiresAuth && !this.requireAuth(ws, message))
+            return;
+        await this.dispatchDomainMessage(ws, message, poker_router_1.POKER_MESSAGE_HANDLER_MAP, 'poker');
+    }
+    async routeBJMultiMessage(ws, message) {
+        if (!this.requireAuth(ws, message))
+            return;
+        await this.dispatchDomainMessage(ws, message, bj_multi_router_1.BJ_MULTI_MESSAGE_HANDLER_MAP, 'multiplayer blackjack');
+    }
+    async dispatchDomainMessage(ws, message, handlerMap, domainName) {
+        const handlerName = handlerMap[message.type];
+        if (!handlerName) {
+            this.sendError(ws, `Unknown ${domainName} message type`, message.requestId);
+            return;
+        }
+        const handler = this[handlerName];
+        if (typeof handler !== 'function') {
+            logger_1.logger.error('WebSocket handler mapping missing method', { type: message.type, handlerName, domainName });
+            this.sendError(ws, 'Handler unavailable', message.requestId);
+            return;
+        }
+        await handler.call(this, ws, message);
+    }
+    async handlePing(ws, message) {
+        this.sendMessage(ws, { type: 'pong', payload: {}, requestId: message.requestId });
     }
     /**
      * Check if client is authenticated. If not, send error and return false.
@@ -815,6 +550,8 @@ class WebSocketService {
                 return this.sendError(ws, `Bet amount too large. Maximum bet is ${maxBet.toString()}`, message.requestId);
             }
             try {
+                // Balance pre-check remains a direct read here because create-game authority currently
+                // lives in game/WebSocket domains; mutation concentration is tracked separately.
                 const balance = await this.dbService.getPlayerBalance(ws.playerAddress);
                 if (balance < totalStake) {
                     const fmt = (n) => Number((0, viem_1.formatEther)(n)).toLocaleString(undefined, { maximumFractionDigits: 2 });
@@ -958,12 +695,7 @@ class WebSocketService {
         if (!pending)
             return;
         try {
-            const nonceUsed = await this.publicClient.readContract({
-                address: this.contractAddress,
-                abi: USED_NONCES_ABI,
-                functionName: 'usedNonces',
-                args: [BigInt(pending.nonce)],
-            });
+            const nonceUsed = await (0, chain_client_1.readUsedWithdrawalNonce)(this.contractAddress, BigInt(pending.nonce), this.publicClient);
             if (nonceUsed) {
                 // Withdrawal succeeded on-chain but confirm POST failed — mark completed now
                 await this.dbService.markPendingWithdrawalCompleted(playerAddress, BigInt(pending.nonce));
@@ -991,6 +723,7 @@ class WebSocketService {
             // actually completed on-chain (nonce used). If so, mark it completed to prevent
             // the expiry cron from refunding it (which would duplicate funds).
             await this.resolvePendingWithdrawals(ws.playerAddress);
+            // Read-only balance sync path (direct DB read) is intentionally preserved for WS contract parity.
             const balance = await this.dbService.getPlayerBalance(ws.playerAddress);
             logger_1.logger.debug('Balance synced', { playerAddress: ws.playerAddress, balance: balance.toString() });
             this.sendMessage(ws, {
@@ -1016,6 +749,7 @@ class WebSocketService {
             // completed on-chain but weren't confirmed to the server.
             await this.resolvePendingWithdrawals(ws.playerAddress);
             // Deposit credits only through confirmed pending_deposits; DB is source of truth.
+            // This WS read path intentionally remains direct during Phase 6.
             const balance = await this.dbService.getPlayerBalance(ws.playerAddress);
             this.sendMessage(ws, {
                 type: 'balance',
@@ -1704,9 +1438,13 @@ class WebSocketService {
     async broadcastPokerTableState(tableId) {
         if (!this.pokerGameService)
             return;
+        const roomId = `poker:table:${tableId}`;
+        if ((this.roomToClients.get(roomId)?.size ?? 0) === 0) {
+            return;
+        }
         try {
             const state = await this.pokerGameService.getTableState(tableId, null);
-            this.broadcastToRoom(`poker:table:${tableId}`, { type: 'poker_table_state', payload: state });
+            this.broadcastToRoom(roomId, { type: 'poker_table_state', payload: state });
         }
         catch (err) {
             logger_1.logger.error('broadcastPokerTableState failed', { tableId, error: err });
@@ -3037,10 +2775,13 @@ class WebSocketService {
     async broadcastBJMultiTableState(tableId) {
         if (!this.bjMultiService)
             return;
+        const roomId = `blackjack:table:${tableId}`;
+        const roomSize = this.roomToClients.get(roomId)?.size ?? 0;
+        if (roomSize === 0) {
+            return;
+        }
         try {
             const state = await this.bjMultiService.getTableState(tableId);
-            const roomId = `blackjack:table:${tableId}`;
-            const roomSize = this.roomToClients.get(roomId)?.size ?? 0;
             const seatedCount = state.seats.filter((s) => s.playerAddress).length;
             state.viewerCount = Math.max(0, roomSize - seatedCount);
             this.broadcastToRoom(roomId, { type: 'bj_multi_table_state', payload: state });
@@ -3208,16 +2949,25 @@ class WebSocketService {
             if (!amount)
                 return this.sendError(ws, 'amount required', message.requestId);
             const betAmount = (0, safe_bigint_1.toBigIntSafe)(amount);
-            const state = await this.bjMultiService.placeBet(tableId, ws.playerAddress, betAmount);
+            await this.bjMultiService.placeBet(tableId, ws.playerAddress, betAmount);
             // Skip the betting timer if every seated player has already bet — no one to wait for
             const allBet = await this.bjMultiService.allSeatedPlayersHaveBet(tableId);
             if (allBet) {
-                await this.bjMultiService.startRound(tableId);
+                try {
+                    await this.bjMultiService.startRound(tableId);
+                }
+                catch (err) {
+                    const msg = err instanceof Error ? err.message : String(err);
+                    // Round may already have advanced by watchdog/another action; avoid surfacing a false-negative error.
+                    if (!msg.includes('not in betting phase')) {
+                        throw err;
+                    }
+                }
             }
-            this.sendMessage(ws, { type: 'bj_multi_table_state', payload: state, requestId: message.requestId });
             const roomId = `blackjack:table:${tableId}`;
-            const broadcastState = await this.bjMultiService.getTableState(tableId);
-            this.broadcastToRoom(roomId, { type: 'bj_multi_table_state', payload: broadcastState });
+            const nextState = await this.bjMultiService.getTableState(tableId);
+            this.sendMessage(ws, { type: 'bj_multi_table_state', payload: nextState, requestId: message.requestId });
+            this.broadcastToRoom(roomId, { type: 'bj_multi_table_state', payload: nextState });
         }
         catch (error) {
             logger_1.logger.error('BJ multi place bet error:', error);
@@ -3302,7 +3052,7 @@ class WebSocketService {
             const { tableId, amount } = (message.payload ?? {});
             if (!tableId || !amount)
                 return this.sendError(ws, 'tableId and amount required', message.requestId);
-            const tipAmount = BigInt(amount);
+            const tipAmount = (0, safe_bigint_1.toBigIntSafe)(amount);
             const result = await this.bjMultiService.tipDealer(tableId, ws.playerAddress, tipAmount);
             this.sendMessage(ws, { type: 'bj_multi_tip_result', payload: result, requestId: message.requestId });
             // Broadcast a tip notification to the room
@@ -3336,6 +3086,7 @@ class WebSocketService {
             if (!deployerWallet)
                 return this.sendError(ws, 'Deployer wallet not configured', message.requestId);
             const normalized = ws.playerAddress.toLowerCase();
+            // Generic tip remains a direct transfer in WS domain for now; tracked in money audit docs.
             await this.dbService.deductPlayerBalance(normalized, tipAmount);
             await this.dbService.addPlayerBalance(deployerWallet, tipAmount);
             // Log to audit table so admin can track tips

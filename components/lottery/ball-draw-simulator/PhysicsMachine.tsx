@@ -1,6 +1,6 @@
 'use client'
 
-/* eslint-disable react/forbid-dom-props */
+ 
 import React, { useRef, useEffect, useCallback } from 'react'
 import { BallData } from './types'
 

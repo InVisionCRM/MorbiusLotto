@@ -32,17 +32,11 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table'
-import AvatarView from '@/components/poker/avatar/AvatarView'
+import { AvatarView } from '@/components/avatar'
 import { useProfileForAddress } from '@/hooks/use-player-profile'
 import { useKenoPlayerStats } from '@/hooks/use-keno-results'
 import { TOKEN_DECIMALS } from '@/lib/contracts'
 import { PlayerStatsFeatureGrid } from '@/components/ui/player-stats-feature-grid'
-
-const PANEL_STYLE = {
-  background: 'linear-gradient(145deg, rgb(16, 26, 35), rgb(35, 36, 41))',
-  boxShadow: 'inset 0 3px 6px rgba(0, 0, 0, 0.8), inset 0 -3px 6px rgba(255, 255, 255, 0.1), 0 1px 3px rgba(0, 0, 0, 0.5)',
-  border: '1px inset rgba(60, 60, 60, 0.5)',
-}
 
 function formatMorbius(wei: bigint): string {
   return parseFloat(formatUnits(wei, TOKEN_DECIMALS)).toLocaleString(undefined, {
@@ -241,7 +235,7 @@ export function KenoPlayerDashboard({ playerAddress }: KenoPlayerDashboardProps)
             className="border border-white/10 rounded-xl overflow-hidden"
           />
 
-          <Card className="bg-gradient-to-br from-gray-900 to-black border-gray-700" style={PANEL_STYLE}>
+          <Card className="surface-panel-sidebar">
             <CardHeader>
               <CardTitle className="text-white flex items-center gap-2">
                 <BarChart3 className="w-5 h-5 text-cyan-400" />
@@ -329,7 +323,7 @@ export function KenoPlayerDashboard({ playerAddress }: KenoPlayerDashboardProps)
       )}
 
       {activeTab === 'history' && (
-        <Card className="bg-gradient-to-br from-gray-900 to-black border-gray-700 overflow-hidden" style={PANEL_STYLE}>
+        <Card className="surface-panel-sidebar overflow-hidden">
           <CardHeader className="flex flex-row items-center justify-between gap-4 flex-wrap">
             <CardTitle className="text-white flex items-center gap-2">
               <History className="w-5 h-5" />

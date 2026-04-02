@@ -107,7 +107,6 @@ export const config = createConfig({
   transports: {
     [pulsechain.id]: fallback([
       http('https://rpc.pulsechain.com'),
-      http('https://pulsechain-rpc.publicnode.com'),
       http('https://rpc-pulsechain.g4mm4.io'),
     ]),
   },

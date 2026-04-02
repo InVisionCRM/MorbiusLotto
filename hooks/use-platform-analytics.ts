@@ -66,10 +66,38 @@ export interface PlatformAnalytics {
   };
 }
 
+const DEFAULT_BLACKJACK_ANALYTICS: PlatformAnalytics['blackjack'] = {
+  total_players: 0,
+  active_players: 0,
+  total_games_played: 0,
+  total_volume: '0',
+  total_payouts: '0',
+  house_profit: '0',
+  games_last_hour: 0,
+  games_last_24_hours: 0,
+  volume_last_24_hours: '0',
+  profit_last_24_hours: '0',
+  average_win_rate: 0,
+  average_bet_size: 0,
+  house_edge: 0,
+  active_connections: 0,
+  blackjack_rate: 0,
+  split_rate: 0,
+  double_down_rate: 0,
+  surrender_rate: 0,
+  pending_settlements: 0,
+  failed_settlements: 0,
+  largest_bet: '0',
+  largest_payout: '0',
+};
+
 function parsePlatformResponse(data: any): PlatformAnalytics {
   const toBigInt = (v: unknown) => toBigIntSafe(v ?? 0);
   return {
-    blackjack: data.blackjack ?? {},
+    blackjack: {
+      ...DEFAULT_BLACKJACK_ANALYTICS,
+      ...(data.blackjack ?? {}),
+    },
     plinko: data.plinko
       ? {
           totalDrops: toBigInt(data.plinko.totalDrops),
@@ -113,7 +141,7 @@ function parsePlatformResponse(data: any): PlatformAnalytics {
 
 function defaultPlatformAnalytics(): PlatformAnalytics {
   return {
-    blackjack: {},
+    blackjack: DEFAULT_BLACKJACK_ANALYTICS,
     plinko: null,
     keno: null,
     lottery: null,
@@ -149,6 +177,7 @@ export function usePlatformAnalytics() {
       }
     },
     refetchInterval: 60_000,
+    refetchOnWindowFocus: false,
     retry: 1,
     staleTime: 30_000,
   });

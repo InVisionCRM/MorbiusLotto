@@ -37,7 +37,7 @@ import { PlayerStatsFeatureGrid } from '@/components/ui/player-stats-feature-gri
 import { GameHistory } from '@/components/BLACKJACK/GameHistory'
 import { CreatorDashboard } from '@/components/Creators/CreatorDashboard'
 import { PlayerAuditView } from '@/components/BLACKJACK/PlayerAuditView'
-import AvatarView from '@/components/poker/avatar/AvatarView'
+import { AvatarView } from '@/components/avatar'
 import type { BlackjackWebSocketClient } from '@/lib/websocket-client'
 import type { GameHistoryEntry } from '@/components/BLACKJACK/GameHistory'
 

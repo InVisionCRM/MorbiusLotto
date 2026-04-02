@@ -1052,7 +1052,7 @@ export function TournamentCreator({
                     ))}
                     {themeKind === 'video' && BLACKJACK_VIDEO_BACKGROUNDS.map((bg) => (
                       <button key={bg.id} type="button" onClick={() => setThemeId(bg.id)} className={`relative aspect-video rounded overflow-hidden border-2 shrink-0 ${themeId === bg.id ? 'border-cyan-500 ring-1 ring-cyan-500/50' : 'border-gray-600 hover:border-gray-500'}`}>
-                        <video src={bg.src} className="w-full h-full object-cover" muted loop autoPlay playsInline />
+                        <img src={BLACKJACK_IMAGE_BACKGROUNDS[0].src} alt={bg.label} className="w-full h-full object-cover" />
                         <div className="absolute inset-x-0 bottom-0 bg-black/70 py-0.5 px-1"><p className="text-white text-[10px] truncate">{bg.label}</p></div>
                       </button>
                     ))}

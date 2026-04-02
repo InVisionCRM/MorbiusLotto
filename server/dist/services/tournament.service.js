@@ -73,6 +73,52 @@ class TournamentService {
     normalizeAddress(address) {
         return address?.toLowerCase() || address;
     }
+    /**
+     * Single authority helper for tournament row locking in mutating flows.
+     * Returns null when tournament does not exist.
+     */
+    async getTournamentForUpdate(client, tournamentId) {
+        const tournamentResult = await client.query(`SELECT * FROM tournaments WHERE id = $1 FOR UPDATE`, [tournamentId]);
+        if (tournamentResult.rows.length === 0)
+            return null;
+        return this.normalizeTournament(tournamentResult.rows[0]);
+    }
+    hasTournamentStatus(tournament, status) {
+        return tournament.status === status;
+    }
+    hasTournamentStatusValue(statusValue, status) {
+        return statusValue === status;
+    }
+    assertTournamentCancelable(tournament) {
+        if (this.hasTournamentStatus(tournament, 'completed')) {
+            throw new Error('Cannot cancel a completed tournament');
+        }
+        if (this.hasTournamentStatus(tournament, 'cancelled')) {
+            throw new Error('Tournament is already cancelled');
+        }
+    }
+    async runScheduledEventHandler(eventType, tournamentId) {
+        switch (eventType) {
+            case 'start':
+                await this.handleFreerollStart(tournamentId);
+                return 'executed';
+            case 'end':
+                await this.handleFreerollEnd(tournamentId);
+                return 'executed';
+            case 'reentry_close':
+                // No-op: reentry window is time-based; closing is implicit.
+                return 'executed';
+            case 'poker_start':
+                if (!this.pokerTournamentService) {
+                    logger_1.logger.warn('executeScheduledEvent: poker_start fired but pokerTournamentService not set — retrying next poll');
+                    return 'retry';
+                }
+                await this.pokerTournamentService.activateTournament(tournamentId);
+                return 'executed';
+            default:
+                return 'unknown';
+        }
+    }
     normalizeTournament(row) {
         let rebuyConfig = { enabled: false, maxRebuys: 0 };
         if (row.rebuy_config) {
@@ -572,7 +618,7 @@ class TournamentService {
         }
         // All players finished, check if tournament already completed
         const tournament = await this.getTournament(tournamentId);
-        if (!tournament || tournament.status !== 'active') {
+        if (!tournament || !this.hasTournamentStatus(tournament, 'active')) {
             return;
         }
         // Distribute prizes
@@ -608,7 +654,7 @@ class TournamentService {
                 throw new Error('Tournament not found');
             }
             const tournament = this.normalizeTournament(tournamentResult.rows[0]);
-            if (tournament.status !== 'active') {
+            if (!this.hasTournamentStatus(tournament, 'active')) {
                 throw new Error('Tournament already completed');
             }
             // For on-chain tournaments, sync prize pool from contract before distribution
@@ -1614,26 +1660,13 @@ class TournamentService {
     async executeScheduledEvent(event) {
         const { id: eventId, tournament_id: tournamentId, event_type: eventType, metadata } = event;
         try {
-            switch (eventType) {
-                case 'start':
-                    await this.handleFreerollStart(tournamentId);
-                    break;
-                case 'end':
-                    await this.handleFreerollEnd(tournamentId);
-                    break;
-                case 'reentry_close':
-                    // No-op: reentry window is time-based; closing is implicit
-                    break;
-                case 'poker_start':
-                    if (!this.pokerTournamentService) {
-                        logger_1.logger.warn('executeScheduledEvent: poker_start fired but pokerTournamentService not set — retrying next poll');
-                        return; // Leave pending so next poll retries
-                    }
-                    await this.pokerTournamentService.activateTournament(tournamentId);
-                    break;
-                default:
-                    logger_1.logger.warn('executeScheduledEvent: unknown event_type %s', eventType);
-                    return; // Don't mark unknown events as executed
+            const result = await this.runScheduledEventHandler(eventType, tournamentId);
+            if (result === 'retry') {
+                return; // Leave pending so next poll retries
+            }
+            if (result === 'unknown') {
+                logger_1.logger.warn('executeScheduledEvent: unknown event_type %s', eventType);
+                return; // Don't mark unknown events as executed
             }
             // Only mark as executed if handler succeeded
             await this.pool.query(`UPDATE tournament_scheduled_events SET executed_at = NOW(), status = 'executed' WHERE id = $1`, [eventId]);
@@ -1681,12 +1714,11 @@ class TournamentService {
         const client = await this.pool.connect();
         try {
             await client.query('BEGIN');
-            const tournamentResult = await client.query(`SELECT * FROM tournaments WHERE id = $1 FOR UPDATE`, [tournamentId]);
-            if (tournamentResult.rows.length === 0) {
+            const tournament = await this.getTournamentForUpdate(client, tournamentId);
+            if (!tournament) {
                 await client.query('ROLLBACK');
                 return;
             }
-            const tournament = this.normalizeTournament(tournamentResult.rows[0]);
             const entriesResult = await client.query(`SELECT * FROM tournament_entries WHERE tournament_id = $1`, [tournamentId]);
             const entries = entriesResult.rows;
             if (tournament.buy_in_amount > 0n) {
@@ -1794,7 +1826,7 @@ class TournamentService {
             logger_1.logger.warn('handleFreerollEnd: tournament not found or not freeroll: %s', tournamentId);
             return;
         }
-        if (tournamentResult.rows[0].status !== 'active') {
+        if (!this.hasTournamentStatusValue(tournamentResult.rows[0].status, 'active')) {
             logger_1.logger.info('handleFreerollEnd: tournament already not active, skipping: %s', tournamentId);
             await this.pool.query(`UPDATE tournaments SET current_phase = 'completed' WHERE id = $1 AND tournament_type = 'freeroll'`, [tournamentId]);
             return;
@@ -1812,25 +1844,17 @@ class TournamentService {
         const client = await this.pool.connect();
         try {
             await client.query('BEGIN');
-            // Get tournament
-            const tournamentQuery = `SELECT * FROM tournaments WHERE id = $1 FOR UPDATE`;
-            const tournamentResult = await client.query(tournamentQuery, [tournamentId]);
-            if (tournamentResult.rows.length === 0) {
+            const tournament = await this.getTournamentForUpdate(client, tournamentId);
+            if (!tournament) {
                 throw new Error('Tournament not found');
             }
-            const tournament = this.normalizeTournament(tournamentResult.rows[0]);
             const normalizedCanceller = this.normalizeAddress(cancellerAddress);
             // Verify canceller is the creator
             if (!tournament.creator_address || this.normalizeAddress(tournament.creator_address) !== normalizedCanceller) {
                 throw new Error('Only the tournament creator can cancel the tournament');
             }
             // Check tournament status
-            if (tournament.status === 'completed') {
-                throw new Error('Cannot cancel a completed tournament');
-            }
-            if (tournament.status === 'cancelled') {
-                throw new Error('Tournament is already cancelled');
-            }
+            this.assertTournamentCancelable(tournament);
             // Check if any games have been played
             const gamesQuery = `SELECT COUNT(*) as count FROM tournament_games WHERE tournament_id = $1`;
             const gamesResult = await client.query(gamesQuery, [tournamentId]);
@@ -1924,13 +1948,12 @@ class TournamentService {
         const client = await this.pool.connect();
         try {
             await client.query('BEGIN');
-            const tournamentResult = await client.query(`SELECT * FROM tournaments WHERE id = $1 FOR UPDATE`, [tournamentId]);
-            if (tournamentResult.rows.length === 0) {
+            const tournament = await this.getTournamentForUpdate(client, tournamentId);
+            if (!tournament) {
                 await client.query('ROLLBACK');
                 return;
             }
-            const tournament = this.normalizeTournament(tournamentResult.rows[0]);
-            if (tournament.status !== 'active') {
+            if (!this.hasTournamentStatus(tournament, 'active')) {
                 await client.query('ROLLBACK');
                 return;
             }

@@ -94,17 +94,6 @@ export function GamesSection() {
     customContent?: ReactNode
   }> = [
     {
-      key: 'poker',
-      href: '/poker',
-      title: "Texas Hold'em",
-      image: '/morbius/morbius-poker-screenshot.png',
-      imageAlt: "Texas Hold'em",
-      titleClassName: 'text-xl md:text-3xl font-orbitron tracking-wide',
-      badge: 'NEW!' as string | null,
-      disabled: false,
-      presenceKey: 'poker',
-    },
-    {
       key: 'multiplayer-blackjack',
       href: '/blackjack-multi',
       title: 'Multiplayer Blackjack',
@@ -176,7 +165,7 @@ export function GamesSection() {
           </p>
           <div className="flex items-center gap-2">
             <a
-              href="https://x.com/morbiusfinance"
+              href="https://x.com/morbius_io"
               target="_blank"
               rel="noopener noreferrer"
               aria-label="Morbius on X"
@@ -185,7 +174,7 @@ export function GamesSection() {
               <IconBrandX size={16} />
             </a>
             <a
-              href="https://t.me/morbiusfinance"
+              href="https://t.me/morbius_cash"
               target="_blank"
               rel="noopener noreferrer"
               aria-label="Morbius on Telegram"
@@ -226,6 +215,7 @@ export function GamesSection() {
               src={game.image}
               alt={game.imageAlt}
               fill
+              sizes="(max-width: 768px) 208px, 384px"
               className={cn(
                 'object-cover',
                 game.disabled ? 'opacity-40 grayscale' : 'opacity-95',

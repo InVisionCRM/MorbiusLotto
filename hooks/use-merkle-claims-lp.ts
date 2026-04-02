@@ -6,7 +6,7 @@ import { formatEther } from 'viem';
 import { toast } from 'sonner';
 import { merkleClaimLpAbi } from '@/abi/merkle-claim-lp';
 import { MERKLE_CLAIM_LP_ADDRESS } from '@/lib/contracts';
-import { getApiUrlOptional } from '@/lib/api-urls';
+import { getMerkleLpClaimPath, getMerkleLpEpochsPath } from '@/lib/api-urls';
 
 export interface LPPublishedEpoch {
   id: number;
@@ -42,7 +42,6 @@ interface UseMerkleClaimsLPReturn {
 
 export function useMerkleClaimsLP(): UseMerkleClaimsLPReturn {
   const { address } = useAccount();
-  const apiBase = getApiUrlOptional();
 
   const [publishedEpochs, setPublishedEpochs] = useState<LPPublishedEpoch[]>([]);
   const [proofMap, setProofMap] = useState<Map<number, {
@@ -57,25 +56,22 @@ export function useMerkleClaimsLP(): UseMerkleClaimsLPReturn {
 
   // Fetch published LP epochs
   useEffect(() => {
-    if (!apiBase) return;
-    fetch(`${apiBase}/api/merkle-lp/epochs`)
+    fetch(getMerkleLpEpochsPath(), { cache: 'no-store' })
       .then((r) => r.json())
       .then((data) => setPublishedEpochs(Array.isArray(data) ? data : []))
       .catch(() => { /* non-critical */ });
-  }, [apiBase, refreshKey]);
+  }, [refreshKey]);
 
   // Fetch proofs for connected wallet
   useEffect(() => {
-    if (!apiBase || !address || publishedEpochs.length === 0) return;
+    if (!address || publishedEpochs.length === 0) return;
 
     const fetchProofs = async () => {
       const newMap = new Map<number, { amount: string; proof: string[]; supersededByEpochNumber: number | null }>();
       await Promise.allSettled(
         publishedEpochs.map(async (epoch) => {
           try {
-            const res = await fetch(
-              `${apiBase}/api/merkle-lp/claim/${epoch.epoch_number}/${address}`,
-            );
+            const res = await fetch(getMerkleLpClaimPath(epoch.epoch_number, address), { cache: 'no-store' });
             if (res.ok) {
               const data = await res.json();
               newMap.set(epoch.id, {
@@ -91,7 +87,7 @@ export function useMerkleClaimsLP(): UseMerkleClaimsLPReturn {
     };
 
     fetchProofs();
-  }, [apiBase, address, publishedEpochs, refreshKey]);
+  }, [address, publishedEpochs, refreshKey]);
 
   // Read hasClaimed for non-superseded entries
   const contractAddress = MERKLE_CLAIM_LP_ADDRESS || undefined;
