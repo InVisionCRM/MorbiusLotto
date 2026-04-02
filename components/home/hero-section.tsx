@@ -7,7 +7,7 @@ const HERO_GLASS_BTN =
   'group relative isolate inline-flex items-center justify-center overflow-hidden rounded-full border border-white/40 font-orbitron bg-transparent backdrop-blur-xs background-refraction/15 px-6 py-3 text-lg font-semibold transition-colors duration-200 hover:border-cyan-300/65 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-500/35 focus-visible:ring-offset-2 focus-visible:ring-offset-neutral-950 sm:px-7 sm:py-3.5 sm:text-base'
 
 const HERO_BTN_LABEL =
-  'text-white/95 text-md lg:text-3xl font-russo-one transition-all duration-200 group-hover:bg-gradient-to-r group-hover:bg-clip-text group-hover:text-transparent'
+  'text-white/95 text-md lg:text-2xl font-russo-one transition-all duration-200 group-hover:bg-gradient-to-r group-hover:bg-clip-text group-hover:text-transparent'
 
 interface HeroSectionProps {
   onOpenPlayerProfile?: () => void
