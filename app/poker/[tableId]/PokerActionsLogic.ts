@@ -52,6 +52,8 @@ export function usePokerActionsLogic({
     (action: PokerActionType, amount?: string) => {
       if (applyE2EMockAction(action, amount)) return;
       if (!currentHand || !clientRef.current) return;
+      // Manual action wins over any queued pre-action.
+      setQueuedPreAction(null);
       clientRef.current
         .pokerAction(
           tableId,
@@ -109,19 +111,24 @@ export function usePokerActionsLogic({
     const key = `${hand.handId}:${queuedPreAction}:${canCheck ? 'check' : 'no-check'}`;
     if (autoActionKeyRef.current === key) return;
     autoActionKeyRef.current = key;
-    const selected = queuedPreAction;
-    setQueuedPreAction(null);
-    if (selected === 'check') {
+    // Small grace period prevents queued pre-action from stealing a fresh manual click.
+    const timer = setTimeout(() => {
+      const selected = queuedPreAction;
+      setQueuedPreAction(null);
+      if (selected === 'check') {
+        if (canCheck) sendPokerAction('check');
+        return;
+      }
+      if (selected === 'call_any') {
+        if (canCheck) sendPokerAction('check');
+        else sendPokerAction('call');
+        return;
+      }
       if (canCheck) sendPokerAction('check');
-      return;
-    }
-    if (selected === 'call_any') {
-      if (canCheck) sendPokerAction('check');
-      else sendPokerAction('call');
-      return;
-    }
-    if (canCheck) sendPokerAction('check');
-    else sendPokerAction('fold');
+      else sendPokerAction('fold');
+    }, 250);
+
+    return () => clearTimeout(timer);
   }, [canAct, canCheck, hand?.handId, queuedPreAction, sendPokerAction]);
 
   return {

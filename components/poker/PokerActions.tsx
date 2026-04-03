@@ -110,6 +110,8 @@ export function PokerActions({
   // ── Handlers ───────────────────────────────────────────────────────────────
   const handlePrimary = () => {
     if (!hasValidAmount || clamped == null) return;
+    // Manual click should always override any queued pre-action.
+    onPreActionChange(null);
     const isAllIn = clamped === stackAmt;
     playSound(
       isAllIn ? 'player_allin' : (isFacingBet ? 'raise' : 'call'),
@@ -138,11 +140,15 @@ export function PokerActions({
   const sliderFillPct = maxOffsetChips > 0 ? (sliderOffset / maxOffsetChips) * 100 : 0;
 
   const handleFoldWithSound = () => {
+    // Manual click should always override any queued pre-action.
+    onPreActionChange(null);
     playSound('call', '/POKER/PokerSounds/PlayerClickConfirmation.mp3');
     onFold();
   };
 
   const handleSecondary = () => {
+    // Manual click should always override any queued pre-action.
+    onPreActionChange(null);
     playSound('call', '/POKER/PokerSounds/PlayerClickConfirmation.mp3');
     if (canCheck) onCheck();
     else onCall();
