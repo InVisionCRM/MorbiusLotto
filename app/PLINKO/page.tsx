@@ -140,14 +140,15 @@ const Home: React.FC = () => {
   type DropSpeed = 'normal' | 'fast' | 'burst';
   const [dropSpeed, setDropSpeed] = useState<DropSpeed>('normal'); // Drop speed mode - normal by default
   const [freePlayEnabled, setFreePlayEnabled] = useState(false); // Free Play toggle - disabled by default (contract mode)
-  const [showIntro, setShowIntro] = useState(() => {
-    // Check localStorage to see if intro was already shown
-    if (typeof window !== 'undefined') {
-      const introShown = localStorage.getItem('plinko-intro-shown');
-      return introShown !== 'true';
-    }
-    return true;
-  });
+  const [showIntro, setShowIntro] = useState(true);
+
+  useEffect(() => {
+    try {
+      if (localStorage.getItem('plinko-intro-shown') === 'true') {
+        setShowIntro(false);
+      }
+    } catch {}
+  }, []);
   const lastRiskRef = useRef<RiskLevel>('GREEN');
   const historyIdCounter = useRef(0);
   const lastBucketIndexRef = useRef<number>(0); // Track bucket index for history
