@@ -303,6 +303,17 @@ export default function PokerTablePage() {
     }
   }, [wsClient, playClick, fetchLatestState]);
 
+  const extractApiError = useCallback((raw: string, status: number, fallback: string) => {
+    if (!raw) return `${fallback} (HTTP ${status})`;
+    try {
+      const parsed = JSON.parse(raw) as { error?: string; message?: string };
+      const msg = parsed?.error || parsed?.message || raw;
+      return `${msg} (HTTP ${status})`;
+    } catch {
+      return `${raw} (HTTP ${status})`;
+    }
+  }, []);
+
   const onAdminStartBots = useCallback(async (numBots: number) => {
     if (!isAdmin || !address || !tableId) return;
     const clampedBots = Math.max(1, Math.min(adminBotMax, Math.floor(numBots || 1)));
@@ -316,9 +327,18 @@ export default function PokerTablePage() {
         },
         body: JSON.stringify({ tableId, numBots: clampedBots }),
       });
-      const data = await res.json().catch(() => ({}));
+      const raw = await res.text().catch(() => '');
+      let data: Record<string, unknown> = {};
+      if (raw) {
+        try {
+          data = JSON.parse(raw) as Record<string, unknown>;
+        } catch {
+          data = {};
+        }
+      }
       if (!res.ok) {
-        throw new Error((data?.error as string) || 'Failed to start bot players');
+        const msg = extractApiError(raw, res.status, 'Failed to start bot players');
+        throw new Error(msg);
       }
       const botCount = typeof data?.numBots === 'number' ? data.numBots : null;
       toast.success(botCount ? `Started ${botCount} bot player(s)` : 'Started bot players');
@@ -327,7 +347,7 @@ export default function PokerTablePage() {
     } finally {
       setAdminBotsBusy(false);
     }
-  }, [isAdmin, address, tableId, adminBotMax]);
+  }, [isAdmin, address, tableId, adminBotMax, extractApiError]);
 
   const onAdminStopBots = useCallback(async () => {
     if (!isAdmin || !address || !tableId) return;
@@ -341,9 +361,10 @@ export default function PokerTablePage() {
         },
         body: JSON.stringify({ tableId }),
       });
-      const data = await res.json().catch(() => ({}));
+      const raw = await res.text().catch(() => '');
       if (!res.ok) {
-        throw new Error((data?.error as string) || 'Failed to stop bot players');
+        const msg = extractApiError(raw, res.status, 'Failed to stop bot players');
+        throw new Error(msg);
       }
       toast.success('Stopped bot players');
     } catch (err) {
@@ -351,7 +372,7 @@ export default function PokerTablePage() {
     } finally {
       setAdminBotsBusy(false);
     }
-  }, [isAdmin, address, tableId]);
+  }, [isAdmin, address, tableId, extractApiError]);
 
   return (
     <PokerThemeProvider themeId={pokerTheme}>
