@@ -146,12 +146,18 @@ export function PokerActions({
     onFold();
   };
 
-  const handleSecondary = () => {
+  const handleCheckWithSound = () => {
     // Manual click should always override any queued pre-action.
     onPreActionChange(null);
     playSound('call', '/POKER/PokerSounds/PlayerClickConfirmation.mp3');
-    if (canCheck) onCheck();
-    else onCall();
+    onCheck();
+  };
+
+  const handleCallWithSound = () => {
+    // Manual click should always override any queued pre-action.
+    onPreActionChange(null);
+    playSound('call', '/POKER/PokerSounds/PlayerClickConfirmation.mp3');
+    onCall();
   };
 
   const barStyle = {
@@ -269,50 +275,58 @@ export function PokerActions({
             </button>
           ))}
         </div>
-        <div className="flex items-stretch gap-1.5 pb-2 pt-1">
+        <div className="flex items-stretch gap-1 pb-2 pt-1">
           <div className="flex gap-1.5 flex-1 min-w-0">
-            <button
-              data-testid="poker-action-fold"
-              type="button"
-              onClick={handleFoldWithSound}
-              disabled={!canAct}
-              className={`flex-1 h-11 min-w-0 rounded-sm text-xs font-bold tracking-wide transition-all hover:brightness-110 active:scale-[0.97] ${foldBtnClass}`}
-              style={foldBtnStyle}
-            >
-              Fold
-            </button>
-            <button
-              data-testid="poker-action-secondary"
-              type="button"
-              onClick={handleSecondary}
-              disabled={!canAct}
-              className={`flex-[0.8] h-10 min-w-0 rounded-sm text-[10px] font-bold tracking-wide transition-all hover:brightness-110 active:scale-[0.97] px-1 ${checkBtnClass}`}
-              style={checkBtnStyle}
-            >
-              {canCheck ? (
-                'Check'
-              ) : (
+            <div className="grid grid-cols-4 gap-1 flex-1 h-11 min-w-0">
+              <button
+                data-testid="poker-action-fold"
+                type="button"
+                onClick={handleFoldWithSound}
+                disabled={!canAct}
+                className={`min-w-0 h-full rounded-xl text-xs font-bold tracking-wide transition-all hover:brightness-110 active:scale-[0.97] ${foldBtnClass}`}
+                style={foldBtnStyle}
+              >
+                Fold
+              </button>
+              <button
+                data-testid="poker-action-check"
+                type="button"
+                onClick={handleCheckWithSound}
+                disabled={!canAct || !canCheck}
+                className={`min-w-0 h-full rounded-xl text-xs font-bold tracking-wide transition-all hover:brightness-110 active:scale-[0.97] px-1 ${checkBtnClass}`}
+                style={checkBtnStyle}
+              >
+                Check
+              </button>
+              <button
+                data-testid="poker-action-call"
+                type="button"
+                onClick={handleCallWithSound}
+                disabled={!canAct || !isFacingBet}
+                className={`min-w-0 h-full rounded-xl text-[10px] font-bold tracking-wide transition-all hover:brightness-110 active:scale-[0.97] px-1 ${checkBtnClass}`}
+                style={{ ...actionBtnBaseStyle, background: 'linear-gradient(180deg, #16a34a 0%, #15803d 100%)' }}
+              >
                 <span className="flex flex-col items-center justify-center leading-tight whitespace-normal">
                   <span>Call</span>
-                  <span className="text-[10px] font-semibold normal-case">{formatAmount(callAmt)}</span>
+                  <span className="text-[10px] font-semibold normal-case">{isFacingBet ? formatAmount(callAmt) : '—'}</span>
                 </span>
-              )}
-            </button>
-            <button
-              data-testid="poker-action-primary"
-              type="button"
-              onClick={handlePrimary}
-              disabled={!canAct || !hasValidAmount}
-              className={`flex-1 h-11 min-w-0 rounded-sm text-[11px] font-bold tracking-wide transition-all hover:brightness-110 active:scale-[0.97] px-1 ${primaryBtnClass}`}
-              style={primaryBtnStyle}
-            >
-              <span className="flex flex-col items-center justify-center leading-tight whitespace-normal">
-                <span>{isFacingBet ? 'Raise To' : 'Bet'}</span>
-                <span className="text-[10px] font-semibold normal-case">
-                  {hasValidAmount && clamped ? formatAmount(clamped) : '—'}
+              </button>
+              <button
+                data-testid="poker-action-primary"
+                type="button"
+                onClick={handlePrimary}
+                disabled={!canAct || !hasValidAmount}
+                className={`min-w-0 h-full rounded-xl text-[11px] font-bold tracking-wide transition-all hover:brightness-110 active:scale-[0.97] px-1 ${primaryBtnClass}`}
+                style={primaryBtnStyle}
+              >
+                <span className="flex flex-col items-center justify-center leading-tight whitespace-normal">
+                  <span>{isFacingBet ? 'Raise To' : 'Bet'}</span>
+                  <span className="text-[10px] font-semibold normal-case">
+                    {hasValidAmount && clamped ? formatAmount(clamped) : '—'}
+                  </span>
                 </span>
-              </span>
-            </button>
+              </button>
+            </div>
           </div>
           <div className="flex items-center gap-1 shrink-0" style={{ width: '42%' }}>
             <input
@@ -417,52 +431,60 @@ export function PokerActions({
           ))}
         </div>
         <div
-          className="flex items-stretch gap-1.5 md:gap-2 px-2 md:px-3 pb-2 md:pb-3 pt-1 md:pt-1.5"
+          className="flex items-stretch gap-1 md:gap-1.5 px-2 md:px-3 pb-2 md:pb-3 pt-1 md:pt-1.5"
           style={{ paddingBottom: 'max(8px, env(safe-area-inset-bottom, 8px))' }}
         >
           <div className="flex gap-1.5 md:gap-2 flex-1 min-w-0">
-            <button
-              data-testid="poker-action-fold"
-              type="button"
-              onClick={handleFoldWithSound}
-              disabled={!canAct}
-              className={`flex-1 h-12 md:h-14 min-w-0 rounded-sm text-sm md:text-base font-bold tracking-wide transition-all hover:brightness-110 active:scale-[0.97] ${foldBtnClass}`}
-              style={foldBtnStyle}
-            >
-              Fold
-            </button>
-            <button
-              data-testid="poker-action-secondary"
-              type="button"
-              onClick={handleSecondary}
-              disabled={!canAct}
-              className={`flex-[0.82] md:flex-[0.72] h-10 md:h-10 min-w-0 rounded-sm text-xs md:text-[13px] font-bold tracking-wide transition-all hover:brightness-110 active:scale-[0.97] px-1.5 md:px-1.5 ${checkBtnClass}`}
-              style={checkBtnStyle}
-            >
-              {canCheck ? (
-                'Check'
-              ) : (
+            <div className="grid grid-cols-4 gap-1 md:gap-1.5 flex-1 h-12 md:h-14 min-w-0">
+              <button
+                data-testid="poker-action-fold"
+                type="button"
+                onClick={handleFoldWithSound}
+                disabled={!canAct}
+                className={`min-w-0 h-full rounded-xl text-sm md:text-base font-bold tracking-wide transition-all hover:brightness-110 active:scale-[0.97] ${foldBtnClass}`}
+                style={foldBtnStyle}
+              >
+                Fold
+              </button>
+              <button
+                data-testid="poker-action-check"
+                type="button"
+                onClick={handleCheckWithSound}
+                disabled={!canAct || !canCheck}
+                className={`min-w-0 h-full rounded-xl text-xs md:text-sm font-bold tracking-wide transition-all hover:brightness-110 active:scale-[0.97] px-1.5 ${checkBtnClass}`}
+                style={checkBtnStyle}
+              >
+                Check
+              </button>
+              <button
+                data-testid="poker-action-call"
+                type="button"
+                onClick={handleCallWithSound}
+                disabled={!canAct || !isFacingBet}
+                className={`min-w-0 h-full rounded-xl text-xs md:text-[13px] font-bold tracking-wide transition-all hover:brightness-110 active:scale-[0.97] px-1.5 ${checkBtnClass}`}
+                style={{ ...actionBtnBaseStyle, background: 'linear-gradient(180deg, #16a34a 0%, #15803d 100%)' }}
+              >
                 <span className="flex flex-col items-center justify-center leading-tight whitespace-normal">
                   <span>Call</span>
-                  <span className="text-[10px] md:text-[11px] font-semibold normal-case">{formatAmount(callAmt)}</span>
+                  <span className="text-[10px] md:text-[11px] font-semibold normal-case">{isFacingBet ? formatAmount(callAmt) : '—'}</span>
                 </span>
-              )}
-            </button>
-            <button
-              data-testid="poker-action-primary"
-              type="button"
-              onClick={handlePrimary}
-              disabled={!canAct || !hasValidAmount}
-              className={`flex-1 h-12 md:h-14 min-w-0 rounded-sm text-sm md:text-base font-bold tracking-wide transition-all hover:brightness-110 active:scale-[0.97] px-2 ${primaryBtnClass}`}
-              style={primaryBtnStyle}
-            >
-              <span className="flex flex-col items-center justify-center leading-tight whitespace-normal">
-                <span>{isFacingBet ? 'Raise To' : 'Bet'}</span>
-                <span className="text-[11px] md:text-xs font-semibold normal-case">
-                  {hasValidAmount && clamped ? formatAmount(clamped) : '—'}
+              </button>
+              <button
+                data-testid="poker-action-primary"
+                type="button"
+                onClick={handlePrimary}
+                disabled={!canAct || !hasValidAmount}
+                className={`min-w-0 h-full rounded-xl text-sm md:text-base font-bold tracking-wide transition-all hover:brightness-110 active:scale-[0.97] px-2 ${primaryBtnClass}`}
+                style={primaryBtnStyle}
+              >
+                <span className="flex flex-col items-center justify-center leading-tight whitespace-normal">
+                  <span>{isFacingBet ? 'Raise To' : 'Bet'}</span>
+                  <span className="text-[11px] md:text-xs font-semibold normal-case">
+                    {hasValidAmount && clamped ? formatAmount(clamped) : '—'}
+                  </span>
                 </span>
-              </span>
-            </button>
+              </button>
+            </div>
           </div>
           <div className="flex items-center gap-1 md:gap-1.5 shrink-0 w-[48%] md:w-[52%] min-w-0">
             <input
