@@ -63,10 +63,11 @@ export default function PokerTablePage() {
   const normalizedAddress = address?.toLowerCase() ?? null;
   const effectivePlayerAddress = normalizedAddress ?? (isE2EMock ? POKER_E2E_MOCK_ADDRESS : null);
   const profileWs = useProfileWs();
+  const profileSetWsClient = profileWs?.setWsClient;
   const queryClient = useQueryClient();
   const setProfileWsClient = useCallback((client: BlackjackWebSocketClient | null) => {
-    profileWs?.setWsClient(client);
-  }, [profileWs]);
+    profileSetWsClient?.(client);
+  }, [profileSetWsClient]);
   const replaceUrl = useCallback((url: string) => {
     router.replace(url);
   }, [router]);

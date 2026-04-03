@@ -64,7 +64,6 @@ export function usePokerConnection({
     const client = new BlackjackWebSocketClient(wsUrl, normalizedAddress ?? undefined, signTypedDataAsync as any);
     clientRef.current = client;
     setWsClient(client);
-    setProfileWsClient(client);
 
     client.on('poker_table_state', (payload: PokerTableState) => {
       if (payload.tableId !== tableId) return;
@@ -116,7 +115,6 @@ export function usePokerConnection({
       clientRef.current = null;
       setWsClient(null);
       setWsConnected(false);
-      setProfileWsClient(null);
     };
   }, [
     tableId,
@@ -126,10 +124,17 @@ export function usePokerConnection({
     joinFromLobby,
     buyInParam,
     pinParam,
-    setProfileWsClient,
     replaceUrl,
     fetchLatestState,
   ]);
+
+  // Keep profile context in sync without re-triggering socket connect lifecycle.
+  useEffect(() => {
+    setProfileWsClient(wsClient);
+    return () => {
+      setProfileWsClient(null);
+    };
+  }, [wsClient, setProfileWsClient]);
 
   useEffect(() => {
     if (!wsConnected || !clientRef.current || !tableId) return;
