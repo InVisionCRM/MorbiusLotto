@@ -1937,12 +1937,19 @@ async function initializeServices() {
           ? Math.max(1, Math.min(MAX_ADMIN_BOTS, Math.floor(requestedBots), emptySeats))
           : defaultBots;
 
-        const serverRoot = path.resolve(__dirname, '../..');
-        const proc = spawn('npm', ['run', 'poker:bot', '--', tableId, String(numBots)], {
-          cwd: serverRoot,
-          env: process.env,
-          stdio: ['ignore', 'pipe', 'pipe'],
-        });
+        const compiledBot = path.resolve(__dirname, 'scripts/poker-bot.js');
+        const botExists = fs.existsSync(compiledBot);
+        const proc = botExists
+          ? spawn(process.execPath, [compiledBot, tableId, String(numBots)], {
+              cwd: path.resolve(__dirname, '../..'),
+              env: process.env,
+              stdio: ['ignore', 'pipe', 'pipe'],
+            })
+          : spawn('npx', ['ts-node', path.resolve(__dirname, 'scripts/poker-bot.ts'), tableId, String(numBots)], {
+              cwd: path.resolve(__dirname, '..'),
+              env: process.env,
+              stdio: ['ignore', 'pipe', 'pipe'],
+            });
 
         const startedAt = new Date().toISOString();
         pokerBotJobs.set(tableId, { tableId, numBots, startedAt, process: proc });
