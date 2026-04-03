@@ -43,23 +43,33 @@ export default function BlackjackMultiLobbyClient({
   const [seatFilter, setSeatFilter] = useState<SeatFilter>('all');
   const [showFilters, setShowFilters] = useState(false);
 
-  const fetchTables = useCallback(async () => {
+  const fetchTables = useCallback(async (options?: { silent?: boolean }) => {
+    const silent = options?.silent ?? false;
+    if (!silent) setLoading(true);
     try {
       const res = await fetch('/api/bj-multi/admin/tables');
+      if (!res.ok) {
+        throw new Error('Failed to load tables');
+      }
       const data = await res.json();
       setTables(data.tables ?? []);
       setError(null);
     } catch (_err) {
       setError('Failed to load tables');
     } finally {
-      setLoading(false);
+      if (!silent) setLoading(false);
     }
   }, []);
 
   useEffect(() => {
-    const interval = setInterval(fetchTables, 8000);
+    // Recover quickly when initial server-side fetch misses.
+    void fetchTables({ silent: initialTables.length > 0 && !initialError });
+
+    const interval = setInterval(() => {
+      void fetchTables({ silent: true });
+    }, 8000);
     return () => clearInterval(interval);
-  }, [fetchTables]);
+  }, [fetchTables, initialError, initialTables.length]);
 
   const filteredTables = useMemo(() => {
     return tables.filter((t) => {

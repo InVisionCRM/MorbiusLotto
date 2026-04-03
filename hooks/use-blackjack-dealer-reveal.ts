@@ -28,10 +28,15 @@ export function useBlackjackDealerReveal({
   const visibleRef = useRef(0);
   const prevTotalRef = useRef(0);
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const onRevealCardRef = useRef(onRevealCard);
 
   useEffect(() => {
     visibleRef.current = visibleCards;
   }, [visibleCards]);
+
+  useEffect(() => {
+    onRevealCardRef.current = onRevealCard;
+  }, [onRevealCard]);
 
   const revealPhaseSet = useMemo(() => new Set(revealPhases), [revealPhases]);
 
@@ -78,7 +83,7 @@ export function useBlackjackDealerReveal({
       if (idx <= totalCards) {
         visibleRef.current = idx;
         setVisibleCards(idx);
-        onRevealCard?.();
+        onRevealCardRef.current?.();
         if (idx < totalCards) {
           timerRef.current = setTimeout(revealNext, perCardDelayMs);
         }
@@ -96,7 +101,6 @@ export function useBlackjackDealerReveal({
     revealPhaseSet,
     holeCardDelayMs,
     perCardDelayMs,
-    onRevealCard,
   ]);
 
   useEffect(() => {
