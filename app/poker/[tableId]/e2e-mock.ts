@@ -73,6 +73,10 @@ export function applyPokerE2EMockAction({
   }
 
   if (action === 'check') {
+    const toCall = toBigIntSafe(base.currentHand.toCall ?? '0');
+    if (toCall > 0n) {
+      return base;
+    }
     return withStreetAction(base, seatIdx, 'check', '0', {
       toCall: '0',
       actingPosition: null,
@@ -97,16 +101,20 @@ export function applyPokerE2EMockAction({
   }
 
   const wager = toBigIntSafe(amount ?? '0');
+  if (wager <= 0n) return base;
   const seats = base.seats.map((s) => ({ ...s }));
   const seat = seats[seatIdx];
+  const priorBet = toBigIntSafe(seat.currentBet ?? '0');
   const seatStack = toBigIntSafe(seat.stack ?? '0');
+  if (wager <= priorBet) return base;
+  const delta = wager - priorBet;
   seat.currentBet = wager.toString();
-  seat.stack = (seatStack > wager ? seatStack - wager : 0n).toString();
+  seat.stack = (seatStack > delta ? seatStack - delta : 0n).toString();
   return withStreetAction(
     { ...base, seats },
     seatIdx,
     action,
     wager.toString(),
-    { toCall: '0', actingPosition: null }
+    { toCall: wager.toString(), actingPosition: null }
   );
 }

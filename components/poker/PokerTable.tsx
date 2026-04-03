@@ -164,14 +164,24 @@ export function PokerTable({ state, currentPlayerAddress, timeLeft, chatBubbleBy
   const toDisplaySlot = (seatIdx: number) => (mySeatIndex >= 0 ? (seatIdx - mySeatIndex + state.seats.length) % state.seats.length : seatIdx);
   const actingPosition = hand?.actingPosition ?? null;
   const isShowdownWithWinners = hand?.street === 'showdown' && hand?.winners?.length;
+  const winnerCandidates = isShowdownWithWinners
+    ? hand!.winners!.filter((w) => {
+        const seat = state.seats.find((s) => s.playerAddress === w.address);
+        return !seat?.folded;
+      })
+    : [];
   const winnerSeatIndices = isShowdownWithWinners
-    ? (hand!.winners!.map((w) => state.seats.findIndex((s) => s.playerAddress === w.address)).filter((i) => i >= 0) as number[])
+    ? ((winnerCandidates.length > 0 ? winnerCandidates : hand!.winners!)
+        .map((w) => state.seats.findIndex((s) => s.playerAddress === w.address))
+        .filter((i) => i >= 0) as number[])
     : [];
   const winnerDisplaySlots = winnerSeatIndices.map(
     (idx) => (mySeatIndex >= 0 ? (idx - mySeatIndex + state.seats.length) % state.seats.length : idx)
   );
   const firstWinnerAnchor = winnerDisplaySlots.length > 0 ? seatAnchors[winnerDisplaySlots[0]] : null;
-  const firstWinner = isShowdownWithWinners ? hand!.winners![0] : null;
+  const firstWinner = isShowdownWithWinners
+    ? ((winnerCandidates.length > 0 ? winnerCandidates[0] : hand!.winners![0]) ?? null)
+    : null;
   const firstWinnerAddr = firstWinner?.address ?? null;
   const isCurrentPlayerWinner = firstWinnerAddr && currentPlayerAddress && firstWinnerAddr === currentPlayerAddress.toLowerCase();
   const firstWinnerSeat = firstWinnerAddr ? state.seats.find((s) => s.playerAddress === firstWinnerAddr) : null;

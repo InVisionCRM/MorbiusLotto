@@ -70,8 +70,12 @@ export function usePokerActionsLogic({
   }, [sendPokerAction]);
 
   const handleCheck = useCallback(() => {
+    if (!canCheck) {
+      toast.error('Cannot check when facing a bet');
+      return;
+    }
     sendPokerAction('check');
-  }, [sendPokerAction]);
+  }, [canCheck, sendPokerAction]);
 
   const handleCall = useCallback(() => {
     sendPokerAction('call');

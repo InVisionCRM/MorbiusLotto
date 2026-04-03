@@ -1282,11 +1282,17 @@ export class PokerGameService {
         actor.foldAction();
         break;
       case 'check':
+        if ((table.currentBet ?? 0) > actor.bet) {
+          throw new Error('Cannot check when facing a bet');
+        }
         actor.checkAction();
         break;
       case 'call': {
         // Capture the call amount BEFORE callAction (which zeroes the difference)
         const callChips = (table.currentBet ?? 0) - actor.bet;
+        if (callChips <= 0) {
+          throw new Error('Nothing to call');
+        }
         actor.callAction();
         if (callChips > 0) {
           actionAmountDb = scaling.tournament
@@ -1416,15 +1422,26 @@ export class PokerGameService {
     const scaling = await this.getTableScaling(tableId);
     const chipWei = scaling.chipWei;
     const resultWinners: { address: string; amount: string; handName?: string; winningCardIndices?: number[] }[] = [];
+    const foldedResult = await pool.query(
+      `SELECT DISTINCT player_address FROM poker_hand_actions
+       WHERE hand_id = $1 AND action = 'fold'`,
+      [handId]
+    );
+    const foldedByAction = new Set<string>(
+      foldedResult.rows.map((r: any) => this.normalizeAddress(r.player_address))
+    );
 
     // Integer chip split per pot (no float drift), then convert to wei for cash.
     const winnerChips = new Map<string, bigint>();
     for (const pot of table.pots) {
       if (!pot.winners || pot.winners.length === 0) continue;
-      const nonFoldedWinners = pot.winners.filter((w: any) => !w.folded);
+      const nonFoldedWinners = pot.winners.filter((w: any) => {
+        const winnerId = this.normalizeAddress(w.id);
+        return !w.folded && !foldedByAction.has(winnerId);
+      });
       if (nonFoldedWinners.length === 0) continue;
       const potChips = BigInt(Math.max(0, Math.round(pot.amount)));
-      const ids = nonFoldedWinners.map((w: any) => w.id as string);
+      const ids = nonFoldedWinners.map((w: any) => this.normalizeAddress(w.id as string));
       const shares = splitBigIntEqually(potChips, ids.length);
       for (let i = 0; i < ids.length; i++) {
         const id = ids[i];
