@@ -821,7 +821,7 @@ export class PokerGameService {
         `SELECT player_address FROM poker_hand_actions WHERE hand_id = $1 AND action = 'fold'`,
         [handId]
       );
-      const foldedSet = new Set(foldResult.rows.map((r: any) => r.player_address));
+      const foldedSet = new Set(foldResult.rows.map((r: any) => this.normalizeAddress(r.player_address)));
 
       // Use live table for position flags if available, otherwise use DB
       let dealerPos = buttonPosition;
@@ -937,7 +937,7 @@ export class PokerGameService {
         seat.isSmallBlind = pos === sbPos;
         seat.isBigBlind = pos === bbPos;
         seat.isActing = actingPosition === pos;
-        seat.folded = foldedSet.has(seat.playerAddress);
+        seat.folded = foldedSet.has(this.normalizeAddress(seat.playerAddress));
         // Live bet override if not done above
         if (liveTable) {
           const livePlayer = liveTable.players[pos];
@@ -984,7 +984,7 @@ export class PokerGameService {
         const showdownHands: Record<string, number[]> = {};
         for (const row of allHoleResult.rows) {
           const cards = Array.isArray(row.cards) ? row.cards : JSON.parse(row.cards ?? '[]');
-          showdownHands[row.player_address] = cards;
+          showdownHands[this.normalizeAddress(row.player_address)] = cards;
         }
         currentHand.showdownHands = showdownHands;
 
@@ -992,12 +992,21 @@ export class PokerGameService {
           try {
             const parsed = typeof h.result === 'string' ? JSON.parse(h.result) : h.result;
             if (parsed?.winners?.length) {
-              currentHand.winners = parsed.winners.map((w: any) => ({
-                address: (w.address || '').toLowerCase(),
-                amount: String(w.amount ?? '0'),
-                handName: w.handName,
-                winningCardIndices: Array.isArray(w.winningCardIndices) ? w.winningCardIndices : undefined,
-              }));
+              const seatedAddresses = new Set(
+                seats
+                  .filter((seat) => !!seat.playerAddress)
+                  .map((seat) => this.normalizeAddress(seat.playerAddress as string))
+              );
+              currentHand.winners = parsed.winners
+                .map((w: any) => ({
+                  address: this.normalizeAddress(w.address || ''),
+                  amount: String(w.amount ?? '0'),
+                  handName: w.handName,
+                  winningCardIndices: Array.isArray(w.winningCardIndices) ? w.winningCardIndices : undefined,
+                }))
+                .filter((winner: any) => !!winner.address)
+                .filter((winner: any) => seatedAddresses.has(winner.address))
+                .filter((winner: any) => !foldedSet.has(winner.address));
             }
           } catch {
             // ignore
@@ -1422,26 +1431,15 @@ export class PokerGameService {
     const scaling = await this.getTableScaling(tableId);
     const chipWei = scaling.chipWei;
     const resultWinners: { address: string; amount: string; handName?: string; winningCardIndices?: number[] }[] = [];
-    const foldedResult = await pool.query(
-      `SELECT DISTINCT player_address FROM poker_hand_actions
-       WHERE hand_id = $1 AND action = 'fold'`,
-      [handId]
-    );
-    const foldedByAction = new Set<string>(
-      foldedResult.rows.map((r: any) => this.normalizeAddress(r.player_address))
-    );
 
     // Integer chip split per pot (no float drift), then convert to wei for cash.
     const winnerChips = new Map<string, bigint>();
     for (const pot of table.pots) {
       if (!pot.winners || pot.winners.length === 0) continue;
-      const nonFoldedWinners = pot.winners.filter((w: any) => {
-        const winnerId = this.normalizeAddress(w.id);
-        return !w.folded && !foldedByAction.has(winnerId);
-      });
+      const nonFoldedWinners = pot.winners.filter((w: any) => !w.folded);
       if (nonFoldedWinners.length === 0) continue;
       const potChips = BigInt(Math.max(0, Math.round(pot.amount)));
-      const ids = nonFoldedWinners.map((w: any) => this.normalizeAddress(w.id as string));
+      const ids = nonFoldedWinners.map((w: any) => w.id as string);
       const shares = splitBigIntEqually(potChips, ids.length);
       for (let i = 0; i < ids.length; i++) {
         const id = ids[i];

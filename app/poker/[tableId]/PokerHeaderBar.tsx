@@ -1,6 +1,6 @@
 'use client';
 
-import type React from 'react';
+import React, { useState } from 'react';
 import type { PokerTableState } from '@/lib/websocket-client';
 
 interface PokerHeaderBarProps {
@@ -22,6 +22,10 @@ interface PokerHeaderBarProps {
   setShowStatsModal: React.Dispatch<React.SetStateAction<boolean>>;
   setShowMyStats: React.Dispatch<React.SetStateAction<boolean>>;
   setShowDashboard: React.Dispatch<React.SetStateAction<boolean>>;
+  adminBotsBusy: boolean;
+  adminBotMax: number;
+  onAdminStartBots: (numBots: number) => void;
+  onAdminStopBots: () => void;
   onLeaveClick: () => void;
 }
 
@@ -44,8 +48,21 @@ export function PokerHeaderBar({
   setShowStatsModal,
   setShowMyStats,
   setShowDashboard,
+  adminBotsBusy,
+  adminBotMax,
+  onAdminStartBots,
+  onAdminStopBots,
   onLeaveClick,
 }: PokerHeaderBarProps) {
+  const [botsMenuOpen, setBotsMenuOpen] = useState(false);
+  const [botCountInput, setBotCountInput] = useState('4');
+
+  const parseBotCount = () => {
+    const n = Number(botCountInput);
+    if (!Number.isFinite(n)) return 1;
+    return Math.max(1, Math.min(adminBotMax, Math.floor(n)));
+  };
+
   return (
     <div
       className="grid flex-shrink-0 grid-cols-[auto_1fr_auto] items-center gap-2 px-2 z-30 font-russo-one"
@@ -216,6 +233,75 @@ export function PokerHeaderBar({
                       Poker Dashboard
                     </button>
                   )}
+                </div>
+              </>
+            )}
+          </div>
+        )}
+        {isAdmin && (
+          <div className="relative">
+            <button
+              type="button"
+              onClick={() => {
+                setBotsMenuOpen((o) => !o);
+                setSettingsMenuOpen(false);
+                setStatsMenuOpen(false);
+              }}
+              className="h-9 px-3 rounded-sm text-[11px] font-bold tracking-wide transition-all hover:brightness-125 active:scale-[0.97]"
+              style={{
+                background: 'rgba(255,255,255,0.07)',
+                color: 'rgba(255,255,255,0.75)',
+                border: '1px solid rgba(255,255,255,0.1)',
+                boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.08)',
+              }}
+              aria-expanded={botsMenuOpen}
+              aria-haspopup="true"
+            >
+              Bots
+            </button>
+            {botsMenuOpen && (
+              <>
+                <div className="fixed inset-0 z-40" aria-hidden onClick={() => setBotsMenuOpen(false)} />
+                <div
+                  className="absolute right-0 top-full mt-1 z-50 min-w-[220px] rounded-lg border border-white/10 overflow-hidden p-3"
+                  style={{ background: 'rgba(10,10,10,0.98)', boxShadow: '0 8px 24px rgba(0,0,0,0.5)' }}
+                >
+                  <div className="text-[10px] uppercase tracking-wide mb-1" style={{ color: 'rgba(255,255,255,0.62)' }}>
+                    Bot Count (1-{adminBotMax})
+                  </div>
+                  <input
+                    type="number"
+                    min={1}
+                    max={adminBotMax}
+                    value={botCountInput}
+                    onChange={(e) => setBotCountInput(e.target.value)}
+                    className="w-full rounded-md px-2 py-1.5 text-[12px] mb-2 bg-black/35 border border-white/15 focus:outline-none focus:border-cyan-400/60"
+                    style={{ color: 'rgba(255,255,255,0.92)' }}
+                  />
+                  <button
+                    type="button"
+                    disabled={adminBotsBusy}
+                    onClick={() => {
+                      onAdminStartBots(parseBotCount());
+                      setBotsMenuOpen(false);
+                    }}
+                    className="w-full text-left px-3 py-2 rounded-md text-[11px] font-bold tracking-wide transition-colors hover:bg-white/10 disabled:opacity-60 disabled:cursor-not-allowed"
+                    style={{ color: 'rgba(255,255,255,0.9)', border: '1px solid rgba(255,255,255,0.1)' }}
+                  >
+                    {adminBotsBusy ? 'Starting Bots...' : 'Start Bot Players'}
+                  </button>
+                  <button
+                    type="button"
+                    disabled={adminBotsBusy}
+                    onClick={() => {
+                      onAdminStopBots();
+                      setBotsMenuOpen(false);
+                    }}
+                    className="w-full text-left px-3 py-2 rounded-md text-[11px] font-bold tracking-wide transition-colors hover:bg-white/10 mt-2 disabled:opacity-60 disabled:cursor-not-allowed"
+                    style={{ color: 'rgba(255,255,255,0.9)', border: '1px solid rgba(255,255,255,0.1)' }}
+                  >
+                    Stop Bot Players
+                  </button>
                 </div>
               </>
             )}

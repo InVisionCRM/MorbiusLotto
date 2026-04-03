@@ -44,6 +44,8 @@ const TOP_ADJACENT_SEAT_VERTICAL_NUDGE_PX = -50;
 const TOP_CENTER_SEAT_VERTICAL_NUDGE_PX = -15;
 const RIGHT_ADJACENT_SEAT_HORIZONTAL_NUDGE_PX = -50;
 const LEFT_ADJACENT_SEAT_HORIZONTAL_NUDGE_PX = 50;
+const SHOWDOWN_CARD_PULL_RATIO = 0.18;
+const SHOWDOWN_CARD_PULL_MAX_PX = 70;
 
 // Compute evenly-spaced seat positions around the table oval for any seat count.
 // Seat 0 is always bottom-center (current player); action then moves to the left,
@@ -164,24 +166,14 @@ export function PokerTable({ state, currentPlayerAddress, timeLeft, chatBubbleBy
   const toDisplaySlot = (seatIdx: number) => (mySeatIndex >= 0 ? (seatIdx - mySeatIndex + state.seats.length) % state.seats.length : seatIdx);
   const actingPosition = hand?.actingPosition ?? null;
   const isShowdownWithWinners = hand?.street === 'showdown' && hand?.winners?.length;
-  const winnerCandidates = isShowdownWithWinners
-    ? hand!.winners!.filter((w) => {
-        const seat = state.seats.find((s) => s.playerAddress === w.address);
-        return !seat?.folded;
-      })
-    : [];
   const winnerSeatIndices = isShowdownWithWinners
-    ? ((winnerCandidates.length > 0 ? winnerCandidates : hand!.winners!)
-        .map((w) => state.seats.findIndex((s) => s.playerAddress === w.address))
-        .filter((i) => i >= 0) as number[])
+    ? (hand!.winners!.map((w) => state.seats.findIndex((s) => s.playerAddress === w.address)).filter((i) => i >= 0) as number[])
     : [];
   const winnerDisplaySlots = winnerSeatIndices.map(
     (idx) => (mySeatIndex >= 0 ? (idx - mySeatIndex + state.seats.length) % state.seats.length : idx)
   );
   const firstWinnerAnchor = winnerDisplaySlots.length > 0 ? seatAnchors[winnerDisplaySlots[0]] : null;
-  const firstWinner = isShowdownWithWinners
-    ? ((winnerCandidates.length > 0 ? winnerCandidates[0] : hand!.winners![0]) ?? null)
-    : null;
+  const firstWinner = isShowdownWithWinners ? hand!.winners![0] : null;
   const firstWinnerAddr = firstWinner?.address ?? null;
   const isCurrentPlayerWinner = firstWinnerAddr && currentPlayerAddress && firstWinnerAddr === currentPlayerAddress.toLowerCase();
   const firstWinnerSeat = firstWinnerAddr ? state.seats.find((s) => s.playerAddress === firstWinnerAddr) : null;
@@ -268,6 +260,28 @@ export function PokerTable({ state, currentPlayerAddress, timeLeft, chatBubbleBy
     const inHand = !!hand && seat.playerAddress && !seat.folded;
     const isWinnerSeat = !!firstWinnerAddr && seat.playerAddress === firstWinnerAddr;
     const isHandWinnerSeat = !!seat.playerAddress && isShowdownWithWinners && winnerAddressSet.has(seat.playerAddress.toLowerCase());
+    const seatShowdownCards =
+      hand?.street === 'showdown' &&
+      !!seat.playerAddress &&
+      !seat.folded &&
+      !!hand?.showdownHands?.[seat.playerAddress]?.length;
+    const displaySlot = toDisplaySlot(idx);
+    const anchor = seatAnchors[displaySlot];
+    let showdownCardOffset: { x: number; y: number } | undefined;
+    if (seatShowdownCards && anchor) {
+      const deltaX = (POT_ANCHOR.fx - anchor.fx) * dims.w;
+      const deltaY = (POT_ANCHOR.fy - anchor.fy) * dims.h;
+      const targetX = deltaX * SHOWDOWN_CARD_PULL_RATIO;
+      const targetY = deltaY * SHOWDOWN_CARD_PULL_RATIO;
+      const magnitude = Math.hypot(targetX, targetY);
+      if (magnitude > 0.001) {
+        const cap = Math.min(1, SHOWDOWN_CARD_PULL_MAX_PX / magnitude);
+        showdownCardOffset = { x: targetX * cap, y: targetY * cap };
+      } else {
+        showdownCardOffset = { x: 0, y: 0 };
+      }
+    }
+
     return {
       seat,
       index: idx,
@@ -299,6 +313,7 @@ export function PokerTable({ state, currentPlayerAddress, timeLeft, chatBubbleBy
       onLeaveTable: onLeave,
       onRequestMobileActivity,
       includeActivityInPlayerRadial: hideSeatAvatars,
+      showdownCardOffset,
     };
   };
 

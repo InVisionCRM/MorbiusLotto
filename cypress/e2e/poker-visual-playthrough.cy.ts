@@ -41,6 +41,7 @@ type DemoState = {
 const WEI = 10n ** 18n;
 const toWei = (v: bigint | number) => (BigInt(v) * WEI).toString();
 const addr = (i: number) => `0x${(i + 1).toString(16).padStart(40, "0")}`;
+const SHOWDOWN_FOLDED_POSITIONS = [2, 4, 8];
 
 function buildBaseSeats(dealerPos: number): DemoSeat[] {
   return Array.from({ length: 10 }, (_, i) => ({
@@ -55,6 +56,21 @@ function buildBaseSeats(dealerPos: number): DemoSeat[] {
     folded: false,
     currentBet: toWei(0),
   }));
+}
+
+function buildShowdownHands(communityCards: number[]): Record<string, number[]> {
+  const blocked = new Set<number>(communityCards);
+  const available: number[] = [];
+  for (let c = 0; c < 52; c += 1) {
+    if (!blocked.has(c)) available.push(c);
+  }
+  const showdownHands: Record<string, number[]> = {};
+  for (let i = 0; i < 10; i += 1) {
+    const first = available[i * 2];
+    const second = available[(i * 2) + 1];
+    showdownHands[addr(i).toLowerCase()] = [first, second];
+  }
+  return showdownHands;
 }
 
 function stateFor(args: {
@@ -316,19 +332,21 @@ describe("Poker visual playthrough", () => {
         cy.wait(stepDelay);
       });
 
-      const showdownHands: Record<string, number[]> = {};
-      for (let i = 0; i < 10; i += 1) showdownHands[addr(i).toLowerCase()] = [i, i + 13];
-
-      const winnerPos = (3 + handNo) % 10;
+      const showdownCommunity = [0, 13, 26, 39, 12];
+      const showdownHands = buildShowdownHands(showdownCommunity);
+      const activeWinnerPositions = Array.from({ length: 10 }, (_, i) => i).filter(
+        (position) => !SHOWDOWN_FOLDED_POSITIONS.includes(position)
+      );
+      const winnerPos = activeWinnerPositions[handNo % activeWinnerPositions.length];
       const showdown = stateFor({
         handId,
         dealerPos,
         street: "showdown",
         pot: 3000,
-        communityCards: [0, 13, 26, 39, 12],
+        communityCards: showdownCommunity,
         actingPosition: null,
         lastAction: { position: 0, action: "call", amount: 400 },
-        folded: [2, 4, 8],
+        folded: SHOWDOWN_FOLDED_POSITIONS,
         bets: {},
         showdownHands,
         winners: [{ address: addr(winnerPos), amount: 3000, handName: "Two pair" }],

@@ -1,8 +1,6 @@
 /**
  * Texas Hold'em hand evaluation for 5-7 cards.
- * Card indices 0-51 follow app-wide encoding:
- *   rankIndex = idx % 13 where 0..12 => 2,3,4,5,6,7,8,9,T,J,Q,K,A
- *   suitIndex = floor(idx / 13)
+ * Card indices 0-51: rank = (idx % 13) + 1 (A=1, K=13), suit = floor(idx/13).
  */
 
 export const enum HandRank {
@@ -18,9 +16,7 @@ export const enum HandRank {
 }
 
 function rankOf(cardIndex: number): number {
-  const rankIndex = cardIndex % 13;
-  // 0..11 => 2..13, 12 => 14 (Ace high)
-  return rankIndex === 12 ? 14 : rankIndex + 2;
+  return (cardIndex % 13) + 1;
 }
 
 function suitOf(cardIndex: number): number {
@@ -29,7 +25,10 @@ function suitOf(cardIndex: number): number {
 
 /** Rank 1 (Ace) can be 1 or 14 for straights */
 function rankValues(cardIndices: number[]): number[] {
-  return cardIndices.map((c) => rankOf(c));
+  return cardIndices.map((c) => {
+    const r = rankOf(c);
+    return r === 1 ? 14 : r;
+  });
 }
 
 /** All 5-card combinations from 7 cards (C(7,5) = 21) */

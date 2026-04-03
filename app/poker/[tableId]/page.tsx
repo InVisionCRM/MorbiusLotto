@@ -57,6 +57,8 @@ export default function PokerTablePage() {
   const [opponentProfileAddress, setOpponentProfileAddress] = useState<string | null>(null);
   const isAdmin = isAdminWallet(address);
   const [tipAnimating, setTipAnimating] = useState(false);
+  const [adminBotsBusy, setAdminBotsBusy] = useState(false);
+  const adminBotMax = 10;
   /** Bumped to open Activity drawer from seat radial on mobile. */
   const [activityMobileOpenSerial, setActivityMobileOpenSerial] = useState(0);
 
@@ -301,6 +303,56 @@ export default function PokerTablePage() {
     }
   }, [wsClient, playClick, fetchLatestState]);
 
+  const onAdminStartBots = useCallback(async (numBots: number) => {
+    if (!isAdmin || !address || !tableId) return;
+    const clampedBots = Math.max(1, Math.min(adminBotMax, Math.floor(numBots || 1)));
+    setAdminBotsBusy(true);
+    try {
+      const res = await fetch('/api/admin/poker/bots/bootstrap', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-admin-wallet': address,
+        },
+        body: JSON.stringify({ tableId, numBots: clampedBots }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        throw new Error((data?.error as string) || 'Failed to start bot players');
+      }
+      const botCount = typeof data?.numBots === 'number' ? data.numBots : null;
+      toast.success(botCount ? `Started ${botCount} bot player(s)` : 'Started bot players');
+    } catch (err) {
+      toast.error((err as Error).message || 'Failed to start bot players');
+    } finally {
+      setAdminBotsBusy(false);
+    }
+  }, [isAdmin, address, tableId, adminBotMax]);
+
+  const onAdminStopBots = useCallback(async () => {
+    if (!isAdmin || !address || !tableId) return;
+    setAdminBotsBusy(true);
+    try {
+      const res = await fetch('/api/admin/poker/bots/stop', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-admin-wallet': address,
+        },
+        body: JSON.stringify({ tableId }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        throw new Error((data?.error as string) || 'Failed to stop bot players');
+      }
+      toast.success('Stopped bot players');
+    } catch (err) {
+      toast.error((err as Error).message || 'Failed to stop bot players');
+    } finally {
+      setAdminBotsBusy(false);
+    }
+  }, [isAdmin, address, tableId]);
+
   return (
     <PokerThemeProvider themeId={pokerTheme}>
       <PokerTableEffectProvider>
@@ -336,6 +388,10 @@ export default function PokerTablePage() {
             setShowStatsModal={setShowStatsModal}
             setShowMyStats={setShowMyStats}
             setShowDashboard={setShowDashboard}
+            adminBotsBusy={adminBotsBusy}
+            adminBotMax={adminBotMax}
+            onAdminStartBots={onAdminStartBots}
+            onAdminStopBots={onAdminStopBots}
             onLeaveClick={handleLeaveClick}
           />
 

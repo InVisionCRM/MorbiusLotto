@@ -257,11 +257,13 @@ export interface PokerSeatProps {
   onRequestMobileActivity?: () => void;
   /** Show Activity wedge in player radial (typically true when `hideSeatAvatar`). */
   includeActivityInPlayerRadial?: boolean;
+  /** During showdown, nudge visible cards toward table center. */
+  showdownCardOffset?: { x: number; y: number };
 }
 
 const CHAT_BUBBLE_MAX_LENGTH = 80;
 
-export function PokerSeat({ seat, index, holeCards, isCurrentPlayer, showCardBacks, winningCardIndices, isHandWinner = false, lastAction, timeLeft, maxTime = 30, chatBubble, onReUpClick, onMenuClick, overlayPhrase: propsOverlayPhrase, overlayEmotion: propsOverlayEmotion, onPhraseReaction, onAnimationReaction, onOpponentClick, onOpponentRadialAction, quickChatPhrases: propsQuickChatPhrases, setQuickChatPhrases: propsSetQuickChatPhrases, onOpenEditQuickChat, hideSeatAvatar = false, onLeaveTable, onRequestMobileActivity, includeActivityInPlayerRadial = false }: PokerSeatProps) {
+export function PokerSeat({ seat, index, holeCards, isCurrentPlayer, showCardBacks, winningCardIndices, isHandWinner = false, lastAction, timeLeft, maxTime = 30, chatBubble, onReUpClick, onMenuClick, overlayPhrase: propsOverlayPhrase, overlayEmotion: propsOverlayEmotion, onPhraseReaction, onAnimationReaction, onOpponentClick, onOpponentRadialAction, quickChatPhrases: propsQuickChatPhrases, setQuickChatPhrases: propsSetQuickChatPhrases, onOpenEditQuickChat, hideSeatAvatar = false, onLeaveTable, onRequestMobileActivity, includeActivityInPlayerRadial = false, showdownCardOffset }: PokerSeatProps) {
   const empty = !seat.playerAddress;
   const showMyCards = !!(holeCards && holeCards.length > 0);
   const showBacks   = !!(showCardBacks && !showMyCards && !empty && !seat.folded);
@@ -581,9 +583,14 @@ export function PokerSeat({ seat, index, holeCards, isCurrentPlayer, showCardBac
 
       {/* ── Cards — peek out from behind avatar ── */}
       {hasCards && (
-        <div
+        <motion.div
           data-testid={`poker-seat-cards-${index}`}
           className="relative flex-shrink-0"
+          animate={{
+            x: showdownCardOffset?.x ?? 0,
+            y: showdownCardOffset?.y ?? 0,
+          }}
+          transition={{ type: 'spring', stiffness: 180, damping: 22 }}
           style={{
             width: showMyCards ? 'clamp(84px, 20vw, 110px)' : 'clamp(58px, 14vw, 74px)',
             height: showMyCards ? 'clamp(72px, 18vw, 96px)' : 'clamp(50px, 12vw, 66px)',
@@ -627,7 +634,7 @@ export function PokerSeat({ seat, index, holeCards, isCurrentPlayer, showCardBac
               aria-hidden
             />
           )}
-        </div>
+        </motion.div>
       )}
 
       {/* ── Avatar (desktop) or compact timer + roles (narrow) ── */}

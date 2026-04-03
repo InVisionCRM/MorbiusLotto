@@ -1,14 +1,14 @@
 /**
  * Poker Bot Script
  *
- * Spawns 1-5 AI bot opponents that join a poker table and play automatically.
+ * Spawns 1-10 AI bot opponents that join a poker table and play automatically.
  * Bots use a simple strategy: tight-aggressive preflop, semi-random postflop.
  *
  * Usage (from server/ directory):
  *   npx ts-node src/scripts/poker-bot.ts [tableId] [numBots]
  *
  * If tableId is omitted, the script lists tables and uses the first with empty seats,
- * or creates a new table. numBots is 1-5 (default 2).
+ * or creates a new table. numBots is 1-10 (default 2).
  *
  * Or via npm script:
  *   npm run poker:bot -- [tableId] [numBots]
@@ -17,6 +17,8 @@
  *   NEXT_PUBLIC_WEBSOCKET_URL or WS_URL - WebSocket URL
  *   DATABASE_URL - PostgreSQL connection string (to give bots balance)
  *   POKER_BOT_BUY_IN - Buy-in amount in human chips (default: 1000)
+ *   POKER_BOT_ADDRESSES - Comma-separated bot wallet addresses (preferred in production)
+ *   CYPRESS_POKER_TEST_PLAYERS / POKER_TEST_PLAYERS - fallback wallet list
  */
 
 import path from 'path';
@@ -28,6 +30,7 @@ dotenv.config();
 
 import WebSocket from 'ws';
 import { Pool } from 'pg';
+import { randomPlaceholderConfig } from '../lib/cosmetics-catalog';
 
 // --------------- Config ---------------
 
@@ -38,14 +41,52 @@ const WS_URL =
 
 const DATABASE_URL = process.env.DATABASE_URL;
 
-// Must be 42 chars (0x + 40 hex) to fit players.wallet_address VARCHAR(42)
-const BOT_ADDRESSES = [
-  '0xB07000000000000000000000000000000000de01',
-  '0xB07000000000000000000000000000000000de02',
-  '0xB07000000000000000000000000000000000de03',
-  '0xB07000000000000000000000000000000000de04',
-  '0xB07000000000000000000000000000000000de05',
+const ADDRESS_RE = /^0x[a-fA-F0-9]{40}$/;
+const MAX_BOTS = 10;
+
+// Default list mirrors Cypress poker real-backend players.
+const CYPRESS_DEFAULT_ADDRESSES = [
+  '0x2775dd8242c4f589536113475b7c80f42ab4a70a',
+  '0x70444750eedf1b2c9b777cbf096a5919a14895e5',
+  '0xEdEe8515897281CcF27999a121A90d76E3Cde016',
+  '0x41682815B05fE6b54a6C0f8813bB99423EE0309D',
+  '0x031E727436173278B92Dad7405fc94FBfc4A18a6',
+  '0x33cedDc21b78414b1a59ba70Ede0B27761FfA556',
+  '0x1b9894ddEf9c19b9a971FBE9fba85135B9348Db0',
+  '0x2D6f6a61cFDc7C7d000C9279bD7a743D277736bB',
+  '0x7aC342321a814c66A0cc38E997DBEC46b8dE8372',
+  '0xaA899ca4658C17B9fFa52490219540c9d49AA86f',
+  '0x8f6Dc8FD8A5115fdec3CCbE36BE6cf9B28635F2e',
+  '0xAfd3Cc199167B396be71911637fcb30bAF22cC67',
 ];
+
+function parseAddressCsv(input?: string): string[] {
+  if (!input) return [];
+  return [...new Set(
+    input
+      .split(',')
+      .map((a) => a.trim())
+      .filter(Boolean)
+      .filter((a) => ADDRESS_RE.test(a))
+      .map((a) => a.toLowerCase())
+  )];
+}
+
+function getBotAddresses(): string[] {
+  const envPreferred = parseAddressCsv(process.env.POKER_BOT_ADDRESSES);
+  if (envPreferred.length > 0) {
+    return envPreferred;
+  }
+  const cypressFallback = parseAddressCsv(process.env.CYPRESS_POKER_TEST_PLAYERS);
+  const genericFallback = parseAddressCsv(process.env.POKER_TEST_PLAYERS);
+  const fallback = cypressFallback.length > 0 ? cypressFallback : genericFallback;
+  if (fallback.length > 0) {
+    return fallback;
+  }
+  return CYPRESS_DEFAULT_ADDRESSES.map((a) => a.toLowerCase());
+}
+
+const BOT_ADDRESSES = getBotAddresses();
 
 const BUY_IN_HUMAN = process.env.POKER_BOT_BUY_IN || '1000';
 // Convert human-readable chips to wei (1 chip = 1e18 wei)
@@ -331,6 +372,20 @@ async function ensureBotBalance(addresses: string[], amount: bigint): Promise<vo
          DO UPDATE SET balance = GREATEST(players.balance, $2::NUMERIC), last_seen = NOW()`,
         [normalized, amount.toString()]
       );
+
+      // Give bot a random placeholder avatar if it has no avatar_config yet.
+      // This keeps bot seats visually distinct in production without overriding real profiles.
+      const avatarConfig = randomPlaceholderConfig(new Set());
+      await pool.query(
+        `INSERT INTO chat_display_names (wallet_address, display_name, profile_image_url, avatar_config, bio, x_handle, tg_handle)
+         VALUES ($1, NULL, NULL, $2::jsonb, NULL, NULL, NULL)
+         ON CONFLICT (wallet_address)
+         DO UPDATE SET
+           avatar_config = COALESCE(chat_display_names.avatar_config, EXCLUDED.avatar_config),
+           updated_at = NOW()`,
+        [normalized, JSON.stringify(avatarConfig)]
+      );
+
       console.log(`[Bot] Ensured balance for ${normalized}: ${amount.toString()} wei`);
     }
   } finally {
@@ -352,6 +407,9 @@ interface TableSummary {
 
 /** Connect with one bot, list tables (or create one), return tableId, then disconnect. */
 async function discoverOrCreateTable(): Promise<string> {
+  if (BOT_ADDRESSES.length === 0) {
+    throw new Error('No valid bot addresses configured. Set POKER_BOT_ADDRESSES.');
+  }
   const scoutAddr = BOT_ADDRESSES[0];
   const ws = await createWsClient(scoutAddr);
   await waitForAuth(ws);
@@ -508,10 +566,13 @@ async function runBot(address: string, tableId: string): Promise<void> {
 // --------------- Entry point ---------------
 
 async function main() {
+  if (BOT_ADDRESSES.length === 0) {
+    throw new Error('No valid bot addresses configured. Set POKER_BOT_ADDRESSES.');
+  }
   const a = process.argv[2];
   const b = process.argv[3];
   const numBotsFromArg = (n: string | undefined) =>
-    Math.min(5, Math.max(1, Number(n) || 2));
+    Math.min(MAX_BOTS, BOT_ADDRESSES.length, Math.max(1, Number(n) || 2));
 
   let tableId: string;
   let numBots: number;
@@ -535,6 +596,7 @@ async function main() {
   console.log(`\n=== Poker Bot Launcher ===`);
   console.log(`Table: ${tableId}`);
   console.log(`Bots: ${numBots}`);
+  console.log(`Address pool: ${BOT_ADDRESSES.length} configured`);
   console.log(`Buy-in: ${BUY_IN_HUMAN} chips (${BUY_IN_WEI.toString()} wei)`);
   console.log(`WS URL: ${WS_URL}\n`);
 
