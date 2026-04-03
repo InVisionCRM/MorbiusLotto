@@ -92,19 +92,21 @@ export function PokerPopups({
 }: PokerPopupsProps) {
   return (
     <>
-      <PokerDepositModal
-        isOpen={showDepositModal}
-        onClose={() => setShowDepositModal(false)}
-        defaultTab={depositModalTab}
-        balanceLabel="Poker Balance"
-        wsClient={mySeat ? wsClient : undefined}
-        tableId={mySeat ? tableId : undefined}
-        currentStack={mySeat?.stack}
-        onReupSuccess={(s) => {
-          if (s) setState(s);
-        }}
-        enablePokerReup={canReup}
-      />
+      {showDepositModal && (
+        <PokerDepositModal
+          isOpen={showDepositModal}
+          onClose={() => setShowDepositModal(false)}
+          defaultTab={depositModalTab}
+          balanceLabel="Poker Balance"
+          wsClient={mySeat ? wsClient : undefined}
+          tableId={mySeat ? tableId : undefined}
+          currentStack={mySeat?.stack}
+          onReupSuccess={(s) => {
+            if (s) setState(s);
+          }}
+          enablePokerReup={canReup}
+        />
+      )}
       <PokerStatsModal
         isOpen={showStatsModal}
         onClose={() => setShowStatsModal(false)}

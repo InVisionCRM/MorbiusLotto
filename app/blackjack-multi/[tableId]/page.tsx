@@ -38,7 +38,6 @@ import { BLACKJACK_IMAGE_BACKGROUNDS, SOUNDS_BETTING_OPEN, SOUNDS_BETTING_CLOSED
 import { useAudio, AudioManager } from '@/hooks/use-audio';
 import { usePlayerStatsEnhanced } from '@/hooks/use-blackjack-stats';
 import { useBlackjackTables } from '@/hooks/use-blackjack-tables';
-import { useBlackjackDealerReveal } from '@/hooks/use-blackjack-dealer-reveal';
 import { useBlackjackRevealCompletion } from '@/hooks/use-blackjack-reveal-completion';
 import { toast } from 'sonner';
 import { BLACKJACK_FACTS } from '@/app/blackjack-multi/blackjack-facts';
@@ -47,6 +46,9 @@ import { BlackjackMultiBetaSplash } from '@/components/BLACKJACK/BlackjackMultiB
 /** Must match server BJ_MULTI_AFK_KICK_AFTER — shown in seat UI */
 const AFK_TIMEOUTS_BEFORE_KICK = 3;
 const RESULT_HOLD_MS = 2200;
+const DEALER_HOLE_REVEAL_DELAY_MS = 1000;
+const DEALER_PER_CARD_REVEAL_DELAY_MS = 2000;
+const DEALER_POST_REVEAL_DELAY_MS = 1500;
 const WEI_PER_MORBIUS = 10n ** 18n;
 const MAX_SAFE_BIGINT = BigInt(Number.MAX_SAFE_INTEGER);
 const MULTI_INFO_PANEL_VIEWPORT_HEIGHT_CLASS = DEFAULT_INFO_PANEL_VIEWPORT_HEIGHT_CLASS;
@@ -163,7 +165,13 @@ export default function BlackjackMultiTablePage() {
     const now = Date.now();
     const prevVisual = visualStateRef.current;
     if (next.phase === 'completed') {
-      visualHoldUntilRef.current = now + RESULT_HOLD_MS;
+      const dealerCardCount = next.dealerCards?.length ?? 0;
+      const revealWindowMs = dealerCardCount <= 2
+        ? DEALER_HOLE_REVEAL_DELAY_MS + DEALER_POST_REVEAL_DELAY_MS
+        : DEALER_HOLE_REVEAL_DELAY_MS
+          + (dealerCardCount - 2) * DEALER_PER_CARD_REVEAL_DELAY_MS
+          + DEALER_POST_REVEAL_DELAY_MS;
+      visualHoldUntilRef.current = now + Math.max(RESULT_HOLD_MS, revealWindowMs);
     }
     const shouldHoldCompleted =
       prevVisual?.phase === 'completed' &&
@@ -333,8 +341,14 @@ export default function BlackjackMultiTablePage() {
     payout: bigint;
   };
   const pendingDealerOutcomeRef = useRef<PendingDealerOutcome | null>(null);
+  const lastOutcomeAnnouncementAtRef = useRef(0);
 
   const [showSeatOutcomeLabels, setShowSeatOutcomeLabels] = useState(false);
+  const [visibleDealerCards, setVisibleDealerCards] = useState(0);
+  const [isDealerRevealing, setIsDealerRevealing] = useState(false);
+  const dealerRevealTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const prevDealerPhaseRef = useRef<BJMultiTableState['phase'] | null>(null);
+  const prevDealerCardCountRef = useRef(0);
 
   // Platform balance (for display under avatar when seated)
   const [playerBalance, setPlayerBalance] = useState<bigint>(0n);
@@ -362,6 +376,10 @@ export default function BlackjackMultiTablePage() {
     pendingDealerOutcomeRef.current = null;
     // Unlock seat WON/LOST labels exactly when outcome voice starts.
     setShowSeatOutcomeLabels(true);
+    const shouldPlayOutcomeVoice = pending.kind !== 'silent';
+    if (shouldPlayOutcomeVoice) {
+      lastOutcomeAnnouncementAtRef.current = Date.now();
+    }
     if (soundEnabled) {
       switch (pending.kind) {
         case 'player_blackjack':
@@ -415,7 +433,15 @@ export default function BlackjackMultiTablePage() {
 
     // ── Betting opens: announce + schedule a random dealer phrase ──
     if (prevPhase !== 'betting' && phaseState.phase === 'betting') {
-      playDealerVoice(pickRandom(SOUNDS_BETTING_OPEN));
+      const pendingOutcome = pendingDealerOutcomeRef.current;
+      const recentlyAnnouncedOutcome = Date.now() - lastOutcomeAnnouncementAtRef.current < 6000;
+      // Avoid overlapping winner voice and betting-open voice in the same transition.
+      const shouldSuppressBettingOpenVoice =
+        (pendingOutcome && pendingOutcome.kind !== 'silent') || recentlyAnnouncedOutcome;
+
+      if (!shouldSuppressBettingOpenVoice) {
+        playDealerVoice(pickRandom(SOUNDS_BETTING_OPEN));
+      }
       // Clear any lingering phrase timer
       if (dealerPhraseTimerRef.current) clearTimeout(dealerPhraseTimerRef.current);
       // Play a random dealer phrase only every 5th hand (quieter table pacing).
@@ -534,51 +560,125 @@ export default function BlackjackMultiTablePage() {
    
   }, [state?.seats]);
 
-  const visibleDealerCards = useBlackjackDealerReveal({
-    totalCards: tableViewState?.dealerCards?.length ?? 0,
-    phase: tableViewState?.phase ?? 'waiting',
-    playingPhase: 'playing',
-    revealPhases: ['dealer_turn', 'completed'],
-    holeCardDelayMs: 800,
-    perCardDelayMs: 1200,
-    onRevealCard: () => playSound('/BlackJack/sounds/cards.wav'),
-  });
+  // Match single-player sequencing: reveal hole card, then extra dealer hits one-by-one.
+  useEffect(() => {
+    const phase = tableViewState?.phase ?? 'waiting';
+    const totalCards = tableViewState?.dealerCards?.length ?? 0;
+    const prevPhase = prevDealerPhaseRef.current;
+    const prevCount = prevDealerCardCountRef.current;
+    const inRevealWindow = phase === 'dealer_turn' || phase === 'completed';
+    const enteredCompleted = phase === 'completed' && prevPhase !== 'completed';
+    const dealerCardsIncreased = inRevealWindow && totalCards > prevCount;
+    const shouldStartReveal =
+      (enteredCompleted || dealerCardsIncreased) &&
+      !isDealerRevealing &&
+      visibleDealerCards < totalCards;
+
+    if (totalCards === 0) {
+      if (dealerRevealTimeoutRef.current) {
+        clearTimeout(dealerRevealTimeoutRef.current);
+        dealerRevealTimeoutRef.current = null;
+      }
+      if (isDealerRevealing) setIsDealerRevealing(false);
+      if (visibleDealerCards !== 0) setVisibleDealerCards(0);
+      prevDealerPhaseRef.current = phase;
+      prevDealerCardCountRef.current = 0;
+      return;
+    }
+
+    if (!inRevealWindow) {
+      if (dealerRevealTimeoutRef.current) {
+        clearTimeout(dealerRevealTimeoutRef.current);
+        dealerRevealTimeoutRef.current = null;
+      }
+      if (isDealerRevealing) setIsDealerRevealing(false);
+      if (visibleDealerCards !== totalCards) setVisibleDealerCards(totalCards);
+      prevDealerPhaseRef.current = phase;
+      prevDealerCardCountRef.current = totalCards;
+      return;
+    }
+
+    if (shouldStartReveal) {
+      if (dealerRevealTimeoutRef.current) {
+        clearTimeout(dealerRevealTimeoutRef.current);
+        dealerRevealTimeoutRef.current = null;
+      }
+      setIsDealerRevealing(true);
+
+      if (totalCards > 2) {
+        dealerRevealTimeoutRef.current = setTimeout(() => {
+          setVisibleDealerCards(2);
+          playSound('/BlackJack/sounds/cards.wav');
+
+          let cardIndex = 2;
+          const revealNextCard = () => {
+            if (cardIndex < totalCards) {
+              cardIndex += 1;
+              setVisibleDealerCards(cardIndex);
+              playSound('/BlackJack/sounds/cards.wav');
+              dealerRevealTimeoutRef.current = setTimeout(revealNextCard, DEALER_PER_CARD_REVEAL_DELAY_MS);
+              return;
+            }
+            dealerRevealTimeoutRef.current = setTimeout(() => {
+              setIsDealerRevealing(false);
+            }, DEALER_POST_REVEAL_DELAY_MS);
+          };
+
+          dealerRevealTimeoutRef.current = setTimeout(revealNextCard, DEALER_PER_CARD_REVEAL_DELAY_MS);
+        }, DEALER_HOLE_REVEAL_DELAY_MS);
+      } else {
+        dealerRevealTimeoutRef.current = setTimeout(() => {
+          setVisibleDealerCards(totalCards);
+          playSound('/BlackJack/sounds/cards.wav');
+          dealerRevealTimeoutRef.current = setTimeout(() => {
+            setIsDealerRevealing(false);
+          }, DEALER_POST_REVEAL_DELAY_MS);
+        }, DEALER_HOLE_REVEAL_DELAY_MS);
+      }
+    } else if (!isDealerRevealing && visibleDealerCards !== totalCards) {
+      setVisibleDealerCards(totalCards);
+    }
+
+    prevDealerPhaseRef.current = phase;
+    prevDealerCardCountRef.current = totalCards;
+  }, [
+    tableViewState?.phase,
+    tableViewState?.dealerCards?.length,
+    isDealerRevealing,
+    visibleDealerCards,
+    playSound,
+  ]);
 
   // After dealer cards are fully revealed, schedule outcome flush (shared reveal-completion contract).
   useEffect(() => {
     if (tableViewState?.phase !== 'completed') {
       resetDealerRevealComplete();
-      return;
     }
+  }, [tableViewState?.phase, resetDealerRevealComplete]);
+
+  useEffect(() => {
     if (!pendingDealerOutcomeRef.current) return;
     const total = tableViewState.dealerCards?.length ?? 0;
     if (total === 0) {
       scheduleDealerRevealComplete(0);
       return;
     }
-    if (visibleDealerCards >= total) {
+    if (!isDealerRevealing && visibleDealerCards >= total) {
       scheduleDealerRevealComplete(0);
     }
   }, [
-    tableViewState?.phase,
     tableViewState?.dealerCards?.length,
     visibleDealerCards,
+    isDealerRevealing,
     scheduleDealerRevealComplete,
-    resetDealerRevealComplete,
   ]);
-
-  // Safety: if the table advances before reveal animation finishes, still announce outcome
-  useEffect(() => {
-    if (tableViewState?.phase !== 'betting' && tableViewState?.phase !== 'waiting') return;
-    if (!pendingDealerOutcomeRef.current) return;
-    flushPendingDealerOutcome();
-  }, [tableViewState?.phase, flushPendingDealerOutcome]);
 
   // Cleanup timers on unmount
   useEffect(() => {
     return () => {
       if (dealerPhraseTimerRef.current) clearTimeout(dealerPhraseTimerRef.current);
       if (visualHoldTimerRef.current) clearTimeout(visualHoldTimerRef.current);
+      if (dealerRevealTimeoutRef.current) clearTimeout(dealerRevealTimeoutRef.current);
       if (dealerVoiceRef.current) { try { dealerVoiceRef.current.source.stop(); } catch {} }
     };
   }, []);
