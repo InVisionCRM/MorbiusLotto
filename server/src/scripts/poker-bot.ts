@@ -122,14 +122,45 @@ function parseMessage(data: WebSocket.Data): Record<string, unknown> {
   throw new Error('Invalid JSON: expected object');
 }
 
+function formatError(err: unknown): string {
+  if (err instanceof Error && err.message) return err.message;
+  if (typeof err === 'string' && err.trim()) return err;
+  try {
+    const raw = JSON.stringify(err);
+    if (raw && raw !== '{}') return raw;
+  } catch {
+    // ignore
+  }
+  return String(err || 'Unknown error');
+}
+
 function createWsClient(address: string): Promise<WebSocket> {
   const url = WS_URL.replace(/^https/, 'wss').replace(/^http/, 'ws');
   const withAuth = `${url}${url.includes('?') ? '&' : '?'}address=${address.toLowerCase()}`;
   return new Promise((resolve, reject) => {
     const ws = new WebSocket(withAuth);
-    const timeout = setTimeout(() => { ws.close(); reject(new Error('WS connect timeout')); }, 15000);
-    ws.on('open', () => { clearTimeout(timeout); resolve(ws); });
-    ws.on('error', (err) => { clearTimeout(timeout); reject(err); });
+    const timeout = setTimeout(() => {
+      ws.close();
+      reject(new Error('WS connect timeout'));
+    }, 15000);
+    const cleanup = () => {
+      clearTimeout(timeout);
+      ws.removeAllListeners('open');
+      ws.removeAllListeners('error');
+      ws.removeAllListeners('close');
+    };
+    ws.on('open', () => {
+      cleanup();
+      resolve(ws);
+    });
+    ws.on('error', (err) => {
+      cleanup();
+      reject(new Error(`WS connect error: ${formatError(err)}`));
+    });
+    ws.on('close', (code, reason) => {
+      cleanup();
+      reject(new Error(`WS closed before open (code=${code}, reason=${reason.toString('utf8') || 'n/a'})`));
+    });
   });
 }
 
@@ -141,12 +172,18 @@ function waitForAuth(ws: WebSocket): Promise<void> {
         const msg = parseMessage(data);
         if (
           msg.type === 'auth_success' ||
-          msg.type === 'connection_established' ||
-          (msg.type === 'auth_challenge' && (msg.payload as any)?.claimedAddress)
+          msg.type === 'connection_established'
         ) {
           clearTimeout(timeout);
           ws.removeListener('message', handler);
           resolve();
+        }
+        if (msg.type === 'auth_challenge' && (msg.payload as any)?.claimedAddress) {
+          clearTimeout(timeout);
+          ws.removeListener('message', handler);
+          reject(new Error(
+            'Server requires signed WebSocket auth challenge. Bots cannot sign. Set DISABLE_WS_AUTH=true on server for local bot testing.'
+          ));
         }
         if (msg.type === 'error') {
           clearTimeout(timeout);
@@ -375,15 +412,17 @@ async function ensureBotBalance(addresses: string[], amount: bigint): Promise<vo
 
       // Give bot a random placeholder avatar if it has no avatar_config yet.
       // This keeps bot seats visually distinct in production without overriding real profiles.
+      const fallbackDisplayName = `Bot ${normalized.slice(2, 6)}${normalized.slice(-2)}`.toUpperCase();
       const avatarConfig = randomPlaceholderConfig(new Set());
       await pool.query(
         `INSERT INTO chat_display_names (wallet_address, display_name, profile_image_url, avatar_config, bio, x_handle, tg_handle)
-         VALUES ($1, NULL, NULL, $2::jsonb, NULL, NULL, NULL)
+         VALUES ($1, $2, NULL, $3::jsonb, NULL, NULL, NULL)
          ON CONFLICT (wallet_address)
          DO UPDATE SET
+           display_name = COALESCE(chat_display_names.display_name, EXCLUDED.display_name),
            avatar_config = COALESCE(chat_display_names.avatar_config, EXCLUDED.avatar_config),
            updated_at = NOW()`,
-        [normalized, JSON.stringify(avatarConfig)]
+        [normalized, fallbackDisplayName, JSON.stringify(avatarConfig)]
       );
 
       console.log(`[Bot] Ensured balance for ${normalized}: ${amount.toString()} wei`);
@@ -606,7 +645,7 @@ async function main() {
   // Launch all bots concurrently
   const promises = botAddrs.map((addr) =>
     runBot(addr, tableId).catch((err) => {
-      console.error(`[Bot ${addr.slice(0, 8)}] Fatal: ${err.message}`);
+      console.error(`[Bot ${addr.slice(0, 8)}] Fatal: ${formatError(err)}`);
     })
   );
 
