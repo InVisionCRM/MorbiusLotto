@@ -1,5 +1,6 @@
 import express from 'express';
 import { createServer } from 'http';
+import { spawn, type ChildProcess } from 'child_process';
 import path from 'path';
 import fs from 'fs';
 import multer from 'multer';
@@ -1878,6 +1879,146 @@ async function initializeServices() {
         res.json({ tournaments: result.rows });
       } catch (error) {
         logger.error('Error fetching poker tournaments:', error);
+        res.status(500).json({ error: 'Internal server error' });
+      }
+    });
+
+    // Admin: poker bot management
+    const pokerBotJobs = new Map<string, { tableId: string; numBots: number; startedAt: string; process: ChildProcess }>();
+    const MAX_ADMIN_BOTS = 10;
+
+    app.post('/api/admin/poker/bots/bootstrap', express.json(), async (req, res) => {
+      try {
+        const tableId = String(req.body?.tableId ?? '').trim();
+        if (!tableId) {
+          res.status(400).json({ error: 'tableId required' });
+          return;
+        }
+
+        const existingJob = pokerBotJobs.get(tableId);
+        if (existingJob && !existingJob.process.killed) {
+          res.status(409).json({
+            error: 'Bots already running for this table',
+            tableId,
+            pid: existingJob.process.pid ?? null,
+            numBots: existingJob.numBots,
+            startedAt: existingJob.startedAt,
+          });
+          return;
+        }
+
+        const tableResult = await dbService.getPool().query(
+          `SELECT pt.max_seats,
+                  COUNT(ps.id) AS seated_count
+           FROM poker_tables pt
+           LEFT JOIN poker_seats ps ON ps.table_id = pt.id
+           WHERE pt.id = $1
+           GROUP BY pt.id`,
+          [tableId],
+        );
+
+        if (tableResult.rows.length === 0) {
+          res.status(404).json({ error: 'Poker table not found' });
+          return;
+        }
+
+        const row = tableResult.rows[0];
+        const maxSeats = Number(row.max_seats ?? 0);
+        const seatedCount = Number(row.seated_count ?? 0);
+        const emptySeats = Math.max(0, maxSeats - seatedCount);
+        if (emptySeats <= 0) {
+          res.status(400).json({ error: 'No empty seats available for bots' });
+          return;
+        }
+
+        const requestedBots = Number(req.body?.numBots);
+        const defaultBots = Math.min(MAX_ADMIN_BOTS, emptySeats);
+        const numBots = Number.isFinite(requestedBots)
+          ? Math.max(1, Math.min(MAX_ADMIN_BOTS, Math.floor(requestedBots), emptySeats))
+          : defaultBots;
+
+        const serverRoot = path.resolve(__dirname, '../..');
+        const proc = spawn('npm', ['run', 'poker:bot', '--', tableId, String(numBots)], {
+          cwd: serverRoot,
+          env: process.env,
+          stdio: ['ignore', 'pipe', 'pipe'],
+        });
+
+        const startedAt = new Date().toISOString();
+        pokerBotJobs.set(tableId, { tableId, numBots, startedAt, process: proc });
+
+        proc.stdout?.on('data', (chunk: Buffer) => {
+          logger.info('[PokerBot]', { tableId, line: chunk.toString().trim() });
+        });
+        proc.stderr?.on('data', (chunk: Buffer) => {
+          logger.warn('[PokerBot]', { tableId, line: chunk.toString().trim() });
+        });
+        proc.on('error', (err) => {
+          logger.error('Poker bot process error', { tableId, err });
+        });
+        proc.on('exit', (code, signal) => {
+          const current = pokerBotJobs.get(tableId);
+          if (current?.process === proc) {
+            pokerBotJobs.delete(tableId);
+          }
+          logger.info('Poker bot process exited', { tableId, code, signal });
+        });
+
+        res.json({ ok: true, tableId, numBots, pid: proc.pid ?? null, startedAt });
+      } catch (error) {
+        logger.error('Error bootstrapping poker bots:', error);
+        res.status(500).json({ error: 'Internal server error' });
+      }
+    });
+
+    app.post('/api/admin/poker/bots/stop', express.json(), async (req, res) => {
+      try {
+        const tableId = String(req.body?.tableId ?? '').trim();
+        if (!tableId) {
+          res.status(400).json({ error: 'tableId required' });
+          return;
+        }
+        const job = pokerBotJobs.get(tableId);
+        if (!job) {
+          res.status(404).json({ error: 'No running bot process for this table' });
+          return;
+        }
+        const stopped = job.process.kill('SIGTERM');
+        pokerBotJobs.delete(tableId);
+        res.json({ ok: true, tableId, stopped, pid: job.process.pid ?? null });
+      } catch (error) {
+        logger.error('Error stopping poker bots:', error);
+        res.status(500).json({ error: 'Internal server error' });
+      }
+    });
+
+    app.get('/api/admin/poker/bots/status', async (req, res) => {
+      try {
+        const tableId = typeof req.query.tableId === 'string' ? req.query.tableId.trim() : '';
+        if (tableId) {
+          const job = pokerBotJobs.get(tableId);
+          if (!job) {
+            res.json({ running: false, tableId });
+            return;
+          }
+          res.json({
+            running: true,
+            tableId,
+            pid: job.process.pid ?? null,
+            numBots: job.numBots,
+            startedAt: job.startedAt,
+          });
+          return;
+        }
+        const jobs = Array.from(pokerBotJobs.values()).map((job) => ({
+          tableId: job.tableId,
+          pid: job.process.pid ?? null,
+          numBots: job.numBots,
+          startedAt: job.startedAt,
+        }));
+        res.json({ running: jobs.length > 0, jobs });
+      } catch (error) {
+        logger.error('Error reading poker bot status:', error);
         res.status(500).json({ error: 'Internal server error' });
       }
     });
