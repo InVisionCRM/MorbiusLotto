@@ -34,6 +34,7 @@ import { EditQuickChatModal } from '@/components/poker/EditQuickChatModal';
 const LONG_PRESS_MS = 500;
 const PHRASE_OVERLAY_DURATION_MS = 2000;
 const LOCAL_EMOTION_DURATION_MS = 3000;
+const FOLD_CRY_EMOTION_DURATION_MS = 5000;
 
 // ── Helpers ────────────────────────────────────────────────────────────────
 
@@ -280,7 +281,6 @@ export function PokerSeat({ seat, index, holeCards, isCurrentPlayer, showCardBac
   const avatarEmotion: Emotion = useMemo(() => {
     if (!lastAction) return 'neutral';
     const a = lastAction.action?.toLowerCase();
-    if (a === 'fold') return 'sad';
     if (a === 'all-in' || a === 'allin') return 'angry';
     return 'neutral';
   }, [lastAction]);
@@ -296,7 +296,10 @@ export function PokerSeat({ seat, index, holeCards, isCurrentPlayer, showCardBac
   const [playerRadialOpen, setPlayerRadialOpen] = useState(false);
   const [playerRadialPage, setPlayerRadialPage] = useState<'main' | 'expressions'>('main');
   const [localEmotion, setLocalEmotion] = useState<Emotion | null>(null);
+  const [isFoldCryActive, setIsFoldCryActive] = useState(false);
   const localEmotionTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const foldCryTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const prevActionRef = useRef<string | null>(null);
   const avatarRef = useRef<HTMLDivElement | null>(null);
 
   // Mouse idle detection — after 5s of no movement, current player's eyes roam
@@ -368,8 +371,34 @@ export function PokerSeat({ seat, index, holeCards, isCurrentPlayer, showCardBac
     [onOpponentRadialAction, seat.playerAddress],
   );
 
-  // Active emotion: menu-open slouch > broadcast (from server) > local (just clicked) > action-driven
-  const activeEmotion: Emotion = hasMenuOpen ? 'neutral' : (propsOverlayEmotion ?? localEmotion ?? avatarEmotion);
+  useEffect(() => {
+    const action = lastAction?.action?.toLowerCase() ?? null;
+    const wasAction = prevActionRef.current;
+    prevActionRef.current = action;
+
+    if (action === 'fold' && wasAction !== 'fold') {
+      setIsFoldCryActive(true);
+      if (foldCryTimerRef.current) clearTimeout(foldCryTimerRef.current);
+      foldCryTimerRef.current = setTimeout(() => {
+        setIsFoldCryActive(false);
+        foldCryTimerRef.current = null;
+      }, FOLD_CRY_EMOTION_DURATION_MS);
+      return;
+    }
+
+    if (action !== 'fold') {
+      setIsFoldCryActive(false);
+      if (foldCryTimerRef.current) {
+        clearTimeout(foldCryTimerRef.current);
+        foldCryTimerRef.current = null;
+      }
+    }
+  }, [lastAction]);
+
+  // Active emotion: menu-open slouch > broadcast (from server) > local (just clicked) > fold-cry timer > action-driven
+  const activeEmotion: Emotion = hasMenuOpen
+    ? 'neutral'
+    : (propsOverlayEmotion ?? localEmotion ?? (isFoldCryActive ? 'sad' : avatarEmotion));
   const roleLabel: keyof typeof ROLE_CRESCENT_STYLE | null = seat.isBigBlind
     ? 'BB'
     : (seat.isDealer && seat.isSmallBlind)
@@ -481,6 +510,7 @@ export function PokerSeat({ seat, index, holeCards, isCurrentPlayer, showCardBac
     clearLongPress();
     if (phraseOverlayTimeoutRef.current) clearTimeout(phraseOverlayTimeoutRef.current);
     if (localEmotionTimerRef.current) clearTimeout(localEmotionTimerRef.current);
+    if (foldCryTimerRef.current) clearTimeout(foldCryTimerRef.current);
   }, [clearLongPress]);
 
   // Close QuickChat picker when clicking outside (player radial uses its own overlay)

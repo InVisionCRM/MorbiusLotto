@@ -46,6 +46,7 @@ const RIGHT_ADJACENT_SEAT_HORIZONTAL_NUDGE_PX = -50;
 const LEFT_ADJACENT_SEAT_HORIZONTAL_NUDGE_PX = 50;
 const SHOWDOWN_CARD_PULL_RATIO = 0.18;
 const SHOWDOWN_CARD_PULL_MAX_PX = 70;
+const BET_CHIP_INWARD_DISTANCE_PX = 64;
 
 // Compute evenly-spaced seat positions around the table oval for any seat count.
 // Seat 0 is always bottom-center (current player); action then moves to the left,
@@ -254,6 +255,56 @@ export function PokerTable({ state, currentPlayerAddress, timeLeft, chatBubbleBy
   useEffect(() => () => {
     for (const t of foldFlyoutTimeoutsRef.current) clearTimeout(t);
   }, []);
+
+  const getSeatNudgePx = (displaySlot: number) => {
+    const seatCount = state.seats.length;
+    const isLeftAdjacentSeat = displaySlot === 1;
+    const isRightAdjacentSeat = displaySlot === seatCount - 1;
+    const isLeftSecondAdjacentSeat = displaySlot === 2;
+    const isRightSecondAdjacentSeat = displaySlot === seatCount - 2;
+    const topCenterSlot = Math.floor(seatCount / 2);
+    const isTopCenterSeat = displaySlot === topCenterSlot;
+    const isTopLeftAdjacentSeat = displaySlot === topCenterSlot - 1;
+    const isTopRightAdjacentSeat = displaySlot === topCenterSlot + 1;
+    const isHeroSeat = displaySlot === 0;
+
+    const seatTranslateXBase = isRightAdjacentSeat
+      ? RIGHT_ADJACENT_SEAT_HORIZONTAL_NUDGE_PX
+      : isLeftAdjacentSeat
+        ? LEFT_ADJACENT_SEAT_HORIZONTAL_NUDGE_PX
+        : isTopLeftAdjacentSeat
+          ? TOP_ADJACENT_SEAT_HORIZONTAL_NUDGE_PX
+          : isTopRightAdjacentSeat
+            ? -TOP_ADJACENT_SEAT_HORIZONTAL_NUDGE_PX
+            : 0;
+
+    const seatTranslateYBase = (isRightAdjacentSeat || isLeftAdjacentSeat)
+      ? ADJACENT_SEAT_VERTICAL_NUDGE_PX
+      : (isLeftSecondAdjacentSeat || isRightSecondAdjacentSeat)
+        ? SECOND_ADJACENT_SEAT_VERTICAL_NUDGE_PX
+        : isTopCenterSeat
+          ? TOP_CENTER_SEAT_VERTICAL_NUDGE_PX
+          : (isTopLeftAdjacentSeat || isTopRightAdjacentSeat)
+            ? TOP_ADJACENT_SEAT_VERTICAL_NUDGE_PX
+            : isHeroSeat
+              ? HERO_SEAT_VERTICAL_NUDGE_PX
+              : 0;
+
+    return {
+      x: Math.round(seatTranslateXBase * seatNudgeScale),
+      y: Math.round(seatTranslateYBase * seatNudgeScale),
+    };
+  };
+
+  const getRenderedSeatAnchor = (displaySlot: number) => {
+    const anchor = seatAnchors[displaySlot];
+    if (!anchor) return null;
+    const nudge = getSeatNudgePx(displaySlot);
+    return {
+      fx: anchor.fx + nudge.x / Math.max(dims.w, 1),
+      fy: anchor.fy + nudge.y / Math.max(dims.h, 1),
+    };
+  };
 
   const seatProps = (idx: number) => {
     const seat = state.seats[idx];
@@ -533,9 +584,18 @@ export function PokerTable({ state, currentPlayerAddress, timeLeft, chatBubbleBy
           const hasBet = toBigIntSafe(seat.currentBet ?? 0) > 0n;
           if (!hasBet) return null;
 
-          const frac = displaySlot === 0 ? 0.55 : 0.38;
-          const cfx = anchor.fx + (POT_ANCHOR.fx - anchor.fx) * frac;
-          const cfy = anchor.fy + (POT_ANCHOR.fy - anchor.fy) * frac;
+          const renderedSeatAnchor = getRenderedSeatAnchor(displaySlot) ?? anchor;
+          const seatPx = { x: renderedSeatAnchor.fx * dims.w, y: renderedSeatAnchor.fy * dims.h };
+          const potPx = { x: POT_ANCHOR.fx * dims.w, y: POT_ANCHOR.fy * dims.h };
+          const towardPot = { x: potPx.x - seatPx.x, y: potPx.y - seatPx.y };
+          const towardPotLen = Math.hypot(towardPot.x, towardPot.y) || 1;
+          const step = Math.min(BET_CHIP_INWARD_DISTANCE_PX, towardPotLen * 0.85);
+          const chipPx = {
+            x: seatPx.x + (towardPot.x / towardPotLen) * step,
+            y: seatPx.y + (towardPot.y / towardPotLen) * step,
+          };
+          const cfx = chipPx.x / Math.max(dims.w, 1);
+          const cfy = chipPx.y / Math.max(dims.h, 1);
 
           return (
             <motion.div
@@ -617,37 +677,7 @@ export function PokerTable({ state, currentPlayerAddress, timeLeft, chatBubbleBy
           : idx;
         const anchor = seatAnchors[displaySlot];
         if (!anchor) return null;
-        const isLeftAdjacentSeat = displaySlot === 1;
-        const isRightAdjacentSeat = displaySlot === state.seats.length - 1;
-        const isLeftSecondAdjacentSeat = displaySlot === 2;
-        const isRightSecondAdjacentSeat = displaySlot === state.seats.length - 2;
-        const topCenterSlot = Math.floor(state.seats.length / 2);
-        const isTopCenterSeat = displaySlot === topCenterSlot;
-        const isTopLeftAdjacentSeat = displaySlot === topCenterSlot - 1;
-        const isTopRightAdjacentSeat = displaySlot === topCenterSlot + 1;
-        const isHeroSeat = displaySlot === 0;
-        const seatTranslateXBase = isRightAdjacentSeat
-          ? RIGHT_ADJACENT_SEAT_HORIZONTAL_NUDGE_PX
-          : isLeftAdjacentSeat
-            ? LEFT_ADJACENT_SEAT_HORIZONTAL_NUDGE_PX
-            : isTopLeftAdjacentSeat
-              ? TOP_ADJACENT_SEAT_HORIZONTAL_NUDGE_PX
-              : isTopRightAdjacentSeat
-                ? -TOP_ADJACENT_SEAT_HORIZONTAL_NUDGE_PX
-            : 0;
-        const seatTranslateYBase = (isRightAdjacentSeat || isLeftAdjacentSeat)
-          ? ADJACENT_SEAT_VERTICAL_NUDGE_PX
-          : (isLeftSecondAdjacentSeat || isRightSecondAdjacentSeat)
-            ? SECOND_ADJACENT_SEAT_VERTICAL_NUDGE_PX
-          : isTopCenterSeat
-            ? TOP_CENTER_SEAT_VERTICAL_NUDGE_PX
-          : (isTopLeftAdjacentSeat || isTopRightAdjacentSeat)
-            ? TOP_ADJACENT_SEAT_VERTICAL_NUDGE_PX
-          : isHeroSeat
-            ? HERO_SEAT_VERTICAL_NUDGE_PX
-            : 0;
-        const seatTranslateX = Math.round(seatTranslateXBase * seatNudgeScale);
-        const seatTranslateY = Math.round(seatTranslateYBase * seatNudgeScale);
+        const seatNudge = getSeatNudgePx(displaySlot);
         return (
           <div
             key={idx}
@@ -657,7 +687,7 @@ export function PokerTable({ state, currentPlayerAddress, timeLeft, chatBubbleBy
             style={{
               left: `${anchor.fx * 100}%`,
               top:  `${anchor.fy * 100}%`,
-              transform: `translate(calc(-50% + ${seatTranslateX}px), calc(-50% + ${seatTranslateY}px))`,
+              transform: `translate(calc(-50% + ${seatNudge.x}px), calc(-50% + ${seatNudge.y}px))`,
             }}
             {...(tutorialTargets ? { 'data-tutorial-target': `seat-${displaySlot}` } : {})}
           >

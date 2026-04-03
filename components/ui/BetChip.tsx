@@ -92,7 +92,7 @@ export function BetChip({
           alignItems: 'center',
           justifyContent: 'center',
           color: '#ffffff',
-          fontSize: '24cqmin',
+          fontSize: '30cqmin',
           fontWeight: 900,
           fontVariantNumeric: 'tabular-nums',
           lineHeight: 1,
