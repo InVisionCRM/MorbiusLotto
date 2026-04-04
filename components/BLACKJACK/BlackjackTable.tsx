@@ -1156,7 +1156,7 @@ const BlackjackTable: React.FC<BlackjackTableProps> = ({
                             {hand.isBlackjack && <span className="text-yellow-400 font-black text-base sm:text-xl">BJ!</span>}
                             {hand.isBust && <span className="text-red-400 font-black text-base sm:text-xl">BUST</span>}
                           </div>}
-                          <div className="flex gap-0">
+                          <div className="relative flex gap-0">
                             {hand.cards.map((card, cardIndex) => {
                               let isNewCard = false;
                               if (Array.isArray(newCardIndices.player)) {
@@ -1184,6 +1184,16 @@ const BlackjackTable: React.FC<BlackjackTableProps> = ({
                                 </div>
                               );
                             })}
+                            {!hasSplit && handIndex === 0 && (testChipStack || chipStack).length > 0 && (
+                              <div className="absolute -top-2 -right-3" style={{ zIndex: 20 }}>
+                                <BetChip
+                                  label={!testChipStack && chipAnimationState !== 'none' ? '' : formatChipLabel((testChipStack || chipStack).reduce((sum, chip) => sum + chip, 0))}
+                                  amount={(testChipStack || chipStack).reduce((sum, chip) => sum + chip, 0)}
+                                  size="clamp(56px, 10vw, 80px)"
+                                  chipSrc={getChipImage(0)}
+                                />
+                              </div>
+                            )}
                           </div>
                           {/* Bet chip moved to absolute position at bottom: 80px (same as Perfect Pairs) */}
                         </div>
@@ -1582,28 +1592,6 @@ const BlackjackTable: React.FC<BlackjackTableProps> = ({
               </span>
             </button>
           )}
-        </div>
-      )}
-
-      {/* Main bet chip — absolutely positioned at same bottom as Perfect Pairs (non-split only) */}
-      {!hasSplit && (testChipStack || chipStack).length > 0 && (
-        <div
-          className={`absolute z-20 pointer-events-none flex flex-col items-center ${
-            !testChipStack && chipAnimationState === 'loss' ? 'chip-stack-lose' :
-            !testChipStack && chipAnimationState === 'win' ? 'chip-stack-win' : ''
-          }`}
-          style={{
-            left: '50%',
-            bottom: '80px',
-            transform: 'translateX(-50%)',
-          }}
-        >
-          <BetChip
-            label={!testChipStack && chipAnimationState !== 'none' ? '' : formatChipLabel((testChipStack || chipStack).reduce((sum, chip) => sum + chip, 0))}
-            amount={(testChipStack || chipStack).reduce((sum, chip) => sum + chip, 0)}
-            size="clamp(56px, 10vw, 80px)"
-            chipSrc={getChipImage(0)}
-          />
         </div>
       )}
 
