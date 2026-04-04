@@ -1053,7 +1053,7 @@ const BlackjackTable: React.FC<BlackjackTableProps> = ({
           {/* Dealer row — shifted up 30px via transform so it actually moves */}
           {testDealerHand ? (
             /* ── Admin test: render dealer cards directly (no reveal logic) ── */
-            <div className="flex flex-col items-center" style={{ transform: 'translateY(-30px)' }}>
+            <div className="flex flex-col items-center" style={{ transform: 'translateY(15px)' }}>
               <div className="flex gap-1 sm:gap-0">
                 {testDealerHand.cards.map((card, index) => (
                   <div key={`dealer-card-${index}`} className={index > 0 ? 'card-overlap-dealer' : ''} style={{ zIndex: index }}>
@@ -1069,7 +1069,7 @@ const BlackjackTable: React.FC<BlackjackTableProps> = ({
             const gameCompleteAndRevealed = gameState === GameState.COMPLETE && !isRevealing && visibleDealerCards >= dealerHand.cards.length;
             const dealerIsWinner = gameCompleteAndRevealed && gameResult === 'loss';
             return (
-              <div className="flex flex-col items-center justify-center" style={{ transform: 'translateY(-30px)' }}>
+              <div className="flex flex-col items-center justify-center" style={{ transform: 'translateY(-10px)' }}>
                 <DealerSection
                   cards={dealerHand.cards}
                   visibleCards={visibleDealerCards}
@@ -1142,7 +1142,7 @@ const BlackjackTable: React.FC<BlackjackTableProps> = ({
                         <div className="flex flex-col items-center">
                           {/* Score — above cards, only when cards are dealt */}
                           {hand.cards.length > 0 && <div className={`flex items-center gap-2 transition-transform duration-300 ${handIsWinner ? 'card-counter-winner' : ''}`} style={{ marginBottom: -10, zIndex: 0 }}>
-                            <div className={`glass-counter relative w-24 h-24 flex items-center justify-center rounded-full transition-all duration-300 ${
+                            <div className={`glass-counter backdrop-blur-md relative w-24 h-24 flex items-center justify-center rounded-full transition-all duration-300 ${
                               gameState === GameState.PLAYER_TURN && (hasSplit ? isActiveHand : true) ? 'card-counter-active' : ''
                             }`}>
                               <span className={`font-black relative z-10 transition-all duration-500 ${
@@ -1185,7 +1185,7 @@ const BlackjackTable: React.FC<BlackjackTableProps> = ({
                               );
                             })}
                             {!hasSplit && handIndex === 0 && (testChipStack || chipStack).length > 0 && (
-                              <div className="absolute -top-2 -right-3" style={{ zIndex: 20 }}>
+                              <div className="absolute -top-2 -right-15" style={{ zIndex: 20 }}>
                                 <BetChip
                                   label={!testChipStack && chipAnimationState !== 'none' ? '' : formatChipLabel((testChipStack || chipStack).reduce((sum, chip) => sum + chip, 0))}
                                   amount={(testChipStack || chipStack).reduce((sum, chip) => sum + chip, 0)}
