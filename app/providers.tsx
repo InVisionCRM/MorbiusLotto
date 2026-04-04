@@ -45,7 +45,7 @@ export function Providers({ children }: { children: React.ReactNode }) {
               fontStack: 'system',
               overlayBlur: 'small',
             })}
-            modalSize="compact"
+            modalSize="wide"
             coolMode={true}
             showRecentTransactions={true}
           >

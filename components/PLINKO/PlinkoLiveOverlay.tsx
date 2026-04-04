@@ -1,7 +1,6 @@
 'use client';
 
 import React from 'react';
-import RealTimeBetChart from '@/components/PLINKO/RealTimeBetChart';
 import { PlinkoDrop, PlinkoPlayerStats } from '@/lib/plinko-types';
 
 type DropSpeed = 'normal' | 'fast' | 'burst';
@@ -30,17 +29,6 @@ interface ChartStats {
 
 interface PlinkoLiveOverlayProps {
   isVisible: boolean;
-  sessionStartTime: number;
-  contractWagerPerBall: number;
-  freePlayWager: number;
-  betHistory: BetDataPoint[];
-  chartStats: ChartStats;
-  drops: PlinkoDrop[];
-  stats: PlinkoPlayerStats | null;
-  isConnected: boolean;
-  playerKey: string;
-  onExport: () => void;
-  onClear: () => Promise<void>;
   history: HistoryItem[];
   dropSpeed: DropSpeed;
   onDropSpeedChange: (speed: DropSpeed) => void;
@@ -54,17 +42,6 @@ const DROP_SPEED_OPTIONS: Array<{ speed: DropSpeed; label: string }> = [
 
 export default function PlinkoLiveOverlay({
   isVisible,
-  sessionStartTime,
-  contractWagerPerBall,
-  freePlayWager,
-  betHistory,
-  chartStats,
-  drops,
-  stats,
-  isConnected,
-  playerKey,
-  onExport,
-  onClear,
   history,
   dropSpeed,
   onDropSpeedChange,
@@ -78,22 +55,6 @@ export default function PlinkoLiveOverlay({
         background: 'linear-gradient(325deg, rgba(16, 20, 24, 0.97), rgba(24, 28, 32, 0.97))',
       }}
     >
-      <div className="flex-1 min-h-0 p-2">
-        <RealTimeBetChart
-          sessionStartTime={sessionStartTime}
-          contractWagerPerBall={contractWagerPerBall}
-          freePlayWager={freePlayWager}
-          betHistory={betHistory}
-          chartStats={chartStats}
-          drops={drops}
-          stats={stats}
-          isConnected={isConnected}
-          playerKey={playerKey}
-          onExport={onExport}
-          onClear={onClear}
-        />
-      </div>
-
       <div className="flex-1 min-h-0 p-2 flex flex-col">
         <div className="text-cyan-300 text-xs font-bold uppercase tracking-wider text-center mb-1">
           Live Results ({history.length})

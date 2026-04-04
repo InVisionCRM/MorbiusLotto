@@ -126,17 +126,6 @@ export default function PlinkoBuyPanel({
           <div className="relative flex min-h-0 flex-col border-b border-white/10 lg:flex-1 lg:basis-0">
             <PlinkoLiveOverlay
               isVisible={isGameRunning}
-              sessionStartTime={chartSessionStartTime}
-              contractWagerPerBall={wagerPerBall}
-              freePlayWager={currentWager}
-              betHistory={betHistory}
-              chartStats={chartStats}
-              drops={drops}
-              stats={stats}
-              isConnected={isHistoryConnected}
-              playerKey={historyPlayerKey}
-              onExport={onExportHistory}
-              onClear={onClearHistory}
               history={history}
               dropSpeed={dropSpeed}
               onDropSpeedChange={onDropSpeedChange}

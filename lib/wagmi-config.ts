@@ -1,84 +1,24 @@
 import { connectorsForWallets } from '@rainbow-me/rainbowkit'
-import type { Wallet } from '@rainbow-me/rainbowkit'
 import { createConfig, http, fallback } from 'wagmi'
-import { injected } from '@wagmi/core'
-import type { EIP1193Provider } from 'viem'
 import { pulsechain } from './chains'
 import {
+  coinbaseWallet,
+  trustWallet,
+  rabbyWallet,
+  okxWallet,
   metaMaskWallet,
   walletConnectWallet,
   injectedWallet,
   rainbowWallet,
 } from '@rainbow-me/rainbowkit/wallets'
 
-type InternetMoneyProvider = EIP1193Provider & {
-  isInternetMoney?: boolean
-  _isInternetMoney?: boolean
-  eip6963ProviderDetails?: {
-    info?: {
-      rdns?: string
-      icon?: string
-    }
-  }
-  providers?: InternetMoneyProvider[]
-}
-
-const isInternetMoneyProvider = (
-  provider: InternetMoneyProvider | undefined
-): provider is InternetMoneyProvider => {
-  if (!provider) return false
-  if (provider.isInternetMoney || provider._isInternetMoney) return true
-  return provider.eip6963ProviderDetails?.info?.rdns === 'io.internetmoney'
-}
-
-const getInternetMoneyProvider = (
-  walletWindow?: Pick<Window, 'ethereum'>
-): InternetMoneyProvider | undefined => {
-  const ethereum =
-    walletWindow?.ethereum as InternetMoneyProvider | undefined ??
-    (typeof window !== 'undefined'
-      ? (window.ethereum as InternetMoneyProvider | undefined)
-      : undefined)
-
-  if (!ethereum) return undefined
-
-  if (Array.isArray(ethereum?.providers)) {
-    const providerFromArray = ethereum.providers.find(isInternetMoneyProvider)
-    if (providerFromArray) return providerFromArray
-  }
-
-  if (isInternetMoneyProvider(ethereum)) return ethereum
-  return undefined
-}
-
-const internetMoneyWallet = (): Wallet => ({
-  id: 'internetMoney',
-  name: 'Internet Money',
-  iconUrl: async () => {
-    const provider = getInternetMoneyProvider()
-    const icon = provider?.eip6963ProviderDetails?.info?.icon
-    return icon ?? 'https://internetmoney.io/favicon.ico'
-  },
-  iconBackground: '#111111',
-  installed: typeof window !== 'undefined' ? !!getInternetMoneyProvider() : undefined,
-  downloadUrls: {
-    browserExtension: 'https://internetmoney.io/chrome',
-    mobile: 'https://internetmoney.io/',
-  },
-  createConnector: () =>
-    injected({
-      target: {
-        id: 'internetMoney',
-        name: 'Internet Money',
-        provider: (walletWindow) => getInternetMoneyProvider(walletWindow),
-      },
-    }),
-})
-
 const injectedWalletRenamed = () => ({
   ...injectedWallet(),
   name: 'Injected',
 })
+
+const walletConnectProjectId =
+  process.env.NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID ?? '88a763ec5a64c568fcce729fbe4b87a8'
 
 // WalletConnect / Reown: projectId is public. Allowlist app origins in Reown Cloud
 // (https://cloud.reown.com) → project → App domains: production, preview hosts, http://localhost:3000.
@@ -87,8 +27,11 @@ const connectors = connectorsForWallets(
     {
       groupName: 'Popular',
       wallets: [
-        internetMoneyWallet,
         metaMaskWallet,
+        coinbaseWallet,
+        trustWallet,
+        rabbyWallet,
+        okxWallet,
         injectedWalletRenamed,
         walletConnectWallet,
         rainbowWallet,
@@ -97,7 +40,13 @@ const connectors = connectorsForWallets(
   ],
   {
     appName: 'Morbius',
-    projectId: '88a763ec5a64c568fcce729fbe4b87a8',
+    appUrl: 'https://morbius.money',
+    projectId: walletConnectProjectId,
+    walletConnectParameters: {
+      qrModalOptions: {
+        enableExplorer: true,
+      },
+    },
   }
 )
 

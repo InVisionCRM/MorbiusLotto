@@ -50,7 +50,6 @@ const nextConfig: NextConfig = {
       "pino-elasticsearch": false,
       "why-is-node-running": false,
       "thread-stream": false,
-      "pino": false,
       "winston": false,
     };
     

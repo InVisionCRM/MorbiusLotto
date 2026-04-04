@@ -9,10 +9,6 @@ export function useWalletDetection() {
     const connectorName = connector?.name?.toLowerCase() || ''
     const connectorId = connector?.id?.toLowerCase() || ''
 
-    const isInternetMoney = connectorName.includes('internet money') ||
-                           connectorId.includes('internetmoney') ||
-                           connectorName.includes('internet-money')
-
     const isMetaMask = connectorName.includes('metamask') ||
                       connectorId.includes('metamask')
 
@@ -23,7 +19,6 @@ export function useWalletDetection() {
       /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent)
 
     return {
-      isInternetMoney,
       isMetaMask,
       isWalletConnect,
       isMobile,
@@ -40,26 +35,6 @@ export function useWalletDetection() {
     }
 
     try {
-      if (walletInfo.isInternetMoney) {
-        // Internet Money needs conservative gas estimation
-        console.log('🌐 Using conservative gas estimation for Internet Money')
-
-        try {
-          let gasEstimate = await publicClient.estimateGas(tx)
-          // Add 40% buffer for Internet Money
-          gasEstimate = gasEstimate * BigInt(140) / BigInt(100)
-
-          // Cap at reasonable limit
-          const maxGas = BigInt(2000000)
-          return gasEstimate > maxGas ? maxGas : gasEstimate
-        } catch (error) {
-          console.warn('🌐 Gas estimation failed for Internet Money, using fallback:', error)
-          // Fallback for complex transactions
-          return BigInt(1500000)
-        }
-      }
-
-      // Standard estimation for other wallets
       return await publicClient.estimateGas(tx)
     } catch (error) {
       console.warn('Gas estimation failed, using fallback:', error)

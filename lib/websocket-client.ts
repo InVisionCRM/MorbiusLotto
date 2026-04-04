@@ -410,12 +410,26 @@ export class BlackjackWebSocketClient {
               ? `Connection closed unexpectedly (state: ${ws?.readyState})`
               : `WebSocket error occurred (state: ${ws?.readyState})`;
 
-        logger.error('WebSocket error', {
+        const isTransientTransportState =
+          ws?.readyState === WebSocket.CONNECTING ||
+          ws?.readyState === WebSocket.CLOSING ||
+          ws?.readyState === WebSocket.CLOSED;
+
+        const logPayload = {
           message: errorMessage,
           readyState: ws?.readyState,
           url,
           eventType: (error as Event)?.type ?? 'error',
-        });
+        };
+
+        // Browser WebSocket error events are often empty objects and are common
+        // during reconnect/teardown. Keep these as warnings so dev overlay does
+        // not treat expected transport churn as a runtime exception.
+        if (isTransientTransportState) {
+          logger.warn('WebSocket transport warning', logPayload);
+        } else {
+          logger.error('WebSocket error', logPayload);
+        }
 
         if (!settled) {
           settled = true;
