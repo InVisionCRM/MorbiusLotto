@@ -1053,7 +1053,7 @@ const BlackjackTable: React.FC<BlackjackTableProps> = ({
           {/* Dealer row — shifted up 30px via transform so it actually moves */}
           {testDealerHand ? (
             /* ── Admin test: render dealer cards directly (no reveal logic) ── */
-            <div className="flex flex-col items-center" style={{ transform: 'translateY(15px)' }}>
+            <div className="flex flex-col items-center" style={{ transform: 'translateY(35px)' }}>
               <div className="flex gap-1 sm:gap-0">
                 {testDealerHand.cards.map((card, index) => (
                   <div key={`dealer-card-${index}`} className={index > 0 ? 'card-overlap-dealer' : ''} style={{ zIndex: index }}>
@@ -1088,7 +1088,7 @@ const BlackjackTable: React.FC<BlackjackTableProps> = ({
           })()}
 
           {/* Player row — shifted down from center, above the bet chip */}
-          <div className="flex flex-col gap-2 items-center justify-center" style={{ transform: 'translateY(clamp(10px, 4vh, 60px))' }}>
+          <div className="flex flex-col gap-2 items-center justify-center" style={{ transform: 'translateY(clamp(0px, 2vh, 32px))' }}>
             <div className={`flex ${hasSplit ? 'gap-2' : 'gap-0'} items-end`}>
               {displayHands.map((hand, handIndex) => {
                 const isActiveHand = hasSplit && handIndex === currentHandIndex && gameState === GameState.PLAYER_TURN;
