@@ -55,8 +55,6 @@ async function unlockAudio(): Promise<boolean> {
 
     // Notify all listeners that audio is unlocked
     unlockListeners.forEach(listener => listener());
-
-    console.log('Audio unlocked successfully');
     return true;
   } catch (e) {
     console.warn('Failed to unlock audio:', e);

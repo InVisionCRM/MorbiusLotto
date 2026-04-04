@@ -1,6 +1,4 @@
 'use client'
-
-import { formatEther } from 'viem'
 import { cn } from '@/lib/utils'
 import { WalletMenu } from '@/components/shared/WalletMenu'
 import { AnimatedShinyText } from '@/components/ui/animated-shiny-text'
@@ -12,7 +10,6 @@ interface KenoConfirmPanelProps {
   paymentMethod: 'MORBIUS' | 'PLS'
   spotSize: number
   wager: number
-  wplsRequiredWei: bigint
   isConnected: boolean
   busy: boolean
   selectedNumbersCount: number
@@ -28,7 +25,6 @@ export function KenoConfirmPanel({
   paymentMethod,
   spotSize,
   wager,
-  wplsRequiredWei,
   isConnected,
   busy,
   selectedNumbersCount,
@@ -56,37 +52,6 @@ export function KenoConfirmPanel({
           }}
         >
           <PaymentMethodToggle value={paymentMethod} onChange={onPaymentMethodChange} textClassName="text-2xl font-semibold" />
-        </div>
-
-        <div
-          className="space-y-2 border-t border-white/10 pt-3 mb-4 relative"
-          style={{
-            background: 'linear-gradient(325deg, rgba(20, 20, 20, 0.8), rgba(40, 40, 40, 0.6))',
-            boxShadow:
-              'inset 0 3px 6px rgba(0, 0, 0, 0.8), inset 0 -3px 6px rgba(255, 255, 255, 0.1), 0 1px 3px rgba(0, 0, 0, 0.5)',
-            border: '1px inset rgba(60, 60, 60, 0.5)',
-            borderRadius: '0.5rem',
-            padding: '0.75rem',
-          }}
-        >
-          <div className="relative">
-            <div className="flex justify-between text-xs">
-              <span className="text-white/70">Spot Size</span>
-              <span className="text-white font-semibold">{spotSize}</span>
-            </div>
-            <div className="flex justify-between text-xs">
-              <span className="text-white/70">Wager</span>
-              <span className="text-white font-semibold">{wager.toLocaleString()} MORBIUS</span>
-            </div>
-            <div className="flex justify-between text-xs pt-2 border-t border-white/10">
-              <span className="text-white/70">Total Cost</span>
-              <span className="text-white font-semibold">
-                {paymentMethod === 'PLS'
-                  ? `~${Number(formatEther(wplsRequiredWei)).toFixed(0)} PLS`
-                  : `${wager.toLocaleString()} MORBIUS`}
-              </span>
-            </div>
-          </div>
         </div>
 
         {!isConnected ? (

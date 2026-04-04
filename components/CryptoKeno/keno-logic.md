@@ -12,7 +12,7 @@ State “Club Keno” games (e.g. Michigan, Missouri) work roughly like this:
 
 * Numbers **1–80** are available.
 * Every **few minutes**, a drawing picks **20 unique numbers** from 1–80.
-* Players choose **1–10 numbers (“spots”)** and a **wager per draw**, often with optional add-ons (multipliers, Bulls-Eye, progressive jackpots like *The Jack*).
+* Players choose **1–10 numbers (“spots”)** and a **wager per draw**, often with optional add-ons (multipliers, Bulls-Eye, progressive jackpots).
 * Payouts scale with:
 
   * Spot size (how many numbers you pick),
@@ -35,7 +35,7 @@ We’ll reproduce this structure on a blockchain:
 
   * Multiplier (like “The Kicker”),
   * Bulls-Eye (one drawn number treated as special),
-  * Progressive jackpot (“The Pot” / “The Jack” style).
+  * Progressive jackpot (“The Pot” style).
 
 This README explains:
 
@@ -379,7 +379,7 @@ Implementation:
 
 Real lotteries (e.g. Missouri Club Keno) use Bulls-Eye and Double Bulls-Eye options for extra cost and bigger prize tiers.
 
-### 6.3 Progressive Jackpot (“The Pot” / “The Jack”)
+### 6.3 Progressive Jackpot (“The Pot”)
 
 **Idea:** A separate jackpot funded by small fixed add-on fees per draw.
 
@@ -393,7 +393,7 @@ Real lotteries (e.g. Missouri Club Keno) use Bulls-Eye and Double Bulls-Eye opti
   * E.g. each progressive ticket gets 9 specific random extra numbers (or uses a specific pattern on the main 20 numbers).
   * If a player’s pattern matches the special progressive criteria, they win `progressivePool`.
 
-This copies the style of Michigan’s “The Jack”, which is an add-on to Club Keno that builds a separate jackpot starting at $10k and growing until someone matches the special pattern.
+This follows the common state-lottery progressive add-on pattern: a separate jackpot pool that grows until someone matches the special pattern.
 
 On win:
 
@@ -608,7 +608,7 @@ Below is a condensed version of 10 UI concept sketches for the frontend.
   * Cost per draw,
   * How it affects payouts,
   * Toggle for default ON/OFF.
-* Gives a clear explanation similar to “The Kicker / Bulls-Eye / The Jack” sections in state lottery guides.
+* Gives a clear explanation similar to “The Kicker / Bulls-Eye / Progressive” sections in state lottery guides.
 
 ### 8. Mobile Ticket Picker
 
@@ -696,9 +696,3 @@ Win Conditions	Shares	Prize
 3 Spot Game - Match 2	21,785	$2
 2 Spot Game - Match 2	12,062	$11
 1 Spot Game - Match 1	315	$2
-The Jack - Match 9 of 9	0	Jackpot
-The Jack - Match 8 of 9	0	$1,000
-The Jack - Match 7 of 9	5	$100
-The Jack - Match 6 of 9	52	$10
-The Jack - Match 5 of 9	287	$5
-The Jack - Match 0 of 9	529	$1

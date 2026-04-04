@@ -1,6 +1,4 @@
-import { useRef } from 'react'
 import { useBalance } from 'wagmi'
-import { formatEther } from 'viem'
 import { pulsechain } from '@/lib/chains'
 
 /**
@@ -18,24 +16,14 @@ export function useNativeBalance(address?: `0x${string}`) {
     },
   })
 
-  // Track previous balance to only log on changes
-  const prevBalanceRef = useRef<bigint | undefined>(undefined)
-
-  // Debug logging for troubleshooting
   if (address && error) {
     console.error('Error fetching PLS balance:', error)
-    console.log('Wallet address:', address)
-    console.log('Error details:', {
+    console.error('PLS balance context:', {
+      walletAddress: address,
       message: error.message,
       cause: error.cause,
       name: error.name,
     })
-  }
-
-  // Only log when balance actually changes
-  if (address && data && data.value !== prevBalanceRef.current) {
-    console.log('PLS Balance loaded:', data.formatted, data.symbol)
-    prevBalanceRef.current = data.value
   }
 
   return {

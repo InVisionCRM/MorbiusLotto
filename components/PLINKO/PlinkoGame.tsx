@@ -79,7 +79,6 @@ const PlinkoGame: React.FC<PlinkoGameProps> = ({ onScore, lastDrop, selectedRisk
 
   // Load seed database on mount - MUST complete before contract drops work
   useEffect(() => {
-    console.log('🔄 Loading seed database...');
     fetch('/seedDatabase.json')
       .then(res => {
         if (!res.ok) throw new Error(`HTTP ${res.status}`);
@@ -88,14 +87,6 @@ const PlinkoGame: React.FC<PlinkoGameProps> = ({ onScore, lastDrop, selectedRisk
       .then((data: SeedDatabase) => {
         seedDatabaseRef.current = data;
         setSeedDbLoaded(true);
-        // Verify the data structure
-        const bucketCount = Object.keys(data['GREEN'] || {}).length;
-        const sampleBucket = data['GREEN']?.['8'];
-        console.log('✅ Seed database loaded successfully:', {
-          bucketCount,
-          sampleBucketSeeds: sampleBucket?.length || 0,
-          firstSeed: sampleBucket?.[0]
-        });
       })
       .catch(err => {
         console.error('❌ Failed to load seed database:', err);
@@ -105,7 +96,6 @@ const PlinkoGame: React.FC<PlinkoGameProps> = ({ onScore, lastDrop, selectedRisk
           .then((data: SeedDatabase) => {
             seedDatabaseRef.current = data;
             setSeedDbLoaded(true);
-            console.log('✅ Seed database loaded from alternate path');
           })
           .catch(err2 => {
             console.error('❌ Also failed alternate path:', err2);
@@ -195,8 +185,6 @@ const PlinkoGame: React.FC<PlinkoGameProps> = ({ onScore, lastDrop, selectedRisk
         render: { visible: false }
       }));
     }
-    console.log(`🪣 Buckets created: bottomRowStartX=${bottomRowStartX}, Y=${BUCKET_Y}, width=${bucketWidth - 6}`);
-
     // Collision Detection — use refs so handler doesn't go stale
     const collisionHandler = (event: Matter.IEventCollision<Matter.Engine>) => {
       event.pairs.forEach((pair) => {
@@ -514,23 +502,12 @@ const PlinkoGame: React.FC<PlinkoGameProps> = ({ onScore, lastDrop, selectedRisk
     let spawnX: number;
     let initialVelX: number;
 
-    // DEBUG: Log the state of all conditions
-    console.log('🔍 Ball spawn debug:', {
-      isContractMode,
-      hasSeed: !!lastDrop.contractResult?.seed,
-      seedDbLoaded: !!seedDatabaseRef.current,
-      contractBucket: lastDrop.contractResult?.bucket,
-      contractSeed: lastDrop.contractResult?.seed?.toString().slice(0, 20) + '...'
-    });
-
     if (isContractMode && lastDrop.contractResult.seed && seedDatabaseRef.current) {
       // DETERMINISTIC MODE: Use pre-computed seed from database
       // This ensures the ball lands in the exact bucket the contract specified
 
       const contractSeed = lastDrop.contractResult.seed;
       const targetBucket = lastDrop.contractResult.bucket; // 0-indexed bucket from contract
-
-      console.log(`🎲 Looking up seed for bucket ${targetBucket}...`);
 
       // Use contract seed to pick which pre-computed seed to use (deterministic selection)
       // Convert seed to number for modulo (handle BigInt if needed)
@@ -548,8 +525,6 @@ const PlinkoGame: React.FC<PlinkoGameProps> = ({ onScore, lastDrop, selectedRisk
       // Physics is the same for all risk levels, so we use GREEN (only one in database)
       const bucketSeeds = seedDatabaseRef.current['GREEN']?.[targetBucket.toString()];
 
-      console.log(`📊 Bucket ${targetBucket} has ${bucketSeeds?.length || 0} seeds available`);
-
       if (bucketSeeds && bucketSeeds.length > 0) {
         const seedIndex = Math.abs(seedNum) % bucketSeeds.length;
         const seedAttempt = bucketSeeds[seedIndex];
@@ -564,8 +539,6 @@ const PlinkoGame: React.FC<PlinkoGameProps> = ({ onScore, lastDrop, selectedRisk
         spawnX = (WORLD_WIDTH / 2) + (side * gapOffset) + ((rng() - 0.5) * PHYSICS.SPAWN_RANGE_X);
         initialVelX = (rng() - 0.5) * PHYSICS.INITIAL_V_X_VARIANCE;
 
-        console.log(`🎯 DETERMINISTIC DROP: bucket=${targetBucket}, seedIndex=${seedIndex}, seedAttempt=${seedAttempt}, seedString="${seedString}"`);
-        console.log(`📍 Spawn position: x=${spawnX.toFixed(2)}, velX=${initialVelX.toFixed(4)}, side=${side}`);
       } else {
         // Fallback if bucket not in database (shouldn't happen)
         console.warn(`⚠️ No seeds found for bucket ${targetBucket}, using random`);
@@ -583,7 +556,6 @@ const PlinkoGame: React.FC<PlinkoGameProps> = ({ onScore, lastDrop, selectedRisk
       const side = Math.random() > 0.5 ? 1 : -1; // 50% left, 50% right
       spawnX = (WORLD_WIDTH / 2) + (side * gapOffset) + ((Math.random() - 0.5) * PHYSICS.SPAWN_RANGE_X);
       initialVelX = (Math.random() - 0.5) * PHYSICS.INITIAL_V_X_VARIANCE;
-      console.log(`🎲 Random spawn: x=${spawnX.toFixed(2)}, velX=${initialVelX.toFixed(4)}`);
     }
 
     const ball = Matter.Bodies.circle(spawnX, 20, BALL_RADIUS, {

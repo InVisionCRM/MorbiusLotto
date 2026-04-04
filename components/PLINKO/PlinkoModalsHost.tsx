@@ -214,7 +214,7 @@ export default function PlinkoModalsHost({
             <SlotMachine
               onClose={() => onShowSlotMachineTestChange(false)}
               onSpinComplete={(result) => {
-                console.log('Slot result:', result);
+                void result;
               }}
             />
           </div>

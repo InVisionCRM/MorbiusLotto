@@ -262,10 +262,7 @@ const Home: React.FC = () => {
   const maxWager = wagerLimitsData.data ? Number(formatEther(wagerLimitsData.data[1])) : 10000;
 
   const handleWatchBallDropped = useCallback((event: WatchedBallDroppedEvent) => {
-    console.log('🔴 LIVE BallDropped event received (useWatchContractEvent):', event);
-
     if (!event.args) {
-      console.log('⚠️ Event has no args, skipping');
       return;
     }
 
@@ -285,13 +282,6 @@ const Home: React.FC = () => {
 
     // Convert multiplier from basis points to actual multiplier
     const actualMultiplier = Number(multiplier) / 100;
-
-    console.log('Decoded live event:', {
-      bucket: bucketIndex,
-      risk,
-      multiplier: actualMultiplier,
-      payout: Number(formatEther(payout)),
-    });
 
     setAnimationQueue(prev => [...prev, {
       bucket: bucketIndex,
@@ -360,13 +350,6 @@ const Home: React.FC = () => {
       totalWon: prev.totalWon + winAmount,
     }));
 
-    // ... rest of your balance update logic ...
-    console.log('=== SCORE EVENT ===');
-    console.log('Multiplier:', actualMultiplier);
-    console.log('Bucket Index:', bucketIndex);
-    console.log('Contract Data:', contractData);
-    console.log('Free Play Mode:', freePlayEnabled);
-
     // In contract mode, we still want to record history when balls hit buckets
     // But we skip the balance updates and auto-play logic for contract mode
 
@@ -431,7 +414,6 @@ const Home: React.FC = () => {
   // Handle approval success and execute pending purchase
   useEffect(() => {
     if (isApprovalSuccess && pendingPurchase) {
-      console.log('✅ APPROVAL SUCCESS! Executing pending purchase...');
       // Execute the pending purchase
       buyBalls(pendingPurchase.count, pendingPurchase.wagerPerBallMORBIUS, pendingPurchase.useNativePLS);
       setPendingPurchase(null);
@@ -461,8 +443,6 @@ const Home: React.FC = () => {
         throw new Error(`Invalid risk level: ${risk}`);
       }
 
-      console.log(`Dropping ${ballsToUpdate} balls with ${risk} risk (contract level: ${contractRiskLevel})`);
-
       // Use dropMultipleBalls to drop ALL balls in ONE transaction
       const txHash = await writeContractAsync({
         address: PLINKO_ADDRESS,
@@ -473,15 +453,11 @@ const Home: React.FC = () => {
       });
 
       // Wait for transaction confirmation with polling
-      console.log('Waiting for multi-ball drop confirmation...', txHash);
       setConfirmationStage('broadcast');
       const dropReceipt = await pollForReceipt(txHash, {
         maxAttempts: 20, // Shorter for multi-ball drops
         intervalMs: 3000,
         onAttempt: (attempt) => {
-          if (attempt % 3 === 0) { // Update more frequently for shorter wait
-            console.log(`Still waiting for multi-ball confirmation... (${attempt}/20)`);
-          }
           // Update confirmation stage based on progress
           if (attempt <= 7) {
             setConfirmationStage('broadcast');
@@ -498,12 +474,8 @@ const Home: React.FC = () => {
       if (dropReceipt.status === 'reverted') {
         throw new Error('Multi-ball drop transaction failed');
       }
-      console.log(`Successfully dropped ${ballsToUpdate} balls!`);
-
       // Refetch player data to update ball balance and stats
       await playerInfo.refetch();
-
-      console.log(`Successfully dropped ${ballsToUpdate} balls! Listening for BallDropped events to animate results...`);
     } catch (error) {
       console.error('Error dropping balls:', error);
       const errorMessage = error instanceof Error ? error.message : 'Unknown error';
@@ -519,11 +491,9 @@ const Home: React.FC = () => {
     if (!freePlayEnabled) {
       if (contractBallBalance > 0) {
         // Player has balls - drop them all
-        console.log(`Dropping ${contractBallBalance} existing balls with ${risk} risk`);
         dropBallContract(risk, contractBallBalance);
       } else {
         // No balls - this selects risk level for buying
-        console.log(`Selected ${risk} risk for buying balls`);
         setBuyRiskLevel(risk);
       }
       return;

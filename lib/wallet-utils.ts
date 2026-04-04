@@ -29,8 +29,6 @@ export function clearWalletConnectCache() {
     keysToRemove.forEach(key => {
       localStorage.removeItem(key)
     })
-
-    console.log(`Cleared ${keysToRemove.length} WalletConnect cache entries`)
     return keysToRemove.length
   } catch (error) {
     console.error('Error clearing WalletConnect cache:', error)

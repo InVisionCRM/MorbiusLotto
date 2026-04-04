@@ -904,24 +904,28 @@ export class BlackjackGameService {
 
     const dealerCards = [...game.dealer_cards];
     const dealerActions: any[] = [];
+    const allHandsBust = playerHands.every(hand => hand.isBust);
 
-    // Dealer hits on soft 17
-    while (true) {
-      const dealerHand = this.pfService.calculateHandTotalV2(dealerCards);
+    // If all player hands are already bust, skip dealer turn entirely.
+    if (!allHandsBust) {
+      // Dealer hits on soft 17
+      while (true) {
+        const dealerHand = this.pfService.calculateHandTotalV2(dealerCards);
 
-      if (dealerHand.total >= 17 && !(dealerHand.total === 17 && dealerHand.hasAce)) {
-        dealerActions.push({ type: 'stand', timestamp: Date.now() });
-        break;
+        if (dealerHand.total >= 17 && !(dealerHand.total === 17 && dealerHand.hasAce)) {
+          dealerActions.push({ type: 'stand', timestamp: Date.now() });
+          break;
+        }
+
+        const card = deck[deckPosition++];
+        dealerCards.push(card);
+        dealerActions.push({
+          type: 'hit',
+          card,
+          deckPosition: deckPosition - 1,
+          timestamp: Date.now()
+        });
       }
-
-      const card = deck[deckPosition++];
-      dealerCards.push(card);
-      dealerActions.push({
-        type: 'hit',
-        card,
-        deckPosition: deckPosition - 1,
-        timestamp: Date.now()
-      });
     }
 
     const finalDealerTotal = this.pfService.calculateHandTotalV2(dealerCards).total;

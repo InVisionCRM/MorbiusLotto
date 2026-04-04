@@ -919,7 +919,6 @@ export default function BlackjackPage() {
       client.on('game_created', (gameState: ServerGameState) => {
         // When createGame returns, handleStartGame handles it; skip here to avoid duplicate
         if (createGameInProgressRef.current) return;
-        console.log('Game created:', gameState);
         const status = String((gameState as any)?.status);
         const isBlackjack = Array.isArray((gameState as any)?.playerHands) &&
           (gameState as any).playerHands.some((h: any) => h.result === 'blackjack' || h.isBlackjack);

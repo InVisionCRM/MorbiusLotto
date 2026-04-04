@@ -48,7 +48,6 @@ const BULLSEYE_PAYTABLE: Record<number, Record<number, number>> = {
   10: { 0: 15, 5: 6, 6: 30, 7: 150, 8: 1500, 9: 15000, 10: 300000 },
 }
 
-const ADDON_MULTIPLIER_FLAG = 1 << 0
 const ADDON_BULLSEYE_FLAG = 1 << 1
 
 function calculateRoundWin(
@@ -57,8 +56,7 @@ function calculateRoundWin(
   spotSize: number,
   addons: number,
   wagerPerDraw: string,
-  bullsEyeNumber: number,
-  drawnMultiplier: number
+  bullsEyeNumber: number
 ): { win: number; pl: number } {
   const wager = Number(wagerPerDraw)
 
@@ -71,9 +69,7 @@ function calculateRoundWin(
   const bullsMult = (addons & ADDON_BULLSEYE_FLAG) !== 0 && bullsEyeNumber > 0 && ticketNumbers.includes(bullsEyeNumber)
     ? BULLSEYE_PAYTABLE[spotSize]?.[hits] ?? 0
     : 0
-  const roundMult = (addons & ADDON_MULTIPLIER_FLAG) !== 0 && drawnMultiplier > 0 ? drawnMultiplier : 1
-
-  const total = (baseMult + bullsMult) * wager * roundMult
+  const total = (baseMult + bullsMult) * wager
   const pl = total - wager
 
   return { win: total, pl }
@@ -111,7 +107,6 @@ export function useKenoTicketRoundHistory(ticket: KenoTicket | null) {
       const roundId = Number(round.id)
       const winningNumbers = Array.from(round.winningNumbers || []).filter((n: unknown) => typeof n === 'number' && n > 0) as number[]
       const bullsEyeNumber = Number(round.bullsEyeNumber || 0)
-      const drawnMultiplier = Number(round.drawnMultiplier || 1)
 
       // Only process if round is finalized (has winning numbers)
       if (winningNumbers.length === 0) return
@@ -123,8 +118,7 @@ export function useKenoTicketRoundHistory(ticket: KenoTicket | null) {
         ticket.spotSize,
         ticket.addons,
         ticket.wagerPerDraw,
-        bullsEyeNumber,
-        drawnMultiplier
+        bullsEyeNumber
       )
 
       // Get matched numbers

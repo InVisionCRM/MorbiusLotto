@@ -39,31 +39,13 @@ const BettingPanel: React.FC<BettingPanelProps> = ({
 
   const remainingBalance = reserveBalance - currentBetAmountBigInt;
 
-  console.log('BettingPanel validation:', {
-    currentBetAmount,
-    currentBetAmountBigInt: currentBetAmountBigInt.toString(),
-    BET_LIMITS_MIN: BET_LIMITS.MIN_BET.toString(),
-    BET_LIMITS_MAX: BET_LIMITS.MAX_BET.toString(),
-    isValidBet,
-    hasEnoughBalance
-  });
-
   const handleStartGame = () => {
-    console.log('BettingPanel handleStartGame called', {
-      isValidBet,
-      hasEnoughBalance,
-      currentBetAmount,
-      currentBetAmountBigInt
-    });
-
     if (!isValidBet || !hasEnoughBalance) {
-      console.log('Bet validation failed:', { isValidBet, hasEnoughBalance });
       return;
     }
 
     // Client seed is managed in the parent component (page.tsx)
     // Pass empty string - parent will use its own clientSeed state
-    console.log('Calling onStartGame with:', { currentBetAmountBigInt });
     onStartGame(currentBetAmountBigInt, '');
   };
 

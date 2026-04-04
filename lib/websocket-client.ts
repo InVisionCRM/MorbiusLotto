@@ -305,7 +305,6 @@ export class BlackjackWebSocketClient {
       let settled = false;
 
       this.ws.onopen = () => {
-        console.log('%c🦇 MORBIUS.IO — socket open. we do not stop.', 'color:#22d3ee;font-weight:bold;font-size:11px;');
         logger.info('WebSocket connected' + (canSign ? ', waiting for auth challenge...' : ' (legacy mode)'));
         this.reconnectAttempts = 0;
         // If we can't sign, we're in legacy mode — don't wait for auth
@@ -326,7 +325,6 @@ export class BlackjackWebSocketClient {
             if (canSign) {
               // Full EIP-712 auth: sign the nonce and send auth_response, wait for auth_success
               this.handleAuthChallenge(msg.payload).catch((err) => {
-                console.error('[WS Client] handleAuthChallenge failed:', err.message, err);
                 if (!settled) {
                   settled = true;
                   reject(new Error(`Auth challenge failed: ${err.message}`));
@@ -466,8 +464,6 @@ export class BlackjackWebSocketClient {
           signature,
         },
       }));
-    } else {
-      console.error('[WS Client] WebSocket not open when trying to send auth_response, readyState:', this.ws?.readyState);
     }
   }
 

@@ -1,4 +1,3 @@
-import { useRef } from 'react'
 import { useReadContract, useWriteContract, useWaitForTransactionReceipt } from 'wagmi'
 import { MORBIUS_TOKEN_ADDRESS, LOTTERY_INSTANT_ADDRESS, TOKEN_DECIMALS } from '@/lib/contracts'
 import { ERC20_ABI } from '@/abi/erc20'
@@ -38,31 +37,17 @@ export function useTokenBalance(address?: `0x${string}`) {
     },
   })
 
-  // Enhanced debug logging (only log on actual changes, not every render)
-  const prevBalanceRef = useRef<bigint | undefined>(undefined)
-  
   if (address) {
     if (error || isError) {
       console.error('❌ Error fetching token balance:', error)
-      console.log('Wallet address:', address)
-      console.log('Token address:', MORBIUS_TOKEN_ADDRESS)
-      console.log('Token decimals:', tokenDecimals)
-      console.log('Error details:', {
+      console.error('Token balance context:', {
+        walletAddress: address,
+        tokenAddress: MORBIUS_TOKEN_ADDRESS,
+        tokenDecimals,
         message: error?.message,
         cause: error?.cause,
         name: error?.name,
       })
-    }
-    
-    // Only log when balance actually changes
-    if (balance !== undefined && balance !== prevBalanceRef.current) {
-      const formatted = formatUnits(balance, tokenDecimals)
-      console.log('✅ Token balance loaded:', formatted, '(decimals:', tokenDecimals, ')')
-      prevBalanceRef.current = balance
-    }
-    
-    if (isLoading && prevBalanceRef.current === undefined) {
-      console.log('⏳ Loading token balance...')
     }
   }
 

@@ -52,11 +52,6 @@ export function useContractBalance() {
           setBalance(balanceValue)
           setBalanceFormatted(formatted)
 
-          console.log('💰 Contract MORBIUS Balance (from API):', {
-            raw: MORBIUSToken.value,
-            formatted,
-            decimals,
-          })
         } else {
           console.warn('⚠️ MORBIUS token not found in API response')
           setBalance(BigInt(0))

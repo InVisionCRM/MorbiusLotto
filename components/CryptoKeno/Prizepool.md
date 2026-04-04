@@ -81,14 +81,3 @@ MATCH	CLUB KENO PRIZE	ODDS OF WINNING 1 IN
 1 of 1	$2	4.00
 OVERALL ODDS OF WINNING 1 IN	-	4.00
 OVERALL ODDS OF WINNING WITH PLUS 3 1 IN	-	3.48
-//The Jack
-MATCH	PRIZE	ODDS OF WINNING 1 IN
-9 of 9	Jackpot*	1,380,688
-8 of 9	$1,000	30,682
-7 of 9	$100	1,690
-6 of 9	$10	175
-5 of 9	$5	31
-0 of 9	$1	16
-Overall Odds to Win: 1 in 9.74
-
-* If two or more persons win the jackpot or Top-Prize, the prize is shared equally among winning persons.

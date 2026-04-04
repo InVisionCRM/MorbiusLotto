@@ -90,7 +90,6 @@ export function useMorbiusBurned() {
             if (BURN_ADDRESSES.some(burnAddr => address === burnAddr.toLowerCase())) {
               const balance = BigInt(holder.value)
               total += balance
-              console.log(`🔥 Found burn address ${address} with ${holder.value} tokens`)
             }
           }
 
@@ -98,12 +97,9 @@ export function useMorbiusBurned() {
           pageCount++
         } while (nextPageParams && pageCount < maxPages)
 
-        console.log(`Total morbius burned: ${total.toString()}`)
-
         if (isMounted) {
           setBurnedAmount(total)
           setIsLoading(false)
-          console.log('🔥 Burned amount updated:', total.toString())
         }
       } catch (err) {
         if (isMounted) {

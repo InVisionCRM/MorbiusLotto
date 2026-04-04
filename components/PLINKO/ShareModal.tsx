@@ -90,8 +90,7 @@ export const ShareModal: React.FC<ShareModalProps> = ({
             const file = new File([imageBlob], 'plinko-session.png', { type: 'image/png' });
             shareData.files = [file];
             canShareWithFiles = navigator.canShare(shareData);
-          } catch (error) {
-            console.log('File sharing not supported:', error);
+          } catch {
             // Remove files from share data if creating File failed
             delete shareData.files;
           }
@@ -108,10 +107,8 @@ export const ShareModal: React.FC<ShareModalProps> = ({
               // User cancelled the share - do nothing
               return;
             } else if (error.name === 'NotAllowedError') {
-              console.log('Share not allowed:', error);
               alert('Sharing was blocked by the browser. Try copying the image instead.');
             } else {
-              console.log('Share failed:', error);
               alert('Native sharing failed. Try copying the image instead.');
             }
           }

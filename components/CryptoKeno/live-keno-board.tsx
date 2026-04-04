@@ -12,14 +12,11 @@ import { DottedGlowBackground } from '@/components/ui/dotted-glow-background'
 import { ChevronLeft, ChevronRight } from 'lucide-react'
 import { useAccount } from 'wagmi'
 
-type Stage = 'idle' | 'multiplier' | 'plus3' | 'drawing' | 'complete'
-const MULTIPLIERS = [1, 2, 3, 5, 10]
+type Stage = 'idle' | 'drawing' | 'complete'
 
 interface LiveKenoBoardProps {
   roundId?: number
   winningNumbers?: number[]
-  plus3Numbers?: number[]
-  multiplier?: number
   bullsEyeNumber?: number
   active?: boolean
   onClose?: () => void
@@ -55,8 +52,6 @@ const ALL_NUMBERS = Array.from({ length: 80 }, (_, i) => i + 1)
 export function LiveKenoBoard({
   roundId,
   winningNumbers = [],
-  plus3Numbers = [],
-  multiplier = 1,
   bullsEyeNumber,
   active = false,
   onClose,
@@ -70,11 +65,8 @@ export function LiveKenoBoard({
   const cellRefs = useRef<Record<number, HTMLDivElement | null>>({})
   const timeouts = useRef<number[]>([])
   const [stage, setStage] = useState<Stage>('idle')
-  const [flyingBall, setFlyingBall] = useState<{ number: number; x: number; y: number; plus3?: boolean } | null>(null)
+  const [flyingBall, setFlyingBall] = useState<{ number: number; x: number; y: number } | null>(null)
   const [drawnNumbers, setDrawnNumbers] = useState<number[]>([])
-  const [drawnPlus3, setDrawnPlus3] = useState<number[]>([])
-  const [wheelAngle, setWheelAngle] = useState(0)
-  const [spinning, setSpinning] = useState(false)
   const [secondsLeft, setSecondsLeft] = useState<number | null>(null)
   const [ticketIndex, setTicketIndex] = useState(0)
   const [showExpiredTickets, setShowExpiredTickets] = useState(false)
@@ -82,7 +74,6 @@ export function LiveKenoBoard({
   const { address } = useAccount()
 
   const orderedWinning = useMemo(() => winningNumbers.filter((n) => n > 0), [winningNumbers])
-  const orderedPlus3 = useMemo(() => plus3Numbers.filter((n) => n > 0), [plus3Numbers])
 
   // Filter tickets based on expired toggle. While a draw is active, always show all tickets so
   // "Your Numbers" stays visible during the entire animation regardless of drawsRemaining value.
@@ -106,10 +97,6 @@ export function LiveKenoBoard({
   const displayNumbers = useMemo(
     () => (drawnNumbers.length ? drawnNumbers : orderedWinning).slice(0, 20),
     [drawnNumbers, orderedWinning]
-  )
-  const displayPlus3 = useMemo(
-    () => (drawnPlus3.length ? drawnPlus3 : orderedPlus3).slice(0, 3),
-    [drawnPlus3, orderedPlus3]
   )
   const hasWonCurrentRound = useMemo(() => {
     if (!currentTicket || !roundId || !currentTicket.roundHistory) return false
@@ -137,11 +124,11 @@ export function LiveKenoBoard({
     timeouts.current.push(id)
   }
 
-  const launchBall = (num: number, isPlus3 = false) => {
+  const launchBall = (num: number) => {
     const container = gridRef.current
     const target = cellRefs.current[num]
     if (!container || !target) {
-      setFlyingBall({ number: num, x: 0, y: 0, plus3: isPlus3 })
+      setFlyingBall({ number: num, x: 0, y: 0 })
       return
     }
     const containerRect = container.getBoundingClientRect()
@@ -151,32 +138,20 @@ export function LiveKenoBoard({
     const centerY = containerRect.top + containerRect.height / 2
     const targetX = targetRect.left + targetRect.width / 2 - centerX
     const targetY = targetRect.top + targetRect.height / 2 - centerY - 15 // shift up for start/end alignment
-    setFlyingBall({ number: num, x: targetX, y: targetY, plus3: isPlus3 })
+    setFlyingBall({ number: num, x: targetX, y: targetY })
   }
 
   const startSequence = () => {
     if (!active || orderedWinning.length === 0) return
     clearTimers()
     setDrawnNumbers([])
-    setDrawnPlus3([])
-    setStage('multiplier')
-    setSpinning(true)
-    const safeMultiplier = MULTIPLIERS.includes(multiplier) ? multiplier : 1
-    const seg = 360 / MULTIPLIERS.length
-    const targetIndex = MULTIPLIERS.indexOf(safeMultiplier)
-    const targetAngle = 720 + targetIndex * seg + seg / 2 // two full spins then land
-    setWheelAngle(targetAngle)
-
+    setStage('drawing')
     let delay = 0
-    // Hold multiplier wheel
-    delay += 2400
-    schedule(() => setSpinning(false), delay - 400)
 
     // Main draw
-    schedule(() => setStage('drawing'), delay)
     orderedWinning.forEach((num, idx) => {
       const startAt = delay + idx * 2500 // ~1 minute total
-      schedule(() => launchBall(num, false), startAt)
+      schedule(() => launchBall(num), startAt)
       schedule(
         () => setDrawnNumbers((prev) => {
           if (prev.includes(num)) return prev
@@ -189,19 +164,7 @@ export function LiveKenoBoard({
     })
 
     const afterNumbers = delay + orderedWinning.length * 2500
-
-    // Plus 3 reveal after main draw
-    if (orderedPlus3.length) {
-      schedule(() => setStage('plus3'), afterNumbers)
-      orderedPlus3.forEach((num, idx) => {
-        const startAt = afterNumbers + idx * 1600
-        schedule(() => launchBall(num, true), startAt)
-        schedule(() => setDrawnPlus3((prev) => [...prev, num]), startAt + 1000)
-      })
-      delay = afterNumbers + orderedPlus3.length * 1600 + 500
-    } else {
-      delay = afterNumbers + 1000
-    }
+    delay = afterNumbers + 1000
 
     schedule(() => {
       setStage('complete')
@@ -213,7 +176,7 @@ export function LiveKenoBoard({
     if (active) startSequence()
     return clearTimers
      
-  }, [active, orderedWinning.join(','), orderedPlus3.join(','), roundId])
+  }, [active, orderedWinning.join(','), roundId])
 
   useEffect(() => {
     if (!nextDrawTime) {
@@ -249,7 +212,7 @@ export function LiveKenoBoard({
                 <AnimatePresence>
                   {flyingBall && (
                     <motion.div
-                      key={`${flyingBall.number}-${flyingBall.plus3 ? 'p' : 'w'}`}
+                      key={flyingBall.number}
                       initial={{ scale: 2, x: 0, y: 0, opacity: 1 }}
                       animate={{
                         scale: [2, 2, 0.35],
@@ -281,7 +244,6 @@ export function LiveKenoBoard({
             >
               {ALL_NUMBERS.map((n) => {
                 const isHit = drawnNumbers.includes(n)
-                const isPlus3Hit = drawnPlus3.includes(n)
                 const isBullsEye = bullsEyeNumber === n
                 const drawIndex = drawnNumbers.indexOf(n)
                 return (
@@ -293,9 +255,7 @@ export function LiveKenoBoard({
                       'relative flex h-9 items-center justify-center border text-xs font-semibold transition overflow-hidden',
                       isHit
                         ? 'border-cyan-500/80 text-cyan-100 shadow-[0_0_0_1px_rgba(6,182,212,0.5)]'
-                        : isPlus3Hit
-                          ? 'border-yellow-300 bg-yellow-500/20 text-yellow-100'
-                          : 'border-white/10 bg-white/5 text-gray-200'
+                        : 'border-white/10 bg-white/5 text-gray-200'
                     )}
                   >
                     {isHit && (
@@ -347,7 +307,7 @@ export function LiveKenoBoard({
                         ))}
                       </div>
 
-                      {(displayPlus3.length > 0 || bullsEyeNumber) && (
+                      {bullsEyeNumber && (
                         <div className="mb-3 text-center">
                           <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-500 mb-2">Add-ons</p>
                           <div className="flex flex-wrap items-center justify-center gap-3">
@@ -359,21 +319,6 @@ export function LiveKenoBoard({
                                 </span>
                               </div>
                             ) : null}
-                            {displayPlus3.length > 0 && (
-                              <div className="flex items-center gap-2 rounded-full bg-rose-100 px-3 py-1 text-[12px] font-bold text-rose-700 shadow-sm">
-                                <span className="uppercase text-[11px]">Plus 3</span>
-                                <div className="flex items-center gap-1">
-                                  {displayPlus3.map((n, idx) => (
-                                    <span
-                                      key={`${n}-${idx}`}
-                                      className="flex h-7 w-7 items-center justify-center rounded-full bg-rose-200 text-[11px] font-black text-rose-800 shadow-[0_2px_6px_rgba(244,63,94,0.25)]"
-                                    >
-                                      {n.toString().padStart(2, '0')}
-                                    </span>
-                                  ))}
-                                </div>
-                              </div>
-                            )}
                           </div>
                         </div>
                       )}

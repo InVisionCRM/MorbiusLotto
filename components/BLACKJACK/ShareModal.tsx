@@ -80,8 +80,7 @@ export const ShareModal: React.FC<ShareModalProps> = ({
             const file = new File([imageBlob], 'blackjack-session.png', { type: 'image/png' });
             shareData.files = [file];
             canShareWithFiles = navigator.canShare(shareData);
-          } catch (error) {
-            console.log('File sharing not supported:', error);
+          } catch {
             delete shareData.files;
           }
         }

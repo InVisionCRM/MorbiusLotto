@@ -772,12 +772,6 @@ export function useTournament(options: UseTournamentOptions) {
         throw new Error('Public client required for on-chain tournament creation. Please ensure your wallet is connected.');
       }
 
-      console.log('Creating tournament on-chain...', {
-        address: MORBIUS_TOURNAMENT_ADDRESS,
-        buyInAmount: params.buyInAmount,
-        maxPlayers: params.maxPlayers,
-      });
-
       const buyInAmount = BigInt(params.buyInAmount);
       const maxPlayers = params.maxPlayers ?? 0;
       const prizeToken = (params.prizeTokenAddress?.trim() || MORBIUS_TOURNAMENT_ZERO) as `0x${string}`;
@@ -792,8 +786,6 @@ export function useTournament(options: UseTournamentOptions) {
           chain: pulsechain,
           maxPriorityFeePerGas: 200_000n, // PulseChain tip
         });
-
-        console.log('Tournament creation transaction sent:', hash);
 
         const receipt = await publicClient.waitForTransactionReceipt({ hash });
         const matchedLog = receipt.logs.find((l) => {
@@ -820,7 +812,6 @@ export function useTournament(options: UseTournamentOptions) {
         });
         if (decoded.eventName === 'TournamentCreated' && 'tournamentId' in decoded.args) {
           onChainTournamentId = Number(decoded.args.tournamentId);
-          console.log('On-chain tournament created with ID:', onChainTournamentId);
         } else {
           throw new Error('Could not parse tournament ID from TournamentCreated event');
         }

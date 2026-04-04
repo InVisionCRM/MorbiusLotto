@@ -58,8 +58,6 @@ export function useWalletDetection() {
       walletKeys.forEach(key => {
         localStorage.removeItem(key)
       })
-
-      console.log(`🧹 Cleared ${walletKeys.length} wallet cache entries`)
     } catch (error) {
       console.warn('Failed to clear wallet cache:', error)
     }

@@ -125,7 +125,6 @@ export default function KenoPage() {
   const {
     paymentMethod,
     setPaymentMethod,
-    wplsRequiredWei,
     handlePlay,
     busy,
     isApprovePending,
@@ -191,7 +190,6 @@ export default function KenoPage() {
       paymentMethod={paymentMethod}
       spotSize={spotSize}
       wager={wager}
-      wplsRequiredWei={wplsRequiredWei}
       isConnected={isConnected}
       busy={busy}
       selectedNumbersCount={selectedNumbers.length}
