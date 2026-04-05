@@ -769,6 +769,15 @@ body {
   [data-poker-shell] .flex-1.relative {
     max-width: 100vw !important;
   }
+
+  /* Header: hide non-essential buttons (How to Play, Settings, Stats, Bots),
+     show the ··· mobile menu instead. */
+  [data-poker-shell] [data-poker-header] [data-poker-header-secondary] {
+    display: none !important;
+  }
+  [data-poker-shell] [data-poker-header] [data-poker-header-mobile-menu] {
+    display: block !important;
+  }
 }
 
 /* Wider landscape (tablets, large phones): just remove the width cap */

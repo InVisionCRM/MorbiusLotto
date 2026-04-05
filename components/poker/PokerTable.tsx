@@ -40,12 +40,12 @@ function formatChips(wei: string | number): string {
 const POT_ANCHOR = { fx: 0.50, fy: 0.51 };
 const ADJACENT_SEAT_VERTICAL_NUDGE_PX = 30;
 const SECOND_ADJACENT_SEAT_VERTICAL_NUDGE_PX = 30;
-const HERO_SEAT_VERTICAL_NUDGE_PX = 15;
+const HERO_SEAT_VERTICAL_NUDGE_PX = 38;
 const TOP_ADJACENT_SEAT_HORIZONTAL_NUDGE_PX = 40;
 const TOP_ADJACENT_SEAT_VERTICAL_NUDGE_PX = -30;
 const TOP_CENTER_SEAT_VERTICAL_NUDGE_PX = -10;
-const RIGHT_ADJACENT_SEAT_HORIZONTAL_NUDGE_PX = -30;
-const LEFT_ADJACENT_SEAT_HORIZONTAL_NUDGE_PX = 30;
+const RIGHT_ADJACENT_SEAT_HORIZONTAL_NUDGE_PX = 25;
+const LEFT_ADJACENT_SEAT_HORIZONTAL_NUDGE_PX = -25;
 const SHOWDOWN_CARD_PULL_RATIO = 0.18;
 const SHOWDOWN_CARD_PULL_MAX_PX = 70;
 const BET_CHIP_INWARD_DISTANCE_PX = 64;
@@ -61,7 +61,7 @@ const BET_CHIP_INWARD_DISTANCE_PX = 64;
 // hard-code rx/ry — they must stay aspect-responsive or landscape breaks.
 function computeSeatAnchors(n: number, mobileNudge = false, aspectRatio = 1.28): Array<{ fx: number; fy: number }> {
   const cx = 0.50, cy = 0.46;
-  const baseRx = 0.44, baseRy = 0.40;
+  const baseRx = 0.46, baseRy = 0.40;
   const arFactor = Math.min(1.15, Math.max(0.85, aspectRatio / 1.28));
   const rx = Math.min(0.48, baseRx * arFactor);
   const ry = Math.max(0.28, baseRy / arFactor);

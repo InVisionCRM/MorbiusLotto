@@ -56,6 +56,7 @@ export function PokerHeaderBar({
 }: PokerHeaderBarProps) {
   const [botsMenuOpen, setBotsMenuOpen] = useState(false);
   const [botCountInput, setBotCountInput] = useState('4');
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
   const parseBotCount = () => {
     const n = Number(botCountInput);
@@ -89,6 +90,7 @@ export function PokerHeaderBar({
       <div aria-hidden className="min-w-0" />
       <div className="flex items-center justify-end gap-1.5 shrink-0 relative">
         <button
+          data-poker-header-secondary
           type="button"
           onClick={() => {
             setShowHowToPlay(true);
@@ -106,7 +108,7 @@ export function PokerHeaderBar({
         >
           How to Play
         </button>
-        <div className="relative">
+        <div data-poker-header-secondary className="relative">
           <button
             type="button"
             onClick={() => {
@@ -170,7 +172,7 @@ export function PokerHeaderBar({
           )}
         </div>
         {normalizedAddress && (
-          <div className="relative">
+          <div data-poker-header-secondary className="relative">
             <button
               type="button"
               onClick={() => {
@@ -242,7 +244,7 @@ export function PokerHeaderBar({
         {normalizedAddress &&
           (isAdmin ||
             renderedState?.seats?.some((s) => (s.playerAddress || '').toLowerCase() === normalizedAddress)) && (
-          <div className="relative">
+          <div data-poker-header-secondary className="relative">
             <button
               type="button"
               onClick={() => {
@@ -310,6 +312,95 @@ export function PokerHeaderBar({
             )}
           </div>
         )}
+        {/* Mobile-only ⋯ menu — hidden on desktop via CSS, shown on mobile landscape */}
+        <div data-poker-header-mobile-menu className="relative" style={{ display: 'none' }}>
+          <button
+            type="button"
+            onClick={() => setMobileMenuOpen((o) => !o)}
+            className="h-9 w-9 flex items-center justify-center rounded-sm text-base font-bold transition-all hover:brightness-125 active:scale-[0.97]"
+            style={{
+              background: 'rgba(255,255,255,0.07)',
+              color: 'rgba(255,255,255,0.8)',
+              border: '1px solid rgba(255,255,255,0.1)',
+            }}
+            aria-label="More options"
+          >
+            ···
+          </button>
+          {mobileMenuOpen && (
+            <>
+              <div className="fixed inset-0 z-40" aria-hidden onClick={() => setMobileMenuOpen(false)} />
+              <div
+                className="absolute right-0 top-full mt-1 z-50 min-w-[170px] rounded-lg border border-white/10 overflow-hidden"
+                style={{ background: 'rgba(10,10,10,0.98)', boxShadow: '0 8px 24px rgba(0,0,0,0.5)' }}
+              >
+                <button
+                  type="button"
+                  onClick={() => { setShowHowToPlay(true); setMobileMenuOpen(false); }}
+                  className="w-full text-left px-3 py-2.5 text-[11px] font-bold tracking-wide transition-colors hover:bg-white/10"
+                  style={{ color: 'rgba(255,255,255,0.9)' }}
+                >
+                  How to Play
+                </button>
+                <button
+                  type="button"
+                  onClick={() => { setShowTableSettingsModal(true); setMobileMenuOpen(false); }}
+                  className="w-full text-left px-3 py-2.5 text-[11px] font-bold tracking-wide transition-colors hover:bg-white/10 border-t border-white/5"
+                  style={{ color: 'rgba(255,255,255,0.9)' }}
+                >
+                  Table Appearance
+                </button>
+                <button
+                  type="button"
+                  onClick={() => { setShowSoundsModal(true); setMobileMenuOpen(false); }}
+                  className="w-full text-left px-3 py-2.5 text-[11px] font-bold tracking-wide transition-colors hover:bg-white/10 border-t border-white/5"
+                  style={{ color: 'rgba(255,255,255,0.9)' }}
+                >
+                  Sounds
+                </button>
+                <button
+                  type="button"
+                  onClick={() => { setShowEditQuickChatModal(true); setMobileMenuOpen(false); }}
+                  className="w-full text-left px-3 py-2.5 text-[11px] font-bold tracking-wide transition-colors hover:bg-white/10 border-t border-white/5"
+                  style={{ color: 'rgba(255,255,255,0.9)' }}
+                >
+                  Edit QuickChat
+                </button>
+                {normalizedAddress && (
+                  <>
+                    <button
+                      type="button"
+                      onClick={() => { setStatsModalAddress(normalizedAddress); setShowStatsModal(true); setMobileMenuOpen(false); }}
+                      className="w-full text-left px-3 py-2.5 text-[11px] font-bold tracking-wide transition-colors hover:bg-white/10 border-t border-white/5"
+                      style={{ color: 'rgba(255,255,255,0.9)' }}
+                    >
+                      Player Stats
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => { setShowMyStats((v) => !v); if (showDashboard) setShowDashboard(false); setMobileMenuOpen(false); }}
+                      className="w-full text-left px-3 py-2.5 text-[11px] font-bold tracking-wide transition-colors hover:bg-white/10 border-t border-white/5"
+                      style={{ color: showMyStats ? 'rgb(34,211,238)' : 'rgba(255,255,255,0.9)' }}
+                    >
+                      Table Stats
+                    </button>
+                  </>
+                )}
+                {isAdmin && (
+                  <button
+                    type="button"
+                    onClick={() => { setShowDashboard((v) => !v); if (showMyStats) setShowMyStats(false); setMobileMenuOpen(false); }}
+                    className="w-full text-left px-3 py-2.5 text-[11px] font-bold tracking-wide transition-colors hover:bg-white/10 border-t border-white/5"
+                    style={{ color: showDashboard ? 'rgb(34,211,238)' : 'rgba(255,255,255,0.9)' }}
+                  >
+                    Poker Dashboard
+                  </button>
+                )}
+              </div>
+            </>
+          )}
+        </div>
+
         <button
           type="button"
           onClick={onLeaveClick}
