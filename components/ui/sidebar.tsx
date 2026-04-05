@@ -1,7 +1,6 @@
 "use client";
 import { cn } from "@/lib/utils";
 import React, { useState, createContext, useContext, useCallback, useEffect, useRef } from "react";
-import { AnimatePresence, motion } from "motion/react";
 import { IconMenu2, IconX } from "@tabler/icons-react";
 
 const DESKTOP_SIDEBAR_PIN_STORAGE_KEY = "global-main-nav-desktop-pinned";
@@ -92,11 +91,11 @@ export const Sidebar = ({
   );
 };
 
-export const SidebarBody = (props: React.ComponentProps<typeof motion.div>) => {
+export const SidebarBody = (props: React.ComponentProps<"div">) => {
   return (
     <>
       <DesktopSidebar {...props} />
-      <MobileSidebar {...(props as unknown as React.ComponentProps<"div">)} />
+      <MobileSidebar {...props} />
     </>
   );
 };
@@ -105,7 +104,7 @@ export const DesktopSidebar = ({
   className,
   children,
   style,
-}: React.ComponentProps<typeof motion.div>) => {
+}: React.ComponentProps<"div">) => {
   const { open, setOpen, animate, disabled } = useSidebar();
   const [pinned, setPinned] = useState(false);
   const [pinPreferenceLoaded, setPinPreferenceLoaded] = useState(false);
@@ -255,54 +254,41 @@ export const MobileSidebar = ({
             onClick={() => !disabled && setOpen(!open)}
           />
         </div>
-        <AnimatePresence>
-          {open && (
-            <>
-              {/* Backdrop - tap to close */}
-              <motion.div
-                initial={{ opacity: 0 }}
-                animate={{ opacity: 1 }}
-                exit={{ opacity: 0 }}
-                transition={{ duration: 0.2 }}
-                className="fixed inset-0 bg-black/50 z-[99998] md:hidden"
-                onClick={() => setOpen(false)}
-                aria-hidden
-              />
-              <motion.div
-                initial={{ x: "-100%", opacity: 0 }}
-                animate={{ x: 0, opacity: 1 }}
-                exit={{ x: "-100%", opacity: 0 }}
-                transition={{
-                  duration: 0.3,
-                  ease: "easeInOut",
-                }}
-                className={cn(
-                  "fixed left-0 top-0 bottom-0 w-1/2 min-w-[160px] max-w-[220px] z-[99999] flex flex-col overflow-hidden",
-                  className
-                )}
-                style={style}
+        {open && (
+          <>
+            {/* Backdrop — plain div (no Framer Motion) to match desktop sidebar reduced motion */}
+            <div
+              className="fixed inset-0 bg-black/50 z-[99998] md:hidden"
+              onClick={() => setOpen(false)}
+              aria-hidden
+            />
+            <div
+              className={cn(
+                "fixed left-0 top-0 bottom-0 w-1/2 min-w-[160px] max-w-[220px] z-[99999] flex flex-col overflow-hidden",
+                className
+              )}
+              style={style}
+            >
+              {/* Dedicated close row: above content so X is never covered by back link. Safe area so X isn't in status bar. */}
+              <div
+                className="shrink-0 flex items-center justify-end pr-1 min-h-12 pl-3"
+                style={{ paddingTop: "max(0.75rem, env(safe-area-inset-top, 0px))" }}
               >
-                {/* Dedicated close row: above content so X is never covered by back link. Safe area so X isn't in status bar. */}
-                <div
-                  className="shrink-0 flex items-center justify-end pr-1 min-h-12 pl-3"
-                  style={{ paddingTop: "max(0.75rem, env(safe-area-inset-top, 0px))" }}
+                <button
+                  type="button"
+                  onClick={() => setOpen(!open)}
+                  className="flex items-center justify-center w-10 h-10 -mr-1 text-white/80 hover:text-white cursor-pointer touch-manipulation"
+                  aria-label="Close menu"
                 >
-                  <button
-                    type="button"
-                    onClick={() => setOpen(!open)}
-                    className="flex items-center justify-center w-10 h-10 -mr-1 text-white/80 hover:text-white cursor-pointer touch-manipulation"
-                    aria-label="Close menu"
-                  >
-                    <IconX className="w-6 h-6" />
-                  </button>
-                </div>
-                <div className="flex-1 min-h-0 overflow-y-auto pl-3 pr-2 pb-4 flex flex-col">
-                  {children}
-                </div>
-              </motion.div>
-            </>
-          )}
-        </AnimatePresence>
+                  <IconX className="w-6 h-6" />
+                </button>
+              </div>
+              <div className="flex-1 min-h-0 overflow-y-auto pl-3 pr-2 pb-4 flex flex-col">
+                {children}
+              </div>
+            </div>
+          </>
+        )}
       </div>
     </>
   );

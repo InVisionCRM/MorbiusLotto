@@ -25,6 +25,7 @@ import { CosmeticsService } from './services/cosmetics.service';
 import { isAdminWallet, getLockedFields, ITEM_CATALOG } from './lib/cosmetics-catalog';
 import { getPokerChipWei } from './lib/poker-chip-scale';
 import { logger } from './utils/logger';
+import { assertPokerBotControlAllowed } from './utils/poker-bot-auth';
 import { MIN_WITHDRAWAL_WEI } from './utils/withdraw-sign';
 import { getPublicClient } from './utils/chain-client';
 import { blackjackAbi } from './abi/blackjack';
@@ -1895,6 +1896,12 @@ async function initializeServices() {
           return;
         }
 
+        const gate = await assertPokerBotControlAllowed(dbService.getPool(), tableId, req.headers['x-admin-wallet'] as string | undefined);
+        if (!gate.ok) {
+          res.status(gate.status).json({ error: gate.error });
+          return;
+        }
+
         const existingJob = pokerBotJobs.get(tableId);
         if (existingJob && !existingJob.process.killed) {
           res.status(409).json({
@@ -1985,6 +1992,11 @@ async function initializeServices() {
           res.status(400).json({ error: 'tableId required' });
           return;
         }
+        const gate = await assertPokerBotControlAllowed(dbService.getPool(), tableId, req.headers['x-admin-wallet'] as string | undefined);
+        if (!gate.ok) {
+          res.status(gate.status).json({ error: gate.error });
+          return;
+        }
         const job = pokerBotJobs.get(tableId);
         if (!job) {
           res.status(404).json({ error: 'No running bot process for this table' });
@@ -2002,6 +2014,19 @@ async function initializeServices() {
     app.get('/api/admin/poker/bots/status', async (req, res) => {
       try {
         const tableId = typeof req.query.tableId === 'string' ? req.query.tableId.trim() : '';
+        const wallet = (req.headers['x-admin-wallet'] as string | undefined)?.trim();
+        if (!tableId) {
+          if (!wallet || !isAdminWallet(wallet)) {
+            res.status(403).json({ error: 'Admin wallet required for global bot status' });
+            return;
+          }
+        } else {
+          const gate = await assertPokerBotControlAllowed(dbService.getPool(), tableId, wallet);
+          if (!gate.ok) {
+            res.status(gate.status).json({ error: gate.error });
+            return;
+          }
+        }
         if (tableId) {
           const job = pokerBotJobs.get(tableId);
           if (!job) {

@@ -239,7 +239,9 @@ export function PokerHeaderBar({
             )}
           </div>
         )}
-        {isAdmin && (
+        {normalizedAddress &&
+          (isAdmin ||
+            renderedState?.seats?.some((s) => (s.playerAddress || '').toLowerCase() === normalizedAddress)) && (
           <div className="relative">
             <button
               type="button"

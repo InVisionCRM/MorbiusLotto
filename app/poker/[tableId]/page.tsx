@@ -315,7 +315,7 @@ export default function PokerTablePage() {
   }, []);
 
   const onAdminStartBots = useCallback(async (numBots: number) => {
-    if (!isAdmin || !address || !tableId) return;
+    if (!address || !tableId) return;
     const clampedBots = Math.max(1, Math.min(adminBotMax, Math.floor(numBots || 1)));
     setAdminBotsBusy(true);
     try {
@@ -347,10 +347,10 @@ export default function PokerTablePage() {
     } finally {
       setAdminBotsBusy(false);
     }
-  }, [isAdmin, address, tableId, adminBotMax, extractApiError]);
+  }, [address, tableId, adminBotMax, extractApiError]);
 
   const onAdminStopBots = useCallback(async () => {
-    if (!isAdmin || !address || !tableId) return;
+    if (!address || !tableId) return;
     setAdminBotsBusy(true);
     try {
       const res = await fetch('/api/admin/poker/bots/stop', {
@@ -372,7 +372,7 @@ export default function PokerTablePage() {
     } finally {
       setAdminBotsBusy(false);
     }
-  }, [isAdmin, address, tableId, extractApiError]);
+  }, [address, tableId, extractApiError]);
 
   return (
     <PokerThemeProvider themeId={pokerTheme}>

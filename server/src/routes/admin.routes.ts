@@ -17,8 +17,10 @@ import type { ChainAnalyticsService } from '../services/chain-analytics.service'
 import type { DatabaseService } from '../services/database.service';
 import type { PokerGameService } from '../services/poker-game.service';
 import type { WebSocketService } from '../services/websocket.service';
+import { isAdminWallet } from '../lib/cosmetics-catalog';
 import { getPublicClient } from '../utils/chain-client';
 import { logger } from '../utils/logger';
+import { assertPokerBotControlAllowed } from '../utils/poker-bot-auth';
 
 const ERC20_BALANCE_OF_ABI = [
   { inputs: [{ name: 'account', type: 'address' }], name: 'balanceOf', outputs: [{ internalType: 'uint256', name: '', type: 'uint256' }], stateMutability: 'view', type: 'function' },
@@ -335,6 +337,12 @@ export function registerAdminRoutes({
         return;
       }
 
+      const gate = await assertPokerBotControlAllowed(dbService.getPool(), tableId, req.headers['x-admin-wallet'] as string | undefined);
+      if (!gate.ok) {
+        res.status(gate.status).json({ error: gate.error });
+        return;
+      }
+
       const existingJob = pokerBotJobs.get(tableId);
       if (existingJob && !existingJob.process.killed) {
         res.status(409).json({
@@ -424,6 +432,11 @@ export function registerAdminRoutes({
         res.status(400).json({ error: 'tableId required' });
         return;
       }
+      const gate = await assertPokerBotControlAllowed(dbService.getPool(), tableId, req.headers['x-admin-wallet'] as string | undefined);
+      if (!gate.ok) {
+        res.status(gate.status).json({ error: gate.error });
+        return;
+      }
       const job = pokerBotJobs.get(tableId);
       if (!job) {
         res.status(404).json({ error: 'No running bot process for this table' });
@@ -441,6 +454,19 @@ export function registerAdminRoutes({
   app.get('/api/admin/poker/bots/status', async (req, res) => {
     try {
       const tableId = typeof req.query.tableId === 'string' ? req.query.tableId.trim() : '';
+      const wallet = (req.headers['x-admin-wallet'] as string | undefined)?.trim();
+      if (!tableId) {
+        if (!wallet || !isAdminWallet(wallet)) {
+          res.status(403).json({ error: 'Admin wallet required for global bot status' });
+          return;
+        }
+      } else {
+        const gate = await assertPokerBotControlAllowed(dbService.getPool(), tableId, wallet);
+        if (!gate.ok) {
+          res.status(gate.status).json({ error: gate.error });
+          return;
+        }
+      }
       if (tableId) {
         const job = pokerBotJobs.get(tableId);
         if (!job) {
