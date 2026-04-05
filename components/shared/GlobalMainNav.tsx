@@ -25,6 +25,7 @@ import type { TableOption } from '@/hooks/use-blackjack-tables';
 import { useQueryClient } from '@tanstack/react-query';
 // Install console.error interceptor for bug reports (browser only, no-op on server)
 import '@/lib/error-log';
+import { InstallAppHelpDialog } from '@/components/shared/InstallAppHelpDialog';
 
 // Lazy-load modals — only pulled into the bundle when first opened
 const ThemeSelectionModal = lazy(() => import('@/components/BLACKJACK/ThemeSelectionModal'));
@@ -225,6 +226,7 @@ interface NavContentProps {
   onSignOut?: () => void;
   onOpenReport: () => void;
   onOpenProfileModal?: () => void;
+  onOpenInstallAppHelp?: () => void;
 }
 
 const NavContent = React.memo(function NavContent(props: NavContentProps) {
@@ -265,6 +267,7 @@ const NavContent = React.memo(function NavContent(props: NavContentProps) {
     onSignOut,
     onOpenReport,
     onOpenProfileModal,
+    onOpenInstallAppHelp,
   } = props;
 
   const btnClass = (active: boolean) =>
@@ -450,6 +453,14 @@ const NavContent = React.memo(function NavContent(props: NavContentProps) {
         {/* Other */}
         <div className="pt-2 mt-2 border-t border-white/10">
           <SectionLabel label="Other" />
+          {onOpenInstallAppHelp ? (
+            <SidebarButton
+              label="Install app"
+              icon={<i className="fas fa-download w-5 text-center shrink-0" aria-hidden />}
+              onClick={onOpenInstallAppHelp}
+              className={`${NAV_ITEM_CLASS} text-emerald-400 hover:bg-emerald-500/15 hover:text-emerald-300`}
+            />
+          ) : null}
           <SidebarButton label="Responsible Gaming" icon={<i className="fas fa-shield-alt w-5 text-center text-white shrink-0" aria-hidden />} onClick={onOpenResponsibleGaming} className={NAV_ITEM_CLASS} />
           <SidebarButton label="Report Issue" icon={<i className="fas fa-flag w-5 text-center text-red-400/80 shrink-0" aria-hidden />} onClick={onOpenReport} className={NAV_ITEM_CLASS} />
           <SidebarLink link={{ label: 'Token Analyzer', href: 'https://scan.morbius.io', icon: <i className="fas fa-search w-5 text-center text-white shrink-0" aria-hidden /> }} className={NAV_ITEM_CLASS} target="_blank" rel="noopener noreferrer" />
@@ -574,6 +585,7 @@ export default function GlobalMainNav({
   const [swapOpen, setSwapOpen] = useState(false);
   const [gameWalletOpen, setGameWalletOpen] = useState(false);
   const [profileAvatarModalOpen, setProfileAvatarModalOpen] = useState(false);
+  const [installAppHelpOpen, setInstallAppHelpOpen] = useState(false);
   const queryClient = useQueryClient();
 
   const effectiveOnOpenResponsibleGaming = useCallback(
@@ -618,6 +630,7 @@ export default function GlobalMainNav({
     [onOpenSwap],
   );
   const handleOpenReport = useCallback(() => setReportOpen(true), []);
+  const handleOpenInstallAppHelp = useCallback(() => setInstallAppHelpOpen(true), []);
   const handleOpenGameWallet = useCallback(() => {
     if (onOpenDepositModal) {
       onOpenDepositModal();
@@ -697,6 +710,7 @@ export default function GlobalMainNav({
             onSignOut={onSignOut}
             onOpenReport={handleOpenReport}
             onOpenProfileModal={handleOpenProfileModal}
+            onOpenInstallAppHelp={handleOpenInstallAppHelp}
           />
         </SidebarBody>
         <div
@@ -708,6 +722,7 @@ export default function GlobalMainNav({
       </div>
 
       {/* Lazy-loaded modals — only rendered when open */}
+      <InstallAppHelpDialog open={installAppHelpOpen} onOpenChange={setInstallAppHelpOpen} />
       <Suspense fallback={null}>
         {page === 'blackjack' && onThemeChange && themeModalOpen && (
           <ThemeSelectionModal

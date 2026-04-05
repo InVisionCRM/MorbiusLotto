@@ -19,6 +19,7 @@ import { PulseChainSection } from '@/components/home/pulsechain-section'
 import { TableShowcaseDisplay } from '@/components/marketing/TableShowcaseDisplay'
 import { MorbItSection } from '@/components/home/morbit-section'
 import Footer from '@/components/PLINKO/Footer'
+import { PwaHomeInstallSplash } from '@/components/home/PwaHomeInstallSplash'
 
 const HOME_FIXED_BG = '/Marketing%20/Hero-Background.jpeg' as const
 
@@ -134,6 +135,7 @@ export default function HomePageClient() {
         address={address ?? null}
         game={playerProfileGame}
       />
+      <PwaHomeInstallSplash />
     </GlobalMainNav>
   )
 }

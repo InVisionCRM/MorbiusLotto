@@ -10,6 +10,7 @@ import { GameLockProvider } from '@/contexts/game-lock-context'
 import { LocaleProvider } from '@/contexts/locale-context'
 import { ProfileSettingsModalProvider } from '@/components/shared/ProfileSettingsModalContext'
 import { ProfileWsProvider } from '@/contexts/profile-ws-context'
+import { PwaInstallPromptProvider } from '@/contexts/pwa-install-prompt-context'
 
 export function Providers({ children }: { children: React.ReactNode }) {
   // Create QueryClient once per provider instance to prevent cache resets
@@ -51,7 +52,7 @@ export function Providers({ children }: { children: React.ReactNode }) {
           >
             <ProfileSettingsModalProvider>
               <ProfileWsProvider>
-                {children}
+                <PwaInstallPromptProvider>{children}</PwaInstallPromptProvider>
               </ProfileWsProvider>
             </ProfileSettingsModalProvider>
           </RainbowKitProvider>
