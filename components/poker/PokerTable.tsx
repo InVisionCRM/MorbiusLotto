@@ -50,9 +50,6 @@ const SHOWDOWN_CARD_PULL_RATIO = 0.18;
 const SHOWDOWN_CARD_PULL_MAX_PX = 70;
 const BET_CHIP_INWARD_DISTANCE_PX = 64;
 
-// Radial scale > 1 pushes seat centers outward past the felt oval toward the rail.
-const SEAT_ELLIPSE_OUTWARD_SCALE = 1.12;
-
 // Compute evenly-spaced seat positions around the table oval for any seat count.
 // Seat 0 is always bottom-center (current player); action then moves to the left,
 // which matches standard clockwise Hold'em flow from the hero seat.
@@ -66,8 +63,8 @@ function computeSeatAnchors(n: number, mobileNudge = false, aspectRatio = 1.28):
   const cx = 0.50, cy = 0.46;
   const baseRx = 0.46, baseRy = 0.40;
   const arFactor = Math.min(1.15, Math.max(0.85, aspectRatio / 1.28));
-  const rx = Math.min(0.54, baseRx * arFactor * SEAT_ELLIPSE_OUTWARD_SCALE);
-  const ry = Math.max(0.28, (baseRy / arFactor) * SEAT_ELLIPSE_OUTWARD_SCALE);
+  const rx = Math.min(0.48, baseRx * arFactor);
+  const ry = Math.max(0.28, baseRy / arFactor);
   return Array.from({ length: n }, (_, i) => {
     const theta = Math.PI / 2 + (i / n) * 2 * Math.PI;
     let fy = parseFloat((cy + ry * Math.sin(theta)).toFixed(4));

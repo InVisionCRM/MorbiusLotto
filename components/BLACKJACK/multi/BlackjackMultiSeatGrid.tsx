@@ -17,6 +17,8 @@ type BlackjackMultiSeatGridProps = {
   myBalanceLabel: string;
   showOutcomeLabel: boolean;
   nudgeScale?: number;
+  /** When true, collapses the outward nudge so seats pull inward toward center */
+  fullscreen?: boolean;
   onTakeSeat: (position: number) => void;
   onOpenProfile: (address: string) => void;
 };
@@ -32,18 +34,20 @@ export function BlackjackMultiSeatGrid({
   myBalanceLabel,
   showOutcomeLabel,
   nudgeScale = 1,
+  fullscreen = false,
   onTakeSeat,
   onOpenProfile,
 }: BlackjackMultiSeatGridProps) {
-  // Keep side-seat framing stable across viewport sizes.
+  // In fullscreen, pull seats inward (positive X nudge toward center, smaller Y).
+  // In normal mode, push side seats outward to frame the table edges.
   const clampedScale = Math.max(0.72, Math.min(1, nudgeScale));
-  const sideNudgeX = Math.round(42 * clampedScale);
-  const sideNudgeY = Math.round(66 * clampedScale);
+  const sideNudgeX = fullscreen ? -60 : Math.round(42 * clampedScale);
+  const sideNudgeY = fullscreen ? Math.round(30 * clampedScale) : Math.round(66 * clampedScale);
 
   return (
     <div
       className="grid w-full max-w-4xl grid-cols-3 gap-2 sm:gap-3 md:gap-4 mx-auto"
-      style={{ transform: 'translateY(6px)', padding: '0 4%' }}
+      style={{ transform: 'translateY(6px)', padding: fullscreen ? '0 12%' : '0 4%' }}
     >
       {POSITIONS.map((pos) => {
         const seat = seats[pos];
@@ -51,9 +55,10 @@ export function BlackjackMultiSeatGrid({
         const isMe = seat?.playerAddress?.toLowerCase() === addressLower;
         const align =
           pos === 0 ? 'flex justify-start' : pos === 2 ? 'flex justify-end' : 'flex justify-center';
+        // Normal: side seats pushed outward. Fullscreen: side seats pulled inward (negative sideNudgeX = toward center).
         const seatNudge =
-          pos === 0 ? { transform: `translate(-${sideNudgeX}px, -${sideNudgeY}px)` } :
-          pos === 2 ? { transform: `translate(${sideNudgeX}px, -${sideNudgeY}px)` } : {};
+          pos === 0 ? { transform: `translate(${fullscreen ? sideNudgeX : -sideNudgeX}px, -${sideNudgeY}px)` } :
+          pos === 2 ? { transform: `translate(${fullscreen ? -sideNudgeX : sideNudgeX}px, -${sideNudgeY}px)` } : {};
         return (
           <div key={pos} className={`min-w-0 ${align}`} style={seatNudge}>
             <BlackjackMultiSeat

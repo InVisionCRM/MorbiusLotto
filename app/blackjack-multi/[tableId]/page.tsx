@@ -10,6 +10,7 @@ import type { BJMultiTableState, BJMultiSeatState, BJMultiHandObj } from '@/lib/
 import GlobalMainNav from '@/components/shared/GlobalMainNav';
 import { useChat } from '@/hooks/use-chat';
 import { BlackjackMultiAvatarDock } from '@/components/BLACKJACK/multi/BlackjackMultiAvatarDock';
+import { AvatarView } from '@/components/avatar';
 import { BlackjackHowToSection } from '@/components/BLACKJACK/BlackjackHowToSection';
 import { BlackjackMultiSeatGrid } from '@/components/BLACKJACK/multi/BlackjackMultiSeatGrid';
 import { BlackjackMultiSoundPanel } from '@/components/BLACKJACK/multi/BlackjackMultiSoundPanel';
@@ -1096,6 +1097,7 @@ export default function BlackjackMultiTablePage() {
               myBalanceLabel={formatMorbius(playerBalance.toString())}
               showOutcomeLabel={showSeatOutcomeLabels}
               nudgeScale={boardScale}
+              fullscreen={isFullscreen}
               onTakeSeat={takeSeat}
               onOpenProfile={setSelectedProfileAddress}
             />
@@ -1137,60 +1139,112 @@ export default function BlackjackMultiTablePage() {
           )}
         </button>
 
-        {/* ── Compact floating bet/action overlay — fullscreen only ── */}
+        {/* ── Fullscreen: avatar strip at top-center ── */}
+        {isFullscreen && (
+          <div className="absolute top-0 left-1/2 -translate-x-1/2 z-30 flex items-end gap-3 px-4 pt-1 pb-1"
+            style={{ background: 'linear-gradient(to bottom, rgba(0,0,0,0.70) 70%, transparent)' }}
+          >
+            {seatsByPosition.map((seat, pos) => {
+              if (!seat?.playerAddress) return null;
+              return (
+                <div key={pos} className="flex flex-col items-center gap-0.5">
+                  <div style={{ width: 38, height: 38, borderRadius: '50%', overflow: 'hidden', border: '1.5px solid rgba(255,255,255,0.25)', flexShrink: 0 }}>
+                    <AvatarView config={seat.avatarConfig ?? null} disableAmbientMotion compact />
+                  </div>
+                  <span className="text-white/60 text-[10px] leading-none truncate max-w-[48px] text-center">
+                    {seat.displayName ?? seat.playerAddress.slice(-4)}
+                  </span>
+                </div>
+              );
+            })}
+          </div>
+        )}
+
+        {/* ── Fullscreen: betting/action panel — bottom-right ── */}
         {isFullscreen && myPosition !== null && (
           <div
-            className="absolute bottom-0 left-0 right-0 z-30 flex items-center gap-2 px-4 py-3"
-            style={{ background: 'linear-gradient(to top, rgba(0,0,0,0.92) 80%, transparent)' }}
+            className="absolute bottom-0 right-0 z-30 flex flex-col gap-1.5 p-3"
+            style={{
+              background: 'linear-gradient(135deg, transparent 0%, rgba(0,0,0,0.88) 30%)',
+              minWidth: 280,
+              maxWidth: 340,
+            }}
           >
             {/* Betting phase */}
             {state?.phase === 'betting' && !hasBet && (
               <>
-                <div className="flex items-center gap-1 rounded-lg bg-white/10 border border-white/15 px-2 py-1">
-                  <span className="text-white/50 text-xs">Bet</span>
-                  <input
-                    type="number"
-                    value={betAmount}
-                    onChange={e => setBetAmount(e.target.value)}
-                    min={tableMinBetWhole}
-                    max={tableMaxBetWhole}
-                    className="w-20 bg-transparent text-white text-sm font-bold text-center outline-none"
-                  />
-                  <span className="text-white/40 text-xs">M</span>
+                {/* Amount input row */}
+                <div className="flex items-stretch rounded-lg border border-white/20 overflow-hidden" style={{ height: 36 }}>
+                  <div className="flex-1 flex items-center gap-2 px-2">
+                    <input
+                      type="text"
+                      inputMode="numeric"
+                      value={betAmount === '0' ? '' : betAmount}
+                      onChange={e => { if (/^[0-9]*$/.test(e.target.value)) setBetAmount(e.target.value || '0'); }}
+                      className="flex-1 min-w-0 bg-transparent text-white font-bold text-sm outline-none placeholder:text-white/30"
+                      placeholder={`${tableMinBetWhole}–${tableMaxBetWhole}`}
+                      aria-label="Bet amount"
+                    />
+                    <span className="text-white/40 text-xs flex-shrink-0">MORBIUS</span>
+                  </div>
+                  <div className="w-px bg-white/20 self-stretch" />
+                  <button
+                    onClick={() => setBetAmount(String(Math.max(tableMinBetWhole, Math.floor(parseInt(betAmount || '0', 10) / 2))))}
+                    className="px-3 text-white font-bold text-sm hover:bg-white/10 transition-colors"
+                  >½</button>
+                  <div className="w-px bg-white/20 self-stretch" />
+                  <button
+                    onClick={() => setBetAmount(String(Math.min(tableMaxBetWhole, parseInt(betAmount || '0', 10) * 2)))}
+                    className="px-3 text-white font-bold text-sm hover:bg-white/10 transition-colors"
+                  >2×</button>
                 </div>
-                <button
-                  onClick={() => setBetAmount(String(Math.max(tableMinBetWhole, Math.floor(parseInt(betAmount || '0', 10) / 2))))}
-                  className="rounded-lg bg-white/10 border border-white/15 text-white/70 hover:text-white text-xs px-2 py-1.5 transition-colors"
-                >½</button>
-                <button
-                  onClick={() => setBetAmount(String(Math.min(tableMaxBetWhole, parseInt(betAmount || '0', 10) * 2)))}
-                  className="rounded-lg bg-white/10 border border-white/15 text-white/70 hover:text-white text-xs px-2 py-1.5 transition-colors"
-                >2×</button>
+                {/* Preset chips row */}
+                <div className="grid grid-cols-5 rounded-md border border-white/20 overflow-hidden">
+                  {[500, 5000, 25000, 50000].map((amt) => (
+                    <button
+                      key={amt}
+                      onClick={() => {
+                        const cur = parseInt(betAmount || '0', 10);
+                        setBetAmount(String(Math.min(tableMaxBetWhole, cur + amt)));
+                      }}
+                      className="h-8 text-white/90 text-xs font-semibold hover:bg-white/10 transition-colors border-r border-white/20"
+                    >
+                      {amt >= 1000 ? `${amt / 1000}k` : amt}
+                    </button>
+                  ))}
+                  <button
+                    onClick={() => setBetAmount('0')}
+                    className="h-8 text-white/90 text-xs font-semibold hover:bg-white/10 transition-colors"
+                  >Clear</button>
+                </div>
+                {/* Deal button */}
                 <button
                   onClick={placeBet}
-                  className="ml-auto rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-sm px-4 py-1.5 transition-colors"
+                  className="w-full h-9 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-sm transition-colors"
                 >Deal</button>
               </>
             )}
+
             {/* Playing phase — my turn */}
             {isMyTurn && activeHand && (
-              <>
-                <button onClick={() => doAction('hit')} className="rounded-lg bg-blue-600 hover:bg-blue-500 text-white font-bold text-sm px-4 py-1.5 transition-colors">Hit</button>
-                <button onClick={() => doAction('stand')} className="rounded-lg bg-red-600 hover:bg-red-500 text-white font-bold text-sm px-4 py-1.5 transition-colors">Stand</button>
+              <div className="flex gap-2">
+                <button onClick={() => doAction('hit')} className="flex-1 h-9 rounded-lg bg-blue-600 hover:bg-blue-500 text-white font-bold text-sm transition-colors">Hit</button>
+                <button onClick={() => doAction('stand')} className="flex-1 h-9 rounded-lg bg-red-600 hover:bg-red-500 text-white font-bold text-sm transition-colors">Stand</button>
                 {activeHand.canDoubleDown && (
-                  <button onClick={() => doAction('double_down')} className="rounded-lg bg-yellow-600 hover:bg-yellow-500 text-white font-bold text-sm px-4 py-1.5 transition-colors">Double</button>
+                  <button onClick={() => doAction('double_down')} className="flex-1 h-9 rounded-lg bg-yellow-600 hover:bg-yellow-500 text-white font-bold text-sm transition-colors">Double</button>
                 )}
                 {activeHand.canSplit && (
-                  <button onClick={() => doAction('split')} className="rounded-lg bg-purple-600 hover:bg-purple-500 text-white font-bold text-sm px-4 py-1.5 transition-colors">Split</button>
+                  <button onClick={() => doAction('split')} className="flex-1 h-9 rounded-lg bg-purple-600 hover:bg-purple-500 text-white font-bold text-sm transition-colors">Split</button>
                 )}
-              </>
+              </div>
             )}
-            {/* Waiting / bet placed indicator */}
+
+            {/* Status messages */}
             {state?.phase === 'betting' && hasBet && (
-              <span className="text-white/50 text-sm">Bet placed — waiting for round to start…</span>
+              <span className="text-white/50 text-xs text-right">Bet placed — waiting for round…</span>
             )}
             {(state?.phase === 'dealer_turn' || (state?.phase === 'playing' && !isMyTurn)) && (
-              <span className="text-white/50 text-sm">Waiting…</span>
+              <span className="text-white/50 text-xs text-right">Waiting…</span>
             )}
           </div>
         )}
@@ -1223,8 +1277,8 @@ export default function BlackjackMultiTablePage() {
       {/* ── End table column wrapper ── */}
       </div>
 
-      {/* ── Controls — sidebar on md+, below table on mobile ── */}
-      <div data-bj-panel className="px-4 py-4 space-y-3 bg-slate-950 md:row-start-1 md:col-start-2 md:py-0 md:px-0 md:flex md:flex-col md:gap-3 md:overflow-hidden md:pt-4">
+      {/* ── Controls — sidebar on md+, below table on mobile; hidden in fullscreen ── */}
+      <div data-bj-panel className={`px-4 py-4 space-y-3 bg-slate-950 md:row-start-1 md:col-start-2 md:py-0 md:px-0 md:flex md:flex-col md:gap-3 md:overflow-hidden md:pt-4${isFullscreen ? ' hidden' : ''}`}>
 
         <BlackjackMultiBetActionPanel
           myPosition={myPosition}
