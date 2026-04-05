@@ -16,6 +16,7 @@ import BlackjackRealTimeBetChart, { BlackjackRealTimeBetChartRef } from '@/compo
 import { BlackjackStatusOverlays } from '@/components/BLACKJACK/BlackjackStatusOverlays';
 import { BlackjackTournamentOverlays } from '@/components/BLACKJACK/BlackjackTournamentOverlays';
 import { BlackjackGameView } from '@/components/BLACKJACK/BlackjackGameView';
+import { BlackjackHowToSection } from '@/components/BLACKJACK/BlackjackHowToSection';
 import { useProfileSettingsModal } from '@/components/shared/ProfileSettingsModalContext';
 import { Card, Hand, Game, GameState, Action, GameResult, GameStateUI } from './types';
 import { useTournament } from '@/hooks/use-tournament';
@@ -2227,6 +2228,8 @@ export default function BlackjackPage() {
           getThemeInfo={getThemeInfo}
           fetchBalance={fetchBalance}
         />
+
+        <BlackjackHowToSection blackjackAddress={BLACKJACK_ADDRESS} />
 
         <BlackjackAuxViews
           currentView={currentView}

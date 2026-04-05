@@ -10,6 +10,7 @@ import type { BJMultiTableState, BJMultiSeatState, BJMultiHandObj } from '@/lib/
 import GlobalMainNav from '@/components/shared/GlobalMainNav';
 import { useChat } from '@/hooks/use-chat';
 import { BlackjackMultiAvatarDock } from '@/components/BLACKJACK/multi/BlackjackMultiAvatarDock';
+import { BlackjackHowToSection } from '@/components/BLACKJACK/BlackjackHowToSection';
 import { BlackjackMultiSeatGrid } from '@/components/BLACKJACK/multi/BlackjackMultiSeatGrid';
 import { BlackjackMultiSoundPanel } from '@/components/BLACKJACK/multi/BlackjackMultiSoundPanel';
 import { BlackjackMultiConnectionOverlay } from '@/components/BLACKJACK/multi/BlackjackMultiConnectionOverlay';
@@ -137,6 +138,16 @@ export default function BlackjackMultiTablePage() {
   const visualHoldUntilRef = useRef(0);
   const visualHoldTimerRef = useRef<NodeJS.Timeout | null>(null);
   const [wsConnected, setWsConnected] = useState(false);
+  const [isFullscreen, setIsFullscreen] = useState(false);
+
+  // Lock body scroll + Escape key when fullscreen is active
+  useEffect(() => {
+    document.body.style.overflow = isFullscreen ? 'hidden' : '';
+    if (!isFullscreen) return () => { document.body.style.overflow = ''; };
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') setIsFullscreen(false); };
+    window.addEventListener('keydown', onKey);
+    return () => { document.body.style.overflow = ''; window.removeEventListener('keydown', onKey); };
+  }, [isFullscreen]);
   const [selectedProfileAddress, setSelectedProfileAddress] = useState<string | null>(null);
   const [wsStatus, setWsStatus] = useState<'connecting' | 'connected' | 'reconnecting' | 'failed'>('connecting');
   const [reconnectInfo, setReconnectInfo] = useState<{ attempt: number; maxAttempts: number } | null>(null);
@@ -983,12 +994,28 @@ export default function BlackjackMultiTablePage() {
       {/* 2-column layout on md+: table (left) + sidebar controls (right) — same shell as app/BLACKJACK/page.tsx */}
       <div data-bj-grid className="grid grid-cols-1 md:grid-cols-[minmax(0,3fr)_minmax(360px,1.2fr)] md:items-start gap-2 md:gap-4 min-h-0" style={{ scrollbarGutter: 'stable both-edges' }}>
 
+      {/* ── Table column: top bar + table ── */}
+      <div className="flex flex-col md:row-start-1 md:col-start-1" data-bj-table>
+        <BlackjackMultiTopBar
+          tableViewState={tableViewState}
+          myPosition={myPosition}
+          onLeaveSeat={leaveSeat}
+          formatMorbius={formatMorbius}
+        />
+
       {/* ── Table container — locked to 16:9 so full table image is always visible ── */}
       <div
         ref={tableRef}
-        data-bj-table
-        className="relative w-full blackjack-table overflow-hidden md:row-start-1 md:col-start-1"
-        style={{
+        className="relative w-full blackjack-table overflow-hidden"
+        style={isFullscreen ? {
+          position: 'fixed',
+          inset: 0,
+          zIndex: 9999,
+          width: '100dvw',
+          height: '100dvh',
+          aspectRatio: 'unset',
+          borderRadius: 0,
+        } : {
           aspectRatio: '16 / 9',
           boxShadow: 'inset 0 4px 12px rgba(0,0,0,0.9), inset 0 -2px 8px rgba(0,0,0,0.5), inset 0 0 0 1px rgba(0,0,0,0.3)',
           border: '1px inset rgba(60,60,60,0.5)',
@@ -1014,13 +1041,6 @@ export default function BlackjackMultiTablePage() {
           className="absolute top-0 left-0 z-10 flex flex-col"
           style={{ width: 800, height: 450, transform: `scale(${boardScale})`, transformOrigin: 'top left' }}
         >
-
-          <BlackjackMultiTopBar
-            tableViewState={tableViewState}
-            myPosition={myPosition}
-            onLeaveSeat={leaveSeat}
-            formatMorbius={formatMorbius}
-          />
 
           <BlackjackMultiTipDealerControl
             visible={!!address && wsConnected && !!wsClient && myPosition !== null}
@@ -1097,6 +1117,84 @@ export default function BlackjackMultiTablePage() {
 
         </div>
 
+        {/* ── Fullscreen toggle button (top-right corner of table) ── */}
+        <button
+          onClick={() => setIsFullscreen(f => !f)}
+          aria-label={isFullscreen ? 'Exit fullscreen' : 'Enter fullscreen'}
+          className="absolute top-2 right-2 z-30 flex items-center justify-center rounded-md bg-black/50 hover:bg-black/75 border border-white/20 text-white/70 hover:text-white transition-all"
+          style={{ width: 32, height: 32 }}
+        >
+          {isFullscreen ? (
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <polyline points="8 3 3 3 3 8" /><polyline points="21 8 21 3 16 3" />
+              <polyline points="3 16 3 21 8 21" /><polyline points="16 21 21 21 21 16" />
+            </svg>
+          ) : (
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <polyline points="15 3 21 3 21 9" /><polyline points="9 21 3 21 3 15" />
+              <line x1="21" y1="3" x2="14" y2="10" /><line x1="3" y1="21" x2="10" y2="14" />
+            </svg>
+          )}
+        </button>
+
+        {/* ── Compact floating bet/action overlay — fullscreen only ── */}
+        {isFullscreen && myPosition !== null && (
+          <div
+            className="absolute bottom-0 left-0 right-0 z-30 flex items-center gap-2 px-4 py-3"
+            style={{ background: 'linear-gradient(to top, rgba(0,0,0,0.92) 80%, transparent)' }}
+          >
+            {/* Betting phase */}
+            {state?.phase === 'betting' && !hasBet && (
+              <>
+                <div className="flex items-center gap-1 rounded-lg bg-white/10 border border-white/15 px-2 py-1">
+                  <span className="text-white/50 text-xs">Bet</span>
+                  <input
+                    type="number"
+                    value={betAmount}
+                    onChange={e => setBetAmount(e.target.value)}
+                    min={tableMinBetWhole}
+                    max={tableMaxBetWhole}
+                    className="w-20 bg-transparent text-white text-sm font-bold text-center outline-none"
+                  />
+                  <span className="text-white/40 text-xs">M</span>
+                </div>
+                <button
+                  onClick={() => setBetAmount(String(Math.max(tableMinBetWhole, Math.floor(parseInt(betAmount || '0', 10) / 2))))}
+                  className="rounded-lg bg-white/10 border border-white/15 text-white/70 hover:text-white text-xs px-2 py-1.5 transition-colors"
+                >½</button>
+                <button
+                  onClick={() => setBetAmount(String(Math.min(tableMaxBetWhole, parseInt(betAmount || '0', 10) * 2)))}
+                  className="rounded-lg bg-white/10 border border-white/15 text-white/70 hover:text-white text-xs px-2 py-1.5 transition-colors"
+                >2×</button>
+                <button
+                  onClick={placeBet}
+                  className="ml-auto rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-sm px-4 py-1.5 transition-colors"
+                >Deal</button>
+              </>
+            )}
+            {/* Playing phase — my turn */}
+            {isMyTurn && activeHand && (
+              <>
+                <button onClick={() => doAction('hit')} className="rounded-lg bg-blue-600 hover:bg-blue-500 text-white font-bold text-sm px-4 py-1.5 transition-colors">Hit</button>
+                <button onClick={() => doAction('stand')} className="rounded-lg bg-red-600 hover:bg-red-500 text-white font-bold text-sm px-4 py-1.5 transition-colors">Stand</button>
+                {activeHand.canDoubleDown && (
+                  <button onClick={() => doAction('double_down')} className="rounded-lg bg-yellow-600 hover:bg-yellow-500 text-white font-bold text-sm px-4 py-1.5 transition-colors">Double</button>
+                )}
+                {activeHand.canSplit && (
+                  <button onClick={() => doAction('split')} className="rounded-lg bg-purple-600 hover:bg-purple-500 text-white font-bold text-sm px-4 py-1.5 transition-colors">Split</button>
+                )}
+              </>
+            )}
+            {/* Waiting / bet placed indicator */}
+            {state?.phase === 'betting' && hasBet && (
+              <span className="text-white/50 text-sm">Bet placed — waiting for round to start…</span>
+            )}
+            {(state?.phase === 'dealer_turn' || (state?.phase === 'playing' && !isMyTurn)) && (
+              <span className="text-white/50 text-sm">Waiting…</span>
+            )}
+          </div>
+        )}
+
         <BlackjackMultiSoundPanel
           open={soundPanelOpen}
           onToggleOpen={() => setSoundPanelOpen((o) => !o)}
@@ -1121,6 +1219,8 @@ export default function BlackjackMultiTablePage() {
           onEnded={handleMusicEnded}
           preload="auto"
         />
+      </div>
+      {/* ── End table column wrapper ── */}
       </div>
 
       {/* ── Controls — sidebar on md+, below table on mobile ── */}
@@ -1208,6 +1308,8 @@ export default function BlackjackMultiTablePage() {
           )}
         </div>
       </section>
+
+      <BlackjackHowToSection blackjackAddress={BLACKJACK_ADDRESS} />
 
       <PlayerProfileModal
         isOpen={!!selectedProfileAddress}
