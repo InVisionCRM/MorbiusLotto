@@ -238,7 +238,7 @@ export const MobileSidebar = ({
     <>
       <div
         className={cn(
-          "fixed top-0 left-0 right-0 z-[99999] h-14 px-4 py-4 flex flex-row md:hidden items-center justify-between gap-2 bg-slate-950/70 border-b border-white/10 w-full"
+          "fixed top-0 left-0 right-0 z-[99999] h-14 px-4 flex flex-row md:hidden items-center justify-between gap-2 bg-slate-950/70 border-b border-white/10 w-full [padding-top:max(1rem,env(safe-area-inset-top))] [height:calc(3.5rem+env(safe-area-inset-top))]"
         )}
         {...props}
       >
