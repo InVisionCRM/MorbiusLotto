@@ -124,7 +124,7 @@ export default function PokerTablePage() {
     [isE2EMock, state, effectivePlayerAddress]
   );
   const pokerChatRoomId = tableId ? `poker:table:${tableId}` : '';
-  usePokerMobileZoomLock();
+  const { isPortraitMobile, tableScale } = usePokerMobileZoomLock();
 
 
   const handleLeave = useCallback(() => {
@@ -378,6 +378,43 @@ export default function PokerTablePage() {
     <PokerThemeProvider themeId={pokerTheme}>
       <PokerTableEffectProvider>
         {!isE2EMock && <PokerBetaSplash />}
+
+        {/* Portrait blocker: shown on mobile when holding phone upright */}
+        {isPortraitMobile && (
+          <div
+            style={{
+              position: 'fixed',
+              inset: 0,
+              zIndex: 9999,
+              background: 'rgb(2 6 23)',
+              display: 'flex',
+              flexDirection: 'column',
+              alignItems: 'center',
+              justifyContent: 'center',
+              gap: '1.25rem',
+              color: 'var(--poker-text, #e2e8f0)',
+            }}
+          >
+            <svg
+              xmlns="http://www.w3.org/2000/svg"
+              width="56"
+              height="56"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="1.5"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              style={{ opacity: 0.7, animation: 'poker-rotate-hint 2s ease-in-out infinite' }}
+            >
+              <rect x="5" y="2" width="14" height="20" rx="2" />
+              <path d="M12 18h.01" />
+            </svg>
+            <p style={{ fontSize: '1.1rem', fontWeight: 600, margin: 0 }}>Rotate your device</p>
+            <p style={{ fontSize: '0.85rem', opacity: 0.55, margin: 0 }}>Poker requires landscape orientation</p>
+          </div>
+        )}
+
         {/* LANDSCAPE NOTE: Landscape mobile support is layered via CSS only
             (@media orientation: landscape rules in globals.css). Do NOT restructure
             this flex-col layout, reorder children, or add conditional rendering
@@ -444,6 +481,7 @@ export default function PokerTablePage() {
           />
 
           <PokerTableView
+            tableScale={tableScale}
             renderedState={renderedState}
             effectivePlayerAddress={effectivePlayerAddress}
             handleLeaveClick={handleLeaveClick}

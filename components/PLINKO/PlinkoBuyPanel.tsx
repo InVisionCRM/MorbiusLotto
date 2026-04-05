@@ -131,10 +131,11 @@ export default function PlinkoBuyPanel({
               onDropSpeedChange={onDropSpeedChange}
             />
 
-            <div className="relative z-10 flex min-h-0 flex-1 flex-col justify-start overflow-y-visible overscroll-contain p-3 lg:overflow-y-auto lg:p-3 xl:p-4 2xl:p-5">
+            <div className="relative z-10 flex min-h-0 flex-1 flex-col justify-start overflow-y-visible overscroll-contain p-3 select-none [-webkit-touch-callout:none] lg:overflow-y-auto lg:p-3 xl:p-4 2xl:p-5 [&_input]:select-text [&_textarea]:select-text">
               <button
+                type="button"
                 onClick={onShowMultiplierTable}
-                className="absolute top-2 right-3 text-white/50 hover:text-cyan-300 text-xs font-medium transition-colors"
+                className="absolute top-2 right-3 text-white/50 hover:text-cyan-300 text-xs font-medium transition-colors touch-manipulation"
               >
                 Risk Tables
               </button>
@@ -213,10 +214,11 @@ export default function PlinkoBuyPanel({
                 <div className="grid grid-cols-4 gap-0">
                   {[10, 100, 500, 1000].map((amount) => (
                     <button
+                      type="button"
                       key={amount}
                       onClick={() => onWagerPerBallChange(Math.max(minWager, Math.min(maxWager, amount)))}
                       disabled={shouldDisableControls}
-                      className={`py-2 text-center text-xs font-bold transition-all touch-manipulation ${
+                      className={`py-2 text-center text-xs font-bold transition-all touch-manipulation select-none ${
                         wagerPerBall === amount
                           ? 'text-cyan-300'
                           : 'text-gray-500 hover:text-gray-400'
@@ -235,10 +237,11 @@ export default function PlinkoBuyPanel({
                 <div className="grid grid-cols-4 gap-0">
                   {[1, 10, 50, 100].map((count) => (
                     <button
+                      type="button"
                       key={count}
                       onClick={() => onBuyBallsCountChange(count)}
                       disabled={shouldDisableControls}
-                      className={`py-2 text-center text-xs font-bold transition-all touch-manipulation ${
+                      className={`py-2 text-center text-xs font-bold transition-all touch-manipulation select-none ${
                         buyBallsCount === count
                           ? 'text-cyan-300'
                           : 'text-gray-500 hover:text-gray-400'
@@ -258,9 +261,10 @@ export default function PlinkoBuyPanel({
                   <label className="block text-cyan-300 text-center text-sm uppercase font-bold mb-1 lg:mb-2">Payment Method</label>
                   <div className="grid grid-cols-2 gap-2">
                     <button
+                      type="button"
                       onClick={() => onUsePLSChange(false)}
                       disabled={shouldDisableControls}
-                      className={`py-2 rounded-lg text-xs lg:text-sm font-bold transition-all touch-manipulation flex items-center justify-center gap-1.5 ${
+                      className={`py-2 rounded-lg text-xs lg:text-sm font-bold transition-all touch-manipulation select-none flex items-center justify-center gap-1.5 ${
                         !usePLS
                           ? 'text-cyan-300 shadow-lg'
                           : 'text-white/40 hover:text-white/60 active:text-white'
@@ -277,14 +281,16 @@ export default function PlinkoBuyPanel({
                       MORBIUS
                       <img
                         src="/morbius/MorbiusLogo (3).png"
-                        alt="Morbius"
-                        className="w-6 h-6 lg:w-7 lg:h-7 object-contain"
+                        alt=""
+                        draggable={false}
+                        className="pointer-events-none w-6 h-6 select-none lg:w-7 lg:h-7 object-contain"
                       />
                     </button>
                     <button
+                      type="button"
                       onClick={() => onUsePLSChange(true)}
                       disabled={shouldDisableControls || !!priceError || isLoadingPrice}
-                      className={`py-2 rounded-lg text-xs lg:text-sm font-bold transition-all touch-manipulation flex items-center justify-center gap-1.5 ${
+                      className={`py-2 rounded-lg text-xs lg:text-sm font-bold transition-all touch-manipulation select-none flex items-center justify-center gap-1.5 ${
                         usePLS
                           ? 'text-purple-300 shadow-lg'
                           : 'text-white/40 hover:text-white/60 active:text-white'
@@ -301,8 +307,9 @@ export default function PlinkoBuyPanel({
                       PLS
                       <img
                         src="/Pulse Branding/Logo/ball.png"
-                        alt="PLS"
-                        className="w-6 h-6 lg:w-7 lg:h-7 object-contain"
+                        alt=""
+                        draggable={false}
+                        className="pointer-events-none w-6 h-6 select-none lg:w-7 lg:h-7 object-contain"
                       />
                     </button>
                   </div>
@@ -337,7 +344,7 @@ export default function PlinkoBuyPanel({
 
               <div className="grid grid-cols-2 lg:grid-cols-1 gap-2">
                 <div
-                  className="rounded-lg p-2 lg:p-3"
+                  className="rounded-lg p-2 select-none lg:p-3"
                   style={{
                     background: usePLS
                       ? 'linear-gradient(145deg, rgba(168, 85, 247, 0.05), rgba(147, 51, 234, 0.05))'
@@ -365,9 +372,10 @@ export default function PlinkoBuyPanel({
                 </div>
 
                 <button
+                  type="button"
                   onClick={() => onBuyBalls(buyBallsCount, wagerPerBall, usePLS)}
                   disabled={!isConnected || shouldDisableControls}
-                  className={`w-full font-bold py-2 lg:py-3 rounded-lg text-sm transition disabled:opacity-50 disabled:cursor-not-allowed ${
+                  className={`w-full touch-manipulation select-none [-webkit-touch-callout:none] font-bold py-2 lg:py-3 rounded-lg text-sm transition disabled:opacity-50 disabled:cursor-not-allowed ${
                     usePLS ? 'text-purple-300' : 'text-cyan-300'
                   }`}
                   style={{
@@ -396,10 +404,11 @@ export default function PlinkoBuyPanel({
                 <div className="grid grid-cols-3 gap-2 mb-2">
                   {SPEED_OPTIONS.map(({ speed, label }) => (
                     <button
+                      type="button"
                       key={speed}
                       onClick={() => onDropSpeedChange(speed)}
                       disabled={false}
-                      className={`h-15 w-full rounded-lg text-xs font-bold transition-all touch-manipulation ${
+                      className={`h-15 w-full rounded-lg text-xs font-bold transition-all touch-manipulation select-none ${
                         dropSpeed === speed
                           ? 'text-cyan-300'
                           : 'text-gray-500 hover:text-gray-400'

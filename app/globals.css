@@ -773,3 +773,10 @@ body {
     max-width: min(100vw, calc((100dvh - 80px) * 2.8)) !important;
   }
 }
+
+/* Portrait blocker rotation hint animation */
+@keyframes poker-rotate-hint {
+  0%, 100% { transform: rotate(0deg); }
+  40%       { transform: rotate(90deg); }
+  60%       { transform: rotate(90deg); }
+}

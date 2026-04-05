@@ -3,17 +3,23 @@
 import Image from 'next/image';
 import { useCallback, useEffect, useState } from 'react';
 import { usePwaInstallPrompt } from '@/contexts/pwa-install-prompt-context';
-import { IosInstallInstructions } from '@/components/shared/IosInstallInstructions';
+import { useInstallAppHelpDialog } from '@/contexts/install-app-help-dialog-context';
 import { isIosTouchDevice, isStandaloneDisplay } from '@/lib/pwa-platform';
+import {
+  PWA_INSTALL_LOGO_HEIGHT,
+  PWA_INSTALL_LOGO_SRC,
+  PWA_INSTALL_LOGO_WIDTH,
+} from '@/lib/pwa-install-branding';
 
 const STORAGE_KEY = 'morbius_pwa_home_install_splash_dismissed_v1';
 
 /**
- * Full-screen install splash on the home page only: large branding + Chromium
- * install button when available, or iOS “Add to Home Screen” steps.
+ * Full-screen install splash on the home page only: Morbius branding, quick path to
+ * the detailed install dialog, and one-tap install when Chromium offers it.
  */
 export function PwaHomeInstallSplash() {
   const { deferredPrompt, clearDeferredPrompt } = usePwaInstallPrompt();
+  const { openInstallHelp } = useInstallAppHelpDialog();
   const [open, setOpen] = useState(false);
   const [installing, setInstalling] = useState(false);
 
@@ -66,6 +72,10 @@ export function PwaHomeInstallSplash() {
     }
   }, [deferredPrompt, clearDeferredPrompt]);
 
+  const handleOpenInstallHelp = useCallback(() => {
+    openInstallHelp();
+  }, [openInstallHelp]);
+
   if (!open) return null;
 
   const ios = isIosTouchDevice();
@@ -78,7 +88,7 @@ export function PwaHomeInstallSplash() {
       aria-modal="true"
       aria-labelledby="pwa-home-install-title"
     >
-      <div className="absolute inset-0 bg-[radial-gradient(circle_at_50%_50%,rgba(34,211,238,0.25),transparent_65%)]" />
+      <div className="absolute inset-0 bg-[radial-gradient(circle_at_50%_50%,rgba(139,92,246,0.24),rgba(34,211,238,0.08),transparent_68%)]" />
       <div
         className="relative z-[1] w-full max-w-lg overflow-hidden rounded-2xl border-2 border-cyan-500/30 bg-gradient-to-br from-slate-900 to-slate-800 shadow-2xl sm:max-w-xl"
         style={{
@@ -103,13 +113,13 @@ export function PwaHomeInstallSplash() {
         </button>
 
         <div className="flex flex-col items-center gap-6 px-6 pb-8 pt-10 sm:px-10 sm:pb-10">
-          <div className="relative w-[min(88vw,340px)] shrink-0">
+          <div className="relative w-[min(88vw,320px)] shrink-0">
             <Image
-              src="/morbius/OfficialMorbiusLogo.png"
+              src={PWA_INSTALL_LOGO_SRC}
               alt="MORBIUS"
-              width={680}
-              height={680}
-              className="h-auto w-full object-contain drop-shadow-[0_0_24px_rgba(34,211,238,0.35)]"
+              width={PWA_INSTALL_LOGO_WIDTH}
+              height={PWA_INSTALL_LOGO_HEIGHT}
+              className="h-auto w-full object-contain drop-shadow-[0_0_28px_rgba(139,92,246,0.45)]"
               priority
             />
           </div>
@@ -127,55 +137,40 @@ export function PwaHomeInstallSplash() {
             </p>
           </div>
 
-          {ios ? (
-            <IosInstallInstructions />
-          ) : (
-            <div className="flex w-full flex-col items-stretch gap-3">
-              {showChromiumInstall ? (
-                <div className="flex flex-col gap-3 sm:flex-row sm:justify-center">
-                  <button
-                    type="button"
-                    disabled={installing}
-                    onClick={handleInstallClick}
-                    className="rounded-xl bg-gradient-to-r from-cyan-600 to-blue-600 px-6 py-3.5 text-base font-semibold text-white shadow-lg transition hover:from-cyan-500 hover:to-blue-500 disabled:opacity-60"
-                  >
-                    {installing ? 'Opening install…' : 'Install app'}
-                  </button>
-                  <button
-                    type="button"
-                    onClick={dismiss}
-                    className="rounded-xl border border-slate-600/80 bg-slate-800/80 px-6 py-3 text-base font-medium text-slate-200 transition hover:bg-slate-700/80 sm:min-w-[8rem]"
-                  >
-                    Not now
-                  </button>
-                </div>
-              ) : (
-                <>
-                  <p className="text-center text-sm text-slate-400">
-                    If your browser supports it, an install option may appear in the address bar
-                    (install icon or menu). You can close this and browse — nothing is required.
-                  </p>
-                  <button
-                    type="button"
-                    onClick={dismiss}
-                    className="self-center rounded-xl border border-slate-600/80 bg-slate-800/80 px-6 py-3 text-base font-medium text-slate-200 transition hover:bg-slate-700/80"
-                  >
-                    Not now
-                  </button>
-                </>
-              )}
-            </div>
-          )}
+          <div className="flex w-full flex-col items-stretch gap-3">
+            <button
+              type="button"
+              onClick={handleOpenInstallHelp}
+              className="w-full rounded-xl bg-gradient-to-r from-violet-600 to-purple-600 px-6 py-3.5 text-base font-semibold text-white shadow-lg transition hover:from-violet-500 hover:to-purple-500"
+            >
+              How to install
+            </button>
 
-          {ios ? (
+            {showChromiumInstall ? (
+              <button
+                type="button"
+                disabled={installing}
+                onClick={handleInstallClick}
+                className="w-full rounded-xl bg-gradient-to-r from-emerald-600 to-teal-600 px-6 py-3.5 text-base font-semibold text-white shadow-lg transition hover:from-emerald-500 hover:to-teal-500 disabled:opacity-60"
+              >
+                {installing ? 'Opening install…' : 'Install app'}
+              </button>
+            ) : null}
+
             <button
               type="button"
               onClick={dismiss}
-              className="text-sm font-medium text-slate-400 underline-offset-2 hover:text-cyan-300 hover:underline"
+              className="w-full rounded-xl border border-slate-600/80 bg-slate-800/80 px-6 py-3 text-base font-medium text-slate-200 transition hover:bg-slate-700/80"
             >
-              Continue without installing
+              Not now
             </button>
-          ) : null}
+          </div>
+
+          <p className="text-center text-xs text-slate-500">
+            {ios
+              ? 'Tap “How to install” for step-by-step Add to Home Screen instructions in Safari.'
+              : 'Tap “How to install” for full steps — including iPhone and iPad.'}
+          </p>
         </div>
       </div>
     </div>

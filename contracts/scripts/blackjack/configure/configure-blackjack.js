@@ -13,7 +13,7 @@ async function main() {
   const blackjack = await hre.ethers.getContractAt("Blackjack", CONTRACT_ADDRESS);
 
   // Server configuration
-  const AUTHORIZED_SERVER = process.env.AUTHORIZED_SERVER || "YOUR_SERVER_ADDRESS_HERE";
+  const AUTHORIZED_SERVER = process.env.AUTHORIZED_SERVER || "0x2775dD8242C4f589536113475B7C80F42ab4A70A";
   const EMERGENCY_ADMIN = process.env.EMERGENCY_ADMIN || deployer.address;
 
   console.log("Contract:", CONTRACT_ADDRESS);

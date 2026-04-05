@@ -6,8 +6,11 @@ import { PokerTable } from '@/components/poker/PokerTable';
 import { MorbiusLoadingChip } from '@/components/shared/MorbiusLoadingChip';
 import { IconButton } from '@/components/animate-ui/components/buttons/icon';
 import type { Emotion } from '@/components/avatar';
+import { POKER_TABLE_REF_W, POKER_TABLE_REF_H } from './PokerMobileZoomLock';
 
 interface PokerTableViewProps {
+  /** Scale factor from usePokerMobileZoomLock. 1.0 on desktop, <1 on mobile landscape. */
+  tableScale?: number;
   renderedState: PokerTableState | null;
   effectivePlayerAddress: string | null;
   handleLeaveClick: () => void;
@@ -52,6 +55,7 @@ const POKER_MAIN_PANEL_STYLE: React.CSSProperties = {
 };
 
 export function PokerTableView({
+  tableScale = 1,
   renderedState,
   effectivePlayerAddress,
   handleLeaveClick,
@@ -81,15 +85,14 @@ export function PokerTableView({
   setTipAnimating,
   onTipDealer,
 }: PokerTableViewProps) {
-  return (
-    <div
-      className="flex-1 relative"
-      style={{
-        minHeight: 0,
-        ...POKER_MAIN_PANEL_STYLE,
-        display: showDashboard || showMyStats ? 'none' : undefined,
-      }}
-    >
+  const isMobileScale = tableScale < 1;
+
+  // The inner table content (tip button + PokerTable + loading/error states).
+  // When scaling, this renders at the fixed reference size and gets shrunk via
+  // CSS transform. PokerTable's ResizeObserver sees POKER_TABLE_REF_W/H so
+  // seat positions are always computed for the same reference size.
+  const tableContent = (
+    <>
       {effectivePlayerAddress && wsConnected && wsClient && mySeat && (
         <div className="absolute top-2 left-1/2 -translate-x-1/2 z-10 flex flex-col items-center">
           <IconButton
@@ -153,6 +156,64 @@ export function PokerTableView({
           <p className="text-[var(--poker-danger)] text-sm text-center">{error}</p>
         </div>
       )}
+    </>
+  );
+
+  if (isMobileScale) {
+    // Mobile landscape: outer flex-1 div centers the scaled table in the
+    // available space. The middle div occupies the exact scaled footprint so
+    // the flex layout accounts for it correctly. The inner div is the full
+    // reference size, shrunk down via transform: scale.
+    return (
+      <div
+        style={{
+          flex: '1 1 0',
+          minHeight: 0,
+          display: showDashboard || showMyStats ? 'none' : 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          overflow: 'visible',
+        }}
+      >
+        {/* Footprint div — takes up exactly the scaled space in the flex layout */}
+        <div
+          style={{
+            position: 'relative',
+            width: POKER_TABLE_REF_W * tableScale,
+            height: POKER_TABLE_REF_H * tableScale,
+            flexShrink: 0,
+          }}
+        >
+          {/* Reference-size container, scaled to fit */}
+          <div
+            style={{
+              position: 'absolute',
+              top: 0,
+              left: 0,
+              width: POKER_TABLE_REF_W,
+              height: POKER_TABLE_REF_H,
+              transform: `scale(${tableScale})`,
+              transformOrigin: 'top left',
+            }}
+          >
+            {tableContent}
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // Desktop / tablet: existing layout unchanged
+  return (
+    <div
+      className="flex-1 relative"
+      style={{
+        minHeight: 0,
+        ...POKER_MAIN_PANEL_STYLE,
+        display: showDashboard || showMyStats ? 'none' : undefined,
+      }}
+    >
+      {tableContent}
     </div>
   );
 }

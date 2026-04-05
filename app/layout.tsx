@@ -29,7 +29,7 @@ export const viewport: Viewport = {
 };
 
 export const metadata: Metadata = {
-  title: "MORBIUS on PulseChain",
+  title: "MORBIUS",
   description: "Morbius.io is a web3 gaming platform built on PulseChain. PulseChain is a fast and secure blockchain that is built for the future of web3.",
   icons: {
     icon: [

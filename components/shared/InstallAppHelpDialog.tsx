@@ -5,6 +5,11 @@ import { useCallback, useEffect, useState } from 'react';
 import { usePwaInstallPrompt } from '@/contexts/pwa-install-prompt-context';
 import { IosInstallInstructions } from '@/components/shared/IosInstallInstructions';
 import { isIosTouchDevice, isStandaloneDisplay } from '@/lib/pwa-platform';
+import {
+  PWA_INSTALL_LOGO_HEIGHT,
+  PWA_INSTALL_LOGO_SRC,
+  PWA_INSTALL_LOGO_WIDTH,
+} from '@/lib/pwa-install-branding';
 
 type InstallAppHelpDialogProps = {
   open: boolean;
@@ -52,7 +57,7 @@ export function InstallAppHelpDialog({ open, onOpenChange }: InstallAppHelpDialo
       aria-modal="true"
       aria-labelledby="install-app-help-title"
     >
-      <div className="absolute inset-0 bg-[radial-gradient(circle_at_50%_50%,rgba(34,211,238,0.2),transparent_65%)]" />
+      <div className="absolute inset-0 bg-[radial-gradient(circle_at_50%_50%,rgba(139,92,246,0.22),rgba(34,211,238,0.08),transparent_68%)]" />
       <div
         className="relative z-[1] w-full max-w-lg overflow-hidden rounded-2xl border-2 border-cyan-500/30 bg-gradient-to-br from-slate-900 to-slate-800 shadow-2xl sm:max-w-xl"
         style={{
@@ -77,13 +82,13 @@ export function InstallAppHelpDialog({ open, onOpenChange }: InstallAppHelpDialo
         </button>
 
         <div className="flex max-h-[min(90vh,720px)] flex-col items-center gap-5 overflow-y-auto px-6 pb-8 pt-10 sm:px-10 sm:pb-10">
-          <div className="relative w-[min(72vw,220px)] shrink-0">
+          <div className="relative w-[min(78vw,260px)] shrink-0">
             <Image
-              src="/morbius/OfficialMorbiusLogo.png"
+              src={PWA_INSTALL_LOGO_SRC}
               alt="MORBIUS"
-              width={440}
-              height={440}
-              className="h-auto w-full object-contain drop-shadow-[0_0_20px_rgba(34,211,238,0.3)]"
+              width={PWA_INSTALL_LOGO_WIDTH}
+              height={PWA_INSTALL_LOGO_HEIGHT}
+              className="h-auto w-full object-contain drop-shadow-[0_0_28px_rgba(139,92,246,0.45)]"
             />
           </div>
 

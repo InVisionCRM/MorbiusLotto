@@ -25,7 +25,7 @@ import type { TableOption } from '@/hooks/use-blackjack-tables';
 import { useQueryClient } from '@tanstack/react-query';
 // Install console.error interceptor for bug reports (browser only, no-op on server)
 import '@/lib/error-log';
-import { InstallAppHelpDialog } from '@/components/shared/InstallAppHelpDialog';
+import { useInstallAppHelpDialog } from '@/contexts/install-app-help-dialog-context';
 
 // Lazy-load modals — only pulled into the bundle when first opened
 const ThemeSelectionModal = lazy(() => import('@/components/BLACKJACK/ThemeSelectionModal'));
@@ -585,7 +585,7 @@ export default function GlobalMainNav({
   const [swapOpen, setSwapOpen] = useState(false);
   const [gameWalletOpen, setGameWalletOpen] = useState(false);
   const [profileAvatarModalOpen, setProfileAvatarModalOpen] = useState(false);
-  const [installAppHelpOpen, setInstallAppHelpOpen] = useState(false);
+  const { openInstallHelp } = useInstallAppHelpDialog();
   const queryClient = useQueryClient();
 
   const effectiveOnOpenResponsibleGaming = useCallback(
@@ -630,7 +630,7 @@ export default function GlobalMainNav({
     [onOpenSwap],
   );
   const handleOpenReport = useCallback(() => setReportOpen(true), []);
-  const handleOpenInstallAppHelp = useCallback(() => setInstallAppHelpOpen(true), []);
+  const handleOpenInstallAppHelp = useCallback(() => openInstallHelp(), [openInstallHelp]);
   const handleOpenGameWallet = useCallback(() => {
     if (onOpenDepositModal) {
       onOpenDepositModal();
@@ -722,7 +722,6 @@ export default function GlobalMainNav({
       </div>
 
       {/* Lazy-loaded modals — only rendered when open */}
-      <InstallAppHelpDialog open={installAppHelpOpen} onOpenChange={setInstallAppHelpOpen} />
       <Suspense fallback={null}>
         {page === 'blackjack' && onThemeChange && themeModalOpen && (
           <ThemeSelectionModal
