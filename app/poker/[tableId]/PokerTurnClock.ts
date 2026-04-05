@@ -4,7 +4,7 @@ import { useEffect, useRef, useState } from 'react';
 import type { PokerCurrentHand } from '@/lib/websocket-client';
 
 export function usePokerTurnClock(hand: PokerCurrentHand | null | undefined) {
-  const [timeLeft, setTimeLeft] = useState<number>(30);
+  const [timeLeft, setTimeLeft] = useState<number>(60);
   const timerHandIdRef = useRef<string | null>(null);
   const timerPositionRef = useRef<number | null>(null);
 
@@ -19,9 +19,9 @@ export function usePokerTurnClock(hand: PokerCurrentHand | null | undefined) {
       timerPositionRef.current = actingPosition;
       if (turnStartedAt && actingPosition != null) {
         const elapsed = (Date.now() - new Date(turnStartedAt).getTime()) / 1000;
-        setTimeLeft(Math.max(0, Math.round(30 - elapsed)));
+        setTimeLeft(Math.max(0, Math.round(60 - elapsed)));
       } else {
-        setTimeLeft(30);
+        setTimeLeft(60);
       }
     }
 
@@ -29,7 +29,7 @@ export function usePokerTurnClock(hand: PokerCurrentHand | null | undefined) {
 
     const interval = setInterval(() => {
       const elapsed = (Date.now() - new Date(turnStartedAt).getTime()) / 1000;
-      const remaining = Math.max(0, Math.round(30 - elapsed));
+      const remaining = Math.max(0, Math.round(60 - elapsed));
       setTimeLeft(remaining);
     }, 500);
 

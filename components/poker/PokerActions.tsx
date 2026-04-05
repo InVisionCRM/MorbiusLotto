@@ -320,7 +320,7 @@ export function PokerActions({
                 style={primaryBtnStyle}
               >
                 <span className="flex flex-col items-center justify-center leading-tight whitespace-normal">
-                  <span>{isFacingBet ? 'Raise To' : 'Bet'}</span>
+                  <span>{isFacingBet ? 'Raise' : 'Bet'}</span>
                   <span className="text-[10px] font-semibold normal-case">
                     {hasValidAmount && clamped ? formatAmount(clamped) : '—'}
                   </span>
@@ -478,7 +478,7 @@ export function PokerActions({
                 style={primaryBtnStyle}
               >
                 <span className="flex flex-col items-center justify-center leading-tight whitespace-normal">
-                  <span>{isFacingBet ? 'Raise To' : 'Bet'}</span>
+                  <span>{isFacingBet ? 'Raise' : 'Bet'}</span>
                   <span className="text-[11px] md:text-xs font-semibold normal-case">
                     {hasValidAmount && clamped ? formatAmount(clamped) : '—'}
                   </span>

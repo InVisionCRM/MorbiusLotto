@@ -74,7 +74,7 @@ Organized index of poker-related files plus current UI behavior notes for table/
 | `server/migrations/036_poker_tables.sql` | Base schema: `poker_tables`, `poker_seats`, `poker_hands`, hand actions, chip amounts as NUMERIC(78,0), card indices 0–51. |
 | `server/migrations/052_poker_blind_action.sql` | Adds `blind` to `poker_hand_actions` action check (for SB/BB posting). |
 | `server/migrations/055_poker_last_raise_size.sql` | Adds `last_raise_size` to `poker_hands` for min re-raise on current street. |
-| `server/migrations/056_poker_turn_timer.sql` | Adds `turn_started_at` to `poker_hands` for server-side 30s turn timer. |
+| `server/migrations/056_poker_turn_timer.sql` | Adds `turn_started_at` to `poker_hands` for server-side 60s turn timer. |
 
 ---
 

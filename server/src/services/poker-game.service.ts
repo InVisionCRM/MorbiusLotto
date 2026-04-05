@@ -66,7 +66,7 @@ export interface PokerCurrentHand {
   minRaise: string;
   /** Amount the acting player must put in to call (0 if can check). */
   toCall: string;
-  /** ISO timestamp of when the current player's turn started (for the 30s timer). */
+  /** ISO timestamp of when the current player's turn started (for the 60s timer). */
   turnStartedAt: string | null;
   /** At showdown: all players' revealed hole cards keyed by address */
   showdownHands?: Record<string, number[]>;
@@ -1556,7 +1556,7 @@ export class PokerGameService {
        FROM poker_hands h
        WHERE h.completed_at IS NULL
          AND h.acting_position IS NOT NULL
-         AND h.turn_started_at < NOW() - INTERVAL '30 seconds'`
+         AND h.turn_started_at < NOW() - INTERVAL '60 seconds'`
     );
 
     const folded: string[] = [];
@@ -1575,10 +1575,16 @@ export class PokerGameService {
           // Capture street before
           const streetBefore = chevtekStreetToPoker(table.currentRound, !!table.winners);
 
-          // Fold
-          actor.foldAction();
+          // Auto-check when not facing a bet; auto-fold when facing a bet
+          const canCheck = !table.currentBet || actor.bet >= table.currentBet;
+          const timeoutAction = canCheck ? 'check' : 'fold';
+          if (canCheck) {
+            actor.checkAction();
+          } else {
+            actor.foldAction();
+          }
 
-          // Record fold action
+          // Record the timeout action
           const orderResult = await pool.query(
             'SELECT COALESCE(MAX("order"), 0) + 1 AS next_order FROM poker_hand_actions WHERE hand_id = $1',
             [row.hand_id]
@@ -1586,8 +1592,8 @@ export class PokerGameService {
           const nextOrder = Number(orderResult.rows[0].next_order);
           await pool.query(
             `INSERT INTO poker_hand_actions (hand_id, player_address, street, action, amount, "order")
-             VALUES ($1, $2, $3, 'fold', 0, $4)`,
-            [row.hand_id, actingAddr, streetBefore, nextOrder]
+             VALUES ($1, $2, $3, $4, 0, $5)`,
+            [row.hand_id, actingAddr, streetBefore, timeoutAction, nextOrder]
           );
 
           if (!table.currentRound && table.winners) {
@@ -1614,7 +1620,7 @@ export class PokerGameService {
           }
 
           folded.push(actingAddr);
-          logger.info('Auto-folded timed-out turn', { handId: row.hand_id, player: actingAddr });
+          logger.info(`Auto-${timeoutAction} timed-out turn`, { handId: row.hand_id, player: actingAddr, action: timeoutAction });
 
           // Track consecutive timeouts and auto-kick/sit-out AFK players
           try {
