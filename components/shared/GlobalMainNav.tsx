@@ -26,6 +26,7 @@ import { useQueryClient } from '@tanstack/react-query';
 // Install console.error interceptor for bug reports (browser only, no-op on server)
 import '@/lib/error-log';
 import { useInstallAppHelpDialog } from '@/contexts/install-app-help-dialog-context';
+import { IconArrowLeft } from '@tabler/icons-react';
 
 // Lazy-load modals — only pulled into the bundle when first opened
 const ThemeSelectionModal = lazy(() => import('@/components/BLACKJACK/ThemeSelectionModal'));
@@ -227,6 +228,7 @@ interface NavContentProps {
   onOpenReport: () => void;
   onOpenProfileModal?: () => void;
   onOpenInstallAppHelp?: () => void;
+  reserveBalance?: bigint;
 }
 
 const NavContent = React.memo(function NavContent(props: NavContentProps) {
@@ -268,6 +270,7 @@ const NavContent = React.memo(function NavContent(props: NavContentProps) {
     onOpenReport,
     onOpenProfileModal,
     onOpenInstallAppHelp,
+    reserveBalance,
   } = props;
 
   const btnClass = (active: boolean) =>
@@ -314,8 +317,8 @@ const NavContent = React.memo(function NavContent(props: NavContentProps) {
           </Link>
         </div>
       )}
-      {/* Logo / Brand */}
-      <div className="shrink-0 py-4">
+      {/* Logo / Brand — hidden in mobile panel (rendered in MobileSidebar header instead) */}
+      <div className="hidden md:block shrink-0 py-4">
         <Link href="/" className="sidebar-item flex items-center group/sidebar" aria-label="MORBIUS.IO Home">
           <span className="w-9 h-9 rounded-lg flex items-center justify-center shrink-0 overflow-hidden">
             <Image src="/morbius/MorbiusLogo (3).png" alt="" width={24} height={24} className="object-contain" />
@@ -324,6 +327,14 @@ const NavContent = React.memo(function NavContent(props: NavContentProps) {
             MORBIUS.IO
           </span>
         </Link>
+        {reserveBalance !== undefined && (
+          <div className="sidebar-label flex items-center gap-1.5 px-2 pt-1.5">
+            <span className="text-white text-sm font-semibold tabular-nums">
+              {Math.round(Number(reserveBalance / BigInt('1000000000000000000'))).toLocaleString()}
+            </span>
+            <Image src="/morbius/MorbiusLogo (3).png" alt="MORBIUS" width={14} height={14} className="object-contain opacity-80" />
+          </div>
+        )}
       </div>
 
       {/* Wallet */}
@@ -655,6 +666,15 @@ export default function GlobalMainNav({
   const mobileBarContent = useMemo(
     () => (
       <div className="flex items-center gap-2 min-w-0">
+        {page !== 'home' && (
+          <Link
+            href="/"
+            className="flex items-center gap-1 text-white/70 hover:text-white text-xs shrink-0"
+          >
+            <IconArrowLeft size={16} />
+            <span>Menu</span>
+          </Link>
+        )}
         <WalletMenu
           onOpenDepositModal={handleOpenGameWallet}
           profileDisplayName={effectiveProfileDisplayName}
@@ -667,7 +687,7 @@ export default function GlobalMainNav({
         />
       </div>
     ),
-    [handleOpenGameWallet, effectiveProfileDisplayName, effectiveProfileImageUrl, effectiveOnOpenProfileSettings],
+    [page, handleOpenGameWallet, effectiveProfileDisplayName, effectiveProfileImageUrl, effectiveOnOpenProfileSettings],
   );
 
   return (
@@ -711,6 +731,7 @@ export default function GlobalMainNav({
             onOpenReport={handleOpenReport}
             onOpenProfileModal={handleOpenProfileModal}
             onOpenInstallAppHelp={handleOpenInstallAppHelp}
+            reserveBalance={reserveBalance}
           />
         </SidebarBody>
         <div

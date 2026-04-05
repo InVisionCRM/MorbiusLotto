@@ -1,6 +1,8 @@
 "use client";
 import { cn } from "@/lib/utils";
 import React, { useState, createContext, useContext, useCallback, useEffect, useRef } from "react";
+import Image from "next/image";
+import Link from "next/link";
 import { IconMenu2, IconX } from "@tabler/icons-react";
 
 const DESKTOP_SIDEBAR_PIN_STORAGE_KEY = "global-main-nav-desktop-pinned";
@@ -234,6 +236,7 @@ export const MobileSidebar = ({
   ...props
 }: React.ComponentProps<"div">) => {
   const { open, setOpen, mobileBarContent, mobileBarCenterContent, disabled } = useSidebar();
+  const touchStartX = useRef(0);
   return (
     <>
       <div
@@ -268,20 +271,20 @@ export const MobileSidebar = ({
                 className
               )}
               style={style}
+              onTouchStart={(e) => { touchStartX.current = e.touches[0].clientX; }}
+              onTouchEnd={(e) => { if (touchStartX.current - e.changedTouches[0].clientX > 50) setOpen(false); }}
             >
-              {/* Dedicated close row: above content so X is never covered by back link. Safe area so X isn't in status bar. */}
+              {/* Brand header row — tapping backdrop still closes the sidebar */}
               <div
-                className="shrink-0 flex items-center justify-end pr-1 min-h-12 pl-3"
+                className="shrink-0 flex items-center pl-3 pr-2 min-h-12"
                 style={{ paddingTop: "max(0.75rem, env(safe-area-inset-top, 0px))" }}
               >
-                <button
-                  type="button"
-                  onClick={() => setOpen(!open)}
-                  className="flex items-center justify-center w-10 h-10 -mr-1 text-white/80 hover:text-white cursor-pointer touch-manipulation"
-                  aria-label="Close menu"
-                >
-                  <IconX className="w-6 h-6" />
-                </button>
+                <Link href="/" className="flex items-center gap-2" aria-label="MORBIUS.IO Home" onClick={() => setOpen(false)}>
+                  <span className="w-7 h-7 rounded-lg flex items-center justify-center shrink-0 overflow-hidden">
+                    <Image src="/morbius/MorbiusLogo (3).png" alt="" width={20} height={20} className="object-contain" />
+                  </span>
+                  <span className="text-sm font-semibold text-white">MORBIUS.IO</span>
+                </Link>
               </div>
               <div className="flex-1 min-h-0 overflow-y-auto pl-3 pr-2 pb-4 flex flex-col">
                 {children}
@@ -337,10 +340,11 @@ export const SidebarButton = React.memo(({
   active = false,
   className,
 }: SidebarButtonProps) => {
+  const { setOpen } = useSidebar();
   return (
     <button
       type="button"
-      onClick={onClick}
+      onClick={() => { onClick?.(); setOpen(false); }}
       className={cn(
         "sidebar-item flex items-center group/sidebar py-2 w-full",
         className
