@@ -197,15 +197,7 @@ export function PokerActivityFeed({
         kind: 'system',
         id: `welcome-${tableId}`,
         type: 'welcome',
-        text:
-          'Welcome to Morbius.IO Poker on PulseChain!\\n\\n' +
-          'Quick Tips:\\n' +
-          `- Blinds: ${sb}/${bb}\\n` +
-          '- Tap your avatar for settings and quick reactions\\n' +
-          '- Use Activity chat to coordinate and banter\\n\\n' +
-          'Socials:\\n' +
-          '- X: https://x.com/MorbiusIO\\n' +
-          '- Telegram: https://t.me/MorbiusIO',
+        text: `Welcome to Morbius.IO Poker! Blinds: ${sb}/${bb}. Tap your avatar for reactions and settings.`,
         ts: Date.now(),
       } satisfies SystemEntry,
     ].slice(-MAX_ENTRIES));
@@ -482,7 +474,7 @@ export function PokerActivityFeed({
           className="px-2.5 py-1 text-[10px] md:text-[11px] leading-snug whitespace-pre-line"
           style={{
             color: isWelcome
-              ? 'rgba(250,204,21,0.9)'
+              ? 'rgba(255,255,255,0.85)'
               : isFact
                 ? 'rgba(52,211,153,0.9)'
                 : isPlayerEvent
@@ -494,7 +486,7 @@ export function PokerActivityFeed({
             className="font-semibold"
             style={{
               color: isWelcome
-                ? 'rgba(250,204,21,1)'
+                ? 'rgba(255,255,255,1)'
                 : isFact
                   ? 'rgba(52,211,153,1)'
                   : isPlayerEvent

@@ -938,13 +938,55 @@ export default function BlackjackMultiTablePage() {
     <GlobalMainNav page="blackjackMulti" showBackArrow backArrowHref="/blackjack-multi" backArrowLabel="Lobby">
       {!isE2EMock && <BlackjackMultiBetaSplash />}
       <style>{BLACKJACK_MULTI_TABLE_STYLES}</style>
-      <main className="w-full max-w-full mx-0 px-2 sm:px-4 pt-2 sm:pt-4 pb-4 sm:pb-8 overflow-x-hidden overflow-y-auto no-scrollbar">
+      <style>{`
+        @media (orientation: landscape) and (max-height: 500px) {
+          /* Hide everything except table + panel */
+          [data-bj-extra] { display: none !important; }
+
+          /* Main: full height, no scroll, no padding */
+          [data-bj-main] {
+            padding: 0 !important;
+            overflow: hidden !important;
+            height: calc(100dvh - 3.5rem) !important;
+            display: flex !important;
+            flex-direction: column !important;
+          }
+
+          /* Grid: horizontal flex, fills available height */
+          [data-bj-grid] {
+            display: flex !important;
+            flex-direction: row !important;
+            align-items: stretch !important;
+            flex: 1 !important;
+            min-height: 0 !important;
+            gap: 0 !important;
+            overflow: hidden !important;
+          }
+
+          /* Table: 63% width, vertically centered */
+          [data-bj-table] {
+            flex: 0 0 63% !important;
+            width: 63% !important;
+            align-self: center !important;
+          }
+
+          /* Panel: remaining width, scrollable */
+          [data-bj-panel] {
+            flex: 1 !important;
+            overflow-y: auto !important;
+            padding: 6px 8px !important;
+            background: rgb(2, 6, 23) !important;
+          }
+        }
+      `}</style>
+      <main data-bj-main className="w-full max-w-full mx-0 px-2 sm:px-4 pt-2 sm:pt-4 pb-4 sm:pb-8 overflow-x-hidden overflow-y-auto no-scrollbar">
       {/* 2-column layout on md+: table (left) + sidebar controls (right) — same shell as app/BLACKJACK/page.tsx */}
-      <div className="grid grid-cols-1 md:grid-cols-[minmax(0,3fr)_minmax(360px,1.2fr)] md:items-start gap-2 md:gap-4 min-h-0" style={{ scrollbarGutter: 'stable both-edges' }}>
+      <div data-bj-grid className="grid grid-cols-1 md:grid-cols-[minmax(0,3fr)_minmax(360px,1.2fr)] md:items-start gap-2 md:gap-4 min-h-0" style={{ scrollbarGutter: 'stable both-edges' }}>
 
       {/* ── Table container — locked to 16:9 so full table image is always visible ── */}
       <div
         ref={tableRef}
+        data-bj-table
         className="relative w-full blackjack-table overflow-hidden md:row-start-1 md:col-start-1"
         style={{
           aspectRatio: '16 / 9',
@@ -1082,7 +1124,7 @@ export default function BlackjackMultiTablePage() {
       </div>
 
       {/* ── Controls — sidebar on md+, below table on mobile ── */}
-      <div className="px-4 py-4 space-y-3 bg-slate-950 md:row-start-1 md:col-start-2 md:py-0 md:px-0 md:flex md:flex-col md:gap-3 md:overflow-hidden md:pt-4">
+      <div data-bj-panel className="px-4 py-4 space-y-3 bg-slate-950 md:row-start-1 md:col-start-2 md:py-0 md:px-0 md:flex md:flex-col md:gap-3 md:overflow-hidden md:pt-4">
 
         <BlackjackMultiBetActionPanel
           myPosition={myPosition}
@@ -1131,7 +1173,7 @@ export default function BlackjackMultiTablePage() {
       </div>
 
       {/* Table profile + player dashboard — same block as app/BLACKJACK/page.tsx (outside game grid so heights aren’t collapsed) */}
-      <section className="mt-4 grid grid-cols-1 items-stretch gap-1 md:grid-cols-2 md:gap-1">
+      <section data-bj-extra className="mt-4 grid grid-cols-1 items-stretch gap-1 md:grid-cols-2 md:gap-1">
         <div className="flex min-h-0 flex-col md:h-full">
           <TableTokenProfileCard
             key={`image-${state?.themeId ?? BLACKJACK_IMAGE_BACKGROUNDS[0].id}`}

@@ -1,18 +1,17 @@
 /**
- * Section title / subtitle styles aligned with `components/marketing/AdvertisingSection.tsx`:
- * `font-bold`, white + `from-indigo-400 to-cyan-400` gradient accents, larger than the ad page default.
- * Font: **Poppins** (same as `body` in `app/globals.css` and `font-poppins` in Tailwind).
+ * Section title / subtitle styles.
+ * Font: **Russo One** — matches the hero "DEFI GAMING, DONE RIGHT" treatment.
+ * All titles are plain white; no gradient.
  */
 export const homeSectionTitleClass =
-  'font-poppins text-4xl md:text-5xl lg:text-6xl xl:text-7xl font-bold tracking-tight mb-3'
+  'font-russo-one text-4xl md:text-5xl lg:text-6xl xl:text-7xl font-bold tracking-tight mb-3'
 
-/** Use on a `<span>` inside the title for gradient text (or wrap full title). */
-export const homeSectionTitleGradientClass =
-  'bg-gradient-to-r from-indigo-400 to-cyan-400 bg-clip-text text-transparent'
+/** Plain white — no gradient. Wrap section title text in this for consistency. */
+export const homeSectionTitleGradientClass = 'text-white'
 
 export const homeSectionSubtitleClass =
   'text-slate-400 text-lg md:text-xl max-w-2xl mx-auto leading-relaxed'
 
 /** Secondary in-section headings (e.g. card headers). */
 export const homeSectionHeading2Class =
-  'font-poppins text-2xl md:text-3xl lg:text-4xl font-bold text-white tracking-tight'
+  'font-russo-one text-2xl md:text-3xl lg:text-4xl font-bold text-white tracking-tight'

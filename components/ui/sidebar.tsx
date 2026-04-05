@@ -241,7 +241,7 @@ export const MobileSidebar = ({
     <>
       <div
         className={cn(
-          "fixed top-0 left-0 right-0 z-[99999] h-14 px-4 flex flex-row md:hidden items-center justify-between gap-2 bg-slate-950/70 border-b border-white/10 w-full [padding-top:max(1rem,env(safe-area-inset-top))] [height:calc(3.5rem+env(safe-area-inset-top))]"
+          "fixed top-0 left-0 right-0 z-[99999] h-14 px-4 flex flex-row md:hidden items-center justify-between gap-2 bg-slate-950/70 border-b border-white/10 w-full [padding-top:env(safe-area-inset-top,0px)] [height:calc(3.5rem+env(safe-area-inset-top,0px))]"
         )}
         {...props}
       >
@@ -277,7 +277,7 @@ export const MobileSidebar = ({
               {/* Brand header row — tapping backdrop still closes the sidebar */}
               <div
                 className="shrink-0 flex items-center pl-3 pr-2 min-h-12"
-                style={{ paddingTop: "max(0.75rem, env(safe-area-inset-top, 0px))" }}
+                style={{ paddingTop: "env(safe-area-inset-top, 0px)" }}
               >
                 <Link href="/" className="flex items-center gap-2" aria-label="MORBIUS.IO Home" onClick={() => setOpen(false)}>
                   <span className="w-7 h-7 rounded-lg flex items-center justify-center shrink-0 overflow-hidden">

@@ -843,56 +843,62 @@ export default function PokerLobbyPage() {
           <PokerHowToPlayModal isOpen={showHowToPlay} onClose={() => setShowHowToPlay(false)} />
 
           {createModal && (
-          <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-3">
             <div
-              className="bg-gradient-to-br from-slate-900 to-slate-800 border-2 border-cyan-500/30 rounded-2xl shadow-2xl max-w-sm w-full overflow-hidden"
+              className="bg-gradient-to-br from-slate-900 to-slate-800 border-2 border-cyan-500/30 rounded-xl shadow-2xl max-w-xs w-full overflow-hidden"
               style={Theme.panel?.base}
             >
-              <div className="p-4 border-b border-cyan-500/30">
-                <h3 className="text-lg font-semibold text-cyan-400">Create Table</h3>
+              <div className="px-3 py-2.5 border-b border-cyan-500/30">
+                <h3 className="text-sm font-semibold text-cyan-400">Create Table</h3>
               </div>
-              <div className="p-4 space-y-4">
-                <p className="text-xs text-slate-500">Blinds in MORBIUS (e.g. 10 = 10 MORBIUS)</p>
-                <label className="block text-sm text-slate-400">Small blind</label>
-                <input
-                  type="text"
-                  value={createModal.smallBlind}
-                  onChange={(e) => setCreateModal((m) => m ? { ...m, smallBlind: e.target.value } : null)}
-                  className="w-full rounded-lg bg-slate-800 border border-cyan-500/30 px-3 py-2 text-white"
-                />
-                <label className="block text-sm text-slate-400">Big blind</label>
-                <input
-                  type="text"
-                  value={createModal.bigBlind}
-                  onChange={(e) => setCreateModal((m) => m ? { ...m, bigBlind: e.target.value } : null)}
-                  className="w-full rounded-lg bg-slate-800 border border-cyan-500/30 px-3 py-2 text-white"
-                />
-                <label className="block text-sm text-slate-400">Max seats (2–10)</label>
-                <input
-                  type="number"
-                  min={2}
-                  max={10}
-                  value={createModal.maxSeats}
-                  onChange={(e) => setCreateModal((m) => m ? { ...m, maxSeats: Math.min(10, Math.max(2, Number(e.target.value) || 6)) } : null)}
-                  className="w-full rounded-lg bg-slate-800 border border-cyan-500/30 px-3 py-2 text-white"
-                />
+              <div className="p-3 space-y-2.5">
+                <p className="text-[11px] text-slate-500">Blinds in MORBIUS (e.g. 10 = 10 MORBIUS)</p>
+                <div>
+                  <label className="block text-xs text-slate-400 mb-1">Small blind</label>
+                  <input
+                    type="text"
+                    value={createModal.smallBlind}
+                    onChange={(e) => setCreateModal((m) => m ? { ...m, smallBlind: e.target.value } : null)}
+                    className="w-full rounded-lg bg-slate-800 border border-cyan-500/30 px-2.5 py-1.5 text-sm text-white"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs text-slate-400 mb-1">Big blind</label>
+                  <input
+                    type="text"
+                    value={createModal.bigBlind}
+                    onChange={(e) => setCreateModal((m) => m ? { ...m, bigBlind: e.target.value } : null)}
+                    className="w-full rounded-lg bg-slate-800 border border-cyan-500/30 px-2.5 py-1.5 text-sm text-white"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs text-slate-400 mb-1">Max seats (2–10)</label>
+                  <input
+                    type="number"
+                    min={2}
+                    max={10}
+                    value={createModal.maxSeats}
+                    onChange={(e) => setCreateModal((m) => m ? { ...m, maxSeats: Math.min(10, Math.max(2, Number(e.target.value) || 6)) } : null)}
+                    className="w-full rounded-lg bg-slate-800 border border-cyan-500/30 px-2.5 py-1.5 text-sm text-white"
+                  />
+                </div>
                 {/* Private table PIN toggle */}
-                <div className="flex items-center justify-between pt-1">
-                  <div className="flex items-center gap-2">
-                    <svg className="w-4 h-4 text-slate-500" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2C9.24 2 7 4.24 7 7v3H6a2 2 0 00-2 2v8a2 2 0 002 2h12a2 2 0 002-2v-8a2 2 0 00-2-2h-1V7c0-2.76-2.24-5-5-5zm0 2c1.66 0 3 1.34 3 3v3H9V7c0-1.66 1.34-3 3-3zm0 10c1.1 0 2 .9 2 2s-.9 2-2 2-2-.9-2-2 .9-2 2-2z" /></svg>
-                    <span className="text-sm text-slate-400">Private table</span>
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-1.5">
+                    <svg className="w-3.5 h-3.5 text-slate-500" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2C9.24 2 7 4.24 7 7v3H6a2 2 0 00-2 2v8a2 2 0 002 2h12a2 2 0 002-2v-8a2 2 0 00-2-2h-1V7c0-2.76-2.24-5-5-5zm0 2c1.66 0 3 1.34 3 3v3H9V7c0-1.66 1.34-3 3-3zm0 10c1.1 0 2 .9 2 2s-.9 2-2 2-2-.9-2-2 .9-2 2-2z" /></svg>
+                    <span className="text-xs text-slate-400">Private table</span>
                   </div>
                   <button
                     type="button"
                     onClick={() => setCreateModal((m) => m ? { ...m, pinEnabled: !m.pinEnabled, pinCode: '' } : null)}
-                    className={`relative w-10 h-5 rounded-full transition-colors ${createModal.pinEnabled ? 'bg-cyan-500' : 'bg-slate-700'}`}
+                    className={`relative w-9 h-5 rounded-full transition-colors ${createModal.pinEnabled ? 'bg-cyan-500' : 'bg-slate-700'}`}
                   >
-                    <span className={`absolute top-0.5 left-0.5 w-4 h-4 rounded-full bg-white transition-transform ${createModal.pinEnabled ? 'translate-x-5' : ''}`} />
+                    <span className={`absolute top-0.5 left-0.5 w-4 h-4 rounded-full bg-white transition-transform ${createModal.pinEnabled ? 'translate-x-4' : ''}`} />
                   </button>
                 </div>
                 {createModal.pinEnabled && (
                   <div>
-                    <label className="block text-sm text-slate-400 mb-1">4-digit PIN</label>
+                    <label className="block text-xs text-slate-400 mb-1">4-digit PIN</label>
                     <input
                       type="text"
                       inputMode="numeric"
@@ -903,16 +909,16 @@ export default function PokerLobbyPage() {
                         setCreateModal((m) => m ? { ...m, pinCode: v } : null);
                       }}
                       placeholder="0000"
-                      className="w-full rounded-lg bg-slate-800 border border-cyan-500/30 px-3 py-2 text-white text-center tracking-[0.5em] text-lg font-mono"
+                      className="w-full rounded-lg bg-slate-800 border border-cyan-500/30 px-2.5 py-1.5 text-sm text-white text-center tracking-[0.5em] font-mono"
                     />
-                    <p className="text-[11px] text-slate-600 mt-1">Share this PIN with players you want to invite.</p>
+                    <p className="text-[10px] text-slate-600 mt-1">Share this PIN with invited players.</p>
                   </div>
                 )}
-                <div className="flex gap-2">
+                <div className="flex gap-2 pt-0.5">
                   <button
                     type="button"
                     onClick={() => setCreateModal(null)}
-                    className="flex-1 py-2 rounded-lg border border-slate-500 text-slate-300"
+                    className="flex-1 py-1.5 text-sm rounded-lg border border-slate-500 text-slate-300"
                   >
                     Cancel
                   </button>
@@ -920,7 +926,7 @@ export default function PokerLobbyPage() {
                     type="button"
                     onClick={handleCreateTable}
                     disabled={creating || !createModal.smallBlind || !createModal.bigBlind || (createModal.pinEnabled && !/^\d{4}$/.test(createModal.pinCode))}
-                    className="flex-1 py-2 rounded-lg bg-gradient-to-r from-cyan-600 to-blue-600 text-white disabled:opacity-50"
+                    className="flex-1 py-1.5 text-sm rounded-lg bg-gradient-to-r from-cyan-600 to-blue-600 text-white disabled:opacity-50"
                   >
                     {creating ? 'Creating...' : 'Create'}
                   </button>

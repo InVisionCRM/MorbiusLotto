@@ -9,6 +9,7 @@ const SHOWDOWN_DURATION_S = 15;
 
 export interface PokerWinnerNotificationCardProps {
   isOpen: boolean;
+  handId?: string | null;
   winnerName: string;
   winnerAmount: string;
   winnerHandName?: string;
@@ -24,6 +25,7 @@ export interface PokerWinnerNotificationCardProps {
 
 export function PokerWinnerNotificationCard({
   isOpen,
+  handId,
   winnerName,
   winnerAmount,
   winnerHandName,
@@ -59,7 +61,7 @@ export function PokerWinnerNotificationCard({
     <AnimatePresence>
       {isOpen && (
         <motion.div
-          key="poker-winner-notification-card"
+          key={`poker-winner-notification-card-${handId ?? 'unknown'}`}
           data-testid="poker-winner-banner"
           data-card="poker-winner-notification-card"
           className="fixed inset-0 z-[120] pointer-events-none flex items-center justify-center px-2 sm:px-4"
@@ -147,12 +149,11 @@ export function PokerWinnerNotificationCard({
                 <div className="rounded-xl bg-black/50 border border-cyan-500/30 px-2 py-3 sm:px-3 sm:py-4 flex flex-col gap-2 sm:gap-3 min-h-[9.5rem] sm:min-h-[10.5rem]">
                   <div className="flex items-center justify-center gap-1.5 sm:gap-2.5 shrink-0">
                     {hole.map((cardIndex, i) => (
-                      <div key={`winner-hole-${i}`} className="flex-none [perspective:1000px]">
+                      <div key={`winner-hole-${i}`} className="flex-none">
                         <CardDisplay
                           cardIndex={cardIndex}
                           small
                           isWinningCard={typeof cardIndex === 'number' && highlightSet.has(cardIndex)}
-                          className={i === 0 ? '[transform:rotateY(-8deg)]' : '[transform:rotateY(8deg)]'}
                         />
                       </div>
                     ))}

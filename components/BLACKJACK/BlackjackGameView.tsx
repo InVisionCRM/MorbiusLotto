@@ -209,7 +209,7 @@ export function BlackjackGameView(props: BlackjackGameViewProps) {
 
       <div className="grid grid-cols-1 md:grid-cols-[2fr_1fr] grid-rows-[1fr_auto_auto] md:grid-rows-[1fr_auto] gap-2 md:gap-4 min-h-0">
         <div className="min-w-0 flex flex-row md:flex-col min-h-0 pb-0 -mx-2 sm:mx-0 order-1 md:order-none md:row-start-1 md:col-start-1 gap-2 md:gap-0">
-          <div className="relative flex-1 min-w-0 min-h-[60vh] sm:min-h-0 flex flex-col">
+          <div className="relative flex-1 min-w-0 min-h-[60dvh] sm:min-h-0 flex flex-col">
             <BlackjackTable
               playerHand={currentGame?.playerHand || { cards: [], total: 0, hasAce: false, isBlackjack: false, isBust: false }}
               playerHands={currentGame?.playerHands}

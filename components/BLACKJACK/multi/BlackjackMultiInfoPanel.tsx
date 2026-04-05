@@ -129,8 +129,8 @@ function ChatMessages({
         const isFactBot = m.type === 'factbot';
         const isIdle = m.type === 'idle_warning';
         return (
-          <div key={m.key} className={`text-xs break-words py-0.5 ${isWelcome ? 'text-yellow-300/80' : isFactBot ? 'text-emerald-400/80' : 'text-orange-400/80'}`}>
-            {isWelcome && <span className="font-bold text-yellow-400">🎰 Morbius: </span>}
+          <div key={m.key} className={`text-xs break-words py-0.5 ${isWelcome ? 'text-white/85' : isFactBot ? 'text-emerald-400/80' : 'text-orange-400/80'}`}>
+            {isWelcome && <span className="font-bold text-white">Morbius: </span>}
             {isFactBot && <span className="font-bold text-emerald-400">FactBot: </span>}
             {isIdle && <span className="font-bold text-orange-400">⚠ System: </span>}
             {isWelcome ? <span dangerouslySetInnerHTML={{ __html: m.text }} /> : m.text}

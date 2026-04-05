@@ -585,6 +585,7 @@ export function PokerTable({ state, currentPlayerAddress, timeLeft, chatBubbleBy
 
       <PokerWinnerNotificationCard
         isOpen={!!(isShowdownWithWinners && firstWinnerAddr && hand)}
+        handId={hand?.handId}
         winnerName={firstWinnerSeat?.displayName || (isCurrentPlayerWinner ? 'You' : shortAddr(firstWinnerAddr ?? ''))}
         winnerAmount={winnerAmount}
         winnerHandName={winnerHandName}

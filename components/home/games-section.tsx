@@ -6,7 +6,6 @@ import Link from 'next/link'
 import { useAccount } from 'wagmi'
 import { useQuery } from '@tanstack/react-query'
 import { IconBrandTelegram, IconBrandX } from '@tabler/icons-react'
-import { Carousel } from '@/components/ui/apple-cards-carousel'
 import { PaymentBadges } from '@/components/home/payment-badges'
 import { cn } from '@/lib/utils'
 import { isAdminWallet } from '@/lib/admin'
@@ -54,6 +53,22 @@ function LivePlayersBadge({ count }: { count: number }) {
   )
 }
 
+type GameCard = {
+  key: string
+  href: string
+  title: string
+  image: string
+  imageAlt: string
+  titleClassName: string
+  badge: string | null
+  disabled: boolean
+  presenceKey?: PresenceKey
+  isGradientCard?: boolean
+  customContent?: ReactNode
+  accent: string
+  accentGlow: string
+}
+
 export function GamesSection() {
   const { address } = useAccount()
   const isAdmin = isAdminWallet(address)
@@ -77,32 +92,19 @@ export function GamesSection() {
     staleTime: 5_000,
   })
 
-  const baseCardClassName =
-    'relative overflow-hidden rounded-3xl h-72 w-52 md:h-[30rem] md:w-96 transition-all duration-300 bg-gradient-to-br from-slate-900 to-slate-800 border border-cyan-500/30 shadow-2xl'
-
-  const gameCards: Array<{
-    key: string
-    href: string
-    title: string
-    image: string
-    imageAlt: string
-    titleClassName: string
-    badge: string | null
-    disabled: boolean
-    presenceKey?: PresenceKey
-    isGradientCard?: boolean
-    customContent?: ReactNode
-  }> = [
+  const gameCards: GameCard[] = [
     {
       key: 'multiplayer-blackjack',
       href: '/blackjack-multi',
       title: 'Multiplayer Blackjack',
       image: '/morbius/multi-blackjack-screenshot.png',
       imageAlt: 'Multiplayer Blackjack',
-      titleClassName: 'text-lg md:text-2xl font-krona-one leading-tight',
-      badge: 'NEW!' as string | null,
+      titleClassName: 'text-2xl md:text-4xl font-krona-one leading-tight',
+      badge: 'NEW!',
       disabled: false,
       presenceKey: 'blackjackMulti',
+      accent: 'border-violet-500/40',
+      accentGlow: '0 0 40px rgba(139,92,246,0.35), 0 0 80px rgba(139,92,246,0.15)',
     },
     {
       key: 'blackjack',
@@ -110,10 +112,12 @@ export function GamesSection() {
       title: 'BlackJack',
       image: '/BlackJack/TableBackground1.png',
       imageAlt: 'BlackJack',
-      titleClassName: 'text-xl md:text-3xl font-jost',
-      badge: 'NEW!' as string | null,
+      titleClassName: 'text-xl md:text-2xl font-jost',
+      badge: 'NEW!',
       disabled: false,
       presenceKey: 'blackjack',
+      accent: 'border-emerald-500/40',
+      accentGlow: '0 0 30px rgba(16,185,129,0.3), 0 0 60px rgba(16,185,129,0.1)',
     },
     {
       key: 'plinko',
@@ -121,10 +125,12 @@ export function GamesSection() {
       title: 'Plinko',
       image: '/morbius/plinkoscreenshot.png',
       imageAlt: 'Plinko',
-      titleClassName: 'text-xl md:text-3xl font-autour-one',
-      badge: 'NEW!' as string | null,
+      titleClassName: 'text-xl md:text-2xl font-autour-one',
+      badge: 'NEW!',
       disabled: false,
       presenceKey: 'plinko',
+      accent: 'border-cyan-500/40',
+      accentGlow: '0 0 30px rgba(6,182,212,0.3), 0 0 60px rgba(6,182,212,0.1)',
     },
     {
       key: 'keno',
@@ -132,10 +138,12 @@ export function GamesSection() {
       title: 'KENO',
       image: '/morbius/KENOscreenshot.png',
       imageAlt: 'KENO',
-      titleClassName: 'text-xl md:text-3xl font-climate-crisis',
-      badge: null as string | null,
+      titleClassName: 'text-xl md:text-2xl font-climate-crisis',
+      badge: null,
       disabled: false,
       presenceKey: 'keno',
+      accent: 'border-amber-500/40',
+      accentGlow: '0 0 30px rgba(245,158,11,0.3), 0 0 60px rgba(245,158,11,0.1)',
     },
     {
       key: 'lotto',
@@ -143,10 +151,12 @@ export function GamesSection() {
       title: 'Lotto',
       image: '/morbius/Lottoscreenshot.png',
       imageAlt: 'Mega Morbius Lotto',
-      titleClassName: 'text-xl md:text-3xl font-monoton',
-      badge: null as string | null,
+      titleClassName: 'text-xl md:text-2xl font-monoton',
+      badge: null,
       disabled: false,
       presenceKey: 'lottery',
+      accent: 'border-rose-500/40',
+      accentGlow: '0 0 30px rgba(244,63,94,0.3), 0 0 60px rgba(244,63,94,0.1)',
     },
     {
       key: 'coming-soon',
@@ -154,14 +164,15 @@ export function GamesSection() {
       title: 'More Games Coming Soon',
       image: '/Marketing%20/Hero-Background.jpeg',
       imageAlt: 'More games coming soon',
-      titleClassName: 'text-lg md:text-2xl font-jost leading-tight',
-      badge: null as string | null,
+      titleClassName: 'text-lg md:text-xl font-jost leading-tight',
+      badge: null,
       disabled: true,
+      accent: 'border-white/10',
+      accentGlow: '',
       customContent: (
-        <div className="mt-2 flex flex-col items-center gap-2 text-center">
-          <p className="max-w-[16rem] text-[11px] md:text-xs text-cyan-100/90 leading-relaxed">
-            Got a game you really want to see on Morbius? Reach out to us directly on X.com or Telegram and
-            we will do our best to get it added!
+        <div className="mt-2 flex flex-col items-start gap-2">
+          <p className="max-w-[16rem] text-[11px] md:text-xs text-cyan-100/80 leading-relaxed">
+            Got a game idea? Reach out on X or Telegram.
           </p>
           <div className="flex items-center gap-2">
             <a
@@ -188,85 +199,126 @@ export function GamesSection() {
     },
   ]
 
-  const items = gameCards.map((game) => {
-    const cardBody = (
-      <div className={cn(baseCardClassName, game.disabled && 'opacity-90 cursor-not-allowed')}>
-        {game.presenceKey != null && !game.disabled ? (
-          <LivePlayersBadge count={presence[game.presenceKey]} />
-        ) : null}
-        {game.badge ? (
-          <div
+  function CardBody({ game, className }: { game: GameCard; className?: string }) {
+    return (
+      <div
+        className={cn(
+          'group relative overflow-hidden rounded-2xl border bg-slate-900 transition-all duration-300',
+          game.accent,
+          !game.disabled && 'cursor-pointer hover:scale-[1.02]',
+          game.disabled && 'opacity-80 cursor-not-allowed',
+          className,
+        )}
+        style={
+          !game.disabled
+            ? {
+                boxShadow: '0 4px 24px rgba(0,0,0,0.4)',
+              }
+            : undefined
+        }
+        onMouseEnter={(e) => {
+          if (!game.disabled && game.accentGlow) {
+            (e.currentTarget as HTMLElement).style.boxShadow = game.accentGlow
+          }
+        }}
+        onMouseLeave={(e) => {
+          if (!game.disabled) {
+            (e.currentTarget as HTMLElement).style.boxShadow = '0 4px 24px rgba(0,0,0,0.4)'
+          }
+        }}
+      >
+        {/* Background image */}
+        <div className="absolute inset-0">
+          <Image
+            src={game.image}
+            alt={game.imageAlt}
+            fill
+            sizes="(max-width: 768px) 50vw, 33vw"
             className={cn(
-              'absolute top-2.5 right-2.5 md:top-3 md:right-3 z-20 text-[10px] md:text-xs px-2 py-1 rounded-full shadow-lg border',
-              game.disabled
-                ? 'bg-black/55 text-amber-200/95 border-amber-500/40 font-semibold'
-                : 'bg-gradient-to-r from-cyan-400 to-blue-500 text-white border-cyan-300/50 font-bold',
+              'object-cover transition-transform duration-500',
+              !game.disabled && 'group-hover:scale-105',
+              game.disabled && 'opacity-35 grayscale',
             )}
-          >
+          />
+        </div>
+
+        {/* Gradient overlay */}
+        <div className="absolute inset-0 bg-gradient-to-t from-black/85 via-black/30 to-transparent" />
+
+        {/* Accent shimmer on hover */}
+        {!game.disabled && (
+          <div className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity duration-300 bg-gradient-to-t from-transparent via-transparent to-white/[0.03]" />
+        )}
+
+        {/* Live badge */}
+        {game.presenceKey != null && !game.disabled && (
+          <LivePlayersBadge count={presence[game.presenceKey]} />
+        )}
+
+        {/* NEW badge */}
+        {game.badge && (
+          <div className="absolute top-2.5 right-2.5 z-20 text-[10px] md:text-xs px-2 py-1 rounded-full shadow-lg border bg-gradient-to-r from-cyan-400 to-blue-500 text-white border-cyan-300/50 font-bold">
             {game.badge}
           </div>
-        ) : null}
+        )}
 
-        <div className="absolute inset-0">
-          {game.isGradientCard ? (
-            <div className="h-full w-full bg-gradient-to-br from-slate-900 via-slate-800 to-slate-950" />
-          ) : (
-            <Image
-              src={game.image}
-              alt={game.imageAlt}
-              fill
-              sizes="(max-width: 768px) 208px, 384px"
-              className={cn(
-                'object-cover',
-                game.disabled ? 'opacity-40 grayscale' : 'opacity-95',
-              )}
-            />
-          )}
-        </div>
-        <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/35 to-transparent" />
-        {game.isGradientCard ? (
-          <div className="absolute inset-0 bg-[radial-gradient(circle_at_50%_50%,rgba(34,211,238,0.2),transparent_65%)]" />
-        ) : null}
+        {/* Payment badges */}
+        {!game.disabled && <PaymentBadges />}
 
-        {!game.disabled ? <PaymentBadges /> : null}
-
-        <div className="absolute inset-0 flex flex-col items-center justify-center px-3 text-center">
+        {/* Title + content — bottom left */}
+        <div className="absolute bottom-0 left-0 right-0 p-3 md:p-4 z-10">
           <h3 className={cn('text-white drop-shadow-lg', game.titleClassName)}>{game.title}</h3>
-          {'customContent' in game && game.customContent ? game.customContent : null}
+          {game.customContent}
         </div>
       </div>
     )
+  }
 
-    if (game.disabled || !game.href) {
-      return (
-        <div
-          key={game.key}
-          className="block"
-          role="group"
-          aria-label={`${game.title} — under construction`}
-        >
-          {cardBody}
-        </div>
-      )
-    }
-
-    return (
-      <Link key={game.key} href={game.href} className="block">
-        {cardBody}
-      </Link>
-    )
-  })
+  const [featured, bj, plinko, keno, lotto, comingSoon] = gameCards
 
   return (
-    <main className="w-full px-4 py-6 md:py-8 relative z-10 overflow-hidden" id="games">
-      <div className="relative">
+    <main className="w-full px-4 py-6 md:py-8 relative z-10" id="games">
+      <div className="max-w-7xl mx-auto">
         <div className="text-center mb-8">
           <h2 className={cn(homeSectionTitleClass, 'mb-2')}>
             <span className={homeSectionTitleGradientClass}>Games</span>
           </h2>
         </div>
 
-        <Carousel items={items} />
+        {/* Bento grid */}
+        <div className="grid grid-cols-2 md:grid-cols-3 gap-3 md:gap-4">
+
+          {/* Featured — spans 2 cols and 2 rows on desktop */}
+          <div className="col-span-2 md:col-span-2 md:row-span-2">
+            <Link href={featured.href} className="block h-full">
+              <CardBody game={featured} className="h-[240px] md:h-full" />
+            </Link>
+          </div>
+
+          {/* BlackJack — right column top */}
+          <Link href={bj.href} className="block">
+            <CardBody game={bj} className="h-[115px] md:h-[235px]" />
+          </Link>
+
+          {/* Plinko — right column bottom */}
+          <Link href={plinko.href} className="block">
+            <CardBody game={plinko} className="h-[115px] md:h-[235px]" />
+          </Link>
+
+          {/* Bottom row — 3 cards */}
+          <Link href={keno.href} className="block">
+            <CardBody game={keno} className="h-[140px] md:h-[180px]" />
+          </Link>
+
+          <Link href={lotto.href} className="block">
+            <CardBody game={lotto} className="h-[140px] md:h-[180px]" />
+          </Link>
+
+          <div role="group" aria-label="More games coming soon">
+            <CardBody game={comingSoon} className="h-[140px] md:h-[180px]" />
+          </div>
+
+        </div>
       </div>
     </main>
   )
