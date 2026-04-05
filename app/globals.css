@@ -754,11 +754,15 @@ body {
     font-size: 0.8em;
   }
 
-  /* Collapse bottom bar: single compact row, hide activity feed */
+  /* Bottom bar: show ONLY the action controls — hide activity feed and spacer.
+     The DOM order is: activity (child 1), spacer (child 2), actions (child 3).
+     We hide the first two children so actions fill the full width. */
   [data-poker-shell] [data-poker-bottom] {
     grid-template-columns: 1fr !important;
-    max-height: 52px;
-    overflow: hidden;
+  }
+  [data-poker-shell] [data-poker-bottom] > div:nth-child(1),
+  [data-poker-shell] [data-poker-bottom] > div:nth-child(2) {
+    display: none !important;
   }
 
   /* Let the table container use the full available width in landscape */

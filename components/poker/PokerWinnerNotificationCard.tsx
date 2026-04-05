@@ -144,8 +144,8 @@ export function PokerWinnerNotificationCard({
               <div className="flex flex-col p-2 sm:p-3 gap-2">
 
                 {/* Cards: hole + community */}
-                <div className="rounded-xl bg-black/50 border border-cyan-500/30 p-2 sm:p-2.5 flex flex-col gap-1.5">
-                  <div className="flex items-center justify-center gap-1.5 sm:gap-2.5">
+                <div className="rounded-xl bg-black/50 border border-cyan-500/30 px-2 py-3 sm:px-3 sm:py-4 flex flex-col gap-2 sm:gap-3 min-h-[9.5rem] sm:min-h-[10.5rem]">
+                  <div className="flex items-center justify-center gap-1.5 sm:gap-2.5 shrink-0">
                     {hole.map((cardIndex, i) => (
                       <div key={`winner-hole-${i}`} className="flex-none [perspective:1000px]">
                         <CardDisplay
@@ -158,7 +158,7 @@ export function PokerWinnerNotificationCard({
                     ))}
                   </div>
 
-                  <div className="flex items-center justify-center gap-1 sm:gap-1.5 overflow-hidden pt-2 sm:pt-3">
+                  <div className="flex flex-1 items-center justify-center gap-1 sm:gap-1.5 overflow-hidden py-1 sm:py-1.5 min-h-[4.25rem] sm:min-h-[4.75rem]">
                     {board.map((cardIndex, i) => (
                       <div key={`winner-board-${i}-${cardIndex ?? 'empty'}`} className="flex-none">
                         <CardDisplay cardIndex={cardIndex} small isWinningCard={highlightSet.has(cardIndex)} />

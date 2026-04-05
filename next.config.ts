@@ -1,11 +1,13 @@
 import type { NextConfig } from "next";
 import webpack from "webpack";
 import withSerwistInit from "@serwist/next";
+import { encodeHashInPrecacheUrls } from "./lib/serwist-precache-manifest";
 
 const withSerwist = withSerwistInit({
   swSrc: "app/sw.ts",
   swDest: "public/sw.js",
   disable: process.env.NODE_ENV === "development",
+  manifestTransforms: [encodeHashInPrecacheUrls],
 });
 
 const nextConfig: NextConfig = {

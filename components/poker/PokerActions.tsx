@@ -3,6 +3,7 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { formatEther, parseEther } from 'viem';
 import { toBigIntSafe } from '@/lib/safe-bigint';
+import { sanitizeDecimalStringForParseEther } from '@/lib/sanitize-decimal-input';
 import { formatMorbiusFloor } from '@/lib/format-morbius-display';
 import { usePokerSounds } from '@/hooks/use-poker-sounds';
 
@@ -14,7 +15,7 @@ function parsePropWei(s: string | number): Amount {
 
 function safeParseAmount(input: string): Amount | null {
   try {
-    const cleaned = input.trim().replace(/,/g, '');
+    const cleaned = sanitizeDecimalStringForParseEther(input);
     if (!cleaned) return null;
     return parseEther(cleaned);
   } catch {

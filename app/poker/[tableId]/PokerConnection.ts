@@ -2,7 +2,11 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { getWebSocketUrlOptional } from '@/lib/api-urls';
-import { BlackjackWebSocketClient, type PokerTableState } from '@/lib/websocket-client';
+import {
+  BlackjackWebSocketClient,
+  type PokerTableState,
+  type SignTypedDataFn,
+} from '@/lib/websocket-client';
 import { toast } from 'sonner';
 
 interface UsePokerConnectionArgs {
@@ -36,6 +40,15 @@ export function usePokerConnection({
   const clientRef = useRef<BlackjackWebSocketClient | null>(null);
   const fetchSeqRef = useRef(0);
 
+  const signTypedRef = useRef(signTypedDataAsync as SignTypedDataFn | undefined);
+  signTypedRef.current = signTypedDataAsync as SignTypedDataFn | undefined;
+
+  const stableSignTypedData = useCallback<SignTypedDataFn>((args) => {
+    const fn = signTypedRef.current;
+    if (!fn) return Promise.reject(new Error('Wallet signer not ready'));
+    return fn(args);
+  }, []);
+
   // Fetch personalized state and apply it only if no newer fetch has started.
   const fetchLatestState = useCallback(() => {
     const client = clientRef.current;
@@ -49,6 +62,40 @@ export function usePokerConnection({
       .catch(() => {});
   }, [tableId]);
 
+  const afterConnectRef = useRef<() => Promise<void>>(async () => {});
+
+  afterConnectRef.current = async () => {
+    const client = clientRef.current;
+    if (!client || !tableId) return;
+    setWsConnected(true);
+    setDisconnected(false);
+    setError(null);
+
+    if (joinFromLobby && buyInParam && normalizedAddress) {
+      await client
+        .pokerJoinTable(tableId, buyInParam, pinParam || undefined)
+        .catch((err: unknown) => {
+          const msg: string = (err as Error)?.message ?? '';
+          if (!msg.toLowerCase().includes('already seated')) {
+            setError(msg || 'Failed to join');
+            toast.error(msg || 'Failed to join');
+          }
+        });
+      try {
+        await client.joinRoom(`poker:table:${tableId}`);
+        const s = await client.pokerGetState(tableId);
+        if (s) setState(s);
+        replaceUrl(`/poker/${tableId}`);
+      } catch {
+        replaceUrl(`/poker/${tableId}`);
+      }
+      return;
+    }
+
+    const s = await client.pokerGetState(tableId);
+    if (s) setState(s);
+  };
+
   useEffect(() => {
     if (isE2EMock) {
       setWsConnected(true);
@@ -61,9 +108,25 @@ export function usePokerConnection({
       setError('WebSocket not configured');
       return;
     }
-    const client = new BlackjackWebSocketClient(wsUrl, normalizedAddress ?? undefined, signTypedDataAsync as any);
+    const client = new BlackjackWebSocketClient(
+      wsUrl,
+      normalizedAddress ?? undefined,
+      normalizedAddress ? stableSignTypedData : undefined
+    );
     clientRef.current = client;
     setWsClient(client);
+
+    const onReconnected = () => {
+      void afterConnectRef.current();
+    };
+
+    const onReconnectFailed = () => {
+      setError('Could not reconnect to the game server');
+      toast.error('Connection lost — please refresh the page');
+    };
+
+    client.on('reconnected', onReconnected);
+    client.on('reconnect_failed', onReconnectFailed);
 
     client.on('poker_table_state', (payload: PokerTableState) => {
       if (payload.tableId !== tableId) return;
@@ -83,34 +146,15 @@ export function usePokerConnection({
 
     client
       .connect()
-      .then(() => {
-        setWsConnected(true);
-        if (joinFromLobby && buyInParam && normalizedAddress) {
-          return client
-            .pokerJoinTable(tableId, buyInParam, pinParam || undefined)
-            .catch((err) => {
-              const msg: string = err?.message ?? '';
-              if (!msg.toLowerCase().includes('already seated')) {
-                setError(msg || 'Failed to join');
-                toast.error(msg || 'Failed to join');
-              }
-            })
-            .then(() => client.joinRoom(`poker:table:${tableId}`))
-            .then(() => client.pokerGetState(tableId))
-            .then((s) => {
-              if (s) setState(s);
-              replaceUrl(`/poker/${tableId}`);
-            })
-            .catch(() => replaceUrl(`/poker/${tableId}`));
-        }
-        return client.pokerGetState(tableId).then(setState);
-      })
+      .then(() => afterConnectRef.current())
       .catch((err) => {
         setError(err?.message ?? 'Failed to connect');
         toast.error(err?.message ?? 'Failed to connect');
       });
 
     return () => {
+      client.off('reconnected', onReconnected);
+      client.off('reconnect_failed', onReconnectFailed);
       client.disconnect();
       clientRef.current = null;
       setWsClient(null);
@@ -119,7 +163,7 @@ export function usePokerConnection({
   }, [
     tableId,
     normalizedAddress,
-    signTypedDataAsync,
+    stableSignTypedData,
     isE2EMock,
     joinFromLobby,
     buyInParam,

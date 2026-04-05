@@ -1,12 +1,13 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useAccount, useSignTypedData } from 'wagmi';
 import { parseEther } from 'viem';
+import { sanitizeDecimalStringForParseEther } from '@/lib/sanitize-decimal-input';
 import { getApiUrlOptional, getWebSocketUrlOptional } from '@/lib/api-urls';
-import { BlackjackWebSocketClient } from '@/lib/websocket-client';
+import { BlackjackWebSocketClient, type SignTypedDataFn } from '@/lib/websocket-client';
 import type { PokerTableSummary, PokerSeatState } from '@/lib/websocket-client';
 import { Footer } from '@/components/shared/footer';
 import { Theme } from '@/lib/theme';
@@ -151,10 +152,18 @@ export default function PokerLobbyPage() {
   const clientRef = React.useRef<BlackjackWebSocketClient | null>(null);
   const isAdmin = isAdminWallet(address);
 
+  const signTypedRef = useRef(signTypedDataAsync as SignTypedDataFn | undefined);
+  signTypedRef.current = signTypedDataAsync as SignTypedDataFn | undefined;
+  const stableSignTypedData = useCallback<SignTypedDataFn>((args) => {
+    const fn = signTypedRef.current;
+    if (!fn) return Promise.reject(new Error('Wallet signer not ready'));
+    return fn(args);
+  }, []);
+
   const joinBuyInOutOfRange = React.useMemo(() => {
     if (!joinModal) return false;
     try {
-      const w = parseEther(buyIn.trim().replace(/,/g, '') || '0');
+      const w = parseEther(sanitizeDecimalStringForParseEther(buyIn) || '0');
       const { minWei, maxWei } = getCashBuyInBoundsWei(BigInt(joinModal.bigBlindWei));
       return w < minWei || w > maxWei;
     } catch {
@@ -220,9 +229,25 @@ export default function PokerLobbyPage() {
 
     // Authenticated when wallet is connected so tournament join/create/events all work
     const client = address
-      ? new BlackjackWebSocketClient(wsUrl, address.toLowerCase(), signTypedDataAsync as any)
+      ? new BlackjackWebSocketClient(wsUrl, address.toLowerCase(), stableSignTypedData)
       : new BlackjackWebSocketClient(wsUrl);
     clientRef.current = client;
+
+    const refreshTables = () => {
+      client
+        .pokerListTables()
+        .then((res) => {
+          setTables(res.tables ?? []);
+          setError(null);
+        })
+        .catch(() => {});
+    };
+
+    const onReconnected = () => {
+      refreshTables();
+    };
+
+    client.on('reconnected', onReconnected);
 
     // Listen for broadcast table list updates
     client.on('poker_table_list', (payload: { tables: PokerTableSummary[] }) => {
@@ -254,19 +279,17 @@ export default function PokerLobbyPage() {
 
     // Poll every 5s for fresh table list (lobby broadcasts not guaranteed)
     const interval = setInterval(() => {
-      client
-        .pokerListTables()
-        .then((res) => setTables(res.tables ?? []))
-        .catch(() => {});
+      refreshTables();
     }, 5000);
 
     return () => {
       clearInterval(interval);
+      client.off('reconnected', onReconnected);
       client.disconnect();
       clientRef.current = null;
       setWsClient(null);
     };
-  }, [address, signTypedDataAsync]);
+  }, [address, stableSignTypedData, router]);
 
   useEffect(() => {
     if (!address || !getApiUrlOptional()) {
@@ -291,7 +314,7 @@ export default function PokerLobbyPage() {
     }
     let buyInWei: string;
     try {
-      buyInWei = parseEther(buyIn.trim().replace(/,/g, '') || '0').toString();
+      buyInWei = parseEther(sanitizeDecimalStringForParseEther(buyIn) || '0').toString();
     } catch {
       setError('Invalid buy-in amount');
       return;
@@ -323,11 +346,11 @@ export default function PokerLobbyPage() {
     setError(null);
     try {
       const sbWei = (() => {
-        try { return parseEther(createModal.smallBlind.trim().replace(/,/g, '') || '0').toString(); }
+        try { return parseEther(sanitizeDecimalStringForParseEther(createModal.smallBlind) || '0').toString(); }
         catch { return createModal.smallBlind; }
       })();
       const bbWei = (() => {
-        try { return parseEther(createModal.bigBlind.trim().replace(/,/g, '') || '0').toString(); }
+        try { return parseEther(sanitizeDecimalStringForParseEther(createModal.bigBlind) || '0').toString(); }
         catch { return createModal.bigBlind; }
       })();
       const pinCode = createModal.pinEnabled ? createModal.pinCode : undefined;
@@ -337,7 +360,7 @@ export default function PokerLobbyPage() {
       // Auto-join creator at max buy-in (100 BB) — matches cash-game rules
       let bbBig: bigint;
       try {
-        bbBig = parseEther(createModal.bigBlind.trim().replace(/,/g, '') || '0');
+        bbBig = parseEther(sanitizeDecimalStringForParseEther(createModal.bigBlind) || '0');
       } catch {
         bbBig = 0n;
       }
@@ -744,7 +767,7 @@ export default function PokerLobbyPage() {
                 )}
                 {balance != null && (() => {
                   try {
-                    return parseEther(buyIn.trim().replace(/,/g, '') || '0') > BigInt(balance);
+                    return parseEther(sanitizeDecimalStringForParseEther(buyIn) || '0') > BigInt(balance);
                   } catch {
                     return false;
                   }
@@ -801,7 +824,7 @@ export default function PokerLobbyPage() {
                       || (joinModal.hasPin && !/^\d{4}$/.test(joinPin))
                       || (balance != null && (() => {
                         try {
-                          return parseEther(buyIn.trim().replace(/,/g, '') || '0') > BigInt(balance);
+                          return parseEther(sanitizeDecimalStringForParseEther(buyIn) || '0') > BigInt(balance);
                         } catch {
                           return false;
                         }
