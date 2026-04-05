@@ -65,17 +65,19 @@ export default function HomePageClient() {
         <div className="relative z-[1] w-full flex flex-col items-center">
           <div className="relative z-10 w-full flex flex-col items-center">
             <FirstVisitNotification className="font-poppins text-center">
-              <p className="text-gray-300 text-base sm:text-lg tracking-wide">
-                The Morbius token analyzer has been redirected to{' '}
+              <p className="text-base sm:text-lg tracking-wide">
+                <span className="text-slate-950">
+                  The Morbius token analyzer has been redirected to{' '}
+                </span>
                 <a
                   href="https://scan.morbius.io"
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="font-bold underline underline-offset-1 text-cyan-400 hover:text-cyan-300"
+                  className="font-bold underline underline-offset-1 text-cyan-600 hover:text-cyan-500"
                 >
                   Scan.Morbius.io
                 </a>
-                .
+                <span className="text-slate-950">.</span>
               </p>
             </FirstVisitNotification>
 

@@ -76,4 +76,5 @@ export const config = createConfig({
     ]),
   },
   ssr: true,
+  multiInjectedProviderDiscovery: false,
 })

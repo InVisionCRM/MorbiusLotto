@@ -226,41 +226,6 @@ export function PokerActions({
         className="sm:hidden"
         style={{ ...barStyle, paddingBottom: 'max(8px, env(safe-area-inset-bottom, 8px))', paddingLeft: 'max(8px, env(safe-area-inset-left, 8px))', paddingRight: 'max(8px, env(safe-area-inset-right, 8px))' }}
       >
-        <div className="flex items-center justify-end gap-2 px-0.5 pt-1">
-          <label className={preActionLabelClass}>
-            <input
-              data-testid="poker-pre-action-check-fold"
-              type="checkbox"
-              checked={preAction === 'check_fold'}
-              onChange={() => togglePreAction('check_fold')}
-              disabled={canAct}
-              className="h-3 w-3 accent-cyan-400 rounded-sm"
-            />
-            <span>Check/Fold</span>
-          </label>
-          <label className={preActionLabelClass}>
-            <input
-              data-testid="poker-pre-action-check"
-              type="checkbox"
-              checked={preAction === 'check'}
-              onChange={() => togglePreAction('check')}
-              disabled={canAct || !canCheck}
-              className="h-3 w-3 accent-cyan-400 rounded-sm"
-            />
-            <span>Check</span>
-          </label>
-          <label className={preActionLabelClass}>
-            <input
-              data-testid="poker-pre-action-call-any"
-              type="checkbox"
-              checked={preAction === 'call_any'}
-              onChange={() => togglePreAction('call_any')}
-              disabled={canAct}
-              className="h-3 w-3 accent-cyan-400 rounded-sm"
-            />
-            <span>Call Any</span>
-          </label>
-        </div>
         <div className="grid grid-cols-4 gap-1 pt-1.5 pb-1 px-0.5">
           {quickSizes.map((q) => (
             <button
@@ -276,8 +241,46 @@ export function PokerActions({
             </button>
           ))}
         </div>
-        <div className="flex items-stretch gap-1 pb-2 pt-1">
-          <div className="flex gap-1.5 flex-1 min-w-0">
+        <div className="flex items-stretch gap-1 pb-2 pt-1 px-0.5">
+          <div
+            className="flex flex-col gap-0.5 justify-center shrink-0 w-[4.65rem] pr-1 border-r border-white/10"
+            aria-label="Pre-selected actions when not your turn"
+          >
+            <label className={`${preActionLabelClass} text-[9px] leading-tight`}>
+              <input
+                data-testid="poker-pre-action-check-fold"
+                type="checkbox"
+                checked={preAction === 'check_fold'}
+                onChange={() => togglePreAction('check_fold')}
+                disabled={canAct}
+                className="h-3 w-3 accent-cyan-400 rounded-sm shrink-0"
+              />
+              <span className="whitespace-nowrap">Check/Fold</span>
+            </label>
+            <label className={`${preActionLabelClass} text-[9px] leading-tight`}>
+              <input
+                data-testid="poker-pre-action-check"
+                type="checkbox"
+                checked={preAction === 'check'}
+                onChange={() => togglePreAction('check')}
+                disabled={canAct || !canCheck}
+                className="h-3 w-3 accent-cyan-400 rounded-sm shrink-0"
+              />
+              <span>Check</span>
+            </label>
+            <label className={`${preActionLabelClass} text-[9px] leading-tight`}>
+              <input
+                data-testid="poker-pre-action-call-any"
+                type="checkbox"
+                checked={preAction === 'call_any'}
+                onChange={() => togglePreAction('call_any')}
+                disabled={canAct}
+                className="h-3 w-3 accent-cyan-400 rounded-sm shrink-0"
+              />
+              <span className="whitespace-nowrap">Call Any</span>
+            </label>
+          </div>
+          <div className="flex gap-1 flex-1 min-w-0">
             <div className="grid grid-cols-4 gap-1 flex-1 h-11 min-w-0">
               <button
                 data-testid="poker-action-fold"
@@ -382,41 +385,6 @@ export function PokerActions({
 
       {/* ── Desktop / tablet (sm+): larger touch targets on md+ for readability ── */}
       <div className="hidden sm:block" style={barStyle}>
-        <div className="flex items-center justify-end gap-2.5 md:gap-3 px-2 md:px-3 pt-1 md:pt-1.5">
-          <label className={preActionLabelClass}>
-            <input
-              data-testid="poker-pre-action-check-fold"
-              type="checkbox"
-              checked={preAction === 'check_fold'}
-              onChange={() => togglePreAction('check_fold')}
-              disabled={canAct}
-              className="h-3.5 w-3.5 accent-cyan-400 rounded-sm"
-            />
-            <span>Check/Fold</span>
-          </label>
-          <label className={preActionLabelClass}>
-            <input
-              data-testid="poker-pre-action-check"
-              type="checkbox"
-              checked={preAction === 'check'}
-              onChange={() => togglePreAction('check')}
-              disabled={canAct || !canCheck}
-              className="h-3.5 w-3.5 accent-cyan-400 rounded-sm"
-            />
-            <span>Check</span>
-          </label>
-          <label className={preActionLabelClass}>
-            <input
-              data-testid="poker-pre-action-call-any"
-              type="checkbox"
-              checked={preAction === 'call_any'}
-              onChange={() => togglePreAction('call_any')}
-              disabled={canAct}
-              className="h-3.5 w-3.5 accent-cyan-400 rounded-sm"
-            />
-            <span>Call Any</span>
-          </label>
-        </div>
         <div className="flex items-center justify-end gap-1.5 px-2 md:px-3 pt-1.5 md:pt-2">
           {quickSizes.map((q) => (
             <button
@@ -435,6 +403,44 @@ export function PokerActions({
           className="flex items-stretch gap-1 md:gap-1.5 px-2 md:px-3 pb-2 md:pb-3 pt-1 md:pt-1.5"
           style={{ paddingBottom: 'max(8px, env(safe-area-inset-bottom, 8px))' }}
         >
+          <div
+            className="flex flex-col gap-1 justify-center shrink-0 pr-2 md:pr-3 border-r border-white/10"
+            aria-label="Pre-selected actions when not your turn"
+          >
+            <label className={preActionLabelClass}>
+              <input
+                data-testid="poker-pre-action-check-fold"
+                type="checkbox"
+                checked={preAction === 'check_fold'}
+                onChange={() => togglePreAction('check_fold')}
+                disabled={canAct}
+                className="h-3.5 w-3.5 accent-cyan-400 rounded-sm shrink-0"
+              />
+              <span className="whitespace-nowrap">Check/Fold</span>
+            </label>
+            <label className={preActionLabelClass}>
+              <input
+                data-testid="poker-pre-action-check"
+                type="checkbox"
+                checked={preAction === 'check'}
+                onChange={() => togglePreAction('check')}
+                disabled={canAct || !canCheck}
+                className="h-3.5 w-3.5 accent-cyan-400 rounded-sm shrink-0"
+              />
+              <span>Check</span>
+            </label>
+            <label className={preActionLabelClass}>
+              <input
+                data-testid="poker-pre-action-call-any"
+                type="checkbox"
+                checked={preAction === 'call_any'}
+                onChange={() => togglePreAction('call_any')}
+                disabled={canAct}
+                className="h-3.5 w-3.5 accent-cyan-400 rounded-sm shrink-0"
+              />
+              <span className="whitespace-nowrap">Call Any</span>
+            </label>
+          </div>
           <div className="flex gap-1.5 md:gap-2 flex-1 min-w-0">
             <div className="grid grid-cols-4 gap-1 md:gap-1.5 flex-1 h-12 md:h-14 min-w-0">
               <button
