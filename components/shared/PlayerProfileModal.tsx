@@ -62,8 +62,7 @@ export function PlayerProfileModal({ isOpen, onClose, address, game = 'all', mod
     <>
       <Dialog open={isOpen} onOpenChange={(open) => { if (!open) onClose() }}>
         <DialogContent
-          modalZIndex={modalZIndex}
-          className="max-w-6xl max-h-[90vh] overflow-y-auto bg-gradient-to-b from-gray-900 to-black border-cyan-500/30"
+          className={`max-w-6xl max-h-[90vh] overflow-y-auto bg-gradient-to-b from-gray-900 to-black border-cyan-500/30 ${modalZIndex ?? ''}`}
         >
           <DialogHeader className="flex flex-row items-center justify-between gap-4">
             <DialogTitle className="text-xl font-bold text-white">

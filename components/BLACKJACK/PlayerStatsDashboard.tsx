@@ -37,7 +37,6 @@ import { PlayerStatsFeatureGrid } from '@/components/ui/player-stats-feature-gri
 import { GameHistory } from '@/components/BLACKJACK/GameHistory'
 import { CreatorDashboard } from '@/components/Creators/CreatorDashboard'
 import { PlayerAuditView } from '@/components/BLACKJACK/PlayerAuditView'
-import { AvatarView } from '@/components/avatar'
 import type { BlackjackWebSocketClient } from '@/lib/websocket-client'
 import type { GameHistoryEntry } from '@/components/BLACKJACK/GameHistory'
 
@@ -83,7 +82,7 @@ export function PlayerStatsDashboard({ stats, isLoading, playerAddress, wsClient
   const { address: connectedAddress } = useAccount()
   const isAdmin = isAdminWallet(connectedAddress)
   const [activeTab, setActiveTab] = useState<'stats' | 'history' | 'creator' | 'audit'>('stats')
-  const { displayName, profileImageUrl, avatarConfig } = useProfileForAddress(playerAddress ?? null)
+  const { displayName } = useProfileForAddress(playerAddress ?? null)
 
   if (isLoading) {
     return (
@@ -347,20 +346,9 @@ export function PlayerStatsDashboard({ stats, isLoading, playerAddress, wsClient
 
   return (
     <div className="space-y-6">
-      {/* Address: avatar if present, full address, copy — no box */}
+      {/* Address, display name, and copy */}
       {playerAddress && (
         <div className="flex flex-wrap items-center gap-2 sm:gap-3 min-w-0">
-          {avatarConfig ? (
-            <div className="h-8 w-8 sm:h-9 sm:w-9 shrink-0 flex items-center justify-center rounded overflow-hidden bg-black/30">
-              <AvatarView config={avatarConfig} compact className="h-8 w-8 sm:h-9 sm:w-9" />
-            </div>
-          ) : profileImageUrl ? (
-            <img
-              src={profileImageUrl}
-              alt=""
-              className="h-8 w-8 sm:h-9 sm:w-9 rounded-full object-cover shrink-0"
-            />
-          ) : null}
           {displayName && (
             <span className="text-sm font-medium text-white shrink-0">{displayName}</span>
           )}
