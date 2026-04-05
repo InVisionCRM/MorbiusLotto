@@ -1207,9 +1207,6 @@ export class WebSocketService {
       if (!this.pokerGameService || !ws.playerAddress) {
         return this.sendError(ws, 'Poker not available or wallet required', message.requestId);
       }
-      if (!isAdminWallet(ws.playerAddress)) {
-        return this.sendError(ws, 'Only admins can create poker tables', message.requestId);
-      }
       const payload = message.payload as { smallBlind?: string; bigBlind?: string; maxSeats?: number; pinCode?: string };
       const smallBlindStr = payload?.smallBlind != null ? String(payload.smallBlind) : undefined;
       const bigBlindStr = payload?.bigBlind != null ? String(payload.bigBlind) : undefined;
