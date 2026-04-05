@@ -247,6 +247,8 @@ interface BotState {
   minRaise: string;
   myPosition: number;
   actingPosition: number | null;
+  /** New each time the current actor changes (or street changes) — use to dedupe bot turns. */
+  turnStartedAt: string | null;
   myStack: string;
   myHoleCards: number[] | null;
   communityCards: number[];
@@ -267,10 +269,17 @@ function parseState(payload: any, botAddress: string): BotState | null {
     minRaise: hand?.minRaise ?? '0',
     myPosition: mySeat.position,
     actingPosition: hand?.actingPosition ?? null,
+    turnStartedAt: hand?.turnStartedAt ?? null,
     myStack: mySeat.stack,
     myHoleCards: payload.myHoleCards ?? null,
     communityCards: hand?.communityCards ?? [],
   };
+}
+
+/** Unique per decision point: same seat can act again on the same street after a raise. */
+function actionDecisionKey(state: BotState): string {
+  const t = state.turnStartedAt ?? '';
+  return `${state.handId}:${state.street}:${state.actingPosition}:${t}:${state.toCall}`;
 }
 
 /** Simple hand strength heuristic (0-1) for preflop hole cards. */
@@ -525,7 +534,50 @@ async function runBot(address: string, tableId: string, buyInWei: bigint): Promi
   } catch { /* non-fatal */ }
 
   // Listen for state broadcasts and act when it's our turn
-  let lastActedHandAction = '';
+  let lastSuccessfulActionKey = '';
+  let pokerActBusy = false;
+
+  /** One act at a time; key includes turnStartedAt + toCall so the same seat can act again on the same street after a raise. */
+  const maybeActPokerTurn = async (hint: BotState, logPrefix: string): Promise<void> => {
+    if (pokerActBusy) return;
+    const hintKey = actionDecisionKey(hint);
+    if (hintKey === lastSuccessfulActionKey) return;
+
+    pokerActBusy = true;
+    try {
+      await thinkDelay();
+
+      let fresh: BotState | null = null;
+      try {
+        const freshPayload = await sendRequest(ws, 'poker_get_state', { tableId });
+        fresh = parseState(freshPayload, address);
+      } catch {
+        fresh = hint;
+      }
+
+      if (!fresh || !fresh.handId || fresh.actingPosition !== fresh.myPosition) return;
+
+      const key = actionDecisionKey(fresh);
+      if (key === lastSuccessfulActionKey) return;
+
+      const decision = decideAction(fresh);
+      console.log(
+        `${tag} ${logPrefix} Hand ${fresh.handId?.slice(0, 8)} | ${fresh.street} | pot=${fresh.pot} toCall=${fresh.toCall} -> ${decision.action}${decision.amount ? ' ' + decision.amount : ''}`
+      );
+
+      await sendRequest(ws, 'poker_action', {
+        tableId,
+        handId: fresh.handId,
+        action: decision.action,
+        amount: decision.amount,
+      });
+      lastSuccessfulActionKey = key;
+    } catch (err: any) {
+      console.error(`${tag} Action failed: ${err?.message ?? err}`);
+    } finally {
+      pokerActBusy = false;
+    }
+  };
 
   ws.on('message', async (data: WebSocket.Data) => {
     try {
@@ -536,37 +588,7 @@ async function runBot(address: string, tableId: string, buyInWei: bigint): Promi
       if (!state || !state.handId) return;
       if (state.actingPosition !== state.myPosition) return;
 
-      // Avoid double-acting on the same state
-      const actionKey = `${state.handId}:${state.street}:${state.actingPosition}`;
-      if (actionKey === lastActedHandAction) return;
-      lastActedHandAction = actionKey;
-
-      // Think for a bit
-      await thinkDelay();
-
-      // Get fresh state (our hole cards might only come from get_state)
-      let freshState = state;
-      try {
-        const freshPayload = await sendRequest(ws, 'poker_get_state', { tableId });
-        const parsed = parseState(freshPayload, address);
-        if (parsed && parsed.handId === state.handId && parsed.actingPosition === state.myPosition) {
-          freshState = parsed;
-        }
-      } catch { /* use broadcast state */ }
-
-      const decision = decideAction(freshState);
-      console.log(`${tag} Hand ${freshState.handId?.slice(0, 8)} | ${freshState.street} | pot=${freshState.pot} toCall=${freshState.toCall} -> ${decision.action}${decision.amount ? ' ' + decision.amount : ''}`);
-
-      try {
-        await sendRequest(ws, 'poker_action', {
-          tableId,
-          handId: freshState.handId,
-          action: decision.action,
-          amount: decision.amount,
-        });
-      } catch (err: any) {
-        console.error(`${tag} Action failed: ${err.message}`);
-      }
+      await maybeActPokerTurn(state, '');
     } catch { /* ignore parse errors */ }
   });
 
@@ -578,21 +600,7 @@ async function runBot(address: string, tableId: string, buyInWei: bigint): Promi
       if (!state || !state.handId) return;
       if (state.actingPosition !== state.myPosition) return;
 
-      const actionKey = `${state.handId}:${state.street}:${state.actingPosition}`;
-      if (actionKey === lastActedHandAction) return;
-      lastActedHandAction = actionKey;
-
-      await thinkDelay();
-
-      const decision = decideAction(state);
-      console.log(`${tag} [poll] ${state.street} | pot=${state.pot} toCall=${state.toCall} -> ${decision.action}${decision.amount ? ' ' + decision.amount : ''}`);
-
-      await sendRequest(ws, 'poker_action', {
-        tableId,
-        handId: state.handId,
-        action: decision.action,
-        amount: decision.amount,
-      });
+      await maybeActPokerTurn(state, '[poll]');
     } catch { /* ignore */ }
   }, 3000);
 

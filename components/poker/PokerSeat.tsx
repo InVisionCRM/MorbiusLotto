@@ -266,7 +266,7 @@ export interface PokerSeatProps {
 
 const CHAT_BUBBLE_MAX_LENGTH = 80;
 
-export function PokerSeat({ seat, index, holeCards, isCurrentPlayer, showCardBacks, winningCardIndices, isHandWinner = false, lastAction, timeLeft, maxTime = 30, chatBubble, onReUpClick, onMenuClick, overlayPhrase: propsOverlayPhrase, overlayEmotion: propsOverlayEmotion, onPhraseReaction, onAnimationReaction, onOpponentClick, onOpponentRadialAction, quickChatPhrases: propsQuickChatPhrases, setQuickChatPhrases: propsSetQuickChatPhrases, onOpenEditQuickChat, hideSeatAvatar = false, onLeaveTable, onRequestMobileActivity, includeActivityInPlayerRadial = false, showdownCardOffset, handName }: PokerSeatProps) {
+export function PokerSeat({ seat, index, holeCards, isCurrentPlayer, showCardBacks, winningCardIndices, isHandWinner = false, lastAction, timeLeft, maxTime = 60, chatBubble, onReUpClick, onMenuClick, overlayPhrase: propsOverlayPhrase, overlayEmotion: propsOverlayEmotion, onPhraseReaction, onAnimationReaction, onOpponentClick, onOpponentRadialAction, quickChatPhrases: propsQuickChatPhrases, setQuickChatPhrases: propsSetQuickChatPhrases, onOpenEditQuickChat, hideSeatAvatar = false, onLeaveTable, onRequestMobileActivity, includeActivityInPlayerRadial = false, showdownCardOffset, handName }: PokerSeatProps) {
   const empty = !seat.playerAddress;
   const showMyCards = !!(holeCards && holeCards.length > 0);
   const showBacks   = !!(showCardBacks && !showMyCards && !empty && !seat.folded);
