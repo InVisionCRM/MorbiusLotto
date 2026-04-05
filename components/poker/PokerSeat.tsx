@@ -260,11 +260,13 @@ export interface PokerSeatProps {
   includeActivityInPlayerRadial?: boolean;
   /** During showdown, nudge visible cards toward table center. */
   showdownCardOffset?: { x: number; y: number };
+  /** Current best hand name (self: live-updating; opponents: showdown only). */
+  handName?: string;
 }
 
 const CHAT_BUBBLE_MAX_LENGTH = 80;
 
-export function PokerSeat({ seat, index, holeCards, isCurrentPlayer, showCardBacks, winningCardIndices, isHandWinner = false, lastAction, timeLeft, maxTime = 60, chatBubble, onReUpClick, onMenuClick, overlayPhrase: propsOverlayPhrase, overlayEmotion: propsOverlayEmotion, onPhraseReaction, onAnimationReaction, onOpponentClick, onOpponentRadialAction, quickChatPhrases: propsQuickChatPhrases, setQuickChatPhrases: propsSetQuickChatPhrases, onOpenEditQuickChat, hideSeatAvatar = false, onLeaveTable, onRequestMobileActivity, includeActivityInPlayerRadial = false, showdownCardOffset }: PokerSeatProps) {
+export function PokerSeat({ seat, index, holeCards, isCurrentPlayer, showCardBacks, winningCardIndices, isHandWinner = false, lastAction, timeLeft, maxTime = 30, chatBubble, onReUpClick, onMenuClick, overlayPhrase: propsOverlayPhrase, overlayEmotion: propsOverlayEmotion, onPhraseReaction, onAnimationReaction, onOpponentClick, onOpponentRadialAction, quickChatPhrases: propsQuickChatPhrases, setQuickChatPhrases: propsSetQuickChatPhrases, onOpenEditQuickChat, hideSeatAvatar = false, onLeaveTable, onRequestMobileActivity, includeActivityInPlayerRadial = false, showdownCardOffset, handName }: PokerSeatProps) {
   const empty = !seat.playerAddress;
   const showMyCards = !!(holeCards && holeCards.length > 0);
   const showBacks   = !!(showCardBacks && !showMyCards && !empty && !seat.folded);
@@ -941,6 +943,23 @@ export function PokerSeat({ seat, index, holeCards, isCurrentPlayer, showCardBac
               </div>
             </div>
           </div>
+          {handName && !isFolded && (
+            <div
+              className="text-center leading-tight truncate px-1.5 py-0.5"
+              style={{
+                background: isCurrentPlayer
+                  ? 'linear-gradient(90deg, rgba(6,182,212,0.25), rgba(34,211,238,0.18))'
+                  : 'rgba(34,211,238,0.12)',
+                color: isCurrentPlayer ? '#67e8f9' : '#a5f3fc',
+                fontSize: 'clamp(8px, 1.7vw, 10px)',
+                fontWeight: 700,
+                letterSpacing: '0.05em',
+                borderTop: '1px solid rgba(34,211,238,0.2)',
+              }}
+            >
+              {handName}
+            </div>
+          )}
           <div className="h-[22px] overflow-hidden">
             <AnimatePresence mode="wait">
               {actionStyle && actionLabel && (

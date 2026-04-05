@@ -65,6 +65,7 @@ export function PokerHeaderBar({
 
   return (
     <div
+      data-poker-header
       className="grid flex-shrink-0 grid-cols-[auto_1fr_auto] items-center gap-2 px-2 z-30 font-russo-one"
       style={{
         background: 'transparent',

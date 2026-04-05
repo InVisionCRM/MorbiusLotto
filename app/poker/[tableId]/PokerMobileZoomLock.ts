@@ -2,6 +2,10 @@
 
 import { useEffect } from 'react';
 
+// LANDSCAPE NOTE: This hook handles zoom prevention only. Do NOT add
+// orientation-lock logic here (e.g. screen.orientation.lock) — landscape
+// support is handled purely via CSS in globals.css. Adding JS orientation
+// control would conflict with the CSS-only approach and break on iOS.
 export function usePokerMobileZoomLock() {
   useEffect(() => {
     const viewport = document.querySelector('meta[name="viewport"]');

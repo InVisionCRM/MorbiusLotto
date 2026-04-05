@@ -38,8 +38,14 @@ interface PokerTableViewProps {
   onTipDealer: () => Promise<void>;
 }
 
+/* LANDSCAPE NOTE: The old formula `calc((100dvh - 160px) * 2.4)` punished
+   landscape viewports by shrinking the table when the screen is short.
+   Using a larger multiplier (3.2) keeps the table usable in landscape while
+   still constraining it in ultra-wide desktop windows. The landscape CSS
+   overrides in globals.css further relax this for phones. Do NOT reduce
+   the multiplier below ~2.8 or landscape mobile will break again. */
 const POKER_MAIN_PANEL_STYLE: React.CSSProperties = {
-  maxWidth: 'min(100vw, calc((100dvh - 160px) * 2.4))',
+  maxWidth: 'min(100vw, calc((100dvh - 100px) * 3.2))',
   marginLeft: 'auto',
   marginRight: 'auto',
   width: '100%',

@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useRef, useState, useEffect } from 'react';
+import React, { useRef, useState, useEffect, useMemo } from 'react';
 import { toBigIntSafe } from '@/lib/safe-bigint';
 import { formatMorbiusFloor } from '@/lib/format-morbius-display';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -13,6 +13,8 @@ import type { PokerTournamentState } from '@/hooks/use-poker-tournament';
 import { BackgroundBeams, type BeamColorPalette } from '@/components/ui/background-beams';
 import { usePokerTableEffect } from '@/hooks/use-poker-table-effect';
 import { PokerWinnerNotificationCard } from './PokerWinnerNotificationCard';
+import { bestHand, handRankToName, evaluateHoleCards } from '@/lib/poker-hand-eval';
+import confetti from 'canvas-confetti';
 
 const BEAM_PALETTES: BeamColorPalette[] = [
   { primary: '#18CCFC', accent: '#6344F5', tail: '#AE48FF' }, // cyan → purple → magenta
@@ -53,13 +55,19 @@ const BET_CHIP_INWARD_DISTANCE_PX = 64;
 // which matches standard clockwise Hold'em flow from the hero seat.
 // When `mobileNudge` is true, seat 0 (bottom-center) is pushed down so it
 // sits just above the betting controls on narrow viewports.
-function computeSeatAnchors(n: number, mobileNudge = false): Array<{ fx: number; fy: number }> {
+//
+// LANDSCAPE NOTE: `aspectRatio` (container w/h) adjusts the ellipse so seats
+// spread wider horizontally and tighter vertically in landscape. Do NOT
+// hard-code rx/ry — they must stay aspect-responsive or landscape breaks.
+function computeSeatAnchors(n: number, mobileNudge = false, aspectRatio = 1.28): Array<{ fx: number; fy: number }> {
   const cx = 0.50, cy = 0.45;
-  const rx = 0.44, ry = 0.36;
+  const baseRx = 0.44, baseRy = 0.36;
+  const arFactor = Math.min(1.15, Math.max(0.85, aspectRatio / 1.28));
+  const rx = Math.min(0.48, baseRx * arFactor);
+  const ry = Math.max(0.28, baseRy / arFactor);
   return Array.from({ length: n }, (_, i) => {
     const theta = Math.PI / 2 + (i / n) * 2 * Math.PI;
     let fy = parseFloat((cy + ry * Math.sin(theta)).toFixed(4));
-    // Push bottom player (i=0) closer to the controls on mobile
     if (i === 0 && mobileNudge) fy = Math.min(0.92, fy + 0.10);
     return {
       fx: parseFloat((cx + rx * Math.cos(theta)).toFixed(4)),
@@ -161,9 +169,11 @@ export function PokerTable({ state, currentPlayerAddress, timeLeft, chatBubbleBy
     }
   }, [hand?.handId]);
 
+  const lastConfettiHandRef = useRef<string | null>(null);
+
   const mySeatIndex = state.seats.findIndex(s => s.playerAddress === currentPlayerAddress);
   const seatNudgeScale = Math.max(0.62, Math.min(1, dims.w / 1200));
-  const seatAnchors = computeSeatAnchors(state.seats.length, hideSeatAvatars);
+  const seatAnchors = computeSeatAnchors(state.seats.length, hideSeatAvatars, dims.w / Math.max(dims.h, 1));
   const toDisplaySlot = (seatIdx: number) => (mySeatIndex >= 0 ? (seatIdx - mySeatIndex + state.seats.length) % state.seats.length : seatIdx);
   const actingPosition = hand?.actingPosition ?? null;
   const isShowdownWithWinners = hand?.street === 'showdown' && hand?.winners?.length;
@@ -190,6 +200,20 @@ export function PokerTable({ state, currentPlayerAddress, timeLeft, chatBubbleBy
   const winnerAddressSet = new Set((isShowdownWithWinners ? hand!.winners! : []).map((w) => w.address.toLowerCase()));
   // Showdown chip destination: land above winner cards (not avatar center).
   const winnerChipYOffsetPx = hideSeatAvatars ? 62 : 86;
+
+  useEffect(() => {
+    if (!isCurrentPlayerWinner || !hand?.handId) return;
+    if (lastConfettiHandRef.current === hand.handId) return;
+    lastConfettiHandRef.current = hand.handId;
+    const gold = ['#FFD700', '#FFC107', '#F5D060', '#FFFFFF', '#FFF8DC'];
+    const shoot = () => {
+      confetti({ particleCount: 60, spread: 70, origin: { y: 0.65 }, colors: gold, startVelocity: 35, zIndex: 200 });
+      confetti({ particleCount: 40, spread: 100, origin: { y: 0.7 }, colors: gold, startVelocity: 25, zIndex: 200 });
+    };
+    shoot();
+    const t = setTimeout(shoot, 350);
+    return () => clearTimeout(t);
+  }, [isCurrentPlayerWinner, hand?.handId]);
 
   useEffect(() => {
     setStickySeatActions(hand?.streetActions ? { ...hand.streetActions } : {});
@@ -306,6 +330,31 @@ export function PokerTable({ state, currentPlayerAddress, timeLeft, chatBubbleBy
     };
   };
 
+  const selfHandName = useMemo(() => {
+    if (!state.myHoleCards || state.myHoleCards.length < 2) return null;
+    const community = hand?.communityCards ?? [];
+    const allCards = [...state.myHoleCards, ...community];
+    if (allCards.length >= 5) {
+      return handRankToName(bestHand(allCards).rank);
+    }
+    return evaluateHoleCards(state.myHoleCards);
+  }, [state.myHoleCards, hand?.communityCards]);
+
+  const showdownHandNames = useMemo(() => {
+    if (hand?.street !== 'showdown' || !hand.showdownHands) return {};
+    const community = hand.communityCards ?? [];
+    const names: Record<string, string> = {};
+    for (const [addr, holeCards] of Object.entries(hand.showdownHands)) {
+      const winner = hand.winners?.find(w => w.address === addr);
+      if (winner?.handName) { names[addr] = winner.handName; continue; }
+      const allCards = [...holeCards, ...community];
+      if (allCards.length >= 5) {
+        names[addr] = handRankToName(bestHand(allCards).rank);
+      }
+    }
+    return names;
+  }, [hand?.street, hand?.showdownHands, hand?.communityCards, hand?.winners]);
+
   const seatProps = (idx: number) => {
     const seat = state.seats[idx];
     const inHand = !!hand && seat.playerAddress && !seat.folded;
@@ -365,6 +414,10 @@ export function PokerTable({ state, currentPlayerAddress, timeLeft, chatBubbleBy
       onRequestMobileActivity,
       includeActivityInPlayerRadial: hideSeatAvatars,
       showdownCardOffset,
+      handName:
+        idx === mySeatIndex && selfHandName
+          ? selfHandName
+          : (seat.playerAddress && showdownHandNames[seat.playerAddress]) || undefined,
     };
   };
 
@@ -695,6 +748,7 @@ export function PokerTable({ state, currentPlayerAddress, timeLeft, chatBubbleBy
           </div>
         );
       })}
+
     </div>
   );
 }

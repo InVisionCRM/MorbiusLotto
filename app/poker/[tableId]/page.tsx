@@ -378,7 +378,13 @@ export default function PokerTablePage() {
     <PokerThemeProvider themeId={pokerTheme}>
       <PokerTableEffectProvider>
         {!isE2EMock && <PokerBetaSplash />}
+        {/* LANDSCAPE NOTE: Landscape mobile support is layered via CSS only
+            (@media orientation: landscape rules in globals.css). Do NOT restructure
+            this flex-col layout, reorder children, or add conditional rendering
+            for landscape vs portrait — it will break the portrait layout that
+            works well today. See globals.css "Poker landscape" section. */}
         <div
+          data-poker-shell
           className={`flex flex-col ${cyberpunk ? 'font-mono uppercase' : ''}`}
           style={{
             ...themeVars as React.CSSProperties,

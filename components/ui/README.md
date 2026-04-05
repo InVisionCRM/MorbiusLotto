@@ -31,7 +31,7 @@ Removed as unused (no static imports found in app/components/hooks/lib/server):
 ## Kept for now
 
 - `components/ui/infinite-moving-cards.tsx` (detected as currently modified in local branch; skipped to avoid removing active work)
-- `components/ui/confetti.tsx` (delete request was rejected)
+- `components/ui/confetti.tsx` (PokerTable switched to direct `canvas-confetti` calls due to re-render bug with the component's `globalOptions` default; the component itself is still valid for other use cases)
 - `components/ui/iphone.tsx` (delete request was rejected)
 
 ## Verification notes

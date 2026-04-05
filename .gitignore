@@ -68,5 +68,9 @@ next-env.d.ts
 
 /docs
 
+# Serwist (generated service worker)
+public/sw*
+public/swe-worker*
+
 # cursor (IDE / debug logs)
 .cursor

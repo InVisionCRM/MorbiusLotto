@@ -97,6 +97,11 @@ export function PokerStatsModal({ isOpen, onClose, playerAddress }: PokerStatsMo
     }
   }, [hands, sortBy]);
 
+  const selectedEntry = useMemo(
+    () => (expandedHandId ? sortedHands.find((h) => h.id === expandedHandId) ?? null : null),
+    [expandedHandId, sortedHands]
+  );
+
   const getResultColor = (resultType: string) => {
     switch (resultType) {
       case 'win':
@@ -322,12 +327,13 @@ export function PokerStatsModal({ isOpen, onClose, playerAddress }: PokerStatsMo
                   </CardContent>
                 </Card>
               ) : (
-                <Card className="bg-gradient-to-br from-gray-900 to-black border-gray-700 overflow-visible">
-                  <CardHeader className="flex flex-row items-center justify-between gap-2 flex-wrap">
-                    <CardTitle className="text-white flex items-center gap-2">
+                <>
+                  {/* Header: title + sort */}
+                  <div className="flex items-center justify-between gap-2 flex-wrap mb-3">
+                    <h3 className="text-white font-bold flex items-center gap-2">
                       <History className="w-5 h-5" />
                       Hand History ({hands.length})
-                    </CardTitle>
+                    </h3>
                     <select
                       value={sortBy}
                       onChange={(e) => setSortBy(e.target.value as 'newest' | 'oldest' | 'profit')}
@@ -338,31 +344,28 @@ export function PokerStatsModal({ isOpen, onClose, playerAddress }: PokerStatsMo
                       <option value="oldest">Oldest first</option>
                       <option value="profit">By profit</option>
                     </select>
-                  </CardHeader>
-                  <CardContent className="p-0">
-                    <div className="divide-y divide-gray-700/60">
-                      <AnimatePresence>
-                        {sortedHands.map((entry) => {
-                          const profit = toBigIntSafe(entry.myWon) - toBigIntSafe(entry.myContributed);
-                          const isExpanded = expandedHandId === entry.id;
-                          return (
-                            <motion.div
-                              key={entry.id}
-                              initial={{ opacity: 0, y: 10 }}
-                              animate={{ opacity: 1, y: 0 }}
-                              className="bg-gray-800/30"
-                            >
+                  </div>
+
+                  {/* ── Desktop: 2-panel (list | detail) ── */}
+                  <div className="hidden md:grid md:grid-cols-[minmax(0,1fr)_minmax(0,1.2fr)] gap-3 min-h-0">
+                    {/* Left panel — hand list */}
+                    <Card className="bg-gradient-to-br from-gray-900 to-black border-gray-700 overflow-hidden flex flex-col">
+                      <CardContent className="p-0 flex-1 min-h-0 overflow-y-auto">
+                        <div className="divide-y divide-gray-700/60">
+                          {sortedHands.map((entry) => {
+                            const profit = toBigIntSafe(entry.myWon) - toBigIntSafe(entry.myContributed);
+                            const isSelected = expandedHandId === entry.id;
+                            return (
                               <div
-                                className="flex flex-wrap items-center justify-between gap-2 p-3 cursor-pointer hover:bg-gray-800/50 transition-colors"
-                                onClick={() =>
-                                  setExpandedHandId(isExpanded ? null : entry.id)
-                                }
+                                key={entry.id}
+                                className={`flex flex-wrap items-center justify-between gap-2 p-3 cursor-pointer transition-colors ${
+                                  isSelected ? 'bg-cyan-500/10 border-l-2 border-l-cyan-400' : 'bg-gray-800/30 hover:bg-gray-800/50 border-l-2 border-l-transparent'
+                                }`}
+                                onClick={() => setExpandedHandId(isSelected ? null : entry.id)}
                               >
                                 <div className="flex items-center gap-2 flex-wrap min-w-0">
                                   <span
-                                    className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-medium border-0 ${getResultColor(
-                                      entry.resultType
-                                    )}`}
+                                    className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-medium border-0 ${getResultColor(entry.resultType)}`}
                                   >
                                     {entry.resultType.toUpperCase()}
                                   </span>
@@ -371,37 +374,89 @@ export function PokerStatsModal({ isOpen, onClose, playerAddress }: PokerStatsMo
                                     {formatHandTime(entry.completed_at)}
                                   </span>
                                   <span className="text-xs text-gray-500">
-                                    Hand #{entry.hand_number} · Pot {formatChips(entry.pot_amount)}
+                                    Hand #{entry.hand_number}
                                   </span>
                                 </div>
-                                <div className="flex items-center gap-3">
-                                  <span
-                                    className={`text-sm font-bold ${getProfitColor(profit.toString())}`}
-                                  >
-                                    {Number(profit) >= 0 ? '+' : ''}
-                                    {formatChips(profit.toString())}
-                                  </span>
-                                  {isExpanded ? (
-                                    <ChevronUp className="w-5 h-5 text-gray-400 shrink-0" />
-                                  ) : (
-                                    <ChevronDown className="w-5 h-5 text-gray-400 shrink-0" />
-                                  )}
-                                </div>
+                                <span className={`text-sm font-bold ${getProfitColor(profit.toString())}`}>
+                                  {Number(profit) >= 0 ? '+' : ''}{formatChips(profit.toString())}
+                                </span>
                               </div>
-                              {isExpanded && (
-                                <HandReplay
-                                  entry={entry}
-                                  detail={handDetail}
-                                  detailLoading={detailLoading}
-                                />
-                              )}
-                            </motion.div>
-                          );
-                        })}
-                      </AnimatePresence>
-                    </div>
-                  </CardContent>
-                </Card>
+                            );
+                          })}
+                        </div>
+                      </CardContent>
+                    </Card>
+
+                    {/* Right panel — hand detail */}
+                    <Card className="bg-gradient-to-br from-gray-900 to-black border-gray-700 overflow-hidden flex flex-col">
+                      <CardContent className="p-0 flex-1 min-h-0 overflow-y-auto">
+                        {expandedHandId && selectedEntry ? (
+                          <HandReplay entry={selectedEntry} detail={handDetail} detailLoading={detailLoading} />
+                        ) : (
+                          <div className="flex flex-col items-center justify-center h-full py-12 text-gray-500">
+                            <History className="w-10 h-10 mb-3 opacity-40" />
+                            <p className="text-sm">Select a hand to view details</p>
+                          </div>
+                        )}
+                      </CardContent>
+                    </Card>
+                  </div>
+
+                  {/* ── Mobile: stacked accordion ── */}
+                  <Card className="md:hidden bg-gradient-to-br from-gray-900 to-black border-gray-700 overflow-visible">
+                    <CardContent className="p-0">
+                      <div className="divide-y divide-gray-700/60">
+                        <AnimatePresence>
+                          {sortedHands.map((entry) => {
+                            const profit = toBigIntSafe(entry.myWon) - toBigIntSafe(entry.myContributed);
+                            const isExpanded = expandedHandId === entry.id;
+                            return (
+                              <motion.div
+                                key={entry.id}
+                                initial={{ opacity: 0, y: 10 }}
+                                animate={{ opacity: 1, y: 0 }}
+                                className="bg-gray-800/30"
+                              >
+                                <div
+                                  className="flex flex-wrap items-center justify-between gap-2 p-3 cursor-pointer hover:bg-gray-800/50 transition-colors"
+                                  onClick={() => setExpandedHandId(isExpanded ? null : entry.id)}
+                                >
+                                  <div className="flex items-center gap-2 flex-wrap min-w-0">
+                                    <span
+                                      className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-medium border-0 ${getResultColor(entry.resultType)}`}
+                                    >
+                                      {entry.resultType.toUpperCase()}
+                                    </span>
+                                    <span className="text-xs text-gray-400 flex items-center gap-1">
+                                      <Clock className="w-3.5 h-3.5" />
+                                      {formatHandTime(entry.completed_at)}
+                                    </span>
+                                    <span className="text-xs text-gray-500">
+                                      Hand #{entry.hand_number} · Pot {formatChips(entry.pot_amount)}
+                                    </span>
+                                  </div>
+                                  <div className="flex items-center gap-3">
+                                    <span className={`text-sm font-bold ${getProfitColor(profit.toString())}`}>
+                                      {Number(profit) >= 0 ? '+' : ''}{formatChips(profit.toString())}
+                                    </span>
+                                    {isExpanded ? (
+                                      <ChevronUp className="w-5 h-5 text-gray-400 shrink-0" />
+                                    ) : (
+                                      <ChevronDown className="w-5 h-5 text-gray-400 shrink-0" />
+                                    )}
+                                  </div>
+                                </div>
+                                {isExpanded && (
+                                  <HandReplay entry={entry} detail={handDetail} detailLoading={detailLoading} />
+                                )}
+                              </motion.div>
+                            );
+                          })}
+                        </AnimatePresence>
+                      </div>
+                    </CardContent>
+                  </Card>
+                </>
               )}
             </>
           )}

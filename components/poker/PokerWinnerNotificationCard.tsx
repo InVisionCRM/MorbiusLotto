@@ -1,6 +1,11 @@
 'use client';
 
-import { Dialog, DialogContent, DialogDescription, DialogTitle } from '@/components/ui/dialog';
+import { useEffect, useState } from 'react';
+import { AnimatePresence, motion } from 'framer-motion';
+import { SparklesText } from '@/components/ui/sparkles-text';
+import { CardDisplay } from './CardDisplay';
+
+const SHOWDOWN_DURATION_S = 15;
 
 export interface PokerWinnerNotificationCardProps {
   isOpen: boolean;
@@ -15,83 +20,6 @@ export interface PokerWinnerNotificationCardProps {
   splitLabel?: string;
   splitAmount?: string;
   formatChips: (wei: string | number) => string;
-}
-
-const CARD_RANKS = ['2', '3', '4', '5', '6', '7', '8', '9', '10', 'J', 'Q', 'K', 'A'];
-const CARD_SUITS = ['\u2663', '\u2666', '\u2665', '\u2660'];
-
-/*
- * Known-good constraints:
- * - Overlay uses pointer-events-none, so card layout must never depend on scrolling.
- * - Community cards always render as a 5-column grid (no horizontal overflow path).
- * - Card face stays simple: white background + rank/suit + winner glow.
- */
-function WinnerPreviewCard({
-  cardIndex,
-  isWinningCard,
-  size,
-}: {
-  cardIndex: number | null;
-  isWinningCard: boolean;
-  size: 'hole' | 'board';
-}) {
-  const isFaceUp = typeof cardIndex === 'number' && cardIndex >= 0 && cardIndex <= 51;
-  const cardShellClass =
-    size === 'hole'
-      ? 'relative w-[clamp(42px,8vw,60px)] aspect-[5/7] rounded-lg overflow-hidden'
-      : 'relative w-full aspect-[5/7] rounded-lg overflow-hidden';
-
-  if (!isFaceUp) {
-    return (
-      <div
-        className={`${cardShellClass} border border-white/10`}
-        style={{
-          background: 'linear-gradient(145deg, rgba(15,23,42,0.55), rgba(15,23,42,0.25))',
-          boxShadow: 'inset 0 2px 4px rgba(0,0,0,0.35)',
-          opacity: 0.25,
-        }}
-      />
-    );
-  }
-
-  const rank = CARD_RANKS[cardIndex % 13];
-  const suitIndex = Math.floor(cardIndex / 13);
-  const suit = CARD_SUITS[suitIndex];
-  const textColor = '#111827';
-
-  return (
-    <div
-      className={`${cardShellClass} border border-slate-300/90`}
-      style={{
-        background: 'linear-gradient(180deg, #ffffff 0%, #f8fafc 92%)',
-        boxShadow: isWinningCard
-          ? '0 10px 24px rgba(0,0,0,0.55), 0 0 0 3px rgba(34, 211, 238, 0.9), 0 0 22px rgba(34, 211, 238, 0.45)'
-          : '0 2px 8px rgba(0,0,0,0.4), 0 1px 3px rgba(0,0,0,0.3)',
-      }}
-    >
-      <div className="absolute inset-0" style={{ boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.85), inset 0 -1px 0 rgba(0,0,0,0.08)' }} />
-
-      <div className="absolute top-1 left-1.5 text-[10px] sm:text-[11px] font-semibold leading-none" style={{ color: textColor }}>
-        {rank}{suit}
-      </div>
-
-      <div className="absolute inset-0 flex items-center justify-center">
-        <span
-          className={`font-extrabold tracking-tight leading-none ${size === 'hole' ? 'text-[18px] sm:text-[22px] md:text-[26px]' : 'text-[14px] sm:text-[16px] md:text-[18px]'}`}
-          style={{ color: textColor }}
-        >
-          {rank}{suit}
-        </span>
-      </div>
-
-      {isWinningCard && (
-        <div
-          className="absolute inset-0 rounded-md pointer-events-none"
-          style={{ boxShadow: 'inset 0 0 0 2px rgba(34, 211, 238, 0.55)' }}
-        />
-      )}
-    </div>
-  );
 }
 
 export function PokerWinnerNotificationCard({
@@ -110,99 +38,168 @@ export function PokerWinnerNotificationCard({
   const hole = [winnerHoleCards[0] ?? null, winnerHoleCards[1] ?? null];
   const board = Array.from({ length: 5 }, (_, i) => communityCards[i] ?? null);
 
-  if (!isOpen) return null;
+  const [countdown, setCountdown] = useState(SHOWDOWN_DURATION_S);
+
+  useEffect(() => {
+    if (!isOpen) {
+      setCountdown(SHOWDOWN_DURATION_S);
+      return;
+    }
+    setCountdown(SHOWDOWN_DURATION_S);
+    const interval = setInterval(() => {
+      setCountdown((prev) => {
+        if (prev <= 1) { clearInterval(interval); return 0; }
+        return prev - 1;
+      });
+    }, 1000);
+    return () => clearInterval(interval);
+  }, [isOpen]);
 
   return (
-    <Dialog open={isOpen}>
-      <DialogContent
-        className="z-[120] w-auto max-w-none border-0 bg-transparent p-0 shadow-none overflow-visible [&>button]:hidden"
-      >
-        <DialogTitle className="sr-only">Poker winner notification</DialogTitle>
-        <DialogDescription className="sr-only">
-          Displays the winner, payout amount, and winning cards for the last poker hand.
-        </DialogDescription>
-        <div
+    <AnimatePresence>
+      {isOpen && (
+        <motion.div
           key="poker-winner-notification-card"
           data-testid="poker-winner-banner"
           data-card="poker-winner-notification-card"
-          className="relative w-full max-w-[640px] rounded-2xl overflow-hidden"
-          style={{
-            background: 'linear-gradient(325deg, rgba(20, 20, 20, 0.8), rgba(40, 40, 40, 0.6))',
-            boxShadow:
-              'inset 0 3px 6px rgba(0, 0, 0, 0.8), inset 0 -3px 6px rgba(255, 255, 255, 0.1), 0 1px 3px rgba(0, 0, 0, 0.5), 0 14px 34px rgba(0, 0, 0, 0.5)',
-            border: '1px inset rgba(60, 60, 60, 0.5)',
-            width: 'min(94vw, 640px)',
-          }}
+          className="fixed inset-0 z-[120] pointer-events-none flex items-center justify-center px-2 sm:px-4"
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          exit={{ opacity: 0 }}
         >
-          <div className="absolute inset-0 bg-[radial-gradient(circle_at_50%_50%,rgba(34,211,238,0.3),transparent_70%)]" />
+          <motion.div
+            className="relative rounded-2xl overflow-hidden"
+            initial={{ opacity: 0, y: 14, scale: 0.98 }}
+            animate={{ opacity: 1, y: 0, scale: 1 }}
+            exit={{ opacity: 0, y: 10, scale: 0.985 }}
+            transition={{
+              type: 'spring',
+              stiffness: 220,
+              damping: 22,
+            }}
+            style={{
+              background: 'linear-gradient(325deg, rgba(20, 20, 20, 0.8), rgba(40, 40, 40, 0.6))',
+              boxShadow:
+                'inset 0 3px 6px rgba(0, 0, 0, 0.8), inset 0 -3px 6px rgba(255, 255, 255, 0.1), 0 1px 3px rgba(0, 0, 0, 0.5), 0 14px 34px rgba(0, 0, 0, 0.5)',
+              border: '1px inset rgba(60, 60, 60, 0.5)',
+              width: 'min(60vw, 480px)',
+              maxHeight: '70vh',
+            }}
+          >
+            <div className="absolute inset-0 bg-[radial-gradient(circle_at_50%_50%,rgba(34,211,238,0.3),transparent_70%)]" />
 
-          <div className="relative z-[1] h-full flex flex-col px-2.5 sm:px-4 pt-2.5 sm:pt-4 pb-4 sm:pb-5 gap-2 sm:gap-3">
-          <div className="text-center">
-            <div className="text-[11px] sm:text-[12px] font-extrabold uppercase tracking-[0.2em] text-cyan-200">
-              WINNER
-            </div>
+            <div className="relative z-[1] flex flex-col overflow-y-auto" style={{ maxHeight: '70vh' }}>
 
-            <h3 className="mt-0.5 text-white text-[clamp(16px,2.4vw,24px)] leading-none font-extrabold tracking-[-0.01em] truncate">
-              {winnerName}
-            </h3>
+              {/* ── Top: 3-column header (Amount | Winner | Hand Rank) ── */}
+              <div className="flex items-stretch" style={{ minHeight: '45%' }}>
 
-            {winnerHandName ? (
-              <div className="mt-1 inline-flex items-center rounded-full bg-black/40 border border-cyan-500/30 px-2.5 py-0.5">
-                <span className="text-white text-[10px] sm:text-[11px] font-medium">{winnerHandName}</span>
-              </div>
-            ) : null}
-          </div>
-
-          <div className="text-center">
-            <div className="text-cyan-300/95 text-[9px] sm:text-[10px] uppercase tracking-[0.2em] font-semibold">MORBIUS</div>
-            <div className="text-white text-[clamp(20px,3.2vw,30px)] font-extrabold leading-none tabular-nums mt-0.5">
-              {formatChips(winnerAmount)}
-            </div>
-          </div>
-
-          <div className="rounded-xl bg-black/50 border border-cyan-500/30 p-2 sm:p-3">
-            <div className="text-center text-cyan-300/90 text-[9px] sm:text-[10px] uppercase tracking-[0.18em] font-semibold">
-              Player Cards
-            </div>
-            <div className="mt-1.5 sm:mt-2 flex items-center justify-center gap-3 sm:gap-4 md:gap-5">
-              {hole.map((cardIndex, i) => (
-                <div key={`winner-hole-${i}`} className="flex-none">
-                  <WinnerPreviewCard
-                    cardIndex={cardIndex}
-                    size="hole"
-                    isWinningCard={typeof cardIndex === 'number' && highlightSet.has(cardIndex)}
+                {/* Left column — Amount won */}
+                <div className="flex-1 flex flex-col items-center justify-center p-2 sm:p-3 min-w-0">
+                  <div className="text-[8px] sm:text-[9px] text-white/50 uppercase tracking-wider font-semibold mb-1">Won</div>
+                  <div className="text-white text-[clamp(13px,2.2vw,20px)] font-extrabold leading-tight tabular-nums text-center">
+                    +{formatChips(winnerAmount)}
+                  </div>
+                  <img
+                    src="/morbius/MorbiusLogo%20(3).png"
+                    alt=""
+                    aria-hidden
+                    className="mt-1"
+                    style={{ height: '1.2em', width: 'auto' }}
                   />
                 </div>
-              ))}
-            </div>
-          </div>
 
-          <div className="rounded-xl bg-black/50 border border-cyan-500/30 p-2 sm:p-3 mb-1 sm:mb-2">
-            <div className="text-center text-cyan-300/90 text-[9px] sm:text-[10px] uppercase tracking-[0.18em] font-semibold">
-              Community Cards
-            </div>
-            <div className="mt-1.5 sm:mt-2 mx-auto w-full max-w-[430px] grid grid-cols-5 gap-1.5 sm:gap-2">
-              {board.map((cardIndex, i) => (
-                <div key={`winner-board-${i}-${cardIndex ?? 'empty'}`} className="min-w-0">
-                  <WinnerPreviewCard cardIndex={cardIndex} size="board" isWinningCard={highlightSet.has(cardIndex)} />
+                {/* Divider */}
+                <div className="w-px self-stretch" style={{ background: 'rgba(34,211,238,0.2)' }} />
+
+                {/* Center column — Winner + name */}
+                <div className="flex-[1.3] flex flex-col items-center justify-center p-2 sm:p-3 min-w-0">
+                  <SparklesText
+                    className="text-[10px] sm:text-[11px] font-extrabold uppercase tracking-[0.2em] text-cyan-200"
+                    sparklesCount={3}
+                    colors={{ first: '#67e8f9', second: '#a5f3fc' }}
+                  >
+                    WINNER
+                  </SparklesText>
+                  <h3 className="mt-0.5 text-white text-[clamp(13px,2vw,18px)] leading-tight font-extrabold tracking-[-0.01em] truncate max-w-full text-center">
+                    {winnerName}
+                  </h3>
                 </div>
-              ))}
-            </div>
-          </div>
 
-          {splitLabel && splitAmount ? (
-            <div className="rounded-xl bg-black/50 border border-cyan-500/30 px-3 py-1.5">
-              <div className="flex items-center justify-between">
-                <span className="text-[11px] text-white/75">{splitLabel}</span>
-                <span className="text-[11px] font-bold text-emerald-400">{splitAmount}</span>
+                {/* Divider */}
+                <div className="w-px self-stretch" style={{ background: 'rgba(34,211,238,0.2)' }} />
+
+                {/* Right column — Hand Rank */}
+                <div className="flex-1 flex flex-col items-center justify-center p-2 sm:p-3 min-w-0">
+                  <div className="text-[8px] sm:text-[9px] text-white/50 uppercase tracking-wider font-semibold mb-1">Hand Rank</div>
+                  <div className="text-cyan-300 text-[clamp(11px,1.8vw,16px)] font-bold leading-tight text-center truncate max-w-full">
+                    {winnerHandName || '—'}
+                  </div>
+                </div>
+              </div>
+
+              {/* Horizontal divider */}
+              <div className="h-px w-full" style={{ background: 'rgba(34,211,238,0.15)' }} />
+
+              {/* ── Bottom: Cards + countdown ── */}
+              <div className="flex flex-col p-2 sm:p-3 gap-2">
+
+                {/* Cards: hole + community */}
+                <div className="rounded-xl bg-black/50 border border-cyan-500/30 p-2 sm:p-2.5 flex flex-col gap-1.5">
+                  <div className="flex items-center justify-center gap-1.5 sm:gap-2.5">
+                    {hole.map((cardIndex, i) => (
+                      <div key={`winner-hole-${i}`} className="flex-none [perspective:1000px]">
+                        <CardDisplay
+                          cardIndex={cardIndex}
+                          small
+                          isWinningCard={typeof cardIndex === 'number' && highlightSet.has(cardIndex)}
+                          className={i === 0 ? '[transform:rotateY(-8deg)]' : '[transform:rotateY(8deg)]'}
+                        />
+                      </div>
+                    ))}
+                  </div>
+
+                  <div className="flex items-center justify-center gap-1 sm:gap-1.5 overflow-hidden pt-2 sm:pt-3">
+                    {board.map((cardIndex, i) => (
+                      <div key={`winner-board-${i}-${cardIndex ?? 'empty'}`} className="flex-none">
+                        <CardDisplay cardIndex={cardIndex} small isWinningCard={highlightSet.has(cardIndex)} />
+                      </div>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Split pot */}
+                {splitLabel && splitAmount && (
+                  <div className="rounded-lg bg-black/50 border border-cyan-500/30 px-2.5 py-1">
+                    <div className="flex items-center justify-between">
+                      <span className="text-[10px] text-white/75">{splitLabel}</span>
+                      <span className="text-[10px] font-bold text-emerald-400">{splitAmount}</span>
+                    </div>
+                  </div>
+                )}
+
+                {/* Countdown timer */}
+                <div className="flex flex-col items-center gap-0.5">
+                  <span className="text-[9px] sm:text-[10px] text-white/50 uppercase tracking-wider font-medium">
+                    Next hand in {countdown}s
+                  </span>
+                  <div
+                    className="w-full h-1 rounded-full overflow-hidden"
+                    style={{ background: 'rgba(255,255,255,0.08)' }}
+                  >
+                    <motion.div
+                      className="h-full rounded-full"
+                      style={{ background: 'linear-gradient(90deg, #06b6d4, #22d3ee)' }}
+                      initial={{ width: '100%' }}
+                      animate={{ width: '0%' }}
+                      transition={{ duration: SHOWDOWN_DURATION_S, ease: 'linear' }}
+                    />
+                  </div>
+                </div>
               </div>
             </div>
-          ) : (
-            <div className="h-2 sm:h-3 shrink-0" />
-          )}
-          </div>
-        </div>
-      </DialogContent>
-    </Dialog>
+          </motion.div>
+        </motion.div>
+      )}
+    </AnimatePresence>
   );
 }

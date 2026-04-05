@@ -21,7 +21,8 @@ Organized index of poker-related files plus current UI behavior notes for table/
 | `PokerSeat.tsx` | Single seat: avatar, stack badge, acting timer ring, hole cards/card backs, role crescent (DEALER/SB/BB), winner crescent at showdown. |
 | `PokerBoard.tsx` | Community cards and pot display (flop/turn/river + pot amount). |
 | `PokerActions.tsx` | Action bar: fold / check / call / bet / raise with amount input; min-raise and to-call from server. |
-| `CardDisplay.tsx` | Renders one card (index 0–51) or placeholder; uses BlackJack card PNGs. |
+| `CardDisplay.tsx` | Renders one card (index 0–51) or placeholder; pure CSS card faces (rank + suit text, no PNGs). Card backs still use branded PNG. |
+| `PokerWinnerNotificationCard.tsx` | Showdown winner overlay: 3-column layout (amount won / WINNER name / hand rank), cards display, 15s countdown timer to next hand. Sized at `min(60vw, 480px)` to avoid covering player seats. |
 | `PokerDepositModal.tsx` | Deposit/buy-in modal: PLS/MORBIUS, approval, Re-up; uses Blackjack escrow and WebSocket for add-chips. |
 | `PokerThemeContext.tsx` | React context for current poker theme (classic / cyberpunk); `usePokerTheme()`. |
 
@@ -37,6 +38,12 @@ Organized index of poker-related files plus current UI behavior notes for table/
 - **Winner indicator**: winner crescent appears only at resolved showdown (`street === showdown` and winners present), including split pots.
 - **Action persistence**: seat action labels persist until that same seat acts again (sticky per-seat action state in `PokerTable.tsx`).
 - **Fold visuals**: folded hole cards animate from seat to table center, then disappear and do not show at showdown.
+- **Hand name badges**: compact cyan text badge between name/chips and action strip on each seat tag.
+  - **Self badge**: always visible during a hand (flop onward shows best made hand, e.g. "Two Pair", "Flush"; preflop shows "Pair" for pocket pairs only). Computed client-side via `lib/poker-hand-eval.ts`.
+  - **Showdown badges**: all revealed players show their final hand name at showdown. Winners use the server-provided `handName`; non-winners are evaluated client-side.
+- **Winner confetti**: gold/white confetti fires via `canvas-confetti` (direct call, not the `Confetti` component) when the current player wins at showdown. Two staggered bursts at z-index 200.
+- **Winner notification card**: 3-column header (amount won with Morbius logo | WINNER + name | Hand Rank label). Bottom section shows cards and a 15-second animated countdown bar to next hand. Sized at `min(60vw, 480px)` so player seats remain visible.
+- **Landscape mobile**: supported via CSS-only overrides in `globals.css` (scoped to `@media (orientation: landscape)`). Header compresses, bottom bar collapses, seat anchors adapt to aspect ratio. Do NOT add JS-based orientation logic — see safety comments in the source files.
 
 ## Frontend — Shared / home (poker-related)
 
@@ -46,6 +53,8 @@ Organized index of poker-related files plus current UI behavior notes for table/
 | `lib/poker-themes.ts` | Theme definitions and CSS variable names (classic, cyberpunk); used by poker components. |
 | `lib/poker-layout.ts` | Layout types and helpers: table/seat/community/pot/actionBar/chat rects; `defaultPokerLayout` export. |
 | `lib/websocket-client.ts` | WebSocket client: poker types (`PokerTableSummary`, `PokerSeatState`, `PokerCurrentHand`, `PokerTableState`) and API (`pokerListTables`, `pokerJoinTable`, `pokerLeaveTable`, `pokerAddChips`, `pokerAction`, `pokerGetState`, `pokerCreateTable`). |
+| `lib/poker-hand-eval.ts` | Client-side Texas Hold'em hand evaluator (ported from server with plain enum). Used for live self-badge and showdown hand names. Exports `bestHand`, `handRankToName`, `evaluateHoleCards`. |
+| `app/poker/[tableId]/PokerMobileZoomLock.ts` | Prevents pinch-zoom on mobile poker. Zoom only — does NOT handle orientation (see CSS). |
 
 ---
 
@@ -74,7 +83,7 @@ Organized index of poker-related files plus current UI behavior notes for table/
 | `server/migrations/036_poker_tables.sql` | Base schema: `poker_tables`, `poker_seats`, `poker_hands`, hand actions, chip amounts as NUMERIC(78,0), card indices 0–51. |
 | `server/migrations/052_poker_blind_action.sql` | Adds `blind` to `poker_hand_actions` action check (for SB/BB posting). |
 | `server/migrations/055_poker_last_raise_size.sql` | Adds `last_raise_size` to `poker_hands` for min re-raise on current street. |
-| `server/migrations/056_poker_turn_timer.sql` | Adds `turn_started_at` to `poker_hands` for server-side 60s turn timer. |
+| `server/migrations/056_poker_turn_timer.sql` | Adds `turn_started_at` to `poker_hands` for server-side 30s turn timer. |
 
 ---
 
@@ -85,3 +94,4 @@ Organized index of poker-related files plus current UI behavior notes for table/
 - **Logic**: `server/src/services/poker-game.service.ts` + `poker-hand-eval.ts`; WebSocket in `websocket.service.ts`.
 - **Data**: Migrations 036 (base), 052 (blind), 055 (last_raise_size), 056 (turn_started_at).
 - **Tooling**: `server/src/scripts/poker-bot.ts` (bots).
+- **Mobile/PWA**: landscape support via CSS in `globals.css`; PWA via `@serwist/next` (`app/sw.ts`, `next.config.ts` wrapper); manifest at `public/icons/site.webmanifest`.

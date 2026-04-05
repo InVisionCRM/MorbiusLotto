@@ -1,5 +1,12 @@
 import type { NextConfig } from "next";
 import webpack from "webpack";
+import withSerwistInit from "@serwist/next";
+
+const withSerwist = withSerwistInit({
+  swSrc: "app/sw.ts",
+  swDest: "public/sw.js",
+  disable: process.env.NODE_ENV === "development",
+});
 
 const nextConfig: NextConfig = {
   async redirects() {
@@ -89,5 +96,4 @@ const nextConfig: NextConfig = {
   // ESLint configuration moved to eslint.config.mjs
 };
 
-export default nextConfig;
-
+export default withSerwist(nextConfig);

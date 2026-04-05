@@ -130,7 +130,6 @@ These files are currently unreachable from active app entrypoints.
 
 ### ui (see also `components/ui/README.md`)
 - `components/ui/checkbox.tsx`
-- `components/ui/confetti.tsx`
 - `components/ui/glowing-stars.tsx`
 - `components/ui/hero-parallax.tsx`
 - `components/ui/infinite-moving-cards.tsx`

@@ -25,9 +25,12 @@ export function PokerBottomBar({
   tableId,
   activityMobileOpenSerial,
 }: PokerBottomBarProps) {
+  // LANDSCAPE NOTE: In landscape mobile the CSS in globals.css collapses this
+  // bar to max-height 52px. Do NOT move the actions or activity feed to a
+  // different DOM position for landscape — the CSS handles it.
   return (
     <>
-      <div className="flex-shrink-0 grid grid-cols-1 md:grid-cols-[minmax(220px,0.8fr)_minmax(80px,0.25fr)_minmax(420px,1.7fr)] gap-0 min-h-0">
+      <div data-poker-bottom className="flex-shrink-0 grid grid-cols-1 md:grid-cols-[minmax(220px,0.8fr)_minmax(80px,0.25fr)_minmax(420px,1.7fr)] gap-0 min-h-0">
         <div className="min-w-0 md:order-1">
           {pokerChatRoomId && (
             <PokerActivityFeed

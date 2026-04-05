@@ -24,7 +24,13 @@ The following route pages were intentionally removed because they are not in use
 - Replaced dead links with active destinations or existing in-page modal flows.
 - Removed obsolete redirects for removed routes in `next.config.ts`.
 
-## Next suggested route-level cleanup
+## PWA routes
 
+| Route | Purpose |
+| ----- | ------- |
+| `app/offline/page.tsx` | Offline fallback page shown by the service worker when network is unavailable. |
+| `app/sw.ts` | Serwist service worker source — compiled to `public/sw.js` at build time. DO NOT cache API/WS routes (casino safety). |
+
+## Next suggested route-level cleanup
 
 - Continue orphan detection for route-specific components/hooks no longer referenced by active routes.

@@ -6,14 +6,7 @@ import { motion } from 'framer-motion';
 
 /** Card index 0-51: rank = (idx % 13), suit = floor(idx/13) — matches server cardToInt encoding */
 const RANK_NAMES = ['2', '3', '4', '5', '6', '7', '8', '9', '10', 'J', 'Q', 'K', 'A'];
-const SUIT_LETTERS = ['C', 'D', 'H', 'S'];
 const SUIT_NAMES = ['clubs', 'diamonds', 'hearts', 'spades'];
-
-function getCardImagePath(cardIndex: number): string {
-  const rank = cardIndex % 13;
-  const suit = Math.floor(cardIndex / 13);
-  return `/BlackJack/Cards/PNG/${RANK_NAMES[rank]}${SUIT_LETTERS[suit]}.png`;
-}
 
 function getCardAlt(cardIndex: number): string {
   const rank = cardIndex % 13;
@@ -33,7 +26,7 @@ export interface CardDisplayProps {
   className?: string;
   /** Stagger delay in seconds for deal animation */
   dealDelay?: number;
-  /** Show a centered white badge with large rank+suit text (used on community cards). */
+  /** @deprecated No longer needed — cards are now pure CSS. Kept for API compat. */
   showCenterRankSuitOverlay?: boolean;
 }
 
@@ -77,7 +70,6 @@ export function CardDisplay({
   isWinningCard,
   className = '',
   dealDelay = 0,
-  showCenterRankSuitOverlay = false,
 }: CardDisplayProps) {
   const sizeClasses = small
     ? 'w-10 h-14 sm:w-11 sm:h-[62px] md:w-12 md:h-[68px] lg:w-14 lg:h-20 xl:w-16 xl:h-[88px]'
@@ -94,6 +86,9 @@ export function CardDisplay({
 
   const rank = isFaceUp ? (cardIndex! % 13) : 0;
   const suit = isFaceUp ? Math.floor(cardIndex! / 13) : 0;
+  const color = getSuitColor(suit);
+  const suitChar = getSuitSymbol(suit);
+  const rankLabel = RANK_NAMES[rank];
 
   return (
     <div className={`poker-card-wrapper ${className}`} style={{ perspective: 600 }}>
@@ -144,8 +139,9 @@ export function CardDisplay({
             rotateX: 0,
           }}
           custom={dealDelay}
-          className={`relative ${sizeClasses} overflow-hidden bg-white rounded-md`}
+          className={`relative ${sizeClasses} overflow-hidden rounded-md select-none`}
           style={{
+            background: 'linear-gradient(160deg, #ffffff 0%, #f8f8f8 50%, #f0f0f0 100%)',
             boxShadow: isWinningCard
               ? `${cardShadow}, 0 10px 24px rgba(0,0,0,0.55), 0 0 0 4px rgba(34, 211, 238, 0.95), 0 0 26px rgba(34, 211, 238, 0.55)`
               : cardShadow,
@@ -157,38 +153,50 @@ export function CardDisplay({
             stiffness: 260,
             damping: 18,
           }}
+          aria-label={getCardAlt(cardIndex!)}
         >
-          <Image
-            src={getCardImagePath(cardIndex!)}
-            alt={getCardAlt(cardIndex!)}
-            width={imageSize.width}
-            height={imageSize.height}
-            className="w-full h-full object-cover"
-            priority
-          />
-          {showCenterRankSuitOverlay && (
-            <div
-              className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 pointer-events-none rounded-md flex items-center justify-center"
-              style={{
-                width: '54%',
-                aspectRatio: '1 / 1',
-                background: 'rgba(255,255,255,0.95)',
-                border: '1px solid rgba(0,0,0,0.18)',
-                boxShadow: '0 2px 8px rgba(0,0,0,0.35)',
-              }}
-            >
-              <span
-                className="font-bold leading-none"
-                style={{
-                  color: getSuitColor(suit),
-                  fontSize: 'clamp(18px, 3.2vw, 28px)',
-                  textShadow: '0 1px 0 rgba(255,255,255,0.5)',
-                }}
-              >
-                {RANK_NAMES[rank]}{getSuitSymbol(suit)}
-              </span>
-            </div>
-          )}
+          {/* Top-left rank + suit */}
+          <div
+            className="absolute flex flex-col items-center leading-none font-bold"
+            style={{
+              color,
+              top: '4%',
+              left: '8%',
+              fontSize: small ? 'clamp(8px, 1.6vw, 12px)' : 'clamp(11px, 2vw, 16px)',
+              lineHeight: 1,
+            }}
+          >
+            <span>{rankLabel}</span>
+            <span style={{ fontSize: '0.85em', marginTop: '0.05em' }}>{suitChar}</span>
+          </div>
+
+          {/* Center suit */}
+          <div
+            className="absolute inset-0 flex items-center justify-center pointer-events-none"
+            style={{
+              color,
+              fontSize: small ? 'clamp(16px, 3.2vw, 28px)' : 'clamp(22px, 4vw, 40px)',
+            }}
+          >
+            <span>{suitChar}</span>
+          </div>
+
+          {/* Bottom-right rank + suit (rotated) */}
+          <div
+            className="absolute flex flex-col items-center leading-none font-bold"
+            style={{
+              color,
+              bottom: '4%',
+              right: '8%',
+              fontSize: small ? 'clamp(8px, 1.6vw, 12px)' : 'clamp(11px, 2vw, 16px)',
+              lineHeight: 1,
+              transform: 'rotate(180deg)',
+            }}
+          >
+            <span>{rankLabel}</span>
+            <span style={{ fontSize: '0.85em', marginTop: '0.05em' }}>{suitChar}</span>
+          </div>
+
           <div className="absolute inset-0 pointer-events-none" style={{ boxShadow: innerGlow }} />
           {isWinningCard && (
             <div
