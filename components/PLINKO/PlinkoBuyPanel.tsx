@@ -113,7 +113,7 @@ export default function PlinkoBuyPanel({
   onBuyBalls,
 }: PlinkoBuyPanelProps) {
   return (
-    <div className="order-2 lg:order-1 lg:flex lg:w-[320px] xl:w-[360px] 2xl:w-[400px] lg:flex-col lg:p-1 lg:overflow-hidden lg:relative lg:z-20 lg:self-stretch lg:min-h-0 flex flex-col min-h-0">
+    <div className="relative z-20 order-2 lg:order-1 lg:flex lg:w-[320px] xl:w-[360px] 2xl:w-[400px] lg:flex-col lg:p-1 lg:overflow-hidden lg:self-stretch lg:min-h-0 flex flex-col min-h-0">
       {!freePlayEnabled && (
         <div
           className="relative rounded-2xl overflow-hidden flex flex-col flex-1 min-h-0 lg:min-h-0 lg:h-full"
