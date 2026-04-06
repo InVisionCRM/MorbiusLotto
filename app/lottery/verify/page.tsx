@@ -10,7 +10,6 @@ import { Alert, AlertDescription } from '@/components/ui/alert'
 import { Badge } from '@/components/ui/badge'
 import Footer from '@/components/PLINKO/Footer'
 import GlobalMainNav from '@/components/shared/GlobalMainNav'
-import { MorbiusLoadingChip } from '@/components/shared/MorbiusLoadingChip'
 import { formatUnits } from 'viem'
 import { CheckCircle, AlertTriangle, Info, Shield, Hash, Eye, ExternalLink } from 'lucide-react'
 import { CopyButton } from '@/components/ui/copy-button'
@@ -527,7 +526,6 @@ export default function LotteryVerifyPage() {
             <div className="w-8 h-8 border-2 border-cyan-400/30 border-t-cyan-400 rounded-full animate-spin" />
             <p className="text-white/70">Loading verifier...</p>
           </div>
-          <MorbiusLoadingChip />
         </div>
       }
     >

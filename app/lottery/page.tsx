@@ -26,9 +26,7 @@ import Footer from '@/components/PLINKO/Footer'
 import { GameFAQ } from '@/components/shared/GameFAQ'
 import { toast } from 'sonner'
 import type { InstantLotteryResultRow } from '@/hooks/use-instant-lottery'
-import { AdSpace } from '@/components/shared/AdSpace'
 import { FloatingPokerChips } from '@/components/home/FloatingPokerChips'
-import { MorbiusLoadingChip } from '@/components/shared/MorbiusLoadingChip'
 
 const ZERO = '0x0000000000000000000000000000000000000000'
 const isDeployed = (LOTTERY_INSTANT_ADDRESS as string) !== ZERO
@@ -48,11 +46,7 @@ function LotteryIntroScreen({ onComplete }: { onComplete: () => void }) {
       }}
       suppressHydrationWarning
     >
-      <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 flex flex-col items-center gap-6">
-        <div className="w-[300px] shrink-0">
-          <AdSpace slot="loading" width={300} height={100} showCta={true} />
-        </div>
-        <div className="flex flex-col items-center gap-[30px]">
+      <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 flex flex-col items-center gap-[30px]">
         <div className="relative w-16 h-16 shrink-0">
           <div
             className="absolute inset-0 rounded-full bg-gradient-to-br from-cyan-500 to-purple-700 flex items-center justify-center shadow-lg"
@@ -72,9 +66,7 @@ function LotteryIntroScreen({ onComplete }: { onComplete: () => void }) {
             Preparing Lotto
           </div>
         </div>
-        </div>
       </div>
-      <MorbiusLoadingChip />
       <style jsx>{`
         @keyframes lotteryBallIn {
           0% { transform: scale(0); opacity: 0; }

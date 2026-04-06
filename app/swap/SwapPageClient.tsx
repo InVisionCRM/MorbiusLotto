@@ -5,8 +5,6 @@ import { ContractAddress } from '@/components/ui/contract-address'
 import { MORBIUS_TOKEN_ADDRESS } from '@/lib/contracts'
 import Footer from '@/components/PLINKO/Footer'
 import GlobalMainNav from '@/components/shared/GlobalMainNav'
-import { MorbiusLoadingChip } from '@/components/shared/MorbiusLoadingChip'
-
 export default function SwapPageClient() {
   const [isLoading, setIsLoading] = useState(true)
 
@@ -28,15 +26,12 @@ export default function SwapPageClient() {
 
             <div className="relative w-full h-[80vh] bg-black/50 rounded-lg overflow-hidden border border-cyan-500/30">
               {isLoading && (
-                <>
-                  <div className="absolute inset-0 flex items-center justify-center bg-black/80 z-10">
-                    <div className="text-center">
-                      <div className="animate-spin w-8 h-8 border-2 border-cyan-400 border-t-transparent rounded-full mx-auto mb-4"></div>
-                      <p className="text-white/60">Loading Internet Money Swap...</p>
-                    </div>
+                <div className="absolute inset-0 flex items-center justify-center bg-black/80 z-10">
+                  <div className="text-center">
+                    <div className="animate-spin w-8 h-8 border-2 border-cyan-400 border-t-transparent rounded-full mx-auto mb-4"></div>
+                    <p className="text-white/60">Loading Internet Money Swap...</p>
                   </div>
-                  <MorbiusLoadingChip />
-                </>
+                </div>
               )}
               <iframe
                 src="https://swap.internetmoney.io/"

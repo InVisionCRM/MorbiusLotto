@@ -20,7 +20,6 @@ import GlobalMainNav from '@/components/shared/GlobalMainNav'
 import { PlayerProfileModal, type PlayerProfileGame } from '@/components/shared/PlayerProfileModal'
 import { useKenoPlayerStats } from '@/hooks/use-keno-results'
 import { AdSpace } from '@/components/shared/AdSpace'
-import { MorbiusLoadingChip } from '@/components/shared/MorbiusLoadingChip'
 import { KenoDrawingOverlay } from '@/components/CryptoKeno/KenoDrawingOverlay'
 import { KenoPlayPanelShell } from '@/components/CryptoKeno/KenoPlayPanelShell'
 import { KenoTicketBuilder } from '@/components/CryptoKeno/KenoTicketBuilder'
@@ -60,11 +59,7 @@ function KenoIntroScreen({ onComplete }: { onComplete: () => void }) {
       }}
       suppressHydrationWarning
     >
-      <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 flex flex-col items-center gap-6">
-        <div className="w-[300px] shrink-0">
-          <AdSpace slot="loading" width={300} height={100} showCta={true} />
-        </div>
-        <div className="flex flex-col items-center gap-[30px]">
+      <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 flex flex-col items-center gap-[30px]">
         <div className="grid grid-cols-5 gap-1 shrink-0">
           {[...Array(10)].map((_, i) => (
             <div
@@ -87,9 +82,7 @@ function KenoIntroScreen({ onComplete }: { onComplete: () => void }) {
             Preparing Keno
           </div>
         </div>
-        </div>
       </div>
-      <MorbiusLoadingChip />
       <style jsx>{`
         @keyframes kenoCellIn {
           0% {

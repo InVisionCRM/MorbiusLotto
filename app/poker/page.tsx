@@ -23,7 +23,6 @@ import {
 import { floorMorbiusWholeFromWei, formatMorbiusFloor, formatMorbiusFloorPlain } from '@/lib/format-morbius-display';
 import { PokerBetaSplash } from '@/components/poker/PokerBetaSplash';
 import { PokerHowToPlayModal } from '@/components/poker/PokerHowToPlayModal';
-import { MorbiusLoadingChip } from '@/components/shared/MorbiusLoadingChip';
 import GlobalMainNav from '@/components/shared/GlobalMainNav';
 // import { PokerTournamentLobby } from '@/components/poker/tournament/PokerTournamentLobby';
 
@@ -121,7 +120,6 @@ function IntroScreen({ onComplete }: { onComplete: () => void }) {
           }
         }
       `}</style>
-      <MorbiusLoadingChip />
     </div>
   );
 }

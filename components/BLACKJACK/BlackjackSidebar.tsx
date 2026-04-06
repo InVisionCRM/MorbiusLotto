@@ -5,7 +5,6 @@ import {
   History,
   BookOpen,
   TrendingUp,
-  Zap,
   Gamepad2,
   Volume2,
   VolumeX,
@@ -18,7 +17,6 @@ import {
 } from 'lucide-react'
 import QuickHistory from '@/components/BLACKJACK/QuickHistory'
 import BlackjackRealTimeBetChart from '@/components/BLACKJACK/RealTimeBetChart'
-import GlobalWinsFeed from '@/components/BLACKJACK/GlobalWinsFeed'
 import type { BlackjackRealTimeBetChartRef } from '@/components/BLACKJACK/RealTimeBetChart'
 import { GameResult } from '@/app/BLACKJACK/types'
 import { Theme } from '@/lib/theme'
@@ -39,7 +37,6 @@ const PANEL_CLASS = ''
 
 const BASE_TABS = [
   { id: 'recent', label: 'Recent', shortLabel: 'Recent', icon: History },
-  { id: 'wins', label: 'Global', shortLabel: 'Global', icon: Zap },
   { id: 'chart', label: 'Chart', shortLabel: 'Chart', icon: TrendingUp },
   { id: 'sounds', label: 'Sounds', shortLabel: 'Sounds', icon: Volume2 },
   { id: 'howto', label: 'How to Play', shortLabel: 'How', icon: BookOpen },
@@ -54,8 +51,6 @@ interface BlackjackSidebarProps {
   reserveBalance?: bigint
   chartRef?: React.RefObject<BlackjackRealTimeBetChartRef | null>
   chartSessionStartTime?: number
-  wsClient?: unknown
-  wsConnected?: boolean
   onVerifyGameRequest?: (gameId: string) => void
   /** When true, a "Tournament" tab is shown with HUD + betting controls; only visible during a tournament */
   inTournament?: boolean
@@ -81,8 +76,6 @@ export default function BlackjackSidebar({
   reserveBalance,
   chartRef,
   chartSessionStartTime,
-  wsClient,
-  wsConnected,
   onVerifyGameRequest,
   inTournament = false,
   tournamentTabContent,
@@ -133,7 +126,7 @@ export default function BlackjackSidebar({
       {/* Tab buttons — fixed at top */}
       <div
         className={`grid gap-2 p-3 shrink-0 items-start bg-black/20 ${
-          tabs.length >= 6 ? 'grid-cols-6' : tabs.length === 5 ? 'grid-cols-5' : 'grid-cols-4'
+          tabs.length >= 5 ? 'grid-cols-5' : 'grid-cols-4'
         }`}
       >
         {tabs.map((tab) => {
@@ -163,7 +156,6 @@ export default function BlackjackSidebar({
         className={`${PANEL_CLASS} flex-1 min-h-0 overflow-auto no-scrollbar border-t border-white/10 ${
           activeTab === 'howto' ||
           activeTab === 'chart' ||
-          activeTab === 'wins' ||
           activeTab === 'sounds' ||
           activeTab === 'tournament-play'
             ? 'p-4'
@@ -176,9 +168,6 @@ export default function BlackjackSidebar({
             reserveBalance={inTournament ? undefined : reserveBalance}
             onVerifyGame={handleQuickHistoryVerify}
           />
-        )}
-        {activeTab === 'wins' && (
-          <GlobalWinsFeed wsClient={wsClient} wsConnected={wsConnected ?? false} />
         )}
         {/* Chart is always mounted when chartRef is set so addGameResult() works from page (ref stays attached).
             Hidden when tab is not active so data accumulates across tab switches. */}

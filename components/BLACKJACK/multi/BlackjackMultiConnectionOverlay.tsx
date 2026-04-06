@@ -1,8 +1,5 @@
 'use client';
 
-import React from 'react';
-import { MorbiusLoadingChip } from '@/components/shared/MorbiusLoadingChip';
-
 export type BlackjackMultiWsStatus = 'connecting' | 'connected' | 'reconnecting' | 'failed';
 
 export function BlackjackMultiConnectionOverlay({
@@ -24,7 +21,6 @@ export function BlackjackMultiConnectionOverlay({
     <>
       {!wsConnected && (
         <div className="absolute inset-0 z-30 flex items-center justify-center bg-black/70 backdrop-blur-sm">
-          <MorbiusLoadingChip />
           <div className="bg-slate-900 border border-slate-700 rounded-lg px-6 py-4 text-center max-w-xs">
             {!address ? (
               <p className="text-amber-400 text-sm">Connect your wallet to play</p>

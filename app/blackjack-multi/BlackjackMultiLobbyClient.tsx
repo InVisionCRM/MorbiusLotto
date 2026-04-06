@@ -10,7 +10,6 @@ import { GameFAQ } from '@/components/shared/GameFAQ';
 import { BLACKJACK_ADDRESS, MORBIUS_TOKEN_ADDRESS } from '@/lib/contracts';
 import { Users, ArrowRight, Filter } from 'lucide-react';
 import { BlackjackMultiBetaSplash } from '@/components/BLACKJACK/BlackjackMultiBetaSplash';
-import { MorbiusLoadingChip } from '@/components/shared/MorbiusLoadingChip';
 import { useBlackjackTables } from '@/hooks/use-blackjack-tables';
 
 function formatMorbius(wei: string): string {
@@ -164,10 +163,7 @@ export default function BlackjackMultiLobbyClient({
           </div>
 
           {loading && (
-            <>
-              <MorbiusLoadingChip />
-              <div className="text-center text-slate-500 text-sm py-12">Loading tables...</div>
-            </>
+            <div className="text-center text-slate-500 text-sm py-12">Loading tables...</div>
           )}
           {error && <div className="text-center text-red-400 text-sm py-12">{error}</div>}
 

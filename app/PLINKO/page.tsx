@@ -33,8 +33,6 @@ import PlinkoTopPlayers from '@/components/PLINKO/PlinkoTopPlayers';
 import { PlinkoRecentPlays } from '@/components/PLINKO/PlinkoRecentPlays';
 import { PlinkoRecentGames } from '@/components/PLINKO/PlinkoRecentGames';
 import { PlinkoPlayerDashboard } from '@/components/PLINKO/PlinkoPlayerDashboard';
-import { AdSpace } from '@/components/shared/AdSpace';
-import { MorbiusLoadingChip } from '@/components/shared/MorbiusLoadingChip';
 import type { PlayerProfileGame } from '@/components/shared/PlayerProfileModal';
 
 interface IntroScreenProps {
@@ -58,11 +56,7 @@ function IntroScreen({ onComplete }: IntroScreenProps) {
       }}
       suppressHydrationWarning
     >
-      <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 flex flex-col items-center gap-6">
-        <div className="w-[300px] shrink-0">
-          <AdSpace slot="loading" width={300} height={100} showCta={true} />
-        </div>
-        <div className="flex flex-col items-center gap-[30px]">
+      <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 flex flex-col items-center gap-[30px]">
         {/* Animated ball */}
         <div className="relative w-20 h-20 shrink-0">
           <div
@@ -83,9 +77,7 @@ function IntroScreen({ onComplete }: IntroScreenProps) {
             Preparing Plinko
           </div>
         </div>
-        </div>
       </div>
-      <MorbiusLoadingChip />
       <style jsx>{`
         @keyframes plinkoBallDrop {
           0% {

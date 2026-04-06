@@ -1,6 +1,5 @@
 'use client';
 
-import React from 'react';
 import { formatEther } from 'viem';
 import { UserPlus } from 'lucide-react';
 import PlayingCard from '@/components/BLACKJACK/PlayingCard';

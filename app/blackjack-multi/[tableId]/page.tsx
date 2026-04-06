@@ -1076,15 +1076,6 @@ export default function BlackjackMultiTablePage() {
               visibleDealerCards={visibleDealerCards}
             />
 
-            {/* "Place your bets!" — mobile/tablet cue; desktop uses centered header pill */}
-            {tableViewState?.phase === 'betting' && (
-              <div className="betting-breathe rounded-xl px-6 py-2 md:hidden" style={{ background: 'rgba(0,0,0,0.45)' }}>
-                <span className="text-white font-bold text-lg tracking-wide" style={{ fontFamily: 'Jost, sans-serif' }}>
-                  Place your bets!
-                </span>
-              </div>
-            )}
-
             {/* 3 SEATS — CSS grid; outer seats inset from edges so they stay visible on mobile */}
             <BlackjackMultiSeatGrid
               seats={seatsByPosition}

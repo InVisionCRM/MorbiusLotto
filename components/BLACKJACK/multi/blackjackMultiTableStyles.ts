@@ -16,13 +16,6 @@ export const BLACKJACK_MULTI_TABLE_STYLES = `
     from { opacity: 0; transform: translateX(60px) translateY(-40px); }
     to { opacity: 1; transform: translateX(0) translateY(0); }
   }
-  .betting-breathe {
-    animation: breathe 3s ease-in-out infinite;
-  }
-  @keyframes breathe {
-    0%, 100% { opacity: 0.6; transform: scale(1); }
-    50% { opacity: 1; transform: scale(1.05); }
-  }
   .tip-chip-fly {
     animation: tipChipFly 0.7s ease-in forwards;
   }

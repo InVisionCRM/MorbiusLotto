@@ -191,7 +191,7 @@ describe('Blackjack multi visual playthrough', () => {
           stateFor({ handNo: i, phase: 'betting', acting: null, dealerCards: [], seats: seatsBase }) as any
         )
       );
-      cy.contains('Place your bets').should('be.visible');
+      cy.get('[data-bj-multi-phase=betting]').should('exist');
       cy.wait(stepDelay);
 
       const playing0 = seatsBase.map((s) => ({ ...s, pendingBet: '0', betAmount: toWei(2000), hands: [hand([0 + s.position, 9 + s.position])] }));
@@ -201,7 +201,7 @@ describe('Blackjack multi visual playthrough', () => {
           stateFor({ handNo: i, phase: 'playing', acting: 0, dealerCards: [12, 25], seats: playing0 }) as any
         )
       );
-      cy.contains('Players acting').should('be.visible');
+      cy.get('[data-bj-multi-phase=playing]').should('exist');
       cy.wait(stepDelay);
 
       const playing1 = playing0.map((s, idx) =>
@@ -235,7 +235,7 @@ describe('Blackjack multi visual playthrough', () => {
           stateFor({ handNo: i, phase: 'dealer_turn', acting: null, dealerCards: [12, 25, 38], seats: dealerTurn }) as any
         )
       );
-      cy.contains('Dealer turn').should('be.visible');
+      cy.get('[data-bj-multi-phase=dealer_turn]').should('exist');
       cy.wait(stepDelay);
 
       const completed = dealerTurn.map((s, idx) => {
@@ -249,7 +249,7 @@ describe('Blackjack multi visual playthrough', () => {
           stateFor({ handNo: i, phase: 'completed', acting: null, dealerCards: [12, 25, 38], seats: completed }) as any
         )
       );
-      cy.contains('Round complete').should('be.visible');
+      cy.get('[data-bj-multi-phase=completed]').should('exist');
       cy.wait(stepDelay);
 
       cy.log(`Hand ${i}/${hands}: reset`);
@@ -258,7 +258,7 @@ describe('Blackjack multi visual playthrough', () => {
           stateFor({ handNo: i + 1, phase: 'betting', acting: null, dealerCards: [], seats: seatsBase }) as any
         )
       );
-      cy.contains('Place your bets').should('be.visible');
+      cy.get('[data-bj-multi-phase=betting]').should('exist');
       cy.wait(stepDelay);
     }
   });

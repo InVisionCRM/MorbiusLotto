@@ -3,7 +3,6 @@
 import type React from 'react';
 import type { BlackjackWebSocketClient, PokerTableState } from '@/lib/websocket-client';
 import { PokerTable } from '@/components/poker/PokerTable';
-import { MorbiusLoadingChip } from '@/components/shared/MorbiusLoadingChip';
 import { IconButton } from '@/components/animate-ui/components/buttons/icon';
 import type { Emotion } from '@/components/avatar';
 import { POKER_TABLE_REF_W, POKER_TABLE_REF_H } from './PokerMobileZoomLock';
@@ -144,12 +143,9 @@ export function PokerTableView({
           onOpenEditQuickChat={() => setShowEditQuickChatModal(true)}
         />
       ) : !error ? (
-        <>
-          <div className="absolute inset-0 flex items-center justify-center text-[var(--poker-text-muted)] text-sm">
-            Loading table...
-          </div>
-          <MorbiusLoadingChip />
-        </>
+        <div className="absolute inset-0 flex items-center justify-center text-[var(--poker-text-muted)] text-sm">
+          Loading table...
+        </div>
       ) : null}
       {error && (
         <div className="absolute inset-0 flex items-center justify-center px-4">

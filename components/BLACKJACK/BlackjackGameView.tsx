@@ -393,8 +393,6 @@ export function BlackjackGameView(props: BlackjackGameViewProps) {
               reserveBalance={offChainBalance}
               chartRef={chartRef}
               chartSessionStartTime={chartSessionStartTime}
-              wsClient={wsClient}
-              wsConnected={wsConnected}
               onVerifyGameRequest={openVerifyView}
               soundEnabled={soundEnabled}
               onSoundEnabledChange={setSoundEnabled}

@@ -1,6 +1,5 @@
 'use client';
 
-import React from 'react';
 import type { BJMultiSeatState } from '@/lib/websocket-client';
 import { BlackjackMultiSeat } from '@/components/BLACKJACK/multi/BlackjackMultiSeat';
 
@@ -42,19 +41,24 @@ export function BlackjackMultiSeatGrid({
   // In normal mode, push side seats outward to frame the table edges.
   const clampedScale = Math.max(0.72, Math.min(1, nudgeScale));
   const sideNudgeX = fullscreen ? -60 : Math.round(42 * clampedScale);
-  const sideNudgeY = fullscreen ? Math.round(30 * clampedScale) : Math.round(66 * clampedScale);
+  // Strong negative Y lifts left/right seats — previous values sat too low vs the table.
+  const sideNudgeY = fullscreen ? Math.round(56 * clampedScale) : Math.round(118 * clampedScale);
 
   return (
     <div
       className="grid w-full max-w-4xl grid-cols-3 gap-2 sm:gap-3 md:gap-4 mx-auto"
-      style={{ transform: 'translateY(6px)', padding: fullscreen ? '0 12%' : '0 4%' }}
+      style={{ padding: fullscreen ? '0 12%' : '0 4%' }}
     >
       {POSITIONS.map((pos) => {
         const seat = seats[pos];
         const isEmpty = !seat?.playerAddress;
         const isMe = seat?.playerAddress?.toLowerCase() === addressLower;
         const align =
-          pos === 0 ? 'flex justify-start' : pos === 2 ? 'flex justify-end' : 'flex justify-center';
+          pos === 0
+            ? 'flex justify-start items-start'
+            : pos === 2
+              ? 'flex justify-end items-start'
+              : 'flex justify-center';
         // Normal: side seats pushed outward. Fullscreen: side seats pulled inward (negative sideNudgeX = toward center).
         const seatNudge =
           pos === 0 ? { transform: `translate(${fullscreen ? sideNudgeX : -sideNudgeX}px, -${sideNudgeY}px)` } :

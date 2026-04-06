@@ -30,7 +30,6 @@ import { usePokerPlayerHands, usePokerPlayerStats } from '@/hooks/use-poker-stat
 import { usePlayerProfileGames } from '@/hooks/use-player-profile'
 import { useQuery } from '@tanstack/react-query'
 import { getApiUrlOptional } from '@/lib/api-urls'
-import { MorbiusLoadingChip } from '@/components/shared/MorbiusLoadingChip'
 import { useMerkleClaims } from '@/hooks/use-merkle-claims'
 
 const PANEL_STYLE = {
@@ -452,7 +451,6 @@ export function AllStatsDashboard({ playerAddress, serverBalanceAnchor }: AllSta
   if (isLoading && aggregated.totalGames === 0 && combinedHistory.length === 0) {
     return (
       <>
-        <MorbiusLoadingChip />
         <div className="flex justify-center py-12">
           <div className="h-8 w-8 animate-spin rounded-full border-2 border-cyan-400 border-t-transparent" />
         </div>

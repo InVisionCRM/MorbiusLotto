@@ -1,6 +1,5 @@
 'use client';
 
-import React from 'react';
 import type { BJMultiTableState } from '@/lib/websocket-client';
 
 export function BlackjackMultiTopBar({
@@ -14,26 +13,12 @@ export function BlackjackMultiTopBar({
   onLeaveSeat: () => void;
   formatMorbius: (wei: string) => string;
 }) {
+  const phase = tableViewState?.phase ?? 'none';
   return (
-    <div className="relative flex items-center justify-between px-4 py-2 bg-black/30 backdrop-blur-sm">
-      <div className="z-10 shrink-0">
-        {tableViewState && (
-          <span
-            className={`text-sm px-3 py-1 rounded-full font-semibold whitespace-nowrap ${
-              tableViewState.phase === 'betting' ? 'bg-yellow-900/80 text-yellow-300' :
-              tableViewState.phase === 'playing' ? 'bg-green-900/80 text-green-300' :
-              tableViewState.phase === 'dealer_turn' ? 'bg-blue-900/80 text-blue-300' :
-              'bg-white/10 text-white/60'
-            }`}
-          >
-            {tableViewState.phase === 'waiting' ? 'Waiting for players' :
-              tableViewState.phase === 'betting' ? 'Place your bets' :
-              tableViewState.phase === 'playing' ? 'Players acting' :
-              tableViewState.phase === 'dealer_turn' ? 'Dealer turn' : 'Round complete'}
-          </span>
-        )}
-      </div>
-
+    <div
+      className="relative flex items-center justify-end px-4 py-2 bg-black/30 backdrop-blur-sm"
+      data-bj-multi-phase={phase}
+    >
       <div className="pointer-events-none absolute left-1/2 top-1/2 z-20 -translate-x-1/2 -translate-y-1/2">
         <span className="text-sm font-semibold text-white/70 whitespace-nowrap">
           {tableViewState
