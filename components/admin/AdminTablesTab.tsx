@@ -33,6 +33,7 @@ import {
 import Image from 'next/image';
 import { Theme } from '@/lib/theme';
 import { TableProfile } from '@/components/BLACKJACK/TableProfile';
+import { adminUploadTableFile } from '@/lib/admin-table-upload';
 
 /** In-game token profile card styling (matches TableTokenProfileCard) */
 const TOKEN_CARD_PANEL_STYLE = {
@@ -50,6 +51,7 @@ function TokenProfilePreviewCard({
   ticker,
   websiteUrl,
   iframeUrl,
+  showIframe = false,
 }: {
   tableName: string;
   description: string;
@@ -58,6 +60,8 @@ function TokenProfilePreviewCard({
   ticker: string;
   websiteUrl: string;
   iframeUrl?: string;
+  /** Omit iframe in admin preview (avoids blocked embeds / geicko console noise). */
+  showIframe?: boolean;
 }) {
   const tokenAddress =
     tokenContract.trim().startsWith('0x') && tokenContract.trim().length >= 42
@@ -82,6 +86,7 @@ function TokenProfilePreviewCard({
           ticker={ticker.trim() || undefined}
           websiteUrl={websiteUrl.trim() || undefined}
           iframeUrl={iframeUrl?.trim() || undefined}
+          showIframe={showIframe}
         />
       </div>
     </div>
@@ -99,7 +104,8 @@ function ImagePreview({ file }: { file: File }) {
     return () => URL.revokeObjectURL(u);
   }, [file]);
   if (!url) return <div className="absolute inset-0 flex items-center justify-center text-[10px] text-slate-500">Loading…</div>;
-  return <Image src={url} alt="Preview" fill className="object-cover" sizes="140px" unoptimized />;
+  // Native img avoids next/image blob URL edge cases (ERR_FILE_NOT_FOUND) after revoke/HMR.
+  return <img src={url} alt="Preview" className="absolute inset-0 h-full w-full object-cover" />;
 }
 
 /** Preview for a replacement file (image or video). */
@@ -115,7 +121,7 @@ function ReplacementPreview({ file }: { file: File }) {
   if (isVideo) {
     return <video src={url} className="absolute inset-0 w-full h-full object-cover" muted playsInline />;
   }
-  return <Image src={url} alt="Preview" fill className="object-cover" sizes="160px" unoptimized />;
+  return <img src={url} alt="Preview" className="absolute inset-0 h-full w-full object-cover" />;
 }
 
 export interface BlackjackTableRow {
@@ -417,32 +423,14 @@ function AddTableDialog({
       const form = new FormData();
       form.set('file', files[0]);
       form.set('kind', kind);
-      const uploadRes = await fetch('/api/admin/upload', {
-        method: 'POST',
-        headers: { 'x-admin-wallet': address },
-        body: form,
-      });
-      if (!uploadRes.ok) {
-        const d = await uploadRes.json().catch(() => ({}));
-        throw new Error(d.error || 'Upload failed');
-      }
-      const { path } = await uploadRes.json();
+      const { path } = await adminUploadTableFile(form, address);
       let resolvedLogoUrl: string | null = logoUrl.trim() || null;
       if (logoFile.length > 0) {
         const logoForm = new FormData();
         logoForm.set('file', logoFile[0]);
         logoForm.set('kind', 'image');
         logoForm.set('purpose', 'logo');
-        const logoUploadRes = await fetch('/api/admin/upload', {
-          method: 'POST',
-          headers: { 'x-admin-wallet': address },
-          body: logoForm,
-        });
-        if (!logoUploadRes.ok) {
-          const d = await logoUploadRes.json().catch(() => ({}));
-          throw new Error(d.error || 'Logo upload failed');
-        }
-        const logoData = await logoUploadRes.json();
+        const logoData = await adminUploadTableFile(logoForm, address);
         resolvedLogoUrl = logoData.path ?? null;
       }
       const createRes = await fetch('/api/admin/tables', {
@@ -490,7 +478,7 @@ function AddTableDialog({
         <DialogHeader className="shrink-0">
           <DialogTitle className="text-sm">Add table</DialogTitle>
           <DialogDescription className="text-xs text-slate-500">
-            Upload an image or video and set name. Optional: description and token contract (DexScreener).
+            Upload an image or video and set name. Optional: description and token contract (DexScreener). Large files upload directly to the game API when configured. Iframe URL must allow embedding (many homepages block iframes); leave blank to use the default Morbius chart when a token is set.
           </DialogDescription>
         </DialogHeader>
         <form onSubmit={handleSubmit} className="flex flex-col min-h-0 flex-1 gap-3">
@@ -699,16 +687,7 @@ function EditTableDialog({
         const form = new FormData();
         form.set('file', replacementFile[0]);
         form.set('kind', row.kind);
-        const uploadRes = await fetch('/api/admin/upload', {
-          method: 'POST',
-          headers: { 'x-admin-wallet': address },
-          body: form,
-        });
-        if (!uploadRes.ok) {
-          const d = await uploadRes.json().catch(() => ({}));
-          throw new Error(d.error || 'Upload failed');
-        }
-        const { path } = await uploadRes.json();
+        const { path } = await adminUploadTableFile(form, address);
         newSrc = path;
       }
       let resolvedLogoUrl: string | null = logoUrl.trim() || null;
@@ -717,16 +696,7 @@ function EditTableDialog({
         logoForm.set('file', logoFile[0]);
         logoForm.set('kind', 'image');
         logoForm.set('purpose', 'logo');
-        const logoUploadRes = await fetch('/api/admin/upload', {
-          method: 'POST',
-          headers: { 'x-admin-wallet': address },
-          body: logoForm,
-        });
-        if (!logoUploadRes.ok) {
-          const d = await logoUploadRes.json().catch(() => ({}));
-          throw new Error(d.error || 'Logo upload failed');
-        }
-        const logoData = await logoUploadRes.json();
+        const logoData = await adminUploadTableFile(logoForm, address);
         resolvedLogoUrl = logoData.path ?? null;
       }
       const body: Record<string, unknown> = {

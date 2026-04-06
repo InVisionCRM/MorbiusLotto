@@ -175,8 +175,14 @@ const uploadMulter = multer({
   },
 });
 
-// Admin API: require x-admin-secret header matching AP env var
+// Admin API: require x-admin-secret header matching AP env var.
+// Exception: POST /api/admin/browser-upload uses x-admin-wallet + isAdminWallet so the browser can
+// upload large files directly to this host (bypasses Vercel/serverless ~4.5MB request body limits).
 app.use('/api/admin', (req, res, next) => {
+  const subPath = (req.url || '').split('?')[0];
+  if (req.method === 'POST' && subPath === '/browser-upload') {
+    return next();
+  }
   if (!ADMIN_SECRET) {
     res.status(503).json({ error: 'Admin access not configured on server' });
     return;
@@ -1642,7 +1648,7 @@ async function initializeServices() {
       return null;
     };
 
-    app.post('/api/admin/upload', (req, res, next) => {
+    const runAdminTableUploadMulter = (req: express.Request, res: express.Response, next: express.NextFunction) => {
       uploadMulter.single('file')(req, res, (err: unknown) => {
         if (err) {
           logger.error('Admin upload multer error:', err);
@@ -1652,7 +1658,9 @@ async function initializeServices() {
         }
         next();
       });
-    }, (req, res) => {
+    };
+
+    const finishAdminTableUpload = (req: express.Request, res: express.Response) => {
       try {
         if (!req.file) {
           res.status(400).json({ error: 'Missing or invalid file' });
@@ -1673,7 +1681,23 @@ async function initializeServices() {
         logger.error('Admin upload error:', err);
         res.status(500).json({ error: err instanceof Error ? err.message : 'Failed to save file' });
       }
-    });
+    };
+
+    app.post(
+      '/api/admin/browser-upload',
+      (req, res, next) => {
+        const wallet = (req.headers['x-admin-wallet'] as string | undefined)?.trim();
+        if (!wallet || !isAdminWallet(wallet)) {
+          res.status(403).json({ error: 'Forbidden', message: 'Admin wallet required' });
+          return;
+        }
+        next();
+      },
+      runAdminTableUploadMulter,
+      finishAdminTableUpload,
+    );
+
+    app.post('/api/admin/upload', runAdminTableUploadMulter, finishAdminTableUpload);
 
     app.get('/api/admin/tables', async (req, res) => {
       try {

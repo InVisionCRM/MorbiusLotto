@@ -31,6 +31,8 @@ const MAX_SIZE_VIDEO = 50 * 1024 * 1024; // 50MB
  * Headers: x-admin-wallet (must be in ADMIN_WALLETS).
  * Proxies to backend when configured (production); otherwise writes to public/ (local dev).
  * Returns { path: string } for use as table src (full URL when proxied, relative path when local).
+ * Note: Large uploads should use the client helper `adminUploadTableFile` (posts to backend
+ * `/api/admin/browser-upload`) to avoid Vercel/serverless request body limits (~4.5MB).
  */
 export async function POST(req: NextRequest) {
   const wallet = req.headers.get('x-admin-wallet')?.trim();

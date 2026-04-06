@@ -793,3 +793,7 @@ body {
   40%       { transform: rotate(90deg); }
   60%       { transform: rotate(90deg); }
 }
+@keyframes bounce {
+  from { transform: scaleY(0.4); }
+  to   { transform: scaleY(1); }
+}

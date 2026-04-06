@@ -46,6 +46,8 @@ export interface TableProfileProps {
   iframeUrl?: string
   /** When true, outer layout is flex column and the iframe grows to fill remaining height (pair with a stretched parent). */
   fillHeight?: boolean
+  /** When false, chart/embed iframe is omitted (e.g. admin preview to avoid third-party CSP / blocked embeds). */
+  showIframe?: boolean
 }
 
 export function TableProfile({
@@ -59,6 +61,7 @@ export function TableProfile({
   websiteUrl: websiteUrlProp,
   iframeUrl: iframeUrlProp,
   fillHeight = false,
+  showIframe = true,
 }: TableProfileProps) {
   const [data, setData] = useState<DexScreenerTokenResponse | null>(null)
   const [loading, setLoading] = useState(!!tokenAddress)
@@ -105,7 +108,7 @@ export function TableProfile({
   const socials = hasToken ? (tokenPairs[0]?.info?.socials ?? []) : []
   const websites = hasToken ? (tokenPairs[0]?.info?.websites ?? []) : []
   const morbiusUrl = hasToken ? `${VIEW_ON_MORBIUS_BASE}${encodeURIComponent(tokenAddress!)}` : ''
-  const iframeSrc = (iframeUrlProp?.trim() || (hasToken ? morbiusUrl : '')) || ''
+  const iframeSrc = showIframe ? ((iframeUrlProp?.trim() || (hasToken ? morbiusUrl : '')) || '') : ''
 
   const iframeEl = (
     <iframe

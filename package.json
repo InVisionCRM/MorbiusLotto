@@ -29,6 +29,7 @@
     "test:e2e:poker:real:file": "npm run build && start-server-and-test start http://localhost:3000 cypress:run:poker:real:file"
   },
   "dependencies": {
+    "@elevenlabs/client": "^1.1.2",
     "@google/genai": "^1.38.0",
     "@neondatabase/serverless": "^1.0.2",
     "@openzeppelin/contracts": "^5.4.0",
