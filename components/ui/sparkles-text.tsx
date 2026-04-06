@@ -1,7 +1,7 @@
 "use client"
 
-import { CSSProperties, ReactElement, useEffect, useState } from "react"
-import { motion } from "motion/react"
+import { CSSProperties, useEffect, useState } from "react"
+import { motion } from "framer-motion"
 
 import { cn } from "@/lib/utils"
 
@@ -15,12 +15,13 @@ interface Sparkle {
   lifespan: number
 }
 
-const Sparkle: React.FC<Sparkle> = ({ id, x, y, color, delay, scale }) => {
+function SparkleParticle({ id, x, y, color, delay, scale }: Sparkle) {
   return (
     <motion.svg
-      key={id}
+      aria-hidden
       className="pointer-events-none absolute z-20"
-      initial={{ opacity: 0, left: x, top: y }}
+      style={{ left: x, top: y }}
+      initial={{ opacity: 0 }}
       animate={{
         opacity: [0, 1, 0],
         scale: [0, scale, 0],
@@ -39,58 +40,22 @@ const Sparkle: React.FC<Sparkle> = ({ id, x, y, color, delay, scale }) => {
   )
 }
 
-interface SparklesTextProps {
-  /**
-   * @default <div />
-   * @type ReactElement
-   * @description
-   * The component to be rendered as the text
-   * */
-  as?: ReactElement
-
-  /**
-   * @default ""
-   * @type string
-   * @description
-   * The className of the text
-   */
+export interface SparklesTextProps {
   className?: string
-
-  /**
-   * @required
-   * @type ReactNode
-   * @description
-   * The content to be displayed
-   * */
   children: React.ReactNode
-
-  /**
-   * @default 10
-   * @type number
-   * @description
-   * The count of sparkles
-   * */
   sparklesCount?: number
-
-  /**
-   * @default "{first: '#9E7AFF', second: '#FE8BBB'}"
-   * @type string
-   * @description
-   * The colors of the sparkles
-   * */
   colors?: {
     first: string
     second: string
   }
 }
 
-export const SparklesText: React.FC<SparklesTextProps> = ({
+export function SparklesText({
   children,
   colors = { first: "#9E7AFF", second: "#FE8BBB" },
   className,
   sparklesCount = 10,
-  ...props
-}) => {
+}: SparklesTextProps) {
   const [sparkles, setSparkles] = useState<Sparkle[]>([])
 
   useEffect(() => {
@@ -101,49 +66,42 @@ export const SparklesText: React.FC<SparklesTextProps> = ({
       const delay = Math.random() * 2
       const scale = Math.random() * 1 + 0.3
       const lifespan = Math.random() * 10 + 5
-      const id = `${starX}-${starY}-${Date.now()}`
+      const id = `${starX}-${starY}-${Date.now()}-${Math.random()}`
       return { id, x: starX, y: starY, color, delay, scale, lifespan }
     }
 
     const initializeStars = () => {
-      const newSparkles = Array.from({ length: sparklesCount }, generateStar)
-      setSparkles(newSparkles)
+      setSparkles(Array.from({ length: sparklesCount }, generateStar))
     }
 
     const updateStars = () => {
-      setSparkles((currentSparkles) =>
-        currentSparkles.map((star) => {
-          if (star.lifespan <= 0) {
-            return generateStar()
-          } else {
-            return { ...star, lifespan: star.lifespan - 0.1 }
-          }
-        })
+      setSparkles((current) =>
+        current.map((star) =>
+          star.lifespan <= 0 ? generateStar() : { ...star, lifespan: star.lifespan - 0.1 }
+        )
       )
     }
 
     initializeStars()
     const interval = setInterval(updateStars, 100)
-
     return () => clearInterval(interval)
   }, [colors.first, colors.second, sparklesCount])
 
   return (
     <div
       className={cn("text-6xl font-bold", className)}
-      {...props}
       style={
         {
-          "--sparkles-first-color": `${colors.first}`,
-          "--sparkles-second-color": `${colors.second}`,
+          "--sparkles-first-color": colors.first,
+          "--sparkles-second-color": colors.second,
         } as CSSProperties
       }
     >
-      <span className="relative inline-block">
-        {sparkles.map((sparkle) => (
-          <Sparkle key={sparkle.id} {...sparkle} />
+      <span className="relative inline-block isolate">
+        {sparkles.map((s) => (
+          <SparkleParticle key={s.id} {...s} />
         ))}
-        <strong>{children}</strong>
+        <strong className="relative z-[1]">{children}</strong>
       </span>
     </div>
   )

@@ -31,10 +31,9 @@ export interface CardDisplayProps {
 }
 
 const dealVariants = {
-  hidden: { opacity: 0, y: -20, scale: 0.85, rotateX: 18 },
+  hidden: { opacity: 0, scale: 0.92, rotateX: 12 },
   visible: (delay: number) => ({
     opacity: 1,
-    y: 0,
     scale: 1,
     rotateX: 0,
     transition: {
@@ -134,8 +133,7 @@ export function CardDisplay({
           initial="hidden"
           animate={{
             opacity: 1,
-            y: isWinningCard ? -20 : 0,
-            scale: isWinningCard ? 1.12 : 1,
+            scale: isWinningCard ? 1.08 : 1,
             rotateX: 0,
           }}
           custom={dealDelay}

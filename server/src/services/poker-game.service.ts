@@ -377,7 +377,10 @@ export class PokerGameService {
         [normalized]
       );
       if (otherSeat.rows.length > 0) {
-        throw new Error('Already seated at another cash table. Leave that table first.');
+        const otherTableId = String(otherSeat.rows[0].table_id ?? '');
+        throw new Error(
+          `Already seated at another cash table. Leave that table first. other_table_id=${otherTableId}`
+        );
       }
 
       const tableResult = await client.query(

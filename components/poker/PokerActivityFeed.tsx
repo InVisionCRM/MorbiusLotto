@@ -141,8 +141,8 @@ export interface PokerActivityFeedProps {
   mobileOpenRequestSerial?: number;
 }
 
-/** Desktop fixed panel heights: expanded vs collapsed. */
-const DESKTOP_ACTIVITY_HEIGHT_EXPANDED = 'min(520px, calc(100dvh - 112px))';
+/** Desktop fixed panel heights: expanded vs collapsed (expanded cap is half of prior max). */
+const DESKTOP_ACTIVITY_HEIGHT_EXPANDED = 'min(260px, calc((100dvh - 112px) / 2))';
 const DESKTOP_ACTIVITY_HEIGHT_COLLAPSED = 'min(180px, calc((100dvh - 112px) * 0.33))';
 const POKER_AFK_TIMEOUTS_BEFORE_KICK = 6;
 
@@ -683,33 +683,43 @@ export function PokerActivityFeed({
 
   return (
     <>
-      {/* Desktop: persistent panel — fixed bottom-left (readable height) or in-flow when embedInLayout */}
-      <div
-        className={
-          embedInLayout
-            ? 'hidden md:flex flex-col rounded-lg overflow-hidden min-h-0 w-full self-end'
-            : 'hidden md:flex fixed z-30 flex-col rounded-lg overflow-hidden'
-        }
-        style={
-          embedInLayout
-            ? {
-                ...desktopPanelStyle,
-                height: expanded ? DESKTOP_ACTIVITY_HEIGHT_EXPANDED : DESKTOP_ACTIVITY_HEIGHT_COLLAPSED,
-                maxHeight: 'calc(100dvh - 112px)',
-                transition: 'height 0.25s ease',
-              }
-            : {
-                ...desktopPanelStyle,
-                width: 300,
-                height: expanded ? DESKTOP_ACTIVITY_HEIGHT_EXPANDED : DESKTOP_ACTIVITY_HEIGHT_COLLAPSED,
-                transition: 'height 0.25s ease',
-                left: 'max(12px, env(safe-area-inset-left, 0px))',
-                bottom: 'max(12px, env(safe-area-inset-bottom, 0px))',
-              }
-        }
-      >
-        {panelContent}
-      </div>
+      {/* Desktop: fixed bottom-left, or embedInLayout = reserve collapsed height + overlay when expanded */}
+      {embedInLayout ? (
+        <div
+          className="hidden md:block relative w-full self-end shrink-0 overflow-visible min-h-0"
+          style={{
+            height: DESKTOP_ACTIVITY_HEIGHT_COLLAPSED,
+            maxHeight: 'calc(100dvh - 112px)',
+            zIndex: expanded ? 50 : undefined,
+          }}
+        >
+          <div
+            className="absolute bottom-0 left-0 right-0 flex flex-col rounded-lg overflow-hidden min-h-0"
+            style={{
+              ...desktopPanelStyle,
+              height: expanded ? DESKTOP_ACTIVITY_HEIGHT_EXPANDED : '100%',
+              maxHeight: 'calc(100dvh - 112px)',
+              transition: 'height 0.25s ease',
+            }}
+          >
+            {panelContent}
+          </div>
+        </div>
+      ) : (
+        <div
+          className="hidden md:flex fixed z-30 flex-col rounded-lg overflow-hidden"
+          style={{
+            ...desktopPanelStyle,
+            width: 300,
+            height: expanded ? DESKTOP_ACTIVITY_HEIGHT_EXPANDED : DESKTOP_ACTIVITY_HEIGHT_COLLAPSED,
+            transition: 'height 0.25s ease',
+            left: 'max(12px, env(safe-area-inset-left, 0px))',
+            bottom: 'max(12px, env(safe-area-inset-bottom, 0px))',
+          }}
+        >
+          {panelContent}
+        </div>
+      )}
 
       {/* Mobile: left-edge tab + slide-in drawer */}
       <div className="md:hidden">

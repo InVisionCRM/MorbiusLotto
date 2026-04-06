@@ -9,6 +9,10 @@ import {
 } from '@/lib/websocket-client';
 import { toast } from 'sonner';
 
+/** Server appends this so the client can offer "leave other table & join here". */
+const POKER_OTHER_TABLE_ID_RE =
+  /other_table_id=([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})/i;
+
 interface UsePokerConnectionArgs {
   tableId: string;
   normalizedAddress: string | null;
@@ -72,22 +76,61 @@ export function usePokerConnection({
     setError(null);
 
     if (joinFromLobby && buyInParam && normalizedAddress) {
-      await client
-        .pokerJoinTable(tableId, buyInParam, pinParam || undefined)
-        .catch((err: unknown) => {
-          const msg: string = (err as Error)?.message ?? '';
-          if (!msg.toLowerCase().includes('already seated')) {
-            setError(msg || 'Failed to join');
-            toast.error(msg || 'Failed to join');
-          }
-        });
-      try {
+      const pin = pinParam || undefined;
+      const finishLobbyJoin = async () => {
         await client.joinRoom(`poker:table:${tableId}`);
         const s = await client.pokerGetState(tableId);
         if (s) setState(s);
         replaceUrl(`/poker/${tableId}`);
-      } catch {
-        replaceUrl(`/poker/${tableId}`);
+      };
+
+      try {
+        await client.pokerJoinTable(tableId, buyInParam, pin);
+        await finishLobbyJoin();
+      } catch (err: unknown) {
+        const msg: string = (err as Error)?.message ?? '';
+        const lower = msg.toLowerCase();
+        const atThisTableOnly =
+          lower.includes('already seated at this table') && !lower.includes('another cash table');
+        const otherMatch = msg.match(POKER_OTHER_TABLE_ID_RE);
+
+        if (otherMatch?.[1]) {
+          const otherId = otherMatch[1];
+          replaceUrl(`/poker/${tableId}`);
+          setError('You are still seated at another table. Use the toast action or Leave on that table.');
+          toast.error('Still seated at another cash table', {
+            description: 'Leave that seat to join this one.',
+            duration: 20_000,
+            action: {
+              label: 'Leave other & join here',
+              onClick: () => {
+                void (async () => {
+                  try {
+                    await client.pokerLeaveTable(otherId);
+                    await client.pokerJoinTable(tableId, buyInParam, pin);
+                    await finishLobbyJoin();
+                    setError(null);
+                    toast.success('Joined this table');
+                  } catch (e) {
+                    const m = (e as Error)?.message ?? 'Could not switch tables';
+                    setError(m);
+                    toast.error(m);
+                  }
+                })();
+              },
+            },
+          });
+        } else if (!atThisTableOnly) {
+          setError(msg || 'Failed to join');
+          toast.error(msg || 'Failed to join');
+          replaceUrl(`/poker/${tableId}`);
+        } else {
+          try {
+            await finishLobbyJoin();
+          } catch {
+            replaceUrl(`/poker/${tableId}`);
+          }
+        }
       }
       return;
     }
@@ -205,7 +248,9 @@ export function usePokerConnection({
     return () => clearInterval(interval);
   }, [tableId, wsConnected, fetchLatestState]);
 
-  // Leave table when navigating away (browser tab close / navigation)
+  // Tab close / full page unload only. Do NOT run leave in effect cleanup: React 18 Strict Mode
+  // remounts dev components once; cleanup would fire pokerLeaveTable right after join, and the URL
+  // no longer has ?join=1 so the remount never re-joins. In-app exit uses the Leave control.
   useEffect(() => {
     if (!tableId || !normalizedAddress) return;
     const leaveOnUnload = () => {
@@ -217,7 +262,6 @@ export function usePokerConnection({
     window.addEventListener('beforeunload', leaveOnUnload);
     return () => {
       window.removeEventListener('beforeunload', leaveOnUnload);
-      leaveOnUnload();
     };
   }, [tableId, normalizedAddress]);
 
