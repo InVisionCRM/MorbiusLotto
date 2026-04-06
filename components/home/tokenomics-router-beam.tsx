@@ -27,13 +27,14 @@ const beamPaint = {
   duration: 2.8,
 } as const
 
+/** Cyan glass treatment for game nodes (holder hub uses `grad.holder` unchanged). */
+const gameCircleGlass = cn(
+  'border-2 border-cyan-400/40 bg-gradient-to-br from-cyan-400/20 via-slate-800/35 to-slate-950/55',
+  'backdrop-blur-md shadow-[inset_0_1px_0_rgba(255,255,255,0.14),inset_0_-8px_24px_rgba(34,211,238,0.08),0_4px_20px_rgba(0,0,0,0.45)]',
+  'ring-1 ring-inset ring-cyan-300/20'
+)
+
 const grad = {
-  plinko: 'bg-gradient-to-br from-sky-400 via-sky-500 to-blue-700 border-sky-200/50',
-  blackjack: 'bg-gradient-to-br from-rose-500 via-rose-600 to-red-900 border-rose-200/45',
-  lottery: 'bg-gradient-to-br from-amber-400 via-orange-500 to-amber-800 border-amber-200/50',
-  keno: 'bg-gradient-to-br from-violet-500 via-purple-600 to-indigo-900 border-violet-200/45',
-  wheel: 'bg-gradient-to-br from-orange-400 via-amber-500 to-orange-800 border-orange-200/50',
-  poker: 'bg-gradient-to-br from-emerald-500 via-teal-600 to-emerald-900 border-emerald-200/45',
   holder:
     'size-[5.25rem] border-cyan-200/55 bg-gradient-to-br from-cyan-400 via-teal-600 to-violet-700 p-0 shadow-[inset_0_2px_12px_rgba(255,255,255,0.2),0_0_40px_-6px_rgba(34,211,238,0.55),0_16px_40px_rgba(0,0,0,0.35)] sm:size-28 sm:min-h-28 sm:min-w-28',
 } as const
@@ -64,15 +65,15 @@ export function TokenomicsRouterBeamHub({ className }: { className?: string }) {
     >
       <div className="flex size-full max-h-[240px] max-w-lg flex-col items-stretch justify-between gap-5 sm:max-h-[260px] sm:gap-7">
         <div className="flex flex-row items-center justify-between gap-1">
-          <BeamHubIconSlot ref={div1Ref} title="Plinko" className={cn(outerSlot, grad.plinko)}>
+          <BeamHubIconSlot ref={div1Ref} title="Plinko" className={cn(outerSlot, gameCircleGlass)}>
             <IconCircleDot size={ICON_OUTER} stroke={STROKE} className={iconWhite} aria-hidden />
           </BeamHubIconSlot>
-          <BeamHubIconSlot ref={div5Ref} title="Blackjack" className={cn(outerSlot, grad.blackjack)}>
+          <BeamHubIconSlot ref={div5Ref} title="Blackjack" className={cn(outerSlot, gameCircleGlass)}>
             <IconSpade size={ICON_OUTER} stroke={STROKE} className={iconWhite} fill="currentColor" aria-hidden />
           </BeamHubIconSlot>
         </div>
         <div className="flex flex-row items-center justify-between gap-0.5 sm:gap-1">
-          <BeamHubIconSlot ref={div2Ref} title="Lottery" className={cn(outerSlot, grad.lottery)}>
+          <BeamHubIconSlot ref={div2Ref} title="Lottery" className={cn(outerSlot, gameCircleGlass)}>
             <IconTicket size={ICON_OUTER} stroke={STROKE} className={iconWhite} aria-hidden />
           </BeamHubIconSlot>
           <BeamHubIconSlot
@@ -89,15 +90,15 @@ export function TokenomicsRouterBeamHub({ className }: { className?: string }) {
               HOLDER
             </span>
           </BeamHubIconSlot>
-          <BeamHubIconSlot ref={div6Ref} title="Keno" className={cn(outerSlot, grad.keno)}>
+          <BeamHubIconSlot ref={div6Ref} title="Keno" className={cn(outerSlot, gameCircleGlass)}>
             <IconLayoutGrid size={ICON_OUTER} stroke={STROKE} className={iconWhite} aria-hidden />
           </BeamHubIconSlot>
         </div>
         <div className="flex flex-row items-center justify-between gap-1">
-          <BeamHubIconSlot ref={div3Ref} title="Big Wheel" className={cn(outerSlot, grad.wheel)}>
+          <BeamHubIconSlot ref={div3Ref} title="Big Wheel" className={cn(outerSlot, gameCircleGlass)}>
             <IconGauge size={ICON_OUTER} stroke={STROKE} className={iconWhite} aria-hidden />
           </BeamHubIconSlot>
-          <BeamHubIconSlot ref={div7Ref} title="Poker" className={cn(outerSlot, grad.poker)}>
+          <BeamHubIconSlot ref={div7Ref} title="Poker" className={cn(outerSlot, gameCircleGlass)}>
             <IconCards size={ICON_OUTER} stroke={STROKE} className={iconWhite} aria-hidden />
           </BeamHubIconSlot>
         </div>

@@ -13,11 +13,9 @@ import { SocialsSection } from '@/components/home/socials-section'
 import { GamesSection } from '@/components/home/games-section'
 import { AvatarShowcaseSection } from '@/components/home/avatar-showcase-section'
 import { TokenomicsSection } from '@/components/home/tokenomics-section'
-import { ResponsibleGamingSection } from '@/components/home/responsible-gaming-section'
 import { MorbiusInfoSection } from '@/components/home/morbius-info-section'
 import { PulseChainSection } from '@/components/home/pulsechain-section'
 import { TableShowcaseDisplay } from '@/components/marketing/TableShowcaseDisplay'
-import { MorbItSection } from '@/components/home/morbit-section'
 import Footer from '@/components/PLINKO/Footer'
 import { PwaHomeInstallSplash } from '@/components/home/PwaHomeInstallSplash'
 
@@ -110,12 +108,6 @@ export default function HomePageClient() {
 
               <HomeSectionDivider />
               <AvatarShowcaseSection />
-
-              <HomeSectionDivider />
-              <MorbItSection />
-
-              <HomeSectionDivider />
-              <ResponsibleGamingSection />
 
               <HomeSectionDivider />
               <Footer />

@@ -6,7 +6,6 @@ import {
   Crown,
   Flame,
   Zap,
-  BarChart2,
   Layers,
   LayoutGrid,
   Tv2,
@@ -429,19 +428,7 @@ export function AdvertisingSection() {
           viewport={{ once: true, margin: '-70px' }}
           variants={adHeaderContainer}
         >
-          <motion.div
-            className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full border text-xs font-semibold uppercase tracking-wider mb-5"
-            style={{ background: 'rgba(99,102,241,0.1)', borderColor: 'rgba(99,102,241,0.3)', color: '#a5b4fc' }}>
-            variants={dropIn}
-            <BarChart2 className="w-3.5 h-3.5" />
-            Custom Blackjack Tables - Limited Spots
-          </motion.div>
-
-          <motion.div variants={popIn}>
-            <span className="text-red-300 font-bold text-sm">Limited Time - 50% Off All Packages!</span>
-          </motion.div>
-
-          <motion.h2 className={cn(homeSectionTitleClass, 'mb-1 mt-4')} variants={dropIn}>
+          <motion.h2 className={cn(homeSectionTitleClass, 'mb-1 mt-0')} variants={dropIn}>
             <span className="text-white">Bring Your Brand</span>
           </motion.h2>
 

@@ -27,15 +27,12 @@ export default function Footer() {
 
   return (
     <>
-      <footer
-        className="w-full bg-black/50 backdrop-blur-sm border-t border-black/10 py-4 px-4 mt-auto bg-cover bg-center"
-        style={{ backgroundImage: "url('/Pulse Branding/Banner/Dark/minimal.png')" }}
-      >
+      <footer className="w-full bg-slate-800/30 backdrop-blur-sm border-t border-white/10 py-4 px-4 mt-auto">
         <div className="container mx-auto max-w-4xl">
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4 md:gap-6">
             {/* Column 1 - More From Morbius.io */}
             <div className="flex flex-col items-center md:items-start">
-              <h3 className="text-purple-500 font-bold text-xs mb-2 md:mb-1">More From Morbius.io!</h3>
+              <h3 className="text-cyan-400 font-bold text-xs mb-2 md:mb-1">More From Morbius.io!</h3>
               <ul className="space-y-1 md:space-y-0.5 text-center md:text-left">
                 <li>
                   <a href="/lottery" className="text-white/90 hover:text-cyan-500 transition-colors text-xs">
@@ -67,7 +64,7 @@ export default function Footer() {
 
             {/* Column 2 - Quick Links */}
             <div className="flex flex-col items-center md:items-start">
-              <h3 className="text-purple-500 font-bold text-xs mb-2 md:mb-1">Quick Links</h3>
+              <h3 className="text-cyan-400 font-bold text-xs mb-2 md:mb-1">Quick Links</h3>
               <ul className="space-y-1 md:space-y-0.5 text-center md:text-left">
                 <li>
                   <a href="/" className="text-white/90 hover:text-cyan-500 transition-colors text-xs">
@@ -115,7 +112,7 @@ export default function Footer() {
 
             {/* Column 3 - Resources */}
             <div className="flex flex-col items-center md:items-start">
-              <h3 className="text-purple-500 font-bold text-xs mb-2 md:mb-1">Resources</h3>
+              <h3 className="text-cyan-400 font-bold text-xs mb-2 md:mb-1">Resources</h3>
               <ul className="space-y-1 md:space-y-0.5 text-center md:text-left">
                 <li>
                   <button
@@ -158,7 +155,7 @@ export default function Footer() {
 
             {/* Column 4 - Social Media */}
             <div className="flex flex-col items-center md:items-start">
-              <h3 className="text-purple-500 font-bold text-xs mb-2 md:mb-1">Connect</h3>
+              <h3 className="text-cyan-400 font-bold text-xs mb-2 md:mb-1">Connect</h3>
               <ul className="space-y-1 md:space-y-0.5 text-center md:text-left">
                 <li>
                   <a

@@ -3,13 +3,12 @@
 import React, { useCallback, useState } from 'react'
 import type { AvatarConfig } from '@/lib/websocket-client'
 import { AvatarView, type Emotion } from '@/components/avatar'
-import { MAX_SUPPLY, type ItemTier } from '@/lib/cosmetics-catalog'
+import { type ItemTier } from '@/lib/cosmetics-catalog'
 import { cn } from '@/lib/utils'
 import { homeSectionSubtitleClass, homeSectionTitleClass, homeSectionTitleGradientClass } from '@/lib/home-section-typography'
 import { Button as MotionButton } from '@/components/animate-ui/primitives/buttons/button'
 import { Particles, ParticlesEffect } from '@/components/animate-ui/primitives/effects/particles'
 import { motion } from 'framer-motion'
-import { Gem, PieChart, Sparkles, Store, UserRound } from 'lucide-react'
 
 const DEMO_BASE: AvatarConfig = {
   skinColor: '#F1C27D',
@@ -63,9 +62,6 @@ const EMOTION_MOVES: { id: Emotion; label: string }[] = [
 ]
 
 const particleDot = 'size-1 rounded-full bg-cyan-400/80 shadow-[0_0_10px_rgba(34,211,238,0.65)]'
-
-const glowCard =
-  'relative overflow-hidden rounded-2xl border border-cyan-500/25 bg-gradient-to-br from-slate-900/95 via-slate-900/80 to-purple-950/25 shadow-[0_0_48px_-16px_rgba(34,211,238,0.35)]'
 
 const fadeUp = {
   initial: { opacity: 0, y: 18 },
@@ -139,12 +135,11 @@ export function AvatarShowcaseSection() {
 
         <div className="relative text-center mb-10 md:mb-12">
           <motion.div {...fadeUp}>
-            <p className="text-xs font-semibold uppercase tracking-[0.25em] text-cyan-400/80 mb-3">Cosmetics</p>
             <h2 id="avatar-showcase-heading" className={cn(homeSectionTitleClass, 'mb-3')}>
-              <span className={homeSectionTitleGradientClass}>Wear the chain</span>
+              <span className={homeSectionTitleGradientClass}>Build Your Poker Face</span>
             </h2>
-            <p className={cn(homeSectionSubtitleClass, 'max-w-xl mx-auto text-slate-400')}>
-              Limited drops, profile-bound SVG avatars, peer marketplace.
+            <p className={cn(homeSectionSubtitleClass, 'max-w-2xl mx-auto text-slate-400')}>
+              The First Fully Custom Avatar Public Marketplace in the Defi Gaming and Online Gaming Space!
             </p>
           </motion.div>
         </div>
@@ -334,91 +329,6 @@ export function AvatarShowcaseSection() {
             </div>
           </div>
         </motion.div>
-
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-12 gap-4 md:gap-5">
-          <motion.div
-            {...fadeUp}
-            transition={{ ...fadeUp.transition, delay: 0.1 }}
-            className={cn(glowCard, 'sm:col-span-2 lg:col-span-5 p-6 md:p-7')}
-          >
-            <div className="absolute -right-8 -top-8 size-32 rounded-full bg-cyan-500/10 blur-2xl" aria-hidden />
-            <UserRound className="size-8 text-cyan-400 mb-4 drop-shadow-[0_0_12px_rgba(34,211,238,0.4)]" aria-hidden />
-            <h3 className="text-lg font-bold text-white tracking-tight mb-2">One puppet, your slots</h3>
-            <p className="text-sm text-slate-400 leading-relaxed">
-              Saved <span className="text-cyan-200/90">AvatarConfig</span> → SVG on seats & chat. Legendary shop items cap at{' '}
-              <span className="text-white font-mono tabular-nums">1</span> mint each — real scarcity on top of combinatorics.
-            </p>
-          </motion.div>
-
-          <motion.div
-            {...fadeUp}
-            transition={{ ...fadeUp.transition, delay: 0.14 }}
-            className={cn(glowCard, 'sm:col-span-2 lg:col-span-7 p-6 md:p-7')}
-          >
-            <div className="flex items-center gap-2 mb-5">
-              <Gem className="size-7 text-amber-400" aria-hidden />
-              <h3 className="text-lg font-bold text-white tracking-tight">Supply / item</h3>
-            </div>
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-              {(['common', 'uncommon', 'rare', 'legendary'] as const).map((tier) => (
-                <div
-                  key={tier}
-                  className="rounded-xl border border-white/10 bg-black/30 px-3 py-4 text-center backdrop-blur-sm"
-                >
-                  <p className="text-[10px] uppercase tracking-widest text-zinc-500 mb-1">{tier}</p>
-                  <p className="text-2xl md:text-3xl font-bold tabular-nums bg-gradient-to-r from-white to-cyan-100 bg-clip-text text-transparent">
-                    {MAX_SUPPLY[tier]}
-                  </p>
-                </div>
-              ))}
-            </div>
-          </motion.div>
-
-          <motion.div
-            {...fadeUp}
-            transition={{ ...fadeUp.transition, delay: 0.18 }}
-            className={cn(glowCard, 'sm:col-span-2 lg:col-span-6 p-6 md:p-7')}
-          >
-            <div className="flex items-center gap-2 mb-4">
-              <PieChart className="size-7 text-cyan-400" aria-hidden />
-              <h3 className="text-lg font-bold text-white tracking-tight">Cosmetic split</h3>
-            </div>
-            <div className="flex flex-wrap gap-2 text-xs font-medium">
-              {[
-                ['Holders', '10%'],
-                ['LP', '15%'],
-                ['Burn', '5%'],
-                ['House', '17.5%'],
-              ].map(([k, v]) => (
-                <span
-                  key={k}
-                  className="inline-flex items-center gap-1.5 rounded-full border border-cyan-500/25 bg-cyan-950/40 px-3 py-1.5 text-cyan-100/90"
-                >
-                  {k}
-                  <span className="font-mono text-cyan-300">{v}</span>
-                </span>
-              ))}
-            </div>
-            <p className="mt-4 text-sm text-slate-400">
-              Rest → <span className="text-slate-200">poker & blackjack tournaments</span>.
-            </p>
-          </motion.div>
-
-          <motion.div
-            {...fadeUp}
-            transition={{ ...fadeUp.transition, delay: 0.22 }}
-            className={cn(glowCard, 'sm:col-span-2 lg:col-span-6 p-6 md:p-7')}
-          >
-            <div className="flex items-center gap-2 mb-4">
-              <Store className="size-7 text-violet-400" aria-hidden />
-              <h3 className="text-lg font-bold text-white tracking-tight">Marketplace</h3>
-            </div>
-            <p className="text-sm text-slate-400 leading-relaxed flex items-start gap-2">
-              <Sparkles className="size-4 text-violet-400 shrink-0 mt-0.5" aria-hidden />
-              List what you own for MORBIUS. Buyers get the item; you set the price — liquidity for rare cosmetics.
-            </p>
-          </motion.div>
-        </div>
       </Particles>
     </section>
   )

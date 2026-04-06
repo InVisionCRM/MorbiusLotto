@@ -36,9 +36,9 @@ const PAYOUT_FEED_ITEMS: { key: string; children: ReactNode }[] = [
     key: 'payout-burn-1',
     children: (
       <>
-        <span className="font-semibold tabular-nums text-orange-300">1,526</span>
+        <span className="font-semibold tabular-nums text-cyan-300">1,526</span>
         <span className="text-white/78"> MORBIUS was sent to </span>
-        <span className="font-mono text-[10px] text-orange-200/70">0x0000…dEaD</span>
+        <span className="font-mono text-[10px] text-cyan-200/80">0x0000…dEaD</span>
       </>
     ),
   },
@@ -56,9 +56,9 @@ const PAYOUT_FEED_ITEMS: { key: string; children: ReactNode }[] = [
     key: 'payout-lp-1',
     children: (
       <>
-        <span className="font-semibold tabular-nums text-violet-300">4,208</span>
+        <span className="font-semibold tabular-nums text-cyan-300">4,208</span>
         <span className="text-white/78"> MORBIUS sent to </span>
-        <span className="font-semibold tracking-wide text-violet-200/95">LP REWARDS</span>
+        <span className="font-semibold tracking-wide text-cyan-200/95">LP REWARDS</span>
       </>
     ),
   },
@@ -66,9 +66,9 @@ const PAYOUT_FEED_ITEMS: { key: string; children: ReactNode }[] = [
     key: 'payout-platform-1',
     children: (
       <>
-        <span className="font-semibold tabular-nums text-sky-300">2,891</span>
+        <span className="font-semibold tabular-nums text-cyan-300">2,891</span>
         <span className="text-white/78"> MORBIUS sent to </span>
-        <span className="font-semibold tracking-wide text-sky-200/95">PLATFORM FEE</span>
+        <span className="font-semibold tracking-wide text-cyan-200/95">PLATFORM FEE</span>
       </>
     ),
   },
@@ -76,9 +76,9 @@ const PAYOUT_FEED_ITEMS: { key: string; children: ReactNode }[] = [
     key: 'payout-burn-2',
     children: (
       <>
-        <span className="font-semibold tabular-nums text-orange-300">892</span>
+        <span className="font-semibold tabular-nums text-cyan-300">892</span>
         <span className="text-white/78"> MORBIUS routed to burn </span>
-        <span className="font-mono text-[10px] text-orange-200/70">0xdEaD…0000</span>
+        <span className="font-mono text-[10px] text-cyan-200/80">0xdEaD…0000</span>
       </>
     ),
   },
@@ -96,9 +96,9 @@ const PAYOUT_FEED_ITEMS: { key: string; children: ReactNode }[] = [
     key: 'payout-lp-2',
     children: (
       <>
-        <span className="font-semibold tabular-nums text-violet-300">2,956</span>
+        <span className="font-semibold tabular-nums text-cyan-300">2,956</span>
         <span className="text-white/78"> MORBIUS routed to </span>
-        <span className="font-semibold tracking-wide text-violet-200/95">LP REWARDS</span>
+        <span className="font-semibold tracking-wide text-cyan-200/95">LP REWARDS</span>
       </>
     ),
   },
@@ -106,9 +106,9 @@ const PAYOUT_FEED_ITEMS: { key: string; children: ReactNode }[] = [
     key: 'payout-platform-2',
     children: (
       <>
-        <span className="font-semibold tabular-nums text-sky-300">1,903</span>
+        <span className="font-semibold tabular-nums text-cyan-300">1,903</span>
         <span className="text-white/78"> MORBIUS allocated as </span>
-        <span className="font-semibold tracking-wide text-sky-200/95">PLATFORM FEE</span>
+        <span className="font-semibold tracking-wide text-cyan-200/95">PLATFORM FEE</span>
       </>
     ),
   },
@@ -116,9 +116,9 @@ const PAYOUT_FEED_ITEMS: { key: string; children: ReactNode }[] = [
     key: 'payout-burn-3',
     children: (
       <>
-        <span className="font-semibold tabular-nums text-orange-300">2,104</span>
+        <span className="font-semibold tabular-nums text-cyan-300">2,104</span>
         <span className="text-white/78"> MORBIUS burned → </span>
-        <span className="font-mono text-[10px] text-orange-200/70">0x0000…0000</span>
+        <span className="font-mono text-[10px] text-cyan-200/80">0x0000…0000</span>
       </>
     ),
   },
@@ -137,9 +137,9 @@ const PAYOUT_FEED_ITEMS: { key: string; children: ReactNode }[] = [
     key: 'payout-lp-3',
     children: (
       <>
-        <span className="font-semibold tabular-nums text-violet-300">5,611</span>
+        <span className="font-semibold tabular-nums text-cyan-300">5,611</span>
         <span className="text-white/78"> MORBIUS split to </span>
-        <span className="font-semibold tracking-wide text-violet-200/95">LP REWARDS</span>
+        <span className="font-semibold tracking-wide text-cyan-200/95">LP REWARDS</span>
       </>
     ),
   },
@@ -147,9 +147,9 @@ const PAYOUT_FEED_ITEMS: { key: string; children: ReactNode }[] = [
     key: 'payout-platform-3',
     children: (
       <>
-        <span className="font-semibold tabular-nums text-sky-300">5,220</span>
+        <span className="font-semibold tabular-nums text-cyan-300">5,220</span>
         <span className="text-white/78"> MORBIUS routed to </span>
-        <span className="font-semibold tracking-wide text-sky-200/95">PLATFORM FEE</span>
+        <span className="font-semibold tracking-wide text-cyan-200/95">PLATFORM FEE</span>
       </>
     ),
   },
@@ -157,9 +157,9 @@ const PAYOUT_FEED_ITEMS: { key: string; children: ReactNode }[] = [
     key: 'payout-burn-4',
     children: (
       <>
-        <span className="font-semibold tabular-nums text-orange-300">441</span>
+        <span className="font-semibold tabular-nums text-cyan-300">441</span>
         <span className="text-white/78"> MORBIUS sent to </span>
-        <span className="font-mono text-[10px] text-orange-200/70">0x0000…bEEF</span>
+        <span className="font-mono text-[10px] text-cyan-200/80">0x0000…bEEF</span>
       </>
     ),
   },
@@ -177,9 +177,9 @@ const PAYOUT_FEED_ITEMS: { key: string; children: ReactNode }[] = [
     key: 'payout-lp-4',
     children: (
       <>
-        <span className="font-semibold tabular-nums text-violet-300">3,007</span>
+        <span className="font-semibold tabular-nums text-cyan-300">3,007</span>
         <span className="text-white/78"> MORBIUS accrued to </span>
-        <span className="font-semibold tracking-wide text-violet-200/95">LP REWARDS</span>
+        <span className="font-semibold tracking-wide text-cyan-200/95">LP REWARDS</span>
       </>
     ),
   },
@@ -187,9 +187,9 @@ const PAYOUT_FEED_ITEMS: { key: string; children: ReactNode }[] = [
     key: 'payout-platform-4',
     children: (
       <>
-        <span className="font-semibold tabular-nums text-sky-300">7,442</span>
+        <span className="font-semibold tabular-nums text-cyan-300">7,442</span>
         <span className="text-white/78"> MORBIUS sent to </span>
-        <span className="font-semibold tracking-wide text-sky-200/95">PLATFORM FEE</span>
+        <span className="font-semibold tracking-wide text-cyan-200/95">PLATFORM FEE</span>
         <span className="text-white/78"> vault</span>
       </>
     ),
@@ -197,12 +197,12 @@ const PAYOUT_FEED_ITEMS: { key: string; children: ReactNode }[] = [
 ]
 
 const payoutFeedCardClass =
-  'mx-auto w-[min(100%,320px)] rounded-lg border border-cyan-500/20 px-3 py-2.5 text-left text-[11px] leading-snug'
+  'mx-auto w-[min(100%,320px)] rounded-lg border border-cyan-400/35 px-3 py-2.5 text-left text-[11px] leading-snug backdrop-blur-md'
 
 const payoutFeedCardStyle = {
-  background: 'linear-gradient(145deg, rgb(16, 26, 35), rgb(35, 36, 41))',
+  background: 'linear-gradient(145deg, rgba(34, 211, 238, 0.1), rgba(15, 23, 42, 0.78))',
   boxShadow:
-    'inset 0 2px 6px rgba(0,0,0,0.8), inset 0 -2px 6px rgba(255,255,255,0.08), 0 1px 3px rgba(0,0,0,0.5)',
+    'inset 0 1px 0 rgba(34, 211, 238, 0.16), inset 0 -2px 8px rgba(0,0,0,0.55), 0 2px 14px rgba(0,0,0,0.4)',
 } as const
 
 const feeStreams = [
@@ -320,15 +320,12 @@ const bentoFeatures = [
           <figure
             key={idx}
             className={cn(
-              'relative w-[9.75rem] shrink-0 cursor-default overflow-hidden rounded-xl border-2 p-3.5',
-              'border-cyan-400/55 bg-[rgb(12,16,24)] shadow-lg shadow-black/40',
-              'ring-1 ring-inset ring-white/10',
-              'transform-gpu transition-colors duration-200 hover:border-cyan-400/80'
+              'relative w-[9.75rem] shrink-0 cursor-default overflow-hidden rounded-xl border-2 p-3.5 backdrop-blur-md',
+              'border-cyan-400/40 bg-gradient-to-br from-cyan-400/18 via-slate-900/45 to-slate-950/70',
+              'shadow-[inset_0_1px_0_rgba(255,255,255,0.12),inset_0_-8px_24px_rgba(34,211,238,0.07),0_4px_16px_rgba(0,0,0,0.5)]',
+              'ring-1 ring-inset ring-cyan-300/18',
+              'transform-gpu transition-colors duration-200 hover:border-cyan-300/65'
             )}
-            style={{
-              boxShadow:
-                'inset 0 2px 8px rgba(0,0,0,0.5), inset 0 -1px 0 rgba(255,255,255,0.08), 0 4px 14px rgba(0,0,0,0.55)',
-            }}
           >
             <figcaption className="text-xs font-bold tracking-wide text-cyan-300">{f.name}</figcaption>
             <blockquote className="mt-2 text-[11px] leading-snug text-white/92">{f.body}</blockquote>
