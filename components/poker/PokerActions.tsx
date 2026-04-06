@@ -52,6 +52,8 @@ export interface PokerActionsProps {
   onCall: () => void;
   onBet: (amount: string) => void;
   onRaise: (amount: string) => void;
+  /** When "floating", renders the fullscreen horizontal strip layout */
+  variant?: 'default' | 'floating';
 }
 
 export type PreActionOption = 'check_fold' | 'check' | 'call_any' | null;
@@ -70,6 +72,7 @@ export function PokerActions({
   onCall,
   onBet,
   onRaise,
+  variant = 'default',
 }: PokerActionsProps) {
   const { play } = usePokerSounds();
   const minRaiseAmt = useMemo(() => parsePropWei(minRaise), [minRaise]);
@@ -206,6 +209,179 @@ export function PokerActions({
   const togglePreAction = (option: Exclude<PreActionOption, null>) => {
     onPreActionChange(preAction === option ? null : option);
   };
+
+  // ── Floating strip (fullscreen mode) ──────────────────────────────────────
+  if (variant === 'floating') {
+    return (
+      <div
+        data-testid="poker-actions"
+        className="w-full select-none flex items-center gap-3"
+        style={{ opacity: canAct ? 1 : 0.45 }}
+        role="group"
+        aria-label="Poker actions"
+      >
+        {/* Action buttons */}
+        <div className="flex gap-2 shrink-0">
+          <button
+            data-testid="poker-action-fold"
+            type="button"
+            onClick={handleFoldWithSound}
+            disabled={!canAct}
+            className={`h-11 w-20 rounded-xl text-sm font-bold tracking-wide transition-all hover:brightness-110 active:scale-[0.97] ${foldBtnClass}`}
+            style={foldBtnStyle}
+          >
+            Fold
+          </button>
+          <button
+            data-testid="poker-action-check"
+            type="button"
+            onClick={handleCheckWithSound}
+            disabled={!canAct || !canCheck}
+            className={`h-11 w-20 rounded-xl text-sm font-bold tracking-wide transition-all hover:brightness-110 active:scale-[0.97] ${checkBtnClass}`}
+            style={checkBtnStyle}
+          >
+            Check
+          </button>
+          <button
+            data-testid="poker-action-call"
+            type="button"
+            onClick={handleCallWithSound}
+            disabled={!canAct || !isFacingBet}
+            className={`h-11 w-20 rounded-xl text-sm font-bold tracking-wide transition-all hover:brightness-110 active:scale-[0.97] ${checkBtnClass}`}
+            style={{ ...actionBtnBaseStyle, background: 'linear-gradient(180deg, #16a34a 0%, #15803d 100%)' }}
+          >
+            <span className="flex flex-col items-center justify-center leading-tight">
+              <span>Call</span>
+              {isFacingBet && <span className="text-[10px] font-semibold normal-case">{formatAmount(callAmt)}</span>}
+            </span>
+          </button>
+        </div>
+
+        {/* Divider */}
+        <div className="w-px self-stretch shrink-0" style={{ background: 'rgba(255,255,255,0.1)' }} />
+
+        {/* Presets */}
+        <div className="flex gap-1.5 shrink-0">
+          {quickSizes.map((q) => (
+            <button
+              key={q.label}
+              type="button"
+              onClick={() => setCustomAmount(formatAmount(clampAmount(q.value, minRaiseAmt, stackAmt)))}
+              disabled={!canAct || stackAmt === 0n}
+              className={`h-8 px-3 text-[11px] rounded-md transition-all disabled:pointer-events-none hover:brightness-125 active:scale-95 ${quickSizeClass}`}
+              style={actionBtnBaseStyle}
+            >
+              {q.label}
+            </button>
+          ))}
+        </div>
+
+        {/* Slider + nudge + amount input */}
+        <div className="flex items-center gap-2 flex-1 min-w-0">
+          <button
+            data-testid="poker-action-nudge-down"
+            type="button"
+            onClick={() => nudge(-1)}
+            disabled={!canAct || !hasValidAmount}
+            className={`h-9 w-9 rounded-md text-lg shrink-0 transition-all hover:brightness-125 active:scale-95 disabled:pointer-events-none flex items-center justify-center font-jost ${!canAct || !hasValidAmount ? 'bg-slate-900/50 text-slate-400' : 'bg-black text-cyan-400'}`}
+            style={{ border: '1px solid rgba(255,255,255,0.12)' }}
+          >
+            −
+          </button>
+          <div className="flex-1 min-w-0 relative flex items-center">
+            <input
+              data-testid="poker-action-slider"
+              type="range"
+              min={0}
+              max={maxOffsetChips || 1}
+              step={stepChips}
+              value={sliderOffset}
+              onChange={handleSlider}
+              disabled={!canAct || stackAmt === 0n}
+              className="poker-slider poker-slider-desktop w-full disabled:pointer-events-none"
+              aria-label="Bet size slider"
+            />
+          </div>
+          <button
+            data-testid="poker-action-nudge-up"
+            type="button"
+            onClick={() => nudge(1)}
+            disabled={!canAct || !hasValidAmount}
+            className={`h-9 w-9 rounded-md text-lg shrink-0 transition-all hover:brightness-125 active:scale-95 disabled:pointer-events-none flex items-center justify-center font-jost ${!canAct || !hasValidAmount ? 'bg-slate-900/50 text-slate-400' : 'bg-black text-cyan-400'}`}
+            style={{ border: '1px solid rgba(255,255,255,0.12)' }}
+          >
+            +
+          </button>
+          <input
+            data-testid="poker-action-amount-input"
+            inputMode="numeric"
+            pattern="[0-9,]*"
+            type="text"
+            value={customAmount}
+            onChange={(e) => setCustomAmount(e.target.value)}
+            disabled={!canAct}
+            className="h-9 w-20 shrink-0 rounded-md text-sm font-jost font-bold tabular-nums text-center outline-none focus:ring-1 transition disabled:pointer-events-none"
+            style={inputStyle}
+            aria-label={isFacingBet ? 'Raise amount' : 'Bet amount'}
+          />
+        </div>
+
+        {/* Divider */}
+        <div className="w-px self-stretch shrink-0" style={{ background: 'rgba(255,255,255,0.1)' }} />
+
+        {/* Raise/Bet button */}
+        <button
+          data-testid="poker-action-primary"
+          type="button"
+          onClick={handlePrimary}
+          disabled={!canAct || !hasValidAmount}
+          className={`h-11 w-24 shrink-0 rounded-xl text-sm font-bold tracking-wide transition-all hover:brightness-110 active:scale-[0.97] ${primaryBtnClass}`}
+          style={primaryBtnStyle}
+        >
+          <span className="flex flex-col items-center justify-center leading-tight">
+            <span>{isFacingBet ? 'Raise' : 'Bet'}</span>
+            {hasValidAmount && clamped && <span className="text-[10px] font-semibold normal-case">{formatAmount(clamped)}</span>}
+          </span>
+        </button>
+
+        <style jsx>{`
+          .poker-slider {
+            -webkit-appearance: none;
+            appearance: none;
+            height: 5px;
+            border-radius: 2px;
+            outline: none;
+            cursor: pointer;
+            background: linear-gradient(
+              to right,
+              #c0392b ${sliderFillPct}%,
+              rgba(255,255,255,0.18) ${sliderFillPct}%
+            );
+          }
+          .poker-slider-desktop { height: 5px; }
+          .poker-slider::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            appearance: none;
+            width: 18px; height: 18px;
+            border-radius: 50%;
+            background: #fff;
+            border: 2px solid #c0392b;
+            cursor: pointer;
+            box-shadow: 0 1px 4px rgba(0,0,0,0.5);
+            transition: transform 0.1s;
+          }
+          .poker-slider::-webkit-slider-thumb:hover { transform: scale(1.15); }
+          .poker-slider::-moz-range-thumb {
+            width: 18px; height: 18px;
+            border-radius: 50%;
+            background: #fff;
+            border: 2px solid #c0392b;
+            cursor: pointer;
+          }
+        `}</style>
+      </div>
+    );
+  }
 
   // ── Render ─────────────────────────────────────────────────────────────────
   return (

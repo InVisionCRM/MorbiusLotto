@@ -5,8 +5,8 @@ import { useEffect, useState } from 'react';
 // Reference dimensions the poker table renders at before scaling.
 // Seat positions, nudges, and chip sizes are all computed for this size.
 // The CSS scale shrinks the whole table uniformly to fit mobile landscape.
-export const POKER_TABLE_REF_W = 1032;
-export const POKER_TABLE_REF_H = 576;
+export const POKER_TABLE_REF_W = 1300;
+export const POKER_TABLE_REF_H = 570;
 
 // Approximate heights of the header and bottom bar on mobile landscape
 // (the CSS in globals.css compacts the header to ~40px and the bottom bar

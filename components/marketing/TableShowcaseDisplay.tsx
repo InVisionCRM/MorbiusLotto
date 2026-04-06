@@ -18,7 +18,7 @@ const SHOWCASES: ShowcaseData[] = [
   {
     name: 'WICK',
     accentColor: '#f97316',
-    glowColor: 'rgba(249,115,22,0.25)',
+    glowColor: 'rgba(22, 226, 249, 0.25)',
     tableImg: '/Marketing%20/Tables/WickTable.png',
     pageImg: '/Marketing%20/Page%20View/WickPage.png',
     tpImg: '/Marketing%20/Token%20Profile/WickTP.png',
@@ -27,7 +27,7 @@ const SHOWCASES: ShowcaseData[] = [
   {
     name: 'LBRTY',
     accentColor: '#a855f7',
-    glowColor: 'rgba(168,85,247,0.25)',
+    glowColor: 'rgba(22, 226, 249, 0.75)',
     tableImg: '/BlackJack/BrandedTable/Liberty.png',
     pageImg: '/Marketing%20/Page%20View/LBRTYpv.png',
     tpImg: '/Marketing%20/Token%20Profile/LBRTYtp.png',
@@ -36,7 +36,7 @@ const SHOWCASES: ShowcaseData[] = [
   {
     name: 'LibertySwap',
     accentColor: '#3b82f6',
-    glowColor: 'rgba(59,130,246,0.25)',
+    glowColor: 'rgba(22, 226, 249, 0.25)',
     tableImg: '/Marketing%20/Tables/LibertySwapTable.png',
     pageImg: '/Marketing%20/Page%20View/LibertyPage.png',
     tpImg: '/Marketing%20/Token%20Profile/LibertyTP.png',
@@ -88,9 +88,9 @@ function BrowserMockup({ data, index }: { data: ShowcaseData; index: number }) {
             style={{ background: 'rgba(15,23,42,0.95)' }}
           >
             <div className="flex gap-1.5 shrink-0">
-              <div className="w-2.5 h-2.5 rounded-full bg-red-500/80" />
-              <div className="w-2.5 h-2.5 rounded-full bg-yellow-400/80" />
-              <div className="w-2.5 h-2.5 rounded-full bg-green-500/80" />
+              <div className="w-2.5 h-2.5 rounded-full bg-cyan-500/50" />
+              <div className="w-2.5 h-2.5 rounded-full bg-yellow-500" />
+              <div className="w-2.5 h-2.5 rounded-full bg-green-500/50" />
             </div>
             <div className="flex-1 px-3 py-1 rounded-md text-[11px] text-slate-500 text-center truncate"
               style={{ background: 'rgba(0,0,0,0.35)' }}>
@@ -119,9 +119,9 @@ function BrowserMockup({ data, index }: { data: ShowcaseData; index: number }) {
           <div className="flex items-center gap-1 px-2 py-1.5 border-b border-white/10"
             style={{ background: '#1e293b' }}>
             <div className="flex gap-1">
-              <div className="w-1.5 h-1.5 rounded-full bg-red-500/70" />
-              <div className="w-1.5 h-1.5 rounded-full bg-yellow-400/70" />
-              <div className="w-1.5 h-1.5 rounded-full bg-green-500/70" />
+              <div className="w-1.5 h-1.5 rounded-full bg-cyan-500/50" />
+              <div className="w-1.5 h-1.5 rounded-full bg-yellow-500" />
+              <div className="w-1.5 h-1.5 rounded-full bg-green-500/50" />
             </div>
             <span className="text-[8px] text-slate-500 ml-1">Table</span>
           </div>
@@ -140,9 +140,9 @@ function BrowserMockup({ data, index }: { data: ShowcaseData; index: number }) {
           <div className="flex items-center gap-1 px-2 py-1.5 border-b border-white/10"
             style={{ background: '#1e293b' }}>
             <div className="flex gap-1">
-              <div className="w-1.5 h-1.5 rounded-full bg-red-500/70" />
-              <div className="w-1.5 h-1.5 rounded-full bg-yellow-400/70" />
-              <div className="w-1.5 h-1.5 rounded-full bg-green-500/70" />
+              <div className="w-1.5 h-1.5 rounded-full bg-cyan-500/50" />
+              <div className="w-1.5 h-1.5 rounded-full bg-yellow-500" />
+              <div className="w-1.5 h-1.5 rounded-full bg-green-500/50" />
             </div>
             <span className="text-[8px] text-slate-500 ml-1">Token Profile</span>
           </div>

@@ -40,6 +40,8 @@ interface PokerTableViewProps {
   tipAnimating: boolean;
   setTipAnimating: React.Dispatch<React.SetStateAction<boolean>>;
   onTipDealer: () => Promise<void>;
+  onSitOut?: () => void;
+  onSitBack?: () => void;
 }
 
 /* LANDSCAPE NOTE: The old formula `calc((100dvh - 160px) * 2.4)` punished
@@ -49,7 +51,7 @@ interface PokerTableViewProps {
    overrides in globals.css further relax this for phones. Do NOT reduce
    the multiplier below ~2.8 or landscape mobile will break again. */
 const POKER_MAIN_PANEL_STYLE: React.CSSProperties = {
-  maxWidth: 'min(100vw, calc((100dvh - 100px) * 2.88))',
+  maxWidth: 'min(90vw, calc((100dvh - 100px) * 2.50))',
   marginLeft: 'auto',
   marginRight: 'auto',
   width: '100%',
@@ -87,6 +89,8 @@ export function PokerTableView({
   tipAnimating,
   setTipAnimating,
   onTipDealer,
+  onSitOut,
+  onSitBack,
 }: PokerTableViewProps) {
   const isMobileScale = tableScale < 1;
 
@@ -167,6 +171,8 @@ export function PokerTableView({
           quickChatPhrases={quickChatPhrases}
           setQuickChatPhrases={setQuickChatPhrases}
           onOpenEditQuickChat={() => setShowEditQuickChatModal(true)}
+          onSitOut={onSitOut}
+          onSitBack={onSitBack}
         />
       ) : !error ? (
         <div className="absolute inset-0 flex items-center justify-center text-[var(--poker-text-muted)] text-sm">

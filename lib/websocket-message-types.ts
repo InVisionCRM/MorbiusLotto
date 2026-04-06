@@ -43,6 +43,8 @@ export const WS_MESSAGE_TYPES = {
   pokerUpdateTableLogo: 'poker_update_table_logo',
   pokerQuickReaction: 'poker_quick_reaction',
   pokerAvatarEmotion: 'poker_avatar_emotion',
+  pokerSitOut: 'poker_sit_out',
+  pokerSitBack: 'poker_sit_back',
 
   // Poker tournaments
   pokerTournamentList: 'poker_tournament_list',
@@ -126,6 +128,8 @@ export const WS_POKER_MESSAGES = [
   WS_MESSAGE_TYPES.pokerUpdateTableLogo,
   WS_MESSAGE_TYPES.pokerQuickReaction,
   WS_MESSAGE_TYPES.pokerAvatarEmotion,
+  WS_MESSAGE_TYPES.pokerSitOut,
+  WS_MESSAGE_TYPES.pokerSitBack,
   WS_MESSAGE_TYPES.pokerTournamentCreate,
   WS_MESSAGE_TYPES.pokerTournamentJoin,
   WS_MESSAGE_TYPES.pokerTournamentCancel,

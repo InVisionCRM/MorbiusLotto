@@ -1046,6 +1046,76 @@ export class PokerGameService {
   }
 
   // ---------------------------------------------------------------------------
+  // setSitOut / setSitBack — voluntary sit-out for cash games
+  // ---------------------------------------------------------------------------
+
+  async setSitOut(tableId: string, playerAddress: string): Promise<PokerTableState> {
+    const pool = this.getPool();
+    const normalized = playerAddress.toLowerCase();
+    const result = await pool.query(
+      `UPDATE poker_seats
+       SET status = 'sitting_out', sit_out_since = NOW(), consecutive_timeouts = 0
+       WHERE table_id = $1 AND player_address = $2
+       RETURNING player_address`,
+      [tableId, normalized]
+    );
+    if (result.rows.length === 0) throw new Error('Seat not found');
+    this.notifyCallback?.(`poker:table:${tableId}`, 'poker_player_sitting_out', {
+      tableId,
+      playerAddress: normalized,
+      reason: 'voluntary',
+    });
+    logger.info('Player voluntarily sitting out', { tableId, player: normalized });
+    await this.broadcastState(tableId);
+    return this.getTableState(tableId, normalized);
+  }
+
+  async setSitBack(tableId: string, playerAddress: string): Promise<PokerTableState> {
+    const pool = this.getPool();
+    const normalized = playerAddress.toLowerCase();
+    const result = await pool.query(
+      `UPDATE poker_seats
+       SET status = 'active', sit_out_since = NULL, consecutive_timeouts = 0
+       WHERE table_id = $1 AND player_address = $2 AND status = 'sitting_out'
+       RETURNING player_address`,
+      [tableId, normalized]
+    );
+    if (result.rows.length === 0) throw new Error('Seat not found or not sitting out');
+    logger.info('Player sitting back in', { tableId, player: normalized });
+    await this.broadcastState(tableId);
+    return this.getTableState(tableId, normalized);
+  }
+
+  /** Kick players who have been sitting out for >= 15 minutes (cash games only). */
+  async kickStaleSitOuts(): Promise<void> {
+    const pool = this.getPool();
+    const stale = await pool.query(
+      `SELECT ps.table_id, ps.player_address
+       FROM poker_seats ps
+       JOIN poker_tables pt ON pt.id = ps.table_id
+       WHERE ps.status = 'sitting_out'
+         AND ps.sit_out_since IS NOT NULL
+         AND ps.sit_out_since < NOW() - INTERVAL '15 minutes'
+         AND pt.tournament_mode = false`,
+    );
+    for (const row of stale.rows) {
+      try {
+        await this.withTableLock(row.table_id, async () => {
+          await this._leaveTable(row.table_id, row.player_address);
+          this.notifyCallback?.(`poker:table:${row.table_id}`, 'poker_player_kicked', {
+            tableId: row.table_id,
+            playerAddress: row.player_address,
+            reason: 'sit_out_timeout',
+          });
+          logger.info('Sit-out timeout kick', { tableId: row.table_id, player: row.player_address });
+        });
+      } catch (err) {
+        logger.error('Error kicking stale sit-out', { tableId: row.table_id, player: row.player_address, error: err });
+      }
+    }
+  }
+
+  // ---------------------------------------------------------------------------
   // startHand
   // ---------------------------------------------------------------------------
 
@@ -1078,7 +1148,8 @@ export class PokerGameService {
     }
 
     const seatsResult = await pool.query(
-      'SELECT position, player_address, stack FROM poker_seats WHERE table_id = $1 ORDER BY position',
+      `SELECT position, player_address, stack FROM poker_seats
+       WHERE table_id = $1 AND status != 'sitting_out' ORDER BY position`,
       [tableId]
     );
     const withStack = seatsResult.rows.filter((r: any) => BigInt(r.stack ?? '0') > 0n);

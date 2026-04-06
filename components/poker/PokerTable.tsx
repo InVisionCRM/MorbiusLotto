@@ -112,13 +112,17 @@ export interface PokerTableProps {
   onOpenEditQuickChat?: () => void;
   /** Open Activity drawer on mobile (narrow viewport); parent bumps `PokerActivityFeed` serial. */
   onRequestMobileActivity?: () => void;
+  /** Voluntarily sit out of future hands (player radial). */
+  onSitOut?: () => void;
+  /** Return from sitting out (player radial). */
+  onSitBack?: () => void;
   /** Add `data-tutorial-target` on table, board, seats (for poker tutorial overlay). */
   tutorialTargets?: boolean;
   /** Wrap pot for tutorial spotlight (forwarded to `PokerBoard`). */
   dataTutorialTargetPot?: boolean;
 }
 
-export function PokerTable({ state, currentPlayerAddress, timeLeft, chatBubbleBySeatIndex, onReUpClick, onMenuClick, reactionBySeatIndex, broadcastEmotionBySeatIndex, onPhraseReaction, onAnimationReaction, onOpponentClick, onOpponentRadialAction, tournamentHUD, quickChatPhrases, setQuickChatPhrases, onOpenEditQuickChat, onLeave, onRequestMobileActivity, tutorialTargets, dataTutorialTargetPot }: PokerTableProps) {
+export function PokerTable({ state, currentPlayerAddress, timeLeft, chatBubbleBySeatIndex, onReUpClick, onMenuClick, reactionBySeatIndex, broadcastEmotionBySeatIndex, onPhraseReaction, onAnimationReaction, onOpponentClick, onOpponentRadialAction, tournamentHUD, quickChatPhrases, setQuickChatPhrases, onOpenEditQuickChat, onLeave, onRequestMobileActivity, onSitOut, onSitBack, tutorialTargets, dataTutorialTargetPot }: PokerTableProps) {
   const tableRef = useRef<HTMLDivElement>(null);
   const [dims, setDims] = useState({ w: 640, h: 500 });
   const hideSeatAvatars = false;
@@ -411,6 +415,8 @@ export function PokerTable({ state, currentPlayerAddress, timeLeft, chatBubbleBy
       onOpenEditQuickChat,
       hideSeatAvatar: hideSeatAvatars,
       onLeaveTable: onLeave,
+      onSitOut,
+      onSitBack,
       onRequestMobileActivity,
       includeActivityInPlayerRadial: hideSeatAvatars,
       showdownCardOffset,

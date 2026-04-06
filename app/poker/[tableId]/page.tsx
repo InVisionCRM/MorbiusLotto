@@ -286,6 +286,7 @@ export default function PokerTablePage() {
       stack={mySeat.stack ?? '0'}
       callAmount={callAmount}
       pot={hand?.pot ?? '0'}
+      variant={isFullscreen ? 'floating' : 'default'}
       onPreActionChange={setQueuedPreAction}
       onFold={handleFold}
       onCheck={handleCheck}
@@ -299,6 +300,26 @@ export default function PokerTablePage() {
     setDepositModalTab('reup');
     setShowDepositModal(true);
   }, []);
+
+  const handleSitOut = useCallback(async () => {
+    if (!wsClient) return;
+    try {
+      const next = await wsClient.pokerSitOut(tableId);
+      setState(next);
+    } catch (err) {
+      toast.error((err as Error).message || 'Failed to sit out');
+    }
+  }, [wsClient, tableId, setState]);
+
+  const handleSitBack = useCallback(async () => {
+    if (!wsClient) return;
+    try {
+      const next = await wsClient.pokerSitBack(tableId);
+      setState(next);
+    } catch (err) {
+      toast.error((err as Error).message || 'Failed to sit back');
+    }
+  }, [wsClient, tableId, setState]);
 
   const onTipDealer = useCallback(async () => {
     if (!wsClient) return;
@@ -522,6 +543,8 @@ export default function PokerTablePage() {
             tipAnimating={tipAnimating}
             setTipAnimating={setTipAnimating}
             onTipDealer={onTipDealer}
+            onSitOut={mySeat ? handleSitOut : undefined}
+            onSitBack={mySeat ? handleSitBack : undefined}
           />
 
           <PokerBottomBar

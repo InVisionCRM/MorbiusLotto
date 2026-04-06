@@ -1,0 +1,748 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Floating Poker Betting Panel — 10 Concepts</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    background: #020617;
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    color: white;
+    padding: 32px 24px;
+  }
+  h1 {
+    text-align: center;
+    font-size: 18px;
+    color: rgba(255,255,255,0.5);
+    letter-spacing: 0.15em;
+    text-transform: uppercase;
+    margin-bottom: 8px;
+  }
+  .subtitle {
+    text-align: center;
+    font-size: 12px;
+    color: rgba(255,255,255,0.3);
+    margin-bottom: 40px;
+  }
+  .grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 48px 40px;
+    max-width: 1200px;
+    margin: 0 auto;
+  }
+  .concept {
+    position: relative;
+  }
+  .concept-label {
+    font-size: 11px;
+    font-weight: 700;
+    color: rgba(6,182,212,0.8);
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    margin-bottom: 6px;
+  }
+  .concept-desc {
+    font-size: 11px;
+    color: rgba(255,255,255,0.35);
+    margin-bottom: 12px;
+    line-height: 1.5;
+  }
+
+  /* Simulated table background for each mockup */
+  .table-bg {
+    position: relative;
+    height: 320px;
+    border-radius: 16px;
+    overflow: hidden;
+    background: radial-gradient(ellipse at 50% 40%, #1a5c3a 0%, #0e3d24 45%, #0a2e1a 100%);
+    border: 3px solid #3d2a06;
+    box-shadow: 0 0 20px rgba(0,0,0,0.6), inset 0 0 40px rgba(0,0,0,0.4);
+    display: flex;
+    align-items: flex-end;
+    justify-content: center;
+  }
+
+  /* ── Shared button styles ── */
+  .btn {
+    border: none;
+    border-radius: 10px;
+    font-weight: 700;
+    font-size: 13px;
+    cursor: pointer;
+    transition: all 0.15s;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-direction: column;
+    line-height: 1.2;
+  }
+  .btn:hover { filter: brightness(1.15); }
+  .btn-fold { background: linear-gradient(180deg, #b91c1c, #7f1d1d); color: white; }
+  .btn-check { background: linear-gradient(180deg, #2563eb, #1e40af); color: white; }
+  .btn-call { background: linear-gradient(180deg, #16a34a, #15803d); color: white; }
+  .btn-raise { background: linear-gradient(180deg, #16a34a, #15803d); color: white; }
+  .btn-preset {
+    background: rgba(0,0,0,0.7);
+    color: #22d3ee;
+    border: 1px solid rgba(255,255,255,0.12);
+    font-size: 11px;
+    font-weight: 600;
+  }
+  .btn-sub {
+    font-size: 9px;
+    font-weight: 600;
+    color: rgba(255,255,255,0.7);
+    display: block;
+  }
+  .slider-track {
+    height: 5px;
+    border-radius: 3px;
+    background: rgba(255,255,255,0.15);
+    position: relative;
+    flex: 1;
+  }
+  .slider-fill {
+    position: absolute;
+    left: 0; top: 0; bottom: 0;
+    width: 55%;
+    border-radius: 3px;
+    background: linear-gradient(90deg, #c0392b, #e74c3c);
+  }
+  .slider-thumb {
+    position: absolute;
+    right: -8px;
+    top: 50%;
+    transform: translateY(-50%);
+    width: 16px; height: 16px;
+    border-radius: 50%;
+    background: white;
+    border: 2px solid #c0392b;
+    box-shadow: 0 1px 4px rgba(0,0,0,0.5);
+  }
+  .amount-input {
+    background: #000;
+    color: #22d3ee;
+    border: 1px solid rgba(255,255,255,0.15);
+    border-radius: 6px;
+    font-size: 13px;
+    font-weight: 700;
+    text-align: center;
+    font-family: inherit;
+    font-variant-numeric: tabular-nums;
+  }
+  .nudge-btn {
+    background: rgba(0,0,0,0.7);
+    color: #22d3ee;
+    border: 1px solid rgba(255,255,255,0.12);
+    border-radius: 6px;
+    font-size: 16px;
+    font-weight: 600;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+  .pre-action {
+    font-size: 9px;
+    color: rgba(255,255,255,0.6);
+    display: flex;
+    align-items: center;
+    gap: 3px;
+  }
+  .pre-action input { width: 10px; height: 10px; accent-color: #22d3ee; }
+  .glass {
+    background: rgba(0,0,0,0.55);
+    backdrop-filter: blur(16px);
+    -webkit-backdrop-filter: blur(16px);
+    border: 1px solid rgba(255,255,255,0.08);
+  }
+
+  /* ═══════════════════════════════════════════════════════
+     CONCEPT 1 — Horizontal strip, bottom center
+     ═══════════════════════════════════════════════════════ */
+  .c1-panel {
+    position: absolute;
+    bottom: 12px;
+    left: 50%;
+    transform: translateX(-50%);
+    border-radius: 14px;
+    padding: 10px 16px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    width: 92%;
+    max-width: 560px;
+  }
+  .c1-actions { display: flex; gap: 6px; }
+  .c1-actions .btn { height: 42px; width: 64px; border-radius: 8px; font-size: 12px; }
+  .c1-slider-area { flex: 1; display: flex; align-items: center; gap: 6px; }
+  .c1-slider-area .amount-input { width: 54px; height: 34px; font-size: 12px; }
+  .c1-presets { display: flex; gap: 4px; }
+  .c1-presets .btn-preset { height: 28px; padding: 0 8px; border-radius: 6px; font-size: 10px; }
+
+  /* ═══════════════════════════════════════════════════════
+     CONCEPT 2 — Compact pill, actions left, slider right
+     ═══════════════════════════════════════════════════════ */
+  .c2-panel {
+    position: absolute;
+    bottom: 16px;
+    left: 50%;
+    transform: translateX(-50%);
+    border-radius: 24px;
+    padding: 8px 12px 8px 8px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    max-width: 480px;
+    width: 85%;
+  }
+  .c2-actions { display: flex; gap: 4px; }
+  .c2-actions .btn { height: 38px; width: 56px; border-radius: 19px; font-size: 11px; }
+  .c2-divider { width: 1px; height: 28px; background: rgba(255,255,255,0.12); flex-shrink: 0; }
+  .c2-right { flex: 1; display: flex; flex-direction: column; gap: 4px; }
+  .c2-presets { display: flex; gap: 3px; }
+  .c2-presets .btn-preset { height: 22px; padding: 0 7px; border-radius: 11px; font-size: 9px; flex: 1; }
+  .c2-slider-row { display: flex; align-items: center; gap: 4px; }
+  .c2-slider-row .amount-input { width: 48px; height: 26px; font-size: 10px; border-radius: 13px; }
+  .c2-slider-row .nudge-btn { width: 24px; height: 24px; border-radius: 12px; font-size: 12px; }
+
+  /* ═══════════════════════════════════════════════════════
+     CONCEPT 3 — Vertical dock, right side
+     ═══════════════════════════════════════════════════════ */
+  .c3-panel {
+    position: absolute;
+    right: 12px;
+    top: 50%;
+    transform: translateY(-50%);
+    border-radius: 16px;
+    padding: 12px 10px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 8px;
+    width: 72px;
+  }
+  .c3-panel .btn { width: 52px; height: 36px; border-radius: 8px; font-size: 10px; }
+  .c3-panel .amount-input { width: 52px; height: 28px; font-size: 10px; }
+  .c3-sep { width: 36px; height: 1px; background: rgba(255,255,255,0.1); }
+
+  /* ═══════════════════════════════════════════════════════
+     CONCEPT 4 — Two-row centered panel
+     ═══════════════════════════════════════════════════════ */
+  .c4-panel {
+    position: absolute;
+    bottom: 12px;
+    left: 50%;
+    transform: translateX(-50%);
+    border-radius: 16px;
+    padding: 10px 14px;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    width: 88%;
+    max-width: 500px;
+  }
+  .c4-row1 { display: flex; gap: 6px; justify-content: center; }
+  .c4-row1 .btn-preset { height: 26px; padding: 0 12px; border-radius: 6px; flex: 1; }
+  .c4-row2 { display: flex; align-items: center; gap: 6px; }
+  .c4-row2 .btn { height: 44px; flex: 1; border-radius: 10px; font-size: 13px; }
+  .c4-row2 .amount-input { width: 60px; height: 44px; font-size: 13px; }
+
+  /* ═══════════════════════════════════════════════════════
+     CONCEPT 5 — Minimal arc (actions only, no slider visible)
+     ═══════════════════════════════════════════════════════ */
+  .c5-panel {
+    position: absolute;
+    bottom: 16px;
+    left: 50%;
+    transform: translateX(-50%);
+    border-radius: 28px;
+    padding: 6px;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    box-shadow: 0 8px 32px rgba(0,0,0,0.6);
+  }
+  .c5-panel .btn { height: 44px; width: 80px; border-radius: 22px; font-size: 13px; }
+  .c5-amount {
+    height: 44px; width: 80px; border-radius: 22px;
+    background: rgba(0,0,0,0.8);
+    border: 1px solid rgba(34,211,238,0.3);
+    color: #22d3ee;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 13px;
+    font-weight: 700;
+    font-variant-numeric: tabular-nums;
+  }
+
+  /* ═══════════════════════════════════════════════════════
+     CONCEPT 6 — Bottom-left anchor with expand
+     ═══════════════════════════════════════════════════════ */
+  .c6-panel {
+    position: absolute;
+    bottom: 12px;
+    left: 12px;
+    border-radius: 14px;
+    padding: 10px 12px;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    width: 240px;
+  }
+  .c6-actions { display: flex; gap: 5px; }
+  .c6-actions .btn { height: 38px; flex: 1; border-radius: 8px; font-size: 12px; }
+  .c6-slider-row { display: flex; align-items: center; gap: 5px; }
+  .c6-slider-row .amount-input { width: 50px; height: 28px; font-size: 11px; }
+  .c6-slider-row .nudge-btn { width: 24px; height: 28px; border-radius: 5px; font-size: 13px; }
+  .c6-presets { display: flex; gap: 3px; }
+  .c6-presets .btn-preset { height: 22px; flex: 1; border-radius: 5px; font-size: 9px; }
+
+  /* ═══════════════════════════════════════════════════════
+     CONCEPT 7 — Radial / semicircle near hero seat
+     ═══════════════════════════════════════════════════════ */
+  .c7-wrapper {
+    position: absolute;
+    bottom: 40px;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 280px;
+    height: 140px;
+  }
+  .c7-btn {
+    position: absolute;
+    width: 62px; height: 40px;
+    border-radius: 12px;
+    font-size: 11px;
+    font-weight: 700;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-direction: column;
+    cursor: pointer;
+    border: none;
+    color: white;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.4);
+  }
+  .c7-fold { left: 0; bottom: 0; }
+  .c7-check { left: 20px; bottom: 50px; }
+  .c7-call { left: 110px; bottom: 70px; }
+  .c7-raise { right: 20px; bottom: 50px; }
+  .c7-amount-pill {
+    position: absolute;
+    right: 0; bottom: 0;
+    background: rgba(0,0,0,0.8);
+    border: 1px solid rgba(34,211,238,0.3);
+    border-radius: 20px;
+    padding: 4px 12px;
+    color: #22d3ee;
+    font-size: 12px;
+    font-weight: 700;
+    font-variant-numeric: tabular-nums;
+  }
+
+  /* ═══════════════════════════════════════════════════════
+     CONCEPT 8 — Split: actions bottom-center, slider bottom-right
+     ═══════════════════════════════════════════════════════ */
+  .c8-actions {
+    position: absolute;
+    bottom: 12px;
+    left: 50%;
+    transform: translateX(-50%);
+    border-radius: 14px;
+    padding: 8px 10px;
+    display: flex;
+    gap: 6px;
+  }
+  .c8-actions .btn { height: 44px; width: 68px; border-radius: 10px; font-size: 12px; }
+  .c8-slider-panel {
+    position: absolute;
+    bottom: 12px;
+    right: 12px;
+    border-radius: 14px;
+    padding: 8px 10px;
+    display: flex;
+    flex-direction: column;
+    gap: 5px;
+    width: 160px;
+  }
+  .c8-presets { display: flex; gap: 3px; }
+  .c8-presets .btn-preset { height: 22px; flex: 1; border-radius: 5px; font-size: 9px; }
+  .c8-slider-row { display: flex; align-items: center; gap: 4px; }
+  .c8-slider-row .amount-input { width: 44px; height: 26px; font-size: 10px; }
+  .c8-slider-row .nudge-btn { width: 22px; height: 26px; border-radius: 5px; font-size: 12px; }
+
+  /* ═══════════════════════════════════════════════════════
+     CONCEPT 9 — Inline with hero seat (below avatar)
+     ═══════════════════════════════════════════════════════ */
+  .c9-seat {
+    position: absolute;
+    bottom: 70px;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 56px; height: 56px;
+    border-radius: 50%;
+    background: rgba(15,20,35,0.9);
+    border: 2px solid rgba(6,182,212,0.6);
+    box-shadow: 0 0 16px rgba(6,182,212,0.3);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 9px;
+    color: white;
+    font-weight: 700;
+    z-index: 5;
+  }
+  .c9-panel {
+    position: absolute;
+    bottom: 10px;
+    left: 50%;
+    transform: translateX(-50%);
+    border-radius: 14px;
+    padding: 8px 10px;
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    width: 380px;
+  }
+  .c9-actions { display: flex; gap: 4px; }
+  .c9-actions .btn { height: 36px; width: 52px; border-radius: 8px; font-size: 10px; }
+  .c9-divider { width: 1px; height: 24px; background: rgba(255,255,255,0.1); flex-shrink: 0; }
+  .c9-presets { display: flex; gap: 3px; }
+  .c9-presets .btn-preset { height: 26px; padding: 0 6px; border-radius: 6px; font-size: 9px; }
+  .c9-amount {
+    background: #000;
+    color: #22d3ee;
+    border: 1px solid rgba(255,255,255,0.15);
+    border-radius: 6px;
+    width: 48px;
+    height: 30px;
+    font-size: 11px;
+    font-weight: 700;
+    text-align: center;
+    font-variant-numeric: tabular-nums;
+  }
+
+  /* ═══════════════════════════════════════════════════════
+     CONCEPT 10 — Collapsible tab (expandable from bottom edge)
+     ═══════════════════════════════════════════════════════ */
+  .c10-tab {
+    position: absolute;
+    bottom: 0;
+    left: 50%;
+    transform: translateX(-50%);
+    border-radius: 14px 14px 0 0;
+    padding: 6px 16px 2px;
+    font-size: 9px;
+    font-weight: 700;
+    color: rgba(255,255,255,0.5);
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    cursor: pointer;
+    text-align: center;
+  }
+  .c10-tab::after {
+    content: '▲';
+    display: block;
+    font-size: 7px;
+    margin-top: 1px;
+    color: rgba(6,182,212,0.5);
+  }
+  .c10-panel {
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    border-radius: 16px 16px 0 0;
+    padding: 12px 16px 10px;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+  .c10-row1 { display: flex; gap: 6px; }
+  .c10-row1 .btn { height: 40px; flex: 1; border-radius: 10px; font-size: 12px; }
+  .c10-row2 { display: flex; align-items: center; gap: 6px; }
+  .c10-row2 .btn-preset { height: 26px; padding: 0 10px; border-radius: 6px; flex: 1; }
+  .c10-row2 .amount-input { width: 56px; height: 30px; font-size: 12px; }
+  .c10-row2 .nudge-btn { width: 26px; height: 30px; border-radius: 6px; font-size: 14px; }
+  .c10-handle {
+    width: 32px;
+    height: 3px;
+    border-radius: 2px;
+    background: rgba(255,255,255,0.2);
+    margin: 0 auto -4px;
+  }
+</style>
+</head>
+<body>
+
+<h1>Floating Betting Panel — 10 Concepts</h1>
+<p class="subtitle">Each mockup shows the panel overlaid on the poker felt in fullscreen mode. All elements are functional placeholders.</p>
+
+<div class="grid">
+
+  <!-- ═══ CONCEPT 1 ═══ -->
+  <div class="concept">
+    <div class="concept-label">#1 — Horizontal Strip</div>
+    <div class="concept-desc">Full-width bar, single row. Everything visible at once. Familiar layout compressed into a glass strip.</div>
+    <div class="table-bg">
+      <div class="c1-panel glass">
+        <div class="c1-actions">
+          <button class="btn btn-fold">Fold</button>
+          <button class="btn btn-check">Check</button>
+          <button class="btn btn-call">Call<span class="btn-sub">2,400</span></button>
+          <button class="btn btn-raise">Raise<span class="btn-sub">4,800</span></button>
+        </div>
+        <div class="c1-presets">
+          <button class="btn-preset">Min</button>
+          <button class="btn-preset">½</button>
+          <button class="btn-preset">Pot</button>
+          <button class="btn-preset">Max</button>
+        </div>
+        <div class="c1-slider-area">
+          <input class="amount-input" value="4,800" readonly style="width:54px;height:34px;font-size:12px;">
+          <div class="slider-track">
+            <div class="slider-fill"><div class="slider-thumb"></div></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ═══ CONCEPT 2 ═══ -->
+  <div class="concept">
+    <div class="concept-label">#2 — Compact Pill</div>
+    <div class="concept-desc">Rounded pill shape. Actions left, sizing right. Minimal footprint, stays out of the felt.</div>
+    <div class="table-bg">
+      <div class="c2-panel glass">
+        <div class="c2-actions">
+          <button class="btn btn-fold">Fold</button>
+          <button class="btn btn-check">Check</button>
+          <button class="btn btn-call">Call</button>
+          <button class="btn btn-raise">Raise</button>
+        </div>
+        <div class="c2-divider"></div>
+        <div class="c2-right">
+          <div class="c2-presets">
+            <button class="btn-preset">Min</button>
+            <button class="btn-preset">½</button>
+            <button class="btn-preset">Pot</button>
+            <button class="btn-preset">Max</button>
+          </div>
+          <div class="c2-slider-row">
+            <input class="amount-input" value="4,800" readonly style="width:48px;height:26px;font-size:10px;border-radius:13px;">
+            <div class="nudge-btn" style="width:24px;height:24px;border-radius:12px;">−</div>
+            <div class="slider-track" style="height:4px;">
+              <div class="slider-fill" style="width:55%;"><div class="slider-thumb" style="width:12px;height:12px;right:-6px;"></div></div>
+            </div>
+            <div class="nudge-btn" style="width:24px;height:24px;border-radius:12px;">+</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ═══ CONCEPT 3 ═══ -->
+  <div class="concept">
+    <div class="concept-label">#3 — Vertical Side Dock</div>
+    <div class="concept-desc">Stacked vertically on the right edge. Table stays fully visible. Works well with wide tables.</div>
+    <div class="table-bg">
+      <div class="c3-panel glass">
+        <button class="btn btn-fold">Fold</button>
+        <button class="btn btn-check">Check</button>
+        <button class="btn btn-call">Call</button>
+        <div class="c3-sep"></div>
+        <input class="amount-input" value="4,800" readonly>
+        <button class="btn btn-raise">Raise</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ═══ CONCEPT 4 ═══ -->
+  <div class="concept">
+    <div class="concept-label">#4 — Two-Row Centered</div>
+    <div class="concept-desc">Top row: presets + slider. Bottom row: big action buttons. Clean separation of sizing vs. action.</div>
+    <div class="table-bg">
+      <div class="c4-panel glass">
+        <div class="c4-row1">
+          <button class="btn-preset" style="flex:1;height:26px;border-radius:6px;font-size:10px;">Min</button>
+          <button class="btn-preset" style="flex:1;height:26px;border-radius:6px;font-size:10px;">½ Pot</button>
+          <button class="btn-preset" style="flex:1;height:26px;border-radius:6px;font-size:10px;">Pot</button>
+          <button class="btn-preset" style="flex:1;height:26px;border-radius:6px;font-size:10px;">Max</button>
+          <div style="display:flex;align-items:center;gap:4px;margin-left:4px;">
+            <div class="nudge-btn" style="width:26px;height:26px;border-radius:6px;font-size:13px;">−</div>
+            <div class="slider-track" style="width:80px;height:4px;">
+              <div class="slider-fill" style="width:55%;"><div class="slider-thumb" style="width:12px;height:12px;right:-6px;"></div></div>
+            </div>
+            <div class="nudge-btn" style="width:26px;height:26px;border-radius:6px;font-size:13px;">+</div>
+          </div>
+        </div>
+        <div class="c4-row2">
+          <button class="btn btn-fold" style="height:44px;flex:1;border-radius:10px;">Fold</button>
+          <button class="btn btn-check" style="height:44px;flex:1;border-radius:10px;">Check</button>
+          <button class="btn btn-call" style="height:44px;flex:1;border-radius:10px;">Call<span class="btn-sub">2,400</span></button>
+          <input class="amount-input" value="4,800" readonly style="width:60px;height:44px;">
+          <button class="btn btn-raise" style="height:44px;flex:1.3;border-radius:10px;">Raise<span class="btn-sub">4,800</span></button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ═══ CONCEPT 5 ═══ -->
+  <div class="concept">
+    <div class="concept-label">#5 — Minimal Arc</div>
+    <div class="concept-desc">Just the essentials: 4 buttons + amount in a pill. Slider hidden — tap amount to expand. Maximum table visibility.</div>
+    <div class="table-bg">
+      <div class="c5-panel glass">
+        <button class="btn btn-fold">Fold</button>
+        <button class="btn btn-check">Check</button>
+        <button class="btn btn-call">Call<span class="btn-sub">2,400</span></button>
+        <div class="c5-amount">4,800</div>
+        <button class="btn btn-raise">Raise<span class="btn-sub">4,800</span></button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ═══ CONCEPT 6 ═══ -->
+  <div class="concept">
+    <div class="concept-label">#6 — Bottom-Left Anchor</div>
+    <div class="concept-desc">Compact panel anchored bottom-left. Keeps center + right of table clear for cards and opponents.</div>
+    <div class="table-bg">
+      <div class="c6-panel glass">
+        <div class="c6-presets">
+          <button class="btn-preset">Min</button>
+          <button class="btn-preset">½ Pot</button>
+          <button class="btn-preset">Pot</button>
+          <button class="btn-preset">Max</button>
+        </div>
+        <div class="c6-slider-row">
+          <input class="amount-input" value="4,800" readonly style="width:50px;height:28px;font-size:11px;">
+          <div class="nudge-btn">−</div>
+          <div class="slider-track" style="height:4px;flex:1;">
+            <div class="slider-fill" style="width:55%;"><div class="slider-thumb" style="width:12px;height:12px;right:-6px;"></div></div>
+          </div>
+          <div class="nudge-btn">+</div>
+        </div>
+        <div class="c6-actions">
+          <button class="btn btn-fold">Fold</button>
+          <button class="btn btn-check">Check</button>
+          <button class="btn btn-call">Call</button>
+          <button class="btn btn-raise">Raise</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ═══ CONCEPT 7 ═══ -->
+  <div class="concept">
+    <div class="concept-label">#7 — Radial Fan</div>
+    <div class="concept-desc">Buttons fan out in a semicircle above the hero seat. Feels like a real poker table action zone. Sizing via amount pill.</div>
+    <div class="table-bg">
+      <div class="c7-wrapper">
+        <button class="c7-btn btn-fold" style="left:10px;bottom:4px;">Fold</button>
+        <button class="c7-btn btn-check" style="left:30px;bottom:54px;">Check</button>
+        <button class="c7-btn btn-call" style="left:108px;bottom:76px;">Call<span class="btn-sub">2,400</span></button>
+        <button class="c7-btn btn-raise" style="right:30px;bottom:54px;">Raise<span class="btn-sub">4,800</span></button>
+        <div class="c7-amount-pill" style="right:10px;bottom:4px;">4,800</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ═══ CONCEPT 8 ═══ -->
+  <div class="concept">
+    <div class="concept-label">#8 — Split Panels</div>
+    <div class="concept-desc">Actions centered at bottom, sizing controls in a small panel bottom-right. Two separate glass islands.</div>
+    <div class="table-bg">
+      <div class="c8-actions glass">
+        <button class="btn btn-fold">Fold</button>
+        <button class="btn btn-check">Check</button>
+        <button class="btn btn-call">Call<span class="btn-sub">2,400</span></button>
+        <button class="btn btn-raise">Raise<span class="btn-sub">4,800</span></button>
+      </div>
+      <div class="c8-slider-panel glass">
+        <div class="c8-presets">
+          <button class="btn-preset">Min</button>
+          <button class="btn-preset">½</button>
+          <button class="btn-preset">Pot</button>
+          <button class="btn-preset">Max</button>
+        </div>
+        <div class="c8-slider-row">
+          <input class="amount-input" value="4,800" readonly style="width:44px;height:26px;font-size:10px;">
+          <div class="nudge-btn" style="width:22px;height:26px;">−</div>
+          <div class="slider-track" style="height:3px;flex:1;">
+            <div class="slider-fill" style="width:55%;"><div class="slider-thumb" style="width:10px;height:10px;right:-5px;"></div></div>
+          </div>
+          <div class="nudge-btn" style="width:22px;height:26px;">+</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ═══ CONCEPT 9 ═══ -->
+  <div class="concept">
+    <div class="concept-label">#9 — Hero Seat Attached</div>
+    <div class="concept-desc">Panel sits directly below the hero seat avatar. Feels connected to your position. Compact single row.</div>
+    <div class="table-bg">
+      <div class="c9-seat">YOU<br><span style="font-size:7px;color:rgba(255,255,255,0.5);">24,600</span></div>
+      <div class="c9-panel glass">
+        <div class="c9-actions">
+          <button class="btn btn-fold">Fold</button>
+          <button class="btn btn-check">Check</button>
+          <button class="btn btn-call">Call</button>
+        </div>
+        <div class="c9-divider"></div>
+        <div class="c9-presets">
+          <button class="btn-preset">Min</button>
+          <button class="btn-preset">½</button>
+          <button class="btn-preset">Pot</button>
+          <button class="btn-preset">Max</button>
+        </div>
+        <input class="c9-amount" value="4,800" readonly>
+        <button class="btn btn-raise" style="height:36px;width:52px;border-radius:8px;font-size:10px;">Raise</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ═══ CONCEPT 10 ═══ -->
+  <div class="concept">
+    <div class="concept-label">#10 — Pull-Up Drawer</div>
+    <div class="concept-desc">Collapsed state: just a small tab. Expanded: full panel slides up from bottom edge. Maximizes table when not betting.</div>
+    <div class="table-bg">
+      <div class="c10-panel glass">
+        <div class="c10-handle"></div>
+        <div class="c10-row1">
+          <button class="btn btn-fold" style="height:40px;flex:1;">Fold</button>
+          <button class="btn btn-check" style="height:40px;flex:1;">Check</button>
+          <button class="btn btn-call" style="height:40px;flex:1;">Call<span class="btn-sub">2,400</span></button>
+          <input class="amount-input" value="4,800" readonly style="width:56px;height:40px;font-size:13px;">
+          <button class="btn btn-raise" style="height:40px;flex:1.3;">Raise<span class="btn-sub">4,800</span></button>
+        </div>
+        <div class="c10-row2">
+          <button class="btn-preset" style="flex:1;">Min</button>
+          <button class="btn-preset" style="flex:1;">½ Pot</button>
+          <button class="btn-preset" style="flex:1;">Pot</button>
+          <button class="btn-preset" style="flex:1;">Max</button>
+          <div style="display:flex;align-items:center;gap:4px;flex:2;margin-left:4px;">
+            <div class="nudge-btn" style="width:26px;height:26px;">−</div>
+            <div class="slider-track" style="height:4px;flex:1;">
+              <div class="slider-fill" style="width:55%;"><div class="slider-thumb" style="width:12px;height:12px;right:-6px;"></div></div>
+            </div>
+            <div class="nudge-btn" style="width:26px;height:26px;">+</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<div style="text-align:center;margin-top:40px;padding-bottom:32px;">
+  <p style="font-size:11px;color:rgba(255,255,255,0.25);">All 10 concepts use the same glass morphism (bg-black/55 + backdrop-blur). Pick a layout and I'll build it.</p>
+</div>
+
+</body>
+</html>

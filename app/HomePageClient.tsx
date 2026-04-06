@@ -109,7 +109,6 @@ export default function HomePageClient() {
               <HomeSectionDivider />
               <AvatarShowcaseSection />
 
-              <HomeSectionDivider />
               <Footer />
             </div>
           </div>

@@ -9,7 +9,7 @@ import {
   homeSectionTitleClass,
   homeSectionTitleGradientClass,
 } from '@/lib/home-section-typography'
-import { Zap, ChevronRight, Tag } from 'lucide-react'
+import { ChevronRight } from 'lucide-react'
 
 // ── Branded table assets for marquee rows (3 × 5) ───────────────────────────
 
@@ -36,26 +36,6 @@ const TABLE_PRODUCTS = [
 function ParallaxHeader() {
   return (
     <div className="max-w-7xl relative mx-auto flex w-full flex-col items-center px-4 pt-10 pb-2 text-center md:pt-16 md:pb-4">
-      <div className="mb-2 inline-flex items-center gap-2 rounded-full border border-cyan-500/30 bg-cyan-950/60 px-3 py-1 text-xs font-semibold uppercase tracking-wider text-cyan-300">
-        <Zap className="h-3.5 w-3.5 shrink-0" />
-        Custom Blackjack Tables &mdash; Limited Spots
-      </div>
-
-      <div className="mb-2 flex justify-center">
-        <div
-          className="inline-flex items-center gap-2 rounded-lg px-3 py-1.5 text-sm"
-          style={{
-            background: 'linear-gradient(135deg, rgba(239,68,68,0.2), rgba(220,38,38,0.1))',
-            border: '1px solid rgba(239,68,68,0.4)',
-          }}
-        >
-          <Tag className="w-3.5 h-3.5 text-red-400" />
-          <span className="text-red-300 font-black uppercase tracking-wide">
-            Limited Time — 50% Off All Packages!
-          </span>
-        </div>
-      </div>
-
       <h1 className={cn(homeSectionTitleClass, 'mb-3 max-w-4xl leading-tight')}>
         <span className="text-white">Bring Your Brand</span>
         <br />

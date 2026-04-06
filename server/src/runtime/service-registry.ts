@@ -89,6 +89,13 @@ export async function initializeRuntimeServices(server: HttpServer, port: string
   pokerGameService.setPostHandCallback((tableId, handNumber) => pokerTournamentService.syncAfterHand(tableId, handNumber));
   bjMultiService.setBroadcastCallback((tableId) => wsService.broadcastBJMultiTableState(tableId));
 
+  // Kick players who have been sitting out for >= 15 minutes (cash games only)
+  setInterval(() => {
+    pokerGameService.kickStaleSitOuts().catch((err) =>
+      logger.warn('Sit-out timeout cron error', { error: err })
+    );
+  }, 60_000); // check every minute
+
   const freerollScheduler = new FreerollSchedulerService(dbService.getPool(), tournamentService);
   freerollScheduler.start();
 

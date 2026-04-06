@@ -65,7 +65,7 @@ export function SocialsSection() {
               data-visible={isVisible ? '' : undefined}
             >
               <div
-                className="relative text-purple-500 group-hover:text-cyan-400 transition-colors duration-300 socials-logo-drop"
+                className="relative text-cyan-500 group-hover:text-purple-400 transition-colors duration-300 socials-logo-drop"
                 style={{ transitionDelay: isVisible ? '700ms' : '0ms' }}
                 data-visible={isVisible ? '' : undefined}
               >
@@ -88,7 +88,7 @@ export function SocialsSection() {
               data-visible={isVisible ? '' : undefined}
             >
               <div
-                className="relative text-purple-500 group-hover:text-cyan-400 transition-colors duration-300 socials-logo-drop"
+                className="relative text-cyan-500 group-hover:text-purple-400 transition-colors duration-300 socials-logo-drop"
                 style={{ transitionDelay: isVisible ? '900ms' : '0ms' }}
                 data-visible={isVisible ? '' : undefined}
               >

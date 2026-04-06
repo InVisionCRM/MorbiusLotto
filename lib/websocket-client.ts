@@ -760,6 +760,16 @@ export class BlackjackWebSocketClient {
     return this.sendRequest(WS_MESSAGE_TYPES.pokerAction, payload);
   }
 
+  /** Voluntarily sit out of future hands. Seat is held; blinds still post. Auth required. */
+  async pokerSitOut(tableId: string): Promise<PokerTableState> {
+    return this.sendRequest(WS_MESSAGE_TYPES.pokerSitOut, { tableId });
+  }
+
+  /** Return from sitting out — re-join the hand rotation. Auth required. */
+  async pokerSitBack(tableId: string): Promise<PokerTableState> {
+    return this.sendRequest(WS_MESSAGE_TYPES.pokerSitBack, { tableId });
+  }
+
   /** Get current table state (e.g. after reconnect). Auth required. */
   async pokerGetState(tableId: string): Promise<PokerTableState> {
     return this.sendRequest(WS_MESSAGE_TYPES.pokerGetState, { tableId });

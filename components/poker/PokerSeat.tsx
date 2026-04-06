@@ -17,6 +17,8 @@ import {
   LogOut,
   MessageCircle,
   Music2,
+  PauseCircle,
+  PlayCircle,
   Smile,
   SmilePlus,
   Trophy,
@@ -252,6 +254,10 @@ export interface PokerSeatProps {
   hideSeatAvatar?: boolean;
   /** Leave table (confirm flow); from player radial. */
   onLeaveTable?: () => void;
+  /** Voluntarily sit out of future hands. */
+  onSitOut?: () => void;
+  /** Return from sitting out. */
+  onSitBack?: () => void;
   /** Bump parent Activity feed serial on mobile. */
   onRequestMobileActivity?: () => void;
   /** Show Activity wedge in player radial (typically true when `hideSeatAvatar`). */
@@ -264,7 +270,7 @@ export interface PokerSeatProps {
 
 const CHAT_BUBBLE_MAX_LENGTH = 80;
 
-export function PokerSeat({ seat, index, holeCards, isCurrentPlayer, showCardBacks, winningCardIndices, isHandWinner = false, lastAction, timeLeft, maxTime = 60, chatBubble, onReUpClick, onMenuClick, overlayPhrase: propsOverlayPhrase, overlayEmotion: propsOverlayEmotion, onPhraseReaction, onAnimationReaction, onOpponentClick, onOpponentRadialAction, quickChatPhrases: propsQuickChatPhrases, setQuickChatPhrases: propsSetQuickChatPhrases, onOpenEditQuickChat, hideSeatAvatar = false, onLeaveTable, onRequestMobileActivity, includeActivityInPlayerRadial = false, showdownCardOffset, handName }: PokerSeatProps) {
+export function PokerSeat({ seat, index, holeCards, isCurrentPlayer, showCardBacks, winningCardIndices, isHandWinner = false, lastAction, timeLeft, maxTime = 60, chatBubble, onReUpClick, onMenuClick, overlayPhrase: propsOverlayPhrase, overlayEmotion: propsOverlayEmotion, onPhraseReaction, onAnimationReaction, onOpponentClick, onOpponentRadialAction, quickChatPhrases: propsQuickChatPhrases, setQuickChatPhrases: propsSetQuickChatPhrases, onOpenEditQuickChat, hideSeatAvatar = false, onLeaveTable, onSitOut, onSitBack, onRequestMobileActivity, includeActivityInPlayerRadial = false, showdownCardOffset, handName }: PokerSeatProps) {
   const empty = !seat.playerAddress;
   const showMyCards = !!(holeCards && holeCards.length > 0);
   const showBacks   = !!(showCardBacks && !showMyCards && !empty && !seat.folded);
@@ -344,6 +350,11 @@ export function PokerSeat({ seat, index, holeCards, isCurrentPlayer, showCardBac
     if (onReUpClick) items.push({ id: 'bank', label: 'Bank', icon: Wallet });
     if (onPhraseReaction) items.push({ id: 'quickchat', label: 'Chat', icon: MessageCircle });
     if (onAnimationReaction) items.push({ id: 'expressions', label: 'Moves', icon: Smile });
+    if (seat.status === 'sitting_out') {
+      if (onSitBack) items.push({ id: 'sitback', label: "I'm Back", icon: PlayCircle });
+    } else {
+      if (onSitOut) items.push({ id: 'sitout', label: 'Sit Out', icon: PauseCircle });
+    }
     if (onLeaveTable) items.push({ id: 'leave', label: 'Leave', icon: LogOut });
     if (includeActivityInPlayerRadial && onRequestMobileActivity) {
       items.push({ id: 'activity', label: 'Activity', icon: LayoutList });
@@ -355,6 +366,9 @@ export function PokerSeat({ seat, index, holeCards, isCurrentPlayer, showCardBac
     onPhraseReaction,
     onAnimationReaction,
     onLeaveTable,
+    onSitOut,
+    onSitBack,
+    seat.status,
     includeActivityInPlayerRadial,
     onRequestMobileActivity,
   ]);
@@ -477,6 +491,8 @@ export function PokerSeat({ seat, index, holeCards, isCurrentPlayer, showCardBac
         setQuickChatPickerOpen(true);
         return;
       }
+      else if (id === 'sitout') onSitOut?.();
+      else if (id === 'sitback') onSitBack?.();
       else if (id === 'leave') onLeaveTable?.();
       else if (id === 'activity') onRequestMobileActivity?.();
       setPlayerRadialOpen(false);
@@ -488,6 +504,8 @@ export function PokerSeat({ seat, index, holeCards, isCurrentPlayer, showCardBac
       onMenuClick,
       onReUpClick,
       onLeaveTable,
+      onSitOut,
+      onSitBack,
       onRequestMobileActivity,
     ],
   );

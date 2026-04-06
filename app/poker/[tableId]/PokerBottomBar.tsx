@@ -31,11 +31,25 @@ export function PokerBottomBar({
   // bar to max-height 52px. Do NOT move the actions or activity feed to a
   // different DOM position for landscape — the CSS handles it.
 
-  // Fullscreen: floating bet panel only (no chat/activity), centered at bottom
+  // Fullscreen: horizontal strip anchored to the bottom of the table
   if (fullscreen) {
     return renderedState && mySeat && actions ? (
-      <div className="absolute bottom-4 left-1/2 -translate-x-1/2 z-40 w-full max-w-xl px-4">
-        <div className="rounded-xl bg-black/60 backdrop-blur-md border border-white/10 p-3">
+      <div className="absolute bottom-0 left-0 right-0 z-40 px-4 pb-3 pt-2"
+        style={{
+          background: 'linear-gradient(to top, rgba(0,0,0,0.75) 60%, transparent)',
+        }}
+      >
+        <div
+          className="w-full mx-auto rounded-2xl px-4 py-2.5"
+          style={{
+            maxWidth: 900,
+            background: 'rgba(5,8,20,0.72)',
+            backdropFilter: 'blur(18px)',
+            WebkitBackdropFilter: 'blur(18px)',
+            border: '1px solid rgba(255,255,255,0.07)',
+            boxShadow: '0 8px 32px rgba(0,0,0,0.5), inset 0 1px 0 rgba(255,255,255,0.04)',
+          }}
+        >
           {actions}
         </div>
       </div>
