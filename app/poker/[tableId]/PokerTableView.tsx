@@ -49,7 +49,7 @@ interface PokerTableViewProps {
    overrides in globals.css further relax this for phones. Do NOT reduce
    the multiplier below ~2.8 or landscape mobile will break again. */
 const POKER_MAIN_PANEL_STYLE: React.CSSProperties = {
-  maxWidth: 'min(100vw, calc((100dvh - 100px) * 3.2))',
+  maxWidth: 'min(100vw, calc((100dvh - 100px) * 2.88))',
   marginLeft: 'auto',
   marginRight: 'auto',
   width: '100%',
