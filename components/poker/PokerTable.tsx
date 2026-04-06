@@ -31,7 +31,7 @@ function shortAddr(addr: string): string {
 
 function formatChips(wei: string | number): string {
   try {
-    return formatMorbiusFloor(wei);
+    return formatMorbiusFloor(wei, { compact: false });
   } catch {
     return String(wei);
   }

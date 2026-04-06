@@ -116,8 +116,7 @@ function CircularTimerRing({ size, timeLeft, maxTime }: { size: number; timeLeft
   const radius = cx - strokeWidth;
   const circumference = 2 * Math.PI * radius;
   const progress = Math.max(0, Math.min(1, timeLeft / maxTime));
-  const hue = progress * 120;
-  const color = `hsl(${hue}, 90%, 52%)`;
+  const color = 'hsl(120, 90%, 52%)';
 
   return (
     <svg
@@ -142,7 +141,7 @@ function CircularTimerRing({ size, timeLeft, maxTime }: { size: number; timeLeft
         strokeLinecap="round"
         strokeDasharray={circumference}
         strokeDashoffset={circumference * (1 - progress)}
-        style={{ filter: `drop-shadow(0 0 4px ${color})`, transition: 'stroke-dashoffset 1s linear, stroke 0.5s ease' }}
+        style={{ filter: `drop-shadow(0 0 4px ${color})`, transition: 'stroke-dashoffset 1s linear' }}
       />
     </svg>
   );
@@ -150,8 +149,7 @@ function CircularTimerRing({ size, timeLeft, maxTime }: { size: number; timeLeft
 
 function RectTimerRing({ timeLeft, maxTime }: { timeLeft: number; maxTime: number }) {
   const progress = Math.max(0, Math.min(1, timeLeft / maxTime));
-  const hue = progress * 120;
-  const color = `hsl(${hue}, 90%, 52%)`;
+  const color = 'hsl(120, 90%, 52%)';
   const perimeter = 2 * (96 + 40);
   return (
     <svg
@@ -184,7 +182,7 @@ function RectTimerRing({ timeLeft, maxTime }: { timeLeft: number; maxTime: numbe
         strokeLinecap="round"
         strokeDasharray={perimeter}
         strokeDashoffset={perimeter * (1 - progress)}
-        style={{ filter: `drop-shadow(0 0 4px ${color})`, transition: 'stroke-dashoffset 1s linear, stroke 0.5s ease' }}
+        style={{ filter: `drop-shadow(0 0 4px ${color})`, transition: 'stroke-dashoffset 1s linear' }}
       />
     </svg>
   );

@@ -5,6 +5,7 @@ import type { BlackjackWebSocketClient, PokerTableState } from '@/lib/websocket-
 import { PokerActivityFeed } from '@/components/poker/PokerActivityFeed';
 
 interface PokerBottomBarProps {
+  fullscreen?: boolean;
   renderedState: PokerTableState | null;
   mySeat: PokerTableState['seats'][number] | null;
   actions: React.ReactNode;
@@ -16,6 +17,7 @@ interface PokerBottomBarProps {
 }
 
 export function PokerBottomBar({
+  fullscreen = false,
   renderedState,
   mySeat,
   actions,
@@ -28,6 +30,18 @@ export function PokerBottomBar({
   // LANDSCAPE NOTE: In landscape mobile the CSS in globals.css collapses this
   // bar to max-height 52px. Do NOT move the actions or activity feed to a
   // different DOM position for landscape — the CSS handles it.
+
+  // Fullscreen: floating bet panel only (no chat/activity), centered at bottom
+  if (fullscreen) {
+    return renderedState && mySeat && actions ? (
+      <div className="absolute bottom-4 left-1/2 -translate-x-1/2 z-40 w-full max-w-xl px-4">
+        <div className="rounded-xl bg-black/60 backdrop-blur-md border border-white/10 p-3">
+          {actions}
+        </div>
+      </div>
+    ) : null;
+  }
+
   return (
     <>
       <div data-poker-bottom className="flex-shrink-0 grid grid-cols-1 md:grid-cols-[minmax(220px,0.8fr)_minmax(80px,0.25fr)_minmax(420px,1.7fr)] gap-0 min-h-0">

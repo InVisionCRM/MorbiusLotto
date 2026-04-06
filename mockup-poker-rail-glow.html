@@ -1,0 +1,329 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Poker Rail Glow Mockup</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    background: rgb(2 6 23);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    min-height: 100vh;
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    color: white;
+    overflow: hidden;
+  }
+
+  .label {
+    position: absolute;
+    top: 16px;
+    left: 50%;
+    transform: translateX(-50%);
+    font-size: 13px;
+    color: rgba(255,255,255,0.4);
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    white-space: nowrap;
+  }
+  .label em { font-style: normal; color: rgba(6,182,212,0.9); }
+
+  .table-container {
+    position: relative;
+    width: 820px;
+    height: 480px;
+  }
+
+  /* ── The poker table (matching PokerTable.tsx structure) ── */
+  .table-base {
+    position: absolute;
+    left: 3%; top: 5%; width: 94%; height: 88%;
+    border-radius: 9999px;
+    background: #07090f;
+    padding: 7px;
+    display: flex;
+    box-shadow: 0 32px 100px rgba(0,0,0,0.95), 0 10px 40px rgba(0,0,0,0.8);
+  }
+  .outer-trim {
+    flex: 1; border-radius: 9999px; display: flex; padding: 8px;
+    background: linear-gradient(135deg, #3d2a06 0%, #7a5c1a 40%, #c9a033 55%, #7a5c1a 70%, #3d2a06 100%);
+    box-shadow: 0 0 18px rgba(180,140,40,0.18), inset 0 1px 3px rgba(255,220,100,0.12);
+  }
+  .cushion {
+    flex: 1; border-radius: 9999px; display: flex; padding: 20px;
+    background: linear-gradient(180deg, #1a1206 0%, #0f0b04 50%, #0a0803 100%);
+    box-shadow: inset 0 4px 16px rgba(0,0,0,0.85), inset 0 -2px 8px rgba(0,0,0,0.6);
+  }
+  .inner-trim {
+    flex: 1; border-radius: 9999px; display: flex; padding: 6px;
+    background: linear-gradient(135deg, #3d2a06 0%, #c9a033 50%, #3d2a06 100%);
+    box-shadow: 0 0 8px rgba(180,140,40,0.12), inset 0 0 4px rgba(200,160,50,0.1);
+  }
+  .felt {
+    flex: 1; border-radius: 9999px; position: relative; overflow: hidden;
+    background: radial-gradient(ellipse at 50% 40%, #1a5c3a 0%, #0e3d24 45%, #0a2e1a 100%);
+    box-shadow: inset 0 8px 40px rgba(0,0,0,0.55), inset 0 -4px 20px rgba(0,0,0,0.4);
+    outline: 1px dashed rgba(255,255,255,0.08);
+    outline-offset: -10px;
+  }
+  .felt-sheen {
+    position: absolute; inset: 0;
+    background: radial-gradient(ellipse at 50% 18%, rgba(255,255,255,0.05) 0%, transparent 55%);
+    pointer-events: none;
+  }
+
+  /* ── GLOW OVERLAY — the new feature ── */
+  .rail-glow {
+    position: absolute;
+    width: 180px;
+    height: 180px;
+    border-radius: 50%;
+    pointer-events: none;
+    z-index: 2;
+    transform: translate(-50%, -50%);
+    transition: left 0.6s cubic-bezier(0.4, 0, 0.2, 1),
+                top 0.6s cubic-bezier(0.4, 0, 0.2, 1);
+    /* Cyan glow */
+    background: radial-gradient(circle, rgba(6,182,212,0.45) 0%, rgba(6,182,212,0.15) 35%, transparent 70%);
+    animation: pulse-glow 2s ease-in-out infinite;
+  }
+  @keyframes pulse-glow {
+    0%, 100% { opacity: 0.8; transform: translate(-50%, -50%) scale(1); }
+    50% { opacity: 1; transform: translate(-50%, -50%) scale(1.08); }
+  }
+
+  /* ── Seats ── */
+  .seat {
+    position: absolute;
+    width: 72px;
+    height: 72px;
+    transform: translate(-50%, -50%);
+    z-index: 10;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    border-radius: 50%;
+    border: 2px solid rgba(255,255,255,0.15);
+    background: rgba(15,20,35,0.85);
+    font-size: 9px;
+    color: rgba(255,255,255,0.6);
+    text-align: center;
+    line-height: 1.2;
+    transition: border-color 0.4s, box-shadow 0.4s;
+  }
+  .seat.active {
+    border-color: rgba(6,182,212,0.8);
+    box-shadow: 0 0 16px rgba(6,182,212,0.4), 0 0 4px rgba(6,182,212,0.6);
+  }
+  .seat .name {
+    font-weight: 700;
+    font-size: 10px;
+    color: white;
+    margin-bottom: 2px;
+  }
+  .seat .stack {
+    font-size: 8px;
+    color: rgba(255,255,255,0.5);
+  }
+
+  /* ── Community cards placeholder ── */
+  .board {
+    position: absolute;
+    left: 50%; top: 48%;
+    transform: translate(-50%, -50%);
+    display: flex;
+    gap: 6px;
+    z-index: 5;
+  }
+  .card {
+    width: 38px; height: 54px;
+    border-radius: 4px;
+    background: white;
+    border: 1px solid rgba(0,0,0,0.2);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 14px;
+    color: #333;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.4);
+  }
+  .card.red { color: #dc2626; }
+  .card.black { color: #1e1e1e; }
+
+  /* ── Pot ── */
+  .pot {
+    position: absolute;
+    left: 50%; top: 38%;
+    transform: translateX(-50%);
+    font-size: 12px;
+    font-weight: 700;
+    color: rgba(255,255,255,0.8);
+    background: rgba(0,0,0,0.5);
+    padding: 3px 10px;
+    border-radius: 10px;
+    border: 1px solid rgba(255,255,255,0.1);
+    z-index: 6;
+    white-space: nowrap;
+  }
+
+  /* ── Turn indicator text ── */
+  .turn-label {
+    position: absolute;
+    font-size: 9px;
+    font-weight: 600;
+    color: rgba(6,182,212,0.9);
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    transform: translateX(-50%);
+    z-index: 12;
+    white-space: nowrap;
+    text-shadow: 0 0 8px rgba(6,182,212,0.5);
+  }
+
+  /* ── Controls ── */
+  .controls {
+    position: absolute;
+    bottom: 20px;
+    left: 50%;
+    transform: translateX(-50%);
+    display: flex;
+    gap: 8px;
+    z-index: 50;
+  }
+  .controls button {
+    padding: 6px 14px;
+    border-radius: 8px;
+    border: 1px solid rgba(255,255,255,0.15);
+    background: rgba(255,255,255,0.08);
+    color: rgba(255,255,255,0.7);
+    font-size: 11px;
+    cursor: pointer;
+    transition: all 0.2s;
+  }
+  .controls button:hover {
+    background: rgba(6,182,212,0.15);
+    border-color: rgba(6,182,212,0.4);
+    color: white;
+  }
+  .controls button.active-btn {
+    background: rgba(6,182,212,0.2);
+    border-color: rgba(6,182,212,0.6);
+    color: rgb(6,182,212);
+  }
+</style>
+</head>
+<body>
+
+<div class="label">Mockup — <em>Cyan rail glow</em> follows active player's turn</div>
+
+<div class="table-container" id="table">
+  <!-- Poker table structure (matches PokerTable.tsx) -->
+  <div class="table-base">
+    <div class="outer-trim">
+      <div class="cushion">
+        <div class="inner-trim">
+          <div class="felt">
+            <div class="felt-sheen"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- THE GLOW — this is the new feature -->
+  <div class="rail-glow" id="glow"></div>
+
+  <!-- Community cards -->
+  <div class="board">
+    <div class="card red">A<br>&#9829;</div>
+    <div class="card black">K<br>&#9824;</div>
+    <div class="card red">10<br>&#9830;</div>
+    <div class="card black">7<br>&#9827;</div>
+    <div class="card black">2<br>&#9824;</div>
+  </div>
+
+  <div class="pot">Pot: 12,400</div>
+</div>
+
+<!-- Click seats to move glow -->
+<div class="controls">
+  <span style="font-size:10px; color:rgba(255,255,255,0.35); align-self:center;">Click a seat or:</span>
+  <button onclick="autoRotate()" id="autoBtn">Auto-rotate</button>
+</div>
+
+<script>
+  // Seat positions — matches computeSeatAnchors() from PokerTable.tsx
+  // 8 seats around the ellipse, seat 0 = bottom center (hero)
+  const SEATS = [
+    { name: 'You',      stack: '24,600',  fx: 0.50, fy: 0.86 },
+    { name: 'Player 2', stack: '18,200',  fx: 0.15, fy: 0.72 },
+    { name: 'Player 3', stack: '31,500',  fx: 0.06, fy: 0.42 },
+    { name: 'Player 4', stack: '9,800',   fx: 0.18, fy: 0.14 },
+    { name: 'Player 5', stack: '45,100',  fx: 0.42, fy: 0.05 },
+    { name: 'Player 6', stack: '22,300',  fx: 0.62, fy: 0.05 },
+    { name: 'Player 7', stack: '15,700',  fx: 0.84, fy: 0.14 },
+    { name: 'Player 8', stack: '8,400',   fx: 0.94, fy: 0.42 },
+  ];
+
+  const table = document.getElementById('table');
+  const glow = document.getElementById('glow');
+  let activeSeat = 4; // Start with Player 5 as active
+  let autoInterval = null;
+
+  // Create seat elements
+  SEATS.forEach((s, i) => {
+    const el = document.createElement('div');
+    el.className = 'seat' + (i === activeSeat ? ' active' : '');
+    el.id = `seat-${i}`;
+    el.style.left = `${s.fx * 100}%`;
+    el.style.top = `${s.fy * 100}%`;
+    el.innerHTML = `<div class="name">${s.name}</div><div class="stack">${s.stack}</div>`;
+    el.onclick = () => setActive(i);
+    table.appendChild(el);
+  });
+
+  function setActive(idx) {
+    activeSeat = idx;
+    // Update seat styles
+    SEATS.forEach((_, i) => {
+      const el = document.getElementById(`seat-${i}`);
+      el.classList.toggle('active', i === idx);
+    });
+    // Move glow to the active seat's rail position
+    const s = SEATS[idx];
+    glow.style.left = `${s.fx * 100}%`;
+    glow.style.top = `${s.fy * 100}%`;
+
+    // Remove old turn labels
+    document.querySelectorAll('.turn-label').forEach(e => e.remove());
+  }
+
+  // Initialize glow position
+  setActive(activeSeat);
+
+  function autoRotate() {
+    const btn = document.getElementById('autoBtn');
+    if (autoInterval) {
+      clearInterval(autoInterval);
+      autoInterval = null;
+      btn.classList.remove('active-btn');
+      btn.textContent = 'Auto-rotate';
+      return;
+    }
+    btn.classList.add('active-btn');
+    btn.textContent = 'Stop';
+    autoInterval = setInterval(() => {
+      setActive((activeSeat + 1) % SEATS.length);
+    }, 1800);
+  }
+
+  // Start auto-rotating by default so it's immediately visual
+  autoRotate();
+</script>
+
+</body>
+</html>

@@ -243,6 +243,7 @@ export default function PokerTablePage() {
   const [showSoundsModal, setShowSoundsModal] = useState(false);
   const [showTableSettingsModal, setShowTableSettingsModal] = useState(false);
   const [showEditQuickChatModal, setShowEditQuickChatModal] = useState(false);
+  const [isFullscreen, setIsFullscreen] = useState(false);
   const [settingsMenuOpen, setSettingsMenuOpen] = useState(false);
   const [statsMenuOpen, setStatsMenuOpen] = useState(false);
   const [quickChatPhrases, setQuickChatPhrases] = useQuickChatPhrases();
@@ -254,6 +255,15 @@ export default function PokerTablePage() {
     state,
     normalizedAddress,
   });
+
+  // Lock body scroll + Escape key when fullscreen is active
+  useEffect(() => {
+    document.body.style.overflow = isFullscreen ? 'hidden' : '';
+    if (!isFullscreen) return () => { document.body.style.overflow = ''; };
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') setIsFullscreen(false); };
+    window.addEventListener('keydown', onKey);
+    return () => { document.body.style.overflow = ''; window.removeEventListener('keydown', onKey); };
+  }, [isFullscreen]);
 
   const pokerTheme = DEFAULT_POKER_THEME;
   const themeVars = getPokerThemeVars(pokerTheme);
@@ -422,7 +432,7 @@ export default function PokerTablePage() {
             works well today. See globals.css "Poker landscape" section. */}
         <div
           data-poker-shell
-          className={`flex flex-col ${cyberpunk ? 'font-mono uppercase' : ''}`}
+          className={`flex flex-col relative ${cyberpunk ? 'font-mono uppercase' : ''}`}
           style={{
             ...themeVars as React.CSSProperties,
             height: '100dvh',
@@ -433,7 +443,7 @@ export default function PokerTablePage() {
             paddingRight: 'env(safe-area-inset-right, 0px)',
           }}
         >
-          <PokerHeaderBar
+          {!isFullscreen && <PokerHeaderBar
             renderedState={renderedState}
             fmtChips={fmtChips}
             normalizedAddress={normalizedAddress}
@@ -457,7 +467,7 @@ export default function PokerTablePage() {
             onAdminStartBots={onAdminStartBots}
             onAdminStopBots={onAdminStopBots}
             onLeaveClick={handleLeaveClick}
-          />
+          />}
 
           {/* Disconnected banner */}
           {disconnected && (
@@ -469,7 +479,7 @@ export default function PokerTablePage() {
             </div>
           )}
 
-          <PokerPanels
+          {!isFullscreen && <PokerPanels
             tableId={tableId}
             renderedState={renderedState}
             isAdmin={isAdmin}
@@ -478,10 +488,12 @@ export default function PokerTablePage() {
             setShowDashboard={setShowDashboard}
             showMyStats={showMyStats}
             setShowMyStats={setShowMyStats}
-          />
+          />}
 
           <PokerTableView
             tableScale={tableScale}
+            fullscreen={isFullscreen}
+            onToggleFullscreen={() => setIsFullscreen(f => !f)}
             renderedState={renderedState}
             effectivePlayerAddress={effectivePlayerAddress}
             handleLeaveClick={handleLeaveClick}
@@ -513,6 +525,7 @@ export default function PokerTablePage() {
           />
 
           <PokerBottomBar
+            fullscreen={isFullscreen}
             renderedState={renderedState}
             mySeat={mySeat}
             actions={sharedActions}

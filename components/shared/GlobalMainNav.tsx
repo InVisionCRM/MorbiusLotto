@@ -346,26 +346,46 @@ const NavContent = React.memo(function NavContent(props: NavContentProps) {
           </span>
         </Link>
         {(reserveBalance !== undefined || walletConnected) && (
-          <div className="px-2 pt-1.5 space-y-1.5">
+          <div className="px-2 pt-1.5 flex flex-col gap-2 w-full min-w-0">
             {reserveBalance !== undefined && (
-              <div className="sidebar-label space-y-0.5">
-                <div className="text-[10px] text-white/55 uppercase tracking-wide">Balance</div>
-                <div className="flex items-center gap-1.5">
-                  <span className="text-white text-sm font-semibold tabular-nums">
+              <div className="sidebar-label !block w-full min-w-0 space-y-1">
+                <div className="text-[10px] text-white/55 uppercase tracking-wide leading-none">
+                  Balance
+                </div>
+                <div className="flex items-center gap-1.5 min-w-0">
+                  <span className="text-white text-sm font-semibold tabular-nums truncate">
                     {formatReserveWholeMorbiusDisplay(reserveBalance)}
                   </span>
-                  <Image src="/morbius/MorbiusLogo (3).png" alt="MORBIUS" width={14} height={14} className="object-contain opacity-80" />
+                  <Image
+                    src="/morbius/MorbiusLogo (3).png"
+                    alt="MORBIUS"
+                    width={14}
+                    height={14}
+                    className="object-contain opacity-80 shrink-0"
+                  />
                 </div>
               </div>
             )}
             {walletConnected && (
-              <div className="sidebar-label space-y-0.5">
-                <div className="text-[10px] text-white/55 uppercase tracking-wide">In-wallet</div>
-                <div className="flex items-center gap-1.5">
-                  <span className="text-white text-sm font-semibold tabular-nums">
+              <div
+                className={`sidebar-label !block w-full min-w-0 space-y-1 ${
+                  reserveBalance !== undefined ? 'pt-2 border-t border-white/10' : ''
+                }`}
+              >
+                <div className="text-[10px] text-white/55 uppercase tracking-wide leading-none">
+                  In-wallet
+                </div>
+                <div className="flex items-center gap-1.5 min-w-0">
+                  <span className="text-white text-sm font-semibold tabular-nums truncate">
                     {formatReserveWholeMorbiusDisplay(inWalletMorbiusWei)}
                   </span>
-                  <Image src="/morbius/MorbiusLogo (3).png" alt="MORBIUS" width={14} height={14} className="object-contain opacity-80" />
+                  <Image
+                    src="/morbius/MorbiusLogo (3).png"
+                    alt="MORBIUS"
+                    width={14}
+                    height={14}
+                    className="object-contain opacity-80 shrink-0"
+                  />
                 </div>
               </div>
             )}

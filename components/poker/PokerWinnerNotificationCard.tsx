@@ -2,7 +2,6 @@
 
 import { useEffect, useState } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
-import { SparklesText } from '@/components/ui/sparkles-text';
 import { CardDisplay } from './CardDisplay';
 
 const SHOWDOWN_DURATION_S = 15;
@@ -115,13 +114,9 @@ export function PokerWinnerNotificationCard({
 
                 {/* Center column — Winner + name */}
                 <div className="flex-[1.3] flex flex-col items-center justify-center p-2 sm:p-3 min-w-0">
-                  <SparklesText
-                    className="text-[10px] sm:text-[11px] font-extrabold uppercase tracking-[0.2em] text-cyan-200"
-                    sparklesCount={3}
-                    colors={{ first: '#67e8f9', second: '#a5f3fc' }}
-                  >
+                  <span className="text-[10px] sm:text-[11px] font-extrabold uppercase tracking-[0.2em] text-cyan-200">
                     WINNER
-                  </SparklesText>
+                  </span>
                   <h3 className="mt-0.5 text-white text-[clamp(13px,2vw,18px)] leading-tight font-extrabold tracking-[-0.01em] truncate max-w-full text-center">
                     {winnerName}
                   </h3>
@@ -133,7 +128,7 @@ export function PokerWinnerNotificationCard({
                 {/* Right column — Hand Rank */}
                 <div className="flex-1 flex flex-col items-center justify-center p-2 sm:p-3 min-w-0">
                   <div className="text-[8px] sm:text-[9px] text-white/50 uppercase tracking-wider font-semibold mb-1">Hand Rank</div>
-                  <div className="text-cyan-300 text-[clamp(11px,1.8vw,16px)] font-bold leading-tight text-center truncate max-w-full">
+                  <div className="text-cyan-300 text-[clamp(10px,1.5vw,13px)] font-bold leading-tight text-center break-words max-w-full">
                     {winnerHandName || '—'}
                   </div>
                 </div>

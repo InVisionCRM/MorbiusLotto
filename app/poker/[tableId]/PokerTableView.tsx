@@ -10,6 +10,8 @@ import { POKER_TABLE_REF_W, POKER_TABLE_REF_H } from './PokerMobileZoomLock';
 interface PokerTableViewProps {
   /** Scale factor from usePokerMobileZoomLock. 1.0 on desktop, <1 on mobile landscape. */
   tableScale?: number;
+  fullscreen?: boolean;
+  onToggleFullscreen?: () => void;
   renderedState: PokerTableState | null;
   effectivePlayerAddress: string | null;
   handleLeaveClick: () => void;
@@ -55,6 +57,8 @@ const POKER_MAIN_PANEL_STYLE: React.CSSProperties = {
 
 export function PokerTableView({
   tableScale = 1,
+  fullscreen = false,
+  onToggleFullscreen,
   renderedState,
   effectivePlayerAddress,
   handleLeaveClick,
@@ -120,6 +124,28 @@ export function PokerTableView({
             </div>
           )}
         </div>
+      )}
+
+      {/* ── Fullscreen toggle button (top-right corner of table, desktop only) ── */}
+      {!isMobileScale && onToggleFullscreen && (
+        <button
+          onClick={onToggleFullscreen}
+          aria-label={fullscreen ? 'Exit fullscreen' : 'Enter fullscreen'}
+          className="absolute top-2 right-2 z-30 flex items-center justify-center rounded-md bg-black/50 hover:bg-black/75 border border-white/20 text-white/70 hover:text-white transition-all"
+          style={{ width: 32, height: 32 }}
+        >
+          {fullscreen ? (
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <polyline points="8 3 3 3 3 8" /><polyline points="21 8 21 3 16 3" />
+              <polyline points="3 16 3 21 8 21" /><polyline points="16 21 21 21 21 16" />
+            </svg>
+          ) : (
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <polyline points="15 3 21 3 21 9" /><polyline points="9 21 3 21 3 15" />
+              <line x1="21" y1="3" x2="14" y2="10" /><line x1="3" y1="21" x2="10" y2="14" />
+            </svg>
+          )}
+        </button>
       )}
 
       {renderedState ? (
@@ -205,7 +231,7 @@ export function PokerTableView({
       className="flex-1 relative"
       style={{
         minHeight: 0,
-        ...POKER_MAIN_PANEL_STYLE,
+        ...(fullscreen ? { width: '100%' } : POKER_MAIN_PANEL_STYLE),
         display: showDashboard || showMyStats ? 'none' : undefined,
       }}
     >
