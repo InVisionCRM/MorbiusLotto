@@ -8,6 +8,7 @@ import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { useAccount } from 'wagmi';
 import { useProfile } from '@/hooks/use-player-profile';
+import { usePlayerServerBalance } from '@/hooks/use-player-server-balance';
 import { WalletMenu } from '@/components/shared/WalletMenu';
 import { MorbiusBurnedDisplay } from '@/components/shared/MorbiusBurnedDisplay';
 import { MorbiusPriceDisplay } from '@/components/shared/MorbiusPriceDisplay';
@@ -65,6 +66,13 @@ const OTHER_GAMES: readonly OtherGameNavItem[] = [
   { label: 'Keno', href: '/keno', icon: 'fa-th' },
 ];
 
+const WEI_PER_MORBIUS = BigInt('1000000000000000000');
+
+/** Whole MORBIUS (rounded), matches existing nav / table display style. */
+function formatReserveWholeMorbiusDisplay(wei: bigint): string {
+  return Math.round(Number(wei / WEI_PER_MORBIUS)).toLocaleString();
+}
+
 /** Section header — uses CSS .sidebar-label for transition, no context needed */
 const SectionLabel = React.memo(function SectionLabel({ label }: { label: string }) {
   return (
@@ -86,6 +94,10 @@ export interface GlobalMainNavProps {
   profileImageUrl?: string | null;
   onOpenProfileSettings?: () => void;
   onOpenDepositModal?: () => void;
+  /**
+   * Optional override (e.g. live Blackjack off-chain balance). When omitted, balance is fetched from
+   * `GET /api/player/{address}/balance` (same source as GameWalletModal).
+   */
   reserveBalance?: bigint;
 
   // Blackjack
@@ -317,7 +329,7 @@ const NavContent = React.memo(function NavContent(props: NavContentProps) {
           </Link>
         </div>
       )}
-      {/* Logo / Brand — hidden in mobile panel (rendered in MobileSidebar header instead) */}
+      {/* Logo / Brand — md+ only; mobile uses drawer header in sidebar.tsx + mobileDrawerBrandingExtra for balance */}
       <div className="hidden md:block shrink-0 py-4">
         <Link href="/" className="sidebar-item flex items-center group/sidebar" aria-label="MORBIUS.IO Home">
           <span className="w-9 h-9 rounded-lg flex items-center justify-center shrink-0 overflow-hidden">
@@ -330,7 +342,7 @@ const NavContent = React.memo(function NavContent(props: NavContentProps) {
         {reserveBalance !== undefined && (
           <div className="sidebar-label flex items-center gap-1.5 px-2 pt-1.5">
             <span className="text-white text-sm font-semibold tabular-nums">
-              {Math.round(Number(reserveBalance / BigInt('1000000000000000000'))).toLocaleString()}
+              {formatReserveWholeMorbiusDisplay(reserveBalance)}
             </span>
             <Image src="/morbius/MorbiusLogo (3).png" alt="MORBIUS" width={14} height={14} className="object-contain opacity-80" />
           </div>
@@ -341,6 +353,7 @@ const NavContent = React.memo(function NavContent(props: NavContentProps) {
       <div className="shrink-0 py-2">
         <WalletMenu
           onOpenDepositModal={onOpenDepositModal}
+          reserveBalance={reserveBalance}
           profileDisplayName={profileDisplayName}
           profileImageUrl={profileImageUrl}
           onOpenProfileSettings={onOpenProfileSettings}
@@ -587,6 +600,15 @@ export default function GlobalMainNav({
   const { gameLocked } = useGameLock();
   const page = useNavPage(pageProp);
   const { address } = useAccount();
+  const { data: serverReserveBalance } = usePlayerServerBalance(
+    reserveBalance === undefined ? address : undefined,
+  );
+  const effectiveReserveBalance =
+    reserveBalance !== undefined
+      ? reserveBalance
+      : serverReserveBalance != null
+        ? serverReserveBalance
+        : undefined;
   const { profileDisplayName: profileDisplayNameFromHook, profileImageUrl: profileImageUrlFromHook, bio: bioFromHook, xHandle: xHandleFromHook, tgHandle: tgHandleFromHook } = useProfile();
   const [responsibleGamingOpen, setResponsibleGamingOpen] = useState(false);
   const [reportOpen, setReportOpen] = useState(false);
@@ -675,8 +697,20 @@ export default function GlobalMainNav({
             <span>Menu</span>
           </Link>
         )}
+        {effectiveReserveBalance !== undefined && (
+          <div
+            className="flex items-center gap-1 shrink-0 text-white/90"
+            title={`${formatReserveWholeMorbiusDisplay(effectiveReserveBalance)} MORBIUS`}
+          >
+            <span className="text-[11px] font-semibold tabular-nums leading-none max-w-[5rem] truncate">
+              {formatReserveWholeMorbiusDisplay(effectiveReserveBalance)}
+            </span>
+            <Image src="/morbius/MorbiusLogo (3).png" alt="" width={12} height={12} className="object-contain opacity-85 shrink-0" />
+          </div>
+        )}
         <WalletMenu
           onOpenDepositModal={handleOpenGameWallet}
+          reserveBalance={effectiveReserveBalance}
           profileDisplayName={effectiveProfileDisplayName}
           profileImageUrl={effectiveProfileImageUrl}
           onOpenProfileSettings={effectiveOnOpenProfileSettings}
@@ -687,11 +721,28 @@ export default function GlobalMainNav({
         />
       </div>
     ),
-    [page, handleOpenGameWallet, effectiveProfileDisplayName, effectiveProfileImageUrl, effectiveOnOpenProfileSettings],
+    [page, handleOpenGameWallet, effectiveProfileDisplayName, effectiveProfileImageUrl, effectiveOnOpenProfileSettings, effectiveReserveBalance],
   );
 
+  const mobileDrawerBrandingExtra = useMemo(() => {
+    if (effectiveReserveBalance === undefined) return null;
+    return (
+      <div className="flex items-center gap-1.5 pl-[2.25rem] pr-1 pb-0.5">
+        <span className="text-white text-xs font-semibold tabular-nums">
+          {formatReserveWholeMorbiusDisplay(effectiveReserveBalance)}
+        </span>
+        <Image src="/morbius/MorbiusLogo (3).png" alt="MORBIUS" width={12} height={12} className="object-contain opacity-80" />
+      </div>
+    );
+  }, [effectiveReserveBalance]);
+
   return (
-    <Sidebar mobileBarContent={mobileBarContent} mobileBarCenterContent={mobileBarCenterContent} disabled={sidebarDisabled || gameLocked}>
+    <Sidebar
+      mobileBarContent={mobileBarContent}
+      mobileBarCenterContent={mobileBarCenterContent}
+      mobileDrawerBrandingExtra={mobileDrawerBrandingExtra}
+      disabled={sidebarDisabled || gameLocked}
+    >
       <div className="flex flex-col md:flex-row min-h-screen w-full">
         <SidebarBody className="shrink-0 surface-panel-sidebar global-main-nav-sidebar">
           <NavContent
@@ -731,7 +782,7 @@ export default function GlobalMainNav({
             onOpenReport={handleOpenReport}
             onOpenProfileModal={handleOpenProfileModal}
             onOpenInstallAppHelp={handleOpenInstallAppHelp}
-            reserveBalance={reserveBalance}
+            reserveBalance={effectiveReserveBalance}
           />
         </SidebarBody>
         <div
@@ -774,7 +825,7 @@ export default function GlobalMainNav({
           <SelfExclusionModal isOpen={responsibleGamingOpen} onClose={handleCloseResponsibleGaming} />
         )}
         {reportOpen && (
-          <ReportModal isOpen={reportOpen} onClose={handleCloseReport} balance={reserveBalance} />
+          <ReportModal isOpen={reportOpen} onClose={handleCloseReport} balance={effectiveReserveBalance} />
         )}
         {profileAvatarModalOpen && (
           <ProfileAvatarModal open={profileAvatarModalOpen} onClose={handleCloseProfileAvatar} onSave={handleProfileAvatarSave} />

@@ -19,6 +19,8 @@ interface SidebarContextProps {
   animate: boolean;
   mobileBarContent?: React.ReactNode;
   mobileBarCenterContent?: React.ReactNode;
+  /** Rendered in the mobile drawer under the MORBIUS.IO brand row (e.g. reserve balance). */
+  mobileDrawerBrandingExtra?: React.ReactNode;
   disabled?: boolean;
 }
 
@@ -41,6 +43,7 @@ export const SidebarProvider = ({
   animate = true,
   mobileBarContent,
   mobileBarCenterContent,
+  mobileDrawerBrandingExtra,
   disabled = false,
 }: {
   children: React.ReactNode;
@@ -49,6 +52,7 @@ export const SidebarProvider = ({
   animate?: boolean;
   mobileBarContent?: React.ReactNode;
   mobileBarCenterContent?: React.ReactNode;
+  mobileDrawerBrandingExtra?: React.ReactNode;
   disabled?: boolean;
 }) => {
   const [openState, setOpenState] = useState(false);
@@ -63,7 +67,17 @@ export const SidebarProvider = ({
     : setOpen;
 
   return (
-    <SidebarContext.Provider value={{ open: effectiveOpen, setOpen: effectiveSetOpen, animate: animate, mobileBarContent, mobileBarCenterContent, disabled }}>
+    <SidebarContext.Provider
+      value={{
+        open: effectiveOpen,
+        setOpen: effectiveSetOpen,
+        animate: animate,
+        mobileBarContent,
+        mobileBarCenterContent,
+        mobileDrawerBrandingExtra,
+        disabled,
+      }}
+    >
       {children}
     </SidebarContext.Provider>
   );
@@ -76,6 +90,7 @@ export const Sidebar = ({
   animate,
   mobileBarContent,
   mobileBarCenterContent,
+  mobileDrawerBrandingExtra,
   disabled,
 }: {
   children: React.ReactNode;
@@ -84,10 +99,19 @@ export const Sidebar = ({
   animate?: boolean;
   mobileBarContent?: React.ReactNode;
   mobileBarCenterContent?: React.ReactNode;
+  mobileDrawerBrandingExtra?: React.ReactNode;
   disabled?: boolean;
 }) => {
   return (
-    <SidebarProvider open={open} setOpen={setOpen} animate={animate} mobileBarContent={mobileBarContent} mobileBarCenterContent={mobileBarCenterContent} disabled={disabled}>
+    <SidebarProvider
+      open={open}
+      setOpen={setOpen}
+      animate={animate}
+      mobileBarContent={mobileBarContent}
+      mobileBarCenterContent={mobileBarCenterContent}
+      mobileDrawerBrandingExtra={mobileDrawerBrandingExtra}
+      disabled={disabled}
+    >
       {children}
     </SidebarProvider>
   );
@@ -235,7 +259,7 @@ export const MobileSidebar = ({
   children,
   ...props
 }: React.ComponentProps<"div">) => {
-  const { open, setOpen, mobileBarContent, mobileBarCenterContent, disabled } = useSidebar();
+  const { open, setOpen, mobileBarContent, mobileBarCenterContent, mobileDrawerBrandingExtra, disabled } = useSidebar();
   const touchStartX = useRef(0);
   return (
     <>
@@ -276,15 +300,16 @@ export const MobileSidebar = ({
             >
               {/* Brand header row — tapping backdrop still closes the sidebar */}
               <div
-                className="shrink-0 flex items-center pl-3 pr-2 min-h-12"
-                style={{ paddingTop: "env(safe-area-inset-top, 0px)" }}
+                className="shrink-0 flex flex-col pl-3 pr-2 pt-2 pb-2 border-b border-white/10 gap-1"
+                style={{ paddingTop: "max(0.5rem, env(safe-area-inset-top, 0px))" }}
               >
-                <Link href="/" className="flex items-center gap-2" aria-label="MORBIUS.IO Home" onClick={() => setOpen(false)}>
+                <Link href="/" className="flex items-center gap-2 min-h-9" aria-label="MORBIUS.IO Home" onClick={() => setOpen(false)}>
                   <span className="w-7 h-7 rounded-lg flex items-center justify-center shrink-0 overflow-hidden">
                     <Image src="/morbius/MorbiusLogo (3).png" alt="" width={20} height={20} className="object-contain" />
                   </span>
                   <span className="text-sm font-semibold text-white">MORBIUS.IO</span>
                 </Link>
+                {mobileDrawerBrandingExtra}
               </div>
               <div className="flex-1 min-h-0 overflow-y-auto pl-3 pr-2 pb-4 flex flex-col">
                 {children}
