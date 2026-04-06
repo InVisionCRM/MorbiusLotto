@@ -25,7 +25,6 @@ import {
 } from 'recharts'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { PlayerStatsFeatureGrid } from '@/components/ui/player-stats-feature-grid'
-import { AvatarView } from '@/components/avatar'
 import {
   Table,
   TableBody,
@@ -61,7 +60,7 @@ export function PlinkoPlayerDashboard({ playerAddress }: PlinkoPlayerDashboardPr
 
   const [activeTab, setActiveTab] = useState<'stats' | 'history'>('stats')
   const [historySort, setHistorySort] = useState<'newest' | 'oldest' | 'profit'>('newest')
-  const { displayName, profileImageUrl, avatarConfig } = useProfileForAddress(playerAddress)
+  const { displayName } = useProfileForAddress(playerAddress)
 
   const sortedForChart = useMemo(() => {
     return [...drops].sort((a, b) => a.timestamp - b.timestamp)
@@ -173,34 +172,25 @@ export function PlinkoPlayerDashboard({ playerAddress }: PlinkoPlayerDashboardPr
 
   return (
     <div className="space-y-6">
-      <div className="flex flex-wrap items-center gap-2 sm:gap-3 min-w-0">
-        {avatarConfig ? (
-          <div className="h-8 w-8 sm:h-9 sm:w-9 shrink-0 flex items-center justify-center rounded overflow-hidden bg-black/30">
-            <AvatarView config={avatarConfig} compact className="h-8 w-8 sm:h-9 sm:w-9" />
-          </div>
-        ) : profileImageUrl ? (
-          <img
-            src={profileImageUrl}
-            alt=""
-            className="h-8 w-8 sm:h-9 sm:w-9 rounded-full object-cover shrink-0"
+      {playerAddress ? (
+        <div className="flex flex-wrap items-center gap-2 sm:gap-3 min-w-0">
+          {displayName && (
+            <span className="text-sm font-medium text-white shrink-0">{displayName}</span>
+          )}
+          <span className="font-mono text-xs sm:text-sm text-cyan-300/90 break-all min-w-0" title={playerAddress}>
+            {playerAddress}
+          </span>
+          <CopyButton
+            content={playerAddress}
+            copyToast="Address copied"
+            variant="ghost"
+            size="default"
+            className="p-1.5 h-9 w-9 text-white/60 hover:text-white"
+            title="Copy address"
+            aria-label="Copy address"
           />
-        ) : null}
-        {displayName && (
-          <span className="text-sm font-medium text-white shrink-0">{displayName}</span>
-        )}
-        <span className="font-mono text-xs sm:text-sm text-cyan-300/90 break-all min-w-0" title={playerAddress}>
-          {playerAddress}
-        </span>
-        <CopyButton
-          content={playerAddress!}
-          copyToast="Address copied"
-          variant="ghost"
-          size="default"
-          className="p-1.5 h-9 w-9 text-white/60 hover:text-white"
-          title="Copy address"
-          aria-label="Copy address"
-        />
-      </div>
+        </div>
+      ) : null}
 
       <div className="flex gap-2 border-b border-white/10 mb-4">
         <button
