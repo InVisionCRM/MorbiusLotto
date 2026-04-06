@@ -21,7 +21,8 @@ export function registerPlayerMutationRoutes({
   app.post('/api/player/profile', express.json(), async (req, res) => {
     try {
       const {
-        address,
+        address: bodyAddress,
+        walletAddress: bodyWalletAddress,
         displayName: rawDisplayName,
         profileImageUrl: rawProfileImageUrl,
         avatarConfig: rawAvatarConfig,
@@ -29,10 +30,16 @@ export function registerPlayerMutationRoutes({
         xHandle: rawXHandle,
         tgHandle: rawTgHandle,
       } = req.body ?? {};
-      if (!address || typeof address !== 'string') {
+      const addressRaw =
+        typeof bodyAddress === 'string' && bodyAddress.trim() !== ''
+          ? bodyAddress
+          : typeof bodyWalletAddress === 'string' && bodyWalletAddress.trim() !== ''
+            ? bodyWalletAddress
+            : '';
+      if (!addressRaw) {
         return res.status(400).json({ error: 'address required' });
       }
-      const normalizedAddress = getAddress(address);
+      const normalizedAddress = getAddress(addressRaw);
       const displayName = typeof rawDisplayName === 'string' ? rawDisplayName.trim() : '';
       if (displayName.length < 3 || displayName.length > 32) {
         return res.status(400).json({ error: 'Display name must be 3–32 characters' });

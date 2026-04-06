@@ -9,6 +9,7 @@ import { usePathname } from 'next/navigation';
 import { useAccount } from 'wagmi';
 import { useProfile } from '@/hooks/use-player-profile';
 import { usePlayerServerBalance } from '@/hooks/use-player-server-balance';
+import { useTokenBalance } from '@/hooks/use-token';
 import { WalletMenu } from '@/components/shared/WalletMenu';
 import { MorbiusBurnedDisplay } from '@/components/shared/MorbiusBurnedDisplay';
 import { MorbiusPriceDisplay } from '@/components/shared/MorbiusPriceDisplay';
@@ -241,6 +242,9 @@ interface NavContentProps {
   onOpenProfileModal?: () => void;
   onOpenInstallAppHelp?: () => void;
   reserveBalance?: bigint;
+  /** MORBIUS ERC-20 balance in the connected wallet (wei). */
+  inWalletMorbiusWei: bigint;
+  walletConnected: boolean;
 }
 
 const NavContent = React.memo(function NavContent(props: NavContentProps) {
@@ -283,6 +287,8 @@ const NavContent = React.memo(function NavContent(props: NavContentProps) {
     onOpenProfileModal,
     onOpenInstallAppHelp,
     reserveBalance,
+    inWalletMorbiusWei,
+    walletConnected,
   } = props;
 
   const btnClass = (active: boolean) =>
@@ -339,12 +345,30 @@ const NavContent = React.memo(function NavContent(props: NavContentProps) {
             MORBIUS.IO
           </span>
         </Link>
-        {reserveBalance !== undefined && (
-          <div className="sidebar-label flex items-center gap-1.5 px-2 pt-1.5">
-            <span className="text-white text-sm font-semibold tabular-nums">
-              {formatReserveWholeMorbiusDisplay(reserveBalance)}
-            </span>
-            <Image src="/morbius/MorbiusLogo (3).png" alt="MORBIUS" width={14} height={14} className="object-contain opacity-80" />
+        {(reserveBalance !== undefined || walletConnected) && (
+          <div className="px-2 pt-1.5 space-y-1.5">
+            {reserveBalance !== undefined && (
+              <div className="sidebar-label space-y-0.5">
+                <div className="text-[10px] text-white/55 uppercase tracking-wide">Balance</div>
+                <div className="flex items-center gap-1.5">
+                  <span className="text-white text-sm font-semibold tabular-nums">
+                    {formatReserveWholeMorbiusDisplay(reserveBalance)}
+                  </span>
+                  <Image src="/morbius/MorbiusLogo (3).png" alt="MORBIUS" width={14} height={14} className="object-contain opacity-80" />
+                </div>
+              </div>
+            )}
+            {walletConnected && (
+              <div className="sidebar-label space-y-0.5">
+                <div className="text-[10px] text-white/55 uppercase tracking-wide">In-wallet</div>
+                <div className="flex items-center gap-1.5">
+                  <span className="text-white text-sm font-semibold tabular-nums">
+                    {formatReserveWholeMorbiusDisplay(inWalletMorbiusWei)}
+                  </span>
+                  <Image src="/morbius/MorbiusLogo (3).png" alt="MORBIUS" width={14} height={14} className="object-contain opacity-80" />
+                </div>
+              </div>
+            )}
           </div>
         )}
       </div>
@@ -600,6 +624,7 @@ export default function GlobalMainNav({
   const { gameLocked } = useGameLock();
   const page = useNavPage(pageProp);
   const { address } = useAccount();
+  const { balance: inWalletMorbiusWei } = useTokenBalance(address);
   const { data: serverReserveBalance } = usePlayerServerBalance(
     reserveBalance === undefined ? address : undefined,
   );
@@ -633,9 +658,12 @@ export default function GlobalMainNav({
     const res = await fetch('/api/player/profile', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ walletAddress: address, displayName: name, profileImageUrl: img, bio, xHandle: x, tgHandle: tg }),
+      body: JSON.stringify({ address, displayName: name, profileImageUrl: img, bio, xHandle: x, tgHandle: tg }),
     });
-    if (!res.ok) throw new Error('Failed to save profile');
+    if (!res.ok) {
+      const data = (await res.json().catch(() => ({}))) as { error?: string };
+      throw new Error(typeof data.error === 'string' ? data.error : 'Failed to save profile');
+    }
     queryClient.invalidateQueries({ queryKey: ['playerProfile'] });
   }, [address, queryClient]);
 
@@ -697,15 +725,36 @@ export default function GlobalMainNav({
             <span>Menu</span>
           </Link>
         )}
-        {effectiveReserveBalance !== undefined && (
+        {(effectiveReserveBalance !== undefined || address) && (
           <div
-            className="flex items-center gap-1 shrink-0 text-white/90"
-            title={`${formatReserveWholeMorbiusDisplay(effectiveReserveBalance)} MORBIUS`}
+            className="flex flex-col gap-0.5 shrink-0 text-white/90 leading-tight max-w-[6.5rem]"
+            title={
+              [
+                effectiveReserveBalance !== undefined
+                  ? `Balance ${formatReserveWholeMorbiusDisplay(effectiveReserveBalance)} MORBIUS`
+                  : null,
+                address ? `In-wallet ${formatReserveWholeMorbiusDisplay(inWalletMorbiusWei)} MORBIUS` : null,
+              ]
+                .filter(Boolean)
+                .join(' · ') || undefined
+            }
           >
-            <span className="text-[11px] font-semibold tabular-nums leading-none max-w-[5rem] truncate">
-              {formatReserveWholeMorbiusDisplay(effectiveReserveBalance)}
-            </span>
-            <Image src="/morbius/MorbiusLogo (3).png" alt="" width={12} height={12} className="object-contain opacity-85 shrink-0" />
+            {effectiveReserveBalance !== undefined && (
+              <span className="text-[9px]">
+                <span className="text-white/55">Balance </span>
+                <span className="font-semibold tabular-nums text-white/95">
+                  {formatReserveWholeMorbiusDisplay(effectiveReserveBalance)}
+                </span>
+              </span>
+            )}
+            {address ? (
+              <span className="text-[9px]">
+                <span className="text-white/55">In-wallet </span>
+                <span className="font-semibold tabular-nums text-white/95">
+                  {formatReserveWholeMorbiusDisplay(inWalletMorbiusWei)}
+                </span>
+              </span>
+            ) : null}
           </div>
         )}
         <WalletMenu
@@ -721,20 +770,49 @@ export default function GlobalMainNav({
         />
       </div>
     ),
-    [page, handleOpenGameWallet, effectiveProfileDisplayName, effectiveProfileImageUrl, effectiveOnOpenProfileSettings, effectiveReserveBalance],
+    [
+      page,
+      handleOpenGameWallet,
+      effectiveProfileDisplayName,
+      effectiveProfileImageUrl,
+      effectiveOnOpenProfileSettings,
+      effectiveReserveBalance,
+      address,
+      inWalletMorbiusWei,
+    ],
   );
 
   const mobileDrawerBrandingExtra = useMemo(() => {
-    if (effectiveReserveBalance === undefined) return null;
+    if (effectiveReserveBalance === undefined && !address) return null;
     return (
-      <div className="flex items-center gap-1.5 pl-[2.25rem] pr-1 pb-0.5">
-        <span className="text-white text-xs font-semibold tabular-nums">
-          {formatReserveWholeMorbiusDisplay(effectiveReserveBalance)}
-        </span>
-        <Image src="/morbius/MorbiusLogo (3).png" alt="MORBIUS" width={12} height={12} className="object-contain opacity-80" />
+      <div className="flex flex-col gap-2 pl-[2.25rem] pr-1 pb-1">
+        {effectiveReserveBalance !== undefined && (
+          <div className="space-y-0.5">
+            <div className="text-[9px] text-white/55 uppercase tracking-wide">Balance</div>
+            <div className="flex items-center gap-1.5">
+              <span className="text-white text-xs font-semibold tabular-nums">
+                {formatReserveWholeMorbiusDisplay(effectiveReserveBalance)}
+              </span>
+              <Image src="/morbius/MorbiusLogo (3).png" alt="MORBIUS" width={12} height={12} className="object-contain opacity-80" />
+            </div>
+          </div>
+        )}
+        {address ? (
+          <div
+            className={`space-y-0.5 ${effectiveReserveBalance !== undefined ? 'pt-1 border-t border-white/10' : ''}`}
+          >
+            <div className="text-[9px] text-white/55 uppercase tracking-wide">In-wallet</div>
+            <div className="flex items-center gap-1.5">
+              <span className="text-white text-xs font-semibold tabular-nums">
+                {formatReserveWholeMorbiusDisplay(inWalletMorbiusWei)}
+              </span>
+              <Image src="/morbius/MorbiusLogo (3).png" alt="MORBIUS" width={12} height={12} className="object-contain opacity-80" />
+            </div>
+          </div>
+        ) : null}
       </div>
     );
-  }, [effectiveReserveBalance]);
+  }, [effectiveReserveBalance, address, inWalletMorbiusWei]);
 
   return (
     <Sidebar
@@ -783,6 +861,8 @@ export default function GlobalMainNav({
             onOpenProfileModal={handleOpenProfileModal}
             onOpenInstallAppHelp={handleOpenInstallAppHelp}
             reserveBalance={effectiveReserveBalance}
+            inWalletMorbiusWei={inWalletMorbiusWei}
+            walletConnected={Boolean(address)}
           />
         </SidebarBody>
         <div
