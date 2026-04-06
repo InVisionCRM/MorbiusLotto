@@ -1,6 +1,7 @@
 'use client'
 
-import React, { useState } from 'react'
+import { useState, useEffect, useCallback } from 'react'
+import { useRouter } from 'next/navigation'
 import Image from 'next/image'
 import GlobalMainNav from '@/components/shared/GlobalMainNav'
 import { FirstVisitNotification } from '@/components/ui/first-visit-notification'
@@ -18,6 +19,7 @@ import { PulseChainSection } from '@/components/home/pulsechain-section'
 import { TableShowcaseDisplay } from '@/components/marketing/TableShowcaseDisplay'
 import Footer from '@/components/PLINKO/Footer'
 import { PwaHomeInstallSplash } from '@/components/home/PwaHomeInstallSplash'
+import { DepositWithdrawModal } from '@/components/BLACKJACK/DepositWithdrawModal'
 
 const HOME_FIXED_BG = '/Marketing%20/Hero-Background.jpeg' as const
 
@@ -30,8 +32,37 @@ function HomeSectionDivider() {
   )
 }
 
+const GAME_ROUTES: Record<string, string> = {
+  open_blackjack: '/BLACKJACK',
+  open_plinko: '/PLINKO',
+  open_keno: '/keno',
+  open_lottery: '/lottery',
+  open_poker: '/poker',
+}
+
 export default function HomePageClient() {
+  const router = useRouter()
   const [loginOpen, setLoginOpen] = useState(false)
+  const [walletModalOpen, setWalletModalOpen] = useState(false)
+
+  useEffect(() => {
+    if (document.querySelector('script[src*="elevenlabs/convai-widget-embed"]')) return
+    const script = document.createElement('script')
+    script.src = 'https://unpkg.com/@elevenlabs/convai-widget-embed'
+    script.async = true
+    script.type = 'text/javascript'
+    document.body.appendChild(script)
+  }, [])
+
+  const clientTools = useCallback(() => ({
+    open_deposit_withdraw_modal: () => setWalletModalOpen(true),
+    open_blackjack: () => router.push('/BLACKJACK'),
+    open_plinko: () => router.push('/PLINKO'),
+    open_keno: () => router.push('/keno'),
+    open_lottery: () => router.push('/lottery'),
+    open_poker: () => router.push('/poker'),
+  }), [router])()
+
   const [playerProfileOpen, setPlayerProfileOpen] = useState(false)
   const [playerProfileGame, setPlayerProfileGame] = useState<'all' | 'blackjack' | 'lottery' | 'keno' | 'plinko'>('all')
   const { address, isAuthenticated, signIn, signOut, isSigning } = useAuth()
@@ -129,6 +160,12 @@ export default function HomePageClient() {
         game={playerProfileGame}
       />
       <PwaHomeInstallSplash />
+      <DepositWithdrawModal
+        isOpen={walletModalOpen}
+        onClose={() => setWalletModalOpen(false)}
+      />
+      {/* @ts-expect-error custom element */}
+      <elevenlabs-convai agent-id="agent_6501knjaw524ff2bc6wvxagf49ga" clientTools={clientTools} />
     </GlobalMainNav>
   )
 }

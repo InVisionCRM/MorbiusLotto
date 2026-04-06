@@ -30,7 +30,8 @@ cd contracts && npx hardhat test
 **MORBlotto** is a Web3 casino gaming platform on PulseChain (chainId 369, EVM-compatible Ethereum fork). It has three main layers:
 
 ### Frontend — Next.js App Router (`app/`, `components/`, `hooks/`)
-- Games: Lottery 6-of-55, Plinko (Matter.js physics), Blackjack, Poker, Big Wheel, Keno
+- Games: Lottery 6-of-55, Plinko (Matter.js physics), Blackjack (single + multiplayer), Poker, Keno
+- Other tools: Morb-It (meme maker, not a game)
 - Wallet integration via Wagmi v2 + RainbowKit; contracts interact via Viem
 - Custom hooks in `hooks/` encapsulate all contract reads/writes and real-time state
 - Shared UI primitives in `components/ui/` (Shadcn/Radix); game-specific components grouped by game name
@@ -44,16 +45,14 @@ cd contracts && npx hardhat test
 
 ### Smart Contracts (`contracts/`, `abi/`)
 - Solidity contracts deployed on PulseChain; ABIs compiled to `abi/`
-- Key contracts: Lottery6of55, Plinko, Blackjack, BigWheel, Keno, MorbiusTournament, TournamentPrizeEscrowV3
+- Key contracts: Lottery6of55, Plinko, Blackjack, Keno, MorbiusTournament, TournamentPrizeEscrowV3
 - Contract addresses centralized in `lib/contracts.ts`
 
 ## Key Patterns
 
 **Wagmi wallet popups**: Never call `writeContractAsync` after an `await` (e.g., `waitForTransactionReceipt`) — this loses the user-gesture context and the wallet popup won't appear. Use a two-step UI flow with separate user-initiated clicks.
 
-**Fee distribution** (all purchases): 5% keeper wallet, 5% deployer wallet, 10% burn address, 10% MegaBorbius Bank, 70% player pool.
-
-**Rollover mechanic**: 100% of remaining bracket rolls over to the next round.
+**Fee distribution** (applied on payouts/withdrawals, consistent across Blackjack, Plinko, Keno, Lottery): 1.25% MORBIUS holder distribution, 0.5% burn, 1.75% platform/house, 1.5% LP holders. Total: 5% fee on payouts. The old "70/10/10/5/5" split was incorrect — do not use it.
 
 **PulseChain / Solidity**: PLS behaves exactly like ETH. `msg.value` is in beats (= wei). No wrappers needed. Unmodified Ethereum contracts deploy and run without changes.
 
