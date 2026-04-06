@@ -99,7 +99,7 @@ export function ChatSidebar() {
         <button
           type="button"
           onClick={() => setOpen(true)}
-          className="fixed right-0 z-[500] flex flex-col items-center justify-center gap-1.5 w-9 min-h-[7.5rem] rounded-l-xl text-cyan-400 hover:text-cyan-300 transition-colors top-1/4 -translate-y-1/2 md:top-1/2"
+          className="fixed right-0 z-[500] flex flex-col items-center justify-center gap-1.5 w-6 min-h-[7.5rem] rounded-l-xl text-cyan-400 hover:text-cyan-300 transition-colors bottom-1/4 -translate-y-1/2 md:bottom-1/4"
           style={{
             ...CHAT_TAG_STYLE,
           }}
@@ -127,7 +127,7 @@ export function ChatSidebar() {
           <>
             <motion.div
               key="chat-backdrop"
-              className="fixed inset-0 z-[9001] md:z-[499] bg-black/50"
+              className="fixed inset-0 z-[9001] md:z-[499] bg-slate-800"
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
@@ -138,7 +138,7 @@ export function ChatSidebar() {
             {/* Desktop */}
             <motion.div
               key="chat-drawer-desktop"
-              className="hidden md:flex fixed right-0 top-0 bottom-0 z-[500] flex-col overflow-hidden text-slate-200"
+              className="hidden md:flex fixed right-0 top-0 bottom-0 z-[500] flex-col overflow-hidden text-slate-300"
               style={{ ...CHAT_DRAWER_STYLE, width: 300 }}
               initial={{ x: '100%', opacity: 0 }}
               animate={{ x: 0, opacity: 1 }}
@@ -179,7 +179,7 @@ export function ChatSidebar() {
             {/* Mobile */}
             <motion.div
               key="chat-drawer-mobile"
-              className="md:hidden fixed right-0 top-0 bottom-0 z-[9002] flex flex-col overflow-hidden text-slate-200"
+              className="md:hidden fixed right-0 top-0 bottom-0 z-[9002] flex flex-col overflow-hidden text-slate-300"
               style={{ ...CHAT_DRAWER_STYLE, width: 'min(85vw, 320px)' }}
               initial={{ x: '100%', opacity: 0 }}
               animate={{ x: 0, opacity: 1 }}
@@ -189,7 +189,7 @@ export function ChatSidebar() {
             >
               <div className="shrink-0 h-14" />
               {hasGameChat && (
-                <div className="flex shrink-0 rounded-none border-b border-cyan-500/15 bg-slate-950/50 mb-0">
+                <div className="flex shrink-0 rounded-none border-b border-cyan-500/15 bg-slate-800 mb-0">
                   <button type="button" onClick={() => setActiveTab('page')} className={tabBtn(activeTab === 'page')}>
                     <span className="truncate block max-w-full">{pageTitle}</span>
                   </button>
