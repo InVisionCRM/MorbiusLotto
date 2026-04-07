@@ -173,7 +173,7 @@ export default function PokerTablePage() {
     applyE2EMockAction,
   });
   // ── Voice commands ────────────────────────────────────────────────────────
-  const { enabled: speechEnabled } = useSpeechEnabled(address);
+  const { enabled: speechEnabled, setEnabled: setSpeechEnabled } = useSpeechEnabled(address);
   const [lastSpeechAction, setLastSpeechAction] = useState<string | null>(null);
   const lastSpeechActionTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -442,6 +442,7 @@ export default function PokerTablePage() {
   }, [address, tableId, extractApiError]);
 
   return (
+    <>
     <PokerThemeProvider themeId={pokerTheme}>
       <PokerTableEffectProvider>
         {!isE2EMock && <PokerBetaSplash />}
@@ -637,14 +638,14 @@ export default function PokerTablePage() {
       </PokerTableEffectProvider>
       </PokerThemeProvider>
 
-      {speechEnabled && (
-        <SpeechHUD
-          listening={speech.listening}
-          transcript={speech.transcript}
-          lastAction={lastSpeechAction}
-          pendingLabel={speech.pendingLabel}
-        />
-      )}
+      <SpeechHUD
+        listening={speech.listening}
+        transcript={speech.transcript}
+        lastAction={lastSpeechAction}
+        pendingLabel={speech.pendingLabel}
+        onToggle={() => setSpeechEnabled(!speechEnabled)}
+      />
       <SophieSplashModal address={address} />
+    </>
   );
 }

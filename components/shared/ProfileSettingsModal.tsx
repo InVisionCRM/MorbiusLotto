@@ -200,7 +200,7 @@ export default function ProfileSettingsModal({
           <div className="flex items-center justify-between py-1">
             <div>
               <div className="text-xs font-medium text-gray-300">Voice commands</div>
-              <div className="text-[11px] text-gray-500">Blackjack only · Chrome/Edge</div>
+              <div className="text-[11px] text-gray-500">Blackjack &amp; Poker · Chrome/Edge</div>
             </div>
             <button
               type="button"

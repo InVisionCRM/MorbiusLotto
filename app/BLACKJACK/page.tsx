@@ -1884,7 +1884,7 @@ export default function BlackjackPage() {
   }, [gameState.currentGame, wsClient, wsConnected, updateGameStateFromServer, fetchBalance]);
 
   // ── Voice commands ────────────────────────────────────────────────────────
-  const { enabled: speechEnabled } = useSpeechEnabled(address);
+  const { enabled: speechEnabled, setEnabled } = useSpeechEnabled(address);
   const [lastSpeechAction, setLastSpeechAction] = useState<string | null>(null);
   const lastSpeechActionTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -2113,14 +2113,13 @@ export default function BlackjackPage() {
         pendingJob={pendingJob}
       />
 
-      {speechEnabled && (
-        <SpeechHUD
-          listening={speech.listening}
-          transcript={speech.transcript}
-          lastAction={lastSpeechAction}
-          pendingLabel={speech.pendingLabel}
-        />
-      )}
+      <SpeechHUD
+        listening={speech.listening}
+        transcript={speech.transcript}
+        lastAction={lastSpeechAction}
+        pendingLabel={speech.pendingLabel}
+        onToggle={() => setEnabled(!speechEnabled)}
+      />
 
       <main className="w-full max-w-full mx-0 px-2 sm:px-4 pt-2 sm:pt-4 pb-4 sm:pb-8 overflow-x-hidden overflow-y-auto no-scrollbar">
         {/* View-specific content */}
