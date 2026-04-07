@@ -463,6 +463,8 @@ export function BlackjackGameView(props: BlackjackGameViewProps) {
               }
               inTournament={tournament.tournamentState.inTournament}
               tournamentTabContent={tournamentTabContent}
+              blackjackAddress={blackjackAddress}
+              morbiusTokenAddress={morbiusTokenAddress}
             />
           </div>
           </div>
@@ -475,12 +477,14 @@ export function BlackjackGameView(props: BlackjackGameViewProps) {
             wsClient={wsClient}
             offChainBalance={offChainBalance}
             tipStats={tipStats}
-            blackjackAddress={blackjackAddress}
-            morbiusTokenAddress={morbiusTokenAddress}
             tournament={tournament}
           />
 
-          <BlackjackHowToSection blackjackAddress={blackjackAddress} layout="panel" />
+          <BlackjackHowToSection
+            blackjackAddress={blackjackAddress}
+            morbiusTokenAddress={morbiusTokenAddress}
+            layout="panel"
+          />
         </div>
       </div>
 

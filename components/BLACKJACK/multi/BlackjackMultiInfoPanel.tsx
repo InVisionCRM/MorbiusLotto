@@ -5,7 +5,6 @@ import { MessageCircle, BarChart3, HelpCircle, History } from 'lucide-react';
 import { toast } from 'sonner';
 import { Input } from '@/components/ui/input';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
-import { GameFAQ } from '@/components/shared/GameFAQ';
 import BlackjackMultiRealTimeBetChart, {
   type BlackjackMultiRealTimeBetChartRef,
 } from '@/components/BLACKJACK/BlackjackMultiRealTimeBetChart';
@@ -50,8 +49,6 @@ type BlackjackMultiInfoPanelProps = {
   onSendChatMessage: (text: string) => void;
   chartRef: React.RefObject<BlackjackMultiRealTimeBetChartRef | null>;
   chartSessionStartTime: number;
-  blackjackAddress: string;
-  morbiusTokenAddress: string;
   formatMorbius: (wei: string) => string;
   viewportHeightClassName?: string;
 };
@@ -238,8 +235,6 @@ export function BlackjackMultiInfoPanel({
   onSendChatMessage,
   chartRef,
   chartSessionStartTime,
-  blackjackAddress,
-  morbiusTokenAddress,
   formatMorbius,
   viewportHeightClassName = DEFAULT_INFO_PANEL_VIEWPORT_HEIGHT_CLASS,
 }: BlackjackMultiInfoPanelProps) {
@@ -310,13 +305,44 @@ export function BlackjackMultiInfoPanel({
           </div>
 
           <TabsContent value="rules" className="mt-0 h-full p-3 overflow-y-auto">
-            <GameFAQ
-              game="blackjack"
-              addresses={[
-                { label: 'Blackjack Contract', address: blackjackAddress },
-                { label: 'MORBIUS Token', address: morbiusTokenAddress },
-              ]}
-            />
+            <div className="text-xs text-white/90 space-y-4">
+              <p className="text-[11px] text-white/50 leading-relaxed">
+                Full FAQ, fees, provably fair details, and contract addresses are in the section below the table (video + accordion).
+              </p>
+              <div>
+                <h3 className="text-sm font-semibold text-cyan-300/95 mb-1.5">At this table</h3>
+                <ul className="space-y-1 list-disc list-inside text-white/80">
+                  <li>Take an open seat, then bet when the table is in the betting phase.</li>
+                  <li>Play proceeds in seat order; use Hit, Stand, Double, or Split when it is your turn.</li>
+                  <li>Chat is available in the Chat tab — keep it respectful.</li>
+                </ul>
+              </div>
+              <div>
+                <h3 className="text-sm font-semibold text-cyan-300/95 mb-1.5">Deposit & withdraw</h3>
+                <ul className="space-y-1 list-disc list-inside text-white/80">
+                  <li>
+                    Use your balance / reserve controls on the table to move MORBIUS in or out. Keep a little PLS for gas.
+                  </li>
+                  <li>Bets use your table balance; winnings are credited back.</li>
+                </ul>
+              </div>
+              <div>
+                <h3 className="text-sm font-semibold text-cyan-300/95 mb-1.5">Blackjack rules</h3>
+                <ul className="space-y-1 list-disc list-inside text-white/80">
+                  <li>Get as close to 21 as you can without busting; beat the dealer total.</li>
+                  <li>
+                    <strong>Hit</strong> — take another card. <strong>Stand</strong> — keep your hand.
+                  </li>
+                  <li>
+                    <strong>Double</strong> — double the bet, one more card only (when allowed).
+                  </li>
+                  <li>
+                    <strong>Split</strong> — on a pair, play two hands (extra bet).
+                  </li>
+                  <li>Natural blackjack (Ace + 10-value) typically pays 3:2. Dealer stands on 17 unless table rules say otherwise.</li>
+                </ul>
+              </div>
+            </div>
           </TabsContent>
 
           <TabsContent value="history" className="mt-0 h-full p-3">

@@ -45,7 +45,7 @@ export default function FAQModal({ open, onOpenChange }: FAQModalProps) {
     },
     {
       question: "Is this game fair?",
-      answer: "Yes! The game uses physics simulation for realistic ball movement. Each drop is independent and results are determined by the physics engine."
+      answer: "Yes. Drops are settled on-chain: the contract builds a verifiable seed from block data and your play, maps it to a bucket, and emits it in the BallDropped event. The full FAQ on the Plinko page explains fees, RNG, and how to verify results."
     }
   ];
 

@@ -1,12 +1,7 @@
 'use client';
 
 import { formatEther } from 'viem';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { GameFAQ } from '@/components/shared/GameFAQ';
 import { PlayerStatsDashboard } from '@/components/BLACKJACK/PlayerStatsDashboard';
-import { BlackjackRecentPlays } from '@/components/BLACKJACK/BlackjackRecentPlays';
-import { BlackjackRecentGames } from '@/components/BLACKJACK/BlackjackRecentGames';
-import BlackjackTopPlayers from '@/components/BLACKJACK/BlackjackTopPlayers';
 import { TournamentLeaderboard } from '@/components/BLACKJACK/Tournament';
 import type { BlackjackWebSocketClient } from '@/lib/websocket-client';
 
@@ -24,8 +19,6 @@ interface BlackjackGameSecondaryPanelsProps {
   wsClient: BlackjackWebSocketClient | null;
   offChainBalance: bigint;
   tipStats: TipStats | null;
-  blackjackAddress: string;
-  morbiusTokenAddress: string;
   tournament: {
     tournamentState: { inTournament: boolean };
     leaderboard: Array<{ player_address: string } & Record<string, unknown>>;
@@ -41,8 +34,6 @@ export function BlackjackGameSecondaryPanels({
   wsClient,
   offChainBalance,
   tipStats,
-  blackjackAddress,
-  morbiusTokenAddress,
   tournament,
 }: BlackjackGameSecondaryPanelsProps) {
   return (
@@ -104,58 +95,6 @@ export function BlackjackGameSecondaryPanels({
           )}
         </div>
       )}
-
-      <section className="mt-3 grid grid-cols-1 gap-3 items-start">
-        <div className="w-full">
-          <GameFAQ
-            game="blackjack"
-            addresses={[
-              { label: 'Blackjack Contract', address: blackjackAddress },
-              { label: 'MORBIUS Token', address: morbiusTokenAddress },
-            ]}
-          />
-        </div>
-        <div className="px-0">
-          <div className="surface-panel relative overflow-hidden rounded-2xl">
-            <div className="surface-cyan-glow" />
-
-            <Tabs defaultValue="recent-games" className="relative p-3 sm:p-4">
-              <TabsList className="grid h-11 w-full max-w-full grid-cols-3 gap-1 rounded-xl border border-cyan-500/30 bg-black/40 p-1">
-                <TabsTrigger
-                  value="recent-games"
-                  className="font-jost min-w-0 w-full justify-center rounded-lg px-1 py-2 text-center text-[11px] font-bold leading-tight text-white/80 transition-all data-[state=active]:bg-gradient-to-r data-[state=active]:from-cyan-600 data-[state=active]:to-blue-600 data-[state=active]:text-white sm:px-2 sm:text-[13px]"
-                >
-                  Recent Games
-                </TabsTrigger>
-                <TabsTrigger
-                  value="recent-play"
-                  className="font-jost min-w-0 w-full justify-center rounded-lg px-1 py-2 text-center text-[11px] font-bold leading-tight text-white/80 transition-all data-[state=active]:bg-gradient-to-r data-[state=active]:from-cyan-600 data-[state=active]:to-blue-600 data-[state=active]:text-white sm:px-2 sm:text-[13px]"
-                >
-                  Recent Play
-                </TabsTrigger>
-                <TabsTrigger
-                  value="leaderboard"
-                  className="font-jost min-w-0 w-full justify-center rounded-lg px-1 py-2 text-center text-[11px] font-bold leading-tight text-white/80 transition-all data-[state=active]:bg-gradient-to-r data-[state=active]:from-cyan-600 data-[state=active]:to-blue-600 data-[state=active]:text-white sm:px-2 sm:text-[13px]"
-                >
-                  Leaderboard
-                </TabsTrigger>
-              </TabsList>
-
-              <TabsContent value="recent-games" className="mt-4 min-h-[260px] focus-visible:outline-none lg:min-h-[300px]">
-                <BlackjackRecentGames compact title="Recent Games" />
-              </TabsContent>
-
-              <TabsContent value="recent-play" className="mt-4 min-h-[260px] focus-visible:outline-none lg:min-h-[300px]">
-                <BlackjackRecentPlays compact title="Recent Play" />
-              </TabsContent>
-
-              <TabsContent value="leaderboard" className="mt-4 min-h-[260px] focus-visible:outline-none lg:min-h-[300px]">
-                <BlackjackTopPlayers />
-              </TabsContent>
-            </Tabs>
-          </div>
-        </div>
-      </section>
 
       {tournament.tournamentState.inTournament && (
         <div className="mt-3">

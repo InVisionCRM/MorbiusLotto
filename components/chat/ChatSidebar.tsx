@@ -125,9 +125,10 @@ export function ChatSidebar() {
       <AnimatePresence>
         {open && (
           <>
+            {/* Backdrop: mobile only — desktop drawer doesn't need a full-screen overlay */}
             <motion.div
               key="chat-backdrop"
-              className="fixed inset-0 z-[9001] md:z-[499] bg-slate-800"
+              className="fixed inset-0 z-[9001] md:hidden bg-slate-800"
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}

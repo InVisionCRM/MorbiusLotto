@@ -22,6 +22,7 @@ import {
 } from '@/lib/poker-buy-in';
 import { floorMorbiusWholeFromWei, formatMorbiusFloor, formatMorbiusFloorPlain } from '@/lib/format-morbius-display';
 import { PokerBetaSplash } from '@/components/poker/PokerBetaSplash';
+import { SophieSplashModal } from '@/components/shared/SophieSplashModal';
 import { PokerHowToPlayModal } from '@/components/poker/PokerHowToPlayModal';
 import GlobalMainNav from '@/components/shared/GlobalMainNav';
 // import { PokerTournamentLobby } from '@/components/poker/tournament/PokerTournamentLobby';
@@ -943,6 +944,7 @@ export default function PokerLobbyPage() {
         onClose={() => setShowDepositModal(false)}
         balanceLabel="Poker Balance"
       />
+      <SophieSplashModal address={address} />
     </>
   );
 }

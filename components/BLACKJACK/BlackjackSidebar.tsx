@@ -4,6 +4,7 @@ import React, { useState, useEffect } from 'react'
 import {
   History,
   BookOpen,
+  CircleHelp,
   TrendingUp,
   Gamepad2,
   Volume2,
@@ -16,10 +17,15 @@ import {
   SkipForward,
 } from 'lucide-react'
 import QuickHistory from '@/components/BLACKJACK/QuickHistory'
+import { BlackjackRecentPlays } from '@/components/BLACKJACK/BlackjackRecentPlays'
+import { BlackjackRecentGames } from '@/components/BLACKJACK/BlackjackRecentGames'
+import BlackjackTopPlayers from '@/components/BLACKJACK/BlackjackTopPlayers'
 import BlackjackRealTimeBetChart from '@/components/BLACKJACK/RealTimeBetChart'
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import type { BlackjackRealTimeBetChartRef } from '@/components/BLACKJACK/RealTimeBetChart'
 import { GameResult } from '@/app/BLACKJACK/types'
 import { Theme } from '@/lib/theme'
+import { GameFAQ } from '@/components/shared/GameFAQ'
 function useIsDesktop() {
   const [isDesktop, setIsDesktop] = useState(false)
   useEffect(() => {
@@ -40,6 +46,7 @@ const BASE_TABS = [
   { id: 'chart', label: 'Chart', shortLabel: 'Chart', icon: TrendingUp },
   { id: 'sounds', label: 'Sounds', shortLabel: 'Sounds', icon: Volume2 },
   { id: 'howto', label: 'How to Play', shortLabel: 'How', icon: BookOpen },
+  { id: 'faq', label: 'FAQ', shortLabel: 'FAQ', icon: CircleHelp },
 ] as const
 
 const TOURNAMENT_PLAY_TAB = { id: 'tournament-play' as const, label: 'Tournament', shortLabel: 'Play', icon: Gamepad2 }
@@ -69,6 +76,8 @@ interface BlackjackSidebarProps {
   musicVolume: number
   onMusicVolumeChange: (volume: number) => void
   musicTrackDisplayName: string
+  blackjackAddress: string
+  morbiusTokenAddress: string
 }
 
 export default function BlackjackSidebar({
@@ -91,6 +100,8 @@ export default function BlackjackSidebar({
   musicVolume,
   onMusicVolumeChange,
   musicTrackDisplayName,
+  blackjackAddress,
+  morbiusTokenAddress,
 }: BlackjackSidebarProps) {
   const isDesktop = useIsDesktop()
   const [activeTab, setActiveTab] = useState<BlackjackSidebarTabId>(() => 'chart')
@@ -126,7 +137,7 @@ export default function BlackjackSidebar({
       {/* Tab buttons — fixed at top */}
       <div
         className={`grid gap-2 p-3 shrink-0 items-start bg-black/20 ${
-          tabs.length >= 5 ? 'grid-cols-5' : 'grid-cols-4'
+          tabs.length >= 6 ? 'grid-cols-6' : tabs.length >= 5 ? 'grid-cols-5' : 'grid-cols-4'
         }`}
       >
         {tabs.map((tab) => {
@@ -155,6 +166,7 @@ export default function BlackjackSidebar({
       <div
         className={`${PANEL_CLASS} flex-1 min-h-0 overflow-auto no-scrollbar border-t border-white/10 ${
           activeTab === 'howto' ||
+          activeTab === 'faq' ||
           activeTab === 'chart' ||
           activeTab === 'sounds' ||
           activeTab === 'tournament-play'
@@ -163,11 +175,46 @@ export default function BlackjackSidebar({
         }`}
       >
         {activeTab === 'recent' && (
-          <QuickHistory
-            history={history}
-            reserveBalance={inTournament ? undefined : reserveBalance}
-            onVerifyGame={handleQuickHistoryVerify}
-          />
+          <div className="min-w-0 space-y-4 p-3 pb-4">
+            <QuickHistory
+              history={history}
+              reserveBalance={inTournament ? undefined : reserveBalance}
+              onVerifyGame={handleQuickHistoryVerify}
+            />
+            <div className="min-w-0 rounded-xl border border-cyan-500/25 bg-black/25">
+              <Tabs defaultValue="recent-games" className="p-2 sm:p-3">
+                <TabsList className="grid h-10 w-full min-w-0 grid-cols-3 gap-0.5 rounded-lg border border-cyan-500/30 bg-black/40 p-0.5">
+                  <TabsTrigger
+                    value="recent-games"
+                    className="font-jost min-w-0 truncate rounded-md px-0.5 py-1.5 text-center text-[10px] font-bold leading-tight text-white/80 transition-all data-[state=active]:bg-gradient-to-r data-[state=active]:from-cyan-600 data-[state=active]:to-blue-600 data-[state=active]:text-white sm:text-[11px]"
+                  >
+                    Recent Games
+                  </TabsTrigger>
+                  <TabsTrigger
+                    value="recent-play"
+                    className="font-jost min-w-0 truncate rounded-md px-0.5 py-1.5 text-center text-[10px] font-bold leading-tight text-white/80 transition-all data-[state=active]:bg-gradient-to-r data-[state=active]:from-cyan-600 data-[state=active]:to-blue-600 data-[state=active]:text-white sm:text-[11px]"
+                  >
+                    Recent Play
+                  </TabsTrigger>
+                  <TabsTrigger
+                    value="leaderboard"
+                    className="font-jost min-w-0 truncate rounded-md px-0.5 py-1.5 text-center text-[10px] font-bold leading-tight text-white/80 transition-all data-[state=active]:bg-gradient-to-r data-[state=active]:from-cyan-600 data-[state=active]:to-blue-600 data-[state=active]:text-white sm:text-[11px]"
+                  >
+                    Leaderboard
+                  </TabsTrigger>
+                </TabsList>
+                <TabsContent value="recent-games" className="mt-3 min-h-[160px] focus-visible:outline-none">
+                  <BlackjackRecentGames compact title="Recent Games" />
+                </TabsContent>
+                <TabsContent value="recent-play" className="mt-3 min-h-[160px] focus-visible:outline-none">
+                  <BlackjackRecentPlays compact title="Recent Play" />
+                </TabsContent>
+                <TabsContent value="leaderboard" className="mt-3 min-h-[160px] focus-visible:outline-none">
+                  <BlackjackTopPlayers />
+                </TabsContent>
+              </Tabs>
+            </div>
+          </div>
         )}
         {/* Chart is always mounted when chartRef is set so addGameResult() works from page (ref stays attached).
             Hidden when tab is not active so data accumulates across tab switches. */}
@@ -277,6 +324,17 @@ export default function BlackjackSidebar({
                 <Volume2 className="w-3 h-3 text-white/30 shrink-0" />
               </div>
             </div>
+          </div>
+        )}
+        {activeTab === 'faq' && (
+          <div className="min-w-0 [&>section]:max-w-none [&>section]:mx-0 [&>section]:px-2 [&>section]:py-4">
+            <GameFAQ
+              game="blackjack"
+              addresses={[
+                { label: 'Blackjack Contract', address: blackjackAddress },
+                { label: 'MORBIUS Token', address: morbiusTokenAddress },
+              ]}
+            />
           </div>
         )}
         {activeTab === 'howto' && (

@@ -43,6 +43,7 @@ import { useBlackjackRevealCompletion } from '@/hooks/use-blackjack-reveal-compl
 import { toast } from 'sonner';
 import { BLACKJACK_FACTS } from '@/app/blackjack-multi/blackjack-facts';
 import { BlackjackMultiBetaSplash } from '@/components/BLACKJACK/BlackjackMultiBetaSplash';
+import { SophieSplashModal } from '@/components/shared/SophieSplashModal';
 
 /** Must match server BJ_MULTI_AFK_KICK_AFTER — shown in seat UI */
 const AFK_TIMEOUTS_BEFORE_KICK = 3;
@@ -1294,8 +1295,6 @@ export default function BlackjackMultiTablePage() {
           onSendChatMessage={sendChatMessage}
           chartRef={chartRef}
           chartSessionStartTime={chartSessionStartTime.current}
-          blackjackAddress={BLACKJACK_ADDRESS}
-          morbiusTokenAddress={MORBIUS_TOKEN_ADDRESS}
           formatMorbius={formatMorbius}
           viewportHeightClassName={MULTI_INFO_PANEL_VIEWPORT_HEIGHT_CLASS}
         />
@@ -1342,6 +1341,8 @@ export default function BlackjackMultiTablePage() {
         address={selectedProfileAddress}
         game="blackjack"
       />
+
+      <SophieSplashModal address={address} />
 
       </main>
     </GlobalMainNav>

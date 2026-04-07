@@ -10,6 +10,7 @@ import GlobalMainNav from '@/components/shared/GlobalMainNav';
 import { Footer } from '@/components/shared/footer';
 import { useSpeechCommands, type BJSpeechAction } from '@/hooks/use-speech-commands';
 import { useSpeechEnabled } from '@/hooks/use-speech-enabled';
+import { SophieSplashModal } from '@/components/shared/SophieSplashModal';
 import { DepositWithdrawModal } from '@/components/BLACKJACK/DepositWithdrawModal';
 import { CustomApprovalModal } from '@/components/BLACKJACK/CustomApprovalModal';
 import { BlackjackAuxViews } from '@/components/BLACKJACK/BlackjackAuxViews';
@@ -2380,6 +2381,22 @@ export default function BlackjackPage() {
           display: none;
         }
       `}</style>
+
+      <SophieSplashModal
+        address={address}
+        onOpenProfileSettings={() =>
+          openProfileSettings({
+            displayName: profileDisplayName ?? '',
+            profileImageUrl,
+            onSave: async (displayName, profileImageUrl, bio, xHandle, tgHandle) => {
+              if (!wsClient) return;
+              const res = await wsClient.setDisplayName(displayName, profileImageUrl, undefined, bio, xHandle, tgHandle);
+              setProfileDisplayName(res.displayName);
+              setProfileImageUrl(res.profileImageUrl);
+            },
+          })
+        }
+      />
     </div>
   );
 }
