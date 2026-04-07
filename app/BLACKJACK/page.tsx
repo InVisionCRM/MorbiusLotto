@@ -11,6 +11,7 @@ import { Footer } from '@/components/shared/footer';
 import { useSpeechCommands, type BJSpeechAction } from '@/hooks/use-speech-commands';
 import { useSpeechEnabled } from '@/hooks/use-speech-enabled';
 import { SophieSplashModal } from '@/components/shared/SophieSplashModal';
+import { SpeechHUD } from '@/components/shared/SpeechHUD';
 import { DepositWithdrawModal } from '@/components/BLACKJACK/DepositWithdrawModal';
 import { CustomApprovalModal } from '@/components/BLACKJACK/CustomApprovalModal';
 import { BlackjackAuxViews } from '@/components/BLACKJACK/BlackjackAuxViews';
@@ -1884,18 +1885,27 @@ export default function BlackjackPage() {
 
   // ── Voice commands ────────────────────────────────────────────────────────
   const { enabled: speechEnabled } = useSpeechEnabled(address);
+  const [lastSpeechAction, setLastSpeechAction] = useState<string | null>(null);
+  const lastSpeechActionTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const showSpeechAction = useCallback((label: string) => {
+    setLastSpeechAction(label);
+    if (lastSpeechActionTimer.current) clearTimeout(lastSpeechActionTimer.current);
+    lastSpeechActionTimer.current = setTimeout(() => setLastSpeechAction(null), 3000);
+  }, []);
 
   const handleVoiceBJAction = useCallback((action: BJSpeechAction) => {
-    if (action.type === 'hit')         { handlePlayerAction(Action.HIT); return; }
-    if (action.type === 'stand')       { handlePlayerAction(Action.STAND); return; }
-    if (action.type === 'double_down') { handlePlayerAction(Action.DOUBLE_DOWN); return; }
-    if (action.type === 'split')       { handlePlayerAction(Action.SPLIT); return; }
-    if (action.type === 'rebet')       { handleRebetAndDeal(); return; }
+    if (action.type === 'hit')         { showSpeechAction('Hit'); handlePlayerAction(Action.HIT); return; }
+    if (action.type === 'stand')       { showSpeechAction('Stand'); handlePlayerAction(Action.STAND); return; }
+    if (action.type === 'double_down') { showSpeechAction('Double Down'); handlePlayerAction(Action.DOUBLE_DOWN); return; }
+    if (action.type === 'split')       { showSpeechAction('Split'); handlePlayerAction(Action.SPLIT); return; }
+    if (action.type === 'rebet')       { showSpeechAction('Rebet'); handleRebetAndDeal(); return; }
     if (action.type === 'bet') {
+      showSpeechAction(`Bet ${action.amount.toLocaleString()} MORBIUS`);
       manageChipStack(String(Math.floor(action.amount)));
       handleStartGame(BigInt(Math.floor(action.amount)) * BigInt(10 ** 18), clientSeed);
     }
-  }, [handlePlayerAction, handleRebetAndDeal, handleStartGame, manageChipStack, clientSeed]);
+  }, [handlePlayerAction, handleRebetAndDeal, handleStartGame, manageChipStack, clientSeed, showSpeechAction]);
 
   const speech = useSpeechCommands({
     mode: 'blackjack',
@@ -2102,6 +2112,15 @@ export default function BlackjackPage() {
         }}
         pendingJob={pendingJob}
       />
+
+      {speechEnabled && (
+        <SpeechHUD
+          listening={speech.listening}
+          transcript={speech.transcript}
+          lastAction={lastSpeechAction}
+          pendingLabel={speech.pendingLabel}
+        />
+      )}
 
       <main className="w-full max-w-full mx-0 px-2 sm:px-4 pt-2 sm:pt-4 pb-4 sm:pb-8 overflow-x-hidden overflow-y-auto no-scrollbar">
         {/* View-specific content */}

@@ -302,6 +302,10 @@ export function useSpeechCommands({
     r.maxAlternatives = 3;
     r.lang = 'en-US';
 
+    // Track whether the current utterance already fired via interim so the
+    // final result doesn't fire a second time for the same word.
+    let interimFiredForCurrentResult = false;
+
     r.onstart = () => { setListening(true); listeningRef.current = true; };
 
     r.onresult = (e: any) => {
@@ -318,10 +322,11 @@ export function useSpeechCommands({
 
       if (!latest.isFinal) {
         // Interim: fire unambiguous single-word blackjack actions immediately
-        if (modeRef.current === 'blackjack' && pendingLabelRef.current === null) {
+        if (modeRef.current === 'blackjack' && pendingLabelRef.current === null && !interimFiredForCurrentResult) {
           for (const alt of alts) {
             const action = parseBlackjackSpeech(alt, true);
             if (action) {
+              interimFiredForCurrentResult = true;
               onBJRef.current?.(action);
               setTranscript('');
               return;
@@ -330,6 +335,10 @@ export function useSpeechCommands({
         }
         return;
       }
+
+      // Final result — reset the guard for the next utterance
+      const firedOnInterim = interimFiredForCurrentResult;
+      interimFiredForCurrentResult = false;
 
       // Final: if pending confirmation, check all alts for yes/no
       setTranscript('');
@@ -340,6 +349,9 @@ export function useSpeechCommands({
         }
         return; // still pending, unrecognized input — ignore
       }
+
+      // Already handled on interim — skip to avoid double-firing
+      if (firedOnInterim) return;
 
       // No pending — find first alt that parses to an action
       for (const alt of alts) {
