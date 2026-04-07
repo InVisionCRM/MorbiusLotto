@@ -1,6 +1,6 @@
-# Plinko on MORBlotto — How It Actually Works
+# Plinko on Morbius — How It Actually Works
 
-Use this for accurate voice copy about **MORBlotto Plinko** (PulseChain). Generic “Price Is Right” or third-party casino descriptions often **do not** match our build.
+Use this for accurate voice copy about **Morbius Plinko** (PulseChain). Generic “Price Is Right” or third-party casino descriptions often **do not** match our build.
 
 ---
 
@@ -26,13 +26,13 @@ Use this for accurate voice copy about **MORBlotto Plinko** (PulseChain). Generi
 **HIGH risk**  
 **200**, 120, 25, 10, 4, 2, 0.2, 0.2, **0.2**, 0.2, 0.2, 2, 4, 10, 25, 120, **200**  
 
-- **Important:** Our **maximum edge multiplier on HIGH risk is 200×**, not 1000×. Any doc that says “1000× Plinko on MORBlotto” is **wrong** for the deployed paytable.
+- **Important:** Our **maximum edge multiplier on HIGH risk is 200×**, not 1000×. Any doc that says “1000× Plinko on Morbius” is **wrong** for the deployed paytable.
 
 ---
 
 ## Outcome generation (not “50/50 every peg”)
 
-- Public explanations often say “each peg is 50% left/right.” On MORBlotto, outcomes are driven by a **deterministic physics simulation** (fixed timestep, Matter.js-style engine constants) plus **provably fair seeds** so the path and final bucket can be verified — **not** by flipping an independent coin at every peg.
+- Public explanations often say “each peg is 50% left/right.” On Morbius, outcomes are driven by a **deterministic physics simulation** (fixed timestep, Matter.js-style engine constants) plus **provably fair seeds** so the path and final bucket can be verified — **not** by flipping an independent coin at every peg.
 - Do **not** claim players can change a “client seed” in the same way as some simple hash-only casino games unless the **current UI** exposes that control; tie narration to **verifiable seeds / fairness tooling the app actually shows**.
 
 ---
@@ -48,6 +48,6 @@ Use this for accurate voice copy about **MORBlotto Plinko** (PulseChain). Generi
 
 ## Do not say
 
-- “Adjust rows from 8 to 16” on MORBlotto Plinko.
+- “Adjust rows from 8 to 16” on Morbius Plinko.
 - “1000× max on our Plinko” (use **200×** on HIGH per contract).
 - “99% RTP / 1% house” as our official number — use the **contract paytables + 5% fee on payouts** story instead.

@@ -4,11 +4,11 @@ Blackjack is the most popular casino card game in the world because it combines 
 
 ---
 
-## MORBlotto — rules that differ from generic casino copy
+## Morbius — rules that differ from generic casino copy
 
-- **Dealer rule:** The dealer **hits soft 17** (a hand totaling 17 that still counts as soft because of an ace). Do **not** say “dealer stands on all 17s” for MORBlotto.
+- **Dealer rule:** The dealer **hits soft 17** (a hand totaling 17 that still counts as soft because of an ace). Do **not** say “dealer stands on all 17s” for Morbius.
 - **Player actions implemented:** **Hit, stand, double down, split.** Ten-value cards of different ranks (e.g. king + jack) can be **split** when our rules treat them as a pair of tens.
-- **Not offered in server logic:** **Insurance** and **surrender** are **not** part of the documented MORBlotto blackjack action set — avoid telling players to take insurance or surrender here.
+- **Not offered in server logic:** **Insurance** and **surrender** are **not** part of the documented Morbius blackjack action set — avoid telling players to take insurance or surrender here.
 - **Fairness:** Games use a **server-side shoe / deck** with **provably fair** seeding (hashed server seed, client seed, nonce) so outcomes can be verified — different from a physical shoe, but not “live dealer peek” unless the UI explicitly shows it.
 - **Modes:** **Single-player** blackjack and **multiplayer / tournament** blackjack share these dealer rules where the same service logic applies.
 
@@ -28,13 +28,13 @@ Your goal is to beat the dealer’s hand without going over 21. If your hand exc
 
 ## 2. The Rules of Play
 1. **The Deal:** You are dealt two cards face-up. The dealer gets one card face-up and one face-down (the "hole card").
-2. **The Options (MORBlotto):**
+2. **The Options (Morbius):**
     * **Hit:** Take another card.
     * **Stand:** Keep your current hand.
     * **Double Down:** Double your original bet in exchange for exactly one more card.
     * **Split:** If you have a splittable pair (including two ten-value cards), split into two hands (requires an additional bet).
-    * **Surrender / Insurance:** Common in live casinos; **not** offered in MORBlotto’s implemented blackjack flows.
-3. **Dealer Rules (MORBlotto):** The dealer **hits** on **soft 17** and stands on **hard 17+** (and on **soft** hands that are no longer soft after hitting, e.g. ace counted as 1).
+    * **Surrender / Insurance:** Common in live casinos; **not** offered in Morbius’s implemented blackjack flows.
+3. **Dealer Rules (Morbius):** The dealer **hits** on **soft 17** and stands on **hard 17+** (and on **soft** hands that are no longer soft after hitting, e.g. ace counted as 1).
 
 ---
 
@@ -77,9 +77,9 @@ This chart is mathematically calculated to give you the highest probability of w
 ---
 
 ## 4. Golden Rules for Beginners
-1. **Insurance:** In live casinos it is usually a poor bet — on **MORBlotto** it is **not** a listed player action; do not instruct users to “decline insurance” as if a button exists unless the UI adds it later.
+1. **Insurance:** In live casinos it is usually a poor bet — on **Morbius** it is **not** a listed player action; do not instruct users to “decline insurance” as if a button exists unless the UI adds it later.
 2. **Learn the "Hard 16" rule:** If you have 16 and the dealer shows 2 through 6, you stand. If the dealer shows 7 through Ace, you hit.
 3. **Always Split Aces and 8s:** A pair of 8s is a 16 (the worst hand in Blackjack); splitting them gives you a much better chance of landing two 18s.
 4. **Bankroll Management:** Never bet more than 5% of your total session bankroll on a single hand.
 
-***Disclaimer:** Blackjack is a game of chance. Basic strategy reduces the house edge but, with **dealer hits soft 17**, the edge is slightly higher than in S17 games. On MORBlotto, play responsibly and follow the in-app rules and limits.*
+***Disclaimer:** Blackjack is a game of chance. Basic strategy reduces the house edge but, with **dealer hits soft 17**, the edge is slightly higher than in S17 games. On Morbius, play responsibly and follow the in-app rules and limits.*

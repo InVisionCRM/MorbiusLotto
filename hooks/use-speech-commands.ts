@@ -75,30 +75,47 @@ export function isVoiceNo(text: string): boolean {
   return NO_PATTERNS.some(p => text === p || text.startsWith(p + ' ') || text.endsWith(' ' + p));
 }
 
+// ── Word-boundary helper ─────────────────────────────────────────────────────
+function hasWord(text: string, word: string): boolean {
+  return new RegExp(`\\b${word}\\b`).test(text);
+}
+
 // ── Blackjack parser ─────────────────────────────────────────────────────────
 const BJ_REBET_PHRASES = ['run it back', 'same bet', 'bet again', 'rebet', 're-bet'];
 
-export function parseBlackjackSpeech(text: string): BJSpeechAction | null {
+/**
+ * immediateOnly: when true, only return actions safe to fire on interim
+ * results (single unambiguous words — hit, stand, double, split).
+ */
+export function parseBlackjackSpeech(text: string, immediateOnly = false): BJSpeechAction | null {
+  if (immediateOnly) {
+    if (text === 'hit')                                    return { type: 'hit' };
+    if (text === 'stand' || text === 'stay')               return { type: 'stand' };
+    if (text === 'double' || text === 'double down')       return { type: 'double_down' };
+    if (text === 'split')                                  return { type: 'split' };
+    return null;
+  }
+
   if (BJ_REBET_PHRASES.some(p => text.includes(p))) return { type: 'rebet' };
-  if (text === 'go' || text === 'again') return { type: 'rebet' };
+  if (text === 'go' || text === 'again')               return { type: 'rebet' };
 
   const betMatch = text.match(/\bbet\b(.*)/);
   if (betMatch) {
     const amount = parseAmount(betMatch[1].trim());
     if (amount !== null) return { type: 'bet', amount };
-    return null; // heard "bet" but no amount — ignore
+    return null;
   }
 
-  if (text.includes('double down') || text.includes('double')) return { type: 'double_down' };
-  if (text.includes('split')) return { type: 'split' };
-  if (text.includes('hit')) return { type: 'hit' };
-  if (text.includes('stand') || text.includes('stay')) return { type: 'stand' };
+  if (text.includes('double down') || hasWord(text, 'double')) return { type: 'double_down' };
+  if (hasWord(text, 'split'))                                   return { type: 'split' };
+  if (hasWord(text, 'hit'))                                     return { type: 'hit' };
+  if (hasWord(text, 'stand') || hasWord(text, 'stay'))          return { type: 'stand' };
 
   return null;
 }
 
 // ── Poker parser ─────────────────────────────────────────────────────────────
-const ALL_IN_PHRASES = ['all in', 'all-in', 'shove', 'jam', 'push'];
+const ALL_IN_PHRASES = ['all in', 'all-in', 'shove', 'jam'];
 
 export function parsePokerSpeech(text: string): PokerSpeechAction | null {
   if (ALL_IN_PHRASES.some(p => text.includes(p))) return { type: 'all_in' };
@@ -107,7 +124,7 @@ export function parsePokerSpeech(text: string): PokerSpeechAction | null {
   if (raiseMatch) {
     const amount = parseAmount(raiseMatch[1].trim());
     if (amount !== null) return { type: 'raise', amount };
-    return null; // "raise" without amount — ignore (no slider control via voice yet)
+    return null;
   }
 
   const betMatch = text.match(/\bbet\b(.*)/);
@@ -117,9 +134,9 @@ export function parsePokerSpeech(text: string): PokerSpeechAction | null {
     return null;
   }
 
-  if (text.includes('fold') || text.includes('muck') || text.includes('give up')) return { type: 'fold' };
-  if (text.includes('check') || text.includes('tap') || text.includes('knock')) return { type: 'check' };
-  if (text.includes('call') || text.includes('snap')) return { type: 'call' };
+  if (hasWord(text, 'fold') || text.includes('muck') || text.includes('give up')) return { type: 'fold' };
+  if (hasWord(text, 'check') || hasWord(text, 'tap') || hasWord(text, 'knock'))   return { type: 'check' };
+  if (hasWord(text, 'call') || hasWord(text, 'snap'))                              return { type: 'call' };
 
   return null;
 }
@@ -155,6 +172,8 @@ export interface UseSpeechCommandsReturn {
   /** Pending action waiting for confirmation (null if none) */
   pendingLabel: string | null;
   toggle: () => void;
+  start: () => void;
+  stop: () => void;
   /** Call from the confirm dialog Yes button */
   confirmYes: () => void;
   /** Call from the confirm dialog No button */
@@ -278,8 +297,9 @@ export function useSpeechCommands({
     const SpeechRecognition =
       (window as any).SpeechRecognition ?? (window as any).webkitSpeechRecognition;
     const r = new SpeechRecognition();
-    r.continuous = false;
+    r.continuous = true;
     r.interimResults = true;
+    r.maxAlternatives = 3;
     r.lang = 'en-US';
 
     r.onstart = () => { setListening(true); listeningRef.current = true; };
@@ -287,23 +307,71 @@ export function useSpeechCommands({
     r.onresult = (e: any) => {
       const results = Array.from(e.results as SpeechRecognitionResultList);
       const latest = results[results.length - 1];
-      const text = (latest[0] as SpeechRecognitionAlternative).transcript.toLowerCase().trim();
-      setTranscript(text);
-      if (latest.isFinal) {
-        setTranscript('');
-        handleFinalTranscript(text);
+
+      // Collect all alternatives for the best transcript
+      const alts: string[] = [];
+      for (let i = 0; i < latest.length; i++) {
+        alts.push((latest[i] as SpeechRecognitionAlternative).transcript.toLowerCase().trim());
       }
+      const text = alts[0];
+      setTranscript(text);
+
+      if (!latest.isFinal) {
+        // Interim: fire unambiguous single-word blackjack actions immediately
+        if (modeRef.current === 'blackjack' && pendingLabelRef.current === null) {
+          for (const alt of alts) {
+            const action = parseBlackjackSpeech(alt, true);
+            if (action) {
+              onBJRef.current?.(action);
+              setTranscript('');
+              return;
+            }
+          }
+        }
+        return;
+      }
+
+      // Final: if pending confirmation, check all alts for yes/no
+      setTranscript('');
+      if (pendingLabelRef.current !== null) {
+        for (const alt of alts) {
+          if (isVoiceYes(alt)) { confirmYes(); return; }
+          if (isVoiceNo(alt))  { confirmNo();  return; }
+        }
+        return; // still pending, unrecognized input — ignore
+      }
+
+      // No pending — find first alt that parses to an action
+      for (const alt of alts) {
+        const action = modeRef.current === 'blackjack'
+          ? parseBlackjackSpeech(alt)
+          : parsePokerSpeech(alt);
+        if (action) {
+          handleFinalTranscript(alt);
+          return;
+        }
+      }
+      // No alt matched — pass highest-confidence to handleFinalTranscript anyway
+      // (it will return early if no action found)
+      handleFinalTranscript(text);
     };
 
     r.onerror = (e: any) => {
       if (e.error === 'no-speech') return;
-      // On aborted — happens during stop, ignore
       if (e.error === 'aborted') return;
+      // On other errors with continuous mode, restart
+      if (!isStoppingRef.current) {
+        setListening(false);
+        listeningRef.current = false;
+        const next = createRecognition();
+        recognitionRef.current = next;
+        try { next.start(); } catch { /* ignore */ }
+      }
     };
 
     r.onend = () => {
       if (!isStoppingRef.current) {
-        // Restart automatically to keep listening
+        // continuous=true shouldn't fire onend normally, but handle edge cases
         const next = createRecognition();
         recognitionRef.current = next;
         try { next.start(); } catch { /* ignore if already stopped */ }
@@ -343,5 +411,5 @@ export function useSpeechCommands({
     };
   }, []);
 
-  return { supported, listening, transcript, pendingLabel, toggle, confirmYes, confirmNo };
+  return { supported, listening, transcript, pendingLabel, toggle, start, stop, confirmYes, confirmNo };
 }

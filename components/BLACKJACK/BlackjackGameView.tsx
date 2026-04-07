@@ -1,6 +1,6 @@
 'use client';
 
-import type { ReactNode } from 'react';
+import type { CSSProperties, ReactNode } from 'react';
 import { getApiUrlOptional, getWebSocketUrlOptional } from '@/lib/api-urls';
 import { GameState, Action } from '@/app/BLACKJACK/types';
 import { TOURNAMENT_CONFIG } from '@/hooks/use-tournament';
@@ -13,7 +13,10 @@ import WinNotification from '@/components/BLACKJACK/WinNotification';
 import { TournamentBetPanel } from '@/components/BLACKJACK/Tournament';
 import { IconButton } from '@/components/animate-ui/components/buttons/icon';
 import { BlackjackGameSecondaryPanels } from '@/components/BLACKJACK/BlackjackGameSecondaryPanels';
+import { BlackjackHowToSection } from '@/components/BLACKJACK/BlackjackHowToSection';
 import type { TableThemeInfo } from '@/hooks/use-blackjack-tables';
+import { SpeechIndicator } from '@/components/shared/SpeechIndicator';
+import { SpeechConfirmDialog } from '@/components/shared/SpeechConfirmDialog';
 
 interface BlackjackGameViewProps {
   contractIsPaused: boolean;
@@ -100,6 +103,14 @@ interface BlackjackGameViewProps {
   morbiusTokenAddress: string;
   /** Active tier limits — passed down to BettingPanel */
   betLimits?: { MIN_BET: bigint; MAX_BET: bigint };
+  /** Voice command props — readback rendered inside the table, confirm dialog outside */
+  speech?: {
+    listening: boolean;
+    transcript: string;
+    pendingLabel: string | null;
+    confirmYes: () => void;
+    confirmNo: () => void;
+  };
 }
 
 export function BlackjackGameView(props: BlackjackGameViewProps) {
@@ -187,31 +198,41 @@ export function BlackjackGameView(props: BlackjackGameViewProps) {
     blackjackAddress,
     morbiusTokenAddress,
     betLimits,
+    speech,
   } = props;
+
+  const panelShell: CSSProperties = {
+    background: 'linear-gradient(145deg, rgb(16, 26, 35), rgb(35, 36, 41))',
+    boxShadow: 'inset 0 3px 6px rgba(0, 0, 0, 0.8), inset 0 -3px 6px rgba(255, 255, 255, 0.1), 0 1px 3px rgba(0, 0, 0, 0.5)',
+    border: '1px inset rgba(60, 60, 60, 0.5)',
+  };
 
   return (
     <>
-      {contractIsPaused && (
-        <div className="mb-3 px-3 py-2 rounded-lg bg-red-500/20 border border-red-500/40 text-red-200 text-sm">
-          <strong>Blackjack contract is paused.</strong> Deposits, withdrawals, and betting are disabled on-chain.
-          {contractEmergencyPaused && ' Emergency pause is active (emergency admin must call setEmergencyPause(false)).'}
-          {contractOzPaused && !contractEmergencyPaused && ' Owner has paused the contract (owner must call unpause()).'}
-        </div>
-      )}
+      <div className="grid grid-cols-1 md:grid-cols-[minmax(0,3fr)_minmax(320px,1.2fr)] md:items-stretch gap-2 md:gap-4 min-h-0">
+        {contractIsPaused && (
+          <div className="col-span-full mb-0 px-3 py-2 rounded-lg bg-red-500/20 border border-red-500/40 text-red-200 text-sm">
+            <strong>Blackjack contract is paused.</strong> Deposits, withdrawals, and betting are disabled on-chain.
+            {contractEmergencyPaused && ' Emergency pause is active (emergency admin must call setEmergencyPause(false)).'}
+            {contractOzPaused && !contractEmergencyPaused && ' Owner has paused the contract (owner must call unpause()).'}
+          </div>
+        )}
 
-      {!getWebSocketUrlOptional() && (
-        <div className="mb-3 px-3 py-2 rounded-lg bg-amber-500/20 border border-amber-500/40 text-amber-200 text-sm">
-          <strong>Game server not connected.</strong>{' '}
-          {typeof process !== 'undefined' && process.env.NODE_ENV === 'production' ? (
-            <>Set <code className="font-mono text-xs bg-black/30 px-1 rounded">NEXT_PUBLIC_WEBSOCKET_URL</code> and <code className="font-mono text-xs bg-black/30 px-1 rounded">NEXT_PUBLIC_API_URL</code> in your deployment (e.g. Vercel → Project → Settings → Environment Variables). Use your backend URL: <code className="font-mono text-xs bg-black/30 px-1 rounded">https://your-api.com</code> and <code className="font-mono text-xs bg-black/30 px-1 rounded">wss://your-api.com</code>. Then <strong>redeploy</strong> — Next.js bakes these in at build time.</>
-          ) : (
-            <>Set <code className="font-mono text-xs bg-black/30 px-1 rounded">NEXT_PUBLIC_WEBSOCKET_URL</code> and <code className="font-mono text-xs bg-black/30 px-1 rounded">NEXT_PUBLIC_API_URL</code> in <code className="font-mono text-xs bg-black/30 px-1 rounded">.env.local</code> (e.g. <code className="font-mono text-xs bg-black/30 px-1 rounded">http://localhost:3001</code> and <code className="font-mono text-xs bg-black/30 px-1 rounded">ws://localhost:3001</code>), then restart the dev server. Run the backend with <code className="font-mono text-xs bg-black/30 px-1 rounded">cd server && npm run dev</code>.</>
-          )}
-        </div>
-      )}
+        {!getWebSocketUrlOptional() && (
+          <div className="col-span-full mb-0 px-3 py-2 rounded-lg bg-amber-500/20 border border-amber-500/40 text-amber-200 text-sm">
+            <strong>Game server not connected.</strong>{' '}
+            {typeof process !== 'undefined' && process.env.NODE_ENV === 'production' ? (
+              <>Set <code className="font-mono text-xs bg-black/30 px-1 rounded">NEXT_PUBLIC_WEBSOCKET_URL</code> and <code className="font-mono text-xs bg-black/30 px-1 rounded">NEXT_PUBLIC_API_URL</code> in your deployment (e.g. Vercel → Project → Settings → Environment Variables). Use your backend URL: <code className="font-mono text-xs bg-black/30 px-1 rounded">https://your-api.com</code> and <code className="font-mono text-xs bg-black/30 px-1 rounded">wss://your-api.com</code>. Then <strong>redeploy</strong> — Next.js bakes these in at build time.</>
+            ) : (
+              <>Set <code className="font-mono text-xs bg-black/30 px-1 rounded">NEXT_PUBLIC_WEBSOCKET_URL</code> and <code className="font-mono text-xs bg-black/30 px-1 rounded">NEXT_PUBLIC_API_URL</code> in <code className="font-mono text-xs bg-black/30 px-1 rounded">.env.local</code> (e.g. <code className="font-mono text-xs bg-black/30 px-1 rounded">http://localhost:3001</code> and <code className="font-mono text-xs bg-black/30 px-1 rounded">ws://localhost:3001</code>), then restart the dev server. Run the backend with <code className="font-mono text-xs bg-black/30 px-1 rounded">cd server && npm run dev</code>.</>
+            )}
+          </div>
+        )}
 
-      <div className="grid grid-cols-1 md:grid-cols-[2fr_1fr] grid-rows-[1fr_auto_auto] md:grid-rows-[1fr_auto] gap-2 md:gap-4 min-h-0">
-        <div className="min-w-0 flex flex-row md:flex-col min-h-0 pb-0 -mx-2 sm:mx-0 order-1 md:order-none md:row-start-1 md:col-start-1 gap-2 md:gap-0">
+        <div
+          className="min-w-0 flex flex-row md:flex-col min-h-0 pb-0 -mx-2 sm:mx-0 order-1 md:order-none md:row-start-1 md:col-start-1 gap-2 md:gap-0 rounded-xl overflow-hidden p-1 sm:p-2 md:p-3"
+          style={panelShell}
+        >
           <div className="relative flex-1 min-w-0 min-h-[60dvh] sm:min-h-0 flex flex-col">
             <BlackjackTable
               playerHand={currentGame?.playerHand || { cards: [], total: 0, hasAce: false, isBlackjack: false, isBust: false }}
@@ -330,10 +351,21 @@ export function BlackjackGameView(props: BlackjackGameViewProps) {
                 onComplete={() => setShowWinNotification(false)}
               />
             )}
+
+            {/* Voice transcript readback — top-left of table */}
+            {speech?.listening !== undefined && (
+              <SpeechIndicator
+                listening={speech.listening}
+                transcript={speech.transcript}
+              />
+            )}
           </div>
         </div>
 
-        <div className="min-w-0 order-3 md:order-none md:row-start-1 md:col-start-2 flex flex-col gap-2 overflow-hidden">
+        <div
+          className="min-w-0 order-3 md:order-none md:row-start-1 md:col-start-2 flex flex-col gap-2 min-h-0 rounded-xl overflow-hidden p-2 sm:p-3 md:max-h-[calc(100dvh-7.5rem)] md:overflow-y-auto"
+          style={panelShell}
+        >
           {tournament.tournamentState.inTournament ? (
             <TournamentBetPanel
               chips={(tournament.displayedTournamentState ?? tournament.tournamentState).chips}
@@ -391,7 +423,7 @@ export function BlackjackGameView(props: BlackjackGameViewProps) {
               </div>
             </div>
           )}
-          <div className="md:h-[420px] overflow-hidden rounded-xl">
+          <div className="min-h-[280px] h-[min(420px,40vh)] md:h-[420px] shrink-0 overflow-hidden rounded-xl min-w-0">
             <BlackjackSidebar
               history={gameState.history}
               reserveBalance={offChainBalance}
@@ -417,27 +449,38 @@ export function BlackjackGameView(props: BlackjackGameViewProps) {
               tournamentTabContent={tournamentTabContent}
             />
           </div>
+
+          <BlackjackGameSecondaryPanels
+            theme={theme}
+            imageSource={imageSource}
+            videoSource={videoSource}
+            getThemeInfo={getThemeInfo}
+            getTableProfile={getTableProfile}
+            onChangeTableClick={() => setThemeModalOpen(true)}
+            address={address}
+            playerStats={playerStats}
+            playerStatsLoading={playerStatsLoading}
+            wsConnected={wsConnected}
+            wsClient={wsClient}
+            offChainBalance={offChainBalance}
+            tipStats={tipStats}
+            blackjackAddress={blackjackAddress}
+            morbiusTokenAddress={morbiusTokenAddress}
+            tournament={tournament}
+          />
+
+          <BlackjackHowToSection blackjackAddress={blackjackAddress} layout="panel" />
         </div>
       </div>
 
-      <BlackjackGameSecondaryPanels
-        theme={theme}
-        imageSource={imageSource}
-        videoSource={videoSource}
-        getThemeInfo={getThemeInfo}
-        getTableProfile={getTableProfile}
-        onChangeTableClick={() => setThemeModalOpen(true)}
-        address={address}
-        playerStats={playerStats}
-        playerStatsLoading={playerStatsLoading}
-        wsConnected={wsConnected}
-        wsClient={wsClient}
-        offChainBalance={offChainBalance}
-        tipStats={tipStats}
-        blackjackAddress={blackjackAddress}
-        morbiusTokenAddress={morbiusTokenAddress}
-        tournament={tournament}
-      />
+      {/* Voice confirm — outside grid so it isn't a grid item; outside table so not clipped */}
+      {speech?.pendingLabel && (
+        <SpeechConfirmDialog
+          label={speech.pendingLabel}
+          onYes={speech.confirmYes}
+          onNo={speech.confirmNo}
+        />
+      )}
     </>
   );
 }

@@ -4,7 +4,7 @@ import type { BJMultiSeatState } from '@/lib/websocket-client';
 import { BlackjackMultiSeat } from '@/components/BLACKJACK/multi/BlackjackMultiSeat';
 
 // All coordinates are in the 800×450 canvas space.
-// SEAT_ANCHORS is the origin point for each seat — cards, tag, and chip are all offset from here.
+// SEAT_ANCHORS is the origin point for each seat — everything offsets from here.
 
 const SEAT_ANCHORS = [
   { x: 100, y: 270 }, // left seat
@@ -12,7 +12,7 @@ const SEAT_ANCHORS = [
   { x: 555, y: 270 }, // right seat
 ] as const;
 
-// Card stack offset from seat anchor. (0,0) = cards start exactly at anchor.
+// Card stack offset from seat anchor.
 const CARD_OFFSETS = [
   { x: 0, y: -80 }, // left
   { x: 0, y: -80 }, // center
@@ -33,6 +33,13 @@ const CHIP_OFFSETS = [
   { x: 30, y: -50 }, // right
 ] as const;
 
+// Avatar circle offset from seat anchor (above the cards).
+const AVATAR_OFFSETS = [
+  { x: 5, y: -140 }, // left
+  { x: 5, y: -140 }, // center
+  { x: 5, y: -140 }, // right
+] as const;
+
 const POSITIONS = [0, 1, 2] as const;
 
 type BlackjackMultiSeatGridProps = {
@@ -45,8 +52,13 @@ type BlackjackMultiSeatGridProps = {
   afkTimeoutsBeforeKick: number;
   myBalanceLabel: string;
   showOutcomeLabel: boolean;
+  turnStartedAt: string | null;
+  bettingStartedAt: string | null;
   onTakeSeat: (position: number) => void;
   onOpenProfile: (address: string) => void;
+  onLeaveSeat?: () => void;
+  onToggleSoundPanel?: () => void;
+  onSendChatMessage?: (msg: string) => void;
 };
 
 export function BlackjackMultiSeatGrid({
@@ -59,8 +71,13 @@ export function BlackjackMultiSeatGrid({
   afkTimeoutsBeforeKick,
   myBalanceLabel,
   showOutcomeLabel,
+  turnStartedAt,
+  bettingStartedAt,
   onTakeSeat,
   onOpenProfile,
+  onLeaveSeat,
+  onToggleSoundPanel,
+  onSendChatMessage,
 }: BlackjackMultiSeatGridProps) {
   return (
     <div className="absolute inset-0" style={{ pointerEvents: 'none' }}>
@@ -91,6 +108,12 @@ export function BlackjackMultiSeatGrid({
               cardOffset={CARD_OFFSETS[pos]}
               tagOffset={TAG_OFFSETS[pos]}
               chipOffset={CHIP_OFFSETS[pos]}
+              avatarOffset={AVATAR_OFFSETS[pos]}
+              turnStartedAt={actingSeatPosition === pos && phase === 'playing' ? turnStartedAt : null}
+              bettingStartedAt={phase === 'betting' && seat?.playerAddress ? bettingStartedAt : null}
+              onLeaveSeat={isMe ? onLeaveSeat : undefined}
+              onToggleSoundPanel={isMe ? onToggleSoundPanel : undefined}
+              onSendChatMessage={isMe ? onSendChatMessage : undefined}
             />
           </div>
         );

@@ -1,6 +1,6 @@
-# Morbius & Tournaments on MORBlotto
+# Morbius — tournaments & platform
 
-This note is for voice and assistant scripts about **MORBlotto on PulseChain**, not generic casino copy.
+This note is for voice and assistant scripts about **Morbius on PulseChain**, not generic casino copy.
 
 ## What “Morbius” means here
 
@@ -24,4 +24,4 @@ This note is for voice and assistant scripts about **MORBlotto on PulseChain**, 
 ## What this document is not
 
 - **Morb-It** (meme maker) is a separate product — it is **not** described here.
-- This is **not** a full rulebook for Texas Hold’em or blackjack; see **ELTexasHoldEm.txt** and **ELBlackJack.txt** for gameplay rules, scoped to how MORBlotto implements them.
+- This is **not** a full rulebook for Texas Hold’em or blackjack; see **ELTexasHoldEm.txt** and **ELBlackJack.txt** for gameplay rules, scoped to how Morbius implements them.

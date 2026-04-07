@@ -8,11 +8,18 @@ const BLACKJACK_HOW_TO_VIDEO_URL =
 
 interface BlackjackHowToSectionProps {
   blackjackAddress: string;
+  /** Narrow right-column layout (single column, tighter spacing). */
+  layout?: 'page' | 'panel';
 }
 
-export function BlackjackHowToSection({ blackjackAddress }: BlackjackHowToSectionProps) {
+export function BlackjackHowToSection({ blackjackAddress, layout = 'page' }: BlackjackHowToSectionProps) {
+  const gridClass =
+    layout === 'panel'
+      ? 'mt-4 grid grid-cols-1 gap-3 items-start border-t border-white/10 pt-4'
+      : 'mt-6 grid grid-cols-1 md:grid-cols-2 gap-4 items-start';
+
   return (
-    <section className="mt-6 grid grid-cols-1 md:grid-cols-2 gap-4 items-start">
+    <section className={gridClass}>
       {/* Video */}
       <div className="rounded-xl overflow-hidden border border-white/10 bg-black">
         <video

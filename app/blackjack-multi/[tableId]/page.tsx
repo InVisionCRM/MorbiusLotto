@@ -976,10 +976,18 @@ export default function BlackjackMultiTablePage() {
 
       <main data-bj-main className="w-full max-w-full mx-0 px-2 sm:px-4 pt-2 sm:pt-4 pb-4 sm:pb-8 overflow-x-hidden overflow-y-auto no-scrollbar">
       {/* 2-column layout on md+: table (left) + sidebar controls (right) — same shell as app/BLACKJACK/page.tsx */}
-      <div data-bj-grid className="grid grid-cols-1 md:grid-cols-[minmax(0,3fr)_minmax(360px,1.2fr)] md:items-start gap-2 md:gap-4 min-h-0" style={{ scrollbarGutter: 'stable both-edges' }}>
+      <div data-bj-grid className="grid grid-cols-1 md:grid-cols-[minmax(0,3fr)_minmax(360px,1.2fr)] md:items-stretch gap-2 md:gap-4 min-h-0" style={{ scrollbarGutter: 'stable both-edges' }}>
 
-      {/* ── Table column: top bar + table ── */}
-      <div className="flex flex-col md:row-start-1 md:col-start-1" data-bj-table>
+      {/* ── Table column: top bar + table (single embossed panel) ── */}
+      <div
+        className="flex flex-col md:row-start-1 md:col-start-1 rounded-xl overflow-hidden p-2 sm:p-3 gap-2 min-h-0"
+        data-bj-table
+        style={{
+          background: 'linear-gradient(145deg, rgb(16, 26, 35), rgb(35, 36, 41))',
+          boxShadow: 'inset 0 3px 6px rgba(0, 0, 0, 0.8), inset 0 -3px 6px rgba(255, 255, 255, 0.1), 0 1px 3px rgba(0, 0, 0, 0.5)',
+          border: '1px inset rgba(60, 60, 60, 0.5)',
+        }}
+      >
         <BlackjackMultiTopBar
           tableViewState={tableViewState}
           myPosition={myPosition}
@@ -1022,7 +1030,7 @@ export default function BlackjackMultiTablePage() {
 
         {/* Content — always 800×450, scaled to fill the container */}
         <div
-          className="absolute top-0 left-0 z-10 flex flex-col"
+          className="absolute top-0 left-0 z-10"
           style={{ width: 800, height: 450, transform: `scale(${boardScale})`, transformOrigin: 'top left' }}
         >
 
@@ -1071,26 +1079,28 @@ export default function BlackjackMultiTablePage() {
             afkTimeoutsBeforeKick={AFK_TIMEOUTS_BEFORE_KICK}
             myBalanceLabel={formatMorbius(playerBalance.toString())}
             showOutcomeLabel={showSeatOutcomeLabels}
+            turnStartedAt={tableViewState?.turnStartedAt ?? null}
+            bettingStartedAt={tableViewState?.bettingStartedAt ?? null}
             onTakeSeat={takeSeat}
             onOpenProfile={setSelectedProfileAddress}
+            onLeaveSeat={myPosition !== null ? leaveSeat : undefined}
+            onToggleSoundPanel={myPosition !== null ? () => setSoundPanelOpen(o => !o) : undefined}
+            onSendChatMessage={myPosition !== null ? sendChatMessage : undefined}
           />
 
-          {/* AVATAR DOCK — absolute coords in 800×450 canvas space */}
-          <div style={{ position: 'absolute', left: 0, bottom: 0 }}>
-            <BlackjackMultiAvatarDock
-              seats={seatsByPosition}
-              addressLower={address?.toLowerCase()}
-              phase={tableViewState?.phase ?? 'waiting'}
-              actingSeatPosition={tableViewState?.actingSeatPosition ?? null}
-              turnStartedAt={tableViewState?.turnStartedAt ?? null}
-              bettingStartedAt={tableViewState?.bettingStartedAt ?? null}
-              myPosition={myPosition}
-              onOpenProfile={setSelectedProfileAddress}
-              onLeaveSeat={myPosition !== null ? leaveSeat : undefined}
-              onToggleSoundPanel={myPosition !== null ? () => setSoundPanelOpen(o => !o) : undefined}
-              onSendChatMessage={myPosition !== null ? sendChatMessage : undefined}
-            />
-          </div>
+          <BlackjackMultiAvatarDock
+            seats={seatsByPosition}
+            addressLower={address?.toLowerCase()}
+            phase={tableViewState?.phase ?? 'waiting'}
+            actingSeatPosition={tableViewState?.actingSeatPosition ?? null}
+            turnStartedAt={tableViewState?.turnStartedAt ?? null}
+            bettingStartedAt={tableViewState?.bettingStartedAt ?? null}
+            myPosition={myPosition}
+            onOpenProfile={setSelectedProfileAddress}
+            onLeaveSeat={myPosition !== null ? leaveSeat : undefined}
+            onToggleSoundPanel={myPosition !== null ? () => setSoundPanelOpen(o => !o) : undefined}
+            onSendChatMessage={myPosition !== null ? sendChatMessage : undefined}
+          />
 
         </div>
 
@@ -1252,8 +1262,16 @@ export default function BlackjackMultiTablePage() {
       {/* ── End table column wrapper ── */}
       </div>
 
-      {/* ── Controls — sidebar on md+, below table on mobile; hidden in fullscreen ── */}
-      <div data-bj-panel className={`px-4 py-4 space-y-3 bg-slate-950 md:row-start-1 md:col-start-2 md:py-0 md:px-0 md:flex md:flex-col md:gap-3 md:overflow-hidden md:pt-4${isFullscreen ? ' hidden' : ''}`}>
+      {/* ── Controls + profile/stats + how-to — one right panel; hidden in fullscreen ── */}
+      <div
+        data-bj-panel
+        className={`px-3 py-3 sm:px-4 sm:py-4 space-y-3 rounded-xl md:row-start-1 md:col-start-2 md:max-h-[calc(100dvh-7.5rem)] md:overflow-y-auto md:py-3 md:px-3${isFullscreen ? ' hidden' : ''}`}
+        style={{
+          background: 'linear-gradient(145deg, rgb(16, 26, 35), rgb(35, 36, 41))',
+          boxShadow: 'inset 0 3px 6px rgba(0, 0, 0, 0.8), inset 0 -3px 6px rgba(255, 255, 255, 0.1), 0 1px 3px rgba(0, 0, 0, 0.5)',
+          border: '1px inset rgba(60, 60, 60, 0.5)',
+        }}
+      >
 
         <BlackjackMultiBetActionPanel
           myPosition={myPosition}
@@ -1298,47 +1316,45 @@ export default function BlackjackMultiTablePage() {
           </div>
         )}
 
-      </div>
-      </div>
-
-      {/* Table profile + player dashboard — same block as app/BLACKJACK/page.tsx (outside game grid so heights aren’t collapsed) */}
-      <section data-bj-extra className="mt-4 grid grid-cols-1 items-stretch gap-1 md:grid-cols-2 md:gap-1">
-        <div className="flex min-h-0 flex-col md:h-full">
-          <TableTokenProfileCard
-            key={`image-${state?.themeId ?? BLACKJACK_IMAGE_BACKGROUNDS[0].id}`}
-            themeKind={'image'}
-            themeId={state?.themeId ?? BLACKJACK_IMAGE_BACKGROUNDS[0].id}
-            getThemeInfo={getThemeInfo}
-            getTableProfile={getTableProfile}
-            onChangeTableClick={() => router.push('/blackjack-multi')}
-            naturalProfileHeight
-          />
-        </div>
-        <div className="flex min-h-0 flex-col md:h-full">
-          {address && playerStats ? (
-            <PlayerStatsDashboard
-              stats={playerStats}
-              isLoading={playerStatsLoading}
-              playerAddress={address}
-              wsClient={wsConnected ? wsClient : null}
-              reserveBalance={BigInt(playerBalance)}
+        <div className="grid grid-cols-1 gap-3 pt-1 border-t border-white/10">
+          <div className="flex min-h-0 flex-col">
+            <TableTokenProfileCard
+              key={`image-${state?.themeId ?? BLACKJACK_IMAGE_BACKGROUNDS[0].id}`}
+              themeKind={'image'}
+              themeId={state?.themeId ?? BLACKJACK_IMAGE_BACKGROUNDS[0].id}
+              getThemeInfo={getThemeInfo}
+              getTableProfile={getTableProfile}
+              onChangeTableClick={() => router.push('/blackjack-multi')}
+              naturalProfileHeight
             />
-          ) : (
-            <div
-              className="flex min-h-[420px] flex-1 items-center justify-center overflow-hidden rounded-xl px-6 text-center text-white/60 md:min-h-[520px] md:h-full"
-              style={{
-                background: 'linear-gradient(145deg, rgb(16, 26, 35), rgb(35, 36, 41))',
-                boxShadow: 'inset 0 3px 6px rgba(0, 0, 0, 0.8), inset 0 -3px 6px rgba(255, 255, 255, 0.1), 0 1px 3px rgba(0, 0, 0, 0.5)',
-                border: '1px inset rgba(60, 60, 60, 0.5)',
-              }}
-            >
-              Connect wallet to view your player dashboard.
-            </div>
-          )}
+          </div>
+          <div className="flex min-h-0 flex-col">
+            {address && playerStats ? (
+              <PlayerStatsDashboard
+                stats={playerStats}
+                isLoading={playerStatsLoading}
+                playerAddress={address}
+                wsClient={wsConnected ? wsClient : null}
+                reserveBalance={BigInt(playerBalance)}
+              />
+            ) : (
+              <div
+                className="flex min-h-[280px] flex-1 items-center justify-center overflow-hidden rounded-xl px-6 text-center text-white/60 md:min-h-[320px]"
+                style={{
+                  background: 'linear-gradient(145deg, rgb(16, 26, 35), rgb(35, 36, 41))',
+                  boxShadow: 'inset 0 3px 6px rgba(0, 0, 0, 0.8), inset 0 -3px 6px rgba(255, 255, 255, 0.1), 0 1px 3px rgba(0, 0, 0, 0.5)',
+                  border: '1px inset rgba(60, 60, 60, 0.5)',
+                }}
+              >
+                Connect wallet to view your player dashboard.
+              </div>
+            )}
+          </div>
         </div>
-      </section>
 
-      <BlackjackHowToSection blackjackAddress={BLACKJACK_ADDRESS} />
+        <BlackjackHowToSection blackjackAddress={BLACKJACK_ADDRESS} layout="panel" />
+      </div>
+      </div>
 
       <PlayerProfileModal
         isOpen={!!selectedProfileAddress}

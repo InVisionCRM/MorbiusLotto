@@ -3,11 +3,13 @@
 import React, { useState, useEffect } from 'react'
 import { createPortal } from 'react-dom'
 import { toast } from 'sonner'
+import { useAccount } from 'wagmi'
 import { useProfile } from '@/hooks/use-player-profile'
 import { useQueryClient } from '@tanstack/react-query'
 import { AvatarView } from '@/components/avatar'
 import { DEFAULT_AVATAR_CONFIG } from '@/components/avatar'
 import { ProfileAvatarModal } from '@/components/shared/ProfileAvatarModal'
+import { useSpeechEnabled } from '@/hooks/use-speech-enabled'
 
 const DISPLAY_NAME_MIN = 3
 const DISPLAY_NAME_MAX = 32
@@ -51,6 +53,8 @@ export default function ProfileSettingsModal({
   const [avatarModalOpen, setAvatarModalOpen] = useState(false)
   const { avatarConfig } = useProfile()
   const queryClient = useQueryClient()
+  const { address } = useAccount()
+  const { enabled: speechEnabled, setEnabled: setSpeechEnabled } = useSpeechEnabled(address)
 
   useEffect(() => setMounted(true), [])
 
@@ -191,6 +195,25 @@ export default function ProfileSettingsModal({
                 />
               </div>
             </div>
+          </div>
+          {/* Voice commands toggle */}
+          <div className="flex items-center justify-between py-1">
+            <div>
+              <div className="text-xs font-medium text-gray-300">Voice commands</div>
+              <div className="text-[11px] text-gray-500">Blackjack only · Chrome/Edge</div>
+            </div>
+            <button
+              type="button"
+              onClick={() => setSpeechEnabled(!speechEnabled)}
+              className="relative inline-flex h-5 w-9 shrink-0 items-center rounded-full transition-colors focus:outline-none"
+              style={{ background: speechEnabled ? 'rgba(6,182,212,0.8)' : 'rgba(75,85,99,0.6)' }}
+              aria-pressed={speechEnabled}
+            >
+              <span
+                className="inline-block h-3.5 w-3.5 transform rounded-full bg-white shadow transition-transform"
+                style={{ transform: speechEnabled ? 'translateX(18px)' : 'translateX(2px)' }}
+              />
+            </button>
           </div>
         </div>
         <div className="px-3 pb-3 flex justify-end gap-2">

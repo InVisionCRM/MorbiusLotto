@@ -8,10 +8,8 @@ import { toast } from 'sonner';
 import { keccak256, toHex, encodePacked } from 'viem';
 import GlobalMainNav from '@/components/shared/GlobalMainNav';
 import { Footer } from '@/components/shared/footer';
-import { SpeechIndicator } from '@/components/shared/SpeechIndicator';
-import { SpeechConfirmDialog } from '@/components/shared/SpeechConfirmDialog';
 import { useSpeechCommands, type BJSpeechAction } from '@/hooks/use-speech-commands';
-import { useSpeechCallThreshold } from '@/hooks/use-speech-call-threshold';
+import { useSpeechEnabled } from '@/hooks/use-speech-enabled';
 import { DepositWithdrawModal } from '@/components/BLACKJACK/DepositWithdrawModal';
 import { CustomApprovalModal } from '@/components/BLACKJACK/CustomApprovalModal';
 import { BlackjackAuxViews } from '@/components/BLACKJACK/BlackjackAuxViews';
@@ -1885,7 +1883,7 @@ export default function BlackjackPage() {
   }, [gameState.currentGame, wsClient, wsConnected, updateGameStateFromServer, fetchBalance]);
 
   // ── Voice commands ────────────────────────────────────────────────────────
-  const { threshold: _callThreshold } = useSpeechCallThreshold(address); // poker-only; stored here for future use
+  const { enabled: speechEnabled } = useSpeechEnabled(address);
 
   const handleVoiceBJAction = useCallback((action: BJSpeechAction) => {
     if (action.type === 'hit')         { handlePlayerAction(Action.HIT); return; }
@@ -1903,6 +1901,13 @@ export default function BlackjackPage() {
     mode: 'blackjack',
     onBlackjackAction: handleVoiceBJAction,
   });
+
+  // Start/stop listening based on the setting
+  useEffect(() => {
+    if (speechEnabled) speech.start();
+    else speech.stop();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [speechEnabled]);
 
   // Transform GameResult[] to GameHistoryEntry[] for GameHistory component
   // Must be before any early returns to comply with Rules of Hooks
@@ -2098,21 +2103,6 @@ export default function BlackjackPage() {
         pendingJob={pendingJob}
       />
 
-      {/* Voice commands */}
-      <SpeechIndicator
-        supported={speech.supported}
-        listening={speech.listening}
-        transcript={speech.transcript}
-        onToggle={speech.toggle}
-      />
-      {speech.pendingLabel && (
-        <SpeechConfirmDialog
-          label={speech.pendingLabel}
-          onYes={speech.confirmYes}
-          onNo={speech.confirmNo}
-        />
-      )}
-
       <main className="w-full max-w-full mx-0 px-2 sm:px-4 pt-2 sm:pt-4 pb-4 sm:pb-8 overflow-x-hidden overflow-y-auto no-scrollbar">
         {/* View-specific content */}
         {currentView === 'game' && (
@@ -2219,6 +2209,7 @@ export default function BlackjackPage() {
           blackjackAddress={BLACKJACK_ADDRESS}
           morbiusTokenAddress={MORBIUS_TOKEN_ADDRESS}
           betLimits={tierLimits}
+          speech={speech}
         />
 
         {/* Tournament card - commented out
@@ -2336,7 +2327,9 @@ export default function BlackjackPage() {
           fetchBalance={fetchBalance}
         />
 
-        <BlackjackHowToSection blackjackAddress={BLACKJACK_ADDRESS} />
+        {currentView !== 'game' && (
+          <BlackjackHowToSection blackjackAddress={BLACKJACK_ADDRESS} />
+        )}
 
         <BlackjackAuxViews
           currentView={currentView}

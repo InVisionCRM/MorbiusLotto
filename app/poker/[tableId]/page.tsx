@@ -31,10 +31,6 @@ import {
   POKER_E2E_MOCK_ADDRESS,
   type PokerE2ETestApi,
 } from './e2e-mock';
-import { SpeechIndicator } from '@/components/shared/SpeechIndicator';
-import { SpeechConfirmDialog } from '@/components/shared/SpeechConfirmDialog';
-import { useSpeechCommands, type PokerSpeechAction } from '@/hooks/use-speech-commands';
-import { useSpeechCallThreshold } from '@/hooks/use-speech-call-threshold';
 
 export default function PokerTablePage() {
   const params = useParams();
@@ -281,34 +277,6 @@ export default function PokerTablePage() {
     }
   };
 
-  // ── Voice commands ────────────────────────────────────────────────────────
-  const { threshold: callThreshold } = useSpeechCallThreshold(address);
-
-  const getCallAmountMorbius = useCallback(
-    () => Number(callAmount) / 1e18,
-    [callAmount],
-  );
-
-  const handleVoicePokerAction = useCallback(
-    (action: PokerSpeechAction) => {
-      if (!canAct) return;
-      if (action.type === 'fold')   { handleFold(); return; }
-      if (action.type === 'check')  { handleCheck(); return; }
-      if (action.type === 'call')   { handleCall(); return; }
-      if (action.type === 'all_in') { handleBet(mySeat?.stack ?? '0'); return; }
-      if (action.type === 'bet')    { handleBet(String(BigInt(Math.floor(action.amount)) * BigInt(10 ** 18))); return; }
-      if (action.type === 'raise')  { handleRaise(String(BigInt(Math.floor(action.amount)) * BigInt(10 ** 18))); return; }
-    },
-    [canAct, handleFold, handleCheck, handleCall, handleBet, handleRaise, mySeat],
-  );
-
-  const speech = useSpeechCommands({
-    mode: 'poker',
-    callThresholdMorbius: callThreshold,
-    getCallAmountMorbius,
-    onPokerAction: handleVoicePokerAction,
-  });
-
   const sharedActions = renderedState && mySeat && (
     <PokerActions
       canAct={!!canAct}
@@ -441,21 +409,6 @@ export default function PokerTablePage() {
     <PokerThemeProvider themeId={pokerTheme}>
       <PokerTableEffectProvider>
         {!isE2EMock && <PokerBetaSplash />}
-
-        {/* Voice commands */}
-        <SpeechIndicator
-          supported={speech.supported}
-          listening={speech.listening}
-          transcript={speech.transcript}
-          onToggle={speech.toggle}
-        />
-        {speech.pendingLabel && (
-          <SpeechConfirmDialog
-            label={speech.pendingLabel}
-            onYes={speech.confirmYes}
-            onNo={speech.confirmNo}
-          />
-        )}
 
         {/* Portrait blocker: shown on mobile when holding phone upright */}
         {isPortraitMobile && (

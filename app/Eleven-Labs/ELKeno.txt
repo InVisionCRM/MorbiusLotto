@@ -1,10 +1,10 @@
-# Keno on MORBlotto — How It Actually Works
+# Keno on Morbius — How It Actually Works
 
-Use this for **Crypto Keno** / **MORBlotto** voice scripts. Much generic Keno copy (live lounge draws, Club Keno dollar paytables, “25–35% house edge”) does **not** apply.
+Use this for **Crypto Keno** / **Morbius** voice scripts. Much generic Keno copy (live lounge draws, Club Keno dollar paytables, “25–35% house edge”) does **not** apply.
 
 ---
 
-## PART 1: How the game works on MORBlotto
+## PART 1: How the game works on Morbius
 
 ### Setup (matches `CryptoKeno.sol`)
 
@@ -69,7 +69,7 @@ The **on-chain default** (and in-app display) uses **multipliers on your wager**
 | 10 | 5 | 2× |
 | 10 | **0** | **3×** (consolation) |
 
-**Do not** read aloud legacy “$10,000 for 8/8” style tables from generic Keno PDFs — those **are not** MORBlotto’s multipliers.
+**Do not** read aloud legacy “$10,000 for 8/8” style tables from generic Keno PDFs — those **are not** Morbius’s multipliers.
 
 Optional **Bullseye**-style add-ons in the UI stack additional multipliers when the marked number hits; mirror whatever the live **Keno** screen shows.
 

@@ -61,7 +61,7 @@ export function BlackjackGameSecondaryPanels({
 }: BlackjackGameSecondaryPanelsProps) {
   return (
     <>
-      <section className="mt-4 grid grid-cols-1 items-stretch gap-1 md:grid-cols-2 md:gap-1">
+      <section className="mt-3 grid grid-cols-1 items-stretch gap-3">
         <div className="flex min-h-0 flex-col md:h-full">
           <TableTokenProfileCard
             key={`${theme}-${theme === 'video' ? videoSource : imageSource}`}
@@ -129,7 +129,7 @@ export function BlackjackGameSecondaryPanels({
         </div>
       )}
 
-      <section className="mt-4 grid grid-cols-1 lg:grid-cols-2 gap-4 lg:gap-6 items-start">
+      <section className="mt-3 grid grid-cols-1 gap-3 items-start">
         <div className="w-full">
           <GameFAQ
             game="blackjack"
@@ -182,7 +182,7 @@ export function BlackjackGameSecondaryPanels({
       </section>
 
       {tournament.tournamentState.inTournament && (
-        <div className="mt-4">
+        <div className="mt-3">
           <TournamentLeaderboard
             leaderboard={tournament.leaderboard as any}
             playerAddress={address}

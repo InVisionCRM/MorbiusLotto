@@ -6,7 +6,7 @@ This comprehensive guide takes you from the foundational rules all the way to ad
 
 ---
 
-## MORBlotto — how Texas Hold’em works *here*
+## Morbius — how Texas Hold’em works *here*
 
 Use this section for accurate product voice; the rest of the doc is general poker education.
 
@@ -15,7 +15,7 @@ Use this section for accurate product voice; the rest of the doc is general poke
 - **Cash games:** Blinds are fixed for the table until the host or configuration changes them.
 - **Poker tournaments (sit-and-go style):** Default config uses **starting stack 5000** and a **published blind schedule** (level 1: 25 / 50, increasing through level 8 with fewer hands per level at higher levels). Blinds come from the tournament row / `poker_config`, not from generic “$1/$2 live poker” examples unless the UI shows those stakes.
 - **Blackjack tournaments** are a **different** `game_type` in the same tournament system — do not describe them as Hold’em.
-- **Currency:** Buy-ins and prizes are often in **MORBIUS**; the site runs on **PulseChain** (EVM). Do not say we are “playing against the casino dealer” in Hold’em on MORBlotto.
+- **Currency:** Buy-ins and prizes are often in **MORBIUS**; the site runs on **PulseChain** (EVM). Do not say we are “playing against the casino dealer” in Hold’em on Morbius.
 
 ---
 
