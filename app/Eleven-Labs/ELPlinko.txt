@@ -1,0 +1,53 @@
+# Plinko on MORBlotto — How It Actually Works
+
+Use this for accurate voice copy about **MORBlotto Plinko** (PulseChain). Generic “Price Is Right” or third-party casino descriptions often **do not** match our build.
+
+---
+
+## Platform facts
+
+- **Currency:** Gameplay uses **MORBIUS** (or a PLS-based purchase path that routes through the platform treasury, depending on the button the player uses). Values on-chain are **uint256 / wei-style integers**, not JavaScript floats.
+- **Settlement:** Drops are settled **on-chain** via the **Plinko** contract (`buyBallsAndDrop` / PLS variant). The contract records bucket index, multiplier, and payout.
+- **Fees on wins:** When you win, **5% of the gross payout** is split across configured recipients (MORBIUS holder distribution, burn, platform, LP distribution) — same high-level fee model as our other bankrolled games. This is **in addition** to the fact that multiplier layouts are designed with house edge in the paytable itself (~97% RTP from multipliers per in-contract comments, before that payout fee).
+
+---
+
+## Board and risk modes (contract-accurate)
+
+- The live board uses a **fixed 16-row** peg layout producing **17 buckets** (indices 0–16), mirrored left/right. Players do **not** choose 8 vs 14 rows in our product — row count is not a user slider tied to different contracts.
+- There are **three risk levels** (contract: `0 = LOW`, `1 = MEDIUM`, `2 = HIGH`):
+
+**LOW risk — multipliers (edges → center → edges), basis points ÷ 100 = ×**  
+16, 9, 2, 1.4, 1.4, 1.2, 1.1, 1, **0.4**, 1, 1.1, 1.2, 1.4, 1.4, 2, 9, 16  
+
+**MEDIUM risk**  
+110, 41, 10, 5, 3, 1.5, 1, 0.5, **0.2**, 0.5, 1, 1.5, 3, 5, 10, 41, 110  
+
+**HIGH risk**  
+**200**, 120, 25, 10, 4, 2, 0.2, 0.2, **0.2**, 0.2, 0.2, 2, 4, 10, 25, 120, **200**  
+
+- **Important:** Our **maximum edge multiplier on HIGH risk is 200×**, not 1000×. Any doc that says “1000× Plinko on MORBlotto” is **wrong** for the deployed paytable.
+
+---
+
+## Outcome generation (not “50/50 every peg”)
+
+- Public explanations often say “each peg is 50% left/right.” On MORBlotto, outcomes are driven by a **deterministic physics simulation** (fixed timestep, Matter.js-style engine constants) plus **provably fair seeds** so the path and final bucket can be verified — **not** by flipping an independent coin at every peg.
+- Do **not** claim players can change a “client seed” in the same way as some simple hash-only casino games unless the **current UI** exposes that control; tie narration to **verifiable seeds / fairness tooling the app actually shows**.
+
+---
+
+## Strategy copy (still true)
+
+- There is **no skill in steering** the ball during a drop.
+- **Risk level** only changes the multiplier curve (variance), not the peg physics model.
+- **Bankroll:** High risk + many rapid drops is volatile; sizing bets to survive long streaks of **0.2×–0.4×** center buckets is sensible.
+- **Gambler’s fallacy:** Past buckets do not change the next outcome.
+
+---
+
+## Do not say
+
+- “Adjust rows from 8 to 16” on MORBlotto Plinko.
+- “1000× max on our Plinko” (use **200×** on HIGH per contract).
+- “99% RTP / 1% house” as our official number — use the **contract paytables + 5% fee on payouts** story instead.

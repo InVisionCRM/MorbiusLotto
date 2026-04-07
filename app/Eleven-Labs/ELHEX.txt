@@ -1,0 +1,96 @@
+# HEX (HEX)
+**The Blockchain Certificate of Deposit**
+
+[![Network](https://img.shields.io/badge/Network-Ethereum%20%7C%20PulseChain-blue)](#)
+[![Smart Contract Immutable](https://img.shields.io/badge/Smart%20Contract-Immutable-success)](#)
+[![Admin Keys](https://img.shields.io/badge/Admin%20Keys-None-success)](#)
+
+## 📖 Introduction
+
+**HEX** is an ERC-20 token launched on the Ethereum network in December 2019 by Richard Heart. It is designed to be the cryptocurrency equivalent of a traditional financial product known as a **Certificate of Deposit (CD)**. 
+
+In traditional banking, a CD pays a slightly higher interest rate than a standard savings account in exchange for the customer agreeing to leave a lump sum deposit untouched for a predetermined period. HEX translates this concept to the blockchain via a decentralized smart contract, replacing the bank with code.
+
+---
+
+## ⚡ Key Features
+
+* **No Middlemen:** The system is entirely peer-to-peer. Yield is paid directly by the smart contract, not by a centralized exchange or lending platform.
+* **Immutable Code:** The HEX smart contract was audited and locked. There are no "admin keys," meaning nobody (not even the founder) can alter the code, halt trading, or change the inflation rate.
+* **Inflation as Yield:** HEX has a maximum annual inflation rate of 3.69%. However, this inflation is only paid to users who are actively staking, incentivizing locking up tokens.
+* **Penalties:** If you end your stake earlier or later than you committed to, the smart contract automatically deducts a portion of your principal/interest and distributes it to the other active stakers.
+
+---
+
+## ⚙️ How It Works: The Mechanics
+
+The core engine of HEX revolves around **Staking** and **T-Shares**.
+
+### 1. Staking (Locking)
+Users purchase HEX on an exchange and then interact with the HEX smart contract to "stake" it. You choose an amount of HEX and a duration (from 1 day up to 5,555 days, or roughly 15.2 years). 
+
+### 2. T-Shares (Trillion Shares)
+When you stake HEX, your HEX tokens are essentially burned, and you are issued **T-Shares**. 
+* T-Shares are the yield-generating engine of the system. 
+* Every day at midnight UTC, the smart contract distributes newly minted HEX to all active T-Shares.
+* The cost to acquire a T-Share increases over time to simulate a rising difficulty, ensuring that early stakers and longer-term stakers get more yield.
+
+### 3. The Multipliers
+* **Longer Pays Better (LPB):** Staking for longer periods gives you bonus T-Shares (up to a 3x multiplier for a 15-year stake).
+* **Bigger Pays Better (BPB):** Staking larger amounts of HEX gives a small bonus multiplier (up to 1.1x).
+
+### 4. Unstaking
+When your stake matures, you "End Stake" through the contract. Your T-Shares are burned, and the smart contract mints your original HEX principal plus all the daily HEX interest you accumulated over the staking period directly to your wallet.
+
+---
+
+## 🚨 Penalties & Game Theory
+
+HEX is built heavily on game theory, specifically punishing those who break their promises and rewarding those who keep them.
+
+* **Emergency End Stake (EES):** If you end your stake before the agreed-upon date, you face severe penalties. Depending on how early you unstake, you can lose all your accumulated interest and a significant portion of your initial principal.
+* **Late Penalty:** If your stake matures and you do not mint your coins within 14 days, the contract begins bleeding your stake by 1% per week until you claim it.
+* **The "Truth Engine":** All penalties collected from early unstakers are distributed proportionately to the remaining stakers. This creates an environment where stakers actively benefit from the impatience or financial distress of others.
+
+---
+
+## 🌐 Network Expansion: PulseChain
+
+Originally deployed on Ethereum as an ERC-20 token, HEX is now intrinsically linked to **PulseChain** (a hard fork of Ethereum created by Richard Heart to lower gas fees). 
+
+When PulseChain launched in 2023, the entire Ethereum state was copied. This means anyone holding Ethereum HEX (eHEX) received a 1:1 copy on PulseChain (pHEX). Today, both versions exist on their respective networks with separate market prices, but they utilize the exact same smart contract logic.
+
+---
+
+## ⚠️ Risks and Controversies
+
+*As with all cryptocurrencies, HEX is highly volatile and carries extreme risk. Below are specific context points every user should research:*
+
+1. **Regulatory Scrutiny:** In July 2023, the **U.S. Securities and Exchange Commission (SEC)** filed a lawsuit against Richard Heart and his associated projects (including HEX), alleging the sale of unregistered securities and the misappropriation of millions of dollars in investor funds.
+2. **"Ponzi/Pyramid" Allegations:** Critics frequently argue that HEX resembles a Ponzi or pyramid scheme because the yield is entirely dependent on future buyers providing exit liquidity, and the aggressive referral/marketing tactics used by the community. Proponents counter that the code is transparent, yield comes from inflation rather than new deposits, and there is no centralized entity paying the yield.
+3. **Origin Address (The "OA"):** A massive, anonymous wallet (believed by the community to belong to the founder) holds the vast majority of the HEX supply. While it has never sold tokens, its existence means the token supply is heavily centralized in one wallet.
+
+---
+
+## 🛠️ How to Interact with HEX
+
+*Disclaimer: This is not financial advice. Ensure you understand smart contract interactions and gas fees.*
+
+1. **Setup Wallet:** Install a Web3 wallet like MetaMask.
+2. **Acquire ETH or PLS:** You need Ethereum (for eHEX) or Pulse (for pHEX) to pay for network gas fees.
+3. **Buy HEX:** Swap for HEX on decentralized exchanges like Uniswap (Ethereum) or PulseX (PulseChain).
+4. **Stake:** Visit a decentralized frontend (e.g., `go.hex.com` or community-built alternatives like `icosa.pro`), connect your wallet, and execute a staking contract.
+5. **Wait:** Hold your keys securely until your stake matures.
+6. **End Stake:** Once mature, interact with the contract again to mint your principal and yield.
+
+---
+
+## 🔗 Official Links & Resources
+
+* **Website:** [hex.com](https://hex.com/)
+* **Smart Contract (Ethereum):** `0x2b591e99afE9f32eAA6214f7B7629768c40Eeb39`
+* **Community Analytics:** [hex.vision](https://hex.vision/)
+* **PulseChain Network:** [pulsechain.com](https://pulsechain.com/)
+
+---
+*README generated for informational and educational purposes only. Cryptocurrency investments are speculative and involve substantial risk of loss.*

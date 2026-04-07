@@ -1,0 +1,90 @@
+# Keno on MORBlotto — How It Actually Works
+
+Use this for **Crypto Keno** / **MORBlotto** voice scripts. Much generic Keno copy (live lounge draws, Club Keno dollar paytables, “25–35% house edge”) does **not** apply.
+
+---
+
+## PART 1: How the game works on MORBlotto
+
+### Setup (matches `CryptoKeno.sol`)
+
+- **Board:** Numbers **1–80** (standard Keno field).
+- **Player picks:** **Spot size from 1 to 10** on the default paytable path the UI and contract ship with (the contract allows a higher configured `maxSpot` in principle, but default initialization and app paytables are built around **1–10** spots).
+- **Draw:** **20 distinct winning numbers** are drawn from 80 for each play.
+- **Match count (“hits”):** How many of your picks appear in those 20 numbers determines the **gross** payout multiplier from the paytable.
+
+### Instant (on-chain) play
+
+- **Quick / instant Keno** is a **single transaction**: pick numbers, wager, draw, and payout settle atomically on-chain. It is **not** the same as a live lounge game where draws happen every five minutes.
+- **Minimum wager:** **1 MORBIUS** (1e18 smallest units) unless the deployment changes constants.
+- **Maximum gross payout cap:** Contract enforces a **maximum gross payout per ticket** (designed around **100k × 25× = 2.5M MORBIUS** scale at 18 decimals).
+
+### Fees
+
+- **5% of the gross payout** is taken on payout and routed per configuration (MORBIUS distribution, burn, platform, LP) — analogous to Plinko’s payout fee model. Narrate **net** winnings when talking about what the player receives after fees.
+
+---
+
+## PART 2: Paytable (default multipliers × wager)
+
+The **on-chain default** (and in-app display) uses **multipliers on your wager**, not US dollar prizes. Examples:
+
+| Spots | Hits | Multiplier (gross) |
+|------:|-----:|-------------------:|
+| 1 | 1 | 2× |
+| 2 | 2 | 3× |
+| 3 | 3 | 4× |
+| 3 | 2 | 2× |
+| 4 | 4 | 7× |
+| 4 | 3 | 3× |
+| 4 | 2 | 1× |
+| 5 | 5 | 10× |
+| 5 | 4 | 7× |
+| 5 | 3 | 2× |
+| 6 | 6 | 12× |
+| 6 | 5 | 10× |
+| 6 | 4 | 5× |
+| 6 | 3 | 1× |
+| 7 | 7 | 15× |
+| 7 | 6 | 12× |
+| 7 | 5 | 9× |
+| 7 | 4 | 5× |
+| 7 | 3 | 1× |
+| 8 | 8 | 17× |
+| 8 | 7 | 12× |
+| 8 | 6 | 7× |
+| 8 | 5 | 5× |
+| 8 | 4 | 2× |
+| 9 | 9 | 20× |
+| 9 | 8 | 15× |
+| 9 | 7 | 10× |
+| 9 | 6 | 7× |
+| 9 | 5 | 4× |
+| 9 | 4 | 2× |
+| 10 | 10 | 25× |
+| 10 | 9 | 20× |
+| 10 | 8 | 15× |
+| 10 | 7 | 12× |
+| 10 | 6 | 5× |
+| 10 | 5 | 2× |
+| 10 | **0** | **3×** (consolation) |
+
+**Do not** read aloud legacy “$10,000 for 8/8” style tables from generic Keno PDFs — those **are not** MORBlotto’s multipliers.
+
+Optional **Bullseye**-style add-ons in the UI stack additional multipliers when the marked number hits; mirror whatever the live **Keno** screen shows.
+
+---
+
+## PART 3: Odds and “strategy”
+
+- **Pure chance:** No pick pattern changes the draw; the chain uses deterministic randomness / provably fair machinery as implemented — do not imply lucky numbers or hot/cold stats change odds.
+- **Spot choice** only changes **volatility and paytable shape**, not a secret edge from “lucky” picks.
+- Generic claims like “live Keno has 25–35% house edge” or “online Keno is always 1–5%” are **not** authoritative for this product; cite **paytable + 5% payout fee** instead.
+
+---
+
+## PART 4: Player care (still valid)
+
+- **Speed:** Instant Keno can be played very quickly — bet sizing matters.
+- **Bankroll rule of thumb:** Use small fractions of bankroll per ticket so long dry spells do not wipe the session.
+- **Responsible play:** Negative-expectation entertainment; only wager what you can afford to lose.

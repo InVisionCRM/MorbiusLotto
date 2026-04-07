@@ -1,0 +1,79 @@
+# PulseChain (PLS)
+**The Faster, Cheaper, Energy-Efficient Ethereum Fork**
+
+[![Network](https://img.shields.io/badge/Network-PulseChain-blue)](#)
+[![Consensus](https://img.shields.io/badge/Consensus-DPoS-success)](#)
+[![Status](https://img.shields.io/badge/Mainnet-Live-success)](#)
+
+## 📖 Introduction
+
+**PulseChain** is a Layer-1 blockchain created by Richard Heart, launched on mainnet in May 2023. It is a hard fork of the Ethereum network designed to alleviate Ethereum's high gas fees, reduce network congestion, and improve overall transaction throughput. 
+
+What makes PulseChain historically unique is that it launched with a full copy of the Ethereum system state. This means all smart contracts, user balances, tokens, and NFTs that existed on Ethereum at the time of the snapshot were seamlessly duplicated onto the new PulseChain network.
+
+---
+
+## ⚡ Key Features
+
+* **Delegated Proof of Stake (DPoS):** PulseChain uses a validator-based PoS consensus mechanism. It is environmentally friendly and requires users to stake their native PLS tokens to secure the network and earn yields.
+* **Cheaper & Faster:** PulseChain boasts a faster block time (roughly 10 seconds compared to Ethereum's 12 seconds) and significantly lower transaction fees, making decentralized finance (DeFi) accessible to users priced out of Ethereum.
+* **Deflationary Fee Burning:** Implementing Ethereum's EIP-1559 protocol, PulseChain burns a portion of the base fee from every transaction, permanently removing those PLS tokens from the circulating supply.
+* **Freemium PLS:** Every Ethereum address that existed at the time of the fork received a free 1:1 copy of its ETH balance in the form of PLS. This ensured users could transact immediately on the new network without needing to bridge funds.
+
+---
+
+## 🎁 The "Largest Airdrop in History"
+
+One of PulseChain's most defining characteristics was the full replication of the Ethereum state, often referred to by the community as the largest airdrop in crypto history.
+
+* **PRC-20 Tokens:** Every ERC-20 token (like USDC, SHIB, LINK, HEX) on Ethereum was duplicated 1:1 on PulseChain as "PRC-20" tokens. 
+* **User Adoption:** Anyone holding assets in a non-custodial Ethereum wallet suddenly possessed a mirrored portfolio on PulseChain. While these copied tokens started with a monetary value of zero, market forces via decentralized exchanges eventually assigned them value.
+
+---
+
+## ⚙️ The Ecosystem: Key Components
+
+### 1. PLS (The Native Gas Token)
+Just as ETH pays for gas on Ethereum, PLS is used to pay for network transactions on PulseChain. The initial supply of PLS was distributed to users who participated in a "Sacrifice Phase" in 2021, an event that raised hundreds of millions of dollars for medical research (such as the SENS Research Foundation) and network development.
+
+### 2. PulseX (PLSX)
+PulseX is the primary Decentralized Exchange (DEX) of PulseChain, serving the exact same automated-market-maker function as Uniswap does on Ethereum. It allows users to swap their PRC-20 tokens. PLSX is the native token of the exchange, which benefits from its own buy-and-burn mechanism funded by trading fees.
+
+### 3. Bridging
+To inject real-world value into the ecosystem, users move assets between Ethereum and PulseChain using the official Bridge. Assets locked in the smart contract on Ethereum are minted as "wrapped" versions on PulseChain (e.g., bridging ETH creates WETH on PulseChain).
+
+---
+
+## 🚨 Regulatory History & The SEC Case
+
+*Understanding the legal landscape is a crucial part of PulseChain's history:*
+
+* **The 2023 SEC Lawsuit:** In July 2023, the U.S. Securities and Exchange Commission (SEC) sued founder Richard Heart, PulseChain, PulseX, and HEX. The agency alleged the sale of unregistered securities and the misappropriation of investor funds.
+* **The 2025 Dismissal (Complete Victory):** In a landmark ruling in early 2025, U.S. District Judge Carol Bagley Amon completely dismissed the SEC's lawsuit against Heart and his projects. The judge ruled that the SEC failed to establish jurisdiction over Heart (who resides in Finland) and dismissed the fraud claims in full, noting the agency failed to demonstrate any misuse of funds within U.S. jurisdiction. The SEC declined to amend its complaint, officially clearing Heart and his projects, and providing PulseChain with a rare level of regulatory clarity in the crypto space.
+
+---
+
+## 🛠️ How to Interact with PulseChain
+
+*Disclaimer: Cryptocurrency is highly volatile. Always verify you are using the correct RPC settings and official bridges.*
+
+1. **Setup Wallet:** Add the PulseChain network to your Web3 wallet (like MetaMask).
+    * *Network Name:* PulseChain
+    * *New RPC URL:* `https://rpc.pulsechain.com`
+    * *Chain ID:* `369`
+    * *Currency Symbol:* `PLS`
+2. **Acquire PLS:** Bridge assets from Ethereum and swap for PLS, or buy PLS directly on a centralized/decentralized exchange that supports the network.
+3. **Trade & Yield Farm:** Use decentralized applications like PulseX to swap tokens, provide liquidity, and earn yield.
+4. **Stake:** If you hold large amounts of PLS (32 million+), you can run a validator node, or you can delegate your PLS to an existing validator pool to help secure the network and earn transaction fees.
+
+---
+
+## 🔗 Official Links & Resources
+
+* **Main Website:** [pulsechain.com](https://pulsechain.com/)
+* **Block Explorer:**[scan.pulsechain.com](https://scan.pulsechain.com/)
+* **Primary DEX:** [pulsex.com](https://pulsex.com/)
+* **Official Bridge:** [bridge.pulsechain.com](https://bridge.pulsechain.com/)
+
+---
+*README generated for informational and educational purposes only. Cryptocurrency interactions involve substantial risk of loss.*

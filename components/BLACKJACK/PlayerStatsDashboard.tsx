@@ -13,15 +13,11 @@ import {
   DollarSign,
   Activity,
   BarChart3,
-  PieChart,
-  Calendar,
-  Clock,
   Crown,
   Wallet,
   ShieldAlert,
 } from 'lucide-react'
 import { CopyButton } from '@/components/ui/copy-button'
-import { toast } from 'sonner'
 import { formatEther } from 'viem'
 import {
   Area,
@@ -315,27 +311,6 @@ export function PlayerStatsDashboard({ stats, isLoading, playerAddress, wsClient
     return dataPoints
   }, [games, stats])
 
-  const recordStats = [
-    {
-      label: 'Biggest Win',
-      value: `${formatCurrency(stats.biggestWin)} MORBIUS`,
-      icon: TrendingUp,
-      color: 'text-green-400'
-    },
-    {
-      label: 'Biggest Loss',
-      value: `${formatCurrency(stats.biggestLoss)} MORBIUS`,
-      icon: TrendingDown,
-      color: 'text-red-400'
-    },
-    {
-      label: 'Favorite Bet',
-      value: `${formatCurrency(stats.favoriteBetAmount)} MORBIUS`,
-      icon: Target,
-      color: 'text-blue-400'
-    }
-  ]
-
   // Determine available tabs
   const availableTabs = [
     { id: 'stats' as const, label: 'Stats', icon: BarChart3 },
@@ -488,104 +463,6 @@ export function PlayerStatsDashboard({ stats, isLoading, playerAddress, wsClient
         </CardContent>
       </Card>
 
-      {/* Records and Additional Stats */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {/* Personal Records */}
-        <Card className="bg-gradient-to-br from-gray-900 to-black border-gray-700">
-          <CardHeader>
-            <CardTitle className="text-white flex items-center gap-2">
-              <Trophy className="w-5 h-5 text-yellow-400" />
-              Personal Records
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            {recordStats.map((record, index) => (
-              <div key={index} className="flex items-center justify-between p-3 bg-gray-800/50 rounded-lg">
-                <div className="flex items-center gap-3">
-                  <record.icon className={`h-4 w-4 ${record.color}`} />
-                  <span className="text-sm text-gray-300">{record.label}</span>
-                </div>
-                <span className={`text-sm font-medium ${record.color}`}>
-                  {record.value}
-                </span>
-              </div>
-            ))}
-          </CardContent>
-        </Card>
-
-        {/* Activity Overview */}
-        <Card className="bg-gradient-to-br from-gray-900 to-black border-gray-700">
-          <CardHeader>
-            <CardTitle className="text-white flex items-center gap-2">
-              <Calendar className="w-5 h-5 text-blue-400" />
-              Activity Overview
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <div className="grid grid-cols-2 gap-4">
-              <div className="text-center p-3 bg-gray-800/50 rounded-lg">
-                <div className="text-lg font-bold text-cyan-400">
-                  {stats.gamesToday}
-                </div>
-                <div className="text-xs text-gray-400">Games Today</div>
-              </div>
-              <div className="text-center p-3 bg-gray-800/50 rounded-lg">
-                <div className="text-lg font-bold text-purple-400">
-                  {stats.gamesThisWeek}
-                </div>
-                <div className="text-xs text-gray-400">Games This Week</div>
-              </div>
-            </div>
-
-            {stats.lastGameTimestamp && (
-              <div className="flex items-center justify-between p-3 bg-gray-800/50 rounded-lg">
-                <div className="flex items-center gap-2">
-                  <Clock className="h-4 w-4 text-gray-400" />
-                  <span className="text-sm text-gray-300">Last Game</span>
-                </div>
-                <span className="text-sm text-gray-400">
-                  {new Date(stats.lastGameTimestamp).toLocaleDateString()}
-                </span>
-              </div>
-            )}
-          </CardContent>
-        </Card>
-      </div>
-
-      {/* Quick Insights */}
-      <Card className="bg-gradient-to-br from-gray-900 to-black border-gray-700">
-        <CardHeader>
-          <CardTitle className="text-white flex items-center gap-2">
-            <PieChart className="w-5 h-5 text-indigo-400" />
-            Quick Insights
-          </CardTitle>
-        </CardHeader>
-        <CardContent>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            <div className="text-center">
-              <div className="text-lg font-bold text-indigo-400 mb-1">
-                {stats.totalGames > 0 ? Math.round((stats.blackjackCount / stats.totalGames) * 100) : 0}%
-              </div>
-              <div className="text-xs text-gray-400">Blackjack Rate</div>
-            </div>
-            <div className="text-center">
-              <div className="text-lg font-bold text-cyan-400 mb-1">
-                {stats.averageBet > 0 ? Math.round((stats.averagePayout / stats.averageBet) * 100) / 100 : 0}x
-              </div>
-              <div className="text-xs text-gray-400">Avg Payout Ratio</div>
-            </div>
-            <div className="text-center">
-              <div className={`text-lg font-bold mb-1 ${
-                stats.currentStreak > 5 ? 'text-green-400' :
-                stats.currentStreak < -3 ? 'text-red-400' : 'text-yellow-400'
-              }`}>
-                {stats.currentStreak > 0 ? '+' : ''}{stats.currentStreak}
-              </div>
-              <div className="text-xs text-gray-400">Win Streak</div>
-            </div>
-          </div>
-        </CardContent>
-      </Card>
         </>
       )}
 

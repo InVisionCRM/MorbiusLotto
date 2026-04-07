@@ -4,33 +4,33 @@ import type { BJMultiSeatState } from '@/lib/websocket-client';
 import { BlackjackMultiSeat } from '@/components/BLACKJACK/multi/BlackjackMultiSeat';
 
 // All coordinates are in the 800×450 canvas space.
-// SEAT_ANCHORS is the top-left origin of each seat's absolute container.
-// CARD_OFFSETS and TAG_OFFSETS are pixel offsets from that origin.
+// SEAT_ANCHORS is the origin point for each seat — cards, tag, and chip are all offset from here.
+
 const SEAT_ANCHORS = [
-  { x: 80,  y: 200 }, // left seat
-  { x: 340, y: 260 }, // center seat
-  { x: 600, y: 200 }, // right seat
+  { x: 100, y: 270 }, // left seat
+  { x: 326, y: 310 }, // center seat
+  { x: 555, y: 270 }, // right seat
 ] as const;
 
-// Where the card stack appears relative to the seat anchor.
+// Card stack offset from seat anchor. (0,0) = cards start exactly at anchor.
 const CARD_OFFSETS = [
-  { x: 0, y: 0 }, // left
-  { x: 0, y: 0 }, // center
-  { x: 0, y: 0 }, // right
+  { x: 0, y: -80 }, // left
+  { x: 0, y: -80 }, // center
+  { x: 0, y: -80 }, // right
 ] as const;
 
-// Where the player name tag appears relative to the seat anchor.
+// Player name tag offset from seat anchor.
 const TAG_OFFSETS = [
-  { x: -10, y: 180 }, // left
-  { x: -10, y: 180 }, // center
-  { x: -10, y: 180 }, // right
+  { x: -10, y: 0 }, // left
+  { x: -10, y: 0 }, // center
+  { x: -10, y: 0 }, // right
 ] as const;
 
-// Where the bet chip appears relative to the seat anchor.
+// Bet chip offset from seat anchor.
 const CHIP_OFFSETS = [
-  { x: 40, y: 60 }, // left
-  { x: 40, y: 60 }, // center
-  { x: 40, y: 60 }, // right
+  { x: 30, y: -50 }, // left
+  { x: 30, y: -50 }, // center
+  { x: 30, y: -50 }, // right
 ] as const;
 
 const POSITIONS = [0, 1, 2] as const;

@@ -1,0 +1,27 @@
+# Morbius & Tournaments on MORBlotto
+
+This note is for voice and assistant scripts about **MORBlotto on PulseChain**, not generic casino copy.
+
+## What “Morbius” means here
+
+- **MORBIUS** is the platform’s in-game ERC-20 token (ticker spelled **MORBIUS**, not “MRB”). Wagers and prizes for on-chain games are denominated in MORBIUS unless a flow explicitly uses PLS through the treasury.
+- **Morbius tournaments** tie together the site’s tournament lobby, optional **on-chain** buy-ins via the **MorbiusTournament** contract, and **server-run** gameplay (real-time state over WebSockets).
+
+## MorbiusTournament (on-chain)
+
+- Creators can **create** a tournament with a **buy-in amount**, optional **max players** (0 can mean no hard cap), and either:
+  - **Platform MORBIUS pool:** `prizeToken` is unset / zero address — buy-ins accumulate into a **prize pool** held by the contract, or
+  - **Custom prize token:** different escrow rules apply; buy-ins may route to the platform fee wallet while a separate prize is configured.
+- Players **join** by approving and paying the buy-in; the contract tracks who joined.
+- Only the **authorized server** can advance lifecycle actions (e.g. mark active, complete) and trigger **payouts** to winners. Game logic and fairness live on the server; the contract holds funds and records joins.
+
+## Server tournaments (blackjack vs poker)
+
+- The database supports **`game_type`**: default **`blackjack`** tournaments and **`poker`** (Texas Hold’em) sit-and-go style events.
+- **Blackjack tournaments** use tournament chips, hand limits, and elimination-style rules configured in the tournament service (starting chips, max hands, min players for prizes, prize split tiers, protocol/creator fee percentages).
+- **Poker tournaments** use a linked **poker table** in tournament mode (virtual chips, blinds from the tournament config, no direct per-hand MORBIUS deduction on the table).
+
+## What this document is not
+
+- **Morb-It** (meme maker) is a separate product — it is **not** described here.
+- This is **not** a full rulebook for Texas Hold’em or blackjack; see **ELTexasHoldEm.txt** and **ELBlackJack.txt** for gameplay rules, scoped to how MORBlotto implements them.

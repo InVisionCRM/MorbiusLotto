@@ -1053,7 +1053,7 @@ export default function BlackjackMultiTablePage() {
 
           {/* ── Play area ── */}
           {/* DEALER — absolute coords in 800×450 canvas space */}
-          <div style={{ position: 'absolute', left: 260, top: 30 }}>
+          <div style={{ position: 'absolute', left: 220, top: 20 }}>
             <BlackjackMultiDealerArea
               tableViewState={tableViewState}
               visibleDealerCards={visibleDealerCards}

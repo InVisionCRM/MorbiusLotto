@@ -1,0 +1,133 @@
+# The Complete Blueprint to Texas Hold'em: Rules, Strategy, and Advanced Mastery
+
+Texas Hold'em is the Cadillac of poker. It takes five minutes to learn and a lifetime to master. Unlike casino games played against the house, poker is a game of incomplete information played against other people. Winning requires a mastery of mathematics, psychology, and emotional control.
+
+This comprehensive guide takes you from the foundational rules all the way to advanced concepts used by serious, profitable players.
+
+---
+
+## MORBlotto — how Texas Hold’em works *here*
+
+Use this section for accurate product voice; the rest of the doc is general poker education.
+
+- **You play other people, not the house.** Cash games and tournaments use **server-authoritative** tables and **WebSocket** updates; stacks and blinds are tracked in **integer “chips”** on the server (cash-game blinds originate from on-chain wei-scale values and are converted for the engine — do not confuse display chips with raw chain units in narration unless the UI labels them).
+- **Tables:** Up to **6 seats** (`max_seats` default). The **button** rotates each hand; **small blind** and **big blind** are posted automatically.
+- **Cash games:** Blinds are fixed for the table until the host or configuration changes them.
+- **Poker tournaments (sit-and-go style):** Default config uses **starting stack 5000** and a **published blind schedule** (level 1: 25 / 50, increasing through level 8 with fewer hands per level at higher levels). Blinds come from the tournament row / `poker_config`, not from generic “$1/$2 live poker” examples unless the UI shows those stakes.
+- **Blackjack tournaments** are a **different** `game_type` in the same tournament system — do not describe them as Hold’em.
+- **Currency:** Buy-ins and prizes are often in **MORBIUS**; the site runs on **PulseChain** (EVM). Do not say we are “playing against the casino dealer” in Hold’em on MORBlotto.
+
+---
+
+## PART 1: Rules and Game Flow
+
+The objective of Texas Hold'em is to win chips by either constructing the best 5-card hand at showdown or by forcing all other players to fold their hands before the showdown.
+
+### 1. The Setup & The Blinds
+Before cards are dealt, two players to the left of the Dealer (the "Button") must post forced bets called **Blinds** to create an initial pot:
+* **Small Blind (SB):** Directly to the left of the button.
+* **Big Blind (BB):** To the left of the SB (usually twice the size of the SB).
+
+### 2. The Streets (Game Flow)
+1. **Pre-Flop:** Every player is dealt two private cards ("Hole Cards"). The action starts with the player to the left of the Big Blind (Under the Gun). Players can **Fold**, **Call** (match the BB), or **Raise**.
+2. **The Flop:** The dealer reveals three community cards. A second round of betting begins, starting with the first active player to the left of the Button.
+3. **The Turn:** A fourth community card is dealt. Third round of betting.
+4. **The River:** The fifth and final community card is dealt. Final round of betting.
+5. **The Showdown:** If two or more players remain after the final betting round, hole cards are revealed. The best 5-card hand (combining hole cards and community cards) wins the pot.
+
+### 3. Hand Rankings (Highest to Lowest)
+1. **Royal Flush:** A-K-Q-J-10 of the same suit.
+2. **Straight Flush:** 5 consecutive cards of the same suit.
+3. **Four of a Kind (Quads):** 4 cards of the same rank.
+4. **Full House:** 3 of a kind + a pair.
+5. **Flush:** 5 cards of the same suit (not consecutive).
+6. **Straight:** 5 consecutive cards of mixed suits.
+7. **Three of a Kind (Trips/Set):** 3 cards of the same rank.
+8. **Two Pair:** Two distinct pairs.
+9. **One Pair:** Two cards of the same rank.
+10. **High Card:** Highest single card plays if no other hand is made.
+
+---
+
+## PART 2: Foundational Strategy (The Basics)
+
+If you want to stop losing and start breaking even or winning slightly, you must master the fundamental ABCs of poker.
+
+### 1. The Power of Position
+Position dictates who acts when. **Acting last is the biggest advantage in poker.**
+* **Early Position (UTG, UTG+1):** You act first. You must play very tight (only premium hands) because you have no information on what the players behind you will do.
+* **Middle Position (MP):** Can play slightly wider than Early Position.
+* **Late Position (Cutoff, Button):** The most profitable seats. You can play a much wider range of hands because you get to see how everyone else reacts before making your decision.
+
+### 2. Starting Hand Matrix (What to play)
+A common beginner mistake is playing "VPIP" (Voluntarily Put In Pot) too high—meaning they play too many hands. A solid baseline is playing around 20-25% of your dealt hands.
+
+| Hand Category | Examples | How to Play |
+| :--- | :--- | :--- |
+| **Premium Pairs** | AA, KK, QQ, JJ | Raise aggressively from any position. 3-bet (re-raise) if someone raises before you. |
+| **Strong Broadways**| AK, AQ, KQ | Raise from any position. Play cautiously if you miss the flop. |
+| **Mid/Small Pairs** | 10-10 down to 2-2 | Call/Raise to hit a "Set" (Three of a Kind). Fold easily if you miss the flop and face heavy aggression. |
+| **Suited Connectors**| 98s, 87s, J10s | Play in late position. Excellent for masking straights and flushes. |
+| **Trap Hands** | KJ, QJ, A10 offsuit | **DANGER.** These hands look pretty but often lose to higher kickers (like AK or AQ). Play cautiously. |
+
+---
+
+## PART 3: Stepping Up (Advanced Concepts for Serious Players)
+
+To transition from a casual player to a highly profitable player, you must stop playing just *your cards* and start playing the *math*, the *ranges*, and the *situations*.
+
+### 1. Pot Odds and Expected Value (+EV)
+Poker is an ongoing calculation of risk vs. reward. Every decision should be "+EV" (Positive Expected Value).
+
+**How to calculate Pot Odds:**
+* **Scenario:** The pot is $100. Your opponent bets $50. The total pot is now $150. You must call $50 to win $150.
+* **The Math:** You are getting 3-to-1 odds ($150 to $50). As a percentage: `Call Size / (Pot + Call Size)`.
+* `50 / (150 + 50) = 50 / 200 = 0.25 (25%)`.
+* **The Decision:** You only need to win this hand more than 25% of the time to make this call profitable in the long run.
+
+### 2. Counting Outs and "The Rule of 4 and 2"
+An "out" is a card left in the deck that will improve your hand to the winning hand.
+* **Example:** You have two hearts. The flop has two hearts. You need one more heart for a flush. There are 13 hearts in a deck, you see 4 of them, leaving **9 outs**.
+* **Rule of 4 (Flop to River):** Multiply your outs by 4 to get your percentage chance of hitting by the river. (9 outs x 4 = ~36% chance).
+* **Rule of 2 (Turn to River):** Multiply your outs by 2 to get your percentage chance of hitting on the river. (9 outs x 2 = ~18% chance).
+* *Application:* Compare this percentage to your Pot Odds to decide if calling is mathematically correct.
+
+### 3. Thinking in "Ranges", Not Hands
+Amateurs say: *"I put him on Ace-King."*
+Pros say: *"Based on his pre-flop raise from UTG, his range consists of 99+, AQ+, and some suited connectors."*
+You must visualize a matrix of possible hands your opponent could have, and narrow that range down on every street based on their actions (betting, checking, calling).
+
+### 4. Bet Sizing Strategy
+Why you bet matters just as much as what you bet.
+* **Value Betting:** Betting with the best hand to get paid by worse hands. Bet an amount the opponent is likely to call (usually 50%-75% of the pot).
+* **Bluffing:** Betting with the worst hand to force better hands to fold. You must tell a believable "story" with your bets.
+* **Polarized vs. Linear Sizing:** Use large bet sizes (overbets) when your range is polarized (you either have the absolute "nuts" or a total bluff).
+
+### 5. GTO vs. Exploitative Play
+* **GTO (Game Theory Optimal):** Playing mathematically perfect poker that cannot be exploited by opponents. It involves balancing your value bets with bluffs perfectly. Used heavily in high-roller games.
+* **Exploitative Play:** Deviating from GTO to exploit specific weaknesses in your opponents. For example, if a player *never* folds to a bluff, stop bluffing them entirely and only bet for value. **At low-to-mid stakes, Exploitative Play is far more profitable than GTO.**
+
+---
+
+## PART 4: Best Practices for Serious Grinders
+
+### 1. Strict Bankroll Management
+Even the best players in the world experience "variance" (downswings due to bad luck). If you do not manage your bankroll, you will go broke.
+* **Cash Games:** Have a minimum of **30 to 50 Buy-ins** for the stake you are playing. (e.g., If you play $1/$2 with a $200 max buy-in, your poker bankroll should be $6,000 - $10,000).
+* **Tournaments (MTTs):** Tournaments have higher variance. You need **100+ Buy-ins**.
+
+### 2. Master Your Mental Game (Avoiding Tilt)
+"Tilt" is playing sub-optimally due to negative emotions (anger, frustration after a "bad beat").
+* Recognize the physical symptoms of tilt (heart rate rising, anger).
+* Walk away from the table. Missing a few hands or ending a session early is vastly cheaper than aggressively dumping chips because you are angry.
+* Accept that bad beats are proof the game is profitable—if bad players never won via luck, they would stop playing altogether.
+
+### 3. Table Selection
+*Poker is the only game where you can be the 10th best player in the world, but if you sit at a table with the top 9, you are the "fish" (sucker).*
+Always look for games with recreational players. Your profit comes from the mistakes of others, not from battling professionals.
+
+### 4. Off-Table Study
+Serious players spend almost as much time studying as they do playing.
+* Review your hand histories, particularly the biggest pots you lost.
+* Use software like Equilab (for equity calculations) or solvers (like PioSolver) to understand optimal lines.
+* Discuss hands with a network of other serious players.
