@@ -1210,7 +1210,7 @@ export class WebSocketService {
       const { tableId } = message.payload as { tableId: string };
       if (!tableId) return this.sendError(ws, 'tableId required', message.requestId);
       const state = await this.pokerGameService.setSitOut(tableId, ws.playerAddress);
-      this.sendSuccess(ws, state, message.requestId);
+      this.sendMessage(ws, { type: 'poker_table_state', payload: state, requestId: message.requestId });
     } catch (error) {
       logger.error('Error handling poker sit out:', error);
       this.sendError(ws, (error as Error).message || 'Failed to sit out', message.requestId);
@@ -1225,7 +1225,7 @@ export class WebSocketService {
       const { tableId } = message.payload as { tableId: string };
       if (!tableId) return this.sendError(ws, 'tableId required', message.requestId);
       const state = await this.pokerGameService.setSitBack(tableId, ws.playerAddress);
-      this.sendSuccess(ws, state, message.requestId);
+      this.sendMessage(ws, { type: 'poker_table_state', payload: state, requestId: message.requestId });
     } catch (error) {
       logger.error('Error handling poker sit back:', error);
       this.sendError(ws, (error as Error).message || 'Failed to sit back', message.requestId);
