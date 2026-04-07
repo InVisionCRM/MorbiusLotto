@@ -2113,13 +2113,6 @@ export default function BlackjackPage() {
         pendingJob={pendingJob}
       />
 
-      <SpeechHUD
-        listening={speech.listening}
-        transcript={speech.transcript}
-        lastAction={lastSpeechAction}
-        pendingLabel={speech.pendingLabel}
-        onToggle={() => setEnabled(!speechEnabled)}
-      />
 
       <main className="w-full max-w-full mx-0 px-2 sm:px-4 pt-2 sm:pt-4 pb-4 sm:pb-8 overflow-x-hidden overflow-y-auto no-scrollbar">
         {/* View-specific content */}
@@ -2399,6 +2392,14 @@ export default function BlackjackPage() {
           display: none;
         }
       `}</style>
+
+      <SpeechHUD
+        listening={speech.listening}
+        transcript={speech.transcript}
+        lastAction={lastSpeechAction}
+        pendingLabel={speech.pendingLabel}
+        onToggle={() => setEnabled(!speechEnabled)}
+      />
 
       <SophieSplashModal
         address={address}

@@ -265,10 +265,11 @@ export const MobileSidebar = ({
     <>
       <div
         className={cn(
-          "fixed top-0 left-0 right-0 z-[99999] h-14 px-4 flex flex-row md:hidden items-center justify-between gap-2 bg-slate-950/70 border-b border-white/10 w-full [padding-top:env(safe-area-inset-top,0px)] [height:calc(3.5rem+env(safe-area-inset-top,0px))]"
+          "fixed top-0 left-0 right-0 z-[99999] md:hidden flex flex-col bg-slate-950/70 border-b border-white/10 w-full [padding-top:env(safe-area-inset-top,0px)]"
         )}
         {...props}
       >
+        <div className="h-14 px-4 flex flex-row items-center justify-between gap-2">
         <div className="flex items-center gap-2 min-w-0 shrink-0">
           {mobileBarContent}
         </div>
@@ -280,6 +281,7 @@ export const MobileSidebar = ({
             className={cn("cursor-pointer", disabled ? "text-white/30 pointer-events-none" : "text-white/80 hover:text-white")}
             onClick={() => !disabled && setOpen(!open)}
           />
+        </div>
         </div>
         {open && (
           <>

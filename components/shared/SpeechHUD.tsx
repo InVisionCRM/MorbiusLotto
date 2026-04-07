@@ -10,7 +10,7 @@ interface Props {
 
 export function SpeechHUD({ listening, transcript, lastAction, pendingLabel, onToggle }: Props) {
   return (
-    <div className="fixed top-4 left-4 z-[100] flex flex-col gap-1.5 pointer-events-none select-none items-start">
+    <div className="fixed top-4 z-[100] flex flex-col gap-1.5 pointer-events-none select-none items-start" style={{ left: 76 }}>
 
       {/* Mic toggle button — always visible, always clickable */}
       <button

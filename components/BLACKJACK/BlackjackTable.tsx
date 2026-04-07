@@ -1050,7 +1050,7 @@ const BlackjackTable: React.FC<BlackjackTableProps> = ({
         </div>
       )}
 
-      <div className="relative z-10 flex flex-col flex-1 min-h-0" style={{ height: '100%' }}>
+      <div className="absolute inset-0 z-10 flex flex-col">
         {/* Play Area — cards absolutely positioned on the table surface */}
         <div className="absolute inset-0">
           {/* Dealer row — upper third of table */}
