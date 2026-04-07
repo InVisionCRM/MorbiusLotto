@@ -24,7 +24,7 @@ import {
   TournamentHUD,
 } from '@/components/BLACKJACK/Tournament';
 import { TournamentListItem } from '@/lib/tournament-types';
-import { BET_LIMITS, BLACKJACK_DEPLOYER_WALLET, DEFAULT_BLACKJACK_IMAGE_ID, BlackjackThemeKind, SOUNDS_TIP } from './constants';
+import { BET_LIMITS, BET_TIERS, BlackjackTier, BLACKJACK_DEPLOYER_WALLET, DEFAULT_BLACKJACK_IMAGE_ID, BlackjackThemeKind, SOUNDS_TIP } from './constants';
 // import { useBlackjackContract } from '@/hooks/use-blackjack-contract';
 import { useBlackjackContract, useWatchDeposits, useWatchDepositsMORBIUS, useWatchWithdrawals } from '@/hooks/use-blackjack-contract';
 import { useBlackjackServerSync } from '@/hooks/use-blackjack-server-sync';
@@ -105,6 +105,65 @@ function IntroScreen({ onComplete }: { onComplete: () => void }) {
   );
 }
 
+// Tier picker shown after the intro, before the game
+function TierPickerScreen({ onSelect }: { onSelect: (tier: BlackjackTier) => void }) {
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center"
+      style={{ background: 'linear-gradient(145deg, rgb(16, 26, 35), rgb(10, 15, 20))' }}
+    >
+      <div className="flex flex-col items-center gap-8 px-4 w-full max-w-md">
+        {/* Header */}
+        <div className="text-center">
+          <div className="text-white text-2xl font-bold tracking-wide mb-1">Choose Your Table</div>
+          <div className="text-slate-400 text-sm">Select a bet range to begin</div>
+        </div>
+
+        {/* Tier cards */}
+        <div className="flex flex-col gap-4 w-full">
+          {(Object.entries(BET_TIERS) as [BlackjackTier, typeof BET_TIERS[BlackjackTier]][]).map(([tier, info]) => (
+            <button
+              key={tier}
+              onClick={() => onSelect(tier)}
+              className="group relative w-full rounded-2xl border border-slate-700 bg-slate-900/80 hover:border-cyan-500/60 hover:bg-slate-800/80 transition-all duration-200 overflow-hidden text-left px-6 py-5"
+            >
+              {/* Subtle gradient accent on hover */}
+              <div className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity duration-200"
+                style={{ background: 'linear-gradient(135deg, rgba(6,182,212,0.07) 0%, rgba(147,51,234,0.07) 100%)' }} />
+
+              <div className="relative flex items-center justify-between">
+                <div>
+                  <div className="flex items-center gap-2 mb-1">
+                    {/* Card suit icon */}
+                    <span className="text-base" style={{ color: tier === 'high' ? '#a855f7' : '#06b6d4' }}>
+                      {tier === 'high' ? '♠' : '♦'}
+                    </span>
+                    <span className="text-white font-bold text-base">{info.label}</span>
+                  </div>
+                  <div className="text-slate-400 text-sm">{info.description} MORBIUS</div>
+                </div>
+                <div
+                  className="w-8 h-8 rounded-full flex items-center justify-center border transition-colors duration-200"
+                  style={{
+                    borderColor: tier === 'high' ? 'rgba(168,85,247,0.4)' : 'rgba(6,182,212,0.4)',
+                    background: tier === 'high' ? 'rgba(168,85,247,0.1)' : 'rgba(6,182,212,0.1)',
+                  }}
+                >
+                  <svg className="w-4 h-4 text-slate-400 group-hover:text-white transition-colors" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
+                  </svg>
+                </div>
+              </div>
+            </button>
+          ))}
+        </div>
+
+        <div className="text-slate-600 text-xs">Provably fair · MORBIUS bets</div>
+      </div>
+    </div>
+  );
+}
+
 // Helper function to create initial hand
 const createEmptyHand = (): Hand => ({
   cards: [],
@@ -155,6 +214,10 @@ export default function BlackjackPage() {
 
   // Intro screen state
   const [showIntro, setShowIntro] = useState(true);
+  // Tier state — null until player picks (or ?tier= param pre-selects)
+  const [selectedTier, setSelectedTier] = useState<BlackjackTier | null>(null);
+  // Active bet limits derived from selected tier
+  const tierLimits = selectedTier ? BET_TIERS[selectedTier] : BET_LIMITS;
 
   // Provably Fair: client seed (auto-generated for player entropy; can be overridden in sidebar)
   const [clientSeed, setClientSeed] = useState(() => {
@@ -422,7 +485,7 @@ export default function BlackjackPage() {
       return;
     }
     const amount = Math.floor(parseFloat(betAmount) || 0);
-    const maxBetNum = Number(formatEther(BET_LIMITS.MAX_BET));
+    const maxBetNum = Number(formatEther(tierLimits.MAX_BET));
     const clamped = Math.min(amount, maxBetNum);
     setManualBetAmount(String(clamped));
     setChipStack(amountToChipStack(clamped));
@@ -442,9 +505,9 @@ export default function BlackjackPage() {
     const lastBet = parseFloat(lastBetAmount);
     if (lastBet > 0) {
       const lastBetWei = BigInt(Math.floor(lastBet).toString() + '0'.repeat(18));
-      if (lastBetWei > BET_LIMITS.MAX_BET) {
+      if (lastBetWei > tierLimits.MAX_BET) {
         toast.error('Bet limit exceeded', {
-          description: `Maximum bet is 100,000 MORBIUS. Cannot rebet ${lastBet} MORBIUS`
+          description: `Maximum bet is ${Number(formatEther(tierLimits.MAX_BET)).toLocaleString()} MORBIUS. Cannot rebet ${lastBet} MORBIUS`
         });
         return;
       }
@@ -476,9 +539,9 @@ export default function BlackjackPage() {
     if (current <= 0) return;
     const doubleAmount = current * 2;
     const doubleAmountWei = BigInt(doubleAmount.toString() + '0'.repeat(18));
-    if (doubleAmountWei > BET_LIMITS.MAX_BET) {
+    if (doubleAmountWei > tierLimits.MAX_BET) {
       toast.error('Bet limit exceeded', {
-        description: `Maximum bet is 100,000 MORBIUS. Cannot double bet of ${Math.floor(current)} MORBIUS`
+        description: `Maximum bet is ${Number(formatEther(tierLimits.MAX_BET)).toLocaleString()} MORBIUS. Cannot double bet of ${Math.floor(current)} MORBIUS`
       });
       return;
     }
@@ -518,10 +581,10 @@ export default function BlackjackPage() {
       const newTotalWei = BigInt(newTotal.toString() + '0'.repeat(18));
 
       // Check if doubling would exceed MAX_BET
-      if (newTotalWei > BET_LIMITS.MAX_BET) {
+      if (newTotalWei > tierLimits.MAX_BET) {
         const currentMorbius = Number(formatEther(BigInt(currentTotal.toString() + '0'.repeat(18))));
         toast.error('Bet limit exceeded', {
-          description: `Maximum bet is 100,000 MORBIUS. Cannot double down bet of ${currentMorbius.toFixed(0)} MORBIUS`
+          description: `Maximum bet is ${Number(formatEther(tierLimits.MAX_BET)).toLocaleString()} MORBIUS. Cannot double down bet of ${currentMorbius.toFixed(0)} MORBIUS`
         });
         return prev; // Don't double
       }
@@ -538,10 +601,10 @@ export default function BlackjackPage() {
       const doubleAmountWei = BigInt(doubleAmount.toString() + '0'.repeat(18));
       
       // Check if splitting would exceed MAX_BET
-      if (doubleAmountWei > BET_LIMITS.MAX_BET) {
+      if (doubleAmountWei > tierLimits.MAX_BET) {
         const currentMorbius = Number(formatEther(BigInt(currentTotal.toString() + '0'.repeat(18))));
         toast.error('Bet limit exceeded', {
-          description: `Maximum bet is 100,000 MORBIUS. Cannot split bet of ${currentMorbius.toFixed(0)} MORBIUS`
+          description: `Maximum bet is ${Number(formatEther(tierLimits.MAX_BET)).toLocaleString()} MORBIUS. Cannot split bet of ${currentMorbius.toFixed(0)} MORBIUS`
         });
         return prev; // Don't split
       }
@@ -748,10 +811,15 @@ export default function BlackjackPage() {
   }, [currentView, isDeployer]);
 
   // Open deposit modal when arriving with ?open=deposit (e.g. from Poker "Get chips")
+  // Also read ?tier= to pre-select a tier without showing the picker
   const searchParams = useSearchParams();
   useEffect(() => {
     if (searchParams.get('open') === 'deposit') {
       setShowDepositModal(true);
+    }
+    const tierParam = searchParams.get('tier');
+    if (tierParam === 'standard' || tierParam === 'high') {
+      setSelectedTier(tierParam);
     }
   }, [searchParams]);
 
@@ -1468,6 +1536,11 @@ export default function BlackjackPage() {
     setShowIntro(false);
   }, []);
 
+  // Handle tier selection from the picker screen
+  const handleTierSelect = useCallback((tier: BlackjackTier) => {
+    setSelectedTier(tier);
+  }, []);
+
   // Handle deposit/withdraw modal (disabled while a hand is in play)
   const handleOpenDepositModal = useCallback(() => {
     if (gameState.isPlaying) {
@@ -1595,15 +1668,15 @@ export default function BlackjackPage() {
     const sideBet = perfectPairsBetAmount ?? 0n;
     const totalStake = betAmount + sideBet;
 
-    if (betAmount < BET_LIMITS.MIN_BET) {
-      toast.error('Bet too small', { description: `Minimum bet is 1 MORBIUS` });
+    if (betAmount < tierLimits.MIN_BET) {
+      toast.error('Bet too small', { description: `Minimum bet is ${Number(formatEther(tierLimits.MIN_BET)).toLocaleString()} MORBIUS` });
       return;
     }
-    if (betAmount > BET_LIMITS.MAX_BET) {
-      toast.error('Bet too large', { description: `Maximum bet is 100,000 MORBIUS` });
+    if (betAmount > tierLimits.MAX_BET) {
+      toast.error('Bet too large', { description: `Maximum bet is ${Number(formatEther(tierLimits.MAX_BET)).toLocaleString()} MORBIUS` });
       return;
     }
-    if (sideBet > BET_LIMITS.MAX_BET) {
+    if (sideBet > tierLimits.MAX_BET) {
       toast.error('Perfect Pairs bet too large');
       return;
     }
@@ -1749,9 +1822,9 @@ export default function BlackjackPage() {
     const lastBet = parseFloat(lastBetAmount);
     if (lastBet <= 0) return;
     const lastBetWei = BigInt(lastBet.toString() + '0'.repeat(18));
-    if (lastBetWei > BET_LIMITS.MAX_BET) {
+    if (lastBetWei > tierLimits.MAX_BET) {
       toast.error('Bet limit exceeded', {
-        description: `Maximum bet is 100,000 MORBIUS. Cannot rebet ${lastBet} MORBIUS`,
+        description: `Maximum bet is ${Number(formatEther(tierLimits.MAX_BET)).toLocaleString()} MORBIUS. Cannot rebet ${lastBet} MORBIUS`,
       });
       return;
     }
@@ -1879,6 +1952,11 @@ export default function BlackjackPage() {
     return <IntroScreen onComplete={handleIntroComplete} />;
   }
 
+  // Show tier picker if no tier selected yet
+  if (!selectedTier) {
+    return <TierPickerScreen onSelect={handleTierSelect} />;
+  }
+
   // Check if user has no reserve balance (less than 1 MORBIUS)
   const hasNoReserve = offChainBalance < BigInt('1000000000000000000'); // Less than 1 MORBIUS (1e18)
   const showSplash = hasNoReserve && isConnected && !splashDismissed;
@@ -1897,7 +1975,7 @@ export default function BlackjackPage() {
   // Check if doubling down would exceed MAX_BET
   const handBetAmount = activeHand?.betAmount || currentGame?.totalBetAmount || BigInt(0);
   const doubleBetAmount = handBetAmount * BigInt(2);
-  const canDoubleDownByBetLimit = doubleBetAmount <= BET_LIMITS.MAX_BET;
+  const canDoubleDownByBetLimit = doubleBetAmount <= tierLimits.MAX_BET;
   
   // Player needs handBetAmount remaining AFTER the initial bet was deducted to double/split
   const hasBalanceForDoubleOrSplit = !tournament.tournamentState.inTournament
@@ -1912,7 +1990,7 @@ export default function BlackjackPage() {
 
   // Can split when player has exactly 2 cards of the same blackjack value (10/J/Q/K interchangeable)
   // Also check if splitting would exceed MAX_BET (split requires 2x bet)
-  const canSplitByBetLimit = doubleBetAmount <= BET_LIMITS.MAX_BET;
+  const canSplitByBetLimit = doubleBetAmount <= tierLimits.MAX_BET;
   const getSplitValue = (v: number) => (v >= 10 && v <= 13) ? 10 : v;
   const canSplit = currentGame?.state === GameState.PLAYER_TURN &&
     activeHand &&
@@ -2101,6 +2179,7 @@ export default function BlackjackPage() {
           tipStats={tipStats}
           blackjackAddress={BLACKJACK_ADDRESS}
           morbiusTokenAddress={MORBIUS_TOKEN_ADDRESS}
+          betLimits={tierLimits}
         />
 
         {/* Tournament card - commented out

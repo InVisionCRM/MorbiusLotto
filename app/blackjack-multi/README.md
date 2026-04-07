@@ -33,8 +33,9 @@ Shared single/multi pieces:
   - Composes extracted UI modules and passes domain props/callbacks.
   - Keeps authoritative multiplayer control flow (seat/bet/action requests, audio triggers, round history feed).
 - `BlackjackMultiSeatGrid`
-  - Renders the 3-seat table row and delegates each seat view to `BlackjackMultiSeat`.
-  - Handles symmetric, scale-aware seat nudges.
+  - Renders the 3 seats at absolute pixel coordinates within the 800×450 canvas space.
+  - Seat positions are defined by `SEAT_ANCHORS` constants at the top of the file — edit those to reposition seats.
+  - No nudge math or scale clamping; positions scale automatically via the parent `transform: scale(boardScale)`.
 - `BlackjackMultiAvatarDock`
   - Bottom-left avatar cluster with acting/betting timers and radial/quick-chat interaction.
 - `BlackjackMultiInfoPanel`
@@ -105,11 +106,19 @@ sequenceDiagram
   - `components/BLACKJACK/multi/blackjackMultiTableStyles.ts`
 - Theme treatment follows current dark panel + cyan accent system already used in blackjack/plinko surfaces.
 
+## Layout System
+
+The table canvas is always rendered at **800×450px** and scaled to fit the container via `transform: scale(boardScale)` where `boardScale = tableWidth / 800`. All child elements use coordinates in this 800×450 space — they scale automatically.
+
+- **Seat positioning**: edit `SEAT_ANCHORS` in `BlackjackMultiSeatGrid.tsx` (pixel coords in 800×450 space).
+- **Mobile**: portrait orientation is blocked with a "rotate your device" overlay. Landscape is required on screens ≤768px wide.
+
 ---
 
 ## Quick Validation Checklist
 
-- Seating: join/leave on each position; side-seat symmetry at different widths.
+- Seating: join/leave on each position; verify seats appear at correct positions on desktop and mobile landscape.
+- Mobile portrait: rotate-device prompt appears; game content is hidden.
 - Betting: bet input + confirm flow, timeout states, idle warnings.
 - Dealer reveal: progressive dealer cards, completion timing, outcome labels/audio.
 - Chat tab: send + receive + cooldown behavior.

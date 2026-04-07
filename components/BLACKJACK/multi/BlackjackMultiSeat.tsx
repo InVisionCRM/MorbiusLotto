@@ -71,6 +71,12 @@ type BlackjackMultiSeatProps = {
   balanceLabel?: string | null;
   onOpenProfile?: (address: string) => void;
   showOutcomeLabel?: boolean;
+  /** Pixel offset from the seat anchor for the card stack. */
+  cardOffset?: { x: number; y: number };
+  /** Pixel offset from the seat anchor for the player identity tag. */
+  tagOffset?: { x: number; y: number };
+  /** Pixel offset from the seat anchor for the bet chip. */
+  chipOffset?: { x: number; y: number };
 };
 
 export function BlackjackMultiSeat({
@@ -86,6 +92,9 @@ export function BlackjackMultiSeat({
   balanceLabel,
   onOpenProfile,
   showOutcomeLabel,
+  cardOffset,
+  tagOffset,
+  chipOffset,
 }: BlackjackMultiSeatProps) {
   const seatRotation = position === 0 ? 45 : position === 2 ? -45 : 0;
   const canOpenProfile = !!seat?.playerAddress && !!onOpenProfile && !isMe;
@@ -94,41 +103,47 @@ export function BlackjackMultiSeat({
     : null;
 
   return (
-    <div className="relative flex h-[248px] min-w-0 flex-col items-center justify-end gap-0 pb-[40px] transition-all duration-300">
+    <div className="relative" style={{ width: 0, height: 0 }}>
       {isActing && (
         <div
-          className="pointer-events-none absolute inset-0 rounded-xl border border-cyan-400/60 bg-cyan-900/10 shadow-[0_0_16px_rgba(34,211,238,0.22),inset_0_0_10px_rgba(34,211,238,0.08)]"
+          className="pointer-events-none absolute rounded-xl border border-cyan-400/60 bg-cyan-900/10 shadow-[0_0_16px_rgba(34,211,238,0.22),inset_0_0_10px_rgba(34,211,238,0.08)]"
+          style={{ left: (cardOffset?.x ?? 0) - 20, top: (cardOffset?.y ?? 0) - 20, width: 120, height: 120 }}
           aria-hidden
         />
       )}
-      {/* Cards area — side seats tilt toward dealer */}
-      <div
-        style={{
-          transform: seatRotation ? `rotate(${seatRotation}deg)` : undefined,
-          transformOrigin: 'center bottom',
-        }}
-      >
-        {isEmpty ? (
-          <div
-            className={`flex min-h-[80px] flex-col items-center justify-center gap-2 rounded-xl border-2 border-dashed px-4 py-4 transition-all ${
-              canTakeSeat
-                ? 'cursor-pointer border-cyan-400/70 bg-cyan-900/20 shadow-[0_0_15px_rgba(6,182,212,0.15)] hover:scale-105 hover:border-cyan-300 hover:bg-cyan-800/30'
-                : 'border-white/25 bg-white/[0.03]'
-            }`}
-            style={position === 1 ? { marginTop: 'auto', marginBottom: '25px' } : undefined}
-            onClick={canTakeSeat ? onTakeSeat : undefined}
-          >
-            {canTakeSeat && (
-              <>
-                <UserPlus className="h-8 w-8 text-cyan-400/80" />
-                <span className="text-xs font-semibold tracking-wide text-cyan-400/80">Seat {position + 1}</span>
-              </>
-            )}
-            {!canTakeSeat && <span className="text-xs font-medium text-white/35">Seat {position + 1}</span>}
-          </div>
-        ) : (
-          <>
-            <div className="relative inline-flex max-w-full flex-col items-center">
+      {/* Empty seat button — upright, pinned at tagOffset so it sits where the tag would be */}
+      {isEmpty && (
+        <div
+          className={`absolute flex flex-col items-center justify-center gap-2 rounded-xl border-2 border-dashed px-4 py-4 transition-all ${
+            canTakeSeat
+              ? 'cursor-pointer border-cyan-400/70 bg-cyan-900/20 shadow-[0_0_15px_rgba(6,182,212,0.15)] hover:scale-105 hover:border-cyan-300 hover:bg-cyan-800/30'
+              : 'border-white/25 bg-white/[0.03]'
+          }`}
+          style={{ left: tagOffset?.x ?? 0, top: tagOffset?.y ?? 0, minWidth: 80 }}
+          onClick={canTakeSeat ? onTakeSeat : undefined}
+        >
+          {canTakeSeat && (
+            <>
+              <UserPlus className="h-8 w-8 text-cyan-400/80" />
+              <span className="text-xs font-semibold tracking-wide text-cyan-400/80">Seat {position + 1}</span>
+            </>
+          )}
+          {!canTakeSeat && <span className="text-xs font-medium text-white/35">Seat {position + 1}</span>}
+        </div>
+      )}
+
+      {/* Cards area — anchored at cardOffset, side seats rotated to face dealer */}
+      {!isEmpty && (
+        <div
+          style={{
+            position: 'absolute',
+            left: cardOffset?.x ?? 0,
+            top: cardOffset?.y ?? 0,
+            transform: seatRotation ? `rotate(${seatRotation}deg)` : undefined,
+            transformOrigin: 'center bottom',
+          }}
+        >
+          <div className="relative inline-flex max-w-full flex-col items-center">
               {/* Hands */}
               {seat && seat.hands.length > 0 ? (
                 <div className={`flex min-h-[80px] justify-center items-start ${seat.hands.length > 1 ? 'flex-row gap-2' : 'flex-col items-center gap-1'}`}>
@@ -201,9 +216,17 @@ export function BlackjackMultiSeat({
                                 <PlayingCard card={indexToCard(c)} owner="player" className="" size="small" />
                               </div>
                             ))}
-                            {/* BetChip — overlays top-right of 2nd hole card */}
+                            {/* BetChip — single hand, pinned at chipOffset */}
                             {!hasSplit && seatTableBetWei(seat) > 0n && hand.cards.length >= 2 && (
-                              <div className="absolute -top-2 -right-3" style={{ zIndex: 20 }}>
+                              <div
+                                style={{
+                                  position: 'absolute',
+                                  left: chipOffset ? chipOffset.x - (cardOffset?.x ?? 0) : undefined,
+                                  top: chipOffset ? chipOffset.y - (cardOffset?.y ?? 0) : undefined,
+                                  ...(!chipOffset ? { top: -8, right: -12 } : {}),
+                                  zIndex: 20,
+                                }}
+                              >
                                 <BetChip
                                   label={formatChipLabel(Math.floor(Number(formatEther(seatTableBetWei(seat)))))}
                                   size="clamp(32px, 6vw, 40px)"
@@ -234,71 +257,77 @@ export function BlackjackMultiSeat({
                 </div>
               )}
             </div>
+        </div>
+      )}
 
-            {/* Player identity tag — separate from card stack so it stays stable across hand transitions */}
-            <div
-              className={`mt-1 pointer-events-auto w-[148px] sm:w-[168px] rounded-md border border-cyan-500/25 px-1.5 py-1 text-center ${
-                canOpenProfile ? 'cursor-pointer' : ''
+      {/* Player identity tag — outside rotation wrapper so it never tilts with cards */}
+      {!isEmpty && seat && (
+        <div
+          className={`pointer-events-auto w-[148px] rounded-md border border-cyan-500/25 px-1.5 py-1 text-center ${
+            canOpenProfile ? 'cursor-pointer' : ''
+          }`}
+          style={{
+            background: 'rgba(0, 0, 0, 0.9)',
+            boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.06), 0 -4px 14px rgba(0,0,0,0.45)',
+            ...(tagOffset
+              ? { position: 'absolute', left: tagOffset.x, top: tagOffset.y }
+              : { marginTop: 4 }),
+          }}
+          onClick={() => {
+            if (canOpenProfile && seat?.playerAddress) onOpenProfile(seat.playerAddress);
+          }}
+          onKeyDown={(e) => {
+            if (canOpenProfile && (e.key === 'Enter' || e.key === ' ') && seat?.playerAddress) {
+              e.preventDefault();
+              onOpenProfile(seat.playerAddress);
+            }
+          }}
+          role={canOpenProfile ? 'button' : undefined}
+          tabIndex={canOpenProfile ? 0 : undefined}
+        >
+          <span className="line-clamp-2 text-[10px] font-semibold leading-tight text-white/95">
+            {seat?.displayName ?? (seat?.playerAddress ? `${seat.playerAddress.slice(0, 6)}…` : '—')}
+            {isMe && <span className="ml-1 text-[9px] text-cyan-200/90">(you)</span>}
+          </span>
+          {balanceLabel != null && (
+            <span className="mt-0.5 block text-[10px] tabular-nums text-white/85">{balanceLabel}</span>
+          )}
+          {(seat.consecutiveTimeouts ?? 0) > 0 && (
+            <span
+              className={`mt-0.5 inline-block max-w-full rounded px-1 py-0.5 text-[8px] font-semibold leading-tight ${
+                (seat.consecutiveTimeouts ?? 0) >= afkTimeoutsBeforeKick - 1
+                  ? 'border border-orange-500/40 bg-orange-950/60 text-orange-100/95'
+                  : 'border border-cyan-500/25 bg-slate-900/80 text-cyan-100/90'
               }`}
-              style={{
-                background: 'rgba(0, 0, 0, 0.9)',
-                boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.06), 0 -4px 14px rgba(0,0,0,0.45)',
-              }}
-              onClick={() => {
-                if (canOpenProfile && seat?.playerAddress) onOpenProfile(seat.playerAddress);
-              }}
-              onKeyDown={(e) => {
-                if (canOpenProfile && (e.key === 'Enter' || e.key === ' ') && seat?.playerAddress) {
-                  e.preventDefault();
-                  onOpenProfile(seat.playerAddress);
-                }
-              }}
-              role={canOpenProfile ? 'button' : undefined}
-              tabIndex={canOpenProfile ? 0 : undefined}
+              title="Missed betting or turn timeouts. At 3 you are removed and chips refunded."
             >
-              <span className="line-clamp-2 text-[10px] font-semibold leading-tight text-white/95 sm:text-[11px]">
-                {seat?.displayName ?? (seat?.playerAddress ? `${seat.playerAddress.slice(0, 6)}…` : '—')}
-                {isMe && <span className="ml-1 text-[9px] text-cyan-200/90">(you)</span>}
-              </span>
-              {balanceLabel != null && (
-                <span className="mt-0.5 block text-[10px] tabular-nums text-white/85">{balanceLabel}</span>
-              )}
-              {seat && (seat.consecutiveTimeouts ?? 0) > 0 && (
-                <span
-                  className={`mt-0.5 inline-block max-w-full rounded px-1 py-0.5 text-[8px] font-semibold leading-tight ${
-                    (seat.consecutiveTimeouts ?? 0) >= afkTimeoutsBeforeKick - 1
-                      ? 'border border-orange-500/40 bg-orange-950/60 text-orange-100/95'
-                      : 'border border-cyan-500/25 bg-slate-900/80 text-cyan-100/90'
-                  }`}
-                  title="Missed betting or turn timeouts. At 3 you are removed and chips refunded."
-                >
-                  {(seat.consecutiveTimeouts ?? 0)}/{afkTimeoutsBeforeKick} idle{isMe ? ' — act' : ''}
-                </span>
-              )}
-              {showOutcomeLabel && seatOutcomeLabel && (
-                <div className={`mt-0.5 text-[10px] font-bold leading-tight ${seatOutcomeLabel.cls}`}>
-                  {seatOutcomeLabel.text}
-                </div>
-              )}
+              {(seat.consecutiveTimeouts ?? 0)}/{afkTimeoutsBeforeKick} idle{isMe ? ' — act' : ''}
+            </span>
+          )}
+          {showOutcomeLabel && seatOutcomeLabel && (
+            <div className={`mt-0.5 text-[10px] font-bold leading-tight ${seatOutcomeLabel.cls}`}>
+              {seatOutcomeLabel.text}
             </div>
+          )}
+          {seat.seatStatus === 'sitting_out' && (
+            <span className="text-[9px] text-white/30">sitting out</span>
+          )}
+        </div>
+      )}
 
-            {/* BetChip for split hands — shown below cards */}
-            {seat && seat.hands.length > 1 && seatTableBetWei(seat) > 0n && (
-              <div className="mt-1 flex flex-col items-center">
-                <BetChip
-                  label={formatChipLabel(Math.floor(Number(formatEther(seatTableBetWei(seat)))))}
-                  size="clamp(44px, 8vw, 56px)"
-                  chipSrc="/morbius/MorbiusChip.png"
-                />
-              </div>
-            )}
-
-            {seat?.seatStatus === 'sitting_out' && (
-              <span className="text-[9px] text-white/30">sitting out</span>
-            )}
-          </>
-        )}
-      </div>
+      {/* BetChip for split hands — pinned at chipOffset */}
+      {!isEmpty && seat && seat.hands.length > 1 && seatTableBetWei(seat) > 0n && (
+        <div
+          className="pointer-events-auto flex flex-col items-center"
+          style={{ position: 'absolute', left: chipOffset?.x ?? 40, top: chipOffset?.y ?? 60 }}
+        >
+          <BetChip
+            label={formatChipLabel(Math.floor(Number(formatEther(seatTableBetWei(seat)))))}
+            size="clamp(44px, 8vw, 56px)"
+            chipSrc="/morbius/MorbiusChip.png"
+          />
+        </div>
+      )}
     </div>
   );
 }

@@ -98,6 +98,8 @@ interface BlackjackGameViewProps {
   tipStats: any;
   blackjackAddress: string;
   morbiusTokenAddress: string;
+  /** Active tier limits — passed down to BettingPanel */
+  betLimits?: { MIN_BET: bigint; MAX_BET: bigint };
 }
 
 export function BlackjackGameView(props: BlackjackGameViewProps) {
@@ -184,6 +186,7 @@ export function BlackjackGameView(props: BlackjackGameViewProps) {
     tipStats,
     blackjackAddress,
     morbiusTokenAddress,
+    betLimits,
   } = props;
 
   return (
@@ -361,6 +364,7 @@ export function BlackjackGameView(props: BlackjackGameViewProps) {
                   onHalfBet={handleHalfBet}
                   onDoubleBet={handleDoubleBet}
                   playerReserves={offChainBalance}
+                  betLimits={betLimits}
                 />
               </div>
               <div className="w-1/2 md:w-full flex items-stretch min-w-0">

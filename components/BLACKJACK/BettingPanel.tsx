@@ -18,6 +18,8 @@ interface BettingPanelProps {
   onRebet?: () => void;
   onHalfBet?: () => void;
   onDoubleBet?: () => void;
+  /** Active tier limits — defaults to BET_LIMITS if not provided */
+  betLimits?: { MIN_BET: bigint; MAX_BET: bigint };
 }
 
 const BettingPanel: React.FC<BettingPanelProps> = ({
@@ -29,12 +31,13 @@ const BettingPanel: React.FC<BettingPanelProps> = ({
   lastBetAmount = '0',
   onRebet,
   onHalfBet,
-  onDoubleBet
+  onDoubleBet,
+  betLimits = BET_LIMITS,
 }) => {
   const [betAmount, setBetAmount] = useState<string>('0');
 
   const currentBetAmountBigInt = parseEther(currentBetAmount || '0');
-  const isValidBet = currentBetAmountBigInt >= BET_LIMITS.MIN_BET && currentBetAmountBigInt <= BET_LIMITS.MAX_BET;
+  const isValidBet = currentBetAmountBigInt >= betLimits.MIN_BET && currentBetAmountBigInt <= betLimits.MAX_BET;
   const hasEnoughBalance = reserveBalance >= currentBetAmountBigInt;
 
   const remainingBalance = reserveBalance - currentBetAmountBigInt;

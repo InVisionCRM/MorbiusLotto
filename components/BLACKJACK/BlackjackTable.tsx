@@ -100,6 +100,8 @@ interface BlackjackTableProps {
   onOpenTournamentHistory?: () => void;
   /** When true (tournament mode), use longer delay before DEAL/REBET appears to avoid race where pressing DEAL too soon causes action buttons to not show */
   inTournament?: boolean;
+  /** Active tier limits — passed to BettingPanel */
+  betLimits?: { MIN_BET: bigint; MAX_BET: bigint };
 }
 
 const BlackjackTable: React.FC<BlackjackTableProps> = ({
@@ -160,6 +162,7 @@ const BlackjackTable: React.FC<BlackjackTableProps> = ({
   onDismissTournamentSummary,
   onOpenTournamentHistory,
   inTournament = false,
+  betLimits,
 }) => {
   // ── Admin layout test: cycle through preset hands ───────────────────────────
   const { address: adminCheckAddress } = useAccount();
@@ -1610,6 +1613,7 @@ const BlackjackTable: React.FC<BlackjackTableProps> = ({
             onRebet={onRebet}
             onHalfBet={onHalfBet}
             onDoubleBet={onDoubleBet}
+            betLimits={betLimits}
           />
         </div>
       )}

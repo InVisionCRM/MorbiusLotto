@@ -951,46 +951,29 @@ export default function BlackjackMultiTablePage() {
       {!isE2EMock && <BlackjackMultiBetaSplash />}
       <style>{BLACKJACK_MULTI_TABLE_STYLES}</style>
       <style>{`
-        @media (orientation: landscape) and (max-height: 500px) {
-          /* Hide everything except table + panel */
-          [data-bj-extra] { display: none !important; }
-
-          /* Main: full height, no scroll, no padding */
-          [data-bj-main] {
-            padding: 0 !important;
-            overflow: hidden !important;
-            height: calc(100dvh - 3.5rem) !important;
-            display: flex !important;
-            flex-direction: column !important;
-          }
-
-          /* Grid: horizontal flex, fills available height */
-          [data-bj-grid] {
-            display: flex !important;
-            flex-direction: row !important;
-            align-items: stretch !important;
-            flex: 1 !important;
-            min-height: 0 !important;
-            gap: 0 !important;
-            overflow: hidden !important;
-          }
-
-          /* Table: 63% width, vertically centered */
-          [data-bj-table] {
-            flex: 0 0 63% !important;
-            width: 63% !important;
-            align-self: center !important;
-          }
-
-          /* Panel: remaining width, scrollable */
-          [data-bj-panel] {
-            flex: 1 !important;
-            overflow-y: auto !important;
-            padding: 6px 8px !important;
-            background: rgb(2, 6, 23) !important;
-          }
+        /* Portrait on small screens: show rotate prompt, hide game */
+        @media (max-width: 768px) and (orientation: portrait) {
+          [data-bj-rotate-prompt] { display: flex !important; }
+          [data-bj-main] { display: none !important; }
         }
       `}</style>
+      {/* Portrait-only rotate prompt — hidden by default, shown via CSS media query on small portrait screens */}
+      <div
+        data-bj-rotate-prompt
+        className="fixed inset-0 z-[9999] hidden flex-col items-center justify-center gap-6"
+        style={{ background: 'rgba(2, 6, 23, 0.97)' }}
+      >
+        <svg width="64" height="64" viewBox="0 0 64 64" fill="none" aria-hidden>
+          <rect x="14" y="8" width="28" height="48" rx="4" stroke="white" strokeOpacity="0.3" strokeWidth="2" />
+          <rect x="8" y="18" width="48" height="28" rx="4" stroke="rgba(34,211,238,0.8)" strokeWidth="2.5" />
+          <path d="M46 10 L54 18 L46 26" stroke="rgba(34,211,238,0.8)" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" />
+        </svg>
+        <div className="text-center">
+          <p className="text-lg font-bold text-white">Rotate your device</p>
+          <p className="mt-1 text-sm text-white/50">Multiplayer Blackjack requires landscape mode</p>
+        </div>
+      </div>
+
       <main data-bj-main className="w-full max-w-full mx-0 px-2 sm:px-4 pt-2 sm:pt-4 pb-4 sm:pb-8 overflow-x-hidden overflow-y-auto no-scrollbar">
       {/* 2-column layout on md+: table (left) + sidebar controls (right) — same shell as app/BLACKJACK/page.tsx */}
       <div data-bj-grid className="grid grid-cols-1 md:grid-cols-[minmax(0,3fr)_minmax(360px,1.2fr)] md:items-start gap-2 md:gap-4 min-h-0" style={{ scrollbarGutter: 'stable both-edges' }}>
@@ -1069,44 +1052,45 @@ export default function BlackjackMultiTablePage() {
           />
 
           {/* ── Play area ── */}
-          <div className="flex-1 flex flex-col justify-center items-center gap-4 px-4 pb-4">
-
+          {/* DEALER — absolute coords in 800×450 canvas space */}
+          <div style={{ position: 'absolute', left: 260, top: 30 }}>
             <BlackjackMultiDealerArea
               tableViewState={tableViewState}
               visibleDealerCards={visibleDealerCards}
             />
-
-            {/* 3 SEATS — CSS grid; outer seats inset from edges so they stay visible on mobile */}
-            <BlackjackMultiSeatGrid
-              seats={seatsByPosition}
-              addressLower={address?.toLowerCase()}
-              phase={tableViewState?.phase ?? 'waiting'}
-              actingSeatPosition={tableViewState?.actingSeatPosition ?? null}
-              myPosition={myPosition}
-              wsConnected={wsConnected}
-              afkTimeoutsBeforeKick={AFK_TIMEOUTS_BEFORE_KICK}
-              myBalanceLabel={formatMorbius(playerBalance.toString())}
-              showOutcomeLabel={showSeatOutcomeLabels}
-              nudgeScale={boardScale}
-              fullscreen={isFullscreen}
-              onTakeSeat={takeSeat}
-              onOpenProfile={setSelectedProfileAddress}
-            />
           </div>
 
-          <BlackjackMultiAvatarDock
+          {/* 3 SEATS — absolute coords in 800×450 canvas space; edit SEAT_ANCHORS in BlackjackMultiSeatGrid to reposition */}
+          <BlackjackMultiSeatGrid
             seats={seatsByPosition}
             addressLower={address?.toLowerCase()}
             phase={tableViewState?.phase ?? 'waiting'}
             actingSeatPosition={tableViewState?.actingSeatPosition ?? null}
-            turnStartedAt={tableViewState?.turnStartedAt ?? null}
-            bettingStartedAt={tableViewState?.bettingStartedAt ?? null}
             myPosition={myPosition}
+            wsConnected={wsConnected}
+            afkTimeoutsBeforeKick={AFK_TIMEOUTS_BEFORE_KICK}
+            myBalanceLabel={formatMorbius(playerBalance.toString())}
+            showOutcomeLabel={showSeatOutcomeLabels}
+            onTakeSeat={takeSeat}
             onOpenProfile={setSelectedProfileAddress}
-            onLeaveSeat={myPosition !== null ? leaveSeat : undefined}
-            onToggleSoundPanel={myPosition !== null ? () => setSoundPanelOpen(o => !o) : undefined}
-            onSendChatMessage={myPosition !== null ? sendChatMessage : undefined}
           />
+
+          {/* AVATAR DOCK — absolute coords in 800×450 canvas space */}
+          <div style={{ position: 'absolute', left: 0, bottom: 0 }}>
+            <BlackjackMultiAvatarDock
+              seats={seatsByPosition}
+              addressLower={address?.toLowerCase()}
+              phase={tableViewState?.phase ?? 'waiting'}
+              actingSeatPosition={tableViewState?.actingSeatPosition ?? null}
+              turnStartedAt={tableViewState?.turnStartedAt ?? null}
+              bettingStartedAt={tableViewState?.bettingStartedAt ?? null}
+              myPosition={myPosition}
+              onOpenProfile={setSelectedProfileAddress}
+              onLeaveSeat={myPosition !== null ? leaveSeat : undefined}
+              onToggleSoundPanel={myPosition !== null ? () => setSoundPanelOpen(o => !o) : undefined}
+              onSendChatMessage={myPosition !== null ? sendChatMessage : undefined}
+            />
+          </div>
 
         </div>
 

@@ -48,7 +48,7 @@ export function BlackjackMultiDealerArea({
   const isDealerTurn = tableViewState?.phase === 'dealer_turn';
 
   return (
-    <div className="flex flex-col items-center justify-center" style={{ transform: 'translateY(35px)' }}>
+    <div className="flex flex-col items-center justify-center">
       <DealerSection
         cards={dCards.map(indexToCard)}
         visibleCards={visibleDealerCards}

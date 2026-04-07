@@ -65,10 +65,28 @@ export const DECKS = 6;
 export const CARDS_PER_DECK = 52;
 export const TOTAL_CARDS = DECKS * CARDS_PER_DECK;
 
-// Bet limits (in MORBIUS, 18 decimals)
+// Bet tiers for single-player blackjack
+export const BET_TIERS = {
+  standard: {
+    label: 'Standard',
+    description: '500 – 10,000 MORBIUS',
+    MIN_BET: BigInt(500_000_000_000_000_000_000),          // 500 MORBIUS
+    MAX_BET: BigInt(10_000_000_000_000_000_000_000),       // 10,000 MORBIUS
+  },
+  high: {
+    label: 'High Roller',
+    description: '10,000 – 50,000 MORBIUS',
+    MIN_BET: BigInt(10_000_000_000_000_000_000_000),       // 10,000 MORBIUS
+    MAX_BET: BigInt(50_000_000_000_000_000_000_000),       // 50,000 MORBIUS
+  },
+} as const;
+
+export type BlackjackTier = keyof typeof BET_TIERS;
+
+// Bet limits (in MORBIUS, 18 decimals) — kept for reference; game uses BET_TIERS at runtime
 export const BET_LIMITS = {
-  MIN_BET: BigInt(1_000_000_000_000_000_000),           // 1 MORBIUS
-  MAX_BET: BigInt(50_000_000_000_000_000_000_000),     // 50,000 MORBIUS
+  MIN_BET: BigInt(500_000_000_000_000_000_000),            // 500 MORBIUS (standard tier floor)
+  MAX_BET: BigInt(50_000_000_000_000_000_000_000),         // 50,000 MORBIUS (high tier ceiling)
 };
 
 // Animation timings (in milliseconds)

@@ -14,6 +14,8 @@ export interface BettingPanelMobileProps {
   onDoubleBet?: () => void;
   /** Player reserve balance (wei) — shown to the right of "AMOUNT" when provided */
   playerReserves?: bigint;
+  /** Active tier limits — defaults to BET_LIMITS if not provided */
+  betLimits?: { MIN_BET: bigint; MAX_BET: bigint };
 }
 
 /** Betting panel for all screens: amount input, Morbius logo, 1/2 and 2x buttons. Chip stack on table updates as user types. */
@@ -25,6 +27,7 @@ export function BettingPanelMobile({
   onHalfBet,
   onDoubleBet,
   playerReserves,
+  betLimits = BET_LIMITS,
 }: BettingPanelMobileProps) {
   const numValue = Math.floor(parseFloat(currentBetAmount || '0') || 0);
   const displayValue = numValue === 0 ? '0' : String(numValue);
@@ -39,7 +42,7 @@ export function BettingPanelMobile({
     }
   }, [currentBetAmount, isFocused]);
 
-  const maxBetNum = Number(formatEther(BET_LIMITS.MAX_BET));
+  const maxBetNum = Number(formatEther(betLimits.MAX_BET));
   const commitValue = (raw: string) => {
     const parsed = Math.floor(parseFloat(raw.replace(/,/g, '')) || 0);
     const clamped = Math.max(0, Math.min(maxBetNum, parsed));
