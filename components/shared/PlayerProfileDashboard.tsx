@@ -70,7 +70,6 @@ export function PlayerProfileDashboard({
       totalWin: stats.total_win,
       winRate: stats.win_rate,
       blackjackCount: stats.blackjack_count || 0,
-      currentStreak: stats.current_streak || 0,
       bestStreak: stats.best_streak || 0,
       biggestWin: stats.biggest_win,
       biggestLoss: stats.biggest_loss,

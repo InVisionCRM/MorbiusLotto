@@ -17,6 +17,7 @@ import { BlackjackHowToSection } from '@/components/BLACKJACK/BlackjackHowToSect
 import type { TableThemeInfo } from '@/hooks/use-blackjack-tables';
 import { SpeechIndicator } from '@/components/shared/SpeechIndicator';
 import { SpeechConfirmDialog } from '@/components/shared/SpeechConfirmDialog';
+import { TableTokenProfileCard, type TableTokenProfileCardProps } from '@/components/BLACKJACK/TableTokenProfileCard';
 
 interface BlackjackGameViewProps {
   contractIsPaused: boolean;
@@ -229,11 +230,12 @@ export function BlackjackGameView(props: BlackjackGameViewProps) {
           </div>
         )}
 
-        <div
-          className="min-w-0 flex flex-row md:flex-col min-h-0 pb-0 -mx-2 sm:mx-0 order-1 md:order-none md:row-start-1 md:col-start-1 gap-2 md:gap-0 rounded-xl overflow-hidden p-1 sm:p-2 md:p-3"
-          style={panelShell}
-        >
-          <div className="relative flex-1 min-w-0 min-h-[60dvh] sm:min-h-0 flex flex-col">
+        <div className="min-w-0 flex flex-col gap-3 order-1 md:order-none md:row-start-1 md:col-start-1 -mx-2 sm:mx-0 md:h-full md:min-h-0">
+          <div
+            className="rounded-xl overflow-hidden p-1 sm:p-2 md:p-3 min-h-0 shrink-0"
+            style={panelShell}
+          >
+            <div className="relative flex-1 min-w-0 min-h-[60dvh] sm:min-h-[min(52dvh,520px)] flex flex-col">
             <BlackjackTable
               playerHand={currentGame?.playerHand || { cards: [], total: 0, hasAce: false, isBlackjack: false, isBust: false }}
               playerHands={currentGame?.playerHands}
@@ -360,12 +362,23 @@ export function BlackjackGameView(props: BlackjackGameViewProps) {
               />
             )}
           </div>
+            </div>
+
+          <div className="min-w-0 w-full flex-1 min-h-0 flex flex-col">
+            <TableTokenProfileCard
+              key={`${theme}-${theme === 'video' ? videoSource : imageSource}`}
+              themeKind={theme}
+              themeId={theme === 'video' ? videoSource : imageSource}
+              getThemeInfo={getThemeInfo}
+              getTableProfile={getTableProfile as TableTokenProfileCardProps['getTableProfile']}
+              onChangeTableClick={() => setThemeModalOpen(true)}
+              fillColumn
+            />
+          </div>
         </div>
 
-        <div
-          className="min-w-0 order-3 md:order-none md:row-start-1 md:col-start-2 flex flex-col gap-2 min-h-0 rounded-xl overflow-hidden p-2 sm:p-3 md:max-h-[calc(100dvh-7.5rem)] md:overflow-y-auto"
-          style={panelShell}
-        >
+        <div className="min-w-0 order-3 md:order-none md:row-start-1 md:col-start-2 flex flex-col gap-3">
+          <div className="rounded-xl overflow-hidden p-2 sm:p-3" style={panelShell}>
           {tournament.tournamentState.inTournament ? (
             <TournamentBetPanel
               chips={(tournament.displayedTournamentState ?? tournament.tournamentState).chips}
@@ -423,6 +436,9 @@ export function BlackjackGameView(props: BlackjackGameViewProps) {
               </div>
             </div>
           )}
+          </div>
+
+          <div className="rounded-xl overflow-hidden min-w-0 p-2 sm:p-3" style={panelShell}>
           <div className="min-h-[280px] h-[min(420px,40vh)] md:h-[420px] shrink-0 overflow-hidden rounded-xl min-w-0">
             <BlackjackSidebar
               history={gameState.history}
@@ -449,14 +465,9 @@ export function BlackjackGameView(props: BlackjackGameViewProps) {
               tournamentTabContent={tournamentTabContent}
             />
           </div>
+          </div>
 
           <BlackjackGameSecondaryPanels
-            theme={theme}
-            imageSource={imageSource}
-            videoSource={videoSource}
-            getThemeInfo={getThemeInfo}
-            getTableProfile={getTableProfile}
-            onChangeTableClick={() => setThemeModalOpen(true)}
             address={address}
             playerStats={playerStats}
             playerStatsLoading={playerStatsLoading}

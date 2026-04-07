@@ -319,7 +319,6 @@ export default function BlackjackMultiTablePage() {
     totalWin: playerStatsData.total_win || BigInt(0),
     winRate: Number(playerStatsData.win_rate) || 0,
     blackjackCount: Number(playerStatsData.blackjack_count) || 0,
-    currentStreak: Number(playerStatsData.current_streak) || 0,
     bestStreak: Number(playerStatsData.best_streak) || 0,
     biggestWin: playerStatsData.biggest_win || BigInt(0),
     biggestLoss: playerStatsData.biggest_loss || BigInt(0),
@@ -980,7 +979,7 @@ export default function BlackjackMultiTablePage() {
 
       {/* ── Table column: top bar + table (single embossed panel) ── */}
       <div
-        className="flex flex-col md:row-start-1 md:col-start-1 rounded-xl overflow-hidden p-2 sm:p-3 gap-2 min-h-0"
+        className="flex flex-col md:row-start-1 md:col-start-1 md:h-full md:min-h-0 rounded-xl overflow-hidden p-2 sm:p-3 gap-2 min-h-0"
         data-bj-table
         style={{
           background: 'linear-gradient(145deg, rgb(16, 26, 35), rgb(35, 36, 41))',
@@ -988,17 +987,19 @@ export default function BlackjackMultiTablePage() {
           border: '1px inset rgba(60, 60, 60, 0.5)',
         }}
       >
+        <div className="shrink-0">
         <BlackjackMultiTopBar
           tableViewState={tableViewState}
           myPosition={myPosition}
           onLeaveSeat={leaveSeat}
           formatMorbius={formatMorbius}
         />
+        </div>
 
       {/* ── Table container — locked to 16:9 so full table image is always visible ── */}
       <div
         ref={tableRef}
-        className="relative w-full blackjack-table overflow-hidden"
+        className="relative w-full blackjack-table overflow-hidden shrink-0"
         style={isFullscreen ? {
           position: 'fixed',
           inset: 0,
@@ -1259,18 +1260,25 @@ export default function BlackjackMultiTablePage() {
           preload="auto"
         />
       </div>
-      {/* ── End table column wrapper ── */}
+
+      <div className="min-w-0 w-full flex-1 min-h-0 flex flex-col mt-2">
+        <TableTokenProfileCard
+          key={`image-${state?.themeId ?? BLACKJACK_IMAGE_BACKGROUNDS[0].id}`}
+          themeKind={'image'}
+          themeId={state?.themeId ?? BLACKJACK_IMAGE_BACKGROUNDS[0].id}
+          getThemeInfo={getThemeInfo}
+          getTableProfile={getTableProfile}
+          onChangeTableClick={() => router.push('/blackjack-multi')}
+          fillColumn
+        />
+      </div>
+      {/* ── End table column (table + token profile) ── */}
       </div>
 
-      {/* ── Controls + profile/stats + how-to — one right panel; hidden in fullscreen ── */}
+      {/* ── Column 2: controls, stats, how-to — stacked full width, separate blocks; hidden in fullscreen ── */}
       <div
         data-bj-panel
-        className={`px-3 py-3 sm:px-4 sm:py-4 space-y-3 rounded-xl md:row-start-1 md:col-start-2 md:max-h-[calc(100dvh-7.5rem)] md:overflow-y-auto md:py-3 md:px-3${isFullscreen ? ' hidden' : ''}`}
-        style={{
-          background: 'linear-gradient(145deg, rgb(16, 26, 35), rgb(35, 36, 41))',
-          boxShadow: 'inset 0 3px 6px rgba(0, 0, 0, 0.8), inset 0 -3px 6px rgba(255, 255, 255, 0.1), 0 1px 3px rgba(0, 0, 0, 0.5)',
-          border: '1px inset rgba(60, 60, 60, 0.5)',
-        }}
+        className={`flex flex-col gap-3 min-w-0 md:row-start-1 md:col-start-2${isFullscreen ? ' hidden' : ''}`}
       >
 
         <BlackjackMultiBetActionPanel
@@ -1316,40 +1324,27 @@ export default function BlackjackMultiTablePage() {
           </div>
         )}
 
-        <div className="grid grid-cols-1 gap-3 pt-1 border-t border-white/10">
-          <div className="flex min-h-0 flex-col">
-            <TableTokenProfileCard
-              key={`image-${state?.themeId ?? BLACKJACK_IMAGE_BACKGROUNDS[0].id}`}
-              themeKind={'image'}
-              themeId={state?.themeId ?? BLACKJACK_IMAGE_BACKGROUNDS[0].id}
-              getThemeInfo={getThemeInfo}
-              getTableProfile={getTableProfile}
-              onChangeTableClick={() => router.push('/blackjack-multi')}
-              naturalProfileHeight
+        <div className="w-full min-w-0">
+          {address && playerStats ? (
+            <PlayerStatsDashboard
+              stats={playerStats}
+              isLoading={playerStatsLoading}
+              playerAddress={address}
+              wsClient={wsConnected ? wsClient : null}
+              reserveBalance={BigInt(playerBalance)}
             />
-          </div>
-          <div className="flex min-h-0 flex-col">
-            {address && playerStats ? (
-              <PlayerStatsDashboard
-                stats={playerStats}
-                isLoading={playerStatsLoading}
-                playerAddress={address}
-                wsClient={wsConnected ? wsClient : null}
-                reserveBalance={BigInt(playerBalance)}
-              />
-            ) : (
-              <div
-                className="flex min-h-[280px] flex-1 items-center justify-center overflow-hidden rounded-xl px-6 text-center text-white/60 md:min-h-[320px]"
-                style={{
-                  background: 'linear-gradient(145deg, rgb(16, 26, 35), rgb(35, 36, 41))',
-                  boxShadow: 'inset 0 3px 6px rgba(0, 0, 0, 0.8), inset 0 -3px 6px rgba(255, 255, 255, 0.1), 0 1px 3px rgba(0, 0, 0, 0.5)',
-                  border: '1px inset rgba(60, 60, 60, 0.5)',
-                }}
-              >
-                Connect wallet to view your player dashboard.
-              </div>
-            )}
-          </div>
+          ) : (
+            <div
+              className="flex min-h-[280px] w-full items-center justify-center overflow-hidden rounded-xl px-6 text-center text-white/60 md:min-h-[320px]"
+              style={{
+                background: 'linear-gradient(145deg, rgb(16, 26, 35), rgb(35, 36, 41))',
+                boxShadow: 'inset 0 3px 6px rgba(0, 0, 0, 0.8), inset 0 -3px 6px rgba(255, 255, 255, 0.1), 0 1px 3px rgba(0, 0, 0, 0.5)',
+                border: '1px inset rgba(60, 60, 60, 0.5)',
+              }}
+            >
+              Connect wallet to view your player dashboard.
+            </div>
+          )}
         </div>
 
         <BlackjackHowToSection blackjackAddress={BLACKJACK_ADDRESS} layout="panel" />

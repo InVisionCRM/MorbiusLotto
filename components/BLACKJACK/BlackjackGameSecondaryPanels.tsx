@@ -3,14 +3,12 @@
 import { formatEther } from 'viem';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { GameFAQ } from '@/components/shared/GameFAQ';
-import { TableTokenProfileCard } from '@/components/BLACKJACK/TableTokenProfileCard';
 import { PlayerStatsDashboard } from '@/components/BLACKJACK/PlayerStatsDashboard';
 import { BlackjackRecentPlays } from '@/components/BLACKJACK/BlackjackRecentPlays';
 import { BlackjackRecentGames } from '@/components/BLACKJACK/BlackjackRecentGames';
 import BlackjackTopPlayers from '@/components/BLACKJACK/BlackjackTopPlayers';
 import { TournamentLeaderboard } from '@/components/BLACKJACK/Tournament';
 import type { BlackjackWebSocketClient } from '@/lib/websocket-client';
-import type { TableThemeInfo } from '@/hooks/use-blackjack-tables';
 
 type TipStats = {
   totalTipAmountWei: string;
@@ -19,12 +17,6 @@ type TipStats = {
 };
 
 interface BlackjackGameSecondaryPanelsProps {
-  theme: 'image' | 'video';
-  imageSource: string;
-  videoSource: string;
-  getThemeInfo: (theme: { kind: 'image' | 'video'; id: string }) => TableThemeInfo;
-  getTableProfile: (theme: { kind: 'image' | 'video'; id: string }) => unknown;
-  onChangeTableClick: () => void;
   address: string | undefined;
   playerStats: any;
   playerStatsLoading: boolean;
@@ -42,12 +34,6 @@ interface BlackjackGameSecondaryPanelsProps {
 }
 
 export function BlackjackGameSecondaryPanels({
-  theme,
-  imageSource,
-  videoSource,
-  getThemeInfo,
-  getTableProfile,
-  onChangeTableClick,
   address,
   playerStats,
   playerStatsLoading,
@@ -61,18 +47,8 @@ export function BlackjackGameSecondaryPanels({
 }: BlackjackGameSecondaryPanelsProps) {
   return (
     <>
-      <section className="mt-3 grid grid-cols-1 items-stretch gap-3">
-        <div className="flex min-h-0 flex-col md:h-full">
-          <TableTokenProfileCard
-            key={`${theme}-${theme === 'video' ? videoSource : imageSource}`}
-            themeKind={theme}
-            themeId={theme === 'video' ? videoSource : imageSource}
-            getThemeInfo={getThemeInfo}
-            getTableProfile={getTableProfile}
-            onChangeTableClick={onChangeTableClick}
-          />
-        </div>
-        <div className="flex min-h-0 flex-col md:h-full">
+      <section className="mt-0 w-full min-w-0">
+        <div className="flex min-h-0 flex-col w-full">
           {address && playerStats ? (
             <PlayerStatsDashboard
               stats={playerStats}
@@ -83,7 +59,7 @@ export function BlackjackGameSecondaryPanels({
             />
           ) : (
             <div
-              className="flex min-h-[420px] flex-1 items-center justify-center overflow-hidden rounded-xl px-6 text-center text-white/60 md:min-h-[520px] md:h-full"
+              className="flex min-h-[320px] w-full items-center justify-center overflow-hidden rounded-xl px-6 text-center text-white/60 md:min-h-[400px]"
               style={{
                 background: 'linear-gradient(145deg, rgb(16, 26, 35), rgb(35, 36, 41))',
                 boxShadow: 'inset 0 3px 6px rgba(0, 0, 0, 0.8), inset 0 -3px 6px rgba(255, 255, 255, 0.1), 0 1px 3px rgba(0, 0, 0, 0.5)',

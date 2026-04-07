@@ -842,7 +842,6 @@ export default function BlackjackPage() {
     totalWin: playerStatsData.total_win || BigInt(0),
     winRate: Number(playerStatsData.win_rate) || 0,
     blackjackCount: Number(playerStatsData.blackjack_count) || 0,
-    currentStreak: Number(playerStatsData.current_streak) || 0,
     bestStreak: Number(playerStatsData.best_streak) || 0,
     biggestWin: playerStatsData.biggest_win || BigInt(0),
     biggestLoss: playerStatsData.biggest_loss || BigInt(0),

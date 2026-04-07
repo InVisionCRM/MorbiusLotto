@@ -6,6 +6,8 @@ import { CopyButton } from '@/components/ui/copy-button'
 
 const SWAP_PAGE_URL = '/swap'
 const VIEW_ON_MORBIUS_BASE = 'https://scan.morbius.io/geicko?address='
+/** When there is no custom iframe and no table token, embed the main Morbius scan app. */
+const MORBIUS_SCAN_IFRAME_FALLBACK = 'https://scan.morbius.io'
 
 interface DexScreenerPair {
   url?: string
@@ -42,7 +44,7 @@ export interface TableProfileProps {
   ticker?: string
   /** Optional website URL (admin-configured, shown as "Website" link) */
   websiteUrl?: string
-  /** Optional iframe URL (e.g. table website embed or custom chart). When set, this is used. When unset and tokenAddress is present, defaults to scan.morbius.io/geicko for that token. When no token, only this custom iframe is shown if provided. */
+  /** Optional iframe URL (e.g. table website embed or custom chart). When set, this is used. Otherwise embeds scan.morbius.io/geicko for the token when present, or https://scan.morbius.io as a fallback. */
   iframeUrl?: string
   /** When true, outer layout is flex column and the iframe grows to fill remaining height (pair with a stretched parent). */
   fillHeight?: boolean
@@ -107,13 +109,17 @@ export function TableProfile({
   const symbol = tickerProp ?? (hasToken ? tokenPairs[0]?.baseToken?.symbol : null) ?? tokenSymbol ?? '—'
   const socials = hasToken ? (tokenPairs[0]?.info?.socials ?? []) : []
   const websites = hasToken ? (tokenPairs[0]?.info?.websites ?? []) : []
-  const morbiusUrl = hasToken ? `${VIEW_ON_MORBIUS_BASE}${encodeURIComponent(tokenAddress!)}` : ''
-  const iframeSrc = showIframe ? ((iframeUrlProp?.trim() || (hasToken ? morbiusUrl : '')) || '') : ''
+  const morbiusTokenChartUrl = hasToken ? `${VIEW_ON_MORBIUS_BASE}${encodeURIComponent(tokenAddress!)}` : ''
+  const iframeSrc = showIframe
+    ? iframeUrlProp?.trim() || morbiusTokenChartUrl || MORBIUS_SCAN_IFRAME_FALLBACK
+    : ''
+
+  const iframeTitle = iframeUrlProp?.trim() ? 'Embed' : hasToken ? 'Token chart' : 'Morbius Scan'
 
   const iframeEl = (
     <iframe
       src={iframeSrc}
-      title={hasToken && !iframeUrlProp?.trim() ? 'Token chart' : 'Embed'}
+      title={iframeTitle}
       className={
         fillHeight
           ? 'absolute inset-0 h-full w-full min-h-[200px] border-0'
@@ -194,9 +200,9 @@ export function TableProfile({
               </div>
             )}
             <div className="flex flex-wrap items-center gap-2">
-              {hasToken && morbiusUrl && (
+              {hasToken && morbiusTokenChartUrl && (
                 <a
-                  href={morbiusUrl}
+                  href={morbiusTokenChartUrl}
                   target="_blank"
                   rel="noopener noreferrer"
                   className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg bg-gradient-to-r from-cyan-600 to-blue-600 hover:from-cyan-500 hover:to-blue-500 text-white text-sm font-medium transition-colors"
@@ -253,6 +259,20 @@ export function TableProfile({
           {iframeSrc && fillHeight && (
             <div className="relative mx-3 mb-3 min-h-[220px] flex-1 overflow-hidden rounded-lg border border-cyan-500/30 bg-slate-900/80 sm:mx-4 sm:mb-4">
               {iframeEl}
+            </div>
+          )}
+          {fillHeight && !iframeSrc && (
+            <div className="relative mx-3 mb-3 flex min-h-[220px] flex-1 flex-col items-center justify-center gap-2 rounded-lg border border-cyan-500/20 bg-slate-900/40 px-4 py-8 sm:mx-4 sm:mb-4">
+              <p className="text-center text-sm text-white/55">Embed hidden (preview mode)</p>
+              <a
+                href={MORBIUS_SCAN_IFRAME_FALLBACK}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex items-center gap-1.5 text-xs font-medium text-cyan-400/90 hover:text-cyan-300"
+              >
+                Open scan.morbius.io
+                <ExternalLink className="w-3 h-3 opacity-80" />
+              </a>
             </div>
           )}
         </div>

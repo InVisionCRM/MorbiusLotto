@@ -23,6 +23,11 @@ export interface TableTokenProfileCardProps {
    * Use when the card sits in a layout where lg:h-full + flex-1 would collapse (e.g. some grid/flex parents).
    */
   naturalProfileHeight?: boolean;
+  /**
+   * When true, the card grows to fill leftover height in a flex column (e.g. under the blackjack table).
+   * The iframe uses flexible height (min ~220px, grows) instead of a fixed min-h-[600px] content block.
+   */
+  fillColumn?: boolean;
 }
 
 const PANEL_STYLE = {
@@ -43,19 +48,22 @@ export function TableTokenProfileCard({
   onChangeTableClick,
   compact = false,
   naturalProfileHeight = false,
+  fillColumn = false,
 }: TableTokenProfileCardProps) {
   const profile = getTableProfile(themeKind, themeId);
 
-  const stretchProfile = !compact && !naturalProfileHeight;
+  const stretchProfile = !compact && (fillColumn || !naturalProfileHeight);
 
   return (
     <div
       className={`rounded-xl min-w-0 flex flex-col border border-cyan-500/30 ${
-        compact
-          ? 'min-h-[280px] overflow-hidden md:min-h-[300px]'
-          : naturalProfileHeight
-            ? 'min-h-[320px] overflow-hidden'
-            : 'min-h-[320px] overflow-hidden lg:h-full lg:min-h-0'
+        fillColumn
+          ? 'min-h-0 flex-1 h-full overflow-hidden'
+          : compact
+            ? 'min-h-[280px] overflow-hidden md:min-h-[300px]'
+            : naturalProfileHeight
+              ? 'min-h-[320px] overflow-hidden'
+              : 'min-h-[320px] overflow-hidden lg:h-full lg:min-h-0'
       }`}
       style={PANEL_STYLE}
     >

@@ -51,7 +51,6 @@ export interface PlayerStats {
   totalWin: bigint
   winRate: number
   blackjackCount: number
-  currentStreak: number
   bestStreak: number
   biggestWin: bigint
   biggestLoss: bigint
@@ -149,7 +148,7 @@ export function PlayerStatsDashboard({ stats, isLoading, playerAddress, wsClient
       title: 'Win Rate',
       value: `${Math.round(stats.winRate)}%`,
       icon: Target,
-      subtitle: `${stats.blackjackCount} blackjacks`,
+      subtitle: `${stats.blackjackCount} blackjacks · Best streak: ${stats.bestStreak}`,
       valueClassName: getWinRateColor(stats.winRate)
     },
     {
@@ -172,13 +171,6 @@ export function PlayerStatsDashboard({ stats, isLoading, playerAddress, wsClient
       icon: Trophy,
       subtitle: `Avg payout: ${formatCurrency(stats.averagePayout)} MORBIUS`,
       valueClassName: 'text-cyan-300'
-    },
-    {
-      title: 'Current Streak',
-      value: stats.currentStreak.toString(),
-      icon: BarChart3,
-      subtitle: `Best: ${stats.bestStreak} wins`,
-      valueClassName: stats.currentStreak > 0 ? 'text-green-400' : 'text-red-400'
     }
   ]
 
