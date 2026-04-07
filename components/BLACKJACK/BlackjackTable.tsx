@@ -1051,12 +1051,12 @@ const BlackjackTable: React.FC<BlackjackTableProps> = ({
       )}
 
       <div className="relative z-10 flex flex-col flex-1 min-h-0" style={{ height: '100%' }}>
-        {/* Play Area — dealer and player in flow, centered as a group with gap between rows */}
-        <div className="flex-1 flex flex-col justify-end items-center gap-12 sm:gap-6 min-h-0 pb-15">
-          {/* Dealer row — absolutely positioned at vertical midpoint */}
+        {/* Play Area — cards absolutely positioned on the table surface */}
+        <div className="absolute inset-0">
+          {/* Dealer row — upper third of table */}
           {testDealerHand ? (
             /* ── Admin test: render dealer cards directly (no reveal logic) ── */
-            <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 flex flex-col items-center">
+            <div className="absolute top-[30%] left-1/2 -translate-x-1/2 flex flex-col items-center">
               <div className="flex gap-1 sm:gap-0">
                 {testDealerHand.cards.map((card, index) => (
                   <div key={`dealer-card-${index}`} className={index > 0 ? 'card-overlap-dealer' : ''} style={{ zIndex: index }}>
@@ -1072,7 +1072,7 @@ const BlackjackTable: React.FC<BlackjackTableProps> = ({
             const gameCompleteAndRevealed = gameState === GameState.COMPLETE && !isRevealing && visibleDealerCards >= dealerHand.cards.length;
             const dealerIsWinner = gameCompleteAndRevealed && gameResult === 'loss';
             return (
-              <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 flex flex-col items-center justify-center">
+              <div className="absolute top-[30%] left-1/2 -translate-x-1/2 flex flex-col items-center justify-center">
                 <DealerSection
                   cards={dealerHand.cards}
                   visibleCards={visibleDealerCards}
@@ -1090,8 +1090,8 @@ const BlackjackTable: React.FC<BlackjackTableProps> = ({
             );
           })()}
 
-          {/* Player row — shifted down from center, above the bet chip */}
-          <div className="flex flex-col gap-2 items-center justify-center">
+          {/* Player row — near bottom of table */}
+          <div className="absolute top-[72%] left-1/2 -translate-x-1/2 flex flex-col gap-2 items-center justify-center">
             <div className={`flex ${hasSplit ? 'gap-2' : 'gap-0'} items-end`}>
               {displayHands.map((hand, handIndex) => {
                 const isActiveHand = hasSplit && handIndex === currentHandIndex && gameState === GameState.PLAYER_TURN;

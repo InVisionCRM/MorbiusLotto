@@ -15,7 +15,7 @@ export function SpeechHUD({ listening, transcript, lastAction, pendingLabel }: P
   if (!listening) return null;
 
   return (
-    <div className="fixed bottom-24 left-4 z-[100] flex flex-col gap-1.5 pointer-events-none select-none">
+    <div className="fixed top-4 left-1/4 -translate-x-1/2 z-[100] flex flex-col gap-1.5 pointer-events-none select-none items-center">
       {/* Mic indicator + live transcript */}
       <div className="flex items-center gap-2 rounded-xl border border-white/10 bg-black/70 px-3 py-2 backdrop-blur-md max-w-[260px]">
         <span className="h-2 w-2 shrink-0 rounded-full bg-red-500 animate-pulse" />
