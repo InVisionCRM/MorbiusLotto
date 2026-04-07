@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useParams, useRouter, useSearchParams } from 'next/navigation';
 import { useAccount, useSignTypedData } from 'wagmi';
 import { formatMorbiusFloor } from '@/lib/format-morbius-display';
@@ -15,6 +15,10 @@ import { isAdminWallet } from '@/lib/admin';
 import { useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import { PokerBetaSplash } from '@/components/poker/PokerBetaSplash';
+import { useSpeechCommands, type PokerSpeechAction } from '@/hooks/use-speech-commands';
+import { useSpeechEnabled } from '@/hooks/use-speech-enabled';
+import { SpeechHUD } from '@/components/shared/SpeechHUD';
+import { SophieSplashModal } from '@/components/shared/SophieSplashModal';
 import { PokerHeaderBar } from './PokerHeaderBar';
 import { PokerTableView } from './PokerTableView';
 import { PokerPopups } from './PokerPopups';
@@ -168,6 +172,38 @@ export default function PokerTablePage() {
     clientRef,
     applyE2EMockAction,
   });
+  // ── Voice commands ────────────────────────────────────────────────────────
+  const { enabled: speechEnabled } = useSpeechEnabled(address);
+  const [lastSpeechAction, setLastSpeechAction] = useState<string | null>(null);
+  const lastSpeechActionTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const showSpeechAction = useCallback((label: string) => {
+    setLastSpeechAction(label);
+    if (lastSpeechActionTimer.current) clearTimeout(lastSpeechActionTimer.current);
+    lastSpeechActionTimer.current = setTimeout(() => setLastSpeechAction(null), 3000);
+  }, []);
+
+  const handleVoicePokerAction = useCallback((action: PokerSpeechAction) => {
+    if (!canAct) return;
+    if (action.type === 'fold')    { showSpeechAction('Fold');                          handleFold(); return; }
+    if (action.type === 'check')   { showSpeechAction('Check');                         handleCheck(); return; }
+    if (action.type === 'call')    { showSpeechAction('Call');                          handleCall(); return; }
+    if (action.type === 'all_in')  { showSpeechAction('All In');                        handleRaise(mySeat?.stack ?? '0'); return; }
+    if (action.type === 'bet')     { showSpeechAction(`Bet ${action.amount}`);          handleBet(String(action.amount)); return; }
+    if (action.type === 'raise')   { showSpeechAction(`Raise to ${action.amount}`);     handleRaise(String(action.amount)); return; }
+  }, [canAct, handleFold, handleCheck, handleCall, handleBet, handleRaise, mySeat, showSpeechAction]);
+
+  const speech = useSpeechCommands({
+    mode: 'poker',
+    onPokerAction: handleVoicePokerAction,
+  });
+
+  useEffect(() => {
+    if (speechEnabled) speech.start();
+    else speech.stop();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [speechEnabled]);
+
   const {
     chatBubbleBySeatIndex,
     reactionBySeatIndex,
@@ -600,5 +636,15 @@ export default function PokerTablePage() {
         />
       </PokerTableEffectProvider>
       </PokerThemeProvider>
+
+      {speechEnabled && (
+        <SpeechHUD
+          listening={speech.listening}
+          transcript={speech.transcript}
+          lastAction={lastSpeechAction}
+          pendingLabel={speech.pendingLabel}
+        />
+      )}
+      <SophieSplashModal address={address} />
   );
 }
