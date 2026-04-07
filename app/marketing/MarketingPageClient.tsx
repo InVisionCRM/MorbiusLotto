@@ -223,7 +223,7 @@ export default function MarketingPageClient() {
               <div className="relative z-10 max-w-3xl mx-auto">
                 <div className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-cyan-950/60 border border-cyan-500/30 text-cyan-300 text-xs font-semibold uppercase tracking-wider mb-4">
                   <Zap className="w-3.5 h-3.5" />
-                  Custom Blackjack Tables &mdash; Limited Spots
+                  
                 </div>
 
                 <div className="flex justify-center mb-6">
@@ -236,7 +236,7 @@ export default function MarketingPageClient() {
                   >
                     <Tag className="w-4 h-4 text-red-400" />
                     <span className="text-red-300 font-black text-sm uppercase tracking-wide">
-                      Limited Time — 50% Off All Packages!
+                      
                     </span>
                   </div>
                 </div>

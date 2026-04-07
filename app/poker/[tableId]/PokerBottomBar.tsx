@@ -34,13 +34,13 @@ export function PokerBottomBar({
   // Fullscreen: horizontal strip anchored to the bottom of the table
   if (fullscreen) {
     return renderedState && mySeat && actions ? (
-      <div className="absolute bottom-0 left-0 right-0 z-40 px-4 pb-3 pt-2"
+      <div className="absolute bottom-0 left-0 right-0 z-40 px-4 pb-1 pt-2"
         style={{
           background: 'linear-gradient(to top, rgba(0,0,0,0.75) 60%, transparent)',
         }}
       >
         <div
-          className="w-full mx-auto rounded-2xl px-4 py-2.5"
+          className="w-full mx-auto rounded-sm px-4 py-2.5"
           style={{
             maxWidth: 900,
             background: 'rgba(5,8,20,0.72)',

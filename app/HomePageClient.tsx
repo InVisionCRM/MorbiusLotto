@@ -1,8 +1,6 @@
 'use client'
 
-import { useState, useEffect, useCallback, useRef } from 'react'
-import { useRouter } from 'next/navigation'
-import { VoiceConversation } from '@elevenlabs/client'
+import { useState, useEffect } from 'react'
 import Image from 'next/image'
 import GlobalMainNav from '@/components/shared/GlobalMainNav'
 import { FirstVisitNotification } from '@/components/ui/first-visit-notification'
@@ -33,55 +31,17 @@ function HomeSectionDivider() {
   )
 }
 
-const GAME_ROUTES: Record<string, string> = {
-  open_blackjack: '/BLACKJACK',
-  open_plinko: '/PLINKO',
-  open_keno: '/keno',
-  open_lottery: '/lottery',
-  open_poker: '/poker',
-}
-
 export default function HomePageClient() {
-  const router = useRouter()
   const [loginOpen, setLoginOpen] = useState(false)
   const [walletModalOpen, setWalletModalOpen] = useState(false)
 
-  const conversationRef = useRef<VoiceConversation | null>(null)
-  const [agentStatus, setAgentStatus] = useState<'idle' | 'connecting' | 'connected'>('idle')
-
-  const clientTools = useCallback(() => ({
-    open_deposit_withdraw_modal: () => { setWalletModalOpen(true); return 'Wallet modal opened.' },
-    open_blackjack: () => { router.push('/BLACKJACK'); return 'Navigating to Blackjack.' },
-    open_plinko: () => { router.push('/PLINKO'); return 'Navigating to Plinko.' },
-    open_keno: () => { router.push('/keno'); return 'Navigating to Keno.' },
-    open_lottery: () => { router.push('/lottery'); return 'Navigating to Lottery.' },
-    open_poker: () => { router.push('/poker'); return 'Navigating to Poker.' },
-  }), [router])
-
-  const startSession = useCallback(async () => {
-    if (conversationRef.current) {
-      await conversationRef.current.endSession()
-      conversationRef.current = null
-      setAgentStatus('idle')
-      return
-    }
-    setAgentStatus('connecting')
-    try {
-      const conversation = await VoiceConversation.startSession({
-        agentId: 'agent_6501knjaw524ff2bc6wvxagf49ga',
-        clientTools: clientTools(),
-        onConnect: () => setAgentStatus('connected'),
-        onDisconnect: () => { conversationRef.current = null; setAgentStatus('idle') },
-        onError: () => { conversationRef.current = null; setAgentStatus('idle') },
-      })
-      conversationRef.current = conversation
-    } catch {
-      setAgentStatus('idle')
-    }
-  }, [clientTools])
-
   useEffect(() => {
-    return () => { conversationRef.current?.endSession() }
+    if (document.querySelector('script[src*="elevenlabs/convai-widget-embed"]')) return
+    const script = document.createElement('script')
+    script.src = 'https://unpkg.com/@elevenlabs/convai-widget-embed'
+    script.async = true
+    script.type = 'text/javascript'
+    document.body.appendChild(script)
   }, [])
 
   const [playerProfileOpen, setPlayerProfileOpen] = useState(false)
@@ -185,43 +145,8 @@ export default function HomePageClient() {
         isOpen={walletModalOpen}
         onClose={() => setWalletModalOpen(false)}
       />
-      <button
-        onClick={startSession}
-        aria-label={agentStatus === 'connected' ? 'End conversation with Sophie' : 'Talk to Sophie'}
-        className="fixed bottom-6 right-6 z-50 flex h-14 w-14 items-center justify-center rounded-full shadow-lg transition-all duration-300 focus:outline-none focus-visible:ring-2 focus-visible:ring-cyan-400"
-        style={{
-          background: agentStatus === 'connected'
-            ? 'radial-gradient(circle, #a855f7, #7c3aed)'
-            : agentStatus === 'connecting'
-            ? 'radial-gradient(circle, #64748b, #475569)'
-            : 'radial-gradient(circle, #22d3ee, #0e7490)',
-          boxShadow: agentStatus === 'connected'
-            ? '0 0 20px rgba(168,85,247,0.6)'
-            : agentStatus === 'connecting'
-            ? 'none'
-            : '0 0 20px rgba(34,211,238,0.4)',
-        }}
-      >
-        {agentStatus === 'connected' ? (
-          // Waveform bars when active
-          <span className="flex items-end gap-[3px] h-5">
-            {[1, 2, 3, 4].map(i => (
-              <span
-                key={i}
-                className="w-[3px] rounded-full bg-white"
-                style={{ animation: `bounce 0.8s ease-in-out ${i * 0.15}s infinite alternate`, height: `${40 + i * 15}%` }}
-              />
-            ))}
-          </span>
-        ) : agentStatus === 'connecting' ? (
-          <span className="h-5 w-5 rounded-full border-2 border-white border-t-transparent animate-spin" />
-        ) : (
-          // Mic icon
-          <svg className="h-6 w-6 text-white" fill="currentColor" viewBox="0 0 24 24" aria-hidden>
-            <path d="M12 1a4 4 0 0 1 4 4v6a4 4 0 0 1-8 0V5a4 4 0 0 1 4-4zm0 2a2 2 0 0 0-2 2v6a2 2 0 0 0 4 0V5a2 2 0 0 0-2-2zm7 8a1 1 0 0 1 1 1 8 8 0 0 1-7 7.938V21h2a1 1 0 0 1 0 2H9a1 1 0 0 1 0-2h2v-1.062A8 8 0 0 1 4 12a1 1 0 0 1 2 0 6 6 0 0 0 12 0 1 1 0 0 1 1-1z" />
-          </svg>
-        )}
-      </button>
+      {/* @ts-expect-error custom element */}
+      <elevenlabs-convai agent-id="agent_6501knjaw524ff2bc6wvxagf49ga" />
     </GlobalMainNav>
   )
 }
