@@ -1,6 +1,7 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
+import { useRouter } from 'next/navigation'
 import Image from 'next/image'
 import GlobalMainNav from '@/components/shared/GlobalMainNav'
 import { FirstVisitNotification } from '@/components/ui/first-visit-notification'
@@ -32,6 +33,7 @@ function HomeSectionDivider() {
 }
 
 export default function HomePageClient() {
+  const router = useRouter()
   const [loginOpen, setLoginOpen] = useState(false)
   const [walletModalOpen, setWalletModalOpen] = useState(false)
 
@@ -43,6 +45,24 @@ export default function HomePageClient() {
     script.type = 'text/javascript'
     document.body.appendChild(script)
   }, [])
+
+  const handleCallEvent = useCallback((e: Event) => {
+    const detail = (e as CustomEvent).detail
+    if (!detail?.config) return
+    detail.config.clientTools = {
+      open_deposit_withdraw_modal: () => { setWalletModalOpen(true); return 'Wallet modal opened.' },
+      open_blackjack: () => { router.push('/BLACKJACK'); return 'Navigating to Blackjack.' },
+      open_plinko: () => { router.push('/PLINKO'); return 'Navigating to Plinko.' },
+      open_keno: () => { router.push('/keno'); return 'Navigating to Keno.' },
+      open_lottery: () => { router.push('/lottery'); return 'Navigating to Lottery.' },
+      open_poker: () => { router.push('/poker'); return 'Navigating to Poker.' },
+    }
+  }, [router])
+
+  useEffect(() => {
+    window.addEventListener('elevenlabs-convai:call', handleCallEvent)
+    return () => window.removeEventListener('elevenlabs-convai:call', handleCallEvent)
+  }, [handleCallEvent])
 
   const [playerProfileOpen, setPlayerProfileOpen] = useState(false)
   const [playerProfileGame, setPlayerProfileGame] = useState<'all' | 'blackjack' | 'lottery' | 'keno' | 'plinko'>('all')
