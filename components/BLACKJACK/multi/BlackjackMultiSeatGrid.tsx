@@ -33,7 +33,7 @@ const CHIP_OFFSETS = [
   { x: 30, y: -50 }, // right
 ] as const;
 
-// Avatar circle offset from seat anchor (above the cards).
+// Avatar circle offset from seat anchor (sits above the cards).
 const AVATAR_OFFSETS = [
   { x: 5, y: -140 }, // left
   { x: 5, y: -140 }, // center
@@ -87,11 +87,7 @@ export function BlackjackMultiSeatGrid({
         const isMe = seat?.playerAddress?.toLowerCase() === addressLower;
         const { x, y } = SEAT_ANCHORS[pos];
         return (
-          <div
-            key={pos}
-            className="absolute"
-            style={{ left: x, top: y, pointerEvents: 'auto' }}
-          >
+          <div key={pos} className="absolute" style={{ left: x, top: y, pointerEvents: 'auto' }}>
             <BlackjackMultiSeat
               seat={seat ?? null}
               position={pos}
@@ -105,15 +101,15 @@ export function BlackjackMultiSeatGrid({
               balanceLabel={isMe ? myBalanceLabel : null}
               onOpenProfile={onOpenProfile}
               showOutcomeLabel={showOutcomeLabel}
-              cardOffset={CARD_OFFSETS[pos]}
-              tagOffset={TAG_OFFSETS[pos]}
-              chipOffset={CHIP_OFFSETS[pos]}
-              avatarOffset={AVATAR_OFFSETS[pos]}
               turnStartedAt={actingSeatPosition === pos && phase === 'playing' ? turnStartedAt : null}
               bettingStartedAt={phase === 'betting' && seat?.playerAddress ? bettingStartedAt : null}
               onLeaveSeat={isMe ? onLeaveSeat : undefined}
               onToggleSoundPanel={isMe ? onToggleSoundPanel : undefined}
               onSendChatMessage={isMe ? onSendChatMessage : undefined}
+              cardOffset={CARD_OFFSETS[pos]}
+              tagOffset={TAG_OFFSETS[pos]}
+              chipOffset={CHIP_OFFSETS[pos]}
+              avatarOffset={AVATAR_OFFSETS[pos]}
             />
           </div>
         );

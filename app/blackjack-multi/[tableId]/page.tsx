@@ -9,7 +9,6 @@ import { BlackjackWebSocketClient } from '@/lib/websocket-client';
 import type { BJMultiTableState, BJMultiSeatState, BJMultiHandObj } from '@/lib/websocket-client';
 import GlobalMainNav from '@/components/shared/GlobalMainNav';
 import { useChat } from '@/hooks/use-chat';
-import { BlackjackMultiAvatarDock } from '@/components/BLACKJACK/multi/BlackjackMultiAvatarDock';
 import { AvatarView } from '@/components/avatar';
 import { BlackjackHowToSection } from '@/components/BLACKJACK/BlackjackHowToSection';
 import { BlackjackMultiSeatGrid } from '@/components/BLACKJACK/multi/BlackjackMultiSeatGrid';
@@ -1083,20 +1082,6 @@ export default function BlackjackMultiTablePage() {
             turnStartedAt={tableViewState?.turnStartedAt ?? null}
             bettingStartedAt={tableViewState?.bettingStartedAt ?? null}
             onTakeSeat={takeSeat}
-            onOpenProfile={setSelectedProfileAddress}
-            onLeaveSeat={myPosition !== null ? leaveSeat : undefined}
-            onToggleSoundPanel={myPosition !== null ? () => setSoundPanelOpen(o => !o) : undefined}
-            onSendChatMessage={myPosition !== null ? sendChatMessage : undefined}
-          />
-
-          <BlackjackMultiAvatarDock
-            seats={seatsByPosition}
-            addressLower={address?.toLowerCase()}
-            phase={tableViewState?.phase ?? 'waiting'}
-            actingSeatPosition={tableViewState?.actingSeatPosition ?? null}
-            turnStartedAt={tableViewState?.turnStartedAt ?? null}
-            bettingStartedAt={tableViewState?.bettingStartedAt ?? null}
-            myPosition={myPosition}
             onOpenProfile={setSelectedProfileAddress}
             onLeaveSeat={myPosition !== null ? leaveSeat : undefined}
             onToggleSoundPanel={myPosition !== null ? () => setSoundPanelOpen(o => !o) : undefined}
