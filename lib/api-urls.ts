@@ -1,7 +1,7 @@
 /**
  * Central place for API and WebSocket base URLs.
  * Set in your deployment (e.g. Vercel project settings, Railway variables).
- *   NEXT_PUBLIC_API_URL — required for core Blackjack; optional for Top Players (getApiUrlOptional).
+ *   NEXT_PUBLIC_API_URL — set on Vercel (build-time embed). Use *Optional helpers where the page must prerender without it (e.g. wallet modal).
  *   NEXT_PUBLIC_WEBSOCKET_URL
  *   NEXT_PUBLIC_BLACKJACK_SERVER_URL
  */
@@ -38,12 +38,17 @@ export function getWebSocketUrlOptional(): string | null {
   return value.trim();
 }
 
-/** Blackjack backend URL. Falls back to API URL when not set (same backend). */
-export function getBlackjackServerUrl(): string {
+/** Blackjack / wallet backend base URL when configured; null otherwise (SSR/build without env). */
+export function getBlackjackServerUrlOptional(): string | null {
   const v = process.env.NEXT_PUBLIC_BLACKJACK_SERVER_URL;
   if (v != null && v.trim() !== '') return v.trim();
-  const api = getApiUrlOptional();
-  if (api) return api;
+  return getApiUrlOptional();
+}
+
+/** Blackjack backend URL. Falls back to API URL when not set (same backend). */
+export function getBlackjackServerUrl(): string {
+  const opt = getBlackjackServerUrlOptional();
+  if (opt) return opt;
   return requireEnv('NEXT_PUBLIC_API_URL');
 }
 

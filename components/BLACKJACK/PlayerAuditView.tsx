@@ -13,7 +13,7 @@ import {
   CheckCircle2,
   Filter,
 } from 'lucide-react';
-import { getBlackjackServerUrl } from '@/lib/api-urls';
+import { getBlackjackServerUrlOptional } from '@/lib/api-urls';
 
 // ── Types ──────────────────────────────────────────────────────────────────
 
@@ -125,7 +125,7 @@ const PAGE_SIZE = 50;
 const PULSE_SCAN_TX = 'https://scan.pulsechain.com/tx/';
 
 export function PlayerAuditView({ playerAddress, games, gamesLoading, actualBalance, showEventsColumn }: PlayerAuditViewProps) {
-  const serverUrl = getBlackjackServerUrl();
+  const serverUrl = getBlackjackServerUrlOptional();
   const [txRecords, setTxRecords] = useState<TxRecord[]>([]);
   const [txLoading, setTxLoading] = useState(false);
   const [txError, setTxError] = useState<string | null>(null);
@@ -136,6 +136,11 @@ export function PlayerAuditView({ playerAddress, games, gamesLoading, actualBala
 
   const fetchTx = useCallback(async () => {
     if (!playerAddress) return;
+    if (!serverUrl) {
+      setTxError('Backend URL not configured (NEXT_PUBLIC_API_URL).');
+      setTxRecords([]);
+      return;
+    }
     setTxLoading(true);
     setTxError(null);
     try {

@@ -165,8 +165,18 @@ export default function HomePageClient() {
         isOpen={walletModalOpen}
         onClose={() => setWalletModalOpen(false)}
       />
+      {/*
+        Sofie / ConvAI: these attributes override the agent dashboard (see @elevenlabs/convai-widget-embed:
+        attribute value ?? server config). tiny = smallest FAB; false expanded flags avoid starting open.
+      */}
       {/* @ts-expect-error custom element */}
-      <elevenlabs-convai agent-id="agent_6501knjaw524ff2bc6wvxagf49ga" />
+      <elevenlabs-convai
+        agent-id="agent_6501knjaw524ff2bc6wvxagf49ga"
+        variant="tiny"
+        default-expanded="false"
+        always-expanded="false"
+        dismissible="true"
+      />
     </GlobalMainNav>
   )
 }

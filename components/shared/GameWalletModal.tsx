@@ -25,7 +25,7 @@ import {
   BLACKJACK_LEGACY_ADDRESS_5,
   MORBIUS_TOKEN_ADDRESS,
 } from '@/lib/contracts';
-import { getBlackjackServerUrl } from '@/lib/api-urls';
+import { getBlackjackServerUrlOptional } from '@/lib/api-urls';
 import { CustomApprovalModal } from '@/components/BLACKJACK/CustomApprovalModal';
 import { ReportModal } from '@/components/shared/ReportModal';
 import { toast } from 'sonner';
@@ -181,7 +181,7 @@ export function GameWalletModal({
 }: GameWalletModalProps) {
   const { address } = useAccount();
   const publicClient = usePublicClient();
-  const serverUrl = getBlackjackServerUrl();
+  const serverUrl = getBlackjackServerUrlOptional();
 
   // ── Self-managed balance (used when externalBalance is not provided) ─────
   const [internalBalance, setInternalBalance] = useState<bigint | null>(null);
@@ -189,7 +189,7 @@ export function GameWalletModal({
   const isSelfManaged = externalBalance === undefined;
 
   const fetchBalance = useCallback(async () => {
-    if (!address || !isSelfManaged) return;
+    if (!address || !isSelfManaged || !serverUrl) return;
     setBalanceLoading(true);
     try {
       const res = await fetch(`${serverUrl}/api/player/${address}/balance`);
@@ -503,7 +503,7 @@ export function GameWalletModal({
 
   // ── Tx history ─────────────────────────────────────────────────────────
   const fetchTxHistory = useCallback(async () => {
-    if (!address) return;
+    if (!address || !serverUrl) return;
     setTxLoading(true);
     setTxError(null);
     try {
@@ -531,6 +531,9 @@ export function GameWalletModal({
     amountWei: bigint,
   ): Promise<{ ok: true } | { ok: false; status: number; message: string }> => {
     if (!address) return { ok: false, status: 0, message: 'Wallet not connected' };
+    if (!serverUrl) {
+      return { ok: false, status: 0, message: 'Backend URL not configured (NEXT_PUBLIC_API_URL).' };
+    }
     try {
       const res = await fetch(`${serverUrl}/api/deposit/notify`, {
         method: 'POST',
@@ -676,6 +679,12 @@ export function GameWalletModal({
 
   // ── Withdraw polling (shared between new withdrawals and resume-on-refresh) ──
   const pollWithdrawJob = useCallback(async (jobId: string, toastId: string | number) => {
+    if (!serverUrl) {
+      toast.error('Backend not configured', { id: toastId, description: 'Set NEXT_PUBLIC_API_URL and redeploy.' });
+      setWithdrawPhase('idle');
+      setWithdrawError(null);
+      return;
+    }
     for (let i = 0; i < 120; i++) {
       const statusRes = await fetch(`${serverUrl}/api/withdraw/status/${jobId}`);
       const statusData = await statusRes.json();
@@ -732,11 +741,11 @@ export function GameWalletModal({
     if (onRefreshBalance) await onRefreshBalance();
     else if (isSelfManaged) await fetchBalance();
     setTimeout(() => { setWithdrawPhase('idle'); setWithdrawError(null); }, 4000);
-  }, [serverUrl, onRefreshBalance, isSelfManaged, onWithdrawSuccess]);
+  }, [serverUrl, onRefreshBalance, isSelfManaged, onWithdrawSuccess, fetchBalance]);
 
   // ── Resume in-progress withdrawal after page refresh ───────────────────
   useEffect(() => {
-    if (!isOpen || !address) return;
+    if (!isOpen || !address || !serverUrl) return;
     let cancelled = false;
     const checkPending = async () => {
       try {
@@ -761,11 +770,15 @@ export function GameWalletModal({
     };
     checkPending();
     return () => { cancelled = true; };
-  }, [isOpen, address]);
+  }, [isOpen, address, serverUrl, pollWithdrawJob]);
 
   // ── Withdraw ───────────────────────────────────────────────────────────
   const handleWithdraw = async () => {
     if (!withdrawAmount || !address) return;
+    if (!serverUrl) {
+      toast.error('Backend URL not configured', { description: 'Set NEXT_PUBLIC_API_URL in Vercel and redeploy.' });
+      return;
+    }
     let amountWei: bigint;
     try {
       amountWei = parseEther(withdrawAmount);
