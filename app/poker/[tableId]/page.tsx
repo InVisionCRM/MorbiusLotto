@@ -18,6 +18,7 @@ import { PokerBetaSplash } from '@/components/poker/PokerBetaSplash';
 import { useSpeechCommands, type PokerSpeechAction } from '@/hooks/use-speech-commands';
 import { useSpeechEnabled } from '@/hooks/use-speech-enabled';
 import { SpeechHUD } from '@/components/shared/SpeechHUD';
+import { SpeechConfirmDialog } from '@/components/shared/SpeechConfirmDialog';
 import { SophieSplashModal } from '@/components/shared/SophieSplashModal';
 import { PokerHeaderBar } from './PokerHeaderBar';
 import { PokerTableView } from './PokerTableView';
@@ -643,8 +644,16 @@ export default function PokerTablePage() {
         transcript={speech.transcript}
         lastAction={lastSpeechAction}
         pendingLabel={speech.pendingLabel}
+        supported={speech.supported}
         onToggle={() => setSpeechEnabled(!speechEnabled)}
       />
+      {speech.pendingLabel && (
+        <SpeechConfirmDialog
+          label={speech.pendingLabel}
+          onYes={speech.confirmYes}
+          onNo={speech.confirmNo}
+        />
+      )}
       <SophieSplashModal address={address} />
     </>
   );

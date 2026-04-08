@@ -102,6 +102,8 @@ interface BlackjackTableProps {
   inTournament?: boolean;
   /** Active tier limits — passed to BettingPanel */
   betLimits?: { MIN_BET: bigint; MAX_BET: bigint };
+  /** Speech toggle — renders inline in the top-right button row with readbacks below */
+  speechToggle?: { listening: boolean; onToggle: () => void; transcript: string; lastAction: string | null; pendingLabel: string | null };
 }
 
 const BlackjackTable: React.FC<BlackjackTableProps> = ({
@@ -163,6 +165,7 @@ const BlackjackTable: React.FC<BlackjackTableProps> = ({
   onOpenTournamentHistory,
   inTournament = false,
   betLimits,
+  speechToggle,
 }) => {
   // ── Admin layout test: cycle through preset hands ───────────────────────────
   const { address: adminCheckAddress } = useAccount();
@@ -1056,7 +1059,7 @@ const BlackjackTable: React.FC<BlackjackTableProps> = ({
           {/* Dealer row — upper third of table */}
           {testDealerHand ? (
             /* ── Admin test: render dealer cards directly (no reveal logic) ── */
-            <div className="absolute top-[30%] left-1/2 -translate-x-1/2 flex flex-col items-center">
+            <div className="absolute top-[20%] left-1/2 -translate-x-1/2 flex flex-col items-center">
               <div className="flex gap-1 sm:gap-0">
                 {testDealerHand.cards.map((card, index) => (
                   <div key={`dealer-card-${index}`} className={index > 0 ? 'card-overlap-dealer' : ''} style={{ zIndex: index }}>
@@ -1072,7 +1075,7 @@ const BlackjackTable: React.FC<BlackjackTableProps> = ({
             const gameCompleteAndRevealed = gameState === GameState.COMPLETE && !isRevealing && visibleDealerCards >= dealerHand.cards.length;
             const dealerIsWinner = gameCompleteAndRevealed && gameResult === 'loss';
             return (
-              <div className="absolute top-[30%] left-1/2 -translate-x-1/2 flex flex-col items-center justify-center">
+              <div className="absolute top-[20%] left-1/2 -translate-x-1/2 flex flex-col items-center justify-center">
                 <DealerSection
                   cards={dealerHand.cards}
                   visibleCards={visibleDealerCards}
@@ -1091,7 +1094,7 @@ const BlackjackTable: React.FC<BlackjackTableProps> = ({
           })()}
 
           {/* Player row — near bottom of table */}
-          <div className="absolute top-[72%] left-1/2 -translate-x-1/2 flex flex-col gap-2 items-center justify-center">
+          <div className="absolute top-[55%] left-1/2 -translate-x-1/2 flex flex-col gap-2 items-center justify-center">
             <div className={`flex ${hasSplit ? 'gap-2' : 'gap-0'} items-end`}>
               {displayHands.map((hand, handIndex) => {
                 const isActiveHand = hasSplit && handIndex === currentHandIndex && gameState === GameState.PLAYER_TURN;
@@ -1145,7 +1148,7 @@ const BlackjackTable: React.FC<BlackjackTableProps> = ({
                         <div className="flex flex-col items-center">
                           {/* Score — above cards, only when cards are dealt */}
                           {hand.cards.length > 0 && <div className={`flex items-center gap-2 transition-transform duration-300 ${handIsWinner ? 'card-counter-winner' : ''}`} style={{ marginBottom: -10, zIndex: 0 }}>
-                            <div className={`glass-counter backdrop-blur-md relative w-24 h-24 flex items-center justify-center rounded-full transition-all duration-300 ${
+                            <div className={`glass-counter backdrop-blur-xl relative w-24 h-24 flex items-center justify-center rounded-full transition-all duration-300 ${
                               gameState === GameState.PLAYER_TURN && (hasSplit ? isActiveHand : true) ? 'card-counter-active' : ''
                             }`}>
                               <span className={`font-black relative z-10 transition-all duration-500 ${
@@ -1649,7 +1652,46 @@ const BlackjackTable: React.FC<BlackjackTableProps> = ({
 
         {/* Change Table - top right of table */}
         {onOpenTableThemeSelector && (
-          <div className="absolute top-2 right-2 z-50 pointer-events-auto flex gap-1.5">
+          <div className="absolute top-2 right-2 z-50 pointer-events-auto flex gap-1.5 items-center">
+            {speechToggle && (
+              <div className="relative flex flex-col items-end gap-1">
+                <button
+                  type="button"
+                  onClick={speechToggle.onToggle}
+                  className="flex items-center gap-1.5 rounded-md border px-2 py-1 text-[10px] font-medium transition-colors bg-slate-900/80 hover:bg-slate-800/80"
+                  style={{
+                    borderColor: speechToggle.listening ? 'rgba(239,68,68,0.5)' : 'rgba(255,255,255,0.15)',
+                    color: speechToggle.listening ? '#fca5a5' : '#9ca3af',
+                  }}
+                >
+                  <span className={`h-1.5 w-1.5 shrink-0 rounded-full ${speechToggle.listening ? 'bg-red-500 animate-pulse' : 'bg-neutral-500'}`} />
+                  {speechToggle.listening ? 'Voice ON' : 'Voice OFF'}
+                  <svg className="h-3 w-3" fill="currentColor" viewBox="0 0 24 24">
+                    <path d="M12 1a4 4 0 0 1 4 4v6a4 4 0 0 1-8 0V5a4 4 0 0 1 4-4zm0 2a2 2 0 0 0-2 2v6a2 2 0 0 0 4 0V5a2 2 0 0 0-2-2zm7 8a1 1 0 0 1 1 1 8 8 0 0 1-7 7.938V21h2a1 1 0 0 1 0 2H9a1 1 0 0 1 0-2h2v-1.062A8 8 0 0 1 4 12a1 1 0 0 1 2 0 6 6 0 0 0 12 0 1 1 0 0 1 1-1z" />
+                  </svg>
+                </button>
+                {speechToggle.listening && (
+                  <div className="flex items-center gap-2 rounded-md border border-white/10 bg-black/70 px-2 py-1 backdrop-blur-md max-w-[180px] pointer-events-none">
+                    <span className="text-[10px] text-white/40 shrink-0">Hearing:</span>
+                    <span className="text-[10px] text-white truncate">
+                      {speechToggle.transcript || <span className="text-white/25 italic">listening…</span>}
+                    </span>
+                  </div>
+                )}
+                {speechToggle.pendingLabel && (
+                  <div className="flex items-center gap-2 rounded-md border border-amber-500/40 bg-amber-500/10 px-2 py-1 backdrop-blur-md max-w-[180px] pointer-events-none">
+                    <span className="text-[10px] text-amber-300 font-semibold shrink-0">Confirm:</span>
+                    <span className="text-[10px] text-amber-200 truncate">{speechToggle.pendingLabel}</span>
+                  </div>
+                )}
+                {speechToggle.lastAction && !speechToggle.pendingLabel && (
+                  <div className="flex items-center gap-2 rounded-md border border-cyan-500/30 bg-cyan-500/10 px-2 py-1 backdrop-blur-md max-w-[180px] pointer-events-none">
+                    <span className="text-[10px] text-cyan-400 font-semibold">▶</span>
+                    <span className="text-[10px] text-cyan-300 truncate">{speechToggle.lastAction}</span>
+                  </div>
+                )}
+              </div>
+            )}
             {isAdmin && (
               <button
                 type="button"

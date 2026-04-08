@@ -4,6 +4,7 @@
   "private": true,
   "scripts": {
     "dev": "next dev --turbopack",
+    "dev:staging": "dotenv -e .env.staging -- next dev --turbopack",
     "build": "next build --webpack",
     "start": "next start",
     "lint": "eslint .",

@@ -11,7 +11,6 @@ import { Footer } from '@/components/shared/footer';
 import { useSpeechCommands, type BJSpeechAction } from '@/hooks/use-speech-commands';
 import { useSpeechEnabled } from '@/hooks/use-speech-enabled';
 import { SophieSplashModal } from '@/components/shared/SophieSplashModal';
-import { SpeechHUD } from '@/components/shared/SpeechHUD';
 import { DepositWithdrawModal } from '@/components/BLACKJACK/DepositWithdrawModal';
 import { CustomApprovalModal } from '@/components/BLACKJACK/CustomApprovalModal';
 import { BlackjackAuxViews } from '@/components/BLACKJACK/BlackjackAuxViews';
@@ -2220,7 +2219,7 @@ export default function BlackjackPage() {
           blackjackAddress={BLACKJACK_ADDRESS}
           morbiusTokenAddress={MORBIUS_TOKEN_ADDRESS}
           betLimits={tierLimits}
-          speech={speech}
+          speech={{ ...speech, lastAction: lastSpeechAction, onToggle: () => setEnabled(!speechEnabled) }}
         />
 
         {/* Tournament card - commented out
@@ -2392,14 +2391,6 @@ export default function BlackjackPage() {
           display: none;
         }
       `}</style>
-
-      <SpeechHUD
-        listening={speech.listening}
-        transcript={speech.transcript}
-        lastAction={lastSpeechAction}
-        pendingLabel={speech.pendingLabel}
-        onToggle={() => setEnabled(!speechEnabled)}
-      />
 
       <SophieSplashModal
         address={address}

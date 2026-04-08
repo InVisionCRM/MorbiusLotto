@@ -55,7 +55,7 @@ export function SpeechConfirmDialog({
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-end justify-center pb-28 px-4 pointer-events-none"
+      className="fixed inset-0 z-[200] flex items-end justify-center pb-28 px-4 pointer-events-none"
       aria-modal="true"
       role="dialog"
     >

@@ -377,16 +377,27 @@ export function useSpeechCommands({
         listeningRef.current = false;
         const next = createRecognition();
         recognitionRef.current = next;
-        try { next.start(); } catch { /* ignore */ }
+        try {
+          next.start();
+        } catch {
+          // InvalidStateError / rapid restarts — without this, listeningRef can stay true and start() no-ops forever
+          setListening(false);
+          listeningRef.current = false;
+        }
       }
     };
 
     r.onend = () => {
       if (!isStoppingRef.current) {
-        // continuous=true shouldn't fire onend normally, but handle edge cases
+        // continuous=true still fires onend in Chrome after silence/pauses; spawn a fresh instance.
         const next = createRecognition();
         recognitionRef.current = next;
-        try { next.start(); } catch { /* ignore if already stopped */ }
+        try {
+          next.start();
+        } catch {
+          setListening(false);
+          listeningRef.current = false;
+        }
       } else {
         setListening(false);
         listeningRef.current = false;
@@ -401,7 +412,12 @@ export function useSpeechCommands({
     isStoppingRef.current = false;
     const r = createRecognition();
     recognitionRef.current = r;
-    try { r.start(); } catch { /* already started */ }
+    try {
+      r.start();
+    } catch {
+      setListening(false);
+      listeningRef.current = false;
+    }
   }, [supported, createRecognition]);
 
   const stop = useCallback(() => {

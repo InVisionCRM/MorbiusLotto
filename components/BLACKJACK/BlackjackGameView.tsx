@@ -108,9 +108,11 @@ interface BlackjackGameViewProps {
   speech?: {
     listening: boolean;
     transcript: string;
+    lastAction: string | null;
     pendingLabel: string | null;
     confirmYes: () => void;
     confirmNo: () => void;
+    onToggle: () => void;
   };
 }
 
@@ -302,6 +304,7 @@ export function BlackjackGameView(props: BlackjackGameViewProps) {
                 setShowTournamentBrowser(true);
               }}
               inTournament={tournament.tournamentState.inTournament}
+              speechToggle={speech ? { listening: speech.listening, onToggle: speech.onToggle, transcript: speech.transcript, lastAction: speech.lastAction, pendingLabel: speech.pendingLabel } : undefined}
             />
 
             {address && wsConnected && wsClient && (
