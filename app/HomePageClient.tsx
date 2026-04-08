@@ -1,7 +1,6 @@
 'use client'
 
-import { useState, useEffect, useCallback } from 'react'
-import { useRouter } from 'next/navigation'
+import { useState, useEffect } from 'react'
 import Image from 'next/image'
 import GlobalMainNav from '@/components/shared/GlobalMainNav'
 import { FirstVisitNotification } from '@/components/ui/first-visit-notification'
@@ -33,36 +32,22 @@ function HomeSectionDivider() {
 }
 
 export default function HomePageClient() {
-  const router = useRouter()
   const [loginOpen, setLoginOpen] = useState(false)
   const [walletModalOpen, setWalletModalOpen] = useState(false)
 
   useEffect(() => {
-    if (document.querySelector('script[src*="elevenlabs/convai-widget-embed"]')) return
-    const script = document.createElement('script')
-    script.src = 'https://unpkg.com/@elevenlabs/convai-widget-embed'
-    script.async = true
-    script.type = 'text/javascript'
-    document.body.appendChild(script)
-  }, [])
-
-  const handleCallEvent = useCallback((e: Event) => {
-    const detail = (e as CustomEvent).detail
-    if (!detail?.config) return
-    detail.config.clientTools = {
-      open_deposit_withdraw_modal: () => { setWalletModalOpen(true); return 'Wallet modal opened.' },
-      open_blackjack: () => { router.push('/BLACKJACK'); return 'Navigating to Blackjack.' },
-      open_plinko: () => { router.push('/PLINKO'); return 'Navigating to Plinko.' },
-      open_keno: () => { router.push('/keno'); return 'Navigating to Keno.' },
-      open_lottery: () => { router.push('/lottery'); return 'Navigating to Lottery.' },
-      open_poker: () => { router.push('/poker'); return 'Navigating to Poker.' },
+    const openDeposit = () => setWalletModalOpen(true)
+    const openLogin = () => setLoginOpen(true)
+    const openDashboard = () => { setPlayerProfileGame('all'); setPlayerProfileOpen(true) }
+    window.addEventListener('sophie:open_deposit_withdraw', openDeposit)
+    window.addEventListener('sophie:open_login', openLogin)
+    window.addEventListener('sophie:open_player_dashboard', openDashboard)
+    return () => {
+      window.removeEventListener('sophie:open_deposit_withdraw', openDeposit)
+      window.removeEventListener('sophie:open_login', openLogin)
+      window.removeEventListener('sophie:open_player_dashboard', openDashboard)
     }
-  }, [router])
-
-  useEffect(() => {
-    window.addEventListener('elevenlabs-convai:call', handleCallEvent)
-    return () => window.removeEventListener('elevenlabs-convai:call', handleCallEvent)
-  }, [handleCallEvent])
+  }, [])
 
   const [playerProfileOpen, setPlayerProfileOpen] = useState(false)
   const [playerProfileGame, setPlayerProfileGame] = useState<'all' | 'blackjack' | 'lottery' | 'keno' | 'plinko'>('all')
@@ -164,18 +149,6 @@ export default function HomePageClient() {
       <DepositWithdrawModal
         isOpen={walletModalOpen}
         onClose={() => setWalletModalOpen(false)}
-      />
-      {/*
-        Sofie / ConvAI: these attributes override the agent dashboard (see @elevenlabs/convai-widget-embed:
-        attribute value ?? server config). tiny = smallest FAB; false expanded flags avoid starting open.
-      */}
-      {/* @ts-expect-error custom element */}
-      <elevenlabs-convai
-        agent-id="agent_6501knjaw524ff2bc6wvxagf49ga"
-        variant="tiny"
-        default-expanded="false"
-        always-expanded="false"
-        dismissible="true"
       />
     </GlobalMainNav>
   )

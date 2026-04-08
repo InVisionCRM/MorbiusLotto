@@ -1884,6 +1884,7 @@ export default function BlackjackPage() {
 
   // ── Voice commands ────────────────────────────────────────────────────────
   const { enabled: speechEnabled, setEnabled } = useSpeechEnabled(address);
+  const [voiceSplashOpen, setVoiceSplashOpen] = useState(false);
   const [lastSpeechAction, setLastSpeechAction] = useState<string | null>(null);
   const lastSpeechActionTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -2219,7 +2220,7 @@ export default function BlackjackPage() {
           blackjackAddress={BLACKJACK_ADDRESS}
           morbiusTokenAddress={MORBIUS_TOKEN_ADDRESS}
           betLimits={tierLimits}
-          speech={{ ...speech, lastAction: lastSpeechAction, onToggle: () => setEnabled(!speechEnabled) }}
+          speech={{ ...speech, lastAction: lastSpeechAction, onToggle: () => { if (speechEnabled) setEnabled(false); else setVoiceSplashOpen(true); } }}
         />
 
         {/* Tournament card - commented out
@@ -2394,6 +2395,9 @@ export default function BlackjackPage() {
 
       <SophieSplashModal
         address={address}
+        forceOpen={voiceSplashOpen}
+        onClose={() => setVoiceSplashOpen(false)}
+        onEnable={() => setEnabled(true)}
         onOpenProfileSettings={() =>
           openProfileSettings({
             displayName: profileDisplayName ?? '',

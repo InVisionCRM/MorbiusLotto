@@ -1,6 +1,6 @@
 'use client'
 
-import React, { useState, useMemo, useCallback, lazy, Suspense } from 'react';
+import React, { useState, useMemo, useCallback, useEffect, lazy, Suspense } from 'react';
 import { useGameLock } from '@/contexts/game-lock-context';
 import { useLocale, SUPPORTED_LOCALES } from '@/contexts/locale-context';
 import Image from 'next/image';
@@ -13,6 +13,7 @@ import { useTokenBalance } from '@/hooks/use-token';
 import { WalletMenu } from '@/components/shared/WalletMenu';
 import { MorbiusBurnedDisplay } from '@/components/shared/MorbiusBurnedDisplay';
 import { MorbiusPriceDisplay } from '@/components/shared/MorbiusPriceDisplay';
+import { NavBalanceDisplay } from '@/components/shared/NavBalanceDisplay';
 import {
   Sidebar,
   SidebarBody,
@@ -29,7 +30,6 @@ import { useQueryClient } from '@tanstack/react-query';
 import '@/lib/error-log';
 import { useInstallAppHelpDialog } from '@/contexts/install-app-help-dialog-context';
 import { IconArrowLeft } from '@tabler/icons-react';
-import { cn } from '@/lib/utils';
 
 // Lazy-load modals — only pulled into the bundle when first opened
 const ThemeSelectionModal = lazy(() => import('@/components/BLACKJACK/ThemeSelectionModal'));
@@ -68,12 +68,6 @@ const OTHER_GAMES: readonly OtherGameNavItem[] = [
   { label: 'Keno', href: '/keno', icon: 'fa-th' },
 ];
 
-const WEI_PER_MORBIUS = BigInt('1000000000000000000');
-
-/** Whole MORBIUS (rounded), matches existing nav / table display style. */
-function formatReserveWholeMorbiusDisplay(wei: bigint): string {
-  return Math.round(Number(wei / WEI_PER_MORBIUS)).toLocaleString();
-}
 
 /** Section header — uses CSS .sidebar-label for transition, no context needed */
 const SectionLabel = React.memo(function SectionLabel({ label }: { label: string }) {
@@ -170,33 +164,17 @@ function useNavPage(pageProp?: NavPage): NavPage {
   return 'home';
 }
 
-const LANG_SELECT_CHEVRON_STYLE = {
-  backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 24 24' stroke='%23fff'%3E%3Cpath stroke-linecap='round' stroke-linejoin='round' stroke-width='2' d='M19 9l-7 7-7-7'/%3E%3C/svg%3E")`,
-  backgroundRepeat: 'no-repeat' as const,
-  backgroundPosition: 'right 0.25rem center',
-  backgroundSize: '1rem',
-};
-
-/** Desktop sidebar brand area — label hides when rail is collapsed (see globals .sidebar-label). */
-const SidebarLanguageRow = React.memo(function SidebarLanguageRow({ sidebarExpanded }: { sidebarExpanded: boolean }) {
+const LanguageSelect = React.memo(function LanguageSelect() {
   const { locale, setLocale, localeLabel } = useLocale();
   return (
-    <div className="px-2 pt-2 border-t border-white/10 mt-2 w-full min-w-0">
-      <div className={cn('flex items-center gap-2 min-w-0', !sidebarExpanded && 'justify-center')}>
-        <span className="sidebar-label text-xs text-white/70 whitespace-nowrap truncate min-w-0 shrink">
-          {localeLabel}
-        </span>
+    <div className="px-2 py-2 sidebar-label">
+      <div className="flex items-center gap-2">
+        <span className="text-sm text-white whitespace-nowrap truncate min-w-0">{localeLabel}</span>
         <select
           value={locale}
           onChange={(e) => setLocale(e.target.value as typeof locale)}
-          className={cn(
-            'min-w-0 text-sm bg-white/10 text-white border border-white/20 rounded-lg cursor-pointer focus:outline-none focus:ring-1 focus:ring-cyan-500/50 appearance-none',
-            sidebarExpanded ? 'flex-1 px-2 py-1.5' : 'w-10 h-9 px-1 py-1 text-xs text-center',
-          )}
-          style={{
-            ...LANG_SELECT_CHEVRON_STYLE,
-            paddingRight: sidebarExpanded ? '1.75rem' : '1.25rem',
-          }}
+          className="flex-1 min-w-0 text-sm bg-white/10 text-white border border-white/20 rounded-lg px-2 py-1.5 cursor-pointer focus:outline-none focus:ring-1 focus:ring-cyan-500/50 appearance-none"
+          style={{ backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 24 24' stroke='%23fff'%3E%3Cpath stroke-linecap='round' stroke-linejoin='round' stroke-width='2' d='M19 9l-7 7-7-7'/%3E%3C/svg%3E")`, backgroundRepeat: 'no-repeat', backgroundPosition: 'right 0.25rem center', backgroundSize: '1rem', paddingRight: '1.5rem' }}
           aria-label="Select language"
         >
           {SUPPORTED_LOCALES.map(({ code, label }) => (
@@ -206,86 +184,6 @@ const SidebarLanguageRow = React.memo(function SidebarLanguageRow({ sidebarExpan
           ))}
         </select>
       </div>
-    </div>
-  );
-});
-
-/** Mobile drawer header (under logo) — always full width. */
-const MobileDrawerLanguageRow = React.memo(function MobileDrawerLanguageRow() {
-  const { locale, setLocale } = useLocale();
-  return (
-    <div className="space-y-1 w-full min-w-0">
-      <div className="text-[9px] text-white/55 uppercase tracking-wide">Language</div>
-      <select
-        value={locale}
-        onChange={(e) => setLocale(e.target.value as typeof locale)}
-        className="w-full min-w-0 text-xs bg-white/10 text-white border border-white/20 rounded-lg px-2 py-1.5 cursor-pointer focus:outline-none focus:ring-1 focus:ring-cyan-500/50 appearance-none"
-        style={{ ...LANG_SELECT_CHEVRON_STYLE, paddingRight: '1.5rem' }}
-        aria-label="Select language"
-      >
-        {SUPPORTED_LOCALES.map(({ code, label }) => (
-          <option key={code} value={code} className="bg-slate-800 text-white">
-            {label}
-          </option>
-        ))}
-      </select>
-    </div>
-  );
-});
-
-const MORBIUS_TOKEN_LINKS: {
-  label: string;
-  href: string;
-  iconClass: string;
-  external?: boolean;
-}[] = [
-  { label: 'Swap', href: '/swap', iconClass: 'fa-exchange-alt' },
-  { label: 'Provide LP', href: 'https://pulsex.com', iconClass: 'fa-tint', external: true },
-  {
-    label: 'Chart',
-    href: 'https://scan.morbius.io/geicko?address=0xB7d4eB5fDfE3d4d3B5C16a44A49948c6EC77c6F1&tab=chart',
-    iconClass: 'fa-chart-line',
-    external: true,
-  },
-];
-
-/** Collapsible Swap / LP / Chart — avoids closing the mobile drawer (not SidebarButton). */
-const MorbiusTokenLinksDisclosure = React.memo(function MorbiusTokenLinksDisclosure({ navItemClass }: { navItemClass: string }) {
-  const [expanded, setExpanded] = useState(false);
-  return (
-    <div className="px-2 pb-1">
-      <button
-        type="button"
-        onClick={() => setExpanded((v) => !v)}
-        className="sidebar-item flex items-center w-full rounded-lg px-2 py-2 text-white transition-colors border border-cyan-500/30 bg-gradient-to-br from-slate-900/80 to-slate-800/60 hover:bg-white/5"
-        style={{
-          boxShadow: 'inset 0 2px 4px rgba(0,0,0,0.45), inset 0 -1px 2px rgba(255,255,255,0.06), 0 1px 2px rgba(0,0,0,0.4)',
-        }}
-        aria-expanded={expanded}
-      >
-        <i className="fas fa-link w-5 text-center shrink-0 text-cyan-400/90" aria-hidden />
-        <span className="sidebar-label text-sm flex-1 text-left font-medium">Token links</span>
-        <span className={cn('sidebar-label text-white/50 transition-transform shrink-0', expanded && 'rotate-180')}>
-          <i className="fas fa-chevron-down text-xs" aria-hidden />
-        </span>
-      </button>
-      {expanded ? (
-        <div className="mt-1.5 ml-2 pl-2 border-l border-cyan-500/20 space-y-0.5">
-          {MORBIUS_TOKEN_LINKS.map((item) => (
-            <SidebarLink
-              key={item.href}
-              link={{
-                label: item.label,
-                href: item.href,
-                icon: <i className={`fas ${item.iconClass} w-5 text-center text-white shrink-0`} aria-hidden />,
-              }}
-              className={navItemClass}
-              target={item.external ? '_blank' : undefined}
-              rel={item.external ? 'noopener noreferrer' : undefined}
-            />
-          ))}
-        </div>
-      ) : null}
     </div>
   );
 });
@@ -301,48 +199,45 @@ const otherGameIcon = (g: OtherGameNavItem) =>
 
 const NAV_ITEM_CLASS = 'text-white hover:bg-white/5 rounded-lg px-2 py-2 transition-colors';
 
-interface NavContentProps {
+/** Renders a Font Awesome icon sized for the sidebar. `active` swaps white → cyan. */
+function NavIcon({ icon, active = false }: { icon: string; active?: boolean }) {
+  return <i className={`fas ${icon} w-5 text-center shrink-0 ${active ? 'text-cyan-400' : 'text-white'}`} aria-hidden />;
+}
+
+function SoundToggleButton({ enabled, onToggle, className }: { enabled: boolean; onToggle: () => void; className?: string }) {
+  return (
+    <SidebarButton
+      label={enabled ? 'Sound On' : 'Sound Off'}
+      icon={<NavIcon icon={enabled ? 'fa-volume-up' : 'fa-volume-mute'} active={enabled} />}
+      onClick={onToggle}
+      className={className ?? NAV_ITEM_CLASS}
+    />
+  );
+}
+
+type NavContentProps = Pick<
+  GlobalMainNavProps,
+  | 'currentView' | 'onViewChange' | 'onThemeChange' | 'soundEnabled' | 'onSoundChange'
+  | 'profileDisplayName' | 'profileImageUrl' | 'onOpenProfileSettings'
+  | 'musicTrackName' | 'isMusicPlaying' | 'onToggleMusic' | 'onNextTrack'
+  | 'onShowPlinkoHistory' | 'onOpenHowToPlay' | 'onOpenSwap' | 'onPlinkoSoundToggle' | 'plinkoSoundEnabled'
+  | 'onShowLotteryDashboard' | 'onShowKenoPrizePool' | 'onShowKenoHistory' | 'onOpenPlayerProfile'
+  | 'showBackArrow' | 'backArrowHref' | 'backArrowLabel'
+  | 'onOpenResponsibleGaming' | 'onOpenAuthModal' | 'isAuthenticated' | 'onSignOut'
+  | 'reserveBalance'
+> & {
   page: NavPage;
   onOpenDepositModal?: () => void;
-  currentView?: string;
-  onViewChange?: (view: 'game' | 'history' | 'stats' | 'analytics') => void;
   setThemeModalOpen: (open: boolean) => void;
-  onThemeChange?: (theme: BlackjackThemeKind) => void;
-  soundEnabled?: boolean;
-  onSoundChange?: (enabled: boolean) => void;
-  profileDisplayName?: string | null;
-  profileImageUrl?: string | null;
-  onOpenProfileSettings?: () => void;
-  musicTrackName?: string;
-  isMusicPlaying?: boolean;
-  onToggleMusic?: () => void;
-  onNextTrack?: () => void;
   isDeployer: boolean;
   isAdmin: boolean;
-  onShowPlinkoHistory?: () => void;
-  onOpenHowToPlay?: () => void;
-  onOpenSwap?: () => void;
-  onPlinkoSoundToggle?: () => void;
-  plinkoSoundEnabled?: boolean;
-  onShowLotteryDashboard?: () => void;
-  onShowKenoPrizePool?: () => void;
-  onShowKenoHistory?: () => void;
-  onOpenPlayerProfile?: (game?: 'plinko' | 'keno' | 'lottery' | 'blackjack') => void;
-  showBackArrow?: boolean;
-  backArrowHref?: string;
-  backArrowLabel?: string;
-  onOpenResponsibleGaming?: () => void;
-  onOpenAuthModal?: () => void;
-  isAuthenticated?: boolean;
-  onSignOut?: () => void;
   onOpenReport: () => void;
   onOpenProfileModal?: () => void;
   onOpenInstallAppHelp?: () => void;
-  reserveBalance?: bigint;
   /** MORBIUS ERC-20 balance in the connected wallet (wei). */
   inWalletMorbiusWei: bigint;
   walletConnected: boolean;
-}
+};
 
 const NavContent = React.memo(function NavContent(props: NavContentProps) {
   const { open } = useSidebar();
@@ -442,53 +337,11 @@ const NavContent = React.memo(function NavContent(props: NavContentProps) {
             MORBIUS.IO
           </span>
         </Link>
-        {(reserveBalance !== undefined || walletConnected) && (
-          <div className="px-2 pt-1.5 flex flex-col gap-2 w-full min-w-0">
-            {reserveBalance !== undefined && (
-              <div className="sidebar-label !block w-full min-w-0 space-y-1">
-                <div className="text-[10px] text-white/55 uppercase tracking-wide leading-none">
-                  Balance
-                </div>
-                <div className="flex items-center gap-1.5 min-w-0">
-                  <span className="text-white text-sm font-semibold tabular-nums truncate">
-                    {formatReserveWholeMorbiusDisplay(reserveBalance)}
-                  </span>
-                  <Image
-                    src="/morbius/MorbiusLogo (3).png"
-                    alt="MORBIUS"
-                    width={14}
-                    height={14}
-                    className="object-contain opacity-80 shrink-0"
-                  />
-                </div>
-              </div>
-            )}
-            {walletConnected && (
-              <div
-                className={`sidebar-label !block w-full min-w-0 space-y-1 ${
-                  reserveBalance !== undefined ? 'pt-2 border-t border-white/10' : ''
-                }`}
-              >
-                <div className="text-[10px] text-white/55 uppercase tracking-wide leading-none">
-                  In-wallet
-                </div>
-                <div className="flex items-center gap-1.5 min-w-0">
-                  <span className="text-white text-sm font-semibold tabular-nums truncate">
-                    {formatReserveWholeMorbiusDisplay(inWalletMorbiusWei)}
-                  </span>
-                  <Image
-                    src="/morbius/MorbiusLogo (3).png"
-                    alt="MORBIUS"
-                    width={14}
-                    height={14}
-                    className="object-contain opacity-80 shrink-0"
-                  />
-                </div>
-              </div>
-            )}
-          </div>
-        )}
-        <SidebarLanguageRow sidebarExpanded={open} />
+        <NavBalanceDisplay
+          variant="sidebar"
+          reserve={reserveBalance}
+          inWallet={walletConnected ? inWalletMorbiusWei : undefined}
+        />
       </div>
 
       {/* Wallet */}
@@ -506,26 +359,26 @@ const NavContent = React.memo(function NavContent(props: NavContentProps) {
       </div>
 
       <nav className="flex-1 min-h-0 overflow-y-auto overflow-x-hidden py-2 space-y-0.5">
-        <SidebarLink link={{ label: 'Home', href: '/', icon: <i className="fas fa-home w-5 text-center text-white shrink-0" aria-hidden /> }} className={NAV_ITEM_CLASS} />
+        <SidebarLink link={{ label: 'Home', href: '/', icon: <NavIcon icon="fa-home" /> }} className={NAV_ITEM_CLASS} />
 
         {/* Page-specific primary nav */}
         {page === 'blackjack' && (
           <>
-            <SidebarButton label="Play" icon={<i className={`fas fa-play w-5 text-center shrink-0 ${currentView === 'game' ? 'text-cyan-400' : 'text-white'}`} aria-hidden />} onClick={() => onViewChange?.('game')} active={currentView === 'game'} className={`rounded-lg px-2 py-2 transition-colors ${btnClass(currentView === 'game')}`} />
+            <SidebarButton label="Play" icon={<NavIcon icon="fa-play" active={currentView === 'game'} />} onClick={() => onViewChange?.('game')} active={currentView === 'game'} className={`rounded-lg px-2 py-2 transition-colors ${btnClass(currentView === 'game')}`} />
             {isDeployer && (
-              <SidebarButton label="Analytics" icon={<i className={`fas fa-chart-line w-5 text-center shrink-0 ${currentView === 'analytics' ? 'text-cyan-400' : 'text-white'}`} aria-hidden />} onClick={() => onViewChange?.('analytics')} active={currentView === 'analytics'} className={`rounded-lg px-2 py-2 transition-colors ${btnClass(currentView === 'analytics')}`} />
+              <SidebarButton label="Analytics" icon={<NavIcon icon="fa-chart-line" active={currentView === 'analytics'} />} onClick={() => onViewChange?.('analytics')} active={currentView === 'analytics'} className={`rounded-lg px-2 py-2 transition-colors ${btnClass(currentView === 'analytics')}`} />
             )}
             {onThemeChange && (
-              <SidebarButton label="Table theme" icon={<i className="fas fa-palette w-5 text-center text-white shrink-0" aria-hidden />} onClick={handleOpenThemeModal} className={NAV_ITEM_CLASS} />
+              <SidebarButton label="Table theme" icon={<NavIcon icon="fa-palette" />} onClick={handleOpenThemeModal} className={NAV_ITEM_CLASS} />
             )}
             {onSoundChange !== undefined && (
-              <SidebarButton label={soundEnabled ? 'Sound On' : 'Sound Off'} icon={<i className={`fas ${soundEnabled ? 'fa-volume-up' : 'fa-volume-mute'} w-5 text-center shrink-0 ${soundEnabled ? 'text-cyan-400' : 'text-white'}`} aria-hidden />} onClick={handleToggleSound} className={NAV_ITEM_CLASS} />
+              <SoundToggleButton enabled={soundEnabled} onToggle={handleToggleSound} />
             )}
           </>
         )}
 
         {page === 'plinko' && onPlinkoSoundToggle !== undefined && (
-          <SidebarButton label={plinkoSoundEnabled ? 'Sound On' : 'Sound Off'} icon={<i className={`fas ${plinkoSoundEnabled ? 'fa-volume-up' : 'fa-volume-mute'} w-5 text-center shrink-0 ${plinkoSoundEnabled ? 'text-cyan-400' : 'text-white'}`} aria-hidden />} onClick={onPlinkoSoundToggle} className={NAV_ITEM_CLASS} />
+          <SoundToggleButton enabled={plinkoSoundEnabled} onToggle={onPlinkoSoundToggle} />
         )}
 
         {/* My Stuff */}
@@ -533,50 +386,50 @@ const NavContent = React.memo(function NavContent(props: NavContentProps) {
           <SectionLabel label="My Stuff" />
 
           {page === 'blackjack' && (
-            <SidebarButton label="My History" icon={<i className={`fas fa-chart-bar w-5 text-center shrink-0 ${currentView === 'stats' ? 'text-cyan-400' : 'text-white'}`} aria-hidden />} onClick={() => onViewChange?.('stats')} active={currentView === 'stats'} className={`rounded-lg px-2 py-2 transition-colors ${btnClass(currentView === 'stats')}`} />
+            <SidebarButton label="My History" icon={<NavIcon icon="fa-chart-bar" active={currentView === 'stats'} />} onClick={() => onViewChange?.('stats')} active={currentView === 'stats'} className={`rounded-lg px-2 py-2 transition-colors ${btnClass(currentView === 'stats')}`} />
           )}
 
           {page === 'plinko' && (
             <>
-              {onOpenHowToPlay && <SidebarButton label="How to Play" icon={<i className="fas fa-question-circle w-5 text-center text-white shrink-0" aria-hidden />} onClick={onOpenHowToPlay} className={NAV_ITEM_CLASS} />}
+              {onOpenHowToPlay && <SidebarButton label="How to Play" icon={<NavIcon icon="fa-question-circle" />} onClick={onOpenHowToPlay} className={NAV_ITEM_CLASS} />}
               {onOpenPlayerProfile ? (
-                <SidebarButton label="My History" icon={<i className="fas fa-chart-bar w-5 text-center text-white shrink-0" aria-hidden />} onClick={handleOpenPlinkoProfile} className={NAV_ITEM_CLASS} />
+                <SidebarButton label="My History" icon={<NavIcon icon="fa-chart-bar" />} onClick={handleOpenPlinkoProfile} className={NAV_ITEM_CLASS} />
               ) : onShowPlinkoHistory ? (
-                <SidebarButton label="My History" icon={<i className="fas fa-chart-bar w-5 text-center text-white shrink-0" aria-hidden />} onClick={onShowPlinkoHistory} className={NAV_ITEM_CLASS} />
+                <SidebarButton label="My History" icon={<NavIcon icon="fa-chart-bar" />} onClick={onShowPlinkoHistory} className={NAV_ITEM_CLASS} />
               ) : (
-                <SidebarLink link={{ label: 'My History', href: '/PLINKO', icon: <i className="fas fa-chart-bar w-5 text-center text-white shrink-0" aria-hidden /> }} className={NAV_ITEM_CLASS} />
+                <SidebarLink link={{ label: 'My History', href: '/PLINKO', icon: <NavIcon icon="fa-chart-bar" /> }} className={NAV_ITEM_CLASS} />
               )}
-              {onOpenSwap && <SidebarButton label="Buy Morbius" icon={<i className="fas fa-exchange-alt w-5 text-center text-white shrink-0" aria-hidden />} onClick={onOpenSwap} className={NAV_ITEM_CLASS} />}
+              {onOpenSwap && <SidebarButton label="Buy Morbius" icon={<NavIcon icon="fa-exchange-alt" />} onClick={onOpenSwap} className={NAV_ITEM_CLASS} />}
             </>
           )}
 
           {page === 'lottery' && (
             <>
-              {onShowLotteryDashboard && <SidebarButton label="My History" icon={<i className="fas fa-chart-bar w-5 text-center text-white shrink-0" aria-hidden />} onClick={onShowLotteryDashboard} className={NAV_ITEM_CLASS} />}
-              {onOpenSwap && <SidebarButton label="Buy Morbius" icon={<i className="fas fa-exchange-alt w-5 text-center text-white shrink-0" aria-hidden />} onClick={onOpenSwap} className={NAV_ITEM_CLASS} />}
+              {onShowLotteryDashboard && <SidebarButton label="My History" icon={<NavIcon icon="fa-chart-bar" />} onClick={onShowLotteryDashboard} className={NAV_ITEM_CLASS} />}
+              {onOpenSwap && <SidebarButton label="Buy Morbius" icon={<NavIcon icon="fa-exchange-alt" />} onClick={onOpenSwap} className={NAV_ITEM_CLASS} />}
             </>
           )}
 
           {page === 'keno' && (
             <>
-              {onShowKenoPrizePool && <SidebarButton label="Prize Pool" icon={<i className="fas fa-trophy w-5 text-center text-white shrink-0" aria-hidden />} onClick={onShowKenoPrizePool} className={NAV_ITEM_CLASS} />}
+              {onShowKenoPrizePool && <SidebarButton label="Prize Pool" icon={<NavIcon icon="fa-trophy" />} onClick={onShowKenoPrizePool} className={NAV_ITEM_CLASS} />}
               {onOpenPlayerProfile ? (
-                <SidebarButton label="My History" icon={<i className="fas fa-chart-bar w-5 text-center text-white shrink-0" aria-hidden />} onClick={handleOpenKenoProfile} className={NAV_ITEM_CLASS} />
+                <SidebarButton label="My History" icon={<NavIcon icon="fa-chart-bar" />} onClick={handleOpenKenoProfile} className={NAV_ITEM_CLASS} />
               ) : onShowKenoHistory ? (
-                <SidebarButton label="My History" icon={<i className="fas fa-chart-bar w-5 text-center text-white shrink-0" aria-hidden />} onClick={onShowKenoHistory} className={NAV_ITEM_CLASS} />
+                <SidebarButton label="My History" icon={<NavIcon icon="fa-chart-bar" />} onClick={onShowKenoHistory} className={NAV_ITEM_CLASS} />
               ) : (
-                <SidebarLink link={{ label: 'My History', href: '/keno', icon: <i className="fas fa-chart-bar w-5 text-center text-white shrink-0" aria-hidden /> }} className={NAV_ITEM_CLASS} />
+                <SidebarLink link={{ label: 'My History', href: '/keno', icon: <NavIcon icon="fa-chart-bar" /> }} className={NAV_ITEM_CLASS} />
               )}
             </>
           )}
 
           {page === 'home' && onOpenPlayerProfile && (
-            <SidebarButton label="Player Dashboard" icon={<i className="fas fa-chart-pie w-5 text-center text-white shrink-0" aria-hidden />} onClick={handleOpenAllProfile} className={NAV_ITEM_CLASS} />
+            <SidebarButton label="Player Dashboard" icon={<NavIcon icon="fa-chart-pie" />} onClick={handleOpenAllProfile} className={NAV_ITEM_CLASS} />
           )}
 
-          <SidebarButton label="Profile" icon={<i className="fas fa-user-edit w-5 text-center text-white shrink-0" aria-hidden />} onClick={handleOpenProfileOrModal} className={NAV_ITEM_CLASS} />
-          <SidebarButton label="Avatar" icon={<i className="fas fa-user-circle w-5 text-center text-white shrink-0" aria-hidden />} onClick={handleOpenProfileModal} className={NAV_ITEM_CLASS} />
-          <SidebarLink link={{ label: 'Claim Morbius', href: '/claim', icon: <i className="fas fa-gift w-5 text-center text-white shrink-0" aria-hidden /> }} className={NAV_ITEM_CLASS} />
+          <SidebarButton label="Profile" icon={<NavIcon icon="fa-user-edit" />} onClick={handleOpenProfileOrModal} className={NAV_ITEM_CLASS} />
+          <SidebarButton label="Avatar" icon={<NavIcon icon="fa-user-circle" />} onClick={handleOpenProfileModal} className={NAV_ITEM_CLASS} />
+          <SidebarLink link={{ label: 'Claim Morbius', href: '/claim', icon: <NavIcon icon="fa-gift" /> }} className={NAV_ITEM_CLASS} />
         </div>
 
         {/* Other Games */}
@@ -596,15 +449,7 @@ const NavContent = React.memo(function NavContent(props: NavContentProps) {
                 </div>
               </div>
             ) : isOtherGameLinked(g) ? (
-              <SidebarLink
-                key={g.href}
-                link={{
-                  label: g.label,
-                  href: g.href,
-                  icon: otherGameIcon(g),
-                }}
-                className={NAV_ITEM_CLASS}
-              />
+              <SidebarLink key={g.href} link={{ label: g.label, href: g.href, icon: otherGameIcon(g) }} className={NAV_ITEM_CLASS} />
             ) : null
           )}
         </div>
@@ -612,48 +457,56 @@ const NavContent = React.memo(function NavContent(props: NavContentProps) {
         {/* Other — includes marketing (/marketing covers tables + campaigns) */}
         <div className="pt-2 mt-2 border-t border-white/10">
           <SectionLabel label="Other" />
-          {onOpenInstallAppHelp ? (
+          {onOpenInstallAppHelp && (
             <SidebarButton
               label="Install app"
-              icon={<i className="fas fa-download w-5 text-center shrink-0" aria-hidden />}
+              icon={<NavIcon icon="fa-download" />}
               onClick={onOpenInstallAppHelp}
               className={`${NAV_ITEM_CLASS} text-emerald-400 hover:bg-emerald-500/15 hover:text-emerald-300`}
             />
-          ) : null}
-          <SidebarButton label="Responsible Gaming" icon={<i className="fas fa-shield-alt w-5 text-center text-white shrink-0" aria-hidden />} onClick={onOpenResponsibleGaming} className={NAV_ITEM_CLASS} />
-          <SidebarLink link={{ label: 'Marketing', href: '/marketing', icon: <i className="fas fa-bullhorn w-5 text-center text-white shrink-0" aria-hidden /> }} className={NAV_ITEM_CLASS} />
+          )}
+          <SidebarButton label="Responsible Gaming" icon={<NavIcon icon="fa-shield-alt" />} onClick={onOpenResponsibleGaming} className={NAV_ITEM_CLASS} />
+          <SidebarLink link={{ label: 'Marketing', href: '/marketing', icon: <NavIcon icon="fa-bullhorn" /> }} className={NAV_ITEM_CLASS} />
           <SidebarButton label="Report Issue" icon={<i className="fas fa-flag w-5 text-center text-red-400/80 shrink-0" aria-hidden />} onClick={onOpenReport} className={NAV_ITEM_CLASS} />
-          <SidebarLink link={{ label: 'Token Analyzer', href: 'https://scan.morbius.io', icon: <i className="fas fa-search w-5 text-center text-white shrink-0" aria-hidden /> }} className={NAV_ITEM_CLASS} target="_blank" rel="noopener noreferrer" />
-          <SidebarLink link={{ label: 'Morb-It', href: '/Morb-It', icon: <i className="fas fa-gamepad w-5 text-center text-white shrink-0" aria-hidden /> }} className={NAV_ITEM_CLASS} />
+          <SidebarLink link={{ label: 'Token Analyzer', href: 'https://scan.morbius.io', icon: <NavIcon icon="fa-search" /> }} className={NAV_ITEM_CLASS} target="_blank" rel="noopener noreferrer" />
+          <SidebarLink link={{ label: 'Morb-It', href: '/Morb-It', icon: <NavIcon icon="fa-gamepad" /> }} className={NAV_ITEM_CLASS} />
           {isAdmin && (
-            <SidebarLink link={{ label: 'Admin', href: '/admin', icon: <i className="fas fa-cog w-5 text-center text-white shrink-0" aria-hidden /> }} className={NAV_ITEM_CLASS} />
+            <SidebarLink link={{ label: 'Admin', href: '/admin', icon: <NavIcon icon="fa-cog" /> }} className={NAV_ITEM_CLASS} />
           )}
         </div>
 
-        {/* Morbius — token links only; burned/price live in sticky footer below */}
+        {/* Language */}
+        <div className="pt-2 mt-2 border-t border-white/10">
+          <SectionLabel label="Language" />
+          <LanguageSelect />
+        </div>
+
+        {/* Morbius — only mount data-fetching components when sidebar is open */}
         <div className="pt-2 mt-2 border-t border-white/10 overflow-hidden">
           <SectionLabel label="Morbius" />
-          <MorbiusTokenLinksDisclosure navItemClass={NAV_ITEM_CLASS} />
+          {open && (
+            <>
+              <div className="px-2 py-1">
+                <MorbiusBurnedDisplay variant="inline" className="text-white text-xs" labelClassName="text-white text-xs" useAnimatedNumbers={false} />
+              </div>
+              <div className="px-2 py-1">
+                <MorbiusPriceDisplay className="text-white text-xs" labelClassName="text-white text-xs" />
+              </div>
+            </>
+          )}
+          <SidebarLink link={{ label: 'Swap', href: '/swap', icon: <NavIcon icon="fa-exchange-alt" /> }} className={NAV_ITEM_CLASS} />
+          <SidebarLink link={{ label: 'Provide LP', href: 'https://pulsex.com', icon: <NavIcon icon="fa-tint" /> }} className={NAV_ITEM_CLASS} target="_blank" rel="noopener noreferrer" />
+          <SidebarLink link={{ label: 'Chart', href: 'https://scan.morbius.io/geicko?address=0xB7d4eB5fDfE3d4d3B5C16a44A49948c6EC77c6F1&tab=chart', icon: <NavIcon icon="fa-chart-line" /> }} className={NAV_ITEM_CLASS} target="_blank" rel="noopener noreferrer" />
         </div>
       </nav>
 
-      {/* Footer: Morbius stats (when sidebar open) + auth + music */}
+      {/* Bottom: Music (Blackjack only) + Auth (home) */}
       <div className="shrink-0 pt-2 border-t border-white/10 space-y-2">
-        {open && (
-          <div className="px-2 space-y-1 pb-1 border-b border-white/10">
-            <div className="px-0 py-0.5">
-              <MorbiusBurnedDisplay variant="inline" className="text-white text-xs" labelClassName="text-white text-xs" useAnimatedNumbers={false} />
-            </div>
-            <div className="px-0 py-0.5">
-              <MorbiusPriceDisplay className="text-white text-xs" labelClassName="text-white text-xs" />
-            </div>
-          </div>
-        )}
         {page === 'home' && onOpenAuthModal && !isAuthenticated && (
-          <SidebarButton label="Sign In" icon={<i className="fas fa-shield w-5 text-center text-cyan-400 shrink-0" aria-hidden />} onClick={onOpenAuthModal} className={NAV_ITEM_CLASS} />
+          <SidebarButton label="Sign In" icon={<NavIcon icon="fa-shield" active />} onClick={onOpenAuthModal} className={NAV_ITEM_CLASS} />
         )}
         {page === 'home' && onSignOut && isAuthenticated && (
-          <SidebarButton label="Sign Out" icon={<i className="fas fa-sign-out-alt w-5 text-center text-white shrink-0" aria-hidden />} onClick={onSignOut} className={NAV_ITEM_CLASS} />
+          <SidebarButton label="Sign Out" icon={<NavIcon icon="fa-sign-out-alt" />} onClick={onSignOut} className={NAV_ITEM_CLASS} />
         )}
         {page === 'blackjack' && musicTrackName && onToggleMusic && open && (
           <div className="px-2 py-2 rounded-lg bg-white/5 border border-cyan-500/20 flex items-center gap-2">
@@ -795,6 +648,30 @@ export default function GlobalMainNav({
   );
   const handleOpenReport = useCallback(() => setReportOpen(true), []);
   const handleOpenInstallAppHelp = useCallback(() => openInstallHelp(), [openInstallHelp]);
+
+  // Sophie (ElevenLabs) event bridge — modals owned by GlobalMainNav
+  useEffect(() => {
+    const openAvatar = () => setProfileAvatarModalOpen(true)
+    const openSettings = () => setProfileSettingsOpen(true)
+    const openSwapEvt = () => setSwapOpen(true)
+    const openResponsible = () => setResponsibleGamingOpen(true)
+    const openInstall = () => openInstallHelp()
+    const openReport = () => setReportOpen(true)
+    window.addEventListener('sophie:open_avatar_editor', openAvatar)
+    window.addEventListener('sophie:open_profile_settings', openSettings)
+    window.addEventListener('sophie:open_swap', openSwapEvt)
+    window.addEventListener('sophie:open_responsible_gaming', openResponsible)
+    window.addEventListener('sophie:open_install_app', openInstall)
+    window.addEventListener('sophie:open_report_issue', openReport)
+    return () => {
+      window.removeEventListener('sophie:open_avatar_editor', openAvatar)
+      window.removeEventListener('sophie:open_profile_settings', openSettings)
+      window.removeEventListener('sophie:open_swap', openSwapEvt)
+      window.removeEventListener('sophie:open_responsible_gaming', openResponsible)
+      window.removeEventListener('sophie:open_install_app', openInstall)
+      window.removeEventListener('sophie:open_report_issue', openReport)
+    }
+  }, [openInstallHelp]);
   const handleOpenGameWallet = useCallback(() => {
     if (onOpenDepositModal) {
       onOpenDepositModal();
@@ -828,38 +705,11 @@ export default function GlobalMainNav({
             <span>Menu</span>
           </Link>
         )}
-        {(effectiveReserveBalance !== undefined || address) && (
-          <div
-            className="flex flex-col gap-0.5 shrink-0 text-white/90 leading-tight max-w-[6.5rem]"
-            title={
-              [
-                effectiveReserveBalance !== undefined
-                  ? `Balance ${formatReserveWholeMorbiusDisplay(effectiveReserveBalance)} MORBIUS`
-                  : null,
-                address ? `In-wallet ${formatReserveWholeMorbiusDisplay(inWalletMorbiusWei)} MORBIUS` : null,
-              ]
-                .filter(Boolean)
-                .join(' · ') || undefined
-            }
-          >
-            {effectiveReserveBalance !== undefined && (
-              <span className="text-[9px]">
-                <span className="text-white/55">Balance </span>
-                <span className="font-semibold tabular-nums text-white/95">
-                  {formatReserveWholeMorbiusDisplay(effectiveReserveBalance)}
-                </span>
-              </span>
-            )}
-            {address ? (
-              <span className="text-[9px]">
-                <span className="text-white/55">In-wallet </span>
-                <span className="font-semibold tabular-nums text-white/95">
-                  {formatReserveWholeMorbiusDisplay(inWalletMorbiusWei)}
-                </span>
-              </span>
-            ) : null}
-          </div>
-        )}
+        <NavBalanceDisplay
+          variant="mobile-bar"
+          reserve={effectiveReserveBalance}
+          inWallet={address ? inWalletMorbiusWei : undefined}
+        />
         <WalletMenu
           onOpenDepositModal={handleOpenGameWallet}
           reserveBalance={effectiveReserveBalance}
@@ -886,41 +736,13 @@ export default function GlobalMainNav({
   );
 
   const mobileDrawerBrandingExtra = useMemo(() => {
-    const hasBalances = effectiveReserveBalance !== undefined || Boolean(address);
+    if (effectiveReserveBalance === undefined && !address) return null;
     return (
-      <div className="flex flex-col gap-2 pl-[2.25rem] pr-1 pb-1 w-full min-w-0">
-        {hasBalances ? (
-          <>
-            {effectiveReserveBalance !== undefined && (
-              <div className="space-y-0.5">
-                <div className="text-[9px] text-white/55 uppercase tracking-wide">Balance</div>
-                <div className="flex items-center gap-1.5">
-                  <span className="text-white text-xs font-semibold tabular-nums">
-                    {formatReserveWholeMorbiusDisplay(effectiveReserveBalance)}
-                  </span>
-                  <Image src="/morbius/MorbiusLogo (3).png" alt="MORBIUS" width={12} height={12} className="object-contain opacity-80" />
-                </div>
-              </div>
-            )}
-            {address ? (
-              <div
-                className={`space-y-0.5 ${effectiveReserveBalance !== undefined ? 'pt-1 border-t border-white/10' : ''}`}
-              >
-                <div className="text-[9px] text-white/55 uppercase tracking-wide">In-wallet</div>
-                <div className="flex items-center gap-1.5">
-                  <span className="text-white text-xs font-semibold tabular-nums">
-                    {formatReserveWholeMorbiusDisplay(inWalletMorbiusWei)}
-                  </span>
-                  <Image src="/morbius/MorbiusLogo (3).png" alt="MORBIUS" width={12} height={12} className="object-contain opacity-80" />
-                </div>
-              </div>
-            ) : null}
-          </>
-        ) : null}
-        <div className={cn(hasBalances && 'pt-2 border-t border-white/10')}>
-          <MobileDrawerLanguageRow />
-        </div>
-      </div>
+      <NavBalanceDisplay
+        variant="mobile-drawer"
+        reserve={effectiveReserveBalance}
+        inWallet={address ? inWalletMorbiusWei : undefined}
+      />
     );
   }, [effectiveReserveBalance, address, inWalletMorbiusWei]);
 

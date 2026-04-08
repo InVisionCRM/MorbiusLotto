@@ -175,6 +175,7 @@ export default function PokerTablePage() {
   });
   // ── Voice commands ────────────────────────────────────────────────────────
   const { enabled: speechEnabled, setEnabled: setSpeechEnabled } = useSpeechEnabled(address);
+  const [voiceSplashOpen, setVoiceSplashOpen] = useState(false);
   const [lastSpeechAction, setLastSpeechAction] = useState<string | null>(null);
   const lastSpeechActionTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -645,7 +646,7 @@ export default function PokerTablePage() {
         lastAction={lastSpeechAction}
         pendingLabel={speech.pendingLabel}
         supported={speech.supported}
-        onToggle={() => setSpeechEnabled(!speechEnabled)}
+        onToggle={() => { if (speechEnabled) setSpeechEnabled(false); else setVoiceSplashOpen(true); }}
       />
       {speech.pendingLabel && (
         <SpeechConfirmDialog
@@ -654,7 +655,7 @@ export default function PokerTablePage() {
           onNo={speech.confirmNo}
         />
       )}
-      <SophieSplashModal address={address} />
+      <SophieSplashModal address={address} forceOpen={voiceSplashOpen} onClose={() => setVoiceSplashOpen(false)} onEnable={() => setSpeechEnabled(true)} />
     </>
   );
 }

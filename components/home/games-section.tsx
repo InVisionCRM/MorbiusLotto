@@ -3,55 +3,10 @@
 import type { ReactNode } from 'react'
 import Image from 'next/image'
 import Link from 'next/link'
-import { useAccount } from 'wagmi'
-import { useQuery } from '@tanstack/react-query'
 import { IconBrandTelegram, IconBrandX } from '@tabler/icons-react'
 import { PaymentBadges } from '@/components/home/payment-badges'
 import { cn } from '@/lib/utils'
-import { isAdminWallet } from '@/lib/admin'
 import { homeSectionTitleClass, homeSectionTitleGradientClass } from '@/lib/home-section-typography'
-
-type LivePresence = {
-  poker: number
-  blackjackMulti: number
-  blackjack: number
-  plinko: number
-  keno: number
-  lottery: number
-  bigWheel: number
-}
-
-type PresenceKey = keyof LivePresence
-
-const EMPTY_PRESENCE: LivePresence = {
-  poker: 0,
-  blackjackMulti: 0,
-  blackjack: 0,
-  plinko: 0,
-  keno: 0,
-  lottery: 0,
-  bigWheel: 0,
-}
-
-function LivePlayersBadge({ count }: { count: number }) {
-  return (
-    <div
-      className="pointer-events-none absolute top-2.5 left-2.5 z-20 flex items-center gap-1.5 rounded-full border border-emerald-500/45 bg-black/60 px-2 py-0.5 shadow-[0_0_12px_rgba(16,185,129,0.25)] backdrop-blur-sm"
-      aria-label={`${count} connected in this game right now`}
-    >
-      <span className="relative flex h-2 w-2 shrink-0">
-        <span
-          className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400 opacity-50"
-          style={{ animationDuration: '2.2s' }}
-        />
-        <span className="relative inline-flex h-2 w-2 rounded-full bg-emerald-400 shadow-[0_0_10px_rgba(52,211,153,0.95)]" />
-      </span>
-      <span className="text-[10px] md:text-[11px] font-semibold tabular-nums text-emerald-100/95">
-        {count.toLocaleString()} live
-      </span>
-    </div>
-  )
-}
 
 type GameCard = {
   key: string
@@ -60,49 +15,22 @@ type GameCard = {
   image: string
   imageAlt: string
   titleClassName: string
-  badge: string | null
   disabled: boolean
-  presenceKey?: PresenceKey
-  isGradientCard?: boolean
   customContent?: ReactNode
   accent: string
   accentGlow: string
 }
 
 export function GamesSection() {
-  const { address } = useAccount()
-  const isAdmin = isAdminWallet(address)
-  const { data: presence = EMPTY_PRESENCE } = useQuery({
-    queryKey: ['livePresence'],
-    queryFn: async (): Promise<LivePresence> => {
-      const res = await fetch('/api/analytics/live-presence')
-      if (!res.ok) return EMPTY_PRESENCE
-      const json = (await res.json()) as Partial<LivePresence>
-      return {
-        poker: Number(json.poker) || 0,
-        blackjackMulti: Number(json.blackjackMulti) || 0,
-        blackjack: Number(json.blackjack) || 0,
-        plinko: Number(json.plinko) || 0,
-        keno: Number(json.keno) || 0,
-        lottery: Number(json.lottery) || 0,
-        bigWheel: Number(json.bigWheel) || 0,
-      }
-    },
-    refetchInterval: 15_000,
-    staleTime: 5_000,
-  })
-
   const gameCards: GameCard[] = [
     {
       key: 'blackjack',
       href: '/BLACKJACK',
       title: 'BlackJack',
-      image: '/BlackJack/TableBackground1.png',
+      image: '/Games-Section/NlackJack-GS.png',
       imageAlt: 'BlackJack',
       titleClassName: 'text-2xl md:text-4xl font-jost leading-tight',
-      badge: 'NEW!',
       disabled: false,
-      presenceKey: 'blackjack',
       accent: 'border-cyan-500/40',
       accentGlow: '0 0 40px rgba(6,182,212,0.35), 0 0 80px rgba(6,182,212,0.15)',
     },
@@ -110,12 +38,10 @@ export function GamesSection() {
       key: 'multiplayer-blackjack',
       href: '/blackjack-multi',
       title: 'Multiplayer Blackjack',
-      image: '/morbius/multi-blackjack-screenshot.png',
+      image: '/Games-Section/BlackJack-Multi-GS.png',
       imageAlt: 'Multiplayer Blackjack',
       titleClassName: 'text-xl md:text-2xl font-krona-one leading-tight',
-      badge: 'NEW!',
       disabled: false,
-      presenceKey: 'blackjackMulti',
       accent: 'border-cyan-500/40',
       accentGlow: '0 0 30px rgba(6,182,212,0.3), 0 0 60px rgba(6,182,212,0.1)',
     },
@@ -123,12 +49,10 @@ export function GamesSection() {
       key: 'plinko',
       href: '/PLINKO',
       title: 'Plinko',
-      image: '/morbius/plinkoscreenshot.png',
+      image: '/Games-Section/Plinko-GS.png',
       imageAlt: 'Plinko',
       titleClassName: 'text-xl md:text-2xl font-autour-one',
-      badge: 'NEW!',
       disabled: false,
-      presenceKey: 'plinko',
       accent: 'border-cyan-500/40',
       accentGlow: '0 0 30px rgba(6,182,212,0.3), 0 0 60px rgba(6,182,212,0.1)',
     },
@@ -136,25 +60,21 @@ export function GamesSection() {
       key: 'keno',
       href: '/keno',
       title: 'KENO',
-      image: '/morbius/KENOscreenshot.png',
+      image: '/Games-Section/KENO-GS.png',
       imageAlt: 'KENO',
       titleClassName: 'text-xl md:text-2xl font-climate-crisis',
-      badge: null,
       disabled: false,
-      presenceKey: 'keno',
       accent: 'border-cyan-500/40',
       accentGlow: '0 0 30px rgba(6,182,212,0.3), 0 0 60px rgba(6,182,212,0.1)',
     },
     {
-      key: 'lotto',
-      href: '/lottery',
-      title: 'Lotto',
-      image: '/morbius/Lottoscreenshot.png',
-      imageAlt: 'Mega Morbius Lotto',
+      key: 'poker',
+      href: '/poker',
+      title: "Texas Hold'em",
+      image: '/Games-Section/TEXASHOLDEM-GS.png',
+      imageAlt: "Texas Hold'em poker",
       titleClassName: 'text-xl md:text-2xl font-monoton',
-      badge: null,
       disabled: false,
-      presenceKey: 'lottery',
       accent: 'border-cyan-500/40',
       accentGlow: '0 0 30px rgba(6,182,212,0.3), 0 0 60px rgba(6,182,212,0.1)',
     },
@@ -162,10 +82,9 @@ export function GamesSection() {
       key: 'coming-soon',
       href: '',
       title: 'More Games Coming Soon',
-      image: '/Marketing%20/Hero-Background.jpeg',
+      image: '/Games-Section/More-To-Come_GS.png',
       imageAlt: 'More games coming soon',
       titleClassName: 'text-lg md:text-xl font-jost leading-tight',
-      badge: null,
       disabled: true,
       accent: 'border-white/10',
       accentGlow: '',
@@ -206,7 +125,7 @@ export function GamesSection() {
           'group relative overflow-hidden rounded-2xl border bg-slate-900 transition-all duration-300',
           game.accent,
           !game.disabled && 'cursor-pointer hover:scale-[1.02]',
-          game.disabled && 'opacity-80 cursor-not-allowed',
+          game.disabled && 'cursor-not-allowed',
           className,
         )}
         style={
@@ -237,30 +156,9 @@ export function GamesSection() {
             className={cn(
               'object-cover transition-transform duration-500',
               !game.disabled && 'group-hover:scale-105',
-              game.disabled && 'opacity-35 grayscale',
             )}
           />
         </div>
-
-        {/* Gradient overlay */}
-        <div className="absolute inset-0 bg-gradient-to-t from-black/85 via-black/30 to-transparent" />
-
-        {/* Accent shimmer on hover */}
-        {!game.disabled && (
-          <div className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity duration-300 bg-gradient-to-t from-transparent via-transparent to-white/[0.03]" />
-        )}
-
-        {/* Live badge */}
-        {game.presenceKey != null && !game.disabled && (
-          <LivePlayersBadge count={presence[game.presenceKey]} />
-        )}
-
-        {/* NEW badge */}
-        {game.badge && (
-          <div className="absolute top-2.5 right-2.5 z-20 text-[10px] md:text-xs px-2 py-1 rounded-full shadow-lg border bg-gradient-to-r from-cyan-400 to-blue-500 text-white border-cyan-300/50 font-bold">
-            {game.badge}
-          </div>
-        )}
 
         {/* Payment badges */}
         {!game.disabled && <PaymentBadges />}
@@ -274,7 +172,7 @@ export function GamesSection() {
     )
   }
 
-  const [featured, bj, plinko, keno, lotto, comingSoon] = gameCards
+  const [featured, bj, plinko, keno, poker, comingSoon] = gameCards
 
   return (
     <main className="w-full px-4 py-6 md:py-8 relative z-10" id="games">
@@ -310,8 +208,8 @@ export function GamesSection() {
             <CardBody game={keno} className="h-[140px] md:h-[180px]" />
           </Link>
 
-          <Link href={lotto.href} className="block">
-            <CardBody game={lotto} className="h-[140px] md:h-[180px]" />
+          <Link href={poker.href} className="block">
+            <CardBody game={poker} className="h-[140px] md:h-[180px]" />
           </Link>
 
           <div role="group" aria-label="More games coming soon">

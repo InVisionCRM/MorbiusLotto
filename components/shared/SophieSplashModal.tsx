@@ -1,18 +1,22 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { useSpeechEnabled } from '@/hooks/use-speech-enabled';
 
 const SPLASH_KEY = 'sophie_splash_seen';
 
 interface Props {
   address: string | undefined;
   onOpenProfileSettings?: () => void;
+  /** When true, force the modal open regardless of localStorage (e.g. user clicked "Voice OFF" toggle) */
+  forceOpen?: boolean;
+  /** Called when the modal closes (so parent can reset forceOpen state) */
+  onClose?: () => void;
+  /** Called when the user clicks "Enable voice" — parent is responsible for enabling */
+  onEnable?: () => void;
 }
 
-export function SophieSplashModal({ address, onOpenProfileSettings }: Props) {
+export function SophieSplashModal({ address: _address, onOpenProfileSettings, forceOpen, onClose, onEnable }: Props) {
   const [open, setOpen] = useState(false);
-  const { setEnabled } = useSpeechEnabled(address);
 
   useEffect(() => {
     try {
@@ -20,13 +24,19 @@ export function SophieSplashModal({ address, onOpenProfileSettings }: Props) {
     } catch { /* ignore */ }
   }, []);
 
+  // forceOpen from parent overrides localStorage check
+  useEffect(() => {
+    if (forceOpen) setOpen(true);
+  }, [forceOpen]);
+
   function dismiss() {
     try { localStorage.setItem(SPLASH_KEY, 'true'); } catch { /* ignore */ }
     setOpen(false);
+    onClose?.();
   }
 
   function enable() {
-    setEnabled(true);
+    onEnable?.();
     dismiss();
   }
 
@@ -34,7 +44,7 @@ export function SophieSplashModal({ address, onOpenProfileSettings }: Props) {
 
   return (
     <div
-      className="fixed inset-0 z-[200] flex items-center justify-center p-4"
+      className="fixed inset-0 z-[200] flex items-center justify-center p-4 font-poppins"
       style={{ background: 'rgba(0,0,0,0.75)', backdropFilter: 'blur(6px)' }}
     >
       <div
@@ -49,27 +59,55 @@ export function SophieSplashModal({ address, onOpenProfileSettings }: Props) {
           </svg>
         </div>
 
-        <h2 className="mb-1 text-center text-lg font-bold text-white">Meet Sophie</h2>
-        <p className="mb-4 text-center text-sm text-gray-400">
-          Your AI host at Morbius.io. Sophie can hear your voice commands and take game actions for you.
+        <h2 className="mb-1 text-center text-lg font-bold text-white tracking-wide">Voice Actions</h2>
+        <p className="mb-4 text-center text-sm text-gray-400 leading-relaxed">
+          Control the game hands-free. Speak commands and they&apos;ll be executed for you.
         </p>
 
-        <ul className="mb-5 space-y-2 text-sm text-gray-300">
-          <li className="flex items-start gap-2">
-            <span className="mt-0.5 text-cyan-400">▸</span>
-            Say <span className="mx-1 rounded bg-neutral-800 px-1.5 py-0.5 font-mono text-xs text-cyan-300">"Hit"</span>
-            <span className="mx-1 rounded bg-neutral-800 px-1.5 py-0.5 font-mono text-xs text-cyan-300">"Stand"</span>
-            <span className="mx-1 rounded bg-neutral-800 px-1.5 py-0.5 font-mono text-xs text-cyan-300">"Double"</span>
-          </li>
-          <li className="flex items-start gap-2">
-            <span className="mt-0.5 text-cyan-400">▸</span>
-            Say <span className="mx-1 rounded bg-neutral-800 px-1.5 py-0.5 font-mono text-xs text-cyan-300">"Bet 500"</span> to place a bet by voice
-          </li>
-          <li className="flex items-start gap-2">
-            <span className="mt-0.5 text-cyan-400">▸</span>
-            Works in Chrome &amp; Edge — microphone access required
-          </li>
-        </ul>
+        {/* Command lists */}
+        <div className="mb-5 grid grid-cols-2 gap-3">
+          {/* Blackjack */}
+          <div className="rounded-xl border border-white/10 bg-neutral-800/60 px-3 py-3">
+            <p className="mb-2 text-[10px] font-semibold uppercase tracking-widest text-cyan-400">Blackjack</p>
+            <div className="space-y-1.5">
+              {[
+                { cmd: '"Hit"', note: 'take a card' },
+                { cmd: '"Stand"', note: 'hold hand' },
+                { cmd: '"Double"', note: 'double down' },
+                { cmd: '"Split"', note: 'split pair' },
+                { cmd: '"Bet 500"', note: 'bet amount' },
+                { cmd: '"Rebet"', note: 'repeat last bet' },
+              ].map(({ cmd, note }) => (
+                <div key={cmd} className="flex items-baseline justify-between gap-2">
+                  <span className="rounded bg-neutral-700 px-1.5 py-0.5 font-mono text-[10px] text-cyan-300 whitespace-nowrap">{cmd}</span>
+                  <span className="text-[10px] text-gray-500 text-right">{note}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {/* Poker */}
+          <div className="rounded-xl border border-white/10 bg-neutral-800/60 px-3 py-3">
+            <p className="mb-2 text-[10px] font-semibold uppercase tracking-widest text-cyan-400">Poker</p>
+            <div className="space-y-1.5">
+              {[
+                { cmd: '"Fold"', note: 'fold hand' },
+                { cmd: '"Check"', note: 'check / tap' },
+                { cmd: '"Call"', note: 'call bet' },
+                { cmd: '"Bet 500"', note: 'open bet' },
+                { cmd: '"Raise 1000"', note: 'raise to amount' },
+                { cmd: '"All in"', note: 'go all in' },
+              ].map(({ cmd, note }) => (
+                <div key={cmd} className="flex items-baseline justify-between gap-2">
+                  <span className="rounded bg-neutral-700 px-1.5 py-0.5 font-mono text-[10px] text-cyan-300 whitespace-nowrap">{cmd}</span>
+                  <span className="text-[10px] text-gray-500 text-right">{note}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+
+        <p className="mb-4 text-center text-xs text-gray-500">Works in Chrome &amp; Edge — microphone access required</p>
 
         {/* Caution block */}
         <div className="mb-5 rounded-xl border border-amber-500/30 bg-amber-500/10 px-4 py-3 text-xs text-amber-300 space-y-1.5">
@@ -81,6 +119,9 @@ export function SophieSplashModal({ address, onOpenProfileSettings }: Props) {
           </div>
           <p>
             Voice commands are keyword-triggered — background music and general chatter are unlikely to cause accidental actions, but not impossible.
+          </p>
+          <p>
+            Nothing is recorded or stored. The live transcript shown on screen is only to let you see what&apos;s being heard in real time.
           </p>
           <p className="font-medium text-amber-400">
             Always disable voice commands when you step away from the screen.
