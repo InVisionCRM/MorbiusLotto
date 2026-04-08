@@ -1,5 +1,10 @@
 'use client';
 
+import { truncateTranscriptWords } from '@/lib/speech-display';
+
+/** Poker: show only the last few words of the live transcript (recognizer still gets full text). */
+const LIVE_TRANSCRIPT_MAX_WORDS = 4;
+
 interface Props {
   listening: boolean;
   transcript: string;
@@ -46,7 +51,9 @@ export function SpeechHUD({
         <div className="flex items-center gap-2 rounded-xl border border-white/10 bg-black/70 px-3 py-2 backdrop-blur-md max-w-[220px] pointer-events-none">
           <span className="text-xs text-white/40 shrink-0">Hearing:</span>
           <span className="text-xs text-white truncate">
-            {transcript || <span className="text-white/25 italic">listening…</span>}
+            {truncateTranscriptWords(transcript, LIVE_TRANSCRIPT_MAX_WORDS) || (
+              <span className="text-white/25 italic">listening…</span>
+            )}
           </span>
         </div>
       )}

@@ -308,7 +308,7 @@ export function BlackjackGameView(props: BlackjackGameViewProps) {
             />
 
             {address && wsConnected && wsClient && (
-              <div className="absolute top-2 left-1/2 -translate-x-1/2 z-10 flex flex-col items-center">
+              <div className="absolute bottom-3 right-3 z-10 flex flex-col items-end">
                 <IconButton
                   variant="tip"
                   size="tip"
@@ -335,8 +335,7 @@ export function BlackjackGameView(props: BlackjackGameViewProps) {
                 </IconButton>
                 {tipAnimating && (
                   <div
-                    className="absolute pointer-events-none"
-                    style={{ top: 0, left: '50%', transform: 'translateX(-50%)' }}
+                    className="absolute pointer-events-none bottom-full right-0 mb-0.5"
                     onAnimationEnd={() => setTipAnimating(false)}
                   >
                     <div className="tip-chip-fly">

@@ -29,6 +29,7 @@ import { useQueryClient } from '@tanstack/react-query';
 import '@/lib/error-log';
 import { useInstallAppHelpDialog } from '@/contexts/install-app-help-dialog-context';
 import { IconArrowLeft } from '@tabler/icons-react';
+import { cn } from '@/lib/utils';
 
 // Lazy-load modals — only pulled into the bundle when first opened
 const ThemeSelectionModal = lazy(() => import('@/components/BLACKJACK/ThemeSelectionModal'));
@@ -169,17 +170,33 @@ function useNavPage(pageProp?: NavPage): NavPage {
   return 'home';
 }
 
-const LanguageSelect = React.memo(function LanguageSelect() {
+const LANG_SELECT_CHEVRON_STYLE = {
+  backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 24 24' stroke='%23fff'%3E%3Cpath stroke-linecap='round' stroke-linejoin='round' stroke-width='2' d='M19 9l-7 7-7-7'/%3E%3C/svg%3E")`,
+  backgroundRepeat: 'no-repeat' as const,
+  backgroundPosition: 'right 0.25rem center',
+  backgroundSize: '1rem',
+};
+
+/** Desktop sidebar brand area — label hides when rail is collapsed (see globals .sidebar-label). */
+const SidebarLanguageRow = React.memo(function SidebarLanguageRow({ sidebarExpanded }: { sidebarExpanded: boolean }) {
   const { locale, setLocale, localeLabel } = useLocale();
   return (
-    <div className="px-2 py-2 sidebar-label">
-      <div className="flex items-center gap-2">
-        <span className="text-sm text-white whitespace-nowrap truncate min-w-0">{localeLabel}</span>
+    <div className="px-2 pt-2 border-t border-white/10 mt-2 w-full min-w-0">
+      <div className={cn('flex items-center gap-2 min-w-0', !sidebarExpanded && 'justify-center')}>
+        <span className="sidebar-label text-xs text-white/70 whitespace-nowrap truncate min-w-0 shrink">
+          {localeLabel}
+        </span>
         <select
           value={locale}
           onChange={(e) => setLocale(e.target.value as typeof locale)}
-          className="flex-1 min-w-0 text-sm bg-white/10 text-white border border-white/20 rounded-lg px-2 py-1.5 cursor-pointer focus:outline-none focus:ring-1 focus:ring-cyan-500/50 appearance-none"
-          style={{ backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 24 24' stroke='%23fff'%3E%3Cpath stroke-linecap='round' stroke-linejoin='round' stroke-width='2' d='M19 9l-7 7-7-7'/%3E%3C/svg%3E")`, backgroundRepeat: 'no-repeat', backgroundPosition: 'right 0.25rem center', backgroundSize: '1rem', paddingRight: '1.5rem' }}
+          className={cn(
+            'min-w-0 text-sm bg-white/10 text-white border border-white/20 rounded-lg cursor-pointer focus:outline-none focus:ring-1 focus:ring-cyan-500/50 appearance-none',
+            sidebarExpanded ? 'flex-1 px-2 py-1.5' : 'w-10 h-9 px-1 py-1 text-xs text-center',
+          )}
+          style={{
+            ...LANG_SELECT_CHEVRON_STYLE,
+            paddingRight: sidebarExpanded ? '1.75rem' : '1.25rem',
+          }}
           aria-label="Select language"
         >
           {SUPPORTED_LOCALES.map(({ code, label }) => (
@@ -189,6 +206,86 @@ const LanguageSelect = React.memo(function LanguageSelect() {
           ))}
         </select>
       </div>
+    </div>
+  );
+});
+
+/** Mobile drawer header (under logo) — always full width. */
+const MobileDrawerLanguageRow = React.memo(function MobileDrawerLanguageRow() {
+  const { locale, setLocale } = useLocale();
+  return (
+    <div className="space-y-1 w-full min-w-0">
+      <div className="text-[9px] text-white/55 uppercase tracking-wide">Language</div>
+      <select
+        value={locale}
+        onChange={(e) => setLocale(e.target.value as typeof locale)}
+        className="w-full min-w-0 text-xs bg-white/10 text-white border border-white/20 rounded-lg px-2 py-1.5 cursor-pointer focus:outline-none focus:ring-1 focus:ring-cyan-500/50 appearance-none"
+        style={{ ...LANG_SELECT_CHEVRON_STYLE, paddingRight: '1.5rem' }}
+        aria-label="Select language"
+      >
+        {SUPPORTED_LOCALES.map(({ code, label }) => (
+          <option key={code} value={code} className="bg-slate-800 text-white">
+            {label}
+          </option>
+        ))}
+      </select>
+    </div>
+  );
+});
+
+const MORBIUS_TOKEN_LINKS: {
+  label: string;
+  href: string;
+  iconClass: string;
+  external?: boolean;
+}[] = [
+  { label: 'Swap', href: '/swap', iconClass: 'fa-exchange-alt' },
+  { label: 'Provide LP', href: 'https://pulsex.com', iconClass: 'fa-tint', external: true },
+  {
+    label: 'Chart',
+    href: 'https://scan.morbius.io/geicko?address=0xB7d4eB5fDfE3d4d3B5C16a44A49948c6EC77c6F1&tab=chart',
+    iconClass: 'fa-chart-line',
+    external: true,
+  },
+];
+
+/** Collapsible Swap / LP / Chart — avoids closing the mobile drawer (not SidebarButton). */
+const MorbiusTokenLinksDisclosure = React.memo(function MorbiusTokenLinksDisclosure({ navItemClass }: { navItemClass: string }) {
+  const [expanded, setExpanded] = useState(false);
+  return (
+    <div className="px-2 pb-1">
+      <button
+        type="button"
+        onClick={() => setExpanded((v) => !v)}
+        className="sidebar-item flex items-center w-full rounded-lg px-2 py-2 text-white transition-colors border border-cyan-500/30 bg-gradient-to-br from-slate-900/80 to-slate-800/60 hover:bg-white/5"
+        style={{
+          boxShadow: 'inset 0 2px 4px rgba(0,0,0,0.45), inset 0 -1px 2px rgba(255,255,255,0.06), 0 1px 2px rgba(0,0,0,0.4)',
+        }}
+        aria-expanded={expanded}
+      >
+        <i className="fas fa-link w-5 text-center shrink-0 text-cyan-400/90" aria-hidden />
+        <span className="sidebar-label text-sm flex-1 text-left font-medium">Token links</span>
+        <span className={cn('sidebar-label text-white/50 transition-transform shrink-0', expanded && 'rotate-180')}>
+          <i className="fas fa-chevron-down text-xs" aria-hidden />
+        </span>
+      </button>
+      {expanded ? (
+        <div className="mt-1.5 ml-2 pl-2 border-l border-cyan-500/20 space-y-0.5">
+          {MORBIUS_TOKEN_LINKS.map((item) => (
+            <SidebarLink
+              key={item.href}
+              link={{
+                label: item.label,
+                href: item.href,
+                icon: <i className={`fas ${item.iconClass} w-5 text-center text-white shrink-0`} aria-hidden />,
+              }}
+              className={navItemClass}
+              target={item.external ? '_blank' : undefined}
+              rel={item.external ? 'noopener noreferrer' : undefined}
+            />
+          ))}
+        </div>
+      ) : null}
     </div>
   );
 });
@@ -391,6 +488,7 @@ const NavContent = React.memo(function NavContent(props: NavContentProps) {
             )}
           </div>
         )}
+        <SidebarLanguageRow sidebarExpanded={open} />
       </div>
 
       {/* Wallet */}
@@ -511,14 +609,7 @@ const NavContent = React.memo(function NavContent(props: NavContentProps) {
           )}
         </div>
 
-        {/* Advertising */}
-        <div className="pt-2 mt-2 border-t border-white/10">
-          <SectionLabel label="Advertising" />
-          <SidebarLink link={{ label: 'Add Table', href: '/marketing', icon: <i className="fas fa-plus-square w-5 text-center text-white shrink-0" aria-hidden /> }} className={NAV_ITEM_CLASS} />
-          <SidebarLink link={{ label: 'Marketing', href: '/marketing', icon: <i className="fas fa-bullhorn w-5 text-center text-white shrink-0" aria-hidden /> }} className={NAV_ITEM_CLASS} />
-        </div>
-
-        {/* Other */}
+        {/* Other — includes marketing (/marketing covers tables + campaigns) */}
         <div className="pt-2 mt-2 border-t border-white/10">
           <SectionLabel label="Other" />
           {onOpenInstallAppHelp ? (
@@ -530,6 +621,7 @@ const NavContent = React.memo(function NavContent(props: NavContentProps) {
             />
           ) : null}
           <SidebarButton label="Responsible Gaming" icon={<i className="fas fa-shield-alt w-5 text-center text-white shrink-0" aria-hidden />} onClick={onOpenResponsibleGaming} className={NAV_ITEM_CLASS} />
+          <SidebarLink link={{ label: 'Marketing', href: '/marketing', icon: <i className="fas fa-bullhorn w-5 text-center text-white shrink-0" aria-hidden /> }} className={NAV_ITEM_CLASS} />
           <SidebarButton label="Report Issue" icon={<i className="fas fa-flag w-5 text-center text-red-400/80 shrink-0" aria-hidden />} onClick={onOpenReport} className={NAV_ITEM_CLASS} />
           <SidebarLink link={{ label: 'Token Analyzer', href: 'https://scan.morbius.io', icon: <i className="fas fa-search w-5 text-center text-white shrink-0" aria-hidden /> }} className={NAV_ITEM_CLASS} target="_blank" rel="noopener noreferrer" />
           <SidebarLink link={{ label: 'Morb-It', href: '/Morb-It', icon: <i className="fas fa-gamepad w-5 text-center text-white shrink-0" aria-hidden /> }} className={NAV_ITEM_CLASS} />
@@ -538,34 +630,25 @@ const NavContent = React.memo(function NavContent(props: NavContentProps) {
           )}
         </div>
 
-        {/* Language */}
-        <div className="pt-2 mt-2 border-t border-white/10">
-          <SectionLabel label="Language" />
-          <LanguageSelect />
-        </div>
-
-        {/* Morbius — only mount data-fetching components when sidebar is open */}
+        {/* Morbius — token links only; burned/price live in sticky footer below */}
         <div className="pt-2 mt-2 border-t border-white/10 overflow-hidden">
           <SectionLabel label="Morbius" />
-          {open && (
-            <>
-              <div className="px-2 py-1">
-                <MorbiusBurnedDisplay variant="inline" className="text-white text-xs" labelClassName="text-white text-xs" useAnimatedNumbers={false} />
-              </div>
-              <div className="px-2 py-1">
-                <MorbiusPriceDisplay className="text-white text-xs" labelClassName="text-white text-xs" />
-              </div>
-            </>
-          )}
-          <SidebarLink link={{ label: 'Claim', href: '/claim', icon: <i className="fas fa-coins w-5 text-center text-white shrink-0" aria-hidden /> }} className={NAV_ITEM_CLASS} />
-          <SidebarLink link={{ label: 'Swap', href: '/swap', icon: <i className="fas fa-exchange-alt w-5 text-center text-white shrink-0" aria-hidden /> }} className={NAV_ITEM_CLASS} />
-          <SidebarLink link={{ label: 'Provide LP', href: 'https://pulsex.com', icon: <i className="fas fa-tint w-5 text-center text-white shrink-0" aria-hidden /> }} className={NAV_ITEM_CLASS} target="_blank" rel="noopener noreferrer" />
-          <SidebarLink link={{ label: 'Chart', href: 'https://scan.morbius.io/geicko?address=0xB7d4eB5fDfE3d4d3B5C16a44A49948c6EC77c6F1&tab=chart', icon: <i className="fas fa-chart-line w-5 text-center text-white shrink-0" aria-hidden /> }} className={NAV_ITEM_CLASS} target="_blank" rel="noopener noreferrer" />
+          <MorbiusTokenLinksDisclosure navItemClass={NAV_ITEM_CLASS} />
         </div>
       </nav>
 
-      {/* Bottom: Music (Blackjack only) + Auth (home) */}
+      {/* Footer: Morbius stats (when sidebar open) + auth + music */}
       <div className="shrink-0 pt-2 border-t border-white/10 space-y-2">
+        {open && (
+          <div className="px-2 space-y-1 pb-1 border-b border-white/10">
+            <div className="px-0 py-0.5">
+              <MorbiusBurnedDisplay variant="inline" className="text-white text-xs" labelClassName="text-white text-xs" useAnimatedNumbers={false} />
+            </div>
+            <div className="px-0 py-0.5">
+              <MorbiusPriceDisplay className="text-white text-xs" labelClassName="text-white text-xs" />
+            </div>
+          </div>
+        )}
         {page === 'home' && onOpenAuthModal && !isAuthenticated && (
           <SidebarButton label="Sign In" icon={<i className="fas fa-shield w-5 text-center text-cyan-400 shrink-0" aria-hidden />} onClick={onOpenAuthModal} className={NAV_ITEM_CLASS} />
         )}
@@ -803,33 +886,40 @@ export default function GlobalMainNav({
   );
 
   const mobileDrawerBrandingExtra = useMemo(() => {
-    if (effectiveReserveBalance === undefined && !address) return null;
+    const hasBalances = effectiveReserveBalance !== undefined || Boolean(address);
     return (
-      <div className="flex flex-col gap-2 pl-[2.25rem] pr-1 pb-1">
-        {effectiveReserveBalance !== undefined && (
-          <div className="space-y-0.5">
-            <div className="text-[9px] text-white/55 uppercase tracking-wide">Balance</div>
-            <div className="flex items-center gap-1.5">
-              <span className="text-white text-xs font-semibold tabular-nums">
-                {formatReserveWholeMorbiusDisplay(effectiveReserveBalance)}
-              </span>
-              <Image src="/morbius/MorbiusLogo (3).png" alt="MORBIUS" width={12} height={12} className="object-contain opacity-80" />
-            </div>
-          </div>
-        )}
-        {address ? (
-          <div
-            className={`space-y-0.5 ${effectiveReserveBalance !== undefined ? 'pt-1 border-t border-white/10' : ''}`}
-          >
-            <div className="text-[9px] text-white/55 uppercase tracking-wide">In-wallet</div>
-            <div className="flex items-center gap-1.5">
-              <span className="text-white text-xs font-semibold tabular-nums">
-                {formatReserveWholeMorbiusDisplay(inWalletMorbiusWei)}
-              </span>
-              <Image src="/morbius/MorbiusLogo (3).png" alt="MORBIUS" width={12} height={12} className="object-contain opacity-80" />
-            </div>
-          </div>
+      <div className="flex flex-col gap-2 pl-[2.25rem] pr-1 pb-1 w-full min-w-0">
+        {hasBalances ? (
+          <>
+            {effectiveReserveBalance !== undefined && (
+              <div className="space-y-0.5">
+                <div className="text-[9px] text-white/55 uppercase tracking-wide">Balance</div>
+                <div className="flex items-center gap-1.5">
+                  <span className="text-white text-xs font-semibold tabular-nums">
+                    {formatReserveWholeMorbiusDisplay(effectiveReserveBalance)}
+                  </span>
+                  <Image src="/morbius/MorbiusLogo (3).png" alt="MORBIUS" width={12} height={12} className="object-contain opacity-80" />
+                </div>
+              </div>
+            )}
+            {address ? (
+              <div
+                className={`space-y-0.5 ${effectiveReserveBalance !== undefined ? 'pt-1 border-t border-white/10' : ''}`}
+              >
+                <div className="text-[9px] text-white/55 uppercase tracking-wide">In-wallet</div>
+                <div className="flex items-center gap-1.5">
+                  <span className="text-white text-xs font-semibold tabular-nums">
+                    {formatReserveWholeMorbiusDisplay(inWalletMorbiusWei)}
+                  </span>
+                  <Image src="/morbius/MorbiusLogo (3).png" alt="MORBIUS" width={12} height={12} className="object-contain opacity-80" />
+                </div>
+              </div>
+            ) : null}
+          </>
         ) : null}
+        <div className={cn(hasBalances && 'pt-2 border-t border-white/10')}>
+          <MobileDrawerLanguageRow />
+        </div>
       </div>
     );
   }, [effectiveReserveBalance, address, inWalletMorbiusWei]);

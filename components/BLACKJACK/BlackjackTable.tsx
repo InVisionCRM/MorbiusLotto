@@ -13,8 +13,11 @@ import { BetChip, formatChipLabel } from '@/components/ui/BetChip';
 import { EncryptedText } from '@/components/ui/encrypted-text';
 import { useAccount } from 'wagmi';
 import { isAdminWallet } from '@/lib/admin';
+import { truncateTranscriptWords } from '@/lib/speech-display';
 
 // Background music playlist moved to page.tsx to avoid duplicate audio instances
+
+const SPEECH_LIVE_TRANSCRIPT_MAX_WORDS = 4;
 
 interface BlackjackTableProps {
   playerHand: Hand;
@@ -1674,7 +1677,9 @@ const BlackjackTable: React.FC<BlackjackTableProps> = ({
                   <div className="flex items-center gap-2 rounded-md border border-white/10 bg-black/70 px-2 py-1 backdrop-blur-md max-w-[180px] pointer-events-none">
                     <span className="text-[10px] text-white/40 shrink-0">Hearing:</span>
                     <span className="text-[10px] text-white truncate">
-                      {speechToggle.transcript || <span className="text-white/25 italic">listening…</span>}
+                      {truncateTranscriptWords(speechToggle.transcript, SPEECH_LIVE_TRANSCRIPT_MAX_WORDS) || (
+                        <span className="text-white/25 italic">listening…</span>
+                      )}
                     </span>
                   </div>
                 )}

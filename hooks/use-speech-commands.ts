@@ -299,7 +299,8 @@ export function useSpeechCommands({
     const r = new SpeechRecognition();
     r.continuous = true;
     r.interimResults = true;
-    r.maxAlternatives = 3;
+    // Fewer alternatives = less verbose / overlapping hypotheses in the UI; still enough for commands.
+    r.maxAlternatives = 1;
     r.lang = 'en-US';
 
     // Track whether the current utterance already fired via interim so the

@@ -454,43 +454,45 @@ export function GameWalletModal({
         }
         if (confirmations >= DEPOSIT_CONFIRMATIONS_REQUIRED) {
           const notifyResult = await notifyDeposit(depositTxHash, depositNotifyAmountWei);
-          if (!notifyResult.ok) {
-            if (notifyResult.status >= 400 && notifyResult.status < 500) {
+          if (notifyResult.ok) {
+            clearPendingDepositStorage();
+            if (depositToastIdRef.current != null) {
+              toast.success('Deposit successful', {
+                id: depositToastIdRef.current,
+                description: 'Funds are now available in your balance.',
+                duration: 5000,
+              });
+            }
+            if (onBalanceSync) {
+              try { await onBalanceSync(); } catch {
+                if (onRefreshBalance) onRefreshBalance().catch(() => {});
+              }
+            } else if (isSelfManaged) {
+              setTimeout(fetchBalance, 1000);
+            }
+            setDepositAmount('');
+            setDepositPhase('success');
+            setDepositBlockNumber(null);
+            setDepositTxHash(null);
+            setDepositNotifyAmountWei(null);
+            setTimeout(() => setDepositPhase('idle'), 2000);
+            return;
+          } else if (notifyResult.ok === false) {
+            const { status, message } = notifyResult;
+            if (status >= 400 && status < 500) {
               if (depositToastIdRef.current != null) {
                 toast.error('Could not record deposit', {
                   id: depositToastIdRef.current,
-                  description: notifyResult.message,
+                  description: message,
                   duration: 8000,
                 });
               }
               setDepositPhase('error');
-              setDepositError(notifyResult.message);
+              setDepositError(message);
               return;
             }
             return;
           }
-          clearPendingDepositStorage();
-          if (depositToastIdRef.current != null) {
-            toast.success('Deposit successful', {
-              id: depositToastIdRef.current,
-              description: 'Funds are now available in your balance.',
-              duration: 5000,
-            });
-          }
-          if (onBalanceSync) {
-            try { await onBalanceSync(); } catch {
-              if (onRefreshBalance) onRefreshBalance().catch(() => {});
-            }
-          } else if (isSelfManaged) {
-            setTimeout(fetchBalance, 1000);
-          }
-          setDepositAmount('');
-          setDepositPhase('success');
-          setDepositBlockNumber(null);
-          setDepositTxHash(null);
-          setDepositNotifyAmountWei(null);
-          setTimeout(() => setDepositPhase('idle'), 2000);
-          return;
         }
       } catch {
         // ignore RPC errors, retry next tick

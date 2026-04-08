@@ -1,6 +1,10 @@
 'use client';
 
 import React, { useEffect, useState } from 'react';
+import { truncateTranscriptWords } from '@/lib/speech-display';
+
+const FLASH_MAX_WORDS = 4;
+const FLASH_MS = 900;
 
 interface SpeechIndicatorProps {
   listening: boolean;
@@ -19,10 +23,10 @@ export function SpeechIndicator({ listening, transcript }: SpeechIndicatorProps)
 
   useEffect(() => {
     if (!transcript) return;
-    setFlashText(transcript);
+    setFlashText(truncateTranscriptWords(transcript, FLASH_MAX_WORDS));
     setFlashVisible(true);
     if (timerRef.current) clearTimeout(timerRef.current);
-    timerRef.current = setTimeout(() => setFlashVisible(false), 1500);
+    timerRef.current = setTimeout(() => setFlashVisible(false), FLASH_MS);
   }, [transcript]);
 
   useEffect(() => () => {
@@ -46,7 +50,7 @@ export function SpeechIndicator({ listening, transcript }: SpeechIndicatorProps)
 
       {/* Transcript flash */}
       <span
-        className="text-xs text-white/80 transition-all duration-300"
+        className="text-xs text-white/80 transition-all duration-300 max-w-[140px] truncate"
         style={{
           opacity: flashVisible && flashText ? 1 : 0,
         }}
