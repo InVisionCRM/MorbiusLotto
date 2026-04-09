@@ -35,7 +35,6 @@ export const metadata: Metadata = {
   icons: {
     icon: [
       { url: '/icons/favicon.ico', sizes: 'any' },
-      { url: '/icons/favicon.svg', type: 'image/svg+xml' },
       { url: '/icons/favicon-96x96.png', sizes: '96x96', type: 'image/png' },
     ],
     apple: [{ url: '/icons/apple-touch-icon.png', sizes: '180x180', type: 'image/png' }],
@@ -96,8 +95,18 @@ export default function RootLayout({
         <link rel="apple-touch-startup-image" media="(device-width:744px) and (device-height:1133px) and (-webkit-device-pixel-ratio:2) and (orientation:portrait)" href="/icons/splash/ipad-mini-portrait.png" />
         <link rel="apple-touch-startup-image" media="(device-width:744px) and (device-height:1133px) and (-webkit-device-pixel-ratio:2) and (orientation:landscape)" href="/icons/splash/ipad-mini-landscape.png" />
 
-        {/* Font Awesome for PLINKO icons */}
-        <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" />
+        {/* Preload hero background images so LCP isn't delayed by CSS discovery */}
+        <link rel="preload" as="image" href="/morbius/hero-small.jpeg" media="(max-width: 767px)" />
+        <link rel="preload" as="image" href="/morbius/Morbius-glass-chip-16x9.jpeg" media="(min-width: 768px)" />
+
+        {/* Font Awesome — load non-render-blocking (icons appear after paint, not before) */}
+        <link
+          rel="stylesheet"
+          href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css"
+          media="print"
+          // @ts-expect-error onload is valid on link elements
+          onLoad="this.media='all'"
+        />
         {/* Montserrat for chat messages */}
         <link rel="preconnect" href="https://fonts.googleapis.com" />
         <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />

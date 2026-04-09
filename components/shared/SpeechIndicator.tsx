@@ -27,11 +27,10 @@ export function SpeechIndicator({ listening, transcript }: SpeechIndicatorProps)
     setFlashVisible(true);
     if (timerRef.current) clearTimeout(timerRef.current);
     timerRef.current = setTimeout(() => setFlashVisible(false), FLASH_MS);
+    return () => {
+      if (timerRef.current) clearTimeout(timerRef.current);
+    };
   }, [transcript]);
-
-  useEffect(() => () => {
-    if (timerRef.current) clearTimeout(timerRef.current);
-  }, []);
 
   if (!listening && !flashVisible) return null;
 

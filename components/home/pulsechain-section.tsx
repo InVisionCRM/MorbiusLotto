@@ -14,21 +14,21 @@ import { ChevronRight } from 'lucide-react'
 // ── Branded table assets for marquee rows (3 × 5) ───────────────────────────
 
 const TABLE_PRODUCTS = [
-  { title: 'LBRTY',      link: '/marketing', thumbnail: '/BlackJack/BrandedTable/Liberty.png'       },
-  { title: 'WICK',       link: '/marketing', thumbnail: '/BlackJack/BrandedTable/GreenWick.png'     },
-  { title: 'TIME',       link: '/marketing', thumbnail: '/BlackJack/BrandedTable/InternetMoney.png' },
-  { title: 'pTIGER',    link: '/marketing', thumbnail: '/BlackJack/BrandedTable/pTiger.png'        },
-  { title: 'EMIT',       link: '/marketing', thumbnail: '/BlackJack/BrandedTable/EMIT.png'          },
-  { title: 'PeaCock',   link: '/marketing', thumbnail: '/BlackJack/BrandedTable/PeaCock-2.png'     },
-  { title: 'PewPew',    link: '/marketing', thumbnail: '/BlackJack/BrandedTable/PewPew.png'        },
-  { title: 'SuperStake',link: '/marketing', thumbnail: '/BlackJack/BrandedTable/SuperStake.png'    },
-  { title: 'CRVE',      link: '/marketing', thumbnail: '/BlackJack/BrandedTable/CRVE.png'          },
-  { title: 'BigRich',   link: '/marketing', thumbnail: '/BlackJack/BrandedTable/BigRich.png'       },
-  { title: 'WhaleBay',  link: '/marketing', thumbnail: '/BlackJack/BrandedTable/WhaleBay.png'      },
-  { title: 'Dr.Doge',   link: '/marketing', thumbnail: '/BlackJack/BrandedTable/Dr.Doge.png'       },
-  { title: 'MVS',       link: '/marketing', thumbnail: '/BlackJack/BrandedTable/MVS.png'           },
-  { title: 'moonlight', link: '/marketing', thumbnail: '/BlackJack/BrandedTable/moonlight.png'     },
-  { title: 'pTGC',      link: '/marketing', thumbnail: '/BlackJack/BrandedTable/pTGC.png'          },
+  { title: 'LBRTY',      link: '/marketing', thumbnail: '/BlackJack/BrandedTable/Liberty.webp'      },
+  { title: 'WICK',       link: '/marketing', thumbnail: '/BlackJack/BrandedTable/GreenWick.webp'     },
+  { title: 'TIME',       link: '/marketing', thumbnail: '/BlackJack/BrandedTable/InternetMoney.webp' },
+  { title: 'pTIGER',    link: '/marketing', thumbnail: '/BlackJack/BrandedTable/pTiger.webp'        },
+  { title: 'EMIT',       link: '/marketing', thumbnail: '/BlackJack/BrandedTable/EMIT.webp'          },
+  { title: 'PeaCock',   link: '/marketing', thumbnail: '/BlackJack/BrandedTable/PeaCock-2.webp'     },
+  { title: 'PewPew',    link: '/marketing', thumbnail: '/BlackJack/BrandedTable/PewPew.webp'        },
+  { title: 'SuperStake',link: '/marketing', thumbnail: '/BlackJack/BrandedTable/SuperStake.webp'    },
+  { title: 'CRVE',      link: '/marketing', thumbnail: '/BlackJack/BrandedTable/CRVE.webp'          },
+  { title: 'BigRich',   link: '/marketing', thumbnail: '/BlackJack/BrandedTable/BigRich.webp'      },
+  { title: 'WhaleBay',  link: '/marketing', thumbnail: '/BlackJack/BrandedTable/WhaleBay.webp'      },
+  { title: 'Dr.Doge',   link: '/marketing', thumbnail: '/BlackJack/BrandedTable/Dr.Doge.webp'      },
+  { title: 'MVS',       link: '/marketing', thumbnail: '/BlackJack/BrandedTable/MVS.webp'           },
+  { title: 'moonlight', link: '/marketing', thumbnail: '/BlackJack/BrandedTable/moonlight.webp'     },
+  { title: 'pTGC',      link: '/marketing', thumbnail: '/BlackJack/BrandedTable/pTGC.webp'          },
 ]
 
 // ── Section header (above marquee strips) ─────────────────────────────────────
@@ -97,6 +97,7 @@ function TableMarqueeStrip({
             alt={p.title}
             fill
             sizes="224px"
+            loading="lazy"
             className="object-cover object-left-top transition group-hover:scale-[1.02]"
           />
           <span className="absolute bottom-2 left-2 rounded-md bg-black/70 px-2 py-0.5 text-xs font-semibold text-white backdrop-blur-sm">

@@ -1,545 +1,452 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useRef, useEffect } from 'react'
 import GlobalMainNav from '@/components/shared/GlobalMainNav'
 import Footer from '@/components/PLINKO/Footer'
 import { CryptoPaymentPanel } from '@/components/marketing/CryptoPaymentPanel'
-import { TableShowcaseDisplay } from '@/components/marketing/TableShowcaseDisplay'
-import { PulseChainAiDisplay } from '@/components/marketing/PulseChainAiDisplay'
-import { AdvertisingSection } from '@/components/marketing/AdvertisingSection'
-import { CometCard } from '@/components/ui/comet-card'
 import {
-  Spade,
-  Crown,
-  Zap,
-  Star,
-  Clock,
-  Palette,
   BadgeCheck,
-  TrendingUp,
-  Globe,
-  MessagesSquare,
-  ChevronRight,
-  BarChart2,
-  Trophy,
-  Users,
-  Megaphone,
-  Tag,
+  Clock,
   Layers,
+  Crown,
+  Spade,
+  Palette,
+  MessagesSquare,
+  ChevronDown,
+  Zap,
 } from 'lucide-react'
+import Image from 'next/image'
 
-const FEATURES = [
+// ── What's included ──────────────────────────────────────────────────────────
+const DELIVERABLES = [
   {
     icon: Spade,
-    title: 'Custom Blackjack Table',
-    description:
-      'A fully branded game table built around your token — live on Morbius in 24 hours. Your design automatically extends to every new game we launch: Poker, Baccarat, and more.',
-    accent: 'cyan',
-    hoverImage: '/Marketing%20/Tables/WickTable.png',
-    shineGradient:
-      'linear-gradient(105deg, transparent 10%, rgba(6,182,212,0.06) 35%, rgba(103,232,249,0.2) 50%, rgba(6,182,212,0.06) 65%, transparent 90%)',
+    label: 'Custom Blackjack Table',
+    sub: 'Auto-extends to Poker, Baccarat & every future game',
+    color: '#22d3ee',
   },
   {
     icon: Palette,
-    title: 'TableProfile Card',
-    description:
-      'A dedicated token profile with your logo, socials, website links, contract address, and a custom description — displayed to every player on every table.',
-    accent: 'violet',
-    hoverImage: '/Marketing%20/Token%20Profile/LibertyTP.png',
-    shineGradient:
-      'linear-gradient(105deg, transparent 10%, rgba(139,92,246,0.06) 35%, rgba(196,181,253,0.2) 50%, rgba(139,92,246,0.06) 65%, transparent 90%)',
+    label: 'Token Profile Card',
+    sub: 'Logo, socials, contract — shown to every player',
+    color: '#a78bfa',
   },
   {
     icon: Crown,
-    title: 'Gold Badge on PulseChainAi.com',
-    description:
-      'Receive a verified GOLD badge, custom description, and a featured spot on the front page of PulseChainAi.Com.',
-    accent: 'amber',
-    hoverImage: '/Marketing%20/PulseChain-AI/PulseChainAiTopTokens.png',
-    shineGradient:
-      'linear-gradient(105deg, transparent 10%, rgba(186,230,255,0.08) 35%, rgba(220,242,255,0.22) 50%, rgba(186,230,255,0.08) 65%, transparent 90%)',
+    label: 'Gold Badge on PulseChainAi.com',
+    sub: 'Featured on the front page, GOLD verified badge',
+    color: '#fbbf24',
+  },
+  {
+    icon: Clock,
+    label: '24-Hour Delivery',
+    sub: 'Guaranteed turnaround once payment is confirmed',
+    color: '#34d399',
+  },
+  {
+    icon: Layers,
+    label: 'Permanent Presence',
+    sub: 'Every new Morbius game inherits your design automatically',
+    color: '#f472b6',
   },
 ]
 
-const HOW_IT_WORKS = [
-  { step: '01', title: 'Send Payment', body: 'Send exactly the PLS amount shown to our wallet on PulseChain.' },
-  { step: '02', title: 'Share Your Brand', body: 'DM us your token address, logo, description, socials, and any color preferences.' },
-  { step: '03', title: 'Go Live in 24 hrs', body: "Your custom table, TableProfile, and Gold Badge are live — we'll ping you when ready." },
-]
-
-const accentMap: Record<string, string> = {
-  cyan: 'from-cyan-500/20 to-cyan-600/10 border-cyan-500/30 text-cyan-400',
-  violet: 'from-violet-500/20 to-violet-600/10 border-violet-500/30 text-violet-400',
-  amber: 'from-amber-500/20 to-amber-600/10 border-amber-500/30 text-amber-400',
+// ── Scroll-triggered animation hook ─────────────────────────────────────────
+function useInView(threshold = 0.15) {
+  const ref = useRef<HTMLDivElement>(null)
+  const [inView, setInView] = useState(false)
+  useEffect(() => {
+    const el = ref.current
+    if (!el) return
+    const obs = new IntersectionObserver(
+      ([entry]) => { if (entry.isIntersecting) { setInView(true); obs.disconnect() } },
+      { threshold }
+    )
+    obs.observe(el)
+    return () => obs.disconnect()
+  }, [threshold])
+  return { ref, inView }
 }
 
-const iconBgMap: Record<string, string> = {
-  cyan: 'bg-cyan-500/20 text-cyan-400',
-  violet: 'bg-violet-500/20 text-violet-400',
-  amber: 'bg-amber-500/20 text-amber-400',
-}
-
-type Tab = 'marketing' | 'advertising'
-
-function TabBar({ active, onChange }: { active: Tab; onChange: (t: Tab) => void }) {
-  const tabs: { id: Tab; label: string; icon: React.ElementType }[] = [
-    { id: 'marketing', label: 'Marketing', icon: Spade },
-    { id: 'advertising', label: 'Advertising', icon: BarChart2 },
-  ]
+// ── Hero Section ──────────────────────────────────────────────────────────────
+function HeroSection() {
+  const [ready, setReady] = useState(false)
+  useEffect(() => { const t = setTimeout(() => setReady(true), 60); return () => clearTimeout(t) }, [])
 
   return (
-    <div
-      className="sticky top-0 z-30 flex justify-center px-4 py-3"
-      style={{ background: 'rgba(2,6,23,0.85)', backdropFilter: 'blur(12px)', borderBottom: '1px solid rgba(255,255,255,0.06)' }}
-    >
-      <div
-        className="inline-flex gap-1 p-1 rounded-xl"
-        style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.08)' }}
-      >
-        {tabs.map(({ id, label, icon: Icon }) => {
-          const isActive = active === id
-          return (
-            <button
-              key={id}
-              type="button"
-              onClick={() => onChange(id)}
-              className="flex items-center gap-2 px-5 py-2 rounded-lg text-sm font-semibold transition-all"
-              style={
-                isActive
-                  ? {
-                      background:
-                        id === 'marketing'
-                          ? 'linear-gradient(135deg, rgba(6,182,212,0.25), rgba(99,102,241,0.2))'
-                          : 'linear-gradient(135deg, rgba(99,102,241,0.25), rgba(139,92,246,0.2))',
-                      color: '#fff',
-                      border: '1px solid rgba(255,255,255,0.12)',
-                      boxShadow: '0 2px 12px rgba(0,0,0,0.3)',
-                    }
-                  : { color: '#64748b', border: '1px solid transparent' }
-              }
-            >
-              <Icon className="w-4 h-4" />
-              {label}
-            </button>
-          )
-        })}
+    <section className="relative min-h-[100dvh] flex flex-col items-center justify-center overflow-hidden px-4 text-center">
+      {/* Background table image */}
+      <div className="pointer-events-none absolute inset-0">
+        <Image
+          src="/BlackJack/BrandedTable/Liberty.webp"
+          alt=""
+          fill
+          className="object-cover object-center opacity-[0.18] scale-110"
+          priority
+        />
+        <div className="absolute inset-0 bg-gradient-to-b from-[#060810] via-[#060810]/80 to-[#060810]" />
+        {/* Radial glow */}
+        <div
+          className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[700px] h-[400px] rounded-full"
+          style={{ background: 'radial-gradient(ellipse, rgba(34,211,238,0.12) 0%, transparent 70%)' }}
+        />
       </div>
-    </div>
+
+      <div className="relative z-10 max-w-3xl mx-auto">
+        {/* Badge */}
+        <div
+          className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full text-xs font-bold uppercase tracking-widest mb-8"
+          style={{
+            background: 'rgba(34,211,238,0.08)',
+            border: '1px solid rgba(34,211,238,0.25)',
+            color: '#67e8f9',
+            opacity: ready ? 1 : 0,
+            transform: ready ? 'translateY(0)' : 'translateY(8px)',
+            transition: 'opacity 0.6s ease, transform 0.6s ease',
+          }}
+        >
+          <Zap className="w-3 h-3" />
+          Get your token on the table
+        </div>
+
+        {/* Headline */}
+        <h1
+          className="font-black tracking-tight leading-none text-white mb-6"
+          style={{
+            fontSize: 'clamp(2.6rem, 8vw, 5.5rem)',
+            opacity: ready ? 1 : 0,
+            transform: ready ? 'translateY(0)' : 'translateY(20px)',
+            transition: 'opacity 0.7s ease 0.1s, transform 0.7s ease 0.1s',
+          }}
+        >
+          Bring Your Brand
+          <br />
+          <span
+            style={{
+              background: 'linear-gradient(135deg, #22d3ee 0%, #818cf8 60%, #c084fc 100%)',
+              WebkitBackgroundClip: 'text',
+              WebkitTextFillColor: 'transparent',
+            }}
+          >
+            To The Table
+          </span>
+        </h1>
+
+        {/* Sub */}
+        <p
+          className="text-slate-400 max-w-xl mx-auto mb-10 leading-relaxed"
+          style={{
+            fontSize: 'clamp(1rem, 2.5vw, 1.2rem)',
+            opacity: ready ? 1 : 0,
+            transform: ready ? 'translateY(0)' : 'translateY(16px)',
+            transition: 'opacity 0.7s ease 0.2s, transform 0.7s ease 0.2s',
+          }}
+        >
+          Morbius builds a fully branded game table for your token — live in{' '}
+          <span className="text-white font-semibold">24 hours</span>, with a token profile,
+          Gold Badge, and your design applied to every future game we launch.
+        </p>
+
+        {/* CTAs */}
+        <div
+          className="flex flex-wrap justify-center gap-3 mb-12"
+          style={{
+            opacity: ready ? 1 : 0,
+            transform: ready ? 'translateY(0)' : 'translateY(12px)',
+            transition: 'opacity 0.7s ease 0.3s, transform 0.7s ease 0.3s',
+          }}
+        >
+          <a
+            href="#payment"
+            className="group relative inline-flex items-center gap-2.5 px-8 py-3.5 rounded-2xl font-bold text-white overflow-hidden"
+            style={{
+              background: 'linear-gradient(135deg, #06b6d4, #6366f1)',
+              boxShadow: '0 0 32px rgba(6,182,212,0.3), 0 4px 16px rgba(0,0,0,0.4)',
+              fontSize: '1rem',
+            }}
+          >
+            <span className="relative z-10">Get Started — $49</span>
+            <span className="relative z-10 line-through text-white/40 text-sm font-normal">$99</span>
+            {/* Shine sweep */}
+            <span
+              className="absolute inset-0 pointer-events-none"
+              style={{
+                background: 'linear-gradient(105deg, transparent 30%, rgba(255,255,255,0.15) 50%, transparent 70%)',
+                transform: 'translateX(-100%)',
+                transition: 'transform 0.5s ease',
+              }}
+            />
+          </a>
+          <a
+            href="#info"
+            className="inline-flex items-center gap-2 px-7 py-3.5 rounded-2xl font-semibold text-slate-300 transition-colors hover:text-white"
+            style={{
+              background: 'rgba(255,255,255,0.04)',
+              border: '1px solid rgba(255,255,255,0.1)',
+              fontSize: '1rem',
+            }}
+          >
+            See what&apos;s included
+          </a>
+        </div>
+
+        {/* Trust bar */}
+        <div
+          className="flex flex-wrap justify-center gap-x-7 gap-y-2 text-sm text-slate-500"
+          style={{
+            opacity: ready ? 1 : 0,
+            transition: 'opacity 0.7s ease 0.45s',
+          }}
+        >
+          <span className="flex items-center gap-1.5"><Clock className="w-3.5 h-3.5 text-cyan-500/70" /> 24hr delivery</span>
+          <span className="flex items-center gap-1.5"><BadgeCheck className="w-3.5 h-3.5 text-amber-400/70" /> Gold Badge included</span>
+          <span className="flex items-center gap-1.5"><Layers className="w-3.5 h-3.5 text-violet-400/70" /> All future games included</span>
+        </div>
+      </div>
+
+      {/* Scroll nudge */}
+      <a
+        href="#info"
+        className="absolute bottom-8 left-1/2 -translate-x-1/2 text-slate-600 hover:text-slate-400 transition-colors"
+        aria-label="Scroll down"
+        style={{ animation: 'bounce 2s infinite' }}
+      >
+        <ChevronDown className="w-6 h-6" />
+      </a>
+
+      <style>{`@keyframes bounce { 0%,100%{transform:translate(-50%,0)} 50%{transform:translate(-50%,8px)} }`}</style>
+    </section>
   )
 }
 
-function TournamentSection() {
-  return (
-    <section className="py-16 px-4">
-      <div className="max-w-5xl mx-auto">
-        <div className="text-center mb-10">
-          <div
-            className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full border text-xs font-semibold uppercase tracking-wider mb-5"
-            style={{ background: 'rgba(139,92,246,0.12)', borderColor: 'rgba(139,92,246,0.35)', color: '#c4b5fd' }}
-          >
-            <Trophy className="w-3.5 h-3.5" />
-            Coming Soon — Custom Tournaments
-          </div>
+// ── Info Section ──────────────────────────────────────────────────────────────
+function InfoSection() {
+  const { ref, inView } = useInView(0.1)
 
-          <h2 className="text-3xl md:text-4xl font-bold text-white mb-3">
-            Add Utility to Your Token{' '}
-            <span className="bg-gradient-to-r from-violet-400 to-purple-400 bg-clip-text text-transparent">
-              Overnight
-            </span>
+  return (
+    <section id="info" className="relative py-24 px-4" ref={ref}>
+      {/* Subtle divider glow */}
+      <div
+        className="pointer-events-none absolute top-0 left-1/2 -translate-x-1/2 w-px h-32"
+        style={{ background: 'linear-gradient(to bottom, transparent, rgba(34,211,238,0.3), transparent)' }}
+      />
+
+      <div className="max-w-4xl mx-auto">
+        {/* Section header */}
+        <div
+          className="text-center mb-16"
+          style={{
+            opacity: inView ? 1 : 0,
+            transform: inView ? 'translateY(0)' : 'translateY(24px)',
+            transition: 'opacity 0.6s ease, transform 0.6s ease',
+          }}
+        >
+          <h2 className="font-black text-white mb-3" style={{ fontSize: 'clamp(1.8rem, 5vw, 3rem)' }}>
+            Everything in the Package
           </h2>
-          <p className="text-slate-400 text-lg max-w-2xl mx-auto">
-            We&apos;re launching fully branded custom tournaments on Morbius. As a table owner,
-            you&apos;ll have the tools to run community events that drive real buy pressure,
-            engagement, and exposure for your token.
-          </p>
+          <p className="text-slate-400 text-lg">One payment. Three powerful placements for your project.</p>
         </div>
 
-        <div className="grid sm:grid-cols-3 gap-4 mb-8">
-          {[
-            {
-              icon: Trophy,
-              title: 'Prize Pools in Your Token',
-              desc: 'Winners receive your token as rewards, incentivizing holders to compete and new players to acquire your token to join.',
-              color: '#f59e0b',
-              bg: 'rgba(245,158,11,0.1)',
-              border: 'rgba(245,158,11,0.2)',
-            },
-            {
-              icon: Users,
-              title: 'Fully Branded Tournament Page',
-              desc: 'Your logo, colors, and Token Profile front and center. Leaderboards, countdown timers, and live results all under your brand.',
-              color: '#6366f1',
-              bg: 'rgba(99,102,241,0.1)',
-              border: 'rgba(99,102,241,0.2)',
-            },
-            {
-              icon: Megaphone,
-              title: 'Built-in Social Moment',
-              desc: 'Tournament launches are natural marketing events. Perfect for project announcements, AMAs, and community milestones.',
-              color: '#ec4899',
-              bg: 'rgba(236,72,153,0.1)',
-              border: 'rgba(236,72,153,0.2)',
-            },
-          ].map(({ icon: Icon, title, desc, color, bg, border }) => (
-            <div key={title} className="p-5 rounded-2xl" style={{ background: bg, border: `1px solid ${border}` }}>
-              <div className="w-10 h-10 rounded-xl flex items-center justify-center mb-3" style={{ background: `${bg.replace('0.1', '0.2')}` }}>
+        {/* Deliverables list — horizontal on desktop, stacked on mobile */}
+        <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4 mb-12">
+          {DELIVERABLES.map(({ icon: Icon, label, sub, color }, i) => (
+            <div
+              key={label}
+              className="group relative rounded-2xl p-5 overflow-hidden cursor-default"
+              style={{
+                background: 'rgba(255,255,255,0.025)',
+                border: '1px solid rgba(255,255,255,0.07)',
+                opacity: inView ? 1 : 0,
+                transform: inView ? 'translateY(0)' : 'translateY(20px)',
+                transition: `opacity 0.55s ease ${i * 0.07 + 0.1}s, transform 0.55s ease ${i * 0.07 + 0.1}s`,
+              }}
+            >
+              {/* hover glow */}
+              <div
+                className="pointer-events-none absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity duration-500"
+                style={{ background: `radial-gradient(ellipse at 30% 50%, ${color}15 0%, transparent 70%)` }}
+              />
+              <div
+                className="w-10 h-10 rounded-xl flex items-center justify-center mb-3"
+                style={{ background: `${color}18` }}
+              >
                 <Icon className="w-5 h-5" style={{ color }} />
               </div>
-              <h3 className="text-white font-bold text-sm mb-2">{title}</h3>
-              <p className="text-slate-500 text-xs leading-relaxed">{desc}</p>
+              <p className="text-white font-bold text-sm mb-1">{label}</p>
+              <p className="text-slate-500 text-xs leading-relaxed">{sub}</p>
             </div>
           ))}
+        </div>
+
+        {/* How it works — horizontal stepper */}
+        <div
+          className="rounded-2xl p-6 md:p-8"
+          style={{
+            background: 'rgba(255,255,255,0.02)',
+            border: '1px solid rgba(255,255,255,0.06)',
+            opacity: inView ? 1 : 0,
+            transform: inView ? 'translateY(0)' : 'translateY(20px)',
+            transition: 'opacity 0.6s ease 0.45s, transform 0.6s ease 0.45s',
+          }}
+        >
+          <p className="text-xs font-bold uppercase tracking-widest text-slate-500 mb-6">How it works</p>
+          <div className="grid md:grid-cols-3 gap-6 md:gap-4">
+            {[
+              { n: '01', title: 'Send Payment', body: 'Send the exact PLS amount shown to our PulseChain wallet.' },
+              { n: '02', title: 'Share Your Brand', body: 'DM us your token address, logo, description, socials, and color preferences.' },
+              { n: '03', title: 'Go Live in 24h', body: "Your table, TableProfile, and Gold Badge go live — we'll ping you when ready." },
+            ].map(({ n, title, body }, i) => (
+              <div key={n} className="flex gap-4">
+                <div
+                  className="text-3xl font-black leading-none shrink-0 tabular-nums"
+                  style={{ color: 'rgba(34,211,238,0.25)', width: '2.5rem', textAlign: 'right' }}
+                >
+                  {n}
+                </div>
+                <div>
+                  <p className="text-white font-bold text-sm mb-1">{title}</p>
+                  <p className="text-slate-500 text-xs leading-relaxed">{body}</p>
+                </div>
+              </div>
+            ))}
+          </div>
         </div>
       </div>
     </section>
   )
 }
 
-export default function MarketingPageClient() {
-  const [tab, setTab] = useState<Tab>('marketing')
-  const [hoveredFeature, setHoveredFeature] = useState<string | null>(null)
+// ── Payment Section ───────────────────────────────────────────────────────────
+function PaymentSection() {
+  const { ref, inView } = useInView(0.1)
 
+  return (
+    <section id="payment" className="relative py-24 px-4" ref={ref}>
+      <div
+        className="pointer-events-none absolute top-0 left-1/2 -translate-x-1/2 w-px h-32"
+        style={{ background: 'linear-gradient(to bottom, transparent, rgba(99,102,241,0.35), transparent)' }}
+      />
+
+      <div className="max-w-4xl mx-auto">
+        {/* Header */}
+        <div
+          className="text-center mb-12"
+          style={{
+            opacity: inView ? 1 : 0,
+            transform: inView ? 'translateY(0)' : 'translateY(24px)',
+            transition: 'opacity 0.6s ease, transform 0.6s ease',
+          }}
+        >
+          <h2 className="font-black text-white mb-3" style={{ fontSize: 'clamp(1.8rem, 5vw, 3rem)' }}>
+            Ready to Get Started?
+          </h2>
+          <p className="text-slate-400 text-lg">Send payment, then reach out with your brand details.</p>
+        </div>
+
+        <div
+          className="grid lg:grid-cols-2 gap-8 items-start"
+          style={{
+            opacity: inView ? 1 : 0,
+            transform: inView ? 'translateY(0)' : 'translateY(24px)',
+            transition: 'opacity 0.65s ease 0.1s, transform 0.65s ease 0.1s',
+          }}
+        >
+          {/* Package summary */}
+          <div
+            className="rounded-2xl p-6 space-y-5"
+            style={{
+              background: 'rgba(255,255,255,0.025)',
+              border: '1px solid rgba(255,255,255,0.07)',
+            }}
+          >
+            <div>
+              <p className="text-xs font-bold uppercase tracking-widest text-slate-500 mb-3">Package summary</p>
+              <ul className="space-y-2.5">
+                {[
+                  'Custom branded table (Blackjack + all future games)',
+                  'Token Profile card with logo, socials & contract',
+                  'GOLD badge on PulseChainAi.com',
+                  'Custom token description on PulseChainAi.com',
+                  'Featured on the front page of PulseChainAi.com',
+                  '24hr delivery guaranteed',
+                ].map((item) => (
+                  <li key={item} className="flex items-start gap-2.5 text-sm text-slate-300">
+                    <BadgeCheck className="w-4 h-4 text-green-400 shrink-0 mt-px" />
+                    {item}
+                  </li>
+                ))}
+              </ul>
+            </div>
+
+            {/* Price */}
+            <div
+              className="pt-4 border-t flex items-center justify-between"
+              style={{ borderColor: 'rgba(255,255,255,0.07)' }}
+            >
+              <span className="text-slate-500 text-sm">One-time fee</span>
+              <div className="text-right">
+                <div className="flex items-baseline gap-2 justify-end">
+                  <span className="text-2xl font-black text-white">$49 USD</span>
+                  <span className="text-slate-600 line-through text-sm">$99</span>
+                </div>
+                <p className="text-xs text-red-400 font-semibold">50% off — limited time</p>
+              </div>
+            </div>
+
+            {/* Contact */}
+            <div
+              className="rounded-xl p-4 space-y-3"
+              style={{ background: 'rgba(6,182,212,0.05)', border: '1px solid rgba(6,182,212,0.12)' }}
+            >
+              <div className="flex items-center gap-2">
+                <MessagesSquare className="w-4 h-4 text-cyan-400" />
+                <span className="text-sm font-semibold text-white">After payment, reach out on:</span>
+              </div>
+              <div className="flex flex-wrap gap-2">
+                <a
+                  href="https://t.me/kylecruise"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-medium transition-colors"
+                  style={{ background: 'rgba(59,130,246,0.15)', border: '1px solid rgba(59,130,246,0.25)', color: '#93c5fd' }}
+                >
+                  Telegram @kylecruise
+                </a>
+                <a
+                  href="https://x.com/Morbius_io"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-medium transition-colors"
+                  style={{ background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.1)', color: '#94a3b8' }}
+                >
+                  X @Morbius_io
+                </a>
+              </div>
+              <p className="text-xs text-slate-600">Include tx hash + token address + brand details (logo, colors, description, socials).</p>
+            </div>
+          </div>
+
+          {/* Payment panel */}
+          <div>
+            <CryptoPaymentPanel />
+          </div>
+        </div>
+      </div>
+    </section>
+  )
+}
+
+// ── Page ──────────────────────────────────────────────────────────────────────
+export default function MarketingPageClient() {
   return (
     <GlobalMainNav>
       <div
         className="min-h-screen text-slate-100"
-        style={{
-          backgroundImage:
-            "linear-gradient(rgba(2,6,23,0.93), rgba(5,10,30,0.96)), url('/BlackJack/TableBackground3.png')",
-          backgroundSize: 'cover',
-          backgroundPosition: 'center',
-          backgroundAttachment: 'fixed',
-        }}
+        style={{ background: '#060810' }}
       >
-        <TabBar active={tab} onChange={setTab} />
-
-        {tab === 'marketing' && (
-          <>
-            <section className="relative w-full py-20 px-4 text-center overflow-hidden">
-              <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-                <div className="w-[600px] h-[300px] rounded-full bg-cyan-500/10 blur-[120px]" />
-              </div>
-
-              <div className="relative z-10 max-w-3xl mx-auto">
-                <div className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-cyan-950/60 border border-cyan-500/30 text-cyan-300 text-xs font-semibold uppercase tracking-wider mb-4">
-                  <Zap className="w-3.5 h-3.5" />
-                  
-                </div>
-
-                <div className="flex justify-center mb-6">
-                  <div
-                    className="inline-flex items-center gap-2 px-4 py-2 rounded-xl"
-                    style={{
-                      background: 'linear-gradient(135deg, rgba(239,68,68,0.2), rgba(220,38,38,0.1))',
-                      border: '1px solid rgba(239,68,68,0.4)',
-                    }}
-                  >
-                    <Tag className="w-4 h-4 text-red-400" />
-                    <span className="text-red-300 font-black text-sm uppercase tracking-wide">
-                      
-                    </span>
-                  </div>
-                </div>
-
-                <h1 className="text-4xl md:text-6xl font-extrabold text-white leading-tight mb-4">
-                  <span className="block whitespace-nowrap">Bring Your Brand</span>
-                  <span className="block whitespace-nowrap bg-gradient-to-r from-cyan-400 to-blue-400 bg-clip-text text-transparent">
-                    To The Table
-                  </span>
-                </h1>
-
-                <p className="text-xl text-slate-300 max-w-2xl mx-auto mb-8 leading-relaxed">
-                  Morbius builds a fully branded game table for your token — live in{' '}
-                  <span className="text-white font-semibold">24 hours</span>, with a token profile,
-                  Gold Badge, and your design auto-applied to every future game we launch.
-                </p>
-
-                <div className="flex flex-wrap justify-center gap-4">
-                  <a
-                    href="#payment"
-                    className="inline-flex items-center gap-2 px-7 py-3.5 rounded-xl bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-400 hover:to-blue-500 text-white font-bold text-base shadow-lg shadow-cyan-900/30 transition-all"
-                  >
-                    Get Started — $49
-                    <span className="text-cyan-200/70 line-through text-sm font-normal">$99</span>
-                    <ChevronRight className="w-4 h-4" />
-                  </a>
-                  <a
-                    href="#whats-included"
-                    className="inline-flex items-center gap-2 px-7 py-3.5 rounded-xl bg-white/5 hover:bg-white/10 border border-white/15 text-white font-semibold text-base transition-all"
-                  >
-                    See What&apos;s Included
-                  </a>
-                </div>
-
-                <div className="flex flex-wrap justify-center gap-6 mt-10 text-sm text-slate-400">
-                  <span className="flex items-center gap-1.5"><Clock className="w-4 h-4 text-cyan-500" /> 24hr turnaround</span>
-                  <span className="flex items-center gap-1.5"><BadgeCheck className="w-4 h-4 text-amber-400" /> Gold Badge included</span>
-                  <span className="flex items-center gap-1.5"><Star className="w-4 h-4 text-violet-400" /> Featured on the front page</span>
-                  <span className="flex items-center gap-1.5"><Layers className="w-4 h-4 text-green-400" /> All future games included</span>
-                </div>
-              </div>
-            </section>
-
-            <section id="whats-included" className="py-16 px-4">
-              <div className="max-w-5xl mx-auto">
-                <div className="text-center mb-12">
-                  <h2 className="text-3xl md:text-4xl font-bold text-white mb-3">
-                    Everything in the Package
-                  </h2>
-                  <p className="text-slate-400 text-lg">
-                    One payment. Three powerful placements for your project.
-                  </p>
-                </div>
-
-                <style>{`@keyframes cardShine { 0% { left: -60%; } 65%, 100% { left: 170%; } }`}</style>
-                <div className="grid md:grid-cols-3 gap-4 md:gap-6">
-                  {FEATURES.map(({ icon: Icon, title, description, accent, hoverImage, shineGradient }) => {
-                    const isHovered = hoveredFeature === title
-                    return (
-                      <div key={title} style={{ position: 'relative', zIndex: isHovered ? 10 : 1 }}>
-                        <CometCard>
-                          <div
-                            className={`relative rounded-2xl bg-gradient-to-br border ${accentMap[accent]} backdrop-blur-sm overflow-hidden cursor-default`}
-                            onMouseEnter={() => setHoveredFeature(title)}
-                            onMouseLeave={() => setHoveredFeature(null)}
-                          >
-                            <div
-                              className="absolute inset-0 pointer-events-none"
-                              style={{ opacity: isHovered ? 1 : 0, transition: 'opacity 0.35s ease' }}
-                            >
-                              <img src={hoverImage} alt="" className="w-full h-full object-cover object-top" />
-                            </div>
-                            <div
-                              className="absolute inset-y-0 pointer-events-none"
-                              style={{
-                                width: '45%',
-                                background: shineGradient,
-                                animation: 'cardShine 4s ease-in-out infinite',
-                                zIndex: 5,
-                              }}
-                            />
-                            <div
-                              className="relative z-10 p-4 md:p-6"
-                              style={{ opacity: isHovered ? 0 : 1, transition: 'opacity 0.25s ease' }}
-                            >
-                              <div className={`w-9 h-9 md:w-12 md:h-12 rounded-xl flex items-center justify-center mb-3 md:mb-4 ${iconBgMap[accent]}`}>
-                                <Icon className="w-5 h-5 md:w-6 md:h-6" />
-                              </div>
-                              <h3 className="text-sm md:text-lg font-bold text-white mb-1.5 md:mb-2">{title}</h3>
-                              <p className="text-slate-400 text-xs md:text-sm leading-relaxed">{description}</p>
-                            </div>
-                          </div>
-                        </CometCard>
-                      </div>
-                    )
-                  })}
-                </div>
-
-                <div
-                  className="mt-6 rounded-2xl p-5 flex items-center gap-4"
-                  style={{
-                    background: 'linear-gradient(135deg, rgba(34,197,94,0.08), rgba(6,182,212,0.06))',
-                    border: '1px solid rgba(34,197,94,0.2)',
-                  }}
-                >
-                  <Layers className="w-8 h-8 text-green-400 shrink-0" />
-                  <div>
-                    <p className="text-white font-bold text-sm mb-0.5">Grows With the Platform</p>
-                    <p className="text-slate-400 text-sm">
-                      Your custom table design automatically carries over to every new game Morbius launches —
-                      <span className="text-white font-semibold"> Poker, Baccarat, and beyond</span>.
-                      One setup, permanent presence across the entire casino.
-                    </p>
-                  </div>
-                </div>
-              </div>
-            </section>
-
-            <TableShowcaseDisplay />
-
-            <section className="py-10 px-4">
-              <div className="max-w-5xl mx-auto">
-                <div className="text-center mb-8">
-                  <h2 className="text-2xl md:text-3xl font-bold text-white mb-2">
-                    Your TableProfile — Preview
-                  </h2>
-                  <p className="text-slate-400">
-                    Every custom table gets a dedicated profile card. Here&apos;s an example:
-                  </p>
-                </div>
-                <div className="flex justify-center">
-                  <CometCard className="w-1/2">
-                    <img
-                      src="/Marketing%20/Token%20Profile/LBRTYtp.png"
-                      alt="Example TableProfile card"
-                      className="w-full rounded-2xl"
-                    />
-                  </CometCard>
-                </div>
-              </div>
-            </section>
-
-            <section className="py-10 px-4">
-              <div className="max-w-3xl mx-auto">
-                <CometCard>
-                  <div
-                    className="rounded-2xl p-4 md:p-8 text-center"
-                    style={{
-                      background: 'linear-gradient(135deg, rgba(245,158,11,0.12) 0%, rgba(217,119,6,0.06) 100%)',
-                      border: '1px solid rgba(245,158,11,0.25)',
-                    }}
-                  >
-                    <Crown className="w-9 h-9 md:w-10 md:h-10 text-amber-400 mx-auto mb-3 md:mb-4" />
-                    <h3 className="text-sm md:text-2xl font-bold text-white mb-1.5 md:mb-3">
-                      Gold Badge on PulseChainAi.com
-                    </h3>
-                    <p className="text-xs md:text-base text-slate-300 leading-relaxed mb-3 md:mb-4">
-                      Your project gets a <span className="text-amber-300 font-semibold">GOLD verified badge</span>,
-                      a custom description, and a{' '}
-                      <span className="text-amber-300 font-semibold">featured spot on the front page</span>{' '}
-                      — putting your project in front of thousands of PulseChain users every day.
-                    </p>
-                    <div className="flex flex-wrap justify-center gap-2 md:gap-4 text-xs md:text-sm">
-                      <span className="flex items-center gap-1 md:gap-1.5 text-amber-300">
-                        <BadgeCheck className="w-3.5 h-3.5 md:w-4 md:h-4" /> GOLD Verified Badge
-                      </span>
-                      <span className="flex items-center gap-1 md:gap-1.5 text-amber-300">
-                        <Globe className="w-3.5 h-3.5 md:w-4 md:h-4" /> Custom Token Description
-                      </span>
-                      <span className="flex items-center gap-1 md:gap-1.5 text-amber-300">
-                        <TrendingUp className="w-3.5 h-3.5 md:w-4 md:h-4" /> Featured on the front page
-                      </span>
-                    </div>
-                  </div>
-                </CometCard>
-              </div>
-            </section>
-
-            <PulseChainAiDisplay />
-            <TournamentSection />
-
-            <section className="py-12 px-4">
-              <div className="max-w-3xl mx-auto">
-                <div className="text-center mb-10">
-                  <h2 className="text-2xl md:text-3xl font-bold text-white mb-2">How It Works</h2>
-                  <p className="text-slate-400">Simple. Fast. Done in 24 hours.</p>
-                </div>
-
-                <div className="space-y-4">
-                  {HOW_IT_WORKS.map(({ step, title, body }) => (
-                    <div
-                      key={step}
-                      className="flex gap-5 p-5 rounded-2xl bg-white/[0.04] border border-white/10 backdrop-blur-sm"
-                    >
-                      <div className="text-3xl font-black text-cyan-500/40 leading-none shrink-0 w-12 text-right">
-                        {step}
-                      </div>
-                      <div>
-                        <h4 className="text-white font-bold mb-1">{title}</h4>
-                        <p className="text-slate-400 text-sm leading-relaxed">{body}</p>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            </section>
-
-            <section id="payment" className="py-16 px-4">
-              <div className="max-w-5xl mx-auto">
-                <div className="text-center mb-10">
-                  <h2 className="text-2xl md:text-3xl font-bold text-white mb-2">
-                    Ready to Get Started?
-                  </h2>
-                  <p className="text-slate-400">
-                    Send payment below, then reach out with your brand details.
-                  </p>
-                </div>
-
-                <div className="grid lg:grid-cols-2 gap-8 items-start">
-                  <div className="space-y-4">
-                    <div
-                      className="rounded-2xl p-6"
-                      style={{
-                        background: 'linear-gradient(135deg, rgba(10,15,30,0.9), rgba(15,20,45,0.9))',
-                        border: '1px solid rgba(99,102,241,0.25)',
-                      }}
-                    >
-                      <h3 className="text-lg font-bold text-white mb-4">Package Summary</h3>
-                      <ul className="space-y-3 text-sm">
-                        {[
-                          'Custom branded table on Morbius (Blackjack + all future games)',
-                          'TableProfile card with logo, socials & contract',
-                          'GOLD badge on PulseChainAi.com',
-                          'Custom token description on PulseChainAi.com',
-                          'Featured on the front page of PulseChainAi.com',
-                          '24hr delivery guaranteed',
-                        ].map((item) => (
-                          <li key={item} className="flex items-start gap-2.5 text-slate-300">
-                            <BadgeCheck className="w-4 h-4 text-green-400 shrink-0 mt-0.5" />
-                            {item}
-                          </li>
-                        ))}
-                      </ul>
-                      <div className="mt-6 pt-5 border-t border-white/10 flex items-center justify-between">
-                        <span className="text-slate-400">One-time fee</span>
-                        <div className="text-right">
-                          <div className="flex items-baseline gap-2 justify-end">
-                            <span className="text-2xl font-black text-white">$49 USD</span>
-                            <span className="text-slate-600 line-through text-base">$99</span>
-                          </div>
-                          <p className="text-xs text-red-400 font-semibold">Limited time — 50% off!</p>
-                        </div>
-                      </div>
-                      <p className="text-xs text-slate-500 mt-1 text-right">Paid in PLS at live market rate</p>
-                    </div>
-
-                    <div
-                      className="rounded-2xl p-5"
-                      style={{
-                        background: 'rgba(15,25,50,0.7)',
-                        border: '1px solid rgba(6,182,212,0.15)',
-                      }}
-                    >
-                      <div className="flex items-center gap-2 mb-3">
-                        <MessagesSquare className="w-4 h-4 text-cyan-400" />
-                        <span className="text-sm font-semibold text-white">After payment, reach out on:</span>
-                      </div>
-                      <div className="flex flex-wrap gap-2">
-                        <a
-                          href="https://t.me/kylecruise"
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg bg-blue-900/40 hover:bg-blue-900/60 border border-blue-500/30 text-blue-300 text-sm transition-colors"
-                        >
-                          Telegram @kylecruise
-                        </a>
-                        <a
-                          href="https://x.com/Morbius_io"
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg bg-slate-800/60 hover:bg-slate-700/60 border border-slate-500/30 text-slate-300 text-sm transition-colors"
-                        >
-                          X @Morbius_io
-                        </a>
-                      </div>
-                      <p className="text-xs text-slate-500 mt-3">
-                        Include your tx hash + token address + brand details (logo, colors, description,
-                        socials).
-                      </p>
-                    </div>
-                  </div>
-
-                  <div>
-                    <CryptoPaymentPanel />
-                  </div>
-                </div>
-              </div>
-            </section>
-          </>
-        )}
-
-        {tab === 'advertising' && <AdvertisingSection />}
-
+        <HeroSection />
+        <InfoSection />
+        <PaymentSection />
         <Footer />
       </div>
     </GlobalMainNav>

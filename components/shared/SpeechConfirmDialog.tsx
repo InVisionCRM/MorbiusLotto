@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useEffect, useRef } from 'react';
+import { useEffect, useRef } from 'react';
 
 interface SpeechConfirmDialogProps {
   /** The action label, e.g. "Bet 5,000 MORBIUS?" */
@@ -27,8 +27,7 @@ export function SpeechConfirmDialog({
   timeoutMs = 8000,
 }: SpeechConfirmDialogProps) {
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  // Progress bar width
-  const [progress, setProgress] = React.useState(100);
+  const barRef = useRef<HTMLDivElement | null>(null);
   const startRef = useRef(Date.now());
   const rafRef = useRef<number | null>(null);
 
@@ -38,7 +37,7 @@ export function SpeechConfirmDialog({
     const tick = () => {
       const elapsed = Date.now() - startRef.current;
       const remaining = Math.max(0, 1 - elapsed / timeoutMs);
-      setProgress(remaining * 100);
+      if (barRef.current) barRef.current.style.width = `${remaining * 100}%`;
       if (remaining > 0) {
         rafRef.current = requestAnimationFrame(tick);
       }
@@ -72,9 +71,10 @@ export function SpeechConfirmDialog({
         {/* Countdown bar */}
         <div className="h-0.5 w-full" style={{ background: 'rgba(255,255,255,0.06)' }}>
           <div
+            ref={barRef}
             className="h-full transition-none"
             style={{
-              width: `${progress}%`,
+              width: '100%',
               background: 'linear-gradient(90deg, #06b6d4, #a855f7)',
             }}
           />
@@ -103,27 +103,21 @@ export function SpeechConfirmDialog({
           <div className="flex gap-2">
             <button
               onClick={onNo}
-              className="flex-1 py-2.5 rounded-xl text-sm font-semibold transition-colors"
+              className="flex-1 py-2.5 rounded-xl text-sm font-semibold transition-colors text-gray-400 hover:text-white"
               style={{
                 background: 'rgba(255,255,255,0.06)',
                 border: '1px solid rgba(255,255,255,0.1)',
-                color: '#9ca3af',
               }}
-              onMouseEnter={e => (e.currentTarget.style.color = '#fff')}
-              onMouseLeave={e => (e.currentTarget.style.color = '#9ca3af')}
             >
               No
             </button>
             <button
               onClick={onYes}
-              className="flex-1 py-2.5 rounded-xl text-sm font-bold transition-all"
+              className="flex-1 py-2.5 rounded-xl text-sm font-bold transition-all text-white"
               style={{
                 background: 'linear-gradient(135deg, rgba(6,182,212,0.25), rgba(168,85,247,0.25))',
                 border: '1px solid rgba(6,182,212,0.4)',
-                color: '#fff',
               }}
-              onMouseEnter={e => (e.currentTarget.style.borderColor = 'rgba(6,182,212,0.7)')}
-              onMouseLeave={e => (e.currentTarget.style.borderColor = 'rgba(6,182,212,0.4)')}
             >
               Yes
             </button>
