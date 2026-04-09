@@ -99,6 +99,10 @@ export default function RootLayout({
         <link rel="preload" as="image" href="/morbius/hero-small.jpeg" media="(max-width: 767px)" />
         <link rel="preload" as="image" href="/morbius/Morbius-glass-chip-16x9.jpeg" media="(min-width: 768px)" />
 
+        {/* Wallet / modal SDKs — warm connections early (Lighthouse preconnect candidates) */}
+        <link rel="preconnect" href="https://pulse.walletconnect.org" />
+        <link rel="preconnect" href="https://api.web3modal.org" />
+
         {/* Font Awesome — load non-render-blocking (icons appear after paint, not before) */}
         <link
           rel="stylesheet"

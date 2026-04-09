@@ -1,30 +1,77 @@
 'use client'
 
-import { useEffect, useRef } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
+
+/** Pinned version for stable caching; upgrade intentionally when QAing the widget. */
+const CONVAI_EMBED_SRC =
+  'https://unpkg.com/@elevenlabs/convai-widget-embed@0.11.2/dist/index.js'
 
 export function ElevenLabsWidget() {
   const router = useRouter()
   const routerRef = useRef(router)
   routerRef.current = router
+  const [convaiReady, setConvaiReady] = useState(false)
+  const injectedRef = useRef(false)
 
   useEffect(() => {
-    // Defer until after the page is interactive so it doesn't compete with LCP
-    const load = () => {
-      if (document.querySelector('script[src*="elevenlabs/convai-widget-embed"]')) return
+    const inject = () => {
+      const existing = document.querySelector('script[data-morbius-convai]') as HTMLScriptElement | null
+      if (existing) {
+        injectedRef.current = true
+        if (typeof window.customElements !== 'undefined' && window.customElements.get('elevenlabs-convai')) {
+          setConvaiReady(true)
+        } else {
+          existing.addEventListener('load', () => setConvaiReady(true), { once: true })
+        }
+        return
+      }
+      if (injectedRef.current) return
+      injectedRef.current = true
       const script = document.createElement('script')
-      script.src = 'https://unpkg.com/@elevenlabs/convai-widget-embed'
+      script.src = CONVAI_EMBED_SRC
       script.async = true
       script.type = 'text/javascript'
+      script.dataset.morbiusConvai = '1'
+      script.onload = () => setConvaiReady(true)
       document.body.appendChild(script)
     }
-    if (document.readyState === 'complete') {
-      const t = window.setTimeout(load, 3000)
-      return () => window.clearTimeout(t)
+
+    const scheduleIdle = (): (() => void) => {
+      if (typeof window.requestIdleCallback === 'function') {
+        const id = window.requestIdleCallback(() => inject(), { timeout: 12_000 })
+        return () => window.cancelIdleCallback(id)
+      }
+      const id = window.setTimeout(() => inject(), 8_000)
+      return () => window.clearTimeout(id)
     }
-    const onLoad = () => { window.setTimeout(load, 3000) }
-    window.addEventListener('load', onLoad, { once: true })
-    return () => window.removeEventListener('load', onLoad)
+
+    // First interaction loads early for users who engage immediately; otherwise idle (better Lighthouse / TBT).
+    const onInteract = () => inject()
+    document.addEventListener('pointerdown', onInteract, { passive: true, once: true })
+    document.addEventListener('keydown', onInteract, { once: true })
+
+    let cancelIdle: (() => void) | undefined
+    if (document.readyState === 'complete') {
+      cancelIdle = scheduleIdle()
+    } else {
+      const onLoad = () => {
+        cancelIdle = scheduleIdle()
+      }
+      window.addEventListener('load', onLoad, { once: true })
+      return () => {
+        window.removeEventListener('load', onLoad)
+        document.removeEventListener('pointerdown', onInteract)
+        document.removeEventListener('keydown', onInteract)
+        cancelIdle?.()
+      }
+    }
+
+    return () => {
+      document.removeEventListener('pointerdown', onInteract)
+      document.removeEventListener('keydown', onInteract)
+      cancelIdle?.()
+    }
   }, [])
 
   useEffect(() => {
@@ -104,6 +151,8 @@ export function ElevenLabsWidget() {
     window.addEventListener('elevenlabs-convai:call', handleCallEvent)
     return () => window.removeEventListener('elevenlabs-convai:call', handleCallEvent)
   }, [])
+
+  if (!convaiReady) return null
 
   return (
     <>

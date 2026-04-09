@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
+import dynamic from 'next/dynamic'
 import Image from 'next/image'
 import GlobalMainNav from '@/components/shared/GlobalMainNav'
 import { FirstVisitNotification } from '@/components/ui/first-visit-notification'
@@ -9,16 +10,41 @@ import { useProfile } from '@/hooks/use-player-profile'
 import { LoginModal } from '@/components/auth/LoginModal'
 import { PlayerProfileModal } from '@/components/shared/PlayerProfileModal'
 import { HeroSection } from '@/components/home/hero-section'
-import { SocialsSection } from '@/components/home/socials-section'
 import { GamesSection } from '@/components/home/games-section'
-import { AvatarShowcaseSection } from '@/components/home/avatar-showcase-section'
-import { TokenomicsSection } from '@/components/home/tokenomics-section'
-import { MorbiusInfoSection } from '@/components/home/morbius-info-section'
-import { PulseChainSection } from '@/components/home/pulsechain-section'
-import { TableShowcaseDisplay } from '@/components/marketing/TableShowcaseDisplay'
-import Footer from '@/components/PLINKO/Footer'
 import { PwaHomeInstallSplash } from '@/components/home/PwaHomeInstallSplash'
 import { DepositWithdrawModal } from '@/components/BLACKJACK/DepositWithdrawModal'
+
+function HomeBelowFoldFallback() {
+  return <div className="w-full min-h-28 rounded-lg bg-neutral-950/40" aria-hidden />
+}
+
+const MorbiusInfoSection = dynamic(
+  () => import('@/components/home/morbius-info-section').then((m) => m.MorbiusInfoSection),
+  { loading: () => <HomeBelowFoldFallback /> }
+)
+const SocialsSection = dynamic(
+  () => import('@/components/home/socials-section').then((m) => m.SocialsSection),
+  { loading: () => <HomeBelowFoldFallback /> }
+)
+const TokenomicsSection = dynamic(
+  () => import('@/components/home/tokenomics-section').then((m) => m.TokenomicsSection),
+  { loading: () => <HomeBelowFoldFallback /> }
+)
+const PulseChainSection = dynamic(
+  () => import('@/components/home/pulsechain-section').then((m) => m.PulseChainSection),
+  { loading: () => <HomeBelowFoldFallback /> }
+)
+const TableShowcaseDisplay = dynamic(
+  () => import('@/components/marketing/TableShowcaseDisplay').then((m) => m.TableShowcaseDisplay),
+  { loading: () => <HomeBelowFoldFallback /> }
+)
+const AvatarShowcaseSection = dynamic(
+  () => import('@/components/home/avatar-showcase-section').then((m) => m.AvatarShowcaseSection),
+  { loading: () => <HomeBelowFoldFallback /> }
+)
+const Footer = dynamic(() => import('@/components/PLINKO/Footer'), {
+  loading: () => <HomeBelowFoldFallback />,
+})
 
 const HOME_FIXED_BG = '/Marketing%20/Hero-Background.jpeg' as const
 

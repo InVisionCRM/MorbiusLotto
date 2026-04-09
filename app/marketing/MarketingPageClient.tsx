@@ -68,153 +68,256 @@ function useInView(threshold = 0.15) {
   return { ref, inView }
 }
 
+// ── Hero mockup data ──────────────────────────────────────────────────────────
+const HERO_MOCKUPS = [
+  { name: 'LibertySwap', color: '#3b82f6', img: '/Marketing%20/Page%20View/LibertyPage.webp', tableImg: '/Marketing%20/Tables/LibertySwapTable.webp', rotateY: -8, z: 0 },
+  { name: 'LBRTY',       color: '#a855f7', img: '/Marketing%20/Page%20View/LBRTYpv.webp',    tableImg: '/BlackJack/BrandedTable/Liberty.webp',        rotateY:  0, z: 2 },
+  { name: 'pTiger',      color: '#f97316', img: '/BlackJack/BrandedTable/pTiger.webp',        tableImg: '/BlackJack/BrandedTable/pTiger.webp',          rotateY:  8, z: 0 },
+]
+
 // ── Hero Section ──────────────────────────────────────────────────────────────
 function HeroSection() {
   const [ready, setReady] = useState(false)
-  useEffect(() => { const t = setTimeout(() => setReady(true), 60); return () => clearTimeout(t) }, [])
+  useEffect(() => { const t = setTimeout(() => setReady(true), 80); return () => clearTimeout(t) }, [])
 
   return (
-    <section className="relative min-h-[100dvh] flex flex-col items-center justify-center overflow-hidden px-4 text-center">
-      {/* Background table image */}
-      <div className="pointer-events-none absolute inset-0">
-        <Image
-          src="/BlackJack/BrandedTable/Liberty.webp"
-          alt=""
-          fill
-          className="object-cover object-center opacity-[0.18] scale-110"
-          priority
-        />
-        <div className="absolute inset-0 bg-gradient-to-b from-[#060810] via-[#060810]/80 to-[#060810]" />
-        {/* Radial glow */}
+    <section className="relative min-h-[100dvh] flex items-center overflow-hidden px-4 py-20 md:py-0">
+      {/* Dark background */}
+      <div className="pointer-events-none absolute inset-0" style={{ background: '#060810' }}>
         <div
-          className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[700px] h-[400px] rounded-full"
-          style={{ background: 'radial-gradient(ellipse, rgba(34,211,238,0.12) 0%, transparent 70%)' }}
+          className="absolute top-1/3 left-1/4 w-[500px] h-[400px] rounded-full"
+          style={{ background: 'radial-gradient(ellipse, rgba(34,211,238,0.07) 0%, transparent 70%)' }}
+        />
+        <div
+          className="absolute top-1/2 right-1/4 w-[400px] h-[400px] rounded-full"
+          style={{ background: 'radial-gradient(ellipse, rgba(168,85,247,0.07) 0%, transparent 70%)' }}
         />
       </div>
 
-      <div className="relative z-10 max-w-3xl mx-auto">
-        {/* Badge */}
-        <div
-          className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full text-xs font-bold uppercase tracking-widest mb-8"
-          style={{
-            background: 'rgba(34,211,238,0.08)',
-            border: '1px solid rgba(34,211,238,0.25)',
-            color: '#67e8f9',
-            opacity: ready ? 1 : 0,
-            transform: ready ? 'translateY(0)' : 'translateY(8px)',
-            transition: 'opacity 0.6s ease, transform 0.6s ease',
-          }}
-        >
-          <Zap className="w-3 h-3" />
-          Get your token on the table
-        </div>
+      <div className="relative z-10 w-full max-w-7xl mx-auto flex flex-col lg:flex-row items-center gap-12 lg:gap-8">
 
-        {/* Headline */}
-        <h1
-          className="font-black tracking-tight leading-none text-white mb-6"
-          style={{
-            fontSize: 'clamp(2.6rem, 8vw, 5.5rem)',
-            opacity: ready ? 1 : 0,
-            transform: ready ? 'translateY(0)' : 'translateY(20px)',
-            transition: 'opacity 0.7s ease 0.1s, transform 0.7s ease 0.1s',
-          }}
-        >
-          Bring Your Brand
-          <br />
-          <span
+        {/* ── Left: copy ── */}
+        <div className="flex-1 min-w-0 text-center lg:text-left">
+          {/* Badge */}
+          <div
+            className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full text-xs font-bold uppercase tracking-widest mb-7"
             style={{
-              background: 'linear-gradient(135deg, #22d3ee 0%, #818cf8 60%, #c084fc 100%)',
-              WebkitBackgroundClip: 'text',
-              WebkitTextFillColor: 'transparent',
+              background: 'rgba(34,211,238,0.08)',
+              border: '1px solid rgba(34,211,238,0.25)',
+              color: '#67e8f9',
+              opacity: ready ? 1 : 0,
+              transform: ready ? 'translateY(0)' : 'translateY(8px)',
+              transition: 'opacity 0.6s ease, transform 0.6s ease',
             }}
           >
-            To The Table
-          </span>
-        </h1>
+            <Zap className="w-3 h-3" />
+            Get your token on the table
+          </div>
 
-        {/* Sub */}
-        <p
-          className="text-slate-400 max-w-xl mx-auto mb-10 leading-relaxed"
-          style={{
-            fontSize: 'clamp(1rem, 2.5vw, 1.2rem)',
-            opacity: ready ? 1 : 0,
-            transform: ready ? 'translateY(0)' : 'translateY(16px)',
-            transition: 'opacity 0.7s ease 0.2s, transform 0.7s ease 0.2s',
-          }}
-        >
-          Morbius builds a fully branded game table for your token — live in{' '}
-          <span className="text-white font-semibold">24 hours</span>, with a token profile,
-          Gold Badge, and your design applied to every future game we launch.
-        </p>
-
-        {/* CTAs */}
-        <div
-          className="flex flex-wrap justify-center gap-3 mb-12"
-          style={{
-            opacity: ready ? 1 : 0,
-            transform: ready ? 'translateY(0)' : 'translateY(12px)',
-            transition: 'opacity 0.7s ease 0.3s, transform 0.7s ease 0.3s',
-          }}
-        >
-          <a
-            href="#payment"
-            className="group relative inline-flex items-center gap-2.5 px-8 py-3.5 rounded-2xl font-bold text-white overflow-hidden"
+          {/* Headline */}
+          <h1
+            className="font-black tracking-tight leading-none text-white mb-6"
             style={{
-              background: 'linear-gradient(135deg, #06b6d4, #6366f1)',
-              boxShadow: '0 0 32px rgba(6,182,212,0.3), 0 4px 16px rgba(0,0,0,0.4)',
-              fontSize: '1rem',
+              fontSize: 'clamp(2.4rem, 5.5vw, 4.5rem)',
+              opacity: ready ? 1 : 0,
+              transform: ready ? 'translateY(0)' : 'translateY(20px)',
+              transition: 'opacity 0.7s ease 0.1s, transform 0.7s ease 0.1s',
             }}
           >
-            <span className="relative z-10">Get Started — $49</span>
-            <span className="relative z-10 line-through text-white/40 text-sm font-normal">$99</span>
-            {/* Shine sweep */}
+            Bring Your Brand
+            <br />
             <span
-              className="absolute inset-0 pointer-events-none"
               style={{
-                background: 'linear-gradient(105deg, transparent 30%, rgba(255,255,255,0.15) 50%, transparent 70%)',
-                transform: 'translateX(-100%)',
-                transition: 'transform 0.5s ease',
+                background: 'linear-gradient(135deg, #22d3ee 0%, #818cf8 60%, #c084fc 100%)',
+                WebkitBackgroundClip: 'text',
+                WebkitTextFillColor: 'transparent',
               }}
-            />
-          </a>
-          <a
-            href="#info"
-            className="inline-flex items-center gap-2 px-7 py-3.5 rounded-2xl font-semibold text-slate-300 transition-colors hover:text-white"
+            >
+              To The Table
+            </span>
+          </h1>
+
+          {/* Sub */}
+          <p
+            className="text-slate-400 max-w-md mx-auto lg:mx-0 mb-10 leading-relaxed"
             style={{
-              background: 'rgba(255,255,255,0.04)',
-              border: '1px solid rgba(255,255,255,0.1)',
-              fontSize: '1rem',
+              fontSize: 'clamp(0.95rem, 2vw, 1.1rem)',
+              opacity: ready ? 1 : 0,
+              transform: ready ? 'translateY(0)' : 'translateY(16px)',
+              transition: 'opacity 0.7s ease 0.2s, transform 0.7s ease 0.2s',
             }}
           >
-            See what&apos;s included
-          </a>
+            Morbius builds a fully branded game table for your token — live in{' '}
+            <span className="text-white font-semibold">24 hours</span>, with a token profile,
+            Gold Badge, and your design applied to every future game we launch.
+          </p>
+
+          {/* CTAs */}
+          <div
+            className="flex flex-wrap justify-center lg:justify-start gap-3 mb-10"
+            style={{
+              opacity: ready ? 1 : 0,
+              transform: ready ? 'translateY(0)' : 'translateY(12px)',
+              transition: 'opacity 0.7s ease 0.3s, transform 0.7s ease 0.3s',
+            }}
+          >
+            <a
+              href="#payment"
+              className="inline-flex items-center gap-2.5 px-7 py-3.5 rounded-2xl font-bold text-white"
+              style={{
+                background: 'linear-gradient(135deg, #06b6d4, #6366f1)',
+                boxShadow: '0 0 28px rgba(6,182,212,0.28), 0 4px 16px rgba(0,0,0,0.4)',
+                fontSize: '1rem',
+              }}
+            >
+              Get Started — $49
+              <span className="line-through text-white/40 text-sm font-normal">$99</span>
+            </a>
+            <a
+              href="#info"
+              className="inline-flex items-center gap-2 px-6 py-3.5 rounded-2xl font-semibold text-slate-300 hover:text-white transition-colors"
+              style={{
+                background: 'rgba(255,255,255,0.04)',
+                border: '1px solid rgba(255,255,255,0.1)',
+                fontSize: '1rem',
+              }}
+            >
+              See what&apos;s included
+            </a>
+          </div>
+
+          {/* Trust bar */}
+          <div
+            className="flex flex-wrap justify-center lg:justify-start gap-x-6 gap-y-2 text-sm text-slate-500"
+            style={{ opacity: ready ? 1 : 0, transition: 'opacity 0.7s ease 0.45s' }}
+          >
+            <span className="flex items-center gap-1.5"><Clock className="w-3.5 h-3.5 text-cyan-500/70" /> 24hr delivery</span>
+            <span className="flex items-center gap-1.5"><BadgeCheck className="w-3.5 h-3.5 text-amber-400/70" /> Gold Badge included</span>
+            <span className="flex items-center gap-1.5"><Layers className="w-3.5 h-3.5 text-violet-400/70" /> All future games included</span>
+          </div>
         </div>
 
-        {/* Trust bar */}
+        {/* ── Right: 3 browser mockups fanned ── */}
         <div
-          className="flex flex-wrap justify-center gap-x-7 gap-y-2 text-sm text-slate-500"
+          className="flex-1 min-w-0 relative hidden lg:flex items-center justify-center"
           style={{
+            minHeight: 420,
             opacity: ready ? 1 : 0,
-            transition: 'opacity 0.7s ease 0.45s',
+            transform: ready ? 'translateX(0)' : 'translateX(40px)',
+            transition: 'opacity 0.8s ease 0.35s, transform 0.8s ease 0.35s',
           }}
         >
-          <span className="flex items-center gap-1.5"><Clock className="w-3.5 h-3.5 text-cyan-500/70" /> 24hr delivery</span>
-          <span className="flex items-center gap-1.5"><BadgeCheck className="w-3.5 h-3.5 text-amber-400/70" /> Gold Badge included</span>
-          <span className="flex items-center gap-1.5"><Layers className="w-3.5 h-3.5 text-violet-400/70" /> All future games included</span>
+          {HERO_MOCKUPS.map((m, i) => {
+            // Fan them: left tilted left, center front, right tilted right
+            const offset = (i - 1) * 52   // horizontal spread in px
+            const yOffset = i === 1 ? -18 : 8  // center card raised
+            const scale = i === 1 ? 1 : 0.82
+            return (
+              <div
+                key={m.name}
+                className="absolute w-[280px]"
+                style={{
+                  left: `calc(50% + ${offset}px)`,
+                  top: '50%',
+                  transform: `translate(-50%, calc(-50% + ${yOffset}px)) perspective(900px) rotateY(${m.rotateY}deg) rotateX(3deg) scale(${scale})`,
+                  zIndex: m.z + 1,
+                  transition: 'transform 0.4s ease',
+                }}
+              >
+                {/* Glow */}
+                <div
+                  className="absolute -inset-4 rounded-3xl blur-2xl pointer-events-none"
+                  style={{ background: `${m.color}22` }}
+                />
+                {/* Browser chrome */}
+                <div
+                  className="relative rounded-xl overflow-hidden shadow-2xl"
+                  style={{
+                    border: `1px solid ${m.color}40`,
+                    boxShadow: `0 24px 60px rgba(0,0,0,0.7), 0 0 0 1px rgba(255,255,255,0.06)`,
+                  }}
+                >
+                  <div
+                    className="flex items-center gap-2 px-3 py-2 border-b"
+                    style={{ background: '#0f172a', borderColor: 'rgba(255,255,255,0.08)' }}
+                  >
+                    <div className="flex gap-1">
+                      <div className="w-2 h-2 rounded-full" style={{ background: `${m.color}80` }} />
+                      <div className="w-2 h-2 rounded-full bg-yellow-500/60" />
+                      <div className="w-2 h-2 rounded-full bg-green-500/50" />
+                    </div>
+                    <div
+                      className="flex-1 px-2 py-0.5 rounded text-[10px] text-slate-500 text-center truncate"
+                      style={{ background: 'rgba(0,0,0,0.4)' }}
+                    >
+                      morbius.io/blackjack/{m.name.toLowerCase()}
+                    </div>
+                  </div>
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img src={m.img} alt={m.name} className="w-full block" loading="eager" />
+                </div>
+                {/* Token badge */}
+                <div
+                  className="absolute -bottom-3 left-1/2 -translate-x-1/2 px-3 py-1 rounded-full text-xs font-bold text-white whitespace-nowrap"
+                  style={{
+                    background: `linear-gradient(135deg, ${m.color}, ${m.color}99)`,
+                    boxShadow: `0 4px 12px ${m.color}40`,
+                  }}
+                >
+                  {m.name}
+                </div>
+              </div>
+            )
+          })}
         </div>
+
+        {/* Mobile: show mockups stacked vertically below copy */}
+        <div className="lg:hidden w-full flex flex-col gap-6 items-center">
+          {HERO_MOCKUPS.map((m) => (
+            <div
+              key={m.name}
+              className="w-full max-w-xs relative"
+              style={{
+                opacity: ready ? 1 : 0,
+                transform: ready ? 'translateY(0)' : 'translateY(16px)',
+                transition: 'opacity 0.7s ease 0.5s, transform 0.7s ease 0.5s',
+              }}
+            >
+              <div
+                className="rounded-xl overflow-hidden"
+                style={{ border: `1px solid ${m.color}40`, boxShadow: `0 16px 40px rgba(0,0,0,0.6)` }}
+              >
+                <div
+                  className="flex items-center gap-2 px-3 py-2 border-b"
+                  style={{ background: '#0f172a', borderColor: 'rgba(255,255,255,0.08)' }}
+                >
+                  <div className="flex gap-1">
+                    <div className="w-2 h-2 rounded-full" style={{ background: `${m.color}80` }} />
+                    <div className="w-2 h-2 rounded-full bg-yellow-500/60" />
+                    <div className="w-2 h-2 rounded-full bg-green-500/50" />
+                  </div>
+                  <span className="text-[10px] text-slate-500 ml-1">{m.name}</span>
+                </div>
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img src={m.img} alt={m.name} className="w-full block" loading="lazy" />
+              </div>
+            </div>
+          ))}
+        </div>
+
       </div>
 
       {/* Scroll nudge */}
       <a
         href="#info"
-        className="absolute bottom-8 left-1/2 -translate-x-1/2 text-slate-600 hover:text-slate-400 transition-colors"
+        className="absolute bottom-6 left-1/2 -translate-x-1/2 text-slate-600 hover:text-slate-400 transition-colors"
         aria-label="Scroll down"
-        style={{ animation: 'bounce 2s infinite' }}
+        style={{ animation: 'heroBounce 2s infinite' }}
       >
         <ChevronDown className="w-6 h-6" />
       </a>
 
-      <style>{`@keyframes bounce { 0%,100%{transform:translate(-50%,0)} 50%{transform:translate(-50%,8px)} }`}</style>
+      <style>{`@keyframes heroBounce { 0%,100%{transform:translate(-50%,0)} 50%{transform:translate(-50%,8px)} }`}</style>
     </section>
   )
 }

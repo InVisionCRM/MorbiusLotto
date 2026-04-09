@@ -29,10 +29,19 @@ export function HeroSection({ onOpenPlayerProfile, onOpenAuthModal, showWelcome 
 
   return (
     <section className="relative flex min-h-[100dvh] min-h-[100svh] w-full flex-col items-center justify-center overflow-hidden bg-neutral-950 px-4 pb-14 pt-0 sm:px-6 sm:pt-0">
-      <div
-        className="pointer-events-none absolute inset-0 z-[1] bg-cover bg-center bg-no-repeat opacity-80 bg-[url('/morbius/hero-small.jpeg')] md:bg-[url('/morbius/Morbius-glass-chip-16x9.jpeg')]"
-        aria-hidden
-      />
+      {/* Real <img> (not CSS background) so Lighthouse can prioritize LCP; matches layout preloads */}
+      <picture className="pointer-events-none absolute inset-0 z-[1] block overflow-hidden">
+        <source media="(min-width: 768px)" srcSet="/morbius/Morbius-glass-chip-16x9.jpeg" />
+        <img
+          src="/morbius/hero-small.jpeg"
+          alt=""
+          width={1920}
+          height={1080}
+          fetchPriority="high"
+          decoding="async"
+          className="absolute inset-0 h-full w-full object-cover object-center opacity-80"
+        />
+      </picture>
 
       <div className="pointer-events-none absolute inset-0 z-[2] bg-gradient-to-b from-black/50 via-black/35 to-black/55" aria-hidden />
 
