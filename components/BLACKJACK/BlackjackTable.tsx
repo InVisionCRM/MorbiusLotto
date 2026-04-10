@@ -107,6 +107,8 @@ interface BlackjackTableProps {
   betLimits?: { MIN_BET: bigint; MAX_BET: bigint };
   /** Speech toggle — renders inline in the top-right button row with readbacks below */
   speechToggle?: { listening: boolean; onToggle: () => void; transcript: string; lastAction: string | null; pendingLabel: string | null };
+  /** Opens in new tab — "How it works" next to voice when speech is shown */
+  voiceTutorialVideoUrl?: string;
 }
 
 const BlackjackTable: React.FC<BlackjackTableProps> = ({
@@ -169,6 +171,7 @@ const BlackjackTable: React.FC<BlackjackTableProps> = ({
   inTournament = false,
   betLimits,
   speechToggle,
+  voiceTutorialVideoUrl,
 }) => {
   // ── Admin layout test: cycle through preset hands ───────────────────────────
   const { address: adminCheckAddress } = useAccount();
@@ -1673,6 +1676,16 @@ const BlackjackTable: React.FC<BlackjackTableProps> = ({
                     <path d="M12 1a4 4 0 0 1 4 4v6a4 4 0 0 1-8 0V5a4 4 0 0 1 4-4zm0 2a2 2 0 0 0-2 2v6a2 2 0 0 0 4 0V5a2 2 0 0 0-2-2zm7 8a1 1 0 0 1 1 1 8 8 0 0 1-7 7.938V21h2a1 1 0 0 1 0 2H9a1 1 0 0 1 0-2h2v-1.062A8 8 0 0 1 4 12a1 1 0 0 1 2 0 6 6 0 0 0 12 0 1 1 0 0 1 1-1z" />
                   </svg>
                 </button>
+                {voiceTutorialVideoUrl ? (
+                  <a
+                    href={voiceTutorialVideoUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-[10px] font-medium text-cyan-400/90 underline underline-offset-2 hover:text-cyan-300"
+                  >
+                    How it works
+                  </a>
+                ) : null}
                 {speechToggle.listening && (
                   <div className="flex items-center gap-2 rounded-md border border-white/10 bg-black/70 px-2 py-1 backdrop-blur-md max-w-[180px] pointer-events-none">
                     <span className="text-[10px] text-white/40 shrink-0">Hearing:</span>

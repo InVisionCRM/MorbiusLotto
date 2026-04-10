@@ -114,6 +114,8 @@ interface BlackjackGameViewProps {
     confirmNo: () => void;
     onToggle: () => void;
   };
+  /** Voice tutorial MP4 — "How it works" on table when speech UI is shown */
+  voiceTutorialVideoUrl?: string;
 }
 
 export function BlackjackGameView(props: BlackjackGameViewProps) {
@@ -202,6 +204,7 @@ export function BlackjackGameView(props: BlackjackGameViewProps) {
     morbiusTokenAddress,
     betLimits,
     speech,
+    voiceTutorialVideoUrl,
   } = props;
 
   const panelShell: CSSProperties = {
@@ -305,6 +308,7 @@ export function BlackjackGameView(props: BlackjackGameViewProps) {
               }}
               inTournament={tournament.tournamentState.inTournament}
               speechToggle={speech ? { listening: speech.listening, onToggle: speech.onToggle, transcript: speech.transcript, lastAction: speech.lastAction, pendingLabel: speech.pendingLabel } : undefined}
+              voiceTutorialVideoUrl={voiceTutorialVideoUrl}
             />
 
             {address && wsConnected && wsClient && (

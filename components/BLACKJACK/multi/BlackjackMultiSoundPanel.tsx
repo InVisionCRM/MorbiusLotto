@@ -18,6 +18,8 @@ type BlackjackMultiSoundPanelProps = {
   onToggleMusic: () => void;
   onNextTrack: () => void;
   onMusicVolumeChange: (value: number) => void;
+  /** Solo table voice commands tutorial (opens in new tab) — not the same as dealer voice lines */
+  voiceTutorialVideoUrl?: string;
 };
 
 export function BlackjackMultiSoundPanel({
@@ -35,6 +37,7 @@ export function BlackjackMultiSoundPanel({
   onToggleMusic,
   onNextTrack,
   onMusicVolumeChange,
+  voiceTutorialVideoUrl,
 }: BlackjackMultiSoundPanelProps) {
   return (
     <div className="absolute left-2 top-10 z-20">
@@ -137,6 +140,22 @@ export function BlackjackMultiSoundPanel({
               <Volume2 className="w-3 h-3 text-white/30 shrink-0" />
             </div>
           </div>
+
+          {voiceTutorialVideoUrl ? (
+            <div className="pt-2 border-t border-white/10 space-y-1">
+              <p className="text-[9px] text-white/40 leading-snug">
+                Solo Blackjack: speak commands (hit, stand, bet…)
+              </p>
+              <a
+                href={voiceTutorialVideoUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-block text-[10px] font-medium text-cyan-400/90 underline underline-offset-2 hover:text-cyan-300"
+              >
+                How it works
+              </a>
+            </div>
+          ) : null}
         </div>
       )}
     </div>

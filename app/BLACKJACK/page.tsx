@@ -11,6 +11,7 @@ import { Footer } from '@/components/shared/footer';
 import { useSpeechCommands, type BJSpeechAction } from '@/hooks/use-speech-commands';
 import { useSpeechEnabled } from '@/hooks/use-speech-enabled';
 import { SophieSplashModal } from '@/components/shared/SophieSplashModal';
+import { VOICE_BLACKJACK_TUTORIAL_URL } from '@/lib/how-to-video-urls';
 import { DepositWithdrawModal } from '@/components/BLACKJACK/DepositWithdrawModal';
 import { CustomApprovalModal } from '@/components/BLACKJACK/CustomApprovalModal';
 import { BlackjackAuxViews } from '@/components/BLACKJACK/BlackjackAuxViews';
@@ -2221,6 +2222,7 @@ export default function BlackjackPage() {
           morbiusTokenAddress={MORBIUS_TOKEN_ADDRESS}
           betLimits={tierLimits}
           speech={{ ...speech, lastAction: lastSpeechAction, onToggle: () => { if (speechEnabled) setEnabled(false); else setVoiceSplashOpen(true); } }}
+          voiceTutorialVideoUrl={VOICE_BLACKJACK_TUTORIAL_URL}
         />
 
         {/* Tournament card - commented out
@@ -2395,9 +2397,11 @@ export default function BlackjackPage() {
 
       <SophieSplashModal
         address={address}
+        openOnFirstVisit={false}
         forceOpen={voiceSplashOpen}
         onClose={() => setVoiceSplashOpen(false)}
         onEnable={() => setEnabled(true)}
+        voiceTutorialVideoUrl={VOICE_BLACKJACK_TUTORIAL_URL}
         onOpenProfileSettings={() =>
           openProfileSettings({
             displayName: profileDisplayName ?? '',

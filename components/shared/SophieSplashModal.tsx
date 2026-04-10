@@ -10,6 +10,10 @@ interface Props {
   forceOpen?: boolean;
   onClose?: () => void;
   onEnable?: () => void;
+  /** If false, skip first-visit auto-open; modal opens only when forceOpen is true (e.g. voice toggle). Default true. */
+  openOnFirstVisit?: boolean;
+  /** When set, shows a "How it works" link that opens the tutorial video in a new tab (e.g. Blackjack voice). */
+  voiceTutorialVideoUrl?: string;
 }
 
 const BJ_COMMANDS = [
@@ -48,14 +52,23 @@ function CommandRow({ cmd, alts, note }: { cmd: string; alts: string[] | null; n
   );
 }
 
-export function SophieSplashModal({ address: _address, onOpenProfileSettings, forceOpen, onClose, onEnable }: Props) {
+export function SophieSplashModal({
+  address: _address,
+  onOpenProfileSettings,
+  forceOpen,
+  onClose,
+  onEnable,
+  openOnFirstVisit = true,
+  voiceTutorialVideoUrl,
+}: Props) {
   const [open, setOpen] = useState(false);
 
   useEffect(() => {
+    if (!openOnFirstVisit) return;
     try {
       if (!localStorage.getItem(SPLASH_KEY)) setOpen(true);
     } catch { /* ignore */ }
-  }, []);
+  }, [openOnFirstVisit]);
 
   useEffect(() => {
     if (forceOpen) setOpen(true);
@@ -98,6 +111,16 @@ export function SophieSplashModal({ address: _address, onOpenProfileSettings, fo
             Control the game hands-free. Speak any of the commands below and they&apos;ll be executed instantly.
           </p>
           <p className="mt-2 text-xs text-gray-600">Works in Chrome &amp; Edge — microphone access required</p>
+          {voiceTutorialVideoUrl ? (
+            <a
+              href={voiceTutorialVideoUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="mt-3 text-sm font-medium text-cyan-400 underline underline-offset-2 hover:text-cyan-300"
+            >
+              How it works
+            </a>
+          ) : null}
         </div>
 
         {/* Command grid */}

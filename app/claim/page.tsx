@@ -40,6 +40,7 @@ import { MerkleClaimsPanel } from '@/components/staking/MerkleClaimsPanel'
 import { MerkleClaimsLPPanel } from '@/components/staking/MerkleClaimsLPPanel'
 import { useMerkleClaims } from '@/hooks/use-merkle-claims'
 import { getApiUrlOptional } from '@/lib/api-urls'
+import { HOW_TO_CLAIM_VIDEO_URL } from '@/lib/how-to-video-urls'
 
 const STAKING_ADDR = MORBIUS_STAKING_ADDRESS as `0x${string}`
 const LP_STAKING_ADDR = MORBIUS_LP_STAKING_ADDRESS as `0x${string}`
@@ -1265,6 +1266,18 @@ export default function ClaimPage() {
               {/* ── HOLDER REWARDS (CLAIMS) PANEL ── */}
               {activeTab === 'claims' && (
                 <motion.div key="claims" {...fadeUp} className="space-y-4">
+                  <div className="rounded-2xl border border-emerald-500/20 overflow-hidden bg-white/5">
+                    <p className="text-xs font-medium text-emerald-300/90 font-poppins px-4 pt-3 pb-2">
+                      How to claim
+                    </p>
+                    <video
+                      className="w-full max-h-[220px] object-contain sm:max-h-[260px] bg-black/30"
+                      controls
+                      playsInline
+                      preload="metadata"
+                      src={HOW_TO_CLAIM_VIDEO_URL}
+                    />
+                  </div>
                   <MerkleClaimsPanel />
                 </motion.div>
               )}

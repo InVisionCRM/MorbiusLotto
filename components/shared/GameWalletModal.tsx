@@ -30,6 +30,7 @@ import { CustomApprovalModal } from '@/components/BLACKJACK/CustomApprovalModal'
 import { ReportModal } from '@/components/shared/ReportModal';
 import { toast } from 'sonner';
 import type { BlackjackWebSocketClient, PokerTableState } from '@/lib/websocket-client';
+import { HOW_TO_DEPOSIT_VIDEO_URL, HOW_TO_WITHDRAW_VIDEO_URL } from '@/lib/how-to-video-urls';
 
 // ── Logos ──────────────────────────────────────────────────────────────────
 
@@ -1099,6 +1100,17 @@ export function GameWalletModal({
                         </button>
                       </div>
 
+                      <div className="rounded-xl border border-gray-200 overflow-hidden bg-gray-50">
+                        <p className="text-xs font-medium text-gray-600 px-3 pt-2 pb-1">How to deposit</p>
+                        <video
+                          className="w-full max-h-[200px] object-contain sm:max-h-[220px] bg-black/5"
+                          controls
+                          playsInline
+                          preload="metadata"
+                          src={HOW_TO_DEPOSIT_VIDEO_URL}
+                        />
+                      </div>
+
                       <div className="space-y-2">
                         <div className="flex justify-between items-center px-1">
                           <label className="text-sm font-medium text-gray-700">Amount</label>
@@ -1211,6 +1223,17 @@ export function GameWalletModal({
                   {/* ── Withdraw ── */}
                   {tab === 'withdraw' && (
                     <div className="space-y-4">
+                      <div className="rounded-xl border border-gray-200 overflow-hidden bg-gray-50">
+                        <p className="text-xs font-medium text-gray-600 px-3 pt-2 pb-1">How to withdraw</p>
+                        <video
+                          className="w-full max-h-[200px] object-contain sm:max-h-[220px] bg-black/5"
+                          controls
+                          playsInline
+                          preload="metadata"
+                          src={HOW_TO_WITHDRAW_VIDEO_URL}
+                        />
+                      </div>
+
                       <div className="space-y-2">
                         <div className="flex justify-between items-center px-1">
                           <label className="text-sm font-medium text-gray-700">

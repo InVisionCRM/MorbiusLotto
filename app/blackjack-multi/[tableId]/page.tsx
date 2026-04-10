@@ -44,6 +44,7 @@ import { toast } from 'sonner';
 import { BLACKJACK_FACTS } from '@/app/blackjack-multi/blackjack-facts';
 import { BlackjackMultiBetaSplash } from '@/components/BLACKJACK/BlackjackMultiBetaSplash';
 import { SophieSplashModal } from '@/components/shared/SophieSplashModal';
+import { VOICE_BLACKJACK_TUTORIAL_URL } from '@/lib/how-to-video-urls';
 
 /** Must match server BJ_MULTI_AFK_KICK_AFTER — shown in seat UI */
 const AFK_TIMEOUTS_BEFORE_KICK = 3;
@@ -1236,6 +1237,7 @@ export default function BlackjackMultiTablePage() {
           onToggleMusic={toggleMusic}
           onNextTrack={nextTrack}
           onMusicVolumeChange={setMusicVolume}
+          voiceTutorialVideoUrl={VOICE_BLACKJACK_TUTORIAL_URL}
         />
 
         {/* Hidden audio element for background music */}
@@ -1342,7 +1344,7 @@ export default function BlackjackMultiTablePage() {
         game="blackjack"
       />
 
-      <SophieSplashModal address={address} />
+      <SophieSplashModal address={address} voiceTutorialVideoUrl={VOICE_BLACKJACK_TUTORIAL_URL} />
 
       </main>
     </GlobalMainNav>
