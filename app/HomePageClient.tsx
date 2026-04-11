@@ -135,6 +135,9 @@ export default function HomePageClient() {
 
             <div className="flex w-full flex-col items-center gap-y-20 px-4 py-12 md:gap-y-28 md:py-20">
               <HomeSectionDivider />
+              <TableShowcaseDisplay />
+
+              <HomeSectionDivider />
               <MorbiusInfoSection />
 
               <HomeSectionDivider />
@@ -145,9 +148,6 @@ export default function HomePageClient() {
 
               <HomeSectionDivider />
               <PulseChainSection />
-
-              <HomeSectionDivider />
-              <TableShowcaseDisplay />
 
               <HomeSectionDivider />
               <AvatarShowcaseSection />

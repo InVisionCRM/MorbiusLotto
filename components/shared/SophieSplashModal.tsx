@@ -93,11 +93,11 @@ export function SophieSplashModal({
       style={{ background: 'rgba(0,0,0,0.8)', backdropFilter: 'blur(8px)' }}
     >
       <div
-        className="relative w-full max-w-2xl rounded-2xl border border-cyan-500/20 bg-neutral-900 shadow-2xl overflow-hidden"
+        className="relative w-full max-w-2xl rounded-2xl border border-cyan-500/20 bg-neutral-900 shadow-2xl flex flex-col max-h-[90vh]"
         style={{ boxShadow: '0 0 60px rgba(34,211,238,0.1)' }}
       >
         {/* Header */}
-        <div className="flex flex-col items-center px-8 pt-8 pb-6 border-b border-white/5">
+        <div className="flex flex-col items-center px-8 pt-8 pb-6 border-b border-white/5 shrink-0">
           <div
             className="mb-4 flex h-14 w-14 items-center justify-center rounded-full"
             style={{ background: 'radial-gradient(circle, rgba(34,211,238,0.2), rgba(14,116,144,0.05))', border: '1px solid rgba(34,211,238,0.35)' }}
@@ -124,7 +124,7 @@ export function SophieSplashModal({
         </div>
 
         {/* Command grid */}
-        <div className="grid grid-cols-2 divide-x divide-white/5 px-0">
+        <div className="grid grid-cols-1 sm:grid-cols-2 sm:divide-x divide-white/5 px-0 overflow-y-auto">
           <div className="px-6 py-5">
             <p className="mb-3 text-[10px] font-bold uppercase tracking-widest text-cyan-400">Blackjack</p>
             {BJ_COMMANDS.map(c => <CommandRow key={c.cmd} {...c} />)}
@@ -136,7 +136,7 @@ export function SophieSplashModal({
         </div>
 
         {/* Footer */}
-        <div className="px-8 py-5 border-t border-white/5 space-y-4">
+        <div className="px-8 py-5 border-t border-white/5 space-y-4 shrink-0">
           {/* Warning */}
           <div className="rounded-xl border border-amber-500/20 bg-amber-500/5 px-4 py-3 text-xs text-amber-300/80 space-y-1">
             <div className="flex items-center gap-1.5 font-semibold text-amber-400 mb-1">
@@ -149,7 +149,7 @@ export function SophieSplashModal({
             <p className="font-medium text-amber-400">Always disable voice commands when stepping away from the screen.</p>
           </div>
 
-          <div className="flex items-center justify-between gap-6">
+          <div className="flex flex-wrap items-center justify-between gap-4">
             <p className="text-xs text-gray-600">
               Toggle anytime in{' '}
               {onOpenProfileSettings ? (
