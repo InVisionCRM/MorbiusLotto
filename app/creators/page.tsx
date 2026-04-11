@@ -2,6 +2,7 @@
 
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { useAccount, useSignTypedData } from 'wagmi';
+import { IconCrown, IconAlertTriangle } from '@tabler/icons-react';
 import { WalletMenu } from '@/components/shared/WalletMenu';
 import { useProfile } from '@/hooks/use-player-profile';
 import { getWebSocketUrlOptional } from '@/lib/api-urls';
@@ -72,7 +73,7 @@ export default function CreatorsPage() {
         {/* Not connected */}
         {!isConnected && (
           <div className="flex flex-col items-center justify-center py-20">
-            <i className="fas fa-crown text-5xl text-purple-400 mb-4" />
+            <IconCrown size={52} className="text-purple-400 mb-4" />
             <h1 className="text-2xl font-bold text-white mb-2">Creator Dashboard</h1>
             <p className="text-gray-400 mb-6">Connect your wallet to view your tournament creator dashboard</p>
             <WalletMenu profileDisplayName={profileDisplayName} profileImageUrl={profileImageUrl} />
@@ -95,7 +96,7 @@ export default function CreatorsPage() {
         {/* WS Error */}
         {isConnected && wsError && !connecting && (
           <div className="flex flex-col items-center justify-center py-20">
-            <i className="fas fa-exclamation-triangle text-4xl text-red-400 mb-4" />
+            <IconAlertTriangle size={44} className="text-red-400 mb-4" />
             <p className="text-red-400 mb-4">{wsError}</p>
             <button
               onClick={connectWs}

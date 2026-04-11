@@ -3,6 +3,7 @@
 import { motion } from 'framer-motion'
 import Link from 'next/link'
 import { cn } from '@/lib/utils'
+import { IconBrandTelegram } from '@tabler/icons-react'
 import {
   homeSectionHeading2Class,
   homeSectionSubtitleClass,
@@ -97,7 +98,7 @@ export function MorbItSection() {
                     <span className="text-sm">Instagram</span>
                   </div>
                   <div className="flex items-center gap-2 text-white/60">
-                    <i className="fab fa-telegram text-xl"></i>
+                    <IconBrandTelegram size={20} />
                     <span className="text-sm">Telegram</span>
                   </div>
                 </div>

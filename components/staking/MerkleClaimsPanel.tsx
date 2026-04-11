@@ -1,14 +1,19 @@
 'use client'
 
-import { useAccount, useReadContract } from 'wagmi'
-import { motion } from 'framer-motion'
-import { Gift, CheckCircle2, Loader2, RefreshCw, AlertCircle, Clock } from 'lucide-react'
+import { useAccount, useReadContract, useWriteContract, usePublicClient } from 'wagmi'
+import { motion, AnimatePresence } from 'framer-motion'
+import { Gift, CheckCircle2, Loader2, RefreshCw, AlertCircle, Clock, X } from 'lucide-react'
 import { useMerkleClaims } from '@/hooks/use-merkle-claims'
 import type { ClaimableEpoch } from '@/hooks/use-merkle-claims'
 import { MERKLE_CLAIM_MORBIUS_ADDRESS, MORBIUS_TOKEN_ADDRESS } from '@/lib/contracts'
 import { ERC20_ABI } from '@/abi/erc20'
+import { morbiusHolderDistributorAbi } from '@/abi/morbius-holder-distributor'
 import { useEffect, useState } from 'react'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
+import { toast } from 'sonner'
+import { pulsechain } from 'viem/chains'
+
+const OLD_DISTRIBUTOR = '0x0416947cd08fc3cd8923dd857c58472f337aa42b' as const
 
 function fmtMorbius(raw: string): string {
   const n = Number(raw) / 1e18
@@ -123,10 +128,115 @@ function DropInfoBar() {
   )
 }
 
+// ── Legacy distributor claim ──────────────────────────────────────────────────
+
+function LegacyClaimButton({ address }: { address: `0x${string}` }) {
+  const [open, setOpen] = useState(false)
+  const [claiming, setClaiming] = useState(false)
+  const { writeContractAsync } = useWriteContract()
+  const publicClient = usePublicClient()
+
+  const { data: earnedRaw, refetch } = useReadContract({
+    address: OLD_DISTRIBUTOR,
+    abi: morbiusHolderDistributorAbi,
+    functionName: 'earned',
+    args: [address],
+  })
+  const earned = (earnedRaw ?? 0n) as bigint
+
+  if (earned === 0n) return null
+
+  const handleClaim = async () => {
+    setClaiming(true)
+    try {
+      const hash = await writeContractAsync({
+        address: OLD_DISTRIBUTOR,
+        abi: morbiusHolderDistributorAbi,
+        functionName: 'claim',
+        chain: pulsechain,
+        account: address,
+        maxPriorityFeePerGas: 200_000n,
+      })
+      toast.info('Claim submitted…')
+      if (publicClient) {
+        const receipt = await publicClient.waitForTransactionReceipt({ hash })
+        if (receipt.status === 'reverted') throw new Error('Transaction reverted')
+      }
+      toast.success('Legacy rewards claimed!')
+      setOpen(false)
+      refetch()
+    } catch (err: any) {
+      const msg = err?.shortMessage || err?.message || 'Claim failed'
+      toast.error(msg)
+    } finally {
+      setClaiming(false)
+    }
+  }
+
+  return (
+    <>
+      <button
+        onClick={() => setOpen(true)}
+        className="text-[11px] text-white/25 font-poppins hover:text-emerald-400/60 transition-colors underline underline-offset-2 decoration-dotted"
+      >
+        Legacy rewards available — claim here
+      </button>
+
+      <AnimatePresence>
+        {open && (
+          <>
+            <motion.div
+              initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+              className="fixed inset-0 z-50 bg-black/70 backdrop-blur-sm"
+              onClick={() => setOpen(false)}
+            />
+            <motion.div
+              initial={{ opacity: 0, y: 16, scale: 0.97 }}
+              animate={{ opacity: 1, y: 0, scale: 1 }}
+              exit={{ opacity: 0, y: 16, scale: 0.97 }}
+              transition={{ duration: 0.18 }}
+              className="fixed inset-0 z-50 flex items-center justify-center px-4 pointer-events-none"
+            >
+              <div
+                className="pointer-events-auto w-full max-w-sm rounded-2xl border border-emerald-500/20 bg-[#080d18] shadow-2xl p-6 space-y-4"
+                onClick={(e) => e.stopPropagation()}
+              >
+                <div className="flex items-center justify-between">
+                  <p className="text-sm font-semibold text-white font-poppins">Legacy Rewards</p>
+                  <button onClick={() => setOpen(false)} className="text-white/30 hover:text-white transition-colors">
+                    <X className="w-4 h-4" />
+                  </button>
+                </div>
+                <div className="rounded-xl bg-emerald-950/20 border border-emerald-500/10 px-4 py-3 text-center">
+                  <p className="text-[10px] uppercase tracking-wider text-white/25 font-poppins mb-0.5">Claimable</p>
+                  <p className="text-2xl font-bold text-emerald-400 font-poppins">
+                    {fmtMorbiusWei(earned)}
+                    <span className="text-sm text-white/30 font-normal ml-1">MORBIUS</span>
+                  </p>
+                </div>
+                <p className="text-[11px] text-white/30 font-poppins leading-relaxed">
+                  These are rewards from the legacy holder distributor contract. Claim to receive them directly to your wallet.
+                </p>
+                <button
+                  onClick={handleClaim}
+                  disabled={claiming}
+                  className="w-full py-3 rounded-xl font-semibold text-white text-sm transition-all disabled:opacity-40 disabled:cursor-not-allowed bg-gradient-to-r from-emerald-600 to-emerald-500 hover:from-emerald-500 hover:to-emerald-400 shadow-lg shadow-emerald-900/30 font-poppins flex items-center justify-center gap-2"
+                >
+                  {claiming ? <><Loader2 className="w-4 h-4 animate-spin" /> Claiming…</> : 'Claim Legacy Rewards'}
+                </button>
+              </div>
+            </motion.div>
+          </>
+        )}
+      </AnimatePresence>
+    </>
+  )
+}
+
 // ── Main panel ───────────────────────────────────────────────────────────────
 
 export function MerkleClaimsPanel() {
-  const { isConnected } = useAccount()
+  const { isConnected, address } = useAccount()
   const {
     claimableEpochs,
     totalClaimable,
@@ -287,66 +397,13 @@ export function MerkleClaimsPanel() {
         </p>
       </div>
 
-      {/* ── Reward history table ───────────────────────────────────── */}
-      {claimableEpochs.length > 0 && (() => {
-        const PENDING_DAYS = 7
-        const pendingCutoff = Date.now() - PENDING_DAYS * 24 * 60 * 60 * 1000
-        return (
-          <div className="rounded-2xl border border-white/5 bg-white/[0.02] p-4 space-y-3">
-            <p className="text-[10px] uppercase tracking-wider text-white/20 font-poppins font-semibold">Reward history</p>
-            <Table>
-              <TableHeader>
-                <TableRow className="border-white/10 hover:bg-transparent">
-                  <TableHead className="text-white/40 font-poppins text-xs">Date & time</TableHead>
-                  <TableHead className="text-white/40 font-poppins text-xs">Epoch</TableHead>
-                  <TableHead className="text-white/40 font-poppins text-xs text-right">Added</TableHead>
-                  <TableHead className="text-white/40 font-poppins text-xs">Status</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {[...claimableEpochs]
-                  .sort((a, b) => b.epoch.epoch_number - a.epoch.epoch_number)
-                  .map((row: ClaimableEpoch) => {
-                    const droppedAt = row.epoch.published_at ? new Date(row.epoch.published_at).getTime() : 0
-                    const isOldPending = !row.claimed && row.supersededByEpochNumber === null && droppedAt > 0 && droppedAt < pendingCutoff
-                    return (
-                      <TableRow key={row.epoch.id} className="border-white/10 text-white/70">
-                        <TableCell className="font-poppins text-xs">
-                          {row.epoch.published_at
-                            ? new Date(row.epoch.published_at).toLocaleString(undefined, {
-                                month: 'short',
-                                day: 'numeric',
-                                year: 'numeric',
-                                hour: 'numeric',
-                                minute: '2-digit',
-                              })
-                            : '—'}
-                        </TableCell>
-                        <TableCell className="font-poppins text-xs text-white/60">{row.epoch.epoch_number}</TableCell>
-                        <TableCell className="font-poppins text-xs text-right text-white/80">
-                          + {fmtMorbius(row.amount)} MORBIUS
-                        </TableCell>
-                        <TableCell className="font-poppins text-xs">
-                          {row.claimed ? (
-                            <span className="text-emerald-400/90 inline-flex items-center gap-1">
-                              <CheckCircle2 className="w-3.5 h-3.5" /> Claimed
-                            </span>
-                          ) : row.supersededByEpochNumber !== null ? (
-                            <span className="text-white/40">Rolled into later drop</span>
-                          ) : isOldPending ? (
-                            <span className="text-white/50">Unclaimed</span>
-                          ) : (
-                            <span className="text-amber-400/80">Pending</span>
-                          )}
-                        </TableCell>
-                      </TableRow>
-                    )
-                  })}
-              </TableBody>
-            </Table>
-          </div>
-        )
-      })()}
+      {/* ── Legacy distributor ───────────────────────────────────── */}
+      {address && (
+        <div className="flex justify-center">
+          <LegacyClaimButton address={address} />
+        </div>
+      )}
+
     </motion.div>
   )
 }

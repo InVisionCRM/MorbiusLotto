@@ -7,6 +7,16 @@ import { useProfile } from '@/hooks/use-player-profile'
 import Image from 'next/image'
 import { AvatarView } from '@/components/avatar'
 import { DEFAULT_AVATAR_CONFIG } from '@/components/avatar'
+import {
+  IconUser,
+  IconChevronDown,
+  IconWallet,
+  IconArrowsExchange,
+  IconPencil,
+  IconLogout,
+  IconCheck,
+  IconCopy,
+} from '@tabler/icons-react'
 
 const GameWalletModal = lazy(() => import('@/components/shared/GameWalletModal').then(m => ({ default: m.GameWalletModal })))
 
@@ -134,7 +144,7 @@ export function WalletMenu({
                   />
                 ) : (
                   <div className="w-full h-full bg-slate-700 flex items-center justify-center">
-                    <i className="fas fa-user text-[10px] text-white/80" aria-hidden />
+                    <IconUser size={10} className="text-white/80" aria-hidden />
                   </div>
                 )
               ) : (
@@ -151,8 +161,9 @@ export function WalletMenu({
                   {effectiveProfileDisplayName ?? `…${address.slice(-4)}`}
                 </span>
                 <span className="sidebar-label flex-shrink-0">
-                  <i
-                    className={`fas fa-chevron-down text-white text-sm transition-transform ${isWalletDropdownOpen ? 'rotate-180' : ''}`}
+                  <IconChevronDown
+                    size={16}
+                    className={`text-white transition-transform ${isWalletDropdownOpen ? 'rotate-180' : ''}`}
                     aria-hidden
                   />
                 </span>
@@ -162,8 +173,9 @@ export function WalletMenu({
                 <span className="text-white truncate min-w-0">
                   {effectiveProfileDisplayName ?? `…${address.slice(-4)}`}
                 </span>
-                <i
-                  className={`fas fa-chevron-down text-white text-sm transition-transform flex-shrink-0 ${isWalletDropdownOpen ? 'rotate-180' : ''}`}
+                <IconChevronDown
+                  size={16}
+                  className={`text-white transition-transform flex-shrink-0 ${isWalletDropdownOpen ? 'rotate-180' : ''}`}
                   aria-hidden
                 />
               </>
@@ -186,7 +198,7 @@ export function WalletMenu({
             >
               <div className="p-2">
                 <div className={`flex items-center gap-2 text-xs uppercase tracking-wider px-3 py-1 ${variant === 'sidebar' ? 'text-white/80' : 'text-cyan-300/60'}`}>
-                  <i className="fas fa-wallet w-4 text-center" aria-hidden />
+                  <IconWallet size={16} aria-hidden />
                   Wallet
                 </div>
                 <button
@@ -194,7 +206,7 @@ export function WalletMenu({
                   onClick={handleDepositWithdraw}
                   className={`w-full flex items-center gap-3 px-3 py-2 rounded-md transition-colors border border-cyan-500/25 bg-cyan-500/10 ${variant === 'sidebar' ? 'text-white hover:bg-cyan-500/15' : 'text-gray-200 hover:bg-cyan-500/15 hover:text-white'}`}
                 >
-                  <i className="fas fa-exchange-alt w-4 text-center text-cyan-300/90" aria-hidden />
+                  <IconArrowsExchange size={16} className="text-cyan-300/90" aria-hidden />
                   <span className="text-sm font-semibold">Deposit / Withdraw</span>
                 </button>
                 {onOpenProfileSettings && (
@@ -206,7 +218,7 @@ export function WalletMenu({
                     }}
                     className={`w-full flex items-center gap-3 px-3 py-2 rounded-md transition-colors ${variant === 'sidebar' ? 'text-white hover:bg-white/10' : 'text-gray-300 hover:bg-white/5 hover:text-white'}`}
                   >
-                    <i className="fas fa-pen w-4 text-center" aria-hidden />
+                    <IconPencil size={16} aria-hidden />
                     <span className="text-sm font-medium">Edit profile</span>
                   </button>
                 )}
@@ -217,7 +229,7 @@ export function WalletMenu({
                   }}
                   className="w-full flex items-center gap-3 px-3 py-2 rounded-md text-red-400 hover:bg-red-500/10 transition-colors"
                 >
-                  <i className="fas fa-sign-out-alt w-4 text-center" />
+                  <IconLogout size={16} />
                   <span className="text-sm font-medium">Disconnect</span>
                 </button>
                 <div className={`mt-2 pt-2 border-t border-white/10 flex items-start gap-2 px-3 py-2 ${variant === 'sidebar' ? 'text-white/60' : 'text-gray-500'}`}>
@@ -232,9 +244,9 @@ export function WalletMenu({
                     title="Copy address"
                   >
                     {copied ? (
-                      <i className="fas fa-check text-cyan-400 text-xs" />
+                      <IconCheck size={12} className="text-cyan-400" />
                     ) : (
-                      <i className="fas fa-copy text-xs" />
+                      <IconCopy size={12} />
                     )}
                   </button>
                 </div>
@@ -254,7 +266,7 @@ export function WalletMenu({
               }
               style={variant !== 'sidebar' ? { background: 'linear-gradient(145deg,rgba(28, 28, 45, 0),rgba(0, 0, 0, 0))' } : undefined}
             >
-              <i className="fas fa-wallet w-5 text-center text-cyan-400 shrink-0" aria-hidden />
+              <IconWallet size={20} className="text-cyan-400 shrink-0" aria-hidden />
               {variant === 'sidebar' ? (
                 <span className="sidebar-label text-cyan-400">
                   Connect
@@ -262,7 +274,7 @@ export function WalletMenu({
               ) : (
                 <>
                   <span className="text-cyan-400">Connect</span>
-                  <i className="fas fa-chevron-down text-cyan-400 text-xs" />
+                  <IconChevronDown size={12} className="text-cyan-400" />
                 </>
               )}
             </button>

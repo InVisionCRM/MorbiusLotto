@@ -3,6 +3,7 @@
 import React from 'react';
 import type { CreatorEarning } from '@/lib/tournament-types';
 import { Theme } from '@/lib/theme';
+import { IconCoins } from '@tabler/icons-react';
 import {
   Table,
   TableHeader,
@@ -67,7 +68,7 @@ export function CreatorEarnings({ earnings }: CreatorEarningsProps) {
   if (earnings.length === 0) {
     return (
       <div className="text-center py-12 text-gray-500">
-        <i className="fas fa-coins text-4xl mb-3 block" />
+        <IconCoins size={40} className="mb-3 mx-auto" />
         <p>No earnings yet</p>
         <p className="text-xs mt-1">Creator fees are earned when tournaments with a fee complete</p>
       </div>

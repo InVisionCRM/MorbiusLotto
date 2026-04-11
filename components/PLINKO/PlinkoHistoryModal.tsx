@@ -3,6 +3,7 @@
 import React, { useState } from 'react'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
+import { IconArrowsSort, IconSortAscending, IconSortDescending, IconCopy, IconCheck, IconDownload, IconTrash } from '@tabler/icons-react';
 import {
   Accordion,
   AccordionContent,
@@ -63,10 +64,10 @@ export function PlinkoHistoryModal({
   }
 
   const SortIcon = ({ field }: { field: typeof sortField }) => {
-    if (sortField !== field) return <i className="fas fa-sort text-white/20 ml-1 text-[10px]"></i>
+    if (sortField !== field) return <IconArrowsSort size={10} className="text-white/20 ml-1" />
     return sortDir === 'asc'
-      ? <i className="fas fa-sort-up text-cyan-400 ml-1 text-[10px]"></i>
-      : <i className="fas fa-sort-down text-cyan-400 ml-1 text-[10px]"></i>
+      ? <IconSortAscending size={10} className="text-cyan-400 ml-1" />
+      : <IconSortDescending size={10} className="text-cyan-400 ml-1" />
   }
 
   const formatDate = (timestamp: number) => {
@@ -229,7 +230,7 @@ export function PlinkoHistoryModal({
                                 className="text-cyan-400 hover:text-cyan-300 transition-colors p-1 hover:bg-white/10 rounded"
                                 title="Copy transaction hash"
                               >
-                                <i className={`fas ${copiedTxHash === txHash ? 'fa-check' : 'fa-copy'} text-md`}></i>
+                                {copiedTxHash === txHash ? <IconCheck size={16} /> : <IconCopy size={16} />}
                               </button>
                             </div>
                           ) : (
@@ -317,7 +318,7 @@ export function PlinkoHistoryModal({
               disabled={drops.length === 0}
               className="bg-slate-800 hover:bg-slate-700 border-cyan-500/30 text-white text-sm"
             >
-              <i className="fas fa-download mr-1 sm:mr-2"></i>
+              <IconDownload size={14} className="mr-1 sm:mr-2" />
               <span className="hidden sm:inline">Export CSV</span>
               <span className="sm:hidden">CSV</span>
             </Button>
@@ -327,7 +328,7 @@ export function PlinkoHistoryModal({
               disabled={drops.length === 0}
               className="bg-slate-800 hover:bg-red-900/50 border-red-500/30 text-red-400 text-sm"
             >
-              <i className="fas fa-trash mr-1 sm:mr-2"></i>
+              <IconTrash size={14} className="mr-1 sm:mr-2" />
               <span className="hidden sm:inline">Clear History</span>
               <span className="sm:hidden">Clear</span>
             </Button>

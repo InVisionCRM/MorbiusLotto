@@ -8,6 +8,7 @@ import { Label } from '@/components/ui/label'
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group'
 import { Loader2 } from 'lucide-react'
 import { parseEther } from 'viem'
+import { IconShield, IconInfoCircle, IconCheck } from '@tabler/icons-react'
 
 interface CustomApprovalModalProps {
   open: boolean
@@ -59,7 +60,7 @@ export function CustomApprovalModal({
       <DialogContent className="sm:max-w-md bg-black/80 border-white/20">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
-            <i className="fas fa-shield-alt text-cyan-400"></i>
+            <IconShield size={18} className="text-cyan-400" />
             Approve {tokenSymbol} Spending
           </DialogTitle>
           <DialogDescription>
@@ -153,7 +154,7 @@ export function CustomApprovalModal({
           {/* Security Notice */}
           <div className="p-3 rounded-lg bg-yellow-500/10 border border-yellow-500/20">
             <div className="flex items-start gap-2">
-              <i className="fas fa-info-circle text-yellow-400 mt-0.5"></i>
+              <IconInfoCircle size={16} className="text-yellow-400 mt-0.5 shrink-0" />
               <div>
                 <p className="text-sm font-medium text-yellow-400">Security Note</p>
                 <p className="text-xs text-white mt-1">
@@ -184,7 +185,7 @@ export function CustomApprovalModal({
               </>
             ) : (
               <>
-                <i className="fas fa-check mr-2"></i>
+                <IconCheck size={16} className="mr-2" />
                 Approve {approvalType === 'unlimited' ? 'Unlimited' : customAmount + ' ' + tokenSymbol}
               </>
             )}

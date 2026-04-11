@@ -1,6 +1,7 @@
 'use client'
 
 import React, { useState, useEffect, useRef, useCallback } from 'react';
+import { IconPlayerPlay, IconPlayerPause, IconPlayerSkipForward, IconVolume, IconChevronDown } from '@tabler/icons-react';
 import Image from 'next/image';
 import { Hand, GameState, Action, GameResult, Card } from '@/app/BLACKJACK/types';
 import type { CardValue, Suit } from '@/app/BLACKJACK/types';
@@ -887,7 +888,7 @@ const BlackjackTable: React.FC<BlackjackTableProps> = ({
               className="w-8 h-8 rounded-lg flex items-center justify-center text-cyan-400 hover:bg-cyan-500/20 transition-colors"
               aria-label={isMusicPlaying ? 'Pause music' : 'Play music'}
             >
-              {isMusicPlaying ? <i className="fas fa-pause text-sm" /> : <i className="fas fa-play text-sm" />}
+              {isMusicPlaying ? <IconPlayerPause size={16} /> : <IconPlayerPlay size={16} />}
             </button>
             {onNextTrack && (
               <button
@@ -896,12 +897,12 @@ const BlackjackTable: React.FC<BlackjackTableProps> = ({
                 className="w-8 h-8 rounded-lg flex items-center justify-center text-cyan-400 hover:bg-cyan-500/20 transition-colors"
                 aria-label="Next track"
               >
-                <i className="fas fa-forward text-sm" />
+                <IconPlayerSkipForward size={16} />
               </button>
             )}
             {onMusicVolumeChange !== undefined && (
               <div className="flex items-center gap-1.5">
-                <i className="fas fa-volume-up text-cyan-400/80 text-xs w-4 text-center" aria-hidden />
+                <IconVolume size={14} className="text-cyan-400/80 w-4" aria-hidden />
                 <input
                   type="range"
                   min={0}
@@ -1652,7 +1653,7 @@ const BlackjackTable: React.FC<BlackjackTableProps> = ({
                 className="object-contain"
               />
             </div>
-            <i className="fas fa-chevron-down text-white/60 text-[10px] absolute right-1.5 top-1/2 transform -translate-y-1/2" />
+            <IconChevronDown size={10} className="text-white/60 absolute right-1.5 top-1/2 transform -translate-y-1/2" />
           </button>
         </div>
 

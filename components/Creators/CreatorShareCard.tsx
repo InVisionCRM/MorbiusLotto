@@ -4,6 +4,7 @@ import React, { useRef, useCallback } from 'react';
 import type { CreatorTournamentItem } from '@/lib/tournament-types';
 import { getDefaultTourCard } from '@/lib/tournament-types';
 import { Theme } from '@/lib/theme';
+import { IconShare, IconCoins, IconUsers, IconTrophy, IconLink } from '@tabler/icons-react';
 
 interface CreatorShareCardProps {
   tournaments: CreatorTournamentItem[];
@@ -29,7 +30,7 @@ export function CreatorShareCard({ tournaments }: CreatorShareCardProps) {
   if (activeTournaments.length === 0) {
     return (
       <div className="text-center py-12 text-gray-500">
-        <i className="fas fa-share-alt text-4xl mb-3 block" />
+        <IconShare size={40} className="mb-3 mx-auto" />
         <p>No active tournaments to share</p>
         <p className="text-xs mt-1">Create a tournament to get shareable links</p>
       </div>
@@ -59,17 +60,17 @@ export function CreatorShareCard({ tournaments }: CreatorShareCardProps) {
                 <h3 className="text-white font-bold text-lg truncate">{t.name}</h3>
                 <div className="flex items-center gap-3 text-sm mt-1">
                   <span className="text-cyan-300">
-                    <i className="fas fa-coins mr-1" />
+                    <IconCoins size={12} className="mr-1 inline" />
                     {formatMorbius(t.buyInAmount)} Buy-in
                   </span>
                   <span className="text-gray-300">
-                    <i className="fas fa-users mr-1" />
+                    <IconUsers size={12} className="mr-1 inline" />
                     {t.entryCount} players
                   </span>
                 </div>
                 {BigInt(t.prizePool || '0') > 0n && (
                   <p className="text-cyan-300 text-sm mt-1">
-                    <i className="fas fa-trophy mr-1" />
+                    <IconTrophy size={12} className="mr-1 inline" />
                     {formatMorbius(t.prizePool)} MORBIUS pool
                   </p>
                 )}
@@ -82,7 +83,7 @@ export function CreatorShareCard({ tournaments }: CreatorShareCardProps) {
                 onClick={() => copyLink(t.id)}
                 className="flex-1 flex items-center justify-center gap-2 py-2 rounded-lg bg-cyan-600 hover:bg-cyan-500 text-white text-sm font-medium transition-colors"
               >
-                <i className="fas fa-link" />
+                <IconLink size={14} />
                 Copy Link
               </button>
             </div>

@@ -16,6 +16,7 @@ import {
   Pause,
   SkipForward,
 } from 'lucide-react'
+import { IconChevronDown } from '@tabler/icons-react'
 import QuickHistory from '@/components/BLACKJACK/QuickHistory'
 import { BlackjackRecentPlays } from '@/components/BLACKJACK/BlackjackRecentPlays'
 import { BlackjackRecentGames } from '@/components/BLACKJACK/BlackjackRecentGames'
@@ -353,7 +354,7 @@ export default function BlackjackSidebar({
                   0
                   { }
                   <img src="/morbius/MorbiusLogo (3).png" alt="" width={16} height={16} className="object-contain" />
-                  <i className="fas fa-chevron-down text-white/60" style={{ fontSize: 7 }} />
+                  <IconChevronDown size={7} className="text-white/60" />
                 </span>
                 in the top left of the game table to deposit or withdraw.
               </li>

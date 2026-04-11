@@ -5,6 +5,7 @@ import type { CreatorTournamentItem, CreatorEarning } from '@/lib/tournament-typ
 import { useTokenPrices } from '@/hooks/use-token-price-usd';
 import { MORBIUS_TOKEN_ADDRESS } from '@/lib/contracts';
 import { Theme } from '@/lib/theme';
+import { IconTrophy, IconPlayerPlay, IconFlagFilled, IconCoins } from '@tabler/icons-react';
 
 interface CreatorStatsProps {
   tournaments: CreatorTournamentItem[];
@@ -49,11 +50,11 @@ export function CreatorStats({ tournaments, earnings }: CreatorStatsProps) {
 
   const totalEarningsDisplay = formatUsd(totalUsd);
 
-  const stats: { label: string; value: React.ReactNode; icon: string }[] = [
-    { label: 'Total Tournaments', value: totalTournaments.toString(), icon: 'fa-trophy' },
-    { label: 'Active', value: activeTournaments.toString(), icon: 'fa-play-circle' },
-    { label: 'Completed', value: completedTournaments.toString(), icon: 'fa-flag-checkered' },
-    { label: 'Total Earnings', value: totalEarningsDisplay, icon: 'fa-coins' },
+  const stats: { label: string; value: React.ReactNode; icon: React.ReactNode }[] = [
+    { label: 'Total Tournaments', value: totalTournaments.toString(), icon: <IconTrophy size={14} className={Theme.cyan.text.primary} /> },
+    { label: 'Active', value: activeTournaments.toString(), icon: <IconPlayerPlay size={14} className={Theme.cyan.text.primary} /> },
+    { label: 'Completed', value: completedTournaments.toString(), icon: <IconFlagFilled size={14} className={Theme.cyan.text.primary} /> },
+    { label: 'Total Earnings', value: totalEarningsDisplay, icon: <IconCoins size={14} className={Theme.cyan.text.primary} /> },
   ];
 
   return (
@@ -65,7 +66,7 @@ export function CreatorStats({ tournaments, earnings }: CreatorStatsProps) {
           style={Theme.panel.base}
         >
           <div className="flex items-center gap-2 mb-2">
-            <i className={`fas ${stat.icon} ${Theme.cyan.text.primary}`} />
+            {stat.icon}
             <span className="text-gray-400 text-xs uppercase tracking-wider">{stat.label}</span>
           </div>
           <div className="text-white text-xl font-bold">{stat.value}</div>

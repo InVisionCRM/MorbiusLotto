@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useState } from 'react';
+import { IconCopy, IconDownload, IconShare } from '@tabler/icons-react';
 
 interface ShareModalProps {
   isOpen: boolean;
@@ -176,7 +177,7 @@ export const ShareModal: React.FC<ShareModalProps> = ({
               className="flex flex-col items-center gap-1 bg-cyan-600 hover:bg-cyan-700 text-white px-3 py-3 rounded-lg font-medium transition-colors"
               title="Copy image to clipboard"
             >
-              <i className="fas fa-copy text-lg"></i>
+              <IconCopy size={20} />
               <span className="text-sm">Copy</span>
             </button>
 
@@ -185,7 +186,7 @@ export const ShareModal: React.FC<ShareModalProps> = ({
               className="flex flex-col items-center gap-1 bg-green-600 hover:bg-green-700 text-white px-3 py-3 rounded-lg font-medium transition-colors"
               title="Save image to device"
             >
-              <i className="fas fa-download text-lg"></i>
+              <IconDownload size={20} />
               <span className="text-sm">Save</span>
             </button>
 
@@ -194,7 +195,7 @@ export const ShareModal: React.FC<ShareModalProps> = ({
               className="flex flex-col items-center gap-1 bg-purple-600 hover:bg-purple-700 text-white px-3 py-3 rounded-lg font-medium transition-colors"
               title="Open native share menu with image"
             >
-              <i className="fas fa-share-alt text-lg"></i>
+              <IconShare size={20} />
               <span className="text-sm">Share</span>
             </button>
           </div>

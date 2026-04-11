@@ -656,6 +656,29 @@ export default function AdminMerkleDropsTab() {
   });
   const holderContractBalanceWei = (holderContractBalance as bigint | undefined) ?? 0n;
 
+  // ── Health data (contract balance vs DB owed, per-epoch breakdown) ──────────
+  interface HealthRow { epoch_number: number; unclaimed_holders: string; unclaimed_morbius: string; claimed: string; superseded: string; }
+  interface HealthData { contractBalanceWei: string; owedWei: string; availableWei: string; byEpoch: HealthRow[]; }
+  const [holderHealth, setHolderHealth] = useState<HealthData | null>(null);
+  const [lpHealth, setLpHealth] = useState<HealthData | null>(null);
+  const [healthLoading, setHealthLoading] = useState(false);
+  const [showHolderEpochBreakdown, setShowHolderEpochBreakdown] = useState(false);
+  const [showLpEpochBreakdown, setShowLpEpochBreakdown] = useState(false);
+
+  const fetchHealth = useCallback(async () => {
+    if (!address) return;
+    setHealthLoading(true);
+    try {
+      const [h, l] = await Promise.all([
+        fetch('/api/admin/merkle/health', { headers: adminHeaders() }).then(r => r.json()),
+        fetch('/api/admin/merkle-lp/health', { headers: adminHeaders() }).then(r => r.json()),
+      ]);
+      setHolderHealth(h);
+      setLpHealth(l);
+    } catch { /* non-critical */ }
+    finally { setHealthLoading(false); }
+  }, [address, adminHeaders]);
+
   // ── Snapshot holder viewer (per-epoch, from DB) ─────────────────────────────
   const [snapshotData, setSnapshotData] = useState<Record<number, { rows: SnapshotRow[]; total: number; page: number; loading: boolean }>>({});
 
@@ -705,7 +728,7 @@ export default function AdminMerkleDropsTab() {
     }
   }, [address, adminHeaders]);
 
-  useEffect(() => { fetchEpochs(); }, [fetchEpochs]);
+  useEffect(() => { fetchEpochs(); fetchHealth(); }, [fetchEpochs, fetchHealth]);
 
   const fetchSettings = useCallback(async () => {
     if (!address) return;
@@ -1131,6 +1154,93 @@ export default function AdminMerkleDropsTab() {
 
   return (
     <div className="space-y-4">
+
+      {/* ── Contract Health Panel ── */}
+      <Card className="bg-slate-900/80 border-slate-700/50">
+        <CardHeader className="pb-2 pt-4 px-4">
+          <CardTitle className="text-sm font-semibold text-slate-200 flex items-center gap-2">
+            <Layers className="w-4 h-4 text-cyan-400" />
+            Contract Health
+            <button onClick={fetchHealth} className="ml-auto text-slate-400 hover:text-cyan-400" title="Refresh">
+              <RefreshCw className={`w-3.5 h-3.5 ${healthLoading ? 'animate-spin' : ''}`} />
+            </button>
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="px-4 pb-4 space-y-4">
+          {[
+            { label: 'Holder Claims (MORBIUS)', health: holderHealth, showBreakdown: showHolderEpochBreakdown, setShow: setShowHolderEpochBreakdown },
+            { label: 'LP Drops', health: lpHealth, showBreakdown: showLpEpochBreakdown, setShow: setShowLpEpochBreakdown },
+          ].map(({ label, health, showBreakdown, setShow }) => {
+            if (!health) return <div key={label} className="text-xs text-slate-500">{label}: loading…</div>;
+            const contract = Number(health.contractBalanceWei) / 1e18;
+            const owed = Number(health.owedWei) / 1e18;
+            const available = Number(health.availableWei) / 1e18;
+            const isHealthy = available >= 0 && contract >= owed;
+            const strandedEpochs = health.byEpoch.filter(e => Number(e.unclaimed_morbius) > 0 && e.epoch_number < Math.max(...health.byEpoch.map(x => x.epoch_number)));
+            return (
+              <div key={label} className="rounded-lg border border-slate-700/50 bg-slate-800/40 p-3 space-y-2">
+                <div className="flex items-center justify-between">
+                  <p className="text-xs font-semibold text-slate-300">{label}</p>
+                  <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full ${isHealthy ? 'bg-green-500/20 text-green-400' : 'bg-red-500/20 text-red-400'}`}>
+                    {isHealthy ? 'Healthy' : 'Underfunded'}
+                  </span>
+                </div>
+                <div className="grid grid-cols-3 gap-2 text-center">
+                  <div>
+                    <p className="text-[10px] text-slate-500 uppercase tracking-wide">Contract Balance</p>
+                    <p className="text-xs font-mono text-cyan-400">{contract.toLocaleString('en-US', { maximumFractionDigits: 2 })}</p>
+                  </div>
+                  <div>
+                    <p className="text-[10px] text-slate-500 uppercase tracking-wide">DB Owed</p>
+                    <p className="text-xs font-mono text-yellow-400">{owed.toLocaleString('en-US', { maximumFractionDigits: 2 })}</p>
+                  </div>
+                  <div>
+                    <p className="text-[10px] text-slate-500 uppercase tracking-wide">Available Next Epoch</p>
+                    <p className={`text-xs font-mono ${available > 0 ? 'text-green-400' : 'text-red-400'}`}>{available.toLocaleString('en-US', { maximumFractionDigits: 2 })}</p>
+                  </div>
+                </div>
+                {strandedEpochs.length > 0 && (
+                  <p className="text-[10px] text-yellow-400/80">
+                    ⚠ {strandedEpochs.length} older epoch{strandedEpochs.length > 1 ? 's' : ''} have unclaimed amounts not yet rolled up
+                  </p>
+                )}
+                <button onClick={() => setShow(!showBreakdown)} className="text-[10px] text-slate-400 hover:text-cyan-400 flex items-center gap-1">
+                  {showBreakdown ? <ChevronDown className="w-3 h-3" /> : <ChevronRight className="w-3 h-3" />}
+                  {showBreakdown ? 'Hide' : 'Show'} per-epoch breakdown
+                </button>
+                {showBreakdown && (
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-[10px] font-mono">
+                      <thead>
+                        <tr className="text-slate-500 border-b border-slate-700">
+                          <th className="text-left py-1">Epoch</th>
+                          <th className="text-right py-1">Unclaimed MORBIUS</th>
+                          <th className="text-right py-1">Holders</th>
+                          <th className="text-right py-1">Claimed</th>
+                          <th className="text-right py-1">Superseded</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {health.byEpoch.filter(e => Number(e.unclaimed_morbius) > 0 || Number(e.claimed) > 0).map(e => (
+                          <tr key={e.epoch_number} className="border-b border-slate-800 hover:bg-slate-700/20">
+                            <td className="py-1 text-slate-300">#{e.epoch_number}</td>
+                            <td className={`py-1 text-right ${Number(e.unclaimed_morbius) > 0 ? 'text-yellow-400' : 'text-slate-500'}`}>
+                              {(Number(e.unclaimed_morbius) / 1e18).toLocaleString('en-US', { maximumFractionDigits: 2 })}
+                            </td>
+                            <td className="py-1 text-right text-slate-400">{e.unclaimed_holders}</td>
+                            <td className="py-1 text-right text-green-400/70">{e.claimed}</td>
+                            <td className="py-1 text-right text-slate-500">{e.superseded}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+              </div>
+            );
+          })}
+        </CardContent>
+      </Card>
 
       {/* ── Send MORBIUS: deposit addresses ── */}
       <Card className="bg-slate-900/80 border-cyan-500/30">

@@ -2,7 +2,7 @@
 
 import React, { useCallback, useEffect, useState } from 'react';
 import { useAccount } from 'wagmi';
-import { useWriteContract, useWaitForTransactionReceipt } from 'wagmi';
+import { useWriteContract, useWaitForTransactionReceipt, useReadContracts } from 'wagmi';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -679,11 +679,33 @@ function PlinkoAdminSection() {
 }
 
 function BlackjackAdminSection() {
+  const addr = BLACKJACK_ADDRESS as `0x${string}`;
+
+  const { data: chainData, refetch: refetchChain } = useReadContracts({
+    contracts: [
+      { address: addr, abi: blackjackAbi, functionName: 'distributionRecipient' },
+      { address: addr, abi: blackjackAbi, functionName: 'lpDistributionRecipient' },
+      { address: addr, abi: blackjackAbi, functionName: 'platformFeeRecipient' },
+      { address: addr, abi: blackjackAbi, functionName: 'distributionFeeBps' },
+      { address: addr, abi: blackjackAbi, functionName: 'lpDistributionFeeBps' },
+      { address: addr, abi: blackjackAbi, functionName: 'platformFeeBps' },
+      { address: addr, abi: blackjackAbi, functionName: 'burnFeeBps' },
+    ],
+  });
+
+  const onChainDistributionRecipient = chainData?.[0]?.result as string | undefined;
+  const onChainLpDistributionRecipient = chainData?.[1]?.result as string | undefined;
+  const onChainPlatformFeeRecipient = chainData?.[2]?.result as string | undefined;
+  const onChainDistributionFeeBps = chainData?.[3]?.result as bigint | undefined;
+  const onChainLpDistributionFeeBps = chainData?.[4]?.result as bigint | undefined;
+  const onChainPlatformFeeBps = chainData?.[5]?.result as bigint | undefined;
+  const onChainBurnFeeBps = chainData?.[6]?.result as bigint | undefined;
+
   const [authorizedServer, setAuthorizedServer] = useState('');
   const [emergencyAdmin, setEmergencyAdmin] = useState('');
   const [distributionFeeBps, setDistributionFeeBps] = useState('');
-  const [distributionRecipient, setDistributionRecipient] = useState(MERKLE_CLAIM_MORBIUS_ADDRESS);
-  const [lpDistributionRecipient, setLpDistributionRecipient] = useState(MERKLE_CLAIM_LP_ADDRESS);
+  const [distributionRecipient, setDistributionRecipient] = useState('');
+  const [lpDistributionRecipient, setLpDistributionRecipient] = useState('');
   const [platformFeeBps, setPlatformFeeBps] = useState('');
   const [platformFeeRecipient, setPlatformFeeRecipient] = useState('');
   const [burnFeeBps, setBurnFeeBps] = useState('');
@@ -694,9 +716,19 @@ function BlackjackAdminSection() {
   const { isLoading: isConfirming, isSuccess, isError } = useWaitForTransactionReceipt({ hash });
 
   useEffect(() => {
-    if (isSuccess) toast.success('Transaction confirmed');
+    if (onChainDistributionRecipient) setDistributionRecipient(onChainDistributionRecipient);
+    if (onChainLpDistributionRecipient) setLpDistributionRecipient(onChainLpDistributionRecipient);
+    if (onChainPlatformFeeRecipient) setPlatformFeeRecipient(onChainPlatformFeeRecipient);
+    if (onChainDistributionFeeBps !== undefined) setDistributionFeeBps(onChainDistributionFeeBps.toString());
+    if (onChainLpDistributionFeeBps !== undefined) setLpDistributionFeeBps(onChainLpDistributionFeeBps.toString());
+    if (onChainPlatformFeeBps !== undefined) setPlatformFeeBps(onChainPlatformFeeBps.toString());
+    if (onChainBurnFeeBps !== undefined) setBurnFeeBps(onChainBurnFeeBps.toString());
+  }, [onChainDistributionRecipient, onChainLpDistributionRecipient, onChainPlatformFeeRecipient, onChainDistributionFeeBps, onChainLpDistributionFeeBps, onChainPlatformFeeBps, onChainBurnFeeBps]);
+
+  useEffect(() => {
+    if (isSuccess) { toast.success('Transaction confirmed'); refetchChain(); }
     if (isError) toast.error('Transaction failed');
-  }, [isSuccess, isError]);
+  }, [isSuccess, isError, refetchChain]);
   useEffect(() => {
     if (writeError) toast.error(writeError.message || 'Transaction rejected or failed');
   }, [writeError]);
@@ -711,8 +743,6 @@ function BlackjackAdminSection() {
     },
     []
   );
-
-  const addr = BLACKJACK_ADDRESS as `0x${string}`;
 
   return (
     <ContractSection title="Blackjack">

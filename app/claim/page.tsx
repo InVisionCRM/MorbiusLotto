@@ -51,7 +51,7 @@ const MERKLE_CLAIM_LP_ADDR = MERKLE_CLAIM_LP_ADDRESS as `0x${string}`
 const MAX_UINT256 = BigInt('115792089237316195423570985008687907853269984665640564039457584007913129639935')
 const PULSEX_ADD_LIQUIDITY_URL = `https://app.pulsex.com/add/v1/${WPLS_TOKEN_ADDRESS}/${MORBIUS_TOKEN_ADDRESS}`
 
-type Tab = 'analytics' | 'morbius' | 'lp' | 'claims'
+type Tab = 'analytics' | 'lp' | 'claims'
 
 // ── Animation variants ────────────────────────────────────────────────
 
@@ -289,6 +289,7 @@ export default function ClaimPage() {
   const [activeTab, setActiveTab] = useState<Tab>('analytics')
   const [showInfo, setShowInfo] = useState(false)
   const [showLpGuide, setShowLpGuide] = useState(false)
+  const [showHowToClaimVideo, setShowHowToClaimVideo] = useState(false)
 
   const [morbiusPrice, setMorbiusPrice] = useState<number | null>(null)
   const [priceChange24h, setPriceChange24h] = useState<number | null>(null)
@@ -764,8 +765,8 @@ export default function ClaimPage() {
 
   // ── DottedGlow colors ─────────────────────────────────────────────
 
-  const glowColor = activeTab === 'morbius' ? 'rgba(16, 187, 217, 0.85)' : activeTab === 'lp' ? 'rgb(155, 62, 243)' : activeTab === 'claims' ? 'rgb(16, 185, 129)' : 'rgb(255, 255, 255)'
-  const dotColor = activeTab === 'morbius' ? 'rgb(14, 50, 59)' : activeTab === 'lp' ? 'rgb(14, 50, 59)' : activeTab === 'claims' ? 'rgb(5, 46, 22)' : 'rgb(14, 50, 59)'
+  const glowColor = activeTab === 'lp' ? 'rgb(155, 62, 243)' : activeTab === 'claims' ? 'rgb(16, 185, 129)' : 'rgb(255, 255, 255)'
+  const dotColor = activeTab === 'lp' ? 'rgb(14, 50, 59)' : activeTab === 'claims' ? 'rgb(5, 46, 22)' : 'rgb(14, 50, 59)'
 
   // ── Tab theme classes ─────────────────────────────────────────────
 
@@ -816,7 +817,6 @@ export default function ClaimPage() {
             <div className="flex gap-1 p-1.5 rounded-2xl bg-white/5 border border-white/10">
               {([
                 { id: 'analytics' as Tab, label: 'Analytics', active: 'bg-gradient-to-r from-indigo-600 to-violet-500 shadow-indigo-900/40' },
-                { id: 'morbius' as Tab, label: 'Legacy stake', active: 'bg-gradient-to-r from-cyan-700 to-cyan-500 shadow-cyan-900/40' },
                 { id: 'lp' as Tab, label: 'LP Claim', active: 'bg-gradient-to-r from-purple-700 to-purple-500 shadow-purple-900/40' },
                 { id: 'claims' as Tab, label: 'Holder Rewards', active: 'bg-gradient-to-r from-emerald-700 to-emerald-500 shadow-emerald-900/40' },
               ]).map((t) => (
@@ -903,72 +903,6 @@ export default function ClaimPage() {
                     </div>
                   </div>
 
-                  {/* Stats grid — side by side on md, stacked on mobile */}
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-
-                    {/* Legacy MORBIUS pool — blurred Coming Soon */}
-                    <div className="relative rounded-2xl border border-cyan-500/20 bg-[#0a0f1a]/90 backdrop-blur-sm p-4 overflow-hidden">
-                      <div className="absolute inset-0 z-10 flex items-center justify-center">
-                        <div className="px-4 py-2 rounded-xl bg-black/60 border border-cyan-500/30 backdrop-blur-sm">
-                          <span className="text-sm font-bold text-cyan-400 font-poppins">Coming Soon!</span>
-                        </div>
-                      </div>
-                      <div className="blur-[3px] pointer-events-none select-none">
-                        <div className="flex items-center justify-between mb-3">
-                          <div className="flex items-center gap-1.5">
-                            <div className="w-1.5 h-1.5 rounded-full bg-cyan-400" />
-                            <span className="text-[10px] uppercase tracking-wider text-cyan-400/70 font-poppins font-semibold">Legacy MORBIUS pool</span>
-                          </div>
-                        </div>
-                        <div className="grid grid-cols-2 gap-2">
-                          {[
-                            { label: 'Total Staked', value: fmt(mTotal), sub: toUsd(mTotal) != null ? fmtUsd(toUsd(mTotal)) : 'MORBIUS', color: 'text-white' },
-                            { label: 'Stakers', value: mStakers.toLocaleString(), sub: null, color: 'text-white' },
-                            { label: 'Reward Pool', value: fmt(mPending), sub: toUsd(mPending) != null ? fmtUsd(toUsd(mPending)) : null, color: 'text-cyan-400' },
-                            { label: 'Total Claimed', value: fmt(mTotalClaimedBal), sub: toUsd(mTotalClaimedBal) != null ? fmtUsd(toUsd(mTotalClaimedBal)) : null, color: 'text-white' },
-                          ].map((s) => (
-                            <div key={s.label} className="rounded-lg bg-cyan-950/20 border border-cyan-500/10 px-3 py-2 text-center">
-                              <div className="text-[9px] uppercase tracking-wider text-white/25 font-poppins mb-0.5">{s.label}</div>
-                              <div className={`text-base font-bold font-poppins ${s.color}`}>{s.value}</div>
-                              {s.sub && <div className="text-[9px] text-white/25 font-poppins">{s.sub}</div>}
-                            </div>
-                          ))}
-                        </div>
-                      </div>
-                    </div>
-
-                    {/* LP Staking (Farming) — blurred Coming Soon */}
-                    <div className="relative rounded-2xl border border-purple-500/20 bg-[#0d0a1a]/90 backdrop-blur-sm p-4 overflow-hidden">
-                      <div className="absolute inset-0 z-10 flex items-center justify-center">
-                        <div className="px-4 py-2 rounded-xl bg-black/60 border border-purple-500/30 backdrop-blur-sm">
-                          <span className="text-sm font-bold text-purple-400 font-poppins">Coming Soon!</span>
-                        </div>
-                      </div>
-                      <div className="blur-[3px] pointer-events-none select-none">
-                        <div className="flex items-center justify-between mb-3">
-                          <div className="flex items-center gap-1.5">
-                            <div className="w-1.5 h-1.5 rounded-full bg-purple-400" />
-                            <span className="text-[10px] uppercase tracking-wider text-purple-400/70 font-poppins font-semibold">Farming</span>
-                          </div>
-                        </div>
-                        <div className="grid grid-cols-2 gap-2">
-                          {[
-                            { label: 'LP Staked', value: fmtLP(lpTotal), sub: 'PLP', color: 'text-white' },
-                            { label: 'Stakers', value: lpStakers.toLocaleString(), sub: null, color: 'text-white' },
-                            { label: 'MORBIUS Pool', value: fmt(lpPending), sub: toUsd(lpPending) != null ? fmtUsd(toUsd(lpPending)) : null, color: 'text-purple-400' },
-                            { label: 'LP Burned', value: fmtLP(lpBurned), sub: 'PLP', color: 'text-orange-400' },
-                          ].map((s) => (
-                            <div key={s.label} className="rounded-lg bg-purple-950/20 border border-purple-500/10 px-3 py-2 text-center">
-                              <div className="text-[9px] uppercase tracking-wider text-white/25 font-poppins mb-0.5">{s.label}</div>
-                              <div className={`text-base font-bold font-poppins ${s.color}`}>{s.value}</div>
-                              {s.sub && <div className="text-[9px] text-white/25 font-poppins">{s.sub}</div>}
-                            </div>
-                          ))}
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-
                   {/* Contract addresses — compact 2-col grid */}
                   <div className="rounded-2xl border border-white/10 bg-[#0a0a14]/90 backdrop-blur-sm px-4 py-3">
                     <div className="grid grid-cols-2 gap-x-6 gap-y-2">
@@ -991,203 +925,6 @@ export default function ClaimPage() {
                     </div>
                   </div>
 
-                </motion.div>
-              )}
-
-              {/* ── MORBIUS PANEL ── */}
-              {activeTab === 'morbius' && (
-                <motion.div key="morbius" {...fadeUp} className="relative">
-                  <div className="absolute inset-0 z-20 flex items-center justify-center pointer-events-none">
-                    <div className="px-6 py-3 rounded-2xl bg-black/60 border border-cyan-500/30 backdrop-blur-sm">
-                      <span className="text-lg font-bold text-cyan-400 font-poppins tracking-wide">Coming Soon!</span>
-                    </div>
-                  </div>
-                  <div className="blur-[3px] pointer-events-none select-none">
-                  <div className="text-center mb-4">
-                    <div className="flex items-center justify-center gap-3 mb-2">
-                      <Image src="/morbius/MorbiusLogo (3).png" alt="MORBIUS" width={44} height={44} className="rounded-full" />
-                      <h1 className="text-3xl font-bold text-cyan-400 font-poppins tracking-tight">Claim rewards</h1>
-                    </div>
-                    <p className="text-white/40 text-sm font-poppins">Merkle holder claims · Legacy on-chain pool</p>
-                    <button onClick={() => setShowInfo(true)} className="mt-2 inline-flex items-center gap-1.5 text-[11px] text-cyan-400/70 hover:text-cyan-300 transition-colors font-poppins font-medium">
-                      <FileText className="w-3.5 h-3.5" />How it works
-                    </button>
-                  </div>
-
-                  {!isConnected ? (
-                    <div className={mCard}><p className="text-center text-white/40 text-sm font-poppins py-4">Connect your wallet to get started.</p></div>
-                  ) : isWrongChain ? (
-                    <div className={`${mCard} space-y-4`}>
-                      <p className="text-center text-white/40 text-sm font-poppins">Switch to PulseChain to continue.</p>
-                      <motion.button whileTap={{ scale: 0.98 }} type="button" onClick={() => switchChainAsync?.({ chainId: pulsechain.id })} className={mBtnPrimary}>Switch to PulseChain</motion.button>
-                    </div>
-                  ) : (
-                    <motion.div className="space-y-4" variants={staggerContainer} initial="initial" animate="animate">
-
-                      {/* Protocol Stats */}
-                      <motion.div variants={staggerChild} className={mCard}>
-                        <div className="grid grid-cols-4 gap-3 text-center">
-                          <div>
-                            <div className="text-[10px] uppercase tracking-wider text-white/30 font-poppins mb-1">Total Staked</div>
-                            <div className="text-base font-bold text-white font-poppins">{fmt(mTotal)}</div>
-                            {toUsd(mTotal) != null && <div className="text-[9px] text-cyan-400/50 font-poppins">{fmtUsd(toUsd(mTotal))}</div>}
-                          </div>
-                          <div>
-                            <div className="text-[10px] uppercase tracking-wider text-white/30 font-poppins mb-1">Stakers</div>
-                            <div className="text-base font-bold text-white font-poppins">{mStakers.toLocaleString()}</div>
-                          </div>
-                          <div>
-                            <div className="text-[10px] uppercase tracking-wider text-white/30 font-poppins mb-1">Reward Pool</div>
-                            <div className="text-base font-bold text-cyan-400 font-poppins">{fmt(mPending)}</div>
-                            {toUsd(mPending) != null && <div className="text-[9px] text-cyan-400/50 font-poppins">{fmtUsd(toUsd(mPending))}</div>}
-                          </div>
-                          <div>
-                            <div className="text-[10px] uppercase tracking-wider text-white/30 font-poppins mb-1">Total Claimed</div>
-                            <div className="text-base font-bold text-white font-poppins">{fmt(mTotalClaimedBal)}</div>
-                            {toUsd(mTotalClaimedBal) != null && <div className="text-[9px] text-white/25 font-poppins">{fmtUsd(toUsd(mTotalClaimedBal))}</div>}
-                          </div>
-                        </div>
-                      </motion.div>
-
-                      {/* Your Position */}
-                      <motion.div variants={staggerChild} className={mCard}>
-                        <div className="flex items-center justify-between mb-4">
-                          <h2 className="text-xs uppercase tracking-wider text-white/30 font-poppins">Your Position</h2>
-                          <span className="text-xs text-cyan-400/80 font-poppins font-semibold">{mShare}% share</span>
-                        </div>
-                        <div className="grid grid-cols-2 gap-3 mb-3">
-                          <div className={`${mInner} text-center`}>
-                            <div className="text-[10px] uppercase tracking-wider text-white/30 font-poppins mb-1">Staked</div>
-                            <div className="text-xl font-bold text-white font-poppins">{fmt(mStaked)}</div>
-                            {toUsd(mStaked) != null && <div className="text-[9px] text-white/30 font-poppins mt-0.5">{fmtUsd(toUsd(mStaked))}</div>}
-                          </div>
-                          <div className="relative">
-                            {mEarnedBal > 0n && (
-                              <motion.div
-                                className="absolute inset-0 rounded-xl bg-cyan-500/5"
-                                animate={{ opacity: [0.3, 0.8, 0.3] }}
-                                transition={{ repeat: Infinity, duration: 2.5, ease: 'easeInOut' }}
-                              />
-                            )}
-                            <div className={`${mInner} text-center relative`}>
-                              <div className="text-[10px] uppercase tracking-wider text-white/30 font-poppins mb-1">Claimable</div>
-                              <div className="text-xl font-bold text-cyan-400 font-poppins">{fmtDec(mEarnedBal)}</div>
-                              {toUsd(mEarnedBal) != null && <div className="text-[9px] text-cyan-400/50 font-poppins mt-0.5">{fmtUsd(toUsd(mEarnedBal))}</div>}
-                            </div>
-                          </div>
-                        </div>
-                        {mStaked > 0n && (
-                          <div className="flex items-center justify-center gap-1.5 text-[11px] text-white/30 font-poppins">
-                            <span>Staking since</span><span className="text-white/50">{formatDate(mStakedAtTs)}</span>
-                          </div>
-                        )}
-                      </motion.div>
-
-                      {/* Stake */}
-                      <motion.div variants={staggerChild} className={mCard}>
-                        <h2 className="text-xs uppercase tracking-wider text-white/30 font-poppins mb-3">Stake</h2>
-                        <div className="flex gap-2 mb-1">
-                          <input type="number" placeholder="0" value={mStakeInput} onChange={(e) => setMStakeInput(e.target.value)} min="0" step="1" className={mInput} />
-                          <button type="button" onClick={() => setMStakeInput(String(mMaxStake))} className={mMaxBtn}>MAX</button>
-                        </div>
-                        <div className="text-[10px] text-white/25 font-poppins mb-3">Wallet: {mMaxStake.toLocaleString()} MORBIUS</div>
-                        <motion.button whileTap={{ scale: 0.98 }} type="button" onClick={handleMStake} disabled={!mStakeInput || mBusy || mAllowanceLoading} className={mBtnPrimary}>
-                          {mAction === 'stake' && mBusy ? (
-                            <span className="flex items-center justify-center gap-2"><Loader2 className="w-4 h-4 animate-spin" />{mNeedsApproval ? 'Approving...' : 'Staking...'}</span>
-                          ) : mNeedsApproval && mStakeInput ? 'Approve MORBIUS' : 'Stake'}
-                        </motion.button>
-                      </motion.div>
-
-                      {/* Unstake */}
-                      <motion.div variants={staggerChild} className={mCard}>
-                        <h2 className="text-xs uppercase tracking-wider text-white/30 font-poppins mb-3">Unstake</h2>
-                        <div className="flex gap-2 mb-1">
-                          <input type="number" placeholder="0" value={mUnstakeInput} onChange={(e) => setMUnstakeInput(e.target.value)} min="0" step="1" className={mInput} />
-                          <button type="button" onClick={() => setMUnstakeInput(String(mMaxUnstake))} className={mMaxBtn}>MAX</button>
-                        </div>
-                        <div className="text-[10px] text-white/25 font-poppins mb-1">Staked: {mMaxUnstake.toLocaleString()} MORBIUS</div>
-                        {mUnstakeInput && Number(mUnstakeInput) > 0 ? (
-                          <div className="text-[10px] text-white/40 font-poppins mb-3 space-y-0.5">
-                            <div>5% fee: {Math.floor(Number(mUnstakeInput) * 0.025).toLocaleString()} to stakers · {Math.floor(Number(mUnstakeInput) * 0.025).toLocaleString()} to LP stakers</div>
-                            <div className="text-cyan-400/70">You receive: {Math.floor(Number(mUnstakeInput) * 0.95).toLocaleString()} MORBIUS</div>
-                          </div>
-                        ) : (
-                          <div className="text-[10px] text-white/25 font-poppins mb-3">5% unstake fee · 2.5% to stakers · 2.5% to LP stakers</div>
-                        )}
-                        <motion.button whileTap={{ scale: 0.98 }} type="button" onClick={handleMUnstake} disabled={!mUnstakeInput || mBusy || mStaked <= 0n} className={mBtnSecondary}>
-                          {mAction === 'unstake' && mBusy ? <span className="flex items-center justify-center gap-2"><Loader2 className="w-4 h-4 animate-spin" /> Unstaking...</span> : 'Unstake'}
-                        </motion.button>
-                      </motion.div>
-
-                      {/* Claim Rewards */}
-                      <motion.div variants={staggerChild} className={mCard}>
-                        <h2 className="text-xs uppercase tracking-wider text-white/30 font-poppins mb-3">Claim Rewards</h2>
-                        <div className={`${mInner} flex items-center justify-between mb-3`}>
-                          <span className="text-white/40 text-sm font-poppins">Claimable</span>
-                          <div className="text-right">
-                            <div className="text-xl font-bold text-cyan-400 font-poppins">{fmtDec(mEarnedBal)} MORBIUS</div>
-                            {toUsd(mEarnedBal) != null && <div className="text-[10px] text-cyan-400/50 font-poppins">{fmtUsd(toUsd(mEarnedBal))}</div>}
-                          </div>
-                        </div>
-                        <div className="text-[10px] text-white/25 font-poppins mb-3">If claimable shows 0 but rewards were deposited, refresh the pool first.</div>
-                        <div className="flex gap-2">
-                          <motion.button whileTap={{ scale: 0.98 }} type="button" onClick={handleMRefresh} disabled={mBusy} className={mBtnSecondary}>
-                            {mAction === 'refresh' && mBusy ? <span className="flex items-center justify-center gap-2"><Loader2 className="w-4 h-4 animate-spin" /> Updating...</span> : 'Refresh Pool'}
-                          </motion.button>
-                          <motion.button whileTap={{ scale: 0.98 }} type="button" onClick={handleMClaim} disabled={mEarnedBal <= 0n || mBusy} className={mBtnPrimary}>
-                            {mAction === 'claim' && mBusy ? <span className="flex items-center justify-center gap-2"><Loader2 className="w-4 h-4 animate-spin" /> Claiming...</span> : 'Claim'}
-                          </motion.button>
-                        </div>
-                      </motion.div>
-
-                      {/* History */}
-                      <motion.div variants={staggerChild} className={mCard}>
-                        <h2 className="text-xs uppercase tracking-wider text-white/30 font-poppins mb-3">History</h2>
-                        {mHistoryLoading ? (
-                          <div className="flex justify-center py-6"><Loader2 className="w-5 h-5 animate-spin text-cyan-500/40" /></div>
-                        ) : mHistory.length === 0 ? (
-                          <p className="text-center text-white/25 text-sm font-poppins py-4">No activity yet.</p>
-                        ) : (
-                          <div className="overflow-x-auto -mx-5 px-5">
-                            <Table>
-                              <TableHeader>
-                                <TableRow className="border-cyan-500/10 hover:bg-transparent">
-                                  <TableHead className="text-[10px] uppercase tracking-wider text-white/30 font-poppins font-semibold h-8">Type</TableHead>
-                                  <TableHead className="text-[10px] uppercase tracking-wider text-white/30 font-poppins font-semibold h-8">Date</TableHead>
-                                  <TableHead className="text-[10px] uppercase tracking-wider text-white/30 font-poppins font-semibold h-8 text-right">Amount</TableHead>
-                                  <TableHead className="text-[10px] uppercase tracking-wider text-white/30 font-poppins font-semibold h-8 text-right">Fee</TableHead>
-                                  <TableHead className="text-[10px] uppercase tracking-wider text-white/30 font-poppins font-semibold h-8">Tx</TableHead>
-                                </TableRow>
-                              </TableHeader>
-                              <TableBody>
-                                {mHistory.map((entry) => (
-                                  <TableRow key={entry.id} className="border-cyan-500/10 hover:bg-cyan-950/20">
-                                    <TableCell className="py-2">
-                                      <span className={`text-xs font-semibold font-poppins whitespace-nowrap ${entry.action === 'Stake' ? 'text-green-400' : entry.action === 'Unstake' ? 'text-orange-400' : 'text-cyan-400'}`}>{entry.action}</span>
-                                    </TableCell>
-                                    <TableCell className="py-2 text-[11px] text-white/50 font-poppins whitespace-nowrap">
-                                      {new Date(entry.timestamp).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}{' '}
-                                      <span className="text-white/30">{new Date(entry.timestamp).toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' })}</span>
-                                    </TableCell>
-                                    <TableCell className="py-2 text-right text-xs text-white/70 font-poppins whitespace-nowrap">{fmt(entry.amount)}</TableCell>
-                                    <TableCell className="py-2 text-right text-xs text-white/40 font-poppins whitespace-nowrap">{entry.fee > 0n ? fmt(entry.fee) : '—'}</TableCell>
-                                    <TableCell className="py-2">
-                                      <a href={`https://scan.pulsechain.com/tx/${entry.txHash}`} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 text-cyan-400/60 hover:text-cyan-300 transition-colors text-[10px] font-mono">
-                                        {entry.txHash.slice(0, 8)}…<ExternalLink className="w-3 h-3 flex-shrink-0" />
-                                      </a>
-                                    </TableCell>
-                                  </TableRow>
-                                ))}
-                              </TableBody>
-                            </Table>
-                          </div>
-                        )}
-                      </motion.div>
-
-                      <p className="text-center text-white/20 text-[10px] font-poppins pt-1">Rewards accrue from protocol fees. Stake to earn. Unstake anytime.</p>
-                    </motion.div>
-                  )}
-                </div>{/* end blur wrapper */}
                 </motion.div>
               )}
 
@@ -1266,18 +1003,13 @@ export default function ClaimPage() {
               {/* ── HOLDER REWARDS (CLAIMS) PANEL ── */}
               {activeTab === 'claims' && (
                 <motion.div key="claims" {...fadeUp} className="space-y-4">
-                  <div className="rounded-2xl border border-emerald-500/20 overflow-hidden bg-white/5">
-                    <p className="text-xs font-medium text-emerald-300/90 font-poppins px-4 pt-3 pb-2">
-                      How to claim
-                    </p>
-                    <video
-                      className="w-full max-h-[220px] object-contain sm:max-h-[260px] bg-black/30"
-                      controls
-                      playsInline
-                      preload="metadata"
-                      src={HOW_TO_CLAIM_VIDEO_URL}
-                    />
-                  </div>
+                  <button
+                    onClick={() => setShowHowToClaimVideo(true)}
+                    className="w-full flex items-center justify-center gap-2 py-2.5 rounded-xl border border-emerald-500/20 bg-emerald-950/10 text-emerald-300/80 hover:text-emerald-200 hover:bg-emerald-950/20 transition-colors font-poppins text-sm font-medium"
+                  >
+                    <FileText className="w-4 h-4" />
+                    How to claim — watch video
+                  </button>
                   <MerkleClaimsPanel />
                 </motion.div>
               )}
@@ -1287,6 +1019,48 @@ export default function ClaimPage() {
         </div>
       </div>
       <InfoModal open={showInfo} onClose={() => setShowInfo(false)} tab={activeTab} />
+
+      {/* ── How to Claim Video Dialog ── */}
+      <AnimatePresence>
+        {showHowToClaimVideo && (
+          <>
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm"
+              onClick={() => setShowHowToClaimVideo(false)}
+            />
+            <motion.div
+              initial={{ opacity: 0, y: 20, scale: 0.97 }}
+              animate={{ opacity: 1, y: 0, scale: 1 }}
+              exit={{ opacity: 0, y: 20, scale: 0.97 }}
+              transition={{ duration: 0.2 }}
+              className="fixed inset-0 z-50 flex items-center justify-center px-4 pointer-events-none"
+            >
+              <div
+                className="pointer-events-auto w-full max-w-xl rounded-2xl border border-emerald-500/20 bg-[#080d18] shadow-2xl overflow-hidden"
+                onClick={(e) => e.stopPropagation()}
+              >
+                <div className="flex items-center justify-between px-5 py-3.5 border-b border-emerald-500/10">
+                  <p className="text-sm font-semibold text-emerald-300 font-poppins">How to Claim</p>
+                  <button onClick={() => setShowHowToClaimVideo(false)} className="text-white/30 hover:text-white transition-colors">
+                    <X className="w-5 h-5" />
+                  </button>
+                </div>
+                <video
+                  className="w-full bg-black/30"
+                  controls
+                  playsInline
+                  autoPlay
+                  preload="metadata"
+                  src={HOW_TO_CLAIM_VIDEO_URL}
+                />
+              </div>
+            </motion.div>
+          </>
+        )}
+      </AnimatePresence>
       </>
     </GlobalMainNav>
   )

@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useState, useEffect, useRef, useCallback } from 'react';
+import { createPortal } from 'react-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { X, Loader2, ArrowDownCircle, ArrowUpCircle, RefreshCw, Check, Flag } from 'lucide-react';
 import { CopyButton } from '@/components/ui/copy-button';
@@ -45,6 +46,62 @@ function TokenLabel({ symbol, size = 'md' }: { symbol: 'MORBIUS' | 'PLS'; size?:
       <img src={src} alt="" className={`${dim} object-contain`} />
       <span>{symbol}</span>
     </span>
+  );
+}
+
+/** Full-screen overlay + video — portaled above wallet modal; video only mounts when open. */
+function WalletHowToVideoModal({
+  kind,
+  onClose,
+}: {
+  kind: 'deposit' | 'withdraw';
+  onClose: () => void;
+}) {
+  const title = kind === 'deposit' ? 'How to deposit' : 'How to withdraw';
+  const src = kind === 'deposit' ? HOW_TO_DEPOSIT_VIDEO_URL : HOW_TO_WITHDRAW_VIDEO_URL;
+
+  if (typeof document === 'undefined') return null;
+
+  return createPortal(
+    <div
+      className="fixed inset-0 z-[200] flex items-center justify-center p-4"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="wallet-how-to-video-title"
+    >
+      <button
+        type="button"
+        className="absolute inset-0 bg-black/75 backdrop-blur-sm"
+        aria-label="Close"
+        onClick={onClose}
+      />
+      <div
+        className="relative z-[1] w-full max-w-lg rounded-2xl border-2 border-cyan-500/30 bg-gradient-to-br from-slate-900 to-slate-800 shadow-2xl overflow-hidden p-4 sm:p-5"
+      >
+        <div className="flex items-center justify-between gap-3 mb-3">
+          <h3 id="wallet-how-to-video-title" className="text-sm font-semibold text-white">
+            {title}
+          </h3>
+          <button
+            type="button"
+            onClick={onClose}
+            className="rounded-full p-1.5 text-gray-400 hover:text-white hover:bg-white/10 transition-colors"
+            aria-label="Close"
+          >
+            <X size={18} />
+          </button>
+        </div>
+        <video
+          key={src}
+          className="w-full max-h-[min(52vh,380px)] rounded-lg bg-black/50 object-contain"
+          controls
+          playsInline
+          preload="metadata"
+          src={src}
+        />
+      </div>
+    </div>,
+    document.body
   );
 }
 
@@ -248,6 +305,7 @@ export function GameWalletModal({
   const [txError, setTxError] = useState<string | null>(null);
   const [txLoaded, setTxLoaded] = useState(false);
   const [reportOpen, setReportOpen] = useState(false);
+  const [howToVideo, setHowToVideo] = useState<'deposit' | 'withdraw' | null>(null);
 
   // ── Wallet balances ────────────────────────────────────────────────────
   const { balance: morbiusBalance } = useTokenBalance(address);
@@ -355,6 +413,7 @@ export function GameWalletModal({
       setDepositConfirmations(0);
       setDepositTxHash(null);
       setDepositNotifyAmountWei(null);
+      setHowToVideo(null);
     } else {
       setTab(defaultTab);
       if (isSelfManaged) fetchBalance();
@@ -1100,17 +1159,6 @@ export function GameWalletModal({
                         </button>
                       </div>
 
-                      <div className="rounded-xl border border-gray-200 overflow-hidden bg-gray-50">
-                        <p className="text-xs font-medium text-gray-600 px-3 pt-2 pb-1">How to deposit</p>
-                        <video
-                          className="w-full max-h-[200px] object-contain sm:max-h-[220px] bg-black/5"
-                          controls
-                          playsInline
-                          preload="metadata"
-                          src={HOW_TO_DEPOSIT_VIDEO_URL}
-                        />
-                      </div>
-
                       <div className="space-y-2">
                         <div className="flex justify-between items-center px-1">
                           <label className="text-sm font-medium text-gray-700">Amount</label>
@@ -1217,23 +1265,21 @@ export function GameWalletModal({
                       <p className="text-[10px] text-gray-400 text-center mt-3">
                         Withdrawals capped at 1,000,000 <TokenLabel symbol="MORBIUS" size="sm" />/day.
                       </p>
+                      <p className="text-[10px] text-center">
+                        <button
+                          type="button"
+                          onClick={() => setHowToVideo('deposit')}
+                          className="text-gray-500 hover:text-cyan-600 underline underline-offset-2 transition-colors"
+                        >
+                          How to deposit
+                        </button>
+                      </p>
                     </div>
                   )}
 
                   {/* ── Withdraw ── */}
                   {tab === 'withdraw' && (
                     <div className="space-y-4">
-                      <div className="rounded-xl border border-gray-200 overflow-hidden bg-gray-50">
-                        <p className="text-xs font-medium text-gray-600 px-3 pt-2 pb-1">How to withdraw</p>
-                        <video
-                          className="w-full max-h-[200px] object-contain sm:max-h-[220px] bg-black/5"
-                          controls
-                          playsInline
-                          preload="metadata"
-                          src={HOW_TO_WITHDRAW_VIDEO_URL}
-                        />
-                      </div>
-
                       <div className="space-y-2">
                         <div className="flex justify-between items-center px-1">
                           <label className="text-sm font-medium text-gray-700">
@@ -1278,6 +1324,15 @@ export function GameWalletModal({
                       </button>
                       <p className="text-[10px] text-gray-400 text-center mt-3">
                         Withdrawals capped at 1,000,000 <TokenLabel symbol="MORBIUS" size="sm" />/day.
+                      </p>
+                      <p className="text-[10px] text-center">
+                        <button
+                          type="button"
+                          onClick={() => setHowToVideo('withdraw')}
+                          className="text-gray-500 hover:text-cyan-600 underline underline-offset-2 transition-colors"
+                        >
+                          How to withdraw
+                        </button>
                       </p>
                     </div>
                   )}
@@ -1519,6 +1574,10 @@ export function GameWalletModal({
           </>
         )}
       </AnimatePresence>
+
+      {howToVideo ? (
+        <WalletHowToVideoModal kind={howToVideo} onClose={() => setHowToVideo(null)} />
+      ) : null}
 
       <CustomApprovalModal
         open={showApprovalModal}

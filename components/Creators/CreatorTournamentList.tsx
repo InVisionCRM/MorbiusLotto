@@ -5,6 +5,7 @@ import { useAccount } from 'wagmi';
 import type { CreatorTournamentItem } from '@/lib/tournament-types';
 import { TournamentCancelReclaim } from '@/components/BLACKJACK/Tournament/TournamentCancelReclaim';
 import { Theme } from '@/lib/theme';
+import { IconArrowsSort, IconSortAscending, IconSortDescending, IconTrophy } from '@tabler/icons-react';
 import {
   Table,
   TableHeader,
@@ -80,16 +81,16 @@ export function CreatorTournamentList({ tournaments, wsClient, onRefresh, creato
   }, [tournaments, sortField, sortAsc]);
 
   const SortIcon = ({ field }: { field: SortField }) => {
-    if (sortField !== field) return <i className="fas fa-sort text-gray-600 ml-1 text-xs" />;
+    if (sortField !== field) return <IconArrowsSort size={12} className="text-gray-600 ml-1" />;
     return sortAsc
-      ? <i className="fas fa-sort-up text-cyan-400 ml-1 text-xs" />
-      : <i className="fas fa-sort-down text-cyan-400 ml-1 text-xs" />;
+      ? <IconSortAscending size={12} className="text-cyan-400 ml-1" />
+      : <IconSortDescending size={12} className="text-cyan-400 ml-1" />;
   };
 
   if (tournaments.length === 0) {
     return (
       <div className="text-center py-12 text-gray-500">
-        <i className="fas fa-trophy text-4xl mb-3 block" />
+        <IconTrophy size={40} className="mb-3 mx-auto" />
         <p>No tournaments created yet</p>
       </div>
     );

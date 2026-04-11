@@ -29,7 +29,38 @@ import { useQueryClient } from '@tanstack/react-query';
 // Install console.error interceptor for bug reports (browser only, no-op on server)
 import '@/lib/error-log';
 import { useInstallAppHelpDialog } from '@/contexts/install-app-help-dialog-context';
-import { IconArrowLeft } from '@tabler/icons-react';
+import {
+  IconArrowLeft,
+  IconHome,
+  IconPlayerPlay,
+  IconPlayerPause,
+  IconPlayerSkipForward,
+  IconChartLine,
+  IconChartBar,
+  IconChartPie,
+  IconPalette,
+  IconQuestionMark,
+  IconArrowsExchange,
+  IconTrophy,
+  IconUserEdit,
+  IconUserCircle,
+  IconGift,
+  IconDownload,
+  IconShield,
+  IconSpeakerphone,
+  IconFlag,
+  IconSearch,
+  IconDeviceGamepad,
+  IconSettings,
+  IconDroplet,
+  IconLogout,
+  IconVolume,
+  IconVolumeOff,
+  IconCircle,
+  IconUsers,
+  IconTicket,
+  IconLayoutGrid,
+} from '@tabler/icons-react';
 
 // Lazy-load modals — only pulled into the bundle when first opened
 const ThemeSelectionModal = lazy(() => import('@/components/BLACKJACK/ThemeSelectionModal'));
@@ -52,20 +83,22 @@ const PATH_TO_PAGE: Record<string, NavPage> = {
   '/blackjack-multi': 'blackjackMulti',
 };
 
+type OtherGameIcon = 'blackjack' | 'plinko' | 'users' | 'ticket' | 'grid';
+
 type OtherGameNavItem =
-  | { label: string; href: string; icon: 'blackjack' | `fa-${string}` }
-  | { label: string; icon: 'blackjack' | `fa-${string}`; comingSoon: true };
+  | { label: string; href: string; icon: OtherGameIcon }
+  | { label: string; icon: OtherGameIcon; comingSoon: true };
 
 function isOtherGameLinked(g: OtherGameNavItem): g is Extract<OtherGameNavItem, { href: string }> {
   return 'href' in g;
 }
 
 const OTHER_GAMES: readonly OtherGameNavItem[] = [
-  { label: 'Plinko', href: '/PLINKO', icon: 'fa-circle' },
+  { label: 'Plinko', href: '/PLINKO', icon: 'plinko' },
   { label: 'Blackjack', href: '/BLACKJACK', icon: 'blackjack' },
-  { label: 'Multiplayer BJ', href: '/blackjack-multi', icon: 'fa-user-friends' },
-  { label: 'Lottery', href: '/lottery', icon: 'fa-ticket-alt' },
-  { label: 'Keno', href: '/keno', icon: 'fa-th' },
+  { label: 'Multiplayer BJ', href: '/blackjack-multi', icon: 'users' },
+  { label: 'Lottery', href: '/lottery', icon: 'ticket' },
+  { label: 'Keno', href: '/keno', icon: 'grid' },
 ];
 
 
@@ -188,20 +221,61 @@ const LanguageSelect = React.memo(function LanguageSelect() {
   );
 });
 
-const otherGameIcon = (g: OtherGameNavItem) =>
-  g.icon === 'blackjack' ? (
+const OTHER_GAME_ICONS: Record<OtherGameIcon, React.ReactNode> = {
+  blackjack: (
     <span className="w-5 h-5 flex-shrink-0 flex items-center justify-center rounded overflow-hidden">
       <Image src="/BlackJack/Cards/PNG/AS.png" alt="" width={20} height={20} className="object-contain" />
     </span>
-  ) : (
-    <i className={`fas ${g.icon} w-5 text-center text-white shrink-0`} aria-hidden />
-  );
+  ),
+  plinko: <IconCircle size={20} className="text-white shrink-0" aria-hidden />,
+  users: <IconUsers size={20} className="text-white shrink-0" aria-hidden />,
+  ticket: <IconTicket size={20} className="text-white shrink-0" aria-hidden />,
+  grid: <IconLayoutGrid size={20} className="text-white shrink-0" aria-hidden />,
+};
+
+const otherGameIcon = (g: OtherGameNavItem) => OTHER_GAME_ICONS[g.icon];
 
 const NAV_ITEM_CLASS = 'text-white hover:bg-white/5 rounded-lg px-2 py-2 transition-colors';
 
-/** Renders a Font Awesome icon sized for the sidebar. `active` swaps white → cyan. */
-function NavIcon({ icon, active = false }: { icon: string; active?: boolean }) {
-  return <i className={`fas ${icon} w-5 text-center shrink-0 ${active ? 'text-cyan-400' : 'text-white'}`} aria-hidden />;
+type NavIconName =
+  | 'fa-home' | 'fa-play' | 'fa-pause' | 'fa-forward' | 'fa-chart-line' | 'fa-chart-bar' | 'fa-chart-pie'
+  | 'fa-palette' | 'fa-question-circle' | 'fa-exchange-alt' | 'fa-trophy' | 'fa-user-edit' | 'fa-user-circle'
+  | 'fa-gift' | 'fa-download' | 'fa-shield-alt' | 'fa-shield' | 'fa-bullhorn' | 'fa-flag' | 'fa-search'
+  | 'fa-gamepad' | 'fa-cog' | 'fa-tint' | 'fa-sign-out-alt' | 'fa-volume-up' | 'fa-volume-mute';
+
+const NAV_ICON_MAP: Record<NavIconName, React.ComponentType<{ size?: number; className?: string; 'aria-hidden'?: boolean }>> = {
+  'fa-home': IconHome,
+  'fa-play': IconPlayerPlay,
+  'fa-pause': IconPlayerPause,
+  'fa-forward': IconPlayerSkipForward,
+  'fa-chart-line': IconChartLine,
+  'fa-chart-bar': IconChartBar,
+  'fa-chart-pie': IconChartPie,
+  'fa-palette': IconPalette,
+  'fa-question-circle': IconQuestionMark,
+  'fa-exchange-alt': IconArrowsExchange,
+  'fa-trophy': IconTrophy,
+  'fa-user-edit': IconUserEdit,
+  'fa-user-circle': IconUserCircle,
+  'fa-gift': IconGift,
+  'fa-download': IconDownload,
+  'fa-shield-alt': IconShield,
+  'fa-shield': IconShield,
+  'fa-bullhorn': IconSpeakerphone,
+  'fa-flag': IconFlag,
+  'fa-search': IconSearch,
+  'fa-gamepad': IconDeviceGamepad,
+  'fa-cog': IconSettings,
+  'fa-tint': IconDroplet,
+  'fa-sign-out-alt': IconLogout,
+  'fa-volume-up': IconVolume,
+  'fa-volume-mute': IconVolumeOff,
+};
+
+/** Renders a Tabler icon sized for the sidebar. `active` swaps white → cyan. */
+function NavIcon({ icon, active = false }: { icon: NavIconName; active?: boolean }) {
+  const Icon = NAV_ICON_MAP[icon];
+  return <Icon size={20} className={`shrink-0 ${active ? 'text-cyan-400' : 'text-white'}`} aria-hidden />;
 }
 
 function SoundToggleButton({ enabled, onToggle, className }: { enabled: boolean; onToggle: () => void; className?: string }) {
@@ -467,7 +541,7 @@ const NavContent = React.memo(function NavContent(props: NavContentProps) {
           )}
           <SidebarButton label="Responsible Gaming" icon={<NavIcon icon="fa-shield-alt" />} onClick={onOpenResponsibleGaming} className={NAV_ITEM_CLASS} />
           <SidebarLink link={{ label: 'Marketing', href: '/marketing', icon: <NavIcon icon="fa-bullhorn" /> }} className={NAV_ITEM_CLASS} />
-          <SidebarButton label="Report Issue" icon={<i className="fas fa-flag w-5 text-center text-red-400/80 shrink-0" aria-hidden />} onClick={onOpenReport} className={NAV_ITEM_CLASS} />
+          <SidebarButton label="Report Issue" icon={<IconFlag size={20} className="text-red-400/80 shrink-0" aria-hidden />} onClick={onOpenReport} className={NAV_ITEM_CLASS} />
           <SidebarLink link={{ label: 'Token Analyzer', href: 'https://scan.morbius.io', icon: <NavIcon icon="fa-search" /> }} className={NAV_ITEM_CLASS} target="_blank" rel="noopener noreferrer" />
           <SidebarLink link={{ label: 'Morb-It', href: '/Morb-It', icon: <NavIcon icon="fa-gamepad" /> }} className={NAV_ITEM_CLASS} />
           {isAdmin && (
@@ -512,11 +586,11 @@ const NavContent = React.memo(function NavContent(props: NavContentProps) {
           <div className="px-2 py-2 rounded-lg bg-white/5 border border-cyan-500/20 flex items-center gap-2">
             <span className="text-white text-xs font-medium truncate flex-1 min-w-0" title={musicTrackName}>{musicTrackName}</span>
             <button type="button" onClick={onToggleMusic} className="w-7 h-7 rounded flex items-center justify-center text-cyan-400 hover:bg-cyan-500/20 transition-colors shrink-0" aria-label={isMusicPlaying ? 'Pause music' : 'Play music'}>
-              {isMusicPlaying ? <i className="fas fa-pause text-xs" /> : <i className="fas fa-play text-xs" />}
+              {isMusicPlaying ? <IconPlayerPause size={14} /> : <IconPlayerPlay size={14} />}
             </button>
             {onNextTrack && (
               <button type="button" onClick={onNextTrack} className="w-7 h-7 rounded flex items-center justify-center text-cyan-400 hover:bg-cyan-500/20 transition-colors shrink-0" aria-label="Next track">
-                <i className="fas fa-forward text-xs" />
+                <IconPlayerSkipForward size={14} />
               </button>
             )}
           </div>

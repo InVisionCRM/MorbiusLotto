@@ -103,14 +103,6 @@ export default function RootLayout({
         <link rel="preconnect" href="https://pulse.walletconnect.org" />
         <link rel="preconnect" href="https://api.web3modal.org" />
 
-        {/* Font Awesome — load non-render-blocking (icons appear after paint, not before) */}
-        <link
-          rel="stylesheet"
-          href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css"
-          media="print"
-          // @ts-expect-error onload is valid on link elements
-          onLoad="this.media='all'"
-        />
         {/* Montserrat for chat messages */}
         <link rel="preconnect" href="https://fonts.googleapis.com" />
         <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />

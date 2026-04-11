@@ -3,6 +3,7 @@
 import React, { useState } from 'react';
 import html2canvas from 'html2canvas';
 import { ShareModal } from './ShareModal';
+import { IconShare, IconLoader } from '@tabler/icons-react';
 
 interface ShareButtonProps {
   chartElement: HTMLElement | null;
@@ -215,7 +216,7 @@ export const ShareButton: React.FC<ShareButtonProps> = ({
         }}
         title="Share your session with image"
       >
-        <i className={`fas ${isGenerating ? 'fa-spinner fa-spin' : 'fa-share-alt'} text-xs`}></i>
+        {isGenerating ? <IconLoader size={12} className="animate-spin" /> : <IconShare size={12} />}
         {isGenerating ? 'Generating...' : 'Share Image'}
       </button>
 

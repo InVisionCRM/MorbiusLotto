@@ -1,6 +1,7 @@
 'use client';
 
 import type { PendingWithdrawalJob } from '@/hooks/use-pending-withdrawal';
+import { IconX } from '@tabler/icons-react';
 
 interface BlackjackStatusOverlaysProps {
   showSplash: boolean;
@@ -25,7 +26,7 @@ export function BlackjackStatusOverlays({
               className="absolute top-4 right-4 text-white/60 hover:text-white transition-colors"
               aria-label="Close"
             >
-              <i className="fas fa-times text-xl"></i>
+              <IconX size={20} />
             </button>
 
             <div className="text-center space-y-4">

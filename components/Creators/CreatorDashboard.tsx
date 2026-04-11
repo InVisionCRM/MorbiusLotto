@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useState, useEffect, useCallback } from 'react';
+import { IconTrophy, IconCoins, IconShare, IconPlus, IconRefresh } from '@tabler/icons-react';
 import type { BlackjackWebSocketClient } from '@/lib/websocket-client';
 import type { CreatorTournamentItem, CreatorEarning, CreateTournamentRequest, CreateFreerollRequest } from '@/lib/tournament-types';
 import { CreatorStats } from './CreatorStats';
@@ -63,10 +64,10 @@ export function CreatorDashboard({ wsClient, address }: CreatorDashboardProps) {
     fetchBalance();
   }, [fetchBalance]);
 
-  const tabs: { id: DashboardTab; label: string; icon: string }[] = [
-    { id: 'tournaments', label: 'Tournaments', icon: 'fa-trophy' },
-    { id: 'earnings', label: 'Earnings', icon: 'fa-coins' },
-    { id: 'share', label: 'Share', icon: 'fa-share-alt' },
+  const tabs: { id: DashboardTab; label: string; icon: React.ReactNode }[] = [
+    { id: 'tournaments', label: 'Tournaments', icon: <IconTrophy size={12} /> },
+    { id: 'earnings', label: 'Earnings', icon: <IconCoins size={12} /> },
+    { id: 'share', label: 'Share', icon: <IconShare size={12} /> },
   ];
 
   return (
@@ -84,7 +85,7 @@ export function CreatorDashboard({ wsClient, address }: CreatorDashboardProps) {
             onClick={() => setShowTournamentCreator(true)}
             className={`flex items-center gap-2 px-4 py-2 rounded-lg ${Theme.cyan.gradient.button} ${Theme.cyan.gradient.buttonHover} text-white font-medium text-sm transition-colors`}
           >
-            <i className="fas fa-plus" />
+            <IconPlus size={14} />
             Create Tournament
           </button>
           <button
@@ -93,7 +94,7 @@ export function CreatorDashboard({ wsClient, address }: CreatorDashboardProps) {
             className="flex items-center gap-2 px-4 py-2 rounded-lg border border-gray-600 text-gray-400 hover:text-white hover:border-gray-500 transition-colors text-sm disabled:opacity-50"
             style={Theme.panel.base}
           >
-            <i className={`fas fa-sync-alt ${loading ? 'animate-spin' : ''}`} />
+            <IconRefresh size={14} className={loading ? 'animate-spin' : ''} />
             Refresh
           </button>
         </div>
@@ -134,7 +135,7 @@ export function CreatorDashboard({ wsClient, address }: CreatorDashboardProps) {
                     : 'text-gray-400 hover:text-gray-300'
                 }`}
               >
-                <i className={`fas ${tab.icon} text-xs`} />
+                {tab.icon}
                 {tab.label}
               </button>
             ))}

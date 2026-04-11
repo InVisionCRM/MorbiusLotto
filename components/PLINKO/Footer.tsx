@@ -7,6 +7,7 @@ import ContactModal from './ContactModal';
 import { AboutUsModal } from '@/components/footer/about-us';
 import { UserAgreementModal } from '@/components/footer/user-agreement';
 import { MORBIUS_TOKEN_ADDRESS } from '@/lib/contracts';
+import { IconBrandX, IconBrandTelegram, IconWorld } from '@tabler/icons-react';
 
 export default function Footer() {
   const [faqOpen, setFaqOpen] = useState(false);
@@ -164,7 +165,7 @@ export default function Footer() {
                     rel="noopener noreferrer"
                     className="text-white/90 hover:text-cyan-500 transition-colors text-xs flex items-center gap-2"
                   >
-                    <i className="fab fa-x-twitter"></i>
+                    <IconBrandX size={14} />
                     <span>@Morbius_io</span>
                   </a>
                 </li>
@@ -175,7 +176,7 @@ export default function Footer() {
                     rel="noopener noreferrer"
                     className="text-white/90 hover:text-cyan-500 transition-colors text-xs flex items-center gap-2"
                   >
-                    <i className="fab fa-telegram"></i>
+                    <IconBrandTelegram size={14} />
                     <span>Morbius_cash</span>
                   </a>
                 </li>
@@ -186,7 +187,7 @@ export default function Footer() {
                     rel="noopener noreferrer"
                     className="text-white/90 hover:text-cyan-500 transition-colors text-xs flex items-center gap-2"
                   >
-                    <i className="fas fa-globe"></i>
+                    <IconWorld size={14} />
                     <span>Morbius.io</span>
                   </a>
                 </li>

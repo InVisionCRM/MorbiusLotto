@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useState, useEffect, useCallback, useImperativeHandle, useMemo, useRef } from 'react';
+import { IconHistory } from '@tabler/icons-react';
 import {
   AreaChart,
   Area,
@@ -211,7 +212,7 @@ const RealTimeBetChart = React.forwardRef<RealTimeBetChartRef, RealTimeBetChartP
           }}
           title="View History"
         >
-          <i className="fas fa-history text-xs"></i>
+          <IconHistory size={12} />
           History
         </button>
 

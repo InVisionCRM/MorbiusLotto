@@ -8,6 +8,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
+import { IconHistory, IconVolume, IconStack2, IconShield } from '@tabler/icons-react';
 
 interface HowToPlayModalProps {
   open: boolean;
@@ -235,28 +236,28 @@ export default function HowToPlayModal({ open, onOpenChange }: HowToPlayModalPro
           <div className="grid grid-cols-2 gap-3">
             <div className="bg-black/60 rounded-lg p-3 border border-[#1BE7FF]/30 hover:border-[#1BE7FF] transition-all">
               <div className="flex items-center gap-2 mb-2">
-                <i className="fas fa-history text-[#1BE7FF] text-sm"></i>
+                <IconHistory size={16} className="text-[#1BE7FF]" />
                 <h4 className="font-bold text-[#1BE7FF] text-sm">Game History</h4>
               </div>
               <p className="text-xs text-gray-400">Track all your drops and winnings</p>
             </div>
             <div className="bg-black/60 rounded-lg p-3 border border-[#1BE7FF]/30 hover:border-[#1BE7FF] transition-all">
               <div className="flex items-center gap-2 mb-2">
-                <i className="fas fa-volume-up text-[#1BE7FF] text-sm"></i>
+                <IconVolume size={16} className="text-[#1BE7FF]" />
                 <h4 className="font-bold text-[#1BE7FF] text-sm">Sound Effects</h4>
               </div>
               <p className="text-xs text-gray-400">Toggle audio feedback on/off</p>
             </div>
             <div className="bg-black/60 rounded-lg p-3 border border-[#1BE7FF]/30 hover:border-[#1BE7FF] transition-all">
               <div className="flex items-center gap-2 mb-2">
-                <i className="fas fa-layer-group text-[#1BE7FF] text-sm"></i>
+                <IconStack2 size={16} className="text-[#1BE7FF]" />
                 <h4 className="font-bold text-[#1BE7FF] text-sm">Bet Presets</h4>
               </div>
               <p className="text-xs text-gray-400">Quick-select common bet amounts</p>
             </div>
             <div className="bg-black/60 rounded-lg p-3 border border-[#1BE7FF]/30 hover:border-[#1BE7FF] transition-all">
               <div className="flex items-center gap-2 mb-2">
-                <i className="fas fa-shield-alt text-[#1BE7FF] text-sm"></i>
+                <IconShield size={16} className="text-[#1BE7FF]" />
                 <h4 className="font-bold text-[#1BE7FF] text-sm">Smart Contract</h4>
               </div>
               <p className="text-xs text-gray-400">All games verified on-chain</p>
