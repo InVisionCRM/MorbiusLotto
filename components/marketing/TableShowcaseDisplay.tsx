@@ -22,7 +22,7 @@ const SHOWCASES: ShowcaseData[] = [
     tableImg: '/Marketing%20/Tables/LibertySwapTable.webp',
     pageImg: '/Marketing%20/Page%20View/LibertyPage.webp',
     tpImg: '/Marketing%20/Token%20Profile/LibertyTP.png',
-    rotateY: 10,
+    rotateY: -10,
   },
   {
     name: 'LBRTY',

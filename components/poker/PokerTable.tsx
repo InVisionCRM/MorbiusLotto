@@ -46,6 +46,33 @@ const TOP_ADJACENT_SEAT_VERTICAL_NUDGE_PX = -30;
 const TOP_CENTER_SEAT_VERTICAL_NUDGE_PX = -10;
 const RIGHT_ADJACENT_SEAT_HORIZONTAL_NUDGE_PX = -30;
 const LEFT_ADJACENT_SEAT_HORIZONTAL_NUDGE_PX = 30;
+// Per-server-position pixel nudges (applied on top of the ellipse + display-slot nudges).
+// Key = state.seats[idx].position value.
+const SEAT_POSITION_NUDGE_PX: Record<number, { x: number; y: number }> = {
+  1: { x: 30, y: 10 },
+  2: { x: 0, y: 60 },
+  4: { x: 30, y: 0 },
+  3: { x: 0, y: -30 },
+  6: { x: -30, y: 0 },
+  7: { x: 0, y: -30 },
+  8: { x: 0, y: 60 },
+  9: { x: -30, y: 10 },
+};
+
+// Per-server-position pixel nudges for chip stacks (applied on top of the computed chip position).
+const CHIP_POSITION_NUDGE_PX: Record<number, { x: number; y: number }> = {
+  0: { x: 0, y: -60 },
+  1: { x: 0, y: -60 },
+  2: { x: 90, y: 0 },
+  3: { x: 90, y: 0 },
+  4: { x: 0, y: 60 },
+  5: { x: 0, y: 60 },
+  6: { x: 0, y: 60 },
+  7: { x: -90, y: 0 },
+  8: { x: -90, y: 0 },
+  9: { x: 0, y: -60 },
+};
+
 const SHOWDOWN_CARD_PULL_RATIO = 0.18;
 const SHOWDOWN_CARD_PULL_MAX_PX = 70;
 const BET_CHIP_INWARD_DISTANCE_PX = 64;
@@ -650,9 +677,10 @@ export function PokerTable({ state, currentPlayerAddress, timeLeft, chatBubbleBy
           const towardPot = { x: potPx.x - seatPx.x, y: potPx.y - seatPx.y };
           const towardPotLen = Math.hypot(towardPot.x, towardPot.y) || 1;
           const step = Math.min(BET_CHIP_INWARD_DISTANCE_PX, towardPotLen * 0.85);
+          const chipNudge = CHIP_POSITION_NUDGE_PX[seat.position ?? actualIdx] ?? { x: 0, y: 0 };
           const chipPx = {
-            x: seatPx.x + (towardPot.x / towardPotLen) * step,
-            y: seatPx.y + (towardPot.y / towardPotLen) * step,
+            x: seatPx.x + (towardPot.x / towardPotLen) * step + chipNudge.x,
+            y: seatPx.y + (towardPot.y / towardPotLen) * step + chipNudge.y,
           };
           const cfx = chipPx.x / Math.max(dims.w, 1);
           const cfy = chipPx.y / Math.max(dims.h, 1);
@@ -678,6 +706,37 @@ export function PokerTable({ state, currentPlayerAddress, timeLeft, chatBubbleBy
         })}
       </AnimatePresence>
       )}
+
+      {/* DEV: chip position markers */}
+      {process.env.NODE_ENV === 'development' && Array.from({ length: state.seats.length }, (_, displaySlot) => {
+        const anchor = seatAnchors[displaySlot];
+        if (!anchor) return null;
+        const actualIdx = mySeatIndex >= 0 ? (mySeatIndex + displaySlot) % state.seats.length : displaySlot;
+        const serverPos = state.seats[actualIdx]?.position ?? actualIdx;
+        const renderedSeatAnchor = getRenderedSeatAnchor(displaySlot) ?? anchor;
+        const seatPx = { x: renderedSeatAnchor.fx * dims.w, y: renderedSeatAnchor.fy * dims.h };
+        const potPx = { x: POT_ANCHOR.fx * dims.w, y: POT_ANCHOR.fy * dims.h };
+        const towardPot = { x: potPx.x - seatPx.x, y: potPx.y - seatPx.y };
+        const towardPotLen = Math.hypot(towardPot.x, towardPot.y) || 1;
+        const step = Math.min(BET_CHIP_INWARD_DISTANCE_PX, towardPotLen * 0.85);
+        const chipNudgeDebug = CHIP_POSITION_NUDGE_PX[serverPos] ?? { x: 0, y: 0 };
+        const chipPx = {
+          x: seatPx.x + (towardPot.x / towardPotLen) * step + chipNudgeDebug.x,
+          y: seatPx.y + (towardPot.y / towardPotLen) * step + chipNudgeDebug.y,
+        };
+        return (
+          <div
+            key={`chip-debug-${displaySlot}`}
+            className="absolute pointer-events-none z-50"
+            style={{ left: `${(chipPx.x / Math.max(dims.w, 1)) * 100}%`, top: `${(chipPx.y / Math.max(dims.h, 1)) * 100}%`, transform: 'translate(-50%, -50%)' }}
+          >
+            <div className="w-3 h-3 rounded-full bg-cyan-400/80 border border-cyan-200" />
+            <div className="absolute -top-4 left-1/2 -translate-x-1/2 whitespace-nowrap rounded bg-black/70 px-1 py-0.5 text-[10px] font-mono text-cyan-300">
+              c{serverPos}
+            </div>
+          </div>
+        );
+      })}
 
       {/* Folded cards: fly from seat to center, then vanish */}
       <AnimatePresence>
@@ -738,19 +797,26 @@ export function PokerTable({ state, currentPlayerAddress, timeLeft, chatBubbleBy
         const anchor = seatAnchors[displaySlot];
         if (!anchor) return null;
         const seatNudge = getSeatNudgePx(displaySlot);
+        const serverPos = state.seats[idx]?.position ?? idx;
+        const posNudge = SEAT_POSITION_NUDGE_PX[serverPos] ?? { x: 0, y: 0 };
         return (
           <div
             key={idx}
             className="absolute z-20"
             data-seat-slot={displaySlot}
-            data-seat-position={state.seats[idx]?.position ?? idx}
+            data-seat-position={serverPos}
             style={{
               left: `${anchor.fx * 100}%`,
               top:  `${anchor.fy * 100}%`,
-              transform: `translate(calc(-50% + ${seatNudge.x}px), calc(-50% + ${seatNudge.y}px))`,
+              transform: `translate(calc(-50% + ${seatNudge.x + posNudge.x}px), calc(-50% + ${seatNudge.y + posNudge.y}px))`,
             }}
             {...(tutorialTargets ? { 'data-tutorial-target': `seat-${displaySlot}` } : {})}
           >
+            {process.env.NODE_ENV === 'development' && (
+              <div className="absolute -top-5 left-1/2 -translate-x-1/2 z-50 whitespace-nowrap rounded bg-black/70 px-1 py-0.5 text-[10px] font-mono text-yellow-300 pointer-events-none">
+                s{state.seats[idx]?.position ?? idx}
+              </div>
+            )}
             <PokerSeat {...seatProps(idx)} />
           </div>
         );
