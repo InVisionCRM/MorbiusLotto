@@ -22,6 +22,7 @@ type ActionEntry = {
   id: string;
   seatIndex: number;
   playerAddr: string;
+  displayName?: string | null;
   action: string;
   amount?: string;
   ts: number;
@@ -38,6 +39,7 @@ type ShowdownEntry = {
   kind: 'showdown';
   id: string;
   winnerAddr: string;
+  displayName?: string | null;
   amount: string;
   handName?: string;        // undefined = fold win (don't reveal cards)
   communityCards?: number[];
@@ -109,18 +111,18 @@ function seatLabel(seatIndex: number, state: PokerTableState | null): string {
 }
 
 const CARD_RANKS = ['2','3','4','5','6','7','8','9','10','J','Q','K','A'];
-const CARD_SUITS = ['C','D','H','S'];
+const CARD_SUITS = ['♣','♦','♥','♠'];
+const SUIT_COLORS = ['rgba(255,255,255,0.85)','rgba(239,68,68,0.9)','rgba(239,68,68,0.9)','rgba(255,255,255,0.85)'];
 
 function TinyCard({ idx }: { idx: number }) {
   const rank = CARD_RANKS[idx % 13];
-  const suit = CARD_SUITS[Math.floor(idx / 13)];
+  const suitIdx = Math.floor(idx / 13);
+  const suit = CARD_SUITS[suitIdx];
+  const color = SUIT_COLORS[suitIdx];
   return (
-     
-    <img
-      src={`/BlackJack/Cards/PNG/${rank}${suit}.png`}
-      alt={`${rank}${suit}`}
-      style={{ width: 16, height: 22, objectFit: 'cover', borderRadius: 2, display: 'inline-block' }}
-    />
+    <span className="font-mono font-bold text-[11px]" style={{ color }}>
+      {rank}{suit}
+    </span>
   );
 }
 
@@ -375,6 +377,7 @@ export function PokerActivityFeed({
         id: key,
         seatIndex: la.position,
         playerAddr: seat?.playerAddress ?? '',
+        displayName: seat?.displayName ?? null,
         action: la.action,
         amount: la.amount && la.amount !== '0' ? la.amount : undefined,
         ts: Date.now(),
@@ -422,6 +425,7 @@ export function PokerActivityFeed({
     const winner = hand.winners[0];
     // No handName = won by everyone else folding — don't reveal hole cards
     const isFoldWin = !winner.handName;
+    const winnerSeat = state?.seats.find((s) => s.playerAddress?.toLowerCase() === winner.address.toLowerCase());
 
     setEntries((prev) => [
       ...prev,
@@ -429,6 +433,7 @@ export function PokerActivityFeed({
         kind: 'showdown',
         id: `showdown-${hand.handId}`,
         winnerAddr: winner.address,
+        displayName: winnerSeat?.displayName ?? null,
         amount: winner.amount,
         handName: winner.handName,
         communityCards: isFoldWin ? undefined : [...(hand.communityCards ?? [])],
@@ -512,7 +517,7 @@ export function PokerActivityFeed({
       );
     }
     if (entry.kind === 'showdown') {
-      const name = shortAddr(entry.winnerAddr);
+      const name = displayPlayerName(entry.displayName, entry.winnerAddr);
       const amt = fmtWei(entry.amount);
       return (
         <div
@@ -557,7 +562,7 @@ export function PokerActivityFeed({
     if (entry.kind === 'action') {
       const color = ACTION_COLORS[entry.action] ?? 'rgba(255,255,255,0.55)';
       const label = ACTION_LABELS[entry.action] ?? entry.action;
-      const name = entry.playerAddr ? shortAddr(entry.playerAddr) : seatLabel(entry.seatIndex, state);
+      const name = displayPlayerName(entry.displayName, entry.playerAddr) || seatLabel(entry.seatIndex, state);
       const amtStr = entry.amount ? fmtWei(entry.amount) : '';
       return (
         <div key={entry.id} className="flex items-baseline gap-1 px-2.5 py-[2px] text-[10px] md:text-[11px] leading-snug">

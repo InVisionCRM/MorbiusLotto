@@ -1,0 +1,70 @@
+/* Wheel rim tint comes from --morb-wheel-rim-* on .morb-roulette-wheel-wrap (room preset) */
+.morb-roulette-wheel-wrap .roulette-wheel-plate::after {
+  border: 6px solid var(--morb-wheel-rim-outer, rgb(34, 211, 238));
+  box-shadow:
+    inset 0 0 0 2px var(--morb-wheel-rim-inner, rgb(8, 145, 178)),
+    0 0 0 2px var(--morb-wheel-rim-glow, rgba(165, 243, 252, 0.55));
+}
+
+/*
+ * Library defaults red wedges to #ff0000; felt uses dark burgundy --red.
+ * Force felt red, then re-apply black / green pockets (same numbering as library).
+ */
+.morb-roulette-wheel-wrap .roulette-wheel-bet-number {
+  border-top-color: #e01e3d !important;
+}
+
+.morb-roulette-wheel-wrap .roulette-wheel-bet-number[data-bet='0'],
+.morb-roulette-wheel-wrap .roulette-wheel-bet-number[data-bet='00'] {
+  border-top-color: #008000 !important;
+}
+
+.morb-roulette-wheel-wrap .roulette-wheel-bet-number[data-bet='2'],
+.morb-roulette-wheel-wrap .roulette-wheel-bet-number[data-bet='4'],
+.morb-roulette-wheel-wrap .roulette-wheel-bet-number[data-bet='6'],
+.morb-roulette-wheel-wrap .roulette-wheel-bet-number[data-bet='8'],
+.morb-roulette-wheel-wrap .roulette-wheel-bet-number[data-bet='10'],
+.morb-roulette-wheel-wrap .roulette-wheel-bet-number[data-bet='11'],
+.morb-roulette-wheel-wrap .roulette-wheel-bet-number[data-bet='13'],
+.morb-roulette-wheel-wrap .roulette-wheel-bet-number[data-bet='15'],
+.morb-roulette-wheel-wrap .roulette-wheel-bet-number[data-bet='17'],
+.morb-roulette-wheel-wrap .roulette-wheel-bet-number[data-bet='20'],
+.morb-roulette-wheel-wrap .roulette-wheel-bet-number[data-bet='22'],
+.morb-roulette-wheel-wrap .roulette-wheel-bet-number[data-bet='24'],
+.morb-roulette-wheel-wrap .roulette-wheel-bet-number[data-bet='26'],
+.morb-roulette-wheel-wrap .roulette-wheel-bet-number[data-bet='28'],
+.morb-roulette-wheel-wrap .roulette-wheel-bet-number[data-bet='29'],
+.morb-roulette-wheel-wrap .roulette-wheel-bet-number[data-bet='31'],
+.morb-roulette-wheel-wrap .roulette-wheel-bet-number[data-bet='33'],
+.morb-roulette-wheel-wrap .roulette-wheel-bet-number[data-bet='35'] {
+  border-top-color: #25252a !important;
+}
+
+/* Winning number hub — only rendered after spin ends (see RouletteWheel.tsx) */
+.morb-roulette-wheel-wrap .morb-roulette-wheel-center-slot {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  z-index: 6;
+  width: 26%;
+  max-width: 5.75rem;
+  aspect-ratio: 1 / 1;
+  transform: translate(-50%, -50%);
+}
+
+.morb-roulette-wheel-wrap .morb-roulette-wheel-center-result {
+  font-size: clamp(1.5rem, 5.5vmin, 2.65rem);
+  line-height: 1;
+  animation: morb-wheel-center-in 0.4s cubic-bezier(0.22, 1, 0.36, 1) forwards;
+}
+
+@keyframes morb-wheel-center-in {
+  from {
+    opacity: 0;
+    transform: scale(0.82);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}

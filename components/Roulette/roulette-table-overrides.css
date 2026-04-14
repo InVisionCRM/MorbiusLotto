@@ -1,0 +1,192 @@
+/* react-casino-roulette: keep felt reds/blacks identical to wheel + history strip */
+.morb-roulette-table-wrap {
+  /* Let the table + history strip share one full-width column; scale the felt with it */
+  container-type: inline-size;
+  container-name: morb-roulette-felt;
+}
+
+/*
+ * Library defaults to height: 368px + aspect-ratio 2/1 → ~736px wide, so the felt looked
+ * narrower than the full-width history strip. Fill the rail width; height follows 2:1.
+ * !important beats inline height/fontSize/--roulette-romb-size from the library.
+ */
+.morb-roulette-table-wrap .roulette-table-container {
+  --red: #e01e3d;
+  --black: #25252a;
+  --hover: rgba(34, 211, 238, 0.52);
+
+  width: 100% !important;
+  max-width: 100% !important;
+  height: auto !important;
+  aspect-ratio: 2 / 1;
+  /* Default lib: fontSize ≈ height*0.05, romb ≈ height*0.09; with 2:1, height = 50% of width → 2.5% / 4.5% of width */
+  font-size: clamp(10px, 2.5cqw, 22px) !important;
+  --roulette-romb-size: clamp(6px, 4.5cqw, 40px) !important;
+}
+
+/* Library omits zero background — align with wheel green */
+.morb-roulette-table-wrap .zero-item {
+  background-color: #008000;
+}
+
+/* Library uses background: #fff on .chip — reads as a white ring behind PNG chips */
+.morb-roulette-table-wrap .chip {
+  background-color: transparent !important;
+  border: none !important;
+  box-shadow: none !important;
+  outline: none !important;
+  color: #fff;
+  text-shadow: 0 0 2px #000, 0 1px 3px rgba(0, 0, 0, 0.9);
+}
+
+/* Thinner, lower-contrast grid (library: 3px solid #fff) */
+.morb-roulette-table-wrap .red-item,
+.morb-roulette-table-wrap .black-item,
+.morb-roulette-table-wrap .column-item,
+.morb-roulette-table-wrap .zero-item {
+  border-left-width: 1px !important;
+  border-top-width: 1px !important;
+  border-left-color: rgba(255, 255, 255, 0.18) !important;
+  border-top-color: rgba(255, 255, 255, 0.18) !important;
+}
+
+.morb-roulette-table-wrap .zero-item:first-child {
+  border-bottom-width: 1px !important;
+  border-bottom-color: rgba(255, 255, 255, 0.18) !important;
+}
+
+.morb-roulette-table-wrap .column-item {
+  border-right-width: 1px !important;
+  border-right-color: rgba(255, 255, 255, 0.18) !important;
+}
+
+.morb-roulette-table-wrap .column-item[data-action='1ST_COLUMN'] {
+  border-bottom-width: 1px !important;
+  border-bottom-color: rgba(255, 255, 255, 0.18) !important;
+}
+
+.morb-roulette-table-wrap .doz-item {
+  border-width: 1px !important;
+  border-style: solid !important;
+  border-color: rgba(255, 255, 255, 0.18) !important;
+}
+
+.morb-roulette-table-wrap .outside-section {
+  border-width: 1px !important;
+  border-style: solid !important;
+  border-color: rgba(255, 255, 255, 0.18) !important;
+}
+
+.morb-roulette-table-wrap .rhomb-red,
+.morb-roulette-table-wrap .rhomb-black {
+  border-width: 1px !important;
+  border-color: rgba(255, 255, 255, 0.28) !important;
+}
+
+/* ── Table “rail” + felt surface (realistic framing) ── */
+.morb-roulette-table-rail {
+  border: 1px inset rgba(60, 60, 60, 0.5);
+  border-radius: 1rem;
+  padding: 0.65rem;
+  background: linear-gradient(145deg, rgb(16, 26, 35), rgb(35, 36, 41));
+  box-shadow:
+    inset 0 3px 6px rgba(0, 0, 0, 0.8),
+    inset 0 -3px 6px rgba(255, 255, 255, 0.08),
+    0 4px 14px rgba(0, 0, 0, 0.55),
+    0 0 0 1px rgba(75, 82, 94, 0.45);
+}
+
+.morb-roulette-felt-surface {
+  position: relative;
+  border-radius: 0.5rem;
+  overflow: hidden;
+}
+
+/* Subtle fabric noise + center wash (Theme.CyanGlow–aware) */
+.morb-roulette-felt-surface::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  z-index: 0;
+  opacity: 0.07;
+  background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+  mix-blend-mode: overlay;
+}
+
+.morb-roulette-felt-surface::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  z-index: 0;
+  background: radial-gradient(
+    ellipse 85% 70% at 50% 42%,
+    rgba(34, 211, 238, 0.08) 0%,
+    transparent 62%
+  ),
+    radial-gradient(ellipse 100% 100% at 50% 50%, transparent 40%, rgba(0, 0, 0, 0.45) 100%);
+}
+
+/* Wheel running / no more bets */
+.morb-roulette-table-wrap .roulette-table-container.read-only {
+  filter: saturate(0.72) brightness(0.9);
+  transition: filter 0.35s ease;
+}
+
+@keyframes morb-winning-pocket-pulse {
+  0%,
+  100% {
+    box-shadow:
+      inset 0 0 0 3px rgba(34, 211, 238, 0.9),
+      0 0 18px rgba(34, 211, 238, 0.35);
+  }
+  50% {
+    box-shadow:
+      inset 0 0 0 3px rgba(34, 211, 238, 1),
+      0 0 26px rgba(34, 211, 238, 0.5);
+  }
+}
+
+/* Winning straight pocket: library exposes data-bet on number + zero cells */
+.morb-roulette-felt-surface[data-winning-pocket='0'] .roulette-table-container [data-bet='0'],
+.morb-roulette-felt-surface[data-winning-pocket='1'] .roulette-table-container [data-bet='1'],
+.morb-roulette-felt-surface[data-winning-pocket='2'] .roulette-table-container [data-bet='2'],
+.morb-roulette-felt-surface[data-winning-pocket='3'] .roulette-table-container [data-bet='3'],
+.morb-roulette-felt-surface[data-winning-pocket='4'] .roulette-table-container [data-bet='4'],
+.morb-roulette-felt-surface[data-winning-pocket='5'] .roulette-table-container [data-bet='5'],
+.morb-roulette-felt-surface[data-winning-pocket='6'] .roulette-table-container [data-bet='6'],
+.morb-roulette-felt-surface[data-winning-pocket='7'] .roulette-table-container [data-bet='7'],
+.morb-roulette-felt-surface[data-winning-pocket='8'] .roulette-table-container [data-bet='8'],
+.morb-roulette-felt-surface[data-winning-pocket='9'] .roulette-table-container [data-bet='9'],
+.morb-roulette-felt-surface[data-winning-pocket='10'] .roulette-table-container [data-bet='10'],
+.morb-roulette-felt-surface[data-winning-pocket='11'] .roulette-table-container [data-bet='11'],
+.morb-roulette-felt-surface[data-winning-pocket='12'] .roulette-table-container [data-bet='12'],
+.morb-roulette-felt-surface[data-winning-pocket='13'] .roulette-table-container [data-bet='13'],
+.morb-roulette-felt-surface[data-winning-pocket='14'] .roulette-table-container [data-bet='14'],
+.morb-roulette-felt-surface[data-winning-pocket='15'] .roulette-table-container [data-bet='15'],
+.morb-roulette-felt-surface[data-winning-pocket='16'] .roulette-table-container [data-bet='16'],
+.morb-roulette-felt-surface[data-winning-pocket='17'] .roulette-table-container [data-bet='17'],
+.morb-roulette-felt-surface[data-winning-pocket='18'] .roulette-table-container [data-bet='18'],
+.morb-roulette-felt-surface[data-winning-pocket='19'] .roulette-table-container [data-bet='19'],
+.morb-roulette-felt-surface[data-winning-pocket='20'] .roulette-table-container [data-bet='20'],
+.morb-roulette-felt-surface[data-winning-pocket='21'] .roulette-table-container [data-bet='21'],
+.morb-roulette-felt-surface[data-winning-pocket='22'] .roulette-table-container [data-bet='22'],
+.morb-roulette-felt-surface[data-winning-pocket='23'] .roulette-table-container [data-bet='23'],
+.morb-roulette-felt-surface[data-winning-pocket='24'] .roulette-table-container [data-bet='24'],
+.morb-roulette-felt-surface[data-winning-pocket='25'] .roulette-table-container [data-bet='25'],
+.morb-roulette-felt-surface[data-winning-pocket='26'] .roulette-table-container [data-bet='26'],
+.morb-roulette-felt-surface[data-winning-pocket='27'] .roulette-table-container [data-bet='27'],
+.morb-roulette-felt-surface[data-winning-pocket='28'] .roulette-table-container [data-bet='28'],
+.morb-roulette-felt-surface[data-winning-pocket='29'] .roulette-table-container [data-bet='29'],
+.morb-roulette-felt-surface[data-winning-pocket='30'] .roulette-table-container [data-bet='30'],
+.morb-roulette-felt-surface[data-winning-pocket='31'] .roulette-table-container [data-bet='31'],
+.morb-roulette-felt-surface[data-winning-pocket='32'] .roulette-table-container [data-bet='32'],
+.morb-roulette-felt-surface[data-winning-pocket='33'] .roulette-table-container [data-bet='33'],
+.morb-roulette-felt-surface[data-winning-pocket='34'] .roulette-table-container [data-bet='34'],
+.morb-roulette-felt-surface[data-winning-pocket='35'] .roulette-table-container [data-bet='35'],
+.morb-roulette-felt-surface[data-winning-pocket='36'] .roulette-table-container [data-bet='36'] {
+  position: relative;
+  z-index: 4;
+  animation: morb-winning-pocket-pulse 1.5s ease-in-out infinite;
+}

@@ -427,6 +427,7 @@ export function PokerTable({ state, currentPlayerAddress, timeLeft, chatBubbleBy
       winningCardIndices: isWinnerSeat ? winningCardIndices : undefined,
       isHandWinner: isHandWinnerSeat,
       lastAction: stickySeatActions[idx] ?? null,
+      callAmount: actingPosition === idx && hand?.toCall ? hand.toCall : null,
       timeLeft: actingPosition === idx ? timeLeft : undefined,
       chatBubble: chatBubbleBySeatIndex?.[idx] ?? null,
       onReUpClick,
@@ -614,16 +615,16 @@ export function PokerTable({ state, currentPlayerAddress, timeLeft, chatBubbleBy
       </div>
 
       <PokerWinnerNotificationCard
-        isOpen={!!(isShowdownWithWinners && firstWinnerAddr && hand)}
-        handId={hand?.handId}
-        winnerName={firstWinnerSeat?.displayName || (isCurrentPlayerWinner ? 'You' : shortAddr(firstWinnerAddr ?? ''))}
-        winnerAmount={winnerAmount}
-        winnerHandName={winnerHandName}
+        isOpen={process.env.NODE_ENV === 'development' || !!(isShowdownWithWinners && firstWinnerAddr && hand)}
+        handId={hand?.handId ?? 'debug-hand'}
+        winnerName={firstWinnerSeat?.displayName || (isCurrentPlayerWinner ? 'You' : shortAddr(firstWinnerAddr ?? '')) || 'DebugPlayer'}
+        winnerAmount={winnerAmount || '1000000000000000000000'}
+        winnerHandName={winnerHandName || 'Full House'}
         winnerAddress={firstWinnerAddr ?? undefined}
         winnerAvatarUrl={firstWinnerSeat?.profileImageUrl}
-        winnerHoleCards={winnerHoleCards}
-        communityCards={hand?.communityCards ?? []}
-        winningCardIndices={winningCardIndices}
+        winnerHoleCards={winnerHoleCards.length ? winnerHoleCards : [0, 1]}
+        communityCards={hand?.communityCards?.length ? hand.communityCards : [2, 3, 4, 5, 6]}
+        winningCardIndices={winningCardIndices.length ? winningCardIndices : [0, 1, 2]}
         splitLabel={splitWinner ? `Split: ${splitSeat?.displayName || shortAddr(splitWinner.address)}` : undefined}
         splitAmount={splitWinner ? `+${formatChips(splitWinner.amount)}` : undefined}
         formatChips={formatChips}
@@ -707,37 +708,6 @@ export function PokerTable({ state, currentPlayerAddress, timeLeft, chatBubbleBy
       </AnimatePresence>
       )}
 
-      {/* DEV: chip position markers */}
-      {process.env.NODE_ENV === 'development' && Array.from({ length: state.seats.length }, (_, displaySlot) => {
-        const anchor = seatAnchors[displaySlot];
-        if (!anchor) return null;
-        const actualIdx = mySeatIndex >= 0 ? (mySeatIndex + displaySlot) % state.seats.length : displaySlot;
-        const serverPos = state.seats[actualIdx]?.position ?? actualIdx;
-        const renderedSeatAnchor = getRenderedSeatAnchor(displaySlot) ?? anchor;
-        const seatPx = { x: renderedSeatAnchor.fx * dims.w, y: renderedSeatAnchor.fy * dims.h };
-        const potPx = { x: POT_ANCHOR.fx * dims.w, y: POT_ANCHOR.fy * dims.h };
-        const towardPot = { x: potPx.x - seatPx.x, y: potPx.y - seatPx.y };
-        const towardPotLen = Math.hypot(towardPot.x, towardPot.y) || 1;
-        const step = Math.min(BET_CHIP_INWARD_DISTANCE_PX, towardPotLen * 0.85);
-        const chipNudgeDebug = CHIP_POSITION_NUDGE_PX[serverPos] ?? { x: 0, y: 0 };
-        const chipPx = {
-          x: seatPx.x + (towardPot.x / towardPotLen) * step + chipNudgeDebug.x,
-          y: seatPx.y + (towardPot.y / towardPotLen) * step + chipNudgeDebug.y,
-        };
-        return (
-          <div
-            key={`chip-debug-${displaySlot}`}
-            className="absolute pointer-events-none z-50"
-            style={{ left: `${(chipPx.x / Math.max(dims.w, 1)) * 100}%`, top: `${(chipPx.y / Math.max(dims.h, 1)) * 100}%`, transform: 'translate(-50%, -50%)' }}
-          >
-            <div className="w-3 h-3 rounded-full bg-cyan-400/80 border border-cyan-200" />
-            <div className="absolute -top-4 left-1/2 -translate-x-1/2 whitespace-nowrap rounded bg-black/70 px-1 py-0.5 text-[10px] font-mono text-cyan-300">
-              c{serverPos}
-            </div>
-          </div>
-        );
-      })}
-
       {/* Folded cards: fly from seat to center, then vanish */}
       <AnimatePresence>
         {foldFlyouts.map((flyout) => (
@@ -812,11 +782,6 @@ export function PokerTable({ state, currentPlayerAddress, timeLeft, chatBubbleBy
             }}
             {...(tutorialTargets ? { 'data-tutorial-target': `seat-${displaySlot}` } : {})}
           >
-            {process.env.NODE_ENV === 'development' && (
-              <div className="absolute -top-5 left-1/2 -translate-x-1/2 z-50 whitespace-nowrap rounded bg-black/70 px-1 py-0.5 text-[10px] font-mono text-yellow-300 pointer-events-none">
-                s{state.seats[idx]?.position ?? idx}
-              </div>
-            )}
             <PokerSeat {...seatProps(idx)} />
           </div>
         );

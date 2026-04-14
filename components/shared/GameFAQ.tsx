@@ -18,7 +18,7 @@ export interface FAQAddress {
 }
 
 interface GameFAQProps {
-  game: 'plinko' | 'blackjack' | 'keno' | 'lottery' | 'poker'
+  game: 'plinko' | 'blackjack' | 'keno' | 'lottery' | 'poker' | 'roulette'
   addresses: FAQAddress[]
 }
 
@@ -183,6 +183,32 @@ const GAME_FAQS: Record<GameFAQProps['game'], { q: string; a: React.ReactNode }[
     {
       q: 'Who do I contact if there\'s an issue?',
       a: 'Contact @Morbius_io on X (x.com) or use the Report tab in the site menu.',
+    },
+    {
+      q: 'Where are the contract addresses?',
+      a: null,
+    },
+  ],
+  roulette: [
+    {
+      q: 'What kind of roulette is this?',
+      a: 'European single-zero roulette (numbers 0–36). There is no double-zero, giving players a better house edge than American roulette.',
+    },
+    {
+      q: 'What bet types are available?',
+      a: 'Inside bets: Straight (35:1), Split (17:1), Street (11:1), Corner (8:1), Line (5:1). Outside bets: Column/Dozen (2:1), Red/Black, Even/Odd, Low/High (1:1 each).',
+    },
+    {
+      q: 'Can I place multiple bets per spin?',
+      a: 'Yes — up to 15 simultaneous bet positions per spin. Select a chip value, click any number or outside bet area, and stack chips as you like before spinning.',
+    },
+    {
+      q: 'How does the result work?',
+      a: 'The result is determined on-chain in the same transaction using blockhash randomness. Payout is instant — no waiting.',
+    },
+    {
+      q: 'What are the fees?',
+      a: '5% total on wagers: 1.25% MORBIUS holder distribution, 1.75% platform/house, 1.5% LP holders, 0.5% burn.',
     },
     {
       q: 'Where are the contract addresses?',

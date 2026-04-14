@@ -231,6 +231,8 @@ export interface PokerSeatProps {
   /** True only when this seat is in current hand winner list at showdown. */
   isHandWinner?: boolean;
   lastAction?: { action: string; amount: string } | null;
+  /** Wei amount the player needs to call (when it's their turn and facing a bet). */
+  callAmount?: string | null;
   timeLeft?: number;
   maxTime?: number;
   chatBubble?: string | null;
@@ -270,7 +272,7 @@ export interface PokerSeatProps {
 
 const CHAT_BUBBLE_MAX_LENGTH = 80;
 
-export function PokerSeat({ seat, index, holeCards, isCurrentPlayer, showCardBacks, winningCardIndices, isHandWinner = false, lastAction, timeLeft, maxTime = 60, chatBubble, onReUpClick, onMenuClick, overlayPhrase: propsOverlayPhrase, overlayEmotion: propsOverlayEmotion, onPhraseReaction, onAnimationReaction, onOpponentClick, onOpponentRadialAction, quickChatPhrases: propsQuickChatPhrases, setQuickChatPhrases: propsSetQuickChatPhrases, onOpenEditQuickChat, hideSeatAvatar = false, onLeaveTable, onSitOut, onSitBack, onRequestMobileActivity, includeActivityInPlayerRadial = false, showdownCardOffset, handName }: PokerSeatProps) {
+export function PokerSeat({ seat, index, holeCards, isCurrentPlayer, showCardBacks, winningCardIndices, isHandWinner = false, lastAction, callAmount, timeLeft, maxTime = 60, chatBubble, onReUpClick, onMenuClick, overlayPhrase: propsOverlayPhrase, overlayEmotion: propsOverlayEmotion, onPhraseReaction, onAnimationReaction, onOpponentClick, onOpponentRadialAction, quickChatPhrases: propsQuickChatPhrases, setQuickChatPhrases: propsSetQuickChatPhrases, onOpenEditQuickChat, hideSeatAvatar = false, onLeaveTable, onSitOut, onSitBack, onRequestMobileActivity, includeActivityInPlayerRadial = false, showdownCardOffset, handName }: PokerSeatProps) {
   const empty = !seat.playerAddress;
   const showMyCards = !!(holeCards && holeCards.length > 0);
   const showBacks   = !!(showCardBacks && !showMyCards && !empty && !seat.folded);
@@ -547,14 +549,20 @@ export function PokerSeat({ seat, index, holeCards, isCurrentPlayer, showCardBac
     return () => document.removeEventListener('click', handleClick, true);
   }, [isCurrentPlayer, quickChatPickerOpen]);
 
-  const activeAction =
-    lastAction && lastAction.action !== 'blind'
+  const callWei = toBigIntSafe(callAmount ?? 0);
+  const activeAction = isActing
+    ? null
+    : lastAction && lastAction.action !== 'blind'
       ? lastAction
       : isFolded
         ? { action: 'fold', amount: '0' }
         : null;
-  const actionStyle = activeAction ? getActionStyle(activeAction.action) : null;
-  const actionLabel = activeAction ? formatActionLabel(activeAction.action, activeAction.amount) : null;
+  const actionStyle = isActing && callWei > 0n
+    ? { bg: 'rgba(74,222,128,0.85)' }
+    : activeAction ? getActionStyle(activeAction.action) : null;
+  const actionLabel = isActing && callWei > 0n
+    ? `Call ${formatChips(callWei)}?`
+    : activeAction ? formatActionLabel(activeAction.action, activeAction.amount) : null;
 
   const displayPhrase = propsOverlayPhrase != null && propsOverlayPhrase !== '' ? propsOverlayPhrase : overlayPhrase;
 

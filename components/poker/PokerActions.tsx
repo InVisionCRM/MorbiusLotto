@@ -83,10 +83,14 @@ export function PokerActions({
   const isFacingBet = callAmt > 0n;
 
   const [customAmount, setCustomAmount] = useState(() => formatAmount(minRaiseAmt));
+  const [sliderOffset, setSliderOffset] = useState(0);
 
   useEffect(() => {
     const current = safeParseAmount(customAmount);
-    if (current == null || current < minRaiseAmt) setCustomAmount(formatAmount(minRaiseAmt));
+    if (current == null || current < minRaiseAmt) {
+      setCustomAmount(formatAmount(minRaiseAmt));
+      setSliderOffset(0);
+    }
   }, [minRaiseAmt]);
 
   // ── Derived values ─────────────────────────────────────────────────────────
@@ -98,7 +102,6 @@ export function PokerActions({
   const maxChips = toChips(stackAmt);
   const maxOffsetChips = Math.max(0, maxChips - minChips);
   const stepChips = Math.max(1, Math.round(Math.max(minChips, 1) / 10)); // ~10% of min as step
-  const sliderOffset = clamped != null ? Math.max(0, toChips(clamped) - minChips) : 0;
 
   // ── Quick size presets ─────────────────────────────────────────────────────
   const quickSizes: Array<{ label: string; value: Amount }> = [
@@ -129,19 +132,24 @@ export function PokerActions({
 
   const handleSlider = (e: React.ChangeEvent<HTMLInputElement>) => {
     const val = parseFloat(e.target.value);
-    setCustomAmount(
-      Math.floor(minChips + val).toLocaleString(undefined, { maximumFractionDigits: 0 })
-    );
+    const rawWei = parseEther(String(minChips + val));
+    const chipWei = parseEther('0.001'); // 10^15 — one poker chip
+    const snapped = (rawWei / chipWei) * chipWei;
+    const clampedWei = snapped < minRaiseAmt ? minRaiseAmt : snapped > stackAmt ? stackAmt : snapped;
+    setSliderOffset(val);
+    setCustomAmount(formatAmount(clampedWei));
   };
 
   const nudge = (dir: 1 | -1) => {
     const base = clamped ?? minRaiseAmt;
     const step = minRaiseAmt > 0n ? minRaiseAmt : parseEther('1');
     const next = clampAmount(base + BigInt(dir) * step, minRaiseAmt, stackAmt);
+    setSliderOffset(0);
     setCustomAmount(formatAmount(next));
   };
 
   const sliderFillPct = maxOffsetChips > 0 ? (sliderOffset / maxOffsetChips) * 100 : 0;
+
 
   const handleFoldWithSound = () => {
     // Manual click should always override any queued pre-action.
@@ -266,7 +274,7 @@ export function PokerActions({
             <button
               key={q.label}
               type="button"
-              onClick={() => setCustomAmount(formatAmount(clampAmount(q.value, minRaiseAmt, stackAmt)))}
+              onClick={() => { setSliderOffset(0); setCustomAmount(formatAmount(clampAmount(q.value, minRaiseAmt, stackAmt))); }}
               disabled={!canAct || stackAmt === 0n}
               className={`h-8 px-3 text-[11px] rounded-md transition-all disabled:pointer-events-none hover:brightness-125 active:scale-95 ${quickSizeClass}`}
               style={actionBtnBaseStyle}
@@ -408,7 +416,7 @@ export function PokerActions({
               data-testid={`poker-quick-size-${q.label.toLowerCase().replace(/[^a-z0-9]+/g, '-')}`}
               key={q.label}
               type="button"
-              onClick={() => setCustomAmount(formatAmount(clampAmount(q.value, minRaiseAmt, stackAmt)))}
+              onClick={() => { setSliderOffset(0); setCustomAmount(formatAmount(clampAmount(q.value, minRaiseAmt, stackAmt))); }}
               disabled={!canAct || stackAmt === 0n}
               className={`h-9 text-[11px] rounded-sm transition-all disabled:pointer-events-none hover:brightness-125 active:scale-95 ${quickSizeClass}`}
               style={actionBtnBaseStyle}
@@ -566,7 +574,7 @@ export function PokerActions({
             <button
               key={q.label}
               type="button"
-              onClick={() => setCustomAmount(formatAmount(clampAmount(q.value, minRaiseAmt, stackAmt)))}
+              onClick={() => { setSliderOffset(0); setCustomAmount(formatAmount(clampAmount(q.value, minRaiseAmt, stackAmt))); }}
               disabled={!canAct || stackAmt === 0n}
               className={`h-8 md:h-10 px-2.5 md:px-3 text-[11px] md:text-sm rounded-sm transition-all disabled:pointer-events-none hover:brightness-125 active:scale-95 ${quickSizeClass}`}
               style={actionBtnBaseStyle}

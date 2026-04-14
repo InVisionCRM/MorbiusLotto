@@ -95,41 +95,47 @@ export function PokerWinnerNotificationCard({
               <div className="flex items-stretch" style={{ minHeight: '60%' }}>
 
                 {/* Left column — Amount won */}
-                <div className="flex-1 flex flex-col items-center justify-center p-2 sm:p-3 min-w-0">
-                  <div className="text-[12px] text-white uppercase tracking-wider font-semibold mb-1">Won</div>
-                  <div className="text-white text-[clamp(13px,2.2vw,20px)] font-extrabold leading-tight tabular-nums text-center">
-                    +{formatChips(winnerAmount)}
+                <div className="flex-1 flex flex-col items-center justify-start pt-4 p-2 sm:p-3 min-w-0">
+                  <div className="text-[12px] text-white uppercase tracking-wider font-semibold mb-5">Won</div>
+                  <div className="flex-1 flex items-center justify-center gap-1.5 min-w-0">
+                    <img
+                      src="/morbius/MorbiusLogo%20(3).png"
+                      alt=""
+                      aria-hidden
+                      className="flex-none"
+                      style={{ height: '1em', width: 'auto' }}
+                    />
+                    <div className="text-white font-extrabold leading-tight tabular-nums truncate" style={{ fontSize: 'clamp(10px, 2.2vw, 20px)' }}>
+                      +{formatChips(winnerAmount)}
+                    </div>
                   </div>
-                  <img
-                    src="/morbius/MorbiusLogo%20(3).png"
-                    alt=""
-                    aria-hidden
-                    className="mt-4"
-                    style={{ height: '1.2em', width: 'auto' }}
-                  />
                 </div>
 
                 {/* Divider */}
                 <div className="w-px self-stretch" style={{ background: 'rgba(34, 211, 238, 0.5)' }} />
 
                 {/* Center column — Winner + name */}
-                <div className="flex-[1.3] flex flex-col items-center justify-center p-2 sm:p-3 min-w-0">
-                  <span className="text-[12px] font-extrabold uppercase tracking-[0.2em] text-white">
+                <div className="flex-[1.3] flex flex-col items-center justify-start pt-4 p-2 sm:p-3 min-w-0">
+                  <span className="text-[12px] font-extrabold uppercase tracking-[0.2em] text-white mb-5">
                     WINNER
                   </span>
-                  <h3 className="mt-0.5 text-cyan-500 text-[clamp(13px,2vw,18px)] leading-tight font-extrabold tracking-[-0.01em] truncate max-w-full text-center">
-                    {winnerName}
-                  </h3>
+                  <div className="flex-1 flex items-center justify-center">
+                    <h3 className="text-cyan-500 text-[clamp(13px,2vw,18px)] leading-tight font-extrabold tracking-[-0.01em] truncate max-w-full text-center">
+                      {winnerName}
+                    </h3>
+                  </div>
                 </div>
 
                 {/* Divider */}
                 <div className="w-px self-stretch" style={{ background: 'rgba(34, 211, 238, 0.35)' }} />
 
                 {/* Right column — Hand Rank */}
-                <div className="flex-1 flex flex-col items-center justify-center p-2 sm:p-3 min-w-0">
-                  <div className="text-[8px] sm:text-[8px] text-white uppercase text-wrap tracking-wider font-semibold mb-1">Hand Rank</div>
-                  <div className="text-cyan-500 text-[clamp(10px,1.5vw,13px)] font-bold leading-tight text-center break-words max-w-full">
-                    {winnerHandName || '—'}
+                <div className="flex-1 flex flex-col items-center justify-start pt-4 p-2 sm:p-3 min-w-0">
+                  <div className="text-[12px]text-white uppercase text-wrap tracking-wider font-semibold mb-5">Hand</div>
+                  <div className="flex-1 flex items-center justify-center">
+                    <div className="text-cyan-500 text-[clamp(13px,2vw,18px)] font-bold leading-tight text-center break-words max-w-full">
+                      {winnerHandName || '—'}
+                    </div>
                   </div>
                 </div>
               </div>
@@ -141,22 +147,18 @@ export function PokerWinnerNotificationCard({
               <div className="flex flex-col p-2 sm:p-3 gap-2">
 
                 {/* Cards: hole + community */}
-                <div className="rounded-sm bg-black/50 border border-cyan-500/30 px-2 py-3 sm:px-2 sm:py-2 flex flex-col gap-2 sm:gap-3 min-h-[8rem] sm:min-h-[8rem]">
-                  <div className="flex items-center justify-center gap-1">
+                <div className="rounded-sm bg-black/50 border border-cyan-500/30 px-2 py-3 sm:px-2 sm:py-2 flex flex-col gap-6 min-h-[8rem] sm:min-h-[8rem]">
+                  <div className="flex items-center justify-center gap-3 mt-3">
                     {hole.map((cardIndex, i) => (
                       <div key={`winner-hole-${i}`} className="flex-none">
-                        <CardDisplay
-                          cardIndex={cardIndex}
-                          small
-                          isWinningCard={typeof cardIndex === 'number' && highlightSet.has(cardIndex)}
-                        />
+                        <CardDisplay cardIndex={cardIndex} small />
                       </div>
                     ))}
                   </div>
 
-                  <div className="flex flex-1 items-center justify-center gap-1 overflow-visible py-2 min-h-[6.5rem] sm:min-h-[6.5rem]">
+                  <div className="flex flex-1 items-center justify-center gap-3 overflow-visible py-2 min-h-[6.5rem] sm:min-h-[6.5rem]">
                     {board.map((cardIndex, i) => (
-                      <CardDisplay key={`winner-board-${i}-${cardIndex ?? 'empty'}`} cardIndex={cardIndex} small isWinningCard={highlightSet.has(cardIndex)} />
+                      <CardDisplay key={`winner-board-${i}-${cardIndex ?? 'empty'}`} cardIndex={cardIndex} small />
                     ))}
                   </div>
                 </div>
