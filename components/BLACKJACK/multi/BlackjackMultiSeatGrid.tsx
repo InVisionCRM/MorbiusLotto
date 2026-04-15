@@ -3,41 +3,18 @@
 import type { BJMultiSeatState } from '@/lib/websocket-client';
 import { BlackjackMultiSeat } from '@/components/BLACKJACK/multi/BlackjackMultiSeat';
 
-// All coordinates are in the 800×450 canvas space.
-// SEAT_ANCHORS is the origin point for each seat — everything offsets from here.
+// ── Canvas coordinate system ─────────────────────────────────────────────────
+// All coordinates are in the logical 800×450 canvas space.
+// `cx`    — horizontal center of the seat in canvas px.
+// `floorY` — Y position of the bottom edge of the name tag in canvas px.
+//            Expressed as distance from the TOP of the canvas (same axis as CSS top).
+// `angle` — rotation of the whole seat column in degrees (positive = clockwise).
+//            The name tag counter-rotates by the same amount so text stays upright.
 
-const SEAT_ANCHORS = [
-  { x: 100, y: 270 }, // left seat
-  { x: 326, y: 310 }, // center seat
-  { x: 555, y: 270 }, // right seat
-] as const;
-
-// Card stack offset from seat anchor.
-const CARD_OFFSETS = [
-  { x: 0, y: -80 }, // left
-  { x: 0, y: -80 }, // center
-  { x: 0, y: -80 }, // right
-] as const;
-
-// Player name tag offset from seat anchor.
-const TAG_OFFSETS = [
-  { x: -10, y: 0 }, // left
-  { x: -10, y: 0 }, // center
-  { x: -10, y: 0 }, // right
-] as const;
-
-// Bet chip offset from seat anchor.
-const CHIP_OFFSETS = [
-  { x: 30, y: -50 }, // left
-  { x: 30, y: -50 }, // center
-  { x: 30, y: -50 }, // right
-] as const;
-
-// Avatar circle offset from seat anchor (sits above the cards).
-const AVATAR_OFFSETS = [
-  { x: 5, y: -140 }, // left
-  { x: 5, y: -140 }, // center
-  { x: 5, y: -140 }, // right
+const SEATS = [
+  { cx: 140, floorY: 415, angle: 18 },   // left
+  { cx: 400, floorY: 428, angle: 0 },    // center (slightly lower = reads as closer)
+  { cx: 660, floorY: 415, angle: -18 },  // right
 ] as const;
 
 const POSITIONS = [0, 1, 2] as const;
@@ -85,12 +62,27 @@ export function BlackjackMultiSeatGrid({
         const seat = seats[pos];
         const isEmpty = !seat?.playerAddress;
         const isMe = seat?.playerAddress?.toLowerCase() === addressLower;
-        const { x, y } = SEAT_ANCHORS[pos];
+        const { cx, floorY, angle } = SEATS[pos];
+
         return (
-          <div key={pos} className="absolute" style={{ left: x, top: y, pointerEvents: 'auto' }}>
+          // Positioned by bottom-center of the name tag.
+          // translateX(-50%) centers the flex column on cx.
+          // translateY(-100%) makes the column hang upward from floorY
+          // so the name tag's bottom edge lands exactly at floorY.
+          <div
+            key={pos}
+            className="absolute"
+            style={{
+              left: cx,
+              top: floorY,
+              transform: 'translateX(-50%) translateY(-100%)',
+              pointerEvents: 'auto',
+            }}
+          >
             <BlackjackMultiSeat
               seat={seat ?? null}
               position={pos}
+              angle={angle}
               isMe={!!isMe}
               isEmpty={isEmpty}
               isActing={actingSeatPosition === pos && phase === 'playing'}
@@ -106,10 +98,6 @@ export function BlackjackMultiSeatGrid({
               onLeaveSeat={isMe ? onLeaveSeat : undefined}
               onToggleSoundPanel={isMe ? onToggleSoundPanel : undefined}
               onSendChatMessage={isMe ? onSendChatMessage : undefined}
-              cardOffset={CARD_OFFSETS[pos]}
-              tagOffset={TAG_OFFSETS[pos]}
-              chipOffset={CHIP_OFFSETS[pos]}
-              avatarOffset={AVATAR_OFFSETS[pos]}
             />
           </div>
         );

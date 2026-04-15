@@ -27,6 +27,9 @@ interface PokerHeaderBarProps {
   onAdminStartBots: (numBots: number) => void;
   onAdminStopBots: () => void;
   onLeaveClick: () => void;
+  /** Whether the seated player has auto-rebuy enabled. Only shown when player is seated. */
+  autoRebuy?: boolean;
+  onToggleAutoRebuy?: () => void;
 }
 
 export function PokerHeaderBar({
@@ -53,6 +56,8 @@ export function PokerHeaderBar({
   onAdminStartBots,
   onAdminStopBots,
   onLeaveClick,
+  autoRebuy = false,
+  onToggleAutoRebuy,
 }: PokerHeaderBarProps) {
   const [botsMenuOpen, setBotsMenuOpen] = useState(false);
   const [botCountInput, setBotCountInput] = useState('4');
@@ -167,6 +172,30 @@ export function PokerHeaderBar({
                 >
                   Edit QuickChat
                 </button>
+                {onToggleAutoRebuy && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      onToggleAutoRebuy();
+                      setSettingsMenuOpen(false);
+                    }}
+                    className="w-full flex items-center justify-between px-3 py-2.5 text-[11px] font-bold tracking-wide transition-colors hover:bg-white/10 border-t border-white/5"
+                    style={{ color: 'rgba(255,255,255,0.9)' }}
+                  >
+                    <span>Auto Rebuy</span>
+                    <span
+                      className="ml-2 inline-flex items-center justify-center rounded-full text-[9px] font-extrabold px-1.5 py-0.5"
+                      style={{
+                        background: autoRebuy ? 'rgba(34,211,238,0.2)' : 'rgba(255,255,255,0.08)',
+                        color: autoRebuy ? 'rgb(34,211,238)' : 'rgba(255,255,255,0.4)',
+                        border: `1px solid ${autoRebuy ? 'rgba(34,211,238,0.4)' : 'rgba(255,255,255,0.12)'}`,
+                        minWidth: 28,
+                      }}
+                    >
+                      {autoRebuy ? 'ON' : 'OFF'}
+                    </span>
+                  </button>
+                )}
               </div>
             </>
           )}
@@ -366,6 +395,27 @@ export function PokerHeaderBar({
                 >
                   Edit QuickChat
                 </button>
+                {onToggleAutoRebuy && (
+                  <button
+                    type="button"
+                    onClick={() => { onToggleAutoRebuy(); setMobileMenuOpen(false); }}
+                    className="w-full flex items-center justify-between px-3 py-2.5 text-[11px] font-bold tracking-wide transition-colors hover:bg-white/10 border-t border-white/5"
+                    style={{ color: 'rgba(255,255,255,0.9)' }}
+                  >
+                    <span>Auto Rebuy</span>
+                    <span
+                      className="ml-2 inline-flex items-center justify-center rounded-full text-[9px] font-extrabold px-1.5 py-0.5"
+                      style={{
+                        background: autoRebuy ? 'rgba(34,211,238,0.2)' : 'rgba(255,255,255,0.08)',
+                        color: autoRebuy ? 'rgb(34,211,238)' : 'rgba(255,255,255,0.4)',
+                        border: `1px solid ${autoRebuy ? 'rgba(34,211,238,0.4)' : 'rgba(255,255,255,0.12)'}`,
+                        minWidth: 28,
+                      }}
+                    >
+                      {autoRebuy ? 'ON' : 'OFF'}
+                    </span>
+                  </button>
+                )}
                 {normalizedAddress && (
                   <>
                     <button

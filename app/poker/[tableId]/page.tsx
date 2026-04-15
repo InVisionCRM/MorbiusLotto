@@ -4,6 +4,7 @@ import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useParams, useRouter, useSearchParams } from 'next/navigation';
 import { useAccount, useSignTypedData } from 'wagmi';
 import { formatMorbiusFloor } from '@/lib/format-morbius-display';
+import { getCashBuyInBoundsWei } from '@/lib/poker-buy-in';
 import type { BlackjackWebSocketClient, PokerTableState } from '@/lib/websocket-client';
 import { DEFAULT_POKER_THEME, getPokerThemeVars } from '@/lib/poker-themes';
 import { PokerThemeProvider } from '@/components/poker/PokerThemeContext';
@@ -281,6 +282,9 @@ export default function PokerTablePage() {
   const [showSoundsModal, setShowSoundsModal] = useState(false);
   const [showTableSettingsModal, setShowTableSettingsModal] = useState(false);
   const [showEditQuickChatModal, setShowEditQuickChatModal] = useState(false);
+  const [autoRebuy, setAutoRebuy] = useState(false);
+  const autoRebuyRef = useRef(false);
+  autoRebuyRef.current = autoRebuy;
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [settingsMenuOpen, setSettingsMenuOpen] = useState(false);
   const [statsMenuOpen, setStatsMenuOpen] = useState(false);
@@ -338,6 +342,47 @@ export default function PokerTablePage() {
     setDepositModalTab('reup');
     setShowDepositModal(true);
   }, []);
+
+  // ── Auto-rebuy ────────────────────────────────────────────────────────────
+  // When enabled, automatically tops the player's stack up to max buy-in
+  // whenever the stack falls below the minimum buy-in (40 BB) — including zero.
+  // Only fires between hands (no active hand = canReup is true).
+  const autoRebuyFiringRef = useRef(false);
+  useEffect(() => {
+    if (!autoRebuy) return;
+    if (!wsClient || !mySeat || !renderedState) return;
+    // Only between hands
+    const hand = renderedState.currentHand;
+    if (hand && hand.street !== 'showdown') return;
+
+    const bigBlindWei = BigInt(renderedState.bigBlind ?? '0');
+    if (bigBlindWei === 0n) return;
+
+    const { minWei, maxWei } = getCashBuyInBoundsWei(bigBlindWei);
+    const stack = BigInt(mySeat.stack ?? '0');
+    if (stack >= minWei) return; // Stack is fine, nothing to do
+
+    const toAdd = maxWei - stack;
+    if (toAdd <= 0n) return;
+    if (autoRebuyFiringRef.current) return;
+
+    autoRebuyFiringRef.current = true;
+    wsClient.pokerAddChips(tableId, toAdd.toString())
+      .then((newState) => {
+        setState(newState);
+        toast.success('Auto-rebuy: topped up to max stack');
+      })
+      .catch((err: Error) => {
+        // Silently skip insufficient-balance errors to avoid spam
+        if (!err.message?.toLowerCase().includes('insufficient')) {
+          toast.error(`Auto-rebuy failed: ${err.message}`);
+        }
+      })
+      .finally(() => {
+        autoRebuyFiringRef.current = false;
+      });
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [autoRebuy, wsClient, tableId, mySeat?.stack, renderedState?.currentHand?.street, renderedState?.bigBlind]);
 
   const handleSitOut = useCallback(async () => {
     if (!wsClient) return;
@@ -527,6 +572,8 @@ export default function PokerTablePage() {
             onAdminStartBots={onAdminStartBots}
             onAdminStopBots={onAdminStopBots}
             onLeaveClick={handleLeaveClick}
+            autoRebuy={autoRebuy}
+            onToggleAutoRebuy={mySeat ? () => setAutoRebuy((v) => !v) : undefined}
           />}
 
           {/* Disconnected banner */}
