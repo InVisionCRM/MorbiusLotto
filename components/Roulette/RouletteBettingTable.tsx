@@ -130,13 +130,13 @@ export function RouletteBettingTable({
     <div className="flex min-w-0 flex-col gap-2 select-none w-full">
       {/* Header */}
       <div className="flex items-center justify-between gap-3 px-1 flex-wrap">
-        <span className="inline-flex items-center gap-2 text-xl text-gray-400">
-          <span className="relative h-9 w-9 shrink-0">
+        <span className="inline-flex items-center gap-1.5 text-base text-gray-400">
+          <span className="relative h-7 w-7 shrink-0">
             <Image
               src={rouletteChipSrcForDenom(Number(formatEther(chipValue)))}
               alt=""
               fill
-              sizes="36px"
+              sizes="28px"
               className="object-contain drop-shadow-[0_2px_6px_rgba(0,0,0,0.65)]"
             />
           </span>
@@ -151,7 +151,7 @@ export function RouletteBettingTable({
           <button
             type="button"
             onClick={() => onBetsChange([])}
-            className="inline-flex items-center gap-2 rounded-xl px-4 py-2 text-sm font-bold uppercase tracking-wide
+            className="inline-flex items-center gap-1.5 rounded-xl px-3 py-1.5 text-xs font-bold uppercase tracking-wide
               bg-gradient-to-r from-[#1a0f13] to-[#2a171e] text-rose-50/95
               border-2 border-[#e01e3d]/80 shadow-[0_0_16px_rgba(224,30,61,0.35),inset_0_1px_0_rgba(255,255,255,0.07)]
               hover:from-[#221218] hover:to-[#321d26] hover:border-[#ff3d62] active:scale-[0.98]

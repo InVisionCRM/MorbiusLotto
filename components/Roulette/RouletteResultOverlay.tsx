@@ -19,6 +19,20 @@ const BET_TYPE_LABELS: Record<BetType, string> = {
   [BetType.LOW_HIGH]:  'Low/High',
 }
 
+// Multiplier = profit on top of wager returned (e.g. 35 means win 35× wager)
+const BET_TYPE_MULTIPLIER: Record<BetType, number> = {
+  [BetType.STRAIGHT]:  35,
+  [BetType.SPLIT]:     17,
+  [BetType.STREET]:    11,
+  [BetType.CORNER]:    8,
+  [BetType.LINE]:      5,
+  [BetType.COLUMN]:    2,
+  [BetType.DOZEN]:     2,
+  [BetType.RED_BLACK]: 1,
+  [BetType.EVEN_ODD]:  1,
+  [BetType.LOW_HIGH]:  1,
+}
+
 interface RouletteResultOverlayProps {
   result: RouletteSpinResult
   onDismiss: () => void
@@ -47,44 +61,42 @@ export function RouletteResultOverlay({ result, onDismiss }: RouletteResultOverl
     <div className="absolute inset-0 z-30 flex items-center justify-center rounded-2xl backdrop-blur-sm">
       <div
         className={cn(
-          'relative rounded-2xl border p-6 w-full max-w-sm mx-4 flex flex-col gap-4 shadow-2xl',
+          'relative rounded-2xl border p-4 w-full max-w-sm mx-4 flex flex-col gap-3 shadow-2xl',
           `bg-gradient-to-br ${bgStyle}`,
           colorClass
         )}
         style={{ boxShadow: `0 0 40px rgba(0,0,0,0.8)` }}
       >
-        {/* Result pocket */}
-        <div className="flex flex-col items-center gap-1">
-          <div className="text-sm text-gray-400 font-medium uppercase tracking-widest">Result</div>
+        {/* Result + P&L in one row */}
+        <div className="flex items-center gap-3">
           <div
             className={cn(
-              'w-20 h-20 rounded-full flex items-center justify-center text-4xl font-black border-4',
+              'w-14 h-14 shrink-0 rounded-full flex items-center justify-center text-3xl font-black border-4',
               colorClass,
-              color === 'green'
-                ? 'bg-green-800/60'
-                : color === 'red'
-                ? 'bg-red-800/60'
-                : 'bg-gray-800/60'
+              color === 'green' ? 'bg-green-800/60' : color === 'red' ? 'bg-red-800/60' : 'bg-gray-800/60'
             )}
           >
             {result.result}
           </div>
-          <div className="text-xs text-gray-400 capitalize">{color}</div>
-          <div className="text-xs text-gray-400">
-            {result.result === 0
-              ? '—'
-              : result.result % 2 === 0
-              ? 'Even'
-              : 'Odd'}{' '}
-            {result.result !== 0 && `· ${result.result <= 18 ? 'Low' : 'High'}`}
+          <div className="flex-1 min-w-0">
+            <div className="text-xs text-gray-400 capitalize">
+              {color}
+              {result.result !== 0 && ` · ${result.result % 2 === 0 ? 'Even' : 'Odd'} · ${result.result <= 18 ? 'Low' : 'High'}`}
+            </div>
+            <div className={cn('font-black text-xl tabular-nums', profitLoss >= 0n ? 'text-green-400' : 'text-red-400')}>
+              {profitLoss >= 0n ? '+' : ''}
+              {Number(formatEther(profitLoss)).toLocaleString(undefined, { maximumFractionDigits: 0 })} M
+            </div>
+            <div className="text-xs text-gray-500">
+              Wagered: {Number(formatEther(result.totalWagered)).toLocaleString(undefined, { maximumFractionDigits: 0 })} M
+            </div>
           </div>
         </div>
 
         {/* Bet breakdown */}
-        <div className="flex flex-col gap-1.5">
+        <div className="flex flex-col gap-1">
           {result.bets.map((bet, i) => {
             const isWin = (() => {
-              // Re-evaluate which bets won based on result
               const r = result.result
               switch (bet.betType) {
                 case BetType.STRAIGHT:  return bet.numbers[0] === r
@@ -104,20 +116,24 @@ export function RouletteResultOverlay({ result, onDismiss }: RouletteResultOverl
               }
             })()
 
+            const winnings = isWin ? bet.wager * BigInt(BET_TYPE_MULTIPLIER[bet.betType]) : 0n
+
             return (
               <div key={i} className={cn(
-                'flex items-center justify-between rounded-lg px-3 py-1.5 text-sm',
+                'flex items-center justify-between rounded-lg px-2.5 py-1 text-xs',
                 isWin ? 'bg-cyan-400/10 border border-cyan-500/30' : 'bg-white/5'
               )}>
                 <span className="text-gray-300 font-medium">{BET_TYPE_LABELS[bet.betType]}</span>
                 <div className="flex items-center gap-2">
-                  <span className="text-gray-400 text-xs">
+                  <span className="text-gray-500">
                     {Number(formatEther(bet.wager)).toLocaleString(undefined, { maximumFractionDigits: 0 })} M
                   </span>
                   {isWin ? (
-                    <span className="text-cyan-400 font-bold text-xs">WIN</span>
+                    <span className="text-green-400 font-bold">
+                      +{Number(formatEther(winnings)).toLocaleString(undefined, { maximumFractionDigits: 0 })} M
+                    </span>
                   ) : (
-                    <span className="text-gray-600 text-xs">—</span>
+                    <span className="text-gray-600">—</span>
                   )}
                 </div>
               </div>
@@ -125,26 +141,9 @@ export function RouletteResultOverlay({ result, onDismiss }: RouletteResultOverl
           })}
         </div>
 
-        {/* P&L */}
-        <div className="flex items-center justify-between rounded-xl px-4 py-3 bg-black/40 border border-white/10">
-          <div className="flex flex-col">
-            <span className="text-xs text-gray-500">Total Wagered</span>
-            <span className="text-white font-bold">
-              {Number(formatEther(result.totalWagered)).toLocaleString(undefined, { maximumFractionDigits: 0 })} MORBIUS
-            </span>
-          </div>
-          <div className="flex flex-col items-end">
-            <span className="text-xs text-gray-500">{won ? 'Payout' : 'Result'}</span>
-            <span className={cn('font-black text-lg', profitLoss >= 0n ? 'text-green-400' : 'text-red-400')}>
-              {profitLoss >= 0n ? '+' : ''}
-              {Number(formatEther(profitLoss)).toLocaleString(undefined, { maximumFractionDigits: 0 })} M
-            </span>
-          </div>
-        </div>
-
         <button
           onClick={onDismiss}
-          className="w-full py-2.5 rounded-xl bg-white/10 hover:bg-white/20 transition-colors text-white font-bold text-sm border border-white/10"
+          className="w-full py-2 rounded-xl bg-white/10 hover:bg-white/20 transition-colors text-white font-bold text-sm border border-white/10"
         >
           Spin Again
         </button>

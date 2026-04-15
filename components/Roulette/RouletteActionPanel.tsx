@@ -45,7 +45,7 @@ export function RouletteActionPanel({
 
   return (
     <div
-      className="rounded-2xl p-4 flex flex-col gap-4"
+      className="rounded-2xl p-6 flex flex-col gap-8"
       style={{
         background: 'linear-gradient(325deg, rgba(20,20,20,0.9), rgba(40,40,40,0.7))',
         boxShadow: 'inset 0 3px 6px rgba(0,0,0,0.8), inset 0 -3px 6px rgba(255,255,255,0.05)',
@@ -68,7 +68,7 @@ export function RouletteActionPanel({
                 onClick={() => onChipChange(wei)}
                 title={`${v.toLocaleString()} MORBIUS`}
                 className={cn(
-                  'flex flex-col items-center justify-center gap-0.5 rounded-xl border px-1 py-2 transition-all',
+                  'flex flex-col items-center justify-center gap-0.5 rounded-xl border px-1 py-6 transition-all',
                   active
                     ? 'border-cyan-400 bg-cyan-950/40 shadow-[0_0_14px_rgba(34,211,238,0.4)] ring-1 ring-cyan-400/60'
                     : 'border-cyan-500/25 bg-black/35 hover:border-cyan-500/45 hover:bg-cyan-950/20'
@@ -98,8 +98,8 @@ export function RouletteActionPanel({
       </div>
 
       {/* Total wager */}
-      <div className="flex items-center justify-between rounded-xl px-3 py-2 bg-black/40 border border-white/10">
-        <span className="text-xs text-gray-500">Total Bet</span>
+      <div className="flex items-center justify-between rounded-xl px-3 py-8 bg-black/40 border border-white/10">
+        <span className="text-xl text-gray-500">Total Bet</span>
         <span className="text-cyan-400 font-black">
           {Number(formatEther(totalWager)).toLocaleString(undefined, { maximumFractionDigits: 0 })} MORBIUS
         </span>

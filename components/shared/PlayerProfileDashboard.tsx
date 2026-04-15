@@ -10,8 +10,10 @@ import { KenoPlayerDashboard } from '@/components/CryptoKeno/KenoPlayerDashboard
 import { PlinkoPlayerDashboard } from '@/components/PLINKO/PlinkoPlayerDashboard'
 import { AllStatsDashboard } from '@/components/shared/AllStatsDashboard'
 import { PokerPlayerDashboard } from '@/components/poker/PokerPlayerDashboard'
+import { RoulettePerformanceChart } from '@/components/Roulette/RoulettePerformanceChart'
+import { useRoulettePlayerStats } from '@/hooks/use-roulette-results'
 
-export type PlayerProfileGame = 'all' | 'blackjack' | 'poker' | 'lottery' | 'keno' | 'plinko'
+export type PlayerProfileGame = 'all' | 'blackjack' | 'poker' | 'lottery' | 'keno' | 'plinko' | 'roulette'
 
 const GAME_LABELS: Record<PlayerProfileGame, string> = {
   all: 'All stats',
@@ -20,6 +22,7 @@ const GAME_LABELS: Record<PlayerProfileGame, string> = {
   lottery: 'Lottery',
   keno: 'Keno',
   plinko: 'Plinko',
+  roulette: 'Roulette',
 }
 
 export interface PlayerProfileDashboardProps {
@@ -83,11 +86,15 @@ export function PlayerProfileDashboard({
     }
   }, [selectedGame, stats])
 
+  const rouletteAddress = address ? ((address.startsWith('0x') ? address : `0x${address}`) as `0x${string}`) : undefined
+  const rouletteStats = useRoulettePlayerStats(selectedGame === 'roulette' ? rouletteAddress : undefined)
+
   const isAll = selectedGame === 'all'
   const isLottery = selectedGame === 'lottery'
   const isKeno = selectedGame === 'keno'
   const isPlinko = selectedGame === 'plinko'
   const isPoker = selectedGame === 'poker'
+  const isRoulette = selectedGame === 'roulette'
   const isLoading = isLottery ? lotteryStats.isLoading : statsLoading
 
   return (
@@ -110,7 +117,52 @@ export function PlayerProfileDashboard({
         </select>
       </div>
 
-      {isAll ? (
+      {isRoulette ? (
+        <div className="space-y-4">
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+            {[
+              { label: 'Total Spins', value: rouletteStats.totalSpins.toLocaleString(), className: 'text-cyan-300' },
+              { label: 'Win Rate', value: `${Math.round(rouletteStats.winRate)}%`, className: rouletteStats.winRate >= 50 ? 'text-green-400' : rouletteStats.winRate >= 30 ? 'text-yellow-400' : 'text-red-400' },
+              { label: 'Total Wagered', value: `${Math.round(Number(rouletteStats.totalWagered) / 1e18).toLocaleString()} M`, className: 'text-neutral-100' },
+              { label: 'Profit / Loss', value: `${rouletteStats.profitLoss >= 0n ? '+' : ''}${Math.round(Number(rouletteStats.profitLoss) / 1e18).toLocaleString()} M`, className: rouletteStats.profitLoss > 0n ? 'text-green-400' : rouletteStats.profitLoss < 0n ? 'text-red-400' : 'text-yellow-400' },
+              { label: 'Biggest Win', value: `+${Math.round(Number(rouletteStats.biggestWin) / 1e18).toLocaleString()} M`, className: 'text-green-400' },
+              { label: 'Biggest Loss', value: `-${Math.round(Number(rouletteStats.biggestLoss) / 1e18).toLocaleString()} M`, className: 'text-red-400' },
+              { label: 'Best Streak', value: rouletteStats.bestStreak.toString(), className: 'text-yellow-400' },
+              { label: 'Avg Wager', value: `${Math.round(Number(rouletteStats.avgWager) / 1e18).toLocaleString()} M`, className: 'text-neutral-100' },
+            ].map((s) => (
+              <div key={s.label} className="rounded-xl bg-black/40 border border-white/10 px-4 py-3 flex flex-col gap-1">
+                <span className="text-xs text-gray-500 uppercase tracking-wide">{s.label}</span>
+                <span className={`text-lg font-black tabular-nums ${s.className}`}>{s.value}</span>
+              </div>
+            ))}
+          </div>
+
+          {/* Color & lucky number breakdown */}
+          <div className="grid grid-cols-2 gap-3">
+            <div className="rounded-xl bg-black/40 border border-white/10 px-4 py-3 space-y-2">
+              <span className="text-xs text-gray-500 uppercase tracking-wide">Color Breakdown</span>
+              <div className="flex flex-col gap-1 text-sm">
+                <div className="flex justify-between"><span className="text-red-400 font-semibold">Red</span><span className="font-bold text-neutral-100">{rouletteStats.redHits}</span></div>
+                <div className="flex justify-between"><span className="text-gray-300 font-semibold">Black</span><span className="font-bold text-neutral-100">{rouletteStats.blackHits}</span></div>
+                <div className="flex justify-between"><span className="text-green-400 font-semibold">Green (0)</span><span className="font-bold text-neutral-100">{rouletteStats.greenHits}</span></div>
+              </div>
+            </div>
+            <div className="rounded-xl bg-black/40 border border-white/10 px-4 py-3 flex flex-col gap-1">
+              <span className="text-xs text-gray-500 uppercase tracking-wide">Lucky Number</span>
+              {rouletteStats.luckyNumber !== null ? (
+                <>
+                  <span className="text-3xl font-black text-cyan-300 tabular-nums">{rouletteStats.luckyNumber}</span>
+                  <span className="text-xs text-gray-500">landed {rouletteStats.luckyNumberCount}×</span>
+                </>
+              ) : (
+                <span className="text-gray-600 text-sm">No data</span>
+              )}
+            </div>
+          </div>
+
+          <RoulettePerformanceChart results={rouletteStats.results} />
+        </div>
+      ) : isAll ? (
         <AllStatsDashboard
           playerAddress={address}
           serverBalanceAnchor={

@@ -8,7 +8,6 @@ import { Card } from '@/components/ui/card'
 import GlobalMainNav from '@/components/shared/GlobalMainNav'
 import Footer from '@/components/PLINKO/Footer'
 import { GameFAQ } from '@/components/shared/GameFAQ'
-import { AdSpace } from '@/components/shared/AdSpace'
 import { ROULETTE_ADDRESS, MORBIUS_TOKEN_ADDRESS } from '@/lib/contracts'
 import { useRoulettePlayFlow, type RouletteBet } from '@/hooks/useRoulettePlayFlow'
 import { RouletteWheel } from '@/components/Roulette/RouletteWheel'
@@ -108,11 +107,7 @@ export default function RoulettePage() {
       <GlobalMainNav onOpenPlayerProfile={address ? () => {} : undefined}>
         <main className="mx-auto w-[90%] overflow-x-hidden px-3 pb-16 pt-4 sm:px-4 lg:px-6">
 
-          <div className="mb-5 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-end">
-            <RouletteRoomBackgroundPicker activeId={roomBgId} onSelect={setRoomBgId} />
-          </div>
-
-          {/* ── Game: ~⅔ wheel + table | ~⅓ bets (stack on small screens) ── */}
+          {/* ── Game: ~⅔ wheel + table | ~⅓ action + recent plays (stack on small screens) ── */}
           <div className="flex flex-col gap-6 lg:flex-row lg:items-start lg:gap-6">
             <div className="flex w-full min-w-0 flex-col gap-6 lg:w-2/3">
               <div className="flex justify-center">
@@ -140,7 +135,7 @@ export default function RoulettePage() {
               />
             </div>
 
-            <aside className="w-full shrink-0 lg:w-1/3 lg:min-w-0">
+            <aside className="w-full shrink-0 lg:w-1/3 lg:min-w-0 flex flex-col gap-4">
               <RouletteActionPanel
                 bets={bets}
                 totalWager={totalWager}
@@ -156,42 +151,35 @@ export default function RoulettePage() {
                 isSpinning={isSpinning}
                 onSpin={handleSpin}
               />
-              <div className="mt-4">
-                <AdSpace slot="default" />
+              <div
+                className="relative overflow-hidden rounded-2xl"
+                style={{ background: 'linear-gradient(325deg, rgba(15,25,15,0.9), rgba(20,30,15,0.7))' }}
+              >
+                <Tabs defaultValue="recent-games" className="relative p-3 sm:p-4">
+                  <TabsList className="grid w-full grid-cols-2 h-11 bg-black/40 border border-cyan-500/30 rounded-xl p-1">
+                    <TabsTrigger
+                      value="recent-games"
+                      className="font-jost font-bold text-[14px] text-white/80 data-[state=active]:text-white data-[state=active]:bg-gradient-to-r data-[state=active]:from-cyan-600 data-[state=active]:to-blue-600 rounded-lg transition-all"
+                    >
+                      Recent Spins
+                    </TabsTrigger>
+                    <TabsTrigger
+                      value="my-spins"
+                      className="font-jost font-bold text-[14px] text-white/80 data-[state=active]:text-white data-[state=active]:bg-gradient-to-r data-[state=active]:from-cyan-600 data-[state=active]:to-blue-600 rounded-lg transition-all"
+                    >
+                      My Spins
+                    </TabsTrigger>
+                  </TabsList>
+                  <TabsContent value="recent-games" className="mt-4 focus-visible:outline-none">
+                    <RouletteRecentPlays hold={wheelSpinning} />
+                  </TabsContent>
+                  <TabsContent value="my-spins" className="mt-4 focus-visible:outline-none">
+                    <RouletteRecentPlays playerAddress={address} compact hold={wheelSpinning} />
+                  </TabsContent>
+                </Tabs>
               </div>
             </aside>
           </div>
-
-          {/* ── Recent plays / My spins ── */}
-          <section className="mt-6">
-            <div
-              className="relative overflow-hidden rounded-2xl"
-              style={{ background: 'linear-gradient(325deg, rgba(15,25,15,0.9), rgba(20,30,15,0.7))' }}
-            >
-              <Tabs defaultValue="recent-games" className="relative p-3 sm:p-4">
-                <TabsList className="grid w-full grid-cols-2 h-11 bg-black/40 border border-cyan-500/30 rounded-xl p-1">
-                  <TabsTrigger
-                    value="recent-games"
-                    className="font-jost font-bold text-[14px] text-white/80 data-[state=active]:text-white data-[state=active]:bg-gradient-to-r data-[state=active]:from-cyan-600 data-[state=active]:to-blue-600 rounded-lg transition-all"
-                  >
-                    Recent Spins
-                  </TabsTrigger>
-                  <TabsTrigger
-                    value="my-spins"
-                    className="font-jost font-bold text-[14px] text-white/80 data-[state=active]:text-white data-[state=active]:bg-gradient-to-r data-[state=active]:from-cyan-600 data-[state=active]:to-blue-600 rounded-lg transition-all"
-                  >
-                    My Spins
-                  </TabsTrigger>
-                </TabsList>
-                <TabsContent value="recent-games" className="mt-4 focus-visible:outline-none">
-                  <RouletteRecentPlays />
-                </TabsContent>
-                <TabsContent value="my-spins" className="mt-4 focus-visible:outline-none">
-                  <RouletteRecentPlays playerAddress={address} compact />
-                </TabsContent>
-              </Tabs>
-            </div>
-          </section>
 
           {/* ── How to Play ── */}
           <section className="mt-6">
@@ -227,6 +215,10 @@ export default function RoulettePage() {
               </div>
             </Card>
           </section>
+
+          <div className="mt-6 flex justify-end">
+            <RouletteRoomBackgroundPicker activeId={roomBgId} onSelect={setRoomBgId} />
+          </div>
 
         </main>
 

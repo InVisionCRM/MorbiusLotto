@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useCallback, useMemo } from 'react'
+import { useState, useEffect, useCallback, useMemo, useRef } from 'react'
 import { usePublicClient, useWatchContractEvent } from 'wagmi'
 import { ROULETTE_ADDRESS, ROULETTE_DEPLOY_BLOCK } from '@/lib/contracts'
 import { ROULETTE_ABI } from '@/lib/roulette-abi'
@@ -61,9 +61,11 @@ function parseSpunLog(
 export function useRouletteResults(options: {
   playerAddress?: `0x${string}` | null
   limit?: number
+  hold?: boolean
 } = {}) {
-  const { playerAddress, limit = 50 } = options
+  const { playerAddress, limit = 50, hold = false } = options
   const [results, setResults] = useState<RouletteSpinRow[]>([])
+  const pendingRef = useRef<RouletteSpinRow[]>([])
   const publicClient = usePublicClient({ chainId: pulsechain.id })
 
   const append = useCallback(
@@ -72,6 +74,20 @@ export function useRouletteResults(options: {
     },
     [limit]
   )
+
+  // Flush buffered events when hold lifts
+  const holdRef = useRef(hold)
+  useEffect(() => {
+    holdRef.current = hold
+    if (!hold && pendingRef.current.length > 0) {
+      const flushed = pendingRef.current
+      pendingRef.current = []
+      setResults((prev) => {
+        const combined = [...flushed, ...prev]
+        return combined.slice(0, limit)
+      })
+    }
+  }, [hold, limit])
 
   useWatchContractEvent({
     address: ROULETTE_ADDRESS,
@@ -82,7 +98,11 @@ export function useRouletteResults(options: {
         const args = (log.args || {}) as Record<string, unknown>
         if (playerAddress && (args.player as string)?.toLowerCase() !== playerAddress.toLowerCase()) continue
         const row = parseSpunLog(args, log.blockNumber, log.transactionHash)
-        append(row)
+        if (holdRef.current) {
+          pendingRef.current = [row, ...pendingRef.current]
+        } else {
+          append(row)
+        }
       }
     },
   })
@@ -177,6 +197,8 @@ export function useRouletteTopPlayers(limit: number = 25) {
   return { data: fromChain, isLoading: false, error: null }
 }
 
+const RED_NUMBERS = new Set([1,3,5,7,9,12,14,16,18,19,21,23,25,27,30,32,34,36])
+
 export function useRoulettePlayerStats(playerAddress: `0x${string}` | undefined) {
   const { results } = useRouletteResults({ playerAddress, limit: 500 })
   return useMemo(() => {
@@ -184,18 +206,65 @@ export function useRoulettePlayerStats(playerAddress: `0x${string}` | undefined)
     let totalWagered = 0n
     let totalWon = 0n
     let winningSpins = 0
+    let biggestWin = 0n
+    let biggestLoss = 0n
+    let bestStreak = 0
+    let currentStreak = 0
+    let redHits = 0
+    let blackHits = 0
+    let greenHits = 0
+    let numberFreq: Record<number, number> = {}
+
     for (const r of results) {
       totalSpins += 1
       totalWagered += r.totalWagered
       totalWon += r.netPayout
-      if (r.netPayout > 0n) winningSpins += 1
+
+      const profit = r.netPayout - r.totalWagered
+      if (r.netPayout > 0n) {
+        winningSpins += 1
+        currentStreak += 1
+        if (currentStreak > bestStreak) bestStreak = currentStreak
+        if (profit > biggestWin) biggestWin = profit
+      } else {
+        currentStreak = 0
+        if (r.totalWagered > biggestLoss) biggestLoss = r.totalWagered
+      }
+
+      const n = r.result
+      numberFreq[n] = (numberFreq[n] ?? 0) + 1
+      if (n === 0) greenHits++
+      else if (RED_NUMBERS.has(n)) redHits++
+      else blackHits++
     }
+
+    // Most landed number
+    let luckyNumber: number | null = null
+    let luckyNumberCount = 0
+    for (const [num, count] of Object.entries(numberFreq)) {
+      if (count > luckyNumberCount) {
+        luckyNumberCount = count
+        luckyNumber = Number(num)
+      }
+    }
+
+    const avgWager = totalSpins > 0 ? totalWagered / BigInt(totalSpins) : 0n
+
     return {
       totalSpins: BigInt(totalSpins),
       totalWagered,
       totalWon,
       profitLoss: totalWon - totalWagered,
       winRate: totalSpins ? (winningSpins / totalSpins) * 100 : 0,
+      biggestWin,
+      biggestLoss,
+      bestStreak,
+      avgWager,
+      redHits,
+      blackHits,
+      greenHits,
+      luckyNumber,
+      luckyNumberCount,
       results,
     }
   }, [results])

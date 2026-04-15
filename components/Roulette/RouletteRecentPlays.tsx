@@ -35,10 +35,10 @@ function formatAddress(addr: string): string {
 }
 
 function formatMorbius(wei: bigint): string {
-  const n = Number(formatEther(wei))
+  const n = Math.round(Number(formatEther(wei)))
   if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1)}M`
   if (n >= 1_000) return `${(n / 1_000).toFixed(0)}k`
-  return n.toLocaleString(undefined, { maximumFractionDigits: 0 })
+  return n.toLocaleString()
 }
 
 function SpinRow({ spin }: { spin: RouletteSpinRow }) {
@@ -72,11 +72,13 @@ function SpinRow({ spin }: { spin: RouletteSpinRow }) {
 export function RouletteRecentPlays({
   playerAddress,
   compact,
+  hold,
 }: {
   playerAddress?: `0x${string}` | null
   compact?: boolean
+  hold?: boolean
 }) {
-  const { results } = useRouletteResults({ playerAddress, limit: compact ? 20 : 50 })
+  const { results } = useRouletteResults({ playerAddress, limit: compact ? 20 : 50, hold })
 
   if (results.length === 0) {
     return (
