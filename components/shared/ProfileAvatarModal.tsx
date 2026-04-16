@@ -5,7 +5,8 @@ import { useConnectModal } from '@rainbow-me/rainbowkit';
 import { useAccount } from 'wagmi';
 import type { AvatarConfig } from '@/lib/websocket-client';
 import type { BlackjackWebSocketClient } from '@/lib/websocket-client';
-import { CharacterCreator, DEFAULT_AVATAR_CONFIG } from '@/components/avatar';
+import { CharacterCreator, DEFAULT_AVATAR_CONFIG, randomizeConfig } from '@/components/avatar';
+import type { RandomizeConfigOptions } from '@/components/avatar';
 import { parseAvatarPayload } from '@/lib/avatar-payload';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useProfileWs } from '@/contexts/profile-ws-context';
@@ -20,7 +21,7 @@ import { CosmeticsShop, COSMETICS_SHOP_PINS_STORAGE_KEY } from '@/components/sha
 import { CosmeticsMarketplace } from '@/components/shared/CosmeticsMarketplace';
 import { ItemPurchaseSheet } from '@/components/shared/ItemPurchaseSheet';
 import { GiftItemModal } from '@/components/shared/GiftItemModal';
-import { Gift, Package, Tag } from 'lucide-react';
+import { Gift, Package, Shuffle, Tag } from 'lucide-react';
 import { createListing } from '@/hooks/use-cosmetics';
 import { toast } from 'sonner';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
@@ -83,6 +84,10 @@ export function ProfileAvatarModal({ open, onClose, wsClient: wsClientProp, onSa
   const [listingBusy, setListingBusy]   = useState(false);
   const [cosmeticShopPins, setCosmeticShopPins] = useState<Set<string>>(readCosmeticShopPins);
   const [randomizePinnedFields, setRandomizePinnedFields] = useState<Set<string>>(readRandomizeFieldPinsFromStorage);
+  const [postSaveNameOpen, setPostSaveNameOpen] = useState(false);
+  const [namePromptInput, setNamePromptInput] = useState('');
+  const [namePromptError, setNamePromptError] = useState<string | null>(null);
+  const [namePromptSaving, setNamePromptSaving] = useState(false);
 
   const toggleRandomPin = useCallback((field: AvatarRandomizeFieldKey) => {
     setRandomizePinnedFields((prev) => {
@@ -151,15 +156,93 @@ export function ProfileAvatarModal({ open, onClose, wsClient: wsClientProp, onSa
     if (open) {
       loadProfile();
       refreshInventory();
+    } else {
+      setPostSaveNameOpen(false);
+      setNamePromptInput('');
+      setNamePromptError(null);
     }
   }, [open, loadProfile, refreshInventory]);
 
-  const handleSave = async () => {
-    const name = displayName.trim();
-    if (name.length < 3) {
-      setError('Display name must be at least 3 characters');
+  const handleFooterRandomize = useCallback(() => {
+    const opts: RandomizeConfigOptions = {};
+    if (cosmeticShopPins.size) opts.pinnedItemKeys = cosmeticShopPins;
+    if (randomizePinnedFields.size) {
+      opts.preserveFrom = config;
+      opts.pinnedFields = randomizePinnedFields;
+    }
+    setConfig(randomizeConfig(ownedSet, Object.keys(opts).length ? opts : undefined));
+  }, [config, cosmeticShopPins, ownedSet, randomizePinnedFields]);
+
+  const finishAfterAvatarSave = useCallback(async () => {
+    setNamePromptInput('');
+    setNamePromptError(null);
+    try {
+      await loadProfile();
+    } catch {
+      /* non-fatal — dialog can still open */
+    }
+    setPostSaveNameOpen(true);
+  }, [loadProfile]);
+
+  const dismissNamePromptAndClose = useCallback(() => {
+    setPostSaveNameOpen(false);
+    setNamePromptInput('');
+    setNamePromptError(null);
+    onClose();
+  }, [onClose]);
+
+  const handlePromptSaveDisplayName = async () => {
+    const n = namePromptInput.trim();
+    if (n.length < 3 || n.length > 32) {
+      setNamePromptError('Display name must be 3–32 characters.');
       return;
     }
+    if (!adminBypass) {
+      const { getLockedFields } = await import('@/lib/cosmetics-catalog');
+      const locked = getLockedFields(config as unknown as Record<string, string>, ownedSet);
+      if (locked.length > 0) {
+        const names = locked.map((l) => l.displayName ?? l.value).join(', ');
+        setNamePromptError(`You don't own: ${names}. Purchase or receive these as a gift to save.`);
+        return;
+      }
+    }
+    setNamePromptSaving(true);
+    setNamePromptError(null);
+    try {
+      if (wsClient?.isConnected()) {
+        await wsClient.setDisplayName(n, profileImageUrl, config);
+      } else if (!address) {
+        setNamePromptError('Connect your wallet to save');
+        return;
+      } else {
+        const res = await fetch('/api/player/profile', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            address,
+            displayName: n,
+            profileImageUrl: profileImageUrl ?? null,
+            avatarConfig: config,
+          }),
+        });
+        if (!res.ok) {
+          const data = await res.json().catch(() => ({}));
+          throw new Error(data.error || 'Failed to save display name');
+        }
+      }
+      setPostSaveNameOpen(false);
+      setNamePromptInput('');
+      onSave?.();
+      onClose();
+    } catch (e) {
+      setNamePromptError(e instanceof Error ? e.message : 'Failed to save');
+    } finally {
+      setNamePromptSaving(false);
+    }
+  };
+
+  const handleSave = async () => {
+    const name = displayName.trim();
     if (name.length > 32) {
       setError('Display name must be at most 32 characters');
       return;
@@ -183,7 +266,7 @@ export function ProfileAvatarModal({ open, onClose, wsClient: wsClientProp, onSa
       if (wsClient?.isConnected()) {
         await wsClient.setDisplayName(name, profileImageUrl, avatarPayload);
         onSave?.();
-        onClose();
+        await finishAfterAvatarSave();
         return;
       }
       if (!address) {
@@ -205,7 +288,7 @@ export function ProfileAvatarModal({ open, onClose, wsClient: wsClientProp, onSa
         throw new Error(data.error || 'Failed to save profile');
       }
       onSave?.();
-      onClose();
+      await finishAfterAvatarSave();
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Failed to save');
     } finally {
@@ -405,6 +488,17 @@ export function ProfileAvatarModal({ open, onClose, wsClient: wsClientProp, onSa
                 >
                   Cancel
                 </button>
+                {view === 'avatar' && !loading && (
+                  <button
+                    type="button"
+                    onClick={handleFooterRandomize}
+                    disabled={saving}
+                    className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md text-sm font-medium border border-violet-400/50 text-violet-800 bg-violet-50 hover:bg-violet-100 disabled:opacity-50 transition-colors touch-manipulation"
+                  >
+                    <Shuffle size={15} />
+                    Randomize
+                  </button>
+                )}
                 <button
                   type="button"
                   onClick={canSave ? handleSave : () => openConnectModal?.()}
@@ -513,6 +607,68 @@ export function ProfileAvatarModal({ open, onClose, wsClient: wsClientProp, onSa
         </div>
       );
     })()}
+
+    {postSaveNameOpen && (
+      <div
+        className="fixed inset-0 z-[310] flex items-center justify-center bg-black/75 p-4 backdrop-blur-sm"
+        role="presentation"
+        onClick={dismissNamePromptAndClose}
+        onKeyDown={(e) => {
+          if (e.key === 'Escape') dismissNamePromptAndClose();
+        }}
+      >
+        <div
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="post-save-name-title"
+          className="w-full max-w-sm rounded-2xl border-2 border-cyan-500/30 bg-gradient-to-br from-slate-900 to-slate-800 p-5 shadow-2xl"
+          onClick={(e) => e.stopPropagation()}
+        >
+          <h2 id="post-save-name-title" className="text-lg font-semibold text-white">
+            Update display name?
+          </h2>
+          <p className="mt-2 text-sm text-slate-400">
+            Your look was saved. If you would like a new public name, enter it below (3–32 characters). Skip to keep your current name.
+          </p>
+          <div className="mt-4 space-y-2">
+            <label htmlFor="post-save-display-name" className="sr-only">
+              Display name
+            </label>
+            <input
+              id="post-save-display-name"
+              type="text"
+              value={namePromptInput}
+              onChange={(e) => {
+                setNamePromptInput(e.target.value.slice(0, 32));
+                setNamePromptError(null);
+              }}
+              placeholder="New display name"
+              maxLength={32}
+              className="w-full rounded-xl border border-cyan-500/30 bg-slate-950/60 px-3 py-2.5 text-sm text-white placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-cyan-500/40"
+            />
+            {namePromptError && <p className="text-sm text-red-400">{namePromptError}</p>}
+          </div>
+          <div className="mt-5 flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
+            <button
+              type="button"
+              onClick={dismissNamePromptAndClose}
+              disabled={namePromptSaving}
+              className="inline-flex h-10 items-center justify-center rounded-xl border border-white/15 bg-white/5 px-4 text-sm font-medium text-slate-200 hover:bg-white/10 disabled:opacity-50"
+            >
+              Skip
+            </button>
+            <button
+              type="button"
+              onClick={() => void handlePromptSaveDisplayName()}
+              disabled={namePromptSaving || namePromptInput.trim().length < 3}
+              className="inline-flex h-10 items-center justify-center rounded-xl bg-gradient-to-r from-cyan-600 to-blue-600 px-4 text-sm font-semibold text-white disabled:opacity-50"
+            >
+              {namePromptSaving ? 'Saving…' : 'Save name'}
+            </button>
+          </div>
+        </div>
+      </div>
+    )}
   </>
   );
 }

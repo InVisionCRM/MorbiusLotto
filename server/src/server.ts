@@ -23,6 +23,7 @@ import { MerkleDropsService } from './services/merkle-drops.service';
 import { MerkleDropsLPService } from './services/merkle-lp-drops.service';
 import { CosmeticsService } from './services/cosmetics.service';
 import { isAdminWallet, getLockedFields, ITEM_CATALOG } from './lib/cosmetics-catalog';
+import { resolveDisplayNameForProfileUpsert } from './lib/resolve-profile-display-name';
 import { getPokerChipWei } from './lib/poker-chip-scale';
 import { logger } from './utils/logger';
 import { assertPokerBotControlAllowed } from './utils/poker-bot-auth';
@@ -388,10 +389,11 @@ async function initializeServices() {
           return res.status(400).json({ error: 'address required' });
         }
         const normalizedAddress = getAddress(addressRaw);
-        const displayName = typeof rawDisplayName === 'string' ? rawDisplayName.trim() : '';
-        if (displayName.length < 3 || displayName.length > 32) {
-          return res.status(400).json({ error: 'Display name must be 3–32 characters' });
-        }
+        const displayName = await resolveDisplayNameForProfileUpsert(
+          dbService,
+          normalizedAddress,
+          typeof rawDisplayName === 'string' ? rawDisplayName : undefined,
+        );
         const profileImageUrl = rawProfileImageUrl !== undefined
           ? (typeof rawProfileImageUrl === 'string' ? rawProfileImageUrl : null)
           : undefined;

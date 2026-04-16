@@ -283,8 +283,6 @@ export default function PokerTablePage() {
   const [showTableSettingsModal, setShowTableSettingsModal] = useState(false);
   const [showEditQuickChatModal, setShowEditQuickChatModal] = useState(false);
   const [autoRebuy, setAutoRebuy] = useState(false);
-  const autoRebuyRef = useRef(false);
-  autoRebuyRef.current = autoRebuy;
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [settingsMenuOpen, setSettingsMenuOpen] = useState(false);
   const [statsMenuOpen, setStatsMenuOpen] = useState(false);

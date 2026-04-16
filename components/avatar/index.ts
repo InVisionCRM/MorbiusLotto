@@ -7,6 +7,7 @@ export {
   DEFAULT_AVATAR_CONFIG,
   randomizeConfig,
 } from './CharacterCreator';
+export type { RandomizeConfigOptions } from './CharacterCreator';
 export { default as GradientBuilder } from './GradientBuilder';
 export { default as PixelBackgroundUploader } from './PixelBackgroundUploader';
 export { default as VoxelPainter } from './VoxelPainter';

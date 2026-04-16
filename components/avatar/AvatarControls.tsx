@@ -314,9 +314,18 @@ export default function AvatarControls({
       if (option.itemKey && onLockedItemClick) onLockedItemClick(option.itemKey);
       return false;
     }
+    if (row.field === 'hairStyle') {
+      onChange({
+        ...config,
+        hairStyle: option.value,
+        hat: 'None',
+        hatColor: '',
+      });
+      return true;
+    }
     update(row.field, option.value);
     return true;
-  }, [isLocked, onLockedItemClick, update]);
+  }, [config, isLocked, onChange, onLockedItemClick, update]);
 
   const cycleActive = (direction: -1 | 1) => {
     if (!activeRow || !activeRow.options.length) return;
@@ -352,7 +361,7 @@ export default function AvatarControls({
       className="flex h-full min-h-0 rounded-2xl overflow-hidden"
       style={PANEL_STYLE}
     >
-      <div className="flex-1 min-w-0 flex flex-col">
+      <div className="flex min-h-0 min-w-0 flex-1 flex-col">
         <div className="p-2.5">
           <Tabs value={activeGroupId} onValueChange={setActiveGroupId}>
             <div className="relative">
@@ -391,7 +400,9 @@ export default function AvatarControls({
           </Tabs>
         </div>
 
-        <div className={`flex-1 overflow-y-auto custom-scrollbar ${compact ? 'p-2' : 'p-2.5'} space-y-2`}>
+        <div
+          className={`flex-1 touch-pan-y overflow-y-auto overscroll-y-contain custom-scrollbar ${compact ? 'p-2' : 'p-2.5'} space-y-2`}
+        >
           <div className="relative rounded-2xl p-3 sm:p-4">
             <button
               type="button"
@@ -410,7 +421,7 @@ export default function AvatarControls({
               <ChevronRight className="mx-auto" size={28} />
             </button>
 
-            <div className="mx-auto flex w-full max-w-[280px] items-center justify-center py-1">
+            <div className="flex w-full items-center justify-center py-1">
               <div className="relative">
                 <div className="absolute inset-8 rounded-full bg-cyan-200/50 blur-3xl" />
                 <AvatarView
@@ -423,7 +434,7 @@ export default function AvatarControls({
           </div>
 
           <div className="rounded-2xl p-2.5 sm:p-3 space-y-3">
-            <div className="mx-auto w-full max-w-[360px] space-y-2">
+            <div className="w-full space-y-2">
               <span className="text-[11px] font-semibold uppercase tracking-[0.16em] text-cyan-600">Category Item</span>
               <div className="flex gap-2 overflow-x-auto pb-1 scrollbar-hide">
                 {activeGroup.rows.map((row) => {
@@ -446,7 +457,7 @@ export default function AvatarControls({
               </div>
             </div>
 
-            <div className="mx-auto w-full max-w-[360px] space-y-2">
+            <div className="w-full space-y-2">
               <div className="flex items-center justify-between gap-2">
                 <span className="text-[11px] font-semibold uppercase tracking-[0.16em] text-cyan-600">Selection</span>
                 {onToggleRandomPin && activeRow && activeRow.canPin !== false && randomizableFieldSet.has(activeRow.field) ? (
@@ -485,7 +496,7 @@ export default function AvatarControls({
 
                 <div
                   ref={optionsScrollRef}
-                  className="flex gap-2 overflow-x-auto px-10 py-1.5 scrollbar-hide snap-x snap-mandatory"
+                  className="flex touch-pan-x gap-2 overflow-x-auto px-10 py-1.5 scrollbar-hide snap-x snap-mandatory"
                 >
                   {activeRow?.options.map((option) => {
                     const locked = isLocked(activeRow.field, option.value);

@@ -32,6 +32,7 @@ import { BLACKJACK_MESSAGE_HANDLER_MAP } from './websocket/blackjack-router';
 import { TOURNAMENT_MESSAGE_HANDLER_MAP } from './websocket/tournament-router';
 import { POKER_MESSAGE_HANDLER_MAP } from './websocket/poker-router';
 import { BJ_MULTI_MESSAGE_HANDLER_MAP } from './websocket/bj-multi-router';
+import { resolveDisplayNameForProfileUpsert } from '../lib/resolve-profile-display-name';
 
 // EIP-712 domain and types for WebSocket authentication
 const AUTH_EIP712_DOMAIN = {
@@ -99,7 +100,6 @@ const CHAT_RECENT_MESSAGES_LIMIT = 50;
 const CHAT_PER_ADDRESS_MAX = 20; // max messages per wallet per window
 const CHAT_PER_ADDRESS_WINDOW_MS = 60_000; // 1 minute
 const CHAT_PER_ADDRESS_CLEANUP_MS = 120_000; // prune stale entries every 2 min
-const CHAT_DISPLAY_NAME_MIN_LEN = 3;
 const CHAT_DISPLAY_NAME_MAX_LEN = 32;
 
 // Rate limit for create_game (1 game per second per connection)
@@ -1341,21 +1341,10 @@ export class WebSocketService {
         return this.sendError(ws, 'displayName required', message.requestId);
       }
 
-      const trimmed = raw.trim();
-      if (trimmed.length < CHAT_DISPLAY_NAME_MIN_LEN) {
-        return this.sendError(ws, `Display name must be at least ${CHAT_DISPLAY_NAME_MIN_LEN} characters`, message.requestId);
-      }
-      if (trimmed.length > CHAT_DISPLAY_NAME_MAX_LEN) {
+      const displayName = await resolveDisplayNameForProfileUpsert(this.dbService, ws.playerAddress, raw);
+      if (displayName.length > CHAT_DISPLAY_NAME_MAX_LEN) {
         return this.sendError(ws, `Display name must be at most ${CHAT_DISPLAY_NAME_MAX_LEN} characters`, message.requestId);
       }
-
-      // Allow letters, numbers, spaces, hyphens, underscores
-      const sanitized = trimmed.replace(/[^\w\s-]/gi, '').replace(/\s+/g, ' ').trim();
-      if (sanitized.length < CHAT_DISPLAY_NAME_MIN_LEN) {
-        return this.sendError(ws, 'Display name contains invalid characters', message.requestId);
-      }
-
-      const displayName = sanitized.slice(0, CHAT_DISPLAY_NAME_MAX_LEN);
       const profileImageUrl = payload.profileImageUrl !== undefined
         ? (typeof payload.profileImageUrl === 'string' ? payload.profileImageUrl : null)
         : undefined;

@@ -126,10 +126,10 @@ export default function CharacterCreator({ config: controlledConfig, onChange, i
     <div className="flex flex-col w-full min-h-0 flex-1">
       <div className={`flex flex-col flex-1 min-h-0 gap-3 ${compact ? 'p-2' : 'p-4 sm:p-5'}`}>
         <section
-          className="min-h-0 mx-auto flex w-full max-w-[38rem] flex-1 flex-col rounded-2xl border border-gray-100 bg-gradient-to-b from-white to-slate-50 overflow-hidden p-3.5 sm:p-4 shadow-xl"
+          className="flex min-h-0 w-full flex-1 flex-col overflow-hidden rounded-2xl border border-gray-100 bg-gradient-to-b from-white to-slate-50 p-3.5 sm:p-4 shadow-xl"
         >
           <div className="mb-3 flex flex-col items-center text-center gap-2">
-            <div className="min-w-0">
+            <div className="min-w-0 w-full max-w-md px-1">
               {displayName !== undefined && onDisplayNameChange ? (
                 <input
                   type="text"
@@ -137,7 +137,7 @@ export default function CharacterCreator({ config: controlledConfig, onChange, i
                   onChange={(e) => onDisplayNameChange(e.target.value)}
                   placeholder="Your name"
                   maxLength={32}
-                  className={`w-full max-w-[300px] bg-transparent border-b border-gray-300 text-slate-900 placeholder:text-slate-400 focus:outline-none focus:border-cyan-500 transition-colors text-center ${compact ? 'pb-1 text-sm font-semibold' : 'pb-2 text-xl sm:text-2xl font-semibold'}`}
+                  className={`w-full bg-transparent border-b border-gray-300 text-slate-900 placeholder:text-slate-400 focus:outline-none focus:border-cyan-500 transition-colors text-center ${compact ? 'pb-1 text-sm font-semibold' : 'pb-2 text-xl sm:text-2xl font-semibold'}`}
                 />
               ) : (
                 <h1 className={`${compact ? 'text-sm' : 'text-xl sm:text-2xl'} font-semibold tracking-tight text-slate-900`}>
@@ -146,23 +146,18 @@ export default function CharacterCreator({ config: controlledConfig, onChange, i
               )}
             </div>
 
-            <div className="flex flex-col items-center gap-1">
-              <button
-                type="button"
-                onClick={handleRandomizeAll}
-                className={`inline-flex items-center justify-center gap-2 rounded-xl border border-violet-400/40 bg-[length:200%_100%] bg-[linear-gradient(90deg,#6d28d9,#7c3aed,#6366f1,#7c3aed)] text-white animate-shimmer shadow-[0_8px_20px_rgba(99,102,241,0.28)] hover:brightness-110 transition-all touch-manipulation ${
-                  compact ? 'px-3 py-2 text-xs font-medium' : 'px-4 py-2.5 text-sm font-medium'
-                }`}
-              >
-                <Shuffle size={compact ? 14 : 16} />
-                Randomize
-              </button>
-              {onToggleRandomPin && (
-                <p className="text-[11px] sm:text-xs text-slate-500">
-                  
-                </p>
-              )}
-            </div>
+            {!compact && (
+              <div className="flex flex-col items-center gap-1">
+                <button
+                  type="button"
+                  onClick={handleRandomizeAll}
+                  className="inline-flex items-center justify-center gap-2 rounded-xl border border-violet-400/40 bg-[length:200%_100%] bg-[linear-gradient(90deg,#6d28d9,#7c3aed,#6366f1,#7c3aed)] px-4 py-2.5 text-sm font-medium text-white animate-shimmer shadow-[0_8px_20px_rgba(99,102,241,0.28)] transition-all hover:brightness-110 touch-manipulation"
+                >
+                  <Shuffle size={16} />
+                  Randomize
+                </button>
+              </div>
+            )}
           </div>
 
           <div className="min-h-0 flex-1">

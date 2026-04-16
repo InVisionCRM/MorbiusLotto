@@ -6,6 +6,7 @@ import { DatabaseService } from '../services/database.service';
 import { getLockedFields, isAdminWallet } from '../lib/cosmetics-catalog';
 import { sendJson } from '../http/json';
 import { logger } from '../utils/logger';
+import { resolveDisplayNameForProfileUpsert } from '../lib/resolve-profile-display-name';
 
 interface RegisterPlayerMutationRoutesOptions {
   app: Express;
@@ -40,10 +41,11 @@ export function registerPlayerMutationRoutes({
         return res.status(400).json({ error: 'address required' });
       }
       const normalizedAddress = getAddress(addressRaw);
-      const displayName = typeof rawDisplayName === 'string' ? rawDisplayName.trim() : '';
-      if (displayName.length < 3 || displayName.length > 32) {
-        return res.status(400).json({ error: 'Display name must be 3–32 characters' });
-      }
+      const displayName = await resolveDisplayNameForProfileUpsert(
+        dbService,
+        normalizedAddress,
+        typeof rawDisplayName === 'string' ? rawDisplayName : undefined,
+      );
       const profileImageUrl =
         rawProfileImageUrl !== undefined ? (typeof rawProfileImageUrl === 'string' ? rawProfileImageUrl : null) : undefined;
       const avatarConfig =
