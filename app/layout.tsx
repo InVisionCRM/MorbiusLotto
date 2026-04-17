@@ -8,7 +8,7 @@ import { BreakReminderWrapper } from "@/components/ResponsibleGaming";
 import { ChatSidebar } from "@/components/chat/ChatSidebar";
 import { GameLockOverlay } from "@/components/shared/GameLockOverlay";
 import { ServiceWorkerRegistration } from "@/components/shared/ServiceWorkerRegistration";
-import { ElevenLabsWidget } from "@/components/shared/ElevenLabsWidget";
+import { ElevenLabsWidgetGate } from "@/components/shared/ElevenLabsWidgetGate";
 
 // Use system fonts instead of Google Fonts to avoid build issues
 const geistSans = {
@@ -120,7 +120,7 @@ export default function RootLayout({
             <Toaster position="top-right" theme="dark" richColors />
             <BreakReminderWrapper />
             <ChatSidebar />
-            <ElevenLabsWidget />
+            <ElevenLabsWidgetGate />
             <Analytics />
           </Providers>
         </div>
