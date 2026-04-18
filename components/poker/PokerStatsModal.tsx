@@ -36,6 +36,12 @@ function formatChips(wei: string | number): string {
   }
 }
 
+/** Tournament pots/actions are integer chips in DB, not MORBIUS wei. */
+function formatHandChipAmount(isTournament: boolean, raw: string | number): string {
+  if (isTournament) return `${toBigIntSafe(raw).toLocaleString()} chips`;
+  return formatChips(raw);
+}
+
 function shortAddr(addr: string): string {
   if (!addr || addr.length < 10) return addr;
   return `${addr.slice(0, 6)}…${addr.slice(-4)}`;
@@ -248,6 +254,9 @@ export function PokerStatsModal({ isOpen, onClose, playerAddress }: PokerStatsMo
                 </div>
               ) : (
                 <>
+                  <p className="text-xs text-gray-500 -mt-2 mb-1">
+                    Ring games only — SNG / tournament hands appear under History (tournament chips, not MORBIUS).
+                  </p>
                   <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                     {statsCards.map((stat, index) => (
                       <Card
@@ -354,6 +363,7 @@ export function PokerStatsModal({ isOpen, onClose, playerAddress }: PokerStatsMo
                         <div className="divide-y divide-gray-700/60">
                           {sortedHands.map((entry) => {
                             const profit = toBigIntSafe(entry.myWon) - toBigIntSafe(entry.myContributed);
+                            const isTourney = !!entry.tournamentId;
                             const isSelected = expandedHandId === entry.id;
                             return (
                               <div
@@ -369,6 +379,14 @@ export function PokerStatsModal({ isOpen, onClose, playerAddress }: PokerStatsMo
                                   >
                                     {entry.resultType.toUpperCase()}
                                   </span>
+                                  {isTourney && (
+                                    <span
+                                      className="text-[10px] uppercase tracking-wide px-1.5 py-0.5 rounded bg-cyan-500/15 text-cyan-300 border border-cyan-500/25 max-w-[10rem] truncate"
+                                      title={entry.tournamentName ?? 'Tournament'}
+                                    >
+                                      SNG
+                                    </span>
+                                  )}
                                   <span className="text-xs text-gray-400 flex items-center gap-1">
                                     <Clock className="w-3.5 h-3.5" />
                                     {formatHandTime(entry.completed_at)}
@@ -378,7 +396,7 @@ export function PokerStatsModal({ isOpen, onClose, playerAddress }: PokerStatsMo
                                   </span>
                                 </div>
                                 <span className={`text-sm font-bold ${getProfitColor(profit.toString())}`}>
-                                  {Number(profit) >= 0 ? '+' : ''}{formatChips(profit.toString())}
+                                  {profit >= 0n ? '+' : ''}{formatHandChipAmount(isTourney, profit.toString())}
                                 </span>
                               </div>
                             );
@@ -409,6 +427,7 @@ export function PokerStatsModal({ isOpen, onClose, playerAddress }: PokerStatsMo
                         <AnimatePresence>
                           {sortedHands.map((entry) => {
                             const profit = toBigIntSafe(entry.myWon) - toBigIntSafe(entry.myContributed);
+                            const isTourney = !!entry.tournamentId;
                             const isExpanded = expandedHandId === entry.id;
                             return (
                               <motion.div
@@ -432,12 +451,12 @@ export function PokerStatsModal({ isOpen, onClose, playerAddress }: PokerStatsMo
                                       {formatHandTime(entry.completed_at)}
                                     </span>
                                     <span className="text-xs text-gray-500">
-                                      Hand #{entry.hand_number} · Pot {formatChips(entry.pot_amount)}
+                                      Hand #{entry.hand_number} · Pot {formatHandChipAmount(isTourney, entry.pot_amount)}
                                     </span>
                                   </div>
                                   <div className="flex items-center gap-3">
                                     <span className={`text-sm font-bold ${getProfitColor(profit.toString())}`}>
-                                      {Number(profit) >= 0 ? '+' : ''}{formatChips(profit.toString())}
+                                      {profit >= 0n ? '+' : ''}{formatHandChipAmount(isTourney, profit.toString())}
                                     </span>
                                     {isExpanded ? (
                                       <ChevronUp className="w-5 h-5 text-gray-400 shrink-0" />
@@ -475,6 +494,7 @@ function HandReplay({
   detail: import('@/hooks/use-poker-stats').PokerHandDetail | null | undefined;
   detailLoading: boolean;
 }) {
+  const isTourney = !!(entry.tournamentId ?? detail?.tournamentId);
   if (detailLoading) {
     return (
       <div className="px-3 pb-3 pt-1 flex items-center gap-2 text-sm text-gray-400">
@@ -510,7 +530,7 @@ function HandReplay({
         )}
         <div className="shrink-0">
           <p className="text-[10px] text-gray-500 uppercase tracking-wider mb-1">Pot</p>
-          <p className="text-sm text-white font-medium">{formatChips(entry.pot_amount)}</p>
+          <p className="text-sm text-white font-medium">{formatHandChipAmount(isTourney, entry.pot_amount)}</p>
         </div>
       </div>
       {entry.result?.winners && entry.result.winners.length > 0 && (
@@ -519,7 +539,7 @@ function HandReplay({
           <ul className="space-y-1">
             {entry.result.winners.map((w, i) => (
               <li key={i} className="text-sm text-gray-300">
-                {shortAddr(w.address)} +{formatChips(w.amount)}
+                {shortAddr(w.address)} +{formatHandChipAmount(isTourney, w.amount)}
                 {w.handName ? ` (${w.handName})` : ''}
               </li>
             ))}
@@ -534,7 +554,7 @@ function HandReplay({
               <li key={i} className="text-xs text-gray-400">
                 <span className="text-cyan-400/90">{a.street}</span>{' '}
                 {shortAddr(a.player_address)} {a.action}{' '}
-                {Number(a.amount) > 0 ? formatChips(a.amount) : ''}
+                {Number(a.amount) > 0 ? formatHandChipAmount(isTourney, a.amount) : ''}
               </li>
             ))}
           </ul>

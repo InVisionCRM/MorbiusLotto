@@ -88,15 +88,47 @@ export interface CreatePokerTournamentParams {
   /** Required when buyInAmount is 0: MORBIUS (wei) debited at create; becomes initial prize_pool. */
   guaranteedPrizePool?: bigint;
   /**
-   * When buy-in is 0: debit `creator` (default) or `platform_promo` wallet.
-   * `platform_promo` requires caller in ADMIN_WALLETS and POKER_PROMO_GUARANTEED_POOL_WALLET in env.
+   * When buy-in is 0: debit the creator's `players.balance` (default).
+   * `platform_promo`: same debit/refund wallet, but only allowed if the creator is in ADMIN_WALLETS (comma-separated `ADMIN_WALLETS` / `NEXT_PUBLIC_ADMIN_WALLETS`).
    */
   guaranteedPrizePoolSource?: GuaranteedPrizePoolSource;
   prizeDistributionType: string;
+  /** Required when prizeDistributionType is `custom` (one integer % per rank, length = maxPlayers, sum 100). */
+  prizePercentages?: number[];
   config: PokerTournamentConfig;
   isPrivate?: boolean;
   pinCode?: string | null;
   scheduledStartAt?: Date | null;
+}
+
+/**
+ * Validates creator prize % per finishing rank (index 0 = 1st place … index maxPlayers-1).
+ * Integers 0–100; unused ranks may be 0; must sum to exactly 100.
+ */
+export function normalizePokerTournamentPrizePercents(maxPlayers: number, raw: unknown): number[] {
+  if (!Number.isFinite(maxPlayers) || maxPlayers < 2 || maxPlayers > 10) {
+    throw new Error('maxPlayers must be between 2 and 10');
+  }
+  if (!Array.isArray(raw)) {
+    throw new Error('prizePercentages must be an array');
+  }
+  if (raw.length !== maxPlayers) {
+    throw new Error(`prizePercentages must have ${maxPlayers} entries (one per max seat)`);
+  }
+  const out: number[] = [];
+  let sum = 0;
+  for (let i = 0; i < raw.length; i++) {
+    const n = Number(raw[i]);
+    if (!Number.isFinite(n) || !Number.isInteger(n) || n < 0 || n > 100) {
+      throw new Error(`prizePercentages[${i}] must be an integer from 0 to 100`);
+    }
+    out.push(n);
+    sum += n;
+  }
+  if (sum !== 100) {
+    throw new Error(`Prize percentages must sum to 100 (currently ${sum})`);
+  }
+  return out;
 }
 
 // ---------------------------------------------------------------------------
@@ -231,24 +263,18 @@ export class PokerTournamentService {
       }
     }
 
-    const prizePercentages = getPrizePercentagesForType(params.prizeDistributionType);
+    const prizePercentages =
+      params.prizeDistributionType === 'custom'
+        ? normalizePokerTournamentPrizePercents(config.maxPlayers, params.prizePercentages)
+        : getPrizePercentagesForType(params.prizeDistributionType);
     const initialPrizePool = buyIn === 0n ? guaranteed.toString() : '0';
 
     let guaranteedPrizeFunderAddress: string | null = null;
     let debitAddress: string | null = null;
 
     if (buyIn === 0n) {
-      if (poolSource === 'platform_promo') {
-        const raw = process.env.POKER_PROMO_GUARANTEED_POOL_WALLET?.trim();
-        if (!raw || !/^0x[a-fA-F0-9]{40}$/.test(raw)) {
-          throw new Error('POKER_PROMO_GUARANTEED_POOL_WALLET is not configured (0x + 40 hex)');
-        }
-        debitAddress = this.normalizeAddress(raw);
-        guaranteedPrizeFunderAddress = debitAddress;
-      } else {
-        debitAddress = normalizedCreator;
-        guaranteedPrizeFunderAddress = null;
-      }
+      debitAddress = normalizedCreator;
+      guaranteedPrizeFunderAddress = null;
     }
 
     const client = await this.pool.connect();
@@ -262,18 +288,12 @@ export class PokerTournamentService {
         );
         if (balRow.rows.length === 0) {
           throw new Error(
-            poolSource === 'platform_promo'
-              ? 'Promo wallet has no players row — create/fund POKER_PROMO_GUARANTEED_POOL_WALLET in players first'
-              : 'Creator player record not found — fund the creator wallet in players.balance first',
+            'Creator player record not found — fund the creator wallet in players.balance first',
           );
         }
         const bal = this.parseBigInt(balRow.rows[0].balance);
         if (bal < guaranteed) {
-          throw new Error(
-            poolSource === 'platform_promo'
-              ? 'Insufficient promo balance to fund guaranteed prize pool'
-              : 'Insufficient balance to fund guaranteed prize pool',
-          );
+          throw new Error('Insufficient balance to fund guaranteed prize pool');
         }
         await client.query(
           `UPDATE players SET balance = balance - $1::NUMERIC WHERE LOWER(wallet_address) = LOWER($2)`,
@@ -1022,6 +1042,10 @@ export class PokerTournamentService {
   async listPokerTournaments(playerAddress?: string): Promise<PokerTournamentSummary[]> {
     const normalized = playerAddress ? this.normalizeAddress(playerAddress) : null;
 
+    /** Cuts lobby noise: hide stale empty registration buckets; always show active, any with players, recent creates, upcoming scheduled, or rows the viewer is in. */
+    const LOBBY_MAX_ROWS = 50;
+    const STALE_EMPTY_REG_DAYS = 7;
+
     const result = await this.pool.query(
       `SELECT r.*,
          CASE WHEN $1::text IS NOT NULL AND EXISTS (
@@ -1031,9 +1055,23 @@ export class PokerTournamentService {
              AND te.status NOT IN ('busted', 'completed')
          ) THEN TRUE ELSE FALSE END AS is_registered
        FROM poker_tournament_registrations r
-       ORDER BY
-         CASE WHEN r.scheduled_start_at IS NOT NULL THEN r.scheduled_start_at ELSE r.created_at END ASC`,
-      [normalized]
+       WHERE (
+         r.status = 'active'
+         OR COALESCE(r.registered_count, 0) > 0
+         OR r.created_at >= NOW() - ($2::int * INTERVAL '1 day')
+         OR (r.scheduled_start_at IS NOT NULL AND r.scheduled_start_at > NOW())
+         OR (
+           $1::text IS NOT NULL AND EXISTS (
+             SELECT 1 FROM tournament_entries te
+             WHERE te.tournament_id = r.tournament_id
+               AND LOWER(te.player_address) = $1::text
+               AND te.status NOT IN ('busted', 'completed')
+           )
+         )
+       )
+       ORDER BY r.created_at DESC
+       LIMIT $3`,
+      [normalized, STALE_EMPTY_REG_DAYS, LOBBY_MAX_ROWS]
     );
 
     return result.rows.map((r) => ({

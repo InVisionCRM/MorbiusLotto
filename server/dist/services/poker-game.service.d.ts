@@ -72,6 +72,8 @@ export interface PokerTableState {
     tableLogo?: string | null;
     /** Logo opacity (0–1). */
     tableLogoOpacity?: number | null;
+    /** Set when `poker_tables.tournament_id` is non-null (SNG / scheduled poker tournament). */
+    tournamentId?: string | null;
 }
 export declare class PokerGameService {
     private dbService;

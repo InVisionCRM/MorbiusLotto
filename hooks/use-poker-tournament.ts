@@ -72,9 +72,11 @@ export interface CreatePokerTournamentParams {
   buyInAmount: string;
   /** Wei string; when `"0"`, server requires `guaranteedPrizePool`. */
   guaranteedPrizePool?: string;
-  /** Admin only: debit `POKER_PROMO_GUARANTEED_POOL_WALLET` instead of creator. */
+  /** Admin only: same as creator-funded pool (debits creating wallet); requires admin in `ADMIN_WALLETS`. */
   guaranteedPrizePoolSource?: 'creator' | 'platform_promo';
   prizeDistributionType: string;
+  /** With `prizeDistributionType: 'custom'`, length must match `config.maxPlayers` and sum to 100. */
+  prizePercentages?: number[];
   config: PokerTournamentConfig;
   isPrivate?: boolean;
   pinCode?: string;

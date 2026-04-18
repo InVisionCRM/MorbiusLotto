@@ -3137,7 +3137,9 @@ export class DatabaseService implements MoneyDatabaseQueries {
     offset: number = 0
   ): Promise<Array<{
     id: string;
-    table_id: string;
+    table_id: string | null;
+    tournament_id: string | null;
+    tournament_name: string | null;
     hand_number: number;
     pot_amount: string;
     community_cards: number[];
@@ -3153,6 +3155,8 @@ export class DatabaseService implements MoneyDatabaseQueries {
       SELECT
         h.id,
         h.table_id,
+        h.tournament_id,
+        tour.name AS tournament_name,
         h.hand_number,
         h.pot_amount::TEXT,
         h.community_cards,
@@ -3167,6 +3171,7 @@ export class DatabaseService implements MoneyDatabaseQueries {
           ELSE 'loss'
         END AS result_type
       FROM poker_hands h
+      LEFT JOIN tournaments tour ON tour.id = h.tournament_id
       INNER JOIN (SELECT DISTINCT hand_id FROM poker_hand_actions WHERE LOWER(player_address) = LOWER($1)) part ON part.hand_id = h.id
       WHERE h.completed_at IS NOT NULL
       ORDER BY h.completed_at DESC
@@ -3175,7 +3180,9 @@ export class DatabaseService implements MoneyDatabaseQueries {
     const result = await this.pool.query(query, [normalized, limit, offset]);
     return result.rows.map((r: any) => ({
       id: r.id,
-      table_id: r.table_id,
+      table_id: r.table_id ?? null,
+      tournament_id: r.tournament_id ?? null,
+      tournament_name: r.tournament_name ?? null,
       hand_number: r.hand_number,
       pot_amount: String(r.pot_amount ?? '0'),
       community_cards: Array.isArray(r.community_cards) ? r.community_cards : (r.community_cards ? JSON.parse(JSON.stringify(r.community_cards)) : []),
@@ -3215,7 +3222,7 @@ export class DatabaseService implements MoneyDatabaseQueries {
           END AS result_type
         FROM poker_hands h
         INNER JOIN (SELECT DISTINCT hand_id FROM poker_hand_actions WHERE LOWER(player_address) = LOWER($1)) part ON part.hand_id = h.id
-        WHERE h.completed_at IS NOT NULL
+        WHERE h.completed_at IS NOT NULL AND h.tournament_id IS NULL
       ),
       totals AS (
         SELECT
@@ -3263,7 +3270,7 @@ export class DatabaseService implements MoneyDatabaseQueries {
           END AS outcome
         FROM poker_hands h
         INNER JOIN (SELECT DISTINCT hand_id FROM poker_hand_actions WHERE LOWER(player_address) = LOWER($1)) part ON part.hand_id = h.id
-        WHERE h.completed_at IS NOT NULL
+        WHERE h.completed_at IS NOT NULL AND h.tournament_id IS NULL
       )
       SELECT outcome FROM player_hands ORDER BY completed_at DESC
     `;
@@ -3427,7 +3434,9 @@ export class DatabaseService implements MoneyDatabaseQueries {
     playerAddress: string
   ): Promise<{
     id: string;
-    table_id: string;
+    table_id: string | null;
+    tournament_id: string | null;
+    tournament_name: string | null;
     hand_number: number;
     pot_amount: string;
     community_cards: number[];
@@ -3438,8 +3447,11 @@ export class DatabaseService implements MoneyDatabaseQueries {
   } | null> {
     const normalized = this.normalizeAddress(playerAddress);
     const handResult = await this.pool.query(
-      `SELECT id, table_id, hand_number, pot_amount::TEXT, community_cards, result, completed_at
-       FROM poker_hands WHERE id = $1 AND completed_at IS NOT NULL`,
+      `SELECT h.id, h.table_id, h.tournament_id, tour.name AS tournament_name, h.hand_number,
+              h.pot_amount::TEXT, h.community_cards, h.result, h.completed_at
+       FROM poker_hands h
+       LEFT JOIN tournaments tour ON tour.id = h.tournament_id
+       WHERE h.id = $1 AND h.completed_at IS NOT NULL`,
       [handId]
     );
     if (handResult.rows.length === 0) return null;
@@ -3459,7 +3471,9 @@ export class DatabaseService implements MoneyDatabaseQueries {
     const communityCards = Array.isArray(h.community_cards) ? h.community_cards : (h.community_cards ? JSON.parse(JSON.stringify(h.community_cards)) : []);
     return {
       id: h.id,
-      table_id: h.table_id,
+      table_id: h.table_id ?? null,
+      tournament_id: h.tournament_id ?? null,
+      tournament_name: h.tournament_name ?? null,
       hand_number: h.hand_number,
       pot_amount: String(h.pot_amount ?? '0'),
       community_cards: communityCards,

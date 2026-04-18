@@ -4,7 +4,10 @@ import { useQuery } from '@tanstack/react-query';
 
 export interface PokerHandListEntry {
   id: string;
-  table_id: string;
+  table_id: string | null;
+  /** Set when the hand was played on a tournament table (retained after SNG table delete). */
+  tournamentId: string | null;
+  tournamentName: string | null;
   hand_number: number;
   pot_amount: string;
   community_cards: number[];
@@ -31,7 +34,9 @@ export interface PokerPlayerStats {
 
 export interface PokerHandDetail {
   id: string;
-  table_id: string;
+  table_id: string | null;
+  tournamentId: string | null;
+  tournamentName: string | null;
   hand_number: number;
   pot_amount: string;
   community_cards: number[];
@@ -44,7 +49,9 @@ export interface PokerHandDetail {
 function parseHandEntry(raw: any): PokerHandListEntry {
   return {
     id: raw.id,
-    table_id: raw.table_id,
+    table_id: raw.table_id ?? null,
+    tournamentId: raw.tournamentId ?? raw.tournament_id ?? null,
+    tournamentName: raw.tournamentName ?? raw.tournament_name ?? null,
     hand_number: raw.hand_number ?? 0,
     pot_amount: String(raw.pot_amount ?? '0'),
     community_cards: Array.isArray(raw.community_cards) ? raw.community_cards : [],
@@ -159,7 +166,9 @@ export function usePokerHandDetail(handId: string | null, playerAddress: string 
       const data = await res.json();
       return {
         id: data.id,
-        table_id: data.table_id,
+        table_id: data.table_id ?? null,
+        tournamentId: data.tournamentId ?? data.tournament_id ?? null,
+        tournamentName: data.tournamentName ?? data.tournament_name ?? null,
         hand_number: data.hand_number ?? 0,
         pot_amount: String(data.pot_amount ?? '0'),
         community_cards: Array.isArray(data.community_cards) ? data.community_cards : [],

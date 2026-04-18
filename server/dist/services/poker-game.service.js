@@ -261,13 +261,13 @@ class PokerGameService {
                 throw new Error('Table not found');
             const tblRow = tableResult.rows[0];
             const maxSeats = Number(tblRow.max_seats) || 6;
-            const tournamentMode = !!tblRow.tournament_mode;
-            if (!tournamentMode) {
-                const bbWei = BigInt(tblRow.big_blind ?? '0');
-                const { minWei, maxWei } = (0, poker_cash_buy_in_1.getCashBuyInBoundsWei)(bbWei);
-                if (buyIn < minWei || buyIn > maxWei) {
-                    throw new Error(`Buy-in must be between ${poker_cash_buy_in_1.POKER_CASH_MIN_BUY_IN_BB} and ${poker_cash_buy_in_1.POKER_CASH_MAX_BUY_IN_BB} big blinds (min ${minWei.toString()} wei, max ${maxWei.toString()} wei).`);
-                }
+            if (tblRow.tournament_mode) {
+                throw new Error('Tournament table: register with poker_tournament_join. Cash poker_join_table is not allowed on tournament tables.');
+            }
+            const bbWei = BigInt(tblRow.big_blind ?? '0');
+            const { minWei, maxWei } = (0, poker_cash_buy_in_1.getCashBuyInBoundsWei)(bbWei);
+            if (buyIn < minWei || buyIn > maxWei) {
+                throw new Error(`Buy-in must be between ${poker_cash_buy_in_1.POKER_CASH_MIN_BUY_IN_BB} and ${poker_cash_buy_in_1.POKER_CASH_MAX_BUY_IN_BB} big blinds (min ${minWei.toString()} wei, max ${maxWei.toString()} wei).`);
             }
             (0, poker_chip_scale_1.assertCashChipMultiple)(buyIn, 'Buy-in');
             // Validate PIN for private tables
@@ -327,7 +327,17 @@ class PokerGameService {
         return this.getTableState(tableId, normalized);
     }
     async leaveTable(tableId, playerAddress) {
-        return this.withTableLock(tableId, () => this._leaveTable(tableId, playerAddress));
+        return this.withTableLock(tableId, async () => {
+            const pool = this.getPool();
+            const modeRow = await pool.query('SELECT tournament_mode FROM poker_tables WHERE id = $1', [tableId]);
+            if (modeRow.rows.length === 0)
+                throw new Error('Table not found');
+            if (modeRow.rows[0].tournament_mode) {
+                await this.leaveTableTournament(tableId, playerAddress);
+                return this.getTableState(tableId, null);
+            }
+            return this._leaveTable(tableId, playerAddress);
+        });
     }
     async _leaveTable(tableId, playerAddress) {
         const normalized = this.normalizeAddress(playerAddress);
@@ -469,7 +479,7 @@ class PokerGameService {
     async getTableState(tableId, forPlayer) {
         const pool = this.getPool();
         const forPlayerAddr = forPlayer ? this.normalizeAddress(forPlayer) : null;
-        const tableRow = await pool.query('SELECT id, small_blind, big_blind, max_seats, status, table_logo, table_logo_opacity FROM poker_tables WHERE id = $1', [tableId]);
+        const tableRow = await pool.query('SELECT id, small_blind, big_blind, max_seats, status, table_logo, table_logo_opacity, tournament_id FROM poker_tables WHERE id = $1', [tableId]);
         if (tableRow.rows.length === 0)
             throw new Error('Table not found');
         const tbl = tableRow.rows[0];
@@ -745,6 +755,8 @@ class PokerGameService {
                 }
             }
         }
+        const tournamentIdRaw = tbl.tournament_id;
+        const tournamentId = tournamentIdRaw != null && String(tournamentIdRaw).length > 0 ? String(tournamentIdRaw) : null;
         return {
             tableId: tbl.id,
             smallBlind: tbl.small_blind?.toString() ?? '0',
@@ -756,6 +768,7 @@ class PokerGameService {
             myHoleCards,
             tableLogo: tbl.table_logo ?? null,
             tableLogoOpacity: tbl.table_logo_opacity != null ? Number(tbl.table_logo_opacity) : null,
+            tournamentId,
         };
     }
     // ---------------------------------------------------------------------------

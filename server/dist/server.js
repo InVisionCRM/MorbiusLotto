@@ -1905,6 +1905,7 @@ async function initializeServices() {
         });
         // Admin: poker bot management
         const pokerBotJobs = new Map();
+        const pokerTournamentBotJobs = new Map();
         const MAX_ADMIN_BOTS = 10;
         app.post('/api/admin/poker/bots/bootstrap', express_1.default.json(), async (req, res) => {
             try {
@@ -2058,6 +2059,117 @@ async function initializeServices() {
             }
             catch (error) {
                 logger_1.logger.error('Error reading poker bot status:', error);
+                res.status(500).json({ error: 'Internal server error' });
+            }
+        });
+        /** Registration-phase bots: `npm run poker:bot -- --tournament <id> <n>` (same machine as API; needs DATABASE_URL). */
+        app.post('/api/admin/poker/tournament-bots/bootstrap', express_1.default.json(), async (req, res) => {
+            try {
+                const tournamentId = String(req.body?.tournamentId ?? '').trim();
+                if (!tournamentId) {
+                    res.status(400).json({ error: 'tournamentId required' });
+                    return;
+                }
+                const gate = await (0, poker_bot_auth_1.assertPokerTournamentBotControlAllowed)(dbService.getPool(), tournamentId, req.headers['x-admin-wallet']);
+                if (!gate.ok) {
+                    res.status(gate.status).json({ error: gate.error });
+                    return;
+                }
+                const existingJob = pokerTournamentBotJobs.get(tournamentId);
+                if (existingJob && !existingJob.process.killed) {
+                    res.status(409).json({
+                        error: 'Bots already running for this tournament',
+                        tournamentId,
+                        pid: existingJob.process.pid ?? null,
+                        numBots: existingJob.numBots,
+                        startedAt: existingJob.startedAt,
+                    });
+                    return;
+                }
+                const tRow = await dbService.getPool().query(`SELECT t.max_players,
+            (SELECT COUNT(*)::int FROM tournament_entries te
+             WHERE te.tournament_id = t.id AND te.status NOT IN ('busted','completed')) AS registered
+           FROM tournaments t
+           WHERE t.id = $1 AND t.game_type = 'poker'`, [tournamentId]);
+                if (tRow.rows.length === 0) {
+                    res.status(404).json({ error: 'Poker tournament not found' });
+                    return;
+                }
+                const maxP = Number(tRow.rows[0].max_players ?? 0);
+                const registered = Number(tRow.rows[0].registered ?? 0);
+                const openSlots = Math.max(0, maxP - registered);
+                if (openSlots <= 0) {
+                    res.status(400).json({ error: 'Tournament is full — no open registration slots for bots' });
+                    return;
+                }
+                const requestedBots = Number(req.body?.numBots);
+                const numBots = Number.isFinite(requestedBots)
+                    ? Math.max(1, Math.min(MAX_ADMIN_BOTS, Math.floor(requestedBots), openSlots))
+                    : Math.min(MAX_ADMIN_BOTS, openSlots);
+                const pinRaw = req.body?.pinCode;
+                const pinCode = typeof pinRaw === 'string' && pinRaw.trim() ? pinRaw.trim().slice(0, 12) : undefined;
+                const childEnv = { ...process.env, ...(pinCode ? { POKER_BOT_TOURNAMENT_PIN: pinCode } : {}) };
+                const compiledBot = path_1.default.resolve(__dirname, 'scripts/poker-bot.js');
+                const botExists = fs_1.default.existsSync(compiledBot);
+                const proc = botExists
+                    ? (0, child_process_1.spawn)(process.execPath, [compiledBot, '--tournament', tournamentId, String(numBots)], {
+                        cwd: path_1.default.resolve(__dirname, '../..'),
+                        env: childEnv,
+                        stdio: ['ignore', 'pipe', 'pipe'],
+                    })
+                    : (0, child_process_1.spawn)('npx', ['ts-node', path_1.default.resolve(__dirname, 'scripts/poker-bot.ts'), '--tournament', tournamentId, String(numBots)], {
+                        cwd: path_1.default.resolve(__dirname, '..'),
+                        env: childEnv,
+                        stdio: ['ignore', 'pipe', 'pipe'],
+                    });
+                const startedAt = new Date().toISOString();
+                pokerTournamentBotJobs.set(tournamentId, { tournamentId, numBots, startedAt, process: proc });
+                proc.stdout?.on('data', (chunk) => {
+                    logger_1.logger.info('[PokerTournamentBot]', { tournamentId, line: chunk.toString().trim() });
+                });
+                proc.stderr?.on('data', (chunk) => {
+                    logger_1.logger.warn('[PokerTournamentBot]', { tournamentId, line: chunk.toString().trim() });
+                });
+                proc.on('error', (err) => {
+                    logger_1.logger.error('Poker tournament bot process error', { tournamentId, err });
+                });
+                proc.on('exit', (code, signal) => {
+                    const current = pokerTournamentBotJobs.get(tournamentId);
+                    if (current?.process === proc) {
+                        pokerTournamentBotJobs.delete(tournamentId);
+                    }
+                    logger_1.logger.info('Poker tournament bot process exited', { tournamentId, code, signal });
+                });
+                res.json({ ok: true, tournamentId, numBots, pid: proc.pid ?? null, startedAt });
+            }
+            catch (error) {
+                logger_1.logger.error('Error bootstrapping poker tournament bots:', error);
+                res.status(500).json({ error: 'Internal server error' });
+            }
+        });
+        app.post('/api/admin/poker/tournament-bots/stop', express_1.default.json(), async (req, res) => {
+            try {
+                const tournamentId = String(req.body?.tournamentId ?? '').trim();
+                if (!tournamentId) {
+                    res.status(400).json({ error: 'tournamentId required' });
+                    return;
+                }
+                const gate = await (0, poker_bot_auth_1.assertPokerTournamentBotControlAllowed)(dbService.getPool(), tournamentId, req.headers['x-admin-wallet']);
+                if (!gate.ok) {
+                    res.status(gate.status).json({ error: gate.error });
+                    return;
+                }
+                const job = pokerTournamentBotJobs.get(tournamentId);
+                if (!job) {
+                    res.status(404).json({ error: 'No running tournament bot process for this id' });
+                    return;
+                }
+                const stopped = job.process.kill('SIGTERM');
+                pokerTournamentBotJobs.delete(tournamentId);
+                res.json({ ok: true, tournamentId, stopped, pid: job.process.pid ?? null });
+            }
+            catch (error) {
+                logger_1.logger.error('Error stopping poker tournament bots:', error);
                 res.status(500).json({ error: 'Internal server error' });
             }
         });

@@ -1,6 +1,8 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
+import { useQueryClient } from '@tanstack/react-query';
+import { format } from 'date-fns';
 import { toast } from 'sonner';
 import {
   usePokerTournament,
@@ -11,12 +13,52 @@ import {
 import type { BlackjackWebSocketClient } from '@/lib/websocket-client';
 import { formatMorbiusFloor } from '@/lib/format-morbius-display';
 import { isAdminWallet } from '@/lib/admin';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
 
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
 
+function tournamentFinishOrdinal(rank: number): string {
+  const j = rank % 10;
+  const k = rank % 100;
+  if (j === 1 && k !== 11) return `${rank}st`;
+  if (j === 2 && k !== 12) return `${rank}nd`;
+  if (j === 3 && k !== 13) return `${rank}rd`;
+  return `${rank}th`;
+}
+
 const MORBIUS_DECIMALS = 18n;
+
+/** 48 slots per day: :00 and :30, labels in 12h AM/PM (local). */
+function useThirtyMinuteTimeOptions(): { value: string; label: string }[] {
+  return useMemo(() => {
+    const out: { value: string; label: string }[] = [];
+    for (let h = 0; h < 24; h++) {
+      for (const m of [0, 30]) {
+        const d = new Date(2000, 0, 1, h, m, 0, 0);
+        out.push({
+          value: `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`,
+          label: format(d, 'h:mm a'),
+        });
+      }
+    }
+    return out;
+  }, []);
+}
+
+function localYyyyMmDd(d: Date): string {
+  const y = d.getFullYear();
+  const mo = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${y}-${mo}-${day}`;
+}
 
 function parseMorbiusInput(val: string): bigint {
   try {
@@ -312,6 +354,26 @@ function TournamentCard({
 // CreateModal
 // ---------------------------------------------------------------------------
 
+const STARTING_STACK_PRESETS = [
+  { value: '1000', label: '1,000 (short)' },
+  { value: '2500', label: '2,500' },
+  { value: '5555', label: '5,555' },
+  { value: '10000', label: '10,000 (deep)' },
+] as const;
+
+function defaultWinnerTakesAllPrizeRowCount(n: number): number[] {
+  return Array.from({ length: n }, (_, i) => (i === 0 ? 100 : 0));
+}
+
+function finishOrdinal(rank: number): string {
+  const j = rank % 10;
+  const k = rank % 100;
+  if (j === 1 && k !== 11) return `${rank}st`;
+  if (j === 2 && k !== 12) return `${rank}nd`;
+  if (j === 3 && k !== 13) return `${rank}rd`;
+  return `${rank}th`;
+}
+
 function CreateModal({ creatorAddress, onClose, onCreate }: {
   creatorAddress?: string;
   onClose: () => void;
@@ -322,21 +384,59 @@ function CreateModal({ creatorAddress, onClose, onCreate }: {
   const [fundFromPromo, setFundFromPromo] = useState(false);
   const [buyIn, setBuyIn] = useState('1000');
   const [guaranteedPool, setGuaranteedPool] = useState('5000');
-  const [prizeType, setPrizeType] = useState('winner_takes_all');
-  const [startingStack, setStartingStack] = useState('5000');
+  const [startingStack, setStartingStack] = useState<string>('10000');
   const [minPlayers, setMinPlayers] = useState('2');
   const [maxPlayers, setMaxPlayers] = useState('6');
   const [isPrivate, setIsPrivate] = useState(false);
   const [privatePin, setPrivatePin] = useState('');
   const [botsToAdd, setBotsToAdd] = useState(0);
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [scheduledStart, setScheduledStart] = useState(''); // ISO datetime-local string
+  /** yyyy-MM-dd in local time; empty = SNG auto-start */
+  const [scheduledDate, setScheduledDate] = useState('');
+  /** HH:mm 24h, only :00 or :30 — paired with scheduledDate */
+  const [scheduledTime, setScheduledTime] = useState('19:00');
+  const [scheduleError, setScheduleError] = useState<string | null>(null);
+
+  const timeOptions = useThirtyMinuteTimeOptions();
+  const minScheduleDate = useMemo(() => localYyyyMmDd(new Date()), []);
 
   const showPromoOption = isFreeroll && isAdminWallet(creatorAddress);
 
   useEffect(() => {
     if (!isFreeroll) setFundFromPromo(false);
   }, [isFreeroll]);
+
+  const prizeSlotCount = useMemo(() => {
+    const minP = Math.max(2, Math.min(10, parseInt(minPlayers, 10) || 2));
+    const rawMax = parseInt(maxPlayers, 10);
+    const maxP = Math.max(
+      minP,
+      Math.max(2, Math.min(10, Number.isFinite(rawMax) ? rawMax : 6)),
+    );
+    return maxP;
+  }, [minPlayers, maxPlayers]);
+
+  const [prizePercents, setPrizePercents] = useState<number[]>(() => defaultWinnerTakesAllPrizeRowCount(6));
+
+  useEffect(() => {
+    setPrizePercents((prev) => {
+      const next = prev.slice(0, prizeSlotCount);
+      while (next.length < prizeSlotCount) next.push(0);
+      if (next.length === prev.length && next.every((v, i) => v === prev[i])) return prev;
+      return next;
+    });
+  }, [prizeSlotCount]);
+
+  const prizeSum = prizePercents.reduce((a, b) => a + b, 0);
+
+  const level1Blinds = POKER_TOURNAMENT_DEFAULT_CONFIG.blindSchedule[0];
+  const startingStackPreview = Math.max(
+    100,
+    parseInt(startingStack, 10) || Number(STARTING_STACK_PRESETS[STARTING_STACK_PRESETS.length - 1].value),
+  );
+  const bigBlindStart = level1Blinds.bigBlind > 0 ? level1Blinds.bigBlind : 1;
+  const startingBigBlindDepth =
+    Math.round((startingStackPreview / bigBlindStart) * 10) / 10;
 
   const handleCreate = async () => {
     if (!name.trim()) return;
@@ -346,6 +446,34 @@ function CreateModal({ creatorAddress, onClose, onCreate }: {
     if (isFreeroll && guaranteeWei <= 0n) return;
     const pinDigits = privatePin.replace(/\D/g, '').slice(0, 12);
     const pinForCreate = isPrivate && pinDigits.length >= 4 ? pinDigits : undefined;
+
+    setScheduleError(null);
+    let scheduledStartAt: string | null = null;
+    if (scheduledDate.trim()) {
+      const parts = scheduledDate.split('-').map(Number);
+      const timeParts = scheduledTime.split(':').map(Number);
+      if (parts.length !== 3 || timeParts.length !== 2) {
+        setScheduleError('Pick a valid date and time.');
+        return;
+      }
+      const [y, mo, d] = parts;
+      const [hh, mm] = timeParts;
+      if (!Number.isFinite(y) || !Number.isFinite(mo) || !Number.isFinite(d) || !Number.isFinite(hh) || !Number.isFinite(mm)) {
+        setScheduleError('Pick a valid date and time.');
+        return;
+      }
+      if (mm !== 0 && mm !== 30) {
+        setScheduleError('Time must be on a 30-minute mark.');
+        return;
+      }
+      const local = new Date(y, mo - 1, d, hh, mm, 0, 0);
+      if (local.getTime() < Date.now() + 60_000) {
+        setScheduleError('Start must be at least 1 minute from now.');
+        return;
+      }
+      scheduledStartAt = local.toISOString();
+    }
+
     setIsSubmitting(true);
     try {
       await onCreate(
@@ -358,16 +486,20 @@ function CreateModal({ creatorAddress, onClose, onCreate }: {
                 ...(fundFromPromo ? { guaranteedPrizePoolSource: 'platform_promo' as const } : {}),
               }
             : {}),
-          prizeDistributionType: prizeType,
+          prizeDistributionType: 'custom',
+          prizePercentages:      [...prizePercents],
           config:                {
             ...POKER_TOURNAMENT_DEFAULT_CONFIG,
-            startingStack: Math.max(100, parseInt(startingStack) || 5000),
-            minPlayers:    Math.max(2, parseInt(minPlayers) || 2),
-            maxPlayers:    Math.max(parseInt(minPlayers) || 2, parseInt(maxPlayers) || 6),
+            startingStack: Math.max(
+              100,
+              parseInt(startingStack, 10) || Number(STARTING_STACK_PRESETS[STARTING_STACK_PRESETS.length - 1].value),
+            ),
+            minPlayers:    Math.max(2, Math.min(10, parseInt(minPlayers, 10) || 2)),
+            maxPlayers:    prizeSlotCount,
           },
           isPrivate,
           ...(pinForCreate ? { pinCode: pinForCreate } : {}),
-          scheduledStartAt: scheduledStart ? new Date(scheduledStart).toISOString() : null,
+          scheduledStartAt,
         },
         { addBots: Math.max(0, Math.min(10, Math.floor(botsToAdd))) },
       );
@@ -432,14 +564,15 @@ function CreateModal({ creatorAddress, onClose, onCreate }: {
                 className="rounded"
               />
               <span className="text-sm text-amber-200/85">
-                Fund pool from platform promo wallet (admin)
+                Admin promo (fund from your wallet — must be in ADMIN_WALLETS)
               </span>
             </label>
           )}
 
           {isFreeroll && fundFromPromo && (
             <p className="text-[11px] text-amber-200/65 leading-snug -mt-1">
-              Server debits <span className="font-mono text-[10px]">POKER_PROMO_GUARANTEED_POOL_WALLET</span> instead of your wallet. Refunds on cancel go back to that wallet.
+              Uses your connected wallet&apos;s in-app balance (same as a normal freeroll you fund). Only wallets listed in{' '}
+              <span className="font-mono text-[10px]">ADMIN_WALLETS</span> can enable this. Cancel refunds the pool to you.
             </p>
           )}
 
@@ -457,16 +590,53 @@ function CreateModal({ creatorAddress, onClose, onCreate }: {
               />
             </div>
             <div>
-              <label className="text-xs text-white/50 uppercase tracking-wide block mb-1">Starting Stack</label>
-              <input
-                type="number"
-                min="100"
-                step="100"
-                value={startingStack}
-                onChange={(e) => setStartingStack(e.target.value)}
-                className="w-full rounded-lg bg-white/8 border border-white/15 px-3 py-2 text-white text-sm focus:outline-none focus:border-white/30"
-              />
+              <label className="text-xs text-white/50 uppercase tracking-wide block mb-1">Starting stack (chips)</label>
+              <Select value={startingStack} onValueChange={setStartingStack}>
+                <SelectTrigger
+                  className="w-full h-auto min-h-[42px] rounded-lg bg-white/8 border border-white/15 px-3 py-2 text-white text-sm focus:ring-1 focus:ring-cyan-500/50 [&_svg]:text-white/60"
+                >
+                  <SelectValue placeholder="Stack size" />
+                </SelectTrigger>
+                <SelectContent className="bg-slate-900 border border-cyan-500/30 text-white shadow-xl z-[200]">
+                  {STARTING_STACK_PRESETS.map((p) => (
+                    <SelectItem
+                      key={p.value}
+                      value={p.value}
+                      className="focus:bg-cyan-500/15 focus:text-white cursor-pointer"
+                    >
+                      {p.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             </div>
+          </div>
+
+          <div
+            className="rounded-xl px-3 py-2.5 border border-cyan-500/20"
+            style={{
+              background: 'linear-gradient(145deg, rgb(16, 26, 35), rgb(35, 36, 41))',
+              boxShadow:
+                'inset 0 3px 6px rgba(0, 0, 0, 0.8), inset 0 -3px 6px rgba(255, 255, 255, 0.1), 0 1px 3px rgba(0, 0, 0, 0.5)',
+            }}
+          >
+            <div className="text-[11px] font-semibold text-cyan-200/90 mb-1">Blinds at start (level 1)</div>
+            <p className="text-xs text-white/75">
+              SB <span className="text-white tabular-nums font-medium">{level1Blinds.smallBlind}</span>
+              <span className="text-white/35 mx-1">/</span>
+              BB <span className="text-white tabular-nums font-medium">{level1Blinds.bigBlind}</span>
+              <span className="text-white/45"> — tournament chips (fixed schedule; not calculated from buy-in)</span>
+            </p>
+            <p className="text-[11px] text-white/50 mt-1.5 leading-snug">
+              With a starting stack of{' '}
+              <span className="text-white/70 tabular-nums">{startingStackPreview.toLocaleString()}</span>, you begin
+              about <span className="text-cyan-200/80 tabular-nums">{startingBigBlindDepth}</span> big blinds deep.
+            </p>
+            <p className="text-[11px] text-white/45 mt-2 leading-snug border-t border-white/10 pt-2">
+              <span className="text-white/55">Why &quot;starting stack&quot;?</span> Buy-in is MORBIUS (prize pool /
+              entry). Starting stack is play chips at the table — separate so you can run a short-stack (faster) or
+              deep-stack (more room to maneuver) structure without changing the buy-in.
+            </p>
           </div>
 
           <div className="grid grid-cols-2 gap-3">
@@ -494,31 +664,140 @@ function CreateModal({ creatorAddress, onClose, onCreate }: {
             </div>
           </div>
 
-          <div>
-            <label className="text-xs text-white/50 uppercase tracking-wide block mb-1">Prize Distribution</label>
-            <select
-              value={prizeType}
-              onChange={(e) => setPrizeType(e.target.value)}
-              className="w-full rounded-lg bg-white/8 border border-white/15 px-3 py-2 text-white text-sm focus:outline-none focus:border-white/30"
-            >
-              <option value="winner_takes_all">Winner Takes All</option>
-              <option value="top_3">Top 3 (60 / 30 / 10%)</option>
-              <option value="top_5">Top 5</option>
-              <option value="top_10">Top 10</option>
-            </select>
+          <div
+            className="rounded-xl px-3 py-2.5 border border-cyan-500/20"
+            style={{
+              background: 'linear-gradient(145deg, rgb(16, 26, 35), rgb(35, 36, 41))',
+              boxShadow:
+                'inset 0 3px 6px rgba(0, 0, 0, 0.8), inset 0 -3px 6px rgba(255, 255, 255, 0.1), 0 1px 3px rgba(0, 0, 0, 0.5)',
+            }}
+          >
+            <div className="flex flex-wrap items-center justify-between gap-2 mb-2">
+              <div className="text-[11px] font-semibold text-cyan-200/90">
+                Prize split <span className="text-white/40 font-normal">(% after table fees)</span>
+                <span className="text-white/35"> · {prizeSlotCount} payout row{prizeSlotCount === 1 ? '' : 's'} (max seats)</span>
+              </div>
+              <div className="flex flex-wrap gap-1.5">
+                <button
+                  type="button"
+                  onClick={() => setPrizePercents(defaultWinnerTakesAllPrizeRowCount(prizeSlotCount))}
+                  className="text-[10px] rounded-md border border-white/15 bg-white/5 px-2 py-1 text-white/75 hover:bg-white/10"
+                >
+                  Winner takes all
+                </button>
+                <button
+                  type="button"
+                  disabled={prizeSlotCount < 3}
+                  onClick={() => {
+                    const row = defaultWinnerTakesAllPrizeRowCount(prizeSlotCount);
+                    row[0] = 50;
+                    row[1] = 30;
+                    row[2] = 20;
+                    setPrizePercents(row);
+                  }}
+                  className="text-[10px] rounded-md border border-white/15 bg-white/5 px-2 py-1 text-white/75 hover:bg-white/10 disabled:opacity-35"
+                >
+                  Top 3 (50/30/20)
+                </button>
+              </div>
+            </div>
+            <p className="text-[10px] text-white/45 leading-snug mb-2">
+              Leave places at 0% if they are not paid. Integer percents only; all rows together must total 100%.
+            </p>
+            <div className="rounded-lg border border-white/10 overflow-hidden max-h-48 overflow-y-auto">
+              <div className="grid grid-cols-[1fr_3.5rem] gap-0 bg-white/5 text-[10px] uppercase tracking-wide text-white/50 px-2 py-1.5 sticky top-0">
+                <span>Place</span>
+                <span className="text-right">%</span>
+              </div>
+              {prizePercents.map((pct, i) => (
+                <div
+                  key={i}
+                  className="grid grid-cols-[1fr_3.5rem] gap-2 items-center border-t border-white/10 px-2 py-1.5"
+                >
+                  <span className="text-xs text-white/80">{finishOrdinal(i + 1)}</span>
+                  <input
+                    type="number"
+                    min={0}
+                    max={100}
+                    step={1}
+                    value={pct}
+                    onChange={(e) => {
+                      const n = parseInt(e.target.value, 10);
+                      const v = Number.isFinite(n) ? Math.max(0, Math.min(100, n)) : 0;
+                      setPrizePercents((prev) => {
+                        const next = [...prev];
+                        next[i] = v;
+                        return next;
+                      });
+                    }}
+                    className="w-full rounded bg-white/10 border border-white/15 px-1.5 py-1 text-xs text-white tabular-nums text-right focus:outline-none focus:border-cyan-500/40"
+                  />
+                </div>
+              ))}
+            </div>
+            <p className={`text-[11px] mt-2 tabular-nums ${prizeSum === 100 ? 'text-emerald-200/85' : 'text-amber-200/90'}`}>
+              Total: {prizeSum}%{' '}
+              {prizeSum !== 100 ? '— must equal 100%' : '(ready)'}
+            </p>
           </div>
 
-          <div>
-            <label className="text-xs text-white/50 uppercase tracking-wide block mb-1">
-              Scheduled Start <span className="normal-case text-white/30">(leave blank for SNG auto-start)</span>
+          <div className="space-y-2">
+            <label className="text-xs text-white/50 uppercase tracking-wide block">
+              Scheduled start{' '}
+              <span className="normal-case text-white/35">(optional — leave date empty for SNG auto-start)</span>
             </label>
-            <input
-              type="datetime-local"
-              value={scheduledStart}
-              min={new Date(Date.now() + 60_000).toISOString().slice(0, 16)}
-              onChange={(e) => setScheduledStart(e.target.value)}
-              className="w-full rounded-lg bg-white/8 border border-white/15 px-3 py-2 text-white text-sm focus:outline-none focus:border-white/30 [color-scheme:dark]"
-            />
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div>
+                <span className="text-[10px] text-white/40 uppercase tracking-wide block mb-1">Date</span>
+                <input
+                  type="date"
+                  value={scheduledDate}
+                  min={minScheduleDate}
+                  onChange={(e) => setScheduledDate(e.target.value)}
+                  className="w-full rounded-lg bg-white/8 border border-white/15 px-3 py-2 text-white text-sm focus:outline-none focus:border-cyan-500/40 [color-scheme:dark]"
+                />
+              </div>
+              <div>
+                <span className="text-[10px] text-white/40 uppercase tracking-wide block mb-1">Time (30 min, local)</span>
+                <Select
+                  value={scheduledTime}
+                  onValueChange={setScheduledTime}
+                  disabled={!scheduledDate}
+                >
+                  <SelectTrigger
+                    className="w-full h-auto min-h-[42px] rounded-lg bg-white/8 border border-white/15 px-3 py-2 text-white text-sm focus:ring-1 focus:ring-cyan-500/50 disabled:opacity-45 [&_svg]:text-white/60"
+                  >
+                    <SelectValue placeholder={scheduledDate ? 'Select time' : 'Pick a date first'} />
+                  </SelectTrigger>
+                  <SelectContent className="max-h-60 bg-slate-900 border border-cyan-500/30 text-white shadow-xl z-[200]">
+                    {timeOptions.map((o) => (
+                      <SelectItem
+                        key={o.value}
+                        value={o.value}
+                        className="focus:bg-cyan-500/15 focus:text-white cursor-pointer"
+                      >
+                        {o.label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+            {scheduleError && (
+              <p className="text-xs text-red-400">{scheduleError}</p>
+            )}
+            {scheduledDate ? (
+              <button
+                type="button"
+                onClick={() => {
+                  setScheduledDate('');
+                  setScheduleError(null);
+                }}
+                className="text-xs text-cyan-400/90 hover:text-cyan-300 underline-offset-2 hover:underline"
+              >
+                Clear scheduled start
+              </button>
+            ) : null}
           </div>
 
           <label className="flex items-center gap-2 cursor-pointer">
@@ -580,6 +859,8 @@ function CreateModal({ creatorAddress, onClose, onCreate }: {
             disabled={
               isSubmitting
               || !name.trim()
+              || prizeSum !== 100
+              || prizePercents.length !== prizeSlotCount
               || (!isFreeroll && parseMorbiusInput(buyIn) <= 0n)
               || (isFreeroll && parseMorbiusInput(guaranteedPool) <= 0n)
             }
@@ -605,6 +886,7 @@ interface PokerTournamentLobbyProps {
 }
 
 export function PokerTournamentLobby({ wsClient, myAddress, onGoToTable }: PokerTournamentLobbyProps) {
+  const queryClient = useQueryClient();
   const [showCreate, setShowCreate] = useState(false);
   const [joinError, setJoinError] = useState<string | null>(null);
   const [joinSuccess, setJoinSuccess] = useState<string | null>(null);
@@ -612,13 +894,48 @@ export function PokerTournamentLobby({ wsClient, myAddress, onGoToTable }: Poker
   const [cancellingId, setCancellingId] = useState<string | null>(null);
   const [tournamentBotsBusyId, setTournamentBotsBusyId] = useState<string | null>(null);
 
-  const { openTournaments, isLoadingTournaments, refreshTournaments, createTournament, joinTournament, cancelTournament, myTableId, myTournamentId } =
-    usePokerTournament({
-      wsClient,
-      onTournamentStarted: (tournamentId, tableId) => {
-        onGoToTable?.(tableId, tournamentId);
-      },
-    });
+  const meLower = myAddress?.toLowerCase() ?? null;
+  const refreshTournamentsRef = useRef<(() => Promise<void>) | null>(null);
+
+  const tournamentHook = usePokerTournament({
+    wsClient,
+    onTournamentStarted: (tournamentId, tableId) => {
+      onGoToTable?.(tableId, tournamentId);
+    },
+    onTournamentCompleted: (winners) => {
+      const myWin = meLower ? winners.find((w) => w.address.toLowerCase() === meLower) : undefined;
+      if (myWin) {
+        const prizeWei = BigInt(myWin.prizeAmount || '0');
+        if (prizeWei > 0n) {
+          toast.success(
+            `You finished ${tournamentFinishOrdinal(myWin.rank)} — ${formatMorbiusFloor(myWin.prizeAmount)} MORBIUS added to your balance.`,
+          );
+        } else {
+          toast.info(`Tournament complete. You finished ${tournamentFinishOrdinal(myWin.rank)}.`);
+        }
+      } else if (meLower) {
+        toast.info('Tournament complete. You did not cash this time — thanks for playing.');
+      }
+      void wsClient?.syncBalance().catch(() => {});
+      if (meLower && meLower.length === 42) {
+        queryClient.invalidateQueries({ queryKey: ['player-server-balance', meLower] });
+      }
+      void refreshTournamentsRef.current?.();
+    },
+  });
+
+  refreshTournamentsRef.current = tournamentHook.refreshTournaments;
+
+  const {
+    openTournaments,
+    isLoadingTournaments,
+    refreshTournaments,
+    createTournament,
+    joinTournament,
+    cancelTournament,
+    myTableId,
+    myTournamentId,
+  } = tournamentHook;
 
   const handleJoin = async (tournamentId: string, pinCode?: string) => {
     if (joiningId) return;

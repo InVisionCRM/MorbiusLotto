@@ -1500,6 +1500,7 @@ class WebSocketService {
                 guaranteedPrizePool,
                 guaranteedPrizePoolSource,
                 prizeDistributionType: p.prizeDistributionType,
+                prizePercentages: Array.isArray(p.prizePercentages) ? p.prizePercentages : undefined,
                 config: p.config,
                 isPrivate: p.isPrivate ?? false,
                 pinCode: p.pinCode ?? null,

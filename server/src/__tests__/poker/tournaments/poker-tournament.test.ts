@@ -16,6 +16,7 @@ import {
   PokerTournamentConfig,
   DEFAULT_BLIND_SCHEDULE,
   BlindLevel,
+  normalizePokerTournamentPrizePercents,
 } from '../../../services/poker-tournament.service';
 import { TournamentService } from '../../../services/tournament.service';
 import { PokerGameService } from '../../../services/poker-game.service';
@@ -97,6 +98,30 @@ beforeEach(async () => {
 });
 
 // ---------------------------------------------------------------------------
+// normalizePokerTournamentPrizePercents
+// ---------------------------------------------------------------------------
+
+describe('0 - normalizePokerTournamentPrizePercents', () => {
+  it('accepts valid rows that sum to 100', () => {
+    expect(normalizePokerTournamentPrizePercents(3, [50, 30, 20])).toEqual([50, 30, 20]);
+    expect(normalizePokerTournamentPrizePercents(6, [100, 0, 0, 0, 0, 0])).toEqual([100, 0, 0, 0, 0, 0]);
+  });
+
+  it('rejects wrong length', () => {
+    expect(() => normalizePokerTournamentPrizePercents(3, [50, 50])).toThrow(/3 entries/);
+  });
+
+  it('rejects sum not 100', () => {
+    expect(() => normalizePokerTournamentPrizePercents(3, [50, 30, 19])).toThrow(/100/);
+  });
+
+  it('rejects non-integers or out of range', () => {
+    expect(() => normalizePokerTournamentPrizePercents(2, [50.5, 49.5])).toThrow(/integer/);
+    expect(() => normalizePokerTournamentPrizePercents(2, [101, -1])).toThrow();
+  });
+});
+
+// ---------------------------------------------------------------------------
 // Helper to create a tournament and track it for cleanup
 // ---------------------------------------------------------------------------
 async function createTestTournament(overrides?: Partial<PokerTournamentConfig>): Promise<string> {
@@ -173,6 +198,53 @@ describe('1 - createPokerTournament', () => {
     ).rejects.toThrow('minPlayers');
   });
 
+  it('custom: rejects when prizePercentages missing', async () => {
+    await expect(
+      pokerTournamentService.createPokerTournament({
+        creatorAddress:        PLAYER_1,
+        name:                  'Custom SNG',
+        buyInAmount:           TEST_BUY_IN,
+        prizeDistributionType: 'custom',
+        config:                SMALL_CONFIG,
+      })
+    ).rejects.toThrow(/prizePercentages/);
+  });
+
+  it('custom: rejects when percentages do not sum to 100', async () => {
+    await expect(
+      pokerTournamentService.createPokerTournament({
+        creatorAddress:        PLAYER_1,
+        name:                  'Custom SNG',
+        buyInAmount:           TEST_BUY_IN,
+        prizeDistributionType: 'custom',
+        prizePercentages:      [50, 30, 19],
+        config:                SMALL_CONFIG,
+      })
+    ).rejects.toThrow(/100/);
+  });
+
+  it('custom: stores prize_percentages JSON matching creator rows', async () => {
+    const pct = [50, 30, 20];
+    const { tournamentId } = await pokerTournamentService.createPokerTournament({
+      creatorAddress:        PLAYER_1,
+      name:                  'Custom pct SNG',
+      buyInAmount:           TEST_BUY_IN,
+      prizeDistributionType: 'custom',
+      prizePercentages:      pct,
+      config:                SMALL_CONFIG,
+    });
+    createdTournamentIds.push(tournamentId);
+
+    const row = await testPool.query(
+      'SELECT prize_distribution_type, prize_percentages FROM tournaments WHERE id = $1',
+      [tournamentId]
+    );
+    expect(row.rows[0].prize_distribution_type).toBe('custom');
+    const stored = row.rows[0].prize_percentages;
+    const arr = typeof stored === 'string' ? JSON.parse(stored) : stored;
+    expect(arr).toEqual(pct);
+  });
+
   it('freeroll: debits creator balance and sets prize_pool from guaranteedPrizePool', async () => {
     const balBefore = await getTestBalance(PLAYER_1);
     const { tournamentId } = await pokerTournamentService.createPokerTournament({
@@ -222,23 +294,20 @@ describe('1 - createPokerTournament', () => {
   });
 });
 
-// Requires migration 094 (guaranteed_prize_funder_address) + ADMIN_WALLETS / promo env
+// platform_promo: admin creator only; debits the creator wallet (same as creator-funded freeroll)
 describe('1c - platform promo guaranteed pool', () => {
   const prevAdmin = process.env.ADMIN_WALLETS;
-  const prevPromo = process.env.POKER_PROMO_GUARANTEED_POOL_WALLET;
 
   beforeAll(() => {
     process.env.ADMIN_WALLETS = PLAYER_1;
-    process.env.POKER_PROMO_GUARANTEED_POOL_WALLET = PLAYER_2;
   });
 
   afterAll(() => {
     process.env.ADMIN_WALLETS = prevAdmin;
-    process.env.POKER_PROMO_GUARANTEED_POOL_WALLET = prevPromo;
   });
 
-  it('debits promo wallet and stores guaranteed_prize_funder_address', async () => {
-    const promoBefore = await getTestBalance(PLAYER_2);
+  it('debits admin creator wallet and leaves guaranteed_prize_funder_address null', async () => {
+    const creatorBefore = await getTestBalance(PLAYER_1);
     const { tournamentId } = await pokerTournamentService.createPokerTournament({
       creatorAddress:             PLAYER_1,
       name:                       'Promo free',
@@ -250,19 +319,19 @@ describe('1c - platform promo guaranteed pool', () => {
     });
     createdTournamentIds.push(tournamentId);
 
-    const promoAfter = await getTestBalance(PLAYER_2);
-    expect(promoBefore - promoAfter).toBe(TEST_GUARANTEED_POOL);
+    const creatorAfter = await getTestBalance(PLAYER_1);
+    expect(creatorBefore - creatorAfter).toBe(TEST_GUARANTEED_POOL);
 
     const row = await testPool.query(
       `SELECT guaranteed_prize_funder_address, prize_pool, creator_address FROM tournaments WHERE id = $1`,
       [tournamentId]
     );
-    expect(String(row.rows[0].guaranteed_prize_funder_address).toLowerCase()).toBe(PLAYER_2.toLowerCase());
+    expect(row.rows[0].guaranteed_prize_funder_address).toBeNull();
     expect(String(row.rows[0].creator_address).toLowerCase()).toBe(PLAYER_1.toLowerCase());
     expect(BigInt(row.rows[0].prize_pool ?? '0')).toBe(TEST_GUARANTEED_POOL);
   });
 
-  it('cancel refunds prize pool to promo wallet', async () => {
+  it('cancel refunds prize pool to creator (admin)', async () => {
     const { tournamentId } = await pokerTournamentService.createPokerTournament({
       creatorAddress:             PLAYER_1,
       name:                       'Promo cancel',
@@ -276,10 +345,10 @@ describe('1c - platform promo guaranteed pool', () => {
 
     await pokerTournamentService.joinPokerTournament(tournamentId, PLAYER_3);
 
-    const promoBefore = await getTestBalance(PLAYER_2);
+    const creatorBefore = await getTestBalance(PLAYER_1);
     await pokerTournamentService.cancelPokerTournament(tournamentId, PLAYER_1);
-    const promoAfter = await getTestBalance(PLAYER_2);
-    expect(promoAfter - promoBefore).toBe(TEST_GUARANTEED_POOL);
+    const creatorAfter = await getTestBalance(PLAYER_1);
+    expect(creatorAfter - creatorBefore).toBe(TEST_GUARANTEED_POOL);
   });
 
   it('rejects platform_promo when caller is not admin', async () => {
@@ -747,6 +816,88 @@ describe('6 - player elimination', () => {
 // ---------------------------------------------------------------------------
 
 describe('7 - prize distribution', () => {
+  it('custom 50/30/20 pays distributable pool by rank for three players', async () => {
+    const cfg: PokerTournamentConfig = {
+      ...SMALL_CONFIG,
+      minPlayers: 3,
+      maxPlayers: 3,
+    };
+    const { tournamentId } = await pokerTournamentService.createPokerTournament({
+      creatorAddress:        PLAYER_1,
+      name:                  'Custom 3-way SNG',
+      buyInAmount:           TEST_BUY_IN,
+      prizeDistributionType: 'custom',
+      prizePercentages:      [50, 30, 20],
+      config:                cfg,
+    });
+    createdTournamentIds.push(tournamentId);
+
+    await pokerTournamentService.joinPokerTournament(tournamentId, PLAYER_1);
+    await pokerTournamentService.joinPokerTournament(tournamentId, PLAYER_2);
+    const { tableId } = await pokerTournamentService.joinPokerTournament(tournamentId, PLAYER_3);
+    if (!tableId) throw new Error('expected tournament table');
+    createdPokerTableIds.push(tableId);
+
+    const poolRow = await testPool.query('SELECT prize_pool FROM tournaments WHERE id = $1', [tournamentId]);
+    const totalPool = BigInt(String(poolRow.rows[0].prize_pool));
+    const distributable = (totalPool * 95n) / 100n;
+    const expectFirst = (distributable * 50n) / 100n;
+    const expectSecond = (distributable * 30n) / 100n;
+    const expectThird = (distributable * 20n) / 100n;
+
+    const CHIP_SCALE = BigInt('1000000000000000000');
+    const stackWei = (chips: number) => (BigInt(chips) * CHIP_SCALE).toString();
+
+    await testPool.query(
+      `UPDATE poker_seats SET stack = $3::NUMERIC WHERE table_id = $1 AND LOWER(player_address) = LOWER($2)`,
+      [tableId, PLAYER_1, stackWei(0)]
+    );
+    await testPool.query(
+      `UPDATE poker_seats SET stack = $3::NUMERIC WHERE table_id = $1 AND LOWER(player_address) = LOWER($2)`,
+      [tableId, PLAYER_2, stackWei(4000)]
+    );
+    await testPool.query(
+      `UPDATE poker_seats SET stack = $3::NUMERIC WHERE table_id = $1 AND LOWER(player_address) = LOWER($2)`,
+      [tableId, PLAYER_3, stackWei(4000)]
+    );
+    await testPool.query(
+      `UPDATE poker_hands SET completed_at = NOW() WHERE table_id = $1 AND completed_at IS NULL`,
+      [tableId]
+    );
+    await pokerTournamentService.syncAfterHand(tableId, 1);
+
+    await testPool.query(
+      `UPDATE poker_seats SET stack = $3::NUMERIC WHERE table_id = $1 AND LOWER(player_address) = LOWER($2)`,
+      [tableId, PLAYER_2, stackWei(0)]
+    );
+    await testPool.query(
+      `UPDATE poker_seats SET stack = $3::NUMERIC WHERE table_id = $1 AND LOWER(player_address) = LOWER($2)`,
+      [tableId, PLAYER_3, stackWei(8000)]
+    );
+    await testPool.query(
+      `UPDATE poker_hands SET completed_at = NOW() WHERE table_id = $1 AND completed_at IS NULL`,
+      [tableId]
+    );
+    await pokerTournamentService.syncAfterHand(tableId, 2);
+
+    const t = await testPool.query('SELECT status FROM tournaments WHERE id = $1', [tournamentId]);
+    expect(t.rows[0].status).toBe('completed');
+
+    const entries = await testPool.query(
+      `SELECT final_rank, prize_won
+       FROM tournament_entries WHERE tournament_id = $1 ORDER BY final_rank`,
+      [tournamentId]
+    );
+    expect(entries.rows).toHaveLength(3);
+
+    const prizeForRank = (rank: number) =>
+      BigInt(String(entries.rows.find((r: { final_rank: number }) => Number(r.final_rank) === rank)?.prize_won ?? '0'));
+
+    expect(prizeForRank(1)).toBe(expectFirst);
+    expect(prizeForRank(2)).toBe(expectSecond);
+    expect(prizeForRank(3)).toBe(expectThird);
+  });
+
   it('credits winner balance after completeTournament (winner_takes_all)', async () => {
     const tournamentId = await createTestTournament({ minPlayers: 2 });
     await pokerTournamentService.joinPokerTournament(tournamentId, PLAYER_1);
@@ -1255,5 +1406,58 @@ describe('10 - regression', () => {
     const t = await testPool.query('SELECT status, prize_pool FROM tournaments WHERE id = $1', [tournamentId]);
     expect(t.rows[0].status).toBe('cancelled');
     expect(String(t.rows[0].prize_pool)).toBe('0');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Suite 12: Hand history retained after SNG table cleanup
+// ---------------------------------------------------------------------------
+
+describe('12 - hand history retention', () => {
+  it('keeps poker_hands with tournament_id after tournament table row is deleted', async () => {
+    const tournamentId = await createTestTournament({ minPlayers: 2, maxPlayers: 2 });
+    await pokerTournamentService.joinPokerTournament(tournamentId, PLAYER_1);
+    const { tableId } = await pokerTournamentService.joinPokerTournament(tournamentId, PLAYER_2);
+    if (!tableId) throw new Error('expected tableId');
+
+    await testPool.query(
+      `UPDATE poker_hands SET completed_at = NOW() WHERE table_id = $1 AND completed_at IS NULL`,
+      [tableId]
+    );
+    await expect(pokerGameService.startHand(tableId)).resolves.toBeTruthy();
+
+    const active = await testPool.query(
+      `SELECT id, tournament_id, table_id FROM poker_hands WHERE table_id = $1 AND completed_at IS NULL`,
+      [tableId]
+    );
+    expect(active.rows.length).toBe(1);
+    expect(active.rows[0].tournament_id).toBe(tournamentId);
+
+    const handId = active.rows[0].id as string;
+
+    await testPool.query(`UPDATE poker_hands SET completed_at = NOW() WHERE id = $1`, [handId]);
+
+    const CHIP_SCALE = BigInt('1000000000000000000');
+    await testPool.query(
+      `UPDATE poker_seats SET stack = 0 WHERE table_id = $1 AND LOWER(player_address) = LOWER($2)`,
+      [tableId, PLAYER_1]
+    );
+    await testPool.query(
+      `UPDATE poker_seats SET stack = $2::NUMERIC WHERE table_id = $1 AND LOWER(player_address) = LOWER($3)`,
+      [tableId, (5000n * CHIP_SCALE).toString(), PLAYER_2]
+    );
+
+    await pokerTournamentService.syncAfterHand(tableId, 1);
+
+    const tblGone = await testPool.query(`SELECT 1 FROM poker_tables WHERE id = $1`, [tableId]);
+    expect(tblGone.rows.length).toBe(0);
+
+    const handAfter = await testPool.query(
+      `SELECT id, tournament_id, table_id FROM poker_hands WHERE id = $1`,
+      [handId]
+    );
+    expect(handAfter.rows.length).toBe(1);
+    expect(handAfter.rows[0].tournament_id).toBe(tournamentId);
+    expect(handAfter.rows[0].table_id).toBeNull();
   });
 });

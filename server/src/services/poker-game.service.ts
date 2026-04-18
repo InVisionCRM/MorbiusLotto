@@ -1142,7 +1142,7 @@ export class PokerGameService {
     const scaling = await this.getTableScaling(tableId);
 
     const tableResult = await pool.query(
-      'SELECT id, small_blind, big_blind, max_seats, hand_number, button_position FROM poker_tables WHERE id = $1',
+      'SELECT id, small_blind, big_blind, max_seats, hand_number, button_position, tournament_id FROM poker_tables WHERE id = $1',
       [tableId]
     );
     if (tableResult.rows.length === 0) throw new Error('Table not found');
@@ -1250,14 +1250,16 @@ export class PokerGameService {
       ? String(Math.max(0, Math.round(potChips0)))
       : enginePotChipsToPotWei(potChips0, scaling.chipWei).toString();
     const lastRaiseSizeStr = scaling.tournament ? String(Math.round(bb)) : bbWei.toString();
+    const tournamentIdForHand: string | null = tblRow.tournament_id ?? null;
     const handInsert = await pool.query(
       `INSERT INTO poker_hands
-         (table_id, hand_number, button_position, server_seed_hash, server_seed, client_seed,
+         (table_id, tournament_id, hand_number, button_position, server_seed_hash, server_seed, client_seed,
           community_cards, pot_amount, street, acting_position, turn_started_at, last_raise_size)
-       VALUES ($1, $2, $3, $4, $5, $6, '[]'::JSONB, $7::NUMERIC, 'preflop', $8, NOW(), $9)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, '[]'::JSONB, $8::NUMERIC, 'preflop', $9, NOW(), $10)
        RETURNING id`,
       [
         tableId,
+        tournamentIdForHand,
         handNumber,
         table.dealerPosition,
         serverSeedHash,

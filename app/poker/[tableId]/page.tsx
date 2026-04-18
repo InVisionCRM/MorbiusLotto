@@ -40,6 +40,15 @@ import {
   type PokerE2ETestApi,
 } from './e2e-mock';
 
+function tournamentFinishOrdinal(rank: number): string {
+  const j = rank % 10;
+  const k = rank % 100;
+  if (j === 1 && k !== 11) return `${rank}st`;
+  if (j === 2 && k !== 12) return `${rank}nd`;
+  if (j === 3 && k !== 13) return `${rank}rd`;
+  return `${rank}th`;
+}
+
 export default function PokerTablePage() {
   const params = useParams();
   const router = useRouter();
@@ -106,20 +115,48 @@ export default function PokerTablePage() {
 
   const handleTournamentCompleted = useCallback(
     (winners: { address: string; rank: number; prizeAmount: string }[]) => {
-      const top = winners.find((w) => w.rank === 1);
-      const msg = top
-        ? `Champion: ${top.address.slice(0, 6)}…${top.address.slice(-4)}`
-        : 'Tournament complete';
-      toast.success(msg);
+      const me = effectivePlayerAddress?.toLowerCase() ?? null;
+      const myWin = me ? winners.find((w) => w.address.toLowerCase() === me) : undefined;
+
+      if (myWin) {
+        const prizeWei = BigInt(myWin.prizeAmount || '0');
+        if (prizeWei > 0n) {
+          toast.success(
+            `You finished ${tournamentFinishOrdinal(myWin.rank)} — ${formatMorbiusFloor(myWin.prizeAmount)} MORBIUS added to your balance.`,
+          );
+        } else {
+          toast.info(`Tournament complete. You finished ${tournamentFinishOrdinal(myWin.rank)}.`);
+        }
+      } else if (me) {
+        toast.info('Tournament complete. You did not cash this time — thanks for playing.');
+      } else {
+        const top = winners.find((w) => w.rank === 1);
+        toast.success(
+          top
+            ? `Champion: ${top.address.slice(0, 6)}…${top.address.slice(-4)}`
+            : 'Tournament complete',
+        );
+      }
+
+      void clientRef.current?.syncBalance().catch(() => {});
+      if (me && me.length === 42) {
+        queryClient.invalidateQueries({ queryKey: ['player-server-balance', me] });
+      }
+
       router.replace('/poker?tab=tournaments');
     },
-    [router],
+    [router, effectivePlayerAddress, queryClient, clientRef],
   );
 
   const handleTournamentCancelled = useCallback(() => {
     toast.info('Tournament cancelled.');
+    const me = effectivePlayerAddress?.toLowerCase() ?? null;
+    void clientRef.current?.syncBalance().catch(() => {});
+    if (me && me.length === 42) {
+      queryClient.invalidateQueries({ queryKey: ['player-server-balance', me] });
+    }
     router.replace('/poker?tab=tournaments');
-  }, [router]);
+  }, [router, effectivePlayerAddress, queryClient, clientRef]);
 
   const [blindIncreaseBanner, setBlindIncreaseBanner] = useState<{
     playId: number;

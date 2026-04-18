@@ -8,17 +8,27 @@
  * Usage (from server/ directory):
  *   npx ts-node src/scripts/poker-bot.ts [tableId] [numBots]
  *
- * If tableId is omitted, the script lists tables and uses the first with empty seats,
+ * Tournament mode (register via poker_tournament_join, then play when table exists):
+ *   npx ts-node src/scripts/poker-bot.ts --tournament <tournamentId> [numBots]
+ *   POKER_BOT_TOURNAMENT_ID=<uuid> npm run poker:bot -- [numBots]
+ *
+ * If tableId is omitted (cash mode), the script lists tables and uses the first with empty seats,
  * or creates a new table. numBots is 1-10 (default 2).
  *
  * Or via npm script:
  *   npm run poker:bot -- [tableId] [numBots]
+ *   npm run poker:bot -- --tournament <tournamentId> [numBots]
  *
  * Env:
  *   NEXT_PUBLIC_WEBSOCKET_URL or WS_URL - WebSocket URL
- *   DATABASE_URL - PostgreSQL connection string (to give bots balance)
+ *   DATABASE_URL - Required (unless POKER_BOT_SKIP_DB=1). Same DB as the server: upserts each bot into
+ *     `players` with balance at least the needed buy-in floor, and ensures a placeholder `chat_display_names` row.
+ *     Cash and tournament modes use the same POKER_BOT_ADDRESSES list — no separate tournament wallets.
+ *   POKER_BOT_SKIP_DB - If 1/true, skip all DB writes (you must already have players + balance).
  *   POKER_BOT_BUY_IN - Buy-in amount in human chips (default: 1000)
  *   POKER_BOT_ADDRESSES - Comma-separated bot wallet addresses (preferred in production)
+ *   POKER_BOT_TOURNAMENT_ID - UUID of poker tournament (alternative to --tournament)
+ *   POKER_BOT_TOURNAMENT_PIN - PIN for private tournaments
  *   CYPRESS_POKER_TEST_PLAYERS / POKER_TEST_PLAYERS - fallback wallet list
  */
 var __importDefault = (this && this.__importDefault) || function (mod) {
@@ -366,7 +376,8 @@ function decideAction(state) {
     // Fold the rest
     return { action: 'fold' };
 }
-// --------------- Database: give bots balance ---------------
+// --------------- Database: players row + minimum balance ---------------
+const POKER_BOT_SKIP_DB = ['1', 'true', 'yes'].includes(String(process.env.POKER_BOT_SKIP_DB ?? '').toLowerCase());
 function computeBuyIn(bigBlindWei) {
     const envBuyIn = process.env.POKER_BOT_BUY_IN;
     if (envBuyIn) {
@@ -379,22 +390,31 @@ function computeBuyIn(bigBlindWei) {
     }
     return bigBlindWei * BigInt(DEFAULT_BUY_IN_BB);
 }
-async function ensureBotBalance(addresses, amount) {
-    if (!DATABASE_URL) {
-        console.log('[Bot] No DATABASE_URL set — skipping balance top-up. Bots must already have balance.');
+/**
+ * Ensures each bot wallet has a `players` row and balance >= minBalanceWei (same logic for cash and tournaments).
+ * Does nothing if POKER_BOT_SKIP_DB is set (you must already have rows + funds).
+ */
+async function ensureBotBalance(addresses, minBalanceWei) {
+    if (POKER_BOT_SKIP_DB) {
+        console.log('[Bot] POKER_BOT_SKIP_DB is set — skipping DB provisioning. Confirm players rows and balances yourself.');
         return;
     }
-    const pool = new pg_1.Pool({ connectionString: DATABASE_URL, ssl: DATABASE_URL.includes('neon') ? { rejectUnauthorized: false } : undefined });
+    if (!DATABASE_URL) {
+        throw new Error('DATABASE_URL is required so bots get a players row and enough balance to join (cash or tournament). ' +
+            'Point it at the same Postgres as the server (e.g. server/.env). ' +
+            'If you already seeded manually, set POKER_BOT_SKIP_DB=1.');
+    }
+    const pool = new pg_1.Pool({
+        connectionString: DATABASE_URL,
+        ssl: DATABASE_URL.includes('neon') ? { rejectUnauthorized: false } : undefined,
+    });
     try {
         for (const addr of addresses) {
             const normalized = addr.toLowerCase();
-            // Upsert player and set balance to at least `amount`
             await pool.query(`INSERT INTO players (wallet_address, balance)
          VALUES ($1, $2::NUMERIC)
          ON CONFLICT (wallet_address)
-         DO UPDATE SET balance = GREATEST(players.balance, $2::NUMERIC), last_seen = NOW()`, [normalized, amount.toString()]);
-            // Give bot a random placeholder avatar if it has no avatar_config yet.
-            // This keeps bot seats visually distinct in production without overriding real profiles.
+         DO UPDATE SET balance = GREATEST(players.balance, $2::NUMERIC), last_seen = NOW()`, [normalized, minBalanceWei.toString()]);
             const fallbackDisplayName = `Bot ${normalized.slice(2, 6)}${normalized.slice(-2)}`.toUpperCase();
             const avatarConfig = (0, cosmetics_catalog_1.randomPlaceholderConfig)(new Set());
             await pool.query(`INSERT INTO chat_display_names (wallet_address, display_name, profile_image_url, avatar_config, bio, x_handle, tg_handle)
@@ -404,7 +424,7 @@ async function ensureBotBalance(addresses, amount) {
            display_name = COALESCE(chat_display_names.display_name, EXCLUDED.display_name),
            avatar_config = COALESCE(chat_display_names.avatar_config, EXCLUDED.avatar_config),
            updated_at = NOW()`, [normalized, fallbackDisplayName, JSON.stringify(avatarConfig)]);
-            console.log(`[Bot] Ensured balance for ${normalized}: ${amount.toString()} wei`);
+            console.log(`[Bot] Ensured players row + balance >= ${minBalanceWei.toString()} wei for ${normalized}`);
         }
     }
     finally {
@@ -449,35 +469,50 @@ async function discoverOrCreateTable() {
     }
     throw new Error('Could not list or create a table');
 }
-// --------------- Bot main loop ---------------
-async function runBot(address, tableId, buyInWei) {
-    const tag = `[Bot ${address.slice(0, 8)}]`;
-    console.log(`${tag} Connecting...`);
-    const ws = await createWsClient(address);
+// --------------- Tournament helpers ---------------
+const TOURNAMENT_TABLE_WAIT_MS = 60 * 60 * 1000;
+const TOURNAMENT_POLL_MS = 2000;
+async function getTournamentBuyInWei(tournamentId) {
+    if (BOT_ADDRESSES.length === 0)
+        throw new Error('No bot addresses configured');
+    const scoutAddr = BOT_ADDRESSES[0];
+    const ws = await createWsClient(scoutAddr);
     await waitForAuth(ws);
-    console.log(`${tag} Authenticated.`);
-    // Join the table
     try {
-        await sendRequest(ws, 'poker_join_table', { tableId, buyInChips: buyInWei.toString() });
-        console.log(`${tag} Joined table ${tableId} with buy-in ${buyInWei.toString()} wei.`);
+        const state = await sendRequest(ws, 'poker_tournament_get_state', { tournamentId });
+        return BigInt(String(state?.buyInAmount ?? '0'));
     }
-    catch (err) {
-        if (err.message?.includes('Already seated')) {
-            console.log(`${tag} Already seated, continuing.`);
-        }
-        else {
-            throw err;
-        }
+    finally {
+        ws.close();
     }
-    // Join the room for broadcasts
+}
+async function waitForTournamentTable(ws, tournamentId, tag) {
+    const deadline = Date.now() + TOURNAMENT_TABLE_WAIT_MS;
+    while (Date.now() < deadline) {
+        const state = await sendRequest(ws, 'poker_tournament_get_state', { tournamentId });
+        const tableId = state?.tableId;
+        if (tableId && typeof tableId === 'string') {
+            console.log(`${tag} Tournament table assigned: ${tableId}`);
+            return tableId;
+        }
+        console.log(`${tag} Waiting for tournament table (status=${state?.status ?? '?'})…`);
+        await sleep(TOURNAMENT_POLL_MS);
+    }
+    throw new Error('Timeout waiting for tournament table');
+}
+// --------------- Bot main loop ---------------
+/**
+ * In-hand loop: must already be seated (cash join or tournament registration + seated).
+ */
+async function runBotPlayLoop(ws, address, tableId, tag) {
     try {
         await sendRequest(ws, 'join_room', { roomId: `poker:table:${tableId}` });
     }
-    catch { /* non-fatal */ }
-    // Listen for state broadcasts and act when it's our turn
+    catch {
+        /* non-fatal */
+    }
     let lastSuccessfulActionKey = '';
     let pokerActBusy = false;
-    /** One act at a time; key includes turnStartedAt + toCall so the same seat can act again on the same street after a raise. */
     const maybeActPokerTurn = async (hint, logPrefix) => {
         if (pokerActBusy)
             return;
@@ -529,9 +564,10 @@ async function runBot(address, tableId, buyInWei) {
                 return;
             await maybeActPokerTurn(state, '');
         }
-        catch { /* ignore parse errors */ }
+        catch {
+            /* ignore parse errors */
+        }
     });
-    // Also poll periodically in case broadcasts are missed
     const pollInterval = setInterval(async () => {
         try {
             const payload = await sendRequest(ws, 'poker_get_state', { tableId });
@@ -542,16 +578,16 @@ async function runBot(address, tableId, buyInWei) {
                 return;
             await maybeActPokerTurn(state, '[poll]');
         }
-        catch { /* ignore */ }
+        catch {
+            /* ignore */
+        }
     }, 3000);
-    // Keep alive until process exits
     ws.on('close', () => {
         console.log(`${tag} Disconnected.`);
         clearInterval(pollInterval);
     });
     return new Promise((resolve) => {
         ws.on('close', resolve);
-        // Also handle Ctrl+C gracefully
         process.on('SIGINT', () => {
             console.log(`${tag} Shutting down...`);
             clearInterval(pollInterval);
@@ -560,14 +596,89 @@ async function runBot(address, tableId, buyInWei) {
         });
     });
 }
+async function runBotTournament(address, tournamentId, pinCode) {
+    const tag = `[Bot ${address.slice(0, 8)}]`;
+    console.log(`${tag} Connecting (tournament ${tournamentId.slice(0, 8)}…)…`);
+    const ws = await createWsClient(address);
+    await waitForAuth(ws);
+    console.log(`${tag} Authenticated.`);
+    const joinPayload = await sendRequest(ws, 'poker_tournament_join', {
+        tournamentId,
+        ...(pinCode ? { pinCode } : {}),
+    });
+    console.log(`${tag} Tournament join OK.`);
+    let tableId = joinPayload?.tableId && typeof joinPayload.tableId === 'string' ? joinPayload.tableId : null;
+    if (!tableId) {
+        tableId = await waitForTournamentTable(ws, tournamentId, tag);
+    }
+    try {
+        await sendRequest(ws, 'join_room', { roomId: `poker_tournament:${tournamentId}` });
+    }
+    catch {
+        /* non-fatal */
+    }
+    await runBotPlayLoop(ws, address, tableId, tag);
+}
+async function runBot(address, tableId, buyInWei) {
+    const tag = `[Bot ${address.slice(0, 8)}]`;
+    console.log(`${tag} Connecting...`);
+    const ws = await createWsClient(address);
+    await waitForAuth(ws);
+    console.log(`${tag} Authenticated.`);
+    try {
+        await sendRequest(ws, 'poker_join_table', { tableId, buyInChips: buyInWei.toString() });
+        console.log(`${tag} Joined table ${tableId} with buy-in ${buyInWei.toString()} wei.`);
+    }
+    catch (err) {
+        if (err.message?.includes('Already seated')) {
+            console.log(`${tag} Already seated, continuing.`);
+        }
+        else {
+            throw err;
+        }
+    }
+    await runBotPlayLoop(ws, address, tableId, tag);
+}
 // --------------- Entry point ---------------
 async function main() {
     if (BOT_ADDRESSES.length === 0) {
         throw new Error('No valid bot addresses configured. Set POKER_BOT_ADDRESSES.');
     }
-    const a = process.argv[2];
-    const b = process.argv[3];
+    const argv = [...process.argv.slice(2)];
+    const tIdx = argv.indexOf('--tournament');
+    let tournamentId = null;
+    if (tIdx >= 0) {
+        tournamentId = argv[tIdx + 1]?.trim() || null;
+        if (!tournamentId) {
+            throw new Error('--tournament must be followed by a tournament UUID');
+        }
+        argv.splice(tIdx, 2);
+    }
+    else if (process.env.POKER_BOT_TOURNAMENT_ID?.trim()) {
+        tournamentId = process.env.POKER_BOT_TOURNAMENT_ID.trim();
+    }
+    const pinCode = process.env.POKER_BOT_TOURNAMENT_PIN?.trim() || undefined;
+    const a = argv[0];
+    const b = argv[1];
     const numBotsFromArg = (n) => Math.min(MAX_BOTS, BOT_ADDRESSES.length, Math.max(1, Number(n) || 2));
+    if (tournamentId) {
+        const numBots = numBotsFromArg(a);
+        const botAddrs = BOT_ADDRESSES.slice(0, numBots);
+        const buyInWei = await getTournamentBuyInWei(tournamentId);
+        console.log(`\n=== Poker Bot Launcher (tournament) ===`);
+        console.log(`Tournament: ${tournamentId}`);
+        console.log(`Bots: ${numBots}`);
+        console.log(`Buy-in (MORBIUS / table currency): ${buyInWei.toString()} wei`);
+        console.log(`WS URL: ${WS_URL}\n`);
+        await ensureBotBalance(botAddrs, buyInWei > 0n ? buyInWei * 10n : 0n);
+        const promises = botAddrs.map((addr) => runBotTournament(addr, tournamentId, pinCode).catch((err) => {
+            console.error(`[Bot ${addr.slice(0, 8)}] Fatal: ${formatError(err)}`);
+        }));
+        await Promise.all(promises);
+        console.log('\n=== All bots finished ===');
+        process.exit(0);
+        return;
+    }
     let tableId;
     let numBots;
     if (a && a.trim().length > 0) {
@@ -588,7 +699,6 @@ async function main() {
         numBots = numBotsFromArg(b);
     }
     const botAddrs = BOT_ADDRESSES.slice(0, numBots);
-    // Fetch table big blind to compute a valid buy-in
     const scoutAddr = botAddrs[0];
     const scoutWs = await createWsClient(scoutAddr);
     await waitForAuth(scoutWs);
@@ -608,9 +718,7 @@ async function main() {
     console.log(`Big blind: ${bigBlindWei.toString()} wei`);
     console.log(`Buy-in: ${buyInWei.toString()} wei (${Number(buyInWei / bigBlindWei)} BB)`);
     console.log(`WS URL: ${WS_URL}\n`);
-    // Give bots balance (10x buy-in so they can rebuy)
     await ensureBotBalance(botAddrs, buyInWei * 10n);
-    // Launch all bots concurrently
     const promises = botAddrs.map((addr) => runBot(addr, tableId, buyInWei).catch((err) => {
         console.error(`[Bot ${addr.slice(0, 8)}] Fatal: ${formatError(err)}`);
     }));

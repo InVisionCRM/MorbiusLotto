@@ -13,7 +13,7 @@ There is **one game type** in the database: `tournaments.game_type = 'poker'`. W
 | **SNG (auto-start)** | Create without a future `scheduledStartAt`, or with a scheduled time **already in the past** | When registered count reaches `config.minPlayers`, the server sets the tournament to **`active`**, sets **`activated_at`**, and calls **`activateTournament`** from the join flow (after commit). |
 | **Scheduled start** | Create with `scheduledStartAt` **in the future** | A row is inserted into `tournament_scheduled_events` with `event_type = 'poker_start'`. **`FreerollSchedulerService`** polls and calls **`PokerTournamentService.startScheduledPokerTournament`**: if registered count **&lt; `minPlayers`**, the event is **cancelled** and buy-ins **refunded**; otherwise **`activateTournament`** runs ( **`status → active`**, table created, first hand dealt). |
 
-**Freeroll SNG (guaranteed pool):** `buy_in_amount = 0` with **`guaranteedPrizePool`** at create. Default: debit the **creator’s** `players.balance` and set **`prize_pool`**. Optional **`guaranteedPrizePoolSource = platform_promo`** (WebSocket payload): caller must be in **`ADMIN_WALLETS`**; server debits **`POKER_PROMO_GUARANTEED_POOL_WALLET`** (must exist in `players`) and sets **`guaranteed_prize_funder_address`** (migration **094**) so cancel / under-min refunds return **`prize_pool`** to that wallet instead of the creator. Joins do **not** add to the pool. **`distributePrizes`** unchanged. Still `game_type = 'poker'`, not blackjack **`tournament_type = 'freeroll'`**.
+**Freeroll SNG (guaranteed pool):** `buy_in_amount = 0` with **`guaranteedPrizePool`** at create. Default: debit the **creator’s** `players.balance` and set **`prize_pool`**. Optional **`guaranteedPrizePoolSource = platform_promo`**: caller must be in **`ADMIN_WALLETS`**; server still debits the **creator’s** balance and leaves **`guaranteed_prize_funder_address`** null (cancel / under-min refunds go to the creator, same as default). Joins do **not** add to the pool. **`distributePrizes`** unchanged. Still `game_type = 'poker'`, not blackjack **`tournament_type = 'freeroll'`**.
 
 **Not implemented for poker:** on-chain `MorbiusTournament` create/join for poker, custom prize tokens / escrow for poker, rebuys (`rebuy_config` is always `{ enabled: false }` on create), or multi-table merges.
 
@@ -52,7 +52,7 @@ Payouts use **`calculate_tournament_prizes(tournament_id)`** (see migration **`0
 ---
 
 ## Frontend and WebSocket
-
+ww  
 **Lobby entry:** On `/poker`, open the **Tournaments** tab (or `/poker?tab=tournaments`). The sidebar under **Lobby** also switches **Cash games** vs **Tournaments**.
 
 **Table HUD:** **`PokerTableState.tournamentId`** comes from **`poker_tables.tournament_id`**, so the HUD works on **`/poker/{tableId}`** even without a query string. The **`?tournament=`** param is still supported (and added after lobby join when applicable) so links stay explicit. The **`PokerTournamentHUD`** uses **`usePokerTableTournamentHud`**: room subscribe via **`poker_tournament_join`**, snapshot **`poker_tournament_get_state`**, refetch when the poker **`handId`** changes, and live updates from blind-up / elimination / complete / cancel events.

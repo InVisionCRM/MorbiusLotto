@@ -35,6 +35,7 @@ export interface PokerTournamentState {
     prizePool: string;
     buyInAmount: string;
     prizeDistributionType: string;
+    pokerConfig?: PokerTournamentConfig;
 }
 export interface PokerTournamentSummary {
     tournamentId: string;
@@ -63,16 +64,23 @@ export interface CreatePokerTournamentParams {
     /** Required when buyInAmount is 0: MORBIUS (wei) debited at create; becomes initial prize_pool. */
     guaranteedPrizePool?: bigint;
     /**
-     * When buy-in is 0: debit `creator` (default) or `platform_promo` wallet.
-     * `platform_promo` requires caller in ADMIN_WALLETS and POKER_PROMO_GUARANTEED_POOL_WALLET in env.
+     * When buy-in is 0: debit the creator's `players.balance` (default).
+     * `platform_promo`: same debit/refund wallet, but only allowed if the creator is in ADMIN_WALLETS (comma-separated `ADMIN_WALLETS` / `NEXT_PUBLIC_ADMIN_WALLETS`).
      */
     guaranteedPrizePoolSource?: GuaranteedPrizePoolSource;
     prizeDistributionType: string;
+    /** Required when prizeDistributionType is `custom` (one integer % per rank, length = maxPlayers, sum 100). */
+    prizePercentages?: number[];
     config: PokerTournamentConfig;
     isPrivate?: boolean;
     pinCode?: string | null;
     scheduledStartAt?: Date | null;
 }
+/**
+ * Validates creator prize % per finishing rank (index 0 = 1st place … index maxPlayers-1).
+ * Integers 0–100; unused ranks may be 0; must sum to exactly 100.
+ */
+export declare function normalizePokerTournamentPrizePercents(maxPlayers: number, raw: unknown): number[];
 export declare class PokerTournamentService {
     private pool;
     private tournamentService;
@@ -91,6 +99,7 @@ export declare class PokerTournamentService {
     private parsePokerConfig;
     createPokerTournament(params: CreatePokerTournamentParams): Promise<{
         tournamentId: string;
+        pinCode: string | null;
     }>;
     /**
      * Player joins the registration phase by paying the buy-in.
@@ -117,7 +126,8 @@ export declare class PokerTournamentService {
      * After each hand completes:
      * 1. Sync seat stacks → tournament_entries.chips_remaining
      * 2. Eliminate 0-chip players (mark busted, remove seat)
-     * 3. Advance blind level if needed
+     * 3. Advance blind level if needed (schedule), then multiply SB/BB by 2^k for k eliminations this hand,
+     *    then clamp SB/BB so nominal BB ≤ smallest eligible stack (≥2 chips), when applicable
      * 4. Complete tournament if ≤1 active player remains
      */
     syncAfterHand(tableId: string, handNumber: number): Promise<void>;
