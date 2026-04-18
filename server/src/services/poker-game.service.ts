@@ -21,6 +21,8 @@ import {
   POKER_CASH_MAX_BUY_IN_BB,
   POKER_CASH_MIN_BUY_IN_BB,
 } from '../lib/poker-cash-buy-in';
+import { decidePokerBotAction } from '../lib/poker-bot-ai';
+import { getServerPokerBotAddressSet } from '../lib/poker-server-bot-addresses';
 import { logger } from '../utils/logger';
 import crypto from 'crypto';
 
@@ -1770,6 +1772,86 @@ export class PokerGameService {
       }
     }
     return folded;
+  }
+
+  // ---------------------------------------------------------------------------
+  // tickServerTournamentBots
+  // ---------------------------------------------------------------------------
+  //
+  // Production: tournament "bots" are real `players` rows + seats; they do not need a separate
+  // WebSocket process. When `POKER_BOT_ADDRESSES` is set on the game server, we take actions
+  // in-process for those wallets on poker tables with `tournament_id` set.
+  //
+  // Disable: POKER_SERVER_TOURNAMENT_BOTS=false
+  // Think delay (ms): POKER_SERVER_BOT_THINK_MS (default 1200, clamped 200–10000)
+
+  async tickServerTournamentBots(): Promise<void> {
+    const off = String(process.env.POKER_SERVER_TOURNAMENT_BOTS ?? '').toLowerCase();
+    if (off === 'false' || off === '0' || off === 'no') return;
+
+    const botSet = getServerPokerBotAddressSet();
+    if (botSet.size === 0) return;
+
+    let thinkMs = 1200;
+    const rawThink = process.env.POKER_SERVER_BOT_THINK_MS;
+    if (rawThink) {
+      const n = Number(rawThink);
+      if (Number.isFinite(n) && n >= 200 && n <= 10_000) thinkMs = Math.floor(n);
+    }
+
+    const pool = this.getPool();
+    const result = await pool.query(
+      `SELECT h.id AS hand_id, h.table_id, h.acting_position
+       FROM poker_hands h
+       INNER JOIN poker_tables pt ON pt.id = h.table_id
+       WHERE h.completed_at IS NULL
+         AND h.acting_position IS NOT NULL
+         AND pt.tournament_id IS NOT NULL
+         AND h.turn_started_at IS NOT NULL
+         AND h.turn_started_at < NOW() - ($1 * INTERVAL '1 millisecond')`,
+      [thinkMs]
+    );
+
+    for (const row of result.rows) {
+      try {
+        const seatQ = await pool.query(
+          `SELECT player_address FROM poker_seats
+           WHERE table_id = $1 AND position = $2 AND player_address IS NOT NULL`,
+          [row.table_id, row.acting_position]
+        );
+        const rawAddr = seatQ.rows[0]?.player_address;
+        if (!rawAddr) continue;
+        const addr = this.normalizeAddress(String(rawAddr));
+        if (!botSet.has(addr)) continue;
+
+        const state = await this.getTableState(row.table_id, addr);
+        const hand = state.currentHand;
+        if (!hand || hand.handId !== row.hand_id) continue;
+        if (hand.street === 'showdown') continue;
+        if (hand.actingPosition !== row.acting_position) continue;
+        if (!['preflop', 'flop', 'turn', 'river'].includes(hand.street)) continue;
+
+        const mySeat = state.seats.find(
+          (s) => s.playerAddress && this.normalizeAddress(s.playerAddress) === addr
+        );
+        const decision = decidePokerBotAction({
+          street: hand.street,
+          pot: hand.pot,
+          toCall: hand.toCall,
+          minRaise: hand.minRaise,
+          myStack: mySeat?.stack ?? '0',
+          myHoleCards: state.myHoleCards,
+        });
+
+        await this.playerAction(row.table_id, row.hand_id, addr, decision.action, decision.amount);
+      } catch (err) {
+        logger.warn('Poker server tournament bot tick failed', {
+          tableId: row.table_id,
+          handId: row.hand_id,
+          message: (err as Error)?.message,
+        });
+      }
+    }
   }
 
   // ---------------------------------------------------------------------------

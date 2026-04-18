@@ -85,6 +85,7 @@ class WebSocketService {
     heartbeatInterval;
     chatRateLimitCleanupInterval;
     pokerAutoFoldInterval = null;
+    pokerServerBotInterval = null;
     publicClient;
     contractAddress;
     tournamentService;
@@ -133,6 +134,17 @@ class WebSocketService {
                     logger_1.logger.error('Poker auto-fold watchdog error', err);
                 }
             }, 5000);
+            // In-process tournament bot actions (POKER_BOT_ADDRESSES on game server; no WS child required)
+            this.pokerServerBotInterval = setInterval(async () => {
+                try {
+                    if (typeof this.pokerGameService.tickServerTournamentBots === 'function') {
+                        await this.pokerGameService.tickServerTournamentBots();
+                    }
+                }
+                catch (err) {
+                    logger_1.logger.error('Poker server tournament bot tick error', err);
+                }
+            }, 2000);
         }
         // Multiplayer blackjack turn timer + betting timeout enforcement (5s poll)
         if (this.bjMultiService) {
@@ -2793,6 +2805,9 @@ class WebSocketService {
         }
         if (this.pokerAutoFoldInterval) {
             clearInterval(this.pokerAutoFoldInterval);
+        }
+        if (this.pokerServerBotInterval) {
+            clearInterval(this.pokerServerBotInterval);
         }
         if (this.bjMultiTimerInterval) {
             clearInterval(this.bjMultiTimerInterval);

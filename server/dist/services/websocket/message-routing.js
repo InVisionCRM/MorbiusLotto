@@ -5,6 +5,7 @@ const message_types_1 = require("./message-types");
 const POKER_PUBLIC_TYPES = new Set([
     'poker_tournament_list',
     'poker_tournament_get_state',
+    'poker_tournament_registrants',
 ]);
 function classifyWebSocketMessageType(type) {
     if (message_types_1.WS_AUTH_MESSAGES.includes(type))

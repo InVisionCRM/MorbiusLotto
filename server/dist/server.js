@@ -2173,6 +2173,51 @@ async function initializeServices() {
                 res.status(500).json({ error: 'Internal server error' });
             }
         });
+        /**
+         * Dev-only: tear down a poker tournament (delete table(s), cancel scheduled events, bust entries,
+         * mark tournament cancelled, zero prize_pool) without balance refunds. Stops registration bots if running.
+         * Requires `POKER_TOURNAMENT_DEV_RESET=true` on the server in addition to admin secret.
+         */
+        app.post('/api/admin/poker/tournaments/:tournamentId/dev-reset', async (req, res) => {
+            try {
+                if (process.env.POKER_TOURNAMENT_DEV_RESET !== 'true') {
+                    res.status(403).json({
+                        error: 'Dev reset disabled. Set POKER_TOURNAMENT_DEV_RESET=true in server environment (testing only; does not refund balances).',
+                    });
+                    return;
+                }
+                const tournamentId = String(req.params.tournamentId ?? '').trim();
+                if (!tournamentId) {
+                    res.status(400).json({ error: 'tournamentId required' });
+                    return;
+                }
+                const botJob = pokerTournamentBotJobs.get(tournamentId);
+                if (botJob) {
+                    try {
+                        botJob.process.kill('SIGTERM');
+                    }
+                    catch (killErr) {
+                        logger_1.logger.warn('Dev reset: failed to SIGTERM tournament bot process', { tournamentId, killErr });
+                    }
+                    pokerTournamentBotJobs.delete(tournamentId);
+                }
+                const result = await pokerTournamentService.adminDevForceResetPokerTournament(tournamentId);
+                res.json({ ok: true, ...result });
+            }
+            catch (error) {
+                const msg = error?.message ? String(error.message) : 'Internal server error';
+                if (msg === 'Poker tournament not found') {
+                    res.status(404).json({ error: msg });
+                    return;
+                }
+                if (msg === 'Invalid tournament id') {
+                    res.status(400).json({ error: msg });
+                    return;
+                }
+                logger_1.logger.error('Error in poker tournament dev-reset:', error);
+                res.status(500).json({ error: 'Internal server error' });
+            }
+        });
         // Admin: game health (API, WS, RPC, MORBIUS per contract, Blackjack reserves for current + all legacy)
         // MORBIUS in contract = MORBIUS_TOKEN.balanceOf(gameContract) for each game (canonical addresses in config/contracts.ts).
         app.get('/api/admin/health', async (req, res) => {

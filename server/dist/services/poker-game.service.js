@@ -10,6 +10,8 @@ const cosmetics_service_1 = require("./cosmetics.service");
 const cosmetics_catalog_1 = require("../lib/cosmetics-catalog");
 const poker_chip_scale_1 = require("../lib/poker-chip-scale");
 const poker_cash_buy_in_1 = require("../lib/poker-cash-buy-in");
+const poker_bot_ai_1 = require("../lib/poker-bot-ai");
+const poker_server_bot_addresses_1 = require("../lib/poker-server-bot-addresses");
 const logger_1 = require("../utils/logger");
 const crypto_1 = __importDefault(require("crypto"));
 // ---------------------------------------------------------------------------
@@ -846,7 +848,7 @@ class PokerGameService {
     async startHand(tableId) {
         const pool = this.getPool();
         const scaling = await this.getTableScaling(tableId);
-        const tableResult = await pool.query('SELECT id, small_blind, big_blind, max_seats, hand_number, button_position FROM poker_tables WHERE id = $1', [tableId]);
+        const tableResult = await pool.query('SELECT id, small_blind, big_blind, max_seats, hand_number, button_position, tournament_id FROM poker_tables WHERE id = $1', [tableId]);
         if (tableResult.rows.length === 0)
             throw new Error('Table not found');
         const tblRow = tableResult.rows[0];
@@ -941,12 +943,14 @@ class PokerGameService {
             ? String(Math.max(0, Math.round(potChips0)))
             : (0, poker_chip_scale_1.enginePotChipsToPotWei)(potChips0, scaling.chipWei).toString();
         const lastRaiseSizeStr = scaling.tournament ? String(Math.round(bb)) : bbWei.toString();
+        const tournamentIdForHand = tblRow.tournament_id ?? null;
         const handInsert = await pool.query(`INSERT INTO poker_hands
-         (table_id, hand_number, button_position, server_seed_hash, server_seed, client_seed,
+         (table_id, tournament_id, hand_number, button_position, server_seed_hash, server_seed, client_seed,
           community_cards, pot_amount, street, acting_position, turn_started_at, last_raise_size)
-       VALUES ($1, $2, $3, $4, $5, $6, '[]'::JSONB, $7::NUMERIC, 'preflop', $8, NOW(), $9)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, '[]'::JSONB, $8::NUMERIC, 'preflop', $9, NOW(), $10)
        RETURNING id`, [
             tableId,
+            tournamentIdForHand,
             handNumber,
             table.dealerPosition,
             serverSeedHash,
@@ -1015,13 +1019,15 @@ class PokerGameService {
             });
             throw new Error(`Illegal action: "${action}" is not allowed. Legal: ${legal.join(', ')}`);
         }
+        // Execute the validated action — not the raw client label (e.g. open-raise must call raiseAction, not betAction).
+        const effectiveAction = action === 'bet' || action === 'raise' ? requestedAction : action;
         // Capture street before action (for DB recording)
         const streetBefore = chevtekStreetToPoker(table.currentRound, !!table.winners);
         const tableRow = await pool.query('SELECT big_blind FROM poker_tables WHERE id = $1', [tableId]);
         const bbWei = BigInt(tableRow.rows[0]?.big_blind ?? 0);
         const bbChips = scaling.tournament ? Number(bbWei) : (0, poker_chip_scale_1.weiToEngineChips)(bbWei);
         let actionAmountDb = '0';
-        switch (action) {
+        switch (effectiveAction) {
             case 'fold':
                 actor.foldAction();
                 break;
@@ -1103,7 +1109,7 @@ class PokerGameService {
         const orderResult = await pool.query('SELECT COALESCE(MAX("order"), 0) + 1 AS next_order FROM poker_hand_actions WHERE hand_id = $1', [handId]);
         const nextOrder = Number(orderResult.rows[0].next_order);
         await pool.query(`INSERT INTO poker_hand_actions (hand_id, player_address, street, action, amount, "order")
-       VALUES ($1, $2, $3, $4, $5::NUMERIC, $6)`, [handId, normalized, streetBefore, action, actionAmountDb, nextOrder]);
+       VALUES ($1, $2, $3, $4, $5::NUMERIC, $6)`, [handId, normalized, streetBefore, effectiveAction, actionAmountDb, nextOrder]);
         if (isShowdown) {
             // Persist showdown results
             await this.persistShowdown(pool, tableId, handId, table);
@@ -1357,6 +1363,79 @@ class PokerGameService {
         return folded;
     }
     // ---------------------------------------------------------------------------
+    // tickServerTournamentBots
+    // ---------------------------------------------------------------------------
+    //
+    // Production: tournament "bots" are real `players` rows + seats; they do not need a separate
+    // WebSocket process. When `POKER_BOT_ADDRESSES` is set on the game server, we take actions
+    // in-process for those wallets on poker tables with `tournament_id` set.
+    //
+    // Disable: POKER_SERVER_TOURNAMENT_BOTS=false
+    // Think delay (ms): POKER_SERVER_BOT_THINK_MS (default 1200, clamped 200–10000)
+    async tickServerTournamentBots() {
+        const off = String(process.env.POKER_SERVER_TOURNAMENT_BOTS ?? '').toLowerCase();
+        if (off === 'false' || off === '0' || off === 'no')
+            return;
+        const botSet = (0, poker_server_bot_addresses_1.getServerPokerBotAddressSet)();
+        if (botSet.size === 0)
+            return;
+        let thinkMs = 1200;
+        const rawThink = process.env.POKER_SERVER_BOT_THINK_MS;
+        if (rawThink) {
+            const n = Number(rawThink);
+            if (Number.isFinite(n) && n >= 200 && n <= 10_000)
+                thinkMs = Math.floor(n);
+        }
+        const pool = this.getPool();
+        const result = await pool.query(`SELECT h.id AS hand_id, h.table_id, h.acting_position
+       FROM poker_hands h
+       INNER JOIN poker_tables pt ON pt.id = h.table_id
+       WHERE h.completed_at IS NULL
+         AND h.acting_position IS NOT NULL
+         AND pt.tournament_id IS NOT NULL
+         AND h.turn_started_at IS NOT NULL
+         AND h.turn_started_at < NOW() - ($1 * INTERVAL '1 millisecond')`, [thinkMs]);
+        for (const row of result.rows) {
+            try {
+                const seatQ = await pool.query(`SELECT player_address FROM poker_seats
+           WHERE table_id = $1 AND position = $2 AND player_address IS NOT NULL`, [row.table_id, row.acting_position]);
+                const rawAddr = seatQ.rows[0]?.player_address;
+                if (!rawAddr)
+                    continue;
+                const addr = this.normalizeAddress(String(rawAddr));
+                if (!botSet.has(addr))
+                    continue;
+                const state = await this.getTableState(row.table_id, addr);
+                const hand = state.currentHand;
+                if (!hand || hand.handId !== row.hand_id)
+                    continue;
+                if (hand.street === 'showdown')
+                    continue;
+                if (hand.actingPosition !== row.acting_position)
+                    continue;
+                if (!['preflop', 'flop', 'turn', 'river'].includes(hand.street))
+                    continue;
+                const mySeat = state.seats.find((s) => s.playerAddress && this.normalizeAddress(s.playerAddress) === addr);
+                const decision = (0, poker_bot_ai_1.decidePokerBotAction)({
+                    street: hand.street,
+                    pot: hand.pot,
+                    toCall: hand.toCall,
+                    minRaise: hand.minRaise,
+                    myStack: mySeat?.stack ?? '0',
+                    myHoleCards: state.myHoleCards,
+                });
+                await this.playerAction(row.table_id, row.hand_id, addr, decision.action, decision.amount);
+            }
+            catch (err) {
+                logger_1.logger.warn('Poker server tournament bot tick failed', {
+                    tableId: row.table_id,
+                    handId: row.hand_id,
+                    message: err?.message,
+                });
+            }
+        }
+    }
+    // ---------------------------------------------------------------------------
     // reconstructTable
     // ---------------------------------------------------------------------------
     async reconstructTable(tableId, pool) {
@@ -1412,7 +1491,7 @@ class PokerGameService {
         const hand = activeHand.rows[0];
         // Get hole cards from DB to know who was dealt in
         const holeCardsResult = await pool.query('SELECT player_address, cards FROM poker_hand_hole_cards WHERE hand_id = $1', [hand.id]);
-        const dealtAddrs = new Set(holeCardsResult.rows.map((r) => r.player_address));
+        const dealtAddrs = new Set(holeCardsResult.rows.map((r) => (r.player_address || '').toLowerCase()));
         const actionsResult = await pool.query(`SELECT player_address, action, amount FROM poker_hand_actions WHERE hand_id = $1 ORDER BY "order"`, [hand.id]);
         const committedNum = new Map();
         const committedWei = new Map();

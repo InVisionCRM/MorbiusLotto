@@ -10,6 +10,7 @@ import {
 } from '@/hooks/use-poker-tournament';
 import type { BlackjackWebSocketClient } from '@/lib/websocket-client';
 import { formatMorbiusFloor } from '@/lib/format-morbius-display';
+import { Trophy, Users, CalendarClock, Lock, Sparkles } from 'lucide-react';
 import { PokerTournamentCreator } from './PokerTournamentCreator';
 import { PokerTournamentRegistrantsModal } from './PokerTournamentRegistrantsModal';
 
@@ -102,6 +103,37 @@ function useCountdown(targetIso: string | null): string | null {
   return display;
 }
 
+const CARD_SURFACE: React.CSSProperties = {
+  background: 'linear-gradient(145deg, rgb(16, 26, 35), rgb(35, 36, 41))',
+  boxShadow:
+    'inset 0 3px 6px rgba(0, 0, 0, 0.8), inset 0 -3px 6px rgba(255, 255, 255, 0.1), 0 4px 14px rgba(0, 0, 0, 0.45)',
+  border: '1px solid rgba(60, 60, 60, 0.55)',
+};
+
+function InfoTag({
+  children,
+  variant,
+}: {
+  children: React.ReactNode;
+  variant: 'orange' | 'teal' | 'sky' | 'emerald' | 'slate' | 'violet';
+}) {
+  const cls = {
+    orange: 'bg-orange-500/18 text-orange-200/95 border-orange-400/35',
+    teal: 'bg-teal-500/18 text-teal-200/95 border-teal-400/35',
+    sky: 'bg-sky-500/18 text-sky-200/95 border-sky-400/35',
+    emerald: 'bg-emerald-500/18 text-emerald-200/95 border-emerald-400/35',
+    slate: 'bg-white/8 text-white/75 border-white/15',
+    violet: 'bg-violet-500/18 text-violet-200/95 border-violet-400/35',
+  }[variant];
+  return (
+    <span
+      className={`inline-flex items-center rounded-md border px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wide ${cls}`}
+    >
+      {children}
+    </span>
+  );
+}
+
 // ---------------------------------------------------------------------------
 // TournamentCard
 // ---------------------------------------------------------------------------
@@ -138,136 +170,230 @@ function TournamentCard({
   const isActive = t.status === 'active';
   const isScheduled = !!t.scheduledStartAt && new Date(t.scheduledStartAt) > new Date();
   const countdown = useCountdown(isScheduled ? t.scheduledStartAt : null);
+  const neededToStart = Math.max(0, t.minPlayers - t.registeredCount);
+
+  let lobbyStatusLine: string;
+  if (isActive) {
+    lobbyStatusLine = 'Table running';
+  } else if (isFull) {
+    lobbyStatusLine = 'Tournament full';
+  } else if (neededToStart > 0) {
+    lobbyStatusLine = `${neededToStart} more needed to start`;
+  } else {
+    lobbyStatusLine = `${spots} seat${spots === 1 ? '' : 's'} open`;
+  }
 
   return (
-    <div className="rounded-xl border border-white/10 bg-white/5 hover:bg-white/8 transition-colors p-4">
-      <div className="flex items-start justify-between gap-3">
-        <div className="flex-1 min-w-0">
-          <div className="flex items-center gap-2 flex-wrap min-w-0">
-            <h4 className="font-semibold text-white truncate">{t.name}</h4>
-            {isZeroBuyInWei(t.buyInAmount) && (
-              <span className="text-[10px] px-2 py-0.5 rounded-full border border-cyan-500/35 text-cyan-300/95 bg-cyan-500/10 shrink-0">
-                Freeroll
-              </span>
-            )}
-          </div>
-          <p className="text-xs text-white/50 mt-0.5">
-            by {t.creatorAddress ? `${t.creatorAddress.slice(0, 6)}…${t.creatorAddress.slice(-4)}` : 'Unknown'}
+    <div
+      className="group relative overflow-hidden rounded-2xl p-4 transition-[transform,box-shadow] duration-200 hover:-translate-y-0.5"
+      style={CARD_SURFACE}
+    >
+      <div className="pointer-events-none absolute inset-0 rounded-2xl opacity-0 group-hover:opacity-100 transition-opacity bg-[radial-gradient(ellipse_at_50%_0%,rgba(34,211,238,0.08),transparent_55%)]" />
+
+      {/* Title + status */}
+      <div className="relative flex items-start justify-between gap-3">
+        <div className="min-w-0 flex-1">
+          <h4 className="text-base sm:text-lg font-bold text-white tracking-tight leading-snug truncate">
+            {t.name}
+          </h4>
+          <p className="mt-1 text-[11px] text-white/45">
+            Host{' '}
+            <span className="text-white/60 font-mono">
+              {t.creatorAddress ? `${t.creatorAddress.slice(0, 6)}…${t.creatorAddress.slice(-4)}` : '—'}
+            </span>
           </p>
         </div>
-        <span className={`text-[10px] px-2 py-0.5 rounded-full border font-medium shrink-0 ${
-          isActive
-            ? 'bg-green-500/20 text-green-300 border-green-500/30'
-            : 'bg-blue-500/20 text-blue-300 border-blue-500/30'
-        }`}>
-          {isActive ? 'In Progress' : 'Open'}
+        <span
+          className={`shrink-0 rounded-lg border px-2 py-1 text-[10px] font-bold uppercase tracking-wider ${
+            isActive
+              ? 'border-emerald-400/40 bg-emerald-500/15 text-emerald-200'
+              : 'border-cyan-500/35 bg-cyan-500/10 text-cyan-200/90'
+          }`}
+        >
+          {isActive ? 'Live' : 'Open'}
         </span>
       </div>
 
-      <div className="mt-3 grid grid-cols-3 gap-2 text-center">
-        <div>
-          <div className="text-[10px] text-white/40 uppercase tracking-wide">Buy-in</div>
-          <div className="text-sm font-semibold text-white mt-0.5">
-            {isZeroBuyInWei(t.buyInAmount) ? 'Free' : formatMorbius(t.buyInAmount)}
+      {/* Prize / buy-in / CTA — HiPoker-style band */}
+      <div className="relative mt-4 flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between sm:gap-4">
+        <div className="flex flex-1 flex-wrap items-end gap-4 sm:gap-6 min-w-0">
+          <div className="flex min-w-0 items-center gap-2">
+            <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-amber-500/15 border border-amber-400/25">
+              <Trophy className="h-4 w-4 text-amber-300" aria-hidden />
+            </div>
+            <div className="min-w-0">
+              <div className="text-[10px] font-semibold uppercase tracking-wide text-white/40">Prize pool</div>
+              <div className="text-lg font-bold tabular-nums text-amber-200 leading-none mt-0.5">
+                {formatMorbius(t.prizePool)}
+              </div>
+              <div className="text-[9px] text-amber-200/50 font-medium mt-0.5">MORBIUS</div>
+            </div>
           </div>
-          <div className="text-[10px] text-white/30">MORBIUS</div>
+
+          <div className="flex min-w-[5.5rem] flex-col items-start sm:items-center sm:mx-auto">
+            <div className="text-[10px] font-semibold uppercase tracking-wide text-white/40">Buy-in</div>
+            <div className="text-lg font-bold text-white tabular-nums leading-none mt-0.5">
+              {isZeroBuyInWei(t.buyInAmount) ? 'Free' : formatMorbius(t.buyInAmount)}
+            </div>
+            <div className="text-[9px] text-white/35 mt-0.5">MORBIUS</div>
+          </div>
         </div>
-        <div>
-          <div className="text-[10px] text-white/40 uppercase tracking-wide">Players</div>
-          <div className="text-sm font-semibold text-white mt-0.5">{t.registeredCount} / {t.maxPlayers}</div>
-          <div className="text-[10px] text-white/30">
-            {isFull ? 'Full' : `${spots} spot${spots === 1 ? '' : 's'} left`}
+
+        {!t.isRegistered && !isActive && !isFull && (
+          <div className="relative w-full sm:w-auto sm:min-w-[8.5rem] shrink-0">
+            {showPin ? (
+              <div className="flex flex-col gap-2">
+                <input
+                  type="text"
+                  value={pin}
+                  onChange={(e) => setPin(e.target.value.replace(/\D/g, '').slice(0, 12))}
+                  placeholder="Tournament PIN"
+                  className="w-full rounded-xl border border-white/15 bg-black/25 px-3 py-2 text-sm text-white placeholder:text-white/30 focus:outline-none focus:ring-2 focus:ring-cyan-500/35"
+                />
+                <div className="flex gap-2">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setShowPin(false);
+                      setPin('');
+                    }}
+                    className="rounded-xl border border-white/15 px-3 py-2 text-xs font-semibold text-white/70 hover:bg-white/5 transition-colors"
+                  >
+                    Back
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      onJoin(t.tournamentId, pin);
+                      setShowPin(false);
+                    }}
+                    disabled={isJoining}
+                    className="min-w-0 flex-1 rounded-xl bg-gradient-to-b from-emerald-400 to-emerald-600 py-2.5 text-sm font-bold text-emerald-950 shadow-[0_4px_14px_rgba(16,185,129,0.35)] hover:from-emerald-300 hover:to-emerald-500 disabled:opacity-55 disabled:cursor-not-allowed transition-all"
+                  >
+                    {isJoining ? 'Joining…' : 'Confirm'}
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <button
+                type="button"
+                onClick={() => (isPrivate ? setShowPin(true) : onJoin(t.tournamentId))}
+                disabled={isJoining}
+                className="w-full rounded-xl bg-gradient-to-b from-emerald-400 to-emerald-600 px-4 py-2.5 text-sm font-bold uppercase tracking-wide text-emerald-950 shadow-[0_4px_14px_rgba(16,185,129,0.35)] hover:from-emerald-300 hover:to-emerald-500 disabled:opacity-55 disabled:cursor-not-allowed transition-all sm:py-3"
+              >
+                {isJoining ? 'Joining…' : 'Register'}
+              </button>
+            )}
           </div>
-          {t.registeredCount > 0 && onViewRegistrants && (
-            <button
-              type="button"
-              onClick={() => onViewRegistrants(t.tournamentId, t.name)}
-              className="mt-1.5 text-[11px] text-cyan-400/90 hover:text-cyan-300 underline-offset-2 hover:underline font-medium"
-            >
-              Who's registered?
-            </button>
+        )}
+      </div>
+
+      {/* Players row + tags */}
+      <div className="relative mt-4 flex flex-col gap-2.5 border-t border-white/[0.07] pt-3">
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <button
+            type="button"
+            onClick={() => t.registeredCount > 0 && onViewRegistrants?.(t.tournamentId, t.name)}
+            disabled={t.registeredCount === 0 || !onViewRegistrants}
+            className={`inline-flex items-center gap-2 rounded-lg px-0 py-0 text-left transition-colors ${
+              t.registeredCount > 0 && onViewRegistrants
+                ? 'text-white/90 hover:text-cyan-200 cursor-pointer'
+                : 'text-white/70 cursor-default'
+            }`}
+          >
+            <Users className="h-4 w-4 text-cyan-400/80 shrink-0" aria-hidden />
+            <span className="text-sm font-semibold tabular-nums">
+              {t.registeredCount} <span className="text-white/35 font-normal">/</span> {t.maxPlayers}
+            </span>
+            <span className="text-[11px] text-white/40 hidden sm:inline">players</span>
+          </button>
+          <span className="text-[11px] text-white/50 font-medium">{lobbyStatusLine}</span>
+        </div>
+
+        <div className="flex flex-wrap gap-1.5">
+          <InfoTag variant="orange">NLHE</InfoTag>
+          <InfoTag variant="teal">{t.maxPlayers}-max</InfoTag>
+          <InfoTag variant="sky">Stack {t.startingStack.toLocaleString()}</InfoTag>
+          {isPrivate && (
+            <InfoTag variant="violet">
+              <span className="inline-flex items-center gap-0.5">
+                <Lock className="h-2.5 w-2.5" aria-hidden />
+                Private
+              </span>
+            </InfoTag>
+          )}
+          {isZeroBuyInWei(t.buyInAmount) && (
+            <InfoTag variant="emerald">
+              <span className="inline-flex items-center gap-0.5">
+                <Sparkles className="h-2.5 w-2.5" aria-hidden />
+                Freeroll
+              </span>
+            </InfoTag>
+          )}
+          {t.scheduledStartAt && (
+            <InfoTag variant="slate">
+              <span className="inline-flex items-center gap-0.5 normal-case font-semibold">
+                <CalendarClock className="h-2.5 w-2.5" aria-hidden />
+                {isScheduled
+                  ? new Date(t.scheduledStartAt).toLocaleString(undefined, {
+                      month: 'short',
+                      day: 'numeric',
+                      hour: 'numeric',
+                      minute: '2-digit',
+                    })
+                  : 'Started'}
+              </span>
+            </InfoTag>
           )}
         </div>
-        <div>
-          <div className="text-[10px] text-white/40 uppercase tracking-wide">Prize Pool</div>
-          <div className="text-sm font-semibold text-yellow-300 mt-0.5">{formatMorbius(t.prizePool)}</div>
-          <div className="text-[10px] text-white/30">MORBIUS</div>
-        </div>
-      </div>
 
-      <div className="mt-3 text-[11px] text-white/40">
-        {t.scheduledStartAt
-          ? `${isScheduled ? 'Starts' : 'Started'} ${new Date(t.scheduledStartAt).toLocaleString()} · Stack: ${t.startingStack.toLocaleString()} chips · ${t.minPlayers}–${t.maxPlayers} seats`
-          : `Stack: ${t.startingStack.toLocaleString()} chips · ${t.minPlayers}–${t.maxPlayers} seats`
-        }
-      </div>
+        {t.registeredCount > 0 && onViewRegistrants && (
+          <button
+            type="button"
+            onClick={() => onViewRegistrants(t.tournamentId, t.name)}
+            className="text-left text-[11px] font-semibold text-cyan-400/85 hover:text-cyan-300 transition-colors"
+          >
+            View registered players →
+          </button>
+        )}
 
-      {isScheduled && countdown && (
-        <div className="mt-1.5 flex items-center gap-1.5">
-          <span className="text-[10px] text-white/40 uppercase tracking-wide">Starts in</span>
-          <span className="text-xs font-bold text-cyan-400 tabular-nums">{countdown}</span>
-        </div>
-      )}
+        {isScheduled && countdown && (
+          <div className="flex items-center gap-2 text-[11px]">
+            <span className="text-white/40 uppercase tracking-wide font-semibold">Starts in</span>
+            <span className="font-bold tabular-nums text-cyan-300">{countdown}</span>
+          </div>
+        )}
+      </div>
 
       {/* Already registered */}
       {t.isRegistered && !isActive && (
-        <div className="mt-3 flex items-center gap-2 rounded-lg bg-green-500/10 border border-green-500/30 px-3 py-2">
-          <span className="text-green-400 text-xs font-semibold">✓ Registered</span>
+        <div className="relative mt-4 flex flex-wrap items-center gap-2 rounded-xl border border-emerald-500/35 bg-emerald-500/[0.12] px-3 py-2.5">
+          <span className="text-emerald-200 text-xs font-bold uppercase tracking-wide">Registered</span>
           {isScheduled && countdown && (
-            <span className="text-white/40 text-xs ml-1">Starts in {countdown}</span>
+            <span className="text-white/45 text-xs">Starts in {countdown}</span>
           )}
           {t.status === 'registration' && t.creatorAddress?.toLowerCase() === myAddress?.toLowerCase() && (
             <button
+              type="button"
               onClick={() => onCancel(t.tournamentId)}
               disabled={isCancelling}
-              className="ml-auto text-[11px] text-red-400/70 hover:text-red-400 disabled:opacity-40 border border-red-500/20 hover:border-red-500/40 rounded px-2 py-0.5 transition-colors"
+              className="ml-auto text-[11px] font-semibold text-red-300/90 hover:text-red-200 disabled:opacity-40 border border-red-500/25 hover:border-red-400/45 rounded-lg px-2 py-1 transition-colors"
             >
-              {isCancelling ? 'Cancelling…' : 'Cancel'}
-            </button>
-          )}
-        </div>
-      )}
-
-      {/* Join button — only show if not registered, not active, not full */}
-      {!t.isRegistered && !isActive && !isFull && (
-        <div className="mt-3">
-          {showPin ? (
-            <div className="flex gap-2">
-              <input
-                type="text"
-                value={pin}
-                onChange={(e) => setPin(e.target.value.replace(/\D/g, '').slice(0, 12))}
-                placeholder="Enter PIN"
-                className="flex-1 rounded-lg bg-white/10 border border-white/20 px-3 py-1.5 text-sm text-white placeholder:text-white/30 focus:outline-none focus:border-white/40"
-              />
-              <button
-                onClick={() => { onJoin(t.tournamentId, pin); setShowPin(false); }}
-                className="rounded-lg bg-yellow-500 hover:bg-yellow-400 text-black font-semibold text-sm px-3 py-1.5 transition-colors"
-              >
-                Join
-              </button>
-            </div>
-          ) : (
-            <button
-              onClick={() => onJoin(t.tournamentId)}
-              disabled={isJoining}
-              className="w-full rounded-lg bg-yellow-500 hover:bg-yellow-400 disabled:opacity-60 disabled:cursor-not-allowed text-black font-semibold text-sm py-2 transition-colors"
-            >
-              {isJoining ? 'Joining…' : isScheduled ? 'Register' : 'Join Tournament'}
+              {isCancelling ? 'Cancelling…' : 'Cancel tourney'}
             </button>
           )}
         </div>
       )}
 
       {isActive && !t.isRegistered && (
-        <div className="mt-3 text-center text-xs text-white/30 py-1">
-          Tournament in progress
+        <div className="relative mt-4 rounded-xl border border-white/10 bg-black/20 px-3 py-2 text-center text-xs text-white/45">
+          Tournament in progress — registration closed
         </div>
       )}
 
       {isActive && t.isRegistered && (
-        <div className="mt-3 text-center text-xs text-green-400/60 py-1">
-          You are playing in this tournament
+        <div className="relative mt-4 rounded-xl border border-emerald-500/25 bg-emerald-500/10 px-3 py-2 text-center text-xs font-semibold text-emerald-200/90">
+          You are seated in this tournament
         </div>
       )}
 

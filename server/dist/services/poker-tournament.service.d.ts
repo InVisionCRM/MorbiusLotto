@@ -74,7 +74,8 @@ export interface CreatePokerTournamentParams {
     config: PokerTournamentConfig;
     isPrivate?: boolean;
     pinCode?: string | null;
-    scheduledStartAt?: Date | null;
+    /** Required — must be a finite `Date` strictly in the future (enforced at create). */
+    scheduledStartAt: Date;
 }
 /**
  * Validates creator prize % per finishing rank (index 0 = 1st place … index maxPlayers-1).
@@ -92,8 +93,11 @@ export declare class PokerTournamentService {
     private broadcast;
     private normalizeAddress;
     private parseBigInt;
-    /** Who receives prize_pool on cancel / scheduled under-min (freeroll → funder or creator). */
-    private prizePoolRefundRecipient;
+    /**
+     * Who receives the **guaranteed** freeroll overlay (buy-in 0) when it is returned:
+     * creator cancel (registration) or scheduled start with insufficient players.
+     */
+    private guaranteedPrizePoolRefundRecipient;
     /** Return the BlindLevel that applies for a given hand number (1-indexed). */
     computeBlindLevel(blindSchedule: BlindLevel[], handNumber: number): BlindLevel;
     private parsePokerConfig;
@@ -133,6 +137,24 @@ export declare class PokerTournamentService {
     syncAfterHand(tableId: string, handNumber: number): Promise<void>;
     completeTournament(tournamentId: string, tableId?: string): Promise<void>;
     cancelPokerTournament(tournamentId: string, callerAddress: string): Promise<void>;
+    /**
+     * **Dev / QA only** (HTTP layer must also enable `POKER_TOURNAMENT_DEV_RESET=true`):
+     * Drops tournament poker table(s), cancels pending scheduled events, marks `playing`/`forfeited`
+     * entries as busted, sets tournament `cancelled` and `prize_pool = 0`.
+     * Does **not** credit player balances (including locked guarantee / buy-ins) — for local DB cleanup only.
+     */
+    adminDevForceResetPokerTournament(tournamentId: string): Promise<{
+        tournamentId: string;
+        deletedTableIds: string[];
+        priorStatus: string;
+    }>;
+    /** Entrants for lobby / modal (addresses + optional display name + registration time + entry status). */
+    getPokerTournamentRegistrants(tournamentId: string): Promise<Array<{
+        playerAddress: string;
+        displayName: string | null;
+        registeredAt: string | null;
+        status: 'playing' | 'busted' | 'completed';
+    }>>;
     listPokerTournaments(playerAddress?: string): Promise<PokerTournamentSummary[]>;
     getTournamentState(tournamentId: string): Promise<PokerTournamentState | null>;
     getPlayerEntryStatus(tournamentId: string, playerAddress: string): Promise<PokerTournamentPlayer | null>;

@@ -85,6 +85,7 @@ class WebSocketService {
     heartbeatInterval;
     chatRateLimitCleanupInterval;
     pokerAutoFoldInterval = null;
+    pokerServerBotInterval = null;
     publicClient;
     contractAddress;
     tournamentService;
@@ -133,6 +134,17 @@ class WebSocketService {
                     logger_1.logger.error('Poker auto-fold watchdog error', err);
                 }
             }, 5000);
+            // In-process tournament bot actions (POKER_BOT_ADDRESSES on game server; no WS child required)
+            this.pokerServerBotInterval = setInterval(async () => {
+                try {
+                    if (typeof this.pokerGameService.tickServerTournamentBots === 'function') {
+                        await this.pokerGameService.tickServerTournamentBots();
+                    }
+                }
+                catch (err) {
+                    logger_1.logger.error('Poker server tournament bot tick error', err);
+                }
+            }, 2000);
         }
         // Multiplayer blackjack turn timer + betting timeout enforcement (5s poll)
         if (this.bjMultiService) {
@@ -1480,8 +1492,11 @@ class WebSocketService {
                 return this.sendError(ws, 'prizeDistributionType required', message.requestId);
             if (!p.config)
                 return this.sendError(ws, 'config required', message.requestId);
-            const scheduledStartAt = p.scheduledStartAt ? new Date(p.scheduledStartAt) : null;
-            if (scheduledStartAt && isNaN(scheduledStartAt.getTime())) {
+            if (p.scheduledStartAt == null || p.scheduledStartAt === '') {
+                return this.sendError(ws, 'scheduledStartAt is required', message.requestId);
+            }
+            const scheduledStartAt = new Date(p.scheduledStartAt);
+            if (isNaN(scheduledStartAt.getTime())) {
                 return this.sendError(ws, 'Invalid scheduledStartAt date', message.requestId);
             }
             const buyInAmount = BigInt(String(p.buyInAmount));
@@ -1564,6 +1579,26 @@ class WebSocketService {
         catch (error) {
             logger_1.logger.error('Error getting poker tournament state:', error);
             this.sendError(ws, error.message || 'Failed to get tournament state', message.requestId);
+        }
+    }
+    async handlePokerTournamentRegistrants(ws, message) {
+        try {
+            if (!this.pokerTournamentService) {
+                return this.sendError(ws, 'Poker tournaments not available', message.requestId);
+            }
+            const { tournamentId } = message.payload ?? {};
+            if (!tournamentId)
+                return this.sendError(ws, 'tournamentId required', message.requestId);
+            const registrants = await this.pokerTournamentService.getPokerTournamentRegistrants(tournamentId);
+            this.sendMessage(ws, {
+                type: 'poker_tournament_registrants',
+                payload: { registrants },
+                requestId: message.requestId,
+            });
+        }
+        catch (error) {
+            logger_1.logger.error('Error getting poker tournament registrants:', error);
+            this.sendError(ws, error.message || 'Failed to get registrants', message.requestId);
         }
     }
     async handlePokerTournamentCancel(ws, message) {
@@ -2770,6 +2805,9 @@ class WebSocketService {
         }
         if (this.pokerAutoFoldInterval) {
             clearInterval(this.pokerAutoFoldInterval);
+        }
+        if (this.pokerServerBotInterval) {
+            clearInterval(this.pokerServerBotInterval);
         }
         if (this.bjMultiTimerInterval) {
             clearInterval(this.bjMultiTimerInterval);

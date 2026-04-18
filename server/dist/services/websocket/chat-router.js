@@ -16,6 +16,7 @@ exports.PUBLIC_MESSAGE_HANDLER_MAP = {
     poker_list_tables: 'handlePokerListTables',
     poker_tournament_list: 'handlePokerTournamentList',
     poker_tournament_get_state: 'handlePokerTournamentGetState',
+    poker_tournament_registrants: 'handlePokerTournamentRegistrants',
     bj_multi_list_tables: 'handleBJMultiListTables',
 };
 //# sourceMappingURL=chat-router.js.map

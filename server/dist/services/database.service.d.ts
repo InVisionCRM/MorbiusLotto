@@ -616,7 +616,9 @@ export declare class DatabaseService implements MoneyDatabaseQueries {
     /** Completed poker hands for a player (for history modal). */
     getPokerPlayerHands(address: string, limit?: number, offset?: number): Promise<Array<{
         id: string;
-        table_id: string;
+        table_id: string | null;
+        tournament_id: string | null;
+        tournament_name: string | null;
         hand_number: number;
         pot_amount: string;
         community_cards: number[];
@@ -671,7 +673,9 @@ export declare class DatabaseService implements MoneyDatabaseQueries {
     /** Single hand detail for replay (actions + hole cards for requesting player). */
     getPokerHandDetail(handId: string, playerAddress: string): Promise<{
         id: string;
-        table_id: string;
+        table_id: string | null;
+        tournament_id: string | null;
+        tournament_name: string | null;
         hand_number: number;
         pot_amount: string;
         community_cards: number[];

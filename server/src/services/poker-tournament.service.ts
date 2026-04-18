@@ -1135,9 +1135,14 @@ export class PokerTournamentService {
   // Read methods
   // ---------------------------------------------------------------------------
 
-  /** Entrants for lobby / modal (addresses + registration time + entry status). */
+  /** Entrants for lobby / modal (addresses + optional display name + registration time + entry status). */
   async getPokerTournamentRegistrants(tournamentId: string): Promise<
-    Array<{ playerAddress: string; registeredAt: string | null; status: 'playing' | 'busted' | 'completed' }>
+    Array<{
+      playerAddress: string;
+      displayName: string | null;
+      registeredAt: string | null;
+      status: 'playing' | 'busted' | 'completed';
+    }>
   > {
     const id = tournamentId.trim();
     if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id)) {
@@ -1150,21 +1155,30 @@ export class PokerTournamentService {
     if (t.rows.length === 0) throw new Error('Tournament not found');
 
     const r = await this.pool.query(
-      `SELECT player_address, bought_in_at, status
-       FROM tournament_entries
-       WHERE tournament_id = $1
+      `SELECT te.player_address, te.bought_in_at, te.status, cdn.display_name
+       FROM tournament_entries te
+       LEFT JOIN chat_display_names cdn ON LOWER(cdn.wallet_address) = LOWER(te.player_address)
+       WHERE te.tournament_id = $1
        ORDER BY
-         CASE status WHEN 'playing' THEN 0 WHEN 'completed' THEN 1 ELSE 2 END,
-         bought_in_at ASC NULLS LAST,
-         LOWER(player_address) ASC`,
+         CASE te.status WHEN 'playing' THEN 0 WHEN 'completed' THEN 1 ELSE 2 END,
+         te.bought_in_at ASC NULLS LAST,
+         LOWER(te.player_address) ASC`,
       [id]
     );
 
-    return r.rows.map((e: { player_address: string; bought_in_at: Date | null; status: string }) => ({
-      playerAddress: e.player_address,
-      registeredAt:  e.bought_in_at ? new Date(e.bought_in_at).toISOString() : null,
-      status:        e.status as 'playing' | 'busted' | 'completed',
-    }));
+    return r.rows.map(
+      (e: {
+        player_address: string;
+        bought_in_at: Date | null;
+        status: string;
+        display_name: string | null;
+      }) => ({
+        playerAddress: e.player_address,
+        displayName:   e.display_name?.trim() ? e.display_name.trim() : null,
+        registeredAt:  e.bought_in_at ? new Date(e.bought_in_at).toISOString() : null,
+        status:        e.status as 'playing' | 'busted' | 'completed',
+      })
+    );
   }
 
   async listPokerTournaments(playerAddress?: string): Promise<PokerTournamentSummary[]> {

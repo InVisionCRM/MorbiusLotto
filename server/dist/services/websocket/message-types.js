@@ -11,6 +11,7 @@ exports.WS_PUBLIC_MESSAGES = [
     'poker_list_tables',
     'poker_tournament_list',
     'poker_tournament_get_state',
+    'poker_tournament_registrants',
     'bj_multi_list_tables',
 ];
 exports.WS_BLACKJACK_MESSAGES = [

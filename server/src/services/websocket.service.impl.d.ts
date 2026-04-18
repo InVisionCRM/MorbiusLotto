@@ -19,6 +19,7 @@ export declare class WebSocketService {
     private heartbeatInterval;
     private chatRateLimitCleanupInterval;
     private pokerAutoFoldInterval;
+    private pokerServerBotInterval;
     private publicClient;
     private contractAddress;
     private tournamentService?;

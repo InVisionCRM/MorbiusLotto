@@ -43,6 +43,7 @@ dotenv_1.default.config();
 const ws_1 = __importDefault(require("ws"));
 const pg_1 = require("pg");
 const cosmetics_catalog_1 = require("../lib/cosmetics-catalog");
+const poker_bot_ai_1 = require("../lib/poker-bot-ai");
 // --------------- Config ---------------
 const WS_URL = process.env.NEXT_PUBLIC_WEBSOCKET_URL ||
     process.env.WS_URL ||
@@ -242,6 +243,9 @@ function parseState(payload, botAddress) {
     if (!mySeat)
         return null;
     const hand = payload.currentHand;
+    const myPosition = Number(mySeat.position);
+    const actingRaw = hand?.actingPosition;
+    const actingPosition = actingRaw === undefined || actingRaw === null || actingRaw === '' ? null : Number(actingRaw);
     return {
         tableId: payload.tableId,
         handId: hand?.handId ?? null,
@@ -249,8 +253,8 @@ function parseState(payload, botAddress) {
         pot: hand?.pot ?? '0',
         toCall: hand?.toCall ?? '0',
         minRaise: hand?.minRaise ?? '0',
-        myPosition: mySeat.position,
-        actingPosition: hand?.actingPosition ?? null,
+        myPosition: Number.isFinite(myPosition) ? myPosition : 0,
+        actingPosition: actingPosition != null && Number.isFinite(actingPosition) ? actingPosition : null,
         turnStartedAt: hand?.turnStartedAt ?? null,
         myStack: mySeat.stack,
         myHoleCards: payload.myHoleCards ?? null,
@@ -261,120 +265,6 @@ function parseState(payload, botAddress) {
 function actionDecisionKey(state) {
     const t = state.turnStartedAt ?? '';
     return `${state.handId}:${state.street}:${state.actingPosition}:${t}:${state.toCall}`;
-}
-/** Simple hand strength heuristic (0-1) for preflop hole cards. */
-function preflopStrength(cards) {
-    if (!cards || cards.length < 2)
-        return 0.3;
-    const r1 = cards[0] % 13; // 0=A, 1=2, ..., 12=K
-    const r2 = cards[1] % 13;
-    const s1 = Math.floor(cards[0] / 13);
-    const s2 = Math.floor(cards[1] / 13);
-    const suited = s1 === s2;
-    const hi = Math.max(r1, r2);
-    const lo = Math.min(r1, r2);
-    // Pocket pair
-    if (r1 === r2) {
-        if (r1 === 0)
-            return 0.95; // AA
-        if (r1 >= 10)
-            return 0.88; // KK, QQ, JJ
-        if (r1 >= 7)
-            return 0.72;
-        return 0.55;
-    }
-    // Ace-high
-    if (hi === 0 || lo === 0) {
-        const kicker = hi === 0 ? lo : hi;
-        if (kicker >= 10)
-            return suited ? 0.82 : 0.75; // AK, AQ, AJ
-        if (kicker >= 7)
-            return suited ? 0.62 : 0.55;
-        return suited ? 0.45 : 0.35;
-    }
-    // Connected / broadway
-    const gap = Math.abs(r1 - r2);
-    let score = 0.25;
-    if (hi >= 9 && lo >= 9)
-        score += 0.35; // Both broadway
-    else if (hi >= 9)
-        score += 0.15;
-    if (gap <= 1)
-        score += 0.15; // Connected
-    else if (gap <= 2)
-        score += 0.08;
-    if (suited)
-        score += 0.1;
-    return Math.min(score, 0.9);
-}
-/**
- * Decide what action to take. Returns { action, amount? }.
- * Strategy: tight-aggressive preflop, semi-random postflop.
- */
-function decideAction(state) {
-    const toCall = BigInt(state.toCall || '0');
-    const pot = BigInt(state.pot || '0');
-    const minRaise = BigInt(state.minRaise || '0');
-    const stack = BigInt(state.myStack || '0');
-    const canCheck = toCall === 0n;
-    const rand = Math.random();
-    // ---- Preflop ----
-    if (state.street === 'preflop') {
-        const strength = preflopStrength(state.myHoleCards ?? []);
-        // Premium hands: raise/re-raise
-        if (strength >= 0.8) {
-            const raiseAmt = minRaise > stack ? stack : minRaise;
-            if (raiseAmt > 0n && raiseAmt > toCall) {
-                return { action: toCall > 0n ? 'raise' : 'bet', amount: raiseAmt.toString() };
-            }
-            return canCheck ? { action: 'check' } : { action: 'call' };
-        }
-        // Medium hands: call or small raise
-        if (strength >= 0.5) {
-            if (canCheck)
-                return { action: 'check' };
-            // Call if bet isn't too big relative to pot
-            if (toCall <= pot / 2n || toCall <= stack / 10n) {
-                return { action: 'call' };
-            }
-            // Fold big bets with medium hands sometimes
-            return rand < 0.4 ? { action: 'call' } : { action: 'fold' };
-        }
-        // Weak hands: mostly fold, occasionally limp
-        if (canCheck)
-            return { action: 'check' };
-        if (toCall <= BigInt(state.minRaise) && rand < 0.2)
-            return { action: 'call' };
-        return { action: 'fold' };
-    }
-    // ---- Postflop (flop/turn/river) ----
-    // Simplified: bet/raise sometimes, check/call often, fold to big bets with nothing
-    if (canCheck) {
-        // Bet ~30% of the time with a pot-sized or half-pot bet
-        if (rand < 0.3 && stack > 0n && minRaise > 0n) {
-            const betSize = pot / 2n;
-            const betAmt = betSize < minRaise ? minRaise : betSize > stack ? stack : betSize;
-            return { action: 'bet', amount: betAmt.toString() };
-        }
-        return { action: 'check' };
-    }
-    // Facing a bet
-    const potOdds = pot > 0n ? Number(toCall) / Number(pot + toCall) : 1;
-    // Always call small bets
-    if (potOdds < 0.2) {
-        return { action: 'call' };
-    }
-    // Raise sometimes (bluff or value)
-    if (rand < 0.15 && stack > minRaise && minRaise > 0n) {
-        const raiseAmt = minRaise > stack ? stack : minRaise;
-        return { action: 'raise', amount: raiseAmt.toString() };
-    }
-    // Call with decent probability
-    if (rand < 0.6) {
-        return { action: 'call' };
-    }
-    // Fold the rest
-    return { action: 'fold' };
 }
 // --------------- Database: players row + minimum balance ---------------
 const POKER_BOT_SKIP_DB = ['1', 'true', 'yes'].includes(String(process.env.POKER_BOT_SKIP_DB ?? '').toLowerCase());
@@ -535,7 +425,14 @@ async function runBotPlayLoop(ws, address, tableId, tag) {
             const key = actionDecisionKey(fresh);
             if (key === lastSuccessfulActionKey)
                 return;
-            const decision = decideAction(fresh);
+            const decision = (0, poker_bot_ai_1.decidePokerBotAction)({
+                street: fresh.street,
+                pot: fresh.pot,
+                toCall: fresh.toCall,
+                minRaise: fresh.minRaise,
+                myStack: fresh.myStack,
+                myHoleCards: fresh.myHoleCards,
+            });
             console.log(`${tag} ${logPrefix} Hand ${fresh.handId?.slice(0, 8)} | ${fresh.street} | pot=${fresh.pot} toCall=${fresh.toCall} -> ${decision.action}${decision.amount ? ' ' + decision.amount : ''}`);
             await sendRequest(ws, 'poker_action', {
                 tableId,

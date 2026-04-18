@@ -135,6 +135,7 @@ export declare class PokerGameService {
     private _playerAction;
     private persistShowdown;
     autoFoldTimedOutTurns(): Promise<string[]>;
+    tickServerTournamentBots(): Promise<void>;
     private reconstructTable;
     private tryStartNextHand;
     private syncSeatsFromTable;

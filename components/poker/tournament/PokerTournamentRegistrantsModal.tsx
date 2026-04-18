@@ -1,11 +1,15 @@
 'use client';
 
 import React, { useEffect, useState } from 'react';
+import Link from 'next/link';
+import { getAddress, isAddress } from 'viem';
 import type { BlackjackWebSocketClient } from '@/lib/websocket-client';
 import { WS_MESSAGE_TYPES } from '@/lib/websocket-message-types';
+import { CopyButton } from '@/components/ui/copy-button';
 
 export interface PokerTournamentRegistrantRow {
   playerAddress: string;
+  displayName?: string | null;
   registeredAt: string | null;
   status: 'playing' | 'busted' | 'completed';
 }
@@ -16,10 +20,10 @@ function statusLabel(status: PokerTournamentRegistrantRow['status']): string {
   return 'Eliminated';
 }
 
-function shortAddr(a: string): string {
-  const s = a || '';
-  if (s.length < 12) return s;
-  return `${s.slice(0, 6)}…${s.slice(-4)}`;
+function profileHref(addr: string): string | null {
+  const t = addr?.trim() ?? '';
+  if (!t || !isAddress(t)) return null;
+  return `/player/${getAddress(t)}`;
 }
 
 interface PokerTournamentRegistrantsModalProps {
@@ -121,6 +125,7 @@ export function PokerTournamentRegistrantsModal({
             <ul className="space-y-2">
               {rows.map((r) => {
                 const isMe = me && r.playerAddress.toLowerCase() === me;
+                const profilePath = profileHref(r.playerAddress);
                 return (
                   <li
                     key={`${r.playerAddress}-${r.registeredAt ?? ''}`}
@@ -135,21 +140,44 @@ export function PokerTournamentRegistrantsModal({
                         : 'inset 0 1px 0 rgba(255,255,255,0.04)',
                     }}
                   >
-                    <div className="min-w-0 flex items-center gap-2 flex-wrap">
-                      <span className="font-mono text-sm text-white/95">{shortAddr(r.playerAddress)}</span>
-                      {isMe && (
-                        <span className="text-[10px] px-1.5 py-0.5 rounded border border-cyan-400/40 text-cyan-200/90">
-                          You
+                    <div className="min-w-0 flex flex-col gap-2">
+                      <div className="flex items-center gap-2 flex-wrap min-w-0">
+                        <span className="text-sm font-semibold text-white truncate">
+                          {r.displayName?.trim() ? r.displayName.trim() : (
+                            <span className="text-white/45 font-normal">No username set</span>
+                          )}
                         </span>
-                      )}
-                      <a
-                        href={`https://scan.pulsechain.com/address/${r.playerAddress}`}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="text-[11px] text-cyan-400/90 hover:text-cyan-300 underline-offset-2 hover:underline"
-                      >
-                        PulseScan
-                      </a>
+                        {isMe && (
+                          <span className="text-[10px] px-1.5 py-0.5 rounded border border-cyan-400/40 text-cyan-200/90 shrink-0">
+                            You
+                          </span>
+                        )}
+                      </div>
+                      <div className="flex flex-wrap items-center gap-2 min-w-0">
+                        <span
+                          className="font-mono text-xs text-cyan-200/85 break-all min-w-0"
+                          title={r.playerAddress}
+                        >
+                          {r.playerAddress}
+                        </span>
+                        <CopyButton
+                          content={r.playerAddress}
+                          copyToast="Address copied"
+                          variant="ghost"
+                          size="sm"
+                          className="h-8 w-8 p-0 text-white/55 hover:text-cyan-300"
+                          title="Copy address"
+                          aria-label="Copy address"
+                        />
+                        {profilePath ? (
+                          <Link
+                            href={profilePath}
+                            className="shrink-0 rounded-lg border border-cyan-500/35 bg-cyan-500/10 px-2.5 py-1 text-[11px] font-semibold text-cyan-200/95 hover:bg-cyan-500/20 hover:border-cyan-400/45 transition-colors"
+                          >
+                            View Profile
+                          </Link>
+                        ) : null}
+                      </div>
                     </div>
                     <div className="flex items-center gap-2 shrink-0 text-xs">
                       <span

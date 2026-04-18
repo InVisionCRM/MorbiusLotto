@@ -77,13 +77,16 @@ class PokerTournamentService {
     parseBigInt(value) {
         return (0, safe_bigint_1.toBigIntSafe)(value);
     }
-    /** Who receives prize_pool on cancel / scheduled under-min (freeroll → funder or creator). */
-    prizePoolRefundRecipient(tournament) {
+    /**
+     * Who receives the **guaranteed** freeroll overlay (buy-in 0) when it is returned:
+     * creator cancel (registration) or scheduled start with insufficient players.
+     */
+    guaranteedPrizePoolRefundRecipient(tournament) {
         const buyIn = this.parseBigInt(tournament.buy_in_amount);
+        if (buyIn > 0n)
+            return null;
         const creatorRaw = tournament.creator_address;
         const creator = creatorRaw ? this.normalizeAddress(creatorRaw) : null;
-        if (buyIn > 0n)
-            return creator;
         const funderRaw = tournament.guaranteed_prize_funder_address;
         if (funderRaw)
             return this.normalizeAddress(funderRaw);
@@ -133,6 +136,13 @@ class PokerTournamentService {
             throw new Error('startingStack must be at least 100');
         if (!params.name?.trim())
             throw new Error('Tournament name required');
+        const scheduled = params.scheduledStartAt;
+        if (!(scheduled instanceof Date) || Number.isNaN(scheduled.getTime())) {
+            throw new Error('scheduledStartAt is required for poker tournaments');
+        }
+        if (scheduled.getTime() <= Date.now()) {
+            throw new Error('scheduledStartAt must be in the future');
+        }
         const buyIn = params.buyInAmount;
         if (buyIn < 0n)
             throw new Error('buyInAmount cannot be negative');
@@ -216,19 +226,17 @@ class PokerTournamentService {
                 initialPrizePool,
                 guaranteedPrizeFunderAddress,
                 JSON.stringify(config),
-                params.scheduledStartAt ?? null,
+                scheduled.toISOString(),
             ]);
             const tournamentId = result.rows[0].id;
-            if (params.scheduledStartAt && params.scheduledStartAt > new Date()) {
-                await client.query(`INSERT INTO tournament_scheduled_events (tournament_id, event_type, scheduled_at, status)
-         VALUES ($1, 'poker_start', $2, 'pending')`, [tournamentId, params.scheduledStartAt.toISOString()]);
-            }
+            await client.query(`INSERT INTO tournament_scheduled_events (tournament_id, event_type, scheduled_at, status)
+         VALUES ($1, 'poker_start', $2, 'pending')`, [tournamentId, scheduled.toISOString()]);
             await client.query('COMMIT');
             logger_1.logger.info('Poker tournament created', {
                 tournamentId,
                 name: params.name,
                 creator: normalizedCreator,
-                scheduledStartAt: params.scheduledStartAt ?? 'SNG (auto-start)',
+                scheduledStartAt: scheduled.toISOString(),
                 buyIn: buyIn.toString(),
                 guaranteedPrizePool: buyIn === 0n ? guaranteed.toString() : undefined,
                 guaranteedPrizePoolSource: buyIn === 0n ? poolSource : undefined,
@@ -264,25 +272,33 @@ class PokerTournamentService {
             if (tRow.rows.length === 0)
                 throw new Error('Poker tournament not found');
             const tournament = tRow.rows[0];
-            if (tournament.status !== 'registration') {
-                throw new Error(`Tournament is not open for registration (status: ${tournament.status})`);
-            }
-            const config = this.parsePokerConfig(tournament.poker_config);
-            // Private tournament PIN check
-            if (tournament.is_private && pinCode !== tournament.pin_code) {
-                throw new Error('Incorrect PIN code');
-            }
-            // Check if player already joined — return success with existing entry so client can recover from timeout/retry
+            // Already registered: idempotent join for retries, and for `poker_tournament_join` while **active**
+            // (table HUD / reconnect calls join after SNG auto-start — must not require status=registration).
             const existing = await client.query(`SELECT id FROM tournament_entries
          WHERE tournament_id = $1 AND LOWER(player_address) = LOWER($2)
            AND status NOT IN ('busted', 'completed')`, [tournamentId, normalized]);
             if (existing.rows.length > 0) {
+                if (tournament.is_private && pinCode !== tournament.pin_code) {
+                    throw new Error('Incorrect PIN code');
+                }
+                const st = String(tournament.status ?? '');
+                if (st !== 'registration' && st !== 'active') {
+                    throw new Error(`Cannot rejoin tournament (status: ${st})`);
+                }
                 await client.query('COMMIT');
                 const entryId = existing.rows[0].id;
                 const tableResult = await this.pool.query('SELECT id FROM poker_tables WHERE tournament_id = $1 LIMIT 1', [tournamentId]);
                 const tableId = tableResult.rows[0]?.id ?? null;
                 logger_1.logger.info('Player already registered for poker tournament, returning existing entry', { tournamentId, playerAddress: normalized, entryId, tableId });
                 return { entryId, autoStarted: !!tableId, tableId };
+            }
+            if (tournament.status !== 'registration') {
+                throw new Error(`Tournament is not open for registration (status: ${tournament.status})`);
+            }
+            const config = this.parsePokerConfig(tournament.poker_config);
+            // Private tournament PIN check (new registration)
+            if (tournament.is_private && pinCode !== tournament.pin_code) {
+                throw new Error('Incorrect PIN code');
             }
             // Check if full
             const countRow = await client.query(`SELECT COUNT(*) AS c FROM tournament_entries
@@ -307,10 +323,11 @@ class PokerTournamentService {
          VALUES ($1, $2, $3, $3) RETURNING id`, [tournamentId, normalized, config.startingStack]);
             const entryId = entryRow.rows[0].id;
             const newRegistered = registered + 1;
-            // Only auto-start SNGs (no scheduled time) or if scheduled time has already passed
+            // Registration fills until scheduled_start_at; activation is always via startScheduledPokerTournament (scheduler).
+            const hasScheduledStart = tournament.scheduled_start_at != null;
             const scheduledStart = tournament.scheduled_start_at ? new Date(tournament.scheduled_start_at) : null;
-            const isScheduledInFuture = scheduledStart && scheduledStart > new Date();
-            const shouldAutoStart = !isScheduledInFuture && newRegistered >= config.minPlayers;
+            const isScheduledInFuture = !!(scheduledStart && scheduledStart.getTime() > Date.now());
+            const shouldAutoStart = !hasScheduledStart && !isScheduledInFuture && newRegistered >= config.minPlayers;
             if (shouldAutoStart) {
                 await client.query(`UPDATE tournaments SET status = 'active', activated_at = COALESCE(activated_at, NOW()) WHERE id = $1`, [tournamentId]);
             }
@@ -360,15 +377,20 @@ class PokerTournamentService {
                 const entries = await client.query(`SELECT id, player_address FROM tournament_entries
            WHERE tournament_id = $1 AND status = 'playing'`, [tournamentId]);
                 for (const entry of entries.rows) {
+                    // Paid tournaments: return each player's buy-in only (prize_pool is buy-ins only here).
                     if (buyIn > 0n) {
                         await client.query(`UPDATE players SET balance = balance + $1::NUMERIC WHERE LOWER(wallet_address) = LOWER($2)`, [buyIn.toString(), entry.player_address]);
                     }
                     await client.query(`UPDATE tournament_entries SET status = 'busted', finished_at = NOW() WHERE id = $1`, [entry.id]);
                 }
-                const poolRefund = this.parseBigInt(tournament.prize_pool);
-                const refundTo = this.prizePoolRefundRecipient(tournament);
-                if (poolRefund > 0n && refundTo) {
-                    await client.query(`UPDATE players SET balance = balance + $1::NUMERIC WHERE LOWER(wallet_address) = LOWER($2)`, [poolRefund.toString(), refundTo]);
+                // Freeroll (buy-in 0): the only MORBIUS refund is the creator/platform-funded guarantee back to the funder.
+                // Do not credit entrants; do not also refund full prize_pool after buy-in loops (avoids double-pay on paid).
+                if (buyIn === 0n) {
+                    const poolRefund = this.parseBigInt(tournament.prize_pool);
+                    const refundTo = this.guaranteedPrizePoolRefundRecipient(tournament);
+                    if (poolRefund > 0n && refundTo) {
+                        await client.query(`UPDATE players SET balance = balance + $1::NUMERIC WHERE LOWER(wallet_address) = LOWER($2)`, [poolRefund.toString(), refundTo]);
+                    }
                 }
                 await client.query(`UPDATE tournaments SET status = 'cancelled', ended_at = NOW(), prize_pool = 0 WHERE id = $1`, [tournamentId]);
                 await client.query('COMMIT');
@@ -691,27 +713,96 @@ class PokerTournamentService {
         if (t.creator_address?.toLowerCase() !== normalized)
             throw new Error('Only the creator can cancel this tournament');
         const buyIn = this.parseBigInt(t.buy_in_amount);
-        const prizePoolRefund = this.parseBigInt(t.prize_pool);
-        // Refund all entries
         const entries = await this.pool.query(`SELECT id, player_address FROM tournament_entries
        WHERE tournament_id = $1 AND status = 'playing'`, [tournamentId]);
         for (const entry of entries.rows) {
+            // Creator cancel during registration: paid events return buy-ins to entrants only.
+            // Freerolls: entrants never receive balance (they never paid a buy-in).
             if (buyIn > 0n) {
                 await this.pool.query(`UPDATE players SET balance = balance + $1::NUMERIC WHERE LOWER(wallet_address) = LOWER($2)`, [buyIn.toString(), entry.player_address]);
             }
             await this.pool.query(`UPDATE tournament_entries SET status = 'busted', finished_at = NOW() WHERE id = $1`, [entry.id]);
         }
-        const refundTo = this.prizePoolRefundRecipient(t);
-        if (prizePoolRefund > 0n && refundTo) {
-            await this.pool.query(`UPDATE players SET balance = balance + $1::NUMERIC WHERE LOWER(wallet_address) = LOWER($2)`, [prizePoolRefund.toString(), refundTo]);
+        // Freeroll: return the locked guarantee to whoever funded prize_pool (creator / funder only).
+        if (buyIn === 0n) {
+            const prizePoolRefund = this.parseBigInt(t.prize_pool);
+            const refundTo = this.guaranteedPrizePoolRefundRecipient(t);
+            if (prizePoolRefund > 0n && refundTo) {
+                await this.pool.query(`UPDATE players SET balance = balance + $1::NUMERIC WHERE LOWER(wallet_address) = LOWER($2)`, [prizePoolRefund.toString(), refundTo]);
+            }
         }
         await this.pool.query(`UPDATE tournaments SET status = 'cancelled', ended_at = NOW(), prize_pool = 0 WHERE id = $1`, [tournamentId]);
         logger_1.logger.info('Poker tournament cancelled', { tournamentId, caller: normalized, refunded: entries.rows.length });
         this.broadcast(`poker_tournament:${tournamentId}`, 'poker_tournament_cancelled', { tournamentId });
     }
+    /**
+     * **Dev / QA only** (HTTP layer must also enable `POKER_TOURNAMENT_DEV_RESET=true`):
+     * Drops tournament poker table(s), cancels pending scheduled events, marks `playing`/`forfeited`
+     * entries as busted, sets tournament `cancelled` and `prize_pool = 0`.
+     * Does **not** credit player balances (including locked guarantee / buy-ins) — for local DB cleanup only.
+     */
+    async adminDevForceResetPokerTournament(tournamentId) {
+        const id = tournamentId.trim();
+        if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id)) {
+            throw new Error('Invalid tournament id');
+        }
+        const tRow = await this.pool.query(`SELECT status FROM tournaments WHERE id = $1 AND game_type = 'poker'`, [id]);
+        if (tRow.rows.length === 0) {
+            throw new Error('Poker tournament not found');
+        }
+        const priorStatus = String(tRow.rows[0].status ?? '');
+        const tables = await this.pool.query(`SELECT id FROM poker_tables WHERE tournament_id = $1`, [id]);
+        const deletedTableIds = [];
+        for (const row of tables.rows) {
+            const tableId = row.id;
+            await this.pokerGameService.deleteTableTournament(tableId);
+            deletedTableIds.push(tableId);
+        }
+        await this.pool.query(`UPDATE tournament_scheduled_events SET status = 'cancelled' WHERE tournament_id = $1 AND status = 'pending'`, [id]);
+        await this.pool.query(`UPDATE tournament_entries
+       SET status = 'busted', chips_remaining = 0, finished_at = COALESCE(finished_at, NOW())
+       WHERE tournament_id = $1 AND status IN ('playing', 'forfeited')`, [id]);
+        await this.pool.query(`UPDATE tournaments
+       SET status = 'cancelled', ended_at = COALESCE(ended_at, NOW()), prize_pool = 0
+       WHERE id = $1 AND game_type = 'poker'`, [id]);
+        logger_1.logger.warn('Poker tournament DEV reset (no balance refunds)', {
+            tournamentId: id,
+            deletedTableIds,
+            priorStatus,
+        });
+        this.broadcast(`poker_tournament:${id}`, 'poker_tournament_cancelled', {
+            tournamentId: id,
+            reason: 'dev_reset',
+        });
+        return { tournamentId: id, deletedTableIds, priorStatus };
+    }
     // ---------------------------------------------------------------------------
     // Read methods
     // ---------------------------------------------------------------------------
+    /** Entrants for lobby / modal (addresses + optional display name + registration time + entry status). */
+    async getPokerTournamentRegistrants(tournamentId) {
+        const id = tournamentId.trim();
+        if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id)) {
+            throw new Error('Invalid tournament id');
+        }
+        const t = await this.pool.query(`SELECT 1 FROM tournaments WHERE id = $1 AND game_type = 'poker'`, [id]);
+        if (t.rows.length === 0)
+            throw new Error('Tournament not found');
+        const r = await this.pool.query(`SELECT te.player_address, te.bought_in_at, te.status, cdn.display_name
+       FROM tournament_entries te
+       LEFT JOIN chat_display_names cdn ON LOWER(cdn.wallet_address) = LOWER(te.player_address)
+       WHERE te.tournament_id = $1
+       ORDER BY
+         CASE te.status WHEN 'playing' THEN 0 WHEN 'completed' THEN 1 ELSE 2 END,
+         te.bought_in_at ASC NULLS LAST,
+         LOWER(te.player_address) ASC`, [id]);
+        return r.rows.map((e) => ({
+            playerAddress: e.player_address,
+            displayName: e.display_name?.trim() ? e.display_name.trim() : null,
+            registeredAt: e.bought_in_at ? new Date(e.bought_in_at).toISOString() : null,
+            status: e.status,
+        }));
+    }
     async listPokerTournaments(playerAddress) {
         const normalized = playerAddress ? this.normalizeAddress(playerAddress) : null;
         /** Cuts lobby noise: hide stale empty registration buckets; always show active, any with players, recent creates, upcoming scheduled, or rows the viewer is in. */

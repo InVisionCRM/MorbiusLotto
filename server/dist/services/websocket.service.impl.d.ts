@@ -11,6 +11,7 @@ export class WebSocketService {
     heartbeatInterval: NodeJS.Timeout;
     chatRateLimitCleanupInterval: NodeJS.Timeout;
     pokerAutoFoldInterval: null;
+    pokerServerBotInterval: null;
     publicClient: {
         account: undefined;
         batch?: {
@@ -168,6 +169,7 @@ export class WebSocketService {
     handlePokerTournamentCreate(ws: any, message: any): Promise<void>;
     handlePokerTournamentJoin(ws: any, message: any): Promise<void>;
     handlePokerTournamentGetState(ws: any, message: any): Promise<void>;
+    handlePokerTournamentRegistrants(ws: any, message: any): Promise<void>;
     handlePokerTournamentCancel(ws: any, message: any): Promise<void>;
     getConnectionCount(): number;
     getActivePlayersCount(): Promise<number>;
