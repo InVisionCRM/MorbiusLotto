@@ -43,6 +43,40 @@ function formatMorbius(wei: string | bigint): string {
   }
 }
 
+/** Registers bot wallets for a tournament (game server spawns `poker-bot` workers). */
+async function requestTournamentBotBootstrap(
+  tournamentId: string,
+  numBots: number,
+  walletAddress: string,
+  pinCode?: string,
+): Promise<{ numBots: number }> {
+  const res = await fetch('/api/admin/poker/tournament-bots/bootstrap', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'x-admin-wallet': walletAddress,
+    },
+    body: JSON.stringify({
+      tournamentId,
+      numBots,
+      ...(pinCode && pinCode.length > 0 ? { pinCode } : {}),
+    }),
+  });
+  const raw = await res.text().catch(() => '');
+  let data: { error?: string; numBots?: number } = {};
+  if (raw) {
+    try {
+      data = JSON.parse(raw) as typeof data;
+    } catch {
+      /* ignore */
+    }
+  }
+  if (!res.ok) {
+    throw new Error(data.error || raw || `HTTP ${res.status}`);
+  }
+  return { numBots: typeof data.numBots === 'number' ? data.numBots : numBots };
+}
+
 function useCountdown(targetIso: string | null): string | null {
   const [display, setDisplay] = useState<string | null>(null);
 
@@ -106,7 +140,9 @@ function TournamentCard({
   myAddress,
   onJoin,
   onCancel,
+  onAddTournamentBots,
   onViewRegistrants,
+  tournamentBotsBusy,
   isJoining,
   isCancelling,
 }: {
@@ -114,12 +150,16 @@ function TournamentCard({
   myAddress?: string;
   onJoin: (tournamentId: string, pinCode?: string) => void;
   onCancel: (tournamentId: string) => void;
+  onAddTournamentBots?: (tournamentId: string, numBots: number, pinCode?: string) => void;
   onViewRegistrants?: (tournamentId: string, name: string) => void;
+  tournamentBotsBusy?: boolean;
   isJoining?: boolean;
   isCancelling?: boolean;
 }) {
   const [pin, setPin] = useState('');
   const [showPin, setShowPin] = useState(false);
+  const [botCount, setBotCount] = useState(2);
+  const [botPin, setBotPin] = useState('');
   const isPrivate = t.isPrivate === true;
 
   const spots = t.maxPlayers - t.registeredCount;
@@ -354,6 +394,51 @@ function TournamentCard({
         </div>
       )}
 
+      {myAddress && t.status === 'registration' && !isActive && onAddTournamentBots && (
+        <div
+          className="mt-3 rounded-lg border border-cyan-500/25 p-3 space-y-2"
+          style={{
+            background: 'linear-gradient(325deg, rgba(20, 20, 20, 0.5), rgba(40, 40, 40, 0.35))',
+            boxShadow: 'inset 0 2px 4px rgba(0, 0, 0, 0.5), 0 1px 2px rgba(0, 0, 0, 0.4)',
+          }}
+        >
+          <div className="text-[11px] font-semibold text-cyan-200/90">Add bot players</div>
+          <p className="text-[10px] text-white/45 leading-snug">
+            Fills open seats with the same automated poker bots used elsewhere on the site. They register from the
+            game server; during the tournament the server plays their turns (fold, call, raise) like normal opponents.
+          </p>
+          <div className="flex flex-wrap gap-2 items-center">
+            <label className="text-[10px] text-white/50 flex items-center gap-1">
+              Count
+              <input
+                type="number"
+                min={1}
+                max={10}
+                value={botCount}
+                onChange={(e) => setBotCount(Math.max(1, Math.min(10, Number(e.target.value) || 1)))}
+                className="w-14 rounded bg-white/10 border border-white/15 px-2 py-1 text-xs text-white"
+              />
+            </label>
+            {isPrivate && (
+              <input
+                type="text"
+                value={botPin}
+                onChange={(e) => setBotPin(e.target.value.replace(/\D/g, '').slice(0, 12))}
+                placeholder="PIN"
+                className="flex-1 min-w-[4rem] rounded-lg bg-white/10 border border-white/15 px-2 py-1 text-xs text-white placeholder:text-white/30"
+              />
+            )}
+            <button
+              type="button"
+              disabled={tournamentBotsBusy || (isPrivate && botPin.length < 4)}
+              onClick={() => onAddTournamentBots(t.tournamentId, botCount, isPrivate ? botPin : undefined)}
+              className="rounded-lg bg-gradient-to-r from-cyan-600 to-blue-600 hover:opacity-95 disabled:opacity-40 text-white text-xs font-semibold px-3 py-1.5 transition-opacity"
+            >
+              {tournamentBotsBusy ? 'Starting…' : 'Add bots'}
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -378,6 +463,7 @@ export function PokerTournamentLobby({ wsClient, myAddress, onGoToTable }: Poker
   const [joinSuccess, setJoinSuccess] = useState<string | null>(null);
   const [joiningId, setJoiningId] = useState<string | null>(null);
   const [cancellingId, setCancellingId] = useState<string | null>(null);
+  const [tournamentBotsBusyId, setTournamentBotsBusyId] = useState<string | null>(null);
   const meLower = myAddress?.toLowerCase() ?? null;
   const refreshTournamentsRef = useRef<(() => Promise<void>) | null>(null);
 
@@ -441,7 +527,27 @@ export function PokerTournamentLobby({ wsClient, myAddress, onGoToTable }: Poker
     }
   };
 
-  const handleCreate = async (params: CreatePokerTournamentParams) => {
+  const handleAddTournamentBots = async (tournamentId: string, numBots: number, pinCode?: string) => {
+    if (!myAddress) {
+      toast.error('Connect your wallet');
+      return;
+    }
+    setTournamentBotsBusyId(tournamentId);
+    setJoinError(null);
+    try {
+      const { numBots: started } = await requestTournamentBotBootstrap(tournamentId, numBots, myAddress, pinCode);
+      toast.success(`Started ${started} poker bot(s) joining this tournament`);
+      await refreshTournaments();
+    } catch (err) {
+      const msg = (err as Error).message ?? 'Failed to start tournament bots';
+      setJoinError(msg);
+      toast.error(msg);
+    } finally {
+      setTournamentBotsBusyId(null);
+    }
+  };
+
+  const handleCreate = async (params: CreatePokerTournamentParams, opts: { addBots: number }) => {
     setJoinError(null);
     try {
       const result = await createTournament(params);
@@ -452,7 +558,24 @@ export function PokerTournamentLobby({ wsClient, myAddress, onGoToTable }: Poker
       if (params.isPrivate && result.pinCode) {
         toast.message(`Private tournament PIN: ${result.pinCode}`, { duration: 14_000 });
       }
-      toast.success('Tournament created');
+      if (opts.addBots > 0 && myAddress) {
+        try {
+          const pinForBots = params.isPrivate ? (result.pinCode ?? undefined) : undefined;
+          const { numBots: started } = await requestTournamentBotBootstrap(
+            result.tournamentId,
+            opts.addBots,
+            myAddress,
+            pinForBots,
+          );
+          toast.success(`Tournament created — ${started} poker bot(s) are joining`);
+        } catch (botErr) {
+          const bmsg = (botErr as Error).message ?? 'Bots failed to start';
+          setJoinError(bmsg);
+          toast.error(`${bmsg} You can still use “Add bots” on the tournament card.`);
+        }
+      } else {
+        toast.success('Tournament created');
+      }
     } catch (err) {
       setJoinError((err as Error).message ?? 'Failed to create');
     }
@@ -538,7 +661,9 @@ export function PokerTournamentLobby({ wsClient, myAddress, onGoToTable }: Poker
               myAddress={myAddress}
               onJoin={handleJoin}
               onCancel={handleCancel}
+              onAddTournamentBots={handleAddTournamentBots}
               onViewRegistrants={(tournamentId, name) => setRegistrantsModal({ tournamentId, name })}
+              tournamentBotsBusy={tournamentBotsBusyId === t.tournamentId}
               isJoining={joiningId === t.tournamentId}
               isCancelling={cancellingId === t.tournamentId}
             />
