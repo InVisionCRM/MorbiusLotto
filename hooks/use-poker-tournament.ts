@@ -120,7 +120,7 @@ export interface UsePokerTournamentReturn {
   myTableId: string | null;
   error: string | null;
   refreshTournaments: () => Promise<void>;
-  createTournament: (params: CreatePokerTournamentParams) => Promise<{ tournamentId: string } | null>;
+  createTournament: (params: CreatePokerTournamentParams) => Promise<{ tournamentId: string; pinCode?: string | null } | null>;
   joinTournament: (tournamentId: string, pinCode?: string) => Promise<{ autoStarted: boolean; tableId: string | null } | null>;
   cancelTournament: (tournamentId: string) => Promise<boolean>;
   fetchTournamentState: (tournamentId: string) => Promise<PokerTournamentState | null>;
@@ -275,10 +275,13 @@ export function usePokerTournament({
 
   const createTournament = useCallback(async (
     params: CreatePokerTournamentParams
-  ): Promise<{ tournamentId: string } | null> => {
+  ): Promise<{ tournamentId: string; pinCode?: string | null } | null> => {
     if (!wsClient) return null;
     try {
-      const response = await wsClient.sendRequest('poker_tournament_create', params);
+      const response = (await wsClient.sendRequest('poker_tournament_create', params)) as {
+        tournamentId: string;
+        pinCode?: string | null;
+      } | null;
       await refreshTournaments();
       return response;
     } catch (err) {

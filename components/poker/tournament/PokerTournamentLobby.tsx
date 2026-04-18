@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
+import { toast } from 'sonner';
 import {
   usePokerTournament,
   POKER_TOURNAMENT_DEFAULT_CONFIG,
@@ -41,6 +42,39 @@ function formatMorbius(wei: string | bigint): string {
   }
 }
 
+async function requestTournamentBotBootstrap(
+  tournamentId: string,
+  numBots: number,
+  walletAddress: string,
+  pinCode?: string,
+): Promise<{ numBots: number }> {
+  const res = await fetch('/api/admin/poker/tournament-bots/bootstrap', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'x-admin-wallet': walletAddress,
+    },
+    body: JSON.stringify({
+      tournamentId,
+      numBots,
+      ...(pinCode && pinCode.length > 0 ? { pinCode } : {}),
+    }),
+  });
+  const raw = await res.text().catch(() => '');
+  let data: { error?: string; numBots?: number } = {};
+  if (raw) {
+    try {
+      data = JSON.parse(raw) as typeof data;
+    } catch {
+      /* ignore */
+    }
+  }
+  if (!res.ok) {
+    throw new Error(data.error || raw || `HTTP ${res.status}`);
+  }
+  return { numBots: typeof data.numBots === 'number' ? data.numBots : numBots };
+}
+
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
@@ -77,6 +111,8 @@ function TournamentCard({
   myAddress,
   onJoin,
   onCancel,
+  onAddTournamentBots,
+  tournamentBotsBusy,
   isJoining,
   isCancelling,
 }: {
@@ -84,11 +120,15 @@ function TournamentCard({
   myAddress?: string;
   onJoin: (tournamentId: string, pinCode?: string) => void;
   onCancel: (tournamentId: string) => void;
+  onAddTournamentBots?: (tournamentId: string, numBots: number, pinCode?: string) => void;
+  tournamentBotsBusy?: boolean;
   isJoining?: boolean;
   isCancelling?: boolean;
 }) {
   const [pin, setPin] = useState('');
   const [showPin, setShowPin] = useState(false);
+  const [botCount, setBotCount] = useState(2);
+  const [botPin, setBotPin] = useState('');
   const isPrivate = t.isPrivate === true;
 
   const spots = t.maxPlayers - t.registeredCount;
@@ -219,6 +259,51 @@ function TournamentCard({
           You are playing in this tournament
         </div>
       )}
+
+      {myAddress && t.status === 'registration' && !isActive && onAddTournamentBots && (
+        <div
+          className="mt-3 rounded-lg border border-cyan-500/25 p-3 space-y-2"
+          style={{
+            background: 'linear-gradient(325deg, rgba(20, 20, 20, 0.5), rgba(40, 40, 40, 0.35))',
+            boxShadow: 'inset 0 2px 4px rgba(0, 0, 0, 0.5), 0 1px 2px rgba(0, 0, 0, 0.4)',
+          }}
+        >
+          <div className="text-[11px] font-semibold text-cyan-200/90">AI players (server)</div>
+          <p className="text-[10px] text-white/45 leading-snug">
+            Starts bot processes on the API host so they register here before the game begins (same idea as cash-table bots).
+          </p>
+          <div className="flex flex-wrap gap-2 items-center">
+            <label className="text-[10px] text-white/50 flex items-center gap-1">
+              Count
+              <input
+                type="number"
+                min={1}
+                max={10}
+                value={botCount}
+                onChange={(e) => setBotCount(Math.max(1, Math.min(10, Number(e.target.value) || 1)))}
+                className="w-14 rounded bg-white/10 border border-white/15 px-2 py-1 text-xs text-white"
+              />
+            </label>
+            {isPrivate && (
+              <input
+                type="text"
+                value={botPin}
+                onChange={(e) => setBotPin(e.target.value.replace(/\D/g, '').slice(0, 12))}
+                placeholder="PIN"
+                className="flex-1 min-w-[4rem] rounded-lg bg-white/10 border border-white/15 px-2 py-1 text-xs text-white placeholder:text-white/30"
+              />
+            )}
+            <button
+              type="button"
+              disabled={tournamentBotsBusy || (isPrivate && botPin.length < 4)}
+              onClick={() => onAddTournamentBots(t.tournamentId, botCount, isPrivate ? botPin : undefined)}
+              className="rounded-lg bg-gradient-to-r from-cyan-600 to-blue-600 hover:opacity-95 disabled:opacity-40 text-white text-xs font-semibold px-3 py-1.5 transition-opacity"
+            >
+              {tournamentBotsBusy ? 'Starting…' : 'Add bots'}
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -230,7 +315,7 @@ function TournamentCard({
 function CreateModal({ creatorAddress, onClose, onCreate }: {
   creatorAddress?: string;
   onClose: () => void;
-  onCreate: (params: CreatePokerTournamentParams) => Promise<void>;
+  onCreate: (params: CreatePokerTournamentParams, opts: { addBots: number }) => Promise<void>;
 }) {
   const [name, setName] = useState('My SNG');
   const [isFreeroll, setIsFreeroll] = useState(false);
@@ -242,6 +327,8 @@ function CreateModal({ creatorAddress, onClose, onCreate }: {
   const [minPlayers, setMinPlayers] = useState('2');
   const [maxPlayers, setMaxPlayers] = useState('6');
   const [isPrivate, setIsPrivate] = useState(false);
+  const [privatePin, setPrivatePin] = useState('');
+  const [botsToAdd, setBotsToAdd] = useState(0);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [scheduledStart, setScheduledStart] = useState(''); // ISO datetime-local string
 
@@ -257,27 +344,33 @@ function CreateModal({ creatorAddress, onClose, onCreate }: {
     const guaranteeWei = isFreeroll ? parseMorbiusInput(guaranteedPool) : 0n;
     if (!isFreeroll && buyWei <= 0n) return;
     if (isFreeroll && guaranteeWei <= 0n) return;
+    const pinDigits = privatePin.replace(/\D/g, '').slice(0, 12);
+    const pinForCreate = isPrivate && pinDigits.length >= 4 ? pinDigits : undefined;
     setIsSubmitting(true);
     try {
-      await onCreate({
-        name:                  name.trim(),
-        buyInAmount:           buyWei.toString(),
-        ...(isFreeroll
-          ? {
-              guaranteedPrizePool: guaranteeWei.toString(),
-              ...(fundFromPromo ? { guaranteedPrizePoolSource: 'platform_promo' as const } : {}),
-            }
-          : {}),
-        prizeDistributionType: prizeType,
-        config:                {
-          ...POKER_TOURNAMENT_DEFAULT_CONFIG,
-          startingStack: Math.max(100, parseInt(startingStack) || 5000),
-          minPlayers:    Math.max(2, parseInt(minPlayers) || 2),
-          maxPlayers:    Math.max(parseInt(minPlayers) || 2, parseInt(maxPlayers) || 6),
+      await onCreate(
+        {
+          name:                  name.trim(),
+          buyInAmount:           buyWei.toString(),
+          ...(isFreeroll
+            ? {
+                guaranteedPrizePool: guaranteeWei.toString(),
+                ...(fundFromPromo ? { guaranteedPrizePoolSource: 'platform_promo' as const } : {}),
+              }
+            : {}),
+          prizeDistributionType: prizeType,
+          config:                {
+            ...POKER_TOURNAMENT_DEFAULT_CONFIG,
+            startingStack: Math.max(100, parseInt(startingStack) || 5000),
+            minPlayers:    Math.max(2, parseInt(minPlayers) || 2),
+            maxPlayers:    Math.max(parseInt(minPlayers) || 2, parseInt(maxPlayers) || 6),
+          },
+          isPrivate,
+          ...(pinForCreate ? { pinCode: pinForCreate } : {}),
+          scheduledStartAt: scheduledStart ? new Date(scheduledStart).toISOString() : null,
         },
-        isPrivate,
-        scheduledStartAt: scheduledStart ? new Date(scheduledStart).toISOString() : null,
-      });
+        { addBots: Math.max(0, Math.min(10, Math.floor(botsToAdd))) },
+      );
       onClose();
     } finally {
       setIsSubmitting(false);
@@ -286,9 +379,15 @@ function CreateModal({ creatorAddress, onClose, onCreate }: {
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm">
-      <div className="bg-[#1a1a2e] border border-white/10 rounded-2xl w-full max-w-md p-6 shadow-2xl">
+      <div
+        className="border border-cyan-500/30 rounded-2xl w-full max-w-md p-6 shadow-2xl"
+        style={{
+          background: 'linear-gradient(325deg, rgba(20, 20, 20, 0.95), rgba(40, 40, 40, 0.85))',
+          boxShadow: 'inset 0 3px 6px rgba(0, 0, 0, 0.6), 0 8px 32px rgba(0, 0, 0, 0.5)',
+        }}
+      >
         <div className="flex items-center justify-between mb-5">
-          <h2 className="text-lg font-bold text-white">Create Poker SNG</h2>
+          <h2 className="text-lg font-bold text-white">Create tournament</h2>
           <button onClick={onClose} className="text-white/40 hover:text-white transition-colors text-xl leading-none">×</button>
         </div>
 
@@ -426,11 +525,47 @@ function CreateModal({ creatorAddress, onClose, onCreate }: {
             <input
               type="checkbox"
               checked={isPrivate}
-              onChange={(e) => setIsPrivate(e.target.checked)}
+              onChange={(e) => {
+                setIsPrivate(e.target.checked);
+                if (!e.target.checked) setPrivatePin('');
+              }}
               className="rounded"
             />
             <span className="text-sm text-white/70">Private (PIN-protected)</span>
           </label>
+
+          {isPrivate && (
+            <div>
+              <label className="text-xs text-white/50 uppercase tracking-wide block mb-1">
+                Room PIN <span className="normal-case text-white/35">(optional — 4–12 digits, or random)</span>
+              </label>
+              <input
+                type="text"
+                value={privatePin}
+                onChange={(e) => setPrivatePin(e.target.value.replace(/\D/g, '').slice(0, 12))}
+                placeholder="e.g. 1234"
+                className="w-full rounded-lg bg-white/8 border border-white/15 px-3 py-2 text-white text-sm focus:outline-none focus:border-cyan-500/40"
+              />
+            </div>
+          )}
+
+          <div
+            className="rounded-lg border border-cyan-500/20 p-3 space-y-2"
+            style={{ background: 'rgba(0,0,0,0.2)' }}
+          >
+            <label className="text-xs text-cyan-200/90 font-semibold block">AI players after create</label>
+            <p className="text-[10px] text-white/45 leading-snug">
+              Optional. Runs on the game server (bot wallets + DATABASE_URL). They register before the tournament starts.
+            </p>
+            <input
+              type="number"
+              min={0}
+              max={10}
+              value={botsToAdd}
+              onChange={(e) => setBotsToAdd(Math.max(0, Math.min(10, Number(e.target.value) || 0)))}
+              className="w-full rounded-lg bg-white/8 border border-white/15 px-3 py-2 text-white text-sm focus:outline-none focus:border-white/30"
+            />
+          </div>
         </div>
 
         <div className="mt-5 flex gap-3">
@@ -475,6 +610,7 @@ export function PokerTournamentLobby({ wsClient, myAddress, onGoToTable }: Poker
   const [joinSuccess, setJoinSuccess] = useState<string | null>(null);
   const [joiningId, setJoiningId] = useState<string | null>(null);
   const [cancellingId, setCancellingId] = useState<string | null>(null);
+  const [tournamentBotsBusyId, setTournamentBotsBusyId] = useState<string | null>(null);
 
   const { openTournaments, isLoadingTournaments, refreshTournaments, createTournament, joinTournament, cancelTournament, myTableId, myTournamentId } =
     usePokerTournament({
@@ -504,11 +640,55 @@ export function PokerTournamentLobby({ wsClient, myAddress, onGoToTable }: Poker
     }
   };
 
-  const handleCreate = async (params: CreatePokerTournamentParams) => {
+  const handleAddTournamentBots = async (tournamentId: string, numBots: number, pinCode?: string) => {
+    if (!myAddress) {
+      toast.error('Connect your wallet');
+      return;
+    }
+    setTournamentBotsBusyId(tournamentId);
     setJoinError(null);
     try {
-      await createTournament(params);
-      refreshTournaments();
+      const { numBots: started } = await requestTournamentBotBootstrap(tournamentId, numBots, myAddress, pinCode);
+      toast.success(`Started ${started} tournament bot player(s)`);
+      await refreshTournaments();
+    } catch (err) {
+      const msg = (err as Error).message ?? 'Failed to start tournament bots';
+      setJoinError(msg);
+      toast.error(msg);
+    } finally {
+      setTournamentBotsBusyId(null);
+    }
+  };
+
+  const handleCreate = async (params: CreatePokerTournamentParams, opts: { addBots: number }) => {
+    setJoinError(null);
+    try {
+      const result = await createTournament(params);
+      if (!result?.tournamentId) {
+        setJoinError('Failed to create tournament');
+        return;
+      }
+      if (params.isPrivate && result.pinCode) {
+        toast.message(`Private tournament PIN: ${result.pinCode}`, { duration: 14_000 });
+      }
+      if (opts.addBots > 0 && myAddress) {
+        try {
+          const pinForBots = params.isPrivate ? (result.pinCode ?? undefined) : undefined;
+          const { numBots: started } = await requestTournamentBotBootstrap(
+            result.tournamentId,
+            opts.addBots,
+            myAddress,
+            pinForBots,
+          );
+          toast.success(`Tournament created — started ${started} bot(s)`);
+        } catch (botErr) {
+          const bmsg = (botErr as Error).message ?? 'Bots failed to start';
+          setJoinError(bmsg);
+          toast.error(`${bmsg} You can still use “Add bots” on the tournament card.`);
+        }
+      } else {
+        toast.success('Tournament created');
+      }
     } catch (err) {
       setJoinError((err as Error).message ?? 'Failed to create');
     }
@@ -594,6 +774,8 @@ export function PokerTournamentLobby({ wsClient, myAddress, onGoToTable }: Poker
               myAddress={myAddress}
               onJoin={handleJoin}
               onCancel={handleCancel}
+              onAddTournamentBots={handleAddTournamentBots}
+              tournamentBotsBusy={tournamentBotsBusyId === t.tournamentId}
               isJoining={joiningId === t.tournamentId}
               isCancelling={cancellingId === t.tournamentId}
             />

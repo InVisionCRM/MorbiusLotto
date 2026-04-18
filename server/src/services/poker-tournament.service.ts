@@ -186,7 +186,9 @@ export class PokerTournamentService {
   // Create
   // ---------------------------------------------------------------------------
 
-  async createPokerTournament(params: CreatePokerTournamentParams): Promise<{ tournamentId: string }> {
+  async createPokerTournament(
+    params: CreatePokerTournamentParams,
+  ): Promise<{ tournamentId: string; pinCode: string | null }> {
     const normalizedCreator = this.normalizeAddress(params.creatorAddress);
     const { config } = params;
 
@@ -335,7 +337,7 @@ export class PokerTournamentService {
         guaranteedPrizePoolSource: buyIn === 0n ? poolSource : undefined,
       });
 
-      return { tournamentId };
+      return { tournamentId, pinCode: params.isPrivate ? pinCode : null };
     } catch (err) {
       await client.query('ROLLBACK');
       throw err;
