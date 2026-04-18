@@ -2215,8 +2215,6 @@ export default function BlackjackPage() {
               />
             ) : null
           }
-          playerStats={playerStats}
-          playerStatsLoading={playerStatsLoading}
           tipStats={tipStats}
           blackjackAddress={BLACKJACK_ADDRESS}
           morbiusTokenAddress={MORBIUS_TOKEN_ADDRESS}

@@ -1,9 +1,7 @@
 'use client';
 
 import { formatEther } from 'viem';
-import { PlayerStatsDashboard } from '@/components/BLACKJACK/PlayerStatsDashboard';
 import { TournamentLeaderboard } from '@/components/BLACKJACK/Tournament';
-import type { BlackjackWebSocketClient } from '@/lib/websocket-client';
 
 type TipStats = {
   totalTipAmountWei: string;
@@ -13,11 +11,6 @@ type TipStats = {
 
 interface BlackjackGameSecondaryPanelsProps {
   address: string | undefined;
-  playerStats: any;
-  playerStatsLoading: boolean;
-  wsConnected: boolean;
-  wsClient: BlackjackWebSocketClient | null;
-  offChainBalance: bigint;
   tipStats: TipStats | null;
   tournament: {
     tournamentState: { inTournament: boolean };
@@ -28,41 +21,11 @@ interface BlackjackGameSecondaryPanelsProps {
 
 export function BlackjackGameSecondaryPanels({
   address,
-  playerStats,
-  playerStatsLoading,
-  wsConnected,
-  wsClient,
-  offChainBalance,
   tipStats,
   tournament,
 }: BlackjackGameSecondaryPanelsProps) {
   return (
     <>
-      <section className="mt-0 w-full min-w-0">
-        <div className="flex min-h-0 flex-col w-full">
-          {address && playerStats ? (
-            <PlayerStatsDashboard
-              stats={playerStats}
-              isLoading={playerStatsLoading}
-              playerAddress={address}
-              wsClient={wsConnected ? wsClient : null}
-              reserveBalance={offChainBalance}
-            />
-          ) : (
-            <div
-              className="flex min-h-[320px] w-full items-center justify-center overflow-hidden rounded-xl px-6 text-center text-white/60 md:min-h-[400px]"
-              style={{
-                background: 'linear-gradient(145deg, rgb(16, 26, 35), rgb(35, 36, 41))',
-                boxShadow: 'inset 0 3px 6px rgba(0, 0, 0, 0.8), inset 0 -3px 6px rgba(255, 255, 255, 0.1), 0 1px 3px rgba(0, 0, 0, 0.5)',
-                border: '1px inset rgba(60, 60, 60, 0.5)',
-              }}
-            >
-              Connect wallet to view your player dashboard.
-            </div>
-          )}
-        </div>
-      </section>
-
       {tipStats && tipStats.tipCount > 0 && (
         <div className="mt-4 rounded-xl overflow-hidden" style={{ background: 'linear-gradient(145deg, rgb(16, 26, 35), rgb(35, 36, 41))', border: '1px solid rgba(217, 119, 6, 0.2)' }}>
           <div className="px-4 py-3 border-b border-amber-600/20 flex items-center justify-between">

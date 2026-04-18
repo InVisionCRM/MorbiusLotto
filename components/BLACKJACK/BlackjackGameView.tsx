@@ -97,8 +97,6 @@ interface BlackjackGameViewProps {
   BLACKJACK_MUSIC_PLAYLIST: readonly string[];
   musicTrackIndex: number;
   tournamentTabContent: ReactNode;
-  playerStats: any;
-  playerStatsLoading: boolean;
   tipStats: any;
   blackjackAddress: string;
   morbiusTokenAddress: string;
@@ -197,8 +195,6 @@ export function BlackjackGameView(props: BlackjackGameViewProps) {
     BLACKJACK_MUSIC_PLAYLIST,
     musicTrackIndex,
     tournamentTabContent,
-    playerStats,
-    playerStatsLoading,
     tipStats,
     blackjackAddress,
     morbiusTokenAddress,
@@ -475,16 +471,7 @@ export function BlackjackGameView(props: BlackjackGameViewProps) {
           </div>
           </div>
 
-          <BlackjackGameSecondaryPanels
-            address={address}
-            playerStats={playerStats}
-            playerStatsLoading={playerStatsLoading}
-            wsConnected={wsConnected}
-            wsClient={wsClient}
-            offChainBalance={offChainBalance}
-            tipStats={tipStats}
-            tournament={tournament}
-          />
+          <BlackjackGameSecondaryPanels address={address} tipStats={tipStats} tournament={tournament} />
 
           <BlackjackHowToSection
             blackjackAddress={blackjackAddress}
