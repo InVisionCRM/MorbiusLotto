@@ -196,9 +196,9 @@ function TournamentCard({
       </div>
 
       <div className="mt-3 text-[11px] text-white/40">
-        {isScheduled
-          ? `Scheduled · Stack: ${t.startingStack.toLocaleString()} chips`
-          : `SNG · Start: ${t.minPlayers} players · Stack: ${t.startingStack.toLocaleString()} chips`
+        {t.scheduledStartAt
+          ? `${isScheduled ? 'Starts' : 'Started'} ${new Date(t.scheduledStartAt).toLocaleString()} · Stack: ${t.startingStack.toLocaleString()} chips · ${t.minPlayers}–${t.maxPlayers} seats`
+          : `Stack: ${t.startingStack.toLocaleString()} chips · ${t.minPlayers}–${t.maxPlayers} seats`
         }
       </div>
 

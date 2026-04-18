@@ -1480,8 +1480,11 @@ class WebSocketService {
                 return this.sendError(ws, 'prizeDistributionType required', message.requestId);
             if (!p.config)
                 return this.sendError(ws, 'config required', message.requestId);
-            const scheduledStartAt = p.scheduledStartAt ? new Date(p.scheduledStartAt) : null;
-            if (scheduledStartAt && isNaN(scheduledStartAt.getTime())) {
+            if (p.scheduledStartAt == null || p.scheduledStartAt === '') {
+                return this.sendError(ws, 'scheduledStartAt is required', message.requestId);
+            }
+            const scheduledStartAt = new Date(p.scheduledStartAt);
+            if (isNaN(scheduledStartAt.getTime())) {
                 return this.sendError(ws, 'Invalid scheduledStartAt date', message.requestId);
             }
             const buyInAmount = BigInt(String(p.buyInAmount));

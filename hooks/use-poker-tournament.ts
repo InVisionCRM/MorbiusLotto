@@ -80,7 +80,8 @@ export interface CreatePokerTournamentParams {
   config: PokerTournamentConfig;
   isPrivate?: boolean;
   pinCode?: string;
-  scheduledStartAt?: string | null;
+  /** ISO 8601 start time — required; server rejects missing or past times. */
+  scheduledStartAt: string;
 }
 
 export const DEFAULT_BLIND_SCHEDULE: BlindLevel[] = [

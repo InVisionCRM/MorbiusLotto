@@ -98,7 +98,8 @@ export interface CreatePokerTournamentParams {
   config: PokerTournamentConfig;
   isPrivate?: boolean;
   pinCode?: string | null;
-  scheduledStartAt?: Date | null;
+  /** Required — must be a finite `Date` strictly in the future (enforced at create). */
+  scheduledStartAt: Date;
 }
 
 /**
@@ -235,6 +236,14 @@ export class PokerTournamentService {
     if (config.startingStack < 100) throw new Error('startingStack must be at least 100');
     if (!params.name?.trim()) throw new Error('Tournament name required');
 
+    const scheduled = params.scheduledStartAt;
+    if (!(scheduled instanceof Date) || Number.isNaN(scheduled.getTime())) {
+      throw new Error('scheduledStartAt is required for poker tournaments');
+    }
+    if (scheduled.getTime() <= Date.now()) {
+      throw new Error('scheduledStartAt must be in the future');
+    }
+
     const buyIn = params.buyInAmount;
     if (buyIn < 0n) throw new Error('buyInAmount cannot be negative');
     const guaranteed = params.guaranteedPrizePool ?? 0n;
@@ -334,19 +343,17 @@ export class PokerTournamentService {
           initialPrizePool,
           guaranteedPrizeFunderAddress,
           JSON.stringify(config),
-          params.scheduledStartAt ?? null,
+          scheduled.toISOString(),
         ]
       );
 
       const tournamentId = result.rows[0].id;
 
-      if (params.scheduledStartAt && params.scheduledStartAt > new Date()) {
-        await client.query(
-          `INSERT INTO tournament_scheduled_events (tournament_id, event_type, scheduled_at, status)
+      await client.query(
+        `INSERT INTO tournament_scheduled_events (tournament_id, event_type, scheduled_at, status)
          VALUES ($1, 'poker_start', $2, 'pending')`,
-          [tournamentId, params.scheduledStartAt.toISOString()]
-        );
-      }
+        [tournamentId, scheduled.toISOString()],
+      );
 
       await client.query('COMMIT');
 
@@ -354,7 +361,7 @@ export class PokerTournamentService {
         tournamentId,
         name: params.name,
         creator: normalizedCreator,
-        scheduledStartAt: params.scheduledStartAt ?? 'SNG (auto-start)',
+        scheduledStartAt: scheduled.toISOString(),
         buyIn: buyIn.toString(),
         guaranteedPrizePool: buyIn === 0n ? guaranteed.toString() : undefined,
         guaranteedPrizePoolSource: buyIn === 0n ? poolSource : undefined,
@@ -400,18 +407,9 @@ export class PokerTournamentService {
       if (tRow.rows.length === 0) throw new Error('Poker tournament not found');
 
       const tournament = tRow.rows[0];
-      if (tournament.status !== 'registration') {
-        throw new Error(`Tournament is not open for registration (status: ${tournament.status})`);
-      }
 
-      const config = this.parsePokerConfig(tournament.poker_config);
-
-      // Private tournament PIN check
-      if (tournament.is_private && pinCode !== tournament.pin_code) {
-        throw new Error('Incorrect PIN code');
-      }
-
-      // Check if player already joined — return success with existing entry so client can recover from timeout/retry
+      // Already registered: idempotent join for retries, and for `poker_tournament_join` while **active**
+      // (table HUD / reconnect calls join after SNG auto-start — must not require status=registration).
       const existing = await client.query(
         `SELECT id FROM tournament_entries
          WHERE tournament_id = $1 AND LOWER(player_address) = LOWER($2)
@@ -419,6 +417,13 @@ export class PokerTournamentService {
         [tournamentId, normalized]
       );
       if (existing.rows.length > 0) {
+        if (tournament.is_private && pinCode !== tournament.pin_code) {
+          throw new Error('Incorrect PIN code');
+        }
+        const st = String(tournament.status ?? '');
+        if (st !== 'registration' && st !== 'active') {
+          throw new Error(`Cannot rejoin tournament (status: ${st})`);
+        }
         await client.query('COMMIT');
         const entryId = existing.rows[0].id;
         const tableResult = await this.pool.query(
@@ -428,6 +433,17 @@ export class PokerTournamentService {
         const tableId = tableResult.rows[0]?.id ?? null;
         logger.info('Player already registered for poker tournament, returning existing entry', { tournamentId, playerAddress: normalized, entryId, tableId });
         return { entryId, autoStarted: !!tableId, tableId };
+      }
+
+      if (tournament.status !== 'registration') {
+        throw new Error(`Tournament is not open for registration (status: ${tournament.status})`);
+      }
+
+      const config = this.parsePokerConfig(tournament.poker_config);
+
+      // Private tournament PIN check (new registration)
+      if (tournament.is_private && pinCode !== tournament.pin_code) {
+        throw new Error('Incorrect PIN code');
       }
 
       // Check if full
@@ -472,10 +488,12 @@ export class PokerTournamentService {
       const entryId = entryRow.rows[0].id;
 
       const newRegistered = registered + 1;
-      // Only auto-start SNGs (no scheduled time) or if scheduled time has already passed
+      // Registration fills until scheduled_start_at; activation is always via startScheduledPokerTournament (scheduler).
+      const hasScheduledStart = tournament.scheduled_start_at != null;
       const scheduledStart = tournament.scheduled_start_at ? new Date(tournament.scheduled_start_at) : null;
-      const isScheduledInFuture = scheduledStart && scheduledStart > new Date();
-      const shouldAutoStart = !isScheduledInFuture && newRegistered >= config.minPlayers;
+      const isScheduledInFuture = !!(scheduledStart && scheduledStart.getTime() > Date.now());
+      const shouldAutoStart =
+        !hasScheduledStart && !isScheduledInFuture && newRegistered >= config.minPlayers;
 
       if (shouldAutoStart) {
         await client.query(

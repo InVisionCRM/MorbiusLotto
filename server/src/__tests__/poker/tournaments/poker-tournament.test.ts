@@ -14,6 +14,7 @@ import { testPool, TEST_PLAYERS, TEST_BUY_IN, TEST_BALANCE, resetTestBalances, g
 import {
   PokerTournamentService,
   PokerTournamentConfig,
+  CreatePokerTournamentParams,
   DEFAULT_BLIND_SCHEDULE,
   BlindLevel,
   normalizePokerTournamentPrizePercents,
@@ -124,6 +125,26 @@ describe('0 - normalizePokerTournamentPrizePercents', () => {
 // ---------------------------------------------------------------------------
 // Helper to create a tournament and track it for cleanup
 // ---------------------------------------------------------------------------
+/** Future start time for tests (create rejects non-future dates). */
+function pokerTestScheduledStart(hoursFromNow = 2): Date {
+  return new Date(Date.now() + hoursFromNow * 60 * 60 * 1000);
+}
+
+/** Join listed players during registration, then run the scheduled-start path (like the real scheduler). */
+async function joinThroughScheduledStart(tournamentId: string, players: string[]): Promise<string> {
+  for (const p of players) {
+    await pokerTournamentService.joinPokerTournament(tournamentId, p);
+  }
+  await pokerTournamentService.startScheduledPokerTournament(tournamentId);
+  const r = await testPool.query(
+    `SELECT id FROM poker_tables WHERE tournament_id = $1 LIMIT 1`,
+    [tournamentId],
+  );
+  const id = r.rows[0]?.id as string | undefined;
+  if (!id) throw new Error('expected tournament table after startScheduledPokerTournament');
+  return id;
+}
+
 async function createTestTournament(overrides?: Partial<PokerTournamentConfig>): Promise<string> {
   const config = { ...SMALL_CONFIG, ...(overrides ?? {}) };
   const { tournamentId } = await pokerTournamentService.createPokerTournament({
@@ -132,6 +153,7 @@ async function createTestTournament(overrides?: Partial<PokerTournamentConfig>):
     buyInAmount:           TEST_BUY_IN,
     prizeDistributionType: 'winner_takes_all',
     config,
+    scheduledStartAt:      pokerTestScheduledStart(),
   });
   createdTournamentIds.push(tournamentId);
   return tournamentId;
@@ -174,6 +196,31 @@ describe('1 - createPokerTournament', () => {
     expect(Number(row.rows[0].max_players)).toBe(3);
   });
 
+  it('rejects create without scheduledStartAt', async () => {
+    await expect(
+      pokerTournamentService.createPokerTournament({
+        creatorAddress:        PLAYER_1,
+        name:                  'No schedule',
+        buyInAmount:           TEST_BUY_IN,
+        prizeDistributionType: 'winner_takes_all',
+        config:                SMALL_CONFIG,
+      } as unknown as CreatePokerTournamentParams)
+    ).rejects.toThrow(/scheduledStartAt/);
+  });
+
+  it('rejects scheduledStartAt in the past', async () => {
+    await expect(
+      pokerTournamentService.createPokerTournament({
+        creatorAddress:        PLAYER_1,
+        name:                  'Past start',
+        buyInAmount:           TEST_BUY_IN,
+        prizeDistributionType: 'winner_takes_all',
+        config:                SMALL_CONFIG,
+        scheduledStartAt:      new Date(Date.now() - 120_000),
+      })
+    ).rejects.toThrow(/future/);
+  });
+
   it('rejects empty blind schedule', async () => {
     await expect(
       pokerTournamentService.createPokerTournament({
@@ -182,6 +229,7 @@ describe('1 - createPokerTournament', () => {
         buyInAmount:           TEST_BUY_IN,
         prizeDistributionType: 'winner_takes_all',
         config:                { ...SMALL_CONFIG, blindSchedule: [] },
+        scheduledStartAt:      pokerTestScheduledStart(),
       })
     ).rejects.toThrow('Blind schedule');
   });
@@ -194,6 +242,7 @@ describe('1 - createPokerTournament', () => {
         buyInAmount:           TEST_BUY_IN,
         prizeDistributionType: 'winner_takes_all',
         config:                { ...SMALL_CONFIG, minPlayers: 1 },
+        scheduledStartAt:      pokerTestScheduledStart(),
       })
     ).rejects.toThrow('minPlayers');
   });
@@ -206,6 +255,7 @@ describe('1 - createPokerTournament', () => {
         buyInAmount:           TEST_BUY_IN,
         prizeDistributionType: 'custom',
         config:                SMALL_CONFIG,
+        scheduledStartAt:      pokerTestScheduledStart(),
       })
     ).rejects.toThrow(/prizePercentages/);
   });
@@ -219,6 +269,7 @@ describe('1 - createPokerTournament', () => {
         prizeDistributionType: 'custom',
         prizePercentages:      [50, 30, 19],
         config:                SMALL_CONFIG,
+        scheduledStartAt:      pokerTestScheduledStart(),
       })
     ).rejects.toThrow(/100/);
   });
@@ -232,6 +283,7 @@ describe('1 - createPokerTournament', () => {
       prizeDistributionType: 'custom',
       prizePercentages:      pct,
       config:                SMALL_CONFIG,
+      scheduledStartAt:      pokerTestScheduledStart(),
     });
     createdTournamentIds.push(tournamentId);
 
@@ -254,6 +306,7 @@ describe('1 - createPokerTournament', () => {
       guaranteedPrizePool:   TEST_GUARANTEED_POOL,
       prizeDistributionType: 'winner_takes_all',
       config:                SMALL_CONFIG,
+      scheduledStartAt:      pokerTestScheduledStart(),
     });
     createdTournamentIds.push(tournamentId);
 
@@ -276,6 +329,7 @@ describe('1 - createPokerTournament', () => {
         buyInAmount:           0n,
         prizeDistributionType: 'winner_takes_all',
         config:                SMALL_CONFIG,
+        scheduledStartAt:      pokerTestScheduledStart(),
       })
     ).rejects.toThrow('guaranteedPrizePool');
   });
@@ -289,6 +343,7 @@ describe('1 - createPokerTournament', () => {
         guaranteedPrizePool:   TEST_GUARANTEED_POOL,
         prizeDistributionType: 'winner_takes_all',
         config:                SMALL_CONFIG,
+        scheduledStartAt:      pokerTestScheduledStart(),
       })
     ).rejects.toThrow('only allowed when buy-in is 0');
   });
@@ -316,6 +371,7 @@ describe('1c - platform promo guaranteed pool', () => {
       guaranteedPrizePoolSource:  'platform_promo',
       prizeDistributionType:      'winner_takes_all',
       config:                     SMALL_CONFIG,
+      scheduledStartAt:           pokerTestScheduledStart(),
     });
     createdTournamentIds.push(tournamentId);
 
@@ -340,6 +396,7 @@ describe('1c - platform promo guaranteed pool', () => {
       guaranteedPrizePoolSource:  'platform_promo',
       prizeDistributionType:      'winner_takes_all',
       config:                     SMALL_CONFIG,
+      scheduledStartAt:           pokerTestScheduledStart(),
     });
     createdTournamentIds.push(tournamentId);
 
@@ -362,6 +419,7 @@ describe('1c - platform promo guaranteed pool', () => {
         guaranteedPrizePoolSource:  'platform_promo',
         prizeDistributionType:      'winner_takes_all',
         config:                     SMALL_CONFIG,
+        scheduledStartAt:           pokerTestScheduledStart(),
       })
     ).rejects.toThrow('admin');
     process.env.ADMIN_WALLETS = PLAYER_1;
@@ -427,11 +485,11 @@ describe('2 - joinPokerTournament', () => {
       buyInAmount:           TEST_BUY_IN,
       prizeDistributionType: 'winner_takes_all',
       config:                { ...SMALL_CONFIG, minPlayers: 2, maxPlayers: 2 },
+      scheduledStartAt:      pokerTestScheduledStart(),
     });
     createdTournamentIds.push(tightId);
 
     await pokerTournamentService.joinPokerTournament(tightId, PLAYER_1);
-    // Second join auto-starts (minPlayers=2 reached)
     await pokerTournamentService.joinPokerTournament(tightId, PLAYER_2);
     // Third join should be rejected (tournament already active / full)
     await expect(
@@ -468,6 +526,7 @@ describe('2b - joinPokerTournament (freeroll)', () => {
       guaranteedPrizePool:   TEST_GUARANTEED_POOL,
       prizeDistributionType: 'winner_takes_all',
       config:                SMALL_CONFIG,
+      scheduledStartAt:      pokerTestScheduledStart(),
     });
     createdTournamentIds.push(tournamentId);
 
@@ -491,7 +550,6 @@ describe('3 - auto-start', () => {
   let tournamentId: string;
 
   beforeEach(async () => {
-    // Use minPlayers=2 so the 2nd join triggers auto-start
     tournamentId = await createTestTournament({ minPlayers: 2, maxPlayers: 6 });
   });
 
@@ -503,46 +561,50 @@ describe('3 - auto-start', () => {
     expect(t.rows[0].status).toBe('registration');
   });
 
-  it('auto-starts on minPlayers-th join', async () => {
+  it('activates when startScheduledPokerTournament runs after min players registered', async () => {
     await pokerTournamentService.joinPokerTournament(tournamentId, PLAYER_1);
-    const { autoStarted, tableId } = await pokerTournamentService.joinPokerTournament(tournamentId, PLAYER_2);
+    const j2 = await pokerTournamentService.joinPokerTournament(tournamentId, PLAYER_2);
+    expect(j2.autoStarted).toBe(false);
+    expect(j2.tableId).toBeNull();
 
-    expect(autoStarted).toBe(true);
-    expect(tableId).toBeTruthy();
+    await pokerTournamentService.startScheduledPokerTournament(tournamentId);
+    const tbl = await testPool.query(`SELECT id FROM poker_tables WHERE tournament_id = $1`, [tournamentId]);
+    expect(tbl.rows.length).toBe(1);
+    const tableId = tbl.rows[0].id as string;
+    createdPokerTableIds.push(tableId);
 
     const t = await testPool.query('SELECT status FROM tournaments WHERE id = $1', [tournamentId]);
     expect(t.rows[0].status).toBe('active');
   });
 
-  it('creates a poker table with tournament_mode=TRUE on auto-start', async () => {
-    await pokerTournamentService.joinPokerTournament(tournamentId, PLAYER_1);
-    const { tableId } = await pokerTournamentService.joinPokerTournament(tournamentId, PLAYER_2);
+  it('allows idempotent join while active for a player already registered (reconnect / table HUD)', async () => {
+    const tableId = await joinThroughScheduledStart(tournamentId, [PLAYER_1, PLAYER_2]);
+    createdPokerTableIds.push(tableId);
 
-    if (tableId) {
-      createdPokerTableIds.push(tableId);
-      const table = await testPool.query('SELECT * FROM poker_tables WHERE id = $1', [tableId]);
-      expect(table.rows).toHaveLength(1);
-      expect(table.rows[0].tournament_mode).toBe(true);
-      expect(table.rows[0].tournament_id).toBe(tournamentId);
-    }
+    const again = await pokerTournamentService.joinPokerTournament(tournamentId, PLAYER_1);
+    expect(again.tableId).toBe(tableId);
+    expect(again.autoStarted).toBe(true);
+  });
+
+  it('creates a poker table with tournament_mode=TRUE on auto-start', async () => {
+    const tableId = await joinThroughScheduledStart(tournamentId, [PLAYER_1, PLAYER_2]);
+    createdPokerTableIds.push(tableId);
+    const table = await testPool.query('SELECT * FROM poker_tables WHERE id = $1', [tableId]);
+    expect(table.rows).toHaveLength(1);
+    expect(table.rows[0].tournament_mode).toBe(true);
+    expect(table.rows[0].tournament_id).toBe(tournamentId);
   });
 
   it('does NOT appear in the cash game lobby', async () => {
-    await pokerTournamentService.joinPokerTournament(tournamentId, PLAYER_1);
-    const { tableId } = await pokerTournamentService.joinPokerTournament(tournamentId, PLAYER_2);
-
-    if (tableId) {
-      createdPokerTableIds.push(tableId);
-      const tables = await pokerGameService.listTables();
-      const found = tables.find((t) => t.id === tableId);
-      expect(found).toBeUndefined();
-    }
+    const tableId = await joinThroughScheduledStart(tournamentId, [PLAYER_1, PLAYER_2]);
+    createdPokerTableIds.push(tableId);
+    const tables = await pokerGameService.listTables();
+    const found = tables.find((t) => t.id === tableId);
+    expect(found).toBeUndefined();
   });
 
   it('rejects cash poker joinTable on tournament tables', async () => {
-    await pokerTournamentService.joinPokerTournament(tournamentId, PLAYER_1);
-    const { tableId } = await pokerTournamentService.joinPokerTournament(tournamentId, PLAYER_2);
-    if (!tableId) throw new Error('expected tournament table');
+    const tableId = await joinThroughScheduledStart(tournamentId, [PLAYER_1, PLAYER_2]);
     createdPokerTableIds.push(tableId);
 
     await expect(
@@ -551,40 +613,29 @@ describe('3 - auto-start', () => {
   });
 
   it('seats all players with starting chips in poker_seats', async () => {
-    await pokerTournamentService.joinPokerTournament(tournamentId, PLAYER_1);
-    const { tableId } = await pokerTournamentService.joinPokerTournament(tournamentId, PLAYER_2);
-
-    if (tableId) {
-      createdPokerTableIds.push(tableId);
-      const seats = await testPool.query('SELECT player_address, stack FROM poker_seats WHERE table_id = $1', [tableId]);
-      expect(seats.rows).toHaveLength(2);
-      const CHIP_SCALE = BigInt('1000000000000000000');
-      const totalStarting = BigInt(SMALL_CONFIG.startingStack) * BigInt(seats.rows.length) * CHIP_SCALE;
-      // Total chips are conserved (blinds just moved chips between players/pot)
-      // Each seat stack must be <= startingStack and > 0 (game in progress)
-      for (const seat of seats.rows) {
-        const stackChips = BigInt(seat.stack) / CHIP_SCALE;
-        expect(stackChips).toBeGreaterThan(BigInt(0));
-        expect(stackChips).toBeLessThanOrEqual(BigInt(SMALL_CONFIG.startingStack));
-      }
-      const totalActual = seats.rows.reduce((acc: bigint, s: { stack: string }) => acc + BigInt(s.stack), BigInt(0));
-      // Total in seats ≤ totalStarting (pot holds the rest)
-      expect(totalActual).toBeLessThanOrEqual(totalStarting);
+    const tableId = await joinThroughScheduledStart(tournamentId, [PLAYER_1, PLAYER_2]);
+    createdPokerTableIds.push(tableId);
+    const seats = await testPool.query('SELECT player_address, stack FROM poker_seats WHERE table_id = $1', [tableId]);
+    expect(seats.rows).toHaveLength(2);
+    const CHIP_SCALE = BigInt('1000000000000000000');
+    const totalStarting = BigInt(SMALL_CONFIG.startingStack) * BigInt(seats.rows.length) * CHIP_SCALE;
+    for (const seat of seats.rows) {
+      const stackChips = BigInt(seat.stack) / CHIP_SCALE;
+      expect(stackChips).toBeGreaterThan(BigInt(0));
+      expect(stackChips).toBeLessThanOrEqual(BigInt(SMALL_CONFIG.startingStack));
     }
+    const totalActual = seats.rows.reduce((acc: bigint, s: { stack: string }) => acc + BigInt(s.stack), BigInt(0));
+    expect(totalActual).toBeLessThanOrEqual(totalStarting);
   });
 
   it('creates bridge rows in poker_tournament_seats', async () => {
-    await pokerTournamentService.joinPokerTournament(tournamentId, PLAYER_1);
-    const { tableId } = await pokerTournamentService.joinPokerTournament(tournamentId, PLAYER_2);
-
-    if (tableId) {
-      createdPokerTableIds.push(tableId);
-      const pts = await testPool.query(
-        'SELECT * FROM poker_tournament_seats WHERE tournament_id = $1',
-        [tournamentId]
-      );
-      expect(pts.rows).toHaveLength(2);
-    }
+    const tableId = await joinThroughScheduledStart(tournamentId, [PLAYER_1, PLAYER_2]);
+    createdPokerTableIds.push(tableId);
+    const pts = await testPool.query(
+      'SELECT * FROM poker_tournament_seats WHERE tournament_id = $1',
+      [tournamentId]
+    );
+    expect(pts.rows).toHaveLength(2);
   });
 });
 
@@ -642,9 +693,7 @@ describe('4 - computeBlindLevel', () => {
 describe('5 - syncAfterHand chip sync', () => {
   it('updates tournament_entries.chips_remaining from poker_seats.stack', async () => {
     const tournamentId = await createTestTournament({ minPlayers: 2 });
-    await pokerTournamentService.joinPokerTournament(tournamentId, PLAYER_1);
-    const { tableId } = await pokerTournamentService.joinPokerTournament(tournamentId, PLAYER_2);
-    if (!tableId) return;
+    const tableId = await joinThroughScheduledStart(tournamentId, [PLAYER_1, PLAYER_2]);
     createdPokerTableIds.push(tableId);
 
     // Manually set stacks to simulate a hand outcome (stacks stored in wei units)
@@ -674,9 +723,7 @@ describe('5 - syncAfterHand chip sync', () => {
 
   it('increments hands_played after sync', async () => {
     const tournamentId = await createTestTournament({ minPlayers: 2 });
-    await pokerTournamentService.joinPokerTournament(tournamentId, PLAYER_1);
-    const { tableId } = await pokerTournamentService.joinPokerTournament(tournamentId, PLAYER_2);
-    if (!tableId) return;
+    const tableId = await joinThroughScheduledStart(tournamentId, [PLAYER_1, PLAYER_2]);
     createdPokerTableIds.push(tableId);
 
     await pokerTournamentService.syncAfterHand(tableId, 1);
@@ -696,9 +743,7 @@ describe('5 - syncAfterHand chip sync', () => {
 describe('6 - player elimination', () => {
   it('marks entry as busted and removes seat when stack hits 0', async () => {
     const tournamentId = await createTestTournament({ minPlayers: 2 });
-    await pokerTournamentService.joinPokerTournament(tournamentId, PLAYER_1);
-    const { tableId } = await pokerTournamentService.joinPokerTournament(tournamentId, PLAYER_2);
-    if (!tableId) return;
+    const tableId = await joinThroughScheduledStart(tournamentId, [PLAYER_1, PLAYER_2]);
     createdPokerTableIds.push(tableId);
 
     // Player 1 goes bust
@@ -736,9 +781,7 @@ describe('6 - player elimination', () => {
 
   it('assigns final_rank to eliminated player', async () => {
     const tournamentId = await createTestTournament({ minPlayers: 2 });
-    await pokerTournamentService.joinPokerTournament(tournamentId, PLAYER_1);
-    const { tableId } = await pokerTournamentService.joinPokerTournament(tournamentId, PLAYER_2);
-    if (!tableId) return;
+    const tableId = await joinThroughScheduledStart(tournamentId, [PLAYER_1, PLAYER_2]);
     createdPokerTableIds.push(tableId);
 
     await testPool.query(
@@ -767,10 +810,7 @@ describe('6 - player elimination', () => {
   it('doubles table blinds (chip units) once per elimination on that sync', async () => {
     // Three players so one elimination does not complete the tournament (table stays up).
     const tournamentId = await createTestTournament({ minPlayers: 3, maxPlayers: 3 });
-    await pokerTournamentService.joinPokerTournament(tournamentId, PLAYER_1);
-    await pokerTournamentService.joinPokerTournament(tournamentId, PLAYER_2);
-    const { tableId } = await pokerTournamentService.joinPokerTournament(tournamentId, PLAYER_3);
-    if (!tableId) return;
+    const tableId = await joinThroughScheduledStart(tournamentId, [PLAYER_1, PLAYER_2, PLAYER_3]);
     createdPokerTableIds.push(tableId);
 
     const CHIP_SCALE = BigInt('1000000000000000000');
@@ -829,13 +869,11 @@ describe('7 - prize distribution', () => {
       prizeDistributionType: 'custom',
       prizePercentages:      [50, 30, 20],
       config:                cfg,
+      scheduledStartAt:      pokerTestScheduledStart(),
     });
     createdTournamentIds.push(tournamentId);
 
-    await pokerTournamentService.joinPokerTournament(tournamentId, PLAYER_1);
-    await pokerTournamentService.joinPokerTournament(tournamentId, PLAYER_2);
-    const { tableId } = await pokerTournamentService.joinPokerTournament(tournamentId, PLAYER_3);
-    if (!tableId) throw new Error('expected tournament table');
+    const tableId = await joinThroughScheduledStart(tournamentId, [PLAYER_1, PLAYER_2, PLAYER_3]);
     createdPokerTableIds.push(tableId);
 
     const poolRow = await testPool.query('SELECT prize_pool FROM tournaments WHERE id = $1', [tournamentId]);
@@ -900,9 +938,7 @@ describe('7 - prize distribution', () => {
 
   it('credits winner balance after completeTournament (winner_takes_all)', async () => {
     const tournamentId = await createTestTournament({ minPlayers: 2 });
-    await pokerTournamentService.joinPokerTournament(tournamentId, PLAYER_1);
-    const { tableId } = await pokerTournamentService.joinPokerTournament(tournamentId, PLAYER_2);
-    if (!tableId) return;
+    const tableId = await joinThroughScheduledStart(tournamentId, [PLAYER_1, PLAYER_2]);
     createdPokerTableIds.push(tableId);
 
     const winnerBalanceBefore = await getTestBalance(PLAYER_2);
@@ -939,27 +975,27 @@ describe('7 - prize distribution', () => {
 // ---------------------------------------------------------------------------
 
 describe('8 - full 2-player E2E', () => {
-  it('completes a full SNG: create → join × 2 → auto-start → bust → prizes', async () => {
-    // 1. Create tournament (maxPlayers=2 so it auto-starts on 2nd join)
+  it('completes a full SNG: create → join × 2 → scheduled start → bust → prizes', async () => {
     const { tournamentId } = await pokerTournamentService.createPokerTournament({
       creatorAddress:        PLAYER_1,
       name:                  'E2E Test SNG',
       buyInAmount:           TEST_BUY_IN,
       prizeDistributionType: 'winner_takes_all',
       config:                { ...SMALL_CONFIG, minPlayers: 2, maxPlayers: 2 },
+      scheduledStartAt:      pokerTestScheduledStart(),
     });
     createdTournamentIds.push(tournamentId);
 
-    // 2. Player 1 joins — no auto-start yet
     const join1 = await pokerTournamentService.joinPokerTournament(tournamentId, PLAYER_1);
     expect(join1.autoStarted).toBe(false);
 
-    // 3. Player 2 joins — triggers auto-start
     const join2 = await pokerTournamentService.joinPokerTournament(tournamentId, PLAYER_2);
-    expect(join2.autoStarted).toBe(true);
-    expect(join2.tableId).toBeTruthy();
+    expect(join2.autoStarted).toBe(false);
+    expect(join2.tableId).toBeNull();
 
-    const tableId = join2.tableId!;
+    await pokerTournamentService.startScheduledPokerTournament(tournamentId);
+    const tbl = await testPool.query(`SELECT id FROM poker_tables WHERE tournament_id = $1 LIMIT 1`, [tournamentId]);
+    const tableId = tbl.rows[0].id as string;
     createdPokerTableIds.push(tableId);
 
     // 4. Verify tournament is active and table created
@@ -1015,6 +1051,7 @@ describe('8 - full 2-player E2E', () => {
       guaranteedPrizePool:   TEST_GUARANTEED_POOL,
       prizeDistributionType: 'winner_takes_all',
       config:                { ...SMALL_CONFIG, minPlayers: 2, maxPlayers: 2 },
+      scheduledStartAt:      pokerTestScheduledStart(),
     });
     createdTournamentIds.push(tournamentId);
 
@@ -1027,8 +1064,10 @@ describe('8 - full 2-player E2E', () => {
     const join1 = await pokerTournamentService.joinPokerTournament(tournamentId, PLAYER_1);
     expect(join1.autoStarted).toBe(false);
     const join2 = await pokerTournamentService.joinPokerTournament(tournamentId, PLAYER_2);
-    expect(join2.autoStarted).toBe(true);
-    const tableId = join2.tableId!;
+    expect(join2.autoStarted).toBe(false);
+    await pokerTournamentService.startScheduledPokerTournament(tournamentId);
+    const tbl = await testPool.query(`SELECT id FROM poker_tables WHERE tournament_id = $1 LIMIT 1`, [tournamentId]);
+    const tableId = tbl.rows[0].id as string;
     createdPokerTableIds.push(tableId);
 
     const poolAfterJoins = await testPool.query('SELECT prize_pool FROM tournaments WHERE id = $1', [tournamentId]);
@@ -1166,9 +1205,7 @@ describe('11 - blinds vs short stacks', () => {
 
   it('startHand succeeds when nominal SB/BB exceed a player stack; stacks stay non-negative', async () => {
     const tournamentId = await createTestTournament({ minPlayers: 2, maxPlayers: 2 });
-    await pokerTournamentService.joinPokerTournament(tournamentId, PLAYER_1);
-    const { tableId } = await pokerTournamentService.joinPokerTournament(tournamentId, PLAYER_2);
-    if (!tableId) throw new Error('expected tableId');
+    const tableId = await joinThroughScheduledStart(tournamentId, [PLAYER_1, PLAYER_2]);
     createdPokerTableIds.push(tableId);
 
     await testPool.query(
@@ -1210,9 +1247,7 @@ describe('11 - blinds vs short stacks', () => {
 
   it('two short stacks: startHand still succeeds when both stacks are below nominal BB', async () => {
     const tournamentId = await createTestTournament({ minPlayers: 2, maxPlayers: 2 });
-    await pokerTournamentService.joinPokerTournament(tournamentId, PLAYER_1);
-    const { tableId } = await pokerTournamentService.joinPokerTournament(tournamentId, PLAYER_2);
-    if (!tableId) throw new Error('expected tableId');
+    const tableId = await joinThroughScheduledStart(tournamentId, [PLAYER_1, PLAYER_2]);
     createdPokerTableIds.push(tableId);
 
     await testPool.query(
@@ -1261,9 +1296,7 @@ describe('11 - blinds vs short stacks', () => {
       maxPlayers: 2,
       blindSchedule: hugeSchedule,
     });
-    await pokerTournamentService.joinPokerTournament(tournamentId, PLAYER_1);
-    const { tableId } = await pokerTournamentService.joinPokerTournament(tournamentId, PLAYER_2);
-    if (!tableId) throw new Error('expected tableId');
+    const tableId = await joinThroughScheduledStart(tournamentId, [PLAYER_1, PLAYER_2]);
     createdPokerTableIds.push(tableId);
 
     await testPool.query(
@@ -1392,6 +1425,7 @@ describe('10 - regression', () => {
       guaranteedPrizePool:   TEST_GUARANTEED_POOL,
       prizeDistributionType: 'winner_takes_all',
       config:                SMALL_CONFIG,
+      scheduledStartAt:      pokerTestScheduledStart(),
     });
     createdTournamentIds.push(tournamentId);
 
@@ -1419,9 +1453,7 @@ describe('10 - regression', () => {
 describe('12 - hand history retention', () => {
   it('keeps poker_hands with tournament_id after tournament table row is deleted', async () => {
     const tournamentId = await createTestTournament({ minPlayers: 2, maxPlayers: 2 });
-    await pokerTournamentService.joinPokerTournament(tournamentId, PLAYER_1);
-    const { tableId } = await pokerTournamentService.joinPokerTournament(tournamentId, PLAYER_2);
-    if (!tableId) throw new Error('expected tableId');
+    const tableId = await joinThroughScheduledStart(tournamentId, [PLAYER_1, PLAYER_2]);
 
     await testPool.query(
       `UPDATE poker_hands SET completed_at = NOW() WHERE table_id = $1 AND completed_at IS NULL`,

@@ -17,12 +17,12 @@ import {
 
 const MORBIUS_DECIMALS = 18n;
 
-/** 48 slots per day: :00 and :30, labels in 12h AM/PM (local). */
-function useThirtyMinuteTimeOptions(): { value: string; label: string }[] {
+/** 96 slots per day: 15-minute steps, labels in 12h AM/PM (local). */
+function useFifteenMinuteTimeOptions(): { value: string; label: string }[] {
   return useMemo(() => {
     const out: { value: string; label: string }[] = [];
     for (let h = 0; h < 24; h++) {
-      for (const m of [0, 30]) {
+      for (let m = 0; m < 60; m += 15) {
         const d = new Date(2000, 0, 1, h, m, 0, 0);
         out.push({
           value: `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`,
@@ -32,6 +32,24 @@ function useThirtyMinuteTimeOptions(): { value: string; label: string }[] {
     }
     return out;
   }, []);
+}
+
+/** Next local 15-minute boundary at least ~1 minute from now (for valid default create). */
+function defaultScheduledFields(): { date: string; time: string } {
+  const from = new Date(Date.now() + 60_000);
+  from.setSeconds(0, 0);
+  const curM = from.getMinutes();
+  const step = 15;
+  const rem = curM % step;
+  const add = rem === 0 ? step : step - rem;
+  from.setMinutes(curM + add);
+  if (from.getTime() <= Date.now()) {
+    from.setMinutes(from.getMinutes() + step);
+  }
+  return {
+    date: localYyyyMmDd(from),
+    time: `${String(from.getHours()).padStart(2, '0')}:${String(from.getMinutes()).padStart(2, '0')}`,
+  };
 }
 
 function localYyyyMmDd(d: Date): string {
@@ -88,13 +106,14 @@ export function PokerTournamentCreator({ creatorAddress, onClose, onCreate }: Po
   const [privatePin, setPrivatePin] = useState('');
   const [botsToAdd, setBotsToAdd] = useState(0);
   const [isSubmitting, setIsSubmitting] = useState(false);
-  /** yyyy-MM-dd in local time; empty = SNG auto-start */
-  const [scheduledDate, setScheduledDate] = useState('');
-  /** HH:mm 24h, only :00 or :30 — paired with scheduledDate */
-  const [scheduledTime, setScheduledTime] = useState('19:00');
+  const initialSchedule = useMemo(() => defaultScheduledFields(), []);
+  /** yyyy-MM-dd in local time — required */
+  const [scheduledDate, setScheduledDate] = useState(initialSchedule.date);
+  /** HH:mm 24h, 15-minute steps */
+  const [scheduledTime, setScheduledTime] = useState(initialSchedule.time);
   const [scheduleError, setScheduleError] = useState<string | null>(null);
 
-  const timeOptions = useThirtyMinuteTimeOptions();
+  const timeOptions = useFifteenMinuteTimeOptions();
   const minScheduleDate = useMemo(() => localYyyyMmDd(new Date()), []);
 
   const showPromoOption = isFreeroll && isAdminWallet(creatorAddress);
@@ -145,31 +164,32 @@ export function PokerTournamentCreator({ creatorAddress, onClose, onCreate }: Po
     const pinForCreate = isPrivate && pinDigits.length >= 4 ? pinDigits : undefined;
 
     setScheduleError(null);
-    let scheduledStartAt: string | null = null;
-    if (scheduledDate.trim()) {
-      const parts = scheduledDate.split('-').map(Number);
-      const timeParts = scheduledTime.split(':').map(Number);
-      if (parts.length !== 3 || timeParts.length !== 2) {
-        setScheduleError('Pick a valid date and time.');
-        return;
-      }
-      const [y, mo, d] = parts;
-      const [hh, mm] = timeParts;
-      if (!Number.isFinite(y) || !Number.isFinite(mo) || !Number.isFinite(d) || !Number.isFinite(hh) || !Number.isFinite(mm)) {
-        setScheduleError('Pick a valid date and time.');
-        return;
-      }
-      if (mm !== 0 && mm !== 30) {
-        setScheduleError('Time must be on a 30-minute mark.');
-        return;
-      }
-      const local = new Date(y, mo - 1, d, hh, mm, 0, 0);
-      if (local.getTime() < Date.now() + 60_000) {
-        setScheduleError('Start must be at least 1 minute from now.');
-        return;
-      }
-      scheduledStartAt = local.toISOString();
+    if (!scheduledDate.trim()) {
+      setScheduleError('Pick a start date.');
+      return;
     }
+    const parts = scheduledDate.split('-').map(Number);
+    const timeParts = scheduledTime.split(':').map(Number);
+    if (parts.length !== 3 || timeParts.length !== 2) {
+      setScheduleError('Pick a valid date and time.');
+      return;
+    }
+    const [y, mo, d] = parts;
+    const [hh, mm] = timeParts;
+    if (!Number.isFinite(y) || !Number.isFinite(mo) || !Number.isFinite(d) || !Number.isFinite(hh) || !Number.isFinite(mm)) {
+      setScheduleError('Pick a valid date and time.');
+      return;
+    }
+    if (mm % 15 !== 0) {
+      setScheduleError('Time must be on a 15-minute mark.');
+      return;
+    }
+    const local = new Date(y, mo - 1, d, hh, mm, 0, 0);
+    if (local.getTime() < Date.now() + 60_000) {
+      setScheduleError('Start must be at least 1 minute from now.');
+      return;
+    }
+    const scheduledStartAt = local.toISOString();
 
     setIsSubmitting(true);
     try {
@@ -387,7 +407,7 @@ export function PokerTournamentCreator({ creatorAddress, onClose, onCreate }: Po
 
           <div className="space-y-3">
             <label className={labelClass}>Scheduled start</label>
-            <p className="text-[11px] text-white/40 -mt-2 mb-1">Optional · 30-minute times</p>
+            <p className="text-[11px] text-white/40 -mt-2 mb-1">Required · 15-minute times (local)</p>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div>
                 <span className="text-[11px] text-white/45 block mb-1">Date</span>
@@ -401,9 +421,9 @@ export function PokerTournamentCreator({ creatorAddress, onClose, onCreate }: Po
               </div>
               <div>
                 <span className="text-[11px] text-white/45 block mb-1">Time</span>
-                <Select value={scheduledTime} onValueChange={setScheduledTime} disabled={!scheduledDate}>
-                  <SelectTrigger className={`${fieldClass} h-auto min-h-[44px] disabled:opacity-40`}>
-                    <SelectValue placeholder={scheduledDate ? 'Time' : 'Choose date'} />
+                <Select value={scheduledTime} onValueChange={setScheduledTime}>
+                  <SelectTrigger className={`${fieldClass} h-auto min-h-[44px]`}>
+                    <SelectValue placeholder="Time" />
                   </SelectTrigger>
                   <SelectContent className="max-h-60 bg-slate-900 border border-cyan-500/30 text-white shadow-xl z-[200]">
                     {timeOptions.map((o) => (
@@ -416,18 +436,6 @@ export function PokerTournamentCreator({ creatorAddress, onClose, onCreate }: Po
               </div>
             </div>
             {scheduleError && <p className="text-xs text-red-400">{scheduleError}</p>}
-            {scheduledDate ? (
-              <button
-                type="button"
-                onClick={() => {
-                  setScheduledDate('');
-                  setScheduleError(null);
-                }}
-                className="text-xs text-cyan-400 hover:text-cyan-300"
-              >
-                Clear schedule
-              </button>
-            ) : null}
           </div>
 
           <label className="flex items-center gap-3 cursor-pointer select-none">
