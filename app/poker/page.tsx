@@ -25,7 +25,7 @@ import { PokerBetaSplash } from '@/components/poker/PokerBetaSplash';
 import { SophieSplashModal } from '@/components/shared/SophieSplashModal';
 import { PokerHowToPlayModal } from '@/components/poker/PokerHowToPlayModal';
 import GlobalMainNav from '@/components/shared/GlobalMainNav';
-// import { PokerTournamentLobby } from '@/components/poker/tournament/PokerTournamentLobby';
+import { PokerTournamentLobby } from '@/components/poker/tournament/PokerTournamentLobby';
 
 /** Format a wei string to whole MORBIUS (floored) for display */
 function formatChips(wei: string): string {
