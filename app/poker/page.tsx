@@ -26,6 +26,14 @@ import { SophieSplashModal } from '@/components/shared/SophieSplashModal';
 import { PokerHowToPlayModal } from '@/components/poker/PokerHowToPlayModal';
 import GlobalMainNav from '@/components/shared/GlobalMainNav';
 import { PokerTournamentLobby } from '@/components/poker/tournament/PokerTournamentLobby';
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from '@/components/ui/table';
 
 /** Format a wei string to whole MORBIUS (floored) for display */
 function formatChips(wei: string): string {
@@ -594,161 +602,197 @@ export default function PokerLobbyPage() {
               </p>
             )}
             {activeTab === 'cash' && !loading && tables.length > 0 && (
-              <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-2">
-                {tables.map((t) => {
-                  const isPlaying = t.status === 'playing';
-                  const openSeats = t.maxSeats - t.seatedCount;
-                  const accentSolid = getBlindAccentSolid(t.bigBlind);
-                  return (
-                    <div
-                      key={t.id}
-                      className="relative bg-[#e0e5ec] rounded-[2rem] p-6 flex flex-col justify-between gap-6 overflow-hidden"
-                      style={{ boxShadow: '2px 2px 6px rgba(163,177,198,0.25), -2px -2px 6px rgba(255,255,255,0.25)' }}
-                    >
-                      {/* Content */}
-                      <div className="relative z-10 flex flex-col justify-between gap-6">
-                      <div className="flex justify-between items-center">
-                        <div
-                          className="w-11 h-11 rounded-full bg-[#e0e5ec] flex items-center justify-center text-lg"
-                          style={{ boxShadow: 'inset 2px 2px 4px rgba(163,177,198,0.5), inset -2px -2px 4px rgba(255,255,255,0.4)', color: accentSolid }}
-                        >
-                          ♠
-                        </div>
-                        <div className="flex items-center gap-1.5">
-                          {t.hasPin && (
-                            <div
-                              className="w-8 h-8 rounded-full bg-[#e0e5ec] flex items-center justify-center"
-                              style={{ boxShadow: '2px 2px 4px rgba(163,177,198,0.4), -2px -2px 4px rgba(255,255,255,0.4)' }}
-                              title="Private table — PIN required"
-                            >
-                              <svg className="w-3.5 h-3.5 text-amber-600" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2C9.24 2 7 4.24 7 7v3H6a2 2 0 00-2 2v8a2 2 0 002 2h12a2 2 0 002-2v-8a2 2 0 00-2-2h-1V7c0-2.76-2.24-5-5-5zm0 2c1.66 0 3 1.34 3 3v3H9V7c0-1.66 1.34-3 3-3zm0 10c1.1 0 2 .9 2 2s-.9 2-2 2-2-.9-2-2 .9-2 2-2z" /></svg>
-                            </div>
+              <div
+                className="rounded-2xl border border-cyan-500/20 overflow-hidden"
+                style={{
+                  background: 'linear-gradient(325deg, rgba(20, 20, 20, 0.8), rgba(40, 40, 40, 0.6))',
+                  boxShadow:
+                    'inset 0 3px 6px rgba(0, 0, 0, 0.8), inset 0 -3px 6px rgba(255, 255, 255, 0.1), 0 1px 3px rgba(0, 0, 0, 0.5)',
+                }}
+              >
+                <Table className="text-slate-200 min-w-[720px]">
+                  <TableHeader>
+                    <TableRow className="border-slate-600/50 hover:bg-transparent">
+                      <TableHead className="text-slate-400 font-semibold whitespace-nowrap">Stakes</TableHead>
+                      <TableHead className="text-slate-400 font-semibold whitespace-nowrap">Status</TableHead>
+                      <TableHead className="text-slate-400 font-semibold whitespace-nowrap">Private</TableHead>
+                      <TableHead className="text-slate-400 font-semibold whitespace-nowrap">Players</TableHead>
+                      <TableHead className="text-slate-400 font-semibold whitespace-nowrap">Open seats</TableHead>
+                      <TableHead className="text-slate-400 font-semibold text-right whitespace-nowrap">Actions</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {tables.map((t) => {
+                      const isPlaying = t.status === 'playing';
+                      const openSeats = t.maxSeats - t.seatedCount;
+                      const accentSolid = getBlindAccentSolid(t.bigBlind);
+                      return (
+                        <React.Fragment key={t.id}>
+                          <TableRow className="border-slate-600/40 hover:bg-white/[0.04]">
+                            <TableCell className="align-top">
+                              <div className="flex items-start gap-3">
+                                <div
+                                  className="shrink-0 w-10 h-10 rounded-full flex items-center justify-center text-lg border border-white/10"
+                                  style={{
+                                    background: 'rgba(0,0,0,0.25)',
+                                    boxShadow: 'inset 0 2px 4px rgba(0,0,0,0.45)',
+                                    color: accentSolid,
+                                  }}
+                                  title="Blind tier"
+                                >
+                                  ♠
+                                </div>
+                                <div className="min-w-0">
+                                  <p className="text-base font-bold text-slate-100 tabular-nums tracking-tight">
+                                    {formatChips(t.smallBlind)} / {formatChips(t.bigBlind)}
+                                  </p>
+                                  <p className="text-slate-400 text-sm font-medium">No-Limit Texas Hold&apos;em</p>
+                                </div>
+                              </div>
+                            </TableCell>
+                            <TableCell className="align-middle whitespace-nowrap">
+                              <span
+                                className={`text-[10px] font-bold uppercase tracking-wider px-2.5 py-1 rounded-full border ${
+                                  isPlaying
+                                    ? 'text-cyan-300 border-cyan-500/35 bg-cyan-500/10'
+                                    : 'text-slate-400 border-slate-600/60 bg-black/20'
+                                }`}
+                              >
+                                {isPlaying ? 'In Progress' : 'Waiting'}
+                              </span>
+                            </TableCell>
+                            <TableCell className="align-middle">
+                              {t.hasPin ? (
+                                <span
+                                  className="inline-flex items-center justify-center w-9 h-9 rounded-full border border-cyan-500/25 bg-black/20"
+                                  title="Private table — PIN required"
+                                >
+                                  <svg className="w-3.5 h-3.5 text-cyan-400" viewBox="0 0 24 24" fill="currentColor">
+                                    <path d="M12 2C9.24 2 7 4.24 7 7v3H6a2 2 0 00-2 2v8a2 2 0 002 2h12a2 2 0 002-2v-8a2 2 0 00-2-2h-1V7c0-2.76-2.24-5-5-5zm0 2c1.66 0 3 1.34 3 3v3H9V7c0-1.66 1.34-3 3-3zm0 10c1.1 0 2 .9 2 2s-.9 2-2 2-2-.9-2-2 .9-2 2-2z" />
+                                  </svg>
+                                </span>
+                              ) : (
+                                <span className="text-slate-500 text-sm">—</span>
+                              )}
+                            </TableCell>
+                            <TableCell className="align-middle whitespace-nowrap">
+                              <span className="font-bold text-slate-100 inline-flex items-center gap-1.5">
+                                <svg
+                                  className="w-3.5 h-3.5 text-slate-500 shrink-0"
+                                  fill="none"
+                                  stroke="currentColor"
+                                  viewBox="0 0 24 24"
+                                >
+                                  <path
+                                    strokeLinecap="round"
+                                    strokeLinejoin="round"
+                                    strokeWidth={2}
+                                    d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0"
+                                  />
+                                </svg>
+                                {t.seatedCount}/{t.maxSeats}
+                              </span>
+                            </TableCell>
+                            <TableCell className="align-middle">
+                              <div className="flex flex-wrap items-center gap-2">
+                                <span className="font-bold text-slate-100 tabular-nums">{openSeats}</span>
+                                <button
+                                  type="button"
+                                  onClick={() => openPlayersDropdown(t.id)}
+                                  className="text-[10px] font-bold text-cyan-400/90 hover:text-cyan-300 uppercase tracking-wider underline underline-offset-2"
+                                >
+                                  {playersDropdownTableId === t.id ? 'Hide' : 'View'}
+                                </button>
+                              </div>
+                            </TableCell>
+                            <TableCell className="align-middle text-right">
+                              <div className="flex flex-col items-end gap-2 min-w-[8rem]">
+                                <div className="flex flex-wrap justify-end gap-2">
+                                  <Link
+                                    href={`/poker/${t.id}`}
+                                    className="inline-flex items-center justify-center px-4 py-2 rounded-xl text-xs font-bold uppercase tracking-widest text-slate-300 border border-slate-600/70 bg-black/25 hover:bg-white/5 hover:border-cyan-500/30 transition-colors"
+                                  >
+                                    Watch
+                                  </Link>
+                                  {isConnected && (
+                                    <button
+                                      type="button"
+                                      onClick={() => {
+                                        const bb = BigInt(t.bigBlind);
+                                        const { maxWei } = getCashBuyInBoundsWei(bb);
+                                        setBuyIn(formatMorbiusFloorPlain(maxWei));
+                                        setJoinModal({ tableId: t.id, hasPin: t.hasPin, bigBlindWei: t.bigBlind });
+                                        setJoinPin('');
+                                      }}
+                                      className="inline-flex items-center justify-center px-4 py-2 rounded-xl text-xs font-bold uppercase tracking-widest text-white bg-gradient-to-r from-cyan-600 to-cyan-500 shadow-[0_2px_12px_rgba(34,211,238,0.25)] hover:opacity-95 active:scale-[0.98] transition-all"
+                                    >
+                                      Sit
+                                    </button>
+                                  )}
+                                </div>
+                                {isAdmin && (
+                                  <button
+                                    type="button"
+                                    onClick={() => removeTable(t.id)}
+                                    disabled={removingTableId === t.id}
+                                    className="text-[10px] font-medium text-slate-500 hover:text-cyan-300 uppercase tracking-wider transition-colors disabled:opacity-50"
+                                  >
+                                    {removingTableId === t.id ? 'Removing…' : 'Remove table'}
+                                  </button>
+                                )}
+                              </div>
+                            </TableCell>
+                          </TableRow>
+                          {playersDropdownTableId === t.id && (
+                            <TableRow className="border-slate-600/40 hover:bg-white/[0.02] bg-black/15">
+                              <TableCell colSpan={6} className="py-3">
+                                <div className="rounded-xl border border-slate-600/50 overflow-hidden bg-black/20">
+                                  <div className="px-3 py-2 border-b border-slate-600/50">
+                                    <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">
+                                      Seated players
+                                    </span>
+                                  </div>
+                                  <div className="p-2 max-h-32 overflow-y-auto">
+                                    {tablePlayersLoading ? (
+                                      <p className="text-slate-500 text-xs">Loading…</p>
+                                    ) : tablePlayers?.tableId === t.id ? (
+                                      (() => {
+                                        const seated = tablePlayers.seats.filter((s) => s.playerAddress);
+                                        if (seated.length === 0) {
+                                          return <p className="text-slate-500 text-xs">No players seated</p>;
+                                        }
+                                        return (
+                                          <ul className="space-y-1.5 text-xs">
+                                            {seated.map((s) => (
+                                              <li
+                                                key={s.position}
+                                                className="flex items-center justify-between gap-2 text-slate-300"
+                                              >
+                                                <span className="font-medium">Seat {s.position + 1}</span>
+                                                <span
+                                                  className="font-mono text-slate-400 truncate max-w-[200px]"
+                                                  title={s.playerAddress ?? ''}
+                                                >
+                                                  {s.playerAddress ? truncateAddress(s.playerAddress) : '—'}
+                                                </span>
+                                              </li>
+                                            ))}
+                                          </ul>
+                                        );
+                                      })()
+                                    ) : (
+                                      <p className="text-slate-500 text-xs">No players seated</p>
+                                    )}
+                                  </div>
+                                </div>
+                              </TableCell>
+                            </TableRow>
                           )}
-                          <div
-                            className="px-3 py-1.5 rounded-full bg-[#e0e5ec]"
-                            style={{ boxShadow: '2px 2px 4px rgba(163,177,198,0.4), -2px -2px 4px rgba(255,255,255,0.4)' }}
-                          >
-                            <span className={`text-[10px] font-bold uppercase tracking-wider ${isPlaying ? 'text-emerald-600' : 'text-slate-500'}`}>
-                              {isPlaying ? 'In Progress' : 'Waiting'}
-                            </span>
-                          </div>
-                        </div>
-                      </div>
-
-                    {/* Middle: blinds + game type */}
-                    <div className="text-center">
-                      <h3 className="text-2xl font-bold text-slate-700 tracking-tight mb-1">
-                        {formatChips(t.smallBlind)} / {formatChips(t.bigBlind)}
-                      </h3>
-                      <p className="text-slate-500 font-medium text-sm">No-Limit Texas Hold&apos;em</p>
-                    </div>
-
-                    {/* Stats row */}
-                    <div className="flex justify-between items-center px-1">
-                      <div className="flex flex-col gap-0.5">
-                        <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Players</span>
-                        <span className="text-base font-bold text-slate-700 flex items-center gap-1">
-                          <svg className="w-3.5 h-3.5 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0" /></svg>
-                          {t.seatedCount}/{t.maxSeats}
-                        </span>
-                      </div>
-                      <div className="flex flex-col gap-0.5 items-end">
-                        <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Open Seats</span>
-                        <div className="flex items-center gap-2">
-                          <span className="text-base font-bold text-slate-700">{openSeats}</span>
-                          <button
-                            type="button"
-                            onClick={() => openPlayersDropdown(t.id)}
-                            className="text-[10px] font-bold text-slate-500 hover:text-slate-700 uppercase tracking-wider underline"
-                          >
-                            {playersDropdownTableId === t.id ? 'Hide' : 'View'}
-                          </button>
-                        </div>
-                      </div>
-                    </div>
-                    {/* Players dropdown */}
-                    {playersDropdownTableId === t.id && (
-                      <div
-                        className="rounded-xl bg-[#e0e5ec] border border-slate-300/50 overflow-hidden"
-                        style={{ boxShadow: 'inset 2px 2px 4px rgba(163,177,198,0.4), inset -2px -2px 4px rgba(255,255,255,0.4)' }}
-                      >
-                        <div className="px-3 py-2 border-b border-slate-300/50">
-                          <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">Seated players</span>
-                        </div>
-                        <div className="p-2 max-h-32 overflow-y-auto">
-                          {tablePlayersLoading ? (
-                            <p className="text-slate-500 text-xs">Loading…</p>
-                          ) : tablePlayers?.tableId === t.id ? (
-                            (() => {
-                              const seated = tablePlayers.seats.filter((s) => s.playerAddress);
-                              if (seated.length === 0) {
-                                return <p className="text-slate-500 text-xs">No players seated</p>;
-                              }
-                              return (
-                                <ul className="space-y-1.5 text-xs">
-                                  {seated.map((s) => (
-                                    <li key={s.position} className="flex items-center justify-between gap-2 text-slate-700">
-                                      <span className="font-medium">Seat {s.position + 1}</span>
-                                      <span className="font-mono text-slate-600 truncate max-w-[140px]" title={s.playerAddress ?? ''}>
-                                        {s.playerAddress ? truncateAddress(s.playerAddress) : '—'}
-                                      </span>
-                                    </li>
-                                  ))}
-                                </ul>
-                              );
-                            })()
-                          ) : (
-                            <p className="text-slate-500 text-xs">No players seated</p>
-                          )}
-                        </div>
-                      </div>
-                    )}
-
-                    {/* Action buttons */}
-                    <div className="flex flex-col gap-2">
-                      <div className="flex gap-3">
-                        <Link
-                          href={`/poker/${t.id}`}
-                          className="flex-1 py-3 rounded-2xl bg-[#e0e5ec] text-slate-500 font-bold uppercase tracking-widest text-xs text-center transition-all duration-200"
-                          style={{ boxShadow: '2px 2px 4px rgba(163,177,198,0.4), -2px -2px 4px rgba(255,255,255,0.4)' }}
-                          onMouseDown={(e) => { e.currentTarget.style.boxShadow = 'inset 2px 2px 4px rgba(163,177,198,0.5), inset -2px -2px 4px rgba(255,255,255,0.4)'; }}
-                          onMouseUp={(e) => { e.currentTarget.style.boxShadow = '2px 2px 4px rgba(163,177,198,0.4), -2px -2px 4px rgba(255,255,255,0.4)'; }}
-                          onMouseLeave={(e) => { e.currentTarget.style.boxShadow = '2px 2px 4px rgba(163,177,198,0.4), -2px -2px 4px rgba(255,255,255,0.4)'; }}
-                        >
-                          Watch
-                        </Link>
-                        {isConnected && (
-                          <button
-                            type="button"
-                            onClick={() => {
-                              const bb = BigInt(t.bigBlind);
-                              const { maxWei } = getCashBuyInBoundsWei(bb);
-                              setBuyIn(formatMorbiusFloorPlain(maxWei));
-                              setJoinModal({ tableId: t.id, hasPin: t.hasPin, bigBlindWei: t.bigBlind });
-                              setJoinPin('');
-                            }}
-                            className="flex-1 py-3 rounded-2xl font-bold uppercase tracking-widest text-xs text-white transition-all duration-200 active:scale-95 shadow"
-                            style={{ background: 'linear-gradient(135deg, #06b6d4, #3b82f6)', boxShadow: '2px 2px 6px rgba(0,0,0,0.2)' }}
-                          >
-                            Sit
-                          </button>
-                        )}
-                      </div>
-                      {isAdmin && (
-                        <button
-                          type="button"
-                          onClick={() => removeTable(t.id)}
-                          disabled={removingTableId === t.id}
-                          className="text-[10px] font-medium text-slate-400 hover:text-red-500 uppercase tracking-wider transition-colors disabled:opacity-50"
-                        >
-                          {removingTableId === t.id ? 'Removing…' : 'Remove table'}
-                        </button>
-                      )}
-                    </div>
-                      </div>
-                    </div>
-                  );
-                })}
+                        </React.Fragment>
+                      );
+                    })}
+                  </TableBody>
+                </Table>
               </div>
             )}
 
