@@ -260,7 +260,7 @@ export function TournamentListSidebar({
               onClick={onCreateTournament}
               className="px-5 py-1 rounded-xs bg-gradient-to-r from-cyan-600 to-blue-600 hover:from-cyan-500 hover:to-blue-500 text-white font-semibold text-xs transition-colors border border-cyan-500/30"
             >
-              Create Tournament Now!
+              Create Blackjack tournament
             </button>
           )}
           <button

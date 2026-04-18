@@ -8,7 +8,8 @@ import { CreatorStats } from './CreatorStats';
 import { CreatorTournamentList } from './CreatorTournamentList';
 import { CreatorEarnings } from './CreatorEarnings';
 import { CreatorShareCard } from './CreatorShareCard';
-import { TournamentCreator } from '@/components/BLACKJACK/Tournament/TournamentCreator';
+import Link from 'next/link';
+import { BlackjackTournamentCreator } from '@/components/BLACKJACK/Tournament/BlackjackTournamentCreator';
 import { useTournament } from '@/hooks/use-tournament';
 import { toast } from 'sonner';
 import { Theme } from '@/lib/theme';
@@ -25,7 +26,7 @@ export function CreatorDashboard({ wsClient, address }: CreatorDashboardProps) {
   const [earnings, setEarnings] = useState<CreatorEarning[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [showTournamentCreator, setShowTournamentCreator] = useState(false);
+  const [showBlackjackTournamentCreator, setShowBlackjackTournamentCreator] = useState(false);
   const [playerBalance, setPlayerBalance] = useState<bigint>(0n);
 
   const tournament = useTournament({ wsClient });
@@ -80,14 +81,22 @@ export function CreatorDashboard({ wsClient, address }: CreatorDashboardProps) {
             Manage your tournaments and track earnings
           </p>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
           <button
-            onClick={() => setShowTournamentCreator(true)}
+            type="button"
+            onClick={() => setShowBlackjackTournamentCreator(true)}
             className={`flex items-center gap-2 px-4 py-2 rounded-lg ${Theme.cyan.gradient.button} ${Theme.cyan.gradient.buttonHover} text-white font-medium text-sm transition-colors`}
           >
             <IconPlus size={14} />
-            Create Tournament
+            Create Blackjack tournament
           </button>
+          <Link
+            href="/poker"
+            className="flex items-center gap-2 px-4 py-2 rounded-lg border border-cyan-500/40 text-cyan-200 hover:bg-cyan-500/10 font-medium text-sm transition-colors"
+          >
+            <IconPlus size={14} />
+            Create Poker SNG
+          </Link>
           <button
             onClick={fetchData}
             disabled={loading}
@@ -123,13 +132,14 @@ export function CreatorDashboard({ wsClient, address }: CreatorDashboardProps) {
           {/* Stat cards */}
           <CreatorStats tournaments={tournaments} earnings={earnings} />
 
-          {/* Tabs */}
-          <div className="flex border-b border-gray-600">
+          {/* Tabs — scroll on narrow screens so nothing is clipped */}
+          <div className="flex border-b border-gray-600 overflow-x-auto overflow-y-hidden [scrollbar-width:thin] [scrollbar-color:rgba(107,114,128,0.6)_transparent]">
             {tabs.map((tab) => (
               <button
                 key={tab.id}
+                type="button"
                 onClick={() => setActiveTab(tab.id)}
-                className={`flex items-center gap-2 px-4 py-3 text-sm font-medium transition-colors ${
+                className={`shrink-0 flex items-center gap-2 px-4 py-3 text-sm font-medium transition-colors ${
                   activeTab === tab.id
                     ? `${Theme.cyan.text.primary} border-b-2 border-cyan-400`
                     : 'text-gray-400 hover:text-gray-300'
@@ -155,9 +165,9 @@ export function CreatorDashboard({ wsClient, address }: CreatorDashboardProps) {
       )}
 
       {/* Tournament Creator Modal */}
-      <TournamentCreator
-        isOpen={showTournamentCreator}
-        onClose={() => setShowTournamentCreator(false)}
+      <BlackjackTournamentCreator
+        isOpen={showBlackjackTournamentCreator}
+        onClose={() => setShowBlackjackTournamentCreator(false)}
         onCreate={async (params: CreateTournamentRequest) => {
           const result = await tournament.createTournament(params);
           if (result) {

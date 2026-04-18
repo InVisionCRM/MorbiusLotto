@@ -4,7 +4,7 @@ import { toast } from 'sonner';
 import { TournamentEntry } from '@/components/BLACKJACK/Tournament/TournamentEntry';
 import { TournamentComplete } from '@/components/BLACKJACK/Tournament/TournamentComplete';
 import { TournamentBrowser } from '@/components/BLACKJACK/Tournament/TournamentBrowser';
-import { TournamentCreator } from '@/components/BLACKJACK/Tournament/TournamentCreator';
+import { BlackjackTournamentCreator } from '@/components/BLACKJACK/Tournament/BlackjackTournamentCreator';
 import { TournamentPinEntry } from '@/components/BLACKJACK/Tournament/TournamentPinEntry';
 import type { CreateTournamentRequest, TournamentListItem } from '@/lib/tournament-types';
 import type { BlackjackWebSocketClient } from '@/lib/websocket-client';
@@ -168,7 +168,7 @@ export function BlackjackTournamentOverlays({
         }}
       />
 
-      <TournamentCreator
+      <BlackjackTournamentCreator
         isOpen={showTournamentCreator}
         onClose={() => setShowTournamentCreator(false)}
         onCreate={async (params: CreateTournamentRequest) => {

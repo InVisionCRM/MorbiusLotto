@@ -59,7 +59,7 @@ interface SelectedToken {
   logoUrl: string | null;
 }
 
-interface TournamentCreatorProps {
+export interface BlackjackTournamentCreatorProps {
   isOpen: boolean;
   onClose: () => void;
   onCreate: (params: CreateTournamentRequest) => Promise<{ tournamentId: string; pinCode?: string; onChainTournamentId?: number } | null>;
@@ -87,14 +87,14 @@ function fromDatetimeLocal(local: string): string {
   return new Date(local).toISOString();
 }
 
-export function TournamentCreator({
+export function BlackjackTournamentCreator({
   isOpen,
   onClose,
   onCreate,
   onCreateFreeroll,
   isLoading,
   playerBalance,
-}: TournamentCreatorProps) {
+}: BlackjackTournamentCreatorProps) {
   const [error, setError] = useState<string | null>(null);
   const [createdTournament, setCreatedTournament] = useState<{ id: string; pinCode?: string; onChainTournamentId?: number } | null>(null);
   const [fundingStep, setFundingStep] = useState<FundingStep>('idle');
@@ -116,6 +116,13 @@ export function TournamentCreator({
   // Wizard: 1=Basics, 2=When & Rules, 3=Prizes & Entry, 4=Options, 5=Review
   const [wizardStep, setWizardStep] = useState(1);
   const TOTAL_WIZARD_STEPS = 5;
+  const WIZARD_TABS: { step: number; label: string; short: string }[] = [
+    { step: 1, label: 'Basics', short: 'Basics' },
+    { step: 2, label: 'Schedule & rules', short: 'Schedule' },
+    { step: 3, label: 'Prizes & entry', short: 'Prizes' },
+    { step: 4, label: 'Options', short: 'Options' },
+    { step: 5, label: 'Review', short: 'Review' },
+  ];
 
   // Tournament type: buy-in or freeroll
   const [tournamentType, setTournamentType] = useState<'buyin' | 'freeroll'>('buyin');
@@ -720,20 +727,33 @@ export function TournamentCreator({
 
   return (
     <Dialog open={isOpen} onOpenChange={(open) => { if (!open) handleClose(); }}>
-      <DialogContent className="max-w-xl max-h-[85vh] flex flex-col gap-0 p-0 border-cyan-500/30 overflow-hidden min-h-0" style={Theme.panel.base}>
-        <DialogHeader className={`p-3 pb-0 border-b border-gray-600 shrink-0 ${Theme.cyan.gradient.button}`}>
-          <DialogTitle className="text-lg font-bold text-white text-center">Create Tournament</DialogTitle>
-          <div className="flex justify-center gap-1.5 pt-2 pb-1.5">
-            {[1, 2, 3, 4, 5].map((s) => (
+      <DialogContent className="max-w-xl sm:max-w-2xl max-h-[90vh] sm:max-h-[85vh] flex flex-col gap-0 p-0 border-cyan-500/30 overflow-hidden min-h-0" style={Theme.panel.base}>
+        <DialogHeader className={`p-3 pb-0 border-b border-cyan-500/20 shrink-0 ${Theme.cyan.gradient.button}`}>
+          <DialogTitle className="text-lg font-bold text-white text-center">Create Blackjack Tournament</DialogTitle>
+          <div
+            className="flex gap-1 pt-2 pb-2 -mx-1 px-1 overflow-x-auto overflow-y-hidden [scrollbar-width:thin] [scrollbar-color:rgba(34,211,238,0.35)_transparent]"
+            role="tablist"
+            aria-label="Tournament setup steps"
+          >
+            {WIZARD_TABS.map(({ step, label, short }) => (
               <button
-                key={s}
+                key={step}
                 type="button"
-                onClick={() => setWizardStep(s)}
-                className={`h-1.5 rounded-full transition-all ${
-                  wizardStep === s ? 'w-5 bg-white' : 'w-1.5 bg-white/40 hover:bg-white/60'
+                role="tab"
+                aria-selected={wizardStep === step}
+                onClick={() => {
+                  setWizardStep(step);
+                  setError(null);
+                }}
+                className={`shrink-0 px-3 py-2 rounded-lg text-xs sm:text-sm font-medium border transition-colors whitespace-nowrap ${
+                  wizardStep === step
+                    ? 'bg-cyan-500/25 border-cyan-500/50 text-cyan-100 shadow-[inset_0_1px_0_rgba(255,255,255,0.08)]'
+                    : 'border-white/10 text-gray-300 hover:text-white hover:bg-white/10 hover:border-cyan-500/20'
                 }`}
-                aria-label={`Step ${s}`}
-              />
+              >
+                <span className="sm:hidden">{short}</span>
+                <span className="hidden sm:inline">{label}</span>
+              </button>
             ))}
           </div>
         </DialogHeader>
@@ -1205,7 +1225,7 @@ export function TournamentCreator({
                   Creating...
                 </span>
               ) : (
-                'Create Tournament'
+                'Create Blackjack Tournament'
               )}
             </button>
           )}
@@ -1215,4 +1235,4 @@ export function TournamentCreator({
   );
 }
 
-export default TournamentCreator;
+export default BlackjackTournamentCreator;

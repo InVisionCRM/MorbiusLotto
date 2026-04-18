@@ -1757,7 +1757,7 @@ export function TournamentBrowser({
                     onClick={onCreateNew}
                     className="mt-2 px-4 py-2 rounded-lg bg-cyan-600 hover:bg-cyan-500 text-white text-sm font-medium"
                   >
-                    Create Tournament
+                    Create Blackjack tournament
                   </button>
                 )}
               </div>
@@ -1791,7 +1791,7 @@ export function TournamentBrowser({
               onClick={onCreateNew}
               className={`px-6 py-3 rounded-xl ${Theme.cyan.gradient.button} ${Theme.cyan.gradient.buttonHover} text-white font-semibold transition-all`}
             >
-              + Create Tournament
+              + Create Blackjack tournament
             </button>
           </div>
         </div>
