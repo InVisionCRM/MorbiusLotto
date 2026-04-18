@@ -11,6 +11,7 @@ import {
 import type { BlackjackWebSocketClient } from '@/lib/websocket-client';
 import { formatMorbiusFloor } from '@/lib/format-morbius-display';
 import { PokerTournamentCreator } from './PokerTournamentCreator';
+import { PokerTournamentRegistrantsModal } from './PokerTournamentRegistrantsModal';
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -111,6 +112,7 @@ function TournamentCard({
   onJoin,
   onCancel,
   onAddTournamentBots,
+  onViewRegistrants,
   tournamentBotsBusy,
   isJoining,
   isCancelling,
@@ -120,6 +122,7 @@ function TournamentCard({
   onJoin: (tournamentId: string, pinCode?: string) => void;
   onCancel: (tournamentId: string) => void;
   onAddTournamentBots?: (tournamentId: string, numBots: number, pinCode?: string) => void;
+  onViewRegistrants?: (tournamentId: string, name: string) => void;
   tournamentBotsBusy?: boolean;
   isJoining?: boolean;
   isCancelling?: boolean;
@@ -175,6 +178,15 @@ function TournamentCard({
           <div className="text-[10px] text-white/30">
             {isFull ? 'Full' : `${spots} spot${spots === 1 ? '' : 's'} left`}
           </div>
+          {t.registeredCount > 0 && onViewRegistrants && (
+            <button
+              type="button"
+              onClick={() => onViewRegistrants(t.tournamentId, t.name)}
+              className="mt-1.5 text-[11px] text-cyan-400/90 hover:text-cyan-300 underline-offset-2 hover:underline font-medium"
+            >
+              Who's registered?
+            </button>
+          )}
         </div>
         <div>
           <div className="text-[10px] text-white/40 uppercase tracking-wide">Prize Pool</div>
@@ -322,6 +334,7 @@ interface PokerTournamentLobbyProps {
 export function PokerTournamentLobby({ wsClient, myAddress, onGoToTable }: PokerTournamentLobbyProps) {
   const queryClient = useQueryClient();
   const [showCreate, setShowCreate] = useState(false);
+  const [registrantsModal, setRegistrantsModal] = useState<{ tournamentId: string; name: string } | null>(null);
   const [joinError, setJoinError] = useState<string | null>(null);
   const [joinSuccess, setJoinSuccess] = useState<string | null>(null);
   const [joiningId, setJoiningId] = useState<string | null>(null);
@@ -526,6 +539,7 @@ export function PokerTournamentLobby({ wsClient, myAddress, onGoToTable }: Poker
               onJoin={handleJoin}
               onCancel={handleCancel}
               onAddTournamentBots={handleAddTournamentBots}
+              onViewRegistrants={(tournamentId, name) => setRegistrantsModal({ tournamentId, name })}
               tournamentBotsBusy={tournamentBotsBusyId === t.tournamentId}
               isJoining={joiningId === t.tournamentId}
               isCancelling={cancellingId === t.tournamentId}
@@ -542,6 +556,15 @@ export function PokerTournamentLobby({ wsClient, myAddress, onGoToTable }: Poker
           onCreate={handleCreate}
         />
       )}
+
+      <PokerTournamentRegistrantsModal
+        open={registrantsModal != null}
+        onClose={() => setRegistrantsModal(null)}
+        wsClient={wsClient}
+        tournamentId={registrantsModal?.tournamentId ?? null}
+        tournamentName={registrantsModal?.name ?? null}
+        myAddress={myAddress}
+      />
     </div>
   );
 }

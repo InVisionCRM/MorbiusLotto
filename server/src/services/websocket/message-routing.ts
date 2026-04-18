@@ -21,6 +21,7 @@ export type WebSocketMessageDomain =
 const POKER_PUBLIC_TYPES = new Set<string>([
   'poker_tournament_list',
   'poker_tournament_get_state',
+  'poker_tournament_registrants',
 ]);
 
 export function classifyWebSocketMessageType(type: string): WebSocketMessageDomain {

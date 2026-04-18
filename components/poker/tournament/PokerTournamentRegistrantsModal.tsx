@@ -1,0 +1,181 @@
+'use client';
+
+import React, { useEffect, useState } from 'react';
+import type { BlackjackWebSocketClient } from '@/lib/websocket-client';
+import { WS_MESSAGE_TYPES } from '@/lib/websocket-message-types';
+
+export interface PokerTournamentRegistrantRow {
+  playerAddress: string;
+  registeredAt: string | null;
+  status: 'playing' | 'busted' | 'completed';
+}
+
+function statusLabel(status: PokerTournamentRegistrantRow['status']): string {
+  if (status === 'playing') return 'Playing';
+  if (status === 'completed') return 'Finished';
+  return 'Eliminated';
+}
+
+function shortAddr(a: string): string {
+  const s = a || '';
+  if (s.length < 12) return s;
+  return `${s.slice(0, 6)}…${s.slice(-4)}`;
+}
+
+interface PokerTournamentRegistrantsModalProps {
+  open: boolean;
+  onClose: () => void;
+  wsClient: BlackjackWebSocketClient | null;
+  tournamentId: string | null;
+  tournamentName: string | null;
+  myAddress?: string;
+}
+
+export function PokerTournamentRegistrantsModal({
+  open,
+  onClose,
+  wsClient,
+  tournamentId,
+  tournamentName,
+  myAddress,
+}: PokerTournamentRegistrantsModalProps) {
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [rows, setRows] = useState<PokerTournamentRegistrantRow[]>([]);
+
+  const me = myAddress?.toLowerCase() ?? null;
+
+  useEffect(() => {
+    if (!open || !tournamentId || !wsClient?.isConnected()) {
+      setRows([]);
+      setError(null);
+      setLoading(false);
+      return;
+    }
+
+    let cancelled = false;
+    setLoading(true);
+    setError(null);
+
+    wsClient
+      .sendRequest(WS_MESSAGE_TYPES.pokerTournamentRegistrants, { tournamentId })
+      .then((payload: { registrants?: PokerTournamentRegistrantRow[] }) => {
+        if (cancelled) return;
+        setRows(Array.isArray(payload?.registrants) ? payload.registrants : []);
+      })
+      .catch((err: Error) => {
+        if (cancelled) return;
+        setError(err?.message ?? 'Failed to load players');
+        setRows([]);
+      })
+      .finally(() => {
+        if (!cancelled) setLoading(false);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [open, tournamentId, wsClient]);
+
+  if (!open) return null;
+
+  return (
+    <div
+      className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4"
+      onClick={(e) => {
+        if (e.target === e.currentTarget) onClose();
+      }}
+      role="presentation"
+    >
+      <div className="relative max-w-lg w-full overflow-hidden rounded-2xl border-2 border-cyan-500/30 bg-gradient-to-br from-slate-900 to-slate-800 shadow-2xl">
+        <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_50%_40%,rgba(34,211,238,0.12),transparent_65%)]" />
+        <div className="relative p-5 border-b border-cyan-500/20 flex items-start justify-between gap-3">
+          <div className="min-w-0">
+            <h3 className="text-lg font-bold text-white truncate">Registered players</h3>
+            {tournamentName && (
+              <p className="text-sm text-white/60 mt-0.5 truncate">{tournamentName}</p>
+            )}
+          </div>
+          <button
+            type="button"
+            onClick={onClose}
+            className="shrink-0 rounded-lg border border-white/15 px-2.5 py-1 text-sm text-white/70 hover:text-white hover:bg-white/10 transition-colors"
+          >
+            Close
+          </button>
+        </div>
+
+        <div className="relative max-h-[min(60vh,420px)] overflow-y-auto p-4">
+          {loading && (
+            <div className="text-center text-white/50 text-sm py-8">Loading…</div>
+          )}
+          {!loading && error && (
+            <div className="rounded-lg bg-red-500/10 border border-red-500/30 text-red-300 text-sm px-3 py-2">
+              {error}
+            </div>
+          )}
+          {!loading && !error && rows.length === 0 && (
+            <div className="text-center text-white/45 text-sm py-8">No registrants yet.</div>
+          )}
+          {!loading && !error && rows.length > 0 && (
+            <ul className="space-y-2">
+              {rows.map((r) => {
+                const isMe = me && r.playerAddress.toLowerCase() === me;
+                return (
+                  <li
+                    key={`${r.playerAddress}-${r.registeredAt ?? ''}`}
+                    className={`rounded-xl px-3 py-2.5 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 border ${
+                      isMe
+                        ? 'border-cyan-500/40 bg-cyan-500/10'
+                        : 'border-white/10 bg-white/[0.04]'
+                    }`}
+                    style={{
+                      boxShadow: isMe
+                        ? '0 2px 8px rgba(0,0,0,0.35), inset 0 1px 0 rgba(255,255,255,0.06)'
+                        : 'inset 0 1px 0 rgba(255,255,255,0.04)',
+                    }}
+                  >
+                    <div className="min-w-0 flex items-center gap-2 flex-wrap">
+                      <span className="font-mono text-sm text-white/95">{shortAddr(r.playerAddress)}</span>
+                      {isMe && (
+                        <span className="text-[10px] px-1.5 py-0.5 rounded border border-cyan-400/40 text-cyan-200/90">
+                          You
+                        </span>
+                      )}
+                      <a
+                        href={`https://scan.pulsechain.com/address/${r.playerAddress}`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="text-[11px] text-cyan-400/90 hover:text-cyan-300 underline-offset-2 hover:underline"
+                      >
+                        PulseScan
+                      </a>
+                    </div>
+                    <div className="flex items-center gap-2 shrink-0 text-xs">
+                      <span
+                        className={`px-2 py-0.5 rounded-full border ${
+                          r.status === 'playing'
+                            ? 'border-green-500/35 text-green-300/95 bg-green-500/10'
+                            : r.status === 'completed'
+                              ? 'border-blue-500/35 text-blue-200/90 bg-blue-500/10'
+                              : 'border-white/20 text-white/55 bg-white/5'
+                        }`}
+                      >
+                        {statusLabel(r.status)}
+                      </span>
+                      {r.registeredAt && (
+                        <span className="text-white/40 tabular-nums hidden sm:inline">
+                          {new Date(r.registeredAt).toLocaleString()}
+                        </span>
+                      )}
+                    </div>
+                  </li>
+                );
+              })}
+            </ul>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}

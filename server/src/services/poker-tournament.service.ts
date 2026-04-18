@@ -170,16 +170,19 @@ export class PokerTournamentService {
     return toBigIntSafe(value);
   }
 
-  /** Who receives prize_pool on cancel / scheduled under-min (freeroll → funder or creator). */
-  private prizePoolRefundRecipient(tournament: {
+  /**
+   * Who receives the **guaranteed** freeroll overlay (buy-in 0) when it is returned:
+   * creator cancel (registration) or scheduled start with insufficient players.
+   */
+  private guaranteedPrizePoolRefundRecipient(tournament: {
     buy_in_amount: unknown;
     creator_address: unknown;
     guaranteed_prize_funder_address?: unknown;
   }): string | null {
     const buyIn = this.parseBigInt(tournament.buy_in_amount);
+    if (buyIn > 0n) return null;
     const creatorRaw = tournament.creator_address as string | null | undefined;
     const creator = creatorRaw ? this.normalizeAddress(creatorRaw) : null;
-    if (buyIn > 0n) return creator;
     const funderRaw = tournament.guaranteed_prize_funder_address as string | null | undefined;
     if (funderRaw) return this.normalizeAddress(funderRaw);
     return creator;
@@ -541,6 +544,7 @@ export class PokerTournamentService {
           [tournamentId]
         );
         for (const entry of entries.rows) {
+          // Paid tournaments: return each player's buy-in only (prize_pool is buy-ins only here).
           if (buyIn > 0n) {
             await client.query(
               `UPDATE players SET balance = balance + $1::NUMERIC WHERE LOWER(wallet_address) = LOWER($2)`,
@@ -552,13 +556,17 @@ export class PokerTournamentService {
             [entry.id]
           );
         }
-        const poolRefund = this.parseBigInt(tournament.prize_pool);
-        const refundTo = this.prizePoolRefundRecipient(tournament);
-        if (poolRefund > 0n && refundTo) {
-          await client.query(
-            `UPDATE players SET balance = balance + $1::NUMERIC WHERE LOWER(wallet_address) = LOWER($2)`,
-            [poolRefund.toString(), refundTo]
-          );
+        // Freeroll (buy-in 0): the only MORBIUS refund is the creator/platform-funded guarantee back to the funder.
+        // Do not credit entrants; do not also refund full prize_pool after buy-in loops (avoids double-pay on paid).
+        if (buyIn === 0n) {
+          const poolRefund = this.parseBigInt(tournament.prize_pool);
+          const refundTo = this.guaranteedPrizePoolRefundRecipient(tournament);
+          if (poolRefund > 0n && refundTo) {
+            await client.query(
+              `UPDATE players SET balance = balance + $1::NUMERIC WHERE LOWER(wallet_address) = LOWER($2)`,
+              [poolRefund.toString(), refundTo]
+            );
+          }
         }
         await client.query(
           `UPDATE tournaments SET status = 'cancelled', ended_at = NOW(), prize_pool = 0 WHERE id = $1`,
@@ -995,9 +1003,7 @@ export class PokerTournamentService {
     if (t.creator_address?.toLowerCase() !== normalized) throw new Error('Only the creator can cancel this tournament');
 
     const buyIn = this.parseBigInt(t.buy_in_amount);
-    const prizePoolRefund = this.parseBigInt(t.prize_pool);
 
-    // Refund all entries
     const entries = await this.pool.query(
       `SELECT id, player_address FROM tournament_entries
        WHERE tournament_id = $1 AND status = 'playing'`,
@@ -1005,6 +1011,8 @@ export class PokerTournamentService {
     );
 
     for (const entry of entries.rows) {
+      // Creator cancel during registration: paid events return buy-ins to entrants only.
+      // Freerolls: entrants never receive balance (they never paid a buy-in).
       if (buyIn > 0n) {
         await this.pool.query(
           `UPDATE players SET balance = balance + $1::NUMERIC WHERE LOWER(wallet_address) = LOWER($2)`,
@@ -1017,12 +1025,16 @@ export class PokerTournamentService {
       );
     }
 
-    const refundTo = this.prizePoolRefundRecipient(t);
-    if (prizePoolRefund > 0n && refundTo) {
-      await this.pool.query(
-        `UPDATE players SET balance = balance + $1::NUMERIC WHERE LOWER(wallet_address) = LOWER($2)`,
-        [prizePoolRefund.toString(), refundTo]
-      );
+    // Freeroll: return the locked guarantee to whoever funded prize_pool (creator / funder only).
+    if (buyIn === 0n) {
+      const prizePoolRefund = this.parseBigInt(t.prize_pool);
+      const refundTo = this.guaranteedPrizePoolRefundRecipient(t);
+      if (prizePoolRefund > 0n && refundTo) {
+        await this.pool.query(
+          `UPDATE players SET balance = balance + $1::NUMERIC WHERE LOWER(wallet_address) = LOWER($2)`,
+          [prizePoolRefund.toString(), refundTo]
+        );
+      }
     }
 
     await this.pool.query(
@@ -1035,9 +1047,107 @@ export class PokerTournamentService {
     this.broadcast(`poker_tournament:${tournamentId}`, 'poker_tournament_cancelled', { tournamentId });
   }
 
+  /**
+   * **Dev / QA only** (HTTP layer must also enable `POKER_TOURNAMENT_DEV_RESET=true`):
+   * Drops tournament poker table(s), cancels pending scheduled events, marks `playing`/`forfeited`
+   * entries as busted, sets tournament `cancelled` and `prize_pool = 0`.
+   * Does **not** credit player balances (including locked guarantee / buy-ins) — for local DB cleanup only.
+   */
+  async adminDevForceResetPokerTournament(tournamentId: string): Promise<{
+    tournamentId: string;
+    deletedTableIds: string[];
+    priorStatus: string;
+  }> {
+    const id = tournamentId.trim();
+    if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id)) {
+      throw new Error('Invalid tournament id');
+    }
+
+    const tRow = await this.pool.query(
+      `SELECT status FROM tournaments WHERE id = $1 AND game_type = 'poker'`,
+      [id],
+    );
+    if (tRow.rows.length === 0) {
+      throw new Error('Poker tournament not found');
+    }
+    const priorStatus = String(tRow.rows[0].status ?? '');
+
+    const tables = await this.pool.query(`SELECT id FROM poker_tables WHERE tournament_id = $1`, [id]);
+    const deletedTableIds: string[] = [];
+    for (const row of tables.rows) {
+      const tableId = row.id as string;
+      await this.pokerGameService.deleteTableTournament(tableId);
+      deletedTableIds.push(tableId);
+    }
+
+    await this.pool.query(
+      `UPDATE tournament_scheduled_events SET status = 'cancelled' WHERE tournament_id = $1 AND status = 'pending'`,
+      [id],
+    );
+
+    await this.pool.query(
+      `UPDATE tournament_entries
+       SET status = 'busted', chips_remaining = 0, finished_at = COALESCE(finished_at, NOW())
+       WHERE tournament_id = $1 AND status IN ('playing', 'forfeited')`,
+      [id],
+    );
+
+    await this.pool.query(
+      `UPDATE tournaments
+       SET status = 'cancelled', ended_at = COALESCE(ended_at, NOW()), prize_pool = 0
+       WHERE id = $1 AND game_type = 'poker'`,
+      [id],
+    );
+
+    logger.warn('Poker tournament DEV reset (no balance refunds)', {
+      tournamentId: id,
+      deletedTableIds,
+      priorStatus,
+    });
+
+    this.broadcast(`poker_tournament:${id}`, 'poker_tournament_cancelled', {
+      tournamentId: id,
+      reason: 'dev_reset',
+    });
+
+    return { tournamentId: id, deletedTableIds, priorStatus };
+  }
+
   // ---------------------------------------------------------------------------
   // Read methods
   // ---------------------------------------------------------------------------
+
+  /** Entrants for lobby / modal (addresses + registration time + entry status). */
+  async getPokerTournamentRegistrants(tournamentId: string): Promise<
+    Array<{ playerAddress: string; registeredAt: string | null; status: 'playing' | 'busted' | 'completed' }>
+  > {
+    const id = tournamentId.trim();
+    if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id)) {
+      throw new Error('Invalid tournament id');
+    }
+    const t = await this.pool.query(
+      `SELECT 1 FROM tournaments WHERE id = $1 AND game_type = 'poker'`,
+      [id]
+    );
+    if (t.rows.length === 0) throw new Error('Tournament not found');
+
+    const r = await this.pool.query(
+      `SELECT player_address, bought_in_at, status
+       FROM tournament_entries
+       WHERE tournament_id = $1
+       ORDER BY
+         CASE status WHEN 'playing' THEN 0 WHEN 'completed' THEN 1 ELSE 2 END,
+         bought_in_at ASC NULLS LAST,
+         LOWER(player_address) ASC`,
+      [id]
+    );
+
+    return r.rows.map((e: { player_address: string; bought_in_at: Date | null; status: string }) => ({
+      playerAddress: e.player_address,
+      registeredAt:  e.bought_in_at ? new Date(e.bought_in_at).toISOString() : null,
+      status:        e.status as 'playing' | 'busted' | 'completed',
+    }));
+  }
 
   async listPokerTournaments(playerAddress?: string): Promise<PokerTournamentSummary[]> {
     const normalized = playerAddress ? this.normalizeAddress(playerAddress) : null;

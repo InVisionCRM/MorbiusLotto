@@ -50,6 +50,7 @@ export const WS_MESSAGE_TYPES = {
   pokerTournamentList: 'poker_tournament_list',
   pokerTournamentJoin: 'poker_tournament_join',
   pokerTournamentGetState: 'poker_tournament_get_state',
+  pokerTournamentRegistrants: 'poker_tournament_registrants',
   pokerTournamentCreate: 'poker_tournament_create',
   pokerTournamentCancel: 'poker_tournament_cancel',
 
@@ -71,6 +72,7 @@ export const WS_PUBLIC_MESSAGES = [
   WS_MESSAGE_TYPES.pokerListTables,
   WS_MESSAGE_TYPES.pokerTournamentList,
   WS_MESSAGE_TYPES.pokerTournamentGetState,
+  WS_MESSAGE_TYPES.pokerTournamentRegistrants,
   'bj_multi_list_tables',
 ] as const;
 

@@ -27,7 +27,7 @@ export async function GET() {
     // All tables including tournament ones — use admin endpoint if it exists
     safeFetch(`${base}/api/admin/poker/tables`, { headers: adminHeaders }),
     // Poker tournaments from the view
-    safeFetch(`${base}/api/poker/admin/tournaments`, { headers: adminHeaders }),
+    safeFetch(`${base}/api/admin/poker/tournaments`, { headers: adminHeaders }),
   ]);
 
   return NextResponse.json({

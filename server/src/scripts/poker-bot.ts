@@ -270,6 +270,10 @@ function parseState(payload: any, botAddress: string): BotState | null {
   const mySeat = seats.find((s: any) => s.playerAddress?.toLowerCase() === botAddress.toLowerCase());
   if (!mySeat) return null;
   const hand = payload.currentHand;
+  const myPosition = Number(mySeat.position);
+  const actingRaw = hand?.actingPosition;
+  const actingPosition =
+    actingRaw === undefined || actingRaw === null || actingRaw === '' ? null : Number(actingRaw);
   return {
     tableId: payload.tableId,
     handId: hand?.handId ?? null,
@@ -277,8 +281,8 @@ function parseState(payload: any, botAddress: string): BotState | null {
     pot: hand?.pot ?? '0',
     toCall: hand?.toCall ?? '0',
     minRaise: hand?.minRaise ?? '0',
-    myPosition: mySeat.position,
-    actingPosition: hand?.actingPosition ?? null,
+    myPosition: Number.isFinite(myPosition) ? myPosition : 0,
+    actingPosition: actingPosition != null && Number.isFinite(actingPosition) ? actingPosition : null,
     turnStartedAt: hand?.turnStartedAt ?? null,
     myStack: mySeat.stack,
     myHoleCards: payload.myHoleCards ?? null,

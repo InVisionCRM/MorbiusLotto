@@ -1566,6 +1566,26 @@ class WebSocketService {
             this.sendError(ws, error.message || 'Failed to get tournament state', message.requestId);
         }
     }
+    async handlePokerTournamentRegistrants(ws, message) {
+        try {
+            if (!this.pokerTournamentService) {
+                return this.sendError(ws, 'Poker tournaments not available', message.requestId);
+            }
+            const { tournamentId } = message.payload ?? {};
+            if (!tournamentId)
+                return this.sendError(ws, 'tournamentId required', message.requestId);
+            const registrants = await this.pokerTournamentService.getPokerTournamentRegistrants(tournamentId);
+            this.sendMessage(ws, {
+                type: 'poker_tournament_registrants',
+                payload: { registrants },
+                requestId: message.requestId,
+            });
+        }
+        catch (error) {
+            logger_1.logger.error('Error getting poker tournament registrants:', error);
+            this.sendError(ws, error.message || 'Failed to get registrants', message.requestId);
+        }
+    }
     async handlePokerTournamentCancel(ws, message) {
         try {
             if (!this.pokerTournamentService || !ws.playerAddress) {

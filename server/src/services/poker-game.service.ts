@@ -1368,6 +1368,9 @@ export class PokerGameService {
       throw new Error(`Illegal action: "${action}" is not allowed. Legal: ${legal.join(', ')}`);
     }
 
+    // Execute the validated action — not the raw client label (e.g. open-raise must call raiseAction, not betAction).
+    const effectiveAction = action === 'bet' || action === 'raise' ? requestedAction : action;
+
     // Capture street before action (for DB recording)
     const streetBefore = chevtekStreetToPoker(table.currentRound, !!table.winners);
 
@@ -1380,7 +1383,7 @@ export class PokerGameService {
 
     let actionAmountDb = '0';
 
-    switch (action) {
+    switch (effectiveAction) {
       case 'fold':
         actor.foldAction();
         break;
@@ -1468,7 +1471,7 @@ export class PokerGameService {
     await pool.query(
       `INSERT INTO poker_hand_actions (hand_id, player_address, street, action, amount, "order")
        VALUES ($1, $2, $3, $4, $5::NUMERIC, $6)`,
-      [handId, normalized, streetBefore, action, actionAmountDb, nextOrder]
+      [handId, normalized, streetBefore, effectiveAction, actionAmountDb, nextOrder]
     );
 
     if (isShowdown) {
@@ -1839,7 +1842,9 @@ export class PokerGameService {
       'SELECT player_address, cards FROM poker_hand_hole_cards WHERE hand_id = $1',
       [hand.id]
     );
-    const dealtAddrs = new Set(holeCardsResult.rows.map((r: any) => r.player_address));
+    const dealtAddrs = new Set(
+      holeCardsResult.rows.map((r: any) => (r.player_address || '').toLowerCase()),
+    );
 
     const actionsResult = await pool.query(
       `SELECT player_address, action, amount FROM poker_hand_actions WHERE hand_id = $1 ORDER BY "order"`,

@@ -50,7 +50,7 @@ cd server && npm test -- --verbose
 | **7 — prize distribution** | After `syncAfterHand` triggers completion, winner balance increases, tournament status is `completed`. |
 | **8 — full 2-player E2E** | End-to-end: create → join ×2 → auto-start → simulate hand result → bust player → verify prizes paid, ranks assigned, tournament completed. |
 | **9 — scheduled poker start** | Below `minPlayers` at start time → cancelled + refunded. At or above `minPlayers` → `status=active` and tournament table created. |
-| **10 — regression** | Blackjack `createTournament` still defaults to `game_type=blackjack`. Cash game tables still appear in `listTables`. `poker_tournament_registrations` filters `game_type=poker`. `cancelPokerTournament` refunds all players. |
+| **10 — regression** | Blackjack `createTournament` still defaults to `game_type=blackjack`. Cash game tables still appear in `listTables`. `poker_tournament_registrations` filters `game_type=poker`. `cancelPokerTournament` refunds paid buy-ins to entrants; freeroll guarantee returns to funder on cancel or scheduled under-min (entrants never credited on freeroll). |
 
 ---
 

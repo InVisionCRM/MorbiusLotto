@@ -197,14 +197,61 @@ function HealthTab({ data, loading, onRefresh }: { data: StatusData | null; load
 // Tab: Tournaments
 // ---------------------------------------------------------------------------
 
-function TournamentsTab({ data }: { data: StatusData | null }) {
+function TournamentsTab({ data, onRefresh }: { data: StatusData | null; onRefresh: () => void }) {
   const tournaments = data?.tournaments ?? [];
+  const [busyId, setBusyId] = useState<string | null>(null);
+  const [banner, setBanner] = useState<{ kind: 'ok' | 'err'; text: string } | null>(null);
+
+  const devReset = async (tournamentId: string) => {
+    const ok = window.confirm(
+      'Dev-reset this tournament? Deletes the poker table, stops registration bots, marks entries busted, cancels the event, and zeros prize_pool in the DB — with NO MORBIUS refunds. Requires POKER_TOURNAMENT_DEV_RESET=true on the game server.',
+    );
+    if (!ok) return;
+    setBusyId(tournamentId);
+    setBanner(null);
+    try {
+      const res = await fetch('/api/poker/admin/tournament-dev-reset', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ tournamentId }),
+      });
+      const j = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        setBanner({ kind: 'err', text: typeof j.error === 'string' ? j.error : `Request failed (${res.status})` });
+        return;
+      }
+      const n = Array.isArray(j.deletedTableIds) ? j.deletedTableIds.length : 0;
+      setBanner({ kind: 'ok', text: `Dev reset done — removed ${n} tournament table(s).` });
+      onRefresh();
+    } catch (e) {
+      setBanner({ kind: 'err', text: e instanceof Error ? e.message : 'Request failed' });
+    } finally {
+      setBusyId(null);
+    }
+  };
+
   if (tournaments.length === 0) {
     return <p className="text-slate-500 text-sm py-8 text-center">No poker tournaments found.</p>;
   }
 
   return (
     <div className="space-y-3">
+      {banner && (
+        <div
+          className={`rounded-xl border px-4 py-3 text-xs ${
+            banner.kind === 'ok'
+              ? 'border-cyan-500/30 bg-cyan-500/5 text-cyan-200/90'
+              : 'border-red-500/30 bg-red-500/5 text-red-300/90'
+          }`}
+        >
+          {banner.text}
+        </div>
+      )}
+      <p className="text-[11px] text-slate-500">
+        Local testing: set <span className="font-mono text-slate-400">POKER_TOURNAMENT_DEV_RESET=true</span> in{' '}
+        <span className="font-mono text-slate-400">server/.env</span> so Dev reset is allowed (still requires admin secret via{' '}
+        <span className="font-mono text-slate-400">AP</span> on this app).
+      </p>
       {tournaments.map(t => (
         <div key={t.tournament_id} className="rounded-xl border border-slate-700/50 bg-slate-800/30 p-4">
           <div className="flex items-start justify-between gap-3 mb-3">
@@ -212,12 +259,22 @@ function TournamentsTab({ data }: { data: StatusData | null }) {
               <span className="font-semibold text-white text-sm">{t.name}</span>
               <span className="ml-2 text-[11px] text-slate-500 font-mono">{t.tournament_id.slice(0, 8)}…</span>
             </div>
-            <span className={`text-[10px] px-2 py-0.5 rounded-full border font-medium shrink-0 ${
-              t.status === 'active'       ? 'bg-green-500/20 text-green-300 border-green-500/30' :
-              t.status === 'registration' ? 'bg-blue-500/20 text-blue-300 border-blue-500/30' :
-              t.status === 'completed'    ? 'bg-slate-500/20 text-slate-400 border-slate-500/30' :
-                                           'bg-red-500/20 text-red-400 border-red-500/30'
-            }`}>{t.status}</span>
+            <div className="flex items-center gap-2 shrink-0">
+              <button
+                type="button"
+                onClick={() => devReset(t.tournament_id)}
+                disabled={busyId !== null}
+                className="text-[10px] px-2 py-1 rounded-lg border border-amber-500/40 text-amber-300/90 hover:bg-amber-500/10 disabled:opacity-40 transition-colors"
+              >
+                {busyId === t.tournament_id ? '…' : 'Dev reset'}
+              </button>
+              <span className={`text-[10px] px-2 py-0.5 rounded-full border font-medium ${
+                t.status === 'active'       ? 'bg-green-500/20 text-green-300 border-green-500/30' :
+                t.status === 'registration' ? 'bg-blue-500/20 text-blue-300 border-blue-500/30' :
+                t.status === 'completed'    ? 'bg-slate-500/20 text-slate-400 border-slate-500/30' :
+                                               'bg-red-500/20 text-red-400 border-red-500/30'
+              }`}>{t.status}</span>
+            </div>
           </div>
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-xs text-slate-400">
             <div><span className="text-slate-600 block text-[10px] uppercase">Buy-in</span>{fmt(t.buy_in_amount)} MORBIUS</div>
@@ -452,7 +509,7 @@ export default function PokerAdminPage() {
 
           {/* Tab content */}
           {activeTab === 'health'      && <HealthTab data={statusData} loading={loading} onRefresh={fetchStatus} />}
-          {activeTab === 'tournaments' && <TournamentsTab data={statusData} />}
+          {activeTab === 'tournaments' && <TournamentsTab data={statusData} onRefresh={fetchStatus} />}
           {activeTab === 'tables'      && <TablesTab data={statusData} />}
           {activeTab === 'tests'       && <TestsTab />}
       </div>

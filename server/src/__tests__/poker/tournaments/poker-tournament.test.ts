@@ -1384,7 +1384,7 @@ describe('10 - regression', () => {
     expect(balanceAfter3).toBeGreaterThanOrEqual(balanceBefore3);
   });
 
-  it('cancelPokerTournament credits prize_pool back to creator for freeroll', async () => {
+  it('cancelPokerTournament returns freeroll guarantee to funder only; entrants get no balance credit', async () => {
     const { tournamentId } = await pokerTournamentService.createPokerTournament({
       creatorAddress:        PLAYER_1,
       name:                  'Cancel free',
@@ -1398,10 +1398,13 @@ describe('10 - regression', () => {
     await pokerTournamentService.joinPokerTournament(tournamentId, PLAYER_2);
 
     const creatorBefore = await getTestBalance(PLAYER_1);
+    const joinerBefore = await getTestBalance(PLAYER_2);
     await pokerTournamentService.cancelPokerTournament(tournamentId, PLAYER_1);
     const creatorAfter = await getTestBalance(PLAYER_1);
+    const joinerAfter = await getTestBalance(PLAYER_2);
 
     expect(creatorAfter - creatorBefore).toBe(TEST_GUARANTEED_POOL);
+    expect(joinerAfter).toBe(joinerBefore);
 
     const t = await testPool.query('SELECT status, prize_pool FROM tournaments WHERE id = $1', [tournamentId]);
     expect(t.rows[0].status).toBe('cancelled');
