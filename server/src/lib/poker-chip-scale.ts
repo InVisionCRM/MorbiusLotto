@@ -1,20 +1,20 @@
-import { logger } from '../utils/logger';
+/**
+ * Unified poker-chip scale.
+ *
+ * The poker engine and all `poker_*` tables (stacks, blinds, pots, bets, rake)
+ * store raw chip integers. MORBIUS (wei) only appears at named boundary points:
+ *   - Cash join buy-in (wei debited from balance → chips on seat)
+ *   - Cash leave / re-up / rake credit (chips → wei to balance)
+ *   - Tournament buy-in / prize payout (wei; chips stay virtual in-tournament)
+ *
+ * One chip = 10^15 wei (0.001 MORBIUS). Hardcoded — do not make configurable.
+ */
 
-/** Default: 0.001 MORBIUS per engine chip (10^15 wei when MORBIUS uses 18 decimals). */
-export const DEFAULT_POKER_CHIP_WEI = 10n ** 15n;
+/** 10^15 wei per chip. */
+export const POKER_CHIP_WEI = 10n ** 15n;
 
-export function getPokerChipWei(): bigint {
-  const raw = process.env.POKER_CHIP_WEI?.trim();
-  if (!raw) return DEFAULT_POKER_CHIP_WEI;
-  try {
-    const v = BigInt(raw);
-    if (v <= 0n) return DEFAULT_POKER_CHIP_WEI;
-    return v;
-  } catch {
-    logger.warn('Invalid POKER_CHIP_WEI env, using default');
-    return DEFAULT_POKER_CHIP_WEI;
-  }
-}
+/** Chip values feed directly into the chevtek engine, which uses JS `number`. */
+export const MAX_ENGINE_CHIPS_BIGINT = BigInt(Number.MAX_SAFE_INTEGER);
 
 const DEFAULT_RAKE_WALLET = '0x2D6f6a61cFDc7C7d000C9279bD7a743D277736bB'.toLowerCase();
 
@@ -26,48 +26,29 @@ export function getPokerRakeWallet(): string {
   return raw.toLowerCase();
 }
 
-export const MAX_ENGINE_CHIPS_BIGINT = BigInt(Number.MAX_SAFE_INTEGER);
-
-export function assertCashBlindsValid(smallBlindWei: bigint, bigBlindWei: bigint): void {
-  const cw = getPokerChipWei();
-  if (smallBlindWei <= 0n || bigBlindWei <= 0n) throw new Error('Blinds must be positive');
-  if (smallBlindWei % cw !== 0n || bigBlindWei % cw !== 0n) {
+/** Convert MORBIUS wei to chips. Throws if not a whole number of chips. */
+export function weiToChips(amountWei: bigint, label = 'Amount'): number {
+  if (amountWei < 0n) throw new Error(`${label} must be non-negative`);
+  if (amountWei % POKER_CHIP_WEI !== 0n) {
     throw new Error(
-      `Blinds must be multiples of poker chip size (${cw.toString()} wei). Run migration 083 or update poker_tables.`
+      `${label} must be a whole number of chips (${POKER_CHIP_WEI.toString()} wei each)`,
     );
   }
-  if (bigBlindWei < smallBlindWei) throw new Error('bigBlind must be >= smallBlind');
-}
-
-export function assertCashChipMultiple(amountWei: bigint, label: string): void {
-  const cw = getPokerChipWei();
-  if (amountWei <= 0n) throw new Error(`${label} must be positive`);
-  if (amountWei % cw !== 0n) {
-    throw new Error(`${label} must be a multiple of one poker chip (${cw.toString()} wei)`);
-  }
-  if (amountWei / cw > MAX_ENGINE_CHIPS_BIGINT) throw new Error(`${label} too large for poker engine`);
-}
-
-export function weiToEngineChips(amountWei: bigint): number {
-  assertCashChipMultiple(amountWei, 'Amount');
-  const cw = getPokerChipWei();
-  const chips = amountWei / cw;
+  const chips = amountWei / POKER_CHIP_WEI;
+  if (chips > MAX_ENGINE_CHIPS_BIGINT) throw new Error(`${label} exceeds max engine chips`);
   return Number(chips);
 }
 
-export function engineChipsToWeiRounded(chips: number): bigint {
-  if (!Number.isFinite(chips) || chips <= 0) return 0n;
+/** Convert chip count back to MORBIUS wei. */
+export function chipsToWei(chips: number): bigint {
+  if (!Number.isFinite(chips)) throw new Error('Chips must be finite');
+  if (chips < 0) throw new Error('Chips must be non-negative');
   const rounded = Math.round(chips);
-  if (BigInt(rounded) > MAX_ENGINE_CHIPS_BIGINT) throw new Error('Stack overflow in poker engine');
-  return BigInt(rounded) * getPokerChipWei();
+  if (BigInt(rounded) > MAX_ENGINE_CHIPS_BIGINT) throw new Error('Chip stack overflow');
+  return BigInt(rounded) * POKER_CHIP_WEI;
 }
 
-export function enginePotChipsToPotWei(totalChipsFloat: number, chipWei: bigint): bigint {
-  if (!Number.isFinite(totalChipsFloat) || totalChipsFloat <= 0) return 0n;
-  const chips = BigInt(Math.max(0, Math.round(totalChipsFloat)));
-  return chips * chipWei;
-}
-
+/** Total chips across a chevtek Table's pots + live bets. */
 export function totalPotChips(table: {
   pots: { amount: number }[];
   players: ({ bet?: number } | null)[];
@@ -77,6 +58,7 @@ export function totalPotChips(table: {
   return potSum + betSum;
 }
 
+/** Split a bigint `total` into `n` near-equal parts (remainder goes to first recipients). */
 export function splitBigIntEqually(total: bigint, n: number): bigint[] {
   if (n <= 0) return [];
   const bn = BigInt(n);

@@ -139,6 +139,17 @@ export function normalizePokerTournamentPrizePercents(maxPlayers: number, raw: u
 /** Tournament uses integer chip counts; multiply by this to store in wei units (same as cash game). */
 const CHIP_SCALE = BigInt('1000000000000000000'); // 10^18
 
+/**
+ * `poker_seats.stack` for tournament tables: on activation stacks are stored as chips×CHIP_SCALE (wei-style);
+ * after each showdown the poker service persists raw integer chip counts. Interpret both correctly so
+ * eliminations and `tournament_entries.chips_remaining` stay aligned with the engine.
+ */
+export function tournamentSeatStackToChipCount(stackRaw: bigint): number {
+  if (stackRaw <= 0n) return 0;
+  if (stackRaw < CHIP_SCALE) return Number(stackRaw);
+  return Number(stackRaw / CHIP_SCALE);
+}
+
 // ---------------------------------------------------------------------------
 // Service
 // ---------------------------------------------------------------------------
@@ -201,6 +212,19 @@ export class PokerTournamentService {
       if (handNumber <= accumulated) return level;
     }
     return blindSchedule[blindSchedule.length - 1];
+  }
+
+  /**
+   * SNG posted blinds use level-1 schedule amounts as a base, then double per elimination.
+   * HUD / WS `newLevel` uses this tier: 1 + floor(log2(posted SB / level-1 SB)).
+   */
+  knockoutBlindDisplayLevel(blindSchedule: BlindLevel[], smallBlindChips: number): number {
+    const l1 = blindSchedule[0];
+    if (!l1 || l1.smallBlind <= 0 || smallBlindChips <= 0) return 1;
+    const ratio = smallBlindChips / l1.smallBlind;
+    if (ratio <= 1) return 1;
+    const steps = Math.floor(Math.log2(ratio) + 1e-9);
+    return 1 + steps;
   }
 
   private parsePokerConfig(raw: unknown): PokerTournamentConfig {
@@ -714,8 +738,8 @@ export class PokerTournamentService {
    * After each hand completes:
    * 1. Sync seat stacks → tournament_entries.chips_remaining
    * 2. Eliminate 0-chip players (mark busted, remove seat)
-   * 3. Advance blind level if needed (schedule), then multiply SB/BB by 2^k for k eliminations this hand,
-   *    then clamp SB/BB so nominal BB ≤ smallest eligible stack (≥2 chips), when applicable
+   * 3. Multiply SB/BB by 2^k for k eliminations this hand (no time/hand schedule progression;
+   *    blinds do not track remaining stack sizes)
    * 4. Complete tournament if ≤1 active player remains
    */
   async syncAfterHand(tableId: string, handNumber: number): Promise<void> {
@@ -744,12 +768,11 @@ export class PokerTournamentService {
       [tableId]
     );
 
-    // Sync chips for each player and collect busted players
-    // Stacks are stored in wei; convert to chip units for tournament_entries (which track integer chips)
+    // Sync chips for each player and collect busted players (see tournamentSeatStackToChipCount)
     const bustedAddresses: string[] = [];
     for (const seat of seats.rows) {
-      const stackWei = toBigIntSafe(seat.stack ?? 0);
-      const stackChips = Number(stackWei / CHIP_SCALE);
+      const stackRaw = toBigIntSafe(seat.stack ?? 0);
+      const stackChips = tournamentSeatStackToChipCount(stackRaw);
       const addr = seat.player_address as string;
 
       await this.pool.query(
@@ -761,67 +784,19 @@ export class PokerTournamentService {
         [stackChips, tournamentId, addr]
       );
 
-      if (stackWei === 0n) bustedAddresses.push(addr);
+      if (stackChips === 0) bustedAddresses.push(addr);
     }
 
-    // Get bridge table entries for busted players to know their entry IDs
-    let remainingAfterElim = seats.rows.length - bustedAddresses.length;
+    await this.eliminateBustedTournamentSeats(
+      tableId,
+      tournamentId,
+      bustedAddresses,
+      handNumber,
+      seats.rows.length,
+    );
 
-    for (const addr of bustedAddresses) {
-      const pts = await this.pool.query(
-        `SELECT pts.entry_id FROM poker_tournament_seats pts
-         WHERE pts.tournament_id = $1 AND LOWER(pts.player_address) = LOWER($2)`,
-        [tournamentId, addr]
-      );
-      if (pts.rows.length === 0) continue;
-      const entryId = pts.rows[0].entry_id as string;
-
-      // Determine current rank (players remaining + 1)
-      const rank = remainingAfterElim + 1;
-
-      // Mark entry as busted (skips checkAndDistributePrizes — we control completion)
-      await this.pool.query(
-        `UPDATE tournament_entries
-         SET status = 'busted', chips_remaining = 0, finished_at = NOW(), final_rank = $2
-         WHERE id = $1`,
-        [entryId, rank]
-      );
-
-      // Mark in bridge table
-      await this.pool.query(
-        `UPDATE poker_tournament_seats SET eliminated_at = NOW(), final_rank = $2
-         WHERE entry_id = $1`,
-        [entryId, rank]
-      );
-
-      // Remove seat from poker table (no balance credit — tournament mode)
-      await this.pokerGameService.leaveTableTournament(tableId, addr);
-
-      logger.info('Poker tournament player eliminated', { tournamentId, playerAddress: addr, rank, handNumber });
-
-      this.broadcast(`poker_tournament:${tournamentId}`, 'poker_tournament_player_eliminated', {
-        tournamentId,
-        playerAddress: addr,
-        finalRank: rank,
-        handNumber,
-      });
-    }
-
-    // Blinds: (1) apply schedule for this hand number, (2) multiply by 2 per elimination this hand
-    const newLevel = this.computeBlindLevel(config.blindSchedule, handNumber);
-    const openingSBChips = Math.round(Number(toBigIntSafe(tableRow.rows[0].small_blind) / CHIP_SCALE));
+    // Blinds: knockout-only — multiply by 2 per elimination this hand (base stays level-1 schedule from activation).
     let blindsUpdated = false;
-
-    if (newLevel.smallBlind !== openingSBChips) {
-      const newSBWei = (BigInt(newLevel.smallBlind) * CHIP_SCALE).toString();
-      const newBBWei = (BigInt(newLevel.bigBlind) * CHIP_SCALE).toString();
-      await this.pool.query(
-        `UPDATE poker_tables SET small_blind = $2::NUMERIC, big_blind = $3::NUMERIC WHERE id = $1`,
-        [tableId, newSBWei, newBBWei]
-      );
-      blindsUpdated = true;
-      logger.info('Poker tournament schedule blind level applied', { tournamentId, tableId, newLevel: newLevel.level });
-    }
 
     const elimCount = bustedAddresses.length;
     if (elimCount > 0) {
@@ -852,58 +827,6 @@ export class PokerTournamentService {
       }
     }
 
-    // UX clamp (optional product rule): nominal BB must not exceed the smallest eligible stack.
-    // Runs after schedule + elimination multiplier. Skips when min stack < 2 chips (cannot keep SB < BB in chip units).
-    // Eligible seats: in the hand or active, not sitting_out — matches players still on the table.
-    const minStackRes = await this.pool.query(
-      `SELECT MIN(stack::numeric) AS min_stack
-       FROM poker_seats
-       WHERE table_id = $1
-         AND status IN ('active', 'in_hand')
-         AND stack::numeric > 0`,
-      [tableId]
-    );
-    const minStackRaw = minStackRes.rows[0]?.min_stack;
-    const minStackWei =
-      minStackRaw !== null && minStackRaw !== undefined ? toBigIntSafe(minStackRaw) : null;
-
-    if (minStackWei !== null && minStackWei >= 2n * CHIP_SCALE) {
-      const curBlinds = await this.pool.query(
-        `SELECT small_blind, big_blind FROM poker_tables WHERE id = $1`,
-        [tableId]
-      );
-      if (curBlinds.rows.length > 0) {
-        const sbWeiBefore = toBigIntSafe(curBlinds.rows[0].small_blind);
-        const bbWeiBefore = toBigIntSafe(curBlinds.rows[0].big_blind);
-        let bbWei = bbWeiBefore;
-        let sbWei = sbWeiBefore;
-        if (sbWei > 0n && bbWei > 0n && bbWei > minStackWei) {
-          const minChips = minStackWei / CHIP_SCALE;
-          let bbChips = bbWei / CHIP_SCALE;
-          const origSbChips = sbWei / CHIP_SCALE;
-          bbChips = bbChips < minChips ? bbChips : minChips;
-          let sbChips = origSbChips < bbChips - 1n ? origSbChips : bbChips - 1n;
-          if (sbChips < 1n) sbChips = 1n;
-          if (sbChips >= bbChips) sbChips = bbChips - 1n;
-          sbWei = sbChips * CHIP_SCALE;
-          bbWei = bbChips * CHIP_SCALE;
-          if (sbWei !== sbWeiBefore || bbWei !== bbWeiBefore) {
-            await this.pool.query(
-              `UPDATE poker_tables SET small_blind = $2::NUMERIC, big_blind = $3::NUMERIC WHERE id = $1`,
-              [tableId, sbWei.toString(), bbWei.toString()]
-            );
-            blindsUpdated = true;
-            logger.info('Poker tournament blinds clamped to smallest stack', {
-              tournamentId,
-              tableId,
-              handNumber,
-              minStackWei: minStackWei.toString(),
-            });
-          }
-        }
-      }
-    }
-
     if (blindsUpdated) {
       const finalRow = await this.pool.query(
         `SELECT small_blind, big_blind FROM poker_tables WHERE id = $1`,
@@ -912,10 +835,11 @@ export class PokerTournamentService {
       if (finalRow.rows.length > 0) {
         const smallBlindChips = Number(toBigIntSafe(finalRow.rows[0].small_blind) / CHIP_SCALE);
         const bigBlindChips = Number(toBigIntSafe(finalRow.rows[0].big_blind) / CHIP_SCALE);
+        const displayLevel = this.knockoutBlindDisplayLevel(config.blindSchedule, smallBlindChips);
         this.broadcast(`poker_tournament:${tournamentId}`, 'poker_tournament_blind_level_up', {
           tournamentId,
           tableId,
-          newLevel: newLevel.level,
+          newLevel: displayLevel,
           smallBlind: smallBlindChips,
           bigBlind: bigBlindChips,
           handNumber,
@@ -931,6 +855,115 @@ export class PokerTournamentService {
     const activeCount = Number(activePlayers.rows[0].c);
 
     if (activeCount <= 1) {
+      await this.completeTournament(tournamentId, tableId);
+    }
+  }
+
+  /**
+   * `tryStartNextHand` refuses to deal when &lt; 2 seats have stack &gt; 0. If eliminations were not fully
+   * applied (e.g. stack format mismatch), the table can stall with no winner. Re-sync entries from
+   * seats, eliminate 0-chip players (no `hands_played` bump), then complete when ≤1 remain.
+   */
+  async recoverTournamentTableIfUnderTwoStackedSeats(tableId: string): Promise<void> {
+    const tableRow = await this.pool.query(
+      `SELECT tournament_id, hand_number FROM poker_tables WHERE id = $1 AND tournament_mode = TRUE`,
+      [tableId]
+    );
+    if (tableRow.rows.length === 0 || !tableRow.rows[0].tournament_id) return;
+
+    const tournamentId = tableRow.rows[0].tournament_id as string;
+    const handNumber = Number(tableRow.rows[0].hand_number ?? 0);
+
+    const tRow = await this.pool.query(
+      `SELECT status, poker_config FROM tournaments WHERE id = $1`,
+      [tournamentId]
+    );
+    if (tRow.rows.length === 0 || tRow.rows[0].status !== 'active') return;
+
+    const config = this.parsePokerConfig(tRow.rows[0].poker_config);
+
+    const seats = await this.pool.query(
+      `SELECT ps.player_address, ps.stack FROM poker_seats ps WHERE ps.table_id = $1`,
+      [tableId]
+    );
+
+    const stackedSeatCount = seats.rows.filter((s) => {
+      const raw = toBigIntSafe(s.stack ?? 0);
+      return tournamentSeatStackToChipCount(raw) > 0;
+    }).length;
+    if (stackedSeatCount >= 2) return;
+
+    const bustedAddresses: string[] = [];
+    for (const seat of seats.rows) {
+      const stackRaw = toBigIntSafe(seat.stack ?? 0);
+      const stackChips = tournamentSeatStackToChipCount(stackRaw);
+      const addr = seat.player_address as string;
+
+      await this.pool.query(
+        `UPDATE tournament_entries
+         SET chips_remaining = $1,
+             highest_chip_count = GREATEST(highest_chip_count, $1)
+         WHERE tournament_id = $2 AND LOWER(player_address) = LOWER($3) AND status = 'playing'`,
+        [stackChips, tournamentId, addr]
+      );
+
+      if (stackChips === 0) bustedAddresses.push(addr);
+    }
+
+    await this.eliminateBustedTournamentSeats(
+      tableId,
+      tournamentId,
+      bustedAddresses,
+      handNumber,
+      seats.rows.length,
+    );
+
+    let blindsUpdated = false;
+    const elimCount = bustedAddresses.length;
+    if (elimCount > 0) {
+      const tblBlinds = await this.pool.query(
+        `SELECT small_blind, big_blind FROM poker_tables WHERE id = $1`,
+        [tableId]
+      );
+      if (tblBlinds.rows.length > 0) {
+        const sbWei = toBigIntSafe(tblBlinds.rows[0].small_blind);
+        const bbWei = toBigIntSafe(tblBlinds.rows[0].big_blind);
+        if (sbWei > 0n && bbWei > 0n) {
+          const mult = 1n << BigInt(elimCount);
+          await this.pool.query(
+            `UPDATE poker_tables SET small_blind = $2::NUMERIC, big_blind = $3::NUMERIC WHERE id = $1`,
+            [tableId, (sbWei * mult).toString(), (bbWei * mult).toString()]
+          );
+          blindsUpdated = true;
+        }
+      }
+    }
+
+    if (blindsUpdated) {
+      const finalRow = await this.pool.query(
+        `SELECT small_blind, big_blind FROM poker_tables WHERE id = $1`,
+        [tableId]
+      );
+      if (finalRow.rows.length > 0) {
+        const smallBlindChips = Number(toBigIntSafe(finalRow.rows[0].small_blind) / CHIP_SCALE);
+        const bigBlindChips = Number(toBigIntSafe(finalRow.rows[0].big_blind) / CHIP_SCALE);
+        const displayLevel = this.knockoutBlindDisplayLevel(config.blindSchedule, smallBlindChips);
+        this.broadcast(`poker_tournament:${tournamentId}`, 'poker_tournament_blind_level_up', {
+          tournamentId,
+          tableId,
+          newLevel: displayLevel,
+          smallBlind: smallBlindChips,
+          bigBlind: bigBlindChips,
+          handNumber,
+        });
+      }
+    }
+
+    const activePlayers = await this.pool.query(
+      `SELECT COUNT(*) AS c FROM tournament_entries WHERE tournament_id = $1 AND status = 'playing'`,
+      [tournamentId]
+    );
+    if (Number(activePlayers.rows[0].c) <= 1) {
       await this.completeTournament(tournamentId, tableId);
     }
   }
@@ -1249,7 +1282,6 @@ export class PokerTournamentService {
     const t = tRow.rows[0];
     const config = this.parsePokerConfig(t.poker_config);
     const handNumber = Number(t.hand_number ?? 0);
-    const currentLevel = this.computeBlindLevel(config.blindSchedule, handNumber);
 
     const entries = await this.pool.query(
       `SELECT id, player_address, chips_remaining, status, final_rank, prize_won
@@ -1260,19 +1292,21 @@ export class PokerTournamentService {
 
     const sbRaw = t.small_blind != null ? toBigIntSafe(t.small_blind) : null;
     const bbRaw = t.big_blind != null ? toBigIntSafe(t.big_blind) : null;
+    const currentLevel = this.computeBlindLevel(config.blindSchedule, 1);
     const smallBlindChips = sbRaw != null && sbRaw > 0n
       ? Number(sbRaw / CHIP_SCALE)
       : currentLevel.smallBlind;
     const bigBlindChips = bbRaw != null && bbRaw > 0n
       ? Number(bbRaw / CHIP_SCALE)
       : currentLevel.bigBlind;
+    const blindLevelDisplay = this.knockoutBlindDisplayLevel(config.blindSchedule, smallBlindChips);
 
     return {
       tournamentId,
       name:                  t.name,
       status:                t.status,
       tableId:               t.table_id ?? null,
-      blindLevel:            currentLevel.level,
+      blindLevel:            blindLevelDisplay,
       smallBlind:            smallBlindChips,
       bigBlind:              bigBlindChips,
       handNumber,
@@ -1287,7 +1321,7 @@ export class PokerTournamentService {
       prizePool:           t.prize_pool?.toString() ?? '0',
       buyInAmount:         t.buy_in_amount?.toString() ?? '0',
       prizeDistributionType: t.prize_distribution_type ?? 'winner_takes_all',
-      /** For client HUD: schedule + meta (actual posted blinds may differ after elim multiplier / clamp). */
+      /** For client HUD: schedule + meta (posted blinds follow elim progression only). */
       pokerConfig:         {
         blindSchedule: config.blindSchedule,
         startingStack: config.startingStack,
@@ -1324,6 +1358,52 @@ export class PokerTournamentService {
   // ---------------------------------------------------------------------------
   // Helpers
   // ---------------------------------------------------------------------------
+
+  private async eliminateBustedTournamentSeats(
+    tableId: string,
+    tournamentId: string,
+    bustedAddresses: string[],
+    handNumber: number,
+    seatCount: number,
+  ): Promise<void> {
+    let remainingAfterElim = seatCount - bustedAddresses.length;
+
+    for (const addr of bustedAddresses) {
+      const pts = await this.pool.query(
+        `SELECT pts.entry_id FROM poker_tournament_seats pts
+         WHERE pts.tournament_id = $1 AND LOWER(pts.player_address) = LOWER($2)`,
+        [tournamentId, addr]
+      );
+      if (pts.rows.length === 0) continue;
+      const entryId = pts.rows[0].entry_id as string;
+
+      const rank = remainingAfterElim + 1;
+
+      await this.pool.query(
+        `UPDATE tournament_entries
+         SET status = 'busted', chips_remaining = 0, finished_at = NOW(), final_rank = $2
+         WHERE id = $1`,
+        [entryId, rank]
+      );
+
+      await this.pool.query(
+        `UPDATE poker_tournament_seats SET eliminated_at = NOW(), final_rank = $2
+         WHERE entry_id = $1`,
+        [entryId, rank]
+      );
+
+      await this.pokerGameService.leaveTableTournament(tableId, addr);
+
+      logger.info('Poker tournament player eliminated', { tournamentId, playerAddress: addr, rank, handNumber });
+
+      this.broadcast(`poker_tournament:${tournamentId}`, 'poker_tournament_player_eliminated', {
+        tournamentId,
+        playerAddress: addr,
+        finalRank: rank,
+        handNumber,
+      });
+    }
+  }
 
   private async getTableIdForTournament(tournamentId: string): Promise<string | null> {
     const r = await this.pool.query(

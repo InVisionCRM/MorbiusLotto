@@ -1,7 +1,7 @@
 'use client';
 
 import React from 'react';
-import type { PokerTournamentState, BlindLevel } from '@/hooks/use-poker-tournament';
+import type { PokerTournamentState } from '@/hooks/use-poker-tournament';
 import { formatMorbiusFloor } from '@/lib/format-morbius-display';
 
 interface Props {
@@ -33,24 +33,6 @@ const panelSurface: React.CSSProperties = {
     'inset 0 3px 6px rgba(0, 0, 0, 0.8), inset 0 -3px 6px rgba(255, 255, 255, 0.06), 0 1px 3px rgba(0, 0, 0, 0.5)',
 };
 
-/** Compute hands until next blind level from the current hand number. */
-function handsUntilNextLevel(
-  handNumber: number,
-  blindSchedule: BlindLevel[],
-  currentLevel: number,
-): number | null {
-  let accumulated = 0;
-  for (const lvl of blindSchedule) {
-    accumulated += lvl.handsPerLevel;
-    if (lvl.level === currentLevel) {
-      const remaining = accumulated - handNumber;
-      if (lvl.handsPerLevel >= 999) return null;
-      return Math.max(0, remaining);
-    }
-  }
-  return null;
-}
-
 export function PokerTournamentHUD({ state, myAddress }: Props) {
   const me = state.players.find(
     (p) => p.playerAddress.toLowerCase() === myAddress.toLowerCase(),
@@ -58,10 +40,6 @@ export function PokerTournamentHUD({ state, myAddress }: Props) {
 
   const activePlayers = state.players.filter((p) => p.status === 'playing');
   const sortedByChips = [...activePlayers].sort((a, b) => b.chipsRemaining - a.chipsRemaining);
-
-  const schedule = state.pokerConfig?.blindSchedule ?? [];
-  const handsLeft =
-    schedule.length > 0 ? handsUntilNextLevel(state.handNumber, schedule, state.blindLevel) : null;
 
   const myRank = me
     ? sortedByChips.findIndex((p) => p.playerAddress.toLowerCase() === myAddress.toLowerCase()) + 1
@@ -114,13 +92,9 @@ export function PokerTournamentHUD({ state, myAddress }: Props) {
         <div className="text-slate-100 font-bold text-sm tabular-nums">
           {formatChips(state.smallBlind)} / {formatChips(state.bigBlind)}
         </div>
-        {handsLeft !== null && (
-          <div className="text-[10px] text-slate-500 mt-0.5">
-            {handsLeft === 0
-              ? 'Level up next hand'
-              : `${handsLeft} hand${handsLeft === 1 ? '' : 's'} until next schedule level`}
-          </div>
-        )}
+        <div className="text-[10px] text-slate-500 mt-0.5">
+          Blinds rise when players are eliminated
+        </div>
       </div>
 
       {/* Your stack */}

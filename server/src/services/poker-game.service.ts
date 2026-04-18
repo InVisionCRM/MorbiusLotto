@@ -6,18 +6,15 @@ import { ProvablyFairService } from './provably-fair.service';
 import { CosmeticsService } from './cosmetics.service';
 import { randomPlaceholderConfig } from '../lib/cosmetics-catalog';
 import {
-  assertCashBlindsValid,
-  assertCashChipMultiple,
-  engineChipsToWeiRounded,
-  enginePotChipsToPotWei,
-  getPokerChipWei,
+  POKER_CHIP_WEI,
+  chipsToWei,
   getPokerRakeWallet,
   splitBigIntEqually,
   totalPotChips,
-  weiToEngineChips,
+  weiToChips,
 } from '../lib/poker-chip-scale';
 import {
-  getCashBuyInBoundsWei,
+  getCashBuyInBoundsChips,
   POKER_CASH_MAX_BUY_IN_BB,
   POKER_CASH_MIN_BUY_IN_BB,
 } from '../lib/poker-cash-buy-in';
@@ -145,6 +142,8 @@ const SHOWDOWN_DELAY_SECONDS = SHOWDOWN_DELAY_MS / 1000;
 export class PokerGameService {
   private broadcastCallback: ((tableId: string) => Promise<void>) | null = null;
   private postHandCallback: ((tableId: string, handNumber: number) => Promise<void>) | null = null;
+  /** When &lt; 2 seated stacks remain, tournament tables may need a no-deal recovery pass. */
+  private tournamentUnderfilledRecovery: ((tableId: string) => Promise<void>) | null = null;
   private notifyCallback: ((room: string, type: string, payload: any) => void) | null = null;
   private activeTables: Map<string, Table> = new Map();
   private nextHandTimers: Map<string, NodeJS.Timeout> = new Map();
@@ -169,6 +168,14 @@ export class PokerGameService {
   /** Register a callback fired after every showdown (used by PokerTournamentService to sync chips). */
   setPostHandCallback(cb: (tableId: string, handNumber: number) => Promise<void>): void {
     this.postHandCallback = cb;
+  }
+
+  /**
+   * Called when a tournament table cannot start the next hand because fewer than two seats have stack &gt; 0.
+   * Applies late eliminations and may complete the SNG.
+   */
+  setTournamentUnderfilledRecovery(cb: (tableId: string) => Promise<void>): void {
+    this.tournamentUnderfilledRecovery = cb;
   }
 
   private getPool(): Pool {
@@ -196,24 +203,22 @@ export class PokerGameService {
     }
   }
 
-  /** Cached cash vs tournament + chip wei; invalidated on table delete. */
-  private scalingCache = new Map<string, { tournament: boolean; chipWei: bigint }>();
+  /** Cached tournament-mode flag; invalidated on table delete. */
+  private tournamentModeCache = new Map<string, boolean>();
 
   private invalidateTableScaling(tableId: string): void {
-    this.scalingCache.delete(tableId);
+    this.tournamentModeCache.delete(tableId);
   }
 
-  private async getTableScaling(tableId: string): Promise<{ tournament: boolean; chipWei: bigint }> {
-    const cached = this.scalingCache.get(tableId);
-    if (cached) return cached;
+  private async isTournamentTable(tableId: string): Promise<boolean> {
+    const cached = this.tournamentModeCache.get(tableId);
+    if (cached !== undefined) return cached;
     const pool = this.getPool();
     const r = await pool.query('SELECT tournament_mode FROM poker_tables WHERE id = $1', [tableId]);
     if (r.rows.length === 0) throw new Error('Table not found');
     const tournament = !!r.rows[0].tournament_mode;
-    const chipWei = getPokerChipWei();
-    const v = { tournament, chipWei };
-    this.scalingCache.set(tableId, v);
-    return v;
+    this.tournamentModeCache.set(tableId, tournament);
+    return tournament;
   }
 
   private normalizeAddress(addr: string): string {
@@ -356,13 +361,14 @@ export class PokerGameService {
   // Seat management
   // ---------------------------------------------------------------------------
 
-  async joinTable(tableId: string, playerAddress: string, buyInChips: string, pinCode?: string): Promise<PokerTableState> {
-    return this.withTableLock(tableId, () => this._joinTable(tableId, playerAddress, buyInChips, pinCode));
+  async joinTable(tableId: string, playerAddress: string, buyInWei: string, pinCode?: string): Promise<PokerTableState> {
+    return this.withTableLock(tableId, () => this._joinTable(tableId, playerAddress, buyInWei, pinCode));
   }
 
-  private async _joinTable(tableId: string, playerAddress: string, buyInChips: string, pinCode?: string): Promise<PokerTableState> {
+  private async _joinTable(tableId: string, playerAddress: string, buyInWei: string, pinCode?: string): Promise<PokerTableState> {
     const normalized = this.normalizeAddress(playerAddress);
-    const buyIn = BigInt(buyInChips);
+    const buyInWeiBig = BigInt(buyInWei);
+    const buyInChips = weiToChips(buyInWeiBig, 'Buy-in');
 
     const position = await this.dbService.withTransaction(async (client) => {
       // Lock the player row first — serializes concurrent join attempts by the same wallet
@@ -400,14 +406,13 @@ export class PokerGameService {
           'Tournament table: register with poker_tournament_join. Cash poker_join_table is not allowed on tournament tables.',
         );
       }
-      const bbWei = BigInt(tblRow.big_blind ?? '0');
-      const { minWei, maxWei } = getCashBuyInBoundsWei(bbWei);
-      if (buyIn < minWei || buyIn > maxWei) {
+      const bbChips = Number(tblRow.big_blind ?? 0);
+      const { minChips, maxChips } = getCashBuyInBoundsChips(bbChips);
+      if (buyInChips < minChips || buyInChips > maxChips) {
         throw new Error(
-          `Buy-in must be between ${POKER_CASH_MIN_BUY_IN_BB} and ${POKER_CASH_MAX_BUY_IN_BB} big blinds (min ${minWei.toString()} wei, max ${maxWei.toString()} wei).`
+          `Buy-in must be between ${POKER_CASH_MIN_BUY_IN_BB} and ${POKER_CASH_MAX_BUY_IN_BB} big blinds (min ${minChips} chips, max ${maxChips} chips).`
         );
       }
-      assertCashChipMultiple(buyIn, 'Buy-in');
 
       // Validate PIN for private tables
       if (tblRow.pin_code) {
@@ -2171,7 +2176,20 @@ export class PokerGameService {
         [tableId]
       );
       const withStack = seatsResult.rows.filter((r: any) => BigInt(r.stack ?? '0') > 0n);
-      if (withStack.length < 2) return;
+      if (withStack.length < 2) {
+        const modeRow = await pool.query(
+          'SELECT tournament_mode FROM poker_tables WHERE id = $1',
+          [tableId]
+        );
+        if (modeRow.rows[0]?.tournament_mode && this.tournamentUnderfilledRecovery) {
+          try {
+            await this.tournamentUnderfilledRecovery(tableId);
+          } catch (err) {
+            logger.error('Tournament underfilled recovery failed', { tableId, err });
+          }
+        }
+        return;
+      }
 
       await this.startHand(tableId);
     });

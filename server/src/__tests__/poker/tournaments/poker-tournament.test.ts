@@ -18,6 +18,7 @@ import {
   DEFAULT_BLIND_SCHEDULE,
   BlindLevel,
   normalizePokerTournamentPrizePercents,
+  tournamentSeatStackToChipCount,
 } from '../../../services/poker-tournament.service';
 import { TournamentService } from '../../../services/tournament.service';
 import { PokerGameService } from '../../../services/poker-game.service';
@@ -640,6 +641,24 @@ describe('3 - auto-start', () => {
 });
 
 // ---------------------------------------------------------------------------
+// tournamentSeatStackToChipCount (pure)
+// ---------------------------------------------------------------------------
+
+describe('3b - tournamentSeatStackToChipCount', () => {
+  const CHIP_SCALE = BigInt('1000000000000000000');
+
+  it('treats values below CHIP_SCALE as raw post-showdown chip counts', () => {
+    expect(tournamentSeatStackToChipCount(0n)).toBe(0);
+    expect(tournamentSeatStackToChipCount(1n)).toBe(1);
+    expect(tournamentSeatStackToChipCount(5000n)).toBe(5000);
+  });
+
+  it('treats large values as activation-style wei stacks', () => {
+    expect(tournamentSeatStackToChipCount(3000n * CHIP_SCALE)).toBe(3000);
+  });
+});
+
+// ---------------------------------------------------------------------------
 // Suite 4: computeBlindLevel (pure, no DB)
 // ---------------------------------------------------------------------------
 
@@ -686,6 +705,18 @@ describe('4 - computeBlindLevel', () => {
   });
 });
 
+describe('4b - knockoutBlindDisplayLevel', () => {
+  const schedule: BlindLevel[] = [
+    { level: 1, smallBlind: 25, bigBlind: 50, handsPerLevel: 10 },
+  ];
+
+  it('increments display tier when posted SB doubles from level-1 base', () => {
+    expect(pokerTournamentService.knockoutBlindDisplayLevel(schedule, 25)).toBe(1);
+    expect(pokerTournamentService.knockoutBlindDisplayLevel(schedule, 50)).toBe(2);
+    expect(pokerTournamentService.knockoutBlindDisplayLevel(schedule, 100)).toBe(3);
+  });
+});
+
 // ---------------------------------------------------------------------------
 // Suite 5: syncAfterHand — chip sync
 // ---------------------------------------------------------------------------
@@ -719,6 +750,34 @@ describe('5 - syncAfterHand chip sync', () => {
     );
     expect(Number(e1.rows[0].chips_remaining)).toBe(3000);
     expect(Number(e2.rows[0].chips_remaining)).toBe(7000);
+  });
+
+  it('syncAfterHand keeps 1-chip stacks as 1 tournament chip (not zero from wei division)', async () => {
+    const tournamentId = await createTestTournament({ minPlayers: 2 });
+    const tableId = await joinThroughScheduledStart(tournamentId, [PLAYER_1, PLAYER_2]);
+    createdPokerTableIds.push(tableId);
+
+    await testPool.query(
+      `UPDATE poker_seats SET stack = $3::NUMERIC WHERE table_id = $1 AND LOWER(player_address) = LOWER($2)`,
+      [tableId, PLAYER_1, '1']
+    );
+    await testPool.query(
+      `UPDATE poker_seats SET stack = $3::NUMERIC WHERE table_id = $1 AND LOWER(player_address) = LOWER($2)`,
+      [tableId, PLAYER_2, '9999']
+    );
+    await testPool.query(
+      `UPDATE poker_hands SET completed_at = NOW() WHERE table_id = $1 AND completed_at IS NULL`,
+      [tableId]
+    );
+
+    await pokerTournamentService.syncAfterHand(tableId, 1);
+
+    const e1 = await testPool.query(
+      `SELECT chips_remaining, status FROM tournament_entries WHERE tournament_id = $1 AND LOWER(player_address) = LOWER($2)`,
+      [tournamentId, PLAYER_1]
+    );
+    expect(Number(e1.rows[0].chips_remaining)).toBe(1);
+    expect(e1.rows[0].status).toBe('playing');
   });
 
   it('increments hands_played after sync', async () => {
@@ -848,6 +907,55 @@ describe('6 - player elimination', () => {
     );
     expect(toBigIntSafe(blindsAfter.rows[0].small_blind)).toBe(sb0 * 2n);
     expect(toBigIntSafe(blindsAfter.rows[0].big_blind)).toBe(bb0 * 2n);
+  });
+
+  it('keeps elimination blind bump after a later hand with no elimination (no schedule rewind)', async () => {
+    const tournamentId = await createTestTournament({ minPlayers: 3, maxPlayers: 3 });
+    const tableId = await joinThroughScheduledStart(tournamentId, [PLAYER_1, PLAYER_2, PLAYER_3]);
+    createdPokerTableIds.push(tableId);
+
+    const CHIP_SCALE = BigInt('1000000000000000000');
+    const blindsBefore = await testPool.query(
+      `SELECT small_blind, big_blind FROM poker_tables WHERE id = $1`,
+      [tableId]
+    );
+    const sb0 = toBigIntSafe(blindsBefore.rows[0].small_blind);
+    const bb0 = toBigIntSafe(blindsBefore.rows[0].big_blind);
+
+    await testPool.query(
+      `UPDATE poker_seats SET stack = 0 WHERE table_id = $1 AND LOWER(player_address) = LOWER($2)`,
+      [tableId, PLAYER_1]
+    );
+    await testPool.query(
+      `UPDATE poker_seats SET stack = $2::NUMERIC WHERE table_id = $1 AND LOWER(player_address) = LOWER($3)`,
+      [tableId, (5000n * CHIP_SCALE).toString(), PLAYER_2]
+    );
+    await testPool.query(
+      `UPDATE poker_seats SET stack = $2::NUMERIC WHERE table_id = $1 AND LOWER(player_address) = LOWER($3)`,
+      [tableId, (5000n * CHIP_SCALE).toString(), PLAYER_3]
+    );
+    await testPool.query(
+      `UPDATE poker_hands SET completed_at = NOW() WHERE table_id = $1 AND completed_at IS NULL`,
+      [tableId]
+    );
+
+    await pokerTournamentService.syncAfterHand(tableId, 1);
+
+    const mid = await testPool.query(
+      `SELECT small_blind, big_blind FROM poker_tables WHERE id = $1`,
+      [tableId]
+    );
+    expect(toBigIntSafe(mid.rows[0].small_blind)).toBe(sb0 * 2n);
+    expect(toBigIntSafe(mid.rows[0].big_blind)).toBe(bb0 * 2n);
+
+    await pokerTournamentService.syncAfterHand(tableId, 2);
+
+    const after = await testPool.query(
+      `SELECT small_blind, big_blind FROM poker_tables WHERE id = $1`,
+      [tableId]
+    );
+    expect(toBigIntSafe(after.rows[0].small_blind)).toBe(sb0 * 2n);
+    expect(toBigIntSafe(after.rows[0].big_blind)).toBe(bb0 * 2n);
   });
 });
 
@@ -1288,8 +1396,7 @@ describe('11 - blinds vs short stacks', () => {
     expect(a0 < nominalBb || a1 < nominalBb).toBe(true);
   });
 
-  it('syncAfterHand clamps stored blinds so BB ≤ smallest eligible stack (when min stack ≥ 2 chips)', async () => {
-    // Level 1 must match table SB so the schedule step does not reset blinds before the clamp.
+  it('syncAfterHand does not change stored blinds based on smallest stack (engine posts all-in blinds)', async () => {
     const hugeSchedule = [{ level: 1, smallBlind: 8000, bigBlind: 10000, handsPerLevel: 999 }];
     const tournamentId = await createTestTournament({
       minPlayers: 2,
@@ -1315,15 +1422,14 @@ describe('11 - blinds vs short stacks', () => {
       [tableId, deepStack.toString(), PLAYER_2]
     );
 
+    const expectSb = 8000n * CHIP_SCALE;
+    const expectBb = 10000n * CHIP_SCALE;
+
     await pokerTournamentService.syncAfterHand(tableId, 1);
 
     const tbl = await testPool.query(`SELECT small_blind, big_blind FROM poker_tables WHERE id = $1`, [tableId]);
-    const bbWei = toBigIntSafe(tbl.rows[0].big_blind);
-    const sbWei = toBigIntSafe(tbl.rows[0].small_blind);
-    expect(bbWei).toBeLessThanOrEqual(shortStack);
-    expect(sbWei).toBeLessThan(bbWei);
-    expect(sbWei).toBe((200n - 1n) * CHIP_SCALE);
-    expect(bbWei).toBe(200n * CHIP_SCALE);
+    expect(toBigIntSafe(tbl.rows[0].small_blind)).toBe(expectSb);
+    expect(toBigIntSafe(tbl.rows[0].big_blind)).toBe(expectBb);
   });
 });
 

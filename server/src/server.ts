@@ -301,6 +301,8 @@ async function initializeServices() {
     pokerGameService.setPostHandCallback(
       (tableId, handNumber) => pokerTournamentService.syncAfterHand(tableId, handNumber)
     );
+    pokerGameService.setTournamentUnderfilledRecovery((tableId) =>
+      pokerTournamentService.recoverTournamentTableIfUnderTwoStackedSeats(tableId));
 
     // Wire BJ multi broadcast callback
     bjMultiService.setBroadcastCallback((tableId) => wsService.broadcastBJMultiTableState(tableId));
