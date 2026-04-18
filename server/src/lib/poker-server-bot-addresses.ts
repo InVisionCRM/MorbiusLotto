@@ -1,4 +1,6 @@
-/** Same wallet list as `poker-bot.ts` / env docs — used to run turns in-process on tournament tables. */
+/** Tournament table in-process bots: same wallet resolution as CLI `poker-bot.ts`. */
+
+import { getPokerBotWalletAddressList } from './poker-bot-wallet-pool';
 
 const ADDRESS_RE = /^0x[a-fA-F0-9]{40}$/;
 
@@ -16,8 +18,7 @@ export function parsePokerBotAddressCsv(input?: string): string[] {
   ];
 }
 
-/** Lowercase 0x addresses from `POKER_BOT_ADDRESSES` (game server env). */
+/** Lowercase bot wallets — uses env chain + defaults (unless POKER_SERVER_BOT_STRICT_ADDRESSES). */
 export function getServerPokerBotAddressSet(): Set<string> {
-  const raw = String(process.env.POKER_BOT_ADDRESSES ?? '').trim();
-  return new Set(parsePokerBotAddressCsv(raw || undefined));
+  return new Set(getPokerBotWalletAddressList({ server: true }));
 }

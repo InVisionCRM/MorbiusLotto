@@ -90,7 +90,7 @@ function finishOrdinal(rank: number): string {
 export interface PokerTournamentCreatorProps {
   creatorAddress?: string;
   onClose: () => void;
-  onCreate: (params: CreatePokerTournamentParams, opts: { addBots: number }) => Promise<void>;
+  onCreate: (params: CreatePokerTournamentParams) => Promise<void>;
 }
 
 export function PokerTournamentCreator({ creatorAddress, onClose, onCreate }: PokerTournamentCreatorProps) {
@@ -104,7 +104,6 @@ export function PokerTournamentCreator({ creatorAddress, onClose, onCreate }: Po
   const [maxPlayers, setMaxPlayers] = useState('6');
   const [isPrivate, setIsPrivate] = useState(false);
   const [privatePin, setPrivatePin] = useState('');
-  const [botsToAdd, setBotsToAdd] = useState(0);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const initialSchedule = useMemo(() => defaultScheduledFields(), []);
   /** yyyy-MM-dd in local time — required */
@@ -193,33 +192,30 @@ export function PokerTournamentCreator({ creatorAddress, onClose, onCreate }: Po
 
     setIsSubmitting(true);
     try {
-      await onCreate(
-        {
-          name:                  name.trim(),
-          buyInAmount:           buyWei.toString(),
-          ...(isFreeroll
-            ? {
-                guaranteedPrizePool: guaranteeWei.toString(),
-                ...(fundFromPromo ? { guaranteedPrizePoolSource: 'platform_promo' as const } : {}),
-              }
-            : {}),
-          prizeDistributionType: 'custom',
-          prizePercentages:      [...prizePercents],
-          config:                {
-            ...POKER_TOURNAMENT_DEFAULT_CONFIG,
-            startingStack: Math.max(
-              100,
-              parseInt(startingStack, 10) || Number(STARTING_STACK_PRESETS[STARTING_STACK_PRESETS.length - 1].value),
-            ),
-            minPlayers:    Math.max(2, Math.min(10, parseInt(minPlayers, 10) || 2)),
-            maxPlayers:    prizeSlotCount,
-          },
-          isPrivate,
-          ...(pinForCreate ? { pinCode: pinForCreate } : {}),
-          scheduledStartAt,
+      await onCreate({
+        name:                  name.trim(),
+        buyInAmount:           buyWei.toString(),
+        ...(isFreeroll
+          ? {
+              guaranteedPrizePool: guaranteeWei.toString(),
+              ...(fundFromPromo ? { guaranteedPrizePoolSource: 'platform_promo' as const } : {}),
+            }
+          : {}),
+        prizeDistributionType: 'custom',
+        prizePercentages:      [...prizePercents],
+        config:                {
+          ...POKER_TOURNAMENT_DEFAULT_CONFIG,
+          startingStack: Math.max(
+            100,
+            parseInt(startingStack, 10) || Number(STARTING_STACK_PRESETS[STARTING_STACK_PRESETS.length - 1].value),
+          ),
+          minPlayers:    Math.max(2, Math.min(10, parseInt(minPlayers, 10) || 2)),
+          maxPlayers:    prizeSlotCount,
         },
-        { addBots: Math.max(0, Math.min(10, Math.floor(botsToAdd))) },
-      );
+        isPrivate,
+        ...(pinForCreate ? { pinCode: pinForCreate } : {}),
+        scheduledStartAt,
+      });
       onClose();
     } finally {
       setIsSubmitting(false);
@@ -463,19 +459,6 @@ export function PokerTournamentCreator({ creatorAddress, onClose, onCreate }: Po
               />
             </div>
           )}
-
-          <div>
-            <label className={labelClass}>Bot players</label>
-            <input
-              type="number"
-              min={0}
-              max={10}
-              value={botsToAdd}
-              onChange={(e) => setBotsToAdd(Math.max(0, Math.min(10, Number(e.target.value) || 0)))}
-              className={fieldClass}
-            />
-            <p className="text-[11px] text-white/40 mt-1">0–10 · optional</p>
-          </div>
         </div>
 
         <div className="relative shrink-0 flex gap-3 px-5 py-4 border-t border-cyan-500/20 bg-black/20">

@@ -5,6 +5,7 @@
  */
 
 import { decidePokerBotAction, pokerAmountToBigInt } from '../../lib/poker-bot-ai';
+import { CYPRESS_DEFAULT_POKER_BOT_ADDRESSES } from '../../lib/poker-bot-wallet-pool';
 import { getServerPokerBotAddressSet, parsePokerBotAddressCsv } from '../../lib/poker-server-bot-addresses';
 
 const SAMPLE_BOT = '0x000000000000000000000000000000000000beef';
@@ -61,6 +62,46 @@ describe('poker-server-bot-ai (unit)', () => {
     } finally {
       if (prev === undefined) delete process.env.POKER_BOT_ADDRESSES;
       else process.env.POKER_BOT_ADDRESSES = prev;
+    }
+  });
+
+  it('getServerPokerBotAddressSet falls back to built-in pool when env unset (non-strict)', () => {
+    const prevAddr = process.env.POKER_BOT_ADDRESSES;
+    const prevStrict = process.env.POKER_SERVER_BOT_STRICT_ADDRESSES;
+    const prevCypress = process.env.CYPRESS_POKER_TEST_PLAYERS;
+    const prevTest = process.env.POKER_TEST_PLAYERS;
+    delete process.env.POKER_BOT_ADDRESSES;
+    delete process.env.POKER_SERVER_BOT_STRICT_ADDRESSES;
+    delete process.env.CYPRESS_POKER_TEST_PLAYERS;
+    delete process.env.POKER_TEST_PLAYERS;
+    try {
+      const set = getServerPokerBotAddressSet();
+      expect(set.size).toBe(CYPRESS_DEFAULT_POKER_BOT_ADDRESSES.length);
+      expect(set.has(CYPRESS_DEFAULT_POKER_BOT_ADDRESSES[0].toLowerCase())).toBe(true);
+    } finally {
+      if (prevAddr === undefined) delete process.env.POKER_BOT_ADDRESSES;
+      else process.env.POKER_BOT_ADDRESSES = prevAddr;
+      if (prevStrict === undefined) delete process.env.POKER_SERVER_BOT_STRICT_ADDRESSES;
+      else process.env.POKER_SERVER_BOT_STRICT_ADDRESSES = prevStrict;
+      if (prevCypress === undefined) delete process.env.CYPRESS_POKER_TEST_PLAYERS;
+      else process.env.CYPRESS_POKER_TEST_PLAYERS = prevCypress;
+      if (prevTest === undefined) delete process.env.POKER_TEST_PLAYERS;
+      else process.env.POKER_TEST_PLAYERS = prevTest;
+    }
+  });
+
+  it('getServerPokerBotAddressSet is empty when strict and POKER_BOT_ADDRESSES unset', () => {
+    const prevAddr = process.env.POKER_BOT_ADDRESSES;
+    const prevStrict = process.env.POKER_SERVER_BOT_STRICT_ADDRESSES;
+    delete process.env.POKER_BOT_ADDRESSES;
+    process.env.POKER_SERVER_BOT_STRICT_ADDRESSES = 'true';
+    try {
+      expect(getServerPokerBotAddressSet().size).toBe(0);
+    } finally {
+      if (prevAddr === undefined) delete process.env.POKER_BOT_ADDRESSES;
+      else process.env.POKER_BOT_ADDRESSES = prevAddr;
+      if (prevStrict === undefined) delete process.env.POKER_SERVER_BOT_STRICT_ADDRESSES;
+      else process.env.POKER_SERVER_BOT_STRICT_ADDRESSES = prevStrict;
     }
   });
 });

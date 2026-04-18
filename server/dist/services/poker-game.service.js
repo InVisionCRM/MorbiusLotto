@@ -1366,9 +1366,9 @@ class PokerGameService {
     // tickServerTournamentBots
     // ---------------------------------------------------------------------------
     //
-    // Production: tournament "bots" are real `players` rows + seats; they do not need a separate
-    // WebSocket process. When `POKER_BOT_ADDRESSES` is set on the game server, we take actions
-    // in-process for those wallets on poker tables with `tournament_id` set.
+    // Tournament "bots": in-process actions for seats whose address is in the same wallet pool as
+    // CLI `poker-bot.ts` — POKER_BOT_ADDRESSES, then CYPRESS/POKER_TEST_PLAYERS, then built-in defaults.
+    // Optional: POKER_SERVER_BOT_STRICT_ADDRESSES=true to require explicit POKER_BOT_ADDRESSES only.
     //
     // Disable: POKER_SERVER_TOURNAMENT_BOTS=false
     // Think delay (ms): POKER_SERVER_BOT_THINK_MS (default 1200, clamped 200–10000)
