@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect, useCallback, useRef } from 'react';
+import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { useParams, useRouter, useSearchParams } from 'next/navigation';
 import { useAccount, useSignTypedData } from 'wagmi';
 import { formatMorbiusFloor } from '@/lib/format-morbius-display';
@@ -32,6 +32,8 @@ import { usePokerSeatOverlays } from './PokerSeatOverlays';
 import { usePokerMobileZoomLock } from './PokerMobileZoomLock';
 import { usePokerTurnClock } from './PokerTurnClock';
 import { usePokerTableSounds } from './PokerSounds';
+import { usePokerTableTournamentHud } from '@/hooks/use-poker-tournament';
+import { TournamentBlindIncreaseOverlay } from '@/components/poker/tournament/TournamentBlindIncreaseOverlay';
 import {
   applyPokerE2EMockAction,
   POKER_E2E_MOCK_ADDRESS,
@@ -48,6 +50,7 @@ export default function PokerTablePage() {
   const joinFromLobby = searchParams.get('join') === '1';
   const buyInParam = searchParams.get('buyIn');
   const pinParam = searchParams.get('pin');
+  const tournamentIdParam = searchParams.get('tournament');
   const isE2EMock = searchParams.get('e2eMock') === '1';
 
   const [testStateOverride, setTestStateOverride] = useState<PokerTableState | null>(null);
@@ -100,6 +103,68 @@ export default function PokerTablePage() {
     replaceUrl,
   });
   const renderedState = testStateOverride ?? state;
+
+  const handleTournamentCompleted = useCallback(
+    (winners: { address: string; rank: number; prizeAmount: string }[]) => {
+      const top = winners.find((w) => w.rank === 1);
+      const msg = top
+        ? `Champion: ${top.address.slice(0, 6)}…${top.address.slice(-4)}`
+        : 'Tournament complete';
+      toast.success(msg);
+      router.replace('/poker?tab=tournaments');
+    },
+    [router],
+  );
+
+  const handleTournamentCancelled = useCallback(() => {
+    toast.info('Tournament cancelled.');
+    router.replace('/poker?tab=tournaments');
+  }, [router]);
+
+  const [blindIncreaseBanner, setBlindIncreaseBanner] = useState<{
+    playId: number;
+    newLevel: number;
+    smallBlind: number;
+    bigBlind: number;
+  } | null>(null);
+
+  const handleBlindLevelUp = useCallback(
+    (p: { newLevel: number; smallBlind: number; bigBlind: number }) => {
+      setBlindIncreaseBanner((prev) => ({
+        playId: (prev?.playId ?? 0) + 1,
+        ...p,
+      }));
+    },
+    [],
+  );
+
+  /** Prefer server `PokerTableState.tournamentId`; once a snapshot exists, ignore stray `?tournament=` on cash tables. */
+  const resolvedTournamentId = useMemo(() => {
+    if (renderedState) {
+      const tid = renderedState.tournamentId;
+      if (tid != null && String(tid).length > 0) return String(tid);
+      return null;
+    }
+    const early = state?.tournamentId;
+    if (early != null && String(early).length > 0) return String(early);
+    return tournamentIdParam && tournamentIdParam.length > 0 ? tournamentIdParam : null;
+  }, [renderedState, state?.tournamentId, tournamentIdParam]);
+
+  const tournamentHudState = usePokerTableTournamentHud({
+    wsClient,
+    wsConnected,
+    tournamentId: resolvedTournamentId,
+    tableId,
+    pokerHandId: renderedState?.currentHand?.handId,
+    onTournamentCompleted: handleTournamentCompleted,
+    onTournamentCancelled: handleTournamentCancelled,
+    onBlindLevelUp: handleBlindLevelUp,
+  });
+
+  const tournamentHUDProp =
+    tournamentHudState && effectivePlayerAddress
+      ? { state: tournamentHudState, myAddress: effectivePlayerAddress }
+      : null;
 
   useEffect(() => {
     if (!isE2EMock || typeof window === 'undefined') return;
@@ -629,6 +694,7 @@ export default function PokerTablePage() {
             onTipDealer={onTipDealer}
             onSitOut={mySeat ? handleSitOut : undefined}
             onSitBack={mySeat ? handleSitBack : undefined}
+            tournamentHUD={tournamentHUDProp}
           />
 
           <PokerBottomBar
@@ -701,6 +767,15 @@ export default function PokerTablePage() {
         />
       )}
       <SophieSplashModal address={address} forceOpen={voiceSplashOpen} onClose={() => setVoiceSplashOpen(false)} onEnable={() => setSpeechEnabled(true)} />
+      {blindIncreaseBanner && (
+        <TournamentBlindIncreaseOverlay
+          playId={blindIncreaseBanner.playId}
+          newLevel={blindIncreaseBanner.newLevel}
+          smallBlind={blindIncreaseBanner.smallBlind}
+          bigBlind={blindIncreaseBanner.bigBlind}
+          onAnimationEnd={() => setBlindIncreaseBanner(null)}
+        />
+      )}
     </>
   );
 }

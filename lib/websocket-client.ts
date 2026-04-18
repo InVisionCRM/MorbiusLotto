@@ -158,6 +158,8 @@ export interface PokerTableState {
   tableLogo?: string | null;
   /** Logo opacity (0–1). Default 0.12. */
   tableLogoOpacity?: number | null;
+  /** Present for tournament-mode tables (`poker_tables.tournament_id`). HUD works without `?tournament=` in the URL. */
+  tournamentId?: string | null;
 }
 
 // ---------------------------------------------------------------------------

@@ -1,7 +1,8 @@
 "use strict";
 /**
  * Texas Hold'em hand evaluation for 5-7 cards.
- * Card indices 0-51: rank = (idx % 13) + 1 (A=1, K=13), suit = floor(idx/13).
+ * Card indices 0-51: rank = (idx % 13) + 2 (2=Two, 14=Ace), suit = floor(idx/13).
+ * Matches the game service encoding where rankIndex 0=Two, 12=Ace.
  */
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.bestHand = bestHand;
@@ -9,17 +10,14 @@ exports.handRankToName = handRankToName;
 exports.compareHands = compareHands;
 exports.winners = winners;
 function rankOf(cardIndex) {
-    return (cardIndex % 13) + 1;
+    return (cardIndex % 13) + 2;
 }
 function suitOf(cardIndex) {
     return Math.floor(cardIndex / 13);
 }
-/** Rank 1 (Ace) can be 1 or 14 for straights */
+/** Rank values for comparison (Ace = 14, already natural from rankOf). */
 function rankValues(cardIndices) {
-    return cardIndices.map((c) => {
-        const r = rankOf(c);
-        return r === 1 ? 14 : r;
-    });
+    return cardIndices.map((c) => rankOf(c));
 }
 /** All 5-card combinations from 7 cards (C(7,5) = 21) */
 function choose5(indices) {

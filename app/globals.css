@@ -797,3 +797,27 @@ body {
   from { transform: scaleY(0.4); }
   to   { transform: scaleY(1); }
 }
+
+/* Tournament table: center blind-increase banner (pointer-events-none; no fill) */
+@keyframes poker-tournament-blind-banner {
+  0% {
+    opacity: 0;
+    transform: scale(0.96);
+  }
+  16% {
+    opacity: 1;
+    transform: scale(1);
+  }
+  55% {
+    opacity: 1;
+    transform: scale(1);
+  }
+  100% {
+    opacity: 0;
+    transform: scale(1);
+  }
+}
+
+.poker-tournament-blind-banner-anim {
+  animation: poker-tournament-blind-banner 5s cubic-bezier(0.33, 0, 0.2, 1) forwards;
+}

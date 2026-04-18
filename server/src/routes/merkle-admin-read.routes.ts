@@ -1,4 +1,5 @@
 import type { Express } from 'express';
+import type { Pool } from 'pg';
 import { MerkleDropsLPService } from '../services/merkle-lp-drops.service';
 import { MerkleDropsService } from '../services/merkle-drops.service';
 import { sendJson } from '../http/json';
@@ -140,7 +141,7 @@ export function registerMerkleAdminReadRoutes({
   app.get('/api/admin/merkle/health', async (_req, res) => {
     try {
       const contractBalance = await getHolderContractBalance();
-      const { pool } = merkleDropsService as any;
+      const pool = (merkleDropsService as unknown as { pool: Pool }).pool;
       const { rows: owedRows } = await pool.query<{ total: string }>(
         `SELECT COALESCE(SUM(CAST(ms.reward_amount AS NUMERIC)), 0) AS total
          FROM merkle_snapshots ms
@@ -181,7 +182,7 @@ export function registerMerkleAdminReadRoutes({
   app.get('/api/admin/merkle-lp/health', async (_req, res) => {
     try {
       const contractBalance = await getLPContractBalance();
-      const { pool } = merkleDropsLPService as any;
+      const pool = (merkleDropsLPService as unknown as { pool: Pool }).pool;
       const { rows: owedRows } = await pool.query<{ total: string }>(
         `SELECT COALESCE(SUM(CAST(ms.reward_amount AS NUMERIC)), 0) AS total
          FROM merkle_lp_snapshots ms

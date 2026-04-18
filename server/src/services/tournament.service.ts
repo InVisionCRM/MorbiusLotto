@@ -260,13 +260,19 @@ export interface PrizeDistribution {
 export class TournamentService {
   private pool: Pool;
   // Set after construction to avoid circular dependency
-  private pokerTournamentService: { activateTournament(tournamentId: string): Promise<string> } | null = null;
+  private pokerTournamentService: {
+    activateTournament(tournamentId: string): Promise<string>;
+    startScheduledPokerTournament(tournamentId: string): Promise<void>;
+  } | null = null;
 
   constructor(pool: Pool) {
     this.pool = pool;
   }
 
-  setPokerTournamentService(service: { activateTournament(tournamentId: string): Promise<string> }): void {
+  setPokerTournamentService(service: {
+    activateTournament(tournamentId: string): Promise<string>;
+    startScheduledPokerTournament(tournamentId: string): Promise<void>;
+  }): void {
     this.pokerTournamentService = service;
   }
 
@@ -321,7 +327,7 @@ export class TournamentService {
           logger.warn('executeScheduledEvent: poker_start fired but pokerTournamentService not set — retrying next poll');
           return 'retry';
         }
-        await this.pokerTournamentService.activateTournament(tournamentId);
+        await this.pokerTournamentService.startScheduledPokerTournament(tournamentId);
         return 'executed';
       default:
         return 'unknown';

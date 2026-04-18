@@ -9,6 +9,13 @@ import {
 } from '@/lib/websocket-client';
 import { toast } from 'sonner';
 
+function pokerTablePath(tableId: string, s: PokerTableState | null): string {
+  const tid = s?.tournamentId;
+  return tid
+    ? `/poker/${tableId}?tournament=${encodeURIComponent(tid)}`
+    : `/poker/${tableId}`;
+}
+
 /** Server appends this so the client can offer "leave other table & join here". */
 const POKER_OTHER_TABLE_ID_RE =
   /other_table_id=([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})/i;
@@ -81,7 +88,7 @@ export function usePokerConnection({
         await client.joinRoom(`poker:table:${tableId}`);
         const s = await client.pokerGetState(tableId);
         if (s) setState(s);
-        replaceUrl(`/poker/${tableId}`);
+        replaceUrl(pokerTablePath(tableId, s ?? null));
       };
 
       try {

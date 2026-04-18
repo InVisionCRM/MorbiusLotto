@@ -9,18 +9,21 @@ const viem_1 = require("viem");
 const cosmetics_catalog_1 = require("../lib/cosmetics-catalog");
 const json_1 = require("../http/json");
 const logger_1 = require("../utils/logger");
+const resolve_profile_display_name_1 = require("../lib/resolve-profile-display-name");
 function registerPlayerMutationRoutes({ app, dbService, cosmeticsService, }) {
     app.post('/api/player/profile', express_1.default.json(), async (req, res) => {
         try {
-            const { address, displayName: rawDisplayName, profileImageUrl: rawProfileImageUrl, avatarConfig: rawAvatarConfig, bio: rawBio, xHandle: rawXHandle, tgHandle: rawTgHandle, } = req.body ?? {};
-            if (!address || typeof address !== 'string') {
+            const { address: bodyAddress, walletAddress: bodyWalletAddress, displayName: rawDisplayName, profileImageUrl: rawProfileImageUrl, avatarConfig: rawAvatarConfig, bio: rawBio, xHandle: rawXHandle, tgHandle: rawTgHandle, } = req.body ?? {};
+            const addressRaw = typeof bodyAddress === 'string' && bodyAddress.trim() !== ''
+                ? bodyAddress
+                : typeof bodyWalletAddress === 'string' && bodyWalletAddress.trim() !== ''
+                    ? bodyWalletAddress
+                    : '';
+            if (!addressRaw) {
                 return res.status(400).json({ error: 'address required' });
             }
-            const normalizedAddress = (0, viem_1.getAddress)(address);
-            const displayName = typeof rawDisplayName === 'string' ? rawDisplayName.trim() : '';
-            if (displayName.length < 3 || displayName.length > 32) {
-                return res.status(400).json({ error: 'Display name must be 3–32 characters' });
-            }
+            const normalizedAddress = (0, viem_1.getAddress)(addressRaw);
+            const displayName = await (0, resolve_profile_display_name_1.resolveDisplayNameForProfileUpsert)(dbService, normalizedAddress, typeof rawDisplayName === 'string' ? rawDisplayName : undefined);
             const profileImageUrl = rawProfileImageUrl !== undefined ? (typeof rawProfileImageUrl === 'string' ? rawProfileImageUrl : null) : undefined;
             const avatarConfig = rawAvatarConfig !== undefined
                 ? rawAvatarConfig !== null && typeof rawAvatarConfig === 'object'

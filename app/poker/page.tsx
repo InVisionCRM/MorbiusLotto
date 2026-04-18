@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import Link from 'next/link';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { useAccount, useSignTypedData } from 'wagmi';
 import { parseEther } from 'viem';
 import { sanitizeDecimalStringForParseEther } from '@/lib/sanitize-decimal-input';
@@ -127,6 +127,7 @@ function IntroScreen({ onComplete }: { onComplete: () => void }) {
 
 export default function PokerLobbyPage() {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const { address, isConnected } = useAccount();
   const { signTypedDataAsync } = useSignTypedData();
   const [showIntro, setShowIntro] = useState(true);
@@ -147,6 +148,31 @@ export default function PokerLobbyPage() {
   const [removingTableId, setRemovingTableId] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<'cash' | 'tournaments'>('cash');
   const [wsClient, setWsClient] = useState<BlackjackWebSocketClient | null>(null);
+
+  useEffect(() => {
+    const t = searchParams.get('tab');
+    if (t === 'tournaments') setActiveTab('tournaments');
+    else if (t === 'cash') setActiveTab('cash');
+  }, [searchParams]);
+
+  const setLobbyTab = useCallback(
+    (tab: 'cash' | 'tournaments') => {
+      setActiveTab(tab);
+      if (tab === 'tournaments') {
+        router.replace('/poker?tab=tournaments', { scroll: false });
+      } else {
+        router.replace('/poker', { scroll: false });
+      }
+    },
+    [router]
+  );
+
+  const goToTournamentTable = useCallback(
+    (tableId: string, tournamentId: string) => {
+      router.push(`/poker/${tableId}?tournament=${tournamentId}`);
+    },
+    [router]
+  );
 
   const clientRef = React.useRef<BlackjackWebSocketClient | null>(null);
   const isAdmin = isAdminWallet(address);
@@ -381,7 +407,11 @@ export default function PokerLobbyPage() {
   return (
     <>
       <PokerBetaSplash />
-      <GlobalMainNav page="poker">
+      <GlobalMainNav
+        page="poker"
+        pokerLobbyTab={activeTab}
+        onPokerLobbyTabChange={setLobbyTab}
+      >
         <div className="relative min-h-screen h-full w-full flex flex-col bg-gradient-to-b from-[#080c14] via-slate-950 to-[#080c14] text-white">
           <div className="absolute inset-0 h-full min-h-screen w-full bg-[radial-gradient(ellipse_80%_60%_at_50%_0%,rgba(34,211,238,0.10),transparent_70%)] pointer-events-none" />
           <div className="relative flex-1 w-full max-w-4xl mx-auto px-3 py-4 sm:px-4 sm:py-8">
@@ -510,7 +540,7 @@ export default function PokerLobbyPage() {
               <div className="flex items-center gap-1 px-5 sm:px-10 py-3.5 sm:py-4 border-t border-white/[0.04]" style={{ background: 'rgba(0,0,0,0.2)' }}>
                 <button
                   type="button"
-                  onClick={() => setActiveTab('cash')}
+                  onClick={() => setLobbyTab('cash')}
                   className={`px-5 py-2.5 rounded-xl text-xs sm:text-sm font-semibold transition-all ${
                     activeTab === 'cash'
                       ? 'bg-cyan-500/[0.12] text-cyan-400'
@@ -524,7 +554,7 @@ export default function PokerLobbyPage() {
                 </button>
                 <button
                   type="button"
-                  onClick={() => setActiveTab('tournaments')}
+                  onClick={() => setLobbyTab('tournaments')}
                   className={`relative px-5 py-2.5 rounded-xl text-xs sm:text-sm font-semibold transition-all ${
                     activeTab === 'tournaments'
                       ? 'bg-cyan-500/[0.12] text-cyan-400'
@@ -532,27 +562,28 @@ export default function PokerLobbyPage() {
                   }`}
                 >
                   Tournaments
-                  <span className="ml-2 text-[9px] sm:text-[10px] font-bold tracking-wider uppercase text-amber-400/80">Soon</span>
                 </button>
               </div>
             </div>
-            {/* Tournament Coming Soon */}
             {activeTab === 'tournaments' && (
-              <div className="flex flex-col items-center justify-center py-16 sm:py-24 text-center">
-                <div className="w-16 h-16 sm:w-20 sm:h-20 rounded-2xl bg-cyan-500/[0.08] border border-cyan-500/15 flex items-center justify-center text-3xl sm:text-4xl mb-5">
-                  🏆
-                </div>
-                <h3 className="text-xl sm:text-2xl font-bold text-slate-200 mb-2">Tournaments Coming Soon</h3>
-                <p className="text-sm sm:text-base text-slate-500 max-w-md leading-relaxed mb-6">
-                  Multi-table tournaments with structured blind levels, guaranteed prize pools, and satellite qualifiers are on the way.
-                </p>
-                <div className="flex items-center gap-2 px-4 py-2 rounded-full bg-amber-500/10 border border-amber-500/20">
-                  <span className="relative flex h-2 w-2">
-                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-amber-400 opacity-75" />
-                    <span className="relative inline-flex rounded-full h-2 w-2 bg-amber-400" />
-                  </span>
-                  <span className="text-xs sm:text-sm font-medium text-amber-400/90">In Development</span>
-                </div>
+              <div
+                className="rounded-2xl border border-cyan-500/20 p-4 sm:p-6"
+                style={{
+                  background: 'linear-gradient(325deg, rgba(20, 20, 20, 0.8), rgba(40, 40, 40, 0.6))',
+                  boxShadow:
+                    'inset 0 3px 6px rgba(0, 0, 0, 0.8), inset 0 -3px 6px rgba(255, 255, 255, 0.1), 0 1px 3px rgba(0, 0, 0, 0.5)',
+                }}
+              >
+                {!isConnected && (
+                  <p className="text-sm text-cyan-200/80 mb-4 rounded-lg border border-cyan-500/25 bg-cyan-500/5 px-3 py-2">
+                    Connect your wallet to create or join Sit &amp; Go tournaments.
+                  </p>
+                )}
+                <PokerTournamentLobby
+                  wsClient={wsClient}
+                  myAddress={address}
+                  onGoToTable={goToTournamentTable}
+                />
               </div>
             )}
 

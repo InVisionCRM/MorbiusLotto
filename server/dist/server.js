@@ -38,6 +38,7 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
 Object.defineProperty(exports, "__esModule", { value: true });
 const express_1 = __importDefault(require("express"));
 const http_1 = require("http");
+const child_process_1 = require("child_process");
 const path_1 = __importDefault(require("path"));
 const fs_1 = __importDefault(require("fs"));
 const multer_1 = __importDefault(require("multer"));
@@ -60,8 +61,10 @@ const merkle_drops_service_1 = require("./services/merkle-drops.service");
 const merkle_lp_drops_service_1 = require("./services/merkle-lp-drops.service");
 const cosmetics_service_1 = require("./services/cosmetics.service");
 const cosmetics_catalog_1 = require("./lib/cosmetics-catalog");
+const resolve_profile_display_name_1 = require("./lib/resolve-profile-display-name");
 const poker_chip_scale_1 = require("./lib/poker-chip-scale");
 const logger_1 = require("./utils/logger");
+const poker_bot_auth_1 = require("./utils/poker-bot-auth");
 const withdraw_sign_1 = require("./utils/withdraw-sign");
 const chain_client_1 = require("./utils/chain-client");
 const blackjack_1 = require("./abi/blackjack");
@@ -200,8 +203,14 @@ const uploadMulter = (0, multer_1.default)({
         cb(null, true);
     },
 });
-// Admin API: require x-admin-secret header matching AP env var
+// Admin API: require x-admin-secret header matching AP env var.
+// Exception: POST /api/admin/browser-upload uses x-admin-wallet + isAdminWallet so the browser can
+// upload large files directly to this host (bypasses Vercel/serverless ~4.5MB request body limits).
 app.use('/api/admin', (req, res, next) => {
+    const subPath = (req.url || '').split('?')[0];
+    if (req.method === 'POST' && subPath === '/browser-upload') {
+        return next();
+    }
     if (!ADMIN_SECRET) {
         res.status(503).json({ error: 'Admin access not configured on server' });
         return;
@@ -358,15 +367,17 @@ async function initializeServices() {
         // Update profile by address (display name, profile image URL, avatar config). No signature required.
         app.post('/api/player/profile', express_1.default.json(), async (req, res) => {
             try {
-                const { address, displayName: rawDisplayName, profileImageUrl: rawProfileImageUrl, avatarConfig: rawAvatarConfig, bio: rawBio, xHandle: rawXHandle, tgHandle: rawTgHandle } = req.body ?? {};
-                if (!address || typeof address !== 'string') {
+                const { address: bodyAddress, walletAddress: bodyWalletAddress, displayName: rawDisplayName, profileImageUrl: rawProfileImageUrl, avatarConfig: rawAvatarConfig, bio: rawBio, xHandle: rawXHandle, tgHandle: rawTgHandle, } = req.body ?? {};
+                const addressRaw = typeof bodyAddress === 'string' && bodyAddress.trim() !== ''
+                    ? bodyAddress
+                    : typeof bodyWalletAddress === 'string' && bodyWalletAddress.trim() !== ''
+                        ? bodyWalletAddress
+                        : '';
+                if (!addressRaw) {
                     return res.status(400).json({ error: 'address required' });
                 }
-                const normalizedAddress = (0, viem_1.getAddress)(address);
-                const displayName = typeof rawDisplayName === 'string' ? rawDisplayName.trim() : '';
-                if (displayName.length < 3 || displayName.length > 32) {
-                    return res.status(400).json({ error: 'Display name must be 3–32 characters' });
-                }
+                const normalizedAddress = (0, viem_1.getAddress)(addressRaw);
+                const displayName = await (0, resolve_profile_display_name_1.resolveDisplayNameForProfileUpsert)(dbService, normalizedAddress, typeof rawDisplayName === 'string' ? rawDisplayName : undefined);
                 const profileImageUrl = rawProfileImageUrl !== undefined
                     ? (typeof rawProfileImageUrl === 'string' ? rawProfileImageUrl : null)
                     : undefined;
@@ -1624,7 +1635,7 @@ async function initializeServices() {
             }
             return null;
         };
-        app.post('/api/admin/upload', (req, res, next) => {
+        const runAdminTableUploadMulter = (req, res, next) => {
             uploadMulter.single('file')(req, res, (err) => {
                 if (err) {
                     logger_1.logger.error('Admin upload multer error:', err);
@@ -1634,7 +1645,8 @@ async function initializeServices() {
                 }
                 next();
             });
-        }, (req, res) => {
+        };
+        const finishAdminTableUpload = (req, res) => {
             try {
                 if (!req.file) {
                     res.status(400).json({ error: 'Missing or invalid file' });
@@ -1656,7 +1668,16 @@ async function initializeServices() {
                 logger_1.logger.error('Admin upload error:', err);
                 res.status(500).json({ error: err instanceof Error ? err.message : 'Failed to save file' });
             }
-        });
+        };
+        app.post('/api/admin/browser-upload', (req, res, next) => {
+            const wallet = req.headers['x-admin-wallet']?.trim();
+            if (!wallet || !(0, cosmetics_catalog_1.isAdminWallet)(wallet)) {
+                res.status(403).json({ error: 'Forbidden', message: 'Admin wallet required' });
+                return;
+            }
+            next();
+        }, runAdminTableUploadMulter, finishAdminTableUpload);
+        app.post('/api/admin/upload', runAdminTableUploadMulter, finishAdminTableUpload);
         app.get('/api/admin/tables', async (req, res) => {
             try {
                 const enabledOnly = req.query.enabledOnly === 'true';
@@ -1879,6 +1900,164 @@ async function initializeServices() {
             }
             catch (error) {
                 logger_1.logger.error('Error fetching poker tournaments:', error);
+                res.status(500).json({ error: 'Internal server error' });
+            }
+        });
+        // Admin: poker bot management
+        const pokerBotJobs = new Map();
+        const MAX_ADMIN_BOTS = 10;
+        app.post('/api/admin/poker/bots/bootstrap', express_1.default.json(), async (req, res) => {
+            try {
+                const tableId = String(req.body?.tableId ?? '').trim();
+                if (!tableId) {
+                    res.status(400).json({ error: 'tableId required' });
+                    return;
+                }
+                const gate = await (0, poker_bot_auth_1.assertPokerBotControlAllowed)(dbService.getPool(), tableId, req.headers['x-admin-wallet']);
+                if (!gate.ok) {
+                    res.status(gate.status).json({ error: gate.error });
+                    return;
+                }
+                const existingJob = pokerBotJobs.get(tableId);
+                if (existingJob && !existingJob.process.killed) {
+                    res.status(409).json({
+                        error: 'Bots already running for this table',
+                        tableId,
+                        pid: existingJob.process.pid ?? null,
+                        numBots: existingJob.numBots,
+                        startedAt: existingJob.startedAt,
+                    });
+                    return;
+                }
+                const tableResult = await dbService.getPool().query(`SELECT pt.max_seats,
+                  COUNT(ps.id) AS seated_count
+           FROM poker_tables pt
+           LEFT JOIN poker_seats ps ON ps.table_id = pt.id
+           WHERE pt.id = $1
+           GROUP BY pt.id`, [tableId]);
+                if (tableResult.rows.length === 0) {
+                    res.status(404).json({ error: 'Poker table not found' });
+                    return;
+                }
+                const row = tableResult.rows[0];
+                const maxSeats = Number(row.max_seats ?? 0);
+                const seatedCount = Number(row.seated_count ?? 0);
+                const emptySeats = Math.max(0, maxSeats - seatedCount);
+                if (emptySeats <= 0) {
+                    res.status(400).json({ error: 'No empty seats available for bots' });
+                    return;
+                }
+                const requestedBots = Number(req.body?.numBots);
+                const defaultBots = Math.min(MAX_ADMIN_BOTS, emptySeats);
+                const numBots = Number.isFinite(requestedBots)
+                    ? Math.max(1, Math.min(MAX_ADMIN_BOTS, Math.floor(requestedBots), emptySeats))
+                    : defaultBots;
+                const compiledBot = path_1.default.resolve(__dirname, 'scripts/poker-bot.js');
+                const botExists = fs_1.default.existsSync(compiledBot);
+                const proc = botExists
+                    ? (0, child_process_1.spawn)(process.execPath, [compiledBot, tableId, String(numBots)], {
+                        cwd: path_1.default.resolve(__dirname, '../..'),
+                        env: process.env,
+                        stdio: ['ignore', 'pipe', 'pipe'],
+                    })
+                    : (0, child_process_1.spawn)('npx', ['ts-node', path_1.default.resolve(__dirname, 'scripts/poker-bot.ts'), tableId, String(numBots)], {
+                        cwd: path_1.default.resolve(__dirname, '..'),
+                        env: process.env,
+                        stdio: ['ignore', 'pipe', 'pipe'],
+                    });
+                const startedAt = new Date().toISOString();
+                pokerBotJobs.set(tableId, { tableId, numBots, startedAt, process: proc });
+                proc.stdout?.on('data', (chunk) => {
+                    logger_1.logger.info('[PokerBot]', { tableId, line: chunk.toString().trim() });
+                });
+                proc.stderr?.on('data', (chunk) => {
+                    logger_1.logger.warn('[PokerBot]', { tableId, line: chunk.toString().trim() });
+                });
+                proc.on('error', (err) => {
+                    logger_1.logger.error('Poker bot process error', { tableId, err });
+                });
+                proc.on('exit', (code, signal) => {
+                    const current = pokerBotJobs.get(tableId);
+                    if (current?.process === proc) {
+                        pokerBotJobs.delete(tableId);
+                    }
+                    logger_1.logger.info('Poker bot process exited', { tableId, code, signal });
+                });
+                res.json({ ok: true, tableId, numBots, pid: proc.pid ?? null, startedAt });
+            }
+            catch (error) {
+                logger_1.logger.error('Error bootstrapping poker bots:', error);
+                res.status(500).json({ error: 'Internal server error' });
+            }
+        });
+        app.post('/api/admin/poker/bots/stop', express_1.default.json(), async (req, res) => {
+            try {
+                const tableId = String(req.body?.tableId ?? '').trim();
+                if (!tableId) {
+                    res.status(400).json({ error: 'tableId required' });
+                    return;
+                }
+                const gate = await (0, poker_bot_auth_1.assertPokerBotControlAllowed)(dbService.getPool(), tableId, req.headers['x-admin-wallet']);
+                if (!gate.ok) {
+                    res.status(gate.status).json({ error: gate.error });
+                    return;
+                }
+                const job = pokerBotJobs.get(tableId);
+                if (!job) {
+                    res.status(404).json({ error: 'No running bot process for this table' });
+                    return;
+                }
+                const stopped = job.process.kill('SIGTERM');
+                pokerBotJobs.delete(tableId);
+                res.json({ ok: true, tableId, stopped, pid: job.process.pid ?? null });
+            }
+            catch (error) {
+                logger_1.logger.error('Error stopping poker bots:', error);
+                res.status(500).json({ error: 'Internal server error' });
+            }
+        });
+        app.get('/api/admin/poker/bots/status', async (req, res) => {
+            try {
+                const tableId = typeof req.query.tableId === 'string' ? req.query.tableId.trim() : '';
+                const wallet = req.headers['x-admin-wallet']?.trim();
+                if (!tableId) {
+                    if (!wallet || !(0, cosmetics_catalog_1.isAdminWallet)(wallet)) {
+                        res.status(403).json({ error: 'Admin wallet required for global bot status' });
+                        return;
+                    }
+                }
+                else {
+                    const gate = await (0, poker_bot_auth_1.assertPokerBotControlAllowed)(dbService.getPool(), tableId, wallet);
+                    if (!gate.ok) {
+                        res.status(gate.status).json({ error: gate.error });
+                        return;
+                    }
+                }
+                if (tableId) {
+                    const job = pokerBotJobs.get(tableId);
+                    if (!job) {
+                        res.json({ running: false, tableId });
+                        return;
+                    }
+                    res.json({
+                        running: true,
+                        tableId,
+                        pid: job.process.pid ?? null,
+                        numBots: job.numBots,
+                        startedAt: job.startedAt,
+                    });
+                    return;
+                }
+                const jobs = Array.from(pokerBotJobs.values()).map((job) => ({
+                    tableId: job.tableId,
+                    pid: job.process.pid ?? null,
+                    numBots: job.numBots,
+                    startedAt: job.startedAt,
+                }));
+                res.json({ running: jobs.length > 0, jobs });
+            }
+            catch (error) {
+                logger_1.logger.error('Error reading poker bot status:', error);
                 res.status(500).json({ error: 'Internal server error' });
             }
         });

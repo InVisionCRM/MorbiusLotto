@@ -43,6 +43,8 @@ export interface PokerTournamentState {
   prizePool: string;
   buyInAmount: string;
   prizeDistributionType: string;
+  /** Present when server returns full snapshot (`getTournamentState`). */
+  pokerConfig?: PokerTournamentConfig;
 }
 
 export interface PokerTournamentSummary {
@@ -61,11 +63,17 @@ export interface PokerTournamentSummary {
   prizeDistributionType: string;
   scheduledStartAt: string | null;
   isRegistered: boolean;
+  /** Present when server runs migration 093+ / updated API */
+  isPrivate?: boolean;
 }
 
 export interface CreatePokerTournamentParams {
   name: string;
   buyInAmount: string;
+  /** Wei string; when `"0"`, server requires `guaranteedPrizePool`. */
+  guaranteedPrizePool?: string;
+  /** Admin only: debit `POKER_PROMO_GUARANTEED_POOL_WALLET` instead of creator. */
+  guaranteedPrizePoolSource?: 'creator' | 'platform_promo';
   prizeDistributionType: string;
   config: PokerTournamentConfig;
   isPrivate?: boolean;
@@ -341,4 +349,185 @@ export function usePokerTournament({
     cancelTournament,
     fetchTournamentState,
   };
+}
+
+// ---------------------------------------------------------------------------
+// Table page: tournament HUD (room subscribe + snapshot + live events)
+// ---------------------------------------------------------------------------
+
+export interface UsePokerTableTournamentHudOptions {
+  wsClient: BlackjackWebSocketClient | null;
+  wsConnected: boolean;
+  tournamentId: string | null | undefined;
+  tableId: string;
+  /** Current poker hand id — when it changes, refresh tournament snapshot (chips + hand #). */
+  pokerHandId: string | null | undefined;
+  onTournamentCompleted?: (winners: { address: string; rank: number; prizeAmount: string }[]) => void;
+  onTournamentCancelled?: () => void;
+  /** Fired on `poker_tournament_blind_level_up` for this table (visual overlay, not sonner). */
+  onBlindLevelUp?: (payload: { newLevel: number; smallBlind: number; bigBlind: number }) => void;
+}
+
+/**
+ * Subscribe to `poker_tournament:{id}`, keep `PokerTournamentState` in sync for the in-table HUD.
+ * Pass `tournamentId` from `PokerTableState.tournamentId` when available; callers may fall back to `?tournament=` only until the first table snapshot loads.
+ */
+export function usePokerTableTournamentHud({
+  wsClient,
+  wsConnected,
+  tournamentId,
+  tableId,
+  pokerHandId,
+  onTournamentCompleted,
+  onTournamentCancelled,
+  onBlindLevelUp,
+}: UsePokerTableTournamentHudOptions): PokerTournamentState | null {
+  const [state, setState] = useState<PokerTournamentState | null>(null);
+  const tid = (tournamentId && String(tournamentId).trim()) || null;
+
+  const onCompletedRef = useRef(onTournamentCompleted);
+  const onCancelledRef = useRef(onTournamentCancelled);
+  const onBlindUpRef = useRef(onBlindLevelUp);
+  useEffect(() => {
+    onCompletedRef.current = onTournamentCompleted;
+  }, [onTournamentCompleted]);
+  useEffect(() => {
+    onCancelledRef.current = onTournamentCancelled;
+  }, [onTournamentCancelled]);
+  useEffect(() => {
+    onBlindUpRef.current = onBlindLevelUp;
+  }, [onBlindLevelUp]);
+
+  // Join room + load snapshot when connected
+  useEffect(() => {
+    if (!tid) {
+      setState(null);
+      return;
+    }
+    if (!wsClient || !wsConnected) return;
+
+    let cancelled = false;
+
+    const bootstrap = async () => {
+      try {
+        await wsClient.sendRequest('poker_tournament_join', { tournamentId: tid });
+        const res: PokerTournamentState | null = await wsClient.sendRequest('poker_tournament_get_state', {
+          tournamentId: tid,
+        });
+        if (cancelled) return;
+        if (res?.tableId === tableId) setState(res);
+        else setState(null);
+      } catch {
+        if (!cancelled) setState(null);
+      }
+    };
+
+    void bootstrap();
+
+    const onReconnect = () => {
+      void bootstrap();
+    };
+    wsClient.on('reconnected', onReconnect);
+
+    return () => {
+      cancelled = true;
+      wsClient.off('reconnected', onReconnect);
+    };
+  }, [wsClient, wsConnected, tid, tableId]);
+
+  // Live tournament events (same connection as table)
+  useEffect(() => {
+    if (!wsClient || !tid) return;
+
+    const onState = (payload: PokerTournamentState) => {
+      if (payload?.tournamentId === tid && payload.tableId === tableId) setState(payload);
+    };
+
+    const onBlind = (payload: {
+      tournamentId: string;
+      tableId?: string;
+      newLevel: number;
+      smallBlind: number;
+      bigBlind: number;
+      handNumber?: number;
+    }) => {
+      if (payload.tournamentId !== tid) return;
+      if (payload.tableId != null && payload.tableId !== tableId) return;
+      onBlindUpRef.current?.({
+        newLevel: payload.newLevel,
+        smallBlind: payload.smallBlind,
+        bigBlind: payload.bigBlind,
+      });
+      setState((prev) => {
+        if (!prev || prev.tournamentId !== tid) return prev;
+        return {
+          ...prev,
+          blindLevel: payload.newLevel,
+          smallBlind: payload.smallBlind,
+          bigBlind: payload.bigBlind,
+          handNumber: payload.handNumber ?? prev.handNumber,
+        };
+      });
+    };
+
+    const onEliminated = (payload: { tournamentId: string; playerAddress: string; finalRank: number }) => {
+      if (payload.tournamentId !== tid) return;
+      setState((prev) => {
+        if (!prev) return prev;
+        return {
+          ...prev,
+          players: prev.players.map((p) =>
+            p.playerAddress.toLowerCase() === payload.playerAddress.toLowerCase()
+              ? { ...p, status: 'busted' as const, finalRank: payload.finalRank }
+              : p
+          ),
+        };
+      });
+    };
+
+    const onCompleted = (payload: {
+      tournamentId: string;
+      winners: { address: string; rank: number; prizeAmount: string }[];
+    }) => {
+      if (payload.tournamentId !== tid) return;
+      setState(null);
+      onCompletedRef.current?.(payload.winners ?? []);
+    };
+
+    const onCancelled = (payload: { tournamentId: string }) => {
+      if (payload.tournamentId !== tid) return;
+      setState(null);
+      onCancelledRef.current?.();
+    };
+
+    wsClient.on('poker_tournament_state', onState);
+    wsClient.on('poker_tournament_blind_level_up', onBlind);
+    wsClient.on('poker_tournament_player_eliminated', onEliminated);
+    wsClient.on('poker_tournament_completed', onCompleted);
+    wsClient.on('poker_tournament_cancelled', onCancelled);
+
+    return () => {
+      wsClient.off('poker_tournament_state', onState);
+      wsClient.off('poker_tournament_blind_level_up', onBlind);
+      wsClient.off('poker_tournament_player_eliminated', onEliminated);
+      wsClient.off('poker_tournament_completed', onCompleted);
+      wsClient.off('poker_tournament_cancelled', onCancelled);
+    };
+  }, [wsClient, tid, tableId]);
+
+  // After each new hand, refresh entries + hand_number from DB (WS does not push full state each hand).
+  useEffect(() => {
+    if (!wsClient || !tid || !wsConnected || !pokerHandId) return;
+    const tm = setTimeout(() => {
+      wsClient
+        .sendRequest('poker_tournament_get_state', { tournamentId: tid })
+        .then((res: PokerTournamentState | null) => {
+          if (res?.tableId === tableId) setState(res);
+        })
+        .catch(() => {});
+    }, 400);
+    return () => clearTimeout(tm);
+  }, [pokerHandId, wsClient, tid, tableId, wsConnected]);
+
+  return !tid ? null : state;
 }

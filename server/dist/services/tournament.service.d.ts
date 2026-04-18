@@ -229,6 +229,7 @@ export declare class TournamentService {
     constructor(pool: Pool);
     setPokerTournamentService(service: {
         activateTournament(tournamentId: string): Promise<string>;
+        startScheduledPokerTournament(tournamentId: string): Promise<void>;
     }): void;
     private toBigInt;
     private normalizeAddress;

@@ -1,6 +1,7 @@
 import { Pool } from 'pg';
 import { logger } from '../utils/logger';
 import { toBigIntSafe } from '../utils/safe-bigint';
+import { isAdminWallet } from '../lib/cosmetics-catalog';
 import { TournamentService } from './tournament.service';
 import { PokerGameService } from './poker-game.service';
 
@@ -55,6 +56,7 @@ export interface PokerTournamentState {
   prizePool: string;
   buyInAmount: string;
   prizeDistributionType: string;
+  pokerConfig?: PokerTournamentConfig;
 }
 
 export interface PokerTournamentSummary {
@@ -73,12 +75,23 @@ export interface PokerTournamentSummary {
   prizeDistributionType: string;
   scheduledStartAt: string | null;
   isRegistered: boolean;
+  isPrivate: boolean;
 }
+
+/** Where the initial guaranteed pool is debited when buy-in is 0. */
+export type GuaranteedPrizePoolSource = 'creator' | 'platform_promo';
 
 export interface CreatePokerTournamentParams {
   creatorAddress: string;
   name: string;
   buyInAmount: bigint;
+  /** Required when buyInAmount is 0: MORBIUS (wei) debited at create; becomes initial prize_pool. */
+  guaranteedPrizePool?: bigint;
+  /**
+   * When buy-in is 0: debit `creator` (default) or `platform_promo` wallet.
+   * `platform_promo` requires caller in ADMIN_WALLETS and POKER_PROMO_GUARANTEED_POOL_WALLET in env.
+   */
+  guaranteedPrizePoolSource?: GuaranteedPrizePoolSource;
   prizeDistributionType: string;
   config: PokerTournamentConfig;
   isPrivate?: boolean;
@@ -123,6 +136,21 @@ export class PokerTournamentService {
 
   private parseBigInt(value: unknown): bigint {
     return toBigIntSafe(value);
+  }
+
+  /** Who receives prize_pool on cancel / scheduled under-min (freeroll → funder or creator). */
+  private prizePoolRefundRecipient(tournament: {
+    buy_in_amount: unknown;
+    creator_address: unknown;
+    guaranteed_prize_funder_address?: unknown;
+  }): string | null {
+    const buyIn = this.parseBigInt(tournament.buy_in_amount);
+    const creatorRaw = tournament.creator_address as string | null | undefined;
+    const creator = creatorRaw ? this.normalizeAddress(creatorRaw) : null;
+    if (buyIn > 0n) return creator;
+    const funderRaw = tournament.guaranteed_prize_funder_address as string | null | undefined;
+    if (funderRaw) return this.normalizeAddress(funderRaw);
+    return creator;
   }
 
   // ---------------------------------------------------------------------------
@@ -170,6 +198,27 @@ export class PokerTournamentService {
     if (config.startingStack < 100) throw new Error('startingStack must be at least 100');
     if (!params.name?.trim()) throw new Error('Tournament name required');
 
+    const buyIn = params.buyInAmount;
+    if (buyIn < 0n) throw new Error('buyInAmount cannot be negative');
+    const guaranteed = params.guaranteedPrizePool ?? 0n;
+    if (buyIn === 0n) {
+      if (guaranteed <= 0n) {
+        throw new Error('guaranteedPrizePool is required and must be > 0 for freeroll (zero buy-in) poker tournaments');
+      }
+    } else if (guaranteed > 0n) {
+      throw new Error('guaranteedPrizePool is only allowed when buy-in is 0');
+    }
+
+    const poolSource: GuaranteedPrizePoolSource = params.guaranteedPrizePoolSource ?? 'creator';
+    if (buyIn > 0n && poolSource !== 'creator') {
+      throw new Error('guaranteedPrizePoolSource is only valid for zero buy-in tournaments');
+    }
+    if (buyIn === 0n && poolSource === 'platform_promo') {
+      if (!isAdminWallet(normalizedCreator)) {
+        throw new Error('Platform-funded freerolls require an admin wallet');
+      }
+    }
+
     let pinCode: string | null = null;
     if (params.isPrivate) {
       const custom = params.pinCode?.trim();
@@ -181,56 +230,118 @@ export class PokerTournamentService {
     }
 
     const prizePercentages = getPrizePercentagesForType(params.prizeDistributionType);
+    const initialPrizePool = buyIn === 0n ? guaranteed.toString() : '0';
 
-    const result = await this.pool.query(
-      `INSERT INTO tournaments (
+    let guaranteedPrizeFunderAddress: string | null = null;
+    let debitAddress: string | null = null;
+
+    if (buyIn === 0n) {
+      if (poolSource === 'platform_promo') {
+        const raw = process.env.POKER_PROMO_GUARANTEED_POOL_WALLET?.trim();
+        if (!raw || !/^0x[a-fA-F0-9]{40}$/.test(raw)) {
+          throw new Error('POKER_PROMO_GUARANTEED_POOL_WALLET is not configured (0x + 40 hex)');
+        }
+        debitAddress = this.normalizeAddress(raw);
+        guaranteedPrizeFunderAddress = debitAddress;
+      } else {
+        debitAddress = normalizedCreator;
+        guaranteedPrizeFunderAddress = null;
+      }
+    }
+
+    const client = await this.pool.connect();
+    try {
+      await client.query('BEGIN');
+
+      if (buyIn === 0n && debitAddress) {
+        const balRow = await client.query(
+          `SELECT balance FROM players WHERE LOWER(wallet_address) = LOWER($1) FOR UPDATE`,
+          [debitAddress]
+        );
+        if (balRow.rows.length === 0) {
+          throw new Error(
+            poolSource === 'platform_promo'
+              ? 'Promo wallet has no players row — create/fund POKER_PROMO_GUARANTEED_POOL_WALLET in players first'
+              : 'Creator player record not found — fund the creator wallet in players.balance first',
+          );
+        }
+        const bal = this.parseBigInt(balRow.rows[0].balance);
+        if (bal < guaranteed) {
+          throw new Error(
+            poolSource === 'platform_promo'
+              ? 'Insufficient promo balance to fund guaranteed prize pool'
+              : 'Insufficient balance to fund guaranteed prize pool',
+          );
+        }
+        await client.query(
+          `UPDATE players SET balance = balance - $1::NUMERIC WHERE LOWER(wallet_address) = LOWER($2)`,
+          [guaranteed.toString(), debitAddress]
+        );
+      }
+
+      const result = await client.query(
+        `INSERT INTO tournaments (
         name, creator_address, buy_in_amount, starting_chips, max_hands, min_players,
         max_players, rebuy_config, table_theme, is_private, pin_code,
-        prize_distribution_type, prize_percentages, prize_pool,
+        prize_distribution_type, prize_percentages, prize_pool, guaranteed_prize_funder_address,
         creator_fee_percent, platform_fee_percent, status,
         game_type, poker_config, scheduled_start_at
       ) VALUES (
         $1, $2, $3::NUMERIC, $4, 999, $5,
         $6, $7::JSONB, $8::JSONB, $9, $10,
-        $11, $12::JSONB, '0',
+        $11, $12::JSONB, $13::NUMERIC, $14,
         2, 3, 'registration',
-        'poker', $13::JSONB, $14
+        'poker', $15::JSONB, $16
       ) RETURNING id`,
-      [
-        params.name.trim(),
-        normalizedCreator,
-        params.buyInAmount.toString(),
-        config.startingStack,
-        config.minPlayers,
-        config.maxPlayers,
-        JSON.stringify({ enabled: false, maxRebuys: 0 }),
-        JSON.stringify({ kind: 'image', id: 'BigRich' }),
-        params.isPrivate ?? false,
-        pinCode,
-        params.prizeDistributionType,
-        JSON.stringify(prizePercentages),
-        JSON.stringify(config),
-        params.scheduledStartAt ?? null,
-      ]
-    );
-
-    const tournamentId = result.rows[0].id;
-
-    // If a future start time was provided, queue the scheduled event for FreerollSchedulerService
-    if (params.scheduledStartAt && params.scheduledStartAt > new Date()) {
-      await this.pool.query(
-        `INSERT INTO tournament_scheduled_events (tournament_id, event_type, scheduled_at, status)
-         VALUES ($1, 'poker_start', $2, 'pending')`,
-        [tournamentId, params.scheduledStartAt.toISOString()]
+        [
+          params.name.trim(),
+          normalizedCreator,
+          buyIn.toString(),
+          config.startingStack,
+          config.minPlayers,
+          config.maxPlayers,
+          JSON.stringify({ enabled: false, maxRebuys: 0 }),
+          JSON.stringify({ kind: 'image', id: 'BigRich' }),
+          params.isPrivate ?? false,
+          pinCode,
+          params.prizeDistributionType,
+          JSON.stringify(prizePercentages),
+          initialPrizePool,
+          guaranteedPrizeFunderAddress,
+          JSON.stringify(config),
+          params.scheduledStartAt ?? null,
+        ]
       );
+
+      const tournamentId = result.rows[0].id;
+
+      if (params.scheduledStartAt && params.scheduledStartAt > new Date()) {
+        await client.query(
+          `INSERT INTO tournament_scheduled_events (tournament_id, event_type, scheduled_at, status)
+         VALUES ($1, 'poker_start', $2, 'pending')`,
+          [tournamentId, params.scheduledStartAt.toISOString()]
+        );
+      }
+
+      await client.query('COMMIT');
+
+      logger.info('Poker tournament created', {
+        tournamentId,
+        name: params.name,
+        creator: normalizedCreator,
+        scheduledStartAt: params.scheduledStartAt ?? 'SNG (auto-start)',
+        buyIn: buyIn.toString(),
+        guaranteedPrizePool: buyIn === 0n ? guaranteed.toString() : undefined,
+        guaranteedPrizePoolSource: buyIn === 0n ? poolSource : undefined,
+      });
+
+      return { tournamentId };
+    } catch (err) {
+      await client.query('ROLLBACK');
+      throw err;
+    } finally {
+      client.release();
     }
-
-    logger.info('Poker tournament created', {
-      tournamentId, name: params.name, creator: normalizedCreator,
-      scheduledStartAt: params.scheduledStartAt ?? 'SNG (auto-start)',
-    });
-
-    return { tournamentId };
   }
 
   // ---------------------------------------------------------------------------
@@ -303,28 +414,29 @@ export class PokerTournamentService {
       const registered = Number(countRow.rows[0].c);
       if (registered >= config.maxPlayers) throw new Error('Tournament is full');
 
-      // Check player balance
+      const buyIn = this.parseBigInt(tournament.buy_in_amount);
+
       const balRow = await client.query(
         `SELECT balance FROM players WHERE LOWER(wallet_address) = LOWER($1) FOR UPDATE`,
         [normalized]
       );
       if (balRow.rows.length === 0) throw new Error('Player not found');
-      const balance = this.parseBigInt(balRow.rows[0].balance);
-      const buyIn = this.parseBigInt(tournament.buy_in_amount);
-      if (balance < buyIn) throw new Error(`Insufficient balance for buy-in`);
 
-      // Deduct buy-in
-      await client.query(
-        `UPDATE players SET balance = balance - $1::NUMERIC
+      if (buyIn > 0n) {
+        const balance = this.parseBigInt(balRow.rows[0].balance);
+        if (balance < buyIn) throw new Error(`Insufficient balance for buy-in`);
+
+        await client.query(
+          `UPDATE players SET balance = balance - $1::NUMERIC
          WHERE LOWER(wallet_address) = LOWER($2)`,
-        [buyIn.toString(), normalized]
-      );
+          [buyIn.toString(), normalized]
+        );
 
-      // Add to prize pool
-      await client.query(
-        `UPDATE tournaments SET prize_pool = prize_pool + $1::NUMERIC WHERE id = $2`,
-        [buyIn.toString(), tournamentId]
-      );
+        await client.query(
+          `UPDATE tournaments SET prize_pool = prize_pool + $1::NUMERIC WHERE id = $2`,
+          [buyIn.toString(), tournamentId]
+        );
+      }
 
       // Create entry
       const entryRow = await client.query(
@@ -342,7 +454,7 @@ export class PokerTournamentService {
 
       if (shouldAutoStart) {
         await client.query(
-          `UPDATE tournaments SET status = 'active' WHERE id = $1`,
+          `UPDATE tournaments SET status = 'active', activated_at = COALESCE(activated_at, NOW()) WHERE id = $1`,
           [tournamentId]
         );
       }
@@ -366,6 +478,95 @@ export class PokerTournamentService {
   }
 
   // ---------------------------------------------------------------------------
+  // Scheduled start (min players, refunds)
+  // ---------------------------------------------------------------------------
+
+  /**
+   * Called by FreerollSchedulerService when scheduled_start_at elapses.
+   * Cancels + refunds if below minPlayers; otherwise activates (status must become active for sync + payouts).
+   */
+  async startScheduledPokerTournament(tournamentId: string): Promise<void> {
+    const client = await this.pool.connect();
+    try {
+      await client.query('BEGIN');
+      const tRow = await client.query(
+        `SELECT * FROM tournaments WHERE id = $1 AND game_type = 'poker' FOR UPDATE`,
+        [tournamentId]
+      );
+      if (tRow.rows.length === 0) {
+        await client.query('ROLLBACK');
+        return;
+      }
+      const tournament = tRow.rows[0];
+      if (tournament.status !== 'registration') {
+        await client.query('COMMIT');
+        return;
+      }
+
+      const config = this.parsePokerConfig(tournament.poker_config);
+      const countRow = await client.query(
+        `SELECT COUNT(*) AS c FROM tournament_entries
+         WHERE tournament_id = $1 AND status NOT IN ('busted','completed')`,
+        [tournamentId]
+      );
+      const registered = Number(countRow.rows[0].c);
+
+      if (registered < config.minPlayers) {
+        const buyIn = this.parseBigInt(tournament.buy_in_amount);
+        const entries = await client.query(
+          `SELECT id, player_address FROM tournament_entries
+           WHERE tournament_id = $1 AND status = 'playing'`,
+          [tournamentId]
+        );
+        for (const entry of entries.rows) {
+          if (buyIn > 0n) {
+            await client.query(
+              `UPDATE players SET balance = balance + $1::NUMERIC WHERE LOWER(wallet_address) = LOWER($2)`,
+              [buyIn.toString(), entry.player_address]
+            );
+          }
+          await client.query(
+            `UPDATE tournament_entries SET status = 'busted', finished_at = NOW() WHERE id = $1`,
+            [entry.id]
+          );
+        }
+        const poolRefund = this.parseBigInt(tournament.prize_pool);
+        const refundTo = this.prizePoolRefundRecipient(tournament);
+        if (poolRefund > 0n && refundTo) {
+          await client.query(
+            `UPDATE players SET balance = balance + $1::NUMERIC WHERE LOWER(wallet_address) = LOWER($2)`,
+            [poolRefund.toString(), refundTo]
+          );
+        }
+        await client.query(
+          `UPDATE tournaments SET status = 'cancelled', ended_at = NOW(), prize_pool = 0 WHERE id = $1`,
+          [tournamentId]
+        );
+        await client.query('COMMIT');
+        logger.info('Scheduled poker tournament cancelled (insufficient players)', {
+          tournamentId,
+          registered,
+          minPlayers: config.minPlayers,
+        });
+        this.broadcast(`poker_tournament:${tournamentId}`, 'poker_tournament_cancelled', {
+          tournamentId,
+          reason: 'insufficient_players',
+        });
+        return;
+      }
+
+      await client.query('COMMIT');
+    } catch (err) {
+      await client.query('ROLLBACK');
+      throw err;
+    } finally {
+      client.release();
+    }
+
+    await this.activateTournament(tournamentId);
+  }
+
+  // ---------------------------------------------------------------------------
   // Activate
   // ---------------------------------------------------------------------------
 
@@ -375,13 +576,42 @@ export class PokerTournamentService {
    * starts the first hand.
    */
   async activateTournament(tournamentId: string): Promise<string> {
+    const existing = await this.pool.query(
+      `SELECT id FROM poker_tables WHERE tournament_id = $1 LIMIT 1`,
+      [tournamentId]
+    );
+    if (existing.rows.length > 0) {
+      return existing.rows[0].id as string;
+    }
+
     const tRow = await this.pool.query(
-      `SELECT t.*, t.poker_config FROM tournaments t WHERE t.id = $1`,
+      `SELECT t.*, t.poker_config FROM tournaments t WHERE t.id = $1 AND t.game_type = 'poker'`,
       [tournamentId]
     );
     if (tRow.rows.length === 0) throw new Error('Tournament not found');
     const tournament = tRow.rows[0];
+    if (tournament.status === 'cancelled' || tournament.status === 'completed') {
+      throw new Error(`Cannot activate tournament in status: ${tournament.status}`);
+    }
+
     const config = this.parsePokerConfig(tournament.poker_config);
+
+    const entries = await this.pool.query(
+      `SELECT id, player_address FROM tournament_entries
+       WHERE tournament_id = $1 AND status = 'playing'
+       ORDER BY bought_in_at ASC`,
+      [tournamentId]
+    );
+    if (entries.rows.length === 0) {
+      throw new Error('Cannot activate poker tournament with no players');
+    }
+
+    await this.pool.query(
+      `UPDATE tournaments
+       SET status = 'active', activated_at = COALESCE(activated_at, NOW())
+       WHERE id = $1 AND status IN ('registration', 'active')`,
+      [tournamentId]
+    );
 
     const firstLevel = this.computeBlindLevel(config.blindSchedule, 1);
 
@@ -398,14 +628,6 @@ export class PokerTournamentService {
       [sbWei, bbWei, config.maxPlayers, tournamentId]
     );
     const tableId = tableRow.rows[0].id;
-
-    // Get all registered entries (ordered by registration time for seat assignment)
-    const entries = await this.pool.query(
-      `SELECT id, player_address FROM tournament_entries
-       WHERE tournament_id = $1 AND status = 'playing'
-       ORDER BY bought_in_at ASC`,
-      [tournamentId]
-    );
 
     // Seat all players with virtual chips (scaled to wei)
     for (const entry of entries.rows) {
@@ -444,7 +666,8 @@ export class PokerTournamentService {
    * After each hand completes:
    * 1. Sync seat stacks → tournament_entries.chips_remaining
    * 2. Eliminate 0-chip players (mark busted, remove seat)
-   * 3. Advance blind level if needed
+   * 3. Advance blind level if needed (schedule), then multiply SB/BB by 2^k for k eliminations this hand,
+   *    then clamp SB/BB so nominal BB ≤ smallest eligible stack (≥2 chips), when applicable
    * 4. Complete tournament if ≤1 active player remains
    */
   async syncAfterHand(tableId: string, handNumber: number): Promise<void> {
@@ -536,26 +759,120 @@ export class PokerTournamentService {
       });
     }
 
-    // Advance blind level if needed
-    // Stored blinds are in wei (chip * 10^18); convert back to chip units for level comparison
+    // Blinds: (1) apply schedule for this hand number, (2) multiply by 2 per elimination this hand
     const newLevel = this.computeBlindLevel(config.blindSchedule, handNumber);
-    const currentSBChips = Math.round(Number(toBigIntSafe(tableRow.rows[0].small_blind) / CHIP_SCALE));
-    if (newLevel.smallBlind !== currentSBChips) {
+    const openingSBChips = Math.round(Number(toBigIntSafe(tableRow.rows[0].small_blind) / CHIP_SCALE));
+    let blindsUpdated = false;
+
+    if (newLevel.smallBlind !== openingSBChips) {
       const newSBWei = (BigInt(newLevel.smallBlind) * CHIP_SCALE).toString();
-      const newBBWei = (BigInt(newLevel.bigBlind)   * CHIP_SCALE).toString();
+      const newBBWei = (BigInt(newLevel.bigBlind) * CHIP_SCALE).toString();
       await this.pool.query(
         `UPDATE poker_tables SET small_blind = $2::NUMERIC, big_blind = $3::NUMERIC WHERE id = $1`,
         [tableId, newSBWei, newBBWei]
       );
-      this.broadcast(`poker_tournament:${tournamentId}`, 'poker_tournament_blind_level_up', {
-        tournamentId,
-        tableId,
-        newLevel: newLevel.level,
-        smallBlind: newLevel.smallBlind,
-        bigBlind: newLevel.bigBlind,
-        handNumber,
-      });
-      logger.info('Poker tournament blind level up', { tournamentId, tableId, newLevel: newLevel.level });
+      blindsUpdated = true;
+      logger.info('Poker tournament schedule blind level applied', { tournamentId, tableId, newLevel: newLevel.level });
+    }
+
+    const elimCount = bustedAddresses.length;
+    if (elimCount > 0) {
+      const tblBlinds = await this.pool.query(
+        `SELECT small_blind, big_blind FROM poker_tables WHERE id = $1`,
+        [tableId]
+      );
+      if (tblBlinds.rows.length > 0) {
+        const sbWei = toBigIntSafe(tblBlinds.rows[0].small_blind);
+        const bbWei = toBigIntSafe(tblBlinds.rows[0].big_blind);
+        if (sbWei > 0n && bbWei > 0n) {
+          const mult = 1n << BigInt(elimCount);
+          const doubledSB = (sbWei * mult).toString();
+          const doubledBB = (bbWei * mult).toString();
+          await this.pool.query(
+            `UPDATE poker_tables SET small_blind = $2::NUMERIC, big_blind = $3::NUMERIC WHERE id = $1`,
+            [tableId, doubledSB, doubledBB]
+          );
+          blindsUpdated = true;
+          logger.info('Poker tournament blinds multiplied after elimination(s)', {
+            tournamentId,
+            tableId,
+            handNumber,
+            eliminations: elimCount,
+            multiplier: mult.toString(),
+          });
+        }
+      }
+    }
+
+    // UX clamp (optional product rule): nominal BB must not exceed the smallest eligible stack.
+    // Runs after schedule + elimination multiplier. Skips when min stack < 2 chips (cannot keep SB < BB in chip units).
+    // Eligible seats: in the hand or active, not sitting_out — matches players still on the table.
+    const minStackRes = await this.pool.query(
+      `SELECT MIN(stack::numeric) AS min_stack
+       FROM poker_seats
+       WHERE table_id = $1
+         AND status IN ('active', 'in_hand')
+         AND stack::numeric > 0`,
+      [tableId]
+    );
+    const minStackRaw = minStackRes.rows[0]?.min_stack;
+    const minStackWei =
+      minStackRaw !== null && minStackRaw !== undefined ? toBigIntSafe(minStackRaw) : null;
+
+    if (minStackWei !== null && minStackWei >= 2n * CHIP_SCALE) {
+      const curBlinds = await this.pool.query(
+        `SELECT small_blind, big_blind FROM poker_tables WHERE id = $1`,
+        [tableId]
+      );
+      if (curBlinds.rows.length > 0) {
+        const sbWeiBefore = toBigIntSafe(curBlinds.rows[0].small_blind);
+        const bbWeiBefore = toBigIntSafe(curBlinds.rows[0].big_blind);
+        let bbWei = bbWeiBefore;
+        let sbWei = sbWeiBefore;
+        if (sbWei > 0n && bbWei > 0n && bbWei > minStackWei) {
+          const minChips = minStackWei / CHIP_SCALE;
+          let bbChips = bbWei / CHIP_SCALE;
+          const origSbChips = sbWei / CHIP_SCALE;
+          bbChips = bbChips < minChips ? bbChips : minChips;
+          let sbChips = origSbChips < bbChips - 1n ? origSbChips : bbChips - 1n;
+          if (sbChips < 1n) sbChips = 1n;
+          if (sbChips >= bbChips) sbChips = bbChips - 1n;
+          sbWei = sbChips * CHIP_SCALE;
+          bbWei = bbChips * CHIP_SCALE;
+          if (sbWei !== sbWeiBefore || bbWei !== bbWeiBefore) {
+            await this.pool.query(
+              `UPDATE poker_tables SET small_blind = $2::NUMERIC, big_blind = $3::NUMERIC WHERE id = $1`,
+              [tableId, sbWei.toString(), bbWei.toString()]
+            );
+            blindsUpdated = true;
+            logger.info('Poker tournament blinds clamped to smallest stack', {
+              tournamentId,
+              tableId,
+              handNumber,
+              minStackWei: minStackWei.toString(),
+            });
+          }
+        }
+      }
+    }
+
+    if (blindsUpdated) {
+      const finalRow = await this.pool.query(
+        `SELECT small_blind, big_blind FROM poker_tables WHERE id = $1`,
+        [tableId]
+      );
+      if (finalRow.rows.length > 0) {
+        const smallBlindChips = Number(toBigIntSafe(finalRow.rows[0].small_blind) / CHIP_SCALE);
+        const bigBlindChips = Number(toBigIntSafe(finalRow.rows[0].big_blind) / CHIP_SCALE);
+        this.broadcast(`poker_tournament:${tournamentId}`, 'poker_tournament_blind_level_up', {
+          tournamentId,
+          tableId,
+          newLevel: newLevel.level,
+          smallBlind: smallBlindChips,
+          bigBlind: bigBlindChips,
+          handNumber,
+        });
+      }
     }
 
     // Check if tournament is over (≤1 active player)
@@ -575,30 +892,20 @@ export class PokerTournamentService {
   // ---------------------------------------------------------------------------
 
   async completeTournament(tournamentId: string, tableId?: string): Promise<void> {
-    // Find the winner (last remaining 'playing' entry)
-    const winnerRow = await this.pool.query(
-      `SELECT id, player_address FROM tournament_entries
-       WHERE tournament_id = $1 AND status = 'playing'
-       LIMIT 1`,
-      [tournamentId]
-    );
-
-    if (winnerRow.rows.length > 0) {
-      const winnerId = winnerRow.rows[0].id;
-      await this.pool.query(
-        `UPDATE tournament_entries
-         SET status = 'completed', finished_at = NOW(), final_rank = 1
-         WHERE id = $1`,
-        [winnerId]
-      );
-      await this.pool.query(
-        `UPDATE poker_tournament_seats SET final_rank = 1
-         WHERE entry_id = $1`,
-        [winnerId]
-      );
+    const statusRow = await this.pool.query(`SELECT status FROM tournaments WHERE id = $1`, [tournamentId]);
+    if (statusRow.rows.length === 0) return;
+    if (statusRow.rows[0].status === 'completed') {
+      const resolvedTableId = tableId ?? await this.getTableIdForTournament(tournamentId);
+      if (resolvedTableId) {
+        try {
+          await this.pokerGameService.deleteTableTournament(resolvedTableId);
+        } catch (err) {
+          logger.warn('Failed to delete tournament poker table (already completed)', { resolvedTableId, err });
+        }
+      }
+      return;
     }
 
-    // Distribute prizes (uses existing tournament service logic)
     let prizeDistributions: { player_address: string; final_rank: number; prize_amount: bigint }[] = [];
     try {
       const results = await this.tournamentService.distributePrizes(tournamentId);
@@ -608,10 +915,25 @@ export class PokerTournamentService {
         prize_amount: r.prize_amount,
       }));
     } catch (err) {
-      logger.error('Poker tournament prize distribution failed', { tournamentId, err });
+      logger.error('Poker tournament prize distribution failed — table kept for retry', { tournamentId, err });
+      throw err;
     }
 
-    // Clean up the poker table
+    await this.pool.query(
+      `UPDATE tournament_entries
+       SET status = 'completed', finished_at = COALESCE(finished_at, NOW())
+       WHERE tournament_id = $1 AND status = 'playing'`,
+      [tournamentId]
+    );
+
+    await this.pool.query(
+      `UPDATE poker_tournament_seats pts
+       SET final_rank = te.final_rank
+       FROM tournament_entries te
+       WHERE pts.entry_id = te.id AND te.tournament_id = $1`,
+      [tournamentId]
+    );
+
     const resolvedTableId = tableId ?? await this.getTableIdForTournament(tournamentId);
     if (resolvedTableId) {
       try {
@@ -641,7 +963,8 @@ export class PokerTournamentService {
     const normalized = this.normalizeAddress(callerAddress);
 
     const tRow = await this.pool.query(
-      `SELECT creator_address, status, buy_in_amount FROM tournaments WHERE id = $1 AND game_type = 'poker'`,
+      `SELECT creator_address, status, buy_in_amount, prize_pool, guaranteed_prize_funder_address
+       FROM tournaments WHERE id = $1 AND game_type = 'poker'`,
       [tournamentId]
     );
     if (tRow.rows.length === 0) throw new Error('Poker tournament not found');
@@ -650,6 +973,7 @@ export class PokerTournamentService {
     if (t.creator_address?.toLowerCase() !== normalized) throw new Error('Only the creator can cancel this tournament');
 
     const buyIn = this.parseBigInt(t.buy_in_amount);
+    const prizePoolRefund = this.parseBigInt(t.prize_pool);
 
     // Refund all entries
     const entries = await this.pool.query(
@@ -659,13 +983,23 @@ export class PokerTournamentService {
     );
 
     for (const entry of entries.rows) {
-      await this.pool.query(
-        `UPDATE players SET balance = balance + $1::NUMERIC WHERE LOWER(wallet_address) = LOWER($2)`,
-        [buyIn.toString(), entry.player_address]
-      );
+      if (buyIn > 0n) {
+        await this.pool.query(
+          `UPDATE players SET balance = balance + $1::NUMERIC WHERE LOWER(wallet_address) = LOWER($2)`,
+          [buyIn.toString(), entry.player_address]
+        );
+      }
       await this.pool.query(
         `UPDATE tournament_entries SET status = 'busted', finished_at = NOW() WHERE id = $1`,
         [entry.id]
+      );
+    }
+
+    const refundTo = this.prizePoolRefundRecipient(t);
+    if (prizePoolRefund > 0n && refundTo) {
+      await this.pool.query(
+        `UPDATE players SET balance = balance + $1::NUMERIC WHERE LOWER(wallet_address) = LOWER($2)`,
+        [prizePoolRefund.toString(), refundTo]
       );
     }
 
@@ -716,6 +1050,7 @@ export class PokerTournamentService {
       prizeDistributionType: r.prize_distribution_type ?? 'winner_takes_all',
       scheduledStartAt:      r.scheduled_start_at ? new Date(r.scheduled_start_at).toISOString() : null,
       isRegistered:          r.is_registered === true,
+      isPrivate:             Boolean(r.is_private),
     }));
   }
 
@@ -735,11 +1070,20 @@ export class PokerTournamentService {
     const currentLevel = this.computeBlindLevel(config.blindSchedule, handNumber);
 
     const entries = await this.pool.query(
-      `SELECT player_address, chips_remaining, status, final_rank, prize_won
+      `SELECT id, player_address, chips_remaining, status, final_rank, prize_won
        FROM tournament_entries WHERE tournament_id = $1
        ORDER BY final_rank ASC NULLS LAST, chips_remaining DESC`,
       [tournamentId]
     );
+
+    const sbRaw = t.small_blind != null ? toBigIntSafe(t.small_blind) : null;
+    const bbRaw = t.big_blind != null ? toBigIntSafe(t.big_blind) : null;
+    const smallBlindChips = sbRaw != null && sbRaw > 0n
+      ? Number(sbRaw / CHIP_SCALE)
+      : currentLevel.smallBlind;
+    const bigBlindChips = bbRaw != null && bbRaw > 0n
+      ? Number(bbRaw / CHIP_SCALE)
+      : currentLevel.bigBlind;
 
     return {
       tournamentId,
@@ -747,12 +1091,12 @@ export class PokerTournamentService {
       status:                t.status,
       tableId:               t.table_id ?? null,
       blindLevel:            currentLevel.level,
-      smallBlind:            Number(t.small_blind ?? currentLevel.smallBlind),
-      bigBlind:              Number(t.big_blind   ?? currentLevel.bigBlind),
+      smallBlind:            smallBlindChips,
+      bigBlind:              bigBlindChips,
       handNumber,
       players:               entries.rows.map((e) => ({
         playerAddress:   e.player_address,
-        entryId:         '', // populated if needed
+        entryId:         e.id as string,
         chipsRemaining:  Number(e.chips_remaining ?? 0),
         status:          e.status,
         finalRank:       e.final_rank ?? null,
@@ -761,6 +1105,13 @@ export class PokerTournamentService {
       prizePool:           t.prize_pool?.toString() ?? '0',
       buyInAmount:         t.buy_in_amount?.toString() ?? '0',
       prizeDistributionType: t.prize_distribution_type ?? 'winner_takes_all',
+      /** For client HUD: schedule + meta (actual posted blinds may differ after elim multiplier / clamp). */
+      pokerConfig:         {
+        blindSchedule: config.blindSchedule,
+        startingStack: config.startingStack,
+        minPlayers:    config.minPlayers,
+        maxPlayers:    config.maxPlayers,
+      },
     };
   }
 
@@ -802,16 +1153,21 @@ export class PokerTournamentService {
 }
 
 // ---------------------------------------------------------------------------
-// Prize percentage helpers (mirrors tournament.service.ts)
+// Prize percentage helpers — must match calculate_tournament_prizes (e.g. migration 033)
 // ---------------------------------------------------------------------------
 
 function getPrizePercentagesForType(type: string): number[] {
   switch (type) {
-    case 'winner_takes_all': return [100];
-    case 'top_3':            return [60, 30, 10];
-    case 'top_3_steep':      return [70, 20, 10];
-    case 'top_5':            return [50, 25, 15, 6, 4];
-    case 'top_10':           return [56, 20, 10, 2, 2, 2, 2, 2, 2, 2];
-    default:                 return [100];
+    case 'winner_takes_all':
+      return [100];
+    case 'top_3':
+    case 'top_3_steep':
+      return [50, 30, 20];
+    case 'top_5':
+      return [40, 25, 15, 12, 8];
+    case 'top_10':
+    case 'custom':
+    default:
+      return [56, 20, 10, 2, 2, 2, 2, 2, 2, 2];
   }
 }

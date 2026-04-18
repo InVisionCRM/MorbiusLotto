@@ -253,7 +253,8 @@ class PokerGameService {
          WHERE LOWER(s.player_address) = LOWER($1)
            AND (t.tournament_mode IS NULL OR t.tournament_mode = FALSE)`, [normalized]);
             if (otherSeat.rows.length > 0) {
-                throw new Error('Already seated at another cash table. Leave that table first.');
+                const otherTableId = String(otherSeat.rows[0].table_id ?? '');
+                throw new Error(`Already seated at another cash table. Leave that table first. other_table_id=${otherTableId}`);
             }
             const tableResult = await client.query('SELECT id, small_blind, big_blind, max_seats, pin_code, tournament_mode FROM poker_tables WHERE id = $1', [tableId]);
             if (tableResult.rows.length === 0)
@@ -571,7 +572,7 @@ class PokerGameService {
             const street = h.street;
             // Fold/dealer/blind flags
             const foldResult = await pool.query(`SELECT player_address FROM poker_hand_actions WHERE hand_id = $1 AND action = 'fold'`, [handId]);
-            const foldedSet = new Set(foldResult.rows.map((r) => r.player_address));
+            const foldedSet = new Set(foldResult.rows.map((r) => this.normalizeAddress(r.player_address)));
             // Use live table for position flags if available, otherwise use DB
             let dealerPos = buttonPosition;
             let sbPos = null;
@@ -678,7 +679,7 @@ class PokerGameService {
                 seat.isSmallBlind = pos === sbPos;
                 seat.isBigBlind = pos === bbPos;
                 seat.isActing = actingPosition === pos;
-                seat.folded = foldedSet.has(seat.playerAddress);
+                seat.folded = foldedSet.has(this.normalizeAddress(seat.playerAddress));
                 // Live bet override if not done above
                 if (liveTable) {
                     const livePlayer = liveTable.players[pos];
@@ -716,19 +717,26 @@ class PokerGameService {
                 const showdownHands = {};
                 for (const row of allHoleResult.rows) {
                     const cards = Array.isArray(row.cards) ? row.cards : JSON.parse(row.cards ?? '[]');
-                    showdownHands[row.player_address] = cards;
+                    showdownHands[this.normalizeAddress(row.player_address)] = cards;
                 }
                 currentHand.showdownHands = showdownHands;
                 if (h.result) {
                     try {
                         const parsed = typeof h.result === 'string' ? JSON.parse(h.result) : h.result;
                         if (parsed?.winners?.length) {
-                            currentHand.winners = parsed.winners.map((w) => ({
-                                address: (w.address || '').toLowerCase(),
+                            const seatedAddresses = new Set(seats
+                                .filter((seat) => !!seat.playerAddress)
+                                .map((seat) => this.normalizeAddress(seat.playerAddress)));
+                            currentHand.winners = parsed.winners
+                                .map((w) => ({
+                                address: this.normalizeAddress(w.address || ''),
                                 amount: String(w.amount ?? '0'),
                                 handName: w.handName,
                                 winningCardIndices: Array.isArray(w.winningCardIndices) ? w.winningCardIndices : undefined,
-                            }));
+                            }))
+                                .filter((winner) => !!winner.address)
+                                .filter((winner) => seatedAddresses.has(winner.address))
+                                .filter((winner) => !foldedSet.has(winner.address));
                         }
                     }
                     catch {
@@ -759,6 +767,67 @@ class PokerGameService {
         await pool.query('UPDATE poker_tables SET table_logo = $2, table_logo_opacity = $3 WHERE id = $1', [tableId, logo, clampedOpacity]);
     }
     // ---------------------------------------------------------------------------
+    // setSitOut / setSitBack — voluntary sit-out for cash games
+    // ---------------------------------------------------------------------------
+    async setSitOut(tableId, playerAddress) {
+        const pool = this.getPool();
+        const normalized = playerAddress.toLowerCase();
+        const result = await pool.query(`UPDATE poker_seats
+       SET status = 'sitting_out', sit_out_since = NOW(), consecutive_timeouts = 0
+       WHERE table_id = $1 AND player_address = $2
+       RETURNING player_address`, [tableId, normalized]);
+        if (result.rows.length === 0)
+            throw new Error('Seat not found');
+        this.notifyCallback?.(`poker:table:${tableId}`, 'poker_player_sitting_out', {
+            tableId,
+            playerAddress: normalized,
+            reason: 'voluntary',
+        });
+        logger_1.logger.info('Player voluntarily sitting out', { tableId, player: normalized });
+        await this.broadcastState(tableId);
+        return this.getTableState(tableId, normalized);
+    }
+    async setSitBack(tableId, playerAddress) {
+        const pool = this.getPool();
+        const normalized = playerAddress.toLowerCase();
+        const result = await pool.query(`UPDATE poker_seats
+       SET status = 'active', sit_out_since = NULL, consecutive_timeouts = 0
+       WHERE table_id = $1 AND player_address = $2 AND status = 'sitting_out'
+       RETURNING player_address`, [tableId, normalized]);
+        if (result.rows.length === 0)
+            throw new Error('Seat not found or not sitting out');
+        logger_1.logger.info('Player sitting back in', { tableId, player: normalized });
+        await this.broadcastState(tableId);
+        return this.getTableState(tableId, normalized);
+    }
+    /** Kick players who have been sitting out for >= 15 minutes (cash games only). */
+    async kickStaleSitOuts() {
+        const pool = this.getPool();
+        const stale = await pool.query(`SELECT ps.table_id, ps.player_address
+       FROM poker_seats ps
+       JOIN poker_tables pt ON pt.id = ps.table_id
+       WHERE ps.status = 'sitting_out'
+         AND ps.sit_out_since IS NOT NULL
+         AND ps.sit_out_since < NOW() - INTERVAL '15 minutes'
+         AND pt.tournament_mode = false`);
+        for (const row of stale.rows) {
+            try {
+                await this.withTableLock(row.table_id, async () => {
+                    await this._leaveTable(row.table_id, row.player_address);
+                    this.notifyCallback?.(`poker:table:${row.table_id}`, 'poker_player_kicked', {
+                        tableId: row.table_id,
+                        playerAddress: row.player_address,
+                        reason: 'sit_out_timeout',
+                    });
+                    logger_1.logger.info('Sit-out timeout kick', { tableId: row.table_id, player: row.player_address });
+                });
+            }
+            catch (err) {
+                logger_1.logger.error('Error kicking stale sit-out', { tableId: row.table_id, player: row.player_address, error: err });
+            }
+        }
+    }
+    // ---------------------------------------------------------------------------
     // startHand
     // ---------------------------------------------------------------------------
     async startHand(tableId) {
@@ -785,7 +854,8 @@ class PokerGameService {
             sb = (0, poker_chip_scale_1.weiToEngineChips)(sbWei);
             bb = (0, poker_chip_scale_1.weiToEngineChips)(bbWei);
         }
-        const seatsResult = await pool.query('SELECT position, player_address, stack FROM poker_seats WHERE table_id = $1 ORDER BY position', [tableId]);
+        const seatsResult = await pool.query(`SELECT position, player_address, stack FROM poker_seats
+       WHERE table_id = $1 AND status != 'sitting_out' ORDER BY position`, [tableId]);
         const withStack = seatsResult.rows.filter((r) => BigInt(r.stack ?? '0') > 0n);
         if (withStack.length < 2)
             return null;
@@ -943,11 +1013,17 @@ class PokerGameService {
                 actor.foldAction();
                 break;
             case 'check':
+                if ((table.currentBet ?? 0) > actor.bet) {
+                    throw new Error('Cannot check when facing a bet');
+                }
                 actor.checkAction();
                 break;
             case 'call': {
                 // Capture the call amount BEFORE callAction (which zeroes the difference)
                 const callChips = (table.currentBet ?? 0) - actor.bet;
+                if (callChips <= 0) {
+                    throw new Error('Nothing to call');
+                }
                 actor.callAction();
                 if (callChips > 0) {
                     actionAmountDb = scaling.tournament
@@ -1173,7 +1249,7 @@ class PokerGameService {
        FROM poker_hands h
        WHERE h.completed_at IS NULL
          AND h.acting_position IS NOT NULL
-         AND h.turn_started_at < NOW() - INTERVAL '30 seconds'`);
+         AND h.turn_started_at < NOW() - INTERVAL '60 seconds'`);
         const folded = [];
         for (const row of timedOut.rows) {
             try {
@@ -1187,13 +1263,20 @@ class PokerGameService {
                     const actingAddr = actor.id;
                     // Capture street before
                     const streetBefore = chevtekStreetToPoker(table.currentRound, !!table.winners);
-                    // Fold
-                    actor.foldAction();
-                    // Record fold action
+                    // Auto-check when not facing a bet; auto-fold when facing a bet
+                    const canCheck = !table.currentBet || actor.bet >= table.currentBet;
+                    const timeoutAction = canCheck ? 'check' : 'fold';
+                    if (canCheck) {
+                        actor.checkAction();
+                    }
+                    else {
+                        actor.foldAction();
+                    }
+                    // Record the timeout action
                     const orderResult = await pool.query('SELECT COALESCE(MAX("order"), 0) + 1 AS next_order FROM poker_hand_actions WHERE hand_id = $1', [row.hand_id]);
                     const nextOrder = Number(orderResult.rows[0].next_order);
                     await pool.query(`INSERT INTO poker_hand_actions (hand_id, player_address, street, action, amount, "order")
-             VALUES ($1, $2, $3, 'fold', 0, $4)`, [row.hand_id, actingAddr, streetBefore, nextOrder]);
+             VALUES ($1, $2, $3, $4, 0, $5)`, [row.hand_id, actingAddr, streetBefore, timeoutAction, nextOrder]);
                     if (!table.currentRound && table.winners) {
                         await this.persistShowdown(pool, row.table_id, row.hand_id, table);
                         await this.broadcastState(row.table_id);
@@ -1215,7 +1298,7 @@ class PokerGameService {
                         await this.broadcastState(row.table_id);
                     }
                     folded.push(actingAddr);
-                    logger_1.logger.info('Auto-folded timed-out turn', { handId: row.hand_id, player: actingAddr });
+                    logger_1.logger.info(`Auto-${timeoutAction} timed-out turn`, { handId: row.hand_id, player: actingAddr, action: timeoutAction });
                     // Track consecutive timeouts and auto-kick/sit-out AFK players
                     try {
                         const tableInfoResult = await pool.query('SELECT tournament_mode FROM poker_tables WHERE id = $1', [row.table_id]);

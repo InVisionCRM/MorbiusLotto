@@ -2,14 +2,14 @@
 /**
  * Poker Bot Script
  *
- * Spawns 1-5 AI bot opponents that join a poker table and play automatically.
+ * Spawns 1-10 AI bot opponents that join a poker table and play automatically.
  * Bots use a simple strategy: tight-aggressive preflop, semi-random postflop.
  *
  * Usage (from server/ directory):
  *   npx ts-node src/scripts/poker-bot.ts [tableId] [numBots]
  *
  * If tableId is omitted, the script lists tables and uses the first with empty seats,
- * or creates a new table. numBots is 1-5 (default 2).
+ * or creates a new table. numBots is 1-10 (default 2).
  *
  * Or via npm script:
  *   npm run poker:bot -- [tableId] [numBots]
@@ -18,6 +18,8 @@
  *   NEXT_PUBLIC_WEBSOCKET_URL or WS_URL - WebSocket URL
  *   DATABASE_URL - PostgreSQL connection string (to give bots balance)
  *   POKER_BOT_BUY_IN - Buy-in amount in human chips (default: 1000)
+ *   POKER_BOT_ADDRESSES - Comma-separated bot wallet addresses (preferred in production)
+ *   CYPRESS_POKER_TEST_PLAYERS / POKER_TEST_PLAYERS - fallback wallet list
  */
 var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
@@ -30,22 +32,56 @@ dotenv_1.default.config({ path: path_1.default.join(__dirname, '../../.env') });
 dotenv_1.default.config();
 const ws_1 = __importDefault(require("ws"));
 const pg_1 = require("pg");
+const cosmetics_catalog_1 = require("../lib/cosmetics-catalog");
 // --------------- Config ---------------
 const WS_URL = process.env.NEXT_PUBLIC_WEBSOCKET_URL ||
     process.env.WS_URL ||
     'ws://localhost:3001';
 const DATABASE_URL = process.env.DATABASE_URL;
-// Must be 42 chars (0x + 40 hex) to fit players.wallet_address VARCHAR(42)
-const BOT_ADDRESSES = [
-    '0xB07000000000000000000000000000000000de01',
-    '0xB07000000000000000000000000000000000de02',
-    '0xB07000000000000000000000000000000000de03',
-    '0xB07000000000000000000000000000000000de04',
-    '0xB07000000000000000000000000000000000de05',
+const ADDRESS_RE = /^0x[a-fA-F0-9]{40}$/;
+const MAX_BOTS = 10;
+// Default list mirrors Cypress poker real-backend players.
+const CYPRESS_DEFAULT_ADDRESSES = [
+    '0x2775dd8242c4f589536113475b7c80f42ab4a70a',
+    '0x70444750eedf1b2c9b777cbf096a5919a14895e5',
+    '0xEdEe8515897281CcF27999a121A90d76E3Cde016',
+    '0x41682815B05fE6b54a6C0f8813bB99423EE0309D',
+    '0x031E727436173278B92Dad7405fc94FBfc4A18a6',
+    '0x33cedDc21b78414b1a59ba70Ede0B27761FfA556',
+    '0x1b9894ddEf9c19b9a971FBE9fba85135B9348Db0',
+    '0x2D6f6a61cFDc7C7d000C9279bD7a743D277736bB',
+    '0x7aC342321a814c66A0cc38E997DBEC46b8dE8372',
+    '0xaA899ca4658C17B9fFa52490219540c9d49AA86f',
+    '0x8f6Dc8FD8A5115fdec3CCbE36BE6cf9B28635F2e',
+    '0xAfd3Cc199167B396be71911637fcb30bAF22cC67',
 ];
-const BUY_IN_HUMAN = process.env.POKER_BOT_BUY_IN || '1000';
-// Convert human-readable chips to wei (1 chip = 1e18 wei)
-const BUY_IN_WEI = BigInt(BUY_IN_HUMAN) * 10n ** 18n;
+function parseAddressCsv(input) {
+    if (!input)
+        return [];
+    return [...new Set(input
+            .split(',')
+            .map((a) => a.trim())
+            .filter(Boolean)
+            .filter((a) => ADDRESS_RE.test(a))
+            .map((a) => a.toLowerCase()))];
+}
+function getBotAddresses() {
+    const envPreferred = parseAddressCsv(process.env.POKER_BOT_ADDRESSES);
+    if (envPreferred.length > 0) {
+        return envPreferred;
+    }
+    const cypressFallback = parseAddressCsv(process.env.CYPRESS_POKER_TEST_PLAYERS);
+    const genericFallback = parseAddressCsv(process.env.POKER_TEST_PLAYERS);
+    const fallback = cypressFallback.length > 0 ? cypressFallback : genericFallback;
+    if (fallback.length > 0) {
+        return fallback;
+    }
+    return CYPRESS_DEFAULT_ADDRESSES.map((a) => a.toLowerCase());
+}
+const BOT_ADDRESSES = getBotAddresses();
+const POKER_CASH_MIN_BUY_IN_BB = 40;
+const POKER_CASH_MAX_BUY_IN_BB = 100;
+const DEFAULT_BUY_IN_BB = 80;
 // Bot thinking delay range (ms) — makes it feel more human
 const THINK_MIN_MS = 800;
 const THINK_MAX_MS = 2500;
@@ -78,14 +114,48 @@ function parseMessage(data) {
     console.error('[Bot] Message was not a JSON object | raw:', raw.slice(0, 200));
     throw new Error('Invalid JSON: expected object');
 }
+function formatError(err) {
+    if (err instanceof Error && err.message)
+        return err.message;
+    if (typeof err === 'string' && err.trim())
+        return err;
+    try {
+        const raw = JSON.stringify(err);
+        if (raw && raw !== '{}')
+            return raw;
+    }
+    catch {
+        // ignore
+    }
+    return String(err || 'Unknown error');
+}
 function createWsClient(address) {
     const url = WS_URL.replace(/^https/, 'wss').replace(/^http/, 'ws');
     const withAuth = `${url}${url.includes('?') ? '&' : '?'}address=${address.toLowerCase()}`;
     return new Promise((resolve, reject) => {
         const ws = new ws_1.default(withAuth);
-        const timeout = setTimeout(() => { ws.close(); reject(new Error('WS connect timeout')); }, 15000);
-        ws.on('open', () => { clearTimeout(timeout); resolve(ws); });
-        ws.on('error', (err) => { clearTimeout(timeout); reject(err); });
+        const timeout = setTimeout(() => {
+            ws.close();
+            reject(new Error('WS connect timeout'));
+        }, 15000);
+        const cleanup = () => {
+            clearTimeout(timeout);
+            ws.removeAllListeners('open');
+            ws.removeAllListeners('error');
+            ws.removeAllListeners('close');
+        };
+        ws.on('open', () => {
+            cleanup();
+            resolve(ws);
+        });
+        ws.on('error', (err) => {
+            cleanup();
+            reject(new Error(`WS connect error: ${formatError(err)}`));
+        });
+        ws.on('close', (code, reason) => {
+            cleanup();
+            reject(new Error(`WS closed before open (code=${code}, reason=${reason.toString('utf8') || 'n/a'})`));
+        });
     });
 }
 function waitForAuth(ws) {
@@ -95,11 +165,15 @@ function waitForAuth(ws) {
             try {
                 const msg = parseMessage(data);
                 if (msg.type === 'auth_success' ||
-                    msg.type === 'connection_established' ||
-                    (msg.type === 'auth_challenge' && msg.payload?.claimedAddress)) {
+                    msg.type === 'connection_established') {
                     clearTimeout(timeout);
                     ws.removeListener('message', handler);
                     resolve();
+                }
+                if (msg.type === 'auth_challenge' && msg.payload?.claimedAddress) {
+                    clearTimeout(timeout);
+                    ws.removeListener('message', handler);
+                    reject(new Error('Server requires signed WebSocket auth challenge. Bots cannot sign. Set DISABLE_WS_AUTH=true on server for local bot testing.'));
                 }
                 if (msg.type === 'error') {
                     clearTimeout(timeout);
@@ -167,10 +241,16 @@ function parseState(payload, botAddress) {
         minRaise: hand?.minRaise ?? '0',
         myPosition: mySeat.position,
         actingPosition: hand?.actingPosition ?? null,
+        turnStartedAt: hand?.turnStartedAt ?? null,
         myStack: mySeat.stack,
         myHoleCards: payload.myHoleCards ?? null,
         communityCards: hand?.communityCards ?? [],
     };
+}
+/** Unique per decision point: same seat can act again on the same street after a raise. */
+function actionDecisionKey(state) {
+    const t = state.turnStartedAt ?? '';
+    return `${state.handId}:${state.street}:${state.actingPosition}:${t}:${state.toCall}`;
 }
 /** Simple hand strength heuristic (0-1) for preflop hole cards. */
 function preflopStrength(cards) {
@@ -287,6 +367,18 @@ function decideAction(state) {
     return { action: 'fold' };
 }
 // --------------- Database: give bots balance ---------------
+function computeBuyIn(bigBlindWei) {
+    const envBuyIn = process.env.POKER_BOT_BUY_IN;
+    if (envBuyIn) {
+        const raw = BigInt(envBuyIn);
+        const minWei = bigBlindWei * BigInt(POKER_CASH_MIN_BUY_IN_BB);
+        const maxWei = bigBlindWei * BigInt(POKER_CASH_MAX_BUY_IN_BB);
+        if (raw >= minWei && raw <= maxWei)
+            return raw;
+        console.log(`[Bot] POKER_BOT_BUY_IN (${raw}) out of bounds [${minWei}..${maxWei}], using ${DEFAULT_BUY_IN_BB}x BB`);
+    }
+    return bigBlindWei * BigInt(DEFAULT_BUY_IN_BB);
+}
 async function ensureBotBalance(addresses, amount) {
     if (!DATABASE_URL) {
         console.log('[Bot] No DATABASE_URL set — skipping balance top-up. Bots must already have balance.');
@@ -301,6 +393,17 @@ async function ensureBotBalance(addresses, amount) {
          VALUES ($1, $2::NUMERIC)
          ON CONFLICT (wallet_address)
          DO UPDATE SET balance = GREATEST(players.balance, $2::NUMERIC), last_seen = NOW()`, [normalized, amount.toString()]);
+            // Give bot a random placeholder avatar if it has no avatar_config yet.
+            // This keeps bot seats visually distinct in production without overriding real profiles.
+            const fallbackDisplayName = `Bot ${normalized.slice(2, 6)}${normalized.slice(-2)}`.toUpperCase();
+            const avatarConfig = (0, cosmetics_catalog_1.randomPlaceholderConfig)(new Set());
+            await pool.query(`INSERT INTO chat_display_names (wallet_address, display_name, profile_image_url, avatar_config, bio, x_handle, tg_handle)
+         VALUES ($1, $2, NULL, $3::jsonb, NULL, NULL, NULL)
+         ON CONFLICT (wallet_address)
+         DO UPDATE SET
+           display_name = COALESCE(chat_display_names.display_name, EXCLUDED.display_name),
+           avatar_config = COALESCE(chat_display_names.avatar_config, EXCLUDED.avatar_config),
+           updated_at = NOW()`, [normalized, fallbackDisplayName, JSON.stringify(avatarConfig)]);
             console.log(`[Bot] Ensured balance for ${normalized}: ${amount.toString()} wei`);
         }
     }
@@ -310,6 +413,9 @@ async function ensureBotBalance(addresses, amount) {
 }
 /** Connect with one bot, list tables (or create one), return tableId, then disconnect. */
 async function discoverOrCreateTable() {
+    if (BOT_ADDRESSES.length === 0) {
+        throw new Error('No valid bot addresses configured. Set POKER_BOT_ADDRESSES.');
+    }
     const scoutAddr = BOT_ADDRESSES[0];
     const ws = await createWsClient(scoutAddr);
     await waitForAuth(ws);
@@ -344,7 +450,7 @@ async function discoverOrCreateTable() {
     throw new Error('Could not list or create a table');
 }
 // --------------- Bot main loop ---------------
-async function runBot(address, tableId) {
+async function runBot(address, tableId, buyInWei) {
     const tag = `[Bot ${address.slice(0, 8)}]`;
     console.log(`${tag} Connecting...`);
     const ws = await createWsClient(address);
@@ -352,8 +458,8 @@ async function runBot(address, tableId) {
     console.log(`${tag} Authenticated.`);
     // Join the table
     try {
-        await sendRequest(ws, 'poker_join_table', { tableId, buyInChips: BUY_IN_WEI.toString() });
-        console.log(`${tag} Joined table ${tableId} with ${BUY_IN_HUMAN} chips.`);
+        await sendRequest(ws, 'poker_join_table', { tableId, buyInChips: buyInWei.toString() });
+        console.log(`${tag} Joined table ${tableId} with buy-in ${buyInWei.toString()} wei.`);
     }
     catch (err) {
         if (err.message?.includes('Already seated')) {
@@ -369,7 +475,48 @@ async function runBot(address, tableId) {
     }
     catch { /* non-fatal */ }
     // Listen for state broadcasts and act when it's our turn
-    let lastActedHandAction = '';
+    let lastSuccessfulActionKey = '';
+    let pokerActBusy = false;
+    /** One act at a time; key includes turnStartedAt + toCall so the same seat can act again on the same street after a raise. */
+    const maybeActPokerTurn = async (hint, logPrefix) => {
+        if (pokerActBusy)
+            return;
+        const hintKey = actionDecisionKey(hint);
+        if (hintKey === lastSuccessfulActionKey)
+            return;
+        pokerActBusy = true;
+        try {
+            await thinkDelay();
+            let fresh = null;
+            try {
+                const freshPayload = await sendRequest(ws, 'poker_get_state', { tableId });
+                fresh = parseState(freshPayload, address);
+            }
+            catch {
+                fresh = hint;
+            }
+            if (!fresh || !fresh.handId || fresh.actingPosition !== fresh.myPosition)
+                return;
+            const key = actionDecisionKey(fresh);
+            if (key === lastSuccessfulActionKey)
+                return;
+            const decision = decideAction(fresh);
+            console.log(`${tag} ${logPrefix} Hand ${fresh.handId?.slice(0, 8)} | ${fresh.street} | pot=${fresh.pot} toCall=${fresh.toCall} -> ${decision.action}${decision.amount ? ' ' + decision.amount : ''}`);
+            await sendRequest(ws, 'poker_action', {
+                tableId,
+                handId: fresh.handId,
+                action: decision.action,
+                amount: decision.amount,
+            });
+            lastSuccessfulActionKey = key;
+        }
+        catch (err) {
+            console.error(`${tag} Action failed: ${err?.message ?? err}`);
+        }
+        finally {
+            pokerActBusy = false;
+        }
+    };
     ws.on('message', async (data) => {
         try {
             const msg = parseMessage(data);
@@ -380,36 +527,7 @@ async function runBot(address, tableId) {
                 return;
             if (state.actingPosition !== state.myPosition)
                 return;
-            // Avoid double-acting on the same state
-            const actionKey = `${state.handId}:${state.street}:${state.actingPosition}`;
-            if (actionKey === lastActedHandAction)
-                return;
-            lastActedHandAction = actionKey;
-            // Think for a bit
-            await thinkDelay();
-            // Get fresh state (our hole cards might only come from get_state)
-            let freshState = state;
-            try {
-                const freshPayload = await sendRequest(ws, 'poker_get_state', { tableId });
-                const parsed = parseState(freshPayload, address);
-                if (parsed && parsed.handId === state.handId && parsed.actingPosition === state.myPosition) {
-                    freshState = parsed;
-                }
-            }
-            catch { /* use broadcast state */ }
-            const decision = decideAction(freshState);
-            console.log(`${tag} Hand ${freshState.handId?.slice(0, 8)} | ${freshState.street} | pot=${freshState.pot} toCall=${freshState.toCall} -> ${decision.action}${decision.amount ? ' ' + decision.amount : ''}`);
-            try {
-                await sendRequest(ws, 'poker_action', {
-                    tableId,
-                    handId: freshState.handId,
-                    action: decision.action,
-                    amount: decision.amount,
-                });
-            }
-            catch (err) {
-                console.error(`${tag} Action failed: ${err.message}`);
-            }
+            await maybeActPokerTurn(state, '');
         }
         catch { /* ignore parse errors */ }
     });
@@ -422,19 +540,7 @@ async function runBot(address, tableId) {
                 return;
             if (state.actingPosition !== state.myPosition)
                 return;
-            const actionKey = `${state.handId}:${state.street}:${state.actingPosition}`;
-            if (actionKey === lastActedHandAction)
-                return;
-            lastActedHandAction = actionKey;
-            await thinkDelay();
-            const decision = decideAction(state);
-            console.log(`${tag} [poll] ${state.street} | pot=${state.pot} toCall=${state.toCall} -> ${decision.action}${decision.amount ? ' ' + decision.amount : ''}`);
-            await sendRequest(ws, 'poker_action', {
-                tableId,
-                handId: state.handId,
-                action: decision.action,
-                amount: decision.amount,
-            });
+            await maybeActPokerTurn(state, '[poll]');
         }
         catch { /* ignore */ }
     }, 3000);
@@ -456,9 +562,12 @@ async function runBot(address, tableId) {
 }
 // --------------- Entry point ---------------
 async function main() {
+    if (BOT_ADDRESSES.length === 0) {
+        throw new Error('No valid bot addresses configured. Set POKER_BOT_ADDRESSES.');
+    }
     const a = process.argv[2];
     const b = process.argv[3];
-    const numBotsFromArg = (n) => Math.min(5, Math.max(1, Number(n) || 2));
+    const numBotsFromArg = (n) => Math.min(MAX_BOTS, BOT_ADDRESSES.length, Math.max(1, Number(n) || 2));
     let tableId;
     let numBots;
     if (a && a.trim().length > 0) {
@@ -479,16 +588,31 @@ async function main() {
         numBots = numBotsFromArg(b);
     }
     const botAddrs = BOT_ADDRESSES.slice(0, numBots);
+    // Fetch table big blind to compute a valid buy-in
+    const scoutAddr = botAddrs[0];
+    const scoutWs = await createWsClient(scoutAddr);
+    await waitForAuth(scoutWs);
+    const listPayload = await sendRequest(scoutWs, 'poker_list_tables', {});
+    scoutWs.close();
+    const tables = (listPayload?.tables ?? []);
+    const targetTable = tables.find((t) => t.id === tableId);
+    const bigBlindWei = BigInt(targetTable?.bigBlind ?? '0');
+    if (bigBlindWei <= 0n) {
+        throw new Error(`Could not determine big blind for table ${tableId}`);
+    }
+    const buyInWei = computeBuyIn(bigBlindWei);
     console.log(`\n=== Poker Bot Launcher ===`);
     console.log(`Table: ${tableId}`);
     console.log(`Bots: ${numBots}`);
-    console.log(`Buy-in: ${BUY_IN_HUMAN} chips (${BUY_IN_WEI.toString()} wei)`);
+    console.log(`Address pool: ${BOT_ADDRESSES.length} configured`);
+    console.log(`Big blind: ${bigBlindWei.toString()} wei`);
+    console.log(`Buy-in: ${buyInWei.toString()} wei (${Number(buyInWei / bigBlindWei)} BB)`);
     console.log(`WS URL: ${WS_URL}\n`);
-    // Give bots balance
-    await ensureBotBalance(botAddrs, BUY_IN_WEI * 10n); // 10x buy-in so they can rebuy
+    // Give bots balance (10x buy-in so they can rebuy)
+    await ensureBotBalance(botAddrs, buyInWei * 10n);
     // Launch all bots concurrently
-    const promises = botAddrs.map((addr) => runBot(addr, tableId).catch((err) => {
-        console.error(`[Bot ${addr.slice(0, 8)}] Fatal: ${err.message}`);
+    const promises = botAddrs.map((addr) => runBot(addr, tableId, buyInWei).catch((err) => {
+        console.error(`[Bot ${addr.slice(0, 8)}] Fatal: ${formatError(err)}`);
     }));
     await Promise.all(promises);
     console.log('\n=== All bots finished ===');

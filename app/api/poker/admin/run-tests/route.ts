@@ -2,7 +2,8 @@ import { NextRequest, NextResponse } from 'next/server';
 import { spawn } from 'child_process';
 import path from 'path';
 
-// All 9 test suites — name must match the describe() block exactly
+// Suite keys → Jest --testNamePattern (must match describe() in poker-tournament.test.ts).
+// Always scoped with --testPathPattern=poker-tournament.test (this route is poker tournaments only).
 const SUITES: Record<string, string> = {
   'all':                     '',
   'create':                  '1 - createPokerTournament',
@@ -13,7 +14,8 @@ const SUITES: Record<string, string> = {
   'elimination':             '6 - player elimination',
   'prizes':                  '7 - prize distribution',
   'e2e':                     '8 - full 2-player E2E',
-  'regression':              '9 - regression',
+  'scheduled':               '9 - scheduled poker start',
+  'regression':              '10 - regression',
 };
 
 export async function POST(req: NextRequest) {
@@ -21,10 +23,16 @@ export async function POST(req: NextRequest) {
 
   const serverDir = path.resolve(process.cwd(), 'server');
   const jestBin = path.join(serverDir, 'node_modules', '.bin', 'jest');
-  const pattern = SUITES[suite];
+  const pattern = SUITES[suite] ?? '';
 
   // Run jest binary directly — avoids npm arg-parsing issues with special characters
-  const args: string[] = ['--forceExit', '--no-coverage', '--colors'];
+  const args: string[] = [
+    '--forceExit',
+    '--no-coverage',
+    '--colors',
+    '--testPathPattern',
+    'poker-tournament.test',
+  ];
   if (pattern) args.push('--testNamePattern', pattern);
 
   return new Promise<NextResponse>((resolve) => {

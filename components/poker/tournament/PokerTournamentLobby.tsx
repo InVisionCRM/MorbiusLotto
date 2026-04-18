@@ -9,6 +9,7 @@ import {
 } from '@/hooks/use-poker-tournament';
 import type { BlackjackWebSocketClient } from '@/lib/websocket-client';
 import { formatMorbiusFloor } from '@/lib/format-morbius-display';
+import { isAdminWallet } from '@/lib/admin';
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -22,6 +23,14 @@ function parseMorbiusInput(val: string): bigint {
     if (isNaN(num) || num <= 0) return 0n;
     return BigInt(Math.round(num)) * 10n ** MORBIUS_DECIMALS;
   } catch { return 0n; }
+}
+
+function isZeroBuyInWei(wei: string): boolean {
+  try {
+    return BigInt(wei || '0') === 0n;
+  } catch {
+    return true;
+  }
 }
 
 function formatMorbius(wei: string | bigint): string {
@@ -80,7 +89,7 @@ function TournamentCard({
 }) {
   const [pin, setPin] = useState('');
   const [showPin, setShowPin] = useState(false);
-  const isPrivate = !t.creatorAddress; // rough heuristic — the server doesn't expose is_private to summary yet
+  const isPrivate = t.isPrivate === true;
 
   const spots = t.maxPlayers - t.registeredCount;
   const isFull = spots <= 0;
@@ -92,7 +101,14 @@ function TournamentCard({
     <div className="rounded-xl border border-white/10 bg-white/5 hover:bg-white/8 transition-colors p-4">
       <div className="flex items-start justify-between gap-3">
         <div className="flex-1 min-w-0">
-          <h4 className="font-semibold text-white truncate">{t.name}</h4>
+          <div className="flex items-center gap-2 flex-wrap min-w-0">
+            <h4 className="font-semibold text-white truncate">{t.name}</h4>
+            {isZeroBuyInWei(t.buyInAmount) && (
+              <span className="text-[10px] px-2 py-0.5 rounded-full border border-cyan-500/35 text-cyan-300/95 bg-cyan-500/10 shrink-0">
+                Freeroll
+              </span>
+            )}
+          </div>
           <p className="text-xs text-white/50 mt-0.5">
             by {t.creatorAddress ? `${t.creatorAddress.slice(0, 6)}…${t.creatorAddress.slice(-4)}` : 'Unknown'}
           </p>
@@ -109,7 +125,9 @@ function TournamentCard({
       <div className="mt-3 grid grid-cols-3 gap-2 text-center">
         <div>
           <div className="text-[10px] text-white/40 uppercase tracking-wide">Buy-in</div>
-          <div className="text-sm font-semibold text-white mt-0.5">{formatMorbius(t.buyInAmount)}</div>
+          <div className="text-sm font-semibold text-white mt-0.5">
+            {isZeroBuyInWei(t.buyInAmount) ? 'Free' : formatMorbius(t.buyInAmount)}
+          </div>
           <div className="text-[10px] text-white/30">MORBIUS</div>
         </div>
         <div>
@@ -209,12 +227,16 @@ function TournamentCard({
 // CreateModal
 // ---------------------------------------------------------------------------
 
-function CreateModal({ onClose, onCreate }: {
+function CreateModal({ creatorAddress, onClose, onCreate }: {
+  creatorAddress?: string;
   onClose: () => void;
   onCreate: (params: CreatePokerTournamentParams) => Promise<void>;
 }) {
   const [name, setName] = useState('My SNG');
+  const [isFreeroll, setIsFreeroll] = useState(false);
+  const [fundFromPromo, setFundFromPromo] = useState(false);
   const [buyIn, setBuyIn] = useState('1000');
+  const [guaranteedPool, setGuaranteedPool] = useState('5000');
   const [prizeType, setPrizeType] = useState('winner_takes_all');
   const [startingStack, setStartingStack] = useState('5000');
   const [minPlayers, setMinPlayers] = useState('2');
@@ -223,13 +245,29 @@ function CreateModal({ onClose, onCreate }: {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [scheduledStart, setScheduledStart] = useState(''); // ISO datetime-local string
 
+  const showPromoOption = isFreeroll && isAdminWallet(creatorAddress);
+
+  useEffect(() => {
+    if (!isFreeroll) setFundFromPromo(false);
+  }, [isFreeroll]);
+
   const handleCreate = async () => {
     if (!name.trim()) return;
+    const buyWei = isFreeroll ? 0n : parseMorbiusInput(buyIn);
+    const guaranteeWei = isFreeroll ? parseMorbiusInput(guaranteedPool) : 0n;
+    if (!isFreeroll && buyWei <= 0n) return;
+    if (isFreeroll && guaranteeWei <= 0n) return;
     setIsSubmitting(true);
     try {
       await onCreate({
         name:                  name.trim(),
-        buyInAmount:           parseMorbiusInput(buyIn).toString(),
+        buyInAmount:           buyWei.toString(),
+        ...(isFreeroll
+          ? {
+              guaranteedPrizePool: guaranteeWei.toString(),
+              ...(fundFromPromo ? { guaranteedPrizePoolSource: 'platform_promo' as const } : {}),
+            }
+          : {}),
         prizeDistributionType: prizeType,
         config:                {
           ...POKER_TOURNAMENT_DEFAULT_CONFIG,
@@ -265,14 +303,57 @@ function CreateModal({ onClose, onCreate }: {
             />
           </div>
 
+          <label className="flex items-center gap-2 cursor-pointer">
+            <input
+              type="checkbox"
+              checked={isFreeroll}
+              onChange={(e) => {
+                setIsFreeroll(e.target.checked);
+                if (!e.target.checked) setFundFromPromo(false);
+              }}
+              className="rounded"
+            />
+            <span className="text-sm text-white/70">
+              Freeroll (guaranteed prize pool at create)
+            </span>
+          </label>
+
+          {isFreeroll && !fundFromPromo && (
+            <p className="text-[11px] text-white/45 leading-snug -mt-1">
+              Charged from your in-app MORBIUS balance when you tap Create (same balance as Plinko and other games).
+            </p>
+          )}
+
+          {showPromoOption && (
+            <label className="flex items-center gap-2 cursor-pointer">
+              <input
+                type="checkbox"
+                checked={fundFromPromo}
+                onChange={(e) => setFundFromPromo(e.target.checked)}
+                className="rounded"
+              />
+              <span className="text-sm text-amber-200/85">
+                Fund pool from platform promo wallet (admin)
+              </span>
+            </label>
+          )}
+
+          {isFreeroll && fundFromPromo && (
+            <p className="text-[11px] text-amber-200/65 leading-snug -mt-1">
+              Server debits <span className="font-mono text-[10px]">POKER_PROMO_GUARANTEED_POOL_WALLET</span> instead of your wallet. Refunds on cancel go back to that wallet.
+            </p>
+          )}
+
           <div className="grid grid-cols-2 gap-3">
             <div>
-              <label className="text-xs text-white/50 uppercase tracking-wide block mb-1">Buy-in (MORBIUS)</label>
+              <label className="text-xs text-white/50 uppercase tracking-wide block mb-1">
+                {isFreeroll ? 'Guaranteed pool (MORBIUS)' : 'Buy-in (MORBIUS)'}
+              </label>
               <input
                 type="number"
                 min="1"
-                value={buyIn}
-                onChange={(e) => setBuyIn(e.target.value)}
+                value={isFreeroll ? guaranteedPool : buyIn}
+                onChange={(e) => (isFreeroll ? setGuaranteedPool(e.target.value) : setBuyIn(e.target.value))}
                 className="w-full rounded-lg bg-white/8 border border-white/15 px-3 py-2 text-white text-sm focus:outline-none focus:border-white/30"
               />
             </div>
@@ -361,7 +442,12 @@ function CreateModal({ onClose, onCreate }: {
           </button>
           <button
             onClick={handleCreate}
-            disabled={isSubmitting || !name.trim()}
+            disabled={
+              isSubmitting
+              || !name.trim()
+              || (!isFreeroll && parseMorbiusInput(buyIn) <= 0n)
+              || (isFreeroll && parseMorbiusInput(guaranteedPool) <= 0n)
+            }
             className="flex-1 rounded-lg bg-yellow-500 hover:bg-yellow-400 disabled:opacity-50 text-black font-semibold text-sm py-2 transition-colors"
           >
             {isSubmitting ? 'Creating…' : 'Create'}
@@ -518,6 +604,7 @@ export function PokerTournamentLobby({ wsClient, myAddress, onGoToTable }: Poker
       {/* Create modal */}
       {showCreate && (
         <CreateModal
+          creatorAddress={myAddress}
           onClose={() => setShowCreate(false)}
           onCreate={handleCreate}
         />

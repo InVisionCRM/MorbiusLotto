@@ -2,6 +2,7 @@
 
 import type React from 'react';
 import type { BlackjackWebSocketClient, PokerTableState } from '@/lib/websocket-client';
+import type { PokerTournamentState } from '@/hooks/use-poker-tournament';
 import { PokerTable } from '@/components/poker/PokerTable';
 import { IconButton } from '@/components/animate-ui/components/buttons/icon';
 import type { Emotion } from '@/components/avatar';
@@ -42,6 +43,8 @@ interface PokerTableViewProps {
   onTipDealer: () => Promise<void>;
   onSitOut?: () => void;
   onSitBack?: () => void;
+  /** Sit & Go overlay (top-left); only when `?tournament=` is present and snapshot loads. */
+  tournamentHUD?: { state: PokerTournamentState; myAddress: string } | null;
 }
 
 /* LANDSCAPE NOTE: The old formula `calc((100dvh - 160px) * 2.4)` punished
@@ -91,6 +94,7 @@ export function PokerTableView({
   onTipDealer,
   onSitOut,
   onSitBack,
+  tournamentHUD,
 }: PokerTableViewProps) {
   const isMobileScale = tableScale < 1;
 
@@ -173,6 +177,7 @@ export function PokerTableView({
           onOpenEditQuickChat={() => setShowEditQuickChatModal(true)}
           onSitOut={onSitOut}
           onSitBack={onSitBack}
+          tournamentHUD={tournamentHUD ?? undefined}
         />
       ) : !error ? (
         <div className="absolute inset-0 flex items-center justify-center text-[var(--poker-text-muted)] text-sm">

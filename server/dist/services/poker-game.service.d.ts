@@ -46,7 +46,7 @@ export interface PokerCurrentHand {
     minRaise: string;
     /** Amount the acting player must put in to call (0 if can check). */
     toCall: string;
-    /** ISO timestamp of when the current player's turn started (for the 30s timer). */
+    /** ISO timestamp of when the current player's turn started (for the 60s timer). */
     turnStartedAt: string | null;
     /** At showdown: all players' revealed hole cards keyed by address */
     showdownHands?: Record<string, number[]>;
@@ -124,6 +124,10 @@ export declare class PokerGameService {
     private _addChips;
     getTableState(tableId: string, forPlayer: string | null): Promise<PokerTableState>;
     updateTableLogo(tableId: string, logo: string | null, opacity: number): Promise<void>;
+    setSitOut(tableId: string, playerAddress: string): Promise<PokerTableState>;
+    setSitBack(tableId: string, playerAddress: string): Promise<PokerTableState>;
+    /** Kick players who have been sitting out for >= 15 minutes (cash games only). */
+    kickStaleSitOuts(): Promise<void>;
     startHand(tableId: string): Promise<PokerTableState | null>;
     playerAction(tableId: string, handId: string, playerAddress: string, action: string, amount?: string): Promise<PokerTableState>;
     private _playerAction;

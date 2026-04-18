@@ -42,6 +42,8 @@ function configureCoreMiddleware(app) {
                 return cb(null, true);
             if (/^https?:\/\/localhost(:\d+)?$/.test(origin))
                 return cb(null, true);
+            if (/^https:\/\/morbiuslotto(-[a-z0-9]+)*\.vercel\.app$/.test(origin))
+                return cb(null, true);
             return cb(null, false);
         },
         credentials: true,

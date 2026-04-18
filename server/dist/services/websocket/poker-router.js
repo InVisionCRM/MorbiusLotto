@@ -11,6 +11,8 @@ exports.POKER_MESSAGE_HANDLER_MAP = {
     poker_update_table_logo: 'handlePokerUpdateTableLogo',
     poker_quick_reaction: 'handlePokerQuickReaction',
     poker_avatar_emotion: 'handlePokerAvatarEmotion',
+    poker_sit_out: 'handlePokerSitOut',
+    poker_sit_back: 'handlePokerSitBack',
     poker_tournament_list: 'handlePokerTournamentList',
     poker_tournament_create: 'handlePokerTournamentCreate',
     poker_tournament_join: 'handlePokerTournamentJoin',

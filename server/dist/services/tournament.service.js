@@ -113,7 +113,7 @@ class TournamentService {
                     logger_1.logger.warn('executeScheduledEvent: poker_start fired but pokerTournamentService not set — retrying next poll');
                     return 'retry';
                 }
-                await this.pokerTournamentService.activateTournament(tournamentId);
+                await this.pokerTournamentService.startScheduledPokerTournament(tournamentId);
                 return 'executed';
             default:
                 return 'unknown';

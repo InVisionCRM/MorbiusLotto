@@ -149,6 +149,9 @@ export interface GlobalMainNavProps {
   themeModalOpen?: boolean;
   onThemeModalOpenChange?: (open: boolean) => void;
   onTournamentLobby?: () => void;
+  /** Poker lobby (`/poker`): which tab is selected in the main content area. */
+  pokerLobbyTab?: 'cash' | 'tournaments';
+  onPokerLobbyTabChange?: (tab: 'cash' | 'tournaments') => void;
   musicTrackName?: string;
   isMusicPlaying?: boolean;
   onToggleMusic?: () => void;
@@ -311,6 +314,8 @@ type NavContentProps = Pick<
   /** MORBIUS ERC-20 balance in the connected wallet (wei). */
   inWalletMorbiusWei: bigint;
   walletConnected: boolean;
+  pokerLobbyTab?: 'cash' | 'tournaments';
+  onPokerLobbyTabChange?: (tab: 'cash' | 'tournaments') => void;
 };
 
 const NavContent = React.memo(function NavContent(props: NavContentProps) {
@@ -355,6 +360,8 @@ const NavContent = React.memo(function NavContent(props: NavContentProps) {
     reserveBalance,
     inWalletMorbiusWei,
     walletConnected,
+    pokerLobbyTab = 'cash',
+    onPokerLobbyTabChange,
   } = props;
 
   const btnClass = (active: boolean) =>
@@ -453,6 +460,26 @@ const NavContent = React.memo(function NavContent(props: NavContentProps) {
 
         {page === 'plinko' && onPlinkoSoundToggle !== undefined && (
           <SoundToggleButton enabled={plinkoSoundEnabled} onToggle={onPlinkoSoundToggle} />
+        )}
+
+        {page === 'poker' && onPokerLobbyTabChange && (
+          <>
+            <SectionLabel label="Lobby" />
+            <SidebarButton
+              label="Cash games"
+              icon={<NavIcon icon="fa-play" active={pokerLobbyTab === 'cash'} />}
+              onClick={() => onPokerLobbyTabChange('cash')}
+              active={pokerLobbyTab === 'cash'}
+              className={`rounded-lg px-2 py-2 transition-colors ${btnClass(pokerLobbyTab === 'cash')}`}
+            />
+            <SidebarButton
+              label="Tournaments"
+              icon={<NavIcon icon="fa-trophy" active={pokerLobbyTab === 'tournaments'} />}
+              onClick={() => onPokerLobbyTabChange('tournaments')}
+              active={pokerLobbyTab === 'tournaments'}
+              className={`rounded-lg px-2 py-2 transition-colors ${btnClass(pokerLobbyTab === 'tournaments')}`}
+            />
+          </>
         )}
 
         {/* My Stuff */}
@@ -627,6 +654,8 @@ export default function GlobalMainNav({
   themeModalOpen: themeModalOpenProp,
   onThemeModalOpenChange,
   onTournamentLobby,
+  pokerLobbyTab,
+  onPokerLobbyTabChange,
   musicTrackName,
   isMusicPlaying,
   onToggleMusic,
@@ -869,6 +898,8 @@ export default function GlobalMainNav({
             reserveBalance={effectiveReserveBalance}
             inWalletMorbiusWei={inWalletMorbiusWei}
             walletConnected={Boolean(address)}
+            pokerLobbyTab={pokerLobbyTab}
+            onPokerLobbyTabChange={onPokerLobbyTabChange}
           />
         </SidebarBody>
         <div

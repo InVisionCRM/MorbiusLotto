@@ -52,11 +52,21 @@ export interface PokerTournamentSummary {
     prizeDistributionType: string;
     scheduledStartAt: string | null;
     isRegistered: boolean;
+    isPrivate: boolean;
 }
+/** Where the initial guaranteed pool is debited when buy-in is 0. */
+export type GuaranteedPrizePoolSource = 'creator' | 'platform_promo';
 export interface CreatePokerTournamentParams {
     creatorAddress: string;
     name: string;
     buyInAmount: bigint;
+    /** Required when buyInAmount is 0: MORBIUS (wei) debited at create; becomes initial prize_pool. */
+    guaranteedPrizePool?: bigint;
+    /**
+     * When buy-in is 0: debit `creator` (default) or `platform_promo` wallet.
+     * `platform_promo` requires caller in ADMIN_WALLETS and POKER_PROMO_GUARANTEED_POOL_WALLET in env.
+     */
+    guaranteedPrizePoolSource?: GuaranteedPrizePoolSource;
     prizeDistributionType: string;
     config: PokerTournamentConfig;
     isPrivate?: boolean;
@@ -74,6 +84,8 @@ export declare class PokerTournamentService {
     private broadcast;
     private normalizeAddress;
     private parseBigInt;
+    /** Who receives prize_pool on cancel / scheduled under-min (freeroll → funder or creator). */
+    private prizePoolRefundRecipient;
     /** Return the BlindLevel that applies for a given hand number (1-indexed). */
     computeBlindLevel(blindSchedule: BlindLevel[], handNumber: number): BlindLevel;
     private parsePokerConfig;
@@ -90,6 +102,11 @@ export declare class PokerTournamentService {
         autoStarted: boolean;
         tableId: string | null;
     }>;
+    /**
+     * Called by FreerollSchedulerService when scheduled_start_at elapses.
+     * Cancels + refunds if below minPlayers; otherwise activates (status must become active for sync + payouts).
+     */
+    startScheduledPokerTournament(tournamentId: string): Promise<void>;
     /**
      * Transition tournament from registration → active.
      * Creates a dedicated poker table (tournament_mode=TRUE), seats all players,

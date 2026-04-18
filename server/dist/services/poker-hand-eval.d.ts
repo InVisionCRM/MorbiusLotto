@@ -1,6 +1,7 @@
 /**
  * Texas Hold'em hand evaluation for 5-7 cards.
- * Card indices 0-51: rank = (idx % 13) + 1 (A=1, K=13), suit = floor(idx/13).
+ * Card indices 0-51: rank = (idx % 13) + 2 (2=Two, 14=Ace), suit = floor(idx/13).
+ * Matches the game service encoding where rankIndex 0=Two, 12=Ace.
  */
 export declare const enum HandRank {
     HighCard = 0,

@@ -8,7 +8,7 @@ Organized index of poker-related files plus current UI behavior notes for table/
 
 | File | Purpose |
 | ---- | ------- |
-| `app/poker/page.tsx` | Lobby: list tables, create table, join with buy-in; intro screen and WebSocket connection. |
+| `app/poker/page.tsx` | Lobby: **Cash games** (tables, create, join) and **Tournaments** (`PokerTournamentLobby`, SNG create/join); intro + WebSocket. Share link: `/poker?tab=tournaments`. Sidebar **Lobby** mirrors the two tabs. |
 | `app/poker/[tableId]/page.tsx` | Table page: game state, PokerTable + PokerActions + PokerDepositModal; theme and layout. |
 
 ---
@@ -25,6 +25,8 @@ Organized index of poker-related files plus current UI behavior notes for table/
 | `PokerWinnerNotificationCard.tsx` | Showdown winner overlay: 3-column layout (amount won / WINNER name / hand rank), cards display, 15s countdown timer to next hand. Sized at `min(60vw, 480px)` to avoid covering player seats. |
 | `PokerDepositModal.tsx` | Deposit/buy-in modal: PLS/MORBIUS, approval, Re-up; uses Blackjack escrow and WebSocket for add-chips. |
 | `PokerThemeContext.tsx` | React context for current poker theme (classic / cyberpunk); `usePokerTheme()`. |
+| `tournament/PokerTournamentLobby.tsx` | SNG list, create (paid / freeroll / scheduled / private), join, cancel; uses `usePokerTournament` + WebSocket. |
+| `tournament/PokerTournamentHUD.tsx` | In-table overlay: blinds, prize pool, stacks, leaderboard; `usePokerTableTournamentHud` when `PokerTableState.tournamentId` or `?tournament=` is present. |
 
 ---
 

@@ -1028,7 +1028,6 @@ class BlackjackMultiGameService {
         const roundResult = await this.pool.query(`SELECT * FROM blackjack_multi_rounds WHERE id = $1`, [roundId]);
         const round = roundResult.rows[0];
         const dealerCards = round.dealer_cards;
-        // Check if all players busted or have blackjack (dealer still draws for fairness)
         while (true) {
             const dh = this.pfService.calculateHandTotalV2(dealerCards);
             if (dh.total >= 17 && !(dh.total === 17 && dh.hasAce))
@@ -1039,6 +1038,11 @@ class BlackjackMultiGameService {
         }
         const finalDh = this.pfService.calculateHandTotalV2(dealerCards);
         await this.pool.query(`UPDATE blackjack_multi_rounds SET dealer_cards = $1, dealer_total = $2, dealer_has_ace = $3 WHERE id = $4`, [JSON.stringify(dealerCards), finalDh.total, finalDh.hasAce, roundId]);
+        // Broadcast dealer_turn state so clients can animate the card reveal
+        // before the round settles to completed. The delay gives WS clients time
+        // to receive the dealer_turn snapshot and start the reveal animation.
+        await this.broadcastTableState(tableId, 'dealer_turn_reveal');
+        await new Promise(resolve => setTimeout(resolve, 300));
         await this.settleRoundInternal(tableId, roundId, deck, dp);
     }
     async settleRoundInternal(tableId, roundId, _deck, _dp) {
