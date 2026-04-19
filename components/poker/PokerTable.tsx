@@ -2,7 +2,7 @@
 
 import React, { useRef, useState, useEffect, useMemo } from 'react';
 import { toBigIntSafe } from '@/lib/safe-bigint';
-import { formatMorbiusFloor } from '@/lib/format-morbius-display';
+import { formatChips } from '@/lib/format-poker-chips';
 import { motion, AnimatePresence } from 'framer-motion';
 import { PokerSeat, PokerChipStack } from './PokerSeat';
 import { PokerBoard } from './PokerBoard';
@@ -27,14 +27,6 @@ const BEAM_PALETTES: BeamColorPalette[] = [
 function shortAddr(addr: string): string {
   if (!addr || addr.length < 10) return addr;
   return `${addr.slice(0, 6)}…${addr.slice(-4)}`;
-}
-
-function formatChips(wei: string | number): string {
-  try {
-    return formatMorbiusFloor(wei, { compact: false });
-  } catch {
-    return String(wei);
-  }
 }
 
 const POT_ANCHOR = { fx: 0.50, fy: 0.51 };

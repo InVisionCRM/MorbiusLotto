@@ -1,23 +1,20 @@
 'use client';
 
 import React, { useEffect, useMemo, useState } from 'react';
-import { formatEther, parseEther } from 'viem';
-import { toBigIntSafe } from '@/lib/safe-bigint';
-import { sanitizeDecimalStringForParseEther } from '@/lib/sanitize-decimal-input';
-import { formatMorbiusFloor } from '@/lib/format-morbius-display';
+import { toChipInt, formatChips } from '@/lib/format-poker-chips';
 import { usePokerSounds } from '@/hooks/use-poker-sounds';
 
 type Amount = bigint;
 
-function parsePropWei(s: string | number): Amount {
-  return toBigIntSafe(s);
+function parseProp(s: string | number): Amount {
+  return toChipInt(s);
 }
 
 function safeParseAmount(input: string): Amount | null {
+  const cleaned = input.replace(/[,\s]/g, '');
+  if (!cleaned || !/^\d+$/.test(cleaned)) return null;
   try {
-    const cleaned = sanitizeDecimalStringForParseEther(input);
-    if (!cleaned) return null;
-    return parseEther(cleaned);
+    return BigInt(cleaned);
   } catch {
     return null;
   }
@@ -30,12 +27,13 @@ function clampAmount(value: Amount, min: Amount, max: Amount): Amount {
 }
 
 function formatAmount(v: Amount): string {
-  return formatMorbiusFloor(v, { compact: false });
+  return formatChips(v);
 }
 
-/** Convert a wei bigint to a plain chip number for slider math */
-function toChips(v: Amount): number {
-  return Number(formatEther(v));
+/** Chips to Number for slider math (bounded by MAX_SAFE_INTEGER). */
+function toChipsNum(v: Amount): number {
+  if (v > BigInt(Number.MAX_SAFE_INTEGER)) return Number.MAX_SAFE_INTEGER;
+  return Number(v);
 }
 
 export interface PokerActionsProps {
@@ -75,10 +73,10 @@ export function PokerActions({
   variant = 'default',
 }: PokerActionsProps) {
   const { play } = usePokerSounds();
-  const minRaiseAmt = useMemo(() => parsePropWei(minRaise), [minRaise]);
-  const stackAmt    = useMemo(() => parsePropWei(stack),    [stack]);
-  const callAmt     = useMemo(() => parsePropWei(callAmount),[callAmount]);
-  const potAmt      = useMemo(() => parsePropWei(pot),       [pot]);
+  const minRaiseAmt = useMemo(() => parseProp(minRaise), [minRaise]);
+  const stackAmt    = useMemo(() => parseProp(stack),    [stack]);
+  const callAmt     = useMemo(() => parseProp(callAmount),[callAmount]);
+  const potAmt      = useMemo(() => parseProp(pot),       [pot]);
 
   const isFacingBet = callAmt > 0n;
 
@@ -98,8 +96,8 @@ export function PokerActions({
   const clamped = parsed == null ? null : clampAmount(parsed, minRaiseAmt, stackAmt);
   const hasValidAmount = clamped != null && stackAmt > 0n;
 
-  const minChips = toChips(minRaiseAmt);
-  const maxChips = toChips(stackAmt);
+  const minChips = toChipsNum(minRaiseAmt);
+  const maxChips = toChipsNum(stackAmt);
   const maxOffsetChips = Math.max(0, maxChips - minChips);
   const stepChips = Math.max(1, Math.round(Math.max(minChips, 1) / 10)); // ~10% of min as step
 
@@ -132,17 +130,15 @@ export function PokerActions({
 
   const handleSlider = (e: React.ChangeEvent<HTMLInputElement>) => {
     const val = parseFloat(e.target.value);
-    const rawWei = parseEther(String(minChips + val));
-    const chipWei = parseEther('0.001'); // 10^15 — one poker chip
-    const snapped = (rawWei / chipWei) * chipWei;
-    const clampedWei = snapped < minRaiseAmt ? minRaiseAmt : snapped > stackAmt ? stackAmt : snapped;
+    const rawChips = BigInt(Math.max(0, Math.round(minChips + val)));
+    const clampedChips = clampAmount(rawChips, minRaiseAmt, stackAmt);
     setSliderOffset(val);
-    setCustomAmount(formatAmount(clampedWei));
+    setCustomAmount(formatAmount(clampedChips));
   };
 
   const nudge = (dir: 1 | -1) => {
     const base = clamped ?? minRaiseAmt;
-    const step = minRaiseAmt > 0n ? minRaiseAmt : parseEther('1');
+    const step = minRaiseAmt > 0n ? minRaiseAmt : 1n;
     const next = clampAmount(base + BigInt(dir) * step, minRaiseAmt, stackAmt);
     setSliderOffset(0);
     setCustomAmount(formatAmount(next));

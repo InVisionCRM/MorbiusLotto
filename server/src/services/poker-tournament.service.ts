@@ -133,24 +133,6 @@ export function normalizePokerTournamentPrizePercents(maxPlayers: number, raw: u
 }
 
 // ---------------------------------------------------------------------------
-// Constants
-// ---------------------------------------------------------------------------
-
-/** Tournament uses integer chip counts; multiply by this to store in wei units (same as cash game). */
-const CHIP_SCALE = BigInt('1000000000000000000'); // 10^18
-
-/**
- * `poker_seats.stack` for tournament tables: on activation stacks are stored as chips×CHIP_SCALE (wei-style);
- * after each showdown the poker service persists raw integer chip counts. Interpret both correctly so
- * eliminations and `tournament_entries.chips_remaining` stay aligned with the engine.
- */
-export function tournamentSeatStackToChipCount(stackRaw: bigint): number {
-  if (stackRaw <= 0n) return 0;
-  if (stackRaw < CHIP_SCALE) return Number(stackRaw);
-  return Number(stackRaw / CHIP_SCALE);
-}
-
-// ---------------------------------------------------------------------------
 // Service
 // ---------------------------------------------------------------------------
 
@@ -687,23 +669,22 @@ export class PokerTournamentService {
 
     const firstLevel = this.computeBlindLevel(config.blindSchedule, 1);
 
-    // Scale chip counts to wei units so the poker UI (which uses formatEther) displays them correctly
-    const sbWei  = (BigInt(firstLevel.smallBlind) * CHIP_SCALE).toString();
-    const bbWei  = (BigInt(firstLevel.bigBlind)   * CHIP_SCALE).toString();
-    const stackWei = (BigInt(config.startingStack) * CHIP_SCALE).toString();
+    const sbChips = BigInt(firstLevel.smallBlind).toString();
+    const bbChips = BigInt(firstLevel.bigBlind).toString();
+    const startingStackChips = BigInt(config.startingStack).toString();
 
     // Create dedicated tournament poker table
     const tableRow = await this.pool.query(
       `INSERT INTO poker_tables (small_blind, big_blind, max_seats, status, tournament_id, tournament_mode)
        VALUES ($1::NUMERIC, $2::NUMERIC, $3, 'waiting', $4, TRUE)
        RETURNING id`,
-      [sbWei, bbWei, config.maxPlayers, tournamentId]
+      [sbChips, bbChips, config.maxPlayers, tournamentId]
     );
     const tableId = tableRow.rows[0].id;
 
-    // Seat all players with virtual chips (scaled to wei)
+    // Seat all players with virtual chips
     for (const entry of entries.rows) {
-      await this.pokerGameService.joinTableTournament(tableId, entry.player_address, stackWei);
+      await this.pokerGameService.joinTableTournament(tableId, entry.player_address, startingStackChips);
 
       // Record in bridge table
       await this.pool.query(
@@ -768,11 +749,9 @@ export class PokerTournamentService {
       [tableId]
     );
 
-    // Sync chips for each player and collect busted players (see tournamentSeatStackToChipCount)
     const bustedAddresses: string[] = [];
     for (const seat of seats.rows) {
-      const stackRaw = toBigIntSafe(seat.stack ?? 0);
-      const stackChips = tournamentSeatStackToChipCount(stackRaw);
+      const stackChips = Number(toBigIntSafe(seat.stack ?? 0));
       const addr = seat.player_address as string;
 
       await this.pool.query(
@@ -833,8 +812,8 @@ export class PokerTournamentService {
         [tableId]
       );
       if (finalRow.rows.length > 0) {
-        const smallBlindChips = Number(toBigIntSafe(finalRow.rows[0].small_blind) / CHIP_SCALE);
-        const bigBlindChips = Number(toBigIntSafe(finalRow.rows[0].big_blind) / CHIP_SCALE);
+        const smallBlindChips = Number(toBigIntSafe(finalRow.rows[0].small_blind));
+        const bigBlindChips = Number(toBigIntSafe(finalRow.rows[0].big_blind));
         const displayLevel = this.knockoutBlindDisplayLevel(config.blindSchedule, smallBlindChips);
         this.broadcast(`poker_tournament:${tournamentId}`, 'poker_tournament_blind_level_up', {
           tournamentId,
@@ -888,15 +867,13 @@ export class PokerTournamentService {
     );
 
     const stackedSeatCount = seats.rows.filter((s) => {
-      const raw = toBigIntSafe(s.stack ?? 0);
-      return tournamentSeatStackToChipCount(raw) > 0;
+      return Number(toBigIntSafe(s.stack ?? 0)) > 0;
     }).length;
     if (stackedSeatCount >= 2) return;
 
     const bustedAddresses: string[] = [];
     for (const seat of seats.rows) {
-      const stackRaw = toBigIntSafe(seat.stack ?? 0);
-      const stackChips = tournamentSeatStackToChipCount(stackRaw);
+      const stackChips = Number(toBigIntSafe(seat.stack ?? 0));
       const addr = seat.player_address as string;
 
       await this.pool.query(
@@ -945,8 +922,8 @@ export class PokerTournamentService {
         [tableId]
       );
       if (finalRow.rows.length > 0) {
-        const smallBlindChips = Number(toBigIntSafe(finalRow.rows[0].small_blind) / CHIP_SCALE);
-        const bigBlindChips = Number(toBigIntSafe(finalRow.rows[0].big_blind) / CHIP_SCALE);
+        const smallBlindChips = Number(toBigIntSafe(finalRow.rows[0].small_blind));
+        const bigBlindChips = Number(toBigIntSafe(finalRow.rows[0].big_blind));
         const displayLevel = this.knockoutBlindDisplayLevel(config.blindSchedule, smallBlindChips);
         this.broadcast(`poker_tournament:${tournamentId}`, 'poker_tournament_blind_level_up', {
           tournamentId,
@@ -1294,10 +1271,10 @@ export class PokerTournamentService {
     const bbRaw = t.big_blind != null ? toBigIntSafe(t.big_blind) : null;
     const currentLevel = this.computeBlindLevel(config.blindSchedule, 1);
     const smallBlindChips = sbRaw != null && sbRaw > 0n
-      ? Number(sbRaw / CHIP_SCALE)
+      ? Number(sbRaw)
       : currentLevel.smallBlind;
     const bigBlindChips = bbRaw != null && bbRaw > 0n
-      ? Number(bbRaw / CHIP_SCALE)
+      ? Number(bbRaw)
       : currentLevel.bigBlind;
     const blindLevelDisplay = this.knockoutBlindDisplayLevel(config.blindSchedule, smallBlindChips);
 

@@ -2,7 +2,7 @@
 
 import React, { useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { formatMorbiusFloor } from '@/lib/format-morbius-display';
+import { formatChips } from '@/lib/format-poker-chips';
 import { X, ExternalLink, UserPlus, UserCheck, Gift } from 'lucide-react';
 import { CopyButton } from '@/components/ui/copy-button';
 import { usePokerPlayerStats } from '@/hooks/use-poker-stats';
@@ -11,14 +11,6 @@ import { useProfileForAddress } from '@/hooks/use-player-profile';
 import { useAccount } from 'wagmi';
 import { AvatarView } from '@/components/avatar';
 import type { AvatarPayload } from '@/lib/websocket-client';
-
-function formatChips(wei: string | number): string {
-  try {
-    return formatMorbiusFloor(wei, { compact: false });
-  } catch {
-    return String(wei);
-  }
-}
 
 export interface PokerOpponentProfileCardProps {
   address: string;

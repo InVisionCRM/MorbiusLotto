@@ -2,7 +2,7 @@
 
 import React, { useRef, useState, useEffect, useCallback, useMemo } from 'react';
 import { toBigIntSafe } from '@/lib/safe-bigint';
-import { floorMorbiusWholeFromWei, formatMorbiusFloor } from '@/lib/format-morbius-display';
+import { formatChips } from '@/lib/format-poker-chips';
 import { BetChip, formatChipLabel } from '@/components/ui/BetChip';
 import { CardDisplay } from './CardDisplay';
 import type { PokerSeatState as SeatState } from '@/lib/websocket-client';
@@ -40,16 +40,6 @@ const FOLD_CRY_EMOTION_DURATION_MS = 5000;
 
 // ── Helpers ────────────────────────────────────────────────────────────────
 
-function formatChips(wei: string | number): string {
-  try {
-    const w = toBigIntSafe(wei);
-    if (w < 0n) return '0';
-    return formatMorbiusFloor(w);
-  } catch {
-    return typeof wei === 'number' ? String(Math.floor(wei)) : String(wei);
-  }
-}
-
 function shortAddr(addr: string): string {
   return addr.slice(-4);
 }
@@ -83,8 +73,8 @@ function formatActionLabel(action: string, amount?: string): string {
 export function PokerChipStack({ weiAmount }: { weiAmount: string }) {
   let amount = 0;
   try {
-    const whole = floorMorbiusWholeFromWei(toBigIntSafe(weiAmount));
-    amount = whole <= BigInt(Number.MAX_SAFE_INTEGER) ? Number(whole) : Number.MAX_SAFE_INTEGER;
+    const n = toBigIntSafe(weiAmount);
+    amount = n <= BigInt(Number.MAX_SAFE_INTEGER) ? Number(n) : Number.MAX_SAFE_INTEGER;
   } catch { /* noop */ }
   if (amount <= 0) return null;
 

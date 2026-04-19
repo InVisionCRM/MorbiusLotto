@@ -17,13 +17,13 @@ import {
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import type { PokerTableState } from '@/lib/websocket-client';
 import { CardDisplay } from '@/components/poker/CardDisplay';
-import { formatMorbiusFloor } from '@/lib/format-morbius-display';
+import { formatChips } from '@/lib/format-poker-chips';
 
 // ── Helpers ─────────────────────────────────────────────────────────────────
 
-function fmtWei(wei: string | number): string {
+function fmtChips(chips: string | number): string {
   try {
-    return formatMorbiusFloor(wei);
+    return formatChips(chips);
   } catch {
     return '0';
   }
@@ -196,7 +196,7 @@ export function PokerPlayerTableDashboard({ tableId, state, onClose }: PokerPlay
           },
           {
             title: 'Blinds',
-            value: `${fmtWei(state?.smallBlind ?? data?.table?.small_blind ?? '0')} / ${fmtWei(state?.bigBlind ?? data?.table?.big_blind ?? '0')}`,
+            value: `${fmtChips(state?.smallBlind ?? data?.table?.small_blind ?? '0')} / ${fmtChips(state?.bigBlind ?? data?.table?.big_blind ?? '0')}`,
             icon: DollarSign,
             color: 'text-purple-400',
           },
@@ -284,7 +284,7 @@ export function PokerPlayerTableDashboard({ tableId, state, onClose }: PokerPlay
 
                     {/* Stack */}
                     <span className="text-sm font-bold text-green-400 tabular-nums text-right">
-                      {fmtWei(seat.stack)}
+                      {fmtChips(seat.stack)}
                     </span>
 
                     {/* Status */}
@@ -307,7 +307,7 @@ export function PokerPlayerTableDashboard({ tableId, state, onClose }: PokerPlay
                 <span />
                 <span className="text-xs text-gray-400 font-medium">Total on table</span>
                 <span className="text-sm font-bold text-white tabular-nums text-right">
-                  {fmtWei(totalChipsOnTable.toString())}
+                  {fmtChips(totalChipsOnTable.toString())}
                 </span>
                 <span />
               </div>
@@ -328,9 +328,9 @@ export function PokerPlayerTableDashboard({ tableId, state, onClose }: PokerPlay
           <CardContent>
             <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
               {[
-                { label: 'Total Pot Volume', value: `${fmtWei(data.stats.total_pot_volume)} MORBIUS`, color: 'text-purple-400' },
-                { label: 'Biggest Pot', value: `${fmtWei(data.stats.biggest_pot)} MORBIUS`, color: 'text-yellow-400' },
-                { label: 'Avg Pot', value: `${fmtWei(data.stats.avg_pot)} MORBIUS`, color: 'text-cyan-400' },
+                { label: 'Total Pot Volume', value: `${fmtChips(data.stats.total_pot_volume)} chips`, color: 'text-purple-400' },
+                { label: 'Biggest Pot', value: `${fmtChips(data.stats.biggest_pot)} chips`, color: 'text-yellow-400' },
+                { label: 'Avg Pot', value: `${fmtChips(data.stats.avg_pot)} chips`, color: 'text-cyan-400' },
                 { label: 'Hands This Hour', value: data.stats.hands_this_hour.toString(), color: 'text-green-400' },
               ].map((item) => (
                 <div key={item.label} className="text-center p-2 rounded-md bg-gray-800/40">
@@ -372,7 +372,7 @@ export function PokerPlayerTableDashboard({ tableId, state, onClose }: PokerPlay
                   </div>
                   <div className="flex items-center gap-3 flex-shrink-0">
                     <span className="text-xs text-gray-400">
-                      Pot: <span className="text-white font-medium">{fmtWei(hand.pot_amount)}</span>
+                      Pot: <span className="text-white font-medium">{fmtChips(hand.pot_amount)}</span>
                     </span>
                     {hand.result?.winners?.[0] && (
                       <span className="text-[10px] text-green-400">

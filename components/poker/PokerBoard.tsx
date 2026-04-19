@@ -2,7 +2,6 @@
 
 import React, { useEffect, useMemo } from 'react';
 import { toBigIntSafe } from '@/lib/safe-bigint';
-import { floorMorbiusWholeFromWei } from '@/lib/format-morbius-display';
 import { CardDisplay } from './CardDisplay';
 import { motion, AnimatePresence, useMotionValue, useSpring, useTransform } from 'framer-motion';
 
@@ -15,17 +14,17 @@ export interface PokerBoardProps {
   dataTutorialTargetPot?: boolean;
 }
 
-function parsePotWholeMorbius(wei: string): number {
+function parsePotChips(chips: string): number {
   try {
-    const whole = floorMorbiusWholeFromWei(toBigIntSafe(wei));
-    return whole <= BigInt(Number.MAX_SAFE_INTEGER) ? Number(whole) : Number.MAX_SAFE_INTEGER;
+    const n = toBigIntSafe(chips);
+    return n <= BigInt(Number.MAX_SAFE_INTEGER) ? Number(n) : Number.MAX_SAFE_INTEGER;
   } catch {
     return 0;
   }
 }
 
 function AnimatedPotValue({ pot }: { pot: string }) {
-  const potNum = useMemo(() => parsePotWholeMorbius(pot), [pot]);
+  const potNum = useMemo(() => parsePotChips(pot), [pot]);
   const mv = useMotionValue(potNum);
   const spring = useSpring(mv, { stiffness: 180, damping: 28 });
   const display = useTransform(spring, (v) =>
@@ -45,7 +44,7 @@ function AnimatedPotValue({ pot }: { pot: string }) {
 }
 
 export function PokerBoard({ communityCards, pot, winningCardIndices, dataTutorialTargetPot }: PokerBoardProps) {
-  const potNum = useMemo(() => parsePotWholeMorbius(pot), [pot]);
+  const potNum = useMemo(() => parsePotChips(pot), [pot]);
 
   const potInner = (
     <div

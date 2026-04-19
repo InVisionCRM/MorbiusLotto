@@ -17,7 +17,7 @@ import {
 import { PokerGameService } from '../../services/poker-game.service';
 import { DatabaseService } from '../../services/database.service';
 import { ProvablyFairService } from '../../services/provably-fair.service';
-import { DEFAULT_POKER_CHIP_WEI } from '../../lib/poker-chip-scale';
+import { POKER_CHIP_WEI } from '../../lib/poker-chip-scale';
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -27,10 +27,9 @@ const PLAYER_1 = TEST_PLAYERS[0];
 const PLAYER_2 = TEST_PLAYERS[1];
 const PLAYER_3 = TEST_PLAYERS[2];
 
-const CHIP_WEI = DEFAULT_POKER_CHIP_WEI;
-// 1/2 blinds in wei (1 chip = CHIP_WEI)
-const SB_WEI = CHIP_WEI;       // 1 chip
-const BB_WEI = CHIP_WEI * 2n;  // 2 chips
+const CHIP_WEI = POKER_CHIP_WEI;
+const SB_CHIPS = 1;
+const BB_CHIPS = 2;
 const BUY_IN_WEI = CHIP_WEI * 100n; // 100 chips (50 BB)
 
 let dbService: DatabaseService;
@@ -65,7 +64,7 @@ async function createAndSeatPlayers(
   players: string[],
   buyInWei: bigint = BUY_IN_WEI,
 ): Promise<string> {
-  const tableId = await pokerGameService.createTable(SB_WEI, BB_WEI, 6);
+  const tableId = await pokerGameService.createTable(SB_CHIPS, BB_CHIPS, 6);
   createdTableIds.push(tableId);
 
   for (const addr of players) {
@@ -173,7 +172,7 @@ describe('Poker Table Reconstruction', () => {
         acting = state.currentHand.actingPosition!;
         actingAddr = state.seats[acting].playerAddress!;
 
-        const betAmount = BB_WEI * 2n; // 2 BB bet
+        const betAmount = BB_CHIPS * 2; // 2 BB bet
         await pokerGameService.playerAction(tableId, handId, actingAddr, 'bet', betAmount.toString());
 
         // Capture state before eviction
@@ -296,7 +295,7 @@ describe('Poker Table Reconstruction', () => {
   describe('reconstruction with all-in', () => {
     it('handles reconstruction when a player is all-in', async () => {
       // Use minimum valid buy-in (40 BB) for easier all-in
-      const smallBuyIn = BB_WEI * 40n; // 40 BB = 80 chips
+      const smallBuyIn = CHIP_WEI * BigInt(BB_CHIPS) * 40n; // 40 BB = 80 chips
       const tableId = await createAndSeatPlayers([PLAYER_1, PLAYER_2], smallBuyIn);
 
       const handState = await pokerGameService.startHand(tableId);

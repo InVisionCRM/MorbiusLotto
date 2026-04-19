@@ -307,8 +307,13 @@ export class PokerGameService {
     }));
   }
 
-  async createTable(smallBlind: bigint, bigBlind: bigint, maxSeats: number, pinCode?: string): Promise<string> {
-    assertCashBlindsValid(smallBlind, bigBlind);
+  async createTable(smallBlindChips: number, bigBlindChips: number, maxSeats: number, pinCode?: string): Promise<string> {
+    if (!Number.isInteger(smallBlindChips) || !Number.isInteger(bigBlindChips) || smallBlindChips <= 0 || bigBlindChips <= 0) {
+      throw new Error('Blinds must be positive integers (chips)');
+    }
+    if (smallBlindChips * 2 !== bigBlindChips) {
+      throw new Error('Big blind must equal 2× small blind');
+    }
     if (pinCode != null && !/^\d{4}$/.test(pinCode)) {
       throw new Error('PIN must be exactly 4 digits');
     }
@@ -317,7 +322,7 @@ export class PokerGameService {
       `INSERT INTO poker_tables (small_blind, big_blind, max_seats, status, pin_code)
        VALUES ($1::NUMERIC, $2::NUMERIC, $3, 'waiting', $4)
        RETURNING id`,
-      [smallBlind.toString(), bigBlind.toString(), maxSeats, pinCode ?? null]
+      [String(smallBlindChips), String(bigBlindChips), maxSeats, pinCode ?? null]
     );
     return r.rows[0].id;
   }
@@ -336,14 +341,15 @@ export class PokerGameService {
         [tableId]
       );
       for (const row of seats.rows) {
-        const stack = BigInt(row.stack ?? '0');
-        if (stack > 0n && row.player_address) {
+        const stackChips = Number(row.stack ?? 0);
+        const stackWei = chipsToWei(stackChips);
+        if (stackWei > 0n && row.player_address) {
           await client.query(
             `INSERT INTO players (wallet_address, balance) VALUES ($1, $2::NUMERIC)
              ON CONFLICT (wallet_address) DO UPDATE SET balance = players.balance + $2::NUMERIC, last_seen = NOW()`,
-            [row.player_address.toLowerCase(), stack.toString()]
+            [row.player_address.toLowerCase(), stackWei.toString()]
           );
-          logger.info('Poker admin delete table: credited stack', { tableId, playerAddress: row.player_address, stack: stack.toString() });
+          logger.info('Poker admin delete table: credited stack', { tableId, playerAddress: row.player_address, stackChips, creditedWei: stackWei.toString() });
         }
       }
 
@@ -433,12 +439,12 @@ export class PokerGameService {
       );
       if (Number(seatCount.rows[0].c) >= maxSeats) throw new Error('Table is full');
 
-      // Deduct balance atomically within the same transaction
+      // Deduct balance (wei) atomically within the same transaction
       const deductResult = await client.query(
         `UPDATE players SET balance = balance - $2::NUMERIC
          WHERE LOWER(wallet_address) = LOWER($1) AND balance >= $2::NUMERIC
          RETURNING balance`,
-        [normalized, buyIn.toString()]
+        [normalized, buyInWeiBig.toString()]
       );
       if (deductResult.rows.length === 0) throw new Error('Insufficient balance');
 
@@ -453,7 +459,7 @@ export class PokerGameService {
       await client.query(
         `INSERT INTO poker_seats (table_id, position, player_address, stack, status)
          VALUES ($1, $2, $3, $4::NUMERIC, 'active')`,
-        [tableId, seatPosition, normalized, buyIn.toString()]
+        [tableId, seatPosition, normalized, String(buyInChips)]
       );
       return seatPosition;
     });
@@ -462,7 +468,6 @@ export class PokerGameService {
     const activeTable = this.activeTables.get(tableId);
     if (activeTable && !activeTable.currentRound) {
       try {
-        const buyInChips = weiToEngineChips(buyIn);
         if (position === 0) {
           activeTable.sitDown(normalized, buyInChips);
         } else {
@@ -473,7 +478,7 @@ export class PokerGameService {
       }
     }
 
-    logger.info('Poker join', { tableId, playerAddress: normalized, buyIn: buyIn.toString(), position });
+    logger.info('Poker join', { tableId, playerAddress: normalized, buyInChips, position });
 
     // Auto-start if 2+ players ready
     const pool = this.getPool();
@@ -539,7 +544,7 @@ export class PokerGameService {
     }
 
     // Atomically remove seat and credit balance so a failed credit cannot strand chips.
-    const creditedStack = await this.dbService.withTransaction(async (client) => {
+    const creditedWei = await this.dbService.withTransaction(async (client) => {
       const del = await client.query(
         `DELETE FROM poker_seats WHERE table_id = $1 AND LOWER(player_address) = LOWER($2) RETURNING stack`,
         [tableId, normalized]
@@ -547,18 +552,19 @@ export class PokerGameService {
       if (del.rows.length === 0) {
         throw new Error('Not seated at this table');
       }
-      const stack = BigInt(del.rows[0].stack || '0');
-      if (stack > 0n) {
+      const stackChips = Number(del.rows[0].stack ?? 0);
+      const stackWei = chipsToWei(stackChips);
+      if (stackWei > 0n) {
         await client.query(
           `INSERT INTO players (wallet_address, balance) VALUES ($1, $2::NUMERIC)
            ON CONFLICT (wallet_address) DO UPDATE SET balance = players.balance + $2::NUMERIC, last_seen = NOW()`,
-          [normalized, stack.toString()]
+          [normalized, stackWei.toString()]
         );
       }
-      return stack;
+      return stackWei;
     });
 
-    logger.info('Poker leave', { tableId, playerAddress: normalized, stack: creditedStack.toString() });
+    logger.info('Poker leave', { tableId, playerAddress: normalized, creditedWei: creditedWei.toString() });
 
     return this.getTableState(tableId, null);
   }
@@ -570,7 +576,6 @@ export class PokerGameService {
     playerAddress: string,
     table: Table
   ): Promise<void> {
-    const scaling = await this.getTableScaling(tableId);
     const handRow = await pool.query('SELECT street FROM poker_hands WHERE id = $1', [handId]);
     if (handRow.rows.length === 0) return;
     const street = handRow.rows[0].street;
@@ -606,32 +611,29 @@ export class PokerGameService {
       );
     } else {
       // Update acting position and pot
-      const potChips = totalPotChips(table);
-      const potStr = scaling.tournament
-        ? String(Math.max(0, Math.round(potChips)))
-        : enginePotChipsToPotWei(potChips, scaling.chipWei).toString();
+      const potStr = String(Math.max(0, Math.round(totalPotChips(table))));
       const actingPos = table.currentPosition ?? null;
       await pool.query(
         'UPDATE poker_hands SET acting_position = $2, pot_amount = $3::NUMERIC, turn_started_at = NOW() WHERE id = $1',
         [handId, actingPos, potStr]
       );
-      await this.syncSeatsFromTable(pool, tableId, table, scaling);
+      await this.syncSeatsFromTable(pool, tableId, table);
     }
   }
 
-  async addChips(tableId: string, playerAddress: string, amount: string): Promise<PokerTableState> {
-    return this.withTableLock(tableId, () => this._addChips(tableId, playerAddress, amount));
+  async addChips(tableId: string, playerAddress: string, amountWei: string): Promise<PokerTableState> {
+    return this.withTableLock(tableId, () => this._addChips(tableId, playerAddress, amountWei));
   }
 
-  private async _addChips(_tableId: string, _playerAddress: string, _amount: string): Promise<PokerTableState> {
+  private async _addChips(_tableId: string, _playerAddress: string, _amountWei: string): Promise<PokerTableState> {
     const tableId = _tableId;
     const playerAddress = this.normalizeAddress(_playerAddress);
-    const amount = BigInt(_amount);
-    if (amount <= 0n) throw new Error('Re-up amount must be greater than zero');
+    const amountWei = BigInt(_amountWei);
+    if (amountWei <= 0n) throw new Error('Re-up amount must be greater than zero');
 
-    const scaling = await this.getTableScaling(tableId);
-    if (scaling.tournament) throw new Error('Tournament tables do not support re-ups');
-    assertCashChipMultiple(amount, 'Re-up');
+    if (await this.isTournamentTable(tableId)) throw new Error('Tournament tables do not support re-ups');
+
+    const amountChips = weiToChips(amountWei, 'Re-up');
 
     await this.dbService.withTransaction(async (client) => {
       const playerLock = await client.query(
@@ -658,17 +660,17 @@ export class PokerGameService {
         throw new Error('Re-ups are only available between hands');
       }
 
-      const currentStack = BigInt(seatResult.rows[0].stack ?? '0');
-      const bigBlindWei = BigInt(seatResult.rows[0].big_blind ?? '0');
-      const { minWei, maxWei } = getCashBuyInBoundsWei(bigBlindWei);
-      const nextStack = currentStack + amount;
+      const currentStackChips = Number(seatResult.rows[0].stack ?? 0);
+      const bigBlindChips = Number(seatResult.rows[0].big_blind ?? 0);
+      const { minChips, maxChips } = getCashBuyInBoundsChips(bigBlindChips);
+      const nextStackChips = currentStackChips + amountChips;
 
-      if (currentStack === 0n && (amount < minWei || amount > maxWei)) {
+      if (currentStackChips === 0 && (amountChips < minChips || amountChips > maxChips)) {
         throw new Error(
           `Rebuy must be between ${POKER_CASH_MIN_BUY_IN_BB} and ${POKER_CASH_MAX_BUY_IN_BB} big blinds.`
         );
       }
-      if (nextStack > maxWei) {
+      if (nextStackChips > maxChips) {
         throw new Error(`Stack cannot exceed ${POKER_CASH_MAX_BUY_IN_BB} big blinds after a re-up.`);
       }
 
@@ -676,7 +678,7 @@ export class PokerGameService {
         `UPDATE players SET balance = balance - $2::NUMERIC
          WHERE LOWER(wallet_address) = LOWER($1) AND balance >= $2::NUMERIC
          RETURNING balance`,
-        [playerAddress, amount.toString()]
+        [playerAddress, amountWei.toString()]
       );
       if (deductResult.rows.length === 0) throw new Error('Insufficient balance');
 
@@ -684,7 +686,7 @@ export class PokerGameService {
         `UPDATE poker_seats
          SET stack = stack + $3::NUMERIC
          WHERE table_id = $1 AND LOWER(player_address) = LOWER($2)`,
-        [tableId, playerAddress, amount.toString()]
+        [tableId, playerAddress, String(amountChips)]
       );
     });
 
@@ -729,8 +731,7 @@ export class PokerGameService {
     if (tableRow.rows.length === 0) throw new Error('Table not found');
     const tbl = tableRow.rows[0];
     const maxSeats = Number(tbl.max_seats) || 6;
-    const scaling = await this.getTableScaling(tableId);
-    const bigBlindWei = BigInt(tbl.big_blind ?? 0);
+    const bigBlindChips = Number(tbl.big_blind ?? 0);
 
     // Load DB seats
     const seatsResult = await pool.query(
@@ -760,13 +761,8 @@ export class PokerGameService {
       if (liveTable && s) {
         const livePlayer = liveTable.players[pos];
         if (livePlayer && livePlayer.id === s.playerAddress) {
-          if (scaling.tournament) {
-            stack = String(Math.max(0, Math.round(livePlayer.stackSize)));
-            currentBet = String(Math.max(0, Math.round(livePlayer.bet)));
-          } else {
-            stack = engineChipsToWeiRounded(livePlayer.stackSize).toString();
-            currentBet = engineChipsToWeiRounded(livePlayer.bet).toString();
-          }
+          stack = String(Math.max(0, Math.round(livePlayer.stackSize)));
+          currentBet = String(Math.max(0, Math.round(livePlayer.bet)));
         }
       }
 
@@ -868,9 +864,9 @@ export class PokerGameService {
         }
       }
 
-      // toCall and minRaise from live table
+      // toCall and minRaise (all chip ints)
       let toCall = '0';
-      let minRaise = bigBlindWei.toString();
+      let minRaise = String(bigBlindChips);
 
       if (liveTable && liveTable.currentRound && actingPosition != null) {
         const actor = liveTable.players[actingPosition];
@@ -878,39 +874,31 @@ export class PokerGameService {
           const toCallChips = liveTable.currentBet !== undefined
             ? Math.max(0, liveTable.currentBet - actor.bet)
             : 0;
-          const bigBlindChips = scaling.tournament ? Number(bigBlindWei) : weiToEngineChips(bigBlindWei);
           const minRaiseChips = (liveTable.currentBet ?? 0)
             + Math.max(liveTable.lastRaise ?? bigBlindChips, bigBlindChips);
-          if (scaling.tournament) {
-            toCall = String(Math.max(0, Math.round(toCallChips)));
-            minRaise = String(Math.max(0, Math.round(minRaiseChips)));
-          } else {
-            toCall = engineChipsToWeiRounded(toCallChips).toString();
-            minRaise = engineChipsToWeiRounded(minRaiseChips).toString();
-          }
+          toCall = String(Math.max(0, Math.round(toCallChips)));
+          minRaise = String(Math.max(0, Math.round(minRaiseChips)));
         }
       } else if (actingPosition != null) {
-        // Fall back to DB-computed values (amounts already in table units: wei or virtual chips)
-        const lastRaiseSizeWei = BigInt(h.last_raise_size ?? 0);
-        const minRaiseIncrement = lastRaiseSizeWei > bigBlindWei ? lastRaiseSizeWei : bigBlindWei;
-        // toCall: from actions
+        const lastRaiseSizeChips = Number(h.last_raise_size ?? 0);
+        const minRaiseIncrement = Math.max(lastRaiseSizeChips, bigBlindChips);
         const contribResult = await pool.query(
           `SELECT player_address, SUM(amount) AS total FROM poker_hand_actions
            WHERE hand_id = $1 AND street = $2 AND action IN ('bet','raise','call','blind')
            GROUP BY player_address`,
           [handId, street]
         );
-        let maxContrib = 0n;
-        let myContrib = 0n;
+        let maxContrib = 0;
+        let myContrib = 0;
         const actingAddr = dbSeatMap.get(actingPosition)?.playerAddress ?? null;
         for (const row of contribResult.rows) {
-          const t = BigInt(row.total ?? '0');
+          const t = Number(row.total ?? 0);
           if (t > maxContrib) maxContrib = t;
           if (actingAddr && row.player_address === actingAddr) myContrib = t;
         }
-        const toCallBig = maxContrib > myContrib ? maxContrib - myContrib : 0n;
-        toCall = toCallBig.toString();
-        minRaise = (toCallBig + minRaiseIncrement).toString();
+        const toCallNum = maxContrib > myContrib ? maxContrib - myContrib : 0;
+        toCall = String(toCallNum);
+        minRaise = String(toCallNum + minRaiseIncrement);
       }
 
       // Last action
@@ -945,11 +933,9 @@ export class PokerGameService {
         };
       }
 
-      // Pot: prefer live table total
+      // Pot (chip int): prefer live table total
       const potStr = liveTable && liveTable.currentRound
-        ? (scaling.tournament
-            ? String(Math.max(0, Math.round(totalPotChips(liveTable))))
-            : enginePotChipsToPotWei(totalPotChips(liveTable), scaling.chipWei).toString())
+        ? String(Math.max(0, Math.round(totalPotChips(liveTable))))
         : (h.pot_amount?.toString() ?? '0');
 
       // Update seat flags
@@ -965,9 +951,7 @@ export class PokerGameService {
         if (liveTable) {
           const livePlayer = liveTable.players[pos];
           if (livePlayer && livePlayer.id === seat.playerAddress) {
-            seat.currentBet = scaling.tournament
-              ? String(Math.max(0, Math.round(livePlayer.bet)))
-              : engineChipsToWeiRounded(livePlayer.bet).toString();
+            seat.currentBet = String(Math.max(0, Math.round(livePlayer.bet)));
           }
         }
       }
@@ -1146,7 +1130,6 @@ export class PokerGameService {
 
   async startHand(tableId: string): Promise<PokerTableState | null> {
     const pool = this.getPool();
-    const scaling = await this.getTableScaling(tableId);
 
     const tableResult = await pool.query(
       'SELECT id, small_blind, big_blind, max_seats, hand_number, button_position, tournament_id FROM poker_tables WHERE id = $1',
@@ -1156,20 +1139,10 @@ export class PokerGameService {
     const tblRow = tableResult.rows[0];
     const maxSeats = Number(tblRow.max_seats) || 6;
 
-    const sbWei = BigInt(tblRow.small_blind ?? 0);
-    const bbWei = BigInt(tblRow.big_blind ?? 0);
-    let sb: number;
-    let bb: number;
-    if (scaling.tournament) {
-      sb = Number(sbWei);
-      bb = Number(bbWei);
-      if (!Number.isFinite(sb) || !Number.isFinite(bb) || sb <= 0 || bb <= 0) {
-        throw new Error('Invalid blinds');
-      }
-    } else {
-      assertCashBlindsValid(sbWei, bbWei);
-      sb = weiToEngineChips(sbWei);
-      bb = weiToEngineChips(bbWei);
+    const sb = Number(tblRow.small_blind ?? 0);
+    const bb = Number(tblRow.big_blind ?? 0);
+    if (!Number.isFinite(sb) || !Number.isFinite(bb) || sb <= 0 || bb <= 0) {
+      throw new Error('Invalid blinds');
     }
 
     const seatsResult = await pool.query(
@@ -1177,7 +1150,7 @@ export class PokerGameService {
        WHERE table_id = $1 AND status != 'sitting_out' ORDER BY position`,
       [tableId]
     );
-    const withStack = seatsResult.rows.filter((r: any) => BigInt(r.stack ?? '0') > 0n);
+    const withStack = seatsResult.rows.filter((r: any) => Number(r.stack ?? 0) > 0);
     if (withStack.length < 2) return null;
 
     // Build or reset the in-memory Table (chevtek uses integer "chips", not wei)
@@ -1192,10 +1165,7 @@ export class PokerGameService {
     for (const seat of withStack) {
       const pos = Number(seat.position);
       const addr = (seat.player_address || '').toLowerCase();
-      const stackWei = BigInt(seat.stack ?? '0');
-      const stackChips = scaling.tournament
-        ? Number(stackWei)
-        : weiToEngineChips(stackWei);
+      const stackChips = Number(seat.stack ?? 0);
       if (pos === 0) {
         table.sitDown(addr, stackChips);
       } else {
@@ -1251,12 +1221,9 @@ export class PokerGameService {
     const sbBlind = sbPlayer ? sbPlayer.bet : sb;  // bet already deducted by dealCards
     const bbBlind = bbPlayer ? bbPlayer.bet : bb;
 
-    // Insert hand into DB
-    const potChips0 = totalPotChips(table);
-    const potStr0 = scaling.tournament
-      ? String(Math.max(0, Math.round(potChips0)))
-      : enginePotChipsToPotWei(potChips0, scaling.chipWei).toString();
-    const lastRaiseSizeStr = scaling.tournament ? String(Math.round(bb)) : bbWei.toString();
+    // Insert hand into DB (chip ints)
+    const potStr0 = String(Math.max(0, Math.round(totalPotChips(table))));
+    const lastRaiseSizeStr = String(Math.round(bb));
     const tournamentIdForHand: string | null = tblRow.tournament_id ?? null;
     const handInsert = await pool.query(
       `INSERT INTO poker_hands
@@ -1288,11 +1255,8 @@ export class PokerGameService {
       );
     }
 
-    // Insert blind actions (amounts in table units: wei for cash, virtual chips for tournament)
-    const blindAmountStr = (chips: number) =>
-      scaling.tournament
-        ? String(Math.max(0, Math.round(chips)))
-        : engineChipsToWeiRounded(chips).toString();
+    // Insert blind actions (chip ints)
+    const blindAmountStr = (chips: number) => String(Math.max(0, Math.round(chips)));
     let actionOrder = 1;
     if (sbPlayer) {
       await pool.query(
@@ -1316,7 +1280,7 @@ export class PokerGameService {
     );
 
     // Sync seat stacks (blinds already deducted by chevtek)
-    await this.syncSeatsFromTable(pool, tableId, table, scaling);
+    await this.syncSeatsFromTable(pool, tableId, table);
 
     return this.getTableState(tableId, null);
   }
@@ -1352,8 +1316,6 @@ export class PokerGameService {
     );
     if (handRow.rows.length === 0) throw new Error('Hand not found or already completed');
 
-    const scaling = await this.getTableScaling(tableId);
-
     // In-memory table is recoverable; reconstruct from DB when cache is missing.
     const table = await this.getOrReconstructActiveTable(tableId, pool, 'player_action');
 
@@ -1385,8 +1347,14 @@ export class PokerGameService {
       'SELECT big_blind FROM poker_tables WHERE id = $1',
       [tableId]
     );
-    const bbWei = BigInt(tableRow.rows[0]?.big_blind ?? 0);
-    const bbChips = scaling.tournament ? Number(bbWei) : weiToEngineChips(bbWei);
+    const bbChips = Number(tableRow.rows[0]?.big_blind ?? 0);
+
+    const parseAmountChips = (): number => {
+      const raw = BigInt(amount ?? '0');
+      let amt = Math.min(Number(raw), actor.stackSize);
+      if (!Number.isFinite(amt) || amt < 0) amt = 0;
+      return amt;
+    };
 
     let actionAmountDb = '0';
 
@@ -1407,49 +1375,21 @@ export class PokerGameService {
           throw new Error('Nothing to call');
         }
         actor.callAction();
-        if (callChips > 0) {
-          actionAmountDb = scaling.tournament
-            ? String(Math.max(0, Math.round(callChips)))
-            : engineChipsToWeiRounded(callChips).toString();
-        }
+        actionAmountDb = String(Math.max(0, Math.round(callChips)));
         break;
       }
       case 'bet': {
-        let amtChips: number;
-        if (scaling.tournament) {
-          const raw = BigInt(amount ?? '0');
-          amtChips = Math.min(Number(raw), actor.stackSize);
-          if (!Number.isFinite(amtChips) || amtChips < 0) amtChips = 0;
-        } else {
-          const wei = BigInt(amount ?? '0');
-          assertCashChipMultiple(wei, 'Bet');
-          amtChips = weiToEngineChips(wei);
-          amtChips = Math.min(amtChips, actor.stackSize);
-        }
+        const amtChips = parseAmountChips();
         if (amtChips === 0 && actor.stackSize === 0) throw new Error('You are already all-in');
         actor.betAction(amtChips);
-        actionAmountDb = scaling.tournament
-          ? String(Math.max(0, Math.round(amtChips)))
-          : engineChipsToWeiRounded(amtChips).toString();
+        actionAmountDb = String(Math.max(0, Math.round(amtChips)));
         break;
       }
       case 'raise': {
-        let amtChips: number;
-        if (scaling.tournament) {
-          const raw = BigInt(amount ?? '0');
-          amtChips = Math.min(Number(raw), actor.stackSize);
-          if (!Number.isFinite(amtChips) || amtChips < 0) amtChips = 0;
-        } else {
-          const wei = BigInt(amount ?? '0');
-          assertCashChipMultiple(wei, 'Raise');
-          amtChips = weiToEngineChips(wei);
-          amtChips = Math.min(amtChips, actor.stackSize);
-        }
+        const amtChips = parseAmountChips();
         if (amtChips === 0 && actor.stackSize === 0) throw new Error('You are already all-in');
         actor.raiseAction(amtChips);
-        actionAmountDb = scaling.tournament
-          ? String(Math.max(0, Math.round(amtChips)))
-          : engineChipsToWeiRounded(amtChips).toString();
+        actionAmountDb = String(Math.max(0, Math.round(amtChips)));
         break;
       }
       default:
@@ -1487,19 +1427,14 @@ export class PokerGameService {
       await this.broadcastState(tableId);
       this.scheduleNextHandAfterShowdown(tableId);
     } else {
-      // Update community cards, pot, acting position, street
+      // Update community cards, pot, acting position, street (chip ints)
       const communityInts = table.communityCards.map(cardToInt);
-      const potChips = totalPotChips(table);
-      const potStr = scaling.tournament
-        ? String(Math.max(0, Math.round(potChips)))
-        : enginePotChipsToPotWei(potChips, scaling.chipWei).toString();
+      const potStr = String(Math.max(0, Math.round(totalPotChips(table))));
       const actingPos = table.currentPosition ?? null;
       const lrChips = table.lastRaise ?? bbChips;
       const lastRaiseSizeDb = streetChanged
-        ? (scaling.tournament ? String(Math.round(bbChips)) : bbWei.toString())
-        : (scaling.tournament
-            ? String(Math.max(0, Math.round(lrChips)))
-            : engineChipsToWeiRounded(lrChips).toString());
+        ? String(Math.round(bbChips))
+        : String(Math.max(0, Math.round(lrChips)));
 
       await pool.query(
         `UPDATE poker_hands
@@ -1520,7 +1455,7 @@ export class PokerGameService {
       );
 
       // Sync seat stacks
-      await this.syncSeatsFromTable(pool, tableId, table, scaling);
+      await this.syncSeatsFromTable(pool, tableId, table);
       await this.broadcastState(tableId);
     }
 
@@ -1532,8 +1467,7 @@ export class PokerGameService {
   // ---------------------------------------------------------------------------
 
   private async persistShowdown(pool: Pool, tableId: string, handId: string, table: Table): Promise<void> {
-    const scaling = await this.getTableScaling(tableId);
-    const chipWei = scaling.chipWei;
+    const isTournament = await this.isTournamentTable(tableId);
     const resultWinners: { address: string; amount: string; handName?: string; winningCardIndices?: number[] }[] = [];
 
     // Integer chip split per pot (no float drift), then convert to wei for cash.
@@ -1551,53 +1485,42 @@ export class PokerGameService {
       }
     }
 
-    // Compute per-player rake (cash games only) and build winner amounts for the result payload.
-    let totalRake = 0n;
-    const rakeByAddr = new Map<string, bigint>(); // per-winner rake in wei
+    // Compute per-player rake (cash games only) and build winner amounts (chip ints) for the result payload.
+    let totalRakeChips = 0n;
+    const rakeByAddr = new Map<string, bigint>(); // per-winner rake in chips
     const rakedWinnerAmounts = new Map<string, bigint>();
-    if (scaling.tournament) {
+    if (isTournament) {
       for (const [addr, ch] of winnerChips) {
         rakedWinnerAmounts.set(addr, ch);
       }
     } else {
-      // Rake in whole engine chips so (grossWei - rakeWei) stays 0 mod chipWei; wei-level
-      // 5% left sub-chip remainders that broke weiToEngineChips / assertCashChipMultiple.
       const pct = BigInt(RAKE_PERCENT);
       for (const [addr, ch] of winnerChips) {
         const rakeChips = (ch * pct) / 100n;
-        const rakeWei = rakeChips * chipWei;
-        const netChips = ch - rakeChips;
-        rakedWinnerAmounts.set(addr, netChips * chipWei);
-        rakeByAddr.set(addr, rakeWei);
-        totalRake += rakeWei;
+        rakedWinnerAmounts.set(addr, ch - rakeChips);
+        rakeByAddr.set(addr, rakeChips);
+        totalRakeChips += rakeChips;
       }
     }
 
-    // Sync engine stacks → DB, applying rake deduction atomically for cash games.
-    // For winners: write (engineStack * chipWei - playerRake) instead of syncing then subtracting.
-    // For non-winners: write engineStack * chipWei (or virtual chips for tournaments).
+    // Sync engine stacks → DB (chip ints), applying rake deduction atomically for cash games.
     for (const player of table.players) {
       if (!player) continue;
-      let stackStr: string;
-      if (scaling.tournament) {
-        stackStr = String(Math.max(0, Math.round(player.stackSize)));
-      } else {
-        const grossWei = engineChipsToWeiRounded(player.stackSize);
-        const playerRake = rakeByAddr.get(player.id) ?? 0n;
-        const netWei = grossWei - playerRake;
-        stackStr = (netWei > 0n ? netWei : 0n).toString();
-      }
+      const grossChips = BigInt(Math.max(0, Math.round(player.stackSize)));
+      const playerRake = rakeByAddr.get(player.id) ?? 0n;
+      const netChips = grossChips > playerRake ? grossChips - playerRake : 0n;
       await pool.query(
         'UPDATE poker_seats SET stack = $3::NUMERIC WHERE table_id = $1 AND player_address = $2',
-        [tableId, player.id, stackStr]
+        [tableId, player.id, netChips.toString()]
       );
     }
 
-    // Credit rake wallet
+    // Credit rake wallet in wei
     const rakeWallet = getPokerRakeWallet();
-    if (totalRake > 0n && !scaling.tournament) {
-      await this.dbService.addBalanceToAddress(rakeWallet, totalRake);
-      logger.info('Poker rake collected', { handId, tableId, rake: totalRake.toString(), wallet: rakeWallet });
+    if (totalRakeChips > 0n && !isTournament) {
+      const rakeWei = totalRakeChips * POKER_CHIP_WEI;
+      await this.dbService.addBalanceToAddress(rakeWallet, rakeWei);
+      logger.info('Poker rake collected', { handId, tableId, rakeChips: totalRakeChips.toString(), rakeWei: rakeWei.toString(), wallet: rakeWallet });
     }
 
     // Get hole cards from DB for hand names
@@ -1633,7 +1556,7 @@ export class PokerGameService {
        SET completed_at = NOW(), street = 'showdown', acting_position = NULL,
            community_cards = $2::JSONB, result = $3::JSONB, rake_amount = $4::NUMERIC
        WHERE id = $1`,
-      [handId, JSON.stringify(communityInts), JSON.stringify({ winners: resultWinners }), totalRake.toString()]
+      [handId, JSON.stringify(communityInts), JSON.stringify({ winners: resultWinners }), totalRakeChips.toString()]
     );
     await pool.query('UPDATE poker_tables SET status = $2 WHERE id = $1', [tableId, 'waiting']);
 
@@ -1668,7 +1591,6 @@ export class PokerGameService {
       try {
         // Serialize with player actions on the same table
         await this.withTableLock(row.table_id, async () => {
-          const scaling = await this.getTableScaling(row.table_id);
           const table = await this.getOrReconstructActiveTable(row.table_id, pool, 'timeout_autofold');
 
           const actor = table.currentActor;
@@ -1706,10 +1628,7 @@ export class PokerGameService {
             this.scheduleNextHandAfterShowdown(row.table_id);
           } else {
             const communityInts = table.communityCards.map(cardToInt);
-            const potChips = totalPotChips(table);
-            const potStr = scaling.tournament
-              ? String(Math.max(0, Math.round(potChips)))
-              : enginePotChipsToPotWei(potChips, scaling.chipWei).toString();
+            const potStr = String(Math.max(0, Math.round(totalPotChips(table))));
             const actingPos = table.currentPosition ?? null;
             const newStreet = chevtekStreetToPoker(table.currentRound, false);
             await pool.query(
@@ -1719,7 +1638,7 @@ export class PokerGameService {
                WHERE id = $1`,
               [row.hand_id, newStreet, JSON.stringify(communityInts), actingPos, potStr]
             );
-            await this.syncSeatsFromTable(pool, row.table_id, table, scaling);
+            await this.syncSeatsFromTable(pool, row.table_id, table);
             await this.broadcastState(row.table_id);
           }
 
@@ -1864,30 +1783,17 @@ export class PokerGameService {
   // ---------------------------------------------------------------------------
 
   private async reconstructTable(tableId: string, pool: Pool): Promise<Table> {
-    const scaling = await this.getTableScaling(tableId);
-
     const tblRow = await pool.query(
       'SELECT small_blind, big_blind, max_seats, button_position, hand_number FROM poker_tables WHERE id = $1',
       [tableId]
     );
     if (tblRow.rows.length === 0) throw new Error('Table not found');
     const tbl = tblRow.rows[0];
-    const sbWei = BigInt(tbl.small_blind ?? 0);
-    const bbWei = BigInt(tbl.big_blind ?? 0);
-    const maxSeats = Number(tbl.max_seats) || 6;
 
-    let sb: number;
-    let bb: number;
-    if (scaling.tournament) {
-      sb = Number(sbWei);
-      bb = Number(bbWei);
-      if (!Number.isFinite(sb) || !Number.isFinite(bb) || sb <= 0 || bb <= 0) {
-        throw new Error('Invalid blinds');
-      }
-    } else {
-      assertCashBlindsValid(sbWei, bbWei);
-      sb = weiToEngineChips(sbWei);
-      bb = weiToEngineChips(bbWei);
+    const sb = Number(tbl.small_blind ?? 0);
+    const bb = Number(tbl.big_blind ?? 0);
+    if (!Number.isFinite(sb) || !Number.isFinite(bb) || sb <= 0 || bb <= 0) {
+      throw new Error('Invalid blinds');
     }
 
     const activeHand = await pool.query(
@@ -1908,8 +1814,7 @@ export class PokerGameService {
         if (!seat.player_address || BigInt(seat.stack ?? '0') === 0n) continue;
         const pos = Number(seat.position);
         const addr = (seat.player_address || '').toLowerCase();
-        const stackWei = BigInt(seat.stack ?? '0');
-        const stackChips = scaling.tournament ? Number(stackWei) : weiToEngineChips(stackWei);
+        const stackChips = Number(seat.stack ?? 0);
         if (pos === 0) {
           table.sitDown(addr, stackChips);
         } else {
@@ -1938,34 +1843,20 @@ export class PokerGameService {
       [hand.id]
     );
 
-    const committedNum = new Map<string, number>();
-    const committedWei = new Map<string, bigint>();
+    const committedChips = new Map<string, number>();
     for (const row of actionsResult.rows) {
       const addr = (row.player_address || '').toLowerCase();
       if (!['bet', 'raise', 'call', 'blind'].includes(row.action)) continue;
-      if (scaling.tournament) {
-        committedNum.set(addr, (committedNum.get(addr) ?? 0) + Number(row.amount ?? 0));
-      } else {
-        const a = BigInt(row.amount ?? '0');
-        committedWei.set(addr, (committedWei.get(addr) ?? 0n) + a);
-      }
+      committedChips.set(addr, (committedChips.get(addr) ?? 0) + Number(row.amount ?? 0));
     }
 
     for (const seat of seatsResult.rows) {
       const addr = (seat.player_address || '').toLowerCase();
       if (!dealtAddrs.has(addr)) continue;
       const pos = Number(seat.position);
-      let startingStack: number;
-      if (scaling.tournament) {
-        const currentStack = Number(BigInt(seat.stack ?? '0'));
-        const totalCommitted = committedNum.get(addr) ?? 0;
-        startingStack = currentStack + totalCommitted;
-      } else {
-        const currentStackWei = BigInt(seat.stack ?? '0');
-        const totalCommittedWei = committedWei.get(addr) ?? 0n;
-        const startingStackWei = currentStackWei + totalCommittedWei;
-        startingStack = weiToEngineChips(startingStackWei);
-      }
+      const currentStack = Number(seat.stack ?? 0);
+      const totalCommitted = committedChips.get(addr) ?? 0;
+      const startingStack = currentStack + totalCommitted;
 
       if (pos === 0) {
         table.sitDown(addr, startingStack);
@@ -2084,16 +1975,12 @@ export class PokerGameService {
           case 'check': actor.checkAction(); break;
           case 'call': actor.callAction(); break;
           case 'bet': {
-            const chips = scaling.tournament
-              ? Number(actionRow.amount)
-              : weiToEngineChips(BigInt(actionRow.amount ?? '0'));
+            const chips = Number(actionRow.amount ?? 0);
             actor.betAction(chips);
             break;
           }
           case 'raise': {
-            const chips = scaling.tournament
-              ? Number(actionRow.amount)
-              : weiToEngineChips(BigInt(actionRow.amount ?? '0'));
+            const chips = Number(actionRow.amount ?? 0);
             actor.raiseAction(chips);
             break;
           }
@@ -2129,9 +2016,7 @@ export class PokerGameService {
       );
       let maxContrib = 0;
       for (const row of streetContribResult.rows) {
-        const chips = scaling.tournament
-          ? Number(row.total ?? 0)
-          : weiToEngineChips(BigInt(row.total ?? '0'));
+        const chips = Number(row.total ?? 0);
         if (chips > maxContrib) maxContrib = chips;
         const p = table.players.find((pl) => pl?.id === (row.player_address || '').toLowerCase());
         if (p) p.bet = chips;
@@ -2203,13 +2088,10 @@ export class PokerGameService {
     pool: Pool,
     tableId: string,
     table: Table,
-    scaling: { tournament: boolean; chipWei: bigint }
   ): Promise<void> {
     for (const player of table.players) {
       if (!player) continue;
-      const stackStr = scaling.tournament
-        ? String(Math.max(0, Math.round(player.stackSize)))
-        : engineChipsToWeiRounded(player.stackSize).toString();
+      const stackStr = String(Math.max(0, Math.round(player.stackSize)));
       await pool.query(
         'UPDATE poker_seats SET stack = $3::NUMERIC WHERE table_id = $1 AND player_address = $2',
         [tableId, player.id, stackStr]

@@ -19,7 +19,7 @@ import {
 } from 'lucide-react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { CardDisplay } from '@/components/poker/CardDisplay'
-import { formatMorbiusFloor } from '@/lib/format-morbius-display'
+import { formatChips } from '@/lib/format-poker-chips'
 
 // ---------------------------------------------------------------------------
 // Types
@@ -78,9 +78,9 @@ interface TableDashboardData {
 // Helpers
 // ---------------------------------------------------------------------------
 
-function fmtWei(wei: string): string {
+function fmtChipsSafe(chips: string): string {
   try {
-    return formatMorbiusFloor(wei || '0')
+    return formatChips(chips || '0')
   } catch {
     return '0'
   }
@@ -193,21 +193,21 @@ export function PokerTableDashboard({ tableId, onClose }: PokerTableDashboardPro
     },
     {
       title: 'Total Rake',
-      value: `${fmtWei(stats.total_rake)} MORBIUS`,
+      value: `${fmtChipsSafe(stats.total_rake)} chips`,
       icon: DollarSign,
       subtitle: 'Collected from completed hands',
       color: 'text-cyan-400',
     },
     {
       title: 'Pot Volume',
-      value: `${fmtWei(stats.total_pot_volume)} MORBIUS`,
+      value: `${fmtChipsSafe(stats.total_pot_volume)} chips`,
       icon: Activity,
-      subtitle: `Avg pot: ${fmtWei(stats.avg_pot)}`,
+      subtitle: `Avg pot: ${fmtChipsSafe(stats.avg_pot)}`,
       color: 'text-purple-400',
     },
     {
       title: 'Biggest Pot',
-      value: `${fmtWei(stats.biggest_pot)} MORBIUS`,
+      value: `${fmtChipsSafe(stats.biggest_pot)} chips`,
       icon: Trophy,
       subtitle: 'All-time high',
       color: 'text-yellow-400',
@@ -320,7 +320,7 @@ export function PokerTableDashboard({ tableId, onClose }: PokerTableDashboardPro
                       </div>
                       <div className="text-right">
                         <span className="text-sm font-medium text-cyan-400">
-                          {fmtWei(seat.stack)} MORBIUS
+                          {fmtChipsSafe(seat.stack)} chips
                         </span>
                         <p className="text-xs text-gray-500">
                           joined {timeAgo(seat.joined_at)}
@@ -381,13 +381,13 @@ export function PokerTableDashboard({ tableId, onClose }: PokerTableDashboardPro
                             {p.vpip_pct.toFixed(1)}%
                           </td>
                           <td className="py-2.5 px-3 text-right text-purple-400 tabular-nums">
-                            {fmtWei(p.total_wagered)}
+                            {fmtChipsSafe(p.total_wagered)}
                           </td>
                           <td className="py-2.5 px-3 text-right text-cyan-400 tabular-nums">
-                            {fmtWei(p.total_won)}
+                            {fmtChipsSafe(p.total_won)}
                           </td>
                           <td className={`py-2.5 pl-3 text-right font-medium tabular-nums ${getPnlColor(p.net_pnl)}`}>
-                            {BigInt(p.net_pnl) > 0n ? '+' : ''}{fmtWei(p.net_pnl)}
+                            {BigInt(p.net_pnl) > 0n ? '+' : ''}{fmtChipsSafe(p.net_pnl)}
                           </td>
                         </tr>
                       )
@@ -454,14 +454,14 @@ export function PokerTableDashboard({ tableId, onClose }: PokerTableDashboardPro
                         <div className="flex items-center gap-4">
                           <div className="text-right">
                             <span className="text-sm font-medium text-cyan-400">
-                              {fmtWei(hand.pot_amount)}
+                              {fmtChipsSafe(hand.pot_amount)}
                             </span>
                             <span className="text-xs text-gray-500 ml-1">pot</span>
                           </div>
                           {BigInt(hand.rake_amount) > 0n && (
                             <div className="text-right">
                               <span className="text-xs text-yellow-400/80">
-                                {fmtWei(hand.rake_amount)} rake
+                                {fmtChipsSafe(hand.rake_amount)} rake
                               </span>
                             </div>
                           )}
@@ -474,7 +474,7 @@ export function PokerTableDashboard({ tableId, onClose }: PokerTableDashboardPro
                           {winners.map((w, i) => (
                             <span key={i} className="text-xs text-green-400">
                               <Trophy className="w-3 h-3 inline mr-0.5 -mt-0.5" />
-                              {fmtAddr(w.address)} won {fmtWei(w.amount)}
+                              {fmtAddr(w.address)} won {fmtChipsSafe(w.amount)}
                               {w.handName && (
                                 <span className="text-green-400/60 ml-1">({w.handName})</span>
                               )}

@@ -5,15 +5,12 @@ import { Activity, Target, Trophy, DollarSign, TrendingUp, TrendingDown, History
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { usePokerPlayerHands, usePokerPlayerStats } from '@/hooks/use-poker-stats'
 import { toBigIntSafe } from '@/lib/safe-bigint'
-import { formatMorbiusFloor } from '@/lib/format-morbius-display'
+import { formatChips } from '@/lib/format-poker-chips'
 import { PlayerStatsFeatureGrid } from '@/components/ui/player-stats-feature-grid'
 
-function formatChips(wei: string | number): string {
-  try {
-    return formatMorbiusFloor(wei, { compact: false })
-  } catch {
-    return String(wei)
-  }
+function formatSignedChips(chips: bigint): string {
+  const n = chips < 0n ? -chips : chips
+  return (chips < 0n ? '-' : '') + formatChips(n)
 }
 
 function getProfitColor(value: string): string {
@@ -71,21 +68,21 @@ export function PokerPlayerDashboard({ playerAddress }: PokerPlayerDashboardProp
     },
     {
       title: 'Profit / Loss',
-      value: `${toBigIntSafe(stats.profit_loss) >= 0n ? '+' : ''}${formatMorbiusFloor(stats.profit_loss, { compact: false })}`,
+      value: `${toBigIntSafe(stats.profit_loss) >= 0n ? '+' : ''}${formatSignedChips(toBigIntSafe(stats.profit_loss))}`,
       subtitle: `${stats.roi >= 0 ? '+' : ''}${Math.round(stats.roi)}% ROI`,
       icon: toBigIntSafe(stats.profit_loss) >= 0n ? TrendingUp : TrendingDown,
       valueClassName: getProfitColor(stats.profit_loss),
     },
     {
       title: 'Total Wagered',
-      value: `${formatChips(stats.total_wagered)} MORBIUS`,
+      value: `${formatChips(stats.total_wagered)} chips`,
       subtitle: 'Chips contributed',
       icon: DollarSign,
       valueClassName: 'text-neutral-100',
     },
     {
       title: 'Total Won',
-      value: `${formatChips(stats.total_won)} MORBIUS`,
+      value: `${formatChips(stats.total_won)} chips`,
       subtitle: 'Chips won from pots',
       icon: Trophy,
       valueClassName: 'text-cyan-300',
@@ -129,13 +126,13 @@ export function PokerPlayerDashboard({ playerAddress }: PokerPlayerDashboardProp
                     <div>
                       <p className="text-sm text-white font-medium">Hand #{hand.hand_number}</p>
                       <p className="text-xs text-gray-400">
-                        Pot {formatChips(hand.pot_amount)} MORBIUS
+                        Pot {formatChips(hand.pot_amount)} chips
                       </p>
                     </div>
                     <div className="text-right">
                       <p className={`text-sm font-semibold ${profit >= 0n ? 'text-green-400' : 'text-red-400'}`}>
                         {profit >= 0n ? '+' : ''}
-                        {formatMorbiusFloor(profit, { compact: false })} MORBIUS
+                        {formatSignedChips(profit)} chips
                       </p>
                       <p className="text-xs text-gray-500">{new Date(hand.completed_at).toLocaleString()}</p>
                     </div>

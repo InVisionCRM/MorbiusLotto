@@ -14,7 +14,6 @@ import { InstantLotteryService } from '../services/instant-lottery.service';
 import { MerkleDropsService } from '../services/merkle-drops.service';
 import { MerkleDropsLPService } from '../services/merkle-lp-drops.service';
 import { CosmeticsService } from '../services/cosmetics.service';
-import { getPokerChipWei } from '../lib/poker-chip-scale';
 import { logger } from '../utils/logger';
 
 export interface RuntimeServices {
@@ -38,9 +37,8 @@ export interface RuntimeServices {
 async function recoverPokerRuntimeState(dbService: DatabaseService, pokerGameService: PokerGameService): Promise<void> {
   const existingTables = await pokerGameService.listTables();
   if (existingTables.length === 0) {
-    const pcw = getPokerChipWei();
-    await pokerGameService.createTable(pcw * 10n, pcw * 20n, 6);
-    logger.info('Poker: created default table (10/20 chips, 6 seats; chip wei = %s)', pcw.toString());
+    await pokerGameService.createTable(10, 20, 6);
+    logger.info('Poker: created default table (10/20 chips, 6 seats)');
   }
 
   try {

@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect, useRef, useCallback, type CSSProperties } from 'react';
-import { formatMorbiusFloor } from '@/lib/format-morbius-display';
+import { formatChips } from '@/lib/format-poker-chips';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useChat } from '@/hooks/use-chat';
 import type { BlackjackWebSocketClient, PokerTableState } from '@/lib/websocket-client';
@@ -97,9 +97,9 @@ function formatEventTime(ts: number): string {
   return new Date(ts).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
 }
 
-function fmtWei(wei: string | number): string {
+function fmtChips(chips: string | number): string {
   try {
-    return formatMorbiusFloor(wei);
+    return formatChips(chips);
   } catch {
     return '';
   }
@@ -191,8 +191,8 @@ export function PokerActivityFeed({
   useEffect(() => {
     if (!connected || !tableId || welcomeSentRef.current) return;
     welcomeSentRef.current = true;
-    const sb = state?.smallBlind ? fmtWei(state.smallBlind) : '?';
-    const bb = state?.bigBlind ? fmtWei(state.bigBlind) : '?';
+    const sb = state?.smallBlind ? fmtChips(state.smallBlind) : '?';
+    const bb = state?.bigBlind ? fmtChips(state.bigBlind) : '?';
     setEntries((prev) => [
       ...prev,
       {
@@ -518,7 +518,7 @@ export function PokerActivityFeed({
     }
     if (entry.kind === 'showdown') {
       const name = displayPlayerName(entry.displayName, entry.winnerAddr);
-      const amt = fmtWei(entry.amount);
+      const amt = fmtChips(entry.amount);
       return (
         <div
           key={entry.id}
@@ -563,7 +563,7 @@ export function PokerActivityFeed({
       const color = ACTION_COLORS[entry.action] ?? 'rgba(255,255,255,0.55)';
       const label = ACTION_LABELS[entry.action] ?? entry.action;
       const name = displayPlayerName(entry.displayName, entry.playerAddr) || seatLabel(entry.seatIndex, state);
-      const amtStr = entry.amount ? fmtWei(entry.amount) : '';
+      const amtStr = entry.amount ? fmtChips(entry.amount) : '';
       return (
         <div key={entry.id} className="flex items-baseline gap-1 px-2.5 py-[2px] text-[10px] md:text-[11px] leading-snug">
           <span className="font-mono shrink-0" style={{ color: 'rgba(255,255,255,0.5)' }}>{name}</span>

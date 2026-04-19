@@ -24,7 +24,6 @@ import { MerkleDropsLPService } from './services/merkle-lp-drops.service';
 import { CosmeticsService } from './services/cosmetics.service';
 import { isAdminWallet, getLockedFields, ITEM_CATALOG } from './lib/cosmetics-catalog';
 import { resolveDisplayNameForProfileUpsert } from './lib/resolve-profile-display-name';
-import { getPokerChipWei } from './lib/poker-chip-scale';
 import { logger } from './utils/logger';
 import { assertPokerBotControlAllowed, assertPokerTournamentBotControlAllowed } from './utils/poker-bot-auth';
 import { MIN_WITHDRAWAL_WEI } from './utils/withdraw-sign';
@@ -254,9 +253,8 @@ async function initializeServices() {
     const pokerGameService = new PokerGameService(dbService, pfService);
     const existingTables = await pokerGameService.listTables();
     if (existingTables.length === 0) {
-      const pcw = getPokerChipWei();
-      await pokerGameService.createTable(pcw * 10n, pcw * 20n, 6);
-      logger.info('Poker: created default table (10/20 chips, 6 seats; chip wei = %s)', pcw.toString());
+      await pokerGameService.createTable(10, 20, 6);
+      logger.info('Poker: created default table (10/20 chips, 6 seats)');
     }
 
     // Clear stale/incomplete poker hands from previous server sessions.

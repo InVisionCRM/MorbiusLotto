@@ -3,7 +3,7 @@
 import React, { useMemo, useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { toBigIntSafe } from '@/lib/safe-bigint';
-import { formatMorbiusFloor } from '@/lib/format-morbius-display';
+import { formatChips } from '@/lib/format-poker-chips';
 import {
   Activity,
   BarChart3,
@@ -28,17 +28,7 @@ import {
   type PokerPlayerStats as PokerStatsType,
 } from '@/hooks/use-poker-stats';
 
-function formatChips(wei: string | number): string {
-  try {
-    return formatMorbiusFloor(wei, { compact: false });
-  } catch {
-    return String(wei);
-  }
-}
-
-/** Tournament pots/actions are integer chips in DB, not MORBIUS wei. */
-function formatHandChipAmount(isTournament: boolean, raw: string | number): string {
-  if (isTournament) return `${toBigIntSafe(raw).toLocaleString()} chips`;
+function formatHandChipAmount(_isTournament: boolean, raw: string | number): string {
   return formatChips(raw);
 }
 
@@ -255,7 +245,7 @@ export function PokerStatsModal({ isOpen, onClose, playerAddress }: PokerStatsMo
               ) : (
                 <>
                   <p className="text-xs text-gray-500 -mt-2 mb-1">
-                    Ring games only — SNG / tournament hands appear under History (tournament chips, not MORBIUS).
+                    Ring games only — SNG / tournament hands appear under History.
                   </p>
                   <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                     {statsCards.map((stat, index) => (

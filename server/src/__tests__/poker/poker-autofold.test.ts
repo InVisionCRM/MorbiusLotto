@@ -19,7 +19,7 @@ import {
 import { PokerGameService } from '../../services/poker-game.service';
 import { DatabaseService } from '../../services/database.service';
 import { ProvablyFairService } from '../../services/provably-fair.service';
-import { DEFAULT_POKER_CHIP_WEI } from '../../lib/poker-chip-scale';
+import { POKER_CHIP_WEI } from '../../lib/poker-chip-scale';
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -30,9 +30,9 @@ const PLAYER_1 = TEST_PLAYERS[3];
 const PLAYER_2 = TEST_PLAYERS[4];
 const PLAYER_3 = TEST_PLAYERS[5];
 
-const CHIP_WEI = DEFAULT_POKER_CHIP_WEI;
-const SB_WEI = CHIP_WEI;
-const BB_WEI = CHIP_WEI * 2n;
+const CHIP_WEI = POKER_CHIP_WEI;
+const SB_CHIPS = 1;
+const BB_CHIPS = 2;
 const BUY_IN_WEI = CHIP_WEI * 100n; // 50 BB
 
 let dbService: DatabaseService;
@@ -64,7 +64,7 @@ async function createAndSeatPlayers(
   players: string[],
   buyInWei: bigint = BUY_IN_WEI,
 ): Promise<string> {
-  const tableId = await pokerGameService.createTable(SB_WEI, BB_WEI, 6);
+  const tableId = await pokerGameService.createTable(SB_CHIPS, BB_CHIPS, 6);
   createdTableIds.push(tableId);
   for (const addr of players) {
     await pokerGameService.joinTable(tableId, addr, buyInWei.toString());
@@ -137,7 +137,7 @@ describe('Poker Auto-Fold / Auto-Check', () => {
       let state = await pokerGameService.getTableState(tableId, null);
       let acting = state.currentHand!.actingPosition!;
       let actingAddr = state.seats[acting].playerAddress!;
-      const raiseAmount = BB_WEI * 3n;
+      const raiseAmount = BB_CHIPS * 3;
       await pokerGameService.playerAction(tableId, handId, actingAddr, 'raise', raiseAmount.toString());
 
       // Second player needs to act — they face a bet

@@ -7,11 +7,11 @@
  *   - Cash leave / re-up / rake credit (chips → wei to balance)
  *   - Tournament buy-in / prize payout (wei; chips stay virtual in-tournament)
  *
- * One chip = 10^15 wei (0.001 MORBIUS). Hardcoded — do not make configurable.
+ * One chip = 10^18 wei (1 MORBIUS). Hardcoded — do not make configurable.
  */
 
-/** 10^15 wei per chip. */
-export const POKER_CHIP_WEI = 10n ** 15n;
+/** 10^18 wei per chip (1 chip = 1 MORBIUS). */
+export const POKER_CHIP_WEI = 10n ** 18n;
 
 /** Chip values feed directly into the chevtek engine, which uses JS `number`. */
 export const MAX_ENGINE_CHIPS_BIGINT = BigInt(Number.MAX_SAFE_INTEGER);
