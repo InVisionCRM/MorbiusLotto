@@ -903,7 +903,7 @@ export default function GlobalMainNav({
           />
         </SidebarBody>
         <div
-          className="relative z-0 flex-1 min-w-0 flex flex-col min-h-0 overflow-x-hidden [padding-top:calc(3.5rem+env(safe-area-inset-top))] md:pt-0"
+          className="relative z-0 flex-1 min-w-0 flex flex-col min-h-0 overflow-x-clip [padding-top:calc(3.5rem+env(safe-area-inset-top))] md:pt-0"
           style={gameLocked ? { position: 'relative', zIndex: 100002 } : undefined}
         >
           {children}

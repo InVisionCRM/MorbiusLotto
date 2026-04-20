@@ -24,6 +24,7 @@ import { floorMorbiusWholeFromWei, formatMorbiusFloor, formatMorbiusFloorPlain }
 import { PokerBetaSplash } from '@/components/poker/PokerBetaSplash';
 import { SophieSplashModal } from '@/components/shared/SophieSplashModal';
 import { PokerHowToPlayModal } from '@/components/poker/PokerHowToPlayModal';
+import { PokerStatsModal } from '@/components/poker/PokerStatsModal';
 import GlobalMainNav from '@/components/shared/GlobalMainNav';
 import { PokerTournamentLobby } from '@/components/poker/tournament/PokerTournamentLobby';
 import {
@@ -149,6 +150,7 @@ export default function PokerLobbyPage() {
   const [createModal, setCreateModal] = useState<{ smallBlind: string; bigBlind: string; maxSeats: number; pinCode: string; pinEnabled: boolean } | null>(null);
   const [creating, setCreating] = useState(false);
   const [showHowToPlay, setShowHowToPlay] = useState(false);
+  const [showStatsModal, setShowStatsModal] = useState(false);
   const [showDepositModal, setShowDepositModal] = useState(false);
   const [playersDropdownTableId, setPlayersDropdownTableId] = useState<string | null>(null);
   const [tablePlayers, setTablePlayers] = useState<{ tableId: string; seats: PokerSeatState[] } | null>(null);
@@ -534,6 +536,21 @@ export default function PokerLobbyPage() {
                       <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}><circle cx="12" cy="12" r="10" /><path d="M12 16v-4M12 8h.01" /></svg>
                       How to Play
                     </button>
+                    {address && (
+                      <button
+                        type="button"
+                        onClick={() => setShowStatsModal(true)}
+                        className="flex items-center gap-2 px-6 py-3.5 rounded-2xl text-slate-400 text-sm font-medium hover:text-white transition-all"
+                        style={{
+                          background: 'rgba(30,41,59,0.5)',
+                          border: '1px solid rgba(51,65,85,0.5)',
+                          boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.03)',
+                        }}
+                      >
+                        <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}><path d="M3 3v18h18" /><path d="M7 15l4-4 4 4 5-5" /></svg>
+                        My Stats
+                      </button>
+                    )}
                     <button
                       type="button"
                       onClick={() => setShowHowToPlay(true)}
@@ -915,6 +932,11 @@ export default function PokerLobbyPage() {
         )}
 
           <PokerHowToPlayModal isOpen={showHowToPlay} onClose={() => setShowHowToPlay(false)} />
+          <PokerStatsModal
+            isOpen={showStatsModal}
+            onClose={() => setShowStatsModal(false)}
+            playerAddress={address ?? null}
+          />
 
           {createModal && (
           <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-3">

@@ -219,7 +219,8 @@ export const DesktopSidebar = ({
       <div
         className={cn(
           // z-20: sit above page-level fixed full-viewport layers (e.g. home bg) that share the viewport
-          "min-h-screen px-3 py-4 hidden md:flex md:flex-col shrink-0 overflow-hidden rounded-r-xl relative z-20",
+          // sticky top-0 + h-screen so the sidebar stays pinned on long pages (e.g. hero scroll-scrub)
+          "h-screen px-3 py-4 hidden md:flex md:flex-col shrink-0 overflow-hidden rounded-r-xl sticky top-0 z-20",
           className
         )}
         style={{
