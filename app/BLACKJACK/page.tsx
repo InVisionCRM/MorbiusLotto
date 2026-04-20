@@ -21,6 +21,7 @@ import { BlackjackStatusOverlays } from '@/components/BLACKJACK/BlackjackStatusO
 import { BlackjackTournamentOverlays } from '@/components/BLACKJACK/BlackjackTournamentOverlays';
 import { BlackjackGameView } from '@/components/BLACKJACK/BlackjackGameView';
 import { BlackjackHowToSection } from '@/components/BLACKJACK/BlackjackHowToSection';
+import ThemeSelectionModal from '@/components/BLACKJACK/ThemeSelectionModal';
 import { useProfileSettingsModal } from '@/components/shared/ProfileSettingsModalContext';
 import { Card, Hand, Game, GameState, Action, GameResult, GameStateUI } from './types';
 import { useTournament } from '@/hooks/use-tournament';
@@ -109,60 +110,204 @@ function IntroScreen({ onComplete }: { onComplete: () => void }) {
   );
 }
 
+// Branded preview image per tier — shown on tier card
+const TIER_PREVIEW_IMAGE: Record<BlackjackTier, string> = {
+  standard: '/BlackJack/BrandedTable/SuperStake.webp',
+  high: '/BlackJack/BrandedTable/High-Roller.png',
+};
+
 // Tier picker shown after the intro, before the game
-function TierPickerScreen({ onSelect }: { onSelect: (tier: BlackjackTier) => void }) {
+function TierPickerScreen({
+  onSelect,
+  onOpenThemeModal,
+}: {
+  onSelect: (tier: BlackjackTier) => void;
+  onOpenThemeModal: () => void;
+}) {
   return (
-    <div
-      className="fixed inset-0 z-50 flex items-center justify-center"
-      style={{ background: 'linear-gradient(145deg, rgb(16, 26, 35), rgb(10, 15, 20))' }}
-    >
-      <div className="flex flex-col items-center gap-8 px-4 w-full max-w-md">
-        {/* Header */}
-        <div className="text-center">
-          <div className="text-white text-2xl font-bold tracking-wide mb-1">Choose Your Table</div>
-          <div className="text-slate-400 text-sm">Select a bet range to begin</div>
+    <div className="relative min-h-screen h-full w-full bg-gradient-to-b from-[#080c14] via-slate-950 to-[#080c14] text-white">
+      <div className="absolute inset-0 h-full min-h-screen w-full bg-[radial-gradient(ellipse_80%_60%_at_50%_0%,rgba(34,211,238,0.10),transparent_70%)] pointer-events-none" />
+      <div className="relative w-full max-w-4xl mx-auto px-3 py-4 sm:px-4 sm:py-8">
+        {/* ── Hero Section ── */}
+        <div
+          className="relative rounded-3xl overflow-hidden mb-6 sm:mb-8 border border-cyan-400/10"
+          style={{
+            background: 'linear-gradient(170deg, #0c1929 0%, #0a0f1a 40%, #0d1117 100%)',
+            boxShadow: '0 0 80px rgba(34,211,238,0.07), 0 2px 40px rgba(0,0,0,0.5), inset 0 1px 0 rgba(34,211,238,0.1)',
+          }}
+        >
+          <div className="h-px bg-gradient-to-r from-transparent via-cyan-400/40 to-transparent" />
+
+          {/* Decorative card fan */}
+          <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-[45%] pointer-events-none select-none opacity-[0.04]">
+            <div className="relative w-[400px] h-[300px]">
+              {[
+                { r: -25, x: -60, y: 0 },
+                { r: -10, x: -20, y: -10 },
+                { r: 5, x: 20, y: -10 },
+                { r: 20, x: 60, y: 0 },
+              ].map((c, i) => (
+                <div
+                  key={i}
+                  className="absolute left-1/2 top-1/2 w-[140px] h-[200px] rounded-2xl border-2 border-white/30 bg-white/10"
+                  style={{ transform: `translate(-50%, -50%) rotate(${c.r}deg) translateX(${c.x}px) translateY(${c.y}px)` }}
+                />
+              ))}
+            </div>
+          </div>
+
+          <div className="relative overflow-hidden">
+            <div className="absolute inset-0 bg-[radial-gradient(ellipse_70%_50%_at_50%_-10%,rgba(34,211,238,0.18),transparent_70%)] pointer-events-none" />
+            <div className="absolute inset-0 bg-[radial-gradient(ellipse_40%_60%_at_20%_100%,rgba(59,130,246,0.08),transparent_60%)] pointer-events-none" />
+            <div className="absolute inset-0 bg-[radial-gradient(ellipse_40%_60%_at_80%_100%,rgba(99,102,241,0.06),transparent_60%)] pointer-events-none" />
+            <div
+              className="absolute inset-0 pointer-events-none opacity-[0.03]"
+              style={{
+                backgroundImage:
+                  'linear-gradient(rgba(255,255,255,0.1) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,0.1) 1px, transparent 1px)',
+                backgroundSize: '40px 40px',
+              }}
+            />
+
+            <div className="relative text-center px-5 sm:px-10 pt-12 sm:pt-14 pb-12 sm:pb-16">
+              {/* Info badge */}
+              <div
+                className="inline-flex items-center gap-2.5 px-5 py-2 rounded-full mb-6 sm:mb-8"
+                style={{
+                  background: 'rgba(34,211,238,0.06)',
+                  border: '1px solid rgba(34,211,238,0.15)',
+                  boxShadow: '0 0 20px rgba(34,211,238,0.08)',
+                }}
+              >
+                <span className="relative flex h-2 w-2">
+                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-cyan-400 opacity-75" />
+                  <span className="relative inline-flex rounded-full h-2 w-2 bg-cyan-400" />
+                </span>
+                <span className="text-[11px] sm:text-xs font-bold tracking-[0.2em] uppercase text-cyan-400">
+                  Choose Your Table
+                </span>
+              </div>
+
+              {/* Main title */}
+              <h1
+                className="text-5xl sm:text-6xl md:text-7xl font-black tracking-[-3px] leading-[1] mb-2"
+                style={{
+                  background: 'linear-gradient(180deg, #ffffff 0%, #e2e8f0 40%, #64748b 100%)',
+                  WebkitBackgroundClip: 'text',
+                  WebkitTextFillColor: 'transparent',
+                  filter: 'drop-shadow(0 2px 8px rgba(0,0,0,0.3))',
+                }}
+              >
+                Blackjack
+              </h1>
+              <p className="text-xs sm:text-sm tracking-[0.3em] uppercase text-cyan-400/80 mb-4">
+                Single Player
+              </p>
+              <p className="text-sm sm:text-base text-slate-500 mb-10 sm:mb-12 max-w-md mx-auto">
+                Pick a bet range, choose your table, and deal yourself in. Provably fair MORBIUS wagering.
+              </p>
+
+              {/* CTA: Choose default table */}
+              <div className="flex justify-center gap-3 flex-wrap">
+                <button
+                  type="button"
+                  onClick={onOpenThemeModal}
+                  className="flex items-center gap-2 px-7 py-3.5 rounded-2xl text-white text-sm font-bold hover:-translate-y-0.5 transition-all"
+                  style={{
+                    background: 'linear-gradient(135deg, #06b6d4, #3b82f6)',
+                    boxShadow:
+                      '0 4px 24px rgba(6,182,212,0.3), 0 1px 2px rgba(0,0,0,0.2), inset 0 1px 0 rgba(255,255,255,0.15)',
+                  }}
+                >
+                  <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.5}>
+                    <rect x="3" y="5" width="18" height="14" rx="2" />
+                    <path d="M3 9h18M7 14h2" />
+                  </svg>
+                  Choose Default Table
+                </button>
+              </div>
+            </div>
+          </div>
         </div>
 
         {/* Tier cards */}
-        <div className="flex flex-col gap-4 w-full">
-          {(Object.entries(BET_TIERS) as [BlackjackTier, typeof BET_TIERS[BlackjackTier]][]).map(([tier, info]) => (
-            <button
-              key={tier}
-              onClick={() => onSelect(tier)}
-              className="group relative w-full rounded-2xl border border-slate-700 bg-slate-900/80 hover:border-cyan-500/60 hover:bg-slate-800/80 transition-all duration-200 overflow-hidden text-left px-6 py-5"
-            >
-              {/* Subtle gradient accent on hover */}
-              <div className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity duration-200"
-                style={{ background: 'linear-gradient(135deg, rgba(6,182,212,0.07) 0%, rgba(147,51,234,0.07) 100%)' }} />
-
-              <div className="relative flex items-center justify-between">
-                <div>
-                  <div className="flex items-center gap-2 mb-1">
-                    {/* Card suit icon */}
-                    <span className="text-base" style={{ color: tier === 'high' ? '#a855f7' : '#06b6d4' }}>
-                      {tier === 'high' ? '♠' : '♦'}
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 sm:gap-5">
+          {(Object.entries(BET_TIERS) as [BlackjackTier, typeof BET_TIERS[BlackjackTier]][]).map(([tier, info]) => {
+            const isHigh = tier === 'high';
+            const accent = isHigh ? '#a855f7' : '#06b6d4';
+            return (
+              <button
+                key={tier}
+                onClick={() => onSelect(tier)}
+                className="group relative rounded-2xl overflow-hidden flex flex-col border border-cyan-500/15 hover:border-cyan-500/40 transition-all text-left"
+                style={{
+                  background: 'linear-gradient(325deg, rgba(20, 20, 20, 0.8), rgba(40, 40, 40, 0.6))',
+                  boxShadow:
+                    'inset 0 3px 6px rgba(0, 0, 0, 0.8), inset 0 -3px 6px rgba(255, 255, 255, 0.1), 0 1px 3px rgba(0, 0, 0, 0.5)',
+                }}
+              >
+                {/* Branded preview image */}
+                <div className="relative aspect-[16/9] w-full bg-black overflow-hidden">
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img
+                    src={TIER_PREVIEW_IMAGE[tier]}
+                    alt={`${info.label} table preview`}
+                    className="absolute inset-0 w-full h-full object-cover group-hover:scale-[1.03] transition-transform duration-500"
+                    loading="lazy"
+                  />
+                  <div className="absolute inset-0 bg-gradient-to-t from-black via-black/30 to-transparent pointer-events-none" />
+                  <div className="absolute top-2 right-2">
+                    <span
+                      className="text-[10px] font-bold uppercase tracking-wider px-2.5 py-1 rounded-full border bg-black/40 backdrop-blur"
+                      style={{ color: accent, borderColor: `${accent}55` }}
+                    >
+                      {isHigh ? '♠ High Roller' : '♦ Standard'}
                     </span>
-                    <span className="text-white font-bold text-base">{info.label}</span>
                   </div>
-                  <div className="text-slate-400 text-sm">{info.description} MORBIUS</div>
+                  <div className="absolute bottom-2 left-3 right-3">
+                    <div className="text-[10px] font-bold tracking-[0.2em] uppercase text-cyan-300/90 drop-shadow">
+                      {info.label}
+                    </div>
+                  </div>
                 </div>
-                <div
-                  className="w-8 h-8 rounded-full flex items-center justify-center border transition-colors duration-200"
-                  style={{
-                    borderColor: tier === 'high' ? 'rgba(168,85,247,0.4)' : 'rgba(6,182,212,0.4)',
-                    background: tier === 'high' ? 'rgba(168,85,247,0.1)' : 'rgba(6,182,212,0.1)',
-                  }}
-                >
-                  <svg className="w-4 h-4 text-slate-400 group-hover:text-white transition-colors" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
-                  </svg>
+
+                {/* Footer: stakes + chevron */}
+                <div className="relative px-4 sm:px-5 py-4 flex items-center justify-between gap-3">
+                  <div className="min-w-0">
+                    <div className="text-[10px] font-bold uppercase tracking-[0.2em] text-slate-500 mb-0.5">
+                      Bet Range
+                    </div>
+                    <div className="text-lg sm:text-xl font-black tabular-nums tracking-tight text-slate-100 leading-none">
+                      {info.description}
+                    </div>
+                    <div className="text-[10px] font-semibold tracking-[0.2em] uppercase text-cyan-400/70 mt-1">
+                      MORBIUS
+                    </div>
+                  </div>
+                  <div
+                    className="w-10 h-10 rounded-full flex items-center justify-center border transition-all group-hover:translate-x-0.5"
+                    style={{
+                      borderColor: `${accent}66`,
+                      background: `${accent}1a`,
+                    }}
+                  >
+                    <svg
+                      className="w-4 h-4 text-slate-300 group-hover:text-white transition-colors"
+                      fill="none"
+                      viewBox="0 0 24 24"
+                      stroke="currentColor"
+                      strokeWidth={2.5}
+                    >
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
+                    </svg>
+                  </div>
                 </div>
-              </div>
-            </button>
-          ))}
+              </button>
+            );
+          })}
         </div>
 
-        <div className="text-slate-600 text-xs">Provably fair · MORBIUS bets</div>
+        <p className="text-center text-slate-600 text-xs mt-6">Provably fair · MORBIUS bets</p>
       </div>
     </div>
   );
@@ -1994,7 +2139,29 @@ export default function BlackjackPage() {
 
   // Show tier picker if no tier selected yet
   if (!selectedTier) {
-    return <TierPickerScreen onSelect={handleTierSelect} />;
+    return (
+      <>
+        <TierPickerScreen onSelect={handleTierSelect} onOpenThemeModal={() => setThemeModalOpen(true)} />
+        {themeModalOpen && (
+          <ThemeSelectionModal
+            open={themeModalOpen}
+            onClose={() => setThemeModalOpen(false)}
+            theme={theme}
+            imageSource={imageSource}
+            videoSource={videoSource}
+            onThemeChange={setTheme}
+            onImageSourceChange={setImageSource}
+            onVideoSourceChange={handleVideoSourceChange}
+            imageOptions={imageOptions}
+            videoOptions={videoOptions}
+            videoSyncToClock={videoSyncToClock}
+            onVideoSyncToClockChange={setVideoSyncToClock}
+            videoPosition={videoPosition}
+            onVideoPositionChange={setVideoPosition}
+          />
+        )}
+      </>
+    );
   }
 
   // Check if user has no reserve balance (less than 1 MORBIUS)
