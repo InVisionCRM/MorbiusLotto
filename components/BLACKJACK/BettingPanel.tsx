@@ -52,7 +52,23 @@ const BettingPanel: React.FC<BettingPanelProps> = ({
     onStartGame(currentBetAmountBigInt, '');
   };
 
-  const quickBetAmounts = [500, 5000, 25000, 50000];
+  const minBetNum = Number(formatEther(betLimits.MIN_BET));
+  const maxBetNum = Number(formatEther(betLimits.MAX_BET));
+  const formatThousands = (n: number) => n.toLocaleString('en-US');
+  const quickBetAmounts = React.useMemo(() => {
+    const roundNice = (n: number) => {
+      if (n <= 0) return 0;
+      const step = n >= 10000 ? 5000 : n >= 1000 ? 500 : 100;
+      return Math.max(step, Math.round(n / step) * step);
+    };
+    const span = maxBetNum - minBetNum;
+    const p2 = roundNice(minBetNum + span * 0.25);
+    const p3 = roundNice(minBetNum + span * 0.5);
+    const unique = Array.from(new Set([minBetNum, p2, p3, maxBetNum])).filter(
+      (n) => n >= minBetNum && n <= maxBetNum
+    );
+    return unique.length === 4 ? unique : [minBetNum, p2, p3, maxBetNum];
+  }, [minBetNum, maxBetNum]);
 
   const isChipAffordable = (chipValue: number) => {
     const chipValueWei = parseEther(chipValue.toString());
@@ -62,13 +78,18 @@ const BettingPanel: React.FC<BettingPanelProps> = ({
 
   return (
     <div className="w-full">
-      {/* 5-col grid: chips (500, 5k, 25k, 50k) + Clear */}
+      <div className="flex items-center justify-center mb-1 sm:mb-2">
+        <span className="text-[10px] sm:text-xs text-gray-400 font-poppins tabular-nums tracking-wider">
+          Min {formatThousands(minBetNum)} · Max {formatThousands(maxBetNum)} MORBIUS
+        </span>
+      </div>
+      {/* 5-col grid: tier-scaled chip presets + Clear */}
       <div className="grid grid-cols-5 gap-1 sm:gap-2 place-items-center">
         {quickBetAmounts.map(amount => {
           const chipImage = getChipImage(amount);
           const affordable = isChipAffordable(amount);
-          const isCyanChip = amount === 50000;
-          const label = amount >= 1000 ? `${amount / 1000}k` : amount;
+          const isCyanChip = amount === maxBetNum;
+          const label = amount >= 1000 ? `${+(amount / 1000).toFixed(1)}k` : amount;
 
           return (
             <button
@@ -96,7 +117,7 @@ const BettingPanel: React.FC<BettingPanelProps> = ({
                   textShadow: isCyanChip
                     ? '0 0 2px rgba(255,255,255,0.9), 0 1px 2px rgba(0,0,0,0.3)'
                     : '1px 1px 2px rgba(0, 0, 0, 0.8), -1px -1px 2px rgba(0, 0, 0, 0.5)',
-                  fontSize: amount >= 25000 ? '8px' : undefined,
+                  fontSize: amount >= 10000 ? '8px' : undefined,
                 }}
               >
                 {label}

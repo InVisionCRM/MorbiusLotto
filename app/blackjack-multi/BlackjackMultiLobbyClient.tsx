@@ -11,6 +11,8 @@ import { BLACKJACK_ADDRESS, MORBIUS_TOKEN_ADDRESS } from '@/lib/contracts';
 import { Users, ArrowRight, Filter } from 'lucide-react';
 import { BlackjackMultiBetaSplash } from '@/components/BLACKJACK/BlackjackMultiBetaSplash';
 import { useBlackjackTables } from '@/hooks/use-blackjack-tables';
+import { DepositWithdrawModal } from '@/components/BLACKJACK/DepositWithdrawModal';
+import BlackjackHowToVideoModal from '@/components/BLACKJACK/BlackjackHowToVideoModal';
 
 function formatMorbius(wei: string): string {
   try {
@@ -41,6 +43,8 @@ export default function BlackjackMultiLobbyClient({
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('all');
   const [seatFilter, setSeatFilter] = useState<SeatFilter>('all');
   const [showFilters, setShowFilters] = useState(false);
+  const [walletModalOpen, setWalletModalOpen] = useState(false);
+  const [howToVideoOpen, setHowToVideoOpen] = useState(false);
 
   const fetchTables = useCallback(async (options?: { silent?: boolean }) => {
     const silent = options?.silent ?? false;
@@ -173,53 +177,80 @@ export default function BlackjackMultiLobbyClient({
             </div>
           )}
 
-          <div className="space-y-3">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             {filteredTables.map((table) => {
               const kind = table.themeKind ?? 'video';
               const themeId = table.themeId ?? 'glowingTable';
               const theme = getThemeInfo({ kind, id: themeId });
+              const isFull = table.seatedCount >= 3;
+              const statusLabel =
+                table.status === 'waiting'
+                  ? 'Open'
+                  : table.status === 'betting'
+                    ? 'Betting'
+                    : 'In Progress';
+              const statusClass =
+                table.status === 'waiting'
+                  ? 'bg-slate-700 text-slate-300'
+                  : table.status === 'betting'
+                    ? 'bg-yellow-800/60 text-yellow-300'
+                    : 'bg-green-800/60 text-green-300';
               return (
                 <div
                   key={table.id}
-                  className="bg-slate-800/60 border border-slate-700 rounded-xl px-5 py-4 flex items-center justify-between gap-3"
+                  className="bg-slate-800/60 border border-slate-700 rounded-xl overflow-hidden flex flex-col hover:border-cyan-500/40 transition-colors"
                 >
-                  <div className="space-y-1 min-w-0 flex-1">
-                    <div className="flex items-center gap-2 flex-wrap">
-                      <span
-                        className={`text-[10px] px-2 py-0.5 rounded-full font-medium ${
-                          table.status === 'waiting'
-                            ? 'bg-slate-700 text-slate-300'
-                            : table.status === 'betting'
-                              ? 'bg-yellow-800/60 text-yellow-300'
-                              : 'bg-green-800/60 text-green-300'
-                        }`}
-                      >
-                        {table.status === 'waiting'
-                          ? 'Open'
-                          : table.status === 'betting'
-                            ? 'Betting'
-                            : 'In Progress'}
+                  {/* Header: table name + status chips */}
+                  <div className="px-4 pt-3 pb-2 flex items-center justify-between gap-2">
+                    <h3 className="text-sm font-semibold text-cyan-300 truncate">{theme.label}</h3>
+                    <div className="flex items-center gap-1.5 shrink-0">
+                      <span className={`text-[10px] px-2 py-0.5 rounded-full font-medium ${statusClass}`}>
+                        {statusLabel}
                       </span>
-                      <span className="text-slate-400 text-xs flex items-center gap-1">
+                      <span className="text-slate-400 text-[11px] flex items-center gap-1">
                         <Users className="w-3 h-3 shrink-0" />
                         {table.seatedCount}/3
                       </span>
                     </div>
-                    <p className="text-slate-300 text-xs">
-                      {formatMorbius(table.minBet)} - {formatMorbius(table.maxBet)} MORBIUS
-                    </p>
-                    <p className="text-slate-500 text-[11px] leading-snug">
-                      <span className="text-slate-500">Table: </span>
-                      <span className="text-cyan-400/90 font-medium">{theme.label}</span>
-                      <span className="text-slate-600"> · </span>
-                      <span className="text-slate-400">{theme.kind === 'video' ? 'Video' : 'Image'}</span>
-                    </p>
                   </div>
-                  <Link href={`/blackjack-multi/${table.id}`}>
-                    <Button size="sm" className="bg-cyan-600 hover:bg-cyan-700 text-white text-xs gap-1">
-                      {table.seatedCount >= 3 ? 'Watch' : 'Join'} <ArrowRight className="w-3 h-3" />
-                    </Button>
-                  </Link>
+
+                  {/* Branded table preview */}
+                  <div className="relative aspect-[16/9] w-full bg-black border-y border-white/5 overflow-hidden">
+                    {theme.kind === 'video' ? (
+                      <video
+                        src={theme.src}
+                        autoPlay
+                        muted
+                        loop
+                        playsInline
+                        preload="metadata"
+                        className="absolute inset-0 w-full h-full object-cover"
+                      />
+                    ) : (
+                      // eslint-disable-next-line @next/next/no-img-element
+                      <img
+                        src={theme.src}
+                        alt={`${theme.label} table`}
+                        className="absolute inset-0 w-full h-full object-cover"
+                        loading="lazy"
+                      />
+                    )}
+                    <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-transparent to-transparent pointer-events-none" />
+                    <div className="absolute bottom-1.5 left-2 right-2 flex items-center justify-between gap-2">
+                      <span className="text-[11px] font-semibold text-white/95 tabular-nums drop-shadow">
+                        {formatMorbius(table.minBet)} – {formatMorbius(table.maxBet)} MORBIUS
+                      </span>
+                    </div>
+                  </div>
+
+                  {/* Footer: action button */}
+                  <div className="px-4 py-3 flex items-center justify-end">
+                    <Link href={`/blackjack-multi/${table.id}`}>
+                      <Button size="sm" className="bg-cyan-600 hover:bg-cyan-700 text-white text-xs gap-1">
+                        {isFull ? 'Watch' : 'Join'} <ArrowRight className="w-3 h-3" />
+                      </Button>
+                    </Link>
+                  </div>
                 </div>
               );
             })}
@@ -232,10 +263,17 @@ export default function BlackjackMultiLobbyClient({
                 { label: 'Blackjack Contract', address: BLACKJACK_ADDRESS },
                 { label: 'MORBIUS Token', address: MORBIUS_TOKEN_ADDRESS },
               ]}
+              onDepositClick={() => setWalletModalOpen(true)}
+              onHowToPlayClick={() => setHowToVideoOpen(true)}
             />
           </div>
         </main>
       </div>
+      <DepositWithdrawModal
+        isOpen={walletModalOpen}
+        onClose={() => setWalletModalOpen(false)}
+      />
+      <BlackjackHowToVideoModal open={howToVideoOpen} onOpenChange={setHowToVideoOpen} />
     </GlobalMainNav>
   );
 }

@@ -20,6 +20,22 @@ export interface FAQAddress {
 interface GameFAQProps {
   game: 'plinko' | 'blackjack' | 'keno' | 'lottery' | 'poker' | 'roulette'
   addresses: FAQAddress[]
+  /** Blackjack-only: render an inline link in the deposit answer that opens the wallet modal. */
+  onDepositClick?: () => void
+  /** Blackjack-only: render an inline link in the how-to-play answer that opens the walkthrough video. */
+  onHowToPlayClick?: () => void
+}
+
+function InlineActionLink({ onClick, children }: { onClick: () => void; children: React.ReactNode }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className="text-cyan-300 underline underline-offset-2 hover:text-cyan-200 font-medium transition-colors"
+    >
+      {children}
+    </button>
+  )
 }
 
 const GAME_FAQS: Record<GameFAQProps['game'], { q: string; a: React.ReactNode }[]> = {
@@ -255,10 +271,32 @@ function AddressBlock({ addresses }: { addresses: FAQAddress[] }) {
   )
 }
 
-export function GameFAQ({ game, addresses }: GameFAQProps) {
+export function GameFAQ({ game, addresses, onDepositClick, onHowToPlayClick }: GameFAQProps) {
   const faqs = GAME_FAQS[game].map((item) => {
     if (item.a === null) {
       return { q: item.q, a: <AddressBlock addresses={addresses} /> }
+    }
+    if (game === 'blackjack' && onHowToPlayClick && item.q === 'How do I play Blackjack?') {
+      return {
+        q: item.q,
+        a: (
+          <>
+            {item.a}{' '}
+            <InlineActionLink onClick={onHowToPlayClick}>Watch the walkthrough →</InlineActionLink>
+          </>
+        ),
+      }
+    }
+    if (game === 'blackjack' && onDepositClick && item.q === 'How do I deposit and withdraw?') {
+      return {
+        q: item.q,
+        a: (
+          <>
+            {item.a}{' '}
+            <InlineActionLink onClick={onDepositClick}>Click here to open Deposit / Withdraw →</InlineActionLink>
+          </>
+        ),
+      }
     }
     return item
   })

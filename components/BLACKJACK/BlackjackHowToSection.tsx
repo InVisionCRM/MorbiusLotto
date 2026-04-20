@@ -1,11 +1,10 @@
 'use client';
 
+import { useState } from 'react';
 import { GameFAQ } from '@/components/shared/GameFAQ';
 import { MORBIUS_TOKEN_ADDRESS } from '@/lib/contracts';
-
-/** Vercel Blob — blackjack walkthrough is too large for `public/`. */
-const BLACKJACK_HOW_TO_VIDEO_URL =
-  'https://ivaqyn53qos0zxu5.public.blob.vercel-storage.com/How-To-Video/how_to_play_blackjack.mp4';
+import { DepositWithdrawModal } from '@/components/BLACKJACK/DepositWithdrawModal';
+import BlackjackHowToVideoModal from '@/components/BLACKJACK/BlackjackHowToVideoModal';
 
 interface BlackjackHowToSectionProps {
   blackjackAddress: string;
@@ -20,31 +19,27 @@ export function BlackjackHowToSection({
   morbiusTokenAddress = MORBIUS_TOKEN_ADDRESS,
   layout = 'page',
 }: BlackjackHowToSectionProps) {
-  const gridClass =
+  const [walletOpen, setWalletOpen] = useState(false);
+  const [videoOpen, setVideoOpen] = useState(false);
+
+  const wrapperClass =
     layout === 'panel'
-      ? 'mt-4 grid grid-cols-1 gap-3 items-start border-t border-white/10 pt-4'
-      : 'mt-6 grid grid-cols-1 md:grid-cols-2 gap-4 items-start';
+      ? 'mt-4 border-t border-white/10 pt-4'
+      : 'mt-6';
 
   return (
-    <section className={gridClass}>
-      <div className="rounded-xl overflow-hidden border border-white/10 bg-black">
-        <video
-          src={BLACKJACK_HOW_TO_VIDEO_URL}
-          controls
-          playsInline
-          className="w-full"
-          poster=""
-          preload="metadata"
-        />
-      </div>
-
+    <section className={wrapperClass}>
       <GameFAQ
         game="blackjack"
         addresses={[
           { label: 'Blackjack Contract', address: blackjackAddress },
           { label: 'MORBIUS Token', address: morbiusTokenAddress },
         ]}
+        onDepositClick={() => setWalletOpen(true)}
+        onHowToPlayClick={() => setVideoOpen(true)}
       />
+      <DepositWithdrawModal isOpen={walletOpen} onClose={() => setWalletOpen(false)} />
+      <BlackjackHowToVideoModal open={videoOpen} onOpenChange={setVideoOpen} />
     </section>
   );
 }

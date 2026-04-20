@@ -42,7 +42,9 @@ export function BettingPanelMobile({
     }
   }, [currentBetAmount, isFocused]);
 
+  const minBetNum = Number(formatEther(betLimits.MIN_BET));
   const maxBetNum = Number(formatEther(betLimits.MAX_BET));
+  const formatThousands = (n: number) => n.toLocaleString('en-US');
   const commitValue = (raw: string) => {
     const parsed = Math.floor(parseFloat(raw.replace(/,/g, '')) || 0);
     const clamped = Math.max(0, Math.min(maxBetNum, parsed));
@@ -70,7 +72,22 @@ export function BettingPanelMobile({
     setInputValue(''); // blank when user starts editing
   };
 
-  const PRESETS = [500, 5000, 25000, 50000];
+  // Presets scale to the active tier: [min, ~25%, ~50%, max]
+  const PRESETS = React.useMemo(() => {
+    const roundNice = (n: number) => {
+      if (n <= 0) return 0;
+      const step = n >= 10000 ? 5000 : n >= 1000 ? 500 : 100;
+      return Math.max(step, Math.round(n / step) * step);
+    };
+    const span = maxBetNum - minBetNum;
+    const p2 = roundNice(minBetNum + span * 0.25);
+    const p3 = roundNice(minBetNum + span * 0.5);
+    const unique = Array.from(new Set([minBetNum, p2, p3, maxBetNum])).filter(
+      (n) => n >= minBetNum && n <= maxBetNum
+    );
+    return unique.length === 4 ? unique : [minBetNum, p2, p3, maxBetNum];
+  }, [minBetNum, maxBetNum]);
+
   const addPreset = (amount: number) => {
     if (isPlaying) return;
     const current = numValue;
@@ -92,7 +109,12 @@ export function BettingPanelMobile({
     <section className="w-full px-2 py-1">
       <div className="flex flex-col gap-1 w-full">
         <div className="flex items-center justify-between gap-2 w-full">
-          <span className="text-xs text-gray-400 uppercase tracking-wider">Amount</span>
+          <div className="flex items-baseline gap-2 min-w-0">
+            <span className="text-xs text-gray-400 uppercase tracking-wider">Amount</span>
+            <span className="text-[10px] sm:text-xs text-gray-500 font-poppins tabular-nums truncate">
+              Min {formatThousands(minBetNum)} · Max {formatThousands(maxBetNum)}
+            </span>
+          </div>
           {playerReserves !== undefined && (
             <span className="text-xs text-gray-400 font-poppins tabular-nums">
               Reserve: {(() => {
@@ -114,7 +136,7 @@ export function BettingPanelMobile({
               onFocus={handleFocus}
               disabled={isPlaying}
               className="flex-1 min-w-0 bg-transparent text-white font-bold text-sm outline-none placeholder:text-gray-500 disabled:opacity-60"
-              placeholder="MIN-500 MAX-50,000"
+              placeholder={`Min ${formatThousands(minBetNum)} · Max ${formatThousands(maxBetNum)}`}
               aria-label="Bet amount in MORBIUS"
             />
             <Image
@@ -162,7 +184,7 @@ export function BettingPanelMobile({
               className="h-9 sm:h-10 min-h-0 py-0 px-0 text-white/95 text-sm sm:text-[15px] font-semibold hover:bg-white/10 active:bg-white/15 disabled:opacity-50 disabled:cursor-not-allowed transition-colors border-r border-white/20"
               aria-label={`Add ${amount} to bet`}
             >
-              {amount >= 1000 ? `${amount / 1000}k` : amount}
+              {amount >= 1000 ? `${+(amount / 1000).toFixed(1)}k` : amount}
             </button>
           ))}
           <button

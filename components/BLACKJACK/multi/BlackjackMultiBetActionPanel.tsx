@@ -1,6 +1,7 @@
 'use client';
 
 import React from 'react';
+import { parseEther } from 'viem';
 import { BlackjackMobileActionBar } from '@/components/BLACKJACK/BlackjackMobileActionBar';
 import { BettingPanelMobile } from '@/components/BLACKJACK/BettingPanelMobile';
 import type { BJMultiHandObj } from '@/lib/websocket-client';
@@ -42,6 +43,11 @@ export function BlackjackMultiBetActionPanel({
 }) {
   if (myPosition === null) return null;
 
+  const tableBetLimits = {
+    MIN_BET: parseEther(String(tableMinBetWhole)),
+    MAX_BET: parseEther(String(tableMaxBetWhole)),
+  };
+
   return (
     <div className="flex flex-row md:flex-col items-stretch w-full">
       <div className="w-1/2 md:w-full md:border-r-0 md:border-b border-r border-white/10 flex items-center min-w-0">
@@ -61,6 +67,7 @@ export function BlackjackMultiBetActionPanel({
             setBetAmount(String(doubled));
           }}
           playerReserves={playerBalanceWei}
+          betLimits={tableBetLimits}
         />
       </div>
       <div className="w-1/2 md:w-full flex items-stretch min-w-0">
