@@ -1104,10 +1104,11 @@ class WebSocketService {
             if (!smallBlindStr || !bigBlindStr) {
                 return this.sendError(ws, 'smallBlind and bigBlind required', message.requestId);
             }
-            const smallBlind = (0, safe_bigint_1.toBigIntSafe)(smallBlindStr);
-            const bigBlind = (0, safe_bigint_1.toBigIntSafe)(bigBlindStr);
-            if (smallBlind <= 0n || bigBlind <= 0n || bigBlind < smallBlind) {
-                return this.sendError(ws, 'Invalid blinds: must be positive and bigBlind >= smallBlind', message.requestId);
+            // Blinds are chip integers (1 chip = 1 MORBIUS); poker-chip-scale migration 097.
+            const smallBlind = Number(smallBlindStr);
+            const bigBlind = Number(bigBlindStr);
+            if (!Number.isInteger(smallBlind) || !Number.isInteger(bigBlind) || smallBlind <= 0 || bigBlind <= 0 || bigBlind < smallBlind) {
+                return this.sendError(ws, 'Invalid blinds: must be positive integer chip counts and bigBlind >= smallBlind', message.requestId);
             }
             const maxSeats = Math.min(10, Math.max(2, Number(payload?.maxSeats) || 6));
             const pinCode = payload?.pinCode && typeof payload.pinCode === 'string' ? payload.pinCode : undefined;

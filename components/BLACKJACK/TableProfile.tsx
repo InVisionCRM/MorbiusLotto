@@ -122,7 +122,7 @@ export function TableProfile({
       title={iframeTitle}
       className={
         fillHeight
-          ? 'absolute inset-0 h-full w-full min-h-[200px] border-0'
+          ? 'absolute inset-0 h-full w-full min-h-0 border-0'
           : 'w-full min-h-[600px] border-0'
       }
       sandbox="allow-scripts allow-same-origin"
@@ -257,12 +257,12 @@ export function TableProfile({
             )}
           </div>
           {iframeSrc && fillHeight && (
-            <div className="relative mx-3 mb-3 min-h-[220px] flex-1 overflow-hidden rounded-lg border border-cyan-500/30 bg-slate-900/80 sm:mx-4 sm:mb-4">
+            <div className="relative mx-3 mb-3 min-h-[max(52dvh,520px)] flex-1 overflow-hidden rounded-lg border border-cyan-500/30 bg-slate-900/80 sm:mx-4 sm:mb-4">
               {iframeEl}
             </div>
           )}
           {fillHeight && !iframeSrc && (
-            <div className="relative mx-3 mb-3 flex min-h-[220px] flex-1 flex-col items-center justify-center gap-2 rounded-lg border border-cyan-500/20 bg-slate-900/40 px-4 py-8 sm:mx-4 sm:mb-4">
+            <div className="relative mx-3 mb-3 flex min-h-[max(52dvh,520px)] flex-1 flex-col items-center justify-center gap-2 rounded-lg border border-cyan-500/20 bg-slate-900/40 px-4 py-8 sm:mx-4 sm:mb-4">
               <p className="text-center text-sm text-white/55">Embed hidden (preview mode)</p>
               <a
                 href={MORBIUS_SCAN_IFRAME_FALLBACK}

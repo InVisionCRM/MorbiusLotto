@@ -14,6 +14,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
+import { ConfirmActionCard } from '@/components/shared/ConfirmActionCard';
 
 const MORBIUS_DECIMALS = 18n;
 
@@ -107,6 +108,7 @@ export function PokerTournamentCreator({ creatorAddress, onClose, onCreate }: Po
   /** After create, start this many poker bots joining the tournament (0 = none). */
   const [botsToAdd, setBotsToAdd] = useState(0);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [showConfirm, setShowConfirm] = useState(false);
   const initialSchedule = useMemo(() => defaultScheduledFields(), []);
   /** yyyy-MM-dd in local time — required */
   const [scheduledDate, setScheduledDate] = useState(initialSchedule.date);
@@ -491,7 +493,7 @@ export function PokerTournamentCreator({ creatorAddress, onClose, onCreate }: Po
           </button>
           <button
             type="button"
-            onClick={handleCreate}
+            onClick={() => setShowConfirm(true)}
             disabled={
               isSubmitting
               || !name.trim()
@@ -506,6 +508,41 @@ export function PokerTournamentCreator({ creatorAddress, onClose, onCreate }: Po
           </button>
         </div>
       </div>
+
+      {showConfirm && (() => {
+        const parts = scheduledDate.split('-').map(Number);
+        const timeParts = scheduledTime.split(':').map(Number);
+        const scheduleDisplay = parts.length === 3 && timeParts.length === 2
+          ? new Date(parts[0], parts[1] - 1, parts[2], timeParts[0], timeParts[1]).toLocaleString(undefined, {
+              month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit',
+            })
+          : '—';
+        const topSplit = prizePercents
+          .map((p, i) => p > 0 ? `${finishOrdinal(i + 1)} ${p}%` : null)
+          .filter(Boolean)
+          .slice(0, 4)
+          .join(', ');
+        return (
+          <ConfirmActionCard
+            title="Create Poker SNG"
+            subtitle="Review details before submitting"
+            rows={[
+              { label: 'Name', value: name || '—', accent: 'white' },
+              { label: isFreeroll ? 'Guaranteed Pool' : 'Buy-in', value: `${isFreeroll ? guaranteedPool : buyIn} MORBIUS`, accent: 'yellow' },
+              { label: 'Starting Stack', value: `${startingStackPreview.toLocaleString()} chips`, accent: 'green' },
+              { label: 'Level 1 Blinds', value: `${level1Blinds.smallBlind} / ${level1Blinds.bigBlind}`, accent: 'cyan' },
+              { label: 'Players', value: `${minPlayers}–${maxPlayers}`, accent: 'white' },
+              { label: 'Prize Split', value: topSplit || '—', accent: 'cyan' },
+              { label: 'Scheduled Start', value: scheduleDisplay, accent: 'white' },
+              { label: 'Private', value: isPrivate ? 'Yes (PIN required)' : 'No', accent: 'white' },
+            ]}
+            onBack={() => setShowConfirm(false)}
+            onConfirm={() => { setShowConfirm(false); handleCreate(); }}
+            confirmLabel="Create Tournament"
+            isLoading={isSubmitting}
+          />
+        );
+      })()}
     </div>
   );
 }

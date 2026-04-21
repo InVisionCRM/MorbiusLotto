@@ -45,6 +45,7 @@ import { BLACKJACK_FACTS } from '@/app/blackjack-multi/blackjack-facts';
 import { BlackjackMultiBetaSplash } from '@/components/BLACKJACK/BlackjackMultiBetaSplash';
 import { SophieSplashModal } from '@/components/shared/SophieSplashModal';
 import { VOICE_BLACKJACK_TUTORIAL_URL } from '@/lib/how-to-video-urls';
+import { ConfirmActionCard } from '@/components/shared/ConfirmActionCard';
 
 /** Must match server BJ_MULTI_AFK_KICK_AFTER — shown in seat UI */
 const AFK_TIMEOUTS_BEFORE_KICK = 3;
@@ -154,6 +155,7 @@ export default function BlackjackMultiTablePage() {
   const [wsStatus, setWsStatus] = useState<'connecting' | 'connected' | 'reconnecting' | 'failed'>('connecting');
   const [reconnectInfo, setReconnectInfo] = useState<{ attempt: number; maxAttempts: number } | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [pendingSeatPos, setPendingSeatPos] = useState<number | null>(null);
   const [tipNotification, setTipNotification] = useState<{ name: string } | null>(null);
   const [tipAnimating, setTipAnimating] = useState(false);
   const wsClientRef = useRef<BlackjackWebSocketClient | null>(null);
@@ -857,7 +859,12 @@ export default function BlackjackMultiTablePage() {
     };
   }, [isE2EMock, applyIncomingState, tableViewState]);
 
-  const takeSeat = useCallback(async (pos: number) => {
+  const takeSeat = useCallback((pos: number) => {
+    if (!wsClient?.isConnected() || !address) return;
+    setPendingSeatPos(pos);
+  }, [wsClient, address]);
+
+  const confirmTakeSeat = useCallback(async (pos: number) => {
     if (!wsClient?.isConnected() || !address) return;
     playSound('/Poker/PokerSounds/PlayerClickConfirmation.mp3');
     try { await wsClient.sendRequest('bj_multi_join_table', { tableId, seatPosition: pos }); }
@@ -1345,6 +1352,24 @@ export default function BlackjackMultiTablePage() {
       />
 
       <SophieSplashModal address={address} voiceTutorialVideoUrl={VOICE_BLACKJACK_TUTORIAL_URL} />
+
+      {pendingSeatPos !== null && (
+        <ConfirmActionCard
+          title="Join Table"
+          subtitle="Confirm your seat"
+          rows={[
+            { label: 'Stakes', value: `${tableMinBetWhole.toLocaleString()}–${tableMaxBetWhole.toLocaleString()} MORBIUS`, accent: 'yellow' },
+            { label: 'Seat', value: `Seat ${pendingSeatPos + 1}`, accent: 'cyan' },
+            { label: 'Players at Table', value: `${state?.seats.filter(s => s.playerAddress).length ?? 0} / 3`, accent: 'white' },
+            { label: 'Table', value: theme.label, accent: 'white' },
+            { label: 'Min Bet', value: `${tableMinBetWhole.toLocaleString()} MORBIUS`, accent: 'white' },
+            { label: 'Max Bet', value: `${tableMaxBetWhole.toLocaleString()} MORBIUS`, accent: 'white' },
+          ]}
+          onBack={() => setPendingSeatPos(null)}
+          onConfirm={() => { const pos = pendingSeatPos; setPendingSeatPos(null); confirmTakeSeat(pos); }}
+          confirmLabel="Take Seat"
+        />
+      )}
 
       </main>
     </GlobalMainNav>

@@ -62,7 +62,6 @@ const merkle_lp_drops_service_1 = require("./services/merkle-lp-drops.service");
 const cosmetics_service_1 = require("./services/cosmetics.service");
 const cosmetics_catalog_1 = require("./lib/cosmetics-catalog");
 const resolve_profile_display_name_1 = require("./lib/resolve-profile-display-name");
-const poker_chip_scale_1 = require("./lib/poker-chip-scale");
 const logger_1 = require("./utils/logger");
 const poker_bot_auth_1 = require("./utils/poker-bot-auth");
 const withdraw_sign_1 = require("./utils/withdraw-sign");
@@ -273,9 +272,8 @@ async function initializeServices() {
         const pokerGameService = new poker_game_service_1.PokerGameService(dbService, pfService);
         const existingTables = await pokerGameService.listTables();
         if (existingTables.length === 0) {
-            const pcw = (0, poker_chip_scale_1.getPokerChipWei)();
-            await pokerGameService.createTable(pcw * 10n, pcw * 20n, 6);
-            logger_1.logger.info('Poker: created default table (10/20 chips, 6 seats; chip wei = %s)', pcw.toString());
+            await pokerGameService.createTable(10, 20, 6);
+            logger_1.logger.info('Poker: created default table (10/20 chips, 6 seats)');
         }
         // Clear stale/incomplete poker hands from previous server sessions.
         // Bot intervals and in-flight state are lost on restart, so any hand
@@ -308,6 +306,7 @@ async function initializeServices() {
         tournamentService.setPokerTournamentService(pokerTournamentService);
         pokerTournamentService.setBroadcastCallback((room, msg) => wsService.broadcastToRoom(room, msg));
         pokerGameService.setPostHandCallback((tableId, handNumber) => pokerTournamentService.syncAfterHand(tableId, handNumber));
+        pokerGameService.setTournamentUnderfilledRecovery((tableId) => pokerTournamentService.recoverTournamentTableIfUnderTwoStackedSeats(tableId));
         // Wire BJ multi broadcast callback
         bjMultiService.setBroadcastCallback((tableId) => wsService.broadcastBJMultiTableState(tableId));
         // Freeroll scheduler (polls pending scheduled events: start, end)

@@ -80,6 +80,8 @@ export declare class PokerGameService {
     private pfService;
     private broadcastCallback;
     private postHandCallback;
+    /** When &lt; 2 seated stacks remain, tournament tables may need a no-deal recovery pass. */
+    private tournamentUnderfilledRecovery;
     private notifyCallback;
     private activeTables;
     private nextHandTimers;
@@ -92,16 +94,21 @@ export declare class PokerGameService {
     setNotifyCallback(cb: (room: string, type: string, payload: any) => void): void;
     /** Register a callback fired after every showdown (used by PokerTournamentService to sync chips). */
     setPostHandCallback(cb: (tableId: string, handNumber: number) => Promise<void>): void;
+    /**
+     * Called when a tournament table cannot start the next hand because fewer than two seats have stack &gt; 0.
+     * Applies late eliminations and may complete the SNG.
+     */
+    setTournamentUnderfilledRecovery(cb: (tableId: string) => Promise<void>): void;
     private getPool;
     /**
      * Serialize async operations on a given table so that concurrent
      * playerAction / autoFold / leaveTable calls cannot interleave.
      */
     private withTableLock;
-    /** Cached cash vs tournament + chip wei; invalidated on table delete. */
-    private scalingCache;
+    /** Cached tournament-mode flag; invalidated on table delete. */
+    private tournamentModeCache;
     private invalidateTableScaling;
-    private getTableScaling;
+    private isTournamentTable;
     private normalizeAddress;
     /**
      * DB remains the canonical source of poker hand/seat state.
@@ -115,14 +122,14 @@ export declare class PokerGameService {
     private scheduleNextHandAfterShowdown;
     private broadcastState;
     listTables(): Promise<PokerTableSummary[]>;
-    createTable(smallBlind: bigint, bigBlind: bigint, maxSeats: number, pinCode?: string): Promise<string>;
+    createTable(smallBlindChips: number, bigBlindChips: number, maxSeats: number, pinCode?: string): Promise<string>;
     deleteTable(tableId: string): Promise<boolean>;
-    joinTable(tableId: string, playerAddress: string, buyInChips: string, pinCode?: string): Promise<PokerTableState>;
+    joinTable(tableId: string, playerAddress: string, buyInWei: string, pinCode?: string): Promise<PokerTableState>;
     private _joinTable;
     leaveTable(tableId: string, playerAddress: string): Promise<PokerTableState | null>;
     private _leaveTable;
     private persistActionAfterStandUp;
-    addChips(tableId: string, playerAddress: string, amount: string): Promise<PokerTableState>;
+    addChips(tableId: string, playerAddress: string, amountWei: string): Promise<PokerTableState>;
     private _addChips;
     getTableState(tableId: string, forPlayer: string | null): Promise<PokerTableState>;
     updateTableLogo(tableId: string, logo: string | null, opacity: number): Promise<void>;

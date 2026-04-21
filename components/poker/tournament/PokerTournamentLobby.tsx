@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import {
@@ -13,6 +13,7 @@ import { formatMorbiusFloor } from '@/lib/format-morbius-display';
 import { Trophy, Users, CalendarClock, Lock, Sparkles } from 'lucide-react';
 import { PokerTournamentCreator } from './PokerTournamentCreator';
 import { PokerTournamentRegistrantsModal } from './PokerTournamentRegistrantsModal';
+import { ConfirmActionCard } from '@/components/shared/ConfirmActionCard';
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -158,6 +159,8 @@ function TournamentCard({
 }) {
   const [pin, setPin] = useState('');
   const [showPin, setShowPin] = useState(false);
+  const [showConfirm, setShowConfirm] = useState(false);
+  const [pendingPin, setPendingPin] = useState<string | undefined>(undefined);
   const [botCount, setBotCount] = useState(2);
   const [botPin, setBotPin] = useState('');
   const isPrivate = t.isPrivate === true;
@@ -250,31 +253,25 @@ function TournamentCard({
                 <div className="flex gap-2">
                   <button
                     type="button"
-                    onClick={() => {
-                      setShowPin(false);
-                      setPin('');
-                    }}
+                    onClick={() => { setShowPin(false); setPin(''); }}
                     className="rounded-xl border border-white/15 px-3 py-2 text-xs font-semibold text-white/70 hover:bg-white/5 transition-colors"
                   >
                     Back
                   </button>
                   <button
                     type="button"
-                    onClick={() => {
-                      onJoin(t.tournamentId, pin);
-                      setShowPin(false);
-                    }}
+                    onClick={() => { setPendingPin(pin); setShowPin(false); setShowConfirm(true); }}
                     disabled={isJoining}
                     className="min-w-0 flex-1 rounded-xl bg-gradient-to-b from-emerald-400 to-emerald-600 py-2.5 text-sm font-bold text-emerald-950 shadow-[0_4px_14px_rgba(16,185,129,0.35)] hover:from-emerald-300 hover:to-emerald-500 disabled:opacity-55 disabled:cursor-not-allowed transition-all"
                   >
-                    {isJoining ? 'Joining…' : 'Confirm'}
+                    Next
                   </button>
                 </div>
               </div>
             ) : (
               <button
                 type="button"
-                onClick={() => (isPrivate ? setShowPin(true) : onJoin(t.tournamentId))}
+                onClick={() => isPrivate ? setShowPin(true) : setShowConfirm(true)}
                 disabled={isJoining}
                 className="w-full rounded-xl bg-gradient-to-b from-emerald-400 to-emerald-600 px-4 py-2.5 text-sm font-bold uppercase tracking-wide text-emerald-950 shadow-[0_4px_14px_rgba(16,185,129,0.35)] hover:from-emerald-300 hover:to-emerald-500 disabled:opacity-55 disabled:cursor-not-allowed transition-all sm:py-3"
               >
@@ -283,6 +280,36 @@ function TournamentCard({
             )}
           </div>
         )}
+
+        {showConfirm && (() => {
+          const isFreeroll = isZeroBuyInWei(t.buyInAmount);
+          const prizeDisplay = `${formatMorbius(t.prizePool)} MORBIUS`;
+          const buyInDisplay = isFreeroll ? 'Free' : `${formatMorbius(t.buyInAmount)} MORBIUS`;
+          const prizeDistLabel = t.prizeDistributionType?.replace(/_/g, ' ') ?? '—';
+          return (
+            <ConfirmActionCard
+              title="Register for Tournament"
+              subtitle={t.name}
+              rows={[
+                { label: 'Buy-in', value: buyInDisplay, accent: 'yellow' },
+                { label: 'Prize Pool', value: prizeDisplay, accent: 'yellow' },
+                { label: 'Prize Distribution', value: prizeDistLabel, accent: 'cyan' },
+                { label: 'Starting Stack', value: t.startingStack.toLocaleString(), accent: 'green' },
+                { label: 'Players', value: `${t.registeredCount} / ${t.maxPlayers}`, accent: 'white' },
+                { label: 'Private', value: isPrivate ? 'Yes' : 'No', accent: 'white' },
+                ...(isScheduled && t.scheduledStartAt ? [{
+                  label: 'Starts',
+                  value: new Date(t.scheduledStartAt).toLocaleString(undefined, { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' }),
+                  accent: 'white' as const,
+                }] : []),
+              ]}
+              onBack={() => { setShowConfirm(false); setPendingPin(undefined); }}
+              onConfirm={() => { setShowConfirm(false); onJoin(t.tournamentId, pendingPin); setPendingPin(undefined); }}
+              confirmLabel="Register"
+              isLoading={isJoining}
+            />
+          );
+        })()}
       </div>
 
       {/* Players row + tags */}
@@ -507,6 +534,20 @@ export function PokerTournamentLobby({ wsClient, myAddress, onGoToTable }: Poker
     myTournamentId,
   } = tournamentHook;
 
+  /** Start time has passed but we have not synced tableId yet (server scheduler / WS lag). */
+  const waitingForTableAfterStart = useMemo(() => {
+    if (!meLower) return false;
+    return openTournaments.some((t) => {
+      if (!t.isRegistered || !t.scheduledStartAt) return false;
+      if (t.status === 'cancelled') return false;
+      if (new Date(t.scheduledStartAt).getTime() > Date.now()) return false;
+      if (t.status === 'active' && t.tableId && myTableId === t.tableId && myTournamentId === t.tournamentId) {
+        return false;
+      }
+      return t.status === 'registration' || (t.status === 'active' && (!t.tableId || myTableId !== t.tableId || myTournamentId !== t.tournamentId));
+    });
+  }, [openTournaments, meLower, myTableId, myTournamentId]);
+
   const handleJoin = async (tournamentId: string, pinCode?: string) => {
     if (joiningId) return;
     setJoiningId(tournamentId);
@@ -628,6 +669,16 @@ export function PokerTournamentLobby({ wsClient, myAddress, onGoToTable }: Poker
         <div className="rounded-lg bg-green-500/10 border border-green-500/30 text-green-400 text-sm px-4 py-2 flex items-start justify-between gap-2">
           <span>{joinSuccess}</span>
           <button onClick={() => setJoinSuccess(null)} className="text-green-400/60 hover:text-green-400 shrink-0 text-base leading-none">×</button>
+        </div>
+      )}
+
+      {/* Table opening right after scheduled start (before list/WS has tableId) */}
+      {waitingForTableAfterStart && !myTableId && (
+        <div className="rounded-xl bg-yellow-500/10 border border-yellow-500/30 px-4 py-3 flex items-center justify-between gap-3">
+          <span className="text-yellow-200/95 text-sm font-medium">
+            Tournament start time reached — opening your table…
+          </span>
+          <span className="shrink-0 h-2 w-2 rounded-full bg-yellow-400 animate-pulse" aria-hidden />
         </div>
       )}
 

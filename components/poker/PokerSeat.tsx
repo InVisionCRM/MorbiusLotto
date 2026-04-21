@@ -628,14 +628,17 @@ export function PokerSeat({ seat, index, holeCards, isCurrentPlayer, showCardBac
       </AnimatePresence>
 
       {/* ── Cards — peek out from behind avatar ── */}
+      <AnimatePresence>
       {hasCards && (
         <motion.div
           data-testid={`poker-seat-cards-${index}`}
           className="relative flex-shrink-0"
+          initial={false}
           animate={{
             x: showdownCardOffset?.x ?? 0,
             y: showdownCardOffset?.y ?? 0,
           }}
+          exit={{ transition: { duration: 0.5 } }}
           transition={{ type: 'spring', stiffness: 180, damping: 22 }}
           style={{
             width: showMyCards ? 'clamp(84px, 20vw, 110px)' : 'clamp(58px, 14vw, 74px)',
@@ -668,9 +671,11 @@ export function PokerSeat({ seat, index, holeCards, isCurrentPlayer, showCardBac
                     <CardDisplay
                       cardIndex={holeCards![ci]}
                       isWinningCard={winningCardIndices?.includes(holeCards![ci])}
+                      variant="hole"
+                      dealDelay={ci * 0.12}
                     />
                   )
-                : <CardDisplay cardIndex={null} small faceDown />}
+                : <CardDisplay cardIndex={null} small faceDown variant="hole" dealDelay={ci * 0.12} />}
             </div>
           ))}
           {isActing && (
@@ -682,6 +687,7 @@ export function PokerSeat({ seat, index, holeCards, isCurrentPlayer, showCardBac
           )}
         </motion.div>
       )}
+      </AnimatePresence>
 
       {/* ── Avatar (desktop) or compact timer + roles (narrow) ── */}
       {!hideSeatAvatar ? (

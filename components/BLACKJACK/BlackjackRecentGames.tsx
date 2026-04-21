@@ -1,11 +1,12 @@
 'use client'
 
 import { useState } from 'react'
+import { useRouter } from 'next/navigation'
 import { useAccount } from 'wagmi'
 import { formatEther } from 'viem'
 import { toBigIntSafe } from '@/lib/safe-bigint'
 import { usePlayerGames, type PlayerGameRow } from '@/hooks/use-blackjack-stats'
-import Link from 'next/link'
+import { Theme } from '@/lib/theme'
 
 const panelStyle = {
   background: 'linear-gradient(145deg, rgb(16, 26, 35), rgb(35, 36, 41))',
@@ -23,7 +24,15 @@ function formatTime(isoOrMs: string | number): string {
   return date.toLocaleString(undefined, { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })
 }
 
-function ResultRow({ r, compact }: { r: PlayerGameRow; compact?: boolean }) {
+function ResultRow({
+  r,
+  compact,
+  onVerifyRequest,
+}: {
+  r: PlayerGameRow
+  compact?: boolean
+  onVerifyRequest?: (gameId: string) => void
+}) {
   const bet = toBigIntSafe(r.total_bet_amount ?? 0)
   const payout = toBigIntSafe(r.total_payout ?? 0)
   const profit = payout - bet
@@ -42,12 +51,13 @@ function ResultRow({ r, compact }: { r: PlayerGameRow; compact?: boolean }) {
         <span className={`shrink-0 tabular-nums text-right ${win ? 'text-green-400' : 'text-white/60'}`}>
           {win ? '+' : ''}{formatMorbius(profit)} MORBIUS
         </span>
-        <Link
-          href={`/BLACKJACK/verify?gameId=${encodeURIComponent(r.id)}`}
-          className="shrink-0 text-blue-400 hover:text-blue-300 text-xs font-semibold underline underline-offset-2"
+        <button
+          type="button"
+          onClick={() => onVerifyRequest?.(r.id)}
+          className="shrink-0 text-left sm:text-right text-blue-400 hover:text-blue-300 text-xs font-semibold underline underline-offset-2"
         >
           Verify
-        </Link>
+        </button>
       </div>
     )
   }
@@ -81,11 +91,19 @@ export function BlackjackRecentGames({
   compact = true,
   title = 'Recent Games',
 }: BlackjackRecentGamesProps) {
+  const router = useRouter()
   const { address } = useAccount()
   const [displayCount, setDisplayCount] = useState(INITIAL_DISPLAY)
+  const [pendingVerifyGameId, setPendingVerifyGameId] = useState<string | null>(null)
   const { data: games = [], isLoading, error } = usePlayerGames(100, 0)
   const displayGames = games.slice(0, displayCount)
   const hasMore = displayCount < games.length
+
+  const confirmLeaveToVerify = () => {
+    if (!pendingVerifyGameId) return
+    router.push(`/BLACKJACK/verify?gameId=${encodeURIComponent(pendingVerifyGameId)}`)
+    setPendingVerifyGameId(null)
+  }
 
   return (
     <div className="rounded-xl overflow-hidden w-full flex flex-col h-full min-h-0 min-w-0" style={panelStyle}>
@@ -112,7 +130,12 @@ export function BlackjackRecentGames({
               <span className="text-center sm:text-right">Verify</span>
             </div>
             {displayGames.map((r) => (
-              <ResultRow key={r.id} r={r} compact={compact} />
+              <ResultRow
+                key={r.id}
+                r={r}
+                compact={compact}
+                onVerifyRequest={compact ? (id) => setPendingVerifyGameId(id) : undefined}
+              />
             ))}
           </>
         )}
@@ -126,6 +149,45 @@ export function BlackjackRecentGames({
           >
             Load more
           </button>
+        </div>
+      )}
+
+      {pendingVerifyGameId && (
+        <div className="fixed inset-0 z-[70] flex items-center justify-center p-4">
+          <button
+            type="button"
+            className="absolute inset-0 bg-black/80 backdrop-blur-sm"
+            aria-label="Dismiss"
+            onClick={() => setPendingVerifyGameId(null)}
+          />
+          <div
+            className="relative w-full max-w-md rounded-2xl border-2 border-cyan-500/30 shadow-2xl overflow-hidden"
+            style={Theme.panel.base}
+          >
+            <div className={`px-5 py-4 ${Theme.modal.header}`}>
+              <h2 className="text-lg font-bold text-white text-center">Leave table?</h2>
+            </div>
+            <p className="px-5 pb-4 text-sm text-slate-200/90 leading-relaxed">
+              You are about to leave the blackjack table to go to the verification page. Are you sure you want to
+              continue?
+            </p>
+            <div className="px-5 pb-5 flex gap-3">
+              <button
+                type="button"
+                onClick={() => setPendingVerifyGameId(null)}
+                className="flex-1 py-2.5 rounded-xl bg-gray-700 hover:bg-gray-600 text-white text-sm font-semibold transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={confirmLeaveToVerify}
+                className={`flex-1 py-2.5 rounded-xl text-sm font-semibold text-white transition-all ${Theme.cyan.gradient.button} ${Theme.cyan.gradient.buttonHover}`}
+              >
+                Continue
+              </button>
+            </div>
+          </div>
         </div>
       )}
     </div>

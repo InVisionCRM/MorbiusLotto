@@ -1,9 +1,10 @@
 'use client';
 
-import React from 'react';
+import React, { useState } from 'react';
 import { formatEther } from 'viem';
 import { TOURNAMENT_CONFIG } from '@/hooks/use-tournament';
 import { Theme } from '@/lib/theme';
+import { ConfirmActionCard } from '@/components/shared/ConfirmActionCard';
 
 interface TournamentEntryProps {
   isOpen: boolean;
@@ -24,6 +25,8 @@ export function TournamentEntry({
   prizePool = '0',
   entryCount = 0,
 }: TournamentEntryProps) {
+  const [showConfirm, setShowConfirm] = useState(false);
+
   if (!isOpen) return null;
 
   const buyInAmount = TOURNAMENT_CONFIG.BUY_IN_AMOUNT;
@@ -134,7 +137,7 @@ export function TournamentEntry({
               Cancel
             </button>
             <button
-              onClick={onEnter}
+              onClick={() => canAfford && setShowConfirm(true)}
               disabled={!canAfford || isLoading}
               className={`flex-1 py-3 rounded-xl font-semibold transition-all ${
                 canAfford && !isLoading
@@ -145,20 +148,8 @@ export function TournamentEntry({
               {isLoading ? (
                 <span className="flex items-center justify-center gap-2">
                   <svg className="animate-spin h-5 w-5" viewBox="0 0 24 24">
-                    <circle
-                      className="opacity-25"
-                      cx="12"
-                      cy="12"
-                      r="10"
-                      stroke="currentColor"
-                      strokeWidth="4"
-                      fill="none"
-                    />
-                    <path
-                      className="opacity-75"
-                      fill="currentColor"
-                      d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
-                    />
+                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" />
+                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
                   </svg>
                   Entering...
                 </span>
@@ -169,6 +160,25 @@ export function TournamentEntry({
               )}
             </button>
           </div>
+
+          {showConfirm && (
+            <ConfirmActionCard
+              title="Enter Tournament"
+              subtitle="Confirm your entry details"
+              rows={[
+                { label: 'Buy-in', value: `${TOURNAMENT_CONFIG.BUY_IN_DISPLAY} MORBIUS`, accent: 'yellow' },
+                { label: 'Starting Chips', value: TOURNAMENT_CONFIG.STARTING_CHIPS.toLocaleString(), accent: 'green' },
+                { label: 'Hands to Play', value: TOURNAMENT_CONFIG.MAX_HANDS, accent: 'cyan' },
+                { label: 'Current Prize Pool', value: `${formattedPrizePool} MORBIUS`, accent: 'yellow' },
+                { label: 'Prize Distribution', value: `1st ${TOURNAMENT_CONFIG.PRIZE_PERCENTAGES[0]}% · 2nd ${TOURNAMENT_CONFIG.PRIZE_PERCENTAGES[1]}% · 3rd ${TOURNAMENT_CONFIG.PRIZE_PERCENTAGES[2]}%`, accent: 'cyan' },
+                { label: 'Your Balance', value: `${formattedBalance} MORBIUS`, accent: canAfford ? 'green' : 'white' },
+              ]}
+              onBack={() => setShowConfirm(false)}
+              onConfirm={() => { setShowConfirm(false); onEnter(); }}
+              confirmLabel="Enter Tournament"
+              isLoading={isLoading}
+            />
+          )}
         </div>
       </div>
     </div>

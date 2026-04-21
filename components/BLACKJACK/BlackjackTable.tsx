@@ -15,6 +15,25 @@ import { EncryptedText } from '@/components/ui/encrypted-text';
 import { useAccount } from 'wagmi';
 import { isAdminWallet } from '@/lib/admin';
 import { truncateTranscriptWords } from '@/lib/speech-display';
+import './bet-tier-animations.css';
+
+/**
+ * Bet-tier deal animation selector. Applied to player's first 2 cards only.
+ * Flip to disable the tier escalation and fall back to the default cardSlideIn.
+ */
+const ENABLE_BET_TIER_ANIMS = true;
+function getBetTierClass(betAmount: string | number | undefined): string {
+  if (!ENABLE_BET_TIER_ANIMS) return '';
+  const n = typeof betAmount === 'number'
+    ? betAmount
+    : parseFloat(String(betAmount ?? '0').replace(/,/g, ''));
+  if (!Number.isFinite(n) || n <= 0) return '';
+  if (n <= 9999) return 'bet-tier-1';
+  if (n <= 20000) return 'bet-tier-2';
+  if (n <= 29999) return 'bet-tier-3';
+  if (n <= 40000) return 'bet-tier-4';
+  return 'bet-tier-5';
+}
 
 // Background music playlist moved to page.tsx to avoid duplicate audio instances
 
@@ -844,14 +863,14 @@ const BlackjackTable: React.FC<BlackjackTableProps> = ({
   return (
     <div
       ref={tableContainerRef}
-      className="relative isolate w-full max-w-full mx-auto blackjack-table flex flex-col flex-1 min-h-[380px] sm:min-h-[600px]"
+      className="relative isolate w-full max-w-full mx-auto blackjack-table flex flex-col flex-1 min-h-[420px] sm:min-h-[680px]"
       style={{
         boxShadow: 'inset 0 4px 12px rgba(0, 0, 0, 0.9), inset 0 -2px 8px rgba(0, 0, 0, 0.5), inset 0 0 0 1px rgba(0, 0, 0, 0.3)',
         border: '1px inset rgba(60, 60, 60, 0.5)',
       }}
     >
       {/* Table surface: flex-1 with min height so table stays a good size */}
-      <div className="flex-1 min-h-[380px] sm:min-h-[600px] relative">
+      <div className="flex-1 min-h-[420px] sm:min-h-[680px] relative">
       <Image
         src={imageSrc}
         alt="Table Background"
@@ -1187,7 +1206,7 @@ const BlackjackTable: React.FC<BlackjackTableProps> = ({
                                   <PlayingCard
                                     card={card}
                                     owner="player"
-                                    className=""
+                                    className={isNewCard && cardIndex < 2 ? getBetTierClass(currentBetAmount) : ''}
                                     index={cardIndex}
                                     isNewCard={isNewCard}
                                     size={cardSize}

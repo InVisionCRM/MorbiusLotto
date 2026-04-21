@@ -13,7 +13,6 @@ import WinNotification from '@/components/BLACKJACK/WinNotification';
 import { TournamentBetPanel } from '@/components/BLACKJACK/Tournament';
 import { IconButton } from '@/components/animate-ui/components/buttons/icon';
 import { BlackjackGameSecondaryPanels } from '@/components/BLACKJACK/BlackjackGameSecondaryPanels';
-import { BlackjackHowToSection } from '@/components/BLACKJACK/BlackjackHowToSection';
 import type { TableThemeInfo } from '@/hooks/use-blackjack-tables';
 import { SpeechIndicator } from '@/components/shared/SpeechIndicator';
 import { SpeechConfirmDialog } from '@/components/shared/SpeechConfirmDialog';
@@ -236,7 +235,7 @@ export function BlackjackGameView(props: BlackjackGameViewProps) {
             className="rounded-xl overflow-hidden p-1 sm:p-2 md:p-3 min-h-0 shrink-0"
             style={panelShell}
           >
-            <div className="relative flex-1 min-w-0 min-h-[60dvh] sm:min-h-[min(52dvh,520px)] flex flex-col">
+            <div className="relative flex-1 min-w-0 min-h-[62dvh] sm:min-h-[min(62dvh,680px)] flex flex-col">
             <BlackjackTable
               playerHand={currentGame?.playerHand || { cards: [], total: 0, hasAce: false, isBlackjack: false, isBust: false }}
               playerHands={currentGame?.playerHands}
@@ -465,19 +464,11 @@ export function BlackjackGameView(props: BlackjackGameViewProps) {
               }
               inTournament={tournament.tournamentState.inTournament}
               tournamentTabContent={tournamentTabContent}
-              blackjackAddress={blackjackAddress}
-              morbiusTokenAddress={morbiusTokenAddress}
             />
           </div>
           </div>
 
           <BlackjackGameSecondaryPanels address={address} tipStats={tipStats} tournament={tournament} />
-
-          <BlackjackHowToSection
-            blackjackAddress={blackjackAddress}
-            morbiusTokenAddress={morbiusTokenAddress}
-            layout="panel"
-          />
         </div>
       </div>
 

@@ -58,7 +58,7 @@ export function TableTokenProfileCard({
     <div
       className={`rounded-xl min-w-0 flex flex-col border border-cyan-500/30 ${
         fillColumn
-          ? 'min-h-0 flex-1 h-full overflow-hidden'
+          ? 'flex-1 h-full min-h-[max(38dvh,560px)] overflow-hidden'
           : compact
             ? 'min-h-[280px] overflow-hidden md:min-h-[300px]'
             : naturalProfileHeight

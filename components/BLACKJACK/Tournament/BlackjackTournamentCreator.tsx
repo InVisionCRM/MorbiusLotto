@@ -34,6 +34,7 @@ import { TOURNAMENT_PRIZE_ESCROW_ADDRESS } from '@/lib/contracts';
 import { Theme } from '@/lib/theme';
 import { useTokenPriceUsd } from '@/hooks/use-token-price-usd';
 import { TokenWithLogo } from '@/components/Creators/TokenWithLogo';
+import { ConfirmActionCard } from '@/components/shared/ConfirmActionCard';
 
 const ESCROW_ZERO = '0x0000000000000000000000000000000000000000';
 const isEscrowConfigured = (TOURNAMENT_PRIZE_ESCROW_ADDRESS as string) !== ESCROW_ZERO;
@@ -98,6 +99,7 @@ export function BlackjackTournamentCreator({
   const [error, setError] = useState<string | null>(null);
   const [createdTournament, setCreatedTournament] = useState<{ id: string; pinCode?: string; onChainTournamentId?: number } | null>(null);
   const [fundingStep, setFundingStep] = useState<FundingStep>('idle');
+  const [showConfirm, setShowConfirm] = useState(false);
   const [approvalTxHash, setApprovalTxHash] = useState<string | null>(null);
   const [fundingError, setFundingError] = useState<string | null>(null);
 
@@ -477,6 +479,42 @@ export function BlackjackTournamentCreator({
 
   if (!isOpen) return null;
 
+  // Confirmation card rows
+  const confirmRows = (() => {
+    const rows: import('@/components/shared/ConfirmActionCard').ConfirmActionRow[] = [];
+    rows.push({ label: 'Tournament', value: name || '—', accent: 'white' });
+    rows.push({ label: 'Type', value: tournamentType === 'buyin' ? 'Buy-in' : 'Freeroll', accent: 'cyan' });
+    if (tournamentType === 'buyin') {
+      rows.push({ label: 'Buy-in', value: `${buyInAmount} MORBIUS`, accent: 'yellow' });
+    }
+    if (tournamentType === 'freeroll' && scheduledStartAt) {
+      rows.push({ label: 'Start', value: new Date(fromDatetimeLocal(scheduledStartAt)).toLocaleString(), accent: 'white' });
+      rows.push({ label: 'Duration', value: `${durationMinutes} min`, accent: 'white' });
+    }
+    rows.push({ label: 'Starting Chips', value: startingChips.toLocaleString(), accent: 'green' });
+    rows.push({ label: 'Max Hands', value: maxHands, accent: 'white' });
+    if (timeLimitMinutes !== null && tournamentType === 'buyin') {
+      rows.push({ label: 'Time Limit', value: TIME_LIMIT_LABELS[timeLimitMinutes] ?? `${timeLimitMinutes}m`, accent: 'white' });
+    }
+    rows.push({ label: 'Prize Distribution', value: PRIZE_PRESETS.find(p => p.id === prizeDistributionType)?.name ?? prizeDistributionType, accent: 'cyan' });
+    if (prizeType === 'custom' && prizeAmountHuman && selectedToken) {
+      rows.push({
+        label: 'Prize Pool',
+        value: `${prizeAmountHuman} ${selectedToken.symbol}${prizeUsdValue != null ? ` (≈$${prizeUsdValue >= 1 ? prizeUsdValue.toLocaleString(undefined, { maximumFractionDigits: 2 }) : prizeUsdValue.toFixed(4)})` : ''}`,
+        accent: 'yellow',
+      });
+    }
+    rows.push({ label: 'Private', value: isPrivate ? 'Yes (PIN required)' : 'No', accent: 'white' });
+    rows.push({
+      label: 'Table Theme',
+      value: themeKind === 'video'
+        ? (BLACKJACK_VIDEO_BACKGROUNDS.find(b => b.id === themeId)?.label ?? themeId)
+        : (BLACKJACK_IMAGE_BACKGROUNDS.find(b => b.id === themeId)?.label ?? themeId),
+      accent: 'white',
+    });
+    return rows;
+  })();
+
   const handleApproveToken = async () => {
     if (!createdTournament || !prizeTokenAddress.trim() || prizeAmountWeiForReview <= 0n) return;
     // Custom token always uses V2 (bytes32) escrow
@@ -726,6 +764,19 @@ export function BlackjackTournamentCreator({
   }
 
   return (
+    <>
+    {showConfirm && (
+      <ConfirmActionCard
+        title="Create Tournament"
+        subtitle="Review details before submitting"
+        rows={confirmRows}
+        onBack={() => setShowConfirm(false)}
+        onConfirm={() => { setShowConfirm(false); handleCreate(); }}
+        confirmLabel={tournamentType === 'buyin' && prizeType === 'custom' ? 'Create & Fund' : 'Create Tournament'}
+        isLoading={isLoading}
+        warning={!canAffordBuyIn && buyInAmountWei > 0n && tournamentType === 'buyin' ? "Your balance is below the buy-in — you won't be able to join your own tournament." : undefined}
+      />
+    )}
     <Dialog open={isOpen} onOpenChange={(open) => { if (!open) handleClose(); }}>
       <DialogContent className="max-w-xl sm:max-w-2xl max-h-[90vh] sm:max-h-[85vh] flex flex-col gap-0 p-0 border-cyan-500/30 overflow-hidden min-h-0" style={Theme.panel.base}>
         <DialogHeader className={`p-3 pb-0 border-b border-cyan-500/20 shrink-0 ${Theme.cyan.gradient.button}`}>
@@ -1218,7 +1269,7 @@ export function BlackjackTournamentCreator({
               Next
             </button>
           ) : (
-            <button type="button" onClick={handleCreate} disabled={isLoading || !name.trim()} className={`flex-1 py-2.5 rounded-xl font-semibold text-sm transition-all ${!isLoading && name.trim() ? `${Theme.cyan.gradient.button} ${Theme.cyan.gradient.buttonHover} text-white` : 'bg-gray-600 text-gray-400 cursor-not-allowed'}`}>
+            <button type="button" onClick={() => setShowConfirm(true)} disabled={isLoading || !name.trim()} className={`flex-1 py-2.5 rounded-xl font-semibold text-sm transition-all ${!isLoading && name.trim() ? `${Theme.cyan.gradient.button} ${Theme.cyan.gradient.buttonHover} text-white` : 'bg-gray-600 text-gray-400 cursor-not-allowed'}`}>
               {isLoading ? (
                 <span className="flex items-center justify-center gap-2">
                   <svg className="animate-spin h-5 w-5" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" /><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" /></svg>
@@ -1232,6 +1283,7 @@ export function BlackjackTournamentCreator({
         </DialogFooter>
       </DialogContent>
     </Dialog>
+    </>
   );
 }
 

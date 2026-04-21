@@ -1,13 +1,17 @@
 'use client';
 
-import React from 'react';
+import React, { useEffect, useRef, useState } from 'react';
+import { motion, AnimatePresence } from 'framer-motion';
 import type { PokerTournamentState } from '@/hooks/use-poker-tournament';
 import { formatMorbiusFloor } from '@/lib/format-morbius-display';
+import { useSidebar } from '@/components/ui/sidebar';
 
 interface Props {
   state: PokerTournamentState;
   myAddress: string;
 }
+
+// ── Formatters ─────────────────────────────────────────────────────────────
 
 function shortAddr(addr: string): string {
   if (!addr || addr.length < 10) return addr;
@@ -18,6 +22,19 @@ function formatChips(n: number): string {
   return n.toLocaleString();
 }
 
+function formatCompactChips(n: number): string {
+  if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1)}M`;
+  if (n >= 10_000) return `${Math.floor(n / 1000)}K`;
+  if (n >= 1000) return `${(n / 1000).toFixed(1)}K`;
+  return n.toLocaleString();
+}
+
+function formatBlindShort(n: number): string {
+  if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1)}M`;
+  if (n >= 1000) return `${Math.floor(n / 1000)}K`;
+  return String(n);
+}
+
 function isZeroBuyInWei(wei: string): boolean {
   try {
     return BigInt(wei || '0') === 0n;
@@ -26,124 +43,426 @@ function isZeroBuyInWei(wei: string): boolean {
   }
 }
 
-/** Plinko / poker lobby panel: embossed grey + cyan border */
-const panelSurface: React.CSSProperties = {
-  background: 'linear-gradient(325deg, rgba(20, 20, 20, 0.88), rgba(40, 40, 40, 0.58))',
-  boxShadow:
-    'inset 0 3px 6px rgba(0, 0, 0, 0.8), inset 0 -3px 6px rgba(255, 255, 255, 0.06), 0 1px 3px rgba(0, 0, 0, 0.5)',
+// ── Burst queue types ──────────────────────────────────────────────────────
+
+type Burst = {
+  id: string;
+  text: string;
+  /** 'red' = elimination stage 1; 'black' = everything else */
+  tone: 'red' | 'black';
 };
 
+const BURST_MS = 1200;
+
+// ── Shared atomic pieces ──────────────────────────────────────────────────
+
+function Divider() {
+  return (
+    <div
+      className="self-center w-12 h-px"
+      style={{ background: 'rgba(255,255,255,0.09)' }}
+    />
+  );
+}
+
+/** Collapsed-rail stat cell: Jost title (small) above Jost value (larger). */
+function CollapsedStat({
+  label,
+  value,
+  valueSuffix,
+}: {
+  label: string;
+  value: string;
+  valueSuffix?: React.ReactNode;
+}) {
+  return (
+    <div className="flex flex-col items-center justify-center gap-0.5 w-full">
+      <span
+        className="font-jost-normal text-[9px] uppercase tracking-[0.14em]"
+        style={{ color: 'rgba(255,255,255,0.45)' }}
+      >
+        {label}
+      </span>
+      <span
+        className="font-jost text-[14px] tabular-nums flex items-center gap-0.5"
+        style={{ color: 'rgba(255,255,255,0.95)', letterSpacing: '-0.01em' }}
+      >
+        {value}
+        {valueSuffix}
+      </span>
+    </div>
+  );
+}
+
+/** Expanded-panel block: centered Jost label above centered Jost value, with optional sub-line. */
+function ExpandedBlock({
+  label,
+  value,
+  sub,
+}: {
+  label: string;
+  value: React.ReactNode;
+  sub?: React.ReactNode;
+}) {
+  return (
+    <div className="flex flex-col items-center gap-1 px-2 py-3">
+      <span
+        className="font-jost-normal text-[10px] uppercase tracking-[0.18em]"
+        style={{ color: 'rgba(255,255,255,0.45)' }}
+      >
+        {label}
+      </span>
+      <span
+        className="font-jost text-[26px] tabular-nums leading-none"
+        style={{ color: 'rgba(255,255,255,0.98)', letterSpacing: '-0.01em' }}
+      >
+        {value}
+      </span>
+      {sub ? (
+        <span
+          className="font-jost-normal text-[10px] tracking-wide"
+          style={{ color: 'rgba(255,255,255,0.55)' }}
+        >
+          {sub}
+        </span>
+      ) : null}
+    </div>
+  );
+}
+
+function BlockDivider() {
+  return (
+    <div
+      className="mx-5 h-px"
+      style={{ background: 'rgba(255,255,255,0.07)' }}
+    />
+  );
+}
+
+// ── Main component ────────────────────────────────────────────────────────
+
 export function PokerTournamentHUD({ state, myAddress }: Props) {
+  const { open } = useSidebar();
+
+  // Derived data
   const me = state.players.find(
     (p) => p.playerAddress.toLowerCase() === myAddress.toLowerCase(),
   );
-
   const activePlayers = state.players.filter((p) => p.status === 'playing');
   const sortedByChips = [...activePlayers].sort((a, b) => b.chipsRemaining - a.chipsRemaining);
-
   const myRank = me
     ? sortedByChips.findIndex((p) => p.playerAddress.toLowerCase() === myAddress.toLowerCase()) + 1
     : null;
 
-  let prizeLabel: string;
-  try {
-    prizeLabel = formatMorbiusFloor(state.prizePool, { compact: true });
-  } catch {
-    prizeLabel = '—';
-  }
+  // Next blinds from schedule (if available)
+  const schedule = state.pokerConfig?.blindSchedule;
+  const nextLevel = schedule?.find((lvl) => lvl.level === state.blindLevel + 1);
+  const nextBlindsStr = nextLevel
+    ? `${formatBlindShort(nextLevel.smallBlind)}/${formatBlindShort(nextLevel.bigBlind)}`
+    : null;
 
-  return (
-    <div
-      className="absolute top-3 left-3 z-30 flex flex-col gap-2 min-w-[188px] max-w-[220px] select-none"
-      style={{ pointerEvents: 'none' }}
-    >
-      {/* Title + prize */}
-      <div
-        className="rounded-xl border border-cyan-500/35 px-3 py-2 backdrop-blur-sm"
-        style={panelSurface}
-      >
-        <div className="flex items-start justify-between gap-2 min-w-0">
-          <h3 className="text-xs font-semibold text-slate-100 leading-tight truncate min-w-0 flex-1">
-            {state.name}
-          </h3>
-          {isZeroBuyInWei(state.buyInAmount) && (
-            <span className="shrink-0 text-[9px] px-1.5 py-0.5 rounded-full border border-cyan-500/40 text-cyan-300/95 bg-cyan-500/10">
-              Freeroll
-            </span>
-          )}
-        </div>
-        <div className="text-[10px] text-cyan-400/75 uppercase tracking-wider font-medium mt-1">
-          Hand {state.handNumber}
-        </div>
-        <div className="text-[10px] text-slate-400 mt-1 flex justify-between gap-2">
-          <span>Prize pool</span>
-          <span className="text-cyan-200/90 font-semibold tabular-nums">{prizeLabel}</span>
+  // Rank change indicator (▲ / ▼)
+  const prevRankRef = useRef<number | null>(null);
+  const [rankDelta, setRankDelta] = useState<'up' | 'down' | null>(null);
+  useEffect(() => {
+    if (myRank == null) return;
+    const prev = prevRankRef.current;
+    prevRankRef.current = myRank;
+    if (prev == null || prev === myRank) return;
+    setRankDelta(myRank < prev ? 'up' : 'down');
+    const t = setTimeout(() => setRankDelta(null), 3000);
+    return () => clearTimeout(t);
+  }, [myRank]);
+
+  // ── Burst queue ──────────────────────────────────────────────────────────
+  const [activeBurst, setActiveBurst] = useState<Burst | null>(null);
+  const burstQueueRef = useRef<Burst[]>([]);
+  const burstPlayingRef = useRef(false);
+  const prevActiveCountRef = useRef<number | null>(null);
+  const prevBlindLevelRef = useRef<number | null>(null);
+
+  const drainBurstQueue = () => {
+    if (burstPlayingRef.current) return;
+    const next = burstQueueRef.current.shift();
+    if (!next) return;
+    burstPlayingRef.current = true;
+    setActiveBurst(next);
+    setTimeout(() => {
+      burstPlayingRef.current = false;
+      setActiveBurst(null);
+      if (burstQueueRef.current.length > 0) {
+        // small beat between bursts so each one registers
+        setTimeout(drainBurstQueue, 80);
+      }
+    }, BURST_MS);
+  };
+
+  const enqueueBursts = (items: Burst[]) => {
+    burstQueueRef.current.push(...items);
+    drainBurstQueue();
+  };
+
+  // Elimination detection
+  useEffect(() => {
+    const count = activePlayers.length;
+    const prev = prevActiveCountRef.current;
+    prevActiveCountRef.current = count;
+    if (prev == null) return;
+    if (count < prev) {
+      // Someone was eliminated. We don't know who specifically from this delta alone,
+      // so use a generic "PLAYER OUT" message.
+      enqueueBursts([
+        { id: `elim-1-${Date.now()}`, text: 'PLAYER OUT', tone: 'red' },
+        { id: `elim-2-${Date.now()}`, text: `${count} LEFT`, tone: 'black' },
+        {
+          id: `elim-3-${Date.now()}`,
+          text: `${formatBlindShort(state.smallBlind)}/${formatBlindShort(state.bigBlind)}`,
+          tone: 'black',
+        },
+      ]);
+    }
+  }, [activePlayers.length, state.smallBlind, state.bigBlind]);
+
+  // Blind-change detection (fires independent of elimination)
+  useEffect(() => {
+    const lvl = state.blindLevel;
+    const prev = prevBlindLevelRef.current;
+    prevBlindLevelRef.current = lvl;
+    if (prev == null) return;
+    if (lvl > prev) {
+      enqueueBursts([
+        { id: `blind-1-${Date.now()}`, text: 'BLINDS UP', tone: 'black' },
+        {
+          id: `blind-2-${Date.now()}`,
+          text: `${formatBlindShort(state.smallBlind)}/${formatBlindShort(state.bigBlind)}`,
+          tone: 'black',
+        },
+      ]);
+    }
+  }, [state.blindLevel, state.smallBlind, state.bigBlind]);
+
+  // ── Precomputed strings ──────────────────────────────────────────────────
+  const blindStr = `${formatBlindShort(state.smallBlind)}/${formatBlindShort(state.bigBlind)}`;
+  const stackShort = me ? formatCompactChips(me.chipsRemaining) : '—';
+  const stackFull = me ? formatChips(me.chipsRemaining) : '—';
+  const rankStr = myRank != null ? `#${myRank}` : '—';
+  const rankLongStr = myRank != null ? `#${myRank} / ${activePlayers.length}` : '—';
+  const playersLeftShort = `${activePlayers.length}`;
+  const playersLeftFull = `${activePlayers.length}`;
+  const prizeLabel = (() => {
+    try {
+      return formatMorbiusFloor(state.prizePool, { compact: true });
+    } catch {
+      return '—';
+    }
+  })();
+
+  // ── Burst overlay ────────────────────────────────────────────────────────
+  const burstOverlay = (
+    <AnimatePresence>
+      {activeBurst && (
+        <motion.div
+          key={activeBurst.id}
+          className="absolute inset-0 z-40 flex items-center justify-center"
+          style={{
+            background: activeBurst.tone === 'red' ? 'rgba(220,38,38,0.98)' : 'rgba(0,0,0,0.96)',
+            color: '#ffffff',
+          }}
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          exit={{ opacity: 0 }}
+          transition={{ duration: 0.15 }}
+        >
+          <motion.span
+            className="font-jost text-center px-3 select-none"
+            style={{
+              letterSpacing: '-0.01em',
+              fontSize: open ? 30 : 16,
+              lineHeight: 1,
+              whiteSpace: 'nowrap',
+              color: '#ffffff',
+            }}
+            initial={{ scale: 0.92, y: 6 }}
+            animate={{ scale: 1, y: 0 }}
+            exit={{ scale: 0.98 }}
+            transition={{ type: 'spring', stiffness: 380, damping: 26 }}
+          >
+            {activeBurst.text}
+          </motion.span>
+        </motion.div>
+      )}
+    </AnimatePresence>
+  );
+
+  // ── Collapsed rail content ───────────────────────────────────────────────
+  const collapsedContent = (
+    <div className="flex flex-col items-stretch justify-between h-full w-full py-6 px-1">
+      <CollapsedStat label="Blinds" value={blindStr} />
+      <Divider />
+      <CollapsedStat label="Stack" value={stackShort} />
+      <Divider />
+      <CollapsedStat
+        label="Rank"
+        value={rankStr}
+        valueSuffix={
+          <AnimatePresence>
+            {rankDelta && (
+              <motion.span
+                key={rankDelta}
+                initial={{ opacity: 0, y: rankDelta === 'up' ? 4 : -4 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0 }}
+                transition={{ duration: 0.2 }}
+                className="text-[10px]"
+                style={{ color: rankDelta === 'up' ? 'rgba(52,211,153,1)' : 'rgba(239,68,68,1)' }}
+              >
+                {rankDelta === 'up' ? '▲' : '▼'}
+              </motion.span>
+            )}
+          </AnimatePresence>
+        }
+      />
+      <Divider />
+      <CollapsedStat label="Left" value={playersLeftShort} />
+    </div>
+  );
+
+  // ── Expanded panel content ───────────────────────────────────────────────
+  const expandedContent = (
+    <div className="flex flex-col h-full w-full min-h-0 pt-6 pb-4 overflow-y-auto" style={{ scrollbarWidth: 'thin', scrollbarColor: 'rgba(255,255,255,0.12) transparent' }}>
+      {/* Tournament name (hero) */}
+      <div className="px-4 pb-3 text-center">
+        <h3
+          className="font-jost leading-[0.95] break-words"
+          style={{
+            fontSize: 28,
+            color: 'rgba(255,255,255,0.98)',
+            letterSpacing: '-0.02em',
+            textTransform: 'uppercase',
+          }}
+        >
+          {state.name}
+        </h3>
+        <div
+          className="mt-1.5 font-jost-normal text-[10px] tracking-[0.18em] uppercase flex items-center justify-center gap-1.5"
+          style={{ color: 'rgba(255,255,255,0.5)' }}
+        >
+          {isZeroBuyInWei(state.buyInAmount) && <span>Freeroll</span>}
+          {isZeroBuyInWei(state.buyInAmount) && <span style={{ color: 'rgba(255,255,255,0.2)' }}>·</span>}
+          <span>Hand {state.handNumber}</span>
         </div>
       </div>
 
-      {/* Blinds */}
-      <div
-        className="rounded-xl border border-cyan-500/35 px-3 py-2 backdrop-blur-sm"
-        style={panelSurface}
-      >
-        <div className="text-[10px] text-cyan-400/75 uppercase tracking-widest font-medium mb-0.5">
-          Blinds · Level {state.blindLevel}
-        </div>
-        <div className="text-slate-100 font-bold text-sm tabular-nums">
-          {formatChips(state.smallBlind)} / {formatChips(state.bigBlind)}
-        </div>
-        <div className="text-[10px] text-slate-500 mt-0.5">
-          Blinds rise when players are eliminated
-        </div>
-      </div>
+      <BlockDivider />
+
+      {/* Blinds — current + next */}
+      <ExpandedBlock
+        label="Blinds"
+        value={`${formatChips(state.smallBlind)} / ${formatChips(state.bigBlind)}`}
+        sub={nextBlindsStr ? <>Next: <span className="font-jost" style={{ color: 'rgba(255,255,255,0.8)' }}>{nextBlindsStr}</span></> : null}
+      />
+
+      <BlockDivider />
 
       {/* Your stack */}
-      {me && (
-        <div
-          className="rounded-xl border border-cyan-500/30 px-3 py-2 backdrop-blur-sm"
-          style={panelSurface}
-        >
-          <div className="text-[10px] text-slate-500 uppercase tracking-widest font-medium mb-0.5">
-            Your stack
-          </div>
-          <div className="text-slate-100 font-bold text-sm tabular-nums">{formatChips(me.chipsRemaining)}</div>
-          {myRank !== null && (
-            <div className="text-[10px] text-slate-500 mt-0.5">
-              Rank #{myRank} of {activePlayers.length}
-            </div>
-          )}
-        </div>
-      )}
+      {me && <ExpandedBlock label="Your Stack" value={stackFull} />}
 
-      {/* Leaderboard strip */}
-      <div
-        className="rounded-xl border border-cyan-500/30 px-3 py-2 backdrop-blur-sm"
-        style={panelSurface}
-      >
-        <div className="text-[10px] text-slate-500 uppercase tracking-widest font-medium mb-1">
-          Players · {activePlayers.length} left
+      {me && <BlockDivider />}
+
+      {/* Rank */}
+      {myRank != null && <ExpandedBlock label="Rank" value={rankLongStr} />}
+
+      {myRank != null && <BlockDivider />}
+
+      {/* Players left */}
+      <ExpandedBlock label="Players Left" value={playersLeftFull} />
+
+      <BlockDivider />
+
+      {/* Prize pool */}
+      <ExpandedBlock label="Prize Pool" value={prizeLabel} />
+
+      <BlockDivider />
+
+      {/* Leaderboard — slightly different treatment: list under a centered heading */}
+      <div className="px-4 pt-3 pb-1">
+        <div
+          className="font-jost-normal text-[10px] uppercase tracking-[0.18em] text-center mb-2"
+          style={{ color: 'rgba(255,255,255,0.45)' }}
+        >
+          Leaderboard
         </div>
-        <div className="flex flex-col gap-0.5">
-          {sortedByChips.slice(0, 4).map((p, i) => (
+        <div className="flex flex-col gap-1">
+          {sortedByChips.slice(0, 6).map((p, i) => {
+            const isMe = p.playerAddress.toLowerCase() === myAddress.toLowerCase();
+            return (
+              <div
+                key={p.playerAddress}
+                className={`flex justify-between items-center gap-2 min-w-0 px-2 py-1 rounded ${isMe ? '' : ''}`}
+                style={{
+                  background: isMe ? 'rgba(255,255,255,0.06)' : 'transparent',
+                  borderLeft: isMe ? '2px solid rgba(255,255,255,0.5)' : '2px solid transparent',
+                }}
+              >
+                <span
+                  className="font-jost-normal text-[12px] truncate min-w-0"
+                  style={{ color: isMe ? 'rgba(255,255,255,0.95)' : 'rgba(255,255,255,0.75)' }}
+                >
+                  <span style={{ color: 'rgba(255,255,255,0.35)' }}>#{i + 1}</span>{' '}
+                  {shortAddr(p.playerAddress)}
+                </span>
+                <span
+                  className="font-jost text-[12px] tabular-nums shrink-0"
+                  style={{ color: isMe ? 'rgba(255,255,255,0.98)' : 'rgba(255,255,255,0.8)' }}
+                >
+                  {formatChips(p.chipsRemaining)}
+                </span>
+              </div>
+            );
+          })}
+          {sortedByChips.length > 6 && (
             <div
-              key={p.playerAddress}
-              className={`flex justify-between items-center text-[11px] gap-2 min-w-0 ${
-                p.playerAddress.toLowerCase() === myAddress.toLowerCase()
-                  ? 'text-cyan-300 font-semibold'
-                  : 'text-slate-300/90'
-              }`}
+              className="font-jost-normal text-[10px] text-center mt-0.5"
+              style={{ color: 'rgba(255,255,255,0.4)' }}
             >
-              <span className="truncate min-w-0">
-                #{i + 1} {shortAddr(p.playerAddress)}
-              </span>
-              <span className="tabular-nums shrink-0">{formatChips(p.chipsRemaining)}</span>
+              +{sortedByChips.length - 6} more
             </div>
-          ))}
-          {sortedByChips.length > 4 && (
-            <div className="text-[10px] text-slate-500 mt-0.5">+{sortedByChips.length - 4} more</div>
           )}
         </div>
       </div>
+    </div>
+  );
+
+  // ── Wrapper ──────────────────────────────────────────────────────────────
+  return (
+    <div className="relative flex flex-col h-full w-full min-h-0 select-none">
+      <AnimatePresence mode="wait" initial={false}>
+        {open ? (
+          <motion.div
+            key="expanded"
+            className="h-full w-full min-h-0"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: 0.12 }}
+          >
+            {expandedContent}
+          </motion.div>
+        ) : (
+          <motion.div
+            key="collapsed"
+            className="h-full w-full min-h-0"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: 0.12 }}
+          >
+            {collapsedContent}
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {burstOverlay}
     </div>
   );
 }

@@ -122,7 +122,7 @@ export interface UsePokerTournamentReturn {
   myEntryStatus: 'playing' | 'busted' | 'completed' | null;
   myTableId: string | null;
   error: string | null;
-  refreshTournaments: () => Promise<void>;
+  refreshTournaments: (opts?: { silent?: boolean }) => Promise<void>;
   createTournament: (params: CreatePokerTournamentParams) => Promise<{ tournamentId: string; pinCode?: string | null } | null>;
   joinTournament: (tournamentId: string, pinCode?: string) => Promise<{ autoStarted: boolean; tableId: string | null } | null>;
   cancelTournament: (tournamentId: string) => Promise<boolean>;
@@ -246,9 +246,10 @@ export function usePokerTournament({
   // Actions
   // ---------------------------------------------------------------------------
 
-  const refreshTournaments = useCallback(async () => {
+  const refreshTournaments = useCallback(async (opts?: { silent?: boolean }) => {
     if (!wsClient) return;
-    setIsLoading(true);
+    const silent = opts?.silent === true;
+    if (!silent) setIsLoading(true);
     try {
       const response = await wsClient.sendRequest('poker_tournament_list', {});
       const tournaments: PokerTournamentSummary[] = response?.tournaments ?? [];
@@ -262,9 +263,9 @@ export function usePokerTournament({
         setMyEntryStatus('playing');
       }
 
-      // Re-subscribe to registered tournament rooms so we receive started/cancelled events
+      // Re-subscribe to registered tournament rooms (registration + active) for WS events
       for (const t of tournaments) {
-        if (t.isRegistered && t.status === 'registration') {
+        if (t.isRegistered && (t.status === 'registration' || t.status === 'active')) {
           wsClient.sendRequest('poker_tournament_join', { tournamentId: t.tournamentId })
             .catch(() => {}); // silently ignore — server handles already-registered case
         }
@@ -272,7 +273,7 @@ export function usePokerTournament({
     } catch (err) {
       setError((err as Error).message ?? 'Failed to load tournaments');
     } finally {
-      setIsLoading(false);
+      if (!silent) setIsLoading(false);
     }
   }, [wsClient]);
 
@@ -340,6 +341,45 @@ export function usePokerTournament({
       refreshTournaments();
     }
   }, [wsClient, refreshTournaments]);
+
+  // Scheduled SNG: refresh when start time hits and poll until list shows active + tableId (scheduler/WS can lag)
+  useEffect(() => {
+    if (!wsClient?.isConnected()) return;
+
+    const poll = () => void refreshTournaments({ silent: true });
+    const startTimeouts: ReturnType<typeof setTimeout>[] = [];
+
+    for (const t of openTournaments) {
+      if (!t.isRegistered || !t.scheduledStartAt || t.status === 'cancelled') continue;
+      const startMs = new Date(t.scheduledStartAt).getTime();
+      const delay = startMs - Date.now() + 400;
+      if (delay > 0) {
+        const capped = Math.min(delay, 2_147_000_000);
+        startTimeouts.push(setTimeout(poll, capped));
+      }
+    }
+
+    const waitingForTable = openTournaments.some((t) => {
+      if (!t.isRegistered || !t.scheduledStartAt) return false;
+      if (t.status === 'cancelled') return false;
+      if (new Date(t.scheduledStartAt).getTime() > Date.now()) return false;
+      if (t.status === 'active' && t.tableId && myTableId === t.tableId && myTournamentId === t.tournamentId) {
+        return false;
+      }
+      return t.status === 'registration' || (t.status === 'active' && (!t.tableId || myTableId !== t.tableId || myTournamentId !== t.tournamentId));
+    });
+
+    let intervalId: ReturnType<typeof setInterval> | null = null;
+    if (waitingForTable) {
+      intervalId = setInterval(poll, 2000);
+      poll();
+    }
+
+    return () => {
+      for (const tm of startTimeouts) clearTimeout(tm);
+      if (intervalId) clearInterval(intervalId);
+    };
+  }, [wsClient, openTournaments, myTableId, myTournamentId, refreshTournaments]);
 
   return {
     openTournaments,

@@ -99,9 +99,10 @@ export function PokerBoard({ communityCards, pot, winningCardIndices, dataTutori
                 <CardDisplay
                   key={communityCards[i]}
                   cardIndex={communityCards[i]}
-                  dealDelay={i * 0.07}
+                  dealDelay={i * 0.12}
                   isWinningCard={winningCardIndices?.includes(communityCards[i])}
                   showCenterRankSuitOverlay
+                  variant="community"
                 />
               ) : (
                 <CardDisplay key={`empty-${i}`} cardIndex={undefined} />

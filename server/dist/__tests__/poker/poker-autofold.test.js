@@ -23,9 +23,9 @@ const poker_chip_scale_1 = require("../../lib/poker-chip-scale");
 const PLAYER_1 = setup_1.TEST_PLAYERS[3];
 const PLAYER_2 = setup_1.TEST_PLAYERS[4];
 const PLAYER_3 = setup_1.TEST_PLAYERS[5];
-const CHIP_WEI = poker_chip_scale_1.DEFAULT_POKER_CHIP_WEI;
-const SB_WEI = CHIP_WEI;
-const BB_WEI = CHIP_WEI * 2n;
+const CHIP_WEI = poker_chip_scale_1.POKER_CHIP_WEI;
+const SB_CHIPS = 1;
+const BB_CHIPS = 2;
 const BUY_IN_WEI = CHIP_WEI * 100n; // 50 BB
 let dbService;
 let pfService;
@@ -50,7 +50,7 @@ afterEach(async () => {
     }
 });
 async function createAndSeatPlayers(players, buyInWei = BUY_IN_WEI) {
-    const tableId = await pokerGameService.createTable(SB_WEI, BB_WEI, 6);
+    const tableId = await pokerGameService.createTable(SB_CHIPS, BB_CHIPS, 6);
     createdTableIds.push(tableId);
     for (const addr of players) {
         await pokerGameService.joinTable(tableId, addr, buyInWei.toString());
@@ -106,7 +106,7 @@ describe('Poker Auto-Fold / Auto-Check', () => {
             let state = await pokerGameService.getTableState(tableId, null);
             let acting = state.currentHand.actingPosition;
             let actingAddr = state.seats[acting].playerAddress;
-            const raiseAmount = BB_WEI * 3n;
+            const raiseAmount = BB_CHIPS * 3;
             await pokerGameService.playerAction(tableId, handId, actingAddr, 'raise', raiseAmount.toString());
             // Second player needs to act — they face a bet
             state = await pokerGameService.getTableState(tableId, null);

@@ -19,6 +19,7 @@ import { getTableThemeInfo, BLACKJACK_IMAGE_BACKGROUNDS } from '@/app/BLACKJACK/
 import type { TableThemeInfo } from '@/hooks/use-blackjack-tables';
 import { FreerollList } from './FreerollList';
 import { TournamentCancelReclaim } from './TournamentCancelReclaim';
+import { ConfirmActionCard } from '@/components/shared/ConfirmActionCard';
 import { useOutsideClick } from '@/hooks/use-outside-click';
 import type { BlackjackWebSocketClient, ChatMessagePayload } from '@/lib/websocket-client';
 import { TOURNAMENT_PRIZE_ESCROW_ADDRESS } from '@/lib/contracts';
@@ -1161,6 +1162,7 @@ function ExpandedCard({
   const timer = useTournamentTimer(tournament);
   const [entries, setEntries] = useState<LeaderboardEntry[]>([]);
   const [loadingEntries, setLoadingEntries] = useState(true);
+  const [pendingJoin, setPendingJoin] = useState<TournamentListItem | null>(null);
 
   const tournamentImage = tournament.customImage || getDefaultTourCard(tournament.id);
 
@@ -1296,7 +1298,7 @@ function ExpandedCard({
             playerBalance={playerBalance}
             playerAddress={playerAddress}
             wsClient={wsClient}
-            onJoin={onJoin}
+            onJoin={(t) => setPendingJoin(t)}
             onFundNow={onFundNow}
             onUnregister={onUnregister}
             onClose={onClose}
@@ -1308,6 +1310,47 @@ function ExpandedCard({
           />
         </motion.div>
       </motion.div>
+
+      {pendingJoin && (() => {
+        const t = pendingJoin;
+        const buyInBigInt = BigInt(t.buyInAmount);
+        const isFreeroll = t.tournamentType === 'freeroll';
+        const isCustomToken = Boolean(t.prizeTokenAddress);
+        const prizePool = BigInt(getEffectivePrizeAmount(t));
+        const decimals = t.prizeTokenDecimals ?? 18;
+        const prizeDisplay = isCustomToken
+          ? `${Number(prizePool / BigInt(10 ** decimals)).toLocaleString()} ${tokenInfo?.symbol ?? 'token'}`
+          : `${Number(formatEther(prizePool)).toLocaleString()} MORBIUS`;
+        const buyInDisplay = isFreeroll ? 'Free' : `${Number(formatEther(buyInBigInt)).toLocaleString()} MORBIUS`;
+        const prizePreset = PRIZE_PRESETS.find(p => p.id === t.prizeDistributionType);
+        const prizeLabel = prizePreset?.name ?? PRIZE_DISTRIBUTION_LABELS[t.prizeDistributionType as keyof typeof PRIZE_DISTRIBUTION_LABELS] ?? t.prizeDistributionType;
+        const timeLimitLabel = t.timeLimitMinutes === null || t.timeLimitMinutes === undefined
+          ? TIME_LIMIT_LABELS['null']
+          : TIME_LIMIT_LABELS[t.timeLimitMinutes] ?? `${t.timeLimitMinutes}m`;
+        const canAfford = playerBalance >= buyInBigInt;
+        return (
+          <ConfirmActionCard
+            title={isFreeroll ? 'Join Freeroll' : 'Join Tournament'}
+            subtitle={t.name}
+            rows={[
+              { label: 'Buy-in', value: buyInDisplay, accent: 'yellow' },
+              { label: 'Prize Pool', value: prizeDisplay, accent: 'yellow' },
+              { label: 'Prize Distribution', value: prizeLabel, accent: 'cyan' },
+              { label: 'Starting Chips', value: t.startingChips.toLocaleString(), accent: 'green' },
+              { label: 'Max Hands', value: t.maxHands, accent: 'white' },
+              { label: 'Time Limit', value: timeLimitLabel, accent: 'white' },
+              { label: 'Players', value: `${t.entryCount}${t.maxPlayers ? `/${t.maxPlayers}` : ''}`, accent: 'white' },
+              { label: 'Private', value: t.isPrivate ? 'Yes' : 'No', accent: 'white' },
+            ]}
+            onBack={() => setPendingJoin(null)}
+            onConfirm={() => { setPendingJoin(null); onJoin(t); }}
+            confirmLabel={isFreeroll ? 'Join Freeroll' : 'Join Tournament'}
+            isLoading={isJoinLoading}
+            disabled={!canAfford}
+            warning={!canAfford && !isFreeroll ? 'Insufficient balance' : undefined}
+          />
+        );
+      })()}
     </div>
   );
 }

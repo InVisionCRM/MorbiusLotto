@@ -1,33 +1,26 @@
 "use strict";
+/**
+ * Unified poker-chip scale.
+ *
+ * The poker engine and all `poker_*` tables (stacks, blinds, pots, bets, rake)
+ * store raw chip integers. MORBIUS (wei) only appears at named boundary points:
+ *   - Cash join buy-in (wei debited from balance → chips on seat)
+ *   - Cash leave / re-up / rake credit (chips → wei to balance)
+ *   - Tournament buy-in / prize payout (wei; chips stay virtual in-tournament)
+ *
+ * One chip = 10^18 wei (1 MORBIUS). Hardcoded — do not make configurable.
+ */
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.MAX_ENGINE_CHIPS_BIGINT = exports.DEFAULT_POKER_CHIP_WEI = void 0;
-exports.getPokerChipWei = getPokerChipWei;
+exports.MAX_ENGINE_CHIPS_BIGINT = exports.POKER_CHIP_WEI = void 0;
 exports.getPokerRakeWallet = getPokerRakeWallet;
-exports.assertCashBlindsValid = assertCashBlindsValid;
-exports.assertCashChipMultiple = assertCashChipMultiple;
-exports.weiToEngineChips = weiToEngineChips;
-exports.engineChipsToWeiRounded = engineChipsToWeiRounded;
-exports.enginePotChipsToPotWei = enginePotChipsToPotWei;
+exports.weiToChips = weiToChips;
+exports.chipsToWei = chipsToWei;
 exports.totalPotChips = totalPotChips;
 exports.splitBigIntEqually = splitBigIntEqually;
-const logger_1 = require("../utils/logger");
-/** Default: 0.001 MORBIUS per engine chip (10^15 wei when MORBIUS uses 18 decimals). */
-exports.DEFAULT_POKER_CHIP_WEI = 10n ** 15n;
-function getPokerChipWei() {
-    const raw = process.env.POKER_CHIP_WEI?.trim();
-    if (!raw)
-        return exports.DEFAULT_POKER_CHIP_WEI;
-    try {
-        const v = BigInt(raw);
-        if (v <= 0n)
-            return exports.DEFAULT_POKER_CHIP_WEI;
-        return v;
-    }
-    catch {
-        logger_1.logger.warn('Invalid POKER_CHIP_WEI env, using default');
-        return exports.DEFAULT_POKER_CHIP_WEI;
-    }
-}
+/** 10^18 wei per chip (1 chip = 1 MORBIUS). */
+exports.POKER_CHIP_WEI = 10n ** 18n;
+/** Chip values feed directly into the chevtek engine, which uses JS `number`. */
+exports.MAX_ENGINE_CHIPS_BIGINT = BigInt(Number.MAX_SAFE_INTEGER);
 const DEFAULT_RAKE_WALLET = '0x2D6f6a61cFDc7C7d000C9279bD7a743D277736bB'.toLowerCase();
 function getPokerRakeWallet() {
     const raw = process.env.POKER_RAKE_WALLET?.trim();
@@ -36,52 +29,36 @@ function getPokerRakeWallet() {
     }
     return raw.toLowerCase();
 }
-exports.MAX_ENGINE_CHIPS_BIGINT = BigInt(Number.MAX_SAFE_INTEGER);
-function assertCashBlindsValid(smallBlindWei, bigBlindWei) {
-    const cw = getPokerChipWei();
-    if (smallBlindWei <= 0n || bigBlindWei <= 0n)
-        throw new Error('Blinds must be positive');
-    if (smallBlindWei % cw !== 0n || bigBlindWei % cw !== 0n) {
-        throw new Error(`Blinds must be multiples of poker chip size (${cw.toString()} wei). Run migration 083 or update poker_tables.`);
+/** Convert MORBIUS wei to chips. Throws if not a whole number of chips. */
+function weiToChips(amountWei, label = 'Amount') {
+    if (amountWei < 0n)
+        throw new Error(`${label} must be non-negative`);
+    if (amountWei % exports.POKER_CHIP_WEI !== 0n) {
+        throw new Error(`${label} must be a whole number of chips (${exports.POKER_CHIP_WEI.toString()} wei each)`);
     }
-    if (bigBlindWei < smallBlindWei)
-        throw new Error('bigBlind must be >= smallBlind');
-}
-function assertCashChipMultiple(amountWei, label) {
-    const cw = getPokerChipWei();
-    if (amountWei <= 0n)
-        throw new Error(`${label} must be positive`);
-    if (amountWei % cw !== 0n) {
-        throw new Error(`${label} must be a multiple of one poker chip (${cw.toString()} wei)`);
-    }
-    if (amountWei / cw > exports.MAX_ENGINE_CHIPS_BIGINT)
-        throw new Error(`${label} too large for poker engine`);
-}
-function weiToEngineChips(amountWei) {
-    assertCashChipMultiple(amountWei, 'Amount');
-    const cw = getPokerChipWei();
-    const chips = amountWei / cw;
+    const chips = amountWei / exports.POKER_CHIP_WEI;
+    if (chips > exports.MAX_ENGINE_CHIPS_BIGINT)
+        throw new Error(`${label} exceeds max engine chips`);
     return Number(chips);
 }
-function engineChipsToWeiRounded(chips) {
-    if (!Number.isFinite(chips) || chips <= 0)
-        return 0n;
+/** Convert chip count back to MORBIUS wei. */
+function chipsToWei(chips) {
+    if (!Number.isFinite(chips))
+        throw new Error('Chips must be finite');
+    if (chips < 0)
+        throw new Error('Chips must be non-negative');
     const rounded = Math.round(chips);
     if (BigInt(rounded) > exports.MAX_ENGINE_CHIPS_BIGINT)
-        throw new Error('Stack overflow in poker engine');
-    return BigInt(rounded) * getPokerChipWei();
+        throw new Error('Chip stack overflow');
+    return BigInt(rounded) * exports.POKER_CHIP_WEI;
 }
-function enginePotChipsToPotWei(totalChipsFloat, chipWei) {
-    if (!Number.isFinite(totalChipsFloat) || totalChipsFloat <= 0)
-        return 0n;
-    const chips = BigInt(Math.max(0, Math.round(totalChipsFloat)));
-    return chips * chipWei;
-}
+/** Total chips across a chevtek Table's pots + live bets. */
 function totalPotChips(table) {
     const potSum = table.pots.reduce((sum, p) => sum + p.amount, 0);
     const betSum = table.players.reduce((sum, p) => sum + (p?.bet ?? 0), 0);
     return potSum + betSum;
 }
+/** Split a bigint `total` into `n` near-equal parts (remainder goes to first recipients). */
 function splitBigIntEqually(total, n) {
     if (n <= 0)
         return [];

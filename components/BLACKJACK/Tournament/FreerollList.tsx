@@ -1,9 +1,10 @@
 'use client';
 
-import React, { useEffect } from 'react';
+import React, { useEffect, useState } from 'react';
 import { useFreeroll, UseFreerollOptions } from '@/hooks/use-freeroll';
 import type { FreerollListItemPayload } from '@/lib/websocket-client';
 import { Theme } from '@/lib/theme';
+import { ConfirmActionCard } from '@/components/shared/ConfirmActionCard';
 
 function formatPhase(phase: string | null): string {
   if (!phase) return '—';
@@ -62,6 +63,8 @@ export function FreerollList({
     joinFreeroll,
     clearError,
   } = useFreeroll({ wsClient });
+
+  const [pendingAction, setPendingAction] = useState<{ t: FreerollListItemPayload; kind: 'register' | 'join' } | null>(null);
 
   useEffect(() => {
     fetchFreerollList(includePast);
@@ -137,7 +140,7 @@ export function FreerollList({
                     {t.current_phase === 'registration' && (
                       <button
                         type="button"
-                        onClick={() => handleRegister(t)}
+                        onClick={() => setPendingAction({ t, kind: 'register' })}
                         className="px-3 py-1.5 rounded-lg text-sm font-medium bg-gradient-to-r from-cyan-600 to-blue-600 text-white hover:opacity-90 border border-cyan-500/30"
                       >
                         Register
@@ -146,7 +149,7 @@ export function FreerollList({
                     {t.current_phase === 'active' && (
                       <button
                         type="button"
-                        onClick={() => handleJoin(t)}
+                        onClick={() => setPendingAction({ t, kind: 'join' })}
                         className="px-3 py-1.5 rounded-lg text-sm font-medium bg-gradient-to-r from-cyan-600 to-blue-600 text-white hover:opacity-90 border border-cyan-500/30"
                       >
                         Join
@@ -159,6 +162,29 @@ export function FreerollList({
           </ul>
         )}
       </div>
+
+      {pendingAction && (
+        <ConfirmActionCard
+          title={pendingAction.kind === 'register' ? 'Register for Freeroll' : 'Join Freeroll'}
+          subtitle={pendingAction.t.name}
+          rows={[
+            { label: 'Buy-in', value: 'Free', accent: 'green' },
+            { label: 'Starting Chips', value: pendingAction.t.starting_chips.toLocaleString(), accent: 'green' },
+            { label: 'Registered', value: pendingAction.t.registered_count, accent: 'cyan' },
+            { label: 'Prize Distribution', value: pendingAction.t.prize_distribution_type.replace(/_/g, ' '), accent: 'cyan' },
+            ...(pendingAction.t.duration_minutes != null ? [{ label: 'Duration', value: `${pendingAction.t.duration_minutes} min`, accent: 'white' as const }] : []),
+            ...(pendingAction.t.scheduled_start_at ? [{ label: 'Scheduled Start', value: formatDate(pendingAction.t.scheduled_start_at), accent: 'white' as const }] : []),
+          ]}
+          onBack={() => setPendingAction(null)}
+          onConfirm={async () => {
+            const action = pendingAction;
+            setPendingAction(null);
+            if (action.kind === 'register') await handleRegister(action.t);
+            else await handleJoin(action.t);
+          }}
+          confirmLabel={pendingAction.kind === 'register' ? 'Register' : 'Join'}
+        />
+      )}
     </div>
   );
 }

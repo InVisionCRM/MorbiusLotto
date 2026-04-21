@@ -9,7 +9,6 @@
  */
 Object.defineProperty(exports, "__esModule", { value: true });
 const poker_chip_scale_1 = require("../../lib/poker-chip-scale");
-const CHIP_WEI = poker_chip_scale_1.DEFAULT_POKER_CHIP_WEI; // 10^15
 const MAX_SAFE = Number.MAX_SAFE_INTEGER;
 // ---------------------------------------------------------------------------
 // splitBigIntEqually
@@ -21,13 +20,11 @@ describe('splitBigIntEqually', () => {
     });
     it('distributes remainder to first players (1 remainder)', () => {
         const result = (0, poker_chip_scale_1.splitBigIntEqually)(10n, 3);
-        // 10 / 3 = 3 base, 1 remainder → first player gets 4, rest get 3
         expect(result).toEqual([4n, 3n, 3n]);
         expect(result.reduce((a, b) => a + b, 0n)).toBe(10n);
     });
     it('distributes remainder to first players (2 remainder)', () => {
         const result = (0, poker_chip_scale_1.splitBigIntEqually)(11n, 3);
-        // 11 / 3 = 3 base, 2 remainder → first 2 get 4, last gets 3
         expect(result).toEqual([4n, 4n, 3n]);
         expect(result.reduce((a, b) => a + b, 0n)).toBe(11n);
     });
@@ -41,11 +38,10 @@ describe('splitBigIntEqually', () => {
         expect((0, poker_chip_scale_1.splitBigIntEqually)(100n, 0)).toEqual([]);
     });
     it('handles large pot with odd split', () => {
-        const pot = 1000000000000000000n; // 1 MORBIUS in wei
+        const pot = 1000000000000000000n;
         const result = (0, poker_chip_scale_1.splitBigIntEqually)(pot, 3);
         const total = result.reduce((a, b) => a + b, 0n);
         expect(total).toBe(pot);
-        // Max difference between any two shares should be 1
         const max = result.reduce((a, b) => a > b ? a : b, 0n);
         const min = result.reduce((a, b) => a < b ? a : b, pot);
         expect(max - min).toBeLessThanOrEqual(1n);
@@ -60,71 +56,49 @@ describe('splitBigIntEqually', () => {
     });
 });
 // ---------------------------------------------------------------------------
-// Wei ↔ Engine Chip conversion
+// weiToChips / chipsToWei
 // ---------------------------------------------------------------------------
-describe('weiToEngineChips', () => {
+describe('weiToChips', () => {
     it('converts exact multiples', () => {
-        expect((0, poker_chip_scale_1.weiToEngineChips)(CHIP_WEI)).toBe(1);
-        expect((0, poker_chip_scale_1.weiToEngineChips)(CHIP_WEI * 100n)).toBe(100);
-        expect((0, poker_chip_scale_1.weiToEngineChips)(CHIP_WEI * 5000n)).toBe(5000);
+        expect((0, poker_chip_scale_1.weiToChips)(poker_chip_scale_1.POKER_CHIP_WEI)).toBe(1);
+        expect((0, poker_chip_scale_1.weiToChips)(poker_chip_scale_1.POKER_CHIP_WEI * 100n)).toBe(100);
+        expect((0, poker_chip_scale_1.weiToChips)(poker_chip_scale_1.POKER_CHIP_WEI * 5000n)).toBe(5000);
+    });
+    it('accepts zero', () => {
+        expect((0, poker_chip_scale_1.weiToChips)(0n)).toBe(0);
     });
     it('throws for non-multiples', () => {
-        expect(() => (0, poker_chip_scale_1.weiToEngineChips)(CHIP_WEI + 1n)).toThrow();
-        expect(() => (0, poker_chip_scale_1.weiToEngineChips)(CHIP_WEI - 1n)).toThrow();
-        expect(() => (0, poker_chip_scale_1.weiToEngineChips)(1n)).toThrow();
-    });
-    it('throws for zero', () => {
-        expect(() => (0, poker_chip_scale_1.weiToEngineChips)(0n)).toThrow();
+        expect(() => (0, poker_chip_scale_1.weiToChips)(poker_chip_scale_1.POKER_CHIP_WEI + 1n)).toThrow();
+        expect(() => (0, poker_chip_scale_1.weiToChips)(poker_chip_scale_1.POKER_CHIP_WEI - 1n)).toThrow();
+        expect(() => (0, poker_chip_scale_1.weiToChips)(1n)).toThrow();
     });
     it('throws for negative', () => {
-        expect(() => (0, poker_chip_scale_1.weiToEngineChips)(-CHIP_WEI)).toThrow();
+        expect(() => (0, poker_chip_scale_1.weiToChips)(-poker_chip_scale_1.POKER_CHIP_WEI)).toThrow();
     });
 });
-describe('engineChipsToWeiRounded', () => {
+describe('chipsToWei', () => {
     it('converts positive chips', () => {
-        expect((0, poker_chip_scale_1.engineChipsToWeiRounded)(1)).toBe(CHIP_WEI);
-        expect((0, poker_chip_scale_1.engineChipsToWeiRounded)(100)).toBe(CHIP_WEI * 100n);
+        expect((0, poker_chip_scale_1.chipsToWei)(1)).toBe(poker_chip_scale_1.POKER_CHIP_WEI);
+        expect((0, poker_chip_scale_1.chipsToWei)(100)).toBe(poker_chip_scale_1.POKER_CHIP_WEI * 100n);
     });
     it('rounds floating point chips', () => {
-        // 1.5 chips → rounds to 2 chips
-        expect((0, poker_chip_scale_1.engineChipsToWeiRounded)(1.5)).toBe(CHIP_WEI * 2n);
-        // 1.4 → rounds to 1
-        expect((0, poker_chip_scale_1.engineChipsToWeiRounded)(1.4)).toBe(CHIP_WEI * 1n);
+        expect((0, poker_chip_scale_1.chipsToWei)(1.5)).toBe(poker_chip_scale_1.POKER_CHIP_WEI * 2n);
+        expect((0, poker_chip_scale_1.chipsToWei)(1.4)).toBe(poker_chip_scale_1.POKER_CHIP_WEI * 1n);
     });
-    it('returns 0 for zero or negative', () => {
-        expect((0, poker_chip_scale_1.engineChipsToWeiRounded)(0)).toBe(0n);
-        expect((0, poker_chip_scale_1.engineChipsToWeiRounded)(-5)).toBe(0n);
+    it('returns 0 for zero', () => {
+        expect((0, poker_chip_scale_1.chipsToWei)(0)).toBe(0n);
     });
-    it('returns 0 for NaN/Infinity', () => {
-        expect((0, poker_chip_scale_1.engineChipsToWeiRounded)(NaN)).toBe(0n);
-        expect((0, poker_chip_scale_1.engineChipsToWeiRounded)(Infinity)).toBe(0n);
+    it('throws for negative', () => {
+        expect(() => (0, poker_chip_scale_1.chipsToWei)(-5)).toThrow();
     });
 });
 describe('wei ↔ chips roundtrip', () => {
     it('roundtrips exact chip amounts', () => {
         for (const chips of [1, 10, 100, 1000, 5000]) {
-            const wei = (0, poker_chip_scale_1.engineChipsToWeiRounded)(chips);
-            const back = (0, poker_chip_scale_1.weiToEngineChips)(wei);
+            const wei = (0, poker_chip_scale_1.chipsToWei)(chips);
+            const back = (0, poker_chip_scale_1.weiToChips)(wei);
             expect(back).toBe(chips);
         }
-    });
-});
-// ---------------------------------------------------------------------------
-// enginePotChipsToPotWei
-// ---------------------------------------------------------------------------
-describe('enginePotChipsToPotWei', () => {
-    it('converts integer chips to wei', () => {
-        expect((0, poker_chip_scale_1.enginePotChipsToPotWei)(100, CHIP_WEI)).toBe(CHIP_WEI * 100n);
-    });
-    it('rounds float chips before conversion', () => {
-        // 100.7 → rounds to 101
-        expect((0, poker_chip_scale_1.enginePotChipsToPotWei)(100.7, CHIP_WEI)).toBe(CHIP_WEI * 101n);
-    });
-    it('returns 0 for zero/negative/NaN', () => {
-        expect((0, poker_chip_scale_1.enginePotChipsToPotWei)(0, CHIP_WEI)).toBe(0n);
-        expect((0, poker_chip_scale_1.enginePotChipsToPotWei)(-5, CHIP_WEI)).toBe(0n);
-        expect((0, poker_chip_scale_1.enginePotChipsToPotWei)(NaN, CHIP_WEI)).toBe(0n);
-        expect((0, poker_chip_scale_1.enginePotChipsToPotWei)(Infinity, CHIP_WEI)).toBe(0n);
     });
 });
 // ---------------------------------------------------------------------------
@@ -141,7 +115,6 @@ describe('totalPotChips', () => {
                 { bet: 0 },
             ],
         };
-        // 100 + 50 + 10 + 20 + 0 = 180
         expect((0, poker_chip_scale_1.totalPotChips)(table)).toBe(180);
     });
     it('handles empty pots', () => {
@@ -160,42 +133,22 @@ describe('totalPotChips', () => {
     });
 });
 // ---------------------------------------------------------------------------
-// assertCashBlindsValid
+// MAX_SAFE_INTEGER boundary
 // ---------------------------------------------------------------------------
-describe('assertCashBlindsValid', () => {
-    it('accepts valid blinds', () => {
-        expect(() => (0, poker_chip_scale_1.assertCashBlindsValid)(CHIP_WEI, CHIP_WEI * 2n)).not.toThrow();
+describe('MAX_SAFE_INTEGER boundary', () => {
+    it('MAX_ENGINE_CHIPS_BIGINT equals Number.MAX_SAFE_INTEGER as bigint', () => {
+        expect(poker_chip_scale_1.MAX_ENGINE_CHIPS_BIGINT).toBe(BigInt(MAX_SAFE));
     });
-    it('accepts equal blinds', () => {
-        expect(() => (0, poker_chip_scale_1.assertCashBlindsValid)(CHIP_WEI, CHIP_WEI)).not.toThrow();
+    it('weiToChips accepts MAX_SAFE_INTEGER chips', () => {
+        const maxWei = BigInt(MAX_SAFE) * poker_chip_scale_1.POKER_CHIP_WEI;
+        expect((0, poker_chip_scale_1.weiToChips)(maxWei)).toBe(MAX_SAFE);
     });
-    it('rejects zero blinds', () => {
-        expect(() => (0, poker_chip_scale_1.assertCashBlindsValid)(0n, CHIP_WEI)).toThrow();
-        expect(() => (0, poker_chip_scale_1.assertCashBlindsValid)(CHIP_WEI, 0n)).toThrow();
+    it('chipsToWei rejects above MAX_SAFE_INTEGER', () => {
+        expect(() => (0, poker_chip_scale_1.chipsToWei)(MAX_SAFE + 1)).toThrow();
     });
-    it('rejects non-chip-multiple blinds', () => {
-        expect(() => (0, poker_chip_scale_1.assertCashBlindsValid)(CHIP_WEI + 1n, CHIP_WEI * 2n)).toThrow();
-    });
-    it('rejects big blind less than small blind', () => {
-        expect(() => (0, poker_chip_scale_1.assertCashBlindsValid)(CHIP_WEI * 3n, CHIP_WEI * 2n)).toThrow();
-    });
-});
-// ---------------------------------------------------------------------------
-// assertCashChipMultiple
-// ---------------------------------------------------------------------------
-describe('assertCashChipMultiple', () => {
-    it('accepts exact multiples', () => {
-        expect(() => (0, poker_chip_scale_1.assertCashChipMultiple)(CHIP_WEI, 'Test')).not.toThrow();
-        expect(() => (0, poker_chip_scale_1.assertCashChipMultiple)(CHIP_WEI * 1000n, 'Test')).not.toThrow();
-    });
-    it('rejects non-multiples', () => {
-        expect(() => (0, poker_chip_scale_1.assertCashChipMultiple)(CHIP_WEI + 1n, 'Test')).toThrow();
-    });
-    it('rejects zero', () => {
-        expect(() => (0, poker_chip_scale_1.assertCashChipMultiple)(0n, 'Test')).toThrow();
-    });
-    it('rejects negative', () => {
-        expect(() => (0, poker_chip_scale_1.assertCashChipMultiple)(-CHIP_WEI, 'Test')).toThrow();
+    it('chipsToWei handles MAX_SAFE_INTEGER exactly', () => {
+        const result = (0, poker_chip_scale_1.chipsToWei)(MAX_SAFE);
+        expect(result).toBe(BigInt(MAX_SAFE) * poker_chip_scale_1.POKER_CHIP_WEI);
     });
 });
 // ---------------------------------------------------------------------------
@@ -203,48 +156,49 @@ describe('assertCashChipMultiple', () => {
 // ---------------------------------------------------------------------------
 describe('Rake calculation (persistShowdown logic)', () => {
     const RAKE_PERCENT = 5;
+    /**
+     * Chip-only rake: rake is computed in chips, then the total is converted to wei
+     * once at the boundary for crediting the rake wallet. Winners are credited
+     * net chips directly.
+     */
     function calculateRake(winnerChips, isTournament) {
-        let totalRake = 0n;
-        const rakedAmounts = new Map();
+        let totalRakeChips = 0n;
+        const netChipsByAddr = new Map();
         const rakeByAddr = new Map();
         if (isTournament) {
             for (const [addr, ch] of winnerChips) {
-                rakedAmounts.set(addr, ch);
+                netChipsByAddr.set(addr, ch);
             }
         }
         else {
             const pct = BigInt(RAKE_PERCENT);
             for (const [addr, ch] of winnerChips) {
                 const rakeChips = (ch * pct) / 100n;
-                const rakeWei = rakeChips * CHIP_WEI;
                 const netChips = ch - rakeChips;
-                rakedAmounts.set(addr, netChips * CHIP_WEI);
-                rakeByAddr.set(addr, rakeWei);
-                totalRake += rakeWei;
+                netChipsByAddr.set(addr, netChips);
+                rakeByAddr.set(addr, rakeChips);
+                totalRakeChips += rakeChips;
             }
         }
-        return { totalRake, rakedAmounts, rakeByAddr };
+        return { totalRakeChips, netChipsByAddr, rakeByAddr };
     }
     it('single winner gets 95% of pot (cash game)', () => {
         const winners = new Map([['player1', 100n]]);
-        const { totalRake, rakedAmounts } = calculateRake(winners, false);
-        expect(totalRake).toBe(5n * CHIP_WEI); // 5% of 100 chips
-        expect(rakedAmounts.get('player1')).toBe(95n * CHIP_WEI);
+        const { totalRakeChips, netChipsByAddr } = calculateRake(winners, false);
+        expect(totalRakeChips).toBe(5n);
+        expect(netChipsByAddr.get('player1')).toBe(95n);
     });
     it('two-way split, even pot', () => {
         const winners = new Map([
             ['player1', 50n],
             ['player2', 50n],
         ]);
-        const { totalRake, rakedAmounts } = calculateRake(winners, false);
-        // Each: 50 * 5% = 2 (truncated) → net = 48 chips each
-        expect(rakedAmounts.get('player1')).toBe(48n * CHIP_WEI);
-        expect(rakedAmounts.get('player2')).toBe(48n * CHIP_WEI);
-        expect(totalRake).toBe(4n * CHIP_WEI); // 2+2 = 4 chips total rake
+        const { totalRakeChips, netChipsByAddr } = calculateRake(winners, false);
+        expect(netChipsByAddr.get('player1')).toBe(48n);
+        expect(netChipsByAddr.get('player2')).toBe(48n);
+        expect(totalRakeChips).toBe(4n);
     });
     it('three-way split with remainder', () => {
-        // 100 chip pot split 3 ways via splitBigIntEqually:
-        // [34, 33, 33] chips
         const potChips = 100n;
         const shares = (0, poker_chip_scale_1.splitBigIntEqually)(potChips, 3);
         const winners = new Map([
@@ -252,45 +206,38 @@ describe('Rake calculation (persistShowdown logic)', () => {
             ['player2', shares[1]],
             ['player3', shares[2]],
         ]);
-        const { totalRake, rakedAmounts } = calculateRake(winners, false);
-        // Each player's rake: floor(share * 5 / 100)
-        // player1: floor(34 * 5 / 100) = floor(1.7) = 1 chip rake → net 33
-        // player2: floor(33 * 5 / 100) = floor(1.65) = 1 chip rake → net 32
-        // player3: floor(33 * 5 / 100) = floor(1.65) = 1 chip rake → net 32
-        expect(rakedAmounts.get('player1')).toBe(33n * CHIP_WEI);
-        expect(rakedAmounts.get('player2')).toBe(32n * CHIP_WEI);
-        expect(rakedAmounts.get('player3')).toBe(32n * CHIP_WEI);
-        expect(totalRake).toBe(3n * CHIP_WEI);
-        // Total distributed + rake should equal original pot
-        const totalDistributed = Array.from(rakedAmounts.values()).reduce((a, b) => a + b, 0n);
-        expect(totalDistributed + totalRake).toBe(potChips * CHIP_WEI);
+        const { totalRakeChips, netChipsByAddr } = calculateRake(winners, false);
+        expect(netChipsByAddr.get('player1')).toBe(33n);
+        expect(netChipsByAddr.get('player2')).toBe(32n);
+        expect(netChipsByAddr.get('player3')).toBe(32n);
+        expect(totalRakeChips).toBe(3n);
+        const totalDistributed = Array.from(netChipsByAddr.values()).reduce((a, b) => a + b, 0n);
+        expect(totalDistributed + totalRakeChips).toBe(potChips);
     });
     it('tournament mode has zero rake', () => {
         const winners = new Map([
             ['player1', 100n],
             ['player2', 50n],
         ]);
-        const { totalRake, rakedAmounts } = calculateRake(winners, true);
-        expect(totalRake).toBe(0n);
-        expect(rakedAmounts.get('player1')).toBe(100n); // raw chips, no wei conversion
-        expect(rakedAmounts.get('player2')).toBe(50n);
+        const { totalRakeChips, netChipsByAddr } = calculateRake(winners, true);
+        expect(totalRakeChips).toBe(0n);
+        expect(netChipsByAddr.get('player1')).toBe(100n);
+        expect(netChipsByAddr.get('player2')).toBe(50n);
     });
     it('very small pot rake rounds to zero', () => {
-        // 1 chip: 5% = 0 (integer division)
         const winners = new Map([['player1', 1n]]);
-        const { totalRake, rakedAmounts } = calculateRake(winners, false);
-        expect(totalRake).toBe(0n);
-        expect(rakedAmounts.get('player1')).toBe(1n * CHIP_WEI);
+        const { totalRakeChips, netChipsByAddr } = calculateRake(winners, false);
+        expect(totalRakeChips).toBe(0n);
+        expect(netChipsByAddr.get('player1')).toBe(1n);
     });
     it('large pot rake is exact', () => {
-        const bigPot = 1000000n; // 1M chips
+        const bigPot = 1000000n;
         const winners = new Map([['player1', bigPot]]);
-        const { totalRake, rakedAmounts } = calculateRake(winners, false);
-        expect(totalRake).toBe(50000n * CHIP_WEI); // exactly 5%
-        expect(rakedAmounts.get('player1')).toBe(950000n * CHIP_WEI); // exactly 95%
+        const { totalRakeChips, netChipsByAddr } = calculateRake(winners, false);
+        expect(totalRakeChips).toBe(50000n);
+        expect(netChipsByAddr.get('player1')).toBe(950000n);
     });
     it('rake + net always equals gross for any pot size', () => {
-        // Property test with various pot sizes
         for (const pot of [1n, 7n, 13n, 99n, 100n, 333n, 1000n, 9999n]) {
             for (const numWinners of [1, 2, 3, 4, 5]) {
                 const shares = (0, poker_chip_scale_1.splitBigIntEqually)(pot, numWinners);
@@ -298,81 +245,17 @@ describe('Rake calculation (persistShowdown logic)', () => {
                 for (let i = 0; i < numWinners; i++) {
                     winners.set(`p${i}`, shares[i]);
                 }
-                const { totalRake, rakedAmounts } = calculateRake(winners, false);
-                // Sum of net amounts + total rake = original pot in wei
-                const totalNet = Array.from(rakedAmounts.values()).reduce((a, b) => a + b, 0n);
-                expect(totalNet + totalRake).toBe(pot * CHIP_WEI);
+                const { totalRakeChips, netChipsByAddr } = calculateRake(winners, false);
+                const totalNet = Array.from(netChipsByAddr.values()).reduce((a, b) => a + b, 0n);
+                expect(totalNet + totalRakeChips).toBe(pot);
             }
         }
-    });
-});
-// ---------------------------------------------------------------------------
-// MAX_SAFE_INTEGER boundary
-// ---------------------------------------------------------------------------
-describe('MAX_SAFE_INTEGER boundary', () => {
-    it('MAX_ENGINE_CHIPS_BIGINT equals Number.MAX_SAFE_INTEGER as bigint', () => {
-        expect(poker_chip_scale_1.MAX_ENGINE_CHIPS_BIGINT).toBe(BigInt(MAX_SAFE));
-    });
-    it('weiToEngineChips accepts MAX_SAFE_INTEGER chips', () => {
-        const maxWei = BigInt(MAX_SAFE) * CHIP_WEI;
-        expect((0, poker_chip_scale_1.weiToEngineChips)(maxWei)).toBe(MAX_SAFE);
-    });
-    it('assertCashChipMultiple rejects above MAX_SAFE_INTEGER', () => {
-        const tooMuch = (BigInt(MAX_SAFE) + 1n) * CHIP_WEI;
-        expect(() => (0, poker_chip_scale_1.assertCashChipMultiple)(tooMuch, 'Test')).toThrow('too large');
-    });
-    it('engineChipsToWeiRounded rejects above MAX_SAFE_INTEGER', () => {
-        expect(() => (0, poker_chip_scale_1.engineChipsToWeiRounded)(MAX_SAFE + 1)).toThrow('Stack overflow');
-    });
-    it('engineChipsToWeiRounded handles MAX_SAFE_INTEGER exactly', () => {
-        const result = (0, poker_chip_scale_1.engineChipsToWeiRounded)(MAX_SAFE);
-        expect(result).toBe(BigInt(MAX_SAFE) * CHIP_WEI);
-    });
-});
-// ---------------------------------------------------------------------------
-// Float drift in chip conversion
-// ---------------------------------------------------------------------------
-describe('float drift in chip conversion', () => {
-    it('engineChipsToWeiRounded handles 0.1 + 0.2 drift', () => {
-        // 0.1 + 0.2 = 0.30000000000000004 in IEEE 754
-        const drifted = 0.1 + 0.2;
-        expect(drifted).not.toBe(0.3);
-        // Should round to 0 chips (rounds to nearest int: 0)
-        const result = (0, poker_chip_scale_1.engineChipsToWeiRounded)(drifted);
-        expect(result).toBe(0n); // rounds to 0, which is <= 0 → returns 0n
-    });
-    it('engineChipsToWeiRounded rounds 99.99999999 to 100', () => {
-        const result = (0, poker_chip_scale_1.engineChipsToWeiRounded)(99.99999999);
-        expect(result).toBe(CHIP_WEI * 100n);
-    });
-    it('engineChipsToWeiRounded rounds 100.00000001 to 100', () => {
-        const result = (0, poker_chip_scale_1.engineChipsToWeiRounded)(100.00000001);
-        expect(result).toBe(CHIP_WEI * 100n);
-    });
-    it('enginePotChipsToPotWei handles float sum of 3-way pot', () => {
-        // Simulates chevtek engine: 100 / 3 = 33.333...
-        const thirdPot = 100 / 3;
-        // Three pot amounts that don't sum to exactly 100
-        const sum = thirdPot + thirdPot + thirdPot;
-        // Each third rounds to 33 chips → 33 * 3 = 99 (loses 1 chip)
-        const result1 = (0, poker_chip_scale_1.enginePotChipsToPotWei)(thirdPot, CHIP_WEI);
-        expect(result1).toBe(CHIP_WEI * 33n);
-        // The total pot should be calculated from the raw float, not per-share
-        const totalResult = (0, poker_chip_scale_1.enginePotChipsToPotWei)(sum, CHIP_WEI);
-        expect(totalResult).toBe(CHIP_WEI * 100n);
-    });
-    it('engineChipsToWeiRounded handles very small positive float', () => {
-        expect((0, poker_chip_scale_1.engineChipsToWeiRounded)(0.4)).toBe(0n); // rounds to 0, <=0 → 0n
-        expect((0, poker_chip_scale_1.engineChipsToWeiRounded)(0.5)).toBe(CHIP_WEI); // rounds to 1
-        expect((0, poker_chip_scale_1.engineChipsToWeiRounded)(0.6)).toBe(CHIP_WEI); // rounds to 1
     });
 });
 // ---------------------------------------------------------------------------
 // Side pot distribution (replicates persistShowdown pot iteration)
 // ---------------------------------------------------------------------------
 describe('Side pot distribution', () => {
-    const RAKE_PERCENT = 5;
-    // Replicate the persistShowdown winnerChips accumulation logic
     function accumulateWinnerChips(pots) {
         const winnerChips = new Map();
         for (const pot of pots) {
@@ -391,9 +274,7 @@ describe('Side pot distribution', () => {
         return winnerChips;
     }
     it('single pot, single winner', () => {
-        const pots = [
-            { amount: 100, winners: [{ id: 'alice', folded: false }] },
-        ];
+        const pots = [{ amount: 100, winners: [{ id: 'alice', folded: false }] }];
         const result = accumulateWinnerChips(pots);
         expect(result.get('alice')).toBe(100n);
     });
@@ -409,12 +290,8 @@ describe('Side pot distribution', () => {
         expect(result.get('bob')).toBe(50n);
     });
     it('main pot + side pot with different winners', () => {
-        // Player A (short stack) goes all-in, wins main pot
-        // Player B wins side pot (only B and C contested it)
         const pots = [
-            // Main pot: all three contributed
             { amount: 150, winners: [{ id: 'A', folded: false }] },
-            // Side pot: only B and C (A was all-in)
             { amount: 100, winners: [{ id: 'B', folded: false }] },
         ];
         const result = accumulateWinnerChips(pots);
@@ -431,10 +308,6 @@ describe('Side pot distribution', () => {
         expect(result.get('A')).toBe(250n);
     });
     it('three pots: short stack, medium stack, deep stack', () => {
-        // Short all-in 30, medium all-in 60, deep has rest
-        // Main pot: 30*3 = 90 (all three)
-        // Side pot 1: (60-30)*2 = 60 (medium + deep)
-        // Side pot 2: remaining from deep
         const pots = [
             { amount: 90, winners: [{ id: 'short', folded: false }] },
             { amount: 60, winners: [{ id: 'medium', folded: false }] },
@@ -446,7 +319,6 @@ describe('Side pot distribution', () => {
         expect(result.get('deep')).toBe(20n);
     });
     it('folded winners are excluded from pot distribution', () => {
-        // chevtek may include folded players in winners array
         const pots = [
             { amount: 100, winners: [
                     { id: 'A', folded: true },
@@ -478,14 +350,12 @@ describe('Side pot distribution', () => {
         const result = accumulateWinnerChips(pots);
         const total = Array.from(result.values()).reduce((a, b) => a + b, 0n);
         expect(total).toBe(100n);
-        // One player gets the extra chip
         const values = Array.from(result.values()).sort((a, b) => Number(b - a));
         expect(values[0]).toBe(34n);
         expect(values[1]).toBe(33n);
         expect(values[2]).toBe(33n);
     });
     it('multiple side pots accumulate for same winner', () => {
-        // Player wins main pot AND side pot
         const pots = [
             { amount: 60, winners: [
                     { id: 'A', folded: false },
@@ -494,41 +364,13 @@ describe('Side pot distribution', () => {
             { amount: 40, winners: [{ id: 'A', folded: false }] },
         ];
         const result = accumulateWinnerChips(pots);
-        // A gets 30 from main pot split + 40 from side pot = 70
         expect(result.get('A')).toBe(70n);
         expect(result.get('B')).toBe(30n);
     });
     it('empty winners array is handled', () => {
-        const pots = [
-            { amount: 100, winners: [] },
-        ];
+        const pots = [{ amount: 100, winners: [] }];
         const result = accumulateWinnerChips(pots);
         expect(result.size).toBe(0);
-    });
-    it('side pot rake preserves total (gross = net + rake)', () => {
-        // Multiple pots, then apply rake to accumulated winnings
-        const pots = [
-            { amount: 150, winners: [{ id: 'A', folded: false }] },
-            { amount: 100, winners: [
-                    { id: 'B', folded: false },
-                    { id: 'C', folded: false },
-                ] },
-        ];
-        const winnerChips = accumulateWinnerChips(pots);
-        // Apply rake (replicating persistShowdown)
-        const pct = BigInt(RAKE_PERCENT);
-        let totalRake = 0n;
-        const rakedAmounts = new Map();
-        for (const [addr, ch] of winnerChips) {
-            const rakeChips = (ch * pct) / 100n;
-            const rakeWei = rakeChips * CHIP_WEI;
-            const netChips = ch - rakeChips;
-            rakedAmounts.set(addr, netChips * CHIP_WEI);
-            totalRake += rakeWei;
-        }
-        const totalNet = Array.from(rakedAmounts.values()).reduce((a, b) => a + b, 0n);
-        const totalGross = Array.from(winnerChips.values()).reduce((a, b) => a + b, 0n);
-        expect(totalNet + totalRake).toBe(totalGross * CHIP_WEI);
     });
 });
 //# sourceMappingURL=poker-rake-splitting.test.js.map

@@ -4,7 +4,7 @@ import React, { useState, useEffect } from 'react'
 import {
   History,
   BookOpen,
-  CircleHelp,
+  Trophy,
   TrendingUp,
   Gamepad2,
   Volume2,
@@ -26,7 +26,8 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import type { BlackjackRealTimeBetChartRef } from '@/components/BLACKJACK/RealTimeBetChart'
 import { GameResult } from '@/app/BLACKJACK/types'
 import { Theme } from '@/lib/theme'
-import { GameFAQ } from '@/components/shared/GameFAQ'
+import BlackjackHowToVideoModal from '@/components/BLACKJACK/BlackjackHowToVideoModal'
+import { PlayCircle } from 'lucide-react'
 function useIsDesktop() {
   const [isDesktop, setIsDesktop] = useState(false)
   useEffect(() => {
@@ -47,7 +48,7 @@ const BASE_TABS = [
   { id: 'chart', label: 'Chart', shortLabel: 'Chart', icon: TrendingUp },
   { id: 'sounds', label: 'Sounds', shortLabel: 'Sounds', icon: Volume2 },
   { id: 'howto', label: 'How to Play', shortLabel: 'How', icon: BookOpen },
-  { id: 'faq', label: 'FAQ', shortLabel: 'FAQ', icon: CircleHelp },
+  { id: 'stats', label: 'Stats', shortLabel: 'Stats', icon: Trophy },
 ] as const
 
 const TOURNAMENT_PLAY_TAB = { id: 'tournament-play' as const, label: 'Tournament', shortLabel: 'Play', icon: Gamepad2 }
@@ -77,8 +78,6 @@ interface BlackjackSidebarProps {
   musicVolume: number
   onMusicVolumeChange: (volume: number) => void
   musicTrackDisplayName: string
-  blackjackAddress: string
-  morbiusTokenAddress: string
 }
 
 export default function BlackjackSidebar({
@@ -101,11 +100,10 @@ export default function BlackjackSidebar({
   musicVolume,
   onMusicVolumeChange,
   musicTrackDisplayName,
-  blackjackAddress,
-  morbiusTokenAddress,
 }: BlackjackSidebarProps) {
   const isDesktop = useIsDesktop()
   const [activeTab, setActiveTab] = useState<BlackjackSidebarTabId>(() => 'chart')
+  const [howToVideoOpen, setHowToVideoOpen] = useState(false)
 
   const tabs = inTournament
     ? [...BASE_TABS, TOURNAMENT_PLAY_TAB]
@@ -167,7 +165,6 @@ export default function BlackjackSidebar({
       <div
         className={`${PANEL_CLASS} flex-1 min-h-0 overflow-auto no-scrollbar border-t border-white/10 ${
           activeTab === 'howto' ||
-          activeTab === 'faq' ||
           activeTab === 'chart' ||
           activeTab === 'sounds' ||
           activeTab === 'tournament-play'
@@ -182,6 +179,10 @@ export default function BlackjackSidebar({
               reserveBalance={inTournament ? undefined : reserveBalance}
               onVerifyGame={handleQuickHistoryVerify}
             />
+          </div>
+        )}
+        {activeTab === 'stats' && (
+          <div className="min-w-0 p-3 pb-4">
             <div className="min-w-0 rounded-xl border border-cyan-500/25 bg-black/25">
               <Tabs defaultValue="recent-games" className="p-2 sm:p-3">
                 <TabsList className="grid h-10 w-full min-w-0 grid-cols-3 gap-0.5 rounded-lg border border-cyan-500/30 bg-black/40 p-0.5">
@@ -327,19 +328,16 @@ export default function BlackjackSidebar({
             </div>
           </div>
         )}
-        {activeTab === 'faq' && (
-          <div className="min-w-0 [&>section]:max-w-none [&>section]:mx-0 [&>section]:px-2 [&>section]:py-4">
-            <GameFAQ
-              game="blackjack"
-              addresses={[
-                { label: 'Blackjack Contract', address: blackjackAddress },
-                { label: 'MORBIUS Token', address: morbiusTokenAddress },
-              ]}
-            />
-          </div>
-        )}
         {activeTab === 'howto' && (
           <div className="text-sm text-white/90 space-y-4">
+            <button
+              type="button"
+              onClick={() => setHowToVideoOpen(true)}
+              className="inline-flex items-center gap-2 text-cyan-300 underline underline-offset-2 hover:text-cyan-200 font-medium transition-colors"
+            >
+              <PlayCircle className="w-4 h-4" />
+              Watch: How to play Blackjack
+            </button>
             <h3 className="text-base font-semibold text-cyan-300/95">Deposit & Withdraw</h3>
             <ul className="space-y-1 list-disc list-inside text-white/80">
               <li><strong>Deposit:</strong> Click your reserve balance
@@ -377,6 +375,7 @@ export default function BlackjackSidebar({
           </div>
         )}
       </div>
+      <BlackjackHowToVideoModal open={howToVideoOpen} onOpenChange={setHowToVideoOpen} />
     </div>
   )
 }

@@ -100,6 +100,11 @@ export declare class PokerTournamentService {
     private guaranteedPrizePoolRefundRecipient;
     /** Return the BlindLevel that applies for a given hand number (1-indexed). */
     computeBlindLevel(blindSchedule: BlindLevel[], handNumber: number): BlindLevel;
+    /**
+     * SNG posted blinds use level-1 schedule amounts as a base, then double per elimination.
+     * HUD / WS `newLevel` uses this tier: 1 + floor(log2(posted SB / level-1 SB)).
+     */
+    knockoutBlindDisplayLevel(blindSchedule: BlindLevel[], smallBlindChips: number): number;
     private parsePokerConfig;
     createPokerTournament(params: CreatePokerTournamentParams): Promise<{
         tournamentId: string;
@@ -130,11 +135,17 @@ export declare class PokerTournamentService {
      * After each hand completes:
      * 1. Sync seat stacks → tournament_entries.chips_remaining
      * 2. Eliminate 0-chip players (mark busted, remove seat)
-     * 3. Advance blind level if needed (schedule), then multiply SB/BB by 2^k for k eliminations this hand,
-     *    then clamp SB/BB so nominal BB ≤ smallest eligible stack (≥2 chips), when applicable
+     * 3. Multiply SB/BB by 2^k for k eliminations this hand (no time/hand schedule progression;
+     *    blinds do not track remaining stack sizes)
      * 4. Complete tournament if ≤1 active player remains
      */
     syncAfterHand(tableId: string, handNumber: number): Promise<void>;
+    /**
+     * `tryStartNextHand` refuses to deal when &lt; 2 seats have stack &gt; 0. If eliminations were not fully
+     * applied (e.g. stack format mismatch), the table can stall with no winner. Re-sync entries from
+     * seats, eliminate 0-chip players (no `hands_played` bump), then complete when ≤1 remain.
+     */
+    recoverTournamentTableIfUnderTwoStackedSeats(tableId: string): Promise<void>;
     completeTournament(tournamentId: string, tableId?: string): Promise<void>;
     cancelPokerTournament(tournamentId: string, callerAddress: string): Promise<void>;
     /**
@@ -158,6 +169,7 @@ export declare class PokerTournamentService {
     listPokerTournaments(playerAddress?: string): Promise<PokerTournamentSummary[]>;
     getTournamentState(tournamentId: string): Promise<PokerTournamentState | null>;
     getPlayerEntryStatus(tournamentId: string, playerAddress: string): Promise<PokerTournamentPlayer | null>;
+    private eliminateBustedTournamentSeats;
     private getTableIdForTournament;
 }
 //# sourceMappingURL=poker-tournament.service.d.ts.map

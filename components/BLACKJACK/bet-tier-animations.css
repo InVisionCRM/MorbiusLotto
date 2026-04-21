@@ -1,0 +1,113 @@
+/*
+ * Bet-tier deal-in animations. Applied to player's first 2 cards only.
+ * Each .bet-tier-N class overrides the default .card-slide-in animation
+ * with a keyframe scaled to the bet size.
+ */
+
+/* Tier 1 — Dealer Arc. Subtle arc from dealer shoe, small rotation settle. */
+@keyframes betTier1In {
+  0%   { opacity: 0; transform: translate(220px, -140px) rotate(-18deg) scale(0.85); }
+  60%  { opacity: 1; }
+  100% { opacity: 1; transform: translate(0, 0) rotate(0deg) scale(1); }
+}
+.blackjack-card.bet-tier-1 {
+  animation-name: betTier1In !important;
+  animation-duration: 0.7s !important;
+  animation-timing-function: cubic-bezier(0.22, 1, 0.36, 1) !important;
+  animation-fill-mode: both !important;
+}
+
+/* Tier 2 — Pitch Slide. Flat low pitch across felt. */
+@keyframes betTier2In {
+  0%   { opacity: 0; transform: translateX(340px) rotate(-4deg); }
+  100% { opacity: 1; transform: translateX(0) rotate(0); }
+}
+.blackjack-card.bet-tier-2 {
+  animation-name: betTier2In !important;
+  animation-duration: 0.55s !important;
+  animation-timing-function: cubic-bezier(0.25, 0.8, 0.3, 1) !important;
+  animation-fill-mode: both !important;
+}
+
+/* Tier 3 — Neon Flip. 3D Y barrel roll with cyan/magenta glow trail. */
+@keyframes betTier3In {
+  0% {
+    opacity: 0;
+    transform: translateX(260px) rotateY(720deg) rotateZ(25deg) scale(0.5);
+    filter: drop-shadow(0 0 0 rgba(0, 255, 255, 0));
+  }
+  50% {
+    opacity: 1;
+    filter:
+      drop-shadow(0 0 24px rgba(0, 255, 255, 0.95))
+      drop-shadow(0 0 48px rgba(255, 0, 200, 0.6));
+  }
+  85% {
+    transform: translateX(-6px) rotateY(10deg) rotateZ(-3deg) scale(1.06);
+  }
+  100% {
+    opacity: 1;
+    transform: translateX(0) rotateY(0) rotateZ(0) scale(1);
+    filter: drop-shadow(0 0 0 rgba(0, 255, 255, 0));
+  }
+}
+.blackjack-card.bet-tier-3 {
+  animation-name: betTier3In !important;
+  animation-duration: 1.05s !important;
+  animation-timing-function: cubic-bezier(0.25, 1.1, 0.35, 1) !important;
+  animation-fill-mode: both !important;
+  transform-style: preserve-3d;
+}
+
+/* Tier 4 — Meteor Strike. Streak in from top-left spinning with orange trail. */
+@keyframes betTier4In {
+  0% {
+    opacity: 0;
+    transform: translate(-520px, -360px) rotate(-720deg) scale(0.4);
+    filter: drop-shadow(8px 8px 14px rgba(255, 120, 0, 0.8));
+  }
+  70% {
+    opacity: 1;
+    transform: translate(14px, 10px) rotate(18deg) scale(1.1);
+    filter: drop-shadow(4px 4px 20px rgba(255, 160, 0, 0.9));
+  }
+  100% {
+    opacity: 1;
+    transform: translate(0, 0) rotate(0) scale(1);
+    filter: drop-shadow(0 0 0 rgba(255, 120, 0, 0));
+  }
+}
+.blackjack-card.bet-tier-4 {
+  animation-name: betTier4In !important;
+  animation-duration: 0.9s !important;
+  animation-timing-function: cubic-bezier(0.2, 1.1, 0.35, 1) !important;
+  animation-fill-mode: both !important;
+}
+
+/* Tier 5 — Shockwave Slam. Slams in from above with gold glow pulse + overshoot. */
+@keyframes betTier5In {
+  0% {
+    opacity: 0;
+    transform: translateY(-300px) scale(0.4);
+    filter: drop-shadow(0 0 0 rgba(255, 200, 0, 0));
+  }
+  70% {
+    opacity: 1;
+    transform: translateY(14px) scale(1.15);
+    filter: drop-shadow(0 0 28px rgba(255, 200, 0, 0.9));
+  }
+  85% {
+    transform: translateY(-4px) scale(0.97);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+    filter: drop-shadow(0 0 0 rgba(255, 200, 0, 0));
+  }
+}
+.blackjack-card.bet-tier-5 {
+  animation-name: betTier5In !important;
+  animation-duration: 0.85s !important;
+  animation-timing-function: cubic-bezier(0.2, 1.4, 0.4, 1) !important;
+  animation-fill-mode: both !important;
+}

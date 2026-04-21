@@ -4,7 +4,8 @@ import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react'
 import { useParams, useRouter, useSearchParams } from 'next/navigation';
 import { useAccount, useSignTypedData } from 'wagmi';
 import { formatMorbiusFloor } from '@/lib/format-morbius-display';
-import { getCashBuyInBoundsWei } from '@/lib/poker-buy-in';
+import { formatChips } from '@/lib/format-poker-chips';
+import { POKER_CASH_MIN_BUY_IN_BB, POKER_CASH_MAX_BUY_IN_BB, POKER_CHIP_WEI } from '@/lib/poker-buy-in';
 import type { BlackjackWebSocketClient, PokerTableState } from '@/lib/websocket-client';
 import { DEFAULT_POKER_THEME, getPokerThemeVars } from '@/lib/poker-themes';
 import { PokerThemeProvider } from '@/components/poker/PokerThemeContext';
@@ -34,6 +35,8 @@ import { usePokerTurnClock } from './PokerTurnClock';
 import { usePokerTableSounds } from './PokerSounds';
 import { usePokerTableTournamentHud } from '@/hooks/use-poker-tournament';
 import { TournamentBlindIncreaseOverlay } from '@/components/poker/tournament/TournamentBlindIncreaseOverlay';
+import { PokerTournamentHUD } from '@/components/poker/tournament/PokerTournamentHUD';
+import { Sidebar, SidebarBody } from '@/components/ui/sidebar';
 import {
   applyPokerE2EMockAction,
   POKER_E2E_MOCK_ADDRESS,
@@ -411,11 +414,11 @@ export default function PokerTablePage() {
   const themeVars = getPokerThemeVars(pokerTheme);
   const cyberpunk = pokerTheme === 'cyberpunk';
 
-  const fmtChips = (wei: string | number) => {
+  const fmtChips = (chips: string | number | bigint) => {
     try {
-      return formatMorbiusFloor(wei, { compact: false });
+      return formatChips(chips);
     } catch {
-      return String(wei);
+      return String(chips);
     }
   };
 
@@ -455,19 +458,21 @@ export default function PokerTablePage() {
     const hand = renderedState.currentHand;
     if (hand && hand.street !== 'showdown') return;
 
-    const bigBlindWei = BigInt(renderedState.bigBlind ?? '0');
-    if (bigBlindWei === 0n) return;
+    const bbChips = BigInt(renderedState.bigBlind ?? '0');
+    if (bbChips === 0n) return;
 
-    const { minWei, maxWei } = getCashBuyInBoundsWei(bigBlindWei);
-    const stack = BigInt(mySeat.stack ?? '0');
-    if (stack >= minWei) return; // Stack is fine, nothing to do
+    const minChips = bbChips * BigInt(POKER_CASH_MIN_BUY_IN_BB);
+    const maxChips = bbChips * BigInt(POKER_CASH_MAX_BUY_IN_BB);
+    const stackChips = BigInt(mySeat.stack ?? '0');
+    if (stackChips >= minChips) return; // Stack is fine, nothing to do
 
-    const toAdd = maxWei - stack;
-    if (toAdd <= 0n) return;
+    const toAddChips = maxChips - stackChips;
+    if (toAddChips <= 0n) return;
     if (autoRebuyFiringRef.current) return;
 
     autoRebuyFiringRef.current = true;
-    wsClient.pokerAddChips(tableId, toAdd.toString())
+    // pokerAddChips expects wei; convert chips -> wei at the boundary.
+    wsClient.pokerAddChips(tableId, (toAddChips * POKER_CHIP_WEI).toString())
       .then((newState) => {
         setState(newState);
         toast.success('Auto-rebuy: topped up to max stack');
@@ -697,42 +702,56 @@ export default function PokerTablePage() {
             setShowMyStats={setShowMyStats}
           />}
 
-          <PokerTableView
-            tableScale={tableScale}
-            fullscreen={isFullscreen}
-            onToggleFullscreen={() => setIsFullscreen(f => !f)}
-            renderedState={renderedState}
-            effectivePlayerAddress={effectivePlayerAddress}
-            handleLeaveClick={handleLeaveClick}
-            setActivityMobileOpenSerial={setActivityMobileOpenSerial}
-            timeLeft={timeLeft}
-            chatBubbleBySeatIndex={chatBubbleBySeatIndex}
-            reactionBySeatIndex={reactionBySeatIndex}
-            broadcastEmotionBySeatIndex={broadcastEmotionBySeatIndex}
-            mySeatIndex={mySeatIndex}
-            onPhraseReaction={onPhraseReaction}
-            onAnimationReaction={onAnimationReaction}
-            canReup={canReup}
-            openReupModal={openReupModal}
-            mySeat={mySeat}
-            setShowAvatarModal={setShowAvatarModal}
-            setOpponentProfileAddress={setOpponentProfileAddress}
-            onOpponentRadialAction={onOpponentRadialAction}
-            quickChatPhrases={quickChatPhrases}
-            setQuickChatPhrases={setQuickChatPhrases}
-            setShowEditQuickChatModal={setShowEditQuickChatModal}
-            error={error}
-            showDashboard={showDashboard}
-            showMyStats={showMyStats}
-            wsConnected={wsConnected}
-            wsClient={wsClient}
-            tipAnimating={tipAnimating}
-            setTipAnimating={setTipAnimating}
-            onTipDealer={onTipDealer}
-            onSitOut={mySeat ? handleSitOut : undefined}
-            onSitBack={mySeat ? handleSitBack : undefined}
-            tournamentHUD={tournamentHUDProp}
-          />
+          <div className="flex flex-row flex-1 min-h-0 min-w-0 relative">
+            {tournamentHUDProp && !isFullscreen && (
+              <Sidebar>
+                <SidebarBody
+                  className="!sticky !top-0 !h-full !py-0 !px-0 bg-[rgba(6,8,12,0.92)] border-r border-white/10"
+                >
+                  <PokerTournamentHUD
+                    state={tournamentHUDProp.state}
+                    myAddress={tournamentHUDProp.myAddress}
+                  />
+                </SidebarBody>
+              </Sidebar>
+            )}
+
+            <PokerTableView
+              tableScale={tableScale}
+              fullscreen={isFullscreen}
+              onToggleFullscreen={() => setIsFullscreen(f => !f)}
+              renderedState={renderedState}
+              effectivePlayerAddress={effectivePlayerAddress}
+              handleLeaveClick={handleLeaveClick}
+              setActivityMobileOpenSerial={setActivityMobileOpenSerial}
+              timeLeft={timeLeft}
+              chatBubbleBySeatIndex={chatBubbleBySeatIndex}
+              reactionBySeatIndex={reactionBySeatIndex}
+              broadcastEmotionBySeatIndex={broadcastEmotionBySeatIndex}
+              mySeatIndex={mySeatIndex}
+              onPhraseReaction={onPhraseReaction}
+              onAnimationReaction={onAnimationReaction}
+              canReup={canReup}
+              openReupModal={openReupModal}
+              mySeat={mySeat}
+              setShowAvatarModal={setShowAvatarModal}
+              setOpponentProfileAddress={setOpponentProfileAddress}
+              onOpponentRadialAction={onOpponentRadialAction}
+              quickChatPhrases={quickChatPhrases}
+              setQuickChatPhrases={setQuickChatPhrases}
+              setShowEditQuickChatModal={setShowEditQuickChatModal}
+              error={error}
+              showDashboard={showDashboard}
+              showMyStats={showMyStats}
+              wsConnected={wsConnected}
+              wsClient={wsClient}
+              tipAnimating={tipAnimating}
+              setTipAnimating={setTipAnimating}
+              onTipDealer={onTipDealer}
+              onSitOut={mySeat ? handleSitOut : undefined}
+              onSitBack={mySeat ? handleSitBack : undefined}
+            />
+          </div>
 
           <PokerBottomBar
             fullscreen={isFullscreen}

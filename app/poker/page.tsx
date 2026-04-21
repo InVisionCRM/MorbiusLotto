@@ -16,11 +16,12 @@ import { GameFAQ } from '@/components/shared/GameFAQ';
 import { MORBIUS_TOKEN_ADDRESS } from '@/lib/contracts';
 import { isAdminWallet } from '@/lib/admin';
 import {
-  getCashBuyInBoundsWei,
+  getCashBuyInBoundsWeiFromChips,
   POKER_CASH_MAX_BUY_IN_BB,
   POKER_CASH_MIN_BUY_IN_BB,
 } from '@/lib/poker-buy-in';
-import { floorMorbiusWholeFromWei, formatMorbiusFloor, formatMorbiusFloorPlain } from '@/lib/format-morbius-display';
+import { formatMorbiusFloor, formatMorbiusFloorPlain } from '@/lib/format-morbius-display';
+import { formatChips } from '@/lib/format-poker-chips';
 import { PokerBetaSplash } from '@/components/poker/PokerBetaSplash';
 import { SophieSplashModal } from '@/components/shared/SophieSplashModal';
 import { PokerHowToPlayModal } from '@/components/poker/PokerHowToPlayModal';
@@ -36,14 +37,6 @@ import {
   TableRow,
 } from '@/components/ui/table';
 
-/** Format a wei string to whole MORBIUS (floored) for display */
-function formatChips(wei: string): string {
-  try {
-    return formatMorbiusFloor(wei, { compact: false });
-  } catch {
-    return wei;
-  }
-}
 
 /** Blind-based accent for lobby card blob (yellow → green → cyan → red → purple → gold) */
 const BLIND_COLORS = [
@@ -54,9 +47,9 @@ const BLIND_COLORS = [
   { max: 100000, color: 'rgba(168, 85, 247, 0.35)' },
   { max: Infinity, color: 'rgba(245, 158, 11, 0.4)' },
 ];
-function getBlindAccentColor(bigBlindWei: string): string {
+function getBlindAccentColor(bigBlindChips: string): string {
   try {
-    const total = Number(floorMorbiusWholeFromWei(BigInt(bigBlindWei)));
+    const total = Number(BigInt(bigBlindChips));
     const tier = BLIND_COLORS.find((t) => total <= t.max) ?? BLIND_COLORS[BLIND_COLORS.length - 1];
     return tier.color;
   } catch {
@@ -65,8 +58,8 @@ function getBlindAccentColor(bigBlindWei: string): string {
 }
 
 /** Solid version of accent color for icons (same RGB, full opacity). */
-function getBlindAccentSolid(bigBlindWei: string): string {
-  const rgba = getBlindAccentColor(bigBlindWei);
+function getBlindAccentSolid(bigBlindChips: string): string {
+  const rgba = getBlindAccentColor(bigBlindChips);
   return rgba.replace(/[\d.]+\)$/, '1)');
 }
 
@@ -143,7 +136,7 @@ export default function PokerLobbyPage() {
   const [tables, setTables] = useState<PokerTableSummary[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [joinModal, setJoinModal] = useState<{ tableId: string; hasPin: boolean; bigBlindWei: string } | null>(null);
+  const [joinModal, setJoinModal] = useState<{ tableId: string; hasPin: boolean; bigBlindChips: string } | null>(null);
   const [buyIn, setBuyIn] = useState('');
   const [joinPin, setJoinPin] = useState('');
   const [balance, setBalance] = useState<string | null>(null);
@@ -199,7 +192,7 @@ export default function PokerLobbyPage() {
     if (!joinModal) return false;
     try {
       const w = parseEther(sanitizeDecimalStringForParseEther(buyIn) || '0');
-      const { minWei, maxWei } = getCashBuyInBoundsWei(BigInt(joinModal.bigBlindWei));
+      const { minWei, maxWei } = getCashBuyInBoundsWeiFromChips(BigInt(joinModal.bigBlindChips));
       return w < minWei || w > maxWei;
     } catch {
       return true;
@@ -354,8 +347,8 @@ export default function PokerLobbyPage() {
       setError('Invalid buy-in amount');
       return;
     }
-    const bbWei = BigInt(joinModal.bigBlindWei);
-    const { minWei, maxWei } = getCashBuyInBoundsWei(bbWei);
+    const bbChips = BigInt(joinModal.bigBlindChips);
+    const { minWei, maxWei } = getCashBuyInBoundsWeiFromChips(bbChips);
     const bi = BigInt(buyInWei);
     if (bi < minWei || bi > maxWei) {
       setError(
@@ -380,26 +373,24 @@ export default function PokerLobbyPage() {
     setCreating(true);
     setError(null);
     try {
-      const sbWei = (() => {
-        try { return parseEther(sanitizeDecimalStringForParseEther(createModal.smallBlind) || '0').toString(); }
-        catch { return createModal.smallBlind; }
+      // Server stores blinds as chip integers (1 chip = 1 MORBIUS). User input is whole MORBIUS.
+      const sbChips = (() => {
+        const n = Number(sanitizeDecimalStringForParseEther(createModal.smallBlind));
+        return Number.isFinite(n) && n > 0 ? Math.floor(n).toString() : '0';
       })();
-      const bbWei = (() => {
-        try { return parseEther(sanitizeDecimalStringForParseEther(createModal.bigBlind) || '0').toString(); }
-        catch { return createModal.bigBlind; }
+      const bbChips = (() => {
+        const n = Number(sanitizeDecimalStringForParseEther(createModal.bigBlind));
+        return Number.isFinite(n) && n > 0 ? Math.floor(n).toString() : '0';
       })();
       const pinCode = createModal.pinEnabled ? createModal.pinCode : undefined;
-      const { tableId } = await wsClient.pokerCreateTable(sbWei, bbWei, createModal.maxSeats, pinCode);
+      const { tableId } = await wsClient.pokerCreateTable(sbChips, bbChips, createModal.maxSeats, pinCode);
       const createdPin = pinCode || '';
       setCreateModal(null);
       // Auto-join creator at max buy-in (100 BB) — matches cash-game rules
-      let bbBig: bigint;
-      try {
-        bbBig = parseEther(sanitizeDecimalStringForParseEther(createModal.bigBlind) || '0');
-      } catch {
-        bbBig = 0n;
-      }
-      const { maxWei } = getCashBuyInBoundsWei(bbBig);
+      const bbChipsBig = (() => {
+        try { return BigInt(bbChips); } catch { return 0n; }
+      })();
+      const { maxWei } = getCashBuyInBoundsWeiFromChips(bbChipsBig);
       const buyInWei = maxWei.toString();
       const pinParam = createdPin ? `&pin=${encodeURIComponent(createdPin)}` : '';
       router.push(`/poker/${tableId}?join=1&buyIn=${encodeURIComponent(buyInWei)}${pinParam}`);
@@ -735,10 +726,10 @@ export default function PokerLobbyPage() {
                                     <button
                                       type="button"
                                       onClick={() => {
-                                        const bb = BigInt(t.bigBlind);
-                                        const { maxWei } = getCashBuyInBoundsWei(bb);
+                                        const bbChips = BigInt(t.bigBlind);
+                                        const { maxWei } = getCashBuyInBoundsWeiFromChips(bbChips);
                                         setBuyIn(formatMorbiusFloorPlain(maxWei));
-                                        setJoinModal({ tableId: t.id, hasPin: t.hasPin, bigBlindWei: t.bigBlind });
+                                        setJoinModal({ tableId: t.id, hasPin: t.hasPin, bigBlindChips: t.bigBlind });
                                         setJoinPin('');
                                       }}
                                       className="inline-flex items-center justify-center px-4 py-2 rounded-xl text-xs font-bold uppercase tracking-widest text-white bg-gradient-to-r from-cyan-600 to-cyan-500 shadow-[0_2px_12px_rgba(34,211,238,0.25)] hover:opacity-95 active:scale-[0.98] transition-all"
@@ -874,8 +865,8 @@ export default function PokerLobbyPage() {
                       <>
                         For this table:{' '}
                         <span className="text-slate-300 tabular-nums">
-                          {formatMorbiusFloor(getCashBuyInBoundsWei(BigInt(joinModal.bigBlindWei)).minWei, { compact: false })} –{' '}
-                          {formatMorbiusFloor(getCashBuyInBoundsWei(BigInt(joinModal.bigBlindWei)).maxWei, { compact: false })}
+                          {formatMorbiusFloor(getCashBuyInBoundsWeiFromChips(BigInt(joinModal.bigBlindChips)).minWei, { compact: false })} –{' '}
+                          {formatMorbiusFloor(getCashBuyInBoundsWeiFromChips(BigInt(joinModal.bigBlindChips)).maxWei, { compact: false })}
                         </span>{' '}
                         MORBIUS.
                       </>
@@ -895,8 +886,8 @@ export default function PokerLobbyPage() {
                 />
                 {joinBuyInOutOfRange && buyIn.trim() !== '' && (
                   <p className="text-amber-400/90 text-xs">
-                    Enter an amount between {formatMorbiusFloor(getCashBuyInBoundsWei(BigInt(joinModal.bigBlindWei)).minWei, { compact: false })} and{' '}
-                    {formatMorbiusFloor(getCashBuyInBoundsWei(BigInt(joinModal.bigBlindWei)).maxWei, { compact: false })} MORBIUS.
+                    Enter an amount between {formatMorbiusFloor(getCashBuyInBoundsWeiFromChips(BigInt(joinModal.bigBlindChips)).minWei, { compact: false })} and{' '}
+                    {formatMorbiusFloor(getCashBuyInBoundsWeiFromChips(BigInt(joinModal.bigBlindChips)).maxWei, { compact: false })} MORBIUS.
                   </p>
                 )}
                 <div className="flex gap-2">

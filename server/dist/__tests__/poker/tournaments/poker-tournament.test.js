@@ -483,10 +483,9 @@ describe('3 - auto-start', () => {
         createdPokerTableIds.push(tableId);
         const seats = await setup_1.testPool.query('SELECT player_address, stack FROM poker_seats WHERE table_id = $1', [tableId]);
         expect(seats.rows).toHaveLength(2);
-        const CHIP_SCALE = BigInt('1000000000000000000');
-        const totalStarting = BigInt(SMALL_CONFIG.startingStack) * BigInt(seats.rows.length) * CHIP_SCALE;
+        const totalStarting = BigInt(SMALL_CONFIG.startingStack) * BigInt(seats.rows.length);
         for (const seat of seats.rows) {
-            const stackChips = BigInt(seat.stack) / CHIP_SCALE;
+            const stackChips = BigInt(seat.stack);
             expect(stackChips).toBeGreaterThan(BigInt(0));
             expect(stackChips).toBeLessThanOrEqual(BigInt(SMALL_CONFIG.startingStack));
         }
@@ -538,6 +537,16 @@ describe('4 - computeBlindLevel', () => {
         expect(pokerTournamentService.computeBlindLevel(poker_tournament_service_1.DEFAULT_BLIND_SCHEDULE, 999).level).toBe(8);
     });
 });
+describe('4b - knockoutBlindDisplayLevel', () => {
+    const schedule = [
+        { level: 1, smallBlind: 25, bigBlind: 50, handsPerLevel: 10 },
+    ];
+    it('increments display tier when posted SB doubles from level-1 base', () => {
+        expect(pokerTournamentService.knockoutBlindDisplayLevel(schedule, 25)).toBe(1);
+        expect(pokerTournamentService.knockoutBlindDisplayLevel(schedule, 50)).toBe(2);
+        expect(pokerTournamentService.knockoutBlindDisplayLevel(schedule, 100)).toBe(3);
+    });
+});
 // ---------------------------------------------------------------------------
 // Suite 5: syncAfterHand — chip sync
 // ---------------------------------------------------------------------------
@@ -546,15 +555,26 @@ describe('5 - syncAfterHand chip sync', () => {
         const tournamentId = await createTestTournament({ minPlayers: 2 });
         const tableId = await joinThroughScheduledStart(tournamentId, [PLAYER_1, PLAYER_2]);
         createdPokerTableIds.push(tableId);
-        // Manually set stacks to simulate a hand outcome (stacks stored in wei units)
-        const CHIP_SCALE = BigInt('1000000000000000000');
-        await setup_1.testPool.query(`UPDATE poker_seats SET stack = $3::NUMERIC WHERE table_id = $1 AND LOWER(player_address) = LOWER($2)`, [tableId, PLAYER_1, (BigInt(3000) * CHIP_SCALE).toString()]);
-        await setup_1.testPool.query(`UPDATE poker_seats SET stack = $3::NUMERIC WHERE table_id = $1 AND LOWER(player_address) = LOWER($2)`, [tableId, PLAYER_2, (BigInt(7000) * CHIP_SCALE).toString()]);
+        // Manually set stacks to simulate a hand outcome (chip ints)
+        await setup_1.testPool.query(`UPDATE poker_seats SET stack = $3::NUMERIC WHERE table_id = $1 AND LOWER(player_address) = LOWER($2)`, [tableId, PLAYER_1, '3000']);
+        await setup_1.testPool.query(`UPDATE poker_seats SET stack = $3::NUMERIC WHERE table_id = $1 AND LOWER(player_address) = LOWER($2)`, [tableId, PLAYER_2, '7000']);
         await pokerTournamentService.syncAfterHand(tableId, 1);
         const e1 = await setup_1.testPool.query(`SELECT chips_remaining FROM tournament_entries WHERE tournament_id = $1 AND LOWER(player_address) = LOWER($2)`, [tournamentId, PLAYER_1]);
         const e2 = await setup_1.testPool.query(`SELECT chips_remaining FROM tournament_entries WHERE tournament_id = $1 AND LOWER(player_address) = LOWER($2)`, [tournamentId, PLAYER_2]);
         expect(Number(e1.rows[0].chips_remaining)).toBe(3000);
         expect(Number(e2.rows[0].chips_remaining)).toBe(7000);
+    });
+    it('syncAfterHand keeps 1-chip stacks as 1 tournament chip (not zero from wei division)', async () => {
+        const tournamentId = await createTestTournament({ minPlayers: 2 });
+        const tableId = await joinThroughScheduledStart(tournamentId, [PLAYER_1, PLAYER_2]);
+        createdPokerTableIds.push(tableId);
+        await setup_1.testPool.query(`UPDATE poker_seats SET stack = $3::NUMERIC WHERE table_id = $1 AND LOWER(player_address) = LOWER($2)`, [tableId, PLAYER_1, '1']);
+        await setup_1.testPool.query(`UPDATE poker_seats SET stack = $3::NUMERIC WHERE table_id = $1 AND LOWER(player_address) = LOWER($2)`, [tableId, PLAYER_2, '9999']);
+        await setup_1.testPool.query(`UPDATE poker_hands SET completed_at = NOW() WHERE table_id = $1 AND completed_at IS NULL`, [tableId]);
+        await pokerTournamentService.syncAfterHand(tableId, 1);
+        const e1 = await setup_1.testPool.query(`SELECT chips_remaining, status FROM tournament_entries WHERE tournament_id = $1 AND LOWER(player_address) = LOWER($2)`, [tournamentId, PLAYER_1]);
+        expect(Number(e1.rows[0].chips_remaining)).toBe(1);
+        expect(e1.rows[0].status).toBe('playing');
     });
     it('increments hands_played after sync', async () => {
         const tournamentId = await createTestTournament({ minPlayers: 2 });
@@ -603,12 +623,11 @@ describe('6 - player elimination', () => {
         const tournamentId = await createTestTournament({ minPlayers: 3, maxPlayers: 3 });
         const tableId = await joinThroughScheduledStart(tournamentId, [PLAYER_1, PLAYER_2, PLAYER_3]);
         createdPokerTableIds.push(tableId);
-        const CHIP_SCALE = BigInt('1000000000000000000');
         const blindsBefore = await setup_1.testPool.query(`SELECT small_blind, big_blind FROM poker_tables WHERE id = $1`, [tableId]);
         const sb0 = (0, safe_bigint_1.toBigIntSafe)(blindsBefore.rows[0].small_blind);
         const bb0 = (0, safe_bigint_1.toBigIntSafe)(blindsBefore.rows[0].big_blind);
-        expect(sb0).toBe(BigInt(SMALL_CONFIG.blindSchedule[0].smallBlind) * CHIP_SCALE);
-        expect(bb0).toBe(BigInt(SMALL_CONFIG.blindSchedule[0].bigBlind) * CHIP_SCALE);
+        expect(sb0).toBe(BigInt(SMALL_CONFIG.blindSchedule[0].smallBlind));
+        expect(bb0).toBe(BigInt(SMALL_CONFIG.blindSchedule[0].bigBlind));
         await setup_1.testPool.query(`UPDATE poker_seats SET stack = 0 WHERE table_id = $1 AND LOWER(player_address) = LOWER($2)`, [tableId, PLAYER_1]);
         await setup_1.testPool.query(`UPDATE poker_seats SET stack = 10000 WHERE table_id = $1 AND LOWER(player_address) = LOWER($2)`, [tableId, PLAYER_2]);
         await setup_1.testPool.query(`UPDATE poker_seats SET stack = 10000 WHERE table_id = $1 AND LOWER(player_address) = LOWER($2)`, [tableId, PLAYER_3]);
@@ -617,6 +636,26 @@ describe('6 - player elimination', () => {
         const blindsAfter = await setup_1.testPool.query(`SELECT small_blind, big_blind FROM poker_tables WHERE id = $1`, [tableId]);
         expect((0, safe_bigint_1.toBigIntSafe)(blindsAfter.rows[0].small_blind)).toBe(sb0 * 2n);
         expect((0, safe_bigint_1.toBigIntSafe)(blindsAfter.rows[0].big_blind)).toBe(bb0 * 2n);
+    });
+    it('keeps elimination blind bump after a later hand with no elimination (no schedule rewind)', async () => {
+        const tournamentId = await createTestTournament({ minPlayers: 3, maxPlayers: 3 });
+        const tableId = await joinThroughScheduledStart(tournamentId, [PLAYER_1, PLAYER_2, PLAYER_3]);
+        createdPokerTableIds.push(tableId);
+        const blindsBefore = await setup_1.testPool.query(`SELECT small_blind, big_blind FROM poker_tables WHERE id = $1`, [tableId]);
+        const sb0 = (0, safe_bigint_1.toBigIntSafe)(blindsBefore.rows[0].small_blind);
+        const bb0 = (0, safe_bigint_1.toBigIntSafe)(blindsBefore.rows[0].big_blind);
+        await setup_1.testPool.query(`UPDATE poker_seats SET stack = 0 WHERE table_id = $1 AND LOWER(player_address) = LOWER($2)`, [tableId, PLAYER_1]);
+        await setup_1.testPool.query(`UPDATE poker_seats SET stack = $2::NUMERIC WHERE table_id = $1 AND LOWER(player_address) = LOWER($3)`, [tableId, '5000', PLAYER_2]);
+        await setup_1.testPool.query(`UPDATE poker_seats SET stack = $2::NUMERIC WHERE table_id = $1 AND LOWER(player_address) = LOWER($3)`, [tableId, '5000', PLAYER_3]);
+        await setup_1.testPool.query(`UPDATE poker_hands SET completed_at = NOW() WHERE table_id = $1 AND completed_at IS NULL`, [tableId]);
+        await pokerTournamentService.syncAfterHand(tableId, 1);
+        const mid = await setup_1.testPool.query(`SELECT small_blind, big_blind FROM poker_tables WHERE id = $1`, [tableId]);
+        expect((0, safe_bigint_1.toBigIntSafe)(mid.rows[0].small_blind)).toBe(sb0 * 2n);
+        expect((0, safe_bigint_1.toBigIntSafe)(mid.rows[0].big_blind)).toBe(bb0 * 2n);
+        await pokerTournamentService.syncAfterHand(tableId, 2);
+        const after = await setup_1.testPool.query(`SELECT small_blind, big_blind FROM poker_tables WHERE id = $1`, [tableId]);
+        expect((0, safe_bigint_1.toBigIntSafe)(after.rows[0].small_blind)).toBe(sb0 * 2n);
+        expect((0, safe_bigint_1.toBigIntSafe)(after.rows[0].big_blind)).toBe(bb0 * 2n);
     });
 });
 // ---------------------------------------------------------------------------
@@ -647,15 +686,14 @@ describe('7 - prize distribution', () => {
         const expectFirst = (distributable * 50n) / 100n;
         const expectSecond = (distributable * 30n) / 100n;
         const expectThird = (distributable * 20n) / 100n;
-        const CHIP_SCALE = BigInt('1000000000000000000');
-        const stackWei = (chips) => (BigInt(chips) * CHIP_SCALE).toString();
-        await setup_1.testPool.query(`UPDATE poker_seats SET stack = $3::NUMERIC WHERE table_id = $1 AND LOWER(player_address) = LOWER($2)`, [tableId, PLAYER_1, stackWei(0)]);
-        await setup_1.testPool.query(`UPDATE poker_seats SET stack = $3::NUMERIC WHERE table_id = $1 AND LOWER(player_address) = LOWER($2)`, [tableId, PLAYER_2, stackWei(4000)]);
-        await setup_1.testPool.query(`UPDATE poker_seats SET stack = $3::NUMERIC WHERE table_id = $1 AND LOWER(player_address) = LOWER($2)`, [tableId, PLAYER_3, stackWei(4000)]);
+        const stackChips = (chips) => String(chips);
+        await setup_1.testPool.query(`UPDATE poker_seats SET stack = $3::NUMERIC WHERE table_id = $1 AND LOWER(player_address) = LOWER($2)`, [tableId, PLAYER_1, stackChips(0)]);
+        await setup_1.testPool.query(`UPDATE poker_seats SET stack = $3::NUMERIC WHERE table_id = $1 AND LOWER(player_address) = LOWER($2)`, [tableId, PLAYER_2, stackChips(4000)]);
+        await setup_1.testPool.query(`UPDATE poker_seats SET stack = $3::NUMERIC WHERE table_id = $1 AND LOWER(player_address) = LOWER($2)`, [tableId, PLAYER_3, stackChips(4000)]);
         await setup_1.testPool.query(`UPDATE poker_hands SET completed_at = NOW() WHERE table_id = $1 AND completed_at IS NULL`, [tableId]);
         await pokerTournamentService.syncAfterHand(tableId, 1);
-        await setup_1.testPool.query(`UPDATE poker_seats SET stack = $3::NUMERIC WHERE table_id = $1 AND LOWER(player_address) = LOWER($2)`, [tableId, PLAYER_2, stackWei(0)]);
-        await setup_1.testPool.query(`UPDATE poker_seats SET stack = $3::NUMERIC WHERE table_id = $1 AND LOWER(player_address) = LOWER($2)`, [tableId, PLAYER_3, stackWei(8000)]);
+        await setup_1.testPool.query(`UPDATE poker_seats SET stack = $3::NUMERIC WHERE table_id = $1 AND LOWER(player_address) = LOWER($2)`, [tableId, PLAYER_2, stackChips(0)]);
+        await setup_1.testPool.query(`UPDATE poker_seats SET stack = $3::NUMERIC WHERE table_id = $1 AND LOWER(player_address) = LOWER($2)`, [tableId, PLAYER_3, stackChips(8000)]);
         await setup_1.testPool.query(`UPDATE poker_hands SET completed_at = NOW() WHERE table_id = $1 AND completed_at IS NULL`, [tableId]);
         await pokerTournamentService.syncAfterHand(tableId, 2);
         const t = await setup_1.testPool.query('SELECT status FROM tournaments WHERE id = $1', [tournamentId]);
@@ -848,19 +886,14 @@ describe('9 - scheduled poker start', () => {
 // Suite 11: Nominal blinds vs short stacks (chevtek all-in blind posts)
 // ---------------------------------------------------------------------------
 describe('11 - blinds vs short stacks', () => {
-    const CHIP_SCALE = BigInt('1000000000000000000');
     it('startHand succeeds when nominal SB/BB exceed a player stack; stacks stay non-negative', async () => {
         const tournamentId = await createTestTournament({ minPlayers: 2, maxPlayers: 2 });
         const tableId = await joinThroughScheduledStart(tournamentId, [PLAYER_1, PLAYER_2]);
         createdPokerTableIds.push(tableId);
         await setup_1.testPool.query(`UPDATE poker_hands SET completed_at = NOW() WHERE table_id = $1 AND completed_at IS NULL`, [tableId]);
-        const tiny = (100n * CHIP_SCALE).toString();
-        const deep = (5000n * CHIP_SCALE).toString();
-        await setup_1.testPool.query(`UPDATE poker_seats SET stack = $2::NUMERIC WHERE table_id = $1 AND LOWER(player_address) = LOWER($3)`, [tableId, tiny, PLAYER_1]);
-        await setup_1.testPool.query(`UPDATE poker_seats SET stack = $2::NUMERIC WHERE table_id = $1 AND LOWER(player_address) = LOWER($3)`, [tableId, deep, PLAYER_2]);
-        const hugeSB = (8000n * CHIP_SCALE).toString();
-        const hugeBB = (10000n * CHIP_SCALE).toString();
-        await setup_1.testPool.query(`UPDATE poker_tables SET small_blind = $2::NUMERIC, big_blind = $3::NUMERIC WHERE id = $1`, [tableId, hugeSB, hugeBB]);
+        await setup_1.testPool.query(`UPDATE poker_seats SET stack = $2::NUMERIC WHERE table_id = $1 AND LOWER(player_address) = LOWER($3)`, [tableId, '100', PLAYER_1]);
+        await setup_1.testPool.query(`UPDATE poker_seats SET stack = $2::NUMERIC WHERE table_id = $1 AND LOWER(player_address) = LOWER($3)`, [tableId, '5000', PLAYER_2]);
+        await setup_1.testPool.query(`UPDATE poker_tables SET small_blind = $2::NUMERIC, big_blind = $3::NUMERIC WHERE id = $1`, [tableId, '8000', '10000']);
         await expect(pokerGameService.startHand(tableId)).resolves.toBeTruthy();
         const seats = await setup_1.testPool.query(`SELECT stack FROM poker_seats WHERE table_id = $1`, [tableId]);
         for (const row of seats.rows) {
@@ -874,10 +907,10 @@ describe('11 - blinds vs short stacks', () => {
         const tableId = await joinThroughScheduledStart(tournamentId, [PLAYER_1, PLAYER_2]);
         createdPokerTableIds.push(tableId);
         await setup_1.testPool.query(`UPDATE poker_hands SET completed_at = NOW() WHERE table_id = $1 AND completed_at IS NULL`, [tableId]);
-        const s = (40n * CHIP_SCALE).toString();
+        const s = '40';
         await setup_1.testPool.query(`UPDATE poker_seats SET stack = $2::NUMERIC WHERE table_id = $1 AND LOWER(player_address) = LOWER($3)`, [tableId, s, PLAYER_1]);
         await setup_1.testPool.query(`UPDATE poker_seats SET stack = $2::NUMERIC WHERE table_id = $1 AND LOWER(player_address) = LOWER($3)`, [tableId, s, PLAYER_2]);
-        await setup_1.testPool.query(`UPDATE poker_tables SET small_blind = $2::NUMERIC, big_blind = $3::NUMERIC WHERE id = $1`, [tableId, (8000n * CHIP_SCALE).toString(), (10000n * CHIP_SCALE).toString()]);
+        await setup_1.testPool.query(`UPDATE poker_tables SET small_blind = $2::NUMERIC, big_blind = $3::NUMERIC WHERE id = $1`, [tableId, '8000', '10000']);
         await expect(pokerGameService.startHand(tableId)).resolves.toBeTruthy();
         const actions = await setup_1.testPool.query(`SELECT amount::text AS amount
        FROM poker_hand_actions pha
@@ -887,12 +920,11 @@ describe('11 - blinds vs short stacks', () => {
         expect(actions.rows.length).toBe(2);
         const a0 = BigInt(actions.rows[0].amount);
         const a1 = BigInt(actions.rows[1].amount);
-        const nominalBb = 10000n * CHIP_SCALE;
+        const nominalBb = 10000n;
         // At least one posted blind is an all-in for less than nominal BB; the other may also be short.
         expect(a0 < nominalBb || a1 < nominalBb).toBe(true);
     });
-    it('syncAfterHand clamps stored blinds so BB ≤ smallest eligible stack (when min stack ≥ 2 chips)', async () => {
-        // Level 1 must match table SB so the schedule step does not reset blinds before the clamp.
+    it('syncAfterHand does not change stored blinds based on smallest stack (engine posts all-in blinds)', async () => {
         const hugeSchedule = [{ level: 1, smallBlind: 8000, bigBlind: 10000, handsPerLevel: 999 }];
         const tournamentId = await createTestTournament({
             minPlayers: 2,
@@ -902,18 +934,16 @@ describe('11 - blinds vs short stacks', () => {
         const tableId = await joinThroughScheduledStart(tournamentId, [PLAYER_1, PLAYER_2]);
         createdPokerTableIds.push(tableId);
         await setup_1.testPool.query(`UPDATE poker_hands SET completed_at = NOW() WHERE table_id = $1 AND completed_at IS NULL`, [tableId]);
-        const shortStack = 200n * CHIP_SCALE;
-        const deepStack = 5000n * CHIP_SCALE;
+        const shortStack = 200n;
+        const deepStack = 5000n;
         await setup_1.testPool.query(`UPDATE poker_seats SET stack = $2::NUMERIC WHERE table_id = $1 AND LOWER(player_address) = LOWER($3)`, [tableId, shortStack.toString(), PLAYER_1]);
         await setup_1.testPool.query(`UPDATE poker_seats SET stack = $2::NUMERIC WHERE table_id = $1 AND LOWER(player_address) = LOWER($3)`, [tableId, deepStack.toString(), PLAYER_2]);
+        const expectSb = 8000n;
+        const expectBb = 10000n;
         await pokerTournamentService.syncAfterHand(tableId, 1);
         const tbl = await setup_1.testPool.query(`SELECT small_blind, big_blind FROM poker_tables WHERE id = $1`, [tableId]);
-        const bbWei = (0, safe_bigint_1.toBigIntSafe)(tbl.rows[0].big_blind);
-        const sbWei = (0, safe_bigint_1.toBigIntSafe)(tbl.rows[0].small_blind);
-        expect(bbWei).toBeLessThanOrEqual(shortStack);
-        expect(sbWei).toBeLessThan(bbWei);
-        expect(sbWei).toBe((200n - 1n) * CHIP_SCALE);
-        expect(bbWei).toBe(200n * CHIP_SCALE);
+        expect((0, safe_bigint_1.toBigIntSafe)(tbl.rows[0].small_blind)).toBe(expectSb);
+        expect((0, safe_bigint_1.toBigIntSafe)(tbl.rows[0].big_blind)).toBe(expectBb);
     });
 });
 // ---------------------------------------------------------------------------
@@ -937,9 +967,8 @@ describe('10 - regression', () => {
         expect(row.rows[0].game_type).toBe('blackjack');
     });
     it('cash game poker tables still appear in listTables (tournament_mode=FALSE)', async () => {
-        // Create a normal cash game table
-        const chipWei = 10n ** 15n;
-        const tableId = await pokerGameService.createTable(chipWei * 25n, chipWei * 50n, 6);
+        // Create a normal cash game table (chip-int blinds)
+        const tableId = await pokerGameService.createTable(25, 50, 6);
         createdPokerTableIds.push(tableId);
         const tables = await pokerGameService.listTables();
         const found = tables.some((t) => t.id === tableId);
@@ -1021,9 +1050,8 @@ describe('12 - hand history retention', () => {
         expect(active.rows[0].tournament_id).toBe(tournamentId);
         const handId = active.rows[0].id;
         await setup_1.testPool.query(`UPDATE poker_hands SET completed_at = NOW() WHERE id = $1`, [handId]);
-        const CHIP_SCALE = BigInt('1000000000000000000');
         await setup_1.testPool.query(`UPDATE poker_seats SET stack = 0 WHERE table_id = $1 AND LOWER(player_address) = LOWER($2)`, [tableId, PLAYER_1]);
-        await setup_1.testPool.query(`UPDATE poker_seats SET stack = $2::NUMERIC WHERE table_id = $1 AND LOWER(player_address) = LOWER($3)`, [tableId, (5000n * CHIP_SCALE).toString(), PLAYER_2]);
+        await setup_1.testPool.query(`UPDATE poker_seats SET stack = $2::NUMERIC WHERE table_id = $1 AND LOWER(player_address) = LOWER($3)`, [tableId, '5000', PLAYER_2]);
         await pokerTournamentService.syncAfterHand(tableId, 1);
         const tblGone = await setup_1.testPool.query(`SELECT 1 FROM poker_tables WHERE id = $1`, [tableId]);
         expect(tblGone.rows.length).toBe(0);

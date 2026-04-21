@@ -2033,6 +2033,112 @@ export class PokerGameService {
       if (hand.acting_position != null) {
         (table as any).currentPosition = Number(hand.acting_position);
       }
+
+      // Recompute lastPosition from DB so action rotation ends correctly.
+      // lastPosition = the seat position of the last player who must act before the
+      // round closes (the player just before the last bettor/raiser, clockwise).
+      // Without this, the stale lastPosition from a partial replay would cause seats
+      // to be skipped or the same seat to act twice.
+      {
+        const maxSeatsForLastPos = Number(tbl.max_seats) || 6;
+        const dealerPosForLastPos = Number(hand.button_position);
+
+        // Find the last bet/raise in the current street
+        const lastAggressorResult = await pool.query(
+          `SELECT player_address FROM poker_hand_actions
+           WHERE hand_id = $1 AND street = $2 AND action IN ('bet','raise')
+           ORDER BY "order" DESC LIMIT 1`,
+          [hand.id, dbStreet]
+        );
+
+        // Build a seat-position map from the dealt players
+        const addrToPos = new Map<string, number>();
+        for (const seat of seatsResult.rows) {
+          if (seat.player_address) {
+            addrToPos.set((seat.player_address as string).toLowerCase(), Number(seat.position));
+          }
+        }
+
+        // Determine which positions are still active (not folded) in this hand
+        const foldedInHand = new Set<string>();
+        for (const row of actionsResult.rows) {
+          if (row.action === 'fold') foldedInHand.add((row.player_address || '').toLowerCase());
+        }
+
+        // All dealt, non-folded seat positions
+        const activeSeatPositions: number[] = [];
+        for (const seat of seatsResult.rows) {
+          if (!seat.player_address) continue;
+          const addr = (seat.player_address as string).toLowerCase();
+          if (!dealtAddrs.has(addr)) continue;
+          if (foldedInHand.has(addr)) continue;
+          activeSeatPositions.push(Number(seat.position));
+        }
+        activeSeatPositions.sort((a, b) => a - b);
+
+        // All dealt seat positions (including folded) — needed to reconstruct SB/BB positions
+        const dealtSeatPositions: number[] = [];
+        for (const seat of seatsResult.rows) {
+          if (!seat.player_address) continue;
+          const addr = (seat.player_address as string).toLowerCase();
+          if (dealtAddrs.has(addr)) dealtSeatPositions.push(Number(seat.position));
+        }
+        dealtSeatPositions.sort((a, b) => a - b);
+
+        // Derive SB and BB positions from button using the full dealt-seat list
+        const dealtList = dealtSeatPositions.length > 0 ? dealtSeatPositions : [dealerPosForLastPos];
+        const sbPos = this.nextSeatPosition(dealerPosForLastPos, dealtList, maxSeatsForLastPos);
+        const bbPos = this.nextSeatPosition(sbPos, dealtList, maxSeatsForLastPos);
+
+        // Default lastPosition: postflop = dealer; preflop = BB (action ends when BB acts last)
+        const isPreflop = dbStreet === 'preflop';
+        let computedLastPos: number = isPreflop ? bbPos : dealerPosForLastPos;
+
+        if (lastAggressorResult.rows.length > 0) {
+          // lastPosition = seat just before the last aggressor (clockwise), among active seats
+          const aggressorAddr = (lastAggressorResult.rows[0].player_address || '').toLowerCase();
+          const aggressorPos = addrToPos.get(aggressorAddr);
+          if (aggressorPos != null && activeSeatPositions.length > 0) {
+            // Walk backward from aggressorPos - 1 to find the last active seat before the aggressor
+            for (let i = 1; i <= maxSeatsForLastPos; i++) {
+              const candidate = ((aggressorPos - i) + maxSeatsForLastPos) % maxSeatsForLastPos;
+              if (activeSeatPositions.includes(candidate)) {
+                computedLastPos = candidate;
+                break;
+              }
+            }
+          }
+        } else if (activeSeatPositions.length > 0 && !isPreflop) {
+          // No aggressor postflop — last to act is the dealer (or first active seat at/before dealer)
+          for (let i = 0; i <= maxSeatsForLastPos; i++) {
+            const candidate = ((dealerPosForLastPos - i) + maxSeatsForLastPos) % maxSeatsForLastPos;
+            if (activeSeatPositions.includes(candidate)) {
+              computedLastPos = candidate;
+              break;
+            }
+          }
+        }
+        // Preflop no-aggressor case: computedLastPos is already bbPos (set above)
+
+        (table as any).lastPosition = computedLastPos;
+
+        // Clear stale per-player raise flags from prior streets so actingPlayers is correct
+        for (const p of table.players) {
+          if (p) delete (p as any).raise;
+        }
+
+        // Re-apply raise flag only for the last aggressor on the current street (if they've matched
+        // current bet), so actingPlayers correctly excludes them from acting again this street.
+        if (lastAggressorResult.rows.length > 0 && maxContrib > 0) {
+          const aggressorAddr = (lastAggressorResult.rows[0].player_address || '').toLowerCase();
+          const aggressorPlayer = table.players.find((pl) => pl?.id === aggressorAddr);
+          if (aggressorPlayer && aggressorPlayer.bet >= maxContrib) {
+            // Mark as raiser so actingPlayers excludes them (they opened/re-raised and don't
+            // get to act again unless someone re-raises them)
+            (aggressorPlayer as any).raise = aggressorPlayer.bet;
+          }
+        }
+      }
     }
 
     return table;

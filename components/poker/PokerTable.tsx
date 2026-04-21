@@ -8,8 +8,6 @@ import { PokerSeat, PokerChipStack } from './PokerSeat';
 import { PokerBoard } from './PokerBoard';
 import { CardDisplay } from './CardDisplay';
 import type { PokerTableState as TableState } from '@/lib/websocket-client';
-import { PokerTournamentHUD } from './tournament/PokerTournamentHUD';
-import type { PokerTournamentState } from '@/hooks/use-poker-tournament';
 import { BackgroundBeams, type BeamColorPalette } from '@/components/ui/background-beams';
 import { usePokerTableEffect } from '@/hooks/use-poker-table-effect';
 import { PokerWinnerNotificationCard } from './PokerWinnerNotificationCard';
@@ -119,11 +117,6 @@ export interface PokerTableProps {
   onOpponentClick?: (address: string) => void;
   /** Right-click radial on opponent (profile / follow / gift). */
   onOpponentRadialAction?: (action: 'profile' | 'follow' | 'gift', address: string) => void;
-  /** When set, renders the tournament HUD overlay in the top-left corner. */
-  tournamentHUD?: {
-    state: PokerTournamentState;
-    myAddress: string;
-  };
   /** QuickChat phrase list (from useQuickChatPhrases). When provided with setQuickChatPhrases and onOpenEditQuickChat, Edit QuickChat can be opened from header Settings. */
   quickChatPhrases?: string[];
   setQuickChatPhrases?: (phrases: string[]) => void;
@@ -141,7 +134,7 @@ export interface PokerTableProps {
   dataTutorialTargetPot?: boolean;
 }
 
-export function PokerTable({ state, currentPlayerAddress, timeLeft, chatBubbleBySeatIndex, onReUpClick, onMenuClick, reactionBySeatIndex, broadcastEmotionBySeatIndex, onPhraseReaction, onAnimationReaction, onOpponentClick, onOpponentRadialAction, tournamentHUD, quickChatPhrases, setQuickChatPhrases, onOpenEditQuickChat, onLeave, onRequestMobileActivity, onSitOut, onSitBack, tutorialTargets, dataTutorialTargetPot }: PokerTableProps) {
+export function PokerTable({ state, currentPlayerAddress, timeLeft, chatBubbleBySeatIndex, onReUpClick, onMenuClick, reactionBySeatIndex, broadcastEmotionBySeatIndex, onPhraseReaction, onAnimationReaction, onOpponentClick, onOpponentRadialAction, quickChatPhrases, setQuickChatPhrases, onOpenEditQuickChat, onLeave, onRequestMobileActivity, onSitOut, onSitBack, tutorialTargets, dataTutorialTargetPot }: PokerTableProps) {
   const tableRef = useRef<HTMLDivElement>(null);
   const [dims, setDims] = useState({ w: 640, h: 500 });
   const hideSeatAvatars = false;
@@ -467,14 +460,6 @@ export function PokerTable({ state, currentPlayerAddress, timeLeft, chatBubbleBy
       style={{ overflow: 'visible' }}
       {...(tutorialTargets ? { 'data-tutorial-target': 'table' } : {})}
     >
-
-      {/* Tournament HUD overlay */}
-      {tournamentHUD && (
-        <PokerTournamentHUD
-          state={tournamentHUD.state}
-          myAddress={tournamentHUD.myAddress}
-        />
-      )}
 
       {/* CSS poker table — padding-based rings so every ring is equal pixel thickness all around */}
       <div
