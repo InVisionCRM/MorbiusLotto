@@ -17,7 +17,7 @@ Organized index of poker-related files plus current UI behavior notes for table/
 
 | File | Purpose |
 | ---- | ------- |
-| `PokerTable.tsx` | Main table container: computed seat anchors, board, pot, fold-to-center animation, sticky seat actions, showdown winner banner + chips slide. |
+| `PokerTable.tsx` | Main table container: authored `SEAT_ANCHOR_RING` (10-max) + ring mapping for fewer seats, board, pot, fold-to-center animation, sticky seat actions, showdown winner banner + chips slide. |
 | `PokerSeat.tsx` | Single seat: avatar, stack badge, acting timer ring, hole cards/card backs, role crescent (DEALER/SB/BB), winner crescent at showdown. |
 | `PokerBoard.tsx` | Community cards and pot display (flop/turn/river + pot amount). |
 | `PokerActions.tsx` | Action bar: fold / check / call / bet / raise with amount input; min-raise and to-call from server. |
@@ -36,6 +36,7 @@ Organized index of poker-related files plus current UI behavior notes for table/
   - `S0` = hero/bottom center
   - `S1..S(n-1)` continue clockwise
   - Seats also expose `data-seat-slot` and `data-seat-position` in DOM for debugging.
+- **Seat geometry**: Base positions are the `SEAT_ANCHOR_RING` constants in `PokerTable.tsx` (normalized `fx`/`fy`). Sub-10 tables map display slots evenly onto that 10-point ring. `S1` and `S(n-1)` use the same rendered vertical center as `S0` (after pixel nudges). Tuning: edit the ring and/or `SEAT_POSITION_NUDGE_PX` / `getSeatNudgePx`.
 - **Role indicators** (`DEALER`, `SB`, `BB`): rendered as opaque inset crescents inside avatar circles (`PokerSeat.tsx`).
 - **Winner indicator**: winner crescent appears only at resolved showdown (`street === showdown` and winners present), including split pots.
 - **Action persistence**: seat action labels persist until that same seat acts again (sticky per-seat action state in `PokerTable.tsx`).
@@ -45,7 +46,7 @@ Organized index of poker-related files plus current UI behavior notes for table/
   - **Showdown badges**: all revealed players show their final hand name at showdown. Winners use the server-provided `handName`; non-winners are evaluated client-side.
 - **Winner confetti**: gold/white confetti fires via `canvas-confetti` (direct call, not the `Confetti` component) when the current player wins at showdown. Two staggered bursts at z-index 200.
 - **Winner notification card**: 3-column header (amount won with Morbius logo | WINNER + name | Hand Rank label). Bottom section shows cards and a 15-second animated countdown bar to next hand. Sized at `min(60vw, 480px)` so player seats remain visible.
-- **Landscape mobile**: supported via CSS-only overrides in `globals.css` (scoped to `@media (orientation: landscape)`). Header compresses, bottom bar collapses, seat anchors adapt to aspect ratio. Do NOT add JS-based orientation logic — see safety comments in the source files.
+- **Landscape mobile**: supported via CSS-only overrides in `globals.css` (scoped to `@media (orientation: landscape)`). Header compresses, bottom bar collapses. Seat **fractions** are aspect-agnostic; pixel nudges scale with table width (`seatNudgeScale` in `PokerTable.tsx`). Do NOT add JS-based orientation logic — see safety comments in the source files.
 
 ## Frontend — Shared / home (poker-related)
 

@@ -7,6 +7,8 @@ import { IconMenu2, IconX } from "@tabler/icons-react";
 
 const DESKTOP_SIDEBAR_PIN_STORAGE_KEY = "global-main-nav-desktop-pinned";
 
+export type DesktopRailSide = "left" | "right";
+
 interface Links {
   label: string;
   href: string;
@@ -22,6 +24,10 @@ interface SidebarContextProps {
   /** Rendered in the mobile drawer under the MORBIUS.IO brand row (e.g. reserve balance). */
   mobileDrawerBrandingExtra?: React.ReactNode;
   disabled?: boolean;
+  /** localStorage key for desktop pin (default: main nav). Use a unique key per rail on one page. */
+  pinStorageKey: string;
+  /** Collapsed rail attaches to this side of the viewport (rounding + pin button placement). */
+  desktopRailSide: DesktopRailSide;
 }
 
 const SidebarContext = createContext<SidebarContextProps | undefined>(
@@ -36,6 +42,10 @@ export const useSidebar = () => {
   return context;
 };
 
+/** Same as useSidebar but returns undefined outside a SidebarProvider (e.g. optional rail layouts). */
+export const useSidebarOptional = (): SidebarContextProps | undefined =>
+  useContext(SidebarContext);
+
 export const SidebarProvider = ({
   children,
   open: openProp,
@@ -45,6 +55,8 @@ export const SidebarProvider = ({
   mobileBarCenterContent,
   mobileDrawerBrandingExtra,
   disabled = false,
+  pinStorageKey = DESKTOP_SIDEBAR_PIN_STORAGE_KEY,
+  desktopRailSide = "left",
 }: {
   children: React.ReactNode;
   open?: boolean;
@@ -54,6 +66,8 @@ export const SidebarProvider = ({
   mobileBarCenterContent?: React.ReactNode;
   mobileDrawerBrandingExtra?: React.ReactNode;
   disabled?: boolean;
+  pinStorageKey?: string;
+  desktopRailSide?: DesktopRailSide;
 }) => {
   const [openState, setOpenState] = useState(false);
 
@@ -76,6 +90,8 @@ export const SidebarProvider = ({
         mobileBarCenterContent,
         mobileDrawerBrandingExtra,
         disabled,
+        pinStorageKey,
+        desktopRailSide,
       }}
     >
       {children}
@@ -92,6 +108,8 @@ export const Sidebar = ({
   mobileBarCenterContent,
   mobileDrawerBrandingExtra,
   disabled,
+  pinStorageKey,
+  desktopRailSide,
 }: {
   children: React.ReactNode;
   open?: boolean;
@@ -101,6 +119,8 @@ export const Sidebar = ({
   mobileBarCenterContent?: React.ReactNode;
   mobileDrawerBrandingExtra?: React.ReactNode;
   disabled?: boolean;
+  pinStorageKey?: string;
+  desktopRailSide?: DesktopRailSide;
 }) => {
   return (
     <SidebarProvider
@@ -111,17 +131,22 @@ export const Sidebar = ({
       mobileBarCenterContent={mobileBarCenterContent}
       mobileDrawerBrandingExtra={mobileDrawerBrandingExtra}
       disabled={disabled}
+      pinStorageKey={pinStorageKey}
+      desktopRailSide={desktopRailSide}
     >
       {children}
     </SidebarProvider>
   );
 };
 
-export const SidebarBody = (props: React.ComponentProps<"div">) => {
+export const SidebarBody = ({
+  desktopOnly = false,
+  ...props
+}: React.ComponentProps<"div"> & { desktopOnly?: boolean }) => {
   return (
     <>
       <DesktopSidebar {...props} />
-      <MobileSidebar {...props} />
+      {!desktopOnly ? <MobileSidebar {...props} /> : null}
     </>
   );
 };
@@ -131,7 +156,7 @@ export const DesktopSidebar = ({
   children,
   style,
 }: React.ComponentProps<"div">) => {
-  const { open, setOpen, animate, disabled } = useSidebar();
+  const { open, setOpen, animate, disabled, pinStorageKey, desktopRailSide } = useSidebar();
   const [pinned, setPinned] = useState(false);
   const [pinPreferenceLoaded, setPinPreferenceLoaded] = useState(false);
   const openTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -189,7 +214,7 @@ export const DesktopSidebar = ({
 
   useEffect(() => {
     try {
-      const raw = window.localStorage.getItem(DESKTOP_SIDEBAR_PIN_STORAGE_KEY);
+      const raw = window.localStorage.getItem(pinStorageKey);
       const persistedPinned = raw === "1";
       setPinned(persistedPinned);
       setOpen(persistedPinned);
@@ -198,21 +223,23 @@ export const DesktopSidebar = ({
     } finally {
       setPinPreferenceLoaded(true);
     }
-  }, [setOpen]);
+  }, [setOpen, pinStorageKey]);
 
   useEffect(() => {
     if (!pinPreferenceLoaded) return;
     try {
-      window.localStorage.setItem(DESKTOP_SIDEBAR_PIN_STORAGE_KEY, pinned ? "1" : "0");
+      window.localStorage.setItem(pinStorageKey, pinned ? "1" : "0");
     } catch {
       // Ignore storage write failures.
     }
-  }, [pinned, pinPreferenceLoaded]);
+  }, [pinned, pinPreferenceLoaded, pinStorageKey]);
 
   useEffect(() => {
     if (!disabled) return;
     setPinned(false);
   }, [disabled]);
+
+  const isRight = desktopRailSide === "right";
 
   return (
     <>
@@ -220,7 +247,8 @@ export const DesktopSidebar = ({
         className={cn(
           // z-20: sit above page-level fixed full-viewport layers (e.g. home bg) that share the viewport
           // sticky top-0 + h-screen so the sidebar stays pinned on long pages (e.g. hero scroll-scrub)
-          "h-screen px-3 py-4 hidden md:flex md:flex-col shrink-0 overflow-hidden rounded-r-xl sticky top-0 z-20",
+          "h-screen px-3 py-4 hidden md:flex md:flex-col shrink-0 overflow-hidden sticky top-0 z-20",
+          isRight ? "rounded-l-xl" : "rounded-r-xl",
           className
         )}
         style={{
@@ -228,6 +256,7 @@ export const DesktopSidebar = ({
           ...(style as React.CSSProperties),
         }}
         data-sidebar-open={open}
+        data-desktop-rail-side={desktopRailSide}
         onMouseEnter={handleMouseEnter}
         onMouseLeave={handleMouseLeave}
       >
@@ -235,7 +264,8 @@ export const DesktopSidebar = ({
           type="button"
           onClick={handleTogglePinned}
           className={cn(
-            "absolute right-2 top-2 z-30 h-7 rounded-md px-2 text-[10px] font-semibold tracking-wide border",
+            "absolute top-2 z-30 h-7 rounded-md px-2 text-[10px] font-semibold tracking-wide border",
+            isRight ? "left-2" : "right-2",
             "transition-colors",
             pinned
               ? "text-cyan-300 border-cyan-400/60 bg-cyan-500/15"

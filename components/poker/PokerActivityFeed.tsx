@@ -1,11 +1,13 @@
 'use client';
 
 import { useState, useEffect, useRef, useCallback, type CSSProperties } from 'react';
+import { createPortal } from 'react-dom';
 import { formatChips } from '@/lib/format-poker-chips';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useChat } from '@/hooks/use-chat';
 import type { BlackjackWebSocketClient, PokerTableState } from '@/lib/websocket-client';
 import { POKER_FACTS } from '@/app/poker/poker-facts';
+import { useSidebarOptional } from '@/components/ui/sidebar';
 
 // ── Types ──────────────────────────────────────────────────────────────────
 
@@ -60,15 +62,19 @@ type Entry = ChatEntry | ActionEntry | ReactionEntry | DividerEntry | ShowdownEn
 const MAX_ENTRIES = 50;
 const CHAT_MAX_LEN = 150;
 
+/** Action line colors aligned with `PokerTournamentHUD` (muted labels, white body, green/red accents). */
 const ACTION_COLORS: Record<string, string> = {
-  fold:     'rgba(239,68,68,0.9)',
-  check:    'rgba(156,163,175,0.85)',
-  call:     'rgba(74,222,128,0.9)',
-  bet:      'rgba(251,191,36,0.9)',
-  raise:    'rgba(251,146,60,0.9)',
-  'all-in': 'rgba(248,113,113,1)',
-  allin:    'rgba(248,113,113,1)',
+  fold:     'rgba(239,68,68,0.95)',
+  check:    'rgba(255,255,255,0.55)',
+  call:     'rgba(52,211,153,0.95)',
+  bet:      'rgba(255,255,255,0.9)',
+  raise:    'rgba(255,255,255,0.92)',
+  'all-in': 'rgba(220,38,38,0.98)',
+  allin:    'rgba(220,38,38,0.98)',
 };
+
+type FeedBurst = { id: string; text: string; tone: 'red' | 'black' };
+const BURST_MS = 1200;
 
 const ACTION_LABELS: Record<string, string> = {
   fold: 'folded', check: 'checked', call: 'called',
@@ -120,7 +126,7 @@ function TinyCard({ idx }: { idx: number }) {
   const suit = CARD_SUITS[suitIdx];
   const color = SUIT_COLORS[suitIdx];
   return (
-    <span className="font-mono font-bold text-[11px]" style={{ color }}>
+    <span className="font-jost font-bold tabular-nums text-[11px]" style={{ color }}>
       {rank}{suit}
     </span>
   );
@@ -128,19 +134,30 @@ function TinyCard({ idx }: { idx: number }) {
 
 // ── Component ──────────────────────────────────────────────────────────────
 
+export type PokerActivityFeedLayout = 'fixed' | 'embedded-bottom' | 'right-rail';
+
 export interface PokerActivityFeedProps {
   wsClient: BlackjackWebSocketClient | null;
   wsConnected: boolean;
   roomId: string;
   tableId: string;
   state: PokerTableState | null;
-  /** When true, desktop panel is in-flow (no fixed) so it can sit in a grid column */
-  embedInLayout?: boolean;
+  /**
+   * Desktop placement: fixed corner, embedded bottom grid, or collapsible right rail (must be wrapped in `Sidebar` + `SidebarBody`).
+   * @default 'fixed'
+   */
+  layout?: PokerActivityFeedLayout;
   /**
    * Increment (e.g. `n => n + 1` from parent) to open the mobile Activity drawer programmatically.
    * Used by the poker seat player radial on narrow viewports.
    */
   mobileOpenRequestSerial?: number;
+  /** QuickChat phrase chips (table page); same handler as seat radial — broadcasts phrase + head bubble. */
+  quickChatPhrases?: string[];
+  onQuickChatPhrase?: (phrase: string) => void;
+  onOpenEditQuickChat?: () => void;
+  /** When false, QuickChat strip is hidden (e.g. not seated). */
+  quickChatEligible?: boolean;
 }
 
 /** Desktop fixed panel heights: expanded vs collapsed (expanded cap is half of prior max). */
@@ -149,16 +166,61 @@ const DESKTOP_ACTIVITY_HEIGHT_COLLAPSED = 'min(180px, calc((100dvh - 112px) * 0.
 const POKER_AFK_TIMEOUTS_BEFORE_KICK = 6;
 
 export function PokerActivityFeed({
-  wsClient, wsConnected, roomId, tableId, state, embedInLayout = false,
+  wsClient,
+  wsConnected,
+  roomId,
+  tableId,
+  state,
+  layout = 'fixed',
   mobileOpenRequestSerial = 0,
+  quickChatPhrases,
+  onQuickChatPhrase,
+  onOpenEditQuickChat,
+  quickChatEligible = false,
 }: PokerActivityFeedProps) {
+  const sidebarOpt = useSidebarOptional();
+  const railOpen = layout === 'right-rail' ? Boolean(sidebarOpt?.open) : true;
+
   const { messages, sendMessage, connected } = useChat(roomId, { wsClient, wsConnected });
 
   const [entries, setEntries] = useState<Entry[]>([]);
   const [input, setInput] = useState('');
   const [expanded, setExpanded] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
+  const [docMounted, setDocMounted] = useState(false);
   const lastMobileOpenRequestRef = useRef(0);
+
+  const [activeBurst, setActiveBurst] = useState<FeedBurst | null>(null);
+  const burstQueueRef = useRef<FeedBurst[]>([]);
+  const burstPlayingRef = useRef(false);
+  const prevFeedLastIdRef = useRef<string | null>(null);
+
+  const drainBurstQueue = useCallback(() => {
+    if (burstPlayingRef.current) return;
+    const next = burstQueueRef.current.shift();
+    if (!next) return;
+    burstPlayingRef.current = true;
+    setActiveBurst(next);
+    setTimeout(() => {
+      burstPlayingRef.current = false;
+      setActiveBurst(null);
+      if (burstQueueRef.current.length > 0) {
+        setTimeout(drainBurstQueue, 80);
+      }
+    }, BURST_MS);
+  }, []);
+
+  const enqueueBursts = useCallback(
+    (items: FeedBurst[]) => {
+      burstQueueRef.current.push(...items);
+      drainBurstQueue();
+    },
+    [drainBurstQueue],
+  );
+
+  useEffect(() => {
+    setDocMounted(true);
+  }, []);
 
   useEffect(() => {
     if (mobileOpenRequestSerial <= lastMobileOpenRequestRef.current) return;
@@ -185,7 +247,37 @@ export function PokerActivityFeed({
     welcomeSentRef.current = false;
     factUsedIndicesRef.current.clear();
     prevSeatSnapshotRef.current = null;
+    prevFeedLastIdRef.current = null;
+    burstQueueRef.current = [];
+    burstPlayingRef.current = false;
+    setActiveBurst(null);
   }, [roomId]);
+
+  // Tournament HUD–style full-panel bursts for high-salience feed moments.
+  useEffect(() => {
+    if (entries.length === 0) return;
+    const last = entries[entries.length - 1];
+    if (prevFeedLastIdRef.current === last.id) return;
+    prevFeedLastIdRef.current = last.id;
+
+    if (last.kind === 'showdown') {
+      enqueueBursts([
+        {
+          id: `burst-sd-${last.id}`,
+          text: last.handName ? 'SHOWDOWN' : 'FOLD WIN',
+          tone: 'black',
+        },
+      ]);
+      return;
+    }
+    if (last.kind === 'action' && (last.action === 'all-in' || last.action === 'allin')) {
+      enqueueBursts([{ id: `burst-ai-${last.id}`, text: 'ALL IN', tone: 'red' }]);
+      return;
+    }
+    if (last.kind === 'system' && last.type === 'idle_warning') {
+      enqueueBursts([{ id: `burst-idle-${last.id}`, text: 'IDLE WARNING', tone: 'red' }]);
+    }
+  }, [entries, enqueueBursts]);
 
   // ── System feed messages: welcome + periodic FactBot ─────────────────────
   useEffect(() => {
@@ -467,52 +559,59 @@ export function PokerActivityFeed({
     if (t && connected) { sendMessage(t); setInput(''); }
   }, [input, connected, sendMessage]);
 
-  // ── Entry renderer ────────────────────────────────────────────────────────
+  // ── Entry renderer (typography + muted hierarchy aligned with `PokerTournamentHUD`) ──
   function renderEntry(entry: Entry) {
+    const lineBase = 'font-jost-normal px-2.5 py-[3px] text-[10px] md:text-[11px] leading-snug';
     if (entry.kind === 'system') {
       const isWelcome = entry.type === 'welcome';
       const isFact = entry.type === 'factbot';
       const isPlayerEvent = entry.type === 'player_event';
+      const isIdle = entry.type === 'idle_warning';
+      const labelColor = isWelcome
+        ? 'rgba(255,255,255,0.45)'
+        : isFact
+          ? 'rgba(52,211,153,0.85)'
+          : isPlayerEvent
+            ? 'rgba(255,255,255,0.45)'
+            : isIdle
+              ? 'rgba(255,255,255,0.45)'
+              : 'rgba(255,255,255,0.45)';
+      const bodyColor = isWelcome
+        ? 'rgba(255,255,255,0.85)'
+        : isFact
+          ? 'rgba(255,255,255,0.78)'
+          : isPlayerEvent
+            ? 'rgba(255,255,255,0.78)'
+            : isIdle
+              ? 'rgba(255,255,255,0.82)'
+              : 'rgba(255,255,255,0.78)';
       return (
         <div
           key={entry.id}
-          className="px-2.5 py-1 text-[10px] md:text-[11px] leading-snug whitespace-pre-line"
-          style={{
-            color: isWelcome
-              ? 'rgba(255,255,255,0.85)'
-              : isFact
-                ? 'rgba(52,211,153,0.9)'
-                : isPlayerEvent
-                  ? 'rgba(56,189,248,0.92)'
-                  : 'rgba(251,146,60,0.92)',
-          }}
+          className={`${lineBase} whitespace-pre-line`}
+          style={{ color: bodyColor }}
         >
           <span
-            className="font-semibold"
-            style={{
-              color: isWelcome
-                ? 'rgba(255,255,255,1)'
-                : isFact
-                  ? 'rgba(52,211,153,1)'
-                  : isPlayerEvent
-                    ? 'rgba(34,211,238,1)'
-                    : 'rgba(251,146,60,1)',
-            }}
+            className="font-jost-normal text-[9px] uppercase tracking-[0.14em]"
+            style={{ color: labelColor }}
           >
-            {isWelcome ? 'Morbius: ' : isFact ? 'FactBot: ' : entry.type === 'player_event' ? 'Table: ' : 'System: '}
+            {isWelcome ? 'Morbius ' : isFact ? 'FactBot ' : entry.type === 'player_event' ? 'Table ' : 'System '}
           </span>
-          {entry.text}
+          <span className="font-jost-normal tracking-wide">{entry.text}</span>
         </div>
       );
     }
     if (entry.kind === 'divider') {
       return (
-        <div key={entry.id} className="flex items-center gap-1 py-0.5 mx-2 select-none">
-          <div className="flex-1 border-t" style={{ borderColor: 'rgba(255,255,255,0.07)' }} />
-          <span className="text-[9px] uppercase tracking-wider px-1" style={{ color: 'rgba(255,255,255,0.2)' }}>
+        <div key={entry.id} className="flex items-center gap-1 py-1 mx-2 select-none">
+          <div className="flex-1 h-px" style={{ background: 'rgba(255,255,255,0.07)' }} />
+          <span
+            className="font-jost-normal text-[9px] uppercase tracking-[0.18em] px-1"
+            style={{ color: 'rgba(255,255,255,0.45)' }}
+          >
             New Hand
           </span>
-          <div className="flex-1 border-t" style={{ borderColor: 'rgba(255,255,255,0.07)' }} />
+          <div className="flex-1 h-px" style={{ background: 'rgba(255,255,255,0.07)' }} />
         </div>
       );
     }
@@ -523,35 +622,56 @@ export function PokerActivityFeed({
         <div
           key={entry.id}
           className="mx-1.5 my-1 px-2 py-1.5 rounded"
-          style={{ background: 'rgba(34,197,94,0.08)', border: '1px solid rgba(34,197,94,0.2)' }}
+          style={{
+            background: 'rgba(255,255,255,0.04)',
+            border: '1px solid rgba(255,255,255,0.08)',
+          }}
         >
-          {/* Winner line */}
-          <div className="flex items-center gap-1 text-[10px] md:text-[11px]">
-            <span style={{ color: 'rgba(34,197,94,0.9)' }}>🏆</span>
-            <span className="font-mono" style={{ color: 'rgba(255,255,255,0.7)' }}>{name}</span>
-            <span style={{ color: 'rgba(34,197,94,0.9)' }}>won</span>
-            {amt && <span className="font-semibold" style={{ color: 'rgba(34,197,94,0.9)' }}>{amt}</span>}
+          <div className="flex flex-wrap items-center gap-1 text-[10px] md:text-[11px]">
+            <span className="font-jost-normal" style={{ color: 'rgba(52,211,153,0.95)' }}>
+              🏆
+            </span>
+            <span className="font-jost-normal truncate min-w-0" style={{ color: 'rgba(255,255,255,0.75)' }}>
+              {name}
+            </span>
+            <span className="font-jost-normal" style={{ color: 'rgba(52,211,153,0.9)' }}>
+              won
+            </span>
+            {amt ? (
+              <span className="font-jost tabular-nums shrink-0" style={{ color: 'rgba(255,255,255,0.98)' }}>
+                {amt}
+              </span>
+            ) : null}
           </div>
-          {/* Cards — only shown for real showdown, not fold wins */}
           {entry.communityCards && entry.communityCards.length > 0 && (
             <div className="mt-1.5 flex flex-col gap-1">
               <div className="flex items-center gap-1 flex-wrap">
-                <span className="text-[9px] uppercase tracking-wider" style={{ color: 'rgba(255,255,255,0.25)' }}>Board</span>
+                <span
+                  className="font-jost-normal text-[9px] uppercase tracking-[0.18em]"
+                  style={{ color: 'rgba(255,255,255,0.45)' }}
+                >
+                  Board
+                </span>
                 <div className="flex gap-0.5">
                   {entry.communityCards.map((c, i) => <TinyCard key={i} idx={c} />)}
                 </div>
               </div>
               {entry.holeCards && entry.holeCards.length >= 2 && (
                 <div className="flex items-center gap-1 flex-wrap">
-                  <span className="text-[9px] uppercase tracking-wider" style={{ color: 'rgba(255,255,255,0.25)' }}>Hand</span>
+                  <span
+                    className="font-jost-normal text-[9px] uppercase tracking-[0.18em]"
+                    style={{ color: 'rgba(255,255,255,0.45)' }}
+                  >
+                    Hand
+                  </span>
                   <div className="flex gap-0.5">
                     {entry.holeCards.map((c, i) => <TinyCard key={i} idx={c} />)}
                   </div>
-                  {entry.handName && (
-                    <span className="text-[9px] italic" style={{ color: 'rgba(251,191,36,0.85)' }}>
+                  {entry.handName ? (
+                    <span className="font-jost-normal text-[9px] italic tracking-wide" style={{ color: 'rgba(255,255,255,0.55)' }}>
                       {entry.handName}
                     </span>
-                  )}
+                  ) : null}
                 </div>
               )}
             </div>
@@ -565,38 +685,89 @@ export function PokerActivityFeed({
       const name = displayPlayerName(entry.displayName, entry.playerAddr) || seatLabel(entry.seatIndex, state);
       const amtStr = entry.amount ? fmtChips(entry.amount) : '';
       return (
-        <div key={entry.id} className="flex items-baseline gap-1 px-2.5 py-[2px] text-[10px] md:text-[11px] leading-snug">
-          <span className="font-mono shrink-0" style={{ color: 'rgba(255,255,255,0.5)' }}>{name}</span>
-          <span className="shrink-0 font-medium" style={{ color }}>{label}</span>
-          {amtStr && (
-            <span className="shrink-0" style={{ color: 'rgba(255,255,255,0.4)' }}>{amtStr}</span>
-          )}
+        <div key={entry.id} className={`${lineBase} flex items-baseline gap-1`}>
+          <span className="font-jost-normal shrink-0 min-w-0 truncate max-w-[42%]" style={{ color: 'rgba(255,255,255,0.45)' }}>
+            {name}
+          </span>
+          <span className="font-jost shrink-0" style={{ color }}>
+            {label}
+          </span>
+          {amtStr ? (
+            <span className="font-jost tabular-nums shrink-0" style={{ color: 'rgba(255,255,255,0.5)' }}>
+              {amtStr}
+            </span>
+          ) : null}
         </div>
       );
     }
     if (entry.kind === 'reaction') {
       const name = seatLabel(entry.seatIndex, state);
       return (
-        <div key={entry.id} className="flex items-baseline gap-1 px-2.5 py-[2px] text-[10px] md:text-[11px] leading-snug">
-          <span className="font-mono shrink-0" style={{ color: 'rgba(255,255,255,0.5)' }}>{name}</span>
-          <span style={{ color: 'rgba(255,255,255,0.75)' }}>{entry.value}</span>
+        <div key={entry.id} className={`${lineBase} flex items-baseline gap-1`}>
+          <span className="font-jost-normal shrink-0" style={{ color: 'rgba(255,255,255,0.45)' }}>
+            {name}
+          </span>
+          <span className="font-jost-normal" style={{ color: 'rgba(255,255,255,0.78)' }}>
+            {entry.value}
+          </span>
         </div>
       );
     }
-    // chat
     const name = entry.displayName?.trim() || shortAddr(entry.sender);
     return (
-      <div key={entry.id} className="px-2.5 py-[2px] text-[10px] md:text-[11px] leading-snug">
-        <span className="font-medium" style={{ color: 'rgba(34,211,238,0.8)' }}>{name}: </span>
-        <span className="break-words" style={{ color: 'rgba(255,255,255,0.8)' }}>{entry.text}</span>
+      <div key={entry.id} className={`${lineBase}`}>
+        <span className="font-jost-normal" style={{ color: 'rgba(255,255,255,0.55)' }}>
+          {name}:{' '}
+        </span>
+        <span className="font-jost-normal break-words" style={{ color: 'rgba(255,255,255,0.85)' }}>
+          {entry.text}
+        </span>
       </div>
     );
   }
 
-  // ── Shared panel content ──────────────────────────────────────────────────
-  const panelContent = (
-    <div className="flex flex-col h-full min-h-0" style={{ fontFamily: '"Russo One", sans-serif' }}>
-      {/* Header */}
+  const burstFontSize =
+    layout === 'right-rail' ? (railOpen ? 28 : 15) : expanded ? 26 : 19;
+
+  const burstOverlay = (
+    <AnimatePresence>
+      {activeBurst && (
+        <motion.div
+          key={activeBurst.id}
+          className="absolute inset-0 z-40 flex items-center justify-center"
+          style={{
+            background: activeBurst.tone === 'red' ? 'rgba(220,38,38,0.98)' : 'rgba(0,0,0,0.96)',
+            color: '#ffffff',
+          }}
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          exit={{ opacity: 0 }}
+          transition={{ duration: 0.15 }}
+        >
+          <motion.span
+            className="font-jost text-center px-3 select-none"
+            style={{
+              letterSpacing: '-0.01em',
+              fontSize: burstFontSize,
+              lineHeight: 1,
+              whiteSpace: 'nowrap',
+              color: '#ffffff',
+            }}
+            initial={{ scale: 0.92, y: 6 }}
+            animate={{ scale: 1, y: 0 }}
+            exit={{ scale: 0.98 }}
+            transition={{ type: 'spring', stiffness: 380, damping: 26 }}
+          >
+            {activeBurst.text}
+          </motion.span>
+        </motion.div>
+      )}
+    </AnimatePresence>
+  );
+
+  // ── Shared panel content (Jost + dividers like `PokerTournamentHUD` expanded panel) ──
+  const renderPanelContent = (opts: { showDesktopHeightToggle: boolean; showMobileClose: boolean }) => (
+    <div className="relative flex flex-col h-full min-h-0 select-none">
       <div
         className="flex items-center justify-between px-2.5 shrink-0"
         style={{
@@ -605,48 +776,100 @@ export function PokerActivityFeed({
           borderBottom: '1px solid rgba(255,255,255,0.07)',
         }}
       >
-        <span className="text-[9px] font-bold uppercase tracking-widest" style={{ color: 'rgba(255,255,255,0.4)' }}>
+        <span
+          className="font-jost-normal text-[10px] uppercase tracking-[0.18em]"
+          style={{ color: 'rgba(255,255,255,0.45)' }}
+        >
           Activity
         </span>
         <div className="flex items-center gap-1">
-          {/* Expand/collapse — desktop only */}
-          <button
-            type="button"
-            onClick={() => setExpanded((v) => !v)}
-            className="hidden md:flex w-5 h-5 items-center justify-center rounded text-[10px] transition hover:bg-white/10"
-            style={{ color: 'rgba(255,255,255,0.4)' }}
-            aria-label={expanded ? 'Collapse' : 'Expand'}
-          >
-            {expanded ? '▾' : '▴'}
-          </button>
-          {/* Close — mobile drawer only */}
-          <button
-            type="button"
-            onClick={() => setMobileOpen(false)}
-            className="flex md:hidden w-5 h-5 items-center justify-center rounded text-[10px] transition hover:bg-white/10"
-            style={{ color: 'rgba(255,255,255,0.35)' }}
-            aria-label="Close"
-          >
-            ✕
-          </button>
+          {opts.showDesktopHeightToggle ? (
+            <button
+              type="button"
+              onClick={() => setExpanded((v) => !v)}
+              className="hidden md:flex w-5 h-5 items-center justify-center rounded font-jost text-[10px] transition hover:bg-white/10"
+              style={{ color: 'rgba(255,255,255,0.45)' }}
+              aria-label={expanded ? 'Collapse' : 'Expand'}
+            >
+              {expanded ? '▾' : '▴'}
+            </button>
+          ) : null}
+          {opts.showMobileClose ? (
+            <button
+              type="button"
+              onClick={() => setMobileOpen(false)}
+              className="flex md:hidden w-5 h-5 items-center justify-center rounded font-jost text-[10px] transition hover:bg-white/10"
+              style={{ color: 'rgba(255,255,255,0.45)' }}
+              aria-label="Close"
+            >
+              ✕
+            </button>
+          ) : null}
         </div>
       </div>
 
-      {/* Feed */}
       <div
         ref={listRef}
-        className="flex-1 overflow-y-auto min-h-0 py-1 text-[10px] md:text-[11px] leading-snug"
-        style={{ scrollbarWidth: 'thin', scrollbarColor: 'rgba(255,255,255,0.08) transparent' }}
+        className="flex-1 overflow-y-auto min-h-0 py-1"
+        style={{ scrollbarWidth: 'thin', scrollbarColor: 'rgba(255,255,255,0.12) transparent' }}
       >
         {entries.length === 0 && (
-          <div className="px-2.5 py-2" style={{ color: 'rgba(255,255,255,0.2)' }}>
+          <div
+            className="px-2.5 py-2 font-jost-normal text-[10px] tracking-wide"
+            style={{ color: 'rgba(255,255,255,0.4)' }}
+          >
             Waiting for activity…
           </div>
         )}
         {entries.map(renderEntry)}
       </div>
 
-      {/* Input */}
+      {quickChatPhrases &&
+      quickChatPhrases.length > 0 &&
+      onQuickChatPhrase &&
+      quickChatEligible ? (
+        <div
+          className="shrink-0 border-t px-2 py-2"
+          style={{ borderColor: 'rgba(255,255,255,0.07)' }}
+        >
+          <div className="flex items-center justify-between gap-2 mb-1.5">
+            <span
+              className="font-jost-normal text-[9px] uppercase tracking-[0.14em]"
+              style={{ color: 'rgba(255,255,255,0.45)' }}
+            >
+              QuickChat
+            </span>
+            {onOpenEditQuickChat ? (
+              <button
+                type="button"
+                onClick={onOpenEditQuickChat}
+                className="font-jost-normal shrink-0 text-[9px] uppercase tracking-[0.12em] text-cyan-400/90 hover:text-cyan-300 transition-colors"
+              >
+                Edit
+              </button>
+            ) : null}
+          </div>
+          <div
+            className="flex flex-wrap gap-1 max-h-[100px] overflow-y-auto min-h-0"
+            style={{ scrollbarWidth: 'thin', scrollbarColor: 'rgba(255,255,255,0.12) transparent' }}
+          >
+            {quickChatPhrases.map((phrase) => (
+              <button
+                key={phrase}
+                type="button"
+                title={phrase}
+                disabled={!wsConnected}
+                onClick={() => onQuickChatPhrase(phrase)}
+                className="font-jost-normal max-w-full truncate rounded-md px-2 py-1 text-[10px] leading-tight transition-colors border border-white/10 hover:bg-white/10 hover:border-cyan-500/25 disabled:opacity-30 disabled:pointer-events-none"
+                style={{ color: 'rgba(255,255,255,0.88)' }}
+              >
+                {phrase}
+              </button>
+            ))}
+          </div>
+        </div>
+      ) : null}
+
       <form
         onSubmit={handleSend}
         className="flex shrink-0 items-center gap-1.5 px-2 py-1.5"
@@ -660,7 +883,7 @@ export function PokerActivityFeed({
           placeholder={connected ? 'Message…' : 'Connecting…'}
           disabled={!connected}
           maxLength={CHAT_MAX_LEN}
-          className="flex-1 min-w-0 px-2.5 py-1.5 rounded text-[10px] md:text-[11px] text-white placeholder-white/25 focus:outline-none focus:ring-1 focus:ring-cyan-500/50 transition"
+          className="flex-1 min-w-0 px-2.5 py-1.5 rounded font-jost text-[10px] md:text-[11px] text-white placeholder:text-white/25 focus:outline-none focus:ring-1 focus:ring-cyan-500/50 transition"
           style={{
             background: 'rgba(255,255,255,0.07)',
             border: '1px solid rgba(255,255,255,0.1)',
@@ -669,16 +892,43 @@ export function PokerActivityFeed({
         <button
           type="submit"
           disabled={!connected || !input.trim()}
-          className="shrink-0 px-2.5 py-1.5 rounded text-[10px] md:text-[11px] font-semibold text-white transition-colors disabled:opacity-25 disabled:pointer-events-none"
-          style={{ background: 'rgba(34,211,238,0.7)' }}
+          className="shrink-0 px-2.5 py-1.5 rounded font-jost text-[10px] md:text-[11px] font-semibold tracking-wide text-white transition-colors disabled:opacity-25 disabled:pointer-events-none border border-cyan-500/30 bg-gradient-to-r from-cyan-600 to-blue-600 shadow-md"
         >
           Send
         </button>
       </form>
+
+      {burstOverlay}
     </div>
   );
 
-  // ── Render ────────────────────────────────────────────────────────────────
+  const railCollapsed = (
+    <div
+      className="flex flex-col items-stretch justify-between h-full w-full py-6 px-1 select-none"
+      role="note"
+      aria-label="Activity and chat — hover or pin the rail to expand"
+    >
+      <div className="self-center w-12 h-px shrink-0" style={{ background: 'rgba(255,255,255,0.09)' }} />
+      <div className="flex flex-1 flex-col items-center justify-center gap-2 min-h-0">
+        <span className="font-jost text-[15px] leading-none text-white/90" aria-hidden>
+          💬
+        </span>
+        <span
+          className="font-jost-normal text-[9px] uppercase tracking-[0.14em] text-center"
+          style={{
+            color: 'rgba(255,255,255,0.45)',
+            writingMode: 'vertical-rl',
+            transform: 'rotate(180deg)',
+          }}
+          aria-hidden
+        >
+          Activity
+        </span>
+      </div>
+      <div className="self-center w-12 h-px shrink-0" style={{ background: 'rgba(255,255,255,0.09)' }} />
+    </div>
+  );
+
   const desktopPanelStyle: CSSProperties = {
     background: 'rgba(6,8,12,0.88)',
     border: '1px solid rgba(255,255,255,0.08)',
@@ -686,10 +936,115 @@ export function PokerActivityFeed({
     backdropFilter: 'blur(10px)',
   };
 
+  const mobileDrawerChrome = (
+    <div className="md:hidden">
+      <AnimatePresence>
+        {!mobileOpen && (
+          <motion.button
+            type="button"
+            onClick={() => setMobileOpen(true)}
+            className="fixed left-0 z-30 flex flex-col items-center justify-center rounded-r-lg"
+            style={{
+              top: '50%',
+              transform: 'translateY(-50%)',
+              width: 28,
+              height: 56,
+              background: 'rgba(6,8,12,0.9)',
+              border: '1px solid rgba(255,255,255,0.08)',
+              borderLeft: 'none',
+              boxShadow: '3px 0 12px rgba(0,0,0,0.4)',
+              color: 'rgba(255,255,255,0.55)',
+              fontSize: 16,
+            }}
+            aria-label="Open activity feed"
+            initial={{ x: -28 }}
+            animate={{ x: 0 }}
+            exit={{ x: -28 }}
+            transition={{ type: 'spring', stiffness: 400, damping: 32 }}
+          >
+            💬
+          </motion.button>
+        )}
+      </AnimatePresence>
+
+      <AnimatePresence>
+        {mobileOpen && (
+          <motion.div
+            className="fixed inset-0 z-[38] bg-black/40"
+            aria-hidden
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: 0.2 }}
+            onClick={() => setMobileOpen(false)}
+          />
+        )}
+      </AnimatePresence>
+
+      <AnimatePresence>
+        {mobileOpen && (
+          <motion.div
+            className="fixed left-0 top-0 bottom-0 z-[39] flex flex-col overflow-hidden"
+            style={{
+              width: 260,
+              background: 'rgba(6,8,12,0.97)',
+              border: '1px solid rgba(255,255,255,0.08)',
+              borderLeft: 'none',
+              boxShadow: '6px 0 32px rgba(0,0,0,0.7)',
+            }}
+            initial={{ x: -260 }}
+            animate={{ x: 0 }}
+            exit={{ x: -260 }}
+            transition={{ type: 'spring', stiffness: 400, damping: 36 }}
+          >
+            {renderPanelContent({ showDesktopHeightToggle: false, showMobileClose: true })}
+          </motion.div>
+        )}
+      </AnimatePresence>
+    </div>
+  );
+
+  const mobileBlock =
+    layout === 'right-rail' && docMounted
+      ? createPortal(mobileDrawerChrome, document.body)
+      : layout !== 'right-rail'
+        ? mobileDrawerChrome
+        : null;
+
   return (
     <>
-      {/* Desktop: fixed bottom-left, or embedInLayout = reserve collapsed height + overlay when expanded */}
-      {embedInLayout ? (
+      {layout === 'right-rail' ? (
+        <div className="relative flex flex-col h-full w-full min-h-0 pt-8 overflow-hidden">
+          <AnimatePresence mode="wait" initial={false}>
+            {railOpen ? (
+              <motion.div
+                key="rail-open"
+                className="flex flex-col flex-1 min-h-0 overflow-hidden rounded-lg"
+                style={desktopPanelStyle}
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0 }}
+                transition={{ duration: 0.12 }}
+              >
+                {renderPanelContent({ showDesktopHeightToggle: false, showMobileClose: false })}
+              </motion.div>
+            ) : (
+              <motion.div
+                key="rail-collapsed"
+                className="flex flex-col flex-1 min-h-0 items-stretch"
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0 }}
+                transition={{ duration: 0.12 }}
+              >
+                {railCollapsed}
+              </motion.div>
+            )}
+          </AnimatePresence>
+        </div>
+      ) : null}
+
+      {layout === 'embedded-bottom' ? (
         <div
           className="hidden md:block relative w-full self-end shrink-0 overflow-visible min-h-0"
           style={{
@@ -707,10 +1062,12 @@ export function PokerActivityFeed({
               transition: 'height 0.25s ease',
             }}
           >
-            {panelContent}
+            {renderPanelContent({ showDesktopHeightToggle: true, showMobileClose: false })}
           </div>
         </div>
-      ) : (
+      ) : null}
+
+      {layout === 'fixed' ? (
         <div
           className="hidden md:flex fixed z-30 flex-col rounded-lg overflow-hidden"
           style={{
@@ -722,79 +1079,11 @@ export function PokerActivityFeed({
             bottom: 'max(12px, env(safe-area-inset-bottom, 0px))',
           }}
         >
-          {panelContent}
+          {renderPanelContent({ showDesktopHeightToggle: true, showMobileClose: false })}
         </div>
-      )}
+      ) : null}
 
-      {/* Mobile: left-edge tab + slide-in drawer */}
-      <div className="md:hidden">
-        {/* Tab button */}
-        <AnimatePresence>
-          {!mobileOpen && (
-            <motion.button
-              type="button"
-              onClick={() => setMobileOpen(true)}
-              className="fixed left-0 z-30 flex flex-col items-center justify-center rounded-r-lg"
-              style={{
-                top: '50%',
-                transform: 'translateY(-50%)',
-                width: 28,
-                height: 56,
-                background: 'rgba(6,8,12,0.9)',
-                border: '1px solid rgba(255,255,255,0.08)',
-                borderLeft: 'none',
-                boxShadow: '3px 0 12px rgba(0,0,0,0.4)',
-                color: 'rgba(255,255,255,0.55)',
-                fontSize: 16,
-              }}
-              aria-label="Open activity feed"
-              initial={{ x: -28 }}
-              animate={{ x: 0 }}
-              exit={{ x: -28 }}
-              transition={{ type: 'spring', stiffness: 400, damping: 32 }}
-            >
-              💬
-            </motion.button>
-          )}
-        </AnimatePresence>
-
-        {/* Backdrop */}
-        <AnimatePresence>
-          {mobileOpen && (
-            <motion.div
-              className="fixed inset-0 z-[38] bg-black/40"
-              aria-hidden
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
-              transition={{ duration: 0.2 }}
-              onClick={() => setMobileOpen(false)}
-            />
-          )}
-        </AnimatePresence>
-
-        {/* Side drawer */}
-        <AnimatePresence>
-          {mobileOpen && (
-            <motion.div
-              className="fixed left-0 top-0 bottom-0 z-[39] flex flex-col overflow-hidden"
-              style={{
-                width: 260,
-                background: 'rgba(6,8,12,0.97)',
-                border: '1px solid rgba(255,255,255,0.08)',
-                borderLeft: 'none',
-                boxShadow: '6px 0 32px rgba(0,0,0,0.7)',
-              }}
-              initial={{ x: -260 }}
-              animate={{ x: 0 }}
-              exit={{ x: -260 }}
-              transition={{ type: 'spring', stiffness: 400, damping: 36 }}
-            >
-              {panelContent}
-            </motion.div>
-          )}
-        </AnimatePresence>
-      </div>
+      {mobileBlock}
     </>
   );
 }

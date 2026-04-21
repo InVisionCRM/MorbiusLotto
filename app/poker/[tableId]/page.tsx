@@ -36,6 +36,7 @@ import { usePokerTableSounds } from './PokerSounds';
 import { usePokerTableTournamentHud } from '@/hooks/use-poker-tournament';
 import { TournamentBlindIncreaseOverlay } from '@/components/poker/tournament/TournamentBlindIncreaseOverlay';
 import { PokerTournamentHUD } from '@/components/poker/tournament/PokerTournamentHUD';
+import { PokerActivityFeed } from '@/components/poker/PokerActivityFeed';
 import { Sidebar, SidebarBody } from '@/components/ui/sidebar';
 import {
   applyPokerE2EMockAction,
@@ -704,7 +705,7 @@ export default function PokerTablePage() {
 
           <div className="flex flex-row flex-1 min-h-0 min-w-0 relative">
             {tournamentHUDProp && !isFullscreen && (
-              <Sidebar>
+              <Sidebar pinStorageKey="poker-table-tournament-hud-pinned">
                 <SidebarBody
                   className="!sticky !top-0 !h-full !py-0 !px-0 bg-[rgba(6,8,12,0.92)] border-r border-white/10"
                 >
@@ -751,6 +752,32 @@ export default function PokerTablePage() {
               onSitOut={mySeat ? handleSitOut : undefined}
               onSitBack={mySeat ? handleSitBack : undefined}
             />
+
+            {pokerChatRoomId && !isFullscreen && (
+              <Sidebar
+                pinStorageKey="poker-table-activity-rail-pinned"
+                desktopRailSide="right"
+              >
+                <SidebarBody
+                  desktopOnly
+                  className="!sticky !top-0 !h-full !py-0 !px-0 bg-[rgba(6,8,12,0.92)] border-l border-white/10"
+                >
+                  <PokerActivityFeed
+                    layout="right-rail"
+                    wsClient={wsClient}
+                    wsConnected={wsConnected}
+                    roomId={pokerChatRoomId}
+                    tableId={tableId}
+                    state={renderedState}
+                    mobileOpenRequestSerial={activityMobileOpenSerial}
+                    quickChatPhrases={quickChatPhrases}
+                    onQuickChatPhrase={onPhraseReaction}
+                    onOpenEditQuickChat={() => setShowEditQuickChatModal(true)}
+                    quickChatEligible={mySeatIndex >= 0}
+                  />
+                </SidebarBody>
+              </Sidebar>
+            )}
           </div>
 
           <PokerBottomBar
@@ -758,11 +785,6 @@ export default function PokerTablePage() {
             renderedState={renderedState}
             mySeat={mySeat}
             actions={sharedActions}
-            wsClient={wsClient}
-            wsConnected={wsConnected}
-            pokerChatRoomId={pokerChatRoomId}
-            tableId={tableId}
-            activityMobileOpenSerial={activityMobileOpenSerial}
           />
         </div>
 

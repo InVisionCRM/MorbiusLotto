@@ -36,7 +36,7 @@ const TOP_ADJACENT_SEAT_VERTICAL_NUDGE_PX = -30;
 const TOP_CENTER_SEAT_VERTICAL_NUDGE_PX = -10;
 const RIGHT_ADJACENT_SEAT_HORIZONTAL_NUDGE_PX = -30;
 const LEFT_ADJACENT_SEAT_HORIZONTAL_NUDGE_PX = 30;
-// Per-server-position pixel nudges (applied on top of the ellipse + display-slot nudges).
+// Per-server-position pixel nudges (applied on top of authored anchors + display-slot nudges).
 // Key = state.seats[idx].position value.
 const SEAT_POSITION_NUDGE_PX: Record<number, { x: number; y: number }> = {
   1: { x: 30, y: 10 },
@@ -67,29 +67,33 @@ const SHOWDOWN_CARD_PULL_RATIO = 0.18;
 const SHOWDOWN_CARD_PULL_MAX_PX = 70;
 const BET_CHIP_INWARD_DISTANCE_PX = 64;
 
-// Compute evenly-spaced seat positions around the table oval for any seat count.
-// Seat 0 is always bottom-center (current player); action then moves to the left,
-// which matches standard clockwise Hold'em flow from the hero seat.
-// When `mobileNudge` is true, seat 0 (bottom-center) is pushed down so it
-// sits just above the betting controls on narrow viewports.
-//
-// LANDSCAPE NOTE: `aspectRatio` (container w/h) adjusts the ellipse so seats
-// spread wider horizontally and tighter vertically in landscape. Do NOT
-// hard-code rx/ry — they must stay aspect-responsive or landscape breaks.
-function computeSeatAnchors(n: number, mobileNudge = false, aspectRatio = 1.28): Array<{ fx: number; fy: number }> {
-  const cx = 0.50, cy = 0.46;
-  const baseRx = 0.46, baseRy = 0.40;
-  const arFactor = Math.min(1.15, Math.max(0.85, aspectRatio / 1.28));
-  const rx = Math.min(0.48, baseRx * arFactor);
-  const ry = Math.max(0.28, baseRy / arFactor);
-  return Array.from({ length: n }, (_, i) => {
-    const theta = Math.PI / 2 + (i / n) * 2 * Math.PI;
-    let fy = parseFloat((cy + ry * Math.sin(theta)).toFixed(4));
-    if (i === 0 && mobileNudge) fy = Math.min(0.92, fy + 0.10);
-    return {
-      fx: parseFloat((cx + rx * Math.cos(theta)).toFixed(4)),
-      fy,
-    };
+// Hand-authored 10-seat ring (fractions of the table root). Display slot 0 is bottom / hero
+// after `toDisplaySlot` rotation; slots increase clockwise. Sub-10 tables map evenly onto this ring.
+const SEAT_ANCHOR_RING: Array<{ fx: number; fy: number }> = [
+  { fx: 0.50, fy: 0.78 }, // 0 — bottom center (hero), cleared above action bar
+  { fx: 0.72, fy: 0.83 }, // 1
+  { fx: 0.89, fy: 0.63 }, // 2
+  { fx: 0.89, fy: 0.36 }, // 3
+  { fx: 0.72, fy: 0.13 }, // 4
+  { fx: 0.50, fy: 0.06 }, // 5
+  { fx: 0.28, fy: 0.13 }, // 6
+  { fx: 0.11, fy: 0.36 }, // 7
+  { fx: 0.11, fy: 0.63 }, // 8
+  { fx: 0.28, fy: 0.83 }, // 9
+];
+
+function ringIndexForDisplaySlot(displaySlot: number, seatCount: number): number {
+  if (seatCount <= 1) return 0;
+  const idx = Math.round((displaySlot * 9) / (seatCount - 1));
+  return Math.max(0, Math.min(9, idx));
+}
+
+function authoredSeatAnchors(seatCount: number): Array<{ fx: number; fy: number }> {
+  if (seatCount <= 0) return [];
+  return Array.from({ length: seatCount }, (_, displaySlot) => {
+    const ri = ringIndexForDisplaySlot(displaySlot, seatCount);
+    const a = SEAT_ANCHOR_RING[ri];
+    return { fx: a.fx, fy: a.fy };
   });
 }
 
@@ -189,7 +193,7 @@ export function PokerTable({ state, currentPlayerAddress, timeLeft, chatBubbleBy
 
   const mySeatIndex = state.seats.findIndex(s => s.playerAddress === currentPlayerAddress);
   const seatNudgeScale = Math.max(0.62, Math.min(1, dims.w / 1200));
-  const seatAnchors = computeSeatAnchors(state.seats.length, hideSeatAvatars, dims.w / Math.max(dims.h, 1));
+  const seatAnchors = useMemo(() => authoredSeatAnchors(state.seats.length), [state.seats.length]);
   const toDisplaySlot = (seatIdx: number) => (mySeatIndex >= 0 ? (seatIdx - mySeatIndex + state.seats.length) % state.seats.length : seatIdx);
 
   const getSeatNudgePx = (displaySlot: number) => {
@@ -233,7 +237,7 @@ export function PokerTable({ state, currentPlayerAddress, timeLeft, chatBubbleBy
   };
 
   /** Full on-screen seat center (fractions 0–1), including display-slot + per-server-position nudges. */
-  const getRenderedSeatAnchor = (displaySlot: number, serverPos: number) => {
+  const computeRenderedSeatAnchorCore = (displaySlot: number, serverPos: number) => {
     const anchor = seatAnchors[displaySlot];
     if (!anchor) return null;
     const nudge = getSeatNudgePx(displaySlot);
@@ -242,6 +246,20 @@ export function PokerTable({ state, currentPlayerAddress, timeLeft, chatBubbleBy
       fx: anchor.fx + (nudge.x + posNudge.x) / Math.max(dims.w, 1),
       fy: anchor.fy + (nudge.y + posNudge.y) / Math.max(dims.h, 1),
     };
+  };
+
+  const getRenderedSeatAnchor = (displaySlot: number, serverPos: number) => {
+    const seatCount = state.seats.length;
+    const out = computeRenderedSeatAnchorCore(displaySlot, serverPos);
+    if (!out) return null;
+    // Neighbors of hero share the same vertical center as display slot 0 (pill / rail alignment).
+    if (seatCount > 2 && (displaySlot === 1 || displaySlot === seatCount - 1)) {
+      const heroSeatIdx = mySeatIndex >= 0 ? mySeatIndex : 0;
+      const heroServerPos = state.seats[heroSeatIdx]?.position ?? heroSeatIdx;
+      const heroRendered = computeRenderedSeatAnchorCore(0, heroServerPos);
+      if (heroRendered) out.fy = heroRendered.fy;
+    }
+    return out;
   };
 
   const actingPosition = hand?.actingPosition ?? null;
@@ -650,7 +668,7 @@ export function PokerTable({ state, currentPlayerAddress, timeLeft, chatBubbleBy
       {/* Chip stacks — between each seat and pot (hidden at showdown so only sliding pot shows) */}
       {!isShowdownWithWinners && (
       <AnimatePresence>
-        {/* Iterate over seat count only — iterating SEAT_ANCHORS (10) causes ghost chips via % wrap-around */}
+        {/* Iterate over seat count only — do not iterate a fixed 10; empty seats would still get chip % positions */}
         {Array.from({ length: state.seats.length }, (_, displaySlot) => {
           const anchor = seatAnchors[displaySlot];
           if (!anchor) return null;

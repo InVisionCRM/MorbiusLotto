@@ -318,8 +318,13 @@ export function PokerSeat({ seat, index, holeCards, isCurrentPlayer, showCardBac
     };
   }, [isCurrentPlayer]);
 
+  const [internalQuickChatPhrases, setInternalQuickChatPhrases] = useQuickChatPhrases();
+  const useSharedQuickChat = propsQuickChatPhrases != null && propsSetQuickChatPhrases != null && onOpenEditQuickChat != null;
+  const quickChatPhrases = useSharedQuickChat ? propsQuickChatPhrases : internalQuickChatPhrases;
+  const setQuickChatPhrases = useSharedQuickChat ? propsSetQuickChatPhrases : setInternalQuickChatPhrases;
+
   // Slouch while any menu is open
-  const hasMenuOpen = quickChatPickerOpen || playerRadialOpen;
+  const hasMenuOpen = (!useSharedQuickChat && quickChatPickerOpen) || playerRadialOpen;
 
   const emotionRadialItems = useMemo(
     () =>
@@ -340,7 +345,7 @@ export function PokerSeat({ seat, index, holeCards, isCurrentPlayer, showCardBac
     const items: RadialMenuItem[] = [];
     if (onMenuClick) items.push({ id: 'avatar', label: 'Avatar', icon: UserRound });
     if (onReUpClick) items.push({ id: 'bank', label: 'Bank', icon: Wallet });
-    if (onPhraseReaction) items.push({ id: 'quickchat', label: 'Chat', icon: MessageCircle });
+    if (onPhraseReaction && !useSharedQuickChat) items.push({ id: 'quickchat', label: 'Chat', icon: MessageCircle });
     if (onAnimationReaction) items.push({ id: 'expressions', label: 'Moves', icon: Smile });
     if (seat.status === 'sitting_out') {
       if (onSitBack) items.push({ id: 'sitback', label: "I'm Back", icon: PlayCircle });
@@ -356,6 +361,7 @@ export function PokerSeat({ seat, index, holeCards, isCurrentPlayer, showCardBac
     onMenuClick,
     onReUpClick,
     onPhraseReaction,
+    useSharedQuickChat,
     onAnimationReaction,
     onLeaveTable,
     onSitOut,
@@ -419,10 +425,6 @@ export function PokerSeat({ seat, index, holeCards, isCurrentPlayer, showCardBac
   const longPressTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const phraseOverlayTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const menuContainerRef = useRef<HTMLDivElement | null>(null);
-  const [internalQuickChatPhrases, setInternalQuickChatPhrases] = useQuickChatPhrases();
-  const useSharedQuickChat = propsQuickChatPhrases != null && propsSetQuickChatPhrases != null && onOpenEditQuickChat != null;
-  const quickChatPhrases = useSharedQuickChat ? propsQuickChatPhrases : internalQuickChatPhrases;
-  const setQuickChatPhrases = useSharedQuickChat ? propsSetQuickChatPhrases : setInternalQuickChatPhrases;
 
   const clearLongPress = useCallback(() => {
     if (longPressTimerRef.current) {
@@ -432,22 +434,22 @@ export function PokerSeat({ seat, index, holeCards, isCurrentPlayer, showCardBac
   }, []);
 
   const handleBadgePointerDown = useCallback(() => {
-    if (!isCurrentPlayer) return;
+    if (!isCurrentPlayer || useSharedQuickChat) return;
     clearLongPress();
     longPressTimerRef.current = setTimeout(() => {
       longPressTimerRef.current = null;
       setQuickChatPickerOpen(true);
     }, LONG_PRESS_MS);
-  }, [isCurrentPlayer, clearLongPress]);
+  }, [isCurrentPlayer, useSharedQuickChat, clearLongPress]);
 
   const handleBadgePointerUp = useCallback(() => clearLongPress(), [clearLongPress]);
   const handleBadgePointerLeave = useCallback(() => clearLongPress(), [clearLongPress]);
   const handleBadgePointerCancel = useCallback(() => clearLongPress(), [clearLongPress]);
   const handleBadgeContextMenu = useCallback((e: React.MouseEvent) => {
     e.preventDefault();
-    if (!isCurrentPlayer) return;
+    if (!isCurrentPlayer || useSharedQuickChat) return;
     setQuickChatPickerOpen(true);
-  }, [isCurrentPlayer]);
+  }, [isCurrentPlayer, useSharedQuickChat]);
 
   const handleAnimationSelect = useCallback((emotion: Emotion) => {
     onAnimationReaction?.(emotion);
@@ -525,7 +527,7 @@ export function PokerSeat({ seat, index, holeCards, isCurrentPlayer, showCardBac
 
   // Close QuickChat picker when clicking outside (player radial uses its own overlay)
   useEffect(() => {
-    if (!quickChatPickerOpen || !isCurrentPlayer) return;
+    if (!quickChatPickerOpen || !isCurrentPlayer || useSharedQuickChat) return;
     const handleClick = (e: MouseEvent) => {
       const target = e.target as Node;
       if (
@@ -537,7 +539,7 @@ export function PokerSeat({ seat, index, holeCards, isCurrentPlayer, showCardBac
     };
     document.addEventListener('click', handleClick, true);
     return () => document.removeEventListener('click', handleClick, true);
-  }, [isCurrentPlayer, quickChatPickerOpen]);
+  }, [isCurrentPlayer, quickChatPickerOpen, useSharedQuickChat]);
 
   const callWei = toBigIntSafe(callAmount ?? 0);
   const activeAction = isActing
@@ -860,7 +862,7 @@ export function PokerSeat({ seat, index, holeCards, isCurrentPlayer, showCardBac
 
         {/* Backdrop to close all menus */}
         <AnimatePresence>
-          {isCurrentPlayer && quickChatPickerOpen && (
+          {isCurrentPlayer && quickChatPickerOpen && !useSharedQuickChat && (
             <motion.div
               className="fixed inset-0 z-[45]"
               initial={{ opacity: 0 }}
@@ -881,7 +883,7 @@ export function PokerSeat({ seat, index, holeCards, isCurrentPlayer, showCardBac
           className="absolute left-1/2 bottom-full mb-2 -translate-x-1/2 z-50 w-max min-w-[120px]"
         >
           <AnimatePresence>
-            {isCurrentPlayer && quickChatPickerOpen && (
+            {isCurrentPlayer && quickChatPickerOpen && !useSharedQuickChat && (
               <motion.div initial={{ opacity: 0, scale: 0.9 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 0.9 }} transition={{ type: 'spring', stiffness: 400, damping: 28 }}>
                 <div className="rounded-xl overflow-hidden max-h-[min(280px,60vh)] overflow-y-auto min-w-[160px] max-w-[220px]"
                   style={{ background: 'rgba(10,10,10,0.96)', border: '1px solid rgba(255,255,255,0.12)', boxShadow: '0 4px 20px rgba(0,0,0,0.6)' }}>
@@ -927,8 +929,12 @@ export function PokerSeat({ seat, index, holeCards, isCurrentPlayer, showCardBac
               aria-label={
                 isCurrentPlayer
                   ? hideSeatAvatar
-                    ? 'Tap for player menu · Long-press for QuickChat'
-                    : 'Long-press or right-click for QuickChat'
+                    ? useSharedQuickChat
+                      ? 'Tap for player menu'
+                      : 'Tap for player menu · Long-press for QuickChat'
+                    : useSharedQuickChat
+                      ? 'Tap avatar for player menu'
+                      : 'Long-press or right-click for QuickChat'
                   : opponentTapProfile
                     ? 'Tap for profile, long-press or right-click for actions'
                     : undefined
