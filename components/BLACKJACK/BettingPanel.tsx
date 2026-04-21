@@ -1,11 +1,7 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { formatEther, parseEther } from 'viem';
-import { useTokenBalance } from '@/hooks/use-token';
-import { useNativeBalance } from '@/hooks/use-native-balance';
-import { usePlsQuote } from '@/hooks/use-pls-quote';
-import { MORBIUS_TOKEN_ADDRESS } from '@/lib/contracts';
 import { BET_LIMITS } from '@/app/BLACKJACK/constants';
 
 interface BettingPanelProps {

@@ -79,7 +79,7 @@ export function PokerWinnerNotificationCard({
               damping: 22,
             }}
             style={{
-              background: 'linear-gradient(325deg, rgba(20, 20, 20, 0.8), rgba(40, 40, 40, 0.6))',
+              background: '#000000',
               boxShadow:
                 'inset 0 3px 6px rgba(0, 0, 0, 0.8), inset 0 -3px 6px rgba(255, 255, 255, 0.1), 0 1px 3px rgba(0, 0, 0, 0.5), 0 14px 34px rgba(0, 0, 0, 0.5)',
               border: '1px inset rgba(60, 60, 60, 0.5)',
@@ -87,8 +87,6 @@ export function PokerWinnerNotificationCard({
               maxHeight: '80vh',
             }}
           >
-            <div className="absolute inset-0 bg-[radial-gradient(circle_at_50%_50%,rgba(34,211,238,0.3),transparent_70%)]" />
-
             <div className="relative z-[1] flex flex-col overflow-y-auto" style={{ maxHeight: '70vh' }}>
 
               {/* ── Top: 3-column header (Amount | Winner | Hand Rank) ── */}

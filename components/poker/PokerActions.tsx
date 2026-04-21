@@ -81,13 +81,11 @@ export function PokerActions({
   const isFacingBet = callAmt > 0n;
 
   const [customAmount, setCustomAmount] = useState(() => formatAmount(minRaiseAmt));
-  const [sliderOffset, setSliderOffset] = useState(0);
 
   useEffect(() => {
     const current = safeParseAmount(customAmount);
     if (current == null || current < minRaiseAmt) {
       setCustomAmount(formatAmount(minRaiseAmt));
-      setSliderOffset(0);
     }
   }, [minRaiseAmt]);
 
@@ -100,6 +98,11 @@ export function PokerActions({
   const maxChips = toChipsNum(stackAmt);
   const maxOffsetChips = Math.max(0, maxChips - minChips);
   const stepChips = Math.max(1, Math.round(Math.max(minChips, 1) / 10)); // ~10% of min as step
+  /** Slider position is derived from the raise/bet amount (single source of truth: customAmount). */
+  const sliderChips =
+    clamped == null || maxOffsetChips <= 0
+      ? 0
+      : Math.max(0, Math.min(maxOffsetChips, toChipsNum(clamped) - minChips));
 
   // ── Quick size presets ─────────────────────────────────────────────────────
   const quickSizes: Array<{ label: string; value: Amount }> = [
@@ -132,19 +135,22 @@ export function PokerActions({
     const val = parseFloat(e.target.value);
     const rawChips = BigInt(Math.max(0, Math.round(minChips + val)));
     const clampedChips = clampAmount(rawChips, minRaiseAmt, stackAmt);
-    setSliderOffset(val);
     setCustomAmount(formatAmount(clampedChips));
+  };
+
+  const handleAllIn = () => {
+    if (!canAct || stackAmt === 0n) return;
+    setCustomAmount(formatAmount(stackAmt));
   };
 
   const nudge = (dir: 1 | -1) => {
     const base = clamped ?? minRaiseAmt;
     const step = minRaiseAmt > 0n ? minRaiseAmt : 1n;
     const next = clampAmount(base + BigInt(dir) * step, minRaiseAmt, stackAmt);
-    setSliderOffset(0);
     setCustomAmount(formatAmount(next));
   };
 
-  const sliderFillPct = maxOffsetChips > 0 ? (sliderOffset / maxOffsetChips) * 100 : 0;
+  const sliderFillPct = maxOffsetChips > 0 ? (sliderChips / maxOffsetChips) * 100 : 0;
 
 
   const handleFoldWithSound = () => {
@@ -176,6 +182,10 @@ export function PokerActions({
   const actionBtnBaseStyle = {
     border: '1px solid rgba(255,255,255,0.12)',
     boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.06)',
+  };
+  const allInBtnStyle = {
+    ...actionBtnBaseStyle,
+    border: '1px solid rgba(251, 191, 36, 0.35)',
   };
   const inputStyle = {
     background: canAct ? '#000' : 'rgba(15, 23, 42, 0.5)',
@@ -270,7 +280,7 @@ export function PokerActions({
             <button
               key={q.label}
               type="button"
-              onClick={() => { setSliderOffset(0); setCustomAmount(formatAmount(clampAmount(q.value, minRaiseAmt, stackAmt))); }}
+              onClick={() => { setCustomAmount(formatAmount(clampAmount(q.value, minRaiseAmt, stackAmt))); }}
               disabled={!canAct || stackAmt === 0n}
               className={`h-8 px-3 text-[11px] rounded-md transition-all disabled:pointer-events-none hover:brightness-125 active:scale-95 ${quickSizeClass}`}
               style={actionBtnBaseStyle}
@@ -278,6 +288,16 @@ export function PokerActions({
               {q.label}
             </button>
           ))}
+          <button
+            data-testid="poker-action-all-in"
+            type="button"
+            onClick={handleAllIn}
+            disabled={!canAct || stackAmt === 0n}
+            className="h-8 px-2.5 text-[11px] rounded-md transition-all disabled:pointer-events-none hover:brightness-125 active:scale-95 font-jost font-bold bg-black text-amber-400"
+            style={allInBtnStyle}
+          >
+            All-in
+          </button>
         </div>
 
         {/* Slider + nudge + amount input */}
@@ -299,7 +319,7 @@ export function PokerActions({
               min={0}
               max={maxOffsetChips || 1}
               step={stepChips}
-              value={sliderOffset}
+              value={sliderChips}
               onChange={handleSlider}
               disabled={!canAct || stackAmt === 0n}
               className="poker-slider poker-slider-desktop w-full disabled:pointer-events-none"
@@ -406,13 +426,13 @@ export function PokerActions({
         className="sm:hidden"
         style={{ ...barStyle, paddingBottom: 'max(8px, env(safe-area-inset-bottom, 8px))', paddingLeft: 'max(8px, env(safe-area-inset-left, 8px))', paddingRight: 'max(8px, env(safe-area-inset-right, 8px))' }}
       >
-        <div className="grid grid-cols-4 gap-1 pt-1.5 pb-1 px-0.5">
+        <div className="grid grid-cols-5 gap-1 pt-1.5 pb-1 px-0.5">
           {quickSizes.map((q) => (
             <button
               data-testid={`poker-quick-size-${q.label.toLowerCase().replace(/[^a-z0-9]+/g, '-')}`}
               key={q.label}
               type="button"
-              onClick={() => { setSliderOffset(0); setCustomAmount(formatAmount(clampAmount(q.value, minRaiseAmt, stackAmt))); }}
+              onClick={() => { setCustomAmount(formatAmount(clampAmount(q.value, minRaiseAmt, stackAmt))); }}
               disabled={!canAct || stackAmt === 0n}
               className={`h-9 text-[11px] rounded-sm transition-all disabled:pointer-events-none hover:brightness-125 active:scale-95 ${quickSizeClass}`}
               style={actionBtnBaseStyle}
@@ -420,6 +440,16 @@ export function PokerActions({
               {q.label}
             </button>
           ))}
+          <button
+            data-testid="poker-action-all-in"
+            type="button"
+            onClick={handleAllIn}
+            disabled={!canAct || stackAmt === 0n}
+            className="h-9 text-[10px] leading-tight rounded-sm transition-all disabled:pointer-events-none hover:brightness-125 active:scale-95 font-jost font-bold bg-black text-amber-400"
+            style={allInBtnStyle}
+          >
+            All-in
+          </button>
         </div>
         <div className="flex items-stretch gap-1 pb-2 pt-1 px-0.5">
           <div
@@ -542,7 +572,7 @@ export function PokerActions({
                 min={0}
                 max={maxOffsetChips || 1}
                 step={stepChips}
-                value={sliderOffset}
+                value={sliderChips}
                 onChange={handleSlider}
                 disabled={!canAct || stackAmt === 0n}
                 className="poker-slider poker-slider-mobile w-full disabled:pointer-events-none"
@@ -570,7 +600,7 @@ export function PokerActions({
             <button
               key={q.label}
               type="button"
-              onClick={() => { setSliderOffset(0); setCustomAmount(formatAmount(clampAmount(q.value, minRaiseAmt, stackAmt))); }}
+              onClick={() => { setCustomAmount(formatAmount(clampAmount(q.value, minRaiseAmt, stackAmt))); }}
               disabled={!canAct || stackAmt === 0n}
               className={`h-8 md:h-10 px-2.5 md:px-3 text-[11px] md:text-sm rounded-sm transition-all disabled:pointer-events-none hover:brightness-125 active:scale-95 ${quickSizeClass}`}
               style={actionBtnBaseStyle}
@@ -578,6 +608,16 @@ export function PokerActions({
               {q.label}
             </button>
           ))}
+          <button
+            data-testid="poker-action-all-in"
+            type="button"
+            onClick={handleAllIn}
+            disabled={!canAct || stackAmt === 0n}
+            className="h-8 md:h-10 px-2 md:px-2.5 text-[11px] md:text-sm rounded-sm transition-all disabled:pointer-events-none hover:brightness-125 active:scale-95 font-jost font-bold bg-black text-amber-400"
+            style={allInBtnStyle}
+          >
+            All-in
+          </button>
         </div>
         <div
           className="flex items-stretch gap-1 md:gap-1.5 px-2 md:px-3 pb-2 md:pb-3 pt-1 md:pt-1.5"
@@ -703,7 +743,7 @@ export function PokerActions({
                 min={0}
                 max={maxOffsetChips || 1}
                 step={stepChips}
-                value={sliderOffset}
+                value={sliderChips}
                 onChange={handleSlider}
                 disabled={!canAct || stackAmt === 0n}
                 className="poker-slider poker-slider-desktop w-full disabled:pointer-events-none"
