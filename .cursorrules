@@ -73,4 +73,8 @@ Loads .env from the server directory; uses DATABASE_URL. Run migrations in order
 
 ----
 
+Git (default): When the user asks to stage, commit, or push without naming a branch, use **`main`** on **`origin`**: `git checkout main`, `git pull origin main` as needed, then `git push origin main`. Do not push to a `cursor/*` or other feature branch unless they explicitly name it. (See also `.cursor/rules/git-origin-main.mdc`.)
+
+----
+
 always keep clean code and make sure to never cut corners. be efficent with token usage. 
