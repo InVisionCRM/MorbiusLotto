@@ -84,6 +84,11 @@ export interface PokerTournamentSummary {
   scheduledStartAt: string | null;
   isRegistered: boolean;
   isPrivate: boolean;
+  /** Level-1 or live table blinds (chip ints). */
+  smallBlind: number;
+  bigBlind: number;
+  /** `knockout` = elimination bumps; `by_hand` = schedule after each hand. */
+  blindIncreaseMode: PokerBlindIncreaseMode;
 }
 
 /** Where the initial guaranteed pool is debited when buy-in is 0. */
@@ -1306,6 +1311,8 @@ export class PokerTournamentService {
 
     const result = await this.pool.query(
       `SELECT r.*,
+         pt.small_blind AS table_small_blind,
+         pt.big_blind AS table_big_blind,
          CASE WHEN $1::text IS NOT NULL AND EXISTS (
            SELECT 1 FROM tournament_entries te
            WHERE te.tournament_id = r.tournament_id
@@ -1313,6 +1320,7 @@ export class PokerTournamentService {
              AND te.status NOT IN ('busted', 'completed')
          ) THEN TRUE ELSE FALSE END AS is_registered
        FROM poker_tournament_registrations r
+       LEFT JOIN poker_tables pt ON pt.id = r.table_id
        WHERE (
          r.status = 'active'
          OR COALESCE(r.registered_count, 0) > 0
@@ -1332,24 +1340,38 @@ export class PokerTournamentService {
       [normalized, STALE_EMPTY_REG_DAYS, LOBBY_MAX_ROWS]
     );
 
-    return result.rows.map((r) => ({
-      tournamentId:          r.tournament_id,
-      name:                  r.name,
-      status:                r.status,
-      buyInAmount:           r.buy_in_amount?.toString() ?? '0',
-      startingStack:         Number(r.starting_chips ?? 5000),
-      registeredCount:       Number(r.registered_count ?? 0),
-      maxPlayers:            Number(r.max_players ?? 6),
-      minPlayers:            Number(r.min_players ?? 2),
-      prizePool:             r.prize_pool?.toString() ?? '0',
-      tableId:               r.table_id ?? null,
-      createdAt:             r.created_at?.toISOString() ?? '',
-      creatorAddress:        r.creator_address ?? null,
-      prizeDistributionType: r.prize_distribution_type ?? 'winner_takes_all',
-      scheduledStartAt:      r.scheduled_start_at ? new Date(r.scheduled_start_at).toISOString() : null,
-      isRegistered:          r.is_registered === true,
-      isPrivate:             Boolean(r.is_private),
-    }));
+    return result.rows.map((r) => {
+      const config = this.parsePokerConfig(r.poker_config);
+      const level0 = config.blindSchedule[0] ?? { smallBlind: 25, bigBlind: 50 };
+      const sbTable = r.table_small_blind != null ? Number(toBigIntSafe(r.table_small_blind)) : null;
+      const bbTable = r.table_big_blind != null ? Number(toBigIntSafe(r.table_big_blind)) : null;
+      const smallBlind =
+        sbTable != null && Number.isFinite(sbTable) && sbTable > 0 ? sbTable : level0.smallBlind;
+      const bigBlind =
+        bbTable != null && Number.isFinite(bbTable) && bbTable > 0 ? bbTable : level0.bigBlind;
+      const blindIncreaseMode = this.getBlindIncreaseMode(config);
+      return {
+        tournamentId:          r.tournament_id,
+        name:                  r.name,
+        status:                r.status,
+        buyInAmount:           r.buy_in_amount?.toString() ?? '0',
+        startingStack:         Number(r.starting_chips ?? 5000),
+        registeredCount:       Number(r.registered_count ?? 0),
+        maxPlayers:            Number(r.max_players ?? 6),
+        minPlayers:            Number(r.min_players ?? 2),
+        prizePool:             r.prize_pool?.toString() ?? '0',
+        tableId:               r.table_id ?? null,
+        createdAt:             r.created_at?.toISOString() ?? '',
+        creatorAddress:        r.creator_address ?? null,
+        prizeDistributionType: r.prize_distribution_type ?? 'winner_takes_all',
+        scheduledStartAt:      r.scheduled_start_at ? new Date(r.scheduled_start_at).toISOString() : null,
+        isRegistered:          r.is_registered === true,
+        isPrivate:             Boolean(r.is_private),
+        smallBlind,
+        bigBlind,
+        blindIncreaseMode,
+      };
+    });
   }
 
   async getTournamentState(tournamentId: string): Promise<PokerTournamentState | null> {

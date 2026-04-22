@@ -53,7 +53,7 @@ export const ShareButton: React.FC<ShareButtonProps> = ({
       headerDiv.style.alignItems = 'center';
       headerDiv.style.marginBottom = '20px';
       headerDiv.innerHTML = `
-        <div style="display: flex; align-items: center; gap: 12px; color: #0891b2; font-size: 28px; font-weight: bold; font-family: Arial, sans-serif;">
+        <div style="display: flex; align-items: center; gap: 12px; color: #0891b2; font-size: 28px; font-weight: bold; font-family: Jost, sans-serif;">
           <span>PLINKO on PULSECHAIN</span>
           <img src="/Pulse Branding/Logo/ball.png" style="width: 32px; height: 32px; object-fit: contain;" crossorigin="anonymous" />
         </div>

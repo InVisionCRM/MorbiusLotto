@@ -943,7 +943,7 @@ const BlackjackTable: React.FC<BlackjackTableProps> = ({
           <div
             className="px-8 py-4 sm:px-12 sm:py-5 rounded-2xl glass-distort-panel"
           >
-            <div style={{ fontFamily: '"Orbitron", sans-serif' }}>
+            <div className="font-sans">
               <EncryptedText
                 text="BLACKJACK"
                 revealDelayMs={100}

@@ -53,6 +53,7 @@ import {
   IconDeviceGamepad,
   IconSettings,
   IconDroplet,
+  IconPhoto,
   IconLogout,
   IconVolume,
   IconVolumeOff,
@@ -244,7 +245,7 @@ type NavIconName =
   | 'fa-home' | 'fa-play' | 'fa-pause' | 'fa-forward' | 'fa-chart-line' | 'fa-chart-bar' | 'fa-chart-pie'
   | 'fa-palette' | 'fa-question-circle' | 'fa-exchange-alt' | 'fa-trophy' | 'fa-user-edit' | 'fa-user-circle'
   | 'fa-gift' | 'fa-download' | 'fa-shield-alt' | 'fa-shield' | 'fa-bullhorn' | 'fa-flag' | 'fa-search'
-  | 'fa-gamepad' | 'fa-cog' | 'fa-tint' | 'fa-sign-out-alt' | 'fa-volume-up' | 'fa-volume-mute';
+  | 'fa-gamepad' | 'fa-cog' | 'fa-tint' | 'fa-image' | 'fa-sign-out-alt' | 'fa-volume-up' | 'fa-volume-mute';
 
 const NAV_ICON_MAP: Record<NavIconName, React.ComponentType<{ size?: number; className?: string; 'aria-hidden'?: boolean }>> = {
   'fa-home': IconHome,
@@ -270,6 +271,7 @@ const NAV_ICON_MAP: Record<NavIconName, React.ComponentType<{ size?: number; cla
   'fa-gamepad': IconDeviceGamepad,
   'fa-cog': IconSettings,
   'fa-tint': IconDroplet,
+  'fa-image': IconPhoto,
   'fa-sign-out-alt': IconLogout,
   'fa-volume-up': IconVolume,
   'fa-volume-mute': IconVolumeOff,
@@ -568,6 +570,7 @@ const NavContent = React.memo(function NavContent(props: NavContentProps) {
           )}
           <SidebarButton label="Responsible Gaming" icon={<NavIcon icon="fa-shield-alt" />} onClick={onOpenResponsibleGaming} className={NAV_ITEM_CLASS} />
           <SidebarLink link={{ label: 'Marketing', href: '/marketing', icon: <NavIcon icon="fa-bullhorn" /> }} className={NAV_ITEM_CLASS} />
+          <SidebarLink link={{ label: 'Brand kit', href: '/branding', icon: <NavIcon icon="fa-image" /> }} className={NAV_ITEM_CLASS} />
           <SidebarButton label="Report Issue" icon={<IconFlag size={20} className="text-red-400/80 shrink-0" aria-hidden />} onClick={onOpenReport} className={NAV_ITEM_CLASS} />
           <SidebarLink link={{ label: 'Token Analyzer', href: 'https://scan.morbius.io', icon: <NavIcon icon="fa-search" /> }} className={NAV_ITEM_CLASS} target="_blank" rel="noopener noreferrer" />
           <SidebarLink link={{ label: 'Morb-It', href: '/Morb-It', icon: <NavIcon icon="fa-gamepad" /> }} className={NAV_ITEM_CLASS} />

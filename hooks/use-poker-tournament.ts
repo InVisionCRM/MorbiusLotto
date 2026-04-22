@@ -73,6 +73,10 @@ export interface PokerTournamentSummary {
   isRegistered: boolean;
   /** Present when server runs migration 093+ / updated API */
   isPrivate?: boolean;
+  /** Lobby blinds: live table or level 1 from config (chip ints). */
+  smallBlind?: number;
+  bigBlind?: number;
+  blindIncreaseMode?: PokerBlindIncreaseMode;
 }
 
 export interface CreatePokerTournamentParams {

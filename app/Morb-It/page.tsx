@@ -714,7 +714,7 @@ export default function MorbItPage() {
         left: `${layerXPos}px`,
         transform: `translate(-50%, -50%) rotate(${layer.rotation}deg)`,
         fontSize: `${visualFontSize}px`,
-        fontFamily: "'Oswald', sans-serif",
+        fontFamily: "'Jost', sans-serif",
         fontWeight: 900,
         color: layer.color,
         background: layer.backgroundColor || 'transparent',

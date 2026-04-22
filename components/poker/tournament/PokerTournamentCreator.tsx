@@ -1,6 +1,7 @@
 'use client';
 
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
+import Link from 'next/link';
 import { format } from 'date-fns';
 import {
   POKER_TOURNAMENT_DEFAULT_CONFIG,
@@ -9,17 +10,24 @@ import {
 } from '@/hooks/use-poker-tournament';
 import { isAdminWallet } from '@/lib/admin';
 import {
+  buildPrizePercents,
+  findPokerPrizePresetMeta,
+  POKER_PRIZE_PRESET_LIST,
+  type PokerPrizePresetId,
+} from '@/lib/poker-tournament-prize-presets';
+import {
   Select,
   SelectContent,
   SelectItem,
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { ConfirmActionCard } from '@/components/shared/ConfirmActionCard';
+import { Confetti, type ConfettiRef } from '@/components/ui/confetti';
 
 const MORBIUS_DECIMALS = 18n;
 
-/** 96 slots per day: 15-minute steps, labels in 12h AM/PM (local). */
 function useFifteenMinuteTimeOptions(): { value: string; label: string }[] {
   return useMemo(() => {
     const out: { value: string; label: string }[] = [];
@@ -36,7 +44,6 @@ function useFifteenMinuteTimeOptions(): { value: string; label: string }[] {
   }, []);
 }
 
-/** Next local 15-minute boundary at least ~1 minute from now (for valid default create). */
 function defaultScheduledFields(): { date: string; time: string } {
   const from = new Date(Date.now() + 60_000);
   from.setSeconds(0, 0);
@@ -66,7 +73,9 @@ function parseMorbiusInput(val: string): bigint {
     const num = parseFloat(val);
     if (isNaN(num) || num <= 0) return 0n;
     return BigInt(Math.round(num)) * 10n ** MORBIUS_DECIMALS;
-  } catch { return 0n; }
+  } catch {
+    return 0n;
+  }
 }
 
 const STARTING_STACK_PRESETS = [
@@ -75,10 +84,6 @@ const STARTING_STACK_PRESETS = [
   { value: '5555', label: '5,555' },
   { value: '10000', label: '10,000' },
 ] as const;
-
-function defaultWinnerTakesAllPrizeRowCount(n: number): number[] {
-  return Array.from({ length: n }, (_, i) => (i === 0 ? 100 : 0));
-}
 
 function finishOrdinal(rank: number): string {
   const j = rank % 10;
@@ -89,13 +94,49 @@ function finishOrdinal(rank: number): string {
   return `${rank}th`;
 }
 
+function snapLocalToQuarterHour(d: Date): Date {
+  const out = new Date(d);
+  out.setSeconds(0, 0);
+  const curM = out.getMinutes();
+  const step = 15;
+  const rem = curM % step;
+  if (rem !== 0) {
+    out.setMinutes(curM + (step - rem));
+  }
+  if (out.getTime() <= Date.now()) {
+    out.setMinutes(out.getMinutes() + step);
+  }
+  return out;
+}
+
+function parseLocalDateTime(dateStr: string, timeStr: string): Date | null {
+  const parts = dateStr.split('-').map(Number);
+  const timeParts = timeStr.split(':').map(Number);
+  if (parts.length !== 3 || timeParts.length !== 2) return null;
+  const [y, mo, d] = parts;
+  const [hh, mm] = timeParts;
+  if (!Number.isFinite(y) || !Number.isFinite(mo) || !Number.isFinite(d) || !Number.isFinite(hh) || !Number.isFinite(mm)) {
+    return null;
+  }
+  return new Date(y, mo - 1, d, hh, mm, 0, 0);
+}
+
 export interface PokerTournamentCreatorProps {
   creatorAddress?: string;
   onClose: () => void;
-  onCreate: (params: CreatePokerTournamentParams, opts: { addBots: number }) => Promise<void>;
+  onCreate: (
+    params: CreatePokerTournamentParams,
+    opts: { addBots: number },
+  ) => Promise<{ tournamentId: string; pinCode?: string | null } | null>;
 }
 
+const TAB_BAR =
+  'flex flex-wrap gap-1 p-1 rounded-xl border border-cyan-500/25 bg-black/30 shadow-[inset_0_2px_6px_rgba(0,0,0,0.65)]';
+const TAB_TRIGGER =
+  'rounded-lg px-3 py-2 text-xs font-medium text-white/65 data-[state=active]:text-white data-[state=active]:bg-gradient-to-br data-[state=active]:from-cyan-600/35 data-[state=active]:to-blue-600/25 data-[state=active]:border data-[state=active]:border-cyan-500/35 data-[state=active]:shadow-sm';
+
 export function PokerTournamentCreator({ creatorAddress, onClose, onCreate }: PokerTournamentCreatorProps) {
+  const isAdmin = isAdminWallet(creatorAddress);
   const [name, setName] = useState('My SNG');
   const [isFreeroll, setIsFreeroll] = useState(false);
   const [fundFromPromo, setFundFromPromo] = useState(false);
@@ -106,27 +147,32 @@ export function PokerTournamentCreator({ creatorAddress, onClose, onCreate }: Po
   const [maxPlayers, setMaxPlayers] = useState('6');
   const [isPrivate, setIsPrivate] = useState(false);
   const [privatePin, setPrivatePin] = useState('');
-  /** After create, start this many poker bots joining the tournament (0 = none). */
   const [botsToAdd, setBotsToAdd] = useState(0);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [showConfirm, setShowConfirm] = useState(false);
+  const [activeTab, setActiveTab] = useState('basics');
   const initialSchedule = useMemo(() => defaultScheduledFields(), []);
-  /** yyyy-MM-dd in local time — required */
   const [scheduledDate, setScheduledDate] = useState(initialSchedule.date);
-  /** HH:mm 24h, 15-minute steps */
   const [scheduledTime, setScheduledTime] = useState(initialSchedule.time);
   const [scheduleError, setScheduleError] = useState<string | null>(null);
-  /** How blinds go up during play (stored on the tournament). */
   const [blindIncreaseMode, setBlindIncreaseMode] = useState<PokerBlindIncreaseMode>('knockout');
+  const [prizePresetId, setPrizePresetId] = useState<PokerPrizePresetId>('podium_classic');
+  const [created, setCreated] = useState<{ tournamentId: string; pinCode?: string | null } | null>(null);
+
+  const confettiRef = useRef<ConfettiRef>(null);
 
   const timeOptions = useFifteenMinuteTimeOptions();
   const minScheduleDate = useMemo(() => localYyyyMmDd(new Date()), []);
 
-  const showPromoOption = isFreeroll && isAdminWallet(creatorAddress);
+  const showPromoOption = isFreeroll && isAdmin;
 
   useEffect(() => {
     if (!isFreeroll) setFundFromPromo(false);
   }, [isFreeroll]);
+
+  useEffect(() => {
+    if (!isAdmin) setBotsToAdd(0);
+  }, [isAdmin]);
 
   const prizeSlotCount = useMemo(() => {
     const minP = Math.max(2, Math.min(10, parseInt(minPlayers, 10) || 2));
@@ -138,27 +184,88 @@ export function PokerTournamentCreator({ creatorAddress, onClose, onCreate }: Po
     return maxP;
   }, [minPlayers, maxPlayers]);
 
-  const [prizePercents, setPrizePercents] = useState<number[]>(() => defaultWinnerTakesAllPrizeRowCount(6));
-
-  useEffect(() => {
-    setPrizePercents((prev) => {
-      const next = prev.slice(0, prizeSlotCount);
-      while (next.length < prizeSlotCount) next.push(0);
-      if (next.length === prev.length && next.every((v, i) => v === prev[i])) return prev;
-      return next;
-    });
-  }, [prizeSlotCount]);
+  const prizePercents = useMemo(
+    () => buildPrizePercents(prizePresetId, prizeSlotCount),
+    [prizePresetId, prizeSlotCount],
+  );
 
   const prizeSum = prizePercents.reduce((a, b) => a + b, 0);
 
   const level1Blinds = POKER_TOURNAMENT_DEFAULT_CONFIG.blindSchedule[0];
+  const handsL1 = level1Blinds.handsPerLevel ?? 10;
   const startingStackPreview = Math.max(
     100,
     parseInt(startingStack, 10) || Number(STARTING_STACK_PRESETS[STARTING_STACK_PRESETS.length - 1].value),
   );
   const bigBlindStart = level1Blinds.bigBlind > 0 ? level1Blinds.bigBlind : 1;
-  const startingBigBlindDepth =
-    Math.round((startingStackPreview / bigBlindStart) * 10) / 10;
+  const startingBigBlindDepth = Math.round((startingStackPreview / bigBlindStart) * 10) / 10;
+
+  const schedulePreview = useMemo(() => {
+    const local = parseLocalDateTime(scheduledDate, scheduledTime);
+    if (!local) return null;
+    return {
+      weekday: format(local, 'EEEE'),
+      dayLine: format(local, 'MMMM d, yyyy'),
+      timeLine: format(local, 'h:mm a'),
+    };
+  }, [scheduledDate, scheduledTime]);
+
+  useEffect(() => {
+    if (!created) return;
+    const id = window.setTimeout(() => {
+      confettiRef.current?.fire({
+        particleCount: 110,
+        spread: 78,
+        origin: { y: 0.55, x: 0.5 },
+        ticks: 220,
+        scalar: 1.05,
+      });
+      window.setTimeout(() => {
+        confettiRef.current?.fire({
+          particleCount: 60,
+          spread: 100,
+          origin: { x: 0.25, y: 0.65 },
+          ticks: 180,
+        });
+        confettiRef.current?.fire({
+          particleCount: 60,
+          spread: 100,
+          origin: { x: 0.75, y: 0.65 },
+          ticks: 180,
+        });
+      }, 180);
+    }, 80);
+    return () => window.clearTimeout(id);
+  }, [created]);
+
+  const bumpSchedule = (kind: 'today' | 'tomorrow' | 'hours', hours?: number) => {
+    let base: Date;
+    if (kind === 'today') {
+      base = snapLocalToQuarterHour(new Date(Date.now() + 45 * 60_000));
+    } else if (kind === 'tomorrow') {
+      base = new Date();
+      base.setDate(base.getDate() + 1);
+      base.setHours(18, 0, 0, 0);
+      base = snapLocalToQuarterHour(base);
+    } else if (kind === 'hours' && hours != null) {
+      base = snapLocalToQuarterHour(new Date(Date.now() + hours * 3_600_000));
+    } else {
+      base = snapLocalToQuarterHour(new Date());
+    }
+    setScheduledDate(localYyyyMmDd(base));
+    setScheduledTime(`${String(base.getHours()).padStart(2, '0')}:${String(base.getMinutes()).padStart(2, '0')}`);
+    setScheduleError(null);
+  };
+
+  const validateSchedule = (): string | null => {
+    if (!scheduledDate.trim()) return 'Pick a start date.';
+    const local = parseLocalDateTime(scheduledDate, scheduledTime);
+    if (!local) return 'Pick a valid date and time.';
+    const mm = local.getMinutes();
+    if (mm % 15 !== 0) return 'Time must be on a 15-minute mark.';
+    if (local.getTime() < Date.now() + 60_000) return 'Start must be at least 1 minute from now.';
+    return null;
+  };
 
   const handleCreate = async () => {
     if (!name.trim()) return;
@@ -169,40 +276,19 @@ export function PokerTournamentCreator({ creatorAddress, onClose, onCreate }: Po
     const pinDigits = privatePin.replace(/\D/g, '').slice(0, 12);
     const pinForCreate = isPrivate && pinDigits.length >= 4 ? pinDigits : undefined;
 
-    setScheduleError(null);
-    if (!scheduledDate.trim()) {
-      setScheduleError('Pick a start date.');
-      return;
-    }
-    const parts = scheduledDate.split('-').map(Number);
-    const timeParts = scheduledTime.split(':').map(Number);
-    if (parts.length !== 3 || timeParts.length !== 2) {
-      setScheduleError('Pick a valid date and time.');
-      return;
-    }
-    const [y, mo, d] = parts;
-    const [hh, mm] = timeParts;
-    if (!Number.isFinite(y) || !Number.isFinite(mo) || !Number.isFinite(d) || !Number.isFinite(hh) || !Number.isFinite(mm)) {
-      setScheduleError('Pick a valid date and time.');
-      return;
-    }
-    if (mm % 15 !== 0) {
-      setScheduleError('Time must be on a 15-minute mark.');
-      return;
-    }
-    const local = new Date(y, mo - 1, d, hh, mm, 0, 0);
-    if (local.getTime() < Date.now() + 60_000) {
-      setScheduleError('Start must be at least 1 minute from now.');
-      return;
-    }
+    const err = validateSchedule();
+    setScheduleError(err);
+    if (err) return;
+
+    const local = parseLocalDateTime(scheduledDate, scheduledTime)!;
     const scheduledStartAt = local.toISOString();
 
     setIsSubmitting(true);
     try {
-      await onCreate(
+      const result = await onCreate(
         {
-          name:                  name.trim(),
-          buyInAmount:           buyWei.toString(),
+          name: name.trim(),
+          buyInAmount: buyWei.toString(),
           ...(isFreeroll
             ? {
                 guaranteedPrizePool: guaranteeWei.toString(),
@@ -210,24 +296,27 @@ export function PokerTournamentCreator({ creatorAddress, onClose, onCreate }: Po
               }
             : {}),
           prizeDistributionType: 'custom',
-          prizePercentages:      [...prizePercents],
-          config:                {
+          prizePercentages: [...prizePercents],
+          config: {
             ...POKER_TOURNAMENT_DEFAULT_CONFIG,
             startingStack: Math.max(
               100,
               parseInt(startingStack, 10) || Number(STARTING_STACK_PRESETS[STARTING_STACK_PRESETS.length - 1].value),
             ),
-            minPlayers:    Math.max(2, Math.min(10, parseInt(minPlayers, 10) || 2)),
-            maxPlayers:    prizeSlotCount,
+            minPlayers: Math.max(2, Math.min(10, parseInt(minPlayers, 10) || 2)),
+            maxPlayers: prizeSlotCount,
             blindIncreaseMode,
           },
           isPrivate,
           ...(pinForCreate ? { pinCode: pinForCreate } : {}),
           scheduledStartAt,
         },
-        { addBots: Math.max(0, Math.min(10, Math.floor(botsToAdd))) },
+        { addBots: isAdmin ? Math.max(0, Math.min(10, Math.floor(botsToAdd))) : 0 },
       );
-      onClose();
+      if (result?.tournamentId) {
+        setCreated(result);
+        setShowConfirm(false);
+      }
     } finally {
       setIsSubmitting(false);
     }
@@ -237,12 +326,79 @@ export function PokerTournamentCreator({ creatorAddress, onClose, onCreate }: Po
     'w-full rounded-xl bg-gray-950/60 border border-cyan-500/20 px-3 py-2.5 text-white text-sm placeholder:text-white/30 focus:outline-none focus:border-cyan-500/50 focus:ring-1 focus:ring-cyan-500/20';
   const labelClass = 'text-xs font-medium text-white/60 mb-1.5 block';
 
+  const prizePresetLabel = findPokerPrizePresetMeta(prizePresetId)?.label ?? prizePresetId;
+
+  if (created) {
+    return (
+      <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm">
+        <Confetti
+          ref={confettiRef}
+          manualstart
+          className="pointer-events-none fixed inset-0 z-[51] h-full w-full"
+        />
+        <div
+          className="relative z-[52] w-full max-w-md rounded-2xl border-2 border-cyan-500/30 bg-gradient-to-br from-slate-900 to-slate-800 p-6 shadow-2xl overflow-hidden"
+          style={{
+            boxShadow: '0 8px 32px rgba(0,0,0,0.55), inset 0 3px 6px rgba(0,0,0,0.8), inset 0 -3px 6px rgba(255,255,255,0.08)',
+          }}
+        >
+          <div className="absolute inset-0 pointer-events-none bg-[radial-gradient(circle_at_50%_0%,rgba(34,211,238,0.18),transparent_55%)]" />
+          <div className="relative text-center space-y-4">
+            <div className="inline-flex h-14 w-14 items-center justify-center rounded-full border border-emerald-500/40 bg-emerald-500/15 text-2xl">
+              ✓
+            </div>
+            <h2 className="text-xl font-bold text-white tracking-tight">Tournament created</h2>
+            <p className="text-sm text-white/70 leading-relaxed">
+              Your Sit &amp; Go is scheduled. You can track it anytime from your creator dashboard.
+            </p>
+            {created.pinCode && (
+              <p className="text-xs text-amber-200/90 rounded-lg border border-amber-500/25 bg-amber-500/10 px-3 py-2">
+                Private PIN: <span className="font-mono font-semibold tracking-wider">{created.pinCode}</span>
+              </p>
+            )}
+            <div className="flex flex-col sm:flex-row gap-2 pt-2">
+              <Link
+                href="/creators"
+                className="flex-1 text-center rounded-xl bg-gradient-to-r from-cyan-600 to-blue-600 px-4 py-3 text-sm font-semibold text-white hover:opacity-95 transition-opacity"
+              >
+                Open creator dashboard
+              </Link>
+              <button
+                type="button"
+                onClick={onClose}
+                className="flex-1 rounded-xl border border-white/15 px-4 py-3 text-sm font-medium text-white/85 hover:bg-white/5 transition-colors"
+              >
+                Close
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  const createDisabled =
+    isSubmitting
+    || !name.trim()
+    || prizeSum !== 100
+    || prizePercents.length !== prizeSlotCount
+    || (!isFreeroll && parseMorbiusInput(buyIn) <= 0n)
+    || (isFreeroll && parseMorbiusInput(guaranteedPool) <= 0n);
+
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm">
-      <div className="relative w-full max-w-lg max-h-[90vh] flex flex-col rounded-2xl border-2 border-cyan-500/30 bg-gradient-to-br from-slate-900 to-slate-800 shadow-2xl overflow-hidden">
+      <div
+        className="relative w-full max-w-xl max-h-[92vh] flex flex-col rounded-2xl border-2 border-cyan-500/30 bg-gradient-to-br from-slate-900 to-slate-800 shadow-2xl overflow-hidden"
+        style={{
+          boxShadow: '0 8px 32px rgba(0,0,0,0.5), inset 0 3px 6px rgba(0,0,0,0.8), inset 0 -3px 6px rgba(255,255,255,0.08)',
+        }}
+      >
         <div className="absolute inset-0 pointer-events-none bg-[radial-gradient(circle_at_50%_0%,rgba(34,211,238,0.12),transparent_55%)]" />
         <div className="relative shrink-0 flex items-center justify-between px-5 pt-5 pb-3 border-b border-cyan-500/20">
-          <h2 className="text-lg font-bold text-white tracking-tight">Create Poker SNG</h2>
+          <div>
+            <h2 className="text-lg font-bold text-white tracking-tight">Create a poker SNG</h2>
+            <p className="text-[11px] text-white/45 mt-0.5">Sit &amp; Go · scheduled start · you host the table size and prizes</p>
+          </div>
           <button
             type="button"
             onClick={onClose}
@@ -253,207 +409,181 @@ export function PokerTournamentCreator({ creatorAddress, onClose, onCreate }: Po
           </button>
         </div>
 
-        <div className="relative flex-1 min-h-0 overflow-y-auto px-5 py-4 space-y-5">
-          <div>
-            <label className={labelClass}>Name</label>
-            <input value={name} onChange={(e) => setName(e.target.value)} className={fieldClass} maxLength={40} />
-          </div>
+        <div className="relative flex-1 min-h-0 overflow-y-auto px-5 py-4">
+          <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
+            <TabsList className={TAB_BAR}>
+              <TabsTrigger value="basics" className={TAB_TRIGGER}>
+                Basics
+              </TabsTrigger>
+              <TabsTrigger value="schedule" className={TAB_TRIGGER}>
+                Start time
+              </TabsTrigger>
+              <TabsTrigger value="rules" className={TAB_TRIGGER}>
+                Blinds &amp; access
+              </TabsTrigger>
+              <TabsTrigger value="prizes" className={TAB_TRIGGER}>
+                Prizes
+              </TabsTrigger>
+              {isAdmin && (
+                <TabsTrigger value="staff" className={TAB_TRIGGER}>
+                  Staff
+                </TabsTrigger>
+              )}
+            </TabsList>
 
-          <label className="flex items-center gap-3 cursor-pointer select-none">
-            <input
-              type="checkbox"
-              checked={isFreeroll}
-              onChange={(e) => {
-                setIsFreeroll(e.target.checked);
-                if (!e.target.checked) setFundFromPromo(false);
-              }}
-              className="rounded border-white/20 bg-gray-900"
-            />
-            <span className="text-sm text-white/90">Freeroll</span>
-          </label>
+            <TabsContent value="basics" className="mt-4 space-y-5 outline-none">
+              <div>
+                <label className={labelClass}>Tournament name</label>
+                <input value={name} onChange={(e) => setName(e.target.value)} className={fieldClass} maxLength={40} />
+              </div>
 
-          {showPromoOption && (
-            <label className="flex items-center gap-3 cursor-pointer select-none">
-              <input
-                type="checkbox"
-                checked={fundFromPromo}
-                onChange={(e) => setFundFromPromo(e.target.checked)}
-                className="rounded border-white/20 bg-gray-900"
-              />
-              <span className="text-sm text-amber-200/90">Admin promo funding</span>
-            </label>
-          )}
-
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            <div>
-              <label className={labelClass}>{isFreeroll ? 'Guaranteed pool' : 'Buy-in'}</label>
-              <input
-                type="number"
-                min="1"
-                value={isFreeroll ? guaranteedPool : buyIn}
-                onChange={(e) => (isFreeroll ? setGuaranteedPool(e.target.value) : setBuyIn(e.target.value))}
-                className={fieldClass}
-              />
-              <p className="text-[11px] text-white/40 mt-1">MORBIUS</p>
-            </div>
-            <div>
-              <label className={labelClass}>Starting stack</label>
-              <Select value={startingStack} onValueChange={setStartingStack}>
-                <SelectTrigger className={`${fieldClass} h-auto min-h-[44px]`}>
-                  <SelectValue placeholder="Chips" />
-                </SelectTrigger>
-                <SelectContent className="bg-slate-900 border border-cyan-500/30 text-white shadow-xl z-[200]">
-                  {STARTING_STACK_PRESETS.map((p) => (
-                    <SelectItem key={p.value} value={p.value} className="focus:bg-cyan-500/15 focus:text-white cursor-pointer">
-                      {p.label}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-              <p className="text-[11px] text-white/40 mt-1">Table chips</p>
-            </div>
-          </div>
-
-          <div className="rounded-xl border border-cyan-500/25 bg-black/25 px-4 py-3">
-            <p className="text-sm text-white/90">
-              <span className="text-white/50">Level 1 blinds · </span>
-              <span className="tabular-nums font-medium text-cyan-200">
-                {level1Blinds.smallBlind} / {level1Blinds.bigBlind}
-              </span>
-            </p>
-            <p className="text-xs text-white/45 mt-1">
-              ~{startingBigBlindDepth} BB deep with {startingStackPreview.toLocaleString()} chips
-            </p>
-          </div>
-
-          <div>
-            <label className={labelClass}>Blind increases</label>
-            <Select
-              value={blindIncreaseMode}
-              onValueChange={(v) => setBlindIncreaseMode(v as PokerBlindIncreaseMode)}
-            >
-              <SelectTrigger className={`${fieldClass} h-auto min-h-[44px]`}>
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent className="bg-slate-900 border border-cyan-500/30 text-white shadow-xl z-[200]">
-                <SelectItem value="knockout" className="focus:bg-cyan-500/15 focus:text-white cursor-pointer">
-                  When players bust — blinds jump (classic SNG here)
-                </SelectItem>
-                <SelectItem value="by_hand" className="focus:bg-cyan-500/15 focus:text-white cursor-pointer">
-                  By hands played — follows the built-in blind schedule
-                </SelectItem>
-              </SelectContent>
-            </Select>
-            <p className="text-[11px] text-white/40 mt-1">
-              {blindIncreaseMode === 'knockout'
-                ? 'Blinds only go up after knockouts; schedule is for starting stakes and the level readout.'
-                : 'Blinds step up on a fixed number of hands per level (see schedule in app code / docs).'}
-            </p>
-          </div>
-
-          <div className="grid grid-cols-2 gap-4">
-            <div>
-              <label className={labelClass}>Min players</label>
-              <input
-                type="number"
-                min="2"
-                max="10"
-                value={minPlayers}
-                onChange={(e) => setMinPlayers(e.target.value)}
-                className={fieldClass}
-              />
-            </div>
-            <div>
-              <label className={labelClass}>Max players</label>
-              <input
-                type="number"
-                min="2"
-                max="10"
-                value={maxPlayers}
-                onChange={(e) => setMaxPlayers(e.target.value)}
-                className={fieldClass}
-              />
-            </div>
-          </div>
-
-          <div className="rounded-xl border border-cyan-500/25 bg-black/25 px-4 py-3 space-y-3">
-            <div className="flex flex-wrap items-center justify-between gap-2">
-              <span className="text-sm font-medium text-white/90">Prize split</span>
-              <div className="flex gap-2">
-                <button
-                  type="button"
-                  onClick={() => setPrizePercents(defaultWinnerTakesAllPrizeRowCount(prizeSlotCount))}
-                  className="text-xs rounded-lg border border-white/15 bg-white/5 px-2.5 py-1.5 text-white/80 hover:bg-white/10 transition-colors"
-                >
-                  Winner takes all
-                </button>
-                <button
-                  type="button"
-                  disabled={prizeSlotCount < 3}
-                  onClick={() => {
-                    const row = defaultWinnerTakesAllPrizeRowCount(prizeSlotCount);
-                    row[0] = 50;
-                    row[1] = 30;
-                    row[2] = 20;
-                    setPrizePercents(row);
+              <label className="flex items-center gap-3 cursor-pointer select-none">
+                <input
+                  type="checkbox"
+                  checked={isFreeroll}
+                  onChange={(e) => {
+                    setIsFreeroll(e.target.checked);
+                    if (!e.target.checked) setFundFromPromo(false);
                   }}
-                  className="text-xs rounded-lg border border-white/15 bg-white/5 px-2.5 py-1.5 text-white/80 hover:bg-white/10 disabled:opacity-30 transition-colors"
-                >
-                  50 / 30 / 20
-                </button>
-              </div>
-            </div>
-            <p className="text-[11px] text-white/45">{prizeSlotCount} places · percents must sum to 100</p>
-            <div className="rounded-lg border border-white/10 overflow-hidden max-h-40 overflow-y-auto">
-              <div className="grid grid-cols-[1fr_3.5rem] gap-0 bg-white/5 text-[10px] font-medium uppercase tracking-wide text-white/45 px-2 py-2">
-                <span>Place</span>
-                <span className="text-right">%</span>
-              </div>
-              {prizePercents.map((pct, i) => (
-                <div key={i} className="grid grid-cols-[1fr_3.5rem] gap-2 items-center border-t border-white/10 px-2 py-2">
-                  <span className="text-sm text-white/80">{finishOrdinal(i + 1)}</span>
+                  className="rounded border-white/20 bg-gray-900"
+                />
+                <span className="text-sm text-white/90">Freeroll (you fund the prize pool)</span>
+              </label>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div>
+                  <label className={labelClass}>{isFreeroll ? 'Guaranteed prize pool' : 'Buy-in per player'}</label>
                   <input
                     type="number"
-                    min={0}
-                    max={100}
-                    step={1}
-                    value={pct}
-                    onChange={(e) => {
-                      const n = parseInt(e.target.value, 10);
-                      const v = Number.isFinite(n) ? Math.max(0, Math.min(100, n)) : 0;
-                      setPrizePercents((prev) => {
-                        const next = [...prev];
-                        next[i] = v;
-                        return next;
-                      });
-                    }}
-                    className="w-full rounded-md bg-white/10 border border-white/10 px-2 py-1 text-sm text-white tabular-nums text-right focus:outline-none focus:border-cyan-500/50"
+                    min="1"
+                    value={isFreeroll ? guaranteedPool : buyIn}
+                    onChange={(e) => (isFreeroll ? setGuaranteedPool(e.target.value) : setBuyIn(e.target.value))}
+                    className={fieldClass}
+                  />
+                  <p className="text-[11px] text-white/40 mt-1">MORBIUS</p>
+                </div>
+                <div>
+                  <label className={labelClass}>Starting stack</label>
+                  <Select value={startingStack} onValueChange={setStartingStack}>
+                    <SelectTrigger className={`${fieldClass} h-auto min-h-[44px]`}>
+                      <SelectValue placeholder="Chips" />
+                    </SelectTrigger>
+                    <SelectContent className="bg-slate-900 border border-cyan-500/30 text-white shadow-xl z-[200]">
+                      {STARTING_STACK_PRESETS.map((p) => (
+                        <SelectItem key={p.value} value={p.value} className="focus:bg-cyan-500/15 focus:text-white cursor-pointer">
+                          {p.label}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <p className="text-[11px] text-white/40 mt-1">Tournament chips at the table</p>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className={labelClass}>Min players</label>
+                  <input
+                    type="number"
+                    min="2"
+                    max="10"
+                    value={minPlayers}
+                    onChange={(e) => setMinPlayers(e.target.value)}
+                    className={fieldClass}
                   />
                 </div>
-              ))}
-            </div>
-            <p className={`text-sm font-medium tabular-nums ${prizeSum === 100 ? 'text-emerald-400' : 'text-amber-300'}`}>
-              Total {prizeSum}%
-            </p>
-          </div>
+                <div>
+                  <label className={labelClass}>Max players</label>
+                  <input
+                    type="number"
+                    min="2"
+                    max="10"
+                    value={maxPlayers}
+                    onChange={(e) => setMaxPlayers(e.target.value)}
+                    className={fieldClass}
+                  />
+                </div>
+              </div>
 
-          <div className="space-y-3">
-            <label className={labelClass}>Scheduled start</label>
-            <p className="text-[11px] text-white/40 -mt-2 mb-1">Required · 15-minute times (local)</p>
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div
+                className="rounded-xl px-4 py-3 text-sm"
+                style={{
+                  background: 'linear-gradient(325deg, rgba(20, 20, 20, 0.85), rgba(40, 40, 40, 0.55))',
+                  border: '1px inset rgba(60, 60, 60, 0.5)',
+                  boxShadow: 'inset 0 3px 6px rgba(0, 0, 0, 0.8), inset 0 -3px 6px rgba(255, 255, 255, 0.1), 0 1px 3px rgba(0, 0, 0, 0.5)',
+                }}
+              >
+                <span className="text-white/50">Opening blinds · </span>
+                <span className="tabular-nums font-medium text-cyan-200">
+                  {level1Blinds.smallBlind} / {level1Blinds.bigBlind}
+                </span>
+                <p className="text-xs text-white/45 mt-1">
+                  About {startingBigBlindDepth} big-blind deep with {startingStackPreview.toLocaleString()} chips
+                </p>
+              </div>
+            </TabsContent>
+
+            <TabsContent value="schedule" className="mt-4 space-y-4 outline-none">
+              {schedulePreview && (
+                <div
+                  className="relative rounded-2xl px-5 py-5 text-center space-y-1"
+                  style={{
+                    background: 'linear-gradient(145deg, rgb(16, 26, 35), rgb(35, 36, 41))',
+                    border: '1px inset rgba(60, 60, 60, 0.5)',
+                    boxShadow: 'inset 0 3px 6px rgba(0, 0, 0, 0.8), inset 0 -3px 6px rgba(255, 255, 255, 0.1), 0 1px 3px rgba(0, 0, 0, 0.5)',
+                  }}
+                >
+                  <div className="absolute inset-0 rounded-2xl pointer-events-none bg-[radial-gradient(circle_at_50%_40%,rgba(34,211,238,0.22),transparent_65%)]" />
+                  <p className="text-xs font-semibold uppercase tracking-widest text-cyan-300/90">Starts</p>
+                  <p className="text-lg font-semibold text-white">{schedulePreview.weekday}</p>
+                  <p className="text-sm text-white/70">{schedulePreview.dayLine}</p>
+                  <p className="text-3xl font-bold tabular-nums text-white tracking-tight pt-1">{schedulePreview.timeLine}</p>
+                  <p className="text-[11px] text-white/40 pt-2">Your local time · 15-minute slots</p>
+                </div>
+              )}
+
+              <div className="flex flex-wrap gap-2">
+                {(
+                  [
+                    { k: 'today' as const, label: 'Soon' },
+                    { k: 'tomorrow' as const, label: 'Tomorrow 6pm' },
+                    { k: 'hours' as const, label: '+1 hour', h: 1 },
+                    { k: 'hours' as const, label: '+3 hours', h: 3 },
+                  ] as const
+                ).map((chip) => (
+                  <button
+                    key={chip.label}
+                    type="button"
+                    onClick={() => bumpSchedule(chip.k, chip.k === 'hours' ? chip.h : undefined)}
+                    className="rounded-full border border-cyan-500/30 bg-cyan-500/10 px-3 py-1.5 text-xs font-medium text-cyan-100 hover:bg-cyan-500/20 transition-colors"
+                  >
+                    {chip.label}
+                  </button>
+                ))}
+              </div>
+
               <div>
-                <span className="text-[11px] text-white/45 block mb-1">Date</span>
+                <label className={labelClass}>Calendar date</label>
                 <input
                   type="date"
                   value={scheduledDate}
                   min={minScheduleDate}
-                  onChange={(e) => setScheduledDate(e.target.value)}
+                  onChange={(e) => {
+                    setScheduledDate(e.target.value);
+                    setScheduleError(null);
+                  }}
                   className={`${fieldClass} [color-scheme:dark]`}
                 />
               </div>
               <div>
-                <span className="text-[11px] text-white/45 block mb-1">Time</span>
-                <Select value={scheduledTime} onValueChange={setScheduledTime}>
+                <label className={labelClass}>Clock time</label>
+                <Select
+                  value={scheduledTime}
+                  onValueChange={(v) => {
+                    setScheduledTime(v);
+                    setScheduleError(null);
+                  }}
+                >
                   <SelectTrigger className={`${fieldClass} h-auto min-h-[44px]`}>
                     <SelectValue placeholder="Time" />
                   </SelectTrigger>
@@ -466,50 +596,131 @@ export function PokerTournamentCreator({ creatorAddress, onClose, onCreate }: Po
                   </SelectContent>
                 </Select>
               </div>
-            </div>
-            {scheduleError && <p className="text-xs text-red-400">{scheduleError}</p>}
-          </div>
+              {scheduleError && <p className="text-xs text-red-400">{scheduleError}</p>}
+            </TabsContent>
 
-          <label className="flex items-center gap-3 cursor-pointer select-none">
-            <input
-              type="checkbox"
-              checked={isPrivate}
-              onChange={(e) => {
-                setIsPrivate(e.target.checked);
-                if (!e.target.checked) setPrivatePin('');
-              }}
-              className="rounded border-white/20 bg-gray-900"
-            />
-            <span className="text-sm text-white/90">Private room</span>
-          </label>
+            <TabsContent value="rules" className="mt-4 space-y-5 outline-none">
+              <div>
+                <label className={labelClass}>How blinds increase</label>
+                <Select value={blindIncreaseMode} onValueChange={(v) => setBlindIncreaseMode(v as PokerBlindIncreaseMode)}>
+                  <SelectTrigger className={`${fieldClass} h-auto min-h-[44px]`}>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent className="bg-slate-900 border border-cyan-500/30 text-white shadow-xl z-[200]">
+                    <SelectItem value="knockout" className="focus:bg-cyan-500/15 focus:text-white cursor-pointer">
+                      After each knockout (classic SNG)
+                    </SelectItem>
+                    <SelectItem value="by_hand" className="focus:bg-cyan-500/15 focus:text-white cursor-pointer">
+                      On a timer — every N completed hands
+                    </SelectItem>
+                  </SelectContent>
+                </Select>
+                <p className="text-[11px] text-white/45 mt-2 leading-relaxed">
+                  {blindIncreaseMode === 'knockout'
+                    ? 'Blinds rise when someone is eliminated, so the game stays comfortable until the field shrinks.'
+                    : `Blinds follow the built-in ladder (level 1 uses ${handsL1} hands per level, then fewer hands on later levels) so the pace picks up even if no one has busted yet.`}
+                </p>
+              </div>
 
-          {isPrivate && (
-            <div>
-              <label className={labelClass}>PIN</label>
-              <input
-                type="text"
-                value={privatePin}
-                onChange={(e) => setPrivatePin(e.target.value.replace(/\D/g, '').slice(0, 12))}
-                placeholder="4–12 digits"
-                className={fieldClass}
-              />
-            </div>
-          )}
+              <label className="flex items-center gap-3 cursor-pointer select-none">
+                <input
+                  type="checkbox"
+                  checked={isPrivate}
+                  onChange={(e) => {
+                    setIsPrivate(e.target.checked);
+                    if (!e.target.checked) setPrivatePin('');
+                  }}
+                  className="rounded border-white/20 bg-gray-900"
+                />
+                <span className="text-sm text-white/90">Private tournament (PIN required to join)</span>
+              </label>
 
-          <div>
-            <label className={labelClass}>Bot players after create</label>
-            <input
-              type="number"
-              min={0}
-              max={10}
-              value={botsToAdd}
-              onChange={(e) => setBotsToAdd(Math.max(0, Math.min(10, Number(e.target.value) || 0)))}
-              className={fieldClass}
-            />
-            <p className="text-[11px] text-white/40 mt-1">
-              0–10 · optional · automated poker bots join open seats once the tournament is created
-            </p>
-          </div>
+              {isPrivate && (
+                <div>
+                  <label className={labelClass}>Room PIN</label>
+                  <input
+                    type="text"
+                    value={privatePin}
+                    onChange={(e) => setPrivatePin(e.target.value.replace(/\D/g, '').slice(0, 12))}
+                    placeholder="4–12 digits"
+                    className={fieldClass}
+                  />
+                </div>
+              )}
+            </TabsContent>
+
+            <TabsContent value="prizes" className="mt-4 space-y-4 outline-none">
+              <div>
+                <label className={labelClass}>Prize split preset</label>
+                <Select value={prizePresetId} onValueChange={(v) => setPrizePresetId(v as PokerPrizePresetId)}>
+                  <SelectTrigger className={`${fieldClass} h-auto min-h-[44px]`}>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent className="max-h-64 bg-slate-900 border border-cyan-500/30 text-white shadow-xl z-[200]">
+                    {POKER_PRIZE_PRESET_LIST.map((p) => (
+                      <SelectItem key={p.id} value={p.id} className="focus:bg-cyan-500/15 focus:text-white cursor-pointer">
+                        <span className="font-medium">{p.label}</span>
+                        <span className="block text-[10px] text-white/45">{p.shortDescription}</span>
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <p className="text-[11px] text-white/45 mt-1.5">
+                  Percents apply to paid finishing positions for up to {prizeSlotCount} seats. Presets always total 100%.
+                </p>
+              </div>
+
+              <div
+                className="rounded-xl overflow-hidden max-h-48 overflow-y-auto"
+                style={{
+                  background: 'linear-gradient(325deg, rgba(20, 20, 20, 0.8), rgba(40, 40, 40, 0.55))',
+                  border: '1px inset rgba(60, 60, 60, 0.5)',
+                  boxShadow: 'inset 0 3px 6px rgba(0, 0, 0, 0.8), inset 0 -3px 6px rgba(255, 255, 255, 0.08)',
+                }}
+              >
+                <div className="grid grid-cols-[1fr_3.5rem] gap-0 bg-white/5 text-[10px] font-medium uppercase tracking-wide text-white/45 px-3 py-2">
+                  <span>Finish</span>
+                  <span className="text-right">%</span>
+                </div>
+                {prizePercents.map((pct, i) => (
+                  <div key={i} className="grid grid-cols-[1fr_3.5rem] gap-2 items-center border-t border-white/10 px-3 py-2">
+                    <span className="text-sm text-white/85">{finishOrdinal(i + 1)}</span>
+                    <span className="text-sm text-cyan-100/95 tabular-nums text-right font-medium">{pct}%</span>
+                  </div>
+                ))}
+              </div>
+            </TabsContent>
+
+            {isAdmin && (
+              <TabsContent value="staff" className="mt-4 space-y-5 outline-none">
+                {showPromoOption && (
+                  <label className="flex items-center gap-3 cursor-pointer select-none">
+                    <input
+                      type="checkbox"
+                      checked={fundFromPromo}
+                      onChange={(e) => setFundFromPromo(e.target.checked)}
+                      className="rounded border-white/20 bg-gray-900"
+                    />
+                    <span className="text-sm text-amber-200/90">Fund freeroll from platform promo wallet</span>
+                  </label>
+                )}
+                <div>
+                  <label className={labelClass}>Auto-join bot count (after create)</label>
+                  <input
+                    type="number"
+                    min={0}
+                    max={10}
+                    value={botsToAdd}
+                    onChange={(e) => setBotsToAdd(Math.max(0, Math.min(10, Number(e.target.value) || 0)))}
+                    className={fieldClass}
+                  />
+                  <p className="text-[11px] text-white/40 mt-1.5 leading-relaxed">
+                    Staff only: server bots fill empty seats once the tournament exists. Players never see this option.
+                  </p>
+                </div>
+              </TabsContent>
+            )}
+          </Tabs>
         </div>
 
         <div className="relative shrink-0 flex gap-3 px-5 py-4 border-t border-cyan-500/20 bg-black/20">
@@ -522,52 +733,53 @@ export function PokerTournamentCreator({ creatorAddress, onClose, onCreate }: Po
           </button>
           <button
             type="button"
-            onClick={() => setShowConfirm(true)}
-            disabled={
-              isSubmitting
-              || !name.trim()
-              || prizeSum !== 100
-              || prizePercents.length !== prizeSlotCount
-              || (!isFreeroll && parseMorbiusInput(buyIn) <= 0n)
-              || (isFreeroll && parseMorbiusInput(guaranteedPool) <= 0n)
-            }
+            onClick={() => {
+              const e = validateSchedule();
+              setScheduleError(e);
+              if (e) setActiveTab('schedule');
+              else setShowConfirm(true);
+            }}
+            disabled={createDisabled}
             className="flex-1 rounded-xl bg-gradient-to-r from-cyan-600 to-blue-600 hover:opacity-95 disabled:opacity-40 disabled:pointer-events-none text-white text-sm font-semibold py-2.5 transition-opacity"
           >
-            {isSubmitting ? 'Creating…' : 'Create'}
+            {isSubmitting ? 'Creating…' : 'Review & create'}
           </button>
         </div>
       </div>
 
       {showConfirm && (() => {
-        const parts = scheduledDate.split('-').map(Number);
-        const timeParts = scheduledTime.split(':').map(Number);
-        const scheduleDisplay = parts.length === 3 && timeParts.length === 2
-          ? new Date(parts[0], parts[1] - 1, parts[2], timeParts[0], timeParts[1]).toLocaleString(undefined, {
-              month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit',
-            })
+        const local = parseLocalDateTime(scheduledDate, scheduledTime);
+        const scheduleDisplay = local
+          ? local.toLocaleString(undefined, { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })
           : '—';
         const topSplit = prizePercents
-          .map((p, i) => p > 0 ? `${finishOrdinal(i + 1)} ${p}%` : null)
+          .map((p, i) => (p > 0 ? `${finishOrdinal(i + 1)} ${p}%` : null))
           .filter(Boolean)
-          .slice(0, 4)
+          .slice(0, 5)
           .join(', ');
         return (
           <ConfirmActionCard
-            title="Create Poker SNG"
-            subtitle="Review details before submitting"
+            title="Create poker SNG"
+            subtitle="Double-check before you publish"
             rows={[
               { label: 'Name', value: name || '—', accent: 'white' },
-              { label: isFreeroll ? 'Guaranteed Pool' : 'Buy-in', value: `${isFreeroll ? guaranteedPool : buyIn} MORBIUS`, accent: 'yellow' },
-              { label: 'Starting Stack', value: `${startingStackPreview.toLocaleString()} chips`, accent: 'green' },
-              { label: 'Level 1 Blinds', value: `${level1Blinds.smallBlind} / ${level1Blinds.bigBlind}`, accent: 'cyan' },
+              { label: isFreeroll ? 'Guaranteed pool' : 'Buy-in', value: `${isFreeroll ? guaranteedPool : buyIn} MORBIUS`, accent: 'yellow' },
+              { label: 'Starting stack', value: `${startingStackPreview.toLocaleString()} chips`, accent: 'green' },
+              { label: 'Opening blinds', value: `${level1Blinds.smallBlind} / ${level1Blinds.bigBlind}`, accent: 'cyan' },
               { label: 'Players', value: `${minPlayers}–${maxPlayers}`, accent: 'white' },
-              { label: 'Prize Split', value: topSplit || '—', accent: 'cyan' },
-              { label: 'Scheduled Start', value: scheduleDisplay, accent: 'white' },
+              { label: 'Prize preset', value: prizePresetLabel, accent: 'cyan' },
+              { label: 'Split preview', value: topSplit || '—', accent: 'white' },
+              { label: 'Starts', value: scheduleDisplay, accent: 'white' },
               { label: 'Private', value: isPrivate ? 'Yes (PIN required)' : 'No', accent: 'white' },
+              ...(isAdmin && botsToAdd > 0
+                ? [{ label: 'Staff bots', value: String(botsToAdd), accent: 'yellow' as const }]
+                : []),
             ]}
             onBack={() => setShowConfirm(false)}
-            onConfirm={() => { setShowConfirm(false); handleCreate(); }}
-            confirmLabel="Create Tournament"
+            onConfirm={() => {
+              void handleCreate();
+            }}
+            confirmLabel="Publish tournament"
             isLoading={isSubmitting}
           />
         );

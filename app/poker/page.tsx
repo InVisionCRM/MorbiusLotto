@@ -37,32 +37,6 @@ import {
   TableRow,
 } from '@/components/ui/table';
 
-
-/** Blind-based accent for lobby card blob (yellow → green → cyan → red → purple → gold) */
-const BLIND_COLORS = [
-  { max: 200, color: 'rgba(59, 130, 246, 0.35)' }, // blue (lowest blinds)
-  { max: 1000, color: 'rgba(34, 197, 94, 0.35)' },
-  { max: 5000, color: 'rgba(34, 211, 238, 0.35)' },
-  { max: 20000, color: 'rgba(239, 68, 68, 0.35)' },
-  { max: 100000, color: 'rgba(168, 85, 247, 0.35)' },
-  { max: Infinity, color: 'rgba(245, 158, 11, 0.4)' },
-];
-function getBlindAccentColor(bigBlindChips: string): string {
-  try {
-    const total = Number(BigInt(bigBlindChips));
-    const tier = BLIND_COLORS.find((t) => total <= t.max) ?? BLIND_COLORS[BLIND_COLORS.length - 1];
-    return tier.color;
-  } catch {
-    return BLIND_COLORS[0].color;
-  }
-}
-
-/** Solid version of accent color for icons (same RGB, full opacity). */
-function getBlindAccentSolid(bigBlindChips: string): string {
-  const rgba = getBlindAccentColor(bigBlindChips);
-  return rgba.replace(/[\d.]+\)$/, '1)');
-}
-
 // Intro screen component (same style as Blackjack)
 function IntroScreen({ onComplete }: { onComplete: () => void }) {
   useEffect(() => {
@@ -415,7 +389,7 @@ export default function PokerLobbyPage() {
       >
         <div className="relative min-h-screen h-full w-full flex flex-col bg-gradient-to-b from-[#080c14] via-slate-950 to-[#080c14] text-white">
           <div className="absolute inset-0 h-full min-h-screen w-full bg-[radial-gradient(ellipse_80%_60%_at_50%_0%,rgba(34,211,238,0.10),transparent_70%)] pointer-events-none" />
-          <div className="relative flex-1 w-full max-w-4xl mx-auto px-3 py-4 sm:px-4 sm:py-8">
+          <div className="relative flex-1 w-full max-w-7xl mx-auto px-3 py-4 sm:px-6 sm:py-8">
             {/* ── Hero Section ── */}
             <div
               className="relative rounded-3xl overflow-hidden mb-6 sm:mb-8 border border-cyan-400/10"
@@ -583,7 +557,7 @@ export default function PokerLobbyPage() {
             </div>
             {activeTab === 'tournaments' && (
               <div
-                className="rounded-2xl border border-cyan-500/20 p-4 sm:p-6"
+                className="rounded-2xl border border-cyan-500/20 p-3 sm:p-5"
                 style={{
                   background: 'linear-gradient(325deg, rgba(20, 20, 20, 0.8), rgba(40, 40, 40, 0.6))',
                   boxShadow:
@@ -618,134 +592,79 @@ export default function PokerLobbyPage() {
                     'inset 0 3px 6px rgba(0, 0, 0, 0.8), inset 0 -3px 6px rgba(255, 255, 255, 0.1), 0 1px 3px rgba(0, 0, 0, 0.5)',
                 }}
               >
-                <Table className="text-slate-200 min-w-[720px]">
+                <Table className="w-full text-slate-200 [&_th]:h-8 [&_th]:py-1.5 [&_th]:px-2 [&_th]:text-xs [&_th]:font-medium [&_th]:text-slate-500 [&_td]:py-1.5 [&_td]:px-2 [&_td]:text-sm">
                   <TableHeader>
                     <TableRow className="border-slate-600/50 hover:bg-transparent">
-                      <TableHead className="text-slate-400 font-semibold whitespace-nowrap">Stakes</TableHead>
-                      <TableHead className="text-slate-400 font-semibold whitespace-nowrap">Status</TableHead>
-                      <TableHead className="text-slate-400 font-semibold whitespace-nowrap">Private</TableHead>
-                      <TableHead className="text-slate-400 font-semibold whitespace-nowrap">Players</TableHead>
-                      <TableHead className="text-slate-400 font-semibold whitespace-nowrap">Open seats</TableHead>
-                      <TableHead className="text-slate-400 font-semibold text-right whitespace-nowrap">Actions</TableHead>
+                      <TableHead className="whitespace-nowrap">Stakes</TableHead>
+                      <TableHead className="whitespace-nowrap">Status</TableHead>
+                      <TableHead className="whitespace-nowrap">Private</TableHead>
+                      <TableHead className="whitespace-nowrap">Players</TableHead>
+                      <TableHead className="whitespace-nowrap">Open seats</TableHead>
+                      <TableHead className="text-right whitespace-nowrap">Actions</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
                     {tables.map((t) => {
                       const isPlaying = t.status === 'playing';
                       const openSeats = t.maxSeats - t.seatedCount;
-                      const accentSolid = getBlindAccentSolid(t.bigBlind);
                       return (
                         <React.Fragment key={t.id}>
                           <TableRow className="border-slate-600/40 hover:bg-white/[0.04]">
-                            <TableCell className="align-top">
-                              <div className="flex items-start gap-3">
-                                <div
-                                  className="shrink-0 w-10 h-10 rounded-full flex items-center justify-center text-lg border border-white/10"
-                                  style={{
-                                    background: 'rgba(0,0,0,0.25)',
-                                    boxShadow: 'inset 0 2px 4px rgba(0,0,0,0.45)',
-                                    color: accentSolid,
-                                  }}
-                                  title="Blind tier"
-                                >
-                                  ♠
-                                </div>
-                                <div className="min-w-0">
-                                  <p className="text-base font-bold text-slate-100 tabular-nums tracking-tight">
-                                    {formatChips(t.smallBlind)} / {formatChips(t.bigBlind)}
-                                  </p>
-                                  <p className="text-slate-400 text-sm font-medium">No-Limit Texas Hold&apos;em</p>
-                                </div>
-                              </div>
+                            <TableCell className="whitespace-nowrap tabular-nums text-slate-200">
+                              {formatChips(t.smallBlind)} / {formatChips(t.bigBlind)}
+                              <span className="text-slate-500"> · </span>
+                              <span className="text-slate-400">NLHE</span>
                             </TableCell>
-                            <TableCell className="align-middle whitespace-nowrap">
-                              <span
-                                className={`text-[10px] font-bold uppercase tracking-wider px-2.5 py-1 rounded-full border ${
-                                  isPlaying
-                                    ? 'text-cyan-300 border-cyan-500/35 bg-cyan-500/10'
-                                    : 'text-slate-400 border-slate-600/60 bg-black/20'
-                                }`}
+                            <TableCell className="whitespace-nowrap text-slate-400">
+                              {isPlaying ? 'In progress' : 'Waiting'}
+                            </TableCell>
+                            <TableCell className="whitespace-nowrap text-slate-400">
+                              {t.hasPin ? 'Yes' : '—'}
+                            </TableCell>
+                            <TableCell className="whitespace-nowrap tabular-nums text-slate-300">
+                              {t.seatedCount}/{t.maxSeats}
+                            </TableCell>
+                            <TableCell className="whitespace-nowrap">
+                              <span className="tabular-nums text-slate-300">{openSeats}</span>
+                              <button
+                                type="button"
+                                onClick={() => openPlayersDropdown(t.id)}
+                                className="ml-2 text-xs text-cyan-400/90 hover:text-cyan-300 underline underline-offset-2"
                               >
-                                {isPlaying ? 'In Progress' : 'Waiting'}
-                              </span>
+                                {playersDropdownTableId === t.id ? 'Hide' : 'View'}
+                              </button>
                             </TableCell>
-                            <TableCell className="align-middle">
-                              {t.hasPin ? (
-                                <span
-                                  className="inline-flex items-center justify-center w-9 h-9 rounded-full border border-cyan-500/25 bg-black/20"
-                                  title="Private table — PIN required"
+                            <TableCell className="text-right whitespace-nowrap">
+                              <div className="inline-flex flex-wrap items-center justify-end gap-1.5">
+                                <Link
+                                  href={`/poker/${t.id}`}
+                                  className="inline-flex items-center justify-center rounded-md border border-slate-600/60 bg-black/20 px-2 py-1 text-xs font-medium text-slate-300 hover:border-cyan-500/35 hover:bg-white/[0.04] transition-colors"
                                 >
-                                  <svg className="w-3.5 h-3.5 text-cyan-400" viewBox="0 0 24 24" fill="currentColor">
-                                    <path d="M12 2C9.24 2 7 4.24 7 7v3H6a2 2 0 00-2 2v8a2 2 0 002 2h12a2 2 0 002-2v-8a2 2 0 00-2-2h-1V7c0-2.76-2.24-5-5-5zm0 2c1.66 0 3 1.34 3 3v3H9V7c0-1.66 1.34-3 3-3zm0 10c1.1 0 2 .9 2 2s-.9 2-2 2-2-.9-2-2 .9-2 2-2z" />
-                                  </svg>
-                                </span>
-                              ) : (
-                                <span className="text-slate-500 text-sm">—</span>
-                              )}
-                            </TableCell>
-                            <TableCell className="align-middle whitespace-nowrap">
-                              <span className="font-bold text-slate-100 inline-flex items-center gap-1.5">
-                                <svg
-                                  className="w-3.5 h-3.5 text-slate-500 shrink-0"
-                                  fill="none"
-                                  stroke="currentColor"
-                                  viewBox="0 0 24 24"
-                                >
-                                  <path
-                                    strokeLinecap="round"
-                                    strokeLinejoin="round"
-                                    strokeWidth={2}
-                                    d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0"
-                                  />
-                                </svg>
-                                {t.seatedCount}/{t.maxSeats}
-                              </span>
-                            </TableCell>
-                            <TableCell className="align-middle">
-                              <div className="flex flex-wrap items-center gap-2">
-                                <span className="font-bold text-slate-100 tabular-nums">{openSeats}</span>
-                                <button
-                                  type="button"
-                                  onClick={() => openPlayersDropdown(t.id)}
-                                  className="text-[10px] font-bold text-cyan-400/90 hover:text-cyan-300 uppercase tracking-wider underline underline-offset-2"
-                                >
-                                  {playersDropdownTableId === t.id ? 'Hide' : 'View'}
-                                </button>
-                              </div>
-                            </TableCell>
-                            <TableCell className="align-middle text-right">
-                              <div className="flex flex-col items-end gap-2 min-w-[8rem]">
-                                <div className="flex flex-wrap justify-end gap-2">
-                                  <Link
-                                    href={`/poker/${t.id}`}
-                                    className="inline-flex items-center justify-center px-4 py-2 rounded-xl text-xs font-bold uppercase tracking-widest text-slate-300 border border-slate-600/70 bg-black/25 hover:bg-white/5 hover:border-cyan-500/30 transition-colors"
+                                  Watch
+                                </Link>
+                                {isConnected && (
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      const bbChips = BigInt(t.bigBlind);
+                                      const { maxWei } = getCashBuyInBoundsWeiFromChips(bbChips);
+                                      setBuyIn(formatMorbiusFloorPlain(maxWei));
+                                      setJoinModal({ tableId: t.id, hasPin: t.hasPin, bigBlindChips: t.bigBlind });
+                                      setJoinPin('');
+                                    }}
+                                    className="inline-flex items-center justify-center rounded-md bg-gradient-to-r from-cyan-600 to-cyan-500 px-2 py-1 text-xs font-medium text-white hover:opacity-95 transition-opacity"
                                   >
-                                    Watch
-                                  </Link>
-                                  {isConnected && (
-                                    <button
-                                      type="button"
-                                      onClick={() => {
-                                        const bbChips = BigInt(t.bigBlind);
-                                        const { maxWei } = getCashBuyInBoundsWeiFromChips(bbChips);
-                                        setBuyIn(formatMorbiusFloorPlain(maxWei));
-                                        setJoinModal({ tableId: t.id, hasPin: t.hasPin, bigBlindChips: t.bigBlind });
-                                        setJoinPin('');
-                                      }}
-                                      className="inline-flex items-center justify-center px-4 py-2 rounded-xl text-xs font-bold uppercase tracking-widest text-white bg-gradient-to-r from-cyan-600 to-cyan-500 shadow-[0_2px_12px_rgba(34,211,238,0.25)] hover:opacity-95 active:scale-[0.98] transition-all"
-                                    >
-                                      Sit
-                                    </button>
-                                  )}
-                                </div>
+                                    Sit
+                                  </button>
+                                )}
                                 {isAdmin && (
                                   <button
                                     type="button"
                                     onClick={() => removeTable(t.id)}
                                     disabled={removingTableId === t.id}
-                                    className="text-[10px] font-medium text-slate-500 hover:text-cyan-300 uppercase tracking-wider transition-colors disabled:opacity-50"
+                                    className="text-xs font-medium text-slate-500 hover:text-slate-300 disabled:opacity-50"
                                   >
-                                    {removingTableId === t.id ? 'Removing…' : 'Remove table'}
+                                    {removingTableId === t.id ? '…' : 'Remove'}
                                   </button>
                                 )}
                               </div>
@@ -753,14 +672,12 @@ export default function PokerLobbyPage() {
                           </TableRow>
                           {playersDropdownTableId === t.id && (
                             <TableRow className="border-slate-600/40 hover:bg-white/[0.02] bg-black/15">
-                              <TableCell colSpan={6} className="py-3">
-                                <div className="rounded-xl border border-slate-600/50 overflow-hidden bg-black/20">
-                                  <div className="px-3 py-2 border-b border-slate-600/50">
-                                    <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">
-                                      Seated players
-                                    </span>
+                              <TableCell colSpan={6} className="py-2">
+                                <div className="rounded-lg border border-slate-600/50 overflow-hidden bg-black/20">
+                                  <div className="px-2 py-1.5 border-b border-slate-600/50">
+                                    <span className="text-xs font-medium text-slate-500">Seated players</span>
                                   </div>
-                                  <div className="p-2 max-h-32 overflow-y-auto">
+                                  <div className="p-2 max-h-28 overflow-y-auto text-sm">
                                     {tablePlayersLoading ? (
                                       <p className="text-slate-500 text-xs">Loading…</p>
                                     ) : tablePlayers?.tableId === t.id ? (
