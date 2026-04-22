@@ -5,6 +5,7 @@ import { useParams, useRouter, useSearchParams } from 'next/navigation';
 import { useAccount, useSignTypedData } from 'wagmi';
 import { formatMorbiusFloor } from '@/lib/format-morbius-display';
 import { formatChips } from '@/lib/format-poker-chips';
+import { formatPokerLastActionLine } from '@/lib/format-poker-last-action';
 import { POKER_CASH_MIN_BUY_IN_BB, POKER_CASH_MAX_BUY_IN_BB, POKER_CHIP_WEI } from '@/lib/poker-buy-in';
 import type { BlackjackWebSocketClient, PokerTableState } from '@/lib/websocket-client';
 import { DEFAULT_POKER_THEME, getPokerThemeVars } from '@/lib/poker-themes';
@@ -26,7 +27,7 @@ import { PokerHeaderBar } from './PokerHeaderBar';
 import { PokerTableView } from './PokerTableView';
 import { PokerPopups } from './PokerPopups';
 import { PokerPanels } from './PokerPanels';
-import { PokerBottomBar } from './PokerBottomBar';
+import { PokerBottomBar, POKER_BOTTOM_RESERVE_VAR } from './PokerBottomBar';
 import { usePokerConnection } from './PokerConnection';
 import { usePokerActionsLogic } from './PokerActionsLogic';
 import { usePokerSeatOverlays } from './PokerSeatOverlays';
@@ -423,6 +424,19 @@ export default function PokerTablePage() {
     }
   };
 
+  const lastActionLine = useMemo(() => {
+    const la = renderedState?.currentHand?.lastAction;
+    const seats = renderedState?.seats;
+    if (!la || !seats?.length) return null;
+    return formatPokerLastActionLine(la, seats);
+  }, [
+    renderedState?.currentHand?.handId,
+    renderedState?.currentHand?.lastAction?.position,
+    renderedState?.currentHand?.lastAction?.action,
+    renderedState?.currentHand?.lastAction?.amount,
+    renderedState?.seats,
+  ]);
+
   const sharedActions = renderedState && mySeat && (
     <PokerActions
       canAct={!!canAct}
@@ -433,6 +447,7 @@ export default function PokerTablePage() {
       callAmount={callAmount}
       pot={hand?.pot ?? '0'}
       variant={isFullscreen ? 'floating' : 'default'}
+      lastActionLine={lastActionLine}
       onPreActionChange={setQueuedPreAction}
       onFold={handleFold}
       onCheck={handleCheck}
@@ -703,7 +718,10 @@ export default function PokerTablePage() {
             setShowMyStats={setShowMyStats}
           />}
 
-          <div className="flex flex-row flex-1 min-h-0 min-w-0 relative">
+          <div
+            className="flex flex-row flex-1 min-h-0 min-w-0 relative"
+            style={{ paddingBottom: `var(${POKER_BOTTOM_RESERVE_VAR}, 0px)` }}
+          >
             {tournamentHUDProp && !isFullscreen && (
               <Sidebar pinStorageKey="poker-table-tournament-hud-pinned">
                 <SidebarBody

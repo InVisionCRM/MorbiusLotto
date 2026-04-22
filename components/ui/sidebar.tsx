@@ -3,7 +3,7 @@ import { cn } from "@/lib/utils";
 import React, { useState, createContext, useContext, useCallback, useEffect, useRef } from "react";
 import Image from "next/image";
 import Link from "next/link";
-import { IconMenu2, IconX } from "@tabler/icons-react";
+import { IconLock, IconMenu2 } from "@tabler/icons-react";
 
 const DESKTOP_SIDEBAR_PIN_STORAGE_KEY = "global-main-nav-desktop-pinned";
 
@@ -264,19 +264,18 @@ export const DesktopSidebar = ({
           type="button"
           onClick={handleTogglePinned}
           className={cn(
-            "absolute top-2 z-30 h-7 rounded-md px-2 text-[10px] font-semibold tracking-wide border",
+            "absolute top-2 z-30 flex h-5 w-5 items-center justify-center rounded border transition-colors",
             isRight ? "left-2" : "right-2",
-            "transition-colors",
             pinned
-              ? "text-cyan-300 border-cyan-400/60 bg-cyan-500/15"
-              : "text-white/70 border-white/20 bg-black/20 hover:text-white hover:bg-white/10",
+              ? "border-cyan-500/45 bg-slate-950/95 text-cyan-400 shadow-[0_0_10px_rgba(34,211,238,0.18)]"
+              : "border-slate-700/90 bg-slate-950 text-slate-600 hover:border-slate-600 hover:text-slate-500",
             disabled ? "pointer-events-none opacity-40" : undefined
           )}
           aria-label={pinned ? "Unpin sidebar" : "Pin sidebar"}
           aria-pressed={pinned}
           title={pinned ? "Unpin sidebar" : "Pin sidebar"}
         >
-          {pinned ? "PINNED" : "PIN"}
+          <IconLock size={8} stroke={2} aria-hidden />
         </button>
         {children as React.ReactNode}
       </div>

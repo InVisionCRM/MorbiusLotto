@@ -186,6 +186,13 @@ describe('1 - createPokerTournament', () => {
     expect(config.blindSchedule).toHaveLength(3);
     expect(config.blindSchedule[0].level).toBe(1);
     expect(config.blindSchedule[0].smallBlind).toBe(25);
+    expect(config.blindIncreaseMode).toBe('knockout');
+  });
+
+  it('stores blindIncreaseMode when set to by_hand', async () => {
+    const tournamentId = await createTestTournament({ blindIncreaseMode: 'by_hand' });
+    const row = await testPool.query('SELECT poker_config FROM tournaments WHERE id = $1', [tournamentId]);
+    expect(row.rows[0].poker_config.blindIncreaseMode).toBe('by_hand');
   });
 
   it('sets min_players and max_players from config', async () => {
@@ -697,6 +704,25 @@ describe('4b - knockoutBlindDisplayLevel', () => {
   });
 });
 
+describe('4c - blindsForNextHand', () => {
+  const schedule: BlindLevel[] = [
+    { level: 1, smallBlind: 25, bigBlind: 50, handsPerLevel: 2 },
+    { level: 2, smallBlind: 50, bigBlind: 100, handsPerLevel: 99 },
+  ];
+
+  it('after hand 1 completes, next hand is still level 1', () => {
+    const b = pokerTournamentService.blindsForNextHand(schedule, 1);
+    expect(b.level).toBe(1);
+    expect(b.smallBlind).toBe(25);
+  });
+
+  it('after hand 2 completes, next hand is level 2', () => {
+    const b = pokerTournamentService.blindsForNextHand(schedule, 2);
+    expect(b.level).toBe(2);
+    expect(b.smallBlind).toBe(50);
+  });
+});
+
 // ---------------------------------------------------------------------------
 // Suite 5: syncAfterHand — chip sync
 // ---------------------------------------------------------------------------
@@ -771,6 +797,37 @@ describe('5 - syncAfterHand chip sync', () => {
       [tournamentId, PLAYER_1]
     );
     expect(Number(e.rows[0].hands_played)).toBeGreaterThan(0);
+  });
+});
+
+describe('5b - syncAfterHand by_hand blind schedule', () => {
+  it('raises posted blinds after a hand with no bust-outs', async () => {
+    const fastSchedule: BlindLevel[] = [
+      { level: 1, smallBlind: 25, bigBlind: 50, handsPerLevel: 1 },
+      { level: 2, smallBlind: 50, bigBlind: 100, handsPerLevel: 99 },
+    ];
+    const tournamentId = await createTestTournament({
+      blindSchedule: fastSchedule,
+      blindIncreaseMode: 'by_hand',
+    });
+    const tableId = await joinThroughScheduledStart(tournamentId, [PLAYER_1, PLAYER_2]);
+    createdPokerTableIds.push(tableId);
+
+    const before = await testPool.query(
+      `SELECT small_blind, big_blind FROM poker_tables WHERE id = $1`,
+      [tableId],
+    );
+    expect(Number(before.rows[0].small_blind)).toBe(25);
+    expect(Number(before.rows[0].big_blind)).toBe(50);
+
+    await pokerTournamentService.syncAfterHand(tableId, 1);
+
+    const after = await testPool.query(
+      `SELECT small_blind, big_blind FROM poker_tables WHERE id = $1`,
+      [tableId],
+    );
+    expect(Number(after.rows[0].small_blind)).toBe(50);
+    expect(Number(after.rows[0].big_blind)).toBe(100);
   });
 });
 

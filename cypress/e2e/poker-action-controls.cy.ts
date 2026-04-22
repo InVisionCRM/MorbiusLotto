@@ -77,12 +77,12 @@ describe("Poker action controls (live table mock mode)", () => {
     });
 
     cy.window().then((win) => win.__POKER_E2E_TEST_API?.setState(baseState(100) as any));
-    cy.get('[data-testid="poker-action-amount-input"]:visible').clear().type("700");
+    cy.get('[data-testid="poker-quick-size-min"]:visible').click();
     cy.get('[data-testid="poker-action-primary"]:visible').click();
     cy.window().then((win) => {
       const state = win.__POKER_E2E_TEST_API?.getState() as any;
       expect(state.currentHand.lastAction.action).to.equal("raise");
-      expect(state.currentHand.lastAction.amount).to.equal((700n * WEI).toString());
+      expect(state.currentHand.lastAction.amount).to.equal(toWei(200).toString());
       expect(state.currentHand.toCall).to.equal("0");
     });
   });

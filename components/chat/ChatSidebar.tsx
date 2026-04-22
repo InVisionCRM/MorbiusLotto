@@ -22,6 +22,12 @@ function getRoomForPath(pathname: string): { roomId: string; title: string } {
   return PATH_TO_ROOM[normalized] ?? DEFAULT_ROOM;
 }
 
+/** Poker uses table `PokerActivityFeed` + WS rooms; hide global `ChatPanel` on lobby and tables. */
+function isPokerRoute(pathname: string | null | undefined): boolean {
+  const p = pathname?.replace(/\/$/, '') || '';
+  return p === '/poker' || p.startsWith('/poker/');
+}
+
 /** Slide-in drawer shell (matches ChatPanel / site chrome) */
 const CHAT_DRAWER_STYLE: React.CSSProperties = {
   background: 'linear-gradient(325deg, rgba(20, 20, 20, 0.98), rgba(35, 36, 41, 0.96))',
@@ -43,6 +49,7 @@ export function ChatSidebar() {
   const [hasUnread, setHasUnread] = useState(false);
   const [activeTab, setActiveTab] = useState<'page' | 'lobby'>('page');
   const pathname = usePathname();
+  const hideOnPoker = isPokerRoute(pathname);
   const { roomId: pageRoomId, title: pageTitle } = getRoomForPath(pathname ?? '/');
 
   // Whether the current page has its own non-lobby chat
@@ -52,6 +59,10 @@ export function ChatSidebar() {
   useEffect(() => {
     setActiveTab('page');
   }, [pathname]);
+
+  useEffect(() => {
+    if (hideOnPoker) setOpen(false);
+  }, [hideOnPoker]);
 
   // Resolve which room to show
   const roomId = hasGameChat && activeTab === 'lobby' ? 'main' : pageRoomId;
@@ -91,6 +102,8 @@ export function ChatSidebar() {
     active
       ? 'flex-1 px-3 py-2.5 text-xs font-semibold text-cyan-400 bg-slate-900/80 border-b-2 border-cyan-500 transition-colors'
       : 'flex-1 px-3 py-2.5 text-xs font-medium text-slate-500 hover:text-slate-200 hover:bg-white/5 transition-colors';
+
+  if (hideOnPoker) return null;
 
   return (
     <>

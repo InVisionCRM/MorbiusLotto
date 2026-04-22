@@ -209,16 +209,13 @@ export function PokerTournamentHUD({ state, myAddress }: Props) {
     prevActiveCountRef.current = count;
     if (prev == null) return;
     if (count < prev) {
-      // Someone was eliminated. We don't know who specifically from this delta alone,
-      // so use a generic "PLAYER OUT" message.
+      const eliminated = prev - count;
+      // One red burst for any elim count; multiple knockouts in the same snapshot are bundled.
+      const elimText =
+        eliminated === 1 ? 'PLAYER OUT' : `${eliminated} PLAYERS ELIMINATED`;
       enqueueBursts([
-        { id: `elim-1-${Date.now()}`, text: 'PLAYER OUT', tone: 'red' },
-        { id: `elim-2-${Date.now()}`, text: `${count} LEFT`, tone: 'black' },
-        {
-          id: `elim-3-${Date.now()}`,
-          text: `${formatBlindShort(state.smallBlind)}/${formatBlindShort(state.bigBlind)}`,
-          tone: 'black',
-        },
+        { id: `elim-${Date.now()}`, text: elimText, tone: 'red' },
+        { id: `elim-left-${Date.now()}`, text: `${count} LEFT`, tone: 'black' },
       ]);
     }
   }, [activePlayers.length, state.smallBlind, state.bigBlind]);
@@ -230,11 +227,11 @@ export function PokerTournamentHUD({ state, myAddress }: Props) {
     prevBlindLevelRef.current = lvl;
     if (prev == null) return;
     if (lvl > prev) {
+      const blindLine = `${formatBlindShort(state.smallBlind)}/${formatBlindShort(state.bigBlind)}`;
       enqueueBursts([
-        { id: `blind-1-${Date.now()}`, text: 'BLINDS UP', tone: 'black' },
         {
-          id: `blind-2-${Date.now()}`,
-          text: `${formatBlindShort(state.smallBlind)}/${formatBlindShort(state.bigBlind)}`,
+          id: `blind-${Date.now()}`,
+          text: `BLINDS INCREASE TO ${blindLine}`,
           tone: 'black',
         },
       ]);
@@ -274,14 +271,30 @@ export function PokerTournamentHUD({ state, myAddress }: Props) {
           transition={{ duration: 0.15 }}
         >
           <motion.span
-            className="font-jost text-center px-3 select-none"
-            style={{
-              letterSpacing: '-0.01em',
-              fontSize: open ? 30 : 16,
-              lineHeight: 1,
-              whiteSpace: 'nowrap',
-              color: '#ffffff',
-            }}
+            className={
+              open
+                ? 'font-jost text-center px-3 select-none'
+                : 'font-jost-normal text-center uppercase tracking-[0.14em] select-none px-1'
+            }
+            style={
+              open
+                ? {
+                    letterSpacing: '-0.01em',
+                    fontSize: 30,
+                    lineHeight: 1,
+                    whiteSpace: 'nowrap',
+                    color: '#ffffff',
+                  }
+                : {
+                    fontSize: 10,
+                    lineHeight: 1,
+                    whiteSpace: 'nowrap',
+                    color: '#ffffff',
+                    writingMode: 'vertical-rl',
+                    transform: 'rotate(180deg)',
+                    letterSpacing: '0.14em',
+                  }
+            }
             initial={{ scale: 0.92, y: 6 }}
             animate={{ scale: 1, y: 0 }}
             exit={{ scale: 0.98 }}

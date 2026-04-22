@@ -5,6 +5,7 @@ import { format } from 'date-fns';
 import {
   POKER_TOURNAMENT_DEFAULT_CONFIG,
   type CreatePokerTournamentParams,
+  type PokerBlindIncreaseMode,
 } from '@/hooks/use-poker-tournament';
 import { isAdminWallet } from '@/lib/admin';
 import {
@@ -115,6 +116,8 @@ export function PokerTournamentCreator({ creatorAddress, onClose, onCreate }: Po
   /** HH:mm 24h, 15-minute steps */
   const [scheduledTime, setScheduledTime] = useState(initialSchedule.time);
   const [scheduleError, setScheduleError] = useState<string | null>(null);
+  /** How blinds go up during play (stored on the tournament). */
+  const [blindIncreaseMode, setBlindIncreaseMode] = useState<PokerBlindIncreaseMode>('knockout');
 
   const timeOptions = useFifteenMinuteTimeOptions();
   const minScheduleDate = useMemo(() => localYyyyMmDd(new Date()), []);
@@ -216,6 +219,7 @@ export function PokerTournamentCreator({ creatorAddress, onClose, onCreate }: Po
             ),
             minPlayers:    Math.max(2, Math.min(10, parseInt(minPlayers, 10) || 2)),
             maxPlayers:    prizeSlotCount,
+            blindIncreaseMode,
           },
           isPrivate,
           ...(pinForCreate ? { pinCode: pinForCreate } : {}),
@@ -319,6 +323,31 @@ export function PokerTournamentCreator({ creatorAddress, onClose, onCreate }: Po
             </p>
             <p className="text-xs text-white/45 mt-1">
               ~{startingBigBlindDepth} BB deep with {startingStackPreview.toLocaleString()} chips
+            </p>
+          </div>
+
+          <div>
+            <label className={labelClass}>Blind increases</label>
+            <Select
+              value={blindIncreaseMode}
+              onValueChange={(v) => setBlindIncreaseMode(v as PokerBlindIncreaseMode)}
+            >
+              <SelectTrigger className={`${fieldClass} h-auto min-h-[44px]`}>
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent className="bg-slate-900 border border-cyan-500/30 text-white shadow-xl z-[200]">
+                <SelectItem value="knockout" className="focus:bg-cyan-500/15 focus:text-white cursor-pointer">
+                  When players bust — blinds jump (classic SNG here)
+                </SelectItem>
+                <SelectItem value="by_hand" className="focus:bg-cyan-500/15 focus:text-white cursor-pointer">
+                  By hands played — follows the built-in blind schedule
+                </SelectItem>
+              </SelectContent>
+            </Select>
+            <p className="text-[11px] text-white/40 mt-1">
+              {blindIncreaseMode === 'knockout'
+                ? 'Blinds only go up after knockouts; schedule is for starting stakes and the level readout.'
+                : 'Blinds step up on a fixed number of hands per level (see schedule in app code / docs).'}
             </p>
           </div>
 

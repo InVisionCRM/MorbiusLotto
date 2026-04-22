@@ -12,6 +12,7 @@ import { BackgroundBeams, type BeamColorPalette } from '@/components/ui/backgrou
 import { usePokerTableEffect } from '@/hooks/use-poker-table-effect';
 import { PokerWinnerNotificationCard } from './PokerWinnerNotificationCard';
 import { bestHand, handRankToName, evaluateHoleCards } from '@/lib/poker-hand-eval';
+import { authoredSeatAnchors } from '@/lib/poker-seat-layout';
 import confetti from 'canvas-confetti';
 
 const BEAM_PALETTES: BeamColorPalette[] = [
@@ -67,35 +68,7 @@ const SHOWDOWN_CARD_PULL_RATIO = 0.18;
 const SHOWDOWN_CARD_PULL_MAX_PX = 70;
 const BET_CHIP_INWARD_DISTANCE_PX = 64;
 
-// Hand-authored 10-seat ring (fractions of the table root). Display slot 0 is bottom / hero
-// after `toDisplaySlot` rotation; slots increase clockwise. Sub-10 tables map evenly onto this ring.
-const SEAT_ANCHOR_RING: Array<{ fx: number; fy: number }> = [
-  { fx: 0.50, fy: 0.78 }, // 0 — bottom center (hero), cleared above action bar
-  { fx: 0.72, fy: 0.83 }, // 1
-  { fx: 0.89, fy: 0.63 }, // 2
-  { fx: 0.89, fy: 0.36 }, // 3
-  { fx: 0.72, fy: 0.13 }, // 4
-  { fx: 0.50, fy: 0.06 }, // 5
-  { fx: 0.28, fy: 0.13 }, // 6
-  { fx: 0.11, fy: 0.36 }, // 7
-  { fx: 0.11, fy: 0.63 }, // 8
-  { fx: 0.28, fy: 0.83 }, // 9
-];
-
-function ringIndexForDisplaySlot(displaySlot: number, seatCount: number): number {
-  if (seatCount <= 1) return 0;
-  const idx = Math.round((displaySlot * 9) / (seatCount - 1));
-  return Math.max(0, Math.min(9, idx));
-}
-
-function authoredSeatAnchors(seatCount: number): Array<{ fx: number; fy: number }> {
-  if (seatCount <= 0) return [];
-  return Array.from({ length: seatCount }, (_, displaySlot) => {
-    const ri = ringIndexForDisplaySlot(displaySlot, seatCount);
-    const a = SEAT_ANCHOR_RING[ri];
-    return { fx: a.fx, fy: a.fy };
-  });
-}
+// Seat base geometry: `lib/poker-seat-layout.ts` (SEAT_ANCHOR_RING + authoredSeatAnchors).
 
 export interface PokerTableProps {
   state: TableState;

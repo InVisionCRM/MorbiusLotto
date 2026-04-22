@@ -502,6 +502,45 @@ body {
   animation: tipChipFly 0.8s ease-out forwards;
 }
 
+/* Poker winner banner — Shockwave Slam–style in (white glow) + slide-down out */
+@keyframes poker-winner-shockwave-in {
+  0% {
+    opacity: 0;
+    transform: translateY(-300px) scale(0.4);
+    filter: drop-shadow(0 0 0 rgba(255, 255, 255, 0));
+  }
+  70% {
+    opacity: 1;
+    transform: translateY(14px) scale(1.15);
+    filter: drop-shadow(0 0 28px rgba(255, 255, 255, 0.95));
+  }
+  85% {
+    transform: translateY(-4px) scale(0.97);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+    filter: drop-shadow(0 0 0 rgba(255, 255, 255, 0));
+  }
+}
+.poker-winner-anim-in-shockwave {
+  animation: poker-winner-shockwave-in 0.85s cubic-bezier(0.2, 1.4, 0.4, 1) both;
+}
+
+@keyframes poker-winner-slide-down-out {
+  0% {
+    opacity: 1;
+    transform: translateY(0);
+  }
+  100% {
+    opacity: 0;
+    transform: translateY(180px) scale(0.92);
+  }
+}
+.poker-winner-anim-out-slide-down {
+  animation: poker-winner-slide-down-out 0.45s cubic-bezier(0.5, 0, 0.75, 0) both;
+}
+
 /* RainbowKit Modal Fix - No longer needed since transform moved to wrapper */
 /* Modals render to body, which is now untransformed, so they center correctly */
 
@@ -516,20 +555,6 @@ body {
 }
 
 .hero-title-line-visible {
-  opacity: 1;
-  transform: translateY(0);
-}
-
-.hero-cta-item {
-  transition: opacity 0.95s ease, transform 1.05s cubic-bezier(0.2, 0.8, 0.2, 1);
-}
-
-.hero-cta-item-hidden {
-  opacity: 0;
-  transform: translateY(24px);
-}
-
-.hero-cta-item-visible {
   opacity: 1;
   transform: translateY(0);
 }

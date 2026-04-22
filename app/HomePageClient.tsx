@@ -122,12 +122,7 @@ export default function HomePageClient() {
               </p>
             </FirstVisitNotification>
 
-            <HeroSection
-              onOpenPlayerProfile={address ? () => { setPlayerProfileGame('all'); setPlayerProfileOpen(true) } : undefined}
-              onOpenAuthModal={() => setLoginOpen(true)}
-              showWelcome={!!address}
-              welcomeName={welcomeName}
-            />
+            <HeroSection showWelcome={!!address} welcomeName={welcomeName} />
 
             <section className="w-full flex flex-col items-center pt-10 md:pt-16">
               <GamesSection />

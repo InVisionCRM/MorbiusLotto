@@ -16,11 +16,19 @@ export interface BlindLevel {
   handsPerLevel: number;
 }
 
+/** How posted blinds go up during the event (stored in `poker_config`). */
+export type PokerBlindIncreaseMode = 'knockout' | 'by_hand';
+
 export interface PokerTournamentConfig {
   startingStack: number;
   minPlayers: number;
   maxPlayers: number;
   blindSchedule: BlindLevel[];
+  /**
+   * `knockout` (default): blinds multiply when someone busts (legacy SNG behavior).
+   * `by_hand`: blinds follow `blindSchedule` / `handsPerLevel` after each completed hand.
+   */
+  blindIncreaseMode?: PokerBlindIncreaseMode;
 }
 
 export const DEFAULT_BLIND_SCHEDULE: BlindLevel[] = [
@@ -209,11 +217,39 @@ export class PokerTournamentService {
     return 1 + steps;
   }
 
+  /** Blinds that apply to the next hand after `completedHandNumber` (1-based) finishes. */
+  blindsForNextHand(blindSchedule: BlindLevel[], completedHandNumber: number): BlindLevel {
+    const nextHand = Math.max(1, completedHandNumber) + 1;
+    return this.computeBlindLevel(blindSchedule, nextHand);
+  }
+
+  private getBlindIncreaseMode(config: PokerTournamentConfig): PokerBlindIncreaseMode {
+    return config.blindIncreaseMode === 'by_hand' ? 'by_hand' : 'knockout';
+  }
+
+  /** HUD / snapshot: schedule level index from posted blinds (by-hand mode). */
+  private scheduleDisplayLevel(blindSchedule: BlindLevel[], smallBlindChips: number, bigBlindChips: number): number {
+    const match = blindSchedule.find(
+      (l) => l.smallBlind === smallBlindChips && l.bigBlind === bigBlindChips,
+    );
+    if (match) return match.level;
+    return blindSchedule[0]?.level ?? 1;
+  }
+
   private parsePokerConfig(raw: unknown): PokerTournamentConfig {
     if (!raw) {
-      return { startingStack: 5000, minPlayers: 2, maxPlayers: 6, blindSchedule: DEFAULT_BLIND_SCHEDULE };
+      return {
+        startingStack: 5000,
+        minPlayers: 2,
+        maxPlayers: 6,
+        blindSchedule: DEFAULT_BLIND_SCHEDULE,
+        blindIncreaseMode: 'knockout',
+      };
     }
     const obj = typeof raw === 'string' ? JSON.parse(raw) : raw as Record<string, unknown>;
+    const modeRaw = obj.blindIncreaseMode;
+    const blindIncreaseMode: PokerBlindIncreaseMode =
+      modeRaw === 'by_hand' ? 'by_hand' : 'knockout';
     return {
       startingStack: Number(obj.startingStack ?? 5000),
       minPlayers:    Number(obj.minPlayers    ?? 2),
@@ -221,6 +257,7 @@ export class PokerTournamentService {
       blindSchedule: Array.isArray(obj.blindSchedule) && obj.blindSchedule.length > 0
         ? obj.blindSchedule as BlindLevel[]
         : DEFAULT_BLIND_SCHEDULE,
+      blindIncreaseMode,
     };
   }
 
@@ -280,6 +317,10 @@ export class PokerTournamentService {
         pinCode = Math.floor(1000 + Math.random() * 9000).toString();
       }
     }
+
+    const blindIncreaseMode: PokerBlindIncreaseMode =
+      config.blindIncreaseMode === 'by_hand' ? 'by_hand' : 'knockout';
+    const configForDb: PokerTournamentConfig = { ...config, blindIncreaseMode };
 
     const prizePercentages =
       params.prizeDistributionType === 'custom'
@@ -348,7 +389,7 @@ export class PokerTournamentService {
           JSON.stringify(prizePercentages),
           initialPrizePool,
           guaranteedPrizeFunderAddress,
-          JSON.stringify(config),
+          JSON.stringify(configForDb),
           scheduled.toISOString(),
         ]
       );
@@ -719,8 +760,9 @@ export class PokerTournamentService {
    * After each hand completes:
    * 1. Sync seat stacks → tournament_entries.chips_remaining
    * 2. Eliminate 0-chip players (mark busted, remove seat)
-   * 3. Multiply SB/BB by 2^k for k eliminations this hand (no time/hand schedule progression;
-   *    blinds do not track remaining stack sizes)
+   * 3. Blind updates (see `blindIncreaseMode` in `poker_config`):
+   *    - `knockout`: multiply SB/BB by 2^k when k players bust this hand
+   *    - `by_hand`: set SB/BB from the blind schedule for the **next** hand (uses `handsPerLevel`)
    * 4. Complete tournament if ≤1 active player remains
    */
   async syncAfterHand(tableId: string, handNumber: number): Promise<void> {
@@ -774,11 +816,11 @@ export class PokerTournamentService {
       seats.rows.length,
     );
 
-    // Blinds: knockout-only — multiply by 2 per elimination this hand (base stays level-1 schedule from activation).
     let blindsUpdated = false;
-
+    const blindMode = this.getBlindIncreaseMode(config);
     const elimCount = bustedAddresses.length;
-    if (elimCount > 0) {
+
+    if (blindMode === 'knockout' && elimCount > 0) {
       const tblBlinds = await this.pool.query(
         `SELECT small_blind, big_blind FROM poker_tables WHERE id = $1`,
         [tableId]
@@ -804,6 +846,38 @@ export class PokerTournamentService {
           });
         }
       }
+    } else if (blindMode === 'by_hand') {
+      const scheduledLevel = this.blindsForNextHand(config.blindSchedule, handNumber);
+      const tblBlinds = await this.pool.query(
+        `SELECT small_blind, big_blind FROM poker_tables WHERE id = $1`,
+        [tableId]
+      );
+      if (tblBlinds.rows.length > 0) {
+        const curSB = Number(toBigIntSafe(tblBlinds.rows[0].small_blind));
+        const curBB = Number(toBigIntSafe(tblBlinds.rows[0].big_blind));
+        if (
+          curSB !== scheduledLevel.smallBlind ||
+          curBB !== scheduledLevel.bigBlind
+        ) {
+          await this.pool.query(
+            `UPDATE poker_tables SET small_blind = $2::NUMERIC, big_blind = $3::NUMERIC WHERE id = $1`,
+            [
+              tableId,
+              BigInt(scheduledLevel.smallBlind).toString(),
+              BigInt(scheduledLevel.bigBlind).toString(),
+            ]
+          );
+          blindsUpdated = true;
+          logger.info('Poker tournament blinds advanced by schedule (by_hand)', {
+            tournamentId,
+            tableId,
+            completedHand: handNumber,
+            nextLevel: scheduledLevel.level,
+            smallBlind: scheduledLevel.smallBlind,
+            bigBlind: scheduledLevel.bigBlind,
+          });
+        }
+      }
     }
 
     if (blindsUpdated) {
@@ -814,7 +888,10 @@ export class PokerTournamentService {
       if (finalRow.rows.length > 0) {
         const smallBlindChips = Number(toBigIntSafe(finalRow.rows[0].small_blind));
         const bigBlindChips = Number(toBigIntSafe(finalRow.rows[0].big_blind));
-        const displayLevel = this.knockoutBlindDisplayLevel(config.blindSchedule, smallBlindChips);
+        const displayLevel =
+          blindMode === 'by_hand'
+            ? this.scheduleDisplayLevel(config.blindSchedule, smallBlindChips, bigBlindChips)
+            : this.knockoutBlindDisplayLevel(config.blindSchedule, smallBlindChips);
         this.broadcast(`poker_tournament:${tournamentId}`, 'poker_tournament_blind_level_up', {
           tournamentId,
           tableId,
@@ -896,8 +973,10 @@ export class PokerTournamentService {
     );
 
     let blindsUpdated = false;
+    const blindModeRecover = this.getBlindIncreaseMode(config);
     const elimCount = bustedAddresses.length;
-    if (elimCount > 0) {
+
+    if (blindModeRecover === 'knockout' && elimCount > 0) {
       const tblBlinds = await this.pool.query(
         `SELECT small_blind, big_blind FROM poker_tables WHERE id = $1`,
         [tableId]
@@ -914,6 +993,30 @@ export class PokerTournamentService {
           blindsUpdated = true;
         }
       }
+    } else if (blindModeRecover === 'by_hand') {
+      const scheduledLevel = this.blindsForNextHand(config.blindSchedule, handNumber);
+      const tblBlinds = await this.pool.query(
+        `SELECT small_blind, big_blind FROM poker_tables WHERE id = $1`,
+        [tableId]
+      );
+      if (tblBlinds.rows.length > 0) {
+        const curSB = Number(toBigIntSafe(tblBlinds.rows[0].small_blind));
+        const curBB = Number(toBigIntSafe(tblBlinds.rows[0].big_blind));
+        if (
+          curSB !== scheduledLevel.smallBlind ||
+          curBB !== scheduledLevel.bigBlind
+        ) {
+          await this.pool.query(
+            `UPDATE poker_tables SET small_blind = $2::NUMERIC, big_blind = $3::NUMERIC WHERE id = $1`,
+            [
+              tableId,
+              BigInt(scheduledLevel.smallBlind).toString(),
+              BigInt(scheduledLevel.bigBlind).toString(),
+            ]
+          );
+          blindsUpdated = true;
+        }
+      }
     }
 
     if (blindsUpdated) {
@@ -924,7 +1027,10 @@ export class PokerTournamentService {
       if (finalRow.rows.length > 0) {
         const smallBlindChips = Number(toBigIntSafe(finalRow.rows[0].small_blind));
         const bigBlindChips = Number(toBigIntSafe(finalRow.rows[0].big_blind));
-        const displayLevel = this.knockoutBlindDisplayLevel(config.blindSchedule, smallBlindChips);
+        const displayLevel =
+          blindModeRecover === 'by_hand'
+            ? this.scheduleDisplayLevel(config.blindSchedule, smallBlindChips, bigBlindChips)
+            : this.knockoutBlindDisplayLevel(config.blindSchedule, smallBlindChips);
         this.broadcast(`poker_tournament:${tournamentId}`, 'poker_tournament_blind_level_up', {
           tournamentId,
           tableId,
@@ -1276,7 +1382,11 @@ export class PokerTournamentService {
     const bigBlindChips = bbRaw != null && bbRaw > 0n
       ? Number(bbRaw)
       : currentLevel.bigBlind;
-    const blindLevelDisplay = this.knockoutBlindDisplayLevel(config.blindSchedule, smallBlindChips);
+    const blindModeState = this.getBlindIncreaseMode(config);
+    const blindLevelDisplay =
+      blindModeState === 'by_hand'
+        ? this.scheduleDisplayLevel(config.blindSchedule, smallBlindChips, bigBlindChips)
+        : this.knockoutBlindDisplayLevel(config.blindSchedule, smallBlindChips);
 
     return {
       tournamentId,
@@ -1298,12 +1408,13 @@ export class PokerTournamentService {
       prizePool:           t.prize_pool?.toString() ?? '0',
       buyInAmount:         t.buy_in_amount?.toString() ?? '0',
       prizeDistributionType: t.prize_distribution_type ?? 'winner_takes_all',
-      /** For client HUD: schedule + meta (posted blinds follow elim progression only). */
+      /** For client HUD: schedule + meta + blind increase mode. */
       pokerConfig:         {
         blindSchedule: config.blindSchedule,
         startingStack: config.startingStack,
         minPlayers:    config.minPlayers,
         maxPlayers:    config.maxPlayers,
+        blindIncreaseMode: config.blindIncreaseMode ?? 'knockout',
       },
     };
   }

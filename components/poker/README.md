@@ -8,6 +8,7 @@ Organized index of poker-related files plus current UI behavior notes for table/
 
 | File | Purpose |
 | ---- | ------- |
+| `app/poker-layout/page.tsx` | **Dev/reference**: visual map of `SEAT_ANCHOR_RING` + sampled slots for 2–10 seats (`/poker-layout`). Same data as `lib/poker-seat-layout.ts` / `PokerTable`. |
 | `app/poker/page.tsx` | Lobby: **Cash games** (tables, create, join) and **Tournaments** (`PokerTournamentLobby`, SNG create/join); intro + WebSocket. Share link: `/poker?tab=tournaments`. Sidebar **Lobby** mirrors the two tabs. |
 | `app/poker/[tableId]/page.tsx` | Table page: game state, PokerTable + PokerActions + PokerDepositModal; theme and layout. |
 
@@ -36,7 +37,7 @@ Organized index of poker-related files plus current UI behavior notes for table/
   - `S0` = hero/bottom center
   - `S1..S(n-1)` continue clockwise
   - Seats also expose `data-seat-slot` and `data-seat-position` in DOM for debugging.
-- **Seat geometry**: Base positions are the `SEAT_ANCHOR_RING` constants in `PokerTable.tsx` (normalized `fx`/`fy`). Sub-10 tables map display slots evenly onto that 10-point ring. `S1` and `S(n-1)` use the same rendered vertical center as `S0` (after pixel nudges). Tuning: edit the ring and/or `SEAT_POSITION_NUDGE_PX` / `getSeatNudgePx`.
+- **Seat geometry**: `SEAT_ANCHOR_RING` in `PokerTable.tsx` defines **10** normalized `fx`/`fy` points — that is the canonical / max table. With **10** seats, display slots map **one-to-one** to those points. With **fewer than 10** seats in play, slots **sample** the same ring evenly (there is no alternate 6- or 8-seat coordinate table). `S1` and `S(n-1)` share hero `fy` after nudges when `n > 2`. Tuning: edit the ring and/or `SEAT_POSITION_NUDGE_PX` / `getSeatNudgePx`.
 - **Role indicators** (`DEALER`, `SB`, `BB`): rendered as opaque inset crescents inside avatar circles (`PokerSeat.tsx`).
 - **Winner indicator**: winner crescent appears only at resolved showdown (`street === showdown` and winners present), including split pots.
 - **Action persistence**: seat action labels persist until that same seat acts again (sticky per-seat action state in `PokerTable.tsx`).

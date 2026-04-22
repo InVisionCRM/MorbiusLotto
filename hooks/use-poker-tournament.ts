@@ -14,11 +14,19 @@ export interface BlindLevel {
   handsPerLevel: number;
 }
 
+/** Mirrors server `PokerBlindIncreaseMode`. */
+export type PokerBlindIncreaseMode = 'knockout' | 'by_hand';
+
 export interface PokerTournamentConfig {
   startingStack: number;
   minPlayers: number;
   maxPlayers: number;
   blindSchedule: BlindLevel[];
+  /**
+   * `knockout`: blinds jump when players bust (legacy).
+   * `by_hand`: blinds follow the schedule after each hand (`handsPerLevel`).
+   */
+  blindIncreaseMode?: PokerBlindIncreaseMode;
 }
 
 export interface PokerTournamentPlayer {
@@ -100,6 +108,7 @@ export const POKER_TOURNAMENT_DEFAULT_CONFIG: PokerTournamentConfig = {
   minPlayers:    2,
   maxPlayers:    6,
   blindSchedule: DEFAULT_BLIND_SCHEDULE,
+  blindIncreaseMode: 'knockout',
 };
 
 // ---------------------------------------------------------------------------

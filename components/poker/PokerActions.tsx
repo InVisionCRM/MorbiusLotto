@@ -52,6 +52,8 @@ export interface PokerActionsProps {
   onRaise: (amount: string) => void;
   /** When "floating", renders the fullscreen horizontal strip layout */
   variant?: 'default' | 'floating';
+  /** Desktop default: single-line recap left of presets (same row; no extra chrome). */
+  lastActionLine?: string | null;
 }
 
 export type PreActionOption = 'check_fold' | 'check' | 'call_any' | null;
@@ -71,6 +73,7 @@ export function PokerActions({
   onBet,
   onRaise,
   variant = 'default',
+  lastActionLine = null,
 }: PokerActionsProps) {
   const { play } = usePokerSounds();
   const minRaiseAmt = useMemo(() => parseProp(minRaise), [minRaise]);
@@ -109,7 +112,7 @@ export function PokerActions({
     { label: 'Min',   value: minRaiseAmt },
     { label: '½ Pot', value: clampAmount(potAmt / 2n, minRaiseAmt, stackAmt) },
     { label: 'Pot',   value: clampAmount(potAmt + callAmt, minRaiseAmt, stackAmt) },
-    { label: 'Max',   value: stackAmt },
+    { label: 'All-in', value: stackAmt },
   ];
 
   // ── Sound helpers ──────────────────────────────────────────────────────────
@@ -138,11 +141,6 @@ export function PokerActions({
     setCustomAmount(formatAmount(clampedChips));
   };
 
-  const handleAllIn = () => {
-    if (!canAct || stackAmt === 0n) return;
-    setCustomAmount(formatAmount(stackAmt));
-  };
-
   const nudge = (dir: 1 | -1) => {
     const base = clamped ?? minRaiseAmt;
     const step = minRaiseAmt > 0n ? minRaiseAmt : 1n;
@@ -152,6 +150,68 @@ export function PokerActions({
 
   const sliderFillPct = maxOffsetChips > 0 ? (sliderChips / maxOffsetChips) * 100 : 0;
 
+  const primaryReady = canAct && hasValidAmount;
+
+  /** Outer “deck” shell — Plinko greys + subtle cyan rim (75% strip is centered by parent). */
+  const panelDeckStyle: React.CSSProperties = {
+    background: 'linear-gradient(325deg, rgba(20, 20, 20, 0.88), rgba(40, 40, 40, 0.72))',
+    boxShadow:
+      'inset 0 3px 6px rgba(0, 0, 0, 0.8), inset 0 -3px 6px rgba(255, 255, 255, 0.1), 0 1px 2px rgba(0, 0, 0, 0.35), 0 0 0 1px rgba(34, 211, 238, 0.12)',
+    border: '1px inset rgba(60, 60, 60, 0.5)',
+    borderRadius: '14px',
+  };
+
+  /** Fold / Check / Call — cool slate, faint cyan edge to match table chrome. */
+  const commitZoneStyle: React.CSSProperties = {
+    background: 'linear-gradient(180deg, rgba(30, 41, 59, 0.55), rgba(15, 23, 42, 0.72))',
+    border: '1px solid rgba(34, 211, 238, 0.14)',
+    boxShadow: 'inset 0 1px 0 rgba(255, 255, 255, 0.05)',
+    borderRadius: '10px',
+  };
+
+  /** Presets / slider row — teal-tinted shell (Plinko cyan accent, not loud fills). */
+  const tuneZoneStyle: React.CSSProperties = {
+    background: 'linear-gradient(180deg, rgba(28, 32, 38, 0.78), rgba(22, 40, 48, 0.58))',
+    border: '1px solid rgba(34, 211, 238, 0.2)',
+    boxShadow: 'inset 0 1px 0 rgba(255, 255, 255, 0.06)',
+    borderRadius: '10px',
+  };
+
+  const commitBtnInset = 'inset 0 1px 0 rgba(255, 255, 255, 0.08)';
+
+  /** Presets / nudges — black ~20% opacity gradient (reads as glass on the tune strip). */
+  const tuneGlassBtnStyle: React.CSSProperties = {
+    background: 'linear-gradient(325deg, rgba(0, 0, 0, 0.22), rgba(0, 0, 0, 0.12))',
+    border: '1px solid rgba(255, 255, 255, 0.2)',
+    boxShadow: `${commitBtnInset}, 0 0 4px rgba(0, 0, 0, 0.25)`,
+  };
+
+  const tuneGlassBtnMutedStyle: React.CSSProperties = {
+    background: 'linear-gradient(325deg, rgba(0, 0, 0, 0.14), rgba(0, 0, 0, 0.08))',
+    border: '1px solid rgba(255, 255, 255, 0.14)',
+    boxShadow: commitBtnInset,
+  };
+
+  /** Fold / Check / Call — each action keeps a clear hue (fold / check / call). */
+  const foldBtnStyleCommit: React.CSSProperties = {
+    border: '1px solid rgba(252, 165, 165, 0.45)',
+    boxShadow: `${commitBtnInset}, 0 0 5px rgba(185, 28, 28, 0.1)`,
+    background: 'linear-gradient(180deg, #b91c1c 0%, #991b1b 45%, #7f1d1d 100%)',
+  };
+
+  const checkBtnStyleCommit: React.CSSProperties = {
+    border: canCheck ? '1px solid rgba(147, 197, 253, 0.5)' : '1px solid rgba(148, 163, 184, 0.35)',
+    boxShadow: canCheck ? `${commitBtnInset}, 0 0 5px rgba(37, 99, 235, 0.1)` : commitBtnInset,
+    background: canCheck
+      ? 'linear-gradient(180deg, #3b82f6 0%, #2563eb 45%, #1d4ed8 100%)'
+      : 'linear-gradient(180deg, #4b5563 0%, #374151 55%, #1f2937 100%)',
+  };
+
+  const callBtnStyleCommit: React.CSSProperties = {
+    border: '1px solid rgba(134, 239, 172, 0.45)',
+    boxShadow: `${commitBtnInset}, 0 0 5px rgba(22, 163, 74, 0.1)`,
+    background: 'linear-gradient(180deg, #22c55e 0%, #16a34a 45%, #15803d 100%)',
+  };
 
   const handleFoldWithSound = () => {
     // Manual click should always override any queued pre-action.
@@ -174,49 +234,26 @@ export function PokerActions({
     onCall();
   };
 
-  const barStyle = {
-    background: 'transparent',
-    border: 'none',
-    boxShadow: 'none',
-  };
-  const actionBtnBaseStyle = {
-    border: '1px solid rgba(255,255,255,0.12)',
-    boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.06)',
-  };
-  const allInBtnStyle = {
-    ...actionBtnBaseStyle,
-    border: '1px solid rgba(251, 191, 36, 0.35)',
-  };
-  const inputStyle = {
-    background: canAct ? '#000' : 'rgba(15, 23, 42, 0.5)',
-    color: '#22d3ee',
-    border: '1px solid rgba(255,255,255,0.15)',
-    ['--tw-ring-color' as string]: 'rgba(255,255,255,0.3)',
-  };
   const foldBtnClass = 'font-jost text-white disabled:opacity-40 disabled:pointer-events-none';
-  const foldBtnStyle = {
-    ...actionBtnBaseStyle,
-    background: 'linear-gradient(180deg, #b91c1c 0%, #7f1d1d 100%)',
-  };
   const checkBtnClass = 'font-jost text-white disabled:opacity-40 disabled:pointer-events-none';
-  const checkBtnStyle = {
-    ...actionBtnBaseStyle,
-    background: canCheck
-      ? 'linear-gradient(180deg, #2563eb 0%, #1e40af 100%)'
-      : 'linear-gradient(180deg, #16a34a 0%, #15803d 100%)',
-  };
-  const primaryBtnClass = 'font-jost text-white disabled:opacity-40 disabled:pointer-events-none';
-  const primaryBtnStyle = {
-    ...actionBtnBaseStyle,
-    background: 'linear-gradient(180deg, #16a34a 0%, #15803d 100%)',
+  const primaryBtnClass =
+    'font-jost text-white hover:brightness-105 disabled:opacity-40 disabled:pointer-events-none';
+  /** Teal primary: darker than prior neon so it sits closer to Fold/Check/Call weight. */
+  const primaryBtnStyle: React.CSSProperties = {
+    border: 'none',
+    background: primaryReady
+      ? 'linear-gradient(180deg, #0d9488 0%, #0f766e 44%, #115e59 100%)'
+      : 'linear-gradient(180deg, #0e7490 0%, #155e75 46%, #164e63 100%)',
+    boxShadow: primaryReady
+      ? `${commitBtnInset}, 0 0 4px rgba(15, 118, 110, 0.14)`
+      : `${commitBtnInset}, 0 0 3px rgba(14, 116, 144, 0.1)`,
   };
   const quickSizeClass = [
     'font-jost',
-    'bg-black',
-    'text-cyan-400',
-    'active:text-purple-500',
-    'disabled:bg-slate-900/50',
-    'disabled:text-slate-400',
+    'text-white',
+    'active:brightness-110',
+    'disabled:opacity-45',
+    'disabled:pointer-events-none',
   ].join(' ');
   const preActionLabelClass = 'inline-flex items-center gap-1 text-[10px] md:text-[11px] font-jost text-white/90';
 
@@ -229,20 +266,25 @@ export function PokerActions({
     return (
       <div
         data-testid="poker-actions"
-        className="w-full select-none flex items-center gap-3"
+        className="w-full select-none flex justify-center min-w-0"
         style={{ opacity: canAct ? 1 : 0.45 }}
         role="group"
         aria-label="Poker actions"
       >
-        {/* Action buttons */}
-        <div className="flex gap-2 shrink-0">
+        <div
+          className="flex w-full min-w-0 max-w-full flex-col gap-2 px-2 py-2 sm:px-3 sm:py-2.5 md:max-w-[75%] md:px-4 md:py-3"
+          style={panelDeckStyle}
+        >
+        <div className="flex min-w-0 flex-col items-stretch gap-2 min-[700px]:flex-row min-[700px]:gap-2">
+        {/* Commit: respond to table */}
+        <div className="flex min-w-0 flex-1 items-stretch gap-1 p-1.5 min-[700px]:max-w-none min-[700px]:shrink-0 min-[700px]:flex-none md:gap-2.5 md:p-2.5" style={commitZoneStyle}>
           <button
             data-testid="poker-action-fold"
             type="button"
             onClick={handleFoldWithSound}
             disabled={!canAct}
-            className={`h-11 w-20 rounded-xl text-sm font-bold tracking-wide transition-all hover:brightness-110 active:scale-[0.97] ${foldBtnClass}`}
-            style={foldBtnStyle}
+            className={`min-h-11 min-w-0 flex-1 basis-0 rounded-lg px-1 text-[11px] font-bold leading-tight tracking-wide transition-all hover:brightness-110 active:scale-[0.97] min-[700px]:rounded-xl min-[700px]:px-3 min-[700px]:text-sm md:min-h-14 md:px-4 md:text-base lg:text-lg ${foldBtnClass}`}
+            style={foldBtnStyleCommit}
           >
             Fold
           </button>
@@ -251,8 +293,8 @@ export function PokerActions({
             type="button"
             onClick={handleCheckWithSound}
             disabled={!canAct || !canCheck}
-            className={`h-11 w-20 rounded-xl text-sm font-bold tracking-wide transition-all hover:brightness-110 active:scale-[0.97] ${checkBtnClass}`}
-            style={checkBtnStyle}
+            className={`min-h-11 min-w-0 flex-1 basis-0 rounded-lg px-1 text-[11px] font-bold leading-tight tracking-wide transition-all hover:brightness-110 active:scale-[0.97] min-[700px]:rounded-xl min-[700px]:px-3 min-[700px]:text-sm md:min-h-14 md:px-4 md:text-base lg:text-lg ${checkBtnClass}`}
+            style={checkBtnStyleCommit}
           >
             Check
           </button>
@@ -261,58 +303,63 @@ export function PokerActions({
             type="button"
             onClick={handleCallWithSound}
             disabled={!canAct || !isFacingBet}
-            className={`h-11 w-20 rounded-xl text-sm font-bold tracking-wide transition-all hover:brightness-110 active:scale-[0.97] ${checkBtnClass}`}
-            style={{ ...actionBtnBaseStyle, background: 'linear-gradient(180deg, #16a34a 0%, #15803d 100%)' }}
+            className={`min-h-11 min-w-0 flex-1 basis-0 rounded-lg px-0.5 text-[10px] font-bold leading-tight tracking-wide transition-all hover:brightness-110 active:scale-[0.97] min-[700px]:rounded-xl min-[700px]:px-3 min-[700px]:text-sm md:min-h-14 md:px-4 md:text-base lg:text-lg ${checkBtnClass}`}
+            style={callBtnStyleCommit}
           >
-            <span className="flex flex-col items-center justify-center leading-tight">
+            <span className="flex flex-col items-center justify-center gap-0.5 leading-tight">
               <span>Call</span>
-              {isFacingBet && <span className="text-[10px] font-semibold normal-case">{formatAmount(callAmt)}</span>}
+              {isFacingBet && (
+                <span className="max-w-full truncate text-[9px] font-semibold normal-case tabular-nums min-[700px]:text-xs md:text-sm lg:text-base">{formatAmount(callAmt)}</span>
+              )}
             </span>
           </button>
         </div>
 
-        {/* Divider */}
-        <div className="w-px self-stretch shrink-0" style={{ background: 'rgba(255,255,255,0.1)' }} />
+        <div className="hidden min-[700px]:block w-px shrink-0 self-stretch bg-white/10" aria-hidden />
 
+        {/* Tune: size + commit amount */}
+        <div className="flex min-w-0 flex-1 flex-col flex-wrap gap-2 p-1.5 min-[520px]:flex-row min-[520px]:flex-nowrap min-[520px]:items-center" style={tuneZoneStyle}>
+        {lastActionLine ? (
+          <span
+            data-testid="poker-actions-last-action"
+            className="m-0 min-w-0 shrink font-jost text-[10px] font-normal leading-tight text-white/35 min-[520px]:max-w-[38%] min-[520px]:flex-1 min-[520px]:basis-0 min-[520px]:truncate min-[700px]:max-w-none lg:text-[11px]"
+            title={lastActionLine}
+          >
+            {lastActionLine}
+          </span>
+        ) : null}
         {/* Presets */}
-        <div className="flex gap-1.5 shrink-0">
+        <div className="flex min-w-0 shrink flex-wrap content-center gap-1 min-[520px]:shrink-0 min-[520px]:justify-end min-[520px]:gap-1.5">
           {quickSizes.map((q) => (
             <button
               key={q.label}
+              data-testid={`poker-quick-size-${q.label.toLowerCase().replace(/[^a-z0-9]+/g, '-')}`}
               type="button"
               onClick={() => { setCustomAmount(formatAmount(clampAmount(q.value, minRaiseAmt, stackAmt))); }}
               disabled={!canAct || stackAmt === 0n}
-              className={`h-8 px-3 text-[11px] rounded-md transition-all disabled:pointer-events-none hover:brightness-125 active:scale-95 ${quickSizeClass}`}
-              style={actionBtnBaseStyle}
+              className={`h-7 min-w-0 shrink px-2 text-[10px] rounded-md transition-all hover:brightness-110 active:scale-95 min-[520px]:h-8 min-[520px]:px-2.5 min-[520px]:text-[11px] md:px-3 md:text-xs ${quickSizeClass}`}
+              style={tuneGlassBtnStyle}
             >
               {q.label}
             </button>
           ))}
-          <button
-            data-testid="poker-action-all-in"
-            type="button"
-            onClick={handleAllIn}
-            disabled={!canAct || stackAmt === 0n}
-            className="h-8 px-2.5 text-[11px] rounded-md transition-all disabled:pointer-events-none hover:brightness-125 active:scale-95 font-jost font-bold bg-black text-amber-400"
-            style={allInBtnStyle}
-          >
-            All-in
-          </button>
         </div>
 
-        {/* Slider + nudge + amount input */}
-        <div className="flex items-center gap-2 flex-1 min-w-0">
+        <div className="hidden h-8 w-px shrink-0 self-center bg-white/10 min-[520px]:block" aria-hidden />
+
+        {/* Slider + nudges */}
+        <div className="flex w-full min-w-0 flex-1 items-center justify-center gap-1 min-[520px]:w-auto min-[520px]:max-w-[min(100%,13rem)] min-[520px]:shrink min-[520px]:grow min-[520px]:justify-end min-[700px]:max-w-[min(100%,15rem)] md:gap-2 lg:max-w-[min(100%,17rem)]">
           <button
             data-testid="poker-action-nudge-down"
             type="button"
             onClick={() => nudge(-1)}
             disabled={!canAct || !hasValidAmount}
-            className={`h-9 w-9 rounded-md text-lg shrink-0 transition-all hover:brightness-125 active:scale-95 disabled:pointer-events-none flex items-center justify-center font-jost ${!canAct || !hasValidAmount ? 'bg-slate-900/50 text-slate-400' : 'bg-black text-cyan-400'}`}
-            style={{ border: '1px solid rgba(255,255,255,0.12)' }}
+            className="flex h-8 w-7 shrink-0 items-center justify-center rounded-md font-jost text-base text-white transition-all hover:brightness-110 active:scale-95 disabled:pointer-events-none min-[520px]:h-9 min-[520px]:w-9 min-[520px]:text-lg"
+            style={!canAct || !hasValidAmount ? tuneGlassBtnMutedStyle : tuneGlassBtnStyle}
           >
             −
           </button>
-          <div className="flex-1 min-w-0 relative flex items-center">
+          <div className="relative flex min-w-0 flex-1 items-center">
             <input
               data-testid="poker-action-slider"
               type="range"
@@ -322,7 +369,7 @@ export function PokerActions({
               value={sliderChips}
               onChange={handleSlider}
               disabled={!canAct || stackAmt === 0n}
-              className="poker-slider poker-slider-desktop w-full disabled:pointer-events-none"
+              className="poker-slider poker-slider-desktop w-full min-w-0 disabled:pointer-events-none"
               aria-label="Bet size slider"
             />
           </div>
@@ -331,27 +378,14 @@ export function PokerActions({
             type="button"
             onClick={() => nudge(1)}
             disabled={!canAct || !hasValidAmount}
-            className={`h-9 w-9 rounded-md text-lg shrink-0 transition-all hover:brightness-125 active:scale-95 disabled:pointer-events-none flex items-center justify-center font-jost ${!canAct || !hasValidAmount ? 'bg-slate-900/50 text-slate-400' : 'bg-black text-cyan-400'}`}
-            style={{ border: '1px solid rgba(255,255,255,0.12)' }}
+            className="flex h-8 w-7 shrink-0 items-center justify-center rounded-md font-jost text-base text-white transition-all hover:brightness-110 active:scale-95 disabled:pointer-events-none min-[520px]:h-9 min-[520px]:w-9 min-[520px]:text-lg"
+            style={!canAct || !hasValidAmount ? tuneGlassBtnMutedStyle : tuneGlassBtnStyle}
           >
             +
           </button>
-          <input
-            data-testid="poker-action-amount-input"
-            inputMode="numeric"
-            pattern="[0-9,]*"
-            type="text"
-            value={customAmount}
-            onChange={(e) => setCustomAmount(e.target.value)}
-            disabled={!canAct}
-            className="h-9 w-20 shrink-0 rounded-md text-sm font-jost font-bold tabular-nums text-center outline-none focus:ring-1 transition disabled:pointer-events-none"
-            style={inputStyle}
-            aria-label={isFacingBet ? 'Raise amount' : 'Bet amount'}
-          />
         </div>
 
-        {/* Divider */}
-        <div className="w-px self-stretch shrink-0" style={{ background: 'rgba(255,255,255,0.1)' }} />
+        <div className="hidden h-8 w-px shrink-0 self-center bg-white/10 min-[520px]:block" aria-hidden />
 
         {/* Raise/Bet button */}
         <button
@@ -359,12 +393,14 @@ export function PokerActions({
           type="button"
           onClick={handlePrimary}
           disabled={!canAct || !hasValidAmount}
-          className={`h-11 w-24 shrink-0 rounded-xl text-sm font-bold tracking-wide transition-all hover:brightness-110 active:scale-[0.97] ${primaryBtnClass}`}
+          className={`flex min-h-[2.65rem] w-full min-w-0 flex-1 flex-col items-center justify-center rounded-lg px-1 text-[11px] font-bold leading-tight tracking-wide transition-all active:scale-[0.97] min-[520px]:min-h-[2.75rem] min-[520px]:max-w-[11rem] min-[520px]:shrink min-[520px]:grow-[2] min-[520px]:rounded-xl min-[520px]:text-sm md:min-h-[3.25rem] md:max-w-[13rem] md:text-base ${primaryBtnClass}`}
           style={primaryBtnStyle}
         >
-          <span className="flex flex-col items-center justify-center leading-tight">
+          <span className="flex max-w-full flex-col items-center justify-center gap-0.5 leading-tight">
             <span>{isFacingBet ? 'Raise' : 'Bet'}</span>
-            {hasValidAmount && clamped && <span className="text-[10px] font-semibold normal-case">{formatAmount(clamped)}</span>}
+            {hasValidAmount && clamped && (
+              <span className="max-w-full truncate text-[10px] font-semibold normal-case tabular-nums min-[520px]:text-sm md:text-base">{formatAmount(clamped)}</span>
+            )}
           </span>
         </button>
 
@@ -378,8 +414,10 @@ export function PokerActions({
             cursor: pointer;
             background: linear-gradient(
               to right,
+              #c0392b 0%,
               #c0392b ${sliderFillPct}%,
-              rgba(255,255,255,0.18) ${sliderFillPct}%
+              rgba(0, 0, 0, 0.22) ${sliderFillPct}%,
+              rgba(0, 0, 0, 0.1) 100%
             );
           }
           .poker-slider-desktop { height: 5px; }
@@ -391,7 +429,7 @@ export function PokerActions({
             background: #fff;
             border: 2px solid #c0392b;
             cursor: pointer;
-            box-shadow: 0 1px 4px rgba(0,0,0,0.5);
+            box-shadow: 0 1px 2px rgba(0,0,0,0.35);
             transition: transform 0.1s;
           }
           .poker-slider::-webkit-slider-thumb:hover { transform: scale(1.15); }
@@ -403,6 +441,9 @@ export function PokerActions({
             cursor: pointer;
           }
         `}</style>
+        </div>
+        </div>
+        </div>
       </div>
     );
   }
@@ -421,12 +462,28 @@ export function PokerActions({
       role="group"
       aria-label="Poker actions"
     >
-      {/* ── Mobile: full-width bar (same layout as desktop, compact) ── */}
-      <div
-        className="sm:hidden"
-        style={{ ...barStyle, paddingBottom: 'max(8px, env(safe-area-inset-bottom, 8px))', paddingLeft: 'max(8px, env(safe-area-inset-left, 8px))', paddingRight: 'max(8px, env(safe-area-inset-right, 8px))' }}
-      >
-        <div className="grid grid-cols-5 gap-1 pt-1.5 pb-1 px-0.5">
+      {/* ── Mobile: bar centered at 75% width with horizontal padding ── */}
+      <div className="sm:hidden flex w-full min-w-0 justify-center px-1">
+        <div
+          className="w-full min-w-0 max-w-[min(100%,28rem)] px-2 pt-2"
+          style={{
+            ...panelDeckStyle,
+            paddingBottom: 'max(8px, env(safe-area-inset-bottom, 8px))',
+            paddingLeft: 'max(0.65rem, env(safe-area-inset-left, 0px))',
+            paddingRight: 'max(0.65rem, env(safe-area-inset-right, 0px))',
+          }}
+        >
+        <div className="mb-1.5 rounded-lg p-1" style={tuneZoneStyle}>
+        {lastActionLine ? (
+          <p
+            data-testid="poker-actions-last-action"
+            className="m-0 min-w-0 truncate px-0.5 pb-1 pt-0.5 font-jost text-[9px] font-normal leading-tight text-white/35"
+            title={lastActionLine}
+          >
+            {lastActionLine}
+          </p>
+        ) : null}
+        <div className={`grid grid-cols-4 gap-1 px-0.5 pb-0.5 ${lastActionLine ? 'pt-0' : 'pt-0.5'}`}>
           {quickSizes.map((q) => (
             <button
               data-testid={`poker-quick-size-${q.label.toLowerCase().replace(/[^a-z0-9]+/g, '-')}`}
@@ -434,26 +491,17 @@ export function PokerActions({
               type="button"
               onClick={() => { setCustomAmount(formatAmount(clampAmount(q.value, minRaiseAmt, stackAmt))); }}
               disabled={!canAct || stackAmt === 0n}
-              className={`h-9 text-[11px] rounded-sm transition-all disabled:pointer-events-none hover:brightness-125 active:scale-95 ${quickSizeClass}`}
-              style={actionBtnBaseStyle}
+              className={`h-9 text-[11px] rounded-sm transition-all hover:brightness-110 active:scale-95 ${quickSizeClass}`}
+              style={tuneGlassBtnStyle}
             >
               {q.label}
             </button>
           ))}
-          <button
-            data-testid="poker-action-all-in"
-            type="button"
-            onClick={handleAllIn}
-            disabled={!canAct || stackAmt === 0n}
-            className="h-9 text-[10px] leading-tight rounded-sm transition-all disabled:pointer-events-none hover:brightness-125 active:scale-95 font-jost font-bold bg-black text-amber-400"
-            style={allInBtnStyle}
-          >
-            All-in
-          </button>
         </div>
-        <div className="flex items-stretch gap-1 pb-2 pt-1 px-0.5">
+        </div>
+        <div className="flex min-w-0 items-stretch gap-1 px-0.5 pb-2 pt-0.5">
           <div
-            className="flex flex-col gap-0.5 justify-center shrink-0 w-[4.65rem] pr-1 border-r border-white/10"
+            className="flex w-[4.65rem] shrink-0 flex-col justify-center gap-0.5 border-r border-white/10 pr-1"
             aria-label="Pre-selected actions when not your turn"
           >
             <label className={`${preActionLabelClass} text-[9px] leading-tight`}>
@@ -463,7 +511,7 @@ export function PokerActions({
                 checked={preAction === 'check_fold'}
                 onChange={() => togglePreAction('check_fold')}
                 disabled={canAct}
-                className="h-3 w-3 accent-cyan-400 rounded-sm shrink-0"
+                className="h-3 w-3 accent-white rounded-sm shrink-0"
               />
               <span className="whitespace-nowrap">Check/Fold</span>
             </label>
@@ -474,7 +522,7 @@ export function PokerActions({
                 checked={preAction === 'check'}
                 onChange={() => togglePreAction('check')}
                 disabled={canAct || !canCheck}
-                className="h-3 w-3 accent-cyan-400 rounded-sm shrink-0"
+                className="h-3 w-3 accent-white rounded-sm shrink-0"
               />
               <span>Check</span>
             </label>
@@ -485,20 +533,20 @@ export function PokerActions({
                 checked={preAction === 'call_any'}
                 onChange={() => togglePreAction('call_any')}
                 disabled={canAct}
-                className="h-3 w-3 accent-cyan-400 rounded-sm shrink-0"
+                className="h-3 w-3 accent-white rounded-sm shrink-0"
               />
               <span className="whitespace-nowrap">Call Any</span>
             </label>
           </div>
-          <div className="flex gap-1 flex-1 min-w-0">
-            <div className="grid grid-cols-4 gap-1 flex-1 h-11 min-w-0">
+          <div className="flex shrink-0 items-stretch p-1" style={commitZoneStyle}>
+            <div className="grid min-h-[3rem] min-w-0 flex-1 grid-cols-3 gap-1.5">
               <button
                 data-testid="poker-action-fold"
                 type="button"
                 onClick={handleFoldWithSound}
                 disabled={!canAct}
-                className={`min-w-0 h-full rounded-xl text-xs font-bold tracking-wide transition-all hover:brightness-110 active:scale-[0.97] ${foldBtnClass}`}
-                style={foldBtnStyle}
+                className={`min-h-[3rem] min-w-[5.5rem] rounded-xl py-1 text-sm font-bold tracking-wide transition-all hover:brightness-110 active:scale-[0.97] ${foldBtnClass}`}
+                style={foldBtnStyleCommit}
               >
                 Fold
               </button>
@@ -507,8 +555,8 @@ export function PokerActions({
                 type="button"
                 onClick={handleCheckWithSound}
                 disabled={!canAct || !canCheck}
-                className={`min-w-0 h-full rounded-xl text-xs font-bold tracking-wide transition-all hover:brightness-110 active:scale-[0.97] px-1 ${checkBtnClass}`}
-                style={checkBtnStyle}
+                className={`min-h-[3rem] min-w-[5.5rem] rounded-xl px-1 py-1 text-sm font-bold tracking-wide transition-all hover:brightness-110 active:scale-[0.97] ${checkBtnClass}`}
+                style={checkBtnStyleCommit}
               >
                 Check
               </button>
@@ -517,55 +565,44 @@ export function PokerActions({
                 type="button"
                 onClick={handleCallWithSound}
                 disabled={!canAct || !isFacingBet}
-                className={`min-w-0 h-full rounded-xl text-[10px] font-bold tracking-wide transition-all hover:brightness-110 active:scale-[0.97] px-1 ${checkBtnClass}`}
-                style={{ ...actionBtnBaseStyle, background: 'linear-gradient(180deg, #16a34a 0%, #15803d 100%)' }}
+                className={`min-h-[3rem] min-w-[5.5rem] rounded-xl px-0.5 py-1 text-[11px] font-bold leading-tight tracking-wide transition-all hover:brightness-110 active:scale-[0.97] ${checkBtnClass}`}
+                style={callBtnStyleCommit}
               >
-                <span className="flex flex-col items-center justify-center leading-tight whitespace-normal">
+                <span className="flex flex-col items-center justify-center gap-0.5 whitespace-normal">
                   <span>Call</span>
-                  <span className="text-[10px] font-semibold normal-case">{isFacingBet ? formatAmount(callAmt) : '—'}</span>
-                </span>
-              </button>
-              <button
-                data-testid="poker-action-primary"
-                type="button"
-                onClick={handlePrimary}
-                disabled={!canAct || !hasValidAmount}
-                className={`min-w-0 h-full rounded-xl text-[11px] font-bold tracking-wide transition-all hover:brightness-110 active:scale-[0.97] px-1 ${primaryBtnClass}`}
-                style={primaryBtnStyle}
-              >
-                <span className="flex flex-col items-center justify-center leading-tight whitespace-normal">
-                  <span>{isFacingBet ? 'Raise' : 'Bet'}</span>
-                  <span className="text-[10px] font-semibold normal-case">
-                    {hasValidAmount && clamped ? formatAmount(clamped) : '—'}
-                  </span>
+                  <span className="text-xs font-semibold normal-case leading-tight tabular-nums">{isFacingBet ? formatAmount(callAmt) : '—'}</span>
                 </span>
               </button>
             </div>
           </div>
-          <div className="flex items-center gap-1 shrink-0" style={{ width: '42%' }}>
-            <input
-              data-testid="poker-action-amount-input"
-              inputMode="numeric"
-              pattern="[0-9,]*"
-              type="text"
-              value={customAmount}
-              onChange={(e) => setCustomAmount(e.target.value)}
-              disabled={!canAct}
-              className="h-11 w-14 rounded-sm text-xs font-jost font-bold tabular-nums text-center outline-none focus:ring-1 transition disabled:pointer-events-none flex-shrink-0"
-              style={inputStyle}
-              aria-label={isFacingBet ? 'Raise amount' : 'Bet amount'}
-            />
+          <div className="flex min-w-0 flex-1 flex-col gap-1 p-0.5" style={tuneZoneStyle}>
+            <button
+              data-testid="poker-action-primary"
+              type="button"
+              onClick={handlePrimary}
+              disabled={!canAct || !hasValidAmount}
+              className={`h-11 w-full rounded-xl px-1 text-sm font-bold tracking-wide transition-all active:scale-[0.97] ${primaryBtnClass}`}
+              style={primaryBtnStyle}
+            >
+              <span className="flex flex-col items-center justify-center gap-0.5 whitespace-normal leading-tight">
+                <span>{isFacingBet ? 'Raise' : 'Bet'}</span>
+                <span className="text-sm font-semibold normal-case tabular-nums">
+                  {hasValidAmount && clamped ? formatAmount(clamped) : '—'}
+                </span>
+              </span>
+            </button>
+          <div className="flex shrink-0 items-center gap-1" style={{ width: '100%' }}>
             <button
               data-testid="poker-action-nudge-down"
               type="button"
               onClick={() => nudge(-1)}
               disabled={!canAct || !hasValidAmount}
-              className={`h-11 w-8 rounded-sm text-sm transition-all hover:brightness-125 active:scale-95 active:text-purple-500 disabled:pointer-events-none flex items-center justify-center shrink-0 font-jost ${!canAct || !hasValidAmount ? 'bg-slate-900/50 text-slate-400' : 'bg-black text-cyan-400'}`}
-              style={{ border: '1px solid rgba(255,255,255,0.12)' }}
+              className="flex h-11 w-8 shrink-0 items-center justify-center rounded-sm font-jost text-sm text-white transition-all hover:brightness-110 active:scale-95 active:text-white/80 disabled:pointer-events-none"
+              style={!canAct || !hasValidAmount ? tuneGlassBtnMutedStyle : tuneGlassBtnStyle}
             >
               −
             </button>
-            <div className="flex-1 min-w-0 relative flex items-center">
+            <div className="relative flex w-[9.25rem] shrink-0 items-center sm:w-[10.25rem]">
               <input
                 data-testid="poker-action-slider"
                 type="range"
@@ -584,92 +621,105 @@ export function PokerActions({
               type="button"
               onClick={() => nudge(1)}
               disabled={!canAct || !hasValidAmount}
-              className={`h-11 w-8 rounded-sm text-sm transition-all hover:brightness-125 active:scale-95 active:text-purple-500 disabled:pointer-events-none flex items-center justify-center shrink-0 font-jost ${!canAct || !hasValidAmount ? 'bg-slate-900/50 text-slate-400' : 'bg-black text-cyan-400'}`}
-              style={{ border: '1px solid rgba(255,255,255,0.12)' }}
+              className="flex h-11 w-8 shrink-0 items-center justify-center rounded-sm font-jost text-sm text-white transition-all hover:brightness-110 active:scale-95 active:text-white/80 disabled:pointer-events-none"
+              style={!canAct || !hasValidAmount ? tuneGlassBtnMutedStyle : tuneGlassBtnStyle}
             >
               +
             </button>
           </div>
         </div>
+        </div>
+        </div>
       </div>
 
-      {/* ── Desktop / tablet (sm+): larger touch targets on md+ for readability ── */}
-      <div className="hidden sm:block" style={barStyle}>
-        <div className="flex items-center justify-end gap-1.5 px-2 md:px-3 pt-1.5 md:pt-2">
-          {quickSizes.map((q) => (
-            <button
-              key={q.label}
-              type="button"
-              onClick={() => { setCustomAmount(formatAmount(clampAmount(q.value, minRaiseAmt, stackAmt))); }}
-              disabled={!canAct || stackAmt === 0n}
-              className={`h-8 md:h-10 px-2.5 md:px-3 text-[11px] md:text-sm rounded-sm transition-all disabled:pointer-events-none hover:brightness-125 active:scale-95 ${quickSizeClass}`}
-              style={actionBtnBaseStyle}
+      {/* ── Desktop / tablet (sm+): fluid width up to 75vw; stacks below 700px width ── */}
+      <div className="hidden min-w-0 sm:flex w-full justify-center px-1 md:px-2">
+        <div
+          className="w-full min-w-0 max-w-full px-2 py-2 sm:px-3 sm:py-2.5 md:max-w-[75%] md:px-5 md:py-3"
+          style={panelDeckStyle}
+        >
+        <div className="mb-1.5 rounded-lg p-1 md:p-1.5" style={tuneZoneStyle}>
+        <div className="flex min-w-0 items-center gap-1.5 pt-0.5 sm:gap-2 md:pt-1">
+          {lastActionLine ? (
+            <span
+              data-testid="poker-actions-last-action"
+              className="m-0 min-w-0 flex-1 truncate font-jost text-[9px] font-normal leading-tight text-white/35 min-[520px]:text-[10px] md:text-[11px]"
+              title={lastActionLine}
             >
-              {q.label}
-            </button>
-          ))}
-          <button
-            data-testid="poker-action-all-in"
-            type="button"
-            onClick={handleAllIn}
-            disabled={!canAct || stackAmt === 0n}
-            className="h-8 md:h-10 px-2 md:px-2.5 text-[11px] md:text-sm rounded-sm transition-all disabled:pointer-events-none hover:brightness-125 active:scale-95 font-jost font-bold bg-black text-amber-400"
-            style={allInBtnStyle}
+              {lastActionLine}
+            </span>
+          ) : null}
+          <div
+            className={`flex min-w-0 flex-wrap items-center justify-end gap-1 sm:gap-1.5 ${lastActionLine ? 'min-w-0 shrink' : 'ml-auto min-w-0'}`}
           >
-            All-in
-          </button>
+            {quickSizes.map((q) => (
+              <button
+                key={q.label}
+                data-testid={`poker-quick-size-${q.label.toLowerCase().replace(/[^a-z0-9]+/g, '-')}`}
+                type="button"
+                onClick={() => { setCustomAmount(formatAmount(clampAmount(q.value, minRaiseAmt, stackAmt))); }}
+                disabled={!canAct || stackAmt === 0n}
+                className={`h-7 min-w-0 shrink rounded-sm px-1.5 text-[10px] transition-all hover:brightness-110 active:scale-95 min-[520px]:h-8 min-[520px]:px-2.5 min-[520px]:text-[11px] md:h-10 md:px-3 md:text-sm ${quickSizeClass}`}
+                style={tuneGlassBtnStyle}
+              >
+                {q.label}
+              </button>
+            ))}
+          </div>
+        </div>
         </div>
         <div
-          className="flex items-stretch gap-1 md:gap-1.5 px-2 md:px-3 pb-2 md:pb-3 pt-1 md:pt-1.5"
+          className="flex min-w-0 flex-col gap-2 min-[700px]:flex-row min-[700px]:items-stretch md:gap-1.5 pb-1 pt-1 md:pb-2 md:pt-1.5"
           style={{ paddingBottom: 'max(8px, env(safe-area-inset-bottom, 8px))' }}
         >
           <div
-            className="flex flex-col gap-1 justify-center shrink-0 pr-2 md:pr-3 border-r border-white/10"
+            className="flex min-w-0 flex-col gap-0.5 justify-center border-white/10 min-[700px]:shrink-0 min-[700px]:border-r min-[700px]:pr-2 md:gap-1 md:pr-3"
             aria-label="Pre-selected actions when not your turn"
           >
-            <label className={preActionLabelClass}>
+            <label className={`${preActionLabelClass} text-[9px] min-[520px]:text-[10px] md:text-[11px]`}>
               <input
                 data-testid="poker-pre-action-check-fold"
                 type="checkbox"
                 checked={preAction === 'check_fold'}
                 onChange={() => togglePreAction('check_fold')}
                 disabled={canAct}
-                className="h-3.5 w-3.5 accent-cyan-400 rounded-sm shrink-0"
+                className="h-3.5 w-3.5 accent-white rounded-sm shrink-0"
               />
-              <span className="whitespace-nowrap">Check/Fold</span>
+              <span className="min-w-0 truncate">Check/Fold</span>
             </label>
-            <label className={preActionLabelClass}>
+            <label className={`${preActionLabelClass} text-[9px] min-[520px]:text-[10px] md:text-[11px]`}>
               <input
                 data-testid="poker-pre-action-check"
                 type="checkbox"
                 checked={preAction === 'check'}
                 onChange={() => togglePreAction('check')}
                 disabled={canAct || !canCheck}
-                className="h-3.5 w-3.5 accent-cyan-400 rounded-sm shrink-0"
+                className="h-3.5 w-3.5 accent-white rounded-sm shrink-0"
               />
               <span>Check</span>
             </label>
-            <label className={preActionLabelClass}>
+            <label className={`${preActionLabelClass} text-[9px] min-[520px]:text-[10px] md:text-[11px]`}>
               <input
                 data-testid="poker-pre-action-call-any"
                 type="checkbox"
                 checked={preAction === 'call_any'}
                 onChange={() => togglePreAction('call_any')}
                 disabled={canAct}
-                className="h-3.5 w-3.5 accent-cyan-400 rounded-sm shrink-0"
+                className="h-3.5 w-3.5 accent-white rounded-sm shrink-0"
               />
-              <span className="whitespace-nowrap">Call Any</span>
+              <span className="min-w-0 truncate">Call Any</span>
             </label>
           </div>
-          <div className="flex gap-1.5 md:gap-2 flex-1 min-w-0">
-            <div className="grid grid-cols-4 gap-1 md:gap-1.5 flex-1 h-12 md:h-14 min-w-0">
+          <div className="flex min-w-0 flex-1 flex-col gap-2 min-[700px]:min-h-0 min-[700px]:flex-row min-[700px]:gap-1.5 md:gap-2">
+          <div className="flex min-w-0 flex-1 items-stretch p-1 min-[700px]:max-w-[55%] min-[700px]:shrink md:p-2" style={commitZoneStyle}>
+            <div className="flex min-h-11 min-w-0 flex-1 gap-0.5 min-[700px]:min-h-[3.5rem] md:min-h-16 md:gap-1.5 lg:gap-2">
               <button
                 data-testid="poker-action-fold"
                 type="button"
                 onClick={handleFoldWithSound}
                 disabled={!canAct}
-                className={`min-w-0 h-full rounded-xl text-sm md:text-base font-bold tracking-wide transition-all hover:brightness-110 active:scale-[0.97] ${foldBtnClass}`}
-                style={foldBtnStyle}
+                className={`min-w-0 flex-1 basis-0 rounded-lg px-0.5 text-[10px] font-bold leading-tight tracking-wide transition-all hover:brightness-110 active:scale-[0.97] min-[700px]:rounded-xl min-[700px]:px-1.5 min-[700px]:text-xs md:min-h-[3.5rem] md:px-2 md:text-sm lg:px-3 lg:text-base xl:text-lg ${foldBtnClass}`}
+                style={foldBtnStyleCommit}
               >
                 Fold
               </button>
@@ -678,8 +728,8 @@ export function PokerActions({
                 type="button"
                 onClick={handleCheckWithSound}
                 disabled={!canAct || !canCheck}
-                className={`min-w-0 h-full rounded-xl text-xs md:text-sm font-bold tracking-wide transition-all hover:brightness-110 active:scale-[0.97] px-1.5 ${checkBtnClass}`}
-                style={checkBtnStyle}
+                className={`min-w-0 flex-1 basis-0 rounded-lg px-0.5 text-[10px] font-bold leading-tight tracking-wide transition-all hover:brightness-110 active:scale-[0.97] min-[700px]:rounded-xl min-[700px]:px-1.5 min-[700px]:text-xs md:min-h-[3.5rem] md:px-2 md:text-sm lg:px-2.5 lg:text-base ${checkBtnClass}`}
+                style={checkBtnStyleCommit}
               >
                 Check
               </button>
@@ -688,55 +738,44 @@ export function PokerActions({
                 type="button"
                 onClick={handleCallWithSound}
                 disabled={!canAct || !isFacingBet}
-                className={`min-w-0 h-full rounded-xl text-xs md:text-[13px] font-bold tracking-wide transition-all hover:brightness-110 active:scale-[0.97] px-1.5 ${checkBtnClass}`}
-                style={{ ...actionBtnBaseStyle, background: 'linear-gradient(180deg, #16a34a 0%, #15803d 100%)' }}
+                className={`min-w-0 flex-1 basis-0 rounded-lg px-0.5 text-[9px] font-bold leading-tight tracking-wide transition-all hover:brightness-110 active:scale-[0.97] min-[700px]:rounded-xl min-[700px]:px-1 min-[700px]:text-xs md:min-h-[3.5rem] md:px-1.5 md:text-sm lg:px-2 lg:text-[15px] ${checkBtnClass}`}
+                style={callBtnStyleCommit}
               >
-                <span className="flex flex-col items-center justify-center leading-tight whitespace-normal">
+                <span className="flex max-w-full flex-col items-center justify-center gap-0.5 whitespace-normal">
                   <span>Call</span>
-                  <span className="text-[10px] md:text-[11px] font-semibold normal-case">{isFacingBet ? formatAmount(callAmt) : '—'}</span>
-                </span>
-              </button>
-              <button
-                data-testid="poker-action-primary"
-                type="button"
-                onClick={handlePrimary}
-                disabled={!canAct || !hasValidAmount}
-                className={`min-w-0 h-full rounded-xl text-sm md:text-base font-bold tracking-wide transition-all hover:brightness-110 active:scale-[0.97] px-2 ${primaryBtnClass}`}
-                style={primaryBtnStyle}
-              >
-                <span className="flex flex-col items-center justify-center leading-tight whitespace-normal">
-                  <span>{isFacingBet ? 'Raise' : 'Bet'}</span>
-                  <span className="text-[11px] md:text-xs font-semibold normal-case">
-                    {hasValidAmount && clamped ? formatAmount(clamped) : '—'}
-                  </span>
+                  <span className="max-w-full truncate text-[8px] font-semibold normal-case tabular-nums min-[700px]:text-[10px] md:text-sm lg:text-base">{isFacingBet ? formatAmount(callAmt) : '—'}</span>
                 </span>
               </button>
             </div>
           </div>
-          <div className="flex items-center gap-1 md:gap-1.5 shrink-0 w-[48%] md:w-[52%] min-w-0">
-            <input
-              data-testid="poker-action-amount-input"
-              inputMode="numeric"
-              pattern="[0-9,]*"
-              type="text"
-              value={customAmount}
-              onChange={(e) => setCustomAmount(e.target.value)}
-              disabled={!canAct}
-              className="h-12 md:h-14 w-16 md:w-[5.25rem] rounded-sm text-sm md:text-base font-jost font-bold tabular-nums text-center outline-none focus:ring-1 transition disabled:pointer-events-none"
-              style={inputStyle}
-              aria-label={isFacingBet ? 'Raise amount' : 'Bet amount'}
-            />
+          <div className="flex min-w-0 flex-1 flex-col gap-1.5 p-1 min-[520px]:flex-row min-[520px]:items-stretch min-[520px]:gap-2 md:p-1.5 md:gap-2" style={tuneZoneStyle}>
+            <button
+              data-testid="poker-action-primary"
+              type="button"
+              onClick={handlePrimary}
+              disabled={!canAct || !hasValidAmount}
+              className={`flex min-h-11 w-full min-w-0 flex-1 flex-col items-center justify-center rounded-lg px-0.5 text-[10px] font-bold leading-tight tracking-wide transition-all active:scale-[0.97] min-[520px]:min-h-[3.25rem] min-[520px]:max-w-none min-[520px]:rounded-xl min-[520px]:px-1 min-[520px]:text-xs min-[700px]:min-h-[3.5rem] min-[700px]:grow-[2] md:min-h-[4rem] md:px-2 md:text-sm lg:text-base ${primaryBtnClass}`}
+              style={primaryBtnStyle}
+            >
+              <span className="flex max-w-full flex-col items-center justify-center gap-0.5 leading-tight">
+                <span>{isFacingBet ? 'Raise' : 'Bet'}</span>
+                <span className="max-w-full truncate text-[9px] font-semibold normal-case tabular-nums min-[520px]:text-xs md:text-base">
+                  {hasValidAmount && clamped ? formatAmount(clamped) : '—'}
+                </span>
+              </span>
+            </button>
+          <div className="flex min-h-10 min-w-0 w-full flex-1 items-center justify-center gap-0.5 min-[520px]:min-h-0 min-[520px]:max-w-[min(100%,15rem)] min-[520px]:shrink min-[520px]:grow md:max-w-[min(100%,17rem)] md:justify-end md:gap-1.5 lg:max-w-[min(100%,19rem)]">
             <button
               data-testid="poker-action-nudge-down"
               type="button"
               onClick={() => nudge(-1)}
               disabled={!canAct || !hasValidAmount}
-              className={`h-12 md:h-14 w-8 md:w-10 rounded-sm text-lg md:text-xl transition-all hover:brightness-125 active:scale-95 active:text-purple-500 disabled:pointer-events-none flex items-center justify-center shrink-0 font-jost ${!canAct || !hasValidAmount ? 'bg-slate-900/50 text-slate-400' : 'bg-black text-cyan-400'}`}
-              style={{ border: '1px solid rgba(255,255,255,0.12)' }}
+              className="flex h-9 w-7 shrink-0 items-center justify-center rounded-sm font-jost text-sm text-white transition-all hover:brightness-110 active:scale-95 active:text-white/80 disabled:pointer-events-none min-[520px]:h-12 min-[520px]:w-8 min-[520px]:text-lg md:h-14 md:w-10 md:text-xl"
+              style={!canAct || !hasValidAmount ? tuneGlassBtnMutedStyle : tuneGlassBtnStyle}
             >
               −
             </button>
-            <div className="flex-1 min-w-0 relative flex items-center">
+            <div className="relative flex min-w-0 flex-1 items-center">
               <input
                 data-testid="poker-action-slider"
                 type="range"
@@ -746,7 +785,7 @@ export function PokerActions({
                 value={sliderChips}
                 onChange={handleSlider}
                 disabled={!canAct || stackAmt === 0n}
-                className="poker-slider poker-slider-desktop w-full disabled:pointer-events-none"
+                className="poker-slider poker-slider-desktop w-full min-w-0 disabled:pointer-events-none"
                 aria-label="Bet size slider"
               />
             </div>
@@ -755,12 +794,15 @@ export function PokerActions({
               type="button"
               onClick={() => nudge(1)}
               disabled={!canAct || !hasValidAmount}
-              className={`h-12 md:h-14 w-8 md:w-10 rounded-sm text-lg md:text-xl transition-all hover:brightness-125 active:scale-95 active:text-purple-500 disabled:pointer-events-none flex items-center justify-center shrink-0 font-jost ${!canAct || !hasValidAmount ? 'bg-slate-900/50 text-slate-400' : 'bg-black text-cyan-400'}`}
-              style={{ border: '1px solid rgba(255,255,255,0.12)' }}
+              className="flex h-9 w-7 shrink-0 items-center justify-center rounded-sm font-jost text-sm text-white transition-all hover:brightness-110 active:scale-95 active:text-white/80 disabled:pointer-events-none min-[520px]:h-12 min-[520px]:w-8 min-[520px]:text-lg md:h-14 md:w-10 md:text-xl"
+              style={!canAct || !hasValidAmount ? tuneGlassBtnMutedStyle : tuneGlassBtnStyle}
             >
               +
             </button>
           </div>
+        </div>
+        </div>
+        </div>
         </div>
       </div>
 
@@ -774,8 +816,10 @@ export function PokerActions({
           cursor: pointer;
           background: linear-gradient(
             to right,
+            #c0392b 0%,
             #c0392b ${sliderFillPct}%,
-            rgba(255,255,255,0.18) ${sliderFillPct}%
+            rgba(0, 0, 0, 0.22) ${sliderFillPct}%,
+            rgba(0, 0, 0, 0.1) 100%
           );
         }
         .poker-slider-desktop {
@@ -803,7 +847,7 @@ export function PokerActions({
           background: #fff;
           border: 2px solid #c0392b;
           cursor: pointer;
-          box-shadow: 0 1px 4px rgba(0,0,0,0.5);
+          box-shadow: 0 1px 2px rgba(0,0,0,0.35);
           transition: transform 0.1s;
         }
         .poker-slider::-webkit-slider-thumb:hover {

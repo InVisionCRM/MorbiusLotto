@@ -1,26 +1,17 @@
 'use client'
 
-import Link from 'next/link'
 import { useEffect, useRef, useState } from 'react'
-
-const HERO_GLASS_BTN =
-  'group relative isolate inline-flex items-center justify-center overflow-hidden rounded-full border border-white/40 font-orbitron bg-transparent backdrop-blur-xs background-refraction/15 px-6 py-3 text-lg font-semibold transition-colors duration-200 hover:border-cyan-300/65 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-500/35 focus-visible:ring-offset-2 focus-visible:ring-offset-neutral-950 sm:px-7 sm:py-3.5 sm:text-base'
-
-const HERO_BTN_LABEL =
-  'text-white/95 text-md lg:text-2xl font-russo-one transition-all duration-200 group-hover:bg-gradient-to-r group-hover:bg-clip-text group-hover:text-transparent'
 
 const HERO_VIDEO_SRC = '/morbius/Morbius-hero-story-scrub.mp4'
 
 const SCRUB_FADE_START = 0.75
 
 interface HeroSectionProps {
-  onOpenPlayerProfile?: () => void
-  onOpenAuthModal?: () => void
   showWelcome?: boolean
   welcomeName?: string | null
 }
 
-export function HeroSection({ onOpenPlayerProfile, onOpenAuthModal, showWelcome = false, welcomeName = null }: HeroSectionProps) {
+export function HeroSection({ showWelcome = false, welcomeName = null }: HeroSectionProps) {
   const outerRef = useRef<HTMLDivElement | null>(null)
   const videoRef = useRef<HTMLVideoElement | null>(null)
   const rafRef = useRef<number | null>(null)
@@ -188,40 +179,6 @@ export function HeroSection({ onOpenPlayerProfile, onOpenAuthModal, showWelcome 
             </span>
           </h1>
         ) : null}
-
-        <div className="absolute bottom-1/4 left-0 right-0 z-10 flex justify-center px-2">
-          <div className="mx-auto grid w-full max-w-md grid-cols-1 gap-3 sm:max-w-5xl sm:grid-cols-2 sm:gap-4">
-            <Link
-              href="/#games"
-              className={`${HERO_GLASS_BTN} hero-cta-item ${ctaReady ? 'hero-cta-item-visible' : 'hero-cta-item-hidden'}`}
-              style={{ transitionDelay: '260ms', pointerEvents: ctaReady ? 'auto' : 'none' }}
-            >
-              <span
-                className={`${HERO_BTN_LABEL} group-hover:from-cyan-300 group-hover:via-cyan-400 group-hover:to-teal-400`}
-              >
-                All Games
-              </span>
-            </Link>
-            <button
-              type="button"
-              onClick={() => {
-                if (onOpenPlayerProfile) {
-                  onOpenPlayerProfile()
-                  return
-                }
-                onOpenAuthModal?.()
-              }}
-              className={`${HERO_GLASS_BTN} hero-cta-item ${ctaReady ? 'hero-cta-item-visible' : 'hero-cta-item-hidden'}`}
-              style={{ transitionDelay: '420ms', pointerEvents: ctaReady ? 'auto' : 'none' }}
-            >
-              <span
-                className={`${HERO_BTN_LABEL} group-hover:from-rose-500 group-hover:via-red-500 group-hover:to-orange-500`}
-              >
-                My Dashboard
-              </span>
-            </button>
-          </div>
-        </div>
 
         <div className="absolute bottom-5 left-1/2 z-10 flex -translate-x-1/2 justify-center sm:bottom-6">
           <div>
