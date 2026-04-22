@@ -658,7 +658,12 @@ export function PokerTournamentCreator({ creatorAddress, onClose, onCreate }: Po
                   </SelectTrigger>
                   <SelectContent className="max-h-64 bg-slate-900 border border-cyan-500/30 text-white shadow-xl z-[200]">
                     {POKER_PRIZE_PRESET_LIST.map((p) => (
-                      <SelectItem key={p.id} value={p.id} className="focus:bg-cyan-500/15 focus:text-white cursor-pointer">
+                      <SelectItem
+                        key={p.id}
+                        value={p.id}
+                        textValue={`${p.label} ${p.shortDescription}`}
+                        className="focus:bg-cyan-500/15 focus:text-white cursor-pointer"
+                      >
                         <span className="font-medium">{p.label}</span>
                         <span className="block text-[10px] text-white/45">{p.shortDescription}</span>
                       </SelectItem>

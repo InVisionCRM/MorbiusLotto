@@ -355,13 +355,18 @@ export function PokerTournamentLobby({ wsClient, myAddress, onGoToTable }: Poker
     }
   };
 
-  const handleCreate = async (params: CreatePokerTournamentParams, opts: { addBots: number }) => {
+  const handleCreate = async (
+    params: CreatePokerTournamentParams,
+    opts: { addBots: number },
+  ): Promise<{ tournamentId: string; pinCode?: string | null } | null> => {
     setJoinError(null);
     try {
       const result = await createTournament(params);
       if (!result?.tournamentId) {
-        setJoinError('Failed to create tournament');
-        return;
+        const msg = 'Failed to create tournament';
+        setJoinError(msg);
+        toast.error(msg);
+        return null;
       }
       if (params.isPrivate && result.pinCode) {
         toast.message(`Private tournament PIN: ${result.pinCode}`, { duration: 14_000 });
@@ -375,17 +380,20 @@ export function PokerTournamentLobby({ wsClient, myAddress, onGoToTable }: Poker
             myAddress,
             pinForBots,
           );
-          toast.success(`Tournament created — ${started} poker bot(s) are joining`);
+          toast.success(`Started ${started} poker bot(s) for this tournament`);
         } catch (botErr) {
           const bmsg = (botErr as Error).message ?? 'Bots failed to start';
           setJoinError(bmsg);
-          toast.error(`${bmsg} You can still use “Bots” in the tournament table.`);
+          toast.error(`${bmsg} You can retry from Staff tools if needed.`);
         }
-      } else {
-        toast.success('Tournament created');
       }
+      await refreshTournaments();
+      return result;
     } catch (err) {
-      setJoinError((err as Error).message ?? 'Failed to create');
+      const msg = (err as Error).message ?? 'Failed to create';
+      setJoinError(msg);
+      toast.error(msg);
+      return null;
     }
   };
 
