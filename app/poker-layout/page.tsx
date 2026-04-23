@@ -57,7 +57,7 @@ export default function PokerLayoutReferencePage() {
 
         <div className="flex flex-wrap items-center gap-3">
           <span className="text-sm text-slate-400">Seats in play</span>
-          <div className="flex flex-wrap gap-1">
+          <div className="flex flex-wrap gap-2">
             {([2, 3, 4, 5, 6, 7, 8, 9, 10] as const).map((n) => (
               <button
                 key={n}
