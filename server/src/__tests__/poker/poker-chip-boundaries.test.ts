@@ -1,9 +1,8 @@
 /**
- * Poker Chip/Wei Boundary Tests
+ * Poker chip ledger boundary tests (cash tables).
  *
- * Verifies the conversion boundaries between MORBIUS (wei) and poker chips
- * are correctly enforced. All poker_* tables store chip integers; MORBIUS
- * (wei) only appears at: cash join buy-in, cash leave credit, rake credit.
+ * Cash join/leave/re-up use `player_poker_chips` only; `players.balance` is unchanged.
+ * Rake accrues as whole chips on the rake wallet row.
  *
  * Requires: server/.env with DATABASE_URL
  * Run: cd server && npm test -- poker-chip-boundaries
@@ -14,15 +13,12 @@ import {
   TEST_PLAYERS,
   resetTestBalances,
   getTestBalance,
+  getTestChipBalance,
 } from '../setup';
 import { DatabaseService } from '../../services/database.service';
 import { ProvablyFairService } from '../../services/provably-fair.service';
 import { PokerGameService } from '../../services/poker-game.service';
-import {
-  POKER_CHIP_WEI,
-  chipsToWei,
-  getPokerRakeWallet,
-} from '../../lib/poker-chip-scale';
+import { POKER_CHIP_WEI, getPokerRakeWallet } from '../../lib/poker-chip-scale';
 
 const PLAYER_1 = TEST_PLAYERS[0];
 const PLAYER_2 = TEST_PLAYERS[1];
@@ -58,26 +54,26 @@ afterEach(async () => {
 });
 
 // ---------------------------------------------------------------------------
-// 1. Cash buy-in boundary: wei → chips
+// 1. Cash buy-in: chip wallet debit, stack = chip int
 // ---------------------------------------------------------------------------
 
-describe('cash buy-in boundary (wei → chips)', () => {
-  it('converts wei buy-in to chip-int stack at the 1000-wei-per-chip rate', async () => {
-    // SB=1, BB=2 → valid cash buy-in is 40–100 BB = 80–200 chips. Use 100.
+describe('cash buy-in (chip wallet)', () => {
+  it('debits player_poker_chips and stores stack as chip-int', async () => {
     const tableId = await pokerGameService.createTable(SB_CHIPS, BB_CHIPS, 6);
     createdTableIds.push(tableId);
 
     const buyInChips = 100n;
-    const buyInWei = POKER_CHIP_WEI * buyInChips;
+    const morbiusBefore = await getTestBalance(PLAYER_1);
+    const chipsBefore = await getTestChipBalance(PLAYER_1);
 
-    const balanceBefore = await getTestBalance(PLAYER_1);
-    await pokerGameService.joinTable(tableId, PLAYER_1, buyInWei.toString());
-    const balanceAfter = await getTestBalance(PLAYER_1);
+    await pokerGameService.joinTable(tableId, PLAYER_1, buyInChips.toString());
 
-    // Balance debited by exactly the buy-in (in wei).
-    expect(balanceBefore - balanceAfter).toBe(buyInWei);
+    const morbiusAfter = await getTestBalance(PLAYER_1);
+    const chipsAfter = await getTestChipBalance(PLAYER_1);
 
-    // Seat stack stored as chip integer, NOT wei.
+    expect(morbiusAfter).toBe(morbiusBefore);
+    expect(chipsBefore - chipsAfter).toBe(buyInChips);
+
     const seatRow = await testPool.query(
       'SELECT stack FROM poker_seats WHERE table_id = $1 AND player_address = $2',
       [tableId, PLAYER_1]
@@ -86,16 +82,12 @@ describe('cash buy-in boundary (wei → chips)', () => {
     expect(BigInt(seatRow.rows[0].stack)).toBe(buyInChips);
   });
 
-  it('rejects buy-ins that are not an exact multiple of POKER_CHIP_WEI', async () => {
+  it('rejects non-whole-chip buy-in strings', async () => {
     const tableId = await pokerGameService.createTable(SB_CHIPS, BB_CHIPS, 6);
     createdTableIds.push(tableId);
 
-    // 1 chip + 1 wei → not an exact multiple
-    const badBuyInWei = POKER_CHIP_WEI + 1n;
-
-    await expect(
-      pokerGameService.joinTable(tableId, PLAYER_1, badBuyInWei.toString())
-    ).rejects.toThrow();
+    await expect(pokerGameService.joinTable(tableId, PLAYER_1, '0')).rejects.toThrow();
+    await expect(pokerGameService.joinTable(tableId, PLAYER_1, '12.5')).rejects.toThrow();
   });
 
   it('stores small_blind and big_blind as chip integers, not wei', async () => {
@@ -113,66 +105,39 @@ describe('cash buy-in boundary (wei → chips)', () => {
 });
 
 // ---------------------------------------------------------------------------
-// 2. Cash leave boundary: chips → wei credit
+// 2. Cash leave: chip wallet credit
 // ---------------------------------------------------------------------------
 
-describe('cash leave boundary (chips → wei credit)', () => {
-  it('credits the player balance by stack × POKER_CHIP_WEI on leave', async () => {
+describe('cash leave (chip wallet)', () => {
+  it('credits player_poker_chips by stack chips on leave', async () => {
     const tableId = await pokerGameService.createTable(SB_CHIPS, BB_CHIPS, 6);
     createdTableIds.push(tableId);
 
-    // SB=1, BB=2 → 40–100 BB = 80–200 chips.
     const buyInChips = 150n;
-    const buyInWei = POKER_CHIP_WEI * buyInChips;
-    await pokerGameService.joinTable(tableId, PLAYER_1, buyInWei.toString());
+    await pokerGameService.joinTable(tableId, PLAYER_1, buyInChips.toString());
 
-    const balanceAfterJoin = await getTestBalance(PLAYER_1);
+    const chipsAfterJoin = await getTestChipBalance(PLAYER_1);
 
-    // Leave without playing any hands — stack should be intact.
     await pokerGameService.leaveTable(tableId, PLAYER_1);
 
-    const balanceAfterLeave = await getTestBalance(PLAYER_1);
+    const chipsAfterLeave = await getTestChipBalance(PLAYER_1);
 
-    // Exactly buyInWei was credited back.
-    expect(balanceAfterLeave - balanceAfterJoin).toBe(buyInWei);
-  });
-
-  it('uses chipsToWei(stack) — no hidden scaling factor', async () => {
-    const tableId = await pokerGameService.createTable(SB_CHIPS, BB_CHIPS, 6);
-    createdTableIds.push(tableId);
-
-    const buyInChips = 137n; // deliberately an odd number
-    await pokerGameService.joinTable(
-      tableId,
-      PLAYER_1,
-      (POKER_CHIP_WEI * buyInChips).toString()
-    );
-
-    const before = await getTestBalance(PLAYER_1);
-    await pokerGameService.leaveTable(tableId, PLAYER_1);
-    const after = await getTestBalance(PLAYER_1);
-
-    // Expected credit via public helper — must match exactly.
-    expect(after - before).toBe(chipsToWei(Number(buyInChips)));
+    expect(chipsAfterLeave - chipsAfterJoin).toBe(buyInChips);
   });
 });
 
 // ---------------------------------------------------------------------------
-// 3. Rake accumulation: DB value matches 5% chip-int floor per hand
+// 3. Rake: chip-int in DB; rake wallet credited in chips
 // ---------------------------------------------------------------------------
 
 describe('rake accumulation', () => {
-  it('stores rake_amount per hand as a chip integer (5% floor of winner share)', async () => {
-    // SB=20/BB=40 keeps pots large enough to produce nonzero rake (floor(5%) of pot).
-    // Valid buy-in = 40–100 BB = 1600–4000 chips; 2000 comfortably survives many fold hands.
+  it('stores rake_amount per hand as a chip integer (5% floor of pot)', async () => {
     const tableId = await pokerGameService.createTable(20, 40, 6);
     createdTableIds.push(tableId);
 
-    const buyInWei = POKER_CHIP_WEI * 2000n;
-    await pokerGameService.joinTable(tableId, PLAYER_1, buyInWei.toString());
-    await pokerGameService.joinTable(tableId, PLAYER_2, buyInWei.toString());
+    await pokerGameService.joinTable(tableId, PLAYER_1, '2000');
+    await pokerGameService.joinTable(tableId, PLAYER_2, '2000');
 
-    // Play 3 preflop-fold hands — blinds only, predictable pot size.
     const HANDS = 3;
     for (let i = 0; i < HANDS; i++) {
       const handState = await pokerGameService.startHand(tableId);
@@ -199,29 +164,22 @@ describe('rake accumulation', () => {
       const pot = BigInt(row.pot_amount);
       const rake = BigInt(row.rake_amount);
 
-      // Rake is floor(5%) of pot in chips; DB must hold the chip-int value,
-      // not a wei-scaled value. Pot here is SB+BB=3 chips, so rake floor = 0.
-      // Sanity bound: rake must never exceed the pot itself, and must be well
-      // below 1e15 (otherwise we've accidentally stored wei).
       expect(rake).toBeLessThanOrEqual(pot);
       expect(rake).toBeLessThan(POKER_CHIP_WEI);
       expect(rake).toBe((pot * 5n) / 100n);
     }
   });
 
-  it('credits the rake wallet by totalRakeChips × POKER_CHIP_WEI when rake accrues', async () => {
+  it('credits the rake wallet in whole chips when rake accrues', async () => {
     const tableId = await pokerGameService.createTable(20, 40, 6);
     createdTableIds.push(tableId);
 
-    // 40–100 BB = 1600–4000 chips. Use 2500.
-    const buyInWei = POKER_CHIP_WEI * 2500n;
-    await pokerGameService.joinTable(tableId, PLAYER_1, buyInWei.toString());
-    await pokerGameService.joinTable(tableId, PLAYER_2, buyInWei.toString());
+    await pokerGameService.joinTable(tableId, PLAYER_1, '2500');
+    await pokerGameService.joinTable(tableId, PLAYER_2, '2500');
 
     const rakeWallet = getPokerRakeWallet();
-    const rakeBefore = await getTestBalance(rakeWallet);
+    const rakeBefore = await getTestChipBalance(rakeWallet);
 
-    // Play one fold hand at SB=20/BB=40: pot = 60 chips, rake floor = 3 chips.
     const handState = await pokerGameService.startHand(tableId);
     const handId = handState!.currentHand!.handId;
 
@@ -236,10 +194,9 @@ describe('rake accumulation', () => {
     );
     const rakeChips = BigInt(rakeRow.rows[0].rake_amount);
 
-    const rakeAfter = await getTestBalance(rakeWallet);
-    const expectedWeiDelta = rakeChips * POKER_CHIP_WEI;
+    const rakeAfter = await getTestChipBalance(rakeWallet);
 
-    expect(rakeAfter - rakeBefore).toBe(expectedWeiDelta);
+    expect(rakeAfter - rakeBefore).toBe(rakeChips);
   });
 });
 
@@ -254,12 +211,9 @@ describe('reconstructed blinds integrity', () => {
     const tableId = await pokerGameService.createTable(sb, bb, 6);
     createdTableIds.push(tableId);
 
-    // 40–100 BB = 2000–5000 chips.
-    const buyInWei = POKER_CHIP_WEI * 3000n;
-    await pokerGameService.joinTable(tableId, PLAYER_1, buyInWei.toString());
-    await pokerGameService.joinTable(tableId, PLAYER_2, buyInWei.toString());
+    await pokerGameService.joinTable(tableId, PLAYER_1, '3000');
+    await pokerGameService.joinTable(tableId, PLAYER_2, '3000');
 
-    // Seed an in-memory table, then evict to force reconstructTable().
     const stateBefore = await pokerGameService.getTableState(tableId, null);
     expect(BigInt(stateBefore.smallBlind)).toBe(BigInt(sb));
     expect(BigInt(stateBefore.bigBlind)).toBe(BigInt(bb));
@@ -270,8 +224,6 @@ describe('reconstructed blinds integrity', () => {
     expect(BigInt(stateAfter.smallBlind)).toBe(BigInt(sb));
     expect(BigInt(stateAfter.bigBlind)).toBe(BigInt(bb));
 
-    // Guard against a wei-leak: if anywhere in the read path we accidentally
-    // multiplied by POKER_CHIP_WEI, the surfaced blinds would be >= 1e15.
     expect(BigInt(stateAfter.smallBlind)).toBeLessThan(POKER_CHIP_WEI);
     expect(BigInt(stateAfter.bigBlind)).toBeLessThan(POKER_CHIP_WEI);
   });
@@ -281,11 +233,7 @@ describe('reconstructed blinds integrity', () => {
     createdTableIds.push(tableId);
 
     const buyInChips = 200n;
-    await pokerGameService.joinTable(
-      tableId,
-      PLAYER_1,
-      (POKER_CHIP_WEI * buyInChips).toString()
-    );
+    await pokerGameService.joinTable(tableId, PLAYER_1, buyInChips.toString());
 
     (pokerGameService as any).activeTables.delete(tableId);
 

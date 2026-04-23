@@ -264,6 +264,30 @@ export class BlackjackWebSocketClient {
   private requestPromises: Map<string, { resolve: Function; reject: Function }> = new Map();
   private intentionalClose = false;
   private signTypedData: SignTypedDataFn | null = null;
+  /** Last `pokerChipBalance` from `auth_success` / `connection_established` (whole chips as decimal string). */
+  private lastPokerChipBalance: string | null = null;
+
+  private static detachWebSocketHandlers(ws: WebSocket): void {
+    ws.onopen = null;
+    ws.onmessage = null;
+    ws.onerror = null;
+    ws.onclose = null;
+  }
+
+  /** Fail fast in-flight sendRequest() calls instead of waiting for the timeout timer. */
+  private rejectAllPendingRequests(reason: string): void {
+    if (this.requestPromises.size === 0) return;
+    const pending = [...this.requestPromises.entries()];
+    this.requestPromises.clear();
+    const err = new Error(reason);
+    for (const [, { reject }] of pending) {
+      try {
+        reject(err);
+      } catch {
+        /* ignore */
+      }
+    }
+  }
 
   constructor(
     private serverUrl: string,
@@ -295,24 +319,43 @@ export class BlackjackWebSocketClient {
         return;
       }
 
+      // Replace or drop a prior socket (CONNECTING / half-open / CLOSING) so a second
+      // connect() cannot orphan a socket whose onclose would schedule duplicate reconnects.
+      if (this.ws) {
+        const stale = this.ws;
+        this.ws = null;
+        BlackjackWebSocketClient.detachWebSocketHandlers(stale);
+        try {
+          if (
+            stale.readyState === WebSocket.CONNECTING ||
+            stale.readyState === WebSocket.OPEN
+          ) {
+            stale.close();
+          }
+        } catch {
+          /* ignore */
+        }
+      }
+
       const url = this.playerAddress
         ? `${this.serverUrl}?address=${this.playerAddress}`
         : this.serverUrl;
 
       const canSign = !!(this.signTypedData && this.playerAddress);
 
-      this.ws = new WebSocket(url);
+      const socket = new WebSocket(url);
+      this.ws = socket;
 
       // Track whether we've resolved/rejected to avoid double-calls
       let settled = false;
 
-      this.ws.onopen = () => {
+      socket.onopen = () => {
         logger.info('WebSocket connected' + (canSign ? ', waiting for auth challenge...' : ' (legacy mode)'));
         this.reconnectAttempts = 0;
         // If we can't sign, we're in legacy mode — don't wait for auth
       };
 
-      this.ws.onmessage = (event) => {
+      socket.onmessage = (event) => {
         try {
           const msg = JSON.parse(event.data as string);
 
@@ -385,7 +428,12 @@ export class BlackjackWebSocketClient {
         this.handleMessage(event.data as string);
       };
 
-      this.ws.onclose = () => {
+      socket.onclose = () => {
+        // Ignore closes from sockets we already superseded with a newer connect().
+        if (this.ws !== socket && this.ws != null) {
+          return;
+        }
+        this.ws = null;
         if (this.intentionalClose) {
           return;
         }
@@ -394,15 +442,16 @@ export class BlackjackWebSocketClient {
           settled = true;
           reject(new Error('WebSocket closed before authentication completed'));
         }
+        this.rejectAllPendingRequests('WebSocket disconnected');
         this.attemptReconnect();
       };
 
-      this.ws.onerror = (error) => {
+      socket.onerror = (error) => {
         if (this.intentionalClose) {
           return;
         }
 
-        const ws = this.ws;
+        const ws = socket;
         const errorMessage =
           ws?.readyState === WebSocket.CONNECTING
             ? `Failed to connect to ${url}. Server may be unavailable.`
@@ -474,9 +523,16 @@ export class BlackjackWebSocketClient {
    */
   disconnect() {
     this.intentionalClose = true;
+    this.rejectAllPendingRequests('WebSocket disconnected');
     if (this.ws) {
-      this.ws.close();
+      const w = this.ws;
       this.ws = null;
+      BlackjackWebSocketClient.detachWebSocketHandlers(w);
+      try {
+        w.close();
+      } catch {
+        /* ignore */
+      }
     }
   }
 
@@ -552,6 +608,17 @@ export class BlackjackWebSocketClient {
     try {
       const message: WebSocketMessage = JSON.parse(data);
       logger.debug('Received message', { type: message.type, requestId: message.requestId });
+
+      if (
+        message.type === WS_MESSAGE_TYPES.authSuccess ||
+        message.type === WS_MESSAGE_TYPES.connectionEstablished
+      ) {
+        const b = message.payload?.pokerChipBalance;
+        if (typeof b === 'string' && b.length > 0) {
+          this.lastPokerChipBalance = b;
+          this.emit('poker_chip_balance', b);
+        }
+      }
 
       // Handle request responses
       if (message.requestId) {
@@ -740,17 +807,17 @@ export class BlackjackWebSocketClient {
     return this.sendRequest(WS_MESSAGE_TYPES.pokerListTables, {});
   }
 
-  /** Join a table with buy-in chips. Auth required. Subscribe to 'poker_table_state' for broadcasts. */
+  /** Join a table; `buyInChips` is a positive whole chip count string (not MORBIUS wei). Auth required. */
   async pokerJoinTable(tableId: string, buyInChips: string, pinCode?: string): Promise<PokerTableState> {
     return this.sendRequest(WS_MESSAGE_TYPES.pokerJoinTable, { tableId, buyInChips, ...(pinCode ? { pinCode } : {}) });
   }
 
-  /** Leave a table (stack is credited back to balance). Auth required. */
+  /** Leave a table (seat stack is credited back to the poker chip wallet). Auth required. */
   async pokerLeaveTable(tableId: string): Promise<PokerTableState | null> {
     return this.sendRequest(WS_MESSAGE_TYPES.pokerLeaveTable, { tableId });
   }
 
-  /** Add chips to an existing seat (deducted from balance, takes effect immediately). Auth required. */
+  /** Add chips to an existing seat (deducted from poker chip wallet). `amount` is a whole chip count string. Auth required. */
   async pokerAddChips(tableId: string, amount: string): Promise<PokerTableState> {
     return this.sendRequest(WS_MESSAGE_TYPES.pokerAddChips, { tableId, amount });
   }
@@ -863,6 +930,11 @@ export class BlackjackWebSocketClient {
    */
   isConnected(): boolean {
     return this.ws?.readyState === WebSocket.OPEN;
+  }
+
+  /** Last off-chain poker chip balance from `auth_success` / `connection_established` (decimal string, whole chips). */
+  getPokerChipBalanceString(): string | null {
+    return this.lastPokerChipBalance;
   }
 
   // === Responsible Gaming / Self-Exclusion API ===

@@ -12,19 +12,12 @@ import {
 } from '@/hooks/use-poker-tournament';
 import { formatChips } from '@/lib/format-poker-chips';
 import type { BlackjackWebSocketClient } from '@/lib/websocket-client';
-import { formatMorbiusFloor } from '@/lib/format-morbius-display';
 import { isAdminWallet } from '@/lib/admin';
 import { PokerTournamentCreator } from './PokerTournamentCreator';
 import { PokerTournamentRegistrantsModal } from './PokerTournamentRegistrantsModal';
+import { PokerTournamentRulesModal } from './PokerTournamentRulesModal';
 import { ConfirmActionCard } from '@/components/shared/ConfirmActionCard';
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from '@/components/ui/table';
+import { Lock } from 'lucide-react';
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -39,19 +32,11 @@ function tournamentFinishOrdinal(rank: number): string {
   return `${rank}th`;
 }
 
-function isZeroBuyInWei(wei: string): boolean {
+function isZeroBuyInChips(amount: string): boolean {
   try {
-    return BigInt(wei || '0') === 0n;
+    return BigInt(amount || '0') === 0n;
   } catch {
     return true;
-  }
-}
-
-function formatMorbius(wei: string | bigint): string {
-  try {
-    return formatMorbiusFloor(wei, { compact: false });
-  } catch {
-    return '0';
   }
 }
 
@@ -146,7 +131,7 @@ function useElapsedSince(startIso: string): string {
 /** Column 2: only green + mono; same 1s tick behavior as legacy lobby timers. */
 function TournamentTimeColumn({ scheduledStartAt }: { scheduledStartAt: string | null }) {
   if (!scheduledStartAt) {
-    return <span className="text-sm font-mono tabular-nums text-emerald-500/50">—</span>;
+    return <span className="text-sm tabular-nums text-slate-500">—</span>;
   }
   const target = new Date(scheduledStartAt).getTime();
   const isFuture = target > Date.now();
@@ -158,30 +143,21 @@ function TournamentTimeColumn({ scheduledStartAt }: { scheduledStartAt: string |
 
 function CountdownToStartCell({ scheduledStartAt }: { scheduledStartAt: string }) {
   const countdown = useCountdown(scheduledStartAt);
+  const line =
+    !countdown ? '…' : countdown === 'Starting now' ? 'Starting now' : `Starts in ${countdown}`;
   return (
-    <span className="block text-sm font-mono tabular-nums text-emerald-400 leading-snug">
-      {!countdown ? (
-        '…'
-      ) : countdown === 'Starting now' ? (
-        'Starting now'
-      ) : (
-        <>
-          Time until start
-          <br />
-          {countdown}
-        </>
-      )}
+    <span className="text-sm tabular-nums text-emerald-400/90 whitespace-nowrap" title={line}>
+      {line}
     </span>
   );
 }
 
 function StartedElapsedCell({ scheduledStartAt }: { scheduledStartAt: string }) {
   const elapsed = useElapsedSince(scheduledStartAt);
+  const line = elapsed ? `Live · ${elapsed}` : '…';
   return (
-    <span className="block text-sm font-mono tabular-nums text-emerald-400 leading-snug">
-      Time started
-      <br />
-      {elapsed ? `${elapsed} ago` : '…'}
+    <span className="text-sm tabular-nums text-emerald-400/90 whitespace-nowrap" title={line}>
+      {line}
     </span>
   );
 }
@@ -192,31 +168,25 @@ function blindModeLabel(mode: PokerBlindIncreaseMode | undefined): string {
 
 function TournamentStatusBadge({ status, isFull }: { status: string; isFull: boolean }) {
   const s = status.toLowerCase();
+  const badge =
+    'inline-flex h-7 items-center rounded-md border px-2.5 text-xs font-semibold tracking-wide';
   if (s === 'active') {
     return (
-      <span className="inline-flex rounded-md border border-emerald-500/45 bg-emerald-500/15 px-2 py-0.5 text-[11px] font-semibold tracking-wide text-emerald-100">
-        Live
-      </span>
+      <span className={`${badge} border-emerald-500/45 bg-emerald-500/15 text-emerald-100`}>Live</span>
     );
   }
   if (s === 'completed' || s === 'cancelled') {
     return (
-      <span className="inline-flex rounded-md border border-slate-600 bg-slate-900/80 px-2 py-0.5 text-[11px] font-semibold tracking-wide text-slate-400">
-        Done
-      </span>
+      <span className={`${badge} border-slate-600 bg-slate-900/80 text-slate-400`}>Done</span>
     );
   }
   if (isFull) {
     return (
-      <span className="inline-flex rounded-md border border-amber-500/40 bg-amber-500/10 px-2 py-0.5 text-[11px] font-semibold tracking-wide text-amber-100">
-        Full
-      </span>
+      <span className={`${badge} border-amber-500/40 bg-amber-500/10 text-amber-100`}>Full</span>
     );
   }
   return (
-    <span className="inline-flex rounded-md border border-slate-600 bg-slate-900/70 px-2 py-0.5 text-[11px] font-semibold tracking-wide text-white">
-      Open
-    </span>
+    <span className={`${badge} border-slate-600 bg-slate-900/70 text-white`}>Open</span>
   );
 }
 
@@ -225,6 +195,15 @@ const TABLE_SHELL_STYLE: React.CSSProperties = {
   boxShadow:
     'inset 0 3px 6px rgba(0, 0, 0, 0.8), inset 0 -3px 6px rgba(255, 255, 255, 0.1), 0 1px 3px rgba(0, 0, 0, 0.5)',
 };
+
+const TH = 'py-2.5 px-3 text-left text-xs font-semibold uppercase tracking-wider text-slate-500 border-b border-slate-600/50';
+const TD = 'py-2.5 px-3 align-middle border-b border-slate-600/35 text-sm text-slate-200';
+const actionBtnPrimary =
+  'inline-flex h-8 w-full min-w-[5.75rem] max-w-[7rem] items-center justify-center rounded-lg bg-gradient-to-r from-cyan-600 to-cyan-500 text-xs font-semibold text-white shadow-sm hover:opacity-95 disabled:cursor-not-allowed disabled:opacity-40 transition-opacity';
+const actionBtnSecondary =
+  'inline-flex h-8 w-full min-w-[5.75rem] max-w-[7rem] items-center justify-center rounded-lg border border-slate-500/60 bg-black/30 text-xs font-semibold text-slate-200 hover:border-cyan-500/35 hover:bg-white/[0.04] transition-colors';
+const actionBtnGhost =
+  'inline-flex h-8 w-full min-w-[5.75rem] max-w-[7rem] items-center justify-center rounded-lg text-xs font-semibold text-slate-400 hover:text-slate-200 hover:bg-white/[0.04] transition-colors disabled:opacity-40';
 
 type JoinFlowState =
   | null
@@ -246,6 +225,7 @@ export function PokerTournamentLobby({ wsClient, myAddress, onGoToTable }: Poker
   const queryClient = useQueryClient();
   const [showCreate, setShowCreate] = useState(false);
   const [registrantsModal, setRegistrantsModal] = useState<{ tournamentId: string; name: string } | null>(null);
+  const [rulesModal, setRulesModal] = useState<{ tournamentId: string; name: string } | null>(null);
   const [joinError, setJoinError] = useState<string | null>(null);
   const [joinSuccess, setJoinSuccess] = useState<string | null>(null);
   const [joiningId, setJoiningId] = useState<string | null>(null);
@@ -263,13 +243,14 @@ export function PokerTournamentLobby({ wsClient, myAddress, onGoToTable }: Poker
     onTournamentStarted: (tournamentId, tableId) => {
       onGoToTable?.(tableId, tournamentId);
     },
-    onTournamentCompleted: (winners) => {
-      const myWin = meLower ? winners.find((w) => w.address.toLowerCase() === meLower) : undefined;
+    onTournamentCompleted: (payload) => {
+      const list = payload.standings;
+      const myWin = meLower ? list.find((w) => w.address.toLowerCase() === meLower) : undefined;
       if (myWin) {
         const prizeWei = BigInt(myWin.prizeAmount || '0');
         if (prizeWei > 0n) {
           toast.success(
-            `You finished ${tournamentFinishOrdinal(myWin.rank)} — ${formatMorbiusFloor(myWin.prizeAmount)} MORBIUS added to your balance.`,
+            `You finished ${tournamentFinishOrdinal(myWin.rank)} — ${formatChips(myWin.prizeAmount)} poker chips credited to your chip wallet.`,
           );
         } else {
           toast.info(`Tournament complete. You finished ${tournamentFinishOrdinal(myWin.rank)}.`);
@@ -431,9 +412,9 @@ export function PokerTournamentLobby({ wsClient, myAddress, onGoToTable }: Poker
 
   const renderJoinConfirm = (t: PokerTournamentSummary, pin?: string) => {
     const isPrivate = t.isPrivate === true;
-    const isFreeroll = isZeroBuyInWei(t.buyInAmount);
-    const prizeDisplay = `${formatMorbius(t.prizePool)} MORBIUS`;
-    const buyInDisplay = isFreeroll ? 'Free' : `${formatMorbius(t.buyInAmount)} MORBIUS`;
+    const isFreeroll = isZeroBuyInChips(t.buyInAmount);
+    const prizeDisplay = `${formatChips(t.prizePool)} chips`;
+    const buyInDisplay = isFreeroll ? 'Free' : `${formatChips(t.buyInAmount)} chips`;
     const prizeDistLabel = t.prizeDistributionType?.replace(/_/g, ' ') ?? '—';
     const isScheduled = !!t.scheduledStartAt && new Date(t.scheduledStartAt) > new Date();
     return (
@@ -474,35 +455,35 @@ export function PokerTournamentLobby({ wsClient, myAddress, onGoToTable }: Poker
   };
 
   return (
-    <div className="flex flex-col gap-2">
-      <div className="flex items-center justify-between gap-2">
-        <h2 className="text-base font-semibold text-white">Poker Tournaments</h2>
-        <div className="flex gap-1.5 shrink-0">
+    <div className="flex flex-col gap-3">
+      <div className="flex items-center justify-between gap-3">
+        <h2 className="text-sm font-semibold tracking-wide text-white">Poker tournaments</h2>
+        <div className="flex items-center gap-2 shrink-0">
           <button
             type="button"
             onClick={refreshTournaments}
-            className="text-xs text-slate-400 hover:text-slate-200 px-2 py-1 rounded-md border border-slate-600/50 hover:border-slate-500/60 transition-colors"
+            className="h-8 px-3 rounded-lg border border-slate-600/55 text-xs font-semibold text-slate-300 hover:text-white hover:border-slate-500/70 transition-colors"
           >
             Refresh
           </button>
           <button
             type="button"
             onClick={() => setShowCreate(true)}
-            className="text-xs bg-yellow-500 hover:bg-yellow-400 text-black font-medium px-2.5 py-1 rounded-md transition-colors"
+            className="h-8 px-3 rounded-lg bg-yellow-500 hover:bg-yellow-400 text-xs font-semibold text-black transition-colors"
           >
-            + Create SNG
+            Create SNG
           </button>
         </div>
       </div>
 
       {joinError && (
-        <div className="rounded-md bg-red-500/10 border border-red-500/30 text-red-400 text-sm px-3 py-1.5">
+        <div className="rounded-lg bg-red-500/10 border border-red-500/30 text-red-400 text-sm px-3 py-2">
           {joinError}
         </div>
       )}
 
       {joinSuccess && (
-        <div className="rounded-md bg-green-500/10 border border-green-500/30 text-green-400 text-sm px-3 py-1.5 flex items-start justify-between gap-2">
+        <div className="rounded-lg bg-green-500/10 border border-green-500/30 text-green-400 text-sm px-3 py-2 flex items-start justify-between gap-2">
           <span>{joinSuccess}</span>
           <button
             type="button"
@@ -515,19 +496,19 @@ export function PokerTournamentLobby({ wsClient, myAddress, onGoToTable }: Poker
       )}
 
       {waitingForTableAfterStart && !myTableId && (
-        <div className="rounded-md bg-yellow-500/10 border border-yellow-500/30 px-3 py-2 flex items-center justify-between gap-2 text-sm text-yellow-200/95">
+        <div className="rounded-lg bg-yellow-500/10 border border-yellow-500/30 px-3 py-2 flex items-center justify-between gap-2 text-sm text-yellow-200/95">
           <span>Tournament start time reached — opening your table…</span>
           <span className="shrink-0 h-1.5 w-1.5 rounded-full bg-yellow-400 animate-pulse" aria-hidden />
         </div>
       )}
 
       {myTournamentId && myTableId && (
-        <div className="rounded-md bg-yellow-500/10 border border-yellow-500/30 px-3 py-2 flex items-center justify-between gap-2 text-sm">
+        <div className="rounded-lg bg-yellow-500/10 border border-yellow-500/30 px-3 py-2 flex items-center justify-between gap-2 text-sm">
           <span className="text-yellow-200">You are in an active tournament</span>
           <button
             type="button"
             onClick={() => onGoToTable?.(myTableId, myTournamentId)}
-            className="text-xs bg-yellow-500 hover:bg-yellow-400 text-black font-medium px-2 py-1 rounded-md transition-colors shrink-0"
+            className="h-8 shrink-0 px-3 rounded-lg bg-yellow-500 hover:bg-yellow-400 text-xs font-semibold text-black transition-colors"
           >
             Go to table
           </button>
@@ -535,43 +516,29 @@ export function PokerTournamentLobby({ wsClient, myAddress, onGoToTable }: Poker
       )}
 
       {isLoadingTournaments ? (
-        <div className="text-center text-slate-500 text-sm py-6">Loading tournaments…</div>
+        <div className="text-center text-slate-500 text-sm py-8">Loading tournaments…</div>
       ) : openTournaments.length === 0 ? (
-        <div className="text-center text-slate-500 text-sm py-6">
+        <div className="text-center text-slate-500 text-sm py-8">
           No open poker tournaments. <span className="text-slate-600">Create one to get started.</span>
         </div>
       ) : (
-        <div className="rounded-xl border border-cyan-500/20 overflow-x-auto" style={TABLE_SHELL_STYLE}>
-          <Table className="table-fixed w-full min-w-[960px] border-collapse text-sm text-white [&_th]:px-1 [&_th]:py-2 [&_th]:text-[11px] [&_th]:font-medium [&_th]:text-center [&_th]:text-white/50 [&_th]:uppercase [&_th]:tracking-wide [&_td]:px-1 [&_td]:py-2 [&_td]:text-center [&_td]:align-middle">
-            <colgroup>
-              <col className="w-[13%]" />
-              <col className="w-[11%]" />
-              <col className="w-[8%]" />
-              <col className="w-[9%]" />
-              <col className="w-[10%]" />
-              <col className="w-[9%]" />
-              <col className="w-[8%]" />
-              <col className="w-[8%]" />
-              <col className="w-[8%]" />
-              <col className="w-[6%]" />
-              <col className="w-[10%]" />
-            </colgroup>
-            <TableHeader>
-              <TableRow className="border-slate-600/50 hover:bg-transparent">
-                <TableHead className="!text-left pl-2">Tournament</TableHead>
-                <TableHead>Time</TableHead>
-                <TableHead>Buy-in</TableHead>
-                <TableHead>Blinds</TableHead>
-                <TableHead>Blind mode</TableHead>
-                <TableHead>Prize</TableHead>
-                <TableHead>Table size</TableHead>
-                <TableHead>Status</TableHead>
-                <TableHead>Private</TableHead>
-                <TableHead>View</TableHead>
-                <TableHead className="!text-right pr-2">Actions</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
+        <div
+          className="rounded-xl border border-cyan-500/20 overflow-x-auto lg:overflow-x-visible"
+          style={TABLE_SHELL_STYLE}
+        >
+          <table className="w-full border-collapse text-sm text-slate-200 min-w-0">
+            <thead>
+              <tr>
+                <th className={`${TH} w-[22%] max-w-[14rem]`}>Tournament</th>
+                <th className={`${TH} whitespace-nowrap`}>Schedule</th>
+                <th className={TH}>Entry & blinds</th>
+                <th className={`${TH} whitespace-nowrap`}>Seats</th>
+                <th className={`${TH} whitespace-nowrap`}>Prize</th>
+                <th className={TH}>State</th>
+                <th className={`${TH} text-right w-[7.5rem]`}>Actions</th>
+              </tr>
+            </thead>
+            <tbody>
               {openTournaments.map((t) => {
                 const spots = t.maxPlayers - t.registeredCount;
                 const isFull = spots <= 0;
@@ -586,59 +553,80 @@ export function PokerTournamentLobby({ wsClient, myAddress, onGoToTable }: Poker
                 const showBotsToggle =
                   !!myAddress && isAdminWallet(myAddress) && t.status === 'registration' && !isActive;
 
-                const buyLabel = isZeroBuyInWei(t.buyInAmount) ? 'Free' : formatMorbius(t.buyInAmount);
+                const buyLabel = isZeroBuyInChips(t.buyInAmount) ? 'Free' : formatChips(t.buyInAmount);
                 const sb = t.smallBlind ?? 25;
                 const bb = t.bigBlind ?? 50;
                 const mode = t.blindIncreaseMode ?? 'knockout';
 
                 return (
                   <React.Fragment key={t.tournamentId}>
-                    <TableRow className="border-slate-600/40 hover:bg-white/[0.04]">
-                      <TableCell className="!text-left pl-2 max-w-0">
-                        <span className="block truncate font-medium text-white" title={t.name}>
+                    <tr className="hover:bg-white/[0.03]">
+                      <td className={`${TD} max-w-0`}>
+                        <div className="font-medium text-white truncate" title={t.name}>
                           {t.name}
-                        </span>
-                      </TableCell>
-                      <TableCell className="align-top pt-2">
-                        <TournamentTimeColumn scheduledStartAt={t.scheduledStartAt} />
-                      </TableCell>
-                      <TableCell className="tabular-nums text-white">{buyLabel}</TableCell>
-                      <TableCell className="tabular-nums text-white whitespace-nowrap">
-                        {formatChips(sb)} / {formatChips(bb)}
-                      </TableCell>
-                      <TableCell className="text-white text-[13px]">{blindModeLabel(mode)}</TableCell>
-                      <TableCell className="tabular-nums text-white">{formatMorbius(t.prizePool)}</TableCell>
-                      <TableCell className="tabular-nums text-white">
-                        {t.registeredCount}/{t.maxPlayers}
-                      </TableCell>
-                      <TableCell>
-                        <TournamentStatusBadge status={t.status} isFull={isFull} />
-                      </TableCell>
-                      <TableCell className="text-white">{isPrivate ? 'Yes' : '—'}</TableCell>
-                      <TableCell>
-                        {t.registeredCount > 0 ? (
+                        </div>
+                        <div className="mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-0.5">
                           <button
                             type="button"
-                            onClick={() => setRegistrantsModal({ tournamentId: t.tournamentId, name: t.name })}
-                            className="text-xs font-medium text-white/80 underline underline-offset-2 hover:text-white"
+                            onClick={() => setRulesModal({ tournamentId: t.tournamentId, name: t.name })}
+                            className="text-xs font-semibold text-cyan-400/90 hover:text-cyan-300"
                           >
-                            List
+                            Rules
                           </button>
-                        ) : (
-                          <span className="text-white/35">—</span>
-                        )}
-                      </TableCell>
-                      <TableCell className="!text-right pr-2 whitespace-nowrap">
-                        <div className="inline-flex flex-wrap items-center justify-end gap-1">
-                          {watchHref ? (
-                            <Link
-                              href={watchHref}
-                              className="inline-flex items-center justify-center rounded border border-white/20 bg-white/5 px-1.5 py-0.5 text-[11px] font-medium text-white hover:bg-white/10 transition-colors"
+                          {t.registeredCount > 0 ? (
+                            <button
+                              type="button"
+                              onClick={() => setRegistrantsModal({ tournamentId: t.tournamentId, name: t.name })}
+                              className="text-xs font-semibold text-slate-400 hover:text-slate-200"
                             >
+                              Roster
+                            </button>
+                          ) : (
+                            <span className="text-xs text-slate-600">Roster</span>
+                          )}
+                        </div>
+                      </td>
+                      <td className={`${TD} whitespace-nowrap`}>
+                        <TournamentTimeColumn scheduledStartAt={t.scheduledStartAt} />
+                      </td>
+                      <td className={TD}>
+                        <div className="font-medium tabular-nums text-slate-100">
+                          {buyLabel === 'Free' ? 'Freeroll' : `${buyLabel} chips`}
+                        </div>
+                        <div className="text-xs text-slate-500 mt-1 tabular-nums">
+                          {formatChips(sb)} / {formatChips(bb)} · {blindModeLabel(mode)}
+                        </div>
+                      </td>
+                      <td className={`${TD} tabular-nums font-medium text-slate-100 whitespace-nowrap`}>
+                        {t.registeredCount}/{t.maxPlayers}
+                      </td>
+                      <td className={`${TD} tabular-nums font-medium text-slate-100 whitespace-nowrap`}>
+                        {formatChips(t.prizePool)}
+                      </td>
+                      <td className={TD}>
+                        <div className="flex flex-col items-start gap-1.5">
+                          <TournamentStatusBadge status={t.status} isFull={isFull} />
+                          {isPrivate ? (
+                            <span className="inline-flex items-center gap-1 text-xs font-medium text-amber-400/90">
+                              <Lock className="w-3.5 h-3.5 shrink-0" aria-hidden />
+                              Private
+                            </span>
+                          ) : (
+                            <span className="text-xs text-slate-500">Open lobby</span>
+                          )}
+                        </div>
+                      </td>
+                      <td className={`${TD} text-right`}>
+                        <div className="inline-flex flex-col gap-1.5 items-end">
+                          {watchHref ? (
+                            <Link href={watchHref} className={actionBtnSecondary}>
                               Watch
                             </Link>
                           ) : (
-                            <span className="inline-flex items-center justify-center rounded border border-white/10 px-1.5 py-0.5 text-[11px] font-medium text-white/25 cursor-not-allowed">
+                            <span
+                              className={`${actionBtnSecondary} cursor-not-allowed opacity-40 pointer-events-none`}
+                              aria-disabled
+                            >
                               Watch
                             </span>
                           )}
@@ -647,28 +635,28 @@ export function PokerTournamentLobby({ wsClient, myAddress, onGoToTable }: Poker
                               type="button"
                               onClick={() => beginJoin(t)}
                               disabled={joiningId != null}
-                              className="inline-flex items-center justify-center rounded border border-cyan-400/50 bg-cyan-500/20 px-1.5 py-0.5 text-[11px] font-medium text-white hover:bg-cyan-500/30 disabled:opacity-50 transition-colors"
+                              className={actionBtnPrimary}
                             >
                               Join
                             </button>
                           )}
                           {t.isRegistered && !isActive && (
                             <span
-                              className="inline-flex items-center justify-center rounded border border-emerald-500/35 bg-emerald-500/10 px-1.5 py-0.5 text-[11px] font-medium text-white"
+                              className={`${actionBtnSecondary} border-emerald-500/35 bg-emerald-500/10 text-emerald-100 cursor-default`}
                               title="Registered for this tournament"
                             >
                               Joined
                             </span>
                           )}
                           {isActive && !t.isRegistered && (
-                            <span className="text-[11px] text-white/35">—</span>
+                            <span className="text-xs text-slate-500 py-1">Spectate</span>
                           )}
                           {isActive && t.isRegistered && (
                             <button
                               type="button"
                               onClick={() => t.tableId && onGoToTable?.(t.tableId, t.tournamentId)}
                               disabled={!t.tableId}
-                              className="inline-flex items-center justify-center rounded border border-cyan-400/50 bg-cyan-500/20 px-1.5 py-0.5 text-[11px] font-medium text-white hover:bg-cyan-500/30 disabled:opacity-40 transition-colors"
+                              className={actionBtnPrimary}
                             >
                               Table
                             </button>
@@ -678,7 +666,7 @@ export function PokerTournamentLobby({ wsClient, myAddress, onGoToTable }: Poker
                               type="button"
                               onClick={() => handleCancel(t.tournamentId)}
                               disabled={cancellingId === t.tournamentId}
-                              className="text-[11px] font-medium text-white/50 hover:text-white/80 disabled:opacity-50"
+                              className={actionBtnGhost}
                             >
                               {cancellingId === t.tournamentId ? '…' : 'Cancel'}
                             </button>
@@ -687,24 +675,24 @@ export function PokerTournamentLobby({ wsClient, myAddress, onGoToTable }: Poker
                             <button
                               type="button"
                               onClick={() => toggleBotsRow(t.tournamentId)}
-                              className="text-[11px] font-medium text-white/50 hover:text-white"
+                              className={actionBtnGhost}
                             >
-                              {botsRowId === t.tournamentId ? 'Bots−' : 'Bots+'}
+                              {botsRowId === t.tournamentId ? 'Hide bots' : 'Add bots'}
                             </button>
                           )}
                         </div>
-                      </TableCell>
-                    </TableRow>
+                      </td>
+                    </tr>
                     {botsRowId === t.tournamentId && (
-                      <TableRow className="border-slate-600/40 hover:bg-white/[0.02] bg-black/15">
-                        <TableCell colSpan={11} className="py-2">
-                          <div className="rounded-lg border border-white/10 px-2 py-2 space-y-1.5 max-w-xl text-sm text-white">
-                            <div className="text-xs font-medium text-white/90">Add bot players</div>
-                            <p className="text-xs text-white/45 leading-snug">
+                      <tr className="bg-black/20">
+                        <td colSpan={7} className="px-3 py-3 border-b border-slate-600/35">
+                          <div className="rounded-lg border border-white/10 px-3 py-3 space-y-2 max-w-xl">
+                            <div className="text-xs font-semibold text-white">Add bot players</div>
+                            <p className="text-xs text-slate-500 leading-relaxed">
                               Bots register from the game server and play like normal opponents.
                             </p>
                             <div className="flex flex-wrap gap-2 items-center">
-                              <label className="text-xs text-white/50 flex items-center gap-1">
+                              <label className="text-xs text-slate-500 flex items-center gap-2">
                                 Count
                                 <input
                                   type="number"
@@ -712,7 +700,7 @@ export function PokerTournamentLobby({ wsClient, myAddress, onGoToTable }: Poker
                                   max={10}
                                   value={botCount}
                                   onChange={(e) => setBotCount(Math.max(1, Math.min(10, Number(e.target.value) || 1)))}
-                                  className="w-12 rounded border border-white/15 bg-black/30 px-1.5 py-0.5 text-xs text-white"
+                                  className="w-12 h-8 rounded-lg border border-slate-600/60 bg-black/30 px-2 text-sm text-white"
                                 />
                               </label>
                               {isPrivate && (
@@ -721,7 +709,7 @@ export function PokerTournamentLobby({ wsClient, myAddress, onGoToTable }: Poker
                                   value={botPin}
                                   onChange={(e) => setBotPin(e.target.value.replace(/\D/g, '').slice(0, 12))}
                                   placeholder="PIN"
-                                  className="min-w-[3.5rem] max-w-[6rem] rounded border border-white/15 bg-black/30 px-1.5 py-0.5 text-xs text-white placeholder:text-white/30"
+                                  className="h-8 min-w-[4rem] max-w-[6rem] rounded-lg border border-slate-600/60 bg-black/30 px-2 text-sm text-white placeholder:text-slate-600"
                                 />
                               )}
                               <button
@@ -730,20 +718,20 @@ export function PokerTournamentLobby({ wsClient, myAddress, onGoToTable }: Poker
                                   tournamentBotsBusyId === t.tournamentId || (isPrivate && botPin.length < 4)
                                 }
                                 onClick={() => handleAddTournamentBots(t.tournamentId, botCount, isPrivate ? botPin : undefined)}
-                                className="rounded-md border border-cyan-400/40 bg-cyan-500/20 px-2 py-1 text-xs font-medium text-white hover:bg-cyan-500/30 disabled:opacity-40 transition-colors"
+                                className="h-8 px-3 rounded-lg border border-cyan-500/40 bg-cyan-500/15 text-xs font-semibold text-cyan-200 hover:bg-cyan-500/25 disabled:opacity-40 transition-colors"
                               >
-                                {tournamentBotsBusyId === t.tournamentId ? '…' : 'Add bots'}
+                                {tournamentBotsBusyId === t.tournamentId ? '…' : 'Run'}
                               </button>
                             </div>
                           </div>
-                        </TableCell>
-                      </TableRow>
+                        </td>
+                      </tr>
                     )}
                   </React.Fragment>
                 );
               })}
-            </TableBody>
-          </Table>
+            </tbody>
+          </table>
         </div>
       )}
 
@@ -762,6 +750,16 @@ export function PokerTournamentLobby({ wsClient, myAddress, onGoToTable }: Poker
         tournamentId={registrantsModal?.tournamentId ?? null}
         tournamentName={registrantsModal?.name ?? null}
         myAddress={myAddress}
+      />
+
+      <PokerTournamentRulesModal
+        open={rulesModal != null}
+        onOpenChange={(o) => {
+          if (!o) setRulesModal(null);
+        }}
+        wsClient={wsClient}
+        tournamentId={rulesModal?.tournamentId ?? ''}
+        tournamentName={rulesModal?.name ?? ''}
       />
 
       {joinFlow?.phase === 'pin' && (

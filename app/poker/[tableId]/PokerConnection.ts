@@ -30,6 +30,8 @@ interface UsePokerConnectionArgs {
   pinParam: string | null;
   setProfileWsClient: (client: BlackjackWebSocketClient | null) => void;
   replaceUrl: (url: string) => void;
+  /** When true, do not send `pokerLeaveTable` on tab close (tournament refresh / accidental close). */
+  skipLeaveOnUnload?: boolean;
 }
 
 export function usePokerConnection({
@@ -42,6 +44,7 @@ export function usePokerConnection({
   pinParam,
   setProfileWsClient,
   replaceUrl,
+  skipLeaveOnUnload = false,
 }: UsePokerConnectionArgs) {
   const [state, setState] = useState<PokerTableState | null>(null);
   const [wsConnected, setWsConnected] = useState(false);
@@ -50,9 +53,20 @@ export function usePokerConnection({
   const [disconnected, setDisconnected] = useState(false);
   const clientRef = useRef<BlackjackWebSocketClient | null>(null);
   const fetchSeqRef = useRef(0);
+  const personalRefetchDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const normalizedAddrRef = useRef<string | null>(null);
+  normalizedAddrRef.current = normalizedAddress?.toLowerCase() ?? null;
 
   const signTypedRef = useRef(signTypedDataAsync as SignTypedDataFn | undefined);
   signTypedRef.current = signTypedDataAsync as SignTypedDataFn | undefined;
+
+  /** URL-driven join params: keep in refs so clearing `?join=1` after join does not remount the socket. */
+  const joinFromLobbyRef = useRef(joinFromLobby);
+  const buyInParamRef = useRef(buyInParam);
+  const pinParamRef = useRef(pinParam);
+  joinFromLobbyRef.current = joinFromLobby;
+  buyInParamRef.current = buyInParam;
+  pinParamRef.current = pinParam;
 
   const stableSignTypedData = useCallback<SignTypedDataFn>((args) => {
     const fn = signTypedRef.current;
@@ -73,6 +87,15 @@ export function usePokerConnection({
       .catch(() => {});
   }, [tableId]);
 
+  const schedulePersonalStateRefetch = useCallback(() => {
+    if (!normalizedAddress || !clientRef.current?.isConnected()) return;
+    if (personalRefetchDebounceRef.current) clearTimeout(personalRefetchDebounceRef.current);
+    personalRefetchDebounceRef.current = setTimeout(() => {
+      personalRefetchDebounceRef.current = null;
+      fetchLatestState();
+    }, 280);
+  }, [normalizedAddress, fetchLatestState]);
+
   const afterConnectRef = useRef<() => Promise<void>>(async () => {});
 
   afterConnectRef.current = async () => {
@@ -82,8 +105,8 @@ export function usePokerConnection({
     setDisconnected(false);
     setError(null);
 
-    if (joinFromLobby && buyInParam && normalizedAddress) {
-      const pin = pinParam || undefined;
+    if (joinFromLobbyRef.current && buyInParamRef.current && normalizedAddress) {
+      const pin = pinParamRef.current || undefined;
       const finishLobbyJoin = async () => {
         await client.joinRoom(`poker:table:${tableId}`);
         const s = await client.pokerGetState(tableId);
@@ -92,7 +115,7 @@ export function usePokerConnection({
       };
 
       try {
-        await client.pokerJoinTable(tableId, buyInParam, pin);
+        await client.pokerJoinTable(tableId, buyInParamRef.current, pin);
         await finishLobbyJoin();
       } catch (err: unknown) {
         const msg: string = (err as Error)?.message ?? '';
@@ -114,7 +137,7 @@ export function usePokerConnection({
                 void (async () => {
                   try {
                     await client.pokerLeaveTable(otherId);
-                    await client.pokerJoinTable(tableId, buyInParam, pin);
+                    await client.pokerJoinTable(tableId, buyInParamRef.current, pin);
                     await finishLobbyJoin();
                     setError(null);
                     toast.success('Joined this table');
@@ -142,6 +165,11 @@ export function usePokerConnection({
       return;
     }
 
+    try {
+      await client.joinRoom(`poker:table:${tableId}`);
+    } catch {
+      /* non-fatal */
+    }
     const s = await client.pokerGetState(tableId);
     if (s) setState(s);
   };
@@ -180,6 +208,12 @@ export function usePokerConnection({
 
     client.on('poker_table_state', (payload: PokerTableState) => {
       if (payload.tableId !== tableId) return;
+      const me = normalizedAddrRef.current;
+      const seated =
+        !!me && payload.seats.some((s) => s.playerAddress && s.playerAddress.toLowerCase() === me);
+      if (seated && payload.myHoleCards == null) {
+        schedulePersonalStateRefetch();
+      }
       setState((prev) => {
         if (payload.myHoleCards != null) return payload;
         const sameHand =
@@ -203,24 +237,33 @@ export function usePokerConnection({
       });
 
     return () => {
+      if (personalRefetchDebounceRef.current) {
+        clearTimeout(personalRefetchDebounceRef.current);
+        personalRefetchDebounceRef.current = null;
+      }
       client.off('reconnected', onReconnected);
       client.off('reconnect_failed', onReconnectFailed);
       client.disconnect();
       clientRef.current = null;
       setWsClient(null);
       setWsConnected(false);
+      setState(null);
     };
   }, [
     tableId,
     normalizedAddress,
     stableSignTypedData,
     isE2EMock,
-    joinFromLobby,
-    buyInParam,
-    pinParam,
     replaceUrl,
     fetchLatestState,
   ]);
+
+  // Wallet becomes available after mount (or reconnect): pull hole cards + seat view immediately.
+  useEffect(() => {
+    if (isE2EMock || !tableId) return;
+    if (!normalizedAddress || !clientRef.current?.isConnected()) return;
+    schedulePersonalStateRefetch();
+  }, [isE2EMock, tableId, normalizedAddress, wsConnected, schedulePersonalStateRefetch]);
 
   // Keep profile context in sync without re-triggering socket connect lifecycle.
   useEffect(() => {
@@ -259,7 +302,7 @@ export function usePokerConnection({
   // remounts dev components once; cleanup would fire pokerLeaveTable right after join, and the URL
   // no longer has ?join=1 so the remount never re-joins. In-app exit uses the Leave control.
   useEffect(() => {
-    if (!tableId || !normalizedAddress) return;
+    if (skipLeaveOnUnload || !tableId || !normalizedAddress) return;
     const leaveOnUnload = () => {
       const client = clientRef.current;
       if (client?.isConnected()) {
@@ -270,7 +313,7 @@ export function usePokerConnection({
     return () => {
       window.removeEventListener('beforeunload', leaveOnUnload);
     };
-  }, [tableId, normalizedAddress]);
+  }, [tableId, normalizedAddress, skipLeaveOnUnload]);
 
   return {
     state,

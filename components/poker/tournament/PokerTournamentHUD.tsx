@@ -3,7 +3,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import type { PokerTournamentState } from '@/hooks/use-poker-tournament';
-import { formatMorbiusFloor } from '@/lib/format-morbius-display';
+import { formatChips as formatChipsLib } from '@/lib/format-poker-chips';
 import { useSidebar } from '@/components/ui/sidebar';
 
 interface Props {
@@ -16,10 +16,6 @@ interface Props {
 function shortAddr(addr: string): string {
   if (!addr || addr.length < 10) return addr;
   return `${addr.slice(0, 6)}…${addr.slice(-4)}`;
-}
-
-function formatChips(n: number): string {
-  return n.toLocaleString();
 }
 
 function formatCompactChips(n: number): string {
@@ -35,7 +31,7 @@ function formatBlindShort(n: number): string {
   return String(n);
 }
 
-function isZeroBuyInWei(wei: string): boolean {
+function isZeroBuyInChips(wei: string): boolean {
   try {
     return BigInt(wei || '0') === 0n;
   } catch {
@@ -241,14 +237,14 @@ export function PokerTournamentHUD({ state, myAddress }: Props) {
   // ── Precomputed strings ──────────────────────────────────────────────────
   const blindStr = `${formatBlindShort(state.smallBlind)}/${formatBlindShort(state.bigBlind)}`;
   const stackShort = me ? formatCompactChips(me.chipsRemaining) : '—';
-  const stackFull = me ? formatChips(me.chipsRemaining) : '—';
+  const stackFull = me ? formatChipsLib(me.chipsRemaining) : '—';
   const rankStr = myRank != null ? `#${myRank}` : '—';
   const rankLongStr = myRank != null ? `#${myRank} / ${activePlayers.length}` : '—';
   const playersLeftShort = `${activePlayers.length}`;
   const playersLeftFull = `${activePlayers.length}`;
   const prizeLabel = (() => {
     try {
-      return formatMorbiusFloor(state.prizePool, { compact: true });
+      return formatChipsLib(state.prizePool);
     } catch {
       return '—';
     }
@@ -360,8 +356,8 @@ export function PokerTournamentHUD({ state, myAddress }: Props) {
           className="mt-1.5 font-jost-normal text-[10px] tracking-[0.18em] uppercase flex items-center justify-center gap-1.5"
           style={{ color: 'rgba(255,255,255,0.5)' }}
         >
-          {isZeroBuyInWei(state.buyInAmount) && <span>Freeroll</span>}
-          {isZeroBuyInWei(state.buyInAmount) && <span style={{ color: 'rgba(255,255,255,0.2)' }}>·</span>}
+          {isZeroBuyInChips(state.buyInAmount) && <span>Freeroll</span>}
+          {isZeroBuyInChips(state.buyInAmount) && <span style={{ color: 'rgba(255,255,255,0.2)' }}>·</span>}
           <span>Hand {state.handNumber}</span>
         </div>
       </div>
@@ -371,7 +367,7 @@ export function PokerTournamentHUD({ state, myAddress }: Props) {
       {/* Blinds — current + next */}
       <ExpandedBlock
         label="Blinds"
-        value={`${formatChips(state.smallBlind)} / ${formatChips(state.bigBlind)}`}
+        value={`${formatChipsLib(state.smallBlind)} / ${formatChipsLib(state.bigBlind)}`}
         sub={nextBlindsStr ? <>Next: <span className="font-jost" style={{ color: 'rgba(255,255,255,0.8)' }}>{nextBlindsStr}</span></> : null}
       />
 
@@ -428,7 +424,7 @@ export function PokerTournamentHUD({ state, myAddress }: Props) {
                   className="font-jost text-[12px] tabular-nums shrink-0"
                   style={{ color: isMe ? 'rgba(255,255,255,0.98)' : 'rgba(255,255,255,0.8)' }}
                 >
-                  {formatChips(p.chipsRemaining)}
+                  {formatChipsLib(p.chipsRemaining)}
                 </span>
               </div>
             );

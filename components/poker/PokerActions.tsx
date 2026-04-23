@@ -632,12 +632,8 @@ export function PokerActions({
         </div>
       </div>
 
-      {/* ── Desktop / tablet (sm+): fluid width up to 75vw; stacks below 700px width ── */}
-      <div className="hidden min-w-0 sm:flex w-full justify-center px-1 md:px-2">
-        <div
-          className="w-full min-w-0 max-w-full px-2 py-2 sm:px-3 sm:py-2.5 md:max-w-[75%] md:px-5 md:py-3"
-          style={panelDeckStyle}
-        >
+      {/* ── Desktop / tablet (sm+): full width of parent (shell pads rails in `PokerBottomBar`). No outer deck shell — matches `/poker-layout` strip. ── */}
+      <div className="hidden min-w-0 sm:flex w-full flex-col px-1 py-2 sm:px-2 sm:py-2 md:px-2 md:py-2.5">
         <div className="mb-1.5 rounded-lg p-1 md:p-1.5" style={tuneZoneStyle}>
         <div className="flex min-w-0 items-center gap-1.5 pt-0.5 sm:gap-2 md:pt-1">
           {lastActionLine ? (
@@ -764,7 +760,7 @@ export function PokerActions({
                 </span>
               </span>
             </button>
-          <div className="flex min-h-10 min-w-0 w-full flex-1 items-center justify-center gap-0.5 min-[520px]:min-h-0 min-[520px]:max-w-[min(100%,15rem)] min-[520px]:shrink min-[520px]:grow md:max-w-[min(100%,17rem)] md:justify-end md:gap-1.5 lg:max-w-[min(100%,19rem)]">
+          <div className="flex min-h-10 min-w-0 w-full flex-1 items-center justify-center gap-1 min-[520px]:min-h-0 min-[520px]:flex-1 md:gap-2">
             <button
               data-testid="poker-action-nudge-down"
               type="button"
@@ -800,7 +796,6 @@ export function PokerActions({
               +
             </button>
           </div>
-        </div>
         </div>
         </div>
         </div>

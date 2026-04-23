@@ -19,8 +19,6 @@ import {
 import { PokerGameService } from '../../services/poker-game.service';
 import { DatabaseService } from '../../services/database.service';
 import { ProvablyFairService } from '../../services/provably-fair.service';
-import { POKER_CHIP_WEI } from '../../lib/poker-chip-scale';
-
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
@@ -30,10 +28,9 @@ const PLAYER_1 = TEST_PLAYERS[3];
 const PLAYER_2 = TEST_PLAYERS[4];
 const PLAYER_3 = TEST_PLAYERS[5];
 
-const CHIP_WEI = POKER_CHIP_WEI;
 const SB_CHIPS = 1;
 const BB_CHIPS = 2;
-const BUY_IN_WEI = CHIP_WEI * 100n; // 50 BB
+const BUY_IN_CHIPS = 100n; // 50 BB
 
 let dbService: DatabaseService;
 let pfService: ProvablyFairService;
@@ -62,12 +59,12 @@ afterEach(async () => {
 
 async function createAndSeatPlayers(
   players: string[],
-  buyInWei: bigint = BUY_IN_WEI,
+  buyInChips: bigint = BUY_IN_CHIPS,
 ): Promise<string> {
   const tableId = await pokerGameService.createTable(SB_CHIPS, BB_CHIPS, 6);
   createdTableIds.push(tableId);
   for (const addr of players) {
-    await pokerGameService.joinTable(tableId, addr, buyInWei.toString());
+    await pokerGameService.joinTable(tableId, addr, buyInChips.toString());
   }
   return tableId;
 }

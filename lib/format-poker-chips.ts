@@ -1,6 +1,6 @@
 /**
  * Poker chip formatting. The server stores and sends raw chip integers
- * (1 chip = 0.001 MORBIUS internally, never displayed as MORBIUS in the poker UI).
+ * (1 chip = 1 MORBIUS at the ledger boundary; poker UI shows chip counts only).
  */
 
 /** Format a chip-int value (bigint | number | string) as an integer with thousands separators. */

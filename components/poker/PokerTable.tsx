@@ -12,7 +12,11 @@ import { BackgroundBeams, type BeamColorPalette } from '@/components/ui/backgrou
 import { usePokerTableEffect } from '@/hooks/use-poker-table-effect';
 import { PokerWinnerNotificationCard } from './PokerWinnerNotificationCard';
 import { bestHand, handRankToName, evaluateHoleCards } from '@/lib/poker-hand-eval';
-import { authoredSeatAnchors } from '@/lib/poker-seat-layout';
+import {
+  authoredSeatAnchors,
+  betChipAnchorForDisplaySlot,
+  POKER_POT_ANCHOR,
+} from '@/lib/poker-seat-layout';
 import confetti from 'canvas-confetti';
 
 const BEAM_PALETTES: BeamColorPalette[] = [
@@ -28,7 +32,7 @@ function shortAddr(addr: string): string {
   return `${addr.slice(0, 6)}…${addr.slice(-4)}`;
 }
 
-const POT_ANCHOR = { fx: 0.50, fy: 0.51 };
+const POT_ANCHOR = POKER_POT_ANCHOR;
 const ADJACENT_SEAT_VERTICAL_NUDGE_PX = 30;
 const SECOND_ADJACENT_SEAT_VERTICAL_NUDGE_PX = 30;
 const HERO_SEAT_VERTICAL_NUDGE_PX = 38;
@@ -50,23 +54,8 @@ const SEAT_POSITION_NUDGE_PX: Record<number, { x: number; y: number }> = {
   9: { x: -30, y: 10 },
 };
 
-// Per-server-position pixel nudges for chip stacks (applied on top of the computed chip position).
-const CHIP_POSITION_NUDGE_PX: Record<number, { x: number; y: number }> = {
-  0: { x: 0, y: -60 },
-  1: { x: 0, y: -60 },
-  2: { x: 90, y: 0 },
-  3: { x: 90, y: 0 },
-  4: { x: 0, y: 60 },
-  5: { x: 0, y: 60 },
-  6: { x: 0, y: 60 },
-  7: { x: -90, y: 0 },
-  8: { x: -90, y: 0 },
-  9: { x: 0, y: -60 },
-};
-
 const SHOWDOWN_CARD_PULL_RATIO = 0.18;
 const SHOWDOWN_CARD_PULL_MAX_PX = 70;
-const BET_CHIP_INWARD_DISTANCE_PX = 64;
 
 // Seat base geometry: `lib/poker-seat-layout.ts` (SEAT_ANCHOR_RING + authoredSeatAnchors).
 
@@ -652,19 +641,7 @@ export function PokerTable({ state, currentPlayerAddress, timeLeft, chatBubbleBy
           const hasBet = toBigIntSafe(seat.currentBet ?? 0) > 0n;
           if (!hasBet) return null;
 
-          const renderedSeatAnchor = getRenderedSeatAnchor(displaySlot, seat.position ?? actualIdx) ?? anchor;
-          const seatPx = { x: renderedSeatAnchor.fx * dims.w, y: renderedSeatAnchor.fy * dims.h };
-          const potPx = { x: POT_ANCHOR.fx * dims.w, y: POT_ANCHOR.fy * dims.h };
-          const towardPot = { x: potPx.x - seatPx.x, y: potPx.y - seatPx.y };
-          const towardPotLen = Math.hypot(towardPot.x, towardPot.y) || 1;
-          const step = Math.min(BET_CHIP_INWARD_DISTANCE_PX, towardPotLen * 0.85);
-          const chipNudge = CHIP_POSITION_NUDGE_PX[seat.position ?? actualIdx] ?? { x: 0, y: 0 };
-          const chipPx = {
-            x: seatPx.x + (towardPot.x / towardPotLen) * step + chipNudge.x,
-            y: seatPx.y + (towardPot.y / towardPotLen) * step + chipNudge.y,
-          };
-          const cfx = chipPx.x / Math.max(dims.w, 1);
-          const cfy = chipPx.y / Math.max(dims.h, 1);
+          const { fx: cfx, fy: cfy } = betChipAnchorForDisplaySlot(state.seats.length, displaySlot);
 
           return (
             <motion.div

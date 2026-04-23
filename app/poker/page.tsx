@@ -4,7 +4,6 @@ import React, { useState, useEffect, useCallback, useRef } from 'react';
 import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useAccount, useSignTypedData } from 'wagmi';
-import { parseEther } from 'viem';
 import { sanitizeDecimalStringForParseEther } from '@/lib/sanitize-decimal-input';
 import { getApiUrlOptional, getWebSocketUrlOptional } from '@/lib/api-urls';
 import { BlackjackWebSocketClient, type SignTypedDataFn } from '@/lib/websocket-client';
@@ -16,26 +15,20 @@ import { GameFAQ } from '@/components/shared/GameFAQ';
 import { MORBIUS_TOKEN_ADDRESS } from '@/lib/contracts';
 import { isAdminWallet } from '@/lib/admin';
 import {
-  getCashBuyInBoundsWeiFromChips,
+  getCashBuyInBoundsChips,
   POKER_CASH_MAX_BUY_IN_BB,
   POKER_CASH_MIN_BUY_IN_BB,
 } from '@/lib/poker-buy-in';
-import { formatMorbiusFloor, formatMorbiusFloorPlain } from '@/lib/format-morbius-display';
-import { formatChips } from '@/lib/format-poker-chips';
+import { formatChips, parseChipInput } from '@/lib/format-poker-chips';
+import { formatMorbiusFloor } from '@/lib/format-morbius-display';
+import { PokerChipExchangeModal } from '@/components/poker/PokerChipExchangeModal';
 import { PokerBetaSplash } from '@/components/poker/PokerBetaSplash';
 import { SophieSplashModal } from '@/components/shared/SophieSplashModal';
 import { PokerHowToPlayModal } from '@/components/poker/PokerHowToPlayModal';
 import { PokerStatsModal } from '@/components/poker/PokerStatsModal';
 import GlobalMainNav from '@/components/shared/GlobalMainNav';
 import { PokerTournamentLobby } from '@/components/poker/tournament/PokerTournamentLobby';
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from '@/components/ui/table';
+import { Coins, Lock } from 'lucide-react';
 
 // Intro screen component (same style as Blackjack)
 function IntroScreen({ onComplete }: { onComplete: () => void }) {
@@ -114,11 +107,13 @@ export default function PokerLobbyPage() {
   const [buyIn, setBuyIn] = useState('');
   const [joinPin, setJoinPin] = useState('');
   const [balance, setBalance] = useState<string | null>(null);
+  const [chipBalance, setChipBalance] = useState<string | null>(null);
   const [createModal, setCreateModal] = useState<{ smallBlind: string; bigBlind: string; maxSeats: number; pinCode: string; pinEnabled: boolean } | null>(null);
   const [creating, setCreating] = useState(false);
   const [showHowToPlay, setShowHowToPlay] = useState(false);
   const [showStatsModal, setShowStatsModal] = useState(false);
   const [showDepositModal, setShowDepositModal] = useState(false);
+  const [showChipExchange, setShowChipExchange] = useState(false);
   const [playersDropdownTableId, setPlayersDropdownTableId] = useState<string | null>(null);
   const [tablePlayers, setTablePlayers] = useState<{ tableId: string; seats: PokerSeatState[] } | null>(null);
   const [tablePlayersLoading, setTablePlayersLoading] = useState(false);
@@ -164,10 +159,12 @@ export default function PokerLobbyPage() {
 
   const joinBuyInOutOfRange = React.useMemo(() => {
     if (!joinModal) return false;
+    const chipsStr = parseChipInput(buyIn);
+    if (chipsStr === '0') return false;
     try {
-      const w = parseEther(sanitizeDecimalStringForParseEther(buyIn) || '0');
-      const { minWei, maxWei } = getCashBuyInBoundsWeiFromChips(BigInt(joinModal.bigBlindChips));
-      return w < minWei || w > maxWei;
+      const c = BigInt(chipsStr);
+      const { minChips, maxChips } = getCashBuyInBoundsChips(BigInt(joinModal.bigBlindChips));
+      return c < minChips || c > maxChips;
     } catch {
       return true;
     }
@@ -249,7 +246,9 @@ export default function PokerLobbyPage() {
       refreshTables();
     };
 
+    const onPokerChipBal = (s: string) => setChipBalance(s);
     client.on('reconnected', onReconnected);
+    client.on('poker_chip_balance', onPokerChipBal);
 
     // Listen for broadcast table list updates
     client.on('poker_table_list', (payload: { tables: PokerTableSummary[] }) => {
@@ -267,6 +266,8 @@ export default function PokerLobbyPage() {
       .connect()
       .then(() => {
         setWsClient(client);
+        const fromWs = client.getPokerChipBalanceString();
+        if (fromWs != null) setChipBalance(fromWs);
         return client.pokerListTables();
       })
       .then((res) => {
@@ -287,24 +288,35 @@ export default function PokerLobbyPage() {
     return () => {
       clearInterval(interval);
       client.off('reconnected', onReconnected);
+      client.off('poker_chip_balance', onPokerChipBal);
       client.disconnect();
       clientRef.current = null;
       setWsClient(null);
     };
   }, [address, stableSignTypedData, router]);
 
-  useEffect(() => {
+  const refreshLobbyBalances = useCallback(() => {
     if (!address || !getApiUrlOptional()) {
       setBalance(null);
+      setChipBalance(null);
       return;
     }
     const apiUrl = getApiUrlOptional();
     if (!apiUrl) return;
-    fetch(`${apiUrl}/api/player/${address.toLowerCase()}/balance`)
+    const addr = address.toLowerCase();
+    fetch(`${apiUrl}/api/player/${addr}/balance`)
       .then((r) => (r.ok ? r.json() : null))
       .then((data) => (data?.balance != null ? setBalance(String(data.balance)) : setBalance(null)))
       .catch(() => setBalance(null));
+    fetch(`${apiUrl}/api/poker/chips/balance?address=${encodeURIComponent(addr)}`)
+      .then((r) => (r.ok ? r.json() : null))
+      .then((data) => (data?.balance != null ? setChipBalance(String(data.balance)) : setChipBalance(null)))
+      .catch(() => setChipBalance(null));
   }, [address]);
+
+  useEffect(() => {
+    refreshLobbyBalances();
+  }, [refreshLobbyBalances]);
 
   /** Navigate to table page with join params; table page will connect once and call pokerJoinTable. */
   const handleJoin = () => {
@@ -314,19 +326,23 @@ export default function PokerLobbyPage() {
       setError('Enter the 4-digit PIN to join this private table');
       return;
     }
-    let buyInWei: string;
+    const buyInChipsStr = parseChipInput(buyIn);
+    if (buyInChipsStr === '0') {
+      setError('Enter a buy-in in whole chips');
+      return;
+    }
+    const bbChips = BigInt(joinModal.bigBlindChips);
+    const { minChips, maxChips } = getCashBuyInBoundsChips(bbChips);
+    let bi: bigint;
     try {
-      buyInWei = parseEther(sanitizeDecimalStringForParseEther(buyIn) || '0').toString();
+      bi = BigInt(buyInChipsStr);
     } catch {
       setError('Invalid buy-in amount');
       return;
     }
-    const bbChips = BigInt(joinModal.bigBlindChips);
-    const { minWei, maxWei } = getCashBuyInBoundsWeiFromChips(bbChips);
-    const bi = BigInt(buyInWei);
-    if (bi < minWei || bi > maxWei) {
+    if (bi < minChips || bi > maxChips) {
       setError(
-        `Buy-in must be between ${POKER_CASH_MIN_BUY_IN_BB} and ${POKER_CASH_MAX_BUY_IN_BB} big blinds (${formatMorbiusFloor(minWei, { compact: false })}–${formatMorbiusFloor(maxWei, { compact: false })} MORBIUS).`
+        `Buy-in must be between ${POKER_CASH_MIN_BUY_IN_BB} and ${POKER_CASH_MAX_BUY_IN_BB} big blinds (${formatChips(minChips)}–${formatChips(maxChips)} chips).`
       );
       return;
     }
@@ -335,7 +351,7 @@ export default function PokerLobbyPage() {
     setJoinModal(null);
     setJoinPin('');
     const pinParam = pin ? `&pin=${encodeURIComponent(pin)}` : '';
-    router.push(`/poker/${targetTableId}?join=1&buyIn=${encodeURIComponent(buyInWei)}${pinParam}`);
+    router.push(`/poker/${targetTableId}?join=1&buyIn=${encodeURIComponent(buyInChipsStr)}${pinParam}`);
   };
 
   const handleCreateTable = async () => {
@@ -364,10 +380,10 @@ export default function PokerLobbyPage() {
       const bbChipsBig = (() => {
         try { return BigInt(bbChips); } catch { return 0n; }
       })();
-      const { maxWei } = getCashBuyInBoundsWeiFromChips(bbChipsBig);
-      const buyInWei = maxWei.toString();
+      const { maxChips } = getCashBuyInBoundsChips(bbChipsBig);
+      const buyInChips = maxChips.toString();
       const pinParam = createdPin ? `&pin=${encodeURIComponent(createdPin)}` : '';
-      router.push(`/poker/${tableId}?join=1&buyIn=${encodeURIComponent(buyInWei)}${pinParam}`);
+      router.push(`/poker/${tableId}?join=1&buyIn=${encodeURIComponent(buyInChips)}${pinParam}`);
     } catch (err) {
       setError((err as Error).message ?? 'Failed to create table');
     } finally {
@@ -475,18 +491,36 @@ export default function PokerLobbyPage() {
                   {/* CTA buttons */}
                   <div className="flex justify-center gap-3 flex-wrap">
                     {isConnected && (
-                      <button
-                        type="button"
-                        onClick={() => setCreateModal({ smallBlind: '10', bigBlind: '20', maxSeats: 6, pinCode: '', pinEnabled: false })}
-                        className="flex items-center gap-2 px-7 py-3.5 rounded-2xl text-white text-sm font-bold hover:-translate-y-0.5 transition-all"
-                        style={{
-                          background: 'linear-gradient(135deg, #06b6d4, #3b82f6)',
-                          boxShadow: '0 4px 24px rgba(6,182,212,0.3), 0 1px 2px rgba(0,0,0,0.2), inset 0 1px 0 rgba(255,255,255,0.15)',
-                        }}
-                      >
-                        <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.5}><path d="M12 5v14M5 12h14" /></svg>
-                        Create Table
-                      </button>
+                      <>
+                        <button
+                          type="button"
+                          onClick={() => setCreateModal({ smallBlind: '10', bigBlind: '20', maxSeats: 6, pinCode: '', pinEnabled: false })}
+                          className="flex items-center gap-2 px-7 py-3.5 rounded-2xl text-white text-sm font-bold hover:-translate-y-0.5 transition-all"
+                          style={{
+                            background: 'linear-gradient(135deg, #06b6d4, #3b82f6)',
+                            boxShadow: '0 4px 24px rgba(6,182,212,0.3), 0 1px 2px rgba(0,0,0,0.2), inset 0 1px 0 rgba(255,255,255,0.15)',
+                          }}
+                        >
+                          <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.5}><path d="M12 5v14M5 12h14" /></svg>
+                          Create Table
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setShowChipExchange(true)}
+                          className="flex items-center gap-2 px-7 py-3.5 rounded-2xl text-cyan-200 text-sm font-bold hover:-translate-y-0.5 transition-all border-2 border-cyan-500/40"
+                          style={{
+                            background: 'linear-gradient(325deg, rgba(20, 20, 20, 0.75), rgba(40, 40, 40, 0.5))',
+                            boxShadow:
+                              'inset 0 3px 6px rgba(0, 0, 0, 0.75), inset 0 -2px 6px rgba(255, 255, 255, 0.06), 0 0 24px rgba(34,211,238,0.12)',
+                          }}
+                        >
+                          <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}>
+                            <circle cx="12" cy="12" r="9" />
+                            <path d="M8 12h8M12 8v8" strokeLinecap="round" />
+                          </svg>
+                          Chip cage
+                        </button>
+                      </>
                     )}
                     <button
                       type="button"
@@ -526,6 +560,65 @@ export default function PokerLobbyPage() {
                   </div>
                 </div>
               </div>
+
+              {isConnected && address && (
+                <div className="relative px-5 sm:px-10 pb-5">
+                  <div
+                    className="rounded-2xl border border-cyan-500/25 overflow-hidden flex flex-col sm:flex-row sm:items-stretch sm:justify-between gap-4 p-4 sm:p-5"
+                    style={{
+                      background: 'linear-gradient(325deg, rgba(20, 20, 20, 0.8), rgba(40, 40, 40, 0.6))',
+                      boxShadow:
+                        'inset 0 3px 6px rgba(0, 0, 0, 0.8), inset 0 -3px 6px rgba(255, 255, 255, 0.1), 0 1px 3px rgba(0, 0, 0, 0.5)',
+                    }}
+                  >
+                    <div className="absolute inset-0 bg-[radial-gradient(circle_at_90%_50%,rgba(34,211,238,0.08),transparent_55%)] pointer-events-none rounded-2xl" />
+                    <div className="relative flex items-start gap-3 min-w-0">
+                      <div
+                        className="shrink-0 w-11 h-11 rounded-xl flex items-center justify-center border border-cyan-500/30"
+                        style={{
+                          background: 'linear-gradient(145deg, rgb(16, 26, 35), rgb(35, 36, 41))',
+                          boxShadow:
+                            'inset 0 2px 4px rgba(0, 0, 0, 0.7), inset 0 -2px 4px rgba(255, 255, 255, 0.06)',
+                        }}
+                      >
+                        <Coins className="w-5 h-5 text-cyan-400/90" aria-hidden />
+                      </div>
+                      <div className="min-w-0">
+                        <h3 className="text-sm font-bold text-cyan-400 tracking-wide">Chip cage</h3>
+                        <p className="text-xs text-slate-500 mt-0.5 leading-relaxed">
+                          MORBIUS play balance ↔ poker chips. Same rate as the tables: 1 chip = 1 MORBIUS.
+                        </p>
+                      </div>
+                    </div>
+                    <div className="relative flex flex-col sm:flex-row flex-wrap items-stretch sm:items-center gap-3 sm:gap-5">
+                      <div className="flex gap-6 flex-1 sm:flex-initial">
+                        <div>
+                          <div className="text-[10px] uppercase tracking-wider text-slate-500 font-semibold">Play balance</div>
+                          <div className="text-lg font-bold tabular-nums text-white mt-0.5">
+                            {balance != null ? formatMorbiusFloor(balance) : '—'}
+                          </div>
+                          <div className="text-[10px] text-slate-600">MORBIUS</div>
+                        </div>
+                        <div>
+                          <div className="text-[10px] uppercase tracking-wider text-slate-500 font-semibold">Poker chips</div>
+                          <div className="text-lg font-bold tabular-nums text-cyan-300 mt-0.5">
+                            {chipBalance != null ? formatChips(chipBalance) : '—'}
+                          </div>
+                          <div className="text-[10px] text-slate-600">Off-chain</div>
+                        </div>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => setShowChipExchange(true)}
+                        className="shrink-0 w-full sm:w-auto px-6 py-3 rounded-xl text-sm font-bold text-white bg-gradient-to-r from-cyan-600 to-blue-600 hover:opacity-95 transition-opacity shadow-lg shadow-cyan-900/25"
+                      >
+                        Open exchange
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              )}
+
               {/* Tab bar */}
               <div className="flex items-center gap-1 px-5 sm:px-10 py-3.5 sm:py-4 border-t border-white/[0.04]" style={{ background: 'rgba(0,0,0,0.2)' }}>
                 <button
@@ -585,117 +678,148 @@ export default function PokerLobbyPage() {
             )}
             {activeTab === 'cash' && !loading && tables.length > 0 && (
               <div
-                className="rounded-2xl border border-cyan-500/20 overflow-hidden"
+                className="rounded-2xl border border-cyan-500/20 overflow-x-auto lg:overflow-x-visible"
                 style={{
                   background: 'linear-gradient(325deg, rgba(20, 20, 20, 0.8), rgba(40, 40, 40, 0.6))',
                   boxShadow:
                     'inset 0 3px 6px rgba(0, 0, 0, 0.8), inset 0 -3px 6px rgba(255, 255, 255, 0.1), 0 1px 3px rgba(0, 0, 0, 0.5)',
                 }}
               >
-                <Table className="w-full text-slate-200 [&_th]:h-8 [&_th]:py-1.5 [&_th]:px-2 [&_th]:text-xs [&_th]:font-medium [&_th]:text-slate-500 [&_td]:py-1.5 [&_td]:px-2 [&_td]:text-sm">
-                  <TableHeader>
-                    <TableRow className="border-slate-600/50 hover:bg-transparent">
-                      <TableHead className="whitespace-nowrap">Stakes</TableHead>
-                      <TableHead className="whitespace-nowrap">Status</TableHead>
-                      <TableHead className="whitespace-nowrap">Private</TableHead>
-                      <TableHead className="whitespace-nowrap">Players</TableHead>
-                      <TableHead className="whitespace-nowrap">Open seats</TableHead>
-                      <TableHead className="text-right whitespace-nowrap">Actions</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
+                <table className="w-full border-collapse text-sm text-slate-200 min-w-0">
+                  <thead>
+                    <tr className="border-b border-slate-600/50">
+                      <th className="py-2.5 px-3 text-left text-xs font-semibold uppercase tracking-wider text-slate-500">
+                        Stakes
+                      </th>
+                      <th className="py-2.5 px-3 text-left text-xs font-semibold uppercase tracking-wider text-slate-500">
+                        Table
+                      </th>
+                      <th className="py-2.5 px-3 text-left text-xs font-semibold uppercase tracking-wider text-slate-500">
+                        Seats
+                      </th>
+                      <th className="py-2.5 px-3 text-right text-xs font-semibold uppercase tracking-wider text-slate-500 w-[8.5rem]">
+                        Actions
+                      </th>
+                    </tr>
+                  </thead>
+                  <tbody>
                     {tables.map((t) => {
                       const isPlaying = t.status === 'playing';
                       const openSeats = t.maxSeats - t.seatedCount;
+                      const cashTh = 'py-2.5 px-3 align-middle border-b border-slate-600/35';
+                      const btnSecondary =
+                        'inline-flex h-8 min-w-[5.75rem] items-center justify-center rounded-lg border border-slate-500/55 bg-black/30 text-xs font-semibold text-slate-200 hover:border-cyan-500/35 hover:bg-white/[0.04] transition-colors';
+                      const btnPrimary =
+                        'inline-flex h-8 min-w-[5.75rem] items-center justify-center rounded-lg bg-gradient-to-r from-cyan-600 to-cyan-500 text-xs font-semibold text-white shadow-sm hover:opacity-95 transition-opacity';
+                      const btnGhost =
+                        'inline-flex h-8 items-center justify-center rounded-lg px-2 text-xs font-semibold text-slate-500 hover:text-slate-300 hover:bg-white/[0.04] transition-colors disabled:opacity-40';
                       return (
                         <React.Fragment key={t.id}>
-                          <TableRow className="border-slate-600/40 hover:bg-white/[0.04]">
-                            <TableCell className="whitespace-nowrap tabular-nums text-slate-200">
-                              {formatChips(t.smallBlind)} / {formatChips(t.bigBlind)}
-                              <span className="text-slate-500"> · </span>
-                              <span className="text-slate-400">NLHE</span>
-                            </TableCell>
-                            <TableCell className="whitespace-nowrap text-slate-400">
-                              {isPlaying ? 'In progress' : 'Waiting'}
-                            </TableCell>
-                            <TableCell className="whitespace-nowrap text-slate-400">
-                              {t.hasPin ? 'Yes' : '—'}
-                            </TableCell>
-                            <TableCell className="whitespace-nowrap tabular-nums text-slate-300">
-                              {t.seatedCount}/{t.maxSeats}
-                            </TableCell>
-                            <TableCell className="whitespace-nowrap">
-                              <span className="tabular-nums text-slate-300">{openSeats}</span>
-                              <button
-                                type="button"
-                                onClick={() => openPlayersDropdown(t.id)}
-                                className="ml-2 text-xs text-cyan-400/90 hover:text-cyan-300 underline underline-offset-2"
-                              >
-                                {playersDropdownTableId === t.id ? 'Hide' : 'View'}
-                              </button>
-                            </TableCell>
-                            <TableCell className="text-right whitespace-nowrap">
-                              <div className="inline-flex flex-wrap items-center justify-end gap-1.5">
-                                <Link
-                                  href={`/poker/${t.id}`}
-                                  className="inline-flex items-center justify-center rounded-md border border-slate-600/60 bg-black/20 px-2 py-1 text-xs font-medium text-slate-300 hover:border-cyan-500/35 hover:bg-white/[0.04] transition-colors"
-                                >
-                                  Watch
-                                </Link>
-                                {isConnected && (
-                                  <button
-                                    type="button"
-                                    onClick={() => {
-                                      const bbChips = BigInt(t.bigBlind);
-                                      const { maxWei } = getCashBuyInBoundsWeiFromChips(bbChips);
-                                      setBuyIn(formatMorbiusFloorPlain(maxWei));
-                                      setJoinModal({ tableId: t.id, hasPin: t.hasPin, bigBlindChips: t.bigBlind });
-                                      setJoinPin('');
-                                    }}
-                                    className="inline-flex items-center justify-center rounded-md bg-gradient-to-r from-cyan-600 to-cyan-500 px-2 py-1 text-xs font-medium text-white hover:opacity-95 transition-opacity"
-                                  >
-                                    Sit
-                                  </button>
-                                )}
-                                {isAdmin && (
-                                  <button
-                                    type="button"
-                                    onClick={() => removeTable(t.id)}
-                                    disabled={removingTableId === t.id}
-                                    className="text-xs font-medium text-slate-500 hover:text-slate-300 disabled:opacity-50"
-                                  >
-                                    {removingTableId === t.id ? '…' : 'Remove'}
-                                  </button>
+                          <tr className="hover:bg-white/[0.03]">
+                            <td className={`${cashTh} tabular-nums`}>
+                              <div className="font-medium text-slate-100">
+                                {formatChips(t.smallBlind)} / {formatChips(t.bigBlind)}
+                              </div>
+                              <div className="text-xs text-slate-500 mt-0.5">No-limit Hold&apos;em</div>
+                            </td>
+                            <td className={cashTh}>
+                              <div className="font-medium text-slate-200">
+                                {isPlaying ? 'In progress' : 'Waiting for players'}
+                              </div>
+                              <div className="mt-1 flex items-center gap-1.5 text-xs text-slate-500">
+                                {t.hasPin ? (
+                                  <>
+                                    <Lock className="w-3.5 h-3.5 text-amber-400/90 shrink-0" aria-hidden />
+                                    <span className="text-amber-400/90 font-medium">Private</span>
+                                  </>
+                                ) : (
+                                  <span>Open table</span>
                                 )}
                               </div>
-                            </TableCell>
-                          </TableRow>
+                            </td>
+                            <td className={`${cashTh} tabular-nums`}>
+                              <div className="font-medium text-slate-100">
+                                {t.seatedCount}/{t.maxSeats}{' '}
+                                <span className="text-slate-500 font-normal">seated</span>
+                              </div>
+                              <div className="text-xs text-slate-500 mt-0.5">
+                                {openSeats} open
+                              </div>
+                            </td>
+                            <td className={`${cashTh} text-right`}>
+                              <div className="inline-flex flex-col items-end gap-1.5">
+                                <div className="flex items-center justify-end gap-2">
+                                  <Link href={`/poker/${t.id}`} className={btnSecondary}>
+                                    Watch
+                                  </Link>
+                                  {isConnected && (
+                                    <button
+                                      type="button"
+                                      onClick={() => {
+                                        const bbChips = BigInt(t.bigBlind);
+                                        const { maxChips } = getCashBuyInBoundsChips(bbChips);
+                                        setBuyIn(maxChips.toString());
+                                        setJoinModal({ tableId: t.id, hasPin: t.hasPin, bigBlindChips: t.bigBlind });
+                                        setJoinPin('');
+                                      }}
+                                      className={btnPrimary}
+                                    >
+                                      Sit
+                                    </button>
+                                  )}
+                                </div>
+                                <div className="flex items-center justify-end gap-2">
+                                  <button
+                                    type="button"
+                                    onClick={() => openPlayersDropdown(t.id)}
+                                    className={btnGhost}
+                                  >
+                                    {playersDropdownTableId === t.id ? 'Hide roster' : 'Roster'}
+                                  </button>
+                                  {isAdmin && (
+                                    <button
+                                      type="button"
+                                      onClick={() => removeTable(t.id)}
+                                      disabled={removingTableId === t.id}
+                                      className={btnGhost}
+                                    >
+                                      {removingTableId === t.id ? '…' : 'Remove'}
+                                    </button>
+                                  )}
+                                </div>
+                              </div>
+                            </td>
+                          </tr>
                           {playersDropdownTableId === t.id && (
-                            <TableRow className="border-slate-600/40 hover:bg-white/[0.02] bg-black/15">
-                              <TableCell colSpan={6} className="py-2">
-                                <div className="rounded-lg border border-slate-600/50 overflow-hidden bg-black/20">
-                                  <div className="px-2 py-1.5 border-b border-slate-600/50">
-                                    <span className="text-xs font-medium text-slate-500">Seated players</span>
+                            <tr className="bg-black/20">
+                              <td colSpan={4} className="px-3 py-3 border-b border-slate-600/35">
+                                <div className="rounded-lg border border-slate-600/50 overflow-hidden bg-black/25">
+                                  <div className="px-3 py-2 border-b border-slate-600/45">
+                                    <span className="text-xs font-semibold uppercase tracking-wider text-slate-500">
+                                      Seated players
+                                    </span>
                                   </div>
-                                  <div className="p-2 max-h-28 overflow-y-auto text-sm">
+                                  <div className="px-3 py-2 max-h-32 overflow-y-auto md:max-h-24">
                                     {tablePlayersLoading ? (
-                                      <p className="text-slate-500 text-xs">Loading…</p>
+                                      <p className="text-slate-500 text-sm py-1">Loading…</p>
                                     ) : tablePlayers?.tableId === t.id ? (
                                       (() => {
                                         const seated = tablePlayers.seats.filter((s) => s.playerAddress);
                                         if (seated.length === 0) {
-                                          return <p className="text-slate-500 text-xs">No players seated</p>;
+                                          return <p className="text-slate-500 text-sm py-1">No players seated</p>;
                                         }
                                         return (
-                                          <ul className="space-y-1.5 text-xs">
+                                          <ul className="divide-y divide-slate-700/40">
                                             {seated.map((s) => (
                                               <li
                                                 key={s.position}
-                                                className="flex items-center justify-between gap-2 text-slate-300"
+                                                className="flex items-center justify-between gap-3 py-2 text-sm text-slate-300"
                                               >
-                                                <span className="font-medium">Seat {s.position + 1}</span>
+                                                <span className="font-medium text-slate-400 shrink-0">
+                                                  Seat {s.position + 1}
+                                                </span>
                                                 <span
-                                                  className="font-mono text-slate-400 truncate max-w-[200px]"
+                                                  className="font-mono text-slate-300 truncate text-right"
                                                   title={s.playerAddress ?? ''}
                                                 >
                                                   {s.playerAddress ? truncateAddress(s.playerAddress) : '—'}
@@ -706,18 +830,18 @@ export default function PokerLobbyPage() {
                                         );
                                       })()
                                     ) : (
-                                      <p className="text-slate-500 text-xs">No players seated</p>
+                                      <p className="text-slate-500 text-sm py-1">No players seated</p>
                                     )}
                                   </div>
                                 </div>
-                              </TableCell>
-                            </TableRow>
+                              </td>
+                            </tr>
                           )}
                         </React.Fragment>
                       );
                     })}
-                  </TableBody>
-                </Table>
+                  </tbody>
+                </table>
               </div>
             )}
 
@@ -764,15 +888,15 @@ export default function PokerLobbyPage() {
                     />
                   </div>
                 )}
-                {balance != null && (() => {
+                {chipBalance != null && (() => {
                   try {
-                    return parseEther(sanitizeDecimalStringForParseEther(buyIn) || '0') > BigInt(balance);
+                    return BigInt(parseChipInput(buyIn)) > BigInt(chipBalance);
                   } catch {
                     return false;
                   }
                 })() && (
                   <p className="text-amber-400 text-sm">
-                    Insufficient balance. <button type="button" onClick={() => setShowDepositModal(true)} className="underline hover:text-amber-300">Get chips</button>
+                    Insufficient poker chips. <button type="button" onClick={() => setShowDepositModal(true)} className="underline hover:text-amber-300">Get chips</button>
                   </p>
                 )}
                 <div className="rounded-lg bg-slate-800/80 border border-cyan-500/20 px-3 py-2.5 space-y-1">
@@ -782,10 +906,10 @@ export default function PokerLobbyPage() {
                       <>
                         For this table:{' '}
                         <span className="text-slate-300 tabular-nums">
-                          {formatMorbiusFloor(getCashBuyInBoundsWeiFromChips(BigInt(joinModal.bigBlindChips)).minWei, { compact: false })} –{' '}
-                          {formatMorbiusFloor(getCashBuyInBoundsWeiFromChips(BigInt(joinModal.bigBlindChips)).maxWei, { compact: false })}
+                          {formatChips(getCashBuyInBoundsChips(BigInt(joinModal.bigBlindChips)).minChips)} –{' '}
+                          {formatChips(getCashBuyInBoundsChips(BigInt(joinModal.bigBlindChips)).maxChips)}
                         </span>{' '}
-                        MORBIUS.
+                        chips (off-chain).
                       </>
                     ) : null}
                   </p>
@@ -793,7 +917,7 @@ export default function PokerLobbyPage() {
                     No in-table top-ups — leave and rejoin to change your stack.
                   </p>
                 </div>
-                <label className="block text-sm text-slate-400">Buy-in (MORBIUS)</label>
+                <label className="block text-sm text-slate-400">Buy-in (whole chips)</label>
                 <input
                   type="text"
                   value={buyIn}
@@ -803,8 +927,8 @@ export default function PokerLobbyPage() {
                 />
                 {joinBuyInOutOfRange && buyIn.trim() !== '' && (
                   <p className="text-amber-400/90 text-xs">
-                    Enter an amount between {formatMorbiusFloor(getCashBuyInBoundsWeiFromChips(BigInt(joinModal.bigBlindChips)).minWei, { compact: false })} and{' '}
-                    {formatMorbiusFloor(getCashBuyInBoundsWeiFromChips(BigInt(joinModal.bigBlindChips)).maxWei, { compact: false })} MORBIUS.
+                    Enter between {formatChips(getCashBuyInBoundsChips(BigInt(joinModal.bigBlindChips)).minChips)} and{' '}
+                    {formatChips(getCashBuyInBoundsChips(BigInt(joinModal.bigBlindChips)).maxChips)} chips.
                   </p>
                 )}
                 <div className="flex gap-2">
@@ -821,9 +945,9 @@ export default function PokerLobbyPage() {
                     disabled={
                       joinBuyInOutOfRange
                       || (joinModal.hasPin && !/^\d{4}$/.test(joinPin))
-                      || (balance != null && (() => {
+                      || (chipBalance != null && (() => {
                         try {
-                          return parseEther(sanitizeDecimalStringForParseEther(buyIn) || '0') > BigInt(balance);
+                          return BigInt(parseChipInput(buyIn)) > BigInt(chipBalance);
                         } catch {
                           return false;
                         }
@@ -948,6 +1072,12 @@ export default function PokerLobbyPage() {
         isOpen={showDepositModal}
         onClose={() => setShowDepositModal(false)}
         balanceLabel="Poker Balance"
+      />
+      <PokerChipExchangeModal
+        isOpen={showChipExchange}
+        onClose={() => setShowChipExchange(false)}
+        walletAddress={address ?? null}
+        onExchangeComplete={refreshLobbyBalances}
       />
       <SophieSplashModal address={address} />
     </>

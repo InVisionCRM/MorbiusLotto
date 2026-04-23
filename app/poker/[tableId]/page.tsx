@@ -3,10 +3,9 @@
 import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { useParams, useRouter, useSearchParams } from 'next/navigation';
 import { useAccount, useSignTypedData } from 'wagmi';
-import { formatMorbiusFloor } from '@/lib/format-morbius-display';
 import { formatChips } from '@/lib/format-poker-chips';
 import { formatPokerLastActionLine } from '@/lib/format-poker-last-action';
-import { POKER_CASH_MIN_BUY_IN_BB, POKER_CASH_MAX_BUY_IN_BB, POKER_CHIP_WEI } from '@/lib/poker-buy-in';
+import { POKER_CASH_MIN_BUY_IN_BB, POKER_CASH_MAX_BUY_IN_BB } from '@/lib/poker-buy-in';
 import type { BlackjackWebSocketClient, PokerTableState } from '@/lib/websocket-client';
 import { DEFAULT_POKER_THEME, getPokerThemeVars } from '@/lib/poker-themes';
 import { PokerThemeProvider } from '@/components/poker/PokerThemeContext';
@@ -37,6 +36,8 @@ import { usePokerTableSounds } from './PokerSounds';
 import { usePokerTableTournamentHud } from '@/hooks/use-poker-tournament';
 import { TournamentBlindIncreaseOverlay } from '@/components/poker/tournament/TournamentBlindIncreaseOverlay';
 import { PokerTournamentHUD } from '@/components/poker/tournament/PokerTournamentHUD';
+import { PokerTournamentResultsModal } from '@/components/poker/tournament/PokerTournamentResultsModal';
+import type { PokerTournamentCompletedPayload } from '@/lib/poker-tournament-completed';
 import { PokerActivityFeed } from '@/components/poker/PokerActivityFeed';
 import { Sidebar, SidebarBody } from '@/components/ui/sidebar';
 import {
@@ -44,15 +45,6 @@ import {
   POKER_E2E_MOCK_ADDRESS,
   type PokerE2ETestApi,
 } from './e2e-mock';
-
-function tournamentFinishOrdinal(rank: number): string {
-  const j = rank % 10;
-  const k = rank % 100;
-  if (j === 1 && k !== 11) return `${rank}st`;
-  if (j === 2 && k !== 12) return `${rank}nd`;
-  if (j === 3 && k !== 13) return `${rank}rd`;
-  return `${rank}th`;
-}
 
 export default function PokerTablePage() {
   const params = useParams();
@@ -84,6 +76,7 @@ export default function PokerTablePage() {
   const adminBotMax = 10;
   /** Bumped to open Activity drawer from seat radial on mobile. */
   const [activityMobileOpenSerial, setActivityMobileOpenSerial] = useState(0);
+  const [tournamentResults, setTournamentResults] = useState<PokerTournamentCompletedPayload | null>(null);
 
   const normalizedAddress = address?.toLowerCase() ?? null;
   const effectivePlayerAddress = normalizedAddress ?? (isE2EMock ? POKER_E2E_MOCK_ADDRESS : null);
@@ -115,43 +108,26 @@ export default function PokerTablePage() {
     pinParam,
     setProfileWsClient,
     replaceUrl,
+    skipLeaveOnUnload: Boolean(tournamentIdParam),
   });
   const renderedState = testStateOverride ?? state;
 
   const handleTournamentCompleted = useCallback(
-    (winners: { address: string; rank: number; prizeAmount: string }[]) => {
+    (payload: PokerTournamentCompletedPayload) => {
+      setTournamentResults(payload);
       const me = effectivePlayerAddress?.toLowerCase() ?? null;
-      const myWin = me ? winners.find((w) => w.address.toLowerCase() === me) : undefined;
-
-      if (myWin) {
-        const prizeWei = BigInt(myWin.prizeAmount || '0');
-        if (prizeWei > 0n) {
-          toast.success(
-            `You finished ${tournamentFinishOrdinal(myWin.rank)} — ${formatMorbiusFloor(myWin.prizeAmount)} MORBIUS added to your balance.`,
-          );
-        } else {
-          toast.info(`Tournament complete. You finished ${tournamentFinishOrdinal(myWin.rank)}.`);
-        }
-      } else if (me) {
-        toast.info('Tournament complete. You did not cash this time — thanks for playing.');
-      } else {
-        const top = winners.find((w) => w.rank === 1);
-        toast.success(
-          top
-            ? `Champion: ${top.address.slice(0, 6)}…${top.address.slice(-4)}`
-            : 'Tournament complete',
-        );
-      }
-
       void clientRef.current?.syncBalance().catch(() => {});
       if (me && me.length === 42) {
         queryClient.invalidateQueries({ queryKey: ['player-server-balance', me] });
       }
-
-      router.replace('/poker?tab=tournaments');
     },
-    [router, effectivePlayerAddress, queryClient, clientRef],
+    [effectivePlayerAddress, queryClient, clientRef],
   );
+
+  const dismissTournamentResults = useCallback(() => {
+    setTournamentResults(null);
+    router.replace('/poker?tab=tournaments');
+  }, [router]);
 
   const handleTournamentCancelled = useCallback(() => {
     toast.info('Tournament cancelled.');
@@ -487,8 +463,7 @@ export default function PokerTablePage() {
     if (autoRebuyFiringRef.current) return;
 
     autoRebuyFiringRef.current = true;
-    // pokerAddChips expects wei; convert chips -> wei at the boundary.
-    wsClient.pokerAddChips(tableId, (toAddChips * POKER_CHIP_WEI).toString())
+    wsClient.pokerAddChips(tableId, toAddChips.toString())
       .then((newState) => {
         setState(newState);
         toast.success('Auto-rebuy: topped up to max stack');
@@ -720,7 +695,11 @@ export default function PokerTablePage() {
 
           <div
             className="flex flex-row flex-1 min-h-0 min-w-0 relative"
-            style={{ paddingBottom: `var(${POKER_BOTTOM_RESERVE_VAR}, 0px)` }}
+            style={
+              isFullscreen
+                ? { paddingBottom: `var(${POKER_BOTTOM_RESERVE_VAR}, 0px)` }
+                : undefined
+            }
           >
             {tournamentHUDProp && !isFullscreen && (
               <Sidebar pinStorageKey="poker-table-tournament-hud-pinned">
@@ -735,41 +714,50 @@ export default function PokerTablePage() {
               </Sidebar>
             )}
 
-            <PokerTableView
-              tableScale={tableScale}
-              fullscreen={isFullscreen}
-              onToggleFullscreen={() => setIsFullscreen(f => !f)}
-              renderedState={renderedState}
-              effectivePlayerAddress={effectivePlayerAddress}
-              handleLeaveClick={handleLeaveClick}
-              setActivityMobileOpenSerial={setActivityMobileOpenSerial}
-              timeLeft={timeLeft}
-              chatBubbleBySeatIndex={chatBubbleBySeatIndex}
-              reactionBySeatIndex={reactionBySeatIndex}
-              broadcastEmotionBySeatIndex={broadcastEmotionBySeatIndex}
-              mySeatIndex={mySeatIndex}
-              onPhraseReaction={onPhraseReaction}
-              onAnimationReaction={onAnimationReaction}
-              canReup={canReup}
-              openReupModal={openReupModal}
-              mySeat={mySeat}
-              setShowAvatarModal={setShowAvatarModal}
-              setOpponentProfileAddress={setOpponentProfileAddress}
-              onOpponentRadialAction={onOpponentRadialAction}
-              quickChatPhrases={quickChatPhrases}
-              setQuickChatPhrases={setQuickChatPhrases}
-              setShowEditQuickChatModal={setShowEditQuickChatModal}
-              error={error}
-              showDashboard={showDashboard}
-              showMyStats={showMyStats}
-              wsConnected={wsConnected}
-              wsClient={wsClient}
-              tipAnimating={tipAnimating}
-              setTipAnimating={setTipAnimating}
-              onTipDealer={onTipDealer}
-              onSitOut={mySeat ? handleSitOut : undefined}
-              onSitBack={mySeat ? handleSitBack : undefined}
-            />
+            <div className="flex min-h-0 min-w-0 flex-1 flex-col relative">
+              <PokerTableView
+                tableScale={tableScale}
+                fullscreen={isFullscreen}
+                onToggleFullscreen={() => setIsFullscreen(f => !f)}
+                renderedState={renderedState}
+                effectivePlayerAddress={effectivePlayerAddress}
+                handleLeaveClick={handleLeaveClick}
+                setActivityMobileOpenSerial={setActivityMobileOpenSerial}
+                timeLeft={timeLeft}
+                chatBubbleBySeatIndex={chatBubbleBySeatIndex}
+                reactionBySeatIndex={reactionBySeatIndex}
+                broadcastEmotionBySeatIndex={broadcastEmotionBySeatIndex}
+                mySeatIndex={mySeatIndex}
+                onPhraseReaction={onPhraseReaction}
+                onAnimationReaction={onAnimationReaction}
+                canReup={canReup}
+                openReupModal={openReupModal}
+                mySeat={mySeat}
+                setShowAvatarModal={setShowAvatarModal}
+                setOpponentProfileAddress={setOpponentProfileAddress}
+                onOpponentRadialAction={onOpponentRadialAction}
+                quickChatPhrases={quickChatPhrases}
+                setQuickChatPhrases={setQuickChatPhrases}
+                setShowEditQuickChatModal={setShowEditQuickChatModal}
+                error={error}
+                showDashboard={showDashboard}
+                showMyStats={showMyStats}
+                wsConnected={wsConnected}
+                wsClient={wsClient}
+                tipAnimating={tipAnimating}
+                setTipAnimating={setTipAnimating}
+                onTipDealer={onTipDealer}
+                onSitOut={mySeat ? handleSitOut : undefined}
+                onSitBack={mySeat ? handleSitBack : undefined}
+              />
+
+              <PokerBottomBar
+                fullscreen={isFullscreen}
+                renderedState={renderedState}
+                mySeat={mySeat}
+                actions={sharedActions}
+              />
+            </div>
 
             {pokerChatRoomId && !isFullscreen && (
               <Sidebar
@@ -797,13 +785,6 @@ export default function PokerTablePage() {
               </Sidebar>
             )}
           </div>
-
-          <PokerBottomBar
-            fullscreen={isFullscreen}
-            renderedState={renderedState}
-            mySeat={mySeat}
-            actions={sharedActions}
-          />
         </div>
 
         <PokerPopups
@@ -870,6 +851,13 @@ export default function PokerTablePage() {
           smallBlind={blindIncreaseBanner.smallBlind}
           bigBlind={blindIncreaseBanner.bigBlind}
           onAnimationEnd={() => setBlindIncreaseBanner(null)}
+        />
+      )}
+      {tournamentResults && (
+        <PokerTournamentResultsModal
+          payload={tournamentResults}
+          myAddress={effectivePlayerAddress}
+          onDismiss={dismissTournamentResults}
         />
       )}
     </>

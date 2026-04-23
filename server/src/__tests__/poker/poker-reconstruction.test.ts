@@ -11,13 +11,11 @@ import { Table, BettingRound } from '@chevtek/poker-engine';
 import {
   testPool,
   TEST_PLAYERS,
-  TEST_BUY_IN,
   resetTestBalances,
 } from '../setup';
 import { PokerGameService } from '../../services/poker-game.service';
 import { DatabaseService } from '../../services/database.service';
 import { ProvablyFairService } from '../../services/provably-fair.service';
-import { POKER_CHIP_WEI } from '../../lib/poker-chip-scale';
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -27,10 +25,9 @@ const PLAYER_1 = TEST_PLAYERS[0];
 const PLAYER_2 = TEST_PLAYERS[1];
 const PLAYER_3 = TEST_PLAYERS[2];
 
-const CHIP_WEI = POKER_CHIP_WEI;
 const SB_CHIPS = 1;
 const BB_CHIPS = 2;
-const BUY_IN_WEI = CHIP_WEI * 100n; // 100 chips (50 BB)
+const BUY_IN_CHIPS = 100n; // 50 BB
 
 let dbService: DatabaseService;
 let pfService: ProvablyFairService;
@@ -62,13 +59,13 @@ afterEach(async () => {
 
 async function createAndSeatPlayers(
   players: string[],
-  buyInWei: bigint = BUY_IN_WEI,
+  buyInChips: bigint = BUY_IN_CHIPS,
 ): Promise<string> {
   const tableId = await pokerGameService.createTable(SB_CHIPS, BB_CHIPS, 6);
   createdTableIds.push(tableId);
 
   for (const addr of players) {
-    await pokerGameService.joinTable(tableId, addr, buyInWei.toString());
+    await pokerGameService.joinTable(tableId, addr, buyInChips.toString());
   }
 
   return tableId;
@@ -294,8 +291,8 @@ describe('Poker Table Reconstruction', () => {
 
   describe('reconstruction with all-in', () => {
     it('handles reconstruction when a player is all-in', async () => {
-      // Use minimum valid buy-in (40 BB) for easier all-in
-      const smallBuyIn = CHIP_WEI * BigInt(BB_CHIPS) * 40n; // 40 BB = 80 chips
+      // Minimum valid buy-in (40 BB) = 80 chips for BB=2
+      const smallBuyIn = BigInt(BB_CHIPS) * 40n;
       const tableId = await createAndSeatPlayers([PLAYER_1, PLAYER_2], smallBuyIn);
 
       const handState = await pokerGameService.startHand(tableId);
@@ -306,7 +303,7 @@ describe('Poker Table Reconstruction', () => {
       let actingAddr = state.seats[acting].playerAddress!;
 
       // Go all-in with a raise
-      const allInAmount = smallBuyIn; // bet entire stack
+      const allInAmount = smallBuyIn;
       try {
         await pokerGameService.playerAction(tableId, handId, actingAddr, 'raise', allInAmount.toString());
       } catch {

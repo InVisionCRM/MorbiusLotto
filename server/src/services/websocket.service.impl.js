@@ -23,6 +23,7 @@ const blackjack_router_1 = require("./websocket/blackjack-router");
 const tournament_router_1 = require("./websocket/tournament-router");
 const poker_router_1 = require("./websocket/poker-router");
 const bj_multi_router_1 = require("./websocket/bj-multi-router");
+const poker_chip_wallet_1 = require("./poker-chip-wallet");
 // EIP-712 domain and types for WebSocket authentication
 const AUTH_EIP712_DOMAIN = {
     name: 'MORBlotto Blackjack',
@@ -315,10 +316,17 @@ class WebSocketService {
             else {
                 logger_1.logger.warn('WebSocket connection without player address', { connectionId });
             }
+            let pokerChipBalance = '0';
+            if (claimedAddress) {
+                try {
+                    pokerChipBalance = (await (0, poker_chip_wallet_1.getPokerChipBalance)(this.dbService.getPool(), claimedAddress)).toString();
+                }
+                catch (_a) { /* ignore */ }
+            }
             // Send connection_established so client connects without any auth prompt
             this.sendMessage(ws, {
                 type: 'connection_established',
-                payload: { connectionId, playerAddress: claimedAddress ?? undefined }
+                payload: { connectionId, playerAddress: claimedAddress ?? undefined, pokerChipBalance }
             });
         }
     }
@@ -477,9 +485,14 @@ class WebSocketService {
             catch (error) {
                 logger_1.logger.error('Failed to track active connection after auth', { connectionId: ws.connectionId, playerAddress: normalizedAddress, error });
             }
+            let pokerChipBalance = '0';
+            try {
+                pokerChipBalance = (await (0, poker_chip_wallet_1.getPokerChipBalance)(this.dbService.getPool(), normalizedAddress)).toString();
+            }
+            catch (_b) { /* ignore */ }
             this.sendMessage(ws, {
                 type: 'auth_success',
-                payload: { playerAddress: normalizedAddress },
+                payload: { playerAddress: normalizedAddress, pokerChipBalance },
                 requestId: message.requestId
             });
         }
@@ -894,8 +907,12 @@ class WebSocketService {
             if (!buyInChips || typeof buyInChips !== 'string') {
                 return this.sendError(ws, 'buyInChips required', message.requestId);
             }
+            const buyInNorm = buyInChips.trim();
+            if (!/^[1-9]\d*$/.test(buyInNorm)) {
+                return this.sendError(ws, 'buyInChips must be a positive whole number of chips (integer string)', message.requestId);
+            }
             const pinCode = payload?.pinCode && typeof payload.pinCode === 'string' ? payload.pinCode : undefined;
-            const state = await this.pokerGameService.joinTable(tableId, ws.playerAddress, buyInChips, pinCode);
+            const state = await this.pokerGameService.joinTable(tableId, ws.playerAddress, buyInNorm, pinCode);
             const roomId = `poker:table:${tableId}`;
             if (ws.currentRoom && ws.connectionId) {
                 const prevSet = this.roomToClients.get(ws.currentRoom);
@@ -963,7 +980,11 @@ class WebSocketService {
             if (!amount || typeof amount !== 'string') {
                 return this.sendError(ws, 'amount required', message.requestId);
             }
-            const state = await this.pokerGameService.addChips(tableId, ws.playerAddress, amount);
+            const amountNorm = amount.trim();
+            if (!/^[1-9]\d*$/.test(amountNorm)) {
+                return this.sendError(ws, 'amount must be a positive whole number of chips (integer string)', message.requestId);
+            }
+            const state = await this.pokerGameService.addChips(tableId, ws.playerAddress, amountNorm);
             this.sendMessage(ws, { type: 'poker_table_state', payload: state, requestId: message.requestId });
             const roomId = `poker:table:${tableId}`;
             const broadcastState = await this.pokerGameService.getTableState(tableId, null);

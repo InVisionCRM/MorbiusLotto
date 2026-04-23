@@ -20,11 +20,20 @@ export const TEST_PLAYERS = [
   '0x000000000000000000000000000000000000fade',
 ];
 
-// 10,000,000 MORBIUS (18 decimals) per test player
+// 10,000,000 MORBIUS (18 decimals) per test player — blackjack / on-chain balance
 export const TEST_BALANCE = '10000000000000000000000000';
 
-// Standard buy-in: 1,000 MORBIUS
+/** Wei string — blackjack tournaments and legacy buy-in columns. */
 export const TEST_BUY_IN = BigInt('1000000000000000000000');
+
+/** Paid poker SNG buy-in in whole off-chain chips. */
+export const TEST_POKER_BUY_IN_CHIPS = 1000n;
+
+/** Freeroll guaranteed pool in whole chips. */
+export const TEST_POKER_GUARANTEE_CHIPS = 5000n;
+
+/** Per-player poker chip wallet seed (generous for integration tests). */
+export const TEST_POKER_CHIPS_PER_PLAYER = '1000000000000000000000000';
 
 export let testPool: Pool;
 
@@ -44,7 +53,9 @@ beforeAll(async () => {
 });
 
 afterAll(async () => {
-  // Clean up test players and any tournaments they created
+  await testPool
+    .query(`DELETE FROM player_poker_chips WHERE wallet_address = ANY($1::text[])`, [TEST_PLAYERS])
+    .catch(() => {});
   await testPool.query(
     `DELETE FROM players WHERE wallet_address = ANY($1::text[])`,
     [TEST_PLAYERS]
@@ -80,15 +91,38 @@ export async function resetTestBalances(): Promise<void> {
     UPDATE players SET balance = $1::NUMERIC
     WHERE wallet_address = ANY($2::text[])
   `, [TEST_BALANCE, TEST_PLAYERS]);
+  await resetTestPokerChips();
+}
+
+/** Reset off-chain poker chip wallets for test addresses. */
+export async function resetTestPokerChips(): Promise<void> {
+  await testPool.query(
+    `
+    INSERT INTO player_poker_chips (wallet_address, balance)
+    SELECT unnest($1::text[]), $2::NUMERIC
+    ON CONFLICT (wallet_address) DO UPDATE SET balance = EXCLUDED.balance, updated_at = NOW()
+    `,
+    [TEST_PLAYERS, TEST_POKER_CHIPS_PER_PLAYER],
+  );
 }
 
 /**
- * Get current balance for a test player.
+ * Get current MORBIUS balance for a test player.
  */
 export async function getTestBalance(address: string): Promise<bigint> {
   const r = await testPool.query(
     'SELECT balance FROM players WHERE LOWER(wallet_address) = LOWER($1)',
     [address]
   );
+  return BigInt(r.rows[0]?.balance ?? '0');
+}
+
+/** Off-chain poker chip balance. */
+export async function getTestChipBalance(address: string): Promise<bigint> {
+  const r = await testPool.query(
+    'SELECT balance::text AS balance FROM player_poker_chips WHERE LOWER(wallet_address) = LOWER($1)',
+    [address]
+  );
+  if (r.rows.length === 0) return 0n;
   return BigInt(r.rows[0]?.balance ?? '0');
 }

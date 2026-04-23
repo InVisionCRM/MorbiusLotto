@@ -6,7 +6,7 @@
  * Requires: server/.env with reachable DATABASE_URL
  */
 
-import { testPool, TEST_PLAYERS, resetTestBalances, TEST_BUY_IN } from '../setup';
+import { testPool, TEST_PLAYERS, resetTestBalances, TEST_POKER_BUY_IN_CHIPS } from '../setup';
 import { PokerGameService } from '../../services/poker-game.service';
 import { DatabaseService } from '../../services/database.service';
 import { ProvablyFairService } from '../../services/provably-fair.service';
@@ -42,7 +42,7 @@ async function createTestTournament(): Promise<string> {
   const { tournamentId } = await pokerTournamentService.createPokerTournament({
     creatorAddress: PLAYER_1,
     name: 'Bot tick test SNG',
-    buyInAmount: TEST_BUY_IN,
+    buyInAmount: TEST_POKER_BUY_IN_CHIPS,
     prizeDistributionType: 'winner_takes_all',
     config: SMALL_CONFIG,
     scheduledStartAt: pokerTestScheduledStart(),

@@ -1,3 +1,8 @@
+/**
+ * Poker (cash + SNG): `poker_join_table.buyInChips` and `poker_add_chips.amount` are **positive whole-chip**
+ * decimal strings (not wei). Session messages `auth_success` / `connection_established` may include
+ * `pokerChipBalance` (chip string). Tournament complete payloads use `*Chips` fields — see `lib/poker-tournament-completed.ts`.
+ */
 export const WS_MESSAGE_TYPES = {
   // Auth/session
   authChallenge: 'auth_challenge',
@@ -162,6 +167,12 @@ export const WS_KNOWN_EVENT_TYPES = new Set<string>([
   WS_MESSAGE_TYPES.pokerTableList,
   WS_MESSAGE_TYPES.pokerQuickReaction,
   WS_MESSAGE_TYPES.pokerAvatarEmotion,
+  'poker_tournament_started',
+  'poker_tournament_state',
+  'poker_tournament_blind_level_up',
+  'poker_tournament_player_eliminated',
+  'poker_tournament_completed',
+  'poker_tournament_cancelled',
   'bj_multi_table_state',
   'bj_multi_table_list',
   'bj_multi_tip_notification',

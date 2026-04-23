@@ -287,7 +287,7 @@ export function WalletMenu({
           <GameWalletModal
             isOpen={isGameWalletOpen}
             onClose={() => setIsGameWalletOpen(false)}
-            reserveBalance={reserveBalance}
+            externalBalance={reserveBalance}
           />
         )}
       </Suspense>

@@ -30,17 +30,24 @@ export function usePokerActionsLogic({
   const [queuedPreAction, setQueuedPreAction] = useState<PreActionOption>(null);
 
   const hand = renderedState?.currentHand;
-  const mySeatIndex = renderedState
-    ? renderedState.seats.findIndex((s) => s.playerAddress === effectivePlayerAddress)
-    : -1;
+  const me = effectivePlayerAddress?.toLowerCase() ?? null;
+  const mySeatIndex =
+    renderedState && me
+      ? renderedState.seats.findIndex((s) => s.playerAddress?.toLowerCase() === me)
+      : -1;
   const mySeat = mySeatIndex >= 0 && renderedState ? renderedState.seats[mySeatIndex] : null;
   const canReup = !!mySeat && (!hand || hand.street === 'showdown');
+
+  const actingAddr =
+    hand?.actingPosition != null && renderedState
+      ? renderedState.seats[hand.actingPosition]?.playerAddress?.toLowerCase() ?? null
+      : null;
 
   const canAct =
     !!hand &&
     hand.actingPosition != null &&
     mySeat &&
-    renderedState!.seats[hand.actingPosition]?.playerAddress === effectivePlayerAddress &&
+    actingAddr === me &&
     !mySeat.folded &&
     !!renderedState?.myHoleCards &&
     renderedState.myHoleCards.length > 0;

@@ -13,7 +13,7 @@ interface PokerBottomBarProps {
 
 const SHELL_SELECTOR = '[data-poker-shell]';
 
-/** Poker shell sets padding on the main row from this (measured bar height). */
+/** Poker shell sets padding on the main row from this (measured bar height). Fullscreen overlay only. */
 export const POKER_BOTTOM_RESERVE_VAR = '--poker-bottom-reserve';
 
 export function PokerBottomBar({
@@ -25,7 +25,8 @@ export function PokerBottomBar({
   const rootRef = useRef<HTMLDivElement>(null);
   const show = !!(renderedState && mySeat && actions);
 
-  // Reserve vertical space so the table flex area does not draw under this overlay.
+  // Reserve vertical space on the shell row only for fullscreen (absolute bar over the flex row).
+  // Windowed mode docks the bar in the center column in-flow — no shell reserve.
   useLayoutEffect(() => {
     const shell = document.querySelector(SHELL_SELECTOR) as HTMLElement | null;
     if (!shell) return;
@@ -34,7 +35,7 @@ export function PokerBottomBar({
       shell.style.setProperty(POKER_BOTTOM_RESERVE_VAR, `${Math.max(0, Math.round(px))}px`);
     };
 
-    if (!show) {
+    if (!show || !fullscreen) {
       applyReserve(0);
       return () => {
         shell.style.removeProperty(POKER_BOTTOM_RESERVE_VAR);
@@ -65,22 +66,16 @@ export function PokerBottomBar({
 
   if (!show) return null;
 
-  return (
-    <div
-      ref={rootRef}
-      data-poker-bottom
-      className="pointer-events-auto absolute bottom-0 left-0 right-0 z-40"
-      style={
-        fullscreen
-          ? {
-              background: 'linear-gradient(to top, rgba(0,0,0,0.75) 60%, transparent)',
-            }
-          : {
-              background: 'linear-gradient(to top, rgba(0,0,0,0.45) 0%, transparent 100%)',
-            }
-      }
-    >
-      {fullscreen ? (
+  if (fullscreen) {
+    return (
+      <div
+        ref={rootRef}
+        data-poker-bottom
+        className="pointer-events-auto absolute bottom-0 left-0 right-0 z-40"
+        style={{
+          background: 'linear-gradient(to top, rgba(0,0,0,0.75) 60%, transparent)',
+        }}
+      >
         <div className="px-4 pb-1 pt-2">
           <div
             className="mx-auto w-full max-w-[900px] rounded-sm px-4 py-2.5"
@@ -95,22 +90,22 @@ export function PokerBottomBar({
             {actions}
           </div>
         </div>
-      ) : (
-        <div className="px-2 pt-1 pb-[max(4px,env(safe-area-inset-bottom,0px))] sm:px-4 sm:pt-1.5 sm:pb-[max(6px,env(safe-area-inset-bottom,0px))]">
-          <div
-            className="mx-auto w-full max-w-[min(100%,56rem)] rounded-2xl border border-cyan-500/25 px-2 py-2 sm:px-3 sm:py-2.5"
-            style={{
-              background: 'linear-gradient(325deg, rgba(20, 20, 20, 0.9), rgba(40, 40, 40, 0.78))',
-              boxShadow:
-                'inset 0 3px 6px rgba(0, 0, 0, 0.75), inset 0 -2px 5px rgba(255, 255, 255, 0.06), 0 6px 28px rgba(0, 0, 0, 0.45), 0 0 0 1px rgba(34, 211, 238, 0.08)',
-              backdropFilter: 'blur(16px)',
-              WebkitBackdropFilter: 'blur(16px)',
-            }}
-          >
-            {actions}
-          </div>
-        </div>
-      )}
+      </div>
+    );
+  }
+
+  return (
+    <div
+      ref={rootRef}
+      data-poker-bottom
+      className="relative z-40 w-full shrink-0 pointer-events-auto"
+      style={{
+        background: 'linear-gradient(to top, rgba(0,0,0,0.35) 0%, transparent 100%)',
+      }}
+    >
+      <div className="w-full px-2 pt-1 pb-[max(4px,env(safe-area-inset-bottom,0px))] sm:px-3 sm:pt-1.5 sm:pb-[max(6px,env(safe-area-inset-bottom,0px))]">
+        {actions}
+      </div>
     </div>
   );
 }

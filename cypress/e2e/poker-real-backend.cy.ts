@@ -1,10 +1,10 @@
 import { BlackjackWebSocketClient } from "../../lib/websocket-client";
 import type { PokerTableState } from "../../lib/websocket-client";
 
-const CHIP_WEI = 10n ** 15n; // default server poker chip size
-const SMALL_BLIND = CHIP_WEI.toString();
-const BIG_BLIND = (CHIP_WEI * 2n).toString();
-const MIN_BUYIN = (BigInt(BIG_BLIND) * 40n).toString(); // server min 40bb
+// Blinds and buy-in are whole chip counts (server `poker_create_table` / `poker_join_table`).
+const SMALL_BLIND = '1';
+const BIG_BLIND = '2';
+const MIN_BUYIN = '80'; // 40 BB at BB=2
 
 function getActorAddress(state: PokerTableState): string {
   const actingPos = state.currentHand?.actingPosition;

@@ -53,6 +53,9 @@ interface PokerPopupsProps {
   showAvatarModal: boolean;
   setShowAvatarModal: React.Dispatch<React.SetStateAction<boolean>>;
   onAvatarSaved: () => void;
+
+  /** Opens chip cage (MORBIUS ↔ poker chips); parent closes wallet first. */
+  onOpenPokerChipExchange?: () => void;
 }
 
 export function PokerPopups({
@@ -89,6 +92,7 @@ export function PokerPopups({
   showAvatarModal,
   setShowAvatarModal,
   onAvatarSaved,
+  onOpenPokerChipExchange,
 }: PokerPopupsProps) {
   return (
     <>
@@ -105,6 +109,7 @@ export function PokerPopups({
             if (s) setState(s);
           }}
           enablePokerReup={canReup}
+          onOpenPokerChipExchange={onOpenPokerChipExchange}
         />
       )}
       <PokerStatsModal

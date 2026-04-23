@@ -2,6 +2,9 @@
 
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { BlackjackWebSocketClient } from '@/lib/websocket-client';
+import { normalizePokerTournamentCompletedPayload, type PokerTournamentCompletedPayload } from '@/lib/poker-tournament-completed';
+
+export type { PokerTournamentCompletedPayload, PokerTournamentStandingRow } from '@/lib/poker-tournament-completed';
 
 // ---------------------------------------------------------------------------
 // Types (mirrors poker-tournament.service.ts)
@@ -53,6 +56,10 @@ export interface PokerTournamentState {
   prizeDistributionType: string;
   /** Present when server returns full snapshot (`getTournamentState`). */
   pokerConfig?: PokerTournamentConfig;
+  /** Server `action_timer_seconds`; null = default ~60s turn clock. */
+  actionTimerSeconds?: number | null;
+  /** % of prize pool per rank (1st = index 0). */
+  prizeSplitPercentages?: number[];
 }
 
 export interface PokerTournamentSummary {
@@ -124,7 +131,7 @@ export interface UsePokerTournamentOptions {
   onTournamentStarted?: (tournamentId: string, tableId: string) => void;
   onBlindLevelUp?: (level: number, smallBlind: number, bigBlind: number) => void;
   onPlayerEliminated?: (playerAddress: string, rank: number) => void;
-  onTournamentCompleted?: (winners: { address: string; rank: number; prizeAmount: string }[]) => void;
+  onTournamentCompleted?: (payload: PokerTournamentCompletedPayload) => void;
 }
 
 export interface UsePokerTournamentReturn {
@@ -221,13 +228,11 @@ export function usePokerTournament({
       onEliminatedRef.current?.(payload.playerAddress, payload.finalRank);
     };
 
-    const handleCompleted = (payload: {
-      tournamentId: string; winners: { address: string; rank: number; prizeAmount: string }[];
-    }) => {
+    const handleCompleted = (payload: unknown) => {
       setMyEntryStatus('completed');
       setMyTournamentId(null);
       setMyTableId(null);
-      onCompletedRef.current?.(payload.winners);
+      onCompletedRef.current?.(normalizePokerTournamentCompletedPayload(payload));
     };
 
     const handleCancelled = (payload: { tournamentId: string }) => {
@@ -421,7 +426,7 @@ export interface UsePokerTableTournamentHudOptions {
   tableId: string;
   /** Current poker hand id — when it changes, refresh tournament snapshot (chips + hand #). */
   pokerHandId: string | null | undefined;
-  onTournamentCompleted?: (winners: { address: string; rank: number; prizeAmount: string }[]) => void;
+  onTournamentCompleted?: (payload: PokerTournamentCompletedPayload) => void;
   onTournamentCancelled?: () => void;
   /** Fired on `poker_tournament_blind_level_up` for this table (visual overlay, not sonner). */
   onBlindLevelUp?: (payload: { newLevel: number; smallBlind: number; bigBlind: number }) => void;
@@ -544,13 +549,11 @@ export function usePokerTableTournamentHud({
       });
     };
 
-    const onCompleted = (payload: {
-      tournamentId: string;
-      winners: { address: string; rank: number; prizeAmount: string }[];
-    }) => {
-      if (payload.tournamentId !== tid) return;
+    const onCompleted = (payload: unknown) => {
+      const p = payload && typeof payload === 'object' ? (payload as Record<string, unknown>) : {};
+      if (typeof p.tournamentId !== 'string' || p.tournamentId !== tid) return;
       setState(null);
-      onCompletedRef.current?.(payload.winners ?? []);
+      onCompletedRef.current?.(normalizePokerTournamentCompletedPayload(payload));
     };
 
     const onCancelled = (payload: { tournamentId: string }) => {

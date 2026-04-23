@@ -26,8 +26,6 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { ConfirmActionCard } from '@/components/shared/ConfirmActionCard';
 import { Confetti, type ConfettiRef } from '@/components/ui/confetti';
 
-const MORBIUS_DECIMALS = 18n;
-
 function useFifteenMinuteTimeOptions(): { value: string; label: string }[] {
   return useMemo(() => {
     const out: { value: string; label: string }[] = [];
@@ -68,11 +66,12 @@ function localYyyyMmDd(d: Date): string {
   return `${y}-${mo}-${day}`;
 }
 
-function parseMorbiusInput(val: string): bigint {
+/** Whole off-chain poker chips (integer string). */
+function parsePositiveWholeChips(val: string): bigint {
+  const cleaned = val.replace(/[,\s]/g, '').split('.')[0] ?? '';
+  if (!cleaned || !/^\d+$/.test(cleaned)) return 0n;
   try {
-    const num = parseFloat(val);
-    if (isNaN(num) || num <= 0) return 0n;
-    return BigInt(Math.round(num)) * 10n ** MORBIUS_DECIMALS;
+    return BigInt(cleaned);
   } catch {
     return 0n;
   }
@@ -269,10 +268,10 @@ export function PokerTournamentCreator({ creatorAddress, onClose, onCreate }: Po
 
   const handleCreate = async () => {
     if (!name.trim()) return;
-    const buyWei = isFreeroll ? 0n : parseMorbiusInput(buyIn);
-    const guaranteeWei = isFreeroll ? parseMorbiusInput(guaranteedPool) : 0n;
-    if (!isFreeroll && buyWei <= 0n) return;
-    if (isFreeroll && guaranteeWei <= 0n) return;
+    const buyChips = isFreeroll ? 0n : parsePositiveWholeChips(buyIn);
+    const guaranteeChips = isFreeroll ? parsePositiveWholeChips(guaranteedPool) : 0n;
+    if (!isFreeroll && buyChips <= 0n) return;
+    if (isFreeroll && guaranteeChips <= 0n) return;
     const pinDigits = privatePin.replace(/\D/g, '').slice(0, 12);
     const pinForCreate = isPrivate && pinDigits.length >= 4 ? pinDigits : undefined;
 
@@ -288,10 +287,10 @@ export function PokerTournamentCreator({ creatorAddress, onClose, onCreate }: Po
       const result = await onCreate(
         {
           name: name.trim(),
-          buyInAmount: buyWei.toString(),
+          buyInAmount: buyChips.toString(),
           ...(isFreeroll
             ? {
-                guaranteedPrizePool: guaranteeWei.toString(),
+                guaranteedPrizePool: guaranteeChips.toString(),
                 ...(fundFromPromo ? { guaranteedPrizePoolSource: 'platform_promo' as const } : {}),
               }
             : {}),
@@ -382,8 +381,8 @@ export function PokerTournamentCreator({ creatorAddress, onClose, onCreate }: Po
     || !name.trim()
     || prizeSum !== 100
     || prizePercents.length !== prizeSlotCount
-    || (!isFreeroll && parseMorbiusInput(buyIn) <= 0n)
-    || (isFreeroll && parseMorbiusInput(guaranteedPool) <= 0n);
+    || (!isFreeroll && parsePositiveWholeChips(buyIn) <= 0n)
+    || (isFreeroll && parsePositiveWholeChips(guaranteedPool) <= 0n);
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm">
@@ -460,7 +459,7 @@ export function PokerTournamentCreator({ creatorAddress, onClose, onCreate }: Po
                     onChange={(e) => (isFreeroll ? setGuaranteedPool(e.target.value) : setBuyIn(e.target.value))}
                     className={fieldClass}
                   />
-                  <p className="text-[11px] text-white/40 mt-1">MORBIUS</p>
+                  <p className="text-[11px] text-white/40 mt-1">Off-chain poker chips</p>
                 </div>
                 <div>
                   <label className={labelClass}>Starting stack</label>
@@ -768,7 +767,7 @@ export function PokerTournamentCreator({ creatorAddress, onClose, onCreate }: Po
             subtitle="Double-check before you publish"
             rows={[
               { label: 'Name', value: name || '—', accent: 'white' },
-              { label: isFreeroll ? 'Guaranteed pool' : 'Buy-in', value: `${isFreeroll ? guaranteedPool : buyIn} MORBIUS`, accent: 'yellow' },
+              { label: isFreeroll ? 'Guaranteed pool' : 'Buy-in', value: `${isFreeroll ? guaranteedPool : buyIn} chips`, accent: 'yellow' },
               { label: 'Starting stack', value: `${startingStackPreview.toLocaleString()} chips`, accent: 'green' },
               { label: 'Opening blinds', value: `${level1Blinds.smallBlind} / ${level1Blinds.bigBlind}`, accent: 'cyan' },
               { label: 'Players', value: `${minPlayers}–${maxPlayers}`, accent: 'white' },

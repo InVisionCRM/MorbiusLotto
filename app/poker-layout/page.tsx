@@ -6,17 +6,24 @@ import { PokerActions } from '@/components/poker/PokerActions';
 import {
   SEAT_ANCHOR_RING,
   authoredSeatAnchors,
+  betChipAnchorForDisplaySlot,
+  POKER_POT_ANCHOR,
   ringIndexForDisplaySlot,
 } from '@/lib/poker-seat-layout';
-
-/** Same as `PokerTable` pot anchor (for reference crosshair). */
-const POT_ANCHOR = { fx: 0.5, fy: 0.51 };
 
 export default function PokerLayoutReferencePage() {
   const [seatCount, setSeatCount] = useState(10);
   const [showFullRing, setShowFullRing] = useState(true);
+  const [showBetChips, setShowBetChips] = useState(true);
 
   const anchors = useMemo(() => authoredSeatAnchors(seatCount), [seatCount]);
+  const chipAnchors = useMemo(
+    () =>
+      Array.from({ length: seatCount }, (_, displaySlot) =>
+        betChipAnchorForDisplaySlot(seatCount, displaySlot),
+      ),
+    [seatCount],
+  );
 
   return (
     <div
@@ -75,6 +82,15 @@ export default function PokerLayoutReferencePage() {
             />
             Show all 10 ring points (faint)
           </label>
+          <label className="flex items-center gap-2 text-sm text-slate-400 cursor-pointer select-none">
+            <input
+              type="checkbox"
+              checked={showBetChips}
+              onChange={(e) => setShowBetChips(e.target.checked)}
+              className="rounded border-slate-600 bg-slate-800 text-amber-500 focus:ring-amber-500/40"
+            />
+            Show bet chip anchors (C0…)
+          </label>
         </div>
 
         {/* Table root — same conceptual box as PokerTable `absolute inset-0` */}
@@ -105,9 +121,28 @@ export default function PokerLayoutReferencePage() {
           {/* Pot */}
           <div
             className="absolute z-10 size-4 rounded-full border-2 border-amber-400/50 bg-amber-400/20 -translate-x-1/2 -translate-y-1/2"
-            style={{ left: `${POT_ANCHOR.fx * 100}%`, top: `${POT_ANCHOR.fy * 100}%` }}
-            title="Pot anchor"
+            style={{ left: `${POKER_POT_ANCHOR.fx * 100}%`, top: `${POKER_POT_ANCHOR.fy * 100}%` }}
+            title="Pot anchor (POKER_POT_ANCHOR)"
           />
+
+          {/* Bet stacks — same as PokerTable (`CHIP_ANCHOR_RING` via betChipAnchorForDisplaySlot) */}
+          {showBetChips &&
+            chipAnchors.map((p, displaySlot) => (
+              <div
+                key={`chip-${displaySlot}`}
+                className="absolute z-[15] flex flex-col items-center -translate-x-1/2 -translate-y-1/2 pointer-events-none"
+                style={{ left: `${p.fx * 100}%`, top: `${p.fy * 100}%` }}
+                title={`Bet stack display slot ${displaySlot} (betChipAnchorForDisplaySlot)`}
+              >
+                <div className="flex size-3.5 items-center justify-center rounded-sm border border-amber-300/90 bg-amber-500/85 shadow-md rotate-45">
+                  <span className="sr-only">Chip {displaySlot}</span>
+                </div>
+                <span className="mt-1.5 text-[9px] font-mono font-semibold text-amber-200/90">C{displaySlot}</span>
+                <span className="text-[8px] font-mono text-slate-500 tabular-nums">
+                  {p.fx.toFixed(2)},{p.fy.toFixed(2)}
+                </span>
+              </div>
+            ))}
 
           {/* Full ring (optional) */}
           {showFullRing &&
@@ -158,6 +193,13 @@ export default function PokerLayoutReferencePage() {
             <code className="text-cyan-300/80">SEAT_ANCHOR_RING</code> (0–9).
           </p>
           <p>
+            <strong className="text-amber-200">C#</strong> = bet stack anchor for that display slot (
+            <code className="text-amber-200/90">betChipAnchorForDisplaySlot</code>
+            ), sampled from the hand-authored{' '}
+            <code className="text-amber-200/90">CHIP_ANCHOR_RING</code> (0–9) with the same{' '}
+            <code className="text-amber-200/90">ringIndexForDisplaySlot</code> mapping as seats.
+          </p>
+          <p>
             Edit coordinates in <code className="text-cyan-300/80">lib/poker-seat-layout.ts</code>; reload this
             page and the live table to compare.
           </p>
@@ -173,9 +215,9 @@ export default function PokerLayoutReferencePage() {
           <p className="text-xs uppercase tracking-widest text-cyan-400/80">UI</p>
           <h2 className="text-lg font-semibold text-slate-100">Betting panel (live component)</h2>
           <p className="text-sm text-slate-400">
-            Same <code className="text-cyan-300/90">PokerActions</code> as the table, centered at 75% of this
-            full-width strip. Sample last-action line + mock chips (facing a bet, valid raise); tweak props to
-            preview other states.
+            Same <code className="text-cyan-300/90">PokerActions</code> as the live table (full width of this
+            strip — on <code className="text-cyan-300/90">/poker/[tableId]</code> the bar sits in the center column
+            between rails). Sample last-action line + mock chips; tweak props to preview other states.
           </p>
         </div>
         <PokerActions

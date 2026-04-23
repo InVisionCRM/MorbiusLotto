@@ -27,3 +27,11 @@ export function getCashBuyInBoundsWeiFromChips(bigBlindChips: bigint): { minWei:
     maxWei: bbWei * BigInt(POKER_CASH_MAX_BUY_IN_BB),
   };
 }
+
+/** Cash table buy-in limits as whole chip counts (same rules as server `getCashBuyInBoundsChips`). */
+export function getCashBuyInBoundsChips(bigBlindChips: bigint): { minChips: bigint; maxChips: bigint } {
+  return {
+    minChips: bigBlindChips * BigInt(POKER_CASH_MIN_BUY_IN_BB),
+    maxChips: bigBlindChips * BigInt(POKER_CASH_MAX_BUY_IN_BB),
+  };
+}

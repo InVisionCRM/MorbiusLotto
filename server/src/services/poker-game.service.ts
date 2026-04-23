@@ -5,14 +5,8 @@ import { DatabaseService } from './database.service';
 import { ProvablyFairService } from './provably-fair.service';
 import { CosmeticsService } from './cosmetics.service';
 import { randomPlaceholderConfig } from '../lib/cosmetics-catalog';
-import {
-  POKER_CHIP_WEI,
-  chipsToWei,
-  getPokerRakeWallet,
-  splitBigIntEqually,
-  totalPotChips,
-  weiToChips,
-} from '../lib/poker-chip-scale';
+import { getPokerRakeWallet, splitBigIntEqually, totalPotChips } from '../lib/poker-chip-scale';
+import { applyPokerChipDelta } from './poker-chip-wallet';
 import {
   getCashBuyInBoundsChips,
   POKER_CASH_MAX_BUY_IN_BB,
@@ -90,6 +84,9 @@ export interface PokerTableState {
   /** Set when `poker_tables.tournament_id` is non-null (SNG / scheduled poker tournament). */
   tournamentId?: string | null;
 }
+
+/** Consecutive turn-timer auto-folds before cash kick / tournament elimination-AFK (voluntary action resets to 0). */
+const POKER_AFK_CONSECUTIVE_TIMEOUT_KICK = 3;
 
 // ---------------------------------------------------------------------------
 // Card encoding helpers
@@ -176,6 +173,20 @@ export class PokerGameService {
    */
   setTournamentUnderfilledRecovery(cb: (tableId: string) => Promise<void>): void {
     this.tournamentUnderfilledRecovery = cb;
+  }
+
+  /**
+   * After N consecutive turn-timer auto-folds on a tournament table, bust the player (same as chip elimination).
+   * Wired at runtime from PokerTournamentService.
+   */
+  private tournamentTimeoutEliminationCallback:
+    | ((tableId: string, playerAddress: string) => Promise<void>)
+    | null = null;
+
+  setTournamentTimeoutEliminationCallback(
+    cb: ((tableId: string, playerAddress: string) => Promise<void>) | null
+  ): void {
+    this.tournamentTimeoutEliminationCallback = cb;
   }
 
   private getPool(): Pool {
@@ -342,14 +353,15 @@ export class PokerGameService {
       );
       for (const row of seats.rows) {
         const stackChips = Number(row.stack ?? 0);
-        const stackWei = chipsToWei(stackChips);
-        if (stackWei > 0n && row.player_address) {
-          await client.query(
-            `INSERT INTO players (wallet_address, balance) VALUES ($1, $2::NUMERIC)
-             ON CONFLICT (wallet_address) DO UPDATE SET balance = players.balance + $2::NUMERIC, last_seen = NOW()`,
-            [row.player_address.toLowerCase(), stackWei.toString()]
+        if (stackChips > 0 && row.player_address) {
+          await applyPokerChipDelta(
+            client,
+            row.player_address,
+            BigInt(stackChips),
+            'cash_admin_return',
+            { type: 'poker_table', id: tableId },
           );
-          logger.info('Poker admin delete table: credited stack', { tableId, playerAddress: row.player_address, stackChips, creditedWei: stackWei.toString() });
+          logger.info('Poker admin delete table: credited chips', { tableId, playerAddress: row.player_address, stackChips });
         }
       }
 
@@ -367,14 +379,17 @@ export class PokerGameService {
   // Seat management
   // ---------------------------------------------------------------------------
 
-  async joinTable(tableId: string, playerAddress: string, buyInWei: string, pinCode?: string): Promise<PokerTableState> {
-    return this.withTableLock(tableId, () => this._joinTable(tableId, playerAddress, buyInWei, pinCode));
+  /** `buyInChips` is a stringified whole-chip count (not MORBIUS wei). */
+  async joinTable(tableId: string, playerAddress: string, buyInChips: string, pinCode?: string): Promise<PokerTableState> {
+    return this.withTableLock(tableId, () => this._joinTable(tableId, playerAddress, buyInChips, pinCode));
   }
 
-  private async _joinTable(tableId: string, playerAddress: string, buyInWei: string, pinCode?: string): Promise<PokerTableState> {
+  private async _joinTable(tableId: string, playerAddress: string, buyInChipsRaw: string, pinCode?: string): Promise<PokerTableState> {
     const normalized = this.normalizeAddress(playerAddress);
-    const buyInWeiBig = BigInt(buyInWei);
-    const buyInChips = weiToChips(buyInWeiBig, 'Buy-in');
+    const buyInChips = BigInt(buyInChipsRaw);
+    if (buyInChips <= 0n) throw new Error('Buy-in must be a positive whole chip amount');
+    if (buyInChips > BigInt(Number.MAX_SAFE_INTEGER)) throw new Error('Buy-in too large');
+    const buyInChipsNum = Number(buyInChips);
 
     const position = await this.dbService.withTransaction(async (client) => {
       // Lock the player row first — serializes concurrent join attempts by the same wallet
@@ -414,7 +429,7 @@ export class PokerGameService {
       }
       const bbChips = Number(tblRow.big_blind ?? 0);
       const { minChips, maxChips } = getCashBuyInBoundsChips(bbChips);
-      if (buyInChips < minChips || buyInChips > maxChips) {
+      if (buyInChipsNum < minChips || buyInChipsNum > maxChips) {
         throw new Error(
           `Buy-in must be between ${POKER_CASH_MIN_BUY_IN_BB} and ${POKER_CASH_MAX_BUY_IN_BB} big blinds (min ${minChips} chips, max ${maxChips} chips).`
         );
@@ -439,14 +454,7 @@ export class PokerGameService {
       );
       if (Number(seatCount.rows[0].c) >= maxSeats) throw new Error('Table is full');
 
-      // Deduct balance (wei) atomically within the same transaction
-      const deductResult = await client.query(
-        `UPDATE players SET balance = balance - $2::NUMERIC
-         WHERE LOWER(wallet_address) = LOWER($1) AND balance >= $2::NUMERIC
-         RETURNING balance`,
-        [normalized, buyInWeiBig.toString()]
-      );
-      if (deductResult.rows.length === 0) throw new Error('Insufficient balance');
+      await applyPokerChipDelta(client, normalized, -buyInChips, 'cash_join', { type: 'poker_table', id: tableId });
 
       const positions = await client.query(
         'SELECT position FROM poker_seats WHERE table_id = $1',
@@ -459,7 +467,7 @@ export class PokerGameService {
       await client.query(
         `INSERT INTO poker_seats (table_id, position, player_address, stack, status)
          VALUES ($1, $2, $3, $4::NUMERIC, 'active')`,
-        [tableId, seatPosition, normalized, String(buyInChips)]
+        [tableId, seatPosition, normalized, String(buyInChipsNum)]
       );
       return seatPosition;
     });
@@ -469,16 +477,16 @@ export class PokerGameService {
     if (activeTable && !activeTable.currentRound) {
       try {
         if (position === 0) {
-          activeTable.sitDown(normalized, buyInChips);
+          activeTable.sitDown(normalized, buyInChipsNum);
         } else {
-          activeTable.sitDown(normalized, buyInChips, position);
+          activeTable.sitDown(normalized, buyInChipsNum, position);
         }
       } catch {
         // If sitDown fails (e.g. already seated from previous run), ignore
       }
     }
 
-    logger.info('Poker join', { tableId, playerAddress: normalized, buyInChips, position });
+    logger.info('Poker join', { tableId, playerAddress: normalized, buyInChips: buyInChips.toString(), position });
 
     // Auto-start if 2+ players ready
     const pool = this.getPool();
@@ -544,7 +552,7 @@ export class PokerGameService {
     }
 
     // Atomically remove seat and credit balance so a failed credit cannot strand chips.
-    const creditedWei = await this.dbService.withTransaction(async (client) => {
+    const creditedChips = await this.dbService.withTransaction(async (client) => {
       const del = await client.query(
         `DELETE FROM poker_seats WHERE table_id = $1 AND LOWER(player_address) = LOWER($2) RETURNING stack`,
         [tableId, normalized]
@@ -553,18 +561,19 @@ export class PokerGameService {
         throw new Error('Not seated at this table');
       }
       const stackChips = Number(del.rows[0].stack ?? 0);
-      const stackWei = chipsToWei(stackChips);
-      if (stackWei > 0n) {
-        await client.query(
-          `INSERT INTO players (wallet_address, balance) VALUES ($1, $2::NUMERIC)
-           ON CONFLICT (wallet_address) DO UPDATE SET balance = players.balance + $2::NUMERIC, last_seen = NOW()`,
-          [normalized, stackWei.toString()]
+      if (stackChips > 0) {
+        await applyPokerChipDelta(
+          client,
+          normalized,
+          BigInt(stackChips),
+          'cash_leave',
+          { type: 'poker_table', id: tableId },
         );
       }
-      return stackWei;
+      return BigInt(stackChips);
     });
 
-    logger.info('Poker leave', { tableId, playerAddress: normalized, creditedWei: creditedWei.toString() });
+    logger.info('Poker leave', { tableId, playerAddress: normalized, creditedChips: creditedChips.toString() });
 
     return this.getTableState(tableId, null);
   }
@@ -621,27 +630,22 @@ export class PokerGameService {
     }
   }
 
-  async addChips(tableId: string, playerAddress: string, amountWei: string): Promise<PokerTableState> {
-    return this.withTableLock(tableId, () => this._addChips(tableId, playerAddress, amountWei));
+  /** `amountChips` is a stringified whole-chip count to add from the player poker chip wallet. */
+  async addChips(tableId: string, playerAddress: string, amountChips: string): Promise<PokerTableState> {
+    return this.withTableLock(tableId, () => this._addChips(tableId, playerAddress, amountChips));
   }
 
-  private async _addChips(_tableId: string, _playerAddress: string, _amountWei: string): Promise<PokerTableState> {
+  private async _addChips(_tableId: string, _playerAddress: string, _amountChipsRaw: string): Promise<PokerTableState> {
     const tableId = _tableId;
     const playerAddress = this.normalizeAddress(_playerAddress);
-    const amountWei = BigInt(_amountWei);
-    if (amountWei <= 0n) throw new Error('Re-up amount must be greater than zero');
+    const addChips = BigInt(_amountChipsRaw);
+    if (addChips <= 0n) throw new Error('Re-up amount must be greater than zero');
+    if (addChips > BigInt(Number.MAX_SAFE_INTEGER)) throw new Error('Re-up too large');
+    const amountChips = Number(addChips);
 
     if (await this.isTournamentTable(tableId)) throw new Error('Tournament tables do not support re-ups');
 
-    const amountChips = weiToChips(amountWei, 'Re-up');
-
     await this.dbService.withTransaction(async (client) => {
-      const playerLock = await client.query(
-        `SELECT id FROM players WHERE LOWER(wallet_address) = LOWER($1) FOR UPDATE`,
-        [playerAddress]
-      );
-      if (playerLock.rows.length === 0) throw new Error('Player not found');
-
       const seatResult = await client.query(
         `SELECT s.stack, t.big_blind
          FROM poker_seats s
@@ -674,13 +678,7 @@ export class PokerGameService {
         throw new Error(`Stack cannot exceed ${POKER_CASH_MAX_BUY_IN_BB} big blinds after a re-up.`);
       }
 
-      const deductResult = await client.query(
-        `UPDATE players SET balance = balance - $2::NUMERIC
-         WHERE LOWER(wallet_address) = LOWER($1) AND balance >= $2::NUMERIC
-         RETURNING balance`,
-        [playerAddress, amountWei.toString()]
-      );
-      if (deductResult.rows.length === 0) throw new Error('Insufficient balance');
+      await applyPokerChipDelta(client, playerAddress, -addChips, 'cash_reup', { type: 'poker_table', id: tableId });
 
       await client.query(
         `UPDATE poker_seats
@@ -1515,12 +1513,12 @@ export class PokerGameService {
       );
     }
 
-    // Credit rake wallet in wei
     const rakeWallet = getPokerRakeWallet();
     if (totalRakeChips > 0n && !isTournament) {
-      const rakeWei = totalRakeChips * POKER_CHIP_WEI;
-      await this.dbService.addBalanceToAddress(rakeWallet, rakeWei);
-      logger.info('Poker rake collected', { handId, tableId, rakeChips: totalRakeChips.toString(), rakeWei: rakeWei.toString(), wallet: rakeWallet });
+      await this.dbService.withTransaction(async (c) => {
+        await applyPokerChipDelta(c, rakeWallet, totalRakeChips, 'rake', { type: 'poker_hand', id: handId });
+      });
+      logger.info('Poker rake collected (chips)', { handId, tableId, rakeChips: totalRakeChips.toString(), wallet: rakeWallet });
     }
 
     // Get hole cards from DB for hand names
@@ -1662,20 +1660,25 @@ export class PokerGameService {
             );
             const consecutiveTimeouts = Number(timeoutResult.rows[0]?.consecutive_timeouts ?? 0);
 
-            if (consecutiveTimeouts >= 6) {
+            if (consecutiveTimeouts >= POKER_AFK_CONSECUTIVE_TIMEOUT_KICK) {
               if (isTournament) {
-                // Sit them out — they bleed blinds and bust naturally (no kick; they paid a buy-in)
-                await pool.query(
-                  `UPDATE poker_seats SET status = 'sitting_out', consecutive_timeouts = 0
-                   WHERE table_id = $1 AND player_address = $2`,
-                  [row.table_id, actingAddr]
-                );
-                this.notifyCallback?.(`poker:table:${row.table_id}`, 'poker_player_sitting_out', {
-                  tableId: row.table_id,
-                  playerAddress: actingAddr,
-                  reason: 'afk',
-                });
-                logger.info('Tournament AFK player marked sitting_out', { tableId: row.table_id, player: actingAddr });
+                if (this.tournamentTimeoutEliminationCallback) {
+                  try {
+                    await this.tournamentTimeoutEliminationCallback(row.table_id, actingAddr);
+                    await this.broadcastState(row.table_id);
+                  } catch (elimErr) {
+                    logger.error('Tournament AFK timeout elimination failed', {
+                      tableId: row.table_id,
+                      player: actingAddr,
+                      error: elimErr,
+                    });
+                  }
+                } else {
+                  logger.warn('Tournament timeout elimination callback not set; AFK player not eliminated', {
+                    tableId: row.table_id,
+                    player: actingAddr,
+                  });
+                }
               } else {
                 // Cash game — kick and return stack (call _leaveTable directly; we already hold the lock)
                 await this._leaveTable(row.table_id, actingAddr);

@@ -261,32 +261,32 @@ const POKER_BOT_SKIP_DB = ['1', 'true', 'yes'].includes(
   String(process.env.POKER_BOT_SKIP_DB ?? '').toLowerCase(),
 );
 
-function computeBuyIn(bigBlindWei: bigint): bigint {
+function computeBuyInChips(bigBlindChips: bigint): bigint {
   const envBuyIn = process.env.POKER_BOT_BUY_IN;
   if (envBuyIn) {
     const raw = BigInt(envBuyIn);
-    const minWei = bigBlindWei * BigInt(POKER_CASH_MIN_BUY_IN_BB);
-    const maxWei = bigBlindWei * BigInt(POKER_CASH_MAX_BUY_IN_BB);
-    if (raw >= minWei && raw <= maxWei) return raw;
-    console.log(`[Bot] POKER_BOT_BUY_IN (${raw}) out of bounds [${minWei}..${maxWei}], using ${DEFAULT_BUY_IN_BB}x BB`);
+    const minChips = bigBlindChips * BigInt(POKER_CASH_MIN_BUY_IN_BB);
+    const maxChips = bigBlindChips * BigInt(POKER_CASH_MAX_BUY_IN_BB);
+    if (raw >= minChips && raw <= maxChips) return raw;
+    console.log(`[Bot] POKER_BOT_BUY_IN (${raw}) out of bounds [${minChips}..${maxChips}], using ${DEFAULT_BUY_IN_BB}x BB`);
   }
-  return bigBlindWei * BigInt(DEFAULT_BUY_IN_BB);
+  return bigBlindChips * BigInt(DEFAULT_BUY_IN_BB);
 }
 
 /**
- * Ensures each bot wallet has a `players` row and balance >= minBalanceWei (same logic for cash and tournaments).
- * Does nothing if POKER_BOT_SKIP_DB is set (you must already have rows + funds).
+ * Ensures each bot has `player_poker_chips.balance` >= minChips (cash join / tournament buy-in debit).
+ * Also ensures `players` row + display name for WS auth. Skips if POKER_BOT_SKIP_DB is set.
  */
-async function ensureBotBalance(addresses: string[], minBalanceWei: bigint): Promise<void> {
+async function ensureBotChipBalances(addresses: string[], minChips: bigint): Promise<void> {
   if (POKER_BOT_SKIP_DB) {
     console.log(
-      '[Bot] POKER_BOT_SKIP_DB is set — skipping DB provisioning. Confirm players rows and balances yourself.',
+      '[Bot] POKER_BOT_SKIP_DB is set — skipping DB provisioning. Confirm player_poker_chips + players yourself.',
     );
     return;
   }
   if (!DATABASE_URL) {
     throw new Error(
-      'DATABASE_URL is required so bots get a players row and enough balance to join (cash or tournament). ' +
+      'DATABASE_URL is required so bots get poker chip balances. ' +
         'Point it at the same Postgres as the server (e.g. server/.env). ' +
         'If you already seeded manually, set POKER_BOT_SKIP_DB=1.',
     );
@@ -300,10 +300,17 @@ async function ensureBotBalance(addresses: string[], minBalanceWei: bigint): Pro
       const normalized = addr.toLowerCase();
       await pool.query(
         `INSERT INTO players (wallet_address, balance)
+         VALUES ($1, '0')
+         ON CONFLICT (wallet_address) DO UPDATE SET last_seen = NOW()`,
+        [normalized],
+      );
+
+      await pool.query(
+        `INSERT INTO player_poker_chips (wallet_address, balance)
          VALUES ($1, $2::NUMERIC)
          ON CONFLICT (wallet_address)
-         DO UPDATE SET balance = GREATEST(players.balance, $2::NUMERIC), last_seen = NOW()`,
-        [normalized, minBalanceWei.toString()],
+         DO UPDATE SET balance = GREATEST(player_poker_chips.balance, EXCLUDED.balance), updated_at = NOW()`,
+        [normalized, minChips.toString()],
       );
 
       const fallbackDisplayName = `Bot ${normalized.slice(2, 6)}${normalized.slice(-2)}`.toUpperCase();
@@ -319,7 +326,7 @@ async function ensureBotBalance(addresses: string[], minBalanceWei: bigint): Pro
         [normalized, fallbackDisplayName, JSON.stringify(avatarConfig)],
       );
 
-      console.log(`[Bot] Ensured players row + balance >= ${minBalanceWei.toString()} wei for ${normalized}`);
+      console.log(`[Bot] Ensured poker chips >= ${minChips.toString()} for ${normalized}`);
     }
   } finally {
     await pool.end();
@@ -384,7 +391,7 @@ async function discoverOrCreateTable(): Promise<string> {
 const TOURNAMENT_TABLE_WAIT_MS = 60 * 60 * 1000;
 const TOURNAMENT_POLL_MS = 2000;
 
-async function getTournamentBuyInWei(tournamentId: string): Promise<bigint> {
+async function getTournamentBuyInChips(tournamentId: string): Promise<bigint> {
   if (BOT_ADDRESSES.length === 0) throw new Error('No bot addresses configured');
   const scoutAddr = BOT_ADDRESSES[0];
   const ws = await createWsClient(scoutAddr);
@@ -556,7 +563,7 @@ async function runBotTournament(
   await runBotPlayLoop(ws, address, tableId, tag);
 }
 
-async function runBot(address: string, tableId: string, buyInWei: bigint): Promise<void> {
+async function runBot(address: string, tableId: string, buyInChips: bigint): Promise<void> {
   const tag = `[Bot ${address.slice(0, 8)}]`;
   console.log(`${tag} Connecting...`);
 
@@ -565,8 +572,8 @@ async function runBot(address: string, tableId: string, buyInWei: bigint): Promi
   console.log(`${tag} Authenticated.`);
 
   try {
-    await sendRequest(ws, 'poker_join_table', { tableId, buyInChips: buyInWei.toString() });
-    console.log(`${tag} Joined table ${tableId} with buy-in ${buyInWei.toString()} wei.`);
+    await sendRequest(ws, 'poker_join_table', { tableId, buyInChips: buyInChips.toString() });
+    console.log(`${tag} Joined table ${tableId} with buy-in ${buyInChips.toString()} chips.`);
   } catch (err: any) {
     if (err.message?.includes('Already seated')) {
       console.log(`${tag} Already seated, continuing.`);
@@ -607,15 +614,16 @@ async function main() {
   if (tournamentId) {
     const numBots = numBotsFromArg(a);
     const botAddrs = BOT_ADDRESSES.slice(0, numBots);
-    const buyInWei = await getTournamentBuyInWei(tournamentId);
+    const buyInChips = await getTournamentBuyInChips(tournamentId);
 
     console.log(`\n=== Poker Bot Launcher (tournament) ===`);
     console.log(`Tournament: ${tournamentId}`);
     console.log(`Bots: ${numBots}`);
-    console.log(`Buy-in (MORBIUS / table currency): ${buyInWei.toString()} wei`);
+    console.log(`Buy-in (poker chips): ${buyInChips.toString()}`);
     console.log(`WS URL: ${WS_URL}\n`);
 
-    await ensureBotBalance(botAddrs, buyInWei > 0n ? buyInWei * 10n : 0n);
+    const minChipFloor = buyInChips > 0n ? buyInChips * 20n : 1_000_000n;
+    await ensureBotChipBalances(botAddrs, minChipFloor);
 
     const promises = botAddrs.map((addr) =>
       runBotTournament(addr, tournamentId!, pinCode).catch((err) => {
@@ -656,24 +664,24 @@ async function main() {
   scoutWs.close();
   const tables = (listPayload?.tables ?? []) as TableSummary[];
   const targetTable = tables.find((t) => t.id === tableId);
-  const bigBlindWei = BigInt(targetTable?.bigBlind ?? '0');
-  if (bigBlindWei <= 0n) {
+  const bigBlindChips = BigInt(targetTable?.bigBlind ?? '0');
+  if (bigBlindChips <= 0n) {
     throw new Error(`Could not determine big blind for table ${tableId}`);
   }
-  const buyInWei = computeBuyIn(bigBlindWei);
+  const buyInChips = computeBuyInChips(bigBlindChips);
 
   console.log(`\n=== Poker Bot Launcher ===`);
   console.log(`Table: ${tableId}`);
   console.log(`Bots: ${numBots}`);
   console.log(`Address pool: ${BOT_ADDRESSES.length} configured`);
-  console.log(`Big blind: ${bigBlindWei.toString()} wei`);
-  console.log(`Buy-in: ${buyInWei.toString()} wei (${Number(buyInWei / bigBlindWei)} BB)`);
+  console.log(`Big blind: ${bigBlindChips.toString()} chips`);
+  console.log(`Buy-in: ${buyInChips.toString()} chips (${Number(buyInChips / bigBlindChips)} BB)`);
   console.log(`WS URL: ${WS_URL}\n`);
 
-  await ensureBotBalance(botAddrs, buyInWei * 10n);
+  await ensureBotChipBalances(botAddrs, buyInChips * 20n);
 
   const promises = botAddrs.map((addr) =>
-    runBot(addr, tableId, buyInWei).catch((err) => {
+    runBot(addr, tableId, buyInChips).catch((err) => {
       console.error(`[Bot ${addr.slice(0, 8)}] Fatal: ${formatError(err)}`);
     }),
   );

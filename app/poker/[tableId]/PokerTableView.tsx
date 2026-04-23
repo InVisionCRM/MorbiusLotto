@@ -50,8 +50,11 @@ interface PokerTableViewProps {
    still constraining it in ultra-wide desktop windows. The landscape CSS
    overrides in globals.css further relax this for phones. Do NOT reduce
    the multiplier below ~2.8 or landscape mobile will break again. */
+/** Extra vertical room so max table width tracks the padded column (keeps aspect sane). */
+const POKER_VIEW_VERTICAL_CHROME_PX = 140;
+
 const POKER_MAIN_PANEL_STYLE: React.CSSProperties = {
-  maxWidth: 'min(90vw, calc((100dvh - 100px) * 2.50))',
+  maxWidth: `min(90vw, calc((100dvh - ${POKER_VIEW_VERTICAL_CHROME_PX}px) * 2.50))`,
   marginLeft: 'auto',
   marginRight: 'auto',
   width: '100%',
@@ -194,6 +197,7 @@ export function PokerTableView({
     // reference size, shrunk down via transform: scale.
     return (
       <div
+        className="py-3 sm:py-5"
         style={{
           flex: '1 1 0',
           minHeight: 0,
@@ -231,10 +235,10 @@ export function PokerTableView({
     );
   }
 
-  // Desktop / tablet: existing layout unchanged
+  // Desktop / tablet: outer vertical padding insets the felt from the column edges.
   return (
     <div
-      className="flex-1 relative"
+      className={`flex-1 relative min-h-0 ${fullscreen ? 'py-2 md:py-3' : 'py-4 md:py-8'}`}
       style={{
         minHeight: 0,
         ...(fullscreen ? { width: '100%' } : POKER_MAIN_PANEL_STYLE),

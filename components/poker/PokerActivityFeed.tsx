@@ -163,7 +163,7 @@ export interface PokerActivityFeedProps {
 /** Desktop fixed panel heights: expanded vs collapsed (expanded cap is half of prior max). */
 const DESKTOP_ACTIVITY_HEIGHT_EXPANDED = 'min(260px, calc((100dvh - 112px) / 2))';
 const DESKTOP_ACTIVITY_HEIGHT_COLLAPSED = 'min(180px, calc((100dvh - 112px) * 0.33))';
-const POKER_AFK_TIMEOUTS_BEFORE_KICK = 6;
+const POKER_AFK_TIMEOUTS_BEFORE_KICK = 3;
 
 export function PokerActivityFeed({
   wsClient,

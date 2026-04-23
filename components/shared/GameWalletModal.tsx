@@ -32,6 +32,7 @@ import { ReportModal } from '@/components/shared/ReportModal';
 import { toast } from 'sonner';
 import type { BlackjackWebSocketClient, PokerTableState } from '@/lib/websocket-client';
 import { HOW_TO_DEPOSIT_VIDEO_URL, HOW_TO_WITHDRAW_VIDEO_URL } from '@/lib/how-to-video-urls';
+import { formatChips, parseChipInput } from '@/lib/format-poker-chips';
 
 // ── Logos ──────────────────────────────────────────────────────────────────
 
@@ -274,6 +275,7 @@ export function GameWalletModal({
   const [depositAmount, setDepositAmount] = useState('');
   const [withdrawAmount, setWithdrawAmount] = useState('');
   const [reupAmount, setReupAmount] = useState('');
+  const [pokerChipBalanceStr, setPokerChipBalanceStr] = useState('0');
 
   // ── Phase states ───────────────────────────────────────────────────────
   const [depositPhase, setDepositPhase] = useState<DepositPhase>('idle');
@@ -924,26 +926,64 @@ export function GameWalletModal({
     }
   };
 
-  // ── Re-up ──────────────────────────────────────────────────────────────
+  // ── Re-up (poker chip wallet → table stack) ─────────────────────────────
+  const atTable = !!wsClient && !!tableId;
+  const showReupTab = atTable && enablePokerReup;
+
+  useEffect(() => {
+    if (!isOpen || !showReupTab || !address || !serverUrl) return;
+    if (tab !== 'reup') return;
+    fetch(`${serverUrl}/api/poker/chips/balance?address=${encodeURIComponent(address.toLowerCase())}`)
+      .then((r) => (r.ok ? r.json() : null))
+      .then((data) => {
+        if (data?.balance != null) setPokerChipBalanceStr(String(data.balance));
+      })
+      .catch(() => {});
+  }, [isOpen, showReupTab, tab, address, serverUrl]);
+
+  const maxReupChipsNum = (() => {
+    try {
+      const b = BigInt(pokerChipBalanceStr || '0');
+      if (b > BigInt(Number.MAX_SAFE_INTEGER)) return Number.MAX_SAFE_INTEGER;
+      return Number(b);
+    } catch {
+      return 0;
+    }
+  })();
+
   const handleReup = async () => {
     if (!wsClient || !tableId || !reupAmount) return;
-    let amountWei: bigint;
+    const chipsStr = parseChipInput(reupAmount);
+    if (chipsStr === '0') {
+      toast.error('Enter a whole number of chips');
+      return;
+    }
+    let amountChips: bigint;
     try {
-      amountWei = parseEther(reupAmount);
+      amountChips = BigInt(chipsStr);
     } catch {
       toast.error('Invalid amount');
       return;
     }
-    if (displayBalance != null && amountWei > displayBalance) {
-      toast.error('Insufficient balance — deposit first');
+    const walletChips = BigInt(pokerChipBalanceStr || '0');
+    if (amountChips > walletChips) {
+      toast.error('Insufficient poker chips — buy chips from your MORBIUS balance first');
       return;
     }
     setIsReupPending(true);
     try {
-      const newState = await wsClient.pokerAddChips(tableId, amountWei.toString());
+      const newState = await wsClient.pokerAddChips(tableId, chipsStr);
       if (newState && onReupSuccess) onReupSuccess(newState);
-      toast.success(`Added ${reupAmount} MORBIUS to your stack`);
+      toast.success(`Added ${formatChips(chipsStr)} chips to your stack`);
       setReupAmount('');
+      setPokerChipBalanceStr((prev) => {
+        try {
+          const next = walletChips - amountChips;
+          return next < 0n ? '0' : next.toString();
+        } catch {
+          return prev;
+        }
+      });
       if (isSelfManaged) fetchBalance();
     } catch (err: any) {
       toast.error(err?.message || 'Failed to add chips');
@@ -961,14 +1001,10 @@ export function GameWalletModal({
       : contractReserve != null
         ? Math.floor(Number(formatEther(contractReserve)))
         : 0;
-  const maxReup = displayBalance != null ? Math.floor(Number(formatEther(displayBalance))) : 0;
 
   const isDepositLoading = depositTx.isPending || depositMORBIISTx.isPending;
   const isLegacyWithdrawLoading = withdrawTx.isPending;
   const controlsDisabled = isDepositLoading || isPreparingWithdraw || isLegacyWithdrawLoading || externalWithdrawLock;
-
-  const atTable = !!wsClient && !!tableId;
-  const showReupTab = atTable && enablePokerReup;
 
   useEffect(() => {
     if (isOpen && tab === 'reup' && !showReupTab) setTab('deposit');
@@ -1342,23 +1378,23 @@ export function GameWalletModal({
                     <div className="space-y-4">
                       <div className="bg-gray-50 rounded-2xl p-4 space-y-1 text-sm">
                         <div className="flex justify-between">
-                          <span className="text-gray-500">Your balance</span>
+                          <span className="text-gray-500">Poker chip wallet</span>
                           <span className="font-semibold text-gray-900">
-                            {maxReup.toLocaleString()} MORBIUS
+                            {formatChips(pokerChipBalanceStr)} chips
                           </span>
                         </div>
                         {currentStack != null && (
                           <div className="flex justify-between">
                             <span className="text-gray-500">Current table stack</span>
-                            <span className="font-semibold text-gray-900">{fmt(currentStack)} MORBIUS</span>
+                            <span className="font-semibold text-gray-900">{formatChips(currentStack)} chips</span>
                           </div>
                         )}
                       </div>
 
                       <div className="space-y-2">
                         <div className="flex justify-between items-center px-1">
-                          <label className="text-sm font-medium text-gray-700">Add to stack (MORBIUS)</label>
-                          <span className="text-xs text-gray-500">Max: {maxReup.toLocaleString()}</span>
+                          <label className="text-sm font-medium text-gray-700">Add to stack (whole chips)</label>
+                          <span className="text-xs text-gray-500">Max: {formatChips(pokerChipBalanceStr)}</span>
                         </div>
                         <div className="flex gap-2">
                           <input
@@ -1368,12 +1404,12 @@ export function GameWalletModal({
                             onChange={(e) => setReupAmount(e.target.value)}
                             min="0"
                             step="1"
-                            max={maxReup}
+                            max={maxReupChipsNum}
                             disabled={isReupPending}
                             className="flex-1 w-full bg-white border border-gray-200 rounded-xl px-4 py-3 text-lg focus:outline-none focus:ring-2 focus:ring-black/5 transition-all"
                           />
                           <button
-                            onClick={() => setReupAmount(maxReup.toString())}
+                            onClick={() => setReupAmount(pokerChipBalanceStr || '0')}
                             disabled={isReupPending}
                             className="px-4 bg-gray-100 text-gray-700 text-sm font-medium rounded-xl hover:bg-gray-200 transition-colors"
                           >
