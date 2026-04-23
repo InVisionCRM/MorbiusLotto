@@ -372,7 +372,7 @@ async function discoverOrCreateTable(): Promise<string> {
     const createPayload = await sendRequest(ws, 'poker_create_table', {
       smallBlind: '10',
       bigBlind: '20',
-      maxSeats: 6,
+      maxSeats: 10,
     });
     const tableId = (createPayload as any)?.tableId;
     if (tableId) {

@@ -143,7 +143,7 @@ export function PokerTournamentCreator({ creatorAddress, onClose, onCreate }: Po
   const [guaranteedPool, setGuaranteedPool] = useState('5000');
   const [startingStack, setStartingStack] = useState<string>('10000');
   const [minPlayers, setMinPlayers] = useState('2');
-  const [maxPlayers, setMaxPlayers] = useState('6');
+  const [maxPlayers, setMaxPlayers] = useState('10');
   const [isPrivate, setIsPrivate] = useState(false);
   const [privatePin, setPrivatePin] = useState('');
   const [botsToAdd, setBotsToAdd] = useState(0);
@@ -178,7 +178,7 @@ export function PokerTournamentCreator({ creatorAddress, onClose, onCreate }: Po
     const rawMax = parseInt(maxPlayers, 10);
     const maxP = Math.max(
       minP,
-      Math.max(2, Math.min(10, Number.isFinite(rawMax) ? rawMax : 6)),
+      Math.max(2, Math.min(10, Number.isFinite(rawMax) ? rawMax : 10)),
     );
     return maxP;
   }, [minPlayers, maxPlayers]);

@@ -272,7 +272,7 @@ export class PokerTournamentService {
       return {
         startingStack: 5000,
         minPlayers: 2,
-        maxPlayers: 6,
+        maxPlayers: 10,
         blindSchedule: DEFAULT_BLIND_SCHEDULE,
         blindIncreaseMode: 'knockout',
       };
@@ -283,7 +283,7 @@ export class PokerTournamentService {
     return {
       startingStack: Number(obj.startingStack ?? 5000),
       minPlayers:    Number(obj.minPlayers    ?? 2),
-      maxPlayers:    Number(obj.maxPlayers    ?? 6),
+      maxPlayers:    Number(obj.maxPlayers    ?? 10),
       blindSchedule: Array.isArray(obj.blindSchedule) && obj.blindSchedule.length > 0
         ? obj.blindSchedule as BlindLevel[]
         : DEFAULT_BLIND_SCHEDULE,
@@ -1581,7 +1581,7 @@ export class PokerTournamentService {
         buyInAmount:           r.buy_in_amount?.toString() ?? '0',
         startingStack:         Number(r.starting_chips ?? 5000),
         registeredCount:       Number(r.registered_count ?? 0),
-        maxPlayers:            Number(r.max_players ?? 6),
+        maxPlayers:            Number(r.max_players ?? 10),
         minPlayers:            Number(r.min_players ?? 2),
         prizePool:             r.prize_pool?.toString() ?? '0',
         tableId:               r.table_id ?? null,

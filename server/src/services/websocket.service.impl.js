@@ -1131,7 +1131,7 @@ class WebSocketService {
             if (!Number.isInteger(smallBlind) || !Number.isInteger(bigBlind) || smallBlind <= 0 || bigBlind <= 0 || bigBlind < smallBlind) {
                 return this.sendError(ws, 'Invalid blinds: must be positive integer chip counts and bigBlind >= smallBlind', message.requestId);
             }
-            const maxSeats = Math.min(10, Math.max(2, Number(payload?.maxSeats) || 6));
+            const maxSeats = Math.min(10, Math.max(2, Number(payload?.maxSeats) || 10));
             const pinCode = payload?.pinCode && typeof payload.pinCode === 'string' ? payload.pinCode : undefined;
             const tableId = await this.pokerGameService.createTable(smallBlind, bigBlind, maxSeats, pinCode);
             this.sendMessage(ws, { type: 'poker_create_table', payload: { tableId }, requestId: message.requestId });

@@ -310,10 +310,10 @@ export class PokerGameService {
       id: r.id,
       smallBlind: r.small_blind?.toString() ?? '0',
       bigBlind: r.big_blind?.toString() ?? '0',
-      maxSeats: Number(r.max_seats) || 6,
+      maxSeats: Number(r.max_seats) || 10,
       status: r.status,
       seatedCount: Number(r.seated_count) || 0,
-      emptySeats: Math.max(0, (Number(r.max_seats) || 6) - (Number(r.seated_count) || 0)),
+      emptySeats: Math.max(0, (Number(r.max_seats) || 10) - (Number(r.seated_count) || 0)),
       hasPin: !!r.pin_code,
     }));
   }
@@ -327,6 +327,9 @@ export class PokerGameService {
     }
     if (pinCode != null && !/^\d{4}$/.test(pinCode)) {
       throw new Error('PIN must be exactly 4 digits');
+    }
+    if (!Number.isInteger(maxSeats) || maxSeats < 2 || maxSeats > 10) {
+      throw new Error('maxSeats must be an integer from 2 to 10');
     }
     const pool = this.getPool();
     const r = await pool.query(
@@ -420,7 +423,7 @@ export class PokerGameService {
       );
       if (tableResult.rows.length === 0) throw new Error('Table not found');
       const tblRow = tableResult.rows[0];
-      const maxSeats = Number(tblRow.max_seats) || 6;
+      const maxSeats = Number(tblRow.max_seats) || 10;
 
       if (tblRow.tournament_mode) {
         throw new Error(
@@ -728,7 +731,7 @@ export class PokerGameService {
     );
     if (tableRow.rows.length === 0) throw new Error('Table not found');
     const tbl = tableRow.rows[0];
-    const maxSeats = Number(tbl.max_seats) || 6;
+    const maxSeats = Number(tbl.max_seats) || 10;
     const bigBlindChips = Number(tbl.big_blind ?? 0);
 
     // Load DB seats
@@ -1135,7 +1138,7 @@ export class PokerGameService {
     );
     if (tableResult.rows.length === 0) throw new Error('Table not found');
     const tblRow = tableResult.rows[0];
-    const maxSeats = Number(tblRow.max_seats) || 6;
+    const maxSeats = Number(tblRow.max_seats) || 10;
 
     const sb = Number(tblRow.small_blind ?? 0);
     const bb = Number(tblRow.big_blind ?? 0);
@@ -2043,7 +2046,7 @@ export class PokerGameService {
       // Without this, the stale lastPosition from a partial replay would cause seats
       // to be skipped or the same seat to act twice.
       {
-        const maxSeatsForLastPos = Number(tbl.max_seats) || 6;
+        const maxSeatsForLastPos = Number(tbl.max_seats) || 10;
         const dealerPosForLastPos = Number(hand.button_position);
 
         // Find the last bet/raise in the current street
@@ -2241,7 +2244,7 @@ export class PokerGameService {
     if (tableResult.rows.length === 0) throw new Error('Table not found');
     if (!tableResult.rows[0].tournament_mode) throw new Error('Table is not in tournament mode');
 
-    const maxSeats = Number(tableResult.rows[0].max_seats) || 6;
+    const maxSeats = Number(tableResult.rows[0].max_seats) || 10;
 
     const existing = await pool.query(
       'SELECT id FROM poker_seats WHERE table_id = $1 AND player_address = $2',

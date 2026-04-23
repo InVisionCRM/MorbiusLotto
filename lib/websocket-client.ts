@@ -845,7 +845,7 @@ export class BlackjackWebSocketClient {
   }
 
   /** Create a new table. Auth required. Returns the new table id. */
-  async pokerCreateTable(smallBlind: string, bigBlind: string, maxSeats: number = 6, pinCode?: string): Promise<{ tableId: string }> {
+  async pokerCreateTable(smallBlind: string, bigBlind: string, maxSeats: number = 10, pinCode?: string): Promise<{ tableId: string }> {
     return this.sendRequest(WS_MESSAGE_TYPES.pokerCreateTable, { smallBlind, bigBlind, maxSeats, ...(pinCode ? { pinCode } : {}) });
   }
 

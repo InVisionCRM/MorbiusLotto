@@ -494,7 +494,7 @@ export default function PokerLobbyPage() {
                       <>
                         <button
                           type="button"
-                          onClick={() => setCreateModal({ smallBlind: '10', bigBlind: '20', maxSeats: 6, pinCode: '', pinEnabled: false })}
+                          onClick={() => setCreateModal({ smallBlind: '10', bigBlind: '20', maxSeats: 10, pinCode: '', pinEnabled: false })}
                           className="flex items-center gap-2 px-7 py-3.5 rounded-2xl text-white text-sm font-bold hover:-translate-y-0.5 transition-all"
                           style={{
                             background: 'linear-gradient(135deg, #06b6d4, #3b82f6)',
@@ -1006,7 +1006,7 @@ export default function PokerLobbyPage() {
                     min={2}
                     max={10}
                     value={createModal.maxSeats}
-                    onChange={(e) => setCreateModal((m) => m ? { ...m, maxSeats: Math.min(10, Math.max(2, Number(e.target.value) || 6)) } : null)}
+                    onChange={(e) => setCreateModal((m) => m ? { ...m, maxSeats: Math.min(10, Math.max(2, Number(e.target.value) || 10)) } : null)}
                     className="w-full rounded-lg bg-slate-800 border border-cyan-500/30 px-2.5 py-1.5 text-sm text-white"
                   />
                 </div>

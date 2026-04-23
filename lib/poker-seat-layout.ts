@@ -1,7 +1,14 @@
 /** Fraction coordinates 0–1 relative to the poker `PokerTable` root (`absolute inset-0` box). */
 export type SeatAnchor = { fx: number; fy: number };
 
-/** Full 10-seat ring — canonical layout; fewer seats sample via `authoredSeatAnchors`. */
+/** Canonical **10-max** ring (one vertex per seat at full tables). */
+export const POKER_TABLE_MAX_SEATS = 10;
+
+/**
+ * Seat positions on the felt for all **10** vertices. With fewer players, `ringIndexForDisplaySlot` maps
+ * each display slot to a subset of these indices so spacing stays even (edits to an unused vertex for
+ * your current `seatCount` have no visible effect until you add seats toward 10).
+ */
 export const SEAT_ANCHOR_RING: SeatAnchor[] = [
   { fx: 0.5, fy: 0.85 }, // 0 — bottom center (hero)
   { fx: 0.70, fy: 0.85 },
@@ -15,12 +22,12 @@ export const SEAT_ANCHOR_RING: SeatAnchor[] = [
   { fx: 0.30, fy: 0.85 },
 ];
 
-/** Map display slot → ring index 0..9. Identity when seatCount === 10 (full ring). */
+/** Map display slot → ring index `0..POKER_TABLE_MAX_SEATS-1`. At full **10** seats, slot === ring index. */
 export function ringIndexForDisplaySlot(displaySlot: number, seatCount: number): number {
   if (seatCount <= 1) return 0;
-  if (seatCount === 10) return Math.max(0, Math.min(9, displaySlot));
-  const idx = Math.round((displaySlot * 9) / (seatCount - 1));
-  return Math.max(0, Math.min(9, idx));
+  if (seatCount === POKER_TABLE_MAX_SEATS) return Math.max(0, Math.min(POKER_TABLE_MAX_SEATS - 1, displaySlot));
+  const idx = Math.round((displaySlot * (POKER_TABLE_MAX_SEATS - 1)) / (seatCount - 1));
+  return Math.max(0, Math.min(POKER_TABLE_MAX_SEATS - 1, idx));
 }
 
 /** Display-slot anchors for `seatCount` players (same logic as `PokerTable`). */
@@ -37,22 +44,20 @@ export function authoredSeatAnchors(seatCount: number): SeatAnchor[] {
 export const POKER_POT_ANCHOR: SeatAnchor = { fx: 0.5, fy: 0.51 };
 
 /**
- * Full 10 bet-stack anchors (canonical ring). Same display-slot → ring index mapping as
- * `SEAT_ANCHOR_RING` via `ringIndexForDisplaySlot` / `authoredChipAnchors`.
- * Initial values matched the former seat→pot lerp at t=0.38 so existing tables did not jump;
- * edit these coordinates directly to tune stack placement.
+ * Bet-stack anchors (**10** vertices). Same `ringIndexForDisplaySlot` mapping as seats.
+ * `PokerTable` uses `authoredChipAnchors` / `betChipAnchorForDisplaySlot` — not `SEAT_ANCHOR_RING`.
  */
 export const CHIP_ANCHOR_RING: SeatAnchor[] = [
   { fx: 0.5, fy: 0.65 }, // 0 — bottom center (hero)
-  { fx: 0.65, fy: 0.65 },
-  { fx: 0.70, fy: 0.55 },
-  { fx: 0.70, fy: 0.45 },
-  { fx: 0.65, fy: 0.35 },
+  { fx: 0.70, fy: 0.65 },
+  { fx: 0.90, fy: 0.65 },
+  { fx: 0.91, fy: 0.35 },
+  { fx: 0.70, fy: 0.35 },
   { fx: 0.5, fy: 0.35 },
-  { fx: 0.35, fy: 0.35 },
-  { fx: 0.30, fy: 0.45 },
-  { fx: 0.30, fy: 0.55 },
-  { fx: 0.35, fy: 0.65 },
+  { fx: 0.30, fy: 0.35 },
+  { fx: 0.10, fy: 0.35 },
+  { fx: 0.10, fy: 0.65 },
+  { fx: 0.30, fy: 0.65 },
 ];
 
 /** Display-slot chip anchors for `seatCount` (mirrors `authoredSeatAnchors`). */

@@ -37,7 +37,7 @@ export interface RuntimeServices {
 async function recoverPokerRuntimeState(dbService: DatabaseService, pokerGameService: PokerGameService): Promise<void> {
   const existingTables = await pokerGameService.listTables();
   if (existingTables.length === 0) {
-    await pokerGameService.createTable(10, 20, 6);
+    await pokerGameService.createTable(10, 20, 10);
     logger.info('Poker: created default table (10/20 chips, 6 seats)');
   }
 
