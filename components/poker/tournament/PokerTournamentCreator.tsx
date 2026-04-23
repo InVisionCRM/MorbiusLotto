@@ -26,32 +26,11 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { ConfirmActionCard } from '@/components/shared/ConfirmActionCard';
 import { Confetti, type ConfettiRef } from '@/components/ui/confetti';
 
-function useFifteenMinuteTimeOptions(): { value: string; label: string }[] {
-  return useMemo(() => {
-    const out: { value: string; label: string }[] = [];
-    for (let h = 0; h < 24; h++) {
-      for (let m = 0; m < 60; m += 15) {
-        const d = new Date(2000, 0, 1, h, m, 0, 0);
-        out.push({
-          value: `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`,
-          label: format(d, 'h:mm a'),
-        });
-      }
-    }
-    return out;
-  }, []);
-}
-
 function defaultScheduledFields(): { date: string; time: string } {
-  const from = new Date(Date.now() + 60_000);
+  const from = new Date(Date.now() + 120_000);
   from.setSeconds(0, 0);
-  const curM = from.getMinutes();
-  const step = 15;
-  const rem = curM % step;
-  const add = rem === 0 ? step : step - rem;
-  from.setMinutes(curM + add);
-  if (from.getTime() <= Date.now()) {
-    from.setMinutes(from.getMinutes() + step);
+  while (from.getTime() < Date.now() + 60_000) {
+    from.setMinutes(from.getMinutes() + 1);
   }
   return {
     date: localYyyyMmDd(from),
@@ -93,24 +72,21 @@ function finishOrdinal(rank: number): string {
   return `${rank}th`;
 }
 
-function snapLocalToQuarterHour(d: Date): Date {
+/** Clears seconds/ms and ensures the instant is strictly at least 1 minute in the future. */
+function ensureScheduleAtLeastOneMinuteAhead(d: Date): Date {
   const out = new Date(d);
   out.setSeconds(0, 0);
-  const curM = out.getMinutes();
-  const step = 15;
-  const rem = curM % step;
-  if (rem !== 0) {
-    out.setMinutes(curM + (step - rem));
-  }
-  if (out.getTime() <= Date.now()) {
-    out.setMinutes(out.getMinutes() + step);
+  out.setMilliseconds(0);
+  while (out.getTime() < Date.now() + 60_000) {
+    out.setMinutes(out.getMinutes() + 1);
   }
   return out;
 }
 
 function parseLocalDateTime(dateStr: string, timeStr: string): Date | null {
   const parts = dateStr.split('-').map(Number);
-  const timeParts = timeStr.split(':').map(Number);
+  const timeOnly = timeStr.slice(0, 5);
+  const timeParts = timeOnly.split(':').map(Number);
   if (parts.length !== 3 || timeParts.length !== 2) return null;
   const [y, mo, d] = parts;
   const [hh, mm] = timeParts;
@@ -160,7 +136,6 @@ export function PokerTournamentCreator({ creatorAddress, onClose, onCreate }: Po
 
   const confettiRef = useRef<ConfettiRef>(null);
 
-  const timeOptions = useFifteenMinuteTimeOptions();
   const minScheduleDate = useMemo(() => localYyyyMmDd(new Date()), []);
 
   const showPromoOption = isFreeroll && isAdmin;
@@ -240,16 +215,16 @@ export function PokerTournamentCreator({ creatorAddress, onClose, onCreate }: Po
   const bumpSchedule = (kind: 'today' | 'tomorrow' | 'hours', hours?: number) => {
     let base: Date;
     if (kind === 'today') {
-      base = snapLocalToQuarterHour(new Date(Date.now() + 45 * 60_000));
+      base = ensureScheduleAtLeastOneMinuteAhead(new Date(Date.now() + 45 * 60_000));
     } else if (kind === 'tomorrow') {
       base = new Date();
       base.setDate(base.getDate() + 1);
       base.setHours(18, 0, 0, 0);
-      base = snapLocalToQuarterHour(base);
+      base = ensureScheduleAtLeastOneMinuteAhead(base);
     } else if (kind === 'hours' && hours != null) {
-      base = snapLocalToQuarterHour(new Date(Date.now() + hours * 3_600_000));
+      base = ensureScheduleAtLeastOneMinuteAhead(new Date(Date.now() + hours * 3_600_000));
     } else {
-      base = snapLocalToQuarterHour(new Date());
+      base = ensureScheduleAtLeastOneMinuteAhead(new Date());
     }
     setScheduledDate(localYyyyMmDd(base));
     setScheduledTime(`${String(base.getHours()).padStart(2, '0')}:${String(base.getMinutes()).padStart(2, '0')}`);
@@ -260,8 +235,6 @@ export function PokerTournamentCreator({ creatorAddress, onClose, onCreate }: Po
     if (!scheduledDate.trim()) return 'Pick a start date.';
     const local = parseLocalDateTime(scheduledDate, scheduledTime);
     if (!local) return 'Pick a valid date and time.';
-    const mm = local.getMinutes();
-    if (mm % 15 !== 0) return 'Time must be on a 15-minute mark.';
     if (local.getTime() < Date.now() + 60_000) return 'Start must be at least 1 minute from now.';
     return null;
   };
@@ -537,7 +510,7 @@ export function PokerTournamentCreator({ creatorAddress, onClose, onCreate }: Po
                   <p className="text-lg font-semibold text-white">{schedulePreview.weekday}</p>
                   <p className="text-sm text-white/70">{schedulePreview.dayLine}</p>
                   <p className="text-3xl font-bold tabular-nums text-white tracking-tight pt-1">{schedulePreview.timeLine}</p>
-                  <p className="text-[11px] text-white/40 pt-2">Your local time · 15-minute slots</p>
+                  <p className="text-[11px] text-white/40 pt-2">Your local time · any minute</p>
                 </div>
               )}
 
@@ -576,24 +549,18 @@ export function PokerTournamentCreator({ creatorAddress, onClose, onCreate }: Po
               </div>
               <div>
                 <label className={labelClass}>Clock time</label>
-                <Select
-                  value={scheduledTime}
-                  onValueChange={(v) => {
-                    setScheduledTime(v);
+                <input
+                  type="time"
+                  step={60}
+                  value={scheduledTime.length >= 5 ? scheduledTime.slice(0, 5) : scheduledTime}
+                  onChange={(e) => {
+                    const v = e.target.value;
+                    if (v) setScheduledTime(v.slice(0, 5));
                     setScheduleError(null);
                   }}
-                >
-                  <SelectTrigger className={`${fieldClass} h-auto min-h-[44px]`}>
-                    <SelectValue placeholder="Time" />
-                  </SelectTrigger>
-                  <SelectContent className="max-h-60 bg-slate-900 border border-cyan-500/30 text-white shadow-xl z-[200]">
-                    {timeOptions.map((o) => (
-                      <SelectItem key={o.value} value={o.value} className="focus:bg-cyan-500/15 focus:text-white cursor-pointer">
-                        {o.label}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                  className={`${fieldClass} [color-scheme:dark]`}
+                />
+                <p className="text-[11px] text-white/40 mt-1.5">Pick any hour and minute (local).</p>
               </div>
               {scheduleError && <p className="text-xs text-red-400">{scheduleError}</p>}
             </TabsContent>

@@ -50,14 +50,14 @@ export const POKER_POT_ANCHOR: SeatAnchor = { fx: 0.5, fy: 0.51 };
 export const CHIP_ANCHOR_RING: SeatAnchor[] = [
   { fx: 0.5, fy: 0.65 }, // 0 — bottom center (hero)
   { fx: 0.70, fy: 0.65 },
-  { fx: 0.90, fy: 0.65 },
-  { fx: 0.91, fy: 0.35 },
+  { fx: 0.80, fy: 0.60 },
+  { fx: 0.80, fy: 0.40 },
   { fx: 0.70, fy: 0.35 },
   { fx: 0.5, fy: 0.35 },
-  { fx: 0.30, fy: 0.35 },
-  { fx: 0.10, fy: 0.35 },
-  { fx: 0.10, fy: 0.65 },
-  { fx: 0.30, fy: 0.65 },
+  { fx: 0.35, fy: 0.35 },
+  { fx: 0.20, fy: 0.40 },
+  { fx: 0.20, fy: 0.60 },
+  { fx: 0.35, fy: 0.65 },
 ];
 
 /** Display-slot chip anchors for `seatCount` (mirrors `authoredSeatAnchors`). */
