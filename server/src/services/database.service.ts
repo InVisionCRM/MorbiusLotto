@@ -2310,7 +2310,7 @@ export class DatabaseService implements MoneyDatabaseQueries {
     const result = await this.pool.query(query, [normalized]);
     const map = new Map<string, string>();
     for (const row of result.rows) {
-      map.set(row.wallet_address, row.display_name);
+      map.set(this.normalizeAddress(row.wallet_address), row.display_name);
     }
     return map;
   }
@@ -2323,7 +2323,8 @@ export class DatabaseService implements MoneyDatabaseQueries {
     const map = new Map<string, { displayName: string; profileImageUrl: string | null; avatarConfig: Record<string, unknown> | null }>();
     for (const row of result.rows) {
       const avatarConfig = row.avatar_config != null && typeof row.avatar_config === 'object' ? (row.avatar_config as Record<string, unknown>) : null;
-      map.set(row.wallet_address, {
+      // Always key by normalized lowercase — lookups use normalizeAddress(); DB may return mixed-case PKs.
+      map.set(this.normalizeAddress(row.wallet_address), {
         displayName: row.display_name,
         profileImageUrl: row.profile_image_url ?? null,
         avatarConfig,
@@ -3163,17 +3164,18 @@ export class DatabaseService implements MoneyDatabaseQueries {
         h.result,
         h.rake_amount::TEXT AS rake_amount,
         h.completed_at AT TIME ZONE 'UTC' AS completed_at,
-        (SELECT COALESCE(SUM(a.amount), 0)::TEXT FROM poker_hand_actions a WHERE a.hand_id = h.id AND LOWER(a.player_address) = LOWER($1)) AS my_contributed,
-        (SELECT COALESCE(SUM((w->>'amount')::numeric), 0)::TEXT FROM jsonb_array_elements(COALESCE(h.result->'winners', '[]'::jsonb)) w WHERE LOWER(w->>'address') = LOWER($1)) AS my_won,
+        p.contributed::TEXT AS my_contributed,
+        p.won_amount::TEXT AS my_won,
         CASE
-          WHEN (SELECT COALESCE(SUM((w->>'amount')::numeric), 0) FROM jsonb_array_elements(COALESCE(h.result->'winners', '[]'::jsonb)) w WHERE LOWER(w->>'address') = LOWER($1)) > 0 THEN 'win'
-          WHEN EXISTS (SELECT 1 FROM poker_hand_actions a WHERE a.hand_id = h.id AND LOWER(a.player_address) = LOWER($1) AND a.action = 'fold') THEN 'fold'
+          WHEN p.won THEN 'win'
+          WHEN p.folded THEN 'fold'
           ELSE 'loss'
         END AS result_type
-      FROM poker_hands h
+      FROM poker_hand_players p
+      JOIN poker_hands h ON h.id = p.hand_id
       LEFT JOIN tournaments tour ON tour.id = h.tournament_id
-      INNER JOIN (SELECT DISTINCT hand_id FROM poker_hand_actions WHERE LOWER(player_address) = LOWER($1)) part ON part.hand_id = h.id
-      WHERE h.completed_at IS NOT NULL
+      WHERE LOWER(p.player_address) = LOWER($1)
+        AND h.completed_at IS NOT NULL
       ORDER BY h.completed_at DESC
       LIMIT $2 OFFSET $3
     `;
@@ -3196,7 +3198,7 @@ export class DatabaseService implements MoneyDatabaseQueries {
   }
 
   /** Aggregate poker stats for a player (from completed hands). */
-  async getPokerPlayerStats(address: string): Promise<{
+  async getPokerPlayerStats(address: string, scope: 'cash' | 'tournament' | 'all' = 'cash'): Promise<{
     total_hands: number;
     hands_won: number;
     win_rate: number;
@@ -3208,71 +3210,175 @@ export class DatabaseService implements MoneyDatabaseQueries {
     best_streak: number;
     biggest_pot_won: string;
     biggest_loss: string;
+    // HUD 6
+    vpip_pct: number;
+    pfr_pct: number;
+    three_bet_pct: number;
+    wtsd_pct: number;
+    wsd_pct: number;
+    aggression_factor: number | null;
+    // Add-ons
+    bb_per_100: number | null;
+    showdown_win_rate: number;
+    non_showdown_win_rate: number;
+    tournament_hands: number;
+    position_win_rates: {
+      button: { hands: number; win_rate: number };
+      small_blind: { hands: number; win_rate: number };
+      big_blind: { hands: number; win_rate: number };
+      other: { hands: number; win_rate: number };
+    };
+    winning_hand_breakdown: Array<{ hand_name: string; count: number }>;
   }> {
     const normalized = this.normalizeAddress(address);
+    const emptyResponse = {
+      total_hands: 0,
+      hands_won: 0,
+      win_rate: 0,
+      total_wagered: '0',
+      total_won: '0',
+      profit_loss: '0',
+      roi: 0,
+      current_streak: 0,
+      best_streak: 0,
+      biggest_pot_won: '0',
+      biggest_loss: '0',
+      vpip_pct: 0,
+      pfr_pct: 0,
+      three_bet_pct: 0,
+      wtsd_pct: 0,
+      wsd_pct: 0,
+      aggression_factor: null,
+      bb_per_100: null,
+      showdown_win_rate: 0,
+      non_showdown_win_rate: 0,
+      tournament_hands: 0,
+      position_win_rates: {
+        button: { hands: 0, win_rate: 0 },
+        small_blind: { hands: 0, win_rate: 0 },
+        big_blind: { hands: 0, win_rate: 0 },
+        other: { hands: 0, win_rate: 0 },
+      },
+      winning_hand_breakdown: [],
+    };
+
+    const scopeFilter =
+      scope === 'cash' ? 'AND h.tournament_id IS NULL'
+      : scope === 'tournament' ? 'AND h.tournament_id IS NOT NULL'
+      : '';
+
+    // Single aggregate over selected scope covering every scalar metric.
     const aggQuery = `
-      WITH player_hands AS (
-        SELECT h.id, h.completed_at,
-          (SELECT COALESCE(SUM(a.amount), 0) FROM poker_hand_actions a WHERE a.hand_id = h.id AND LOWER(a.player_address) = LOWER($1)) AS my_contributed,
-          (SELECT COALESCE(SUM((w->>'amount')::numeric), 0) FROM jsonb_array_elements(COALESCE(h.result->'winners', '[]'::jsonb)) w WHERE LOWER(w->>'address') = LOWER($1)) AS my_won,
-          CASE
-            WHEN (SELECT COALESCE(SUM((w->>'amount')::numeric), 0) FROM jsonb_array_elements(COALESCE(h.result->'winners', '[]'::jsonb)) w WHERE LOWER(w->>'address') = LOWER($1)) > 0 THEN 'win'
-            WHEN EXISTS (SELECT 1 FROM poker_hand_actions a WHERE a.hand_id = h.id AND LOWER(a.player_address) = LOWER($1) AND a.action = 'fold') THEN 'fold'
-            ELSE 'loss'
-          END AS result_type
-        FROM poker_hands h
-        INNER JOIN (SELECT DISTINCT hand_id FROM poker_hand_actions WHERE LOWER(player_address) = LOWER($1)) part ON part.hand_id = h.id
-        WHERE h.completed_at IS NOT NULL AND h.tournament_id IS NULL
-      ),
-      totals AS (
-        SELECT
-          COUNT(*)::INT AS total_hands,
-          COUNT(*) FILTER (WHERE result_type = 'win')::INT AS hands_won,
-          COALESCE(SUM(my_contributed), 0)::TEXT AS total_wagered,
-          COALESCE(SUM(my_won), 0)::TEXT AS total_won,
-          COALESCE(MAX(my_won) FILTER (WHERE result_type = 'win'), 0)::TEXT AS biggest_pot_won,
-          COALESCE(MAX(my_contributed) FILTER (WHERE result_type != 'win'), 0)::TEXT AS biggest_loss
-        FROM player_hands
-      )
-      SELECT * FROM totals
+      SELECT
+        COUNT(*)::INT AS total_hands,
+        COUNT(*) FILTER (WHERE p.won)::INT AS hands_won,
+        COALESCE(SUM(p.contributed), 0)::TEXT AS total_wagered,
+        COALESCE(SUM(p.won_amount), 0)::TEXT AS total_won,
+        COALESCE(MAX(p.won_amount) FILTER (WHERE p.won), 0)::TEXT AS biggest_pot_won,
+        COALESCE(MAX(p.contributed) FILTER (WHERE NOT p.won), 0)::TEXT AS biggest_loss,
+        COUNT(*) FILTER (WHERE p.vpip)::INT AS vpip_count,
+        COUNT(*) FILTER (WHERE p.pfr)::INT AS pfr_count,
+        COUNT(*) FILTER (WHERE p.three_bet)::INT AS three_bet_count,
+        COUNT(*) FILTER (WHERE p.saw_flop)::INT AS saw_flop_count,
+        COUNT(*) FILTER (WHERE p.saw_showdown)::INT AS saw_showdown_count,
+        COUNT(*) FILTER (WHERE p.saw_showdown AND p.won)::INT AS showdown_wins,
+        COUNT(*) FILTER (WHERE p.won AND NOT p.saw_showdown)::INT AS non_showdown_wins,
+        COALESCE(SUM(
+          p.preflop_bets + p.preflop_raises + p.flop_bets + p.flop_raises +
+          p.turn_bets + p.turn_raises + p.river_bets + p.river_raises
+        ), 0)::INT AS total_bets_raises,
+        COALESCE(SUM(
+          p.preflop_calls + p.flop_calls + p.turn_calls + p.river_calls
+        ), 0)::INT AS total_calls,
+        -- BB/100: use table.big_blind averaged; profit in chips / avg_bb / hands * 100.
+        COALESCE(AVG(t.big_blind)::NUMERIC, 0)::TEXT AS avg_big_blind,
+        -- Positional splits
+        COUNT(*) FILTER (WHERE p.is_button)::INT AS button_hands,
+        COUNT(*) FILTER (WHERE p.is_button AND p.won)::INT AS button_wins,
+        COUNT(*) FILTER (WHERE p.is_small_blind)::INT AS sb_hands,
+        COUNT(*) FILTER (WHERE p.is_small_blind AND p.won)::INT AS sb_wins,
+        COUNT(*) FILTER (WHERE p.is_big_blind)::INT AS bb_hands,
+        COUNT(*) FILTER (WHERE p.is_big_blind AND p.won)::INT AS bb_wins,
+        COUNT(*) FILTER (WHERE NOT p.is_button AND NOT p.is_small_blind AND NOT p.is_big_blind)::INT AS other_hands,
+        COUNT(*) FILTER (WHERE NOT p.is_button AND NOT p.is_small_blind AND NOT p.is_big_blind AND p.won)::INT AS other_wins
+      FROM poker_hand_players p
+      JOIN poker_hands h ON h.id = p.hand_id
+      LEFT JOIN poker_tables t ON t.id = h.table_id
+      WHERE LOWER(p.player_address) = LOWER($1)
+        AND h.completed_at IS NOT NULL
+        ${scopeFilter}
     `;
     const aggResult = await this.pool.query(aggQuery, [normalized]);
     const row = aggResult.rows[0];
-    if (!row || Number(row.total_hands) === 0) {
-      return {
-        total_hands: 0,
-        hands_won: 0,
-        win_rate: 0,
-        total_wagered: '0',
-        total_won: '0',
-        profit_loss: '0',
-        roi: 0,
-        current_streak: 0,
-        best_streak: 0,
-        biggest_pot_won: '0',
-        biggest_loss: '0',
-      };
-    }
+    if (!row || Number(row.total_hands) === 0) return emptyResponse;
+
     const totalHands = Number(row.total_hands);
     const handsWon = Number(row.hands_won);
     const totalWagered = BigInt(row.total_wagered ?? '0');
     const totalWon = BigInt(row.total_won ?? '0');
     const profitLoss = totalWon - totalWagered;
     const roi = totalWagered > 0n ? Number((profitLoss * 10000n) / totalWagered) / 100 : 0;
+    const pct = (num: number, denom: number) => (denom > 0 ? (num / denom) * 100 : 0);
+
+    const totalBetsRaises = Number(row.total_bets_raises);
+    const totalCalls = Number(row.total_calls);
+    const aggressionFactor = totalCalls > 0 ? totalBetsRaises / totalCalls : null;
+
+    const avgBigBlind = Number(row.avg_big_blind ?? 0);
+    const bbPer100 = avgBigBlind > 0 && totalHands > 0
+      ? (Number(profitLoss) / avgBigBlind) / totalHands * 100
+      : null;
+
+    const sawFlopCount = Number(row.saw_flop_count);
+    const sawShowdownCount = Number(row.saw_showdown_count);
+    const showdownWins = Number(row.showdown_wins);
+    const nonShowdownWins = Number(row.non_showdown_wins);
+
+    // Tournament hand count (fast COUNT)
+    const tournamentHandsRes = await this.pool.query(
+      `SELECT COUNT(*)::INT AS n
+         FROM poker_hand_players p
+         JOIN poker_hands h ON h.id = p.hand_id
+        WHERE LOWER(p.player_address) = LOWER($1)
+          AND h.completed_at IS NOT NULL
+          AND h.tournament_id IS NOT NULL`,
+      [normalized]
+    );
+    const tournamentHands = Number(tournamentHandsRes.rows[0]?.n ?? 0);
+
+    // Winning hand breakdown, same scope as primary stats
+    const breakdownRes = await this.pool.query(
+      `SELECT p.hand_name, COUNT(*)::INT AS count
+         FROM poker_hand_players p
+         JOIN poker_hands h ON h.id = p.hand_id
+        WHERE LOWER(p.player_address) = LOWER($1)
+          AND h.completed_at IS NOT NULL
+          ${scopeFilter}
+          AND p.won
+          AND p.hand_name IS NOT NULL
+        GROUP BY p.hand_name
+        ORDER BY count DESC`,
+      [normalized]
+    );
+    const winningHandBreakdown = breakdownRes.rows.map((r: any) => ({
+      hand_name: String(r.hand_name),
+      count: Number(r.count),
+    }));
+
+    // Ordered outcomes for streaks (same scope)
     const orderedQuery = `
-      WITH player_hands AS (
-        SELECT
-          h.completed_at,
-          CASE
-            WHEN (SELECT COALESCE(SUM((w->>'amount')::numeric), 0) FROM jsonb_array_elements(COALESCE(h.result->'winners', '[]'::jsonb)) w WHERE LOWER(w->>'address') = LOWER($1)) > 0 THEN 1
-            WHEN EXISTS (SELECT 1 FROM poker_hand_actions a WHERE a.hand_id = h.id AND LOWER(a.player_address) = LOWER($1) AND a.action = 'fold') THEN 0
-            ELSE -1
-          END AS outcome
-        FROM poker_hands h
-        INNER JOIN (SELECT DISTINCT hand_id FROM poker_hand_actions WHERE LOWER(player_address) = LOWER($1)) part ON part.hand_id = h.id
-        WHERE h.completed_at IS NOT NULL AND h.tournament_id IS NULL
-      )
-      SELECT outcome FROM player_hands ORDER BY completed_at DESC
+      SELECT
+        CASE
+          WHEN p.won THEN 1
+          WHEN p.folded THEN 0
+          ELSE -1
+        END AS outcome
+      FROM poker_hand_players p
+      JOIN poker_hands h ON h.id = p.hand_id
+      WHERE LOWER(p.player_address) = LOWER($1)
+        AND h.completed_at IS NOT NULL
+        ${scopeFilter}
+      ORDER BY h.completed_at DESC
     `;
     const orderedResult = await this.pool.query(orderedQuery, [normalized]);
     const outcomes = orderedResult.rows.map((r: any) => Number(r.outcome));
@@ -3288,10 +3394,16 @@ export class DatabaseService implements MoneyDatabaseQueries {
       }
     }
     currentStreak = run;
+
+    const buttonHands = Number(row.button_hands);
+    const sbHands = Number(row.sb_hands);
+    const bbHands = Number(row.bb_hands);
+    const otherHands = Number(row.other_hands);
+
     return {
       total_hands: totalHands,
       hands_won: handsWon,
-      win_rate: totalHands > 0 ? (handsWon / totalHands) * 100 : 0,
+      win_rate: pct(handsWon, totalHands),
       total_wagered: totalWagered.toString(),
       total_won: totalWon.toString(),
       profit_loss: profitLoss.toString(),
@@ -3300,6 +3412,23 @@ export class DatabaseService implements MoneyDatabaseQueries {
       best_streak: bestStreak,
       biggest_pot_won: String(row.biggest_pot_won ?? '0'),
       biggest_loss: String(row.biggest_loss ?? '0'),
+      vpip_pct: pct(Number(row.vpip_count), totalHands),
+      pfr_pct: pct(Number(row.pfr_count), totalHands),
+      three_bet_pct: pct(Number(row.three_bet_count), totalHands),
+      wtsd_pct: pct(sawShowdownCount, sawFlopCount),
+      wsd_pct: pct(showdownWins, sawShowdownCount),
+      aggression_factor: aggressionFactor,
+      bb_per_100: bbPer100,
+      showdown_win_rate: pct(showdownWins, sawShowdownCount),
+      non_showdown_win_rate: pct(nonShowdownWins, totalHands),
+      tournament_hands: tournamentHands,
+      position_win_rates: {
+        button: { hands: buttonHands, win_rate: pct(Number(row.button_wins), buttonHands) },
+        small_blind: { hands: sbHands, win_rate: pct(Number(row.sb_wins), sbHands) },
+        big_blind: { hands: bbHands, win_rate: pct(Number(row.bb_wins), bbHands) },
+        other: { hands: otherHands, win_rate: pct(Number(row.other_wins), otherHands) },
+      },
+      winning_hand_breakdown: winningHandBreakdown,
     };
   }
 
@@ -3329,30 +3458,18 @@ export class DatabaseService implements MoneyDatabaseQueries {
   }> {
     const normalized = this.normalizeAddress(address);
     const aggQuery = `
-      WITH player_hands AS (
-        SELECT h.id, h.hand_number, h.completed_at,
-          (SELECT COALESCE(SUM(a.amount), 0) FROM poker_hand_actions a WHERE a.hand_id = h.id AND LOWER(a.player_address) = LOWER($1)) AS my_contributed,
-          (SELECT COALESCE(SUM((w->>'amount')::numeric), 0) FROM jsonb_array_elements(COALESCE(h.result->'winners', '[]'::jsonb)) w WHERE LOWER(w->>'address') = LOWER($1)) AS my_won,
-          CASE
-            WHEN (SELECT COALESCE(SUM((w->>'amount')::numeric), 0) FROM jsonb_array_elements(COALESCE(h.result->'winners', '[]'::jsonb)) w WHERE LOWER(w->>'address') = LOWER($1)) > 0 THEN 'win'
-            WHEN EXISTS (SELECT 1 FROM poker_hand_actions a WHERE a.hand_id = h.id AND LOWER(a.player_address) = LOWER($1) AND a.action = 'fold') THEN 'fold'
-            ELSE 'loss'
-          END AS result_type
-        FROM poker_hands h
-        INNER JOIN (SELECT DISTINCT hand_id FROM poker_hand_actions WHERE LOWER(player_address) = LOWER($1)) part ON part.hand_id = h.id
-        WHERE h.completed_at IS NOT NULL AND h.table_id = $2
-      ),
-      totals AS (
-        SELECT
-          COUNT(*)::INT AS total_hands,
-          COUNT(*) FILTER (WHERE result_type = 'win')::INT AS hands_won,
-          COALESCE(SUM(my_contributed), 0)::TEXT AS total_wagered,
-          COALESCE(SUM(my_won), 0)::TEXT AS total_won,
-          COALESCE(MAX(my_won) FILTER (WHERE result_type = 'win'), 0)::TEXT AS biggest_pot_won,
-          COALESCE(MAX(my_contributed) FILTER (WHERE result_type != 'win'), 0)::TEXT AS biggest_loss
-        FROM player_hands
-      )
-      SELECT * FROM totals
+      SELECT
+        COUNT(*)::INT AS total_hands,
+        COUNT(*) FILTER (WHERE p.won)::INT AS hands_won,
+        COALESCE(SUM(p.contributed), 0)::TEXT AS total_wagered,
+        COALESCE(SUM(p.won_amount), 0)::TEXT AS total_won,
+        COALESCE(MAX(p.won_amount) FILTER (WHERE p.won), 0)::TEXT AS biggest_pot_won,
+        COALESCE(MAX(p.contributed) FILTER (WHERE NOT p.won), 0)::TEXT AS biggest_loss
+      FROM poker_hand_players p
+      JOIN poker_hands h ON h.id = p.hand_id
+      WHERE LOWER(p.player_address) = LOWER($1)
+        AND h.completed_at IS NOT NULL
+        AND h.table_id = $2
     `;
     const aggResult = await this.pool.query(aggQuery, [normalized, tableId]);
     const row = aggResult.rows[0];
@@ -3372,22 +3489,22 @@ export class DatabaseService implements MoneyDatabaseQueries {
     const roi = totalWagered > 0n ? Number((profitLoss * 10000n) / totalWagered) / 100 : 0;
     // Fetch ordered outcomes for streak + chart data in one query
     const orderedQuery = `
-      WITH player_hands AS (
-        SELECT
-          h.hand_number,
-          h.completed_at,
-          (SELECT COALESCE(SUM(a.amount), 0)::TEXT FROM poker_hand_actions a WHERE a.hand_id = h.id AND LOWER(a.player_address) = LOWER($1)) AS my_contributed,
-          (SELECT COALESCE(SUM((w->>'amount')::numeric), 0)::TEXT FROM jsonb_array_elements(COALESCE(h.result->'winners', '[]'::jsonb)) w WHERE LOWER(w->>'address') = LOWER($1)) AS my_won,
-          CASE
-            WHEN (SELECT COALESCE(SUM((w->>'amount')::numeric), 0) FROM jsonb_array_elements(COALESCE(h.result->'winners', '[]'::jsonb)) w WHERE LOWER(w->>'address') = LOWER($1)) > 0 THEN 'win'
-            WHEN EXISTS (SELECT 1 FROM poker_hand_actions a WHERE a.hand_id = h.id AND LOWER(a.player_address) = LOWER($1) AND a.action = 'fold') THEN 'fold'
-            ELSE 'loss'
-          END AS result_type
-        FROM poker_hands h
-        INNER JOIN (SELECT DISTINCT hand_id FROM poker_hand_actions WHERE LOWER(player_address) = LOWER($1)) part ON part.hand_id = h.id
-        WHERE h.completed_at IS NOT NULL AND h.table_id = $2
-      )
-      SELECT hand_number, completed_at, my_contributed, my_won, result_type FROM player_hands ORDER BY completed_at ASC
+      SELECT
+        h.hand_number,
+        h.completed_at,
+        p.contributed::TEXT AS my_contributed,
+        p.won_amount::TEXT AS my_won,
+        CASE
+          WHEN p.won THEN 'win'
+          WHEN p.folded THEN 'fold'
+          ELSE 'loss'
+        END AS result_type
+      FROM poker_hand_players p
+      JOIN poker_hands h ON h.id = p.hand_id
+      WHERE LOWER(p.player_address) = LOWER($1)
+        AND h.completed_at IS NOT NULL
+        AND h.table_id = $2
+      ORDER BY h.completed_at ASC
     `;
     const orderedResult = await this.pool.query(orderedQuery, [normalized, tableId]);
     const handsHistory = orderedResult.rows.map((r: any) => ({

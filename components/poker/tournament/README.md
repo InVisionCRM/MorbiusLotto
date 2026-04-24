@@ -52,10 +52,24 @@ Payouts use **`calculate_tournament_prizes(tournament_id)`** (see migration **`0
 ---
 
 ## Frontend and WebSocket
-ww  
+
 **Lobby entry:** On `/poker`, open the **Tournaments** tab (or `/poker?tab=tournaments`). The sidebar under **Lobby** also switches **Cash games** vs **Tournaments**.
 
 **Table HUD:** **`PokerTableState.tournamentId`** comes from **`poker_tables.tournament_id`**, so the HUD works on **`/poker/{tableId}`** even without a query string. The **`?tournament=`** param is still supported (and added after lobby join when applicable) so links stay explicit. The **`PokerTournamentHUD`** uses **`usePokerTableTournamentHud`**: room subscribe via **`poker_tournament_join`**, snapshot **`poker_tournament_get_state`**, refetch when the poker **`handId`** changes, and live updates from blind-up / elimination / complete / cancel events.
+
+### Trace: display names (tournament HUD vs seat tags)
+
+There is **one** canonical name field for humans: **`chat_display_names.display_name`** (per `wallet_address`). The legacy **`players`** row does not store a nickname.
+
+| Step | Seat tags (poker table) | Tournament sidebar HUD |
+| --- | --- | --- |
+| 1 | `PokerGameService` builds seats, then calls **`DatabaseService.getProfiles(seatAddresses)`** (`poker-game.service.ts`). | **`PokerTournamentService.getTournamentState`** runs SQL on **`tournament_entries`** with **`LEFT JOIN chat_display_names cdn ON LOWER(cdn.wallet_address) = LOWER(te.player_address)`** (`poker-tournament.service.ts`). |
+| 2 | Each seat gets **`seat.displayName = profile?.displayName ?? null`**. | Each player object includes **`displayName`** from **`cdn.display_name`** (trimmed; empty → `null`). |
+| 3 | WS **`poker_table_state`** sends the full table payload to the client. | Client calls **`sendRequest('poker_tournament_get_state')`**; server answers with **`type: 'poker_tournament_state'`** and **`payload`** = full snapshot (`websocket.service.impl.js` → **`handlePokerTournamentGetState`**). |
+| 4 | **`lib/websocket-client.ts`**: `sendRequest` resolves the promise with **`message.payload`** (same object that also emits **`poker_tournament_state`** to listeners). | Same. |
+| 5 | **`PokerSeat`** shows **`seat.displayName?.trim() || shortAddr(...)`** (or **You** for self). | **`PokerTournamentHUD`** uses **`playerDisplayLabel`**: **`p.displayName?.trim()`** then **`shortAddr`**. |
+
+So both surfaces read the **same DB column**. If the HUD shows addresses but seats show names, typical causes are: **stale server** (snapshot without `displayName`), **empty `display_name`** in DB (avatar-only row from **`setDefaultAvatarIfNull`** uses `''`), or **inspecting cached/old client state**. **`getProfiles`** now keys its result map by **normalized lowercase** so lookups always match **`normalizeAddress`** even if a legacy **`chat_display_names.wallet_address`** row used mixed case.
 
 **Blind increase:** On `poker_tournament_blind_level_up`, the table page shows **`TournamentBlindIncreaseOverlay`**: large centered white type, no background, `pointer-events-none` (full UI stays clickable), fade in / slow fade out via `poker-tournament-blind-banner` in `app/globals.css`.
 

@@ -46,6 +46,8 @@ export interface Tournament {
     platform_fee_percent: number;
     /** uint256 from MorbiusTournament contract; when set, server calls setCompleted after distribute */
     on_chain_tournament_id?: number | null;
+    /** `blackjack` (default) | `poker` — poker uses chip-denominated buy_in / prize_pool when off-chain. */
+    game_type?: string | null;
 }
 export interface TournamentEntry {
     id: string;

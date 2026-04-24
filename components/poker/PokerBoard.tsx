@@ -92,24 +92,31 @@ export function PokerBoard({ communityCards, pot, winningCardIndices, dataTutori
       </AnimatePresence>
 
       <div className="flex gap-2 sm:gap-3">
-        {[0, 1, 2, 3, 4].map((i) => (
-          <AnimatePresence key={i} mode="wait">
-            <div data-testid="poker-community-cards">
-              {communityCards[i] != null ? (
-                <CardDisplay
-                  key={communityCards[i]}
-                  cardIndex={communityCards[i]}
-                  dealDelay={i * 0.12}
-                  isWinningCard={winningCardIndices?.includes(communityCards[i])}
-                  showCenterRankSuitOverlay
-                  variant="community"
-                />
-              ) : (
-                <CardDisplay key={`empty-${i}`} cardIndex={undefined} />
-              )}
-            </div>
-          </AnimatePresence>
-        ))}
+        {[0, 1, 2, 3, 4].map((i) => {
+          // Each card starts at the pot (board center) and flies out to its slot.
+          // Approximate cell width (card + gap) — tuned for the `clamp()` sizes in CardDisplay.
+          const CELL_WIDTH_PX = 84;
+          const dealFromOffset = { dx: (2 - i) * CELL_WIDTH_PX, dy: 0 };
+          return (
+            <AnimatePresence key={i} mode="wait">
+              <div data-testid="poker-community-cards">
+                {communityCards[i] != null ? (
+                  <CardDisplay
+                    key={communityCards[i]}
+                    cardIndex={communityCards[i]}
+                    dealDelay={i * 0.12}
+                    isWinningCard={winningCardIndices?.includes(communityCards[i])}
+                    showCenterRankSuitOverlay
+                    variant="community"
+                    dealFromOffset={dealFromOffset}
+                  />
+                ) : (
+                  <CardDisplay key={`empty-${i}`} cardIndex={undefined} />
+                )}
+              </div>
+            </AnimatePresence>
+          );
+        })}
       </div>
     </div>
   );

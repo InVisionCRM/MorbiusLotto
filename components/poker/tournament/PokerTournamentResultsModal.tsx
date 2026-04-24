@@ -2,7 +2,7 @@
 
 import React from 'react';
 import type { PokerTournamentCompletedPayload, PokerTournamentStandingRow } from '@/lib/poker-tournament-completed';
-import { formatChips } from '@/lib/format-poker-chips';
+import { formatChips, toChipInt } from '@/lib/format-poker-chips';
 
 function shortAddr(addr: string): string {
   if (!addr || addr.length < 10) return addr;
@@ -178,13 +178,8 @@ export function PokerTournamentResultsModal({ payload, myAddress, onDismiss }: P
               </div>
               {rows.map((r: PokerTournamentStandingRow) => {
                 const isMe = me != null && r.address.toLowerCase() === me;
-                const payoutZero = (() => {
-                  try {
-                    return BigInt(r.prizeAmount || '0') === 0n;
-                  } catch {
-                    return true;
-                  }
-                })();
+                const payoutBn = toChipInt(r.prizeAmount);
+                const payoutZero = payoutBn === 0n;
                 return (
                   <div
                     key={`${r.rank}-${r.address}`}
@@ -207,7 +202,7 @@ export function PokerTournamentResultsModal({ payload, myAddress, onDismiss }: P
                       className="font-jost text-[12px] tabular-nums text-right"
                       style={{ color: payoutZero ? 'rgba(255,255,255,0.35)' : 'rgba(255,255,255,0.95)' }}
                     >
-                      {payoutZero ? '0' : formatChips(r.prizeAmount)}
+                      {formatChips(payoutBn)}
                     </span>
                   </div>
                 );

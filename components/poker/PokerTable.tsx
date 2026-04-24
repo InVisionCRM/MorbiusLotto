@@ -15,9 +15,14 @@ import { bestHand, handRankToName, evaluateHoleCards } from '@/lib/poker-hand-ev
 import {
   authoredSeatAnchors,
   betChipAnchorForDisplaySlot,
+  cardAnchorForDisplaySlot,
   POKER_POT_ANCHOR,
 } from '@/lib/poker-seat-layout';
 import confetti from 'canvas-confetti';
+import {
+  POKER_DEFAULT_TABLE_LOGO_FILENAME,
+  POKER_TABLE_LOGO_PUBLIC_PREFIX,
+} from '@/lib/poker-table-logo-constants';
 
 const BEAM_PALETTES: BeamColorPalette[] = [
   { primary: '#18CCFC', accent: '#6344F5', tail: '#AE48FF' }, // cyan → purple → magenta
@@ -33,27 +38,6 @@ function shortAddr(addr: string): string {
 }
 
 const POT_ANCHOR = POKER_POT_ANCHOR;
-const ADJACENT_SEAT_VERTICAL_NUDGE_PX = 30;
-const SECOND_ADJACENT_SEAT_VERTICAL_NUDGE_PX = 30;
-const HERO_SEAT_VERTICAL_NUDGE_PX = 38;
-const TOP_ADJACENT_SEAT_HORIZONTAL_NUDGE_PX = 40;
-const TOP_ADJACENT_SEAT_VERTICAL_NUDGE_PX = -30;
-const TOP_CENTER_SEAT_VERTICAL_NUDGE_PX = -10;
-const RIGHT_ADJACENT_SEAT_HORIZONTAL_NUDGE_PX = -30;
-const LEFT_ADJACENT_SEAT_HORIZONTAL_NUDGE_PX = 30;
-// Per-server-position pixel nudges (applied on top of authored anchors + display-slot nudges).
-// Key = state.seats[idx].position value.
-const SEAT_POSITION_NUDGE_PX: Record<number, { x: number; y: number }> = {
-  1: { x: 30, y: 10 },
-  2: { x: 0, y: 60 },
-  4: { x: 30, y: 0 },
-  3: { x: 0, y: -30 },
-  6: { x: -30, y: 0 },
-  7: { x: 0, y: -30 },
-  8: { x: 0, y: 60 },
-  9: { x: -30, y: 10 },
-};
-
 const SHOWDOWN_CARD_PULL_RATIO = 0.18;
 const SHOWDOWN_CARD_PULL_MAX_PX = 70;
 
@@ -154,74 +138,13 @@ export function PokerTable({ state, currentPlayerAddress, timeLeft, chatBubbleBy
   const lastConfettiHandRef = useRef<string | null>(null);
 
   const mySeatIndex = state.seats.findIndex(s => s.playerAddress === currentPlayerAddress);
-  const seatNudgeScale = Math.max(0.62, Math.min(1, dims.w / 1200));
   const seatAnchors = useMemo(() => authoredSeatAnchors(state.seats.length), [state.seats.length]);
   const toDisplaySlot = (seatIdx: number) => (mySeatIndex >= 0 ? (seatIdx - mySeatIndex + state.seats.length) % state.seats.length : seatIdx);
 
-  const getSeatNudgePx = (displaySlot: number) => {
-    const seatCount = state.seats.length;
-    const isLeftAdjacentSeat = displaySlot === 1;
-    const isRightAdjacentSeat = displaySlot === seatCount - 1;
-    const isLeftSecondAdjacentSeat = displaySlot === 2;
-    const isRightSecondAdjacentSeat = displaySlot === seatCount - 2;
-    const topCenterSlot = Math.floor(seatCount / 2);
-    const isTopCenterSeat = displaySlot === topCenterSlot;
-    const isTopLeftAdjacentSeat = displaySlot === topCenterSlot - 1;
-    const isTopRightAdjacentSeat = displaySlot === topCenterSlot + 1;
-    const isHeroSeat = displaySlot === 0;
-
-    const seatTranslateXBase = isRightAdjacentSeat
-      ? RIGHT_ADJACENT_SEAT_HORIZONTAL_NUDGE_PX
-      : isLeftAdjacentSeat
-        ? LEFT_ADJACENT_SEAT_HORIZONTAL_NUDGE_PX
-        : isTopLeftAdjacentSeat
-          ? TOP_ADJACENT_SEAT_HORIZONTAL_NUDGE_PX
-          : isTopRightAdjacentSeat
-            ? -TOP_ADJACENT_SEAT_HORIZONTAL_NUDGE_PX
-            : 0;
-
-    const seatTranslateYBase = (isRightAdjacentSeat || isLeftAdjacentSeat)
-      ? ADJACENT_SEAT_VERTICAL_NUDGE_PX
-      : (isLeftSecondAdjacentSeat || isRightSecondAdjacentSeat)
-        ? SECOND_ADJACENT_SEAT_VERTICAL_NUDGE_PX
-        : isTopCenterSeat
-          ? TOP_CENTER_SEAT_VERTICAL_NUDGE_PX
-          : (isTopLeftAdjacentSeat || isTopRightAdjacentSeat)
-            ? TOP_ADJACENT_SEAT_VERTICAL_NUDGE_PX
-            : isHeroSeat
-              ? HERO_SEAT_VERTICAL_NUDGE_PX
-              : 0;
-
-    return {
-      x: Math.round(seatTranslateXBase * seatNudgeScale),
-      y: Math.round(seatTranslateYBase * seatNudgeScale),
-    };
-  };
-
-  /** Full on-screen seat center (fractions 0–1), including display-slot + per-server-position nudges. */
-  const computeRenderedSeatAnchorCore = (displaySlot: number, serverPos: number) => {
+  const getRenderedSeatAnchor = (displaySlot: number, _serverPos: number) => {
     const anchor = seatAnchors[displaySlot];
     if (!anchor) return null;
-    const nudge = getSeatNudgePx(displaySlot);
-    const posNudge = SEAT_POSITION_NUDGE_PX[serverPos] ?? { x: 0, y: 0 };
-    return {
-      fx: anchor.fx + (nudge.x + posNudge.x) / Math.max(dims.w, 1),
-      fy: anchor.fy + (nudge.y + posNudge.y) / Math.max(dims.h, 1),
-    };
-  };
-
-  const getRenderedSeatAnchor = (displaySlot: number, serverPos: number) => {
-    const seatCount = state.seats.length;
-    const out = computeRenderedSeatAnchorCore(displaySlot, serverPos);
-    if (!out) return null;
-    // Neighbors of hero share the same vertical center as display slot 0 (pill / rail alignment).
-    if (seatCount > 2 && (displaySlot === 1 || displaySlot === seatCount - 1)) {
-      const heroSeatIdx = mySeatIndex >= 0 ? mySeatIndex : 0;
-      const heroServerPos = state.seats[heroSeatIdx]?.position ?? heroSeatIdx;
-      const heroRendered = computeRenderedSeatAnchorCore(0, heroServerPos);
-      if (heroRendered) out.fy = heroRendered.fy;
-    }
-    return out;
+    return { fx: anchor.fx, fy: anchor.fy };
   };
 
   const actingPosition = hand?.actingPosition ?? null;
@@ -317,7 +240,9 @@ export function PokerTable({ state, currentPlayerAddress, timeLeft, chatBubbleBy
       if (nowFolded && !wasFolded) {
         const displaySlot = toDisplaySlot(idx);
         const serverPos = state.seats[idx]?.position ?? idx;
-        const from = getRenderedSeatAnchor(displaySlot, serverPos);
+        const from = idx === mySeatIndex
+          ? getRenderedSeatAnchor(displaySlot, serverPos)
+          : cardAnchorForDisplaySlot(state.seats.length, displaySlot);
         const visual = lastKnownCardVisualRef.current[idx] ?? { showBacks: true };
         if (from) {
           const id = `${hand.handId}-fold-${idx}-${Date.now()}`;
@@ -336,6 +261,13 @@ export function PokerTable({ state, currentPlayerAddress, timeLeft, chatBubbleBy
   useEffect(() => () => {
     for (const t of foldFlyoutTimeoutsRef.current) clearTimeout(t);
   }, []);
+
+  const floatingTableLogoSrc = useMemo(() => {
+    const useDefault = state.tableLogoIsDefault ?? !state.tableLogo;
+    const file = useDefault ? POKER_DEFAULT_TABLE_LOGO_FILENAME : state.tableLogo;
+    if (!file) return null;
+    return `${POKER_TABLE_LOGO_PUBLIC_PREFIX}${encodeURIComponent(file)}`;
+  }, [state.tableLogo, state.tableLogoIsDefault]);
 
   const selfHandName = useMemo(() => {
     if (!state.myHoleCards || state.myHoleCards.length < 2) return null;
@@ -429,6 +361,9 @@ export function PokerTable({ state, currentPlayerAddress, timeLeft, chatBubbleBy
         idx === mySeatIndex && selfHandName
           ? selfHandName
           : (seat.playerAddress && showdownHandNames[seat.playerAddress]) || undefined,
+      cardDealFromOffset: anchorFrac
+        ? { dx: (POT_ANCHOR.fx - anchorFrac.fx) * dims.w, dy: (POT_ANCHOR.fy - anchorFrac.fy) * dims.h }
+        : undefined,
     };
   };
 
@@ -504,8 +439,8 @@ export function PokerTable({ state, currentPlayerAddress, timeLeft, chatBubbleBy
                     </div>
                   </>
                 )}
-                {/* Marketing logo — admin-set, rendered centered on felt */}
-                {state.tableLogo && (
+                {/* Floating table logo — paid sponsorship or default Morbius */}
+                {floatingTableLogoSrc && (
                   <div
                     style={{
                       position: 'absolute', inset: 0, pointerEvents: 'none',
@@ -514,9 +449,10 @@ export function PokerTable({ state, currentPlayerAddress, timeLeft, chatBubbleBy
                     }}
                   >
                     <img
-                      src={`/Marketing /LOGOS/${state.tableLogo}`}
+                      src={floatingTableLogoSrc}
                       alt=""
                       draggable={false}
+                      className="poker-table-logo-float"
                       style={{
                         maxWidth: '38%',
                         maxHeight: '44%',
@@ -584,7 +520,7 @@ export function PokerTable({ state, currentPlayerAddress, timeLeft, chatBubbleBy
       </div>
 
       <PokerWinnerNotificationCard
-        isOpen={process.env.NODE_ENV === 'development' || !!(isShowdownWithWinners && firstWinnerAddr && hand)}
+        isOpen={!!(isShowdownWithWinners && firstWinnerAddr && hand)}
         handId={hand?.handId ?? 'debug-hand'}
         winnerName={firstWinnerSeat?.displayName || (isCurrentPlayerWinner ? 'You' : shortAddr(firstWinnerAddr ?? '')) || 'DebugPlayer'}
         winnerAmount={winnerAmount || '1000000000000000000000'}
@@ -715,6 +651,58 @@ export function PokerTable({ state, currentPlayerAddress, timeLeft, chatBubbleBy
           </motion.div>
         ))}
       </AnimatePresence>
+
+      {/* Opponent hole cards — positioned by `CARD_ANCHOR_RING` so they can be moved independently of seats. */}
+      {state.seats.map((seat, idx) => {
+        if (idx === mySeatIndex) return null;
+        if (!seat.playerAddress || seat.folded) return null;
+        const inHand = !!hand;
+        const showdownCards = hand?.showdownHands?.[seat.playerAddress] ?? null;
+        const showBacks = inHand && !showdownCards;
+        if (!showBacks && !showdownCards?.length) return null;
+        const displaySlot = toDisplaySlot(idx);
+        const { fx, fy } = cardAnchorForDisplaySlot(state.seats.length, displaySlot);
+        const faceDown = !showdownCards?.length;
+        const dealFromOffset = {
+          dx: (POT_ANCHOR.fx - fx) * dims.w,
+          dy: (POT_ANCHOR.fy - fy) * dims.h,
+        };
+        return (
+          <div
+            key={`cards-${idx}`}
+            data-testid={`poker-seat-cards-${idx}`}
+            className="absolute pointer-events-none z-10"
+            style={{
+              left: `${fx * 100}%`,
+              top: `${fy * 100}%`,
+              transform: 'translate(-50%, -50%)',
+              width: 'clamp(58px, 14vw, 74px)',
+              height: 'clamp(50px, 12vw, 66px)',
+            }}
+          >
+            {[0, 1].map((ci) => (
+              <div
+                key={ci}
+                className="absolute"
+                style={{
+                  bottom: 0,
+                  left: ci === 0 ? 0 : 'clamp(14px, 3.8vw, 20px)',
+                  width: 'clamp(38px, 9vw, 48px)',
+                  height: 'clamp(48px, 12vw, 62px)',
+                  transform: `rotate(${ci === 0 ? -12 : 12}deg)`,
+                  transformOrigin: 'bottom center',
+                  borderRadius: 8,
+                  zIndex: ci,
+                }}
+              >
+                {faceDown
+                  ? <CardDisplay cardIndex={null} small faceDown variant="hole" dealDelay={ci * 0.12} dealFromOffset={dealFromOffset} />
+                  : <CardDisplay cardIndex={showdownCards![ci] ?? null} variant="hole" dealDelay={ci * 0.12} dealFromOffset={dealFromOffset} />}
+              </div>
+            ))}
+          </div>
+        );
+      })}
 
       {/* Seats */}
       {state.seats.map((_, idx) => {

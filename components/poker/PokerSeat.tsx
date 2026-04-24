@@ -258,11 +258,13 @@ export interface PokerSeatProps {
   showdownCardOffset?: { x: number; y: number };
   /** Current best hand name (self: live-updating; opponents: showdown only). */
   handName?: string;
+  /** Pixel offset from pot center to this seat's card origin — so cards deal from the middle of the table. */
+  cardDealFromOffset?: { dx: number; dy: number };
 }
 
 const CHAT_BUBBLE_MAX_LENGTH = 80;
 
-export function PokerSeat({ seat, index, holeCards, isCurrentPlayer, showCardBacks, winningCardIndices, isHandWinner = false, lastAction, callAmount, timeLeft, maxTime = 60, chatBubble, onReUpClick, onMenuClick, overlayPhrase: propsOverlayPhrase, overlayEmotion: propsOverlayEmotion, onPhraseReaction, onAnimationReaction, onOpponentClick, onOpponentRadialAction, quickChatPhrases: propsQuickChatPhrases, setQuickChatPhrases: propsSetQuickChatPhrases, onOpenEditQuickChat, hideSeatAvatar = false, onLeaveTable, onSitOut, onSitBack, onRequestMobileActivity, includeActivityInPlayerRadial = false, showdownCardOffset, handName }: PokerSeatProps) {
+export function PokerSeat({ seat, index, holeCards, isCurrentPlayer, showCardBacks, winningCardIndices, isHandWinner = false, lastAction, callAmount, timeLeft, maxTime = 60, chatBubble, onReUpClick, onMenuClick, overlayPhrase: propsOverlayPhrase, overlayEmotion: propsOverlayEmotion, onPhraseReaction, onAnimationReaction, onOpponentClick, onOpponentRadialAction, quickChatPhrases: propsQuickChatPhrases, setQuickChatPhrases: propsSetQuickChatPhrases, onOpenEditQuickChat, hideSeatAvatar = false, onLeaveTable, onSitOut, onSitBack, onRequestMobileActivity, includeActivityInPlayerRadial = false, showdownCardOffset, handName, cardDealFromOffset }: PokerSeatProps) {
   const empty = !seat.playerAddress;
   const showMyCards = !!(holeCards && holeCards.length > 0);
   const showBacks   = !!(showCardBacks && !showMyCards && !empty && !seat.folded);
@@ -629,9 +631,9 @@ export function PokerSeat({ seat, index, holeCards, isCurrentPlayer, showCardBac
         )}
       </AnimatePresence>
 
-      {/* ── Cards — peek out from behind avatar ── */}
+      {/* ── Cards — hero only. Opponent cards are rendered by PokerTable via CARD_ANCHOR_RING. ── */}
       <AnimatePresence>
-      {hasCards && (
+      {hasCards && showMyCards && isCurrentPlayer && (
         <motion.div
           data-testid={`poker-seat-cards-${index}`}
           className="relative flex-shrink-0"
@@ -675,9 +677,10 @@ export function PokerSeat({ seat, index, holeCards, isCurrentPlayer, showCardBac
                       isWinningCard={winningCardIndices?.includes(holeCards![ci])}
                       variant="hole"
                       dealDelay={ci * 0.12}
+                      dealFromOffset={cardDealFromOffset}
                     />
                   )
-                : <CardDisplay cardIndex={null} small faceDown variant="hole" dealDelay={ci * 0.12} />}
+                : <CardDisplay cardIndex={null} small faceDown variant="hole" dealDelay={ci * 0.12} dealFromOffset={cardDealFromOffset} />}
             </div>
           ))}
           {isActing && (

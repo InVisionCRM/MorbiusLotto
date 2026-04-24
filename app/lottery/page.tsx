@@ -27,6 +27,9 @@ import { GameFAQ } from '@/components/shared/GameFAQ'
 import { toast } from 'sonner'
 import type { InstantLotteryResultRow } from '@/hooks/use-instant-lottery'
 import { FloatingPokerChips } from '@/components/home/FloatingPokerChips'
+import { ProvablyFairClientSeedModal } from '@/components/shared/ProvablyFairClientSeedModal'
+import { generateHexClientSeed } from '@/lib/generate-client-seed'
+import { loadStoredClientSeed, saveStoredClientSeed } from '@/lib/provably-fair-client-seed-storage'
 
 const ZERO = '0x0000000000000000000000000000000000000000'
 const isDeployed = (LOTTERY_INSTANT_ADDRESS as string) !== ZERO
@@ -80,6 +83,11 @@ function LotteryIntroScreen({ onComplete }: { onComplete: () => void }) {
 export default function LotteryPage() {
   const { address } = useAccount()
   const [showIntro, setShowIntro] = useState(true)
+  const [lotteryClientSeed, setLotteryClientSeed] = useState(() => {
+    const stored = loadStoredClientSeed('lottery')
+    return stored ?? generateHexClientSeed()
+  })
+  const [provablyFairOpen, setProvablyFairOpen] = useState(false)
   const [showResultModal, setShowResultModal] = useState(false)
   const lastShownResultKeyRef = useRef<string | null>(null)
   const [lastPlayResult, setLastPlayResult] = useState<InstantLotteryResultRow | null>(null)
@@ -98,6 +106,10 @@ export default function LotteryPage() {
     r ? `${r.transactionHash ?? ''}-${String(r.blockNumber ?? '')}-${(r.winningNumbers ?? []).join(',')}` : null
 
   const [drawCompletedKey, setDrawCompletedKey] = useState<string | null>(null)
+
+  useEffect(() => {
+    if (lotteryClientSeed) saveStoredClientSeed('lottery', lotteryClientSeed)
+  }, [lotteryClientSeed])
 
   useEffect(() => {
     if (results.length === 0) return
@@ -225,8 +237,21 @@ export default function LotteryPage() {
                     compact
                   />
                 </div>
-                <div className="order-2">
-                  <InstantLotteryPlayPanel onResult={onResult} onError={(err) => toast.error(err.message)} />
+                <div className="order-2 space-y-2">
+                  <div className="flex justify-end">
+                    <button
+                      type="button"
+                      onClick={() => setProvablyFairOpen(true)}
+                      className="text-xs text-cyan-400/90 underline underline-offset-2 hover:text-cyan-300"
+                    >
+                      Provably fair
+                    </button>
+                  </div>
+                  <InstantLotteryPlayPanel
+                    clientSeed={lotteryClientSeed}
+                    onResult={onResult}
+                    onError={(err) => toast.error(err.message)}
+                  />
                 </div>
               </section>
 
@@ -273,6 +298,13 @@ export default function LotteryPage() {
         open={showResultModal}
         onOpenChange={setShowResultModal}
         result={latestResultForUser}
+      />
+
+      <ProvablyFairClientSeedModal
+        open={provablyFairOpen}
+        onOpenChange={setProvablyFairOpen}
+        value={lotteryClientSeed}
+        onChange={setLotteryClientSeed}
       />
     </div>
   )

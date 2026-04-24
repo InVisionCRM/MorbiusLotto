@@ -63,12 +63,14 @@ exports.WS_POKER_MESSAGES = [
     'poker_get_state',
     'poker_create_table',
     'poker_update_table_logo',
+    'poker_purchase_table_logo',
     'poker_quick_reaction',
     'poker_avatar_emotion',
     'poker_tournament_create',
     'poker_tournament_join',
     'poker_tournament_cancel',
 ];
+/** Multiplayer BJ: `bj_multi_place_bet` payload may include optional `clientSeed` (string, max 255). */
 exports.WS_BJ_MULTI_MESSAGES = [
     'bj_multi_join_table',
     'bj_multi_leave_table',

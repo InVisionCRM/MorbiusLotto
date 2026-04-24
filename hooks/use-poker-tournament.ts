@@ -34,6 +34,8 @@ export interface PokerTournamentConfig {
 
 export interface PokerTournamentPlayer {
   playerAddress: string;
+  /** Server `chat_display_names`; omit/null = show shortened address in UI. */
+  displayName?: string | null;
   entryId: string;
   chipsRemaining: number;
   status: 'playing' | 'busted' | 'completed';
@@ -220,7 +222,7 @@ export function usePokerTournament({
           ...prev,
           players: prev.players.map((p) =>
             p.playerAddress.toLowerCase() === payload.playerAddress.toLowerCase()
-              ? { ...p, status: 'busted' as const, finalRank: payload.finalRank }
+              ? { ...p, status: 'busted' as const, finalRank: payload.finalRank, chipsRemaining: 0 }
               : p
           ),
         };
@@ -542,7 +544,7 @@ export function usePokerTableTournamentHud({
           ...prev,
           players: prev.players.map((p) =>
             p.playerAddress.toLowerCase() === payload.playerAddress.toLowerCase()
-              ? { ...p, status: 'busted' as const, finalRank: payload.finalRank }
+              ? { ...p, status: 'busted' as const, finalRank: payload.finalRank, chipsRemaining: 0 }
               : p
           ),
         };

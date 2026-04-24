@@ -1347,7 +1347,10 @@ async function initializeServices() {
         if (!address || !/^0x[a-fA-F0-9]{40}$/.test(address)) {
           return res.status(400).json({ error: 'Invalid address' });
         }
-        const stats = await dbService.getPokerPlayerStats(address);
+        const rawScope = String(req.query.scope ?? 'cash');
+        const scope: 'cash' | 'tournament' | 'all' =
+          rawScope === 'tournament' || rawScope === 'all' ? rawScope : 'cash';
+        const stats = await dbService.getPokerPlayerStats(address, scope);
         sendJson(res, stats);
       } catch (error) {
         logger.error('Error fetching poker player stats:', error);

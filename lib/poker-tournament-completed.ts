@@ -5,6 +5,7 @@
  */
 
 import { POKER_CHIP_WEI } from './poker-buy-in';
+import { toChipInt } from './format-poker-chips';
 
 export interface PokerTournamentStandingRow {
   address: string;
@@ -55,13 +56,11 @@ export function normalizePokerTournamentCompletedPayload(raw: unknown): PokerTou
 
   const standings: PokerTournamentStandingRow[] = (listRaw as unknown[]).map((row) => {
     const r = row && typeof row === 'object' ? (row as Record<string, unknown>) : {};
-    const rawPrize = r.prizeAmount;
-    const prizeChips = hasNewPool
-      ? numString(rawPrize)
-      : legacyWeiToChipsString(rawPrize);
+    const rawPrize = r.prizeAmount ?? r.prize_amount;
+    const prizeChips = hasNewPool ? toChipInt(rawPrize).toString() : legacyWeiToChipsString(rawPrize);
     return {
-      address: String(r.address ?? '').toLowerCase(),
-      rank: Number(r.rank ?? 0),
+      address: String(r.address ?? r.player_address ?? '').toLowerCase(),
+      rank: Number(r.rank ?? r.final_rank ?? 0),
       prizeAmount: prizeChips,
     };
   }).filter((s) => s.address.length > 0 && Number.isFinite(s.rank) && s.rank > 0);

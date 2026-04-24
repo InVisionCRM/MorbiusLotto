@@ -339,7 +339,7 @@ class WebSocketService {
                 requestId: message.requestId
             });
             if (!(0, message_types_1.isKnownWebSocketMessageType)(message.type)) {
-                this.sendError(ws, 'Unknown message type', message.requestId);
+                this.sendError(ws, `Unknown message type: ${message.type}`, message.requestId);
                 return;
             }
             const domain = (0, message_routing_1.classifyWebSocketMessageType)(message.type);
@@ -372,7 +372,7 @@ class WebSocketService {
                     await this.routeBJMultiMessage(ws, message);
                     return;
                 default:
-                    this.sendError(ws, 'Unknown message type', message.requestId);
+                    this.sendError(ws, `Unknown message type (routing): ${message.type}`, message.requestId);
                     return;
             }
         }
@@ -1164,6 +1164,31 @@ class WebSocketService {
         catch (error) {
             logger_1.logger.error('Error updating poker table logo:', error);
             this.sendError(ws, error.message || 'Failed to update table logo', message.requestId);
+        }
+    }
+    async handlePokerPurchaseTableLogo(ws, message) {
+        try {
+            if (!this.pokerGameService || !ws.playerAddress) {
+                return this.sendError(ws, 'Poker not available or wallet required', message.requestId);
+            }
+            const payload = message.payload;
+            const tableId = payload?.tableId;
+            const logo = payload?.logo;
+            if (!tableId || typeof tableId !== 'string') {
+                return this.sendError(ws, 'tableId required', message.requestId);
+            }
+            if (!logo || typeof logo !== 'string') {
+                return this.sendError(ws, 'logo required', message.requestId);
+            }
+            const state = await this.pokerGameService.purchaseTableLogoSponsorship(tableId, ws.playerAddress, logo.trim());
+            this.sendMessage(ws, { type: 'poker_table_state', payload: state, requestId: message.requestId });
+            const roomId = `poker:table:${tableId}`;
+            const broadcastState = await this.pokerGameService.getTableState(tableId, null);
+            this.broadcastToRoom(roomId, { type: 'poker_table_state', payload: broadcastState });
+        }
+        catch (error) {
+            logger_1.logger.error('Error purchasing poker table logo:', error);
+            this.sendError(ws, error.message || 'Failed to purchase table logo', message.requestId);
         }
     }
     async handleGetChatHistory(ws, message) {
@@ -3015,13 +3040,13 @@ class WebSocketService {
             if (!this.bjMultiService || !ws.playerAddress) {
                 return this.sendError(ws, 'BJ multi not available or wallet required', message.requestId);
             }
-            const { tableId, amount } = (message.payload ?? {});
+            const { tableId, amount, clientSeed } = (message.payload ?? {});
             if (!tableId)
                 return this.sendError(ws, 'tableId required', message.requestId);
             if (!amount)
                 return this.sendError(ws, 'amount required', message.requestId);
             const betAmount = (0, safe_bigint_1.toBigIntSafe)(amount);
-            await this.bjMultiService.placeBet(tableId, ws.playerAddress, betAmount);
+            await this.bjMultiService.placeBet(tableId, ws.playerAddress, betAmount, typeof clientSeed === 'string' ? clientSeed : undefined);
             // Skip the betting timer if every seated player has already bet — no one to wait for
             const allBet = await this.bjMultiService.allSeatedPlayersHaveBet(tableId);
             if (allBet) {

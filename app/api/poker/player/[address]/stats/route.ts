@@ -11,7 +11,7 @@ function getBackendUrl(): string {
 }
 
 export async function GET(
-  _request: NextRequest,
+  request: NextRequest,
   { params }: { params: Promise<{ address: string }> }
 ) {
   const { address } = await params;
@@ -20,9 +20,12 @@ export async function GET(
     return NextResponse.json({ error: 'Invalid address' }, { status: 400 });
   }
 
+  const rawScope = request.nextUrl.searchParams.get('scope') ?? 'cash';
+  const scope = rawScope === 'tournament' || rawScope === 'all' ? rawScope : 'cash';
+
   try {
     const backendUrl = getBackendUrl();
-    const res = await fetch(`${backendUrl}/api/poker/player/${address}/stats`, {
+    const res = await fetch(`${backendUrl}/api/poker/player/${address}/stats?scope=${scope}`, {
       headers: { 'Content-Type': 'application/json' },
       next: { revalidate: 30 },
     });

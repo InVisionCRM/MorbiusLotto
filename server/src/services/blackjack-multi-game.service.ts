@@ -394,7 +394,12 @@ export class BlackjackMultiGameService {
   // Betting phase
   // --------------------------------------------------------------------------
 
-  async placeBet(tableId: string, playerAddress: string, betAmount: bigint): Promise<BJMultiTableState> {
+  async placeBet(
+    tableId: string,
+    playerAddress: string,
+    betAmount: bigint,
+    clientSeed?: string,
+  ): Promise<BJMultiTableState> {
     const release = await this.tableLocks.acquire(tableId);
     try {
       const normalized = playerAddress.toLowerCase();
@@ -422,6 +427,11 @@ export class BlackjackMultiGameService {
       );
       if (seatResult.rows.length === 0) throw new Error('Not seated at this table');
       const seat = seatResult.rows[0];
+
+      const normalizedClientSeed =
+        typeof clientSeed === 'string' && clientSeed.length > 0
+          ? clientSeed.slice(0, 255)
+          : 'default';
 
       // Atomic: refund previous pending bet, deduct new bet, update seat — all in one transaction
       const prevPending = BigInt(seat.pending_bet || '0');
@@ -452,8 +462,8 @@ export class BlackjackMultiGameService {
         // else netDeduction === 0 — same amount, no balance change needed
 
         await client.query(
-          `UPDATE blackjack_multi_seats SET pending_bet = $1, consecutive_timeouts = 0 WHERE table_id = $2 AND LOWER(player_address) = LOWER($3)`,
-          [betAmount.toString(), tableId, normalized],
+          `UPDATE blackjack_multi_seats SET pending_bet = $1, consecutive_timeouts = 0, client_seed = $4 WHERE table_id = $2 AND LOWER(player_address) = LOWER($3)`,
+          [betAmount.toString(), tableId, normalized, normalizedClientSeed],
         );
       });
       this.audit(tableId, 'place_bet', null, normalized, { betAmount: betAmount.toString() });
@@ -548,10 +558,15 @@ export class BlackjackMultiGameService {
       ? Number(existingRound.round_number)
       : Number(roundNumResult.rows[0].last) + 1;
 
-    // Generate provably fair deck
+    // Generate provably fair deck — round client seed = seat seeds in position order (colon-joined), max 255 chars
     const serverSeed = this.pfService.generateServerSeed();
     const serverSeedHash = this.pfService.createServerSeedHash(serverSeed);
-    const clientSeed = 'default';
+    const sortedBetting = [...bettingSeats].sort((a, b) => Number(a.position) - Number(b.position));
+    const seedParts = sortedBetting.map((s) =>
+      String(s.client_seed ?? 'default').slice(0, 255),
+    );
+    const joined = seedParts.join(':');
+    const clientSeed = joined.length > 0 ? joined.slice(0, 255) : 'default';
     const deck = this.pfService.fisherYatesShuffle(serverSeed, clientSeed, roundNumber);
 
     // Initial deal: s0c1, s1c1, …, dealer_c1, s0c2, s1c2, …, dealer_c2

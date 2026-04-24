@@ -28,7 +28,9 @@ function registerPokerReadRoutes({ app, dbService, }) {
             if (!address || !ADDRESS_REGEX.test(address)) {
                 return res.status(400).json({ error: 'Invalid address' });
             }
-            const stats = await dbService.getPokerPlayerStats(address);
+            const rawScope = String(req.query.scope ?? 'cash');
+            const scope = rawScope === 'tournament' || rawScope === 'all' ? rawScope : 'cash';
+            const stats = await dbService.getPokerPlayerStats(address, scope);
             (0, json_1.sendJson)(res, stats);
         }
         catch (error) {

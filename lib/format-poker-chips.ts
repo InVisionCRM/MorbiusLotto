@@ -12,7 +12,7 @@ export function formatChips(value: bigint | number | string): string {
       if (!Number.isFinite(value)) return '0';
       n = BigInt(Math.max(0, Math.round(value)));
     } else {
-      n = BigInt(value || '0');
+      n = toChipInt(value);
     }
   } catch {
     return '0';
@@ -36,13 +36,25 @@ export function toChipInt(value: bigint | number | string | null | undefined): b
     if (typeof value === 'bigint') return value < 0n ? 0n : value;
     if (typeof value === 'number') {
       if (!Number.isFinite(value)) return 0n;
-      const rounded = Math.max(0, Math.round(value));
-      return BigInt(rounded);
+      const floored = Math.floor(Math.max(0, value));
+      return BigInt(floored);
     }
-    const s = String(value).replace(/[,\s]/g, '');
-    if (!/^-?\d+$/.test(s)) return 0n;
-    const b = BigInt(s);
-    return b < 0n ? 0n : b;
+    const s = String(value).replace(/[,\s]/g, '').trim();
+    if (!s || s === 'null' || s === 'undefined') return 0n;
+    // Integer string
+    if (/^-?\d+$/.test(s)) {
+      const b = BigInt(s);
+      return b < 0n ? 0n : b;
+    }
+    // Postgres NUMERIC / JSON decimals: "5040.0000000000000000"
+    const dot = s.indexOf('.');
+    if (dot >= 0) {
+      const head = s.slice(0, dot) || '0';
+      if (!/^-?\d+$/.test(head)) return 0n;
+      const b = BigInt(head);
+      return b < 0n ? 0n : b;
+    }
+    return 0n;
   } catch {
     return 0n;
   }

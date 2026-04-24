@@ -36,6 +36,8 @@ import { useBlackjackServerSync } from '@/hooks/use-blackjack-server-sync';
 import { useBlackjackCompletionOrchestrator } from '@/hooks/use-blackjack-completion-orchestrator';
 import { BLACKJACK_ADDRESS, MORBIUS_TOKEN_ADDRESS } from '@/lib/contracts';
 import { getApiUrlOptional, getWebSocketUrlOptional } from '@/lib/api-urls';
+import { generateHexClientSeed } from '@/lib/generate-client-seed';
+import { loadStoredClientSeed, saveStoredClientSeed } from '@/lib/provably-fair-client-seed-storage';
 import { usePendingWithdrawal } from '@/hooks/use-pending-withdrawal';
 import { BlackjackWebSocketClient, GameState as ServerGameState } from '@/lib/websocket-client';
 import { formatEther, parseEther } from 'viem';
@@ -368,14 +370,10 @@ export default function BlackjackPage() {
   // Active bet limits derived from selected tier
   const tierLimits = selectedTier ? BET_TIERS[selectedTier] : BET_LIMITS;
 
-  // Provably Fair: client seed (auto-generated for player entropy; can be overridden in sidebar)
+  // Provably Fair: client seed (localStorage + Provably fair modal; profile modal can edit same key)
   const [clientSeed, setClientSeed] = useState(() => {
-    if (typeof window !== 'undefined' && window.crypto) {
-      const bytes = new Uint8Array(16)
-      window.crypto.getRandomValues(bytes)
-      return Array.from(bytes, (b) => b.toString(16).padStart(2, '0')).join('')
-    }
-    return ''
+    const stored = loadStoredClientSeed('blackjack');
+    return stored ?? generateHexClientSeed();
   });
 
   // Perfect Pairs side bet (whole MORBIUS units, 0-10000)
@@ -556,14 +554,15 @@ export default function BlackjackPage() {
   // Splash screen dismissal state
   const [splashDismissed, setSplashDismissed] = useState(false);
 
-  // Generate random client seed
   const generateClientSeed = () => {
-    const randomBytes = new Uint8Array(16);
-    crypto.getRandomValues(randomBytes);
-    const seed = Array.from(randomBytes, byte => byte.toString(16).padStart(2, '0')).join('');
+    const seed = generateHexClientSeed();
     setClientSeed(seed);
     return seed;
   };
+
+  useEffect(() => {
+    if (clientSeed) saveStoredClientSeed('blackjack', clientSeed);
+  }, [clientSeed]);
 
   // Contract hook (for deposits/withdrawals only)
   const {
@@ -2339,6 +2338,7 @@ export default function BlackjackPage() {
           setShowTournamentBrowser={setShowTournamentBrowser}
           handleStartGame={handleStartGame}
           clientSeed={clientSeed}
+          setClientSeed={setClientSeed}
           handleTournamentPlayerAction={handleTournamentPlayerAction}
           handlePlayerAction={handlePlayerAction}
           address={address}

@@ -1,13 +1,13 @@
 'use client';
 
 import type React from 'react';
-import type { BlackjackWebSocketClient, PokerTableState } from '@/lib/websocket-client';
+import type { PokerTableState } from '@/lib/websocket-client';
 import { PokerTable } from '@/components/poker/PokerTable';
-import { IconButton } from '@/components/animate-ui/components/buttons/icon';
 import type { Emotion } from '@/components/avatar';
 import { POKER_TABLE_REF_W, POKER_TABLE_REF_H } from './PokerMobileZoomLock';
 
 interface PokerTableViewProps {
+  tableId: string;
   /** Scale factor from usePokerMobileZoomLock. 1.0 on desktop, <1 on mobile landscape. */
   tableScale?: number;
   fullscreen?: boolean;
@@ -36,10 +36,11 @@ interface PokerTableViewProps {
   showDashboard: boolean;
   showMyStats: boolean;
   wsConnected: boolean;
-  wsClient: BlackjackWebSocketClient | null;
   tipAnimating: boolean;
   setTipAnimating: React.Dispatch<React.SetStateAction<boolean>>;
   onTipDealer: () => Promise<void>;
+  /** Fullscreen mode hides the page header — show Logo/Tip on the table using this callback. */
+  onOpenLogoSponsor?: () => void;
   onSitOut?: () => void;
   onSitBack?: () => void;
 }
@@ -61,6 +62,7 @@ const POKER_MAIN_PANEL_STYLE: React.CSSProperties = {
 };
 
 export function PokerTableView({
+  tableId,
   tableScale = 1,
   fullscreen = false,
   onToggleFullscreen,
@@ -88,14 +90,24 @@ export function PokerTableView({
   showDashboard,
   showMyStats,
   wsConnected,
-  wsClient,
   tipAnimating,
   setTipAnimating,
   onTipDealer,
+  onOpenLogoSponsor,
   onSitOut,
   onSitBack,
 }: PokerTableViewProps) {
   const isMobileScale = tableScale < 1;
+
+  /** Same shell as `PokerHeaderBar` secondary actions — used when header is hidden (fullscreen). */
+  const headerSecondaryBtnClass =
+    'pointer-events-auto rounded-sm px-2.5 sm:px-3 py-1.5 text-[10px] sm:text-[11px] font-bold tracking-wide transition-all hover:brightness-125 active:scale-[0.97] whitespace-nowrap';
+  const headerSecondaryBtnStyle: React.CSSProperties = {
+    background: 'rgba(255,255,255,0.07)',
+    color: 'rgba(255,255,255,0.75)',
+    border: '1px solid rgba(255,255,255,0.1)',
+    boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.08)',
+  };
 
   // The inner table content (tip button + PokerTable + loading/error states).
   // When scaling, this renders at the fixed reference size and gets shrunk via
@@ -103,35 +115,56 @@ export function PokerTableView({
   // seat positions are always computed for the same reference size.
   const tableContent = (
     <>
-      {effectivePlayerAddress && wsConnected && wsClient && mySeat && (
-        <div className="absolute top-2 left-1/2 -translate-x-1/2 z-10 flex flex-col items-center">
-          <IconButton
-            variant="tip"
-            size="tip"
-            onClick={async () => {
-              if (tipAnimating) return;
-              setTipAnimating(true);
-              try {
-                await onTipDealer();
-              } finally {
-                setTimeout(() => setTipAnimating(false), 900);
-              }
-            }}
-            disabled={tipAnimating}
-          >
-            Tip 2,000
-          </IconButton>
-          {tipAnimating && (
-            <div className="absolute pointer-events-none" style={{ top: 0, left: '50%', transform: 'translateX(-50%)' }}>
-              <div className="tip-chip-fly">
-                <div className="w-6 h-6 rounded-full border-2 border-amber-400 bg-amber-600 flex items-center justify-center shadow-lg shadow-amber-500/40">
-                  <span className="text-white text-[8px] font-bold">$</span>
-                </div>
+      {fullscreen &&
+        effectivePlayerAddress &&
+        wsConnected &&
+        mySeat &&
+        onOpenLogoSponsor && (
+          <div className="absolute top-2 left-1/2 -translate-x-1/2 z-10 flex flex-col items-center gap-1.5">
+            <div className="flex items-center gap-1.5">
+              <button
+                type="button"
+                onClick={() => onOpenLogoSponsor()}
+                className={headerSecondaryBtnClass}
+                style={headerSecondaryBtnStyle}
+              >
+                Logo
+              </button>
+              <div className="relative">
+                <button
+                  type="button"
+                  onClick={async () => {
+                    if (tipAnimating) return;
+                    setTipAnimating(true);
+                    try {
+                      await onTipDealer();
+                    } finally {
+                      setTimeout(() => setTipAnimating(false), 900);
+                    }
+                  }}
+                  disabled={tipAnimating}
+                  className={`${headerSecondaryBtnClass} disabled:opacity-60 disabled:cursor-not-allowed`}
+                  style={headerSecondaryBtnStyle}
+                >
+                  Tip 2,000
+                </button>
+                {tipAnimating && (
+                  <div
+                    className="absolute left-1/2 -translate-x-1/2 pointer-events-none"
+                    style={{ top: '100%', marginTop: 2 }}
+                    aria-hidden
+                  >
+                    <div className="tip-chip-fly">
+                      <div className="w-6 h-6 rounded-full border-2 border-amber-400 bg-amber-600 flex items-center justify-center shadow-lg shadow-amber-500/40">
+                        <span className="text-white text-[8px] font-bold">$</span>
+                      </div>
+                    </div>
+                  </div>
+                )}
               </div>
             </div>
-          )}
-        </div>
-      )}
+          </div>
+        )}
 
       {/* ── Fullscreen toggle button (top-right corner of table, desktop only) ── */}
       {!isMobileScale && onToggleFullscreen && (
@@ -238,7 +271,7 @@ export function PokerTableView({
   // Desktop / tablet: outer vertical padding insets the felt from the column edges.
   return (
     <div
-      className={`flex-1 relative min-h-0 ${fullscreen ? 'py-2 md:py-3' : 'py-4 md:py-8'}`}
+      className={`flex-1 relative min-h-0 ${fullscreen ? 'py-6 md:py-10 px-4 md:px-8' : 'py-8 md:py-14 px-6 md:px-12'}`}
       style={{
         minHeight: 0,
         ...(fullscreen ? { width: '100%' } : POKER_MAIN_PANEL_STYLE),

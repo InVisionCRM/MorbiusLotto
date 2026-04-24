@@ -37,6 +37,7 @@ exports.TournamentService = exports.TOURNAMENT_CONFIG = void 0;
 const viem_1 = require("viem");
 const logger_1 = require("../utils/logger");
 const safe_bigint_1 = require("../utils/safe-bigint");
+const poker_chip_wallet_1 = require("./poker-chip-wallet");
 function formatWei(w) {
     return Number((0, viem_1.formatEther)(w)).toLocaleString(undefined, { maximumFractionDigits: 2 });
 }
@@ -190,6 +191,7 @@ class TournamentService {
             platform_fee_percent: Number(row.platform_fee_percent ?? 3),
             tournament_type: row.tournament_type ?? null,
             on_chain_tournament_id: row.on_chain_tournament_id != null ? Number(row.on_chain_tournament_id) : null,
+            game_type: row.game_type ?? 'blackjack',
         };
     }
     normalizeEntry(row) {
@@ -679,6 +681,7 @@ class TournamentService {
             useEscrowV2 = useEscrow;
             useMorbiusPayout = isOnChain && !useEscrow;
             onChainTournamentId = tournament.on_chain_tournament_id ?? null;
+            const offChainPokerChips = String(tournament.game_type ?? '') === 'poker' && !useMorbiusPayout && !useEscrowV2;
             // Apply prizes — DB updates only; on-chain calls deferred to Phase 2
             for (const row of prizesResult.rows) {
                 const prizeAmount = this.toBigInt(row.prize_amount);
@@ -688,8 +691,11 @@ class TournamentService {
                         // Queue for Phase 2 on-chain payout
                         pendingOnChainPayouts.push({ address: row.player_address, amount: prizeAmount });
                     }
+                    else if (offChainPokerChips) {
+                        await (0, poker_chip_wallet_1.applyPokerChipDelta)(client, String(row.player_address).toLowerCase(), prizeAmount, 'tournament_prize', { type: 'tournament', id: tournamentId });
+                    }
                     else {
-                        // Off-chain balance: safe to update inside the DB transaction
+                        // Off-chain MORBIUS balance (blackjack / legacy)
                         await client.query(`UPDATE players SET balance = balance + $1::NUMERIC WHERE LOWER(wallet_address) = LOWER($2)`, [prizeAmount.toString(), row.player_address]);
                     }
                     distributions.push({
@@ -707,16 +713,22 @@ class TournamentService {
             const platformFeePercent = 3;
             const creatorFeePercent = 2;
             const totalPool = actualPrizePool;
-            const platformWallet = process.env.PLATFORM_FEE_WALLET;
-            if (platformFeePercent > 0 && platformWallet) {
+            const platformWalletEnv = process.env.PLATFORM_FEE_WALLET?.trim();
+            const platformWalletChips = (0, poker_chip_wallet_1.getPlatformFeeWalletLower)();
+            if (platformFeePercent > 0 && (platformWalletEnv || offChainPokerChips)) {
                 const platformFeeAmount = (totalPool * BigInt(platformFeePercent)) / 100n;
                 if (platformFeeAmount > 0n) {
                     if (useMorbiusPayout || useEscrowV2) {
-                        pendingOnChainPayouts.push({ address: platformWallet, amount: platformFeeAmount });
+                        if (platformWalletEnv) {
+                            pendingOnChainPayouts.push({ address: platformWalletEnv, amount: platformFeeAmount });
+                        }
                     }
-                    else {
+                    else if (offChainPokerChips) {
+                        await (0, poker_chip_wallet_1.applyPokerChipDelta)(client, platformWalletChips, platformFeeAmount, 'platform_fee', { type: 'tournament', id: tournamentId });
+                    }
+                    else if (platformWalletEnv) {
                         await client.query(`INSERT INTO players (wallet_address, balance) VALUES (LOWER($1), $2::NUMERIC)
-               ON CONFLICT (wallet_address) DO UPDATE SET balance = players.balance + $2::NUMERIC`, [platformWallet.toLowerCase(), platformFeeAmount.toString()]);
+               ON CONFLICT (wallet_address) DO UPDATE SET balance = players.balance + $2::NUMERIC`, [platformWalletEnv.toLowerCase(), platformFeeAmount.toString()]);
                     }
                 }
             }
@@ -725,6 +737,9 @@ class TournamentService {
                 if (creatorFeeAmount > 0n) {
                     if (useMorbiusPayout || useEscrowV2) {
                         pendingOnChainPayouts.push({ address: tournament.creator_address, amount: creatorFeeAmount });
+                    }
+                    else if (offChainPokerChips) {
+                        await (0, poker_chip_wallet_1.applyPokerChipDelta)(client, tournament.creator_address.toLowerCase(), creatorFeeAmount, 'creator_fee', { type: 'tournament', id: tournamentId });
                     }
                     else {
                         await client.query(`UPDATE players SET balance = balance + $1::NUMERIC WHERE LOWER(wallet_address) = LOWER($2)`, [creatorFeeAmount.toString(), tournament.creator_address]);

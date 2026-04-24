@@ -1,6 +1,7 @@
 'use client'
 
-import React, { useState, useEffect } from 'react'
+import React, { useState, useEffect, useCallback } from 'react'
+import Link from 'next/link'
 import { usePlayerProfileStats } from '@/hooks/use-player-profile'
 import { usePlayerServerBalance } from '@/hooks/use-player-server-balance'
 import { PlayerStatsDashboard } from '@/components/BLACKJACK/PlayerStatsDashboard'
@@ -12,6 +13,13 @@ import { AllStatsDashboard } from '@/components/shared/AllStatsDashboard'
 import { PokerPlayerDashboard } from '@/components/poker/PokerPlayerDashboard'
 import { RoulettePerformanceChart } from '@/components/Roulette/RoulettePerformanceChart'
 import { useRoulettePlayerStats } from '@/hooks/use-roulette-results'
+import { ProvablyFairClientSeedModal } from '@/components/shared/ProvablyFairClientSeedModal'
+import { generateHexClientSeed } from '@/lib/generate-client-seed'
+import {
+  loadStoredClientSeed,
+  saveStoredClientSeed,
+  type ProvablyFairStoredGame,
+} from '@/lib/provably-fair-client-seed-storage'
 
 export type PlayerProfileGame = 'all' | 'blackjack' | 'poker' | 'lottery' | 'keno' | 'plinko' | 'roulette'
 
@@ -45,6 +53,31 @@ export function PlayerProfileDashboard({
   modalOpen,
 }: PlayerProfileDashboardProps) {
   const [selectedGame, setSelectedGame] = useState<PlayerProfileGame>(initialGame)
+  const [pfModalOpen, setPfModalOpen] = useState(false)
+  const [pfModalGame, setPfModalGame] = useState<ProvablyFairStoredGame | null>(null)
+  const [pfSeedValue, setPfSeedValue] = useState('')
+
+  const openProvablyFairModal = useCallback((game: ProvablyFairStoredGame) => {
+    setPfModalGame(game)
+    setPfSeedValue(loadStoredClientSeed(game) ?? generateHexClientSeed())
+    setPfModalOpen(true)
+  }, [])
+
+  const closeProvablyFairModal = useCallback((open: boolean) => {
+    if (!open && pfModalGame) {
+      saveStoredClientSeed(pfModalGame, pfSeedValue)
+    }
+    setPfModalOpen(open)
+    if (!open) setPfModalGame(null)
+  }, [pfModalGame, pfSeedValue])
+
+  const onPfSeedChange = useCallback(
+    (next: string) => {
+      setPfSeedValue(next)
+      if (pfModalGame) saveStoredClientSeed(pfModalGame, next)
+    },
+    [pfModalGame],
+  )
 
   useEffect(() => {
     if (modalOpen === undefined) {
@@ -53,6 +86,11 @@ export function PlayerProfileDashboard({
       setSelectedGame(initialGame)
     }
   }, [initialGame, modalOpen])
+
+  useEffect(() => {
+    setPfModalOpen(false)
+    setPfModalGame(null)
+  }, [selectedGame])
 
   const { data: stats, isLoading: statsLoading } = usePlayerProfileStats(selectedGame === 'blackjack' ? address : null)
   const { data: reserveBalance } = usePlayerServerBalance(selectedGame === 'blackjack' ? address : null)
@@ -97,25 +135,62 @@ export function PlayerProfileDashboard({
   const isRoulette = selectedGame === 'roulette'
   const isLoading = isLottery ? lotteryStats.isLoading : statsLoading
 
+  const verifyHref =
+    selectedGame === 'blackjack'
+      ? '/BLACKJACK/verify'
+      : selectedGame === 'lottery'
+        ? '/lottery/verify'
+        : null
+  const pfGame: ProvablyFairStoredGame | null =
+    selectedGame === 'blackjack' ? 'blackjack' : selectedGame === 'lottery' ? 'lottery' : null
+
   return (
     <div className="flex flex-col gap-4">
-      <div className="flex items-center gap-2 flex-wrap">
-        <label htmlFor={gameSelectId} className="text-sm text-white/80 whitespace-nowrap">
-          Game:
-        </label>
-        <select
-          id={gameSelectId}
-          value={selectedGame}
-          onChange={(e) => setSelectedGame(e.target.value as PlayerProfileGame)}
-          className="bg-slate-800/90 border border-cyan-500/30 rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:ring-2 focus:ring-cyan-500/50"
-        >
-          {(Object.entries(GAME_LABELS) as [PlayerProfileGame, string][]).map(([value, label]) => (
-            <option key={value} value={value} className="bg-slate-900 text-white">
-              {label}
-            </option>
-          ))}
-        </select>
+      <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between sm:gap-4">
+        <div className="flex items-center gap-2 flex-wrap">
+          <label htmlFor={gameSelectId} className="text-sm text-white/80 whitespace-nowrap">
+            Game:
+          </label>
+          <select
+            id={gameSelectId}
+            value={selectedGame}
+            onChange={(e) => setSelectedGame(e.target.value as PlayerProfileGame)}
+            className="bg-slate-800/90 border border-cyan-500/30 rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:ring-2 focus:ring-cyan-500/50"
+          >
+            {(Object.entries(GAME_LABELS) as [PlayerProfileGame, string][]).map(([value, label]) => (
+              <option key={value} value={value} className="bg-slate-900 text-white">
+                {label}
+              </option>
+            ))}
+          </select>
+        </div>
+        {verifyHref && pfGame && (
+          <div className="flex flex-wrap items-center gap-3 sm:justify-end">
+            <Link
+              href={verifyHref}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-xs text-cyan-400/90 underline underline-offset-2 hover:text-cyan-300"
+            >
+              Verify
+            </Link>
+            <button
+              type="button"
+              onClick={() => openProvablyFairModal(pfGame)}
+              className="text-xs text-cyan-400/90 underline underline-offset-2 hover:text-cyan-300"
+            >
+              Provably fair
+            </button>
+          </div>
+        )}
       </div>
+
+      <ProvablyFairClientSeedModal
+        open={pfModalOpen && pfModalGame !== null}
+        onOpenChange={closeProvablyFairModal}
+        value={pfSeedValue}
+        onChange={onPfSeedChange}
+      />
 
       {isRoulette ? (
         <div className="space-y-4">

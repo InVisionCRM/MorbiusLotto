@@ -1,6 +1,6 @@
 'use client';
 
-import type { CSSProperties, ReactNode } from 'react';
+import { useState, type CSSProperties, type ReactNode } from 'react';
 import { getApiUrlOptional, getWebSocketUrlOptional } from '@/lib/api-urls';
 import { GameState, Action } from '@/app/BLACKJACK/types';
 import { TOURNAMENT_CONFIG } from '@/hooks/use-tournament';
@@ -17,6 +17,7 @@ import type { TableThemeInfo } from '@/hooks/use-blackjack-tables';
 import { SpeechIndicator } from '@/components/shared/SpeechIndicator';
 import { SpeechConfirmDialog } from '@/components/shared/SpeechConfirmDialog';
 import { TableTokenProfileCard, type TableTokenProfileCardProps } from '@/components/BLACKJACK/TableTokenProfileCard';
+import { ProvablyFairClientSeedModal } from '@/components/shared/ProvablyFairClientSeedModal';
 
 interface BlackjackGameViewProps {
   contractIsPaused: boolean;
@@ -71,6 +72,7 @@ interface BlackjackGameViewProps {
   setShowTournamentBrowser: (open: boolean) => void;
   handleStartGame: (betAmount: bigint, clientSeed: string, perfectPairsBetAmount?: bigint) => Promise<void>;
   clientSeed: string;
+  setClientSeed: (seed: string) => void;
   handleTournamentPlayerAction: (action: Action) => Promise<void>;
   handlePlayerAction: (action: Action) => Promise<void>;
   address: string | undefined;
@@ -169,6 +171,7 @@ export function BlackjackGameView(props: BlackjackGameViewProps) {
     setShowTournamentBrowser,
     handleStartGame,
     clientSeed,
+    setClientSeed,
     handleTournamentPlayerAction,
     handlePlayerAction,
     address,
@@ -201,6 +204,8 @@ export function BlackjackGameView(props: BlackjackGameViewProps) {
     speech,
     voiceTutorialVideoUrl,
   } = props;
+
+  const [provablyFairOpen, setProvablyFairOpen] = useState(false);
 
   const panelShell: CSSProperties = {
     background: 'linear-gradient(145deg, rgb(16, 26, 35), rgb(35, 36, 41))',
@@ -437,6 +442,17 @@ export function BlackjackGameView(props: BlackjackGameViewProps) {
               </div>
             </div>
           )}
+            {!tournament.tournamentState.inTournament && (
+              <div className="flex justify-end border-t border-white/5 px-2 py-2">
+                <button
+                  type="button"
+                  onClick={() => setProvablyFairOpen(true)}
+                  className="text-xs text-cyan-400/90 underline underline-offset-2 hover:text-cyan-300"
+                >
+                  Provably fair
+                </button>
+              </div>
+            )}
           </div>
 
           <div className="rounded-xl overflow-hidden min-w-0 p-2 sm:p-3" style={panelShell}>
@@ -480,6 +496,13 @@ export function BlackjackGameView(props: BlackjackGameViewProps) {
           onNo={speech.confirmNo}
         />
       )}
+
+      <ProvablyFairClientSeedModal
+        open={provablyFairOpen}
+        onOpenChange={setProvablyFairOpen}
+        value={clientSeed}
+        onChange={setClientSeed}
+      />
     </>
   );
 }

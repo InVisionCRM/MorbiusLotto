@@ -154,10 +154,17 @@ export interface PokerTableState {
   seats: PokerSeatState[];
   currentHand: PokerCurrentHand | null;
   myHoleCards: number[] | null;
-  /** Marketing logo filename (admin-set, e.g. "partner.png"). Null = no logo. */
+  /** Sponsored gallery logo filename, or null when idle (client shows default Morbius logo). */
   tableLogo?: string | null;
   /** Logo opacity (0–1). Default 0.12. */
   tableLogoOpacity?: number | null;
+  /** ISO end of paid logo window, or null. */
+  tableLogoSponsoredUntil?: string | null;
+  tableLogoSponsorAddress?: string | null;
+  /** True when felt uses default Morbius logo (no active sponsorship). */
+  tableLogoIsDefault?: boolean;
+  /** Whole MORBIUS chips as decimal string for the next logo change. */
+  tableLogoPriceMorbiusChips?: string;
   /** Present for tournament-mode tables (`poker_tables.tournament_id`). HUD works without `?tournament=` in the URL. */
   tournamentId?: string | null;
 }
@@ -852,6 +859,11 @@ export class BlackjackWebSocketClient {
   /** Admin-only: update the marketing logo displayed on the table felt. */
   async pokerUpdateTableLogo(tableId: string, logo: string | null, opacity: number): Promise<{ success: boolean }> {
     return this.sendRequest(WS_MESSAGE_TYPES.pokerUpdateTableLogo, { tableId, logo, opacity });
+  }
+
+  /** Seated players: pay off-chain MORBIUS to set a curated gallery logo for 10 minutes (timer restarts). */
+  async pokerPurchaseTableLogo(tableId: string, logo: string): Promise<PokerTableState> {
+    return this.sendRequest(WS_MESSAGE_TYPES.pokerPurchaseTableLogo, { tableId, logo });
   }
 
   /**

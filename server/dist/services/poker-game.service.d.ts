@@ -68,10 +68,21 @@ export interface PokerTableState {
     currentHand: PokerCurrentHand | null;
     /** Hole cards only for the requesting player */
     myHoleCards: number[] | null;
-    /** Marketing logo filename (admin-set). Null = no logo. */
+    /**
+     * Sponsored marketing logo filename (gallery file under `public/Marketing /LOGOS/`).
+     * Null when idle — clients show the default Morbius logo on the felt.
+     */
     tableLogo?: string | null;
     /** Logo opacity (0–1). */
     tableLogoOpacity?: number | null;
+    /** ISO end time of current paid logo window, or null if idle. */
+    tableLogoSponsoredUntil?: string | null;
+    /** Last sponsor wallet (lowercase), for UI. */
+    tableLogoSponsorAddress?: string | null;
+    /** True when no active sponsorship (felt uses default Morbius logo). */
+    tableLogoIsDefault?: boolean;
+    /** Whole MORBIUS chips (string) for the next logo change at this moment. */
+    tableLogoPriceMorbiusChips?: string;
     /** Set when `poker_tables.tournament_id` is non-null (SNG / scheduled poker tournament). */
     tournamentId?: string | null;
 }
@@ -87,6 +98,8 @@ export declare class PokerGameService {
     private nextHandTimers;
     /** Per-table mutex to serialize playerAction / autoFold / leaveTable calls. */
     private tableLocks;
+    /** Starting stacks (whole chips) captured at hand deal, keyed by handId -> address. */
+    private handStartingStacks;
     constructor(dbService: DatabaseService, pfService: ProvablyFairService);
     /** Wire in the WebSocket broadcast so actions push state to clients. */
     setBroadcastCallback(cb: (tableId: string) => Promise<void>): void;
@@ -99,6 +112,12 @@ export declare class PokerGameService {
      * Applies late eliminations and may complete the SNG.
      */
     setTournamentUnderfilledRecovery(cb: (tableId: string) => Promise<void>): void;
+    /**
+     * After N consecutive turn-timer auto-folds on a tournament table, bust the player (same as chip elimination).
+     * Wired at runtime from PokerTournamentService.
+     */
+    private tournamentTimeoutEliminationCallback;
+    setTournamentTimeoutEliminationCallback(cb: ((tableId: string, playerAddress: string) => Promise<void>) | null): void;
     private getPool;
     /**
      * Serialize async operations on a given table so that concurrent
@@ -124,15 +143,24 @@ export declare class PokerGameService {
     listTables(): Promise<PokerTableSummary[]>;
     createTable(smallBlindChips: number, bigBlindChips: number, maxSeats: number, pinCode?: string): Promise<string>;
     deleteTable(tableId: string): Promise<boolean>;
-    joinTable(tableId: string, playerAddress: string, buyInWei: string, pinCode?: string): Promise<PokerTableState>;
+    /** `buyInChips` is a stringified whole-chip count (not MORBIUS wei). */
+    joinTable(tableId: string, playerAddress: string, buyInChips: string, pinCode?: string): Promise<PokerTableState>;
     private _joinTable;
     leaveTable(tableId: string, playerAddress: string): Promise<PokerTableState | null>;
     private _leaveTable;
     private persistActionAfterStandUp;
-    addChips(tableId: string, playerAddress: string, amountWei: string): Promise<PokerTableState>;
+    /** `amountChips` is a stringified whole-chip count to add from the player poker chip wallet. */
+    addChips(tableId: string, playerAddress: string, amountChips: string): Promise<PokerTableState>;
     private _addChips;
+    /** Clear expired paid logo rows so all readers converge without a cron. */
+    private expirePokerTableLogoIfExpired;
     getTableState(tableId: string, forPlayer: string | null): Promise<PokerTableState>;
     updateTableLogo(tableId: string, logo: string | null, opacity: number): Promise<void>;
+    /**
+     * Pay MORBIUS (off-chain `players.balance`) to set a curated gallery logo for 10 minutes.
+     * Timer restarts on each purchase. Seated players only.
+     */
+    purchaseTableLogoSponsorship(tableId: string, playerAddress: string, logoFilename: string): Promise<PokerTableState>;
     setSitOut(tableId: string, playerAddress: string): Promise<PokerTableState>;
     setSitBack(tableId: string, playerAddress: string): Promise<PokerTableState>;
     /** Kick players who have been sitting out for >= 15 minutes (cash games only). */
@@ -141,6 +169,13 @@ export declare class PokerGameService {
     playerAction(tableId: string, handId: string, playerAddress: string, action: string, amount?: string): Promise<PokerTableState>;
     private _playerAction;
     private persistShowdown;
+    /**
+     * Denormalize per-player stats for a completed hand into poker_hand_players.
+     * Reads poker_hand_actions (already persisted) and combines with in-memory
+     * starting stacks + settlement data. Failure here must never corrupt a hand —
+     * errors are swallowed by the caller.
+     */
+    private populateHandPlayers;
     autoFoldTimedOutTurns(): Promise<string[]>;
     tickServerTournamentBots(): Promise<void>;
     private reconstructTable;

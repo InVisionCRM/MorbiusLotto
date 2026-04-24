@@ -636,7 +636,7 @@ export declare class DatabaseService implements MoneyDatabaseQueries {
         resultType: 'win' | 'loss' | 'fold';
     }>>;
     /** Aggregate poker stats for a player (from completed hands). */
-    getPokerPlayerStats(address: string): Promise<{
+    getPokerPlayerStats(address: string, scope?: 'cash' | 'tournament' | 'all'): Promise<{
         total_hands: number;
         hands_won: number;
         win_rate: number;
@@ -648,6 +648,38 @@ export declare class DatabaseService implements MoneyDatabaseQueries {
         best_streak: number;
         biggest_pot_won: string;
         biggest_loss: string;
+        vpip_pct: number;
+        pfr_pct: number;
+        three_bet_pct: number;
+        wtsd_pct: number;
+        wsd_pct: number;
+        aggression_factor: number | null;
+        bb_per_100: number | null;
+        showdown_win_rate: number;
+        non_showdown_win_rate: number;
+        tournament_hands: number;
+        position_win_rates: {
+            button: {
+                hands: number;
+                win_rate: number;
+            };
+            small_blind: {
+                hands: number;
+                win_rate: number;
+            };
+            big_blind: {
+                hands: number;
+                win_rate: number;
+            };
+            other: {
+                hands: number;
+                win_rate: number;
+            };
+        };
+        winning_hand_breakdown: Array<{
+            hand_name: string;
+            count: number;
+        }>;
     }>;
     /** Aggregate poker stats for a player at a specific table (from completed hands). */
     getPokerPlayerTableStats(tableId: string, address: string): Promise<{

@@ -18,6 +18,11 @@ export interface PokerHandListEntry {
   resultType: 'win' | 'loss' | 'fold';
 }
 
+export interface PokerPositionWinRate {
+  hands: number;
+  win_rate: number;
+}
+
 export interface PokerPlayerStats {
   total_hands: number;
   hands_won: number;
@@ -30,6 +35,25 @@ export interface PokerPlayerStats {
   best_streak: number;
   biggest_pot_won: string;
   biggest_loss: string;
+  // HUD 6
+  vpip_pct: number;
+  pfr_pct: number;
+  three_bet_pct: number;
+  wtsd_pct: number;
+  wsd_pct: number;
+  aggression_factor: number | null;
+  // Add-ons
+  bb_per_100: number | null;
+  showdown_win_rate: number;
+  non_showdown_win_rate: number;
+  tournament_hands: number;
+  position_win_rates: {
+    button: PokerPositionWinRate;
+    small_blind: PokerPositionWinRate;
+    big_blind: PokerPositionWinRate;
+    other: PokerPositionWinRate;
+  };
+  winning_hand_breakdown: Array<{ hand_name: string; count: number }>;
 }
 
 export interface PokerHandDetail {
@@ -78,27 +102,63 @@ export function usePokerPlayerHands(address: string | null, limit: number = 100)
   });
 }
 
-export function usePokerPlayerStats(address: string | null) {
+function parsePosition(raw: any): PokerPositionWinRate {
+  return {
+    hands: Number(raw?.hands ?? 0),
+    win_rate: Number(raw?.win_rate ?? 0),
+  };
+}
+
+function parsePlayerStats(data: any): PokerPlayerStats {
+  const pos = data?.position_win_rates ?? {};
+  return {
+    total_hands: data.total_hands ?? 0,
+    hands_won: data.hands_won ?? 0,
+    win_rate: data.win_rate ?? 0,
+    total_wagered: String(data.total_wagered ?? '0'),
+    total_won: String(data.total_won ?? '0'),
+    profit_loss: String(data.profit_loss ?? '0'),
+    roi: data.roi ?? 0,
+    current_streak: data.current_streak ?? 0,
+    best_streak: data.best_streak ?? 0,
+    biggest_pot_won: String(data.biggest_pot_won ?? '0'),
+    biggest_loss: String(data.biggest_loss ?? '0'),
+    vpip_pct: Number(data.vpip_pct ?? 0),
+    pfr_pct: Number(data.pfr_pct ?? 0),
+    three_bet_pct: Number(data.three_bet_pct ?? 0),
+    wtsd_pct: Number(data.wtsd_pct ?? 0),
+    wsd_pct: Number(data.wsd_pct ?? 0),
+    aggression_factor: data.aggression_factor == null ? null : Number(data.aggression_factor),
+    bb_per_100: data.bb_per_100 == null ? null : Number(data.bb_per_100),
+    showdown_win_rate: Number(data.showdown_win_rate ?? 0),
+    non_showdown_win_rate: Number(data.non_showdown_win_rate ?? 0),
+    tournament_hands: Number(data.tournament_hands ?? 0),
+    position_win_rates: {
+      button: parsePosition(pos.button),
+      small_blind: parsePosition(pos.small_blind),
+      big_blind: parsePosition(pos.big_blind),
+      other: parsePosition(pos.other),
+    },
+    winning_hand_breakdown: Array.isArray(data.winning_hand_breakdown)
+      ? data.winning_hand_breakdown.map((b: any) => ({
+          hand_name: String(b?.hand_name ?? ''),
+          count: Number(b?.count ?? 0),
+        }))
+      : [],
+  };
+}
+
+export type PokerStatsScope = 'cash' | 'tournament' | 'all';
+
+export function usePokerPlayerStats(address: string | null, scope: PokerStatsScope = 'cash') {
   return useQuery<PokerPlayerStats>({
-    queryKey: ['pokerPlayerStats', address],
+    queryKey: ['pokerPlayerStats', address, scope],
     queryFn: async () => {
       if (!address) throw new Error('Address required');
-      const res = await fetch(`/api/poker/player/${address}/stats`);
+      const res = await fetch(`/api/poker/player/${address}/stats?scope=${scope}`);
       if (!res.ok) throw new Error('Failed to fetch poker stats');
       const data = await res.json();
-      return {
-        total_hands: data.total_hands ?? 0,
-        hands_won: data.hands_won ?? 0,
-        win_rate: data.win_rate ?? 0,
-        total_wagered: String(data.total_wagered ?? '0'),
-        total_won: String(data.total_won ?? '0'),
-        profit_loss: String(data.profit_loss ?? '0'),
-        roi: data.roi ?? 0,
-        current_streak: data.current_streak ?? 0,
-        best_streak: data.best_streak ?? 0,
-        biggest_pot_won: String(data.biggest_pot_won ?? '0'),
-        biggest_loss: String(data.biggest_loss ?? '0'),
-      };
+      return parsePlayerStats(data);
     },
     enabled: !!address,
     refetchInterval: 30_000,
@@ -124,17 +184,7 @@ export function usePokerPlayerTableStats(tableId: string | null, address: string
       if (!res.ok) throw new Error('Failed to fetch poker table stats');
       const data = await res.json();
       return {
-        total_hands: data.total_hands ?? 0,
-        hands_won: data.hands_won ?? 0,
-        win_rate: data.win_rate ?? 0,
-        total_wagered: String(data.total_wagered ?? '0'),
-        total_won: String(data.total_won ?? '0'),
-        profit_loss: String(data.profit_loss ?? '0'),
-        roi: data.roi ?? 0,
-        current_streak: data.current_streak ?? 0,
-        best_streak: data.best_streak ?? 0,
-        biggest_pot_won: String(data.biggest_pot_won ?? '0'),
-        biggest_loss: String(data.biggest_loss ?? '0'),
+        ...parsePlayerStats(data),
         hands_history: Array.isArray(data.hands_history)
           ? data.hands_history.map((h: any) => ({
               hand_number: h.hand_number ?? 0,

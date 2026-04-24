@@ -10,16 +10,16 @@ export const POKER_TABLE_MAX_SEATS = 10;
  * your current `seatCount` have no visible effect until you add seats toward 10).
  */
 export const SEAT_ANCHOR_RING: SeatAnchor[] = [
-  { fx: 0.5, fy: 0.85 }, // 0 — bottom center (hero)
-  { fx: 0.70, fy: 0.85 },
-  { fx: 0.90, fy: 0.65 },
-  { fx: 0.91, fy: 0.35 },
-  { fx: 0.70, fy: 0.15 },
-  { fx: 0.5, fy: 0.15 },
+  { fx: 0.5, fy: 0.85 },  // 0 — bottom center (hero)
+  { fx: 0.30, fy: 0.85 }, // 1 — hero's left (next to act, clockwise)
+  { fx: 0.10, fy: 0.70 },
+  { fx: 0.10, fy: 0.30 },
   { fx: 0.30, fy: 0.15 },
-  { fx: 0.10, fy: 0.35 },
-  { fx: 0.10, fy: 0.65 },
-  { fx: 0.30, fy: 0.85 },
+  { fx: 0.5, fy: 0.15 },  // 5 — top center
+  { fx: 0.70, fy: 0.15 },
+  { fx: 0.91, fy: 0.30 },
+  { fx: 0.90, fy: 0.70 },
+  { fx: 0.70, fy: 0.85 },
 ];
 
 /** Map display slot → ring index `0..POKER_TABLE_MAX_SEATS-1`. At full **10** seats, slot === ring index. */
@@ -48,16 +48,16 @@ export const POKER_POT_ANCHOR: SeatAnchor = { fx: 0.5, fy: 0.51 };
  * `PokerTable` uses `authoredChipAnchors` / `betChipAnchorForDisplaySlot` — not `SEAT_ANCHOR_RING`.
  */
 export const CHIP_ANCHOR_RING: SeatAnchor[] = [
-  { fx: 0.5, fy: 0.65 }, // 0 — bottom center (hero)
-  { fx: 0.70, fy: 0.65 },
-  { fx: 0.80, fy: 0.60 },
-  { fx: 0.80, fy: 0.40 },
-  { fx: 0.70, fy: 0.35 },
-  { fx: 0.5, fy: 0.35 },
-  { fx: 0.35, fy: 0.35 },
-  { fx: 0.20, fy: 0.40 },
+  { fx: 0.5, fy: 0.65 },  // 0 — bottom center (hero)
+  { fx: 0.35, fy: 0.65 }, // 1 — hero's left (next to act, clockwise)
   { fx: 0.20, fy: 0.60 },
-  { fx: 0.35, fy: 0.65 },
+  { fx: 0.20, fy: 0.40 },
+  { fx: 0.35, fy: 0.35 },
+  { fx: 0.5, fy: 0.35 },  // 5 — top center
+  { fx: 0.70, fy: 0.35 },
+  { fx: 0.80, fy: 0.40 },
+  { fx: 0.80, fy: 0.60 },
+  { fx: 0.70, fy: 0.65 },
 ];
 
 /** Display-slot chip anchors for `seatCount` (mirrors `authoredSeatAnchors`). */
@@ -73,4 +73,35 @@ export function authoredChipAnchors(seatCount: number): SeatAnchor[] {
 export function betChipAnchorForDisplaySlot(seatCount: number, displaySlot: number): SeatAnchor {
   const chips = authoredChipAnchors(seatCount);
   return chips[displaySlot] ?? { ...POKER_POT_ANCHOR };
+}
+
+/**
+ * Non-hero hole-card anchors (**10** vertices). Same `ringIndexForDisplaySlot` mapping as seats/chips.
+ * Tweak these freely to place opponent cards wherever looks right relative to each seat.
+ */
+export const CARD_ANCHOR_RING: SeatAnchor[] = [
+  { fx: 0.5, fy: 0.75 },  // 0 — hero (unused for opponent cards; hero's cards live on avatar)
+  { fx: 0.30, fy: 0.70 }, // 1 — hero's left (next to act, clockwise)
+  { fx: 0.10, fy: 0.56 },
+  { fx: 0.10, fy: 0.17 },
+  { fx: 0.30, fy: 0.03 },
+  { fx: 0.5, fy: 0.03 },  // 5 — top center
+  { fx: 0.70, fy: 0.03 },
+  { fx: 0.91, fy: 0.17 },
+  { fx: 0.91, fy: 0.56 },
+  { fx: 0.70, fy: 0.70 },
+];
+
+export function authoredCardAnchors(seatCount: number): SeatAnchor[] {
+  if (seatCount <= 0) return [];
+  return Array.from({ length: seatCount }, (_, displaySlot) => {
+    const ri = ringIndexForDisplaySlot(displaySlot, seatCount);
+    const a = CARD_ANCHOR_RING[ri];
+    return { fx: a.fx, fy: a.fy };
+  });
+}
+
+export function cardAnchorForDisplaySlot(seatCount: number, displaySlot: number): SeatAnchor {
+  const cards = authoredCardAnchors(seatCount);
+  return cards[displaySlot] ?? { ...POKER_POT_ANCHOR };
 }

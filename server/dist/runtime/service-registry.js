@@ -20,7 +20,7 @@ const logger_1 = require("../utils/logger");
 async function recoverPokerRuntimeState(dbService, pokerGameService) {
     const existingTables = await pokerGameService.listTables();
     if (existingTables.length === 0) {
-        await pokerGameService.createTable(10, 20, 6);
+        await pokerGameService.createTable(10, 20, 10);
         logger_1.logger.info('Poker: created default table (10/20 chips, 6 seats)');
     }
     try {
@@ -59,6 +59,7 @@ async function initializeRuntimeServices(server, port) {
     pokerTournamentService.setBroadcastCallback((room, msg) => wsService.broadcastToRoom(room, msg));
     pokerGameService.setPostHandCallback((tableId, handNumber) => pokerTournamentService.syncAfterHand(tableId, handNumber));
     pokerGameService.setTournamentUnderfilledRecovery((tableId) => pokerTournamentService.recoverTournamentTableIfUnderTwoStackedSeats(tableId));
+    pokerGameService.setTournamentTimeoutEliminationCallback((tableId, playerAddress) => pokerTournamentService.eliminatePlayerForConsecutiveTimeouts(tableId, playerAddress));
     bjMultiService.setBroadcastCallback((tableId) => wsService.broadcastBJMultiTableState(tableId));
     // Kick players who have been sitting out for >= 15 minutes (cash games only)
     setInterval(() => {

@@ -37,6 +37,7 @@ type ReactionEntry = {
   ts: number;
 };
 type DividerEntry = { kind: 'divider'; id: string; ts: number };
+type StreetHeaderEntry = { kind: 'street_header'; id: string; label: string; ts: number };
 type ShowdownEntry = {
   kind: 'showdown';
   id: string;
@@ -55,7 +56,14 @@ type SystemEntry = {
   text: string;
   ts: number;
 };
-type Entry = ChatEntry | ActionEntry | ReactionEntry | DividerEntry | ShowdownEntry | SystemEntry;
+type Entry =
+  | ChatEntry
+  | ActionEntry
+  | ReactionEntry
+  | DividerEntry
+  | StreetHeaderEntry
+  | ShowdownEntry
+  | SystemEntry;
 
 // ── Constants ─────────────────────────────────────────────────────────────
 
@@ -97,6 +105,17 @@ function displayPlayerName(displayName?: string | null, addr?: string | null): s
   const trimmed = (displayName ?? '').trim();
   if (trimmed.length > 0) return trimmed;
   return fallbackLast4(addr ?? '');
+}
+
+function formatStreetLabel(street: string): string {
+  const s = street.trim().toLowerCase();
+  if (s === 'preflop') return 'Preflop';
+  if (s === 'flop') return 'Flop';
+  if (s === 'turn') return 'Turn';
+  if (s === 'river') return 'River';
+  if (s === 'showdown') return 'Showdown';
+  if (!s) return '—';
+  return s.charAt(0).toUpperCase() + s.slice(1);
 }
 
 function formatEventTime(ts: number): string {
@@ -232,6 +251,8 @@ export function PokerActivityFeed({
   const seenMsgIdsRef = useRef<Set<string>>(new Set());
   const lastActionKeyRef = useRef<string | null>(null);
   const lastHandIdRef = useRef<string | null>(null);
+  /** `${handId}:${street}` — insert a street subheader when this changes for the current hand. */
+  const lastActionStreetKeyRef = useRef<string | null>(null);
   const lastShowdownHandRef = useRef<string | null>(null);
   const welcomeSentRef = useRef(false);
   const factUsedIndicesRef = useRef<Set<number>>(new Set());
@@ -251,6 +272,10 @@ export function PokerActivityFeed({
     burstQueueRef.current = [];
     burstPlayingRef.current = false;
     setActiveBurst(null);
+    lastActionKeyRef.current = null;
+    lastHandIdRef.current = null;
+    lastActionStreetKeyRef.current = null;
+    lastShowdownHandRef.current = null;
   }, [roomId]);
 
   // Tournament HUD–style full-panel bursts for high-salience feed moments.
@@ -446,13 +471,17 @@ export function PokerActivityFeed({
 
   // ── Track hand actions from state ─────────────────────────────────────────
   useEffect(() => {
-    const la = state?.currentHand?.lastAction;
-    const handId = state?.currentHand?.handId;
+    const hand = state?.currentHand;
+    const la = hand?.lastAction;
+    const handId = hand?.handId;
+    const street = (hand?.street ?? '').trim() || '—';
     if (!la || !handId) return;
 
-    const key = `${handId}:${la.position}:${la.action}:${la.amount}`;
+    const key = `${handId}:${street}:${la.position}:${la.action}:${la.amount}`;
     if (key === lastActionKeyRef.current) return;
     lastActionKeyRef.current = key;
+
+    const streetKey = `${handId}:${street}`;
 
     setEntries((prev) => {
       const next = [...prev];
@@ -462,6 +491,16 @@ export function PokerActivityFeed({
         next.push({ kind: 'divider', id: `divider-${handId}`, ts: Date.now() });
       }
       lastHandIdRef.current = handId;
+
+      if (streetKey !== lastActionStreetKeyRef.current) {
+        lastActionStreetKeyRef.current = streetKey;
+        next.push({
+          kind: 'street_header',
+          id: `street-${streetKey}`,
+          label: formatStreetLabel(street),
+          ts: Date.now(),
+        });
+      }
 
       const seat = state?.seats[la.position];
       next.push({
@@ -477,8 +516,7 @@ export function PokerActivityFeed({
 
       return next.slice(-MAX_ENTRIES);
     });
-   
-  }, [state?.currentHand?.lastAction, state?.currentHand?.handId]);
+  }, [state?.currentHand?.lastAction, state?.currentHand?.handId, state?.currentHand?.street]);
 
   // ── Track QuickChat phrases ───────────────────────────────────────────────
   useEffect(() => {
@@ -561,7 +599,7 @@ export function PokerActivityFeed({
 
   // ── Entry renderer (typography + muted hierarchy aligned with `PokerTournamentHUD`) ──
   function renderEntry(entry: Entry) {
-    const lineBase = 'font-jost-normal px-2.5 py-[3px] text-[10px] md:text-[11px] leading-snug';
+    const lineBase = 'font-jost font-bold px-2.5 py-[3px] text-[10px] md:text-[11px] leading-snug';
     if (entry.kind === 'system') {
       const isWelcome = entry.type === 'welcome';
       const isFact = entry.type === 'factbot';
@@ -604,14 +642,28 @@ export function PokerActivityFeed({
     if (entry.kind === 'divider') {
       return (
         <div key={entry.id} className="flex items-center gap-1 py-1 mx-2 select-none">
-          <div className="flex-1 h-px" style={{ background: 'rgba(255,255,255,0.07)' }} />
+          <div className="flex-1 h-px" style={{ background: 'rgba(26, 255, 0, 0.85)' }} />
           <span
-            className="font-jost-normal text-[9px] uppercase tracking-[0.18em] px-1"
-            style={{ color: 'rgba(255,255,255,0.45)' }}
+            className="font-jost font-bold text-[12px] uppercase tracking-[0.18em] px-1"
+            style={{ color: 'rgb(26, 255, 0)' }}
           >
             New Hand
           </span>
-          <div className="flex-1 h-px" style={{ background: 'rgba(255,255,255,0.07)' }} />
+          <div className="flex-1 h-px" style={{ background: 'rgba(26, 255, 0, 0.85)' }} />
+        </div>
+      );
+    }
+    if (entry.kind === 'street_header') {
+      return (
+        <div key={entry.id} className="flex items-center gap-1 py-0.5 mx-2 select-none">
+          <div className="flex-1 h-px" style={{ background: 'rgba(255, 255, 255, 0.29)' }} />
+          <span
+            className="font-jost font-bold text-[12px] uppercase tracking-[0.18em] px-1"
+            style={{ color: 'rgba(19, 169, 196, 0.95)' }}
+          >
+            {entry.label}
+          </span>
+          <div className="flex-1 h-px" style={{ background: 'rgba(255, 255, 255, 0.29)' }} />
         </div>
       );
     }

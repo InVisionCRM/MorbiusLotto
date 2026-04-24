@@ -5,7 +5,13 @@ import { DatabaseService } from './database.service';
 import { ProvablyFairService } from './provably-fair.service';
 import { CosmeticsService } from './cosmetics.service';
 import { randomPlaceholderConfig } from '../lib/cosmetics-catalog';
-import { getPokerRakeWallet, splitBigIntEqually, totalPotChips } from '../lib/poker-chip-scale';
+import { chipsToWei, getPokerRakeWallet, splitBigIntEqually, totalPotChips } from '../lib/poker-chip-scale';
+import { computeTableLogoChangePriceMorbiusChips } from '../lib/poker-table-logo-pricing';
+import {
+  isSafeLogoFilename,
+  listAllowedPokerMarketingLogoFilenames,
+} from '../lib/poker-table-logo-allowlist';
+import { POKER_DEFAULT_TABLE_LOGO_FILENAME } from '../lib/poker-table-logo-constants';
 import { applyPokerChipDelta } from './poker-chip-wallet';
 import {
   getCashBuyInBoundsChips,
@@ -77,10 +83,21 @@ export interface PokerTableState {
   currentHand: PokerCurrentHand | null;
   /** Hole cards only for the requesting player */
   myHoleCards: number[] | null;
-  /** Marketing logo filename (admin-set). Null = no logo. */
+  /**
+   * Sponsored marketing logo filename (gallery file under `public/Marketing /LOGOS/`).
+   * Null when idle — clients show the default Morbius logo on the felt.
+   */
   tableLogo?: string | null;
   /** Logo opacity (0–1). */
   tableLogoOpacity?: number | null;
+  /** ISO end time of current paid logo window, or null if idle. */
+  tableLogoSponsoredUntil?: string | null;
+  /** Last sponsor wallet (lowercase), for UI. */
+  tableLogoSponsorAddress?: string | null;
+  /** True when no active sponsorship (felt uses default Morbius logo). */
+  tableLogoIsDefault?: boolean;
+  /** Whole MORBIUS chips (string) for the next logo change at this moment. */
+  tableLogoPriceMorbiusChips?: string;
   /** Set when `poker_tables.tournament_id` is non-null (SNG / scheduled poker tournament). */
   tournamentId?: string | null;
 }
@@ -146,6 +163,8 @@ export class PokerGameService {
   private nextHandTimers: Map<string, NodeJS.Timeout> = new Map();
   /** Per-table mutex to serialize playerAction / autoFold / leaveTable calls. */
   private tableLocks: Map<string, Promise<void>> = new Map();
+  /** Starting stacks (whole chips) captured at hand deal, keyed by handId -> address. */
+  private handStartingStacks: Map<string, Map<string, bigint>> = new Map();
 
   constructor(
     private dbService: DatabaseService,
@@ -721,12 +740,30 @@ export class PokerGameService {
   // getTableState
   // ---------------------------------------------------------------------------
 
+  /** Clear expired paid logo rows so all readers converge without a cron. */
+  private async expirePokerTableLogoIfExpired(pool: Pool, tableId: string): Promise<void> {
+    await pool.query(
+      `UPDATE poker_tables
+       SET table_logo = NULL,
+           table_logo_sponsored_until = NULL,
+           table_logo_sponsor_address = NULL
+       WHERE id = $1
+         AND table_logo_sponsored_until IS NOT NULL
+         AND table_logo_sponsored_until <= NOW()`,
+      [tableId]
+    );
+  }
+
   async getTableState(tableId: string, forPlayer: string | null): Promise<PokerTableState> {
     const pool = this.getPool();
     const forPlayerAddr = forPlayer ? this.normalizeAddress(forPlayer) : null;
 
+    await this.expirePokerTableLogoIfExpired(pool, tableId);
+
     const tableRow = await pool.query(
-      'SELECT id, small_blind, big_blind, max_seats, status, table_logo, table_logo_opacity, tournament_id FROM poker_tables WHERE id = $1',
+      `SELECT id, small_blind, big_blind, max_seats, status, table_logo, table_logo_opacity, tournament_id,
+              table_logo_sponsored_until, table_logo_sponsor_address
+       FROM poker_tables WHERE id = $1`,
       [tableId]
     );
     if (tableRow.rows.length === 0) throw new Error('Table not found');
@@ -1027,6 +1064,24 @@ export class PokerGameService {
     const tournamentId =
       tournamentIdRaw != null && String(tournamentIdRaw).length > 0 ? String(tournamentIdRaw) : null;
 
+    const sponsoredUntilRaw = tbl.table_logo_sponsored_until;
+    const sponsoredUntil =
+      sponsoredUntilRaw != null ? new Date(sponsoredUntilRaw as Date | string) : null;
+    const nowDate = new Date();
+    const sponsoredActive =
+      sponsoredUntil != null &&
+      !Number.isNaN(sponsoredUntil.getTime()) &&
+      sponsoredUntil.getTime() > nowDate.getTime();
+    const remainingMs = sponsoredActive ? sponsoredUntil.getTime() - nowDate.getTime() : 0;
+    const priceChips = computeTableLogoChangePriceMorbiusChips({
+      sponsoredActive,
+      remainingMs,
+    });
+    const tableLogoEffective =
+      sponsoredActive && tbl.table_logo != null && String(tbl.table_logo).length > 0
+        ? String(tbl.table_logo)
+        : null;
+
     return {
       tableId: tbl.id,
       smallBlind: tbl.small_blind?.toString() ?? '0',
@@ -1036,8 +1091,15 @@ export class PokerGameService {
       seats,
       currentHand,
       myHoleCards,
-      tableLogo: tbl.table_logo ?? null,
+      tableLogo: tableLogoEffective,
       tableLogoOpacity: tbl.table_logo_opacity != null ? Number(tbl.table_logo_opacity) : null,
+      tableLogoSponsoredUntil: sponsoredActive ? sponsoredUntil.toISOString() : null,
+      tableLogoSponsorAddress:
+        sponsoredActive && tbl.table_logo_sponsor_address
+          ? String(tbl.table_logo_sponsor_address).toLowerCase()
+          : null,
+      tableLogoIsDefault: !sponsoredActive,
+      tableLogoPriceMorbiusChips: priceChips.toString(),
       tournamentId,
     };
   }
@@ -1048,11 +1110,107 @@ export class PokerGameService {
 
   async updateTableLogo(tableId: string, logo: string | null, opacity: number): Promise<void> {
     const pool = this.getPool();
+    const row = await pool.query<{ until: Date | null }>(
+      'SELECT table_logo_sponsored_until AS until FROM poker_tables WHERE id = $1',
+      [tableId]
+    );
+    if (row.rows.length === 0) throw new Error('Table not found');
+    const until = row.rows[0].until;
+    if (until != null && new Date(until).getTime() > Date.now()) {
+      throw new Error('Cannot update table logo while a paid sponsorship is active');
+    }
     const clampedOpacity = Math.max(0, Math.min(1, opacity));
     await pool.query(
       'UPDATE poker_tables SET table_logo = $2, table_logo_opacity = $3 WHERE id = $1',
       [tableId, logo, clampedOpacity]
     );
+  }
+
+  /**
+   * Pay MORBIUS (off-chain `players.balance`) to set a curated gallery logo for 10 minutes.
+   * Timer restarts on each purchase. Seated players only.
+   */
+  async purchaseTableLogoSponsorship(
+    tableId: string,
+    playerAddress: string,
+    logoFilename: string
+  ): Promise<PokerTableState> {
+    const pool = this.getPool();
+    const normalized = this.normalizeAddress(playerAddress);
+    const name = String(logoFilename ?? '').trim();
+    if (!isSafeLogoFilename(name)) {
+      throw new Error('Invalid logo filename');
+    }
+    if (name === POKER_DEFAULT_TABLE_LOGO_FILENAME) {
+      throw new Error('Pick a gallery logo other than the default');
+    }
+
+    await this.expirePokerTableLogoIfExpired(pool, tableId);
+
+    const seatCheck = await pool.query(
+      `SELECT 1 FROM poker_seats
+       WHERE table_id = $1 AND LOWER(player_address) = LOWER($2) AND player_address IS NOT NULL
+       LIMIT 1`,
+      [tableId, normalized]
+    );
+    if (seatCheck.rows.length === 0) {
+      throw new Error('Must be seated at this table to sponsor the logo');
+    }
+
+    const allowed = await listAllowedPokerMarketingLogoFilenames();
+    if (!allowed.includes(name)) {
+      throw new Error('Logo is not in the curated gallery');
+    }
+
+    const trow = await pool.query<{ until: Date | null }>(
+      'SELECT table_logo_sponsored_until AS until FROM poker_tables WHERE id = $1',
+      [tableId]
+    );
+    if (trow.rows.length === 0) throw new Error('Table not found');
+    const untilRaw = trow.rows[0].until;
+    const sponsoredUntil = untilRaw != null ? new Date(untilRaw as Date | string) : null;
+    const nowDate = new Date();
+    const sponsoredActive =
+      sponsoredUntil != null &&
+      !Number.isNaN(sponsoredUntil.getTime()) &&
+      sponsoredUntil.getTime() > nowDate.getTime();
+    const remainingMs = sponsoredActive ? sponsoredUntil.getTime() - nowDate.getTime() : 0;
+    const priceChips = computeTableLogoChangePriceMorbiusChips({
+      sponsoredActive,
+      remainingMs,
+    });
+    if (priceChips > BigInt(Number.MAX_SAFE_INTEGER)) {
+      throw new Error('Price overflow');
+    }
+    const wei = chipsToWei(Number(priceChips));
+
+    await this.dbService.withTransaction(async (client: any) => {
+      const deduct = await client.query(
+        `UPDATE players SET balance = balance - $2::NUMERIC
+         WHERE LOWER(wallet_address) = LOWER($1) AND balance >= $2::NUMERIC
+         RETURNING balance`,
+        [normalized, wei.toString()]
+      );
+      if (deduct.rows.length === 0) {
+        throw new Error('Insufficient MORBIUS balance for table logo sponsorship');
+      }
+      await client.query(
+        `UPDATE poker_tables SET
+           table_logo = $2,
+           table_logo_sponsored_until = NOW() + INTERVAL '10 minutes',
+           table_logo_sponsor_address = $3
+         WHERE id = $1`,
+        [tableId, name, normalized]
+      );
+      await client.query(
+        `INSERT INTO poker_table_logo_purchases (table_id, wallet_address, morbius_chips, logo_filename)
+         VALUES ($1::uuid, $2, $3::bigint, $4)`,
+        [tableId, normalized, priceChips.toString(), name]
+      );
+    });
+
+    await this.broadcastState(tableId);
+    return this.getTableState(tableId, normalized);
   }
 
   // ---------------------------------------------------------------------------
@@ -1202,6 +1360,16 @@ export class PokerGameService {
     const serverSeedHash = this.pfService.createServerSeedHash(serverSeed);
     const clientSeed = crypto.randomBytes(16).toString('hex');
 
+    // Capture starting stacks BEFORE dealCards() posts blinds.
+    const startingStacksByAddr = new Map<string, bigint>();
+    for (const player of table.players) {
+      if (!player) continue;
+      startingStacksByAddr.set(
+        player.id,
+        BigInt(Math.max(0, Math.round(player.stackSize)))
+      );
+    }
+
     // Deal cards (sets currentRound, posts blinds, sets currentPosition, shuffles deck internally)
     table.dealCards();
 
@@ -1216,11 +1384,20 @@ export class PokerGameService {
       holeCardsByAddr.set(player.id, cards);
     }
 
-    // Extract blind amounts from table state
+    // Capture blind amounts BEFORE any board-runout; gatherBets zeroes player.bet.
     const sbPlayer = table.players[table.smallBlindPosition!];
     const bbPlayer = table.players[table.bigBlindPosition!];
-    const sbBlind = sbPlayer ? sbPlayer.bet : sb;  // bet already deducted by dealCards
+    const sbBlind = sbPlayer ? sbPlayer.bet : sb;
     const bbBlind = bbPlayer ? bbPlayer.bet : bb;
+
+    // If no one can voluntarily act (e.g. heads-up where the SB went all-in on
+    // posting the blind), chevtek's dealCards leaves currentPosition on an
+    // all-in player and the hand deadlocks — no action will ever arrive, and
+    // tryStartNextHand won't fire because completed_at stays NULL. Drive the
+    // state machine forward; it auto-deals remaining streets and showdowns.
+    if (table.currentRound && table.actingPlayers.length <= 1) {
+      table.nextAction();
+    }
 
     // Insert hand into DB (chip ints)
     const potStr0 = String(Math.max(0, Math.round(totalPotChips(table))));
@@ -1246,6 +1423,7 @@ export class PokerGameService {
       ]
     );
     const handId: string = handInsert.rows[0].id;
+    this.handStartingStacks.set(handId, startingStacksByAddr);
 
     // Insert hole cards
     for (const [addr, cards] of holeCardsByAddr) {
@@ -1282,6 +1460,13 @@ export class PokerGameService {
 
     // Sync seat stacks (blinds already deducted by chevtek)
     await this.syncSeatsFromTable(pool, tableId, table);
+
+    // If the hand already ran to showdown (all remaining players were all-in
+    // from blinds), finalize now — no player actions will ever arrive.
+    if (!table.currentRound && table.winners) {
+      await this.persistShowdown(pool, tableId, handId, table);
+      this.scheduleNextHandAfterShowdown(tableId);
+    }
 
     return this.getTableState(tableId, null);
   }
@@ -1559,6 +1744,20 @@ export class PokerGameService {
        WHERE id = $1`,
       [handId, JSON.stringify(communityInts), JSON.stringify({ winners: resultWinners }), totalRakeChips.toString()]
     );
+
+    try {
+      await this.populateHandPlayers(pool, handId, table, {
+        winnerChips,
+        rakedWinnerAmounts,
+        rakeByAddr,
+        resultWinners,
+      });
+    } catch (err) {
+      logger.error('populateHandPlayers failed', { handId, tableId, err });
+    } finally {
+      this.handStartingStacks.delete(handId);
+    }
+
     await pool.query('UPDATE poker_tables SET status = $2 WHERE id = $1', [tableId, 'waiting']);
 
     // Fire tournament post-hand hook (awaited so eliminations complete before tryStartNextHand)
@@ -1570,6 +1769,215 @@ export class PokerGameService {
       } catch (err) {
         logger.error('Post-hand tournament callback error', { tableId, err });
       }
+    }
+  }
+
+  // ---------------------------------------------------------------------------
+  // populateHandPlayers
+  // ---------------------------------------------------------------------------
+
+  /**
+   * Denormalize per-player stats for a completed hand into poker_hand_players.
+   * Reads poker_hand_actions (already persisted) and combines with in-memory
+   * starting stacks + settlement data. Failure here must never corrupt a hand —
+   * errors are swallowed by the caller.
+   */
+  private async populateHandPlayers(
+    pool: Pool,
+    handId: string,
+    table: Table,
+    settlement: {
+      winnerChips: Map<string, bigint>;
+      rakedWinnerAmounts: Map<string, bigint>;
+      rakeByAddr: Map<string, bigint>;
+      resultWinners: { address: string; amount: string; handName?: string }[];
+    }
+  ): Promise<void> {
+    const startingStacks = this.handStartingStacks.get(handId) ?? new Map<string, bigint>();
+    const buttonPos = table.dealerPosition;
+    const sbPos = table.smallBlindPosition;
+    const bbPos = table.bigBlindPosition;
+
+    // Map each seated player -> seat position
+    const seatByAddr = new Map<string, number>();
+    for (let i = 0; i < table.players.length; i++) {
+      const p = table.players[i];
+      if (p) seatByAddr.set(p.id, i);
+    }
+
+    if (seatByAddr.size === 0) return;
+
+    // Load all actions for this hand
+    const actionsRes = await pool.query(
+      `SELECT player_address, street, action, amount
+         FROM poker_hand_actions
+        WHERE hand_id = $1
+        ORDER BY "order" ASC`,
+      [handId]
+    );
+
+    type StreetName = 'preflop' | 'flop' | 'turn' | 'river';
+    const streets: StreetName[] = ['preflop', 'flop', 'turn', 'river'];
+
+    type Counts = { bets: number; raises: number; calls: number; checks: number };
+    const zeroCounts = (): Counts => ({ bets: 0, raises: 0, calls: 0, checks: 0 });
+
+    interface PlayerAgg {
+      contributed: bigint;
+      folded: boolean;
+      foldedStreet: StreetName | null;
+      saw: Record<StreetName, boolean>;
+      counts: Record<StreetName, Counts>;
+      vpip: boolean;
+      pfr: boolean;
+      threeBet: boolean;
+    }
+
+    const aggByAddr = new Map<string, PlayerAgg>();
+    for (const addr of seatByAddr.keys()) {
+      aggByAddr.set(addr, {
+        contributed: 0n,
+        folded: false,
+        foldedStreet: null,
+        saw: { preflop: true, flop: false, turn: false, river: false },
+        counts: { preflop: zeroCounts(), flop: zeroCounts(), turn: zeroCounts(), river: zeroCounts() },
+        vpip: false,
+        pfr: false,
+        threeBet: false,
+      });
+    }
+
+    // Track preflop raise count across the whole hand for 3-bet detection.
+    let preflopRaiseCount = 0;
+
+    for (const row of actionsRes.rows) {
+      const addr = String(row.player_address).toLowerCase();
+      const agg = aggByAddr.get(addr);
+      if (!agg) continue;
+      const street = row.street as StreetName;
+      const action = String(row.action);
+      const amount = BigInt(row.amount ?? '0');
+
+      agg.contributed += amount;
+
+      if (action === 'fold') {
+        agg.folded = true;
+        agg.foldedStreet = street;
+        continue;
+      }
+      if (action === 'blind') {
+        // Blinds don't count as voluntary; no counts update.
+        continue;
+      }
+
+      if (street === 'preflop') {
+        if (action === 'call' || action === 'bet' || action === 'raise') {
+          agg.vpip = true;
+        }
+        if (action === 'raise' || action === 'bet') {
+          agg.pfr = true;
+          if (preflopRaiseCount >= 1) agg.threeBet = true;
+          preflopRaiseCount += 1;
+        }
+      }
+
+      const c = agg.counts[street];
+      if (action === 'bet') c.bets += 1;
+      else if (action === 'raise') c.raises += 1;
+      else if (action === 'call') c.calls += 1;
+      else if (action === 'check') c.checks += 1;
+    }
+
+    // Determine which streets each player "saw" (reached without folding earlier).
+    for (const agg of aggByAddr.values()) {
+      for (let i = 0; i < streets.length; i++) {
+        const s = streets[i];
+        if (agg.folded && agg.foldedStreet && streets.indexOf(agg.foldedStreet) < i) {
+          agg.saw[s] = false;
+        } else {
+          agg.saw[s] = true;
+        }
+      }
+    }
+
+    // Build winner handName / showdown lookup
+    const winnerMetaByAddr = new Map<string, { handName?: string }>();
+    for (const w of settlement.resultWinners) {
+      winnerMetaByAddr.set(w.address.toLowerCase(), { handName: w.handName });
+    }
+
+    // Did the hand reach showdown at all? (≥2 non-folded players remain)
+    const nonFoldedCount = Array.from(aggByAddr.values()).filter((a) => !a.folded).length;
+    const handWentToShowdown = nonFoldedCount >= 2;
+
+    // Batch insert rows
+    for (const [addr, seatPos] of seatByAddr) {
+      const agg = aggByAddr.get(addr)!;
+      const startingStack = startingStacks.get(addr) ?? 0n;
+      const endingStackRaw = table.players[seatPos]?.stackSize ?? 0;
+      const endingStack = BigInt(Math.max(0, Math.round(endingStackRaw)));
+      const rakePaid = settlement.rakeByAddr.get(addr) ?? 0n;
+      const wonNet = settlement.rakedWinnerAmounts.get(addr) ?? 0n;
+      const won = wonNet > 0n;
+      const meta = winnerMetaByAddr.get(addr);
+      const sawShowdown = !agg.folded && handWentToShowdown;
+
+      const c = agg.counts;
+      await pool.query(
+        `INSERT INTO poker_hand_players (
+           hand_id, player_address, seat_position,
+           is_button, is_small_blind, is_big_blind,
+           starting_stack, ending_stack, contributed, won_amount, rake_paid,
+           saw_flop, saw_turn, saw_river, saw_showdown,
+           folded, folded_street, won, hand_name,
+           vpip, pfr, three_bet,
+           preflop_bets, preflop_raises, preflop_calls, preflop_checks,
+           flop_bets, flop_raises, flop_calls, flop_checks,
+           turn_bets, turn_raises, turn_calls, turn_checks,
+           river_bets, river_raises, river_calls, river_checks
+         )
+         VALUES (
+           $1, $2, $3,
+           $4, $5, $6,
+           $7::NUMERIC, $8::NUMERIC, $9::NUMERIC, $10::NUMERIC, $11::NUMERIC,
+           $12, $13, $14, $15,
+           $16, $17, $18, $19,
+           $20, $21, $22,
+           $23, $24, $25, $26,
+           $27, $28, $29, $30,
+           $31, $32, $33, $34,
+           $35, $36, $37, $38
+         )
+         ON CONFLICT (hand_id, player_address) DO NOTHING`,
+        [
+          handId,
+          addr,
+          seatPos,
+          seatPos === buttonPos,
+          sbPos != null && seatPos === sbPos,
+          bbPos != null && seatPos === bbPos,
+          startingStack.toString(),
+          endingStack.toString(),
+          agg.contributed.toString(),
+          wonNet.toString(),
+          rakePaid.toString(),
+          agg.saw.flop,
+          agg.saw.turn,
+          agg.saw.river,
+          sawShowdown,
+          agg.folded,
+          agg.foldedStreet,
+          won,
+          meta?.handName ?? null,
+          agg.vpip,
+          agg.pfr,
+          agg.threeBet,
+          c.preflop.bets, c.preflop.raises, c.preflop.calls, c.preflop.checks,
+          c.flop.bets, c.flop.raises, c.flop.calls, c.flop.checks,
+          c.turn.bets, c.turn.raises, c.turn.calls, c.turn.checks,
+          c.river.bets, c.river.raises, c.river.calls, c.river.checks,
+        ]
+      );
     }
   }
 

@@ -5,13 +5,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { toBigIntSafe } from '@/lib/safe-bigint';
 import { formatChips } from '@/lib/format-poker-chips';
 import {
-  Activity,
   BarChart3,
-  Trophy,
-  DollarSign,
-  Target,
-  TrendingUp,
-  TrendingDown,
   History,
   ChevronDown,
   ChevronUp,
@@ -20,12 +14,11 @@ import {
 } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { CardDisplay } from '@/components/poker/CardDisplay';
+import { PokerPlayerDashboard } from '@/components/poker/PokerPlayerDashboard';
 import {
   usePokerPlayerHands,
-  usePokerPlayerStats,
   usePokerHandDetail,
   type PokerHandListEntry,
-  type PokerPlayerStats as PokerStatsType,
 } from '@/hooks/use-poker-stats';
 
 function formatHandChipAmount(_isTournament: boolean, raw: string | number): string {
@@ -63,7 +56,6 @@ export function PokerStatsModal({ isOpen, onClose, playerAddress }: PokerStatsMo
   const [expandedHandId, setExpandedHandId] = useState<string | null>(null);
   const [sortBy, setSortBy] = useState<'newest' | 'oldest' | 'profit'>('newest');
 
-  const { data: stats, isLoading: statsLoading } = usePokerPlayerStats(isOpen ? playerAddress : null);
   const { data: hands, isLoading: handsLoading } = usePokerPlayerHands(
     isOpen ? playerAddress : null,
     100
@@ -120,55 +112,6 @@ export function PokerStatsModal({ isOpen, onClose, playerAddress }: PokerStatsMo
 
   if (!isOpen) return null;
 
-  const s = stats as PokerStatsType | undefined;
-  const statsCards = s
-    ? [
-        {
-          title: 'Total Hands',
-          value: s.total_hands.toLocaleString(),
-          icon: Activity,
-          subtitle: `${s.hands_won} wins`,
-          color: 'text-blue-400',
-        },
-        {
-          title: 'Win Rate',
-          value: `${Math.round(s.win_rate)}%`,
-          icon: Target,
-          subtitle: `${s.hands_won} of ${s.total_hands} hands`,
-          color: s.win_rate >= 50 ? 'text-green-400' : s.win_rate >= 40 ? 'text-yellow-400' : 'text-red-400',
-          progress: s.win_rate,
-        },
-        {
-          title: 'Profit / Loss',
-          value: `${Number(toBigIntSafe(s.profit_loss)) >= 0 ? '+' : ''}${formatChips(s.profit_loss)}`,
-          icon: Number(toBigIntSafe(s.profit_loss)) >= 0 ? TrendingUp : TrendingDown,
-          subtitle: `${s.roi >= 0 ? '+' : ''}${Math.round(s.roi)}% ROI`,
-          color: getProfitColor(s.profit_loss),
-        },
-        {
-          title: 'Total Wagered',
-          value: formatChips(s.total_wagered),
-          icon: DollarSign,
-          subtitle: 'Chips put in pot',
-          color: 'text-purple-400',
-        },
-        {
-          title: 'Total Won',
-          value: formatChips(s.total_won),
-          icon: Trophy,
-          subtitle: 'From winning hands',
-          color: 'text-green-400',
-        },
-        {
-          title: 'Current Streak',
-          value: s.current_streak > 0 ? `+${s.current_streak}` : String(s.current_streak),
-          icon: BarChart3,
-          subtitle: `Best: ${s.best_streak} wins`,
-          color: s.current_streak > 0 ? 'text-green-400' : 'text-red-400',
-        },
-      ]
-    : [];
-
   return (
     <>
       <div
@@ -183,7 +126,7 @@ export function PokerStatsModal({ isOpen, onClose, playerAddress }: PokerStatsMo
         initial={{ opacity: 0, scale: 0.96 }}
         animate={{ opacity: 1, scale: 1 }}
         exit={{ opacity: 0, scale: 0.96 }}
-        className="surface-modal-card fixed left-1/2 top-1/2 z-50 flex max-h-[90vh] w-full max-w-2xl -translate-x-1/2 -translate-y-1/2 flex-col"
+        className="surface-modal-card fixed left-1/2 top-1/2 z-50 flex max-h-[75vh] w-full !max-w-5xl -translate-x-1/2 -translate-y-1/2 flex-col"
         onClick={(e) => e.stopPropagation()}
       >
         <div className="flex-shrink-0 flex items-center justify-between px-4 py-3 border-b border-cyan-500/30 bg-slate-900/80">
@@ -226,86 +169,8 @@ export function PokerStatsModal({ isOpen, onClose, playerAddress }: PokerStatsMo
         </div>
 
         <div className="flex-1 min-h-0 overflow-y-auto p-4 space-y-4">
-          {activeTab === 'stats' && (
-            <>
-              {statsLoading ? (
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                  {Array.from({ length: 6 }).map((_, i) => (
-                    <Card key={i} className="bg-gray-900/80 border-gray-700">
-                      <CardHeader className="pb-2">
-                        <div className="h-4 bg-gray-700 rounded animate-pulse w-24" />
-                      </CardHeader>
-                      <CardContent>
-                        <div className="h-8 bg-gray-700 rounded animate-pulse w-32 mb-2" />
-                        <div className="h-3 bg-gray-700 rounded animate-pulse w-full" />
-                      </CardContent>
-                    </Card>
-                  ))}
-                </div>
-              ) : (
-                <>
-                  <p className="text-xs text-gray-500 -mt-2 mb-1">
-                    Ring games only — SNG / tournament hands appear under History.
-                  </p>
-                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                    {statsCards.map((stat, index) => (
-                      <Card
-                        key={stat.title}
-                        className="bg-gradient-to-br from-gray-900 to-black border-gray-700"
-                      >
-                        <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                          <CardTitle className="text-sm font-medium text-gray-400">
-                            {stat.title}
-                          </CardTitle>
-                          <stat.icon className={`h-4 w-4 ${stat.color}`} />
-                        </CardHeader>
-                        <CardContent>
-                          <div className={`text-xl font-bold ${stat.color} mb-1`}>{stat.value}</div>
-                          <p className="text-xs text-gray-500">{stat.subtitle}</p>
-                          {stat.progress !== undefined && (
-                            <div
-                              className="mt-2 h-1 rounded-full bg-gray-700 overflow-hidden"
-                              style={{ background: 'rgba(55, 65, 81, 0.5)' }}
-                            >
-                              <div
-                                className="h-full bg-cyan-500 rounded-full"
-                                style={{ width: `${Math.min(100, stat.progress)}%` }}
-                              />
-                            </div>
-                          )}
-                        </CardContent>
-                      </Card>
-                    ))}
-                  </div>
-                  {s && (Number(toBigIntSafe(s.biggest_pot_won)) > 0 || Number(toBigIntSafe(s.biggest_loss)) > 0) && (
-                    <Card className="bg-gradient-to-br from-gray-900 to-black border-gray-700">
-                      <CardHeader>
-                        <CardTitle className="text-white flex items-center gap-2 text-base">
-                          <Trophy className="w-4 h-4 text-yellow-400" />
-                          Personal Records
-                        </CardTitle>
-                      </CardHeader>
-                      <CardContent className="flex flex-wrap gap-4">
-                        <div className="flex items-center gap-2 p-3 bg-gray-800/50 rounded-lg">
-                          <TrendingUp className="h-4 w-4 text-green-400" />
-                          <span className="text-sm text-gray-300">Biggest pot won</span>
-                          <span className="text-sm font-medium text-green-400">
-                            {formatChips(s.biggest_pot_won)}
-                          </span>
-                        </div>
-                        <div className="flex items-center gap-2 p-3 bg-gray-800/50 rounded-lg">
-                          <TrendingDown className="h-4 w-4 text-red-400" />
-                          <span className="text-sm text-gray-300">Biggest loss</span>
-                          <span className="text-sm font-medium text-red-400">
-                            {formatChips(s.biggest_loss)}
-                          </span>
-                        </div>
-                      </CardContent>
-                    </Card>
-                  )}
-                </>
-              )}
-            </>
+          {activeTab === 'stats' && playerAddress && (
+            <PokerPlayerDashboard playerAddress={playerAddress} showRecentHands={false} />
           )}
 
           {activeTab === 'history' && (

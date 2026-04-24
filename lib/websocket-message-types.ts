@@ -46,6 +46,7 @@ export const WS_MESSAGE_TYPES = {
   pokerGetState: 'poker_get_state',
   pokerCreateTable: 'poker_create_table',
   pokerUpdateTableLogo: 'poker_update_table_logo',
+  pokerPurchaseTableLogo: 'poker_purchase_table_logo',
   pokerQuickReaction: 'poker_quick_reaction',
   pokerAvatarEmotion: 'poker_avatar_emotion',
   pokerSitOut: 'poker_sit_out',
@@ -133,6 +134,7 @@ export const WS_POKER_MESSAGES = [
   WS_MESSAGE_TYPES.pokerGetState,
   WS_MESSAGE_TYPES.pokerCreateTable,
   WS_MESSAGE_TYPES.pokerUpdateTableLogo,
+  WS_MESSAGE_TYPES.pokerPurchaseTableLogo,
   WS_MESSAGE_TYPES.pokerQuickReaction,
   WS_MESSAGE_TYPES.pokerAvatarEmotion,
   WS_MESSAGE_TYPES.pokerSitOut,
@@ -142,6 +144,7 @@ export const WS_POKER_MESSAGES = [
   WS_MESSAGE_TYPES.pokerTournamentCancel,
 ] as const;
 
+/** Multiplayer BJ: `bj_multi_place_bet` payload may include optional `clientSeed` (string, max 255). */
 export const WS_BJ_MULTI_MESSAGES = [
   'bj_multi_join_table',
   'bj_multi_leave_table',

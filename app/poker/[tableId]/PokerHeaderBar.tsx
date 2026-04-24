@@ -2,6 +2,17 @@
 
 import React, { useState } from 'react';
 import type { PokerTableState } from '@/lib/websocket-client';
+import { SpeechVoiceToggle } from '@/components/shared/SpeechHUD';
+
+/** Matches "How to Play" / Settings header chips (see `data-poker-header-secondary`). */
+const POKER_HEADER_SECONDARY_BTN_CLASS =
+  'h-9 px-2.5 sm:px-3 rounded-sm text-[10px] sm:text-[11px] font-bold tracking-wide transition-all hover:brightness-125 active:scale-[0.97] whitespace-nowrap';
+const POKER_HEADER_SECONDARY_BTN_STYLE: React.CSSProperties = {
+  background: 'rgba(255,255,255,0.07)',
+  color: 'rgba(255,255,255,0.75)',
+  border: '1px solid rgba(255,255,255,0.1)',
+  boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.08)',
+};
 
 interface PokerHeaderBarProps {
   renderedState: PokerTableState | null;
@@ -30,6 +41,18 @@ interface PokerHeaderBarProps {
   /** Whether the seated player has auto-rebuy enabled. Only shown when player is seated. */
   autoRebuy?: boolean;
   onToggleAutoRebuy?: () => void;
+  /** Seated + connected: show Logo / Tip next to How to Play */
+  showTableBrandingActions?: boolean;
+  onOpenTableLogoSponsor?: () => void;
+  tipAnimating?: boolean;
+  setTipAnimating?: React.Dispatch<React.SetStateAction<boolean>>;
+  onTipDealer?: () => Promise<void>;
+  /** Voice commands toggle — same row as Logo / Tip / How to Play */
+  voiceCommands?: {
+    listening: boolean;
+    supported: boolean;
+    onToggle: () => void;
+  };
 }
 
 export function PokerHeaderBar({
@@ -58,6 +81,12 @@ export function PokerHeaderBar({
   onLeaveClick,
   autoRebuy = false,
   onToggleAutoRebuy,
+  showTableBrandingActions = false,
+  onOpenTableLogoSponsor,
+  tipAnimating = false,
+  setTipAnimating,
+  onTipDealer,
+  voiceCommands,
 }: PokerHeaderBarProps) {
   const [botsMenuOpen, setBotsMenuOpen] = useState(false);
   const [botCountInput, setBotCountInput] = useState('4');
@@ -94,6 +123,71 @@ export function PokerHeaderBar({
       )}
       <div aria-hidden className="min-w-0" />
       <div className="flex items-center justify-end gap-1.5 shrink-0 relative">
+        {showTableBrandingActions && onOpenTableLogoSponsor && onTipDealer && setTipAnimating && (
+          <>
+            <button
+              data-poker-header-secondary
+              type="button"
+              onClick={() => {
+                onOpenTableLogoSponsor();
+                setSettingsMenuOpen(false);
+                setStatsMenuOpen(false);
+              }}
+              className={POKER_HEADER_SECONDARY_BTN_CLASS}
+              style={POKER_HEADER_SECONDARY_BTN_STYLE}
+            >
+              Logo
+            </button>
+            <div data-poker-header-secondary className="relative shrink-0">
+              <button
+                type="button"
+                onClick={async () => {
+                  if (tipAnimating) return;
+                  setTipAnimating(true);
+                  try {
+                    await onTipDealer();
+                  } finally {
+                    setTimeout(() => setTipAnimating(false), 900);
+                  }
+                }}
+                disabled={tipAnimating}
+                className={`${POKER_HEADER_SECONDARY_BTN_CLASS} disabled:opacity-60 disabled:cursor-not-allowed`}
+                style={POKER_HEADER_SECONDARY_BTN_STYLE}
+              >
+                Tip 2,000
+              </button>
+              {tipAnimating && (
+                <div
+                  className="absolute left-1/2 -translate-x-1/2 pointer-events-none z-50"
+                  style={{ top: '100%', marginTop: 2 }}
+                  aria-hidden
+                >
+                  <div className="tip-chip-fly">
+                    <div className="w-6 h-6 rounded-full border-2 border-amber-400 bg-amber-600 flex items-center justify-center shadow-lg shadow-amber-500/40">
+                      <span className="text-white text-[8px] font-bold">$</span>
+                    </div>
+                  </div>
+                </div>
+              )}
+            </div>
+          </>
+        )}
+        {voiceCommands && (
+          <div data-poker-header-secondary className="relative shrink-0">
+            <SpeechVoiceToggle
+              listening={voiceCommands.listening}
+              supported={voiceCommands.supported}
+              onToggle={() => {
+                voiceCommands.onToggle();
+                setSettingsMenuOpen(false);
+                setStatsMenuOpen(false);
+              }}
+              labelMode="short"
+              className={POKER_HEADER_SECONDARY_BTN_CLASS}
+              style={POKER_HEADER_SECONDARY_BTN_STYLE}
+            />
+          </div>
+        )}
         <button
           data-poker-header-secondary
           type="button"
@@ -102,13 +196,8 @@ export function PokerHeaderBar({
             setSettingsMenuOpen(false);
             setStatsMenuOpen(false);
           }}
-          className="h-9 px-2.5 sm:px-3 rounded-sm text-[10px] sm:text-[11px] font-bold tracking-wide transition-all hover:brightness-125 active:scale-[0.97] whitespace-nowrap"
-          style={{
-            background: 'rgba(255,255,255,0.07)',
-            color: 'rgba(255,255,255,0.75)',
-            border: '1px solid rgba(255,255,255,0.1)',
-            boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.08)',
-          }}
+          className={POKER_HEADER_SECONDARY_BTN_CLASS}
+          style={POKER_HEADER_SECONDARY_BTN_STYLE}
           aria-haspopup="dialog"
         >
           How to Play
@@ -121,12 +210,7 @@ export function PokerHeaderBar({
               setStatsMenuOpen(false);
             }}
             className="h-9 px-3 rounded-sm text-[11px] font-bold tracking-wide transition-all hover:brightness-125 active:scale-[0.97]"
-            style={{
-              background: 'rgba(255,255,255,0.07)',
-              color: 'rgba(255,255,255,0.75)',
-              border: '1px solid rgba(255,255,255,0.1)',
-              boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.08)',
-            }}
+            style={POKER_HEADER_SECONDARY_BTN_STYLE}
             aria-expanded={settingsMenuOpen}
             aria-haspopup="true"
           >
@@ -371,6 +455,56 @@ export function PokerHeaderBar({
                 >
                   How to Play
                 </button>
+                {voiceCommands && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      voiceCommands.onToggle();
+                      setMobileMenuOpen(false);
+                    }}
+                    disabled={!voiceCommands.supported}
+                    className="w-full text-left px-3 py-2.5 text-[11px] font-bold tracking-wide transition-colors hover:bg-white/10 border-t border-white/5 disabled:opacity-60 disabled:cursor-not-allowed"
+                    style={{
+                      color: !voiceCommands.supported
+                        ? 'rgba(255,255,255,0.4)'
+                        : voiceCommands.listening
+                          ? 'rgb(252,165,165)'
+                          : 'rgba(255,255,255,0.9)',
+                    }}
+                  >
+                    Voice: {!voiceCommands.supported ? 'N/A' : voiceCommands.listening ? 'On' : 'Off'}
+                  </button>
+                )}
+                {showTableBrandingActions && onOpenTableLogoSponsor && onTipDealer && setTipAnimating && (
+                  <>
+                    <button
+                      type="button"
+                      onClick={() => { onOpenTableLogoSponsor(); setMobileMenuOpen(false); }}
+                      className="w-full text-left px-3 py-2.5 text-[11px] font-bold tracking-wide transition-colors hover:bg-white/10 border-t border-white/5"
+                      style={{ color: 'rgba(255,255,255,0.9)' }}
+                    >
+                      Table logo
+                    </button>
+                    <button
+                      type="button"
+                      onClick={async () => {
+                        if (tipAnimating) return;
+                        setTipAnimating(true);
+                        try {
+                          await onTipDealer();
+                        } finally {
+                          setTimeout(() => setTipAnimating(false), 900);
+                        }
+                        setMobileMenuOpen(false);
+                      }}
+                      className="w-full text-left px-3 py-2.5 text-[11px] font-bold tracking-wide transition-colors hover:bg-white/10 border-t border-white/5 disabled:opacity-60"
+                      style={{ color: 'rgba(255,255,255,0.9)' }}
+                      disabled={tipAnimating}
+                    >
+                      Tip dealer (2,000)
+                    </button>
+                  </>
+                )}
                 <button
                   type="button"
                   onClick={() => { setShowTableSettingsModal(true); setMobileMenuOpen(false); }}

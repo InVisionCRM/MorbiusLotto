@@ -15,11 +15,18 @@ const ENABLE_POKER_ANIMS = true;
 /** Card index 0-51: rank = (idx % 13), suit = floor(idx/13) — matches server cardToInt encoding */
 const RANK_NAMES = ['2', '3', '4', '5', '6', '7', '8', '9', '10', 'J', 'Q', 'K', 'A'];
 const SUIT_NAMES = ['clubs', 'diamonds', 'hearts', 'spades'];
+const SUIT_LETTERS = ['C', 'D', 'H', 'S'];
 
 function getCardAlt(cardIndex: number): string {
   const rank = cardIndex % 13;
   const suit = Math.floor(cardIndex / 13);
   return `${RANK_NAMES[rank]} of ${SUIT_NAMES[suit]}`;
+}
+
+function getCardImageSrc(cardIndex: number): string {
+  const rank = cardIndex % 13;
+  const suit = Math.floor(cardIndex / 13);
+  return `/BlackJack/Cards/PNG/${RANK_NAMES[rank]}${SUIT_LETTERS[suit]}.png`;
 }
 
 export interface CardDisplayProps {
@@ -38,6 +45,12 @@ export interface CardDisplayProps {
   showCenterRankSuitOverlay?: boolean;
   /** Per-role animation preset. Omit for default spring behavior. */
   variant?: 'hole' | 'community';
+  /**
+   * Pixel offset from the deal origin (pot / deck center) to the card's final position.
+   * Card animates in from `(dx, dy)` → `(0, 0)` and exits back to `(dx, dy)`.
+   * When omitted, falls back to a fixed offset (`x: -80` for hole, `y: -70` for community).
+   */
+  dealFromOffset?: { dx: number; dy: number };
 }
 
 const dealVariants = {
@@ -56,63 +69,50 @@ const dealVariants = {
 };
 
 /**
- * Spin Pitch — hole cards spin in from center-left with a full rotation and slight scale.
- * Exit "fold" = reverse Spin Pitch: spin back toward the dealer (mucked).
+ * Spin Pitch — hole cards spin in from the pot (deck) and land at their seat position.
+ * When no offset is provided, falls back to a fixed left-slide (legacy behavior).
  */
-const holeVariants: Variants = {
-  hidden: { opacity: 0, x: -80, rotate: -360, scale: 0.7 },
+const makeHoleVariants = (dx: number, dy: number): Variants => ({
+  hidden: { opacity: 0, x: dx, y: dy, rotate: -360, scale: 0.7 },
   visible: (delay: number) => ({
     opacity: 1,
     x: 0,
+    y: 0,
     rotate: 0,
     scale: 1,
     transition: { delay, duration: 0.55, ease: [0.25, 0.85, 0.3, 1] },
   }),
   exit: {
     opacity: 0,
-    x: -80,
+    x: dx,
+    y: dy,
     rotate: 360,
     scale: 0.7,
     transition: { duration: 0.45, ease: [0.5, 0, 0.75, 0.25] },
   },
-};
+});
 
 /**
- * Shockwave Slam — community cards drop in from above with overshoot + glow pulse.
- * Exit = simple fade + slight scale-down so a board-clear doesn't pop.
+ * Shockwave Slam — community cards launch from the pot and slam into their board slot.
+ * When no offset is provided, falls back to dropping from above (legacy behavior).
  */
-const communityVariants: Variants = {
-  hidden: { opacity: 0, y: -70, scale: 0.5 },
+const makeCommunityVariants = (dx: number, dy: number): Variants => ({
+  hidden: { opacity: 0, x: dx, y: dy, scale: 0.5 },
   visible: (delay: number) => ({
     opacity: 1,
-    y: [-70, 8, 0],
+    x: [dx, 0, 0],
+    y: [dy, 0, 0],
     scale: [0.5, 1.12, 1],
     transition: { delay, duration: 0.6, ease: [0.2, 1.1, 0.4, 1], times: [0, 0.7, 1] },
   }),
   exit: {
     opacity: 0,
+    x: dx,
+    y: dy,
     scale: 0.9,
-    y: 10,
     transition: { duration: 0.25, ease: 'easeIn' },
   },
-};
-
-function getSuitSymbol(suit: number): string {
-  switch (suit) {
-    case 0:
-      return '♣';
-    case 1:
-      return '♦';
-    case 2:
-      return '♥';
-    default:
-      return '♠';
-  }
-}
-
-function getSuitColor(suit: number): string {
-  return suit === 1 || suit === 2 ? '#dc2626' : '#111827';
-}
+});
 
 export function CardDisplay({
   cardIndex,
@@ -122,12 +122,14 @@ export function CardDisplay({
   className = '',
   dealDelay = 0,
   variant,
+  dealFromOffset,
 }: CardDisplayProps) {
+  const { dx, dy } = dealFromOffset ?? { dx: variant === 'community' ? 0 : -80, dy: variant === 'community' ? -70 : 0 };
   const activeVariants =
     ENABLE_POKER_ANIMS && variant === 'hole'
-      ? holeVariants
+      ? makeHoleVariants(dx, dy)
       : ENABLE_POKER_ANIMS && variant === 'community'
-      ? communityVariants
+      ? makeCommunityVariants(dx, dy)
       : dealVariants;
   const hasExit = ENABLE_POKER_ANIMS && (variant === 'hole' || variant === 'community');
   const sizeClasses = small
@@ -143,11 +145,7 @@ export function CardDisplay({
   const isEmpty = !isFaceDown && cardIndex == null;
   const isFaceUp = !isFaceDown && !isEmpty;
 
-  const rank = isFaceUp ? (cardIndex! % 13) : 0;
-  const suit = isFaceUp ? Math.floor(cardIndex! / 13) : 0;
-  const color = getSuitColor(suit);
-  const suitChar = getSuitSymbol(suit);
-  const rankLabel = RANK_NAMES[rank];
+  const cardImageSrc = isFaceUp ? getCardImageSrc(cardIndex!) : '';
 
   return (
     <div className={`poker-card-wrapper ${className}`} style={{ perspective: 600 }}>
@@ -201,7 +199,7 @@ export function CardDisplay({
           custom={dealDelay}
           className={`relative ${sizeClasses} overflow-hidden rounded-md select-none`}
           style={{
-            background: 'linear-gradient(160deg, #ffffff 0%, #f8f8f8 50%, #f0f0f0 100%)',
+            background: '#ffffff',
             boxShadow: isWinningCard
               ? `${cardShadow}, 0 10px 24px rgba(0,0,0,0.55), 0 0 0 4px rgba(34, 211, 238, 0.95), 0 0 26px rgba(34, 211, 238, 0.55)`
               : cardShadow,
@@ -215,48 +213,14 @@ export function CardDisplay({
           }}
           aria-label={getCardAlt(cardIndex!)}
         >
-          {/* Top-left rank + suit */}
-          <div
-            className="absolute flex flex-col items-center leading-none font-bold"
-            style={{
-              color,
-              top: '4%',
-              left: '8%',
-              fontSize: small ? 'clamp(8px, 1.6vw, 12px)' : 'clamp(11px, 2vw, 16px)',
-              lineHeight: 1,
-            }}
-          >
-            <span>{rankLabel}</span>
-            <span style={{ fontSize: '0.85em', marginTop: '0.05em' }}>{suitChar}</span>
-          </div>
-
-          {/* Center suit */}
-          <div
-            className="absolute inset-0 flex items-center justify-center pointer-events-none"
-            style={{
-              color,
-              fontSize: small ? 'clamp(16px, 3.2vw, 28px)' : 'clamp(22px, 4vw, 40px)',
-            }}
-          >
-            <span>{suitChar}</span>
-          </div>
-
-          {/* Bottom-right rank + suit (rotated) */}
-          <div
-            className="absolute flex flex-col items-center leading-none font-bold"
-            style={{
-              color,
-              bottom: '4%',
-              right: '8%',
-              fontSize: small ? 'clamp(8px, 1.6vw, 12px)' : 'clamp(11px, 2vw, 16px)',
-              lineHeight: 1,
-              transform: 'rotate(180deg)',
-            }}
-          >
-            <span>{rankLabel}</span>
-            <span style={{ fontSize: '0.85em', marginTop: '0.05em' }}>{suitChar}</span>
-          </div>
-
+          <Image
+            src={cardImageSrc}
+            alt={getCardAlt(cardIndex!)}
+            width={imageSize.width}
+            height={imageSize.height}
+            className="w-full h-full object-contain"
+            priority
+          />
           <div className="absolute inset-0 pointer-events-none" style={{ boxShadow: innerGlow }} />
           {isWinningCard && (
             <div

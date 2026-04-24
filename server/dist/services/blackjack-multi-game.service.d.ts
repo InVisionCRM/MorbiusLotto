@@ -92,7 +92,7 @@ export declare class BlackjackMultiGameService {
     getTableHistory(tableId: string, limit?: number): Promise<any[]>;
     joinTable(tableId: string, playerAddress: string, seatPosition: number): Promise<BJMultiTableState>;
     leaveTable(tableId: string, playerAddress: string): Promise<BJMultiTableState>;
-    placeBet(tableId: string, playerAddress: string, betAmount: bigint): Promise<BJMultiTableState>;
+    placeBet(tableId: string, playerAddress: string, betAmount: bigint, clientSeed?: string): Promise<BJMultiTableState>;
     /**
      * Check if the table is in betting phase and every seated player has placed a bet.
      * Used to skip the betting timer when there's no one left to wait for.

@@ -152,6 +152,7 @@ export class WebSocketService {
     handlePokerAvatarEmotion(ws: any, message: any): Promise<void>;
     handlePokerCreateTable(ws: any, message: any): Promise<void>;
     handlePokerUpdateTableLogo(ws: any, message: any): Promise<void>;
+    handlePokerPurchaseTableLogo(ws: any, message: any): Promise<void>;
     handleGetChatHistory(ws: any, message: any): Promise<void>;
     handleSetDisplayName(ws: any, message: any): Promise<void>;
     handleGetProfile(ws: any, message: any): Promise<void>;

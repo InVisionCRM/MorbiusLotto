@@ -69,9 +69,11 @@ function toNumberSafe(value: unknown): number {
 type Ticket = [number, number, number, number, number, number]
 
 export function InstantLotteryPlayPanel({
+  clientSeed,
   onResult,
   onError,
 }: {
+  clientSeed: string
   onResult?: (result: { playerNumbers: number[]; winningNumbers: number[]; matchCount: number; wager: bigint; netPayout: bigint; txHash?: string }) => void
   onError?: (err: Error) => void
 }) {
@@ -268,6 +270,7 @@ export function InstantLotteryPlayPanel({
             address,
             numbers: ticket,
             wager: wagerWei.toString(),
+            clientSeed: (clientSeed.trim() || 'default').slice(0, 255),
           }),
         })
         const data = await res.json().catch(() => ({}))
@@ -293,7 +296,7 @@ export function InstantLotteryPlayPanel({
 
     setPlayClicked(true)
     playLottery(ticket, wagerWei)
-  }, [address, selected, wagerWei, minWager, maxWager, isOnPulseChain, switchToPulseChain, needsApproval, approve, playLottery, useApiPlay, apiUrl, onResult, onError])
+  }, [address, selected, wagerWei, minWager, maxWager, isOnPulseChain, switchToPulseChain, needsApproval, approve, playLottery, useApiPlay, apiUrl, clientSeed, onResult, onError])
 
   const handlePlayPLS = useCallback(async () => {
     if (!address || selected.length !== NUMBERS_PER_TICKET || wagerWei < minWager || wagerWei > maxWager) return

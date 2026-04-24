@@ -54,6 +54,8 @@ const tournament_scheduler_service_1 = require("./services/tournament-scheduler.
 const websocket_service_1 = require("./services/websocket.service");
 const poker_game_service_1 = require("./services/poker-game.service");
 const poker_tournament_service_1 = require("./services/poker-tournament.service");
+const poker_chip_scale_1 = require("./lib/poker-chip-scale");
+const poker_chip_wallet_1 = require("./services/poker-chip-wallet");
 const blackjack_multi_game_service_1 = require("./services/blackjack-multi-game.service");
 const chain_analytics_service_1 = require("./services/chain-analytics.service");
 const instant_lottery_service_1 = require("./services/instant-lottery.service");
@@ -272,7 +274,7 @@ async function initializeServices() {
         const pokerGameService = new poker_game_service_1.PokerGameService(dbService, pfService);
         const existingTables = await pokerGameService.listTables();
         if (existingTables.length === 0) {
-            await pokerGameService.createTable(10, 20, 6);
+            await pokerGameService.createTable(10, 20, 10);
             logger_1.logger.info('Poker: created default table (10/20 chips, 6 seats)');
         }
         // Clear stale/incomplete poker hands from previous server sessions.
@@ -307,6 +309,7 @@ async function initializeServices() {
         pokerTournamentService.setBroadcastCallback((room, msg) => wsService.broadcastToRoom(room, msg));
         pokerGameService.setPostHandCallback((tableId, handNumber) => pokerTournamentService.syncAfterHand(tableId, handNumber));
         pokerGameService.setTournamentUnderfilledRecovery((tableId) => pokerTournamentService.recoverTournamentTableIfUnderTwoStackedSeats(tableId));
+        pokerGameService.setTournamentTimeoutEliminationCallback((tableId, playerAddress) => pokerTournamentService.eliminatePlayerForConsecutiveTimeouts(tableId, playerAddress));
         // Wire BJ multi broadcast callback
         bjMultiService.setBroadcastCallback((tableId) => wsService.broadcastBJMultiTableState(tableId));
         // Freeroll scheduler (polls pending scheduled events: start, end)
@@ -1326,7 +1329,9 @@ async function initializeServices() {
                 if (!address || !/^0x[a-fA-F0-9]{40}$/.test(address)) {
                     return res.status(400).json({ error: 'Invalid address' });
                 }
-                const stats = await dbService.getPokerPlayerStats(address);
+                const rawScope = String(req.query.scope ?? 'cash');
+                const scope = rawScope === 'tournament' || rawScope === 'all' ? rawScope : 'cash';
+                const stats = await dbService.getPokerPlayerStats(address, scope);
                 sendJson(res, stats);
             }
             catch (error) {
@@ -1387,6 +1392,99 @@ async function initializeServices() {
             }
             catch (error) {
                 logger_1.logger.error('Error fetching poker hand detail:', error);
+                res.status(500).json({ error: 'Internal server error' });
+            }
+        });
+        app.get('/api/poker/chips/balance', async (req, res) => {
+            try {
+                const address = req.query.address;
+                if (!address || !/^0x[a-fA-F0-9]{40}$/i.test(address)) {
+                    return res.status(400).json({ error: 'address query required (0x…42 hex)' });
+                }
+                const normalized = address.toLowerCase();
+                const balance = await (0, poker_chip_wallet_1.getPokerChipBalance)(dbService.getPool(), normalized);
+                return res.status(200).json({ balance: balance.toString() });
+            }
+            catch (error) {
+                logger_1.logger.error('Error fetching poker chip balance:', error);
+                res.status(500).json({ error: 'Internal server error' });
+            }
+        });
+        app.post('/api/poker/chips/purchase', express_1.default.json(), async (req, res) => {
+            try {
+                const { address, chips } = req.body ?? {};
+                if (!address || typeof address !== 'string' || !/^0x[a-fA-F0-9]{40}$/i.test(address)) {
+                    return res.status(400).json({ error: 'address required' });
+                }
+                const normalized = address.toLowerCase();
+                let chipsBn;
+                try {
+                    chipsBn = BigInt(String(chips ?? '0'));
+                }
+                catch {
+                    return res.status(400).json({ error: 'chips must be an integer string' });
+                }
+                if (chipsBn <= 0n)
+                    return res.status(400).json({ error: 'chips must be positive' });
+                if (chipsBn > BigInt(Number.MAX_SAFE_INTEGER)) {
+                    return res.status(400).json({ error: 'chips amount too large' });
+                }
+                const wei = (0, poker_chip_scale_1.chipsToWei)(Number(chipsBn));
+                await dbService.withTransaction(async (client) => {
+                    const deduct = await client.query(`UPDATE players SET balance = balance - $2::NUMERIC
+             WHERE LOWER(wallet_address) = LOWER($1) AND balance >= $2::NUMERIC
+             RETURNING balance`, [normalized, wei.toString()]);
+                    if (deduct.rows.length === 0) {
+                        throw new Error('Insufficient MORBIUS balance for chip purchase (or player not found)');
+                    }
+                    await (0, poker_chip_wallet_1.applyPokerChipDelta)(client, normalized, chipsBn, 'purchase');
+                });
+                const newBal = await (0, poker_chip_wallet_1.getPokerChipBalance)(dbService.getPool(), normalized);
+                return res.status(200).json({ ok: true, chipsCredited: chipsBn.toString(), pokerChipBalance: newBal.toString() });
+            }
+            catch (error) {
+                const msg = error instanceof Error ? error.message : 'Internal server error';
+                if (msg.includes('Insufficient') || msg.includes('must be')) {
+                    return res.status(400).json({ error: msg });
+                }
+                logger_1.logger.error('Poker chip purchase error:', error);
+                res.status(500).json({ error: 'Internal server error' });
+            }
+        });
+        app.post('/api/poker/chips/cashout', express_1.default.json(), async (req, res) => {
+            try {
+                const { address, chips } = req.body ?? {};
+                if (!address || typeof address !== 'string' || !/^0x[a-fA-F0-9]{40}$/i.test(address)) {
+                    return res.status(400).json({ error: 'address required' });
+                }
+                const normalized = address.toLowerCase();
+                let chipsBn;
+                try {
+                    chipsBn = BigInt(String(chips ?? '0'));
+                }
+                catch {
+                    return res.status(400).json({ error: 'chips must be an integer string' });
+                }
+                if (chipsBn <= 0n)
+                    return res.status(400).json({ error: 'chips must be positive' });
+                if (chipsBn > BigInt(Number.MAX_SAFE_INTEGER)) {
+                    return res.status(400).json({ error: 'chips amount too large' });
+                }
+                const wei = (0, poker_chip_scale_1.chipsToWei)(Number(chipsBn));
+                await dbService.withTransaction(async (client) => {
+                    await (0, poker_chip_wallet_1.applyPokerChipDelta)(client, normalized, -chipsBn, 'cashout');
+                    await client.query(`INSERT INTO players (wallet_address, balance) VALUES ($1, $2::NUMERIC)
+             ON CONFLICT (wallet_address) DO UPDATE SET balance = players.balance + $2::NUMERIC, last_seen = NOW()`, [normalized, wei.toString()]);
+                });
+                const newBal = await (0, poker_chip_wallet_1.getPokerChipBalance)(dbService.getPool(), normalized);
+                return res.status(200).json({ ok: true, morbiusCreditedWei: wei.toString(), pokerChipBalance: newBal.toString() });
+            }
+            catch (error) {
+                const msg = error instanceof Error ? error.message : 'Internal server error';
+                if (msg.includes('Insufficient poker chips') || msg.includes('must be')) {
+                    return res.status(400).json({ error: msg });
+                }
+                logger_1.logger.error('Poker chip cashout error:', error);
                 res.status(500).json({ error: 'Internal server error' });
             }
         });

@@ -39,6 +39,7 @@ import { PokerTournamentHUD } from '@/components/poker/tournament/PokerTournamen
 import { PokerTournamentResultsModal } from '@/components/poker/tournament/PokerTournamentResultsModal';
 import type { PokerTournamentCompletedPayload } from '@/lib/poker-tournament-completed';
 import { PokerActivityFeed } from '@/components/poker/PokerActivityFeed';
+import { PokerTableLogoSponsorModal } from '@/components/poker/PokerTableLogoSponsorModal';
 import { Sidebar, SidebarBody } from '@/components/ui/sidebar';
 import {
   applyPokerE2EMockAction,
@@ -69,6 +70,7 @@ export default function PokerTablePage() {
   const [showDashboard, setShowDashboard] = useState(false);
   const [showMyStats, setShowMyStats] = useState(false);
   const [showHowToPlay, setShowHowToPlay] = useState(false);
+  const [logoSponsorOpen, setLogoSponsorOpen] = useState(false);
   const [opponentProfileAddress, setOpponentProfileAddress] = useState<string | null>(null);
   const isAdmin = isAdminWallet(address);
   const [tipAnimating, setTipAnimating] = useState(false);
@@ -670,6 +672,19 @@ export default function PokerTablePage() {
             onLeaveClick={handleLeaveClick}
             autoRebuy={autoRebuy}
             onToggleAutoRebuy={mySeat ? () => setAutoRebuy((v) => !v) : undefined}
+            showTableBrandingActions={Boolean(effectivePlayerAddress && wsConnected && mySeat)}
+            onOpenTableLogoSponsor={() => setLogoSponsorOpen(true)}
+            tipAnimating={tipAnimating}
+            setTipAnimating={setTipAnimating}
+            onTipDealer={onTipDealer}
+            voiceCommands={{
+              listening: speech.listening,
+              supported: speech.supported,
+              onToggle: () => {
+                if (speechEnabled) setSpeechEnabled(false);
+                else setVoiceSplashOpen(true);
+              },
+            }}
           />}
 
           {/* Disconnected banner */}
@@ -716,6 +731,7 @@ export default function PokerTablePage() {
 
             <div className="flex min-h-0 min-w-0 flex-1 flex-col relative">
               <PokerTableView
+                tableId={tableId}
                 tableScale={tableScale}
                 fullscreen={isFullscreen}
                 onToggleFullscreen={() => setIsFullscreen(f => !f)}
@@ -743,10 +759,10 @@ export default function PokerTablePage() {
                 showDashboard={showDashboard}
                 showMyStats={showMyStats}
                 wsConnected={wsConnected}
-                wsClient={wsClient}
                 tipAnimating={tipAnimating}
                 setTipAnimating={setTipAnimating}
                 onTipDealer={onTipDealer}
+                onOpenLogoSponsor={() => setLogoSponsorOpen(true)}
                 onSitOut={mySeat ? handleSitOut : undefined}
                 onSitBack={mySeat ? handleSitBack : undefined}
               />
@@ -786,6 +802,17 @@ export default function PokerTablePage() {
             )}
           </div>
         </div>
+
+        {wsClient && effectivePlayerAddress && mySeat && (
+          <PokerTableLogoSponsorModal
+            isOpen={logoSponsorOpen}
+            onClose={() => setLogoSponsorOpen(false)}
+            tableId={tableId}
+            walletAddress={effectivePlayerAddress}
+            wsClient={wsClient}
+            tableState={renderedState}
+          />
+        )}
 
         <PokerPopups
           showDepositModal={showDepositModal}
@@ -835,6 +862,7 @@ export default function PokerTablePage() {
         pendingLabel={speech.pendingLabel}
         supported={speech.supported}
         onToggle={() => { if (speechEnabled) setSpeechEnabled(false); else setVoiceSplashOpen(true); }}
+        hideFloatingToggle={!isFullscreen}
       />
       {speech.pendingLabel && (
         <SpeechConfirmDialog

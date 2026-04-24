@@ -252,7 +252,7 @@ class BlackjackMultiGameService {
     // --------------------------------------------------------------------------
     // Betting phase
     // --------------------------------------------------------------------------
-    async placeBet(tableId, playerAddress, betAmount) {
+    async placeBet(tableId, playerAddress, betAmount, clientSeed) {
         const release = await this.tableLocks.acquire(tableId);
         try {
             const normalized = playerAddress.toLowerCase();
@@ -275,6 +275,9 @@ class BlackjackMultiGameService {
             if (seatResult.rows.length === 0)
                 throw new Error('Not seated at this table');
             const seat = seatResult.rows[0];
+            const normalizedClientSeed = typeof clientSeed === 'string' && clientSeed.length > 0
+                ? clientSeed.slice(0, 255)
+                : 'default';
             // Atomic: refund previous pending bet, deduct new bet, update seat — all in one transaction
             const prevPending = BigInt(seat.pending_bet || '0');
             await this.dbService.withTransaction(async (client) => {
@@ -295,7 +298,7 @@ class BlackjackMultiGameService {
                     await client.query(`UPDATE players SET balance = balance + $2::NUMERIC WHERE LOWER(wallet_address) = LOWER($1)`, [normalized, (-netDeduction).toString()]);
                 }
                 // else netDeduction === 0 — same amount, no balance change needed
-                await client.query(`UPDATE blackjack_multi_seats SET pending_bet = $1, consecutive_timeouts = 0 WHERE table_id = $2 AND LOWER(player_address) = LOWER($3)`, [betAmount.toString(), tableId, normalized]);
+                await client.query(`UPDATE blackjack_multi_seats SET pending_bet = $1, consecutive_timeouts = 0, client_seed = $4 WHERE table_id = $2 AND LOWER(player_address) = LOWER($3)`, [betAmount.toString(), tableId, normalized, normalizedClientSeed]);
             });
             this.audit(tableId, 'place_bet', null, normalized, { betAmount: betAmount.toString() });
             // If table is still 'waiting' or 'completed', advance it to 'betting'
@@ -364,10 +367,13 @@ class BlackjackMultiGameService {
         const roundNumber = existingRound
             ? Number(existingRound.round_number)
             : Number(roundNumResult.rows[0].last) + 1;
-        // Generate provably fair deck
+        // Generate provably fair deck — round client seed = seat seeds in position order (colon-joined), max 255 chars
         const serverSeed = this.pfService.generateServerSeed();
         const serverSeedHash = this.pfService.createServerSeedHash(serverSeed);
-        const clientSeed = 'default';
+        const sortedBetting = [...bettingSeats].sort((a, b) => Number(a.position) - Number(b.position));
+        const seedParts = sortedBetting.map((s) => String(s.client_seed ?? 'default').slice(0, 255));
+        const joined = seedParts.join(':');
+        const clientSeed = joined.length > 0 ? joined.slice(0, 255) : 'default';
         const deck = this.pfService.fisherYatesShuffle(serverSeed, clientSeed, roundNumber);
         // Initial deal: s0c1, s1c1, …, dealer_c1, s0c2, s1c2, …, dealer_c2
         let dp = 0;

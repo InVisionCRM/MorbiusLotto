@@ -46,6 +46,8 @@ import { BlackjackMultiBetaSplash } from '@/components/BLACKJACK/BlackjackMultiB
 import { SophieSplashModal } from '@/components/shared/SophieSplashModal';
 import { VOICE_BLACKJACK_TUTORIAL_URL } from '@/lib/how-to-video-urls';
 import { ConfirmActionCard } from '@/components/shared/ConfirmActionCard';
+import { ProvablyFairClientSeedModal } from '@/components/shared/ProvablyFairClientSeedModal';
+import { generateHexClientSeed } from '@/lib/generate-client-seed';
 
 /** Must match server BJ_MULTI_AFK_KICK_AFTER — shown in seat UI */
 const AFK_TIMEOUTS_BEFORE_KICK = 3;
@@ -158,6 +160,8 @@ export default function BlackjackMultiTablePage() {
   const [pendingSeatPos, setPendingSeatPos] = useState<number | null>(null);
   const [tipNotification, setTipNotification] = useState<{ name: string } | null>(null);
   const [tipAnimating, setTipAnimating] = useState(false);
+  const [multiClientSeed, setMultiClientSeed] = useState(() => generateHexClientSeed());
+  const [provablyFairOpen, setProvablyFairOpen] = useState(false);
   const wsClientRef = useRef<BlackjackWebSocketClient | null>(null);
   const [wsClient, setWsClient] = useState<BlackjackWebSocketClient | null>(null);
   const latestStateVersionRef = useRef(0);
@@ -887,14 +891,18 @@ export default function BlackjackMultiTablePage() {
     }
     playSound('/Poker/PokerSounds/PlayerClickConfirmation.mp3');
     try {
-      await wsClient.sendRequest('bj_multi_place_bet', { tableId, amount: parseEther(String(amt)).toString() });
+      await wsClient.sendRequest('bj_multi_place_bet', {
+        tableId,
+        amount: parseEther(String(amt)).toString(),
+        clientSeed: multiClientSeed.slice(0, 255),
+      });
       fetchBalance();
     } catch (e) {
       const msg = (e as Error).message;
       // Suppress race-condition errors that aren't actionable
       if (!msg.includes('not in betting phase')) setError(msg);
     }
-  }, [wsClient, tableId, betAmount, fetchBalance, playSound, tableMinBetWhole, tableMaxBetWhole]);
+  }, [wsClient, tableId, betAmount, multiClientSeed, fetchBalance, playSound, tableMinBetWhole, tableMaxBetWhole]);
 
   const doAction = useCallback(async (action: 'hit' | 'stand' | 'double_down' | 'split') => {
     if (!wsClient?.isConnected()) return;
@@ -1001,6 +1009,7 @@ export default function BlackjackMultiTablePage() {
           myPosition={myPosition}
           onLeaveSeat={leaveSeat}
           formatMorbius={formatMorbius}
+          onProvablyFairClick={() => setProvablyFairOpen(true)}
         />
         </div>
 
@@ -1370,6 +1379,13 @@ export default function BlackjackMultiTablePage() {
           confirmLabel="Take Seat"
         />
       )}
+
+      <ProvablyFairClientSeedModal
+        open={provablyFairOpen}
+        onOpenChange={setProvablyFairOpen}
+        value={multiClientSeed}
+        onChange={setMultiClientSeed}
+      />
 
       </main>
     </GlobalMainNav>

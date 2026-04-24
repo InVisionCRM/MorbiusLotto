@@ -96,6 +96,8 @@ export function PokerWinnerNotificationCard({
 
   const [mounted, setMounted] = useState(isOpen);
   const [shellKey, setShellKey] = useState(0);
+  /** Local override: once the countdown hits 0 we self-dismiss even if the parent's `isOpen` is still true. */
+  const [expired, setExpired] = useState(false);
   const prevIsOpenRef = useRef(isOpen);
   const prevHandIdRef = useRef<string | null | undefined>(handId);
 
@@ -109,6 +111,7 @@ export function PokerWinnerNotificationCard({
       const handChanged = prevHand !== undefined && prevHand !== handId;
       if (!wasOpen || handChanged) {
         setShellKey((k) => k + 1);
+        setExpired(false);
       }
       prevIsOpenRef.current = true;
       prevHandIdRef.current = handId;
@@ -116,6 +119,8 @@ export function PokerWinnerNotificationCard({
       prevIsOpenRef.current = false;
     }
   }, [isOpen, handId]);
+
+  const activeForPanel = isOpen && !expired;
 
   const handleExitDone = useCallback(() => {
     setMounted(false);
@@ -131,13 +136,14 @@ export function PokerWinnerNotificationCard({
       setCountdown((prev) => {
         if (prev <= 1) {
           clearInterval(interval);
+          setExpired(true);
           return 0;
         }
         return prev - 1;
       });
     }, 1000);
     return () => clearInterval(interval);
-  }, [isOpen]);
+  }, [isOpen, shellKey]);
 
   const boxStyle: CSSProperties = {
     background: '#000000',
@@ -156,7 +162,7 @@ export function PokerWinnerNotificationCard({
       data-card="poker-winner-notification-card"
       className="fixed inset-0 z-[120] pointer-events-none flex items-center justify-center px-2 sm:px-4"
     >
-      <WinnerPanelFrame key={shellKey} active={isOpen} onExitComplete={handleExitDone} boxStyle={boxStyle}>
+      <WinnerPanelFrame key={shellKey} active={activeForPanel} onExitComplete={handleExitDone} boxStyle={boxStyle}>
         <div className="relative z-[1] flex flex-col overflow-y-auto font-jost-normal" style={{ maxHeight: '70vh' }}>
 
           {/* ── Top: 3-column header (Amount | Winner | Hand Rank) ── */}

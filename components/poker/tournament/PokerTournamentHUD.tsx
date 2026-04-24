@@ -1,9 +1,9 @@
 'use client';
 
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import type { PokerTournamentState } from '@/hooks/use-poker-tournament';
-import { formatChips as formatChipsLib } from '@/lib/format-poker-chips';
+import type { PokerTournamentState, PokerTournamentPlayer } from '@/hooks/use-poker-tournament';
+import { formatChips as formatChipsLib, toChipInt } from '@/lib/format-poker-chips';
 import { useSidebar } from '@/components/ui/sidebar';
 
 interface Props {
@@ -13,9 +13,21 @@ interface Props {
 
 // ── Formatters ─────────────────────────────────────────────────────────────
 
-function shortAddr(addr: string): string {
-  if (!addr || addr.length < 10) return addr;
-  return `${addr.slice(0, 6)}…${addr.slice(-4)}`;
+/** Wallet fallback in leaderboard: last 4 characters only. */
+function addrLast4(addr: string): string {
+  const a = addr.trim();
+  if (!a) return '';
+  return a.length <= 4 ? a : a.slice(-4);
+}
+
+function playerDisplayLabel(p: PokerTournamentPlayer): string {
+  const n = p.displayName?.trim();
+  if (n) return n;
+  return addrLast4(p.playerAddress);
+}
+
+function playerIsOut(p: PokerTournamentPlayer): boolean {
+  return p.status === 'busted' || p.status === 'completed';
 }
 
 function formatCompactChips(n: number): string {
@@ -37,6 +49,13 @@ function isZeroBuyInChips(wei: string): boolean {
   } catch {
     return true;
   }
+}
+
+/** Integer chip share of `pool` for a payout percentage (0–100). */
+function chipShareForPercent(pool: bigint, pct: number): bigint {
+  if (pool <= 0n || !Number.isFinite(pct) || pct <= 0) return 0n;
+  const p = Math.min(100, Math.max(0, Math.round(pct)));
+  return (pool * BigInt(p)) / 100n;
 }
 
 // ── Burst queue types ──────────────────────────────────────────────────────
@@ -146,6 +165,24 @@ export function PokerTournamentHUD({ state, myAddress }: Props) {
   );
   const activePlayers = state.players.filter((p) => p.status === 'playing');
   const sortedByChips = [...activePlayers].sort((a, b) => b.chipsRemaining - a.chipsRemaining);
+
+  /** Active (by chips), then everyone out (by finishing rank, worst first). */
+  const leaderboardRows = useMemo(() => {
+    const playing = state.players.filter((p) => p.status === 'playing');
+    playing.sort((a, b) => b.chipsRemaining - a.chipsRemaining);
+    const out = state.players.filter((p) => p.status !== 'playing');
+    out.sort((a, b) => {
+      const ra = a.finalRank ?? -1;
+      const rb = b.finalRank ?? -1;
+      if (ra !== rb) return rb - ra;
+      return a.playerAddress.localeCompare(b.playerAddress);
+    });
+    return [...playing, ...out];
+  }, [state.players]);
+
+  const splits = state.prizeSplitPercentages ?? [];
+  const poolBn = useMemo(() => toChipInt(state.prizePool), [state.prizePool]);
+
   const myRank = me
     ? sortedByChips.findIndex((p) => p.playerAddress.toLowerCase() === myAddress.toLowerCase()) + 1
     : null;
@@ -345,7 +382,7 @@ export function PokerTournamentHUD({ state, myAddress }: Props) {
           className="font-jost leading-[0.95] break-words"
           style={{
             fontSize: 28,
-            color: 'rgba(255,255,255,0.98)',
+            color: 'rgba(0, 191, 255, 0.98)',
             letterSpacing: '-0.02em',
             textTransform: 'uppercase',
           }}
@@ -354,7 +391,7 @@ export function PokerTournamentHUD({ state, myAddress }: Props) {
         </h3>
         <div
           className="mt-1.5 font-jost-normal text-[10px] tracking-[0.18em] uppercase flex items-center justify-center gap-1.5"
-          style={{ color: 'rgba(255,255,255,0.5)' }}
+          style={{ color: 'rgba(255, 255, 255, 0.5)' }}
         >
           {isZeroBuyInChips(state.buyInAmount) && <span>Freeroll</span>}
           {isZeroBuyInChips(state.buyInAmount) && <span style={{ color: 'rgba(255,255,255,0.2)' }}>·</span>}
@@ -396,47 +433,195 @@ export function PokerTournamentHUD({ state, myAddress }: Props) {
       {/* Leaderboard — slightly different treatment: list under a centered heading */}
       <div className="px-4 pt-3 pb-1">
         <div
-          className="font-jost-normal text-[10px] uppercase tracking-[0.18em] text-center mb-2"
-          style={{ color: 'rgba(255,255,255,0.45)' }}
+          className="font-jost font-bold text-[14px] uppercase tracking-[0.18em] text-center mb-2"
+          style={{ color: 'rgb(255, 251, 0)' }}
         >
           Leaderboard
         </div>
-        <div className="flex flex-col gap-1">
-          {sortedByChips.slice(0, 6).map((p, i) => {
+        <div
+          className="grid grid-cols-[minmax(0,1fr)_minmax(3.5rem,max-content)_minmax(3.25rem,max-content)] gap-x-2 gap-y-0.5 items-start px-2 mb-1"
+          style={{ color: 'rgba(255,255,255,0.38)' }}
+        >
+          <span className="font-jost-normal text-[9px] uppercase tracking-[0.14em]">Player</span>
+          <span className="font-jost-normal text-[9px] uppercase tracking-[0.14em] text-right">Stack</span>
+          <span className="font-jost-normal text-[9px] uppercase tracking-[0.14em] text-right">Prize</span>
+        </div>
+        <div className="flex flex-col gap-0.5">
+          {leaderboardRows.map((p) => {
             const isMe = p.playerAddress.toLowerCase() === myAddress.toLowerCase();
+            const out = playerIsOut(p);
+            const rankAmongActive = out
+              ? null
+              : sortedByChips.findIndex((x) => x.playerAddress.toLowerCase() === p.playerAddress.toLowerCase()) + 1;
+            const podium =
+              !out && rankAmongActive != null && rankAmongActive >= 1 && rankAmongActive <= 3
+                ? (rankAmongActive as 1 | 2 | 3)
+                : null;
+            const namePx = podium === 1 ? 17 : podium === 2 ? 14.5 : podium === 3 ? 13 : 12;
+            const rankNumPx = podium === 1 ? 13 : podium === 2 ? 11.5 : podium === 3 ? 10.5 : 12;
+            const chipPx = podium === 1 ? 15 : podium === 2 ? 13.5 : podium === 3 ? 12.5 : 12;
+            const rankPrefix =
+              rankAmongActive != null && rankAmongActive > 0 ? (
+                <span
+                  className="shrink-0 tabular-nums"
+                  style={{
+                    color:
+                      podium === 1
+                        ? 'rgba(34,211,238,0.75)'
+                        : podium === 2
+                          ? 'rgba(255,255,255,0.42)'
+                          : podium === 3
+                            ? 'rgba(255,255,255,0.38)'
+                            : 'rgba(255,255,255,0.35)',
+                    fontSize: rankNumPx,
+                    fontWeight: podium === 1 ? 600 : 500,
+                    letterSpacing: podium === 1 ? '0.02em' : undefined,
+                  }}
+                >
+                  #{rankAmongActive}
+                </span>
+              ) : null;
+            const outLabel =
+              p.status === 'completed' && p.finalRank === 1
+                ? 'Winner'
+                : p.status === 'completed' && p.finalRank != null
+                  ? `Finished · #${p.finalRank}`
+                  : p.status === 'busted'
+                    ? p.finalRank != null
+                      ? `Eliminated · #${p.finalRank}`
+                      : 'Eliminated'
+                    : null;
+            const rowBg =
+              podium === 1
+                ? 'linear-gradient(90deg, rgba(34,211,238,0.12) 0%, rgba(34,211,238,0.02) 55%, transparent 100%)'
+                : podium === 2
+                  ? 'linear-gradient(90deg, rgba(255,255,255,0.07) 0%, transparent 70%)'
+                  : podium === 3
+                    ? 'linear-gradient(90deg, rgba(255,255,255,0.045) 0%, transparent 65%)'
+                    : isMe
+                      ? 'rgba(255,255,255,0.06)'
+                      : 'transparent';
+            const rowBorderLeft =
+              podium === 1
+                ? '3px solid rgba(34,211,238,0.45)'
+                : podium === 2
+                  ? '2px solid rgba(255,255,255,0.28)'
+                  : podium === 3
+                    ? '2px solid rgba(180,130,70,0.45)'
+                    : isMe
+                      ? '2px solid rgba(255,255,255,0.5)'
+                      : '2px solid transparent';
+            const splitPct =
+              splits.length === 0
+                ? undefined
+                : out && p.finalRank != null && p.finalRank >= 1
+                  ? splits[p.finalRank - 1]
+                  : !out &&
+                      rankAmongActive != null &&
+                      rankAmongActive >= 1 &&
+                      rankAmongActive <= splits.length
+                    ? splits[rankAmongActive - 1]
+                    : undefined;
+            const prizePx = podium === 1 ? 12 : podium === 2 ? 10.5 : podium === 3 ? 10 : 9;
+            const prizeShareBn =
+              splitPct != null && Number.isFinite(splitPct) && splitPct >= 0
+                ? chipShareForPercent(poolBn, splitPct)
+                : 0n;
+            const showPrizeChips = poolBn > 0n && splitPct != null && splitPct > 0;
             return (
               <div
                 key={p.playerAddress}
-                className={`flex justify-between items-center gap-2 min-w-0 px-2 py-1 rounded ${isMe ? '' : ''}`}
+                className="grid grid-cols-[minmax(0,1fr)_minmax(3.5rem,max-content)_minmax(3.25rem,max-content)] gap-x-2 items-start min-w-0 px-2 rounded"
                 style={{
-                  background: isMe ? 'rgba(255,255,255,0.06)' : 'transparent',
-                  borderLeft: isMe ? '2px solid rgba(255,255,255,0.5)' : '2px solid transparent',
+                  background: rowBg,
+                  borderLeft: rowBorderLeft,
+                  opacity: out ? 0.72 : 1,
+                  paddingTop: podium === 1 ? 10 : podium ? 7 : 6,
+                  paddingBottom: podium === 1 ? 10 : podium ? 7 : 6,
+                  boxShadow:
+                    podium === 1 ? 'inset 0 1px 0 rgba(255,255,255,0.06)' : undefined,
                 }}
               >
                 <span
-                  className="font-jost-normal text-[12px] truncate min-w-0"
-                  style={{ color: isMe ? 'rgba(255,255,255,0.95)' : 'rgba(255,255,255,0.75)' }}
+                  className={`truncate min-w-0 flex flex-col gap-0.5 ${podium ? 'font-jost' : 'font-jost-normal'}`}
+                  style={{
+                    color: isMe ? 'rgba(255,255,255,0.95)' : 'rgba(255,255,255,0.78)',
+                    fontSize: namePx,
+                    lineHeight: podium === 1 ? 1.15 : 1.2,
+                    fontWeight: podium === 1 ? 600 : podium ? 500 : 400,
+                    letterSpacing: podium === 1 ? '-0.02em' : '-0.01em',
+                  }}
                 >
-                  <span style={{ color: 'rgba(255,255,255,0.35)' }}>#{i + 1}</span>{' '}
-                  {shortAddr(p.playerAddress)}
+                  <span className="truncate min-w-0 flex items-baseline gap-1.5 min-w-0">
+                    {rankPrefix}
+                    <span className="truncate min-w-0" style={{ fontSize: 'inherit' }}>
+                      {playerDisplayLabel(p)}
+                    </span>
+                  </span>
+                  {outLabel ? (
+                    <span
+                      className="font-jost-normal text-[9px] uppercase tracking-wide truncate"
+                      style={{
+                        color:
+                          p.status === 'completed' && p.finalRank === 1
+                            ? 'rgba(52,211,153,0.95)'
+                            : p.status === 'completed'
+                              ? 'rgba(255,255,255,0.5)'
+                              : 'rgba(248,113,113,0.9)',
+                      }}
+                    >
+                      {outLabel}
+                    </span>
+                  ) : null}
                 </span>
                 <span
-                  className="font-jost text-[12px] tabular-nums shrink-0"
-                  style={{ color: isMe ? 'rgba(255,255,255,0.98)' : 'rgba(255,255,255,0.8)' }}
+                  className="font-jost tabular-nums shrink-0 self-start text-right"
+                  style={{
+                    color: isMe ? 'rgba(255,255,255,0.98)' : 'rgba(255,255,255,0.82)',
+                    fontSize: chipPx,
+                    fontWeight: podium === 1 ? 600 : 500,
+                    letterSpacing: podium === 1 ? '-0.02em' : undefined,
+                  }}
                 >
-                  {formatChipsLib(p.chipsRemaining)}
+                  {out ? '—' : formatChipsLib(p.chipsRemaining)}
                 </span>
+                <div className="flex flex-col items-end justify-start min-w-0 self-start text-right leading-tight">
+                  {splitPct != null && Number.isFinite(splitPct) && splitPct >= 0 ? (
+                    <>
+                      <span
+                        className="font-jost tabular-nums"
+                        style={{
+                          fontSize: prizePx,
+                          color: isMe ? 'rgba(255,255,255,0.92)' : 'rgba(255,255,255,0.78)',
+                          fontWeight: podium === 1 ? 600 : 500,
+                        }}
+                      >
+                        {splitPct}%
+                      </span>
+                      {showPrizeChips ? (
+                        <span
+                          className="font-jost-normal tabular-nums text-[8px] mt-0.5"
+                          style={{ color: 'rgba(255,255,255,0.42)' }}
+                        >
+                          {formatChipsLib(prizeShareBn)}
+                        </span>
+                      ) : null}
+                    </>
+                  ) : (
+                    <span
+                      className="font-jost tabular-nums"
+                      style={{
+                        fontSize: prizePx,
+                        color: 'rgba(255,255,255,0.32)',
+                      }}
+                    >
+                      —
+                    </span>
+                  )}
+                </div>
               </div>
             );
           })}
-          {sortedByChips.length > 6 && (
-            <div
-              className="font-jost-normal text-[10px] text-center mt-0.5"
-              style={{ color: 'rgba(255,255,255,0.4)' }}
-            >
-              +{sortedByChips.length - 6} more
-            </div>
-          )}
         </div>
       </div>
     </div>

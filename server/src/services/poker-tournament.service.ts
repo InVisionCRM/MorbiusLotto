@@ -45,6 +45,8 @@ export const DEFAULT_BLIND_SCHEDULE: BlindLevel[] = [
 
 export interface PokerTournamentPlayer {
   playerAddress: string;
+  /** From `chat_display_names`; null if unset. */
+  displayName: string | null;
   entryId: string;
   chipsRemaining: number;
   status: 'playing' | 'busted' | 'completed';
@@ -1613,9 +1615,12 @@ export class PokerTournamentService {
     const handNumber = Number(t.hand_number ?? 0);
 
     const entries = await this.pool.query(
-      `SELECT id, player_address, chips_remaining, status, final_rank, prize_won
-       FROM tournament_entries WHERE tournament_id = $1
-       ORDER BY final_rank ASC NULLS LAST, chips_remaining DESC`,
+      `SELECT te.id, te.player_address, te.chips_remaining, te.status, te.final_rank, te.prize_won,
+              cdn.display_name
+       FROM tournament_entries te
+       LEFT JOIN chat_display_names cdn ON LOWER(cdn.wallet_address) = LOWER(te.player_address)
+       WHERE te.tournament_id = $1
+       ORDER BY te.final_rank ASC NULLS LAST, te.chips_remaining DESC`,
       [tournamentId]
     );
 
@@ -1648,11 +1653,20 @@ export class PokerTournamentService {
       smallBlind:            smallBlindChips,
       bigBlind:              bigBlindChips,
       handNumber,
-      players:               entries.rows.map((e) => ({
+      players:               entries.rows.map((e: {
+        player_address: string;
+        id: string;
+        chips_remaining: unknown;
+        status: string;
+        final_rank: number | null;
+        prize_won: unknown;
+        display_name: string | null;
+      }) => ({
         playerAddress:   e.player_address,
+        displayName:     e.display_name?.trim() ? e.display_name.trim() : null,
         entryId:         e.id as string,
         chipsRemaining:  Number(e.chips_remaining ?? 0),
-        status:          e.status,
+        status:          e.status as 'playing' | 'busted' | 'completed',
         finalRank:       e.final_rank ?? null,
         prizeWon:        (e.prize_won ?? '0').toString(),
       })),
@@ -1678,9 +1692,11 @@ export class PokerTournamentService {
   ): Promise<PokerTournamentPlayer | null> {
     const normalized = this.normalizeAddress(playerAddress);
     const row = await this.pool.query(
-      `SELECT id, player_address, chips_remaining, status, final_rank, prize_won
-       FROM tournament_entries
-       WHERE tournament_id = $1 AND LOWER(player_address) = LOWER($2)
+      `SELECT te.id, te.player_address, te.chips_remaining, te.status, te.final_rank, te.prize_won,
+              cdn.display_name
+       FROM tournament_entries te
+       LEFT JOIN chat_display_names cdn ON LOWER(cdn.wallet_address) = LOWER(te.player_address)
+       WHERE te.tournament_id = $1 AND LOWER(te.player_address) = LOWER($2)
        LIMIT 1`,
       [tournamentId, normalized]
     );
@@ -1688,6 +1704,7 @@ export class PokerTournamentService {
     const e = row.rows[0];
     return {
       playerAddress: e.player_address,
+      displayName:   e.display_name?.trim() ? e.display_name.trim() : null,
       entryId:       e.id,
       chipsRemaining: Number(e.chips_remaining ?? 0),
       status:        e.status,
