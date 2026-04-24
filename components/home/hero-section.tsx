@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from 'react'
 
-const HERO_VIDEO_SRC = '/morbius/Morbius-hero-story-scrub.mp4'
+const HERO_VIDEO_SRC = '/morbius/Morbiusio_Building_Entrance_Pan.mp4'
 
 const SCRUB_FADE_START = 0.75
 
@@ -107,6 +107,11 @@ export function HeroSection({ showWelcome = false, welcomeName = null }: HeroSec
   const showOverlay = isDesktop ? overlayProgress > 0.01 : mobileFinished
   const overlayOpacity = isDesktop ? overlayProgress : mobileFinished ? 1 : 0
   const ctaReady = isDesktop ? overlayProgress > 0.55 : mobileFinished
+  const scrollHintOpacity = isDesktop
+    ? Math.max(0, 1 - overlayProgress * 8)
+    : mobileFinished
+      ? 0
+      : 1
 
   return (
     <div
@@ -180,12 +185,20 @@ export function HeroSection({ showWelcome = false, welcomeName = null }: HeroSec
           </h1>
         ) : null}
 
-        <div className="absolute bottom-5 left-1/2 z-10 flex -translate-x-1/2 justify-center sm:bottom-6">
-          <div>
-            <svg className="h-5 w-5 text-white/40" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 14l-7 7m0 0l-7-7m7 7V3" />
-            </svg>
+        <div
+          className="pointer-events-none absolute bottom-6 left-1/2 z-10 flex -translate-x-1/2 flex-col items-center gap-2 transition-opacity duration-500 sm:bottom-8"
+          style={{ opacity: scrollHintOpacity }}
+          aria-hidden
+        >
+          <span className="text-[10px] font-semibold uppercase tracking-[0.3em] text-white/60 sm:text-xs">
+            Scroll
+          </span>
+          <div className="hero-scroll-hint flex h-9 w-6 items-start justify-center rounded-full border border-white/40 p-1 sm:h-10 sm:w-6">
+            <span className="hero-scroll-hint-dot block h-1.5 w-1.5 rounded-full bg-white/80" />
           </div>
+          <svg className="h-4 w-4 text-white/50" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 14l-7 7m0 0l-7-7m7 7V3" />
+          </svg>
         </div>
       </section>
     </div>

@@ -45,7 +45,11 @@ function IntroScreen({ onComplete }: { onComplete: () => void }) {
     <div
       className="fixed inset-0 z-50"
       style={{
-        background: 'linear-gradient(145deg, rgb(16, 26, 35), rgb(10, 15, 20))',
+        backgroundImage:
+          "linear-gradient(145deg, rgba(16, 26, 35, 0.78), rgba(10, 15, 20, 0.88)), url('/morbius/Morbius_Poker.png')",
+        backgroundSize: 'cover',
+        backgroundPosition: 'center',
+        backgroundRepeat: 'no-repeat',
       }}
       suppressHydrationWarning
     >
