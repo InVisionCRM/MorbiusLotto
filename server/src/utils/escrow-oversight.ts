@@ -162,7 +162,6 @@ export async function getPoolDetails(tournamentId: string): Promise<EscrowPoolDe
       bigint,
       bigint,
       boolean,
-      boolean
     ];
     
     const now = BigInt(Math.floor(Date.now() / 1000));
