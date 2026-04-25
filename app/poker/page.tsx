@@ -28,6 +28,7 @@ import { PokerHowToPlayModal } from '@/components/poker/PokerHowToPlayModal';
 import { PokerStatsModal } from '@/components/poker/PokerStatsModal';
 import GlobalMainNav from '@/components/shared/GlobalMainNav';
 import { PokerTournamentLobby } from '@/components/poker/tournament/PokerTournamentLobby';
+import { PokerTournamentHistory } from '@/components/poker/tournament/PokerTournamentHistory';
 import { Coins, Lock } from 'lucide-react';
 
 // Intro screen component (same style as Blackjack)
@@ -122,20 +123,23 @@ export default function PokerLobbyPage() {
   const [tablePlayers, setTablePlayers] = useState<{ tableId: string; seats: PokerSeatState[] } | null>(null);
   const [tablePlayersLoading, setTablePlayersLoading] = useState(false);
   const [removingTableId, setRemovingTableId] = useState<string | null>(null);
-  const [activeTab, setActiveTab] = useState<'cash' | 'tournaments'>('cash');
+  const [activeTab, setActiveTab] = useState<'cash' | 'tournaments' | 'history'>('cash');
   const [wsClient, setWsClient] = useState<BlackjackWebSocketClient | null>(null);
 
   useEffect(() => {
     const t = searchParams.get('tab');
     if (t === 'tournaments') setActiveTab('tournaments');
+    else if (t === 'history') setActiveTab('history');
     else if (t === 'cash') setActiveTab('cash');
   }, [searchParams]);
 
   const setLobbyTab = useCallback(
-    (tab: 'cash' | 'tournaments') => {
+    (tab: 'cash' | 'tournaments' | 'history') => {
       setActiveTab(tab);
       if (tab === 'tournaments') {
         router.replace('/poker?tab=tournaments', { scroll: false });
+      } else if (tab === 'history') {
+        router.replace('/poker?tab=history', { scroll: false });
       } else {
         router.replace('/poker', { scroll: false });
       }
@@ -650,6 +654,17 @@ export default function PokerLobbyPage() {
                 >
                   Tournaments
                 </button>
+                <button
+                  type="button"
+                  onClick={() => setLobbyTab('history')}
+                  className={`relative px-5 py-2.5 rounded-xl text-xs sm:text-sm font-semibold transition-all ${
+                    activeTab === 'history'
+                      ? 'bg-cyan-500/[0.12] text-cyan-400'
+                      : 'text-slate-600 hover:text-slate-400'
+                  }`}
+                >
+                  History
+                </button>
               </div>
             </div>
             {activeTab === 'tournaments' && (
@@ -671,6 +686,19 @@ export default function PokerLobbyPage() {
                   myAddress={address}
                   onGoToTable={goToTournamentTable}
                 />
+              </div>
+            )}
+
+            {activeTab === 'history' && (
+              <div
+                className="rounded-2xl border border-cyan-500/20 p-3 sm:p-5"
+                style={{
+                  background: 'linear-gradient(325deg, rgba(20, 20, 20, 0.8), rgba(40, 40, 40, 0.6))',
+                  boxShadow:
+                    'inset 0 3px 6px rgba(0, 0, 0, 0.8), inset 0 -3px 6px rgba(255, 255, 255, 0.1), 0 1px 3px rgba(0, 0, 0, 0.5)',
+                }}
+              >
+                <PokerTournamentHistory myAddress={address} />
               </div>
             )}
 

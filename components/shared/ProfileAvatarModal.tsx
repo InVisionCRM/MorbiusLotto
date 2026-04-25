@@ -66,6 +66,7 @@ export function ProfileAvatarModal({ open, onClose, wsClient: wsClientProp, onSa
 
   const [displayName, setDisplayName] = useState('');
   const [profileImageUrl, setProfileImageUrl] = useState<string | null>(null);
+  const [profileDisplayMode, setProfileDisplayMode] = useState<'avatar' | 'photo'>('avatar');
   const [config, setConfig] = useState<AvatarConfig>(DEFAULT_AVATAR_CONFIG);
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -132,6 +133,7 @@ export function ProfileAvatarModal({ open, onClose, wsClient: wsClientProp, onSa
         const profile = await wsClient.getProfile();
         setDisplayName(profile.displayName ?? '');
         setProfileImageUrl(profile.profileImageUrl ?? null);
+        setProfileDisplayMode(profile.profileDisplayMode === 'photo' ? 'photo' : 'avatar');
         setConfig(hydrateAvatarFromServer(profile.avatarConfig));
       } else if (address) {
         const res = await fetch(`/api/player/${address}/profile`);
@@ -139,10 +141,12 @@ export function ProfileAvatarModal({ open, onClose, wsClient: wsClientProp, onSa
         const data = await res.json();
         setDisplayName(data.displayName ?? '');
         setProfileImageUrl(data.profileImageUrl ?? null);
+        setProfileDisplayMode(data.profileDisplayMode === 'photo' ? 'photo' : 'avatar');
         setConfig(hydrateAvatarFromServer(data.avatarConfig));
       } else {
         setDisplayName('');
         setProfileImageUrl(null);
+        setProfileDisplayMode('avatar');
         setConfig(DEFAULT_AVATAR_CONFIG);
       }
     } catch (e) {
@@ -210,7 +214,7 @@ export function ProfileAvatarModal({ open, onClose, wsClient: wsClientProp, onSa
     setNamePromptError(null);
     try {
       if (wsClient?.isConnected()) {
-        await wsClient.setDisplayName(n, profileImageUrl, config);
+        await wsClient.setDisplayName(n, profileImageUrl, config, undefined, undefined, undefined, profileDisplayMode);
       } else if (!address) {
         setNamePromptError('Connect your wallet to save');
         return;
@@ -223,6 +227,7 @@ export function ProfileAvatarModal({ open, onClose, wsClient: wsClientProp, onSa
             displayName: n,
             profileImageUrl: profileImageUrl ?? null,
             avatarConfig: config,
+            profileDisplayMode,
           }),
         });
         if (!res.ok) {
@@ -264,7 +269,7 @@ export function ProfileAvatarModal({ open, onClose, wsClient: wsClientProp, onSa
     setError(null);
     try {
       if (wsClient?.isConnected()) {
-        await wsClient.setDisplayName(name, profileImageUrl, avatarPayload);
+        await wsClient.setDisplayName(name, profileImageUrl, avatarPayload, undefined, undefined, undefined, profileDisplayMode);
         onSave?.();
         await finishAfterAvatarSave();
         return;
@@ -281,6 +286,7 @@ export function ProfileAvatarModal({ open, onClose, wsClient: wsClientProp, onSa
           displayName: name,
           profileImageUrl: profileImageUrl ?? null,
           avatarConfig: avatarPayload,
+          profileDisplayMode,
         }),
       });
       if (!res.ok) {
@@ -427,6 +433,36 @@ export function ProfileAvatarModal({ open, onClose, wsClient: wsClientProp, onSa
                 </div>
               ) : (
                 <div className="relative flex-1 min-h-0 overflow-hidden flex flex-col">
+                  <div className="flex items-center justify-between gap-2 px-3 py-1.5 border-b border-gray-100 bg-gray-50/60">
+                    <div className="min-w-0">
+                      <p className="text-[11px] font-semibold text-gray-700 leading-tight">Show at game tables</p>
+                      <p className="text-[10px] text-gray-500 leading-tight">Chat always uses your photo.</p>
+                    </div>
+                    <div className="inline-flex rounded-lg bg-gray-200 p-0.5 shrink-0" role="group" aria-label="Game seat appearance">
+                      <button
+                        type="button"
+                        onClick={() => setProfileDisplayMode('avatar')}
+                        className={`px-2.5 py-1 rounded-md text-[11px] font-medium transition-colors ${
+                          profileDisplayMode === 'avatar' ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-600 hover:text-gray-800'
+                        }`}
+                        aria-pressed={profileDisplayMode === 'avatar'}
+                      >
+                        Avatar
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setProfileDisplayMode('photo')}
+                        disabled={!profileImageUrl}
+                        title={!profileImageUrl ? 'Upload a profile photo first' : undefined}
+                        className={`px-2.5 py-1 rounded-md text-[11px] font-medium transition-colors ${
+                          profileDisplayMode === 'photo' ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-600 hover:text-gray-800 disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:text-gray-600'
+                        }`}
+                        aria-pressed={profileDisplayMode === 'photo'}
+                      >
+                        Photo
+                      </button>
+                    </div>
+                  </div>
                   <CharacterCreator
                     config={config}
                     onChange={setConfig}

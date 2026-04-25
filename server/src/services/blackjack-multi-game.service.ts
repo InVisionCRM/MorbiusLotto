@@ -59,6 +59,7 @@ export interface BJMultiSeatState {
   displayName?: string | null;
   profileImageUrl?: string | null;
   avatarConfig?: Record<string, unknown> | null;
+  profileDisplayMode?: 'avatar' | 'photo';
   // Round-specific (null when no active round or seat has no bet)
   betAmount: string;
   hands: BJMultiHandObj[];
@@ -1089,6 +1090,7 @@ export class BlackjackMultiGameService {
         displayName: profile?.displayName ?? null,
         profileImageUrl: profile?.profileImageUrl ?? null,
         avatarConfig: profile?.avatarConfig ?? placeholderByAddress.get(seat.player_address.toLowerCase()) ?? null,
+        profileDisplayMode: profile?.profileDisplayMode ?? 'avatar',
         betAmount: rs ? rs.bet_amount : '0',
         hands: rs ? (rs.hands as BJMultiHandObj[]) : [],
         activeHandIndex: rs ? (rs.active_hand_index ?? 0) : 0,

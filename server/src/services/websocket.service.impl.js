@@ -1269,7 +1269,10 @@ class WebSocketService {
             const bio = payload.bio !== undefined ? (typeof payload.bio === 'string' ? payload.bio.trim().slice(0, 200) || null : null) : undefined;
             const xHandle = payload.xHandle !== undefined ? (typeof payload.xHandle === 'string' ? payload.xHandle.trim().replace(/^@/, '').slice(0, 50) || null : null) : undefined;
             const tgHandle = payload.tgHandle !== undefined ? (typeof payload.tgHandle === 'string' ? payload.tgHandle.trim().replace(/^@/, '').slice(0, 50) || null : null) : undefined;
-            await this.dbService.setDisplayName(ws.playerAddress, displayName, profileImageUrl, avatarConfig, bio, xHandle, tgHandle);
+            const profileDisplayMode = payload.profileDisplayMode === 'photo' || payload.profileDisplayMode === 'avatar'
+                ? payload.profileDisplayMode
+                : undefined;
+            await this.dbService.setDisplayName(ws.playerAddress, displayName, profileImageUrl, avatarConfig, bio, xHandle, tgHandle, profileDisplayMode);
             const profile = await this.dbService.getProfile(ws.playerAddress);
             this.sendMessage(ws, {
                 type: 'display_name_set',
@@ -1280,6 +1283,7 @@ class WebSocketService {
                     bio: profile?.bio ?? null,
                     xHandle: profile?.xHandle ?? null,
                     tgHandle: profile?.tgHandle ?? null,
+                    profileDisplayMode: profile?.profileDisplayMode ?? 'avatar',
                 },
                 requestId: message.requestId
             });
@@ -1298,8 +1302,8 @@ class WebSocketService {
             this.sendMessage(ws, {
                 type: 'profile',
                 payload: profile
-                    ? { displayName: profile.displayName, profileImageUrl: profile.profileImageUrl, avatarConfig: profile.avatarConfig, bio: profile.bio, xHandle: profile.xHandle, tgHandle: profile.tgHandle }
-                    : { displayName: null, profileImageUrl: null, avatarConfig: null, bio: null, xHandle: null, tgHandle: null },
+                    ? { displayName: profile.displayName, profileImageUrl: profile.profileImageUrl, avatarConfig: profile.avatarConfig, bio: profile.bio, xHandle: profile.xHandle, tgHandle: profile.tgHandle, profileDisplayMode: profile.profileDisplayMode ?? 'avatar' }
+                    : { displayName: null, profileImageUrl: null, avatarConfig: null, bio: null, xHandle: null, tgHandle: null, profileDisplayMode: 'avatar' },
                 requestId: message.requestId
             });
         }

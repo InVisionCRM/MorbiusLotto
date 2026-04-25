@@ -861,26 +861,3 @@ body {
   animation: poker-tournament-blind-banner 5s cubic-bezier(0.33, 0, 0.2, 1) forwards;
 }
 
-/* Cash / tournament poker: floating sponsored (or default) table logo on felt */
-@keyframes poker-table-logo-float {
-  0% {
-    transform: translate(-12%, -8%) rotate(-2deg);
-  }
-  22% {
-    transform: translate(14%, -6%) rotate(1.5deg);
-  }
-  48% {
-    transform: translate(8%, 12%) rotate(-1deg);
-  }
-  72% {
-    transform: translate(-16%, 6%) rotate(2deg);
-  }
-  100% {
-    transform: translate(-12%, -8%) rotate(-2deg);
-  }
-}
-
-.poker-table-logo-float {
-  animation: poker-table-logo-float 26s ease-in-out infinite;
-  will-change: transform;
-}

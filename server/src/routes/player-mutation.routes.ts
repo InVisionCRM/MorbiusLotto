@@ -30,6 +30,7 @@ export function registerPlayerMutationRoutes({
         bio: rawBio,
         xHandle: rawXHandle,
         tgHandle: rawTgHandle,
+        profileDisplayMode: rawProfileDisplayMode,
       } = req.body ?? {};
       const addressRaw =
         typeof bodyAddress === 'string' && bodyAddress.trim() !== ''
@@ -68,6 +69,10 @@ export function registerPlayerMutationRoutes({
             ? rawTgHandle.trim().replace(/^@/, '').slice(0, 50) || null
             : null
           : undefined;
+      const profileDisplayMode: 'avatar' | 'photo' | undefined =
+        rawProfileDisplayMode === 'photo' || rawProfileDisplayMode === 'avatar'
+          ? rawProfileDisplayMode
+          : undefined;
 
       if (avatarConfig && !isAdminWallet(normalizedAddress)) {
         const inventory = await cosmeticsService.getInventory(normalizedAddress);
@@ -100,7 +105,7 @@ export function registerPlayerMutationRoutes({
         }
       }
 
-      await dbService.setDisplayName(normalizedAddress, displayName, profileImageUrl, avatarConfig, bio, xHandle, tgHandle);
+      await dbService.setDisplayName(normalizedAddress, displayName, profileImageUrl, avatarConfig, bio, xHandle, tgHandle, profileDisplayMode);
       const profile = await dbService.getProfile(normalizedAddress);
       sendJson(res, profile ?? { displayName: null, profileImageUrl: null, avatarConfig: null });
     } catch (error) {

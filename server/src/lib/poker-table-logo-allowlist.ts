@@ -5,7 +5,7 @@ const ALLOWED_EXTS = new Set(['.png', '.jpg', '.jpeg', '.svg', '.webp', '.gif'])
 
 /** Resolved from compiled `server/dist/lib` or `server/src/lib` → repo `public/`. */
 export function getPokerMarketingLogosDir(): string {
-  return join(__dirname, '../../../public', 'Marketing ', 'LOGOS');
+  return join(__dirname, '../../../public', 'Logos');
 }
 
 let cached: { at: number; files: string[] } | null = null;

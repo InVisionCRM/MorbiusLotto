@@ -1,15 +1,16 @@
 'use client';
 
-import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
-import type { CSSProperties, ReactNode } from 'react';
-import { motion } from 'framer-motion';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import { AnimatePresence, motion } from 'framer-motion';
 import { CardDisplay } from './CardDisplay';
 
 const SHOWDOWN_DURATION_S = 15;
 
-/** Keyframe names must match `app/globals.css` (for `animationend` filtering). */
-const ANIM_IN_NAME = 'poker-winner-shockwave-in';
-const ANIM_OUT_NAME = 'poker-winner-slide-down-out';
+const GOLD = '#c9a34a';
+const GOLD_BRIGHT = '#f0d27a';
+const GOLD_DEEP = '#8a6a1f';
+const FELT_DEEP = '#0a2419';
+const FELT_EDGE = '#041510';
 
 export interface PokerWinnerNotificationCardProps {
   isOpen: boolean;
@@ -27,55 +28,28 @@ export interface PokerWinnerNotificationCardProps {
   formatChips: (wei: string | number) => string;
 }
 
-type PanelMode = 'in' | 'idle' | 'out';
-
-function WinnerPanelFrame({
-  active,
-  onExitComplete,
-  children,
-  boxStyle,
-}: {
-  active: boolean;
-  onExitComplete: () => void;
-  children: ReactNode;
-  boxStyle: CSSProperties;
-}) {
-  const [mode, setMode] = useState<PanelMode>('in');
-  const modeRef = useRef<PanelMode>(mode);
-  modeRef.current = mode;
-
-  useEffect(() => {
-    if (active) setMode('in');
-    else setMode('out');
-  }, [active]);
-
-  const onAnimEnd = useCallback(
-    (e: React.AnimationEvent<HTMLDivElement>) => {
-      if (e.target !== e.currentTarget) return;
-      const name = e.animationName;
-      if (name === ANIM_IN_NAME) {
-        setMode((m) => (m === 'in' ? 'idle' : m));
-        return;
-      }
-      if (name === ANIM_OUT_NAME && modeRef.current === 'out') {
-        onExitComplete();
-      }
-    },
-    [onExitComplete],
-  );
-
-  const animClass =
-    mode === 'in' ? 'poker-winner-anim-in-shockwave' : mode === 'out' ? 'poker-winner-anim-out-slide-down' : '';
-
-  return (
-    <div
-      className={`relative rounded-2xl overflow-hidden ${animClass}`}
-      style={boxStyle}
-      onAnimationEnd={onAnimEnd}
-    >
-      {children}
-    </div>
-  );
+/**
+ * Selects exactly 5 winning cards from hole + community.
+ * winningCardIndices are 0-51 card values (not positional). Falls back to hole + first 3 community if incomplete.
+ */
+function selectWinningFive(
+  hole: number[],
+  community: number[],
+  winningCardIndices: number[],
+): number[] {
+  const hand = winningCardIndices.filter((c) => typeof c === 'number' && c >= 0 && c <= 51);
+  if (hand.length === 5) return hand;
+  const pool = [...hole, ...community].filter((c) => typeof c === 'number' && c >= 0 && c <= 51);
+  const seen = new Set<number>();
+  const unique: number[] = [];
+  for (const c of [...hand, ...pool]) {
+    if (!seen.has(c)) {
+      seen.add(c);
+      unique.push(c);
+    }
+    if (unique.length === 5) break;
+  }
+  return unique;
 }
 
 export function PokerWinnerNotificationCard({
@@ -86,52 +60,31 @@ export function PokerWinnerNotificationCard({
   winnerHandName,
   winnerHoleCards = [],
   communityCards = [],
-  winningCardIndices: _winningCardIndices = [],
+  winningCardIndices = [],
   splitLabel,
   splitAmount,
   formatChips,
 }: PokerWinnerNotificationCardProps) {
-  const hole = [winnerHoleCards[0] ?? null, winnerHoleCards[1] ?? null];
-  const board = Array.from({ length: 5 }, (_, i) => communityCards[i] ?? null);
-
-  const [mounted, setMounted] = useState(isOpen);
-  const [shellKey, setShellKey] = useState(0);
-  /** Local override: once the countdown hits 0 we self-dismiss even if the parent's `isOpen` is still true. */
-  const [expired, setExpired] = useState(false);
-  const prevIsOpenRef = useRef(isOpen);
-  const prevHandIdRef = useRef<string | null | undefined>(handId);
+  const fiveCards = useMemo(
+    () => selectWinningFive(winnerHoleCards, communityCards, winningCardIndices),
+    [winnerHoleCards, communityCards, winningCardIndices],
+  );
 
   const [countdown, setCountdown] = useState(SHOWDOWN_DURATION_S);
-
-  useLayoutEffect(() => {
-    if (isOpen) {
-      setMounted(true);
-      const wasOpen = prevIsOpenRef.current;
-      const prevHand = prevHandIdRef.current;
-      const handChanged = prevHand !== undefined && prevHand !== handId;
-      if (!wasOpen || handChanged) {
-        setShellKey((k) => k + 1);
-        setExpired(false);
-      }
-      prevIsOpenRef.current = true;
-      prevHandIdRef.current = handId;
-    } else {
-      prevIsOpenRef.current = false;
-    }
-  }, [isOpen, handId]);
-
-  const activeForPanel = isOpen && !expired;
-
-  const handleExitDone = useCallback(() => {
-    setMounted(false);
-  }, []);
+  const [expired, setExpired] = useState(false);
+  const prevHandRef = useRef<string | null | undefined>(handId);
 
   useEffect(() => {
     if (!isOpen) {
       setCountdown(SHOWDOWN_DURATION_S);
+      setExpired(false);
       return;
     }
-    setCountdown(SHOWDOWN_DURATION_S);
+    if (prevHandRef.current !== handId) {
+      setCountdown(SHOWDOWN_DURATION_S);
+      setExpired(false);
+      prevHandRef.current = handId;
+    }
     const interval = setInterval(() => {
       setCountdown((prev) => {
         if (prev <= 1) {
@@ -143,131 +96,229 @@ export function PokerWinnerNotificationCard({
       });
     }, 1000);
     return () => clearInterval(interval);
-  }, [isOpen, shellKey]);
+  }, [isOpen, handId]);
 
-  const boxStyle: CSSProperties = {
-    background: '#000000',
-    boxShadow:
-      'inset 0 3px 6px rgba(0, 0, 0, 0.8), inset 0 -3px 6px rgba(255, 255, 255, 0.1), 0 1px 3px rgba(0, 0, 0, 0.5), 0 14px 34px rgba(0, 0, 0, 0.5)',
-    border: '1px inset rgba(60, 60, 60, 0.5)',
-    width: 'min(40vw, 380px)',
-    maxHeight: '80vh',
-  };
-
-  if (!mounted) return null;
+  const showMedallion = isOpen && !expired;
 
   return (
     <div
       data-testid="poker-winner-banner"
       data-card="poker-winner-notification-card"
-      className="fixed inset-0 z-[120] pointer-events-none flex items-center justify-center px-2 sm:px-4"
+      className="absolute inset-0 z-[80] pointer-events-none flex items-center justify-center"
+      style={{ top: '41%', height: '22%' }}
     >
-      <WinnerPanelFrame key={shellKey} active={activeForPanel} onExitComplete={handleExitDone} boxStyle={boxStyle}>
-        <div className="relative z-[1] flex flex-col overflow-y-auto font-jost-normal" style={{ maxHeight: '70vh' }}>
+      <AnimatePresence>
+        {showMedallion && (
+          <motion.div
+            key={`winner-medallion-${handId}`}
+            className="relative flex flex-col items-center"
+            initial={{ opacity: 0, scale: 0.6, y: 20 }}
+            animate={{ opacity: 1, scale: 1, y: 0 }}
+            exit={{ opacity: 0, scale: 0.85, y: 10, transition: { duration: 0.35, ease: [0.5, 0, 0.75, 0.2] } }}
+            transition={{ duration: 0.55, ease: [0.2, 0.9, 0.3, 1.05] }}
+          >
+            {/* Radial gold aura behind the medallion */}
+            <motion.div
+              className="absolute pointer-events-none"
+              style={{
+                width: 520,
+                height: 520,
+                left: '50%',
+                top: '50%',
+                transform: 'translate(-50%, -50%)',
+                background: `radial-gradient(closest-side, ${GOLD}44 0%, ${GOLD}18 38%, transparent 70%)`,
+                filter: 'blur(4px)',
+              }}
+              animate={{ opacity: [0.55, 0.85, 0.55] }}
+              transition={{ duration: 3.2, repeat: Infinity, ease: 'easeInOut' }}
+              aria-hidden
+            />
 
-          {/* ── Top: 3-column header (Amount | Winner | Hand Rank) ── */}
-          <div className="flex items-stretch" style={{ minHeight: '60%' }}>
+            {/* Winning 5-card fan — above medallion */}
+            <div className="relative flex items-end justify-center gap-0 mb-1" style={{ minHeight: 96 }}>
+              {fiveCards.map((cardIndex, i) => {
+                const total = fiveCards.length;
+                const mid = (total - 1) / 2;
+                const offset = i - mid;
+                const rotate = offset * 7;
+                const translateY = Math.abs(offset) * 4;
+                return (
+                  <motion.div
+                    key={`winner-card-${i}-${cardIndex}`}
+                    className="relative"
+                    style={{
+                      marginLeft: i === 0 ? 0 : -14,
+                      zIndex: 10 + i,
+                      transform: `rotate(${rotate}deg) translateY(${translateY}px)`,
+                      transformOrigin: 'bottom center',
+                      filter: `drop-shadow(0 6px 12px rgba(0,0,0,0.55)) drop-shadow(0 0 10px ${GOLD}66)`,
+                    }}
+                    initial={{ opacity: 0, y: -40, scale: 0.6, rotate: 0 }}
+                    animate={{ opacity: 1, y: 0, scale: 1, rotate }}
+                    transition={{
+                      delay: 0.15 + i * 0.08,
+                      duration: 0.5,
+                      ease: [0.2, 1.0, 0.35, 1.05],
+                    }}
+                  >
+                    <CardDisplay cardIndex={cardIndex} small />
+                  </motion.div>
+                );
+              })}
+            </div>
 
-            {/* Left column — Amount won */}
-            <div className="flex-1 flex flex-col items-center justify-start pt-4 p-2 sm:p-3 min-w-0">
-              <div className="font-jost text-[12px] text-white uppercase tracking-wider mb-5">Won</div>
-              <div className="flex-1 flex items-center justify-center gap-1.5 min-w-0">
+            {/* Medallion body — ornate shield */}
+            <div
+              className="relative flex flex-col items-center"
+              style={{
+                width: 340,
+                padding: '14px 22px 16px',
+                background: `
+                  linear-gradient(180deg, ${FELT_DEEP} 0%, ${FELT_EDGE} 100%)
+                `,
+                border: `1px solid ${GOLD}`,
+                borderRadius: 16,
+                boxShadow: `
+                  0 0 0 2px rgba(0,0,0,0.55),
+                  0 0 0 3px ${GOLD_DEEP},
+                  0 18px 50px rgba(0,0,0,0.75),
+                  inset 0 1px 0 ${GOLD}55,
+                  inset 0 -14px 30px rgba(0,0,0,0.6)
+                `,
+              }}
+            >
+              {/* Corner gold flourishes */}
+              {([
+                { top: 6, left: 6, rotate: 0 },
+                { top: 6, right: 6, rotate: 90 },
+                { bottom: 6, right: 6, rotate: 180 },
+                { bottom: 6, left: 6, rotate: 270 },
+              ] as const).map((pos, i) => (
+                <div
+                  key={`flourish-${i}`}
+                  className="absolute pointer-events-none"
+                  style={{
+                    ...pos,
+                    width: 16,
+                    height: 16,
+                    background: `linear-gradient(135deg, ${GOLD_BRIGHT} 0%, ${GOLD} 45%, transparent 55%)`,
+                    clipPath: 'polygon(0 0, 100% 0, 0 100%)',
+                    opacity: 0.85,
+                  }}
+                  aria-hidden
+                />
+              ))}
+
+              {/* Top eyebrow: "WINNER" with gold rules */}
+              <div className="flex items-center gap-2 mb-1.5 w-full">
+                <div className="flex-1 h-px" style={{ background: `linear-gradient(to right, transparent, ${GOLD}aa)` }} />
+                <span
+                  className="text-[10px] tracking-[0.4em] font-semibold"
+                  style={{ color: GOLD_BRIGHT, textShadow: `0 0 8px ${GOLD}88` }}
+                >
+                  WINNER
+                </span>
+                <div className="flex-1 h-px" style={{ background: `linear-gradient(to left, transparent, ${GOLD}aa)` }} />
+              </div>
+
+              {/* Winner name — serif, large */}
+              <div
+                className="font-serif text-center leading-none mb-1 truncate max-w-full"
+                style={{
+                  fontSize: 'clamp(18px, 2.2vw, 24px)',
+                  color: '#f7ecc9',
+                  textShadow: `0 1px 0 rgba(0,0,0,0.7), 0 0 14px ${GOLD}55`,
+                  letterSpacing: '0.02em',
+                }}
+              >
+                {winnerName}
+              </div>
+
+              {/* Hand name — italic serif */}
+              <div
+                className="font-serif italic text-center mb-2.5"
+                style={{
+                  fontSize: 'clamp(12px, 1.4vw, 14px)',
+                  color: GOLD_BRIGHT,
+                  opacity: 0.9,
+                }}
+              >
+                {winnerHandName || '—'}
+              </div>
+
+              {/* Amount */}
+              <div
+                className="flex items-center justify-center gap-1.5 mb-2"
+                style={{
+                  padding: '6px 14px',
+                  borderRadius: 999,
+                  background: 'rgba(0,0,0,0.45)',
+                  border: `1px solid ${GOLD}66`,
+                  boxShadow: `inset 0 1px 0 rgba(255,255,255,0.06), 0 2px 8px rgba(0,0,0,0.6)`,
+                }}
+              >
                 <img
                   src="/morbius/MorbiusLogo%20(3).png"
                   alt=""
                   aria-hidden
-                  className="flex-none"
-                  style={{ height: '1em', width: 'auto' }}
+                  style={{ height: '1.1em', width: 'auto' }}
                 />
-                <div className="font-jost text-white leading-tight tabular-nums truncate" style={{ fontSize: 'clamp(10px, 2.2vw, 20px)', letterSpacing: '-0.01em' }}>
+                <span
+                  className="font-jost tabular-nums"
+                  style={{
+                    fontSize: 'clamp(16px, 1.9vw, 20px)',
+                    color: GOLD_BRIGHT,
+                    letterSpacing: '-0.01em',
+                    textShadow: `0 0 12px ${GOLD}aa`,
+                  }}
+                >
                   +{formatChips(winnerAmount)}
+                </span>
+              </div>
+
+              {/* Split pot sub-line */}
+              {splitLabel && splitAmount && (
+                <div
+                  className="flex items-center justify-between gap-2 w-full px-2 py-1 mb-1.5 rounded-md"
+                  style={{ background: 'rgba(0,0,0,0.35)', border: `1px solid ${GOLD}33` }}
+                >
+                  <span className="font-jost-normal text-[11px] truncate" style={{ color: '#d9cba1' }}>
+                    {splitLabel}
+                  </span>
+                  <span className="font-jost text-[11px] tabular-nums shrink-0" style={{ color: GOLD_BRIGHT }}>
+                    {splitAmount}
+                  </span>
                 </div>
-              </div>
-            </div>
+              )}
 
-            {/* Divider */}
-            <div className="w-px self-stretch" style={{ background: 'rgba(34, 211, 238, 0.5)' }} />
-
-            {/* Center column — Winner + name */}
-            <div className="flex-[1.3] flex flex-col items-center justify-start pt-4 p-2 sm:p-3 min-w-0">
-              <span className="font-jost text-[12px] uppercase tracking-[0.2em] text-white mb-5">
-                WINNER
-              </span>
-              <div className="flex-1 flex items-center justify-center">
-                <h3 className="font-jost text-cyan-500 text-[clamp(13px,2vw,18px)] leading-tight tracking-[-0.01em] truncate max-w-full text-center">
-                  {winnerName}
-                </h3>
-              </div>
-            </div>
-
-            {/* Divider */}
-            <div className="w-px self-stretch" style={{ background: 'rgba(34, 211, 238, 0.35)' }} />
-
-            {/* Right column — Hand Rank */}
-            <div className="flex-1 flex flex-col items-center justify-start pt-4 p-2 sm:p-3 min-w-0">
-              <div className="font-jost text-[12px] text-white uppercase text-wrap tracking-wider mb-5">Hand</div>
-              <div className="flex-1 flex items-center justify-center">
-                <div className="font-jost text-cyan-500 text-[clamp(13px,2vw,18px)] leading-tight text-center break-words max-w-full">
-                  {winnerHandName || '—'}
-                </div>
-              </div>
-            </div>
-          </div>
-
-          {/* Horizontal divider */}
-          <div className="h-px w-full" style={{ background: 'rgba(34, 211, 238, 0.33)' }} />
-
-          {/* ── Bottom: Cards + countdown ── */}
-          <div className="flex flex-col p-2 sm:p-3 gap-2">
-
-            {/* Cards: hole + community */}
-            <div className="rounded-sm bg-black/50 border border-cyan-500/30 px-2 py-3 sm:px-2 sm:py-2 flex flex-col gap-6 min-h-[8rem] sm:min-h-[8rem]">
-              <div className="flex items-center justify-center gap-3 mt-3">
-                {hole.map((cardIndex, i) => (
-                  <div key={`winner-hole-${i}`} className="flex-none">
-                    <CardDisplay cardIndex={cardIndex} small />
-                  </div>
-                ))}
-              </div>
-
-              <div className="flex flex-1 items-center justify-center gap-3 overflow-visible py-2 min-h-[6.5rem] sm:min-h-[6.5rem]">
-                {board.map((cardIndex, i) => (
-                  <CardDisplay key={`winner-board-${i}-${cardIndex ?? 'empty'}`} cardIndex={cardIndex} small />
-                ))}
-              </div>
-            </div>
-
-            {/* Split pot */}
-            {splitLabel && splitAmount && (
-              <div className="rounded-lg bg-black/50 border border-cyan-500/30 px-2.5 py-1">
-                <div className="flex items-center justify-between gap-2 min-w-0">
-                  <span className="font-jost-normal text-[12px] text-white truncate">{splitLabel}</span>
-                  <span className="font-jost text-[12px] tabular-nums text-cyan-500 shrink-0">{splitAmount}</span>
-                </div>
-              </div>
-            )}
-
-            {/* Countdown timer */}
-            <div className="flex flex-col items-center gap-0.5">
-              <span className="font-jost-normal text-[9px] text-white uppercase tracking-wider tabular-nums">
-                Next hand in {countdown}s
-              </span>
+              {/* Gold hairline countdown — bottom edge */}
               <div
-                className="w-full h-1 rounded-full overflow-hidden"
-                style={{ background: 'rgba(83, 233, 13, 0.85)' }}
+                className="absolute left-3 right-3 overflow-hidden"
+                style={{ bottom: 4, height: 1.5, borderRadius: 1 }}
               >
                 <motion.div
-                  className="h-full rounded-full"
-                  style={{ background: 'linear-gradient(90deg, #06b6d4, #22d3ee)' }}
+                  className="h-full"
+                  style={{
+                    background: `linear-gradient(90deg, ${GOLD_DEEP}, ${GOLD_BRIGHT}, ${GOLD_DEEP})`,
+                    boxShadow: `0 0 6px ${GOLD}aa`,
+                  }}
                   initial={{ width: '100%' }}
                   animate={{ width: '0%' }}
                   transition={{ duration: SHOWDOWN_DURATION_S, ease: 'linear' }}
                 />
               </div>
             </div>
-          </div>
-        </div>
-      </WinnerPanelFrame>
+
+            {/* Countdown label — subtle, below */}
+            <div
+              className="mt-1.5 font-jost-normal text-[9px] tracking-[0.25em] tabular-nums"
+              style={{ color: `${GOLD}dd`, opacity: 0.7 }}
+            >
+              NEXT HAND · {countdown}s
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
   );
 }

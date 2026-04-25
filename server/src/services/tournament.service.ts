@@ -2742,4 +2742,273 @@ export class TournamentService {
       client.release();
     }
   }
+
+  // ============================================
+  // History / Results (public read) methods
+  // ============================================
+
+  /** Public summary row for the completed-tournaments browser. */
+  async listCompletedTournaments(
+    limit: number = 25,
+    offset: number = 0,
+  ): Promise<CompletedTournamentSummary[]> {
+    const safeLimit = Math.min(Math.max(limit, 1), 100);
+    const safeOffset = Math.max(offset, 0);
+    const query = `
+      SELECT
+        t.id,
+        t.name,
+        t.tournament_type,
+        t.buy_in_amount,
+        t.prize_pool,
+        t.prize_token_address,
+        t.status,
+        t.created_at,
+        t.ended_at,
+        t.custom_image,
+        (SELECT COUNT(*)::int FROM tournament_entries te WHERE te.tournament_id = t.id) AS entry_count
+      FROM tournaments t
+      WHERE t.status IN ('completed', 'cancelled')
+      ORDER BY COALESCE(t.ended_at, t.created_at) DESC
+      LIMIT $1 OFFSET $2
+    `;
+    const result = await this.pool.query(query, [safeLimit, safeOffset]);
+    return result.rows.map((row: any) => ({
+      tournamentId: row.id,
+      name: row.name,
+      tournamentType: row.tournament_type ?? 'standard',
+      buyInAmount: this.toBigInt(row.buy_in_amount),
+      prizePool: this.toBigInt(row.prize_pool),
+      prizeTokenAddress: row.prize_token_address ?? null,
+      status: row.status,
+      createdAt: row.created_at,
+      endedAt: row.ended_at ?? null,
+      customImage: row.custom_image ?? null,
+      entryCount: Number(row.entry_count ?? 0),
+    }));
+  }
+
+  /** Full results page for a single tournament: metadata + final standings. */
+  async getTournamentResults(tournamentId: string): Promise<TournamentResults | null> {
+    const tRes = await this.pool.query(
+      `SELECT id, name, tournament_type, buy_in_amount, starting_chips, prize_pool,
+              prize_token_address, status, created_at, started_at, ended_at, custom_image,
+              time_limit_minutes, max_players, prize_distribution_type
+         FROM tournaments WHERE id = $1`,
+      [tournamentId],
+    );
+    if (tRes.rows.length === 0) return null;
+    const t = tRes.rows[0];
+
+    const eRes = await this.pool.query(
+      `SELECT te.id AS entry_id, te.player_address, te.final_rank, te.prize_won,
+              te.status, te.bought_in_at, te.finished_at, te.hands_played,
+              te.highest_chip_count, te.chips_remaining
+         FROM tournament_entries te
+         WHERE te.tournament_id = $1
+         ORDER BY
+           CASE WHEN te.final_rank IS NULL THEN 1 ELSE 0 END,
+           te.final_rank ASC,
+           te.chips_remaining DESC,
+           te.bought_in_at ASC`,
+      [tournamentId],
+    );
+
+    return {
+      tournamentId: t.id,
+      name: t.name,
+      tournamentType: t.tournament_type ?? 'standard',
+      buyInAmount: this.toBigInt(t.buy_in_amount),
+      startingChips: Number(t.starting_chips ?? 0),
+      prizePool: this.toBigInt(t.prize_pool),
+      prizeTokenAddress: t.prize_token_address ?? null,
+      status: t.status,
+      createdAt: t.created_at,
+      startedAt: t.started_at ?? null,
+      endedAt: t.ended_at ?? null,
+      customImage: t.custom_image ?? null,
+      timeLimitMinutes: t.time_limit_minutes != null ? Number(t.time_limit_minutes) : null,
+      maxPlayers: t.max_players != null ? Number(t.max_players) : null,
+      prizeDistributionType: t.prize_distribution_type ?? null,
+      entries: eRes.rows.map((row: any) => ({
+        entryId: row.entry_id,
+        playerAddress: row.player_address,
+        finalRank: row.final_rank != null ? Number(row.final_rank) : null,
+        prizeWon: this.toBigInt(row.prize_won),
+        status: row.status,
+        boughtInAt: row.bought_in_at,
+        finishedAt: row.finished_at ?? null,
+        handsPlayed: Number(row.hands_played ?? 0),
+        highestChipCount: Number(row.highest_chip_count ?? 0),
+        chipsRemaining: Number(row.chips_remaining ?? 0),
+      })),
+    };
+  }
+
+  /** Aggregate stats computed from poker_hands / poker_hand_players for a tournament. */
+  async getTournamentPokerStats(tournamentId: string): Promise<TournamentPokerStats> {
+    const sumRes = await this.pool.query(
+      `SELECT
+         COUNT(*)::int AS hand_count,
+         COALESCE(MAX(pot_amount), 0)::bigint AS biggest_pot,
+         COALESCE(SUM(pot_amount), 0)::bigint AS total_pot,
+         MIN(completed_at) AS first_hand_at,
+         MAX(completed_at) AS last_hand_at
+       FROM poker_hands
+       WHERE tournament_id = $1 AND completed_at IS NOT NULL`,
+      [tournamentId],
+    );
+    const sum = sumRes.rows[0] ?? {};
+
+    const biggestPotRes = await this.pool.query(
+      `SELECT id, hand_number, pot_amount, completed_at, table_id
+         FROM poker_hands
+         WHERE tournament_id = $1 AND completed_at IS NOT NULL
+         ORDER BY pot_amount DESC, completed_at ASC
+         LIMIT 1`,
+      [tournamentId],
+    );
+    const biggestHand = biggestPotRes.rows[0] ?? null;
+
+    const rakeRes = await this.pool.query(
+      `SELECT COALESCE(SUM(rake_paid), 0)::bigint AS total_rake
+         FROM poker_hand_players hp
+         JOIN poker_hands h ON h.id = hp.hand_id
+         WHERE h.tournament_id = $1`,
+      [tournamentId],
+    );
+
+    return {
+      handCount: Number(sum.hand_count ?? 0),
+      biggestPot: BigInt(sum.biggest_pot ?? 0),
+      totalPot: BigInt(sum.total_pot ?? 0),
+      totalRake: BigInt(rakeRes.rows[0]?.total_rake ?? 0),
+      firstHandAt: sum.first_hand_at ?? null,
+      lastHandAt: sum.last_hand_at ?? null,
+      biggestHand: biggestHand
+        ? {
+            handId: biggestHand.id,
+            handNumber: Number(biggestHand.hand_number),
+            potAmount: BigInt(biggestHand.pot_amount ?? 0),
+            completedAt: biggestHand.completed_at,
+            tableId: biggestHand.table_id,
+          }
+        : null,
+    };
+  }
+
+  /** Paginated hand list for a tournament; optionally filter to hands a player was dealt into. */
+  async getTournamentHands(
+    tournamentId: string,
+    limit: number = 50,
+    offset: number = 0,
+    playerAddress?: string | null,
+  ): Promise<TournamentHandRow[]> {
+    const safeLimit = Math.min(Math.max(limit, 1), 500);
+    const safeOffset = Math.max(offset, 0);
+    const params: any[] = [tournamentId];
+    let where = 'WHERE h.tournament_id = $1 AND h.completed_at IS NOT NULL';
+    if (playerAddress) {
+      params.push(this.normalizeAddress(playerAddress));
+      where += ` AND EXISTS (
+        SELECT 1 FROM poker_hand_players hp
+        WHERE hp.hand_id = h.id AND LOWER(hp.player_address) = $${params.length}
+      )`;
+    }
+    params.push(safeLimit, safeOffset);
+    const query = `
+      SELECT h.id, h.hand_number, h.table_id, h.pot_amount, h.community_cards,
+             h.completed_at, h.result
+        FROM poker_hands h
+        ${where}
+        ORDER BY h.completed_at DESC
+        LIMIT $${params.length - 1} OFFSET $${params.length}
+    `;
+    const result = await this.pool.query(query, params);
+    return result.rows.map((row: any) => ({
+      handId: row.id,
+      handNumber: Number(row.hand_number),
+      tableId: row.table_id,
+      potAmount: BigInt(row.pot_amount ?? 0),
+      communityCards: row.community_cards ?? null,
+      completedAt: row.completed_at,
+      result: row.result ?? null,
+    }));
+  }
+}
+
+// ============================================
+// History / Results return types
+// ============================================
+
+export interface CompletedTournamentSummary {
+  tournamentId: string;
+  name: string;
+  tournamentType: string;
+  buyInAmount: bigint;
+  prizePool: bigint;
+  prizeTokenAddress: string | null;
+  status: 'completed' | 'cancelled' | string;
+  createdAt: Date;
+  endedAt: Date | null;
+  customImage: string | null;
+  entryCount: number;
+}
+
+export interface TournamentResultsEntry {
+  entryId: string;
+  playerAddress: string;
+  finalRank: number | null;
+  prizeWon: bigint;
+  status: 'playing' | 'busted' | 'completed' | string;
+  boughtInAt: Date;
+  finishedAt: Date | null;
+  handsPlayed: number;
+  highestChipCount: number;
+  chipsRemaining: number;
+}
+
+export interface TournamentResults {
+  tournamentId: string;
+  name: string;
+  tournamentType: string;
+  buyInAmount: bigint;
+  startingChips: number;
+  prizePool: bigint;
+  prizeTokenAddress: string | null;
+  status: string;
+  createdAt: Date;
+  startedAt: Date | null;
+  endedAt: Date | null;
+  customImage: string | null;
+  timeLimitMinutes: number | null;
+  maxPlayers: number | null;
+  prizeDistributionType: string | null;
+  entries: TournamentResultsEntry[];
+}
+
+export interface TournamentPokerStats {
+  handCount: number;
+  biggestPot: bigint;
+  totalPot: bigint;
+  totalRake: bigint;
+  firstHandAt: Date | null;
+  lastHandAt: Date | null;
+  biggestHand: {
+    handId: string;
+    handNumber: number;
+    potAmount: bigint;
+    completedAt: Date;
+    tableId: string;
+  } | null;
+}
+
+export interface TournamentHandRow {
+  handId: string;
+  handNumber: number;
+  tableId: string;
+  potAmount: bigint;
+  communityCards: unknown;
+  completedAt: Date;
+  result: unknown;
 }

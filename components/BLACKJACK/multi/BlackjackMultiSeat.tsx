@@ -509,7 +509,14 @@ export function BlackjackMultiSeat({
                   onTouchEnd={() => { if (longPressTimerRef.current) { clearTimeout(longPressTimerRef.current); longPressTimerRef.current = null; } }}
                   onTouchMove={() => { if (longPressTimerRef.current) { clearTimeout(longPressTimerRef.current); longPressTimerRef.current = null; } }}
                 >
-                  {seat?.avatarConfig ? (
+                  {seat?.profileDisplayMode === 'photo' && seat?.profileImageUrl ? (
+                    <img
+                      src={seat.profileImageUrl}
+                      alt={seat.displayName ?? 'Player'}
+                      className="h-full w-full object-cover"
+                      draggable={false}
+                    />
+                  ) : seat?.avatarConfig ? (
                     <AvatarView
                       config={seat.avatarConfig as unknown as AvatarConfig}
                       emotion={activeEmotion}
@@ -518,6 +525,13 @@ export function BlackjackMultiSeat({
                       forceAsleep={seat?.seatStatus === 'sitting_out'}
                       compact
                       className="h-full w-full"
+                    />
+                  ) : seat?.profileImageUrl ? (
+                    <img
+                      src={seat.profileImageUrl}
+                      alt={seat.displayName ?? 'Player'}
+                      className="h-full w-full object-cover"
+                      draggable={false}
                     />
                   ) : (
                     <div className="flex h-full w-full items-center justify-center text-[9px] font-bold text-slate-400">

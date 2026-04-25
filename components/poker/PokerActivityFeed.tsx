@@ -250,6 +250,10 @@ export function PokerActivityFeed({
   const listRef = useRef<HTMLDivElement>(null);
   const seenMsgIdsRef = useRef<Set<string>>(new Set());
   const lastActionKeyRef = useRef<string | null>(null);
+  /** Highest action `order` already logged for the current hand. Rapid server broadcasts can be
+   *  batched by React into a single state update, so we must iterate the server-provided
+   *  `recentActions` list and log any gap — tracking just the newest action would drop the rest. */
+  const lastActionOrderRef = useRef<{ handId: string; order: number } | null>(null);
   const lastHandIdRef = useRef<string | null>(null);
   /** `${handId}:${street}` — insert a street subheader when this changes for the current hand. */
   const lastActionStreetKeyRef = useRef<string | null>(null);
@@ -273,6 +277,7 @@ export function PokerActivityFeed({
     burstPlayingRef.current = false;
     setActiveBurst(null);
     lastActionKeyRef.current = null;
+    lastActionOrderRef.current = null;
     lastHandIdRef.current = null;
     lastActionStreetKeyRef.current = null;
     lastShowdownHandRef.current = null;
@@ -470,18 +475,41 @@ export function PokerActivityFeed({
   }, [messages]);
 
   // ── Track hand actions from state ─────────────────────────────────────────
+  //
+  // Iterate the server-provided `recentActions` (not just `lastAction`): if two
+  // actions happen between React renders, both setStates get batched and we only
+  // see the last one. Tracking by `order` means we log every action exactly once,
+  // and using each action's own `street` keeps street headers aligned with where
+  // the action actually happened rather than the snapshot's current street.
   useEffect(() => {
     const hand = state?.currentHand;
-    const la = hand?.lastAction;
     const handId = hand?.handId;
-    const street = (hand?.street ?? '').trim() || '—';
-    if (!la || !handId) return;
+    if (!handId) return;
+    const recent = hand?.recentActions ?? [];
 
-    const key = `${handId}:${street}:${la.position}:${la.action}:${la.amount}`;
-    if (key === lastActionKeyRef.current) return;
-    lastActionKeyRef.current = key;
+    // Fallback to `lastAction` if server hasn't been updated to send `recentActions` yet.
+    const actions: {
+      order: number;
+      street: string;
+      position: number;
+      action: string;
+      amount: string;
+    }[] =
+      recent.length > 0
+        ? recent
+        : hand?.lastAction
+          ? [{ order: 0, street: (hand.street ?? '').trim() || '—', ...hand.lastAction }]
+          : [];
 
-    const streetKey = `${handId}:${street}`;
+    if (actions.length === 0) return;
+
+    // Reset watermark when we switch hands.
+    if (!lastActionOrderRef.current || lastActionOrderRef.current.handId !== handId) {
+      lastActionOrderRef.current = { handId, order: -Infinity };
+    }
+    const watermark = lastActionOrderRef.current.order;
+    const toLog = actions.filter((a) => a.order > watermark);
+    if (toLog.length === 0) return;
 
     setEntries((prev) => {
       const next = [...prev];
@@ -492,31 +520,47 @@ export function PokerActivityFeed({
       }
       lastHandIdRef.current = handId;
 
-      if (streetKey !== lastActionStreetKeyRef.current) {
-        lastActionStreetKeyRef.current = streetKey;
+      for (const a of toLog) {
+        const street = (a.street ?? '').trim() || '—';
+        const streetKey = `${handId}:${street}`;
+        if (streetKey !== lastActionStreetKeyRef.current) {
+          lastActionStreetKeyRef.current = streetKey;
+          next.push({
+            kind: 'street_header',
+            id: `street-${streetKey}`,
+            label: formatStreetLabel(street),
+            ts: Date.now(),
+          });
+        }
+
+        const seat = state?.seats[a.position];
+        const key = `${handId}:${street}:${a.order}:${a.position}:${a.action}:${a.amount}`;
+        lastActionKeyRef.current = key;
         next.push({
-          kind: 'street_header',
-          id: `street-${streetKey}`,
-          label: formatStreetLabel(street),
+          kind: 'action',
+          id: key,
+          seatIndex: a.position,
+          playerAddr: seat?.playerAddress ?? '',
+          displayName: seat?.displayName ?? null,
+          action: a.action,
+          amount: a.amount && a.amount !== '0' ? a.amount : undefined,
           ts: Date.now(),
         });
       }
 
-      const seat = state?.seats[la.position];
-      next.push({
-        kind: 'action',
-        id: key,
-        seatIndex: la.position,
-        playerAddr: seat?.playerAddress ?? '',
-        displayName: seat?.displayName ?? null,
-        action: la.action,
-        amount: la.amount && la.amount !== '0' ? la.amount : undefined,
-        ts: Date.now(),
-      });
-
       return next.slice(-MAX_ENTRIES);
     });
-  }, [state?.currentHand?.lastAction, state?.currentHand?.handId, state?.currentHand?.street]);
+
+    lastActionOrderRef.current = {
+      handId,
+      order: toLog[toLog.length - 1].order,
+    };
+  }, [
+    state?.currentHand?.recentActions,
+    state?.currentHand?.lastAction,
+    state?.currentHand?.handId,
+    state?.currentHand?.street,
+  ]);
 
   // ── Track QuickChat phrases ───────────────────────────────────────────────
   useEffect(() => {

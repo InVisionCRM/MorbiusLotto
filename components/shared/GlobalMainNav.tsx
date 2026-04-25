@@ -151,8 +151,8 @@ export interface GlobalMainNavProps {
   onThemeModalOpenChange?: (open: boolean) => void;
   onTournamentLobby?: () => void;
   /** Poker lobby (`/poker`): which tab is selected in the main content area. */
-  pokerLobbyTab?: 'cash' | 'tournaments';
-  onPokerLobbyTabChange?: (tab: 'cash' | 'tournaments') => void;
+  pokerLobbyTab?: 'cash' | 'tournaments' | 'history';
+  onPokerLobbyTabChange?: (tab: 'cash' | 'tournaments' | 'history') => void;
   musicTrackName?: string;
   isMusicPlaying?: boolean;
   onToggleMusic?: () => void;
@@ -316,8 +316,8 @@ type NavContentProps = Pick<
   /** MORBIUS ERC-20 balance in the connected wallet (wei). */
   inWalletMorbiusWei: bigint;
   walletConnected: boolean;
-  pokerLobbyTab?: 'cash' | 'tournaments';
-  onPokerLobbyTabChange?: (tab: 'cash' | 'tournaments') => void;
+  pokerLobbyTab?: 'cash' | 'tournaments' | 'history';
+  onPokerLobbyTabChange?: (tab: 'cash' | 'tournaments' | 'history') => void;
 };
 
 const NavContent = React.memo(function NavContent(props: NavContentProps) {
@@ -480,6 +480,13 @@ const NavContent = React.memo(function NavContent(props: NavContentProps) {
               onClick={() => onPokerLobbyTabChange('tournaments')}
               active={pokerLobbyTab === 'tournaments'}
               className={`rounded-lg px-2 py-2 transition-colors ${btnClass(pokerLobbyTab === 'tournaments')}`}
+            />
+            <SidebarButton
+              label="History"
+              icon={<NavIcon icon="fa-chart-bar" active={pokerLobbyTab === 'history'} />}
+              onClick={() => onPokerLobbyTabChange('history')}
+              active={pokerLobbyTab === 'history'}
+              className={`rounded-lg px-2 py-2 transition-colors ${btnClass(pokerLobbyTab === 'history')}`}
             />
           </>
         )}

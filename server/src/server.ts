@@ -382,6 +382,7 @@ async function initializeServices() {
           bio: rawBio,
           xHandle: rawXHandle,
           tgHandle: rawTgHandle,
+          profileDisplayMode: rawProfileDisplayMode,
         } = req.body ?? {};
         const addressRaw =
           typeof bodyAddress === 'string' && bodyAddress.trim() !== ''
@@ -407,6 +408,8 @@ async function initializeServices() {
         const bio     = rawBio     !== undefined ? (typeof rawBio     === 'string' ? rawBio.trim().slice(0, 200) || null     : null) : undefined;
         const xHandle = rawXHandle !== undefined ? (typeof rawXHandle === 'string' ? rawXHandle.trim().replace(/^@/, '').slice(0, 50) || null : null) : undefined;
         const tgHandle = rawTgHandle !== undefined ? (typeof rawTgHandle === 'string' ? rawTgHandle.trim().replace(/^@/, '').slice(0, 50) || null : null) : undefined;
+        const profileDisplayMode: 'avatar' | 'photo' | undefined =
+          rawProfileDisplayMode === 'photo' || rawProfileDisplayMode === 'avatar' ? rawProfileDisplayMode : undefined;
 
         // Cosmetics ownership check (skip for admin wallets)
         if (avatarConfig && !isAdminWallet(normalizedAddress)) {
@@ -441,7 +444,7 @@ async function initializeServices() {
           }
         }
 
-        await dbService.setDisplayName(normalizedAddress, displayName, profileImageUrl, avatarConfig, bio, xHandle, tgHandle);
+        await dbService.setDisplayName(normalizedAddress, displayName, profileImageUrl, avatarConfig, bio, xHandle, tgHandle, profileDisplayMode);
         const profile = await dbService.getProfile(normalizedAddress);
         sendJson(res, profile ?? { displayName: null, profileImageUrl: null, avatarConfig: null });
       } catch (error) {
@@ -1608,6 +1611,92 @@ async function initializeServices() {
         })));
       } catch (error) {
         logger.error('Error fetching player tournament history:', error);
+        res.status(500).json({ error: 'Internal server error' });
+      }
+    });
+
+    // Public: list completed/cancelled tournaments (for poker "History" tab)
+    app.get('/api/tournament/completed', async (req, res) => {
+      try {
+        const limit = Math.min(Math.max(parseInt(req.query.limit as string) || 25, 1), 100);
+        const offset = Math.max(parseInt(req.query.offset as string) || 0, 0);
+        const rows = await tournamentService.listCompletedTournaments(limit, offset);
+        sendJson(
+          res,
+          rows.map((r) => ({
+            ...r,
+            buyInAmount: r.buyInAmount.toString(),
+            prizePool: r.prizePool.toString(),
+          })),
+        );
+      } catch (error) {
+        logger.error('Error fetching completed tournaments:', error);
+        res.status(500).json({ error: 'Internal server error' });
+      }
+    });
+
+    // Public: full tournament results (standings + payouts)
+    app.get('/api/tournament/:tournamentId/results', async (req, res) => {
+      try {
+        const { tournamentId } = req.params;
+        const results = await tournamentService.getTournamentResults(tournamentId);
+        if (!results) {
+          return res.status(404).json({ error: 'Tournament not found' });
+        }
+        sendJson(res, {
+          ...results,
+          buyInAmount: results.buyInAmount.toString(),
+          prizePool: results.prizePool.toString(),
+          entries: results.entries.map((e) => ({
+            ...e,
+            prizeWon: e.prizeWon.toString(),
+          })),
+        });
+      } catch (error) {
+        logger.error('Error fetching tournament results:', error);
+        res.status(500).json({ error: 'Internal server error' });
+      }
+    });
+
+    // Public: tournament-level poker aggregates (biggest pot, hand count, etc.)
+    app.get('/api/tournament/:tournamentId/stats', async (req, res) => {
+      try {
+        const { tournamentId } = req.params;
+        const stats = await tournamentService.getTournamentPokerStats(tournamentId);
+        sendJson(res, {
+          ...stats,
+          biggestPot: stats.biggestPot.toString(),
+          totalPot: stats.totalPot.toString(),
+          totalRake: stats.totalRake.toString(),
+          biggestHand: stats.biggestHand
+            ? { ...stats.biggestHand, potAmount: stats.biggestHand.potAmount.toString() }
+            : null,
+        });
+      } catch (error) {
+        logger.error('Error fetching tournament stats:', error);
+        res.status(500).json({ error: 'Internal server error' });
+      }
+    });
+
+    // Public: paginated hand list for a tournament (optional player filter)
+    app.get('/api/tournament/:tournamentId/hands', async (req, res) => {
+      try {
+        const { tournamentId } = req.params;
+        const limit = Math.min(Math.max(parseInt(req.query.limit as string) || 50, 1), 500);
+        const offset = Math.max(parseInt(req.query.offset as string) || 0, 0);
+        const playerAddress = (req.query.player as string) || null;
+        const hands = await tournamentService.getTournamentHands(
+          tournamentId,
+          limit,
+          offset,
+          playerAddress,
+        );
+        sendJson(
+          res,
+          hands.map((h) => ({ ...h, potAmount: h.potAmount.toString() })),
+        );
+      } catch (error) {
+        logger.error('Error fetching tournament hands:', error);
         res.status(500).json({ error: 'Internal server error' });
       }
     });

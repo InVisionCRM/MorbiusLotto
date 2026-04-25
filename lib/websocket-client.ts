@@ -125,6 +125,8 @@ export interface PokerSeatState {
   displayName?: string | null;
   profileImageUrl?: string | null;
   avatarConfig?: AvatarPayload | null;
+  /** Per-player render preference at this seat. Defaults to 'avatar'. */
+  profileDisplayMode?: 'avatar' | 'photo';
 }
 
 export interface PokerCurrentHand {
@@ -134,6 +136,18 @@ export interface PokerCurrentHand {
   pot: string;
   actingPosition: number | null;
   lastAction: { position: number; action: string; amount: string } | null;
+  /**
+   * Recent non-blind actions across the hand, oldest → newest. Each carries its own
+   * `street` and monotonic `order`, so clients can log every action even when rapid
+   * server broadcasts are batched into a single React state update.
+   */
+  recentActions?: {
+    order: number;
+    street: string;
+    position: number;
+    action: string;
+    amount: string;
+  }[];
   streetActions?: Record<number, { action: string; amount: string }>;
   minRaise: string;
   toCall: string;
@@ -199,6 +213,8 @@ export interface BJMultiSeatState {
   displayName?: string | null;
   profileImageUrl?: string | null;
   avatarConfig?: AvatarPayload | null;
+  /** Per-player render preference at this seat. Defaults to 'avatar'. */
+  profileDisplayMode?: 'avatar' | 'photo';
   betAmount: string;
   hands: BJMultiHandObj[];
   activeHandIndex: number;
@@ -905,20 +921,21 @@ export class BlackjackWebSocketClient {
    * Requires connected wallet. Use on('display_name_set', handler) for the response.
    * Optionally pass profileImageUrl and/or avatarConfig; get_profile and display_name_set responses include avatarConfig.
    */
-  async setDisplayName(displayName: string, profileImageUrl?: string | null, avatarConfig?: AvatarPayload | null, bio?: string | null, xHandle?: string | null, tgHandle?: string | null): Promise<{ displayName: string; profileImageUrl: string | null; avatarConfig: AvatarPayload | null; bio: string | null; xHandle: string | null; tgHandle: string | null }> {
+  async setDisplayName(displayName: string, profileImageUrl?: string | null, avatarConfig?: AvatarPayload | null, bio?: string | null, xHandle?: string | null, tgHandle?: string | null, profileDisplayMode?: 'avatar' | 'photo'): Promise<{ displayName: string; profileImageUrl: string | null; avatarConfig: AvatarPayload | null; bio: string | null; xHandle: string | null; tgHandle: string | null; profileDisplayMode: 'avatar' | 'photo' }> {
     const payload: Record<string, unknown> = { displayName };
     if (profileImageUrl !== undefined) payload.profileImageUrl = profileImageUrl;
     if (avatarConfig !== undefined) payload.avatarConfig = avatarConfig;
     if (bio !== undefined) payload.bio = bio;
     if (xHandle !== undefined) payload.xHandle = xHandle;
     if (tgHandle !== undefined) payload.tgHandle = tgHandle;
+    if (profileDisplayMode !== undefined) payload.profileDisplayMode = profileDisplayMode;
     return this.sendRequest(WS_MESSAGE_TYPES.setDisplayName, payload);
   }
 
   /**
-   * Get current profile (display name, profile image URL, avatar config, bio, social handles) for the connected wallet.
+   * Get current profile (display name, profile image URL, avatar config, bio, social handles, display mode) for the connected wallet.
    */
-  async getProfile(): Promise<{ displayName: string | null; profileImageUrl: string | null; avatarConfig: AvatarPayload | null; bio: string | null; xHandle: string | null; tgHandle: string | null }> {
+  async getProfile(): Promise<{ displayName: string | null; profileImageUrl: string | null; avatarConfig: AvatarPayload | null; bio: string | null; xHandle: string | null; tgHandle: string | null; profileDisplayMode: 'avatar' | 'photo' }> {
     return this.sendRequest(WS_MESSAGE_TYPES.getProfile, {});
   }
 

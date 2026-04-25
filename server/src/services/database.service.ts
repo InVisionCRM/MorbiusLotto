@@ -2216,10 +2216,10 @@ export class DatabaseService implements MoneyDatabaseQueries {
     return result.rows[0]?.display_name ?? null;
   }
 
-  async getProfile(walletAddress: string): Promise<{ displayName: string; profileImageUrl: string | null; avatarConfig: Record<string, unknown> | null; bio: string | null; xHandle: string | null; tgHandle: string | null } | null> {
+  async getProfile(walletAddress: string): Promise<{ displayName: string; profileImageUrl: string | null; avatarConfig: Record<string, unknown> | null; bio: string | null; xHandle: string | null; tgHandle: string | null; profileDisplayMode: 'avatar' | 'photo' } | null> {
     const normalized = this.normalizeAddress(walletAddress);
     const result = await this.pool.query(
-      `SELECT display_name, profile_image_url, avatar_config, bio, x_handle, tg_handle FROM chat_display_names WHERE wallet_address = $1`,
+      `SELECT display_name, profile_image_url, avatar_config, bio, x_handle, tg_handle, profile_display_mode FROM chat_display_names WHERE wallet_address = $1`,
       [normalized],
     );
     const row = result.rows[0];
@@ -2232,6 +2232,7 @@ export class DatabaseService implements MoneyDatabaseQueries {
       bio: row.bio ?? null,
       xHandle: row.x_handle ?? null,
       tgHandle: row.tg_handle ?? null,
+      profileDisplayMode: row.profile_display_mode === 'photo' ? 'photo' : 'avatar',
     };
   }
 
@@ -2243,21 +2244,23 @@ export class DatabaseService implements MoneyDatabaseQueries {
     bio?: string | null,
     xHandle?: string | null,
     tgHandle?: string | null,
+    profileDisplayMode?: 'avatar' | 'photo' | null,
   ): Promise<void> {
     const normalized = this.normalizeAddress(walletAddress);
     // Always upsert all provided fields; NULL params fall back to COALESCE of existing value
     // so callers that don't know a field's current value won't accidentally clear it.
     await this.pool.query(
-      `INSERT INTO chat_display_names (wallet_address, display_name, profile_image_url, avatar_config, bio, x_handle, tg_handle)
-       VALUES ($1, $2, $3, $4, $5, $6, $7)
+      `INSERT INTO chat_display_names (wallet_address, display_name, profile_image_url, avatar_config, bio, x_handle, tg_handle, profile_display_mode)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, COALESCE($8, 'avatar'))
        ON CONFLICT (wallet_address) DO UPDATE SET
-         display_name      = $2,
-         updated_at        = NOW(),
-         profile_image_url = COALESCE($3, chat_display_names.profile_image_url),
-         avatar_config     = COALESCE($4::jsonb, chat_display_names.avatar_config),
-         bio               = COALESCE($5, chat_display_names.bio),
-         x_handle          = COALESCE($6, chat_display_names.x_handle),
-         tg_handle         = COALESCE($7, chat_display_names.tg_handle)`,
+         display_name         = $2,
+         updated_at           = NOW(),
+         profile_image_url    = COALESCE($3, chat_display_names.profile_image_url),
+         avatar_config        = COALESCE($4::jsonb, chat_display_names.avatar_config),
+         bio                  = COALESCE($5, chat_display_names.bio),
+         x_handle             = COALESCE($6, chat_display_names.x_handle),
+         tg_handle            = COALESCE($7, chat_display_names.tg_handle),
+         profile_display_mode = COALESCE($8, chat_display_names.profile_display_mode)`,
       [
         normalized,
         displayName,
@@ -2266,6 +2269,7 @@ export class DatabaseService implements MoneyDatabaseQueries {
         bio ?? null,
         xHandle ?? null,
         tgHandle ?? null,
+        profileDisplayMode ?? null,
       ],
     );
   }
@@ -2315,12 +2319,12 @@ export class DatabaseService implements MoneyDatabaseQueries {
     return map;
   }
 
-  async getProfiles(walletAddresses: string[]): Promise<Map<string, { displayName: string; profileImageUrl: string | null; avatarConfig: Record<string, unknown> | null }>> {
+  async getProfiles(walletAddresses: string[]): Promise<Map<string, { displayName: string; profileImageUrl: string | null; avatarConfig: Record<string, unknown> | null; profileDisplayMode: 'avatar' | 'photo' }>> {
     if (walletAddresses.length === 0) return new Map();
     const normalized = [...new Set(walletAddresses.map(a => this.normalizeAddress(a)))];
-    const query = `SELECT wallet_address, display_name, profile_image_url, avatar_config FROM chat_display_names WHERE wallet_address = ANY($1)`;
+    const query = `SELECT wallet_address, display_name, profile_image_url, avatar_config, profile_display_mode FROM chat_display_names WHERE wallet_address = ANY($1)`;
     const result = await this.pool.query(query, [normalized]);
-    const map = new Map<string, { displayName: string; profileImageUrl: string | null; avatarConfig: Record<string, unknown> | null }>();
+    const map = new Map<string, { displayName: string; profileImageUrl: string | null; avatarConfig: Record<string, unknown> | null; profileDisplayMode: 'avatar' | 'photo' }>();
     for (const row of result.rows) {
       const avatarConfig = row.avatar_config != null && typeof row.avatar_config === 'object' ? (row.avatar_config as Record<string, unknown>) : null;
       // Always key by normalized lowercase — lookups use normalizeAddress(); DB may return mixed-case PKs.
@@ -2328,6 +2332,7 @@ export class DatabaseService implements MoneyDatabaseQueries {
         displayName: row.display_name,
         profileImageUrl: row.profile_image_url ?? null,
         avatarConfig,
+        profileDisplayMode: row.profile_display_mode === 'photo' ? 'photo' : 'avatar',
       });
     }
     return map;

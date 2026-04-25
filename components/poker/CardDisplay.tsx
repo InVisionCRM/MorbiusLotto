@@ -199,7 +199,6 @@ export function CardDisplay({
           custom={dealDelay}
           className={`relative ${sizeClasses} overflow-hidden rounded-md select-none`}
           style={{
-            background: '#ffffff',
             boxShadow: isWinningCard
               ? `${cardShadow}, 0 10px 24px rgba(0,0,0,0.55), 0 0 0 4px rgba(34, 211, 238, 0.95), 0 0 26px rgba(34, 211, 238, 0.55)`
               : cardShadow,

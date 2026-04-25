@@ -23,6 +23,7 @@ import {
   POKER_DEFAULT_TABLE_LOGO_FILENAME,
   POKER_TABLE_LOGO_PUBLIC_PREFIX,
 } from '@/lib/poker-table-logo-constants';
+import { FloatingTableLogo } from './FloatingTableLogo';
 
 const BEAM_PALETTES: BeamColorPalette[] = [
   { primary: '#18CCFC', accent: '#6344F5', tail: '#AE48FF' }, // cyan → purple → magenta
@@ -441,27 +442,10 @@ export function PokerTable({ state, currentPlayerAddress, timeLeft, chatBubbleBy
                 )}
                 {/* Floating table logo — paid sponsorship or default Morbius */}
                 {floatingTableLogoSrc && (
-                  <div
-                    style={{
-                      position: 'absolute', inset: 0, pointerEvents: 'none',
-                      display: 'flex', alignItems: 'center', justifyContent: 'center',
-                      opacity: state.tableLogoOpacity ?? 0.12,
-                    }}
-                  >
-                    <img
-                      src={floatingTableLogoSrc}
-                      alt=""
-                      draggable={false}
-                      className="poker-table-logo-float"
-                      style={{
-                        maxWidth: '38%',
-                        maxHeight: '44%',
-                        objectFit: 'contain',
-                        filter: 'grayscale(0.15)',
-                        userSelect: 'none',
-                      }}
-                    />
-                  </div>
+                  <FloatingTableLogo
+                    src={floatingTableLogoSrc}
+                    opacity={state.tableLogoOpacity ?? 0.12}
+                  />
                 )}
                 {/* Felt sheen — sits above effects to preserve the 3D depth / shadow */}
                 <div style={{

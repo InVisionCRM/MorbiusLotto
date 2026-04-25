@@ -663,11 +663,11 @@ export function PokerSeat({ seat, index, holeCards, isCurrentPlayer, showCardBac
                   : { width: 'clamp(38px, 9vw, 48px)', height: 'clamp(48px, 12vw, 62px)', left: ci === 0 ? '0' : 'clamp(14px, 3.8vw, 20px)' }),
                 transform: `rotate(${ci === 0 ? -12 : 12}deg)`,
                 transformOrigin: 'bottom center',
-                filter: isFolded ? 'grayscale(1) opacity(0.5)' : undefined,
+                filter: [
+                  isFolded ? 'grayscale(1) opacity(0.5)' : '',
+                  isActing ? 'drop-shadow(0 0 6px rgba(34,211,238,0.95)) drop-shadow(0 0 14px rgba(56,189,248,0.65))' : '',
+                ].filter(Boolean).join(' ') || undefined,
                 borderRadius: 8,
-                boxShadow: isActing
-                  ? '0 0 0 2px rgba(34, 211, 238, 0.95), 0 0 14px rgba(34, 211, 238, 0.85), 0 0 22px rgba(56, 189, 248, 0.65)'
-                  : undefined,
               }}
             >
               {showMyCards
@@ -743,7 +743,14 @@ export function PokerSeat({ seat, index, holeCards, isCurrentPlayer, showCardBac
                       : undefined
                 }
               >
-                {seat.avatarConfig ? (
+                {seat.profileDisplayMode === 'photo' && seat.profileImageUrl ? (
+                  <img
+                    src={seat.profileImageUrl}
+                    alt={seat.displayName ?? 'Player'}
+                    className="h-full w-full object-cover"
+                    draggable={false}
+                  />
+                ) : seat.avatarConfig ? (
                   <AvatarView
                     config={seat.avatarConfig}
                     emotion={activeEmotion}
@@ -752,6 +759,13 @@ export function PokerSeat({ seat, index, holeCards, isCurrentPlayer, showCardBac
                     forceAsleep={seat.status === 'sitting_out'}
                     roamEyes={(isCurrentPlayer && mouseIdle) || (!isCurrentPlayer && !isActing && seat.status !== 'sitting_out')}
                     className="w-full h-full"
+                  />
+                ) : seat.profileImageUrl ? (
+                  <img
+                    src={seat.profileImageUrl}
+                    alt={seat.displayName ?? 'Player'}
+                    className="h-full w-full object-cover"
+                    draggable={false}
                   />
                 ) : (
                   <div

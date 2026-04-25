@@ -51,6 +51,7 @@ export interface PokerSeatState {
   displayName?: string | null;
   profileImageUrl?: string | null;
   avatarConfig?: Record<string, unknown> | null;
+  profileDisplayMode?: 'avatar' | 'photo';
 }
 
 export interface PokerCurrentHand {
@@ -60,6 +61,18 @@ export interface PokerCurrentHand {
   pot: string;
   actingPosition: number | null;
   lastAction: { position: number; action: string; amount: string } | null;
+  /**
+   * Recent non-blind actions across the hand, oldest → newest. Each carries its own
+   * `street` and monotonic `order`, so the client can log every action even when
+   * rapid server broadcasts are batched into a single React state update.
+   */
+  recentActions?: {
+    order: number;
+    street: PokerStreet;
+    position: number;
+    action: string;
+    amount: string;
+  }[];
   /** Latest non-blind action for each seat on the current street, keyed by seat position. */
   streetActions?: Record<number, { action: string; amount: string }>;
   minRaise: string;
@@ -847,6 +860,7 @@ export class PokerGameService {
         seat.displayName = profile?.displayName ?? null;
         seat.profileImageUrl = profile?.profileImageUrl ?? null;
         seat.avatarConfig = profile?.avatarConfig ?? placeholderByAddress.get(normalized) ?? null;
+        seat.profileDisplayMode = profile?.profileDisplayMode ?? 'avatar';
       }
     }
 
@@ -939,21 +953,36 @@ export class PokerGameService {
         minRaise = String(toCallNum + minRaiseIncrement);
       }
 
-      // Last action
+      // Recent actions (oldest → newest). We return the last 40 so the client's
+      // activity feed can log every action even when rapid broadcasts are batched
+      // into a single React state update. `lastAction` is kept for backward compat.
       const actionsResult = await pool.query(
-        `SELECT player_address, action, amount FROM poker_hand_actions
+        `SELECT "order", player_address, street, action, amount FROM poker_hand_actions
          WHERE hand_id = $1 AND action NOT IN ('blind')
-         ORDER BY "order" DESC LIMIT 1`,
+         ORDER BY "order" DESC LIMIT 40`,
         [handId]
       );
-      let lastAction: PokerCurrentHand['lastAction'] = null;
-      if (actionsResult.rows.length > 0) {
-        const la = actionsResult.rows[0];
-        const pos = seats.findIndex((s) => s.playerAddress === la.player_address);
-        if (pos >= 0) {
-          lastAction = { position: pos, action: la.action, amount: la.amount?.toString() ?? '0' };
-        }
+      const recentActions: NonNullable<PokerCurrentHand['recentActions']> = [];
+      for (let i = actionsResult.rows.length - 1; i >= 0; i--) {
+        const row = actionsResult.rows[i];
+        const pos = seats.findIndex((s) => s.playerAddress === row.player_address);
+        if (pos < 0) continue;
+        recentActions.push({
+          order: Number(row.order),
+          street: row.street as PokerStreet,
+          position: pos,
+          action: row.action,
+          amount: row.amount?.toString() ?? '0',
+        });
       }
+      const lastAction: PokerCurrentHand['lastAction'] =
+        recentActions.length > 0
+          ? {
+              position: recentActions[recentActions.length - 1].position,
+              action: recentActions[recentActions.length - 1].action,
+              amount: recentActions[recentActions.length - 1].amount,
+            }
+          : null;
 
       const streetActionsResult = await pool.query(
         `SELECT player_address, action, amount FROM poker_hand_actions
@@ -1001,6 +1030,7 @@ export class PokerGameService {
         pot: potStr,
         actingPosition,
         lastAction,
+        recentActions,
         streetActions,
         minRaise,
         toCall,
