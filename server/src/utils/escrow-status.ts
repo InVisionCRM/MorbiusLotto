@@ -41,14 +41,18 @@ export async function getEscrowPoolStatus(tournamentId: string): Promise<EscrowP
       functionName: 'getPool',
       args: [idBytes32],
     });
-    const [token, depositor, totalDeposited, amountPaidOut, depositedAt, cancelled] = result as [
-      `0x${string}`,
-      `0x${string}`,
-      bigint,
-      bigint,
-      bigint,
-      boolean,
-    ];
+    // Cast via `unknown` because some toolchains may still resolve the V2 ABI to a
+    // 7-element tuple type (cached `node_modules`, parallel ABI files). The runtime
+    // contract returns 6 fields regardless — see the comment on the ABI's `getPool` block.
+    const [token, depositor, totalDeposited, amountPaidOut, depositedAt, cancelled] =
+      result as unknown as [
+        `0x${string}`,
+        `0x${string}`,
+        bigint,
+        bigint,
+        bigint,
+        boolean,
+      ];
     return {
       token,
       depositor,
