@@ -18,7 +18,7 @@ type Props = {
 export function FloatingTableLogo({
   src,
   opacity,
-  maxSizeFraction = 0.38,
+  maxSizeFraction = 0.22,
   speed = 90,
 }: Props) {
   const containerRef = useRef<HTMLDivElement | null>(null);
@@ -30,7 +30,7 @@ export function FloatingTableLogo({
   const lastTsRef = useRef<number | null>(null);
   const rafRef = useRef<number | null>(null);
   const feltRef = useRef({ w: 0, h: 0, cx: 0, cy: 0, r: 0 });
-  const logoRef = useRef({ w: 0, h: 0, half: 0 });
+  const logoRef = useRef({ w: 0, h: 0, half: 0, hw: 0, hh: 0 });
 
   useEffect(() => {
     const container = containerRef.current;
@@ -54,6 +54,8 @@ export function FloatingTableLogo({
         w: lw,
         h: lh,
         half: Math.hypot(lw, lh) / 2,
+        hw: lw / 2,
+        hh: lh / 2,
       };
       if (!initializedRef.current && w > 0 && h > 0 && lw > 0 && lh > 0) {
         posRef.current = { x: feltRef.current.cx, y: feltRef.current.cy };
@@ -85,10 +87,8 @@ export function FloatingTableLogo({
       const dt = Math.min(0.05, (ts - last) / 1000);
 
       const { cx, cy, r } = feltRef.current;
-      const { half } = logoRef.current;
-      if (r <= 0 || half <= 0) return;
-
-      const maxR = Math.max(0, r - half - 4);
+      const { hw, hh } = logoRef.current;
+      if (r <= 0 || hw <= 0 || hh <= 0) return;
 
       let { x, y } = posRef.current;
       let { x: vx, y: vy } = velRef.current;
@@ -99,16 +99,21 @@ export function FloatingTableLogo({
       const dx = x - cx;
       const dy = y - cy;
       const dist = Math.hypot(dx, dy);
-      if (dist > maxR && dist > 0) {
+      if (dist > 0) {
         const nx = dx / dist;
         const ny = dy / dist;
-        const dot = vx * nx + vy * ny;
-        if (dot > 0) {
-          vx -= 2 * dot * nx;
-          vy -= 2 * dot * ny;
+        // Farthest extent of the logo's bounding box along the radial normal.
+        const extent = Math.abs(nx) * hw + Math.abs(ny) * hh;
+        const maxR = Math.max(0, r - extent - 2);
+        if (dist > maxR) {
+          const dot = vx * nx + vy * ny;
+          if (dot > 0) {
+            vx -= 2 * dot * nx;
+            vy -= 2 * dot * ny;
+          }
+          x = cx + nx * maxR;
+          y = cy + ny * maxR;
         }
-        x = cx + nx * maxR;
-        y = cy + ny * maxR;
       }
 
       posRef.current = { x, y };

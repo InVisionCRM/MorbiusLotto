@@ -778,6 +778,7 @@ class BlackjackMultiGameService {
                 displayName: profile?.displayName ?? null,
                 profileImageUrl: profile?.profileImageUrl ?? null,
                 avatarConfig: profile?.avatarConfig ?? placeholderByAddress.get(seat.player_address.toLowerCase()) ?? null,
+                profileDisplayMode: profile?.profileDisplayMode ?? 'avatar',
                 betAmount: rs ? rs.bet_amount : '0',
                 hands: rs ? rs.hands : [],
                 activeHandIndex: rs ? (rs.active_hand_index ?? 0) : 0,

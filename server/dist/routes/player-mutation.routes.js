@@ -13,7 +13,7 @@ const resolve_profile_display_name_1 = require("../lib/resolve-profile-display-n
 function registerPlayerMutationRoutes({ app, dbService, cosmeticsService, }) {
     app.post('/api/player/profile', express_1.default.json(), async (req, res) => {
         try {
-            const { address: bodyAddress, walletAddress: bodyWalletAddress, displayName: rawDisplayName, profileImageUrl: rawProfileImageUrl, avatarConfig: rawAvatarConfig, bio: rawBio, xHandle: rawXHandle, tgHandle: rawTgHandle, } = req.body ?? {};
+            const { address: bodyAddress, walletAddress: bodyWalletAddress, displayName: rawDisplayName, profileImageUrl: rawProfileImageUrl, avatarConfig: rawAvatarConfig, bio: rawBio, xHandle: rawXHandle, tgHandle: rawTgHandle, profileDisplayMode: rawProfileDisplayMode, } = req.body ?? {};
             const addressRaw = typeof bodyAddress === 'string' && bodyAddress.trim() !== ''
                 ? bodyAddress
                 : typeof bodyWalletAddress === 'string' && bodyWalletAddress.trim() !== ''
@@ -40,6 +40,9 @@ function registerPlayerMutationRoutes({ app, dbService, cosmeticsService, }) {
                 ? typeof rawTgHandle === 'string'
                     ? rawTgHandle.trim().replace(/^@/, '').slice(0, 50) || null
                     : null
+                : undefined;
+            const profileDisplayMode = rawProfileDisplayMode === 'photo' || rawProfileDisplayMode === 'avatar'
+                ? rawProfileDisplayMode
                 : undefined;
             if (avatarConfig && !(0, cosmetics_catalog_1.isAdminWallet)(normalizedAddress)) {
                 const inventory = await cosmeticsService.getInventory(normalizedAddress);
@@ -70,7 +73,7 @@ function registerPlayerMutationRoutes({ app, dbService, cosmeticsService, }) {
                     }
                 }
             }
-            await dbService.setDisplayName(normalizedAddress, displayName, profileImageUrl, avatarConfig, bio, xHandle, tgHandle);
+            await dbService.setDisplayName(normalizedAddress, displayName, profileImageUrl, avatarConfig, bio, xHandle, tgHandle, profileDisplayMode);
             const profile = await dbService.getProfile(normalizedAddress);
             (0, json_1.sendJson)(res, profile ?? { displayName: null, profileImageUrl: null, avatarConfig: null });
         }

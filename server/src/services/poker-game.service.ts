@@ -8,9 +8,9 @@ import { randomPlaceholderConfig } from '../lib/cosmetics-catalog';
 import { chipsToWei, getPokerRakeWallet, splitBigIntEqually, totalPotChips } from '../lib/poker-chip-scale';
 import { computeTableLogoChangePriceMorbiusChips } from '../lib/poker-table-logo-pricing';
 import {
+  isCuratedPokerLogoFilename,
   isSafeLogoFilename,
-  listAllowedPokerMarketingLogoFilenames,
-} from '../lib/poker-table-logo-allowlist';
+} from '../lib/poker-curated-logos';
 import { POKER_DEFAULT_TABLE_LOGO_FILENAME } from '../lib/poker-table-logo-constants';
 import { applyPokerChipDelta } from './poker-chip-wallet';
 import {
@@ -1187,8 +1187,7 @@ export class PokerGameService {
       throw new Error('Must be seated at this table to sponsor the logo');
     }
 
-    const allowed = await listAllowedPokerMarketingLogoFilenames();
-    if (!allowed.includes(name)) {
+    if (!isCuratedPokerLogoFilename(name)) {
       throw new Error('Logo is not in the curated gallery');
     }
 

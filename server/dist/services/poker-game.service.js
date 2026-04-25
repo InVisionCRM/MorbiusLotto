@@ -10,7 +10,7 @@ const cosmetics_service_1 = require("./cosmetics.service");
 const cosmetics_catalog_1 = require("../lib/cosmetics-catalog");
 const poker_chip_scale_1 = require("../lib/poker-chip-scale");
 const poker_table_logo_pricing_1 = require("../lib/poker-table-logo-pricing");
-const poker_table_logo_allowlist_1 = require("../lib/poker-table-logo-allowlist");
+const poker_curated_logos_1 = require("../lib/poker-curated-logos");
 const poker_table_logo_constants_1 = require("../lib/poker-table-logo-constants");
 const poker_chip_wallet_1 = require("./poker-chip-wallet");
 const poker_cash_buy_in_1 = require("../lib/poker-cash-buy-in");
@@ -589,6 +589,7 @@ class PokerGameService {
                 seat.displayName = profile?.displayName ?? null;
                 seat.profileImageUrl = profile?.profileImageUrl ?? null;
                 seat.avatarConfig = profile?.avatarConfig ?? placeholderByAddress.get(normalized) ?? null;
+                seat.profileDisplayMode = profile?.profileDisplayMode ?? 'avatar';
             }
         }
         let currentHand = null;
@@ -667,18 +668,33 @@ class PokerGameService {
                 toCall = String(toCallNum);
                 minRaise = String(toCallNum + minRaiseIncrement);
             }
-            // Last action
-            const actionsResult = await pool.query(`SELECT player_address, action, amount FROM poker_hand_actions
+            // Recent actions (oldest → newest). We return the last 40 so the client's
+            // activity feed can log every action even when rapid broadcasts are batched
+            // into a single React state update. `lastAction` is kept for backward compat.
+            const actionsResult = await pool.query(`SELECT "order", player_address, street, action, amount FROM poker_hand_actions
          WHERE hand_id = $1 AND action NOT IN ('blind')
-         ORDER BY "order" DESC LIMIT 1`, [handId]);
-            let lastAction = null;
-            if (actionsResult.rows.length > 0) {
-                const la = actionsResult.rows[0];
-                const pos = seats.findIndex((s) => s.playerAddress === la.player_address);
-                if (pos >= 0) {
-                    lastAction = { position: pos, action: la.action, amount: la.amount?.toString() ?? '0' };
-                }
+         ORDER BY "order" DESC LIMIT 40`, [handId]);
+            const recentActions = [];
+            for (let i = actionsResult.rows.length - 1; i >= 0; i--) {
+                const row = actionsResult.rows[i];
+                const pos = seats.findIndex((s) => s.playerAddress === row.player_address);
+                if (pos < 0)
+                    continue;
+                recentActions.push({
+                    order: Number(row.order),
+                    street: row.street,
+                    position: pos,
+                    action: row.action,
+                    amount: row.amount?.toString() ?? '0',
+                });
             }
+            const lastAction = recentActions.length > 0
+                ? {
+                    position: recentActions[recentActions.length - 1].position,
+                    action: recentActions[recentActions.length - 1].action,
+                    amount: recentActions[recentActions.length - 1].amount,
+                }
+                : null;
             const streetActionsResult = await pool.query(`SELECT player_address, action, amount FROM poker_hand_actions
          WHERE hand_id = $1 AND street = $2 AND action NOT IN ('blind')
          ORDER BY "order" DESC`, [handId, street]);
@@ -721,6 +737,7 @@ class PokerGameService {
                 pot: potStr,
                 actingPosition,
                 lastAction,
+                recentActions,
                 streetActions,
                 minRaise,
                 toCall,
@@ -828,7 +845,7 @@ class PokerGameService {
         const pool = this.getPool();
         const normalized = this.normalizeAddress(playerAddress);
         const name = String(logoFilename ?? '').trim();
-        if (!(0, poker_table_logo_allowlist_1.isSafeLogoFilename)(name)) {
+        if (!(0, poker_curated_logos_1.isSafeLogoFilename)(name)) {
             throw new Error('Invalid logo filename');
         }
         if (name === poker_table_logo_constants_1.POKER_DEFAULT_TABLE_LOGO_FILENAME) {
@@ -841,8 +858,7 @@ class PokerGameService {
         if (seatCheck.rows.length === 0) {
             throw new Error('Must be seated at this table to sponsor the logo');
         }
-        const allowed = await (0, poker_table_logo_allowlist_1.listAllowedPokerMarketingLogoFilenames)();
-        if (!allowed.includes(name)) {
+        if (!(0, poker_curated_logos_1.isCuratedPokerLogoFilename)(name)) {
             throw new Error('Logo is not in the curated gallery');
         }
         const trow = await pool.query('SELECT table_logo_sponsored_until AS until FROM poker_tables WHERE id = $1', [tableId]);

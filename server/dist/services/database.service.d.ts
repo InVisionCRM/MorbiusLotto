@@ -470,8 +470,9 @@ export declare class DatabaseService implements MoneyDatabaseQueries {
         bio: string | null;
         xHandle: string | null;
         tgHandle: string | null;
+        profileDisplayMode: 'avatar' | 'photo';
     } | null>;
-    setDisplayName(walletAddress: string, displayName: string, profileImageUrl?: string | null, avatarConfig?: Record<string, unknown> | null, bio?: string | null, xHandle?: string | null, tgHandle?: string | null): Promise<void>;
+    setDisplayName(walletAddress: string, displayName: string, profileImageUrl?: string | null, avatarConfig?: Record<string, unknown> | null, bio?: string | null, xHandle?: string | null, tgHandle?: string | null, profileDisplayMode?: 'avatar' | 'photo' | null): Promise<void>;
     /**
      * Sets avatar_config only when it is currently null (for new players or those who never set an avatar).
      * If no row exists, inserts one with empty display_name and the given config.
@@ -484,6 +485,7 @@ export declare class DatabaseService implements MoneyDatabaseQueries {
         displayName: string;
         profileImageUrl: string | null;
         avatarConfig: Record<string, unknown> | null;
+        profileDisplayMode: 'avatar' | 'photo';
     }>>;
     getBlockedAddresses(): Promise<string[]>;
     isAddressBlocked(walletAddress: string): Promise<boolean>;

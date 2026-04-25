@@ -25,6 +25,7 @@ export interface BJMultiSeatState {
     displayName?: string | null;
     profileImageUrl?: string | null;
     avatarConfig?: Record<string, unknown> | null;
+    profileDisplayMode?: 'avatar' | 'photo';
     betAmount: string;
     hands: BJMultiHandObj[];
     activeHandIndex: number;

@@ -26,6 +26,7 @@ export interface PokerSeatState {
     displayName?: string | null;
     profileImageUrl?: string | null;
     avatarConfig?: Record<string, unknown> | null;
+    profileDisplayMode?: 'avatar' | 'photo';
 }
 export interface PokerCurrentHand {
     handId: string;
@@ -38,6 +39,18 @@ export interface PokerCurrentHand {
         action: string;
         amount: string;
     } | null;
+    /**
+     * Recent non-blind actions across the hand, oldest → newest. Each carries its own
+     * `street` and monotonic `order`, so the client can log every action even when
+     * rapid server broadcasts are batched into a single React state update.
+     */
+    recentActions?: {
+        order: number;
+        street: PokerStreet;
+        position: number;
+        action: string;
+        amount: string;
+    }[];
     /** Latest non-blind action for each seat on the current street, keyed by seat position. */
     streetActions?: Record<number, {
         action: string;

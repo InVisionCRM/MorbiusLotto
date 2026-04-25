@@ -487,5 +487,80 @@ export declare class TournamentService {
         txHash?: string;
         error?: string;
     }>;
+    /** Public summary row for the completed-tournaments browser. */
+    listCompletedTournaments(limit?: number, offset?: number): Promise<CompletedTournamentSummary[]>;
+    /** Full results page for a single tournament: metadata + final standings. */
+    getTournamentResults(tournamentId: string): Promise<TournamentResults | null>;
+    /** Aggregate stats computed from poker_hands / poker_hand_players for a tournament. */
+    getTournamentPokerStats(tournamentId: string): Promise<TournamentPokerStats>;
+    /** Paginated hand list for a tournament; optionally filter to hands a player was dealt into. */
+    getTournamentHands(tournamentId: string, limit?: number, offset?: number, playerAddress?: string | null): Promise<TournamentHandRow[]>;
+}
+export interface CompletedTournamentSummary {
+    tournamentId: string;
+    name: string;
+    tournamentType: string;
+    buyInAmount: bigint;
+    prizePool: bigint;
+    prizeTokenAddress: string | null;
+    status: 'completed' | 'cancelled' | string;
+    createdAt: Date;
+    endedAt: Date | null;
+    customImage: string | null;
+    entryCount: number;
+}
+export interface TournamentResultsEntry {
+    entryId: string;
+    playerAddress: string;
+    finalRank: number | null;
+    prizeWon: bigint;
+    status: 'playing' | 'busted' | 'completed' | string;
+    boughtInAt: Date;
+    finishedAt: Date | null;
+    handsPlayed: number;
+    highestChipCount: number;
+    chipsRemaining: number;
+}
+export interface TournamentResults {
+    tournamentId: string;
+    name: string;
+    tournamentType: string;
+    buyInAmount: bigint;
+    startingChips: number;
+    prizePool: bigint;
+    prizeTokenAddress: string | null;
+    status: string;
+    createdAt: Date;
+    startedAt: Date | null;
+    endedAt: Date | null;
+    customImage: string | null;
+    timeLimitMinutes: number | null;
+    maxPlayers: number | null;
+    prizeDistributionType: string | null;
+    entries: TournamentResultsEntry[];
+}
+export interface TournamentPokerStats {
+    handCount: number;
+    biggestPot: bigint;
+    totalPot: bigint;
+    totalRake: bigint;
+    firstHandAt: Date | null;
+    lastHandAt: Date | null;
+    biggestHand: {
+        handId: string;
+        handNumber: number;
+        potAmount: bigint;
+        completedAt: Date;
+        tableId: string;
+    } | null;
+}
+export interface TournamentHandRow {
+    handId: string;
+    handNumber: number;
+    tableId: string;
+    potAmount: bigint;
+    communityCards: unknown;
+    completedAt: Date;
+    result: unknown;
 }
 //# sourceMappingURL=tournament.service.d.ts.map
