@@ -57,6 +57,11 @@ export const tournamentPrizeEscrowV2Abi = [
     type: 'function',
   },
   {
+    // The deployed contract at TOURNAMENT_PRIZE_ESCROW_ADDRESS returns 6 fields, NOT 7.
+    // It is a bytes32-keyed V3 layout (no `active` field). Decoding with a 7-field ABI
+    // throws "Position 192 is out of bounds" and silently misreads `totalDeposited` as
+    // `amountPaidOut` in V1 fallback paths — which is what the "Escrow has already paid out"
+    // bug was: false positives from a bad ABI, not a real on-chain payout.
     inputs: [{ name: 'tournamentId', type: 'bytes32' }],
     name: 'getPool',
     outputs: [
@@ -66,7 +71,6 @@ export const tournamentPrizeEscrowV2Abi = [
       { name: 'amountPaidOut', type: 'uint256' },
       { name: 'depositedAt', type: 'uint256' },
       { name: 'cancelled', type: 'bool' },
-      { name: 'active', type: 'bool' },
     ],
     stateMutability: 'view',
     type: 'function',

@@ -442,16 +442,6 @@ export function PokerTournamentCreator({ creatorAddress, onClose, onCreate }: Po
   const runServerCreateAfterDeposit = async (uuid: string, txHash: string) => {
     if (!selectedToken) return;
     setFundingStep('creating');
-    // TEMP DEBUG: surface the exact values being sent so we can inspect on-chain state if create rejects.
-    console.log('[CUSTOM-TOKEN-CREATE]', {
-      uuid,
-      bytes32: tournamentIdToBytes32(uuid),
-      txHash,
-      tokenAddress: selectedToken.address,
-      amountWei: customTokenAmountWei.toString(),
-      decimals: selectedToken.decimals,
-      symbol: selectedToken.symbol,
-    });
     const built = buildCreateParams({
       customTokenEscrow: {
         tournamentId: uuid,
