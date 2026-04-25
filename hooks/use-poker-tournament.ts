@@ -88,13 +88,37 @@ export interface PokerTournamentSummary {
   blindIncreaseMode?: PokerBlindIncreaseMode;
 }
 
+/**
+ * Funding payload supplied when `guaranteedPrizePoolSource === 'custom_token'`.
+ * The client deposits to `TournamentPrizeEscrowV2` BEFORE calling create; the
+ * server re-reads on-chain state and rejects if anything doesn't match.
+ *
+ * `tournamentId` is a client-generated UUID v4 used as both the DB row id and
+ * (after `keccak256(uuid)`) the bytes32 escrow key.
+ */
+export interface CustomTokenEscrowFunding {
+  tournamentId: string;
+  txHash: string;
+  tokenAddress: string;
+  /** Wei (smallest unit) deposited. Send as a string to survive JSON serialization. */
+  amount: string;
+  /** 1–18. */
+  decimals: number;
+}
+
 export interface CreatePokerTournamentParams {
   name: string;
   buyInAmount: string;
-  /** Wei string; when `"0"`, server requires `guaranteedPrizePool`. */
+  /** Wei string; when `"0"`, server requires `guaranteedPrizePool` unless source is `custom_token`. */
   guaranteedPrizePool?: string;
-  /** Admin only: same as creator-funded pool (debits creating wallet); requires admin in `ADMIN_WALLETS`. */
-  guaranteedPrizePoolSource?: 'creator' | 'platform_promo';
+  /**
+   * `creator` (default): debit creator's poker chip wallet for the guarantee.
+   * `platform_promo`: admin only — uses platform promo wallet.
+   * `custom_token`: prize is held on-chain in the escrow contract; `customTokenEscrow` required.
+   */
+  guaranteedPrizePoolSource?: 'creator' | 'platform_promo' | 'custom_token';
+  /** Required when `guaranteedPrizePoolSource === 'custom_token'`. */
+  customTokenEscrow?: CustomTokenEscrowFunding;
   prizeDistributionType: string;
   /** With `prizeDistributionType: 'custom'`, length must match `config.maxPlayers` and sum to 100. */
   prizePercentages?: number[];

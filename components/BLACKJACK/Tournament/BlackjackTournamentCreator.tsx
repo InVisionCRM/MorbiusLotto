@@ -35,6 +35,7 @@ import { Theme } from '@/lib/theme';
 import { useTokenPriceUsd } from '@/hooks/use-token-price-usd';
 import { TokenWithLogo } from '@/components/Creators/TokenWithLogo';
 import { ConfirmActionCard } from '@/components/shared/ConfirmActionCard';
+import { Prc20TokenPicker, type SelectedPrc20Token } from '@/components/shared/Prc20TokenPicker';
 
 const ESCROW_ZERO = '0x0000000000000000000000000000000000000000';
 const isEscrowConfigured = (TOURNAMENT_PRIZE_ESCROW_ADDRESS as string) !== ESCROW_ZERO;
@@ -43,22 +44,6 @@ import { tournamentIdToBytes32 } from '@/lib/tournament-id-bytes32';
 import { ERC20_ABI } from '@/abi/erc20';
 
 type FundingStep = 'idle' | 'approving' | 'approved' | 'depositing' | 'done';
-
-interface TokenSearchResult {
-  address: string;
-  name: string;
-  symbol: string;
-  decimals: number | null;
-  iconUrl: string | null;
-}
-
-interface SelectedToken {
-  address: string;
-  name: string;
-  symbol: string;
-  decimals: number;
-  logoUrl: string | null;
-}
 
 export interface BlackjackTournamentCreatorProps {
   isOpen: boolean;
@@ -103,13 +88,19 @@ export function BlackjackTournamentCreator({
   const [approvalTxHash, setApprovalTxHash] = useState<string | null>(null);
   const [fundingError, setFundingError] = useState<string | null>(null);
 
-  // Token search state
-  const [tokenQuery, setTokenQuery] = useState('');
-  const [tokenSearchResults, setTokenSearchResults] = useState<TokenSearchResult[]>([]);
-  const [tokenSearching, setTokenSearching] = useState(false);
-  const [selectedToken, setSelectedToken] = useState<SelectedToken | null>(null);
-  const tokenSearchTimeout = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const tokenDropdownRef = useRef<HTMLDivElement>(null);
+  // Token picker state — picker owns search/debounce internally; we just hold the resolved selection.
+  const [selectedToken, setSelectedToken] = useState<SelectedPrc20Token | null>(null);
+
+  const handleTokenChange = useCallback((token: SelectedPrc20Token | null) => {
+    setSelectedToken(token);
+    if (token) {
+      setPrizeTokenAddress(token.address);
+      setPrizeTokenDecimals(token.decimals);
+    } else {
+      setPrizeTokenAddress('');
+      setPrizeTokenDecimals(18);
+    }
+  }, []);
 
   const { address } = useAccount();
   const { writeContractAsync } = useWriteContract();
@@ -206,100 +197,6 @@ export function BlackjackTournamentCreator({
   };
 
   // Close dropdown on outside click
-  useEffect(() => {
-    const handleClickOutside = (e: MouseEvent) => {
-      if (tokenDropdownRef.current && !tokenDropdownRef.current.contains(e.target as Node)) {
-        setTokenSearchResults([]);
-      }
-    };
-    document.addEventListener('mousedown', handleClickOutside);
-    return () => document.removeEventListener('mousedown', handleClickOutside);
-  }, []);
-
-  // Debounced token search
-  const handleTokenQueryChange = useCallback((query: string) => {
-    setTokenQuery(query);
-    if (tokenSearchTimeout.current) clearTimeout(tokenSearchTimeout.current);
-    if (!query.trim() || query.trim().length < 2) {
-      setTokenSearchResults([]);
-      setTokenSearching(false);
-      return;
-    }
-    setTokenSearching(true);
-    tokenSearchTimeout.current = setTimeout(async () => {
-      try {
-        const res = await fetch(`https://api.scan.pulsechain.com/api/v2/search?q=${encodeURIComponent(query.trim())}`);
-        const data = await res.json();
-        const items = (data.items || [])
-          .filter((item: any) => item.type === 'token')
-          .slice(0, 8)
-          .map((item: any) => ({
-            address: item.address,
-            name: item.name || 'Unknown',
-            symbol: item.symbol || '???',
-            decimals: item.token_type === 'ERC-20' ? (item.exchange_rate ? null : null) : null,
-            iconUrl: item.icon_url || null,
-          }));
-        setTokenSearchResults(items);
-      } catch {
-        setTokenSearchResults([]);
-      } finally {
-        setTokenSearching(false);
-      }
-    }, 400);
-  }, []);
-
-  // Fetch token details (decimals + logo) after selection
-  const fetchTokenDetails = useCallback(async (address: string, name: string, symbol: string) => {
-    let decimals = 18;
-    let logoUrl: string | null = null;
-    try {
-      const res = await fetch(`https://api.scan.pulsechain.com/api/v2/tokens/${address}`);
-      const data = await res.json();
-      if (data.decimals != null) decimals = Number(data.decimals);
-      if (data.name) name = data.name;
-      if (data.symbol) symbol = data.symbol;
-      if (data.icon_url) logoUrl = data.icon_url;
-    } catch { /* use defaults */ }
-
-    // Try DexScreener for logo if scan didn't have one
-    if (!logoUrl) {
-      try {
-        const res = await fetch(`https://api.dexscreener.com/latest/dex/tokens/${address}`);
-        const data = await res.json();
-        const img = data.pairs?.[0]?.info?.imageUrl;
-        if (img) logoUrl = img;
-      } catch { /* no logo */ }
-    }
-
-    setSelectedToken({ address, name, symbol, decimals, logoUrl });
-    setPrizeTokenAddress(address);
-    setPrizeTokenDecimals(decimals);
-    setTokenQuery('');
-    setTokenSearchResults([]);
-  }, []);
-
-  // Handle selecting a token from search results
-  const handleSelectToken = useCallback((result: TokenSearchResult) => {
-    fetchTokenDetails(result.address, result.name, result.symbol);
-  }, [fetchTokenDetails]);
-
-  // Handle pasting a raw address (no search result) — fetch its details
-  const handleRawAddressSubmit = useCallback(() => {
-    const addr = tokenQuery.trim();
-    if (/^0x[a-fA-F0-9]{40}$/.test(addr)) {
-      fetchTokenDetails(addr, 'Unknown Token', '???');
-    }
-  }, [tokenQuery, fetchTokenDetails]);
-
-  // Clear selected token
-  const handleClearToken = useCallback(() => {
-    setSelectedToken(null);
-    setPrizeTokenAddress('');
-    setPrizeTokenDecimals(18);
-    setTokenQuery('');
-  }, []);
-
   // Computed values
   const buyInAmountWei = useMemo(() => {
     try {
@@ -1148,36 +1045,7 @@ export function BlackjackTournamentCreator({
                   {prizeType === 'custom' && (
                     <div className="space-y-2 p-3 rounded-xl border border-gray-700" style={Theme.panel.base}>
                       <p className="text-gray-400 text-xs">Search by name/symbol or paste a token contract address. You&apos;ll fund the prize pool after creating.</p>
-                      {selectedToken ? (
-                        <div className="flex items-center gap-2 p-2 rounded-lg bg-gray-900">
-                          <span className="text-white text-sm truncate">{selectedToken.symbol}</span>
-                          <button onClick={handleClearToken} className="ml-auto text-gray-400 hover:text-white">Clear</button>
-                        </div>
-                      ) : (
-                        <div ref={tokenDropdownRef}>
-                          <input
-                            type="text"
-                            value={tokenQuery}
-                            onChange={(e) => handleTokenQueryChange(e.target.value)}
-                            onKeyDown={(e) => e.key === 'Enter' && handleRawAddressSubmit()}
-                            onBlur={handleRawAddressSubmit}
-                            placeholder="Search token (e.g. HEX, WPLS) or paste 0x..."
-                            className="w-full px-3 py-2 rounded-lg bg-gray-900 border border-gray-600 text-white text-sm"
-                          />
-                          {tokenSearchResults.length > 0 && (
-                            <div className="mt-1 max-h-32 overflow-y-auto rounded-lg border border-gray-600 bg-gray-800">
-                              {tokenSearchResults.map((r) => (
-                                <button key={r.address} type="button" onClick={() => handleSelectToken(r)} className="w-full px-3 py-2 text-left text-sm hover:bg-gray-700 flex items-center gap-2">
-                                  <span className="text-white truncate">{r.symbol}</span><span className="text-gray-500 text-xs">{r.name}</span>
-                                </button>
-                              ))}
-                            </div>
-                          )}
-                          {tokenSearchResults.length === 0 && tokenQuery.trim().length >= 2 && !tokenSearching && (
-                            <p className="mt-1 text-gray-500 text-xs px-1">No results — try pasting the token contract address (0x...)</p>
-                          )}
-                        </div>
-                      )}
+                      <Prc20TokenPicker value={selectedToken} onChange={handleTokenChange} />
                       <div>
                         <label className="block text-gray-400 text-xs mb-1">Prize amount (total pool)</label>
                         <input type="text" value={prizeAmountHuman} onChange={(e) => setPrizeAmountHuman(e.target.value)} placeholder="e.g. 1000" className="w-full px-3 py-2 rounded-lg bg-gray-900 border border-gray-600 text-white text-sm" />

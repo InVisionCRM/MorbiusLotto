@@ -5,15 +5,16 @@ import { useEffect, useRef } from 'react';
 type Props = {
   src: string;
   opacity: number;
-  /** Fraction of felt diameter the logo's longest side can occupy. */
+  /** Fraction of felt's shorter axis the logo's longest side can occupy. */
   maxSizeFraction?: number;
   /** Target speed in pixels per second. */
   speed?: number;
 };
 
 /**
- * DVD-screensaver-style floating logo that bounces off the circular felt rail.
- * Renders absolutely inside a round felt container; caller handles opacity wrapper.
+ * DVD-screensaver-style floating logo that bounces off the elliptical felt rail.
+ * Bounce reflection randomized 15°–37° off the inward surface normal so paths
+ * never repeat. Renders absolutely inside the felt container.
  */
 export function FloatingTableLogo({
   src,
@@ -29,8 +30,8 @@ export function FloatingTableLogo({
   const initializedRef = useRef(false);
   const lastTsRef = useRef<number | null>(null);
   const rafRef = useRef<number | null>(null);
-  const feltRef = useRef({ w: 0, h: 0, cx: 0, cy: 0, r: 0 });
-  const logoRef = useRef({ w: 0, h: 0, half: 0, hw: 0, hh: 0 });
+  const feltRef = useRef({ cx: 0, cy: 0, a: 0, b: 0 });
+  const logoRef = useRef({ w: 0, h: 0, hw: 0, hh: 0 });
 
   useEffect(() => {
     const container = containerRef.current;
@@ -42,31 +43,24 @@ export function FloatingTableLogo({
       const w = rect.width;
       const h = rect.height;
       feltRef.current = {
-        w,
-        h,
         cx: w / 2,
         cy: h / 2,
-        r: Math.min(w, h) / 2,
+        a: w / 2,
+        b: h / 2,
       };
       const lw = img.offsetWidth;
       const lh = img.offsetHeight;
-      logoRef.current = {
-        w: lw,
-        h: lh,
-        half: Math.hypot(lw, lh) / 2,
-        hw: lw / 2,
-        hh: lh / 2,
-      };
+      logoRef.current = { w: lw, h: lh, hw: lw / 2, hh: lh / 2 };
       if (!initializedRef.current && w > 0 && h > 0 && lw > 0 && lh > 0) {
-        const { cx, cy, r } = feltRef.current;
-        const halfDiag = Math.hypot(lw, lh) / 2;
-        const spawnR = Math.max(0, r - halfDiag - 4);
+        const { cx, cy, a, b } = feltRef.current;
+        // Spawn anywhere inside an inner ellipse that keeps the logo off the rail.
+        const spawnA = Math.max(0, a - lw / 2 - 4);
+        const spawnB = Math.max(0, b - lh / 2 - 4);
         const spawnAngle = Math.random() * Math.PI * 2;
-        // sqrt for uniform area distribution, not biased toward center
-        const spawnDist = Math.sqrt(Math.random()) * spawnR;
+        const spawnRadial = Math.sqrt(Math.random());
         posRef.current = {
-          x: cx + Math.cos(spawnAngle) * spawnDist,
-          y: cy + Math.sin(spawnAngle) * spawnDist,
+          x: cx + Math.cos(spawnAngle) * spawnA * spawnRadial,
+          y: cy + Math.sin(spawnAngle) * spawnB * spawnRadial,
         };
         const angle = Math.random() * Math.PI * 2;
         velRef.current = {
@@ -95,9 +89,9 @@ export function FloatingTableLogo({
       if (last == null) return;
       const dt = Math.min(0.05, (ts - last) / 1000);
 
-      const { cx, cy, r } = feltRef.current;
+      const { cx, cy, a, b } = feltRef.current;
       const { hw, hh } = logoRef.current;
-      if (r <= 0 || hw <= 0 || hh <= 0) return;
+      if (a <= 0 || b <= 0 || hw <= 0 || hh <= 0) return;
 
       let { x, y } = posRef.current;
       let { x: vx, y: vy } = velRef.current;
@@ -105,20 +99,28 @@ export function FloatingTableLogo({
       x += vx * dt;
       y += vy * dt;
 
-      const dx = x - cx;
-      const dy = y - cy;
-      const dist = Math.hypot(dx, dy);
-      if (dist > 0) {
-        const nx = dx / dist;
-        const ny = dy / dist;
-        // Farthest extent of the logo's bounding box along the radial normal.
+      // Outward unit normal at (x, y) on the ellipse: gradient of (x/a)^2 + (y/b)^2.
+      const gx = (x - cx) / (a * a);
+      const gy = (y - cy) / (b * b);
+      const glen = Math.hypot(gx, gy);
+      if (glen > 0) {
+        const nx = gx / glen;
+        const ny = gy / glen;
+
+        // How far the logo's box reaches along the normal.
         const extent = Math.abs(nx) * hw + Math.abs(ny) * hh;
-        const maxR = Math.max(0, r - extent - 2);
-        if (dist > maxR) {
+
+        // Inward distance from the rail to the box edge along the normal.
+        // For an ellipse, signed distance is approximated well by the level-set
+        // value scaled by 1 / |∇|, which is ~accurate near the boundary.
+        const ex = (x - cx) / a;
+        const ey = (y - cy) / b;
+        const level = ex * ex + ey * ey - 1;
+        const railDist = level / (2 * glen);
+
+        if (railDist > -extent - 2) {
           const dot = vx * nx + vy * ny;
           if (dot > 0) {
-            // Random outgoing angle 15°–37° from the inward surface normal,
-            // sign flipped randomly so paths don't always curl the same way.
             const speedNow = Math.hypot(vx, vy);
             const inwardX = -nx;
             const inwardY = -ny;
@@ -126,14 +128,18 @@ export function FloatingTableLogo({
             const maxDeg = 37;
             const deg = minDeg + Math.random() * (maxDeg - minDeg);
             const sign = Math.random() < 0.5 ? -1 : 1;
-            const rad = (deg * Math.PI) / 180 * sign;
-            const cos = Math.cos(rad);
-            const sin = Math.sin(rad);
-            vx = (inwardX * cos - inwardY * sin) * speedNow;
-            vy = (inwardX * sin + inwardY * cos) * speedNow;
+            const rad = ((deg * Math.PI) / 180) * sign;
+            const c = Math.cos(rad);
+            const s = Math.sin(rad);
+            vx = (inwardX * c - inwardY * s) * speedNow;
+            vy = (inwardX * s + inwardY * c) * speedNow;
           }
-          x = cx + nx * maxR;
-          y = cy + ny * maxR;
+          // Push back along the normal so we sit just inside the box-aware boundary.
+          const push = railDist + extent + 2;
+          if (push > 0) {
+            x -= nx * push;
+            y -= ny * push;
+          }
         }
       }
 

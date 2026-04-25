@@ -509,36 +509,18 @@ export default function PokerLobbyPage() {
                   {/* CTA buttons */}
                   <div className="flex justify-center gap-3 flex-wrap">
                     {isConnected && (
-                      <>
-                        <button
-                          type="button"
-                          onClick={() => setCreateModal({ smallBlind: '10', bigBlind: '20', maxSeats: 10, pinCode: '', pinEnabled: false })}
-                          className="flex items-center gap-2 px-7 py-3.5 rounded-2xl text-white text-sm font-bold hover:-translate-y-0.5 transition-all"
-                          style={{
-                            background: 'linear-gradient(135deg, #06b6d4, #3b82f6)',
-                            boxShadow: '0 4px 24px rgba(6,182,212,0.3), 0 1px 2px rgba(0,0,0,0.2), inset 0 1px 0 rgba(255,255,255,0.15)',
-                          }}
-                        >
-                          <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.5}><path d="M12 5v14M5 12h14" /></svg>
-                          Create Table
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => setShowChipExchange(true)}
-                          className="flex items-center gap-2 px-7 py-3.5 rounded-2xl text-cyan-200 text-sm font-bold hover:-translate-y-0.5 transition-all border-2 border-cyan-500/40"
-                          style={{
-                            background: 'linear-gradient(325deg, rgba(20, 20, 20, 0.75), rgba(40, 40, 40, 0.5))',
-                            boxShadow:
-                              'inset 0 3px 6px rgba(0, 0, 0, 0.75), inset 0 -2px 6px rgba(255, 255, 255, 0.06), 0 0 24px rgba(34,211,238,0.12)',
-                          }}
-                        >
-                          <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}>
-                            <circle cx="12" cy="12" r="9" />
-                            <path d="M8 12h8M12 8v8" strokeLinecap="round" />
-                          </svg>
-                          Chip cage
-                        </button>
-                      </>
+                      <button
+                        type="button"
+                        onClick={() => setCreateModal({ smallBlind: '10', bigBlind: '20', maxSeats: 10, pinCode: '', pinEnabled: false })}
+                        className="flex items-center gap-2 px-7 py-3.5 rounded-2xl text-white text-sm font-bold hover:-translate-y-0.5 transition-all"
+                        style={{
+                          background: 'linear-gradient(135deg, #06b6d4, #3b82f6)',
+                          boxShadow: '0 4px 24px rgba(6,182,212,0.3), 0 1px 2px rgba(0,0,0,0.2), inset 0 1px 0 rgba(255,255,255,0.15)',
+                        }}
+                      >
+                        <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.5}><path d="M12 5v14M5 12h14" /></svg>
+                        Create Table
+                      </button>
                     )}
                     <button
                       type="button"
@@ -578,67 +560,89 @@ export default function PokerLobbyPage() {
                   </div>
                 </div>
               </div>
+            </div>
 
-              {isConnected && address && (
-                <div className="relative px-5 sm:px-10 pb-5">
-                  <div
-                    className="rounded-2xl border border-cyan-500/25 overflow-hidden flex flex-col sm:flex-row sm:items-stretch sm:justify-between gap-4 p-4 sm:p-5"
-                    style={{
-                      background: 'linear-gradient(325deg, rgba(20, 20, 20, 0.8), rgba(40, 40, 40, 0.6))',
-                      boxShadow:
-                        'inset 0 3px 6px rgba(0, 0, 0, 0.8), inset 0 -3px 6px rgba(255, 255, 255, 0.1), 0 1px 3px rgba(0, 0, 0, 0.5)',
-                    }}
-                  >
-                    <div className="absolute inset-0 bg-[radial-gradient(circle_at_90%_50%,rgba(34,211,238,0.08),transparent_55%)] pointer-events-none rounded-2xl" />
-                    <div className="relative flex items-start gap-3 min-w-0">
-                      <div
-                        className="shrink-0 w-11 h-11 rounded-xl flex items-center justify-center border border-cyan-500/30"
-                        style={{
-                          background: 'linear-gradient(145deg, rgb(16, 26, 35), rgb(35, 36, 41))',
-                          boxShadow:
-                            'inset 0 2px 4px rgba(0, 0, 0, 0.7), inset 0 -2px 4px rgba(255, 255, 255, 0.06)',
-                        }}
-                      >
-                        <Coins className="w-5 h-5 text-cyan-400/90" aria-hidden />
-                      </div>
-                      <div className="min-w-0">
-                        <h3 className="text-sm font-bold text-cyan-400 tracking-wide">Chip cage</h3>
-                        <p className="text-xs text-slate-500 mt-0.5 leading-relaxed">
-                          MORBIUS play balance ↔ poker chips. Same rate as the tables: 1 chip = 1 MORBIUS.
-                        </p>
-                      </div>
+            {isConnected && address && (
+              <section
+                className="relative mb-6 sm:mb-8 rounded-2xl sm:rounded-3xl overflow-hidden border-2 border-cyan-500/30"
+                style={{
+                  background: 'linear-gradient(325deg, rgba(20, 20, 20, 0.8), rgba(40, 40, 40, 0.6))',
+                  boxShadow:
+                    'inset 0 3px 6px rgba(0, 0, 0, 0.8), inset 0 -3px 6px rgba(255, 255, 255, 0.1), 0 1px 3px rgba(0, 0, 0, 0.5), 0 0 50px rgba(34, 211, 238, 0.06)',
+                }}
+              >
+                <div className="absolute inset-0 pointer-events-none bg-[radial-gradient(ellipse_90%_80%_at_50%_0%,rgba(34,211,238,0.15),transparent_55%)]" />
+                <div className="absolute inset-0 pointer-events-none bg-[radial-gradient(circle_at_100%_50%,rgba(34,211,238,0.08),transparent_50%)]" />
+                <div className="relative h-1 bg-gradient-to-r from-transparent via-cyan-400/50 to-transparent" aria-hidden />
+                <div className="relative px-4 py-5 sm:px-8 sm:py-6 flex flex-col lg:flex-row lg:items-center gap-5 lg:gap-8">
+                  <div className="flex items-start gap-3 sm:gap-4 min-w-0 flex-1">
+                    <div
+                      className="shrink-0 w-12 h-12 sm:w-14 sm:h-14 rounded-2xl flex items-center justify-center border border-cyan-500/35"
+                      style={{
+                        background: 'linear-gradient(145deg, rgb(16, 26, 35), rgb(35, 36, 41))',
+                        boxShadow: 'inset 0 3px 6px rgba(0,0,0,0.8), 0 0 20px rgba(34,211,238,0.12)',
+                      }}
+                    >
+                      <Coins className="w-6 h-6 sm:w-7 sm:h-7 text-cyan-300" aria-hidden />
                     </div>
-                    <div className="relative flex flex-col sm:flex-row flex-wrap items-stretch sm:items-center gap-3 sm:gap-5">
-                      <div className="flex gap-6 flex-1 sm:flex-initial">
-                        <div>
-                          <div className="text-[10px] uppercase tracking-wider text-slate-500 font-semibold">Play balance</div>
-                          <div className="text-lg font-bold tabular-nums text-white mt-0.5">
-                            {balance != null ? formatMorbiusFloor(balance) : '—'}
-                          </div>
-                          <div className="text-[10px] text-slate-600">MORBIUS</div>
-                        </div>
-                        <div>
-                          <div className="text-[10px] uppercase tracking-wider text-slate-500 font-semibold">Poker chips</div>
-                          <div className="text-lg font-bold tabular-nums text-cyan-300 mt-0.5">
-                            {chipBalance != null ? formatChips(chipBalance) : '—'}
-                          </div>
-                          <div className="text-[10px] text-slate-600">Off-chain</div>
-                        </div>
-                      </div>
-                      <button
-                        type="button"
-                        onClick={() => setShowChipExchange(true)}
-                        className="shrink-0 w-full sm:w-auto px-6 py-3 rounded-xl text-sm font-bold text-white bg-gradient-to-r from-cyan-600 to-blue-600 hover:opacity-95 transition-opacity shadow-lg shadow-cyan-900/25"
-                      >
-                        Open exchange
-                      </button>
+                    <div className="min-w-0 pt-0.5">
+                      <h2 className="text-base sm:text-lg font-black tracking-tight text-white">
+                        MORBIUS <span className="text-cyan-400/90">↔</span> poker chips
+                      </h2>
+                      <p className="text-xs sm:text-sm text-slate-500 mt-1 max-w-md leading-relaxed">
+                        Same rate everywhere at the table: 1 chip = 1 MORBIUS. Move funds before you sit.
+                      </p>
                     </div>
                   </div>
+                  <div className="flex flex-col sm:flex-row items-stretch sm:items-end gap-4 lg:gap-6 lg:ml-auto">
+                    <div className="grid grid-cols-2 gap-3 sm:gap-6 flex-1 sm:flex-initial min-w-0">
+                      <div
+                        className="rounded-xl px-4 py-3 border border-white/[0.06]"
+                        style={{
+                          background: 'linear-gradient(145deg, rgba(0,0,0,0.35), rgba(30,30,30,0.25))',
+                          boxShadow: 'inset 0 2px 4px rgba(0,0,0,0.5)',
+                        }}
+                      >
+                        <div className="text-[10px] uppercase tracking-[0.2em] text-slate-500 font-bold">Play balance</div>
+                        <div className="text-xl sm:text-2xl font-black tabular-nums text-white mt-1 leading-none truncate">
+                          {balance != null ? formatMorbiusFloor(balance) : '—'}
+                        </div>
+                        <div className="text-[10px] text-cyan-500/60 font-semibold mt-1.5">MORBIUS</div>
+                      </div>
+                      <div
+                        className="rounded-xl px-4 py-3 border border-cyan-500/20"
+                        style={{
+                          background: 'linear-gradient(145deg, rgba(6, 55, 65, 0.25), rgba(20, 20, 20, 0.45))',
+                          boxShadow: 'inset 0 2px 4px rgba(0,0,0,0.5), 0 0 24px rgba(34,211,238,0.06)',
+                        }}
+                      >
+                        <div className="text-[10px] uppercase tracking-[0.2em] text-slate-500 font-bold">Poker chips</div>
+                        <div className="text-xl sm:text-2xl font-black tabular-nums text-cyan-200 mt-1 leading-none truncate">
+                          {chipBalance != null ? formatChips(chipBalance) : '—'}
+                        </div>
+                      </div>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => setShowChipExchange(true)}
+                      className="shrink-0 w-full sm:w-auto min-h-[3rem] px-6 sm:px-8 rounded-xl text-sm font-bold text-white transition-all hover:opacity-95 hover:scale-[1.02] active:scale-[0.99] border border-cyan-400/20"
+                      style={{
+                        background: 'linear-gradient(135deg, #0891b2, #2563eb)',
+                        boxShadow: '0 8px 32px rgba(6, 182, 212, 0.25), 0 0 0 1px rgba(34, 211, 238, 0.2), inset 0 1px 0 rgba(255,255,255,0.15)',
+                      }}
+                    >
+                      Open exchange
+                    </button>
+                  </div>
                 </div>
-              )}
+              </section>
+            )}
 
-              {/* Tab bar */}
-              <div className="flex items-center gap-1 px-5 sm:px-10 py-3.5 sm:py-4 border-t border-white/[0.04]" style={{ background: 'rgba(0,0,0,0.2)' }}>
+            {/* Tab bar */}
+            <div
+              className="flex items-center gap-1 px-5 sm:px-10 py-3.5 sm:py-4 mb-6 sm:mb-8 rounded-2xl border border-cyan-500/20"
+              style={{ background: 'linear-gradient(180deg, rgba(0,0,0,0.35), rgba(0,0,0,0.2))' }}
+            >
                 <button
                   type="button"
                   onClick={() => setLobbyTab('cash')}
@@ -675,7 +679,6 @@ export default function PokerLobbyPage() {
                 >
                   History
                 </button>
-              </div>
             </div>
             {activeTab === 'tournaments' && (
               <div

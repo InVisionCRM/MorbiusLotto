@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import type { PokerTableState } from '@/lib/websocket-client';
 import { SpeechVoiceToggle } from '@/components/shared/SpeechHUD';
 
@@ -92,6 +92,38 @@ export function PokerHeaderBar({
   const [botCountInput, setBotCountInput] = useState('4');
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
+  // Countdown for the active table-logo sponsorship; ticks once per second.
+  const sponsoredUntil = renderedState?.tableLogoSponsoredUntil ?? null;
+  const [logoTimerLabel, setLogoTimerLabel] = useState<string | null>(null);
+  useEffect(() => {
+    if (!sponsoredUntil) {
+      setLogoTimerLabel(null);
+      return;
+    }
+    const end = new Date(sponsoredUntil).getTime();
+    if (Number.isNaN(end)) {
+      setLogoTimerLabel(null);
+      return;
+    }
+    const compute = () => {
+      const ms = end - Date.now();
+      if (ms <= 0) {
+        setLogoTimerLabel(null);
+        return false;
+      }
+      const s = Math.floor(ms / 1000);
+      const m = Math.floor(s / 60);
+      const r = s % 60;
+      setLogoTimerLabel(`${m}:${r.toString().padStart(2, '0')}`);
+      return true;
+    };
+    if (!compute()) return;
+    const id = setInterval(() => {
+      if (!compute()) clearInterval(id);
+    }, 1000);
+    return () => clearInterval(id);
+  }, [sponsoredUntil]);
+
   const parseBotCount = () => {
     const n = Number(botCountInput);
     if (!Number.isFinite(n)) return 1;
@@ -137,6 +169,9 @@ export function PokerHeaderBar({
               style={POKER_HEADER_SECONDARY_BTN_STYLE}
             >
               Logo
+              {logoTimerLabel && (
+                <span className="ml-1.5 tabular-nums opacity-80">{logoTimerLabel}</span>
+              )}
             </button>
             <div data-poker-header-secondary className="relative shrink-0">
               <button
@@ -484,6 +519,9 @@ export function PokerHeaderBar({
                       style={{ color: 'rgba(255,255,255,0.9)' }}
                     >
                       Table logo
+                      {logoTimerLabel && (
+                        <span className="ml-1.5 tabular-nums opacity-80">{logoTimerLabel}</span>
+                      )}
                     </button>
                     <button
                       type="button"

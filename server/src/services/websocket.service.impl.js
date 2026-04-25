@@ -1559,12 +1559,37 @@ class WebSocketService {
             if (p.guaranteedPrizePoolSource === 'platform_promo') {
                 guaranteedPrizePoolSource = 'platform_promo';
             }
+            else if (p.guaranteedPrizePoolSource === 'custom_token') {
+                guaranteedPrizePoolSource = 'custom_token';
+            }
+            // Custom-token escrow funding payload (only meaningful when source is 'custom_token').
+            // Service re-validates everything; we only normalize types here.
+            let customTokenEscrow = undefined;
+            if (guaranteedPrizePoolSource === 'custom_token') {
+                if (!p.customTokenEscrow || typeof p.customTokenEscrow !== 'object') {
+                    return this.sendError(ws, 'customTokenEscrow required for custom_token prize source', message.requestId);
+                }
+                const e = p.customTokenEscrow;
+                try {
+                    customTokenEscrow = {
+                        tournamentId: String(e.tournamentId ?? ''),
+                        txHash: String(e.txHash ?? ''),
+                        tokenAddress: String(e.tokenAddress ?? ''),
+                        amount: BigInt(String(e.amount ?? '0')),
+                        decimals: Number(e.decimals ?? 18),
+                    };
+                }
+                catch (_err) {
+                    return this.sendError(ws, 'customTokenEscrow.amount must be a numeric string', message.requestId);
+                }
+            }
             const result = await this.pokerTournamentService.createPokerTournament({
                 creatorAddress: ws.playerAddress,
                 name: p.name,
                 buyInAmount,
                 guaranteedPrizePool,
                 guaranteedPrizePoolSource,
+                customTokenEscrow,
                 prizeDistributionType: p.prizeDistributionType,
                 prizePercentages: Array.isArray(p.prizePercentages) ? p.prizePercentages : undefined,
                 config: p.config,

@@ -5,6 +5,9 @@ import { isAdminWallet } from '../lib/cosmetics-catalog';
 import { TournamentService } from './tournament.service';
 import { PokerGameService } from './poker-game.service';
 import { applyPokerChipDelta } from './poker-chip-wallet';
+import { getEscrowPoolStatus } from '../utils/escrow-status';
+import { tournamentIdToBytes32 } from '../utils/tournament-id-bytes32';
+import { cancelTournamentInEscrow } from '../utils/escrow-payout';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -83,7 +86,15 @@ export interface PokerTournamentSummary {
   registeredCount: number;
   maxPlayers: number;
   minPlayers: number;
+  /**
+   * For chip freerolls and platform-promo: chip amount.
+   * For custom-token freerolls: amount in the token's smallest unit (wei). Pair with `prizeTokenDecimals`.
+   */
   prizePool: string;
+  /** ERC-20 contract address when prize is a custom PRC-20; null = chips. */
+  prizeTokenAddress: string | null;
+  /** 1–18 when `prizeTokenAddress` is set; null otherwise. */
+  prizeTokenDecimals: number | null;
   tableId: string | null;
   createdAt: string;
   creatorAddress: string | null;
@@ -99,7 +110,29 @@ export interface PokerTournamentSummary {
 }
 
 /** Where the initial guaranteed pool is debited when buy-in is 0. */
-export type GuaranteedPrizePoolSource = 'creator' | 'platform_promo';
+export type GuaranteedPrizePoolSource = 'creator' | 'platform_promo' | 'custom_token';
+
+/**
+ * Funding payload supplied by the client when the prize pool is held in the
+ * `TournamentPrizeEscrowV2` contract for an arbitrary PRC-20 token.
+ *
+ * The client deposits BEFORE this call; the server re-reads on-chain state to
+ * verify the deposit is real, matches the supplied token + amount, and was made
+ * by the creator. Only then is the tournament row written, with the same UUID
+ * used for both the DB id and the bytes32 escrow key (keccak256(uuid)).
+ */
+export interface CustomTokenEscrowFunding {
+  /** Client-generated UUID v4. Used as `tournaments.id` AND keccak'd to produce the on-chain bytes32 key. */
+  tournamentId: string;
+  /** Tx hash of the depositPrizePool call. Stored for auditability. */
+  txHash: string;
+  /** ERC-20 contract address that funded the pool. */
+  tokenAddress: string;
+  /** Wei (smallest unit) of the deposit. */
+  amount: bigint;
+  /** Token decimals (1–18). Used for display only; server trusts on-chain decimals for math. */
+  decimals: number;
+}
 
 export interface CreatePokerTournamentParams {
   creatorAddress: string;
@@ -110,8 +143,11 @@ export interface CreatePokerTournamentParams {
   /**
    * When buy-in is 0: debit the creator's `players.balance` (default).
    * `platform_promo`: same debit/refund wallet, but only allowed if the creator is in ADMIN_WALLETS (comma-separated `ADMIN_WALLETS` / `NEXT_PUBLIC_ADMIN_WALLETS`).
+   * `custom_token`: prize pool is held in the on-chain escrow contract; `customTokenEscrow` must be supplied and is verified before the row is written.
    */
   guaranteedPrizePoolSource?: GuaranteedPrizePoolSource;
+  /** Required when `guaranteedPrizePoolSource === 'custom_token'`. */
+  customTokenEscrow?: CustomTokenEscrowFunding;
   prizeDistributionType: string;
   /** Required when prizeDistributionType is `custom` (one integer % per rank, length = maxPlayers, sum 100). */
   prizePercentages?: number[];
@@ -322,15 +358,19 @@ export class PokerTournamentService {
     const buyIn = params.buyInAmount;
     if (buyIn < 0n) throw new Error('buyInAmount cannot be negative');
     const guaranteed = params.guaranteedPrizePool ?? 0n;
-    if (buyIn === 0n) {
+    const poolSource: GuaranteedPrizePoolSource = params.guaranteedPrizePoolSource ?? 'creator';
+
+    // Chip-denominated prize pool is only required for chip/promo freerolls.
+    // For custom_token freerolls the prize lives on-chain in the escrow contract,
+    // so off-chain `guaranteedPrizePool` (chips) is irrelevant.
+    if (buyIn === 0n && poolSource !== 'custom_token') {
       if (guaranteed <= 0n) {
         throw new Error('guaranteedPrizePool is required and must be > 0 for freeroll (zero buy-in) poker tournaments');
       }
-    } else if (guaranteed > 0n) {
+    } else if (buyIn > 0n && guaranteed > 0n) {
       throw new Error('guaranteedPrizePool is only allowed when buy-in is 0');
     }
 
-    const poolSource: GuaranteedPrizePoolSource = params.guaranteedPrizePoolSource ?? 'creator';
     if (buyIn > 0n && poolSource !== 'creator') {
       throw new Error('guaranteedPrizePoolSource is only valid for zero buy-in tournaments');
     }
@@ -338,6 +378,74 @@ export class PokerTournamentService {
       if (!isAdminWallet(normalizedCreator)) {
         throw new Error('Platform-funded freerolls require an admin wallet');
       }
+    }
+
+    // Custom-token escrow path: verify on-chain deposit before we touch the DB.
+    let escrowVerified: {
+      tournamentId: string;
+      tokenAddress: string;
+      decimals: number;
+      txHash: string;
+      bytes32Id: string;
+    } | null = null;
+
+    if (poolSource === 'custom_token') {
+      if (buyIn !== 0n) {
+        throw new Error('custom_token prize source is only valid for freeroll (zero buy-in) tournaments');
+      }
+      const e = params.customTokenEscrow;
+      if (!e) throw new Error('customTokenEscrow is required when guaranteedPrizePoolSource is custom_token');
+      if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(e.tournamentId)) {
+        throw new Error('customTokenEscrow.tournamentId must be a UUID');
+      }
+      if (!/^0x[a-fA-F0-9]{40}$/.test(e.tokenAddress)) {
+        throw new Error('customTokenEscrow.tokenAddress must be a 0x-prefixed 20-byte address');
+      }
+      if (!/^0x[a-fA-F0-9]{64}$/.test(e.txHash)) {
+        throw new Error('customTokenEscrow.txHash must be a 0x-prefixed 32-byte tx hash');
+      }
+      if (e.amount <= 0n) {
+        throw new Error('customTokenEscrow.amount must be positive');
+      }
+      const dec = Math.floor(Number(e.decimals));
+      if (!Number.isFinite(dec) || dec < 1 || dec > 18) {
+        throw new Error('customTokenEscrow.decimals must be an integer between 1 and 18');
+      }
+
+      // Re-read the escrow contract; trust on-chain state, not the client's claims.
+      const pool = await getEscrowPoolStatus(e.tournamentId);
+      if (!pool) {
+        throw new Error('Could not verify on-chain escrow deposit (RPC error or no deposit found)');
+      }
+      if (pool.cancelled) {
+        throw new Error('Escrow deposit has already been cancelled');
+      }
+      if (pool.active === false) {
+        throw new Error('Escrow deposit is not active');
+      }
+      if (pool.token.toLowerCase() !== e.tokenAddress.toLowerCase()) {
+        throw new Error(`Escrow token mismatch (on-chain: ${pool.token}, claimed: ${e.tokenAddress})`);
+      }
+      if (pool.depositor && pool.depositor.toLowerCase() !== normalizedCreator) {
+        throw new Error('Escrow depositor must match the tournament creator');
+      }
+      if (pool.totalDeposited < e.amount) {
+        throw new Error(`Escrow underfunded (on-chain: ${pool.totalDeposited.toString()}, claimed: ${e.amount.toString()})`);
+      }
+      if (pool.amountPaidOut > 0n) {
+        throw new Error('Escrow has already paid out — cannot reuse for new tournament');
+      }
+
+      // tournamentIdToBytes32(uuid) is what the client used on-chain. We re-derive
+      // server-side and store it so cancel/payout can rebuild the same key without
+      // redoing the keccak.
+      escrowVerified = {
+        tournamentId: e.tournamentId,
+        tokenAddress: e.tokenAddress.toLowerCase(),
+        decimals: dec,
+        txHash: e.txHash.toLowerCase(),
+        bytes32Id: tournamentIdToBytes32(e.tournamentId),
+      };
     }
 
     let pinCode: string | null = null;
@@ -357,12 +465,24 @@ export class PokerTournamentService {
       params.prizeDistributionType === 'custom'
         ? normalizePokerTournamentPrizePercents(config.maxPlayers, params.prizePercentages)
         : getPrizePercentagesForType(params.prizeDistributionType);
-    const initialPrizePool = buyIn === 0n ? guaranteed.toString() : '0';
+    // Off-chain freerolls store the chip pool. Custom-token freerolls store the on-chain
+    // wei amount in `prize_pool` so `calculate_tournament_prizes` and `distributePrizes`
+    // (in tournament.service.ts) compute and pay out in the token's wei units —
+    // same pattern blackjack uses.
+    let initialPrizePool: string;
+    if (poolSource === 'custom_token' && params.customTokenEscrow) {
+      initialPrizePool = params.customTokenEscrow.amount.toString();
+    } else if (buyIn === 0n) {
+      initialPrizePool = guaranteed.toString();
+    } else {
+      initialPrizePool = '0';
+    }
 
     let guaranteedPrizeFunderAddress: string | null = null;
     let debitAddress: string | null = null;
 
-    if (buyIn === 0n) {
+    // Custom-token escrow path debits nothing off-chain — the prize is held in the contract.
+    if (buyIn === 0n && poolSource !== 'custom_token') {
       debitAddress = normalizedCreator;
       guaranteedPrizeFunderAddress = null;
     }
@@ -373,17 +493,21 @@ export class PokerTournamentService {
 
       const result = await client.query(
         `INSERT INTO tournaments (
+        id,
         name, creator_address, buy_in_amount, starting_chips, max_hands, min_players,
         max_players, rebuy_config, table_theme, is_private, pin_code,
         prize_distribution_type, prize_percentages, prize_pool, guaranteed_prize_funder_address,
         creator_fee_percent, platform_fee_percent, status,
-        game_type, poker_config, scheduled_start_at
+        game_type, poker_config, scheduled_start_at,
+        prize_token_address, prize_token_decimals, escrow_tx_hash, escrow_tournament_id_bytes32
       ) VALUES (
+        COALESCE($17::UUID, gen_random_uuid()),
         $1, $2, $3::NUMERIC, $4, 999, $5,
         $6, $7::JSONB, $8::JSONB, $9, $10,
         $11, $12::JSONB, $13::NUMERIC, $14,
         2, 3, 'registration',
-        'poker', $15::JSONB, $16
+        'poker', $15::JSONB, $16,
+        $18, $19, $20, $21
       ) RETURNING id`,
         [
           params.name.trim(),
@@ -402,6 +526,11 @@ export class PokerTournamentService {
           guaranteedPrizeFunderAddress,
           JSON.stringify(configForDb),
           scheduled.toISOString(),
+          escrowVerified?.tournamentId ?? null,
+          escrowVerified?.tokenAddress ?? null,
+          escrowVerified?.decimals ?? null,
+          escrowVerified?.txHash ?? null,
+          escrowVerified?.bytes32Id ?? null,
         ]
       );
 
@@ -635,6 +764,7 @@ export class PokerTournamentService {
 
       if (registered < config.minPlayers) {
         const buyIn = this.parseBigInt(tournament.buy_in_amount);
+        const isCustomToken = !!tournament.prize_token_address;
         const entries = await client.query(
           `SELECT id, player_address FROM tournament_entries
            WHERE tournament_id = $1 AND status = 'playing'`,
@@ -655,7 +785,8 @@ export class PokerTournamentService {
             [entry.id]
           );
         }
-        if (buyIn === 0n) {
+        // Chip-pool refund — skipped for custom_token (on-chain reclaim handled below).
+        if (buyIn === 0n && !isCustomToken) {
           const poolRefund = this.parseBigInt(tournament.prize_pool);
           const refundTo = this.guaranteedPrizePoolRefundRecipient(tournament);
           if (poolRefund > 0n && refundTo) {
@@ -668,15 +799,37 @@ export class PokerTournamentService {
             );
           }
         }
-        await client.query(
-          `UPDATE tournaments SET status = 'cancelled', ended_at = NOW(), prize_pool = 0 WHERE id = $1`,
-          [tournamentId]
-        );
+        if (isCustomToken) {
+          await client.query(
+            `UPDATE tournaments SET status = 'cancelled', ended_at = NOW() WHERE id = $1`,
+            [tournamentId]
+          );
+        } else {
+          await client.query(
+            `UPDATE tournaments SET status = 'cancelled', ended_at = NOW(), prize_pool = 0 WHERE id = $1`,
+            [tournamentId]
+          );
+        }
         await client.query('COMMIT');
+        // On-chain cancel post-commit — same reasoning as cancelPokerTournament.
+        if (isCustomToken) {
+          try {
+            const result = await cancelTournamentInEscrow(tournamentId);
+            if (!result.success) {
+              logger.error('Custom-token freeroll auto-cancel: on-chain cancel failed; admin must retry', {
+                tournamentId,
+                error: result.error,
+              });
+            }
+          } catch (err) {
+            logger.error('Custom-token freeroll auto-cancel: on-chain cancel threw', { tournamentId, err });
+          }
+        }
         logger.info('Scheduled poker tournament cancelled (insufficient players)', {
           tournamentId,
           registered,
           minPlayers: config.minPlayers,
+          isCustomToken,
         });
         this.broadcast(`poker_tournament:${tournamentId}`, 'poker_tournament_cancelled', {
           tournamentId,
@@ -1345,7 +1498,8 @@ export class PokerTournamentService {
     const normalized = this.normalizeAddress(callerAddress);
 
     const tRow = await this.pool.query(
-      `SELECT creator_address, status, buy_in_amount, prize_pool, guaranteed_prize_funder_address
+      `SELECT creator_address, status, buy_in_amount, prize_pool, guaranteed_prize_funder_address,
+              prize_token_address
        FROM tournaments WHERE id = $1 AND game_type = 'poker'`,
       [tournamentId]
     );
@@ -1355,6 +1509,7 @@ export class PokerTournamentService {
     if (t.creator_address?.toLowerCase() !== normalized) throw new Error('Only the creator can cancel this tournament');
 
     const buyIn = this.parseBigInt(t.buy_in_amount);
+    const isCustomToken = !!t.prize_token_address;
 
     const entries = await this.pool.query(
       `SELECT id, player_address FROM tournament_entries
@@ -1366,6 +1521,7 @@ export class PokerTournamentService {
     try {
       await client.query('BEGIN');
       for (const entry of entries.rows) {
+        // Buy-in path is chip-only today; custom-token freerolls have buyIn = 0 so no chip refund needed.
         if (buyIn > 0n) {
           await applyPokerChipDelta(
             client,
@@ -1381,7 +1537,10 @@ export class PokerTournamentService {
         );
       }
 
-      if (buyIn === 0n) {
+      // Chip-pool refund (creator/promo wallet). Skipped for custom_token: those funds live
+      // in the escrow contract, not in any chip wallet — we mark them cancelled on-chain
+      // below so the creator can `creatorReclaim` from their wallet.
+      if (buyIn === 0n && !isCustomToken) {
         const prizePoolRefund = this.parseBigInt(t.prize_pool);
         const refundTo = this.guaranteedPrizePoolRefundRecipient(t);
         if (prizePoolRefund > 0n && refundTo) {
@@ -1395,10 +1554,18 @@ export class PokerTournamentService {
         }
       }
 
-      await client.query(
-        `UPDATE tournaments SET status = 'cancelled', ended_at = NOW(), prize_pool = 0 WHERE id = $1`,
-        [tournamentId]
-      );
+      // For custom-token freerolls keep prize_pool intact for audit; the on-chain pool is the source of truth.
+      if (isCustomToken) {
+        await client.query(
+          `UPDATE tournaments SET status = 'cancelled', ended_at = NOW() WHERE id = $1`,
+          [tournamentId]
+        );
+      } else {
+        await client.query(
+          `UPDATE tournaments SET status = 'cancelled', ended_at = NOW(), prize_pool = 0 WHERE id = $1`,
+          [tournamentId]
+        );
+      }
       await client.query('COMMIT');
     } catch (e) {
       await client.query('ROLLBACK');
@@ -1407,7 +1574,30 @@ export class PokerTournamentService {
       client.release();
     }
 
-    logger.info('Poker tournament cancelled', { tournamentId, caller: normalized, refunded: entries.rows.length });
+    // On-chain cancel happens after the DB transaction so a failed RPC call doesn't roll back the cancel.
+    // Worst case: DB shows cancelled but the escrow remains active — admins can retry, and the creator
+    // can still reclaim once cancelled. We tolerate this asymmetry rather than risking a phantom-active
+    // tournament if the DB commit fails after a successful on-chain cancel.
+    if (isCustomToken) {
+      try {
+        const result = await cancelTournamentInEscrow(tournamentId);
+        if (!result.success) {
+          logger.error('Custom-token freeroll: on-chain cancel failed; creator must retry manually', {
+            tournamentId,
+            error: result.error,
+          });
+        }
+      } catch (err) {
+        logger.error('Custom-token freeroll: on-chain cancel threw', { tournamentId, err });
+      }
+    }
+
+    logger.info('Poker tournament cancelled', {
+      tournamentId,
+      caller: normalized,
+      refunded: entries.rows.length,
+      isCustomToken,
+    });
 
     this.broadcast(`poker_tournament:${tournamentId}`, 'poker_tournament_cancelled', { tournamentId });
   }

@@ -665,6 +665,11 @@ export default function AdminMerkleDropsTab() {
   const [showHolderEpochBreakdown, setShowHolderEpochBreakdown] = useState(false);
   const [showLpEpochBreakdown, setShowLpEpochBreakdown] = useState(false);
 
+  const adminHeaders = useCallback(
+    () => address ? { 'x-admin-wallet': address, 'Content-Type': 'application/json' } : {},
+    [address],
+  );
+
   const fetchHealth = useCallback(async () => {
     if (!address) return;
     setHealthLoading(true);
@@ -681,11 +686,6 @@ export default function AdminMerkleDropsTab() {
 
   // ── Snapshot holder viewer (per-epoch, from DB) ─────────────────────────────
   const [snapshotData, setSnapshotData] = useState<Record<number, { rows: SnapshotRow[]; total: number; page: number; loading: boolean }>>({});
-
-  const adminHeaders = useCallback(
-    () => address ? { 'x-admin-wallet': address, 'Content-Type': 'application/json' } : {},
-    [address],
-  );
 
   const fetchSnapshotPage = useCallback(async (epochId: number, page = 1) => {
     setSnapshotData((prev) => ({
