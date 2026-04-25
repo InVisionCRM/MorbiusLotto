@@ -19,7 +19,7 @@ export function FloatingTableLogo({
   src,
   opacity,
   maxSizeFraction = 0.22,
-  speed = 90,
+  speed = 38,
 }: Props) {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const imgRef = useRef<HTMLImageElement | null>(null);
@@ -58,7 +58,16 @@ export function FloatingTableLogo({
         hh: lh / 2,
       };
       if (!initializedRef.current && w > 0 && h > 0 && lw > 0 && lh > 0) {
-        posRef.current = { x: feltRef.current.cx, y: feltRef.current.cy };
+        const { cx, cy, r } = feltRef.current;
+        const halfDiag = Math.hypot(lw, lh) / 2;
+        const spawnR = Math.max(0, r - halfDiag - 4);
+        const spawnAngle = Math.random() * Math.PI * 2;
+        // sqrt for uniform area distribution, not biased toward center
+        const spawnDist = Math.sqrt(Math.random()) * spawnR;
+        posRef.current = {
+          x: cx + Math.cos(spawnAngle) * spawnDist,
+          y: cy + Math.sin(spawnAngle) * spawnDist,
+        };
         const angle = Math.random() * Math.PI * 2;
         velRef.current = {
           x: Math.cos(angle) * speed,
@@ -108,8 +117,20 @@ export function FloatingTableLogo({
         if (dist > maxR) {
           const dot = vx * nx + vy * ny;
           if (dot > 0) {
-            vx -= 2 * dot * nx;
-            vy -= 2 * dot * ny;
+            // Random outgoing angle 15°–37° from the inward surface normal,
+            // sign flipped randomly so paths don't always curl the same way.
+            const speedNow = Math.hypot(vx, vy);
+            const inwardX = -nx;
+            const inwardY = -ny;
+            const minDeg = 15;
+            const maxDeg = 37;
+            const deg = minDeg + Math.random() * (maxDeg - minDeg);
+            const sign = Math.random() < 0.5 ? -1 : 1;
+            const rad = (deg * Math.PI) / 180 * sign;
+            const cos = Math.cos(rad);
+            const sin = Math.sin(rad);
+            vx = (inwardX * cos - inwardY * sin) * speedNow;
+            vy = (inwardX * sin + inwardY * cos) * speedNow;
           }
           x = cx + nx * maxR;
           y = cy + ny * maxR;
