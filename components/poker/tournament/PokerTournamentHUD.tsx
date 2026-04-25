@@ -4,6 +4,7 @@ import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import type { PokerTournamentState, PokerTournamentPlayer } from '@/hooks/use-poker-tournament';
 import { formatChips as formatChipsLib, toChipInt } from '@/lib/format-poker-chips';
+import { formatUnits } from 'viem';
 import { useSidebar } from '@/components/ui/sidebar';
 
 interface Props {
@@ -41,6 +42,43 @@ function formatBlindShort(n: number): string {
   if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1)}M`;
   if (n >= 1000) return `${Math.floor(n / 1000)}K`;
   return String(n);
+}
+
+/**
+ * Human-readable amount in the prize unit. Routes:
+ *  - chip-int → "12,345"
+ *  - token-wei → "1.2345 0xABcd…1234"
+ *
+ * Pass `bareAmount=true` to get just the numeric portion (no token tail) — used for
+ * per-player prize-share rows where the column header already implies the unit.
+ */
+function formatPrizeAmount(
+  amount: bigint | string,
+  prizeTokenAddress: string | null | undefined,
+  prizeTokenDecimals: number | null | undefined,
+  prizeTokenSymbol: string | null | undefined,
+  opts: { bareAmount?: boolean } = {},
+): string {
+  if (!prizeTokenAddress) {
+    try {
+      return formatChipsLib(typeof amount === 'bigint' ? amount.toString() : amount);
+    } catch { return '—'; }
+  }
+  const dec = prizeTokenDecimals ?? 18;
+  let bn: bigint;
+  try {
+    bn = typeof amount === 'bigint' ? amount : BigInt(amount || '0');
+  } catch { return '—'; }
+  let human: string;
+  try {
+    human = formatUnits(bn, dec);
+  } catch { return '—'; }
+  const trimmed = human.includes('.') ? human.replace(/\.?0+$/, '') : human;
+  if (opts.bareAmount) return trimmed;
+  const ticker = prizeTokenSymbol?.trim()
+    ? prizeTokenSymbol.trim()
+    : `${prizeTokenAddress.slice(0, 6)}…${prizeTokenAddress.slice(-4)}`;
+  return `${trimmed} ${ticker}`;
 }
 
 function isZeroBuyInChips(wei: string): boolean {
@@ -279,13 +317,7 @@ export function PokerTournamentHUD({ state, myAddress }: Props) {
   const rankLongStr = myRank != null ? `#${myRank} / ${activePlayers.length}` : '—';
   const playersLeftShort = `${activePlayers.length}`;
   const playersLeftFull = `${activePlayers.length}`;
-  const prizeLabel = (() => {
-    try {
-      return formatChipsLib(state.prizePool);
-    } catch {
-      return '—';
-    }
-  })();
+  const prizeLabel = formatPrizeAmount(state.prizePool, state.prizeTokenAddress, state.prizeTokenDecimals, state.prizeTokenSymbol);
 
   // ── Burst overlay ────────────────────────────────────────────────────────
   const burstOverlay = (
@@ -603,7 +635,7 @@ export function PokerTournamentHUD({ state, myAddress }: Props) {
                           className="font-jost-normal tabular-nums text-[8px] mt-0.5"
                           style={{ color: 'rgba(255,255,255,0.42)' }}
                         >
-                          {formatChipsLib(prizeShareBn)}
+                          {formatPrizeAmount(prizeShareBn, state.prizeTokenAddress, state.prizeTokenDecimals, state.prizeTokenSymbol, { bareAmount: true })}
                         </span>
                       ) : null}
                     </>

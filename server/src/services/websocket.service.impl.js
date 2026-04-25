@@ -1529,6 +1529,29 @@ class WebSocketService {
             this.sendError(ws, error.message || 'Failed to list tournaments', message.requestId);
         }
     }
+    /**
+     * Lists cancelled custom-token poker tournaments where the caller is the creator and
+     * may still need to call `creatorReclaim` on the escrow. Cheap DB read; the client
+     * confirms reclaimability via on-chain `getPool` before showing a button.
+     */
+    async handlePokerTournamentListReclaimable(ws, message) {
+        try {
+            if (!this.pokerTournamentService || !ws.playerAddress) {
+                return this.sendError(ws, 'Wallet required', message.requestId);
+            }
+            const tournaments = await this.pokerTournamentService
+                .listReclaimableCustomTokenPokerTournaments(ws.playerAddress);
+            this.sendMessage(ws, {
+                type: 'poker_tournament_list_reclaimable',
+                payload: { tournaments },
+                requestId: message.requestId,
+            });
+        }
+        catch (error) {
+            logger_1.logger.error('Error listing reclaimable poker tournaments:', error);
+            this.sendError(ws, error.message || 'Failed to list reclaimable tournaments', message.requestId);
+        }
+    }
     async handlePokerTournamentCreate(ws, message) {
         try {
             if (!this.pokerTournamentService || !ws.playerAddress) {
@@ -1577,6 +1600,8 @@ class WebSocketService {
                         tokenAddress: String(e.tokenAddress ?? ''),
                         amount: BigInt(String(e.amount ?? '0')),
                         decimals: Number(e.decimals ?? 18),
+                        // Symbol is optional and re-validated server-side; pass-through only.
+                        symbol: typeof e.symbol === 'string' ? e.symbol : undefined,
                     };
                 }
                 catch (_err) {

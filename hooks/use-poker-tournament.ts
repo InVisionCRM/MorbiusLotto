@@ -53,7 +53,11 @@ export interface PokerTournamentState {
   bigBlind: number;
   handNumber: number;
   players: PokerTournamentPlayer[];
+  /** Chip-int for chips/promo; token-wei for custom-token (pair with `prizeTokenDecimals`). */
   prizePool: string;
+  prizeTokenAddress?: string | null;
+  prizeTokenDecimals?: number | null;
+  prizeTokenSymbol?: string | null;
   buyInAmount: string;
   prizeDistributionType: string;
   /** Present when server returns full snapshot (`getTournamentState`). */
@@ -73,7 +77,17 @@ export interface PokerTournamentSummary {
   registeredCount: number;
   maxPlayers: number;
   minPlayers: number;
+  /**
+   * Chip-denominated pool for chips/promo freerolls; token-wei for custom-token
+   * freerolls (pair with `prizeTokenDecimals` for display).
+   */
   prizePool: string;
+  /** ERC-20 address when prize is a custom PRC-20; null = chips. */
+  prizeTokenAddress?: string | null;
+  /** 1–18 when `prizeTokenAddress` is set. */
+  prizeTokenDecimals?: number | null;
+  /** Display ticker (e.g. "HEX"); falls back to address tail in UI when null. */
+  prizeTokenSymbol?: string | null;
   tableId: string | null;
   createdAt: string;
   creatorAddress: string | null;
@@ -104,6 +118,8 @@ export interface CustomTokenEscrowFunding {
   amount: string;
   /** 1–18. */
   decimals: number;
+  /** Display ticker (e.g. "HEX"). Server caches it for the lobby/HUD. */
+  symbol?: string;
 }
 
 export interface CreatePokerTournamentParams {
@@ -160,6 +176,20 @@ export interface UsePokerTournamentOptions {
   onTournamentCompleted?: (payload: PokerTournamentCompletedPayload) => void;
 }
 
+/** Cancelled custom-token poker tournament rows the connected wallet may still reclaim. */
+export interface ReclaimableCustomTokenTournament {
+  tournamentId: string;
+  name: string;
+  cancelledAt: string | null;
+  prizeTokenAddress: string;
+  prizeTokenDecimals: number;
+  prizeTokenSymbol: string | null;
+  /** Token-wei. Pair with `prizeTokenDecimals` for display. */
+  prizePool: string;
+  /** Pre-derived bytes32 escrow key (`keccak256(uuid)`). Use directly with `creatorReclaim(bytes32)`. */
+  escrowTournamentIdBytes32: string | null;
+}
+
 export interface UsePokerTournamentReturn {
   openTournaments: PokerTournamentSummary[];
   isLoadingTournaments: boolean;
@@ -173,6 +203,11 @@ export interface UsePokerTournamentReturn {
   joinTournament: (tournamentId: string, pinCode?: string) => Promise<{ autoStarted: boolean; tableId: string | null } | null>;
   cancelTournament: (tournamentId: string) => Promise<boolean>;
   fetchTournamentState: (tournamentId: string) => Promise<PokerTournamentState | null>;
+  /**
+   * One-shot fetch of cancelled custom-token freerolls created by the connected wallet
+   * that may still have funds parked in the escrow. Returns [] when wallet is missing.
+   */
+  fetchReclaimableTournaments: () => Promise<ReclaimableCustomTokenTournament[]>;
 }
 
 // ---------------------------------------------------------------------------
@@ -379,6 +414,18 @@ export function usePokerTournament({
     }
   }, [wsClient]);
 
+  const fetchReclaimableTournaments = useCallback(async (): Promise<ReclaimableCustomTokenTournament[]> => {
+    if (!wsClient) return [];
+    try {
+      const response = await wsClient.sendRequest('poker_tournament_list_reclaimable', {});
+      const list = response?.tournaments;
+      return Array.isArray(list) ? (list as ReclaimableCustomTokenTournament[]) : [];
+    } catch {
+      // Reclaim list is a best-effort sidecar; never surface errors to the lobby.
+      return [];
+    }
+  }, [wsClient]);
+
   // Load on mount
   useEffect(() => {
     if (wsClient?.isConnected()) {
@@ -438,6 +485,7 @@ export function usePokerTournament({
     joinTournament,
     cancelTournament,
     fetchTournamentState,
+    fetchReclaimableTournaments,
   };
 }
 

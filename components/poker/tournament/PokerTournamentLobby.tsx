@@ -9,8 +9,14 @@ import {
   type PokerTournamentSummary,
   type PokerBlindIncreaseMode,
   type CreatePokerTournamentParams,
+  type ReclaimableCustomTokenTournament,
 } from '@/hooks/use-poker-tournament';
 import { formatChips } from '@/lib/format-poker-chips';
+import { formatUnits } from 'viem';
+import { useWriteContract, usePublicClient } from 'wagmi';
+import { TOURNAMENT_PRIZE_ESCROW_ADDRESS } from '@/lib/contracts';
+import { tournamentPrizeEscrowV2Abi } from '@/abi/tournament-prize-escrow-v2';
+import { tournamentIdToBytes32 } from '@/lib/tournament-id-bytes32';
 import type { BlackjackWebSocketClient } from '@/lib/websocket-client';
 import { isAdminWallet } from '@/lib/admin';
 import { PokerTournamentCreator } from './PokerTournamentCreator';
@@ -30,6 +36,31 @@ function tournamentFinishOrdinal(rank: number): string {
   if (j === 2 && k !== 12) return `${rank}nd`;
   if (j === 3 && k !== 13) return `${rank}rd`;
   return `${rank}th`;
+}
+
+/**
+ * Render the prize pool with the right unit:
+ *  - Chip / promo freerolls → "5,000 chips"
+ *  - Custom-token freerolls → "1,234.56 HEX" (uses prize_token_decimals from server)
+ *
+ * Symbol is unknown server-side; we show the truncated address as a fallback unless the
+ * caller passes a resolved symbol. The dedicated `PokerTokenSymbol` lookup can be wired
+ * in later — for now the address tail is enough to identify the token.
+ */
+function formatPokerPrizePool(t: PokerTournamentSummary): string {
+  if (!t.prizeTokenAddress) return `${formatChips(t.prizePool)} chips`;
+  const decimals = t.prizeTokenDecimals ?? 18;
+  let human: string;
+  try {
+    human = formatUnits(BigInt(t.prizePool || '0'), decimals);
+  } catch {
+    human = '0';
+  }
+  const trimmed = human.includes('.') ? human.replace(/\.?0+$/, '') : human;
+  const ticker = t.prizeTokenSymbol?.trim()
+    ? t.prizeTokenSymbol.trim()
+    : `${t.prizeTokenAddress.slice(0, 6)}…${t.prizeTokenAddress.slice(-4)}`;
+  return `${trimmed} ${ticker}`;
 }
 
 function isZeroBuyInChips(amount: string): boolean {
@@ -275,6 +306,7 @@ export function PokerTournamentLobby({ wsClient, myAddress, onGoToTable }: Poker
     createTournament,
     joinTournament,
     cancelTournament,
+    fetchReclaimableTournaments,
     myTableId,
     myTournamentId,
   } = tournamentHook;
@@ -413,7 +445,7 @@ export function PokerTournamentLobby({ wsClient, myAddress, onGoToTable }: Poker
   const renderJoinConfirm = (t: PokerTournamentSummary, pin?: string) => {
     const isPrivate = t.isPrivate === true;
     const isFreeroll = isZeroBuyInChips(t.buyInAmount);
-    const prizeDisplay = `${formatChips(t.prizePool)} chips`;
+    const prizeDisplay = formatPokerPrizePool(t);
     const buyInDisplay = isFreeroll ? 'Free' : `${formatChips(t.buyInAmount)} chips`;
     const prizeDistLabel = t.prizeDistributionType?.replace(/_/g, ' ') ?? '—';
     const isScheduled = !!t.scheduledStartAt && new Date(t.scheduledStartAt) > new Date();
@@ -481,6 +513,11 @@ export function PokerTournamentLobby({ wsClient, myAddress, onGoToTable }: Poker
           {joinError}
         </div>
       )}
+
+      <ReclaimableEscrowBanner
+        myAddress={myAddress}
+        fetchReclaimable={fetchReclaimableTournaments}
+      />
 
       {joinSuccess && (
         <div className="rounded-lg bg-green-500/10 border border-green-500/30 text-green-400 text-sm px-3 py-2 flex items-start justify-between gap-2">
@@ -601,7 +638,7 @@ export function PokerTournamentLobby({ wsClient, myAddress, onGoToTable }: Poker
                         {t.registeredCount}/{t.maxPlayers}
                       </td>
                       <td className={`${TD} tabular-nums font-medium text-slate-100 whitespace-nowrap`}>
-                        {formatChips(t.prizePool)}
+                        {formatPokerPrizePool(t)}
                       </td>
                       <td className={TD}>
                         <div className="flex flex-col items-start gap-1.5">
@@ -661,7 +698,13 @@ export function PokerTournamentLobby({ wsClient, myAddress, onGoToTable }: Poker
                               Table
                             </button>
                           )}
-                          {t.isRegistered && !isActive && isCreator && t.status === 'registration' && (
+                          {/*
+                           * Creator can cancel their own tournament during registration without
+                           * being registered as a player — required for custom-token freerolls
+                           * where the creator never joins as a player (their stake is on-chain,
+                           * not chip-denominated).
+                           */}
+                          {!isActive && isCreator && t.status === 'registration' && (
                             <button
                               type="button"
                               onClick={() => handleCancel(t.tournamentId)}
@@ -802,6 +845,158 @@ export function PokerTournamentLobby({ wsClient, myAddress, onGoToTable }: Poker
       )}
 
       {joinFlow?.phase === 'confirm' && renderJoinConfirm(joinFlow.t, joinFlow.pin)}
+    </div>
+  );
+}
+
+/**
+ * Surfaces cancelled custom-token poker freerolls created by the connected wallet
+ * that still have funds parked in the escrow contract. One row per tournament with
+ * a "Reclaim" button that calls `creatorReclaim(bytes32)` on the escrow.
+ *
+ * Server returns the candidate set (cheap DB read); client confirms reclaimability
+ * on-chain (`getPool`) before showing each row to avoid surfacing already-reclaimed
+ * tournaments. Returns null when nothing to reclaim, so the lobby has no extra noise.
+ */
+function ReclaimableEscrowBanner({
+  myAddress,
+  fetchReclaimable,
+}: {
+  myAddress: string;
+  fetchReclaimable: () => Promise<ReclaimableCustomTokenTournament[]>;
+}) {
+  const [candidates, setCandidates] = useState<ReclaimableCustomTokenTournament[]>([]);
+  /** On-chain confirmed reclaimable subset, keyed by tournamentId. */
+  const [reclaimable, setReclaimable] = useState<Set<string>>(new Set());
+  const [busyId, setBusyId] = useState<string | null>(null);
+  const [errorById, setErrorById] = useState<Record<string, string>>({});
+  const { writeContractAsync } = useWriteContract();
+  const publicClient = usePublicClient();
+
+  // Fetch candidates whenever the connected wallet changes.
+  useEffect(() => {
+    if (!myAddress) {
+      setCandidates([]);
+      setReclaimable(new Set());
+      return;
+    }
+    let cancelled = false;
+    void (async () => {
+      const list = await fetchReclaimable();
+      if (cancelled) return;
+      setCandidates(list);
+    })();
+    return () => { cancelled = true; };
+  }, [myAddress, fetchReclaimable]);
+
+  // For each candidate, confirm on-chain reclaimability so we don't show stale rows.
+  useEffect(() => {
+    if (candidates.length === 0 || !publicClient) {
+      setReclaimable(new Set());
+      return;
+    }
+    let cancelled = false;
+    void (async () => {
+      const ok = new Set<string>();
+      await Promise.all(candidates.map(async (c) => {
+        try {
+          const idBytes32 = c.escrowTournamentIdBytes32 ?? tournamentIdToBytes32(c.tournamentId);
+          const result = await publicClient.readContract({
+            address: TOURNAMENT_PRIZE_ESCROW_ADDRESS,
+            abi: tournamentPrizeEscrowV2Abi,
+            functionName: 'getPool',
+            args: [idBytes32 as `0x${string}`],
+          });
+          // V2 tuple: [token, depositor, totalDeposited, amountPaidOut, depositedAt, cancelled, active]
+          const [, , totalDeposited, amountPaidOut, , isCancelled] = result as readonly [
+            `0x${string}`, `0x${string}`, bigint, bigint, bigint, boolean, boolean,
+          ];
+          if (isCancelled && totalDeposited > amountPaidOut) ok.add(c.tournamentId);
+        } catch {
+          // RPC failure: skip silently. The row stays out of the banner this render.
+        }
+      }));
+      if (!cancelled) setReclaimable(ok);
+    })();
+    return () => { cancelled = true; };
+  }, [candidates, publicClient]);
+
+  const visible = useMemo(
+    () => candidates.filter((c) => reclaimable.has(c.tournamentId)),
+    [candidates, reclaimable],
+  );
+
+  if (visible.length === 0) return null;
+
+  const handleReclaim = async (c: ReclaimableCustomTokenTournament) => {
+    setBusyId(c.tournamentId);
+    setErrorById((prev) => { const next = { ...prev }; delete next[c.tournamentId]; return next; });
+    try {
+      const idBytes32 = c.escrowTournamentIdBytes32 ?? tournamentIdToBytes32(c.tournamentId);
+      const hash = await writeContractAsync({
+        address: TOURNAMENT_PRIZE_ESCROW_ADDRESS,
+        abi: tournamentPrizeEscrowV2Abi,
+        functionName: 'creatorReclaim',
+        args: [idBytes32 as `0x${string}`],
+      });
+      if (publicClient) await publicClient.waitForTransactionReceipt({ hash });
+      // On success drop the row from `reclaimable`; the next mount-fetch can re-confirm.
+      setReclaimable((prev) => {
+        const next = new Set(prev);
+        next.delete(c.tournamentId);
+        return next;
+      });
+    } catch (err) {
+      setErrorById((prev) => ({ ...prev, [c.tournamentId]: (err as Error).message ?? 'Reclaim failed' }));
+    } finally {
+      setBusyId(null);
+    }
+  };
+
+  const formatTokenAmount = (c: ReclaimableCustomTokenTournament) => {
+    let human: string;
+    try { human = formatUnits(BigInt(c.prizePool || '0'), c.prizeTokenDecimals); }
+    catch { human = '0'; }
+    const trimmed = human.includes('.') ? human.replace(/\.?0+$/, '') : human;
+    const ticker = c.prizeTokenSymbol?.trim()
+      ? c.prizeTokenSymbol.trim()
+      : `${c.prizeTokenAddress.slice(0, 6)}…${c.prizeTokenAddress.slice(-4)}`;
+    return `${trimmed} ${ticker}`;
+  };
+
+  return (
+    <div className="rounded-xl border border-amber-500/40 bg-amber-500/5 p-3 space-y-2">
+      <div className="flex items-center justify-between gap-3">
+        <h3 className="text-xs font-semibold tracking-wide uppercase text-amber-200/90">
+          Reclaim deposit ({visible.length})
+        </h3>
+        <span className="text-[11px] text-amber-200/60">
+          Cancelled freerolls you funded — pull your tokens back from escrow.
+        </span>
+      </div>
+      <ul className="space-y-1.5">
+        {visible.map((c) => {
+          const err = errorById[c.tournamentId];
+          const isBusy = busyId === c.tournamentId;
+          return (
+            <li key={c.tournamentId} className="flex items-center gap-3 rounded-lg bg-black/20 px-3 py-2">
+              <div className="min-w-0 flex-1">
+                <div className="text-sm text-white truncate">{c.name || 'Untitled'}</div>
+                <div className="text-[11px] text-amber-200/80 tabular-nums">{formatTokenAmount(c)}</div>
+                {err && <div className="text-[11px] text-red-300 mt-1 break-words">{err}</div>}
+              </div>
+              <button
+                type="button"
+                disabled={isBusy}
+                onClick={() => void handleReclaim(c)}
+                className="shrink-0 rounded-lg bg-amber-500 hover:bg-amber-400 disabled:opacity-50 disabled:pointer-events-none text-black text-xs font-semibold px-3 py-1.5"
+              >
+                {isBusy ? 'Reclaiming…' : 'Reclaim'}
+              </button>
+            </li>
+          );
+        })}
+      </ul>
     </div>
   );
 }

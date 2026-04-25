@@ -67,7 +67,12 @@ export interface PokerTournamentState {
   bigBlind: number;
   handNumber: number;
   players: PokerTournamentPlayer[];
+  /** Chip-int for chips/promo; token-wei for custom-token (pair with `prizeTokenDecimals`). */
   prizePool: string;
+  /** ERC-20 address when prize is a custom PRC-20; null/absent = chips. */
+  prizeTokenAddress?: string | null;
+  prizeTokenDecimals?: number | null;
+  prizeTokenSymbol?: string | null;
   buyInAmount: string;
   prizeDistributionType: string;
   pokerConfig?: PokerTournamentConfig;
@@ -95,6 +100,8 @@ export interface PokerTournamentSummary {
   prizeTokenAddress: string | null;
   /** 1–18 when `prizeTokenAddress` is set; null otherwise. */
   prizeTokenDecimals: number | null;
+  /** Display ticker (e.g. "HEX"); null if missing or chips. */
+  prizeTokenSymbol: string | null;
   tableId: string | null;
   createdAt: string;
   creatorAddress: string | null;
@@ -132,6 +139,8 @@ export interface CustomTokenEscrowFunding {
   amount: bigint;
   /** Token decimals (1–18). Used for display only; server trusts on-chain decimals for math. */
   decimals: number;
+  /** Display ticker (e.g. "HEX"). Optional — server falls back to address tail in lobby/HUD if missing. */
+  symbol?: string;
 }
 
 export interface CreatePokerTournamentParams {
@@ -385,6 +394,7 @@ export class PokerTournamentService {
       tournamentId: string;
       tokenAddress: string;
       decimals: number;
+      symbol: string | null;
       txHash: string;
       bytes32Id: string;
     } | null = null;
@@ -410,6 +420,13 @@ export class PokerTournamentService {
       const dec = Math.floor(Number(e.decimals));
       if (!Number.isFinite(dec) || dec < 1 || dec > 18) {
         throw new Error('customTokenEscrow.decimals must be an integer between 1 and 18');
+      }
+      // Symbol is display-only; sanitize to prevent garbage / injection in lobby cells.
+      let symbolClean: string | null = null;
+      if (typeof e.symbol === 'string') {
+        const s = e.symbol.trim().slice(0, 32);
+        // Tickers in the wild can include digits, dots, dashes; reject control chars and brackets.
+        if (s && /^[A-Za-z0-9._\-+]+$/.test(s)) symbolClean = s;
       }
 
       // Re-read the escrow contract; trust on-chain state, not the client's claims.
@@ -443,6 +460,7 @@ export class PokerTournamentService {
         tournamentId: e.tournamentId,
         tokenAddress: e.tokenAddress.toLowerCase(),
         decimals: dec,
+        symbol: symbolClean,
         txHash: e.txHash.toLowerCase(),
         bytes32Id: tournamentIdToBytes32(e.tournamentId),
       };
@@ -499,7 +517,8 @@ export class PokerTournamentService {
         prize_distribution_type, prize_percentages, prize_pool, guaranteed_prize_funder_address,
         creator_fee_percent, platform_fee_percent, status,
         game_type, poker_config, scheduled_start_at,
-        prize_token_address, prize_token_decimals, escrow_tx_hash, escrow_tournament_id_bytes32
+        prize_token_address, prize_token_decimals, prize_token_symbol,
+        escrow_tx_hash, escrow_tournament_id_bytes32
       ) VALUES (
         COALESCE($17::UUID, gen_random_uuid()),
         $1, $2, $3::NUMERIC, $4, 999, $5,
@@ -507,7 +526,8 @@ export class PokerTournamentService {
         $11, $12::JSONB, $13::NUMERIC, $14,
         2, 3, 'registration',
         'poker', $15::JSONB, $16,
-        $18, $19, $20, $21
+        $18, $19, $20,
+        $21, $22
       ) RETURNING id`,
         [
           params.name.trim(),
@@ -529,6 +549,7 @@ export class PokerTournamentService {
           escrowVerified?.tournamentId ?? null,
           escrowVerified?.tokenAddress ?? null,
           escrowVerified?.decimals ?? null,
+          escrowVerified?.symbol ?? null,
           escrowVerified?.txHash ?? null,
           escrowVerified?.bytes32Id ?? null,
         ]
@@ -1776,6 +1797,9 @@ export class PokerTournamentService {
         maxPlayers:            Number(r.max_players ?? 10),
         minPlayers:            Number(r.min_players ?? 2),
         prizePool:             r.prize_pool?.toString() ?? '0',
+        prizeTokenAddress:     r.prize_token_address ?? null,
+        prizeTokenDecimals:    r.prize_token_decimals != null ? Number(r.prize_token_decimals) : null,
+        prizeTokenSymbol:      r.prize_token_symbol ?? null,
         tableId:               r.table_id ?? null,
         createdAt:             r.created_at?.toISOString() ?? '',
         creatorAddress:        r.creator_address ?? null,
@@ -1788,6 +1812,50 @@ export class PokerTournamentService {
         blindIncreaseMode,
       };
     });
+  }
+
+  /**
+   * Cancelled custom-token poker tournaments where the caller is the creator and
+   * funds may still be reclaimable from the escrow contract.
+   *
+   * Pure DB read — the client decides whether to surface a "Reclaim" button by
+   * doing an on-chain `getPool` to confirm `cancelled === true && totalDeposited > amountPaidOut`.
+   * We do NOT round-trip the chain here: this list could be 0 rows for many viewers
+   * and we don't want to slow the lobby for everyone.
+   */
+  async listReclaimableCustomTokenPokerTournaments(creatorAddress: string): Promise<Array<{
+    tournamentId: string;
+    name: string;
+    cancelledAt: string | null;
+    prizeTokenAddress: string;
+    prizeTokenDecimals: number;
+    prizeTokenSymbol: string | null;
+    prizePool: string;
+    escrowTournamentIdBytes32: string | null;
+  }>> {
+    const normalized = this.normalizeAddress(creatorAddress);
+    const result = await this.pool.query(
+      `SELECT id, name, ended_at, prize_token_address, prize_token_decimals, prize_token_symbol,
+              prize_pool, escrow_tournament_id_bytes32
+       FROM tournaments
+       WHERE game_type = 'poker'
+         AND status = 'cancelled'
+         AND prize_token_address IS NOT NULL
+         AND LOWER(creator_address) = $1
+       ORDER BY ended_at DESC NULLS LAST
+       LIMIT 50`,
+      [normalized],
+    );
+    return result.rows.map((r) => ({
+      tournamentId: r.id as string,
+      name: String(r.name ?? ''),
+      cancelledAt: r.ended_at ? new Date(r.ended_at).toISOString() : null,
+      prizeTokenAddress: String(r.prize_token_address),
+      prizeTokenDecimals: r.prize_token_decimals != null ? Number(r.prize_token_decimals) : 18,
+      prizeTokenSymbol: r.prize_token_symbol ?? null,
+      prizePool: r.prize_pool?.toString() ?? '0',
+      escrowTournamentIdBytes32: r.escrow_tournament_id_bytes32 ?? null,
+    }));
   }
 
   async getTournamentState(tournamentId: string): Promise<PokerTournamentState | null> {
@@ -1861,6 +1929,9 @@ export class PokerTournamentService {
         prizeWon:        (e.prize_won ?? '0').toString(),
       })),
       prizePool:           t.prize_pool?.toString() ?? '0',
+      prizeTokenAddress:   t.prize_token_address ?? null,
+      prizeTokenDecimals:  t.prize_token_decimals != null ? Number(t.prize_token_decimals) : null,
+      prizeTokenSymbol:    t.prize_token_symbol ?? null,
       buyInAmount:         t.buy_in_amount?.toString() ?? '0',
       prizeDistributionType: t.prize_distribution_type ?? 'winner_takes_all',
       /** For client HUD: schedule + meta + blind increase mode. */

@@ -449,6 +449,7 @@ export function PokerTournamentCreator({ creatorAddress, onClose, onCreate }: Po
         tokenAddress: selectedToken.address,
         amount: customTokenAmountWei.toString(),
         decimals: selectedToken.decimals,
+        symbol: selectedToken.symbol,
       },
     });
     if (!built) {
