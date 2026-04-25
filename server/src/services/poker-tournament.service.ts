@@ -450,7 +450,20 @@ export class PokerTournamentService {
         throw new Error(`Escrow underfunded (on-chain: ${pool.totalDeposited.toString()}, claimed: ${e.amount.toString()})`);
       }
       if (pool.amountPaidOut > 0n) {
-        throw new Error('Escrow has already paid out — cannot reuse for new tournament');
+        // Surface enough context to debug a UUID/bytes32 collision in the wild.
+        logger.error('Custom-token freeroll create rejected: bytes32 already has prior payout', {
+          tournamentId: e.tournamentId,
+          bytes32Id: tournamentIdToBytes32(e.tournamentId),
+          totalDeposited: pool.totalDeposited.toString(),
+          amountPaidOut: pool.amountPaidOut.toString(),
+          depositor: pool.depositor,
+          claimedTxHash: e.txHash,
+        });
+        throw new Error(
+          `Escrow already has prior activity for this tournament id (paid out: ${pool.amountPaidOut.toString()}). ` +
+          `If you just deposited, the deposit transaction likely targeted a previously-used bytes32 — ` +
+          `cancel the create flow and try again to generate a fresh id.`,
+        );
       }
 
       // tournamentIdToBytes32(uuid) is what the client used on-chain. We re-derive
