@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from 'react'
 
-const HERO_VIDEO_SRC = '/morbius/Morbiusio_Building_Entrance_Pan.mp4'
+const HERO_VIDEO_SRC = '/morbius/Morbiusio_Building_Entrance_Pan_scrub.mp4'
 
 const SCRUB_FADE_START = 0.75
 

@@ -131,7 +131,17 @@ function TierPickerScreen({
   onOpenThemeModal: () => void;
 }) {
   return (
-    <div className="relative min-h-screen h-full w-full bg-gradient-to-b from-[#080c14] via-slate-950 to-[#080c14] text-white">
+    <div
+      className="relative min-h-screen h-full w-full text-white"
+      style={{
+        backgroundImage:
+          "linear-gradient(to bottom, rgba(8,12,20,0.88), rgba(2,6,17,0.92) 50%, rgba(8,12,20,0.94)), url('/morbius/Morbius_Blackjack.png')",
+        backgroundSize: 'cover',
+        backgroundPosition: 'center top',
+        backgroundRepeat: 'no-repeat',
+        backgroundAttachment: 'fixed',
+      }}
+    >
       <div className="absolute inset-0 h-full min-h-screen w-full bg-[radial-gradient(ellipse_80%_60%_at_50%_0%,rgba(34,211,238,0.10),transparent_70%)] pointer-events-none" />
       <div className="relative w-full max-w-4xl mx-auto px-3 py-4 sm:px-4 sm:py-8">
         {/* ── Hero Section ── */}

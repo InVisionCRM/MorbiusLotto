@@ -8,7 +8,7 @@ const path_1 = require("path");
 const ALLOWED_EXTS = new Set(['.png', '.jpg', '.jpeg', '.svg', '.webp', '.gif']);
 /** Resolved from compiled `server/dist/lib` or `server/src/lib` → repo `public/`. */
 function getPokerMarketingLogosDir() {
-    return (0, path_1.join)(__dirname, '../../../public', 'Marketing ', 'LOGOS');
+    return (0, path_1.join)(__dirname, '../../../public', 'Logos');
 }
 let cached = null;
 const CACHE_MS = 60_000;
