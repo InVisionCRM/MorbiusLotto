@@ -29,27 +29,22 @@ export interface PokerWinnerNotificationCardProps {
 }
 
 /**
- * Selects exactly 5 winning cards from hole + community.
- * winningCardIndices are 0-51 card values (not positional). Falls back to hole + first 3 community if incomplete.
+ * Selects the cards to display. At a real showdown, winningCardIndices contains
+ * exactly 5 valid cards from the player's best hand — use those. Otherwise
+ * (e.g. fold-win where everyone else folded), show only the cards that were
+ * actually revealed: the winner's hole cards plus whatever community cards
+ * were dealt. Never pad to 5 with cards that weren't on the table.
  */
-function selectWinningFive(
+function selectDisplayCards(
   hole: number[],
   community: number[],
   winningCardIndices: number[],
 ): number[] {
-  const hand = winningCardIndices.filter((c) => typeof c === 'number' && c >= 0 && c <= 51);
+  const isValid = (c: unknown): c is number =>
+    typeof c === 'number' && Number.isInteger(c) && c >= 0 && c <= 51;
+  const hand = winningCardIndices.filter(isValid);
   if (hand.length === 5) return hand;
-  const pool = [...hole, ...community].filter((c) => typeof c === 'number' && c >= 0 && c <= 51);
-  const seen = new Set<number>();
-  const unique: number[] = [];
-  for (const c of [...hand, ...pool]) {
-    if (!seen.has(c)) {
-      seen.add(c);
-      unique.push(c);
-    }
-    if (unique.length === 5) break;
-  }
-  return unique;
+  return [...hole.filter(isValid), ...community.filter(isValid)];
 }
 
 export function PokerWinnerNotificationCard({
@@ -65,8 +60,8 @@ export function PokerWinnerNotificationCard({
   splitAmount,
   formatChips,
 }: PokerWinnerNotificationCardProps) {
-  const fiveCards = useMemo(
-    () => selectWinningFive(winnerHoleCards, communityCards, winningCardIndices),
+  const displayCards = useMemo(
+    () => selectDisplayCards(winnerHoleCards, communityCards, winningCardIndices),
     [winnerHoleCards, communityCards, winningCardIndices],
   );
 
@@ -136,8 +131,8 @@ export function PokerWinnerNotificationCard({
 
             {/* Winning 5-card fan — above medallion */}
             <div className="relative flex items-end justify-center gap-0 mb-1" style={{ minHeight: 96 }}>
-              {fiveCards.map((cardIndex, i) => {
-                const total = fiveCards.length;
+              {displayCards.map((cardIndex, i) => {
+                const total = displayCards.length;
                 const mid = (total - 1) / 2;
                 const offset = i - mid;
                 const rotate = offset * 7;

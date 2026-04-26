@@ -511,9 +511,9 @@ export function PokerTable({ state, currentPlayerAddress, timeLeft, chatBubbleBy
         winnerHandName={winnerHandName || 'Full House'}
         winnerAddress={firstWinnerAddr ?? undefined}
         winnerAvatarUrl={firstWinnerSeat?.profileImageUrl}
-        winnerHoleCards={winnerHoleCards.length ? winnerHoleCards : [0, 1]}
-        communityCards={hand?.communityCards?.length ? hand.communityCards : [2, 3, 4, 5, 6]}
-        winningCardIndices={winningCardIndices.length ? winningCardIndices : [0, 1, 2]}
+        winnerHoleCards={winnerHoleCards}
+        communityCards={hand?.communityCards ?? []}
+        winningCardIndices={winningCardIndices}
         splitLabel={splitWinner ? `Split: ${splitSeat?.displayName || shortAddr(splitWinner.address)}` : undefined}
         splitAmount={splitWinner ? `+${formatChips(splitWinner.amount)}` : undefined}
         formatChips={formatChips}
