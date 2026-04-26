@@ -120,7 +120,7 @@ export function PokerTableView({
         wsConnected &&
         mySeat &&
         onOpenLogoSponsor && (
-          <div className="absolute top-2 left-1/2 -translate-x-1/2 z-10 flex flex-col items-center gap-1.5">
+          <div className="absolute top-2 left-1/2 -translate-x-1/2 z-50 flex flex-col items-center gap-1.5">
             <div className="flex items-center gap-1.5">
               <button
                 type="button"

@@ -104,7 +104,7 @@ export function PokerWinnerNotificationCard({
     <div
       data-testid="poker-winner-banner"
       data-card="poker-winner-notification-card"
-      className="absolute inset-0 z-[80] pointer-events-none flex items-center justify-center"
+      className="absolute inset-0 z-[35] pointer-events-none flex items-center justify-center"
       style={{ top: '41%', height: '22%' }}
     >
       <AnimatePresence>

@@ -13,37 +13,34 @@ import { HeroSection } from '@/components/home/hero-section'
 import { GamesSection } from '@/components/home/games-section'
 import { PwaHomeInstallSplash } from '@/components/home/PwaHomeInstallSplash'
 import { DepositWithdrawModal } from '@/components/BLACKJACK/DepositWithdrawModal'
-
-function HomeBelowFoldFallback() {
-  return <div className="w-full min-h-28 rounded-lg bg-neutral-950/40" aria-hidden />
-}
+import { LoadingTip } from '@/components/shared/LoadingTip'
 
 const MorbiusInfoSection = dynamic(
   () => import('@/components/home/morbius-info-section').then((m) => m.MorbiusInfoSection),
-  { loading: () => <HomeBelowFoldFallback /> }
+  { loading: () => <LoadingTip variant="inline" /> }
 )
 const SocialsSection = dynamic(
   () => import('@/components/home/socials-section').then((m) => m.SocialsSection),
-  { loading: () => <HomeBelowFoldFallback /> }
+  { loading: () => <LoadingTip variant="inline" /> }
 )
 const TokenomicsSection = dynamic(
   () => import('@/components/home/tokenomics-section').then((m) => m.TokenomicsSection),
-  { loading: () => <HomeBelowFoldFallback /> }
+  { loading: () => <LoadingTip variant="inline" /> }
 )
 const PulseChainSection = dynamic(
   () => import('@/components/home/pulsechain-section').then((m) => m.PulseChainSection),
-  { loading: () => <HomeBelowFoldFallback /> }
+  { loading: () => <LoadingTip variant="inline" /> }
 )
 const TableShowcaseDisplay = dynamic(
   () => import('@/components/marketing/TableShowcaseDisplay').then((m) => m.TableShowcaseDisplay),
-  { loading: () => <HomeBelowFoldFallback /> }
+  { loading: () => <LoadingTip variant="inline" /> }
 )
 const AvatarShowcaseSection = dynamic(
   () => import('@/components/home/avatar-showcase-section').then((m) => m.AvatarShowcaseSection),
-  { loading: () => <HomeBelowFoldFallback /> }
+  { loading: () => <LoadingTip variant="inline" /> }
 )
 const Footer = dynamic(() => import('@/components/PLINKO/Footer'), {
-  loading: () => <HomeBelowFoldFallback />,
+  loading: () => <LoadingTip variant="inline" />,
 })
 
 const HOME_FIXED_BG = '/Marketing%20/Hero-Background.jpeg' as const

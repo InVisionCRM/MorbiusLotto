@@ -362,7 +362,7 @@ const NavContent = React.memo(function NavContent(props: NavContentProps) {
     reserveBalance,
     inWalletMorbiusWei,
     walletConnected,
-    pokerLobbyTab = 'cash',
+    pokerLobbyTab = 'tournaments',
     onPokerLobbyTabChange,
   } = props;
 
@@ -468,18 +468,18 @@ const NavContent = React.memo(function NavContent(props: NavContentProps) {
           <>
             <SectionLabel label="Lobby" />
             <SidebarButton
-              label="Cash games"
-              icon={<NavIcon icon="fa-play" active={pokerLobbyTab === 'cash'} />}
-              onClick={() => onPokerLobbyTabChange('cash')}
-              active={pokerLobbyTab === 'cash'}
-              className={`rounded-lg px-2 py-2 transition-colors ${btnClass(pokerLobbyTab === 'cash')}`}
-            />
-            <SidebarButton
               label="Tournaments"
               icon={<NavIcon icon="fa-trophy" active={pokerLobbyTab === 'tournaments'} />}
               onClick={() => onPokerLobbyTabChange('tournaments')}
               active={pokerLobbyTab === 'tournaments'}
               className={`rounded-lg px-2 py-2 transition-colors ${btnClass(pokerLobbyTab === 'tournaments')}`}
+            />
+            <SidebarButton
+              label="Cash games"
+              icon={<NavIcon icon="fa-play" active={pokerLobbyTab === 'cash'} />}
+              onClick={() => onPokerLobbyTabChange('cash')}
+              active={pokerLobbyTab === 'cash'}
+              className={`rounded-lg px-2 py-2 transition-colors ${btnClass(pokerLobbyTab === 'cash')}`}
             />
             <SidebarButton
               label="History"

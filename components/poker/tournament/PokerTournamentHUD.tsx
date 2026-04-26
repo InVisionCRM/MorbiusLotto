@@ -112,13 +112,13 @@ const BURST_MS = 1200;
 function Divider() {
   return (
     <div
-      className="self-center w-12 h-px"
-      style={{ background: 'rgba(255,255,255,0.09)' }}
+      className="self-center w-7 h-px"
+      style={{ background: 'rgba(255,255,255,0.08)' }}
     />
   );
 }
 
-/** Collapsed-rail stat cell: Jost title (small) above Jost value (larger). */
+/** Collapsed-rail stat cell: tiny uppercase label above tabular value, tightly stacked. */
 function CollapsedStat({
   label,
   value,
@@ -129,16 +129,16 @@ function CollapsedStat({
   valueSuffix?: React.ReactNode;
 }) {
   return (
-    <div className="flex flex-col items-center justify-center gap-0.5 w-full">
+    <div className="flex flex-col items-center justify-center w-full leading-none">
       <span
-        className="font-jost-normal text-[9px] uppercase tracking-[0.14em]"
-        style={{ color: 'rgba(255,255,255,0.45)' }}
+        className="font-jost-normal text-[8px] uppercase tracking-[0.18em]"
+        style={{ color: 'rgba(255,255,255,0.38)' }}
       >
         {label}
       </span>
       <span
-        className="font-jost text-[14px] tabular-nums flex items-center gap-0.5"
-        style={{ color: 'rgba(255,255,255,0.95)', letterSpacing: '-0.01em' }}
+        className="font-jost text-[13px] tabular-nums flex items-center gap-0.5 mt-1"
+        style={{ color: 'rgba(255,255,255,0.96)', letterSpacing: '-0.01em' }}
       >
         {value}
         {valueSuffix}
@@ -147,7 +147,7 @@ function CollapsedStat({
   );
 }
 
-/** Expanded-panel block: centered Jost label above centered Jost value, with optional sub-line. */
+/** Expanded-panel hero block: large centered value with label and optional sub-line. */
 function ExpandedBlock({
   label,
   value,
@@ -158,16 +158,16 @@ function ExpandedBlock({
   sub?: React.ReactNode;
 }) {
   return (
-    <div className="flex flex-col items-center gap-1 px-2 py-3">
+    <div className="flex flex-col items-center gap-1.5 px-2 py-4">
       <span
-        className="font-jost-normal text-[10px] uppercase tracking-[0.18em]"
-        style={{ color: 'rgba(255,255,255,0.45)' }}
+        className="font-jost-normal text-[10px] uppercase tracking-[0.2em]"
+        style={{ color: 'rgba(255,255,255,0.42)' }}
       >
         {label}
       </span>
       <span
-        className="font-jost text-[26px] tabular-nums leading-none"
-        style={{ color: 'rgba(255,255,255,0.98)', letterSpacing: '-0.01em' }}
+        className="font-jost text-[28px] tabular-nums leading-none"
+        style={{ color: 'rgba(255,255,255,0.98)', letterSpacing: '-0.02em' }}
       >
         {value}
       </span>
@@ -175,6 +175,46 @@ function ExpandedBlock({
         <span
           className="font-jost-normal text-[10px] tracking-wide"
           style={{ color: 'rgba(255,255,255,0.55)' }}
+        >
+          {sub}
+        </span>
+      ) : null}
+    </div>
+  );
+}
+
+/** Compact stat tile used inside the 2-col secondary grid in the expanded panel. */
+function StatTile({
+  label,
+  value,
+  sub,
+  align = 'left',
+}: {
+  label: string;
+  value: React.ReactNode;
+  sub?: React.ReactNode;
+  align?: 'left' | 'right';
+}) {
+  return (
+    <div
+      className={`flex flex-col gap-1 px-3 py-2.5 ${align === 'right' ? 'items-end text-right' : 'items-start text-left'}`}
+    >
+      <span
+        className="font-jost-normal text-[9px] uppercase tracking-[0.18em]"
+        style={{ color: 'rgba(255,255,255,0.4)' }}
+      >
+        {label}
+      </span>
+      <span
+        className="font-jost text-[17px] tabular-nums leading-none"
+        style={{ color: 'rgba(255,255,255,0.96)', letterSpacing: '-0.01em' }}
+      >
+        {value}
+      </span>
+      {sub ? (
+        <span
+          className="font-jost-normal text-[9px] tracking-wide"
+          style={{ color: 'rgba(255,255,255,0.5)' }}
         >
           {sub}
         </span>
@@ -374,34 +414,43 @@ export function PokerTournamentHUD({ state, myAddress }: Props) {
 
   // ── Collapsed rail content ───────────────────────────────────────────────
   const collapsedContent = (
-    <div className="flex flex-col items-stretch justify-between h-full w-full py-6 px-1">
-      <CollapsedStat label="Blinds" value={blindStr} />
-      <Divider />
-      <CollapsedStat label="Stack" value={stackShort} />
-      <Divider />
-      <CollapsedStat
-        label="Rank"
-        value={rankStr}
-        valueSuffix={
-          <AnimatePresence>
-            {rankDelta && (
-              <motion.span
-                key={rankDelta}
-                initial={{ opacity: 0, y: rankDelta === 'up' ? 4 : -4 }}
-                animate={{ opacity: 1, y: 0 }}
-                exit={{ opacity: 0 }}
-                transition={{ duration: 0.2 }}
-                className="text-[10px]"
-                style={{ color: rankDelta === 'up' ? 'rgba(52,211,153,1)' : 'rgba(239,68,68,1)' }}
-              >
-                {rankDelta === 'up' ? '▲' : '▼'}
-              </motion.span>
-            )}
-          </AnimatePresence>
-        }
-      />
-      <Divider />
-      <CollapsedStat label="Left" value={playersLeftShort} />
+    <div className="flex flex-col items-center justify-center h-full w-full px-1">
+      <div
+        className="flex flex-col items-stretch w-full gap-3 py-4 px-1 rounded-lg"
+        style={{
+          background: 'linear-gradient(180deg, rgba(255,255,255,0.025) 0%, rgba(255,255,255,0.008) 100%)',
+          border: '1px solid rgba(255,255,255,0.05)',
+          boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.04)',
+        }}
+      >
+        <CollapsedStat label="Blinds" value={blindStr} />
+        <Divider />
+        <CollapsedStat label="Stack" value={stackShort} />
+        <Divider />
+        <CollapsedStat
+          label="Rank"
+          value={rankStr}
+          valueSuffix={
+            <AnimatePresence>
+              {rankDelta && (
+                <motion.span
+                  key={rankDelta}
+                  initial={{ opacity: 0, y: rankDelta === 'up' ? 4 : -4 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0 }}
+                  transition={{ duration: 0.2 }}
+                  className="text-[9px]"
+                  style={{ color: rankDelta === 'up' ? 'rgba(52,211,153,1)' : 'rgba(239,68,68,1)' }}
+                >
+                  {rankDelta === 'up' ? '▲' : '▼'}
+                </motion.span>
+              )}
+            </AnimatePresence>
+          }
+        />
+        <Divider />
+        <CollapsedStat label="Left" value={playersLeftShort} />
+      </div>
     </div>
   );
 
@@ -433,32 +482,39 @@ export function PokerTournamentHUD({ state, myAddress }: Props) {
 
       <BlockDivider />
 
-      {/* Blinds — current + next */}
+      {/* Blinds — hero (current + next) */}
       <ExpandedBlock
         label="Blinds"
         value={`${formatChipsLib(state.smallBlind)} / ${formatChipsLib(state.bigBlind)}`}
-        sub={nextBlindsStr ? <>Next: <span className="font-jost" style={{ color: 'rgba(255,255,255,0.8)' }}>{nextBlindsStr}</span></> : null}
+        sub={nextBlindsStr ? <>Next <span className="font-jost" style={{ color: 'rgba(255,255,255,0.8)' }}>{nextBlindsStr}</span></> : null}
       />
 
-      <BlockDivider />
-
-      {/* Your stack */}
-      {me && <ExpandedBlock label="Your Stack" value={stackFull} />}
-
-      {me && <BlockDivider />}
-
-      {/* Rank */}
-      {myRank != null && <ExpandedBlock label="Rank" value={rankLongStr} />}
-
-      {myRank != null && <BlockDivider />}
-
-      {/* Players left */}
-      <ExpandedBlock label="Players Left" value={playersLeftFull} />
-
-      <BlockDivider />
-
-      {/* Prize pool */}
-      <ExpandedBlock label="Prize Pool" value={prizeLabel} />
+      {/* Secondary stats — 2-col grid card */}
+      <div className="px-4 pt-1 pb-4">
+        <div
+          className="grid grid-cols-2 rounded-lg overflow-hidden"
+          style={{
+            background: 'linear-gradient(180deg, rgba(255,255,255,0.03) 0%, rgba(255,255,255,0.01) 100%)',
+            border: '1px solid rgba(255,255,255,0.06)',
+            boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.04)',
+          }}
+        >
+          {me ? (
+            <StatTile label="Your Stack" value={stackFull} />
+          ) : (
+            <StatTile label="Your Stack" value="—" />
+          )}
+          <StatTile
+            label="Rank"
+            value={myRank != null ? `#${myRank}` : '—'}
+            sub={myRank != null ? `of ${activePlayers.length}` : undefined}
+            align="right"
+          />
+          <div className="col-span-2 h-px" style={{ background: 'rgba(255,255,255,0.06)' }} />
+          <StatTile label="Players Left" value={playersLeftFull} />
+          <StatTile label="Prize Pool" value={prizeLabel} align="right" />
+        </div>
+      </div>
 
       <BlockDivider />
 

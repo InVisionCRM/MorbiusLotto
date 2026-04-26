@@ -588,13 +588,13 @@ export function PokerSeat({ seat, index, holeCards, isCurrentPlayer, showCardBac
             key={chatBubble}
             className="absolute bottom-full left-1/2 -translate-x-1/2 mb-1 pointer-events-none z-30"
             style={{ maxWidth: 'min(160px, 42vw)', minWidth: 48 }}
-            initial={{ opacity: 0, scale: 0.85, y: 4 }}
-            animate={{ opacity: 1, scale: 1, y: 0 }}
-            exit={{ opacity: 0, scale: 0.92, y: 2 }}
-            transition={{ type: 'spring', stiffness: 400, damping: 28 }}
+            initial={{ opacity: 0, y: 12 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: 10 }}
+            transition={{ duration: 0.28, ease: [0.2, 0.9, 0.2, 1] }}
           >
             <div
-              className="px-2 py-1.5 rounded-lg text-left break-words"
+              className="font-jost px-2 py-1.5 rounded-lg text-left break-words font-semibold"
               style={{
                 background: 'rgba(0,0,0,0.92)',
                 border: '1px solid rgba(255,255,255,0.12)',
@@ -619,12 +619,12 @@ export function PokerSeat({ seat, index, holeCards, isCurrentPlayer, showCardBac
         {displayPhrase && (
           <motion.div
             key={displayPhrase}
-            className="font-grandstander absolute bottom-full left-1/2 -translate-x-1/2 mb-1 pointer-events-none z-40 text-lg lg:text-xl max-w-[min(180px,50vw)] text-center px-2"
+            className="font-jost absolute bottom-full left-1/2 -translate-x-1/2 mb-1 pointer-events-none z-40 text-lg lg:text-xl max-w-[min(180px,50vw)] text-center px-2 font-bold"
             style={{ color: 'var(--poker-text)' }}
-            initial={{ opacity: 0, scale: 0.85 }}
-            animate={{ opacity: 1, scale: 1 }}
-            exit={{ opacity: 0, scale: 0.9 }}
-            transition={{ type: 'spring', stiffness: 400, damping: 24 }}
+            initial={{ opacity: 0, y: 12 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: 10 }}
+            transition={{ duration: 0.28, ease: [0.2, 0.9, 0.2, 1] }}
           >
             {displayPhrase}
           </motion.div>
@@ -906,11 +906,11 @@ export function PokerSeat({ seat, index, holeCards, isCurrentPlayer, showCardBac
                   style={{ background: 'rgba(10,10,10,0.96)', border: '1px solid rgba(255,255,255,0.12)', boxShadow: '0 4px 20px rgba(0,0,0,0.6)' }}>
                   {quickChatPhrases.map((phrase) => (
                     <button key={phrase} type="button" onClick={() => handleQuickChatSelect(phrase)}
-                      className="font-grandstander w-full px-3 py-2 text-sm text-center hover:bg-white/10 transition-colors truncate"
+                      className="font-jost w-full px-3 py-2 text-sm text-center font-semibold hover:bg-white/10 transition-colors truncate"
                       style={{ color: 'var(--poker-text)' }}>{phrase}</button>
                   ))}
                   <button type="button" onClick={() => { setQuickChatPickerOpen(false); useSharedQuickChat ? onOpenEditQuickChat?.() : setEditQuickChatOpen(true); }}
-                    className="font-grandstander w-full px-3 py-2.5 text-sm font-medium text-center hover:bg-white/10 transition-colors flex items-center gap-2 border-t border-white/10"
+                    className="font-jost w-full px-3 py-2.5 text-sm font-medium text-center hover:bg-white/10 transition-colors flex items-center gap-2 border-t border-white/10"
                     style={{ color: 'var(--poker-text)' }}>
                     <span className="text-cyan-400">✎</span> Edit QuickChat
                   </button>

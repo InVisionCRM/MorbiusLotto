@@ -1,4 +1,7 @@
-/** Default 14 QuickChat phrases shown in the picker until the user edits. */
+/**
+ * Default 14 QuickChat phrases shown in the picker until the user edits.
+ * In-table display (picker + above-seat bubble) uses Jost; see `PokerSeat` and `EditQuickChatModal`.
+ */
 export const DEFAULT_QUICKCHAT_PHRASES: string[] = [
   'Hello!',
   'Good game!',

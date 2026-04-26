@@ -123,15 +123,22 @@ export default function PokerLobbyPage() {
   const [tablePlayers, setTablePlayers] = useState<{ tableId: string; seats: PokerSeatState[] } | null>(null);
   const [tablePlayersLoading, setTablePlayersLoading] = useState(false);
   const [removingTableId, setRemovingTableId] = useState<string | null>(null);
-  const [activeTab, setActiveTab] = useState<'cash' | 'tournaments' | 'history'>('cash');
+  const [activeTab, setActiveTab] = useState<'cash' | 'tournaments' | 'history'>('tournaments');
   const [wsClient, setWsClient] = useState<BlackjackWebSocketClient | null>(null);
 
   useEffect(() => {
     const t = searchParams.get('tab');
-    if (t === 'tournaments') setActiveTab('tournaments');
-    else if (t === 'history') setActiveTab('history');
-    else if (t === 'cash') setActiveTab('cash');
-  }, [searchParams]);
+    if (t === 'history') {
+      setActiveTab('history');
+    } else if (t === 'cash') {
+      setActiveTab('cash');
+    } else if (t === 'tournaments') {
+      setActiveTab('tournaments');
+    } else {
+      setActiveTab('tournaments');
+      router.replace('/poker?tab=tournaments', { scroll: false });
+    }
+  }, [searchParams, router]);
 
   const setLobbyTab = useCallback(
     (tab: 'cash' | 'tournaments' | 'history') => {
@@ -141,7 +148,7 @@ export default function PokerLobbyPage() {
       } else if (tab === 'history') {
         router.replace('/poker?tab=history', { scroll: false });
       } else {
-        router.replace('/poker', { scroll: false });
+        router.replace('/poker?tab=cash', { scroll: false });
       }
     },
     [router]
@@ -645,6 +652,17 @@ export default function PokerLobbyPage() {
             >
                 <button
                   type="button"
+                  onClick={() => setLobbyTab('tournaments')}
+                  className={`relative px-5 py-2.5 rounded-xl text-xs sm:text-sm font-semibold transition-all ${
+                    activeTab === 'tournaments'
+                      ? 'bg-cyan-500/[0.12] text-cyan-400'
+                      : 'text-slate-600 hover:text-slate-400'
+                  }`}
+                >
+                  Tournaments
+                </button>
+                <button
+                  type="button"
                   onClick={() => setLobbyTab('cash')}
                   className={`px-5 py-2.5 rounded-xl text-xs sm:text-sm font-semibold transition-all ${
                     activeTab === 'cash'
@@ -656,17 +674,6 @@ export default function PokerLobbyPage() {
                   {tables.length > 0 && activeTab === 'cash' && (
                     <span className="ml-2 text-[11px] font-bold px-2.5 py-0.5 rounded-full bg-cyan-500/15 text-cyan-400">{tables.length}</span>
                   )}
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setLobbyTab('tournaments')}
-                  className={`relative px-5 py-2.5 rounded-xl text-xs sm:text-sm font-semibold transition-all ${
-                    activeTab === 'tournaments'
-                      ? 'bg-cyan-500/[0.12] text-cyan-400'
-                      : 'text-slate-600 hover:text-slate-400'
-                  }`}
-                >
-                  Tournaments
                 </button>
                 <button
                   type="button"

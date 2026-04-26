@@ -87,7 +87,7 @@ export function EditQuickChatModal({
           <div className="flex items-center justify-between px-4 py-3 border-b border-white/10">
             <h2
               id="edit-quickchat-title"
-              className="font-grandstander text-lg font-semibold"
+              className="font-jost text-lg font-semibold"
               style={{ color: 'var(--poker-text)' }}
             >
               Edit QuickChat
@@ -127,7 +127,7 @@ export function EditQuickChatModal({
                       key={phrase}
                       className="flex items-center justify-between gap-2 py-1.5 px-2 rounded hover:bg-white/5 group"
                     >
-                      <span className="font-grandstander text-sm truncate flex-1" style={{ color: 'var(--poker-text)' }}>
+                      <span className="font-jost text-sm font-medium truncate flex-1" style={{ color: 'var(--poker-text)' }}>
                         {phrase}
                       </span>
                       <button
@@ -166,7 +166,7 @@ export function EditQuickChatModal({
                             key={phrase}
                             className="flex items-center justify-between gap-2 py-1 px-2 rounded hover:bg-white/5"
                           >
-                            <span className="font-grandstander text-sm truncate flex-1" style={{ color: 'var(--poker-text)' }}>
+                            <span className="font-jost text-sm font-medium truncate flex-1" style={{ color: 'var(--poker-text)' }}>
                               {phrase}
                             </span>
                             <button
