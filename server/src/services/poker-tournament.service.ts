@@ -432,13 +432,26 @@ export class PokerTournamentService {
       // Re-read the escrow contract; trust on-chain state, not the client's claims.
       const pool = await getEscrowPoolStatus(e.tournamentId);
       if (!pool) {
-        throw new Error('Could not verify on-chain escrow deposit (RPC error or no deposit found)');
+        throw new Error('Could not verify on-chain escrow deposit (RPC error)');
+      }
+      // Empty pool: contract returns the zero-struct when no deposit has landed at this bytes32.
+      // Most common cause: the deposit tx was signed by the wallet but not broadcast/mined yet,
+      // OR the wallet rejected silently after returning a hash. Check this FIRST so the error
+      // message is accurate instead of falling through to "not active" / "underfunded".
+      if (pool.token === '0x0000000000000000000000000000000000000000' || pool.totalDeposited === 0n) {
+        logger.warn('Custom-token freeroll: no on-chain deposit found at bytes32', {
+          tournamentId: e.tournamentId,
+          bytes32Id: tournamentIdToBytes32(e.tournamentId),
+          claimedTxHash: e.txHash,
+          claimedAmount: e.amount.toString(),
+        });
+        throw new Error(
+          'No on-chain deposit found for this tournament id yet. The deposit transaction may still be pending or was never broadcast. ' +
+          'Check the tx hash in a block explorer; if it never landed, cancel and retry the create flow to start fresh.',
+        );
       }
       if (pool.cancelled) {
         throw new Error('Escrow deposit has already been cancelled');
-      }
-      if (pool.active === false) {
-        throw new Error('Escrow deposit is not active');
       }
       if (pool.token.toLowerCase() !== e.tokenAddress.toLowerCase()) {
         throw new Error(`Escrow token mismatch (on-chain: ${pool.token}, claimed: ${e.tokenAddress})`);

@@ -428,7 +428,21 @@ export function PokerTournamentCreator({ creatorAddress, onClose, onCreate }: Po
         functionName: 'depositPrizePool',
         args: [bytes32Id, selectedToken.address as `0x${string}`, customTokenAmountWei],
       });
-      if (publicClient) await publicClient.waitForTransactionReceipt({ hash });
+      // Wait for the receipt AND verify it succeeded — `waitForTransactionReceipt`
+      // resolves on a reverted tx too (status: 'reverted'). Without this guard, a failed
+      // deposit (e.g. bytes32 already used → contract throws "Already deposited") would
+      // silently proceed to the server, which then reads an empty pool and rejects with
+      // a confusing "Escrow deposit is not active" error.
+      if (publicClient) {
+        const receipt = await publicClient.waitForTransactionReceipt({ hash });
+        if (receipt.status !== 'success') {
+          throw new Error(
+            `Deposit transaction reverted on-chain (tx: ${hash}). ` +
+            `This usually means the tournament id was already used for a prior deposit. ` +
+            `Cancel the create flow and start fresh.`,
+          );
+        }
+      }
       setDepositTxHash(hash);
       setFundingStep('deposited');
       // Fire the server create immediately — no wallet popup needed.
