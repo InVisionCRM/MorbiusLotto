@@ -1529,6 +1529,29 @@ class WebSocketService {
             this.sendError(ws, error.message || 'Failed to list tournaments', message.requestId);
         }
     }
+    /**
+     * Lists cancelled custom-token poker tournaments where the caller is the creator and
+     * may still need to call `creatorReclaim` on the escrow. Cheap DB read; the client
+     * confirms reclaimability via on-chain `getPool` before showing a button.
+     */
+    async handlePokerTournamentListReclaimable(ws, message) {
+        try {
+            if (!this.pokerTournamentService || !ws.playerAddress) {
+                return this.sendError(ws, 'Wallet required', message.requestId);
+            }
+            const tournaments = await this.pokerTournamentService
+                .listReclaimableCustomTokenPokerTournaments(ws.playerAddress);
+            this.sendMessage(ws, {
+                type: 'poker_tournament_list_reclaimable',
+                payload: { tournaments },
+                requestId: message.requestId,
+            });
+        }
+        catch (error) {
+            logger_1.logger.error('Error listing reclaimable poker tournaments:', error);
+            this.sendError(ws, error.message || 'Failed to list reclaimable tournaments', message.requestId);
+        }
+    }
     async handlePokerTournamentCreate(ws, message) {
         try {
             if (!this.pokerTournamentService || !ws.playerAddress) {
@@ -1559,12 +1582,39 @@ class WebSocketService {
             if (p.guaranteedPrizePoolSource === 'platform_promo') {
                 guaranteedPrizePoolSource = 'platform_promo';
             }
+            else if (p.guaranteedPrizePoolSource === 'custom_token') {
+                guaranteedPrizePoolSource = 'custom_token';
+            }
+            // Custom-token escrow funding payload (only meaningful when source is 'custom_token').
+            // Service re-validates everything; we only normalize types here.
+            let customTokenEscrow = undefined;
+            if (guaranteedPrizePoolSource === 'custom_token') {
+                if (!p.customTokenEscrow || typeof p.customTokenEscrow !== 'object') {
+                    return this.sendError(ws, 'customTokenEscrow required for custom_token prize source', message.requestId);
+                }
+                const e = p.customTokenEscrow;
+                try {
+                    customTokenEscrow = {
+                        tournamentId: String(e.tournamentId ?? ''),
+                        txHash: String(e.txHash ?? ''),
+                        tokenAddress: String(e.tokenAddress ?? ''),
+                        amount: BigInt(String(e.amount ?? '0')),
+                        decimals: Number(e.decimals ?? 18),
+                        // Symbol is optional and re-validated server-side; pass-through only.
+                        symbol: typeof e.symbol === 'string' ? e.symbol : undefined,
+                    };
+                }
+                catch (_err) {
+                    return this.sendError(ws, 'customTokenEscrow.amount must be a numeric string', message.requestId);
+                }
+            }
             const result = await this.pokerTournamentService.createPokerTournament({
                 creatorAddress: ws.playerAddress,
                 name: p.name,
                 buyInAmount,
                 guaranteedPrizePool,
                 guaranteedPrizePoolSource,
+                customTokenEscrow,
                 prizeDistributionType: p.prizeDistributionType,
                 prizePercentages: Array.isArray(p.prizePercentages) ? p.prizePercentages : undefined,
                 config: p.config,

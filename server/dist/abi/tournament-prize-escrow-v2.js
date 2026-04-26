@@ -10,6 +10,9 @@ exports.tournamentPrizeEscrowV2Abi = [
         type: 'function',
     },
     {
+        // The deployed contract returns 6 fields (no `active`). A phantom 7th field
+        // makes viem fail decode and silently fall through to a V1 ABI elsewhere
+        // that mis-aligns `totalDeposited` into `amountPaidOut`. See escrow-status.ts.
         inputs: [{ name: 'tournamentId', type: 'bytes32' }],
         name: 'getPool',
         outputs: [
@@ -19,7 +22,6 @@ exports.tournamentPrizeEscrowV2Abi = [
             { name: 'amountPaidOut', type: 'uint256' },
             { name: 'depositedAt', type: 'uint256' },
             { name: 'cancelled', type: 'bool' },
-            { name: 'active', type: 'bool' },
         ],
         stateMutability: 'view',
         type: 'function',
@@ -90,7 +92,6 @@ exports.tournamentPrizeEscrowV2Abi = [
             { name: 'amountPaidOuts', type: 'uint256[]' },
             { name: 'depositedAts', type: 'uint256[]' },
             { name: 'cancelleds', type: 'bool[]' },
-            { name: 'actives', type: 'bool[]' },
         ],
         stateMutability: 'view',
         type: 'function',

@@ -47,6 +47,18 @@ export async function sendEscrowPayout(
   const idBytes32 = tournamentIdToBytes32(tournamentId);
   const winner = winnerAddress as `0x${string}`;
 
+  // Log entry so we can see in production whether sendEscrowPayout is even being reached.
+  // If we never see this line, the bug is upstream (Phase 2 not running). If we see this
+  // but no "Escrow payout sent", the wallet/RPC/auth is wrong and we'll see the error below.
+  logger.info('sendEscrowPayout: invoking', {
+    tournamentId,
+    bytes32Id: idBytes32,
+    escrow: ESCROW_V2_ADDRESS,
+    winner,
+    amount: amount.toString(),
+    callerWallet: AUTHORIZED_KEY ? privateKeyToAccount(AUTHORIZED_KEY).address : '<MISSING_KEY>',
+  });
+
   const maxRetries = 2;
   for (let attempt = 0; attempt <= maxRetries; attempt++) {
     try {
@@ -63,7 +75,8 @@ export async function sendEscrowPayout(
       return { success: true, txHash: hash };
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
-      logger.error('Escrow payout attempt failed', { attempt, tournamentId, winner: winnerAddress, error: msg });
+      const stack = err instanceof Error ? err.stack : undefined;
+      logger.error('Escrow payout attempt failed', { attempt, tournamentId, winner: winnerAddress, error: msg, stack });
       if (attempt === maxRetries) {
         return { success: false, error: msg };
       }

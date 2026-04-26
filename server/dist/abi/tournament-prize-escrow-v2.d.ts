@@ -37,9 +37,6 @@ export declare const tournamentPrizeEscrowV2Abi: readonly [{
     }, {
         readonly name: "cancelled";
         readonly type: "bool";
-    }, {
-        readonly name: "active";
-        readonly type: "bool";
     }];
     readonly stateMutability: "view";
     readonly type: "function";
@@ -150,9 +147,6 @@ export declare const tournamentPrizeEscrowV2Abi: readonly [{
         readonly type: "uint256[]";
     }, {
         readonly name: "cancelleds";
-        readonly type: "bool[]";
-    }, {
-        readonly name: "actives";
         readonly type: "bool[]";
     }];
     readonly stateMutability: "view";

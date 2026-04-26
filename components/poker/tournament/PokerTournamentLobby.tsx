@@ -278,11 +278,24 @@ export function PokerTournamentLobby({ wsClient, myAddress, onGoToTable }: Poker
       const list = payload.standings;
       const myWin = meLower ? list.find((w) => w.address.toLowerCase() === meLower) : undefined;
       if (myWin) {
-        const prizeWei = BigInt(myWin.prizeAmount || '0');
-        if (prizeWei > 0n) {
-          toast.success(
-            `You finished ${tournamentFinishOrdinal(myWin.rank)} — ${formatChips(myWin.prizeAmount)} poker chips credited to your chip wallet.`,
-          );
+        const prizeBn = BigInt(myWin.prizeAmount || '0');
+        if (prizeBn > 0n) {
+          if (payload.prizeTokenAddress) {
+            // Custom-token: amount is in token-wei; format with decimals + symbol.
+            const dec = payload.prizeTokenDecimals ?? 18;
+            const human = formatUnits(prizeBn, dec);
+            const trimmed = human.includes('.') ? human.replace(/\.?0+$/, '') : human;
+            const ticker = payload.prizeTokenSymbol?.trim()
+              ? payload.prizeTokenSymbol.trim()
+              : `${payload.prizeTokenAddress.slice(0, 6)}…${payload.prizeTokenAddress.slice(-4)}`;
+            toast.success(
+              `You finished ${tournamentFinishOrdinal(myWin.rank)} — ${trimmed} ${ticker} sent to your wallet.`,
+            );
+          } else {
+            toast.success(
+              `You finished ${tournamentFinishOrdinal(myWin.rank)} — ${formatChips(myWin.prizeAmount)} poker chips credited to your chip wallet.`,
+            );
+          }
         } else {
           toast.info(`Tournament complete. You finished ${tournamentFinishOrdinal(myWin.rank)}.`);
         }
@@ -498,6 +511,12 @@ export function PokerTournamentLobby({ wsClient, myAddress, onGoToTable }: Poker
           >
             Refresh
           </button>
+          <Link
+            href="/creators"
+            className="h-8 px-3 rounded-lg border border-slate-600/55 text-xs font-semibold text-slate-300 hover:text-white hover:border-slate-500/70 transition-colors flex items-center"
+          >
+            Creator Dashboard
+          </Link>
           <button
             type="button"
             onClick={() => setShowCreate(true)}

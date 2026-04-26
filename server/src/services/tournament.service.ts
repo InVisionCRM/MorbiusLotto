@@ -1039,9 +1039,16 @@ export class TournamentService {
         }
       }
 
-      // Fees — same pattern: queue on-chain, apply off-chain in transaction
-      const platformFeePercent = 3;
-      const creatorFeePercent = 2;
+      // Fees — same pattern: queue on-chain, apply off-chain in transaction.
+      //
+      // Poker freerolls (buy_in_amount = 0) redirect the 2% creator fee to the platform,
+      // so the full 5% goes to the platform wallet. The creator funded the prize pool,
+      // so paying them 2% of their own funds back is meaningless — it just rounds the
+      // donation. Blackjack and all buy-in tournaments keep the 3/2 split unchanged.
+      const isPokerFreeroll =
+        String(tournament.game_type ?? '') === 'poker' && tournament.buy_in_amount === 0n;
+      const platformFeePercent = isPokerFreeroll ? 5 : 3;
+      const creatorFeePercent = isPokerFreeroll ? 0 : 2;
       const totalPool = actualPrizePool;
 
       const platformWalletEnv = process.env.PLATFORM_FEE_WALLET?.trim();

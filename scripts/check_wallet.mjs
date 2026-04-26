@@ -1,0 +1,10 @@
+import { createPublicClient, http } from 'viem';
+import { pulsechain } from 'viem/chains';
+const client = createPublicClient({ chain: pulsechain, transport: http('https://rpc.pulsechain.com') });
+const wallet = '0x2775dD8242C4f589536113475B7C80F42ab4A70A';
+const nonce = await client.getTransactionCount({ address: wallet });
+const balance = await client.getBalance({ address: wallet });
+console.log('Wallet:', wallet);
+console.log('Nonce: ', nonce);
+console.log('PLS Balance (wei):', balance.toString());
+console.log('PLS Balance:', Number(balance) / 1e18);

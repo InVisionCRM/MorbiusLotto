@@ -10,7 +10,10 @@ import { toChipInt } from './format-poker-chips';
 export interface PokerTournamentStandingRow {
   address: string;
   rank: number;
-  /** Prize in whole chips credited to the player chip wallet. */
+  /**
+   * Chip-int when the tournament prize is chips/promo.
+   * Token-wei when `prizeTokenAddress` is set on the parent payload (pair with `prizeTokenDecimals`).
+   */
   prizeAmount: string;
 }
 
@@ -19,6 +22,7 @@ export interface PokerTournamentCompletedPayload {
   name: string;
   /** Buy-in per entry in whole chips (0 for freerolls). */
   buyInAmount: string;
+  /** Chip-int OR token-wei depending on `prizeTokenAddress`. The "Chips" suffix is historical. */
   grossPrizePoolChips: string;
   platformFeeChips: string;
   creatorFeeChips: string;
@@ -29,6 +33,10 @@ export interface PokerTournamentCompletedPayload {
   lastHandAt: string | null;
   endedAt: string | null;
   standings: PokerTournamentStandingRow[];
+  /** Set for custom-token freerolls; null/undefined for chip/promo tournaments. */
+  prizeTokenAddress?: string | null;
+  prizeTokenDecimals?: number | null;
+  prizeTokenSymbol?: string | null;
 }
 
 function numString(v: unknown, fallback = '0'): string {
@@ -54,31 +62,46 @@ export function normalizePokerTournamentCompletedPayload(raw: unknown): PokerTou
   const listRaw = Array.isArray(p.standings) ? p.standings : Array.isArray(p.winners) ? p.winners : [];
   const hasNewPool = typeof p.grossPrizePoolChips === 'string' && p.grossPrizePoolChips.length > 0;
 
+  // Custom-token tournaments carry token-wei, not chips. Skip the chip-int coercion so
+  // we don't risk losing precision on huge wei values down the road, and so the formatter
+  // can branch on `prizeTokenAddress` without re-parsing.
+  const prizeTokenAddress = typeof p.prizeTokenAddress === 'string' && p.prizeTokenAddress.length > 0
+    ? p.prizeTokenAddress
+    : null;
+  const prizeTokenDecimals = p.prizeTokenDecimals != null && Number.isFinite(Number(p.prizeTokenDecimals))
+    ? Number(p.prizeTokenDecimals)
+    : null;
+  const prizeTokenSymbol = typeof p.prizeTokenSymbol === 'string' && p.prizeTokenSymbol.length > 0
+    ? p.prizeTokenSymbol
+    : null;
+  const isCustomToken = !!prizeTokenAddress;
+
   const standings: PokerTournamentStandingRow[] = (listRaw as unknown[]).map((row) => {
     const r = row && typeof row === 'object' ? (row as Record<string, unknown>) : {};
     const rawPrize = r.prizeAmount ?? r.prize_amount;
-    const prizeChips = hasNewPool ? toChipInt(rawPrize).toString() : legacyWeiToChipsString(rawPrize);
+    let prizeAmount: string;
+    if (isCustomToken) prizeAmount = numString(rawPrize, '0');
+    else if (hasNewPool) prizeAmount = toChipInt(rawPrize).toString();
+    else prizeAmount = legacyWeiToChipsString(rawPrize);
     return {
       address: String(r.address ?? r.player_address ?? '').toLowerCase(),
       rank: Number(r.rank ?? r.final_rank ?? 0),
-      prizeAmount: prizeChips,
+      prizeAmount,
     };
   }).filter((s) => s.address.length > 0 && Number.isFinite(s.rank) && s.rank > 0);
 
   const sorted = [...standings].sort((a, b) => a.rank - b.rank);
 
-  const grossPrizePoolChips = hasNewPool
-    ? numString(p.grossPrizePoolChips)
-    : legacyWeiToChipsString(p.grossPrizePoolWei);
-  const platformFeeChips = typeof p.platformFeeChips === 'string' && p.platformFeeChips.length > 0
-    ? numString(p.platformFeeChips)
-    : legacyWeiToChipsString(p.platformFeeWei);
-  const creatorFeeChips = typeof p.creatorFeeChips === 'string' && p.creatorFeeChips.length > 0
-    ? numString(p.creatorFeeChips)
-    : legacyWeiToChipsString(p.creatorFeeWei);
-  const handRakeTotalChips = typeof p.handRakeTotalChips === 'string' && p.handRakeTotalChips.length > 0
-    ? numString(p.handRakeTotalChips)
-    : legacyWeiToChipsString(p.handRakeTotalWei);
+  // Pool/fee fields keep their stringified amounts as-is for custom-token; the consumer formats.
+  const passThrough = (key: string, legacyKey: string): string => {
+    if (isCustomToken) return numString(p[key], '0');
+    if (hasNewPool && typeof p[key] === 'string' && (p[key] as string).length > 0) return numString(p[key]);
+    return legacyWeiToChipsString(p[legacyKey]);
+  };
+  const grossPrizePoolChips = passThrough('grossPrizePoolChips', 'grossPrizePoolWei');
+  const platformFeeChips = passThrough('platformFeeChips', 'platformFeeWei');
+  const creatorFeeChips = passThrough('creatorFeeChips', 'creatorFeeWei');
+  const handRakeTotalChips = passThrough('handRakeTotalChips', 'handRakeTotalWei');
 
   return {
     tournamentId: tid,
@@ -94,5 +117,8 @@ export function normalizePokerTournamentCompletedPayload(raw: unknown): PokerTou
     lastHandAt: typeof p.lastHandAt === 'string' ? p.lastHandAt : null,
     endedAt: typeof p.endedAt === 'string' ? p.endedAt : null,
     standings: sorted,
+    prizeTokenAddress,
+    prizeTokenDecimals,
+    prizeTokenSymbol,
   };
 }

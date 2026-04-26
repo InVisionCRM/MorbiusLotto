@@ -1401,9 +1401,13 @@ export class PokerTournamentService {
       buy_in_amount: string;
       creator_fee_percent: number | null;
       platform_fee_percent: number | null;
+      prize_token_address: string | null;
+      prize_token_decimals: number | null;
+      prize_token_symbol: string | null;
     }>(
       `SELECT name, prize_pool::text, buy_in_amount::text,
-              creator_fee_percent, platform_fee_percent
+              creator_fee_percent, platform_fee_percent,
+              prize_token_address, prize_token_decimals, prize_token_symbol
        FROM tournaments WHERE id = $1`,
       [tournamentId],
     );
@@ -1521,6 +1525,11 @@ export class PokerTournamentService {
       endedAt,
       standings,
       winners: standings,
+      // For custom-token freerolls the chip-denominated `*Chips` fields above are
+      // actually wei of this token. Clients display via prize_token_decimals.
+      prizeTokenAddress: meta.prize_token_address ?? null,
+      prizeTokenDecimals: meta.prize_token_decimals != null ? Number(meta.prize_token_decimals) : null,
+      prizeTokenSymbol: meta.prize_token_symbol ?? null,
     });
   }
 

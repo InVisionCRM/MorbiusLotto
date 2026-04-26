@@ -41,7 +41,12 @@ export interface PokerTournamentState {
     bigBlind: number;
     handNumber: number;
     players: PokerTournamentPlayer[];
+    /** Chip-int for chips/promo; token-wei for custom-token (pair with `prizeTokenDecimals`). */
     prizePool: string;
+    /** ERC-20 address when prize is a custom PRC-20; null/absent = chips. */
+    prizeTokenAddress?: string | null;
+    prizeTokenDecimals?: number | null;
+    prizeTokenSymbol?: string | null;
     buyInAmount: string;
     prizeDistributionType: string;
     pokerConfig?: PokerTournamentConfig;
@@ -59,7 +64,17 @@ export interface PokerTournamentSummary {
     registeredCount: number;
     maxPlayers: number;
     minPlayers: number;
+    /**
+     * For chip freerolls and platform-promo: chip amount.
+     * For custom-token freerolls: amount in the token's smallest unit (wei). Pair with `prizeTokenDecimals`.
+     */
     prizePool: string;
+    /** ERC-20 contract address when prize is a custom PRC-20; null = chips. */
+    prizeTokenAddress: string | null;
+    /** 1–18 when `prizeTokenAddress` is set; null otherwise. */
+    prizeTokenDecimals: number | null;
+    /** Display ticker (e.g. "HEX"); null if missing or chips. */
+    prizeTokenSymbol: string | null;
     tableId: string | null;
     createdAt: string;
     creatorAddress: string | null;
@@ -74,7 +89,30 @@ export interface PokerTournamentSummary {
     blindIncreaseMode: PokerBlindIncreaseMode;
 }
 /** Where the initial guaranteed pool is debited when buy-in is 0. */
-export type GuaranteedPrizePoolSource = 'creator' | 'platform_promo';
+export type GuaranteedPrizePoolSource = 'creator' | 'platform_promo' | 'custom_token';
+/**
+ * Funding payload supplied by the client when the prize pool is held in the
+ * `TournamentPrizeEscrowV2` contract for an arbitrary PRC-20 token.
+ *
+ * The client deposits BEFORE this call; the server re-reads on-chain state to
+ * verify the deposit is real, matches the supplied token + amount, and was made
+ * by the creator. Only then is the tournament row written, with the same UUID
+ * used for both the DB id and the bytes32 escrow key (keccak256(uuid)).
+ */
+export interface CustomTokenEscrowFunding {
+    /** Client-generated UUID v4. Used as `tournaments.id` AND keccak'd to produce the on-chain bytes32 key. */
+    tournamentId: string;
+    /** Tx hash of the depositPrizePool call. Stored for auditability. */
+    txHash: string;
+    /** ERC-20 contract address that funded the pool. */
+    tokenAddress: string;
+    /** Wei (smallest unit) of the deposit. */
+    amount: bigint;
+    /** Token decimals (1–18). Used for display only; server trusts on-chain decimals for math. */
+    decimals: number;
+    /** Display ticker (e.g. "HEX"). Optional — server falls back to address tail in lobby/HUD if missing. */
+    symbol?: string;
+}
 export interface CreatePokerTournamentParams {
     creatorAddress: string;
     name: string;
@@ -84,8 +122,11 @@ export interface CreatePokerTournamentParams {
     /**
      * When buy-in is 0: debit the creator's `players.balance` (default).
      * `platform_promo`: same debit/refund wallet, but only allowed if the creator is in ADMIN_WALLETS (comma-separated `ADMIN_WALLETS` / `NEXT_PUBLIC_ADMIN_WALLETS`).
+     * `custom_token`: prize pool is held in the on-chain escrow contract; `customTokenEscrow` must be supplied and is verified before the row is written.
      */
     guaranteedPrizePoolSource?: GuaranteedPrizePoolSource;
+    /** Required when `guaranteedPrizePoolSource === 'custom_token'`. */
+    customTokenEscrow?: CustomTokenEscrowFunding;
     prizeDistributionType: string;
     /** Required when prizeDistributionType is `custom` (one integer % per rank, length = maxPlayers, sum 100). */
     prizePercentages?: number[];
@@ -203,6 +244,25 @@ export declare class PokerTournamentService {
         status: 'playing' | 'busted' | 'completed';
     }>>;
     listPokerTournaments(playerAddress?: string): Promise<PokerTournamentSummary[]>;
+    /**
+     * Cancelled custom-token poker tournaments where the caller is the creator and
+     * funds may still be reclaimable from the escrow contract.
+     *
+     * Pure DB read — the client decides whether to surface a "Reclaim" button by
+     * doing an on-chain `getPool` to confirm `cancelled === true && totalDeposited > amountPaidOut`.
+     * We do NOT round-trip the chain here: this list could be 0 rows for many viewers
+     * and we don't want to slow the lobby for everyone.
+     */
+    listReclaimableCustomTokenPokerTournaments(creatorAddress: string): Promise<Array<{
+        tournamentId: string;
+        name: string;
+        cancelledAt: string | null;
+        prizeTokenAddress: string;
+        prizeTokenDecimals: number;
+        prizeTokenSymbol: string | null;
+        prizePool: string;
+        escrowTournamentIdBytes32: string | null;
+    }>>;
     getTournamentState(tournamentId: string): Promise<PokerTournamentState | null>;
     getPlayerEntryStatus(tournamentId: string, playerAddress: string): Promise<PokerTournamentPlayer | null>;
     private eliminateBustedTournamentSeats;

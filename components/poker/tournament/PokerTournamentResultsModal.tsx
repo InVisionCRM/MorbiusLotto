@@ -3,6 +3,7 @@
 import React from 'react';
 import type { PokerTournamentCompletedPayload, PokerTournamentStandingRow } from '@/lib/poker-tournament-completed';
 import { formatChips, toChipInt } from '@/lib/format-poker-chips';
+import { formatUnits } from 'viem';
 
 function shortAddr(addr: string): string {
   if (!addr || addr.length < 10) return addr;
@@ -16,6 +17,36 @@ function finishOrdinal(rank: number): string {
   if (j === 2 && k !== 12) return `${rank}nd`;
   if (j === 3 && k !== 13) return `${rank}rd`;
   return `${rank}th`;
+}
+
+/**
+ * Format an amount in the prize unit:
+ *  - chips → "12,345"
+ *  - token-wei → "1.234" (no symbol; symbol/ticker rendered separately as the unit label)
+ *
+ * For chips, the legacy `formatChips` already handles BigInt + locale separators.
+ * For tokens we use viem's `formatUnits` and trim trailing zeros for readability.
+ */
+function formatPrizeAmount(
+  amount: string | bigint,
+  prizeTokenAddress?: string | null,
+  prizeTokenDecimals?: number | null,
+): string {
+  if (!prizeTokenAddress) return formatChips(amount);
+  const dec = prizeTokenDecimals ?? 18;
+  let bn: bigint;
+  try { bn = typeof amount === 'bigint' ? amount : BigInt(amount || '0'); } catch { return '—'; }
+  let human: string;
+  try { human = formatUnits(bn, dec); } catch { return '—'; }
+  return human.includes('.') ? human.replace(/\.?0+$/, '') : human;
+}
+
+/** Unit label shown under the headline numbers. "chips" for chip pools, "$SYMBOL" for tokens. */
+function unitLabel(payload: PokerTournamentCompletedPayload): string {
+  if (!payload.prizeTokenAddress) return 'chips';
+  return payload.prizeTokenSymbol?.trim()
+    ? payload.prizeTokenSymbol.trim()
+    : `${payload.prizeTokenAddress.slice(0, 6)}…${payload.prizeTokenAddress.slice(-4)}`;
 }
 
 function formatDurationMs(ms: number | null): string {
@@ -66,6 +97,8 @@ export interface PokerTournamentResultsModalProps {
 export function PokerTournamentResultsModal({ payload, myAddress, onDismiss }: PokerTournamentResultsModalProps) {
   const me = myAddress?.toLowerCase() ?? null;
   const rows = payload.standings;
+  const unit = unitLabel(payload);
+  const isCustomToken = !!payload.prizeTokenAddress;
 
   return (
     <div className="fixed inset-0 z-[200] flex items-center justify-center p-3 sm:p-4 bg-black/80 backdrop-blur-sm">
@@ -107,8 +140,8 @@ export function PokerTournamentResultsModal({ payload, myAddress, onDismiss }: P
             <StatBlock label="Table time" value={formatDurationMs(payload.elapsedMs)} />
             <StatBlock
               label="Prize pool"
-              value={formatChips(payload.grossPrizePoolChips)}
-              sub="chips"
+              value={formatPrizeAmount(payload.grossPrizePoolChips, payload.prizeTokenAddress, payload.prizeTokenDecimals)}
+              sub={unit}
             />
           </div>
 
@@ -127,10 +160,10 @@ export function PokerTournamentResultsModal({ payload, myAddress, onDismiss }: P
                   Hand rake
                 </div>
                 <div className="font-jost text-[15px] tabular-nums mt-0.5" style={{ color: 'rgba(255,255,255,0.92)' }}>
-                  {formatChips(payload.handRakeTotalChips)}
+                  {formatPrizeAmount(payload.handRakeTotalChips, payload.prizeTokenAddress, payload.prizeTokenDecimals)}
                 </div>
                 <div className="font-jost-normal text-[9px] mt-0.5" style={{ color: 'rgba(255,255,255,0.35)' }}>
-                  chips
+                  {unit}
                 </div>
               </div>
               <div className="rounded-md border border-white/[0.07] bg-white/[0.03] px-3 py-2">
@@ -138,10 +171,10 @@ export function PokerTournamentResultsModal({ payload, myAddress, onDismiss }: P
                   Protocol
                 </div>
                 <div className="font-jost text-[15px] tabular-nums mt-0.5" style={{ color: 'rgba(255,255,255,0.92)' }}>
-                  {formatChips(payload.platformFeeChips)}
+                  {formatPrizeAmount(payload.platformFeeChips, payload.prizeTokenAddress, payload.prizeTokenDecimals)}
                 </div>
                 <div className="font-jost-normal text-[9px] mt-0.5" style={{ color: 'rgba(255,255,255,0.35)' }}>
-                  chips
+                  {unit}
                 </div>
               </div>
               <div className="rounded-md border border-white/[0.07] bg-white/[0.03] px-3 py-2">
@@ -149,10 +182,10 @@ export function PokerTournamentResultsModal({ payload, myAddress, onDismiss }: P
                   Creator fee
                 </div>
                 <div className="font-jost text-[15px] tabular-nums mt-0.5" style={{ color: 'rgba(255,255,255,0.92)' }}>
-                  {formatChips(payload.creatorFeeChips)}
+                  {formatPrizeAmount(payload.creatorFeeChips, payload.prizeTokenAddress, payload.prizeTokenDecimals)}
                 </div>
                 <div className="font-jost-normal text-[9px] mt-0.5" style={{ color: 'rgba(255,255,255,0.35)' }}>
-                  chips
+                  {unit}
                 </div>
               </div>
             </div>
@@ -174,10 +207,12 @@ export function PokerTournamentResultsModal({ payload, myAddress, onDismiss }: P
               >
                 <span>#</span>
                 <span>Player</span>
-                <span className="text-right">Payout (chips)</span>
+                <span className="text-right">Payout ({unit})</span>
               </div>
               {rows.map((r: PokerTournamentStandingRow) => {
                 const isMe = me != null && r.address.toLowerCase() === me;
+                // Custom-token amounts are wei-strings; toChipInt preserves them as bigints.
+                // The zero-check still works because formatUnits(0n, n) === "0".
                 const payoutBn = toChipInt(r.prizeAmount);
                 const payoutZero = payoutBn === 0n;
                 return (
@@ -202,14 +237,16 @@ export function PokerTournamentResultsModal({ payload, myAddress, onDismiss }: P
                       className="font-jost text-[12px] tabular-nums text-right"
                       style={{ color: payoutZero ? 'rgba(255,255,255,0.35)' : 'rgba(255,255,255,0.95)' }}
                     >
-                      {formatChips(payoutBn)}
+                      {formatPrizeAmount(payoutBn, payload.prizeTokenAddress, payload.prizeTokenDecimals)}
                     </span>
                   </div>
                 );
               })}
             </div>
             <p className="font-jost-normal text-[9px] text-center mt-2" style={{ color: 'rgba(255,255,255,0.32)' }}>
-              Payouts credit your off-chain poker chip wallet. Hand rake is normally zero in SNGs.
+              {isCustomToken
+                ? `Payouts are sent on-chain in ${unit} directly to the winner's wallet. Hand rake is normally zero in SNGs.`
+                : 'Payouts credit your off-chain poker chip wallet. Hand rake is normally zero in SNGs.'}
             </p>
           </div>
         </div>

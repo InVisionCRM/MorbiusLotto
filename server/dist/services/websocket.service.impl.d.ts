@@ -167,6 +167,12 @@ export class WebSocketService {
     /** Broadcast current poker table state to room (e.g. after API adds bots so UI updates). */
     broadcastPokerTableState(tableId: any): Promise<void>;
     handlePokerTournamentList(ws: any, message: any): Promise<void>;
+    /**
+     * Lists cancelled custom-token poker tournaments where the caller is the creator and
+     * may still need to call `creatorReclaim` on the escrow. Cheap DB read; the client
+     * confirms reclaimability via on-chain `getPool` before showing a button.
+     */
+    handlePokerTournamentListReclaimable(ws: any, message: any): Promise<void>;
     handlePokerTournamentCreate(ws: any, message: any): Promise<void>;
     handlePokerTournamentJoin(ws: any, message: any): Promise<void>;
     handlePokerTournamentGetState(ws: any, message: any): Promise<void>;
