@@ -179,6 +179,11 @@ export interface PokerTableState {
   tableLogoIsDefault?: boolean;
   /** Whole MORBIUS chips as decimal string for the next logo change. */
   tableLogoPriceMorbiusChips?: string;
+  /** Sponsored token's contract address (lowercase) — null when no active sponsorship. */
+  tableLogoTokenAddress?: string | null;
+  tableLogoTokenName?: string | null;
+  tableLogoTokenSymbol?: string | null;
+  tableLogoTokenLogoUrl?: string | null;
   /** Present for tournament-mode tables (`poker_tables.tournament_id`). HUD works without `?tournament=` in the URL. */
   tournamentId?: string | null;
 }
@@ -877,9 +882,12 @@ export class BlackjackWebSocketClient {
     return this.sendRequest(WS_MESSAGE_TYPES.pokerUpdateTableLogo, { tableId, logo, opacity });
   }
 
-  /** Seated players: pay off-chain MORBIUS to set a curated gallery logo for 10 minutes (timer restarts). */
-  async pokerPurchaseTableLogo(tableId: string, logo: string): Promise<PokerTableState> {
-    return this.sendRequest(WS_MESSAGE_TYPES.pokerPurchaseTableLogo, { tableId, logo });
+  /** Seated players: pay off-chain MORBIUS to spotlight a token for 10 minutes (timer restarts). */
+  async pokerPurchaseTableLogo(
+    tableId: string,
+    token: { address: string; name: string; symbol: string; logoUrl: string | null },
+  ): Promise<PokerTableState> {
+    return this.sendRequest(WS_MESSAGE_TYPES.pokerPurchaseTableLogo, { tableId, token });
   }
 
   /**

@@ -3,6 +3,7 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { toChipInt, formatChips } from '@/lib/format-poker-chips';
 import { usePokerSounds } from '@/hooks/use-poker-sounds';
+import { SponsoredTokenMarquee } from './SponsoredTokenMarquee';
 
 type Amount = bigint;
 
@@ -52,8 +53,18 @@ export interface PokerActionsProps {
   onRaise: (amount: string) => void;
   /** When "floating", renders the fullscreen horizontal strip layout */
   variant?: 'default' | 'floating';
-  /** Desktop default: single-line recap left of presets (same row; no extra chrome). */
+  /** Legacy: last-action recap line. Replaced by the always-on sponsored-token marquee. */
   lastActionLine?: string | null;
+  /**
+   * Active sponsor token (or null to fall back to MORBIUS default).
+   * Drives the marquee that lives where `lastActionLine` used to render.
+   */
+  sponsoredToken?: {
+    address: string;
+    name: string | null;
+    symbol: string | null;
+    logoUrl: string | null;
+  } | null;
 }
 
 export type PreActionOption = 'check_fold' | 'check' | 'call_any' | null;
@@ -73,7 +84,8 @@ export function PokerActions({
   onBet,
   onRaise,
   variant = 'default',
-  lastActionLine = null,
+  lastActionLine: _lastActionLine = null,
+  sponsoredToken = null,
 }: PokerActionsProps) {
   const { play } = usePokerSounds();
   const minRaiseAmt = useMemo(() => parseProp(minRaise), [minRaise]);
@@ -319,15 +331,9 @@ export function PokerActions({
 
         {/* Tune: size + commit amount */}
         <div className="flex min-w-0 flex-1 flex-col flex-wrap gap-2 p-1.5 min-[520px]:flex-row min-[520px]:flex-nowrap min-[520px]:items-center" style={tuneZoneStyle}>
-        {lastActionLine ? (
-          <span
-            data-testid="poker-actions-last-action"
-            className="m-0 min-w-0 shrink font-jost text-[10px] font-normal leading-tight text-white/35 min-[520px]:max-w-[38%] min-[520px]:flex-1 min-[520px]:basis-0 min-[520px]:truncate min-[700px]:max-w-none lg:text-[11px]"
-            title={lastActionLine}
-          >
-            {lastActionLine}
-          </span>
-        ) : null}
+        <div className="m-0 flex min-w-0 shrink min-[520px]:max-w-[38%] min-[520px]:flex-1 min-[520px]:basis-0 min-[700px]:max-w-none">
+          <SponsoredTokenMarquee sponsor={sponsoredToken} />
+        </div>
         {/* Presets */}
         <div className="flex min-w-0 shrink flex-wrap content-center gap-1 min-[520px]:shrink-0 min-[520px]:justify-end min-[520px]:gap-1.5">
           {quickSizes.map((q) => (
@@ -474,16 +480,10 @@ export function PokerActions({
           }}
         >
         <div className="mb-1.5 rounded-lg p-1" style={tuneZoneStyle}>
-        {lastActionLine ? (
-          <p
-            data-testid="poker-actions-last-action"
-            className="m-0 min-w-0 truncate px-0.5 pb-1 pt-0.5 font-jost text-[9px] font-normal leading-tight text-white/35"
-            title={lastActionLine}
-          >
-            {lastActionLine}
-          </p>
-        ) : null}
-        <div className={`grid grid-cols-4 gap-1 px-0.5 pb-0.5 ${lastActionLine ? 'pt-0' : 'pt-0.5'}`}>
+        <div className="px-0.5 pb-1 pt-0.5">
+          <SponsoredTokenMarquee sponsor={sponsoredToken} compact />
+        </div>
+        <div className="grid grid-cols-4 gap-1 px-0.5 pb-0.5 pt-0">
           {quickSizes.map((q) => (
             <button
               data-testid={`poker-quick-size-${q.label.toLowerCase().replace(/[^a-z0-9]+/g, '-')}`}
@@ -636,18 +636,10 @@ export function PokerActions({
       <div className="hidden min-w-0 sm:flex w-full flex-col px-1 py-2 sm:px-2 sm:py-2 md:px-2 md:py-2.5">
         <div className="mb-1.5 rounded-lg p-1 md:p-1.5" style={tuneZoneStyle}>
         <div className="flex min-w-0 items-center gap-1.5 pt-0.5 sm:gap-2 md:pt-1">
-          {lastActionLine ? (
-            <span
-              data-testid="poker-actions-last-action"
-              className="m-0 min-w-0 flex-1 truncate font-jost text-[9px] font-normal leading-tight text-white/35 min-[520px]:text-[10px] md:text-[11px]"
-              title={lastActionLine}
-            >
-              {lastActionLine}
-            </span>
-          ) : null}
-          <div
-            className={`flex min-w-0 flex-wrap items-center justify-end gap-1 sm:gap-1.5 ${lastActionLine ? 'min-w-0 shrink' : 'ml-auto min-w-0'}`}
-          >
+          <div className="m-0 flex min-w-0 flex-1">
+            <SponsoredTokenMarquee sponsor={sponsoredToken} />
+          </div>
+          <div className="flex min-w-0 shrink flex-wrap items-center justify-end gap-1 sm:gap-1.5">
             {quickSizes.map((q) => (
               <button
                 key={q.label}

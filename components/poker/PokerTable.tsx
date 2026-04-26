@@ -19,11 +19,9 @@ import {
   POKER_POT_ANCHOR,
 } from '@/lib/poker-seat-layout';
 import confetti from 'canvas-confetti';
-import {
-  POKER_DEFAULT_TABLE_LOGO_FILENAME,
-  POKER_TABLE_LOGO_PUBLIC_PREFIX,
-} from '@/lib/poker-table-logo-constants';
 import { FloatingTableLogo } from './FloatingTableLogo';
+
+const MORBIUS_DEFAULT_FELT_LOGO = '/morbius/MorbiusLogo-2.svg';
 
 const BEAM_PALETTES: BeamColorPalette[] = [
   { primary: '#18CCFC', accent: '#6344F5', tail: '#AE48FF' }, // cyan → purple → magenta
@@ -264,11 +262,13 @@ export function PokerTable({ state, currentPlayerAddress, timeLeft, chatBubbleBy
   }, []);
 
   const floatingTableLogoSrc = useMemo(() => {
-    const useDefault = state.tableLogoIsDefault ?? !state.tableLogo;
-    const file = useDefault ? POKER_DEFAULT_TABLE_LOGO_FILENAME : state.tableLogo;
-    if (!file) return null;
-    return `${POKER_TABLE_LOGO_PUBLIC_PREFIX}${encodeURIComponent(file)}`;
-  }, [state.tableLogo, state.tableLogoIsDefault]);
+    // Active sponsorship: render the sponsored token's DexScreener logo.
+    if (state.tableLogoSponsoredUntil && state.tableLogoTokenLogoUrl) {
+      return state.tableLogoTokenLogoUrl;
+    }
+    // Idle: always default to the MORBIUS logo.
+    return MORBIUS_DEFAULT_FELT_LOGO;
+  }, [state.tableLogoSponsoredUntil, state.tableLogoTokenLogoUrl]);
 
   const selfHandName = useMemo(() => {
     if (!state.myHoleCards || state.myHoleCards.length < 2) return null;

@@ -102,6 +102,19 @@
   animation-direction: var(--animation-direction, forwards);
 }
 
+/* Slim continuous marquee for the poker betting-panel sponsor strip. */
+@keyframes poker-marquee {
+  0% { transform: translateX(0); }
+  100% { transform: translateX(-50%); }
+}
+.animate-poker-marquee {
+  animation: poker-marquee 45s linear infinite;
+  will-change: transform;
+}
+.animate-poker-marquee:hover {
+  animation-play-state: paused;
+}
+
 * {
   border-color: var(--color-border);
 }

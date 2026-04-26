@@ -415,6 +415,22 @@ export default function PokerTablePage() {
     renderedState?.seats,
   ]);
 
+  const sponsoredToken = useMemo(() => {
+    const addr = renderedState?.tableLogoTokenAddress;
+    if (!addr) return null;
+    return {
+      address: addr,
+      name: renderedState?.tableLogoTokenName ?? null,
+      symbol: renderedState?.tableLogoTokenSymbol ?? null,
+      logoUrl: renderedState?.tableLogoTokenLogoUrl ?? null,
+    };
+  }, [
+    renderedState?.tableLogoTokenAddress,
+    renderedState?.tableLogoTokenName,
+    renderedState?.tableLogoTokenSymbol,
+    renderedState?.tableLogoTokenLogoUrl,
+  ]);
+
   const sharedActions = renderedState && mySeat && (
     <PokerActions
       canAct={!!canAct}
@@ -426,6 +442,7 @@ export default function PokerTablePage() {
       pot={hand?.pot ?? '0'}
       variant={isFullscreen ? 'floating' : 'default'}
       lastActionLine={lastActionLine}
+      sponsoredToken={sponsoredToken}
       onPreActionChange={setQueuedPreAction}
       onFold={handleFold}
       onCheck={handleCheck}
