@@ -646,6 +646,8 @@ class TournamentService {
         let onChainTournamentId = null;
         let useEscrowV2 = false;
         let useMorbiusPayout = false;
+        /** Lifted out of Phase 1 so Phase 2 can match the creator-fee payout and persist its tx hash. */
+        let creatorAddress = null;
         const distributions = [];
         // ── Phase 1: DB transaction ───────────────────────────────────────────────
         try {
@@ -681,6 +683,7 @@ class TournamentService {
             useEscrowV2 = useEscrow;
             useMorbiusPayout = isOnChain && !useEscrow;
             onChainTournamentId = tournament.on_chain_tournament_id ?? null;
+            creatorAddress = tournament.creator_address ? String(tournament.creator_address).toLowerCase() : null;
             const offChainPokerChips = String(tournament.game_type ?? '') === 'poker' && !useMorbiusPayout && !useEscrowV2;
             // Apply prizes — DB updates only; on-chain calls deferred to Phase 2
             for (const row of prizesResult.rows) {
@@ -709,9 +712,15 @@ class TournamentService {
                     await client.query(`UPDATE tournament_entries SET final_rank = $1 WHERE id = $2`, [row.final_rank, row.entry_id]);
                 }
             }
-            // Fees — same pattern: queue on-chain, apply off-chain in transaction
-            const platformFeePercent = 3;
-            const creatorFeePercent = 2;
+            // Fees — same pattern: queue on-chain, apply off-chain in transaction.
+            //
+            // Poker freerolls (buy_in_amount = 0) redirect the 2% creator fee to the platform,
+            // so the full 5% goes to the platform wallet. The creator funded the prize pool,
+            // so paying them 2% of their own funds back is meaningless — it just rounds the
+            // donation. Blackjack and all buy-in tournaments keep the 3/2 split unchanged.
+            const isPokerFreeroll = String(tournament.game_type ?? '') === 'poker' && tournament.buy_in_amount === 0n;
+            const platformFeePercent = isPokerFreeroll ? 5 : 3;
+            const creatorFeePercent = isPokerFreeroll ? 0 : 2;
             const totalPool = actualPrizePool;
             const platformWalletEnv = process.env.PLATFORM_FEE_WALLET?.trim();
             const platformWalletChips = (0, poker_chip_wallet_1.getPlatformFeeWalletLower)();
@@ -778,6 +787,10 @@ class TournamentService {
                     error: setActiveResult.error,
                 });
             }
+            const morbiusWinnerEntryByAddress = new Map();
+            for (const d of distributions) {
+                morbiusWinnerEntryByAddress.set(d.player_address.toLowerCase(), d.entry_id);
+            }
             for (const { address, amount } of pendingOnChainPayouts) {
                 const result = await (0, morbius_tournament_1.sendMorbiusTournamentPayout)(onChainTournamentId, address, amount);
                 if (!result.success) {
@@ -787,6 +800,32 @@ class TournamentService {
                         amount: amount.toString(),
                         error: result.error,
                     });
+                    continue;
+                }
+                const lowerAddr = address.toLowerCase();
+                const entryId = morbiusWinnerEntryByAddress.get(lowerAddr);
+                if (entryId && result.txHash) {
+                    try {
+                        await this.pool.query(`UPDATE tournament_entries SET prize_payout_tx_hash = $1 WHERE id = $2`, [result.txHash, entryId]);
+                    }
+                    catch (writeErr) {
+                        logger_1.logger.warn('Failed to persist prize_payout_tx_hash (payout still on-chain)', {
+                            tournamentId, entryId, txHash: result.txHash, error: writeErr.message,
+                        });
+                    }
+                }
+                // Creator-fee path: same payout machinery, but recipient is the tournament creator
+                // (not a tournament_entries row). Persist on the parent `tournaments` row instead so
+                // the creator dashboard can surface a copyable hash.
+                if (creatorAddress && lowerAddr === creatorAddress && result.txHash) {
+                    try {
+                        await this.pool.query(`UPDATE tournaments SET creator_fee_tx_hash = $1 WHERE id = $2`, [result.txHash, tournamentId]);
+                    }
+                    catch (writeErr) {
+                        logger_1.logger.warn('Failed to persist creator_fee_tx_hash (payout still on-chain)', {
+                            tournamentId, txHash: result.txHash, error: writeErr.message,
+                        });
+                    }
                 }
             }
             const setResult = await (0, morbius_tournament_1.setMorbiusTournamentCompleted)(onChainTournamentId);
@@ -799,15 +838,49 @@ class TournamentService {
             }
         }
         else if (useEscrowV2) {
-            for (const { address, amount } of pendingOnChainPayouts) {
-                const result = await (0, escrow_payout_1.sendEscrowPayout)(tournamentId, address, amount);
-                if (!result.success) {
-                    logger_1.logger.error('Escrow payout failed — tournament completed in DB, manual on-chain recovery required', {
-                        tournamentId,
-                        recipient: address,
-                        amount: amount.toString(),
-                        error: result.error,
-                    });
+            // Single batched call replaces the loop-of-payout()s. The contract iterates
+            // recipients internally, atomic, one nonce, one network round-trip. Fixes the
+            // production failure mode where N sequential writeContract calls were silently
+            // dropped by the public RPC.
+            const batchResult = await (0, escrow_payout_1.sendEscrowPayoutMultiple)(tournamentId, pendingOnChainPayouts);
+            if (!batchResult.success) {
+                logger_1.logger.error('Escrow payoutMultiple failed — tournament completed in DB, manual on-chain recovery required', {
+                    tournamentId,
+                    recipientCount: pendingOnChainPayouts.length,
+                    error: batchResult.error,
+                });
+            }
+            else if (batchResult.txHash) {
+                // The batch tx settles every recipient in one hash. Persist the same hash
+                // on every winner's entry row + on the tournament row for the creator-fee row.
+                // Best-effort: failed writes here don't reverse the on-chain payout.
+                const winnerEntryByAddress = new Map();
+                for (const d of distributions) {
+                    winnerEntryByAddress.set(d.player_address.toLowerCase(), d.entry_id);
+                }
+                for (const { address } of pendingOnChainPayouts) {
+                    const lowerAddr = address.toLowerCase();
+                    const entryId = winnerEntryByAddress.get(lowerAddr);
+                    if (entryId) {
+                        try {
+                            await this.pool.query(`UPDATE tournament_entries SET prize_payout_tx_hash = $1 WHERE id = $2`, [batchResult.txHash, entryId]);
+                        }
+                        catch (writeErr) {
+                            logger_1.logger.warn('Failed to persist prize_payout_tx_hash (batch payout still on-chain)', {
+                                tournamentId, entryId, txHash: batchResult.txHash, error: writeErr.message,
+                            });
+                        }
+                    }
+                    if (creatorAddress && lowerAddr === creatorAddress) {
+                        try {
+                            await this.pool.query(`UPDATE tournaments SET creator_fee_tx_hash = $1 WHERE id = $2`, [batchResult.txHash, tournamentId]);
+                        }
+                        catch (writeErr) {
+                            logger_1.logger.warn('Failed to persist creator_fee_tx_hash (batch payout still on-chain)', {
+                                tournamentId, txHash: batchResult.txHash, error: writeErr.message,
+                            });
+                        }
+                    }
                 }
             }
         }
@@ -1812,8 +1885,10 @@ class TournamentService {
         t.prize_pool,
         t.prize_token_address,
         t.prize_token_decimals,
+        t.prize_token_symbol,
         COALESCE(t.creator_fee_percent, 0) AS creator_fee_percent,
         (t.prize_pool * COALESCE(t.creator_fee_percent, 0)) / 100 AS fee_earned,
+        t.creator_fee_tx_hash,
         t.ended_at
       FROM tournaments t
       WHERE LOWER(t.creator_address) = LOWER($1)
@@ -1828,8 +1903,10 @@ class TournamentService {
             prizePool: String(row.prize_pool ?? '0'),
             prizeTokenAddress: row.prize_token_address ?? null,
             prizeTokenDecimals: row.prize_token_decimals != null ? Number(row.prize_token_decimals) : null,
+            prizeTokenSymbol: row.prize_token_symbol ?? null,
             feePercent: Number(row.creator_fee_percent ?? 0),
             feeEarned: String(row.fee_earned ?? '0'),
+            feeTxHash: row.creator_fee_tx_hash ?? null,
             completedAt: row.ended_at ? new Date(row.ended_at).toISOString() : '',
         }));
     }

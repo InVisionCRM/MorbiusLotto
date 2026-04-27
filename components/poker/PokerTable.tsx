@@ -17,9 +17,11 @@ import {
   betChipAnchorForDisplaySlot,
   cardAnchorForDisplaySlot,
   POKER_POT_ANCHOR,
+  ringIndexForDisplaySlot,
 } from '@/lib/poker-seat-layout';
 import confetti from 'canvas-confetti';
 import { FloatingTableLogo } from './FloatingTableLogo';
+import { PokerRailActingHighlight } from './PokerRailActingHighlight';
 
 const MORBIUS_DEFAULT_FELT_LOGO = '/morbius/MorbiusLogo-2.svg';
 
@@ -147,6 +149,21 @@ export function PokerTable({ state, currentPlayerAddress, timeLeft, chatBubbleBy
   };
 
   const actingPosition = hand?.actingPosition ?? null;
+  const actingDisplaySlot =
+    actingPosition != null &&
+    actingPosition >= 0 &&
+    actingPosition < state.seats.length
+      ? toDisplaySlot(actingPosition)
+      : null;
+  const actingRingIndex =
+    actingDisplaySlot != null && state.seats.length > 0
+      ? ringIndexForDisplaySlot(actingDisplaySlot, state.seats.length)
+      : null;
+  const showRailActingHighlight =
+    !!hand &&
+    hand.street !== 'showdown' &&
+    actingPosition != null &&
+    actingRingIndex != null;
   const isShowdownWithWinners = hand?.street === 'showdown' && hand?.winners?.length;
   const winnerSeatIndices = isShowdownWithWinners
     ? (hand!.winners!.map((w) => state.seats.findIndex((s) => s.playerAddress === w.address)).filter((i) => i >= 0) as number[])
@@ -464,6 +481,11 @@ export function PokerTable({ state, currentPlayerAddress, timeLeft, chatBubbleBy
           </div>
         </div>
       </div>
+
+      <PokerRailActingHighlight
+        visible={showRailActingHighlight}
+        activeRingIndex={actingRingIndex}
+      />
 
       {/* Dealer button holder bump — top center */}
       <div

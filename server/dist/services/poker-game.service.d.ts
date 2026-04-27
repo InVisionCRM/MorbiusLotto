@@ -92,10 +92,15 @@ export interface PokerTableState {
     tableLogoSponsoredUntil?: string | null;
     /** Last sponsor wallet (lowercase), for UI. */
     tableLogoSponsorAddress?: string | null;
-    /** True when no active sponsorship (felt uses default Morbius logo). */
+    /** True when no active sponsorship (felt uses default Morbius token). */
     tableLogoIsDefault?: boolean;
     /** Whole MORBIUS chips (string) for the next logo change at this moment. */
     tableLogoPriceMorbiusChips?: string;
+    /** Sponsored token contract address (lowercased), or null when idle. */
+    tableLogoTokenAddress?: string | null;
+    tableLogoTokenName?: string | null;
+    tableLogoTokenSymbol?: string | null;
+    tableLogoTokenLogoUrl?: string | null;
     /** Set when `poker_tables.tournament_id` is non-null (SNG / scheduled poker tournament). */
     tournamentId?: string | null;
 }
@@ -170,10 +175,18 @@ export declare class PokerGameService {
     getTableState(tableId: string, forPlayer: string | null): Promise<PokerTableState>;
     updateTableLogo(tableId: string, logo: string | null, opacity: number): Promise<void>;
     /**
-     * Pay MORBIUS (off-chain `players.balance`) to set a curated gallery logo for 10 minutes.
+     * Pay MORBIUS (off-chain `players.balance`) to sponsor a token spotlight for 10 minutes.
      * Timer restarts on each purchase. Seated players only.
+     *
+     * Trust-the-client metadata: the client passes name/symbol/logoUrl pulled from DexScreener.
+     * Only the address is structurally validated; lengths are capped server-side.
      */
-    purchaseTableLogoSponsorship(tableId: string, playerAddress: string, logoFilename: string): Promise<PokerTableState>;
+    purchaseTableLogoSponsorship(tableId: string, playerAddress: string, token: {
+        address: string;
+        name: string;
+        symbol: string;
+        logoUrl: string | null;
+    }): Promise<PokerTableState>;
     setSitOut(tableId: string, playerAddress: string): Promise<PokerTableState>;
     setSitBack(tableId: string, playerAddress: string): Promise<PokerTableState>;
     /** Kick players who have been sitting out for >= 15 minutes (cash games only). */

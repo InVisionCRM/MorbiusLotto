@@ -22,6 +22,17 @@ export const tournamentPrizeEscrowV2Abi = [
     type: 'function',
   },
   {
+    inputs: [
+      { name: 'tournamentId', type: 'bytes32' },
+      { name: 'winners', type: 'address[]' },
+      { name: 'percentages', type: 'uint256[]' },
+    ],
+    name: 'payoutMultiple',
+    outputs: [],
+    stateMutability: 'nonpayable',
+    type: 'function',
+  },
+  {
     inputs: [{ name: 'tournamentId', type: 'bytes32' }, { name: 'to', type: 'address' }],
     name: 'payoutRemainderTo',
     outputs: [],

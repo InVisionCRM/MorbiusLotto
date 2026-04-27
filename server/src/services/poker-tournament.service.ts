@@ -1466,8 +1466,35 @@ export class PokerTournamentService {
         prize_amount: r.prize_amount,
       }));
     } catch (err) {
-      logger.error('Poker tournament prize distribution failed — table kept for retry', { tournamentId, err });
-      throw err;
+      // distributePrizes commits Phase 1 (writes prize_won, flips status to 'completed')
+      // BEFORE Phase 2 fires the on-chain payouts. If the throw happened after the commit,
+      // the DB is in a half-state where re-running distributePrizes throws "Tournament already
+      // completed" and we'd get stuck forever — winner row still 'playing', table never torn down.
+      //
+      // Re-read status: if it's already 'completed', Phase 1 succeeded → proceed with cleanup
+      // (entry status flip, seat ranks, table teardown, broadcast). On-chain payouts can be
+      // retried separately by an admin without reverting any DB state.
+      const statusRecheck = await this.pool.query(`SELECT status FROM tournaments WHERE id = $1`, [tournamentId]);
+      const isAlreadyCompleted = statusRecheck.rows[0]?.status === 'completed';
+      if (!isAlreadyCompleted) {
+        logger.error('Poker tournament prize distribution failed pre-commit — table kept for retry', { tournamentId, err });
+        throw err;
+      }
+      logger.error(
+        'distributePrizes Phase 2 failed AFTER commit — proceeding with cleanup; on-chain payouts need manual recovery',
+        { tournamentId, err: (err as Error).message },
+      );
+      // Reload prizes from DB so the broadcast still includes correct standings.
+      const reloaded = await this.pool.query<{ entry_id: string; player_address: string; final_rank: number; prize_won: string }>(
+        `SELECT id AS entry_id, player_address, final_rank, COALESCE(prize_won, 0)::text AS prize_won
+         FROM tournament_entries WHERE tournament_id = $1 AND final_rank IS NOT NULL`,
+        [tournamentId],
+      );
+      prizeDistributions = reloaded.rows.map((r) => ({
+        player_address: r.player_address,
+        final_rank: Number(r.final_rank),
+        prize_amount: BigInt(r.prize_won || '0'),
+      }));
     }
 
     await this.pool.query(

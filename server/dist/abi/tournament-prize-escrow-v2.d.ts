@@ -17,6 +17,21 @@ export declare const tournamentPrizeEscrowV2Abi: readonly [{
     readonly inputs: readonly [{
         readonly name: "tournamentId";
         readonly type: "bytes32";
+    }, {
+        readonly name: "winners";
+        readonly type: "address[]";
+    }, {
+        readonly name: "percentages";
+        readonly type: "uint256[]";
+    }];
+    readonly name: "payoutMultiple";
+    readonly outputs: readonly [];
+    readonly stateMutability: "nonpayable";
+    readonly type: "function";
+}, {
+    readonly inputs: readonly [{
+        readonly name: "tournamentId";
+        readonly type: "bytes32";
     }];
     readonly name: "getPool";
     readonly outputs: readonly [{

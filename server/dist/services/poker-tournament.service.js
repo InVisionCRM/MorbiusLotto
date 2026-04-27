@@ -261,13 +261,24 @@ class PokerTournamentService {
             // Re-read the escrow contract; trust on-chain state, not the client's claims.
             const pool = await (0, escrow_status_1.getEscrowPoolStatus)(e.tournamentId);
             if (!pool) {
-                throw new Error('Could not verify on-chain escrow deposit (RPC error or no deposit found)');
+                throw new Error('Could not verify on-chain escrow deposit (RPC error)');
+            }
+            // Empty pool: contract returns the zero-struct when no deposit has landed at this bytes32.
+            // Most common cause: the deposit tx was signed by the wallet but not broadcast/mined yet,
+            // OR the wallet rejected silently after returning a hash. Check this FIRST so the error
+            // message is accurate instead of falling through to "not active" / "underfunded".
+            if (pool.token === '0x0000000000000000000000000000000000000000' || pool.totalDeposited === 0n) {
+                logger_1.logger.warn('Custom-token freeroll: no on-chain deposit found at bytes32', {
+                    tournamentId: e.tournamentId,
+                    bytes32Id: (0, tournament_id_bytes32_1.tournamentIdToBytes32)(e.tournamentId),
+                    claimedTxHash: e.txHash,
+                    claimedAmount: e.amount.toString(),
+                });
+                throw new Error('No on-chain deposit found for this tournament id yet. The deposit transaction may still be pending or was never broadcast. ' +
+                    'Check the tx hash in a block explorer; if it never landed, cancel and retry the create flow to start fresh.');
             }
             if (pool.cancelled) {
                 throw new Error('Escrow deposit has already been cancelled');
-            }
-            if (pool.active === false) {
-                throw new Error('Escrow deposit is not active');
             }
             if (pool.token.toLowerCase() !== e.tokenAddress.toLowerCase()) {
                 throw new Error(`Escrow token mismatch (on-chain: ${pool.token}, claimed: ${e.tokenAddress})`);
@@ -988,8 +999,29 @@ class PokerTournamentService {
             }));
         }
         catch (err) {
-            logger_1.logger.error('Poker tournament prize distribution failed — table kept for retry', { tournamentId, err });
-            throw err;
+            // distributePrizes commits Phase 1 (writes prize_won, flips status to 'completed')
+            // BEFORE Phase 2 fires the on-chain payouts. If the throw happened after the commit,
+            // the DB is in a half-state where re-running distributePrizes throws "Tournament already
+            // completed" and we'd get stuck forever — winner row still 'playing', table never torn down.
+            //
+            // Re-read status: if it's already 'completed', Phase 1 succeeded → proceed with cleanup
+            // (entry status flip, seat ranks, table teardown, broadcast). On-chain payouts can be
+            // retried separately by an admin without reverting any DB state.
+            const statusRecheck = await this.pool.query(`SELECT status FROM tournaments WHERE id = $1`, [tournamentId]);
+            const isAlreadyCompleted = statusRecheck.rows[0]?.status === 'completed';
+            if (!isAlreadyCompleted) {
+                logger_1.logger.error('Poker tournament prize distribution failed pre-commit — table kept for retry', { tournamentId, err });
+                throw err;
+            }
+            logger_1.logger.error('distributePrizes Phase 2 failed AFTER commit — proceeding with cleanup; on-chain payouts need manual recovery', { tournamentId, err: err.message });
+            // Reload prizes from DB so the broadcast still includes correct standings.
+            const reloaded = await this.pool.query(`SELECT id AS entry_id, player_address, final_rank, COALESCE(prize_won, 0)::text AS prize_won
+         FROM tournament_entries WHERE tournament_id = $1 AND final_rank IS NOT NULL`, [tournamentId]);
+            prizeDistributions = reloaded.rows.map((r) => ({
+                player_address: r.player_address,
+                final_rank: Number(r.final_rank),
+                prize_amount: BigInt(r.prize_won || '0'),
+            }));
         }
         await this.pool.query(`UPDATE tournament_entries
        SET status = 'completed', finished_at = COALESCE(finished_at, NOW())
@@ -998,7 +1030,8 @@ class PokerTournamentService {
        SET final_rank = te.final_rank
        FROM tournament_entries te
        WHERE pts.entry_id = te.id AND te.tournament_id = $1`, [tournamentId]);
-        const standingsRes = await this.pool.query(`SELECT LOWER(player_address) AS player_address, final_rank, COALESCE(prize_won, 0)::text AS prize_won
+        const standingsRes = await this.pool.query(`SELECT LOWER(player_address) AS player_address, final_rank,
+              COALESCE(prize_won, 0)::text AS prize_won, prize_payout_tx_hash
        FROM tournament_entries
        WHERE tournament_id = $1 AND final_rank IS NOT NULL
        ORDER BY final_rank ASC`, [tournamentId]);
@@ -1006,6 +1039,7 @@ class PokerTournamentService {
             address: r.player_address,
             rank: Number(r.final_rank),
             prizeAmount: r.prize_won,
+            payoutTxHash: r.prize_payout_tx_hash ?? null,
         }));
         const endedRes = await this.pool.query(`SELECT ended_at FROM tournaments WHERE id = $1`, [tournamentId]);
         const endedAt = endedRes.rows[0]?.ended_at ? new Date(endedRes.rows[0].ended_at).toISOString() : null;

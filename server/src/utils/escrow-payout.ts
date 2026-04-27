@@ -85,6 +85,99 @@ export async function sendEscrowPayout(
   return { success: false, error: 'Max retries exceeded' };
 }
 
+/**
+ * Batched escrow payout — single tx pays N recipients using percentages of the
+ * remaining pool balance. Replaces the loop-of-`payout()` pattern that was
+ * silently failing on Railway (RPC drops on N sequential writes).
+ *
+ * Caller passes raw wei amounts; we convert each to a percentage relative to
+ * `remaining` (read on-chain so it's authoritative). The contract truncates to
+ * uint256 percentages, so summed dust may leave 1-2 wei unpaid — fine for our use.
+ *
+ * Returns the same `{success, txHash, error}` shape as `sendEscrowPayout` so
+ * callers can stay uniform.
+ */
+export async function sendEscrowPayoutMultiple(
+  tournamentId: string,
+  recipients: { address: string; amount: bigint }[],
+): Promise<{ success: boolean; txHash?: string; error?: string }> {
+  if (recipients.length === 0) return { success: true };
+
+  const idBytes32 = tournamentIdToBytes32(tournamentId);
+
+  // Read current remaining balance to compute percentages. This is the contract's
+  // perspective — `remaining = totalDeposited - amountPaidOut`. If anything was
+  // already paid out (e.g. partial recovery), the percentages are scaled accordingly.
+  const status = await getEscrowPoolStatus(tournamentId);
+  if (!status) return { success: false, error: 'Could not read escrow pool state' };
+  const remaining = status.totalDeposited - status.amountPaidOut;
+  if (remaining <= 0n) {
+    logger.warn('sendEscrowPayoutMultiple: pool has no remaining balance', { tournamentId });
+    return { success: false, error: 'Pool has no remaining balance' };
+  }
+
+  // Compute integer percentages 0–100. Drop entries that round to 0 (would be a no-op
+  // in the contract anyway and just wastes calldata). Sum check enforced by contract too.
+  const winners: `0x${string}`[] = [];
+  const percentages: bigint[] = [];
+  let totalPct = 0n;
+  for (const r of recipients) {
+    if (r.amount <= 0n) continue;
+    // pct = floor(amount * 100 / remaining). Could leave dust on the floor; harmless.
+    const pct = (r.amount * 100n) / remaining;
+    if (pct <= 0n) continue;
+    winners.push(r.address as `0x${string}`);
+    percentages.push(pct);
+    totalPct += pct;
+  }
+  if (winners.length === 0) {
+    logger.warn('sendEscrowPayoutMultiple: all recipients rounded to 0%', {
+      tournamentId, remaining: remaining.toString(),
+    });
+    return { success: false, error: 'All amounts rounded to 0% of remaining' };
+  }
+  if (totalPct > 100n) {
+    // Should not happen: caller-supplied amounts shouldn't exceed `remaining` since
+    // both come from the same pool calc. Defensive — a >100% sum reverts in-contract.
+    logger.error('sendEscrowPayoutMultiple: percentages sum > 100, refusing to call', {
+      tournamentId, totalPct: totalPct.toString(),
+    });
+    return { success: false, error: `Computed percentages sum to ${totalPct} (>100)` };
+  }
+
+  logger.info('sendEscrowPayoutMultiple: invoking', {
+    tournamentId,
+    bytes32Id: idBytes32,
+    recipientCount: winners.length,
+    totalPct: totalPct.toString(),
+    remaining: remaining.toString(),
+    callerWallet: AUTHORIZED_KEY ? privateKeyToAccount(AUTHORIZED_KEY).address : '<MISSING_KEY>',
+  });
+
+  const maxRetries = 2;
+  for (let attempt = 0; attempt <= maxRetries; attempt++) {
+    try {
+      const client = getWalletClient();
+      const hash = await client.writeContract({
+        account: client.account!,
+        chain: pulsechain,
+        address: ESCROW_V2_ADDRESS,
+        abi: tournamentPrizeEscrowV2Abi,
+        functionName: 'payoutMultiple',
+        args: [idBytes32, winners, percentages],
+      });
+      logger.info('Escrow payoutMultiple sent', { tournamentId, recipientCount: winners.length, txHash: hash });
+      return { success: true, txHash: hash };
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      const stack = err instanceof Error ? err.stack : undefined;
+      logger.error('Escrow payoutMultiple attempt failed', { attempt, tournamentId, error: msg, stack });
+      if (attempt === maxRetries) return { success: false, error: msg };
+    }
+  }
+  return { success: false, error: 'Max retries exceeded' };
+}
+
 const RECLAIM_WALLET = (process.env.ESCROW_REMAINDER_WALLET || process.env.PLATFORM_FEE_WALLET) as `0x${string}` | undefined;
 
 /**

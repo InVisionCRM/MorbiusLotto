@@ -7,6 +7,21 @@ export const tournamentPrizeEscrowV2Abi = [
     type: 'function',
   },
   {
+    // Batched payout: distributes `remaining` (totalDeposited - amountPaidOut) across the
+    // winners array using each percentage. Single tx, atomic, way more reliable than
+    // looping `payout()` calls — RPC drops/nonce races on N writes were causing silent
+    // payout failures in production.
+    inputs: [
+      { name: 'tournamentId', type: 'bytes32' },
+      { name: 'winners', type: 'address[]' },
+      { name: 'percentages', type: 'uint256[]' },
+    ],
+    name: 'payoutMultiple',
+    outputs: [],
+    stateMutability: 'nonpayable',
+    type: 'function',
+  },
+  {
     // The deployed contract returns 6 fields (no `active`). A phantom 7th field
     // makes viem fail decode and silently fall through to a V1 ABI elsewhere
     // that mis-aligns `totalDeposited` into `amountPaidOut`. See escrow-status.ts.

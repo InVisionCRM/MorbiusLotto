@@ -10,6 +10,7 @@ import {
   POKER_POT_ANCHOR,
   ringIndexForDisplaySlot,
 } from '@/lib/poker-seat-layout';
+import { PokerTableRailActingLayoutDemo } from '@/components/poker/PokerTableRailActingLayoutDemo';
 
 export default function PokerLayoutReferencePage() {
   const [seatCount, setSeatCount] = useState(10);
@@ -93,7 +94,26 @@ export default function PokerLayoutReferencePage() {
           </label>
         </div>
 
-        {/* Table root — same conceptual box as PokerTable `absolute inset-0` */}
+        <section className="space-y-3 pt-2">
+          <div className="space-y-1">
+            <p className="text-xs uppercase tracking-widest text-cyan-400/80">Production (interactive)</p>
+            <h2 className="text-lg font-semibold text-slate-100">Rail + acting sector</h2>
+            <p className="text-sm text-slate-400 max-w-2xl">
+              Same <code className="text-cyan-300/90">PokerTableRailShell</code> +{' '}
+              <code className="text-cyan-300/90">PokerRailActingHighlight</code> as the live table (wrapped in{' '}
+              <code className="text-cyan-300/90">PokerTableEffectProvider</code> for felt/rail from settings).
+              Tweak the cyan sector without a game. Uses <strong className="text-slate-200">Seats in play</strong> and
+              the two checkboxes above for reference overlays.
+            </p>
+          </div>
+          <PokerTableRailActingLayoutDemo
+            seatCount={seatCount}
+            showFullRing={showFullRing}
+            showBetChips={showBetChips}
+          />
+        </section>
+
+        {/* Table root — same conceptual box as PokerTable `absolute inset-0` (lightweight coordinate map) */}
         <div
           className="relative w-full mx-auto rounded-2xl border border-cyan-500/25 overflow-hidden shadow-2xl"
           style={{

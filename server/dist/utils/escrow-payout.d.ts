@@ -8,6 +8,26 @@ export declare function sendEscrowPayout(tournamentId: string, winnerAddress: st
     error?: string;
 }>;
 /**
+ * Batched escrow payout — single tx pays N recipients using percentages of the
+ * remaining pool balance. Replaces the loop-of-`payout()` pattern that was
+ * silently failing on Railway (RPC drops on N sequential writes).
+ *
+ * Caller passes raw wei amounts; we convert each to a percentage relative to
+ * `remaining` (read on-chain so it's authoritative). The contract truncates to
+ * uint256 percentages, so summed dust may leave 1-2 wei unpaid — fine for our use.
+ *
+ * Returns the same `{success, txHash, error}` shape as `sendEscrowPayout` so
+ * callers can stay uniform.
+ */
+export declare function sendEscrowPayoutMultiple(tournamentId: string, recipients: {
+    address: string;
+    amount: bigint;
+}[]): Promise<{
+    success: boolean;
+    txHash?: string;
+    error?: string;
+}>;
+/**
  * Send any remaining (unclaimed) escrow balance for a tournament to the configured reclaim wallet.
  * Call after distributePrizes so escrow never holds leftover funds.
  * Uses same authorized server key as payouts. Set ESCROW_REMAINDER_WALLET or PLATFORM_FEE_WALLET.

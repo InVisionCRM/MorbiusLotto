@@ -7,6 +7,7 @@ import { formatEther } from 'viem'
 import { toBigIntSafe } from '@/lib/safe-bigint'
 import { usePlayerGames, type PlayerGameRow } from '@/hooks/use-blackjack-stats'
 import { Theme } from '@/lib/theme'
+import { formatBlackjackPlayTime } from '@/lib/format-blackjack-play-time'
 
 const panelStyle = {
   background: 'linear-gradient(145deg, rgb(16, 26, 35), rgb(35, 36, 41))',
@@ -19,10 +20,8 @@ function formatMorbius(wei: bigint): string {
   return Math.floor(Number(formatEther(wei))).toLocaleString(undefined, { maximumFractionDigits: 2 })
 }
 
-function formatTime(isoOrMs: string | number): string {
-  const date = typeof isoOrMs === 'string' ? new Date(isoOrMs) : new Date(isoOrMs)
-  return date.toLocaleString(undefined, { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })
-}
+const compactRowGrid =
+  'grid grid-cols-[minmax(min-content,1fr)_auto_4.5rem] items-center gap-2 sm:gap-3 py-2 px-2 sm:px-3 border-b border-white/5 last:border-0 text-sm'
 
 function ResultRow({
   r,
@@ -38,12 +37,12 @@ function ResultRow({
   const profit = payout - bet
   const win = profit > 0n
   const resultLabel = r.result === 'blackjack' ? 'BJ' : r.result ?? '—'
-  const timeStr = r.created_at ? formatTime(r.created_at) : '—'
+  const timeStr = formatBlackjackPlayTime(r.created_at)
 
   if (compact) {
     return (
-      <div className="grid grid-cols-[minmax(0,1.6fr)_minmax(140px,0.95fr)_4.5rem] items-center gap-4 sm:gap-5 py-2 px-2 sm:px-3 border-b border-white/5 last:border-0 text-sm">
-        <span className="text-white/70 min-w-0 truncate">
+      <div className={compactRowGrid}>
+        <span className="text-white/70 min-w-0 whitespace-normal [overflow-wrap:anywhere]">
           <span className="text-white/50 font-mono">{timeStr}</span>
           <span className="mx-1.5">·</span>
           {resultLabel} · #{r.game_number}
@@ -124,7 +123,7 @@ export function BlackjackRecentGames({
           <div className="p-4 text-center text-white/50 text-sm">No games yet. Play Blackjack to see history here.</div>
         ) : (
           <>
-            <div className="grid grid-cols-[minmax(0,1.6fr)_minmax(140px,0.95fr)_4.5rem] items-center gap-4 sm:gap-5 px-2 sm:px-3 py-1.5 text-[10px] uppercase tracking-wider text-white/40 border-b border-white/10">
+            <div className="grid grid-cols-[minmax(min-content,1fr)_auto_4.5rem] items-center gap-2 sm:gap-3 px-2 sm:px-3 py-1.5 text-[10px] uppercase tracking-wider text-white/40 border-b border-white/10">
               <span>Game</span>
               <span className="text-right">Net</span>
               <span className="text-center sm:text-right">Verify</span>

@@ -10,8 +10,11 @@ const cosmetics_service_1 = require("./cosmetics.service");
 const cosmetics_catalog_1 = require("../lib/cosmetics-catalog");
 const poker_chip_scale_1 = require("../lib/poker-chip-scale");
 const poker_table_logo_pricing_1 = require("../lib/poker-table-logo-pricing");
-const poker_curated_logos_1 = require("../lib/poker-curated-logos");
-const poker_table_logo_constants_1 = require("../lib/poker-table-logo-constants");
+// Sponsorship purchase length caps for trust-the-client token metadata.
+const SPONSOR_TOKEN_NAME_MAX = 128;
+const SPONSOR_TOKEN_SYMBOL_MAX = 32;
+const SPONSOR_TOKEN_LOGO_URL_MAX = 1024;
+const ETH_ADDRESS_RE = /^0x[a-fA-F0-9]{40}$/;
 const poker_chip_wallet_1 = require("./poker-chip-wallet");
 const poker_cash_buy_in_1 = require("../lib/poker-cash-buy-in");
 const poker_bot_ai_1 = require("../lib/poker-bot-ai");
@@ -502,7 +505,11 @@ class PokerGameService {
         await pool.query(`UPDATE poker_tables
        SET table_logo = NULL,
            table_logo_sponsored_until = NULL,
-           table_logo_sponsor_address = NULL
+           table_logo_sponsor_address = NULL,
+           table_logo_token_address = NULL,
+           table_logo_token_name = NULL,
+           table_logo_token_symbol = NULL,
+           table_logo_token_logo_url = NULL
        WHERE id = $1
          AND table_logo_sponsored_until IS NOT NULL
          AND table_logo_sponsored_until <= NOW()`, [tableId]);
@@ -512,7 +519,8 @@ class PokerGameService {
         const forPlayerAddr = forPlayer ? this.normalizeAddress(forPlayer) : null;
         await this.expirePokerTableLogoIfExpired(pool, tableId);
         const tableRow = await pool.query(`SELECT id, small_blind, big_blind, max_seats, status, table_logo, table_logo_opacity, tournament_id,
-              table_logo_sponsored_until, table_logo_sponsor_address
+              table_logo_sponsored_until, table_logo_sponsor_address,
+              table_logo_token_address, table_logo_token_name, table_logo_token_symbol, table_logo_token_logo_url
        FROM poker_tables WHERE id = $1`, [tableId]);
         if (tableRow.rows.length === 0)
             throw new Error('Table not found');
@@ -819,6 +827,18 @@ class PokerGameService {
                 : null,
             tableLogoIsDefault: !sponsoredActive,
             tableLogoPriceMorbiusChips: priceChips.toString(),
+            tableLogoTokenAddress: sponsoredActive && tbl.table_logo_token_address
+                ? String(tbl.table_logo_token_address).toLowerCase()
+                : null,
+            tableLogoTokenName: sponsoredActive && tbl.table_logo_token_name
+                ? String(tbl.table_logo_token_name)
+                : null,
+            tableLogoTokenSymbol: sponsoredActive && tbl.table_logo_token_symbol
+                ? String(tbl.table_logo_token_symbol)
+                : null,
+            tableLogoTokenLogoUrl: sponsoredActive && tbl.table_logo_token_logo_url
+                ? String(tbl.table_logo_token_logo_url)
+                : null,
             tournamentId,
         };
     }
@@ -838,18 +858,29 @@ class PokerGameService {
         await pool.query('UPDATE poker_tables SET table_logo = $2, table_logo_opacity = $3 WHERE id = $1', [tableId, logo, clampedOpacity]);
     }
     /**
-     * Pay MORBIUS (off-chain `players.balance`) to set a curated gallery logo for 10 minutes.
+     * Pay MORBIUS (off-chain `players.balance`) to sponsor a token spotlight for 10 minutes.
      * Timer restarts on each purchase. Seated players only.
+     *
+     * Trust-the-client metadata: the client passes name/symbol/logoUrl pulled from DexScreener.
+     * Only the address is structurally validated; lengths are capped server-side.
      */
-    async purchaseTableLogoSponsorship(tableId, playerAddress, logoFilename) {
+    async purchaseTableLogoSponsorship(tableId, playerAddress, token) {
         const pool = this.getPool();
         const normalized = this.normalizeAddress(playerAddress);
-        const name = String(logoFilename ?? '').trim();
-        if (!(0, poker_curated_logos_1.isSafeLogoFilename)(name)) {
-            throw new Error('Invalid logo filename');
+        const tokenAddress = String(token?.address ?? '').trim().toLowerCase();
+        const tokenName = String(token?.name ?? '').trim().slice(0, SPONSOR_TOKEN_NAME_MAX);
+        const tokenSymbol = String(token?.symbol ?? '').trim().slice(0, SPONSOR_TOKEN_SYMBOL_MAX);
+        const tokenLogoUrlRaw = token?.logoUrl == null ? '' : String(token.logoUrl).trim();
+        const tokenLogoUrl = tokenLogoUrlRaw.slice(0, SPONSOR_TOKEN_LOGO_URL_MAX) || null;
+        if (!ETH_ADDRESS_RE.test(tokenAddress)) {
+            throw new Error('Invalid token address');
         }
-        if (name === poker_table_logo_constants_1.POKER_DEFAULT_TABLE_LOGO_FILENAME) {
-            throw new Error('Pick a gallery logo other than the default');
+        if (!tokenName)
+            throw new Error('Token name required');
+        if (!tokenSymbol)
+            throw new Error('Token symbol required');
+        if (tokenLogoUrl && !/^https?:\/\//i.test(tokenLogoUrl)) {
+            throw new Error('Token logo URL must be http(s)');
         }
         await this.expirePokerTableLogoIfExpired(pool, tableId);
         const seatCheck = await pool.query(`SELECT 1 FROM poker_seats
@@ -857,9 +888,6 @@ class PokerGameService {
        LIMIT 1`, [tableId, normalized]);
         if (seatCheck.rows.length === 0) {
             throw new Error('Must be seated at this table to sponsor the logo');
-        }
-        if (!(0, poker_curated_logos_1.isCuratedPokerLogoFilename)(name)) {
-            throw new Error('Logo is not in the curated gallery');
         }
         const trow = await pool.query('SELECT table_logo_sponsored_until AS until FROM poker_tables WHERE id = $1', [tableId]);
         if (trow.rows.length === 0)
@@ -879,6 +907,9 @@ class PokerGameService {
             throw new Error('Price overflow');
         }
         const wei = (0, poker_chip_scale_1.chipsToWei)(Number(priceChips));
+        // table_logo column kept for back-compat (NOT NULL on some history rows); store the
+        // address so legacy reads have something stable. New renderers use the token columns.
+        const legacyLogoValue = tokenAddress;
         await this.dbService.withTransaction(async (client) => {
             const deduct = await client.query(`UPDATE players SET balance = balance - $2::NUMERIC
          WHERE LOWER(wallet_address) = LOWER($1) AND balance >= $2::NUMERIC
@@ -889,10 +920,15 @@ class PokerGameService {
             await client.query(`UPDATE poker_tables SET
            table_logo = $2,
            table_logo_sponsored_until = NOW() + INTERVAL '10 minutes',
-           table_logo_sponsor_address = $3
-         WHERE id = $1`, [tableId, name, normalized]);
-            await client.query(`INSERT INTO poker_table_logo_purchases (table_id, wallet_address, morbius_chips, logo_filename)
-         VALUES ($1::uuid, $2, $3::bigint, $4)`, [tableId, normalized, priceChips.toString(), name]);
+           table_logo_sponsor_address = $3,
+           table_logo_token_address = $4,
+           table_logo_token_name = $5,
+           table_logo_token_symbol = $6,
+           table_logo_token_logo_url = $7
+         WHERE id = $1`, [tableId, legacyLogoValue, normalized, tokenAddress, tokenName, tokenSymbol, tokenLogoUrl]);
+            await client.query(`INSERT INTO poker_table_logo_purchases
+           (table_id, wallet_address, morbius_chips, logo_filename, token_address, token_name, token_symbol)
+         VALUES ($1::uuid, $2, $3::bigint, $4, $5, $6, $7)`, [tableId, normalized, priceChips.toString(), legacyLogoValue, tokenAddress, tokenName, tokenSymbol]);
         });
         await this.broadcastState(tableId);
         return this.getTableState(tableId, normalized);

@@ -1173,14 +1173,19 @@ class WebSocketService {
             }
             const payload = message.payload;
             const tableId = payload?.tableId;
-            const logo = payload?.logo;
+            const token = payload?.token;
             if (!tableId || typeof tableId !== 'string') {
                 return this.sendError(ws, 'tableId required', message.requestId);
             }
-            if (!logo || typeof logo !== 'string') {
-                return this.sendError(ws, 'logo required', message.requestId);
+            if (!token || typeof token !== 'object') {
+                return this.sendError(ws, 'token required', message.requestId);
             }
-            const state = await this.pokerGameService.purchaseTableLogoSponsorship(tableId, ws.playerAddress, logo.trim());
+            const state = await this.pokerGameService.purchaseTableLogoSponsorship(tableId, ws.playerAddress, {
+                address: typeof token.address === 'string' ? token.address : '',
+                name: typeof token.name === 'string' ? token.name : '',
+                symbol: typeof token.symbol === 'string' ? token.symbol : '',
+                logoUrl: typeof token.logoUrl === 'string' ? token.logoUrl : null,
+            });
             this.sendMessage(ws, { type: 'poker_table_state', payload: state, requestId: message.requestId });
             const roomId = `poker:table:${tableId}`;
             const broadcastState = await this.pokerGameService.getTableState(tableId, null);

@@ -460,8 +460,12 @@ export declare class TournamentService {
         prizePool: string;
         prizeTokenAddress: string | null;
         prizeTokenDecimals: number | null;
+        /** Display ticker for the prize token (e.g. "FLOWT"); null for chip/MORBIUS. */
+        prizeTokenSymbol: string | null;
         feePercent: number;
         feeEarned: string;
+        /** Tx hash of the on-chain creator-fee transfer; null when fee was off-chain or not yet paid. */
+        feeTxHash: string | null;
         completedAt: string;
     }[]>;
     /** Complete freeroll: distribute prizes (via existing logic) and set current_phase = completed. */
