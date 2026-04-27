@@ -23,7 +23,7 @@ export default function AdminPlayerLookup() {
       setError('Enter a wallet address');
       return;
     }
-    if (!isAddress(raw)) {
+    if (!isAddress(raw, { strict: false })) {
       setError('Invalid address (expected 0x + 40 hex characters)');
       return;
     }

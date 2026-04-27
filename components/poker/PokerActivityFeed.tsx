@@ -67,18 +67,21 @@ type Entry =
 
 // ── Constants ─────────────────────────────────────────────────────────────
 
-const MAX_ENTRIES = 50;
+const MAX_ENTRIES = 150;
 const CHAT_MAX_LEN = 150;
 
-/** Action line colors aligned with `PokerTournamentHUD` (muted labels, white body, green/red accents). */
+/**
+ * Verb colors — same hues as `PokerActions` commit + primary (fold / check / call / Bet|Raise).
+ * @see `foldBtnStyleCommit`, `checkBtnStyleCommit`, `callBtnStyleCommit`, `primaryBtnStyle` in PokerActions.tsx
+ */
 const ACTION_COLORS: Record<string, string> = {
-  fold:     'rgba(239,68,68,0.95)',
-  check:    'rgba(255,255,255,0.55)',
-  call:     'rgba(52,211,153,0.95)',
-  bet:      'rgba(255,255,255,0.9)',
-  raise:    'rgba(255,255,255,0.92)',
-  'all-in': 'rgba(220,38,38,0.98)',
-  allin:    'rgba(220,38,38,0.98)',
+  fold:     'rgb(252, 165, 165)',  // red commit gradient (#b91c1c family)
+  check:    'rgb(96, 165, 250)',  // blue commit (#3b82f6 / #2563eb) — not grey
+  call:     'rgb(74, 222, 128)',  // green commit (#22c55e / #16a34a)
+  bet:      'rgb(45, 212, 191)',  // primary bet/raise (#0d9488 teal)
+  raise:    'rgb(45, 212, 191)',
+  'all-in': 'rgb(220, 38, 38)',  // strong red (stays distinct from fold tint)
+  allin:    'rgb(220, 38, 38)',
 };
 
 type FeedBurst = { id: string; text: string; tone: 'red' | 'black' };
@@ -641,7 +644,7 @@ export function PokerActivityFeed({
     if (t && connected) { sendMessage(t); setInput(''); }
   }, [input, connected, sendMessage]);
 
-  // ── Entry renderer (typography + muted hierarchy aligned with `PokerTournamentHUD`) ──
+  // ── Entry renderer (player name muted; verb uses `ACTION_COLORS` = PokerActions button hues) ──
   function renderEntry(entry: Entry) {
     const lineBase = 'font-jost font-bold px-2.5 py-[3px] text-[10px] md:text-[11px] leading-snug';
     if (entry.kind === 'system') {
