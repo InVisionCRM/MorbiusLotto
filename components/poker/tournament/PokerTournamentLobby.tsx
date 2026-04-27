@@ -13,6 +13,7 @@ import {
   type ClaimableCustomTokenTournament,
 } from '@/hooks/use-poker-tournament';
 import { formatChips } from '@/lib/format-poker-chips';
+import { formatPrizePoolDisplay } from '@/lib/format-poker-tournament-prize-display';
 import { formatUnits } from 'viem';
 import { useWriteContract, usePublicClient } from 'wagmi';
 import { TOURNAMENT_PRIZE_ESCROW_ADDRESS } from '@/lib/contracts';
@@ -49,19 +50,11 @@ function tournamentFinishOrdinal(rank: number): string {
  * in later — for now the address tail is enough to identify the token.
  */
 function formatPokerPrizePool(t: PokerTournamentSummary): string {
-  if (!t.prizeTokenAddress) return `${formatChips(t.prizePool)} chips`;
-  const decimals = t.prizeTokenDecimals ?? 18;
-  let human: string;
-  try {
-    human = formatUnits(BigInt(t.prizePool || '0'), decimals);
-  } catch {
-    human = '0';
-  }
-  const trimmed = human.includes('.') ? human.replace(/\.?0+$/, '') : human;
-  const ticker = t.prizeTokenSymbol?.trim()
-    ? t.prizeTokenSymbol.trim()
-    : `${t.prizeTokenAddress.slice(0, 6)}…${t.prizeTokenAddress.slice(-4)}`;
-  return `${trimmed} ${ticker}`;
+  return formatPrizePoolDisplay(t.prizePool, {
+    prizeTokenAddress: t.prizeTokenAddress,
+    prizeTokenDecimals: t.prizeTokenDecimals,
+    prizeTokenSymbol: t.prizeTokenSymbol,
+  });
 }
 
 function isZeroBuyInChips(amount: string): boolean {

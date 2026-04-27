@@ -2,8 +2,11 @@
 
 import React, { useEffect, useState, useCallback } from 'react';
 import Link from 'next/link';
-import { formatChips } from '@/lib/format-poker-chips';
-import { formatMorbiusFloor } from '@/lib/format-morbius-display';
+import {
+  formatPrizePoolDisplay,
+  formatTournamentBuyInDisplay,
+  formatTournamentPayoutDisplay,
+} from '@/lib/format-poker-tournament-prize-display';
 
 interface CompletedTournament {
   tournamentId: string;
@@ -12,6 +15,9 @@ interface CompletedTournament {
   buyInAmount: string;
   prizePool: string;
   prizeTokenAddress: string | null;
+  prizeTokenDecimals?: number | null;
+  prizeTokenSymbol?: string | null;
+  gameType?: string | null;
   status: string;
   createdAt: string;
   endedAt: string | null;
@@ -23,8 +29,13 @@ interface PlayerHistoryItem {
   tournamentId: string;
   tournamentName: string;
   tournamentStatus: string;
+  tournamentType?: string;
   finalRank: number | null;
   prizeWon: string;
+  prizeTokenAddress?: string | null;
+  prizeTokenDecimals?: number | null;
+  prizeTokenSymbol?: string | null;
+  gameType?: string | null;
   boughtInAt: string;
   finishedAt: string | null;
   handsPlayed: number;
@@ -58,15 +69,9 @@ function formatDate(iso: string | null | undefined): string {
   });
 }
 
-function formatBuyIn(wei: string, isFreeroll: boolean): string {
-  if (isFreeroll) return 'Free';
-  try {
-    const n = BigInt(wei);
-    if (n === 0n) return 'Free';
-    return `${formatMorbiusFloor(n)} MORBIUS`;
-  } catch {
-    return '—';
-  }
+function formatBuyInRow(t: CompletedTournament): string {
+  if (t.tournamentType === 'freeroll') return 'Free';
+  return formatTournamentBuyInDisplay(t.buyInAmount, { gameType: t.gameType ?? null });
 }
 
 export function PokerTournamentHistory({ myAddress }: PokerTournamentHistoryProps) {
@@ -189,11 +194,15 @@ export function PokerTournamentHistory({ myAddress }: PokerTournamentHistoryProp
                   </td>
                   <td className="py-2.5 px-3 text-slate-400 text-xs">{formatDate(t.endedAt ?? t.createdAt)}</td>
                   <td className="py-2.5 px-3 text-right tabular-nums">
-                    {formatBuyIn(t.buyInAmount, t.tournamentType === 'freeroll')}
+                    {formatBuyInRow(t)}
                   </td>
                   <td className="py-2.5 px-3 text-right tabular-nums">{t.entryCount}</td>
                   <td className="py-2.5 px-3 text-right tabular-nums text-amber-300">
-                    {t.prizeTokenAddress ? formatChips(BigInt(t.prizePool)) : `${formatMorbiusFloor(BigInt(t.prizePool))} MORBIUS`}
+                    {formatPrizePoolDisplay(t.prizePool, {
+                      prizeTokenAddress: t.prizeTokenAddress,
+                      prizeTokenDecimals: t.prizeTokenDecimals,
+                      prizeTokenSymbol: t.prizeTokenSymbol,
+                    })}
                   </td>
                   <td className="py-2.5 px-3 text-right">
                     <span className={`text-[10px] uppercase tracking-wider px-2 py-0.5 rounded ${
@@ -240,14 +249,12 @@ export function PokerTournamentHistory({ myAddress }: PokerTournamentHistoryProp
                   </td>
                   <td className="py-2.5 px-3 text-right tabular-nums">{t.handsPlayed}</td>
                   <td className="py-2.5 px-3 text-right tabular-nums text-amber-300">
-                    {(() => {
-                      try {
-                        const n = BigInt(t.prizeWon);
-                        return n > 0n ? `${formatMorbiusFloor(n)} MORBIUS` : '—';
-                      } catch {
-                        return '—';
-                      }
-                    })()}
+                    {formatTournamentPayoutDisplay(t.prizeWon, {
+                      prizeTokenAddress: t.prizeTokenAddress ?? null,
+                      prizeTokenDecimals: t.prizeTokenDecimals,
+                      prizeTokenSymbol: t.prizeTokenSymbol,
+                      gameType: t.gameType ?? null,
+                    })}
                   </td>
                 </tr>
               ))}

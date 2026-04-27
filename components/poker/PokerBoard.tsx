@@ -59,11 +59,7 @@ export function PokerBoard({ communityCards, pot, winningCardIndices, dataTutori
       }}
     >
       <span className="font-jost-normal text-[var(--poker-danger)] text-[9px] tracking-[var(--poker-tracking)] uppercase">POT</span>
-      <div className="flex items-center gap-1">
-        <AnimatedPotValue pot={pot} />
-        { }
-        <img src="/morbius/MorbiusLogo (3).png" alt="MORBIUS" className="w-4 h-4 sm:w-5 sm:h-5 rounded-full" />
-      </div>
+      <AnimatedPotValue pot={pot} />
     </div>
   );
 

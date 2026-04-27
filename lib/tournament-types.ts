@@ -401,6 +401,9 @@ export interface PlayerTournamentHistoryItem {
   tournamentStatus: 'active' | 'completed' | 'cancelled';
   tournamentType: string;
   prizeTokenAddress: string | null;
+  prizeTokenDecimals: number | null;
+  prizeTokenSymbol: string | null;
+  gameType: string | null;
   endedAt: string | null;
   /** When the tournament is scheduled to end (time limit). Used for "time remaining" when in progress. */
   endsAt: string | null;

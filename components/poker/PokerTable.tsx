@@ -18,6 +18,7 @@ import {
   cardAnchorForDisplaySlot,
   POKER_POT_ANCHOR,
   ringIndexForDisplaySlot,
+  winningPotChipAnchorForDisplaySlot,
 } from '@/lib/poker-seat-layout';
 import confetti from 'canvas-confetti';
 import { FloatingTableLogo } from './FloatingTableLogo';
@@ -88,7 +89,6 @@ export interface PokerTableProps {
 export function PokerTable({ state, currentPlayerAddress, timeLeft, chatBubbleBySeatIndex, onReUpClick, onMenuClick, reactionBySeatIndex, broadcastEmotionBySeatIndex, onPhraseReaction, onAnimationReaction, onOpponentClick, onOpponentRadialAction, quickChatPhrases, setQuickChatPhrases, onOpenEditQuickChat, onLeave, onRequestMobileActivity, onSitOut, onSitBack, tutorialTargets, dataTutorialTargetPot }: PokerTableProps) {
   const tableRef = useRef<HTMLDivElement>(null);
   const [dims, setDims] = useState({ w: 640, h: 500 });
-  const hideSeatAvatars = false;
   const { effect: tableEffect, feltGradient, railStyle } = usePokerTableEffect();
 
   useEffect(() => {
@@ -171,12 +171,9 @@ export function PokerTable({ state, currentPlayerAddress, timeLeft, chatBubbleBy
   const winnerDisplaySlots = winnerSeatIndices.map(
     (idx) => (mySeatIndex >= 0 ? (idx - mySeatIndex + state.seats.length) % state.seats.length : idx)
   );
-  const firstWinnerAnchor =
-    winnerSeatIndices.length > 0 && winnerDisplaySlots.length > 0
-      ? getRenderedSeatAnchor(
-          winnerDisplaySlots[0],
-          state.seats[winnerSeatIndices[0]]?.position ?? winnerSeatIndices[0],
-        )
+  const winnerPotChipAnchor =
+    winnerDisplaySlots.length > 0
+      ? winningPotChipAnchorForDisplaySlot(state.seats.length, winnerDisplaySlots[0])
       : null;
   const firstWinner = isShowdownWithWinners ? hand!.winners![0] : null;
   const firstWinnerAddr = firstWinner?.address ?? null;
@@ -192,8 +189,6 @@ export function PokerTable({ state, currentPlayerAddress, timeLeft, chatBubbleBy
     : undefined;
   const splitSeat = splitWinner ? state.seats.find((s) => s.playerAddress === splitWinner.address) : null;
   const winnerAddressSet = new Set((isShowdownWithWinners ? hand!.winners! : []).map((w) => w.address.toLowerCase()));
-  // Showdown chip destination: land above winner cards (not avatar center).
-  const winnerChipYOffsetPx = hideSeatAvatars ? 62 : 86;
 
   useEffect(() => {
     if (!isCurrentPlayerWinner || !hand?.handId) return;
@@ -543,7 +538,7 @@ export function PokerTable({ state, currentPlayerAddress, timeLeft, chatBubbleBy
 
       {/* Chips sliding from pot to winner at showdown */}
       <AnimatePresence>
-        {isShowdownWithWinners && hand?.pot && firstWinnerAnchor && (
+        {isShowdownWithWinners && hand?.pot && winnerPotChipAnchor && (
           <motion.div
             key={`chips-to-winner-${hand.handId}`}
             className="absolute z-30 pointer-events-none"
@@ -553,8 +548,8 @@ export function PokerTable({ state, currentPlayerAddress, timeLeft, chatBubbleBy
               top: `${POT_ANCHOR.fy * 100}%`,
             }}
             animate={{
-              left: `${firstWinnerAnchor.fx * 100}%`,
-              top: `calc(${firstWinnerAnchor.fy * 100}% - ${winnerChipYOffsetPx}px)`,
+              left: `${winnerPotChipAnchor.fx * 100}%`,
+              top: `${winnerPotChipAnchor.fy * 100}%`,
             }}
             exit={{ opacity: 0 }}
             transition={{

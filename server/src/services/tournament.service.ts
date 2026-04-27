@@ -94,6 +94,9 @@ export interface TournamentEntry {
   tournamentStatus: 'active' | 'completed' | 'cancelled';
   tournamentType: string;
   prizeTokenAddress: string | null;
+  prizeTokenDecimals: number | null;
+  prizeTokenSymbol: string | null;
+  gameType: string | null;
   /** When the tournament actually ended (set on completion) */
   endedAt: Date | null;
   /** When the tournament is scheduled to end (time limit; null = no limit). Use for "time remaining" when in progress. */
@@ -1317,6 +1320,9 @@ export class TournamentService {
         t.status AS tournament_status,
         t.tournament_type,
         t.prize_token_address,
+        t.prize_token_decimals,
+        t.prize_token_symbol,
+        t.game_type,
         t.ended_at,
         t.ends_at,
         te.id AS entry_id,
@@ -1340,6 +1346,9 @@ export class TournamentService {
       tournamentStatus: row.tournament_status,
       tournamentType: row.tournament_type ?? 'standard',
       prizeTokenAddress: row.prize_token_address ?? null,
+      prizeTokenDecimals: row.prize_token_decimals != null ? Number(row.prize_token_decimals) : null,
+      prizeTokenSymbol: row.prize_token_symbol ?? null,
+      gameType: row.game_type != null ? String(row.game_type) : null,
       endedAt: row.ended_at ?? null,
       endsAt: row.ends_at ?? null,
       entryId: row.entry_id,
@@ -2861,6 +2870,9 @@ export class TournamentService {
         t.buy_in_amount,
         t.prize_pool,
         t.prize_token_address,
+        t.prize_token_decimals,
+        t.prize_token_symbol,
+        t.game_type,
         t.status,
         t.created_at,
         t.ended_at,
@@ -2879,6 +2891,9 @@ export class TournamentService {
       buyInAmount: this.toBigInt(row.buy_in_amount),
       prizePool: this.toBigInt(row.prize_pool),
       prizeTokenAddress: row.prize_token_address ?? null,
+      prizeTokenDecimals: row.prize_token_decimals != null ? Number(row.prize_token_decimals) : null,
+      prizeTokenSymbol: row.prize_token_symbol ?? null,
+      gameType: row.game_type != null ? String(row.game_type) : null,
       status: row.status,
       createdAt: row.created_at,
       endedAt: row.ended_at ?? null,
@@ -2891,7 +2906,8 @@ export class TournamentService {
   async getTournamentResults(tournamentId: string): Promise<TournamentResults | null> {
     const tRes = await this.pool.query(
       `SELECT id, name, tournament_type, buy_in_amount, starting_chips, prize_pool,
-              prize_token_address, status, created_at, started_at, ended_at, custom_image,
+              prize_token_address, prize_token_decimals, prize_token_symbol,
+              game_type, status, created_at, started_at, ended_at, custom_image,
               time_limit_minutes, max_players, prize_distribution_type
          FROM tournaments WHERE id = $1`,
       [tournamentId],
@@ -2921,6 +2937,9 @@ export class TournamentService {
       startingChips: Number(t.starting_chips ?? 0),
       prizePool: this.toBigInt(t.prize_pool),
       prizeTokenAddress: t.prize_token_address ?? null,
+      prizeTokenDecimals: t.prize_token_decimals != null ? Number(t.prize_token_decimals) : null,
+      prizeTokenSymbol: t.prize_token_symbol ?? null,
+      gameType: t.game_type != null ? String(t.game_type) : null,
       status: t.status,
       createdAt: t.created_at,
       startedAt: t.started_at ?? null,
@@ -3047,6 +3066,9 @@ export interface CompletedTournamentSummary {
   buyInAmount: bigint;
   prizePool: bigint;
   prizeTokenAddress: string | null;
+  prizeTokenDecimals: number | null;
+  prizeTokenSymbol: string | null;
+  gameType: string | null;
   status: 'completed' | 'cancelled' | string;
   createdAt: Date;
   endedAt: Date | null;
@@ -3075,6 +3097,9 @@ export interface TournamentResults {
   startingChips: number;
   prizePool: bigint;
   prizeTokenAddress: string | null;
+  prizeTokenDecimals: number | null;
+  prizeTokenSymbol: string | null;
+  gameType: string | null;
   status: string;
   createdAt: Date;
   startedAt: Date | null;

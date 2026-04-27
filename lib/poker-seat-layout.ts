@@ -92,6 +92,37 @@ export const CARD_ANCHOR_RING: SeatAnchor[] = [
   { fx: 0.70, fy: 0.70 },
 ];
 
+/**
+ * Showdown: where the animated main pot chip stack lands (fractions 0–1), **10** ring vertices.
+ * Blended from seat → hole-card anchor so stacks sit between avatar and cards; tune per vertex in
+ * `WINNING_POT_CHIP_ANCHOR_RING` or adjust `WINNING_POT_CHIP_SEAT_TO_CARD_T`. Mapped like C#/S#.
+ */
+export const WINNING_POT_CHIP_SEAT_TO_CARD_T = 0.48;
+
+export const WINNING_POT_CHIP_ANCHOR_RING: SeatAnchor[] = SEAT_ANCHOR_RING.map((seat, i) => {
+  const card = CARD_ANCHOR_RING[i];
+  const t = WINNING_POT_CHIP_SEAT_TO_CARD_T;
+  return {
+    fx: seat.fx + (card.fx - seat.fx) * t,
+    fy: seat.fy + (card.fy - seat.fy) * t,
+  };
+});
+
+/** Display-slot anchors for winning pot chips (hero-centered), mirroring `authoredChipAnchors`. */
+export function authoredWinningPotChipAnchors(seatCount: number): SeatAnchor[] {
+  if (seatCount <= 0) return [];
+  return Array.from({ length: seatCount }, (_, displaySlot) => {
+    const ri = ringIndexForDisplaySlot(displaySlot, seatCount);
+    const a = WINNING_POT_CHIP_ANCHOR_RING[ri];
+    return { fx: a.fx, fy: a.fy };
+  });
+}
+
+export function winningPotChipAnchorForDisplaySlot(seatCount: number, displaySlot: number): SeatAnchor {
+  const list = authoredWinningPotChipAnchors(seatCount);
+  return list[displaySlot] ?? { ...POKER_POT_ANCHOR };
+}
+
 export function authoredCardAnchors(seatCount: number): SeatAnchor[] {
   if (seatCount <= 0) return [];
   return Array.from({ length: seatCount }, (_, displaySlot) => {

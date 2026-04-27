@@ -6,6 +6,7 @@ import { PokerActions } from '@/components/poker/PokerActions';
 import {
   SEAT_ANCHOR_RING,
   authoredSeatAnchors,
+  authoredWinningPotChipAnchors,
   betChipAnchorForDisplaySlot,
   POKER_POT_ANCHOR,
   ringIndexForDisplaySlot,
@@ -16,6 +17,7 @@ export default function PokerLayoutReferencePage() {
   const [seatCount, setSeatCount] = useState(10);
   const [showFullRing, setShowFullRing] = useState(true);
   const [showBetChips, setShowBetChips] = useState(true);
+  const [showWinningPotChips, setShowWinningPotChips] = useState(true);
 
   const anchors = useMemo(() => authoredSeatAnchors(seatCount), [seatCount]);
   const chipAnchors = useMemo(
@@ -25,6 +27,7 @@ export default function PokerLayoutReferencePage() {
       ),
     [seatCount],
   );
+  const winningPotAnchors = useMemo(() => authoredWinningPotChipAnchors(seatCount), [seatCount]);
 
   return (
     <div
@@ -92,6 +95,15 @@ export default function PokerLayoutReferencePage() {
             />
             Show bet chip anchors (C0…)
           </label>
+          <label className="flex items-center gap-2 text-sm text-slate-400 cursor-pointer select-none">
+            <input
+              type="checkbox"
+              checked={showWinningPotChips}
+              onChange={(e) => setShowWinningPotChips(e.target.checked)}
+              className="rounded border-slate-600 bg-slate-800 text-emerald-400 focus:ring-emerald-500/40"
+            />
+            Show showdown pot chip anchors (W0…)
+          </label>
         </div>
 
         <section className="space-y-3 pt-2">
@@ -110,6 +122,7 @@ export default function PokerLayoutReferencePage() {
             seatCount={seatCount}
             showFullRing={showFullRing}
             showBetChips={showBetChips}
+            showWinningPotChips={showWinningPotChips}
           />
         </section>
 
@@ -158,6 +171,22 @@ export default function PokerLayoutReferencePage() {
                   <span className="sr-only">Chip {displaySlot}</span>
                 </div>
                 <span className="mt-1.5 text-[9px] font-mono font-semibold text-amber-200/90">C{displaySlot}</span>
+                <span className="text-[8px] font-mono text-slate-500 tabular-nums">
+                  {p.fx.toFixed(2)},{p.fy.toFixed(2)}
+                </span>
+              </div>
+            ))}
+
+          {showWinningPotChips &&
+            winningPotAnchors.map((p, displaySlot) => (
+              <div
+                key={`win-pot-${displaySlot}`}
+                className="absolute z-[16] flex flex-col items-center -translate-x-1/2 -translate-y-1/2 pointer-events-none"
+                style={{ left: `${p.fx * 100}%`, top: `${p.fy * 100}%` }}
+                title={`Showdown main pot stack → display slot ${displaySlot} (winningPotChipAnchorForDisplaySlot)`}
+              >
+                <div className="flex size-4 items-center justify-center rounded-full border-2 border-emerald-400/80 bg-emerald-500/35 shadow-md" />
+                <span className="mt-1.5 text-[9px] font-mono font-semibold text-emerald-200/95">W{displaySlot}</span>
                 <span className="text-[8px] font-mono text-slate-500 tabular-nums">
                   {p.fx.toFixed(2)},{p.fy.toFixed(2)}
                 </span>
@@ -218,6 +247,14 @@ export default function PokerLayoutReferencePage() {
             ), sampled from the hand-authored{' '}
             <code className="text-amber-200/90">CHIP_ANCHOR_RING</code> (0–9) with the same{' '}
             <code className="text-amber-200/90">ringIndexForDisplaySlot</code> mapping as seats.
+          </p>
+          <p>
+            <strong className="text-emerald-300">W#</strong> = showdown main pot chip destination (
+            <code className="text-emerald-200/90">winningPotChipAnchorForDisplaySlot</code>
+            ), from <code className="text-emerald-200/90">WINNING_POT_CHIP_ANCHOR_RING</code> (or tweak{' '}
+            <code className="text-emerald-200/90">WINNING_POT_CHIP_SEAT_TO_CARD_T</code> to shift all seats between{' '}
+            <code className="text-slate-400">SEAT_</code> and <code className="text-slate-400">CARD_ANCHOR_RING</code>
+            ).
           </p>
           <p>
             Edit coordinates in <code className="text-cyan-300/80">lib/poker-seat-layout.ts</code>; reload this

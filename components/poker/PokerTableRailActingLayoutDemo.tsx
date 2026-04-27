@@ -8,6 +8,7 @@ import {
   SEAT_ANCHOR_RING,
   POKER_POT_ANCHOR,
   authoredSeatAnchors,
+  authoredWinningPotChipAnchors,
   betChipAnchorForDisplaySlot,
   ringIndexForDisplaySlot,
 } from '@/lib/poker-seat-layout';
@@ -52,10 +53,12 @@ function RailActingPreviewInner({
   seatCount,
   showFullRing,
   showBetChips,
+  showWinningPotChips,
 }: {
   seatCount: number;
   showFullRing: boolean;
   showBetChips: boolean;
+  showWinningPotChips: boolean;
 }) {
   const [showHighlight, setShowHighlight] = useState(true);
   const [mode, setMode] = useState<'ring' | 'displaySlot'>('ring');
@@ -70,6 +73,7 @@ function RailActingPreviewInner({
       ),
     [seatCount]
   );
+  const winningPotAnchors = useMemo(() => authoredWinningPotChipAnchors(seatCount), [seatCount]);
 
   const maxSlot = Math.max(0, seatCount - 1);
   const slotClamped = Math.min(pretendDisplaySlot, maxSlot);
@@ -177,6 +181,19 @@ function RailActingPreviewInner({
             </div>
           ))}
 
+        {showWinningPotChips &&
+          winningPotAnchors.map((p, displaySlot) => (
+            <div
+              key={`p-win-${displaySlot}`}
+              className="absolute z-[16] flex flex-col items-center -translate-x-1/2 -translate-y-1/2 pointer-events-none"
+              style={{ left: `${p.fx * 100}%`, top: `${p.fy * 100}%` }}
+              title={`W${displaySlot} winning pot chip anchor`}
+            >
+              <div className="flex size-4 items-center justify-center rounded-full border-2 border-emerald-400/80 bg-emerald-500/35 shadow-md" />
+              <span className="mt-1.5 text-[9px] font-mono font-semibold text-emerald-200/95">W{displaySlot}</span>
+            </div>
+          ))}
+
         {showFullRing &&
           SEAT_ANCHOR_RING.map((p, ringIdx) => (
             <div
@@ -213,10 +230,12 @@ export function PokerTableRailActingLayoutDemo({
   seatCount,
   showFullRing,
   showBetChips,
+  showWinningPotChips = true,
 }: {
   seatCount: number;
   showFullRing: boolean;
   showBetChips: boolean;
+  showWinningPotChips?: boolean;
 }) {
   return (
     <PokerTableEffectProvider>
@@ -224,6 +243,7 @@ export function PokerTableRailActingLayoutDemo({
         seatCount={seatCount}
         showFullRing={showFullRing}
         showBetChips={showBetChips}
+        showWinningPotChips={showWinningPotChips}
       />
     </PokerTableEffectProvider>
   );

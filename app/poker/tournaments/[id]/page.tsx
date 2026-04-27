@@ -4,7 +4,11 @@ import React, { useEffect, useState, useCallback } from 'react';
 import Link from 'next/link';
 import { useParams } from 'next/navigation';
 import { formatChips } from '@/lib/format-poker-chips';
-import { formatMorbiusFloor } from '@/lib/format-morbius-display';
+import {
+  formatPrizePoolDisplay,
+  formatTournamentBuyInDisplay,
+  formatTournamentPayoutDisplay,
+} from '@/lib/format-poker-tournament-prize-display';
 
 interface ResultsEntry {
   entryId: string;
@@ -27,6 +31,9 @@ interface TournamentResults {
   startingChips: number;
   prizePool: string;
   prizeTokenAddress: string | null;
+  prizeTokenDecimals?: number | null;
+  prizeTokenSymbol?: string | null;
+  gameType?: string | null;
   status: string;
   createdAt: string;
   startedAt: string | null;
@@ -101,16 +108,6 @@ function formatDuration(startIso: string | null, endIso: string | null): string 
   return h > 0 ? `${h}h ${m}m` : `${m}m`;
 }
 
-function formatPrize(wei: string, isCustomToken: boolean): string {
-  try {
-    const n = BigInt(wei);
-    if (n === 0n) return '—';
-    return isCustomToken ? formatChips(n) : `${formatMorbiusFloor(n)} MORBIUS`;
-  } catch {
-    return '—';
-  }
-}
-
 export default function TournamentResultsPage() {
   const params = useParams<{ id: string }>();
   const id = params?.id;
@@ -171,7 +168,17 @@ export default function TournamentResultsPage() {
     );
   }
 
-  const isCustomToken = !!results.prizeTokenAddress;
+  const payoutMeta = {
+    prizeTokenAddress: results.prizeTokenAddress,
+    prizeTokenDecimals: results.prizeTokenDecimals,
+    prizeTokenSymbol: results.prizeTokenSymbol,
+    gameType: results.gameType ?? null,
+  };
+  const buyInDisplay =
+    results.tournamentType === 'freeroll'
+      ? 'Free'
+      : formatTournamentBuyInDisplay(results.buyInAmount, { gameType: results.gameType ?? null });
+  const prizePoolDisplay = formatPrizePoolDisplay(results.prizePool, payoutMeta);
   const ranked = [...results.entries].sort((a, b) => {
     if (a.finalRank == null && b.finalRank == null) return 0;
     if (a.finalRank == null) return 1;
@@ -208,8 +215,8 @@ export default function TournamentResultsPage() {
 
       {/* Summary cards */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-6">
-        <SummaryCard label="Buy-in" value={formatPrize(results.buyInAmount, isCustomToken)} />
-        <SummaryCard label="Prize Pool" value={formatPrize(results.prizePool, isCustomToken)} highlight />
+        <SummaryCard label="Buy-in" value={buyInDisplay} />
+        <SummaryCard label="Prize Pool" value={prizePoolDisplay} highlight />
         <SummaryCard label="Entrants" value={results.entries.length.toString()} />
         <SummaryCard label="Hands Played" value={(stats?.handCount ?? 0).toString()} />
       </div>
@@ -263,7 +270,7 @@ export default function TournamentResultsPage() {
                   <td className="py-2.5 px-3 text-right tabular-nums">{e.handsPlayed}</td>
                   <td className="py-2.5 px-3 text-right tabular-nums text-cyan-300">{formatChips(BigInt(e.highestChipCount))}</td>
                   <td className={`py-2.5 px-3 text-right tabular-nums ${isPaid ? 'text-amber-300 font-semibold' : 'text-slate-600'}`}>
-                    {formatPrize(e.prizeWon, isCustomToken)}
+                    {formatTournamentPayoutDisplay(e.prizeWon, payoutMeta)}
                   </td>
                 </tr>
               );
