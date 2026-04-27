@@ -21,7 +21,11 @@ export interface BlindLevel {
 }
 
 /** How posted blinds go up during the event (stored in `poker_config`). */
-export type PokerBlindIncreaseMode = 'knockout' | 'by_hand';
+export type PokerBlindIncreaseMode = 'knockout' | 'by_hand' | 'by_time';
+
+/** Allowed wall-clock intervals (minutes) for `by_time` mode. */
+export const BLIND_INTERVAL_MINUTES_OPTIONS = [15, 30, 45, 60] as const;
+export type BlindIntervalMinutes = typeof BLIND_INTERVAL_MINUTES_OPTIONS[number];
 
 export interface PokerTournamentConfig {
   startingStack: number;
@@ -31,8 +35,11 @@ export interface PokerTournamentConfig {
   /**
    * `knockout` (default): blinds multiply when someone busts (legacy SNG behavior).
    * `by_hand`: blinds follow `blindSchedule` / `handsPerLevel` after each completed hand.
+   * `by_time`: blinds advance one level every `blindIntervalMinutes` of wall-clock time.
    */
   blindIncreaseMode?: PokerBlindIncreaseMode;
+  /** Required when `blindIncreaseMode === 'by_time'`. Must be one of `BLIND_INTERVAL_MINUTES_OPTIONS`. */
+  blindIntervalMinutes?: BlindIntervalMinutes;
 }
 
 export const DEFAULT_BLIND_SCHEDULE: BlindLevel[] = [
@@ -80,6 +87,12 @@ export interface PokerTournamentState {
   actionTimerSeconds?: number | null;
   /** Percent of prize pool per finishing rank (index 0 = 1st place); integers summing to 100. */
   prizeSplitPercentages?: number[];
+  /**
+   * `by_time` mode only — wall-clock instant the current blind level became active.
+   * Clients can subtract from `Date.now()` and compare against `pokerConfig.blindIntervalMinutes`
+   * to render a countdown to the next bump. Null/absent for other modes or pre-activation.
+   */
+  currentBlindLevelStartedAt?: string | null;
 }
 
 export interface PokerTournamentSummary {
@@ -112,8 +125,10 @@ export interface PokerTournamentSummary {
   /** Level-1 or live table blinds (chip ints). */
   smallBlind: number;
   bigBlind: number;
-  /** `knockout` = elimination bumps; `by_hand` = schedule after each hand. */
+  /** `knockout` = elimination bumps; `by_hand` = schedule after each hand; `by_time` = wall-clock interval. */
   blindIncreaseMode: PokerBlindIncreaseMode;
+  /** Set only when `blindIncreaseMode === 'by_time'`. */
+  blindIntervalMinutes?: BlindIntervalMinutes;
 }
 
 /** Where the initial guaranteed pool is debited when buy-in is 0. */
@@ -265,7 +280,18 @@ export class PokerTournamentService {
   private normalizeBlindIncreaseMode(raw: unknown): PokerBlindIncreaseMode {
     if (raw == null || raw === '') return 'knockout';
     const s = String(raw).trim().toLowerCase().replace(/-/g, '_');
-    return s === 'by_hand' ? 'by_hand' : 'knockout';
+    if (s === 'by_hand') return 'by_hand';
+    if (s === 'by_time') return 'by_time';
+    return 'knockout';
+  }
+
+  /** Normalize stored / client-sent blind interval (minutes). Returns null when not in the allowed set. */
+  private normalizeBlindIntervalMinutes(raw: unknown): BlindIntervalMinutes | null {
+    const n = Math.floor(Number(raw));
+    if (!Number.isFinite(n)) return null;
+    return (BLIND_INTERVAL_MINUTES_OPTIONS as readonly number[]).includes(n)
+      ? (n as BlindIntervalMinutes)
+      : null;
   }
 
   /** Return the BlindLevel that applies for a given hand number (1-indexed). */
@@ -291,6 +317,34 @@ export class PokerTournamentService {
     if (ratio <= 1) return 1;
     const steps = Math.floor(Math.log2(ratio) + 1e-9);
     return 1 + steps;
+  }
+
+  /**
+   * `by_time`: how many full intervals have elapsed since `levelStartedAt`.
+   * Capped at the schedule length so we never read past the last level.
+   * Returns the level number (1-based) that should currently be in effect.
+   *
+   * Example: schedule has 8 levels, interval = 30 min, levelStartedAt was the
+   * level-1 start. After 75 minutes (2 full 30-min intervals elapsed) the
+   * effective level is `1 + 2 = 3`.
+   */
+  computeBlindLevelByTime(
+    blindSchedule: BlindLevel[],
+    intervalMinutes: number,
+    levelStartedAt: Date,
+    startingLevel: number,
+    now: Date = new Date(),
+  ): BlindLevel {
+    if (!blindSchedule.length) {
+      throw new Error('computeBlindLevelByTime: empty schedule');
+    }
+    const safeStart = Math.max(1, Math.floor(startingLevel));
+    const safeInterval = Math.max(1, Math.floor(intervalMinutes));
+    const elapsedMs = Math.max(0, now.getTime() - levelStartedAt.getTime());
+    const intervalMs = safeInterval * 60_000;
+    const stepsElapsed = Math.floor(elapsedMs / intervalMs);
+    const targetIdx = Math.min(blindSchedule.length - 1, safeStart - 1 + stepsElapsed);
+    return blindSchedule[targetIdx];
   }
 
   /** Blinds that apply to the next hand after `completedHandNumber` (1-based) finishes. */
@@ -327,6 +381,8 @@ export class PokerTournamentService {
     const obj = typeof raw === 'string' ? JSON.parse(raw) : raw as Record<string, unknown>;
     const modeRaw = obj.blindIncreaseMode ?? obj.blind_increase_mode;
     const blindIncreaseMode = this.normalizeBlindIncreaseMode(modeRaw);
+    const intervalRaw = obj.blindIntervalMinutes ?? obj.blind_interval_minutes;
+    const interval = this.normalizeBlindIntervalMinutes(intervalRaw);
     return {
       startingStack: Number(obj.startingStack ?? 5000),
       minPlayers:    Number(obj.minPlayers    ?? 2),
@@ -335,6 +391,7 @@ export class PokerTournamentService {
         ? obj.blindSchedule as BlindLevel[]
         : DEFAULT_BLIND_SCHEDULE,
       blindIncreaseMode,
+      ...(blindIncreaseMode === 'by_time' && interval ? { blindIntervalMinutes: interval } : {}),
     };
   }
 
@@ -350,6 +407,15 @@ export class PokerTournamentService {
 
     if (!config.blindSchedule || config.blindSchedule.length === 0) {
       throw new Error('Blind schedule must have at least one level');
+    }
+    const blindModeForCreate = this.normalizeBlindIncreaseMode(config.blindIncreaseMode);
+    if (blindModeForCreate === 'by_time') {
+      const interval = this.normalizeBlindIntervalMinutes(config.blindIntervalMinutes);
+      if (!interval) {
+        throw new Error(
+          `blindIntervalMinutes is required when blindIncreaseMode is 'by_time' and must be one of ${BLIND_INTERVAL_MINUTES_OPTIONS.join(', ')}`,
+        );
+      }
     }
     if (config.minPlayers < 2) throw new Error('minPlayers must be at least 2');
     if (config.maxPlayers < config.minPlayers) throw new Error('maxPlayers must be >= minPlayers');
@@ -503,7 +569,19 @@ export class PokerTournamentService {
     }
 
     const blindIncreaseMode = this.normalizeBlindIncreaseMode(config.blindIncreaseMode);
-    const configForDb: PokerTournamentConfig = { ...config, blindIncreaseMode };
+    const blindIntervalMinutes =
+      blindIncreaseMode === 'by_time'
+        ? this.normalizeBlindIntervalMinutes(config.blindIntervalMinutes) ?? undefined
+        : undefined;
+    const configForDb: PokerTournamentConfig = {
+      ...config,
+      blindIncreaseMode,
+      ...(blindIntervalMinutes ? { blindIntervalMinutes } : {}),
+    };
+    // Strip a stale interval if mode isn't by_time so it doesn't accidentally persist.
+    if (blindIncreaseMode !== 'by_time') {
+      delete (configForDb as Partial<PokerTournamentConfig>).blindIntervalMinutes;
+    }
 
     const prizePercentages =
       params.prizeDistributionType === 'custom'
@@ -950,11 +1028,22 @@ export class PokerTournamentService {
     const startingStackChips = BigInt(config.startingStack).toString();
 
     // Create dedicated tournament poker table
+    const isByTime = this.getBlindIncreaseMode(config) === 'by_time';
     const tableRow = await this.pool.query(
-      `INSERT INTO poker_tables (small_blind, big_blind, max_seats, status, tournament_id, tournament_mode)
-       VALUES ($1::NUMERIC, $2::NUMERIC, $3, 'waiting', $4, TRUE)
+      `INSERT INTO poker_tables (
+         small_blind, big_blind, max_seats, status, tournament_id, tournament_mode,
+         current_blind_level, current_blind_level_started_at
+       )
+       VALUES ($1::NUMERIC, $2::NUMERIC, $3, 'waiting', $4, TRUE, $5, $6)
        RETURNING id`,
-      [sbChips, bbChips, config.maxPlayers, tournamentId]
+      [
+        sbChips,
+        bbChips,
+        config.maxPlayers,
+        tournamentId,
+        isByTime ? firstLevel.level : null,
+        isByTime ? new Date() : null,
+      ]
     );
     const tableId = tableRow.rows[0].id;
 
@@ -1384,6 +1473,130 @@ export class PokerTournamentService {
     );
     if (Number(activePlayers.rows[0].c) <= 1) {
       await this.completeTournament(tournamentId, tableId);
+    }
+  }
+
+  // ---------------------------------------------------------------------------
+  // Time-based blind tick (by_time mode)
+  // ---------------------------------------------------------------------------
+
+  /**
+   * Scheduler tick: advance blinds for all active poker tournaments running in
+   * `by_time` mode whose current level has been live for ≥ `blindIntervalMinutes`.
+   *
+   * Called by `FreerollSchedulerService`. Cheap on average — the partial index on
+   * `current_blind_level_started_at` keeps the scan tight and most tables won't
+   * need an update on any given poll.
+   *
+   * One row per tournament-table; we step the level forward one at a time per
+   * tick (even if multiple intervals have passed), so a brief outage doesn't
+   * skip levels visually — but `computeBlindLevelByTime` still picks the
+   * correct target so we'll catch up over the next few ticks.
+   */
+  async tickTimeBasedBlindAdvances(): Promise<void> {
+    let tables: Array<{
+      table_id: string;
+      tournament_id: string;
+      poker_config: unknown;
+      current_blind_level: number | null;
+      current_blind_level_started_at: Date | null;
+      small_blind: unknown;
+      big_blind: unknown;
+      hand_number: number | null;
+    }>;
+    try {
+      const res = await this.pool.query(
+        `SELECT pt.id AS table_id,
+                pt.tournament_id,
+                t.poker_config,
+                pt.current_blind_level,
+                pt.current_blind_level_started_at,
+                pt.small_blind,
+                pt.big_blind,
+                pt.hand_number
+         FROM poker_tables pt
+         JOIN tournaments t ON t.id = pt.tournament_id
+         WHERE pt.tournament_mode = TRUE
+           AND t.status = 'active'
+           AND t.game_type = 'poker'
+           AND pt.current_blind_level_started_at IS NOT NULL`,
+      );
+      tables = res.rows;
+    } catch (err) {
+      logger.error('tickTimeBasedBlindAdvances: query failed', { err });
+      return;
+    }
+
+    for (const row of tables) {
+      try {
+        const config = this.parsePokerConfig(row.poker_config);
+        if (this.getBlindIncreaseMode(config) !== 'by_time') continue;
+
+        const interval = this.normalizeBlindIntervalMinutes(config.blindIntervalMinutes);
+        if (!interval) continue;
+
+        const startedAt = row.current_blind_level_started_at;
+        if (!(startedAt instanceof Date) || Number.isNaN(startedAt.getTime())) continue;
+
+        const startingLevel = Math.max(1, Math.floor(Number(row.current_blind_level ?? 1)));
+        const target = this.computeBlindLevelByTime(
+          config.blindSchedule,
+          interval,
+          startedAt,
+          startingLevel,
+        );
+
+        if (target.level === startingLevel) continue; // not yet time
+
+        const curSB = Number(toBigIntSafe(row.small_blind ?? 0));
+        const curBB = Number(toBigIntSafe(row.big_blind ?? 0));
+        const sameBlinds = curSB === target.smallBlind && curBB === target.bigBlind;
+
+        // Reset the level clock to NOW so the next interval starts cleanly,
+        // even if no on-table blind values changed (e.g. duplicate level rows).
+        await this.pool.query(
+          `UPDATE poker_tables
+             SET small_blind = $2::NUMERIC,
+                 big_blind   = $3::NUMERIC,
+                 current_blind_level = $4,
+                 current_blind_level_started_at = NOW()
+           WHERE id = $1`,
+          [
+            row.table_id,
+            BigInt(target.smallBlind).toString(),
+            BigInt(target.bigBlind).toString(),
+            target.level,
+          ],
+        );
+
+        logger.info('Poker tournament blinds advanced by time', {
+          tournamentId: row.tournament_id,
+          tableId: row.table_id,
+          intervalMinutes: interval,
+          fromLevel: startingLevel,
+          toLevel: target.level,
+          smallBlind: target.smallBlind,
+          bigBlind: target.bigBlind,
+          sameBlinds,
+        });
+
+        if (!sameBlinds) {
+          this.broadcast(`poker_tournament:${row.tournament_id}`, 'poker_tournament_blind_level_up', {
+            tournamentId: row.tournament_id,
+            tableId: row.table_id,
+            newLevel: target.level,
+            smallBlind: target.smallBlind,
+            bigBlind: target.bigBlind,
+            handNumber: Number(row.hand_number ?? 0),
+          });
+        }
+      } catch (err) {
+        logger.error('tickTimeBasedBlindAdvances: per-table tick failed', {
+          tableId: row.table_id,
+          tournamentId: row.tournament_id,
+          err,
+        });
+      }
     }
   }
 
@@ -1975,7 +2188,8 @@ export class PokerTournamentService {
 
   async getTournamentState(tournamentId: string): Promise<PokerTournamentState | null> {
     const tRow = await this.pool.query(
-      `SELECT t.*, pt.id AS table_id, pt.hand_number, pt.small_blind, pt.big_blind
+      `SELECT t.*, pt.id AS table_id, pt.hand_number, pt.small_blind, pt.big_blind,
+              pt.current_blind_level, pt.current_blind_level_started_at
        FROM tournaments t
        LEFT JOIN poker_tables pt ON pt.tournament_id = t.id
        WHERE t.id = $1 AND t.game_type = 'poker'`,
@@ -2007,10 +2221,23 @@ export class PokerTournamentService {
       ? Number(bbRaw)
       : currentLevel.bigBlind;
     const blindModeState = this.getBlindIncreaseMode(config);
-    const blindLevelDisplay =
-      blindModeState === 'by_hand'
-        ? this.scheduleDisplayLevel(config.blindSchedule, smallBlindChips, bigBlindChips)
-        : this.knockoutBlindDisplayLevel(config.blindSchedule, smallBlindChips);
+    let blindLevelDisplay: number;
+    if (blindModeState === 'by_hand') {
+      blindLevelDisplay = this.scheduleDisplayLevel(config.blindSchedule, smallBlindChips, bigBlindChips);
+    } else if (blindModeState === 'by_time') {
+      // Prefer the persisted current_blind_level (set at activation, advanced by the tick).
+      // Fall back to `scheduleDisplayLevel` so the UI doesn't show level 1 if the column is null.
+      const persisted = t.current_blind_level != null ? Number(t.current_blind_level) : null;
+      blindLevelDisplay = persisted && Number.isFinite(persisted) && persisted >= 1
+        ? persisted
+        : this.scheduleDisplayLevel(config.blindSchedule, smallBlindChips, bigBlindChips);
+    } else {
+      blindLevelDisplay = this.knockoutBlindDisplayLevel(config.blindSchedule, smallBlindChips);
+    }
+    const currentBlindLevelStartedAt: string | null =
+      blindModeState === 'by_time' && t.current_blind_level_started_at
+        ? new Date(t.current_blind_level_started_at).toISOString()
+        : null;
 
     const prizeSplitPercentages = parsePrizePercentagesFromDb(
       t.prize_percentages,
@@ -2056,9 +2283,13 @@ export class PokerTournamentService {
         minPlayers:    config.minPlayers,
         maxPlayers:    config.maxPlayers,
         blindIncreaseMode: blindModeState,
+        ...(blindModeState === 'by_time' && config.blindIntervalMinutes
+          ? { blindIntervalMinutes: config.blindIntervalMinutes }
+          : {}),
       },
       actionTimerSeconds: t.action_timer_seconds != null ? Number(t.action_timer_seconds) : null,
       prizeSplitPercentages,
+      currentBlindLevelStartedAt,
     };
   }
 

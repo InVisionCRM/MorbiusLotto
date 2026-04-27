@@ -309,8 +309,9 @@ async function initializeServices() {
     // Wire BJ multi broadcast callback
     bjMultiService.setBroadcastCallback((tableId) => wsService.broadcastBJMultiTableState(tableId));
 
-    // Freeroll scheduler (polls pending scheduled events: start, end)
+    // Freeroll scheduler (polls pending scheduled events: start, end; also ticks poker by_time blind advances)
     freerollScheduler = new FreerollSchedulerService(dbService.getPool(), tournamentService);
+    freerollScheduler.setPokerTournamentService(pokerTournamentService);
     freerollScheduler.start();
 
     // Tournament scheduler (time-expired buy-in tournaments, stuck-tournament recovery)

@@ -99,6 +99,7 @@ export async function initializeRuntimeServices(server: HttpServer, port: string
   }, 60_000); // check every minute
 
   const freerollScheduler = new FreerollSchedulerService(dbService.getPool(), tournamentService);
+  freerollScheduler.setPokerTournamentService(pokerTournamentService);
   freerollScheduler.start();
 
   const tournamentScheduler = new TournamentSchedulerService(dbService.getPool(), tournamentService);

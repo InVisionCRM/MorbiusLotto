@@ -195,7 +195,9 @@ function StartedElapsedCell({ scheduledStartAt }: { scheduledStartAt: string }) 
 }
 
 function blindModeLabel(mode: PokerBlindIncreaseMode | undefined): string {
-  return mode === 'by_hand' ? 'Scheduled' : 'Elimination';
+  if (mode === 'by_hand') return 'Scheduled';
+  if (mode === 'by_time') return 'Timed';
+  return 'Elimination';
 }
 
 function TournamentStatusBadge({ status, isFull }: { status: string; isFull: boolean }) {

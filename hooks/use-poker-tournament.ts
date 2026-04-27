@@ -18,7 +18,11 @@ export interface BlindLevel {
 }
 
 /** Mirrors server `PokerBlindIncreaseMode`. */
-export type PokerBlindIncreaseMode = 'knockout' | 'by_hand';
+export type PokerBlindIncreaseMode = 'knockout' | 'by_hand' | 'by_time';
+
+/** Mirrors server `BLIND_INTERVAL_MINUTES_OPTIONS`. */
+export const BLIND_INTERVAL_MINUTES_OPTIONS = [15, 30, 45, 60] as const;
+export type BlindIntervalMinutes = typeof BLIND_INTERVAL_MINUTES_OPTIONS[number];
 
 export interface PokerTournamentConfig {
   startingStack: number;
@@ -28,8 +32,11 @@ export interface PokerTournamentConfig {
   /**
    * `knockout`: blinds jump when players bust (legacy).
    * `by_hand`: blinds follow the schedule after each hand (`handsPerLevel`).
+   * `by_time`: blinds advance one level every `blindIntervalMinutes` of wall-clock time.
    */
   blindIncreaseMode?: PokerBlindIncreaseMode;
+  /** Required when `blindIncreaseMode === 'by_time'`. One of `BLIND_INTERVAL_MINUTES_OPTIONS`. */
+  blindIntervalMinutes?: BlindIntervalMinutes;
 }
 
 export interface PokerTournamentPlayer {
@@ -66,6 +73,11 @@ export interface PokerTournamentState {
   actionTimerSeconds?: number | null;
   /** % of prize pool per rank (1st = index 0). */
   prizeSplitPercentages?: number[];
+  /**
+   * `by_time` mode only — ISO timestamp when the current blind level started.
+   * Use with `pokerConfig.blindIntervalMinutes` to render a countdown to the next bump.
+   */
+  currentBlindLevelStartedAt?: string | null;
 }
 
 export interface PokerTournamentSummary {

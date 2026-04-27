@@ -24,6 +24,7 @@ const tournament_router_1 = require("./websocket/tournament-router");
 const poker_router_1 = require("./websocket/poker-router");
 const bj_multi_router_1 = require("./websocket/bj-multi-router");
 const poker_chip_wallet_1 = require("./poker-chip-wallet");
+const stream_voice_service_1 = require("./stream-voice.service");
 // EIP-712 domain and types for WebSocket authentication
 const AUTH_EIP712_DOMAIN = {
     name: 'MORBlotto Blackjack',
@@ -1788,6 +1789,22 @@ class WebSocketService {
         catch (error) {
             logger_1.logger.error('Error cancelling poker tournament:', error);
             this.sendError(ws, error.message || 'Failed to cancel tournament', message.requestId);
+        }
+    }
+    async handlePokerVoiceToken(ws, message) {
+        try {
+            if (!ws.playerAddress) {
+                return this.sendError(ws, 'wallet required', message.requestId);
+            }
+            const tokenInfo = stream_voice_service_1.generateStreamVoiceToken(ws.playerAddress);
+            if (!tokenInfo) {
+                return this.sendError(ws, 'voice chat not configured', message.requestId);
+            }
+            this.sendMessage(ws, { type: 'poker_voice_token', payload: tokenInfo, requestId: message.requestId });
+        }
+        catch (error) {
+            logger_1.logger.error('Error issuing voice token:', error);
+            this.sendError(ws, error.message || 'Failed to issue voice token', message.requestId);
         }
     }
     // Get connection count

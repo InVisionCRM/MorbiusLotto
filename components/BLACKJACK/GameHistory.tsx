@@ -1,10 +1,10 @@
 'use client'
 
-import React, { useState } from 'react'
+import React, { useEffect, useMemo, useState } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import Image from 'next/image'
 import Link from 'next/link'
-import { History, ChevronDown, ChevronUp, Trophy, Target, Clock } from 'lucide-react'
+import { History, ChevronDown, ChevronUp, ChevronLeft, ChevronRight, Trophy, Clock } from 'lucide-react'
 import { formatEther } from 'viem'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
@@ -31,6 +31,8 @@ export interface GameHistoryEntry {
   wasSplit?: boolean
   wasDoubleDown?: boolean
 }
+
+const HISTORY_PAGE_SIZE = 25
 
 interface GameHistoryProps {
   history: GameHistoryEntry[]
@@ -89,8 +91,9 @@ const CardImage = ({ value, index, salt = 0 }: { value: number; index: number; s
 export function GameHistory({ history, onVerifyGame, isLoading }: GameHistoryProps) {
   const [expandedGame, setExpandedGame] = useState<string | null>(null)
   const [sortBy, setSortBy] = useState<'newest' | 'oldest' | 'profit'>('newest')
+  const [page, setPage] = useState(1)
 
-  const sortedHistory = React.useMemo(() => {
+  const sortedHistory = useMemo(() => {
     const sorted = [...history]
 
     switch (sortBy) {
@@ -108,6 +111,27 @@ export function GameHistory({ history, onVerifyGame, isLoading }: GameHistoryPro
         return sorted
     }
   }, [history, sortBy])
+
+  const totalPages = Math.max(1, Math.ceil(sortedHistory.length / HISTORY_PAGE_SIZE))
+  const safePage = Math.min(page, totalPages)
+  const pageOffset = (safePage - 1) * HISTORY_PAGE_SIZE
+  const pagedHistory = useMemo(
+    () => sortedHistory.slice(pageOffset, pageOffset + HISTORY_PAGE_SIZE),
+    [sortedHistory, pageOffset],
+  )
+
+  useEffect(() => {
+    setPage(1)
+    setExpandedGame(null)
+  }, [history, sortBy])
+
+  useEffect(() => {
+    if (page > totalPages) setPage(totalPages)
+  }, [page, totalPages])
+
+  useEffect(() => {
+    setExpandedGame(null)
+  }, [safePage])
 
   const getResultColor = (result: string) => {
     switch (result) {
@@ -207,8 +231,14 @@ export function GameHistory({ history, onVerifyGame, isLoading }: GameHistoryPro
         </div>
       </CardHeader>
       <CardContent className="space-y-3 p-4">
+        {sortedHistory.length > HISTORY_PAGE_SIZE && (
+          <p className="text-[11px] text-gray-500 -mt-1 mb-1">
+            Showing {pageOffset + 1}–{Math.min(pageOffset + HISTORY_PAGE_SIZE, sortedHistory.length)} of {sortedHistory.length}
+          </p>
+        )}
         <AnimatePresence>
-          {sortedHistory.map((entry, entryIndex) => {
+          {pagedHistory.map((entry, idx) => {
+            const entryIndex = pageOffset + idx
             return (
             <motion.div
               key={entry.id}
@@ -387,6 +417,38 @@ export function GameHistory({ history, onVerifyGame, isLoading }: GameHistoryPro
             </motion.div>
           )})}
         </AnimatePresence>
+
+        {totalPages > 1 && (
+          <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 pt-4 border-t border-gray-700/80">
+            <span className="text-xs text-gray-500 text-center sm:text-left tabular-nums">
+              Page {safePage} of {totalPages}
+            </span>
+            <div className="flex items-center justify-center gap-2">
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                className="min-w-[100px] border-white/15 bg-gray-800/50 text-white hover:bg-gray-700/70"
+                disabled={safePage <= 1}
+                onClick={() => setPage((p) => Math.max(1, p - 1))}
+              >
+                <ChevronLeft className="w-4 h-4 mr-1" aria-hidden />
+                Previous
+              </Button>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                className="min-w-[100px] border-white/15 bg-gray-800/50 text-white hover:bg-gray-700/70"
+                disabled={safePage >= totalPages}
+                onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+              >
+                Next
+                <ChevronRight className="w-4 h-4 ml-1" aria-hidden />
+              </Button>
+            </div>
+          </div>
+        )}
       </CardContent>
     </Card>
   )

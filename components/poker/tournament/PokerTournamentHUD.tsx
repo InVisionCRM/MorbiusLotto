@@ -294,6 +294,35 @@ export function PokerTournamentHUD({ state, myAddress }: Props) {
     ? `${formatBlindShort(nextLevel.smallBlind)}/${formatBlindShort(nextLevel.bigBlind)}`
     : null;
 
+  // ── by_time mode: live countdown to the next blind bump ──────────────────
+  // `currentBlindLevelStartedAt` + `blindIntervalMinutes` come from the server snapshot.
+  // We tick a 1Hz `now` clock so the rendered MM:SS updates without any push.
+  const isByTime = state.pokerConfig?.blindIncreaseMode === 'by_time';
+  const intervalMinutes = state.pokerConfig?.blindIntervalMinutes ?? null;
+  const levelStartedAtMs = useMemo(() => {
+    if (!isByTime || !state.currentBlindLevelStartedAt) return null;
+    const t = Date.parse(state.currentBlindLevelStartedAt);
+    return Number.isFinite(t) ? t : null;
+  }, [isByTime, state.currentBlindLevelStartedAt]);
+
+  const [nowMs, setNowMs] = useState(() => Date.now());
+  useEffect(() => {
+    if (!isByTime || levelStartedAtMs == null || !intervalMinutes) return;
+    setNowMs(Date.now());
+    const id = setInterval(() => setNowMs(Date.now()), 1000);
+    return () => clearInterval(id);
+  }, [isByTime, levelStartedAtMs, intervalMinutes]);
+
+  const nextLevelCountdown = useMemo(() => {
+    if (!isByTime || levelStartedAtMs == null || !intervalMinutes || !nextLevel) return null;
+    const intervalMs = intervalMinutes * 60_000;
+    const remainMs = Math.max(0, levelStartedAtMs + intervalMs - nowMs);
+    const totalSec = Math.ceil(remainMs / 1000);
+    const mm = Math.floor(totalSec / 60);
+    const ss = totalSec % 60;
+    return `${String(mm).padStart(2, '0')}:${String(ss).padStart(2, '0')}`;
+  }, [isByTime, levelStartedAtMs, intervalMinutes, nextLevel, nowMs]);
+
   // Rank change indicator (▲ / ▼)
   const prevRankRef = useRef<number | null>(null);
   const [rankDelta, setRankDelta] = useState<'up' | 'down' | null>(null);
@@ -446,6 +475,15 @@ export function PokerTournamentHUD({ state, myAddress }: Props) {
         }}
       >
         <CollapsedStat label="Blinds" value={blindStr} />
+        {nextLevelCountdown ? (
+          <span
+            className="font-jost-normal tabular-nums text-[9px] -mt-2 self-center"
+            style={{ color: 'rgba(34,211,238,0.9)' }}
+            title={intervalMinutes ? `Blinds advance every ${intervalMinutes} min` : undefined}
+          >
+            {nextLevelCountdown}
+          </span>
+        ) : null}
         <Divider />
         <CollapsedStat label="Stack" value={stackShort} />
         <Divider />
@@ -504,11 +542,27 @@ export function PokerTournamentHUD({ state, myAddress }: Props) {
 
       <BlockDivider />
 
-      {/* Blinds — hero (current + next) */}
+      {/* Blinds — hero (current + next, with countdown in by_time mode) */}
       <ExpandedBlock
         label="Blinds"
         value={`${formatChipsLib(state.smallBlind)} / ${formatChipsLib(state.bigBlind)}`}
-        sub={nextBlindsStr ? <>Next <span className="font-jost" style={{ color: 'rgba(255,255,255,0.8)' }}>{nextBlindsStr}</span></> : null}
+        sub={
+          nextBlindsStr ? (
+            <span className="inline-flex items-center gap-1.5">
+              <span>Next</span>
+              <span className="font-jost" style={{ color: 'rgba(255,255,255,0.8)' }}>{nextBlindsStr}</span>
+              {nextLevelCountdown ? (
+                <span
+                  className="font-jost tabular-nums"
+                  style={{ color: 'rgba(34,211,238,0.95)' }}
+                  title={`Blinds advance every ${intervalMinutes} min`}
+                >
+                  · in {nextLevelCountdown}
+                </span>
+              ) : null}
+            </span>
+          ) : null
+        }
       />
 
       {/* Secondary stats — 2-col grid card */}

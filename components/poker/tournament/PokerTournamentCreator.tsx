@@ -4,7 +4,9 @@ import React, { useState, useEffect, useMemo, useRef } from 'react';
 import Link from 'next/link';
 import { format } from 'date-fns';
 import {
+  BLIND_INTERVAL_MINUTES_OPTIONS,
   POKER_TOURNAMENT_DEFAULT_CONFIG,
+  type BlindIntervalMinutes,
   type CreatePokerTournamentParams,
   type CustomTokenEscrowFunding,
   type PokerBlindIncreaseMode,
@@ -188,6 +190,7 @@ export function PokerTournamentCreator({ creatorAddress, onClose, onCreate }: Po
   const [scheduledTime, setScheduledTime] = useState(initialSchedule.time);
   const [scheduleError, setScheduleError] = useState<string | null>(null);
   const [blindIncreaseMode, setBlindIncreaseMode] = useState<PokerBlindIncreaseMode>('knockout');
+  const [blindIntervalMinutes, setBlindIntervalMinutes] = useState<BlindIntervalMinutes>(30);
   const [prizePresetId, setPrizePresetId] = useState<PokerPrizePresetId>('podium_classic');
   const [created, setCreated] = useState<{ tournamentId: string; pinCode?: string | null } | null>(null);
 
@@ -355,6 +358,7 @@ export function PokerTournamentCreator({ creatorAddress, onClose, onCreate }: Po
           minPlayers: Math.max(2, Math.min(10, parseInt(minPlayers, 10) || 2)),
           maxPlayers: prizeSlotCount,
           blindIncreaseMode,
+          ...(blindIncreaseMode === 'by_time' ? { blindIntervalMinutes } : {}),
         },
         isPrivate,
         ...(pinForCreate ? { pinCode: pinForCreate } : {}),
@@ -939,16 +943,50 @@ export function PokerTournamentCreator({ creatorAddress, onClose, onCreate }: Po
                       After each knockout (classic SNG)
                     </SelectItem>
                     <SelectItem value="by_hand" className="focus:bg-cyan-500/15 focus:text-white cursor-pointer">
-                      On a timer — every N completed hands
+                      Every N completed hands
+                    </SelectItem>
+                    <SelectItem value="by_time" className="focus:bg-cyan-500/15 focus:text-white cursor-pointer">
+                      On a wall-clock timer
                     </SelectItem>
                   </SelectContent>
                 </Select>
                 <p className="text-[11px] text-white/45 mt-2 leading-relaxed">
                   {blindIncreaseMode === 'knockout'
                     ? 'Blinds rise when someone is eliminated, so the game stays comfortable until the field shrinks.'
-                    : `Blinds follow the built-in ladder (level 1 uses ${handsL1} hands per level, then fewer hands on later levels) so the pace picks up even if no one has busted yet.`}
+                    : blindIncreaseMode === 'by_hand'
+                      ? `Blinds follow the built-in ladder (level 1 uses ${handsL1} hands per level, then fewer hands on later levels) so the pace picks up even if no one has busted yet.`
+                      : `Blinds advance one level every ${blindIntervalMinutes} minutes of real time, no matter how many hands have been played.`}
                 </p>
               </div>
+
+              {blindIncreaseMode === 'by_time' && (
+                <div>
+                  <label className={labelClass}>Time per blind level</label>
+                  <div className="grid grid-cols-4 gap-2">
+                    {BLIND_INTERVAL_MINUTES_OPTIONS.map((mins) => {
+                      const selected = blindIntervalMinutes === mins;
+                      const label = mins === 60 ? '1 hr' : `${mins} min`;
+                      return (
+                        <button
+                          key={mins}
+                          type="button"
+                          onClick={() => setBlindIntervalMinutes(mins)}
+                          className={`rounded-lg px-3 py-2 text-xs font-medium border transition-colors ${
+                            selected
+                              ? 'bg-cyan-600/30 border-cyan-500/50 text-white'
+                              : 'bg-black/30 border-white/10 text-white/60 hover:text-white'
+                          }`}
+                        >
+                          {label}
+                        </button>
+                      );
+                    })}
+                  </div>
+                  <p className="text-[11px] text-white/45 mt-1.5">
+                    Each blind level lasts {blindIntervalMinutes} minutes, then bumps to the next row in the schedule automatically.
+                  </p>
+                </div>
+              )}
 
               <label className="flex items-center gap-3 cursor-pointer select-none">
                 <input

@@ -2,7 +2,7 @@
 
 import React, { useEffect, useMemo } from 'react';
 import { toBigIntSafe } from '@/lib/safe-bigint';
-import { CardDisplay } from './CardDisplay';
+import { CardDisplay, formatPokerCardIndexLabel, pokerCardSuitIndex } from './CardDisplay';
 import { motion, AnimatePresence, useMotionValue, useSpring, useTransform } from 'framer-motion';
 
 export interface PokerBoardProps {
@@ -91,27 +91,42 @@ export function PokerBoard({ communityCards, pot, winningCardIndices, dataTutori
         )}
       </AnimatePresence>
 
-      <div className="flex gap-2 sm:gap-3">
+      <div className="flex gap-2 sm:gap-3" data-testid="poker-community-cards">
         {[0, 1, 2, 3, 4].map((i) => {
           // Each card starts at the pot (board center) and flies out to its slot.
           // Approximate cell width (card + gap) — tuned for the `clamp()` sizes in CardDisplay.
           const CELL_WIDTH_PX = 84;
           const dealFromOffset = { dx: (2 - i) * CELL_WIDTH_PX, dy: 0 };
+          const idx = communityCards[i];
+          const suitIdx = idx != null ? pokerCardSuitIndex(idx) : null;
+          const labelColor =
+            suitIdx === 1 || suitIdx === 2
+              ? 'rgba(248, 113, 113, 0.95)'
+              : 'rgba(255, 255, 255, 0.72)';
           return (
             <AnimatePresence key={i} mode="wait">
-              <div data-testid="poker-community-cards">
-                {communityCards[i] != null ? (
+              <div className="flex min-w-0 flex-col items-center gap-0.5">
+                {idx != null ? (
                   <CardDisplay
-                    key={communityCards[i]}
-                    cardIndex={communityCards[i]}
+                    key={idx}
+                    cardIndex={idx}
                     dealDelay={i * 0.12}
-                    isWinningCard={winningCardIndices?.includes(communityCards[i])}
+                    isWinningCard={winningCardIndices?.includes(idx)}
                     showCenterRankSuitOverlay
                     variant="community"
                     dealFromOffset={dealFromOffset}
                   />
                 ) : (
                   <CardDisplay key={`empty-${i}`} cardIndex={undefined} />
+                )}
+                {idx != null && (
+                  <span
+                    className="font-jost-normal max-w-full truncate text-center text-[8px] leading-none tracking-tight sm:text-[9px] tabular-nums"
+                    style={{ color: labelColor }}
+                    aria-hidden
+                  >
+                    {formatPokerCardIndexLabel(idx)}
+                  </span>
                 )}
               </div>
             </AnimatePresence>

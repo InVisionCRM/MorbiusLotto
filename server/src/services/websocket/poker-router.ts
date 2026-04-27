@@ -18,4 +18,5 @@ export const POKER_MESSAGE_HANDLER_MAP: Record<string, string> = {
   poker_tournament_join: 'handlePokerTournamentJoin',
   poker_tournament_get_state: 'handlePokerTournamentGetState',
   poker_tournament_cancel: 'handlePokerTournamentCancel',
+  poker_voice_token: 'handlePokerVoiceToken',
 };

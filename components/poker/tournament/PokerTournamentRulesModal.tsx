@@ -18,11 +18,19 @@ const AFK_MISSED_TURNS_IN_A_ROW = 3;
 /** Server auto-fold watchdog uses 60s when DB `action_timer_seconds` is unset. */
 const DEFAULT_TURN_SECONDS = 60;
 
-function blindModeExplain(mode: PokerBlindIncreaseMode | undefined): string {
+function blindModeExplain(mode: PokerBlindIncreaseMode | undefined, intervalMinutes?: number): string {
   if (mode === 'by_hand') {
     return (
       'Scheduled blind increases: the small and big blind amounts follow the schedule below. ' +
       'After each level, blinds stay the same for the number of completed hands shown in the last column, then move to the next row.'
+    );
+  }
+  if (mode === 'by_time') {
+    const mins = intervalMinutes && intervalMinutes > 0 ? intervalMinutes : null;
+    const label = mins ? `${mins} minutes` : 'a fixed interval';
+    return (
+      `Timed blind increases: each level lasts ${label} of real time, then blinds bump to the next row in the schedule below ` +
+      'regardless of how many hands have been played.'
     );
   }
   return (
@@ -147,7 +155,7 @@ export function PokerTournamentRulesModal({
                 <h3 className="text-xs font-semibold uppercase tracking-wide text-cyan-300/90">
                   Blind levels
                 </h3>
-                <p className="text-white/75 leading-relaxed">{blindModeExplain(mode)}</p>
+                <p className="text-white/75 leading-relaxed">{blindModeExplain(mode, cfg?.blindIntervalMinutes)}</p>
                 <div
                   className="rounded-lg overflow-hidden border border-cyan-500/20 text-xs"
                   style={{

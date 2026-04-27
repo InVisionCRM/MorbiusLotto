@@ -16,6 +16,23 @@ const ENABLE_POKER_ANIMS = true;
 const RANK_NAMES = ['2', '3', '4', '5', '6', '7', '8', '9', '10', 'J', 'Q', 'K', 'A'];
 const SUIT_NAMES = ['clubs', 'diamonds', 'hearts', 'spades'];
 const SUIT_LETTERS = ['C', 'D', 'H', 'S'];
+/** Unicode suit symbols in same order as SUIT_NAMES / floor(idx/13) */
+const SUIT_SYMBOLS = ['♣', '♦', '♥', '♠'] as const;
+
+/**
+ * Human-readable rank + suit for a 0–51 `cardIndex` (matches server `cardToInt` encoding).
+ * Returns empty string for invalid indices.
+ */
+export function formatPokerCardIndexLabel(cardIndex: number): string {
+  if (cardIndex < 0 || cardIndex > 51) return '';
+  return `${RANK_NAMES[cardIndex % 13]}${SUIT_SYMBOLS[Math.floor(cardIndex / 13)]}`;
+}
+
+/** Suit band index 0–3 for coloring label text (clubs / diamonds / hearts / spades). */
+export function pokerCardSuitIndex(cardIndex: number): number | null {
+  if (cardIndex < 0 || cardIndex > 51) return null;
+  return Math.floor(cardIndex / 13);
+}
 
 function getCardAlt(cardIndex: number): string {
   const rank = cardIndex % 13;

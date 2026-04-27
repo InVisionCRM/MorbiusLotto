@@ -51,6 +51,7 @@
     "@radix-ui/react-tooltip": "^1.2.8",
     "@rainbow-me/rainbowkit": "^2.2.10",
     "@serwist/next": "^9.5.7",
+    "@stream-io/video-react-sdk": "^1.35.2",
     "@tabler/icons-react": "^3.41.0",
     "@tanstack/react-query": "^5.90.11",
     "@tanstack/react-table": "^8.21.3",
