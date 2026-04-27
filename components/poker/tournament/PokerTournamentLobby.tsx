@@ -13,7 +13,7 @@ import {
   type ClaimableCustomTokenTournament,
 } from '@/hooks/use-poker-tournament';
 import { formatChips } from '@/lib/format-poker-chips';
-import { formatPrizePoolDisplay } from '@/lib/format-poker-tournament-prize-display';
+import { formatPrizePoolDisplay, formatPrizeTokenUnitLabel } from '@/lib/format-poker-tournament-prize-display';
 import { formatUnits } from 'viem';
 import { useWriteContract, usePublicClient } from 'wagmi';
 import { TOURNAMENT_PRIZE_ESCROW_ADDRESS } from '@/lib/contracts';
@@ -45,15 +45,15 @@ function tournamentFinishOrdinal(rank: number): string {
  *  - Chip / promo freerolls → "5,000 chips"
  *  - Custom-token freerolls → "1,234.56 HEX" (uses prize_token_decimals from server)
  *
- * Symbol is unknown server-side; we show the truncated address as a fallback unless the
- * caller passes a resolved symbol. The dedicated `PokerTokenSymbol` lookup can be wired
- * in later — for now the address tail is enough to identify the token.
+ * Custom-token rows store `prizeTokenName` / `prizeTokenSymbol` from the picker; labels
+ * never fall back to a shortened contract address.
  */
 function formatPokerPrizePool(t: PokerTournamentSummary): string {
   return formatPrizePoolDisplay(t.prizePool, {
-    prizeTokenAddress: t.prizeTokenAddress,
+    prizeTokenAddress: t.prizeTokenAddress ?? null,
     prizeTokenDecimals: t.prizeTokenDecimals,
     prizeTokenSymbol: t.prizeTokenSymbol,
+    prizeTokenName: t.prizeTokenName,
   });
 }
 
@@ -281,9 +281,11 @@ export function PokerTournamentLobby({ wsClient, myAddress, onGoToTable }: Poker
             const dec = payload.prizeTokenDecimals ?? 18;
             const human = formatUnits(prizeBn, dec);
             const trimmed = human.includes('.') ? human.replace(/\.?0+$/, '') : human;
-            const ticker = payload.prizeTokenSymbol?.trim()
-              ? payload.prizeTokenSymbol.trim()
-              : `${payload.prizeTokenAddress.slice(0, 6)}…${payload.prizeTokenAddress.slice(-4)}`;
+            const ticker = formatPrizeTokenUnitLabel({
+              prizeTokenName: payload.prizeTokenName,
+              prizeTokenSymbol: payload.prizeTokenSymbol,
+              prizeTokenAddress: payload.prizeTokenAddress,
+            });
             toast.success(
               `You finished ${tournamentFinishOrdinal(myWin.rank)} — ${trimmed} ${ticker} sent to your wallet.`,
             );
@@ -980,9 +982,11 @@ function ReclaimableEscrowBanner({
     try { human = formatUnits(BigInt(c.prizePool || '0'), c.prizeTokenDecimals); }
     catch { human = '0'; }
     const trimmed = human.includes('.') ? human.replace(/\.?0+$/, '') : human;
-    const ticker = c.prizeTokenSymbol?.trim()
-      ? c.prizeTokenSymbol.trim()
-      : `${c.prizeTokenAddress.slice(0, 6)}…${c.prizeTokenAddress.slice(-4)}`;
+    const ticker = formatPrizeTokenUnitLabel({
+      prizeTokenName: c.prizeTokenName,
+      prizeTokenSymbol: c.prizeTokenSymbol,
+      prizeTokenAddress: c.prizeTokenAddress,
+    });
     return `${trimmed} ${ticker}`;
   };
 
@@ -1139,9 +1143,11 @@ function ClaimableEscrowBanner({
     try { human = formatUnits(wei, c.prizeTokenDecimals); }
     catch { human = '0'; }
     const trimmed = human.includes('.') ? human.replace(/\.?0+$/, '') : human;
-    const ticker = c.prizeTokenSymbol?.trim()
-      ? c.prizeTokenSymbol.trim()
-      : `${c.prizeTokenAddress.slice(0, 6)}…${c.prizeTokenAddress.slice(-4)}`;
+    const ticker = formatPrizeTokenUnitLabel({
+      prizeTokenName: c.prizeTokenName,
+      prizeTokenSymbol: c.prizeTokenSymbol,
+      prizeTokenAddress: c.prizeTokenAddress,
+    });
     return `${trimmed} ${ticker}`;
   };
 

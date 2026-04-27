@@ -96,6 +96,7 @@ export interface TournamentEntry {
   prizeTokenAddress: string | null;
   prizeTokenDecimals: number | null;
   prizeTokenSymbol: string | null;
+  prizeTokenName: string | null;
   gameType: string | null;
   /** When the tournament actually ended (set on completion) */
   endedAt: Date | null;
@@ -1322,6 +1323,7 @@ export class TournamentService {
         t.prize_token_address,
         t.prize_token_decimals,
         t.prize_token_symbol,
+        t.prize_token_name,
         t.game_type,
         t.ended_at,
         t.ends_at,
@@ -1346,8 +1348,13 @@ export class TournamentService {
       tournamentStatus: row.tournament_status,
       tournamentType: row.tournament_type ?? 'standard',
       prizeTokenAddress: row.prize_token_address ?? null,
-      prizeTokenDecimals: row.prize_token_decimals != null ? Number(row.prize_token_decimals) : null,
+      prizeTokenDecimals: (() => {
+        if (row.prize_token_decimals == null) return null;
+        const n = Number(row.prize_token_decimals);
+        return Number.isFinite(n) ? n : null;
+      })(),
       prizeTokenSymbol: row.prize_token_symbol ?? null,
+      prizeTokenName: row.prize_token_name ?? null,
       gameType: row.game_type != null ? String(row.game_type) : null,
       endedAt: row.ended_at ?? null,
       endsAt: row.ends_at ?? null,
@@ -2872,6 +2879,7 @@ export class TournamentService {
         t.prize_token_address,
         t.prize_token_decimals,
         t.prize_token_symbol,
+        t.prize_token_name,
         t.game_type,
         t.status,
         t.created_at,
@@ -2893,6 +2901,7 @@ export class TournamentService {
       prizeTokenAddress: row.prize_token_address ?? null,
       prizeTokenDecimals: row.prize_token_decimals != null ? Number(row.prize_token_decimals) : null,
       prizeTokenSymbol: row.prize_token_symbol ?? null,
+      prizeTokenName: row.prize_token_name ?? null,
       gameType: row.game_type != null ? String(row.game_type) : null,
       status: row.status,
       createdAt: row.created_at,
@@ -2906,7 +2915,7 @@ export class TournamentService {
   async getTournamentResults(tournamentId: string): Promise<TournamentResults | null> {
     const tRes = await this.pool.query(
       `SELECT id, name, tournament_type, buy_in_amount, starting_chips, prize_pool,
-              prize_token_address, prize_token_decimals, prize_token_symbol,
+              prize_token_address, prize_token_decimals, prize_token_symbol, prize_token_name,
               game_type, status, created_at, started_at, ended_at, custom_image,
               time_limit_minutes, max_players, prize_distribution_type
          FROM tournaments WHERE id = $1`,
@@ -2939,6 +2948,7 @@ export class TournamentService {
       prizeTokenAddress: t.prize_token_address ?? null,
       prizeTokenDecimals: t.prize_token_decimals != null ? Number(t.prize_token_decimals) : null,
       prizeTokenSymbol: t.prize_token_symbol ?? null,
+      prizeTokenName: t.prize_token_name ?? null,
       gameType: t.game_type != null ? String(t.game_type) : null,
       status: t.status,
       createdAt: t.created_at,
@@ -3068,6 +3078,7 @@ export interface CompletedTournamentSummary {
   prizeTokenAddress: string | null;
   prizeTokenDecimals: number | null;
   prizeTokenSymbol: string | null;
+  prizeTokenName: string | null;
   gameType: string | null;
   status: 'completed' | 'cancelled' | string;
   createdAt: Date;
@@ -3099,6 +3110,7 @@ export interface TournamentResults {
   prizeTokenAddress: string | null;
   prizeTokenDecimals: number | null;
   prizeTokenSymbol: string | null;
+  prizeTokenName: string | null;
   gameType: string | null;
   status: string;
   createdAt: Date;

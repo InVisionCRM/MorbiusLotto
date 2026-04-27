@@ -613,44 +613,34 @@ export default function BlackjackPage() {
     [displayWagerTiers, validImageIds, validVideoIds],
   );
 
-  // Load table background: fetch server default, then apply per-wallet localStorage override if present.
+  // Load table background: static defaults, then apply per-wallet localStorage override if present.
+  // (Legacy GET /api/blackjack/default-table was Express-only; same-origin Next has no proxy — avoid 404 + crash.)
   // Depends on validImageIds/validVideoIds so it re-runs once API tables load and can validate UUID-based
   // custom tables that weren't in the static list on first render.
   useEffect(() => {
     if (typeof window === 'undefined') return;
-    let cancelled = false;
     const key = address ? `${TABLE_PREFS_KEY}_${address.toLowerCase()}` : null;
     prefLoadedRef.current = false;
-    (async () => {
-      const defaultRes = await fetch('/api/blackjack/default-table').catch(() => null);
-      const apiDefault: { themeKind: 'image' | 'video'; tableId: string } =
-        defaultRes?.ok
-          ? await defaultRes.json().catch(() => ({ themeKind: 'image' as const, tableId: DEFAULT_BLACKJACK_IMAGE_ID }))
-          : { themeKind: 'image', tableId: DEFAULT_BLACKJACK_IMAGE_ID };
-      if (cancelled) return;
-      let imageToUse = apiDefault.themeKind === 'image' ? apiDefault.tableId : DEFAULT_BLACKJACK_IMAGE_ID;
-      let videoToUse = apiDefault.themeKind === 'video' ? apiDefault.tableId : 'glowingTable';
-      if (key) {
-        try {
-          const raw = localStorage.getItem(key);
-          if (raw) {
-            const prefs = JSON.parse(raw) as { theme?: string; imageSource?: string; videoSource?: string };
-            if (prefs.imageSource && validImageIds.has(prefs.imageSource)) imageToUse = prefs.imageSource;
-            if (prefs.videoSource && validVideoIds.has(prefs.videoSource)) videoToUse = prefs.videoSource;
-          }
-        } catch {
-          // ignore invalid stored prefs
+    let imageToUse = DEFAULT_BLACKJACK_IMAGE_ID;
+    let videoToUse = 'glowingTable';
+    if (key) {
+      try {
+        const raw = localStorage.getItem(key);
+        if (raw) {
+          const prefs = JSON.parse(raw) as { theme?: string; imageSource?: string; videoSource?: string };
+          if (prefs.imageSource && validImageIds.has(prefs.imageSource)) imageToUse = prefs.imageSource;
+          if (prefs.videoSource && validVideoIds.has(prefs.videoSource)) videoToUse = prefs.videoSource;
         }
+      } catch {
+        // ignore invalid stored prefs
       }
-      if (!validImageIds.has(imageToUse)) imageToUse = DEFAULT_BLACKJACK_IMAGE_ID;
-      if (!validVideoIds.has(videoToUse)) videoToUse = 'glowingTable';
-      if (cancelled) return;
-      prefLoadedRef.current = true;
-      setTheme('image');
-      setImageSource(imageToUse);
-      setVideoSource(videoToUse);
-    })();
-    return () => { cancelled = true; };
+    }
+    if (!validImageIds.has(imageToUse)) imageToUse = DEFAULT_BLACKJACK_IMAGE_ID;
+    if (!validVideoIds.has(videoToUse)) videoToUse = 'glowingTable';
+    prefLoadedRef.current = true;
+    setTheme('image');
+    setImageSource(imageToUse);
+    setVideoSource(videoToUse);
   }, [address, validImageIds, validVideoIds]);
 
   // Persist table background preference when it changes.
@@ -1988,7 +1978,11 @@ export default function BlackjackPage() {
 
       // Step 2: Generate game hash (must use total stake so server lock matches)
       const timestamp = Math.floor(Date.now() / 1000);
-      const serverSeedForHash = serverSeedHash.startsWith('0x') ? serverSeedHash.slice(2) : serverSeedHash;
+      const rawSeedHash = typeof serverSeedHash === 'string' ? serverSeedHash : '';
+      if (!rawSeedHash) {
+        throw new Error('Server did not return a seed hash');
+      }
+      const serverSeedForHash = rawSeedHash.startsWith('0x') ? rawSeedHash.slice(2) : rawSeedHash;
       const hashInput = `${serverSeedForHash}:${finalClientSeed}:${nonce}:${totalStake.toString()}:${timestamp}`;
 
       const encoder = new TextEncoder();

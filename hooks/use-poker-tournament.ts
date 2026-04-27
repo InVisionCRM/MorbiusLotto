@@ -65,6 +65,7 @@ export interface PokerTournamentState {
   prizeTokenAddress?: string | null;
   prizeTokenDecimals?: number | null;
   prizeTokenSymbol?: string | null;
+  prizeTokenName?: string | null;
   buyInAmount: string;
   prizeDistributionType: string;
   /** Present when server returns full snapshot (`getTournamentState`). */
@@ -98,8 +99,10 @@ export interface PokerTournamentSummary {
   prizeTokenAddress?: string | null;
   /** 1–18 when `prizeTokenAddress` is set. */
   prizeTokenDecimals?: number | null;
-  /** Display ticker (e.g. "HEX"); falls back to address tail in UI when null. */
+  /** Display ticker (e.g. "HEX"); paired with `prizeTokenName` for labels. */
   prizeTokenSymbol?: string | null;
+  /** Token contract name for UI when available. */
+  prizeTokenName?: string | null;
   tableId: string | null;
   createdAt: string;
   creatorAddress: string | null;
@@ -132,6 +135,8 @@ export interface CustomTokenEscrowFunding {
   decimals: number;
   /** Display ticker (e.g. "HEX"). Server caches it for the lobby/HUD. */
   symbol?: string;
+  /** Full token name from picker / scan; stored for history and display. */
+  name?: string;
 }
 
 export interface CreatePokerTournamentParams {
@@ -196,6 +201,7 @@ export interface ReclaimableCustomTokenTournament {
   prizeTokenAddress: string;
   prizeTokenDecimals: number;
   prizeTokenSymbol: string | null;
+  prizeTokenName?: string | null;
   /** Token-wei. Pair with `prizeTokenDecimals` for display. */
   prizePool: string;
   /** Pre-derived bytes32 escrow key (`keccak256(uuid)`). Use directly with `creatorReclaim(bytes32)`. */
@@ -214,6 +220,7 @@ export interface ClaimableCustomTokenTournament {
   prizeTokenAddress: string;
   prizeTokenDecimals: number;
   prizeTokenSymbol: string | null;
+  prizeTokenName?: string | null;
   /** Token-wei the player should be owed. Pair with `prizeTokenDecimals` for display. */
   prizeWon: string;
   /** Pre-derived bytes32 escrow key. */

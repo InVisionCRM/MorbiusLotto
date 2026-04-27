@@ -33,6 +33,7 @@ interface TournamentResults {
   prizeTokenAddress: string | null;
   prizeTokenDecimals?: number | null;
   prizeTokenSymbol?: string | null;
+  prizeTokenName?: string | null;
   gameType?: string | null;
   status: string;
   createdAt: string;
@@ -172,6 +173,7 @@ export default function TournamentResultsPage() {
     prizeTokenAddress: results.prizeTokenAddress,
     prizeTokenDecimals: results.prizeTokenDecimals,
     prizeTokenSymbol: results.prizeTokenSymbol,
+    prizeTokenName: results.prizeTokenName ?? null,
     gameType: results.gameType ?? null,
   };
   const buyInDisplay =

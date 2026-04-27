@@ -3,7 +3,7 @@
 
 CREATE TABLE IF NOT EXISTS blackjack_sp_wager_tiers (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    label VARCHAR(128) NOT NULL,
+    label VARCHAR(512) NOT NULL,
     min_bet NUMERIC(78, 0) NOT NULL,
     max_bet NUMERIC(78, 0) NOT NULL,
     theme_kind VARCHAR(16)

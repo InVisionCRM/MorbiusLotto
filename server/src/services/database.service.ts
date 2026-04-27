@@ -3124,11 +3124,12 @@ export class DatabaseService implements MoneyDatabaseQueries {
     const themeId = input.themeId?.trim() || null;
     const slug = input.slug?.trim() || null;
     const enabled = input.enabled !== false;
+    const label = input.label.length > 512 ? input.label.slice(0, 512) : input.label;
     const r = await this.pool.query(
       `INSERT INTO blackjack_sp_wager_tiers (label, min_bet, max_bet, theme_kind, theme_id, sort_order, slug, enabled)
        VALUES ($1, $2::NUMERIC, $3::NUMERIC, $4, $5, $6, $7, $8)
        RETURNING id, label, min_bet::TEXT, max_bet::TEXT, theme_kind, theme_id, sort_order, enabled, slug, created_at, updated_at`,
-      [input.label, input.minBet.toString(), input.maxBet.toString(), themeKind, themeId, sortOrder, slug, enabled],
+      [label, input.minBet.toString(), input.maxBet.toString(), themeKind, themeId, sortOrder, slug, enabled],
     );
     return this.mapBlackjackSpWagerTierRow(r.rows[0]);
   }
@@ -3151,7 +3152,8 @@ export class DatabaseService implements MoneyDatabaseQueries {
     let i = 1;
     if (updates.label !== undefined) {
       fields.push(`label = $${i++}`);
-      values.push(updates.label);
+      const lb = updates.label;
+      values.push(lb.length > 512 ? lb.slice(0, 512) : lb);
     }
     if (updates.minBet !== undefined) {
       fields.push(`min_bet = $${i++}::NUMERIC`);

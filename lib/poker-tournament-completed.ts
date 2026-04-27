@@ -42,6 +42,7 @@ export interface PokerTournamentCompletedPayload {
   prizeTokenAddress?: string | null;
   prizeTokenDecimals?: number | null;
   prizeTokenSymbol?: string | null;
+  prizeTokenName?: string | null;
 }
 
 function numString(v: unknown, fallback = '0'): string {
@@ -78,6 +79,9 @@ export function normalizePokerTournamentCompletedPayload(raw: unknown): PokerTou
     : null;
   const prizeTokenSymbol = typeof p.prizeTokenSymbol === 'string' && p.prizeTokenSymbol.length > 0
     ? p.prizeTokenSymbol
+    : null;
+  const prizeTokenName = typeof p.prizeTokenName === 'string' && p.prizeTokenName.trim().length > 0
+    ? p.prizeTokenName.trim()
     : null;
   const isCustomToken = !!prizeTokenAddress;
 
@@ -130,5 +134,6 @@ export function normalizePokerTournamentCompletedPayload(raw: unknown): PokerTou
     prizeTokenAddress,
     prizeTokenDecimals,
     prizeTokenSymbol,
+    prizeTokenName,
   };
 }

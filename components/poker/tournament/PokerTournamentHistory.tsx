@@ -6,6 +6,8 @@ import {
   formatPrizePoolDisplay,
   formatTournamentBuyInDisplay,
   formatTournamentPayoutDisplay,
+  payoutMetaFromHistoryRow,
+  prizePoolMetaFromHistoryRow,
 } from '@/lib/format-poker-tournament-prize-display';
 
 interface CompletedTournament {
@@ -17,6 +19,7 @@ interface CompletedTournament {
   prizeTokenAddress: string | null;
   prizeTokenDecimals?: number | null;
   prizeTokenSymbol?: string | null;
+  prizeTokenName?: string | null;
   gameType?: string | null;
   status: string;
   createdAt: string;
@@ -35,6 +38,7 @@ interface PlayerHistoryItem {
   prizeTokenAddress?: string | null;
   prizeTokenDecimals?: number | null;
   prizeTokenSymbol?: string | null;
+  prizeTokenName?: string | null;
   gameType?: string | null;
   boughtInAt: string;
   finishedAt: string | null;
@@ -198,11 +202,7 @@ export function PokerTournamentHistory({ myAddress }: PokerTournamentHistoryProp
                   </td>
                   <td className="py-2.5 px-3 text-right tabular-nums">{t.entryCount}</td>
                   <td className="py-2.5 px-3 text-right tabular-nums text-amber-300">
-                    {formatPrizePoolDisplay(t.prizePool, {
-                      prizeTokenAddress: t.prizeTokenAddress,
-                      prizeTokenDecimals: t.prizeTokenDecimals,
-                      prizeTokenSymbol: t.prizeTokenSymbol,
-                    })}
+                    {formatPrizePoolDisplay(t.prizePool, prizePoolMetaFromHistoryRow(t as unknown as Record<string, unknown>))}
                   </td>
                   <td className="py-2.5 px-3 text-right">
                     <span className={`text-[10px] uppercase tracking-wider px-2 py-0.5 rounded ${
@@ -249,12 +249,10 @@ export function PokerTournamentHistory({ myAddress }: PokerTournamentHistoryProp
                   </td>
                   <td className="py-2.5 px-3 text-right tabular-nums">{t.handsPlayed}</td>
                   <td className="py-2.5 px-3 text-right tabular-nums text-amber-300">
-                    {formatTournamentPayoutDisplay(t.prizeWon, {
-                      prizeTokenAddress: t.prizeTokenAddress ?? null,
-                      prizeTokenDecimals: t.prizeTokenDecimals,
-                      prizeTokenSymbol: t.prizeTokenSymbol,
-                      gameType: t.gameType ?? null,
-                    })}
+                    {formatTournamentPayoutDisplay(
+                      t.prizeWon,
+                      payoutMetaFromHistoryRow(t as unknown as Record<string, unknown>),
+                    )}
                   </td>
                 </tr>
               ))}

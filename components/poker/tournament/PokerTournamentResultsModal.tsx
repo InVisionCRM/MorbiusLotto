@@ -3,6 +3,7 @@
 import React from 'react';
 import type { PokerTournamentCompletedPayload, PokerTournamentStandingRow } from '@/lib/poker-tournament-completed';
 import { formatChips, toChipInt } from '@/lib/format-poker-chips';
+import { formatPrizeTokenUnitLabel } from '@/lib/format-poker-tournament-prize-display';
 import { formatUnits } from 'viem';
 
 function shortAddr(addr: string): string {
@@ -41,12 +42,14 @@ function formatPrizeAmount(
   return human.includes('.') ? human.replace(/\.?0+$/, '') : human;
 }
 
-/** Unit label shown under the headline numbers. "chips" for chip pools, "$SYMBOL" for tokens. */
+/** Unit label shown under the headline numbers. "chips" for chip pools; token name/symbol for ERC-20. */
 function unitLabel(payload: PokerTournamentCompletedPayload): string {
   if (!payload.prizeTokenAddress) return 'chips';
-  return payload.prizeTokenSymbol?.trim()
-    ? payload.prizeTokenSymbol.trim()
-    : `${payload.prizeTokenAddress.slice(0, 6)}…${payload.prizeTokenAddress.slice(-4)}`;
+  return formatPrizeTokenUnitLabel({
+    prizeTokenName: payload.prizeTokenName,
+    prizeTokenSymbol: payload.prizeTokenSymbol,
+    prizeTokenAddress: payload.prizeTokenAddress,
+  });
 }
 
 function formatDurationMs(ms: number | null): string {

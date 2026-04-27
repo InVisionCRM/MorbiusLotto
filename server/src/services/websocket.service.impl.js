@@ -1673,8 +1673,9 @@ class WebSocketService {
                         tokenAddress: String(e.tokenAddress ?? ''),
                         amount: BigInt(String(e.amount ?? '0')),
                         decimals: Number(e.decimals ?? 18),
-                        // Symbol is optional and re-validated server-side; pass-through only.
+                        // Symbol / name optional; re-validated server-side; pass-through only.
                         symbol: typeof e.symbol === 'string' ? e.symbol : undefined,
+                        name: typeof e.name === 'string' ? e.name : undefined,
                     };
                 }
                 catch (_err) {

@@ -112,6 +112,7 @@ export function useBlackjackTables(options?: UseBlackjackTablesOptions) {
 
   const resolveThemeSource = useCallback(
     (kind: 'image' | 'video', id: string): string | null => {
+      if (id == null || typeof id !== 'string' || id === '') return null;
       const options = kind === 'video' ? videoOptions : imageOptions;
       const byId = options.find((x) => x.id === id);
       if (byId?.src) return normalizeSrc(byId.src);
@@ -126,6 +127,14 @@ export function useBlackjackTables(options?: UseBlackjackTablesOptions) {
 
   const getThemeInfo = useCallback(
     (theme: { kind: 'image' | 'video'; id: string }): TableThemeInfo => {
+      if (theme.id == null || theme.id === '') {
+        if (theme.kind === 'video') {
+          const fallback = BLACKJACK_VIDEO_BACKGROUNDS[0];
+          return { label: fallback.label, src: fallback.src, kind: 'video' };
+        }
+        const def = BLACKJACK_IMAGE_BACKGROUNDS.find((x) => x.id === DEFAULT_BLACKJACK_IMAGE_ID) ?? BLACKJACK_IMAGE_BACKGROUNDS[0];
+        return { label: def.label, src: def.src, kind: 'image' };
+      }
       const options = theme.kind === 'video' ? videoOptions : imageOptions;
       const byId = options.find((x) => x.id === theme.id);
       if (byId) return { label: byId.label, src: byId.src, kind: theme.kind };
