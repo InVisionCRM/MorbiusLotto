@@ -15,6 +15,11 @@ export interface PokerTournamentStandingRow {
    * Token-wei when `prizeTokenAddress` is set on the parent payload (pair with `prizeTokenDecimals`).
    */
   prizeAmount: string;
+  /**
+   * Set when the prize was paid on-chain (escrow/Morbius) — the verifiable tx hash.
+   * Null for chip/promo payouts that never touched the chain.
+   */
+  payoutTxHash?: string | null;
 }
 
 export interface PokerTournamentCompletedPayload {
@@ -83,10 +88,15 @@ export function normalizePokerTournamentCompletedPayload(raw: unknown): PokerTou
     if (isCustomToken) prizeAmount = numString(rawPrize, '0');
     else if (hasNewPool) prizeAmount = toChipInt(rawPrize).toString();
     else prizeAmount = legacyWeiToChipsString(rawPrize);
+    // Validate tx hash shape — accepts only a 0x-prefixed 32-byte hash, otherwise null.
+    // Prevents garbage from accidentally rendering as a clickable link.
+    const rawTx = r.payoutTxHash ?? r.payout_tx_hash;
+    const payoutTxHash = typeof rawTx === 'string' && /^0x[0-9a-fA-F]{64}$/.test(rawTx) ? rawTx : null;
     return {
       address: String(r.address ?? r.player_address ?? '').toLowerCase(),
       rank: Number(r.rank ?? r.final_rank ?? 0),
       prizeAmount,
+      payoutTxHash,
     };
   }).filter((s) => s.address.length > 0 && Number.isFinite(s.rank) && s.rank > 0);
 

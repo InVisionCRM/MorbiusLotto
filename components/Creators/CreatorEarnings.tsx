@@ -1,9 +1,9 @@
 'use client';
 
-import React from 'react';
+import React, { useState } from 'react';
 import type { CreatorEarning } from '@/lib/tournament-types';
 import { Theme } from '@/lib/theme';
-import { IconCoins } from '@tabler/icons-react';
+import { IconCoins, IconCopy, IconCheck } from '@tabler/icons-react';
 import {
   Table,
   TableHeader,
@@ -16,6 +16,45 @@ import {
 import { TokenAmountWithUsd } from './TokenAmountWithUsd';
 import { useTokenPrices } from '@/hooks/use-token-price-usd';
 import { MORBIUS_TOKEN_ADDRESS } from '@/lib/contracts';
+
+/**
+ * Compact copy-to-clipboard button. Shows a brief checkmark on success so the
+ * user has feedback that nothing about the row state changed except their clipboard.
+ * Disabled (and visually muted) when there's nothing to copy.
+ */
+function CopyButton({
+  value,
+  title,
+  className = '',
+}: {
+  value: string | null | undefined;
+  title: string;
+  className?: string;
+}) {
+  const [copied, setCopied] = useState(false);
+  const enabled = !!value;
+  const handleClick = async () => {
+    if (!value) return;
+    try {
+      await navigator.clipboard.writeText(value);
+      setCopied(true);
+      window.setTimeout(() => setCopied(false), 1200);
+    } catch {
+      // Clipboard API can reject in insecure contexts; degrade silently rather than spam errors.
+    }
+  };
+  return (
+    <button
+      type="button"
+      onClick={handleClick}
+      disabled={!enabled}
+      title={enabled ? title : `${title} (not available)`}
+      className={`inline-flex items-center justify-center w-5 h-5 rounded text-gray-400 hover:text-cyan-400 hover:bg-white/5 transition-colors disabled:opacity-30 disabled:pointer-events-none ${className}`}
+    >
+      {copied ? <IconCheck size={12} /> : <IconCopy size={12} />}
+    </button>
+  );
+}
 
 interface CreatorEarningsProps {
   earnings: CreatorEarning[];
@@ -97,21 +136,37 @@ export function CreatorEarnings({ earnings }: CreatorEarningsProps) {
                 {formatDate(e.completedAt)}
               </TableCell>
               <TableCell className="text-gray-300">
-                <TokenAmountWithUsd
-                  address={e.prizeTokenAddress}
-                  amount={e.prizePool}
-                  decimals={e.prizeTokenDecimals ?? 18}
-                />
+                <span className="inline-flex items-center gap-1.5 flex-wrap">
+                  <TokenAmountWithUsd
+                    address={e.prizeTokenAddress}
+                    amount={e.prizePool}
+                    decimals={e.prizeTokenDecimals ?? 18}
+                  />
+                  {/* Copies the token contract address. Falls back to MORBIUS for chip/legacy rows
+                      so the button is always useful (not just for custom-token freerolls). */}
+                  <CopyButton
+                    value={e.prizeTokenAddress ?? MORBIUS_TOKEN_ADDRESS}
+                    title="Copy token contract address"
+                  />
+                </span>
               </TableCell>
               <TableCell className="text-cyan-400">
                 {e.feePercent}%
               </TableCell>
               <TableCell className="text-cyan-400 font-medium">
-                <TokenAmountWithUsd
-                  address={e.prizeTokenAddress}
-                  amount={e.feeEarned}
-                  decimals={e.prizeTokenDecimals ?? 18}
-                />
+                <span className="inline-flex items-center gap-1.5 flex-wrap">
+                  <TokenAmountWithUsd
+                    address={e.prizeTokenAddress}
+                    amount={e.feeEarned}
+                    decimals={e.prizeTokenDecimals ?? 18}
+                  />
+                  {/* Copies the on-chain payout tx hash that sent the creator fee. Disabled
+                      (muted) when null — off-chain payouts and pre-tracking rows have no hash. */}
+                  <CopyButton
+                    value={e.feeTxHash}
+                    title="Copy fee payout transaction hash"
+                  />
+                </span>
               </TableCell>
             </TableRow>
           ))}

@@ -1489,8 +1489,10 @@ export class PokerTournamentService {
       player_address: string;
       final_rank: number;
       prize_won: string;
+      prize_payout_tx_hash: string | null;
     }>(
-      `SELECT LOWER(player_address) AS player_address, final_rank, COALESCE(prize_won, 0)::text AS prize_won
+      `SELECT LOWER(player_address) AS player_address, final_rank,
+              COALESCE(prize_won, 0)::text AS prize_won, prize_payout_tx_hash
        FROM tournament_entries
        WHERE tournament_id = $1 AND final_rank IS NOT NULL
        ORDER BY final_rank ASC`,
@@ -1500,6 +1502,7 @@ export class PokerTournamentService {
       address: r.player_address,
       rank: Number(r.final_rank),
       prizeAmount: r.prize_won,
+      payoutTxHash: r.prize_payout_tx_hash ?? null,
     }));
 
     const endedRes = await this.pool.query<{ ended_at: Date | null }>(

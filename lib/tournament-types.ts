@@ -384,8 +384,12 @@ export interface CreatorEarning {
   /** When set, prize pool and fee are in this custom token (not MORBIUS) */
   prizeTokenAddress?: string | null;
   prizeTokenDecimals?: number | null;
+  /** Display ticker for the prize token (e.g. "FLOWT"); null falls back to MORBIUS-default. */
+  prizeTokenSymbol?: string | null;
   feePercent: number;
   feeEarned: string;
+  /** Tx hash of the on-chain creator-fee payout; null = off-chain or not yet paid. */
+  feeTxHash?: string | null;
   completedAt: string;
 }
 

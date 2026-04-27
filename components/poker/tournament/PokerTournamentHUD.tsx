@@ -6,6 +6,7 @@ import type { PokerTournamentState, PokerTournamentPlayer } from '@/hooks/use-po
 import { formatChips as formatChipsLib, toChipInt } from '@/lib/format-poker-chips';
 import { formatUnits } from 'viem';
 import { useSidebar } from '@/components/ui/sidebar';
+import { useTokenInfo } from '@/hooks/use-token-info';
 
 interface Props {
   state: PokerTournamentState;
@@ -87,6 +88,27 @@ function isZeroBuyInChips(wei: string): boolean {
   } catch {
     return true;
   }
+}
+
+/**
+ * Tiny round logo for the custom-token prize, rendered next to the prize-pool value.
+ * Uses the same DexScreener/scan-API fallback chain as the lobby (`useTokenInfo`).
+ * Returns null when there's no token (chip pool) or no logo could be resolved —
+ * the caller's text-only render keeps working without any layout shift.
+ */
+function PrizeTokenLogo({ address, size = 14 }: { address?: string | null; size?: number }) {
+  const info = useTokenInfo(address ?? null);
+  if (!address || !info?.logoUrl) return null;
+  return (
+    <img
+      src={info.logoUrl}
+      alt=""
+      width={size}
+      height={size}
+      className="rounded-full object-contain shrink-0 inline-block align-middle"
+      style={{ marginRight: 4 }}
+    />
+  );
 }
 
 /** Integer chip share of `pool` for a payout percentage (0–100). */
@@ -512,7 +534,16 @@ export function PokerTournamentHUD({ state, myAddress }: Props) {
           />
           <div className="col-span-2 h-px" style={{ background: 'rgba(255,255,255,0.06)' }} />
           <StatTile label="Players Left" value={playersLeftFull} />
-          <StatTile label="Prize Pool" value={prizeLabel} align="right" />
+          <StatTile
+            label="Prize Pool"
+            value={
+              <span className="inline-flex items-center justify-end">
+                <PrizeTokenLogo address={state.prizeTokenAddress} />
+                {prizeLabel}
+              </span>
+            }
+            align="right"
+          />
         </div>
       </div>
 

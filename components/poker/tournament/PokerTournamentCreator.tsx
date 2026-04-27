@@ -29,7 +29,7 @@ import { Confetti, type ConfettiRef } from '@/components/ui/confetti';
 import { Prc20TokenPicker, type SelectedPrc20Token } from '@/components/shared/Prc20TokenPicker';
 import { useTokenPriceUsd } from '@/hooks/use-token-price-usd';
 import { parseUnits } from 'viem';
-import { useWriteContract, usePublicClient } from 'wagmi';
+import { useWriteContract, usePublicClient, useAccount } from 'wagmi';
 import { ERC20_ABI } from '@/abi/erc20';
 import { tournamentPrizeEscrowV2Abi } from '@/abi/tournament-prize-escrow-v2';
 import { TOURNAMENT_PRIZE_ESCROW_ADDRESS } from '@/lib/contracts';
@@ -181,6 +181,7 @@ export function PokerTournamentCreator({ creatorAddress, onClose, onCreate }: Po
   const [depositTxHash, setDepositTxHash] = useState<string | null>(null);
   const { writeContractAsync } = useWriteContract();
   const publicClient = usePublicClient();
+  const { address: connectedAddress } = useAccount();
   const [activeTab, setActiveTab] = useState('basics');
   const initialSchedule = useMemo(() => defaultScheduledFields(), []);
   const [scheduledDate, setScheduledDate] = useState(initialSchedule.date);
@@ -393,6 +394,35 @@ export function PokerTournamentCreator({ creatorAddress, onClose, onCreate }: Po
       setFundingError('Your browser is missing crypto.randomUUID; please update to a modern browser.');
       return;
     }
+
+    // Balance pre-flight at approve time: approving more than you own succeeds at the ERC20
+    // level (allowances aren't bounded by balance), but the deposit step would then fail.
+    // Catch it here so the user doesn't burn gas on a doomed approval.
+    if (publicClient && connectedAddress) {
+      try {
+        const balance = (await publicClient.readContract({
+          address: selectedToken.address as `0x${string}`,
+          abi: ERC20_ABI,
+          functionName: 'balanceOf',
+          args: [connectedAddress],
+        })) as bigint;
+        if (balance < customTokenAmountWei) {
+          const dec = Math.min(18, Math.max(1, selectedToken.decimals));
+          const have = (Number(balance) / 10 ** dec).toLocaleString(undefined, { maximumFractionDigits: 4 });
+          const need = (Number(customTokenAmountWei) / 10 ** dec).toLocaleString(undefined, { maximumFractionDigits: 4 });
+          setFundingError(
+            `Insufficient ${selectedToken.symbol} balance. You have ${have} but need ${need}. ` +
+            `Get more ${selectedToken.symbol} into this wallet, then retry.`,
+          );
+          return;
+        }
+      } catch (preErr) {
+        // Non-fatal: if the read failed (RPC issue), let the user try anyway. The deposit
+        // step has its own pre-flight + receipt check.
+        console.warn('approve pre-flight balance read failed', preErr);
+      }
+    }
+
     const uuid = crypto.randomUUID();
     setFundingTournamentId(uuid);
     setFundingStep('approving');
@@ -422,6 +452,61 @@ export function PokerTournamentCreator({ creatorAddress, onClose, onCreate }: Po
     setFundingStep('depositing');
     try {
       const bytes32Id = tournamentIdToBytes32(fundingTournamentId);
+
+      // Pre-flight checks — catch the obvious failure modes BEFORE opening the wallet.
+      // The contract reverts inside transferFrom for either of these, with no human-readable
+      // reason in the receipt. Checking up front saves a wasted tx + gas + a confusing error.
+      if (publicClient && connectedAddress) {
+        try {
+          const [balance, allowance, escrowPool] = await Promise.all([
+            publicClient.readContract({
+              address: selectedToken.address as `0x${string}`,
+              abi: ERC20_ABI,
+              functionName: 'balanceOf',
+              args: [connectedAddress],
+            }) as Promise<bigint>,
+            publicClient.readContract({
+              address: selectedToken.address as `0x${string}`,
+              abi: ERC20_ABI,
+              functionName: 'allowance',
+              args: [connectedAddress, TOURNAMENT_PRIZE_ESCROW_ADDRESS],
+            }) as Promise<bigint>,
+            publicClient.readContract({
+              address: TOURNAMENT_PRIZE_ESCROW_ADDRESS,
+              abi: tournamentPrizeEscrowV2Abi,
+              functionName: 'getPool',
+              args: [bytes32Id],
+            }) as Promise<readonly [`0x${string}`, `0x${string}`, bigint, bigint, bigint, boolean]>,
+          ]);
+          if (balance < customTokenAmountWei) {
+            const dec = Math.min(18, Math.max(1, selectedToken.decimals));
+            const have = (Number(balance) / 10 ** dec).toLocaleString(undefined, { maximumFractionDigits: 4 });
+            const need = (Number(customTokenAmountWei) / 10 ** dec).toLocaleString(undefined, { maximumFractionDigits: 4 });
+            throw new Error(
+              `Insufficient ${selectedToken.symbol} balance. You have ${have} but need ${need}. ` +
+              `Get more ${selectedToken.symbol} into this wallet, then retry.`,
+            );
+          }
+          if (allowance < customTokenAmountWei) {
+            // Should not happen — step 1 should have approved this exact amount. Defensive.
+            throw new Error(
+              `Token allowance is too low (${allowance.toString()} < ${customTokenAmountWei.toString()}). ` +
+              `Cancel and retry the create flow to re-approve.`,
+            );
+          }
+          // bytes32 already occupied: pool token != 0x0 → contract will revert with "Already deposited".
+          if (escrowPool[0] !== '0x0000000000000000000000000000000000000000') {
+            throw new Error(
+              `This tournament id has already been used on-chain (depositor: ${escrowPool[1]}). ` +
+              `Hard-refresh the page to generate a fresh id and retry.`,
+            );
+          }
+        } catch (preflightErr) {
+          // Re-throw to the outer catch — UI lands in 'approved' so user can fix and retry the deposit step.
+          throw preflightErr;
+        }
+      }
+
       const hash = await writeContractAsync({
         address: TOURNAMENT_PRIZE_ESCROW_ADDRESS,
         abi: tournamentPrizeEscrowV2Abi,
@@ -429,17 +514,16 @@ export function PokerTournamentCreator({ creatorAddress, onClose, onCreate }: Po
         args: [bytes32Id, selectedToken.address as `0x${string}`, customTokenAmountWei],
       });
       // Wait for the receipt AND verify it succeeded — `waitForTransactionReceipt`
-      // resolves on a reverted tx too (status: 'reverted'). Without this guard, a failed
-      // deposit (e.g. bytes32 already used → contract throws "Already deposited") would
-      // silently proceed to the server, which then reads an empty pool and rejects with
-      // a confusing "Escrow deposit is not active" error.
+      // resolves on a reverted tx too (status: 'reverted'). The pre-flight above catches
+      // the common cases, but tokens can revert mid-tx for other reasons (rebase/fee-on-transfer/paused),
+      // so we still validate the receipt before claiming success to the server.
       if (publicClient) {
         const receipt = await publicClient.waitForTransactionReceipt({ hash });
         if (receipt.status !== 'success') {
           throw new Error(
             `Deposit transaction reverted on-chain (tx: ${hash}). ` +
-            `This usually means the tournament id was already used for a prior deposit. ` +
-            `Cancel the create flow and start fresh.`,
+            `Possible causes: token has fee-on-transfer/rebase logic the escrow doesn't support, ` +
+            `the token is paused, or your wallet was blacklisted by the token contract.`,
           );
         }
       }

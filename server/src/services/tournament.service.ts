@@ -947,6 +947,8 @@ export class TournamentService {
     let onChainTournamentId: number | null = null;
     let useEscrowV2 = false;
     let useMorbiusPayout = false;
+    /** Lifted out of Phase 1 so Phase 2 can match the creator-fee payout and persist its tx hash. */
+    let creatorAddress: string | null = null;
     const distributions: PrizeDistribution[] = [];
 
     // ── Phase 1: DB transaction ───────────────────────────────────────────────
@@ -993,6 +995,7 @@ export class TournamentService {
       useEscrowV2 = useEscrow;
       useMorbiusPayout = isOnChain && !useEscrow;
       onChainTournamentId = tournament.on_chain_tournament_id ?? null;
+      creatorAddress = tournament.creator_address ? String(tournament.creator_address).toLowerCase() : null;
       const offChainPokerChips =
         String(tournament.game_type ?? '') === 'poker' && !useMorbiusPayout && !useEscrowV2;
 
@@ -1138,6 +1141,10 @@ export class TournamentService {
         });
       }
 
+      const morbiusWinnerEntryByAddress = new Map<string, string>();
+      for (const d of distributions) {
+        morbiusWinnerEntryByAddress.set(d.player_address.toLowerCase(), d.entry_id);
+      }
       for (const { address, amount } of pendingOnChainPayouts) {
         const result = await sendMorbiusTournamentPayout(onChainTournamentId, address, amount);
         if (!result.success) {
@@ -1147,6 +1154,36 @@ export class TournamentService {
             amount: amount.toString(),
             error: result.error,
           });
+          continue;
+        }
+        const lowerAddr = address.toLowerCase();
+        const entryId = morbiusWinnerEntryByAddress.get(lowerAddr);
+        if (entryId && result.txHash) {
+          try {
+            await this.pool.query(
+              `UPDATE tournament_entries SET prize_payout_tx_hash = $1 WHERE id = $2`,
+              [result.txHash, entryId],
+            );
+          } catch (writeErr) {
+            logger.warn('Failed to persist prize_payout_tx_hash (payout still on-chain)', {
+              tournamentId, entryId, txHash: result.txHash, error: (writeErr as Error).message,
+            });
+          }
+        }
+        // Creator-fee path: same payout machinery, but recipient is the tournament creator
+        // (not a tournament_entries row). Persist on the parent `tournaments` row instead so
+        // the creator dashboard can surface a copyable hash.
+        if (creatorAddress && lowerAddr === creatorAddress && result.txHash) {
+          try {
+            await this.pool.query(
+              `UPDATE tournaments SET creator_fee_tx_hash = $1 WHERE id = $2`,
+              [result.txHash, tournamentId],
+            );
+          } catch (writeErr) {
+            logger.warn('Failed to persist creator_fee_tx_hash (payout still on-chain)', {
+              tournamentId, txHash: result.txHash, error: (writeErr as Error).message,
+            });
+          }
         }
       }
 
@@ -1159,6 +1196,13 @@ export class TournamentService {
         });
       }
     } else if (useEscrowV2) {
+      // Build a quick lookup of winner addresses → entry id so we can persist the on-chain
+      // payout tx hash back to `tournament_entries`. Fee recipients (platform/creator) are
+      // also in `pendingOnChainPayouts` but won't match a winner address, so they're skipped.
+      const winnerEntryByAddress = new Map<string, string>();
+      for (const d of distributions) {
+        winnerEntryByAddress.set(d.player_address.toLowerCase(), d.entry_id);
+      }
       for (const { address, amount } of pendingOnChainPayouts) {
         const result = await sendEscrowPayout(tournamentId, address, amount);
         if (!result.success) {
@@ -1168,6 +1212,37 @@ export class TournamentService {
             amount: amount.toString(),
             error: result.error,
           });
+          continue;
+        }
+        // Persist the tx hash on the winner's entry so the results modal can render
+        // a verification link. Best-effort: a failed write here doesn't unwind the payout.
+        const lowerAddr = address.toLowerCase();
+        const entryId = winnerEntryByAddress.get(lowerAddr);
+        if (entryId && result.txHash) {
+          try {
+            await this.pool.query(
+              `UPDATE tournament_entries SET prize_payout_tx_hash = $1 WHERE id = $2`,
+              [result.txHash, entryId],
+            );
+          } catch (writeErr) {
+            logger.warn('Failed to persist prize_payout_tx_hash (payout still on-chain)', {
+              tournamentId, entryId, txHash: result.txHash, error: (writeErr as Error).message,
+            });
+          }
+        }
+        // Creator-fee path: persist on `tournaments.creator_fee_tx_hash` so the dashboard
+        // has a copyable hash. Same payout machinery; recipient is the tournament's creator.
+        if (creatorAddress && lowerAddr === creatorAddress && result.txHash) {
+          try {
+            await this.pool.query(
+              `UPDATE tournaments SET creator_fee_tx_hash = $1 WHERE id = $2`,
+              [result.txHash, tournamentId],
+            );
+          } catch (writeErr) {
+            logger.warn('Failed to persist creator_fee_tx_hash (payout still on-chain)', {
+              tournamentId, txHash: result.txHash, error: (writeErr as Error).message,
+            });
+          }
         }
       }
     }
@@ -2412,8 +2487,12 @@ export class TournamentService {
     prizePool: string;
     prizeTokenAddress: string | null;
     prizeTokenDecimals: number | null;
+    /** Display ticker for the prize token (e.g. "FLOWT"); null for chip/MORBIUS. */
+    prizeTokenSymbol: string | null;
     feePercent: number;
     feeEarned: string;
+    /** Tx hash of the on-chain creator-fee transfer; null when fee was off-chain or not yet paid. */
+    feeTxHash: string | null;
     completedAt: string;
   }[]> {
     const normalizedAddress = this.normalizeAddress(creatorAddress);
@@ -2424,8 +2503,10 @@ export class TournamentService {
         t.prize_pool,
         t.prize_token_address,
         t.prize_token_decimals,
+        t.prize_token_symbol,
         COALESCE(t.creator_fee_percent, 0) AS creator_fee_percent,
         (t.prize_pool * COALESCE(t.creator_fee_percent, 0)) / 100 AS fee_earned,
+        t.creator_fee_tx_hash,
         t.ended_at
       FROM tournaments t
       WHERE LOWER(t.creator_address) = LOWER($1)
@@ -2441,8 +2522,10 @@ export class TournamentService {
       prizePool: String(row.prize_pool ?? '0'),
       prizeTokenAddress: row.prize_token_address ?? null,
       prizeTokenDecimals: row.prize_token_decimals != null ? Number(row.prize_token_decimals) : null,
+      prizeTokenSymbol: row.prize_token_symbol ?? null,
       feePercent: Number(row.creator_fee_percent ?? 0),
       feeEarned: String(row.fee_earned ?? '0'),
+      feeTxHash: row.creator_fee_tx_hash ?? null,
       completedAt: row.ended_at ? new Date(row.ended_at).toISOString() : '',
     }));
   }

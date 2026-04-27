@@ -234,10 +234,24 @@ export function PokerTournamentResultsModal({ payload, myAddress, onDismiss }: P
                       {shortAddr(r.address)}
                     </span>
                     <span
-                      className="font-jost text-[12px] tabular-nums text-right"
+                      className="font-jost text-[12px] tabular-nums text-right inline-flex items-center justify-end gap-1.5"
                       style={{ color: payoutZero ? 'rgba(255,255,255,0.35)' : 'rgba(255,255,255,0.95)' }}
                     >
                       {formatPrizeAmount(payoutBn, payload.prizeTokenAddress, payload.prizeTokenDecimals)}
+                      {/* Verifiable on-chain link, only when this prize was actually paid on-chain. */}
+                      {r.payoutTxHash && !payoutZero ? (
+                        <a
+                          href={`https://scan.pulsechain.com/tx/${r.payoutTxHash}`}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          title="View payout transaction on PulseScan"
+                          className="text-[10px] font-jost-normal opacity-60 hover:opacity-100 transition-opacity"
+                          style={{ color: 'rgba(125,211,252,0.85)' }}
+                          onClick={(e) => e.stopPropagation()}
+                        >
+                          ↗
+                        </a>
+                      ) : null}
                     </span>
                   </div>
                 );
@@ -245,7 +259,7 @@ export function PokerTournamentResultsModal({ payload, myAddress, onDismiss }: P
             </div>
             <p className="font-jost-normal text-[9px] text-center mt-2" style={{ color: 'rgba(255,255,255,0.32)' }}>
               {isCustomToken
-                ? `Payouts are sent on-chain in ${unit} directly to the winner's wallet. Hand rake is normally zero in SNGs.`
+                ? `Payouts are sent on-chain in ${unit} directly to the winner's wallet — tap ↗ next to a payout to view the transaction on PulseScan.`
                 : 'Payouts credit your off-chain poker chip wallet. Hand rake is normally zero in SNGs.'}
             </p>
           </div>
