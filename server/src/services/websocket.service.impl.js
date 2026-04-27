@@ -1557,6 +1557,29 @@ class WebSocketService {
             this.sendError(ws, error.message || 'Failed to list reclaimable tournaments', message.requestId);
         }
     }
+    /**
+     * Lists completed custom-token poker tournaments where the caller has unpaid
+     * winnings (no `prize_payout_tx_hash` recorded). Client confirms each via
+     * on-chain `unclaimedOf(bytes32, me)` before showing a Claim button.
+     */
+    async handlePokerTournamentListClaimable(ws, message) {
+        try {
+            if (!this.pokerTournamentService || !ws.playerAddress) {
+                return this.sendError(ws, 'Wallet required', message.requestId);
+            }
+            const tournaments = await this.pokerTournamentService
+                .listClaimableCustomTokenPokerTournaments(ws.playerAddress);
+            this.sendMessage(ws, {
+                type: 'poker_tournament_list_claimable',
+                payload: { tournaments },
+                requestId: message.requestId,
+            });
+        }
+        catch (error) {
+            logger_1.logger.error('Error listing claimable poker tournaments:', error);
+            this.sendError(ws, error.message || 'Failed to list claimable tournaments', message.requestId);
+        }
+    }
     async handlePokerTournamentCreate(ws, message) {
         try {
             if (!this.pokerTournamentService || !ws.playerAddress) {

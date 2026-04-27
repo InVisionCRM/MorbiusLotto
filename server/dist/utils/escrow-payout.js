@@ -17,7 +17,8 @@ const escrow_status_1 = require("./escrow-status");
 const tournament_id_bytes32_1 = require("./tournament-id-bytes32");
 const logger_1 = require("./logger");
 /** Tournament Prize Escrow V2 (bytes32 tournament IDs) - hardcoded for reliability */
-const ESCROW_V2_ADDRESS = '0x52cbF18A8AE0Fd4324B045E13532d35CF05Af3e1';
+// Active escrow (V4 deployed at this address). Variable name kept for backward-compat.
+const ESCROW_V2_ADDRESS = '0x29d65B552c8246293740e686C9b4F90F359A9F1b';
 /** V3 (uint256 IDs) - kept for cancel/reclaim of legacy V3-funded tournaments */
 const ESCROW_V3_ADDRESS = '0xa114a8974D4478b09FE9d2E2bf1BdCF28dE5bd25';
 const AUTHORIZED_KEY = (process.env.TOURNAMENT_PRIZE_ESCROW_AUTHORIZED_KEY || process.env.SETTLEMENT_PRIVATE_KEY);
@@ -84,68 +85,40 @@ async function sendEscrowPayout(tournamentId, winnerAddress, amount) {
     return { success: false, error: 'Max retries exceeded' };
 }
 /**
- * Batched escrow payout — single tx pays N recipients using percentages of the
- * remaining pool balance. Replaces the loop-of-`payout()` pattern that was
- * silently failing on Railway (RPC drops on N sequential writes).
+ * Batched escrow payout via V4's `payoutMultiple(bytes32, address[], uint256[] amounts)`.
  *
- * Caller passes raw wei amounts; we convert each to a percentage relative to
- * `remaining` (read on-chain so it's authoritative). The contract truncates to
- * uint256 percentages, so summed dust may leave 1-2 wei unpaid — fine for our use.
+ * Single on-chain tx pays N recipients atomically. Replaces the legacy loop-of-`payout()`
+ * pattern that silently failed on Railway's RPC (N sequential writes, drops mid-loop,
+ * no rollback). Now: one nonce, one round-trip, all-or-nothing.
  *
- * Returns the same `{success, txHash, error}` shape as `sendEscrowPayout` so
- * callers can stay uniform.
+ * The V4 contract takes raw wei amounts (V2's `payoutMultiple` took percentages, but
+ * (a) V2's bytecode didn't actually have the function deployed, and (b) percentages
+ * caused rounding loss). Server already has exact amounts from `calculate_tournament_prizes`
+ * so wei is the natural unit.
  */
 async function sendEscrowPayoutMultiple(tournamentId, recipients) {
     if (recipients.length === 0)
         return { success: true };
     const idBytes32 = (0, tournament_id_bytes32_1.tournamentIdToBytes32)(tournamentId);
-    // Read current remaining balance to compute percentages. This is the contract's
-    // perspective — `remaining = totalDeposited - amountPaidOut`. If anything was
-    // already paid out (e.g. partial recovery), the percentages are scaled accordingly.
-    const status = await (0, escrow_status_1.getEscrowPoolStatus)(tournamentId);
-    if (!status)
-        return { success: false, error: 'Could not read escrow pool state' };
-    const remaining = status.totalDeposited - status.amountPaidOut;
-    if (remaining <= 0n) {
-        logger_1.logger.warn('sendEscrowPayoutMultiple: pool has no remaining balance', { tournamentId });
-        return { success: false, error: 'Pool has no remaining balance' };
-    }
-    // Compute integer percentages 0–100. Drop entries that round to 0 (would be a no-op
-    // in the contract anyway and just wastes calldata). Sum check enforced by contract too.
+    // Drop zero-amount entries; contract's `_push` already no-ops on them but it's
+    // wasted calldata + log noise.
     const winners = [];
-    const percentages = [];
-    let totalPct = 0n;
+    const amounts = [];
     for (const r of recipients) {
         if (r.amount <= 0n)
             continue;
-        // pct = floor(amount * 100 / remaining). Could leave dust on the floor; harmless.
-        const pct = (r.amount * 100n) / remaining;
-        if (pct <= 0n)
-            continue;
         winners.push(r.address);
-        percentages.push(pct);
-        totalPct += pct;
+        amounts.push(r.amount);
     }
     if (winners.length === 0) {
-        logger_1.logger.warn('sendEscrowPayoutMultiple: all recipients rounded to 0%', {
-            tournamentId, remaining: remaining.toString(),
-        });
-        return { success: false, error: 'All amounts rounded to 0% of remaining' };
+        return { success: true };
     }
-    if (totalPct > 100n) {
-        // Should not happen: caller-supplied amounts shouldn't exceed `remaining` since
-        // both come from the same pool calc. Defensive — a >100% sum reverts in-contract.
-        logger_1.logger.error('sendEscrowPayoutMultiple: percentages sum > 100, refusing to call', {
-            tournamentId, totalPct: totalPct.toString(),
-        });
-        return { success: false, error: `Computed percentages sum to ${totalPct} (>100)` };
-    }
+    const totalAmount = amounts.reduce((sum, a) => sum + a, 0n);
     logger_1.logger.info('sendEscrowPayoutMultiple: invoking', {
         tournamentId,
         bytes32Id: idBytes32,
         recipientCount: winners.length,
-        totalPct: totalPct.toString(),
-        remaining: remaining.toString(),
+        totalAmount: totalAmount.toString(),
         callerWallet: AUTHORIZED_KEY ? (0, accounts_1.privateKeyToAccount)(AUTHORIZED_KEY).address : '<MISSING_KEY>',
     });
     const maxRetries = 2;
@@ -158,7 +131,7 @@ async function sendEscrowPayoutMultiple(tournamentId, recipients) {
                 address: ESCROW_V2_ADDRESS,
                 abi: tournament_prize_escrow_v2_1.tournamentPrizeEscrowV2Abi,
                 functionName: 'payoutMultiple',
-                args: [idBytes32, winners, percentages],
+                args: [idBytes32, winners, amounts],
             });
             logger_1.logger.info('Escrow payoutMultiple sent', { tournamentId, recipientCount: winners.length, txHash: hash });
             return { success: true, txHash: hash };

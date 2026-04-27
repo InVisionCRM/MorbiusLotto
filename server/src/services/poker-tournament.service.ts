@@ -1923,6 +1923,56 @@ export class PokerTournamentService {
     }));
   }
 
+  /**
+   * Completed custom-token poker tournaments where the caller has a positive `prize_won`
+   * but no `prize_payout_tx_hash` recorded — i.e. the push payout didn't fire (or hasn't
+   * yet) and the server-recorded claimable amount may still be pullable on-chain.
+   *
+   * Pure DB read; the client confirms each row via `unclaimedOf(bytes32, me)` before
+   * surfacing a button. Cheap query — index on `tournament_id, player_address` already exists.
+   */
+  async listClaimableCustomTokenPokerTournaments(playerAddress: string): Promise<Array<{
+    tournamentId: string;
+    name: string;
+    completedAt: string | null;
+    prizeTokenAddress: string;
+    prizeTokenDecimals: number;
+    prizeTokenSymbol: string | null;
+    /** Token-wei the player should be owed; pair with `prizeTokenDecimals` for display. */
+    prizeWon: string;
+    escrowTournamentIdBytes32: string | null;
+  }>> {
+    const normalized = this.normalizeAddress(playerAddress);
+    const result = await this.pool.query(
+      `SELECT t.id, t.name, t.ended_at,
+              t.prize_token_address, t.prize_token_decimals, t.prize_token_symbol,
+              te.prize_won::text AS prize_won,
+              t.escrow_tournament_id_bytes32
+       FROM tournaments t
+       JOIN tournament_entries te ON te.tournament_id = t.id
+       WHERE t.game_type = 'poker'
+         AND t.status = 'completed'
+         AND t.prize_token_address IS NOT NULL
+         AND LOWER(te.player_address) = $1
+         AND te.prize_won IS NOT NULL
+         AND te.prize_won::NUMERIC > 0
+         AND te.prize_payout_tx_hash IS NULL
+       ORDER BY t.ended_at DESC NULLS LAST
+       LIMIT 50`,
+      [normalized],
+    );
+    return result.rows.map((r) => ({
+      tournamentId: r.id as string,
+      name: String(r.name ?? ''),
+      completedAt: r.ended_at ? new Date(r.ended_at).toISOString() : null,
+      prizeTokenAddress: String(r.prize_token_address),
+      prizeTokenDecimals: r.prize_token_decimals != null ? Number(r.prize_token_decimals) : 18,
+      prizeTokenSymbol: r.prize_token_symbol ?? null,
+      prizeWon: r.prize_won?.toString() ?? '0',
+      escrowTournamentIdBytes32: r.escrow_tournament_id_bytes32 ?? null,
+    }));
+  }
+
   async getTournamentState(tournamentId: string): Promise<PokerTournamentState | null> {
     const tRow = await this.pool.query(
       `SELECT t.*, pt.id AS table_id, pt.hand_number, pt.small_blind, pt.big_blind

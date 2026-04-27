@@ -1,60 +1,81 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.tournamentPrizeEscrowV2Abi = void 0;
+/**
+ * ABI for the deployed escrow contract at TOURNAMENT_PRIZE_ESCROW_ADDRESS.
+ *
+ * Filename retained for compatibility with existing imports — actually the V4 contract
+ * (TournamentPrizeEscrowV4.sol). Differences vs the legacy V2 layout:
+ *   - getPool returns 6 fields (no `active`); derive `active = !cancelled && remaining > 0`
+ *   - payoutMultiple takes uint256[] amounts (raw wei), NOT percentages
+ *   - setUnclaimedShares + claim + unclaimedOf added for the pull-backup path
+ */
 exports.tournamentPrizeEscrowV2Abi = [
+    // Funding
     {
-        inputs: [{ name: 'tournamentId', type: 'bytes32' }, { name: 'winner', type: 'address' }, { name: 'amount', type: 'uint256' }],
+        inputs: [
+            { name: 'tournamentId', type: 'bytes32' },
+            { name: 'token', type: 'address' },
+            { name: 'amount', type: 'uint256' },
+        ],
+        name: 'depositPrizePool',
+        outputs: [],
+        stateMutability: 'nonpayable',
+        type: 'function',
+    },
+    // Push payouts
+    {
+        inputs: [
+            { name: 'tournamentId', type: 'bytes32' },
+            { name: 'winner', type: 'address' },
+            { name: 'amount', type: 'uint256' },
+        ],
         name: 'payout',
         outputs: [],
         stateMutability: 'nonpayable',
         type: 'function',
     },
     {
-        // Batched payout: distributes `remaining` (totalDeposited - amountPaidOut) across the
-        // winners array using each percentage. Single tx, atomic, way more reliable than
-        // looping `payout()` calls — RPC drops/nonce races on N writes were causing silent
-        // payout failures in production.
         inputs: [
             { name: 'tournamentId', type: 'bytes32' },
             { name: 'winners', type: 'address[]' },
-            { name: 'percentages', type: 'uint256[]' },
+            { name: 'amounts', type: 'uint256[]' },
         ],
         name: 'payoutMultiple',
         outputs: [],
         stateMutability: 'nonpayable',
         type: 'function',
     },
+    // Pull payouts (backup path)
     {
-        // The deployed contract returns 6 fields (no `active`). A phantom 7th field
-        // makes viem fail decode and silently fall through to a V1 ABI elsewhere
-        // that mis-aligns `totalDeposited` into `amountPaidOut`. See escrow-status.ts.
-        inputs: [{ name: 'tournamentId', type: 'bytes32' }],
-        name: 'getPool',
-        outputs: [
-            { name: 'token', type: 'address' },
-            { name: 'depositor', type: 'address' },
-            { name: 'totalDeposited', type: 'uint256' },
-            { name: 'amountPaidOut', type: 'uint256' },
-            { name: 'depositedAt', type: 'uint256' },
-            { name: 'cancelled', type: 'bool' },
+        inputs: [
+            { name: 'tournamentId', type: 'bytes32' },
+            { name: 'winners', type: 'address[]' },
+            { name: 'amounts', type: 'uint256[]' },
         ],
+        name: 'setUnclaimedShares',
+        outputs: [],
+        stateMutability: 'nonpayable',
+        type: 'function',
+    },
+    {
+        inputs: [{ name: 'tournamentId', type: 'bytes32' }],
+        name: 'claim',
+        outputs: [],
+        stateMutability: 'nonpayable',
+        type: 'function',
+    },
+    {
+        inputs: [
+            { name: 'tournamentId', type: 'bytes32' },
+            { name: 'winner', type: 'address' },
+        ],
+        name: 'unclaimedOf',
+        outputs: [{ type: 'uint256' }],
         stateMutability: 'view',
         type: 'function',
     },
-    {
-        inputs: [{ name: 'tournamentId', type: 'bytes32' }, { name: 'to', type: 'address' }],
-        name: 'payoutRemainderTo',
-        outputs: [],
-        stateMutability: 'nonpayable',
-        type: 'function',
-    },
-    {
-        inputs: [{ name: 'tournamentId', type: 'bytes32' }, { name: 'to', type: 'address' }],
-        name: 'reclaimUnclaimed',
-        outputs: [],
-        stateMutability: 'nonpayable',
-        type: 'function',
-    },
+    // Cancel + reclaim
     {
         inputs: [{ name: 'tournamentId', type: 'bytes32' }],
         name: 'cancelTournament',
@@ -70,89 +91,143 @@ exports.tournamentPrizeEscrowV2Abi = [
         type: 'function',
     },
     {
+        inputs: [
+            { name: 'tournamentId', type: 'bytes32' },
+            { name: 'to', type: 'address' },
+        ],
+        name: 'payoutRemainderTo',
+        outputs: [],
+        stateMutability: 'nonpayable',
+        type: 'function',
+    },
+    // Admin
+    {
+        inputs: [],
+        name: 'authorizedServer',
+        outputs: [{ type: 'address' }],
+        stateMutability: 'view',
+        type: 'function',
+    },
+    {
+        inputs: [],
+        name: 'owner',
+        outputs: [{ type: 'address' }],
+        stateMutability: 'view',
+        type: 'function',
+    },
+    {
+        inputs: [{ name: '_authorizedServer', type: 'address' }],
+        name: 'setAuthorizedServer',
+        outputs: [],
+        stateMutability: 'nonpayable',
+        type: 'function',
+    },
+    // Reads — getPool returns 6 fields (no `active`)
+    {
+        inputs: [{ name: 'tournamentId', type: 'bytes32' }],
+        name: 'getPool',
+        outputs: [
+            { name: 'token', type: 'address' },
+            { name: 'depositor', type: 'address' },
+            { name: 'totalDeposited', type: 'uint256' },
+            { name: 'amountPaidOut', type: 'uint256' },
+            { name: 'depositedAt', type: 'uint256' },
+            { name: 'cancelled', type: 'bool' },
+        ],
+        stateMutability: 'view',
+        type: 'function',
+    },
+    {
         inputs: [{ name: 'tournamentId', type: 'bytes32' }],
         name: 'getRemainingBalance',
-        outputs: [{ name: '', type: 'uint256' }],
+        outputs: [{ type: 'uint256' }],
         stateMutability: 'view',
         type: 'function',
     },
     {
         inputs: [],
         name: 'getTournamentCount',
-        outputs: [{ name: '', type: 'uint256' }],
-        stateMutability: 'view',
-        type: 'function',
-    },
-    {
-        inputs: [{ name: 'index', type: 'uint256' }],
-        name: 'getTournamentId',
-        outputs: [{ name: '', type: 'bytes32' }],
+        outputs: [{ type: 'uint256' }],
         stateMutability: 'view',
         type: 'function',
     },
     {
         inputs: [],
         name: 'getAllTournamentIds',
-        outputs: [{ name: '', type: 'bytes32[]' }],
+        outputs: [{ type: 'bytes32[]' }],
         stateMutability: 'view',
         type: 'function',
     },
+    // Events
     {
-        inputs: [{ name: 'tournamentIds_', type: 'bytes32[]' }],
-        name: 'getPoolsBatch',
-        outputs: [
-            { name: 'tokens', type: 'address[]' },
-            { name: 'depositors', type: 'address[]' },
-            { name: 'totalDepositeds', type: 'uint256[]' },
-            { name: 'amountPaidOuts', type: 'uint256[]' },
-            { name: 'depositedAts', type: 'uint256[]' },
-            { name: 'cancelleds', type: 'bool[]' },
+        anonymous: false,
+        inputs: [
+            { indexed: true, name: 'tournamentId', type: 'bytes32' },
+            { indexed: true, name: 'token', type: 'address' },
+            { indexed: false, name: 'amount', type: 'uint256' },
+            { indexed: true, name: 'depositor', type: 'address' },
         ],
-        stateMutability: 'view',
-        type: 'function',
+        name: 'PrizePoolDeposited',
+        type: 'event',
     },
     {
-        inputs: [],
-        name: 'getActivePools',
-        outputs: [
-            { name: 'activeIds', type: 'bytes32[]' },
-            { name: 'balances', type: 'uint256[]' },
+        anonymous: false,
+        inputs: [
+            { indexed: true, name: 'tournamentId', type: 'bytes32' },
+            { indexed: true, name: 'winner', type: 'address' },
+            { indexed: false, name: 'amount', type: 'uint256' },
         ],
-        stateMutability: 'view',
-        type: 'function',
+        name: 'Payout',
+        type: 'event',
     },
     {
-        inputs: [{ name: 'depositor', type: 'address' }],
-        name: 'getPoolsByDepositor',
-        outputs: [
-            { name: 'ids', type: 'bytes32[]' },
-            { name: 'tokens', type: 'address[]' },
-            { name: 'totalDepositeds', type: 'uint256[]' },
-            { name: 'amountPaidOuts', type: 'uint256[]' },
-            { name: 'depositedAts', type: 'uint256[]' },
-            { name: 'cancelleds', type: 'bool[]' },
+        anonymous: false,
+        inputs: [
+            { indexed: true, name: 'tournamentId', type: 'bytes32' },
+            { indexed: true, name: 'winner', type: 'address' },
+            { indexed: false, name: 'amount', type: 'uint256' },
         ],
-        stateMutability: 'view',
-        type: 'function',
+        name: 'ClaimableSet',
+        type: 'event',
     },
     {
-        inputs: [{ name: 'token', type: 'address' }],
-        name: 'getTotalValueLocked',
-        outputs: [{ name: '', type: 'uint256' }],
-        stateMutability: 'view',
-        type: 'function',
-    },
-    {
-        inputs: [],
-        name: 'getEscrowSummary',
-        outputs: [
-            { name: 'totalTournaments', type: 'uint256' },
-            { name: 'activeTournaments', type: 'uint256' },
-            { name: 'cancelledTournaments', type: 'uint256' },
-            { name: 'totalValueLocked', type: 'uint256' },
+        anonymous: false,
+        inputs: [
+            { indexed: true, name: 'tournamentId', type: 'bytes32' },
+            { indexed: true, name: 'winner', type: 'address' },
+            { indexed: false, name: 'amount', type: 'uint256' },
         ],
-        stateMutability: 'view',
-        type: 'function',
+        name: 'Claimed',
+        type: 'event',
+    },
+    {
+        anonymous: false,
+        inputs: [
+            { indexed: true, name: 'tournamentId', type: 'bytes32' },
+            { indexed: true, name: 'depositor', type: 'address' },
+        ],
+        name: 'TournamentCancelled',
+        type: 'event',
+    },
+    {
+        anonymous: false,
+        inputs: [
+            { indexed: true, name: 'tournamentId', type: 'bytes32' },
+            { indexed: true, name: 'creator', type: 'address' },
+            { indexed: false, name: 'amount', type: 'uint256' },
+        ],
+        name: 'CreatorReclaimed',
+        type: 'event',
+    },
+    {
+        anonymous: false,
+        inputs: [
+            { indexed: true, name: 'tournamentId', type: 'bytes32' },
+            { indexed: true, name: 'to', type: 'address' },
+            { indexed: false, name: 'amount', type: 'uint256' },
+        ],
+        name: 'RemainderReclaimed',
+        type: 'event',
     },
 ];
 //# sourceMappingURL=tournament-prize-escrow-v2.js.map

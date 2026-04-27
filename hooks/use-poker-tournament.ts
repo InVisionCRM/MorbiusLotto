@@ -190,6 +190,24 @@ export interface ReclaimableCustomTokenTournament {
   escrowTournamentIdBytes32: string | null;
 }
 
+/**
+ * Completed custom-token poker tournaments where the connected wallet has unpaid
+ * winnings recorded server-side. Surfaced when the on-chain push payout failed
+ * (or hasn't fired); winners pull via `claim(bytes32)`.
+ */
+export interface ClaimableCustomTokenTournament {
+  tournamentId: string;
+  name: string;
+  completedAt: string | null;
+  prizeTokenAddress: string;
+  prizeTokenDecimals: number;
+  prizeTokenSymbol: string | null;
+  /** Token-wei the player should be owed. Pair with `prizeTokenDecimals` for display. */
+  prizeWon: string;
+  /** Pre-derived bytes32 escrow key. */
+  escrowTournamentIdBytes32: string | null;
+}
+
 export interface UsePokerTournamentReturn {
   openTournaments: PokerTournamentSummary[];
   isLoadingTournaments: boolean;
@@ -208,6 +226,11 @@ export interface UsePokerTournamentReturn {
    * that may still have funds parked in the escrow. Returns [] when wallet is missing.
    */
   fetchReclaimableTournaments: () => Promise<ReclaimableCustomTokenTournament[]>;
+  /**
+   * One-shot fetch of completed custom-token freerolls where the connected wallet has
+   * an unpaid prize. Surfaces the Claim button when the on-chain `unclaimedOf` confirms.
+   */
+  fetchClaimableTournaments: () => Promise<ClaimableCustomTokenTournament[]>;
 }
 
 // ---------------------------------------------------------------------------
@@ -426,6 +449,17 @@ export function usePokerTournament({
     }
   }, [wsClient]);
 
+  const fetchClaimableTournaments = useCallback(async (): Promise<ClaimableCustomTokenTournament[]> => {
+    if (!wsClient) return [];
+    try {
+      const response = await wsClient.sendRequest('poker_tournament_list_claimable', {});
+      const list = response?.tournaments;
+      return Array.isArray(list) ? (list as ClaimableCustomTokenTournament[]) : [];
+    } catch {
+      return [];
+    }
+  }, [wsClient]);
+
   // Load on mount
   useEffect(() => {
     if (wsClient?.isConnected()) {
@@ -486,6 +520,7 @@ export function usePokerTournament({
     cancelTournament,
     fetchTournamentState,
     fetchReclaimableTournaments,
+    fetchClaimableTournaments,
   };
 }
 

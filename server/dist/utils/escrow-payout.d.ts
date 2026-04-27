@@ -8,16 +8,16 @@ export declare function sendEscrowPayout(tournamentId: string, winnerAddress: st
     error?: string;
 }>;
 /**
- * Batched escrow payout — single tx pays N recipients using percentages of the
- * remaining pool balance. Replaces the loop-of-`payout()` pattern that was
- * silently failing on Railway (RPC drops on N sequential writes).
+ * Batched escrow payout via V4's `payoutMultiple(bytes32, address[], uint256[] amounts)`.
  *
- * Caller passes raw wei amounts; we convert each to a percentage relative to
- * `remaining` (read on-chain so it's authoritative). The contract truncates to
- * uint256 percentages, so summed dust may leave 1-2 wei unpaid — fine for our use.
+ * Single on-chain tx pays N recipients atomically. Replaces the legacy loop-of-`payout()`
+ * pattern that silently failed on Railway's RPC (N sequential writes, drops mid-loop,
+ * no rollback). Now: one nonce, one round-trip, all-or-nothing.
  *
- * Returns the same `{success, txHash, error}` shape as `sendEscrowPayout` so
- * callers can stay uniform.
+ * The V4 contract takes raw wei amounts (V2's `payoutMultiple` took percentages, but
+ * (a) V2's bytecode didn't actually have the function deployed, and (b) percentages
+ * caused rounding loss). Server already has exact amounts from `calculate_tournament_prizes`
+ * so wei is the natural unit.
  */
 export declare function sendEscrowPayoutMultiple(tournamentId: string, recipients: {
     address: string;

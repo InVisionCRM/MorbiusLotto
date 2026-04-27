@@ -1,4 +1,28 @@
+/**
+ * ABI for the deployed escrow contract at TOURNAMENT_PRIZE_ESCROW_ADDRESS.
+ *
+ * Filename retained for compatibility with existing imports — actually the V4 contract
+ * (TournamentPrizeEscrowV4.sol). Differences vs the legacy V2 layout:
+ *   - getPool returns 6 fields (no `active`); derive `active = !cancelled && remaining > 0`
+ *   - payoutMultiple takes uint256[] amounts (raw wei), NOT percentages
+ *   - setUnclaimedShares + claim + unclaimedOf added for the pull-backup path
+ */
 export declare const tournamentPrizeEscrowV2Abi: readonly [{
+    readonly inputs: readonly [{
+        readonly name: "tournamentId";
+        readonly type: "bytes32";
+    }, {
+        readonly name: "token";
+        readonly type: "address";
+    }, {
+        readonly name: "amount";
+        readonly type: "uint256";
+    }];
+    readonly name: "depositPrizePool";
+    readonly outputs: readonly [];
+    readonly stateMutability: "nonpayable";
+    readonly type: "function";
+}, {
     readonly inputs: readonly [{
         readonly name: "tournamentId";
         readonly type: "bytes32";
@@ -21,10 +45,103 @@ export declare const tournamentPrizeEscrowV2Abi: readonly [{
         readonly name: "winners";
         readonly type: "address[]";
     }, {
-        readonly name: "percentages";
+        readonly name: "amounts";
         readonly type: "uint256[]";
     }];
     readonly name: "payoutMultiple";
+    readonly outputs: readonly [];
+    readonly stateMutability: "nonpayable";
+    readonly type: "function";
+}, {
+    readonly inputs: readonly [{
+        readonly name: "tournamentId";
+        readonly type: "bytes32";
+    }, {
+        readonly name: "winners";
+        readonly type: "address[]";
+    }, {
+        readonly name: "amounts";
+        readonly type: "uint256[]";
+    }];
+    readonly name: "setUnclaimedShares";
+    readonly outputs: readonly [];
+    readonly stateMutability: "nonpayable";
+    readonly type: "function";
+}, {
+    readonly inputs: readonly [{
+        readonly name: "tournamentId";
+        readonly type: "bytes32";
+    }];
+    readonly name: "claim";
+    readonly outputs: readonly [];
+    readonly stateMutability: "nonpayable";
+    readonly type: "function";
+}, {
+    readonly inputs: readonly [{
+        readonly name: "tournamentId";
+        readonly type: "bytes32";
+    }, {
+        readonly name: "winner";
+        readonly type: "address";
+    }];
+    readonly name: "unclaimedOf";
+    readonly outputs: readonly [{
+        readonly type: "uint256";
+    }];
+    readonly stateMutability: "view";
+    readonly type: "function";
+}, {
+    readonly inputs: readonly [{
+        readonly name: "tournamentId";
+        readonly type: "bytes32";
+    }];
+    readonly name: "cancelTournament";
+    readonly outputs: readonly [];
+    readonly stateMutability: "nonpayable";
+    readonly type: "function";
+}, {
+    readonly inputs: readonly [{
+        readonly name: "tournamentId";
+        readonly type: "bytes32";
+    }];
+    readonly name: "creatorReclaim";
+    readonly outputs: readonly [];
+    readonly stateMutability: "nonpayable";
+    readonly type: "function";
+}, {
+    readonly inputs: readonly [{
+        readonly name: "tournamentId";
+        readonly type: "bytes32";
+    }, {
+        readonly name: "to";
+        readonly type: "address";
+    }];
+    readonly name: "payoutRemainderTo";
+    readonly outputs: readonly [];
+    readonly stateMutability: "nonpayable";
+    readonly type: "function";
+}, {
+    readonly inputs: readonly [];
+    readonly name: "authorizedServer";
+    readonly outputs: readonly [{
+        readonly type: "address";
+    }];
+    readonly stateMutability: "view";
+    readonly type: "function";
+}, {
+    readonly inputs: readonly [];
+    readonly name: "owner";
+    readonly outputs: readonly [{
+        readonly type: "address";
+    }];
+    readonly stateMutability: "view";
+    readonly type: "function";
+}, {
+    readonly inputs: readonly [{
+        readonly name: "_authorizedServer";
+        readonly type: "address";
+    }];
+    readonly name: "setAuthorizedServer";
     readonly outputs: readonly [];
     readonly stateMutability: "nonpayable";
     readonly type: "function";
@@ -59,52 +176,9 @@ export declare const tournamentPrizeEscrowV2Abi: readonly [{
     readonly inputs: readonly [{
         readonly name: "tournamentId";
         readonly type: "bytes32";
-    }, {
-        readonly name: "to";
-        readonly type: "address";
-    }];
-    readonly name: "payoutRemainderTo";
-    readonly outputs: readonly [];
-    readonly stateMutability: "nonpayable";
-    readonly type: "function";
-}, {
-    readonly inputs: readonly [{
-        readonly name: "tournamentId";
-        readonly type: "bytes32";
-    }, {
-        readonly name: "to";
-        readonly type: "address";
-    }];
-    readonly name: "reclaimUnclaimed";
-    readonly outputs: readonly [];
-    readonly stateMutability: "nonpayable";
-    readonly type: "function";
-}, {
-    readonly inputs: readonly [{
-        readonly name: "tournamentId";
-        readonly type: "bytes32";
-    }];
-    readonly name: "cancelTournament";
-    readonly outputs: readonly [];
-    readonly stateMutability: "nonpayable";
-    readonly type: "function";
-}, {
-    readonly inputs: readonly [{
-        readonly name: "tournamentId";
-        readonly type: "bytes32";
-    }];
-    readonly name: "creatorReclaim";
-    readonly outputs: readonly [];
-    readonly stateMutability: "nonpayable";
-    readonly type: "function";
-}, {
-    readonly inputs: readonly [{
-        readonly name: "tournamentId";
-        readonly type: "bytes32";
     }];
     readonly name: "getRemainingBalance";
     readonly outputs: readonly [{
-        readonly name: "";
         readonly type: "uint256";
     }];
     readonly stateMutability: "view";
@@ -113,20 +187,7 @@ export declare const tournamentPrizeEscrowV2Abi: readonly [{
     readonly inputs: readonly [];
     readonly name: "getTournamentCount";
     readonly outputs: readonly [{
-        readonly name: "";
         readonly type: "uint256";
-    }];
-    readonly stateMutability: "view";
-    readonly type: "function";
-}, {
-    readonly inputs: readonly [{
-        readonly name: "index";
-        readonly type: "uint256";
-    }];
-    readonly name: "getTournamentId";
-    readonly outputs: readonly [{
-        readonly name: "";
-        readonly type: "bytes32";
     }];
     readonly stateMutability: "view";
     readonly type: "function";
@@ -134,106 +195,128 @@ export declare const tournamentPrizeEscrowV2Abi: readonly [{
     readonly inputs: readonly [];
     readonly name: "getAllTournamentIds";
     readonly outputs: readonly [{
-        readonly name: "";
         readonly type: "bytes32[]";
     }];
     readonly stateMutability: "view";
     readonly type: "function";
 }, {
+    readonly anonymous: false;
     readonly inputs: readonly [{
-        readonly name: "tournamentIds_";
-        readonly type: "bytes32[]";
-    }];
-    readonly name: "getPoolsBatch";
-    readonly outputs: readonly [{
-        readonly name: "tokens";
-        readonly type: "address[]";
+        readonly indexed: true;
+        readonly name: "tournamentId";
+        readonly type: "bytes32";
     }, {
-        readonly name: "depositors";
-        readonly type: "address[]";
+        readonly indexed: true;
+        readonly name: "token";
+        readonly type: "address";
     }, {
-        readonly name: "totalDepositeds";
-        readonly type: "uint256[]";
+        readonly indexed: false;
+        readonly name: "amount";
+        readonly type: "uint256";
     }, {
-        readonly name: "amountPaidOuts";
-        readonly type: "uint256[]";
-    }, {
-        readonly name: "depositedAts";
-        readonly type: "uint256[]";
-    }, {
-        readonly name: "cancelleds";
-        readonly type: "bool[]";
-    }];
-    readonly stateMutability: "view";
-    readonly type: "function";
-}, {
-    readonly inputs: readonly [];
-    readonly name: "getActivePools";
-    readonly outputs: readonly [{
-        readonly name: "activeIds";
-        readonly type: "bytes32[]";
-    }, {
-        readonly name: "balances";
-        readonly type: "uint256[]";
-    }];
-    readonly stateMutability: "view";
-    readonly type: "function";
-}, {
-    readonly inputs: readonly [{
+        readonly indexed: true;
         readonly name: "depositor";
         readonly type: "address";
     }];
-    readonly name: "getPoolsByDepositor";
-    readonly outputs: readonly [{
-        readonly name: "ids";
-        readonly type: "bytes32[]";
-    }, {
-        readonly name: "tokens";
-        readonly type: "address[]";
-    }, {
-        readonly name: "totalDepositeds";
-        readonly type: "uint256[]";
-    }, {
-        readonly name: "amountPaidOuts";
-        readonly type: "uint256[]";
-    }, {
-        readonly name: "depositedAts";
-        readonly type: "uint256[]";
-    }, {
-        readonly name: "cancelleds";
-        readonly type: "bool[]";
-    }];
-    readonly stateMutability: "view";
-    readonly type: "function";
+    readonly name: "PrizePoolDeposited";
+    readonly type: "event";
 }, {
+    readonly anonymous: false;
     readonly inputs: readonly [{
-        readonly name: "token";
+        readonly indexed: true;
+        readonly name: "tournamentId";
+        readonly type: "bytes32";
+    }, {
+        readonly indexed: true;
+        readonly name: "winner";
+        readonly type: "address";
+    }, {
+        readonly indexed: false;
+        readonly name: "amount";
+        readonly type: "uint256";
+    }];
+    readonly name: "Payout";
+    readonly type: "event";
+}, {
+    readonly anonymous: false;
+    readonly inputs: readonly [{
+        readonly indexed: true;
+        readonly name: "tournamentId";
+        readonly type: "bytes32";
+    }, {
+        readonly indexed: true;
+        readonly name: "winner";
+        readonly type: "address";
+    }, {
+        readonly indexed: false;
+        readonly name: "amount";
+        readonly type: "uint256";
+    }];
+    readonly name: "ClaimableSet";
+    readonly type: "event";
+}, {
+    readonly anonymous: false;
+    readonly inputs: readonly [{
+        readonly indexed: true;
+        readonly name: "tournamentId";
+        readonly type: "bytes32";
+    }, {
+        readonly indexed: true;
+        readonly name: "winner";
+        readonly type: "address";
+    }, {
+        readonly indexed: false;
+        readonly name: "amount";
+        readonly type: "uint256";
+    }];
+    readonly name: "Claimed";
+    readonly type: "event";
+}, {
+    readonly anonymous: false;
+    readonly inputs: readonly [{
+        readonly indexed: true;
+        readonly name: "tournamentId";
+        readonly type: "bytes32";
+    }, {
+        readonly indexed: true;
+        readonly name: "depositor";
         readonly type: "address";
     }];
-    readonly name: "getTotalValueLocked";
-    readonly outputs: readonly [{
-        readonly name: "";
-        readonly type: "uint256";
-    }];
-    readonly stateMutability: "view";
-    readonly type: "function";
+    readonly name: "TournamentCancelled";
+    readonly type: "event";
 }, {
-    readonly inputs: readonly [];
-    readonly name: "getEscrowSummary";
-    readonly outputs: readonly [{
-        readonly name: "totalTournaments";
-        readonly type: "uint256";
+    readonly anonymous: false;
+    readonly inputs: readonly [{
+        readonly indexed: true;
+        readonly name: "tournamentId";
+        readonly type: "bytes32";
     }, {
-        readonly name: "activeTournaments";
-        readonly type: "uint256";
+        readonly indexed: true;
+        readonly name: "creator";
+        readonly type: "address";
     }, {
-        readonly name: "cancelledTournaments";
-        readonly type: "uint256";
-    }, {
-        readonly name: "totalValueLocked";
+        readonly indexed: false;
+        readonly name: "amount";
         readonly type: "uint256";
     }];
-    readonly stateMutability: "view";
-    readonly type: "function";
+    readonly name: "CreatorReclaimed";
+    readonly type: "event";
+}, {
+    readonly anonymous: false;
+    readonly inputs: readonly [{
+        readonly indexed: true;
+        readonly name: "tournamentId";
+        readonly type: "bytes32";
+    }, {
+        readonly indexed: true;
+        readonly name: "to";
+        readonly type: "address";
+    }, {
+        readonly indexed: false;
+        readonly name: "amount";
+        readonly type: "uint256";
+    }];
+    readonly name: "RemainderReclaimed";
+    readonly type: "event";
 }];
 //# sourceMappingURL=tournament-prize-escrow-v2.d.ts.map

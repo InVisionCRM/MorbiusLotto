@@ -7,7 +7,7 @@ import { applyPokerChipDelta, getPlatformFeeWalletLower } from './poker-chip-wal
 function formatWei(w: bigint): string {
   return Number(formatEther(w)).toLocaleString(undefined, { maximumFractionDigits: 2 });
 }
-import { sendEscrowPayout } from '../utils/escrow-payout';
+import { sendEscrowPayoutMultiple, setEscrowUnclaimedShares } from '../utils/escrow-payout';
 import { setMorbiusTournamentCompleted, setMorbiusTournamentActive, hasJoinedMorbiusTournament, sendMorbiusTournamentPayout } from '../utils/morbius-tournament';
 import { getEscrowPoolStatus } from '../utils/escrow-status';
 
@@ -1196,52 +1196,61 @@ export class TournamentService {
         });
       }
     } else if (useEscrowV2) {
-      // Build a quick lookup of winner addresses → entry id so we can persist the on-chain
-      // payout tx hash back to `tournament_entries`. Fee recipients (platform/creator) are
-      // also in `pendingOnChainPayouts` but won't match a winner address, so they're skipped.
-      const winnerEntryByAddress = new Map<string, string>();
-      for (const d of distributions) {
-        winnerEntryByAddress.set(d.player_address.toLowerCase(), d.entry_id);
-      }
-      for (const { address, amount } of pendingOnChainPayouts) {
-        const result = await sendEscrowPayout(tournamentId, address, amount);
-        if (!result.success) {
-          logger.error('Escrow payout failed — tournament completed in DB, manual on-chain recovery required', {
+      // Single batched on-chain call replaces the loop-of-payout()s. The V4 contract
+      // iterates internally — atomic, one nonce, one round-trip. Fixes the production
+      // failure mode where N sequential writeContract calls were silently dropped.
+      const batchResult = await sendEscrowPayoutMultiple(tournamentId, pendingOnChainPayouts);
+      if (!batchResult.success) {
+        logger.error('Escrow payoutMultiple failed — falling back to setUnclaimedShares so winners can claim manually', {
+          tournamentId,
+          recipientCount: pendingOnChainPayouts.length,
+          error: batchResult.error,
+        });
+        // Backup path: record claimable amounts on-chain. Winners (and the platform/creator
+        // for fees) can call `claim()` from their own wallets to pull. The pool still holds
+        // the funds; nothing is lost. Best-effort — if THIS also fails, an admin can call
+        // setUnclaimedShares manually with the recipient list from the DB later.
+        const fallback = await setEscrowUnclaimedShares(tournamentId, pendingOnChainPayouts);
+        if (!fallback.success) {
+          logger.error('setUnclaimedShares fallback also failed — manual on-chain recovery required', {
             tournamentId,
-            recipient: address,
-            amount: amount.toString(),
-            error: result.error,
+            error: fallback.error,
           });
-          continue;
         }
-        // Persist the tx hash on the winner's entry so the results modal can render
-        // a verification link. Best-effort: a failed write here doesn't unwind the payout.
-        const lowerAddr = address.toLowerCase();
-        const entryId = winnerEntryByAddress.get(lowerAddr);
-        if (entryId && result.txHash) {
-          try {
-            await this.pool.query(
-              `UPDATE tournament_entries SET prize_payout_tx_hash = $1 WHERE id = $2`,
-              [result.txHash, entryId],
-            );
-          } catch (writeErr) {
-            logger.warn('Failed to persist prize_payout_tx_hash (payout still on-chain)', {
-              tournamentId, entryId, txHash: result.txHash, error: (writeErr as Error).message,
-            });
+      } else if (batchResult.txHash) {
+        // The batch tx settles every recipient in one hash. Persist that hash on every
+        // winner's entry row + on the tournament row for the creator-fee row. Best-effort:
+        // a failed write here doesn't reverse the on-chain payout.
+        const winnerEntryByAddress = new Map<string, string>();
+        for (const d of distributions) {
+          winnerEntryByAddress.set(d.player_address.toLowerCase(), d.entry_id);
+        }
+        for (const { address } of pendingOnChainPayouts) {
+          const lowerAddr = address.toLowerCase();
+          const entryId = winnerEntryByAddress.get(lowerAddr);
+          if (entryId) {
+            try {
+              await this.pool.query(
+                `UPDATE tournament_entries SET prize_payout_tx_hash = $1 WHERE id = $2`,
+                [batchResult.txHash, entryId],
+              );
+            } catch (writeErr) {
+              logger.warn('Failed to persist prize_payout_tx_hash (batch payout still on-chain)', {
+                tournamentId, entryId, txHash: batchResult.txHash, error: (writeErr as Error).message,
+              });
+            }
           }
-        }
-        // Creator-fee path: persist on `tournaments.creator_fee_tx_hash` so the dashboard
-        // has a copyable hash. Same payout machinery; recipient is the tournament's creator.
-        if (creatorAddress && lowerAddr === creatorAddress && result.txHash) {
-          try {
-            await this.pool.query(
-              `UPDATE tournaments SET creator_fee_tx_hash = $1 WHERE id = $2`,
-              [result.txHash, tournamentId],
-            );
-          } catch (writeErr) {
-            logger.warn('Failed to persist creator_fee_tx_hash (payout still on-chain)', {
-              tournamentId, txHash: result.txHash, error: (writeErr as Error).message,
-            });
+          if (creatorAddress && lowerAddr === creatorAddress) {
+            try {
+              await this.pool.query(
+                `UPDATE tournaments SET creator_fee_tx_hash = $1 WHERE id = $2`,
+                [batchResult.txHash, tournamentId],
+              );
+            } catch (writeErr) {
+              logger.warn('Failed to persist creator_fee_tx_hash (batch payout still on-chain)', {
+                tournamentId, txHash: batchResult.txHash, error: (writeErr as Error).message,
+              });
+            }
           }
         }
       }

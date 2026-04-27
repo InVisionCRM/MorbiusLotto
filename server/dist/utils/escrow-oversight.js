@@ -9,151 +9,167 @@ exports.getTotalValueLocked = getTotalValueLocked;
 const chain_client_1 = require("./chain-client");
 const tournament_prize_escrow_v2_1 = require("../abi/tournament-prize-escrow-v2");
 const tournament_id_bytes32_1 = require("./tournament-id-bytes32");
-/** Tournament Prize Escrow V2 - hardcoded for reliability */
-const ESCROW_V2_ADDRESS = '0x52cbF18A8AE0Fd4324B045E13532d35CF05Af3e1';
-/**
- * Get escrow summary statistics
- */
-async function getEscrowSummary() {
-    try {
-        const client = (0, chain_client_1.getPublicClient)();
-        const result = await client.readContract({
+/** Active escrow (V4 deployed at this address). Variable name kept for backward-compat. */
+const ESCROW_V2_ADDRESS = '0x29d65B552c8246293740e686C9b4F90F359A9F1b';
+/** Read every pool from the contract. Single source of truth for the JS aggregators below. */
+async function readAllPools() {
+    const client = (0, chain_client_1.getPublicClient)();
+    const idsRaw = (await client.readContract({
+        address: ESCROW_V2_ADDRESS,
+        abi: tournament_prize_escrow_v2_1.tournamentPrizeEscrowV2Abi,
+        functionName: 'getAllTournamentIds',
+    }));
+    const ids = idsRaw;
+    if (ids.length === 0)
+        return [];
+    // Read pools in parallel — small N, public RPC handles burst fine.
+    const pools = await Promise.all(ids.map(async (id) => {
+        const r = (await client.readContract({
             address: ESCROW_V2_ADDRESS,
             abi: tournament_prize_escrow_v2_1.tournamentPrizeEscrowV2Abi,
-            functionName: 'getEscrowSummary',
-        });
-        const [totalTournaments, activeTournaments, cancelledTournaments, totalValueLocked] = result;
+            functionName: 'getPool',
+            args: [id],
+        }));
         return {
-            totalTournaments: Number(totalTournaments),
-            activeTournaments: Number(activeTournaments),
-            cancelledTournaments: Number(cancelledTournaments),
-            totalValueLocked,
+            id,
+            token: r[0],
+            depositor: r[1],
+            totalDeposited: r[2],
+            amountPaidOut: r[3],
+            depositedAt: r[4],
+            cancelled: r[5],
+        };
+    }));
+    return pools;
+}
+/** Aggregate over all pools in JS — replaces the contract's removed `getEscrowSummary`. */
+async function getEscrowSummary() {
+    try {
+        const pools = await readAllPools();
+        let active = 0;
+        let cancelled = 0;
+        let tvl = 0n;
+        for (const p of pools) {
+            if (p.token === '0x0000000000000000000000000000000000000000')
+                continue;
+            if (p.cancelled) {
+                cancelled++;
+            }
+            else if (p.amountPaidOut < p.totalDeposited) {
+                // V4 has no `active` flag; "active" = funded and not yet fully paid.
+                active++;
+                tvl += p.totalDeposited - p.amountPaidOut;
+            }
+        }
+        return {
+            totalTournaments: pools.length,
+            activeTournaments: active,
+            cancelledTournaments: cancelled,
+            totalValueLocked: tvl,
         };
     }
     catch {
         return null;
     }
 }
-/**
- * Get all tournament IDs in escrow
- */
+/** Returns bytes32 IDs as strings — the original UUIDs aren't recoverable from the hash. */
 async function getAllTournamentIds() {
     try {
-        const client = (0, chain_client_1.getPublicClient)();
-        const ids = await client.readContract({
-            address: ESCROW_V2_ADDRESS,
-            abi: tournament_prize_escrow_v2_1.tournamentPrizeEscrowV2Abi,
-            functionName: 'getAllTournamentIds',
-        });
-        // Convert bytes32[] to string[] (they're stored as bytes32 but represent UUIDs)
-        return ids.map(() => 'unknown'); // We can't reverse bytes32 to UUID easily
+        const pools = await readAllPools();
+        return pools.map((p) => p.id);
     }
     catch {
         return [];
     }
 }
-/**
- * Get pools by depositor (creator)
- */
+function poolToDetails(p, tournamentId) {
+    const now = BigInt(Math.floor(Date.now() / 1000));
+    const ageSeconds = p.depositedAt > 0n ? now - p.depositedAt : 0n;
+    const ageDays = Number(ageSeconds) / 86400;
+    return {
+        tournamentId: tournamentId ?? p.id,
+        token: p.token,
+        depositor: p.depositor,
+        totalDeposited: p.totalDeposited,
+        amountPaidOut: p.amountPaidOut,
+        remainingBalance: p.totalDeposited - p.amountPaidOut,
+        depositedAt: p.depositedAt,
+        cancelled: p.cancelled,
+        ageDays: Math.round(ageDays * 100) / 100,
+    };
+}
+/** Pools belonging to a given depositor — JS filter over `readAllPools`. */
 async function getPoolsByDepositor(depositor) {
     try {
-        const client = (0, chain_client_1.getPublicClient)();
-        const result = await client.readContract({
-            address: ESCROW_V2_ADDRESS,
-            abi: tournament_prize_escrow_v2_1.tournamentPrizeEscrowV2Abi,
-            functionName: 'getPoolsByDepositor',
-            args: [depositor],
-        });
-        const [ids, tokens, totalDepositeds, amountPaidOuts, depositedAts, cancelleds] = result;
-        const now = BigInt(Math.floor(Date.now() / 1000));
-        return ids.map((id, i) => {
-            const depositedAt = depositedAts[i];
-            const ageSeconds = now - depositedAt;
-            const ageDays = Number(ageSeconds) / 86400;
-            return {
-                tournamentId: id, // bytes32 representation
-                token: tokens[i],
-                depositor,
-                totalDeposited: totalDepositeds[i],
-                amountPaidOut: amountPaidOuts[i],
-                remainingBalance: totalDepositeds[i] - amountPaidOuts[i],
-                depositedAt,
-                cancelled: cancelleds[i],
-                ageDays: Math.round(ageDays * 100) / 100,
-            };
-        });
+        const pools = await readAllPools();
+        const lower = depositor.toLowerCase();
+        return pools
+            .filter((p) => p.depositor.toLowerCase() === lower)
+            .map((p) => poolToDetails(p));
     }
     catch {
         return [];
     }
 }
-/**
- * Get active pools (non-cancelled with remaining balance)
- */
+/** Pools that are funded, not cancelled, and have remaining balance. */
 async function getActivePools() {
     try {
-        const client = (0, chain_client_1.getPublicClient)();
-        const result = await client.readContract({
-            address: ESCROW_V2_ADDRESS,
-            abi: tournament_prize_escrow_v2_1.tournamentPrizeEscrowV2Abi,
-            functionName: 'getActivePools',
-        });
-        const [activeIds, balances] = result;
-        return activeIds.map((id, i) => ({
-            tournamentId: id,
-            balance: balances[i],
-        }));
+        const pools = await readAllPools();
+        return pools
+            .filter((p) => p.token !== '0x0000000000000000000000000000000000000000' &&
+            !p.cancelled &&
+            p.amountPaidOut < p.totalDeposited)
+            .map((p) => ({ tournamentId: p.id, balance: p.totalDeposited - p.amountPaidOut }));
     }
     catch {
         return [];
     }
 }
 /**
- * Get pool details for a specific tournament
+ * Per-tournament details. Caller passes the off-chain UUID; we hash it server-side.
+ * Returns the friendly UUID in the response so admin UIs don't have to track both.
  */
 async function getPoolDetails(tournamentId) {
     try {
         const client = (0, chain_client_1.getPublicClient)();
         const idBytes32 = (0, tournament_id_bytes32_1.tournamentIdToBytes32)(tournamentId);
-        const result = await client.readContract({
+        const r = (await client.readContract({
             address: ESCROW_V2_ADDRESS,
             abi: tournament_prize_escrow_v2_1.tournamentPrizeEscrowV2Abi,
             functionName: 'getPool',
             args: [idBytes32],
-        });
-        const [token, depositor, totalDeposited, amountPaidOut, depositedAt, cancelled] = result;
-        const now = BigInt(Math.floor(Date.now() / 1000));
-        const ageSeconds = now - depositedAt;
-        const ageDays = Number(ageSeconds) / 86400;
-        return {
-            tournamentId,
-            token,
-            depositor,
-            totalDeposited,
-            amountPaidOut,
-            remainingBalance: totalDeposited - amountPaidOut,
-            depositedAt,
-            cancelled,
-            ageDays: Math.round(ageDays * 100) / 100,
+        }));
+        const raw = {
+            id: idBytes32,
+            token: r[0],
+            depositor: r[1],
+            totalDeposited: r[2],
+            amountPaidOut: r[3],
+            depositedAt: r[4],
+            cancelled: r[5],
         };
+        return poolToDetails(raw, tournamentId);
     }
     catch {
         return null;
     }
 }
-/**
- * Get total value locked for a specific token
- */
+/** TVL for a specific token across all funded, non-cancelled pools. */
 async function getTotalValueLocked(token) {
     try {
-        const client = (0, chain_client_1.getPublicClient)();
-        const result = await client.readContract({
-            address: ESCROW_V2_ADDRESS,
-            abi: tournament_prize_escrow_v2_1.tournamentPrizeEscrowV2Abi,
-            functionName: 'getTotalValueLocked',
-            args: [token],
-        });
-        return result;
+        const pools = await readAllPools();
+        const lower = token.toLowerCase();
+        let total = 0n;
+        for (const p of pools) {
+            if (p.token.toLowerCase() !== lower)
+                continue;
+            if (p.cancelled)
+                continue;
+            if (p.amountPaidOut >= p.totalDeposited)
+                continue;
+            total += p.totalDeposited - p.amountPaidOut;
+        }
+        return total;
     }
     catch {
         return 0n;

@@ -1,1 +1,1 @@
-{"version":3,"file":"safe-bigint.d.ts","sourceRoot":"","sources":["../../src/utils/safe-bigint.ts"],"names":[],"mappings":"AAYA;;;GAGG;AACH,wBAAgB,YAAY,CAAC,KAAK,EAAE,OAAO,GAAG,MAAM,CAenD"}
+{"version":3,"file":"safe-bigint.d.ts","sourceRoot":"","sources":["../../src/utils/safe-bigint.ts"],"names":[],"mappings":"AAyBA;;;;GAIG;AACH,wBAAgB,YAAY,CAAC,KAAK,EAAE,OAAO,GAAG,MAAM,CAgBnD"}

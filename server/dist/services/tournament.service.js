@@ -838,10 +838,9 @@ class TournamentService {
             }
         }
         else if (useEscrowV2) {
-            // Single batched call replaces the loop-of-payout()s. The contract iterates
-            // recipients internally, atomic, one nonce, one network round-trip. Fixes the
-            // production failure mode where N sequential writeContract calls were silently
-            // dropped by the public RPC.
+            // Single batched on-chain call replaces the loop-of-payout()s. The V4 contract
+            // iterates internally — atomic, one nonce, one round-trip. Fixes the production
+            // failure mode where N sequential writeContract calls were silently dropped.
             const batchResult = await (0, escrow_payout_1.sendEscrowPayoutMultiple)(tournamentId, pendingOnChainPayouts);
             if (!batchResult.success) {
                 logger_1.logger.error('Escrow payoutMultiple failed — tournament completed in DB, manual on-chain recovery required', {
@@ -851,9 +850,9 @@ class TournamentService {
                 });
             }
             else if (batchResult.txHash) {
-                // The batch tx settles every recipient in one hash. Persist the same hash
-                // on every winner's entry row + on the tournament row for the creator-fee row.
-                // Best-effort: failed writes here don't reverse the on-chain payout.
+                // The batch tx settles every recipient in one hash. Persist that hash on every
+                // winner's entry row + on the tournament row for the creator-fee row. Best-effort:
+                // a failed write here doesn't reverse the on-chain payout.
                 const winnerEntryByAddress = new Map();
                 for (const d of distributions) {
                     winnerEntryByAddress.set(d.player_address.toLowerCase(), d.entry_id);

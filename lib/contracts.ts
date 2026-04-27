@@ -106,8 +106,13 @@ export const LEGACY_BLACKJACK_ADDRESSES: readonly `0x${string}`[] = [
   ...(BLACKJACK_LEGACY_ADDRESS_7 ? [BLACKJACK_LEGACY_ADDRESS_7] : []),
 ]
 
-// Tournament Prize Escrow V2 (custom token prize pools) - hardcoded for reliability
-export const TOURNAMENT_PRIZE_ESCROW_ADDRESS = '0x52cbF18A8AE0Fd4324B045E13532d35CF05Af3e1' as const
+// Tournament Prize Escrow V4 — hybrid push (payoutMultiple) + pull (claim) escrow.
+// Replaces the legacy V2 at 0x52cb… (which lacked payoutMultiple in its deployed
+// bytecode and silently failed N-write loops on the production RPC).
+export const TOURNAMENT_PRIZE_ESCROW_ADDRESS = '0x29d65B552c8246293740e686C9b4F90F359A9F1b' as const
+
+/** Legacy V2 address — kept only so funds parked in old pools can still be reclaimed. */
+export const TOURNAMENT_PRIZE_ESCROW_V2_LEGACY_ADDRESS = '0x52cbF18A8AE0Fd4324B045E13532d35CF05Af3e1' as const
 
 // MorbiusTournament (on-chain create/join, uint256 IDs)
 export const MORBIUS_TOURNAMENT_ADDRESS = '0x1F30Aa16B4Da0124308E33b8650C351BBCA70704' as const

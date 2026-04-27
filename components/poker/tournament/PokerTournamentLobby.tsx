@@ -10,6 +10,7 @@ import {
   type PokerBlindIncreaseMode,
   type CreatePokerTournamentParams,
   type ReclaimableCustomTokenTournament,
+  type ClaimableCustomTokenTournament,
 } from '@/hooks/use-poker-tournament';
 import { formatChips } from '@/lib/format-poker-chips';
 import { formatUnits } from 'viem';
@@ -320,6 +321,7 @@ export function PokerTournamentLobby({ wsClient, myAddress, onGoToTable }: Poker
     joinTournament,
     cancelTournament,
     fetchReclaimableTournaments,
+    fetchClaimableTournaments,
     myTableId,
     myTournamentId,
   } = tournamentHook;
@@ -536,6 +538,11 @@ export function PokerTournamentLobby({ wsClient, myAddress, onGoToTable }: Poker
       <ReclaimableEscrowBanner
         myAddress={myAddress}
         fetchReclaimable={fetchReclaimableTournaments}
+      />
+
+      <ClaimableEscrowBanner
+        myAddress={myAddress}
+        fetchClaimable={fetchClaimableTournaments}
       />
 
       {joinSuccess && (
@@ -926,9 +933,10 @@ function ReclaimableEscrowBanner({
             functionName: 'getPool',
             args: [idBytes32 as `0x${string}`],
           });
-          // V2 tuple: [token, depositor, totalDeposited, amountPaidOut, depositedAt, cancelled, active]
+          // V4 returns 6 fields: [token, depositor, totalDeposited, amountPaidOut, depositedAt, cancelled].
+          // No `active` flag — derive from the math.
           const [, , totalDeposited, amountPaidOut, , isCancelled] = result as readonly [
-            `0x${string}`, `0x${string}`, bigint, bigint, bigint, boolean, boolean,
+            `0x${string}`, `0x${string}`, bigint, bigint, bigint, boolean,
           ];
           if (isCancelled && totalDeposited > amountPaidOut) ok.add(c.tournamentId);
         } catch {
@@ -1011,6 +1019,165 @@ function ReclaimableEscrowBanner({
                 className="shrink-0 rounded-lg bg-amber-500 hover:bg-amber-400 disabled:opacity-50 disabled:pointer-events-none text-black text-xs font-semibold px-3 py-1.5"
               >
                 {isBusy ? 'Reclaiming…' : 'Reclaim'}
+              </button>
+            </li>
+          );
+        })}
+      </ul>
+    </div>
+  );
+}
+
+/**
+ * Surfaces completed custom-token poker freerolls where the connected wallet has unpaid
+ * winnings — the on-chain push payout failed (or hasn't fired) but `setUnclaimedShares`
+ * recorded the amount on-chain. One row per tournament with a Claim button that calls
+ * `claim(bytes32)` to pull the prize from the escrow.
+ *
+ * Server returns the candidate set (winners with no `prize_payout_tx_hash`); client
+ * confirms each via on-chain `unclaimedOf(bytes32, me)` so we never show a button for
+ * an already-claimed/never-set tournament.
+ */
+function ClaimableEscrowBanner({
+  myAddress,
+  fetchClaimable,
+}: {
+  myAddress: string;
+  fetchClaimable: () => Promise<ClaimableCustomTokenTournament[]>;
+}) {
+  const [candidates, setCandidates] = useState<ClaimableCustomTokenTournament[]>([]);
+  /** Keyed by tournamentId. Only entries with a confirmed positive on-chain unclaimed get a button. */
+  const [onChainAmount, setOnChainAmount] = useState<Map<string, bigint>>(new Map());
+  const [busyId, setBusyId] = useState<string | null>(null);
+  const [errorById, setErrorById] = useState<Record<string, string>>({});
+  const { writeContractAsync } = useWriteContract();
+  const publicClient = usePublicClient();
+
+  // Fetch candidates whenever the connected wallet changes.
+  useEffect(() => {
+    if (!myAddress) {
+      setCandidates([]);
+      setOnChainAmount(new Map());
+      return;
+    }
+    let cancelled = false;
+    void (async () => {
+      const list = await fetchClaimable();
+      if (cancelled) return;
+      setCandidates(list);
+    })();
+    return () => { cancelled = true; };
+  }, [myAddress, fetchClaimable]);
+
+  // Confirm each candidate on-chain. We trust unclaimedOf as the source of truth — the
+  // server's DB row is just a hint that there COULD be something; the contract decides.
+  useEffect(() => {
+    if (candidates.length === 0 || !publicClient || !myAddress) {
+      setOnChainAmount(new Map());
+      return;
+    }
+    let cancelled = false;
+    void (async () => {
+      const map = new Map<string, bigint>();
+      await Promise.all(candidates.map(async (c) => {
+        try {
+          const idBytes32 = c.escrowTournamentIdBytes32 ?? tournamentIdToBytes32(c.tournamentId);
+          const amount = (await publicClient.readContract({
+            address: TOURNAMENT_PRIZE_ESCROW_ADDRESS,
+            abi: tournamentPrizeEscrowV2Abi,
+            functionName: 'unclaimedOf',
+            args: [idBytes32 as `0x${string}`, myAddress as `0x${string}`],
+          })) as bigint;
+          if (amount > 0n) map.set(c.tournamentId, amount);
+        } catch {
+          // RPC blip; skip silently.
+        }
+      }));
+      if (!cancelled) setOnChainAmount(map);
+    })();
+    return () => { cancelled = true; };
+  }, [candidates, publicClient, myAddress]);
+
+  const visible = useMemo(
+    () => candidates.filter((c) => onChainAmount.has(c.tournamentId)),
+    [candidates, onChainAmount],
+  );
+
+  if (visible.length === 0) return null;
+
+  const handleClaim = async (c: ClaimableCustomTokenTournament) => {
+    setBusyId(c.tournamentId);
+    setErrorById((prev) => { const next = { ...prev }; delete next[c.tournamentId]; return next; });
+    try {
+      const idBytes32 = c.escrowTournamentIdBytes32 ?? tournamentIdToBytes32(c.tournamentId);
+      const hash = await writeContractAsync({
+        address: TOURNAMENT_PRIZE_ESCROW_ADDRESS,
+        abi: tournamentPrizeEscrowV2Abi,
+        functionName: 'claim',
+        args: [idBytes32 as `0x${string}`],
+      });
+      if (publicClient) await publicClient.waitForTransactionReceipt({ hash });
+      // Drop the row immediately — next mount-fetch will re-confirm there's nothing left.
+      setOnChainAmount((prev) => {
+        const next = new Map(prev);
+        next.delete(c.tournamentId);
+        return next;
+      });
+    } catch (err) {
+      setErrorById((prev) => ({ ...prev, [c.tournamentId]: (err as Error).message ?? 'Claim failed' }));
+    } finally {
+      setBusyId(null);
+    }
+  };
+
+  /**
+   * Show on-chain unclaimed amount when present (it's the truth — the server's DB
+   * row may differ if the server-recorded share was overwritten). Falls back to
+   * `prizeWon` from the DB if the on-chain value is unexpectedly missing.
+   */
+  const formatTokenAmount = (c: ClaimableCustomTokenTournament): string => {
+    const onChain = onChainAmount.get(c.tournamentId);
+    const wei = onChain ?? (() => {
+      try { return BigInt(c.prizeWon || '0'); } catch { return 0n; }
+    })();
+    let human: string;
+    try { human = formatUnits(wei, c.prizeTokenDecimals); }
+    catch { human = '0'; }
+    const trimmed = human.includes('.') ? human.replace(/\.?0+$/, '') : human;
+    const ticker = c.prizeTokenSymbol?.trim()
+      ? c.prizeTokenSymbol.trim()
+      : `${c.prizeTokenAddress.slice(0, 6)}…${c.prizeTokenAddress.slice(-4)}`;
+    return `${trimmed} ${ticker}`;
+  };
+
+  return (
+    <div className="rounded-xl border border-emerald-500/40 bg-emerald-500/5 p-3 space-y-2">
+      <div className="flex items-center justify-between gap-3">
+        <h3 className="text-xs font-semibold tracking-wide uppercase text-emerald-200/90">
+          Unclaimed prizes ({visible.length})
+        </h3>
+        <span className="text-[11px] text-emerald-200/60">
+          Tournaments where your prize is sitting on-chain — pull it to your wallet.
+        </span>
+      </div>
+      <ul className="space-y-1.5">
+        {visible.map((c) => {
+          const err = errorById[c.tournamentId];
+          const isBusy = busyId === c.tournamentId;
+          return (
+            <li key={c.tournamentId} className="flex items-center gap-3 rounded-lg bg-black/20 px-3 py-2">
+              <div className="min-w-0 flex-1">
+                <div className="text-sm text-white truncate">{c.name || 'Untitled'}</div>
+                <div className="text-[11px] text-emerald-200/80 tabular-nums">{formatTokenAmount(c)}</div>
+                {err && <div className="text-[11px] text-red-300 mt-1 break-words">{err}</div>}
+              </div>
+              <button
+                type="button"
+                disabled={isBusy}
+                onClick={() => void handleClaim(c)}
+                className="shrink-0 rounded-lg bg-emerald-500 hover:bg-emerald-400 disabled:opacity-50 disabled:pointer-events-none text-black text-xs font-semibold px-3 py-1.5"
+              >
+                {isBusy ? 'Claiming…' : 'Claim'}
               </button>
             </li>
           );

@@ -7,7 +7,9 @@ const tournament_prize_escrow_v2_1 = require("../abi/tournament-prize-escrow-v2"
 const tournament_prize_escrow_v3_1 = require("../abi/tournament-prize-escrow-v3");
 const tournament_id_bytes32_1 = require("./tournament-id-bytes32");
 /** Tournament Prize Escrow V2 (bytes32 tournament IDs) - hardcoded for reliability */
-const ESCROW_V2_ADDRESS = '0x52cbF18A8AE0Fd4324B045E13532d35CF05Af3e1';
+// Active escrow (formerly "V2", now V4 deployed at the address below). Variable name kept
+// for compatibility with existing imports; the actual contract is TournamentPrizeEscrowV4.
+const ESCROW_V2_ADDRESS = '0x29d65B552c8246293740e686C9b4F90F359A9F1b';
 const ESCROW_V3_ADDRESS = '0xa114a8974D4478b09FE9d2E2bf1BdCF28dE5bd25';
 /**
  * Read tournament prize pool status from the deployed escrow contract.
