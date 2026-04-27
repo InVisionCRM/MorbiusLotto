@@ -11,8 +11,22 @@ function toIntegerString(value: number): string {
 }
 
 /**
+ * PostgreSQL `NUMERIC` often serializes with a fractional part (e.g. "4750.0000000000").
+ * `BigInt("4750.0000000000")` throws. Truncate toward zero on the integer part so
+ * `distributePrizes` (all prize distribution types: winner-takes-all, top-N, custom %, etc.)
+ * receives the correct wei/chip amounts from `calculate_tournament_prizes`.
+ */
+function bigintStringFromPlainDecimal(s: string): string {
+  if (!s.includes('.')) return s;
+  const head = s.slice(0, s.indexOf('.')) || '0';
+  if (!/^-?\d+$/.test(head)) return s;
+  return head;
+}
+
+/**
  * Safely convert unknown values (e.g. from DB/JSON) to bigint.
- * Handles: bigint, number (including 1.11e+21), string (including "1.11e+21"), null, undefined.
+ * Handles: bigint, number (including 1.11e+21), string (including "1.11e+21"), null, undefined;
+ * and plain decimal strings from PostgreSQL NUMERIC.
  */
 export function toBigIntSafe(value: unknown): bigint {
   if (typeof value === 'bigint') return value;
@@ -20,10 +34,11 @@ export function toBigIntSafe(value: unknown): bigint {
   if (typeof value === 'number') {
     return BigInt(toIntegerString(value));
   }
-  const s = String(value).trim() || '0';
+  let s = String(value).trim() || '0';
   if (s.toLowerCase().includes('e')) {
     return BigInt(toIntegerString(Number(s)));
   }
+  s = bigintStringFromPlainDecimal(s);
   try {
     return BigInt(s);
   } catch {
