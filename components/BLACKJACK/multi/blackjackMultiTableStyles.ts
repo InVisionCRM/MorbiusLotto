@@ -16,6 +16,18 @@ export const BLACKJACK_MULTI_TABLE_STYLES = `
     from { opacity: 0; transform: translateX(60px) translateY(-40px); }
     to { opacity: 1; transform: translateX(0) translateY(0); }
   }
+
+  /* Match single-player BlackjackTable: fade + slide off (collect) */
+  @keyframes cardClearOut {
+    to {
+      opacity: 0;
+      transform: translate(-80px, -120px) scale(0.6);
+    }
+  }
+  .card-clear-out {
+    animation: cardClearOut 0.45s ease-in forwards;
+    pointer-events: none;
+  }
   .tip-chip-fly {
     animation: tipChipFly 0.7s ease-in forwards;
   }

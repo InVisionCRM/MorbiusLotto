@@ -36,6 +36,8 @@ type BlackjackMultiSeatGridProps = {
   onLeaveSeat?: () => void;
   onToggleSoundPanel?: () => void;
   onSendChatMessage?: (msg: string) => void;
+  cardsExiting?: boolean;
+  newPlayerCardByHandKey?: Record<string, Set<number>>;
 };
 
 export function BlackjackMultiSeatGrid({
@@ -55,6 +57,8 @@ export function BlackjackMultiSeatGrid({
   onLeaveSeat,
   onToggleSoundPanel,
   onSendChatMessage,
+  cardsExiting = false,
+  newPlayerCardByHandKey,
 }: BlackjackMultiSeatGridProps) {
   return (
     <div className="absolute inset-0" style={{ pointerEvents: 'none' }}>
@@ -98,6 +102,8 @@ export function BlackjackMultiSeatGrid({
               onLeaveSeat={isMe ? onLeaveSeat : undefined}
               onToggleSoundPanel={isMe ? onToggleSoundPanel : undefined}
               onSendChatMessage={isMe ? onSendChatMessage : undefined}
+              cardsExiting={cardsExiting}
+              newPlayerCardByHandKey={newPlayerCardByHandKey}
             />
           </div>
         );

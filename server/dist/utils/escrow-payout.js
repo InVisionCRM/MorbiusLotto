@@ -2,6 +2,7 @@
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.sendEscrowPayout = sendEscrowPayout;
 exports.sendEscrowPayoutMultiple = sendEscrowPayoutMultiple;
+exports.setEscrowUnclaimedShares = setEscrowUnclaimedShares;
 exports.sendEscrowRemainderToReclaimWallet = sendEscrowRemainderToReclaimWallet;
 exports.sendEscrowV3Payout = sendEscrowV3Payout;
 exports.sendEscrowV3RemainderTo = sendEscrowV3RemainderTo;
@@ -140,6 +141,56 @@ async function sendEscrowPayoutMultiple(tournamentId, recipients) {
             const msg = err instanceof Error ? err.message : String(err);
             const stack = err instanceof Error ? err.stack : undefined;
             logger_1.logger.error('Escrow payoutMultiple attempt failed', { attempt, tournamentId, error: msg, stack });
+            if (attempt === maxRetries)
+                return { success: false, error: msg };
+        }
+    }
+    return { success: false, error: 'Max retries exceeded' };
+}
+/**
+ * Backup path: when `payoutMultiple` fails, record per-winner claimable amounts on-chain
+ * so winners can pull from their own wallets via `claim()`. Idempotent overwrite.
+ *
+ * Called after a push failure as a safety net — even if every push attempt drops, the
+ * pool still has the funds and the claimable mapping tells winners exactly what they're owed.
+ */
+async function setEscrowUnclaimedShares(tournamentId, recipients) {
+    if (recipients.length === 0)
+        return { success: true };
+    const idBytes32 = (0, tournament_id_bytes32_1.tournamentIdToBytes32)(tournamentId);
+    const winners = [];
+    const amounts = [];
+    for (const r of recipients) {
+        if (r.amount <= 0n)
+            continue;
+        winners.push(r.address);
+        amounts.push(r.amount);
+    }
+    if (winners.length === 0)
+        return { success: true };
+    logger_1.logger.info('setEscrowUnclaimedShares: invoking', {
+        tournamentId,
+        bytes32Id: idBytes32,
+        recipientCount: winners.length,
+    });
+    const maxRetries = 2;
+    for (let attempt = 0; attempt <= maxRetries; attempt++) {
+        try {
+            const client = getWalletClient();
+            const hash = await client.writeContract({
+                account: client.account,
+                chain: chains_1.pulsechain,
+                address: ESCROW_V2_ADDRESS,
+                abi: tournament_prize_escrow_v2_1.tournamentPrizeEscrowV2Abi,
+                functionName: 'setUnclaimedShares',
+                args: [idBytes32, winners, amounts],
+            });
+            logger_1.logger.info('setUnclaimedShares sent', { tournamentId, recipientCount: winners.length, txHash: hash });
+            return { success: true, txHash: hash };
+        }
+        catch (err) {
+            const msg = err instanceof Error ? err.message : String(err);
+            logger_1.logger.error('setUnclaimedShares attempt failed', { attempt, tournamentId, error: msg });
             if (attempt === maxRetries)
                 return { success: false, error: msg };
         }

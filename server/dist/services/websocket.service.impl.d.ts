@@ -106,6 +106,14 @@ export class WebSocketService {
         minBet: any;
         maxBet: any;
     }>;
+    /**
+     * When at least one enabled single-player wager tier exists, require wagerTierId and use that tier's min/max.
+     * Otherwise use cached admin config limits (legacy).
+     */
+    resolveSinglePlayerBetLimits(wagerTierId: any): Promise<{
+        minBet: any;
+        maxBet: any;
+    }>;
     /** Returns false if over per-address limit; otherwise records the message and returns true. */
     checkPerAddressChatLimit(address: any, now: any): boolean;
     handleConnection(ws: any, request: any): Promise<void>;
@@ -173,6 +181,12 @@ export class WebSocketService {
      * confirms reclaimability via on-chain `getPool` before showing a button.
      */
     handlePokerTournamentListReclaimable(ws: any, message: any): Promise<void>;
+    /**
+     * Lists completed custom-token poker tournaments where the caller has unpaid
+     * winnings (no `prize_payout_tx_hash` recorded). Client confirms each via
+     * on-chain `unclaimedOf(bytes32, me)` before showing a Claim button.
+     */
+    handlePokerTournamentListClaimable(ws: any, message: any): Promise<void>;
     handlePokerTournamentCreate(ws: any, message: any): Promise<void>;
     handlePokerTournamentJoin(ws: any, message: any): Promise<void>;
     handlePokerTournamentGetState(ws: any, message: any): Promise<void>;

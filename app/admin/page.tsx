@@ -40,6 +40,7 @@ const AdminReportsTab = dynamic(() => import('@/components/admin/AdminReportsTab
 const AdminLPStakingTab = dynamic(() => import('@/components/admin/AdminLPStakingTab'));
 const AdminMerkleDropsTab = dynamic(() => import('@/components/admin/AdminMerkleDropsTab'));
 const AdminBJMultiTab = dynamic(() => import('@/components/admin/AdminBJMultiTab'));
+const AdminBJSingleTab = dynamic(() => import('@/components/admin/AdminBJSingleTab'));
 const AdminPendingTransfersTab = dynamic(
   () => import('@/components/admin/AdminPendingTransfersTab')
 );
@@ -57,7 +58,8 @@ type AdminTabValue =
   | 'lp-staking'
   | 'advertising'
   | 'cosmetics'
-  | 'bj-multi';
+  | 'bj-multi'
+  | 'bj-single';
 
 type AdminTabDefinition = {
   value: AdminTabValue;
@@ -81,6 +83,7 @@ const ADMIN_TABS: AdminTabDefinition[] = [
   { value: 'advertising', label: 'Ads', icon: Megaphone, accentClass: 'data-[state=active]:bg-amber-600/80 data-[state=active]:text-white', Component: AdminAdvertisingTab },
   { value: 'cosmetics', label: 'Items', icon: Package, accentClass: 'data-[state=active]:bg-purple-600/80 data-[state=active]:text-white', Component: AdminCosmeticsTab },
   { value: 'bj-multi', label: 'BJ Multi', accentClass: 'data-[state=active]:bg-red-700/80 data-[state=active]:text-white', Component: AdminBJMultiTab },
+  { value: 'bj-single', label: 'BJ 1P', accentClass: 'data-[state=active]:bg-rose-600/80 data-[state=active]:text-white', Component: AdminBJSingleTab },
 ];
 
 const ADMIN_TAB_VALUES = new Set<AdminTabValue>(ADMIN_TABS.map((tab) => tab.value));

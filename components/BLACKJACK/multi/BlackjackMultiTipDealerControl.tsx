@@ -1,7 +1,7 @@
 'use client';
 
 import React from 'react';
-import { IconButton } from '@/components/animate-ui/components/buttons/icon';
+import { Coins } from 'lucide-react';
 
 export function BlackjackMultiTipDealerControl({
   visible,
@@ -19,15 +19,18 @@ export function BlackjackMultiTipDealerControl({
   if (!visible) return null;
 
   return (
-    <div className="pointer-events-auto absolute left-1/2 top-12 z-[12] flex -translate-x-1/2 flex-col items-center">
-      <IconButton
-        variant="tip"
-        size="tip"
+    <div className="relative flex flex-col items-center pointer-events-auto z-[12]">
+      <button
+        type="button"
         onClick={onTipDealer}
         disabled={tipAnimating}
+        aria-label="Tip dealer 2,000 MORBIUS"
+        title="Tip dealer 2,000 MORBIUS"
+        className="flex items-center justify-center rounded-md bg-amber-900/50 hover:bg-amber-800/60 border border-amber-600/40 text-amber-300 transition-all disabled:opacity-50 disabled:pointer-events-none"
+        style={{ width: 32, height: 32 }}
       >
-        Tip 2,000
-      </IconButton>
+        <Coins className="w-4 h-4" aria-hidden />
+      </button>
 
       {tipAnimating && (
         <div
@@ -44,7 +47,7 @@ export function BlackjackMultiTipDealerControl({
       )}
 
       {tipNotificationName && (
-        <div className="mt-1 px-3 py-1 rounded bg-black/70 border border-amber-600/30 text-amber-300 text-[10px] text-center animate-fade-in whitespace-nowrap">
+        <div className="absolute top-full left-1/2 -translate-x-1/2 mt-1 px-3 py-1 rounded bg-black/70 border border-amber-600/30 text-amber-300 text-[10px] text-center animate-fade-in whitespace-nowrap z-20 shadow-lg">
           Thanks for the tip! Best of luck to you, {tipNotificationName}
         </div>
       )}

@@ -5,7 +5,7 @@ import { GlobalAnalyticsDashboard } from '@/components/BLACKJACK/GlobalAnalytics
 import type { BlackjackWebSocketClient } from '@/lib/websocket-client';
 
 interface BlackjackAuxViewsProps {
-  currentView: 'game' | 'stats' | 'analytics';
+  currentView: 'game' | 'stats' | 'analytics' | 'history';
   isDeployer: boolean;
   playerStatsLoading: boolean;
   playerStatsError: unknown;

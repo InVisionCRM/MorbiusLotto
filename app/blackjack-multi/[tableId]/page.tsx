@@ -41,6 +41,7 @@ import { usePlayerStatsEnhanced } from '@/hooks/use-blackjack-stats';
 import { useBlackjackTables } from '@/hooks/use-blackjack-tables';
 import { useBlackjackRevealCompletion } from '@/hooks/use-blackjack-reveal-completion';
 import { toast } from 'sonner';
+import { ANIMATION_TIMINGS } from '@/app/BLACKJACK/constants';
 import { BLACKJACK_FACTS } from '@/app/blackjack-multi/blackjack-facts';
 import { BlackjackMultiBetaSplash } from '@/components/BLACKJACK/BlackjackMultiBetaSplash';
 import { SophieSplashModal } from '@/components/shared/SophieSplashModal';
@@ -58,6 +59,14 @@ const DEALER_POST_REVEAL_DELAY_MS = 1500;
 const WEI_PER_MORBIUS = 10n ** 18n;
 const MAX_SAFE_BIGINT = BigInt(Number.MAX_SAFE_INTEGER);
 const MULTI_INFO_PANEL_VIEWPORT_HEIGHT_CLASS = DEFAULT_INFO_PANEL_VIEWPORT_HEIGHT_CLASS;
+/** Match `CARD_CLEAR_ANIMATION_MS` in BlackjackTable (card fly-off duration). */
+const MULTI_CARD_CLEAR_OUT_MS = 450;
+
+function hadRoundCardsOnTable(s: BJMultiTableState | null | undefined): boolean {
+  if (!s) return false;
+  if ((s.dealerCards?.length ?? 0) > 0) return true;
+  return s.seats.some((seat) => seat.hands?.some((h) => h.cards.length > 0));
+}
 
 function toSafeInteger(value: bigint): number {
   if (value <= 0n) return 0;
@@ -165,16 +174,43 @@ export default function BlackjackMultiTablePage() {
   const wsClientRef = useRef<BlackjackWebSocketClient | null>(null);
   const [wsClient, setWsClient] = useState<BlackjackWebSocketClient | null>(null);
   const latestStateVersionRef = useRef(0);
+  const [multiCardsExiting, setMultiCardsExiting] = useState(false);
+  const [newDealerCardIndices, setNewDealerCardIndices] = useState<Set<number>>(() => new Set());
+  const [newPlayerCardByHandKey, setNewPlayerCardByHandKey] = useState<Record<string, Set<number>>>({});
+  const cardExitTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const roundKeyForAnimRef = useRef<string>('');
+  const prevDealerLenForAnimRef = useRef(0);
+  const prevSeatHandLenForAnimRef = useRef<Record<string, number>>({});
 
   const commitVisualState = useCallback((next: BJMultiTableState) => {
     visualStateRef.current = next;
     setVisualState(next);
   }, []);
 
+  const finishWithCardExit = useCallback((next: BJMultiTableState) => {
+    if (cardExitTimeoutRef.current) {
+      clearTimeout(cardExitTimeoutRef.current);
+      cardExitTimeoutRef.current = null;
+    }
+    setNewDealerCardIndices(new Set());
+    setNewPlayerCardByHandKey({});
+    setMultiCardsExiting(true);
+    cardExitTimeoutRef.current = setTimeout(() => {
+      cardExitTimeoutRef.current = null;
+      setMultiCardsExiting(false);
+      commitVisualState(next);
+    }, MULTI_CARD_CLEAR_OUT_MS);
+  }, [commitVisualState]);
+
   const applyIncomingState = useCallback((next: BJMultiTableState) => {
     const incomingVersion = getStateVersion(next);
     if (incomingVersion > 0 && incomingVersion < latestStateVersionRef.current) {
       return;
+    }
+    if (cardExitTimeoutRef.current) {
+      clearTimeout(cardExitTimeoutRef.current);
+      cardExitTimeoutRef.current = null;
+      setMultiCardsExiting(false);
     }
     if (incomingVersion > 0) {
       latestStateVersionRef.current = incomingVersion;
@@ -205,7 +241,16 @@ export default function BlackjackMultiTablePage() {
           visualHoldTimerRef.current = null;
           const pending = visualPendingStateRef.current ?? stateRef.current;
           visualPendingStateRef.current = null;
-          if (pending) commitVisualState(pending);
+          if (!pending) return;
+          const v = visualStateRef.current;
+          if (
+            hadRoundCardsOnTable(v) &&
+            (pending.phase === 'betting' || pending.phase === 'waiting')
+          ) {
+            finishWithCardExit(pending);
+          } else {
+            commitVisualState(pending);
+          }
         }, waitMs);
       }
       return;
@@ -216,12 +261,112 @@ export default function BlackjackMultiTablePage() {
       visualHoldTimerRef.current = null;
     }
     visualPendingStateRef.current = null;
-    commitVisualState(next);
-  }, [commitVisualState]);
+
+    const prevV = visualStateRef.current;
+    const shouldAnimateClear =
+      hadRoundCardsOnTable(prevV) &&
+      prevV?.phase === 'completed' &&
+      (next.phase === 'betting' || next.phase === 'waiting');
+
+    if (shouldAnimateClear) {
+      finishWithCardExit(next);
+    } else {
+      commitVisualState(next);
+    }
+  }, [commitVisualState, finishWithCardExit]);
   const tableViewState = visualState ?? state;
 
   useEffect(() => {
+    return () => {
+      if (cardExitTimeoutRef.current) {
+        clearTimeout(cardExitTimeoutRef.current);
+        cardExitTimeoutRef.current = null;
+      }
+    };
+  }, []);
+
+  // Deal-in: track card count increases per round (matches single-player use-blackjack-server-sync)
+  useEffect(() => {
+    const st = tableViewState;
+    if (!st) return;
+
+    const rk = `${st.roundNumber}-${st.currentRoundId ?? 'x'}`;
+    const timeouts: ReturnType<typeof setTimeout>[] = [];
+
+    if (roundKeyForAnimRef.current !== rk) {
+      roundKeyForAnimRef.current = rk;
+      prevDealerLenForAnimRef.current = st.dealerCards?.length ?? 0;
+      const nextMap: Record<string, number> = {};
+      for (const seat of st.seats) {
+        seat.hands.forEach((h, hi) => {
+          nextMap[`${seat.position}-${hi}`] = h.cards.length;
+        });
+      }
+      prevSeatHandLenForAnimRef.current = nextMap;
+      return;
+    }
+
+    const staggerMs = 250;
+    const dealMs = ANIMATION_TIMINGS.CARD_DEAL;
+
+    const dLen = st.dealerCards?.length ?? 0;
+    if (dLen > prevDealerLenForAnimRef.current) {
+      const newIdx = new Set<number>();
+      for (let i = prevDealerLenForAnimRef.current; i < dLen; i++) newIdx.add(i);
+      setNewDealerCardIndices(newIdx);
+      const maxI = dLen - 1;
+      timeouts.push(
+        setTimeout(() => setNewDealerCardIndices(new Set()), maxI * staggerMs + dealMs + 100),
+      );
+      prevDealerLenForAnimRef.current = dLen;
+    } else {
+      prevDealerLenForAnimRef.current = dLen;
+    }
+
+    const playerPatch: Record<string, Set<number>> = {};
+    let maxPlayerDelay = 0;
+    for (const seat of st.seats) {
+      seat.hands.forEach((h, hi) => {
+        const key = `${seat.position}-${hi}`;
+        const n = h.cards.length;
+        const prev = prevSeatHandLenForAnimRef.current[key] ?? 0;
+        if (n > prev) {
+          const set = new Set<number>();
+          for (let i = prev; i < n; i++) set.add(i);
+          playerPatch[key] = set;
+          const maxI = n - 1;
+          maxPlayerDelay = Math.max(maxPlayerDelay, maxI * staggerMs + dealMs + 100);
+        }
+        prevSeatHandLenForAnimRef.current[key] = n;
+      });
+    }
+    if (Object.keys(playerPatch).length > 0) {
+      setNewPlayerCardByHandKey((p) => {
+        const merged = { ...p };
+        for (const [k, s] of Object.entries(playerPatch)) {
+          merged[k] = s;
+        }
+        return merged;
+      });
+      timeouts.push(
+        setTimeout(() => {
+          setNewPlayerCardByHandKey((p) => {
+            const next = { ...p };
+            for (const k of Object.keys(playerPatch)) delete next[k];
+            return next;
+          });
+        }, maxPlayerDelay),
+      );
+    }
+
+    return () => { timeouts.forEach(clearTimeout); };
+  }, [tableViewState]);
+
+  useEffect(() => {
     latestStateVersionRef.current = 0;
+    roundKeyForAnimRef.current = '';
+    prevDealerLenForAnimRef.current = 0;
+    prevSeatHandLenForAnimRef.current = {};
   }, [tableId]);
 
   // Bet panel state — string to match BettingPanelMobile interface
@@ -963,6 +1108,18 @@ export default function BlackjackMultiTablePage() {
 
   return (
     <GlobalMainNav page="blackjackMulti" showBackArrow backArrowHref="/blackjack-multi" backArrowLabel="Lobby">
+      <div
+        className="relative min-h-screen h-full w-full text-white"
+        style={{
+          backgroundImage:
+            "linear-gradient(to bottom, rgba(8,12,20,0.88), rgba(2,6,17,0.92) 50%, rgba(8,12,20,0.94)), url('/morbius/Morbius_Blackjack.png')",
+          backgroundSize: 'cover',
+          backgroundPosition: 'center top',
+          backgroundRepeat: 'no-repeat',
+          backgroundAttachment: 'fixed',
+        }}
+      >
+        <div className="pointer-events-none absolute inset-0 h-full min-h-screen w-full bg-[radial-gradient(ellipse_80%_60%_at_50%_0%,rgba(34,211,238,0.10),transparent_70%)]" />
       {!isE2EMock && <BlackjackMultiBetaSplash />}
       <style>{BLACKJACK_MULTI_TABLE_STYLES}</style>
       <style>{`
@@ -1052,14 +1209,6 @@ export default function BlackjackMultiTablePage() {
           style={{ width: 800, height: 450, transform: `scale(${boardScale})`, transformOrigin: 'top left' }}
         >
 
-          <BlackjackMultiTipDealerControl
-            visible={!!address && wsConnected && !!wsClient && myPosition !== null}
-            tipAnimating={tipAnimating}
-            tipNotificationName={tipNotification?.name ?? null}
-            onTipDealer={tipDealer}
-            onTipAnimationEnd={() => setTipAnimating(false)}
-          />
-
           <BlackjackMultiConnectionOverlay
             wsConnected={wsConnected}
             address={address}
@@ -1083,6 +1232,8 @@ export default function BlackjackMultiTablePage() {
             <BlackjackMultiDealerArea
               tableViewState={tableViewState}
               visibleDealerCards={visibleDealerCards}
+              cardsExiting={multiCardsExiting}
+              newDealerCardIndices={newDealerCardIndices.size > 0 ? newDealerCardIndices : null}
             />
           </div>
 
@@ -1104,29 +1255,58 @@ export default function BlackjackMultiTablePage() {
             onLeaveSeat={myPosition !== null ? leaveSeat : undefined}
             onToggleSoundPanel={myPosition !== null ? () => setSoundPanelOpen(o => !o) : undefined}
             onSendChatMessage={myPosition !== null ? sendChatMessage : undefined}
+            cardsExiting={multiCardsExiting}
+            newPlayerCardByHandKey={newPlayerCardByHandKey}
           />
 
         </div>
 
-        {/* ── Fullscreen toggle button (top-right corner of table) ── */}
-        <button
-          onClick={() => setIsFullscreen(f => !f)}
-          aria-label={isFullscreen ? 'Exit fullscreen' : 'Enter fullscreen'}
-          className="absolute top-2 right-2 z-30 flex items-center justify-center rounded-md bg-black/50 hover:bg-black/75 border border-white/20 text-white/70 hover:text-white transition-all"
-          style={{ width: 32, height: 32 }}
-        >
-          {isFullscreen ? (
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-              <polyline points="8 3 3 3 3 8" /><polyline points="21 8 21 3 16 3" />
-              <polyline points="3 16 3 21 8 21" /><polyline points="16 21 21 21 21 16" />
-            </svg>
-          ) : (
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-              <polyline points="15 3 21 3 21 9" /><polyline points="9 21 3 21 3 15" />
-              <line x1="21" y1="3" x2="14" y2="10" /><line x1="3" y1="21" x2="10" y2="14" />
-            </svg>
-          )}
-        </button>
+        {/* ── Tip → Sound → Fullscreen (32×32 each, right-aligned) ── */}
+        <div className="absolute top-2 right-2 z-30 flex items-center gap-2">
+          <BlackjackMultiTipDealerControl
+            visible={!!address && wsConnected && !!wsClient && myPosition !== null}
+            tipAnimating={tipAnimating}
+            tipNotificationName={tipNotification?.name ?? null}
+            onTipDealer={tipDealer}
+            onTipAnimationEnd={() => setTipAnimating(false)}
+          />
+          <BlackjackMultiSoundPanel
+            open={soundPanelOpen}
+            onToggleOpen={() => setSoundPanelOpen((o) => !o)}
+            soundEnabled={soundEnabled}
+            dealerVoiceEnabled={dealerVoiceEnabled}
+            sfxEnabled={sfxEnabled}
+            isMusicPlaying={isMusicPlaying}
+            musicVolume={musicVolume}
+            currentTrackName={MUSIC_PLAYLIST[musicTrackIndex].split('/').pop()?.replace('.mp3', '').replace(/-/g, ' ') ?? 'Unknown'}
+            onToggleSoundEnabled={() => setSoundEnabled((e) => !e)}
+            onToggleDealerVoiceEnabled={() => setDealerVoiceEnabled((e) => !e)}
+            onToggleSfxEnabled={() => setSfxEnabled((e) => !e)}
+            onToggleMusic={toggleMusic}
+            onNextTrack={nextTrack}
+            onMusicVolumeChange={setMusicVolume}
+            voiceTutorialVideoUrl={VOICE_BLACKJACK_TUTORIAL_URL}
+          />
+          <button
+            type="button"
+            onClick={() => setIsFullscreen(f => !f)}
+            aria-label={isFullscreen ? 'Exit fullscreen' : 'Enter fullscreen'}
+            className="flex items-center justify-center rounded-md bg-black/50 hover:bg-black/75 border border-white/20 text-white/70 hover:text-white transition-all"
+            style={{ width: 32, height: 32 }}
+          >
+            {isFullscreen ? (
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+                <polyline points="8 3 3 3 3 8" /><polyline points="21 8 21 3 16 3" />
+                <polyline points="3 16 3 21 8 21" /><polyline points="16 21 21 21 21 16" />
+              </svg>
+            ) : (
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+                <polyline points="15 3 21 3 21 9" /><polyline points="9 21 3 21 3 15" />
+                <line x1="21" y1="3" x2="14" y2="10" /><line x1="3" y1="21" x2="10" y2="14" />
+              </svg>
+            )}
+          </button>
+        </div>
 
         {/* ── Fullscreen: avatar strip at top-center ── */}
         {isFullscreen && (
@@ -1238,24 +1418,6 @@ export default function BlackjackMultiTablePage() {
           </div>
         )}
 
-        <BlackjackMultiSoundPanel
-          open={soundPanelOpen}
-          onToggleOpen={() => setSoundPanelOpen((o) => !o)}
-          soundEnabled={soundEnabled}
-          dealerVoiceEnabled={dealerVoiceEnabled}
-          sfxEnabled={sfxEnabled}
-          isMusicPlaying={isMusicPlaying}
-          musicVolume={musicVolume}
-          currentTrackName={MUSIC_PLAYLIST[musicTrackIndex].split('/').pop()?.replace('.mp3', '').replace(/-/g, ' ') ?? 'Unknown'}
-          onToggleSoundEnabled={() => setSoundEnabled((e) => !e)}
-          onToggleDealerVoiceEnabled={() => setDealerVoiceEnabled((e) => !e)}
-          onToggleSfxEnabled={() => setSfxEnabled((e) => !e)}
-          onToggleMusic={toggleMusic}
-          onNextTrack={nextTrack}
-          onMusicVolumeChange={setMusicVolume}
-          voiceTutorialVideoUrl={VOICE_BLACKJACK_TUTORIAL_URL}
-        />
-
         {/* Hidden audio element for background music */}
         <audio
           ref={musicAudioRef}
@@ -1322,7 +1484,7 @@ export default function BlackjackMultiTablePage() {
         {/* Not seated CTA */}
         {state && myPosition === null && address && wsConnected && (
           <div className="text-center text-white/40 text-sm py-2">
-            {state.seats.every(s => s.playerAddress) ? 'Table full — spectating' : 'Click an empty seat to join'}
+            {state.seats.every(s => s.playerAddress) ? 'Table full — spectating' : ''}
           </div>
         )}
 
@@ -1388,6 +1550,7 @@ export default function BlackjackMultiTablePage() {
       />
 
       </main>
+      </div>
     </GlobalMainNav>
   );
 }

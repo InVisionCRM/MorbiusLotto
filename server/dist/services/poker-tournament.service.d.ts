@@ -263,6 +263,25 @@ export declare class PokerTournamentService {
         prizePool: string;
         escrowTournamentIdBytes32: string | null;
     }>>;
+    /**
+     * Completed custom-token poker tournaments where the caller has a positive `prize_won`
+     * but no `prize_payout_tx_hash` recorded — i.e. the push payout didn't fire (or hasn't
+     * yet) and the server-recorded claimable amount may still be pullable on-chain.
+     *
+     * Pure DB read; the client confirms each row via `unclaimedOf(bytes32, me)` before
+     * surfacing a button. Cheap query — index on `tournament_id, player_address` already exists.
+     */
+    listClaimableCustomTokenPokerTournaments(playerAddress: string): Promise<Array<{
+        tournamentId: string;
+        name: string;
+        completedAt: string | null;
+        prizeTokenAddress: string;
+        prizeTokenDecimals: number;
+        prizeTokenSymbol: string | null;
+        /** Token-wei the player should be owed; pair with `prizeTokenDecimals` for display. */
+        prizeWon: string;
+        escrowTournamentIdBytes32: string | null;
+    }>>;
     getTournamentState(tournamentId: string): Promise<PokerTournamentState | null>;
     getPlayerEntryStatus(tournamentId: string, playerAddress: string): Promise<PokerTournamentPlayer | null>;
     private eliminateBustedTournamentSeats;

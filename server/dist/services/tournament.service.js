@@ -843,11 +843,22 @@ class TournamentService {
             // failure mode where N sequential writeContract calls were silently dropped.
             const batchResult = await (0, escrow_payout_1.sendEscrowPayoutMultiple)(tournamentId, pendingOnChainPayouts);
             if (!batchResult.success) {
-                logger_1.logger.error('Escrow payoutMultiple failed — tournament completed in DB, manual on-chain recovery required', {
+                logger_1.logger.error('Escrow payoutMultiple failed — falling back to setUnclaimedShares so winners can claim manually', {
                     tournamentId,
                     recipientCount: pendingOnChainPayouts.length,
                     error: batchResult.error,
                 });
+                // Backup path: record claimable amounts on-chain. Winners (and the platform/creator
+                // for fees) can call `claim()` from their own wallets to pull. The pool still holds
+                // the funds; nothing is lost. Best-effort — if THIS also fails, an admin can call
+                // setUnclaimedShares manually with the recipient list from the DB later.
+                const fallback = await (0, escrow_payout_1.setEscrowUnclaimedShares)(tournamentId, pendingOnChainPayouts);
+                if (!fallback.success) {
+                    logger_1.logger.error('setUnclaimedShares fallback also failed — manual on-chain recovery required', {
+                        tournamentId,
+                        error: fallback.error,
+                    });
+                }
             }
             else if (batchResult.txHash) {
                 // The batch tx settles every recipient in one hash. Persist that hash on every

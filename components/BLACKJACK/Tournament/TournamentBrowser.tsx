@@ -114,8 +114,8 @@ function FundTournamentEscrowModal({
   const amountWei = BigInt(tournament.prizePool);
   const decimals = tournament.prizeTokenDecimals ?? 18;
   const token = (tournament.prizeTokenAddress ?? '').trim() as `0x${string}`;
-  const escrow = TOURNAMENT_PRIZE_ESCROW_ADDRESS;
-  const isEscrowConfigured = escrow !== ESCROW_ZERO;
+  const escrow = String(TOURNAMENT_PRIZE_ESCROW_ADDRESS ?? '').toLowerCase();
+  const isEscrowConfigured = Boolean(escrow && escrow !== ESCROW_ZERO);
 
   const { data: allowance, refetch: refetchAllowance } = useReadContract({
     address: token || undefined,

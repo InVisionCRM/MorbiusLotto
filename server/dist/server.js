@@ -1799,6 +1799,28 @@ async function initializeServices() {
                 res.status(500).json({ error: 'Internal server error' });
             }
         });
+        // Public: single-player wager tiers (enabled only; used by game + admin UI)
+        app.get('/api/blackjack/wager-tiers', async (_req, res) => {
+            try {
+                const rows = await dbService.listBlackjackSpWagerTiers(true);
+                sendJson(res, {
+                    tiers: rows.map((t) => ({
+                        id: t.id,
+                        label: t.label,
+                        minBet: t.min_bet,
+                        maxBet: t.max_bet,
+                        themeKind: t.theme_kind,
+                        themeId: t.theme_id,
+                        sortOrder: t.sort_order,
+                        slug: t.slug,
+                    })),
+                });
+            }
+            catch (error) {
+                logger_1.logger.error('Error fetching blackjack wager tiers:', error);
+                res.status(500).json({ error: 'Internal server error' });
+            }
+        });
         // Admin: Blackjack tables CRUD (requires x-admin-wallet in allowed list)
         const dbSchemaError = (err) => {
             const msg = err && typeof err.message === 'string' ? err.message : '';
@@ -2032,6 +2054,178 @@ async function initializeServices() {
             }
             catch (error) {
                 logger_1.logger.error('Error deleting BJ multi table:', error);
+                res.status(500).json({ error: 'Internal server error' });
+            }
+        });
+        const mapSpWagerTierAdmin = (t) => ({
+            id: t.id,
+            label: t.label,
+            minBet: t.min_bet,
+            maxBet: t.max_bet,
+            themeKind: t.theme_kind,
+            themeId: t.theme_id,
+            sortOrder: t.sort_order,
+            enabled: t.enabled,
+            slug: t.slug,
+            createdAt: t.created_at.toISOString(),
+            updatedAt: t.updated_at.toISOString(),
+        });
+        const parseSpTierBounds = (minBetRaw, maxBetRaw) => {
+            if (typeof minBetRaw !== 'string' || typeof maxBetRaw !== 'string') {
+                return { ok: false, error: 'minBet and maxBet are required (string wei)' };
+            }
+            let minBet;
+            let maxBet;
+            try {
+                minBet = BigInt(minBetRaw);
+                maxBet = BigInt(maxBetRaw);
+            }
+            catch {
+                return { ok: false, error: 'Invalid minBet or maxBet' };
+            }
+            if (minBet < 0n || maxBet <= 0n)
+                return { ok: false, error: 'Bet bounds must be positive' };
+            if (minBet > maxBet)
+                return { ok: false, error: 'minBet cannot exceed maxBet' };
+            return { ok: true, minBet, maxBet };
+        };
+        // Admin: single-player blackjack wager tiers
+        app.get('/api/admin/bj-single/wager-tiers', async (_req, res) => {
+            try {
+                const rows = await dbService.listBlackjackSpWagerTiers(false);
+                sendJson(res, { tiers: rows.map(mapSpWagerTierAdmin) });
+            }
+            catch (error) {
+                logger_1.logger.error('Error listing BJ single wager tiers:', error);
+                res.status(500).json({ error: 'Internal server error' });
+            }
+        });
+        app.post('/api/admin/bj-single/wager-tiers', async (req, res) => {
+            try {
+                const body = req.body;
+                const label = typeof body.label === 'string' ? body.label.trim() : '';
+                if (!label) {
+                    res.status(400).json({ error: 'label is required' });
+                    return;
+                }
+                const bounds = parseSpTierBounds(body.minBet, body.maxBet);
+                if (!bounds.ok) {
+                    res.status(400).json({ error: bounds.error });
+                    return;
+                }
+                let themeKind = undefined;
+                if (body.themeKind === null || body.themeKind === '') {
+                    themeKind = null;
+                }
+                else if (body.themeKind === 'image' || body.themeKind === 'video') {
+                    themeKind = body.themeKind;
+                }
+                else if (body.themeKind !== undefined) {
+                    res.status(400).json({ error: 'themeKind must be image, video, or null' });
+                    return;
+                }
+                const themeId = typeof body.themeId === 'string' ? body.themeId.trim() || null : undefined;
+                const slug = typeof body.slug === 'string' ? body.slug.trim() || null : undefined;
+                const sortOrder = typeof body.sortOrder === 'number' ? body.sortOrder : undefined;
+                const enabled = typeof body.enabled === 'boolean' ? body.enabled : undefined;
+                const row = await dbService.createBlackjackSpWagerTier({
+                    label,
+                    minBet: bounds.minBet,
+                    maxBet: bounds.maxBet,
+                    themeKind: themeKind === undefined ? null : themeKind,
+                    themeId: themeId === undefined ? null : themeId,
+                    sortOrder,
+                    slug,
+                    enabled,
+                });
+                res.status(201).json({ tier: mapSpWagerTierAdmin(row) });
+            }
+            catch (error) {
+                if (error?.code === '23505') {
+                    res.status(409).json({ error: 'Slug must be unique' });
+                    return;
+                }
+                logger_1.logger.error('Error creating BJ single wager tier:', error);
+                res.status(500).json({ error: 'Internal server error' });
+            }
+        });
+        app.patch('/api/admin/bj-single/wager-tiers/:tierId', async (req, res) => {
+            try {
+                const { tierId } = req.params;
+                const body = req.body;
+                const updates = {};
+                if (typeof body.label === 'string')
+                    updates.label = body.label.trim();
+                if (body.minBet !== undefined || body.maxBet !== undefined) {
+                    const existing = await dbService.getBlackjackSpWagerTierById(tierId, false);
+                    if (!existing) {
+                        res.status(404).json({ error: 'Tier not found' });
+                        return;
+                    }
+                    const minStr = body.minBet !== undefined ? String(body.minBet) : existing.min_bet;
+                    const maxStr = body.maxBet !== undefined ? String(body.maxBet) : existing.max_bet;
+                    const bounds = parseSpTierBounds(minStr, maxStr);
+                    if (!bounds.ok) {
+                        res.status(400).json({ error: bounds.error });
+                        return;
+                    }
+                    updates.minBet = bounds.minBet;
+                    updates.maxBet = bounds.maxBet;
+                }
+                if (body.themeKind === null || body.themeKind === '') {
+                    updates.themeKind = null;
+                    updates.themeId = null;
+                }
+                else if (body.themeKind === 'image' || body.themeKind === 'video') {
+                    updates.themeKind = body.themeKind;
+                    if (typeof body.themeId === 'string')
+                        updates.themeId = body.themeId.trim() || null;
+                }
+                else if (body.themeKind !== undefined) {
+                    res.status(400).json({ error: 'themeKind must be image, video, or null' });
+                    return;
+                }
+                else if (typeof body.themeId === 'string') {
+                    updates.themeId = body.themeId.trim() || null;
+                }
+                if (typeof body.sortOrder === 'number')
+                    updates.sortOrder = body.sortOrder;
+                if (typeof body.enabled === 'boolean')
+                    updates.enabled = body.enabled;
+                if (body.slug === null || body.slug === '') {
+                    updates.slug = null;
+                }
+                else if (typeof body.slug === 'string') {
+                    updates.slug = body.slug.trim() || null;
+                }
+                const row = await dbService.updateBlackjackSpWagerTier(tierId, updates);
+                if (!row) {
+                    res.status(404).json({ error: 'Tier not found' });
+                    return;
+                }
+                sendJson(res, { tier: mapSpWagerTierAdmin(row) });
+            }
+            catch (error) {
+                if (error?.code === '23505') {
+                    res.status(409).json({ error: 'Slug must be unique' });
+                    return;
+                }
+                logger_1.logger.error('Error updating BJ single wager tier:', error);
+                res.status(500).json({ error: 'Internal server error' });
+            }
+        });
+        app.delete('/api/admin/bj-single/wager-tiers/:tierId', async (req, res) => {
+            try {
+                const { tierId } = req.params;
+                const ok = await dbService.deleteBlackjackSpWagerTier(tierId);
+                if (!ok) {
+                    res.status(404).json({ error: 'Tier not found' });
+                    return;
+                }
+                res.json({ ok: true });
+            }
+            catch (error) {
+                logger_1.logger.error('Error deleting BJ single wager tier:', error);
                 res.status(500).json({ error: 'Internal server error' });
             }
         });

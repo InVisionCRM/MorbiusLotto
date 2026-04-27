@@ -2359,6 +2359,104 @@ class DatabaseService {
         const r = await this.pool.query('DELETE FROM blackjack_tables WHERE id = $1', [id]);
         return (r.rowCount ?? 0) > 0;
     }
+    mapBlackjackSpWagerTierRow(r) {
+        const tk = r.theme_kind;
+        const themeKind = tk === 'image' || tk === 'video' ? tk : null;
+        return {
+            id: r.id,
+            label: r.label,
+            min_bet: String(r.min_bet),
+            max_bet: String(r.max_bet),
+            theme_kind: themeKind,
+            theme_id: r.theme_id ?? null,
+            sort_order: Number(r.sort_order ?? 0),
+            enabled: Boolean(r.enabled),
+            slug: r.slug ?? null,
+            created_at: new Date(r.created_at),
+            updated_at: new Date(r.updated_at),
+        };
+    }
+    async listBlackjackSpWagerTiers(enabledOnly) {
+        const where = enabledOnly ? 'WHERE enabled = true' : '';
+        const r = await this.pool.query(`SELECT id, label, min_bet::TEXT, max_bet::TEXT, theme_kind, theme_id, sort_order, enabled, slug, created_at, updated_at
+       FROM blackjack_sp_wager_tiers
+       ${where}
+       ORDER BY sort_order ASC, created_at ASC`);
+        return r.rows.map((row) => this.mapBlackjackSpWagerTierRow(row));
+    }
+    async getBlackjackSpWagerTierById(id, enabledOnly) {
+        const r = await this.pool.query(`SELECT id, label, min_bet::TEXT, max_bet::TEXT, theme_kind, theme_id, sort_order, enabled, slug, created_at, updated_at
+       FROM blackjack_sp_wager_tiers
+       WHERE id = $1 ${enabledOnly ? 'AND enabled = true' : ''}
+       LIMIT 1`, [id]);
+        if (r.rows.length === 0)
+            return null;
+        return this.mapBlackjackSpWagerTierRow(r.rows[0]);
+    }
+    async createBlackjackSpWagerTier(input) {
+        const sortRes = await this.pool.query(`SELECT COALESCE(MAX(sort_order), -1) + 1 AS next_sort FROM blackjack_sp_wager_tiers`);
+        const nextSort = Number(sortRes.rows[0]?.next_sort ?? 0);
+        const sortOrder = input.sortOrder ?? nextSort;
+        const themeKind = input.themeKind ?? null;
+        const themeId = input.themeId?.trim() || null;
+        const slug = input.slug?.trim() || null;
+        const enabled = input.enabled !== false;
+        const r = await this.pool.query(`INSERT INTO blackjack_sp_wager_tiers (label, min_bet, max_bet, theme_kind, theme_id, sort_order, slug, enabled)
+       VALUES ($1, $2::NUMERIC, $3::NUMERIC, $4, $5, $6, $7, $8)
+       RETURNING id, label, min_bet::TEXT, max_bet::TEXT, theme_kind, theme_id, sort_order, enabled, slug, created_at, updated_at`, [input.label, input.minBet.toString(), input.maxBet.toString(), themeKind, themeId, sortOrder, slug, enabled]);
+        return this.mapBlackjackSpWagerTierRow(r.rows[0]);
+    }
+    async updateBlackjackSpWagerTier(id, updates) {
+        const fields = [];
+        const values = [];
+        let i = 1;
+        if (updates.label !== undefined) {
+            fields.push(`label = $${i++}`);
+            values.push(updates.label);
+        }
+        if (updates.minBet !== undefined) {
+            fields.push(`min_bet = $${i++}::NUMERIC`);
+            values.push(updates.minBet.toString());
+        }
+        if (updates.maxBet !== undefined) {
+            fields.push(`max_bet = $${i++}::NUMERIC`);
+            values.push(updates.maxBet.toString());
+        }
+        if (updates.themeKind !== undefined) {
+            fields.push(`theme_kind = $${i++}`);
+            values.push(updates.themeKind);
+        }
+        if (updates.themeId !== undefined) {
+            fields.push(`theme_id = $${i++}`);
+            values.push(updates.themeId?.trim() || null);
+        }
+        if (updates.sortOrder !== undefined) {
+            fields.push(`sort_order = $${i++}`);
+            values.push(updates.sortOrder);
+        }
+        if (updates.enabled !== undefined) {
+            fields.push(`enabled = $${i++}`);
+            values.push(updates.enabled);
+        }
+        if (updates.slug !== undefined) {
+            fields.push(`slug = $${i++}`);
+            values.push(updates.slug?.trim() || null);
+        }
+        if (fields.length === 0) {
+            return this.getBlackjackSpWagerTierById(id, false);
+        }
+        fields.push('updated_at = NOW()');
+        values.push(id);
+        const r = await this.pool.query(`UPDATE blackjack_sp_wager_tiers SET ${fields.join(', ')} WHERE id = $${i}
+       RETURNING id, label, min_bet::TEXT, max_bet::TEXT, theme_kind, theme_id, sort_order, enabled, slug, created_at, updated_at`, values);
+        if (r.rows.length === 0)
+            return null;
+        return this.mapBlackjackSpWagerTierRow(r.rows[0]);
+    }
+    async deleteBlackjackSpWagerTier(id) {
+        const r = await this.pool.query('DELETE FROM blackjack_sp_wager_tiers WHERE id = $1', [id]);
+        return (r.rowCount ?? 0) > 0;
+    }
     // ── Contract daily snapshots ────────────────────────────────────────────────
     /** Upsert a snapshot for today. Called hourly by the snapshot scheduler. */
     async saveContractDailySnapshot(game, totalWagered, totalPayouts, contractReserve) {

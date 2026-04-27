@@ -1,7 +1,7 @@
 'use client';
 
 import React from 'react';
-import { Volume2, VolumeX, Settings2, Music, Play, Pause, SkipForward, Mic, MicOff } from 'lucide-react';
+import { Volume2, VolumeX, Music, Play, Pause, SkipForward, Mic, MicOff } from 'lucide-react';
 
 type BlackjackMultiSoundPanelProps = {
   open: boolean;
@@ -40,19 +40,24 @@ export function BlackjackMultiSoundPanel({
   voiceTutorialVideoUrl,
 }: BlackjackMultiSoundPanelProps) {
   return (
-    <div className="absolute left-2 top-10 z-20">
+    <div className="relative z-20">
       <button
         type="button"
         onClick={onToggleOpen}
-        className="flex items-center gap-1.5 px-2.5 py-1.5 rounded bg-black/60 border border-white/15 text-white/70 hover:text-white hover:bg-black/75 transition-colors text-xs backdrop-blur-sm"
+        aria-label="Sound settings"
         title="Sound settings"
+        className="flex items-center justify-center rounded-md bg-black/50 hover:bg-black/75 border border-white/20 text-white/70 hover:text-white transition-all"
+        style={{ width: 32, height: 32 }}
       >
-        {soundEnabled ? <Volume2 className="w-3.5 h-3.5" /> : <VolumeX className="w-3.5 h-3.5 text-red-400" />}
-        <Settings2 className="w-3 h-3" />
+        {soundEnabled ? (
+          <Volume2 className="w-4 h-4" aria-hidden />
+        ) : (
+          <VolumeX className="w-4 h-4 text-red-400" aria-hidden />
+        )}
       </button>
       {open && (
         <div
-          className="mt-1 bg-black/90 border border-white/15 rounded-lg p-3 backdrop-blur-md w-[220px] space-y-2.5"
+          className="absolute right-0 top-full mt-1 bg-black/90 border border-white/15 rounded-lg p-3 backdrop-blur-md w-[220px] space-y-2.5 shadow-lg"
           onClick={(e) => e.stopPropagation()}
         >
           <label className="flex items-center justify-between cursor-pointer group">

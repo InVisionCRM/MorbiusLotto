@@ -154,6 +154,20 @@ export interface BlackjackTableRow {
     created_at: Date;
     updated_at: Date;
 }
+/** Single-player blackjack wager tier (admin + public list). */
+export interface BlackjackSpWagerTierRow {
+    id: string;
+    label: string;
+    min_bet: string;
+    max_bet: string;
+    theme_kind: 'image' | 'video' | null;
+    theme_id: string | null;
+    sort_order: number;
+    enabled: boolean;
+    slug: string | null;
+    created_at: Date;
+    updated_at: Date;
+}
 export interface MoneyDatabaseQueries extends MoneyDatabasePort {
 }
 export declare class DatabaseService implements MoneyDatabaseQueries {
@@ -593,6 +607,30 @@ export declare class DatabaseService implements MoneyDatabaseQueries {
     createBlackjackTable(row: Omit<BlackjackTableRow, 'id' | 'created_at' | 'updated_at'>): Promise<BlackjackTableRow>;
     updateBlackjackTable(id: string, updates: Partial<Pick<BlackjackTableRow, 'name' | 'src' | 'description' | 'token_contract_address' | 'logo_url' | 'ticker' | 'iframe_url' | 'website_url' | 'sort_order' | 'enabled'>>): Promise<BlackjackTableRow | null>;
     deleteBlackjackTable(id: string): Promise<boolean>;
+    private mapBlackjackSpWagerTierRow;
+    listBlackjackSpWagerTiers(enabledOnly: boolean): Promise<BlackjackSpWagerTierRow[]>;
+    getBlackjackSpWagerTierById(id: string, enabledOnly: boolean): Promise<BlackjackSpWagerTierRow | null>;
+    createBlackjackSpWagerTier(input: {
+        label: string;
+        minBet: bigint;
+        maxBet: bigint;
+        themeKind?: 'image' | 'video' | null;
+        themeId?: string | null;
+        sortOrder?: number;
+        slug?: string | null;
+        enabled?: boolean;
+    }): Promise<BlackjackSpWagerTierRow>;
+    updateBlackjackSpWagerTier(id: string, updates: Partial<{
+        label: string;
+        minBet: bigint;
+        maxBet: bigint;
+        themeKind: 'image' | 'video' | null;
+        themeId: string | null;
+        sortOrder: number;
+        enabled: boolean;
+        slug: string | null;
+    }>): Promise<BlackjackSpWagerTierRow | null>;
+    deleteBlackjackSpWagerTier(id: string): Promise<boolean>;
     /** Upsert a snapshot for today. Called hourly by the snapshot scheduler. */
     saveContractDailySnapshot(game: string, totalWagered: bigint, totalPayouts: bigint, contractReserve: bigint): Promise<void>;
     /** Return snapshots for the last N days, oldest first. */

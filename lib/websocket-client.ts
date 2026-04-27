@@ -789,7 +789,9 @@ export class BlackjackWebSocketClient {
     betAmount: bigint,
     clientSeedCommitment?: string,
     gameHash?: string,
-    perfectPairsBetAmount?: bigint
+    perfectPairsBetAmount?: bigint,
+    /** Required by server when any enabled single-player wager tier exists (UUID). */
+    wagerTierId?: string
   ): Promise<GameState> {
     const payload: Record<string, string | undefined> = {
       betAmount: betAmount.toString(),
@@ -798,6 +800,9 @@ export class BlackjackWebSocketClient {
     };
     if (perfectPairsBetAmount != null && perfectPairsBetAmount > 0n) {
       payload.perfectPairsBetAmount = perfectPairsBetAmount.toString();
+    }
+    if (wagerTierId?.trim()) {
+      payload.wagerTierId = wagerTierId.trim();
     }
     return this.sendRequest(WS_MESSAGE_TYPES.createGame, payload);
   }

@@ -1,0 +1,42 @@
+import { NextRequest, NextResponse } from 'next/server';
+
+function backendUrl(): string | null {
+  const u = process.env.NEXT_PUBLIC_API_URL || process.env.BLACKJACK_SERVER_URL;
+  return u ? u.trim().replace(/\/$/, '') : null;
+}
+
+export async function PATCH(req: NextRequest, { params }: { params: Promise<{ tierId: string }> }) {
+  const base = backendUrl();
+  if (!base) return NextResponse.json({ error: 'Backend not configured' }, { status: 503 });
+  try {
+    const { tierId } = await params;
+    const body = await req.json();
+    const r = await fetch(`${base}/api/admin/bj-single/wager-tiers/${tierId}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json', 'x-admin-secret': process.env.AP ?? '' },
+      body: JSON.stringify(body),
+      signal: AbortSignal.timeout(8000),
+    });
+    const data = await r.json();
+    return NextResponse.json(data, { status: r.status });
+  } catch {
+    return NextResponse.json({ error: 'Backend unreachable' }, { status: 503 });
+  }
+}
+
+export async function DELETE(_req: NextRequest, { params }: { params: Promise<{ tierId: string }> }) {
+  const base = backendUrl();
+  if (!base) return NextResponse.json({ error: 'Backend not configured' }, { status: 503 });
+  try {
+    const { tierId } = await params;
+    const r = await fetch(`${base}/api/admin/bj-single/wager-tiers/${tierId}`, {
+      method: 'DELETE',
+      headers: { 'x-admin-secret': process.env.AP ?? '' },
+      signal: AbortSignal.timeout(8000),
+    });
+    const data = await r.json().catch(() => ({}));
+    return NextResponse.json(data, { status: r.status });
+  } catch {
+    return NextResponse.json({ error: 'Backend unreachable' }, { status: 503 });
+  }
+}

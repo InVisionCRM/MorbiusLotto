@@ -29,7 +29,7 @@ import {
   TournamentHUD,
 } from '@/components/BLACKJACK/Tournament';
 import { TournamentListItem } from '@/lib/tournament-types';
-import { BET_LIMITS, BET_TIERS, BlackjackTier, BLACKJACK_DEPLOYER_WALLET, DEFAULT_BLACKJACK_IMAGE_ID, BlackjackThemeKind, SOUNDS_TIP } from './constants';
+import { BET_LIMITS, BET_TIERS, BLACKJACK_DEPLOYER_WALLET, DEFAULT_BLACKJACK_IMAGE_ID, BlackjackThemeKind, SOUNDS_TIP, getTableThemeInfo } from './constants';
 // import { useBlackjackContract } from '@/hooks/use-blackjack-contract';
 import { useBlackjackContract, useWatchDeposits, useWatchDepositsMORBIUS, useWatchWithdrawals } from '@/hooks/use-blackjack-contract';
 import { useBlackjackServerSync } from '@/hooks/use-blackjack-server-sync';
@@ -62,10 +62,11 @@ function IntroScreen({ onComplete }: { onComplete: () => void }) {
       className="fixed inset-0 z-50"
       style={{
         backgroundImage:
-          "linear-gradient(145deg, rgba(16, 26, 35, 0.78), rgba(10, 15, 20, 0.88)), url('/morbius/Morbius_Blackjack.png')",
+          "linear-gradient(to bottom, rgba(8,12,20,0.88), rgba(2,6,17,0.92) 50%, rgba(8,12,20,0.94)), url('/morbius/Morbius_Blackjack.png')",
         backgroundSize: 'cover',
-        backgroundPosition: 'center',
+        backgroundPosition: 'center top',
         backgroundRepeat: 'no-repeat',
+        backgroundAttachment: 'fixed',
       }}
       suppressHydrationWarning
     >
@@ -116,18 +117,45 @@ function IntroScreen({ onComplete }: { onComplete: () => void }) {
   );
 }
 
-// Branded preview image per tier — shown on tier card
-const TIER_PREVIEW_IMAGE: Record<BlackjackTier, string> = {
-  standard: '/BlackJack/BrandedTable/SuperStake.webp',
-  high: '/BlackJack/BrandedTable/High-Roller.png',
+/** Public wager tier row from GET /api/blackjack/wager-tiers */
+type SpWagerTierPublic = {
+  id: string;
+  label: string;
+  minBet: string;
+  maxBet: string;
+  themeKind?: 'image' | 'video' | null;
+  themeId?: string | null;
+  sortOrder?: number;
+  slug?: string | null;
 };
+
+const TIER_CARD_FALLBACK_PREVIEWS = [
+  '/BlackJack/BrandedTable/SuperStake.webp',
+  '/BlackJack/BrandedTable/High-Roller.png',
+  '/BlackJack/BrandedTable/WhaleBay.png',
+] as const;
+
+function tierCardPreview(tier: SpWagerTierPublic, index: number): string {
+  if (tier.themeKind && tier.themeId) {
+    try {
+      return getTableThemeInfo({ kind: tier.themeKind, id: tier.themeId }).src;
+    } catch {
+      /* fall through */
+    }
+  }
+  return TIER_CARD_FALLBACK_PREVIEWS[index % TIER_CARD_FALLBACK_PREVIEWS.length];
+}
 
 // Tier picker shown after the intro, before the game
 function TierPickerScreen({
+  tiers,
+  loading,
   onSelect,
   onOpenThemeModal,
 }: {
-  onSelect: (tier: BlackjackTier) => void;
+  tiers: SpWagerTierPublic[];
+  loading: boolean;
+  onSelect: (tierId: string) => void;
   onOpenThemeModal: () => void;
 }) {
   return (
@@ -247,81 +275,87 @@ function TierPickerScreen({
         </div>
 
         {/* Tier cards */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 sm:gap-5">
-          {(Object.entries(BET_TIERS) as [BlackjackTier, typeof BET_TIERS[BlackjackTier]][]).map(([tier, info]) => {
-            const isHigh = tier === 'high';
-            const accent = isHigh ? '#a855f7' : '#06b6d4';
-            return (
-              <button
-                key={tier}
-                onClick={() => onSelect(tier)}
-                className="group relative rounded-2xl overflow-hidden flex flex-col border border-cyan-500/15 hover:border-cyan-500/40 transition-all text-left"
-                style={{
-                  background: 'linear-gradient(325deg, rgba(20, 20, 20, 0.8), rgba(40, 40, 40, 0.6))',
-                  boxShadow:
-                    'inset 0 3px 6px rgba(0, 0, 0, 0.8), inset 0 -3px 6px rgba(255, 255, 255, 0.1), 0 1px 3px rgba(0, 0, 0, 0.5)',
-                }}
-              >
-                {/* Branded preview image */}
-                <div className="relative aspect-[16/9] w-full bg-black overflow-hidden">
-                  {/* eslint-disable-next-line @next/next/no-img-element */}
-                  <img
-                    src={TIER_PREVIEW_IMAGE[tier]}
-                    alt={`${info.label} table preview`}
-                    className="absolute inset-0 w-full h-full object-cover group-hover:scale-[1.03] transition-transform duration-500"
-                    loading="lazy"
-                  />
-                  <div className="absolute inset-0 bg-gradient-to-t from-black via-black/30 to-transparent pointer-events-none" />
-                  <div className="absolute top-2 right-2">
-                    <span
-                      className="text-[10px] font-bold uppercase tracking-wider px-2.5 py-1 rounded-full border bg-black/40 backdrop-blur"
-                      style={{ color: accent, borderColor: `${accent}55` }}
-                    >
-                      {isHigh ? '♠ High Roller' : '♦ Standard'}
-                    </span>
-                  </div>
-                  <div className="absolute bottom-2 left-3 right-3">
-                    <div className="text-[10px] font-bold tracking-[0.2em] uppercase text-cyan-300/90 drop-shadow">
-                      {info.label}
+        {loading ? (
+          <p className="text-center text-slate-400 text-sm py-16">Loading wager tables…</p>
+        ) : tiers.length === 0 ? (
+          <p className="text-center text-slate-500 text-sm py-16">No wager tables available.</p>
+        ) : (
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-5">
+            {tiers.map((tier, index) => {
+              const isAlt = index % 2 === 1;
+              const accent = isAlt ? '#a855f7' : '#06b6d4';
+              const previewSrc = tierCardPreview(tier, index);
+              const rangeLabel = `${Number(formatEther(BigInt(tier.minBet))).toLocaleString()} – ${Number(formatEther(BigInt(tier.maxBet))).toLocaleString()} MORBIUS`;
+              return (
+                <button
+                  key={tier.id}
+                  onClick={() => onSelect(tier.id)}
+                  className="group relative rounded-2xl overflow-hidden flex flex-col border border-cyan-500/15 hover:border-cyan-500/40 transition-all text-left"
+                  style={{
+                    background: 'linear-gradient(325deg, rgba(20, 20, 20, 0.8), rgba(40, 40, 40, 0.6))',
+                    boxShadow:
+                      'inset 0 3px 6px rgba(0, 0, 0, 0.8), inset 0 -3px 6px rgba(255, 255, 255, 0.1), 0 1px 3px rgba(0, 0, 0, 0.5)',
+                  }}
+                >
+                  <div className="relative aspect-[16/9] w-full bg-black overflow-hidden">
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img
+                      src={previewSrc}
+                      alt={`${tier.label} table preview`}
+                      className="absolute inset-0 w-full h-full object-cover group-hover:scale-[1.03] transition-transform duration-500"
+                      loading="lazy"
+                    />
+                    <div className="absolute inset-0 bg-gradient-to-t from-black via-black/30 to-transparent pointer-events-none" />
+                    <div className="absolute top-2 right-2">
+                      <span
+                        className="text-[10px] font-bold uppercase tracking-wider px-2.5 py-1 rounded-full border bg-black/40 backdrop-blur"
+                        style={{ color: accent, borderColor: `${accent}55` }}
+                      >
+                        {isAlt ? '♠ Stakes' : '♦ Table'}
+                      </span>
+                    </div>
+                    <div className="absolute bottom-2 left-3 right-3">
+                      <div className="text-[10px] font-bold tracking-[0.2em] uppercase text-cyan-300/90 drop-shadow">
+                        {tier.label}
+                      </div>
                     </div>
                   </div>
-                </div>
 
-                {/* Footer: stakes + chevron */}
-                <div className="relative px-4 sm:px-5 py-4 flex items-center justify-between gap-3">
-                  <div className="min-w-0">
-                    <div className="text-[10px] font-bold uppercase tracking-[0.2em] text-slate-500 mb-0.5">
-                      Bet Range
+                  <div className="relative px-4 sm:px-5 py-4 flex items-center justify-between gap-3">
+                    <div className="min-w-0">
+                      <div className="text-[10px] font-bold uppercase tracking-[0.2em] text-slate-500 mb-0.5">
+                        Bet Range
+                      </div>
+                      <div className="text-lg sm:text-xl font-black tabular-nums tracking-tight text-slate-100 leading-none">
+                        {rangeLabel}
+                      </div>
+                      <div className="text-[10px] font-semibold tracking-[0.2em] uppercase text-cyan-400/70 mt-1">
+                        MORBIUS
+                      </div>
                     </div>
-                    <div className="text-lg sm:text-xl font-black tabular-nums tracking-tight text-slate-100 leading-none">
-                      {info.description}
-                    </div>
-                    <div className="text-[10px] font-semibold tracking-[0.2em] uppercase text-cyan-400/70 mt-1">
-                      MORBIUS
-                    </div>
-                  </div>
-                  <div
-                    className="w-10 h-10 rounded-full flex items-center justify-center border transition-all group-hover:translate-x-0.5"
-                    style={{
-                      borderColor: `${accent}66`,
-                      background: `${accent}1a`,
-                    }}
-                  >
-                    <svg
-                      className="w-4 h-4 text-slate-300 group-hover:text-white transition-colors"
-                      fill="none"
-                      viewBox="0 0 24 24"
-                      stroke="currentColor"
-                      strokeWidth={2.5}
+                    <div
+                      className="w-10 h-10 rounded-full flex items-center justify-center border transition-all group-hover:translate-x-0.5"
+                      style={{
+                        borderColor: `${accent}66`,
+                        background: `${accent}1a`,
+                      }}
                     >
-                      <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
-                    </svg>
+                      <svg
+                        className="w-4 h-4 text-slate-300 group-hover:text-white transition-colors"
+                        fill="none"
+                        viewBox="0 0 24 24"
+                        stroke="currentColor"
+                        strokeWidth={2.5}
+                      >
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
+                      </svg>
+                    </div>
                   </div>
-                </div>
-              </button>
-            );
-          })}
-        </div>
+                </button>
+              );
+            })}
+          </div>
+        )}
 
         <p className="text-center text-slate-600 text-xs mt-6">Provably fair · MORBIUS bets</p>
       </div>
@@ -379,10 +413,62 @@ export default function BlackjackPage() {
 
   // Intro screen state
   const [showIntro, setShowIntro] = useState(true);
-  // Tier state — null until player picks (or ?tier= param pre-selects)
-  const [selectedTier, setSelectedTier] = useState<BlackjackTier | null>(null);
-  // Active bet limits derived from selected tier
-  const tierLimits = selectedTier ? BET_TIERS[selectedTier] : BET_LIMITS;
+  // Wager tiers from DB (migration 109); empty fetch falls back to legacy BET_TIERS
+  const [fetchedWagerTiers, setFetchedWagerTiers] = useState<SpWagerTierPublic[] | null>(null);
+  const [selectedTierId, setSelectedTierId] = useState<string | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    fetch('/api/blackjack/wager-tiers')
+      .then((r) => (r.ok ? r.json() : Promise.reject()))
+      .then((d: { tiers?: SpWagerTierPublic[] }) => {
+        if (cancelled) return;
+        setFetchedWagerTiers(Array.isArray(d?.tiers) ? d.tiers : []);
+      })
+      .catch(() => {
+        if (!cancelled) setFetchedWagerTiers([]);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  const useDbWagerTiers = Boolean(fetchedWagerTiers && fetchedWagerTiers.length > 0);
+
+  const displayWagerTiers: SpWagerTierPublic[] = useMemo(() => {
+    if (fetchedWagerTiers === null) return [];
+    if (useDbWagerTiers) return fetchedWagerTiers;
+    return [
+      {
+        id: 'standard',
+        label: BET_TIERS.standard.label,
+        minBet: BET_TIERS.standard.MIN_BET.toString(),
+        maxBet: BET_TIERS.standard.MAX_BET.toString(),
+        slug: 'standard',
+      },
+      {
+        id: 'high',
+        label: BET_TIERS.high.label,
+        minBet: BET_TIERS.high.MIN_BET.toString(),
+        maxBet: BET_TIERS.high.MAX_BET.toString(),
+        slug: 'high',
+      },
+    ];
+  }, [fetchedWagerTiers, useDbWagerTiers]);
+
+  const tierLimits = useMemo(() => {
+    if (!selectedTierId) return BET_LIMITS;
+    const t = displayWagerTiers.find((x) => x.id === selectedTierId);
+    if (!t) return BET_LIMITS;
+    const min = BigInt(t.minBet);
+    const max = BigInt(t.maxBet);
+    return {
+      MIN_BET: min,
+      MAX_BET: max,
+      label: t.label,
+      description: `${Number(formatEther(min)).toLocaleString()} – ${Number(formatEther(max)).toLocaleString()} MORBIUS`,
+    };
+  }, [selectedTierId, displayWagerTiers]);
 
   // Provably Fair: client seed (localStorage + Provably fair modal; profile modal can edit same key)
   const [clientSeed, setClientSeed] = useState(() => {
@@ -395,6 +481,10 @@ export default function BlackjackPage() {
 
   // Background preference state (persisted per wallet). imageSource/videoSource can be static id or API table UUID.
   const { imageOptions, videoOptions, getThemeInfo, getTableProfile } = useBlackjackTables();
+  const getTableProfileForGameView = useCallback(
+    (t: { kind: 'image' | 'video'; id: string }) => getTableProfile(t.kind, t.id),
+    [getTableProfile],
+  );
   const [theme, setTheme] = useState<BlackjackThemeKind>('image');
   const [imageSource, setImageSource] = useState<string>(DEFAULT_BLACKJACK_IMAGE_ID);
   // True once the initial load effect has finished writing prefs to state — prevents
@@ -503,6 +593,25 @@ export default function BlackjackPage() {
   const TABLE_PREFS_KEY = 'morb_blackjack_table';
   const validImageIds = useMemo(() => new Set(imageOptions.map((x) => x.id)), [imageOptions]);
   const validVideoIds = useMemo(() => new Set(videoOptions.map((x) => x.id)), [videoOptions]);
+
+  const handleTierSelect = useCallback(
+    (tierId: string) => {
+      setSelectedTierId(tierId);
+      const t = displayWagerTiers.find((x) => x.id === tierId);
+      if (t?.themeKind && t?.themeId && prefLoadedRef.current) {
+        const k = t.themeKind;
+        const tid = t.themeId;
+        if (k === 'image' && validImageIds.has(tid)) {
+          setTheme('image');
+          setImageSource(tid);
+        } else if (k === 'video' && validVideoIds.has(tid)) {
+          setTheme('video');
+          setVideoSource(tid);
+        }
+      }
+    },
+    [displayWagerTiers, validImageIds, validVideoIds],
+  );
 
   // Load table background: fetch server default, then apply per-wallet localStorage override if present.
   // Depends on validImageIds/validVideoIds so it re-runs once API tables load and can validate UUID-based
@@ -973,17 +1082,21 @@ export default function BlackjackPage() {
   }, [currentView, isDeployer]);
 
   // Open deposit modal when arriving with ?open=deposit (e.g. from Poker "Get chips")
-  // Also read ?tier= to pre-select a tier without showing the picker
   const searchParams = useSearchParams();
   useEffect(() => {
     if (searchParams.get('open') === 'deposit') {
       setShowDepositModal(true);
     }
-    const tierParam = searchParams.get('tier');
-    if (tierParam === 'standard' || tierParam === 'high') {
-      setSelectedTier(tierParam);
-    }
   }, [searchParams]);
+
+  // ?tier= slug, uuid, or legacy standard|high
+  useEffect(() => {
+    if (fetchedWagerTiers === null) return;
+    const tierParam = searchParams.get('tier');
+    if (!tierParam) return;
+    const match = displayWagerTiers.find((t) => t.id === tierParam || t.slug === tierParam);
+    if (match) setSelectedTierId(match.id);
+  }, [searchParams, fetchedWagerTiers, displayWagerTiers]);
 
   // Fetch real analytics data
   const { data: playerStatsData, isLoading: playerStatsLoading, refetch: refetchPlayerStats, error: playerStatsError } = usePlayerStatsEnhanced();
@@ -1697,11 +1810,6 @@ export default function BlackjackPage() {
     setShowIntro(false);
   }, []);
 
-  // Handle tier selection from the picker screen
-  const handleTierSelect = useCallback((tier: BlackjackTier) => {
-    setSelectedTier(tier);
-  }, []);
-
   // Handle deposit/withdraw modal (disabled while a hand is in play)
   const handleOpenDepositModal = useCallback(() => {
     if (gameState.isPlaying) {
@@ -1894,7 +2002,13 @@ export default function BlackjackPage() {
       createGameInProgressRef.current = true;
       let serverGameState: any;
       try {
-        serverGameState = await wsClient.createGame(betAmount, clientSeed, gameHash, sideBet > 0n ? sideBet : undefined);
+        serverGameState = await wsClient.createGame(
+          betAmount,
+          clientSeed,
+          gameHash,
+          sideBet > 0n ? sideBet : undefined,
+          useDbWagerTiers ? (selectedTierId ?? undefined) : undefined,
+        );
       } finally {
         createGameInProgressRef.current = false;
       }
@@ -1961,7 +2075,20 @@ export default function BlackjackPage() {
       // Restore the optimistically-deducted balance — the server never saw this bet.
       fetchBalance().catch(() => {});
     }
-  }, [isConnected, address, wsConnected, wsClient, fetchBalance, updateGameStateFromServer, applyPhasedBlackjackDeal, handleGameCompletion]);
+  }, [
+    isConnected,
+    address,
+    wsConnected,
+    wsClient,
+    fetchBalance,
+    updateGameStateFromServer,
+    applyPhasedBlackjackDeal,
+    handleGameCompletion,
+    tierLimits,
+    useDbWagerTiers,
+    selectedTierId,
+    clientSeed,
+  ]);
 
   // When Deal is clicked: if bet came from mobile manual entry, convert to chip stack so table shows chips, then start game
   const handleDealClick = useCallback(() => {
@@ -2151,10 +2278,15 @@ export default function BlackjackPage() {
   }
 
   // Show tier picker if no tier selected yet
-  if (!selectedTier) {
+  if (!selectedTierId) {
     return (
       <>
-        <TierPickerScreen onSelect={handleTierSelect} onOpenThemeModal={() => setThemeModalOpen(true)} />
+        <TierPickerScreen
+          tiers={displayWagerTiers}
+          loading={fetchedWagerTiers === null}
+          onSelect={handleTierSelect}
+          onOpenThemeModal={() => setThemeModalOpen(true)}
+        />
         {themeModalOpen && (
           <ThemeSelectionModal
             open={themeModalOpen}
@@ -2221,11 +2353,18 @@ export default function BlackjackPage() {
     hasBalanceForDoubleOrSplit;
 
   return (
-    <div className="min-h-screen overflow-x-hidden overflow-y-auto w-full no-scrollbar"
+    <div
+      className="relative min-h-screen overflow-x-hidden overflow-y-auto w-full no-scrollbar"
       style={{
-        background: 'linear-gradient(145deg, rgb(10, 15, 20), rgb(16, 26, 35))',
+        backgroundImage:
+          "linear-gradient(to bottom, rgba(8,12,20,0.88), rgba(2,6,17,0.92) 50%, rgba(8,12,20,0.94)), url('/morbius/Morbius_Blackjack.png')",
+        backgroundSize: 'cover',
+        backgroundPosition: 'center top',
+        backgroundRepeat: 'no-repeat',
+        backgroundAttachment: 'fixed',
       }}
     >
+      <div className="pointer-events-none absolute inset-0 h-full min-h-screen w-full bg-[radial-gradient(ellipse_80%_60%_at_50%_0%,rgba(34,211,238,0.10),transparent_70%)]" />
       {/* Background music audio element - single instance */}
       <audio
         ref={musicAudioRef}
@@ -2300,9 +2439,9 @@ export default function BlackjackPage() {
         {currentView === 'game' && (
           <>
         <BlackjackGameView
-          contractIsPaused={contractIsPaused}
-          contractEmergencyPaused={contractEmergencyPaused}
-          contractOzPaused={contractOzPaused}
+          contractIsPaused={Boolean(contractIsPaused)}
+          contractEmergencyPaused={Boolean(contractEmergencyPaused)}
+          contractOzPaused={Boolean(contractOzPaused)}
           tournament={tournament}
           currentGame={currentGame}
           gameState={gameState}
@@ -2338,7 +2477,7 @@ export default function BlackjackPage() {
           videoSource={videoSource}
           theme={theme}
           getThemeInfo={getThemeInfo}
-          getTableProfile={getTableProfile}
+          getTableProfile={getTableProfileForGameView}
           videoSyncToClock={videoSyncToClock}
           videoPosition={videoPosition}
           handleOpenDepositModal={handleOpenDepositModal}

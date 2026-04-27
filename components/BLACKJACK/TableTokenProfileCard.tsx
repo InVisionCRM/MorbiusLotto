@@ -30,10 +30,11 @@ export interface TableTokenProfileCardProps {
   fillColumn?: boolean;
 }
 
-const PANEL_STYLE = {
-  background: 'linear-gradient(145deg, rgb(16, 26, 35), rgb(35, 36, 41))',
-  boxShadow: 'inset 0 3px 6px rgba(0, 0, 0, 0.8), inset 0 -3px 6px rgba(255, 255, 255, 0.1), 0 1px 3px rgba(0, 0, 0, 0.5)',
-  border: '1px inset rgba(60, 60, 60, 0.5)',
+/** Matches poker lobby hero card shell (`app/poker/page.tsx`). */
+const POKER_HERO_CARD_SHELL_STYLE = {
+  background: 'linear-gradient(170deg, #0c1929 0%, #0a0f1a 40%, #0d1117 100%)',
+  boxShadow:
+    '0 0 80px rgba(34,211,238,0.07), 0 2px 40px rgba(0,0,0,0.5), inset 0 1px 0 rgba(34,211,238,0.1)',
 } as const;
 
 /**
@@ -56,52 +57,66 @@ export function TableTokenProfileCard({
 
   return (
     <div
-      className={`rounded-xl min-w-0 flex flex-col border border-cyan-500/30 ${
+      className={`relative rounded-xl min-w-0 flex flex-col overflow-hidden border border-cyan-400/10 ${
         fillColumn
-          ? 'flex-1 h-full min-h-[max(38dvh,560px)] overflow-hidden'
+          ? 'flex-1 h-full min-h-[max(38dvh,560px)]'
           : compact
-            ? 'min-h-[280px] overflow-hidden md:min-h-[300px]'
+            ? 'min-h-[280px] md:min-h-[300px]'
             : naturalProfileHeight
-              ? 'min-h-[320px] overflow-hidden'
-              : 'min-h-[320px] overflow-hidden lg:h-full lg:min-h-0'
+              ? 'min-h-[320px]'
+              : 'min-h-[320px] lg:h-full lg:min-h-0'
       }`}
-      style={PANEL_STYLE}
+      style={POKER_HERO_CARD_SHELL_STYLE}
     >
-      <div className="px-3 py-2 border-b border-white/10 flex items-center justify-between shrink-0">
-        <h3 className={`${Theme.cyan.text.primary} font-semibold text-sm`}>
-          About This Table
-        </h3>
-        {onChangeTableClick ? (
-          <button
-            type="button"
-            onClick={onChangeTableClick}
-            className="text-cyan-300/80 hover:text-cyan-300 text-xs font-medium shrink-0 transition-colors"
-          >
-            Change Table
-          </button>
-        ) : (
-          <span className="text-slate-400 text-xs shrink-0">Change Table</span>
-        )}
-      </div>
-      <div
-        className={
-          stretchProfile
-            ? 'flex min-h-0 flex-1 flex-col overflow-hidden p-2'
-            : naturalProfileHeight
-              ? 'flex flex-col overflow-auto p-2'
-              : 'min-h-0 flex-1 overflow-auto p-2'
-        }
-      >
-        <TableProfile
-          name={profile?.name ?? undefined}
-          tokenAddress={profile?.token_contract_address ?? undefined}
-          description={profile?.description ?? undefined}
-          logoUrl={profile?.logo_url ?? undefined}
-          ticker={profile?.ticker ?? undefined}
-          websiteUrl={profile?.website_url ?? undefined}
-          iframeUrl={profile?.iframe_url ?? undefined}
-          fillHeight={stretchProfile}
+      <div className="h-px shrink-0 bg-gradient-to-r from-transparent via-cyan-400/40 to-transparent" />
+      <div className="relative flex min-h-0 flex-1 flex-col overflow-hidden">
+        <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(ellipse_70%_50%_at_50%_-10%,rgba(34,211,238,0.18),transparent_70%)]" />
+        <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(ellipse_40%_60%_at_20%_100%,rgba(59,130,246,0.08),transparent_60%)]" />
+        <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(ellipse_40%_60%_at_80%_100%,rgba(99,102,241,0.06),transparent_60%)]" />
+        <div
+          className="pointer-events-none absolute inset-0 opacity-[0.03]"
+          style={{
+            backgroundImage:
+              'linear-gradient(rgba(255,255,255,0.1) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,0.1) 1px, transparent 1px)',
+            backgroundSize: '40px 40px',
+          }}
         />
+        <div className="relative z-[1] flex shrink-0 items-center justify-between border-b border-white/10 px-3 py-2">
+          <h3 className={`${Theme.cyan.text.primary} font-semibold text-sm`}>
+            About This Table
+          </h3>
+          {onChangeTableClick ? (
+            <button
+              type="button"
+              onClick={onChangeTableClick}
+              className="text-cyan-300/80 hover:text-cyan-300 text-xs font-medium shrink-0 transition-colors"
+            >
+              Change Table
+            </button>
+          ) : (
+            <span className="text-slate-400 text-xs shrink-0">Change Table</span>
+          )}
+        </div>
+        <div
+          className={
+            stretchProfile
+              ? 'relative z-[1] flex min-h-0 flex-1 flex-col overflow-hidden p-2'
+              : naturalProfileHeight
+                ? 'relative z-[1] flex flex-col overflow-auto p-2'
+                : 'relative z-[1] min-h-0 flex-1 overflow-auto p-2'
+          }
+        >
+          <TableProfile
+            name={profile?.name ?? undefined}
+            tokenAddress={profile?.token_contract_address ?? undefined}
+            description={profile?.description ?? undefined}
+            logoUrl={profile?.logo_url ?? undefined}
+            ticker={profile?.ticker ?? undefined}
+            websiteUrl={profile?.website_url ?? undefined}
+            iframeUrl={profile?.iframe_url ?? undefined}
+            fillHeight={stretchProfile}
+          />
+        </div>
       </div>
     </div>
   );

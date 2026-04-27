@@ -28,6 +28,21 @@ export declare function sendEscrowPayoutMultiple(tournamentId: string, recipient
     error?: string;
 }>;
 /**
+ * Backup path: when `payoutMultiple` fails, record per-winner claimable amounts on-chain
+ * so winners can pull from their own wallets via `claim()`. Idempotent overwrite.
+ *
+ * Called after a push failure as a safety net — even if every push attempt drops, the
+ * pool still has the funds and the claimable mapping tells winners exactly what they're owed.
+ */
+export declare function setEscrowUnclaimedShares(tournamentId: string, recipients: {
+    address: string;
+    amount: bigint;
+}[]): Promise<{
+    success: boolean;
+    txHash?: string;
+    error?: string;
+}>;
+/**
  * Send any remaining (unclaimed) escrow balance for a tournament to the configured reclaim wallet.
  * Call after distributePrizes so escrow never holds leftover funds.
  * Uses same authorized server key as payouts. Set ESCROW_REMAINDER_WALLET or PLATFORM_FEE_WALLET.

@@ -136,6 +136,10 @@ export type BlackjackMultiSeatProps = {
   onLeaveSeat?: () => void;
   onToggleSoundPanel?: () => void;
   onSendChatMessage?: (msg: string) => void;
+  /** Round clear: match single-player card fly-out */
+  cardsExiting?: boolean;
+  /** Key `${position}-${handIndex}` → card indices that just arrived (deal-in) */
+  newPlayerCardByHandKey?: Record<string, Set<number>>;
 };
 
 // ── Component ────────────────────────────────────────────────────────────────
@@ -159,6 +163,8 @@ export function BlackjackMultiSeat({
   onLeaveSeat,
   onToggleSoundPanel,
   onSendChatMessage,
+  cardsExiting = false,
+  newPlayerCardByHandKey,
 }: BlackjackMultiSeatProps) {
   const canOpenProfile = !!seat?.playerAddress && !!onOpenProfile && !isMe;
   const seatOutcomeLabel = seat
@@ -360,11 +366,24 @@ export function BlackjackMultiSeat({
 
                       {/* Card fan */}
                       <div className="relative flex">
-                        {hand.cards.map((c, ci) => (
-                          <div key={ci} className={ci > 0 ? 'card-overlap-player' : ''} style={{ zIndex: ci }}>
-                            <PlayingCard card={indexToCard(c)} owner="player" className="" size="small" />
-                          </div>
-                        ))}
+                        {hand.cards.map((c, ci) => {
+                          const nk = newPlayerCardByHandKey?.[`${position}-${hi}`];
+                          const isNewCard = nk ? nk.has(ci) : false;
+                          return (
+                            <div key={ci} className={ci > 0 ? 'card-overlap-player' : ''} style={{ zIndex: ci }}>
+                              <PlayingCard
+                                card={indexToCard(c)}
+                                owner="player"
+                                className=""
+                                size="small"
+                                index={ci}
+                                isNewCard={isNewCard}
+                                exiting={cardsExiting}
+                                exitDelay={ci * 0.12}
+                              />
+                            </div>
+                          );
+                        })}
 
                         {/* Bet chip — single hand only; overlaps top-right corner of card fan */}
                         {!hasSplit && totalBetWei > 0n && hand.cards.length >= 2 && (

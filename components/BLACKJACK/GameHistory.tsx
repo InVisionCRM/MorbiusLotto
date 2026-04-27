@@ -209,7 +209,6 @@ export function GameHistory({ history, onVerifyGame, isLoading }: GameHistoryPro
       <CardContent className="space-y-3 p-4">
         <AnimatePresence>
           {sortedHistory.map((entry, entryIndex) => {
-            const playerTotal = entry.playerHands?.[0]?.total ?? 0
             return (
             <motion.div
               key={entry.id}
@@ -258,51 +257,6 @@ export function GameHistory({ history, onVerifyGame, isLoading }: GameHistoryPro
                   ) : (
                     <ChevronDown className="w-5 h-5 text-gray-400 shrink-0" />
                   )}
-                </div>
-              </div>
-
-              {/* Battle layout: You vs Dealer with TOTAL labels */}
-              <div className="flex items-stretch">
-                <div className="flex-1 min-w-0 p-4 flex flex-col items-center justify-center border-r border-gray-700">
-                  <div className="text-xs text-cyan-400 uppercase font-medium mb-2">You</div>
-                  <div className="flex items-center justify-center gap-1 mb-2">
-                    {entry.playerHands?.[0]?.cards?.length ? (
-                      entry.playerHands[0].cards.slice(0, 4).map((cardValue, idx) => (
-                        <CardImage key={`p-${idx}`} value={cardValue} index={idx} salt={entryIndex} />
-                      ))
-                    ) : (
-                      <span className="text-xs text-gray-500">No cards</span>
-                    )}
-                    {entry.playerHands?.[0]?.cards?.length > 4 && (
-                      <span className="text-xs text-gray-500">+{entry.playerHands[0].cards.length - 4}</span>
-                    )}
-                  </div>
-                  <div className="flex flex-col items-center">
-                    <span className="text-[10px] text-gray-500 uppercase tracking-wider">TOTAL</span>
-                    <span className="text-2xl font-bold text-cyan-400">{playerTotal}</span>
-                  </div>
-                </div>
-                <div className="flex items-center px-4 bg-gray-900/50">
-                  <span className="text-sm font-bold text-gray-500">VS</span>
-                </div>
-                <div className="flex-1 min-w-0 p-4 flex flex-col items-center justify-center">
-                  <div className="text-xs text-red-400 uppercase font-medium mb-2">Dealer</div>
-                  <div className="flex items-center justify-center gap-1 mb-2">
-                    {entry.dealerCards?.length ? (
-                      entry.dealerCards.slice(0, 4).map((cardValue, idx) => (
-                        <CardImage key={`d-${idx}`} value={cardValue} index={idx} salt={entryIndex + 100} />
-                      ))
-                    ) : (
-                      <span className="text-xs text-gray-500">No cards</span>
-                    )}
-                    {entry.dealerCards?.length > 4 && (
-                      <span className="text-xs text-gray-500">+{entry.dealerCards.length - 4}</span>
-                    )}
-                  </div>
-                  <div className="flex flex-col items-center">
-                    <span className="text-[10px] text-gray-500 uppercase tracking-wider">TOTAL</span>
-                    <span className="text-2xl font-bold text-red-400">{entry.dealerTotal ?? 0}</span>
-                  </div>
                 </div>
               </div>
 
@@ -405,34 +359,26 @@ export function GameHistory({ history, onVerifyGame, isLoading }: GameHistoryPro
                       </div>
 
                       {/* Verification */}
-                      <div className="grid grid-cols-[1fr_1fr] gap-4 items-center pt-2 border-t border-gray-700 text-left">
-                        <div className="flex items-center gap-2">
-                          {entry.verified ? (
-                            <>
-                              <div className="w-2 h-2 bg-green-400 rounded-full flex-shrink-0"></div>
-                              <span className="text-sm text-green-400">Verified</span>
-                            </>
-                          ) : (
-                            <>
-                              <div className="w-2 h-2 bg-yellow-400 rounded-full flex-shrink-0"></div>
-                              <span className="text-sm text-yellow-400">Unverified</span>
-                            </>
-                          )}
-                        </div>
-                        <div className="text-left">
-                          <Link href={`/BLACKJACK/verify?gameId=${encodeURIComponent(entry.gameId)}`}>
-                            <Button
-                              variant="outline"
-                              size="sm"
-                              onClick={(e) => {
-                                e.stopPropagation();
-                              }}
-                              className="text-xs"
-                            >
-                              Verify Game
-                            </Button>
-                          </Link>
-                        </div>
+                      <div className="pt-2 border-t border-gray-700 space-y-3">
+                        {entry.verified ? (
+                          <div className="flex items-center gap-2">
+                            <div className="w-2 h-2 bg-green-400 rounded-full shrink-0" />
+                            <span className="text-sm text-green-400 font-medium">Verified</span>
+                          </div>
+                        ) : null}
+                        <Link
+                          href={`/BLACKJACK/verify?gameId=${encodeURIComponent(entry.gameId)}`}
+                          className="block w-full"
+                          onClick={(e) => e.stopPropagation()}
+                        >
+                          <Button
+                            type="button"
+                            variant="outline"
+                            className="w-full h-10 text-sm font-semibold rounded-lg border-2 border-cyan-500/40 bg-gradient-to-r from-cyan-600/25 to-blue-600/25 text-cyan-100 shadow-[0_4px_16px_rgba(0,0,0,0.35),inset_0_1px_0_rgba(255,255,255,0.06)] hover:from-cyan-600/40 hover:to-blue-600/40 hover:border-cyan-400/55 hover:text-white transition-all"
+                          >
+                            {entry.verified ? 'Open verification' : 'Verify this game'}
+                          </Button>
+                        </Link>
                       </div>
                     </div>
                   </motion.div>

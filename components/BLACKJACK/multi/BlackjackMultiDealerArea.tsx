@@ -35,9 +35,13 @@ function handTotalFromCardIndices(indices: number[], visibleCount: number): numb
 export function BlackjackMultiDealerArea({
   tableViewState,
   visibleDealerCards,
+  cardsExiting = false,
+  newDealerCardIndices = null,
 }: {
   tableViewState: BJMultiTableState | null;
   visibleDealerCards: number;
+  cardsExiting?: boolean;
+  newDealerCardIndices?: Set<number> | null;
 }) {
   const dCards = tableViewState?.dealerCards ?? [];
   const vis = Math.min(visibleDealerCards, dCards.length);
@@ -61,6 +65,8 @@ export function BlackjackMultiDealerArea({
         isBlackjack={naturalBj}
         counterActive={isDealerTurn}
         badgeSize="small"
+        cardsExiting={cardsExiting}
+        newDealerCardIndices={newDealerCardIndices}
       />
     </div>
   );

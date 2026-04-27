@@ -23,6 +23,7 @@ type DealerSectionProps = {
   isBlackjack: boolean;
   winnerHighlight?: boolean;
   badgeSize?: 'small' | 'large';
+  newDealerCardIndices?: Set<number> | null;
 };
 
 export default function DealerSection({
@@ -40,6 +41,7 @@ export default function DealerSection({
   isBlackjack,
   winnerHighlight = false,
   badgeSize = 'small',
+  newDealerCardIndices = null,
 }: DealerSectionProps) {
   return (
     <>
@@ -50,6 +52,7 @@ export default function DealerSection({
           hideHoleCard={hideHoleCard}
           cardsExiting={cardsExiting}
           cardSize={cardSize}
+          newDealerCardIndices={newDealerCardIndices}
         />
 
         {showPlayingHoleFallback && isPlayingPhase && cards.length === 1 && (

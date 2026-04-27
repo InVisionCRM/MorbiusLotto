@@ -21,7 +21,7 @@ interface BlackjackTournamentOverlaysProps {
   setShowTournamentComplete: (open: boolean) => void;
   showTournamentBrowser: boolean;
   setShowTournamentBrowser: (open: boolean) => void;
-  tournamentBrowserInitialTab: 'join' | 'history';
+  tournamentBrowserInitialTab: 'join' | 'my' | 'freeroll' | 'history';
   showTournamentCreator: boolean;
   setShowTournamentCreator: (open: boolean) => void;
   showTournamentPinEntry: boolean;
@@ -131,7 +131,7 @@ export function BlackjackTournamentOverlays({
                 setShowTournamentBrowser(false);
                 setIsTournamentMode(true);
                 toast.success('Joined tournament!');
-                fetchBalance().catch(() => {});
+                void Promise.resolve(fetchBalance()).catch(() => {});
               }
             });
           }
@@ -162,7 +162,7 @@ export function BlackjackTournamentOverlays({
           const success = await tournament.unregisterTournament(tournamentId);
           if (success) {
             await tournament.fetchTournamentList();
-            fetchBalance().catch(() => {});
+            void Promise.resolve(fetchBalance()).catch(() => {});
           }
           return success;
         }}
@@ -204,7 +204,7 @@ export function BlackjackTournamentOverlays({
                   setShowTournamentBrowser(false);
                   setIsTournamentMode(true);
                   toast.success('Joined tournament!');
-                  fetchBalance().catch(() => {});
+                  void Promise.resolve(fetchBalance()).catch(() => {});
                 }
               });
             }}
@@ -234,7 +234,7 @@ export function BlackjackTournamentOverlays({
             setPendingJoinTournament(null);
             setIsTournamentMode(true);
             toast.success('Joined private tournament!');
-            fetchBalance().catch(() => {});
+            void Promise.resolve(fetchBalance()).catch(() => {});
           }
           return success;
         }}

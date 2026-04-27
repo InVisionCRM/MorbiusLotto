@@ -68,7 +68,7 @@ interface BlackjackGameViewProps {
   handleCardsClearComplete: () => void;
   perfectPairsBet: number;
   setPerfectPairsBet: (value: number) => void;
-  setTournamentBrowserInitialTab: (tab: 'join' | 'history') => void;
+  setTournamentBrowserInitialTab: (tab: 'join' | 'my' | 'freeroll' | 'history') => void;
   setShowTournamentBrowser: (open: boolean) => void;
   handleStartGame: (betAmount: bigint, clientSeed: string, perfectPairsBetAmount?: bigint) => Promise<void>;
   clientSeed: string;
@@ -376,7 +376,7 @@ export function BlackjackGameView(props: BlackjackGameViewProps) {
               themeKind={theme}
               themeId={theme === 'video' ? videoSource : imageSource}
               getThemeInfo={getThemeInfo}
-              getTableProfile={getTableProfile as TableTokenProfileCardProps['getTableProfile']}
+              getTableProfile={getTableProfile as unknown as TableTokenProfileCardProps['getTableProfile']}
               onChangeTableClick={() => setThemeModalOpen(true)}
               fillColumn
             />

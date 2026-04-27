@@ -94,7 +94,8 @@ export function TournamentCancelReclaim({
 
     try {
       // Custom token always uses V2 (bytes32) escrow
-      if (!TOURNAMENT_PRIZE_ESCROW_ADDRESS || TOURNAMENT_PRIZE_ESCROW_ADDRESS === ESCROW_ZERO) {
+      const escrowStr = String(TOURNAMENT_PRIZE_ESCROW_ADDRESS ?? '').toLowerCase();
+      if (!escrowStr || escrowStr === ESCROW_ZERO) {
         setError('Escrow contract not configured for this tournament type');
         return;
       }

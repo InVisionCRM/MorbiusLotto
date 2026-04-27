@@ -16,6 +16,7 @@ exports.POKER_MESSAGE_HANDLER_MAP = {
     poker_sit_back: 'handlePokerSitBack',
     poker_tournament_list: 'handlePokerTournamentList',
     poker_tournament_list_reclaimable: 'handlePokerTournamentListReclaimable',
+    poker_tournament_list_claimable: 'handlePokerTournamentListClaimable',
     poker_tournament_create: 'handlePokerTournamentCreate',
     poker_tournament_join: 'handlePokerTournamentJoin',
     poker_tournament_get_state: 'handlePokerTournamentGetState',

@@ -226,6 +226,37 @@ class WebSocketService {
             return { minBet: DEFAULT_BET_LIMITS.MIN_BET, maxBet: DEFAULT_BET_LIMITS.MAX_BET };
         }
     }
+    /**
+     * When at least one enabled single-player wager tier exists, require wagerTierId and use that tier's min/max.
+     * Otherwise use cached admin config limits (legacy).
+     */
+    async resolveSinglePlayerBetLimits(wagerTierId) {
+        let tiers;
+        try {
+            tiers = await this.dbService.listBlackjackSpWagerTiers(true);
+        }
+        catch (err) {
+            logger_1.logger.warn('blackjack_sp_wager_tiers unavailable; using admin config limits', { error: err });
+            return this.getBetLimits();
+        }
+        if (!tiers.length) {
+            return this.getBetLimits();
+        }
+        const id = typeof wagerTierId === 'string' ? wagerTierId.trim() : '';
+        if (!id) {
+            throw new Error('wagerTierId is required');
+        }
+        const tier = await this.dbService.getBlackjackSpWagerTierById(id, true);
+        if (!tier) {
+            throw new Error('Invalid or disabled wager tier');
+        }
+        const minBet = BigInt(tier.min_bet);
+        const maxBet = BigInt(tier.max_bet);
+        if (minBet > maxBet) {
+            throw new Error('Wager tier limits misconfigured');
+        }
+        return { minBet, maxBet };
+    }
     /** Returns false if over per-address limit; otherwise records the message and returns true. */
     checkPerAddressChatLimit(address, now) {
         const key = address.toLowerCase();
@@ -567,12 +598,25 @@ class WebSocketService {
                 return this.sendError(ws, 'Perfect Pairs bet too large. Maximum is 10,000 MORBIUS', message.requestId);
             }
             const totalStake = betAmount + perfectPairsBetAmount;
-            const { minBet, maxBet } = await this.getBetLimits();
+            let minBet;
+            let maxBet;
+            try {
+                const resolved = await this.resolveSinglePlayerBetLimits(payload.wagerTierId);
+                minBet = resolved.minBet;
+                maxBet = resolved.maxBet;
+            }
+            catch (e) {
+                const msg = e instanceof Error ? e.message : String(e);
+                return this.sendError(ws, msg, message.requestId);
+            }
             if (betAmount < minBet) {
                 return this.sendError(ws, `Bet amount too small. Minimum bet is ${minBet.toString()}`, message.requestId);
             }
             if (betAmount > maxBet) {
                 return this.sendError(ws, `Bet amount too large. Maximum bet is ${maxBet.toString()}`, message.requestId);
+            }
+            if (perfectPairsBetAmount > maxBet) {
+                return this.sendError(ws, `Perfect Pairs bet exceeds this table maximum (${maxBet.toString()} wei)`, message.requestId);
             }
             try {
                 // Balance pre-check remains a direct read here because create-game authority currently
@@ -1555,6 +1599,29 @@ class WebSocketService {
         catch (error) {
             logger_1.logger.error('Error listing reclaimable poker tournaments:', error);
             this.sendError(ws, error.message || 'Failed to list reclaimable tournaments', message.requestId);
+        }
+    }
+    /**
+     * Lists completed custom-token poker tournaments where the caller has unpaid
+     * winnings (no `prize_payout_tx_hash` recorded). Client confirms each via
+     * on-chain `unclaimedOf(bytes32, me)` before showing a Claim button.
+     */
+    async handlePokerTournamentListClaimable(ws, message) {
+        try {
+            if (!this.pokerTournamentService || !ws.playerAddress) {
+                return this.sendError(ws, 'Wallet required', message.requestId);
+            }
+            const tournaments = await this.pokerTournamentService
+                .listClaimableCustomTokenPokerTournaments(ws.playerAddress);
+            this.sendMessage(ws, {
+                type: 'poker_tournament_list_claimable',
+                payload: { tournaments },
+                requestId: message.requestId,
+            });
+        }
+        catch (error) {
+            logger_1.logger.error('Error listing claimable poker tournaments:', error);
+            this.sendError(ws, error.message || 'Failed to list claimable tournaments', message.requestId);
         }
     }
     async handlePokerTournamentCreate(ws, message) {
