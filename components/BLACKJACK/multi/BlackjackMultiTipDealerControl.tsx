@@ -19,7 +19,7 @@ export function BlackjackMultiTipDealerControl({
   if (!visible) return null;
 
   return (
-    <div className="pointer-events-auto absolute left-1/4 top-12 z-[12] flex -translate-x-1/2 flex-col items-center">
+    <div className="pointer-events-auto absolute left-1/2 top-12 z-[12] flex -translate-x-1/2 flex-col items-center">
       <IconButton
         variant="tip"
         size="tip"
