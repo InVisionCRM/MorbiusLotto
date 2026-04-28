@@ -141,6 +141,9 @@ export function PokerTable({ state, currentPlayerAddress, timeLeft, chatBubbleBy
   const lastConfettiHandRef = useRef<string | null>(null);
 
   const mySeatIndex = state.seats.findIndex(s => s.playerAddress === currentPlayerAddress);
+  // Feature flag retained for the seat-radial-only layout experiment. Kept off
+  // until the layout is reintroduced; refs at lines ~476/481/541 read it.
+  const hideSeatAvatars = false;
   const seatAnchors = useMemo(() => authoredSeatAnchors(state.seats.length), [state.seats.length]);
   const toDisplaySlot = (seatIdx: number) => (mySeatIndex >= 0 ? (seatIdx - mySeatIndex + state.seats.length) % state.seats.length : seatIdx);
 
