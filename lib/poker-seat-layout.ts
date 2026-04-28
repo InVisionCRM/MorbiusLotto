@@ -53,7 +53,7 @@ export const CHIP_ANCHOR_RING: SeatAnchor[] = [
   { fx: 0.20, fy: 0.60 },
   { fx: 0.20, fy: 0.40 },
   { fx: 0.35, fy: 0.35 },
-  { fx: 0.5, fy: 0.35 },  // 5 — top center
+  { fx: 0.5, fy: 0.25 },  // 5 — top center
   { fx: 0.70, fy: 0.35 },
   { fx: 0.80, fy: 0.40 },
   { fx: 0.80, fy: 0.60 },
