@@ -8,6 +8,7 @@ import {
   WPLS_MORBIUS_PAIR,
   TOKEN_DECIMALS,
 } from '@/lib/contracts'
+import { fetchDexScreenerProxy } from '@/lib/dexscreener-client'
 
 const ROUTER_ABI = [
   {
@@ -117,9 +118,7 @@ export function usePlsQuote({
 
     const fetchDexScreener = async () => {
       try {
-        const res = await fetch(
-          `https://api.dexscreener.com/latest/dex/pairs/pulsechain/${WPLS_MORBIUS_PAIR}`
-        )
+        const res = await fetchDexScreenerProxy('pairs', WPLS_MORBIUS_PAIR)
         if (!res.ok) return
         const data = await res.json()
         if (data.pairs?.[0]?.priceNative) {

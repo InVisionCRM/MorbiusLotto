@@ -53,8 +53,10 @@ export interface CardDisplayProps {
   small?: boolean;
   /** Show card back (for opponent hole cards) */
   faceDown?: boolean;
-  /** At showdown: highlight this card as part of the winning hand (cyan border) */
+  /** At showdown: highlight this card as part of the winning hand (brightness boost). */
   isWinningCard?: boolean;
+  /** At showdown: dim this card because it is not part of the winning hand. */
+  isDimmed?: boolean;
   className?: string;
   /** Stagger delay in seconds for deal animation */
   dealDelay?: number;
@@ -136,6 +138,7 @@ export function CardDisplay({
   small,
   faceDown,
   isWinningCard,
+  isDimmed,
   className = '',
   dealDelay = 0,
   variant,
@@ -217,9 +220,15 @@ export function CardDisplay({
           className={`relative ${sizeClasses} overflow-hidden rounded-md select-none`}
           style={{
             boxShadow: isWinningCard
-              ? `${cardShadow}, 0 10px 24px rgba(0,0,0,0.55), 0 0 0 4px rgba(34, 211, 238, 0.95), 0 0 26px rgba(34, 211, 238, 0.55)`
+              ? `${cardShadow}, 0 12px 28px rgba(0,0,0,0.6), 0 0 22px rgba(255, 245, 200, 0.35)`
               : cardShadow,
             transformStyle: 'preserve-3d',
+            filter: isWinningCard
+              ? 'brightness(1.18) saturate(1.12)'
+              : isDimmed
+              ? 'brightness(0.45) saturate(0.7)'
+              : undefined,
+            zIndex: isWinningCard ? 30 : undefined,
           }}
           transition={hasExit ? undefined : {
             delay: dealDelay,
@@ -238,14 +247,6 @@ export function CardDisplay({
             priority
           />
           <div className="absolute inset-0 pointer-events-none" style={{ boxShadow: innerGlow }} />
-          {isWinningCard && (
-            <div
-              className="absolute inset-0 pointer-events-none rounded-md"
-              style={{
-                boxShadow: 'inset 0 0 0 2px rgba(34, 211, 238, 0.55)',
-              }}
-            />
-          )}
         </motion.div>
       )}
     </div>

@@ -97,12 +97,13 @@ export function PokerActions({
 
   const [customAmount, setCustomAmount] = useState(() => formatAmount(minRaiseAmt));
 
+  // Snap the slider back to the minimum at the start of every action turn and
+  // whenever the min itself changes. Without this the slider carries over the
+  // previous turn's value (e.g. all-in) and players accidentally jam.
   useEffect(() => {
-    const current = safeParseAmount(customAmount);
-    if (current == null || current < minRaiseAmt) {
-      setCustomAmount(formatAmount(minRaiseAmt));
-    }
-  }, [minRaiseAmt]);
+    if (!canAct) return;
+    setCustomAmount(formatAmount(minRaiseAmt));
+  }, [canAct, minRaiseAmt]);
 
   // ── Derived values ─────────────────────────────────────────────────────────
   const parsed  = safeParseAmount(customAmount);

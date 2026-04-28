@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useCallback, useEffect, useRef, useState } from 'react';
+import { fetchDexScreenerProxy } from '@/lib/dexscreener-client';
 
 export interface SelectedPrc20Token {
   address: string;
@@ -74,7 +75,7 @@ export function Prc20TokenPicker({
 
       if (!logoUrl) {
         try {
-          const res = await fetch(`https://api.dexscreener.com/latest/dex/tokens/${address}`);
+          const res = await fetchDexScreenerProxy('tokens', address);
           const data = await res.json();
           const img = data.pairs?.[0]?.info?.imageUrl;
           if (img) logoUrl = img;

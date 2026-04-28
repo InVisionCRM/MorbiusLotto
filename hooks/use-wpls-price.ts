@@ -3,6 +3,7 @@
 import { useState, useEffect, useRef } from 'react'
 import { useReadContract } from 'wagmi'
 import { WPLS_MORBIUS_PAIR, WPLS_TOKEN_ADDRESS, MORBIUS_TOKEN_ADDRESS, TOKEN_DECIMALS } from '@/lib/contracts'
+import { fetchDexScreenerProxy } from '@/lib/dexscreener-client'
 
 // PulseX Pair ABI (V1/V2 compatible) - only the functions we need
 const PAIR_ABI = [
@@ -87,9 +88,7 @@ export function useWplsPrice() {
       setIsLoadingDex(true)
       setDexError(null)
       try {
-        const response = await fetch(
-          `https://api.dexscreener.com/latest/dex/pairs/pulsechain/${WPLS_MORBIUS_PAIR}`
-        )
+        const response = await fetchDexScreenerProxy('pairs', WPLS_MORBIUS_PAIR)
         if (!response.ok) {
           throw new Error(`DexScreener API error: ${response.status}`)
         }

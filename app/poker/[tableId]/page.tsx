@@ -39,6 +39,7 @@ import { PokerTournamentHUD } from '@/components/poker/tournament/PokerTournamen
 import { PokerTournamentResultsModal } from '@/components/poker/tournament/PokerTournamentResultsModal';
 import type { PokerTournamentCompletedPayload } from '@/lib/poker-tournament-completed';
 import { PokerActivityFeed } from '@/components/poker/PokerActivityFeed';
+import { VoiceChatPanel } from '@/components/poker/VoiceChatPanel';
 import { PokerTableLogoSponsorModal } from '@/components/poker/PokerTableLogoSponsorModal';
 import { Sidebar, SidebarBody } from '@/components/ui/sidebar';
 import {
@@ -703,6 +704,18 @@ export default function PokerTablePage() {
               },
             }}
           />}
+
+          {!isFullscreen && (
+            <div className="px-2 pt-1">
+              <VoiceChatPanel
+                wsClient={wsClient}
+                walletAddress={normalizedAddress}
+                tableId={tableId}
+                seated={Boolean(mySeat)}
+                enabled={Boolean(resolvedTournamentId)}
+              />
+            </div>
+          )}
 
           {/* Disconnected banner */}
           {disconnected && (

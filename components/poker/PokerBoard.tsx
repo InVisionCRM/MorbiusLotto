@@ -8,8 +8,10 @@ import { motion, AnimatePresence, useMotionValue, useSpring, useTransform } from
 export interface PokerBoardProps {
   communityCards: number[];
   pot: string;
-  /** At showdown: 5 card indices that form the winning hand (for cyan highlight) */
+  /** At showdown: 5 card indices that form the winning hand (highlighted via brightness) */
   winningCardIndices?: number[];
+  /** At showdown: dim non-winning community cards so winners stand out. */
+  dimNonWinning?: boolean;
   /** When true, wrap the pot in an element with data-tutorial-target="pot" for tutorial spotlight */
   dataTutorialTargetPot?: boolean;
 }
@@ -43,7 +45,7 @@ function AnimatedPotValue({ pot }: { pot: string }) {
   );
 }
 
-export function PokerBoard({ communityCards, pot, winningCardIndices, dataTutorialTargetPot }: PokerBoardProps) {
+export function PokerBoard({ communityCards, pot, winningCardIndices, dimNonWinning, dataTutorialTargetPot }: PokerBoardProps) {
   const potNum = useMemo(() => parsePotChips(pot), [pot]);
 
   const potInner = (
@@ -108,6 +110,7 @@ export function PokerBoard({ communityCards, pot, winningCardIndices, dataTutori
                     cardIndex={idx}
                     dealDelay={i * 0.12}
                     isWinningCard={winningCardIndices?.includes(idx)}
+                    isDimmed={dimNonWinning && !winningCardIndices?.includes(idx)}
                     showCenterRankSuitOverlay
                     variant="community"
                     dealFromOffset={dealFromOffset}
@@ -117,7 +120,7 @@ export function PokerBoard({ communityCards, pot, winningCardIndices, dataTutori
                 )}
                 {idx != null && (
                   <span
-                    className="font-jost-normal max-w-full truncate text-center text-[8px] leading-none tracking-tight sm:text-[9px] tabular-nums"
+                    className="font-jost font-bold max-w-full truncate text-center text-[14px] leading-tight tracking-tight sm:text-[12px] tabular-nums"
                     style={{ color: labelColor }}
                     aria-hidden
                   >

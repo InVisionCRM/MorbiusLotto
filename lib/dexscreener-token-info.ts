@@ -3,6 +3,8 @@
  * Trust-the-client: results flow into a sponsorship purchase or render directly.
  */
 
+import { fetchDexScreenerProxy } from '@/lib/dexscreener-client';
+
 export interface DexscreenerSocials {
   twitter: string | null;
   telegram: string | null;
@@ -34,7 +36,7 @@ export async function fetchDexScreenerTokenInfo(
   const address = rawAddress.trim().toLowerCase();
   if (!ETH_ADDR_RE.test(address)) return null;
 
-  const res = await fetch(`https://api.dexscreener.com/latest/dex/tokens/${address}`, { signal });
+  const res = await fetchDexScreenerProxy('tokens', address, { signal });
   if (!res.ok) return null;
   const data = await res.json();
   const pairs: any[] = Array.isArray(data?.pairs) ? data.pairs : [];

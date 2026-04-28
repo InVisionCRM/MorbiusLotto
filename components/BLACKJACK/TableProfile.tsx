@@ -3,6 +3,7 @@
 import React, { useEffect, useState } from 'react'
 import { ExternalLink } from 'lucide-react'
 import { CopyButton } from '@/components/ui/copy-button'
+import { fetchDexScreenerProxy } from '@/lib/dexscreener-client'
 
 const SWAP_PAGE_URL = '/swap'
 const VIEW_ON_MORBIUS_BASE = 'https://scan.morbius.io/geicko?address='
@@ -82,7 +83,7 @@ export function TableProfile({
     let cancelled = false
     setLoading(true)
     setError(null)
-    fetch(`https://api.dexscreener.com/latest/dex/tokens/${tokenAddress}`)
+    fetchDexScreenerProxy('tokens', tokenAddress)
       .then((res) => {
         if (!res.ok) throw new Error(`DexScreener ${res.status}`)
         return res.json()

@@ -164,7 +164,10 @@ function chevtekStreetToPoker(round: BettingRound | undefined, hasWinners: boole
 // Rake configuration (cash games only — tournaments use virtual chips)
 // ---------------------------------------------------------------------------
 const RAKE_PERCENT = 5; // 5% of each pot
-const SHOWDOWN_DELAY_MS = 15_000;
+// Client plays a staged reveal animation (~5–7s for all-in run-outs) before the
+// winner medallion mounts. Pad the delay so the medallion still gets its full
+// time on screen after the reveal finishes.
+const SHOWDOWN_DELAY_MS = 22_000;
 const SHOWDOWN_DELAY_SECONDS = SHOWDOWN_DELAY_MS / 1000;
 
 // ---------------------------------------------------------------------------
@@ -960,7 +963,10 @@ export class PokerGameService {
         }
         const toCallNum = maxContrib > myContrib ? maxContrib - myContrib : 0;
         toCall = String(toCallNum);
-        minRaise = String(toCallNum + minRaiseIncrement);
+        // Standard No-Limit min-raise: current high bet + last raise increment
+        // (NOT toCall + increment — that under-counts when the actor has
+        // partial chips already in the pot, e.g. SB/BB facing a raise).
+        minRaise = String(maxContrib + minRaiseIncrement);
       }
 
       // Recent actions (oldest → newest). We return the last 40 so the client's
@@ -1644,12 +1650,33 @@ export class PokerGameService {
         const amtChips = parseAmountChips();
         if (amtChips === 0 && actor.stackSize === 0) throw new Error('You are already all-in');
         actor.betAction(amtChips);
+        // Chevtek only updates `table.lastRaise` when raising an existing bet,
+        // so an opening bet on a new street leaves `lastRaise` stale from the
+        // previous street. Standard No-Limit rule: an opening bet sets the
+        // raise increment to the bet size, so the next minimum raise is
+        // bet + bet (e.g. open 75 → min raise to 150).
+        table.lastRaise = amtChips;
         actionAmountDb = String(Math.max(0, Math.round(amtChips)));
         break;
       }
       case 'raise': {
         const amtChips = parseAmountChips();
         if (amtChips === 0 && actor.stackSize === 0) throw new Error('You are already all-in');
+        // Enforce min-raise *before* chevtek, because its `raiseAction` silently
+        // accepts undersized raises whenever `amount >= stackSize` (treating
+        // them as all-in-for-less). We only want that exception when the actor
+        // actually goes all-in, not when the requested amount happens to match
+        // their stack by coincidence with chips left over.
+        const currentBetChips = table.currentBet ?? 0;
+        const lastRaiseChips = table.lastRaise ?? bbChips;
+        const minRaiseIncrement = Math.max(lastRaiseChips, bbChips);
+        const minRaiseTotal = currentBetChips + minRaiseIncrement;
+        const isAllIn = amtChips >= actor.stackSize;
+        if (!isAllIn && amtChips < minRaiseTotal) {
+          throw new Error(
+            `Raise must be at least ${minRaiseTotal} (currentBet ${currentBetChips} + ${minRaiseIncrement}).`
+          );
+        }
         actor.raiseAction(amtChips);
         actionAmountDb = String(Math.max(0, Math.round(amtChips)));
         break;

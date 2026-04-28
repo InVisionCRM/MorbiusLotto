@@ -136,3 +136,33 @@ export function cardAnchorForDisplaySlot(seatCount: number, displaySlot: number)
   const cards = authoredCardAnchors(seatCount);
   return cards[displaySlot] ?? { ...POKER_POT_ANCHOR };
 }
+
+/**
+ * Dealer-button anchors: sit between each seat and its bet-stack, ~30% of the
+ * way from the seat toward the chip anchor — close to the avatar like a real
+ * dealer button next to a player.
+ */
+export const DEALER_BUTTON_SEAT_TO_CHIP_T = 0.30;
+
+export const DEALER_BUTTON_ANCHOR_RING: SeatAnchor[] = SEAT_ANCHOR_RING.map((seat, i) => {
+  const chip = CHIP_ANCHOR_RING[i];
+  const t = DEALER_BUTTON_SEAT_TO_CHIP_T;
+  return {
+    fx: seat.fx + (chip.fx - seat.fx) * t,
+    fy: seat.fy + (chip.fy - seat.fy) * t,
+  };
+});
+
+export function authoredDealerButtonAnchors(seatCount: number): SeatAnchor[] {
+  if (seatCount <= 0) return [];
+  return Array.from({ length: seatCount }, (_, displaySlot) => {
+    const ri = ringIndexForDisplaySlot(displaySlot, seatCount);
+    const a = DEALER_BUTTON_ANCHOR_RING[ri];
+    return { fx: a.fx, fy: a.fy };
+  });
+}
+
+export function dealerButtonAnchorForDisplaySlot(seatCount: number, displaySlot: number): SeatAnchor {
+  const list = authoredDealerButtonAnchors(seatCount);
+  return list[displaySlot] ?? { ...POKER_POT_ANCHOR };
+}

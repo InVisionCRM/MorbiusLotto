@@ -25,6 +25,7 @@ import { morbiusStakingAbi } from '@/abi/morbius-staking'
 import { morbiusLPStakingAbi } from '@/abi/morbius-lp-staking'
 import { ERC20_ABI } from '@/abi/erc20'
 import { useTokenBalance } from '@/hooks/use-token'
+import { fetchDexScreenerProxy } from '@/lib/dexscreener-client'
 import { DottedGlowBackground } from '@/components/ui/dotted-glow-background'
 import { pulsechain } from '@/lib/chains'
 import { toast } from 'sonner'
@@ -315,9 +316,7 @@ export default function ClaimPage() {
   useEffect(() => {
     const fetchPrice = async () => {
       try {
-        const res = await fetch(
-          `https://api.dexscreener.com/latest/dex/pairs/pulsechain/${PLP_ADDR.toLowerCase()}`,
-        )
+        const res = await fetchDexScreenerProxy('pairs', PLP_ADDR.toLowerCase())
         const data = await res.json()
         const pair = data?.pairs?.[0] ?? data?.pair
         if (!pair) return

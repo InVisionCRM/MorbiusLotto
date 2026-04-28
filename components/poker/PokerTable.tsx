@@ -2,7 +2,6 @@
 
 import React, { useRef, useState, useEffect, useMemo } from 'react';
 import { toBigIntSafe } from '@/lib/safe-bigint';
-import { formatChips } from '@/lib/format-poker-chips';
 import { motion, AnimatePresence } from 'framer-motion';
 import { PokerSeat, PokerChipStack } from './PokerSeat';
 import { PokerBoard } from './PokerBoard';
@@ -10,12 +9,12 @@ import { CardDisplay } from './CardDisplay';
 import type { PokerTableState as TableState } from '@/lib/websocket-client';
 import { BackgroundBeams, type BeamColorPalette } from '@/components/ui/background-beams';
 import { usePokerTableEffect } from '@/hooks/use-poker-table-effect';
-import { PokerWinnerNotificationCard } from './PokerWinnerNotificationCard';
 import { bestHand, handRankToName, evaluateHoleCards } from '@/lib/poker-hand-eval';
 import {
   authoredSeatAnchors,
   betChipAnchorForDisplaySlot,
   cardAnchorForDisplaySlot,
+  dealerButtonAnchorForDisplaySlot,
   POKER_POT_ANCHOR,
   ringIndexForDisplaySlot,
   winningPotChipAnchorForDisplaySlot,
@@ -23,6 +22,7 @@ import {
 import confetti from 'canvas-confetti';
 import { FloatingTableLogo } from './FloatingTableLogo';
 import { PokerRailActingHighlight } from './PokerRailActingHighlight';
+import { DealerButton } from './DealerButton';
 
 const MORBIUS_DEFAULT_FELT_LOGO = '/morbius/MorbiusLogo-2.svg';
 
@@ -34,14 +34,16 @@ const BEAM_PALETTES: BeamColorPalette[] = [
   { primary: '#D4A82A', accent: '#B08820', tail: '#8A6010' }, // gold trim tones (matches table)
 ];
 
-function shortAddr(addr: string): string {
-  if (!addr || addr.length < 10) return addr;
-  return `${addr.slice(0, 6)}…${addr.slice(-4)}`;
-}
-
 const POT_ANCHOR = POKER_POT_ANCHOR;
 const SHOWDOWN_CARD_PULL_RATIO = 0.18;
 const SHOWDOWN_CARD_PULL_MAX_PX = 70;
+
+// Staged showdown reveal — keeps the moment cinematic instead of dumping
+// every card and the winner medallion in a single frame.
+const REVEAL_COMMUNITY_STEP_MS = 850;   // gap between turn → river when streets were skipped
+const REVEAL_BEFORE_HANDS_MS = 600;     // beat after final community card before hole cards flip
+const REVEAL_HAND_STEP_MS = 750;        // gap between successive opponent hole-card reveals
+const REVEAL_BEFORE_MEDALLION_MS = 700; // beat after last hole card before medallion appears
 
 // Seat base geometry: `lib/poker-seat-layout.ts` (SEAT_ANCHOR_RING + authoredSeatAnchors).
 
@@ -178,20 +180,120 @@ export function PokerTable({ state, currentPlayerAddress, timeLeft, chatBubbleBy
   const firstWinner = isShowdownWithWinners ? hand!.winners![0] : null;
   const firstWinnerAddr = firstWinner?.address ?? null;
   const isCurrentPlayerWinner = firstWinnerAddr && currentPlayerAddress && firstWinnerAddr === currentPlayerAddress.toLowerCase();
-  const firstWinnerSeat = firstWinnerAddr ? state.seats.find((s) => s.playerAddress === firstWinnerAddr) : null;
-  const winnerAmount = firstWinner?.amount ?? hand?.pot ?? '0';
-  const winnerHandName = firstWinner?.handName;
-  const winningCardIndices = firstWinner?.winningCardIndices ?? [];
-  const firstWinnerAddrLower = firstWinnerAddr?.toLowerCase() ?? null;
-  const winnerHoleCards = firstWinnerAddrLower ? hand?.showdownHands?.[firstWinnerAddrLower] ?? [] : [];
-  const splitWinner = isShowdownWithWinners
-    ? hand!.winners!.find((w) => w.address.toLowerCase() !== firstWinnerAddrLower)
-    : undefined;
-  const splitSeat = splitWinner ? state.seats.find((s) => s.playerAddress === splitWinner.address) : null;
+  // Combined winning card indices across all winners (split pots): every card
+  // that contributed to *any* winning hand should highlight bright.
+  const winningCardIndices = useMemo(() => {
+    if (!isShowdownWithWinners) return [] as number[];
+    const set = new Set<number>();
+    for (const w of hand!.winners ?? []) {
+      for (const c of w.winningCardIndices ?? []) set.add(c);
+    }
+    return Array.from(set);
+  }, [isShowdownWithWinners, hand?.winners]);
   const winnerAddressSet = new Set((isShowdownWithWinners ? hand!.winners! : []).map((w) => w.address.toLowerCase()));
 
+  // ── Staged showdown reveal ──────────────────────────────────────────────
+  // The server can flip straight to `street === 'showdown'` with the full
+  // board + every hand revealed (especially on all-in run-outs where chevtek
+  // auto-resolves all remaining streets in a single tick). Replay it here as
+  // a cinematic sequence: missing community cards → opponent hole cards
+  // (loser→winner) → winner medallion. On reconnect mid-showdown, jump to
+  // the final state instead of replaying.
+  const preShowdownCommunityCountRef = useRef(0);
   useEffect(() => {
-    if (!isCurrentPlayerWinner || !hand?.handId) return;
+    if (hand && hand.street !== 'showdown') {
+      preShowdownCommunityCountRef.current = hand.communityCards?.length ?? 0;
+    }
+  }, [hand?.handId, hand?.street, hand?.communityCards?.length]);
+
+  const totalCommunityCount = hand?.communityCards?.length ?? 0;
+  const showdownAddrsAll = useMemo(
+    () => (hand?.showdownHands ? Object.keys(hand.showdownHands) : []),
+    [hand?.showdownHands],
+  );
+  // Reveal order: non-winners first (each in turn), winners last for max suspense.
+  const revealOrder = useMemo(() => {
+    const winnerLower = new Set((hand?.winners ?? []).map((w) => w.address.toLowerCase()));
+    const losers = showdownAddrsAll.filter((a) => !winnerLower.has(a.toLowerCase()));
+    const winners = showdownAddrsAll.filter((a) => winnerLower.has(a.toLowerCase()));
+    return [...losers, ...winners];
+  }, [showdownAddrsAll, hand?.winners]);
+
+  const [revealedCommunityCount, setRevealedCommunityCount] = useState(0);
+  const [revealedHandAddrs, setRevealedHandAddrs] = useState<Set<string>>(new Set());
+  const [medallionReady, setMedallionReady] = useState(false);
+  const revealHandIdRef = useRef<string | null>(null);
+
+  useEffect(() => {
+    if (!isShowdownWithWinners || !hand?.handId) {
+      // Reset whenever we leave the showdown state (new hand, etc).
+      if (revealHandIdRef.current !== null) {
+        revealHandIdRef.current = null;
+        setRevealedCommunityCount(0);
+        setRevealedHandAddrs(new Set());
+        setMedallionReady(false);
+      }
+      return;
+    }
+    if (revealHandIdRef.current === hand.handId) return;
+    const isFirstObservation = revealHandIdRef.current === null;
+    revealHandIdRef.current = hand.handId;
+
+    // Reconnect heuristic: if this is the very first hand we're seeing and it
+    // arrives already in showdown, we likely joined mid-resolve — jump to end.
+    const isReconnect = isFirstObservation && preShowdownCommunityCountRef.current === 0;
+    if (isReconnect) {
+      setRevealedCommunityCount(totalCommunityCount);
+      setRevealedHandAddrs(new Set(showdownAddrsAll.map((a) => a.toLowerCase())));
+      setMedallionReady(true);
+      return;
+    }
+
+    const startCommunity = Math.min(preShowdownCommunityCountRef.current, totalCommunityCount);
+    setRevealedCommunityCount(startCommunity);
+    setRevealedHandAddrs(new Set());
+    setMedallionReady(false);
+
+    const timeouts: ReturnType<typeof setTimeout>[] = [];
+    let cursor = 0;
+
+    // Stage 1: dribble missing community cards.
+    for (let n = startCommunity + 1; n <= totalCommunityCount; n += 1) {
+      cursor += REVEAL_COMMUNITY_STEP_MS;
+      const target = n;
+      timeouts.push(setTimeout(() => setRevealedCommunityCount(target), cursor));
+    }
+
+    // Stage 2: beat, then reveal opponent hole cards one-by-one.
+    cursor += REVEAL_BEFORE_HANDS_MS;
+    for (const addr of revealOrder) {
+      const lower = addr.toLowerCase();
+      cursor += REVEAL_HAND_STEP_MS;
+      timeouts.push(
+        setTimeout(() => {
+          setRevealedHandAddrs((prev) => {
+            const next = new Set(prev);
+            next.add(lower);
+            return next;
+          });
+        }, cursor),
+      );
+    }
+
+    // Stage 3: brief beat, then mount the winner medallion.
+    cursor += REVEAL_BEFORE_MEDALLION_MS;
+    timeouts.push(setTimeout(() => setMedallionReady(true), cursor));
+
+    return () => {
+      for (const t of timeouts) clearTimeout(t);
+    };
+  }, [isShowdownWithWinners, hand?.handId, totalCommunityCount, showdownAddrsAll, revealOrder]);
+
+  // What the rest of the component should treat as "the medallion moment".
+  const showFinalShowdownVisuals = !!isShowdownWithWinners && medallionReady;
+
+  useEffect(() => {
+    if (!showFinalShowdownVisuals || !isCurrentPlayerWinner || !hand?.handId) return;
     if (lastConfettiHandRef.current === hand.handId) return;
     lastConfettiHandRef.current = hand.handId;
     const gold = ['#FFD700', '#FFC107', '#F5D060', '#FFFFFF', '#FFF8DC'];
@@ -202,7 +304,7 @@ export function PokerTable({ state, currentPlayerAddress, timeLeft, chatBubbleBy
     shoot();
     const t = setTimeout(shoot, 350);
     return () => clearTimeout(t);
-  }, [isCurrentPlayerWinner, hand?.handId]);
+  }, [showFinalShowdownVisuals, isCurrentPlayerWinner, hand?.handId]);
 
   useEffect(() => {
     setStickySeatActions(hand?.streetActions ? { ...hand.streetActions } : {});
@@ -310,13 +412,21 @@ export function PokerTable({ state, currentPlayerAddress, timeLeft, chatBubbleBy
   const seatProps = (idx: number) => {
     const seat = state.seats[idx];
     const inHand = !!hand && seat.playerAddress && !seat.folded;
-    const isWinnerSeat = !!firstWinnerAddr && seat.playerAddress === firstWinnerAddr;
-    const isHandWinnerSeat = !!seat.playerAddress && isShowdownWithWinners && winnerAddressSet.has(seat.playerAddress.toLowerCase());
-    const seatShowdownCards =
-      hand?.street === 'showdown' &&
-      !!seat.playerAddress &&
-      !seat.folded &&
-      !!hand?.showdownHands?.[seat.playerAddress]?.length;
+    const isHandWinnerSeat = !!seat.playerAddress && showFinalShowdownVisuals && winnerAddressSet.has(seat.playerAddress.toLowerCase());
+    // For splits each winner highlights its own winning cards.
+    const seatWinnerEntry = seat.playerAddress
+      ? hand?.winners?.find((w) => w.address.toLowerCase() === seat.playerAddress!.toLowerCase())
+      : undefined;
+    const seatWinningCardIndices = seatWinnerEntry?.winningCardIndices ?? [];
+    // Gate showdown hole-card reveal on the staged sequence: only seats whose
+    // address has been "flipped" so far show face-up cards.
+    const seatAddrLower = seat.playerAddress?.toLowerCase();
+    const isSeatRevealed = !!seatAddrLower && revealedHandAddrs.has(seatAddrLower);
+    const showdownCardsForSeat =
+      hand?.street === 'showdown' && !!seat.playerAddress && !seat.folded && isSeatRevealed
+        ? hand?.showdownHands?.[seat.playerAddress]
+        : undefined;
+    const seatShowdownCards = !!showdownCardsForSeat?.length;
     const displaySlot = toDisplaySlot(idx);
     const serverPos = seat.position ?? idx;
     const anchorFrac = getRenderedSeatAnchor(displaySlot, serverPos);
@@ -342,11 +452,11 @@ export function PokerTable({ state, currentPlayerAddress, timeLeft, chatBubbleBy
         seat.folded
           ? undefined
           : mySeatIndex === idx
-          ? (state.myHoleCards ?? hand?.showdownHands?.[seat.playerAddress!] ?? undefined)
-          : (hand?.showdownHands?.[seat.playerAddress!] ?? undefined),
+          ? (state.myHoleCards ?? showdownCardsForSeat ?? undefined)
+          : (showdownCardsForSeat ?? undefined),
       isCurrentPlayer: idx === mySeatIndex,
-      showCardBacks: !!(inHand && idx !== mySeatIndex && !hand?.showdownHands?.[seat.playerAddress!]),
-      winningCardIndices: isWinnerSeat ? winningCardIndices : undefined,
+      showCardBacks: !!(inHand && idx !== mySeatIndex && !showdownCardsForSeat),
+      winningCardIndices: isHandWinnerSeat ? seatWinningCardIndices : undefined,
       isHandWinner: isHandWinnerSeat,
       lastAction: stickySeatActions[idx] ?? null,
       callAmount: actingPosition === idx && hand?.toCall ? hand.toCall : null,
@@ -373,7 +483,7 @@ export function PokerTable({ state, currentPlayerAddress, timeLeft, chatBubbleBy
       handName:
         idx === mySeatIndex && selfHandName
           ? selfHandName
-          : (seat.playerAddress && showdownHandNames[seat.playerAddress]) || undefined,
+          : (isSeatRevealed && seat.playerAddress && showdownHandNames[seat.playerAddress]) || undefined,
       cardDealFromOffset: anchorFrac
         ? { dx: (POT_ANCHOR.fx - anchorFrac.fx) * dims.w, dy: (POT_ANCHOR.fy - anchorFrac.fy) * dims.h }
         : undefined,
@@ -480,6 +590,7 @@ export function PokerTable({ state, currentPlayerAddress, timeLeft, chatBubbleBy
       <PokerRailActingHighlight
         visible={showRailActingHighlight}
         activeRingIndex={actingRingIndex}
+        tableDims={dims}
       />
 
       {/* Dealer button holder bump — top center */}
@@ -497,17 +608,27 @@ export function PokerTable({ state, currentPlayerAddress, timeLeft, chatBubbleBy
         }}
       />
 
-      {/* Community board — center of felt */}
+      {/* Community board — center of felt. At showdown, lift above the dim
+          wash so winning cards (which carry their own brightness boost) and
+          dimmed non-winning cards are stacked above the overlay. */}
       <div
         className="absolute flex items-center justify-center"
-        style={{ left: '20%', top: '41%', width: '60%', height: '22%', zIndex: 25 }}
+        style={{
+          left: '20%', top: '41%', width: '60%', height: '22%',
+          zIndex: showFinalShowdownVisuals ? 29 : 25,
+        }}
         {...(tutorialTargets ? { 'data-tutorial-target': 'community-cards' } : {})}
       >
         {hand ? (
           <PokerBoard
-            communityCards={hand.communityCards}
+            communityCards={
+              isShowdownWithWinners
+                ? hand.communityCards.slice(0, revealedCommunityCount)
+                : hand.communityCards
+            }
             pot={hand.pot}
-            winningCardIndices={winningCardIndices}
+            winningCardIndices={showFinalShowdownVisuals ? winningCardIndices : []}
+            dimNonWinning={showFinalShowdownVisuals}
             dataTutorialTargetPot={dataTutorialTargetPot}
           />
         ) : (
@@ -520,25 +641,25 @@ export function PokerTable({ state, currentPlayerAddress, timeLeft, chatBubbleBy
         )}
       </div>
 
-      <PokerWinnerNotificationCard
-        isOpen={!!(isShowdownWithWinners && firstWinnerAddr && hand)}
-        handId={hand?.handId ?? 'debug-hand'}
-        winnerName={firstWinnerSeat?.displayName || (isCurrentPlayerWinner ? 'You' : shortAddr(firstWinnerAddr ?? '')) || 'DebugPlayer'}
-        winnerAmount={winnerAmount || '1000000000000000000000'}
-        winnerHandName={winnerHandName || 'Full House'}
-        winnerAddress={firstWinnerAddr ?? undefined}
-        winnerAvatarUrl={firstWinnerSeat?.profileImageUrl}
-        winnerHoleCards={winnerHoleCards}
-        communityCards={hand?.communityCards ?? []}
-        winningCardIndices={winningCardIndices}
-        splitLabel={splitWinner ? `Split: ${splitSeat?.displayName || shortAddr(splitWinner.address)}` : undefined}
-        splitAmount={splitWinner ? `+${formatChips(splitWinner.amount)}` : undefined}
-        formatChips={formatChips}
-      />
+      {/* Showdown spotlight — dim wash that the winning seat(s) and the
+          winning community + hole cards punch through via higher z-index. */}
+      <AnimatePresence>
+        {showFinalShowdownVisuals && (
+          <motion.div
+            key="showdown-dim"
+            className="absolute inset-0 pointer-events-none"
+            style={{ zIndex: 28, background: 'rgba(0,0,0,0.55)' }}
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: 0.45, ease: 'easeOut' }}
+          />
+        )}
+      </AnimatePresence>
 
       {/* Chips sliding from pot to winner at showdown */}
       <AnimatePresence>
-        {isShowdownWithWinners && hand?.pot && winnerPotChipAnchor && (
+        {showFinalShowdownVisuals && hand?.pot && winnerPotChipAnchor && (
           <motion.div
             key={`chips-to-winner-${hand.handId}`}
             className="absolute z-30 pointer-events-none"
@@ -658,7 +779,10 @@ export function PokerTable({ state, currentPlayerAddress, timeLeft, chatBubbleBy
         if (idx === mySeatIndex) return null;
         if (!seat.playerAddress || seat.folded) return null;
         const inHand = !!hand;
-        const showdownCards = hand?.showdownHands?.[seat.playerAddress] ?? null;
+        const seatLower = seat.playerAddress.toLowerCase();
+        const seatRevealed = revealedHandAddrs.has(seatLower);
+        const showdownCards =
+          seatRevealed ? hand?.showdownHands?.[seat.playerAddress] ?? null : null;
         const showBacks = inHand && !showdownCards;
         if (!showBacks && !showdownCards?.length) return null;
         const displaySlot = toDisplaySlot(idx);
@@ -668,17 +792,21 @@ export function PokerTable({ state, currentPlayerAddress, timeLeft, chatBubbleBy
           dx: (POT_ANCHOR.fx - fx) * dims.w,
           dy: (POT_ANCHOR.fy - fy) * dims.h,
         };
+        const seatLowerForZ = seat.playerAddress.toLowerCase();
+        const isWinnerHoleCards =
+          showFinalShowdownVisuals && winnerAddressSet.has(seatLowerForZ);
         return (
           <div
             key={`cards-${idx}`}
             data-testid={`poker-seat-cards-${idx}`}
-            className="absolute pointer-events-none z-10"
+            className="absolute pointer-events-none"
             style={{
               left: `${fx * 100}%`,
               top: `${fy * 100}%`,
               transform: 'translate(-50%, -50%)',
               width: 'clamp(58px, 14vw, 74px)',
               height: 'clamp(50px, 12vw, 66px)',
+              zIndex: isWinnerHoleCards ? 30 : 10,
             }}
           >
             {[0, 1].map((ci) => (
@@ -705,6 +833,17 @@ export function PokerTable({ state, currentPlayerAddress, timeLeft, chatBubbleBy
         );
       })}
 
+      {/* Dealer button — physical disc that slides between dealers each hand. */}
+      {(() => {
+        const dealerIdx = state.seats.findIndex((s) => s.isDealer && s.playerAddress);
+        if (dealerIdx < 0) return null;
+        const displaySlot = mySeatIndex >= 0
+          ? (dealerIdx - mySeatIndex + state.seats.length) % state.seats.length
+          : dealerIdx;
+        const { fx, fy } = dealerButtonAnchorForDisplaySlot(state.seats.length, displaySlot);
+        return <DealerButton fx={fx} fy={fy} />;
+      })()}
+
       {/* Seats */}
       {state.seats.map((_, idx) => {
         const displaySlot = mySeatIndex >= 0
@@ -713,16 +852,22 @@ export function PokerTable({ state, currentPlayerAddress, timeLeft, chatBubbleBy
         const serverPos = state.seats[idx]?.position ?? idx;
         const rendered = getRenderedSeatAnchor(displaySlot, serverPos);
         if (!rendered) return null;
+        const seat = state.seats[idx];
+        const isWinnerSeatPunchThrough =
+          showFinalShowdownVisuals &&
+          !!seat?.playerAddress &&
+          winnerAddressSet.has(seat.playerAddress.toLowerCase());
         return (
           <div
             key={idx}
-            className="absolute z-20"
+            className="absolute"
             data-seat-slot={displaySlot}
             data-seat-position={serverPos}
             style={{
               left: `${rendered.fx * 100}%`,
               top:  `${rendered.fy * 100}%`,
               transform: 'translate(-50%, -50%)',
+              zIndex: isWinnerSeatPunchThrough ? 30 : 20,
             }}
             {...(tutorialTargets ? { 'data-tutorial-target': `seat-${displaySlot}` } : {})}
           >

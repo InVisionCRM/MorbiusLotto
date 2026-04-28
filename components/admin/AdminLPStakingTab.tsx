@@ -18,6 +18,7 @@ import { MERKLE_CLAIM_LP_ADDRESS, MORBIUS_TOKEN_ADDRESS } from '@/lib/contracts'
 import { pulsechain } from '@/lib/chains';
 import { getApiUrlOptional } from '@/lib/api-urls';
 import { SNAPSHOT_EXCLUSION_CONTRACTS } from '@/lib/snapshot-exclusions';
+import { fetchDexScreenerProxy } from '@/lib/dexscreener-client';
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
@@ -654,7 +655,7 @@ export default function AdminLPStakingTab() {
     setSearchError('');
     setDiscoveredPairs(null);
     try {
-      const resp = await fetch(`https://api.dexscreener.com/latest/dex/tokens/${MORBIUS_ADDR}`);
+      const resp = await fetchDexScreenerProxy('tokens', MORBIUS_ADDR);
       if (!resp.ok) throw new Error(`DexScreener returned ${resp.status}`);
       const data = await resp.json() as {
         pairs?: Array<{

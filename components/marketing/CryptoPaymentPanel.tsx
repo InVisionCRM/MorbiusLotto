@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react'
 import { ChevronRight, AlertCircle, Loader2, MessagesSquare } from 'lucide-react'
 import { CopyButton as ClipboardCopyButton } from '@/components/ui/copy-button'
 import { WPLS_TOKEN_ADDRESS } from '@/lib/contracts'
+import { fetchDexScreenerProxy } from '@/lib/dexscreener-client'
 
 // ── Configure your payment wallet here ──────────────────────────────────────
 export const PAYMENT_WALLET = '0xEdEe8515897281CcF27999a121A90d76E3Cde016'
@@ -26,7 +27,7 @@ export function usePlsUsdPrice() {
     let cancelled = false
 
     const fetchPrice = () => {
-      fetch(`https://api.dexscreener.com/latest/dex/tokens/${WPLS_TOKEN_ADDRESS}`)
+      fetchDexScreenerProxy('tokens', WPLS_TOKEN_ADDRESS)
         .then((r) => r.json())
         .then((data) => {
           if (cancelled) return

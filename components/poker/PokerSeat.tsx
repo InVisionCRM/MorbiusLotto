@@ -87,17 +87,9 @@ const AVATAR_SIZE_PX = 84;
 const ROLE_CRESCENT_HEIGHT_PX = Math.round(AVATAR_SIZE_PX * 0.28);
 
 const ROLE_CRESCENT_STYLE = {
-  DEALER: { bg: '#f4e7b6', text: '#1a1a1a', rim: '#d4af37' },
   SB: { bg: '#1d4ed8', text: '#ffffff', rim: '#60a5fa' },
   BB: { bg: '#b45309', text: '#ffffff', rim: '#fbbf24' },
-  'DEALER/SB': { bg: '#1f2a44', text: '#f8fafc', rim: '#a7b6d9' },
 } as const;
-const WINNER_CRESCENT_STYLE = {
-  bg: '#14532d',
-  text: '#ecfccb',
-  rim: '#22c55e',
-} as const;
-
 // ── Circular timer ring around avatar ──────────────────────────────────────
 
 function CircularTimerRing({ size, timeLeft, maxTime }: { size: number; timeLeft: number; maxTime: number }) {
@@ -413,15 +405,14 @@ export function PokerSeat({ seat, index, holeCards, isCurrentPlayer, showCardBac
   const activeEmotion: Emotion = hasMenuOpen
     ? 'neutral'
     : (propsOverlayEmotion ?? localEmotion ?? (isFoldCryActive ? 'sad' : avatarEmotion));
+  // Dealer position is shown via the physical dealer button on the felt
+  // (`DealerButton` rendered by `PokerTable`), not the avatar crescent. Only
+  // SB / BB still get a crescent.
   const roleLabel: keyof typeof ROLE_CRESCENT_STYLE | null = seat.isBigBlind
     ? 'BB'
-    : (seat.isDealer && seat.isSmallBlind)
-      ? 'DEALER/SB'
-      : seat.isDealer
-        ? 'DEALER'
-        : seat.isSmallBlind
-          ? 'SB'
-          : null;
+    : seat.isSmallBlind
+      ? 'SB'
+      : null;
   const roleStyle = roleLabel ? ROLE_CRESCENT_STYLE[roleLabel] : null;
 
   const longPressTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -782,32 +773,6 @@ export function PokerSeat({ seat, index, holeCards, isCurrentPlayer, showCardBac
                 {isCurrentPlayer && (
                   <div className="pointer-events-none absolute inset-0 rounded-full bg-black/0 transition-colors hover:bg-black/20" />
                 )}
-                {isHandWinner && (
-                  <div
-                    className="pointer-events-none absolute left-1/2 top-0 -translate-x-1/2 flex items-center justify-center"
-                    style={{
-                      width: '84%',
-                      height: Math.max(16, Math.round(ROLE_CRESCENT_HEIGHT_PX * 0.78)),
-                      borderRadius: '42px 42px 9999px 9999px / 18px 18px 12px 12px',
-                      background: WINNER_CRESCENT_STYLE.bg,
-                      borderBottom: `1px solid ${WINNER_CRESCENT_STYLE.rim}`,
-                      boxShadow:
-                        'inset 0 2px 4px rgba(255,255,255,0.08), inset 0 -7px 12px rgba(0,0,0,0.85), 0 1px 4px rgba(0,0,0,0.55)',
-                    }}
-                  >
-                    <span
-                      style={{
-                        color: WINNER_CRESCENT_STYLE.text,
-                        fontSize: 9,
-                        fontWeight: 900,
-                        letterSpacing: '0.5px',
-                        lineHeight: 1,
-                      }}
-                    >
-                      WINNER
-                    </span>
-                  </div>
-                )}
                 {roleLabel && roleStyle && (
                   <div
                     className="pointer-events-none absolute left-1/2 bottom-0 -translate-x-1/2 flex items-center justify-center"
@@ -824,9 +789,9 @@ export function PokerSeat({ seat, index, holeCards, isCurrentPlayer, showCardBac
                     <span
                       style={{
                         color: roleStyle.text,
-                        fontSize: roleLabel === 'DEALER/SB' ? 8 : roleLabel === 'DEALER' ? 9 : 11,
+                        fontSize: 11,
                         fontWeight: 900,
-                        letterSpacing: roleLabel === 'DEALER/SB' ? '-0.4px' : roleLabel === 'DEALER' ? '-0.2px' : '0.2px',
+                        letterSpacing: '0.2px',
                         lineHeight: 1,
                       }}
                     >

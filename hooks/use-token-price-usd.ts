@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { MORBIUS_TOKEN_ADDRESS } from '@/lib/contracts';
+import { fetchDexScreenerProxy } from '@/lib/dexscreener-client';
 
 interface DexScreenerPair {
   baseToken?: { address?: string };
@@ -38,9 +39,7 @@ export function useTokenPriceUsd(address?: string | null): number | null {
     let cancelled = false;
     (async () => {
       try {
-        const res = await fetch(
-          `https://api.dexscreener.com/latest/dex/tokens/${tokenAddress}`
-        );
+        const res = await fetchDexScreenerProxy('tokens', tokenAddress);
         const data: DexScreenerResponse = await res.json();
         const pairs = data.pairs ?? [];
         const normalizedAddr = tokenAddress.toLowerCase();
@@ -92,9 +91,7 @@ export function useTokenPrices(addresses: (string | null | undefined)[]): Record
           return;
         }
         try {
-          const res = await fetch(
-            `https://api.dexscreener.com/latest/dex/tokens/${addr}`
-          );
+          const res = await fetchDexScreenerProxy('tokens', addr);
           const data: DexScreenerResponse = await res.json();
           const pairs = data.pairs ?? [];
           const normalizedAddr = addr.toLowerCase();
