@@ -3,10 +3,7 @@
 import { useState, useRef, useEffect } from 'react';
 import { useAccount } from 'wagmi';
 import { useChat } from '@/hooks/use-chat';
-import { useProfileSettingsModal } from '@/components/shared/ProfileSettingsModalContext';
-import { AvatarView } from '@/components/avatar';
 import { PlayerProfileModal } from '@/components/shared/PlayerProfileModal';
-import { parseAvatarPayload } from '@/lib/avatar-payload';
 import type { BlackjackWebSocketClient, ChatMessagePayload } from '@/lib/websocket-client';
 
 /** Plinko-style dark panel shell */
@@ -72,67 +69,6 @@ function senderLabel(msg: ChatMessagePayload): string {
   return 'Anonymous';
 }
 
-function senderInitials(msg: ChatMessagePayload): string {
-  const label = senderLabel(msg);
-  if (msg.displayName?.trim()) {
-    const parts = msg.displayName.trim().split(/\s+/);
-    if (parts.length >= 2) return (parts[0][0] + parts[1][0]).toUpperCase().slice(0, 2);
-    return label.slice(0, 2).toUpperCase();
-  }
-  return label.slice(0, 2).toUpperCase();
-}
-
-function ChatMessageAvatar({
-  msg,
-  isOwnMessage,
-  onOwnClick,
-}: {
-  msg: ChatMessagePayload;
-  isOwnMessage: boolean;
-  onOwnClick?: () => void;
-}) {
-  const avatarPayload = parseAvatarPayload(msg.avatarConfig);
-  const imgUrl = msg.profileImageUrl?.trim() || null;
-
-  const inner = (
-    <>
-      {avatarPayload ? (
-        <AvatarView config={msg.avatarConfig} compact className="h-full w-full" emotion="neutral" />
-      ) : imgUrl ? (
-         
-        <img src={imgUrl} alt="" className="h-full w-full object-cover" />
-      ) : (
-        <span className="flex h-full w-full items-center justify-center text-[9px] font-semibold uppercase tracking-tight text-slate-500">
-          {senderInitials(msg)}
-        </span>
-      )}
-    </>
-  );
-
-  const shellClass =
-    'h-8 w-8 shrink-0 overflow-hidden rounded-full bg-slate-950 ring-1 ring-cyan-500/20 shadow-[inset_0_1px_2px_rgba(0,0,0,0.5)]';
-
-  if (isOwnMessage && onOwnClick) {
-    return (
-      <button
-        type="button"
-        onClick={onOwnClick}
-        className={`${shellClass} cursor-pointer transition hover:ring-cyan-400/45 focus:outline-none focus-visible:ring-2 focus-visible:ring-cyan-500`}
-        title="Profile settings"
-        aria-label="Open profile settings"
-      >
-        {inner}
-      </button>
-    );
-  }
-
-  return (
-    <div className={shellClass} aria-hidden>
-      {inner}
-    </div>
-  );
-}
-
 export interface ChatPanelProps {
   /** Chat room: 'main' (home), 'blackjack', 'plinko', 'keno', etc. */
   roomId: string;
@@ -174,8 +110,7 @@ export function ChatPanel({
   compact = false,
   bareShell = false,
 }: ChatPanelProps) {
-  const { messages, sendMessage, connected, error, setDisplayName, getProfile, loadMore, loadingMore, chatPaused } = useChat(roomId, { wsClient, wsConnected });
-  const { openProfileSettings } = useProfileSettingsModal();
+  const { messages, sendMessage, connected, error, setDisplayName, loadMore, loadingMore, chatPaused } = useChat(roomId, { wsClient, wsConnected });
   const [input, setInput] = useState('');
   const [open, setOpen] = useState(false);
   const [showNameInput, setShowNameInput] = useState(false);
@@ -347,7 +282,6 @@ export function ChatPanel({
             <div className="text-slate-500 text-xs p-2 font-sans">No messages yet. Say hi!</div>
           )}
           {messages.map((msg) => {
-            const isOwnMessage = !!walletAddress && msg.senderAddress?.toLowerCase() === walletAddress.toLowerCase();
             if (compact) {
               return (
                 <div key={msg.id} className="text-left flex gap-1.5 items-baseline font-sans">
@@ -357,57 +291,32 @@ export function ChatPanel({
               );
             }
             return (
-            <div key={msg.id} className="text-left flex gap-2.5 font-sans">
-              <ChatMessageAvatar
-                msg={msg}
-                isOwnMessage={isOwnMessage}
-                onOwnClick={
-                  isOwnMessage
-                    ? async () => {
-                        try {
-                          const p = await getProfile();
-                          openProfileSettings({
-                            displayName: p.displayName ?? '',
-                            profileImageUrl: p.profileImageUrl,
-                            bio: (p as { bio?: string | null }).bio ?? null,
-                            xHandle: (p as { xHandle?: string | null }).xHandle ?? null,
-                            tgHandle: (p as { tgHandle?: string | null }).tgHandle ?? null,
-                            onSave: async (name, img, bio, xHandle, tgHandle) => {
-                              await setDisplayName(name, img, bio, xHandle, tgHandle);
-                            },
-                          });
-                        } catch {
-                          // Not connected or no client
-                        }
-                      }
-                    : undefined
-                }
-              />
-              <div className="min-w-0 flex-1">
-                <div className="flex items-baseline gap-2 flex-wrap">
-                  {msg.senderAddress ? (
-                    <button
-                      type="button"
-                      onClick={() => setProfileModalAddress(msg.senderAddress!)}
-                      className="font-jost text-cyan-400 text-xs font-medium shrink-0 hover:text-cyan-300 cursor-pointer transition-colors"
+              <div key={msg.id} className="text-left flex gap-2.5 font-sans">
+                <div className="min-w-0 flex-1">
+                  <div className="flex items-baseline gap-2 flex-wrap">
+                    {msg.senderAddress ? (
+                      <button
+                        type="button"
+                        onClick={() => setProfileModalAddress(msg.senderAddress!)}
+                        className="font-jost text-cyan-400 text-xs font-medium shrink-0 hover:text-cyan-300 cursor-pointer transition-colors"
+                      >
+                        {senderLabel(msg)}
+                      </button>
+                    ) : (
+                      <span className="font-jost text-cyan-400 text-xs font-medium shrink-0">
+                        {senderLabel(msg)}
+                      </span>
+                    )}
+                    <span
+                      className="text-slate-500 text-[10px] shrink-0 tabular-nums"
+                      title={formatTime(msg.timestamp)}
                     >
-                      {senderLabel(msg)}
-                    </button>
-                  ) : (
-                    <span className="font-jost text-cyan-400 text-xs font-medium shrink-0">
-                      {senderLabel(msg)}
+                      {formatRelative(msg.timestamp)}
                     </span>
-                  )}
-                  <span
-                    className="text-slate-500 text-[10px] shrink-0 tabular-nums"
-                    title={formatTime(msg.timestamp)}
-                  >
-                    {formatRelative(msg.timestamp)}
-                  </span>
+                  </div>
+                  <p className="text-white/95 text-sm break-words pl-0 mt-0.5 leading-relaxed" style={{ fontFamily: "'Montserrat', sans-serif", fontWeight: 500 }}>{msg.text}</p>
                 </div>
-                <p className="text-white/95 text-sm break-words pl-0 mt-0.5 leading-relaxed" style={{ fontFamily: "'Montserrat', sans-serif", fontWeight: 500 }}>{msg.text}</p>
               </div>
-            </div>
             );
           })}
         </div>
