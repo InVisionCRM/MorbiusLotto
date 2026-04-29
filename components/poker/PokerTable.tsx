@@ -593,7 +593,6 @@ export function PokerTable({ state, currentPlayerAddress, timeLeft, chatBubbleBy
       <PokerRailActingHighlight
         visible={showRailActingHighlight}
         activeRingIndex={actingRingIndex}
-        tableDims={dims}
       />
 
       {/* Dealer button holder bump — top center */}

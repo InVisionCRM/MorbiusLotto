@@ -100,7 +100,7 @@ export const CARD_ANCHOR_RING: SeatAnchor[] = [
  * `WINNING_POT_CHIP_SEAT_TO_CARD_T`. Mapped like C#/S#.
  */
 export const WINNING_POT_CHIP_SEAT_TO_CARD_T = 0.48;
-export const WINNING_POT_CHIP_RIGHT_OFFSET = 0.20;
+export const WINNING_POT_CHIP_RIGHT_OFFSET = 0.1;
 
 export const WINNING_POT_CHIP_ANCHOR_RING: SeatAnchor[] = SEAT_ANCHOR_RING.map((seat, i) => {
   const card = CARD_ANCHOR_RING[i];

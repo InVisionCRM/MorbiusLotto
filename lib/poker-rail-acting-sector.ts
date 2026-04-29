@@ -77,11 +77,12 @@ export interface RailSectorRadii {
   ryInner: number;
 }
 
+// Fallback radii used only when callers don't pass tableDims. These are a
+// rough guess; the live `PokerTable` always passes dims so it computes the
+// correct cushion band per render.
 const DEFAULT_RADII: RailSectorRadii = {
-  /* Outer: just inside the shell ellipse (half box ~ 47/44) */
   rxOuter: 45.2,
   ryOuter: 42.4,
-  /* Inner: inside cushion, outside felt — tune if band looks offset */
   rxInner: 32.0,
   ryInner: 30.0,
 };
