@@ -1,5 +1,6 @@
 /** Fraction coordinates 0–1 relative to the poker `PokerTable` root (`absolute inset-0` box). */
 export type SeatAnchor = { fx: number; fy: number };
+export type DealerButtonAnchor = SeatAnchor & { x: number };
 
 /** Canonical **10-max** ring (one vertex per seat at full tables). */
 export const POKER_TABLE_MAX_SEATS = 10;
@@ -94,16 +95,18 @@ export const CARD_ANCHOR_RING: SeatAnchor[] = [
 
 /**
  * Showdown: where the animated main pot chip stack lands (fractions 0–1), **10** ring vertices.
- * Blended from seat → hole-card anchor so stacks sit between avatar and cards; tune per vertex in
- * `WINNING_POT_CHIP_ANCHOR_RING` or adjust `WINNING_POT_CHIP_SEAT_TO_CARD_T`. Mapped like C#/S#.
+ * Blended from seat → hole-card anchor, then nudged right so stacks sit between
+ * avatar and cards; tune per vertex in `WINNING_POT_CHIP_ANCHOR_RING` or adjust
+ * `WINNING_POT_CHIP_SEAT_TO_CARD_T`. Mapped like C#/S#.
  */
 export const WINNING_POT_CHIP_SEAT_TO_CARD_T = 0.48;
+export const WINNING_POT_CHIP_RIGHT_OFFSET = 0.85;
 
 export const WINNING_POT_CHIP_ANCHOR_RING: SeatAnchor[] = SEAT_ANCHOR_RING.map((seat, i) => {
   const card = CARD_ANCHOR_RING[i];
   const t = WINNING_POT_CHIP_SEAT_TO_CARD_T;
   return {
-    fx: seat.fx + (card.fx - seat.fx) * t,
+    fx: seat.fx + (card.fx - seat.fx) * t + WINNING_POT_CHIP_RIGHT_OFFSET,
     fy: seat.fy + (card.fy - seat.fy) * t,
   };
 });
@@ -139,30 +142,33 @@ export function cardAnchorForDisplaySlot(seatCount: number, displaySlot: number)
 
 /**
  * Dealer-button anchors: sit between each seat and its bet-stack, ~30% of the
- * way from the seat toward the chip anchor — close to the avatar like a real
- * dealer button next to a player.
+ * way from the seat toward the chip anchor, then nudged slightly right — close
+ * to the avatar like a real dealer button next to a player.
  */
 export const DEALER_BUTTON_SEAT_TO_CHIP_T = 0.30;
+export const DEALER_BUTTON_RIGHT_OFFSET = 0.65;
 
-export const DEALER_BUTTON_ANCHOR_RING: SeatAnchor[] = SEAT_ANCHOR_RING.map((seat, i) => {
+export const DEALER_BUTTON_ANCHOR_RING: DealerButtonAnchor[] = SEAT_ANCHOR_RING.map((seat, i) => {
   const chip = CHIP_ANCHOR_RING[i];
   const t = DEALER_BUTTON_SEAT_TO_CHIP_T;
+  const fx = seat.fx + (chip.fx - seat.fx) * t + DEALER_BUTTON_RIGHT_OFFSET;
   return {
-    fx: seat.fx + (chip.fx - seat.fx) * t,
+    x: fx,
+    fx,
     fy: seat.fy + (chip.fy - seat.fy) * t,
   };
 });
 
-export function authoredDealerButtonAnchors(seatCount: number): SeatAnchor[] {
+export function authoredDealerButtonAnchors(seatCount: number): DealerButtonAnchor[] {
   if (seatCount <= 0) return [];
   return Array.from({ length: seatCount }, (_, displaySlot) => {
     const ri = ringIndexForDisplaySlot(displaySlot, seatCount);
     const a = DEALER_BUTTON_ANCHOR_RING[ri];
-    return { fx: a.fx, fy: a.fy };
+    return { x: a.x, fx: a.fx, fy: a.fy };
   });
 }
 
-export function dealerButtonAnchorForDisplaySlot(seatCount: number, displaySlot: number): SeatAnchor {
+export function dealerButtonAnchorForDisplaySlot(seatCount: number, displaySlot: number): DealerButtonAnchor {
   const list = authoredDealerButtonAnchors(seatCount);
-  return list[displaySlot] ?? { ...POKER_POT_ANCHOR };
+  return list[displaySlot] ?? { x: POKER_POT_ANCHOR.fx, ...POKER_POT_ANCHOR };
 }
