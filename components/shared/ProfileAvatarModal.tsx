@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useConnectModal } from '@rainbow-me/rainbowkit';
 import { useAccount } from 'wagmi';
 import type { AvatarConfig } from '@/lib/websocket-client';
@@ -46,6 +46,28 @@ function hydrateAvatarFromServer(raw: unknown): AvatarConfig {
   return parsed != null ? { ...parsed } : DEFAULT_AVATAR_CONFIG;
 }
 
+const PROFILE_PHOTO_MAX_DIM = 256;
+const PROFILE_PHOTO_JPEG_QUALITY = 0.82;
+
+async function fileToDownscaledDataUrl(file: File): Promise<string> {
+  if (!file.type.startsWith('image/')) throw new Error('Please select an image file.');
+  if (file.size > 10 * 1024 * 1024) throw new Error('Image too large (max 10MB).');
+  const bitmap = await createImageBitmap(file);
+  const { width: w, height: h } = bitmap;
+  const scale = Math.min(1, PROFILE_PHOTO_MAX_DIM / Math.max(w, h));
+  const targetW = Math.max(1, Math.round(w * scale));
+  const targetH = Math.max(1, Math.round(h * scale));
+  const canvas = document.createElement('canvas');
+  canvas.width = targetW;
+  canvas.height = targetH;
+  const ctx = canvas.getContext('2d');
+  if (!ctx) throw new Error('Canvas not supported.');
+  ctx.drawImage(bitmap, 0, 0, targetW, targetH);
+  bitmap.close?.();
+  const hasAlpha = file.type === 'image/png' || file.type === 'image/webp';
+  return canvas.toDataURL(hasAlpha ? 'image/png' : 'image/jpeg', PROFILE_PHOTO_JPEG_QUALITY);
+}
+
 function readCosmeticShopPins(): Set<string> {
   if (typeof window === 'undefined') return new Set();
   try {
@@ -67,6 +89,36 @@ export function ProfileAvatarModal({ open, onClose, wsClient: wsClientProp, onSa
   const [displayName, setDisplayName] = useState('');
   const [profileImageUrl, setProfileImageUrl] = useState<string | null>(null);
   const [profileDisplayMode, setProfileDisplayMode] = useState<'avatar' | 'photo'>('avatar');
+  const photoInputRef = useRef<HTMLInputElement>(null);
+  const [photoError, setPhotoError] = useState<string | null>(null);
+
+  const handlePhotoPicked = useCallback(async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    e.target.value = ''; // allow re-picking the same file
+    if (!file) return;
+    setPhotoError(null);
+    try {
+      const dataUrl = await fileToDownscaledDataUrl(file);
+      setProfileImageUrl(dataUrl);
+      setProfileDisplayMode('photo');
+    } catch (err) {
+      setPhotoError(err instanceof Error ? err.message : 'Failed to read image.');
+    }
+  }, []);
+
+  const handlePhotoToggleClick = useCallback(() => {
+    if (profileImageUrl) {
+      setProfileDisplayMode('photo');
+    } else {
+      photoInputRef.current?.click();
+    }
+  }, [profileImageUrl]);
+
+  const handleRemovePhoto = useCallback(() => {
+    setProfileImageUrl(null);
+    setProfileDisplayMode('avatar');
+    setPhotoError(null);
+  }, []);
   const [config, setConfig] = useState<AvatarConfig>(DEFAULT_AVATAR_CONFIG);
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -214,7 +266,7 @@ export function ProfileAvatarModal({ open, onClose, wsClient: wsClientProp, onSa
     setNamePromptError(null);
     try {
       if (wsClient?.isConnected()) {
-        await wsClient.setDisplayName(n, profileImageUrl, config, undefined, undefined, undefined, profileDisplayMode);
+        await wsClient.setDisplayName(n, profileImageUrl ?? '', config, undefined, undefined, undefined, profileDisplayMode);
       } else if (!address) {
         setNamePromptError('Connect your wallet to save');
         return;
@@ -225,7 +277,7 @@ export function ProfileAvatarModal({ open, onClose, wsClient: wsClientProp, onSa
           body: JSON.stringify({
             address,
             displayName: n,
-            profileImageUrl: profileImageUrl ?? null,
+            profileImageUrl: profileImageUrl ?? '',
             avatarConfig: config,
             profileDisplayMode,
           }),
@@ -269,7 +321,7 @@ export function ProfileAvatarModal({ open, onClose, wsClient: wsClientProp, onSa
     setError(null);
     try {
       if (wsClient?.isConnected()) {
-        await wsClient.setDisplayName(name, profileImageUrl, avatarPayload, undefined, undefined, undefined, profileDisplayMode);
+        await wsClient.setDisplayName(name, profileImageUrl ?? '', avatarPayload, undefined, undefined, undefined, profileDisplayMode);
         onSave?.();
         await finishAfterAvatarSave();
         return;
@@ -284,7 +336,7 @@ export function ProfileAvatarModal({ open, onClose, wsClient: wsClientProp, onSa
         body: JSON.stringify({
           address,
           displayName: name,
-          profileImageUrl: profileImageUrl ?? null,
+          profileImageUrl: profileImageUrl ?? '',
           avatarConfig: avatarPayload,
           profileDisplayMode,
         }),
@@ -433,35 +485,75 @@ export function ProfileAvatarModal({ open, onClose, wsClient: wsClientProp, onSa
                 </div>
               ) : (
                 <div className="relative flex-1 min-h-0 overflow-hidden flex flex-col">
-                  <div className="flex items-center justify-between gap-2 px-3 py-1.5 border-b border-gray-100 bg-gray-50/60">
-                    <div className="min-w-0">
-                      <p className="text-[11px] font-semibold text-gray-700 leading-tight">Show at game tables</p>
-                      <p className="text-[10px] text-gray-500 leading-tight">Chat always uses your photo.</p>
+                  <div className="shrink-0 px-3 py-1.5 border-b border-gray-100 bg-gray-50/60 relative z-10">
+                    <div className="flex items-center justify-between gap-2">
+                      <div className="min-w-0 flex items-center gap-2">
+                        {profileImageUrl ? (
+                          <img
+                            src={profileImageUrl}
+                            alt="Profile photo"
+                            className="h-8 w-8 rounded-full object-cover ring-1 ring-gray-300 shrink-0"
+                            draggable={false}
+                          />
+                        ) : null}
+                        <div className="min-w-0">
+                          <p className="text-[11px] font-semibold text-gray-700 leading-tight">Show at game tables</p>
+                          <p className="text-[10px] text-gray-500 leading-tight">Chat always uses your photo.</p>
+                        </div>
+                      </div>
+                      <div className="inline-flex rounded-lg bg-gray-200 p-0.5 shrink-0" role="group" aria-label="Game seat appearance">
+                        <button
+                          type="button"
+                          onClick={() => setProfileDisplayMode('avatar')}
+                          className={`px-2.5 py-1 rounded-md text-[11px] font-medium transition-colors ${
+                            profileDisplayMode === 'avatar' ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-600 hover:text-gray-800'
+                          }`}
+                          aria-pressed={profileDisplayMode === 'avatar'}
+                        >
+                          Avatar
+                        </button>
+                        <button
+                          type="button"
+                          onClick={handlePhotoToggleClick}
+                          className={`px-2.5 py-1 rounded-md text-[11px] font-medium transition-colors ${
+                            profileDisplayMode === 'photo' ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-600 hover:text-gray-800'
+                          }`}
+                          aria-pressed={profileDisplayMode === 'photo'}
+                        >
+                          {profileImageUrl ? 'Photo' : 'Upload photo'}
+                        </button>
+                      </div>
                     </div>
-                    <div className="inline-flex rounded-lg bg-gray-200 p-0.5 shrink-0" role="group" aria-label="Game seat appearance">
-                      <button
-                        type="button"
-                        onClick={() => setProfileDisplayMode('avatar')}
-                        className={`px-2.5 py-1 rounded-md text-[11px] font-medium transition-colors ${
-                          profileDisplayMode === 'avatar' ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-600 hover:text-gray-800'
-                        }`}
-                        aria-pressed={profileDisplayMode === 'avatar'}
-                      >
-                        Avatar
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => setProfileDisplayMode('photo')}
-                        disabled={!profileImageUrl}
-                        title={!profileImageUrl ? 'Upload a profile photo first' : undefined}
-                        className={`px-2.5 py-1 rounded-md text-[11px] font-medium transition-colors ${
-                          profileDisplayMode === 'photo' ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-600 hover:text-gray-800 disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:text-gray-600'
-                        }`}
-                        aria-pressed={profileDisplayMode === 'photo'}
-                      >
-                        Photo
-                      </button>
-                    </div>
+                    {profileImageUrl && (
+                      <div className="mt-1 flex items-center gap-2 text-[10px]">
+                        <button
+                          type="button"
+                          onClick={() => photoInputRef.current?.click()}
+                          className="text-cyan-600 hover:text-cyan-700 underline-offset-2 hover:underline"
+                        >
+                          Replace
+                        </button>
+                        <span className="text-gray-300">·</span>
+                        <button
+                          type="button"
+                          onClick={handleRemovePhoto}
+                          className="text-red-500 hover:text-red-600 underline-offset-2 hover:underline"
+                        >
+                          Remove
+                        </button>
+                      </div>
+                    )}
+                    {photoError && (
+                      <p className="mt-1 text-[10px] text-red-500">{photoError}</p>
+                    )}
+                    <input
+                      ref={photoInputRef}
+                      type="file"
+                      accept="image/png,image/jpeg,image/webp,image/gif"
+                      className="hidden"
+                      onChange={handlePhotoPicked}
+                      aria-label="Upload profile photo"
+                    />
                   </div>
                   <CharacterCreator
                     config={config}

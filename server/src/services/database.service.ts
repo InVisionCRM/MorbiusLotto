@@ -2266,11 +2266,11 @@ export class DatabaseService implements MoneyDatabaseQueries {
     // so callers that don't know a field's current value won't accidentally clear it.
     await this.pool.query(
       `INSERT INTO chat_display_names (wallet_address, display_name, profile_image_url, avatar_config, bio, x_handle, tg_handle, profile_display_mode)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, COALESCE($8, 'avatar'))
+       VALUES ($1, $2, NULLIF($3, ''), $4, $5, $6, $7, COALESCE($8, 'avatar'))
        ON CONFLICT (wallet_address) DO UPDATE SET
          display_name         = $2,
          updated_at           = NOW(),
-         profile_image_url    = COALESCE($3, chat_display_names.profile_image_url),
+         profile_image_url    = CASE WHEN $3 = '' THEN NULL WHEN $3 IS NULL THEN chat_display_names.profile_image_url ELSE $3 END,
          avatar_config        = COALESCE($4::jsonb, chat_display_names.avatar_config),
          bio                  = COALESCE($5, chat_display_names.bio),
          x_handle             = COALESCE($6, chat_display_names.x_handle),
