@@ -24,7 +24,9 @@ import { isAdminWallet } from '@/lib/admin';
 import { PokerTournamentCreator } from './PokerTournamentCreator';
 import { PokerTournamentRegistrantsModal } from './PokerTournamentRegistrantsModal';
 import { PokerTournamentRulesModal } from './PokerTournamentRulesModal';
+import { MyPokerTournamentsModal } from './MyPokerTournamentsModal';
 import { ConfirmActionCard } from '@/components/shared/ConfirmActionCard';
+import { InsufficientBalanceDialog } from '@/components/shared/InsufficientBalanceDialog';
 import { Lock } from 'lucide-react';
 
 // ---------------------------------------------------------------------------
@@ -254,6 +256,10 @@ export function PokerTournamentLobby({ wsClient, myAddress, onGoToTable }: Poker
   const [registrantsModal, setRegistrantsModal] = useState<{ tournamentId: string; name: string } | null>(null);
   const [rulesModal, setRulesModal] = useState<{ tournamentId: string; name: string } | null>(null);
   const [joinError, setJoinError] = useState<string | null>(null);
+  const [insufficientChipsInfo, setInsufficientChipsInfo] = useState<{ required?: string } | null>(null);
+  const [showMyTournaments, setShowMyTournaments] = useState(false);
+  const [forfeitConfirm, setForfeitConfirm] = useState<{ tournamentId: string; name: string } | null>(null);
+  const [forfeitInFlight, setForfeitInFlight] = useState(false);
   const [joinSuccess, setJoinSuccess] = useState<string | null>(null);
   const [joiningId, setJoiningId] = useState<string | null>(null);
   const [cancellingId, setCancellingId] = useState<string | null>(null);
@@ -317,6 +323,7 @@ export function PokerTournamentLobby({ wsClient, myAddress, onGoToTable }: Poker
     createTournament,
     joinTournament,
     cancelTournament,
+    forfeitTournament,
     fetchReclaimableTournaments,
     fetchClaimableTournaments,
     myTableId,
@@ -354,7 +361,16 @@ export function PokerTournamentLobby({ wsClient, myAddress, onGoToTable }: Poker
         await refreshTournaments();
       }
     } catch (err) {
-      setJoinError((err as Error).message ?? 'Failed to join');
+      const msg = (err as Error).message ?? 'Failed to join';
+      if (/insufficient|not enough|balance/i.test(msg)) {
+        const t = openTournaments.find((x) => x.tournamentId === tournamentId);
+        const required = t && !isZeroBuyInChips(t.buyInAmount)
+          ? `${formatChips(t.buyInAmount)} chips`
+          : undefined;
+        setInsufficientChipsInfo({ required });
+      } else {
+        setJoinError(msg);
+      }
     } finally {
       setJoiningId(null);
     }
@@ -433,6 +449,29 @@ export function PokerTournamentLobby({ wsClient, myAddress, onGoToTable }: Poker
       setJoinError((err as Error).message ?? 'Failed to cancel');
     } finally {
       setCancellingId(null);
+    }
+  };
+
+  const beginForfeit = (tournamentId: string) => {
+    if (forfeitInFlight) return;
+    const t = openTournaments.find((x) => x.tournamentId === tournamentId);
+    setForfeitConfirm({ tournamentId, name: t?.name ?? 'this tournament' });
+  };
+
+  const handleConfirmForfeit = async () => {
+    if (!forfeitConfirm || forfeitInFlight) return;
+    setForfeitInFlight(true);
+    try {
+      const ok = await forfeitTournament(forfeitConfirm.tournamentId);
+      if (ok) {
+        toast.success('You have been eliminated from the tournament.');
+        await refreshTournaments();
+      } else {
+        toast.error('Failed to forfeit tournament');
+      }
+    } finally {
+      setForfeitInFlight(false);
+      setForfeitConfirm(null);
     }
   };
 
@@ -563,14 +602,42 @@ export function PokerTournamentLobby({ wsClient, myAddress, onGoToTable }: Poker
       )}
 
       {myTournamentId && myTableId && (
-        <div className="rounded-lg bg-yellow-500/10 border border-yellow-500/30 px-3 py-2 flex items-center justify-between gap-2 text-sm">
+        <div className="rounded-lg bg-yellow-500/10 border border-yellow-500/30 px-3 py-2 flex flex-wrap items-center justify-between gap-2 text-sm">
           <span className="text-yellow-200">You are in an active tournament</span>
+          <div className="flex items-center gap-2 flex-wrap">
+            <button
+              type="button"
+              onClick={() => setShowMyTournaments(true)}
+              className="h-8 px-3 rounded-lg border border-yellow-400/40 text-xs font-semibold text-yellow-100 hover:bg-yellow-500/20 transition-colors"
+            >
+              My Tournaments
+            </button>
+            <button
+              type="button"
+              onClick={() => beginForfeit(myTournamentId)}
+              className="h-8 px-3 rounded-lg bg-red-600/85 hover:bg-red-500 text-xs font-semibold text-white transition-colors"
+            >
+              Forfeit
+            </button>
+            <button
+              type="button"
+              onClick={() => onGoToTable?.(myTableId, myTournamentId)}
+              className="h-8 shrink-0 px-3 rounded-lg bg-yellow-500 hover:bg-yellow-400 text-xs font-semibold text-black transition-colors"
+            >
+              Go to table
+            </button>
+          </div>
+        </div>
+      )}
+
+      {!myTournamentId && openTournaments.some((t) => t.isRegistered) && (
+        <div className="flex justify-end">
           <button
             type="button"
-            onClick={() => onGoToTable?.(myTableId, myTournamentId)}
-            className="h-8 shrink-0 px-3 rounded-lg bg-yellow-500 hover:bg-yellow-400 text-xs font-semibold text-black transition-colors"
+            onClick={() => setShowMyTournaments(true)}
+            className="h-8 px-3 rounded-lg border border-cyan-500/35 text-xs font-semibold text-cyan-200/95 hover:bg-cyan-500/15 transition-colors"
           >
-            Go to table
+            My Tournaments
           </button>
         </div>
       )}
@@ -868,6 +935,49 @@ export function PokerTournamentLobby({ wsClient, myAddress, onGoToTable }: Poker
       )}
 
       {joinFlow?.phase === 'confirm' && renderJoinConfirm(joinFlow.t, joinFlow.pin)}
+
+      <MyPokerTournamentsModal
+        open={showMyTournaments}
+        onClose={() => setShowMyTournaments(false)}
+        tournaments={openTournaments}
+        myTableId={myTableId ?? null}
+        myTournamentId={myTournamentId ?? null}
+        onGoToTable={(tableId, tournamentId) => onGoToTable?.(tableId, tournamentId)}
+        onForfeit={(tournamentId) => {
+          setShowMyTournaments(false);
+          beginForfeit(tournamentId);
+        }}
+      />
+
+      {forfeitConfirm && (
+        <ConfirmActionCard
+          title="Forfeit tournament?"
+          subtitle={forfeitConfirm.name}
+          rows={[
+            { label: 'Result', value: 'You will be eliminated', accent: 'yellow' },
+            { label: 'Refund', value: 'None — buy-in stays in the prize pool', accent: 'white' },
+          ]}
+          onBack={() => setForfeitConfirm(null)}
+          onConfirm={() => { void handleConfirmForfeit(); }}
+          confirmLabel="Forfeit"
+          isLoading={forfeitInFlight}
+          warning="This is the same as busting out. The action cannot be undone."
+        />
+      )}
+
+      <InsufficientBalanceDialog
+        isOpen={insufficientChipsInfo != null}
+        onClose={() => setInsufficientChipsInfo(null)}
+        title="Not Enough Poker Chips"
+        message="Your poker chip balance isn't enough to register for this tournament. Open the chip exchange to convert MORBIUS into chips."
+        required={insufficientChipsInfo?.required}
+        actionLabel="Open Chip Exchange"
+        onOpenExchange={() => {
+          if (typeof window !== 'undefined') {
+            window.dispatchEvent(new CustomEvent('sophie:open_poker_chip_exchange'));
+          }
+        }}
+      />
     </div>
   );
 }

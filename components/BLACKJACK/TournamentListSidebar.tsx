@@ -12,6 +12,7 @@ import {
 import { useOutsideClick } from '@/hooks/use-outside-click';
 import { useTokenInfo } from '@/hooks/use-token-info';
 import { Theme } from '@/lib/theme';
+import { InsufficientBalanceDialog } from '@/components/shared/InsufficientBalanceDialog';
 
 const PAGE_SIZE = 10;
 
@@ -104,6 +105,7 @@ export function TournamentListSidebar({
 }: TournamentListSidebarProps) {
   const [page, setPage] = useState(1);
   const [active, setActive] = useState<TournamentListItem | null>(null);
+  const [insufficientFor, setInsufficientFor] = useState<TournamentListItem | null>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const expandedRef = useRef<HTMLDivElement>(null);
 
@@ -354,16 +356,19 @@ export function TournamentListSidebar({
                     {onJoin && (() => {
                       const isFull = active.maxPlayers != null && active.entryCount >= active.maxPlayers;
                       const canAfford = active.tournamentType === 'freeroll' || playerBalance >= BigInt(active.buyInAmount);
-                      const isDisabled = isJoinLoading || !canAfford || isFull;
-                      
+                      const isDisabled = isJoinLoading || isFull;
+
                       return (
                         <button
                           type="button"
                           onClick={(e) => {
                             e.stopPropagation();
-                            if (!isDisabled) {
-                              onJoin(active);
+                            if (isJoinLoading || isFull) return;
+                            if (!canAfford) {
+                              setInsufficientFor(active);
+                              return;
                             }
+                            onJoin(active);
                           }}
                           disabled={isDisabled}
                           className="w-full py-2 rounded-lg bg-gradient-to-r from-cyan-600 to-blue-600 hover:from-cyan-500 hover:to-blue-500 disabled:from-gray-700 disabled:to-gray-700 disabled:text-gray-500 disabled:cursor-not-allowed text-white font-semibold text-xs transition-colors flex items-center justify-center gap-2"
@@ -417,6 +422,14 @@ export function TournamentListSidebar({
           </>
         )}
       </AnimatePresence>
+
+      <InsufficientBalanceDialog
+        isOpen={insufficientFor != null}
+        onClose={() => setInsufficientFor(null)}
+        title="Not Enough MORBIUS"
+        required={insufficientFor ? formatBuyIn(insufficientFor) : undefined}
+        balance={`${Number(formatEther(playerBalance)).toLocaleString()} MORBIUS`}
+      />
     </div>
   );
 }

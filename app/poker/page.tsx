@@ -22,6 +22,7 @@ import {
 import { formatChips, parseChipInput } from '@/lib/format-poker-chips';
 import { formatMorbiusFloor } from '@/lib/format-morbius-display';
 import { PokerChipExchangeModal } from '@/components/poker/PokerChipExchangeModal';
+import { InsufficientBalanceDialog } from '@/components/shared/InsufficientBalanceDialog';
 import { PokerBetaSplash } from '@/components/poker/PokerBetaSplash';
 import { SophieSplashModal } from '@/components/shared/SophieSplashModal';
 import { PokerHowToPlayModal } from '@/components/poker/PokerHowToPlayModal';
@@ -119,6 +120,15 @@ export default function PokerLobbyPage() {
   const [showStatsModal, setShowStatsModal] = useState(false);
   const [showDepositModal, setShowDepositModal] = useState(false);
   const [showChipExchange, setShowChipExchange] = useState(false);
+  const [showInsufficientChips, setShowInsufficientChips] = useState(false);
+
+  useEffect(() => {
+    const open = () => setShowChipExchange(true);
+    if (typeof window !== 'undefined') {
+      window.addEventListener('sophie:open_poker_chip_exchange', open);
+      return () => window.removeEventListener('sophie:open_poker_chip_exchange', open);
+    }
+  }, []);
   const [playersDropdownTableId, setPlayersDropdownTableId] = useState<string | null>(null);
   const [tablePlayers, setTablePlayers] = useState<{ tableId: string; seats: PokerSeatState[] } | null>(null);
   const [tablePlayersLoading, setTablePlayersLoading] = useState(false);
@@ -993,17 +1003,20 @@ export default function PokerLobbyPage() {
                   </button>
                   <button
                     type="button"
-                    onClick={handleJoin}
+                    onClick={() => {
+                      const insufficient = chipBalance != null && (() => {
+                        try { return BigInt(parseChipInput(buyIn)) > BigInt(chipBalance); }
+                        catch { return false; }
+                      })();
+                      if (insufficient) {
+                        setShowInsufficientChips(true);
+                        return;
+                      }
+                      handleJoin();
+                    }}
                     disabled={
                       joinBuyInOutOfRange
                       || (joinModal.hasPin && !/^\d{4}$/.test(joinPin))
-                      || (chipBalance != null && (() => {
-                        try {
-                          return BigInt(parseChipInput(buyIn)) > BigInt(chipBalance);
-                        } catch {
-                          return false;
-                        }
-                      })())
                     }
                     className="flex-1 py-2 rounded-lg bg-gradient-to-r from-cyan-600 to-blue-600 text-white disabled:opacity-50"
                   >
@@ -1130,6 +1143,16 @@ export default function PokerLobbyPage() {
         onClose={() => setShowChipExchange(false)}
         walletAddress={address ?? null}
         onExchangeComplete={refreshLobbyBalances}
+      />
+      <InsufficientBalanceDialog
+        isOpen={showInsufficientChips}
+        onClose={() => setShowInsufficientChips(false)}
+        title="Not Enough Poker Chips"
+        message="Your poker chip balance isn't enough for this buy-in. Open the chip exchange to convert MORBIUS into chips, or top up your MORBIUS balance first."
+        required={(() => { try { return `${formatChips(BigInt(parseChipInput(buyIn)))} chips`; } catch { return undefined; } })()}
+        balance={chipBalance != null ? `${formatChips(BigInt(chipBalance))} chips` : undefined}
+        actionLabel="Open Chip Exchange"
+        onOpenExchange={() => setShowChipExchange(true)}
       />
       <SophieSplashModal address={address} />
     </>

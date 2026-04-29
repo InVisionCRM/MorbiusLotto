@@ -239,6 +239,7 @@ export interface UsePokerTournamentReturn {
   createTournament: (params: CreatePokerTournamentParams) => Promise<{ tournamentId: string; pinCode?: string | null } | null>;
   joinTournament: (tournamentId: string, pinCode?: string) => Promise<{ autoStarted: boolean; tableId: string | null } | null>;
   cancelTournament: (tournamentId: string) => Promise<boolean>;
+  forfeitTournament: (tournamentId: string) => Promise<boolean>;
   fetchTournamentState: (tournamentId: string) => Promise<PokerTournamentState | null>;
   /**
    * One-shot fetch of cancelled custom-token freerolls created by the connected wallet
@@ -276,6 +277,15 @@ export function usePokerTournament({
   const onEliminatedRef = useRef(onPlayerEliminated);
   const onCompletedRef  = useRef(onTournamentCompleted);
   const myTournamentIdRef = useRef(myTournamentId);
+  /**
+   * Tracks which tournament rooms the current WS connection is already subscribed to.
+   * Reset whenever `wsClient` changes (new connection). Prevents `refreshTournaments`
+   * from re-firing `poker_tournament_join` (which hits Postgres) on every poll.
+   */
+  const subscribedTournamentsRef = useRef<Set<string>>(new Set());
+  useEffect(() => {
+    subscribedTournamentsRef.current = new Set();
+  }, [wsClient]);
 
   useEffect(() => { onStartedRef.current    = onTournamentStarted; },  [onTournamentStarted]);
   useEffect(() => { onLevelUpRef.current    = onBlindLevelUp; },        [onBlindLevelUp]);
@@ -384,12 +394,20 @@ export function usePokerTournament({
         setMyEntryStatus('playing');
       }
 
-      // Re-subscribe to registered tournament rooms (registration + active) for WS events
+      // Re-subscribe to registered tournament rooms (registration + active) for WS events.
+      // Skip tournaments we've already subscribed to on this WS connection — re-firing
+      // `poker_tournament_join` hits Postgres (`SELECT ... FOR UPDATE`, table lookup) and
+      // was overloading the server when called on every refresh / poll cycle.
       for (const t of tournaments) {
-        if (t.isRegistered && (t.status === 'registration' || t.status === 'active')) {
-          wsClient.sendRequest('poker_tournament_join', { tournamentId: t.tournamentId })
-            .catch(() => {}); // silently ignore — server handles already-registered case
-        }
+        if (!t.isRegistered) continue;
+        if (t.status !== 'registration' && t.status !== 'active') continue;
+        if (subscribedTournamentsRef.current.has(t.tournamentId)) continue;
+        subscribedTournamentsRef.current.add(t.tournamentId);
+        wsClient.sendRequest('poker_tournament_join', { tournamentId: t.tournamentId })
+          .catch(() => {
+            // Re-allow retry on next refresh if the request failed outright.
+            subscribedTournamentsRef.current.delete(t.tournamentId);
+          });
       }
     } catch (err) {
       setError((err as Error).message ?? 'Failed to load tournaments');
@@ -439,6 +457,23 @@ export function usePokerTournament({
       return true;
     } catch (err) {
       setError((err as Error).message ?? 'Failed to cancel tournament');
+      return false;
+    }
+  }, [wsClient]);
+
+  /**
+   * Voluntarily eliminate the caller from an active poker tournament. Same effect as busting
+   * out: rank assigned, seat removed, knockout blind multiplier applied, tournament may complete.
+   * No refund — buy-in stays in the prize pool.
+   */
+  const forfeitTournament = useCallback(async (tournamentId: string): Promise<boolean> => {
+    if (!wsClient) return false;
+    try {
+      await wsClient.sendRequest('poker_tournament_forfeit', { tournamentId });
+      // Local state cleanup happens via the broadcast `poker_tournament_player_eliminated` handler.
+      return true;
+    } catch (err) {
+      setError((err as Error).message ?? 'Failed to forfeit tournament');
       return false;
     }
   }, [wsClient]);
@@ -537,6 +572,7 @@ export function usePokerTournament({
     createTournament,
     joinTournament,
     cancelTournament,
+    forfeitTournament,
     fetchTournamentState,
     fetchReclaimableTournaments,
     fetchClaimableTournaments,

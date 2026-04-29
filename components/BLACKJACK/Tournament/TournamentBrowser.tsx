@@ -20,6 +20,7 @@ import type { TableThemeInfo } from '@/hooks/use-blackjack-tables';
 import { FreerollList } from './FreerollList';
 import { TournamentCancelReclaim } from './TournamentCancelReclaim';
 import { ConfirmActionCard } from '@/components/shared/ConfirmActionCard';
+import { InsufficientBalanceDialog } from '@/components/shared/InsufficientBalanceDialog';
 import { useOutsideClick } from '@/hooks/use-outside-click';
 import type { BlackjackWebSocketClient, ChatMessagePayload } from '@/lib/websocket-client';
 import { TOURNAMENT_PRIZE_ESCROW_ADDRESS } from '@/lib/contracts';
@@ -574,11 +575,13 @@ function ExpandedCardContent({
   isJoinLoading?: boolean;
 }) {
   const buyInBigInt = BigInt(tournament.buyInAmount);
-  const canAfford = playerBalance >= buyInBigInt;
+  const isFreerollTournament = tournament.tournamentType === 'freeroll' || buyInBigInt === 0n;
+  const canAfford = isFreerollTournament || playerBalance >= buyInBigInt;
   const isFull = tournament.maxPlayers !== null && tournament.entryCount >= tournament.maxPlayers;
   const isAlreadyIn = Boolean(currentTournamentId && tournament.id === currentTournamentId);
   const isCustomToken = Boolean(tournament.prizeTokenAddress);
   const notFunded = isCustomToken && !tournament.escrowFunded;
+  const [showInsufficient, setShowInsufficient] = useState(false);
 
   // Determine if current player is a participant
   const isParticipant = useMemo(() => {
@@ -945,12 +948,20 @@ function ExpandedCardContent({
         <button
           onClick={(e) => {
             e.stopPropagation();
-            if (!isJoinLoading) onJoin(tournament);
+            if (isJoinLoading) return;
+            if (!isAlreadyIn && !canAfford) {
+              setShowInsufficient(true);
+              return;
+            }
+            if (!isAlreadyIn && (isFull || notFunded)) return;
+            onJoin(tournament);
           }}
-          disabled={isJoinLoading || (!isAlreadyIn && (!canAfford || isFull || notFunded))}
+          disabled={isJoinLoading || (!isAlreadyIn && (isFull || notFunded))}
           className={`w-full py-3 rounded-xl font-semibold transition-all flex items-center justify-center gap-2 ${
             isAlreadyIn || (canAfford && !isFull && !notFunded)
               ? `${Theme.cyan.gradient.button} ${Theme.cyan.gradient.buttonHover} text-white`
+              : !canAfford && !isFull && !notFunded
+              ? 'bg-amber-600/80 hover:bg-amber-500 text-white'
               : 'bg-gray-700 text-gray-500 cursor-not-allowed'
           }`}
         >
@@ -975,6 +986,14 @@ function ExpandedCardContent({
           )}
         </button>
       </div>
+
+      <InsufficientBalanceDialog
+        isOpen={showInsufficient}
+        onClose={() => setShowInsufficient(false)}
+        title="Not Enough MORBIUS"
+        required={`${Number(formatEther(buyInBigInt)).toLocaleString()} MORBIUS`}
+        balance={`${Number(formatEther(playerBalance)).toLocaleString()} MORBIUS`}
+      />
     </div>
   );
 }
@@ -1327,7 +1346,18 @@ function ExpandedCard({
         const timeLimitLabel = t.timeLimitMinutes === null || t.timeLimitMinutes === undefined
           ? TIME_LIMIT_LABELS['null']
           : TIME_LIMIT_LABELS[t.timeLimitMinutes] ?? `${t.timeLimitMinutes}m`;
-        const canAfford = playerBalance >= buyInBigInt;
+        const canAfford = isFreeroll || playerBalance >= buyInBigInt;
+        if (!canAfford && !isFreeroll) {
+          return (
+            <InsufficientBalanceDialog
+              isOpen
+              onClose={() => setPendingJoin(null)}
+              title="Not Enough MORBIUS"
+              required={buyInDisplay}
+              balance={`${Number(formatEther(playerBalance)).toLocaleString()} MORBIUS`}
+            />
+          );
+        }
         return (
           <ConfirmActionCard
             title={isFreeroll ? 'Join Freeroll' : 'Join Tournament'}
@@ -1346,8 +1376,6 @@ function ExpandedCard({
             onConfirm={() => { setPendingJoin(null); onJoin(t); }}
             confirmLabel={isFreeroll ? 'Join Freeroll' : 'Join Tournament'}
             isLoading={isJoinLoading}
-            disabled={!canAfford}
-            warning={!canAfford && !isFreeroll ? 'Insufficient balance' : undefined}
           />
         );
       })()}

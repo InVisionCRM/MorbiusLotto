@@ -101,6 +101,7 @@ export declare class WebSocketService {
     private handlePokerTournamentJoin;
     private handlePokerTournamentGetState;
     private handlePokerTournamentCancel;
+    private handlePokerTournamentForfeit;
     private handlePokerVoiceToken;
     getConnectionCount(): number;
     getActivePlayersCount(): Promise<number>;

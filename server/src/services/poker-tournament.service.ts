@@ -727,6 +727,35 @@ export class PokerTournamentService {
   ): Promise<{ entryId: string; autoStarted: boolean; tableId: string | null }> {
     const normalized = this.normalizeAddress(playerAddress);
 
+    // Cheap fast path: when the caller is already registered (very common — table HUD reconnects,
+    // `refreshTournaments` re-subscribing to rooms, retry storms), skip opening a transaction with
+    // `SELECT ... FOR UPDATE`. Two simple reads instead of the full lock + 5+ queries.
+    const fastCheck = await this.pool.query(
+      `SELECT te.id AS entry_id, t.status AS tournament_status, t.is_private, t.pin_code,
+              (SELECT id FROM poker_tables WHERE tournament_id = $1 LIMIT 1) AS table_id
+         FROM tournament_entries te
+         JOIN tournaments t ON t.id = te.tournament_id
+        WHERE te.tournament_id = $1
+          AND LOWER(te.player_address) = $2
+          AND te.status NOT IN ('busted', 'completed')
+        LIMIT 1`,
+      [tournamentId, normalized]
+    );
+    if (fastCheck.rows.length > 0) {
+      const row = fastCheck.rows[0];
+      const status = String(row.tournament_status ?? '');
+      if (status === 'registration' || status === 'active') {
+        if (row.is_private && pinCode !== row.pin_code) {
+          throw new Error('Incorrect PIN code');
+        }
+        return {
+          entryId: row.entry_id,
+          autoStarted: !!row.table_id,
+          tableId: row.table_id ?? null,
+        };
+      }
+    }
+
     /** Set only on successful new-registration path; idempotent path returns from inside `connect` block. */
     let committedEntryId: string | null = null;
     let committedShouldAutoStart = false;
@@ -1347,6 +1376,119 @@ export class PokerTournamentService {
       [tournamentId]
     );
     const activeCount = Number(activePlayers.rows[0].c);
+
+    if (activeCount <= 1) {
+      await this.completeTournament(tournamentId, tableId);
+    }
+  }
+
+  /**
+   * Player-initiated forfeit: voluntarily eliminates the caller from an active poker tournament.
+   * Same DB path as a chip bust (rank assigned, seat removed, WS event broadcast, knockout blind
+   * multiplier applied, may complete the tournament). No refund — buy-in stays in the prize pool.
+   *
+   * No-ops cleanly when the player isn't seated or the tournament isn't active.
+   */
+  async forfeitPokerTournament(tournamentId: string, playerAddress: string): Promise<void> {
+    const normalized = this.normalizeAddress(playerAddress);
+
+    const tRow = await this.pool.query(
+      `SELECT poker_config, status FROM tournaments WHERE id = $1`,
+      [tournamentId]
+    );
+    if (tRow.rows.length === 0) {
+      throw new Error('Tournament not found');
+    }
+    if (tRow.rows[0].status !== 'active') {
+      throw new Error('Forfeit only valid for active tournaments');
+    }
+
+    const seatRow = await this.pool.query(
+      `SELECT pts.table_id
+         FROM poker_tournament_seats pts
+         JOIN tournament_entries te ON te.id = pts.entry_id
+        WHERE pts.tournament_id = $1
+          AND LOWER(pts.player_address) = $2
+          AND te.status = 'playing'
+          AND pts.eliminated_at IS NULL
+        LIMIT 1`,
+      [tournamentId, normalized]
+    );
+    if (seatRow.rows.length === 0) {
+      throw new Error('You are not seated in this tournament');
+    }
+    const tableId = seatRow.rows[0].table_id as string;
+
+    const tableInfo = await this.pool.query(
+      `SELECT hand_number FROM poker_tables WHERE id = $1 AND tournament_mode = TRUE`,
+      [tableId]
+    );
+    if (tableInfo.rows.length === 0) {
+      throw new Error('Tournament table not found');
+    }
+    const handNumber = Number(tableInfo.rows[0].hand_number ?? 0);
+
+    const config = this.parsePokerConfig(tRow.rows[0].poker_config);
+
+    const seatCountRes = await this.pool.query<{ c: string }>(
+      `SELECT COUNT(*)::text AS c FROM poker_seats WHERE table_id = $1`,
+      [tableId]
+    );
+    const seatCount = Number(seatCountRes.rows[0]?.c ?? 0);
+    if (seatCount <= 0) return;
+
+    await this.eliminateBustedTournamentSeats(
+      tableId,
+      tournamentId,
+      [normalized],
+      handNumber,
+      seatCount,
+    );
+
+    const blindMode = this.getBlindIncreaseMode(config);
+    if (blindMode === 'knockout') {
+      const tblBlinds = await this.pool.query(
+        `SELECT small_blind, big_blind FROM poker_tables WHERE id = $1`,
+        [tableId]
+      );
+      if (tblBlinds.rows.length > 0) {
+        const sbWei = toBigIntSafe(tblBlinds.rows[0].small_blind);
+        const bbWei = toBigIntSafe(tblBlinds.rows[0].big_blind);
+        if (sbWei > 0n && bbWei > 0n) {
+          const doubledSB = (sbWei * 2n).toString();
+          const doubledBB = (bbWei * 2n).toString();
+          await this.pool.query(
+            `UPDATE poker_tables SET small_blind = $2::NUMERIC, big_blind = $3::NUMERIC WHERE id = $1`,
+            [tableId, doubledSB, doubledBB]
+          );
+          const finalRow = await this.pool.query(
+            `SELECT small_blind, big_blind FROM poker_tables WHERE id = $1`,
+            [tableId]
+          );
+          if (finalRow.rows.length > 0) {
+            const smallBlindChips = Number(toBigIntSafe(finalRow.rows[0].small_blind));
+            const bigBlindChips = Number(toBigIntSafe(finalRow.rows[0].big_blind));
+            const displayLevel = this.knockoutBlindDisplayLevel(config.blindSchedule, smallBlindChips);
+            this.broadcast(`poker_tournament:${tournamentId}`, 'poker_tournament_blind_level_up', {
+              tournamentId,
+              tableId,
+              newLevel: displayLevel,
+              smallBlind: smallBlindChips,
+              bigBlind: bigBlindChips,
+              handNumber,
+            });
+          }
+        }
+      }
+    }
+
+    const activePlayers = await this.pool.query(
+      `SELECT COUNT(*) AS c FROM tournament_entries WHERE tournament_id = $1 AND status = 'playing'`,
+      [tournamentId]
+    );
+    const activeCount = Number(activePlayers.rows[0].c);
+
+    logger.info('Poker tournament player forfeited', { tournamentId, playerAddress: normalized, handNumber });
 
     if (activeCount <= 1) {
       await this.completeTournament(tournamentId, tableId);

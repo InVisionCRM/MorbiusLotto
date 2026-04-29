@@ -770,12 +770,17 @@ export default function GlobalMainNav({
     const openResponsible = () => setResponsibleGamingOpen(true)
     const openInstall = () => openInstallHelp()
     const openReport = () => setReportOpen(true)
+    const openGameWallet = () => {
+      if (onOpenDepositModal) onOpenDepositModal();
+      else setGameWalletOpen(true);
+    }
     window.addEventListener('sophie:open_avatar_editor', openAvatar)
     window.addEventListener('sophie:open_profile_settings', openSettings)
     window.addEventListener('sophie:open_swap', openSwapEvt)
     window.addEventListener('sophie:open_responsible_gaming', openResponsible)
     window.addEventListener('sophie:open_install_app', openInstall)
     window.addEventListener('sophie:open_report_issue', openReport)
+    window.addEventListener('sophie:open_game_wallet', openGameWallet)
     return () => {
       window.removeEventListener('sophie:open_avatar_editor', openAvatar)
       window.removeEventListener('sophie:open_profile_settings', openSettings)
@@ -783,8 +788,9 @@ export default function GlobalMainNav({
       window.removeEventListener('sophie:open_responsible_gaming', openResponsible)
       window.removeEventListener('sophie:open_install_app', openInstall)
       window.removeEventListener('sophie:open_report_issue', openReport)
+      window.removeEventListener('sophie:open_game_wallet', openGameWallet)
     }
-  }, [openInstallHelp]);
+  }, [openInstallHelp, onOpenDepositModal]);
   const handleOpenGameWallet = useCallback(() => {
     if (onOpenDepositModal) {
       onOpenDepositModal();

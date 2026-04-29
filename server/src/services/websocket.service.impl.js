@@ -1792,6 +1792,22 @@ class WebSocketService {
             this.sendError(ws, error.message || 'Failed to cancel tournament', message.requestId);
         }
     }
+    async handlePokerTournamentForfeit(ws, message) {
+        try {
+            if (!this.pokerTournamentService || !ws.playerAddress) {
+                return this.sendError(ws, 'Poker tournaments not available or wallet required', message.requestId);
+            }
+            const { tournamentId } = message.payload;
+            if (!tournamentId)
+                return this.sendError(ws, 'tournamentId required', message.requestId);
+            await this.pokerTournamentService.forfeitPokerTournament(tournamentId, ws.playerAddress);
+            this.sendMessage(ws, { type: 'poker_tournament_forfeit', payload: { tournamentId }, requestId: message.requestId });
+        }
+        catch (error) {
+            logger_1.logger.error('Error forfeiting poker tournament:', error);
+            this.sendError(ws, error.message || 'Failed to forfeit tournament', message.requestId);
+        }
+    }
     async handlePokerVoiceToken(ws, message) {
         try {
             if (!ws.playerAddress) {

@@ -5,6 +5,7 @@ import { formatEther } from 'viem';
 import { TOURNAMENT_CONFIG } from '@/hooks/use-tournament';
 import { Theme } from '@/lib/theme';
 import { ConfirmActionCard } from '@/components/shared/ConfirmActionCard';
+import { InsufficientBalanceDialog } from '@/components/shared/InsufficientBalanceDialog';
 
 interface TournamentEntryProps {
   isOpen: boolean;
@@ -26,6 +27,7 @@ export function TournamentEntry({
   entryCount = 0,
 }: TournamentEntryProps) {
   const [showConfirm, setShowConfirm] = useState(false);
+  const [showInsufficient, setShowInsufficient] = useState(false);
 
   if (!isOpen) return null;
 
@@ -137,11 +139,17 @@ export function TournamentEntry({
               Cancel
             </button>
             <button
-              onClick={() => canAfford && setShowConfirm(true)}
-              disabled={!canAfford || isLoading}
+              onClick={() => {
+                if (isLoading) return;
+                if (canAfford) setShowConfirm(true);
+                else setShowInsufficient(true);
+              }}
+              disabled={isLoading}
               className={`flex-1 py-3 rounded-xl font-semibold transition-all ${
                 canAfford && !isLoading
                   ? 'bg-gradient-to-r from-cyan-500 to-purple-500 hover:from-cyan-400 hover:to-purple-400 text-white shadow-lg shadow-cyan-500/30'
+                  : !canAfford && !isLoading
+                  ? 'bg-amber-600/80 hover:bg-amber-500 text-white shadow-lg shadow-amber-500/20'
                   : 'bg-gray-600 text-gray-400 cursor-not-allowed'
               }`}
             >
@@ -179,6 +187,14 @@ export function TournamentEntry({
               isLoading={isLoading}
             />
           )}
+
+          <InsufficientBalanceDialog
+            isOpen={showInsufficient}
+            onClose={() => setShowInsufficient(false)}
+            title="Not Enough MORBIUS"
+            required={`${TOURNAMENT_CONFIG.BUY_IN_DISPLAY} MORBIUS`}
+            balance={`${formattedBalance} MORBIUS`}
+          />
         </div>
       </div>
     </div>
