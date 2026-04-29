@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { StreamVideoClient, type Call } from '@stream-io/video-react-sdk';
 import type { BlackjackWebSocketClient } from '@/lib/websocket-client';
+import { WS_MESSAGE_TYPES } from '@/lib/websocket-message-types';
 
 interface VoiceTokenPayload {
   apiKey: string;
@@ -39,7 +40,7 @@ let cachedClient: StreamVideoClient | null = null;
 let cachedClientUserId: string | null = null;
 
 async function fetchVoiceToken(wsClient: BlackjackWebSocketClient): Promise<VoiceTokenPayload> {
-  const res = (await wsClient.sendRequest('poker_voice_token', {})) as VoiceTokenPayload | null;
+  const res = (await wsClient.sendRequest(WS_MESSAGE_TYPES.pokerVoiceToken, {})) as VoiceTokenPayload | null;
   if (!res?.apiKey || !res.token || !res.userId) {
     throw new Error('voice token unavailable');
   }

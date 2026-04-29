@@ -69,8 +69,10 @@ exports.WS_POKER_MESSAGES = [
     'poker_tournament_create',
     'poker_tournament_join',
     'poker_tournament_cancel',
+    'poker_tournament_forfeit',
     'poker_tournament_list_reclaimable',
     'poker_tournament_list_claimable',
+    'poker_voice_token',
 ];
 /** Multiplayer BJ: `bj_multi_place_bet` payload may include optional `clientSeed` (string, max 255). */
 exports.WS_BJ_MULTI_MESSAGES = [

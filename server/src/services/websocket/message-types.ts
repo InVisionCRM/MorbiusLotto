@@ -72,6 +72,7 @@ export const WS_POKER_MESSAGES = [
   'poker_tournament_forfeit',
   'poker_tournament_list_reclaimable',
   'poker_tournament_list_claimable',
+  'poker_voice_token',
 ] as const;
 
 /** Multiplayer BJ: `bj_multi_place_bet` payload may include optional `clientSeed` (string, max 255). */

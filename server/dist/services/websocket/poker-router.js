@@ -21,5 +21,7 @@ exports.POKER_MESSAGE_HANDLER_MAP = {
     poker_tournament_join: 'handlePokerTournamentJoin',
     poker_tournament_get_state: 'handlePokerTournamentGetState',
     poker_tournament_cancel: 'handlePokerTournamentCancel',
+    poker_tournament_forfeit: 'handlePokerTournamentForfeit',
+    poker_voice_token: 'handlePokerVoiceToken',
 };
 //# sourceMappingURL=poker-router.js.map
