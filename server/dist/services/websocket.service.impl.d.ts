@@ -192,6 +192,8 @@ export class WebSocketService {
     handlePokerTournamentGetState(ws: any, message: any): Promise<void>;
     handlePokerTournamentRegistrants(ws: any, message: any): Promise<void>;
     handlePokerTournamentCancel(ws: any, message: any): Promise<void>;
+    handlePokerTournamentForfeit(ws: any, message: any): Promise<void>;
+    handlePokerVoiceToken(ws: any, message: any): Promise<void>;
     getConnectionCount(): number;
     getActivePlayersCount(): Promise<number>;
     /**

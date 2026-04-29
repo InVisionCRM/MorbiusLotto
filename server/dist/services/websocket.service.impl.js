@@ -24,6 +24,7 @@ const tournament_router_1 = require("./websocket/tournament-router");
 const poker_router_1 = require("./websocket/poker-router");
 const bj_multi_router_1 = require("./websocket/bj-multi-router");
 const poker_chip_wallet_1 = require("./poker-chip-wallet");
+const stream_voice_service_1 = require("./stream-voice.service");
 // EIP-712 domain and types for WebSocket authentication
 const AUTH_EIP712_DOMAIN = {
     name: 'MORBlotto Blackjack',
@@ -429,7 +430,7 @@ class WebSocketService {
         await this.dispatchDomainMessage(ws, message, tournament_router_1.TOURNAMENT_MESSAGE_HANDLER_MAP, 'tournament');
     }
     async routePokerMessage(ws, message) {
-        const requiresAuth = message.type !== 'poker_tournament_list' && message.type !== 'poker_tournament_get_state';
+        const requiresAuth = message.type !== 'poker_tournament_list' && message.type !== 'poker_tournament_get_state' && message.type !== 'poker_voice_token';
         if (requiresAuth && !this.requireAuth(ws, message))
             return;
         await this.dispatchDomainMessage(ws, message, poker_router_1.POKER_MESSAGE_HANDLER_MAP, 'poker');
@@ -1672,8 +1673,9 @@ class WebSocketService {
                         tokenAddress: String(e.tokenAddress ?? ''),
                         amount: BigInt(String(e.amount ?? '0')),
                         decimals: Number(e.decimals ?? 18),
-                        // Symbol is optional and re-validated server-side; pass-through only.
+                        // Symbol / name optional; re-validated server-side; pass-through only.
                         symbol: typeof e.symbol === 'string' ? e.symbol : undefined,
+                        name: typeof e.name === 'string' ? e.name : undefined,
                     };
                 }
                 catch (_err) {
@@ -1788,6 +1790,46 @@ class WebSocketService {
         catch (error) {
             logger_1.logger.error('Error cancelling poker tournament:', error);
             this.sendError(ws, error.message || 'Failed to cancel tournament', message.requestId);
+        }
+    }
+    async handlePokerTournamentForfeit(ws, message) {
+        try {
+            if (!this.pokerTournamentService || !ws.playerAddress) {
+                return this.sendError(ws, 'Poker tournaments not available or wallet required', message.requestId);
+            }
+            const { tournamentId } = message.payload;
+            if (!tournamentId)
+                return this.sendError(ws, 'tournamentId required', message.requestId);
+            await this.pokerTournamentService.forfeitPokerTournament(tournamentId, ws.playerAddress);
+            this.sendMessage(ws, { type: 'poker_tournament_forfeit', payload: { tournamentId }, requestId: message.requestId });
+        }
+        catch (error) {
+            logger_1.logger.error('Error forfeiting poker tournament:', error);
+            this.sendError(ws, error.message || 'Failed to forfeit tournament', message.requestId);
+        }
+    }
+    async handlePokerVoiceToken(ws, message) {
+        try {
+            if (!ws.playerAddress) {
+                const apiKey = (0, stream_voice_service_1.getStreamVoiceApiKey)();
+                if (!apiKey) {
+                    return this.sendError(ws, 'voice chat not configured', message.requestId);
+                }
+                return this.sendMessage(ws, {
+                    type: 'poker_voice_token',
+                    payload: { apiKey, anonymous: true },
+                    requestId: message.requestId
+                });
+            }
+            const tokenInfo = stream_voice_service_1.generateStreamVoiceToken(ws.playerAddress);
+            if (!tokenInfo) {
+                return this.sendError(ws, 'voice chat not configured', message.requestId);
+            }
+            this.sendMessage(ws, { type: 'poker_voice_token', payload: tokenInfo, requestId: message.requestId });
+        }
+        catch (error) {
+            logger_1.logger.error('Error issuing voice token:', error);
+            this.sendError(ws, error.message || 'Failed to issue voice token', message.requestId);
         }
     }
     // Get connection count

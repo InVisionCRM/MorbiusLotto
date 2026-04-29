@@ -8,7 +8,10 @@ export interface BlindLevel {
     handsPerLevel: number;
 }
 /** How posted blinds go up during the event (stored in `poker_config`). */
-export type PokerBlindIncreaseMode = 'knockout' | 'by_hand';
+export type PokerBlindIncreaseMode = 'knockout' | 'by_hand' | 'by_time';
+/** Allowed wall-clock intervals (minutes) for `by_time` mode. */
+export declare const BLIND_INTERVAL_MINUTES_OPTIONS: readonly [15, 30, 45, 60];
+export type BlindIntervalMinutes = typeof BLIND_INTERVAL_MINUTES_OPTIONS[number];
 export interface PokerTournamentConfig {
     startingStack: number;
     minPlayers: number;
@@ -17,8 +20,11 @@ export interface PokerTournamentConfig {
     /**
      * `knockout` (default): blinds multiply when someone busts (legacy SNG behavior).
      * `by_hand`: blinds follow `blindSchedule` / `handsPerLevel` after each completed hand.
+     * `by_time`: blinds advance one level every `blindIntervalMinutes` of wall-clock time.
      */
     blindIncreaseMode?: PokerBlindIncreaseMode;
+    /** Required when `blindIncreaseMode === 'by_time'`. Must be one of `BLIND_INTERVAL_MINUTES_OPTIONS`. */
+    blindIntervalMinutes?: BlindIntervalMinutes;
 }
 export declare const DEFAULT_BLIND_SCHEDULE: BlindLevel[];
 export interface PokerTournamentPlayer {
@@ -47,6 +53,7 @@ export interface PokerTournamentState {
     prizeTokenAddress?: string | null;
     prizeTokenDecimals?: number | null;
     prizeTokenSymbol?: string | null;
+    prizeTokenName?: string | null;
     buyInAmount: string;
     prizeDistributionType: string;
     pokerConfig?: PokerTournamentConfig;
@@ -54,6 +61,12 @@ export interface PokerTournamentState {
     actionTimerSeconds?: number | null;
     /** Percent of prize pool per finishing rank (index 0 = 1st place); integers summing to 100. */
     prizeSplitPercentages?: number[];
+    /**
+     * `by_time` mode only — wall-clock instant the current blind level became active.
+     * Clients can subtract from `Date.now()` and compare against `pokerConfig.blindIntervalMinutes`
+     * to render a countdown to the next bump. Null/absent for other modes or pre-activation.
+     */
+    currentBlindLevelStartedAt?: string | null;
 }
 export interface PokerTournamentSummary {
     tournamentId: string;
@@ -75,6 +88,8 @@ export interface PokerTournamentSummary {
     prizeTokenDecimals: number | null;
     /** Display ticker (e.g. "HEX"); null if missing or chips. */
     prizeTokenSymbol: string | null;
+    /** Token contract name for UI (e.g. from PulseScan); null = use symbol / generic label. */
+    prizeTokenName: string | null;
     tableId: string | null;
     createdAt: string;
     creatorAddress: string | null;
@@ -85,8 +100,10 @@ export interface PokerTournamentSummary {
     /** Level-1 or live table blinds (chip ints). */
     smallBlind: number;
     bigBlind: number;
-    /** `knockout` = elimination bumps; `by_hand` = schedule after each hand. */
+    /** `knockout` = elimination bumps; `by_hand` = schedule after each hand; `by_time` = wall-clock interval. */
     blindIncreaseMode: PokerBlindIncreaseMode;
+    /** Set only when `blindIncreaseMode === 'by_time'`. */
+    blindIntervalMinutes?: BlindIntervalMinutes;
 }
 /** Where the initial guaranteed pool is debited when buy-in is 0. */
 export type GuaranteedPrizePoolSource = 'creator' | 'platform_promo' | 'custom_token';
@@ -112,6 +129,8 @@ export interface CustomTokenEscrowFunding {
     decimals: number;
     /** Display ticker (e.g. "HEX"). Optional — server falls back to address tail in lobby/HUD if missing. */
     symbol?: string;
+    /** Full token name (e.g. from picker / PulseScan). Optional; stored for history/lobby display. */
+    name?: string;
 }
 export interface CreatePokerTournamentParams {
     creatorAddress: string;
@@ -164,6 +183,8 @@ export declare class PokerTournamentService {
     private handsPerLevelNumeric;
     /** Normalize stored / client-sent blind mode (case, kebab, legacy snake key handled in parse). */
     private normalizeBlindIncreaseMode;
+    /** Normalize stored / client-sent blind interval (minutes). Returns null when not in the allowed set. */
+    private normalizeBlindIntervalMinutes;
     /** Return the BlindLevel that applies for a given hand number (1-indexed). */
     computeBlindLevel(blindSchedule: BlindLevel[], handNumber: number): BlindLevel;
     /**
@@ -171,6 +192,16 @@ export declare class PokerTournamentService {
      * HUD / WS `newLevel` uses this tier: 1 + floor(log2(posted SB / level-1 SB)).
      */
     knockoutBlindDisplayLevel(blindSchedule: BlindLevel[], smallBlindChips: number): number;
+    /**
+     * `by_time`: how many full intervals have elapsed since `levelStartedAt`.
+     * Capped at the schedule length so we never read past the last level.
+     * Returns the level number (1-based) that should currently be in effect.
+     *
+     * Example: schedule has 8 levels, interval = 30 min, levelStartedAt was the
+     * level-1 start. After 75 minutes (2 full 30-min intervals elapsed) the
+     * effective level is `1 + 2 = 3`.
+     */
+    computeBlindLevelByTime(blindSchedule: BlindLevel[], intervalMinutes: number, levelStartedAt: Date, startingLevel: number, now?: Date): BlindLevel;
     /** Blinds that apply to the next hand after `completedHandNumber` (1-based) finishes. */
     blindsForNextHand(blindSchedule: BlindLevel[], completedHandNumber: number): BlindLevel;
     private getBlindIncreaseMode;
@@ -218,11 +249,33 @@ export declare class PokerTournamentService {
      */
     eliminatePlayerForConsecutiveTimeouts(tableId: string, playerAddress: string): Promise<void>;
     /**
+     * Player-initiated forfeit: voluntarily eliminates the caller from an active poker tournament.
+     * Same DB path as a chip bust (rank assigned, seat removed, WS event broadcast, knockout blind
+     * multiplier applied, may complete the tournament). No refund — buy-in stays in the prize pool.
+     *
+     * No-ops cleanly when the player isn't seated or the tournament isn't active.
+     */
+    forfeitPokerTournament(tournamentId: string, playerAddress: string): Promise<void>;
+    /**
      * `tryStartNextHand` refuses to deal when &lt; 2 seats have stack &gt; 0. If eliminations were not fully
      * applied (e.g. stack format mismatch), the table can stall with no winner. Re-sync entries from
      * seats, eliminate 0-chip players (no `hands_played` bump), then complete when ≤1 remain.
      */
     recoverTournamentTableIfUnderTwoStackedSeats(tableId: string): Promise<void>;
+    /**
+     * Scheduler tick: advance blinds for all active poker tournaments running in
+     * `by_time` mode whose current level has been live for ≥ `blindIntervalMinutes`.
+     *
+     * Called by `FreerollSchedulerService`. Cheap on average — the partial index on
+     * `current_blind_level_started_at` keeps the scan tight and most tables won't
+     * need an update on any given poll.
+     *
+     * One row per tournament-table; we step the level forward one at a time per
+     * tick (even if multiple intervals have passed), so a brief outage doesn't
+     * skip levels visually — but `computeBlindLevelByTime` still picks the
+     * correct target so we'll catch up over the next few ticks.
+     */
+    tickTimeBasedBlindAdvances(): Promise<void>;
     completeTournament(tournamentId: string, tableId?: string): Promise<void>;
     cancelPokerTournament(tournamentId: string, callerAddress: string): Promise<void>;
     /**
@@ -260,6 +313,7 @@ export declare class PokerTournamentService {
         prizeTokenAddress: string;
         prizeTokenDecimals: number;
         prizeTokenSymbol: string | null;
+        prizeTokenName: string | null;
         prizePool: string;
         escrowTournamentIdBytes32: string | null;
     }>>;
@@ -278,6 +332,7 @@ export declare class PokerTournamentService {
         prizeTokenAddress: string;
         prizeTokenDecimals: number;
         prizeTokenSymbol: string | null;
+        prizeTokenName: string | null;
         /** Token-wei the player should be owed; pair with `prizeTokenDecimals` for display. */
         prizeWon: string;
         escrowTournamentIdBytes32: string | null;

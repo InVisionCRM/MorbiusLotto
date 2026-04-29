@@ -66,6 +66,7 @@ async function initializeRuntimeServices(server, port) {
         pokerGameService.kickStaleSitOuts().catch((err) => logger_1.logger.warn('Sit-out timeout cron error', { error: err }));
     }, 60_000); // check every minute
     const freerollScheduler = new freeroll_scheduler_service_1.FreerollSchedulerService(dbService.getPool(), tournamentService);
+    freerollScheduler.setPokerTournamentService(pokerTournamentService);
     freerollScheduler.start();
     const tournamentScheduler = new tournament_scheduler_service_1.TournamentSchedulerService(dbService.getPool(), tournamentService);
     tournamentScheduler.start();

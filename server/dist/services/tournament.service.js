@@ -951,6 +951,10 @@ class TournamentService {
         t.status AS tournament_status,
         t.tournament_type,
         t.prize_token_address,
+        t.prize_token_decimals,
+        t.prize_token_symbol,
+        t.prize_token_name,
+        t.game_type,
         t.ended_at,
         t.ends_at,
         te.id AS entry_id,
@@ -974,6 +978,15 @@ class TournamentService {
             tournamentStatus: row.tournament_status,
             tournamentType: row.tournament_type ?? 'standard',
             prizeTokenAddress: row.prize_token_address ?? null,
+            prizeTokenDecimals: (() => {
+                if (row.prize_token_decimals == null)
+                    return null;
+                const n = Number(row.prize_token_decimals);
+                return Number.isFinite(n) ? n : null;
+            })(),
+            prizeTokenSymbol: row.prize_token_symbol ?? null,
+            prizeTokenName: row.prize_token_name ?? null,
+            gameType: row.game_type != null ? String(row.game_type) : null,
             endedAt: row.ended_at ?? null,
             endsAt: row.ends_at ?? null,
             entryId: row.entry_id,
@@ -2190,6 +2203,10 @@ class TournamentService {
         t.buy_in_amount,
         t.prize_pool,
         t.prize_token_address,
+        t.prize_token_decimals,
+        t.prize_token_symbol,
+        t.prize_token_name,
+        t.game_type,
         t.status,
         t.created_at,
         t.ended_at,
@@ -2208,6 +2225,10 @@ class TournamentService {
             buyInAmount: this.toBigInt(row.buy_in_amount),
             prizePool: this.toBigInt(row.prize_pool),
             prizeTokenAddress: row.prize_token_address ?? null,
+            prizeTokenDecimals: row.prize_token_decimals != null ? Number(row.prize_token_decimals) : null,
+            prizeTokenSymbol: row.prize_token_symbol ?? null,
+            prizeTokenName: row.prize_token_name ?? null,
+            gameType: row.game_type != null ? String(row.game_type) : null,
             status: row.status,
             createdAt: row.created_at,
             endedAt: row.ended_at ?? null,
@@ -2218,7 +2239,8 @@ class TournamentService {
     /** Full results page for a single tournament: metadata + final standings. */
     async getTournamentResults(tournamentId) {
         const tRes = await this.pool.query(`SELECT id, name, tournament_type, buy_in_amount, starting_chips, prize_pool,
-              prize_token_address, status, created_at, started_at, ended_at, custom_image,
+              prize_token_address, prize_token_decimals, prize_token_symbol, prize_token_name,
+              game_type, status, created_at, started_at, ended_at, custom_image,
               time_limit_minutes, max_players, prize_distribution_type
          FROM tournaments WHERE id = $1`, [tournamentId]);
         if (tRes.rows.length === 0)
@@ -2242,6 +2264,10 @@ class TournamentService {
             startingChips: Number(t.starting_chips ?? 0),
             prizePool: this.toBigInt(t.prize_pool),
             prizeTokenAddress: t.prize_token_address ?? null,
+            prizeTokenDecimals: t.prize_token_decimals != null ? Number(t.prize_token_decimals) : null,
+            prizeTokenSymbol: t.prize_token_symbol ?? null,
+            prizeTokenName: t.prize_token_name ?? null,
+            gameType: t.game_type != null ? String(t.game_type) : null,
             status: t.status,
             createdAt: t.created_at,
             startedAt: t.started_at ?? null,

@@ -11,10 +11,19 @@ const MAX_EVENTS_PER_POLL = 10;
 class FreerollSchedulerService {
     pool;
     tournamentService;
+    pokerTournamentService = null;
     intervalId = null;
     constructor(pool, tournamentService) {
         this.pool = pool;
         this.tournamentService = tournamentService;
+    }
+    /**
+     * Wire in the poker tournament service so the scheduler can advance time-based
+     * blinds (`blindIncreaseMode === 'by_time'`) on every poll. Optional — if not
+     * set, time-based tournaments will not advance blinds, but other handlers still run.
+     */
+    setPokerTournamentService(svc) {
+        this.pokerTournamentService = svc;
     }
     start() {
         if (this.intervalId != null) {
@@ -48,6 +57,16 @@ class FreerollSchedulerService {
         }
         catch (err) {
             logger_1.logger.error('FreerollSchedulerService: poll error: %s', err);
+        }
+        // Time-based blind advances for active poker tournaments running in `by_time` mode.
+        // Errors are swallowed inside the tick; this just guards against a thrown rejection.
+        if (this.pokerTournamentService) {
+            try {
+                await this.pokerTournamentService.tickTimeBasedBlindAdvances();
+            }
+            catch (err) {
+                logger_1.logger.error('FreerollSchedulerService: poker by_time tick error: %s', err);
+            }
         }
     }
     async getPendingEvents() {

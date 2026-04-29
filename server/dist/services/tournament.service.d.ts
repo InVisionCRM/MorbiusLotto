@@ -71,6 +71,10 @@ export interface PlayerTournamentHistoryItem {
     tournamentStatus: 'active' | 'completed' | 'cancelled';
     tournamentType: string;
     prizeTokenAddress: string | null;
+    prizeTokenDecimals: number | null;
+    prizeTokenSymbol: string | null;
+    prizeTokenName: string | null;
+    gameType: string | null;
     /** When the tournament actually ended (set on completion) */
     endedAt: Date | null;
     /** When the tournament is scheduled to end (time limit; null = no limit). Use for "time remaining" when in progress. */
@@ -507,6 +511,10 @@ export interface CompletedTournamentSummary {
     buyInAmount: bigint;
     prizePool: bigint;
     prizeTokenAddress: string | null;
+    prizeTokenDecimals: number | null;
+    prizeTokenSymbol: string | null;
+    prizeTokenName: string | null;
+    gameType: string | null;
     status: 'completed' | 'cancelled' | string;
     createdAt: Date;
     endedAt: Date | null;
@@ -533,6 +541,10 @@ export interface TournamentResults {
     startingChips: number;
     prizePool: bigint;
     prizeTokenAddress: string | null;
+    prizeTokenDecimals: number | null;
+    prizeTokenSymbol: string | null;
+    prizeTokenName: string | null;
+    gameType: string | null;
     status: string;
     createdAt: Date;
     startedAt: Date | null;

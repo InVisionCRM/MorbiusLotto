@@ -312,8 +312,9 @@ async function initializeServices() {
         pokerGameService.setTournamentTimeoutEliminationCallback((tableId, playerAddress) => pokerTournamentService.eliminatePlayerForConsecutiveTimeouts(tableId, playerAddress));
         // Wire BJ multi broadcast callback
         bjMultiService.setBroadcastCallback((tableId) => wsService.broadcastBJMultiTableState(tableId));
-        // Freeroll scheduler (polls pending scheduled events: start, end)
+        // Freeroll scheduler (polls pending scheduled events: start, end; also ticks poker by_time blind advances)
         freerollScheduler = new freeroll_scheduler_service_1.FreerollSchedulerService(dbService.getPool(), tournamentService);
+        freerollScheduler.setPokerTournamentService(pokerTournamentService);
         freerollScheduler.start();
         // Tournament scheduler (time-expired buy-in tournaments, stuck-tournament recovery)
         tournamentScheduler = new tournament_scheduler_service_1.TournamentSchedulerService(dbService.getPool(), tournamentService);
@@ -1799,6 +1800,32 @@ async function initializeServices() {
                 res.status(500).json({ error: 'Internal server error' });
             }
         });
+        /** DB or migration hints for single-player wager tier routes */
+        const blackjackSpWagerTiersSchemaErrorResponse = (res, error, context) => {
+            const err = error;
+            const msg = typeof err.message === 'string' ? err.message : '';
+            if (err.code === '42P01' || /relation ["']?blackjack_sp_wager_tiers["']? does not exist/i.test(msg)) {
+                logger_1.logger.error(`${context}: blackjack_sp_wager_tiers missing`, { error });
+                res.status(503).json({
+                    error: 'Run migration 109 from repo root: node server/run-migration.js migrations/109_blackjack_sp_wager_tiers.sql',
+                });
+                return true;
+            }
+            if (err.code === '42703' && msg.includes('blackjack_sp_wager_tiers')) {
+                logger_1.logger.error(`${context}: blackjack_sp_wager_tiers column mismatch`, { error });
+                res.status(503).json({
+                    error: 'blackjack_sp_wager_tiers schema mismatch. Apply migrations 109 and 111 (see server/migrations/).',
+                });
+                return true;
+            }
+            if (/value too long/i.test(msg) && /label/i.test(msg)) {
+                res.status(400).json({
+                    error: 'Label column too small. Run: node server/run-migration.js migrations/111_blackjack_sp_wager_tiers_label_widen.sql',
+                });
+                return true;
+            }
+            return false;
+        };
         // Public: single-player wager tiers (enabled only; used by game + admin UI)
         app.get('/api/blackjack/wager-tiers', async (_req, res) => {
             try {
@@ -1817,6 +1844,8 @@ async function initializeServices() {
                 });
             }
             catch (error) {
+                if (blackjackSpWagerTiersSchemaErrorResponse(res, error, 'GET /api/blackjack/wager-tiers'))
+                    return;
                 logger_1.logger.error('Error fetching blackjack wager tiers:', error);
                 res.status(500).json({ error: 'Internal server error' });
             }
@@ -2096,6 +2125,8 @@ async function initializeServices() {
                 sendJson(res, { tiers: rows.map(mapSpWagerTierAdmin) });
             }
             catch (error) {
+                if (blackjackSpWagerTiersSchemaErrorResponse(res, error, 'GET /api/admin/bj-single/wager-tiers'))
+                    return;
                 logger_1.logger.error('Error listing BJ single wager tiers:', error);
                 res.status(500).json({ error: 'Internal server error' });
             }
@@ -2145,6 +2176,8 @@ async function initializeServices() {
                     res.status(409).json({ error: 'Slug must be unique' });
                     return;
                 }
+                if (blackjackSpWagerTiersSchemaErrorResponse(res, error, 'POST /api/admin/bj-single/wager-tiers'))
+                    return;
                 logger_1.logger.error('Error creating BJ single wager tier:', error);
                 res.status(500).json({ error: 'Internal server error' });
             }
@@ -2210,6 +2243,8 @@ async function initializeServices() {
                     res.status(409).json({ error: 'Slug must be unique' });
                     return;
                 }
+                if (blackjackSpWagerTiersSchemaErrorResponse(res, error, 'PATCH /api/admin/bj-single/wager-tiers'))
+                    return;
                 logger_1.logger.error('Error updating BJ single wager tier:', error);
                 res.status(500).json({ error: 'Internal server error' });
             }
@@ -2225,6 +2260,8 @@ async function initializeServices() {
                 res.json({ ok: true });
             }
             catch (error) {
+                if (blackjackSpWagerTiersSchemaErrorResponse(res, error, 'DELETE /api/admin/bj-single/wager-tiers'))
+                    return;
                 logger_1.logger.error('Error deleting BJ single wager tier:', error);
                 res.status(500).json({ error: 'Internal server error' });
             }

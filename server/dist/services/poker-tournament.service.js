@@ -1,6 +1,6 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.PokerTournamentService = exports.DEFAULT_BLIND_SCHEDULE = void 0;
+exports.PokerTournamentService = exports.DEFAULT_BLIND_SCHEDULE = exports.BLIND_INTERVAL_MINUTES_OPTIONS = void 0;
 exports.normalizePokerTournamentPrizePercents = normalizePokerTournamentPrizePercents;
 const logger_1 = require("../utils/logger");
 const safe_bigint_1 = require("../utils/safe-bigint");
@@ -9,6 +9,8 @@ const poker_chip_wallet_1 = require("./poker-chip-wallet");
 const escrow_status_1 = require("../utils/escrow-status");
 const tournament_id_bytes32_1 = require("../utils/tournament-id-bytes32");
 const escrow_payout_1 = require("../utils/escrow-payout");
+/** Allowed wall-clock intervals (minutes) for `by_time` mode. */
+exports.BLIND_INTERVAL_MINUTES_OPTIONS = [15, 30, 45, 60];
 exports.DEFAULT_BLIND_SCHEDULE = [
     { level: 1, smallBlind: 25, bigBlind: 50, handsPerLevel: 10 },
     { level: 2, smallBlind: 50, bigBlind: 100, handsPerLevel: 10 },
@@ -109,7 +111,20 @@ class PokerTournamentService {
         if (raw == null || raw === '')
             return 'knockout';
         const s = String(raw).trim().toLowerCase().replace(/-/g, '_');
-        return s === 'by_hand' ? 'by_hand' : 'knockout';
+        if (s === 'by_hand')
+            return 'by_hand';
+        if (s === 'by_time')
+            return 'by_time';
+        return 'knockout';
+    }
+    /** Normalize stored / client-sent blind interval (minutes). Returns null when not in the allowed set. */
+    normalizeBlindIntervalMinutes(raw) {
+        const n = Math.floor(Number(raw));
+        if (!Number.isFinite(n))
+            return null;
+        return exports.BLIND_INTERVAL_MINUTES_OPTIONS.includes(n)
+            ? n
+            : null;
     }
     /** Return the BlindLevel that applies for a given hand number (1-indexed). */
     computeBlindLevel(blindSchedule, handNumber) {
@@ -136,6 +151,27 @@ class PokerTournamentService {
             return 1;
         const steps = Math.floor(Math.log2(ratio) + 1e-9);
         return 1 + steps;
+    }
+    /**
+     * `by_time`: how many full intervals have elapsed since `levelStartedAt`.
+     * Capped at the schedule length so we never read past the last level.
+     * Returns the level number (1-based) that should currently be in effect.
+     *
+     * Example: schedule has 8 levels, interval = 30 min, levelStartedAt was the
+     * level-1 start. After 75 minutes (2 full 30-min intervals elapsed) the
+     * effective level is `1 + 2 = 3`.
+     */
+    computeBlindLevelByTime(blindSchedule, intervalMinutes, levelStartedAt, startingLevel, now = new Date()) {
+        if (!blindSchedule.length) {
+            throw new Error('computeBlindLevelByTime: empty schedule');
+        }
+        const safeStart = Math.max(1, Math.floor(startingLevel));
+        const safeInterval = Math.max(1, Math.floor(intervalMinutes));
+        const elapsedMs = Math.max(0, now.getTime() - levelStartedAt.getTime());
+        const intervalMs = safeInterval * 60_000;
+        const stepsElapsed = Math.floor(elapsedMs / intervalMs);
+        const targetIdx = Math.min(blindSchedule.length - 1, safeStart - 1 + stepsElapsed);
+        return blindSchedule[targetIdx];
     }
     /** Blinds that apply to the next hand after `completedHandNumber` (1-based) finishes. */
     blindsForNextHand(blindSchedule, completedHandNumber) {
@@ -167,6 +203,8 @@ class PokerTournamentService {
         const obj = typeof raw === 'string' ? JSON.parse(raw) : raw;
         const modeRaw = obj.blindIncreaseMode ?? obj.blind_increase_mode;
         const blindIncreaseMode = this.normalizeBlindIncreaseMode(modeRaw);
+        const intervalRaw = obj.blindIntervalMinutes ?? obj.blind_interval_minutes;
+        const interval = this.normalizeBlindIntervalMinutes(intervalRaw);
         return {
             startingStack: Number(obj.startingStack ?? 5000),
             minPlayers: Number(obj.minPlayers ?? 2),
@@ -175,6 +213,7 @@ class PokerTournamentService {
                 ? obj.blindSchedule
                 : exports.DEFAULT_BLIND_SCHEDULE,
             blindIncreaseMode,
+            ...(blindIncreaseMode === 'by_time' && interval ? { blindIntervalMinutes: interval } : {}),
         };
     }
     // ---------------------------------------------------------------------------
@@ -185,6 +224,13 @@ class PokerTournamentService {
         const { config } = params;
         if (!config.blindSchedule || config.blindSchedule.length === 0) {
             throw new Error('Blind schedule must have at least one level');
+        }
+        const blindModeForCreate = this.normalizeBlindIncreaseMode(config.blindIncreaseMode);
+        if (blindModeForCreate === 'by_time') {
+            const interval = this.normalizeBlindIntervalMinutes(config.blindIntervalMinutes);
+            if (!interval) {
+                throw new Error(`blindIntervalMinutes is required when blindIncreaseMode is 'by_time' and must be one of ${exports.BLIND_INTERVAL_MINUTES_OPTIONS.join(', ')}`);
+            }
         }
         if (config.minPlayers < 2)
             throw new Error('minPlayers must be at least 2');
@@ -258,6 +304,12 @@ class PokerTournamentService {
                 if (s && /^[A-Za-z0-9._\-+]+$/.test(s))
                     symbolClean = s;
             }
+            let nameClean = null;
+            if (typeof e.name === 'string') {
+                const n = e.name.trim().slice(0, 64);
+                if (n.length > 0 && !/[<>\x00-\x08\x0B\x0C\x0E-\x1F]/.test(n))
+                    nameClean = n;
+            }
             // Re-read the escrow contract; trust on-chain state, not the client's claims.
             const pool = await (0, escrow_status_1.getEscrowPoolStatus)(e.tournamentId);
             if (!pool) {
@@ -311,6 +363,7 @@ class PokerTournamentService {
                 tokenAddress: e.tokenAddress.toLowerCase(),
                 decimals: dec,
                 symbol: symbolClean,
+                name: nameClean,
                 txHash: e.txHash.toLowerCase(),
                 bytes32Id: (0, tournament_id_bytes32_1.tournamentIdToBytes32)(e.tournamentId),
             };
@@ -326,7 +379,18 @@ class PokerTournamentService {
             }
         }
         const blindIncreaseMode = this.normalizeBlindIncreaseMode(config.blindIncreaseMode);
-        const configForDb = { ...config, blindIncreaseMode };
+        const blindIntervalMinutes = blindIncreaseMode === 'by_time'
+            ? this.normalizeBlindIntervalMinutes(config.blindIntervalMinutes) ?? undefined
+            : undefined;
+        const configForDb = {
+            ...config,
+            blindIncreaseMode,
+            ...(blindIntervalMinutes ? { blindIntervalMinutes } : {}),
+        };
+        // Strip a stale interval if mode isn't by_time so it doesn't accidentally persist.
+        if (blindIncreaseMode !== 'by_time') {
+            delete configForDb.blindIntervalMinutes;
+        }
         const prizePercentages = params.prizeDistributionType === 'custom'
             ? normalizePokerTournamentPrizePercents(config.maxPlayers, params.prizePercentages)
             : getPrizePercentagesForType(params.prizeDistributionType);
@@ -361,7 +425,7 @@ class PokerTournamentService {
         prize_distribution_type, prize_percentages, prize_pool, guaranteed_prize_funder_address,
         creator_fee_percent, platform_fee_percent, status,
         game_type, poker_config, scheduled_start_at,
-        prize_token_address, prize_token_decimals, prize_token_symbol,
+        prize_token_address, prize_token_decimals, prize_token_symbol, prize_token_name,
         escrow_tx_hash, escrow_tournament_id_bytes32
       ) VALUES (
         COALESCE($17::UUID, gen_random_uuid()),
@@ -370,8 +434,8 @@ class PokerTournamentService {
         $11, $12::JSONB, $13::NUMERIC, $14,
         2, 3, 'registration',
         'poker', $15::JSONB, $16,
-        $18, $19, $20,
-        $21, $22
+        $18, $19, $20, $21,
+        $22, $23
       ) RETURNING id`, [
                 params.name.trim(),
                 normalizedCreator,
@@ -393,6 +457,7 @@ class PokerTournamentService {
                 escrowVerified?.tokenAddress ?? null,
                 escrowVerified?.decimals ?? null,
                 escrowVerified?.symbol ?? null,
+                escrowVerified?.name ?? null,
                 escrowVerified?.txHash ?? null,
                 escrowVerified?.bytes32Id ?? null,
             ]);
@@ -432,6 +497,31 @@ class PokerTournamentService {
      */
     async joinPokerTournament(tournamentId, playerAddress, pinCode) {
         const normalized = this.normalizeAddress(playerAddress);
+        // Cheap fast path: when the caller is already registered (very common — table HUD reconnects,
+        // `refreshTournaments` re-subscribing to rooms, retry storms), skip opening a transaction with
+        // `SELECT ... FOR UPDATE`. Two simple reads instead of the full lock + 5+ queries.
+        const fastCheck = await this.pool.query(`SELECT te.id AS entry_id, t.status AS tournament_status, t.is_private, t.pin_code,
+              (SELECT id FROM poker_tables WHERE tournament_id = $1 LIMIT 1) AS table_id
+         FROM tournament_entries te
+         JOIN tournaments t ON t.id = te.tournament_id
+        WHERE te.tournament_id = $1
+          AND LOWER(te.player_address) = $2
+          AND te.status NOT IN ('busted', 'completed')
+        LIMIT 1`, [tournamentId, normalized]);
+        if (fastCheck.rows.length > 0) {
+            const row = fastCheck.rows[0];
+            const status = String(row.tournament_status ?? '');
+            if (status === 'registration' || status === 'active') {
+                if (row.is_private && pinCode !== row.pin_code) {
+                    throw new Error('Incorrect PIN code');
+                }
+                return {
+                    entryId: row.entry_id,
+                    autoStarted: !!row.table_id,
+                    tableId: row.table_id ?? null,
+                };
+            }
+        }
         /** Set only on successful new-registration path; idempotent path returns from inside `connect` block. */
         let committedEntryId = null;
         let committedShouldAutoStart = false;
@@ -652,9 +742,20 @@ class PokerTournamentService {
         const bbChips = BigInt(firstLevel.bigBlind).toString();
         const startingStackChips = BigInt(config.startingStack).toString();
         // Create dedicated tournament poker table
-        const tableRow = await this.pool.query(`INSERT INTO poker_tables (small_blind, big_blind, max_seats, status, tournament_id, tournament_mode)
-       VALUES ($1::NUMERIC, $2::NUMERIC, $3, 'waiting', $4, TRUE)
-       RETURNING id`, [sbChips, bbChips, config.maxPlayers, tournamentId]);
+        const isByTime = this.getBlindIncreaseMode(config) === 'by_time';
+        const tableRow = await this.pool.query(`INSERT INTO poker_tables (
+         small_blind, big_blind, max_seats, status, tournament_id, tournament_mode,
+         current_blind_level, current_blind_level_started_at
+       )
+       VALUES ($1::NUMERIC, $2::NUMERIC, $3, 'waiting', $4, TRUE, $5, $6)
+       RETURNING id`, [
+            sbChips,
+            bbChips,
+            config.maxPlayers,
+            tournamentId,
+            isByTime ? firstLevel.level : null,
+            isByTime ? new Date() : null,
+        ]);
         const tableId = tableRow.rows[0].id;
         // Seat all players with virtual chips
         for (const entry of entries.rows) {
@@ -854,6 +955,79 @@ class PokerTournamentService {
         }
     }
     /**
+     * Player-initiated forfeit: voluntarily eliminates the caller from an active poker tournament.
+     * Same DB path as a chip bust (rank assigned, seat removed, WS event broadcast, knockout blind
+     * multiplier applied, may complete the tournament). No refund — buy-in stays in the prize pool.
+     *
+     * No-ops cleanly when the player isn't seated or the tournament isn't active.
+     */
+    async forfeitPokerTournament(tournamentId, playerAddress) {
+        const normalized = this.normalizeAddress(playerAddress);
+        const tRow = await this.pool.query(`SELECT poker_config, status FROM tournaments WHERE id = $1`, [tournamentId]);
+        if (tRow.rows.length === 0) {
+            throw new Error('Tournament not found');
+        }
+        if (tRow.rows[0].status !== 'active') {
+            throw new Error('Forfeit only valid for active tournaments');
+        }
+        const seatRow = await this.pool.query(`SELECT pts.table_id
+         FROM poker_tournament_seats pts
+         JOIN tournament_entries te ON te.id = pts.entry_id
+        WHERE pts.tournament_id = $1
+          AND LOWER(pts.player_address) = $2
+          AND te.status = 'playing'
+          AND pts.eliminated_at IS NULL
+        LIMIT 1`, [tournamentId, normalized]);
+        if (seatRow.rows.length === 0) {
+            throw new Error('You are not seated in this tournament');
+        }
+        const tableId = seatRow.rows[0].table_id;
+        const tableInfo = await this.pool.query(`SELECT hand_number FROM poker_tables WHERE id = $1 AND tournament_mode = TRUE`, [tableId]);
+        if (tableInfo.rows.length === 0) {
+            throw new Error('Tournament table not found');
+        }
+        const handNumber = Number(tableInfo.rows[0].hand_number ?? 0);
+        const config = this.parsePokerConfig(tRow.rows[0].poker_config);
+        const seatCountRes = await this.pool.query(`SELECT COUNT(*)::text AS c FROM poker_seats WHERE table_id = $1`, [tableId]);
+        const seatCount = Number(seatCountRes.rows[0]?.c ?? 0);
+        if (seatCount <= 0)
+            return;
+        await this.eliminateBustedTournamentSeats(tableId, tournamentId, [normalized], handNumber, seatCount);
+        const blindMode = this.getBlindIncreaseMode(config);
+        if (blindMode === 'knockout') {
+            const tblBlinds = await this.pool.query(`SELECT small_blind, big_blind FROM poker_tables WHERE id = $1`, [tableId]);
+            if (tblBlinds.rows.length > 0) {
+                const sbWei = (0, safe_bigint_1.toBigIntSafe)(tblBlinds.rows[0].small_blind);
+                const bbWei = (0, safe_bigint_1.toBigIntSafe)(tblBlinds.rows[0].big_blind);
+                if (sbWei > 0n && bbWei > 0n) {
+                    const doubledSB = (sbWei * 2n).toString();
+                    const doubledBB = (bbWei * 2n).toString();
+                    await this.pool.query(`UPDATE poker_tables SET small_blind = $2::NUMERIC, big_blind = $3::NUMERIC WHERE id = $1`, [tableId, doubledSB, doubledBB]);
+                    const finalRow = await this.pool.query(`SELECT small_blind, big_blind FROM poker_tables WHERE id = $1`, [tableId]);
+                    if (finalRow.rows.length > 0) {
+                        const smallBlindChips = Number((0, safe_bigint_1.toBigIntSafe)(finalRow.rows[0].small_blind));
+                        const bigBlindChips = Number((0, safe_bigint_1.toBigIntSafe)(finalRow.rows[0].big_blind));
+                        const displayLevel = this.knockoutBlindDisplayLevel(config.blindSchedule, smallBlindChips);
+                        this.broadcast(`poker_tournament:${tournamentId}`, 'poker_tournament_blind_level_up', {
+                            tournamentId,
+                            tableId,
+                            newLevel: displayLevel,
+                            smallBlind: smallBlindChips,
+                            bigBlind: bigBlindChips,
+                            handNumber,
+                        });
+                    }
+                }
+            }
+        }
+        const activePlayers = await this.pool.query(`SELECT COUNT(*) AS c FROM tournament_entries WHERE tournament_id = $1 AND status = 'playing'`, [tournamentId]);
+        const activeCount = Number(activePlayers.rows[0].c);
+        logger_1.logger.info('Poker tournament player forfeited', { tournamentId, playerAddress: normalized, handNumber });
+        if (activeCount <= 1) {
+            await this.completeTournament(tournamentId, tableId);
+        }
+    }
+    /**
      * `tryStartNextHand` refuses to deal when &lt; 2 seats have stack &gt; 0. If eliminations were not fully
      * applied (e.g. stack format mismatch), the table can stall with no winner. Re-sync entries from
      * seats, eliminate 0-chip players (no `hands_played` bump), then complete when ≤1 remain.
@@ -942,6 +1116,106 @@ class PokerTournamentService {
         }
     }
     // ---------------------------------------------------------------------------
+    // Time-based blind tick (by_time mode)
+    // ---------------------------------------------------------------------------
+    /**
+     * Scheduler tick: advance blinds for all active poker tournaments running in
+     * `by_time` mode whose current level has been live for ≥ `blindIntervalMinutes`.
+     *
+     * Called by `FreerollSchedulerService`. Cheap on average — the partial index on
+     * `current_blind_level_started_at` keeps the scan tight and most tables won't
+     * need an update on any given poll.
+     *
+     * One row per tournament-table; we step the level forward one at a time per
+     * tick (even if multiple intervals have passed), so a brief outage doesn't
+     * skip levels visually — but `computeBlindLevelByTime` still picks the
+     * correct target so we'll catch up over the next few ticks.
+     */
+    async tickTimeBasedBlindAdvances() {
+        let tables;
+        try {
+            const res = await this.pool.query(`SELECT pt.id AS table_id,
+                pt.tournament_id,
+                t.poker_config,
+                pt.current_blind_level,
+                pt.current_blind_level_started_at,
+                pt.small_blind,
+                pt.big_blind,
+                pt.hand_number
+         FROM poker_tables pt
+         JOIN tournaments t ON t.id = pt.tournament_id
+         WHERE pt.tournament_mode = TRUE
+           AND t.status = 'active'
+           AND t.game_type = 'poker'
+           AND pt.current_blind_level_started_at IS NOT NULL`);
+            tables = res.rows;
+        }
+        catch (err) {
+            logger_1.logger.error('tickTimeBasedBlindAdvances: query failed', { err });
+            return;
+        }
+        for (const row of tables) {
+            try {
+                const config = this.parsePokerConfig(row.poker_config);
+                if (this.getBlindIncreaseMode(config) !== 'by_time')
+                    continue;
+                const interval = this.normalizeBlindIntervalMinutes(config.blindIntervalMinutes);
+                if (!interval)
+                    continue;
+                const startedAt = row.current_blind_level_started_at;
+                if (!(startedAt instanceof Date) || Number.isNaN(startedAt.getTime()))
+                    continue;
+                const startingLevel = Math.max(1, Math.floor(Number(row.current_blind_level ?? 1)));
+                const target = this.computeBlindLevelByTime(config.blindSchedule, interval, startedAt, startingLevel);
+                if (target.level === startingLevel)
+                    continue; // not yet time
+                const curSB = Number((0, safe_bigint_1.toBigIntSafe)(row.small_blind ?? 0));
+                const curBB = Number((0, safe_bigint_1.toBigIntSafe)(row.big_blind ?? 0));
+                const sameBlinds = curSB === target.smallBlind && curBB === target.bigBlind;
+                // Reset the level clock to NOW so the next interval starts cleanly,
+                // even if no on-table blind values changed (e.g. duplicate level rows).
+                await this.pool.query(`UPDATE poker_tables
+             SET small_blind = $2::NUMERIC,
+                 big_blind   = $3::NUMERIC,
+                 current_blind_level = $4,
+                 current_blind_level_started_at = NOW()
+           WHERE id = $1`, [
+                    row.table_id,
+                    BigInt(target.smallBlind).toString(),
+                    BigInt(target.bigBlind).toString(),
+                    target.level,
+                ]);
+                logger_1.logger.info('Poker tournament blinds advanced by time', {
+                    tournamentId: row.tournament_id,
+                    tableId: row.table_id,
+                    intervalMinutes: interval,
+                    fromLevel: startingLevel,
+                    toLevel: target.level,
+                    smallBlind: target.smallBlind,
+                    bigBlind: target.bigBlind,
+                    sameBlinds,
+                });
+                if (!sameBlinds) {
+                    this.broadcast(`poker_tournament:${row.tournament_id}`, 'poker_tournament_blind_level_up', {
+                        tournamentId: row.tournament_id,
+                        tableId: row.table_id,
+                        newLevel: target.level,
+                        smallBlind: target.smallBlind,
+                        bigBlind: target.bigBlind,
+                        handNumber: Number(row.hand_number ?? 0),
+                    });
+                }
+            }
+            catch (err) {
+                logger_1.logger.error('tickTimeBasedBlindAdvances: per-table tick failed', {
+                    tableId: row.table_id,
+                    tournamentId: row.tournament_id,
+                    err,
+                });
+            }
+        }
+    }
+    // ---------------------------------------------------------------------------
     // Complete
     // ---------------------------------------------------------------------------
     async completeTournament(tournamentId, tableId) {
@@ -963,7 +1237,7 @@ class PokerTournamentService {
         const resolvedTableId = tableId ?? (await this.getTableIdForTournament(tournamentId));
         const metaRes = await this.pool.query(`SELECT name, prize_pool::text, buy_in_amount::text,
               creator_fee_percent, platform_fee_percent,
-              prize_token_address, prize_token_decimals, prize_token_symbol
+              prize_token_address, prize_token_decimals, prize_token_symbol, prize_token_name
        FROM tournaments WHERE id = $1`, [tournamentId]);
         if (metaRes.rows.length === 0)
             return;
@@ -1075,6 +1349,7 @@ class PokerTournamentService {
             prizeTokenAddress: meta.prize_token_address ?? null,
             prizeTokenDecimals: meta.prize_token_decimals != null ? Number(meta.prize_token_decimals) : null,
             prizeTokenSymbol: meta.prize_token_symbol ?? null,
+            prizeTokenName: meta.prize_token_name ?? null,
         });
     }
     // ---------------------------------------------------------------------------
@@ -1279,6 +1554,7 @@ class PokerTournamentService {
                 prizeTokenAddress: r.prize_token_address ?? null,
                 prizeTokenDecimals: r.prize_token_decimals != null ? Number(r.prize_token_decimals) : null,
                 prizeTokenSymbol: r.prize_token_symbol ?? null,
+                prizeTokenName: r.prize_token_name ?? null,
                 tableId: r.table_id ?? null,
                 createdAt: r.created_at?.toISOString() ?? '',
                 creatorAddress: r.creator_address ?? null,
@@ -1304,7 +1580,7 @@ class PokerTournamentService {
     async listReclaimableCustomTokenPokerTournaments(creatorAddress) {
         const normalized = this.normalizeAddress(creatorAddress);
         const result = await this.pool.query(`SELECT id, name, ended_at, prize_token_address, prize_token_decimals, prize_token_symbol,
-              prize_pool, escrow_tournament_id_bytes32
+              prize_token_name, prize_pool, escrow_tournament_id_bytes32
        FROM tournaments
        WHERE game_type = 'poker'
          AND status = 'cancelled'
@@ -1319,6 +1595,7 @@ class PokerTournamentService {
             prizeTokenAddress: String(r.prize_token_address),
             prizeTokenDecimals: r.prize_token_decimals != null ? Number(r.prize_token_decimals) : 18,
             prizeTokenSymbol: r.prize_token_symbol ?? null,
+            prizeTokenName: r.prize_token_name ?? null,
             prizePool: r.prize_pool?.toString() ?? '0',
             escrowTournamentIdBytes32: r.escrow_tournament_id_bytes32 ?? null,
         }));
@@ -1334,7 +1611,7 @@ class PokerTournamentService {
     async listClaimableCustomTokenPokerTournaments(playerAddress) {
         const normalized = this.normalizeAddress(playerAddress);
         const result = await this.pool.query(`SELECT t.id, t.name, t.ended_at,
-              t.prize_token_address, t.prize_token_decimals, t.prize_token_symbol,
+              t.prize_token_address, t.prize_token_decimals, t.prize_token_symbol, t.prize_token_name,
               te.prize_won::text AS prize_won,
               t.escrow_tournament_id_bytes32
        FROM tournaments t
@@ -1355,12 +1632,14 @@ class PokerTournamentService {
             prizeTokenAddress: String(r.prize_token_address),
             prizeTokenDecimals: r.prize_token_decimals != null ? Number(r.prize_token_decimals) : 18,
             prizeTokenSymbol: r.prize_token_symbol ?? null,
+            prizeTokenName: r.prize_token_name ?? null,
             prizeWon: r.prize_won?.toString() ?? '0',
             escrowTournamentIdBytes32: r.escrow_tournament_id_bytes32 ?? null,
         }));
     }
     async getTournamentState(tournamentId) {
-        const tRow = await this.pool.query(`SELECT t.*, pt.id AS table_id, pt.hand_number, pt.small_blind, pt.big_blind
+        const tRow = await this.pool.query(`SELECT t.*, pt.id AS table_id, pt.hand_number, pt.small_blind, pt.big_blind,
+              pt.current_blind_level, pt.current_blind_level_started_at
        FROM tournaments t
        LEFT JOIN poker_tables pt ON pt.tournament_id = t.id
        WHERE t.id = $1 AND t.game_type = 'poker'`, [tournamentId]);
@@ -1385,9 +1664,24 @@ class PokerTournamentService {
             ? Number(bbRaw)
             : currentLevel.bigBlind;
         const blindModeState = this.getBlindIncreaseMode(config);
-        const blindLevelDisplay = blindModeState === 'by_hand'
-            ? this.scheduleDisplayLevel(config.blindSchedule, smallBlindChips, bigBlindChips)
-            : this.knockoutBlindDisplayLevel(config.blindSchedule, smallBlindChips);
+        let blindLevelDisplay;
+        if (blindModeState === 'by_hand') {
+            blindLevelDisplay = this.scheduleDisplayLevel(config.blindSchedule, smallBlindChips, bigBlindChips);
+        }
+        else if (blindModeState === 'by_time') {
+            // Prefer the persisted current_blind_level (set at activation, advanced by the tick).
+            // Fall back to `scheduleDisplayLevel` so the UI doesn't show level 1 if the column is null.
+            const persisted = t.current_blind_level != null ? Number(t.current_blind_level) : null;
+            blindLevelDisplay = persisted && Number.isFinite(persisted) && persisted >= 1
+                ? persisted
+                : this.scheduleDisplayLevel(config.blindSchedule, smallBlindChips, bigBlindChips);
+        }
+        else {
+            blindLevelDisplay = this.knockoutBlindDisplayLevel(config.blindSchedule, smallBlindChips);
+        }
+        const currentBlindLevelStartedAt = blindModeState === 'by_time' && t.current_blind_level_started_at
+            ? new Date(t.current_blind_level_started_at).toISOString()
+            : null;
         const prizeSplitPercentages = parsePrizePercentagesFromDb(t.prize_percentages, String(t.prize_distribution_type ?? 'winner_takes_all'));
         return {
             tournamentId,
@@ -1411,6 +1705,7 @@ class PokerTournamentService {
             prizeTokenAddress: t.prize_token_address ?? null,
             prizeTokenDecimals: t.prize_token_decimals != null ? Number(t.prize_token_decimals) : null,
             prizeTokenSymbol: t.prize_token_symbol ?? null,
+            prizeTokenName: t.prize_token_name ?? null,
             buyInAmount: t.buy_in_amount?.toString() ?? '0',
             prizeDistributionType: t.prize_distribution_type ?? 'winner_takes_all',
             /** For client HUD: schedule + meta + blind increase mode. */
@@ -1420,9 +1715,13 @@ class PokerTournamentService {
                 minPlayers: config.minPlayers,
                 maxPlayers: config.maxPlayers,
                 blindIncreaseMode: blindModeState,
+                ...(blindModeState === 'by_time' && config.blindIntervalMinutes
+                    ? { blindIntervalMinutes: config.blindIntervalMinutes }
+                    : {}),
             },
             actionTimerSeconds: t.action_timer_seconds != null ? Number(t.action_timer_seconds) : null,
             prizeSplitPercentages,
+            currentBlindLevelStartedAt,
         };
     }
     async getPlayerEntryStatus(tournamentId, playerAddress) {
