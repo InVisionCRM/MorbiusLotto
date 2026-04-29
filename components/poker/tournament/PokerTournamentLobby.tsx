@@ -500,9 +500,9 @@ export function PokerTournamentLobby({ wsClient, myAddress, onGoToTable }: Poker
 
   return (
     <div className="flex flex-col gap-3">
-      <div className="flex items-center justify-between gap-3">
-        <h2 className="text-sm font-semibold tracking-wide text-white">Poker tournaments</h2>
-        <div className="flex items-center gap-2 shrink-0">
+      <div className="flex flex-col items-center gap-2">
+        <h2 className="text-sm font-semibold tracking-wide text-white text-center">Poker tournaments</h2>
+        <div className="flex items-center gap-2">
           <button
             type="button"
             onClick={refreshTournaments}

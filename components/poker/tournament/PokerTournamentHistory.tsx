@@ -1,7 +1,6 @@
 'use client';
 
 import React, { useEffect, useState, useCallback } from 'react';
-import Link from 'next/link';
 import {
   formatPrizePoolDisplay,
   formatTournamentBuyInDisplay,
@@ -9,6 +8,7 @@ import {
   payoutMetaFromHistoryRow,
   prizePoolMetaFromHistoryRow,
 } from '@/lib/format-poker-tournament-prize-display';
+import { PokerTournamentResultsModalView } from './PokerTournamentResultsModalView';
 
 interface CompletedTournament {
   tournamentId: string;
@@ -84,6 +84,7 @@ export function PokerTournamentHistory({ myAddress }: PokerTournamentHistoryProp
   const [mineList, setMineList] = useState<PlayerHistoryItem[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [openTournamentId, setOpenTournamentId] = useState<string | null>(null);
 
   const loadAll = useCallback(async () => {
     setLoading(true);
@@ -186,14 +187,19 @@ export function PokerTournamentHistory({ myAddress }: PokerTournamentHistoryProp
             </thead>
             <tbody>
               {allList.map((t) => (
-                <tr key={t.tournamentId} className="border-b border-slate-800/50 hover:bg-cyan-500/[0.04] transition-colors">
+                <tr
+                  key={t.tournamentId}
+                  className="border-b border-slate-800/50 hover:bg-cyan-500/[0.04] cursor-pointer transition-colors"
+                  onClick={() => setOpenTournamentId(t.tournamentId)}
+                >
                   <td className="py-2.5 px-3">
-                    <Link
-                      href={`/poker/tournaments/${t.tournamentId}`}
-                      className="font-semibold text-cyan-300 hover:text-cyan-200"
+                    <button
+                      type="button"
+                      onClick={(e) => { e.stopPropagation(); setOpenTournamentId(t.tournamentId); }}
+                      className="font-semibold text-cyan-300 hover:text-cyan-200 text-left"
                     >
                       {t.name}
-                    </Link>
+                    </button>
                     <div className="text-[10px] uppercase tracking-wider text-slate-600">{t.tournamentType}</div>
                   </td>
                   <td className="py-2.5 px-3 text-slate-400 text-xs">{formatDate(t.endedAt ?? t.createdAt)}</td>
@@ -234,14 +240,19 @@ export function PokerTournamentHistory({ myAddress }: PokerTournamentHistoryProp
             </thead>
             <tbody>
               {mineList.map((t) => (
-                <tr key={t.tournamentId} className="border-b border-slate-800/50 hover:bg-cyan-500/[0.04] transition-colors">
+                <tr
+                  key={t.tournamentId}
+                  className="border-b border-slate-800/50 hover:bg-cyan-500/[0.04] cursor-pointer transition-colors"
+                  onClick={() => setOpenTournamentId(t.tournamentId)}
+                >
                   <td className="py-2.5 px-3">
-                    <Link
-                      href={`/poker/tournaments/${t.tournamentId}`}
-                      className="font-semibold text-cyan-300 hover:text-cyan-200"
+                    <button
+                      type="button"
+                      onClick={(e) => { e.stopPropagation(); setOpenTournamentId(t.tournamentId); }}
+                      className="font-semibold text-cyan-300 hover:text-cyan-200 text-left"
                     >
                       {t.tournamentName}
-                    </Link>
+                    </button>
                   </td>
                   <td className="py-2.5 px-3 text-slate-400 text-xs">{formatDate(t.boughtInAt)}</td>
                   <td className="py-2.5 px-3 text-right tabular-nums">
@@ -260,6 +271,12 @@ export function PokerTournamentHistory({ myAddress }: PokerTournamentHistoryProp
           </table>
         </div>
       )}
+
+      <PokerTournamentResultsModalView
+        open={openTournamentId !== null}
+        onClose={() => setOpenTournamentId(null)}
+        tournamentId={openTournamentId}
+      />
     </div>
   );
 }
