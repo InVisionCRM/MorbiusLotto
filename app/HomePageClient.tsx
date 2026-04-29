@@ -11,6 +11,7 @@ import { LoginModal } from '@/components/auth/LoginModal'
 import { PlayerProfileModal } from '@/components/shared/PlayerProfileModal'
 import { HeroSection } from '@/components/home/hero-section'
 import { GamesSection } from '@/components/home/games-section'
+import { PlatformStatsSection } from '@/components/home/platform-stats-section'
 import { PwaHomeInstallSplash } from '@/components/home/PwaHomeInstallSplash'
 import { DepositWithdrawModal } from '@/components/BLACKJACK/DepositWithdrawModal'
 import { LoadingTip } from '@/components/shared/LoadingTip'
@@ -126,6 +127,8 @@ export default function HomePageClient() {
             </section>
 
             <div className="flex w-full flex-col items-center gap-y-20 px-4 py-12 md:gap-y-28 md:py-20">
+              <PlatformStatsSection />
+
               <HomeSectionDivider />
               <PulseChainSection />
 
