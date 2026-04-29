@@ -39,6 +39,7 @@ export interface UsePokerVoiceReturn {
  */
 let cachedClient: StreamVideoClient | null = null;
 let cachedClientUserId: string | null = null;
+const POKER_VOICE_CALL_ID_VERSION = 'v2';
 
 async function fetchVoiceToken(wsClient: BlackjackWebSocketClient): Promise<VoiceTokenPayload> {
   const res = (await wsClient.sendRequest(WS_MESSAGE_TYPES.pokerVoiceToken, {})) as VoiceTokenPayload | null;
@@ -84,6 +85,10 @@ async function getOrCreateClient(
   return client;
 }
 
+function getPokerVoiceCallId(tableId: string): string {
+  return `poker-table-${tableId}-${POKER_VOICE_CALL_ID_VERSION}`;
+}
+
 export function usePokerVoice({
   wsClient,
   walletAddress,
@@ -121,10 +126,15 @@ export function usePokerVoice({
         if (cancelled) return;
         setClient(c);
 
-        const newCall = c.call('audio_room', `poker-table-${tableId}`);
+        const newCall = c.call('audio_room', getPokerVoiceCallId(tableId!));
         // Default mic muted on join — poker etiquette + avoids hot-mic accidents.
         await newCall.microphone.disable().catch(() => {});
         await newCall.join({ create: seated });
+        if (seated) {
+          // Stream audio rooms start backstage by default; going live lets other
+          // players and anonymous watchers join without JoinBackstage permission.
+          await newCall.goLive().catch(() => {});
+        }
         if (cancelled) {
           newCall.leave().catch(() => {});
           return;
