@@ -7,9 +7,10 @@ import { WS_MESSAGE_TYPES } from '@/lib/websocket-message-types';
 
 interface VoiceTokenPayload {
   apiKey: string;
-  token: string;
-  userId: string;
-  expiresAt: number;
+  token?: string;
+  userId?: string;
+  expiresAt?: number;
+  anonymous?: boolean;
 }
 
 export interface UsePokerVoiceOptions {
@@ -17,7 +18,7 @@ export interface UsePokerVoiceOptions {
   walletAddress: string | null;
   /** Stable id for the call. Use the poker table id; voice is scoped per table. */
   tableId: string | null;
-  /** Voice only spins up when the wallet is seated. */
+  /** Seated players can speak; watchers join listen-only. */
   seated: boolean;
   /** Gate: voice currently enabled for tournament tables only. Pass `false` to no-op. */
   enabled: boolean;
@@ -41,7 +42,7 @@ let cachedClientUserId: string | null = null;
 
 async function fetchVoiceToken(wsClient: BlackjackWebSocketClient): Promise<VoiceTokenPayload> {
   const res = (await wsClient.sendRequest(WS_MESSAGE_TYPES.pokerVoiceToken, {})) as VoiceTokenPayload | null;
-  if (!res?.apiKey || !res.token || !res.userId) {
+  if (!res?.apiKey || (!res.anonymous && (!res.token || !res.userId))) {
     throw new Error('voice token unavailable');
   }
   return res;
@@ -49,9 +50,12 @@ async function fetchVoiceToken(wsClient: BlackjackWebSocketClient): Promise<Voic
 
 async function getOrCreateClient(
   wsClient: BlackjackWebSocketClient,
-  walletAddress: string,
+  walletAddress: string | null,
+  canSpeak: boolean,
 ): Promise<StreamVideoClient> {
-  const userId = walletAddress.toLowerCase();
+  const tokenInfo = await fetchVoiceToken(wsClient);
+  const anonymous = !canSpeak || !!tokenInfo.anonymous || !walletAddress;
+  const userId = anonymous ? '!anon' : walletAddress!.toLowerCase();
   if (cachedClient && cachedClientUserId === userId) return cachedClient;
 
   if (cachedClient && cachedClientUserId !== userId) {
@@ -60,13 +64,21 @@ async function getOrCreateClient(
     cachedClientUserId = null;
   }
 
-  const tokenInfo = await fetchVoiceToken(wsClient);
-  const client = new StreamVideoClient({
-    apiKey: tokenInfo.apiKey,
-    user: { id: userId },
-    token: tokenInfo.token,
-    tokenProvider: async () => (await fetchVoiceToken(wsClient)).token,
-  });
+  const client = anonymous
+    ? new StreamVideoClient({
+        apiKey: tokenInfo.apiKey,
+        user: { type: 'anonymous' },
+      })
+    : new StreamVideoClient({
+        apiKey: tokenInfo.apiKey,
+        user: { id: userId },
+        token: tokenInfo.token!,
+        tokenProvider: async () => {
+          const next = await fetchVoiceToken(wsClient);
+          if (!next.token) throw new Error('voice token unavailable');
+          return next.token;
+        },
+      });
   cachedClient = client;
   cachedClientUserId = userId;
   return client;
@@ -85,7 +97,7 @@ export function usePokerVoice({
   const [error, setError] = useState<string | null>(null);
   const callRef = useRef<Call | null>(null);
 
-  const shouldJoin = enabled && seated && !!wsClient && !!walletAddress && !!tableId;
+  const shouldJoin = enabled && !!wsClient && !!tableId;
 
   useEffect(() => {
     if (!shouldJoin) {
@@ -105,14 +117,14 @@ export function usePokerVoice({
 
     (async () => {
       try {
-        const c = await getOrCreateClient(wsClient!, walletAddress!);
+        const c = await getOrCreateClient(wsClient!, walletAddress, seated);
         if (cancelled) return;
         setClient(c);
 
         const newCall = c.call('audio_room', `poker-table-${tableId}`);
         // Default mic muted on join — poker etiquette + avoids hot-mic accidents.
         await newCall.microphone.disable().catch(() => {});
-        await newCall.join({ create: true });
+        await newCall.join({ create: seated });
         if (cancelled) {
           newCall.leave().catch(() => {});
           return;
@@ -133,7 +145,7 @@ export function usePokerVoice({
       callRef.current = null;
       if (c) c.leave().catch(() => {});
     };
-  }, [shouldJoin, wsClient, walletAddress, tableId]);
+  }, [shouldJoin, wsClient, walletAddress, tableId, seated]);
 
   return { client, call, status, error };
 }

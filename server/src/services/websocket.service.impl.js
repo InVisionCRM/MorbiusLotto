@@ -430,7 +430,7 @@ class WebSocketService {
         await this.dispatchDomainMessage(ws, message, tournament_router_1.TOURNAMENT_MESSAGE_HANDLER_MAP, 'tournament');
     }
     async routePokerMessage(ws, message) {
-        const requiresAuth = message.type !== 'poker_tournament_list' && message.type !== 'poker_tournament_get_state';
+        const requiresAuth = message.type !== 'poker_tournament_list' && message.type !== 'poker_tournament_get_state' && message.type !== 'poker_voice_token';
         if (requiresAuth && !this.requireAuth(ws, message))
             return;
         await this.dispatchDomainMessage(ws, message, poker_router_1.POKER_MESSAGE_HANDLER_MAP, 'poker');
@@ -1811,7 +1811,15 @@ class WebSocketService {
     async handlePokerVoiceToken(ws, message) {
         try {
             if (!ws.playerAddress) {
-                return this.sendError(ws, 'wallet required', message.requestId);
+                const apiKey = (0, stream_voice_service_1.getStreamVoiceApiKey)();
+                if (!apiKey) {
+                    return this.sendError(ws, 'voice chat not configured', message.requestId);
+                }
+                return this.sendMessage(ws, {
+                    type: 'poker_voice_token',
+                    payload: { apiKey, anonymous: true },
+                    requestId: message.requestId
+                });
             }
             const tokenInfo = stream_voice_service_1.generateStreamVoiceToken(ws.playerAddress);
             if (!tokenInfo) {

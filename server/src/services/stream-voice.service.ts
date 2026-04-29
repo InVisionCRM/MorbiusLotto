@@ -10,6 +10,10 @@ export interface StreamVoiceToken {
   expiresAt: number;
 }
 
+export function getStreamVoiceApiKey(): string | null {
+  return process.env.STREAM_API_KEY || null;
+}
+
 function base64url(input: Buffer | string): string {
   const buf = typeof input === 'string' ? Buffer.from(input) : input;
   return buf.toString('base64').replace(/=/g, '').replace(/\+/g, '-').replace(/\//g, '_');
@@ -21,7 +25,7 @@ function base64url(input: Buffer | string): string {
  * Reference: https://getstream.io/video/docs/api/#generating-tokens
  */
 export function generateStreamVoiceToken(walletAddress: string): StreamVoiceToken | null {
-  const apiKey = process.env.STREAM_API_KEY;
+  const apiKey = getStreamVoiceApiKey();
   const apiSecret = process.env.STREAM_API_SECRET;
   if (!apiKey || !apiSecret) {
     logger.warn('Stream voice token requested but STREAM_API_KEY/SECRET not configured');

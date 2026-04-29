@@ -32,6 +32,7 @@ import { AvatarView, type Emotion } from '@/components/avatar';
 import { RadialMenu, RadialMenuFloating, type RadialMenuItem } from '@/components/ui/radial-menu';
 import { useQuickChatPhrases } from '@/hooks/useQuickChatPhrases';
 import { EditQuickChatModal } from '@/components/poker/EditQuickChatModal';
+import { usePokerVoicePresenceForAddress } from './voice-presence';
 
 const LONG_PRESS_MS = 500;
 const PHRASE_OVERLAY_DURATION_MS = 2000;
@@ -200,6 +201,61 @@ const OPPONENT_RADIAL_ITEMS: RadialMenuItem[] = [
   { id: 'gift', label: 'Gift', icon: Gift },
 ];
 
+function VoiceAvatarCue({
+  active,
+  audioLevel,
+  isLocalParticipant,
+}: {
+  active: boolean;
+  audioLevel: number;
+  isLocalParticipant: boolean;
+}) {
+  if (!active && audioLevel <= 0.03) return null;
+
+  const level = Math.max(active ? 0.22 : 0, Math.min(1, audioLevel));
+  const intensity = Math.min(1, level + (active ? 0.18 : 0));
+  const glowAlpha = 0.24 + intensity * 0.46;
+  const ringAlpha = 0.36 + intensity * 0.54;
+  const blur = 9 + intensity * 24;
+  const scale = 1 + intensity * 0.035;
+
+  return (
+    <div className="pointer-events-none absolute inset-0 z-20 rounded-full" aria-hidden>
+      <div
+        className="absolute inset-[2px] rounded-full transition-all duration-150"
+        style={{
+          transform: `scale(${scale})`,
+          border: `${2 + intensity * 2.5}px solid rgba(96, 165, 250, ${ringAlpha})`,
+          boxShadow: [
+            `0 0 ${blur}px rgba(59, 130, 246, ${glowAlpha})`,
+            `0 0 ${blur * 1.8}px rgba(37, 99, 235, ${glowAlpha * 0.5})`,
+            'inset 0 0 14px rgba(255, 255, 255, 0.12)',
+          ].join(', '),
+        }}
+      />
+      <div
+        className="absolute inset-[6px] rounded-full transition-opacity duration-150"
+        style={{
+          opacity: 0.18 + intensity * 0.32,
+          background: 'radial-gradient(circle at 50% 30%, rgba(255,255,255,0.20), transparent 58%)',
+          mixBlendMode: 'screen',
+        }}
+      />
+      {isLocalParticipant && (
+        <div
+          className="absolute -right-0.5 top-1/2 h-3 w-3 -translate-y-1/2 rounded-full transition-all duration-150"
+          style={{
+            background: active ? 'rgb(96, 165, 250)' : 'rgba(148, 163, 184, 0.9)',
+            boxShadow: active
+              ? `0 0 ${10 + intensity * 12}px rgba(59, 130, 246, ${0.55 + intensity * 0.3})`
+              : '0 0 6px rgba(148, 163, 184, 0.35)',
+          }}
+        />
+      )}
+    </div>
+  );
+}
+
 // ── PokerSeat ─────────────────────────────────────────────────────────────
 
 export interface PokerSeatProps {
@@ -269,6 +325,9 @@ export function PokerSeat({ seat, index, holeCards, isCurrentPlayer, showCardBac
   const displayName = empty
     ? 'Open'
     : (isCurrentPlayer ? 'You' : (seat.displayName?.trim() || shortAddr(seat.playerAddress!)));
+  const voicePresence = usePokerVoicePresenceForAddress(seat.playerAddress);
+  const voiceLevel = voicePresence?.audioLevel ?? 0;
+  const voiceActive = !!voicePresence && (voicePresence.isSpeaking || voicePresence.isDominantSpeaker || voiceLevel > 0.12);
 
   const avatarEmotion: Emotion = useMemo(() => {
     if (!lastAction) return 'neutral';
@@ -734,6 +793,11 @@ export function PokerSeat({ seat, index, holeCards, isCurrentPlayer, showCardBac
                       : undefined
                 }
               >
+                <VoiceAvatarCue
+                  active={voiceActive}
+                  audioLevel={voiceLevel}
+                  isLocalParticipant={!!voicePresence?.isLocalParticipant}
+                />
                 {seat.profileDisplayMode === 'photo' && seat.profileImageUrl ? (
                   <img
                     src={seat.profileImageUrl}
