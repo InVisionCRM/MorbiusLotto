@@ -46,7 +46,7 @@ export function authoredSeatAnchors(seatCount: number): SeatAnchor[] {
  * Tweak these independently from avatar seats, cards, and chip stacks.
  */
 export const PLAYER_TAG_ANCHOR_RING: SeatAnchor[] = [
-  { fx: 0.43, fy: 0.82 },  // 0 — bottom center (hero)
+  { fx: 0.43, fy: 0.83 },  // 0 — bottom center (hero)
   { fx: 0.23, fy: 0.82 }, // 1 — S1
   { fx: 0.14, fy: 0.65 },
   { fx: 0.14, fy: 0.30 },
