@@ -1337,16 +1337,6 @@ export function PokerTournamentCreator({ creatorAddress, onClose, onCreate }: Po
             </TabsList>
 
             <TabsContent value="basics" className="mt-4 space-y-4 outline-none">
-              <div>
-                <label className={`${labelClass} text-center`}>Tournament name</label>
-                <input
-                  value={name}
-                  onChange={(e) => setName(e.target.value)}
-                  className={`${fieldClass} text-center`}
-                  maxLength={40}
-                />
-              </div>
-
               <div className="space-y-2">
                 <p className="w-full text-center text-xs font-semibold uppercase tracking-wide text-white/55">Pick one</p>
                 <div
@@ -1434,6 +1424,16 @@ export function PokerTournamentCreator({ creatorAddress, onClose, onCreate }: Po
                     </div>
                   </button>
                 </div>
+              </div>
+
+              <div>
+                <label className={`${labelClass} text-center`}>Tournament name</label>
+                <input
+                  value={name}
+                  onChange={(e) => setName(e.target.value)}
+                  className={`${fieldClass} text-center`}
+                  maxLength={40}
+                />
               </div>
 
               <label className="flex items-center gap-3 cursor-pointer select-none">
