@@ -444,6 +444,9 @@ export default function PokerTablePage() {
       variant={isFullscreen ? 'floating' : 'default'}
       lastActionLine={lastActionLine}
       sponsoredToken={sponsoredToken}
+      sponsoredUntil={renderedState.tableLogoSponsoredUntil ?? null}
+      sponsorPriceMorbiusChips={renderedState.tableLogoPriceMorbiusChips ?? null}
+      onOpenSponsorModal={() => setLogoSponsorOpen(true)}
       onPreActionChange={setQueuedPreAction}
       onFold={handleFold}
       onCheck={handleCheck}
@@ -901,7 +904,13 @@ export default function PokerTablePage() {
           onNo={speech.confirmNo}
         />
       )}
-      <SophieSplashModal address={address} forceOpen={voiceSplashOpen} onClose={() => setVoiceSplashOpen(false)} onEnable={() => setSpeechEnabled(true)} />
+      <SophieSplashModal
+        address={address}
+        openOnFirstVisit={false}
+        forceOpen={voiceSplashOpen}
+        onClose={() => setVoiceSplashOpen(false)}
+        onEnable={() => setSpeechEnabled(true)}
+      />
       {blindIncreaseBanner && (
         <TournamentBlindIncreaseOverlay
           playId={blindIncreaseBanner.playId}

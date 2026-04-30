@@ -1,5 +1,6 @@
 "use client"
 
+import type { CSSProperties } from 'react'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { Badge } from '@/components/ui/badge'
@@ -8,7 +9,6 @@ import { cn } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
 // import { KenoTicket } from '@/components/CryptoKeno/keno-ticket'
 import { BentoGrid, BentoGridItem } from '@/components/ui/bento-grid'
-import { DottedGlowBackground } from '@/components/ui/dotted-glow-background'
 import { ChevronLeft, ChevronRight } from 'lucide-react'
 import { useAccount } from 'wagmi'
 
@@ -48,6 +48,20 @@ interface LiveKenoBoardProps {
 }
 
 const ALL_NUMBERS = Array.from({ length: 80 }, (_, i) => i + 1)
+
+/** Plinko-style embossed fill + soft edge (avoids `surface-panel` inset border reading as black). */
+const KENO_EMBOSSED_PANEL: CSSProperties = {
+  background: 'linear-gradient(325deg, rgba(20, 20, 20, 0.8), rgba(40, 40, 40, 0.6))',
+  boxShadow:
+    'inset 0 3px 6px rgba(0, 0, 0, 0.8), inset 0 -3px 6px rgba(255, 255, 255, 0.1), 0 1px 3px rgba(0, 0, 0, 0.5)',
+  border: '1px solid rgba(0, 0, 0, 0.1)',
+}
+
+/** Poker lobby card rim + glow — replaces default bento purple refraction on this page. */
+const KENO_BENTO_POKER_SURFACE: CSSProperties = {
+  boxShadow:
+    '0 0 80px rgba(34,211,238,0.07), 0 2px 40px rgba(0,0,0,0.5), inset 0 1px 0 rgba(34,211,238,0.1)',
+}
 
 export function LiveKenoBoard({
   roundId,
@@ -193,11 +207,14 @@ export function LiveKenoBoard({
   }, [nextDrawTime])
 
   return (
-    <Card className="surface-panel relative overflow-hidden">
+    <Card
+      className="relative overflow-hidden rounded-xl border-0 bg-transparent text-white shadow-none"
+      style={KENO_EMBOSSED_PANEL}
+    >
       {/* Radial gradient overlay */}
 
 
-      <div className="relative z-10 px-4 py-3">
+      <div className="relative z-10 rounded-xl border border-[rgba(0,0,0,0.1)] px-4 py-3">
         <BentoGrid className="max-w-none grid-cols-1 auto-rows-auto gap-3">
           <BentoGridItem
             title={
@@ -205,7 +222,8 @@ export function LiveKenoBoard({
                 KENO
               </span>
             }
-            className="relative overflow-hidden"
+            className="relative overflow-hidden !border-white/25 !bg-black/30"
+            style={KENO_BENTO_POKER_SURFACE}
             header={
               <>
                 {/* Flying ball overlay */}
@@ -238,9 +256,9 @@ export function LiveKenoBoard({
               ref={gridRef}
               className={cn(
                 "relative z-0 grid grid-cols-10 gap-0 p-0 pb-3 pt-3 backdrop-blur transition-opacity",
-                'opacity-100',
-                'surface-panel'
+                'opacity-100'
               )}
+              style={KENO_EMBOSSED_PANEL}
             >
               {ALL_NUMBERS.map((n) => {
                 const isHit = drawnNumbers.includes(n)
@@ -252,7 +270,7 @@ export function LiveKenoBoard({
                     ref={(el) => { cellRefs.current[n] = el }}
                     layout
                     className={cn(
-                      'relative flex h-9 items-center justify-center border text-xs font-semibold transition overflow-hidden',
+                      'relative h-9 border text-xs font-semibold transition overflow-hidden',
                       isHit
                         ? 'border-cyan-500/80 text-cyan-100 shadow-[0_0_0_1px_rgba(6,182,212,0.5)]'
                         : 'border-white/10 bg-white/5 text-gray-200'
@@ -267,7 +285,9 @@ export function LiveKenoBoard({
                         transition={{ duration: 0.4, delay: drawIndex * 0.04 }}
                       />
                     )}
-                    <span className="relative z-10 drop-shadow-[0_1px_2px_rgba(0,0,0,0.8)]">{n.toString().padStart(2, '0')}</span>
+                    <span className="pointer-events-none absolute left-1/2 top-1/2 z-10 -translate-x-1/2 -translate-y-1/2 tabular-nums drop-shadow-[0_1px_2px_rgba(0,0,0,0.8)]">
+                      {n.toString().padStart(2, '0')}
+                    </span>
                     {isBullsEye && (
                       <span className="absolute -top-1 -right-1 h-3 w-3 rounded-full bg-blue-400 shadow-[0_0_0_2px_rgba(59,130,246,0.4)] z-10" />
                     )}
@@ -284,7 +304,10 @@ export function LiveKenoBoard({
                     exit={{ opacity: 0 }}
                     className="pointer-events-auto absolute inset-0 z-40 flex items-center justify-center"
                   >
-                    <div className="surface-panel h-full w-full overflow-hidden rounded-2xl p-3 text-white backdrop-blur-md">
+                    <div
+                      className="h-full w-full overflow-hidden rounded-2xl p-3 text-white backdrop-blur-md"
+                      style={KENO_EMBOSSED_PANEL}
+                    >
                       {/* Radial gradient overlay */}
                       <div className="relative">
                       <div className="grid grid-cols-5 gap-2 justify-items-center mb-3">
@@ -295,14 +318,16 @@ export function LiveKenoBoard({
                             animate={{ scale: 1, opacity: 1, rotateX: 0, y: 0 }}
                             exit={{ scale: 0.85, opacity: 0, rotateX: 25, y: -6 }}
                             transition={{ duration: 0.45, delay: idx * 0.06, ease: [0.16, 1, 0.3, 1] }}
-                            className="relative flex h-14 w-14 items-center justify-center rounded-full text-[15px] font-bold text-white backdrop-blur-xl"
+                            className="relative h-14 w-14 rounded-full text-[15px] font-bold text-white backdrop-blur-xl"
                             style={{
                               background: 'linear-gradient(135deg, rgba(255, 255, 255, 0.2) 0%, rgba(255, 255, 255, 0.06) 100%)',
                               boxShadow: 'inset 0 1px 1px rgba(255, 255, 255, 0.25), inset 0 -1px 1px rgba(0, 0, 0, 0.08), 0 2px 4px rgba(0, 0, 0, 0.15)',
                               border: '1px solid rgba(255, 255, 255, 0.22)',
                             }}
                           >
-                            <span className="relative z-10 drop-shadow-[0_1px_2px_rgba(0,0,0,0.5)]">{n.toString().padStart(2, '0')}</span>
+                            <span className="pointer-events-none absolute left-1/2 top-1/2 z-10 -translate-x-1/2 -translate-y-1/2 tabular-nums drop-shadow-[0_1px_2px_rgba(0,0,0,0.5)]">
+                              {n.toString().padStart(2, '0')}
+                            </span>
                           </motion.div>
                         ))}
                       </div>
@@ -336,23 +361,11 @@ export function LiveKenoBoard({
 
           <BentoGridItem
             title="Your Numbers"
-            className="relative overflow-hidden"
+            className="relative overflow-hidden !border-white/25 !bg-black/30"
+            style={KENO_BENTO_POKER_SURFACE}
             description={`${currentTicket?.drawsRemaining ?? 0} draws remaining`}
           >
-            <DottedGlowBackground
-              className="rounded-lg"
-              gap={10}
-              radius={5}
-              color="rgba(117, 42, 188, 0.63)"
-              glowColor="rgba(241, 248, 255, 0.23)"
-              opacity={0.6}
-              backgroundOpacity={0.7}
-              edgeFadeOpacity={1}
-              speedScale={0.3}
-              speedMin={0.05}
-              speedMax={1}
-            />
-            <div className="relative z-10">
+            <div className="relative z-10 min-h-[4.5rem] rounded-lg bg-black/20 p-3 ring-1 ring-white/10">
             {filteredTickets && filteredTickets.length > 0 ? (
               <div className="flex items-center gap-3">
                 <Button
@@ -375,13 +388,15 @@ export function LiveKenoBoard({
                         key={n}
                         layout
                         className={cn(
-                          'relative flex h-14 w-14 items-center justify-center rounded-full border-2 text-xl font-bold transition-all duration-700 ease-out',
+                          'relative h-14 w-14 rounded-full border-2 text-xl font-bold transition-all duration-700 ease-out',
                           isHit
                             ? 'border-purple-400 text-purple-100 shadow-[0_0_4px_rgba(168,85,247,0.7)] bg-purple-500/20'
                             : 'border-cyan-400 text-cyan-100 shadow-[0_0_4px_rgba(34,211,238,0.8)] bg-slate-900/90'
                         )}
                       >
-                        {n.toString().padStart(2, '0')}
+                        <span className="pointer-events-none absolute left-1/2 top-1/2 z-10 -translate-x-1/2 -translate-y-1/2 tabular-nums">
+                          {n.toString().padStart(2, '0')}
+                        </span>
                         {isBullsEye && (
                           <span className="absolute -top-0.5 -right-0.5 h-2 w-2 rounded-full bg-blue-400 shadow-[0_0_3px_rgba(59,130,246,0.8)]" />
                         )}

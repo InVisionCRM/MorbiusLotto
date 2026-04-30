@@ -24,13 +24,28 @@ import { formatMorbiusFloor } from '@/lib/format-morbius-display';
 import { PokerChipExchangeModal } from '@/components/poker/PokerChipExchangeModal';
 import { InsufficientBalanceDialog } from '@/components/shared/InsufficientBalanceDialog';
 import { PokerBetaSplash } from '@/components/poker/PokerBetaSplash';
-import { SophieSplashModal } from '@/components/shared/SophieSplashModal';
 import { PokerHowToPlayModal } from '@/components/poker/PokerHowToPlayModal';
 import { PokerStatsModal } from '@/components/poker/PokerStatsModal';
 import GlobalMainNav from '@/components/shared/GlobalMainNav';
 import { PokerTournamentLobby } from '@/components/poker/tournament/PokerTournamentLobby';
 import { PokerTournamentHistory } from '@/components/poker/tournament/PokerTournamentHistory';
 import { Coins, Lock } from 'lucide-react';
+import { formatDistanceToNow } from 'date-fns';
+
+function shortenHexAddress(addr: string | null | undefined): string {
+  if (!addr || typeof addr !== 'string' || addr.length < 12) return '—';
+  const a = addr.toLowerCase();
+  return `${a.slice(0, 6)}\u2026${a.slice(-4)}`;
+}
+
+function formatTableAge(createdAt: string | null | undefined): string {
+  if (!createdAt) return '—';
+  try {
+    return formatDistanceToNow(new Date(createdAt), { addSuffix: true });
+  } catch {
+    return '—';
+  }
+}
 
 // Intro screen component (same style as Blackjack)
 function IntroScreen({ onComplete }: { onComplete: () => void }) {
@@ -100,6 +115,11 @@ function IntroScreen({ onComplete }: { onComplete: () => void }) {
   );
 }
 
+/** Hero card fill — outer shell and inner content column use the same value so they match pixel-for-pixel. */
+const POKER_HERO_CARD_GRADIENT = 'linear-gradient(170deg, #0c1929 0%, #0a0f1a 40%, #0d1117 100%)';
+/** Same stops as hero, angle + order flipped so it reads clearly against the hero strip (still matches palette). */
+const POKER_HERO_CARD_GRADIENT_FLIPPED = 'linear-gradient(350deg, #0d1117 0%, #0a0f1a 40%, #0c1929 100%)';
+
 export default function PokerLobbyPage() {
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -134,6 +154,7 @@ export default function PokerLobbyPage() {
   const [tablePlayersLoading, setTablePlayersLoading] = useState(false);
   const [removingTableId, setRemovingTableId] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<'cash' | 'tournaments' | 'history'>('tournaments');
+  const [tournamentCreateModalOpen, setTournamentCreateModalOpen] = useState(false);
   const [wsClient, setWsClient] = useState<BlackjackWebSocketClient | null>(null);
 
   useEffect(() => {
@@ -161,8 +182,12 @@ export default function PokerLobbyPage() {
         router.replace('/poker?tab=cash', { scroll: false });
       }
     },
-    [router]
+    [router],
   );
+
+  useEffect(() => {
+    if (activeTab !== 'tournaments') setTournamentCreateModalOpen(false);
+  }, [activeTab]);
 
   const goToTournamentTable = useCallback(
     (tableId: string, tournamentId: string) => {
@@ -443,14 +468,16 @@ export default function PokerLobbyPage() {
           <div className="relative flex-1 w-full max-w-7xl mx-auto px-3 py-4 sm:px-6 sm:py-8">
             {/* ── Hero Section ── */}
             <div
-              className="relative rounded-3xl overflow-hidden mb-6 sm:mb-8 border border-cyan-400/10"
+              className="relative mb-6 flex min-h-[17rem] w-full flex-col overflow-hidden rounded-3xl border border-white/25 sm:mb-8 sm:min-h-[20rem] md:min-h-[22rem]"
               style={{
-                background: 'linear-gradient(170deg, #0c1929 0%, #0a0f1a 40%, #0d1117 100%)',
+                background: POKER_HERO_CARD_GRADIENT,
                 boxShadow: '0 0 80px rgba(34,211,238,0.07), 0 2px 40px rgba(0,0,0,0.5), inset 0 1px 0 rgba(34,211,238,0.1)',
+                justifyContent: 'center',
+                alignItems: 'center',
               }}
             >
               {/* Top glow line */}
-              <div className="h-px bg-gradient-to-r from-transparent via-cyan-400/40 to-transparent" />
+              <div className="h-px w-full shrink-0 bg-gradient-to-r from-transparent via-cyan-400/40 to-transparent" />
 
               {/* Decorative card fan — positioned behind content */}
               <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-[45%] pointer-events-none select-none opacity-[0.04]">
@@ -472,23 +499,15 @@ export default function PokerLobbyPage() {
                 </div>
               </div>
 
-              <div className="relative overflow-hidden">
-                {/* Layered radial glows */}
-                <div className="absolute inset-0 bg-[radial-gradient(ellipse_70%_50%_at_50%_-10%,rgba(34,211,238,0.18),transparent_70%)] pointer-events-none" />
-                <div className="absolute inset-0 bg-[radial-gradient(ellipse_40%_60%_at_20%_100%,rgba(59,130,246,0.08),transparent_60%)] pointer-events-none" />
-                <div className="absolute inset-0 bg-[radial-gradient(ellipse_40%_60%_at_80%_100%,rgba(99,102,241,0.06),transparent_60%)] pointer-events-none" />
-
-                {/* Subtle grid overlay */}
+              <div className="relative flex min-h-0 w-full flex-1 flex-col self-stretch overflow-hidden">
                 <div
-                  className="absolute inset-0 pointer-events-none opacity-[0.03]"
+                  className="relative z-10 box-border flex min-h-full w-full flex-1 flex-col px-5 py-10 text-center text-slate-200 sm:px-10 sm:py-12"
                   style={{
-                    backgroundImage: 'linear-gradient(rgba(255,255,255,0.1) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,0.1) 1px, transparent 1px)',
-                    backgroundSize: '40px 40px',
+                    background: POKER_HERO_CARD_GRADIENT,
+                    justifyContent: 'center',
+                    alignItems: 'center',
                   }}
-                />
-
-                {/* Centered hero content */}
-                <div className="relative text-center px-5 sm:px-10 pt-12 sm:pt-14 pb-12 sm:pb-16">
+                >
                   {/* Live badge */}
                   <div
                     className="inline-flex items-center gap-2.5 px-5 py-2 rounded-full mb-6 sm:mb-8"
@@ -509,7 +528,7 @@ export default function PokerLobbyPage() {
 
                   {/* Main title */}
                   <h1
-                    className="text-5xl sm:text-6xl md:text-7xl font-black tracking-[-3px] leading-[1] mb-4"
+                    className="text-5xl sm:text-6xl md:text-7xl font-black tracking-[-3px] leading-[1] mb-8 sm:mb-10"
                     style={{
                       background: 'linear-gradient(180deg, #ffffff 0%, #e2e8f0 40%, #64748b 100%)',
                       WebkitBackgroundClip: 'text',
@@ -519,9 +538,6 @@ export default function PokerLobbyPage() {
                   >
                     Texas Hold&apos;em
                   </h1>
-                  <p className="text-sm sm:text-base text-slate-500 mb-10 sm:mb-12 max-w-md mx-auto">
-                    No-limit multiplayer poker. Join a table or start your own.
-                  </p>
 
                   {/* CTA buttons */}
                   <div className="flex justify-center gap-3 flex-wrap">
@@ -536,21 +552,22 @@ export default function PokerLobbyPage() {
                         }}
                       >
                         <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.5}><path d="M12 5v14M5 12h14" /></svg>
-                        Create Table
+                        Create Cash Game
                       </button>
                     )}
                     <button
                       type="button"
-                      onClick={() => setShowHowToPlay(true)}
-                      className="flex items-center gap-2 px-6 py-3.5 rounded-2xl text-slate-400 text-sm font-medium hover:text-white transition-all"
+                      onClick={() => {
+                        setLobbyTab('tournaments');
+                        setTournamentCreateModalOpen(true);
+                      }}
+                      className="flex items-center gap-2 px-6 py-3.5 rounded-2xl text-sm font-bold text-black transition-all hover:brightness-105 active:scale-[0.99]"
                       style={{
-                        background: 'rgba(30,41,59,0.5)',
-                        border: '1px solid rgba(51,65,85,0.5)',
-                        boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.03)',
+                        background: 'linear-gradient(180deg, #eab308, #ca8a04)',
+                        boxShadow: '0 2px 12px rgba(234, 179, 8, 0.25)',
                       }}
                     >
-                      <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}><circle cx="12" cy="12" r="10" /><path d="M12 16v-4M12 8h.01" /></svg>
-                      How to Play
+                      Create Tournament
                     </button>
                     {address && (
                       <button
@@ -567,11 +584,45 @@ export default function PokerLobbyPage() {
                         My Stats
                       </button>
                     )}
+                    <Link
+                      href="/creators"
+                      className="flex items-center gap-2 px-6 py-3.5 rounded-2xl text-slate-400 text-sm font-medium hover:text-white transition-all"
+                      style={{
+                        background: 'rgba(30,41,59,0.5)',
+                        border: '1px solid rgba(51,65,85,0.5)',
+                        boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.03)',
+                      }}
+                    >
+                      Creator Dashboard
+                    </Link>
                     <button
                       type="button"
                       onClick={() => setShowHowToPlay(true)}
-                      className="flex items-center px-5 py-3.5 rounded-2xl text-slate-600 hover:text-slate-300 text-sm font-medium transition-colors"
+                      className="flex items-center gap-2 px-6 py-3.5 rounded-2xl text-slate-400 text-sm font-medium hover:text-white transition-all"
+                      style={{
+                        background: 'rgba(30,41,59,0.5)',
+                        border: '1px solid rgba(51,65,85,0.5)',
+                        boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.03)',
+                      }}
                     >
+                      <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}><circle cx="12" cy="12" r="10" /><path d="M12 16v-4M12 8h.01" /></svg>
+                      How to Play
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setShowHowToPlay(true)}
+                      className="flex items-center gap-2 px-6 py-3.5 rounded-2xl text-slate-400 text-sm font-medium hover:text-white transition-all"
+                      style={{
+                        background: 'rgba(30,41,59,0.5)',
+                        border: '1px solid rgba(51,65,85,0.5)',
+                        boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.03)',
+                      }}
+                    >
+                      <svg className="w-4 h-4 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}>
+                        <path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20" />
+                        <path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z" />
+                        <path d="M8 7h8M8 11h6" />
+                      </svg>
                       Tutorial
                     </button>
                   </div>
@@ -581,7 +632,7 @@ export default function PokerLobbyPage() {
 
             {isConnected && address && (
               <section
-                className="relative mb-6 sm:mb-8 rounded-2xl sm:rounded-3xl overflow-hidden border-2 border-cyan-500/30"
+                className="relative mb-6 sm:mb-8 rounded-2xl sm:rounded-3xl overflow-hidden border-2 border-white/25"
                 style={{
                   background: 'linear-gradient(325deg, rgba(20, 20, 20, 0.8), rgba(40, 40, 40, 0.6))',
                   boxShadow:
@@ -594,7 +645,7 @@ export default function PokerLobbyPage() {
                 <div className="relative px-4 py-5 sm:px-8 sm:py-6 flex flex-col lg:flex-row lg:items-center gap-5 lg:gap-8">
                   <div className="flex items-start gap-3 sm:gap-4 min-w-0 flex-1">
                     <div
-                      className="shrink-0 w-12 h-12 sm:w-14 sm:h-14 rounded-2xl flex items-center justify-center border border-cyan-500/35"
+                      className="shrink-0 w-12 h-12 sm:w-14 sm:h-14 rounded-2xl flex items-center justify-center border border-white/30"
                       style={{
                         background: 'linear-gradient(145deg, rgb(16, 26, 35), rgb(35, 36, 41))',
                         boxShadow: 'inset 0 3px 6px rgba(0,0,0,0.8), 0 0 20px rgba(34,211,238,0.12)',
@@ -627,7 +678,7 @@ export default function PokerLobbyPage() {
                         <div className="text-[10px] text-cyan-500/60 font-semibold mt-1.5">MORBIUS</div>
                       </div>
                       <div
-                        className="rounded-xl px-4 py-3 border border-cyan-500/20"
+                        className="rounded-xl px-4 py-3 border border-white/20"
                         style={{
                           background: 'linear-gradient(145deg, rgba(6, 55, 65, 0.25), rgba(20, 20, 20, 0.45))',
                           boxShadow: 'inset 0 2px 4px rgba(0,0,0,0.5), 0 0 24px rgba(34,211,238,0.06)',
@@ -642,7 +693,7 @@ export default function PokerLobbyPage() {
                     <button
                       type="button"
                       onClick={() => setShowChipExchange(true)}
-                      className="shrink-0 w-full sm:w-auto min-h-[3rem] px-6 sm:px-8 rounded-xl text-sm font-bold text-white transition-all hover:opacity-95 hover:scale-[1.02] active:scale-[0.99] border border-cyan-400/20"
+                      className="shrink-0 w-full sm:w-auto min-h-[3rem] px-6 sm:px-8 rounded-xl text-sm font-bold text-white transition-all hover:opacity-95 hover:scale-[1.02] active:scale-[0.99] border border-white/20"
                       style={{
                         background: 'linear-gradient(135deg, #0891b2, #2563eb)',
                         boxShadow: '0 8px 32px rgba(6, 182, 212, 0.25), 0 0 0 1px rgba(34, 211, 238, 0.2), inset 0 1px 0 rgba(255,255,255,0.15)',
@@ -657,7 +708,7 @@ export default function PokerLobbyPage() {
 
             {/* Tab bar */}
             <div
-              className="flex items-center gap-1 px-5 sm:px-10 py-3.5 sm:py-4 mb-6 sm:mb-8 rounded-2xl border border-cyan-500/20"
+              className="flex items-center gap-1 px-5 sm:px-10 py-3.5 sm:py-4 mb-6 sm:mb-8 rounded-2xl border border-white/25"
               style={{ background: 'linear-gradient(180deg, rgba(0,0,0,0.35), rgba(0,0,0,0.2))' }}
             >
                 <button
@@ -666,7 +717,7 @@ export default function PokerLobbyPage() {
                   className={`relative px-5 py-2.5 rounded-xl text-xs sm:text-sm font-semibold transition-all ${
                     activeTab === 'tournaments'
                       ? 'bg-cyan-500/[0.12] text-cyan-400'
-                      : 'text-slate-600 hover:text-slate-400'
+                      : 'text-white hover:text-white/85'
                   }`}
                 >
                   Tournaments
@@ -677,7 +728,7 @@ export default function PokerLobbyPage() {
                   className={`px-5 py-2.5 rounded-xl text-xs sm:text-sm font-semibold transition-all ${
                     activeTab === 'cash'
                       ? 'bg-cyan-500/[0.12] text-cyan-400'
-                      : 'text-slate-600 hover:text-slate-400'
+                      : 'text-white hover:text-white/85'
                   }`}
                 >
                   Cash Games
@@ -691,44 +742,47 @@ export default function PokerLobbyPage() {
                   className={`relative px-5 py-2.5 rounded-xl text-xs sm:text-sm font-semibold transition-all ${
                     activeTab === 'history'
                       ? 'bg-cyan-500/[0.12] text-cyan-400'
-                      : 'text-slate-600 hover:text-slate-400'
+                      : 'text-white hover:text-white/85'
                   }`}
                 >
                   History
                 </button>
             </div>
             {activeTab === 'tournaments' && (
-              <div
-                className="rounded-2xl border border-cyan-500/20 p-3 sm:p-5"
-                style={{
-                  background: 'linear-gradient(325deg, rgba(20, 20, 20, 0.8), rgba(40, 40, 40, 0.6))',
-                  boxShadow:
-                    'inset 0 3px 6px rgba(0, 0, 0, 0.8), inset 0 -3px 6px rgba(255, 255, 255, 0.1), 0 1px 3px rgba(0, 0, 0, 0.5)',
-                }}
-              >
-                {!isConnected && (
-                  <p className="text-sm text-cyan-200/80 mb-4 rounded-lg border border-cyan-500/25 bg-cyan-500/5 px-3 py-2">
-                    Connect your wallet to create or join Sit &amp; Go tournaments.
-                  </p>
-                )}
-                <PokerTournamentLobby
-                  wsClient={wsClient}
-                  myAddress={address}
-                  onGoToTable={goToTournamentTable}
-                />
+              <div className="surface-splash-panel !border-white/10 overflow-hidden">
+                <div className="surface-splash-panel-glow" aria-hidden />
+                <div
+                  className="relative z-10 box-border flex w-full min-h-0 flex-col p-3 sm:p-5"
+                  style={{
+                    background: POKER_HERO_CARD_GRADIENT_FLIPPED,
+                    justifyContent: 'center',
+                    alignItems: 'center',
+                  }}
+                >
+                  <div className="w-full max-w-full">
+                    {!isConnected && (
+                      <p className="text-sm text-cyan-200/80 mb-4 rounded-lg border border-white/20 bg-cyan-500/5 px-3 py-2">
+                        Connect your wallet to create or join Sit &amp; Go tournaments.
+                      </p>
+                    )}
+                    <PokerTournamentLobby
+                      wsClient={wsClient}
+                      myAddress={address}
+                      onGoToTable={goToTournamentTable}
+                      createModalOpen={tournamentCreateModalOpen}
+                      onCreateModalOpenChange={setTournamentCreateModalOpen}
+                    />
+                  </div>
+                </div>
               </div>
             )}
 
             {activeTab === 'history' && (
-              <div
-                className="rounded-2xl border border-cyan-500/20 p-3 sm:p-5"
-                style={{
-                  background: 'linear-gradient(325deg, rgba(20, 20, 20, 0.8), rgba(40, 40, 40, 0.6))',
-                  boxShadow:
-                    'inset 0 3px 6px rgba(0, 0, 0, 0.8), inset 0 -3px 6px rgba(255, 255, 255, 0.1), 0 1px 3px rgba(0, 0, 0, 0.5)',
-                }}
-              >
-                <PokerTournamentHistory myAddress={address} />
+              <div className="surface-splash-panel !border-white/10 overflow-hidden">
+                <div className="surface-splash-panel-glow" aria-hidden />
+                <div className="relative z-10 p-3 sm:p-5">
+                  <PokerTournamentHistory myAddress={address} />
+                </div>
               </div>
             )}
 
@@ -740,21 +794,24 @@ export default function PokerLobbyPage() {
             )}
             {activeTab === 'cash' && !loading && tables.length > 0 && (
               <div
-                className="rounded-2xl border border-cyan-500/20 overflow-x-auto lg:overflow-x-visible"
-                style={{
-                  background: 'linear-gradient(325deg, rgba(20, 20, 20, 0.8), rgba(40, 40, 40, 0.6))',
-                  boxShadow:
-                    'inset 0 3px 6px rgba(0, 0, 0, 0.8), inset 0 -3px 6px rgba(255, 255, 255, 0.1), 0 1px 3px rgba(0, 0, 0, 0.5)',
-                }}
+                className="surface-splash-panel overflow-x-auto lg:overflow-x-visible border-2 !border-[rgba(255,255,255,0.1)]"
               >
-                <table className="w-full border-collapse text-sm text-slate-200 min-w-0">
+                <div className="surface-splash-panel-glow" aria-hidden />
+                <div className="relative z-10 min-w-0">
+                  <table className="w-full border-collapse text-sm text-slate-200 min-w-0">
                   <thead>
                     <tr className="border-b border-slate-600/50">
                       <th className="py-2.5 px-3 text-left text-xs font-semibold uppercase tracking-wider text-slate-500">
-                        Stakes
+                        Blinds
                       </th>
                       <th className="py-2.5 px-3 text-left text-xs font-semibold uppercase tracking-wider text-slate-500">
                         Table
+                      </th>
+                      <th className="py-2.5 px-3 text-left text-xs font-semibold uppercase tracking-wider text-slate-500">
+                        Creator
+                      </th>
+                      <th className="py-2.5 px-3 text-left text-xs font-semibold uppercase tracking-wider text-slate-500 whitespace-nowrap">
+                        Running
                       </th>
                       <th className="py-2.5 px-3 text-left text-xs font-semibold uppercase tracking-wider text-slate-500">
                         Seats
@@ -767,10 +824,16 @@ export default function PokerLobbyPage() {
                   <tbody>
                     {tables.map((t) => {
                       const isPlaying = t.status === 'playing';
+                      const hasPlayers = t.seatedCount > 0;
+                      const tableStatusLabel = isPlaying
+                        ? 'In progress'
+                        : hasPlayers
+                          ? 'Live'
+                          : 'Waiting for players';
                       const openSeats = t.maxSeats - t.seatedCount;
                       const cashTh = 'py-2.5 px-3 align-middle border-b border-slate-600/35';
                       const btnSecondary =
-                        'inline-flex h-8 min-w-[5.75rem] items-center justify-center rounded-lg border border-slate-500/55 bg-black/30 text-xs font-semibold text-slate-200 hover:border-cyan-500/35 hover:bg-white/[0.04] transition-colors';
+                        'inline-flex h-8 min-w-[5.75rem] items-center justify-center rounded-lg border border-slate-500/55 bg-black/30 text-xs font-semibold text-slate-200 hover:border-white/35 hover:bg-white/[0.04] transition-colors';
                       const btnPrimary =
                         'inline-flex h-8 min-w-[5.75rem] items-center justify-center rounded-lg bg-gradient-to-r from-cyan-600 to-cyan-500 text-xs font-semibold text-white shadow-sm hover:opacity-95 transition-opacity';
                       const btnGhost =
@@ -785,19 +848,19 @@ export default function PokerLobbyPage() {
                               <div className="text-xs text-slate-500 mt-0.5">No-limit Hold&apos;em</div>
                             </td>
                             <td className={cashTh}>
-                              <div className="font-medium text-slate-200">
-                                {isPlaying ? 'In progress' : 'Waiting for players'}
-                              </div>
-                              <div className="mt-1 flex items-center gap-1.5 text-xs text-slate-500">
-                                {t.hasPin ? (
-                                  <>
-                                    <Lock className="w-3.5 h-3.5 text-amber-400/90 shrink-0" aria-hidden />
-                                    <span className="text-amber-400/90 font-medium">Private</span>
-                                  </>
-                                ) : (
-                                  <span>Open table</span>
-                                )}
-                              </div>
+                              <div className="font-medium text-slate-200">{tableStatusLabel}</div>
+                              {t.hasPin ? (
+                                <div className="mt-1 flex items-center gap-1.5 text-xs text-slate-500">
+                                  <Lock className="w-3.5 h-3.5 text-amber-400/90 shrink-0" aria-hidden />
+                                  <span className="text-amber-400/90 font-medium">Private</span>
+                                </div>
+                              ) : null}
+                            </td>
+                            <td className={`${cashTh} font-mono text-xs text-slate-300`}>
+                              <span title={t.creatorAddress ?? undefined}>{shortenHexAddress(t.creatorAddress)}</span>
+                            </td>
+                            <td className={`${cashTh} text-xs text-slate-400 whitespace-nowrap`}>
+                              {formatTableAge(t.createdAt)}
                             </td>
                             <td className={`${cashTh} tabular-nums`}>
                               <div className="font-medium text-slate-100">
@@ -854,7 +917,7 @@ export default function PokerLobbyPage() {
                           </tr>
                           {playersDropdownTableId === t.id && (
                             <tr className="bg-black/20">
-                              <td colSpan={4} className="px-3 py-3 border-b border-slate-600/35">
+                              <td colSpan={6} className="px-3 py-3 border-b border-slate-600/35">
                                 <div className="rounded-lg border border-slate-600/50 overflow-hidden bg-black/25">
                                   <div className="px-3 py-2 border-b border-slate-600/45">
                                     <span className="text-xs font-semibold uppercase tracking-wider text-slate-500">
@@ -904,6 +967,7 @@ export default function PokerLobbyPage() {
                     })}
                   </tbody>
                 </table>
+                </div>
               </div>
             )}
 
@@ -920,10 +984,10 @@ export default function PokerLobbyPage() {
           {joinModal && (
           <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
             <div
-              className="bg-gradient-to-br from-slate-900 to-slate-800 border-2 border-cyan-500/30 rounded-2xl shadow-2xl max-w-sm w-full overflow-hidden"
+              className="bg-gradient-to-br from-slate-900 to-slate-800 border-2 border-white/25 rounded-2xl shadow-2xl max-w-sm w-full overflow-hidden"
               style={Theme.panel?.base}
             >
-              <div className="p-4 border-b border-cyan-500/30">
+              <div className="p-4 border-b border-white/25">
                 <h3 className="text-lg font-semibold text-cyan-400 flex items-center gap-2">
                   Join Table
                   {joinModal.hasPin && (
@@ -961,7 +1025,7 @@ export default function PokerLobbyPage() {
                     Insufficient poker chips. <button type="button" onClick={() => setShowDepositModal(true)} className="underline hover:text-amber-300">Get chips</button>
                   </p>
                 )}
-                <div className="rounded-lg bg-slate-800/80 border border-cyan-500/20 px-3 py-2.5 space-y-1">
+                <div className="rounded-lg bg-slate-800/80 border border-white/20 px-3 py-2.5 space-y-1">
                   <p className="text-[11px] text-slate-400 leading-relaxed">
                     <span className="text-cyan-400/90 font-medium">Cash buy-in:</span>{' '}
                     {joinModal ? (
@@ -985,7 +1049,7 @@ export default function PokerLobbyPage() {
                   value={buyIn}
                   onChange={(e) => setBuyIn(e.target.value)}
                   placeholder="e.g. 100"
-                  className="w-full rounded-lg bg-slate-800 border border-cyan-500/30 px-3 py-2 text-white"
+                  className="w-full rounded-lg bg-slate-800 border border-white/25 px-3 py-2 text-white"
                 />
                 {joinBuyInOutOfRange && buyIn.trim() !== '' && (
                   <p className="text-amber-400/90 text-xs">
@@ -1038,11 +1102,11 @@ export default function PokerLobbyPage() {
           {createModal && (
           <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-3">
             <div
-              className="bg-gradient-to-br from-slate-900 to-slate-800 border-2 border-cyan-500/30 rounded-xl shadow-2xl max-w-xs w-full overflow-hidden"
+              className="bg-gradient-to-br from-slate-900 to-slate-800 border-2 border-white/25 rounded-xl shadow-2xl max-w-xs w-full overflow-hidden"
               style={Theme.panel?.base}
             >
-              <div className="px-3 py-2.5 border-b border-cyan-500/30">
-                <h3 className="text-sm font-semibold text-cyan-400">Create Table</h3>
+              <div className="px-3 py-2.5 border-b border-white/25">
+                <h3 className="text-sm font-semibold text-cyan-400">Create Cash Game</h3>
               </div>
               <div className="p-3 space-y-2.5">
                 <p className="text-[11px] text-slate-500">Blinds in MORBIUS (e.g. 10 = 10 MORBIUS)</p>
@@ -1052,7 +1116,7 @@ export default function PokerLobbyPage() {
                     type="text"
                     value={createModal.smallBlind}
                     onChange={(e) => setCreateModal((m) => m ? { ...m, smallBlind: e.target.value } : null)}
-                    className="w-full rounded-lg bg-slate-800 border border-cyan-500/30 px-2.5 py-1.5 text-sm text-white"
+                    className="w-full rounded-lg bg-slate-800 border border-white/25 px-2.5 py-1.5 text-sm text-white"
                   />
                 </div>
                 <div>
@@ -1061,7 +1125,7 @@ export default function PokerLobbyPage() {
                     type="text"
                     value={createModal.bigBlind}
                     onChange={(e) => setCreateModal((m) => m ? { ...m, bigBlind: e.target.value } : null)}
-                    className="w-full rounded-lg bg-slate-800 border border-cyan-500/30 px-2.5 py-1.5 text-sm text-white"
+                    className="w-full rounded-lg bg-slate-800 border border-white/25 px-2.5 py-1.5 text-sm text-white"
                   />
                 </div>
                 <div>
@@ -1072,7 +1136,7 @@ export default function PokerLobbyPage() {
                     max={10}
                     value={createModal.maxSeats}
                     onChange={(e) => setCreateModal((m) => m ? { ...m, maxSeats: Math.min(10, Math.max(2, Number(e.target.value) || 10)) } : null)}
-                    className="w-full rounded-lg bg-slate-800 border border-cyan-500/30 px-2.5 py-1.5 text-sm text-white"
+                    className="w-full rounded-lg bg-slate-800 border border-white/25 px-2.5 py-1.5 text-sm text-white"
                   />
                 </div>
                 {/* Private table PIN toggle */}
@@ -1102,7 +1166,7 @@ export default function PokerLobbyPage() {
                         setCreateModal((m) => m ? { ...m, pinCode: v } : null);
                       }}
                       placeholder="0000"
-                      className="w-full rounded-lg bg-slate-800 border border-cyan-500/30 px-2.5 py-1.5 text-sm text-white text-center tracking-[0.5em] font-mono"
+                      className="w-full rounded-lg bg-slate-800 border border-white/25 px-2.5 py-1.5 text-sm text-white text-center tracking-[0.5em] font-mono"
                     />
                     <p className="text-[10px] text-slate-600 mt-1">Share this PIN with invited players.</p>
                   </div>
@@ -1154,7 +1218,6 @@ export default function PokerLobbyPage() {
         actionLabel="Open Chip Exchange"
         onOpenExchange={() => setShowChipExchange(true)}
       />
-      <SophieSplashModal address={address} />
     </>
   );
 }

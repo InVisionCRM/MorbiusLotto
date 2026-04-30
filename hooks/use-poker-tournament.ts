@@ -20,9 +20,10 @@ export interface BlindLevel {
 /** Mirrors server `PokerBlindIncreaseMode`. */
 export type PokerBlindIncreaseMode = 'knockout' | 'by_hand' | 'by_time';
 
-/** Mirrors server `BLIND_INTERVAL_MINUTES_OPTIONS`. */
-export const BLIND_INTERVAL_MINUTES_OPTIONS = [15, 30, 45, 60] as const;
-export type BlindIntervalMinutes = typeof BLIND_INTERVAL_MINUTES_OPTIONS[number];
+/** Mirrors server: wall-clock minutes per blind level in `by_time` mode (inclusive). */
+export const BLIND_INTERVAL_MINUTES_MIN = 1;
+export const BLIND_INTERVAL_MINUTES_MAX = 60;
+export type BlindIntervalMinutes = number;
 
 export interface PokerTournamentConfig {
   startingStack: number;
@@ -35,7 +36,7 @@ export interface PokerTournamentConfig {
    * `by_time`: blinds advance one level every `blindIntervalMinutes` of wall-clock time.
    */
   blindIncreaseMode?: PokerBlindIncreaseMode;
-  /** Required when `blindIncreaseMode === 'by_time'`. One of `BLIND_INTERVAL_MINUTES_OPTIONS`. */
+  /** Required when `blindIncreaseMode === 'by_time'`. Integer minutes from `BLIND_INTERVAL_MINUTES_MIN` to `BLIND_INTERVAL_MINUTES_MAX`. */
   blindIntervalMinutes?: BlindIntervalMinutes;
 }
 

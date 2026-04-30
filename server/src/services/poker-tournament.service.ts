@@ -23,9 +23,10 @@ export interface BlindLevel {
 /** How posted blinds go up during the event (stored in `poker_config`). */
 export type PokerBlindIncreaseMode = 'knockout' | 'by_hand' | 'by_time';
 
-/** Allowed wall-clock intervals (minutes) for `by_time` mode. */
-export const BLIND_INTERVAL_MINUTES_OPTIONS = [15, 30, 45, 60] as const;
-export type BlindIntervalMinutes = typeof BLIND_INTERVAL_MINUTES_OPTIONS[number];
+/** Allowed wall-clock interval (minutes) for `by_time` mode — integers 1–60 inclusive. */
+export const BLIND_INTERVAL_MINUTES_MIN = 1;
+export const BLIND_INTERVAL_MINUTES_MAX = 60;
+export type BlindIntervalMinutes = number;
 
 export interface PokerTournamentConfig {
   startingStack: number;
@@ -38,7 +39,7 @@ export interface PokerTournamentConfig {
    * `by_time`: blinds advance one level every `blindIntervalMinutes` of wall-clock time.
    */
   blindIncreaseMode?: PokerBlindIncreaseMode;
-  /** Required when `blindIncreaseMode === 'by_time'`. Must be one of `BLIND_INTERVAL_MINUTES_OPTIONS`. */
+  /** Required when `blindIncreaseMode === 'by_time'`. Integer minutes from `BLIND_INTERVAL_MINUTES_MIN` to `BLIND_INTERVAL_MINUTES_MAX`. */
   blindIntervalMinutes?: BlindIntervalMinutes;
 }
 
@@ -290,13 +291,12 @@ export class PokerTournamentService {
     return 'knockout';
   }
 
-  /** Normalize stored / client-sent blind interval (minutes). Returns null when not in the allowed set. */
+  /** Normalize stored / client-sent blind interval (minutes). Returns null when out of range. */
   private normalizeBlindIntervalMinutes(raw: unknown): BlindIntervalMinutes | null {
     const n = Math.floor(Number(raw));
     if (!Number.isFinite(n)) return null;
-    return (BLIND_INTERVAL_MINUTES_OPTIONS as readonly number[]).includes(n)
-      ? (n as BlindIntervalMinutes)
-      : null;
+    if (n < BLIND_INTERVAL_MINUTES_MIN || n > BLIND_INTERVAL_MINUTES_MAX) return null;
+    return n;
   }
 
   /** Return the BlindLevel that applies for a given hand number (1-indexed). */
@@ -418,7 +418,7 @@ export class PokerTournamentService {
       const interval = this.normalizeBlindIntervalMinutes(config.blindIntervalMinutes);
       if (!interval) {
         throw new Error(
-          `blindIntervalMinutes is required when blindIncreaseMode is 'by_time' and must be one of ${BLIND_INTERVAL_MINUTES_OPTIONS.join(', ')}`,
+          `blindIntervalMinutes is required when blindIncreaseMode is 'by_time' and must be an integer from ${BLIND_INTERVAL_MINUTES_MIN} to ${BLIND_INTERVAL_MINUTES_MAX} (minutes).`,
         );
       }
     }

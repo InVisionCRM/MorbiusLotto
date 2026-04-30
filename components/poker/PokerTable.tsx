@@ -16,6 +16,7 @@ import {
   cardAnchorForDisplaySlot,
   dealerButtonAnchorForDisplaySlot,
   POKER_POT_ANCHOR,
+  playerTagAnchorForDisplaySlot,
   ringIndexForDisplaySlot,
   winningPotChipAnchorForDisplaySlot,
 } from '@/lib/poker-seat-layout';
@@ -23,6 +24,9 @@ import confetti from 'canvas-confetti';
 import { FloatingTableLogo } from './FloatingTableLogo';
 import { PokerRailActingHighlight } from './PokerRailActingHighlight';
 import { DealerButton } from './DealerButton';
+import {
+  POKER_BETWEEN_HANDS_DELAY_MS,
+} from '@/lib/poker-between-hands-delay';
 
 const MORBIUS_DEFAULT_FELT_LOGO = '/morbius/MorbiusLogo-2.svg';
 
@@ -295,6 +299,37 @@ export function PokerTable({ state, currentPlayerAddress, timeLeft, chatBubbleBy
   // What the rest of the component should treat as "the medallion moment".
   const showFinalShowdownVisuals = !!isShowdownWithWinners && medallionReady;
 
+  /** Server deadline for auto next hand (ISO). Omitted on older backends. */
+  const serverNextHandMs = useMemo(() => {
+    const iso = hand?.nextHandAt;
+    if (!iso) return null;
+    const t = Date.parse(iso);
+    return Number.isFinite(t) ? t : null;
+  }, [hand?.nextHandAt]);
+
+  /**
+   * If `nextHandAt` is missing, approximate the 15s window from medallion time so the
+   * intermission UI still appears (matches common "only Time to act after next hand" report).
+   */
+  const [clientIntermissionEndMs, setClientIntermissionEndMs] = useState<number | null>(null);
+  useEffect(() => {
+    if (!isShowdownWithWinners || !hand?.handId) {
+      setClientIntermissionEndMs(null);
+      return;
+    }
+    if (hand.nextHandAt) {
+      setClientIntermissionEndMs(null);
+      return;
+    }
+    if (medallionReady) {
+      setClientIntermissionEndMs((prev) => prev ?? Date.now() + POKER_BETWEEN_HANDS_DELAY_MS);
+    }
+  }, [isShowdownWithWinners, hand?.handId, hand?.nextHandAt, medallionReady]);
+
+  const intermissionEndMs =
+    isShowdownWithWinners && hand ? (serverNextHandMs ?? clientIntermissionEndMs) : null;
+  const showBetweenHandsTimer = intermissionEndMs != null;
+
   useEffect(() => {
     if (!showFinalShowdownVisuals || !isCurrentPlayerWinner || !hand?.handId) return;
     if (lastConfettiHandRef.current === hand.handId) return;
@@ -433,6 +468,13 @@ export function PokerTable({ state, currentPlayerAddress, timeLeft, chatBubbleBy
     const displaySlot = toDisplaySlot(idx);
     const serverPos = seat.position ?? idx;
     const anchorFrac = getRenderedSeatAnchor(displaySlot, serverPos);
+    const playerTagAnchor = playerTagAnchorForDisplaySlot(state.seats.length, displaySlot);
+    const playerTagOffset = anchorFrac
+      ? {
+          x: (playerTagAnchor.fx - anchorFrac.fx) * dims.w,
+          y: (playerTagAnchor.fy - anchorFrac.fy) * dims.h,
+        }
+      : undefined;
     let showdownCardOffset: { x: number; y: number } | undefined;
     if (seatShowdownCards && anchorFrac) {
       const deltaX = (POT_ANCHOR.fx - anchorFrac.fx) * dims.w;
@@ -482,6 +524,7 @@ export function PokerTable({ state, currentPlayerAddress, timeLeft, chatBubbleBy
       onSitBack,
       onRequestMobileActivity,
       includeActivityInPlayerRadial: hideSeatAvatars,
+      playerTagOffset,
       showdownCardOffset,
       handName:
         idx === mySeatIndex && selfHandName
@@ -614,25 +657,35 @@ export function PokerTable({ state, currentPlayerAddress, timeLeft, chatBubbleBy
           wash so winning cards (which carry their own brightness boost) and
           dimmed non-winning cards are stacked above the overlay. */}
       <div
-        className="absolute flex items-center justify-center"
+        className="absolute flex flex-col items-center justify-center"
         style={{
-          left: '20%', top: '41%', width: '60%', height: '22%',
+          left: '20%',
+          top: '41%',
+          width: '60%',
+          minHeight: '22%',
           zIndex: showFinalShowdownVisuals ? 29 : 25,
         }}
         {...(tutorialTargets ? { 'data-tutorial-target': 'community-cards' } : {})}
       >
         {hand ? (
-          <PokerBoard
-            communityCards={
-              isShowdownWithWinners
-                ? hand.communityCards.slice(0, revealedCommunityCount)
-                : hand.communityCards
-            }
-            pot={hand.pot}
-            winningCardIndices={showFinalShowdownVisuals ? winningCardIndices : []}
-            dimNonWinning={showFinalShowdownVisuals}
-            dataTutorialTargetPot={dataTutorialTargetPot}
-          />
+          <>
+            <PokerBoard
+              communityCards={
+                isShowdownWithWinners
+                  ? hand.communityCards.slice(0, revealedCommunityCount)
+                  : hand.communityCards
+              }
+              pot={hand.pot}
+              winningCardIndices={showFinalShowdownVisuals ? winningCardIndices : []}
+              dimNonWinning={showFinalShowdownVisuals}
+              dataTutorialTargetPot={dataTutorialTargetPot}
+              betweenHandsNextHandAtIso={
+                showBetweenHandsTimer && intermissionEndMs != null
+                  ? new Date(intermissionEndMs).toISOString()
+                  : null
+              }
+            />
+          </>
         ) : (
           <span
             className="text-xl font-bold tracking-[0.25em] uppercase select-none"

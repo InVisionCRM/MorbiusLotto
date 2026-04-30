@@ -1,4 +1,5 @@
 'use client'
+
 import { cn } from '@/lib/utils'
 import { WalletMenu } from '@/components/shared/WalletMenu'
 import { AnimatedShinyText } from '@/components/ui/animated-shiny-text'
@@ -43,12 +44,14 @@ export function KenoConfirmPanel({
         </div>
 
         <div
-          className="mb-4 w-full rounded-lg relative overflow-hidden p-4"
+          className={cn(
+            'mb-4 w-full rounded-lg relative overflow-hidden p-4',
+            'border border-[rgba(0,0,0,0.1)]'
+          )}
           style={{
             background: 'linear-gradient(325deg, rgba(20, 20, 20, 0.8), rgba(40, 40, 40, 0.6))',
             boxShadow:
               'inset 0 3px 6px rgba(0, 0, 0, 0.8), inset 0 -3px 6px rgba(255, 255, 255, 0.1), 0 1px 3px rgba(0, 0, 0, 0.5)',
-            border: '1px inset rgba(60, 60, 60, 0.5)',
           }}
         >
           <PaymentMethodToggle value={paymentMethod} onChange={onPaymentMethodChange} textClassName="text-2xl font-semibold" />

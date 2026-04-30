@@ -3,6 +3,11 @@
 import { Input } from '@/components/ui/input'
 import { cn } from '@/lib/utils'
 
+/** Soft edge on dark embossed panels — class wins over theme `border-input` / UA button chrome. */
+const kenoPanelEdge = 'border border-[rgba(0,0,0,0.1)]'
+const kenoEmbossedBtn =
+  'appearance-none box-border outline-none ring-0 border border-[rgba(0,0,0,0.1)]'
+
 interface KenoTicketBuilderProps {
   spotSize: number
   wager: number
@@ -38,12 +43,11 @@ export function KenoTicketBuilder({
 
       <div className="grid grid-cols-2 gap-4">
         <div
-          className="space-y-1 p-3 rounded-lg relative"
+          className={cn('space-y-1 p-3 rounded-lg relative', kenoPanelEdge)}
           style={{
             background: 'linear-gradient(325deg, rgba(20, 20, 20, 0.8), rgba(40, 40, 40, 0.6))',
             boxShadow:
               'inset 0 3px 6px rgba(0, 0, 0, 0.8), inset 0 -3px 6px rgba(255, 255, 255, 0.1), 0 1px 3px rgba(0, 0, 0, 0.5)',
-            border: '1px inset rgba(60, 60, 60, 0.5)',
           }}
         >
           <div className="relative z-10 space-y-1">
@@ -52,9 +56,11 @@ export function KenoTicketBuilder({
               {[1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map((num) => (
                 <button
                   key={num}
+                  type="button"
                   onClick={() => onSpotSizeChange(num)}
                   className={cn(
-                    'w-full h-8 rounded-lg font-semibold text-sm transition-all hover:opacity-80',
+                    kenoEmbossedBtn,
+                    'relative h-8 w-full rounded-lg font-semibold text-sm transition-all hover:opacity-80',
                     spotSize === num ? 'text-cyan-500' : 'text-gray-300'
                   )}
                   style={
@@ -63,17 +69,17 @@ export function KenoTicketBuilder({
                           background: 'linear-gradient(325deg, rgba(20, 20, 20, 0.8), rgba(40, 40, 40, 0.6))',
                           boxShadow:
                             'inset 0 3px 6px rgba(0, 0, 0, 0.8), inset 0 -3px 6px rgba(255, 255, 255, 0.1), 0 1px 3px rgba(0, 0, 0, 0.5), 0 0 12px rgba(34, 197, 94, 0.3)',
-                          border: '1px inset rgba(60, 60, 60, 0.5)',
                         }
                       : {
                           background: 'linear-gradient(325deg, rgba(20, 20, 20, 0.8), rgba(40, 40, 40, 0.6))',
                           boxShadow:
                             'inset 0 3px 6px rgba(0, 0, 0, 0.8), inset 0 -3px 6px rgba(255, 255, 255, 0.1), 0 1px 3px rgba(0, 0, 0, 0.5)',
-                          border: '1px inset rgba(60, 60, 60, 0.5)',
                         }
                   }
                 >
-                  {num}
+                  <span className="pointer-events-none absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 tabular-nums">
+                    {num}
+                  </span>
                 </button>
               ))}
             </div>
@@ -81,12 +87,11 @@ export function KenoTicketBuilder({
         </div>
 
         <div
-          className="rounded-lg p-3 relative"
+          className={cn('rounded-lg p-3 relative', kenoPanelEdge)}
           style={{
             background: 'linear-gradient(325deg, rgba(20, 20, 20, 0.8), rgba(40, 40, 40, 0.6))',
             boxShadow:
               'inset 0 3px 6px rgba(0, 0, 0, 0.8), inset 0 -3px 6px rgba(255, 255, 255, 0.1), 0 1px 3px rgba(0, 0, 0, 0.5)',
-            border: '1px inset rgba(60, 60, 60, 0.5)',
           }}
         >
           <div className="relative">
@@ -111,8 +116,10 @@ export function KenoTicketBuilder({
           {[2500, 10000, 25000].map((preset) => (
             <button
               key={preset}
+              type="button"
               onClick={() => onWagerChange(preset)}
               className={cn(
+                kenoEmbossedBtn,
                 'w-full py-2.5 text-sm rounded-none transition-all hover:opacity-80',
                 wager === preset ? 'text-cyan-500' : 'text-white/70'
               )}
@@ -122,13 +129,11 @@ export function KenoTicketBuilder({
                       background: 'linear-gradient(325deg, rgba(20, 20, 20, 0.8), rgba(40, 40, 40, 0.6))',
                       boxShadow:
                         'inset 0 3px 6px rgba(0, 0, 0, 0.8), inset 0 -3px 6px rgba(255, 255, 255, 0.1), 0 1px 3px rgba(0, 0, 0, 0.5), 0 0 8px rgba(6, 182, 212, 0.2)',
-                      border: '1px inset rgba(60, 60, 60, 0.5)',
                     }
                   : {
                       background: 'linear-gradient(325deg, rgba(20, 20, 20, 0.8), rgba(40, 40, 40, 0.6))',
                       boxShadow:
                         'inset 0 3px 6px rgba(0, 0, 0, 0.8), inset 0 -3px 6px rgba(255, 255, 255, 0.1), 0 1px 3px rgba(0, 0, 0, 0.5)',
-                      border: '1px inset rgba(60, 60, 60, 0.5)',
                     }
               }
             >
@@ -143,12 +148,14 @@ export function KenoTicketBuilder({
             value={wager}
             onChange={(e) => onWagerChange(parseFloat(e.target.value) || 0)}
             placeholder="Custom"
-            className="text-white relative col-span-1"
+            className={cn(
+              'text-white relative col-span-1 !border-[rgba(0,0,0,0.1)] bg-transparent shadow-none',
+              'focus-visible:!border-[rgba(0,0,0,0.1)] focus-visible:ring-0 focus-visible:ring-offset-0'
+            )}
             style={{
               background: 'linear-gradient(325deg, rgba(20, 20, 20, 0.8), rgba(40, 40, 40, 0.6))',
               boxShadow:
                 'inset 0 3px 6px rgba(0, 0, 0, 0.8), inset 0 -3px 6px rgba(255, 255, 255, 0.1), 0 1px 3px rgba(0, 0, 0, 0.5)',
-              border: '1px inset rgba(60, 60, 60, 0.5)',
             }}
           />
         </div>
@@ -158,23 +165,29 @@ export function KenoTicketBuilder({
         <h3 className="text-lg font-semibold text-white text-center">PICK YOUR NUMBERS</h3>
         <div className="grid grid-cols-2 gap-3">
           <button
+            type="button"
             onClick={onQuickPick}
-            className="h-12 font-semibold rounded-xl transition-all relative backdrop-blur-xl hover:bg-white/[0.12]"
+            className={cn(
+              kenoEmbossedBtn,
+              'h-12 font-semibold rounded-xl transition-all relative backdrop-blur-xl hover:bg-white/[0.12]'
+            )}
             style={{
               background: 'linear-gradient(135deg, rgba(255, 255, 255, 0.12) 0%, rgba(255, 255, 255, 0.04) 100%)',
               boxShadow: 'inset 0 1px 1px rgba(255, 255, 255, 0.2), inset 0 -1px 1px rgba(0, 0, 0, 0.05), 0 1px 2px rgba(0, 0, 0, 0.1)',
-              border: '1px solid rgba(255, 255, 255, 0.18)',
             }}
           >
             <span className="relative z-10 text-cyan-400/70 hover:text-cyan-400/90">Quick Pick</span>
           </button>
           <button
+            type="button"
             onClick={onClearNumbers}
-            className="h-12 font-semibold rounded-xl transition-all relative backdrop-blur-xl hover:bg-white/[0.12]"
+            className={cn(
+              kenoEmbossedBtn,
+              'h-12 font-semibold rounded-xl transition-all relative backdrop-blur-xl hover:bg-white/[0.12]'
+            )}
             style={{
               background: 'linear-gradient(135deg, rgba(255, 255, 255, 0.12) 0%, rgba(255, 255, 255, 0.04) 100%)',
               boxShadow: 'inset 0 1px 1px rgba(255, 255, 255, 0.2), inset 0 -1px 1px rgba(0, 0, 0, 0.05), 0 1px 2px rgba(0, 0, 0, 0.1)',
-              border: '1px solid rgba(255, 255, 255, 0.18)',
             }}
           >
             <span className="relative z-10 text-red-400/70 hover:text-red-400/90">Clear</span>
@@ -185,12 +198,15 @@ export function KenoTicketBuilder({
       <div className="space-y-2">
         {isNumberPickerCollapsed ? (
           <button
+            type="button"
             onClick={() => onNumberPickerCollapsedChange(false)}
-            className="w-full h-12 font-semibold rounded-xl transition-all relative backdrop-blur-xl hover:bg-white/[0.12]"
+            className={cn(
+              kenoEmbossedBtn,
+              'w-full h-12 font-semibold rounded-xl transition-all relative backdrop-blur-xl hover:bg-white/[0.12]'
+            )}
             style={{
               background: 'linear-gradient(135deg, rgba(255, 255, 255, 0.12) 0%, rgba(255, 255, 255, 0.04) 100%)',
               boxShadow: 'inset 0 1px 1px rgba(255, 255, 255, 0.2), inset 0 -1px 1px rgba(0, 0, 0, 0.05), 0 1px 2px rgba(0, 0, 0, 0.1)',
-              border: '1px solid rgba(255, 255, 255, 0.18)',
             }}
           >
             <span className="text-blue-400/70 hover:text-blue-400/90">PICK YOUR OWN NUMBERS</span>
@@ -202,6 +218,7 @@ export function KenoTicketBuilder({
                 Select {spotSize} number{spotSize !== 1 ? 's' : ''} from 1-80
               </h4>
               <button
+                type="button"
                 onClick={() => onNumberPickerCollapsedChange(true)}
                 className="text-white/70 hover:text-white text-sm font-medium"
               >
@@ -215,11 +232,14 @@ export function KenoTicketBuilder({
                   return (
                     <button
                       key={n}
+                      type="button"
                       onClick={() => onToggleNumber(n)}
                       disabled={!active && selectedNumbers.length >= spotSize}
                       className={cn(
-                        'h-8 rounded text-xs font-semibold transition-all cursor-pointer',
-                        active ? 'bg-white text-black border-white text-md scale-115' : 'text-white hover:opacity-80'
+                        'relative h-8 rounded text-xs font-semibold transition-all cursor-pointer',
+                        active
+                          ? 'bg-white text-black border border-white text-md scale-115'
+                          : cn(kenoEmbossedBtn, 'text-white hover:opacity-80')
                       )}
                       style={
                         !active
@@ -227,12 +247,13 @@ export function KenoTicketBuilder({
                               background: 'linear-gradient(325deg, rgba(20, 20, 20, 0.8), rgba(40, 40, 40, 0.6))',
                               boxShadow:
                                 'inset 0 3px 6px rgba(0, 0, 0, 0.8), inset 0 -3px 6px rgba(255, 255, 255, 0.1), 0 1px 3px rgba(0, 0, 0, 0.5)',
-                              border: '1px inset rgba(60, 60, 60, 0.5)',
                             }
                           : undefined
                       }
                     >
-                      {n}
+                      <span className="pointer-events-none absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 tabular-nums">
+                        {n.toString().padStart(2, '0')}
+                      </span>
                     </button>
                   )
                 })}

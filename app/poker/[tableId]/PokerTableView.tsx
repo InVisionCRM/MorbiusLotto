@@ -55,7 +55,8 @@ interface PokerTableViewProps {
 const POKER_VIEW_VERTICAL_CHROME_PX = 140;
 
 const POKER_MAIN_PANEL_STYLE: React.CSSProperties = {
-  maxWidth: `min(90vw, calc((100dvh - ${POKER_VIEW_VERTICAL_CHROME_PX}px) * 2.50))`,
+  /** Narrower felt: was 90vw × 2.50 — more margin to side rails / HUD. */
+  maxWidth: `min(78vw, calc((100dvh - ${POKER_VIEW_VERTICAL_CHROME_PX}px) * 2.22))`,
   marginLeft: 'auto',
   marginRight: 'auto',
   width: '100%',

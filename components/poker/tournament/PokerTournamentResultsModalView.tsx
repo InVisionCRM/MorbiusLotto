@@ -11,6 +11,7 @@ import {
 interface ResultsEntry {
   entryId: string;
   playerAddress: string;
+  displayName?: string | null;
   finalRank: number | null;
   prizeWon: string;
   status: string;
@@ -58,14 +59,6 @@ interface TournamentStats {
     completedAt: string;
     tableId: string;
   } | null;
-}
-
-interface HandRow {
-  handId: string;
-  handNumber: number;
-  tableId: string;
-  potAmount: string;
-  completedAt: string;
 }
 
 interface Props {
@@ -146,7 +139,6 @@ function SummaryCard({
 export function PokerTournamentResultsModalView({ open, onClose, tournamentId }: Props) {
   const [results, setResults] = useState<TournamentResults | null>(null);
   const [stats, setStats] = useState<TournamentStats | null>(null);
-  const [hands, setHands] = useState<HandRow[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -155,12 +147,10 @@ export function PokerTournamentResultsModalView({ open, onClose, tournamentId }:
     setError(null);
     setResults(null);
     setStats(null);
-    setHands([]);
     try {
-      const [rRes, sRes, hRes] = await Promise.all([
+      const [rRes, sRes] = await Promise.all([
         fetch(`/api/tournament/${id}/results`),
         fetch(`/api/tournament/${id}/stats`),
-        fetch(`/api/tournament/${id}/hands?limit=100`),
       ]);
       if (!rRes.ok) {
         if (rRes.status === 404) {
@@ -171,7 +161,6 @@ export function PokerTournamentResultsModalView({ open, onClose, tournamentId }:
       }
       setResults(await rRes.json());
       if (sRes.ok) setStats(await sRes.json());
-      if (hRes.ok) setHands(await hRes.json());
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to load tournament');
     } finally {
@@ -186,7 +175,6 @@ export function PokerTournamentResultsModalView({ open, onClose, tournamentId }:
     if (!open) {
       setResults(null);
       setStats(null);
-      setHands([]);
       setError(null);
       setLoading(false);
     }
@@ -342,8 +330,13 @@ export function PokerTournamentResultsModalView({ open, onClose, tournamentId }:
                               '—'
                             )}
                           </td>
-                          <td className="py-2 px-3 font-mono text-xs text-slate-300">
-                            {shortAddr(e.playerAddress)}
+                          <td className="py-2 px-3 text-slate-200">
+                            <span className="font-medium text-sm">
+                              {e.displayName?.trim() ? e.displayName.trim() : shortAddr(e.playerAddress)}
+                            </span>
+                            {e.displayName?.trim() ? (
+                              <span className="block font-mono text-[10px] text-slate-500">{shortAddr(e.playerAddress)}</span>
+                            ) : null}
                           </td>
                           <td className="py-2 px-3 text-right tabular-nums">{e.handsPlayed}</td>
                           <td className="py-2 px-3 text-right tabular-nums text-cyan-300">
@@ -364,37 +357,6 @@ export function PokerTournamentResultsModalView({ open, onClose, tournamentId }:
                   </tbody>
                 </table>
               </div>
-
-              {hands.length > 0 && (
-                <>
-                  <h4 className="text-sm font-bold text-white mb-2 uppercase tracking-wider">
-                    Recent Hands{' '}
-                    <span className="text-[10px] font-normal text-slate-500">({hands.length} shown)</span>
-                  </h4>
-                  <div className="overflow-x-auto rounded-xl border border-cyan-500/15">
-                    <table className="w-full border-collapse text-sm">
-                      <thead>
-                        <tr className="border-b border-slate-700/50 bg-black/20">
-                          <th className="py-2 px-3 text-left text-[10px] font-semibold uppercase tracking-wider text-slate-500">Hand #</th>
-                          <th className="py-2 px-3 text-left text-[10px] font-semibold uppercase tracking-wider text-slate-500">Time</th>
-                          <th className="py-2 px-3 text-right text-[10px] font-semibold uppercase tracking-wider text-slate-500">Pot</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {hands.map((h) => (
-                          <tr key={h.handId} className="border-b border-slate-800/50">
-                            <td className="py-1.5 px-3 font-mono text-xs">{h.handNumber}</td>
-                            <td className="py-1.5 px-3 text-xs text-slate-400">{formatDate(h.completedAt)}</td>
-                            <td className="py-1.5 px-3 text-right tabular-nums text-cyan-300">
-                              {formatChips(BigInt(h.potAmount))}
-                            </td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
-                </>
-              )}
             </>
           )}
         </div>

@@ -201,7 +201,7 @@ function TournamentStatusBadge({ status, isFull }: { status: string; isFull: boo
     'inline-flex h-7 items-center rounded-md border px-2.5 text-xs font-semibold tracking-wide';
   if (s === 'active') {
     return (
-      <span className={`${badge} border-emerald-500/45 bg-emerald-500/15 text-emerald-100`}>Live</span>
+      <span className={`${badge} border-emerald-400/55 bg-emerald-500/30 text-emerald-50`}>Live</span>
     );
   }
   if (s === 'completed' || s === 'cancelled') {
@@ -248,11 +248,19 @@ interface PokerTournamentLobbyProps {
   myAddress?: string;
   /** Called when a tournament's poker table is ready and player should navigate to it. */
   onGoToTable?: (tableId: string, tournamentId: string) => void;
+  /** Controlled SNG create modal (e.g. hero “Create SNG”). */
+  createModalOpen: boolean;
+  onCreateModalOpenChange: (open: boolean) => void;
 }
 
-export function PokerTournamentLobby({ wsClient, myAddress, onGoToTable }: PokerTournamentLobbyProps) {
+export function PokerTournamentLobby({
+  wsClient,
+  myAddress,
+  onGoToTable,
+  createModalOpen: showCreate,
+  onCreateModalOpenChange: setShowCreate,
+}: PokerTournamentLobbyProps) {
   const queryClient = useQueryClient();
-  const [showCreate, setShowCreate] = useState(false);
   const [registrantsModal, setRegistrantsModal] = useState<{ tournamentId: string; name: string } | null>(null);
   const [rulesModal, setRulesModal] = useState<{ tournamentId: string; name: string } | null>(null);
   const [joinError, setJoinError] = useState<string | null>(null);
@@ -538,31 +546,15 @@ export function PokerTournamentLobby({ wsClient, myAddress, onGoToTable }: Poker
   };
 
   return (
-    <div className="flex flex-col gap-3">
-      <div className="flex flex-col items-center gap-2">
-        <h2 className="text-sm font-semibold tracking-wide text-white text-center">Poker tournaments</h2>
-        <div className="flex items-center gap-2">
-          <button
-            type="button"
-            onClick={refreshTournaments}
-            className="h-8 px-3 rounded-lg border border-slate-600/55 text-xs font-semibold text-slate-300 hover:text-white hover:border-slate-500/70 transition-colors"
-          >
-            Refresh
-          </button>
-          <Link
-            href="/creators"
-            className="h-8 px-3 rounded-lg border border-slate-600/55 text-xs font-semibold text-slate-300 hover:text-white hover:border-slate-500/70 transition-colors flex items-center"
-          >
-            Creator Dashboard
-          </Link>
-          <button
-            type="button"
-            onClick={() => setShowCreate(true)}
-            className="h-8 px-3 rounded-lg bg-yellow-500 hover:bg-yellow-400 text-xs font-semibold text-black transition-colors"
-          >
-            Create SNG
-          </button>
-        </div>
+    <div className="flex w-full flex-col gap-3">
+      <div className="flex justify-end">
+        <button
+          type="button"
+          onClick={refreshTournaments}
+          className="h-8 px-3 rounded-lg border border-slate-600/55 text-xs font-semibold text-slate-300 hover:text-white hover:border-slate-500/70 transition-colors"
+        >
+          Refresh
+        </button>
       </div>
 
       {joinError && (
@@ -658,7 +650,8 @@ export function PokerTournamentLobby({ wsClient, myAddress, onGoToTable }: Poker
               <tr>
                 <th className={`${TH} w-[22%] max-w-[14rem]`}>Tournament</th>
                 <th className={`${TH} whitespace-nowrap`}>Schedule</th>
-                <th className={TH}>Entry & blinds</th>
+                <th className={TH}>Entry</th>
+                <th className={`${TH} whitespace-nowrap`}>Blinds</th>
                 <th className={`${TH} whitespace-nowrap`}>Seats</th>
                 <th className={`${TH} whitespace-nowrap`}>Prize</th>
                 <th className={TH}>State</th>
@@ -720,9 +713,9 @@ export function PokerTournamentLobby({ wsClient, myAddress, onGoToTable }: Poker
                         <div className="font-medium tabular-nums text-slate-100">
                           {buyLabel === 'Free' ? 'Freeroll' : `${buyLabel} chips`}
                         </div>
-                        <div className="text-xs text-slate-500 mt-1 tabular-nums">
-                          {formatChips(sb)} / {formatChips(bb)} · {blindModeLabel(mode)}
-                        </div>
+                      </td>
+                      <td className={`${TD} whitespace-nowrap tabular-nums text-slate-300`}>
+                        {formatChips(sb)} / {formatChips(bb)} · {blindModeLabel(mode)}
                       </td>
                       <td className={`${TD} tabular-nums font-medium text-slate-100 whitespace-nowrap`}>
                         {t.registeredCount}/{t.maxPlayers}
@@ -733,13 +726,11 @@ export function PokerTournamentLobby({ wsClient, myAddress, onGoToTable }: Poker
                       <td className={TD}>
                         <div className="flex flex-col items-start gap-1.5">
                           <TournamentStatusBadge status={t.status} isFull={isFull} />
-                          {isPrivate ? (
+                          {isPrivate && (
                             <span className="inline-flex items-center gap-1 text-xs font-medium text-amber-400/90">
                               <Lock className="w-3.5 h-3.5 shrink-0" aria-hidden />
                               Private
                             </span>
-                          ) : (
-                            <span className="text-xs text-slate-500">Open lobby</span>
                           )}
                         </div>
                       </td>
@@ -774,9 +765,6 @@ export function PokerTournamentLobby({ wsClient, myAddress, onGoToTable }: Poker
                             >
                               Joined
                             </span>
-                          )}
-                          {isActive && !t.isRegistered && (
-                            <span className="text-xs text-slate-500 py-1">Spectate</span>
                           )}
                           {isActive && t.isRegistered && (
                             <button
@@ -818,7 +806,7 @@ export function PokerTournamentLobby({ wsClient, myAddress, onGoToTable }: Poker
                     </tr>
                     {botsRowId === t.tournamentId && (
                       <tr className="bg-black/20">
-                        <td colSpan={7} className="px-3 py-3 border-b border-slate-600/35">
+                        <td colSpan={8} className="px-3 py-3 border-b border-slate-600/35">
                           <div className="rounded-lg border border-white/10 px-3 py-3 space-y-2 max-w-xl">
                             <div className="text-xs font-semibold text-white">Add bot players</div>
                             <p className="text-xs text-slate-500 leading-relaxed">

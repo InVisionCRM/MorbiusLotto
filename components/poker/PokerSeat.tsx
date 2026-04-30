@@ -302,6 +302,8 @@ export interface PokerSeatProps {
   onRequestMobileActivity?: () => void;
   /** Show Activity wedge in player radial (typically true when `hideSeatAvatar`). */
   includeActivityInPlayerRadial?: boolean;
+  /** Pixel offset from the avatar seat anchor to the independently authored player tag anchor. */
+  playerTagOffset?: { x: number; y: number };
   /** During showdown, nudge visible cards toward table center. */
   showdownCardOffset?: { x: number; y: number };
   /** Current best hand name (self: live-updating; opponents: showdown only). */
@@ -312,7 +314,12 @@ export interface PokerSeatProps {
 
 const CHAT_BUBBLE_MAX_LENGTH = 80;
 
-export function PokerSeat({ seat, index, holeCards, isCurrentPlayer, showCardBacks, winningCardIndices, isHandWinner = false, lastAction, callAmount, timeLeft, maxTime = 60, chatBubble, onReUpClick, onMenuClick, overlayPhrase: propsOverlayPhrase, overlayEmotion: propsOverlayEmotion, onPhraseReaction, onAnimationReaction, onOpponentClick, onOpponentRadialAction, quickChatPhrases: propsQuickChatPhrases, setQuickChatPhrases: propsSetQuickChatPhrases, onOpenEditQuickChat, hideSeatAvatar = false, onLeaveTable, onSitOut, onSitBack, onRequestMobileActivity, includeActivityInPlayerRadial = false, showdownCardOffset, handName, cardDealFromOffset }: PokerSeatProps) {
+function offsetTransform(offset?: { x: number; y: number }): string | undefined {
+  if (!offset || (Math.abs(offset.x) < 0.01 && Math.abs(offset.y) < 0.01)) return undefined;
+  return `translate(${offset.x}px, ${offset.y}px)`;
+}
+
+export function PokerSeat({ seat, index, holeCards, isCurrentPlayer, showCardBacks, winningCardIndices, isHandWinner = false, lastAction, callAmount, timeLeft, maxTime = 60, chatBubble, onReUpClick, onMenuClick, overlayPhrase: propsOverlayPhrase, overlayEmotion: propsOverlayEmotion, onPhraseReaction, onAnimationReaction, onOpponentClick, onOpponentRadialAction, quickChatPhrases: propsQuickChatPhrases, setQuickChatPhrases: propsSetQuickChatPhrases, onOpenEditQuickChat, hideSeatAvatar = false, onLeaveTable, onSitOut, onSitBack, onRequestMobileActivity, includeActivityInPlayerRadial = false, playerTagOffset, showdownCardOffset, handName, cardDealFromOffset }: PokerSeatProps) {
   const empty = !seat.playerAddress;
   const showMyCards = !!(holeCards && holeCards.length > 0);
   const showBacks   = !!(showCardBacks && !showMyCards && !empty && !seat.folded);
@@ -904,7 +911,7 @@ export function PokerSeat({ seat, index, holeCards, isCurrentPlayer, showCardBac
       )}
 
       {/* ── Buttons + badge ── */}
-      <div style={{ position: 'relative', display: 'inline-block' }}>
+      <div style={{ position: 'relative', display: 'inline-block', transform: offsetTransform(playerTagOffset) }}>
 
         {/* Backdrop to close all menus */}
         <AnimatePresence>

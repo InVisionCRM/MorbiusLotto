@@ -44,7 +44,6 @@ import { toast } from 'sonner';
 import { ANIMATION_TIMINGS } from '@/app/BLACKJACK/constants';
 import { BLACKJACK_FACTS } from '@/app/blackjack-multi/blackjack-facts';
 import { BlackjackMultiBetaSplash } from '@/components/BLACKJACK/BlackjackMultiBetaSplash';
-import { SophieSplashModal } from '@/components/shared/SophieSplashModal';
 import { VOICE_BLACKJACK_TUTORIAL_URL } from '@/lib/how-to-video-urls';
 import { ConfirmActionCard } from '@/components/shared/ConfirmActionCard';
 import { ProvablyFairClientSeedModal } from '@/components/shared/ProvablyFairClientSeedModal';
@@ -1521,8 +1520,6 @@ export default function BlackjackMultiTablePage() {
         address={selectedProfileAddress}
         game="blackjack"
       />
-
-      <SophieSplashModal address={address} voiceTutorialVideoUrl={VOICE_BLACKJACK_TUTORIAL_URL} />
 
       {pendingSeatPos !== null && (
         <ConfirmActionCard

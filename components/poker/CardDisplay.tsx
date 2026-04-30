@@ -19,6 +19,14 @@ const SUIT_LETTERS = ['C', 'D', 'H', 'S'];
 /** Unicode suit symbols in same order as SUIT_NAMES / floor(idx/13) */
 const SUIT_SYMBOLS = ['♣', '♦', '♥', '♠'] as const;
 
+/** Full-opacity colors for rank+suit text by suit band (clubs, diamonds, hearts, spades). */
+export const POKER_RANK_SUIT_LABEL_COLORS = [
+  'rgba(255, 255, 255, 1)',
+  'rgba(248, 113, 113, 1)',
+  'rgba(248, 113, 113, 1)',
+  'rgba(255, 255, 255, 1)',
+] as const;
+
 /**
  * Human-readable rank + suit for a 0–51 `cardIndex` (matches server `cardToInt` encoding).
  * Returns empty string for invalid indices.

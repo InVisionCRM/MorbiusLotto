@@ -1,8 +1,9 @@
 'use client';
 
-import React, { useEffect, useMemo } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { toBigIntSafe } from '@/lib/safe-bigint';
-import { CardDisplay, formatPokerCardIndexLabel, pokerCardSuitIndex } from './CardDisplay';
+import { POKER_BETWEEN_HANDS_DELAY_MS } from '@/lib/poker-between-hands-delay';
+import { CardDisplay, formatPokerCardIndexLabel, POKER_RANK_SUIT_LABEL_COLORS, pokerCardSuitIndex } from './CardDisplay';
 import { motion, AnimatePresence, useMotionValue, useSpring, useTransform } from 'framer-motion';
 
 export interface PokerBoardProps {
@@ -14,6 +15,76 @@ export interface PokerBoardProps {
   dimNonWinning?: boolean;
   /** When true, wrap the pot in an element with data-tutorial-target="pot" for tutorial spotlight */
   dataTutorialTargetPot?: boolean;
+  /** Wall-clock ISO when the next hand starts; shows a thin countdown bar under the board. */
+  betweenHandsNextHandAtIso?: string | null;
+}
+
+function BetweenHandsProgressBar({ nextHandAtIso }: { nextHandAtIso: string }) {
+  const endMs = useMemo(() => {
+    const t = new Date(nextHandAtIso).getTime();
+    return Number.isFinite(t) ? t : 0;
+  }, [nextHandAtIso]);
+  const [, setTick] = useState(0);
+  useEffect(() => {
+    if (endMs <= 0) return;
+    const id = setInterval(() => setTick((x) => x + 1), 250);
+    return () => clearInterval(id);
+  }, [endMs]);
+
+  if (endMs <= 0) return null;
+
+  const now = Date.now();
+  const remainingMs = Math.max(0, endMs - now);
+  const remainingSec = Math.ceil(remainingMs / 1000);
+  const startedAtMs = endMs - POKER_BETWEEN_HANDS_DELAY_MS;
+  const fillPct = Math.min(
+    100,
+    Math.max(0, ((now - startedAtMs) / POKER_BETWEEN_HANDS_DELAY_MS) * 100),
+  );
+
+  return (
+    <div
+      className="mt-2 flex w-full max-w-[min(100%,28rem)] flex-col items-stretch gap-1 sm:max-w-[min(100%,32rem)]"
+      aria-live="polite"
+      aria-label={`Next hand in about ${remainingSec} seconds`}
+    >
+      <div className="flex items-center justify-between gap-2 px-0.5">
+        <span
+          className="font-jost text-[9px] font-medium uppercase tracking-[0.18em] sm:text-[10px]"
+          style={{ color: 'rgba(255, 255, 255, 0.45)' }}
+        >
+          Next hand
+        </span>
+        <span
+          className="font-jost text-sm font-bold tabular-nums sm:text-base"
+          style={{
+            color: 'rgb(165, 243, 252)',
+            textShadow: '0 0 12px rgba(34, 211, 238, 0.45)',
+          }}
+        >
+          {remainingSec}
+          <span className="ml-0.5 text-xs font-semibold text-cyan-200/80">s</span>
+        </span>
+      </div>
+      <div
+        className="relative h-2 w-full overflow-hidden rounded-full sm:h-2.5"
+        style={{
+          background: 'linear-gradient(180deg, rgba(0, 0, 0, 0.58), rgba(255, 255, 255, 0.05))',
+          boxShadow: 'inset 0 2px 6px rgba(0, 0, 0, 0.78)',
+          border: '1px inset rgba(60, 60, 60, 0.45)',
+        }}
+      >
+        <div
+          className="h-full rounded-full transition-[width] duration-200 ease-linear"
+          style={{
+            width: `${fillPct}%`,
+            background: 'linear-gradient(90deg, rgb(6, 120, 150), rgb(34, 211, 238), rgb(56, 189, 248))',
+            boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.25), 0 0 12px rgba(34, 211, 238, 0.45)',
+          }}
+        />
+      </div>
+    </div>
+  );
 }
 
 function parsePotChips(chips: string): number {
@@ -45,7 +116,14 @@ function AnimatedPotValue({ pot }: { pot: string }) {
   );
 }
 
-export function PokerBoard({ communityCards, pot, winningCardIndices, dimNonWinning, dataTutorialTargetPot }: PokerBoardProps) {
+export function PokerBoard({
+  communityCards,
+  pot,
+  winningCardIndices,
+  dimNonWinning,
+  dataTutorialTargetPot,
+  betweenHandsNextHandAtIso,
+}: PokerBoardProps) {
   const potNum = useMemo(() => parsePotChips(pot), [pot]);
 
   const potInner = (
@@ -98,9 +176,7 @@ export function PokerBoard({ communityCards, pot, winningCardIndices, dimNonWinn
           const idx = communityCards[i];
           const suitIdx = idx != null ? pokerCardSuitIndex(idx) : null;
           const labelColor =
-            suitIdx === 1 || suitIdx === 2
-              ? 'rgba(248, 113, 113, 0.95)'
-              : 'rgba(255, 255, 255, 0.72)';
+            suitIdx != null ? POKER_RANK_SUIT_LABEL_COLORS[suitIdx] : 'rgba(255, 255, 255, 1)';
           return (
             <AnimatePresence key={i} mode="wait">
               <div className="flex min-w-0 flex-col items-center gap-0.5">
@@ -120,7 +196,7 @@ export function PokerBoard({ communityCards, pot, winningCardIndices, dimNonWinn
                 )}
                 {idx != null && (
                   <span
-                    className="font-jost font-bold max-w-full truncate text-center text-[14px] leading-tight tracking-tight sm:text-[12px] tabular-nums"
+                    className="font-jost font-bold max-w-full truncate text-center text-[17px] leading-tight tracking-tight sm:text-[18px] tabular-nums"
                     style={{ color: labelColor }}
                     aria-hidden
                   >
@@ -132,6 +208,9 @@ export function PokerBoard({ communityCards, pot, winningCardIndices, dimNonWinn
           );
         })}
       </div>
+      {betweenHandsNextHandAtIso ? (
+        <BetweenHandsProgressBar nextHandAtIso={betweenHandsNextHandAtIso} />
+      ) : null}
     </div>
   );
 }

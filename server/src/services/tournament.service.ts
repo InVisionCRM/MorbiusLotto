@@ -2883,10 +2883,16 @@ export class TournamentService {
         t.game_type,
         t.status,
         t.created_at,
+        t.activated_at AS started_at,
         t.ended_at,
         t.custom_image,
+        t.creator_address,
+        t.escrow_tx_hash,
+        cdn.display_name AS creator_display_name,
         (SELECT COUNT(*)::int FROM tournament_entries te WHERE te.tournament_id = t.id) AS entry_count
       FROM tournaments t
+      LEFT JOIN chat_display_names cdn
+        ON LOWER(TRIM(cdn.wallet_address)) = LOWER(TRIM(t.creator_address))
       WHERE t.status IN ('completed', 'cancelled')
       ORDER BY COALESCE(t.ended_at, t.created_at) DESC
       LIMIT $1 OFFSET $2
@@ -2905,8 +2911,12 @@ export class TournamentService {
       gameType: row.game_type != null ? String(row.game_type) : null,
       status: row.status,
       createdAt: row.created_at,
+      startedAt: row.started_at ?? null,
       endedAt: row.ended_at ?? null,
       customImage: row.custom_image ?? null,
+      creatorAddress: row.creator_address != null ? String(row.creator_address) : null,
+      creatorDisplayName: row.creator_display_name != null ? String(row.creator_display_name).trim() || null : null,
+      escrowTxHash: row.escrow_tx_hash != null ? String(row.escrow_tx_hash) : null,
       entryCount: Number(row.entry_count ?? 0),
     }));
   }
@@ -2916,7 +2926,7 @@ export class TournamentService {
     const tRes = await this.pool.query(
       `SELECT id, name, tournament_type, buy_in_amount, starting_chips, prize_pool,
               prize_token_address, prize_token_decimals, prize_token_symbol, prize_token_name,
-              game_type, status, created_at, started_at, ended_at, custom_image,
+              game_type, status, created_at, activated_at AS started_at, ended_at, custom_image,
               time_limit_minutes, max_players, prize_distribution_type
          FROM tournaments WHERE id = $1`,
       [tournamentId],
@@ -2927,8 +2937,11 @@ export class TournamentService {
     const eRes = await this.pool.query(
       `SELECT te.id AS entry_id, te.player_address, te.final_rank, te.prize_won,
               te.status, te.bought_in_at, te.finished_at, te.hands_played,
-              te.highest_chip_count, te.chips_remaining
+              te.highest_chip_count, te.chips_remaining,
+              NULLIF(TRIM(cdn.display_name), '') AS display_name
          FROM tournament_entries te
+         LEFT JOIN chat_display_names cdn
+           ON LOWER(TRIM(cdn.wallet_address)) = LOWER(TRIM(te.player_address))
          WHERE te.tournament_id = $1
          ORDER BY
            CASE WHEN te.final_rank IS NULL THEN 1 ELSE 0 END,
@@ -2961,6 +2974,7 @@ export class TournamentService {
       entries: eRes.rows.map((row: any) => ({
         entryId: row.entry_id,
         playerAddress: row.player_address,
+        displayName: row.display_name != null ? String(row.display_name) : null,
         finalRank: row.final_rank != null ? Number(row.final_rank) : null,
         prizeWon: this.toBigInt(row.prize_won),
         status: row.status,
@@ -3082,14 +3096,21 @@ export interface CompletedTournamentSummary {
   gameType: string | null;
   status: 'completed' | 'cancelled' | string;
   createdAt: Date;
+  startedAt: Date | null;
   endedAt: Date | null;
   customImage: string | null;
+  creatorAddress: string | null;
+  creatorDisplayName: string | null;
+  /** On-chain escrow funding tx when custom-token prize pool was deposited. */
+  escrowTxHash: string | null;
   entryCount: number;
 }
 
 export interface TournamentResultsEntry {
   entryId: string;
   playerAddress: string;
+  /** From `chat_display_names` when set. */
+  displayName: string | null;
   finalRank: number | null;
   prizeWon: bigint;
   status: 'playing' | 'busted' | 'completed' | string;

@@ -371,7 +371,7 @@ export function BlackjackMultiInfoPanel({
                             const rank = ranks[c % 13];
                             const isRed = suit === '♥' || suit === '♦';
                             return (
-                              <span key={ci} className={`px-1 py-0.5 rounded text-[10px] font-bold border border-white/10 bg-black/30 ${isRed ? 'text-red-400' : 'text-white/80'}`}>
+                              <span key={ci} className={`px-1 py-0.5 rounded text-[10px] font-bold border border-white/10 bg-black/30 ${isRed ? 'text-red-400' : 'text-white'}`}>
                                 {rank}{suit}
                               </span>
                             );
@@ -391,7 +391,7 @@ export function BlackjackMultiInfoPanel({
                                 const rank = ranks[c % 13];
                                 const isRed = suit === '♥' || suit === '♦';
                                 return (
-                                  <span key={ci} className={`px-1 py-0.5 rounded text-[10px] font-bold border border-white/10 bg-black/30 ${isRed ? 'text-red-400' : 'text-white/80'}`}>
+                                  <span key={ci} className={`px-1 py-0.5 rounded text-[10px] font-bold border border-white/10 bg-black/30 ${isRed ? 'text-red-400' : 'text-white'}`}>
                                     {rank}{suit}
                                   </span>
                                 );

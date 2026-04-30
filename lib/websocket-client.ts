@@ -108,6 +108,10 @@ export interface PokerTableSummary {
   seatedCount: number;
   emptySeats: number;
   hasPin: boolean;
+  /** Lowercase 0x wallet that created the table; omitted on older servers. */
+  creatorAddress?: string | null;
+  /** ISO8601 table creation time; omitted on older servers. */
+  createdAt?: string | null;
 }
 
 export interface PokerSeatState {
@@ -153,6 +157,8 @@ export interface PokerCurrentHand {
   toCall: string;
   /** ISO timestamp when the current player's turn started (for 30s timer). */
   turnStartedAt: string | null;
+  /** When set (showdown only), wall-clock ISO when the server auto-starts the next hand. */
+  nextHandAt?: string | null;
   /** At showdown: all players' revealed hole cards keyed by lowercase address */
   showdownHands?: Record<string, number[]>;
   /** At showdown: winner(s), amount each receives, optional hand name, and 5 card indices forming best hand */

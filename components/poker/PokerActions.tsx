@@ -65,6 +65,12 @@ export interface PokerActionsProps {
     symbol: string | null;
     logoUrl: string | null;
   } | null;
+  /** ISO end time of the active sponsorship; drives the marquee's countdown. */
+  sponsoredUntil?: string | null;
+  /** Whole MORBIUS chips required to trump the current sponsor. */
+  sponsorPriceMorbiusChips?: string | null;
+  /** Opens the sponsorship purchase modal (Click here CTA in marquee). */
+  onOpenSponsorModal?: () => void;
 }
 
 export type PreActionOption = 'check_fold' | 'check' | 'call_any' | null;
@@ -86,6 +92,9 @@ export function PokerActions({
   variant = 'default',
   lastActionLine: _lastActionLine = null,
   sponsoredToken = null,
+  sponsoredUntil = null,
+  sponsorPriceMorbiusChips = null,
+  onOpenSponsorModal,
 }: PokerActionsProps) {
   const { play } = usePokerSounds();
   const minRaiseAmt = useMemo(() => parseProp(minRaise), [minRaise]);
@@ -119,6 +128,12 @@ export function PokerActions({
     clamped == null || maxOffsetChips <= 0
       ? 0
       : Math.max(0, Math.min(maxOffsetChips, toChipsNum(clamped) - minChips));
+  const sponsorMarqueeProps = {
+    sponsor: sponsoredToken,
+    sponsoredUntil,
+    priceMorbiusChips: sponsorPriceMorbiusChips,
+    onOpenSponsorModal,
+  };
 
   // ── Quick size presets ─────────────────────────────────────────────────────
   const quickSizes: Array<{ label: string; value: Amount }> = [
@@ -333,7 +348,7 @@ export function PokerActions({
         {/* Tune: size + commit amount */}
         <div className="flex min-w-0 flex-1 flex-col flex-wrap gap-2 p-1.5 min-[520px]:flex-row min-[520px]:flex-nowrap min-[520px]:items-center" style={tuneZoneStyle}>
         <div className="m-0 flex min-w-0 shrink min-[520px]:max-w-[38%] min-[520px]:flex-1 min-[520px]:basis-0 min-[700px]:max-w-none">
-          <SponsoredTokenMarquee sponsor={sponsoredToken} />
+          <SponsoredTokenMarquee {...sponsorMarqueeProps} />
         </div>
         {/* Presets */}
         <div className="flex min-w-0 shrink flex-wrap content-center gap-1 min-[520px]:shrink-0 min-[520px]:justify-end min-[520px]:gap-1.5">
@@ -482,7 +497,7 @@ export function PokerActions({
         >
         <div className="mb-1.5 rounded-lg p-1" style={tuneZoneStyle}>
         <div className="px-0.5 pb-1 pt-0.5">
-          <SponsoredTokenMarquee sponsor={sponsoredToken} compact />
+          <SponsoredTokenMarquee {...sponsorMarqueeProps} compact />
         </div>
         <div className="grid grid-cols-4 gap-1 px-0.5 pb-0.5 pt-0">
           {quickSizes.map((q) => (
@@ -638,7 +653,7 @@ export function PokerActions({
         <div className="mb-1.5 rounded-lg p-1 md:p-1.5" style={tuneZoneStyle}>
         <div className="flex min-w-0 items-center gap-1.5 pt-0.5 sm:gap-2 md:pt-1">
           <div className="m-0 flex min-w-0 flex-1">
-            <SponsoredTokenMarquee sponsor={sponsoredToken} />
+            <SponsoredTokenMarquee {...sponsorMarqueeProps} />
           </div>
           <div className="flex min-w-0 shrink flex-wrap items-center justify-end gap-1 sm:gap-1.5">
             {quickSizes.map((q) => (

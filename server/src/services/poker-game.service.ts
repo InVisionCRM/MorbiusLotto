@@ -34,6 +34,10 @@ export interface PokerTableSummary {
   seatedCount: number;
   emptySeats: number;
   hasPin: boolean;
+  /** Lowercase 0x creator; null for legacy tables. */
+  creatorAddress: string | null;
+  /** ISO8601 when the table row was created (server clock). */
+  createdAt: string | null;
 }
 
 export interface PokerSeatState {
@@ -84,6 +88,8 @@ export interface PokerCurrentHand {
   showdownHands?: Record<string, number[]>;
   /** At showdown: winner(s), amount each receives, optional hand name, and 5 card indices forming best hand */
   winners?: { address: string; amount: string; handName?: string; winningCardIndices?: number[] }[];
+  /** ISO wall time when the server will auto-start the next hand (showdown intermission only). */
+  nextHandAt?: string | null;
 }
 
 export interface PokerTableState {
@@ -164,10 +170,9 @@ function chevtekStreetToPoker(round: BettingRound | undefined, hasWinners: boole
 // Rake configuration (cash games only — tournaments use virtual chips)
 // ---------------------------------------------------------------------------
 const RAKE_PERCENT = 5; // 5% of each pot
-// Client plays a staged reveal animation (~5–7s for all-in run-outs) before the
-// winner medallion mounts. Pad the delay so the medallion still gets its full
-// time on screen after the reveal finishes.
-const SHOWDOWN_DELAY_MS = 22_000;
+// Post-showdown pause before the next hand is dealt. Keep in sync with
+// `POKER_BETWEEN_HANDS_DELAY_MS` in `lib/poker-between-hands-delay.ts`.
+const SHOWDOWN_DELAY_MS = 15_000;
 const SHOWDOWN_DELAY_SECONDS = SHOWDOWN_DELAY_MS / 1000;
 
 // ---------------------------------------------------------------------------
@@ -339,12 +344,13 @@ export class PokerGameService {
   async listTables(): Promise<PokerTableSummary[]> {
     const pool = this.getPool();
     const result = await pool.query(
-      `SELECT t.id, t.small_blind, t.big_blind, t.max_seats, t.status, t.pin_code,
+      `SELECT t.id, t.small_blind, t.big_blind, t.max_seats, t.status, t.pin_code, t.created_at, t.creator_address,
               COUNT(s.id) FILTER (WHERE s.player_address IS NOT NULL) AS seated_count
        FROM poker_tables t
        LEFT JOIN poker_seats s ON s.table_id = t.id
        WHERE t.status IN ('waiting', 'playing') AND (t.tournament_mode IS NULL OR t.tournament_mode = FALSE)
-       GROUP BY t.id ORDER BY t.created_at ASC`
+       GROUP BY t.id, t.small_blind, t.big_blind, t.max_seats, t.status, t.pin_code, t.created_at, t.creator_address
+       ORDER BY t.created_at ASC`
     );
     return result.rows.map((r: any) => ({
       id: r.id,
@@ -355,10 +361,18 @@ export class PokerGameService {
       seatedCount: Number(r.seated_count) || 0,
       emptySeats: Math.max(0, (Number(r.max_seats) || 10) - (Number(r.seated_count) || 0)),
       hasPin: !!r.pin_code,
+      creatorAddress: r.creator_address ? String(r.creator_address).toLowerCase() : null,
+      createdAt: r.created_at ? new Date(r.created_at).toISOString() : null,
     }));
   }
 
-  async createTable(smallBlindChips: number, bigBlindChips: number, maxSeats: number, pinCode?: string): Promise<string> {
+  async createTable(
+    smallBlindChips: number,
+    bigBlindChips: number,
+    maxSeats: number,
+    pinCode?: string,
+    creatorAddress?: string | null,
+  ): Promise<string> {
     if (!Number.isInteger(smallBlindChips) || !Number.isInteger(bigBlindChips) || smallBlindChips <= 0 || bigBlindChips <= 0) {
       throw new Error('Blinds must be positive integers (chips)');
     }
@@ -372,11 +386,15 @@ export class PokerGameService {
       throw new Error('maxSeats must be an integer from 2 to 10');
     }
     const pool = this.getPool();
+    const normalizedCreator =
+      typeof creatorAddress === 'string' && /^0x[a-fA-F0-9]{40}$/.test(creatorAddress)
+        ? creatorAddress.toLowerCase()
+        : null;
     const r = await pool.query(
-      `INSERT INTO poker_tables (small_blind, big_blind, max_seats, status, pin_code)
-       VALUES ($1::NUMERIC, $2::NUMERIC, $3, 'waiting', $4)
+      `INSERT INTO poker_tables (small_blind, big_blind, max_seats, status, pin_code, creator_address)
+       VALUES ($1::NUMERIC, $2::NUMERIC, $3, 'waiting', $4, $5)
        RETURNING id`,
-      [String(smallBlindChips), String(bigBlindChips), maxSeats, pinCode ?? null]
+      [String(smallBlindChips), String(bigBlindChips), maxSeats, pinCode ?? null, normalizedCreator]
     );
     return r.rows[0].id;
   }
@@ -882,7 +900,7 @@ export class PokerGameService {
 
     const handRow = await pool.query(
       `SELECT id, hand_number, button_position, community_cards, pot_amount, street,
-              acting_position, turn_started_at, result, last_raise_size
+              acting_position, turn_started_at, result, last_raise_size, completed_at
        FROM poker_hands WHERE table_id = $1
          AND (completed_at IS NULL OR (street = 'showdown' AND completed_at > NOW() - INTERVAL '${SHOWDOWN_DELAY_SECONDS} seconds'))
        ORDER BY CASE WHEN completed_at IS NULL THEN 0 ELSE 1 END, created_at DESC LIMIT 1`,
@@ -1101,6 +1119,15 @@ export class PokerGameService {
             }
           } catch {
             // ignore
+          }
+        }
+
+        if (h.completed_at) {
+          const rawCompleted = h.completed_at as Date | string;
+          const completedMs =
+            rawCompleted instanceof Date ? rawCompleted.getTime() : new Date(rawCompleted).getTime();
+          if (Number.isFinite(completedMs)) {
+            currentHand.nextHandAt = new Date(completedMs + SHOWDOWN_DELAY_MS).toISOString();
           }
         }
       }

@@ -200,18 +200,25 @@ export default function KenoPage() {
   )
 
   return (
-    <div
-      className="min-h-screen text-white"
-      style={{
-        background: 'linear-gradient(325deg, rgba(20, 20, 20, 0.95), rgba(40, 40, 40, 0.95))',
-      }}
+    <GlobalMainNav
+      onShowKenoPrizePool={() => setShowPrizePool(true)}
+      onOpenPlayerProfile={address ? (game) => { setPlayerProfileGame(game); setPlayerProfileOpen(true); } : undefined}
     >
-      <GlobalMainNav
-        onShowKenoPrizePool={() => setShowPrizePool(true)}
-        onOpenPlayerProfile={address ? (game) => { setPlayerProfileGame(game); setPlayerProfileOpen(true); } : undefined}
+      <div
+        className="relative min-h-screen h-full w-full flex flex-col text-white"
+        style={{
+          backgroundImage:
+            "linear-gradient(to bottom, rgba(8,12,20,0.88), rgba(2,6,17,0.92) 50%, rgba(8,12,20,0.94)), url('/morbius/Morbius_Keno.png')",
+          backgroundSize: 'cover',
+          backgroundPosition: 'center top',
+          backgroundRepeat: 'no-repeat',
+          backgroundAttachment: 'fixed',
+        }}
       >
-      <main className="px-2 sm:px-4 md:px-6 pb-16 pt-4 md:pt-2 w-full max-w-full overflow-x-hidden">
-        <div className="flex flex-col md:grid md:grid-cols-2 gap-6">
+        <div className="absolute inset-0 h-full min-h-screen w-full bg-[radial-gradient(ellipse_80%_60%_at_50%_0%,rgba(34,211,238,0.10),transparent_70%)] pointer-events-none" />
+        <div className="relative flex-1 w-full max-w-7xl mx-auto px-3 py-4 sm:px-6 sm:py-8">
+          <main className="w-full max-w-full overflow-x-hidden pb-16 pt-4 md:pt-2">
+            <div className="flex flex-col md:grid md:grid-cols-2 gap-6">
           {/* LEFT COLUMN: Live board always visible — min-height keeps layout stable when overlay shows/hides */}
           <div className="flex flex-col gap-6 order-1 md:order-none min-h-[520px] md:min-h-[580px]">
             {/* Live Keno Board — fixed min-height so overlay doesn't change column size */}
@@ -360,7 +367,7 @@ export default function KenoPage() {
           </Card>
         </section>
 
-      </main>
+          </main>
 
       {/* Prize Pool Modal */}
       <KenoPrizePoolModal
@@ -388,7 +395,8 @@ export default function KenoPage() {
 
       {/* Footer */}
       <Footer />
-      </GlobalMainNav>
-    </div>
+        </div>
+      </div>
+    </GlobalMainNav>
   )
 }

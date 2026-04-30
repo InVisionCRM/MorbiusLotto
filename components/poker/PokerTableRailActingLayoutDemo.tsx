@@ -7,6 +7,7 @@ import { PokerRailActingHighlight } from '@/components/poker/PokerRailActingHigh
 import {
   SEAT_ANCHOR_RING,
   POKER_POT_ANCHOR,
+  authoredPlayerTagAnchors,
   authoredSeatAnchors,
   authoredWinningPotChipAnchors,
   betChipAnchorForDisplaySlot,
@@ -53,11 +54,13 @@ function RailActingPreviewInner({
   seatCount,
   showFullRing,
   showBetChips,
+  showPlayerTags,
   showWinningPotChips,
 }: {
   seatCount: number;
   showFullRing: boolean;
   showBetChips: boolean;
+  showPlayerTags: boolean;
   showWinningPotChips: boolean;
 }) {
   const [showHighlight, setShowHighlight] = useState(true);
@@ -66,6 +69,7 @@ function RailActingPreviewInner({
   const [pretendDisplaySlot, setPretendDisplaySlot] = useState(0);
 
   const anchors = useMemo(() => authoredSeatAnchors(seatCount), [seatCount]);
+  const playerTagAnchors = useMemo(() => authoredPlayerTagAnchors(seatCount), [seatCount]);
   const chipAnchors = useMemo(
     () =>
       Array.from({ length: seatCount }, (_, displaySlot) =>
@@ -181,6 +185,19 @@ function RailActingPreviewInner({
             </div>
           ))}
 
+        {showPlayerTags &&
+          playerTagAnchors.map((p, displaySlot) => (
+            <div
+              key={`p-tag-${displaySlot}`}
+              className="absolute z-[17] flex flex-col items-center -translate-x-1/2 -translate-y-1/2 pointer-events-none"
+              style={{ left: `${p.fx * 100}%`, top: `${p.fy * 100}%` }}
+              title={`T${displaySlot} player tag anchor`}
+            >
+              <div className="h-3.5 w-8 rounded border border-cyan-300/80 bg-cyan-500/25 shadow-md" />
+              <span className="mt-1.5 text-[9px] font-mono font-semibold text-cyan-200/95">T{displaySlot}</span>
+            </div>
+          ))}
+
         {showWinningPotChips &&
           winningPotAnchors.map((p, displaySlot) => (
             <div
@@ -230,11 +247,13 @@ export function PokerTableRailActingLayoutDemo({
   seatCount,
   showFullRing,
   showBetChips,
+  showPlayerTags = true,
   showWinningPotChips = true,
 }: {
   seatCount: number;
   showFullRing: boolean;
   showBetChips: boolean;
+  showPlayerTags?: boolean;
   showWinningPotChips?: boolean;
 }) {
   return (
@@ -243,6 +262,7 @@ export function PokerTableRailActingLayoutDemo({
         seatCount={seatCount}
         showFullRing={showFullRing}
         showBetChips={showBetChips}
+        showPlayerTags={showPlayerTags}
         showWinningPotChips={showWinningPotChips}
       />
     </PokerTableEffectProvider>

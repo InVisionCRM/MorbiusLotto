@@ -7,6 +7,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { useChat } from '@/hooks/use-chat';
 import type { BlackjackWebSocketClient, PokerTableState } from '@/lib/websocket-client';
 import { POKER_FACTS } from '@/app/poker/poker-facts';
+import { POKER_RANK_SUIT_LABEL_COLORS } from '@/components/poker/CardDisplay';
 import { useSidebarOptional } from '@/components/ui/sidebar';
 
 // ── Types ──────────────────────────────────────────────────────────────────
@@ -140,13 +141,12 @@ function seatLabel(seatIndex: number, state: PokerTableState | null): string {
 
 const CARD_RANKS = ['2','3','4','5','6','7','8','9','10','J','Q','K','A'];
 const CARD_SUITS = ['♣','♦','♥','♠'];
-const SUIT_COLORS = ['rgba(255,255,255,0.85)','rgba(239,68,68,0.9)','rgba(239,68,68,0.9)','rgba(255,255,255,0.85)'];
 
 function TinyCard({ idx }: { idx: number }) {
   const rank = CARD_RANKS[idx % 13];
   const suitIdx = Math.floor(idx / 13);
   const suit = CARD_SUITS[suitIdx];
-  const color = SUIT_COLORS[suitIdx];
+  const color = POKER_RANK_SUIT_LABEL_COLORS[suitIdx];
   return (
     <span className="font-jost font-bold tabular-nums text-[11px]" style={{ color }}>
       {rank}{suit}

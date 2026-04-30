@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Globe, Send, Twitter, ExternalLink } from 'lucide-react';
 import {
   buildScanMorbiusLink,
@@ -14,8 +14,8 @@ const DISCORD_ICON = (
   </svg>
 );
 
-/** Hardcoded MORBIUS default — used when no sponsor is active. */
 const MORBIUS_TOKEN_ADDRESS = '0xB7d4eB5fDfE3d4d3B5C16a44A49948c6EC77c6F1';
+const MORBIUS_FALLBACK_LOGO = '/morbius/MorbiusLogo-2.svg';
 
 export interface SponsoredTokenMarqueeProps {
   /** When non-null, renders this token; otherwise falls back to MORBIUS. */
@@ -25,37 +25,37 @@ export interface SponsoredTokenMarqueeProps {
     symbol: string | null;
     logoUrl: string | null;
   } | null;
+  /** ISO end time of the active sponsorship window (drives the countdown chip). */
+  sponsoredUntil?: string | null;
+  /** Whole MORBIUS chips required to trump the sponsor right now. */
+  priceMorbiusChips?: string | null;
+  /** Opens the purchase modal — used by the "Click here" call-to-action chip. */
+  onOpenSponsorModal?: () => void;
   /** Compact = mobile/floating variants (smaller text). */
   compact?: boolean;
 }
 
 type Chip = {
   key: string;
-  label: string;
+  /** Inline content for the chip. */
+  content: React.ReactNode;
+  /** When set, chip is wrapped in an external link. */
   href?: string;
-  icon?: React.ReactNode;
-  bold?: boolean;
+  /** When set, chip becomes a button that calls this on click. */
+  onClick?: () => void;
 };
 
-function buildChips(
-  info: { name: string; symbol: string; address: string },
-  socials: { twitter: string | null; telegram: string | null; discord: string | null },
-  websites: string[],
-): Chip[] {
-  const chips: Chip[] = [];
-  chips.push({ key: 'name', label: info.name, bold: true });
-  chips.push({ key: 'ticker', label: `$${info.symbol}` });
-  if (socials.twitter) chips.push({ key: 'twitter', label: 'Twitter', href: socials.twitter, icon: <Twitter size={11} /> });
-  if (socials.telegram) chips.push({ key: 'telegram', label: 'Telegram', href: socials.telegram, icon: <Send size={11} /> });
-  if (socials.discord) chips.push({ key: 'discord', label: 'Discord', href: socials.discord, icon: DISCORD_ICON });
-  if (websites[0]) chips.push({ key: 'website', label: 'Website', href: websites[0], icon: <Globe size={11} /> });
-  chips.push({
-    key: 'scan',
-    label: 'scan.morbius.io',
-    href: buildScanMorbiusLink(info.address),
-    icon: <ExternalLink size={11} />,
-  });
-  return chips;
+function formatTimeRemaining(sponsoredUntil: string | null | undefined): string | null {
+  if (!sponsoredUntil) return null;
+  const end = new Date(sponsoredUntil).getTime();
+  if (Number.isNaN(end)) return null;
+  const ms = end - Date.now();
+  if (ms <= 0) return null;
+  const totalSeconds = Math.floor(ms / 1000);
+  const m = Math.floor(totalSeconds / 60);
+  const s = totalSeconds % 60;
+  if (m === 0) return `${s}s`;
+  return s === 0 ? `${m}m` : `${m}m ${s}s`;
 }
 
 /**
@@ -63,13 +63,20 @@ function buildChips(
  * Always renders (defaults to MORBIUS). Fits inside the existing strip height —
  * does NOT add vertical space.
  */
-export function SponsoredTokenMarquee({ sponsor, compact = false }: SponsoredTokenMarqueeProps) {
+export function SponsoredTokenMarquee({
+  sponsor,
+  sponsoredUntil,
+  priceMorbiusChips,
+  onOpenSponsorModal,
+  compact = false,
+}: SponsoredTokenMarqueeProps) {
   const [info, setInfo] = useState<DexscreenerTokenInfo | null>(null);
+  const [tick, setTick] = useState(0);
 
-  // Effective sponsor — fall back to MORBIUS when no active sponsorship.
   const targetAddress = (sponsor?.address ?? MORBIUS_TOKEN_ADDRESS).toLowerCase();
   const fallbackName = sponsor?.name ?? 'Morbius';
   const fallbackSymbol = sponsor?.symbol ?? 'MORBIUS';
+  const fallbackLogo = sponsor?.logoUrl ?? MORBIUS_FALLBACK_LOGO;
 
   useEffect(() => {
     const ac = new AbortController();
@@ -83,22 +90,206 @@ export function SponsoredTokenMarquee({ sponsor, compact = false }: SponsoredTok
     return () => ac.abort();
   }, [targetAddress]);
 
-  const chips = buildChips(
-    {
-      name: info?.name ?? fallbackName,
-      symbol: info?.symbol ?? fallbackSymbol,
-      address: targetAddress,
-    },
-    info?.socials ?? { twitter: null, telegram: null, discord: null },
-    info?.websites ?? [],
+  // Re-render the time-remaining chip every second while a sponsorship is active.
+  useEffect(() => {
+    if (!sponsoredUntil) return;
+    const id = setInterval(() => setTick((x) => x + 1), 1000);
+    return () => clearInterval(id);
+  }, [sponsoredUntil]);
+
+  const tokenName = info?.name ?? fallbackName;
+  const tokenSymbol = info?.symbol ?? fallbackSymbol;
+  const tokenLogo = info?.logoUrl ?? fallbackLogo;
+  const socials = info?.socials ?? { twitter: null, telegram: null, discord: null };
+  const websites = info?.websites ?? [];
+  const isSponsored = !!sponsoredUntil;
+  const timeRemaining = useMemo(
+    () => formatTimeRemaining(sponsoredUntil ?? null),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [sponsoredUntil, tick],
   );
+
+  const logoSize = compact ? 14 : 16;
+  const tokenLogoNode = tokenLogo ? (
+    <img
+      src={tokenLogo}
+      alt=""
+      className="rounded-full bg-white/5 object-contain"
+      style={{ width: logoSize, height: logoSize }}
+      draggable={false}
+    />
+  ) : null;
+  const logoCardNode = tokenLogo ? (
+    <span className="inline-flex items-center gap-1 rounded-full border border-cyan-300/20 bg-white/5 px-1.5 py-0.5 shadow-[inset_0_1px_0_rgba(255,255,255,0.08)]">
+      <img
+        src={tokenLogo}
+        alt=""
+        className="rounded-full bg-black/20 object-contain ring-1 ring-white/10"
+        style={{ width: compact ? 18 : 20, height: compact ? 18 : 20 }}
+        draggable={false}
+      />
+    </span>
+  ) : null;
+
+  const chips: Chip[] = [];
+
+  // Logo + name (bold)
+  chips.push({
+    key: 'identity',
+    content: (
+      <span className="inline-flex items-center gap-1.5 font-semibold text-white/85">
+        {tokenLogoNode}
+        {tokenName}
+      </span>
+    ),
+  });
+
+  // Ticker
+  chips.push({
+    key: 'ticker',
+    content: <span className="text-white/55">${tokenSymbol}</span>,
+  });
+
+  if (logoCardNode) {
+    chips.push({
+      key: 'logo-lead',
+      content: logoCardNode,
+    });
+  }
+
+  // Sponsorship message + click-here CTA
+  if (isSponsored && timeRemaining && priceMorbiusChips) {
+    const priceLabel = (() => {
+      try {
+        return BigInt(priceMorbiusChips).toLocaleString();
+      } catch {
+        return priceMorbiusChips;
+      }
+    })();
+    chips.push({
+      key: 'sponsor-msg',
+      content: (
+        <span className="inline-flex items-center gap-1.5 text-white/65">
+          {tokenLogoNode}
+          <span>
+            The table is now sponsored by{' '}
+            <span className="font-semibold text-white/85">{tokenName}</span> for the next{' '}
+            <span className="font-semibold text-white/85 tabular-nums">{timeRemaining}</span>. You
+            can trump this sponsor with any token you want for just{' '}
+            <span className="font-semibold text-white/85 tabular-nums">{priceLabel} MORBIUS</span>.
+          </span>
+          {onOpenSponsorModal && (
+            <span className="font-semibold text-cyan-300 underline underline-offset-2">
+              Click Here
+            </span>
+          )}
+        </span>
+      ),
+      onClick: onOpenSponsorModal,
+    });
+  }
+
+  // Socials
+  if (socials.twitter) {
+    chips.push({
+      key: 'twitter',
+      content: (
+        <span className="inline-flex items-center gap-1 text-cyan-300/85">
+          <Twitter size={11} /> Twitter
+        </span>
+      ),
+      href: socials.twitter,
+    });
+  }
+  if (socials.telegram) {
+    chips.push({
+      key: 'telegram',
+      content: (
+        <span className="inline-flex items-center gap-1 text-cyan-300/85">
+          <Send size={11} /> Telegram
+        </span>
+      ),
+      href: socials.telegram,
+    });
+  }
+  if (socials.discord) {
+    chips.push({
+      key: 'discord',
+      content: (
+        <span className="inline-flex items-center gap-1 text-cyan-300/85">
+          {DISCORD_ICON} Discord
+        </span>
+      ),
+      href: socials.discord,
+    });
+  }
+  if (websites[0]) {
+    chips.push({
+      key: 'website',
+      content: (
+        <span className="inline-flex items-center gap-1 text-cyan-300/85">
+          <Globe size={11} /> Website
+        </span>
+      ),
+      href: websites[0],
+    });
+  }
+
+  // Logo chips (mid-rotation visual anchors)
+  if (logoCardNode) {
+    chips.push({
+      key: 'logo-mid',
+      content: logoCardNode,
+    });
+  }
+
+  // scan.morbius.io link
+  chips.push({
+    key: 'scan',
+    content: (
+      <span className="inline-flex items-center gap-1 text-cyan-300/85">
+        <ExternalLink size={11} /> scan.morbius.io
+      </span>
+    ),
+    href: buildScanMorbiusLink(targetAddress),
+  });
+
+  // Trailing logo + CTA when not currently sponsored — invites users to be the first sponsor.
+  if (!isSponsored && onOpenSponsorModal && priceMorbiusChips) {
+    const priceLabel = (() => {
+      try {
+        return BigInt(priceMorbiusChips).toLocaleString();
+      } catch {
+        return priceMorbiusChips;
+      }
+    })();
+    chips.push({
+      key: 'become-sponsor',
+      content: (
+        <span className="inline-flex items-center gap-1.5 text-white/65">
+          {tokenLogoNode}
+          <span>
+            Promote your token here for{' '}
+            <span className="font-semibold text-white/85 tabular-nums">{priceLabel} MORBIUS</span>.
+          </span>
+          <span className="font-semibold text-cyan-300 underline underline-offset-2">Click Here</span>
+        </span>
+      ),
+      onClick: onOpenSponsorModal,
+    });
+  }
+
+  if (logoCardNode) {
+    chips.push({
+      key: 'logo-tail',
+      content: logoCardNode,
+    });
+  }
 
   // Duplicate items so the CSS marquee loops seamlessly.
   const looped = [...chips, ...chips];
   const textCls = compact ? 'text-[10px]' : 'text-[11px] md:text-[12px]';
   const dotCls = compact ? 'mx-2' : 'mx-3';
-  const linkColor = 'text-cyan-300/85 hover:text-cyan-200';
-  const baseColor = 'text-white/55';
 
   return (
     <div
@@ -109,29 +300,39 @@ export function SponsoredTokenMarquee({ sponsor, compact = false }: SponsoredTok
         className={`flex w-max items-center whitespace-nowrap leading-tight tabular-nums ${textCls} animate-poker-marquee`}
       >
         {looped.map((c, i) => {
-          const content = (
-            <span
-              className={`inline-flex items-center gap-1 ${c.href ? linkColor : baseColor} ${c.bold ? 'font-semibold' : ''}`}
-            >
-              {c.icon}
-              {c.label}
-            </span>
-          );
+          const inner = c.content;
+          let node: React.ReactNode;
+          if (c.href) {
+            node = (
+              <a
+                href={c.href}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="hover:underline"
+                onClick={(e) => e.stopPropagation()}
+              >
+                {inner}
+              </a>
+            );
+          } else if (c.onClick) {
+            node = (
+              <button
+                type="button"
+                className="text-left hover:opacity-90"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  c.onClick?.();
+                }}
+              >
+                {inner}
+              </button>
+            );
+          } else {
+            node = inner;
+          }
           return (
             <span key={`${c.key}-${i}`} className="inline-flex items-center">
-              {c.href ? (
-                <a
-                  href={c.href}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="hover:underline"
-                  onClick={(e) => e.stopPropagation()}
-                >
-                  {content}
-                </a>
-              ) : (
-                content
-              )}
+              {node}
               {i < looped.length - 1 && <span className={`${dotCls} text-white/15`}>·</span>}
             </span>
           );

@@ -438,6 +438,22 @@ body {
   @apply w-full max-w-lg overflow-hidden rounded-2xl border-2 border-cyan-500/30 bg-gradient-to-br from-slate-900 to-slate-800 shadow-2xl;
 }
 
+/**
+ * Same visual language as `.surface-modal-card` / PokerBetaSplash — slate gradient,
+ * cyan border, outer + inset highlight shadow. No max-width (page sections).
+ */
+.surface-splash-panel {
+  @apply relative w-full rounded-2xl border-2 border-cyan-500/30 bg-gradient-to-br from-slate-900 to-slate-800;
+  box-shadow:
+    0 4px 16px rgba(0, 0, 0, 0.6),
+    inset 0 1px 0 rgba(255, 255, 255, 0.05);
+}
+
+.surface-splash-panel-glow {
+  @apply pointer-events-none absolute inset-0 z-0 rounded-2xl;
+  background: radial-gradient(circle at 50% 0%, rgba(34, 211, 238, 0.12), transparent 55%);
+}
+
 .surface-toast-card {
   @apply w-full max-w-xs rounded-xl border border-cyan-500/30 bg-gradient-to-r from-slate-900/90 to-slate-800/90 p-3 shadow-xl backdrop-blur-sm;
   box-shadow: 0 4px 16px rgba(0, 0, 0, 0.6), inset 0 1px 0 rgba(255, 255, 255, 0.05);
