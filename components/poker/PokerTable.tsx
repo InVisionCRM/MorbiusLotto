@@ -27,6 +27,7 @@ import { DealerButton } from './DealerButton';
 import {
   POKER_BETWEEN_HANDS_DELAY_MS,
 } from '@/lib/poker-between-hands-delay';
+import { POKER_UI_CQW } from '@/lib/poker-table-cqw';
 
 const MORBIUS_DEFAULT_FELT_LOGO = '/morbius/MorbiusLogo-2.svg';
 
@@ -90,9 +91,15 @@ export interface PokerTableProps {
   tutorialTargets?: boolean;
   /** Wrap pot for tutorial spotlight (forwarded to `PokerBoard`). */
   dataTutorialTargetPot?: boolean;
+  /**
+   * When true, draws a faint marker at every display-slot dealer anchor (see `DEALER_BUTTON_RING`)
+   * so you can tune `lib/poker-seat-layout.ts` without guessing. The real dealer disc still renders
+   * only on the active dealer seat.
+   */
+  showDealerAnchorGuides?: boolean;
 }
 
-export function PokerTable({ state, currentPlayerAddress, timeLeft, chatBubbleBySeatIndex, onReUpClick, onMenuClick, reactionBySeatIndex, broadcastEmotionBySeatIndex, onPhraseReaction, onAnimationReaction, onOpponentClick, onOpponentRadialAction, quickChatPhrases, setQuickChatPhrases, onOpenEditQuickChat, onLeave, onRequestMobileActivity, onSitOut, onSitBack, tutorialTargets, dataTutorialTargetPot }: PokerTableProps) {
+export function PokerTable({ state, currentPlayerAddress, timeLeft, chatBubbleBySeatIndex, onReUpClick, onMenuClick, reactionBySeatIndex, broadcastEmotionBySeatIndex, onPhraseReaction, onAnimationReaction, onOpponentClick, onOpponentRadialAction, quickChatPhrases, setQuickChatPhrases, onOpenEditQuickChat, onLeave, onRequestMobileActivity, onSitOut, onSitBack, tutorialTargets, dataTutorialTargetPot, showDealerAnchorGuides = false }: PokerTableProps) {
   const tableRef = useRef<HTMLDivElement>(null);
   const [dims, setDims] = useState({ w: 640, h: 500 });
   const { effect: tableEffect, feltGradient, railStyle } = usePokerTableEffect();
@@ -174,16 +181,30 @@ export function PokerTable({ state, currentPlayerAddress, timeLeft, chatBubbleBy
     actingPosition != null &&
     actingRingIndex != null;
   const isShowdownWithWinners = hand?.street === 'showdown' && hand?.winners?.length;
-  const winnerSeatIndices = isShowdownWithWinners
-    ? (hand!.winners!.map((w) => state.seats.findIndex((s) => s.playerAddress === w.address)).filter((i) => i >= 0) as number[])
-    : [];
-  const winnerDisplaySlots = winnerSeatIndices.map(
-    (idx) => (mySeatIndex >= 0 ? (idx - mySeatIndex + state.seats.length) % state.seats.length : idx)
-  );
-  const winnerPotChipAnchor =
-    winnerDisplaySlots.length > 0
-      ? winningPotChipAnchorForDisplaySlot(state.seats.length, winnerDisplaySlots[0])
-      : null;
+  const winnerPotChipTargets = useMemo(() => {
+    if (!isShowdownWithWinners || !hand?.winners?.length) return [] as { key: string; amount: string; fx: number; fy: number }[];
+    const targets: { key: string; amount: string; fx: number; fy: number }[] = [];
+    for (const w of hand.winners) {
+      let amountStr = w.amount ?? '0';
+      let amountBi = toBigIntSafe(amountStr);
+      if (amountBi <= 0n && hand.winners.length === 1 && hand.pot) {
+        amountBi = toBigIntSafe(hand.pot);
+        amountStr = hand.pot;
+      }
+      if (amountBi <= 0n) continue;
+      const seatIdx = state.seats.findIndex(
+        (s) => (s.playerAddress ?? '').toLowerCase() === w.address.toLowerCase(),
+      );
+      if (seatIdx < 0) continue;
+      const displaySlot =
+        mySeatIndex >= 0
+          ? (seatIdx - mySeatIndex + state.seats.length) % state.seats.length
+          : seatIdx;
+      const { fx, fy } = winningPotChipAnchorForDisplaySlot(state.seats.length, displaySlot);
+      targets.push({ key: w.address.toLowerCase(), amount: amountStr, fx, fy });
+    }
+    return targets;
+  }, [isShowdownWithWinners, hand, mySeatIndex, state.seats]);
   const firstWinner = isShowdownWithWinners ? hand!.winners![0] : null;
   const firstWinnerAddr = firstWinner?.address ?? null;
   const isCurrentPlayerWinner = firstWinnerAddr && currentPlayerAddress && firstWinnerAddr === currentPlayerAddress.toLowerCase();
@@ -564,7 +585,7 @@ export function PokerTable({ state, currentPlayerAddress, timeLeft, chatBubbleBy
       ref={tableRef}
       data-testid="poker-table-root"
       className="absolute inset-0"
-      style={{ overflow: 'visible' }}
+      style={{ overflow: 'visible', containerType: 'inline-size' }}
       {...(tutorialTargets ? { 'data-tutorial-target': 'table' } : {})}
     >
 
@@ -737,30 +758,31 @@ export function PokerTable({ state, currentPlayerAddress, timeLeft, chatBubbleBy
 
       {/* Chips sliding from pot to winner at showdown */}
       <AnimatePresence>
-        {showFinalShowdownVisuals && hand?.pot && winnerPotChipAnchor && (
-          <motion.div
-            key={`chips-to-winner-${hand.handId}`}
-            className="absolute z-30 pointer-events-none"
-            style={{ transform: 'translate(-50%, -50%)' }}
-            initial={{
-              left: `${POT_ANCHOR.fx * 100}%`,
-              top: `${POT_ANCHOR.fy * 100}%`,
-            }}
-            animate={{
-              left: `${winnerPotChipAnchor.fx * 100}%`,
-              top: `${winnerPotChipAnchor.fy * 100}%`,
-            }}
-            exit={{ opacity: 0 }}
-            transition={{
-              type: 'spring',
-              stiffness: 80,
-              damping: 18,
-              delay: 0.4,
-            }}
-          >
-            <PokerChipStack weiAmount={hand.pot} />
-          </motion.div>
-        )}
+        {showFinalShowdownVisuals &&
+          winnerPotChipTargets.map((t, i) => (
+            <motion.div
+              key={`chips-to-winner-${hand!.handId}-${t.key}`}
+              className="absolute z-[35] pointer-events-none"
+              style={{ transform: 'translate(-50%, -50%)' }}
+              initial={{
+                left: `${POT_ANCHOR.fx * 100}%`,
+                top: `${POT_ANCHOR.fy * 100}%`,
+              }}
+              animate={{
+                left: `${t.fx * 100}%`,
+                top: `${t.fy * 100}%`,
+              }}
+              exit={{ opacity: 0 }}
+              transition={{
+                type: 'spring',
+                stiffness: 80,
+                damping: 18,
+                delay: 0.4 + i * 0.09,
+              }}
+            >
+              <PokerChipStack weiAmount={t.amount} />
+            </motion.div>
+          ))}
       </AnimatePresence>
 
       {/* Chip stacks — between each seat and pot (hidden at showdown so only sliding pot shows) */}
@@ -768,8 +790,6 @@ export function PokerTable({ state, currentPlayerAddress, timeLeft, chatBubbleBy
       <AnimatePresence>
         {/* Iterate over seat count only — do not iterate a fixed 10; empty seats would still get chip % positions */}
         {Array.from({ length: state.seats.length }, (_, displaySlot) => {
-          const anchor = seatAnchors[displaySlot];
-          if (!anchor) return null;
           const actualIdx = mySeatIndex >= 0
             ? (mySeatIndex + displaySlot) % state.seats.length
             : displaySlot;
@@ -783,16 +803,16 @@ export function PokerTable({ state, currentPlayerAddress, timeLeft, chatBubbleBy
             <motion.div
               key={`chips-${actualIdx}`}
               className="absolute pointer-events-none"
-              style={{
-                left: `${cfx * 100}%`,
-                top:  `${cfy * 100}%`,
-                transform: 'translate(-50%, -50%)',
-                zIndex: 25,
-              }}
               initial={{ scale: 0, opacity: 0 }}
               animate={{ scale: 1, opacity: 1 }}
               exit={{ scale: 0, opacity: 0 }}
               transition={{ type: 'spring', stiffness: 320, damping: 24 }}
+              style={{
+                left: `${cfx * 100}%`,
+                top: `${cfy * 100}%`,
+                transform: 'translate(-50%, -50%)',
+                zIndex: 27,
+              }}
             >
               <PokerChipStack weiAmount={seat.currentBet} />
             </motion.div>
@@ -882,8 +902,8 @@ export function PokerTable({ state, currentPlayerAddress, timeLeft, chatBubbleBy
               left: `${fx * 100}%`,
               top: `${fy * 100}%`,
               transform: 'translate(-50%, -50%)',
-              width: 'clamp(58px, 14vw, 74px)',
-              height: 'clamp(50px, 12vw, 66px)',
+              width: POKER_UI_CQW.flyoutRowW,
+              height: POKER_UI_CQW.flyoutRowH,
               zIndex: isWinnerHoleCards ? 30 : 10,
             }}
           >
@@ -893,9 +913,9 @@ export function PokerTable({ state, currentPlayerAddress, timeLeft, chatBubbleBy
                 className="absolute"
                 style={{
                   bottom: 0,
-                  left: ci === 0 ? 0 : 'clamp(14px, 3.8vw, 20px)',
-                  width: 'clamp(38px, 9vw, 48px)',
-                  height: 'clamp(48px, 12vw, 62px)',
+                  left: ci === 0 ? 0 : POKER_UI_CQW.flyoutCardLeft,
+                  width: POKER_UI_CQW.flyoutCardW,
+                  height: POKER_UI_CQW.flyoutCardH,
                   transform: `rotate(${ci === 0 ? -12 : 12}deg)`,
                   transformOrigin: 'bottom center',
                   borderRadius: 8,
@@ -911,13 +931,51 @@ export function PokerTable({ state, currentPlayerAddress, timeLeft, chatBubbleBy
         );
       })}
 
-      {/* Dealer button — physical disc that slides between dealers each hand. */}
+      {/* Optional: one faint marker per display-slot dealer anchor (layout tuning). */}
+      {showDealerAnchorGuides &&
+        Array.from({ length: state.seats.length }, (_, displaySlot) => {
+          const { fx, fy } = dealerButtonAnchorForDisplaySlot(state.seats.length, displaySlot);
+          return (
+            <div
+              key={`dealer-anchor-guide-${displaySlot}`}
+              className="absolute pointer-events-none z-[31]"
+              style={{
+                left: `${fx * 100}%`,
+                top: `${fy * 100}%`,
+                transform: 'translate(-50%, -50%)',
+              }}
+              aria-hidden
+            >
+              <div
+                style={{
+                  width: 26,
+                  height: 26,
+                  borderRadius: 9999,
+                  border: '1px dashed rgba(212, 175, 55, 0.55)',
+                  background: 'rgba(25, 22, 14, 0.45)',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  fontSize: 9,
+                  fontWeight: 800,
+                  color: 'rgba(251, 191, 136, 0.85)',
+                  letterSpacing: '-0.02em',
+                }}
+              >
+                d{displaySlot}
+              </div>
+            </div>
+          );
+        })}
+
+      {/* Dealer button — single physical disc on the active dealer seat (real poker). */}
       {(() => {
-        const dealerIdx = state.seats.findIndex((s) => s.isDealer && s.playerAddress);
+        const dealerIdx = state.seats.findIndex((s) => s.isDealer);
         if (dealerIdx < 0) return null;
-        const displaySlot = mySeatIndex >= 0
-          ? (dealerIdx - mySeatIndex + state.seats.length) % state.seats.length
-          : dealerIdx;
+        const displaySlot =
+          mySeatIndex >= 0
+            ? (dealerIdx - mySeatIndex + state.seats.length) % state.seats.length
+            : dealerIdx;
         const { fx, fy } = dealerButtonAnchorForDisplaySlot(state.seats.length, displaySlot);
         return <DealerButton fx={fx} fy={fy} />;
       })()}

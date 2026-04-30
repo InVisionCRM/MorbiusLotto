@@ -68,11 +68,9 @@ export function BetChip({
         width: cssSize,
         height: cssSize,
         flexShrink: 0,
-        containerType: 'size',
         ...style,
       }}
     >
-      { }
       <img
         src={src}
         alt=""
@@ -92,7 +90,7 @@ export function BetChip({
           alignItems: 'center',
           justifyContent: 'center',
           color: '#ffffff',
-          fontSize: '30cqmin',
+          fontSize: typeof size === 'number' ? Math.max(7, Math.min(12, Math.round(size * 0.24))) : 10,
           fontWeight: 900,
           fontVariantNumeric: 'tabular-nums',
           lineHeight: 1,

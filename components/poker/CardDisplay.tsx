@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useMemo } from 'react';
+import React, { useMemo, type CSSProperties } from 'react';
 import Image from 'next/image';
 import { motion, type Variants } from 'framer-motion';
 
@@ -161,9 +161,10 @@ export function CardDisplay({
     return dealVariants;
   }, [variant, dx, dy]);
   const hasExit = ENABLE_POKER_ANIMS && (variant === 'hole' || variant === 'community');
-  const sizeClasses = small
-    ? 'w-10 h-14 sm:w-11 sm:h-[62px] md:w-12 md:h-[68px] lg:w-14 lg:h-20 xl:w-16 xl:h-[88px]'
-    : 'w-14 h-20 sm:w-16 sm:h-24 lg:w-[72px] lg:h-[100px] xl:w-20 xl:h-28';
+  /** Sizes track poker table width (`container-type: inline-size` on `PokerTable`). */
+  const sizeStyle: CSSProperties = small
+    ? { width: 'clamp(40px, 4.9cqw, 64px)', height: 'clamp(56px, 6.85cqw, 88px)' }
+    : { width: 'clamp(56px, 6.15cqw, 80px)', height: 'clamp(78px, 8.6cqw, 112px)' };
 
   const imageSize = { width: 80, height: 112 };
 
@@ -186,8 +187,8 @@ export function CardDisplay({
           animate="visible"
           exit={hasExit ? 'exit' : undefined}
           custom={dealDelay}
-          className={`relative ${sizeClasses} overflow-hidden`}
-          style={{ boxShadow: cardShadow, transformStyle: 'preserve-3d' }}
+          className="relative overflow-hidden"
+          style={{ ...sizeStyle, boxShadow: cardShadow, transformStyle: 'preserve-3d' }}
         >
           <div className="absolute inset-0 bg-slate-900 overflow-hidden">
             <Image
@@ -205,8 +206,9 @@ export function CardDisplay({
 
       {isEmpty && (
         <div
-          className={`relative ${sizeClasses} border border-white/10`}
+          className="relative overflow-hidden border border-white/10"
           style={{
+            ...sizeStyle,
             background: 'linear-gradient(145deg, rgba(15,23,42,0.6), rgba(15,23,42,0.3))',
             boxShadow: 'inset 0 2px 4px rgba(0,0,0,0.3)',
             opacity: 0.05,
@@ -226,8 +228,9 @@ export function CardDisplay({
           }}
           exit={hasExit ? 'exit' : undefined}
           custom={dealDelay}
-          className={`relative ${sizeClasses} overflow-hidden rounded-md select-none`}
+          className="relative overflow-hidden rounded-md select-none"
           style={{
+            ...sizeStyle,
             boxShadow: isWinningCard
               ? `${cardShadow}, 0 12px 28px rgba(0,0,0,0.6), 0 0 22px rgba(255, 245, 200, 0.35)`
               : cardShadow,

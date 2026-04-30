@@ -19,7 +19,7 @@ export function DealerButton({ fx, fy }: DealerButtonProps) {
     <motion.div
       data-testid="poker-dealer-button"
       className="absolute pointer-events-none"
-      style={{ transform: 'translate(-50%, -50%)', zIndex: 19 }}
+      style={{ transform: 'translate(-50%, -50%)', zIndex: 32 }}
       initial={false}
       animate={{ left: `${fx * 100}%`, top: `${fy * 100}%` }}
       transition={{ type: 'spring', stiffness: 90, damping: 20, mass: 0.9 }}

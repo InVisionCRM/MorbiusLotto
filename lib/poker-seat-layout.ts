@@ -5,22 +5,24 @@ export type DealerButtonAnchor = SeatAnchor & { x: number };
 /** Canonical **10-max** ring (one vertex per seat at full tables). */
 export const POKER_TABLE_MAX_SEATS = 10;
 
+/** Pot center (fractions) — keep in sync with `PokerTable` felt / `PokerBoard` region. */
+export const POKER_POT_ANCHOR: SeatAnchor = { fx: 0.5, fy: 0.51 };
+
 /**
- * Seat positions on the felt for all **10** vertices — same fractions as {@link CHIP_ANCHOR_RING}
- * (one anchor per seat on the inner ring). With fewer players, `ringIndexForDisplaySlot` maps each
- * display slot to a subset of these indices so spacing stays even.
+ * Seat positions on the felt for all **10** vertices (avatar ring). With fewer players,
+ * `ringIndexForDisplaySlot` maps each display slot to a subset of these indices so spacing stays even.
  */
 export const SEAT_ANCHOR_RING: SeatAnchor[] = [
-  { fx: 0.5, fy: 0.85 }, // 0 — bottom center (hero)
-  { fx: 0.33, fy: 0.85 }, // 1 — hero's left (next to act, clockwise)
-  { fx: 0.10, fy: 0.65 }, // 2 — S2
-  { fx: 0.10, fy: 0.30 },
-  { fx: 0.33, fy: 0.15 },
-  { fx: 0.50, fy: 0.15 }, // 5 — top center
-  { fx: 0.67, fy: 0.15 },
+  { fx: 0.5, fy: 0.90 }, // 0 — bottom center (hero)
+  { fx: 0.25, fy: 0.90 }, // 1 — hero's left (next to act, clockwise)
+  { fx: 0.05, fy: 0.65 }, // 2 — S2
+  { fx: 0.05, fy: 0.30 },
+  { fx: 0.25, fy: 0.15 },
+  { fx: 0.45, fy: 0.15 }, // 5 — top center
+  { fx: 0.75, fy: 0.15 },
   { fx: 0.95, fy: 0.30 },
   { fx: 0.95, fy: 0.65 },
-  { fx: 0.67, fy: 0.85 },
+  { fx: 0.75, fy: 0.90 },
 ];
 
 /** Map display slot → ring index `0..POKER_TABLE_MAX_SEATS-1`. At full **10** seats, slot === ring index. */
@@ -46,16 +48,16 @@ export function authoredSeatAnchors(seatCount: number): SeatAnchor[] {
  * Tweak these independently from avatar seats, cards, and chip stacks.
  */
 export const PLAYER_TAG_ANCHOR_RING: SeatAnchor[] = [
-  { fx: 0.43, fy: 0.83 },  // 0 — bottom center (hero)
-  { fx: 0.23, fy: 0.82 }, // 1 — S1
-  { fx: 0.14, fy: 0.65 },
-  { fx: 0.14, fy: 0.30 },
-  { fx: 0.22, fy: 0.02 },
-  { fx: 0.43, fy: 0.02 },  // 5 — top center
-  { fx: 0.68, fy: 0.02 },
-  { fx: 0.90, fy: 0.30 },
-  { fx: 0.90, fy: 0.65 },
-  { fx: 0.58, fy: 0.82 },
+  { fx: 0.45, fy: 0.85 },  // 0 — bottom center (hero)
+  { fx: 0.20, fy: 0.85 }, // 1 — S1
+  { fx: 0.10, fy: 0.60 },
+  { fx: 0.10, fy: 0.25 },
+  { fx: 0.30, fy: 0.10 },
+  { fx: 0.50, fy: 0.10 },  // 5 — top center
+  { fx: 0.70, fy: 0.10 },
+  { fx: 0.90, fy: 0.25 },
+  { fx: 0.90, fy: 0.60 },
+  { fx: 0.70, fy: 0.85 },
 ];
 
 /** Display-slot player tag anchors for `seatCount` (mirrors `authoredSeatAnchors`). */
@@ -73,21 +75,32 @@ export function playerTagAnchorForDisplaySlot(seatCount: number, displaySlot: nu
   return tags[displaySlot] ?? { ...POKER_POT_ANCHOR };
 }
 
-/** Pot center (fractions) — keep in sync with `PokerTable` felt / `PokerBoard` region. */
-export const POKER_POT_ANCHOR: SeatAnchor = { fx: 0.5, fy: 0.51 };
-
 /**
- * Bet-stack anchors (**10** vertices). Same coordinates as {@link SEAT_ANCHOR_RING}; same
- * `ringIndexForDisplaySlot` mapping. `PokerTable` uses `authoredChipAnchors` / `betChipAnchorForDisplaySlot`.
+ * Bet-stack anchors (**10** vertices) — tweak per seat independently (like {@link PLAYER_TAG_ANCHOR_RING}).
+ * Initialized to match the former seat-co-located chip ring; change here without moving avatars.
  */
-export const CHIP_ANCHOR_RING: SeatAnchor[] = SEAT_ANCHOR_RING;
+export const BET_CHIP_ANCHOR_RING: SeatAnchor[] = [
+  { fx: 0.5, fy: 0.65 },
+  { fx: 0.25, fy: 0.65 },
+  { fx: 0.15, fy: 0.55 },
+  { fx: 0.15, fy: 0.30 },
+  { fx: 0.30, fy: 0.25 },
+  { fx: 0.50, fy: 0.23 },
+  { fx: 0.70, fy: 0.25 },
+  { fx: 0.82, fy: 0.30 },
+  { fx: 0.82, fy: 0.45 },
+  { fx: 0.70, fy: 0.65 },
+];
 
-/** Display-slot chip anchors for `seatCount` (mirrors `authoredSeatAnchors`). */
+/** @deprecated Use {@link BET_CHIP_ANCHOR_RING}; kept for grep / external refs. */
+export const CHIP_ANCHOR_RING: SeatAnchor[] = BET_CHIP_ANCHOR_RING;
+
+/** Display-slot bet-chip anchors for `seatCount` (mirrors `authoredSeatAnchors`). */
 export function authoredChipAnchors(seatCount: number): SeatAnchor[] {
   if (seatCount <= 0) return [];
   return Array.from({ length: seatCount }, (_, displaySlot) => {
     const ri = ringIndexForDisplaySlot(displaySlot, seatCount);
-    const a = CHIP_ANCHOR_RING[ri];
+    const a = BET_CHIP_ANCHOR_RING[ri];
     return { fx: a.fx, fy: a.fy };
   });
 }
@@ -98,54 +111,37 @@ export function betChipAnchorForDisplaySlot(seatCount: number, displaySlot: numb
 }
 
 /**
- * 0 = {@link POKER_POT_ANCHOR}, 1 = {@link SEAT_ANCHOR_RING} vertex. Radial from pot → seat so the
- * dealer disc tracks the oval (no single global x/y nudge that fails on left vs right).
+ * Dealer-button disc anchors (**10** vertices) — per-seat authoring like {@link PLAYER_TAG_ANCHOR_RING}.
+ * Values match the former seat→tag lerp at t=0.22 so existing tables do not jump.
  */
-export const DEALER_BUTTON_POT_TO_SEAT_T = 0.88;
+export const DEALER_BUTTON_RING: SeatAnchor[] = [
+  { fx: 0.43, fy: 0.80 },
+  { fx: 0.28, fy: 0.75 },
+  { fx: 0.17, fy: 0.50 },
+  { fx: 0.17, fy: 0.35 },
+  { fx: 0.25, fy: 0.20 },
+  { fx: 0.45, fy: 0.20 },
+  { fx: 0.65, fy: 0.20 },
+  { fx: 0.83, fy: 0.25 },
+  { fx: 0.83, fy: 0.60 },
+  { fx: 0.78, fy: 0.75 },
+];
 
 /**
- * Dealer-chip anchors (**10** vertices): between pot and each seat along the same line — distinct
- * from {@link CHIP_ANCHOR_RING} (stacks) and consistent around the full ring.
- */
-export const DEALER_CHIP_ANCHOR_RING: SeatAnchor[] = SEAT_ANCHOR_RING.map((seat) => {
-  const t = DEALER_BUTTON_POT_TO_SEAT_T;
-  const p = POKER_POT_ANCHOR;
-  return {
-    fx: p.fx + (seat.fx - p.fx) * t,
-    fy: p.fy + (seat.fy - p.fy) * t,
-  };
-});
-
-/** Display-slot dealer-chip anchors for `seatCount` (mirrors `authoredChipAnchors`). */
-export function authoredDealerChipAnchors(seatCount: number): SeatAnchor[] {
-  if (seatCount <= 0) return [];
-  return Array.from({ length: seatCount }, (_, displaySlot) => {
-    const ri = ringIndexForDisplaySlot(displaySlot, seatCount);
-    const a = DEALER_CHIP_ANCHOR_RING[ri];
-    return { fx: a.fx, fy: a.fy };
-  });
-}
-
-export function dealerChipAnchorForDisplaySlot(seatCount: number, displaySlot: number): SeatAnchor {
-  const list = authoredDealerChipAnchors(seatCount);
-  return list[displaySlot] ?? { ...POKER_POT_ANCHOR };
-}
-
-/**
- * Non-hero hole-card anchors (**10** vertices). Same `ringIndexForDisplaySlot` mapping as seats/chips.
+ * Non-hero hole-card anchors (**10** vertices). Same `ringIndexForDisplaySlot` mapping as seats / bet stacks.
  * Tweak these freely to place opponent cards wherever looks right relative to each seat.
  */
 export const CARD_ANCHOR_RING: SeatAnchor[] = [
-  { fx: 0.50, fy: 0.80 },  // 0 — hero (unused for opponent cards; hero's cards live on avatar)
-  { fx: 0.23, fy: 0.80 }, // 1 — S1
-  { fx: 0.19, fy: 0.60 },
-  { fx: 0.19, fy: 0.25 },
-  { fx: 0.22, fy: 0.02 },
+  { fx: 0.50, fy: 0.77 },  // 0 — hero (unused for opponent cards; hero's cards live on avatar)
+  { fx: 0.18, fy: 0.77 }, // 1 — S1
+  { fx: 0.10, fy: 0.52 },
+  { fx: 0.10, fy: 0.17 },
+  { fx: 0.30, fy: 0.02 },
   { fx: 0.50, fy: 0.02 },  // 5 — top center
   { fx: 0.68, fy: 0.02 },
-  { fx: 0.87, fy: 0.25 },
-  { fx: 0.87, fy: 0.60 },
-  { fx: 0.68, fy: 0.80 },
+  { fx: 0.88, fy: 0.17 },
+  { fx: 0.88, fy: 0.52 },
+  { fx: 0.68, fy: 0.77 },
 ];
 
 /**
@@ -153,16 +149,16 @@ export const CARD_ANCHOR_RING: SeatAnchor[] = [
  * Tweak each vertex independently to place the winning stack cleanly per seat, mapped like C#/S#.
  */
 export const WINNING_POT_CHIP_ANCHOR_RING: SeatAnchor[] = [
-  { fx: 0.59, fy: 0.80 }, // 0 — bottom center (hero)
-  { fx: 0.39, fy: 0.80 }, // 1 — hero's left (next to act, clockwise)
-  { fx: 0.32, fy: 0.63 },
-  { fx: 0.27, fy: 0.24 },
-  { fx: 0.43, fy: 0.18 },
-  { fx: 0.54, fy: 0.18 }, // 5 — top center
-  { fx: 0.79, fy: 0.18 },
-  { fx: 0.80, fy: 0.24 },
-  { fx: 0.80, fy: 0.63 },
-  { fx: 0.79, fy: 0.80 },
+  { fx: 0.43, fy: 0.80 },
+  { fx: 0.28, fy: 0.75 },
+  { fx: 0.17, fy: 0.50 },
+  { fx: 0.17, fy: 0.35 },
+  { fx: 0.25, fy: 0.20 },
+  { fx: 0.45, fy: 0.20 },
+  { fx: 0.65, fy: 0.20 },
+  { fx: 0.83, fy: 0.25 },
+  { fx: 0.83, fy: 0.60 },
+  { fx: 0.78, fy: 0.75 },
 ];
 
 /** Display-slot anchors for winning pot chips (hero-centered), mirroring `authoredChipAnchors`. */
@@ -195,10 +191,9 @@ export function cardAnchorForDisplaySlot(seatCount: number, displaySlot: number)
 }
 
 /**
- * Dealer-button anchors: same fractional positions as {@link DEALER_CHIP_ANCHOR_RING}.
- * `x` duplicates `fx` for legacy {@link DealerButtonAnchor} shape.
+ * Dealer-button anchors (**10** vertices). `x` duplicates `fx` for legacy {@link DealerButtonAnchor} shape.
  */
-export const DEALER_BUTTON_ANCHOR_RING: DealerButtonAnchor[] = DEALER_CHIP_ANCHOR_RING.map((a) => ({
+export const DEALER_BUTTON_ANCHOR_RING: DealerButtonAnchor[] = DEALER_BUTTON_RING.map((a) => ({
   x: a.fx,
   fx: a.fx,
   fy: a.fy,

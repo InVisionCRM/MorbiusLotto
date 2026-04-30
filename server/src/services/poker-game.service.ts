@@ -1044,14 +1044,18 @@ export class PokerGameService {
         ? String(Math.max(0, Math.round(totalPotChips(liveTable))))
         : (h.pot_amount?.toString() ?? '0');
 
-      // Update seat flags
+      // Update seat flags (dealer / blinds / acting apply to every chair — empty seats too — so the
+      // client can place the dealer disc even if the button seat is momentarily empty.)
       for (const seat of seats) {
-        if (!seat.playerAddress) continue;
         const pos = seat.position;
         seat.isDealer = pos === dealerPos;
         seat.isSmallBlind = pos === sbPos;
         seat.isBigBlind = pos === bbPos;
         seat.isActing = actingPosition === pos;
+        if (!seat.playerAddress) {
+          seat.folded = false;
+          continue;
+        }
         seat.folded = foldedSet.has(this.normalizeAddress(seat.playerAddress));
         // Live bet override if not done above
         if (liveTable) {

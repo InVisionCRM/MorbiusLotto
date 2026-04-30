@@ -33,6 +33,7 @@ import { RadialMenu, RadialMenuFloating, type RadialMenuItem } from '@/component
 import { useQuickChatPhrases } from '@/hooks/useQuickChatPhrases';
 import { EditQuickChatModal } from '@/components/poker/EditQuickChatModal';
 import { usePokerVoicePresenceForAddress } from './voice-presence';
+import { POKER_UI_CQW } from '@/lib/poker-table-cqw';
 
 const LONG_PRESS_MS = 500;
 const PHRASE_OVERLAY_DURATION_MS = 2000;
@@ -80,12 +81,14 @@ export function PokerChipStack({ weiAmount }: { weiAmount: string }) {
   if (amount <= 0) return null;
 
   return (
-    <BetChip label={formatChipLabel(amount)} amount={amount} size="clamp(34px, 3vw, 44px)" />
+    <BetChip label={formatChipLabel(amount)} amount={amount} size={POKER_UI_CQW.betChip} />
   );
 }
 
-const AVATAR_SIZE_PX = 84;
-const ROLE_CRESCENT_HEIGHT_PX = Math.round(AVATAR_SIZE_PX * 0.28);
+const AVATAR_BOX_STYLE: React.CSSProperties = {
+  width: 'clamp(58px, 6.5cqw, 84px)',
+  height: 'clamp(58px, 6.5cqw, 84px)',
+};
 
 const ROLE_CRESCENT_STYLE = {
   SB: { bg: '#1d4ed8', text: '#ffffff', rim: '#60a5fa' },
@@ -93,12 +96,11 @@ const ROLE_CRESCENT_STYLE = {
 } as const;
 // ── Circular timer ring around avatar ──────────────────────────────────────
 
-function CircularTimerRing({ size, timeLeft, maxTime }: { size: number; timeLeft: number; maxTime: number }) {
-  const pad = 5;
-  const total = size + pad * 2;
-  const cx = total / 2;
+function CircularTimerRing({ timeLeft, maxTime }: { timeLeft: number; maxTime: number }) {
   const strokeWidth = 3.5;
-  const radius = cx - strokeWidth;
+  const cx = 50;
+  const cy = 50;
+  const radius = 44;
   const circumference = 2 * Math.PI * radius;
   const progress = Math.max(0, Math.min(1, timeLeft / maxTime));
   const color = 'hsl(120, 90%, 52%)';
@@ -106,27 +108,28 @@ function CircularTimerRing({ size, timeLeft, maxTime }: { size: number; timeLeft
   return (
     <svg
       aria-hidden
+      viewBox="0 0 100 100"
       style={{
         position: 'absolute',
-        top: -pad,
-        left: -pad,
-        width: total,
-        height: total,
+        left: '50%',
+        top: '50%',
+        width: 'calc(100% + 10px)',
+        height: 'calc(100% + 10px)',
+        transform: 'translate(-50%, -50%) rotate(-90deg)',
         pointerEvents: 'none',
         zIndex: 5,
-        transform: 'rotate(-90deg)',
       }}
     >
-      <circle cx={cx} cy={cx} r={radius} fill="none" stroke="rgba(255,255,255,0.08)" strokeWidth={strokeWidth} />
+      <circle cx={cx} cy={cy} r={radius} fill="none" stroke="rgba(255,255,255,0.08)" strokeWidth={strokeWidth} />
       <circle
-        cx={cx} cy={cx} r={radius}
+        cx={cx}
+        cy={cy}
+        r={radius}
         fill="none"
         stroke={color}
         strokeWidth={strokeWidth}
         strokeLinecap="round"
-        strokeDasharray={circumference}
-        strokeDashoffset={circumference * (1 - progress)}
-        style={{ filter: `drop-shadow(0 0 4px ${color})`, transition: 'stroke-dashoffset 1s linear' }}
+        strokeDasharray={`${circumference * progress} ${circumference}`}
       />
     </svg>
   );
@@ -644,7 +647,7 @@ export function PokerSeat({ seat, index, holeCards, isCurrentPlayer, showCardBac
           <motion.div
             key={chatBubble}
             className="absolute bottom-full left-1/2 -translate-x-1/2 mb-1 pointer-events-none z-30"
-            style={{ maxWidth: 'min(160px, 42vw)', minWidth: 48 }}
+            style={{ maxWidth: POKER_UI_CQW.chatBubbleMax, minWidth: 48 }}
             initial={{ opacity: 0, y: 12 }}
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: 10 }}
@@ -657,7 +660,7 @@ export function PokerSeat({ seat, index, holeCards, isCurrentPlayer, showCardBac
                 border: '1px solid rgba(255,255,255,0.12)',
                 boxShadow: '0 2px 12px rgba(0,0,0,0.7), inset 0 1px 0 rgba(255,255,255,0.06)',
                 color: 'var(--poker-text)',
-                fontSize: 'clamp(9px, 1.9vw, 10px)',
+                fontSize: POKER_UI_CQW.chatBubbleFont,
                 lineHeight: 1.3,
               }}
             >
@@ -676,8 +679,8 @@ export function PokerSeat({ seat, index, holeCards, isCurrentPlayer, showCardBac
         {displayPhrase && (
           <motion.div
             key={displayPhrase}
-            className="font-jost absolute bottom-full left-1/2 -translate-x-1/2 mb-1 pointer-events-none z-40 text-lg lg:text-xl max-w-[min(180px,50vw)] text-center px-2 font-bold"
-            style={{ color: 'var(--poker-text)' }}
+            className="font-jost absolute bottom-full left-1/2 -translate-x-1/2 mb-1 pointer-events-none z-40 text-lg lg:text-xl text-center px-2 font-bold"
+            style={{ color: 'var(--poker-text)', maxWidth: POKER_UI_CQW.phraseOverlayMax }}
             initial={{ opacity: 0, y: 12 }}
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: 10 }}
@@ -702,8 +705,8 @@ export function PokerSeat({ seat, index, holeCards, isCurrentPlayer, showCardBac
           exit={{ transition: { duration: 0.5 } }}
           transition={{ type: 'spring', stiffness: 180, damping: 22 }}
           style={{
-            width: showMyCards ? 'clamp(84px, 20vw, 110px)' : 'clamp(58px, 14vw, 74px)',
-            height: showMyCards ? 'clamp(72px, 18vw, 96px)' : 'clamp(50px, 12vw, 66px)',
+            width: showMyCards ? POKER_UI_CQW.heroCardAreaW : POKER_UI_CQW.flyoutRowW,
+            height: showMyCards ? POKER_UI_CQW.heroCardAreaH : POKER_UI_CQW.flyoutRowH,
             marginBottom: hideSeatAvatar ? -10 : -44,
             zIndex: 0,
           }}
@@ -716,8 +719,8 @@ export function PokerSeat({ seat, index, holeCards, isCurrentPlayer, showCardBac
                 bottom: 0,
                 zIndex: ci,
                 ...(showMyCards
-                  ? { width: 'clamp(54px, 13vw, 70px)', height: 'clamp(70px, 17vw, 90px)', left: ci === 0 ? '0' : 'clamp(22px, 5.6vw, 30px)' }
-                  : { width: 'clamp(38px, 9vw, 48px)', height: 'clamp(48px, 12vw, 62px)', left: ci === 0 ? '0' : 'clamp(14px, 3.8vw, 20px)' }),
+                  ? { width: POKER_UI_CQW.heroCardInnerW, height: POKER_UI_CQW.heroCardInnerH, left: ci === 0 ? '0' : POKER_UI_CQW.heroCardInnerLeft }
+                  : { width: POKER_UI_CQW.peekCardInnerW, height: POKER_UI_CQW.peekCardInnerH, left: ci === 0 ? '0' : POKER_UI_CQW.peekCardInnerLeft }),
                 transform: `rotate(${ci === 0 ? -12 : 12}deg)`,
                 transformOrigin: 'bottom center',
                 filter: [
@@ -757,7 +760,7 @@ export function PokerSeat({ seat, index, holeCards, isCurrentPlayer, showCardBac
 
           {/* Circular timer ring around avatar */}
           {isActing && timeLeft != null && (
-            <CircularTimerRing size={AVATAR_SIZE_PX} timeLeft={timeLeft} maxTime={maxTime} />
+            <CircularTimerRing timeLeft={timeLeft} maxTime={maxTime} />
           )}
 
           {/* Avatar — current player: tap opens action radial; opponent: context radial + click profile */}
@@ -767,8 +770,7 @@ export function PokerSeat({ seat, index, holeCards, isCurrentPlayer, showCardBac
                 ref={avatarRef}
                 className="relative select-none overflow-hidden rounded-full outline-none"
                 style={{
-                  width: AVATAR_SIZE_PX,
-                  height: AVATAR_SIZE_PX,
+                  ...AVATAR_BOX_STYLE,
                   border: isActing
                     ? '2px solid transparent'
                     : isCurrentPlayer
@@ -849,7 +851,7 @@ export function PokerSeat({ seat, index, holeCards, isCurrentPlayer, showCardBac
                     className="pointer-events-none absolute left-1/2 bottom-0 -translate-x-1/2 flex items-center justify-center"
                     style={{
                       width: '92%',
-                      height: ROLE_CRESCENT_HEIGHT_PX,
+                      height: '28%',
                       borderRadius: '9999px 9999px 42px 42px / 14px 14px 22px 22px',
                       background: roleStyle.bg,
                       borderTop: `1px solid ${roleStyle.rim}`,
@@ -1010,12 +1012,12 @@ export function PokerSeat({ seat, index, holeCards, isCurrentPlayer, showCardBac
             >
           <div className="py-1 px-2.5 flex items-center justify-center">
             <div className="flex flex-col items-center min-w-0 text-center">
-              <div className="font-bold truncate leading-tight" style={{ color: isCurrentPlayer ? '#fde68a' : '#e2e8f0', fontSize: 'clamp(11px, 2vw, 13px)', maxWidth: 96 }}>
+              <div className="font-bold truncate leading-tight" style={{ color: isCurrentPlayer ? '#fde68a' : '#e2e8f0', fontSize: POKER_UI_CQW.playerTagName, maxWidth: 96 }}>
                 {displayName}
               </div>
               <div
                 className="font-bold tabular-nums leading-tight flex items-center justify-center gap-0.5"
-                style={{ color: '#fbbf24', fontSize: 'clamp(9px, 1.8vw, 11px)', whiteSpace: 'nowrap' }}
+                style={{ color: '#fbbf24', fontSize: POKER_UI_CQW.playerTagChips, whiteSpace: 'nowrap' }}
               >
                 {formatChips(seat.stack)}
                 <img src="/morbius/MorbiusLogo%20(3).png" alt="" aria-hidden className="shrink-0" style={{ height: '1em', width: 'auto', verticalAlign: 'middle' }} />
@@ -1030,7 +1032,7 @@ export function PokerSeat({ seat, index, holeCards, isCurrentPlayer, showCardBac
                   ? 'linear-gradient(90deg, rgba(6,182,212,0.25), rgba(34,211,238,0.18))'
                   : 'rgba(34,211,238,0.12)',
                 color: isCurrentPlayer ? '#67e8f9' : '#a5f3fc',
-                fontSize: 'clamp(8px, 1.7vw, 10px)',
+                fontSize: POKER_UI_CQW.actionRowFont,
                 fontWeight: 700,
                 letterSpacing: '0.05em',
                 borderTop: '1px solid rgba(34,211,238,0.2)',
@@ -1052,7 +1054,7 @@ export function PokerSeat({ seat, index, holeCards, isCurrentPlayer, showCardBac
                   <div
                     data-testid={`poker-seat-action-${index}`}
                     className="h-[22px] text-center font-bold px-2 py-1 leading-tight break-words"
-                    style={{ background: actionStyle.bg, color: '#fff', fontSize: 'clamp(8px, 1.55vw, 10px)' }}
+                    style={{ background: actionStyle.bg, color: '#fff', fontSize: POKER_UI_CQW.actionPillFont }}
                   >
                     {actionLabel}
                   </div>

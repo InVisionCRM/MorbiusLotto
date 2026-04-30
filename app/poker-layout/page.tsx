@@ -1,6 +1,7 @@
 'use client';
 
 import Link from 'next/link';
+import { useEffect, useRef, useState } from 'react';
 import { PokerTable } from '@/components/poker/PokerTable';
 import { PokerThemeProvider } from '@/components/poker/PokerThemeContext';
 import { PokerTableEffectProvider } from '@/hooks/use-poker-table-effect';
@@ -78,20 +79,62 @@ const MOCK_TABLE_STATE: PokerTableState = {
 };
 
 function PokerLayoutMockTable() {
+  const panelRef = useRef<HTMLDivElement>(null);
+  const [scale, setScale] = useState(1);
+
+  useEffect(() => {
+    const el = panelRef.current;
+    if (!el) return;
+    const update = () => {
+      const w = el.clientWidth;
+      const h = el.clientHeight;
+      if (w <= 0 || h <= 0) return;
+      const s = Math.min(w / POKER_TABLE_REF_W, h / POKER_TABLE_REF_H, 1);
+      setScale(Math.max(0.35, s));
+    };
+    update();
+    const ro = new ResizeObserver(update);
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
+
   return (
     <div
-      className="relative mx-auto w-full"
+      ref={panelRef}
+      className="relative mx-auto flex w-full max-w-[min(100%,1400px)] items-center justify-center overflow-visible rounded-xl border border-cyan-500/15 bg-black/20"
       style={{
-        aspectRatio: `${POKER_TABLE_REF_W} / ${POKER_TABLE_REF_H}`,
-        maxWidth: POKER_TABLE_REF_W,
-        overflow: 'visible',
+        height: 'min(88dvh, 720px)',
+        minHeight: 320,
       }}
     >
-      <PokerTable
-        state={MOCK_TABLE_STATE}
-        currentPlayerAddress={mockAddress(0)}
-        timeLeft={42}
-      />
+      {/* Same pattern as mobile `PokerTableView`: inner ref size so ResizeObserver / cqw match production. */}
+      <div
+        style={{
+          position: 'relative',
+          width: POKER_TABLE_REF_W * scale,
+          height: POKER_TABLE_REF_H * scale,
+          flexShrink: 0,
+        }}
+      >
+        <div
+          style={{
+            position: 'absolute',
+            top: 0,
+            left: 0,
+            width: POKER_TABLE_REF_W,
+            height: POKER_TABLE_REF_H,
+            transform: `scale(${scale})`,
+            transformOrigin: 'top left',
+          }}
+        >
+          <PokerTable
+            state={MOCK_TABLE_STATE}
+            currentPlayerAddress={mockAddress(0)}
+            timeLeft={42}
+            showDealerAnchorGuides
+          />
+        </div>
+      </div>
     </div>
   );
 }
@@ -110,7 +153,9 @@ export default function PokerLayoutReferencePage() {
             <p className="text-xs uppercase tracking-widest text-cyan-400/80">Reference</p>
             <h1 className="text-2xl font-semibold tracking-tight md:text-3xl">Poker layout mock table</h1>
             <p className="max-w-3xl text-sm text-slate-400">
-              One production-shaped table using the live rail, card, chip, dealer, and tag styling. Move the anchors in{' '}
+              One production-shaped table using the live rail, card, chip, dealer, and tag styling. Faint{' '}
+              <span className="text-amber-200/90">d0–d9</span> markers show every dealer-button anchor; the gold disc is the
+              real dealer seat. Edit anchors in{' '}
               <code className="text-cyan-300/90">lib/poker-seat-layout.ts</code> and reload to compare placement.
             </p>
           </div>

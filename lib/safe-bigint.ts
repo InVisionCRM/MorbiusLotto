@@ -21,9 +21,19 @@ export function toBigIntSafe(value: unknown): bigint {
   if (typeof value === 'number') {
     return BigInt(toIntegerString(value));
   }
-  const s = String(value).trim() || '0';
+  let s = String(value).trim() || '0';
+  // JSON / UI may use grouping or fractional NUMERIC strings — normalize to integer chips.
+  s = s.replace(/[,_\s]/g, '');
   if (s.toLowerCase().includes('e')) {
     return BigInt(toIntegerString(Number(s)));
+  }
+  if (s.includes('.')) {
+    const intPart = s.split('.')[0] ?? '0';
+    try {
+      return BigInt(intPart || '0');
+    } catch {
+      return 0n;
+    }
   }
   try {
     return BigInt(s);
