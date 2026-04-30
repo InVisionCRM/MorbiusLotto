@@ -82,10 +82,137 @@
   to {
     transform: translateX(calc(-100% - var(--gap)));}}
   @keyframes marquee-vertical {
-  from {
-    transform: translateY(0);}
-  to {
-    transform: translateY(calc(-100% - var(--gap)));}}}
+    from {
+      transform: translateY(0);
+    }
+    to {
+      transform: translateY(calc(-100% - var(--gap)));
+    }
+  }
+
+  /* Home: Morbius card showcase (BlackJack/Cards/PNG) */
+  --animate-morbi-card-float: morbi-card-float 4.2s ease-in-out infinite;
+  --animate-morbi-card-drift: morbi-card-drift 5.5s ease-in-out infinite;
+  --animate-morbi-card-wobble: morbi-card-wobble 3.8s ease-in-out infinite;
+  --animate-morbi-card-glow-pulse: morbi-card-glow-pulse 3.2s ease-in-out infinite;
+  --animate-morbi-card-flutter: morbi-card-flutter 4.8s cubic-bezier(0.45, 0.05, 0.55, 0.95) infinite;
+
+  @keyframes morbi-card-float {
+    0%,
+    100% {
+      transform: translateY(0) scale(1);
+    }
+    50% {
+      transform: translateY(-14px) scale(1.03);
+    }
+  }
+
+  @keyframes morbi-card-drift {
+    0%,
+    100% {
+      transform: translate(0, 0) rotate(-8deg);
+    }
+    35% {
+      transform: translate(10px, -16px) rotate(6deg);
+    }
+    70% {
+      transform: translate(-8px, 8px) rotate(-4deg);
+    }
+  }
+
+  @keyframes morbi-card-wobble {
+    0%,
+    100% {
+      transform: translateY(0) rotate(-10deg);
+    }
+    25% {
+      transform: translateY(-10px) rotate(8deg);
+    }
+    50% {
+      transform: translateY(4px) rotate(2deg);
+    }
+    75% {
+      transform: translateY(-6px) rotate(-5deg);
+    }
+  }
+
+  @keyframes morbi-card-glow-pulse {
+    0%,
+    100% {
+      filter: drop-shadow(0 0 6px rgba(34, 211, 238, 0.25)) brightness(1);
+      transform: scale(1);
+    }
+    50% {
+      filter: drop-shadow(0 0 18px rgba(34, 211, 238, 0.55)) brightness(1.08);
+      transform: scale(1.04);
+    }
+  }
+
+  @keyframes morbi-card-flutter {
+    0%,
+    100% {
+      transform: translateY(0) rotate(0deg);
+    }
+    20% {
+      transform: translateY(-12px) rotate(4deg);
+    }
+    40% {
+      transform: translateY(6px) rotate(-3deg);
+    }
+    60% {
+      transform: translateY(-8px) rotate(5deg);
+    }
+    80% {
+      transform: translateY(3px) rotate(-2deg);
+    }
+  }
+
+  /* Home: Morbius card theater — orbit ring + subtle staging */
+  --animate-morbi-orbit-slow: morbi-orbit-slow 48s linear infinite;
+  --animate-morbi-orbit-slow-reverse: morbi-orbit-slow 48s linear infinite reverse;
+  --animate-morbi-levitate: morbi-levitate 3.4s ease-in-out infinite;
+  --animate-morbi-sway: morbi-sway 4.2s ease-in-out infinite;
+  --animate-morbi-tilt: morbi-tilt 5.5s ease-in-out infinite;
+
+  @keyframes morbi-orbit-slow {
+    from {
+      transform: rotate(0deg);
+    }
+    to {
+      transform: rotate(360deg);
+    }
+  }
+
+  @keyframes morbi-levitate {
+    0%,
+    100% {
+      transform: translateY(0);
+    }
+    50% {
+      transform: translateY(-10px);
+    }
+  }
+
+  @keyframes morbi-sway {
+    0%,
+    100% {
+      transform: translateX(0) rotate(-3deg);
+    }
+    50% {
+      transform: translateX(8px) rotate(3deg);
+    }
+  }
+
+  @keyframes morbi-tilt {
+    0%,
+    100% {
+      transform: perspective(520px) rotateY(-8deg) rotateX(4deg);
+    }
+    50% {
+      transform: perspective(520px) rotateY(8deg) rotateX(-3deg);
+    }
+  }
+}
 
 /* Infinite moving cards scroll animation (content is duplicated, so -50% loops) */
 @keyframes scroll {

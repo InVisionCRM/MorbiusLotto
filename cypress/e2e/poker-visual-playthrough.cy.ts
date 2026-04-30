@@ -33,6 +33,7 @@ type DemoState = {
     turnStartedAt: string | null;
     streetActions?: Record<number, { action: DemoSeatAction; amount: string }>;
     showdownHands?: Record<string, number[]>;
+    handWentToShowdown?: boolean;
     winners?: Array<{ address: string; amount: string; handName: string }>;
   };
   myHoleCards: number[] | null;
@@ -85,6 +86,7 @@ function stateFor(args: {
   bets: Record<number, number>;
   streetActions?: Record<number, { action: DemoSeatAction; amount: number }>;
   showdownHands?: Record<string, number[]>;
+  handWentToShowdown?: boolean;
   winners?: Array<{ address: string; amount: number; handName: string }>;
   waiting?: boolean;
 }): DemoState {
@@ -135,6 +137,9 @@ function stateFor(args: {
             ]),
           ),
           showdownHands: args.showdownHands,
+          ...(typeof args.handWentToShowdown === 'boolean'
+            ? { handWentToShowdown: args.handWentToShowdown }
+            : {}),
           winners: args.winners?.map((w) => ({
             address: w.address.toLowerCase(),
             amount: toWei(w.amount),
@@ -349,6 +354,7 @@ describe("Poker visual playthrough", () => {
         folded: SHOWDOWN_FOLDED_POSITIONS,
         bets: {},
         showdownHands,
+        handWentToShowdown: true,
         winners: [{ address: addr(winnerPos), amount: 3000, handName: "Two pair" }],
       });
       cy.log(`Hand ${handNo}/${hands}: showdown`);

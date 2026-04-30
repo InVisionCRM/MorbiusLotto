@@ -1,6 +1,6 @@
 'use client';
 
-import React from 'react';
+import React, { useMemo } from 'react';
 import Image from 'next/image';
 import { motion, type Variants } from 'framer-motion';
 
@@ -153,12 +153,13 @@ export function CardDisplay({
   dealFromOffset,
 }: CardDisplayProps) {
   const { dx, dy } = dealFromOffset ?? { dx: variant === 'community' ? 0 : -80, dy: variant === 'community' ? -70 : 0 };
-  const activeVariants =
-    ENABLE_POKER_ANIMS && variant === 'hole'
-      ? makeHoleVariants(dx, dy)
-      : ENABLE_POKER_ANIMS && variant === 'community'
-      ? makeCommunityVariants(dx, dy)
-      : dealVariants;
+  // Stable reference for Framer Motion: a new object every render can re-trigger community/hole deal motion
+  // when unrelated parents re-render (e.g. turn timer), causing flop cards to replay their slam-in.
+  const activeVariants = useMemo(() => {
+    if (ENABLE_POKER_ANIMS && variant === 'hole') return makeHoleVariants(dx, dy);
+    if (ENABLE_POKER_ANIMS && variant === 'community') return makeCommunityVariants(dx, dy);
+    return dealVariants;
+  }, [variant, dx, dy]);
   const hasExit = ENABLE_POKER_ANIMS && (variant === 'hole' || variant === 'community');
   const sizeClasses = small
     ? 'w-10 h-14 sm:w-11 sm:h-[62px] md:w-12 md:h-[68px] lg:w-14 lg:h-20 xl:w-16 xl:h-[88px]'

@@ -600,8 +600,10 @@ export function PokerActivityFeed({
     lastShowdownHandRef.current = hand.handId;
 
     const winner = hand.winners[0];
-    // No handName = won by everyone else folding — don't reveal hole cards
-    const isFoldWin = !winner.handName;
+    // Fold-out: fewer than two dealt players still in — never reveal hole cards (server flag).
+    const isFoldWin =
+      hand.handWentToShowdown === false ||
+      (hand.handWentToShowdown == null && !winner.handName);
     const winnerSeat = state?.seats.find((s) => s.playerAddress?.toLowerCase() === winner.address.toLowerCase());
 
     setEntries((prev) => [
@@ -619,7 +621,12 @@ export function PokerActivityFeed({
       } satisfies ShowdownEntry,
     ].slice(-MAX_ENTRIES));
    
-  }, [state?.currentHand?.street, state?.currentHand?.handId, state?.currentHand?.winners]);
+  }, [
+    state?.currentHand?.street,
+    state?.currentHand?.handId,
+    state?.currentHand?.winners,
+    state?.currentHand?.handWentToShowdown,
+  ]);
 
   // ── Auto-scroll ───────────────────────────────────────────────────────────
   useEffect(() => {

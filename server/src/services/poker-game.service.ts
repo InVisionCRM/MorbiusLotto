@@ -86,6 +86,11 @@ export interface PokerCurrentHand {
   turnStartedAt: string | null;
   /** At showdown: all players' revealed hole cards keyed by address */
   showdownHands?: Record<string, number[]>;
+  /**
+   * At showdown: true when at least two dealt-in players did not fold (real showdown).
+   * False on fold-out wins — clients must not expose uncalled winners' hole cards.
+   */
+  handWentToShowdown?: boolean;
   /** At showdown: winner(s), amount each receives, optional hand name, and 5 card indices forming best hand */
   winners?: { address: string; amount: string; handName?: string; winningCardIndices?: number[] }[];
   /** ISO wall time when the server will auto-start the next hand (showdown intermission only). */
@@ -1084,18 +1089,34 @@ export class PokerGameService {
         }
       }
 
-      // Showdown: reveal all hands and winners
+      // Showdown: winners always; hole cards only when ≥2 dealt players reached the end without folding.
       if (street === 'showdown') {
-        const allHoleResult = await pool.query(
-          'SELECT player_address, cards FROM poker_hand_hole_cards WHERE hand_id = $1',
+        const dealtHoleResult = await pool.query(
+          'SELECT player_address FROM poker_hand_hole_cards WHERE hand_id = $1',
           [handId]
         );
-        const showdownHands: Record<string, number[]> = {};
-        for (const row of allHoleResult.rows) {
-          const cards = Array.isArray(row.cards) ? row.cards : JSON.parse(row.cards ?? '[]');
-          showdownHands[this.normalizeAddress(row.player_address)] = cards;
+        const dealtAddrs = new Set(
+          dealtHoleResult.rows.map((r: any) => this.normalizeAddress(r.player_address))
+        );
+        let nonFoldedDealtCount = 0;
+        for (const addr of dealtAddrs) {
+          if (!foldedSet.has(addr)) nonFoldedDealtCount += 1;
         }
-        currentHand.showdownHands = showdownHands;
+        const handWentToShowdown = nonFoldedDealtCount >= 2;
+        currentHand.handWentToShowdown = handWentToShowdown;
+
+        if (handWentToShowdown) {
+          const allHoleResult = await pool.query(
+            'SELECT player_address, cards FROM poker_hand_hole_cards WHERE hand_id = $1',
+            [handId]
+          );
+          const showdownHands: Record<string, number[]> = {};
+          for (const row of allHoleResult.rows) {
+            const cards = Array.isArray(row.cards) ? row.cards : JSON.parse(row.cards ?? '[]');
+            showdownHands[this.normalizeAddress(row.player_address)] = cards;
+          }
+          currentHand.showdownHands = showdownHands;
+        }
 
         if (h.result) {
           try {

@@ -161,6 +161,11 @@ export interface PokerCurrentHand {
   nextHandAt?: string | null;
   /** At showdown: all players' revealed hole cards keyed by lowercase address */
   showdownHands?: Record<string, number[]>;
+  /**
+   * At showdown: true when at least two dealt-in players did not fold (real showdown).
+   * False on fold-out wins — uncalled winners' hole cards are not public.
+   */
+  handWentToShowdown?: boolean;
   /** At showdown: winner(s), amount each receives, optional hand name, and 5 card indices forming best hand */
   winners?: { address: string; amount: string; handName?: string; winningCardIndices?: number[] }[];
 }

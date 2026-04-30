@@ -32,6 +32,7 @@ type DemoState = {
     turnStartedAt: string | null;
     streetActions?: Record<number, { action: DemoSeatAction; amount: string }>;
     showdownHands?: Record<string, number[]>;
+    handWentToShowdown?: boolean;
     winners?: Array<{ address: string; amount: string; handName: string }>;
   };
   myHoleCards: number[] | null;
@@ -67,6 +68,7 @@ function stateFor(args: {
   bets: Record<number, number>;
   streetActions?: Record<number, { action: DemoSeatAction; amount: number }>;
   showdownHands?: Record<string, number[]>;
+  handWentToShowdown?: boolean;
   winners?: Array<{ address: string; amount: number; handName: string }>;
   waiting?: boolean;
 }): DemoState {
@@ -127,6 +129,9 @@ function stateFor(args: {
             ]),
           ),
           showdownHands: args.showdownHands,
+          ...(typeof args.handWentToShowdown === 'boolean'
+            ? { handWentToShowdown: args.handWentToShowdown }
+            : {}),
           winners: args.winners?.map((w) => ({
             address: w.address.toLowerCase(),
             amount: toWei(w.amount),
@@ -247,6 +252,7 @@ describe("Poker full round (10 players, mocked)", () => {
       folded: [2, 4, 8],
       bets: {},
       showdownHands,
+      handWentToShowdown: true,
       winners: [{ address: addr(3), amount: 3000, handName: "Two pair" }],
     });
     cy.window().then((win) => win.__POKER_E2E_TEST_API?.setState(showdown as any));

@@ -1,172 +1,382 @@
 'use client'
 
 import { cn } from '@/lib/utils'
-import {
-  homeSectionHeading2Class,
-  homeSectionSubtitleClass,
-  homeSectionTitleClass,
-  homeSectionTitleGradientClass,
-} from '@/lib/home-section-typography'
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useState } from 'react'
 
-/*
- * Build per-word animation data from the body text.
- * Words that need special styling are matched by exact string and given a className.
- */
-type Word = { text: string; className?: string }
+const RANKS = ['2', '3', '4', '5', '6', '7', '8', '9', '10', 'J', 'Q', 'K', 'A'] as const
+const SUITS = ['C', 'D', 'H', 'S'] as const
 
-const BODY_TEXT =
-  'Morbius is proof that a meme coin can become something bigger. The platform is for the community\u2014more utility for Morbius and any token, especially launches on PUMP.TIRES. We push utility through partnerships and shipping product. $MORBIUS is the in\u2011game currency on morbius.io and the reward for holders and LP providers.'
+/** Full 52-card filenames (matches `/public/BlackJack/Cards/PNG`). */
+const ALL_CARD_FILES: string[] = RANKS.flatMap((r) =>
+  SUITS.map((s) => `${r}${s}.png`),
+)
 
-const WORD_STYLES: Record<string, string> = {
-  Morbius: 'font-semibold text-white',
-  meme: 'font-semibold text-slate-100',
-  coin: 'font-semibold text-slate-100',
-  'community\u2014more': 'font-semibold text-slate-100',
-  utility: 'font-semibold text-slate-100',
-  any: 'font-semibold text-slate-100',
-  token: 'font-semibold text-slate-100',
-  'PUMP.TIRES.': 'bg-cyan-500 bg-clip-text font-bold uppercase tracking-wide text-transparent',
-  partnerships: 'font-semibold text-slate-100',
-  shipping: 'font-semibold text-slate-100',
-  'product.': 'font-semibold text-slate-100',
-  $MORBIUS: 'bg-cyan-500 bg-clip-text font-semibold text-transparent',
-  'morbius.io': 'font-semibold text-cyan-200/90',
-  holders: 'font-semibold text-slate-100',
-  LP: 'font-semibold text-slate-100',
-  'providers.': 'font-semibold text-slate-100',
+const SPADE_HIGH_TO_LOW = (
+  ['A', 'K', 'Q', 'J', '10', '9', '8', '7', '6', '5', '4', '3', '2'] as const
+).map((r) => `${r}S.png`)
+
+const ANIM_CLASSES = [
+  'animate-morbi-card-float',
+  'animate-morbi-card-drift',
+  'animate-morbi-card-wobble',
+  'animate-morbi-card-glow-pulse',
+  'animate-morbi-card-flutter',
+] as const
+
+function usePrefersReducedMotion(): boolean {
+  const [reduced, setReduced] = useState(false)
+  useEffect(() => {
+    const mq = window.matchMedia('(prefers-reduced-motion: reduce)')
+    setReduced(mq.matches)
+    const on = () => setReduced(mq.matches)
+    mq.addEventListener('change', on)
+    return () => mq.removeEventListener('change', on)
+  }, [])
+  return reduced
 }
 
-const BODY_WORDS: Word[] = BODY_TEXT.split(' ').map((w) => ({
-  text: w,
-  className: WORD_STYLES[w],
-}))
-
-function SlideUpBody({
-  isVisible,
+function CardImg({
+  file,
+  className,
+  style,
+  priority,
 }: {
-  isVisible: boolean
+  file: string
+  className?: string
+  style?: React.CSSProperties
+  priority?: boolean
 }) {
   return (
-    <p className="max-w-2xl mx-auto text-xl font-medium leading-relaxed text-slate-300 md:text-2xl">
-      {BODY_WORDS.map((word, i) => (
-        <span key={i}>
-          <span
-            className={cn('slide-up-word', word.className)}
-            data-visible={isVisible ? '' : undefined}
+    <img
+      src={`/BlackJack/Cards/PNG/${file}`}
+      alt=""
+      width={180}
+      height={252}
+      className={cn(
+        'pointer-events-none h-auto max-h-[28vh] w-[clamp(2.25rem,7.5vw,5.75rem)] select-none object-contain',
+        'drop-shadow-[0_10px_28px_rgba(0,0,0,0.65)]',
+        className,
+      )}
+      style={style}
+      loading={priority ? 'eager' : 'lazy'}
+      decoding="async"
+      draggable={false}
+    />
+  )
+}
+
+function StanzaFan() {
+  const accent = ['AH.png', 'AD.png', 'AC.png', 'KH.png', 'KD.png', 'QC.png', 'JD.png']
+  const n = SPADE_HIGH_TO_LOW.length
+  return (
+    <div className="relative flex min-h-[100dvh] w-full flex-col items-center justify-end pb-[6vh] pt-16 md:pb-[10vh]">
+      <div className="relative mx-auto h-[min(48vh,380px)] w-full max-w-5xl">
+        {SPADE_HIGH_TO_LOW.map((file, i) => {
+          const angle = -38 + (76 * i) / Math.max(1, n - 1)
+          return (
+            <CardImg
+              key={file}
+              file={file}
+              priority={i < 4}
+              className={cn(
+                'absolute bottom-0 left-1/2 origin-bottom motion-safe:opacity-100',
+                ANIM_CLASSES[i % ANIM_CLASSES.length],
+              )}
+              style={{
+                zIndex: i,
+                transform: `translateX(-50%) rotate(${angle}deg)`,
+                transformOrigin: '50% 100%',
+                animationDelay: `${i * 70}ms`,
+              }}
+            />
+          )
+        })}
+        {accent.map((file, i) => (
+          <CardImg
+            key={file}
+            file={file}
+            className={cn(
+              'absolute bottom-0 left-1/2 origin-bottom opacity-75 motion-safe:animate-morbi-card-float',
+            )}
+            style={{
+              zIndex: -1,
+              transform: `translateX(-50%) translate(${-140 + i * 42}px, 36px) rotate(${-18 + i * 5}deg)`,
+              transformOrigin: '50% 100%',
+              animationDelay: `${280 + i * 55}ms`,
+            }}
+          />
+        ))}
+      </div>
+    </div>
+  )
+}
+
+function StanzaOrbitRing() {
+  const outer = ALL_CARD_FILES.slice(0, 18)
+  const inner = ALL_CARD_FILES.slice(18, 36)
+
+  const arm = (
+    file: string,
+    i: number,
+    n: number,
+    translate: string,
+    offset: number,
+    compact: boolean,
+  ) => {
+    const angle = (360 / n) * i + offset
+    return (
+      <div
+        key={`${file}-${translate}-${i}`}
+        className="absolute left-1/2 top-1/2 h-0 w-0"
+        style={{
+          transform: `rotate(${angle}deg) ${translate}`,
+        }}
+      >
+        <div
+          className="motion-safe:animate-morbi-orbit-slow-reverse"
+          style={{ transform: 'translate(-50%, -50%)' }}
+        >
+          <CardImg
+            file={file}
+            className={cn(
+              compact
+                ? 'w-[clamp(1.75rem,5.5vw,3.5rem)]'
+                : 'w-[clamp(2.25rem,7vw,5rem)]',
+              ANIM_CLASSES[(i + offset) % ANIM_CLASSES.length],
+            )}
+            style={{ animationDelay: `${i * 45}ms` }}
+          />
+        </div>
+      </div>
+    )
+  }
+
+  return (
+    <div className="relative flex min-h-[100dvh] w-full items-center justify-center p-3 md:p-6">
+      <div
+        className="relative aspect-square w-[min(92vw,580px)] motion-safe:animate-morbi-orbit-slow"
+        style={{ contain: 'layout style' }}
+      >
+        {outer.map((file, i) => arm(file, i, outer.length, 'translateY(-44vmin)', 0, false))}
+        {inner.map((file, i) => arm(file, i, inner.length, 'translateY(-26vmin)', 10, true))}
+      </div>
+    </div>
+  )
+}
+
+function StanzaWaterfall() {
+  const cols: string[][] = [
+    ALL_CARD_FILES.filter((_, i) => i % 4 === 0).slice(0, 11),
+    ALL_CARD_FILES.filter((_, i) => i % 4 === 1).slice(0, 11),
+    ALL_CARD_FILES.filter((_, i) => i % 4 === 2).slice(0, 11),
+    ALL_CARD_FILES.filter((_, i) => i % 4 === 3).slice(0, 11),
+  ]
+  return (
+    <div className="relative flex min-h-[100dvh] w-full items-center justify-center px-1 py-6 md:px-4">
+      <div className="grid w-full max-w-6xl grid-cols-4 gap-x-0.5 md:gap-x-2">
+        {cols.map((column, ci) => (
+          <div
+            key={ci}
+            className="flex flex-col items-center"
+            style={{ marginTop: ci % 2 === 1 ? 16 : 0 }}
           >
-            {word.text}
-          </span>
-          {i < BODY_WORDS.length - 1 ? ' ' : null}
-        </span>
-      ))}
-    </p>
+            {column.map((file, ri) => (
+              <CardImg
+                key={`${file}-w-${ci}-${ri}`}
+                file={file}
+                className={cn(
+                  'w-[clamp(1.65rem,5vw,3rem)] max-h-none',
+                  ri % 3 === 0 && 'motion-safe:animate-morbi-levitate',
+                  ri % 3 === 1 && 'motion-safe:animate-morbi-sway',
+                  ri % 3 === 2 && 'motion-safe:animate-morbi-tilt',
+                  ANIM_CLASSES[(ci + ri) % ANIM_CLASSES.length],
+                )}
+                style={{
+                  marginTop: ri === 0 ? 0 : -38,
+                  animationDelay: `${(ci * 8 + ri) * 45}ms`,
+                  zIndex: column.length - ri,
+                }}
+              />
+            ))}
+          </div>
+        ))}
+      </div>
+    </div>
+  )
+}
+
+function StanzaFaceOff() {
+  const left = ALL_CARD_FILES.slice(0, 13)
+  const right = ALL_CARD_FILES.slice(13, 26)
+  return (
+    <div className="relative flex min-h-[100dvh] w-full flex-col items-center justify-center gap-10 px-2 py-10 md:flex-row md:gap-6">
+      <div className="relative h-[min(52vh,420px)] w-full max-w-md">
+        {left.map((file, i) => {
+          const angle = -28 + (56 * i) / 12
+          return (
+            <CardImg
+              key={`${file}-l-${i}`}
+              file={file}
+              className={cn(
+                'absolute bottom-0 right-[12%] origin-bottom',
+                ANIM_CLASSES[i % ANIM_CLASSES.length],
+              )}
+              style={{
+                zIndex: i,
+                transform: `rotate(${angle}deg) translateX(${i * 2}px)`,
+                transformOrigin: '100% 100%',
+                animationDelay: `${i * 45}ms`,
+              }}
+            />
+          )
+        })}
+      </div>
+      <div className="relative h-[min(52vh,420px)] w-full max-w-md">
+        {right.map((file, i) => {
+          const angle = 28 - (56 * i) / 12
+          return (
+            <CardImg
+              key={`${file}-r-${i}`}
+              file={file}
+              className={cn(
+                'absolute bottom-0 left-[12%] origin-bottom',
+                ANIM_CLASSES[(i + 2) % ANIM_CLASSES.length],
+              )}
+              style={{
+                zIndex: i,
+                transform: `rotate(${angle}deg) translateX(${-i * 2}px)`,
+                transformOrigin: '0% 100%',
+                animationDelay: `${i * 45}ms`,
+              }}
+            />
+          )
+        })}
+      </div>
+    </div>
+  )
+}
+
+function StanzaFullDeckGrid() {
+  const rows = SUITS.map((s) => RANKS.map((r) => `${r}${s}.png`))
+  return (
+    <div className="relative flex min-h-[100dvh] w-full items-center justify-center px-1 py-6 md:px-3">
+      <div
+        className="grid w-full max-w-7xl gap-1 md:gap-1.5"
+        style={{
+          gridTemplateColumns: 'repeat(13, minmax(0, 1fr))',
+        }}
+      >
+        {rows.flatMap((row) =>
+          row.map((file, i) => (
+            <CardImg
+              key={`${file}-grid-${i}`}
+              file={file}
+              className={cn(
+                'w-full max-w-[52px] motion-safe:animate-morbi-card-glow-pulse sm:max-w-[56px] md:max-w-[64px]',
+                ANIM_CLASSES[i % ANIM_CLASSES.length],
+              )}
+              style={{
+                animationDelay: `${(i % 13) * 35 + Math.floor(i / 13) * 120}ms`,
+              }}
+            />
+          )),
+        )}
+      </div>
+    </div>
+  )
+}
+
+function MorbiusCardsReduced() {
+  const sample = [
+    'AS.png',
+    'KS.png',
+    'QS.png',
+    'JS.png',
+    '10S.png',
+    'AH.png',
+    'KH.png',
+    'QH.png',
+    'JH.png',
+    '10H.png',
+    'AD.png',
+    'KD.png',
+  ]
+  return (
+    <section
+      id="what-is-morbius"
+      className="relative w-full max-w-6xl scroll-mt-20 px-2 py-12 md:px-4 md:py-16"
+      aria-label="Morbius playing card showcase"
+    >
+      <h2 className="sr-only">Morbius playing card showcase</h2>
+      <div
+        className="relative overflow-hidden rounded-2xl border border-cyan-500/25 p-8"
+        style={{
+          background: 'linear-gradient(325deg, rgba(20, 20, 20, 0.85), rgba(40, 40, 40, 0.65))',
+          boxShadow:
+            'inset 0 3px 6px rgba(0, 0, 0, 0.8), inset 0 -3px 6px rgba(255, 255, 255, 0.1), 0 1px 3px rgba(0, 0, 0, 0.5)',
+        }}
+      >
+        <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_50%_45%,rgba(34,211,238,0.12),transparent_68%)]" />
+        <div className="relative flex flex-wrap items-center justify-center gap-3">
+          {sample.map((file, i) => (
+            <CardImg key={file} file={file} className="max-h-[20vh] w-[clamp(2.5rem,12vw,4rem)]" />
+          ))}
+        </div>
+      </div>
+    </section>
+  )
+}
+
+function MorbiusCardsSnapTheater() {
+  return (
+    <section
+      id="what-is-morbius"
+      className="relative mx-auto w-full max-w-7xl scroll-mt-20"
+      aria-label="Morbius playing card showcase"
+    >
+      <h2 className="sr-only">Morbius playing card showcase</h2>
+
+      <div
+        className="relative h-[100dvh] max-h-[100svh] overflow-hidden rounded-2xl border border-cyan-500/30"
+        style={{
+          background: 'linear-gradient(325deg, rgba(20, 20, 20, 0.88), rgba(40, 40, 40, 0.62))',
+          boxShadow:
+            'inset 0 3px 6px rgba(0, 0, 0, 0.8), inset 0 -3px 6px rgba(255, 255, 255, 0.1), 0 1px 3px rgba(0, 0, 0, 0.5)',
+        }}
+      >
+        <div className="pointer-events-none absolute inset-0 z-0 bg-[radial-gradient(circle_at_50%_42%,rgba(34,211,238,0.14),transparent_65%)]" />
+        <div
+          className={cn(
+            'relative z-[1] h-full w-full snap-y snap-mandatory overflow-x-hidden overflow-y-auto scroll-smooth',
+            'overscroll-y-contain',
+          )}
+          style={{ WebkitOverflowScrolling: 'touch' }}
+        >
+          <div className="snap-start snap-always min-h-[100dvh]">
+            <StanzaFan />
+          </div>
+          <div className="snap-start snap-always min-h-[100dvh]">
+            <StanzaOrbitRing />
+          </div>
+          <div className="snap-start snap-always min-h-[100dvh]">
+            <StanzaWaterfall />
+          </div>
+          <div className="snap-start snap-always min-h-[100dvh]">
+            <StanzaFaceOff />
+          </div>
+          <div className="snap-start snap-always min-h-[100dvh]">
+            <StanzaFullDeckGrid />
+          </div>
+        </div>
+      </div>
+    </section>
   )
 }
 
 export function MorbiusInfoSection() {
-  const sectionRef = useRef<HTMLElement>(null)
-  const [contentVisible, setContentVisible] = useState(false)
-  const [logoY, setLogoY] = useState(0)
-
-  useEffect(() => {
-    const el = sectionRef.current
-    if (!el) return
-
-    const observer = new IntersectionObserver(
-      ([entry]) => {
-        if (entry.isIntersecting) {
-          setContentVisible(true)
-          observer.disconnect()
-        }
-      },
-      { threshold: 0.25 },
-    )
-
-    observer.observe(el)
-    return () => observer.disconnect()
-  }, [])
-
-  // Parallax scroll for background logo
-  useEffect(() => {
-    const el = sectionRef.current
-    if (!el) return
-
-    let raf = 0
-    const onScroll = () => {
-      cancelAnimationFrame(raf)
-      raf = requestAnimationFrame(() => {
-        const rect = el.getBoundingClientRect()
-        const vh = window.innerHeight
-        const progress = 1 - (rect.bottom / (vh + rect.height))
-        const y = (0.5 - progress) * 70
-        setLogoY(y)
-      })
-    }
-
-    window.addEventListener('scroll', onScroll, { passive: true })
-    onScroll()
-    return () => {
-      window.removeEventListener('scroll', onScroll)
-      cancelAnimationFrame(raf)
-    }
-  }, [])
-
-  return (
-    <section
-      ref={sectionRef}
-      id="what-is-morbius"
-      className="relative w-full max-w-2xl mx-auto px-4 py-12 md:py-16 scroll-mt-20 overflow-hidden"
-    >
-      {/* ── Parallax background logo ── */}
-      <div
-        className="pointer-events-none absolute inset-x-0 top-0 bottom-0 z-0 flex items-center justify-center"
-        aria-hidden
-      >
-        <img
-          src="/morbius/OfficialMorbiusLogo.png"
-          alt=""
-          className="w-[700px] max-w-[90vw] opacity-40 will-change-transform"
-          style={{ transform: `translateY(${logoY}%)` }}
-        />
-      </div>
-
-      <div className="relative z-10 text-center mb-12 md:mb-16">
-        {/* ── Title: slide-up ── */}
-        <h2
-          className={cn(
-            homeSectionTitleClass,
-            'mb-5 slide-up-word',
-          )}
-          data-visible={contentVisible ? '' : undefined}
-        >
-          <span className="text-white">What is </span>
-          <span className={homeSectionTitleGradientClass}>Morbius?</span>
-        </h2>
-
-        {/* ── Subtitle: slide-up ── */}
-        <p
-          className={cn(homeSectionSubtitleClass, 'mt-4 max-w-2xl mx-auto slide-up-word')}
-          data-visible={contentVisible ? '' : undefined}
-        >
-          The Morbius token was created on Pump.Tires on PulseChain on November 11th, 2025.
-          Holders of Morbius may see direct benefits from holding the token but it is not
-          required to play any games on the site.
-        </p>
-
-        {/* ── Engine heading: slide-up ── */}
-        <h2
-          className={cn(homeSectionHeading2Class, 'mt-10 mb-5 slide-up-word')}
-          data-visible={contentVisible ? '' : undefined}
-        >
-          <span className={homeSectionTitleGradientClass}>
-            Not just a game, but a tokenomics engine.
-          </span>
-        </h2>
-
-        {/* ── Body: slide-up (same timing as all content) ── */}
-        <SlideUpBody isVisible={contentVisible} />
-      </div>
-    </section>
-  )
+  const reduced = usePrefersReducedMotion()
+  if (reduced) {
+    return <MorbiusCardsReduced />
+  }
+  return <MorbiusCardsSnapTheater />
 }
