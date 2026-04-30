@@ -214,37 +214,54 @@ export function PokerTable({ state, currentPlayerAddress, timeLeft, chatBubbleBy
   }, [hand?.handId, hand?.street, hand?.communityCards?.length]);
 
   const totalCommunityCount = hand?.communityCards?.length ?? 0;
-  const showdownAddrsAll = useMemo(
-    () => (hand?.showdownHands ? Object.keys(hand.showdownHands) : []),
-    [hand?.showdownHands],
-  );
-  // Reveal order: non-winners first (each in turn), winners last for max suspense.
-  const revealOrder = useMemo(() => {
-    const winnerLower = new Set((hand?.winners ?? []).map((w) => w.address.toLowerCase()));
-    const losers = showdownAddrsAll.filter((a) => !winnerLower.has(a.toLowerCase()));
-    const winners = showdownAddrsAll.filter((a) => winnerLower.has(a.toLowerCase()));
-    return [...losers, ...winners];
-  }, [showdownAddrsAll, hand?.winners]);
+  /** Stable across object reference churn from WS — used only to re-run showdown scheduling when content changes. */
+  const showdownRevealScheduleKey = useMemo(() => {
+    if (!hand?.showdownHands) return '';
+    return Object.keys(hand.showdownHands)
+      .map((a) => a.toLowerCase())
+      .sort()
+      .join('|');
+  }, [hand?.showdownHands]);
+  const winnersRevealScheduleKey = useMemo(() => {
+    if (!hand?.winners?.length) return '';
+    return hand.winners
+      .map((w) => w.address.toLowerCase())
+      .sort()
+      .join('|');
+  }, [hand?.winners]);
 
   const [revealedCommunityCount, setRevealedCommunityCount] = useState(0);
   const [revealedHandAddrs, setRevealedHandAddrs] = useState<Set<string>>(new Set());
   const [medallionReady, setMedallionReady] = useState(false);
   const revealHandIdRef = useRef<string | null>(null);
+  /** Dedupes effect re-runs for the same hand when only object references changed (avoids clearing timeouts then bailing). */
+  const revealScheduleSigRef = useRef<string | null>(null);
 
   useEffect(() => {
     if (!isShowdownWithWinners || !hand?.handId) {
       // Reset whenever we leave the showdown state (new hand, etc).
       if (revealHandIdRef.current !== null) {
         revealHandIdRef.current = null;
+        revealScheduleSigRef.current = null;
         setRevealedCommunityCount(0);
         setRevealedHandAddrs(new Set());
         setMedallionReady(false);
       }
       return;
     }
-    if (revealHandIdRef.current === hand.handId) return;
+
+    const scheduleSig = `${hand.handId}\u0001${showdownRevealScheduleKey}\u0001${winnersRevealScheduleKey}\u0001${totalCommunityCount}`;
+    if (revealScheduleSigRef.current === scheduleSig) return;
+    revealScheduleSigRef.current = scheduleSig;
+
     const isFirstObservation = revealHandIdRef.current === null;
     revealHandIdRef.current = hand.handId;
+
+    const showdownAddrsAll = hand.showdownHands ? Object.keys(hand.showdownHands) : [];
+    const winnerLower = new Set((hand.winners ?? []).map((w) => w.address.toLowerCase()));
+    const losers = showdownAddrsAll.filter((a) => !winnerLower.has(a.toLowerCase()));
+    const winners = showdownAddrsAll.filter((a) => winnerLower.has(a.toLowerCase()));
+    const revealOrder = [...losers, ...winners];
 
     // Reconnect heuristic: if this is the very first hand we're seeing and it
     // arrives already in showdown, we likely joined mid-resolve — jump to end.
@@ -294,7 +311,13 @@ export function PokerTable({ state, currentPlayerAddress, timeLeft, chatBubbleBy
     return () => {
       for (const t of timeouts) clearTimeout(t);
     };
-  }, [isShowdownWithWinners, hand?.handId, totalCommunityCount, showdownAddrsAll, revealOrder]);
+  }, [
+    isShowdownWithWinners,
+    hand?.handId,
+    totalCommunityCount,
+    showdownRevealScheduleKey,
+    winnersRevealScheduleKey,
+  ]);
 
   // What the rest of the component should treat as "the medallion moment".
   const showFinalShowdownVisuals = !!isShowdownWithWinners && medallionReady;
