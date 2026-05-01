@@ -53,6 +53,8 @@ interface PokerHeaderBarProps {
     supported: boolean;
     onToggle: () => void;
   };
+  /** Center column of the header grid (e.g. tournament Stream voice strip). */
+  voiceSlot?: React.ReactNode;
 }
 
 export function PokerHeaderBar({
@@ -87,6 +89,7 @@ export function PokerHeaderBar({
   setTipAnimating,
   onTipDealer,
   voiceCommands,
+  voiceSlot,
 }: PokerHeaderBarProps) {
   const [botsMenuOpen, setBotsMenuOpen] = useState(false);
   const [botCountInput, setBotCountInput] = useState('4');
@@ -153,7 +156,9 @@ export function PokerHeaderBar({
       ) : (
         <div className="min-w-0" />
       )}
-      <div aria-hidden className="min-w-0" />
+      <div className="min-w-0 flex justify-center items-center overflow-hidden px-0.5 self-center">
+        {voiceSlot ?? null}
+      </div>
       <div className="flex items-center justify-end gap-1.5 shrink-0 relative">
         {showTableBrandingActions && onOpenTableLogoSponsor && onTipDealer && setTipAnimating && (
           <>

@@ -78,6 +78,11 @@ export interface CardDisplayProps {
    * When omitted, falls back to a fixed offset (`x: -80` for hole, `y: -70` for community).
    */
   dealFromOffset?: { dx: number; dy: number };
+  /**
+   * Skip fly-in from pot (hole/community variants). Used for showdown staging so
+   * face-up reveals do not replay the initial deal animation.
+   */
+  suppressEntryMotion?: boolean;
 }
 
 const dealVariants = {
@@ -151,8 +156,11 @@ export function CardDisplay({
   dealDelay = 0,
   variant,
   dealFromOffset,
+  suppressEntryMotion = false,
 }: CardDisplayProps) {
   const { dx, dy } = dealFromOffset ?? { dx: variant === 'community' ? 0 : -80, dy: variant === 'community' ? -70 : 0 };
+  const entryDelay = suppressEntryMotion ? 0 : dealDelay;
+  const motionInitial = suppressEntryMotion ? false : 'hidden';
   // Stable reference for Framer Motion: a new object every render can re-trigger community/hole deal motion
   // when unrelated parents re-render (e.g. turn timer), causing flop cards to replay their slam-in.
   const activeVariants = useMemo(() => {
@@ -183,10 +191,10 @@ export function CardDisplay({
         <motion.div
           key="face-down"
           variants={activeVariants}
-          initial="hidden"
+          initial={motionInitial}
           animate="visible"
           exit={hasExit ? 'exit' : undefined}
-          custom={dealDelay}
+          custom={entryDelay}
           className="relative overflow-hidden"
           style={{ ...sizeStyle, boxShadow: cardShadow, transformStyle: 'preserve-3d' }}
         >
@@ -220,14 +228,14 @@ export function CardDisplay({
         <motion.div
           key={`card-${cardIndex}`}
           variants={activeVariants}
-          initial="hidden"
+          initial={motionInitial}
           animate={hasExit ? 'visible' : {
             opacity: 1,
             scale: isWinningCard ? 1.08 : 1,
             rotateX: 0,
           }}
           exit={hasExit ? 'exit' : undefined}
-          custom={dealDelay}
+          custom={entryDelay}
           className="relative overflow-hidden rounded-md select-none"
           style={{
             ...sizeStyle,
@@ -243,7 +251,7 @@ export function CardDisplay({
             zIndex: isWinningCard ? 30 : undefined,
           }}
           transition={hasExit ? undefined : {
-            delay: dealDelay,
+            delay: entryDelay,
             type: 'spring',
             stiffness: 260,
             damping: 18,

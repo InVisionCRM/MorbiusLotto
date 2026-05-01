@@ -27,13 +27,19 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
+import {
+  Accordion,
+  AccordionContent,
+  AccordionItem,
+  AccordionTrigger,
+} from '@/components/ui/accordion';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Dialog, DialogOverlay, DialogPortal } from '@/components/ui/dialog';
 import * as DialogPrimitive from '@radix-ui/react-dialog';
 import { cn } from '@/lib/utils';
 import type { PieLabelRenderProps } from 'recharts';
 import { Cell, Pie, PieChart, ResponsiveContainer } from 'recharts';
-import { ConfirmActionCard } from '@/components/shared/ConfirmActionCard';
+import { PokerTournamentSharePanel } from '@/components/poker/tournament/PokerTournamentSharePanel';
 import { Confetti, type ConfettiRef } from '@/components/ui/confetti';
 import { Prc20TokenPicker, type SelectedPrc20Token } from '@/components/shared/Prc20TokenPicker';
 import { useTokenPriceUsd } from '@/hooks/use-token-price-usd';
@@ -427,179 +433,320 @@ export interface PokerTournamentCreatorProps {
   ) => Promise<{ tournamentId: string; pinCode?: string | null } | null>;
 }
 
+/** Embossed Plinko-style panel — shared by tab bar, FAQ, and tournament name field. */
+const POKER_BASICS_FAQ_PANEL_STYLE: React.CSSProperties = {
+  background: 'linear-gradient(325deg, rgba(20, 20, 20, 0.8), rgba(40, 40, 40, 0.6))',
+  boxShadow: 'inset 0 3px 6px rgba(0, 0, 0, 0.8), inset 0 -3px 6px rgba(255, 255, 255, 0.1), 0 1px 3px rgba(0, 0, 0, 0.5)',
+  border: '1px inset rgba(60, 60, 60, 0.5)',
+  borderRadius: '1rem',
+};
+
 const TAB_BAR =
-  'flex h-auto min-h-10 flex-wrap items-stretch justify-center gap-1 p-1 rounded-xl border border-cyan-500/25 bg-black/30 shadow-[inset_0_2px_6px_rgba(0,0,0,0.65)]';
+  'relative z-[1] grid h-auto min-h-10 w-full grid-cols-2 gap-1 border-0 bg-transparent p-1 shadow-none sm:grid-cols-4 text-white/70';
 const TAB_TRIGGER =
-  'inline-flex min-w-0 flex-1 basis-0 items-center justify-center rounded-lg px-2 py-2 text-center text-xs font-medium text-white/65 data-[state=active]:text-white data-[state=active]:bg-gradient-to-br data-[state=active]:from-cyan-600/35 data-[state=active]:to-blue-600/25 data-[state=active]:border data-[state=active]:border-cyan-500/35 data-[state=active]:shadow-sm sm:px-3';
+  'inline-flex min-h-10 w-full min-w-0 items-center justify-center rounded-lg px-2 py-2 text-center text-[11px] font-medium leading-snug whitespace-normal text-white/65 data-[state=active]:text-white data-[state=active]:bg-gradient-to-br data-[state=active]:from-cyan-600/35 data-[state=active]:to-blue-600/25 data-[state=active]:border data-[state=active]:border-cyan-500/35 data-[state=active]:shadow-sm sm:text-xs sm:px-3';
 
 const BLIND_ROLODEX_ROW_PX = 40;
 
-/** Row height and viewport for compact chip / player pickers (Basics tab). */
-const SMALL_ROLODEX_ROW_PX = 28;
-const SMALL_ROLODEX_VIEW_PX = 108;
-const SMALL_ROLODEX_PAD_PX = (SMALL_ROLODEX_VIEW_PX - SMALL_ROLODEX_ROW_PX) / 2;
+const PLAYER_COUNT_OPTIONS: readonly number[] = [2, 3, 4, 5, 6, 7, 8, 9, 10];
 
-const BUY_IN_ROLODEX_VALUES: readonly number[] = [
+const CHIPS_POOL_SELECT_VALUES: readonly number[] = [
   50, 100, 250, 500, 750, 1000, 1500, 2000, 2500, 3000, 4000, 5000, 7500, 10000, 15000, 25000, 50000, 100000,
 ];
 
-const PLAYER_COUNT_ROLODEX_VALUES: readonly number[] = [2, 3, 4, 5, 6, 7, 8, 9, 10];
+const STARTING_STACK_SELECT_VALUES: readonly number[] = STARTING_STACK_PRESETS.map((p) => parseInt(p.value, 10));
 
-const STARTING_STACK_ROLODEX_VALUES: readonly number[] = STARTING_STACK_PRESETS.map((p) =>
-  parseInt(p.value, 10),
-);
-
-/** Small scroll-snap column + ± for discrete chip amounts or seat counts. */
-function ScrollSnapSmallRolodex({
-  values,
-  value,
-  onChange,
-  suffix,
-  ariaLabelDecrease,
-  ariaLabelIncrease,
-}: {
-  values: readonly number[];
-  value: number;
-  onChange: (n: number) => void;
-  suffix?: string;
-  ariaLabelDecrease: string;
-  ariaLabelIncrease: string;
-}) {
-  const scrollRef = useRef<HTMLDivElement>(null);
-  const lastEmitted = useRef(value);
-  const merged = useMemo(() => {
-    const s = new Set<number>([...values, value]);
-    return Array.from(s).sort((a, b) => a - b);
-  }, [values, value]);
-
-  const scrollToValue = useCallback(
-    (v: number) => {
-      const el = scrollRef.current;
-      if (!el) return;
-      const i = merged.indexOf(v);
-      if (i < 0) return;
-      const pad = (el.clientHeight - SMALL_ROLODEX_ROW_PX) / 2;
-      const top = pad + (i + 0.5) * SMALL_ROLODEX_ROW_PX - el.clientHeight / 2;
-      el.scrollTop = Math.max(0, Math.min(top, el.scrollHeight - el.clientHeight));
-    },
-    [merged],
-  );
-
-  useLayoutEffect(() => {
-    scrollToValue(value);
-    lastEmitted.current = value;
-  }, [value, merged, scrollToValue]);
-
-  const handleScroll = useCallback(() => {
-    const el = scrollRef.current;
-    if (!el) return;
-    const pad = (el.clientHeight - SMALL_ROLODEX_ROW_PX) / 2;
-    const center = el.scrollTop + el.clientHeight / 2;
-    const idx = Math.round((center - pad) / SMALL_ROLODEX_ROW_PX - 0.5);
-    const i = Math.max(0, Math.min(merged.length - 1, idx));
-    const v = merged[i];
-    if (v !== lastEmitted.current) {
-      lastEmitted.current = v;
-      onChange(v);
+function snapToNearestInList(n: number, list: readonly number[]): number {
+  if (list.length === 0) return n;
+  let best = list[0];
+  let bestAbs = Math.abs(best - n);
+  for (let i = 1; i < list.length; i++) {
+    const v = list[i];
+    const d = Math.abs(v - n);
+    if (d < bestAbs || (d === bestAbs && v > best)) {
+      best = v;
+      bestAbs = d;
     }
-  }, [merged, onChange]);
+  }
+  return best;
+}
 
-  const nudge = useCallback(
-    (delta: number) => {
-      const i = merged.indexOf(lastEmitted.current);
-      const ni = Math.max(0, Math.min(merged.length - 1, i + delta));
-      const next = merged[ni];
-      scrollToValue(next);
-      lastEmitted.current = next;
-      onChange(next);
-    },
-    [merged, onChange, scrollToValue],
-  );
+type PokerCreatorFaqEntry = { q: string; a: React.ReactNode };
 
+function PokerTournamentTabFaqPanel({
+  idPrefix,
+  entries,
+}: {
+  idPrefix: string;
+  entries: readonly PokerCreatorFaqEntry[];
+}) {
+  if (entries.length === 0) return null;
   return (
-    <div className="flex items-stretch gap-1.5">
-      <div className="flex shrink-0 flex-col justify-center gap-0.5">
-        <button
-          type="button"
-          onClick={() => nudge(-1)}
-          aria-label={ariaLabelDecrease}
-          className="flex h-7 w-7 items-center justify-center rounded-lg border border-cyan-500/30 bg-black/40 text-cyan-200 shadow-[inset_0_2px_4px_rgba(0,0,0,0.5)] transition-colors hover:bg-cyan-500/15 hover:text-white"
-        >
-          <span className="text-base leading-none" aria-hidden>
-            −
-          </span>
-        </button>
-        <button
-          type="button"
-          onClick={() => nudge(1)}
-          aria-label={ariaLabelIncrease}
-          className="flex h-7 w-7 items-center justify-center rounded-lg border border-cyan-500/30 bg-black/40 text-cyan-200 shadow-[inset_0_2px_4px_rgba(0,0,0,0.5)] transition-colors hover:bg-cyan-500/15 hover:text-white"
-        >
-          <span className="text-base leading-none" aria-hidden>
-            +
-          </span>
-        </button>
-      </div>
-      <div className="relative min-w-0 flex-1">
-        <div
-          className="pointer-events-none absolute inset-x-0 top-1/2 z-10 h-7 -translate-y-1/2 border-y border-cyan-500/35 bg-cyan-500/[0.08]"
-          aria-hidden
-        />
-        <div
-          ref={scrollRef}
-          onScroll={handleScroll}
-          tabIndex={0}
-          onKeyDown={(e) => {
-            if (e.key === 'ArrowUp') {
-              e.preventDefault();
-              nudge(-1);
-            } else if (e.key === 'ArrowDown') {
-              e.preventDefault();
-              nudge(1);
-            } else if (e.key === 'PageUp') {
-              e.preventDefault();
-              nudge(-3);
-            } else if (e.key === 'PageDown') {
-              e.preventDefault();
-              nudge(3);
-            }
-          }}
-          className="relative z-0 overflow-y-auto overflow-x-hidden rounded-xl border border-cyan-500/25 bg-black/30 shadow-[inset_0_2px_6px_rgba(0,0,0,0.65)] outline-none focus-visible:ring-2 focus-visible:ring-cyan-500/45 [scrollbar-color:rgba(34,211,238,0.35)_transparent] [scrollbar-width:thin]"
-          style={{
-            height: SMALL_ROLODEX_VIEW_PX,
-            scrollSnapType: 'y proximity',
-            WebkitMaskImage: 'linear-gradient(to bottom, transparent 0%, black 14%, black 86%, transparent 100%)',
-            maskImage: 'linear-gradient(to bottom, transparent 0%, black 14%, black 86%, transparent 100%)',
-          }}
-        >
-          <div style={{ paddingTop: SMALL_ROLODEX_PAD_PX, paddingBottom: SMALL_ROLODEX_PAD_PX }}>
-            {merged.map((n) => {
-              const active = n === value;
-              return (
-                <button
-                  key={n}
-                  type="button"
-                  style={{ height: SMALL_ROLODEX_ROW_PX, scrollSnapAlign: 'center' }}
-                  onClick={() => {
-                    scrollToValue(n);
-                    lastEmitted.current = n;
-                    onChange(n);
-                  }}
-                  className={`flex w-full shrink-0 items-center justify-center gap-0.5 text-xs font-semibold tabular-nums transition-colors ${
-                    active ? 'text-cyan-200' : 'text-white/40 hover:text-white/70'
-                  }`}
-                >
-                  {n.toLocaleString()}
-                  {suffix ? <span className="text-[9px] font-medium uppercase tracking-wide opacity-75">{suffix}</span> : null}
-                </button>
-              );
-            })}
-          </div>
-        </div>
-      </div>
-    </div>
+    <section className="relative w-full py-4 mt-4" style={POKER_BASICS_FAQ_PANEL_STYLE}>
+      <div
+        className="absolute inset-0 bg-[radial-gradient(circle_at_50%_50%,rgba(34,211,238,0.08),transparent_70%)] rounded-[1rem] pointer-events-none"
+        aria-hidden
+      />
+      <h2 className="text-lg font-bold text-cyan-300/95 mb-3 px-4 relative">FAQ</h2>
+      <Accordion type="single" collapsible className="w-full relative px-2 sm:px-3">
+        {entries.map((faq, i) => (
+          <AccordionItem key={`${idPrefix}-item-${i}`} value={`${idPrefix}-faq-${i}`} className="border-cyan-500/20 text-left">
+            <AccordionTrigger className="text-white/90 hover:text-cyan-300 py-3 text-sm font-medium [&[data-state=open]>svg]:rotate-180 px-2">
+              {faq.q}
+            </AccordionTrigger>
+            <AccordionContent className="text-white/80 text-sm pb-3 px-2">{faq.a}</AccordionContent>
+          </AccordionItem>
+        ))}
+      </Accordion>
+    </section>
   );
 }
+
+const POKER_CREATOR_TYPE_FAQ: readonly PokerCreatorFaqEntry[] = [
+  {
+    q: 'What is the difference between Freeroll and Buy-in?',
+    a: (
+      <p className="text-white/80 text-sm leading-relaxed">
+        <span className="text-cyan-200/90 font-medium">Freeroll:</span> you fund the prize (chips, platform promo, or a custom token on-chain). Players join free.{' '}
+        <span className="text-cyan-200/90 font-medium">Buy-in:</span> each player pays tournament chips to enter; the pool comes from those entries (MORBIUS-backed); the creator does not post the pool.
+      </p>
+    ),
+  },
+  {
+    q: 'Why does a name step appear after I pick a model?',
+    a: (
+      <p className="text-white/80 text-sm leading-relaxed">
+        So you confirm funding type first, then set the public name in one place. After you tap Proceed, the rest of the tabs unlock so you can finish blinds, prizes, and schedule.
+      </p>
+    ),
+  },
+  {
+    q: 'What does a private tournament do?',
+    a: (
+      <p className="text-white/80 text-sm leading-relaxed">
+        Optional PIN (4–12 digits) is required to join. Use it for invite-only tables. You set it here on the Type tab; you can change it later on this tab before you publish.
+      </p>
+    ),
+  },
+  {
+    q: 'What are custom PRC-20 prizes?',
+    a: (
+      <p className="text-white/80 text-sm leading-relaxed">
+        For freerolls only: instead of off-chain chips, you can pick any PulseChain token and deposit the prize on-chain when you publish (approve, then deposit). Prize splits on the Prizes tab apply to
+        that token amount.
+      </p>
+    ),
+  },
+  {
+    q: 'What happens when I click Review and create?',
+    a: (
+      <p className="text-white/80 text-sm leading-relaxed">
+        After you finish all tabs, Review and create opens a summary. Most tournaments publish with one confirmation. Custom-token freerolls need approve and deposit wallet steps before the server
+        creates the event.
+      </p>
+    ),
+  },
+];
+
+const POKER_CREATOR_SCHEDULE_FAQ: readonly PokerCreatorFaqEntry[] = [
+  {
+    q: 'What time zone is the start time?',
+    a: (
+      <p className="text-white/80 text-sm leading-relaxed">
+        {`The date and clock pickers use your browser's local time zone. What you see is what players in your region expect; communicate UTC or local time in your community if players are global.`}
+      </p>
+    ),
+  },
+  {
+    q: 'What happens if my tournament does not get the minimum player count? Do I or already registered players lose our funds?',
+    a: (
+      <p className="text-white/80 text-sm leading-relaxed">
+        No. When the scheduled start time is reached, if registered players are still below your minimum, the event is cancelled automatically. Anyone who paid a buy-in is refunded to their poker chip
+        balance; guaranteed chip pools go back per house rules. Custom-token freerolls use the on-chain cancel path so deposits can be reclaimed—nobody keeps buy-ins because the table never opened.
+      </p>
+    ),
+  },
+  {
+    q: 'What is a scheduled Sit & Go?',
+    a: (
+      <p className="text-white/80 text-sm leading-relaxed">
+        A Sit & Go starts when enough players are ready—here, it is tied to the calendar time you set. Players can register beforehand; at the scheduled moment the table can open if the minimum seats
+        are filled (see Basics FAQ if the minimum is not met).
+      </p>
+    ),
+  },
+  {
+    q: 'Can I change the start time later?',
+    a: (
+      <p className="text-white/80 text-sm leading-relaxed">
+        No, after you publish a tournament, the scheduled time is locked. You would have to cancel and recreate the tournament with your new time.
+      </p>
+    ),
+  },
+];
+
+const POKER_CREATOR_RULES_FAQ: readonly PokerCreatorFaqEntry[] = [
+  {
+    q: 'What do the three blind increase modes mean?',
+    a: (
+      <div className="space-y-2 text-white/80 text-sm leading-relaxed">
+        <p>
+          <span className="text-cyan-200/90 font-medium">After each knockout:</span> blinds jump when someone busts out—slow play stays at low blinds longer.
+        </p>
+        <p>
+          <span className="text-cyan-200/90 font-medium">Every N hands:</span> levels advance after a fixed number of completed hands (shown in the ladder), not on wall-clock minutes alone.
+        </p>
+        <p>
+          <span className="text-cyan-200/90 font-medium">Wall-clock timer:</span> each level lasts your chosen minutes of real time, then blinds bump regardless of how many hands finished.
+        </p>
+      </div>
+    ),
+  },
+  {
+    q: 'What is time per blind level?',
+    a: (
+      <p className="text-white/80 text-sm leading-relaxed">
+        Only used when you choose wall-clock timer mode. Pick how many minutes each level lasts ({BLIND_INTERVAL_MINUTES_MIN}–{BLIND_INTERVAL_MINUTES_MAX}); the rolodex sets that interval for the whole
+        ladder.
+      </p>
+    ),
+  },
+  {
+    q: 'Does the blind schedule table match the live tournament?',
+    a: (
+      <p className="text-white/80 text-sm leading-relaxed">
+        The table previews the default ladder (small/big blinds per level, and hands-per-level when in hand-based mode). In-game timing still follows the mode you selected—this is the structure
+        players will climb through.
+      </p>
+    ),
+  },
+];
+
+const POKER_CREATOR_PRIZES_FAQ: readonly PokerCreatorFaqEntry[] = [
+  {
+    q: 'Why do prize presets always total 100%?',
+    a: (
+      <p className="text-white/80 text-sm leading-relaxed">
+        Paid finishing positions must split the whole pool. Presets assign a percentage to each paid spot; zeros mean unpaid ranks. The ladder length follows your maximum player count on the Basics
+        tab.
+      </p>
+    ),
+  },
+  {
+    q: 'What does the pie chart estimate?',
+    a: (
+      <p className="text-white/80 text-sm leading-relaxed">
+        It is a preview from your current buy-in or guaranteed pool (or custom token amount for that path) and seat count. Final payouts still follow tournament results and house rules at settlement.
+      </p>
+    ),
+  },
+  {
+    q: 'How does max players affect prizes?',
+    a: (
+      <p className="text-white/80 text-sm leading-relaxed">
+        The preset is applied up to your max seats (2–10). If you lower max players, the percent rows shrink accordingly so the chart always matches how many seats can cash.
+      </p>
+    ),
+  },
+];
+
+const POKER_CREATOR_STAFF_FAQ: readonly PokerCreatorFaqEntry[] = [
+  {
+    q: 'Who can use auto-join bots?',
+    a: (
+      <p className="text-white/80 text-sm leading-relaxed">
+        This option is staff-only and never shown to regular players. It exists so admins can seed empty seats with server-controlled bots after creation for testing or demos.
+      </p>
+    ),
+  },
+  {
+    q: 'When do bots join?',
+    a: (
+      <p className="text-white/80 text-sm leading-relaxed">
+        After the tournament is created successfully, up to the count you enter here can auto-join to fill vacant seats. It does not replace real players who have already registered.
+      </p>
+    ),
+  },
+];
+
+function PokerTournamentBasicsFaqSection({
+  isFreeroll,
+  usesCustomTokenEscrowPool,
+}: {
+  isFreeroll: boolean;
+  usesCustomTokenEscrowPool: boolean;
+}) {
+  const poolOrBuy = usesCustomTokenEscrowPool
+    ? {
+        q: 'Where does the prize money come from for a custom-token freeroll?',
+        a: (
+          <p className="text-white/80 text-sm leading-relaxed">
+            You choose a PulseChain token and total amount, then approve and deposit into the on-chain prize escrow when you publish. The split you pick on the Prizes tab applies to that token pool,
+            not off-chain poker chips.
+          </p>
+        ),
+      }
+    : isFreeroll
+      ? {
+          q: 'What is the guaranteed prize pool?',
+          a: (
+            <p className="text-white/80 text-sm leading-relaxed">
+              For chip or platform-promo freerolls, this is the total off-chain tournament chips you commit as the prize. Players join for free; nobody pays a buy-in. If you use custom tokens instead,
+              you set the pool on-chain (see the question about custom-token freerolls).
+            </p>
+          ),
+        }
+      : {
+          q: 'What is buy-in per player?',
+          a: (
+            <p className="text-white/80 text-sm leading-relaxed">
+              Each seat costs this many tournament chips to enter. One tournament chip equals one MORBIUS for buy-in tournaments. Players buy or convert chips in the lobby before joining. The prize
+              pool grows from those buy-ins (after fees where applicable); the creator does not fund the pool.
+            </p>
+          ),
+        };
+
+  const faqs: PokerCreatorFaqEntry[] = [
+    {
+      q: 'What is the difference between minimum and maximum players?',
+      a: (
+        <div className="space-y-2 text-white/80 text-sm leading-relaxed">
+          <p>
+            <span className="text-cyan-200/90 font-medium">Minimum</span> is how many registered or joined players must be present before the table can start at the scheduled time. If that bar is not
+            met, the Sit & Go is cancelled and buy-ins or posted pool chips are refunded.
+          </p>
+          <p>
+            <span className="text-cyan-200/90 font-medium">Maximum</span> is the hard cap on seats at the table (2–10). Prize ladders and previews use this headcount.
+          </p>
+        </div>
+      ),
+    },
+    poolOrBuy,
+    {
+      q: 'What is starting stack?',
+      a: (
+        <p className="text-white/80 text-sm leading-relaxed">
+          Every player begins the tournament with this many tournament chips in front of them at the table. It does not change the prize pool size by itself—it changes how deep the game feels. Higher
+          stacks usually mean longer play before blinds create pressure.
+        </p>
+      ),
+    },
+    {
+      q: 'What if we do not get enough players by the start time?',
+      a: (
+        <p className="text-white/80 text-sm leading-relaxed">
+          The tournament needs at least the minimum number of players when the clock hits your scheduled start. If not, it is cancelled and players (and you, where applicable) get refunds for buy-ins
+          or posted pool chips. Plan a realistic minimum for your community size.
+        </p>
+      ),
+    },
+  ];
+
+  return <PokerTournamentTabFaqPanel idPrefix="basics" entries={faqs} />;
+}
+
+const selectTriggerBasicsClass =
+  'w-full h-11 rounded-xl bg-gray-950/60 border border-cyan-500/20 px-3 text-white text-sm focus:outline-none focus:border-cyan-500/50 focus:ring-1 focus:ring-cyan-500/20 [&>span]:line-clamp-1';
 
 /** Scroll-snap “rolodex” for 1–60 minutes (by-time blind interval). */
 function BlindIntervalRolodex({
@@ -748,7 +895,12 @@ function BlindIntervalRolodex({
 export function PokerTournamentCreator({ creatorAddress, onClose, onCreate }: PokerTournamentCreatorProps) {
   const isAdmin = isAdminWallet(creatorAddress);
   const [name, setName] = useState('My Tournament');
-  const [isFreeroll, setIsFreeroll] = useState(false);
+  /** `null` until the user picks freeroll vs buy-in on the Type tab. */
+  const [fundingKind, setFundingKind] = useState<'freeroll' | 'buyin' | null>(null);
+  const isFreeroll = fundingKind === 'freeroll';
+  /** After name + Proceed, other tabs unlock and Basics shows table settings. */
+  const [tournamentSetupComplete, setTournamentSetupComplete] = useState(false);
+  const [nameGateOpen, setNameGateOpen] = useState(false);
   /**
    * Where the freeroll prize comes from. Only meaningful when `isFreeroll === true`.
    *  - `chips`: creator's poker chip wallet is debited (default)
@@ -784,7 +936,7 @@ export function PokerTournamentCreator({ creatorAddress, onClose, onCreate }: Po
   const { writeContractAsync } = useWriteContract();
   const publicClient = usePublicClient();
   const { address: connectedAddress } = useAccount();
-  const [activeTab, setActiveTab] = useState('basics');
+  const [activeTab, setActiveTab] = useState('type');
   const initialSchedule = useMemo(() => defaultScheduledFields(), []);
   const [scheduledDate, setScheduledDate] = useState(initialSchedule.date);
   const [scheduledTime, setScheduledTime] = useState(initialSchedule.time);
@@ -813,6 +965,25 @@ export function PokerTournamentCreator({ creatorAddress, onClose, onCreate }: Po
   useEffect(() => {
     if (!isAdmin) setBotsToAdd(0);
   }, [isAdmin]);
+
+  useEffect(() => {
+    if (isFreeroll && prizeSource === 'custom_token') return;
+    const raw = parseInt(isFreeroll ? guaranteedPool : buyIn, 10) || (isFreeroll ? 5000 : 1000);
+    const clamped = Math.max(1, Math.min(100_000, raw));
+    const s = snapToNearestInList(clamped, CHIPS_POOL_SELECT_VALUES);
+    const field = isFreeroll ? guaranteedPool : buyIn;
+    if (String(s) !== field) {
+      if (isFreeroll) setGuaranteedPool(String(s));
+      else setBuyIn(String(s));
+    }
+  }, [isFreeroll, prizeSource, buyIn, guaranteedPool]);
+
+  useEffect(() => {
+    const fallback = parseInt(STARTING_STACK_PRESETS[STARTING_STACK_PRESETS.length - 1].value, 10);
+    const raw = parseInt(startingStack, 10) || fallback;
+    const s = snapToNearestInList(raw, STARTING_STACK_SELECT_VALUES);
+    if (String(s) !== startingStack) setStartingStack(String(s));
+  }, [startingStack]);
 
   /** Custom-token amount in smallest unit (wei). 0n if invalid / not yet entered. */
   const customTokenAmountWei = useMemo<bigint>(() => {
@@ -925,7 +1096,7 @@ export function PokerTournamentCreator({ creatorAddress, onClose, onCreate }: Po
   const buildCreateParams = (
     extras: { customTokenEscrow?: CustomTokenEscrowFunding } = {},
   ): { params: CreatePokerTournamentParams; addBots: number } | null => {
-    if (!name.trim()) return null;
+    if (!name.trim() || !fundingKind) return null;
     const buyChips = isFreeroll ? 0n : parsePositiveWholeChips(buyIn);
     const guaranteeChips = isFreeroll && prizeSource !== 'custom_token' ? parsePositiveWholeChips(guaranteedPool) : 0n;
     if (!isFreeroll && buyChips <= 0n) return null;
@@ -1239,7 +1410,7 @@ export function PokerTournamentCreator({ creatorAddress, onClose, onCreate }: Po
             </div>
             <h2 className="text-xl font-bold text-white tracking-tight">Tournament created</h2>
             <p className="text-sm text-white/70 leading-relaxed">
-              Your Sit &amp; Go is scheduled. You can track it anytime from your creator dashboard.
+              Your Sit & Go is scheduled. You can track it anytime from your creator dashboard.
             </p>
             {created.pinCode && (
               <p className="text-xs text-amber-200/90 rounded-lg border border-amber-500/25 bg-amber-500/10 px-3 py-2">
@@ -1269,6 +1440,8 @@ export function PokerTournamentCreator({ creatorAddress, onClose, onCreate }: Po
 
   const createDisabled =
     isSubmitting
+    || !tournamentSetupComplete
+    || fundingKind == null
     || !name.trim()
     || prizeSum !== 100
     || prizePercents.length !== prizeSlotCount
@@ -1276,6 +1449,30 @@ export function PokerTournamentCreator({ creatorAddress, onClose, onCreate }: Po
     || (isFreeroll && prizeSource === 'chips' && parsePositiveWholeChips(guaranteedPool) <= 0n)
     || (isFreeroll && prizeSource === 'platform_promo' && parsePositiveWholeChips(guaranteedPool) <= 0n)
     || (isFreeroll && prizeSource === 'custom_token' && (!selectedToken || customTokenAmountWei <= 0n));
+
+  const pickFreeroll = () => {
+    if (tournamentSetupComplete) {
+      setFundingKind('freeroll');
+      return;
+    }
+    setFundingKind('freeroll');
+    setNameGateOpen(true);
+  };
+
+  const pickBuyIn = () => {
+    if (tournamentSetupComplete) {
+      setFundingKind('buyin');
+      setSelectedToken(null);
+      setCustomTokenAmount('');
+      setPrizeSource('chips');
+      return;
+    }
+    setFundingKind('buyin');
+    setSelectedToken(null);
+    setCustomTokenAmount('');
+    setPrizeSource('chips');
+    setNameGateOpen(true);
+  };
 
   return (
     <Dialog defaultOpen onOpenChange={(open) => { if (!open) onClose(); }}>
@@ -1302,7 +1499,7 @@ export function PokerTournamentCreator({ creatorAddress, onClose, onCreate }: Po
         <div className="relative shrink-0 flex items-center justify-between px-5 pt-5 pb-3 border-b border-cyan-500/20">
           <div>
             <h2 className="text-lg font-bold text-white tracking-tight">Create a poker tournament</h2>
-            <p className="text-[11px] text-white/45 mt-0.5">Sit &amp; Go · scheduled start · you host the table size and prizes</p>
+            <p className="text-[11px] text-white/45 mt-0.5">Sit & Go · scheduled start · you host the table size and prizes</p>
           </div>
           <button
             type="button"
@@ -1316,124 +1513,111 @@ export function PokerTournamentCreator({ creatorAddress, onClose, onCreate }: Po
 
         <div className="relative flex-1 min-h-0 overflow-y-auto scroll-smooth overscroll-y-contain px-5 py-4">
           <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-            <TabsList className={`w-full ${TAB_BAR}`}>
-              <TabsTrigger value="basics" className={TAB_TRIGGER}>
-                Basics
-              </TabsTrigger>
-              <TabsTrigger value="schedule" className={TAB_TRIGGER}>
-                Start time
-              </TabsTrigger>
-              <TabsTrigger value="rules" className={TAB_TRIGGER}>
-                Blinds &amp; access
-              </TabsTrigger>
-              <TabsTrigger value="prizes" className={TAB_TRIGGER}>
-                Prizes
-              </TabsTrigger>
-              {isAdmin && (
-                <TabsTrigger value="staff" className={TAB_TRIGGER}>
-                  Staff
+            <div className="relative w-full overflow-hidden" style={POKER_BASICS_FAQ_PANEL_STYLE}>
+              <div
+                className="pointer-events-none absolute inset-0 rounded-[1rem] bg-[radial-gradient(circle_at_50%_50%,rgba(34,211,238,0.08),transparent_70%)]"
+                aria-hidden
+              />
+              <TabsList className={cn('w-full', TAB_BAR)}>
+                <TabsTrigger value="type" className={TAB_TRIGGER}>
+                  Type
                 </TabsTrigger>
-              )}
-            </TabsList>
+                <TabsTrigger value="basics" disabled={!tournamentSetupComplete} className={TAB_TRIGGER}>
+                  Basics
+                </TabsTrigger>
+                <TabsTrigger value="schedule" disabled={!tournamentSetupComplete} className={TAB_TRIGGER}>
+                  Start time
+                </TabsTrigger>
+                <TabsTrigger value="rules" disabled={!tournamentSetupComplete} className={TAB_TRIGGER}>
+                  Blinds
+                </TabsTrigger>
+                <TabsTrigger value="prizes" disabled={!tournamentSetupComplete} className={TAB_TRIGGER}>
+                  Prizes
+                </TabsTrigger>
+                <TabsTrigger value="share" disabled={!tournamentSetupComplete} className={TAB_TRIGGER}>
+                  Share
+                </TabsTrigger>
+                {isAdmin && (
+                  <TabsTrigger value="staff" disabled={!tournamentSetupComplete} className={TAB_TRIGGER}>
+                    Staff
+                  </TabsTrigger>
+                )}
+              </TabsList>
+            </div>
 
-            <TabsContent value="basics" className="mt-4 space-y-4 outline-none">
+            <TabsContent value="type" className="mt-4 space-y-4 outline-none">
+              <p className="text-center text-sm text-white/70 leading-relaxed">
+                Choose how this Sit & Go is funded. You will name the tournament next, then configure players, chips, and schedule on the Basics tab and beyond.
+              </p>
               <div className="space-y-2">
-                <p className="w-full text-center text-xs font-semibold uppercase tracking-wide text-white/55">Pick one</p>
+                <p className="w-full text-center font-jost text-base font-bold uppercase tracking-[0.12em] text-white/95 sm:text-lg">
+                  Pick one
+                </p>
                 <div
-                  className="grid grid-cols-2 items-stretch gap-0 overflow-hidden rounded-xl border border-cyan-500/25 bg-black/30 shadow-[inset_0_2px_6px_rgba(0,0,0,0.65)]"
+                  className="grid min-h-[11.5rem] grid-cols-2 items-stretch gap-0 overflow-hidden rounded-xl border border-cyan-500/25 bg-black/30 shadow-[inset_0_2px_6px_rgba(0,0,0,0.65)] sm:min-h-[12.5rem]"
                   role="group"
                   aria-label="Tournament funding type"
                 >
                   <button
                     type="button"
-                    onClick={() => setIsFreeroll(true)}
-                    aria-pressed={isFreeroll}
-                    className={`flex h-full min-h-0 min-w-0 flex-col items-center border-r border-cyan-500/20 px-3 py-3.5 text-center transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-cyan-500/45 focus-visible:ring-inset sm:px-3.5 sm:py-4 ${
-                      isFreeroll
-                        ? 'bg-cyan-500/[0.14] text-white'
-                        : 'text-white/65 hover:bg-white/[0.04] hover:text-white/90'
+                    onClick={pickFreeroll}
+                    aria-pressed={fundingKind === 'freeroll'}
+                    className={`relative h-full min-h-0 min-w-0 overflow-hidden border-r border-cyan-500/20 p-0 text-center transition-[box-shadow,filter] focus:outline-none focus-visible:ring-2 focus-visible:ring-cyan-500/45 focus-visible:ring-inset ${
+                      fundingKind === 'freeroll'
+                        ? 'grayscale-0 shadow-[inset_0_0_0_2px_rgba(6,182,212,0.45)]'
+                        : 'grayscale hover:brightness-110'
                     }`}
                   >
-                    <span className="shrink-0 text-base font-black uppercase leading-tight tracking-[0.14em] text-cyan-200 sm:text-lg">
-                      Freeroll
+                    <span className="sr-only">
+                      Freeroll: creator funds the prize pool; users play free; any PRC-20 or MORBIUS.
                     </span>
-                    <div className="mt-2 flex min-h-[4.5rem] w-full flex-1 flex-col items-center gap-1.5">
-                      <p className="flex items-center justify-center gap-1.5 text-[10px] font-semibold uppercase leading-snug tracking-wide text-white/80">
-                        <span className="shrink-0 text-cyan-400/90" aria-hidden>
-                          •
-                        </span>
-                        <span className="min-w-0 max-w-[13rem]">Creator funds the prize pool.</span>
-                      </p>
-                      <p className="flex items-center justify-center gap-1.5 text-[10px] font-semibold uppercase leading-snug tracking-wide text-white/80">
-                        <span className="shrink-0 text-cyan-400/90" aria-hidden>
-                          •
-                        </span>
-                        <span className="min-w-0 max-w-[13rem]">Users play for free.</span>
-                      </p>
-                      <p className="flex items-center justify-center gap-1.5 text-[10px] font-semibold uppercase leading-snug tracking-wide text-amber-200/90">
-                        <span className="shrink-0 text-amber-300/90" aria-hidden>
-                          •
-                        </span>
-                        <span className="min-w-0 max-w-[13rem]">Custom tokens or MORBIUS</span>
-                      </p>
-                    </div>
+                    <img
+                      src="/images/poker-freeroll-type-promo.png"
+                      alt=""
+                      width={600}
+                      height={400}
+                      decoding="async"
+                      draggable={false}
+                      className="pointer-events-none absolute inset-0 h-full w-full object-cover object-center select-none"
+                    />
+                    {fundingKind === 'freeroll' ? (
+                      <span
+                        aria-hidden
+                        className="pointer-events-none absolute inset-0 bg-cyan-500/[0.12]"
+                      />
+                    ) : null}
                   </button>
                   <button
                     type="button"
-                    onClick={() => {
-                      setIsFreeroll(false);
-                      setPrizeSource('chips');
-                      setSelectedToken(null);
-                      setCustomTokenAmount('');
-                    }}
-                    aria-pressed={!isFreeroll}
-                    className={`flex h-full min-h-0 min-w-0 flex-col items-center px-3 py-3.5 text-center transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-cyan-500/45 focus-visible:ring-inset sm:px-3.5 sm:py-4 ${
-                      !isFreeroll
-                        ? 'bg-cyan-500/[0.14] text-white'
-                        : 'text-white/65 hover:bg-white/[0.04] hover:text-white/90'
+                    onClick={pickBuyIn}
+                    aria-pressed={fundingKind === 'buyin'}
+                    className={`relative h-full min-h-0 min-w-0 overflow-hidden p-0 text-center transition-[box-shadow,filter] focus:outline-none focus-visible:ring-2 focus-visible:ring-cyan-500/45 focus-visible:ring-inset ${
+                      fundingKind === 'buyin'
+                        ? 'grayscale-0 shadow-[inset_0_0_0_2px_rgba(6,182,212,0.45)]'
+                        : 'grayscale hover:brightness-110'
                     }`}
                   >
-                    <span className="shrink-0 text-base font-black uppercase leading-tight tracking-[0.14em] text-cyan-200 sm:text-lg">
-                      Buy-in
+                    <span className="sr-only">
+                      Buy-in: creator rake; user buy-ins fund the prize pool; creator earns 2% of the prize pool; MORBIUS
+                      only today; PRC-20 support coming soon.
                     </span>
-                    <div className="mt-2 flex min-h-[4.5rem] w-full flex-1 flex-col items-center gap-1.5">
-                      <p className="flex items-center justify-center gap-1.5 text-[10px] font-semibold uppercase leading-snug tracking-wide text-white/80">
-                        <span className="shrink-0 text-cyan-400/90" aria-hidden>
-                          •
-                        </span>
-                        <span className="min-w-0 max-w-[13rem]">Creator does not fund the prize pool.</span>
-                      </p>
-                      <p className="flex items-center justify-center gap-1.5 text-[10px] font-semibold uppercase leading-snug tracking-wide text-white/80">
-                        <span className="shrink-0 text-cyan-400/90" aria-hidden>
-                          •
-                        </span>
-                        <span className="min-w-0 max-w-[13rem]">Prize pool is accumulated from user buy-ins.</span>
-                      </p>
-                      <p className="flex items-center justify-center gap-1.5 text-[10px] font-semibold uppercase leading-snug tracking-wide text-amber-200/90">
-                        <span className="shrink-0 text-amber-300/90" aria-hidden>
-                          •
-                        </span>
-                        <span className="min-w-0 max-w-[13rem]">Creator earns 2% of prize pool.</span>
-                      </p>
-                      <p className="flex items-center justify-center gap-1.5 text-[10px] font-semibold uppercase leading-snug tracking-wide text-amber-200/90">
-                        <span className="shrink-0 text-amber-300/90" aria-hidden>
-                          •
-                        </span>
-                        <span className="min-w-0 max-w-[13rem]">MORBIUS only.</span>
-                      </p>
-                    </div>
+                    <img
+                      src="/images/poker-buyin-type-promo.png"
+                      alt=""
+                      width={600}
+                      height={400}
+                      decoding="async"
+                      draggable={false}
+                      className="pointer-events-none absolute inset-0 h-full w-full object-cover object-center select-none"
+                    />
+                    {fundingKind === 'buyin' ? (
+                      <span
+                        aria-hidden
+                        className="pointer-events-none absolute inset-0 bg-cyan-500/[0.12]"
+                      />
+                    ) : null}
                   </button>
                 </div>
-              </div>
-
-              <div>
-                <label className={`${labelClass} text-center`}>Tournament name</label>
-                <input
-                  value={name}
-                  onChange={(e) => setName(e.target.value)}
-                  className={`${fieldClass} text-center`}
-                  maxLength={40}
-                />
               </div>
 
               <label className="flex items-center gap-3 cursor-pointer select-none">
@@ -1461,6 +1645,49 @@ export function PokerTournamentCreator({ creatorAddress, onClose, onCreate }: Po
                   />
                 </div>
               )}
+
+              {tournamentSetupComplete ? (
+                <div>
+                  <label
+                    htmlFor="poker-tourney-name-type"
+                    className="mb-1.5 block text-center font-jost text-sm font-bold text-white/95 sm:text-base"
+                  >
+                    Tournament name
+                  </label>
+                  <div className="relative w-full overflow-hidden" style={POKER_BASICS_FAQ_PANEL_STYLE}>
+                    <div
+                      className="pointer-events-none absolute inset-0 rounded-[1rem] bg-[radial-gradient(circle_at_50%_50%,rgba(34,211,238,0.08),transparent_70%)]"
+                      aria-hidden
+                    />
+                    <input
+                      id="poker-tourney-name-type"
+                      value={name}
+                      onChange={(e) => setName(e.target.value)}
+                      className={cn(
+                        'relative z-[1] w-full min-h-[52px] border-0 bg-transparent px-4 py-4 text-center font-jost text-lg font-semibold tracking-tight text-white placeholder:text-white/30',
+                        'focus:outline-none focus-visible:ring-2 focus-visible:ring-cyan-500/45 focus-visible:ring-inset',
+                        'sm:min-h-[60px] sm:px-5 sm:py-[1.125rem] sm:text-2xl',
+                      )}
+                      maxLength={40}
+                    />
+                  </div>
+                </div>
+              ) : (
+                <p className="text-center text-[11px] text-white/45">
+                  After you pick a model, a short step asks for the tournament name before the other tabs unlock.
+                </p>
+              )}
+              <PokerTournamentTabFaqPanel idPrefix="type" entries={POKER_CREATOR_TYPE_FAQ} />
+            </TabsContent>
+
+            <TabsContent value="basics" className="mt-4 space-y-4 outline-none">
+              <div className="rounded-xl border border-cyan-500/20 bg-black/25 px-3 py-2.5 text-center shadow-[inset_0_2px_6px_rgba(0,0,0,0.45)]">
+                <p className="text-[11px] font-semibold uppercase tracking-wide text-cyan-200/90">{name.trim() || '—'}</p>
+                <p className="text-[10px] text-white/50 mt-0.5">
+                  {isFreeroll ? 'Freeroll' : 'Buy-in'}
+                  {isPrivate ? ' · private (PIN)' : ''} · edit name and privacy on the Type tab
+                </p>
+              </div>
 
               {isFreeroll && (
                 <div className="space-y-3">
@@ -1493,7 +1720,7 @@ export function PokerTournamentCreator({ creatorAddress, onClose, onCreate }: Po
                   {prizeSource === 'custom_token' && (
                     <div className="space-y-3 rounded-xl border border-cyan-500/25 bg-black/25 p-3 shadow-[inset_0_2px_6px_rgba(0,0,0,0.45)]">
                       <p className="text-[11px] leading-relaxed text-white/70">
-                        Pick any PulseChain token. You&apos;ll approve and deposit the prize amount on-chain when you publish — two wallet popups, then the tournament is created.
+                        Pick any PulseChain token. You will approve and deposit the prize amount on-chain when you publish — two wallet popups, then the tournament is created.
                       </p>
                       <Prc20TokenPicker value={selectedToken} onChange={setSelectedToken} />
                       <div>
@@ -1513,101 +1740,158 @@ export function PokerTournamentCreator({ creatorAddress, onClose, onCreate }: Po
                 </div>
               )}
 
-              <div
-                className={cn(
-                  'mt-1 grid grid-cols-1 gap-5 sm:grid-cols-2 sm:gap-x-4 sm:gap-y-5',
-                  !isFreeroll || prizeSource !== 'custom_token' ? '' : 'sm:max-w-xl sm:mx-auto',
-                )}
-              >
+              <div className="mt-1 grid grid-cols-2 gap-x-4 gap-y-4">
                 <div className="flex min-w-0 flex-col">
-                  <label className={`${labelClass} w-full text-center`}>Min players</label>
-                  <ScrollSnapSmallRolodex
-                    values={PLAYER_COUNT_ROLODEX_VALUES}
-                    value={Math.max(2, Math.min(10, parseInt(minPlayers, 10) || 2))}
-                    onChange={(v) => {
-                      setMinPlayers(String(v));
+                  <label htmlFor="poker-basics-min-players" className={labelClass}>
+                    Min players
+                  </label>
+                  <Select
+                    value={String(Math.max(2, Math.min(10, parseInt(minPlayers, 10) || 2)))}
+                    onValueChange={(v) => {
+                      const n = parseInt(v, 10);
+                      setMinPlayers(String(n));
                       const mx = parseInt(maxPlayers, 10);
-                      if (!Number.isFinite(mx) || mx < v) setMaxPlayers(String(v));
+                      if (!Number.isFinite(mx) || mx < n) setMaxPlayers(String(n));
                     }}
-                    ariaLabelDecrease="Decrease minimum players"
-                    ariaLabelIncrease="Increase minimum players"
-                  />
-                  <p className="mt-1.5 text-center text-[11px] leading-snug text-white/45">
-                    A Sit &amp; Go needs at least this many players registered or joined before the table can start at the scheduled time. If the minimum is not met, the tournament is cancelled and buy-ins / posted pool chips are refunded to players and the creator.
-                  </p>
+                  >
+                    <SelectTrigger id="poker-basics-min-players" className={selectTriggerBasicsClass}>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent className="max-h-64 bg-slate-900 border border-cyan-500/30 text-white shadow-xl z-[200]">
+                      {PLAYER_COUNT_OPTIONS.map((n) => (
+                        <SelectItem
+                          key={n}
+                          value={String(n)}
+                          textValue={`${n} players`}
+                          className="focus:bg-cyan-500/15 focus:text-white cursor-pointer"
+                        >
+                          {n} players
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
                 </div>
                 <div className="flex min-w-0 flex-col">
-                  <label className={`${labelClass} w-full text-center`}>Max players</label>
-                  <ScrollSnapSmallRolodex
-                    values={PLAYER_COUNT_ROLODEX_VALUES}
-                    value={Math.max(
-                      Math.max(2, Math.min(10, parseInt(minPlayers, 10) || 2)),
-                      Math.min(10, parseInt(maxPlayers, 10) || 10),
+                  <label htmlFor="poker-basics-max-players" className={labelClass}>
+                    Max players
+                  </label>
+                  <Select
+                    value={String(
+                      Math.max(
+                        Math.max(2, Math.min(10, parseInt(minPlayers, 10) || 2)),
+                        Math.min(10, parseInt(maxPlayers, 10) || 10),
+                      ),
                     )}
-                    onChange={(v) => {
-                      setMaxPlayers(String(v));
+                    onValueChange={(v) => {
+                      const n = parseInt(v, 10);
+                      setMaxPlayers(String(n));
                       const mn = parseInt(minPlayers, 10);
-                      if (!Number.isFinite(mn) || mn > v) setMinPlayers(String(v));
+                      if (!Number.isFinite(mn) || mn > n) setMinPlayers(String(n));
                     }}
-                    ariaLabelDecrease="Decrease maximum players"
-                    ariaLabelIncrease="Increase maximum players"
-                  />
-                  <p className="mt-1.5 text-center text-[11px] leading-snug text-white/45">
-                    Hard cap on seats. Prize ladders and table size use this headcount (2–10).
-                  </p>
+                  >
+                    <SelectTrigger id="poker-basics-max-players" className={selectTriggerBasicsClass}>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent className="max-h-64 bg-slate-900 border border-cyan-500/30 text-white shadow-xl z-[200]">
+                      {PLAYER_COUNT_OPTIONS.map((n) => (
+                        <SelectItem
+                          key={n}
+                          value={String(n)}
+                          textValue={`${n} players`}
+                          className="focus:bg-cyan-500/15 focus:text-white cursor-pointer"
+                        >
+                          {n} players
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
                 </div>
                 {(!isFreeroll || prizeSource !== 'custom_token') && (
                   <div className="flex min-w-0 flex-col">
-                    <label className={`${labelClass} w-full text-center`}>
+                    <label htmlFor="poker-basics-pool-buyin" className={labelClass}>
                       {isFreeroll ? 'Guaranteed prize pool' : 'Buy-in per player'}
                     </label>
-                    <ScrollSnapSmallRolodex
-                      values={BUY_IN_ROLODEX_VALUES}
-                      value={Math.max(
-                        1,
-                        Math.min(
-                          100_000,
-                          parseInt(isFreeroll ? guaranteedPool : buyIn, 10) || (isFreeroll ? 5000 : 1000),
+                    <Select
+                      value={String(
+                        snapToNearestInList(
+                          Math.max(
+                            1,
+                            Math.min(
+                              100_000,
+                              parseInt(isFreeroll ? guaranteedPool : buyIn, 10) || (isFreeroll ? 5000 : 1000),
+                            ),
+                          ),
+                          CHIPS_POOL_SELECT_VALUES,
                         ),
                       )}
-                      onChange={(n) => {
-                        if (isFreeroll) setGuaranteedPool(String(n));
-                        else setBuyIn(String(n));
+                      onValueChange={(v) => {
+                        if (isFreeroll) setGuaranteedPool(v);
+                        else setBuyIn(v);
                       }}
-                      suffix="chips"
-                      ariaLabelDecrease={isFreeroll ? 'Decrease guaranteed pool' : 'Decrease buy-in'}
-                      ariaLabelIncrease={isFreeroll ? 'Increase guaranteed pool' : 'Increase buy-in'}
-                    />
-                    <p className="mt-1.5 text-center text-[11px] leading-snug text-white/45">
-                      {isFreeroll
-                        ? 'Off-chain poker chips you post as the total prize pool for this freeroll (not entry fees).'
-                        : '1 tournament chip = 1 MORBIUS. This is how many chips each seat costs to enter the tournament. Buy or convert chips from the lobby before you join a table.'}
-                    </p>
+                    >
+                      <SelectTrigger id="poker-basics-pool-buyin" className={selectTriggerBasicsClass}>
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent className="max-h-64 bg-slate-900 border border-cyan-500/30 text-white shadow-xl z-[200]">
+                        {CHIPS_POOL_SELECT_VALUES.map((n) => (
+                          <SelectItem
+                            key={n}
+                            value={String(n)}
+                            textValue={`${n.toLocaleString()} chips`}
+                            className="focus:bg-cyan-500/15 focus:text-white cursor-pointer"
+                          >
+                            {n.toLocaleString()} chips
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
                   </div>
                 )}
                 <div
                   className={cn(
                     'flex min-w-0 flex-col',
-                    !isFreeroll || prizeSource !== 'custom_token' ? '' : 'sm:col-span-2',
+                    !isFreeroll || prizeSource !== 'custom_token' ? '' : 'col-span-2',
                   )}
                 >
-                  <label className={`${labelClass} w-full text-center`}>Starting stack</label>
-                  <ScrollSnapSmallRolodex
-                    values={STARTING_STACK_ROLODEX_VALUES}
-                    value={Math.max(
-                      100,
-                      parseInt(startingStack, 10) || parseInt(STARTING_STACK_PRESETS[STARTING_STACK_PRESETS.length - 1].value, 10),
+                  <label htmlFor="poker-basics-starting-stack" className={labelClass}>
+                    Starting stack
+                  </label>
+                  <Select
+                    value={String(
+                      snapToNearestInList(
+                        Math.max(
+                          100,
+                          parseInt(startingStack, 10) ||
+                            parseInt(STARTING_STACK_PRESETS[STARTING_STACK_PRESETS.length - 1].value, 10),
+                        ),
+                        STARTING_STACK_SELECT_VALUES,
+                      ),
                     )}
-                    onChange={(n) => setStartingStack(String(n))}
-                    suffix="chips"
-                    ariaLabelDecrease="Decrease starting stack"
-                    ariaLabelIncrease="Increase starting stack"
-                  />
-                  <p className="mt-1.5 text-center text-[11px] leading-snug text-white/45">
-                    Each player starts with this many tournament chips at the table. Buy-in (or guaranteed pool) still sets the prize money; starting stack sets how deep stacks feel—higher stacks usually mean a longer tournament before blinds pressure bites.
-                  </p>
+                    onValueChange={(v) => setStartingStack(v)}
+                  >
+                    <SelectTrigger id="poker-basics-starting-stack" className={selectTriggerBasicsClass}>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent className="max-h-64 bg-slate-900 border border-cyan-500/30 text-white shadow-xl z-[200]">
+                      {STARTING_STACK_SELECT_VALUES.map((n) => (
+                        <SelectItem
+                          key={n}
+                          value={String(n)}
+                          textValue={`${n.toLocaleString()} chips`}
+                          className="focus:bg-cyan-500/15 focus:text-white cursor-pointer"
+                        >
+                          {n.toLocaleString()} chips
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
                 </div>
               </div>
+
+              <PokerTournamentBasicsFaqSection
+                isFreeroll={isFreeroll}
+                usesCustomTokenEscrowPool={isFreeroll && prizeSource === 'custom_token'}
+              />
             </TabsContent>
 
             <TabsContent value="schedule" className="mt-4 space-y-4 outline-none">
@@ -1679,6 +1963,7 @@ export function PokerTournamentCreator({ creatorAddress, onClose, onCreate }: Po
                 </div>
                 {scheduleError && <p className="w-full text-center text-xs text-red-400">{scheduleError}</p>}
               </div>
+              <PokerTournamentTabFaqPanel idPrefix="schedule" entries={POKER_CREATOR_SCHEDULE_FAQ} />
             </TabsContent>
 
             <TabsContent value="rules" className="mt-4 space-y-5 outline-none">
@@ -1781,6 +2066,7 @@ export function PokerTournamentCreator({ creatorAddress, onClose, onCreate }: Po
                 </div>
               </div>
 
+              <PokerTournamentTabFaqPanel idPrefix="rules" entries={POKER_CREATOR_RULES_FAQ} />
             </TabsContent>
 
             <TabsContent value="prizes" className="mt-4 space-y-4 outline-none">
@@ -1819,6 +2105,11 @@ export function PokerTournamentCreator({ creatorAddress, onClose, onCreate }: Po
               >
                 <PrizeSplit3DPie percents={prizePercents} poolPreview={prizeSplitPoolPreview} />
               </div>
+              <PokerTournamentTabFaqPanel idPrefix="prizes" entries={POKER_CREATOR_PRIZES_FAQ} />
+            </TabsContent>
+
+            <TabsContent value="share" className="mt-4 space-y-4 outline-none">
+              <PokerTournamentSharePanel tournamentName={name} isFreeroll={isFreeroll} />
             </TabsContent>
 
             {isAdmin && (
@@ -1837,6 +2128,7 @@ export function PokerTournamentCreator({ creatorAddress, onClose, onCreate }: Po
                     Staff only: server bots fill empty seats once the tournament exists. Players never see this option.
                   </p>
                 </div>
+                <PokerTournamentTabFaqPanel idPrefix="staff" entries={POKER_CREATOR_STAFF_FAQ} />
               </TabsContent>
             )}
           </Tabs>
@@ -1868,6 +2160,72 @@ export function PokerTournamentCreator({ creatorAddress, onClose, onCreate }: Po
             {isSubmitting ? 'Creating…' : 'Review & create'}
           </button>
         </div>
+
+        {nameGateOpen ? (
+          <div
+            className="absolute inset-0 z-[70] flex items-center justify-center p-5 bg-black/75 backdrop-blur-sm"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="poker-tourney-name-gate-title"
+          >
+            <div
+              className="relative w-full max-w-sm overflow-hidden rounded-2xl border-2 border-cyan-500/30 bg-gradient-to-br from-slate-900 to-slate-800 p-5 shadow-2xl"
+              style={{
+                boxShadow: '0 8px 32px rgba(0,0,0,0.5), inset 0 3px 6px rgba(0,0,0,0.8), inset 0 -3px 6px rgba(255,255,255,0.08)',
+              }}
+            >
+              <div className="absolute inset-0 pointer-events-none bg-[radial-gradient(circle_at_50%_0%,rgba(34,211,238,0.12),transparent_55%)]" />
+              <div className="relative space-y-4">
+                <div>
+                  <h3 id="poker-tourney-name-gate-title" className="text-base font-bold text-white text-center tracking-tight">
+                    Name your tournament
+                  </h3>
+                  <p className="mt-1 text-center text-[11px] text-white/55">
+                    {fundingKind === 'freeroll' ? 'Freeroll — you fund the prize pool.' : 'Buy-in — pool comes from player entries (MORBIUS).'}
+                  </p>
+                </div>
+                <div>
+                  <label htmlFor="poker-tourney-name-gate-input" className={`${labelClass} text-center`}>
+                    Tournament name
+                  </label>
+                  <input
+                    id="poker-tourney-name-gate-input"
+                    value={name}
+                    onChange={(e) => setName(e.target.value)}
+                    className={`${fieldClass} text-center`}
+                    maxLength={40}
+                    autoFocus
+                  />
+                </div>
+                <div className="flex gap-2 pt-1">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setNameGateOpen(false);
+                      if (!tournamentSetupComplete) setFundingKind(null);
+                    }}
+                    className="flex-1 rounded-xl border border-white/15 px-3 py-2.5 text-sm font-medium text-white/85 hover:bg-white/5 transition-colors"
+                  >
+                    Back
+                  </button>
+                  <button
+                    type="button"
+                    disabled={!name.trim()}
+                    onClick={() => {
+                      if (!name.trim()) return;
+                      setNameGateOpen(false);
+                      setTournamentSetupComplete(true);
+                      setActiveTab('basics');
+                    }}
+                    className="flex-1 rounded-xl bg-gradient-to-r from-cyan-600 to-blue-600 px-3 py-2.5 text-sm font-semibold text-white hover:opacity-95 disabled:opacity-40 disabled:pointer-events-none transition-opacity"
+                  >
+                    Proceed
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        ) : null}
       </div>
 
       {showConfirm && (() => {

@@ -103,7 +103,7 @@ export function PokerBottomBar({
         background: 'linear-gradient(to top, rgba(0,0,0,0.35) 0%, transparent 100%)',
       }}
     >
-      <div className="w-full px-2 pt-1 pb-[max(4px,env(safe-area-inset-bottom,0px))] sm:px-3 sm:pt-1.5 sm:pb-[max(6px,env(safe-area-inset-bottom,0px))]">
+      <div className="w-full max-sm:px-0 max-sm:pt-0 max-sm:pb-0 sm:px-3 sm:pt-1.5 sm:pb-[max(6px,env(safe-area-inset-bottom,0px))]">
         {actions}
       </div>
     </div>

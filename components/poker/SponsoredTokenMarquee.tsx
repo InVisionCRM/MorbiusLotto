@@ -8,14 +8,16 @@ import {
   type DexscreenerTokenInfo,
 } from '@/lib/dexscreener-token-info';
 
-const DISCORD_ICON = (
-  <svg width="11" height="11" viewBox="0 0 24 24" fill="currentColor" aria-hidden>
-    <path d="M19.27 5.33A17.09 17.09 0 0 0 14.97 4l-.21.4a14.43 14.43 0 0 0-5.52 0L9.03 4a17.06 17.06 0 0 0-4.3 1.33C2.06 9.27 1.32 13.1 1.7 16.86a17.27 17.27 0 0 0 5.27 2.66l.42-.59a11.5 11.5 0 0 1-1.84-.88l.45-.36a12.36 12.36 0 0 0 12 0l.45.36c-.58.34-1.2.64-1.84.88l.42.59a17.31 17.31 0 0 0 5.27-2.66c.43-4.36-.71-8.16-2.83-11.53ZM8.52 14.34c-1.04 0-1.9-.95-1.9-2.13 0-1.18.84-2.14 1.9-2.14 1.07 0 1.92.96 1.9 2.14 0 1.18-.84 2.13-1.9 2.13Zm6.96 0c-1.04 0-1.9-.95-1.9-2.13 0-1.18.85-2.14 1.9-2.14 1.07 0 1.92.96 1.9 2.14 0 1.18-.84 2.13-1.9 2.13Z" />
-  </svg>
-);
-
 const MORBIUS_TOKEN_ADDRESS = '0xB7d4eB5fDfE3d4d3B5C16a44A49948c6EC77c6F1';
 const MORBIUS_FALLBACK_LOGO = '/morbius/MorbiusLogo-2.svg';
+
+function DiscordGlyph({ size }: { size: number }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="currentColor" aria-hidden>
+      <path d="M19.27 5.33A17.09 17.09 0 0 0 14.97 4l-.21.4a14.43 14.43 0 0 0-5.52 0L9.03 4a17.06 17.06 0 0 0-4.3 1.33C2.06 9.27 1.32 13.1 1.7 16.86a17.27 17.27 0 0 0 5.27 2.66l.42-.59a11.5 11.5 0 0 1-1.84-.88l.45-.36a12.36 12.36 0 0 0 12 0l.45.36c-.58.34-1.2.64-1.84.88l.42.59a17.31 17.31 0 0 0 5.27-2.66c.43-4.36-.71-8.16-2.83-11.53ZM8.52 14.34c-1.04 0-1.9-.95-1.9-2.13 0-1.18.84-2.14 1.9-2.14 1.07 0 1.92.96 1.9 2.14 0 1.18-.84 2.13-1.9 2.13Zm6.96 0c-1.04 0-1.9-.95-1.9-2.13 0-1.18.85-2.14 1.9-2.14 1.07 0 1.92.96 1.9 2.14 0 1.18-.84 2.13-1.9 2.13Z" />
+    </svg>
+  );
+}
 
 export interface SponsoredTokenMarqueeProps {
   /** When non-null, renders this token; otherwise falls back to MORBIUS. */
@@ -33,6 +35,8 @@ export interface SponsoredTokenMarqueeProps {
   onOpenSponsorModal?: () => void;
   /** Compact = mobile/floating variants (smaller text). */
   compact?: boolean;
+  /** Tighter typography and icons (poker mobile action strip). */
+  density?: 'default' | 'tight';
 }
 
 type Chip = {
@@ -69,6 +73,7 @@ export function SponsoredTokenMarquee({
   priceMorbiusChips,
   onOpenSponsorModal,
   compact = false,
+  density = 'default',
 }: SponsoredTokenMarqueeProps) {
   const [info, setInfo] = useState<DexscreenerTokenInfo | null>(null);
   const [tick, setTick] = useState(0);
@@ -109,7 +114,10 @@ export function SponsoredTokenMarquee({
     [sponsoredUntil, tick],
   );
 
-  const logoSize = compact ? 14 : 16;
+  const tight = density === 'tight';
+  const iconSz = tight ? 10 : 11;
+
+  const logoSize = tight ? 12 : compact ? 14 : 16;
   const tokenLogoNode = tokenLogo ? (
     <img
       src={tokenLogo}
@@ -125,7 +133,7 @@ export function SponsoredTokenMarquee({
         src={tokenLogo}
         alt=""
         className="rounded-full bg-black/20 object-contain ring-1 ring-white/10"
-        style={{ width: compact ? 18 : 20, height: compact ? 18 : 20 }}
+        style={{ width: tight ? 16 : compact ? 18 : 20, height: tight ? 16 : compact ? 18 : 20 }}
         draggable={false}
       />
     </span>
@@ -195,7 +203,7 @@ export function SponsoredTokenMarquee({
       key: 'twitter',
       content: (
         <span className="inline-flex items-center gap-1 text-cyan-300/85">
-          <Twitter size={11} /> Twitter
+          <Twitter size={iconSz} /> Twitter
         </span>
       ),
       href: socials.twitter,
@@ -206,7 +214,7 @@ export function SponsoredTokenMarquee({
       key: 'telegram',
       content: (
         <span className="inline-flex items-center gap-1 text-cyan-300/85">
-          <Send size={11} /> Telegram
+          <Send size={iconSz} /> Telegram
         </span>
       ),
       href: socials.telegram,
@@ -217,7 +225,7 @@ export function SponsoredTokenMarquee({
       key: 'discord',
       content: (
         <span className="inline-flex items-center gap-1 text-cyan-300/85">
-          {DISCORD_ICON} Discord
+          <DiscordGlyph size={iconSz} /> Discord
         </span>
       ),
       href: socials.discord,
@@ -228,7 +236,7 @@ export function SponsoredTokenMarquee({
       key: 'website',
       content: (
         <span className="inline-flex items-center gap-1 text-cyan-300/85">
-          <Globe size={11} /> Website
+          <Globe size={iconSz} /> Website
         </span>
       ),
       href: websites[0],
@@ -248,7 +256,7 @@ export function SponsoredTokenMarquee({
     key: 'scan',
     content: (
       <span className="inline-flex items-center gap-1 text-cyan-300/85">
-        <ExternalLink size={11} /> scan.morbius.io
+        <ExternalLink size={iconSz} /> scan.morbius.io
       </span>
     ),
     href: buildScanMorbiusLink(targetAddress),
@@ -288,8 +296,8 @@ export function SponsoredTokenMarquee({
 
   // Duplicate items so the CSS marquee loops seamlessly.
   const looped = [...chips, ...chips];
-  const textCls = compact ? 'text-[10px]' : 'text-[11px] md:text-[12px]';
-  const dotCls = compact ? 'mx-2' : 'mx-3';
+  const textCls = tight ? 'text-[9px]' : compact ? 'text-[10px]' : 'text-[11px] md:text-[12px]';
+  const dotCls = tight ? 'mx-1.5' : compact ? 'mx-2' : 'mx-3';
 
   return (
     <div

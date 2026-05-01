@@ -17,6 +17,8 @@ export interface PokerBoardProps {
   dataTutorialTargetPot?: boolean;
   /** Wall-clock ISO when the next hand starts; shows a thin countdown bar under the board. */
   betweenHandsNextHandAtIso?: string | null;
+  /** During showdown staging: skip Shockwave Slam so board cards do not replay deal-in. */
+  suppressCommunityEntryMotion?: boolean;
 }
 
 function BetweenHandsProgressBar({ nextHandAtIso }: { nextHandAtIso: string }) {
@@ -123,6 +125,7 @@ export function PokerBoard({
   dimNonWinning,
   dataTutorialTargetPot,
   betweenHandsNextHandAtIso,
+  suppressCommunityEntryMotion = false,
 }: PokerBoardProps) {
   const potNum = useMemo(() => parsePotChips(pot), [pot]);
 
@@ -185,6 +188,7 @@ export function PokerBoard({
                     key={idx}
                     cardIndex={idx}
                     dealDelay={i * 0.12}
+                    suppressEntryMotion={suppressCommunityEntryMotion}
                     isWinningCard={winningCardIndices?.includes(idx)}
                     isDimmed={dimNonWinning && !winningCardIndices?.includes(idx)}
                     showCenterRankSuitOverlay

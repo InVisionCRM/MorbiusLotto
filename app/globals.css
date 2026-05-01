@@ -964,7 +964,9 @@ body {
    - Restructure the poker page flex-col layout for landscape — use CSS only.
    - Add conditional JS rendering for landscape vs portrait.
    - Change PokerSeat, PokerTable, or PokerActions component props/interfaces.
-   - Move the action bar or header into different DOM positions.
+   - Move the action bar or header into different DOM positions (exception: the
+     tournament Stream voice strip may render in the header center column to save
+     vertical space — that slot is still within `data-poker-header`).
    All landscape adaptations are purely visual via these CSS overrides.
    ═══════════════════════════════════════════════════════════════════════════ */
 

@@ -706,19 +706,17 @@ export default function PokerTablePage() {
                 else setVoiceSplashOpen(true);
               },
             }}
-          />}
-
-          {!isFullscreen && (
-            <div className="px-2 pt-1">
+            voiceSlot={
               <VoiceChatPanel
                 wsClient={wsClient}
                 walletAddress={normalizedAddress}
                 tableId={tableId}
                 seated={Boolean(mySeat)}
                 enabled={Boolean(resolvedTournamentId)}
+                compact
               />
-            </div>
-          )}
+            }
+          />}
 
           {/* Disconnected banner */}
           {disconnected && (

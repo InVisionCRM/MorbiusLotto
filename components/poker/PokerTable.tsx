@@ -278,7 +278,15 @@ export function PokerTable({ state, currentPlayerAddress, timeLeft, chatBubbleBy
     const isFirstObservation = revealHandIdRef.current === null;
     revealHandIdRef.current = hand.handId;
 
-    const showdownAddrsAll = hand.showdownHands ? Object.keys(hand.showdownHands) : [];
+    const showdownKeys = hand.showdownHands ? Object.keys(hand.showdownHands) : [];
+    const showdownAddrsAll = [...showdownKeys].sort((a, b) => {
+      const ia = state.seats.findIndex((s) => s.playerAddress?.toLowerCase() === a.toLowerCase());
+      const ib = state.seats.findIndex((s) => s.playerAddress?.toLowerCase() === b.toLowerCase());
+      if (ia >= 0 && ib >= 0 && ia !== ib) return ia - ib;
+      if (ia >= 0 && ib < 0) return -1;
+      if (ia < 0 && ib >= 0) return 1;
+      return a.toLowerCase().localeCompare(b.toLowerCase());
+    });
     const winnerLower = new Set((hand.winners ?? []).map((w) => w.address.toLowerCase()));
     const losers = showdownAddrsAll.filter((a) => !winnerLower.has(a.toLowerCase()));
     const winners = showdownAddrsAll.filter((a) => winnerLower.has(a.toLowerCase()));
@@ -722,6 +730,7 @@ export function PokerTable({ state, currentPlayerAddress, timeLeft, chatBubbleBy
               pot={hand.pot}
               winningCardIndices={showFinalShowdownVisuals ? winningCardIndices : []}
               dimNonWinning={showFinalShowdownVisuals}
+              suppressCommunityEntryMotion={!!isShowdownWithWinners}
               dataTutorialTargetPot={dataTutorialTargetPot}
               betweenHandsNextHandAtIso={
                 showBetweenHandsTimer && intermissionEndMs != null
@@ -924,7 +933,15 @@ export function PokerTable({ state, currentPlayerAddress, timeLeft, chatBubbleBy
               >
                 {faceDown
                   ? <CardDisplay cardIndex={null} small faceDown variant="hole" dealDelay={ci * 0.12} dealFromOffset={dealFromOffset} />
-                  : <CardDisplay cardIndex={showdownCards![ci] ?? null} variant="hole" dealDelay={ci * 0.12} dealFromOffset={dealFromOffset} />}
+                  : (
+                      <CardDisplay
+                        cardIndex={showdownCards![ci] ?? null}
+                        variant="hole"
+                        dealDelay={ci * 0.12}
+                        dealFromOffset={dealFromOffset}
+                        suppressEntryMotion
+                      />
+                    )}
               </div>
             ))}
           </div>
