@@ -37,6 +37,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Dialog, DialogOverlay, DialogPortal } from '@/components/ui/dialog';
 import * as DialogPrimitive from '@radix-ui/react-dialog';
 import { cn } from '@/lib/utils';
+import { IconShare } from '@tabler/icons-react';
 import type { PieLabelRenderProps } from 'recharts';
 import { Cell, Pie, PieChart, ResponsiveContainer } from 'recharts';
 import { PokerTournamentSharePanel } from '@/components/poker/tournament/PokerTournamentSharePanel';
@@ -1389,6 +1390,65 @@ export function PokerTournamentCreator({ creatorAddress, onClose, onCreate }: Po
 
   const prizePresetLabel = findPokerPrizePresetMeta(prizePresetId)?.label ?? prizePresetId;
 
+  const shareOverlaySnapshot = useMemo(() => {
+    const local = parseLocalDateTime(scheduledDate, scheduledTime);
+    const scheduleLine = local
+      ? format(local, 'EEE, MMM d, yyyy · h:mm a')
+      : 'Start time: set on Start time tab';
+
+    const pctCompact = prizePercents
+      .filter((p) => p > 0)
+      .map((p) => `${p}%`)
+      .join(' · ');
+    const payoutLine = pctCompact ? `${prizePresetLabel} · ${pctCompact}` : prizePresetLabel;
+
+    let prizeLine = 'Set prize on Basics / Prizes';
+    if (isFreeroll) {
+      if (prizeSource === 'custom_token') {
+        if (selectedToken && customTokenAmountWei > 0n) {
+          const sym = selectedToken.symbol?.trim() || 'Token';
+          const dec = Math.min(18, Math.max(0, Number.isFinite(selectedToken.decimals) ? selectedToken.decimals : 18));
+          const amtHuman = formatUnits(customTokenAmountWei, dec);
+          const num = Number(amtHuman);
+          const shown =
+            Number.isFinite(num) && amtHuman.includes('.')
+              ? num.toLocaleString('en-US', { maximumFractionDigits: 8 })
+              : amtHuman;
+          prizeLine = `${shown} ${sym}`;
+        } else {
+          prizeLine = 'Custom token prize (Basics)';
+        }
+      } else {
+        const g = parsePositiveWholeChips(guaranteedPool);
+        prizeLine =
+          g > 0n
+            ? `${formatChips(g)} chips${prizeSource === 'platform_promo' ? ' · promo' : ''}`
+            : 'Guaranteed chips (Basics)';
+      }
+    } else {
+      const buy = parsePositiveWholeChips(buyIn);
+      const pool = buy * BigInt(prizeSlotCount);
+      prizeLine =
+        buy > 0n
+          ? `${formatChips(pool)} chips max · ${formatChips(buy)} × ${prizeSlotCount} seats`
+          : 'Buy-in (Basics)';
+    }
+
+    return { scheduleLine, prizeLine, payoutLine };
+  }, [
+    scheduledDate,
+    scheduledTime,
+    prizePercents,
+    prizePresetLabel,
+    isFreeroll,
+    prizeSource,
+    selectedToken,
+    customTokenAmountWei,
+    guaranteedPool,
+    buyIn,
+    prizeSlotCount,
+  ]);
+
   if (created) {
     return (
       <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm">
@@ -1501,14 +1561,26 @@ export function PokerTournamentCreator({ creatorAddress, onClose, onCreate }: Po
             <h2 className="text-lg font-bold text-white tracking-tight">Create a poker tournament</h2>
             <p className="text-[11px] text-white/45 mt-0.5">Sit & Go · scheduled start · you host the table size and prizes</p>
           </div>
-          <button
-            type="button"
-            onClick={onClose}
-            className="rounded-lg p-1.5 text-white/50 hover:text-white hover:bg-white/10 transition-colors"
-            aria-label="Close"
-          >
-            ×
-          </button>
+          <div className="flex items-center gap-1 shrink-0">
+            <button
+              type="button"
+              onClick={() => setActiveTab('share')}
+              disabled={!tournamentSetupComplete}
+              className="rounded-lg p-1.5 text-cyan-400/80 hover:text-cyan-300 hover:bg-cyan-500/15 transition-colors disabled:pointer-events-none disabled:opacity-35 disabled:hover:bg-transparent"
+              aria-label="Share tournament image"
+              title={tournamentSetupComplete ? 'Open Share tab' : 'Finish Type tab setup to share'}
+            >
+              <IconShare className="h-5 w-5" aria-hidden />
+            </button>
+            <button
+              type="button"
+              onClick={onClose}
+              className="rounded-lg p-1.5 text-white/50 hover:text-white hover:bg-white/10 transition-colors"
+              aria-label="Close"
+            >
+              ×
+            </button>
+          </div>
         </div>
 
         <div className="relative flex-1 min-h-0 overflow-y-auto scroll-smooth overscroll-y-contain px-5 py-4">
@@ -2109,7 +2181,13 @@ export function PokerTournamentCreator({ creatorAddress, onClose, onCreate }: Po
             </TabsContent>
 
             <TabsContent value="share" className="mt-4 space-y-4 outline-none">
-              <PokerTournamentSharePanel tournamentName={name} isFreeroll={isFreeroll} />
+              <PokerTournamentSharePanel
+                tournamentName={name}
+                isFreeroll={isFreeroll}
+                scheduleLine={shareOverlaySnapshot.scheduleLine}
+                prizeLine={shareOverlaySnapshot.prizeLine}
+                payoutLine={shareOverlaySnapshot.payoutLine}
+              />
             </TabsContent>
 
             {isAdmin && (

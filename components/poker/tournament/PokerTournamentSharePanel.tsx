@@ -15,17 +15,77 @@ import {
 const MAX_IMAGE_BYTES = 8 * 1024 * 1024;
 const ACCEPT = 'image/png,image/jpeg';
 
+function canvasToBlob(canvas: HTMLCanvasElement, type = 'image/png', quality = 0.92): Promise<Blob | null> {
+  return new Promise((resolve) => {
+    canvas.toBlob((b) => resolve(b), type, quality);
+  });
+}
+
+/**
+ * Download PNG after async canvas work. Prefer data URL (no blob lifecycle); blob + delayed revoke as fallback.
+ * Deferred click helps Safari / strict download policies after await in the handler.
+ */
+function downloadCanvasAsPng(canvas: HTMLCanvasElement, filename: string): void {
+  const tryDataUrl = (): boolean => {
+    try {
+      const dataUrl = canvas.toDataURL('image/png', 0.92);
+      if (!dataUrl || dataUrl === 'data:,') return false;
+      const a = document.createElement('a');
+      a.href = dataUrl;
+      a.download = filename;
+      a.setAttribute('rel', 'noopener noreferrer');
+      a.style.display = 'none';
+      document.body.appendChild(a);
+      window.setTimeout(() => {
+        a.click();
+        window.setTimeout(() => {
+          if (a.parentNode) document.body.removeChild(a);
+        }, 0);
+      }, 0);
+      return true;
+    } catch {
+      return false;
+    }
+  };
+
+  if (tryDataUrl()) return;
+
+  void canvasToBlob(canvas).then((blob) => {
+    if (!blob) return;
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = filename;
+    a.setAttribute('rel', 'noopener noreferrer');
+    a.style.display = 'none';
+    document.body.appendChild(a);
+    window.setTimeout(() => {
+      a.click();
+      window.setTimeout(() => {
+        if (a.parentNode) document.body.removeChild(a);
+        window.setTimeout(() => URL.revokeObjectURL(url), 4000);
+      }, 0);
+    }, 0);
+  });
+}
+
 export type PokerTournamentSharePanelProps = {
   tournamentName: string;
   isFreeroll: boolean;
   /** Shown on overlays (e.g. site + chain). */
   siteLine?: string;
+  scheduleLine: string;
+  prizeLine: string;
+  payoutLine: string;
 };
 
 export function PokerTournamentSharePanel({
   tournamentName,
   isFreeroll,
   siteLine = 'Morbius.io · PulseChain',
+  scheduleLine,
+  prizeLine,
+  payoutLine,
 }: PokerTournamentSharePanelProps) {
   const shareCardRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -71,58 +131,54 @@ export function PokerTournamentSharePanel({
     setFileError(null);
   };
 
-  const runExport = useCallback(async (): Promise<Blob | null> => {
+  const runExportCanvas = useCallback(async (): Promise<HTMLCanvasElement | null> => {
     const el = shareCardRef.current;
     if (!el) return null;
+    try {
+      if (typeof document !== 'undefined' && document.fonts?.ready) {
+        await document.fonts.ready;
+      }
+    } catch {
+      /* ignore */
+    }
+
     const canvas = await html2canvas(el, {
       scale: 2,
       useCORS: true,
-      // Blob/file preview URLs are same-origin; true avoids blank exports when the library treats images as cross-origin.
       allowTaint: true,
       backgroundColor: null,
       logging: false,
+      foreignObjectRendering: false,
+      scrollX: 0,
+      scrollY: -window.scrollY,
     });
-    return new Promise((resolve) => {
-      canvas.toBlob((blob) => {
-        if (blob) {
-          resolve(blob);
-          return;
-        }
-        try {
-          const dataUrl = canvas.toDataURL('image/png', 0.95);
-          const [header, base64] = dataUrl.split(',');
-          const mime = header?.match(/data:([^;]+)/)?.[1] ?? 'image/png';
-          const binary = atob(base64 ?? '');
-          const bytes = new Uint8Array(binary.length);
-          for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
-          resolve(new Blob([bytes], { type: mime }));
-        } catch {
-          resolve(null);
-        }
-      }, 'image/png', 0.95);
-    });
+    return canvas;
+  }, []);
+
+  const blobFromCanvas = useCallback(async (canvas: HTMLCanvasElement): Promise<Blob | null> => {
+    let blob = await canvasToBlob(canvas);
+    if (blob) return blob;
+    try {
+      const dataUrl = canvas.toDataURL('image/png', 0.92);
+      const res = await fetch(dataUrl);
+      return await res.blob();
+    } catch {
+      return null;
+    }
   }, []);
 
   const onDownload = async () => {
     setStatusMsg(null);
     setExporting(true);
     try {
-      const blob = await runExport();
-      if (!blob) {
+      const canvas = await runExportCanvas();
+      if (!canvas) {
         setStatusMsg('Could not create image.');
         return;
       }
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = `poker-tournament-share-${Date.now()}.png`;
-      a.rel = 'noopener noreferrer';
-      document.body.appendChild(a);
-      a.click();
-      document.body.removeChild(a);
-      // Revoking immediately can cancel the download before the browser reads the blob URL.
-      window.setTimeout(() => URL.revokeObjectURL(url), 2500);
-      setStatusMsg('Download started.');
+      const filename = `poker-tournament-share-${Date.now()}.png`;
+      downloadCanvasAsPng(canvas, filename);
+      setStatusMsg('Download started. Check your downloads folder.');
     } catch (err) {
       console.error('[PokerTournamentSharePanel] export failed', err);
       setStatusMsg('Export failed. Try another browser or image.');
@@ -135,7 +191,12 @@ export function PokerTournamentSharePanel({
     setStatusMsg(null);
     setExporting(true);
     try {
-      const blob = await runExport();
+      const canvas = await runExportCanvas();
+      if (!canvas) {
+        setStatusMsg('Could not create image.');
+        return;
+      }
+      const blob = await blobFromCanvas(canvas);
       if (!blob) {
         setStatusMsg('Could not create image.');
         return;
@@ -157,6 +218,9 @@ export function PokerTournamentSharePanel({
     tournamentName: tournamentName.trim() || 'My tournament',
     fundingLabel,
     siteLine,
+    scheduleLine,
+    prizeLine,
+    payoutLine,
   };
 
   return (
