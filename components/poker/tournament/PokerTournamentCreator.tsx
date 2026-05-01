@@ -1564,8 +1564,8 @@ export function PokerTournamentCreator({ creatorAddress, onClose, onCreate }: Po
                     aria-pressed={fundingKind === 'freeroll'}
                     className={`relative h-full min-h-0 min-w-0 overflow-hidden border-r border-cyan-500/20 p-0 text-center transition-[box-shadow,filter] focus:outline-none focus-visible:ring-2 focus-visible:ring-cyan-500/45 focus-visible:ring-inset ${
                       fundingKind === 'freeroll'
-                        ? 'grayscale-0 shadow-[inset_0_0_0_2px_rgba(6,182,212,0.45)]'
-                        : 'grayscale hover:brightness-110'
+                        ? 'shadow-[inset_0_0_0_2px_rgba(6,182,212,0.45)]'
+                        : 'hover:brightness-110'
                     }`}
                   >
                     <span className="sr-only">
@@ -1593,8 +1593,8 @@ export function PokerTournamentCreator({ creatorAddress, onClose, onCreate }: Po
                     aria-pressed={fundingKind === 'buyin'}
                     className={`relative h-full min-h-0 min-w-0 overflow-hidden p-0 text-center transition-[box-shadow,filter] focus:outline-none focus-visible:ring-2 focus-visible:ring-cyan-500/45 focus-visible:ring-inset ${
                       fundingKind === 'buyin'
-                        ? 'grayscale-0 shadow-[inset_0_0_0_2px_rgba(6,182,212,0.45)]'
-                        : 'grayscale hover:brightness-110'
+                        ? 'shadow-[inset_0_0_0_2px_rgba(6,182,212,0.45)]'
+                        : 'hover:brightness-110'
                     }`}
                   >
                     <span className="sr-only">

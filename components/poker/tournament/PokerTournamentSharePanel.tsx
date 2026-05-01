@@ -25,7 +25,7 @@ export type PokerTournamentSharePanelProps = {
 export function PokerTournamentSharePanel({
   tournamentName,
   isFreeroll,
-  siteLine = 'Win.Morbius.io · PulseChain',
+  siteLine = 'Morbius.io · PulseChain',
 }: PokerTournamentSharePanelProps) {
   const shareCardRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -77,12 +77,29 @@ export function PokerTournamentSharePanel({
     const canvas = await html2canvas(el, {
       scale: 2,
       useCORS: true,
-      allowTaint: false,
+      // Blob/file preview URLs are same-origin; true avoids blank exports when the library treats images as cross-origin.
+      allowTaint: true,
       backgroundColor: null,
       logging: false,
     });
     return new Promise((resolve) => {
-      canvas.toBlob((blob) => resolve(blob), 'image/png', 0.95);
+      canvas.toBlob((blob) => {
+        if (blob) {
+          resolve(blob);
+          return;
+        }
+        try {
+          const dataUrl = canvas.toDataURL('image/png', 0.95);
+          const [header, base64] = dataUrl.split(',');
+          const mime = header?.match(/data:([^;]+)/)?.[1] ?? 'image/png';
+          const binary = atob(base64 ?? '');
+          const bytes = new Uint8Array(binary.length);
+          for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+          resolve(new Blob([bytes], { type: mime }));
+        } catch {
+          resolve(null);
+        }
+      }, 'image/png', 0.95);
     });
   }, []);
 
@@ -99,12 +116,15 @@ export function PokerTournamentSharePanel({
       const a = document.createElement('a');
       a.href = url;
       a.download = `poker-tournament-share-${Date.now()}.png`;
+      a.rel = 'noopener noreferrer';
       document.body.appendChild(a);
       a.click();
       document.body.removeChild(a);
-      URL.revokeObjectURL(url);
+      // Revoking immediately can cancel the download before the browser reads the blob URL.
+      window.setTimeout(() => URL.revokeObjectURL(url), 2500);
       setStatusMsg('Download started.');
-    } catch {
+    } catch (err) {
+      console.error('[PokerTournamentSharePanel] export failed', err);
       setStatusMsg('Export failed. Try another browser or image.');
     } finally {
       setExporting(false);
