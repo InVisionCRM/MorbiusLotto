@@ -27,6 +27,7 @@ import { PokerTournamentRulesModal } from './PokerTournamentRulesModal';
 import { MyPokerTournamentsModal } from './MyPokerTournamentsModal';
 import { ConfirmActionCard } from '@/components/shared/ConfirmActionCard';
 import { InsufficientBalanceDialog } from '@/components/shared/InsufficientBalanceDialog';
+import { EscrowBuyInJoinPanel } from './EscrowBuyInJoinPanel';
 import { Lock } from 'lucide-react';
 
 // ---------------------------------------------------------------------------
@@ -65,6 +66,30 @@ function isZeroBuyInChips(amount: string): boolean {
   } catch {
     return true;
   }
+}
+
+function isCustomTokenBuyIn(t: PokerTournamentSummary): boolean {
+  return !isZeroBuyInChips(t.buyInAmount) && !!t.prizeTokenAddress;
+}
+
+function formatBuyInCell(t: PokerTournamentSummary): string {
+  if (isZeroBuyInChips(t.buyInAmount)) return 'Freeroll';
+  if (isCustomTokenBuyIn(t)) {
+    const dec = t.prizeTokenDecimals != null ? t.prizeTokenDecimals : 18;
+    let human: string;
+    try {
+      human = formatUnits(BigInt(t.buyInAmount), dec);
+    } catch {
+      human = t.buyInAmount;
+    }
+    const tick = formatPrizeTokenUnitLabel({
+      prizeTokenAddress: t.prizeTokenAddress,
+      prizeTokenSymbol: t.prizeTokenSymbol,
+      prizeTokenName: t.prizeTokenName,
+    });
+    return `${human} ${tick}`;
+  }
+  return `${formatChips(t.buyInAmount)} chips`;
 }
 
 /** Registers bot wallets for a tournament (game server spawns `poker-bot` workers). */
@@ -237,7 +262,8 @@ const actionBtnGhost =
 type JoinFlowState =
   | null
   | { phase: 'pin'; t: PokerTournamentSummary; pin: string }
-  | { phase: 'confirm'; t: PokerTournamentSummary; pin?: string };
+  | { phase: 'confirm'; t: PokerTournamentSummary; pin?: string }
+  | { phase: 'escrow_pay'; t: PokerTournamentSummary; pin?: string };
 
 // ---------------------------------------------------------------------------
 // Main Lobby
@@ -273,6 +299,9 @@ export function PokerTournamentLobby({
   const [cancellingId, setCancellingId] = useState<string | null>(null);
   const [tournamentBotsBusyId, setTournamentBotsBusyId] = useState<string | null>(null);
   const [joinFlow, setJoinFlow] = useState<JoinFlowState>(null);
+  /** Same-chain deposit succeeded but WS registration failed — retry without sending another deposit. */
+  const escrowJoinTxRetryRef = useRef<`0x${string}` | null>(null);
+  const [leavingRegId, setLeavingRegId] = useState<string | null>(null);
   const [botsRowId, setBotsRowId] = useState<string | null>(null);
   const [botCount, setBotCount] = useState(2);
   const [botPin, setBotPin] = useState('');
@@ -330,6 +359,7 @@ export function PokerTournamentLobby({
     refreshTournaments,
     createTournament,
     joinTournament,
+    leaveTournamentRegistration,
     cancelTournament,
     forfeitTournament,
     fetchReclaimableTournaments,
@@ -355,32 +385,57 @@ export function PokerTournamentLobby({
     });
   }, [openTournaments, meLower, myTableId, myTournamentId]);
 
-  const handleJoin = async (tournamentId: string, pinCode?: string) => {
+  const handleJoin = async (
+    tournamentId: string,
+    pinCode?: string,
+    joinEscrowTxHash?: `0x${string}`,
+  ) => {
     if (joiningId) return;
     setJoiningId(tournamentId);
     setJoinError(null);
     setJoinSuccess(null);
     try {
-      const result = await joinTournament(tournamentId, pinCode);
+      const result = await joinTournament(tournamentId, pinCode, joinEscrowTxHash);
       if (result?.autoStarted && result.tableId) {
+        escrowJoinTxRetryRef.current = null;
+        setJoinFlow(null);
         onGoToTable?.(result.tableId, tournamentId);
       } else if (result && !result.autoStarted) {
+        escrowJoinTxRetryRef.current = null;
+        setJoinFlow(null);
         setJoinSuccess("You're registered! Your seat will be assigned automatically when the tournament starts.");
         await refreshTournaments();
       }
     } catch (err) {
       const msg = (err as Error).message ?? 'Failed to join';
-      if (/insufficient|not enough|balance/i.test(msg)) {
-        const t = openTournaments.find((x) => x.tournamentId === tournamentId);
-        const required = t && !isZeroBuyInChips(t.buyInAmount)
-          ? `${formatChips(t.buyInAmount)} chips`
-          : undefined;
+      const t = openTournaments.find((x) => x.tournamentId === tournamentId);
+      const tokenBuyIn = t != null && isCustomTokenBuyIn(t);
+      if (/insufficient|not enough|balance/i.test(msg) && !tokenBuyIn) {
+        const required =
+          t && !isZeroBuyInChips(t.buyInAmount) ? `${formatChips(t.buyInAmount)} chips` : undefined;
         setInsufficientChipsInfo({ required });
       } else {
         setJoinError(msg);
       }
     } finally {
       setJoiningId(null);
+    }
+  };
+
+  const handleLeaveRegistration = async (tournamentId: string) => {
+    if (leavingRegId) return;
+    setLeavingRegId(tournamentId);
+    setJoinError(null);
+    try {
+      const ok = await leaveTournamentRegistration(tournamentId);
+      if (ok) {
+        toast.success('You left the tournament. Any on-chain buy-in refund is handled by the server.');
+        await refreshTournaments();
+      } else {
+        toast.error('Could not leave registration.');
+      }
+    } finally {
+      setLeavingRegId(null);
     }
   };
 
@@ -486,8 +541,11 @@ export function PokerTournamentLobby({
   const beginJoin = (t: PokerTournamentSummary) => {
     if (joiningId != null) return;
     setJoinError(null);
+    escrowJoinTxRetryRef.current = null;
     if (t.isPrivate === true) {
       setJoinFlow({ phase: 'pin', t, pin: '' });
+    } else if (isCustomTokenBuyIn(t)) {
+      setJoinFlow({ phase: 'escrow_pay', t });
     } else {
       setJoinFlow({ phase: 'confirm', t });
     }
@@ -503,9 +561,8 @@ export function PokerTournamentLobby({
 
   const renderJoinConfirm = (t: PokerTournamentSummary, pin?: string) => {
     const isPrivate = t.isPrivate === true;
-    const isFreeroll = isZeroBuyInChips(t.buyInAmount);
     const prizeDisplay = formatPokerPrizePool(t);
-    const buyInDisplay = isFreeroll ? 'Free' : `${formatChips(t.buyInAmount)} chips`;
+    const buyInDisplay = formatBuyInCell(t);
     const prizeDistLabel = t.prizeDistributionType?.replace(/_/g, ' ') ?? '—';
     const isScheduled = !!t.scheduledStartAt && new Date(t.scheduledStartAt) > new Date();
     return (
@@ -673,7 +730,6 @@ export function PokerTournamentLobby({
                 const showBotsToggle =
                   !!myAddress && isAdminWallet(myAddress) && t.status === 'registration' && !isActive;
 
-                const buyLabel = isZeroBuyInChips(t.buyInAmount) ? 'Free' : formatChips(t.buyInAmount);
                 const sb = t.smallBlind ?? 25;
                 const bb = t.bigBlind ?? 50;
                 const mode = t.blindIncreaseMode ?? 'knockout';
@@ -710,9 +766,7 @@ export function PokerTournamentLobby({
                         <TournamentTimeColumn scheduledStartAt={t.scheduledStartAt} />
                       </td>
                       <td className={TD}>
-                        <div className="font-medium tabular-nums text-slate-100">
-                          {buyLabel === 'Free' ? 'Freeroll' : `${buyLabel} chips`}
-                        </div>
+                        <div className="font-medium tabular-nums text-slate-100">{formatBuyInCell(t)}</div>
                       </td>
                       <td className={`${TD} whitespace-nowrap tabular-nums text-slate-300`}>
                         {formatChips(sb)} / {formatChips(bb)} · {blindModeLabel(mode)}
@@ -766,6 +820,19 @@ export function PokerTournamentLobby({
                               Joined
                             </span>
                           )}
+                          {t.isRegistered &&
+                            !isActive &&
+                            t.status === 'registration' &&
+                            isCustomTokenBuyIn(t) && (
+                              <button
+                                type="button"
+                                onClick={() => void handleLeaveRegistration(t.tournamentId)}
+                                disabled={leavingRegId === t.tournamentId}
+                                className={actionBtnGhost}
+                              >
+                                {leavingRegId === t.tournamentId ? '…' : 'Leave'}
+                              </button>
+                            )}
                           {isActive && t.isRegistered && (
                             <button
                               type="button"
@@ -912,7 +979,13 @@ export function PokerTournamentLobby({
               <button
                 type="button"
                 disabled={joinFlow.pin.length < 4}
-                onClick={() => setJoinFlow({ phase: 'confirm', t: joinFlow.t, pin: joinFlow.pin })}
+                onClick={() =>
+                  setJoinFlow(
+                    isCustomTokenBuyIn(joinFlow.t)
+                      ? { phase: 'escrow_pay', t: joinFlow.t, pin: joinFlow.pin }
+                      : { phase: 'confirm', t: joinFlow.t, pin: joinFlow.pin },
+                  )
+                }
                 className="flex-1 rounded-xl bg-gradient-to-r from-cyan-600 to-cyan-500 py-2 text-xs font-bold text-white disabled:opacity-40"
               >
                 Next
@@ -923,6 +996,72 @@ export function PokerTournamentLobby({
       )}
 
       {joinFlow?.phase === 'confirm' && renderJoinConfirm(joinFlow.t, joinFlow.pin)}
+
+      {joinFlow?.phase === 'escrow_pay' &&
+        joinFlow.t.prizeTokenAddress &&
+        (() => {
+          const t = joinFlow.t;
+          let buyInWei: bigint;
+          try {
+            buyInWei = BigInt(t.buyInAmount);
+          } catch {
+            return (
+              <div className="fixed inset-0 z-[70] flex items-center justify-center p-4">
+                <div className="absolute inset-0 bg-black/75 backdrop-blur-sm" onClick={() => setJoinFlow(null)} />
+                <div className="relative rounded-2xl border border-red-500/40 bg-slate-900 p-4 text-sm text-red-200">
+                  Invalid buy-in amount for this tournament.
+                </div>
+              </div>
+            );
+          }
+          const tokenAddr = t.prizeTokenAddress as `0x${string}`;
+          const dec = t.prizeTokenDecimals ?? 18;
+          return (
+            <div className="fixed inset-0 z-[70] flex items-center justify-center p-4">
+              <div className="absolute inset-0 bg-black/75 backdrop-blur-sm" onClick={() => setJoinFlow(null)} />
+              <div
+                className="relative w-full max-w-md rounded-2xl border border-cyan-500/30 overflow-hidden shadow-2xl p-5 space-y-4"
+                style={TABLE_SHELL_STYLE}
+              >
+                <h3 className="text-lg font-bold text-white text-center">Pay buy-in</h3>
+                <p className="text-xs text-white/50 text-center">{t.name}</p>
+                <EscrowBuyInJoinPanel
+                  tournamentId={t.tournamentId}
+                  tokenAddress={tokenAddr}
+                  tokenDecimals={dec}
+                  tokenSymbol={t.prizeTokenSymbol ?? null}
+                  tokenName={t.prizeTokenName ?? null}
+                  buyInWei={buyInWei}
+                  disabled={joiningId === t.tournamentId}
+                  onCancel={() => setJoinFlow(null)}
+                  onSuccess={async (hash) => {
+                    escrowJoinTxRetryRef.current = hash;
+                    await handleJoin(t.tournamentId, t.isPrivate === true ? joinFlow.pin : undefined, hash);
+                  }}
+                />
+                {joinError && escrowJoinTxRetryRef.current && (
+                  <div className="rounded-lg border border-amber-500/35 bg-amber-500/10 px-3 py-2 space-y-2">
+                    <p className="text-[11px] text-amber-100/90">{joinError}</p>
+                    <button
+                      type="button"
+                      disabled={joiningId === t.tournamentId}
+                      onClick={() =>
+                        void handleJoin(
+                          t.tournamentId,
+                          t.isPrivate === true ? joinFlow.pin : undefined,
+                          escrowJoinTxRetryRef.current ?? undefined,
+                        )
+                      }
+                      className="w-full rounded-lg bg-gradient-to-r from-cyan-600 to-blue-600 py-2 text-xs font-semibold text-white disabled:opacity-40"
+                    >
+                      Retry registration (same deposit)
+                    </button>
+                  </div>
+                )}
+              </div>
+            </div>
+          );
+        })()}
 
       <MyPokerTournamentsModal
         open={showMyTournaments}

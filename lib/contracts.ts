@@ -106,10 +106,20 @@ export const LEGACY_BLACKJACK_ADDRESSES: readonly `0x${string}`[] = [
   ...(BLACKJACK_LEGACY_ADDRESS_7 ? [BLACKJACK_LEGACY_ADDRESS_7] : []),
 ]
 
-// Tournament Prize Escrow V4 — hybrid push (payoutMultiple) + pull (claim) escrow.
-// Replaces the legacy V2 at 0x52cb… (which lacked payoutMultiple in its deployed
-// bytecode and silently failed N-write loops on the production RPC).
-export const TOURNAMENT_PRIZE_ESCROW_ADDRESS = '0x29d65B552c8246293740e686C9b4F90F359A9F1b' as const
+// Tournament Prize Escrow V5 (addToPrizePool + V4-compatible ABI). Override via NEXT_PUBLIC_TOURNAMENT_PRIZE_ESCROW_ADDRESS after deploy.
+const DEFAULT_TOURNAMENT_PRIZE_ESCROW_ADDRESS = '0x29d65B552c8246293740e686C9b4F90F359A9F1b' as const
+
+function resolveTournamentPrizeEscrowAddress(): `0x${string}` {
+  const raw =
+    typeof process !== 'undefined' ? process.env.NEXT_PUBLIC_TOURNAMENT_PRIZE_ESCROW_ADDRESS : undefined
+  const t = typeof raw === 'string' ? raw.trim() : ''
+  if (/^0x[a-fA-F0-9]{40}$/i.test(t)) {
+    return t as `0x${string}`
+  }
+  return DEFAULT_TOURNAMENT_PRIZE_ESCROW_ADDRESS
+}
+
+export const TOURNAMENT_PRIZE_ESCROW_ADDRESS = resolveTournamentPrizeEscrowAddress()
 
 /** Legacy V2 address — kept only so funds parked in old pools can still be reclaimed. */
 export const TOURNAMENT_PRIZE_ESCROW_V2_LEGACY_ADDRESS = '0x52cbF18A8AE0Fd4324B045E13532d35CF05Af3e1' as const

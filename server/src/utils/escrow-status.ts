@@ -2,11 +2,12 @@ import { getPublicClient } from './chain-client';
 import { tournamentPrizeEscrowV2Abi } from '../abi/tournament-prize-escrow-v2';
 import { tournamentPrizeEscrowV3Abi } from '../abi/tournament-prize-escrow-v3';
 import { tournamentIdToBytes32 } from './tournament-id-bytes32';
+import { getTournamentPrizeEscrowAddress } from './tournament-escrow-address';
 
-/** Tournament Prize Escrow V2 (bytes32 tournament IDs) - hardcoded for reliability */
-// Active escrow (formerly "V2", now V4 deployed at the address below). Variable name kept
-// for compatibility with existing imports; the actual contract is TournamentPrizeEscrowV4.
-const ESCROW_V2_ADDRESS = '0x29d65B552c8246293740e686C9b4F90F359A9F1b' as const;
+/** Active bytes32 escrow (V5 / V4-compatible ABI). */
+function escrowBytes32Address(): `0x${string}` {
+  return getTournamentPrizeEscrowAddress();
+}
 const ESCROW_V3_ADDRESS = '0xa114a8974D4478b09FE9d2E2bf1BdCF28dE5bd25' as const;
 
 export interface EscrowPoolStatus {
@@ -38,7 +39,7 @@ export async function getEscrowPoolStatus(tournamentId: string): Promise<EscrowP
     const client = getPublicClient();
     const idBytes32 = tournamentIdToBytes32(tournamentId);
     const result = await client.readContract({
-      address: ESCROW_V2_ADDRESS,
+      address: escrowBytes32Address(),
       abi: tournamentPrizeEscrowV2Abi,
       functionName: 'getPool',
       args: [idBytes32],

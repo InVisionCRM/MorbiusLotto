@@ -56,6 +56,7 @@ export const WS_MESSAGE_TYPES = {
   // Poker tournaments
   pokerTournamentList: 'poker_tournament_list',
   pokerTournamentJoin: 'poker_tournament_join',
+  pokerTournamentLeaveRegistration: 'poker_tournament_leave_registration',
   pokerTournamentGetState: 'poker_tournament_get_state',
   pokerTournamentRegistrants: 'poker_tournament_registrants',
   pokerTournamentCreate: 'poker_tournament_create',
@@ -143,6 +144,7 @@ export const WS_POKER_MESSAGES = [
   WS_MESSAGE_TYPES.pokerVoiceToken,
   WS_MESSAGE_TYPES.pokerTournamentCreate,
   WS_MESSAGE_TYPES.pokerTournamentJoin,
+  WS_MESSAGE_TYPES.pokerTournamentLeaveRegistration,
   WS_MESSAGE_TYPES.pokerTournamentCancel,
 ] as const;
 

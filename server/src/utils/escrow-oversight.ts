@@ -1,9 +1,11 @@
 import { getPublicClient } from './chain-client';
 import { tournamentPrizeEscrowV2Abi } from '../abi/tournament-prize-escrow-v2';
 import { tournamentIdToBytes32 } from './tournament-id-bytes32';
+import { getTournamentPrizeEscrowAddress } from './tournament-escrow-address';
 
-/** Active escrow (V4 deployed at this address). Variable name kept for backward-compat. */
-const ESCROW_V2_ADDRESS = '0x29d65B552c8246293740e686C9b4F90F359A9F1b' as const;
+function escrowBytes32Address(): `0x${string}` {
+  return getTournamentPrizeEscrowAddress();
+}
 
 /**
  * V4 dropped the on-chain aggregation helpers (`getEscrowSummary`, `getActivePools`,
@@ -45,7 +47,7 @@ interface RawPool {
 async function readAllPools(): Promise<RawPool[]> {
   const client = getPublicClient();
   const idsRaw = (await client.readContract({
-    address: ESCROW_V2_ADDRESS,
+    address: escrowBytes32Address(),
     abi: tournamentPrizeEscrowV2Abi,
     functionName: 'getAllTournamentIds',
   })) as readonly `0x${string}`[];
@@ -55,7 +57,7 @@ async function readAllPools(): Promise<RawPool[]> {
   const pools = await Promise.all(
     ids.map(async (id) => {
       const r = (await client.readContract({
-        address: ESCROW_V2_ADDRESS,
+        address: escrowBytes32Address(),
         abi: tournamentPrizeEscrowV2Abi,
         functionName: 'getPool',
         args: [id],
@@ -167,7 +169,7 @@ export async function getPoolDetails(tournamentId: string): Promise<EscrowPoolDe
     const client = getPublicClient();
     const idBytes32 = tournamentIdToBytes32(tournamentId);
     const r = (await client.readContract({
-      address: ESCROW_V2_ADDRESS,
+      address: escrowBytes32Address(),
       abi: tournamentPrizeEscrowV2Abi,
       functionName: 'getPool',
       args: [idBytes32],

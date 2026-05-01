@@ -68,6 +68,7 @@ export const WS_POKER_MESSAGES = [
   'poker_avatar_emotion',
   'poker_tournament_create',
   'poker_tournament_join',
+  'poker_tournament_leave_registration',
   'poker_tournament_cancel',
   'poker_tournament_forfeit',
   'poker_tournament_list_reclaimable',

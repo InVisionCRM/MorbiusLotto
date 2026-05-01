@@ -991,6 +991,31 @@ export class TournamentService {
         }
       }
 
+      // Prize ERC-20 held in TournamentPrizeEscrow — sync gross remaining from chain before prize math.
+      if (tournament.prize_token_address) {
+        const poolStatus = await getEscrowPoolStatus(tournamentId);
+        const zero = '0x0000000000000000000000000000000000000000';
+        if (
+          poolStatus &&
+          poolStatus.token &&
+          String(poolStatus.token).toLowerCase() !== zero &&
+          poolStatus.totalDeposited > 0n
+        ) {
+          const remaining = poolStatus.totalDeposited - poolStatus.amountPaidOut;
+          if (remaining > 0n) {
+            actualPrizePool = remaining;
+            await client.query(`UPDATE tournaments SET prize_pool = $1::NUMERIC WHERE id = $2`, [
+              remaining.toString(),
+              tournamentId,
+            ]);
+            logger.info('Synced prize pool from escrow contract', {
+              tournamentId,
+              remaining: remaining.toString(),
+            });
+          }
+        }
+      }
+
       const prizesQuery = `SELECT * FROM calculate_tournament_prizes($1)`;
       const prizesResult = await client.query(prizesQuery, [tournamentId]);
 

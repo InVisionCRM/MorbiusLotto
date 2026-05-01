@@ -140,19 +140,30 @@ export interface CustomTokenEscrowFunding {
   name?: string;
 }
 
+/** Metadata only — server assigns UUID and escrow bytes32 at create (no on-chain deposit yet). */
+export interface CustomTokenBuyInMeta {
+  tokenAddress: string;
+  decimals: number;
+  symbol?: string;
+  name?: string;
+}
+
 export interface CreatePokerTournamentParams {
   name: string;
   buyInAmount: string;
   /** Wei string; when `"0"`, server requires `guaranteedPrizePool` unless source is `custom_token`. */
   guaranteedPrizePool?: string;
   /**
-   * `creator` (default): debit creator's poker chip wallet for the guarantee.
+   * `creator` (default): debit creator's poker chip wallet for the guarantee or chip buy-in.
    * `platform_promo`: admin only — uses platform promo wallet.
-   * `custom_token`: prize is held on-chain in the escrow contract; `customTokenEscrow` required.
+   * `custom_token`: freeroll prize on-chain; `customTokenEscrow` required.
+   * `custom_token_buyin`: players pay buy-in into escrow; `customTokenBuyIn` metadata required.
    */
-  guaranteedPrizePoolSource?: 'creator' | 'platform_promo' | 'custom_token';
+  guaranteedPrizePoolSource?: 'creator' | 'platform_promo' | 'custom_token' | 'custom_token_buyin';
   /** Required when `guaranteedPrizePoolSource === 'custom_token'`. */
   customTokenEscrow?: CustomTokenEscrowFunding;
+  /** Required when `guaranteedPrizePoolSource === 'custom_token_buyin'`. */
+  customTokenBuyIn?: CustomTokenBuyInMeta;
   prizeDistributionType: string;
   /** With `prizeDistributionType: 'custom'`, length must match `config.maxPlayers` and sum to 100. */
   prizePercentages?: number[];
@@ -238,7 +249,12 @@ export interface UsePokerTournamentReturn {
   error: string | null;
   refreshTournaments: (opts?: { silent?: boolean }) => Promise<void>;
   createTournament: (params: CreatePokerTournamentParams) => Promise<{ tournamentId: string; pinCode?: string | null } | null>;
-  joinTournament: (tournamentId: string, pinCode?: string) => Promise<{ autoStarted: boolean; tableId: string | null } | null>;
+  joinTournament: (
+    tournamentId: string,
+    pinCode?: string,
+    joinEscrowTxHash?: `0x${string}`,
+  ) => Promise<{ autoStarted: boolean; tableId: string | null } | null>;
+  leaveTournamentRegistration: (tournamentId: string) => Promise<boolean>;
   cancelTournament: (tournamentId: string) => Promise<boolean>;
   forfeitTournament: (tournamentId: string) => Promise<boolean>;
   fetchTournamentState: (tournamentId: string) => Promise<PokerTournamentState | null>;
@@ -437,19 +453,37 @@ export function usePokerTournament({
   const joinTournament = useCallback(async (
     tournamentId: string,
     pinCode?: string,
+    joinEscrowTxHash?: `0x${string}`,
   ): Promise<{ autoStarted: boolean; tableId: string | null } | null> => {
     if (!wsClient) return null;
     try {
-      const response = await wsClient.sendRequest('poker_tournament_join', { tournamentId, pinCode });
+      const response = await wsClient.sendRequest('poker_tournament_join', {
+        tournamentId,
+        pinCode,
+        ...(joinEscrowTxHash ? { joinEscrowTxHash } : {}),
+      });
       setMyTournamentId(tournamentId);
       setMyEntryStatus('playing');
       if (response?.tableId) setMyTableId(response.tableId);
       return response;
     } catch (err) {
-      setError((err as Error).message ?? 'Failed to join tournament');
-      return null;
+      const msg = (err as Error).message ?? 'Failed to join tournament';
+      setError(msg);
+      throw new Error(msg);
     }
   }, [wsClient]);
+
+  const leaveTournamentRegistration = useCallback(async (tournamentId: string): Promise<boolean> => {
+    if (!wsClient) return false;
+    try {
+      await wsClient.sendRequest('poker_tournament_leave_registration', { tournamentId });
+      await refreshTournaments();
+      return true;
+    } catch (err) {
+      setError((err as Error).message ?? 'Failed to leave registration');
+      return false;
+    }
+  }, [wsClient, refreshTournaments]);
 
   const cancelTournament = useCallback(async (tournamentId: string): Promise<boolean> => {
     if (!wsClient) return false;
@@ -572,6 +606,7 @@ export function usePokerTournament({
     refreshTournaments,
     createTournament,
     joinTournament,
+    leaveTournamentRegistration,
     cancelTournament,
     forfeitTournament,
     fetchTournamentState,

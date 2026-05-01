@@ -2,6 +2,8 @@
 
 This document describes how **Texas Hold’em Sit & Go (SNG)**–style tournaments work in MORBlotto, what “modes” exist, the main code paths, and remaining gaps. Currency is **MORBIUS** (off-chain balance for buy-ins and standard payouts unless a different global tournament path applies).
 
+**Custom PRC-20 buy-ins (on-chain escrow per seat)** are documented separately: [`CUSTOM_PRC20_BUYIN_TOURNAMENTS.md`](./CUSTOM_PRC20_BUYIN_TOURNAMENTS.md).
+
 ---
 
 ## Modes (what actually exists)
@@ -15,7 +17,7 @@ There is **one game type** in the database: `tournaments.game_type = 'poker'`. W
 
 **Freeroll SNG (guaranteed pool):** `buy_in_amount = 0` with **`guaranteedPrizePool`** at create. Default: debit the **creator’s** `players.balance` and set **`prize_pool`**. Optional **`guaranteedPrizePoolSource = platform_promo`**: caller must be in **`ADMIN_WALLETS`**; server still debits the **creator’s** balance and leaves **`guaranteed_prize_funder_address`** null (cancel / under-min refunds go to the creator, same as default). Joins do **not** add to the pool. **`distributePrizes`** unchanged. Still `game_type = 'poker'`, not blackjack **`tournament_type = 'freeroll'`**.
 
-**Not implemented for poker:** on-chain `MorbiusTournament` create/join for poker, custom prize tokens / escrow for poker, rebuys (`rebuy_config` is always `{ enabled: false }` on create), or multi-table merges.
+**Not implemented for poker:** on-chain `MorbiusTournament` create/join for poker, rebuys (`rebuy_config` is always `{ enabled: false }` on create), or multi-table merges. **Custom PRC-20 buy-ins** use **`TournamentPrizeEscrow`** + **`addToPrizePool`** (see [`CUSTOM_PRC20_BUYIN_TOURNAMENTS.md`](./CUSTOM_PRC20_BUYIN_TOURNAMENTS.md)); freeroll prize escrow via **`depositPrizePool`** remains separate.
 
 ---
 
@@ -86,9 +88,9 @@ So both surfaces read the **same DB column**. If the HUD shows addresses but sea
 
 ## Remaining gaps / follow-ups
 
-- **On-chain / escrow poker** — not wired; all buy-ins are off-chain `players.balance`.
 - **`lib/tournament-types.ts`** — PRIZE_PRESETS copy is for blackjack-style UI; payout splits are defined in SQL + server helpers.
 - **Rebuys, multi-table** — not supported.
+- **On-chain MorbiusTournament path for poker** — not used; poker uses DB + optional escrow for custom-token pools as documented above.
 
 ---
 
@@ -96,6 +98,7 @@ So both surfaces read the **same DB column**. If the HUD shows addresses but sea
 
 | Layer | Files |
 | --- | --- |
+| Custom token **buy-in** (escrow) | [`CUSTOM_PRC20_BUYIN_TOURNAMENTS.md`](./CUSTOM_PRC20_BUYIN_TOURNAMENTS.md) |
 | Service | `server/src/services/poker-tournament.service.ts` |
 | Scheduler | `server/src/services/tournament.service.ts` (`executeScheduledEvent`, `poker_start` → `startScheduledPokerTournament`) |
 | Poll loop | `server/src/services/freeroll-scheduler.service.ts` |

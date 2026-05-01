@@ -146,7 +146,7 @@ export function PokerTournamentSharePanel({
       scale: 2,
       useCORS: true,
       allowTaint: true,
-      backgroundColor: null,
+      backgroundColor: '#0c1222',
       logging: false,
       foreignObjectRendering: false,
       scrollX: 0,
@@ -290,7 +290,12 @@ export function PokerTournamentSharePanel({
         <div className="flex justify-center overflow-x-auto pb-1">
           <div
             ref={shareCardRef}
-            className="relative aspect-[1200/630] w-full max-w-[600px] shrink-0 overflow-hidden rounded-xl border border-cyan-500/25 bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950 shadow-lg"
+            className="relative aspect-[1200/630] w-full max-w-[600px] shrink-0 overflow-hidden rounded-xl"
+            style={{
+              background: 'linear-gradient(145deg, #0f172a 0%, #0c1524 45%, #0f172a 100%)',
+              border: '1px solid rgba(6, 182, 212, 0.28)',
+              boxShadow: '0 10px 15px -3px rgba(0,0,0,0.45)',
+            }}
           >
             {previewUrl ? (
               <img src={previewUrl} alt="" className="absolute inset-0 h-full w-full object-cover" />
@@ -302,7 +307,13 @@ export function PokerTournamentSharePanel({
                 }}
               />
             )}
-            <div className="absolute inset-0 bg-[radial-gradient(circle_at_50%_40%,rgba(34,211,238,0.06),transparent_65%)]" aria-hidden />
+            <div
+              className="pointer-events-none absolute inset-0"
+              style={{
+                background: 'radial-gradient(circle at 50% 40%, rgba(34,211,238,0.06), transparent 65%)',
+              }}
+              aria-hidden
+            />
             {renderShareOverlay(overlayStyle, overlayProps)}
           </div>
         </div>
