@@ -189,6 +189,7 @@ export class WebSocketService {
     handlePokerTournamentListClaimable(ws: any, message: any): Promise<void>;
     handlePokerTournamentCreate(ws: any, message: any): Promise<void>;
     handlePokerTournamentJoin(ws: any, message: any): Promise<void>;
+    handlePokerTournamentLeaveRegistration(ws: any, message: any): Promise<void>;
     handlePokerTournamentGetState(ws: any, message: any): Promise<void>;
     handlePokerTournamentRegistrants(ws: any, message: any): Promise<void>;
     handlePokerTournamentCancel(ws: any, message: any): Promise<void>;

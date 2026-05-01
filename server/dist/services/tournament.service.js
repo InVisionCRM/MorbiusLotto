@@ -676,6 +676,28 @@ class TournamentService {
                     });
                 }
             }
+            // Prize ERC-20 held in TournamentPrizeEscrow — sync gross remaining from chain before prize math.
+            if (tournament.prize_token_address) {
+                const poolStatus = await (0, escrow_status_1.getEscrowPoolStatus)(tournamentId);
+                const zero = '0x0000000000000000000000000000000000000000';
+                if (poolStatus &&
+                    poolStatus.token &&
+                    String(poolStatus.token).toLowerCase() !== zero &&
+                    poolStatus.totalDeposited > 0n) {
+                    const remaining = poolStatus.totalDeposited - poolStatus.amountPaidOut;
+                    if (remaining > 0n) {
+                        actualPrizePool = remaining;
+                        await client.query(`UPDATE tournaments SET prize_pool = $1::NUMERIC WHERE id = $2`, [
+                            remaining.toString(),
+                            tournamentId,
+                        ]);
+                        logger_1.logger.info('Synced prize pool from escrow contract', {
+                            tournamentId,
+                            remaining: remaining.toString(),
+                        });
+                    }
+                }
+            }
             const prizesQuery = `SELECT * FROM calculate_tournament_prizes($1)`;
             const prizesResult = await client.query(prizesQuery, [tournamentId]);
             const useEscrow = Boolean(tournament.prize_token_address);
@@ -2209,10 +2231,16 @@ class TournamentService {
         t.game_type,
         t.status,
         t.created_at,
+        t.activated_at AS started_at,
         t.ended_at,
         t.custom_image,
+        t.creator_address,
+        t.escrow_tx_hash,
+        cdn.display_name AS creator_display_name,
         (SELECT COUNT(*)::int FROM tournament_entries te WHERE te.tournament_id = t.id) AS entry_count
       FROM tournaments t
+      LEFT JOIN chat_display_names cdn
+        ON LOWER(TRIM(cdn.wallet_address)) = LOWER(TRIM(t.creator_address))
       WHERE t.status IN ('completed', 'cancelled')
       ORDER BY COALESCE(t.ended_at, t.created_at) DESC
       LIMIT $1 OFFSET $2
@@ -2231,8 +2259,12 @@ class TournamentService {
             gameType: row.game_type != null ? String(row.game_type) : null,
             status: row.status,
             createdAt: row.created_at,
+            startedAt: row.started_at ?? null,
             endedAt: row.ended_at ?? null,
             customImage: row.custom_image ?? null,
+            creatorAddress: row.creator_address != null ? String(row.creator_address) : null,
+            creatorDisplayName: row.creator_display_name != null ? String(row.creator_display_name).trim() || null : null,
+            escrowTxHash: row.escrow_tx_hash != null ? String(row.escrow_tx_hash) : null,
             entryCount: Number(row.entry_count ?? 0),
         }));
     }
@@ -2240,7 +2272,7 @@ class TournamentService {
     async getTournamentResults(tournamentId) {
         const tRes = await this.pool.query(`SELECT id, name, tournament_type, buy_in_amount, starting_chips, prize_pool,
               prize_token_address, prize_token_decimals, prize_token_symbol, prize_token_name,
-              game_type, status, created_at, started_at, ended_at, custom_image,
+              game_type, status, created_at, activated_at AS started_at, ended_at, custom_image,
               time_limit_minutes, max_players, prize_distribution_type
          FROM tournaments WHERE id = $1`, [tournamentId]);
         if (tRes.rows.length === 0)
@@ -2248,8 +2280,11 @@ class TournamentService {
         const t = tRes.rows[0];
         const eRes = await this.pool.query(`SELECT te.id AS entry_id, te.player_address, te.final_rank, te.prize_won,
               te.status, te.bought_in_at, te.finished_at, te.hands_played,
-              te.highest_chip_count, te.chips_remaining
+              te.highest_chip_count, te.chips_remaining,
+              NULLIF(TRIM(cdn.display_name), '') AS display_name
          FROM tournament_entries te
+         LEFT JOIN chat_display_names cdn
+           ON LOWER(TRIM(cdn.wallet_address)) = LOWER(TRIM(te.player_address))
          WHERE te.tournament_id = $1
          ORDER BY
            CASE WHEN te.final_rank IS NULL THEN 1 ELSE 0 END,
@@ -2279,6 +2314,7 @@ class TournamentService {
             entries: eRes.rows.map((row) => ({
                 entryId: row.entry_id,
                 playerAddress: row.player_address,
+                displayName: row.display_name != null ? String(row.display_name) : null,
                 finalRank: row.final_rank != null ? Number(row.final_rank) : null,
                 prizeWon: this.toBigInt(row.prize_won),
                 status: row.status,

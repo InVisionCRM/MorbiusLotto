@@ -60,10 +60,9 @@ function chevtekStreetToPoker(round, hasWinners) {
 // Rake configuration (cash games only — tournaments use virtual chips)
 // ---------------------------------------------------------------------------
 const RAKE_PERCENT = 5; // 5% of each pot
-// Client plays a staged reveal animation (~5–7s for all-in run-outs) before the
-// winner medallion mounts. Pad the delay so the medallion still gets its full
-// time on screen after the reveal finishes.
-const SHOWDOWN_DELAY_MS = 22_000;
+// Post-showdown pause before the next hand is dealt. Keep in sync with
+// `POKER_BETWEEN_HANDS_DELAY_MS` in `lib/poker-between-hands-delay.ts`.
+const SHOWDOWN_DELAY_MS = 15_000;
 const SHOWDOWN_DELAY_SECONDS = SHOWDOWN_DELAY_MS / 1000;
 // ---------------------------------------------------------------------------
 // PokerGameService
@@ -211,12 +210,13 @@ class PokerGameService {
     // ---------------------------------------------------------------------------
     async listTables() {
         const pool = this.getPool();
-        const result = await pool.query(`SELECT t.id, t.small_blind, t.big_blind, t.max_seats, t.status, t.pin_code,
+        const result = await pool.query(`SELECT t.id, t.small_blind, t.big_blind, t.max_seats, t.status, t.pin_code, t.created_at, t.creator_address,
               COUNT(s.id) FILTER (WHERE s.player_address IS NOT NULL) AS seated_count
        FROM poker_tables t
        LEFT JOIN poker_seats s ON s.table_id = t.id
        WHERE t.status IN ('waiting', 'playing') AND (t.tournament_mode IS NULL OR t.tournament_mode = FALSE)
-       GROUP BY t.id ORDER BY t.created_at ASC`);
+       GROUP BY t.id, t.small_blind, t.big_blind, t.max_seats, t.status, t.pin_code, t.created_at, t.creator_address
+       ORDER BY t.created_at ASC`);
         return result.rows.map((r) => ({
             id: r.id,
             smallBlind: r.small_blind?.toString() ?? '0',
@@ -226,9 +226,11 @@ class PokerGameService {
             seatedCount: Number(r.seated_count) || 0,
             emptySeats: Math.max(0, (Number(r.max_seats) || 10) - (Number(r.seated_count) || 0)),
             hasPin: !!r.pin_code,
+            creatorAddress: r.creator_address ? String(r.creator_address).toLowerCase() : null,
+            createdAt: r.created_at ? new Date(r.created_at).toISOString() : null,
         }));
     }
-    async createTable(smallBlindChips, bigBlindChips, maxSeats, pinCode) {
+    async createTable(smallBlindChips, bigBlindChips, maxSeats, pinCode, creatorAddress) {
         if (!Number.isInteger(smallBlindChips) || !Number.isInteger(bigBlindChips) || smallBlindChips <= 0 || bigBlindChips <= 0) {
             throw new Error('Blinds must be positive integers (chips)');
         }
@@ -242,9 +244,12 @@ class PokerGameService {
             throw new Error('maxSeats must be an integer from 2 to 10');
         }
         const pool = this.getPool();
-        const r = await pool.query(`INSERT INTO poker_tables (small_blind, big_blind, max_seats, status, pin_code)
-       VALUES ($1::NUMERIC, $2::NUMERIC, $3, 'waiting', $4)
-       RETURNING id`, [String(smallBlindChips), String(bigBlindChips), maxSeats, pinCode ?? null]);
+        const normalizedCreator = typeof creatorAddress === 'string' && /^0x[a-fA-F0-9]{40}$/.test(creatorAddress)
+            ? creatorAddress.toLowerCase()
+            : null;
+        const r = await pool.query(`INSERT INTO poker_tables (small_blind, big_blind, max_seats, status, pin_code, creator_address)
+       VALUES ($1::NUMERIC, $2::NUMERIC, $3, 'waiting', $4, $5)
+       RETURNING id`, [String(smallBlindChips), String(bigBlindChips), maxSeats, pinCode ?? null, normalizedCreator]);
         return r.rows[0].id;
     }
     async deleteTable(tableId) {
@@ -606,7 +611,7 @@ class PokerGameService {
         let currentHand = null;
         let myHoleCards = null;
         const handRow = await pool.query(`SELECT id, hand_number, button_position, community_cards, pot_amount, street,
-              acting_position, turn_started_at, result, last_raise_size
+              acting_position, turn_started_at, result, last_raise_size, completed_at
        FROM poker_hands WHERE table_id = $1
          AND (completed_at IS NULL OR (street = 'showdown' AND completed_at > NOW() - INTERVAL '${SHOWDOWN_DELAY_SECONDS} seconds'))
        ORDER BY CASE WHEN completed_at IS NULL THEN 0 ELSE 1 END, created_at DESC LIMIT 1`, [tableId]);
@@ -726,15 +731,18 @@ class PokerGameService {
             const potStr = liveTable && liveTable.currentRound
                 ? String(Math.max(0, Math.round((0, poker_chip_scale_1.totalPotChips)(liveTable))))
                 : (h.pot_amount?.toString() ?? '0');
-            // Update seat flags
+            // Update seat flags (dealer / blinds / acting apply to every chair — empty seats too — so the
+            // client can place the dealer disc even if the button seat is momentarily empty.)
             for (const seat of seats) {
-                if (!seat.playerAddress)
-                    continue;
                 const pos = seat.position;
                 seat.isDealer = pos === dealerPos;
                 seat.isSmallBlind = pos === sbPos;
                 seat.isBigBlind = pos === bbPos;
                 seat.isActing = actingPosition === pos;
+                if (!seat.playerAddress) {
+                    seat.folded = false;
+                    continue;
+                }
                 seat.folded = foldedSet.has(this.normalizeAddress(seat.playerAddress));
                 // Live bet override if not done above
                 if (liveTable) {
@@ -766,15 +774,26 @@ class PokerGameService {
                         : JSON.parse(holeResult.rows[0].cards);
                 }
             }
-            // Showdown: reveal all hands and winners
+            // Showdown: winners always; hole cards only when ≥2 dealt players reached the end without folding.
             if (street === 'showdown') {
-                const allHoleResult = await pool.query('SELECT player_address, cards FROM poker_hand_hole_cards WHERE hand_id = $1', [handId]);
-                const showdownHands = {};
-                for (const row of allHoleResult.rows) {
-                    const cards = Array.isArray(row.cards) ? row.cards : JSON.parse(row.cards ?? '[]');
-                    showdownHands[this.normalizeAddress(row.player_address)] = cards;
+                const dealtHoleResult = await pool.query('SELECT player_address FROM poker_hand_hole_cards WHERE hand_id = $1', [handId]);
+                const dealtAddrs = new Set(dealtHoleResult.rows.map((r) => this.normalizeAddress(r.player_address)));
+                let nonFoldedDealtCount = 0;
+                for (const addr of dealtAddrs) {
+                    if (!foldedSet.has(addr))
+                        nonFoldedDealtCount += 1;
                 }
-                currentHand.showdownHands = showdownHands;
+                const handWentToShowdown = nonFoldedDealtCount >= 2;
+                currentHand.handWentToShowdown = handWentToShowdown;
+                if (handWentToShowdown) {
+                    const allHoleResult = await pool.query('SELECT player_address, cards FROM poker_hand_hole_cards WHERE hand_id = $1', [handId]);
+                    const showdownHands = {};
+                    for (const row of allHoleResult.rows) {
+                        const cards = Array.isArray(row.cards) ? row.cards : JSON.parse(row.cards ?? '[]');
+                        showdownHands[this.normalizeAddress(row.player_address)] = cards;
+                    }
+                    currentHand.showdownHands = showdownHands;
+                }
                 if (h.result) {
                     try {
                         const parsed = typeof h.result === 'string' ? JSON.parse(h.result) : h.result;
@@ -796,6 +815,13 @@ class PokerGameService {
                     }
                     catch {
                         // ignore
+                    }
+                }
+                if (h.completed_at) {
+                    const rawCompleted = h.completed_at;
+                    const completedMs = rawCompleted instanceof Date ? rawCompleted.getTime() : new Date(rawCompleted).getTime();
+                    if (Number.isFinite(completedMs)) {
+                        currentHand.nextHandAt = new Date(completedMs + SHOWDOWN_DELAY_MS).toISOString();
                     }
                 }
             }

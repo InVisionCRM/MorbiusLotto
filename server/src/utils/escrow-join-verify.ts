@@ -1,4 +1,4 @@
-import { parseEventLogs } from 'viem';
+import { decodeEventLog, type Hex } from 'viem';
 import { getPublicClient } from './chain-client';
 import { tournamentPrizeEscrowV2Abi } from '../abi/tournament-prize-escrow-v2';
 import { tournamentIdToBytes32 } from './tournament-id-bytes32';
@@ -46,22 +46,39 @@ export async function verifyEscrowAddToPrizePoolJoinTx(params: {
       return { ok: false, error: 'Deposit transaction sender does not match player wallet' };
     }
 
-    const prizeLogs = parseEventLogs({
-      abi: tournamentPrizeEscrowV2Abi,
-      logs: receipt.logs,
-      eventName: 'PrizePoolAdded',
-      strict: false,
-    });
+    /** Server uses viem ^1.x — `parseEventLogs` is v2+; decode each log with `decodeEventLog`. */
+    type RpcLog = (typeof receipt.logs)[number];
+    const decodedRows: Array<{ address: string; args: Record<string, unknown> }> = [];
+    for (const rawLog of receipt.logs) {
+      const log = rawLog as RpcLog;
+      if (!log.topics?.length) continue;
+      try {
+        const decoded = decodeEventLog({
+          abi: tournamentPrizeEscrowV2Abi,
+          data: (log.data ?? '0x') as Hex,
+          topics: log.topics as [Hex, ...Hex[]],
+          strict: false,
+        });
+        if (decoded.eventName !== 'PrizePoolAdded') continue;
+        const args = decoded.args;
+        if (!args || typeof args !== 'object') continue;
+        decodedRows.push({
+          address: String(log.address).toLowerCase(),
+          args: args as Record<string, unknown>,
+        });
+      } catch {
+        /* wrong selector / not this contract */
+      }
+    }
 
-    const match = prizeLogs.find((log) => {
-      if (!log.args || typeof log.args !== 'object') return false;
-      const a = log.args as Record<string, unknown>;
+    const match = decodedRows.find((row) => {
+      const a = row.args;
       const tid = String(a.tournamentId ?? '').toLowerCase();
       const tok = String(a.token ?? '').toLowerCase();
       const amt = a.amount as bigint | undefined;
       const contrib = String(a.contributor ?? '').toLowerCase();
       return (
-        log.address.toLowerCase() === escrowAddr &&
+        row.address === escrowAddr &&
         tid === wantBytes32 &&
         tok === tokenWant &&
         amt === buyInAmountWei &&

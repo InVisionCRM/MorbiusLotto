@@ -19,6 +19,7 @@ exports.POKER_MESSAGE_HANDLER_MAP = {
     poker_tournament_list_claimable: 'handlePokerTournamentListClaimable',
     poker_tournament_create: 'handlePokerTournamentCreate',
     poker_tournament_join: 'handlePokerTournamentJoin',
+    poker_tournament_leave_registration: 'handlePokerTournamentLeaveRegistration',
     poker_tournament_get_state: 'handlePokerTournamentGetState',
     poker_tournament_cancel: 'handlePokerTournamentCancel',
     poker_tournament_forfeit: 'handlePokerTournamentForfeit',

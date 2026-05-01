@@ -4,8 +4,8 @@ exports.tournamentPrizeEscrowV2Abi = void 0;
 /**
  * ABI for the deployed escrow contract at TOURNAMENT_PRIZE_ESCROW_ADDRESS.
  *
- * Filename retained for compatibility with existing imports — actually the V4 contract
- * (TournamentPrizeEscrowV4.sol). Differences vs the legacy V2 layout:
+ * Filename retained for compatibility with existing imports — targets V5 bytecode
+ * (TournamentPrizeEscrowV5.sol = V4 + `addToPrizePool`). Differences vs the legacy V2 layout:
  *   - getPool returns 6 fields (no `active`); derive `active = !cancelled && remaining > 0`
  *   - payoutMultiple takes uint256[] amounts (raw wei), NOT percentages
  *   - setUnclaimedShares + claim + unclaimedOf added for the pull-backup path
@@ -19,6 +19,17 @@ exports.tournamentPrizeEscrowV2Abi = [
             { name: 'amount', type: 'uint256' },
         ],
         name: 'depositPrizePool',
+        outputs: [],
+        stateMutability: 'nonpayable',
+        type: 'function',
+    },
+    {
+        inputs: [
+            { name: 'tournamentId', type: 'bytes32' },
+            { name: 'token', type: 'address' },
+            { name: 'amount', type: 'uint256' },
+        ],
+        name: 'addToPrizePool',
         outputs: [],
         stateMutability: 'nonpayable',
         type: 'function',
@@ -168,6 +179,17 @@ exports.tournamentPrizeEscrowV2Abi = [
             { indexed: true, name: 'depositor', type: 'address' },
         ],
         name: 'PrizePoolDeposited',
+        type: 'event',
+    },
+    {
+        anonymous: false,
+        inputs: [
+            { indexed: true, name: 'tournamentId', type: 'bytes32' },
+            { indexed: true, name: 'token', type: 'address' },
+            { indexed: false, name: 'amount', type: 'uint256' },
+            { indexed: true, name: 'contributor', type: 'address' },
+        ],
+        name: 'PrizePoolAdded',
         type: 'event',
     },
     {

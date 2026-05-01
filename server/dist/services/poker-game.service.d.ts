@@ -10,6 +10,10 @@ export interface PokerTableSummary {
     seatedCount: number;
     emptySeats: number;
     hasPin: boolean;
+    /** Lowercase 0x creator; null for legacy tables. */
+    creatorAddress: string | null;
+    /** ISO8601 when the table row was created (server clock). */
+    createdAt: string | null;
 }
 export interface PokerSeatState {
     position: number;
@@ -63,6 +67,11 @@ export interface PokerCurrentHand {
     turnStartedAt: string | null;
     /** At showdown: all players' revealed hole cards keyed by address */
     showdownHands?: Record<string, number[]>;
+    /**
+     * At showdown: true when at least two dealt-in players did not fold (real showdown).
+     * False on fold-out wins — clients must not expose uncalled winners' hole cards.
+     */
+    handWentToShowdown?: boolean;
     /** At showdown: winner(s), amount each receives, optional hand name, and 5 card indices forming best hand */
     winners?: {
         address: string;
@@ -70,6 +79,8 @@ export interface PokerCurrentHand {
         handName?: string;
         winningCardIndices?: number[];
     }[];
+    /** ISO wall time when the server will auto-start the next hand (showdown intermission only). */
+    nextHandAt?: string | null;
 }
 export interface PokerTableState {
     tableId: string;
@@ -159,7 +170,7 @@ export declare class PokerGameService {
     private scheduleNextHandAfterShowdown;
     private broadcastState;
     listTables(): Promise<PokerTableSummary[]>;
-    createTable(smallBlindChips: number, bigBlindChips: number, maxSeats: number, pinCode?: string): Promise<string>;
+    createTable(smallBlindChips: number, bigBlindChips: number, maxSeats: number, pinCode?: string, creatorAddress?: string | null): Promise<string>;
     deleteTable(tableId: string): Promise<boolean>;
     /** `buyInChips` is a stringified whole-chip count (not MORBIUS wei). */
     joinTable(tableId: string, playerAddress: string, buyInChips: string, pinCode?: string): Promise<PokerTableState>;

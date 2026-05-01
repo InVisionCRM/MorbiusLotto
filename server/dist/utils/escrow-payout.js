@@ -16,10 +16,11 @@ const tournament_prize_escrow_v2_1 = require("../abi/tournament-prize-escrow-v2"
 const tournament_prize_escrow_v3_1 = require("../abi/tournament-prize-escrow-v3");
 const escrow_status_1 = require("./escrow-status");
 const tournament_id_bytes32_1 = require("./tournament-id-bytes32");
+const tournament_escrow_address_1 = require("./tournament-escrow-address");
 const logger_1 = require("./logger");
-/** Tournament Prize Escrow V2 (bytes32 tournament IDs) - hardcoded for reliability */
-// Active escrow (V4 deployed at this address). Variable name kept for backward-compat.
-const ESCROW_V2_ADDRESS = '0x29d65B552c8246293740e686C9b4F90F359A9F1b';
+function escrowBytes32Address() {
+    return (0, tournament_escrow_address_1.getTournamentPrizeEscrowAddress)();
+}
 /** V3 (uint256 IDs) - kept for cancel/reclaim of legacy V3-funded tournaments */
 const ESCROW_V3_ADDRESS = '0xa114a8974D4478b09FE9d2E2bf1BdCF28dE5bd25';
 const AUTHORIZED_KEY = (process.env.TOURNAMENT_PRIZE_ESCROW_AUTHORIZED_KEY || process.env.SETTLEMENT_PRIVATE_KEY);
@@ -54,7 +55,7 @@ async function sendEscrowPayout(tournamentId, winnerAddress, amount) {
     logger_1.logger.info('sendEscrowPayout: invoking', {
         tournamentId,
         bytes32Id: idBytes32,
-        escrow: ESCROW_V2_ADDRESS,
+        escrow: escrowBytes32Address(),
         winner,
         amount: amount.toString(),
         callerWallet: AUTHORIZED_KEY ? (0, accounts_1.privateKeyToAccount)(AUTHORIZED_KEY).address : '<MISSING_KEY>',
@@ -66,7 +67,7 @@ async function sendEscrowPayout(tournamentId, winnerAddress, amount) {
             const hash = await client.writeContract({
                 account: client.account,
                 chain: chains_1.pulsechain,
-                address: ESCROW_V2_ADDRESS,
+                address: escrowBytes32Address(),
                 abi: tournament_prize_escrow_v2_1.tournamentPrizeEscrowV2Abi,
                 functionName: 'payout',
                 args: [idBytes32, winner, amount],
@@ -129,7 +130,7 @@ async function sendEscrowPayoutMultiple(tournamentId, recipients) {
             const hash = await client.writeContract({
                 account: client.account,
                 chain: chains_1.pulsechain,
-                address: ESCROW_V2_ADDRESS,
+                address: escrowBytes32Address(),
                 abi: tournament_prize_escrow_v2_1.tournamentPrizeEscrowV2Abi,
                 functionName: 'payoutMultiple',
                 args: [idBytes32, winners, amounts],
@@ -180,7 +181,7 @@ async function setEscrowUnclaimedShares(tournamentId, recipients) {
             const hash = await client.writeContract({
                 account: client.account,
                 chain: chains_1.pulsechain,
-                address: ESCROW_V2_ADDRESS,
+                address: escrowBytes32Address(),
                 abi: tournament_prize_escrow_v2_1.tournamentPrizeEscrowV2Abi,
                 functionName: 'setUnclaimedShares',
                 args: [idBytes32, winners, amounts],
@@ -222,7 +223,7 @@ async function sendEscrowRemainderToReclaimWallet(tournamentId) {
             const hash = await client.writeContract({
                 account: client.account,
                 chain: chains_1.pulsechain,
-                address: ESCROW_V2_ADDRESS,
+                address: escrowBytes32Address(),
                 abi: tournament_prize_escrow_v2_1.tournamentPrizeEscrowV2Abi,
                 functionName: 'payoutRemainderTo',
                 args: [idBytes32, RECLAIM_WALLET],
@@ -322,7 +323,7 @@ async function cancelTournamentInEscrow(tournamentId) {
             const hash = await client.writeContract({
                 account: client.account,
                 chain: chains_1.pulsechain,
-                address: ESCROW_V2_ADDRESS,
+                address: escrowBytes32Address(),
                 abi: tournament_prize_escrow_v2_1.tournamentPrizeEscrowV2Abi,
                 functionName: 'cancelTournament',
                 args: [idBytes32],

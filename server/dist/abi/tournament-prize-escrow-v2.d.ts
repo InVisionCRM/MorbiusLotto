@@ -1,8 +1,8 @@
 /**
  * ABI for the deployed escrow contract at TOURNAMENT_PRIZE_ESCROW_ADDRESS.
  *
- * Filename retained for compatibility with existing imports — actually the V4 contract
- * (TournamentPrizeEscrowV4.sol). Differences vs the legacy V2 layout:
+ * Filename retained for compatibility with existing imports — targets V5 bytecode
+ * (TournamentPrizeEscrowV5.sol = V4 + `addToPrizePool`). Differences vs the legacy V2 layout:
  *   - getPool returns 6 fields (no `active`); derive `active = !cancelled && remaining > 0`
  *   - payoutMultiple takes uint256[] amounts (raw wei), NOT percentages
  *   - setUnclaimedShares + claim + unclaimedOf added for the pull-backup path
@@ -19,6 +19,21 @@ export declare const tournamentPrizeEscrowV2Abi: readonly [{
         readonly type: "uint256";
     }];
     readonly name: "depositPrizePool";
+    readonly outputs: readonly [];
+    readonly stateMutability: "nonpayable";
+    readonly type: "function";
+}, {
+    readonly inputs: readonly [{
+        readonly name: "tournamentId";
+        readonly type: "bytes32";
+    }, {
+        readonly name: "token";
+        readonly type: "address";
+    }, {
+        readonly name: "amount";
+        readonly type: "uint256";
+    }];
+    readonly name: "addToPrizePool";
     readonly outputs: readonly [];
     readonly stateMutability: "nonpayable";
     readonly type: "function";
@@ -219,6 +234,27 @@ export declare const tournamentPrizeEscrowV2Abi: readonly [{
         readonly type: "address";
     }];
     readonly name: "PrizePoolDeposited";
+    readonly type: "event";
+}, {
+    readonly anonymous: false;
+    readonly inputs: readonly [{
+        readonly indexed: true;
+        readonly name: "tournamentId";
+        readonly type: "bytes32";
+    }, {
+        readonly indexed: true;
+        readonly name: "token";
+        readonly type: "address";
+    }, {
+        readonly indexed: false;
+        readonly name: "amount";
+        readonly type: "uint256";
+    }, {
+        readonly indexed: true;
+        readonly name: "contributor";
+        readonly type: "address";
+    }];
+    readonly name: "PrizePoolAdded";
     readonly type: "event";
 }, {
     readonly anonymous: false;

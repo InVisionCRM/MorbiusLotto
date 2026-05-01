@@ -517,13 +517,20 @@ export interface CompletedTournamentSummary {
     gameType: string | null;
     status: 'completed' | 'cancelled' | string;
     createdAt: Date;
+    startedAt: Date | null;
     endedAt: Date | null;
     customImage: string | null;
+    creatorAddress: string | null;
+    creatorDisplayName: string | null;
+    /** On-chain escrow funding tx when custom-token prize pool was deposited. */
+    escrowTxHash: string | null;
     entryCount: number;
 }
 export interface TournamentResultsEntry {
     entryId: string;
     playerAddress: string;
+    /** From `chat_display_names` when set. */
+    displayName: string | null;
     finalRank: number | null;
     prizeWon: bigint;
     status: 'playing' | 'busted' | 'completed' | string;

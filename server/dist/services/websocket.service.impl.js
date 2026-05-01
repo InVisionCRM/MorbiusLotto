@@ -1178,7 +1178,7 @@ class WebSocketService {
             }
             const maxSeats = Math.min(10, Math.max(2, Number(payload?.maxSeats) || 10));
             const pinCode = payload?.pinCode && typeof payload.pinCode === 'string' ? payload.pinCode : undefined;
-            const tableId = await this.pokerGameService.createTable(smallBlind, bigBlind, maxSeats, pinCode);
+            const tableId = await this.pokerGameService.createTable(smallBlind, bigBlind, maxSeats, pinCode, ws.playerAddress ?? null);
             this.sendMessage(ws, { type: 'poker_create_table', payload: { tableId }, requestId: message.requestId });
         }
         catch (error) {
@@ -1655,8 +1655,8 @@ class WebSocketService {
             if (p.guaranteedPrizePoolSource === 'platform_promo') {
                 guaranteedPrizePoolSource = 'platform_promo';
             }
-            else if (p.guaranteedPrizePoolSource === 'custom_token') {
-                guaranteedPrizePoolSource = 'custom_token';
+            else if (p.guaranteedPrizePoolSource === 'custom_token_buyin') {
+                guaranteedPrizePoolSource = 'custom_token_buyin';
             }
             // Custom-token escrow funding payload (only meaningful when source is 'custom_token').
             // Service re-validates everything; we only normalize types here.
@@ -1682,6 +1682,19 @@ class WebSocketService {
                     return this.sendError(ws, 'customTokenEscrow.amount must be a numeric string', message.requestId);
                 }
             }
+            let customTokenBuyIn = undefined;
+            if (guaranteedPrizePoolSource === 'custom_token_buyin') {
+                if (!p.customTokenBuyIn || typeof p.customTokenBuyIn !== 'object') {
+                    return this.sendError(ws, 'customTokenBuyIn required for custom_token_buyin', message.requestId);
+                }
+                const m = p.customTokenBuyIn;
+                customTokenBuyIn = {
+                    tokenAddress: String(m.tokenAddress ?? ''),
+                    decimals: Number(m.decimals ?? 18),
+                    symbol: typeof m.symbol === 'string' ? m.symbol : undefined,
+                    name: typeof m.name === 'string' ? m.name : undefined,
+                };
+            }
             const result = await this.pokerTournamentService.createPokerTournament({
                 creatorAddress: ws.playerAddress,
                 name: p.name,
@@ -1689,6 +1702,7 @@ class WebSocketService {
                 guaranteedPrizePool,
                 guaranteedPrizePoolSource,
                 customTokenEscrow,
+                customTokenBuyIn,
                 prizeDistributionType: p.prizeDistributionType,
                 prizePercentages: Array.isArray(p.prizePercentages) ? p.prizePercentages : undefined,
                 config: p.config,
@@ -1708,12 +1722,12 @@ class WebSocketService {
             if (!this.pokerTournamentService || !ws.playerAddress) {
                 return this.sendError(ws, 'Poker tournaments not available or wallet required', message.requestId);
             }
-            const { tournamentId, pinCode } = message.payload;
+            const { tournamentId, pinCode, joinEscrowTxHash } = message.payload;
             if (!tournamentId)
                 return this.sendError(ws, 'tournamentId required', message.requestId);
             let result = null;
             try {
-                result = await this.pokerTournamentService.joinPokerTournament(tournamentId, ws.playerAddress, pinCode);
+                result = await this.pokerTournamentService.joinPokerTournament(tournamentId, ws.playerAddress, pinCode, joinEscrowTxHash);
             }
             catch (joinErr) {
                 const msg = joinErr.message ?? '';
@@ -1738,6 +1752,26 @@ class WebSocketService {
         catch (error) {
             logger_1.logger.error('Error joining poker tournament:', error);
             this.sendError(ws, error.message || 'Failed to join tournament', message.requestId);
+        }
+    }
+    async handlePokerTournamentLeaveRegistration(ws, message) {
+        try {
+            if (!this.pokerTournamentService || !ws.playerAddress) {
+                return this.sendError(ws, 'Poker tournaments not available or wallet required', message.requestId);
+            }
+            const { tournamentId } = message.payload ?? {};
+            if (!tournamentId)
+                return this.sendError(ws, 'tournamentId required', message.requestId);
+            await this.pokerTournamentService.leavePokerTournamentRegistration(tournamentId, ws.playerAddress);
+            this.sendMessage(ws, {
+                type: 'poker_tournament_left_registration',
+                payload: { tournamentId },
+                requestId: message.requestId,
+            });
+        }
+        catch (error) {
+            logger_1.logger.error('Error leaving poker tournament registration:', error);
+            this.sendError(ws, error.message || 'Failed to leave registration', message.requestId);
         }
     }
     async handlePokerTournamentGetState(ws, message) {

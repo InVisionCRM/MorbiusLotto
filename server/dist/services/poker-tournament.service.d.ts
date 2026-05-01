@@ -9,9 +9,10 @@ export interface BlindLevel {
 }
 /** How posted blinds go up during the event (stored in `poker_config`). */
 export type PokerBlindIncreaseMode = 'knockout' | 'by_hand' | 'by_time';
-/** Allowed wall-clock intervals (minutes) for `by_time` mode. */
-export declare const BLIND_INTERVAL_MINUTES_OPTIONS: readonly [15, 30, 45, 60];
-export type BlindIntervalMinutes = typeof BLIND_INTERVAL_MINUTES_OPTIONS[number];
+/** Allowed wall-clock interval (minutes) for `by_time` mode — integers 1–60 inclusive. */
+export declare const BLIND_INTERVAL_MINUTES_MIN = 1;
+export declare const BLIND_INTERVAL_MINUTES_MAX = 60;
+export type BlindIntervalMinutes = number;
 export interface PokerTournamentConfig {
     startingStack: number;
     minPlayers: number;
@@ -23,7 +24,7 @@ export interface PokerTournamentConfig {
      * `by_time`: blinds advance one level every `blindIntervalMinutes` of wall-clock time.
      */
     blindIncreaseMode?: PokerBlindIncreaseMode;
-    /** Required when `blindIncreaseMode === 'by_time'`. Must be one of `BLIND_INTERVAL_MINUTES_OPTIONS`. */
+    /** Required when `blindIncreaseMode === 'by_time'`. Integer minutes from `BLIND_INTERVAL_MINUTES_MIN` to `BLIND_INTERVAL_MINUTES_MAX`. */
     blindIntervalMinutes?: BlindIntervalMinutes;
 }
 export declare const DEFAULT_BLIND_SCHEDULE: BlindLevel[];
@@ -105,8 +106,15 @@ export interface PokerTournamentSummary {
     /** Set only when `blindIncreaseMode === 'by_time'`. */
     blindIntervalMinutes?: BlindIntervalMinutes;
 }
-/** Where the initial guaranteed pool is debited when buy-in is 0. */
-export type GuaranteedPrizePoolSource = 'creator' | 'platform_promo' | 'custom_token';
+/** Where the initial guaranteed pool is debited when buy-in is 0; `custom_token_buyin` is buy-in paid in PRC-20 via escrow. */
+export type GuaranteedPrizePoolSource = 'creator' | 'platform_promo' | 'custom_token' | 'custom_token_buyin';
+/** Token metadata for poker tournaments where each player pays buy-in into escrow (no creator deposit at create). */
+export interface CustomTokenBuyInMeta {
+    tokenAddress: string;
+    decimals: number;
+    symbol?: string;
+    name?: string;
+}
 /**
  * Funding payload supplied by the client when the prize pool is held in the
  * `TournamentPrizeEscrowV2` contract for an arbitrary PRC-20 token.
@@ -146,6 +154,8 @@ export interface CreatePokerTournamentParams {
     guaranteedPrizePoolSource?: GuaranteedPrizePoolSource;
     /** Required when `guaranteedPrizePoolSource === 'custom_token'`. */
     customTokenEscrow?: CustomTokenEscrowFunding;
+    /** Required when `guaranteedPrizePoolSource === 'custom_token_buyin'`. */
+    customTokenBuyIn?: CustomTokenBuyInMeta;
     prizeDistributionType: string;
     /** Required when prizeDistributionType is `custom` (one integer % per rank, length = maxPlayers, sum 100). */
     prizePercentages?: number[];
@@ -183,7 +193,7 @@ export declare class PokerTournamentService {
     private handsPerLevelNumeric;
     /** Normalize stored / client-sent blind mode (case, kebab, legacy snake key handled in parse). */
     private normalizeBlindIncreaseMode;
-    /** Normalize stored / client-sent blind interval (minutes). Returns null when not in the allowed set. */
+    /** Normalize stored / client-sent blind interval (minutes). Returns null when out of range. */
     private normalizeBlindIntervalMinutes;
     /** Return the BlindLevel that applies for a given hand number (1-indexed). */
     computeBlindLevel(blindSchedule: BlindLevel[], handNumber: number): BlindLevel;
@@ -217,11 +227,15 @@ export declare class PokerTournamentService {
      * Uses SELECT ... FOR UPDATE to prevent race condition on auto-start.
      * Returns the entry and whether the tournament auto-started.
      */
-    joinPokerTournament(tournamentId: string, playerAddress: string, pinCode?: string): Promise<{
+    joinPokerTournament(tournamentId: string, playerAddress: string, pinCode?: string, joinEscrowTxHash?: string | null): Promise<{
         entryId: string;
         autoStarted: boolean;
         tableId: string | null;
     }>;
+    /**
+     * Registration-phase exit for custom-token buy-in tournaments: server pushes buy-in back from escrow, then removes DB entry.
+     */
+    leavePokerTournamentRegistration(tournamentId: string, playerAddress: string): Promise<void>;
     /**
      * Called by FreerollSchedulerService when scheduled_start_at elapses.
      * Cancels + refunds if below minPlayers; otherwise activates (status must become active for sync + payouts).

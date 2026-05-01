@@ -1,7 +1,8 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.PokerTournamentService = exports.DEFAULT_BLIND_SCHEDULE = exports.BLIND_INTERVAL_MINUTES_OPTIONS = void 0;
+exports.PokerTournamentService = exports.DEFAULT_BLIND_SCHEDULE = exports.BLIND_INTERVAL_MINUTES_MAX = exports.BLIND_INTERVAL_MINUTES_MIN = void 0;
 exports.normalizePokerTournamentPrizePercents = normalizePokerTournamentPrizePercents;
+const crypto_1 = require("crypto");
 const logger_1 = require("../utils/logger");
 const safe_bigint_1 = require("../utils/safe-bigint");
 const cosmetics_catalog_1 = require("../lib/cosmetics-catalog");
@@ -9,8 +10,10 @@ const poker_chip_wallet_1 = require("./poker-chip-wallet");
 const escrow_status_1 = require("../utils/escrow-status");
 const tournament_id_bytes32_1 = require("../utils/tournament-id-bytes32");
 const escrow_payout_1 = require("../utils/escrow-payout");
-/** Allowed wall-clock intervals (minutes) for `by_time` mode. */
-exports.BLIND_INTERVAL_MINUTES_OPTIONS = [15, 30, 45, 60];
+const escrow_join_verify_1 = require("../utils/escrow-join-verify");
+/** Allowed wall-clock interval (minutes) for `by_time` mode — integers 1–60 inclusive. */
+exports.BLIND_INTERVAL_MINUTES_MIN = 1;
+exports.BLIND_INTERVAL_MINUTES_MAX = 60;
 exports.DEFAULT_BLIND_SCHEDULE = [
     { level: 1, smallBlind: 25, bigBlind: 50, handsPerLevel: 10 },
     { level: 2, smallBlind: 50, bigBlind: 100, handsPerLevel: 10 },
@@ -117,14 +120,14 @@ class PokerTournamentService {
             return 'by_time';
         return 'knockout';
     }
-    /** Normalize stored / client-sent blind interval (minutes). Returns null when not in the allowed set. */
+    /** Normalize stored / client-sent blind interval (minutes). Returns null when out of range. */
     normalizeBlindIntervalMinutes(raw) {
         const n = Math.floor(Number(raw));
         if (!Number.isFinite(n))
             return null;
-        return exports.BLIND_INTERVAL_MINUTES_OPTIONS.includes(n)
-            ? n
-            : null;
+        if (n < exports.BLIND_INTERVAL_MINUTES_MIN || n > exports.BLIND_INTERVAL_MINUTES_MAX)
+            return null;
+        return n;
     }
     /** Return the BlindLevel that applies for a given hand number (1-indexed). */
     computeBlindLevel(blindSchedule, handNumber) {
@@ -229,7 +232,7 @@ class PokerTournamentService {
         if (blindModeForCreate === 'by_time') {
             const interval = this.normalizeBlindIntervalMinutes(config.blindIntervalMinutes);
             if (!interval) {
-                throw new Error(`blindIntervalMinutes is required when blindIncreaseMode is 'by_time' and must be one of ${exports.BLIND_INTERVAL_MINUTES_OPTIONS.join(', ')}`);
+                throw new Error(`blindIntervalMinutes is required when blindIncreaseMode is 'by_time' and must be an integer from ${exports.BLIND_INTERVAL_MINUTES_MIN} to ${exports.BLIND_INTERVAL_MINUTES_MAX} (minutes).`);
             }
         }
         if (config.minPlayers < 2)
@@ -263,8 +266,11 @@ class PokerTournamentService {
         else if (buyIn > 0n && guaranteed > 0n) {
             throw new Error('guaranteedPrizePool is only allowed when buy-in is 0');
         }
-        if (buyIn > 0n && poolSource !== 'creator') {
-            throw new Error('guaranteedPrizePoolSource is only valid for zero buy-in tournaments');
+        if (buyIn > 0n && poolSource !== 'creator' && poolSource !== 'custom_token_buyin') {
+            throw new Error('Buy-in tournaments must use creator (chip) or custom_token_buyin funding');
+        }
+        if (buyIn === 0n && poolSource === 'custom_token_buyin') {
+            throw new Error('custom_token_buyin requires a positive buy-in amount');
         }
         if (buyIn === 0n && poolSource === 'platform_promo') {
             if (!(0, cosmetics_catalog_1.isAdminWallet)(normalizedCreator)) {
@@ -273,6 +279,7 @@ class PokerTournamentService {
         }
         // Custom-token escrow path: verify on-chain deposit before we touch the DB.
         let escrowVerified = null;
+        let customBuyInRow = null;
         if (poolSource === 'custom_token') {
             if (buyIn !== 0n) {
                 throw new Error('custom_token prize source is only valid for freeroll (zero buy-in) tournaments');
@@ -368,6 +375,39 @@ class PokerTournamentService {
                 bytes32Id: (0, tournament_id_bytes32_1.tournamentIdToBytes32)(e.tournamentId),
             };
         }
+        if (poolSource === 'custom_token_buyin') {
+            const m = params.customTokenBuyIn;
+            if (!m)
+                throw new Error('customTokenBuyIn is required when guaranteedPrizePoolSource is custom_token_buyin');
+            if (!/^0x[a-fA-F0-9]{40}$/.test(m.tokenAddress)) {
+                throw new Error('customTokenBuyIn.tokenAddress must be a 0x-prefixed 20-byte address');
+            }
+            const dec = Math.floor(Number(m.decimals));
+            if (!Number.isFinite(dec) || dec < 1 || dec > 18) {
+                throw new Error('customTokenBuyIn.decimals must be an integer between 1 and 18');
+            }
+            let symbolCleanBuyIn = null;
+            if (typeof m.symbol === 'string') {
+                const s = m.symbol.trim().slice(0, 32);
+                if (s && /^[A-Za-z0-9._\-+]+$/.test(s))
+                    symbolCleanBuyIn = s;
+            }
+            let nameCleanBuyIn = null;
+            if (typeof m.name === 'string') {
+                const n = m.name.trim().slice(0, 64);
+                if (n.length > 0 && !/[<>\x00-\x08\x0B\x0C\x0E-\x1F]/.test(n))
+                    nameCleanBuyIn = n;
+            }
+            const tidBuyIn = (0, crypto_1.randomUUID)();
+            customBuyInRow = {
+                tournamentId: tidBuyIn,
+                tokenAddress: m.tokenAddress.toLowerCase(),
+                decimals: dec,
+                symbol: symbolCleanBuyIn,
+                name: nameCleanBuyIn,
+                bytes32Id: (0, tournament_id_bytes32_1.tournamentIdToBytes32)(tidBuyIn),
+            };
+        }
         let pinCode = null;
         if (params.isPrivate) {
             const custom = params.pinCode?.trim();
@@ -401,6 +441,9 @@ class PokerTournamentService {
         let initialPrizePool;
         if (poolSource === 'custom_token' && params.customTokenEscrow) {
             initialPrizePool = params.customTokenEscrow.amount.toString();
+        }
+        else if (poolSource === 'custom_token_buyin') {
+            initialPrizePool = '0';
         }
         else if (buyIn === 0n) {
             initialPrizePool = guaranteed.toString();
@@ -453,13 +496,13 @@ class PokerTournamentService {
                 guaranteedPrizeFunderAddress,
                 JSON.stringify(configForDb),
                 scheduled.toISOString(),
-                escrowVerified?.tournamentId ?? null,
-                escrowVerified?.tokenAddress ?? null,
-                escrowVerified?.decimals ?? null,
-                escrowVerified?.symbol ?? null,
-                escrowVerified?.name ?? null,
+                escrowVerified?.tournamentId ?? customBuyInRow?.tournamentId ?? null,
+                escrowVerified?.tokenAddress ?? customBuyInRow?.tokenAddress ?? null,
+                escrowVerified?.decimals ?? customBuyInRow?.decimals ?? null,
+                escrowVerified?.symbol ?? customBuyInRow?.symbol ?? null,
+                escrowVerified?.name ?? customBuyInRow?.name ?? null,
                 escrowVerified?.txHash ?? null,
-                escrowVerified?.bytes32Id ?? null,
+                escrowVerified?.bytes32Id ?? customBuyInRow?.bytes32Id ?? null,
             ]);
             const tournamentId = result.rows[0].id;
             if (buyIn === 0n && debitAddress) {
@@ -475,7 +518,7 @@ class PokerTournamentService {
                 scheduledStartAt: scheduled.toISOString(),
                 buyIn: buyIn.toString(),
                 guaranteedPrizePool: buyIn === 0n ? guaranteed.toString() : undefined,
-                guaranteedPrizePoolSource: buyIn === 0n ? poolSource : undefined,
+                guaranteedPrizePoolSource: buyIn === 0n ? poolSource : poolSource === 'custom_token_buyin' ? poolSource : undefined,
             });
             return { tournamentId, pinCode: params.isPrivate ? pinCode : null };
         }
@@ -495,7 +538,7 @@ class PokerTournamentService {
      * Uses SELECT ... FOR UPDATE to prevent race condition on auto-start.
      * Returns the entry and whether the tournament auto-started.
      */
-    async joinPokerTournament(tournamentId, playerAddress, pinCode) {
+    async joinPokerTournament(tournamentId, playerAddress, pinCode, joinEscrowTxHash) {
         const normalized = this.normalizeAddress(playerAddress);
         // Cheap fast path: when the caller is already registered (very common — table HUD reconnects,
         // `refreshTournaments` re-subscribing to rooms, retry storms), skip opening a transaction with
@@ -525,6 +568,8 @@ class PokerTournamentService {
         /** Set only on successful new-registration path; idempotent path returns from inside `connect` block. */
         let committedEntryId = null;
         let committedShouldAutoStart = false;
+        /** When join fails after an escrow deposit was verified (e.g. tournament full). */
+        let refundEscrowAfterRollback = null;
         const client = await this.pool.connect();
         try {
             await client.query('BEGIN');
@@ -570,16 +615,54 @@ class PokerTournamentService {
             const countRow = await client.query(`SELECT COUNT(*) AS c FROM tournament_entries
          WHERE tournament_id = $1 AND status NOT IN ('busted','completed')`, [tournamentId]);
             const registered = Number(countRow.rows[0].c);
-            if (registered >= config.maxPlayers)
-                throw new Error('Tournament is full');
             const buyIn = this.parseBigInt(tournament.buy_in_amount);
-            if (buyIn > 0n) {
+            const prizeTokRaw = tournament.prize_token_address
+                ? String(tournament.prize_token_address).trim()
+                : '';
+            const isEscrowBuyIn = buyIn > 0n && prizeTokRaw.startsWith('0x');
+            if (registered >= config.maxPlayers) {
+                const txh = joinEscrowTxHash?.trim();
+                if (isEscrowBuyIn && txh && /^0x[a-fA-F0-9]{64}$/.test(txh)) {
+                    refundEscrowAfterRollback = {
+                        tournamentId,
+                        player: normalized,
+                        buyIn,
+                        prizeToken: prizeTokRaw,
+                        txHash: txh,
+                    };
+                }
+                throw new Error('Tournament is full');
+            }
+            let escrowTxForInsert = null;
+            if (isEscrowBuyIn) {
+                const txh = joinEscrowTxHash?.trim();
+                if (!txh || !/^0x[a-fA-F0-9]{64}$/.test(txh)) {
+                    throw new Error('joinEscrowTxHash required (hash of your successful addToPrizePool transaction)');
+                }
+                const dupChk = await client.query(`SELECT id FROM tournament_entries WHERE LOWER(escrow_join_tx_hash) = LOWER($1) LIMIT 1`, [txh]);
+                if (dupChk.rows.length > 0) {
+                    throw new Error('This escrow deposit transaction was already used to join a tournament');
+                }
+                const ver = await (0, escrow_join_verify_1.verifyEscrowAddToPrizePoolJoinTx)({
+                    tournamentIdUuid: tournamentId,
+                    txHash: txh,
+                    playerAddress: normalized,
+                    prizeTokenAddress: prizeTokRaw,
+                    buyInAmountWei: buyIn,
+                });
+                if (!ver.ok) {
+                    throw new Error(ver.error);
+                }
+                escrowTxForInsert = txh.toLowerCase();
+                await client.query(`UPDATE tournaments SET prize_pool = prize_pool + $1::NUMERIC WHERE id = $2`, [buyIn.toString(), tournamentId]);
+            }
+            else if (buyIn > 0n) {
                 await (0, poker_chip_wallet_1.applyPokerChipDelta)(client, normalized, -buyIn, 'tournament_buyin', { type: 'tournament', id: tournamentId });
                 await client.query(`UPDATE tournaments SET prize_pool = prize_pool + $1::NUMERIC WHERE id = $2`, [buyIn.toString(), tournamentId]);
             }
             // Create entry
-            const entryRow = await client.query(`INSERT INTO tournament_entries (tournament_id, player_address, chips_remaining, highest_chip_count)
-         VALUES ($1, $2, $3, $3) RETURNING id`, [tournamentId, normalized, config.startingStack]);
+            const entryRow = await client.query(`INSERT INTO tournament_entries (tournament_id, player_address, chips_remaining, highest_chip_count, escrow_join_tx_hash)
+         VALUES ($1, $2, $3, $3, $4) RETURNING id`, [tournamentId, normalized, config.startingStack, escrowTxForInsert]);
             const entryId = entryRow.rows[0].id;
             const newRegistered = registered + 1;
             // Registration fills until scheduled_start_at; activation is always via startScheduledPokerTournament (scheduler).
@@ -602,6 +685,31 @@ class PokerTournamentService {
             catch {
                 /* ignore — e.g. connection already closed or not in a transaction */
             }
+            const refund = refundEscrowAfterRollback;
+            if (refund) {
+                try {
+                    const v = await (0, escrow_join_verify_1.verifyEscrowAddToPrizePoolJoinTx)({
+                        tournamentIdUuid: refund.tournamentId,
+                        txHash: refund.txHash,
+                        playerAddress: refund.player,
+                        prizeTokenAddress: refund.prizeToken,
+                        buyInAmountWei: refund.buyIn,
+                    });
+                    if (v.ok) {
+                        const pay = await (0, escrow_payout_1.sendEscrowPayout)(refund.tournamentId, refund.player, refund.buyIn);
+                        if (!pay.success) {
+                            logger_1.logger.error('Escrow buy-in refund after failed join failed', {
+                                tournamentId: refund.tournamentId,
+                                player: refund.player,
+                                error: pay.error,
+                            });
+                        }
+                    }
+                }
+                catch (refundErr) {
+                    logger_1.logger.error('Escrow buy-in refund path threw', { refundErr, tournamentId: refund.tournamentId });
+                }
+            }
             throw err;
         }
         finally {
@@ -617,6 +725,57 @@ class PokerTournamentService {
             return { entryId: committedEntryId, autoStarted: false, tableId: null };
         }
         throw new Error('joinPokerTournament: missing committed entry (internal error)');
+    }
+    /**
+     * Registration-phase exit for custom-token buy-in tournaments: server pushes buy-in back from escrow, then removes DB entry.
+     */
+    async leavePokerTournamentRegistration(tournamentId, playerAddress) {
+        const normalized = this.normalizeAddress(playerAddress);
+        const tRow = await this.pool.query(`SELECT id, status, buy_in_amount, prize_token_address
+       FROM tournaments WHERE id = $1 AND game_type = 'poker'`, [tournamentId]);
+        if (tRow.rows.length === 0)
+            throw new Error('Poker tournament not found');
+        const t = tRow.rows[0];
+        if (String(t.status ?? '') !== 'registration') {
+            throw new Error('You can only leave during registration');
+        }
+        const buyIn = this.parseBigInt(t.buy_in_amount);
+        const prizeTok = t.prize_token_address ? String(t.prize_token_address).trim() : '';
+        const isEscrowBuyIn = buyIn > 0n && prizeTok.startsWith('0x');
+        if (!isEscrowBuyIn) {
+            throw new Error('Leave-with-refund is only available for custom-token buy-in tournaments');
+        }
+        const entryRow = await this.pool.query(`SELECT id FROM tournament_entries
+       WHERE tournament_id = $1 AND LOWER(player_address) = LOWER($2)
+         AND status NOT IN ('busted', 'completed')`, [tournamentId, normalized]);
+        if (entryRow.rows.length === 0)
+            throw new Error('You are not registered for this tournament');
+        const pay = await (0, escrow_payout_1.sendEscrowPayout)(tournamentId, normalized, buyIn);
+        if (!pay.success) {
+            throw new Error(pay.error || 'On-chain refund failed; try again or contact support');
+        }
+        const client = await this.pool.connect();
+        try {
+            await client.query('BEGIN');
+            await client.query(`UPDATE tournament_entries SET status = 'busted', finished_at = NOW() WHERE id = $1`, [entryRow.rows[0].id]);
+            await client.query(`UPDATE tournaments SET prize_pool = GREATEST(prize_pool - $1::NUMERIC, 0) WHERE id = $2`, [buyIn.toString(), tournamentId]);
+            await client.query('COMMIT');
+        }
+        catch (e) {
+            await client.query('ROLLBACK');
+            throw e;
+        }
+        finally {
+            client.release();
+        }
+        logger_1.logger.info('Player left poker tournament registration (escrow refund)', {
+            tournamentId,
+            playerAddress: normalized,
+        });
+        this.broadcast(`poker_tournament:${tournamentId}`, 'poker_tournament_registration_left', {
+            tournamentId,
+            playerAddress: normalized,
+        });
     }
     // ---------------------------------------------------------------------------
     // Scheduled start (min players, refunds)
@@ -646,10 +805,11 @@ class PokerTournamentService {
             if (registered < config.minPlayers) {
                 const buyIn = this.parseBigInt(tournament.buy_in_amount);
                 const isCustomToken = !!tournament.prize_token_address;
+                const isEscrowBuyIn = buyIn > 0n && isCustomToken;
                 const entries = await client.query(`SELECT id, player_address FROM tournament_entries
            WHERE tournament_id = $1 AND status = 'playing'`, [tournamentId]);
                 for (const entry of entries.rows) {
-                    if (buyIn > 0n) {
+                    if (buyIn > 0n && !isEscrowBuyIn) {
                         await (0, poker_chip_wallet_1.applyPokerChipDelta)(client, entry.player_address, buyIn, 'tournament_refund', { type: 'tournament', id: tournamentId });
                     }
                     await client.query(`UPDATE tournament_entries SET status = 'busted', finished_at = NOW() WHERE id = $1`, [entry.id]);
@@ -669,7 +829,28 @@ class PokerTournamentService {
                     await client.query(`UPDATE tournaments SET status = 'cancelled', ended_at = NOW(), prize_pool = 0 WHERE id = $1`, [tournamentId]);
                 }
                 await client.query('COMMIT');
-                // On-chain cancel post-commit — same reasoning as cancelPokerTournament.
+                // Custom-token buy-in: push refunds before marking escrow cancelled.
+                if (isEscrowBuyIn && entries.rows.length > 0) {
+                    try {
+                        const recipients = entries.rows.map((e) => ({
+                            address: String(e.player_address),
+                            amount: buyIn,
+                        }));
+                        const pay = await (0, escrow_payout_1.sendEscrowPayoutMultiple)(tournamentId, recipients);
+                        if (!pay.success) {
+                            logger_1.logger.error('Escrow buy-in refund batch failed (scheduled insufficient players)', {
+                                tournamentId,
+                                error: pay.error,
+                            });
+                        }
+                    }
+                    catch (refundErr) {
+                        logger_1.logger.error('Escrow buy-in refund threw (scheduled insufficient players)', {
+                            tournamentId,
+                            refundErr,
+                        });
+                    }
+                }
                 if (isCustomToken) {
                     try {
                         const result = await (0, escrow_payout_1.cancelTournamentInEscrow)(tournamentId);
@@ -1369,14 +1550,15 @@ class PokerTournamentService {
             throw new Error('Only the creator can cancel this tournament');
         const buyIn = this.parseBigInt(t.buy_in_amount);
         const isCustomToken = !!t.prize_token_address;
+        const isEscrowBuyIn = buyIn > 0n && isCustomToken;
         const entries = await this.pool.query(`SELECT id, player_address FROM tournament_entries
        WHERE tournament_id = $1 AND status = 'playing'`, [tournamentId]);
         const client = await this.pool.connect();
         try {
             await client.query('BEGIN');
             for (const entry of entries.rows) {
-                // Buy-in path is chip-only today; custom-token freerolls have buyIn = 0 so no chip refund needed.
-                if (buyIn > 0n) {
+                // Escrow buy-ins are refunded on-chain below (push), not as poker chips.
+                if (buyIn > 0n && !isEscrowBuyIn) {
                     await (0, poker_chip_wallet_1.applyPokerChipDelta)(client, entry.player_address, buyIn, 'tournament_refund', { type: 'tournament', id: tournamentId });
                 }
                 await client.query(`UPDATE tournament_entries SET status = 'busted', finished_at = NOW() WHERE id = $1`, [entry.id]);
@@ -1413,6 +1595,24 @@ class PokerTournamentService {
         // tournament if the DB commit fails after a successful on-chain cancel.
         if (isCustomToken) {
             try {
+                if (isEscrowBuyIn && entries.rows.length > 0) {
+                    try {
+                        const recipients = entries.rows.map((e) => ({
+                            address: String(e.player_address),
+                            amount: buyIn,
+                        }));
+                        const pay = await (0, escrow_payout_1.sendEscrowPayoutMultiple)(tournamentId, recipients);
+                        if (!pay.success) {
+                            logger_1.logger.error('Escrow buy-in refund batch failed (creator cancel)', {
+                                tournamentId,
+                                error: pay.error,
+                            });
+                        }
+                    }
+                    catch (refundErr) {
+                        logger_1.logger.error('Escrow buy-in refund threw (creator cancel)', { tournamentId, refundErr });
+                    }
+                }
                 const result = await (0, escrow_payout_1.cancelTournamentInEscrow)(tournamentId);
                 if (!result.success) {
                     logger_1.logger.error('Custom-token freeroll: on-chain cancel failed; creator must retry manually', {
@@ -1430,6 +1630,7 @@ class PokerTournamentService {
             caller: normalized,
             refunded: entries.rows.length,
             isCustomToken,
+            isEscrowBuyIn,
         });
         this.broadcast(`poker_tournament:${tournamentId}`, 'poker_tournament_cancelled', { tournamentId });
     }
