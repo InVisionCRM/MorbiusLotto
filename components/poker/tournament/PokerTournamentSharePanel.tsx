@@ -15,6 +15,51 @@ import {
 const MAX_IMAGE_BYTES = 8 * 1024 * 1024;
 const ACCEPT = 'image/png,image/jpeg';
 
+/** html2canvas 1.x color parser does not support CSS Color 4 (oklch / lab / lch). Coerce via 2D canvas. */
+const HTML2CANVAS_COLOR_LONGHANDS = [
+  'color',
+  'background-color',
+  'border-top-color',
+  'border-right-color',
+  'border-bottom-color',
+  'border-left-color',
+  'outline-color',
+  'text-decoration-color',
+  'caret-color',
+  'column-rule-color',
+] as const;
+
+function mirrorComputedColorLonghandsOntoClone(
+  originalRoot: HTMLElement,
+  clonedRoot: HTMLElement,
+  ctx: CanvasRenderingContext2D,
+): void {
+  const stack: Array<[Element, Element]> = [[originalRoot, clonedRoot]];
+  while (stack.length) {
+    const [orig, clone] = stack.pop()!;
+    if (orig instanceof HTMLElement && clone instanceof HTMLElement) {
+      const win = orig.ownerDocument.defaultView;
+      if (win) {
+        const cs = win.getComputedStyle(orig);
+        for (const prop of HTML2CANVAS_COLOR_LONGHANDS) {
+          const raw = cs.getPropertyValue(prop).trim();
+          if (!raw) continue;
+          try {
+            ctx.fillStyle = raw;
+            clone.style.setProperty(prop, String(ctx.fillStyle));
+          } catch {
+            /* leave cascade */
+          }
+        }
+      }
+    }
+    const oCh = orig.children;
+    const cCh = clone.children;
+    const n = Math.min(oCh.length, cCh.length);
+    for (let i = 0; i < n; i++) stack.push([oCh[i], cCh[i]]);
+  }
+}
+
 function canvasToBlob(canvas: HTMLCanvasElement, type = 'image/png', quality = 0.92): Promise<Blob | null> {
   return new Promise((resolve) => {
     canvas.toBlob((b) => resolve(b), type, quality);
@@ -151,6 +196,15 @@ export function PokerTournamentSharePanel({
       foreignObjectRendering: false,
       scrollX: 0,
       scrollY: -window.scrollY,
+      onclone: (_doc, clonedEl) => {
+        if (!(clonedEl instanceof HTMLElement)) return;
+        const scratch = document.createElement('canvas');
+        scratch.width = 1;
+        scratch.height = 1;
+        const colorCtx = scratch.getContext('2d');
+        if (!colorCtx) return;
+        mirrorComputedColorLonghandsOntoClone(el, clonedEl, colorCtx);
+      },
     });
     return canvas;
   }, []);
@@ -295,6 +349,8 @@ export function PokerTournamentSharePanel({
               background: 'linear-gradient(145deg, #0f172a 0%, #0c1524 45%, #0f172a 100%)',
               border: '1px solid rgba(6, 182, 212, 0.28)',
               boxShadow: '0 10px 15px -3px rgba(0,0,0,0.45)',
+              /* Avoid inheriting theme oklch() from ancestors — html2canvas cannot parse it. */
+              color: 'rgb(255, 255, 255)',
             }}
           >
             {previewUrl ? (

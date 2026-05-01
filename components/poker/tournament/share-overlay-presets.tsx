@@ -231,8 +231,8 @@ export function MinimalCornerOverlay({
           {fundingLabel}
         </p>
         <div
-          className="mt-2 space-y-0.5 border-t pt-2 text-[9px] leading-snug sm:text-[10px]"
-          style={{ borderColor: C.white10, color: C.white75 }}
+          className="mt-2 space-y-0.5 pt-2 text-[9px] leading-snug sm:text-[10px]"
+          style={{ borderTop: `1px solid ${C.white10}`, color: C.white75 }}
         >
           <p>
             <span style={{ color: C.cyanMuted }}>Starts</span> {scheduleLine}
@@ -297,8 +297,12 @@ export function BracketTitleOverlay({
             {name}
           </p>
           <div
-            className="mx-auto mt-4 max-w-[95%] space-y-1 border-y py-3 text-[9px] leading-snug sm:mt-5 sm:text-[10px] md:text-[11px]"
-            style={{ borderColor: C.white10, color: C.white80 }}
+            className="mx-auto mt-4 max-w-[95%] space-y-1 py-3 text-[9px] leading-snug sm:mt-5 sm:text-[10px] md:text-[11px]"
+            style={{
+              borderTop: `1px solid ${C.white10}`,
+              borderBottom: `1px solid ${C.white10}`,
+              color: C.white80,
+            }}
           >
             <p>
               <span style={{ fontWeight: 600, color: 'rgba(103, 232, 249, 0.9)' }}>Starts</span> · {scheduleLine}

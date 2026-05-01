@@ -9,6 +9,7 @@ import {
   POKER_TOURNAMENT_DEFAULT_CONFIG,
   type BlindIntervalMinutes,
   type CreatePokerTournamentParams,
+  type CustomTokenBuyInMeta,
   type CustomTokenEscrowFunding,
   type PokerBlindIncreaseMode,
 } from '@/hooks/use-poker-tournament';
@@ -53,6 +54,9 @@ import { tournamentIdToBytes32 } from '@/lib/tournament-id-bytes32';
 
 /** Where the freeroll guarantee comes from. Mirrors server `GuaranteedPrizePoolSource`. */
 type PrizeSource = 'chips' | 'platform_promo' | 'custom_token';
+
+/** Buy-in tournaments: off-chain chips vs per-seat PRC-20 via escrow (`custom_token_buyin`). */
+type BuyInPrizeSource = 'chips' | 'custom_token_buyin';
 
 function defaultScheduledFields(): { date: string; time: string } {
   const from = new Date(Date.now() + 120_000);
@@ -673,9 +677,11 @@ const POKER_CREATOR_STAFF_FAQ: readonly PokerCreatorFaqEntry[] = [
 function PokerTournamentBasicsFaqSection({
   isFreeroll,
   usesCustomTokenEscrowPool,
+  usesCustomTokenBuyIn,
 }: {
   isFreeroll: boolean;
   usesCustomTokenEscrowPool: boolean;
+  usesCustomTokenBuyIn: boolean;
 }) {
   const poolOrBuy = usesCustomTokenEscrowPool
     ? {
@@ -687,25 +693,35 @@ function PokerTournamentBasicsFaqSection({
           </p>
         ),
       }
-    : isFreeroll
+    : usesCustomTokenBuyIn
       ? {
-          q: 'What is the guaranteed prize pool?',
+          q: 'How does a custom-token buy-in work?',
           a: (
             <p className="text-white/80 text-sm leading-relaxed">
-              For chip or platform-promo freerolls, this is the total off-chain tournament chips you commit as the prize. Players join for free; nobody pays a buy-in. If you use custom tokens instead,
-              you set the pool on-chain (see the question about custom-token freerolls).
+              You pick the token and the buy-in amount per seat here — nothing is collected from you when you publish. Each player approves and deposits that token into the on-chain prize escrow when they
+              register. Refunds if the tournament does not run are handled by the server and the escrow contract.
             </p>
           ),
         }
-      : {
-          q: 'What is buy-in per player?',
-          a: (
-            <p className="text-white/80 text-sm leading-relaxed">
-              Each seat costs this many tournament chips to enter. One tournament chip equals one MORBIUS for buy-in tournaments. Players buy or convert chips in the lobby before joining. The prize
-              pool grows from those buy-ins (after fees where applicable); the creator does not fund the pool.
-            </p>
-          ),
-        };
+      : isFreeroll
+        ? {
+            q: 'What is the guaranteed prize pool?',
+            a: (
+              <p className="text-white/80 text-sm leading-relaxed">
+                For chip or platform-promo freerolls, this is the total off-chain tournament chips you commit as the prize. Players join for free; nobody pays a buy-in. If you use custom tokens instead,
+                you set the pool on-chain (see the question about custom-token freerolls).
+              </p>
+            ),
+          }
+        : {
+            q: 'What is buy-in per player?',
+            a: (
+              <p className="text-white/80 text-sm leading-relaxed">
+                Each seat costs this many tournament chips to enter. One tournament chip equals one MORBIUS for chip buy-in tournaments. Players buy or convert chips in the lobby before joining. The prize
+                pool grows from those buy-ins (after fees where applicable); the creator does not fund the pool.
+              </p>
+            ),
+          };
 
   const faqs: PokerCreatorFaqEntry[] = [
     {
@@ -780,7 +796,6 @@ function BlindIntervalRolodex({
     el.scrollTop = Math.max(0, Math.min(top, el.scrollHeight - el.clientHeight));
     lastEmitted.current = value;
     // Intentionally once per mount — scroll-driven updates only go through onScroll / nudge.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const handleScroll = useCallback(() => {
@@ -912,6 +927,9 @@ export function PokerTournamentCreator({ creatorAddress, onClose, onCreate }: Po
   const [selectedToken, setSelectedToken] = useState<SelectedPrc20Token | null>(null);
   const [customTokenAmount, setCustomTokenAmount] = useState('');
   const [buyIn, setBuyIn] = useState('1000');
+  /** When `fundingKind === 'buyin'`: poker chips vs custom PRC-20 paid into escrow per seat at join time. */
+  const [buyInPrizeSource, setBuyInPrizeSource] = useState<BuyInPrizeSource>('chips');
+  const [buyInTokenHumanAmount, setBuyInTokenHumanAmount] = useState('');
   const [guaranteedPool, setGuaranteedPool] = useState('5000');
   const [startingStack, setStartingStack] = useState<string>('10000');
   const [minPlayers, setMinPlayers] = useState('2');
@@ -959,6 +977,13 @@ export function PokerTournamentCreator({ creatorAddress, onClose, onCreate }: Po
   }, [isFreeroll]);
 
   useEffect(() => {
+    if (isFreeroll) {
+      setBuyInPrizeSource('chips');
+      setBuyInTokenHumanAmount('');
+    }
+  }, [isFreeroll]);
+
+  useEffect(() => {
     // Non-admins cannot select platform_promo; reset if they somehow ended up there.
     if (prizeSource === 'platform_promo' && !isAdmin) setPrizeSource('chips');
   }, [prizeSource, isAdmin]);
@@ -969,6 +994,7 @@ export function PokerTournamentCreator({ creatorAddress, onClose, onCreate }: Po
 
   useEffect(() => {
     if (isFreeroll && prizeSource === 'custom_token') return;
+    if (!isFreeroll && buyInPrizeSource === 'custom_token_buyin') return;
     const raw = parseInt(isFreeroll ? guaranteedPool : buyIn, 10) || (isFreeroll ? 5000 : 1000);
     const clamped = Math.max(1, Math.min(100_000, raw));
     const s = snapToNearestInList(clamped, CHIPS_POOL_SELECT_VALUES);
@@ -977,7 +1003,7 @@ export function PokerTournamentCreator({ creatorAddress, onClose, onCreate }: Po
       if (isFreeroll) setGuaranteedPool(String(s));
       else setBuyIn(String(s));
     }
-  }, [isFreeroll, prizeSource, buyIn, guaranteedPool]);
+  }, [isFreeroll, prizeSource, buyIn, guaranteedPool, buyInPrizeSource]);
 
   useEffect(() => {
     const fallback = parseInt(STARTING_STACK_PRESETS[STARTING_STACK_PRESETS.length - 1].value, 10);
@@ -996,6 +1022,16 @@ export function PokerTournamentCreator({ creatorAddress, onClose, onCreate }: Po
       return 0n;
     }
   }, [prizeSource, selectedToken, customTokenAmount]);
+
+  const buyInTokenWei = useMemo<bigint>(() => {
+    if (buyInPrizeSource !== 'custom_token_buyin' || !selectedToken || !buyInTokenHumanAmount.trim()) return 0n;
+    try {
+      const dec = Math.min(18, Math.max(1, selectedToken.decimals));
+      return parseUnits(buyInTokenHumanAmount.trim(), dec);
+    } catch {
+      return 0n;
+    }
+  }, [buyInPrizeSource, selectedToken, buyInTokenHumanAmount]);
 
   const prizeSlotCount = useMemo(() => {
     const minP = Math.max(2, Math.min(10, parseInt(minPlayers, 10) || 2));
@@ -1031,6 +1067,16 @@ export function PokerTournamentCreator({ creatorAddress, onClose, onCreate }: Po
       if (g <= 0n) return null;
       return { kind: 'chips', poolChips: g, approximate: false };
     }
+    if (buyInPrizeSource === 'custom_token_buyin') {
+      if (!selectedToken || buyInTokenWei <= 0n) return null;
+      const dec = Math.min(18, Math.max(0, Number.isFinite(selectedToken.decimals) ? selectedToken.decimals : 18));
+      return {
+        kind: 'erc20',
+        poolWei: buyInTokenWei * BigInt(prizeSlotCount),
+        decimals: dec,
+        symbol: selectedToken.symbol?.trim() || 'Token',
+      };
+    }
     const buy = parsePositiveWholeChips(buyIn);
     if (buy <= 0n) return null;
     return {
@@ -1038,7 +1084,7 @@ export function PokerTournamentCreator({ creatorAddress, onClose, onCreate }: Po
       poolChips: buy * BigInt(prizeSlotCount),
       approximate: true,
     };
-  }, [isFreeroll, prizeSource, selectedToken, customTokenAmountWei, guaranteedPool, buyIn, prizeSlotCount]);
+  }, [isFreeroll, prizeSource, selectedToken, customTokenAmountWei, guaranteedPool, buyIn, prizeSlotCount, buyInPrizeSource, buyInTokenWei]);
 
   const level1Blinds = POKER_TOURNAMENT_DEFAULT_CONFIG.blindSchedule[0];
   const blindScheduleLadder = POKER_TOURNAMENT_DEFAULT_CONFIG.blindSchedule;
@@ -1100,7 +1146,10 @@ export function PokerTournamentCreator({ creatorAddress, onClose, onCreate }: Po
     if (!name.trim() || !fundingKind) return null;
     const buyChips = isFreeroll ? 0n : parsePositiveWholeChips(buyIn);
     const guaranteeChips = isFreeroll && prizeSource !== 'custom_token' ? parsePositiveWholeChips(guaranteedPool) : 0n;
-    if (!isFreeroll && buyChips <= 0n) return null;
+    if (!isFreeroll) {
+      if (buyInPrizeSource === 'chips' && buyChips <= 0n) return null;
+      if (buyInPrizeSource === 'custom_token_buyin' && (buyInTokenWei <= 0n || !selectedToken)) return null;
+    }
     if (isFreeroll && prizeSource !== 'custom_token' && guaranteeChips <= 0n) return null;
     const pinDigits = privatePin.replace(/\D/g, '').slice(0, 12);
     const pinForCreate = isPrivate && pinDigits.length >= 4 ? pinDigits : undefined;
@@ -1112,20 +1161,41 @@ export function PokerTournamentCreator({ creatorAddress, onClose, onCreate }: Po
     const local = parseLocalDateTime(scheduledDate, scheduledTime)!;
     const scheduledStartAt = local.toISOString();
 
-    let sourceField: { guaranteedPrizePoolSource?: 'platform_promo' | 'custom_token' } = {};
+    let sourceField: {
+      guaranteedPrizePoolSource?: 'platform_promo' | 'custom_token' | 'custom_token_buyin';
+    } = {};
+    let customTokenBuyInField: { customTokenBuyIn?: CustomTokenBuyInMeta } = {};
     if (isFreeroll) {
       if (prizeSource === 'platform_promo') sourceField = { guaranteedPrizePoolSource: 'platform_promo' };
       else if (prizeSource === 'custom_token') sourceField = { guaranteedPrizePoolSource: 'custom_token' };
+    } else if (buyInPrizeSource === 'custom_token_buyin') {
+      sourceField = { guaranteedPrizePoolSource: 'custom_token_buyin' };
+      if (selectedToken) {
+        customTokenBuyInField = {
+          customTokenBuyIn: {
+            tokenAddress: selectedToken.address,
+            decimals: selectedToken.decimals,
+            symbol: selectedToken.symbol,
+            name: selectedToken.name,
+          },
+        };
+      }
     }
 
+    const buyInAmountStr = !isFreeroll
+      ? buyInPrizeSource === 'custom_token_buyin'
+        ? buyInTokenWei.toString()
+        : buyChips.toString()
+      : '0';
     return {
       params: {
         name: name.trim(),
-        buyInAmount: buyChips.toString(),
+        buyInAmount: buyInAmountStr,
         ...(isFreeroll && prizeSource !== 'custom_token'
           ? { guaranteedPrizePool: guaranteeChips.toString() }
           : {}),
         ...sourceField,
+        ...customTokenBuyInField,
         ...(extras.customTokenEscrow ? { customTokenEscrow: extras.customTokenEscrow } : {}),
         prizeDistributionType: 'custom',
         prizePercentages: [...prizePercents],
@@ -1425,6 +1495,20 @@ export function PokerTournamentCreator({ creatorAddress, onClose, onCreate }: Po
             ? `${formatChips(g)} chips${prizeSource === 'platform_promo' ? ' · promo' : ''}`
             : 'Guaranteed chips (Basics)';
       }
+    } else if (buyInPrizeSource === 'custom_token_buyin') {
+      if (selectedToken && buyInTokenWei > 0n) {
+        const sym = selectedToken.symbol?.trim() || 'Token';
+        const dec = Math.min(18, Math.max(0, Number.isFinite(selectedToken.decimals) ? selectedToken.decimals : 18));
+        const amtHuman = formatUnits(buyInTokenWei, dec);
+        const num = Number(amtHuman);
+        const perSeat =
+          Number.isFinite(num) && amtHuman.includes('.')
+            ? num.toLocaleString('en-US', { maximumFractionDigits: 8 })
+            : amtHuman;
+        prizeLine = `${perSeat} ${sym}/seat · up to ${prizeSlotCount} seats`;
+      } else {
+        prizeLine = 'Custom token buy-in (Basics)';
+      }
     } else {
       const buy = parsePositiveWholeChips(buyIn);
       const pool = buy * BigInt(prizeSlotCount);
@@ -1447,6 +1531,8 @@ export function PokerTournamentCreator({ creatorAddress, onClose, onCreate }: Po
     guaranteedPool,
     buyIn,
     prizeSlotCount,
+    buyInPrizeSource,
+    buyInTokenWei,
   ]);
 
   if (created) {
@@ -1505,7 +1591,8 @@ export function PokerTournamentCreator({ creatorAddress, onClose, onCreate }: Po
     || !name.trim()
     || prizeSum !== 100
     || prizePercents.length !== prizeSlotCount
-    || (!isFreeroll && parsePositiveWholeChips(buyIn) <= 0n)
+    || (!isFreeroll && buyInPrizeSource === 'chips' && parsePositiveWholeChips(buyIn) <= 0n)
+    || (!isFreeroll && buyInPrizeSource === 'custom_token_buyin' && (!selectedToken || buyInTokenWei <= 0n))
     || (isFreeroll && prizeSource === 'chips' && parsePositiveWholeChips(guaranteedPool) <= 0n)
     || (isFreeroll && prizeSource === 'platform_promo' && parsePositiveWholeChips(guaranteedPool) <= 0n)
     || (isFreeroll && prizeSource === 'custom_token' && (!selectedToken || customTokenAmountWei <= 0n));
@@ -1524,13 +1611,16 @@ export function PokerTournamentCreator({ creatorAddress, onClose, onCreate }: Po
       setFundingKind('buyin');
       setSelectedToken(null);
       setCustomTokenAmount('');
+      setBuyInTokenHumanAmount('');
+      setBuyInPrizeSource('chips');
       setPrizeSource('chips');
       return;
     }
     setFundingKind('buyin');
     setSelectedToken(null);
     setCustomTokenAmount('');
-    setPrizeSource('chips');
+    setBuyInTokenHumanAmount('');
+    setBuyInPrizeSource('chips');
     setNameGateOpen(true);
   };
 
@@ -1812,6 +1902,48 @@ export function PokerTournamentCreator({ creatorAddress, onClose, onCreate }: Po
                 </div>
               )}
 
+              {!isFreeroll && (
+                <div className="space-y-3">
+                  <label className={labelClass}>Buy-in currency</label>
+                  <div className="grid grid-cols-2 gap-2">
+                    <button
+                      type="button"
+                      onClick={() => setBuyInPrizeSource('chips')}
+                      className={`rounded-lg px-3 py-2 text-xs font-medium border transition-colors ${buyInPrizeSource === 'chips' ? 'bg-cyan-600/30 border-cyan-500/50 text-white' : 'bg-black/30 border-white/10 text-white/60 hover:text-white'}`}
+                    >
+                      Poker chips
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setBuyInPrizeSource('custom_token_buyin')}
+                      className={`rounded-lg px-3 py-2 text-xs font-medium border transition-colors ${buyInPrizeSource === 'custom_token_buyin' ? 'bg-cyan-600/30 border-cyan-500/50 text-white' : 'bg-black/30 border-white/10 text-white/60 hover:text-white'}`}
+                    >
+                      Custom PRC-20
+                    </button>
+                  </div>
+                  {buyInPrizeSource === 'custom_token_buyin' && (
+                    <div className="space-y-3 rounded-xl border border-cyan-500/25 bg-black/25 p-3 shadow-[inset_0_2px_6px_rgba(0,0,0,0.45)]">
+                      <p className="text-[11px] leading-relaxed text-white/70">
+                        Pick the token and buy-in per seat. Players pay into the prize escrow when they join — you are not charged when you publish this tournament.
+                      </p>
+                      <Prc20TokenPicker value={selectedToken} onChange={setSelectedToken} />
+                      <div>
+                        <label className={labelClass}>Buy-in per player</label>
+                        <input
+                          type="text"
+                          value={buyInTokenHumanAmount}
+                          onChange={(e) => setBuyInTokenHumanAmount(e.target.value)}
+                          placeholder={selectedToken ? `Amount in ${selectedToken.symbol}` : 'Pick a token first'}
+                          disabled={!selectedToken}
+                          className={`${fieldClass} disabled:opacity-50`}
+                        />
+                        <CustomTokenUsdHint token={selectedToken} amount={buyInTokenHumanAmount} />
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
+
               <div className="mt-1 grid grid-cols-2 gap-x-4 gap-y-4">
                 <div className="flex min-w-0 flex-col">
                   <label htmlFor="poker-basics-min-players" className={labelClass}>
@@ -1878,7 +2010,7 @@ export function PokerTournamentCreator({ creatorAddress, onClose, onCreate }: Po
                     </SelectContent>
                   </Select>
                 </div>
-                {(!isFreeroll || prizeSource !== 'custom_token') && (
+                {(isFreeroll ? prizeSource !== 'custom_token' : buyInPrizeSource === 'chips') && (
                   <div className="flex min-w-0 flex-col">
                     <label htmlFor="poker-basics-pool-buyin" className={labelClass}>
                       {isFreeroll ? 'Guaranteed prize pool' : 'Buy-in per player'}
@@ -1922,7 +2054,10 @@ export function PokerTournamentCreator({ creatorAddress, onClose, onCreate }: Po
                 <div
                   className={cn(
                     'flex min-w-0 flex-col',
-                    !isFreeroll || prizeSource !== 'custom_token' ? '' : 'col-span-2',
+                    (isFreeroll && prizeSource === 'custom_token')
+                    || (!isFreeroll && buyInPrizeSource === 'custom_token_buyin')
+                      ? 'col-span-2'
+                      : '',
                   )}
                 >
                   <label htmlFor="poker-basics-starting-stack" className={labelClass}>
@@ -1963,6 +2098,7 @@ export function PokerTournamentCreator({ creatorAddress, onClose, onCreate }: Po
               <PokerTournamentBasicsFaqSection
                 isFreeroll={isFreeroll}
                 usesCustomTokenEscrowPool={isFreeroll && prizeSource === 'custom_token'}
+                usesCustomTokenBuyIn={!isFreeroll && buyInPrizeSource === 'custom_token_buyin'}
               />
             </TabsContent>
 
@@ -2342,8 +2478,18 @@ export function PokerTournamentCreator({ creatorAddress, onClose, onCreate }: Po
         }
 
         const prizeRow = isFreeroll
-          ? { label: 'Guaranteed pool', value: `${guaranteedPool} chips${prizeSource === 'platform_promo' ? ' · platform-funded' : ''}`, accent: prizeSource === 'platform_promo' ? ('yellow' as const) : ('yellow' as const) }
-          : { label: 'Buy-in', value: `${buyIn} chips`, accent: 'yellow' as const };
+          ? {
+              label: 'Guaranteed pool',
+              value: `${guaranteedPool} chips${prizeSource === 'platform_promo' ? ' · platform-funded' : ''}`,
+              accent: 'yellow' as const,
+            }
+          : buyInPrizeSource === 'custom_token_buyin' && selectedToken && buyInTokenWei > 0n
+            ? {
+                label: 'Buy-in',
+                value: `${formatUnits(buyInTokenWei, Math.min(18, Math.max(1, selectedToken.decimals)))} ${selectedToken.symbol?.trim() || 'Token'} per player (on-chain)`,
+                accent: 'yellow' as const,
+              }
+            : { label: 'Buy-in', value: `${buyIn} chips`, accent: 'yellow' as const };
 
         return (
           <ConfirmActionCard
