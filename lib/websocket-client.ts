@@ -623,7 +623,14 @@ export class BlackjackWebSocketClient {
         reject: (error: any) => {
           clearTimeout(timeout);
           const errMessage = error?.message ?? (typeof error === 'string' ? error : String(error));
-          logger.error(`Request rejected (${type}, ${requestId}): ${errMessage}`);
+          const isTransportChurn =
+            errMessage === 'WebSocket disconnected' ||
+            /websocket not connected|websocket closed before authentication/i.test(errMessage);
+          if (isTransportChurn) {
+            logger.debug(`Request cancelled (${type}, ${requestId}): ${errMessage}`);
+          } else {
+            logger.error(`Request rejected (${type}, ${requestId}): ${errMessage}`);
+          }
           reject(error);
         }
       });

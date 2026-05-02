@@ -42,6 +42,7 @@ import { IconShare } from '@tabler/icons-react';
 import type { PieLabelRenderProps } from 'recharts';
 import { Cell, Pie, PieChart, ResponsiveContainer } from 'recharts';
 import { PokerTournamentSharePanel } from '@/components/poker/tournament/PokerTournamentSharePanel';
+import { ConfirmActionCard } from '@/components/shared/ConfirmActionCard';
 import { Confetti, type ConfettiRef } from '@/components/ui/confetti';
 import { Prc20TokenPicker, type SelectedPrc20Token } from '@/components/shared/Prc20TokenPicker';
 import { useTokenPriceUsd } from '@/hooks/use-token-price-usd';

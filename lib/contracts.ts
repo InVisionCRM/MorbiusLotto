@@ -107,7 +107,7 @@ export const LEGACY_BLACKJACK_ADDRESSES: readonly `0x${string}`[] = [
 ]
 
 // Tournament Prize Escrow V5 (addToPrizePool + V4-compatible ABI). Override via NEXT_PUBLIC_TOURNAMENT_PRIZE_ESCROW_ADDRESS after deploy.
-const DEFAULT_TOURNAMENT_PRIZE_ESCROW_ADDRESS = '0x29d65B552c8246293740e686C9b4F90F359A9F1b' as const
+const DEFAULT_TOURNAMENT_PRIZE_ESCROW_ADDRESS = '0xA54da628C54d2C9885a537f18dc9c22856510eDf' as const
 
 function resolveTournamentPrizeEscrowAddress(): `0x${string}` {
   const raw =

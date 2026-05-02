@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, type CSSProperties, type ReactNode } from 'react';
+import { useLayoutEffect, useState, type CSSProperties, type ReactNode } from 'react';
 import { getApiUrlOptional, getWebSocketUrlOptional } from '@/lib/api-urls';
 import { GameState, Action } from '@/app/BLACKJACK/types';
 import { TOURNAMENT_CONFIG } from '@/hooks/use-tournament';
@@ -206,12 +206,94 @@ export function BlackjackGameView(props: BlackjackGameViewProps) {
   } = props;
 
   const [provablyFairOpen, setProvablyFairOpen] = useState(false);
+  /** Desktop places the bet panel in the right column; mobile keeps it directly under the table (above token profile). */
+  const [isMdUp, setIsMdUp] = useState(false);
+  useLayoutEffect(() => {
+    const mq = window.matchMedia('(min-width: 768px)');
+    const sync = () => setIsMdUp(mq.matches);
+    sync();
+    mq.addEventListener('change', sync);
+    return () => mq.removeEventListener('change', sync);
+  }, []);
 
   const panelShell: CSSProperties = {
     background: 'linear-gradient(145deg, rgb(16, 26, 35), rgb(35, 36, 41))',
     boxShadow: 'inset 0 3px 6px rgba(0, 0, 0, 0.8), inset 0 -3px 6px rgba(255, 255, 255, 0.1), 0 1px 3px rgba(0, 0, 0, 0.5)',
     border: '1px inset rgba(60, 60, 60, 0.5)',
   };
+
+  const primaryBetPanelCard = (
+    <div className="rounded-xl overflow-hidden p-2 sm:p-3" style={panelShell}>
+      {tournament.tournamentState.inTournament ? (
+        <TournamentBetPanel
+          chips={(tournament.displayedTournamentState ?? tournament.tournamentState).chips}
+          onStartGame={handleStartTournamentGame}
+          isPlaying={gameState.isPlaying}
+          handsRemaining={(tournament.displayedTournamentState ?? tournament.tournamentState).handsRemaining}
+          gameResult={currentGameResult === 'dealer_blackjack' ? 'loss' : currentGameResult}
+          onHit={() => handleTournamentPlayerAction(Action.HIT)}
+          onStand={() => handleTournamentPlayerAction(Action.STAND)}
+          onDoubleDown={() => handleTournamentPlayerAction(Action.DOUBLE_DOWN)}
+          onSplit={() => handleTournamentPlayerAction(Action.SPLIT)}
+          canHit={canHit}
+          canStand={canStand}
+          canDoubleDown={canDoubleDown && (tournament.displayedTournamentState ?? tournament.tournamentState).chips >= (currentGame?.playerHand?.betAmount ? Number(currentGame.playerHand.betAmount) : 0)}
+          canSplit={canSplit && (tournament.displayedTournamentState ?? tournament.tournamentState).chips >= (currentGame?.playerHand?.betAmount ? Number(currentGame.playerHand.betAmount) : 0)}
+        />
+      ) : (
+        <div className="flex flex-row md:flex-col items-stretch w-full">
+          <div className="w-1/2 md:w-full md:border-r-0 md:border-b border-r border-white/10 flex items-center min-w-0">
+            <BettingPanelMobile
+              onStartGame={(betBigInt, _clientSeed) => {
+                const ppBetWei = perfectPairsBet > 0 ? BigInt(perfectPairsBet) * BigInt(10 ** 18) : undefined;
+                handleStartGame(betBigInt, clientSeed, ppBetWei);
+              }}
+              isPlaying={gameState.isPlaying}
+              onBetAmountChange={manageChipStack}
+              currentBetAmount={displayBetAmount}
+              onHalfBet={handleHalfBet}
+              onDoubleBet={handleDoubleBet}
+              playerReserves={offChainBalance}
+              betLimits={betLimits}
+            />
+          </div>
+          <div className="w-1/2 md:w-full flex items-stretch min-w-0">
+            <BlackjackMobileActionBar
+              onRebetAndDeal={handleRebetAndDeal}
+              onStartGame={handleDealClick}
+              onAction={handlePlayerAction}
+              onDoubleDownChips={handleDoubleDownChips}
+              onSplitChips={handleSplitChips}
+              isPlaying={gameState.isPlaying}
+              canHit={canHit}
+              canStand={canStand}
+              canDoubleDown={canDoubleDown}
+              canSplit={canSplit}
+              canDeal={!gameState.isPlaying && totalBetAmount > 0}
+              chipStackLength={chipStack.length}
+              lastBetAmount={lastBetAmount}
+              soundEnabled={soundEnabled}
+              onPlaySfx={playSfx}
+              alwaysVisible
+              perfectPairsBet={perfectPairsBet}
+              onPerfectPairsBetChange={setPerfectPairsBet}
+            />
+          </div>
+        </div>
+      )}
+      {!tournament.tournamentState.inTournament && (
+        <div className="flex justify-end border-t border-white/5 px-2 py-2">
+          <button
+            type="button"
+            onClick={() => setProvablyFairOpen(true)}
+            className="text-xs text-cyan-400/90 underline underline-offset-2 hover:text-cyan-300"
+          >
+            Provably fair
+          </button>
+        </div>
+      )}
+    </div>
+  );
 
   return (
     <>
@@ -370,6 +452,8 @@ export function BlackjackGameView(props: BlackjackGameViewProps) {
           </div>
             </div>
 
+          {!isMdUp && primaryBetPanelCard}
+
           <div className="min-w-0 w-full flex-1 min-h-0 flex flex-col">
             <TableTokenProfileCard
               key={`${theme}-${theme === 'video' ? videoSource : imageSource}`}
@@ -384,76 +468,7 @@ export function BlackjackGameView(props: BlackjackGameViewProps) {
         </div>
 
         <div className="min-w-0 order-3 md:order-none md:row-start-1 md:col-start-2 flex flex-col gap-3">
-          <div className="rounded-xl overflow-hidden p-2 sm:p-3" style={panelShell}>
-          {tournament.tournamentState.inTournament ? (
-            <TournamentBetPanel
-              chips={(tournament.displayedTournamentState ?? tournament.tournamentState).chips}
-              onStartGame={handleStartTournamentGame}
-              isPlaying={gameState.isPlaying}
-              handsRemaining={(tournament.displayedTournamentState ?? tournament.tournamentState).handsRemaining}
-              gameResult={currentGameResult === 'dealer_blackjack' ? 'loss' : currentGameResult}
-              onHit={() => handleTournamentPlayerAction(Action.HIT)}
-              onStand={() => handleTournamentPlayerAction(Action.STAND)}
-              onDoubleDown={() => handleTournamentPlayerAction(Action.DOUBLE_DOWN)}
-              onSplit={() => handleTournamentPlayerAction(Action.SPLIT)}
-              canHit={canHit}
-              canStand={canStand}
-              canDoubleDown={canDoubleDown && (tournament.displayedTournamentState ?? tournament.tournamentState).chips >= (currentGame?.playerHand?.betAmount ? Number(currentGame.playerHand.betAmount) : 0)}
-              canSplit={canSplit && (tournament.displayedTournamentState ?? tournament.tournamentState).chips >= (currentGame?.playerHand?.betAmount ? Number(currentGame.playerHand.betAmount) : 0)}
-            />
-          ) : (
-            <div className="flex flex-row md:flex-col items-stretch w-full">
-              <div className="w-1/2 md:w-full md:border-r-0 md:border-b border-r border-white/10 flex items-center min-w-0">
-                <BettingPanelMobile
-                  onStartGame={(betBigInt, _clientSeed) => {
-                    const ppBetWei = perfectPairsBet > 0 ? BigInt(perfectPairsBet) * BigInt(10 ** 18) : undefined;
-                    handleStartGame(betBigInt, clientSeed, ppBetWei);
-                  }}
-                  isPlaying={gameState.isPlaying}
-                  onBetAmountChange={manageChipStack}
-                  currentBetAmount={displayBetAmount}
-                  onHalfBet={handleHalfBet}
-                  onDoubleBet={handleDoubleBet}
-                  playerReserves={offChainBalance}
-                  betLimits={betLimits}
-                />
-              </div>
-              <div className="w-1/2 md:w-full flex items-stretch min-w-0">
-                <BlackjackMobileActionBar
-                  onRebetAndDeal={handleRebetAndDeal}
-                  onStartGame={handleDealClick}
-                  onAction={handlePlayerAction}
-                  onDoubleDownChips={handleDoubleDownChips}
-                  onSplitChips={handleSplitChips}
-                  isPlaying={gameState.isPlaying}
-                  canHit={canHit}
-                  canStand={canStand}
-                  canDoubleDown={canDoubleDown}
-                  canSplit={canSplit}
-                  canDeal={!gameState.isPlaying && totalBetAmount > 0}
-                  chipStackLength={chipStack.length}
-                  lastBetAmount={lastBetAmount}
-                  soundEnabled={soundEnabled}
-                  onPlaySfx={playSfx}
-                  alwaysVisible
-                  perfectPairsBet={perfectPairsBet}
-                  onPerfectPairsBetChange={setPerfectPairsBet}
-                />
-              </div>
-            </div>
-          )}
-            {!tournament.tournamentState.inTournament && (
-              <div className="flex justify-end border-t border-white/5 px-2 py-2">
-                <button
-                  type="button"
-                  onClick={() => setProvablyFairOpen(true)}
-                  className="text-xs text-cyan-400/90 underline underline-offset-2 hover:text-cyan-300"
-                >
-                  Provably fair
-                </button>
-              </div>
-            )}
-          </div>
+          {isMdUp && primaryBetPanelCard}
 
           <div className="rounded-xl overflow-hidden min-w-0 p-2 sm:p-3" style={panelShell}>
           <div className="min-h-[280px] h-[min(420px,40vh)] md:h-[420px] shrink-0 overflow-hidden rounded-xl min-w-0">

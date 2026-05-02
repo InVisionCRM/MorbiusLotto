@@ -427,7 +427,13 @@ export function usePokerTournament({
           });
       }
     } catch (err) {
-      setError((err as Error).message ?? 'Failed to load tournaments');
+      const msg = (err as Error).message ?? 'Failed to load tournaments';
+      const transport =
+        /websocket disconnected|websocket not connected|websocket closed|not connected/i.test(msg);
+      // Polling uses silent: true — do not surface transport churn as lobby error (it spams on reconnect).
+      if (!silent && !transport) {
+        setError(msg);
+      }
     } finally {
       if (!silent) setIsLoading(false);
     }
@@ -442,7 +448,12 @@ export function usePokerTournament({
         tournamentId: string;
         pinCode?: string | null;
       } | null;
-      await refreshTournaments();
+      // List refresh can fail during reconnect; creation already succeeded on the server.
+      try {
+        await refreshTournaments({ silent: true });
+      } catch {
+        /* next open / manual refresh will repopulate */
+      }
       return response;
     } catch (err) {
       setError((err as Error).message ?? 'Failed to create tournament');

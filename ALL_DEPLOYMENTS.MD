@@ -28,7 +28,8 @@
 | 20 | 0xd31130104abb435ce87100e307C8c6ca89268032 | 25790592 | 2026-02-14 | Unknown | 0
 | 21 | 0x011eE5F4658c5183FB9f8cd72e264ca5DBd404ab | 25786753 | 2026-02-14 | MorbiusHolderDistributor V1 (legacy — has ~1100 MORBIUS) | 14k
 | 22 | 0x52cbF18A8AE0Fd4324B045E13532d35CF05Af3e1 | 25780265 | 2026-02-13 | TournamentPrizeEscrow V2 (legacy — custom token prize pools) |
-| 22b | 0x29d65B552c8246293740e686C9b4F90F359A9F1b | — | 2026-05-01 | **TournamentPrizeEscrow V5** (CURRENT app default — `addToPrizePool` + V4-compatible ABI; set `TOURNAMENT_PRIZE_ESCROW_ADDRESS` / `NEXT_PUBLIC_TOURNAMENT_PRIZE_ESCROW_ADDRESS` after mainnet deploy) |
+| 22b | 0x29d65B552c8246293740e686C9b4F90F359A9F1b | — | 2026-05-01 | **TournamentPrizeEscrow V5** (superseded — use 22c for mainnet) |
+| 22c | 0xA54da628C54d2C9885a537f18dc9c22856510eDf | — | 2026-05-01 | **TournamentPrizeEscrow V5** (CURRENT — `addToPrizePool`; set `TOURNAMENT_PRIZE_ESCROW_ADDRESS` / `NEXT_PUBLIC_TOURNAMENT_PRIZE_ESCROW_ADDRESS`) |
 | 23 | 0x1051CAA460e6DC739583dC2b611C8E3AB37fc543 | 25765890 | 2026-02-11 | TournamentPrizeEscrow V1 (legacy) |
 | 24 | 0x69771cE8C2eC5a78Cf87b0a21ad801E74a3EED09 | 25749892 | 2026-02-10 | BlackjackV2 V1 (legacy — BLACKJACK_LEGACY_ADDRESS_3) | 1.8m
 | 25 | 0x59dec9419B32aA9CCC2C46A6fd8AeB68dE069C26 | 25692640 | 2026-02-03 | MorbiusHolderDistributor (legacy) | 1000 rich
@@ -88,7 +89,7 @@
 | Keno | 0x734A1460b4131F8cFE4950894Be89d1a852c957A | Other |
 | Lottery 6of55 V2 | 0xD66b4489fbfF99A8d62f969203899840F2ec69c5 | Other |
 | MorbiusTournament | 0x1F30Aa16B4Da0124308E33b8650C351BBCA70704 | Deployer 1 |
-| TournamentPrizeEscrow V5 | 0x29d65B552c8246293740e686C9b4F90F359A9F1b | Deployer 1 (default in repo until overridden by env) |
+| TournamentPrizeEscrow V5 | 0xA54da628C54d2C9885a537f18dc9c22856510eDf | Deployer 1 (default in repo until overridden by env); 0x29d65… superseded |
 | TournamentPrizeEscrow V2 | 0x52cbF18A8AE0Fd4324B045E13532d35CF05Af3e1 | Deployer 1 |
 | MorbiusHolderDistributor V3 | 0x0416947cd08Fc3cd8923dD857c58472F337aa42B | Other |
 | MorbiusStaking V2 | 0xCc54f6d7ff847ab4Ab4f10314ebf84486921368B | Deployer 1 |
