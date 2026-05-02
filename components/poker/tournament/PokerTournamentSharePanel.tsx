@@ -15,48 +15,71 @@ import {
 const MAX_IMAGE_BYTES = 8 * 1024 * 1024;
 const ACCEPT = 'image/png,image/jpeg';
 
-/** html2canvas 1.x color parser does not support CSS Color 4 (oklch / lab / lch). Coerce via 2D canvas. */
-const HTML2CANVAS_COLOR_LONGHANDS = [
-  'color',
-  'background-color',
-  'border-top-color',
-  'border-right-color',
-  'border-bottom-color',
-  'border-left-color',
-  'outline-color',
-  'text-decoration-color',
-  'caret-color',
-  'column-rule-color',
-] as const;
+/**
+ * html2canvas 1.x cannot parse CSS Color 4 (`oklch()`, `lab()`, etc.). Tailwind v4 theme
+ * utilities often serialize to those functions in computed styles — including on properties
+ * we did not previously mirror (box-shadow, text-shadow, border shorthand, background-image).
+ * Resolve any offending value through a live probe so the clone only sees rgb/rgba/hex.
+ */
+const MODERN_COLOR_SYNTAX = /oklch\s*\(|lab\s*\(|lch\s*\(|hwb\s*\(|color\s*\(/i;
 
-function mirrorComputedColorLonghandsOntoClone(
+const PROBE_OUT_OF_FLOW =
+  'position:fixed!important;left:-99999px!important;top:0!important;width:1px!important;height:1px!important;opacity:0!important;pointer-events:none!important;visibility:hidden!important';
+
+function mirrorModernColorsOntoClone(
   originalRoot: HTMLElement,
   clonedRoot: HTMLElement,
-  ctx: CanvasRenderingContext2D,
+  colorCtx: CanvasRenderingContext2D | null,
 ): void {
-  const stack: Array<[Element, Element]> = [[originalRoot, clonedRoot]];
-  while (stack.length) {
-    const [orig, clone] = stack.pop()!;
-    if (orig instanceof HTMLElement && clone instanceof HTMLElement) {
-      const win = orig.ownerDocument.defaultView;
-      if (win) {
-        const cs = win.getComputedStyle(orig);
-        for (const prop of HTML2CANVAS_COLOR_LONGHANDS) {
-          const raw = cs.getPropertyValue(prop).trim();
-          if (!raw) continue;
-          try {
-            ctx.fillStyle = raw;
-            clone.style.setProperty(prop, String(ctx.fillStyle));
-          } catch {
-            /* leave cascade */
+  const doc = originalRoot.ownerDocument;
+  const win = doc.defaultView;
+  const probe = doc.createElement('div');
+  probe.setAttribute('aria-hidden', 'true');
+  doc.documentElement.appendChild(probe);
+
+  try {
+    const stack: Array<[Element, Element]> = [[originalRoot, clonedRoot]];
+    while (stack.length) {
+      const [orig, clone] = stack.pop()!;
+      if (orig instanceof HTMLElement && clone instanceof HTMLElement) {
+        const cs = win?.getComputedStyle(orig);
+        if (cs) {
+          for (let i = 0; i < cs.length; i++) {
+            const prop = cs.item(i);
+            const raw = cs.getPropertyValue(prop).trim();
+            if (!raw || !MODERN_COLOR_SYNTAX.test(raw)) continue;
+
+            let resolved: string | null = null;
+            try {
+              probe.style.cssText = PROBE_OUT_OF_FLOW;
+              probe.style.setProperty(prop, raw);
+              const fromProbe = win?.getComputedStyle(probe).getPropertyValue(prop).trim();
+              if (fromProbe && !MODERN_COLOR_SYNTAX.test(fromProbe)) resolved = fromProbe;
+            } catch {
+              /* leave resolved null */
+            }
+
+            if (!resolved && colorCtx) {
+              try {
+                colorCtx.fillStyle = raw;
+                const s = String(colorCtx.fillStyle);
+                if (!MODERN_COLOR_SYNTAX.test(s)) resolved = s;
+              } catch {
+                /* complex values (e.g. shadow) are not fillStyle-parseable */
+              }
+            }
+
+            if (resolved) clone.style.setProperty(prop, resolved);
           }
         }
       }
+      const oCh = orig.children;
+      const cCh = clone.children;
+      const n = Math.min(oCh.length, cCh.length);
+      for (let i = 0; i < n; i++) stack.push([oCh[i], cCh[i]]);
     }
-    const oCh = orig.children;
-    const cCh = clone.children;
-    const n = Math.min(oCh.length, cCh.length);
-    for (let i = 0; i < n; i++) stack.push([oCh[i], cCh[i]]);
+  } finally {
+    probe.remove();
   }
 }
 
@@ -202,8 +225,7 @@ export function PokerTournamentSharePanel({
         scratch.width = 1;
         scratch.height = 1;
         const colorCtx = scratch.getContext('2d');
-        if (!colorCtx) return;
-        mirrorComputedColorLonghandsOntoClone(el, clonedEl, colorCtx);
+        mirrorModernColorsOntoClone(el, clonedEl, colorCtx);
       },
     });
     return canvas;
