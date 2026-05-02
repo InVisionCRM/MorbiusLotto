@@ -718,12 +718,13 @@ export default function BlackjackPage() {
   // Game result for chip animations
   const [currentGameResult, setCurrentGameResult] = useState<'win' | 'loss' | 'push' | 'blackjack' | 'dealer_blackjack' | null>(null);
 
-  // Convert integer MORBIUS amount to chip stack (same denominations as rebet/half/double)
-  const CHIP_VALUES = [50000, 25000, 5000, 500];
+  // Greedy MORBIUS chip stack for table animation. Must include 1 so min-bet sizes (e.g. 1) get a non-empty stack;
+  // otherwise DEAL stays disabled (action bar requires chipStack.length > 0 when rebet is available).
+  const MORBIUS_CHIP_DENOMINATIONS = [50000, 25000, 5000, 500, 100, 50, 25, 10, 5, 1];
   const amountToChipStack = useCallback((amount: number): number[] => {
     const chips: number[] = [];
     let remaining = Math.floor(amount);
-    for (const chipValue of CHIP_VALUES) {
+    for (const chipValue of MORBIUS_CHIP_DENOMINATIONS) {
       while (remaining >= chipValue) {
         chips.push(chipValue);
         remaining -= chipValue;
@@ -773,18 +774,9 @@ export default function BlackjackPage() {
         return;
       }
       setManualBetAmount(null);
-      const chips: number[] = [];
-      let remaining = Math.floor(lastBet);
-      const chipValues = [50000, 25000, 5000, 500];
-      for (const chipValue of chipValues) {
-        while (remaining >= chipValue) {
-          chips.push(chipValue);
-          remaining -= chipValue;
-        }
-      }
-      setChipStack(chips);
+      setChipStack(amountToChipStack(Math.floor(lastBet)));
     }
-  }, [lastBetAmount]);
+  }, [lastBetAmount, amountToChipStack, tierLimits.MAX_BET]);
 
   // Half bet: reduce current bet by 50%
   const handleHalfBet = useCallback(() => {
@@ -2110,21 +2102,11 @@ export default function BlackjackPage() {
       });
       return;
     }
-    // Set chip stack to last bet (visual sync)
-    const chips: number[] = [];
-    let remaining = lastBet;
-    const chipValues = [50000, 25000, 5000, 500];
-    for (const chipValue of chipValues) {
-      while (remaining >= chipValue) {
-        chips.push(chipValue);
-        remaining -= chipValue;
-      }
-    }
-    setChipStack(chips);
+    setChipStack(amountToChipStack(Math.floor(lastBet)));
     initialBetRef.current = Math.floor(lastBet);
     const ppBetWei = perfectPairsBet > 0 ? BigInt(perfectPairsBet) * BigInt(10 ** 18) : undefined;
     handleStartGame(lastBetWei, clientSeed, ppBetWei);
-  }, [lastBetAmount, clientSeed, handleStartGame, perfectPairsBet]);
+  }, [lastBetAmount, clientSeed, handleStartGame, perfectPairsBet, amountToChipStack, tierLimits.MAX_BET]);
 
   // Note: Approval handling no longer needed since bets come from reserve
 

@@ -139,7 +139,6 @@ export const BLACKJACK_IMAGE_BACKGROUNDS = [
   { id: 'High-Roller-2', label: 'High Roller 2', src: '/BlackJack/BrandedTable/High-Roller-2.png' },
   { id: 'high-roller-3', label: 'High Roller 3', src: '/BlackJack/BrandedTable/high-roller-3.png' },
   { id: 'High-Roller', label: 'High Roller', src: '/BlackJack/BrandedTable/High-Roller.png' },
-  { id: 'High-Roller-2', label: 'High Roller 2', src: '/BlackJack/BrandedTable/High-Roller-2.png' },
   { id: 'InternetMoney', label: 'Internet Money', src: '/BlackJack/BrandedTable/InternetMoney.png' },
   { id: 'Liberty', label: 'Liberty', src: '/BlackJack/BrandedTable/Liberty.png' },
   { id: 'moonlight', label: 'Moonlight', src: '/BlackJack/BrandedTable/moonlight.png' },

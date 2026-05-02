@@ -42,6 +42,31 @@ function normalizeSrc(src: string): string {
   return `https://${src}`;
 }
 
+/** Merge profile fields from every option that refers to the same felt (same normalized src). DB rows (UUID id) usually hold token/logo/description; bundled static rows only have id/label/src. */
+function buildTableProfileData(requestedId: string, candidates: TableOption[]): TableProfileData {
+  const idMatch = candidates.find((c) => c.id === requestedId);
+  const name = idMatch?.label ?? candidates[0]?.label ?? null;
+
+  const firstNonNull = <K extends keyof TableOption>(key: K): string | null => {
+    for (const c of candidates) {
+      const v = c[key];
+      if (typeof v === 'string' && v.trim() !== '') return v;
+      if (v != null && v !== '') return String(v);
+    }
+    return null;
+  };
+
+  return {
+    name,
+    description: firstNonNull('description'),
+    token_contract_address: firstNonNull('token_contract_address'),
+    logo_url: firstNonNull('logo_url'),
+    ticker: firstNonNull('ticker'),
+    iframe_url: firstNonNull('iframe_url'),
+    website_url: firstNonNull('website_url'),
+  };
+}
+
 /** DB rows first (sort_order), then static ids missing from DB so pickers always include bundled tables. */
 function mergeWithStatic(
   apiMapped: TableOption[],
@@ -158,26 +183,33 @@ export function useBlackjackTables(options?: UseBlackjackTablesOptions) {
   const getTableProfile = useCallback(
     (kind: 'image' | 'video', id: string): TableProfileData | null => {
       const options = kind === 'video' ? videoOptions : imageOptions;
-      let row = options.find((x) => x.id === id);
-      if (!row) {
-        const resolvedSrc = resolveThemeSource(kind, id);
-        if (resolvedSrc) {
-          row = options.find((x) => normalizeSrc(x.src) === resolvedSrc);
-        }
-      }
-      if (row) {
+      const trimmed = id?.trim() ?? '';
+      if (!trimmed) {
+        const info = getThemeInfo({ kind, id: '' });
         return {
-          name: row.label ?? null,
-          description: row.description ?? null,
-          token_contract_address: row.token_contract_address ?? null,
-          logo_url: row.logo_url ?? null,
-          ticker: row.ticker ?? null,
-          iframe_url: row.iframe_url ?? null,
-          website_url: row.website_url ?? null,
+          name: info.label,
+          description: null,
+          token_contract_address: null,
+          logo_url: null,
+          ticker: null,
+          iframe_url: null,
+          website_url: null,
         };
       }
+
+      const resolvedSrc = resolveThemeSource(kind, trimmed);
+      const candidates = options.filter(
+        (x) =>
+          x.id === trimmed ||
+          (resolvedSrc != null && normalizeSrc(x.src) === resolvedSrc)
+      );
+
+      if (candidates.length > 0) {
+        return buildTableProfileData(trimmed, candidates);
+      }
+
       // Multiplayer / deep links: theme_id may not exist in admin table list — still show theme label
-      const info = getThemeInfo({ kind, id });
+      const info = getThemeInfo({ kind, id: trimmed });
       return {
         name: info.label,
         description: null,
