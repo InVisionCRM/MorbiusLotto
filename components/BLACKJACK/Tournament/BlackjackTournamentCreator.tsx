@@ -664,7 +664,7 @@ export function BlackjackTournamentCreator({
 
   if (!address) {
     return (
-      <Dialog open={isOpen} onOpenChange={(open) => { if (!open) handleClose(); }}>
+      <Dialog modal={false} open={isOpen} onOpenChange={(open) => { if (!open) handleClose(); }}>
         <DialogContent
           className="max-w-md gap-0 border-cyan-500/30 p-0 overflow-hidden sm:max-w-md"
           style={Theme.panel.base}

@@ -1589,7 +1589,7 @@ export function PokerTournamentCreator({ creatorAddress, onClose, onCreate }: Po
 
   if (!creatorAddress) {
     return (
-      <Dialog defaultOpen onOpenChange={(open) => { if (!open) onClose(); }}>
+      <Dialog modal={false} defaultOpen onOpenChange={(open) => { if (!open) onClose(); }}>
         <DialogPortal>
           <DialogOverlay className="z-50 bg-black/80 backdrop-blur-sm data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0" />
           <DialogPrimitive.Content

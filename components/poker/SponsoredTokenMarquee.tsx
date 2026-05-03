@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useMemo, useState } from 'react';
-import { Globe, Send, Twitter, ExternalLink } from 'lucide-react';
+import { Globe, Send, Twitter, ExternalLink, X } from 'lucide-react';
 import {
   buildScanMorbiusLink,
   fetchDexScreenerTokenInfo,
@@ -62,11 +62,9 @@ function formatTimeRemaining(sponsoredUntil: string | null | undefined): string 
   return s === 0 ? `${m}m` : `${m}m ${s}s`;
 }
 
-/**
- * Slim auto-scrolling marquee for the poker betting panel.
- * Always renders (defaults to MORBIUS). Fits inside the existing strip height —
- * does NOT add vertical space.
- */
+/** One toast per sponsorship window even if multiple `SponsoredTokenMarquee` instances mount. */
+const sponsorNoticeShownKeys = new Set<string>();
+
 export function SponsoredTokenMarquee({
   sponsor,
   sponsoredUntil,
@@ -110,7 +108,6 @@ export function SponsoredTokenMarquee({
   const isSponsored = !!sponsoredUntil;
   const timeRemaining = useMemo(
     () => formatTimeRemaining(sponsoredUntil ?? null),
-    // eslint-disable-next-line react-hooks/exhaustive-deps
     [sponsoredUntil, tick],
   );
 
@@ -127,21 +124,42 @@ export function SponsoredTokenMarquee({
       draggable={false}
     />
   ) : null;
-  const logoCardNode = tokenLogo ? (
-    <span className="inline-flex items-center gap-1 rounded-full border border-cyan-300/20 bg-white/5 px-1.5 py-0.5 shadow-[inset_0_1px_0_rgba(255,255,255,0.08)]">
-      <img
-        src={tokenLogo}
-        alt=""
-        className="rounded-full bg-black/20 object-contain ring-1 ring-white/10"
-        style={{ width: tight ? 16 : compact ? 18 : 20, height: tight ? 16 : compact ? 18 : 20 }}
-        draggable={false}
-      />
-    </span>
-  ) : null;
+
+  const [sponsorToastOpen, setSponsorToastOpen] = useState(false);
+
+  useEffect(() => {
+    if (!sponsoredUntil) {
+      setSponsorToastOpen(false);
+      return;
+    }
+    const end = new Date(sponsoredUntil).getTime();
+    if (Number.isNaN(end) || end <= Date.now()) {
+      setSponsorToastOpen(false);
+      return;
+    }
+    const key = `${sponsoredUntil}::${sponsor?.address ?? targetAddress}`;
+    if (sponsorNoticeShownKeys.has(key)) return;
+    sponsorNoticeShownKeys.add(key);
+    setSponsorToastOpen(true);
+    const t = window.setTimeout(() => setSponsorToastOpen(false), 10_000);
+    return () => {
+      window.clearTimeout(t);
+      sponsorNoticeShownKeys.delete(key);
+    };
+  }, [sponsoredUntil, sponsor?.address, targetAddress]);
+
+  const sponsorMinutesRemaining = useMemo(() => {
+    if (!sponsoredUntil) return 10;
+    const end = new Date(sponsoredUntil).getTime();
+    if (Number.isNaN(end)) return 10;
+    const ms = end - Date.now();
+    if (ms <= 0) return 1;
+    return Math.max(1, Math.ceil(ms / 60_000));
+  }, [sponsoredUntil, tick]);
 
   const chips: Chip[] = [];
 
-  // Logo + name (bold)
+  // Logo + name (bold) — sole inline logo in the strip
   chips.push({
     key: 'identity',
     content: (
@@ -158,13 +176,6 @@ export function SponsoredTokenMarquee({
     content: <span className="text-white/55">${tokenSymbol}</span>,
   });
 
-  if (logoCardNode) {
-    chips.push({
-      key: 'logo-lead',
-      content: logoCardNode,
-    });
-  }
-
   // Sponsorship message + click-here CTA
   if (isSponsored && timeRemaining && priceMorbiusChips) {
     const priceLabel = (() => {
@@ -178,7 +189,6 @@ export function SponsoredTokenMarquee({
       key: 'sponsor-msg',
       content: (
         <span className="inline-flex items-center gap-1.5 text-white/65">
-          {tokenLogoNode}
           <span>
             The table is now sponsored by{' '}
             <span className="font-semibold text-white/85">{tokenName}</span> for the next{' '}
@@ -243,14 +253,6 @@ export function SponsoredTokenMarquee({
     });
   }
 
-  // Logo chips (mid-rotation visual anchors)
-  if (logoCardNode) {
-    chips.push({
-      key: 'logo-mid',
-      content: logoCardNode,
-    });
-  }
-
   // scan.morbius.io link
   chips.push({
     key: 'scan',
@@ -275,7 +277,6 @@ export function SponsoredTokenMarquee({
       key: 'become-sponsor',
       content: (
         <span className="inline-flex items-center gap-1.5 text-white/65">
-          {tokenLogoNode}
           <span>
             Promote your token here for{' '}
             <span className="font-semibold text-white/85 tabular-nums">{priceLabel} MORBIUS</span>.
@@ -287,26 +288,54 @@ export function SponsoredTokenMarquee({
     });
   }
 
-  if (logoCardNode) {
-    chips.push({
-      key: 'logo-tail',
-      content: logoCardNode,
-    });
-  }
-
   // Duplicate items so the CSS marquee loops seamlessly.
   const looped = [...chips, ...chips];
   const textCls = tight ? 'text-[9px]' : compact ? 'text-[10px]' : 'text-[11px] md:text-[12px]';
   const dotCls = tight ? 'mx-1.5' : compact ? 'mx-2' : 'mx-3';
 
   return (
-    <div
-      className="relative min-w-0 flex-1 overflow-hidden [mask-image:linear-gradient(to_right,transparent,black_8%,black_92%,transparent)]"
-      data-testid="sponsored-token-marquee"
-    >
+    <>
+      {sponsorToastOpen && isSponsored && (
+        <div
+          className="font-jost pointer-events-auto fixed z-[200] max-w-[min(20rem,calc(100vw-2rem))] rounded-xl border border-cyan-500/30 p-3 shadow-xl"
+          style={{
+            top: 'max(1rem, env(safe-area-inset-top, 0px))',
+            left: 'max(1rem, env(safe-area-inset-left, 0px))',
+            background: 'linear-gradient(to right, rgba(15, 23, 42, 0.95), rgba(30, 41, 59, 0.92))',
+            boxShadow: '0 4px 16px rgba(0, 0, 0, 0.6), inset 0 1px 0 rgba(255, 255, 255, 0.05)',
+          }}
+          role="status"
+          aria-live="polite"
+        >
+          <div className="flex items-start justify-between gap-2">
+            <div className="min-w-0 flex-1 pr-1">
+              <div className="text-base font-bold leading-snug tracking-tight text-white md:text-lg">
+                {tokenName}
+              </div>
+              <p className="mt-1.5 text-xs leading-snug text-white/80 md:text-sm">
+                {sponsorMinutesRemaining === 1
+                  ? 'is the sponsor for the next minute! Learn more about it below.'
+                  : `is the sponsor for the next ${sponsorMinutesRemaining} minutes! Learn more about it below.`}
+              </p>
+            </div>
+            <button
+              type="button"
+              className="shrink-0 rounded-md p-1 text-white/50 transition hover:bg-white/10 hover:text-white"
+              aria-label="Dismiss sponsor notice"
+              onClick={() => setSponsorToastOpen(false)}
+            >
+              <X className="h-4 w-4" />
+            </button>
+          </div>
+        </div>
+      )}
       <div
-        className={`flex w-max items-center whitespace-nowrap leading-tight tabular-nums ${textCls} animate-poker-marquee`}
+        className="relative min-w-0 flex-1 overflow-hidden [mask-image:linear-gradient(to_right,transparent,black_8%,black_92%,transparent)]"
+        data-testid="sponsored-token-marquee"
       >
+        <div
+          className={`font-jost flex w-max items-center whitespace-nowrap leading-tight tabular-nums ${textCls} animate-poker-marquee`}
+        >
         {looped.map((c, i) => {
           const inner = c.content;
           let node: React.ReactNode;
@@ -345,7 +374,8 @@ export function SponsoredTokenMarquee({
             </span>
           );
         })}
+        </div>
       </div>
-    </div>
+    </>
   );
 }

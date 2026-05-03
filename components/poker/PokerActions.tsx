@@ -289,13 +289,15 @@ export function PokerActions({
     onPreActionChange(preAction === option ? null : option);
   };
 
+  /** Dim only action controls when waiting — marquee + pre-actions stay full opacity. */
+  const dimWhenNotActing: React.CSSProperties = canAct ? {} : { opacity: 0.45 };
+
   // ── Floating strip (fullscreen mode) ──────────────────────────────────────
   if (variant === 'floating') {
     return (
       <div
         data-testid="poker-actions"
         className="w-full select-none flex justify-center min-w-0"
-        style={{ opacity: canAct ? 1 : 0.45 }}
         role="group"
         aria-label="Poker actions"
       >
@@ -305,7 +307,7 @@ export function PokerActions({
         >
         <div className="flex min-w-0 flex-col items-stretch gap-2 min-[700px]:flex-row min-[700px]:gap-2">
         {/* Commit: respond to table */}
-        <div className="flex min-w-0 flex-1 items-stretch gap-1 p-1.5 min-[700px]:max-w-none min-[700px]:shrink-0 min-[700px]:flex-none md:gap-2.5 md:p-2.5" style={commitZoneStyle}>
+        <div className="flex min-w-0 flex-1 items-stretch gap-1 p-1.5 min-[700px]:max-w-none min-[700px]:shrink-0 min-[700px]:flex-none md:gap-2.5 md:p-2.5" style={{ ...commitZoneStyle, ...dimWhenNotActing }}>
           <button
             data-testid="poker-action-fold"
             type="button"
@@ -343,7 +345,7 @@ export function PokerActions({
           </button>
         </div>
 
-        <div className="hidden min-[700px]:block w-px shrink-0 self-stretch bg-white/10" aria-hidden />
+        <div className="hidden min-[700px]:block w-px shrink-0 self-stretch bg-white/10" aria-hidden style={dimWhenNotActing} />
 
         {/* Tune: size + commit amount */}
         <div className="flex min-w-0 flex-1 flex-col flex-wrap gap-2 p-1.5 min-[520px]:flex-row min-[520px]:flex-nowrap min-[520px]:items-center" style={tuneZoneStyle}>
@@ -351,7 +353,7 @@ export function PokerActions({
           <SponsoredTokenMarquee {...sponsorMarqueeProps} />
         </div>
         {/* Presets */}
-        <div className="flex min-w-0 shrink flex-wrap content-center gap-1 min-[520px]:shrink-0 min-[520px]:justify-end min-[520px]:gap-1.5">
+        <div className="flex min-w-0 shrink flex-wrap content-center gap-1 min-[520px]:shrink-0 min-[520px]:justify-end min-[520px]:gap-1.5" style={dimWhenNotActing}>
           {quickSizes.map((q) => (
             <button
               key={q.label}
@@ -367,10 +369,10 @@ export function PokerActions({
           ))}
         </div>
 
-        <div className="hidden h-8 w-px shrink-0 self-center bg-white/10 min-[520px]:block" aria-hidden />
+        <div className="hidden h-8 w-px shrink-0 self-center bg-white/10 min-[520px]:block" aria-hidden style={dimWhenNotActing} />
 
         {/* Slider + nudges */}
-        <div className="flex w-full min-w-0 flex-1 items-center justify-center gap-1 min-[520px]:w-auto min-[520px]:max-w-[min(100%,13rem)] min-[520px]:shrink min-[520px]:grow min-[520px]:justify-end min-[700px]:max-w-[min(100%,15rem)] md:gap-2 lg:max-w-[min(100%,17rem)]">
+        <div className="flex w-full min-w-0 flex-1 items-center justify-center gap-1 min-[520px]:w-auto min-[520px]:max-w-[min(100%,13rem)] min-[520px]:shrink min-[520px]:grow min-[520px]:justify-end min-[700px]:max-w-[min(100%,15rem)] md:gap-2 lg:max-w-[min(100%,17rem)]" style={dimWhenNotActing}>
           <button
             data-testid="poker-action-nudge-down"
             type="button"
@@ -407,7 +409,7 @@ export function PokerActions({
           </button>
         </div>
 
-        <div className="hidden h-8 w-px shrink-0 self-center bg-white/10 min-[520px]:block" aria-hidden />
+        <div className="hidden h-8 w-px shrink-0 self-center bg-white/10 min-[520px]:block" aria-hidden style={dimWhenNotActing} />
 
         {/* Raise/Bet button */}
         <button
@@ -416,7 +418,7 @@ export function PokerActions({
           onClick={handlePrimary}
           disabled={!canAct || !hasValidAmount}
           className={`flex min-h-[2.65rem] w-full min-w-0 flex-1 flex-col items-center justify-center rounded-lg px-1 text-[11px] font-bold leading-tight tracking-wide transition-all active:scale-[0.97] min-[520px]:min-h-[2.75rem] min-[520px]:max-w-[11rem] min-[520px]:shrink min-[520px]:grow-[2] min-[520px]:rounded-xl min-[520px]:text-sm md:min-h-[3.25rem] md:max-w-[13rem] md:text-base ${primaryBtnClass}`}
-          style={primaryBtnStyle}
+          style={{ ...primaryBtnStyle, ...dimWhenNotActing }}
         >
           <span className="flex max-w-full flex-col items-center justify-center gap-0.5 leading-tight">
             <span>{isFacingBet ? 'Raise' : 'Bet'}</span>
@@ -477,7 +479,6 @@ export function PokerActions({
       className="w-full select-none"
       style={{
         borderTop: 'none',
-        opacity: canAct ? 1 : 0.45,
         position: 'relative',
         zIndex: 30,
       }}
@@ -499,7 +500,7 @@ export function PokerActions({
         <div className="px-0.5 pb-0.5 pt-0">
           <SponsoredTokenMarquee {...sponsorMarqueeProps} compact density="tight" />
         </div>
-        <div className="grid grid-cols-4 gap-1 px-0.5 pb-0.5 pt-0">
+        <div className="grid grid-cols-4 gap-1 px-0.5 pb-0.5 pt-0" style={dimWhenNotActing}>
           {quickSizes.map((q) => (
             <button
               data-testid={`poker-quick-size-${q.label.toLowerCase().replace(/[^a-z0-9]+/g, '-')}`}
@@ -554,7 +555,7 @@ export function PokerActions({
               <span className="whitespace-nowrap">Call Any</span>
             </label>
           </div>
-          <div className="flex shrink-0 items-stretch p-1" style={commitZoneStyle}>
+          <div className="flex shrink-0 items-stretch p-1" style={{ ...commitZoneStyle, ...dimWhenNotActing }}>
             <div className="grid min-h-[2.75rem] min-w-0 flex-1 grid-cols-3 gap-1.5">
               <button
                 data-testid="poker-action-fold"
@@ -591,7 +592,7 @@ export function PokerActions({
               </button>
             </div>
           </div>
-          <div className="flex min-w-0 flex-1 flex-col gap-1 p-0.5" style={tuneZoneStyle}>
+          <div className="flex min-w-0 flex-1 flex-col gap-1 p-0.5" style={{ ...tuneZoneStyle, ...dimWhenNotActing }}>
             <button
               data-testid="poker-action-primary"
               type="button"
@@ -655,7 +656,7 @@ export function PokerActions({
           <div className="m-0 flex min-w-0 flex-1">
             <SponsoredTokenMarquee {...sponsorMarqueeProps} />
           </div>
-          <div className="flex min-w-0 shrink flex-wrap items-center justify-end gap-1 sm:gap-1.5">
+          <div className="flex min-w-0 shrink flex-wrap items-center justify-end gap-1 sm:gap-1.5" style={dimWhenNotActing}>
             {quickSizes.map((q) => (
               <button
                 key={q.label}
@@ -715,7 +716,7 @@ export function PokerActions({
             </label>
           </div>
           <div className="flex min-w-0 flex-1 flex-col gap-2 min-[700px]:min-h-0 min-[700px]:flex-row min-[700px]:gap-1.5 md:gap-2">
-          <div className="flex min-w-0 flex-1 items-stretch p-1 min-[700px]:max-w-[55%] min-[700px]:shrink md:p-2" style={commitZoneStyle}>
+          <div className="flex min-w-0 flex-1 items-stretch p-1 min-[700px]:max-w-[55%] min-[700px]:shrink md:p-2" style={{ ...commitZoneStyle, ...dimWhenNotActing }}>
             <div className="flex min-h-11 min-w-0 flex-1 gap-0.5 min-[700px]:min-h-[3.5rem] md:min-h-16 md:gap-1.5 lg:gap-2">
               <button
                 data-testid="poker-action-fold"
@@ -752,7 +753,7 @@ export function PokerActions({
               </button>
             </div>
           </div>
-          <div className="flex min-w-0 flex-1 flex-col gap-1.5 p-1 min-[520px]:flex-row min-[520px]:items-stretch min-[520px]:gap-2 md:p-1.5 md:gap-2" style={tuneZoneStyle}>
+          <div className="flex min-w-0 flex-1 flex-col gap-1.5 p-1 min-[520px]:flex-row min-[520px]:items-stretch min-[520px]:gap-2 md:p-1.5 md:gap-2" style={{ ...tuneZoneStyle, ...dimWhenNotActing }}>
             <button
               data-testid="poker-action-primary"
               type="button"
