@@ -58,7 +58,7 @@ V4 **`setUnclaimedShares`** requires **`!pool.cancelled`**. The **primary** reco
 
 - **`leavePokerTournamentRegistration`**: payout buy-in on-chain first, then DB transaction; broadcast **`poker_tournament_registration_left`** (or named equivalent in message-types).
 
-### `distributePrizes` (`tournament.service.ts`)
+### `distributePrizes` (`tournament.service.ts`) 
 
 - When **`prize_token_address`** is set: **`getEscrowPoolStatus`** — sync **`actualPrizePool`** (and DB alignment) from **`totalDeposited - amountPaidOut`** before prize fee math, reducing RPC vs DB drift.
 

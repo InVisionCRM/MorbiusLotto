@@ -3,6 +3,7 @@
 import React, { useState, useMemo, useRef, useCallback, useEffect } from 'react';
 import { formatEther, parseEther, parseUnits } from 'viem';
 import { pulsechain } from 'viem/chains';
+import { useConnectModal } from '@rainbow-me/rainbowkit';
 import { useAccount, useWriteContract, usePublicClient } from 'wagmi';
 import {
   Dialog,
@@ -103,6 +104,7 @@ export function BlackjackTournamentCreator({
   }, []);
 
   const { address } = useAccount();
+  const { openConnectModal } = useConnectModal();
   const { writeContractAsync } = useWriteContract();
   const publicClient = usePublicClient();
 
@@ -657,6 +659,33 @@ export function BlackjackTournamentCreator({
           </div>
         </div>
       </div>
+    );
+  }
+
+  if (!address) {
+    return (
+      <Dialog open={isOpen} onOpenChange={(open) => { if (!open) handleClose(); }}>
+        <DialogContent
+          className="max-w-md gap-0 border-cyan-500/30 p-0 overflow-hidden sm:max-w-md"
+          style={Theme.panel.base}
+        >
+          <DialogHeader className={`p-4 pb-3 border-b border-cyan-500/20 text-center sm:text-center ${Theme.cyan.gradient.button}`}>
+            <DialogTitle className="text-lg font-bold text-white">Connect your wallet</DialogTitle>
+          </DialogHeader>
+          <div className="p-6 space-y-4">
+            <p className="text-sm text-gray-400 text-center leading-relaxed">
+              Tournament creation uses your wallet for on-chain registration and prize funding. Connect first, then configure your event.
+            </p>
+            <button
+              type="button"
+              onClick={() => openConnectModal?.()}
+              className={`w-full py-3 rounded-xl ${Theme.cyan.gradient.button} ${Theme.cyan.gradient.buttonHover} text-white font-semibold transition-all`}
+            >
+              Connect wallet
+            </button>
+          </div>
+        </DialogContent>
+      </Dialog>
     );
   }
 

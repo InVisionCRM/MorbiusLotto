@@ -15,6 +15,21 @@ import {
 const MAX_IMAGE_BYTES = 8 * 1024 * 1024;
 const ACCEPT = 'image/png,image/jpeg';
 
+type ShareBackgroundPreset = { id: string; label: string; src: string };
+
+/** Served from `public/images/poker-tournament-share/` (same-origin for html2canvas). */
+const SHARE_BACKGROUND_PRESETS: ShareBackgroundPreset[] = [
+  { id: 'tower', label: 'Morbius tower', src: '/images/poker-tournament-share/morbius-tower-night.png' },
+  { id: 'poker-room', label: 'Poker room', src: '/images/poker-tournament-share/poker-room-neon.png' },
+  { id: 'holdem-teal', label: 'Texas Holdem (teal)', src: '/images/poker-tournament-share/texas-holdem-teal.png' },
+  { id: 'holdem-purple', label: 'Texas Holdem (purple)', src: '/images/poker-tournament-share/texas-holdem-purple.png' },
+  { id: 'lobby', label: 'Casino lobby', src: '/images/poker-tournament-share/casino-lobby-triptych.png' },
+];
+
+function revokeIfBlobUrl(url: string | null): void {
+  if (url?.startsWith('blob:')) URL.revokeObjectURL(url);
+}
+
 /**
  * html2canvas 1.x cannot parse CSS Color 4 (`oklch()`, `lab()`, etc.). Tailwind v4 theme
  * utilities often serialize to those functions in computed styles — including on properties
@@ -166,7 +181,7 @@ export function PokerTournamentSharePanel({
 
   useEffect(() => {
     return () => {
-      if (previewUrl) URL.revokeObjectURL(previewUrl);
+      revokeIfBlobUrl(previewUrl);
     };
   }, [previewUrl]);
 
@@ -185,14 +200,23 @@ export function PokerTournamentSharePanel({
       return;
     }
     setPreviewUrl((prev) => {
-      if (prev) URL.revokeObjectURL(prev);
+      revokeIfBlobUrl(prev);
       return URL.createObjectURL(f);
     });
   };
 
+  const onSelectPreset = (src: string) => {
+    setFileError(null);
+    setPreviewUrl((prev) => {
+      revokeIfBlobUrl(prev);
+      return src;
+    });
+    if (fileInputRef.current) fileInputRef.current.value = '';
+  };
+
   const clearImage = () => {
     setPreviewUrl((prev) => {
-      if (prev) URL.revokeObjectURL(prev);
+      revokeIfBlobUrl(prev);
       return null;
     });
     if (fileInputRef.current) fileInputRef.current.value = '';
@@ -302,7 +326,7 @@ export function PokerTournamentSharePanel({
   return (
     <div className="space-y-5">
       <p className="text-center text-sm text-white/70 leading-relaxed">
-        Upload a background image, pick an overlay style, then download or copy a PNG for social posts.
+        Pick a preset background or upload your own, choose an overlay style, then download or copy a PNG for social posts.
       </p>
 
       <div className="space-y-2">
@@ -338,6 +362,39 @@ export function PokerTournamentSharePanel({
 
       <div className="space-y-2">
         <Label className="text-sm font-semibold text-white/90">Background image</Label>
+        <p className="text-[11px] text-white/50">Preset art</p>
+        <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
+          {SHARE_BACKGROUND_PRESETS.map((p) => {
+            const selected = previewUrl === p.src;
+            return (
+              <button
+                key={p.id}
+                type="button"
+                onClick={() => onSelectPreset(p.src)}
+                className={cn(
+                  'group relative aspect-[1200/630] overflow-hidden rounded-lg text-left shadow-[inset_0_2px_6px_rgba(0,0,0,0.35)] transition-colors',
+                  selected
+                    ? 'border-2 border-cyan-500/55 ring-1 ring-cyan-400/30'
+                    : 'border border-cyan-500/25 hover:border-cyan-500/45',
+                )}
+                style={{
+                  background: 'linear-gradient(325deg, rgba(20, 20, 20, 0.95), rgba(40, 40, 40, 0.75))',
+                }}
+                aria-label={`Use ${p.label} background`}
+                aria-pressed={selected}
+              >
+                <img src={p.src} alt="" className="absolute inset-0 h-full w-full object-cover" />
+                <span
+                  className="pointer-events-none absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/85 via-black/40 to-transparent px-2 pb-1.5 pt-6 text-[10px] font-semibold uppercase tracking-wide text-white/95"
+                  style={{ textShadow: '0 1px 2px rgba(0,0,0,0.85)' }}
+                >
+                  {p.label}
+                </span>
+              </button>
+            );
+          })}
+        </div>
+        <p className="pt-1 text-[11px] text-white/50">Or upload</p>
         <div className="flex flex-wrap items-center gap-2">
           <input ref={fileInputRef} type="file" accept={ACCEPT} className="hidden" onChange={onPickFile} />
           <button
@@ -354,7 +411,7 @@ export function PokerTournamentSharePanel({
               onClick={clearImage}
               className="rounded-lg px-3 py-2 text-sm text-white/60 underline-offset-2 hover:text-white hover:underline"
             >
-              Remove
+              Clear background
             </button>
           ) : null}
         </div>

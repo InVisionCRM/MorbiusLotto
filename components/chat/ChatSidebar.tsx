@@ -4,6 +4,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { usePathname } from 'next/navigation';
 import { AnimatePresence, motion } from 'motion/react';
 import { MessageCircle, X, Home } from 'lucide-react';
+import { cn } from '@/lib/utils';
 import { ChatPanel } from './ChatPanel';
 
 const PATH_TO_ROOM: Record<string, { roomId: string; title: string }> = {
@@ -27,22 +28,6 @@ function isPokerRoute(pathname: string | null | undefined): boolean {
   const p = pathname?.replace(/\/$/, '') || '';
   return p === '/poker' || p.startsWith('/poker/');
 }
-
-/** Slide-in drawer shell (matches ChatPanel / site chrome) */
-const CHAT_DRAWER_STYLE: React.CSSProperties = {
-  background: 'linear-gradient(325deg, rgba(20, 20, 20, 0.98), rgba(35, 36, 41, 0.96))',
-  boxShadow:
-    'inset 0 3px 6px rgba(0, 0, 0, 0.75), inset 0 -2px 6px rgba(255, 255, 255, 0.05), -4px 0 24px rgba(0, 0, 0, 0.45)',
-  borderLeft: '1px solid rgba(34, 211, 238, 0.28)',
-};
-
-const CHAT_TAG_STYLE: React.CSSProperties = {
-  background: 'linear-gradient(145deg, rgb(16, 26, 35), rgb(35, 36, 41))',
-  boxShadow: 'inset 0 3px 6px rgba(0, 0, 0, 0.8), inset 0 -3px 6px rgba(255, 255, 255, 0.08), 0 1px 3px rgba(0, 0, 0, 0.5)',
-  borderLeft: '1px solid rgba(34, 211, 238, 0.35)',
-  borderTop: '1px solid rgba(60, 60, 60, 0.45)',
-  borderBottom: '1px solid rgba(60, 60, 60, 0.45)',
-};
 
 export function ChatSidebar() {
   const [open, setOpen] = useState(false);
@@ -91,7 +76,7 @@ export function ChatSidebar() {
     <button
       type="button"
       onClick={closeSheet}
-      className="w-9 h-9 rounded-lg flex items-center justify-center shrink-0 bg-slate-800 border border-cyan-500/35 text-cyan-200 hover:bg-slate-700 hover:text-white transition-colors shadow-lg"
+      className="w-9 h-9 rounded-lg flex items-center justify-center shrink-0 border border-white/15 bg-white/5 text-white hover:bg-white/10 transition-colors"
       aria-label="Close chat"
     >
       <X className="w-5 h-5 stroke-[2.5]" />
@@ -99,9 +84,10 @@ export function ChatSidebar() {
   );
 
   const tabBtn = (active: boolean) =>
-    active
-      ? 'flex-1 px-3 py-2.5 text-xs font-semibold text-cyan-400 bg-slate-900/80 border-b-2 border-cyan-500 transition-colors'
-      : 'flex-1 px-3 py-2.5 text-xs font-medium text-slate-500 hover:text-slate-200 hover:bg-white/5 transition-colors';
+    cn(
+      'flex-1 px-3 py-2.5 text-xs font-medium rounded-lg transition-colors',
+      active ? 'bg-cyan-500/20 text-cyan-300' : 'text-white hover:bg-white/5',
+    );
 
   if (hideOnPoker) return null;
 
@@ -112,21 +98,18 @@ export function ChatSidebar() {
         <button
           type="button"
           onClick={() => setOpen(true)}
-          className="fixed right-0 z-[500] flex flex-col items-center justify-center gap-1.5 w-6 min-h-[7.5rem] rounded-l-xl text-cyan-400 hover:text-cyan-300 transition-colors bottom-1/4 -translate-y-1/2 md:bottom-1/4"
-          style={{
-            ...CHAT_TAG_STYLE,
-          }}
+          className="surface-panel-sidebar fixed right-0 z-[500] flex flex-col items-center justify-center gap-1.5 w-6 min-h-[7.5rem] rounded-l-xl text-white hover:bg-white/5 transition-colors bottom-1/4 -translate-y-1/2 md:bottom-1/4"
           aria-label={hasUnread ? 'Open chat (unread messages)' : 'Open chat'}
         >
-          <MessageCircle className="w-5 h-5 shrink-0 opacity-90" />
+          <MessageCircle className="w-5 h-5 shrink-0 text-white opacity-90" />
           {hasUnread && (
             <span
-              className="absolute top-2 right-1.5 w-2 h-2 rounded-full bg-red-500 ring-2 ring-slate-900"
+              className="absolute top-2 right-1.5 w-2 h-2 rounded-full bg-red-500 ring-2 ring-slate-950"
               aria-hidden
             />
           )}
           <span
-            className="text-[11px] text-slate-500 tracking-[0.2em] uppercase font-semibold"
+            className="text-[11px] text-white/70 tracking-[0.2em] uppercase font-semibold"
             style={{ writingMode: 'vertical-rl', transform: 'rotate(180deg)' }}
           >
             Chat
@@ -141,7 +124,7 @@ export function ChatSidebar() {
             {/* Backdrop: mobile only — desktop drawer doesn't need a full-screen overlay */}
             <motion.div
               key="chat-backdrop"
-              className="fixed inset-0 z-[9001] md:hidden bg-slate-800"
+              className="fixed inset-0 z-[9001] md:hidden bg-black/50"
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
@@ -152,8 +135,8 @@ export function ChatSidebar() {
             {/* Desktop */}
             <motion.div
               key="chat-drawer-desktop"
-              className="hidden md:flex fixed right-0 top-0 bottom-0 z-[500] flex-col overflow-hidden text-slate-300"
-              style={{ ...CHAT_DRAWER_STYLE, width: 300 }}
+              className="surface-panel-sidebar hidden md:flex fixed right-0 top-0 bottom-0 z-[500] flex-col overflow-hidden text-white rounded-l-xl"
+              style={{ width: 300 }}
               initial={{ x: '100%', opacity: 0 }}
               animate={{ x: 0, opacity: 1 }}
               exit={{ x: '100%', opacity: 0 }}
@@ -161,7 +144,7 @@ export function ChatSidebar() {
               onClick={(e) => e.stopPropagation()}
             >
               {hasGameChat && (
-                <div className="flex shrink-0 rounded-none border-b border-cyan-500/15 bg-slate-950/50 mb-0">
+                <div className="flex shrink-0 rounded-none border-b border-white/10 mb-0 p-1 gap-0.5">
                   <button type="button" onClick={() => setActiveTab('page')} className={tabBtn(activeTab === 'page')}>
                     <span className="truncate block max-w-full">{pageTitle}</span>
                   </button>
@@ -193,8 +176,8 @@ export function ChatSidebar() {
             {/* Mobile */}
             <motion.div
               key="chat-drawer-mobile"
-              className="md:hidden fixed right-0 top-0 bottom-0 z-[9002] flex flex-col overflow-hidden text-slate-300"
-              style={{ ...CHAT_DRAWER_STYLE, width: 'min(85vw, 320px)' }}
+              className="surface-panel-sidebar md:hidden fixed right-0 top-0 bottom-0 z-[9002] flex flex-col overflow-hidden text-white rounded-l-xl"
+              style={{ width: 'min(85vw, 320px)' }}
               initial={{ x: '100%', opacity: 0 }}
               animate={{ x: 0, opacity: 1 }}
               exit={{ x: '100%', opacity: 0 }}
@@ -203,7 +186,7 @@ export function ChatSidebar() {
             >
               <div className="shrink-0 h-14" />
               {hasGameChat && (
-                <div className="flex shrink-0 rounded-none border-b border-cyan-500/15 bg-slate-800 mb-0">
+                <div className="flex shrink-0 rounded-none border-b border-white/10 mb-0 p-1 gap-0.5">
                   <button type="button" onClick={() => setActiveTab('page')} className={tabBtn(activeTab === 'page')}>
                     <span className="truncate block max-w-full">{pageTitle}</span>
                   </button>

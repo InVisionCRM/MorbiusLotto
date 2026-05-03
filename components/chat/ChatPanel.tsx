@@ -6,19 +6,11 @@ import { useChat } from '@/hooks/use-chat';
 import { PlayerProfileModal } from '@/components/shared/PlayerProfileModal';
 import type { BlackjackWebSocketClient, ChatMessagePayload } from '@/lib/websocket-client';
 
-/** Plinko-style dark panel shell */
-const CHAT_SHELL_STYLE: React.CSSProperties = {
-  background: 'linear-gradient(325deg, rgba(20, 20, 20, 0.96), rgba(40, 40, 40, 0.9))',
-  boxShadow:
-    'inset 0 3px 6px rgba(0, 0, 0, 0.8), inset 0 -3px 6px rgba(255, 255, 255, 0.08), 0 4px 20px rgba(0, 0, 0, 0.5)',
-  border: '1px inset rgba(60, 60, 60, 0.5)',
-};
-
-/** Recessed message list / emoji tray */
+/** Recessed message list / emoji tray (nested strip inside main-nav-style shell) */
 const CHAT_INSET_STYLE: React.CSSProperties = {
-  background: 'rgba(16, 18, 22, 0.94)',
-  boxShadow: 'inset 0 2px 8px rgba(0, 0, 0, 0.65)',
-  border: '1px solid rgba(55, 65, 75, 0.5)',
+  background: 'rgba(0, 0, 0, 0.22)',
+  boxShadow: 'inset 0 2px 8px rgba(0, 0, 0, 0.55)',
+  border: '1px solid rgba(255, 255, 255, 0.08)',
 };
 
 const CHAT_MESSAGE_MAX_LENGTH = 150;
@@ -259,7 +251,7 @@ export function ChatPanel({
                 type="button"
                 onClick={loadMore}
                 disabled={loadingMore}
-                className="text-xs disabled:opacity-50 px-2 py-1 rounded-lg border border-cyan-500/20 text-slate-400 hover:bg-white/5 hover:text-slate-200 transition-colors"
+                className="text-xs disabled:opacity-50 px-2 py-1 rounded-lg border border-white/15 text-white/70 hover:bg-white/5 hover:text-white transition-colors"
               >
                 {loadingMore ? 'Loading…' : 'Load older messages'}
               </button>
@@ -276,17 +268,17 @@ export function ChatPanel({
             </div>
           )}
           {!connected && !error && (
-            <div className="text-slate-500 text-xs p-2 font-sans">Connecting…</div>
+            <div className="text-white/50 text-xs p-2 font-sans">Connecting…</div>
           )}
           {connected && messages.length === 0 && (
-            <div className="text-slate-500 text-xs p-2 font-sans">No messages yet. Say hi!</div>
+            <div className="text-white/50 text-xs p-2 font-sans">No messages yet. Say hi!</div>
           )}
           {messages.map((msg) => {
             if (compact) {
               return (
                 <div key={msg.id} className="text-left flex gap-1.5 items-baseline font-sans">
-                  <span className="text-[11px] text-slate-500 shrink-0" style={{ fontFamily: "'Montserrat', sans-serif", fontWeight: 500 }}>{senderLabel(msg)}:</span>
-                  <span className="text-[13px] text-white/95 break-words min-w-0" style={{ fontFamily: "'Montserrat', sans-serif", fontWeight: 500 }}>{msg.text}</span>
+                  <span className="text-[11px] text-white/55 shrink-0" style={{ fontFamily: "'Montserrat', sans-serif", fontWeight: 500 }}>{senderLabel(msg)}:</span>
+                  <span className="text-[13px] text-white break-words min-w-0" style={{ fontFamily: "'Montserrat', sans-serif", fontWeight: 500 }}>{msg.text}</span>
                 </div>
               );
             }
@@ -308,13 +300,13 @@ export function ChatPanel({
                       </span>
                     )}
                     <span
-                      className="text-slate-500 text-[10px] shrink-0 tabular-nums"
+                      className="text-white/45 text-[10px] shrink-0 tabular-nums"
                       title={formatTime(msg.timestamp)}
                     >
                       {formatRelative(msg.timestamp)}
                     </span>
                   </div>
-                  <p className="text-white/95 text-sm break-words pl-0 mt-0.5 leading-relaxed" style={{ fontFamily: "'Montserrat', sans-serif", fontWeight: 500 }}>{msg.text}</p>
+                  <p className="text-white text-sm break-words pl-0 mt-0.5 leading-relaxed" style={{ fontFamily: "'Montserrat', sans-serif", fontWeight: 500 }}>{msg.text}</p>
                 </div>
               </div>
             );
@@ -332,11 +324,11 @@ export function ChatPanel({
       </div>
       <form
         onSubmit={handleSubmit}
-        className={`font-sans flex-shrink-0 border-t border-cyan-500/15 text-slate-200 ${compact ? 'p-2 flex items-end gap-2' : 'p-2 flex flex-col gap-2'}`}
+        className={`font-sans flex-shrink-0 border-t border-white/10 text-white ${compact ? 'p-2 flex items-end gap-2' : 'p-2 flex flex-col gap-2'}`}
       >
         {!compact && showEmojiPicker && (
           <div
-            className="flex flex-wrap gap-1 p-2 rounded-lg border border-cyan-500/20 max-h-24 overflow-y-auto"
+            className="flex flex-wrap gap-1 p-2 rounded-lg border border-white/10 max-h-24 overflow-y-auto"
             style={CHAT_INSET_STYLE}
           >
             {EMOJI_LIST.map((emoji) => (
@@ -344,7 +336,7 @@ export function ChatPanel({
                 key={emoji}
                 type="button"
                 onClick={() => insertEmoji(emoji)}
-                className="w-7 h-7 flex items-center justify-center rounded-md hover:bg-white/10 text-lg leading-none transition text-slate-200"
+                className="w-7 h-7 flex items-center justify-center rounded-md hover:bg-white/10 text-lg leading-none transition text-white"
                 title={emoji}
               >
                 {emoji}
@@ -363,7 +355,7 @@ export function ChatPanel({
               disabled={!connected || chatPaused}
               maxLength={CHAT_MESSAGE_MAX_LENGTH}
               rows={1}
-              className="w-full min-w-0 h-11 py-2.5 px-3 rounded-full border border-white/10 bg-slate-900/90 text-[15px] text-slate-100 placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-cyan-500/35 focus:border-cyan-500/40 resize-none overflow-hidden font-sans"
+              className="w-full min-w-0 h-11 py-2.5 px-3 rounded-full border border-white/20 bg-white/10 text-[15px] text-white placeholder:text-white/45 focus:outline-none focus:ring-1 focus:ring-cyan-500/50 resize-none overflow-hidden font-sans"
               aria-label="Message"
             />
           ) : (
@@ -377,9 +369,9 @@ export function ChatPanel({
                 disabled={!connected || chatPaused}
                 maxLength={CHAT_MESSAGE_MAX_LENGTH}
                 rows={4}
-                className="w-full resize-none py-2 pr-14 text-sm rounded-lg border border-white/10 bg-slate-900/85 text-slate-100 placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-cyan-500/35 focus:border-cyan-500/40"
+                className="w-full resize-none py-2 pr-14 text-sm rounded-lg border border-white/20 bg-white/10 text-white placeholder:text-white/45 focus:outline-none focus:ring-1 focus:ring-cyan-500/50"
               />
-              <span className="absolute right-2 bottom-2 text-[10px] tabular-nums pointer-events-none text-slate-500">
+              <span className="absolute right-2 bottom-2 text-[10px] tabular-nums pointer-events-none text-white/45">
                 {input.length}/{CHAT_MESSAGE_MAX_LENGTH}
               </span>
             </>
@@ -390,7 +382,7 @@ export function ChatPanel({
             <button
               type="button"
               onClick={() => setShowEmojiPicker((v) => !v)}
-              className="w-9 h-9 flex-shrink-0 rounded-lg text-lg flex items-center justify-center transition bg-slate-800/90 border border-cyan-500/20 text-slate-200 hover:bg-slate-700/90"
+              className="w-9 h-9 flex-shrink-0 rounded-lg text-lg flex items-center justify-center transition border border-white/15 bg-white/5 text-white hover:bg-white/10"
               title="Insert emoji"
               aria-label="Insert emoji"
             >
@@ -417,14 +409,13 @@ export function ChatPanel({
       className={`flex flex-col overflow-hidden h-full font-sans ${
         compact || bareShell
           ? 'min-h-0 border-0 shadow-none rounded-none bg-transparent'
-          : `font-poppins rounded-xl border border-cyan-500/30 shadow-2xl min-h-[320px] ${fillHeight ? 'min-h-0' : ''}`
+          : `surface-panel-sidebar font-poppins rounded-xl min-h-[320px] ${fillHeight ? 'min-h-0' : ''}`
       } ${className}`}
-      style={compact || bareShell ? undefined : CHAT_SHELL_STYLE}
     >
       {(!compact || title) && (
-        <div className={`flex flex-col gap-1 px-3 py-2 border-b border-cyan-500/15 text-slate-200 ${compact ? 'py-1.5' : ''}`}>
+        <div className={`flex flex-col gap-1 px-3 py-2 border-b border-white/10 text-white ${compact ? 'py-1.5' : ''}`}>
           <div className="flex items-center justify-between gap-2">
-            <span className="text-cyan-400 font-semibold text-sm tracking-tight truncate">{title}</span>
+            <span className="text-white font-semibold text-sm tracking-tight truncate">{title}</span>
             <div className="flex items-center gap-2 shrink-0">
               {!compact && walletAddress && connected && !showNameInput && (
                 <button
@@ -446,7 +437,7 @@ export function ChatPanel({
                 onChange={(e) => setNameInput(e.target.value)}
                 placeholder="Display name (3–32 chars)"
                 maxLength={32}
-                className="flex-1 min-w-0 min-w-[120px] rounded-lg px-2 py-1.5 text-xs border border-white/10 bg-slate-900/85 text-slate-100 placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-cyan-500/35"
+                className="flex-1 min-w-0 min-w-[120px] rounded-lg px-2 py-1.5 text-xs border border-white/20 bg-white/10 text-white placeholder:text-white/45 focus:outline-none focus:ring-1 focus:ring-cyan-500/50"
               />
               <button
                 type="button"
@@ -459,7 +450,7 @@ export function ChatPanel({
               <button
                 type="button"
                 onClick={() => { setShowNameInput(false); setNameInput(''); }}
-                className="px-2 py-1.5 rounded-lg text-xs shrink-0 text-slate-400 hover:text-slate-200 transition-colors"
+                className="px-2 py-1.5 rounded-lg text-xs shrink-0 text-white/60 hover:text-white transition-colors"
               >
                 Cancel
               </button>
@@ -493,7 +484,7 @@ export function ChatPanel({
               <button
                 type="button"
                 onClick={() => setOpen(false)}
-                className="absolute -top-1 -right-1 z-10 w-9 h-9 rounded-lg flex items-center justify-center bg-slate-800 border border-cyan-500/35 text-cyan-200 hover:bg-slate-700 hover:text-white transition-colors shadow-lg"
+                className="absolute -top-1 -right-1 z-10 w-9 h-9 rounded-lg flex items-center justify-center border border-white/15 bg-white/5 text-white hover:bg-white/10 transition-colors"
                 aria-label="Close chat"
               >
                 <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth={2.5} viewBox="0 0 24 24">
@@ -506,10 +497,7 @@ export function ChatPanel({
             <button
               type="button"
               onClick={() => setOpen(true)}
-              className="w-full rounded-xl py-3 px-4 text-left flex items-center gap-2 border border-cyan-500/30 font-semibold text-sm transition text-cyan-400 hover:text-cyan-300 hover:border-cyan-400/50 shadow-lg relative bg-gradient-to-br from-slate-900 to-slate-800"
-              style={{
-                boxShadow: 'inset 0 2px 4px rgba(0,0,0,0.5), 0 4px 16px rgba(0,0,0,0.35)',
-              }}
+              className="surface-panel-sidebar w-full rounded-xl py-3 px-4 text-left flex items-center gap-2 font-semibold text-sm transition text-white hover:bg-white/5 relative"
               aria-label={`Open ${title}${unreadCount > 0 ? `, ${unreadCount} unread` : ''}`}
             >
               <svg className="w-5 h-5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">

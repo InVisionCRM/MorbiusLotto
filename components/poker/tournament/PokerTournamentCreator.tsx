@@ -47,6 +47,7 @@ import { Confetti, type ConfettiRef } from '@/components/ui/confetti';
 import { Prc20TokenPicker, type SelectedPrc20Token } from '@/components/shared/Prc20TokenPicker';
 import { useTokenPriceUsd } from '@/hooks/use-token-price-usd';
 import { formatUnits, parseUnits } from 'viem';
+import { useConnectModal } from '@rainbow-me/rainbowkit';
 import { useWriteContract, usePublicClient, useAccount } from 'wagmi';
 import { ERC20_ABI } from '@/abi/erc20';
 import { tournamentPrizeEscrowV2Abi } from '@/abi/tournament-prize-escrow-v2';
@@ -956,6 +957,7 @@ export function PokerTournamentCreator({ creatorAddress, onClose, onCreate }: Po
   const { writeContractAsync } = useWriteContract();
   const publicClient = usePublicClient();
   const { address: connectedAddress } = useAccount();
+  const { openConnectModal } = useConnectModal();
   const [activeTab, setActiveTab] = useState('type');
   const initialSchedule = useMemo(() => defaultScheduledFields(), []);
   const [scheduledDate, setScheduledDate] = useState(initialSchedule.date);
@@ -1582,6 +1584,57 @@ export function PokerTournamentCreator({ creatorAddress, onClose, onCreate }: Po
           </div>
         </div>
       </div>
+    );
+  }
+
+  if (!creatorAddress) {
+    return (
+      <Dialog defaultOpen onOpenChange={(open) => { if (!open) onClose(); }}>
+        <DialogPortal>
+          <DialogOverlay className="z-50 bg-black/80 backdrop-blur-sm data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0" />
+          <DialogPrimitive.Content
+            className={cn(
+              'fixed inset-0 z-50 flex flex-col items-center justify-center border-0 bg-transparent p-4 shadow-none outline-none',
+              'overflow-y-auto scroll-smooth overscroll-y-contain',
+              'data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 duration-200',
+            )}
+          >
+            <DialogPrimitive.Title className="sr-only">Connect your wallet</DialogPrimitive.Title>
+            <DialogPrimitive.Description className="sr-only">
+              Connect a wallet to create a poker tournament.
+            </DialogPrimitive.Description>
+            <div
+              className="relative w-full max-w-sm rounded-2xl border-2 border-cyan-500/30 bg-gradient-to-br from-slate-900 to-slate-800 p-6 shadow-2xl overflow-hidden"
+              style={{
+                boxShadow: '0 8px 32px rgba(0,0,0,0.5), inset 0 3px 6px rgba(0,0,0,0.8), inset 0 -3px 6px rgba(255,255,255,0.08)',
+              }}
+            >
+              <div className="absolute inset-0 pointer-events-none bg-[radial-gradient(circle_at_50%_0%,rgba(34,211,238,0.12),transparent_55%)]" />
+              <div className="relative flex items-start justify-between gap-3 mb-4">
+                <h2 className="text-lg font-bold text-white tracking-tight pr-2">Connect your wallet</h2>
+                <button
+                  type="button"
+                  onClick={onClose}
+                  className="shrink-0 rounded-lg p-1.5 text-white/50 hover:text-white hover:bg-white/10 transition-colors"
+                  aria-label="Close"
+                >
+                  ×
+                </button>
+              </div>
+              <p className="relative text-sm text-white/70 leading-relaxed mb-4">
+                Creating a tournament requires a connected wallet so you are recorded as the host and can sign on-chain buy-in or prize steps when needed.
+              </p>
+              <button
+                type="button"
+                onClick={() => openConnectModal?.()}
+                className="relative w-full rounded-xl bg-gradient-to-r from-cyan-600 to-blue-600 px-4 py-3 text-sm font-semibold text-white hover:opacity-95 transition-opacity"
+              >
+                Connect wallet
+              </button>
+            </div>
+          </DialogPrimitive.Content>
+        </DialogPortal>
+      </Dialog>
     );
   }
 

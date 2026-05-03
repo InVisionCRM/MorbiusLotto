@@ -43,12 +43,11 @@ const POT_ANCHOR = POKER_POT_ANCHOR;
 const SHOWDOWN_CARD_PULL_RATIO = 0.18;
 const SHOWDOWN_CARD_PULL_MAX_PX = 70;
 
-// Staged showdown reveal — keeps the moment cinematic instead of dumping
-// every card and the winner medallion in a single frame.
+// Staged showdown reveal — community run-out can be stepped; hole cards flip
+// together, then a short beat before the winner medallion.
 const REVEAL_COMMUNITY_STEP_MS = 850;   // gap between turn → river when streets were skipped
-const REVEAL_BEFORE_HANDS_MS = 600;     // beat after final community card before hole cards flip
-const REVEAL_HAND_STEP_MS = 750;        // gap between successive opponent hole-card reveals
-const REVEAL_BEFORE_MEDALLION_MS = 700; // beat after last hole card before medallion appears
+const REVEAL_BEFORE_HANDS_MS = 600;     // beat after final community card before all hole cards flip
+const REVEAL_BEFORE_MEDALLION_MS = 700; // beat after hole cards before medallion appears
 
 // Seat base geometry: `lib/poker-seat-layout.ts` (SEAT_ANCHOR_RING + authoredSeatAnchors).
 
@@ -224,8 +223,8 @@ export function PokerTable({ state, currentPlayerAddress, timeLeft, chatBubbleBy
   // The server can flip straight to `street === 'showdown'` with the full
   // board + every hand revealed (especially on all-in run-outs where chevtek
   // auto-resolves all remaining streets in a single tick). Replay it here as
-  // a cinematic sequence: missing community cards → opponent hole cards
-  // (loser→winner) → winner medallion. On reconnect mid-showdown, jump to
+  // a cinematic sequence: missing community cards → all hole cards at once
+  // → winner medallion. On reconnect mid-showdown, jump to
   // the final state instead of replaying.
   const preShowdownCommunityCountRef = useRef(0);
   useEffect(() => {
@@ -287,11 +286,6 @@ export function PokerTable({ state, currentPlayerAddress, timeLeft, chatBubbleBy
       if (ia < 0 && ib >= 0) return 1;
       return a.toLowerCase().localeCompare(b.toLowerCase());
     });
-    const winnerLower = new Set((hand.winners ?? []).map((w) => w.address.toLowerCase()));
-    const losers = showdownAddrsAll.filter((a) => !winnerLower.has(a.toLowerCase()));
-    const winners = showdownAddrsAll.filter((a) => winnerLower.has(a.toLowerCase()));
-    const revealOrder = [...losers, ...winners];
-
     // Reconnect heuristic: if this is the very first hand we're seeing and it
     // arrives already in showdown, we likely joined mid-resolve — jump to end.
     const isReconnect = isFirstObservation && preShowdownCommunityCountRef.current === 0;
@@ -317,21 +311,14 @@ export function PokerTable({ state, currentPlayerAddress, timeLeft, chatBubbleBy
       timeouts.push(setTimeout(() => setRevealedCommunityCount(target), cursor));
     }
 
-    // Stage 2: beat, then reveal opponent hole cards one-by-one.
+    // Stage 2: beat, then reveal every showdown hand at once.
     cursor += REVEAL_BEFORE_HANDS_MS;
-    for (const addr of revealOrder) {
-      const lower = addr.toLowerCase();
-      cursor += REVEAL_HAND_STEP_MS;
-      timeouts.push(
-        setTimeout(() => {
-          setRevealedHandAddrs((prev) => {
-            const next = new Set(prev);
-            next.add(lower);
-            return next;
-          });
-        }, cursor),
-      );
-    }
+    const allShowdownLower = showdownAddrsAll.map((a) => a.toLowerCase());
+    timeouts.push(
+      setTimeout(() => {
+        setRevealedHandAddrs(new Set(allShowdownLower));
+      }, cursor),
+    );
 
     // Stage 3: brief beat, then mount the winner medallion.
     cursor += REVEAL_BEFORE_MEDALLION_MS;
@@ -508,8 +495,8 @@ export function PokerTable({ state, currentPlayerAddress, timeLeft, chatBubbleBy
       ? hand?.winners?.find((w) => w.address.toLowerCase() === seat.playerAddress!.toLowerCase())
       : undefined;
     const seatWinningCardIndices = seatWinnerEntry?.winningCardIndices ?? [];
-    // Gate showdown hole-card reveal on the staged sequence: only seats whose
-    // address has been "flipped" so far show face-up cards.
+    // Gate showdown hole cards until the timed reveal step (all non-folded
+    // showdown hands flip together).
     const seatAddrLower = seat.playerAddress?.toLowerCase();
     const isSeatRevealed = !!seatAddrLower && revealedHandAddrs.has(seatAddrLower);
     const showdownCardsForSeat =
