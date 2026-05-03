@@ -441,6 +441,7 @@ export default function PokerTablePage() {
       stack={mySeat.stack ?? '0'}
       callAmount={callAmount}
       pot={hand?.pot ?? '0'}
+      betSizingResetKey={hand ? `${hand.handId}:${hand.street}` : ''}
       variant={isFullscreen ? 'floating' : 'default'}
       lastActionLine={lastActionLine}
       sponsoredToken={sponsoredToken}

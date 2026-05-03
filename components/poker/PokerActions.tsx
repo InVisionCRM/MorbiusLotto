@@ -71,6 +71,11 @@ export interface PokerActionsProps {
   sponsorPriceMorbiusChips?: string | null;
   /** Opens the sponsorship purchase modal (Click here CTA in marquee). */
   onOpenSponsorModal?: () => void;
+  /**
+   * When this key changes (e.g. `${handId}:${street}`), bet/raise sizing resets to min raise.
+   * Omit or pass '' when idle — avoids wiping passive sizing when `canAct` toggles.
+   */
+  betSizingResetKey?: string;
 }
 
 export type PreActionOption = 'check_fold' | 'check' | 'call_any' | null;
@@ -95,6 +100,7 @@ export function PokerActions({
   sponsoredUntil = null,
   sponsorPriceMorbiusChips = null,
   onOpenSponsorModal,
+  betSizingResetKey = '',
 }: PokerActionsProps) {
   const { play } = usePokerSounds();
   const minRaiseAmt = useMemo(() => parseProp(minRaise), [minRaise]);
@@ -106,13 +112,12 @@ export function PokerActions({
 
   const [customAmount, setCustomAmount] = useState(() => formatAmount(minRaiseAmt));
 
-  // Snap the slider back to the minimum at the start of every action turn and
-  // whenever the min itself changes. Without this the slider carries over the
-  // previous turn's value (e.g. all-in) and players accidentally jam.
+  // Reset sizing at hand/street boundaries only — not when `canAct` flips — so passive
+  // prep survives until it is your turn. Do not add minRaiseAmt to deps: it moves mid-street.
   useEffect(() => {
-    if (!canAct) return;
+    if (!betSizingResetKey) return;
     setCustomAmount(formatAmount(minRaiseAmt));
-  }, [canAct, minRaiseAmt]);
+  }, [betSizingResetKey]);
 
   // ── Derived values ─────────────────────────────────────────────────────────
   const parsed  = safeParseAmount(customAmount);
@@ -289,8 +294,8 @@ export function PokerActions({
     onPreActionChange(preAction === option ? null : option);
   };
 
-  /** Dim only action controls when waiting — marquee + pre-actions stay full opacity. */
-  const dimWhenNotActing: React.CSSProperties = canAct ? {} : { opacity: 0.45 };
+  /** Dim Fold/Check/Call (and Bet/Raise commit) when waiting — presets/slider stay full opacity. */
+  const dimCommitWhenNotActing: React.CSSProperties = canAct ? {} : { opacity: 0.45 };
 
   // ── Floating strip (fullscreen mode) ──────────────────────────────────────
   if (variant === 'floating') {
@@ -307,7 +312,7 @@ export function PokerActions({
         >
         <div className="flex min-w-0 flex-col items-stretch gap-2 min-[700px]:flex-row min-[700px]:gap-2">
         {/* Commit: respond to table */}
-        <div className="flex min-w-0 flex-1 items-stretch gap-1 p-1.5 min-[700px]:max-w-none min-[700px]:shrink-0 min-[700px]:flex-none md:gap-2.5 md:p-2.5" style={{ ...commitZoneStyle, ...dimWhenNotActing }}>
+        <div className="flex min-w-0 flex-1 items-stretch gap-1 p-1.5 min-[700px]:max-w-none min-[700px]:shrink-0 min-[700px]:flex-none md:gap-2.5 md:p-2.5" style={{ ...commitZoneStyle, ...dimCommitWhenNotActing }}>
           <button
             data-testid="poker-action-fold"
             type="button"
@@ -345,7 +350,7 @@ export function PokerActions({
           </button>
         </div>
 
-        <div className="hidden min-[700px]:block w-px shrink-0 self-stretch bg-white/10" aria-hidden style={dimWhenNotActing} />
+        <div className="hidden min-[700px]:block w-px shrink-0 self-stretch bg-white/10" aria-hidden />
 
         {/* Tune: size + commit amount */}
         <div className="flex min-w-0 flex-1 flex-col flex-wrap gap-2 p-1.5 min-[520px]:flex-row min-[520px]:flex-nowrap min-[520px]:items-center" style={tuneZoneStyle}>
@@ -353,14 +358,14 @@ export function PokerActions({
           <SponsoredTokenMarquee {...sponsorMarqueeProps} />
         </div>
         {/* Presets */}
-        <div className="flex min-w-0 shrink flex-wrap content-center gap-1 min-[520px]:shrink-0 min-[520px]:justify-end min-[520px]:gap-1.5" style={dimWhenNotActing}>
+        <div className="flex min-w-0 shrink flex-wrap content-center gap-1 min-[520px]:shrink-0 min-[520px]:justify-end min-[520px]:gap-1.5">
           {quickSizes.map((q) => (
             <button
               key={q.label}
               data-testid={`poker-quick-size-${q.label.toLowerCase().replace(/[^a-z0-9]+/g, '-')}`}
               type="button"
               onClick={() => { setCustomAmount(formatAmount(clampAmount(q.value, minRaiseAmt, stackAmt))); }}
-              disabled={!canAct || stackAmt === 0n}
+              disabled={stackAmt === 0n}
               className={`h-7 min-w-0 shrink px-2 text-[10px] rounded-md transition-all hover:brightness-110 active:scale-95 min-[520px]:h-8 min-[520px]:px-2.5 min-[520px]:text-[11px] md:px-3 md:text-xs ${quickSizeClass}`}
               style={tuneGlassBtnStyle}
             >
@@ -369,17 +374,17 @@ export function PokerActions({
           ))}
         </div>
 
-        <div className="hidden h-8 w-px shrink-0 self-center bg-white/10 min-[520px]:block" aria-hidden style={dimWhenNotActing} />
+        <div className="hidden h-8 w-px shrink-0 self-center bg-white/10 min-[520px]:block" aria-hidden />
 
         {/* Slider + nudges */}
-        <div className="flex w-full min-w-0 flex-1 items-center justify-center gap-1 min-[520px]:w-auto min-[520px]:max-w-[min(100%,13rem)] min-[520px]:shrink min-[520px]:grow min-[520px]:justify-end min-[700px]:max-w-[min(100%,15rem)] md:gap-2 lg:max-w-[min(100%,17rem)]" style={dimWhenNotActing}>
+        <div className="flex w-full min-w-0 flex-1 items-center justify-center gap-1 min-[520px]:w-auto min-[520px]:max-w-[min(100%,13rem)] min-[520px]:shrink min-[520px]:grow min-[520px]:justify-end min-[700px]:max-w-[min(100%,15rem)] md:gap-2 lg:max-w-[min(100%,17rem)]">
           <button
             data-testid="poker-action-nudge-down"
             type="button"
             onClick={() => nudge(-1)}
-            disabled={!canAct || !hasValidAmount}
+            disabled={stackAmt === 0n || !hasValidAmount}
             className="flex h-8 w-7 shrink-0 items-center justify-center rounded-md font-jost text-base text-white transition-all hover:brightness-110 active:scale-95 disabled:pointer-events-none min-[520px]:h-9 min-[520px]:w-9 min-[520px]:text-lg"
-            style={!canAct || !hasValidAmount ? tuneGlassBtnMutedStyle : tuneGlassBtnStyle}
+            style={stackAmt === 0n || !hasValidAmount ? tuneGlassBtnMutedStyle : tuneGlassBtnStyle}
           >
             −
           </button>
@@ -392,7 +397,7 @@ export function PokerActions({
               step={stepChips}
               value={sliderChips}
               onChange={handleSlider}
-              disabled={!canAct || stackAmt === 0n}
+              disabled={stackAmt === 0n}
               className="poker-slider poker-slider-desktop w-full min-w-0 disabled:pointer-events-none"
               aria-label="Bet size slider"
             />
@@ -401,15 +406,15 @@ export function PokerActions({
             data-testid="poker-action-nudge-up"
             type="button"
             onClick={() => nudge(1)}
-            disabled={!canAct || !hasValidAmount}
+            disabled={stackAmt === 0n || !hasValidAmount}
             className="flex h-8 w-7 shrink-0 items-center justify-center rounded-md font-jost text-base text-white transition-all hover:brightness-110 active:scale-95 disabled:pointer-events-none min-[520px]:h-9 min-[520px]:w-9 min-[520px]:text-lg"
-            style={!canAct || !hasValidAmount ? tuneGlassBtnMutedStyle : tuneGlassBtnStyle}
+            style={stackAmt === 0n || !hasValidAmount ? tuneGlassBtnMutedStyle : tuneGlassBtnStyle}
           >
             +
           </button>
         </div>
 
-        <div className="hidden h-8 w-px shrink-0 self-center bg-white/10 min-[520px]:block" aria-hidden style={dimWhenNotActing} />
+        <div className="hidden h-8 w-px shrink-0 self-center bg-white/10 min-[520px]:block" aria-hidden />
 
         {/* Raise/Bet button */}
         <button
@@ -418,7 +423,7 @@ export function PokerActions({
           onClick={handlePrimary}
           disabled={!canAct || !hasValidAmount}
           className={`flex min-h-[2.65rem] w-full min-w-0 flex-1 flex-col items-center justify-center rounded-lg px-1 text-[11px] font-bold leading-tight tracking-wide transition-all active:scale-[0.97] min-[520px]:min-h-[2.75rem] min-[520px]:max-w-[11rem] min-[520px]:shrink min-[520px]:grow-[2] min-[520px]:rounded-xl min-[520px]:text-sm md:min-h-[3.25rem] md:max-w-[13rem] md:text-base ${primaryBtnClass}`}
-          style={{ ...primaryBtnStyle, ...dimWhenNotActing }}
+          style={{ ...primaryBtnStyle, ...dimCommitWhenNotActing }}
         >
           <span className="flex max-w-full flex-col items-center justify-center gap-0.5 leading-tight">
             <span>{isFacingBet ? 'Raise' : 'Bet'}</span>
@@ -500,14 +505,14 @@ export function PokerActions({
         <div className="px-0.5 pb-0.5 pt-0">
           <SponsoredTokenMarquee {...sponsorMarqueeProps} compact density="tight" />
         </div>
-        <div className="grid grid-cols-4 gap-1 px-0.5 pb-0.5 pt-0" style={dimWhenNotActing}>
+        <div className="grid grid-cols-4 gap-1 px-0.5 pb-0.5 pt-0">
           {quickSizes.map((q) => (
             <button
               data-testid={`poker-quick-size-${q.label.toLowerCase().replace(/[^a-z0-9]+/g, '-')}`}
               key={q.label}
               type="button"
               onClick={() => { setCustomAmount(formatAmount(clampAmount(q.value, minRaiseAmt, stackAmt))); }}
-              disabled={!canAct || stackAmt === 0n}
+              disabled={stackAmt === 0n}
               className={`h-8 text-[11px] rounded-sm transition-all hover:brightness-110 active:scale-95 ${quickSizeClass}`}
               style={tuneGlassBtnStyle}
             >
@@ -555,7 +560,7 @@ export function PokerActions({
               <span className="whitespace-nowrap">Call Any</span>
             </label>
           </div>
-          <div className="flex shrink-0 items-stretch p-1" style={{ ...commitZoneStyle, ...dimWhenNotActing }}>
+          <div className="flex shrink-0 items-stretch p-1" style={{ ...commitZoneStyle, ...dimCommitWhenNotActing }}>
             <div className="grid min-h-[2.75rem] min-w-0 flex-1 grid-cols-3 gap-1.5">
               <button
                 data-testid="poker-action-fold"
@@ -592,14 +597,14 @@ export function PokerActions({
               </button>
             </div>
           </div>
-          <div className="flex min-w-0 flex-1 flex-col gap-1 p-0.5" style={{ ...tuneZoneStyle, ...dimWhenNotActing }}>
+          <div className="flex min-w-0 flex-1 flex-col gap-1 p-0.5" style={tuneZoneStyle}>
             <button
               data-testid="poker-action-primary"
               type="button"
               onClick={handlePrimary}
               disabled={!canAct || !hasValidAmount}
               className={`h-10 w-full rounded-xl px-1 text-sm font-bold tracking-wide transition-all active:scale-[0.97] ${primaryBtnClass}`}
-              style={primaryBtnStyle}
+              style={{ ...primaryBtnStyle, ...dimCommitWhenNotActing }}
             >
               <span className="flex flex-col items-center justify-center gap-0.5 whitespace-normal leading-tight">
                 <span>{isFacingBet ? 'Raise' : 'Bet'}</span>
@@ -613,9 +618,9 @@ export function PokerActions({
               data-testid="poker-action-nudge-down"
               type="button"
               onClick={() => nudge(-1)}
-              disabled={!canAct || !hasValidAmount}
+              disabled={stackAmt === 0n || !hasValidAmount}
               className="flex h-10 w-8 shrink-0 items-center justify-center rounded-sm font-jost text-sm text-white transition-all hover:brightness-110 active:scale-95 active:text-white/80 disabled:pointer-events-none"
-              style={!canAct || !hasValidAmount ? tuneGlassBtnMutedStyle : tuneGlassBtnStyle}
+              style={stackAmt === 0n || !hasValidAmount ? tuneGlassBtnMutedStyle : tuneGlassBtnStyle}
             >
               −
             </button>
@@ -628,7 +633,7 @@ export function PokerActions({
                 step={stepChips}
                 value={sliderChips}
                 onChange={handleSlider}
-                disabled={!canAct || stackAmt === 0n}
+                disabled={stackAmt === 0n}
                 className="poker-slider poker-slider-mobile w-full disabled:pointer-events-none"
                 aria-label="Bet size slider"
               />
@@ -637,9 +642,9 @@ export function PokerActions({
               data-testid="poker-action-nudge-up"
               type="button"
               onClick={() => nudge(1)}
-              disabled={!canAct || !hasValidAmount}
+              disabled={stackAmt === 0n || !hasValidAmount}
               className="flex h-10 w-8 shrink-0 items-center justify-center rounded-sm font-jost text-sm text-white transition-all hover:brightness-110 active:scale-95 active:text-white/80 disabled:pointer-events-none"
-              style={!canAct || !hasValidAmount ? tuneGlassBtnMutedStyle : tuneGlassBtnStyle}
+              style={stackAmt === 0n || !hasValidAmount ? tuneGlassBtnMutedStyle : tuneGlassBtnStyle}
             >
               +
             </button>
@@ -656,14 +661,14 @@ export function PokerActions({
           <div className="m-0 flex min-w-0 flex-1">
             <SponsoredTokenMarquee {...sponsorMarqueeProps} />
           </div>
-          <div className="flex min-w-0 shrink flex-wrap items-center justify-end gap-1 sm:gap-1.5" style={dimWhenNotActing}>
+          <div className="flex min-w-0 shrink flex-wrap items-center justify-end gap-1 sm:gap-1.5">
             {quickSizes.map((q) => (
               <button
                 key={q.label}
                 data-testid={`poker-quick-size-${q.label.toLowerCase().replace(/[^a-z0-9]+/g, '-')}`}
                 type="button"
                 onClick={() => { setCustomAmount(formatAmount(clampAmount(q.value, minRaiseAmt, stackAmt))); }}
-                disabled={!canAct || stackAmt === 0n}
+                disabled={stackAmt === 0n}
                 className={`h-7 min-w-0 shrink rounded-sm px-1.5 text-[10px] transition-all hover:brightness-110 active:scale-95 min-[520px]:h-8 min-[520px]:px-2.5 min-[520px]:text-[11px] md:h-10 md:px-3 md:text-sm ${quickSizeClass}`}
                 style={tuneGlassBtnStyle}
               >
@@ -716,7 +721,7 @@ export function PokerActions({
             </label>
           </div>
           <div className="flex min-w-0 flex-1 flex-col gap-2 min-[700px]:min-h-0 min-[700px]:flex-row min-[700px]:gap-1.5 md:gap-2">
-          <div className="flex min-w-0 flex-1 items-stretch p-1 min-[700px]:max-w-[55%] min-[700px]:shrink md:p-2" style={{ ...commitZoneStyle, ...dimWhenNotActing }}>
+          <div className="flex min-w-0 flex-1 items-stretch p-1 min-[700px]:max-w-[55%] min-[700px]:shrink md:p-2" style={{ ...commitZoneStyle, ...dimCommitWhenNotActing }}>
             <div className="flex min-h-11 min-w-0 flex-1 gap-0.5 min-[700px]:min-h-[3.5rem] md:min-h-16 md:gap-1.5 lg:gap-2">
               <button
                 data-testid="poker-action-fold"
@@ -753,14 +758,14 @@ export function PokerActions({
               </button>
             </div>
           </div>
-          <div className="flex min-w-0 flex-1 flex-col gap-1.5 p-1 min-[520px]:flex-row min-[520px]:items-stretch min-[520px]:gap-2 md:p-1.5 md:gap-2" style={{ ...tuneZoneStyle, ...dimWhenNotActing }}>
+          <div className="flex min-w-0 flex-1 flex-col gap-1.5 p-1 min-[520px]:flex-row min-[520px]:items-stretch min-[520px]:gap-2 md:p-1.5 md:gap-2" style={tuneZoneStyle}>
             <button
               data-testid="poker-action-primary"
               type="button"
               onClick={handlePrimary}
               disabled={!canAct || !hasValidAmount}
               className={`flex min-h-11 w-full min-w-0 flex-1 flex-col items-center justify-center rounded-lg px-0.5 text-[10px] font-bold leading-tight tracking-wide transition-all active:scale-[0.97] min-[520px]:min-h-[3.25rem] min-[520px]:max-w-none min-[520px]:rounded-xl min-[520px]:px-1 min-[520px]:text-xs min-[700px]:min-h-[3.5rem] min-[700px]:grow-[2] md:min-h-[4rem] md:px-2 md:text-sm lg:text-base ${primaryBtnClass}`}
-              style={primaryBtnStyle}
+              style={{ ...primaryBtnStyle, ...dimCommitWhenNotActing }}
             >
               <span className="flex max-w-full flex-col items-center justify-center gap-0.5 leading-tight">
                 <span>{isFacingBet ? 'Raise' : 'Bet'}</span>
@@ -774,9 +779,9 @@ export function PokerActions({
               data-testid="poker-action-nudge-down"
               type="button"
               onClick={() => nudge(-1)}
-              disabled={!canAct || !hasValidAmount}
+              disabled={stackAmt === 0n || !hasValidAmount}
               className="flex h-9 w-7 shrink-0 items-center justify-center rounded-sm font-jost text-sm text-white transition-all hover:brightness-110 active:scale-95 active:text-white/80 disabled:pointer-events-none min-[520px]:h-12 min-[520px]:w-8 min-[520px]:text-lg md:h-14 md:w-10 md:text-xl"
-              style={!canAct || !hasValidAmount ? tuneGlassBtnMutedStyle : tuneGlassBtnStyle}
+              style={stackAmt === 0n || !hasValidAmount ? tuneGlassBtnMutedStyle : tuneGlassBtnStyle}
             >
               −
             </button>
@@ -789,7 +794,7 @@ export function PokerActions({
                 step={stepChips}
                 value={sliderChips}
                 onChange={handleSlider}
-                disabled={!canAct || stackAmt === 0n}
+                disabled={stackAmt === 0n}
                 className="poker-slider poker-slider-desktop w-full min-w-0 disabled:pointer-events-none"
                 aria-label="Bet size slider"
               />
@@ -798,9 +803,9 @@ export function PokerActions({
               data-testid="poker-action-nudge-up"
               type="button"
               onClick={() => nudge(1)}
-              disabled={!canAct || !hasValidAmount}
+              disabled={stackAmt === 0n || !hasValidAmount}
               className="flex h-9 w-7 shrink-0 items-center justify-center rounded-sm font-jost text-sm text-white transition-all hover:brightness-110 active:scale-95 active:text-white/80 disabled:pointer-events-none min-[520px]:h-12 min-[520px]:w-8 min-[520px]:text-lg md:h-14 md:w-10 md:text-xl"
-              style={!canAct || !hasValidAmount ? tuneGlassBtnMutedStyle : tuneGlassBtnStyle}
+              style={stackAmt === 0n || !hasValidAmount ? tuneGlassBtnMutedStyle : tuneGlassBtnStyle}
             >
               +
             </button>
