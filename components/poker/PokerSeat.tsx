@@ -313,6 +313,8 @@ export interface PokerSeatProps {
   handName?: string;
   /** Pixel offset from pot center to this seat's card origin — so cards deal from the middle of the table. */
   cardDealFromOffset?: { dx: number; dy: number };
+  /** Face-down hole card art (table sponsor / default); matches floating felt logo when set by parent. */
+  cardBackSrc?: string | null;
 }
 
 const CHAT_BUBBLE_MAX_LENGTH = 80;
@@ -322,7 +324,7 @@ function offsetTransform(offset?: { x: number; y: number }): string | undefined 
   return `translate(${offset.x}px, ${offset.y}px)`;
 }
 
-export function PokerSeat({ seat, index, holeCards, isCurrentPlayer, showCardBacks, winningCardIndices, isHandWinner = false, lastAction, callAmount, timeLeft, maxTime = 60, chatBubble, onReUpClick, onMenuClick, overlayPhrase: propsOverlayPhrase, overlayEmotion: propsOverlayEmotion, onPhraseReaction, onAnimationReaction, onOpponentClick, onOpponentRadialAction, quickChatPhrases: propsQuickChatPhrases, setQuickChatPhrases: propsSetQuickChatPhrases, onOpenEditQuickChat, hideSeatAvatar = false, onLeaveTable, onSitOut, onSitBack, onRequestMobileActivity, includeActivityInPlayerRadial = false, playerTagOffset, showdownCardOffset, handName, cardDealFromOffset }: PokerSeatProps) {
+export function PokerSeat({ seat, index, holeCards, isCurrentPlayer, showCardBacks, winningCardIndices, isHandWinner = false, lastAction, callAmount, timeLeft, maxTime = 60, chatBubble, onReUpClick, onMenuClick, overlayPhrase: propsOverlayPhrase, overlayEmotion: propsOverlayEmotion, onPhraseReaction, onAnimationReaction, onOpponentClick, onOpponentRadialAction, quickChatPhrases: propsQuickChatPhrases, setQuickChatPhrases: propsSetQuickChatPhrases, onOpenEditQuickChat, hideSeatAvatar = false, onLeaveTable, onSitOut, onSitBack, onRequestMobileActivity, includeActivityInPlayerRadial = false, playerTagOffset, showdownCardOffset, handName, cardDealFromOffset, cardBackSrc }: PokerSeatProps) {
   const empty = !seat.playerAddress;
   const showMyCards = !!(holeCards && holeCards.length > 0);
   const showBacks   = !!(showCardBacks && !showMyCards && !empty && !seat.folded);
@@ -740,7 +742,7 @@ export function PokerSeat({ seat, index, holeCards, isCurrentPlayer, showCardBac
                       dealFromOffset={cardDealFromOffset}
                     />
                   )
-                : <CardDisplay cardIndex={null} small faceDown variant="hole" dealDelay={ci * 0.12} dealFromOffset={cardDealFromOffset} />}
+                : <CardDisplay cardIndex={null} small faceDown variant="hole" dealDelay={ci * 0.12} dealFromOffset={cardDealFromOffset} cardBackSrc={cardBackSrc} />}
             </div>
           ))}
           {isActing && (

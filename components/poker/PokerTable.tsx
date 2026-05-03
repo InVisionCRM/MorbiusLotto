@@ -572,6 +572,7 @@ export function PokerTable({ state, currentPlayerAddress, timeLeft, chatBubbleBy
       cardDealFromOffset: anchorFrac
         ? { dx: (POT_ANCHOR.fx - anchorFrac.fx) * dims.w, dy: (POT_ANCHOR.fy - anchorFrac.fy) * dims.h }
         : undefined,
+      cardBackSrc: floatingTableLogoSrc,
     };
   };
 
@@ -860,7 +861,7 @@ export function PokerTable({ state, currentPlayerAddress, timeLeft, chatBubbleBy
                 >
                   {flyout.holeCards?.length
                     ? <CardDisplay cardIndex={flyout.holeCards[ci] ?? null} />
-                    : <CardDisplay cardIndex={null} small faceDown={!flyout.holeCards?.length || flyout.showBacks} />}
+                    : <CardDisplay cardIndex={null} small faceDown={!flyout.holeCards?.length || flyout.showBacks} cardBackSrc={floatingTableLogoSrc} />}
                 </div>
               ))}
             </div>
@@ -919,7 +920,7 @@ export function PokerTable({ state, currentPlayerAddress, timeLeft, chatBubbleBy
                 }}
               >
                 {faceDown
-                  ? <CardDisplay cardIndex={null} small faceDown variant="hole" dealDelay={ci * 0.12} dealFromOffset={dealFromOffset} />
+                  ? <CardDisplay cardIndex={null} small faceDown variant="hole" dealDelay={ci * 0.12} dealFromOffset={dealFromOffset} cardBackSrc={floatingTableLogoSrc} />
                   : (
                       <CardDisplay
                         cardIndex={showdownCards![ci] ?? null}

@@ -83,6 +83,8 @@ export interface CardDisplayProps {
    * face-up reveals do not replay the initial deal animation.
    */
   suppressEntryMotion?: boolean;
+  /** Face-down card art (e.g. table sponsor logo). Defaults to Pulse ball texture. */
+  cardBackSrc?: string | null;
 }
 
 const dealVariants = {
@@ -157,6 +159,7 @@ export function CardDisplay({
   variant,
   dealFromOffset,
   suppressEntryMotion = false,
+  cardBackSrc,
 }: CardDisplayProps) {
   const { dx, dy } = dealFromOffset ?? { dx: variant === 'community' ? 0 : -80, dy: variant === 'community' ? -70 : 0 };
   const entryDelay = suppressEntryMotion ? 0 : dealDelay;
@@ -184,6 +187,7 @@ export function CardDisplay({
   const isFaceUp = !isFaceDown && !isEmpty;
 
   const cardImageSrc = isFaceUp ? getCardImageSrc(cardIndex!) : '';
+  const faceDownSrc = cardBackSrc || '/Pulse Branding/Logo/ball.png';
 
   return (
     <div className={`poker-card-wrapper ${className}`} style={{ perspective: 600 }}>
@@ -199,13 +203,14 @@ export function CardDisplay({
           style={{ ...sizeStyle, boxShadow: cardShadow, transformStyle: 'preserve-3d' }}
         >
           <div className="absolute inset-0 bg-slate-900 overflow-hidden">
-            <Image
-              src="/Pulse Branding/Logo/ball.png"
+            {/* img: supports remote sponsor URLs without Next image config */}
+            <img
+              src={faceDownSrc}
               alt="Card back"
               width={imageSize.width}
               height={imageSize.height}
               className="w-full h-full object-cover"
-              priority
+              draggable={false}
             />
           </div>
           <div className="absolute inset-0 pointer-events-none" style={{ boxShadow: innerGlow }} />
