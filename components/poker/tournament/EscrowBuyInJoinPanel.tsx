@@ -7,7 +7,8 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import { erc20Abi, formatUnits } from 'viem';
 import { useAccount, usePublicClient, useWriteContract } from 'wagmi';
-import { TOURNAMENT_PRIZE_ESCROW_ADDRESS } from '@/lib/contracts';
+import { TOURNAMENT_PRIZE_ESCROW_ADDRESS, WPLS_TOKEN_ADDRESS } from '@/lib/contracts';
+import { ensureWplsBalance } from '@/lib/ensure-wpls-balance';
 import { tournamentPrizeEscrowV2Abi } from '@/abi/tournament-prize-escrow-v2';
 import { tournamentIdToBytes32 } from '@/lib/tournament-id-bytes32';
 import { formatPrizeTokenUnitLabel } from '@/lib/format-poker-tournament-prize-display';
@@ -88,6 +89,16 @@ export function EscrowBuyInJoinPanel({
     setStep('approving');
     try {
       const escrow = TOURNAMENT_PRIZE_ESCROW_ADDRESS as `0x${string}`;
+      // PLS preset uses the WPLS address — auto-wrap any shortfall from native PLS
+      // before the approve step so the user can pay buy-in directly with PLS.
+      if (tokenAddress.toLowerCase() === WPLS_TOKEN_ADDRESS.toLowerCase()) {
+        await ensureWplsBalance({
+          publicClient,
+          writeContractAsync: writeContractAsync as Parameters<typeof ensureWplsBalance>[0]['writeContractAsync'],
+          owner: address,
+          requiredWei: buyInWei,
+        });
+      }
       const allowance = await publicClient.readContract({
         address: tokenAddress,
         abi: erc20Abi,

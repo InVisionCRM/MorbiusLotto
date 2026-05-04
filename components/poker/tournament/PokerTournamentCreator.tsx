@@ -45,13 +45,14 @@ import { PokerTournamentSharePanel } from '@/components/poker/tournament/PokerTo
 import { ConfirmActionCard } from '@/components/shared/ConfirmActionCard';
 import { Confetti, type ConfettiRef } from '@/components/ui/confetti';
 import { Prc20TokenPicker, type SelectedPrc20Token } from '@/components/shared/Prc20TokenPicker';
+import { ensureWplsBalance } from '@/lib/ensure-wpls-balance';
 import { useTokenPriceUsd } from '@/hooks/use-token-price-usd';
 import { formatUnits, parseUnits } from 'viem';
 import { useConnectModal } from '@rainbow-me/rainbowkit';
 import { useWriteContract, usePublicClient, useAccount } from 'wagmi';
 import { ERC20_ABI } from '@/abi/erc20';
 import { tournamentPrizeEscrowV2Abi } from '@/abi/tournament-prize-escrow-v2';
-import { TOURNAMENT_PRIZE_ESCROW_ADDRESS } from '@/lib/contracts';
+import { TOURNAMENT_PRIZE_ESCROW_ADDRESS, WPLS_TOKEN_ADDRESS } from '@/lib/contracts';
 import { tournamentIdToBytes32 } from '@/lib/tournament-id-bytes32';
 
 /** Where the freeroll guarantee comes from. Mirrors server `GuaranteedPrizePoolSource`. */
@@ -1250,6 +1251,26 @@ export function PokerTournamentCreator({ creatorAddress, onClose, onCreate }: Po
     if (typeof crypto === 'undefined' || typeof crypto.randomUUID !== 'function') {
       setFundingError('Your browser is missing crypto.randomUUID; please update to a modern browser.');
       return;
+    }
+
+    // PLS preset uses the WPLS address — auto-wrap any shortfall from native PLS
+    // before approve so creators can fund the prize pool directly with PLS.
+    if (
+      publicClient
+      && connectedAddress
+      && selectedToken.address.toLowerCase() === WPLS_TOKEN_ADDRESS.toLowerCase()
+    ) {
+      try {
+        await ensureWplsBalance({
+          publicClient,
+          writeContractAsync: writeContractAsync as Parameters<typeof ensureWplsBalance>[0]['writeContractAsync'],
+          owner: connectedAddress,
+          requiredWei: customTokenAmountWei,
+        });
+      } catch (wrapErr) {
+        setFundingError((wrapErr as Error).message ?? 'Wrap PLS failed');
+        return;
+      }
     }
 
     // Balance pre-flight at approve time: approving more than you own succeeds at the ERC20

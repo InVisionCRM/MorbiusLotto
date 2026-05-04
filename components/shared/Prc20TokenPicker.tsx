@@ -25,7 +25,34 @@ export interface Prc20TokenPickerProps {
   className?: string;
   inputClassName?: string;
   resultsClassName?: string;
+  /** Hide the quick-pick preset chips above the search input. */
+  hidePresets?: boolean;
 }
+
+/**
+ * Quick-pick presets shown above the search input. The "PLS" preset uses the
+ * WPLS contract address (escrow only accepts ERC-20) but the displayed token
+ * is overridden to read as PLS — the deposit/join flows wrap native PLS to
+ * WPLS automatically when needed (see `lib/ensure-wpls-balance.ts`).
+ */
+const TOKEN_PRESETS: ReadonlyArray<{
+  label: string;
+  address: string;
+  sublabel?: string;
+  /** When set, overrides the on-chain metadata so the picker displays this label everywhere. */
+  displayAs?: { name: string; symbol: string };
+}> = [
+  {
+    label: 'PLS',
+    address: '0xA1077a294dDE1B09bB078844df40758a5D0f9a27',
+    displayAs: { name: 'PulseChain', symbol: 'PLS' },
+  },
+  { label: 'HEX', address: '0x2b591e99afE9f32eAA6214f7B7629768c40Eeb39' },
+  { label: 'eHEX', address: '0x57fde0a71132198BBeC939B98976993d8D89D225', sublabel: 'from Ethereum' },
+  { label: 'DAI', address: '0xefD766cCb38EaF1dfd701853BFCe31359239F305', sublabel: 'from Ethereum' },
+  { label: 'PRVX', address: '0xF6f8Db0aBa00007681F8fAF16A0FDa1c9B030b11' },
+  { label: 'PLSX', address: '0x95B303987A60C71504D99Aa1b13B4DA07b0790ab' },
+];
 
 /**
  * PulseChain ERC-20 token picker.
@@ -41,6 +68,7 @@ export function Prc20TokenPicker({
   className,
   inputClassName,
   resultsClassName,
+  hidePresets,
 }: Prc20TokenPickerProps) {
   const [query, setQuery] = useState('');
   const [results, setResults] = useState<TokenSearchResult[]>([]);
@@ -59,7 +87,12 @@ export function Prc20TokenPicker({
   }, []);
 
   const fetchTokenDetails = useCallback(
-    async (address: string, fallbackName: string, fallbackSymbol: string) => {
+    async (
+      address: string,
+      fallbackName: string,
+      fallbackSymbol: string,
+      displayOverride?: { name: string; symbol: string },
+    ) => {
       let name = fallbackName;
       let symbol = fallbackSymbol;
       let decimals = 18;
@@ -80,6 +113,11 @@ export function Prc20TokenPicker({
           const img = data.pairs?.[0]?.info?.imageUrl;
           if (img) logoUrl = img;
         } catch { /* no logo */ }
+      }
+
+      if (displayOverride) {
+        name = displayOverride.name;
+        symbol = displayOverride.symbol;
       }
 
       onChange({ address, name, symbol, decimals, logoUrl });
@@ -163,6 +201,24 @@ export function Prc20TokenPicker({
 
   return (
     <div ref={dropdownRef} className={className}>
+      {!hidePresets && !query.trim() && (
+        <div className="mb-2 flex flex-wrap gap-1.5">
+          {TOKEN_PRESETS.map((p) => (
+            <button
+              key={p.address}
+              type="button"
+              onClick={() => fetchTokenDetails(p.address, p.label, p.label, p.displayAs)}
+              title={p.sublabel ? `${p.label} (${p.sublabel})` : p.label}
+              className="px-2.5 py-1 rounded-full bg-gray-800 hover:bg-gray-700 border border-gray-600 text-xs text-white"
+            >
+              <span className="font-medium">{p.label}</span>
+              {p.sublabel && (
+                <span className="ml-1 text-gray-400">{p.sublabel}</span>
+              )}
+            </button>
+          ))}
+        </div>
+      )}
       <input
         type="text"
         value={query}
