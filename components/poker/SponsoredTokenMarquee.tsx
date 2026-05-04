@@ -112,9 +112,9 @@ export function SponsoredTokenMarquee({
   );
 
   const tight = density === 'tight';
-  const iconSz = tight ? 10 : 11;
+  const iconSz = tight ? 9 : 11;
 
-  const logoSize = tight ? 12 : compact ? 14 : 16;
+  const logoSize = tight ? 10 : compact ? 14 : 16;
   const tokenLogoNode = tokenLogo ? (
     <img
       src={tokenLogo}
@@ -334,7 +334,7 @@ export function SponsoredTokenMarquee({
         data-testid="sponsored-token-marquee"
       >
         <div
-          className={`font-jost flex w-max items-center whitespace-nowrap leading-tight tabular-nums ${textCls} animate-poker-marquee`}
+          className={`font-jost flex w-max items-center whitespace-nowrap ${tight ? 'leading-none' : 'leading-tight'} tabular-nums ${textCls} animate-poker-marquee`}
         >
         {looped.map((c, i) => {
           const inner = c.content;

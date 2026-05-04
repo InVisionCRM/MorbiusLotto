@@ -493,7 +493,7 @@ export function PokerActions({
       {/* ── Mobile: bar centered at 75% width with horizontal padding ── */}
       <div className="sm:hidden flex w-full min-w-0 justify-center px-0">
         <div
-          className="w-full min-w-0 max-w-[min(100%,28rem)] px-1.5 pt-1"
+          className="w-full min-w-0 max-w-[min(100%,28rem)] px-1.5 pt-0.5"
           style={{
             ...panelDeckStyle,
             paddingBottom: 'max(4px, env(safe-area-inset-bottom, 4px))',
@@ -501,11 +501,11 @@ export function PokerActions({
             paddingRight: 'max(0.5rem, env(safe-area-inset-right, 0px))',
           }}
         >
-        <div className="mb-1 rounded-lg p-0.5" style={tuneZoneStyle}>
-        <div className="px-0.5 pb-0.5 pt-0">
+        <div className="mb-0.5 rounded-md p-0.5" style={tuneZoneStyle}>
+        <div className="px-0.5 pb-0 pt-0">
           <SponsoredTokenMarquee {...sponsorMarqueeProps} compact density="tight" />
         </div>
-        <div className="grid grid-cols-4 gap-1 px-0.5 pb-0.5 pt-0">
+        <div className="grid grid-cols-4 gap-1 px-0.5 pb-0 pt-0.5">
           {quickSizes.map((q) => (
             <button
               data-testid={`poker-quick-size-${q.label.toLowerCase().replace(/[^a-z0-9]+/g, '-')}`}
@@ -513,7 +513,7 @@ export function PokerActions({
               type="button"
               onClick={() => { setCustomAmount(formatAmount(clampAmount(q.value, minRaiseAmt, stackAmt))); }}
               disabled={stackAmt === 0n}
-              className={`h-8 text-[11px] rounded-sm transition-all hover:brightness-110 active:scale-95 ${quickSizeClass}`}
+              className={`h-7 text-[11px] rounded-sm transition-all hover:brightness-110 active:scale-95 ${quickSizeClass}`}
               style={tuneGlassBtnStyle}
             >
               {q.label}
@@ -521,7 +521,7 @@ export function PokerActions({
           ))}
         </div>
         </div>
-        <div className="flex min-w-0 items-stretch gap-1 px-0.5 pb-1 pt-0.5">
+        <div className="flex min-w-0 items-stretch gap-1 px-0.5 pb-0.5 pt-0">
           <div
             className="flex w-[4.65rem] shrink-0 flex-col justify-center gap-0.5 border-r border-white/10 pr-1"
             aria-label="Pre-selected actions when not your turn"
@@ -560,14 +560,14 @@ export function PokerActions({
               <span className="whitespace-nowrap">Call Any</span>
             </label>
           </div>
-          <div className="flex shrink-0 items-stretch p-1" style={{ ...commitZoneStyle, ...dimCommitWhenNotActing }}>
-            <div className="grid min-h-[2.75rem] min-w-0 flex-1 grid-cols-3 gap-1.5">
+          <div className="flex shrink-0 items-stretch p-0.5" style={{ ...commitZoneStyle, ...dimCommitWhenNotActing }}>
+            <div className="grid min-h-[2.5rem] min-w-0 flex-1 grid-cols-3 gap-1">
               <button
                 data-testid="poker-action-fold"
                 type="button"
                 onClick={handleFoldWithSound}
                 disabled={!canAct}
-                className={`min-h-[2.75rem] min-w-[5.5rem] rounded-xl py-1 text-sm font-bold tracking-wide transition-all hover:brightness-110 active:scale-[0.97] ${foldBtnClass}`}
+                className={`min-h-[2.5rem] min-w-[5.5rem] rounded-lg py-0.5 text-sm font-bold tracking-wide transition-all hover:brightness-110 active:scale-[0.97] ${foldBtnClass}`}
                 style={foldBtnStyleCommit}
               >
                 Fold
@@ -577,7 +577,7 @@ export function PokerActions({
                 type="button"
                 onClick={handleCheckWithSound}
                 disabled={!canAct || !canCheck}
-                className={`min-h-[2.75rem] min-w-[5.5rem] rounded-xl px-1 py-1 text-sm font-bold tracking-wide transition-all hover:brightness-110 active:scale-[0.97] ${checkBtnClass}`}
+                className={`min-h-[2.5rem] min-w-[5.5rem] rounded-lg px-1 py-0.5 text-sm font-bold tracking-wide transition-all hover:brightness-110 active:scale-[0.97] ${checkBtnClass}`}
                 style={checkBtnStyleCommit}
               >
                 Check
@@ -587,7 +587,7 @@ export function PokerActions({
                 type="button"
                 onClick={handleCallWithSound}
                 disabled={!canAct || !isFacingBet}
-                className={`min-h-[2.75rem] min-w-[5.5rem] rounded-xl px-0.5 py-1 text-[11px] font-bold leading-tight tracking-wide transition-all hover:brightness-110 active:scale-[0.97] ${checkBtnClass}`}
+                className={`min-h-[2.5rem] min-w-[5.5rem] rounded-lg px-0.5 py-0.5 text-[11px] font-bold leading-tight tracking-wide transition-all hover:brightness-110 active:scale-[0.97] ${checkBtnClass}`}
                 style={callBtnStyleCommit}
               >
                 <span className="flex flex-col items-center justify-center gap-0.5 whitespace-normal">
@@ -597,18 +597,18 @@ export function PokerActions({
               </button>
             </div>
           </div>
-          <div className="flex min-w-0 flex-1 flex-col gap-1 p-0.5" style={tuneZoneStyle}>
+          <div className="flex min-w-0 flex-1 flex-col gap-0.5 p-0.5" style={tuneZoneStyle}>
             <button
               data-testid="poker-action-primary"
               type="button"
               onClick={handlePrimary}
               disabled={!canAct || !hasValidAmount}
-              className={`h-10 w-full rounded-xl px-1 text-sm font-bold tracking-wide transition-all active:scale-[0.97] ${primaryBtnClass}`}
+              className={`h-9 w-full rounded-lg px-1 text-sm font-bold tracking-wide transition-all active:scale-[0.97] ${primaryBtnClass}`}
               style={{ ...primaryBtnStyle, ...dimCommitWhenNotActing }}
             >
-              <span className="flex flex-col items-center justify-center gap-0.5 whitespace-normal leading-tight">
+              <span className="flex flex-row items-center justify-center gap-1 whitespace-normal leading-none">
                 <span>{isFacingBet ? 'Raise' : 'Bet'}</span>
-                <span className="text-sm font-semibold normal-case tabular-nums">
+                <span className="text-xs font-semibold normal-case tabular-nums">
                   {hasValidAmount && clamped ? formatAmount(clamped) : '—'}
                 </span>
               </span>
@@ -619,7 +619,7 @@ export function PokerActions({
               type="button"
               onClick={() => nudge(-1)}
               disabled={stackAmt === 0n || !hasValidAmount}
-              className="flex h-10 w-8 shrink-0 items-center justify-center rounded-sm font-jost text-sm text-white transition-all hover:brightness-110 active:scale-95 active:text-white/80 disabled:pointer-events-none"
+              className="flex h-8 w-8 shrink-0 items-center justify-center rounded-sm font-jost text-sm text-white transition-all hover:brightness-110 active:scale-95 active:text-white/80 disabled:pointer-events-none"
               style={stackAmt === 0n || !hasValidAmount ? tuneGlassBtnMutedStyle : tuneGlassBtnStyle}
             >
               −
@@ -643,7 +643,7 @@ export function PokerActions({
               type="button"
               onClick={() => nudge(1)}
               disabled={stackAmt === 0n || !hasValidAmount}
-              className="flex h-10 w-8 shrink-0 items-center justify-center rounded-sm font-jost text-sm text-white transition-all hover:brightness-110 active:scale-95 active:text-white/80 disabled:pointer-events-none"
+              className="flex h-8 w-8 shrink-0 items-center justify-center rounded-sm font-jost text-sm text-white transition-all hover:brightness-110 active:scale-95 active:text-white/80 disabled:pointer-events-none"
               style={stackAmt === 0n || !hasValidAmount ? tuneGlassBtnMutedStyle : tuneGlassBtnStyle}
             >
               +

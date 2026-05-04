@@ -16,9 +16,11 @@ import {
   IconLogout,
   IconCheck,
   IconCopy,
+  IconShieldOff,
 } from '@tabler/icons-react'
 
 const GameWalletModal = lazy(() => import('@/components/shared/GameWalletModal').then(m => ({ default: m.GameWalletModal })))
+const RevokeApprovalsModal = lazy(() => import('@/components/shared/RevokeApprovalsModal').then(m => ({ default: m.RevokeApprovalsModal })))
 
 export interface WalletMenuProps {
   /**
@@ -67,6 +69,7 @@ export function WalletMenu({
   const effectiveProfileImageUrl = profileImageUrl ?? profileImageUrlFromHook
   const [isWalletDropdownOpen, setIsWalletDropdownOpen] = useState(false)
   const [isGameWalletOpen, setIsGameWalletOpen] = useState(false)
+  const [isRevokeOpen, setIsRevokeOpen] = useState(false)
   const [copied, setCopied] = useState(false)
   const walletDropdownRef = useRef<HTMLDivElement>(null)
 
@@ -223,6 +226,17 @@ export function WalletMenu({
                   </button>
                 )}
                 <button
+                  type="button"
+                  onClick={() => {
+                    setIsRevokeOpen(true)
+                    setIsWalletDropdownOpen(false)
+                  }}
+                  className={`w-full flex items-center gap-3 px-3 py-2 rounded-md transition-colors ${variant === 'sidebar' ? 'text-white hover:bg-white/10' : 'text-gray-300 hover:bg-white/5 hover:text-white'}`}
+                >
+                  <IconShieldOff size={16} aria-hidden />
+                  <span className="text-sm font-medium">Manage approvals</span>
+                </button>
+                <button
                   onClick={() => {
                     disconnect()
                     setIsWalletDropdownOpen(false)
@@ -288,6 +302,12 @@ export function WalletMenu({
             isOpen={isGameWalletOpen}
             onClose={() => setIsGameWalletOpen(false)}
             externalBalance={reserveBalance}
+          />
+        )}
+        {isRevokeOpen && (
+          <RevokeApprovalsModal
+            isOpen={isRevokeOpen}
+            onClose={() => setIsRevokeOpen(false)}
           />
         )}
       </Suspense>
