@@ -710,6 +710,7 @@ export function PokerSeat({ seat, index, holeCards, isCurrentPlayer, showCardBac
             width: showMyCards ? POKER_UI_CQW.heroCardAreaW : POKER_UI_CQW.flyoutRowW,
             height: showMyCards ? POKER_UI_CQW.heroCardAreaH : POKER_UI_CQW.flyoutRowH,
             marginBottom: hideSeatAvatar ? -10 : -44,
+            marginLeft: POKER_UI_CQW.heroCardsLayoutShiftX,
             zIndex: 0,
           }}
         >

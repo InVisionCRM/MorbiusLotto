@@ -115,7 +115,7 @@ export function betChipAnchorForDisplaySlot(seatCount: number, displaySlot: numb
  * Values match the former seat→tag lerp at t=0.22 so existing tables do not jump.
  */
 export const DEALER_BUTTON_RING: SeatAnchor[] = [
-  { fx: 0.43, fy: 0.80 },
+  { fx: 0.40, fy: 0.80 },
   { fx: 0.28, fy: 0.75 },
   { fx: 0.17, fy: 0.50 },
   { fx: 0.17, fy: 0.35 },

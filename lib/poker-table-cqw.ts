@@ -11,6 +11,8 @@ export const POKER_UI_CQW = {
   heroCardAreaH: 'clamp(72px, 6.1cqw, 96px)',
   heroCardInnerW: 'clamp(54px, 4.35cqw, 70px)',
   heroCardInnerH: 'clamp(70px, 5.85cqw, 90px)',
+  /** Nudge the hero hole-card cluster left (relative to centered seat column). */
+  heroCardsLayoutShiftX: 'clamp(-90px, -1.55cqw, -90px)',
   heroCardInnerLeft: 'clamp(22px, 1.85cqw, 30px)',
   peekCardInnerW: 'clamp(38px, 3cqw, 48px)',
   peekCardInnerH: 'clamp(48px, 4.15cqw, 62px)',
@@ -20,8 +22,8 @@ export const POKER_UI_CQW = {
   flyoutCardW: 'clamp(38px, 3cqw, 48px)',
   flyoutCardH: 'clamp(48px, 4.15cqw, 62px)',
   flyoutCardLeft: 'clamp(14px, 1.2cqw, 20px)',
-  playerTagName: 'clamp(11px, 1.45cqw, 13px)',
-  playerTagChips: 'clamp(9px, 1.35cqw, 11px)',
+  playerTagName: 'clamp(11px, 1.45cqw, 10px)',
+  playerTagChips: 'clamp(9px, 1.35cqw, 14px)',
   actionRowFont: 'clamp(8px, 1.25cqw, 10px)',
   actionPillFont: 'clamp(8px, 1.15cqw, 10px)',
 } as const;

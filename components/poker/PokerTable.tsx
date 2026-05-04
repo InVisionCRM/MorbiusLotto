@@ -43,9 +43,6 @@ const POT_ANCHOR = POKER_POT_ANCHOR;
 const SHOWDOWN_CARD_PULL_RATIO = 0.18;
 const SHOWDOWN_CARD_PULL_MAX_PX = 70;
 
-/** Extra horizontal nudge for the viewer's own seat (display slot 0 when seated) after `translate(-50%, -50%)`. Negative = left. */
-const HERO_SEAT_ANCHOR_NUDGE_X_PX = -5;
-
 // Staged showdown reveal — community run-out can be stepped; hole cards flip
 // together, then a short beat before the winner medallion.
 const REVEAL_COMMUNITY_STEP_MS = 850;   // gap between turn → river when streets were skipped
@@ -1010,10 +1007,7 @@ export function PokerTable({ state, currentPlayerAddress, timeLeft, chatBubbleBy
             style={{
               left: `${rendered.fx * 100}%`,
               top:  `${rendered.fy * 100}%`,
-              transform:
-                mySeatIndex >= 0 && displaySlot === 0
-                  ? `translate(calc(-50% + ${HERO_SEAT_ANCHOR_NUDGE_X_PX}px), -50%)`
-                  : 'translate(-50%, -50%)',
+              transform: 'translate(-50%, -50%)',
               zIndex: isWinnerSeatPunchThrough ? 30 : 20,
             }}
             {...(tutorialTargets ? { 'data-tutorial-target': `seat-${displaySlot}` } : {})}
