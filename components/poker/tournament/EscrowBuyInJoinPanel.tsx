@@ -4,15 +4,23 @@
  * Approve + addToPrizePool; parent passes tx hash to server join.
  */
 
-import React, { useCallback, useState } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import { erc20Abi, formatUnits } from 'viem';
 import { useAccount, usePublicClient, useWriteContract } from 'wagmi';
 import { TOURNAMENT_PRIZE_ESCROW_ADDRESS } from '@/lib/contracts';
 import { tournamentPrizeEscrowV2Abi } from '@/abi/tournament-prize-escrow-v2';
 import { tournamentIdToBytes32 } from '@/lib/tournament-id-bytes32';
 import { formatPrizeTokenUnitLabel } from '@/lib/format-poker-tournament-prize-display';
+import { fetchDexScreenerTokenInfo } from '@/lib/dexscreener-token-info';
+import { BackgroundBeams } from '@/components/ui/background-beams';
 
 export type EscrowBuyInJoinStep = 'idle' | 'approving' | 'depositing' | 'done' | 'failed';
+
+const STEPS: { key: 'approve' | 'deposit' | 'done'; label: string }[] = [
+  { key: 'approve', label: 'Approve token' },
+  { key: 'deposit', label: 'Deposit to escrow' },
+  { key: 'done', label: 'Joined' },
+];
 
 export function EscrowBuyInJoinPanel({
   tournamentId,
@@ -40,6 +48,24 @@ export function EscrowBuyInJoinPanel({
   const { writeContractAsync } = useWriteContract();
   const [step, setStep] = useState<EscrowBuyInJoinStep>('idle');
   const [err, setErr] = useState<string | null>(null);
+  const [logoUrl, setLogoUrl] = useState<string | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    const ctrl = new AbortController();
+    void (async () => {
+      try {
+        const info = await fetchDexScreenerTokenInfo(tokenAddress, ctrl.signal);
+        if (!cancelled) setLogoUrl(info?.logoUrl ?? null);
+      } catch {
+        /* ignore */
+      }
+    })();
+    return () => {
+      cancelled = true;
+      ctrl.abort();
+    };
+  }, [tokenAddress]);
 
   const ticker = formatPrizeTokenUnitLabel({
     prizeTokenAddress: tokenAddress,
@@ -94,41 +120,205 @@ export function EscrowBuyInJoinPanel({
     }
   }, [address, publicClient, tokenAddress, buyInWei, tournamentId, writeContractAsync, onSuccess]);
 
+  const busy = step === 'approving' || step === 'depositing';
+  const symbolForBadge = (tokenSymbol ?? '?').slice(0, 4).toUpperCase();
+  const initial = symbolForBadge.charAt(0);
+
+  const stepStateOf = (key: 'approve' | 'deposit' | 'done'): 'pending' | 'active' | 'complete' => {
+    if (key === 'approve') {
+      if (step === 'approving') return 'active';
+      if (step === 'depositing' || step === 'done') return 'complete';
+      return 'pending';
+    }
+    if (key === 'deposit') {
+      if (step === 'depositing') return 'active';
+      if (step === 'done') return 'complete';
+      return 'pending';
+    }
+    return step === 'done' ? 'complete' : 'pending';
+  };
+
+  const ctaLabel =
+    step === 'approving'
+      ? 'Approving…'
+      : step === 'depositing'
+        ? 'Depositing…'
+        : step === 'done'
+          ? 'Joined ✓'
+          : step === 'failed'
+            ? 'Try again'
+            : 'Approve & pay buy-in';
+
   return (
-    <div className="rounded-xl border border-cyan-500/30 bg-gradient-to-br from-slate-900 to-slate-800 p-4 space-y-3 max-w-md">
-      <h3 className="text-sm font-semibold text-white">Pay buy-in on-chain</h3>
-      <p className="text-xs text-slate-400">
-        Approve then deposit <span className="text-cyan-200/90 font-mono tabular-nums">{human}</span>{' '}
-        <span className="text-slate-300">{ticker}</span> into the prize escrow for this tournament.
-      </p>
-      {err && (
-        <p className="text-xs text-red-300 bg-red-500/10 border border-red-500/30 rounded-lg p-2 break-words">{err}</p>
-      )}
-      <div className="flex flex-wrap gap-2 pt-1">
-        <button
-          type="button"
-          disabled={disabled || step === 'approving' || step === 'depositing' || step === 'done'}
-          onClick={() => void run()}
-          className="inline-flex items-center justify-center rounded-lg bg-gradient-to-r from-cyan-600 to-blue-600 px-4 py-2 text-xs font-semibold text-white disabled:opacity-40"
-        >
-          {step === 'idle' || step === 'failed'
-            ? 'Approve & pay'
-            : step === 'approving'
-              ? 'Approving…'
-              : step === 'depositing'
-                ? 'Depositing…'
-                : step === 'done'
-                  ? 'Done'
-                  : '…'}
-        </button>
-        <button
-          type="button"
-          disabled={step === 'approving' || step === 'depositing'}
-          onClick={onCancel}
-          className="inline-flex items-center justify-center rounded-lg border border-slate-500/50 px-4 py-2 text-xs text-slate-300 hover:bg-white/[0.04]"
-        >
-          Cancel
-        </button>
+    <div className="relative w-full max-w-md overflow-hidden rounded-2xl border border-cyan-500/30 bg-slate-950 shadow-[0_0_60px_-15px_rgba(34,211,238,0.35)]">
+      {/* Animated beams background */}
+      <div className="pointer-events-none absolute inset-0 z-0 opacity-60">
+        <BackgroundBeams palette={{ primary: '#3B82F6', accent: '#A855F7', tail: '#EC4899' }} />
+      </div>
+      {/* Soft top glow */}
+      <div
+        className="pointer-events-none absolute inset-x-0 top-0 z-0 h-40"
+        style={{
+          background:
+            'radial-gradient(60% 100% at 50% 0%, rgba(34,211,238,0.18) 0%, rgba(99,68,245,0.10) 45%, transparent 80%)',
+        }}
+      />
+
+      <div className="relative z-10 p-5 space-y-5">
+        {/* Header / token spotlight */}
+        <div className="flex flex-col items-center text-center pt-2">
+          <div className="relative">
+            <div
+              className="absolute -inset-3 rounded-full blur-2xl opacity-70"
+              style={{
+                background:
+                  'conic-gradient(from 0deg, #18CCFC, #6344F5, #AE48FF, #18CCFC)',
+              }}
+            />
+            <div className="relative h-24 w-24 rounded-full ring-2 ring-cyan-400/60 bg-slate-900 overflow-hidden flex items-center justify-center">
+              {logoUrl ? (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img
+                  src={logoUrl}
+                  alt={tokenSymbol ?? 'token'}
+                  className="h-full w-full object-cover"
+                  onError={() => setLogoUrl(null)}
+                />
+              ) : (
+                <span className="text-3xl font-extrabold tracking-tight text-white/90">
+                  {initial}
+                </span>
+              )}
+            </div>
+          </div>
+
+          <div className="mt-3 text-[10px] uppercase tracking-[0.2em] text-cyan-300/80">
+            Tournament buy-in
+          </div>
+          <div className="mt-1 flex items-baseline justify-center gap-2">
+            <span className="font-mono tabular-nums text-3xl font-bold text-white">
+              {human}
+            </span>
+            <span className="text-sm font-semibold text-cyan-200/90">{ticker}</span>
+          </div>
+          {tokenName && (
+            <div className="mt-1 text-xs text-slate-400 truncate max-w-full">
+              {tokenName}
+            </div>
+          )}
+        </div>
+
+        {/* Step tracker */}
+        <div className="rounded-xl border border-white/10 bg-slate-900/60 backdrop-blur-sm p-3">
+          <div className="flex items-center justify-between">
+            {STEPS.map((s, i) => {
+              const state = stepStateOf(s.key);
+              return (
+                <React.Fragment key={s.key}>
+                  <div className="flex flex-col items-center gap-1.5 flex-1 min-w-0">
+                    <div
+                      className={[
+                        'relative h-7 w-7 rounded-full flex items-center justify-center text-[11px] font-bold transition-all',
+                        state === 'complete'
+                          ? 'bg-emerald-500 text-white shadow-[0_0_12px_rgba(16,185,129,0.6)]'
+                          : state === 'active'
+                            ? 'bg-cyan-500 text-white shadow-[0_0_14px_rgba(34,211,238,0.7)]'
+                            : 'bg-slate-800 text-slate-500 ring-1 ring-white/10',
+                      ].join(' ')}
+                    >
+                      {state === 'active' && (
+                        <span className="absolute inset-0 rounded-full animate-ping bg-cyan-400/40" />
+                      )}
+                      <span className="relative">
+                        {state === 'complete' ? '✓' : i + 1}
+                      </span>
+                    </div>
+                    <span
+                      className={[
+                        'text-[10px] uppercase tracking-wider truncate',
+                        state === 'complete'
+                          ? 'text-emerald-300'
+                          : state === 'active'
+                            ? 'text-cyan-200'
+                            : 'text-slate-500',
+                      ].join(' ')}
+                    >
+                      {s.label}
+                    </span>
+                  </div>
+                  {i < STEPS.length - 1 && (
+                    <div
+                      className={[
+                        'h-px flex-1 mx-1 transition-colors',
+                        stepStateOf(STEPS[i + 1].key) !== 'pending' ||
+                        stepStateOf(s.key) === 'complete'
+                          ? 'bg-cyan-400/60'
+                          : 'bg-white/10',
+                      ].join(' ')}
+                    />
+                  )}
+                </React.Fragment>
+              );
+            })}
+          </div>
+        </div>
+
+        {err && (
+          <p className="text-xs text-red-300 bg-red-500/10 border border-red-500/30 rounded-lg p-2 break-words">
+            {err}
+          </p>
+        )}
+
+        <div className="flex flex-wrap gap-2">
+          <button
+            type="button"
+            disabled={disabled || busy || step === 'done'}
+            onClick={() => void run()}
+            className="relative flex-1 min-w-[180px] inline-flex items-center justify-center rounded-xl bg-gradient-to-r from-cyan-500 via-blue-500 to-violet-500 px-4 py-3 text-sm font-semibold text-white shadow-lg shadow-cyan-500/20 transition-all hover:shadow-cyan-500/40 disabled:opacity-50 disabled:cursor-not-allowed overflow-hidden"
+          >
+            {busy && (
+              <span className="absolute inset-0 bg-gradient-to-r from-transparent via-white/20 to-transparent animate-pulse" />
+            )}
+            <span className="relative inline-flex items-center gap-2">
+              {busy && (
+                <svg
+                  className="h-4 w-4 animate-spin"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  xmlns="http://www.w3.org/2000/svg"
+                >
+                  <circle
+                    cx="12"
+                    cy="12"
+                    r="10"
+                    stroke="currentColor"
+                    strokeOpacity="0.25"
+                    strokeWidth="3"
+                  />
+                  <path
+                    d="M22 12a10 10 0 0 1-10 10"
+                    stroke="currentColor"
+                    strokeWidth="3"
+                    strokeLinecap="round"
+                  />
+                </svg>
+              )}
+              {ctaLabel}
+            </span>
+          </button>
+          <button
+            type="button"
+            disabled={busy}
+            onClick={onCancel}
+            className="inline-flex items-center justify-center rounded-xl border border-slate-500/40 bg-slate-900/60 px-4 py-3 text-sm text-slate-300 hover:bg-white/[0.04] disabled:opacity-40"
+          >
+            Cancel
+          </button>
+        </div>
+
+        <p className="text-[10px] text-slate-500 text-center">
+          Funds are held in the on-chain prize escrow and refunded automatically if the tournament is cancelled.
+        </p>
       </div>
     </div>
   );

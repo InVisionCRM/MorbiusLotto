@@ -33,9 +33,24 @@ export async function verifyEscrowAddToPrizePoolJoinTx(params: {
 
   try {
     const client = getPublicClient();
-    const receipt = await client.getTransactionReceipt({ hash: txHash });
-    if (!receipt || receipt.status !== 'success') {
-      return { ok: false, error: 'Transaction not successful or not found' };
+
+    // viem v1 throws TransactionReceiptNotFoundError when the tx isn't mined yet on this RPC;
+    // the server's RPC can lag behind the client's RPC, so retry for ~18s before giving up.
+    let receipt: Awaited<ReturnType<typeof client.getTransactionReceipt>> | null = null;
+    for (let i = 0; i < 6; i++) {
+      try {
+        receipt = await client.getTransactionReceipt({ hash: txHash });
+        if (receipt) break;
+      } catch {
+        /* not mined yet on this RPC — wait and retry */
+      }
+      if (i < 5) await new Promise((r) => setTimeout(r, 3000));
+    }
+    if (!receipt) {
+      return { ok: false, error: 'Deposit tx not found on-chain after waiting (RPC may be lagging)' };
+    }
+    if (receipt.status !== 'success') {
+      return { ok: false, error: 'Deposit transaction reverted on-chain — check token allowance, balance, and that the tournament has not already been funded with a different token' };
     }
 
     const tx = await client.getTransaction({ hash: txHash });

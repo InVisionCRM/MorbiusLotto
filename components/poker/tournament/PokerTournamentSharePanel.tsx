@@ -2,7 +2,7 @@
 
 import React, { useCallback, useEffect, useId, useRef, useState } from 'react';
 import html2canvas from 'html2canvas';
-import { IconDownload, IconPhoto, IconCopy } from '@tabler/icons-react';
+import { IconDownload, IconPhoto, IconShare } from '@tabler/icons-react';
 import { Label } from '@/components/ui/label';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { cn } from '@/lib/utils';
@@ -108,11 +108,10 @@ function canvasToBlob(canvas: HTMLCanvasElement, type = 'image/png', quality = 0
  * Download PNG after async canvas work. Prefer data URL (no blob lifecycle); blob + delayed revoke as fallback.
  * Deferred click helps Safari / strict download policies after await in the handler.
  */
-function downloadCanvasAsPng(canvas: HTMLCanvasElement, filename: string): void {
-  const tryDataUrl = (): boolean => {
-    try {
-      const dataUrl = canvas.toDataURL('image/png', 0.92);
-      if (!dataUrl || dataUrl === 'data:,') return false;
+async function downloadCanvasAsPng(canvas: HTMLCanvasElement, filename: string): Promise<boolean> {
+  try {
+    const dataUrl = canvas.toDataURL('image/png', 0.92);
+    if (dataUrl && dataUrl !== 'data:,') {
       const a = document.createElement('a');
       a.href = dataUrl;
       a.download = filename;
@@ -126,30 +125,28 @@ function downloadCanvasAsPng(canvas: HTMLCanvasElement, filename: string): void 
         }, 0);
       }, 0);
       return true;
-    } catch {
-      return false;
     }
-  };
+  } catch {
+    /* fall through to blob */
+  }
 
-  if (tryDataUrl()) return;
-
-  void canvasToBlob(canvas).then((blob) => {
-    if (!blob) return;
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = filename;
-    a.setAttribute('rel', 'noopener noreferrer');
-    a.style.display = 'none';
-    document.body.appendChild(a);
+  const blob = await canvasToBlob(canvas);
+  if (!blob) return false;
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = filename;
+  a.setAttribute('rel', 'noopener noreferrer');
+  a.style.display = 'none';
+  document.body.appendChild(a);
+  window.setTimeout(() => {
+    a.click();
     window.setTimeout(() => {
-      a.click();
-      window.setTimeout(() => {
-        if (a.parentNode) document.body.removeChild(a);
-        window.setTimeout(() => URL.revokeObjectURL(url), 4000);
-      }, 0);
+      if (a.parentNode) document.body.removeChild(a);
+      window.setTimeout(() => URL.revokeObjectURL(url), 4000);
     }, 0);
-  });
+  }, 0);
+  return true;
 }
 
 export type PokerTournamentSharePanelProps = {
@@ -237,7 +234,6 @@ export function PokerTournamentSharePanel({
     const canvas = await html2canvas(el, {
       scale: 2,
       useCORS: true,
-      allowTaint: true,
       backgroundColor: '#0c1222',
       logging: false,
       foreignObjectRendering: false,
@@ -277,8 +273,12 @@ export function PokerTournamentSharePanel({
         return;
       }
       const filename = `poker-tournament-share-${Date.now()}.png`;
-      downloadCanvasAsPng(canvas, filename);
-      setStatusMsg('Download started. Check your downloads folder.');
+      const ok = await downloadCanvasAsPng(canvas, filename);
+      setStatusMsg(
+        ok
+          ? 'Download started. Check your downloads folder.'
+          : 'Download failed — your browser blocked the export.',
+      );
     } catch (err) {
       console.error('[PokerTournamentSharePanel] export failed', err);
       setStatusMsg('Export failed. Try another browser or image.');
@@ -287,7 +287,7 @@ export function PokerTournamentSharePanel({
     }
   };
 
-  const onCopyImage = async () => {
+  const onShareImage = async () => {
     setStatusMsg(null);
     setExporting(true);
     try {
@@ -301,14 +301,24 @@ export function PokerTournamentSharePanel({
         setStatusMsg('Could not create image.');
         return;
       }
-      if (!navigator.clipboard?.write) {
-        setStatusMsg('Clipboard not supported here — use Download.');
+      const file = new File([blob], `poker-tournament-share-${Date.now()}.png`, { type: 'image/png' });
+      const nav = navigator as Navigator & {
+        canShare?: (data: ShareData) => boolean;
+        share?: (data: ShareData) => Promise<void>;
+      };
+      if (nav.share && nav.canShare?.({ files: [file] })) {
+        await nav.share({
+          files: [file],
+          title: overlayProps.tournamentName,
+          text: `${overlayProps.tournamentName} — ${overlayProps.scheduleLine}`,
+        });
+        setStatusMsg('Shared.');
         return;
       }
-      await navigator.clipboard.write([new ClipboardItem({ 'image/png': blob })]);
-      setStatusMsg('Image copied to clipboard.');
-    } catch {
-      setStatusMsg('Copy failed — use Download.');
+      setStatusMsg('Sharing not supported here — use Download.');
+    } catch (err) {
+      if ((err as DOMException)?.name === 'AbortError') return;
+      setStatusMsg('Share failed — use Download.');
     } finally {
       setExporting(false);
     }
@@ -473,11 +483,11 @@ export function PokerTournamentSharePanel({
         <button
           type="button"
           disabled={exporting}
-          onClick={onCopyImage}
+          onClick={onShareImage}
           className="inline-flex items-center gap-2 rounded-lg border border-white/15 bg-white/5 px-5 py-2.5 text-sm font-medium text-white/90 transition-colors hover:bg-white/10 disabled:opacity-50"
         >
-          <IconCopy className="h-4 w-4" aria-hidden />
-          Copy image
+          <IconShare className="h-4 w-4" aria-hidden />
+          Share
         </button>
       </div>
       {statusMsg ? <p className="text-center text-[11px] text-cyan-200/85">{statusMsg}</p> : null}
