@@ -22,7 +22,17 @@ interface PlayerStatsFeatureGridProps {
   className?: string
 }
 
+/** First index of the last row for a fixed column count (0-based grid). */
+function lastRowStartIndex(itemCount: number, cols: number): number {
+  if (itemCount <= 0 || cols <= 0) return 0
+  return Math.floor((itemCount - 1) / cols) * cols
+}
+
 export function PlayerStatsFeatureGrid({ items, className }: PlayerStatsFeatureGridProps) {
+  const n = items.length
+  const mdLast = lastRowStartIndex(n, 2)
+  const lgLast = lastRowStartIndex(n, 3)
+
   return (
     <div className={cn("grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 relative z-10", className)}>
       {items.map((item, index) => (
@@ -31,11 +41,12 @@ export function PlayerStatsFeatureGrid({ items, className }: PlayerStatsFeatureG
           className={cn(
             "flex flex-col py-6 relative group/feature",
             "border-white/10",
-            (index === 0 || index === 3) && "md:border-l",
-            index < 3 && "md:border-b",
+            index < n - 1 && "border-b",
+            index < mdLast ? "md:border-b" : "md:border-b-0",
+            index < lgLast ? "lg:border-b" : "lg:border-b-0",
+            index % 2 === 0 && "md:border-l",
+            index % 3 === 0 && "lg:border-l",
             "lg:border-r",
-            (index === 0 || index === 3) && "lg:border-l",
-            index < 3 && "lg:border-b"
           )}
           style={FEATURE_PANEL_STYLE}
         >

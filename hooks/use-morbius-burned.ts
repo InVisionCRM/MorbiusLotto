@@ -1,6 +1,5 @@
 import { useEffect, useState } from 'react'
-
-const MORBIUS_TOKEN = '0xB7d4eB5fDfE3d4d3B5C16a44A49948c6EC77c6F1'
+import { MORBIUS_TOKEN_ADDRESS } from '@/lib/contracts'
 
 // Known burn addresses to check for
 const BURN_ADDRESSES = [
@@ -62,7 +61,7 @@ export function useMorbiusBurned() {
 
         do {
           // Build URL with pagination params
-          let url = `https://api.scan.pulsechain.com/api/v2/tokens/${MORBIUS_TOKEN}/holders`
+          let url = `https://api.scan.pulsechain.com/api/v2/tokens/${MORBIUS_TOKEN_ADDRESS}/holders`
           if (nextPageParams) {
             const params = new URLSearchParams({
               address_hash: nextPageParams.address_hash,

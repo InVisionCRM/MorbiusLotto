@@ -16,10 +16,6 @@ import { PwaHomeInstallSplash } from '@/components/home/PwaHomeInstallSplash'
 import { DepositWithdrawModal } from '@/components/BLACKJACK/DepositWithdrawModal'
 import { LoadingTip } from '@/components/shared/LoadingTip'
 
-const MorbiusInfoSection = dynamic(
-  () => import('@/components/home/morbius-info-section').then((m) => m.MorbiusInfoSection),
-  { loading: () => <LoadingTip variant="inline" /> }
-)
 const SocialsSection = dynamic(
   () => import('@/components/home/socials-section').then((m) => m.SocialsSection),
   { loading: () => <LoadingTip variant="inline" /> }
@@ -127,6 +123,7 @@ export default function HomePageClient() {
             </section>
 
             <div className="flex w-full flex-col items-center gap-y-20 px-4 py-12 md:gap-y-28 md:py-20">
+              <HomeSectionDivider />
               <PlatformStatsSection />
 
               <HomeSectionDivider />
@@ -134,9 +131,6 @@ export default function HomePageClient() {
 
               <HomeSectionDivider />
               <TableShowcaseDisplay />
-
-              <HomeSectionDivider />
-              <MorbiusInfoSection />
 
               <HomeSectionDivider />
               <SocialsSection />
