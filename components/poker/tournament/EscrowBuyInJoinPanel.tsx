@@ -8,20 +8,21 @@ import React, { useCallback, useEffect, useState } from 'react';
 import { erc20Abi, formatUnits } from 'viem';
 import { useAccount, usePublicClient, useWriteContract } from 'wagmi';
 import { TOURNAMENT_PRIZE_ESCROW_ADDRESS, WPLS_TOKEN_ADDRESS } from '@/lib/contracts';
-import { ensureWplsBalance } from '@/lib/ensure-wpls-balance';
+import { getWplsShortfall, WPLS_DEPOSIT_ABI } from '@/lib/ensure-wpls-balance';
 import { tournamentPrizeEscrowV2Abi } from '@/abi/tournament-prize-escrow-v2';
 import { tournamentIdToBytes32 } from '@/lib/tournament-id-bytes32';
 import { formatPrizeTokenUnitLabel } from '@/lib/format-poker-tournament-prize-display';
 import { fetchDexScreenerTokenInfo } from '@/lib/dexscreener-token-info';
 import { BackgroundBeams } from '@/components/ui/background-beams';
 
-export type EscrowBuyInJoinStep = 'idle' | 'approving' | 'depositing' | 'done' | 'failed';
-
-const STEPS: { key: 'approve' | 'deposit' | 'done'; label: string }[] = [
-  { key: 'approve', label: 'Approve token' },
-  { key: 'deposit', label: 'Deposit to escrow' },
-  { key: 'done', label: 'Joined' },
-];
+export type EscrowBuyInJoinStep =
+  | 'idle'
+  | 'wrapping'
+  | 'wrapped'
+  | 'approving'
+  | 'depositing'
+  | 'done'
+  | 'failed';
 
 export function EscrowBuyInJoinPanel({
   tournamentId,
@@ -80,7 +81,57 @@ export function EscrowBuyInJoinPanel({
     human = buyInWei.toString();
   }
 
-  const run = useCallback(async () => {
+  // PLS preset uses the WPLS address. On mobile, wrapping in the same chain as
+  // approve loses the user-gesture context and the wallet popup gets dismissed.
+  // So we preflight: if a wrap is needed, surface it as its own user-clicked step.
+  const isWplsToken = tokenAddress.toLowerCase() === WPLS_TOKEN_ADDRESS.toLowerCase();
+  const [wrapShortfall, setWrapShortfall] = useState<bigint | null>(null);
+  const wrapNeeded = isWplsToken && wrapShortfall != null && wrapShortfall > 0n && step !== 'wrapped' && step !== 'done';
+
+  useEffect(() => {
+    if (!isWplsToken || !address || !publicClient) {
+      setWrapShortfall(null);
+      return;
+    }
+    let cancelled = false;
+    void (async () => {
+      try {
+        const sf = await getWplsShortfall({ publicClient, owner: address, requiredWei: buyInWei });
+        if (!cancelled) setWrapShortfall(sf);
+      } catch {
+        if (!cancelled) setWrapShortfall(0n); // fail open — let approve step handle real errors
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [isWplsToken, address, publicClient, buyInWei]);
+
+  const runWrap = useCallback(async () => {
+    if (!address || !publicClient || wrapShortfall == null || wrapShortfall <= 0n) return;
+    setErr(null);
+    setStep('wrapping');
+    try {
+      const nativeBalance = await publicClient.getBalance({ address });
+      if (nativeBalance < wrapShortfall) {
+        throw new Error(
+          `Need ${wrapShortfall.toString()} more PLS to wrap, but wallet only has ${nativeBalance.toString()}.`,
+        );
+      }
+      const hash = await writeContractAsync({
+        address: WPLS_TOKEN_ADDRESS as `0x${string}`,
+        abi: WPLS_DEPOSIT_ABI,
+        functionName: 'deposit',
+        value: wrapShortfall,
+      });
+      await publicClient.waitForTransactionReceipt({ hash });
+      setStep('wrapped');
+      setWrapShortfall(0n);
+    } catch (e) {
+      setStep('failed');
+      setErr((e as Error).message ?? 'Wrap PLS failed');
+    }
+  }, [address, publicClient, wrapShortfall, writeContractAsync]);
+
+  const runApproveAndDeposit = useCallback(async () => {
     if (!address || !publicClient) {
       setErr('Connect your wallet');
       return;
@@ -89,16 +140,6 @@ export function EscrowBuyInJoinPanel({
     setStep('approving');
     try {
       const escrow = TOURNAMENT_PRIZE_ESCROW_ADDRESS as `0x${string}`;
-      // PLS preset uses the WPLS address — auto-wrap any shortfall from native PLS
-      // before the approve step so the user can pay buy-in directly with PLS.
-      if (tokenAddress.toLowerCase() === WPLS_TOKEN_ADDRESS.toLowerCase()) {
-        await ensureWplsBalance({
-          publicClient,
-          writeContractAsync: writeContractAsync as Parameters<typeof ensureWplsBalance>[0]['writeContractAsync'],
-          owner: address,
-          requiredWei: buyInWei,
-        });
-      }
       const allowance = await publicClient.readContract({
         address: tokenAddress,
         abi: erc20Abi,
@@ -131,11 +172,29 @@ export function EscrowBuyInJoinPanel({
     }
   }, [address, publicClient, tokenAddress, buyInWei, tournamentId, writeContractAsync, onSuccess]);
 
-  const busy = step === 'approving' || step === 'depositing';
+  const busy = step === 'wrapping' || step === 'approving' || step === 'depositing';
   const symbolForBadge = (tokenSymbol ?? '?').slice(0, 4).toUpperCase();
   const initial = symbolForBadge.charAt(0);
 
-  const stepStateOf = (key: 'approve' | 'deposit' | 'done'): 'pending' | 'active' | 'complete' => {
+  const STEPS: { key: 'wrap' | 'approve' | 'deposit' | 'done'; label: string }[] = isWplsToken
+    ? [
+        { key: 'wrap', label: 'Wrap PLS' },
+        { key: 'approve', label: 'Approve' },
+        { key: 'deposit', label: 'Deposit' },
+        { key: 'done', label: 'Joined' },
+      ]
+    : [
+        { key: 'approve', label: 'Approve token' },
+        { key: 'deposit', label: 'Deposit to escrow' },
+        { key: 'done', label: 'Joined' },
+      ];
+
+  const stepStateOf = (key: 'wrap' | 'approve' | 'deposit' | 'done'): 'pending' | 'active' | 'complete' => {
+    if (key === 'wrap') {
+      if (step === 'wrapping') return 'active';
+      if (step === 'wrapped' || step === 'approving' || step === 'depositing' || step === 'done') return 'complete';
+      return 'pending';
+    }
     if (key === 'approve') {
       if (step === 'approving') return 'active';
       if (step === 'depositing' || step === 'done') return 'complete';
@@ -149,8 +208,9 @@ export function EscrowBuyInJoinPanel({
     return step === 'done' ? 'complete' : 'pending';
   };
 
-  const ctaLabel =
-    step === 'approving'
+  const ctaLabel = wrapNeeded
+    ? step === 'wrapping' ? 'Wrapping PLS…' : 'Wrap PLS'
+    : step === 'approving'
       ? 'Approving…'
       : step === 'depositing'
         ? 'Depositing…'
@@ -159,6 +219,8 @@ export function EscrowBuyInJoinPanel({
           : step === 'failed'
             ? 'Try again'
             : 'Approve & pay buy-in';
+
+  const onCtaClick = wrapNeeded ? runWrap : runApproveAndDeposit;
 
   return (
     <div className="relative w-full max-w-md overflow-hidden rounded-2xl border border-cyan-500/30 bg-slate-950 shadow-[0_0_60px_-15px_rgba(34,211,238,0.35)]">
@@ -284,7 +346,7 @@ export function EscrowBuyInJoinPanel({
           <button
             type="button"
             disabled={disabled || busy || step === 'done'}
-            onClick={() => void run()}
+            onClick={() => void onCtaClick()}
             className="relative flex-1 min-w-[180px] inline-flex items-center justify-center rounded-xl bg-gradient-to-r from-cyan-500 via-blue-500 to-violet-500 px-4 py-3 text-sm font-semibold text-white shadow-lg shadow-cyan-500/20 transition-all hover:shadow-cyan-500/40 disabled:opacity-50 disabled:cursor-not-allowed overflow-hidden"
           >
             {busy && (

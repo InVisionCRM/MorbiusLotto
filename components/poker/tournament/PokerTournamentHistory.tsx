@@ -2,6 +2,7 @@
 
 import React, { useEffect, useState, useCallback } from 'react';
 import {
+  buyInMetaFromHistoryRow,
   formatPrizePoolDisplay,
   formatTournamentBuyInDisplay,
   formatTournamentPayoutDisplay,
@@ -110,7 +111,10 @@ function formatElapsed(
 
 function formatBuyInRow(t: CompletedTournament): string {
   if (t.tournamentType === 'freeroll') return 'Free';
-  return formatTournamentBuyInDisplay(t.buyInAmount, { gameType: t.gameType ?? null });
+  return formatTournamentBuyInDisplay(
+    t.buyInAmount,
+    buyInMetaFromHistoryRow(t as unknown as Record<string, unknown>),
+  );
 }
 
 function creatorLine(t: CompletedTournament): string {

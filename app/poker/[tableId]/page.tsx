@@ -687,8 +687,6 @@ export default function PokerTablePage() {
             background: 'rgb(2 6 23)',
             color: 'var(--poker-text)',
             overflow: 'hidden',
-            paddingLeft: 'env(safe-area-inset-left, 0px)',
-            paddingRight: 'env(safe-area-inset-right, 0px)',
           }}
         >
           {!isFullscreen && <PokerHeaderBar

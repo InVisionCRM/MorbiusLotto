@@ -195,7 +195,13 @@ export function PokerTournamentResultsModalView({ open, onClose, tournamentId }:
   const buyInDisplay = results
     ? results.tournamentType === 'freeroll'
       ? 'Free'
-      : formatTournamentBuyInDisplay(results.buyInAmount, { gameType: results.gameType ?? null })
+      : formatTournamentBuyInDisplay(results.buyInAmount, {
+          gameType: results.gameType ?? null,
+          prizeTokenAddress: results.prizeTokenAddress ?? null,
+          prizeTokenDecimals: results.prizeTokenDecimals ?? null,
+          prizeTokenSymbol: results.prizeTokenSymbol ?? null,
+          prizeTokenName: results.prizeTokenName ?? null,
+        })
     : '—';
   const prizePoolDisplay =
     results && payoutMeta ? formatPrizePoolDisplay(results.prizePool, payoutMeta) : '—';

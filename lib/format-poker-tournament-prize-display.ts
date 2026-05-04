@@ -119,16 +119,30 @@ export function formatTournamentPayoutDisplay(amountRaw: string, meta: PayoutFor
 }
 
 /**
- * Buy-in display: poker uses whole chip counts; blackjack / on-chain use MORBIUS wei.
+ * Buy-in display:
+ *  - custom on-chain token (any game) → human amount + ticker, decimal-adjusted
+ *  - poker chips → formatted chip count
+ *  - default → MORBIUS wei
  * Zero → Free.
  */
 export function formatTournamentBuyInDisplay(
   buyInRaw: string,
-  meta?: { gameType?: string | null },
+  meta?: { gameType?: string | null } & Partial<PrizePoolFormatMeta>,
 ): string {
   try {
     const raw = BigInt(buyInRaw || '0');
     if (raw === 0n) return 'Free';
+    const tokenAddr = meta?.prizeTokenAddress?.trim();
+    if (tokenAddr) {
+      const decimals = safeTokenDecimals(meta?.prizeTokenDecimals);
+      const human = trimNumericTrailingZeros(formatUnits(raw, decimals));
+      const ticker = formatPrizeTokenUnitLabel({
+        prizeTokenAddress: tokenAddr,
+        prizeTokenSymbol: meta?.prizeTokenSymbol ?? null,
+        prizeTokenName: meta?.prizeTokenName ?? null,
+      });
+      return `${human} ${ticker}`;
+    }
     if (meta?.gameType === 'poker') {
       return `${formatChips(raw)} chips`;
     }
@@ -136,4 +150,12 @@ export function formatTournamentBuyInDisplay(
   } catch {
     return '—';
   }
+}
+
+/** Convenience: derive buy-in meta from a history row (snake/camel agnostic). */
+export function buyInMetaFromHistoryRow(r: Record<string, unknown>): { gameType: string | null } & PrizePoolFormatMeta {
+  const base = coalescePrizeTokenMeta(r);
+  const gt = r.gameType ?? r.game_type;
+  const gameType = typeof gt === 'string' && gt.trim() ? gt.trim() : null;
+  return { ...base, gameType };
 }

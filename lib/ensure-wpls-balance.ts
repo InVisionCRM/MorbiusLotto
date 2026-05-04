@@ -3,6 +3,23 @@ import type { PublicClient } from 'viem';
 import { WPLS_TOKEN_ADDRESS } from '@/lib/contracts';
 
 const wplsDepositAbi = parseAbi(['function deposit() payable']);
+export const WPLS_DEPOSIT_ABI = wplsDepositAbi;
+
+/** Returns the wei shortfall vs WPLS balance (0 if balance already covers `requiredWei`). */
+export async function getWplsShortfall(params: {
+  publicClient: PublicClient;
+  owner: `0x${string}`;
+  requiredWei: bigint;
+}): Promise<bigint> {
+  const { publicClient, owner, requiredWei } = params;
+  const balance = (await publicClient.readContract({
+    address: WPLS_TOKEN_ADDRESS as `0x${string}`,
+    abi: erc20Abi,
+    functionName: 'balanceOf',
+    args: [owner],
+  })) as bigint;
+  return balance >= requiredWei ? 0n : requiredWei - balance;
+}
 
 /**
  * Ensures `owner` holds at least `requiredWei` WPLS by wrapping native PLS

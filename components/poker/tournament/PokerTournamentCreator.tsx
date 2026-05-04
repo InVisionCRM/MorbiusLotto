@@ -45,7 +45,7 @@ import { PokerTournamentSharePanel } from '@/components/poker/tournament/PokerTo
 import { ConfirmActionCard } from '@/components/shared/ConfirmActionCard';
 import { Confetti, type ConfettiRef } from '@/components/ui/confetti';
 import { Prc20TokenPicker, type SelectedPrc20Token } from '@/components/shared/Prc20TokenPicker';
-import { ensureWplsBalance } from '@/lib/ensure-wpls-balance';
+import { getWplsShortfall, WPLS_DEPOSIT_ABI } from '@/lib/ensure-wpls-balance';
 import { useTokenPriceUsd } from '@/hooks/use-token-price-usd';
 import { formatUnits, parseUnits } from 'viem';
 import { useConnectModal } from '@rainbow-me/rainbowkit';
@@ -946,7 +946,9 @@ export function PokerTournamentCreator({ creatorAddress, onClose, onCreate }: Po
   // Two-step on-chain funding for custom-token freerolls.
   // 'idle' is the pre-funding state; 'approving'/'depositing' are mid-tx; 'approved' allows step 2;
   // 'creating' calls the server; 'failed' shows the reclaim button.
-  const [fundingStep, setFundingStep] = useState<'idle' | 'approving' | 'approved' | 'depositing' | 'deposited' | 'creating' | 'failed'>('idle');
+  const [fundingStep, setFundingStep] = useState<'idle' | 'wrapping' | 'wrapped' | 'approving' | 'approved' | 'depositing' | 'deposited' | 'creating' | 'failed'>('idle');
+  /** Wei needed to wrap from native PLS → WPLS for the prize pool. null = not yet known; 0n = no wrap needed. */
+  const [wrapShortfall, setWrapShortfall] = useState<bigint | null>(null);
   const [fundingError, setFundingError] = useState<string | null>(null);
   /**
    * Stable across the entire funding flow: we generate the UUID once when the user
@@ -1026,6 +1028,35 @@ export function PokerTournamentCreator({ creatorAddress, onClose, onCreate }: Po
       return 0n;
     }
   }, [prizeSource, selectedToken, customTokenAmount]);
+
+  // Preflight WPLS shortfall for the custom-token freeroll prize pool.
+  // Surfaced as a separate "Wrap PLS" button so the wrap → approve chain doesn't
+  // run on the same gesture (mobile wallets dismiss the second popup otherwise).
+  useEffect(() => {
+    const isWplsPool =
+      prizeSource === 'custom_token'
+      && !!selectedToken
+      && selectedToken.address.toLowerCase() === WPLS_TOKEN_ADDRESS.toLowerCase()
+      && customTokenAmountWei > 0n;
+    if (!isWplsPool || !publicClient || !connectedAddress) {
+      setWrapShortfall(null);
+      return;
+    }
+    let cancelled = false;
+    void (async () => {
+      try {
+        const sf = await getWplsShortfall({
+          publicClient,
+          owner: connectedAddress,
+          requiredWei: customTokenAmountWei,
+        });
+        if (!cancelled) setWrapShortfall(sf);
+      } catch {
+        if (!cancelled) setWrapShortfall(0n);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [prizeSource, selectedToken, customTokenAmountWei, publicClient, connectedAddress]);
 
   const buyInTokenWei = useMemo<bigint>(() => {
     if (buyInPrizeSource !== 'custom_token_buyin' || !selectedToken || !buyInTokenHumanAmount.trim()) return 0n;
@@ -1241,6 +1272,38 @@ export function PokerTournamentCreator({ creatorAddress, onClose, onCreate }: Po
   // ---- Custom-token funding flow (two wallet popups, then server create) ----
 
   /**
+   * Step 0 (PLS only): wrap native PLS → WPLS for the shortfall. Surfaced as its
+   * own button so the next approve popup gets a fresh user gesture (mobile wallets
+   * dismiss popups when the gesture has decayed across an awaited receipt).
+   */
+  const handleWrapPls = async () => {
+    if (!selectedToken || !publicClient || !connectedAddress) return;
+    if (wrapShortfall == null || wrapShortfall <= 0n) return;
+    setFundingError(null);
+    setFundingStep('wrapping');
+    try {
+      const nativeBalance = await publicClient.getBalance({ address: connectedAddress });
+      if (nativeBalance < wrapShortfall) {
+        throw new Error(
+          `Need ${wrapShortfall.toString()} more PLS to wrap, but wallet only has ${nativeBalance.toString()}.`,
+        );
+      }
+      const hash = await writeContractAsync({
+        address: WPLS_TOKEN_ADDRESS as `0x${string}`,
+        abi: WPLS_DEPOSIT_ABI,
+        functionName: 'deposit',
+        value: wrapShortfall,
+      });
+      await publicClient.waitForTransactionReceipt({ hash });
+      setWrapShortfall(0n);
+      setFundingStep('wrapped');
+    } catch (err) {
+      setFundingError((err as Error).message ?? 'Wrap PLS failed');
+      setFundingStep('idle');
+    }
+  };
+
+  /**
    * Step 1: ERC20 approve. Must be triggered by a fresh user gesture so the wallet
    * popup actually appears (browser user-activation requirement).
    */
@@ -1251,26 +1314,6 @@ export function PokerTournamentCreator({ creatorAddress, onClose, onCreate }: Po
     if (typeof crypto === 'undefined' || typeof crypto.randomUUID !== 'function') {
       setFundingError('Your browser is missing crypto.randomUUID; please update to a modern browser.');
       return;
-    }
-
-    // PLS preset uses the WPLS address — auto-wrap any shortfall from native PLS
-    // before approve so creators can fund the prize pool directly with PLS.
-    if (
-      publicClient
-      && connectedAddress
-      && selectedToken.address.toLowerCase() === WPLS_TOKEN_ADDRESS.toLowerCase()
-    ) {
-      try {
-        await ensureWplsBalance({
-          publicClient,
-          writeContractAsync: writeContractAsync as Parameters<typeof ensureWplsBalance>[0]['writeContractAsync'],
-          owner: connectedAddress,
-          requiredWei: customTokenAmountWei,
-        });
-      } catch (wrapErr) {
-        setFundingError((wrapErr as Error).message ?? 'Wrap PLS failed');
-        return;
-      }
     }
 
     // Balance pre-flight at approve time: approving more than you own succeeds at the ERC20
@@ -2541,6 +2584,8 @@ export function PokerTournamentCreator({ creatorAddress, onClose, onCreate }: Po
               prizeSplitPreview={topSplit || '—'}
               fundingStep={fundingStep}
               fundingError={fundingError}
+              wrapShortfall={wrapShortfall}
+              onWrap={() => void handleWrapPls()}
               onApprove={() => void handleApproveCustomToken()}
               onDeposit={() => void handleDepositCustomToken()}
               onReclaim={() => void handleReclaimDeposit()}
@@ -2609,6 +2654,8 @@ function CustomTokenFunderCard({
   prizeSplitPreview,
   fundingStep,
   fundingError,
+  wrapShortfall,
+  onWrap,
   onApprove,
   onDeposit,
   onReclaim,
@@ -2621,14 +2668,26 @@ function CustomTokenFunderCard({
   tournamentName: string;
   scheduleDisplay: string;
   prizeSplitPreview: string;
-  fundingStep: 'idle' | 'approving' | 'approved' | 'depositing' | 'deposited' | 'creating' | 'failed';
+  fundingStep: 'idle' | 'wrapping' | 'wrapped' | 'approving' | 'approved' | 'depositing' | 'deposited' | 'creating' | 'failed';
   fundingError: string | null;
+  /** Wei needed to wrap PLS → WPLS. null = unknown / not WPLS. >0 = surface a wrap step. */
+  wrapShortfall: bigint | null;
+  onWrap: () => void;
   onApprove: () => void;
   onDeposit: () => void;
   onReclaim: () => void;
   onCancel: () => void;
   canCancel: boolean;
 }) {
+  const wrapNeeded =
+    wrapShortfall != null
+    && wrapShortfall > 0n
+    && fundingStep !== 'wrapped'
+    && fundingStep !== 'approving'
+    && fundingStep !== 'approved'
+    && fundingStep !== 'depositing'
+    && fundingStep !== 'deposited'
+    && fundingStep !== 'creating';
   if (!token || amountWei <= 0n) return null;
 
   const stepBadge = (label: string, state: 'pending' | 'active' | 'done' | 'failed') => {
@@ -2649,12 +2708,16 @@ function CustomTokenFunderCard({
     );
   };
 
+  const wrapState: 'pending' | 'active' | 'done' | 'failed' =
+    fundingStep === 'wrapping' ? 'active'
+      : fundingStep === 'wrapped' || (wrapShortfall === 0n && fundingStep !== 'idle') ? 'done'
+        : 'pending';
   const approveState: 'pending' | 'active' | 'done' | 'failed' =
-    fundingStep === 'idle' ? 'pending'
+    fundingStep === 'idle' || fundingStep === 'wrapping' || fundingStep === 'wrapped' ? 'pending'
       : fundingStep === 'approving' ? 'active'
         : 'done';
   const depositState: 'pending' | 'active' | 'done' | 'failed' =
-    fundingStep === 'idle' || fundingStep === 'approving' ? 'pending'
+    fundingStep === 'idle' || fundingStep === 'wrapping' || fundingStep === 'wrapped' || fundingStep === 'approving' ? 'pending'
       : fundingStep === 'approved' ? 'pending'
         : fundingStep === 'depositing' ? 'active'
           : fundingStep === 'deposited' || fundingStep === 'creating' ? 'done'
@@ -2663,14 +2726,18 @@ function CustomTokenFunderCard({
   const createState: 'pending' | 'active' | 'done' | 'failed' =
     fundingStep === 'creating' ? 'active'
       : fundingStep === 'failed' ? 'failed'
-        : fundingStep === 'idle' || fundingStep === 'approving' || fundingStep === 'approved' || fundingStep === 'depositing' ? 'pending'
+        : fundingStep === 'idle' || fundingStep === 'wrapping' || fundingStep === 'wrapped' || fundingStep === 'approving' || fundingStep === 'approved' || fundingStep === 'depositing' ? 'pending'
           : 'done';
 
   return (
     <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm">
       <div className="relative w-full max-w-md rounded-2xl border-2 border-emerald-500/30 bg-gradient-to-br from-slate-900 to-slate-800 p-5 shadow-2xl">
         <h3 className="text-lg font-bold text-white">Fund prize pool on-chain</h3>
-        <p className="text-xs text-white/55 mt-1">Two wallet popups — approve, then deposit. Tournament is created automatically once the deposit confirms.</p>
+        <p className="text-xs text-white/55 mt-1">
+          {wrapNeeded
+            ? 'Three wallet popups — wrap PLS, approve, then deposit. Each step needs its own tap so your mobile wallet keeps the popup open.'
+            : 'Two wallet popups — approve, then deposit. Tournament is created automatically once the deposit confirms.'}
+        </p>
 
         <div className="mt-4 space-y-2 text-xs">
           <div className="flex justify-between"><span className="text-white/50">Tournament</span><span className="text-white font-medium truncate ml-3">{tournamentName}</span></div>
@@ -2680,7 +2747,8 @@ function CustomTokenFunderCard({
           <div className="flex justify-between"><span className="text-white/50">Split</span><span className="text-white truncate ml-3">{prizeSplitPreview}</span></div>
         </div>
 
-        <div className="mt-4 grid grid-cols-3 gap-2">
+        <div className={`mt-4 grid gap-2 ${(wrapNeeded || fundingStep === 'wrapping' || fundingStep === 'wrapped') ? 'grid-cols-4' : 'grid-cols-3'}`}>
+          {(wrapNeeded || fundingStep === 'wrapping' || fundingStep === 'wrapped') && stepBadge('Wrap', wrapState)}
           {stepBadge('Approve', approveState)}
           {stepBadge('Deposit', depositState)}
           {stepBadge('Create', createState)}
@@ -2691,7 +2759,15 @@ function CustomTokenFunderCard({
         )}
 
         <div className="mt-4 flex flex-col gap-2">
-          {fundingStep === 'idle' && (
+          {wrapNeeded && fundingStep !== 'wrapping' && (
+            <button onClick={onWrap} className="w-full rounded-xl bg-gradient-to-r from-violet-600 to-cyan-600 text-white text-sm font-semibold py-2.5">
+              0. Wrap PLS
+            </button>
+          )}
+          {fundingStep === 'wrapping' && (
+            <button disabled className="w-full rounded-xl bg-violet-600/40 text-white/80 text-sm font-semibold py-2.5">Wrapping PLS…</button>
+          )}
+          {(fundingStep === 'idle' || fundingStep === 'wrapped') && !wrapNeeded && (
             <button onClick={onApprove} className="w-full rounded-xl bg-gradient-to-r from-cyan-600 to-blue-600 text-white text-sm font-semibold py-2.5">
               1. Approve {token.symbol}
             </button>
