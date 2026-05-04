@@ -12,9 +12,6 @@ import { formatChips } from '@/lib/format-poker-chips';
 import { formatMorbiusFloor } from '@/lib/format-morbius-display';
 import type { PokerTournamentState, PokerBlindIncreaseMode } from '@/hooks/use-poker-tournament';
 
-/** Must match server `POKER_AFK_CONSECUTIVE_TIMEOUT_KICK` in `poker-game.service.ts`. */
-const AFK_MISSED_TURNS_IN_A_ROW = 3;
-
 /** Server auto-fold watchdog uses 60s when DB `action_timer_seconds` is unset. */
 const DEFAULT_TURN_SECONDS = 60;
 
@@ -201,22 +198,8 @@ export function PokerTournamentRulesModal({
                   When it is your turn to act, you have{' '}
                   <span className="text-white font-medium">{turnSeconds} seconds</span> before the table
                   automatically checks or folds for you (check if you can check for free; otherwise fold).
-                </p>
-              </section>
-
-              <section className="space-y-2">
-                <h3 className="text-xs font-semibold uppercase tracking-wide text-cyan-300/90">
-                  AFK — missing your turn
-                </h3>
-                <p className="text-white/75 leading-relaxed">
-                  If the action clock runs out on your turn{' '}
-                  <span className="text-white font-medium">{AFK_MISSED_TURNS_IN_A_ROW} times in a row</span>, you
-                  are eliminated from the tournament (same as busting out; no refund). In cash games the seat may be
-                  closed and your stack returned.{' '}
-                  <span className="text-white">
-                    As soon as you take any real action yourself, the miss-count goes back to zero
-                  </span>
-                  — the three misses must be three timeouts in a row with no voluntary play between them.
+                  This applies every time the clock runs out; you are not removed from the table or tournament
+                  for missing the timer.
                 </p>
               </section>
 

@@ -87,8 +87,6 @@ beforeAll(async () => {
   pokerGameService = new PokerGameService(dbService, pfService);
   tournamentService = new TournamentService(testPool);
   pokerTournamentService = new PokerTournamentService(testPool, tournamentService, pokerGameService);
-  pokerGameService.setTournamentTimeoutEliminationCallback((tableId, playerAddress) =>
-    pokerTournamentService.eliminatePlayerForConsecutiveTimeouts(tableId, playerAddress));
 });
 
 afterAll(async () => {

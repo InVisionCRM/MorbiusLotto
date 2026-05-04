@@ -21,8 +21,6 @@ const poker_bot_ai_1 = require("../lib/poker-bot-ai");
 const poker_server_bot_addresses_1 = require("../lib/poker-server-bot-addresses");
 const logger_1 = require("../utils/logger");
 const crypto_1 = __importDefault(require("crypto"));
-/** Consecutive turn-timer auto-folds before cash kick / tournament elimination-AFK (voluntary action resets to 0). */
-const POKER_AFK_CONSECUTIVE_TIMEOUT_KICK = 3;
 // ---------------------------------------------------------------------------
 // Card encoding helpers
 // ---------------------------------------------------------------------------
@@ -103,14 +101,6 @@ class PokerGameService {
      */
     setTournamentUnderfilledRecovery(cb) {
         this.tournamentUnderfilledRecovery = cb;
-    }
-    /**
-     * After N consecutive turn-timer auto-folds on a tournament table, bust the player (same as chip elimination).
-     * Wired at runtime from PokerTournamentService.
-     */
-    tournamentTimeoutEliminationCallback = null;
-    setTournamentTimeoutEliminationCallback(cb) {
-        this.tournamentTimeoutEliminationCallback = cb;
     }
     getPool() {
         return this.dbService.getPool();
@@ -1658,52 +1648,6 @@ class PokerGameService {
                     }
                     folded.push(actingAddr);
                     logger_1.logger.info(`Auto-${timeoutAction} timed-out turn`, { handId: row.hand_id, player: actingAddr, action: timeoutAction });
-                    // Track consecutive timeouts and auto-kick/sit-out AFK players
-                    try {
-                        const tableInfoResult = await pool.query('SELECT tournament_mode FROM poker_tables WHERE id = $1', [row.table_id]);
-                        const isTournament = tableInfoResult.rows[0]?.tournament_mode ?? false;
-                        const timeoutResult = await pool.query(`UPDATE poker_seats
-               SET consecutive_timeouts = consecutive_timeouts + 1
-               WHERE table_id = $1 AND player_address = $2
-               RETURNING consecutive_timeouts`, [row.table_id, actingAddr]);
-                        const consecutiveTimeouts = Number(timeoutResult.rows[0]?.consecutive_timeouts ?? 0);
-                        if (consecutiveTimeouts >= POKER_AFK_CONSECUTIVE_TIMEOUT_KICK) {
-                            if (isTournament) {
-                                if (this.tournamentTimeoutEliminationCallback) {
-                                    try {
-                                        await this.tournamentTimeoutEliminationCallback(row.table_id, actingAddr);
-                                        await this.broadcastState(row.table_id);
-                                    }
-                                    catch (elimErr) {
-                                        logger_1.logger.error('Tournament AFK timeout elimination failed', {
-                                            tableId: row.table_id,
-                                            player: actingAddr,
-                                            error: elimErr,
-                                        });
-                                    }
-                                }
-                                else {
-                                    logger_1.logger.warn('Tournament timeout elimination callback not set; AFK player not eliminated', {
-                                        tableId: row.table_id,
-                                        player: actingAddr,
-                                    });
-                                }
-                            }
-                            else {
-                                // Cash game — kick and return stack (call _leaveTable directly; we already hold the lock)
-                                await this._leaveTable(row.table_id, actingAddr);
-                                this.notifyCallback?.(`poker:table:${row.table_id}`, 'poker_player_kicked', {
-                                    tableId: row.table_id,
-                                    playerAddress: actingAddr,
-                                    reason: 'afk',
-                                });
-                                logger_1.logger.info('Cash game AFK player kicked', { tableId: row.table_id, player: actingAddr });
-                            }
-                        }
-                    }
-                    catch (kickErr) {
-                        logger_1.logger.error('Error handling AFK kick/sitout', { handId: row.hand_id, player: actingAddr, error: kickErr });
-                    }
                 });
             }
             catch (err) {

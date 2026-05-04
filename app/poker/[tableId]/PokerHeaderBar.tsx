@@ -38,6 +38,9 @@ interface PokerHeaderBarProps {
   onAdminStartBots: (numBots: number) => void;
   onAdminStopBots: () => void;
   onLeaveClick: () => void;
+  /** Spectator / eliminated: show Exit instead of Leave (return to lobby without a seated stack). */
+  showExitToLobby?: boolean;
+  onExitClick?: () => void;
   /** Whether the seated player has auto-rebuy enabled. Only shown when player is seated. */
   autoRebuy?: boolean;
   onToggleAutoRebuy?: () => void;
@@ -81,6 +84,8 @@ export function PokerHeaderBar({
   onAdminStartBots,
   onAdminStopBots,
   onLeaveClick,
+  showExitToLobby = false,
+  onExitClick,
   autoRebuy = false,
   onToggleAutoRebuy,
   showTableBrandingActions = false,
@@ -630,7 +635,7 @@ export function PokerHeaderBar({
 
         <button
           type="button"
-          onClick={onLeaveClick}
+          onClick={showExitToLobby ? onExitClick : onLeaveClick}
           className="h-9 px-3 rounded-sm text-[11px] font-bold tracking-wide transition-all hover:brightness-110 active:scale-[0.97]"
           style={{
             background: 'linear-gradient(180deg, #8b1a1a 0%, #6b1111 100%)',
@@ -639,7 +644,7 @@ export function PokerHeaderBar({
             boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.1)',
           }}
         >
-          Leave
+          {showExitToLobby ? 'Exit' : 'Leave'}
         </button>
       </div>
     </div>

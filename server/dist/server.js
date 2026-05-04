@@ -300,7 +300,7 @@ async function initializeServices() {
         const wsService = new websocket_service_1.WebSocketService(server, gameService, dbService, tournamentService, pokerGameService, bjMultiService);
         // Wire broadcast so bot actions (which bypass the WS handler) still push state to clients
         pokerGameService.setBroadcastCallback((tableId) => wsService.broadcastPokerTableState(tableId));
-        // Wire notifications for AFK kick/sit-out events
+        // Wire notifications (e.g. sit-out / table events)
         pokerGameService.setNotifyCallback((room, type, payload) => wsService.broadcastToRoom(room, { type, payload }));
         // Initialize poker tournament service and wire into WebSocket + post-hand callback
         const pokerTournamentService = new poker_tournament_service_1.PokerTournamentService(dbService.getPool(), tournamentService, pokerGameService);
@@ -309,7 +309,6 @@ async function initializeServices() {
         pokerTournamentService.setBroadcastCallback((room, msg) => wsService.broadcastToRoom(room, msg));
         pokerGameService.setPostHandCallback((tableId, handNumber) => pokerTournamentService.syncAfterHand(tableId, handNumber));
         pokerGameService.setTournamentUnderfilledRecovery((tableId) => pokerTournamentService.recoverTournamentTableIfUnderTwoStackedSeats(tableId));
-        pokerGameService.setTournamentTimeoutEliminationCallback((tableId, playerAddress) => pokerTournamentService.eliminatePlayerForConsecutiveTimeouts(tableId, playerAddress));
         // Wire BJ multi broadcast callback
         bjMultiService.setBroadcastCallback((tableId) => wsService.broadcastBJMultiTableState(tableId));
         // Freeroll scheduler (polls pending scheduled events: start, end; also ticks poker by_time blind advances)

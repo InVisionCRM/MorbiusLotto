@@ -53,7 +53,7 @@ type ShowdownEntry = {
 type SystemEntry = {
   kind: 'system';
   id: string;
-  type: 'welcome' | 'factbot' | 'player_event' | 'idle_warning';
+  type: 'welcome' | 'factbot' | 'player_event';
   text: string;
   ts: number;
 };
@@ -185,7 +185,6 @@ export interface PokerActivityFeedProps {
 /** Desktop fixed panel heights: expanded vs collapsed (expanded cap is half of prior max). */
 const DESKTOP_ACTIVITY_HEIGHT_EXPANDED = 'min(260px, calc((100dvh - 112px) / 2))';
 const DESKTOP_ACTIVITY_HEIGHT_COLLAPSED = 'min(180px, calc((100dvh - 112px) * 0.33))';
-const POKER_AFK_TIMEOUTS_BEFORE_KICK = 3;
 
 export function PokerActivityFeed({
   wsClient,
@@ -267,7 +266,6 @@ export function PokerActivityFeed({
     playerAddress: string | null;
     status: string;
     displayName?: string | null;
-    consecutiveTimeouts: number;
   }> | null>(null);
 
   // Reset one-time system message state when room changes.
@@ -306,9 +304,6 @@ export function PokerActivityFeed({
     if (last.kind === 'action' && (last.action === 'all-in' || last.action === 'allin')) {
       enqueueBursts([{ id: `burst-ai-${last.id}`, text: 'ALL IN', tone: 'red' }]);
       return;
-    }
-    if (last.kind === 'system' && last.type === 'idle_warning') {
-      enqueueBursts([{ id: `burst-idle-${last.id}`, text: 'IDLE WARNING', tone: 'red' }]);
     }
   }, [entries, enqueueBursts]);
 
@@ -365,7 +360,7 @@ export function PokerActivityFeed({
     };
   }, [connected]);
 
-  // ── Player system events: join / leave / watch + idle warnings ───────────
+  // ── Player system events: join / leave / watch ───────────────────────────
   useEffect(() => {
     if (!state?.seats?.length) return;
 
@@ -374,7 +369,6 @@ export function PokerActivityFeed({
       playerAddress: seat.playerAddress?.toLowerCase() ?? null,
       status: seat.status,
       displayName: seat.displayName ?? null,
-      consecutiveTimeouts: Number(seat.consecutiveTimeouts ?? 0),
     }));
 
     if (!prev) {
@@ -427,22 +421,6 @@ export function PokerActivityFeed({
             id: `player-back-${i}-${now}-${n.playerAddress}`,
             type: 'player_event',
             text: `${name} rejoined from watching at ${nowLabel}`,
-            ts: now,
-          });
-        }
-      }
-
-      // Idle warnings (same idea as blackjack: warn when timeout count increases and is high)
-      if (n.playerAddress) {
-        const prevTimeouts = p.consecutiveTimeouts ?? 0;
-        const currentTimeouts = n.consecutiveTimeouts ?? 0;
-        if (currentTimeouts > prevTimeouts && currentTimeouts >= 2) {
-          const name = displayPlayerName(n.displayName, n.playerAddress);
-          updates.push({
-            kind: 'system',
-            id: `idle-${i}-${now}-${n.playerAddress}-${currentTimeouts}`,
-            type: 'idle_warning',
-            text: `${name} is idle (${currentTimeouts}/${POKER_AFK_TIMEOUTS_BEFORE_KICK}) at ${nowLabel}.`,
             ts: now,
           });
         }
@@ -658,25 +636,20 @@ export function PokerActivityFeed({
       const isWelcome = entry.type === 'welcome';
       const isFact = entry.type === 'factbot';
       const isPlayerEvent = entry.type === 'player_event';
-      const isIdle = entry.type === 'idle_warning';
       const labelColor = isWelcome
         ? 'rgba(255,255,255,0.45)'
         : isFact
           ? 'rgba(52,211,153,0.85)'
           : isPlayerEvent
             ? 'rgba(255,255,255,0.45)'
-            : isIdle
-              ? 'rgba(255,255,255,0.45)'
-              : 'rgba(255,255,255,0.45)';
+            : 'rgba(255,255,255,0.45)';
       const bodyColor = isWelcome
         ? 'rgba(255,255,255,0.85)'
         : isFact
           ? 'rgba(255,255,255,0.78)'
           : isPlayerEvent
             ? 'rgba(255,255,255,0.78)'
-            : isIdle
-              ? 'rgba(255,255,255,0.82)'
-              : 'rgba(255,255,255,0.78)';
+            : 'rgba(255,255,255,0.78)';
       return (
         <div
           key={entry.id}

@@ -131,9 +131,6 @@ export interface PokerTableState {
   tournamentId?: string | null;
 }
 
-/** Consecutive turn-timer auto-folds before cash kick / tournament elimination-AFK (voluntary action resets to 0). */
-const POKER_AFK_CONSECUTIVE_TIMEOUT_KICK = 3;
-
 // ---------------------------------------------------------------------------
 // Card encoding helpers
 // ---------------------------------------------------------------------------
@@ -223,20 +220,6 @@ export class PokerGameService {
    */
   setTournamentUnderfilledRecovery(cb: (tableId: string) => Promise<void>): void {
     this.tournamentUnderfilledRecovery = cb;
-  }
-
-  /**
-   * After N consecutive turn-timer auto-folds on a tournament table, bust the player (same as chip elimination).
-   * Wired at runtime from PokerTournamentService.
-   */
-  private tournamentTimeoutEliminationCallback:
-    | ((tableId: string, playerAddress: string) => Promise<void>)
-    | null = null;
-
-  setTournamentTimeoutEliminationCallback(
-    cb: ((tableId: string, playerAddress: string) => Promise<void>) | null
-  ): void {
-    this.tournamentTimeoutEliminationCallback = cb;
   }
 
   private getPool(): Pool {
@@ -2208,57 +2191,6 @@ export class PokerGameService {
 
           folded.push(actingAddr);
           logger.info(`Auto-${timeoutAction} timed-out turn`, { handId: row.hand_id, player: actingAddr, action: timeoutAction });
-
-          // Track consecutive timeouts and auto-kick/sit-out AFK players
-          try {
-            const tableInfoResult = await pool.query(
-              'SELECT tournament_mode FROM poker_tables WHERE id = $1',
-              [row.table_id]
-            );
-            const isTournament = tableInfoResult.rows[0]?.tournament_mode ?? false;
-
-            const timeoutResult = await pool.query(
-              `UPDATE poker_seats
-               SET consecutive_timeouts = consecutive_timeouts + 1
-               WHERE table_id = $1 AND player_address = $2
-               RETURNING consecutive_timeouts`,
-              [row.table_id, actingAddr]
-            );
-            const consecutiveTimeouts = Number(timeoutResult.rows[0]?.consecutive_timeouts ?? 0);
-
-            if (consecutiveTimeouts >= POKER_AFK_CONSECUTIVE_TIMEOUT_KICK) {
-              if (isTournament) {
-                if (this.tournamentTimeoutEliminationCallback) {
-                  try {
-                    await this.tournamentTimeoutEliminationCallback(row.table_id, actingAddr);
-                    await this.broadcastState(row.table_id);
-                  } catch (elimErr) {
-                    logger.error('Tournament AFK timeout elimination failed', {
-                      tableId: row.table_id,
-                      player: actingAddr,
-                      error: elimErr,
-                    });
-                  }
-                } else {
-                  logger.warn('Tournament timeout elimination callback not set; AFK player not eliminated', {
-                    tableId: row.table_id,
-                    player: actingAddr,
-                  });
-                }
-              } else {
-                // Cash game — kick and return stack (call _leaveTable directly; we already hold the lock)
-                await this._leaveTable(row.table_id, actingAddr);
-                this.notifyCallback?.(`poker:table:${row.table_id}`, 'poker_player_kicked', {
-                  tableId: row.table_id,
-                  playerAddress: actingAddr,
-                  reason: 'afk',
-                });
-                logger.info('Cash game AFK player kicked', { tableId: row.table_id, player: actingAddr });
-              }
-            }
-          } catch (kickErr) {
-            logger.error('Error handling AFK kick/sitout', { handId: row.hand_id, player: actingAddr, error: kickErr });
-          }
         });
       } catch (err) {
         logger.error('Error auto-folding timed-out turn', { handId: row.hand_id, error: err });

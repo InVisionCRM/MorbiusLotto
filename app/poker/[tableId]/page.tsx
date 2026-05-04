@@ -68,6 +68,7 @@ export default function PokerTablePage() {
   const [statsModalAddress, setStatsModalAddress] = useState<string | null>(null);
   const [showAvatarModal, setShowAvatarModal] = useState(false);
   const [showLeaveConfirm, setShowLeaveConfirm] = useState(false);
+  const [showExitConfirm, setShowExitConfirm] = useState(false);
   const [showDashboard, setShowDashboard] = useState(false);
   const [showMyStats, setShowMyStats] = useState(false);
   const [showHowToPlay, setShowHowToPlay] = useState(false);
@@ -232,10 +233,6 @@ export default function PokerTablePage() {
       .catch((err) => toast.error((err as Error).message));
   }, [tableId, router]);
 
-  const handleLeaveClick = useCallback(() => {
-    setShowLeaveConfirm(true);
-  }, []);
-
   const {
     hand,
     mySeatIndex,
@@ -260,6 +257,32 @@ export default function PokerTablePage() {
     clientRef,
     applyE2EMockAction,
   });
+
+  const handleLeaveClick = useCallback(() => {
+    setShowExitConfirm(false);
+    setShowLeaveConfirm(true);
+  }, []);
+
+  const handleExitClick = useCallback(() => {
+    setShowLeaveConfirm(false);
+    setShowExitConfirm(true);
+  }, []);
+
+  /** Spectator or eliminated (no seat in state): confirm → optional WS leave, always lobby. */
+  const handleExitToLobby = useCallback(() => {
+    setShowExitConfirm(false);
+    const client = clientRef.current;
+    const go = () => {
+      clientRef.current = null;
+      router.push('/poker');
+    };
+    if (client?.isConnected()) {
+      client.pokerLeaveTable(tableId).then(go).catch(go);
+    } else {
+      go();
+    }
+  }, [tableId, router]);
+
   // ── Voice commands ────────────────────────────────────────────────────────
   const { enabled: speechEnabled, setEnabled: setSpeechEnabled } = useSpeechEnabled(address);
   const [voiceSplashOpen, setVoiceSplashOpen] = useState(false);
@@ -692,6 +715,8 @@ export default function PokerTablePage() {
             onAdminStartBots={onAdminStartBots}
             onAdminStopBots={onAdminStopBots}
             onLeaveClick={handleLeaveClick}
+            showExitToLobby={!mySeat}
+            onExitClick={handleExitClick}
             autoRebuy={autoRebuy}
             onToggleAutoRebuy={mySeat ? () => setAutoRebuy((v) => !v) : undefined}
             showTableBrandingActions={Boolean(effectivePlayerAddress && wsConnected && mySeat)}
@@ -872,8 +897,11 @@ export default function PokerTablePage() {
           setShowHowToPlay={setShowHowToPlay}
           showLeaveConfirm={showLeaveConfirm}
           setShowLeaveConfirm={setShowLeaveConfirm}
+          showExitConfirm={showExitConfirm}
+          setShowExitConfirm={setShowExitConfirm}
           fmtChips={fmtChips}
           handleLeave={handleLeave}
+          handleExitToLobby={handleExitToLobby}
           opponentProfileAddress={opponentProfileAddress}
           setOpponentProfileAddress={setOpponentProfileAddress}
           setStatsModalAddress={setStatsModalAddress}

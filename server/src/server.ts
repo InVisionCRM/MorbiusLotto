@@ -288,7 +288,7 @@ async function initializeServices() {
 
     // Wire broadcast so bot actions (which bypass the WS handler) still push state to clients
     pokerGameService.setBroadcastCallback((tableId) => wsService.broadcastPokerTableState(tableId));
-    // Wire notifications for AFK kick/sit-out events
+    // Wire notifications (e.g. sit-out / table events)
     pokerGameService.setNotifyCallback((room, type, payload) => wsService.broadcastToRoom(room, { type, payload }));
 
     // Initialize poker tournament service and wire into WebSocket + post-hand callback
@@ -303,8 +303,6 @@ async function initializeServices() {
     );
     pokerGameService.setTournamentUnderfilledRecovery((tableId) =>
       pokerTournamentService.recoverTournamentTableIfUnderTwoStackedSeats(tableId));
-    pokerGameService.setTournamentTimeoutEliminationCallback((tableId, playerAddress) =>
-      pokerTournamentService.eliminatePlayerForConsecutiveTimeouts(tableId, playerAddress));
 
     // Wire BJ multi broadcast callback
     bjMultiService.setBroadcastCallback((tableId) => wsService.broadcastBJMultiTableState(tableId));

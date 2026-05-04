@@ -13,6 +13,6 @@ function getTournamentPrizeEscrowAddress() {
     if (/^0x[a-fA-F0-9]{40}$/.test(t)) {
         return t.toLowerCase();
     }
-    return '0x29d65b552c8246293740e686c9b4f90f359a9f1b';
+    return '0xa54da628c54d2c9885a537f18dc9c22856510edf';
 }
 //# sourceMappingURL=tournament-escrow-address.js.map

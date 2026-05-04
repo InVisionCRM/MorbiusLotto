@@ -59,7 +59,6 @@ async function initializeRuntimeServices(server, port) {
     pokerTournamentService.setBroadcastCallback((room, msg) => wsService.broadcastToRoom(room, msg));
     pokerGameService.setPostHandCallback((tableId, handNumber) => pokerTournamentService.syncAfterHand(tableId, handNumber));
     pokerGameService.setTournamentUnderfilledRecovery((tableId) => pokerTournamentService.recoverTournamentTableIfUnderTwoStackedSeats(tableId));
-    pokerGameService.setTournamentTimeoutEliminationCallback((tableId, playerAddress) => pokerTournamentService.eliminatePlayerForConsecutiveTimeouts(tableId, playerAddress));
     bjMultiService.setBroadcastCallback((tableId) => wsService.broadcastBJMultiTableState(tableId));
     // Kick players who have been sitting out for >= 15 minutes (cash games only)
     setInterval(() => {

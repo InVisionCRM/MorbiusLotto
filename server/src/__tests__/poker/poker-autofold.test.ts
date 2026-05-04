@@ -4,13 +4,11 @@
  * Tests autoFoldTimedOutTurns behavior:
  * - Auto-checks when no outstanding bet (canCheck logic)
  * - Auto-folds when facing a bet
- * - Consecutive timeout tracking and AFK kick
  *
  * Uses real database — run: cd server && npm test -- poker-autofold
  * Requires: server/.env with DATABASE_URL
  */
 
-import { Pool } from 'pg';
 import {
   testPool,
   TEST_PLAYERS,
@@ -164,67 +162,6 @@ describe('Poker Auto-Fold / Auto-Check', () => {
       state = await pokerGameService.getTableState(tableId, null);
       const foldedSeat = state.seats.find(s => s.playerAddress === timedOutAddr);
       expect(foldedSeat?.folded).toBe(true);
-    });
-  });
-
-  describe('consecutive timeout tracking', () => {
-    it('increments consecutive_timeouts on each auto-fold', async () => {
-      const tableId = await createAndSeatPlayers([PLAYER_1, PLAYER_2]);
-
-      // Start hand and expire the acting player's turn
-      const handState = await pokerGameService.startHand(tableId);
-      const handId = handState!.currentHand!.handId;
-
-      let state = await pokerGameService.getTableState(tableId, null);
-      const acting = state.currentHand!.actingPosition!;
-      const actingAddr = state.seats[acting].playerAddress!;
-
-      // Check initial timeout count
-      const beforeResult = await testPool.query(
-        'SELECT consecutive_timeouts FROM poker_seats WHERE table_id = $1 AND player_address = $2',
-        [tableId, actingAddr]
-      );
-      expect(Number(beforeResult.rows[0]?.consecutive_timeouts ?? 0)).toBe(0);
-
-      // Expire and auto-fold
-      await expireTurn(handId);
-      await pokerGameService.autoFoldTimedOutTurns();
-
-      // Check timeout count incremented
-      const afterResult = await testPool.query(
-        'SELECT consecutive_timeouts FROM poker_seats WHERE table_id = $1 AND player_address = $2',
-        [tableId, actingAddr]
-      );
-      expect(Number(afterResult.rows[0]?.consecutive_timeouts ?? 0)).toBe(1);
-    });
-
-    it('resets consecutive_timeouts on voluntary action', async () => {
-      const tableId = await createAndSeatPlayers([PLAYER_1, PLAYER_2]);
-
-      // Manually set a timeout count
-      await testPool.query(
-        `UPDATE poker_seats SET consecutive_timeouts = 3
-         WHERE table_id = $1 AND player_address = $2`,
-        [tableId, PLAYER_1]
-      );
-
-      const handState = await pokerGameService.startHand(tableId);
-      const handId = handState!.currentHand!.handId;
-
-      let state = await pokerGameService.getTableState(tableId, null);
-      const acting = state.currentHand!.actingPosition!;
-      const actingAddr = state.seats[acting].playerAddress!;
-
-      // If this player is PLAYER_1, their voluntary action should reset the counter
-      if (actingAddr === PLAYER_1) {
-        await pokerGameService.playerAction(tableId, handId, actingAddr, 'fold');
-
-        const result = await testPool.query(
-          'SELECT consecutive_timeouts FROM poker_seats WHERE table_id = $1 AND player_address = $2',
-          [tableId, PLAYER_1]
-        );
-        expect(Number(result.rows[0]?.consecutive_timeouts ?? 99)).toBe(0);
-      }
     });
   });
 

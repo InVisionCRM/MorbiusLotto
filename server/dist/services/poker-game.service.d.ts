@@ -141,12 +141,6 @@ export declare class PokerGameService {
      * Applies late eliminations and may complete the SNG.
      */
     setTournamentUnderfilledRecovery(cb: (tableId: string) => Promise<void>): void;
-    /**
-     * After N consecutive turn-timer auto-folds on a tournament table, bust the player (same as chip elimination).
-     * Wired at runtime from PokerTournamentService.
-     */
-    private tournamentTimeoutEliminationCallback;
-    setTournamentTimeoutEliminationCallback(cb: ((tableId: string, playerAddress: string) => Promise<void>) | null): void;
     private getPool;
     /**
      * Serialize async operations on a given table so that concurrent

@@ -1072,8 +1072,8 @@ class PokerTournamentService {
         }
     }
     /**
-     * Bust a player from an active poker SNG after consecutive turn-timer auto-folds (wired from PokerGameService).
-     * Same DB path as chip bust: ranks, seat removal, WS elimination event, knockout blind multiplier, may complete.
+     * Bust a player from an active poker SNG (same DB path as chip bust: ranks, seat removal, WS event, blinds, may complete).
+     * Turn timers no longer invoke this; kept for tests / parity with chip elimination.
      */
     async eliminatePlayerForConsecutiveTimeouts(tableId, playerAddress) {
         const normalized = this.normalizeAddress(playerAddress);

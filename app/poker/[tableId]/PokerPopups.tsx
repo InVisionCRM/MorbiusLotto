@@ -43,8 +43,12 @@ interface PokerPopupsProps {
 
   showLeaveConfirm: boolean;
   setShowLeaveConfirm: React.Dispatch<React.SetStateAction<boolean>>;
+  showExitConfirm: boolean;
+  setShowExitConfirm: React.Dispatch<React.SetStateAction<boolean>>;
   fmtChips: (wei: string | number) => string;
   handleLeave: () => void;
+  /** Spectator / busted (no seat): leave WS room when possible, always navigate to lobby. */
+  handleExitToLobby: () => void;
 
   opponentProfileAddress: string | null;
   setOpponentProfileAddress: React.Dispatch<React.SetStateAction<string | null>>;
@@ -84,8 +88,11 @@ export function PokerPopups({
   setShowHowToPlay,
   showLeaveConfirm,
   setShowLeaveConfirm,
+  showExitConfirm,
+  setShowExitConfirm,
   fmtChips,
   handleLeave,
+  handleExitToLobby,
   opponentProfileAddress,
   setOpponentProfileAddress,
   setStatsModalAddress,
@@ -137,6 +144,44 @@ export function PokerPopups({
         onSave={setQuickChatPhrases}
       />
       <PokerHowToPlayModal isOpen={showHowToPlay} onClose={() => setShowHowToPlay(false)} />
+      {showExitConfirm && (
+        <div className="surface-modal-shell">
+          <div
+            className="surface-modal-card max-w-sm p-5"
+            style={{ boxShadow: '0 4px 16px rgba(0, 0, 0, 0.6), inset 0 1px 0 rgba(255, 255, 255, 0.05)' }}
+          >
+            <p className="text-slate-200 text-sm mb-1">Return to lobby</p>
+            <p className="text-slate-300 text-sm mb-5">
+              Leave this table view and go back to the poker lobby?
+            </p>
+            <div className="flex gap-3 justify-end">
+              <button
+                type="button"
+                onClick={() => setShowExitConfirm(false)}
+                className="px-4 py-2 rounded-lg text-sm font-medium transition-all hover:brightness-110"
+                style={{
+                  background: 'rgba(255,255,255,0.1)',
+                  color: 'rgba(255,255,255,0.9)',
+                  border: '1px solid rgba(255,255,255,0.2)',
+                }}
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={handleExitToLobby}
+                className="px-4 py-2 rounded-lg text-sm font-medium text-white transition-all hover:brightness-110"
+                style={{
+                  background: 'linear-gradient(180deg, #8b1a1a 0%, #6b1111 100%)',
+                  border: '1px solid rgba(255,255,255,0.12)',
+                }}
+              >
+                Exit
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
       {showLeaveConfirm && mySeat && (
         <div className="surface-modal-shell">
           <div

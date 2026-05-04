@@ -36,7 +36,6 @@ beforeAll(async () => {
   const pokerGame = new PokerGameService(dbService, pf);
   const tournamentService = new TournamentService(testPool);
   pokerTournamentService = new PokerTournamentService(testPool, tournamentService, pokerGame);
-  pokerGame.setTournamentTimeoutEliminationCallback(async () => {});
 });
 
 afterAll(async () => {
