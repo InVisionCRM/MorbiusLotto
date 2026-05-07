@@ -176,6 +176,8 @@ const RAKE_PERCENT = 5; // 5% of each pot
 // `POKER_BETWEEN_HANDS_DELAY_MS` in `lib/poker-between-hands-delay.ts`.
 const SHOWDOWN_DELAY_MS = 15_000;
 const SHOWDOWN_DELAY_SECONDS = SHOWDOWN_DELAY_MS / 1000;
+/** Delay between revealing flop / turn / river when all players are all-in (ms). `0` disables staging (tests). */
+const DEFAULT_POKER_RUNOUT_STREET_DELAY_MS = 2_000;
 
 // ---------------------------------------------------------------------------
 // PokerGameService
@@ -189,6 +191,8 @@ export class PokerGameService {
   private notifyCallback: ((room: string, type: string, payload: any) => void) | null = null;
   private activeTables: Map<string, Table> = new Map();
   private nextHandTimers: Map<string, NodeJS.Timeout> = new Map();
+  /** Single pending timer per table: staged board run-out before showdown persist. */
+  private runoutTimers: Map<string, NodeJS.Timeout> = new Map();
   /** Per-table mutex to serialize playerAction / autoFold / leaveTable calls. */
   private tableLocks: Map<string, Promise<void>> = new Map();
   /** Starting stacks (whole chips) captured at hand deal, keyed by handId -> address. */
@@ -298,6 +302,146 @@ export class PokerGameService {
       clearTimeout(timer);
       this.nextHandTimers.delete(tableId);
     }
+  }
+
+  private clearRunoutSchedule(tableId: string): void {
+    const timer = this.runoutTimers.get(tableId);
+    if (timer) {
+      clearTimeout(timer);
+      this.runoutTimers.delete(tableId);
+    }
+  }
+
+  private getRunoutStreetDelayMs(): number {
+    const raw = process.env.POKER_RUNOUT_STREET_DELAY_MS;
+    if (raw === '0') return 0;
+    const n = Number(raw);
+    if (Number.isFinite(n) && n >= 0 && n <= 60_000) return Math.floor(n);
+    return DEFAULT_POKER_RUNOUT_STREET_DELAY_MS;
+  }
+
+  /** Cumulative board sizes still to reveal: flop → 3, turn → 4, river → 5. */
+  private computeRunoutTargets(lenBefore: number, lenFull: number): number[] {
+    return [3, 4, 5].filter((n) => lenFull >= n && lenBefore < n);
+  }
+
+  private streetForRevealedCommunityCount(n: number): PokerStreet {
+    if (n >= 5) return 'river';
+    if (n >= 4) return 'turn';
+    if (n >= 3) return 'flop';
+    return 'preflop';
+  }
+
+  /** Persist visible board + pot while run-out is in progress (hand not completed). */
+  private async writeHandProgressSnapshotToDb(
+    pool: Pool,
+    handId: string,
+    table: Table,
+    tableId: string,
+    revealedCount: number,
+    fullCommunityInts: number[],
+  ): Promise<void> {
+    const bbRow = await pool.query('SELECT big_blind FROM poker_tables WHERE id = $1', [tableId]);
+    const bbChips = Number(bbRow.rows[0]?.big_blind ?? 0);
+    const slice = fullCommunityInts.slice(0, revealedCount);
+    const street = this.streetForRevealedCommunityCount(revealedCount);
+    const potStr = String(Math.max(0, Math.round(totalPotChips(table))));
+    await pool.query(
+      `UPDATE poker_hands
+       SET street = $2, community_cards = $3::JSONB, acting_position = NULL,
+           pot_amount = $4::NUMERIC, last_raise_size = $5::NUMERIC,
+           turn_started_at = NULL
+       WHERE id = $1`,
+      [handId, street, JSON.stringify(slice), potStr, String(Math.round(bbChips))],
+    );
+  }
+
+  /**
+   * When everyone is all-in, chevtek resolves the full board immediately in memory.
+   * Stage DB/broadcast updates with delays so clients see flop → turn → river before showdown.
+   * @returns true if run-out timers were scheduled (caller must not call scheduleNextHandAfterShowdown yet).
+   */
+  private async completeShowdownWithOptionalRunout(
+    pool: Pool,
+    tableId: string,
+    handId: string,
+    table: Table,
+    communityLenBefore: number,
+  ): Promise<boolean> {
+    const delayMs = this.getRunoutStreetDelayMs();
+    const fullCommunityInts = table.communityCards.map(cardToInt);
+    const targets = this.computeRunoutTargets(communityLenBefore, fullCommunityInts.length);
+    if (targets.length === 0 || delayMs === 0) {
+      await this.persistShowdown(pool, tableId, handId, table);
+      return false;
+    }
+
+    await this.writeHandProgressSnapshotToDb(
+      pool,
+      handId,
+      table,
+      tableId,
+      communityLenBefore,
+      fullCommunityInts,
+    );
+    await this.syncSeatsFromTable(pool, tableId, table);
+    this.scheduleRunoutChain(tableId, handId, fullCommunityInts, targets, delayMs);
+    return true;
+  }
+
+  private scheduleRunoutChain(
+    tableId: string,
+    handId: string,
+    fullCommunityInts: number[],
+    targets: number[],
+    delayMs: number,
+  ): void {
+    this.clearRunoutSchedule(tableId);
+    const pool = this.getPool();
+
+    const scheduleStep = (stepIndex: number) => {
+      const timer = setTimeout(() => {
+        void this.withTableLock(tableId, async () => {
+          try {
+            const handOk = await pool.query(
+              'SELECT id FROM poker_hands WHERE id = $1 AND table_id = $2 AND completed_at IS NULL',
+              [handId, tableId],
+            );
+            if (handOk.rows.length === 0) {
+              this.runoutTimers.delete(tableId);
+              return;
+            }
+            const table = await this.getOrReconstructActiveTable(tableId, pool, 'player_action');
+            const n = targets[stepIndex];
+            await this.writeHandProgressSnapshotToDb(
+              pool,
+              handId,
+              table,
+              tableId,
+              n,
+              fullCommunityInts,
+            );
+            await this.syncSeatsFromTable(pool, tableId, table);
+            await this.broadcastState(tableId);
+            const isLast = stepIndex === targets.length - 1;
+            if (isLast) {
+              await this.persistShowdown(pool, tableId, handId, table);
+              await this.broadcastState(tableId);
+              this.scheduleNextHandAfterShowdown(tableId);
+              this.runoutTimers.delete(tableId);
+            } else {
+              scheduleStep(stepIndex + 1);
+            }
+          } catch (err) {
+            logger.error('Poker runout step failed', { tableId, handId, stepIndex, err });
+            this.runoutTimers.delete(tableId);
+          }
+        });
+      }, delayMs);
+      this.runoutTimers.set(tableId, timer);
+    };
+
+    scheduleStep(0);
   }
 
   /**
@@ -418,6 +562,7 @@ export class PokerGameService {
     });
 
     this.clearScheduledNextHand(tableId);
+    this.clearRunoutSchedule(tableId);
     this.activeTables.delete(tableId);
     this.invalidateTableScaling(tableId);
     logger.info('Poker admin delete table', { tableId });
@@ -589,12 +734,20 @@ export class PokerGameService {
     const activeTable = this.activeTables.get(tableId);
     if (activeHandResult.rows.length > 0 && activeTable) {
       try {
+        const communityLenBeforeStandUp = activeTable.communityCards?.length ?? 0;
         // standUp folds the player and calls nextAction() if they were acting
         activeTable.standUp(normalized);
 
         // Persist any state changes from standUp
         const handId = activeHandResult.rows[0].id;
-        await this.persistActionAfterStandUp(pool, tableId, handId, normalized, activeTable);
+        await this.persistActionAfterStandUp(
+          pool,
+          tableId,
+          handId,
+          normalized,
+          activeTable,
+          communityLenBeforeStandUp,
+        );
       } catch (err) {
         logger.warn('standUp error on leaveTable', { tableId, playerAddress: normalized, err });
       }
@@ -632,7 +785,8 @@ export class PokerGameService {
     tableId: string,
     handId: string,
     playerAddress: string,
-    table: Table
+    table: Table,
+    communityLenBeforeStandUp: number,
   ): Promise<void> {
     const handRow = await pool.query('SELECT street FROM poker_hands WHERE id = $1', [handId]);
     if (handRow.rows.length === 0) return;
@@ -658,9 +812,17 @@ export class PokerGameService {
 
     // Check if hand has concluded (showdown triggered by standUp)
     if (!table.currentRound && table.winners) {
-      await this.persistShowdown(pool, tableId, handId, table);
+      const deferred = await this.completeShowdownWithOptionalRunout(
+        pool,
+        tableId,
+        handId,
+        table,
+        communityLenBeforeStandUp,
+      );
       await this.broadcastState(tableId);
-      this.scheduleNextHandAfterShowdown(tableId);
+      if (!deferred) {
+        this.scheduleNextHandAfterShowdown(tableId);
+      }
     } else if (!table.currentRound) {
       // No winners yet but round ended — update acting position
       await pool.query(
@@ -1406,6 +1568,7 @@ export class PokerGameService {
 
   async startHand(tableId: string): Promise<PokerTableState | null> {
     const pool = this.getPool();
+    this.clearRunoutSchedule(tableId);
 
     const tableResult = await pool.query(
       'SELECT id, small_blind, big_blind, max_seats, hand_number, button_position, tournament_id FROM poker_tables WHERE id = $1',
@@ -1581,8 +1744,11 @@ export class PokerGameService {
     // If the hand already ran to showdown (all remaining players were all-in
     // from blinds), finalize now — no player actions will ever arrive.
     if (!table.currentRound && table.winners) {
-      await this.persistShowdown(pool, tableId, handId, table);
-      this.scheduleNextHandAfterShowdown(tableId);
+      const showdownDeferred = await this.completeShowdownWithOptionalRunout(pool, tableId, handId, table, 0);
+      await this.broadcastState(tableId);
+      if (!showdownDeferred) {
+        this.scheduleNextHandAfterShowdown(tableId);
+      }
     }
 
     return this.getTableState(tableId, null);
@@ -1645,6 +1811,7 @@ export class PokerGameService {
 
     // Capture street before action (for DB recording)
     const streetBefore = chevtekStreetToPoker(table.currentRound, !!table.winners);
+    const communityLenBeforeAction = table.communityCards?.length ?? 0;
 
     const tableRow = await pool.query(
       'SELECT big_blind FROM poker_tables WHERE id = $1',
@@ -1746,10 +1913,17 @@ export class PokerGameService {
     );
 
     if (isShowdown) {
-      // Persist showdown results
-      await this.persistShowdown(pool, tableId, handId, table);
+      const showdownDeferred = await this.completeShowdownWithOptionalRunout(
+        pool,
+        tableId,
+        handId,
+        table,
+        communityLenBeforeAction,
+      );
       await this.broadcastState(tableId);
-      this.scheduleNextHandAfterShowdown(tableId);
+      if (!showdownDeferred) {
+        this.scheduleNextHandAfterShowdown(tableId);
+      }
     } else {
       // Update community cards, pot, acting position, street (chip ints)
       const communityInts = table.communityCards.map(cardToInt);
@@ -2147,6 +2321,7 @@ export class PokerGameService {
 
           // Capture street before
           const streetBefore = chevtekStreetToPoker(table.currentRound, !!table.winners);
+          const communityLenBeforeTimeout = table.communityCards?.length ?? 0;
 
           // Auto-check when not facing a bet; auto-fold when facing a bet
           const canCheck = !table.currentBet || actor.bet >= table.currentBet;
@@ -2170,9 +2345,17 @@ export class PokerGameService {
           );
 
           if (!table.currentRound && table.winners) {
-            await this.persistShowdown(pool, row.table_id, row.hand_id, table);
+            const showdownDeferred = await this.completeShowdownWithOptionalRunout(
+              pool,
+              row.table_id,
+              row.hand_id,
+              table,
+              communityLenBeforeTimeout,
+            );
             await this.broadcastState(row.table_id);
-            this.scheduleNextHandAfterShowdown(row.table_id);
+            if (!showdownDeferred) {
+              this.scheduleNextHandAfterShowdown(row.table_id);
+            }
           } else {
             const communityInts = table.communityCards.map(cardToInt);
             const potStr = String(Math.max(0, Math.round(totalPotChips(table))));
@@ -2651,6 +2834,7 @@ export class PokerGameService {
 
   private async tryStartNextHand(tableId: string): Promise<void> {
     this.clearScheduledNextHand(tableId);
+    this.clearRunoutSchedule(tableId);
     return this.withTableLock(tableId, async () => {
       const pool = this.getPool();
 
@@ -2783,9 +2967,17 @@ export class PokerGameService {
     const activeTable = this.activeTables.get(tableId);
     if (activeHandResult.rows.length > 0 && activeTable) {
       try {
+        const communityLenBeforeStandUp = activeTable.communityCards?.length ?? 0;
         activeTable.standUp(normalized);
         const handId = activeHandResult.rows[0].id;
-        await this.persistActionAfterStandUp(pool, tableId, handId, normalized, activeTable);
+        await this.persistActionAfterStandUp(
+          pool,
+          tableId,
+          handId,
+          normalized,
+          activeTable,
+          communityLenBeforeStandUp,
+        );
       } catch (err) {
         logger.warn('standUp error on leaveTableTournament', { tableId, playerAddress: normalized, err });
       }
@@ -2803,6 +2995,7 @@ export class PokerGameService {
   async deleteTableTournament(tableId: string): Promise<void> {
     const pool = this.getPool();
     this.clearScheduledNextHand(tableId);
+    this.clearRunoutSchedule(tableId);
     this.activeTables.delete(tableId);
     this.invalidateTableScaling(tableId);
     await pool.query('DELETE FROM poker_tables WHERE id = $1', [tableId]);

@@ -4,7 +4,6 @@ import { useState, useEffect } from 'react'
 import dynamic from 'next/dynamic'
 import Image from 'next/image'
 import GlobalMainNav from '@/components/shared/GlobalMainNav'
-import { FirstVisitNotification } from '@/components/ui/first-visit-notification'
 import { useAuth } from '@/hooks/use-auth'
 import { useProfile } from '@/hooks/use-player-profile'
 import { LoginModal } from '@/components/auth/LoginModal'
@@ -99,23 +98,6 @@ export default function HomePageClient() {
 
         <div className="relative z-[1] w-full flex flex-col items-center">
           <div className="relative z-10 w-full flex flex-col items-center">
-            <FirstVisitNotification className="font-poppins text-center">
-              <p className="text-base sm:text-lg tracking-wide">
-                <span className="text-slate-950">
-                  The Morbius token analyzer has been redirected to{' '}
-                </span>
-                <a
-                  href="https://scan.morbius.io"
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="font-bold underline underline-offset-1 text-cyan-600 hover:text-cyan-500"
-                >
-                  Scan.Morbius.io
-                </a>
-                <span className="text-slate-950">.</span>
-              </p>
-            </FirstVisitNotification>
-
             <HeroSection showWelcome={!!address} welcomeName={welcomeName} />
 
             <section className="w-full flex flex-col items-center pt-10 md:pt-16">
