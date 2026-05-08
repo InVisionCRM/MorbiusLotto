@@ -256,6 +256,9 @@ export function PokerTable({ state, currentPlayerAddress, timeLeft, chatBubbleBy
   const revealHandIdRef = useRef<string | null>(null);
   /** Dedupes effect re-runs for the same hand when only object references changed (avoids clearing timeouts then bailing). */
   const revealScheduleSigRef = useRef<string | null>(null);
+  /** Read inside timeouts so Strict Mode / dedupe rescue never reads a stale medallion flag. */
+  const medallionReadyRef = useRef(false);
+  medallionReadyRef.current = medallionReady;
 
   useEffect(() => {
     if (!isShowdownWithWinners || !hand?.handId) {
@@ -271,6 +274,22 @@ export function PokerTable({ state, currentPlayerAddress, timeLeft, chatBubbleBy
     }
 
     const scheduleSig = `${hand.handId}\u0001${showdownRevealScheduleKey}\u0001${winnersRevealScheduleKey}\u0001${totalCommunityCount}`;
+
+    // Same signature as the last scheduled run.
+    if (revealScheduleSigRef.current === scheduleSig) {
+      if (medallionReadyRef.current) return;
+      // React Strict Mode (or a churned effect) can clear timeouts then re-enter with the
+      // same sig before Stage 3 fires — recover instead of leaving the table stuck with no dim.
+      if (!showdownRevealScheduleKey) {
+        setRevealedCommunityCount(totalCommunityCount);
+        setRevealedHandAddrs(new Set());
+        setMedallionReady(true);
+        return;
+      }
+      // Real showdown: allow a full reschedule (do not skip hole-card beats).
+      revealScheduleSigRef.current = null;
+    }
+
     if (revealScheduleSigRef.current === scheduleSig) return;
     revealScheduleSigRef.current = scheduleSig;
 
@@ -286,6 +305,7 @@ export function PokerTable({ state, currentPlayerAddress, timeLeft, chatBubbleBy
       if (ia < 0 && ib >= 0) return 1;
       return a.toLowerCase().localeCompare(b.toLowerCase());
     });
+    const skipHoleReveal = showdownAddrsAll.length === 0;
     // Reconnect heuristic: if this is the very first hand we're seeing and it
     // arrives already in showdown, we likely joined mid-resolve — jump to end.
     const isReconnect = isFirstObservation && preShowdownCommunityCountRef.current === 0;
@@ -297,6 +317,16 @@ export function PokerTable({ state, currentPlayerAddress, timeLeft, chatBubbleBy
     }
 
     const startCommunity = Math.min(preShowdownCommunityCountRef.current, totalCommunityCount);
+
+    // Fold-out (or any end state with winners but no public hole cards): no card-flip step.
+    // When the board is already fully dealt, jump straight to winner dim / highlight.
+    if (skipHoleReveal && startCommunity >= totalCommunityCount) {
+      setRevealedCommunityCount(totalCommunityCount);
+      setRevealedHandAddrs(new Set());
+      setMedallionReady(true);
+      return;
+    }
+
     setRevealedCommunityCount(startCommunity);
     setRevealedHandAddrs(new Set());
     setMedallionReady(false);
@@ -311,18 +341,25 @@ export function PokerTable({ state, currentPlayerAddress, timeLeft, chatBubbleBy
       timeouts.push(setTimeout(() => setRevealedCommunityCount(target), cursor));
     }
 
-    // Stage 2: beat, then reveal every showdown hand at once.
-    cursor += REVEAL_BEFORE_HANDS_MS;
     const allShowdownLower = showdownAddrsAll.map((a) => a.toLowerCase());
-    timeouts.push(
-      setTimeout(() => {
-        setRevealedHandAddrs(new Set(allShowdownLower));
-      }, cursor),
-    );
 
-    // Stage 3: brief beat, then mount the winner medallion.
-    cursor += REVEAL_BEFORE_MEDALLION_MS;
-    timeouts.push(setTimeout(() => setMedallionReady(true), cursor));
+    if (skipHoleReveal) {
+      // Board run-out only, then winner visuals (no hole-card beat in between).
+      cursor += REVEAL_BEFORE_MEDALLION_MS;
+      timeouts.push(setTimeout(() => setMedallionReady(true), cursor));
+    } else {
+      // Stage 2: beat, then reveal every showdown hand at once.
+      cursor += REVEAL_BEFORE_HANDS_MS;
+      timeouts.push(
+        setTimeout(() => {
+          setRevealedHandAddrs(new Set(allShowdownLower));
+        }, cursor),
+      );
+
+      // Stage 3: brief beat, then mount the winner medallion.
+      cursor += REVEAL_BEFORE_MEDALLION_MS;
+      timeouts.push(setTimeout(() => setMedallionReady(true), cursor));
+    }
 
     return () => {
       for (const t of timeouts) clearTimeout(t);
