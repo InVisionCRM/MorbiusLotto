@@ -1,30 +1,44 @@
 'use client';
 
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useSyncExternalStore } from 'react';
 
-function storageKey(address: string | undefined): string {
-  return `speech_enabled:${(address ?? 'anon').toLowerCase()}`;
+function walletKey(address: string | undefined): string {
+  return (address ?? 'anon').toLowerCase();
 }
 
-/** Per-wallet localStorage toggle for voice commands. Off by default. */
+const enabledByWallet = new Map<string, boolean>();
+const listeners = new Set<() => void>();
+
+function subscribe(listener: () => void) {
+  listeners.add(listener);
+  return () => listeners.delete(listener);
+}
+
+function emit() {
+  for (const l of listeners) l();
+}
+
+/**
+ * Per-wallet toggle for voice commands, in-memory only (resets to off on full page load).
+ * All callers for the same wallet share one value via useSyncExternalStore.
+ */
 export function useSpeechEnabled(address: string | undefined) {
-  const [enabled, setEnabledState] = useState(false);
+  const key = walletKey(address);
 
-  useEffect(() => {
-    try {
-      const raw = localStorage.getItem(storageKey(address));
-      setEnabledState(raw === 'true');
-    } catch {
-      setEnabledState(false);
-    }
-  }, [address]);
+  const enabled = useSyncExternalStore(
+    subscribe,
+    () => enabledByWallet.get(key) ?? false,
+    () => false,
+  );
 
-  const setEnabled = useCallback((value: boolean) => {
-    setEnabledState(value);
-    try {
-      localStorage.setItem(storageKey(address), String(value));
-    } catch { /* ignore */ }
-  }, [address]);
+  const setEnabled = useCallback(
+    (value: boolean) => {
+      if (value) enabledByWallet.set(key, true);
+      else enabledByWallet.delete(key);
+      emit();
+    },
+    [key],
+  );
 
   return { enabled, setEnabled };
 }

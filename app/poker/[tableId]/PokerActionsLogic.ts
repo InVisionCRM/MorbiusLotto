@@ -53,7 +53,7 @@ export function usePokerActionsLogic({
     renderedState.myHoleCards.length > 0;
   const canCheck = hand?.toCall === '0' || hand?.toCall === '';
   const callAmount = hand?.toCall ?? '0';
-  const currentHand = state?.currentHand;
+  const currentHand = renderedState?.currentHand ?? state?.currentHand;
 
   const sendPokerAction = useCallback(
     (action: PokerActionType, amount?: string) => {

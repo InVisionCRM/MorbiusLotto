@@ -1065,7 +1065,15 @@ export class PokerGameService {
         ? h.community_cards
         : (h.community_cards ? JSON.parse(JSON.stringify(h.community_cards)) : []);
 
-      const actingPosition: number | null = h.acting_position != null ? Number(h.acting_position) : null;
+      const dbActingPosition: number | null = h.acting_position != null ? Number(h.acting_position) : null;
+      // Authoritative while betting: chevtek's seat index. DB can be NULL/stale (e.g. run-out snapshot
+      // windows or rare persist skew); without this overlay clients see no actor and toCall=0 → "frozen".
+      const engineActingPosition =
+        liveTable?.currentRound != null && liveTable.currentPosition != null
+          ? liveTable.currentPosition
+          : null;
+      const actingPosition =
+        engineActingPosition !== null ? engineActingPosition : dbActingPosition;
       const street: PokerStreet = h.street;
 
       // Fold/dealer/blind flags
@@ -2436,7 +2444,11 @@ export class PokerGameService {
         const hand = state.currentHand;
         if (!hand || hand.handId !== row.hand_id) continue;
         if (hand.street === 'showdown') continue;
-        if (hand.actingPosition !== row.acting_position) continue;
+        if (hand.actingPosition == null) continue;
+        const botSeatIdx = state.seats.findIndex(
+          (s) => s.playerAddress && this.normalizeAddress(String(s.playerAddress)) === addr,
+        );
+        if (botSeatIdx < 0 || hand.actingPosition !== botSeatIdx) continue;
         if (!['preflop', 'flop', 'turn', 'river'].includes(hand.street)) continue;
 
         const mySeat = state.seats.find(

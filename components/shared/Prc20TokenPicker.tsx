@@ -50,6 +50,7 @@ const TOKEN_PRESETS: ReadonlyArray<{
   { label: 'HEX', address: '0x2b591e99afE9f32eAA6214f7B7629768c40Eeb39' },
   { label: 'eHEX', address: '0x57fde0a71132198BBeC939B98976993d8D89D225', sublabel: 'from Ethereum' },
   { label: 'DAI', address: '0xefD766cCb38EaF1dfd701853BFCe31359239F305', sublabel: 'from Ethereum' },
+  { label: 'pDAI', address: '0x6B175474E89094C44Da98b954EedeAC495271d0F' },
   { label: 'PRVX', address: '0xF6f8Db0aBa00007681F8fAF16A0FDa1c9B030b11' },
   { label: 'PLSX', address: '0x95B303987A60C71504D99Aa1b13B4DA07b0790ab' },
 ];
