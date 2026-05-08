@@ -371,6 +371,29 @@ export class PokerGameService {
     const delayMs = this.getRunoutStreetDelayMs();
     const fullCommunityInts = table.communityCards.map(cardToInt);
     const targets = this.computeRunoutTargets(communityLenBefore, fullCommunityInts.length);
+    // #region agent log
+    fetch('http://127.0.0.1:7437/ingest/dcecee39-66bb-4d3e-98e6-5aebeaebe9f1', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'X-Debug-Session-Id': '1b0c0f' },
+      body: JSON.stringify({
+        sessionId: '1b0c0f',
+        hypothesisId: 'H4',
+        location: 'poker-game.service.ts:completeShowdownWithOptionalRunout',
+        message: 'showdown runout branch',
+        data: {
+          tableId,
+          handId,
+          delayMs,
+          communityLenBefore,
+          fullBoardLen: fullCommunityInts.length,
+          targetsLen: targets.length,
+          hasWinners: !!table.winners,
+          liveRound: !!table.currentRound,
+        },
+        timestamp: Date.now(),
+      }),
+    }).catch(() => {});
+    // #endregion
     if (targets.length === 0 || delayMs === 0) {
       await this.persistShowdown(pool, tableId, handId, table);
       return false;
@@ -413,6 +436,20 @@ export class PokerGameService {
             }
             const table = await this.getOrReconstructActiveTable(tableId, pool, 'player_action');
             const n = targets[stepIndex];
+            // #region agent log
+            fetch('http://127.0.0.1:7437/ingest/dcecee39-66bb-4d3e-98e6-5aebeaebe9f1', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json', 'X-Debug-Session-Id': '1b0c0f' },
+              body: JSON.stringify({
+                sessionId: '1b0c0f',
+                hypothesisId: 'H5',
+                location: 'poker-game.service.ts:scheduleRunoutChain',
+                message: 'runout step',
+                data: { tableId, handId, stepIndex, revealCount: n, targetSteps: targets.length },
+                timestamp: Date.now(),
+              }),
+            }).catch(() => {});
+            // #endregion
             await this.writeHandProgressSnapshotToDb(
               pool,
               handId,
@@ -1145,6 +1182,43 @@ export class PokerGameService {
         minRaise = String(maxContrib + minRaiseIncrement);
       }
 
+      // #region agent log
+      {
+        const tid = tbl.tournament_id;
+        const isTournament = tid != null && String(tid).length > 0;
+        const suspicious =
+          actingPosition == null ||
+          (toCall === '0' && !!liveTable?.currentRound && !!liveTable?.currentBet);
+        if (isTournament && !h.completed_at && suspicious) {
+          fetch('http://127.0.0.1:7437/ingest/dcecee39-66bb-4d3e-98e6-5aebeaebe9f1', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'X-Debug-Session-Id': '1b0c0f' },
+            body: JSON.stringify({
+              sessionId: '1b0c0f',
+              hypothesisId: 'H1',
+              location: 'poker-game.service.ts:getTableState',
+              message: 'tournament incomplete hand snapshot',
+              data: {
+                tableId,
+                handId,
+                street,
+                dbActing: dbActingPosition,
+                engineActing: engineActingPosition,
+                effectiveActing: actingPosition,
+                liveRound: !!liveTable?.currentRound,
+                livePos: liveTable?.currentPosition ?? null,
+                hasWinners: !!liveTable?.winners,
+                toCall,
+                minRaise,
+                completedAt: h.completed_at ? 1 : 0,
+              },
+              timestamp: Date.now(),
+            }),
+          }).catch(() => {});
+        }
+      }
+      // #endregion
+
       // Recent actions (oldest → newest). We return the last 40 so the client's
       // activity feed can log every action even when rapid broadcasts are batched
       // into a single React state update. `lastAction` is kept for backward compat.
@@ -1798,7 +1872,31 @@ export class PokerGameService {
 
     // Validate it's this player's turn
     const actor = table.currentActor;
-    if (!actor) throw new Error('No acting player');
+    if (!actor) {
+      // #region agent log
+      fetch('http://127.0.0.1:7437/ingest/dcecee39-66bb-4d3e-98e6-5aebeaebe9f1', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'X-Debug-Session-Id': '1b0c0f' },
+        body: JSON.stringify({
+          sessionId: '1b0c0f',
+          hypothesisId: 'H3',
+          location: 'poker-game.service.ts:_playerAction',
+          message: 'No acting player (reject)',
+          data: {
+            tableId,
+            handId,
+            liveRound: !!table.currentRound,
+            currentPosition: table.currentPosition ?? null,
+            hasWinners: !!table.winners,
+            actingPlayersLen: table.actingPlayers?.length ?? -1,
+            activePlayersLen: table.activePlayers?.length ?? -1,
+          },
+          timestamp: Date.now(),
+        }),
+      }).catch(() => {});
+      // #endregion
+      throw new Error('No acting player');
+    }
     if (actor.id !== normalized) throw new Error('Not your turn');
 
     // Pre-validate action against engine's legal actions before executing
@@ -2442,6 +2540,28 @@ export class PokerGameService {
 
         const state = await this.getTableState(row.table_id, addr);
         const hand = state.currentHand;
+        // #region agent log
+        fetch('http://127.0.0.1:7437/ingest/dcecee39-66bb-4d3e-98e6-5aebeaebe9f1', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'X-Debug-Session-Id': '1b0c0f' },
+          body: JSON.stringify({
+            sessionId: '1b0c0f',
+            hypothesisId: 'H2',
+            location: 'poker-game.service.ts:tickServerTournamentBots',
+            message: 'bot candidate state',
+            data: {
+              tableId: row.table_id,
+              handId: row.hand_id,
+              dbActing: row.acting_position,
+              stateActing: hand?.actingPosition ?? null,
+              street: hand?.street ?? null,
+              toCall: hand?.toCall ?? null,
+              skipNoHand: !hand || hand.handId !== row.hand_id,
+            },
+            timestamp: Date.now(),
+          }),
+        }).catch(() => {});
+        // #endregion
         if (!hand || hand.handId !== row.hand_id) continue;
         if (hand.street === 'showdown') continue;
         if (hand.actingPosition == null) continue;
