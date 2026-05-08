@@ -45,7 +45,7 @@ const SHOWDOWN_CARD_PULL_MAX_PX = 70;
 
 // Staged showdown reveal — community run-out can be stepped; hole cards flip
 // together, then a short beat before the winner medallion.
-const REVEAL_COMMUNITY_STEP_MS = 850;   // gap between turn → river when streets were skipped
+const REVEAL_COMMUNITY_STEP_MS = 2000;  // gap between each community card during all-in runout
 const REVEAL_BEFORE_HANDS_MS = 600;     // beat after final community card before all hole cards flip
 const REVEAL_BEFORE_MEDALLION_MS = 700; // beat after hole cards before medallion appears
 
@@ -333,28 +333,33 @@ export function PokerTable({ state, currentPlayerAddress, timeLeft, chatBubbleBy
 
     const timeouts: ReturnType<typeof setTimeout>[] = [];
     let cursor = 0;
-
-    // Stage 1: dribble missing community cards.
-    for (let n = startCommunity + 1; n <= totalCommunityCount; n += 1) {
-      cursor += REVEAL_COMMUNITY_STEP_MS;
-      const target = n;
-      timeouts.push(setTimeout(() => setRevealedCommunityCount(target), cursor));
-    }
-
     const allShowdownLower = showdownAddrsAll.map((a) => a.toLowerCase());
 
     if (skipHoleReveal) {
-      // Board run-out only, then winner visuals (no hole-card beat in between).
+      // Fold-out / no hole cards to show: run out the board, then winner visuals.
+      for (let n = startCommunity + 1; n <= totalCommunityCount; n += 1) {
+        cursor += REVEAL_COMMUNITY_STEP_MS;
+        const target = n;
+        timeouts.push(setTimeout(() => setRevealedCommunityCount(target), cursor));
+      }
       cursor += REVEAL_BEFORE_MEDALLION_MS;
       timeouts.push(setTimeout(() => setMedallionReady(true), cursor));
     } else {
-      // Stage 2: beat, then reveal every showdown hand at once.
+      // All-in showdown: hole cards flip first, then board runs out, then winner.
+      // Stage 1: reveal all hole cards immediately.
       cursor += REVEAL_BEFORE_HANDS_MS;
       timeouts.push(
         setTimeout(() => {
           setRevealedHandAddrs(new Set(allShowdownLower));
         }, cursor),
       );
+
+      // Stage 2: deal remaining community cards one at a time.
+      for (let n = startCommunity + 1; n <= totalCommunityCount; n += 1) {
+        cursor += REVEAL_COMMUNITY_STEP_MS;
+        const target = n;
+        timeouts.push(setTimeout(() => setRevealedCommunityCount(target), cursor));
+      }
 
       // Stage 3: brief beat, then mount the winner medallion.
       cursor += REVEAL_BEFORE_MEDALLION_MS;
