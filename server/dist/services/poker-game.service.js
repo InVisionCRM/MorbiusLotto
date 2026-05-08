@@ -173,6 +173,15 @@ class PokerGameService {
         }
     }
     /**
+     * All-in showdown: chevtek already resolved the full board in memory.
+     * Persist immediately — the client handles staged card reveal animation.
+     * Always returns false (caller should call scheduleNextHandAfterShowdown).
+     */
+    async completeShowdownWithOptionalRunout(pool, tableId, handId, table, _communityLenBefore) {
+        await this.persistShowdown(pool, tableId, handId, table);
+        return false;
+    }
+    /**
      * Keep showdown delay transition behavior centralized for deterministic restart/reconnect handling.
      */
     scheduleNextHandAfterShowdown(tableId) {
@@ -382,11 +391,12 @@ class PokerGameService {
         const activeTable = this.activeTables.get(tableId);
         if (activeHandResult.rows.length > 0 && activeTable) {
             try {
+                const communityLenBeforeStandUp = activeTable.communityCards?.length ?? 0;
                 // standUp folds the player and calls nextAction() if they were acting
                 activeTable.standUp(normalized);
                 // Persist any state changes from standUp
                 const handId = activeHandResult.rows[0].id;
-                await this.persistActionAfterStandUp(pool, tableId, handId, normalized, activeTable);
+                await this.persistActionAfterStandUp(pool, tableId, handId, normalized, activeTable, communityLenBeforeStandUp);
             }
             catch (err) {
                 logger_1.logger.warn('standUp error on leaveTable', { tableId, playerAddress: normalized, err });
@@ -407,7 +417,7 @@ class PokerGameService {
         logger_1.logger.info('Poker leave', { tableId, playerAddress: normalized, creditedChips: creditedChips.toString() });
         return this.getTableState(tableId, null);
     }
-    async persistActionAfterStandUp(pool, tableId, handId, playerAddress, table) {
+    async persistActionAfterStandUp(pool, tableId, handId, playerAddress, table, communityLenBeforeStandUp) {
         const handRow = await pool.query('SELECT street FROM poker_hands WHERE id = $1', [handId]);
         if (handRow.rows.length === 0)
             return;
@@ -422,9 +432,11 @@ class PokerGameService {
         }
         // Check if hand has concluded (showdown triggered by standUp)
         if (!table.currentRound && table.winners) {
-            await this.persistShowdown(pool, tableId, handId, table);
+            const deferred = await this.completeShowdownWithOptionalRunout(pool, tableId, handId, table, communityLenBeforeStandUp);
             await this.broadcastState(tableId);
-            this.scheduleNextHandAfterShowdown(tableId);
+            if (!deferred) {
+                this.scheduleNextHandAfterShowdown(tableId);
+            }
         }
         else if (!table.currentRound) {
             // No winners yet but round ended — update acting position
@@ -612,7 +624,13 @@ class PokerGameService {
             const communityCards = Array.isArray(h.community_cards)
                 ? h.community_cards
                 : (h.community_cards ? JSON.parse(JSON.stringify(h.community_cards)) : []);
-            const actingPosition = h.acting_position != null ? Number(h.acting_position) : null;
+            const dbActingPosition = h.acting_position != null ? Number(h.acting_position) : null;
+            // Authoritative while betting: chevtek's seat index. DB can be NULL/stale (e.g. run-out snapshot
+            // windows or rare persist skew); without this overlay clients see no actor and toCall=0 → "frozen".
+            const engineActingPosition = liveTable?.currentRound != null && liveTable.currentPosition != null
+                ? liveTable.currentPosition
+                : null;
+            const actingPosition = engineActingPosition !== null ? engineActingPosition : dbActingPosition;
             const street = h.street;
             // Fold/dealer/blind flags
             const foldResult = await pool.query(`SELECT player_address FROM poker_hand_actions WHERE hand_id = $1 AND action = 'fold'`, [handId]);
@@ -1156,8 +1174,11 @@ class PokerGameService {
         // If the hand already ran to showdown (all remaining players were all-in
         // from blinds), finalize now — no player actions will ever arrive.
         if (!table.currentRound && table.winners) {
-            await this.persistShowdown(pool, tableId, handId, table);
-            this.scheduleNextHandAfterShowdown(tableId);
+            const showdownDeferred = await this.completeShowdownWithOptionalRunout(pool, tableId, handId, table, 0);
+            await this.broadcastState(tableId);
+            if (!showdownDeferred) {
+                this.scheduleNextHandAfterShowdown(tableId);
+            }
         }
         return this.getTableState(tableId, null);
     }
@@ -1198,6 +1219,7 @@ class PokerGameService {
         const effectiveAction = action === 'bet' || action === 'raise' ? requestedAction : action;
         // Capture street before action (for DB recording)
         const streetBefore = chevtekStreetToPoker(table.currentRound, !!table.winners);
+        const communityLenBeforeAction = table.communityCards?.length ?? 0;
         const tableRow = await pool.query('SELECT big_blind FROM poker_tables WHERE id = $1', [tableId]);
         const bbChips = Number(tableRow.rows[0]?.big_blind ?? 0);
         const parseAmountChips = () => {
@@ -1279,10 +1301,11 @@ class PokerGameService {
         await pool.query(`INSERT INTO poker_hand_actions (hand_id, player_address, street, action, amount, "order")
        VALUES ($1, $2, $3, $4, $5::NUMERIC, $6)`, [handId, normalized, streetBefore, effectiveAction, actionAmountDb, nextOrder]);
         if (isShowdown) {
-            // Persist showdown results
-            await this.persistShowdown(pool, tableId, handId, table);
+            const showdownDeferred = await this.completeShowdownWithOptionalRunout(pool, tableId, handId, table, communityLenBeforeAction);
             await this.broadcastState(tableId);
-            this.scheduleNextHandAfterShowdown(tableId);
+            if (!showdownDeferred) {
+                this.scheduleNextHandAfterShowdown(tableId);
+            }
         }
         else {
             // Update community cards, pot, acting position, street (chip ints)
@@ -1615,6 +1638,7 @@ class PokerGameService {
                     const actingAddr = actor.id;
                     // Capture street before
                     const streetBefore = chevtekStreetToPoker(table.currentRound, !!table.winners);
+                    const communityLenBeforeTimeout = table.communityCards?.length ?? 0;
                     // Auto-check when not facing a bet; auto-fold when facing a bet
                     const canCheck = !table.currentBet || actor.bet >= table.currentBet;
                     const timeoutAction = canCheck ? 'check' : 'fold';
@@ -1630,9 +1654,11 @@ class PokerGameService {
                     await pool.query(`INSERT INTO poker_hand_actions (hand_id, player_address, street, action, amount, "order")
              VALUES ($1, $2, $3, $4, 0, $5)`, [row.hand_id, actingAddr, streetBefore, timeoutAction, nextOrder]);
                     if (!table.currentRound && table.winners) {
-                        await this.persistShowdown(pool, row.table_id, row.hand_id, table);
+                        const showdownDeferred = await this.completeShowdownWithOptionalRunout(pool, row.table_id, row.hand_id, table, communityLenBeforeTimeout);
                         await this.broadcastState(row.table_id);
-                        this.scheduleNextHandAfterShowdown(row.table_id);
+                        if (!showdownDeferred) {
+                            this.scheduleNextHandAfterShowdown(row.table_id);
+                        }
                     }
                     else {
                         const communityInts = table.communityCards.map(cardToInt);
@@ -1705,7 +1731,10 @@ class PokerGameService {
                     continue;
                 if (hand.street === 'showdown')
                     continue;
-                if (hand.actingPosition !== row.acting_position)
+                if (hand.actingPosition == null)
+                    continue;
+                const botSeatIdx = state.seats.findIndex((s) => s.playerAddress && this.normalizeAddress(String(s.playerAddress)) === addr);
+                if (botSeatIdx < 0 || hand.actingPosition !== botSeatIdx)
                     continue;
                 if (!['preflop', 'flop', 'turn', 'river'].includes(hand.street))
                     continue;
@@ -2150,9 +2179,10 @@ class PokerGameService {
         const activeTable = this.activeTables.get(tableId);
         if (activeHandResult.rows.length > 0 && activeTable) {
             try {
+                const communityLenBeforeStandUp = activeTable.communityCards?.length ?? 0;
                 activeTable.standUp(normalized);
                 const handId = activeHandResult.rows[0].id;
-                await this.persistActionAfterStandUp(pool, tableId, handId, normalized, activeTable);
+                await this.persistActionAfterStandUp(pool, tableId, handId, normalized, activeTable, communityLenBeforeStandUp);
             }
             catch (err) {
                 logger_1.logger.warn('standUp error on leaveTableTournament', { tableId, playerAddress: normalized, err });

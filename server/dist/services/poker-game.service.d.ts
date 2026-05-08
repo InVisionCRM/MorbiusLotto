@@ -159,6 +159,12 @@ export declare class PokerGameService {
     private getOrReconstructActiveTable;
     private clearScheduledNextHand;
     /**
+     * All-in showdown: chevtek already resolved the full board in memory.
+     * Persist immediately — the client handles staged card reveal animation.
+     * Always returns false (caller should call scheduleNextHandAfterShowdown).
+     */
+    private completeShowdownWithOptionalRunout;
+    /**
      * Keep showdown delay transition behavior centralized for deterministic restart/reconnect handling.
      */
     private scheduleNextHandAfterShowdown;
