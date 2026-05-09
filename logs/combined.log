@@ -1,0 +1,8 @@
+{"level":"info","message":"Database connected successfully","service":"blackjack-server","timestamp":"2026-05-08T23:39:23.480Z"}
+{"level":"info","message":"Poker admin delete table","service":"blackjack-server","tableId":"d34a6059-3a6c-49b8-8117-13887a788f52","timestamp":"2026-05-08T23:39:23.884Z"}
+{"level":"info","message":"Poker admin delete table","service":"blackjack-server","tableId":"328bb1d8-ac75-455b-b536-d66fb946a0e0","timestamp":"2026-05-08T23:39:24.336Z"}
+{"level":"info","message":"Poker admin delete table","service":"blackjack-server","tableId":"f160a5b8-ac59-4364-b659-76200c4ae75b","timestamp":"2026-05-08T23:39:24.651Z"}
+{"level":"info","message":"Poker admin delete table","service":"blackjack-server","tableId":"035f75d5-8bde-4910-a58b-11b4ab31b00e","timestamp":"2026-05-08T23:39:24.969Z"}
+{"level":"info","message":"Poker admin delete table","service":"blackjack-server","tableId":"e90555cd-5266-46cf-ac14-173859023d86","timestamp":"2026-05-08T23:39:25.334Z"}
+{"level":"info","message":"Poker admin delete table","service":"blackjack-server","tableId":"a356c9e9-c213-4b0c-871b-063d4c879c6b","timestamp":"2026-05-08T23:39:25.654Z"}
+{"level":"info","message":"Poker admin delete table","service":"blackjack-server","tableId":"eb74f5c1-a4aa-4d4c-8d59-5402acd96dc1","timestamp":"2026-05-08T23:39:25.972Z"}
