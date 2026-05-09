@@ -193,6 +193,15 @@ export class PokerGameService {
   private tableLocks: Map<string, Promise<void>> = new Map();
   /** Starting stacks (whole chips) captured at hand deal, keyed by handId -> address. */
   private handStartingStacks: Map<string, Map<string, bigint>> = new Map();
+  /**
+   * Hand number of the most-recently-completed hand per tableId, stashed by
+   * `persistShowdown` so the deferred post-hand callback (eliminations, blind
+   * updates) can fire from inside the inter-hand timer instead of immediately
+   * on showdown — that way the busted tournament player stays seated through
+   * the full reveal + 15-second post-showdown window. Read+deleted by
+   * `scheduleNextHandAfterShowdown`'s timer body.
+   */
+  private pendingPostHandHandNumbers: Map<string, number> = new Map();
 
   constructor(
     private dbService: DatabaseService,
@@ -317,7 +326,12 @@ export class PokerGameService {
   }
 
   /**
-   * Keep showdown delay transition behavior centralized for deterministic restart/reconnect handling.
+   * Centralizes the post-showdown transition: waits SHOWDOWN_DELAY_MS, then
+   * runs the tournament post-hand callback (eliminations + blind updates)
+   * BEFORE starting the next hand. Eliminations are deliberately deferred to
+   * this moment so a busted player remains seated through the full reveal
+   * window (cards stay flipped, chat works, no surprise auto-leave) and the
+   * tournament-end check runs in time to cancel a stale `tryStartNextHand`.
    */
   private scheduleNextHandAfterShowdown(tableId: string): void {
     if (this.nextHandTimers.has(tableId)) return;
@@ -325,6 +339,20 @@ export class PokerGameService {
     const timer = setTimeout(async () => {
       this.nextHandTimers.delete(tableId);
       try {
+        const handNumber = this.pendingPostHandHandNumbers.get(tableId);
+        if (handNumber != null) {
+          this.pendingPostHandHandNumbers.delete(tableId);
+          if (this.postHandCallback) {
+            try {
+              await this.postHandCallback(tableId, handNumber);
+            } catch (err) {
+              // Defensive: a failed post-hand callback (e.g. tournament sync
+              // race) must NOT block the next hand from starting, otherwise
+              // the table sits frozen until manual intervention.
+              logger.error('Post-hand tournament callback error', { tableId, handNumber, err });
+            }
+          }
+        }
         await this.tryStartNextHand(tableId);
         await this.broadcastState(tableId);
       } catch (error) {
@@ -434,6 +462,7 @@ export class PokerGameService {
     });
 
     this.clearScheduledNextHand(tableId);
+    this.pendingPostHandHandNumbers.delete(tableId);
     this.activeTables.delete(tableId);
     this.invalidateTableScaling(tableId);
     logger.info('Poker admin delete table', { tableId });
@@ -1950,16 +1979,15 @@ export class PokerGameService {
 
     await pool.query('UPDATE poker_tables SET status = $2 WHERE id = $1', [tableId, 'waiting']);
 
-    // Fire tournament post-hand hook (awaited so eliminations complete before tryStartNextHand)
-    if (this.postHandCallback) {
-      const handRow = await pool.query('SELECT hand_number FROM poker_hands WHERE id = $1', [handId]);
-      const handNumber = Number(handRow.rows[0]?.hand_number ?? 0);
-      try {
-        await this.postHandCallback(tableId, handNumber);
-      } catch (err) {
-        logger.error('Post-hand tournament callback error', { tableId, err });
-      }
-    }
+    // Stash the just-completed hand number so `scheduleNextHandAfterShowdown`
+    // can fire the tournament post-hand callback (eliminations + blind
+    // updates) when the inter-hand timer expires — NOT immediately. Keeping
+    // the busted player seated through the full reveal + 15s post-showdown
+    // window matches the cinematic UX the rest of the table sees and lets
+    // them chat / react before the auto-leave kicks in.
+    const handRow = await pool.query('SELECT hand_number FROM poker_hands WHERE id = $1', [handId]);
+    const handNumber = Number(handRow.rows[0]?.hand_number ?? 0);
+    this.pendingPostHandHandNumbers.set(tableId, handNumber);
   }
 
   // ---------------------------------------------------------------------------
@@ -2876,6 +2904,7 @@ export class PokerGameService {
   async deleteTableTournament(tableId: string): Promise<void> {
     const pool = this.getPool();
     this.clearScheduledNextHand(tableId);
+    this.pendingPostHandHandNumbers.delete(tableId);
     this.activeTables.delete(tableId);
     this.invalidateTableScaling(tableId);
     await pool.query('DELETE FROM poker_tables WHERE id = $1', [tableId]);

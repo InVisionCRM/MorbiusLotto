@@ -409,7 +409,12 @@ export function PokerTable({ state, currentPlayerAddress, timeLeft, chatBubbleBy
 
   const intermissionEndMs =
     isShowdownWithWinners && hand ? (serverNextHandMs ?? clientIntermissionEndMs) : null;
-  const showBetweenHandsTimer = intermissionEndMs != null;
+  // Don't render the inter-hand countdown until the medallion mounts — the
+  // absolute deadline (`nextHandAt`) is still set immediately by the server,
+  // so the bar simply appears partway through its progress once the runout
+  // reveal finishes. This stops the timer from showing while the cards are
+  // still flipping.
+  const showBetweenHandsTimer = intermissionEndMs != null && medallionReady;
 
   useEffect(() => {
     if (!showFinalShowdownVisuals || !isCurrentPlayerWinner || !hand?.handId) return;
