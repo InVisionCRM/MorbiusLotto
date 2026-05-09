@@ -267,7 +267,7 @@ export function BracketTitleOverlay({
   };
   return (
     <div className="pointer-events-none absolute inset-0 flex items-center justify-center px-4 sm:px-6" style={fontJost}>
-      <div className="relative w-full max-w-[92%] py-6 sm:py-10">
+      <div className="relative w-full max-w-[90%] py-3 sm:py-5">
         <div
           className="absolute inset-0 rounded-sm"
           style={{
@@ -280,15 +280,15 @@ export function BracketTitleOverlay({
         <div style={{ ...corner, right: -4, top: -4, borderWidth: '2px 2px 0 0' }} aria-hidden />
         <div style={{ ...corner, left: -4, bottom: -4, borderWidth: '0 0 2px 2px' }} aria-hidden />
         <div style={{ ...corner, right: -4, bottom: -4, borderWidth: '0 2px 2px 0' }} aria-hidden />
-        <div className="relative px-4 py-6 text-center sm:px-6 sm:py-8">
+        <div className="relative px-3 py-2 text-center sm:px-5 sm:py-3">
           <p
-            className="text-[10px] font-bold uppercase tracking-[0.35em] sm:text-xs"
+            className="text-[9px] font-bold uppercase tracking-[0.32em] sm:text-[11px]"
             style={{ color: 'rgba(165, 243, 252, 0.9)' }}
           >
             {fundingLabel}
           </p>
           <p
-            className="mt-3 text-3xl font-black uppercase leading-none tracking-tight sm:mt-4 sm:text-4xl md:text-5xl"
+            className="mt-1.5 text-xl font-black uppercase leading-[1.05] tracking-tight sm:mt-2 sm:text-2xl md:text-3xl"
             style={{
               color: C.white,
               textShadow: '0 4px 20px rgba(0,0,0,0.85)',
@@ -297,7 +297,7 @@ export function BracketTitleOverlay({
             {name}
           </p>
           <div
-            className="mx-auto mt-4 max-w-[95%] space-y-1 py-3 text-[9px] leading-snug sm:mt-5 sm:text-[10px] md:text-[11px]"
+            className="mx-auto mt-1.5 max-w-[95%] space-y-0.5 py-1.5 text-[9px] leading-snug sm:mt-2 sm:text-[10px]"
             style={{
               borderTop: `1px solid ${C.white10}`,
               borderBottom: `1px solid ${C.white10}`,
@@ -310,12 +310,12 @@ export function BracketTitleOverlay({
             <p>
               <span style={{ fontWeight: 600, color: 'rgba(103, 232, 249, 0.9)' }}>Prize</span> · {prizeLine}
             </p>
-            <p className="line-clamp-3">
+            <p className="line-clamp-2">
               <span style={{ fontWeight: 600, color: 'rgba(103, 232, 249, 0.9)' }}>Payout</span> · {payoutLine}
             </p>
           </div>
           <p
-            className="mt-4 text-[10px] font-medium uppercase tracking-[0.22em] sm:mt-6 sm:text-xs md:text-sm"
+            className="mt-1.5 text-[9px] font-medium uppercase tracking-[0.22em] sm:mt-2 sm:text-[10px] md:text-[11px]"
             style={{ color: C.white55 }}
           >
             {siteLine}

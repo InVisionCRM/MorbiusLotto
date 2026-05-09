@@ -537,6 +537,12 @@ export function PokerTable({ state, currentPlayerAddress, timeLeft, chatBubbleBy
     const seat = state.seats[idx];
     const inHand = !!hand && seat.playerAddress && !seat.folded;
     const isHandWinnerSeat = !!seat.playerAddress && showFinalShowdownVisuals && winnerAddressSet.has(seat.playerAddress.toLowerCase());
+    // Winner pill: surface as soon as the server publishes street='showdown'
+    // with winners — including fold-out wins where the cinematic medallion
+    // reveal would otherwise gate the display behind the staged community
+    // run-out. `winnerAddressSet` is already empty when not in a showdown
+    // state, so this is implicitly gated on `isShowdownWithWinners`.
+    const isShowdownWinnerSeat = !!seat.playerAddress && winnerAddressSet.has(seat.playerAddress.toLowerCase());
     // For splits each winner highlights its own winning cards.
     const seatWinnerEntry = seat.playerAddress
       ? hand?.winners?.find((w) => w.address.toLowerCase() === seat.playerAddress!.toLowerCase())
@@ -588,7 +594,7 @@ export function PokerTable({ state, currentPlayerAddress, timeLeft, chatBubbleBy
       isCurrentPlayer: idx === mySeatIndex,
       showCardBacks: !!(inHand && idx !== mySeatIndex && !showdownCardsForSeat),
       winningCardIndices: isHandWinnerSeat ? seatWinningCardIndices : undefined,
-      isHandWinner: isHandWinnerSeat,
+      isHandWinner: isShowdownWinnerSeat,
       lastAction: stickySeatActions[idx] ?? null,
       callAmount: actingPosition === idx && hand?.toCall ? hand.toCall : null,
       timeLeft: actingPosition === idx ? timeLeft : undefined,

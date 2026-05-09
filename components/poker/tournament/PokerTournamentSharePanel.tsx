@@ -104,51 +104,6 @@ function canvasToBlob(canvas: HTMLCanvasElement, type = 'image/png', quality = 0
   });
 }
 
-/**
- * Download PNG after async canvas work. Prefer data URL (no blob lifecycle); blob + delayed revoke as fallback.
- * Deferred click helps Safari / strict download policies after await in the handler.
- */
-async function downloadCanvasAsPng(canvas: HTMLCanvasElement, filename: string): Promise<boolean> {
-  try {
-    const dataUrl = canvas.toDataURL('image/png', 0.92);
-    if (dataUrl && dataUrl !== 'data:,') {
-      const a = document.createElement('a');
-      a.href = dataUrl;
-      a.download = filename;
-      a.setAttribute('rel', 'noopener noreferrer');
-      a.style.display = 'none';
-      document.body.appendChild(a);
-      window.setTimeout(() => {
-        a.click();
-        window.setTimeout(() => {
-          if (a.parentNode) document.body.removeChild(a);
-        }, 0);
-      }, 0);
-      return true;
-    }
-  } catch {
-    /* fall through to blob */
-  }
-
-  const blob = await canvasToBlob(canvas);
-  if (!blob) return false;
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement('a');
-  a.href = url;
-  a.download = filename;
-  a.setAttribute('rel', 'noopener noreferrer');
-  a.style.display = 'none';
-  document.body.appendChild(a);
-  window.setTimeout(() => {
-    a.click();
-    window.setTimeout(() => {
-      if (a.parentNode) document.body.removeChild(a);
-      window.setTimeout(() => URL.revokeObjectURL(url), 4000);
-    }, 0);
-  }, 0);
-  return true;
-}
-
 export type PokerTournamentSharePanelProps = {
   tournamentName: string;
   isFreeroll: boolean;
@@ -169,10 +124,23 @@ export function PokerTournamentSharePanel({
 }: PokerTournamentSharePanelProps) {
   const shareCardRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  /**
+   * Pre-rendered PNG blob URL from the share preview. We render it BEFORE the user
+   * clicks Download/Share so the actual click handler can fire `<a download>` or
+   * `navigator.share()` synchronously — awaiting html2canvas inside the click
+   * handler destroys the user-gesture token and browsers silently drop both.
+   */
+  const exportBlobUrlRef = useRef<string | null>(null);
   const [overlayStyle, setOverlayStyle] = useState<ShareOverlayId>('neonHero');
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const [fileError, setFileError] = useState<string | null>(null);
-  const [exporting, setExporting] = useState(false);
+  const [exportPayload, setExportPayload] = useState<{
+    blobUrl: string;
+    file: File;
+    filename: string;
+  } | null>(null);
+  const [exportPreparing, setExportPreparing] = useState(false);
+  const [exportError, setExportError] = useState<string | null>(null);
   const [statusMsg, setStatusMsg] = useState<string | null>(null);
   const groupId = useId();
 
@@ -181,6 +149,15 @@ export function PokerTournamentSharePanel({
       revokeIfBlobUrl(previewUrl);
     };
   }, [previewUrl]);
+
+  useEffect(() => {
+    return () => {
+      if (exportBlobUrlRef.current) {
+        URL.revokeObjectURL(exportBlobUrlRef.current);
+        exportBlobUrlRef.current = null;
+      }
+    };
+  }, []);
 
   const fundingLabel = isFreeroll ? 'Freeroll' : 'Buy-in';
 
@@ -263,67 +240,6 @@ export function PokerTournamentSharePanel({
     }
   }, []);
 
-  const onDownload = async () => {
-    setStatusMsg(null);
-    setExporting(true);
-    try {
-      const canvas = await runExportCanvas();
-      if (!canvas) {
-        setStatusMsg('Could not create image.');
-        return;
-      }
-      const filename = `poker-tournament-share-${Date.now()}.png`;
-      const ok = await downloadCanvasAsPng(canvas, filename);
-      setStatusMsg(
-        ok
-          ? 'Download started. Check your downloads folder.'
-          : 'Download failed — your browser blocked the export.',
-      );
-    } catch (err) {
-      console.error('[PokerTournamentSharePanel] export failed', err);
-      setStatusMsg('Export failed. Try another browser or image.');
-    } finally {
-      setExporting(false);
-    }
-  };
-
-  const onShareImage = async () => {
-    setStatusMsg(null);
-    setExporting(true);
-    try {
-      const canvas = await runExportCanvas();
-      if (!canvas) {
-        setStatusMsg('Could not create image.');
-        return;
-      }
-      const blob = await blobFromCanvas(canvas);
-      if (!blob) {
-        setStatusMsg('Could not create image.');
-        return;
-      }
-      const file = new File([blob], `poker-tournament-share-${Date.now()}.png`, { type: 'image/png' });
-      const nav = navigator as Navigator & {
-        canShare?: (data: ShareData) => boolean;
-        share?: (data: ShareData) => Promise<void>;
-      };
-      if (nav.share && nav.canShare?.({ files: [file] })) {
-        await nav.share({
-          files: [file],
-          title: overlayProps.tournamentName,
-          text: `${overlayProps.tournamentName} — ${overlayProps.scheduleLine}`,
-        });
-        setStatusMsg('Shared.');
-        return;
-      }
-      setStatusMsg('Sharing not supported here — use Download.');
-    } catch (err) {
-      if ((err as DOMException)?.name === 'AbortError') return;
-      setStatusMsg('Share failed — use Download.');
-    } finally {
-      setExporting(false);
-    }
-  };
-
   const overlayProps = {
     tournamentName: tournamentName.trim() || 'My tournament',
     fundingLabel,
@@ -333,10 +249,109 @@ export function PokerTournamentSharePanel({
     payoutLine,
   };
 
+  /**
+   * Re-render the share PNG whenever any input that affects it changes.
+   * Debounced so each keystroke in the parent name field doesn't kick off
+   * a new html2canvas pass. Cancellation guards against out-of-order writes.
+   */
+  useEffect(() => {
+    let cancelled = false;
+    const timer = window.setTimeout(async () => {
+      setExportPreparing(true);
+      setExportError(null);
+      try {
+        const canvas = await runExportCanvas();
+        if (cancelled) return;
+        if (!canvas) {
+          setExportError('Could not prepare image.');
+          return;
+        }
+        const blob = await blobFromCanvas(canvas);
+        if (cancelled) return;
+        if (!blob) {
+          setExportError('Could not prepare image.');
+          return;
+        }
+        const filename = `poker-tournament-share-${Date.now()}.png`;
+        const url = URL.createObjectURL(blob);
+        const file = new File([blob], filename, { type: 'image/png' });
+        const previous = exportBlobUrlRef.current;
+        exportBlobUrlRef.current = url;
+        if (previous) URL.revokeObjectURL(previous);
+        setExportPayload({ blobUrl: url, file, filename });
+      } catch (err) {
+        if (cancelled) return;
+        console.error('[PokerTournamentSharePanel] prepare failed', err);
+        setExportError('Could not prepare image. Try another background.');
+      } finally {
+        if (!cancelled) setExportPreparing(false);
+      }
+    }, 350);
+    return () => {
+      cancelled = true;
+      window.clearTimeout(timer);
+    };
+  }, [
+    previewUrl,
+    overlayStyle,
+    tournamentName,
+    fundingLabel,
+    siteLine,
+    scheduleLine,
+    prizeLine,
+    payoutLine,
+    runExportCanvas,
+    blobFromCanvas,
+  ]);
+
+  const downloadReady = !!exportPayload && !exportPreparing;
+
+  const onDownloadClick = (e: React.MouseEvent<HTMLAnchorElement>) => {
+    if (!downloadReady) {
+      e.preventDefault();
+      setStatusMsg(exportPreparing ? 'Image still preparing…' : 'Image not ready — try again.');
+      return;
+    }
+    setStatusMsg('Download started — check your downloads folder.');
+  };
+
+  /**
+   * Sync share — keep the user-gesture token. We pass the pre-rendered File
+   * directly to navigator.share() WITHOUT awaiting beforehand. Awaiting
+   * html2canvas here would cause the share sheet to be silently blocked.
+   */
+  const onShareClick = () => {
+    if (!exportPayload) {
+      setStatusMsg(exportPreparing ? 'Image still preparing…' : 'Image not ready — try again.');
+      return;
+    }
+    const nav = navigator as Navigator & {
+      canShare?: (data: ShareData) => boolean;
+      share?: (data: ShareData) => Promise<void>;
+    };
+    const data: ShareData = {
+      files: [exportPayload.file],
+      title: overlayProps.tournamentName,
+      text: `${overlayProps.tournamentName} — ${overlayProps.scheduleLine}`,
+    };
+    if (!nav.share || !nav.canShare?.(data)) {
+      setStatusMsg('Sharing not supported here — use Download.');
+      return;
+    }
+    setStatusMsg(null);
+    nav
+      .share(data)
+      .then(() => setStatusMsg('Shared.'))
+      .catch((err: unknown) => {
+        if ((err as DOMException)?.name === 'AbortError') return;
+        setStatusMsg('Share failed — use Download.');
+      });
+  };
+
   return (
     <div className="space-y-5">
       <p className="text-center text-sm text-white/70 leading-relaxed">
-        Pick a preset background or upload your own, choose an overlay style, then download or copy a PNG for social posts.
+        Pick a preset background or upload your own, choose an overlay style, then download or share a PNG for social posts.
       </p>
 
       <div className="space-y-2">
@@ -443,7 +458,20 @@ export function PokerTournamentSharePanel({
             }}
           >
             {previewUrl ? (
-              <img src={previewUrl} alt="" className="absolute inset-0 h-full w-full object-cover" />
+              <>
+                <img
+                  src={previewUrl}
+                  alt=""
+                  crossOrigin="anonymous"
+                  className="absolute inset-0 h-full w-full object-cover"
+                />
+                {/* Dim the underlying image so overlay text stays readable. */}
+                <div
+                  className="pointer-events-none absolute inset-0"
+                  style={{ background: 'rgba(0, 0, 0, 0.45)' }}
+                  aria-hidden
+                />
+              </>
             ) : (
               <div
                 className="absolute inset-0"
@@ -465,32 +493,49 @@ export function PokerTournamentSharePanel({
       </div>
 
       <div className="flex flex-wrap items-center justify-center gap-3">
-        <button
-          type="button"
-          disabled={exporting}
-          onClick={onDownload}
-          className="inline-flex items-center gap-2 rounded-lg border border-cyan-500/35 bg-gradient-to-r from-cyan-600/30 to-blue-600/25 px-5 py-2.5 text-sm font-semibold text-white shadow-md transition-colors hover:from-cyan-600/40 hover:to-blue-600/35 disabled:opacity-50"
-        >
-          {exporting ? (
-            'Working…'
-          ) : (
-            <>
-              <IconDownload className="h-4 w-4" aria-hidden />
-              Download PNG
-            </>
+        <a
+          href={exportPayload?.blobUrl ?? '#'}
+          download={exportPayload?.filename ?? 'poker-tournament-share.png'}
+          role="button"
+          aria-disabled={!downloadReady}
+          onClick={onDownloadClick}
+          className={cn(
+            'inline-flex items-center gap-2 rounded-lg border border-cyan-500/35 bg-gradient-to-r from-cyan-600/30 to-blue-600/25 px-5 py-2.5 text-sm font-semibold text-white shadow-md transition-colors hover:from-cyan-600/40 hover:to-blue-600/35',
+            !downloadReady && 'cursor-not-allowed opacity-60 hover:from-cyan-600/30 hover:to-blue-600/25',
           )}
-        </button>
+        >
+          <IconDownload className="h-4 w-4" aria-hidden />
+          {exportPreparing && !exportPayload ? 'Preparing…' : 'Download PNG'}
+        </a>
         <button
           type="button"
-          disabled={exporting}
-          onClick={onShareImage}
-          className="inline-flex items-center gap-2 rounded-lg border border-white/15 bg-white/5 px-5 py-2.5 text-sm font-medium text-white/90 transition-colors hover:bg-white/10 disabled:opacity-50"
+          disabled={!exportPayload}
+          onClick={onShareClick}
+          className="inline-flex items-center gap-2 rounded-lg border border-white/15 bg-white/5 px-5 py-2.5 text-sm font-medium text-white/90 transition-colors hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-50"
         >
           <IconShare className="h-4 w-4" aria-hidden />
           Share
         </button>
       </div>
-      {statusMsg ? <p className="text-center text-[11px] text-cyan-200/85">{statusMsg}</p> : null}
+      {statusMsg ? (
+        <p
+          role="status"
+          aria-live="polite"
+          className="mx-auto max-w-md rounded-lg border border-cyan-500/40 bg-cyan-500/10 px-3 py-2 text-center text-xs font-medium text-cyan-100"
+        >
+          {statusMsg}
+        </p>
+      ) : exportError ? (
+        <p
+          role="status"
+          aria-live="polite"
+          className="mx-auto max-w-md rounded-lg border border-amber-400/40 bg-amber-400/10 px-3 py-2 text-center text-xs font-medium text-amber-100"
+        >
+          {exportError}
+        </p>
+      ) : exportPreparing ? (
+        <p className="text-center text-[11px] text-white/55">Preparing image…</p>
+      ) : null}
     </div>
   );
 }

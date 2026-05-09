@@ -102,31 +102,10 @@ const ACTION_LABELS: Record<string, string> = {
   bet: 'bet', raise: 'raised', 'all-in': 'ALL IN', allin: 'ALL IN',
 };
 
-/**
- * Deterministic muted palette for player names — consistent per-address tinting
- * so you can scan the feed and instantly track "who is doing what" without
- * re-reading the address. Hues stay within the cyan/grey theme family.
- */
-const NAME_PALETTE = [
-  'rgba(125, 211, 252, 0.85)', // sky-300
-  'rgba(110, 231, 183, 0.85)', // emerald-300
-  'rgba(251, 191, 36, 0.85)',  // amber-400
-  'rgba(248, 113, 113, 0.85)', // red-400
-  'rgba(196, 181, 253, 0.85)', // violet-300
-  'rgba(244, 114, 182, 0.85)', // pink-400
-  'rgba(34, 211, 238, 0.85)',  // cyan-400
-  'rgba(253, 186, 116, 0.85)', // orange-300
-];
-
-function colorForAddress(addr: string | null | undefined): string {
-  if (!addr) return 'rgba(255,255,255,0.55)';
-  const lower = addr.toLowerCase();
-  let hash = 5381;
-  for (let i = 0; i < lower.length; i++) {
-    hash = ((hash << 5) + hash + lower.charCodeAt(i)) >>> 0;
-  }
-  return NAME_PALETTE[hash % NAME_PALETTE.length];
-}
+// Player names render in pure white. The per-address tinting palette was
+// removed — the chat reads cleaner with a single name color and the "you"
+// accent (left-edge cyan inset) handles "is this me?" scanning.
+const NAME_COLOR = '#ffffff';
 
 // ── Helpers ────────────────────────────────────────────────────────────────
 
@@ -834,8 +813,8 @@ export function PokerActivityFeed({
               {label}
             </span>
             <span
-              className="font-jost-normal text-[10px] truncate max-w-[140px]"
-              style={{ color: 'rgba(255,255,255,0.7)' }}
+              className="font-jost font-bold text-[10px] truncate max-w-[140px]"
+              style={{ color: NAME_COLOR }}
             >
               {name}
             </span>
@@ -915,7 +894,6 @@ export function PokerActivityFeed({
     if (entry.kind === 'showdown') {
       const name = displayPlayerName(entry.displayName, entry.winnerAddr);
       const amt = fmtChips(entry.amount);
-      const winnerColor = colorForAddress(entry.winnerAddr);
       const isMine = !!myAddr && entry.winnerAddr.toLowerCase() === myAddr;
       return (
         <div
@@ -934,8 +912,8 @@ export function PokerActivityFeed({
               🏆
             </span>
             <span
-              className="font-jost-normal truncate min-w-0"
-              style={{ color: winnerColor }}
+              className="font-jost font-bold truncate min-w-0"
+              style={{ color: NAME_COLOR }}
             >
               {name}
             </span>
@@ -944,10 +922,10 @@ export function PokerActivityFeed({
             </span>
             {amt ? (
               <motion.span
-                className="font-jost tabular-nums shrink-0"
-                style={{ color: 'rgba(255,255,255,0.98)' }}
+                className="font-jost font-bold tabular-nums shrink-0"
+                style={{ color: '#ffffff' }}
                 initial={{ scale: 1.18, color: 'rgba(52,211,153,1)' }}
-                animate={{ scale: 1, color: 'rgba(255,255,255,0.98)' }}
+                animate={{ scale: 1, color: '#ffffff' }}
                 transition={{ duration: 0.5, ease: [0.22, 1, 0.36, 1] }}
               >
                 {amt}
@@ -995,7 +973,6 @@ export function PokerActivityFeed({
       const label = ACTION_LABELS[entry.action] ?? entry.action;
       const name = displayPlayerName(entry.displayName, entry.playerAddr) || seatLabel(entry.seatIndex, state);
       const amtStr = entry.amount ? fmtChips(entry.amount) : '';
-      const nameColor = colorForAddress(entry.playerAddr);
       const isMine = !!myAddr && entry.playerAddr.toLowerCase() === myAddr;
       return (
         <div
@@ -1004,8 +981,8 @@ export function PokerActivityFeed({
           style={isMine ? { boxShadow: 'inset 2px 0 0 0 rgba(34,211,238,0.7)' } : undefined}
         >
           <span
-            className="font-jost-normal shrink-0 min-w-0 truncate max-w-[42%]"
-            style={{ color: nameColor }}
+            className="font-jost font-bold shrink-0 min-w-0 truncate max-w-[42%]"
+            style={{ color: NAME_COLOR }}
           >
             {name}
           </span>
@@ -1013,7 +990,7 @@ export function PokerActivityFeed({
             {label}
           </span>
           {amtStr ? (
-            <span className="font-jost tabular-nums shrink-0" style={{ color: 'rgba(255,255,255,0.5)' }}>
+            <span className="font-jost font-bold tabular-nums shrink-0" style={{ color: '#ffffff' }}>
               {amtStr}
             </span>
           ) : null}
@@ -1021,13 +998,10 @@ export function PokerActivityFeed({
       );
     }
     if (entry.kind === 'reaction') {
-      const reactSeat = state?.seats[entry.seatIndex];
-      const reactAddr = reactSeat?.playerAddress ?? '';
       const name = seatLabel(entry.seatIndex, state);
-      const reactColor = colorForAddress(reactAddr);
       return (
         <div key={entry.id} className={`${lineBase} flex items-baseline gap-1`}>
-          <span className="font-jost-normal shrink-0" style={{ color: reactColor }}>
+          <span className="font-jost font-bold shrink-0" style={{ color: NAME_COLOR }}>
             {name}
           </span>
           <span className="font-jost-normal" style={{ color: 'rgba(255,255,255,0.78)' }}>
@@ -1037,7 +1011,6 @@ export function PokerActivityFeed({
       );
     }
     const name = displayPlayerName(entry.displayName, entry.sender);
-    const chatColor = colorForAddress(entry.sender);
     const isMine = !!myAddr && entry.sender.toLowerCase() === myAddr;
     return (
       <div
@@ -1045,7 +1018,7 @@ export function PokerActivityFeed({
         className={`${lineBase}`}
         style={isMine ? { boxShadow: 'inset 2px 0 0 0 rgba(34,211,238,0.7)' } : undefined}
       >
-        <span className="font-jost-normal" style={{ color: chatColor }}>
+        <span className="font-jost font-bold" style={{ color: NAME_COLOR }}>
           {name}:{' '}
         </span>
         <span className="font-jost-normal break-words" style={{ color: 'rgba(255,255,255,0.85)' }}>
