@@ -23,14 +23,48 @@ export interface VoiceChatPanelProps {
   seated: boolean;
   /** Voice is currently tournament-only. Pass false on cash tables to render nothing. */
   enabled: boolean;
+  /**
+   * User has opted in to join the table voice call. Defaults off per session —
+   * the call is never created until the user explicitly joins.
+   */
+  joined: boolean;
+  /** Toggle handler for the in-strip Join / Leave control. */
+  onToggleJoined: () => void;
   /** Tighter one-line layout for the poker header center column. */
   compact?: boolean;
 }
 
 export function VoiceChatPanel(props: VoiceChatPanelProps) {
-  const { client, call, status, error } = usePokerVoice(props);
+  const { client, call, status, error } = usePokerVoice({
+    wsClient: props.wsClient,
+    walletAddress: props.walletAddress,
+    tableId: props.tableId,
+    seated: props.seated,
+    enabled: props.enabled && props.joined,
+  });
 
   if (!props.enabled) return null;
+
+  if (!props.joined) {
+    return (
+      <button
+        type="button"
+        onClick={props.onToggleJoined}
+        className={`shrink-0 rounded-full font-jost transition-transform active:scale-95 ${props.compact ? 'px-2 py-0.5 text-[10px]' : 'px-2.5 py-1 text-xs'}`}
+        style={{
+          background: 'linear-gradient(180deg, rgba(18,22,30,0.72), rgba(8,10,14,0.58))',
+          border: '1px solid rgba(255,255,255,0.13)',
+          backdropFilter: 'blur(18px) saturate(150%)',
+          color: 'rgba(219,234,254,0.94)',
+          boxShadow: '0 6px 18px rgba(0,0,0,0.22), inset 0 1px 0 rgba(255,255,255,0.1)',
+        }}
+        aria-label="Join table voice chat"
+        title="Join table voice chat"
+      >
+        Join voice
+      </button>
+    );
+  }
 
   if (status === 'error') {
     const fullMsg = `${props.seated ? 'Voice unavailable' : 'Voice listening unavailable'}${error ? `: ${error}` : ''}`;
@@ -64,13 +98,13 @@ export function VoiceChatPanel(props: VoiceChatPanelProps) {
   return (
     <StreamVideo client={client}>
       <StreamCall call={call}>
-        <VoiceChatBar canSpeak={props.seated} compact={props.compact} />
+        <VoiceChatBar canSpeak={props.seated} compact={props.compact} onLeave={props.onToggleJoined} />
       </StreamCall>
     </StreamVideo>
   );
 }
 
-function VoiceChatBar({ canSpeak, compact }: { canSpeak: boolean; compact?: boolean }) {
+function VoiceChatBar({ canSpeak, compact, onLeave }: { canSpeak: boolean; compact?: boolean; onLeave: () => void }) {
   const { useMicrophoneState, useParticipants, useLocalParticipant, useDominantSpeaker } = useCallStateHooks();
   const { isMute, microphone } = useMicrophoneState();
   const participants = useParticipants();
@@ -157,6 +191,19 @@ function VoiceChatBar({ canSpeak, compact }: { canSpeak: boolean; compact?: bool
           <span className="text-[var(--poker-text)]/70">{participants.length} · </span>
           {detailLine}
         </span>
+        <button
+          type="button"
+          onClick={onLeave}
+          className="ml-0.5 shrink-0 rounded-full px-1.5 py-0.5 font-jost text-[10px] leading-none text-[var(--poker-text)]/70 transition-colors hover:text-[var(--poker-text)]"
+          style={{
+            background: 'rgba(255,255,255,0.06)',
+            boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.08)',
+          }}
+          aria-label="Leave voice chat"
+          title="Leave voice chat"
+        >
+          ×
+        </button>
       </div>
     );
   }
@@ -211,6 +258,19 @@ function VoiceChatBar({ canSpeak, compact }: { canSpeak: boolean; compact?: bool
         </span>
         <span className="max-w-[160px] truncate text-[10px] font-medium text-blue-100/85">{detailLine}</span>
       </div>
+      <button
+        type="button"
+        onClick={onLeave}
+        className="ml-1 shrink-0 rounded-full px-2 py-1 font-jost text-[11px] text-[var(--poker-text)]/75 transition-colors hover:text-[var(--poker-text)]"
+        style={{
+          background: 'rgba(255,255,255,0.06)',
+          boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.08)',
+        }}
+        aria-label="Leave voice chat"
+        title="Leave voice chat"
+      >
+        Leave
+      </button>
     </div>
   );
 }

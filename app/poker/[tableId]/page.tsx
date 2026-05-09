@@ -286,6 +286,8 @@ export default function PokerTablePage() {
   // ── Voice commands ────────────────────────────────────────────────────────
   const { enabled: speechEnabled, setEnabled: setSpeechEnabled } = useSpeechEnabled(address);
   const [voiceSplashOpen, setVoiceSplashOpen] = useState(false);
+  // Tournament voice chat is explicit opt-in per session — never auto-joins.
+  const [voiceChatJoined, setVoiceChatJoined] = useState(false);
   const [lastSpeechAction, setLastSpeechAction] = useState<string | null>(null);
   const lastSpeechActionTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -691,6 +693,7 @@ export default function PokerTablePage() {
         >
           {!isFullscreen && <PokerHeaderBar
             renderedState={renderedState}
+            tournamentState={tournamentHUDProp?.state ?? null}
             fmtChips={fmtChips}
             normalizedAddress={normalizedAddress}
             isAdmin={isAdmin}
@@ -737,6 +740,8 @@ export default function PokerTablePage() {
                 tableId={tableId}
                 seated={Boolean(mySeat)}
                 enabled={Boolean(resolvedTournamentId)}
+                joined={voiceChatJoined}
+                onToggleJoined={() => setVoiceChatJoined((v) => !v)}
                 compact
               />
             }

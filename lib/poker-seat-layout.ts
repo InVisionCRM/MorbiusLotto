@@ -13,16 +13,16 @@ export const POKER_POT_ANCHOR: SeatAnchor = { fx: 0.5, fy: 0.51 };
  * `ringIndexForDisplaySlot` maps each display slot to a subset of these indices so spacing stays even.
  */
 export const SEAT_ANCHOR_RING: SeatAnchor[] = [
-  { fx: 0.5, fy: 0.90 }, // 0 — bottom center (hero)
-  { fx: 0.25, fy: 0.90 }, // 1 — hero's left (next to act, clockwise)
-  { fx: 0.05, fy: 0.65 }, // 2 — S2
-  { fx: 0.05, fy: 0.30 },
-  { fx: 0.25, fy: 0.15 },
-  { fx: 0.45, fy: 0.15 }, // 5 — top center
-  { fx: 0.75, fy: 0.15 },
-  { fx: 0.95, fy: 0.30 },
-  { fx: 0.95, fy: 0.65 },
-  { fx: 0.75, fy: 0.90 },
+  { fx: 0.5, fy: 0.89 }, // 0 — bottom center (hero)
+  { fx: 0.25, fy: 0.89 }, // 1 — hero's left (next to act, clockwise)
+  { fx: 0.05, fy: 0.64 }, // 2 — S2
+  { fx: 0.05, fy: 0.29 },
+  { fx: 0.25, fy: 0.14 },
+  { fx: 0.45, fy: 0.14 }, // 5 — top center
+  { fx: 0.75, fy: 0.14 },
+  { fx: 0.95, fy: 0.29 },
+  { fx: 0.95, fy: 0.64 },
+  { fx: 0.75, fy: 0.89 },
 ];
 
 /** Map display slot → ring index `0..POKER_TABLE_MAX_SEATS-1`. At full **10** seats, slot === ring index. */
@@ -132,16 +132,16 @@ export const DEALER_BUTTON_RING: SeatAnchor[] = [
  * Tweak these freely to place opponent cards wherever looks right relative to each seat.
  */
 export const CARD_ANCHOR_RING: SeatAnchor[] = [
-  { fx: 0.50, fy: 0.77 },  // 0 — hero (unused for opponent cards; hero's cards live on avatar)
-  { fx: 0.18, fy: 0.77 }, // 1 — S1
-  { fx: 0.10, fy: 0.52 },
-  { fx: 0.10, fy: 0.17 },
-  { fx: 0.30, fy: 0.02 },
-  { fx: 0.50, fy: 0.02 },  // 5 — top center
-  { fx: 0.68, fy: 0.02 },
-  { fx: 0.88, fy: 0.17 },
-  { fx: 0.88, fy: 0.52 },
-  { fx: 0.68, fy: 0.77 },
+  { fx: 0.50, fy: 0.80 },  // 0 — hero (unused for opponent cards; hero's cards live on avatar)
+  { fx: 0.18, fy: 0.81 }, // 1 — S1
+  { fx: 0.10, fy: 0.55 },
+  { fx: 0.10, fy: 0.20 },
+  { fx: 0.30, fy: 0.06 },
+  { fx: 0.50, fy: 0.06 },  // 5 — top center
+  { fx: 0.68, fy: 0.06 },
+  { fx: 0.88, fy: 0.20 },
+  { fx: 0.88, fy: 0.55 },
+  { fx: 0.68, fy: 0.80 },
 ];
 
 /**

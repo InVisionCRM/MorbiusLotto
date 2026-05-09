@@ -1044,7 +1044,7 @@ export function PokerSeat({ seat, index, holeCards, isCurrentPlayer, showCardBac
               {handName}
             </div>
           )}
-          <div className="h-[22px] overflow-hidden">
+          <div className="relative h-[22px] overflow-hidden">
             <AnimatePresence mode="wait">
               {actionStyle && actionLabel && (
                 <motion.div
@@ -1060,6 +1060,33 @@ export function PokerSeat({ seat, index, holeCards, isCurrentPlayer, showCardBac
                     style={{ background: actionStyle.bg, color: '#fff', fontSize: POKER_UI_CQW.actionPillFont }}
                   >
                     {actionLabel}
+                  </div>
+                </motion.div>
+              )}
+            </AnimatePresence>
+            <AnimatePresence>
+              {isHandWinner && (
+                <motion.div
+                  key="winner-overlay"
+                  initial={{ opacity: 0, y: 4 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, y: -4 }}
+                  transition={{ duration: 0.15 }}
+                  className="absolute inset-0"
+                >
+                  <div
+                    data-testid={`poker-seat-winner-${index}`}
+                    className="h-[22px] flex items-center justify-center gap-1 font-bold leading-tight px-2"
+                    style={{
+                      background: 'linear-gradient(180deg, #fbbf24 0%, #b45309 100%)',
+                      color: '#1a1208',
+                      fontSize: POKER_UI_CQW.actionPillFont,
+                      boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.25), inset 0 -2px 4px rgba(0,0,0,0.4), 0 1px 3px rgba(0,0,0,0.5)',
+                      letterSpacing: '0.04em',
+                    }}
+                  >
+                    <Trophy size={11} strokeWidth={2.5} aria-hidden />
+                    <span>Winner</span>
                   </div>
                 </motion.div>
               )}
