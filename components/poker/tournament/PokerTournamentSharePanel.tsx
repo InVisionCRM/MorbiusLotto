@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useCallback, useEffect, useId, useRef, useState } from 'react';
-import html2canvas from 'html2canvas';
+import { toBlob } from 'html-to-image';
 import { IconDownload, IconPhoto, IconShare } from '@tabler/icons-react';
 import { Label } from '@/components/ui/label';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
@@ -28,80 +28,6 @@ const SHARE_BACKGROUND_PRESETS: ShareBackgroundPreset[] = [
 
 function revokeIfBlobUrl(url: string | null): void {
   if (url?.startsWith('blob:')) URL.revokeObjectURL(url);
-}
-
-/**
- * html2canvas 1.x cannot parse CSS Color 4 (`oklch()`, `lab()`, etc.). Tailwind v4 theme
- * utilities often serialize to those functions in computed styles — including on properties
- * we did not previously mirror (box-shadow, text-shadow, border shorthand, background-image).
- * Resolve any offending value through a live probe so the clone only sees rgb/rgba/hex.
- */
-const MODERN_COLOR_SYNTAX = /oklch\s*\(|lab\s*\(|lch\s*\(|hwb\s*\(|color\s*\(/i;
-
-const PROBE_OUT_OF_FLOW =
-  'position:fixed!important;left:-99999px!important;top:0!important;width:1px!important;height:1px!important;opacity:0!important;pointer-events:none!important;visibility:hidden!important';
-
-function mirrorModernColorsOntoClone(
-  originalRoot: HTMLElement,
-  clonedRoot: HTMLElement,
-  colorCtx: CanvasRenderingContext2D | null,
-): void {
-  const doc = originalRoot.ownerDocument;
-  const win = doc.defaultView;
-  const probe = doc.createElement('div');
-  probe.setAttribute('aria-hidden', 'true');
-  doc.documentElement.appendChild(probe);
-
-  try {
-    const stack: Array<[Element, Element]> = [[originalRoot, clonedRoot]];
-    while (stack.length) {
-      const [orig, clone] = stack.pop()!;
-      if (orig instanceof HTMLElement && clone instanceof HTMLElement) {
-        const cs = win?.getComputedStyle(orig);
-        if (cs) {
-          for (let i = 0; i < cs.length; i++) {
-            const prop = cs.item(i);
-            const raw = cs.getPropertyValue(prop).trim();
-            if (!raw || !MODERN_COLOR_SYNTAX.test(raw)) continue;
-
-            let resolved: string | null = null;
-            try {
-              probe.style.cssText = PROBE_OUT_OF_FLOW;
-              probe.style.setProperty(prop, raw);
-              const fromProbe = win?.getComputedStyle(probe).getPropertyValue(prop).trim();
-              if (fromProbe && !MODERN_COLOR_SYNTAX.test(fromProbe)) resolved = fromProbe;
-            } catch {
-              /* leave resolved null */
-            }
-
-            if (!resolved && colorCtx) {
-              try {
-                colorCtx.fillStyle = raw;
-                const s = String(colorCtx.fillStyle);
-                if (!MODERN_COLOR_SYNTAX.test(s)) resolved = s;
-              } catch {
-                /* complex values (e.g. shadow) are not fillStyle-parseable */
-              }
-            }
-
-            if (resolved) clone.style.setProperty(prop, resolved);
-          }
-        }
-      }
-      const oCh = orig.children;
-      const cCh = clone.children;
-      const n = Math.min(oCh.length, cCh.length);
-      for (let i = 0; i < n; i++) stack.push([oCh[i], cCh[i]]);
-    }
-  } finally {
-    probe.remove();
-  }
-}
-
-function canvasToBlob(canvas: HTMLCanvasElement, type = 'image/png', quality = 0.92): Promise<Blob | null> {
-  return new Promise((resolve) => {
-    canvas.toBlob((b) => resolve(b), type, quality);
-  });
 }
 
 export type PokerTournamentSharePanelProps = {
@@ -197,7 +123,12 @@ export function PokerTournamentSharePanel({
     setFileError(null);
   };
 
-  const runExportCanvas = useCallback(async (): Promise<HTMLCanvasElement | null> => {
+  /**
+   * Render the share card to a PNG blob via html-to-image. Unlike html2canvas,
+   * html-to-image uses an inline SVG `<foreignObject>` snapshot, so modern CSS
+   * color syntax (oklch, lab, color-mix, etc.) and CSS variables work natively.
+   */
+  const runExportBlob = useCallback(async (): Promise<Blob | null> => {
     const el = shareCardRef.current;
     if (!el) return null;
     try {
@@ -207,37 +138,11 @@ export function PokerTournamentSharePanel({
     } catch {
       /* ignore */
     }
-
-    const canvas = await html2canvas(el, {
-      scale: 2,
-      useCORS: true,
+    return toBlob(el, {
+      pixelRatio: 2,
       backgroundColor: '#0c1222',
-      logging: false,
-      foreignObjectRendering: false,
-      scrollX: 0,
-      scrollY: -window.scrollY,
-      onclone: (_doc, clonedEl) => {
-        if (!(clonedEl instanceof HTMLElement)) return;
-        const scratch = document.createElement('canvas');
-        scratch.width = 1;
-        scratch.height = 1;
-        const colorCtx = scratch.getContext('2d');
-        mirrorModernColorsOntoClone(el, clonedEl, colorCtx);
-      },
+      cacheBust: true,
     });
-    return canvas;
-  }, []);
-
-  const blobFromCanvas = useCallback(async (canvas: HTMLCanvasElement): Promise<Blob | null> => {
-    let blob = await canvasToBlob(canvas);
-    if (blob) return blob;
-    try {
-      const dataUrl = canvas.toDataURL('image/png', 0.92);
-      const res = await fetch(dataUrl);
-      return await res.blob();
-    } catch {
-      return null;
-    }
   }, []);
 
   const overlayProps = {
@@ -260,13 +165,7 @@ export function PokerTournamentSharePanel({
       setExportPreparing(true);
       setExportError(null);
       try {
-        const canvas = await runExportCanvas();
-        if (cancelled) return;
-        if (!canvas) {
-          setExportError('Could not prepare image.');
-          return;
-        }
-        const blob = await blobFromCanvas(canvas);
+        const blob = await runExportBlob();
         if (cancelled) return;
         if (!blob) {
           setExportError('Could not prepare image.');
@@ -300,8 +199,7 @@ export function PokerTournamentSharePanel({
     scheduleLine,
     prizeLine,
     payoutLine,
-    runExportCanvas,
-    blobFromCanvas,
+    runExportBlob,
   ]);
 
   const downloadReady = !!exportPayload && !exportPreparing;
