@@ -1,9 +1,11 @@
 'use client';
 
-import React from 'react';
+import React, { useMemo, useState } from 'react';
 import type { PokerTournamentSummary } from '@/hooks/use-poker-tournament';
 import { formatChips } from '@/lib/format-poker-chips';
 import { formatPrizePoolDisplay } from '@/lib/format-poker-tournament-prize-display';
+import { PokerTournamentShareModal } from './PokerTournamentShareModal';
+import { derivePokerShareSnapshotFromSummary } from '@/lib/poker-share-snapshot';
 
 interface MyPokerTournamentsModalProps {
   open: boolean;
@@ -54,6 +56,12 @@ export function MyPokerTournamentsModal({
   onGoToTable,
   onForfeit,
 }: MyPokerTournamentsModalProps) {
+  const [shareTournament, setShareTournament] = useState<PokerTournamentSummary | null>(null);
+  const shareSnapshot = useMemo(
+    () => (shareTournament ? derivePokerShareSnapshotFromSummary(shareTournament) : null),
+    [shareTournament],
+  );
+
   if (!open) return null;
 
   const mine = tournaments.filter((t) => t.isRegistered);
@@ -121,6 +129,16 @@ export function MyPokerTournamentsModal({
                     </div>
 
                     <div className="flex flex-wrap items-center gap-2 justify-end">
+                      {t.status === 'registration' && (
+                        <button
+                          type="button"
+                          onClick={() => setShareTournament(t)}
+                          className="h-8 px-3 rounded-lg border border-cyan-500/40 bg-black/30 text-xs font-semibold text-cyan-100 hover:border-cyan-400/60 hover:bg-cyan-500/10 transition-colors"
+                          title="Generate a share image for this tournament"
+                        >
+                          Share
+                        </button>
+                      )}
                       {isActiveTable && t.tableId && (
                         <button
                           type="button"
@@ -150,6 +168,19 @@ export function MyPokerTournamentsModal({
           )}
         </div>
       </div>
+      {shareTournament && shareSnapshot && (
+        <PokerTournamentShareModal
+          open
+          onClose={() => setShareTournament(null)}
+          tournamentName={shareSnapshot.tournamentName}
+          isFreeroll={shareSnapshot.isFreeroll}
+          scheduleLine={shareSnapshot.scheduleLine}
+          prizeLine={shareSnapshot.prizeLine}
+          payoutLine={shareSnapshot.payoutLine}
+          shareTokenSymbol={shareSnapshot.shareTokenSymbol}
+          shareTokenLogoUrl={shareSnapshot.shareTokenLogoUrl}
+        />
+      )}
     </div>
   );
 }

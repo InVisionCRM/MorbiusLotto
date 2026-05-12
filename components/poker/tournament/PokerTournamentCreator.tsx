@@ -43,6 +43,8 @@ import { IconShare } from '@tabler/icons-react';
 import type { PieLabelRenderProps } from 'recharts';
 import { Cell, Pie, PieChart, ResponsiveContainer } from 'recharts';
 import { PokerTournamentSharePanel } from '@/components/poker/tournament/PokerTournamentSharePanel';
+import { PokerTournamentShareModal } from '@/components/poker/tournament/PokerTournamentShareModal';
+import { formatShareScheduleLine } from '@/lib/poker-share-snapshot';
 import { ConfirmActionCard } from '@/components/shared/ConfirmActionCard';
 import { Confetti, type ConfettiRef } from '@/components/ui/confetti';
 import { Prc20TokenPicker, type SelectedPrc20Token } from '@/components/shared/Prc20TokenPicker';
@@ -394,21 +396,6 @@ function parseLocalDateTime(dateStr: string, timeStr: string): Date | null {
     return null;
   }
   return new Date(y, mo - 1, d, hh, mm, 0, 0);
-}
-
-function shortTimeZoneName(local: Date): string {
-  try {
-    const parts = new Intl.DateTimeFormat(undefined, { timeZoneName: 'short' }).formatToParts(local);
-    return parts.find((p) => p.type === 'timeZoneName')?.value?.trim() ?? '';
-  } catch {
-    return '';
-  }
-}
-
-function formatShareScheduleLine(local: Date): string {
-  const base = format(local, 'EEE, MMM d, yyyy · h:mm a');
-  const tz = shortTimeZoneName(local);
-  return tz ? `${base} ${tz}` : base;
 }
 
 /** Opens the native date/time UI from a surrounding click (not only the small icon). */
@@ -986,6 +973,7 @@ export function PokerTournamentCreator({ creatorAddress, onClose, onCreate }: Po
   const [blindIntervalMinutes, setBlindIntervalMinutes] = useState<BlindIntervalMinutes>(15);
   const [prizePresetId, setPrizePresetId] = useState<PokerPrizePresetId>('podium_classic');
   const [created, setCreated] = useState<{ tournamentId: string; pinCode?: string | null } | null>(null);
+  const [postCreateShareOpen, setPostCreateShareOpen] = useState(false);
 
   const confettiRef = useRef<ConfettiRef>(null);
   const scheduleSectionRef = useRef<HTMLDivElement>(null);
@@ -1675,6 +1663,14 @@ export function PokerTournamentCreator({ creatorAddress, onClose, onCreate }: Po
               </Link>
               <button
                 type="button"
+                onClick={() => setPostCreateShareOpen(true)}
+                className="flex-1 rounded-xl border border-cyan-500/40 bg-cyan-500/10 px-4 py-3 text-sm font-semibold text-cyan-100 hover:bg-cyan-500/20 transition-colors inline-flex items-center justify-center gap-2"
+              >
+                <IconShare className="h-4 w-4" aria-hidden />
+                Share image
+              </button>
+              <button
+                type="button"
                 onClick={onClose}
                 className="flex-1 rounded-xl border border-white/15 px-4 py-3 text-sm font-medium text-white/85 hover:bg-white/5 transition-colors"
               >
@@ -1683,6 +1679,17 @@ export function PokerTournamentCreator({ creatorAddress, onClose, onCreate }: Po
             </div>
           </div>
         </div>
+        <PokerTournamentShareModal
+          open={postCreateShareOpen}
+          onClose={() => setPostCreateShareOpen(false)}
+          tournamentName={name}
+          isFreeroll={isFreeroll}
+          scheduleLine={shareOverlaySnapshot.scheduleLine}
+          prizeLine={shareOverlaySnapshot.prizeLine}
+          payoutLine={shareOverlaySnapshot.payoutLine}
+          shareTokenSymbol={shareOverlaySnapshot.shareTokenSymbol}
+          shareTokenLogoUrl={shareOverlaySnapshot.shareTokenLogoUrl}
+        />
       </div>
     );
   }

@@ -25,6 +25,8 @@ import { PokerTournamentCreator } from './PokerTournamentCreator';
 import { PokerTournamentRegistrantsModal } from './PokerTournamentRegistrantsModal';
 import { PokerTournamentRulesModal } from './PokerTournamentRulesModal';
 import { MyPokerTournamentsModal } from './MyPokerTournamentsModal';
+import { PokerTournamentShareModal } from './PokerTournamentShareModal';
+import { derivePokerShareSnapshotFromSummary } from '@/lib/poker-share-snapshot';
 import { ConfirmActionCard } from '@/components/shared/ConfirmActionCard';
 import { InsufficientBalanceDialog } from '@/components/shared/InsufficientBalanceDialog';
 import { EscrowBuyInJoinPanel } from './EscrowBuyInJoinPanel';
@@ -289,6 +291,7 @@ export function PokerTournamentLobby({
   const queryClient = useQueryClient();
   const [registrantsModal, setRegistrantsModal] = useState<{ tournamentId: string; name: string } | null>(null);
   const [rulesModal, setRulesModal] = useState<{ tournamentId: string; name: string } | null>(null);
+  const [shareModalT, setShareModalT] = useState<PokerTournamentSummary | null>(null);
   const [joinError, setJoinError] = useState<string | null>(null);
   const [insufficientChipsInfo, setInsufficientChipsInfo] = useState<{ required?: string } | null>(null);
   const [showMyTournaments, setShowMyTournaments] = useState(false);
@@ -802,6 +805,16 @@ export function PokerTournamentLobby({
                               Watch
                             </span>
                           )}
+                          {t.status === 'registration' && !isActive && (
+                            <button
+                              type="button"
+                              onClick={() => setShareModalT(t)}
+                              className={actionBtnSecondary}
+                              title="Generate a share image for this tournament"
+                            >
+                              Share
+                            </button>
+                          )}
                           {canJoin && (
                             <button
                               type="button"
@@ -1105,7 +1118,41 @@ export function PokerTournamentLobby({
           }
         }}
       />
+
+      <ShareModalForLobby tournament={shareModalT} onClose={() => setShareModalT(null)} />
     </div>
+  );
+}
+
+/**
+ * Lobby-side wrapper that memoizes share-snapshot derivation per tournament.
+ * Splitting it into its own component keeps the snapshot computation off the
+ * lobby's render path until a row's "Share" button is actually clicked.
+ */
+function ShareModalForLobby({
+  tournament,
+  onClose,
+}: {
+  tournament: PokerTournamentSummary | null;
+  onClose: () => void;
+}) {
+  const snapshot = useMemo(
+    () => (tournament ? derivePokerShareSnapshotFromSummary(tournament) : null),
+    [tournament],
+  );
+  if (!tournament || !snapshot) return null;
+  return (
+    <PokerTournamentShareModal
+      open
+      onClose={onClose}
+      tournamentName={snapshot.tournamentName}
+      isFreeroll={snapshot.isFreeroll}
+      scheduleLine={snapshot.scheduleLine}
+      prizeLine={snapshot.prizeLine}
+      payoutLine={snapshot.payoutLine}
+      shareTokenSymbol={snapshot.shareTokenSymbol}
+      shareTokenLogoUrl={snapshot.shareTokenLogoUrl}
+    />
   );
 }
 
