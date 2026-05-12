@@ -79,6 +79,17 @@ class PokerGameService {
     tableLocks = new Map();
     /** Starting stacks (whole chips) captured at hand deal, keyed by handId -> address. */
     handStartingStacks = new Map();
+    /**
+     * Hand number of the most-recently-completed hand per tableId, stashed by
+     * `persistShowdown` so the deferred post-hand callback (eliminations, blind
+     * updates) can fire from inside the inter-hand timer instead of immediately
+     * on showdown — that way the busted tournament player stays seated through
+     * the full reveal + 15-second post-showdown window. Read+deleted by
+     * `scheduleNextHandAfterShowdown`'s timer body.
+     */
+    pendingPostHandHandNumbers = new Map();
+    /** Bail flag for `recoverStuckPostHandTables` so overlapping ticks can't pile up. */
+    recoveryInFlight = false;
     constructor(dbService, pfService) {
         this.dbService = dbService;
         this.pfService = pfService;
@@ -182,7 +193,12 @@ class PokerGameService {
         return false;
     }
     /**
-     * Keep showdown delay transition behavior centralized for deterministic restart/reconnect handling.
+     * Centralizes the post-showdown transition: waits SHOWDOWN_DELAY_MS, then
+     * runs the tournament post-hand callback (eliminations + blind updates)
+     * BEFORE starting the next hand. Eliminations are deliberately deferred to
+     * this moment so a busted player remains seated through the full reveal
+     * window (cards stay flipped, chat works, no surprise auto-leave) and the
+     * tournament-end check runs in time to cancel a stale `tryStartNextHand`.
      */
     scheduleNextHandAfterShowdown(tableId) {
         if (this.nextHandTimers.has(tableId))
@@ -190,6 +206,30 @@ class PokerGameService {
         const timer = setTimeout(async () => {
             this.nextHandTimers.delete(tableId);
             try {
+                const handNumber = this.pendingPostHandHandNumbers.get(tableId);
+                if (handNumber != null) {
+                    this.pendingPostHandHandNumbers.delete(tableId);
+                    if (this.postHandCallback) {
+                        try {
+                            await this.postHandCallback(tableId, handNumber);
+                        }
+                        catch (err) {
+                            // Defensive: a failed post-hand callback (e.g. tournament sync
+                            // race) must NOT block the next hand from starting, otherwise
+                            // the table sits frozen until manual intervention.
+                            logger_1.logger.error('Post-hand tournament callback error', { tableId, handNumber, err });
+                        }
+                    }
+                }
+                // Stamp ALL pending hands on this table as processed — happy path,
+                // crash recovery, and "no callback registered" all converge here.
+                // Marking after the callback (succeed OR throw) prevents the sweep
+                // from retrying a perpetually-failing callback in a tight loop.
+                await this.getPool().query(`UPDATE poker_hands
+              SET post_hand_processed_at = NOW()
+            WHERE table_id = $1
+              AND completed_at IS NOT NULL
+              AND post_hand_processed_at IS NULL`, [tableId]);
                 await this.tryStartNextHand(tableId);
                 await this.broadcastState(tableId);
             }
@@ -198,6 +238,118 @@ class PokerGameService {
             }
         }, SHOWDOWN_DELAY_MS);
         this.nextHandTimers.set(tableId, timer);
+    }
+    /**
+     * Self-healing sweep — finds any showdown whose deferred post-hand work
+     * never ran (server restart during the 15s window, lost in-memory timer,
+     * etc.) and finishes it. Must be safe to call repeatedly: every step
+     * re-checks the `post_hand_processed_at` marker under the per-table lock
+     * before mutating, and the partial index keeps the scan cheap.
+     *
+     * Wired into the existing 5s `pokerAutoFoldInterval` and called once
+     * during server bootstrap.
+     */
+    async recoverStuckPostHandTables() {
+        if (this.recoveryInFlight)
+            return;
+        this.recoveryInFlight = true;
+        try {
+            const pool = this.getPool();
+            // 20s threshold = 15s SHOWDOWN_DELAY_MS + 5s margin so we never race
+            // the happy-path timer. LIMIT 25 keeps a single tick bounded; the
+            // sweep runs again every 5s until the backlog is drained.
+            const stuck = await pool.query(`SELECT h.table_id, h.id AS hand_id, h.hand_number, h.completed_at
+           FROM poker_hands h
+          WHERE h.completed_at IS NOT NULL
+            AND h.post_hand_processed_at IS NULL
+            AND h.completed_at < NOW() - INTERVAL '20 seconds'
+          ORDER BY h.completed_at ASC
+          LIMIT 25`);
+            for (const row of stuck.rows) {
+                const tableId = row.table_id;
+                const handId = row.hand_id;
+                const handNumber = Number(row.hand_number ?? 0);
+                const completedAtMs = row.completed_at instanceof Date
+                    ? row.completed_at.getTime()
+                    : new Date(row.completed_at).getTime();
+                const completedAtAgeSeconds = Number.isFinite(completedAtMs)
+                    ? Math.round((Date.now() - completedAtMs) / 1000)
+                    : -1;
+                let claimed = false;
+                try {
+                    // Phase 1: do the per-table work (callback + mark processed +
+                    // drop stale in-memory timers) under the table lock so a player
+                    // action can't race us.
+                    await this.withTableLock(tableId, async () => {
+                        // Re-check inside the lock — the happy-path timer or another
+                        // sweep tick may have processed it between query and acquire.
+                        const stillPending = await pool.query(`SELECT 1 FROM poker_hands
+                WHERE id = $1 AND post_hand_processed_at IS NULL`, [handId]);
+                        if (stillPending.rows.length === 0)
+                            return;
+                        if (this.postHandCallback) {
+                            try {
+                                await this.postHandCallback(tableId, handNumber);
+                            }
+                            catch (err) {
+                                logger_1.logger.error('Recovery: post-hand callback error', {
+                                    tableId,
+                                    handNumber,
+                                    err,
+                                });
+                            }
+                        }
+                        // Atomic claim — also serves as a second-level race guard if
+                        // the happy-path timer somehow wrote the marker between our
+                        // re-check and now.
+                        const updated = await pool.query(`UPDATE poker_hands
+                  SET post_hand_processed_at = NOW()
+                WHERE id = $1 AND post_hand_processed_at IS NULL`, [handId]);
+                        if ((updated.rowCount ?? 0) === 0)
+                            return;
+                        claimed = true;
+                        // Drop any stale in-memory state from before the restart so the
+                        // happy-path timer can't fire on top of us.
+                        this.pendingPostHandHandNumbers.delete(tableId);
+                        const ghostTimer = this.nextHandTimers.get(tableId);
+                        if (ghostTimer) {
+                            clearTimeout(ghostTimer);
+                            this.nextHandTimers.delete(tableId);
+                        }
+                    });
+                    // Phase 2: kick off the next hand OUTSIDE the per-table lock —
+                    // `tryStartNextHand` acquires the same lock internally, so doing
+                    // it inside Phase 1 would deadlock. We already filtered on
+                    // completed_at > 20s ago, so the SHOWDOWN_DELAY_MS window has
+                    // elapsed and there's no need to arm another timer.
+                    if (claimed) {
+                        await this.tryStartNextHand(tableId);
+                        await this.broadcastState(tableId);
+                        logger_1.logger.info('Recovered stuck poker post-hand work', {
+                            tableId,
+                            handNumber,
+                            completedAtAgeSeconds,
+                        });
+                    }
+                }
+                catch (err) {
+                    // Per-row failures (e.g. table deleted between query + lock,
+                    // transient DB hiccup) must NOT poison the rest of the sweep.
+                    logger_1.logger.error('Recovery: failed to process stuck poker hand', {
+                        tableId,
+                        handId,
+                        handNumber,
+                        err,
+                    });
+                }
+            }
+        }
+        catch (err) {
+            logger_1.logger.error('recoverStuckPostHandTables sweep error', { err });
+        }
+        finally {
+            this.recoveryInFlight = false;
+        }
     }
     async broadcastState(tableId) {
         if (this.broadcastCallback) {
@@ -270,6 +422,7 @@ class PokerGameService {
             await client.query('DELETE FROM poker_tables WHERE id = $1', [tableId]);
         });
         this.clearScheduledNextHand(tableId);
+        this.pendingPostHandHandNumbers.delete(tableId);
         this.activeTables.delete(tableId);
         this.invalidateTableScaling(tableId);
         logger_1.logger.info('Poker admin delete table', { tableId });
@@ -1434,17 +1587,15 @@ class PokerGameService {
             this.handStartingStacks.delete(handId);
         }
         await pool.query('UPDATE poker_tables SET status = $2 WHERE id = $1', [tableId, 'waiting']);
-        // Fire tournament post-hand hook (awaited so eliminations complete before tryStartNextHand)
-        if (this.postHandCallback) {
-            const handRow = await pool.query('SELECT hand_number FROM poker_hands WHERE id = $1', [handId]);
-            const handNumber = Number(handRow.rows[0]?.hand_number ?? 0);
-            try {
-                await this.postHandCallback(tableId, handNumber);
-            }
-            catch (err) {
-                logger_1.logger.error('Post-hand tournament callback error', { tableId, err });
-            }
-        }
+        // Stash the just-completed hand number so `scheduleNextHandAfterShowdown`
+        // can fire the tournament post-hand callback (eliminations + blind
+        // updates) when the inter-hand timer expires — NOT immediately. Keeping
+        // the busted player seated through the full reveal + 15s post-showdown
+        // window matches the cinematic UX the rest of the table sees and lets
+        // them chat / react before the auto-leave kicks in.
+        const handRow = await pool.query('SELECT hand_number FROM poker_hands WHERE id = $1', [handId]);
+        const handNumber = Number(handRow.rows[0]?.hand_number ?? 0);
+        this.pendingPostHandHandNumbers.set(tableId, handNumber);
     }
     // ---------------------------------------------------------------------------
     // populateHandPlayers
@@ -2199,6 +2350,7 @@ class PokerGameService {
     async deleteTableTournament(tableId) {
         const pool = this.getPool();
         this.clearScheduledNextHand(tableId);
+        this.pendingPostHandHandNumbers.delete(tableId);
         this.activeTables.delete(tableId);
         this.invalidateTableScaling(tableId);
         await pool.query('DELETE FROM poker_tables WHERE id = $1', [tableId]);

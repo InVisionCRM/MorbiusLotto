@@ -91,6 +91,40 @@ export declare class MerkleDropsLPService {
     removeFromBlocklist(address: string): Promise<void>;
     getSettings(): Promise<Record<string, string>>;
     updateSettings(patch: Record<string, string>): Promise<void>;
+    /**
+     * Preview which published LP epochs are eligible for stale-snapshot reclamation.
+     * Mirrors MerkleDropsService.previewReclaimStaleSnapshots.
+     */
+    previewReclaimStaleSnapshots(): Promise<{
+        ageDays: number;
+        minEpochsBack: number;
+        candidates: Array<{
+            epochNumber: number;
+            epochId: number;
+            publishedAt: string;
+            unclaimedSnapshots: number;
+            reclaimableWei: string;
+            onChainClaimedWei: string;
+            revocable: boolean;
+        }>;
+        totalReclaimableWei: string;
+    }>;
+    /**
+     * Execute stale-snapshot reclamation. See MerkleDropsService.reclaimStaleSnapshots
+     * for ordering and safety notes (revoke on-chain first, mark DB second).
+     */
+    reclaimStaleSnapshots(): Promise<{
+        results: Array<{
+            epochNumber: number;
+            epochId: number;
+            reclaimableWei: string;
+            reclaimedSnapshots: number;
+            revoked: boolean;
+            txHash?: string;
+            error?: string;
+        }>;
+        totalReclaimedWei: string;
+    }>;
     getAvailableContractBalance(): Promise<bigint>;
     syncClaimStatus(): Promise<number>;
     private autoFinalizeAndPublish;

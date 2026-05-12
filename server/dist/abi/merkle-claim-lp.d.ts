@@ -54,5 +54,19 @@ export declare const merkleClaimLpAbi: readonly [{
     readonly outputs: readonly [];
     readonly stateMutability: "nonpayable";
     readonly type: "function";
+}, {
+    readonly inputs: readonly [{
+        readonly internalType: "uint256";
+        readonly name: "";
+        readonly type: "uint256";
+    }];
+    readonly name: "epochClaimedAmount";
+    readonly outputs: readonly [{
+        readonly internalType: "uint256";
+        readonly name: "";
+        readonly type: "uint256";
+    }];
+    readonly stateMutability: "view";
+    readonly type: "function";
 }];
 //# sourceMappingURL=merkle-claim-lp.d.ts.map

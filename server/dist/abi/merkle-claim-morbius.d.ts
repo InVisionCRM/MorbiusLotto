@@ -44,5 +44,29 @@ export declare const merkleClaimMorbiusAbi: readonly [{
     }];
     readonly stateMutability: "view";
     readonly type: "function";
+}, {
+    readonly inputs: readonly [{
+        readonly internalType: "uint256";
+        readonly name: "";
+        readonly type: "uint256";
+    }];
+    readonly name: "epochClaimedAmount";
+    readonly outputs: readonly [{
+        readonly internalType: "uint256";
+        readonly name: "";
+        readonly type: "uint256";
+    }];
+    readonly stateMutability: "view";
+    readonly type: "function";
+}, {
+    readonly inputs: readonly [{
+        readonly internalType: "uint256";
+        readonly name: "epochId";
+        readonly type: "uint256";
+    }];
+    readonly name: "revokeEpoch";
+    readonly outputs: readonly [];
+    readonly stateMutability: "nonpayable";
+    readonly type: "function";
 }];
 //# sourceMappingURL=merkle-claim-morbius.d.ts.map

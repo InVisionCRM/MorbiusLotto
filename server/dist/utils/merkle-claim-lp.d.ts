@@ -9,6 +9,10 @@
  * per LP token) and fetching LP token holders from the PulseChain API.
  */
 export declare function isMerkleKeeperConfigured(): boolean;
+/** Returns true if the owner private key is configured (required for revokeEpoch). */
+export declare function isMerkleOwnerConfigured(): boolean;
+/** Returns the configured owner-key wallet address, or null if not configured. */
+export declare function getMerkleOwnerKeyAddress(): string | null;
 /**
  * Read the MORBIUS balance held by the MerkleClaimLP contract.
  */
@@ -22,6 +26,18 @@ type TxResult = {
     txHash?: string;
     error?: string;
 };
+/**
+ * Read the on-chain claimed amount for an LP epoch.
+ * If > 0, revokeEpoch() will revert with "already has claims".
+ */
+export declare function getEpochClaimedAmount(epochNumber: number): Promise<bigint>;
+/**
+ * Revoke an LP epoch root on-chain. Only succeeds when no on-chain claims
+ * have been made against this epoch yet.
+ *
+ * NOTE: revokeEpoch is onlyOwner. Signed by MERKLE_OWNER_PRIVATE_KEY.
+ */
+export declare function revokeEpochOnChain(epochNumber: number): Promise<TxResult>;
 /**
  * Publish the Merkle root for an epoch on-chain.
  * Tokens must already be in the contract (sent directly via MORBIUS transfer).

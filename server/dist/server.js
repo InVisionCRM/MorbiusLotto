@@ -282,9 +282,16 @@ async function initializeServices() {
         // still marked incomplete would permanently block new hands from starting.
         try {
             const pool = dbService.getPool();
-            const staleResult = await pool.query(`UPDATE poker_hands SET completed_at = NOW(), acting_position = NULL
-         WHERE completed_at IS NULL
-         RETURNING id, table_id`);
+            // Force-complete any in-progress hand AND mark its post-hand work
+            // already processed — these are not real showdowns (no winners, no
+            // chip distribution), so the recovery sweep should not run
+            // `syncAfterHand` against them. See `recoverStuckPostHandTables`.
+            const staleResult = await pool.query(`UPDATE poker_hands
+            SET completed_at = NOW(),
+                acting_position = NULL,
+                post_hand_processed_at = NOW()
+          WHERE completed_at IS NULL
+          RETURNING id, table_id`);
             if (staleResult.rows.length > 0) {
                 logger_1.logger.info(`Poker: cleared ${staleResult.rows.length} stale hand(s) from previous session`);
                 // Reset any tables still marked 'playing' back to 'waiting'
@@ -309,6 +316,13 @@ async function initializeServices() {
         pokerTournamentService.setBroadcastCallback((room, msg) => wsService.broadcastToRoom(room, msg));
         pokerGameService.setPostHandCallback((tableId, handNumber) => pokerTournamentService.syncAfterHand(tableId, handNumber));
         pokerGameService.setTournamentUnderfilledRecovery((tableId) => pokerTournamentService.recoverTournamentTableIfUnderTwoStackedSeats(tableId));
+        // Run the post-hand recovery sweep once at startup so any showdown
+        // that was mid-window when the previous process exited gets unstuck
+        // without waiting for the 5s periodic interval. Fire-and-forget — the
+        // periodic interval will retry anything we miss.
+        pokerGameService
+            .recoverStuckPostHandTables()
+            .catch((err) => logger_1.logger.error('Startup poker post-hand recovery failed', { err }));
         // Wire BJ multi broadcast callback
         bjMultiService.setBroadcastCallback((tableId) => wsService.broadcastBJMultiTableState(tableId));
         // Freeroll scheduler (polls pending scheduled events: start, end; also ticks poker by_time blind advances)
@@ -4307,7 +4321,7 @@ async function initializeServices() {
         });
         app.post('/api/admin/merkle/settings', async (req, res) => {
             try {
-                const allowed = new Set(['schedule_type', 'schedule_day', 'schedule_hour_utc', 'schedule_interval', 'default_reward_wei', 'auto_publish_onchain', 'countdown_duration']);
+                const allowed = new Set(['schedule_type', 'schedule_day', 'schedule_hour_utc', 'schedule_interval', 'default_reward_wei', 'auto_publish_onchain', 'countdown_duration', 'reclaim_stale_enabled', 'reclaim_stale_age_days', 'reclaim_min_epochs_back']);
                 const patch = {};
                 for (const [k, v] of Object.entries(req.body)) {
                     if (allowed.has(k) && typeof v === 'string')
@@ -4323,6 +4337,27 @@ async function initializeServices() {
             }
             catch (error) {
                 logger_1.logger.error('Error updating merkle settings:', error);
+                res.status(500).json({ error: String(error) });
+            }
+        });
+        // Admin: stale-snapshot reclamation (holder).
+        // Preview is a dry-run; execute calls revokeEpoch() on-chain and marks
+        // matching snapshots reclaimed_at. Funds become available for the next epoch.
+        app.get('/api/admin/merkle/reclaim/preview', async (_req, res) => {
+            try {
+                sendJson(res, await merkleDropsService.previewReclaimStaleSnapshots());
+            }
+            catch (error) {
+                logger_1.logger.error('Error previewing merkle reclaim:', error);
+                res.status(500).json({ error: String(error) });
+            }
+        });
+        app.post('/api/admin/merkle/reclaim/execute', async (_req, res) => {
+            try {
+                sendJson(res, await merkleDropsService.reclaimStaleSnapshots());
+            }
+            catch (error) {
+                logger_1.logger.error('Error executing merkle reclaim:', error);
                 res.status(500).json({ error: String(error) });
             }
         });
@@ -4579,6 +4614,25 @@ async function initializeServices() {
                 sendJson(res, await merkleDropsLPService.getSettings());
             }
             catch (error) {
+                res.status(500).json({ error: String(error) });
+            }
+        });
+        // Admin: stale-snapshot reclamation (LP). See /api/admin/merkle/reclaim above.
+        app.get('/api/admin/merkle-lp/reclaim/preview', async (_req, res) => {
+            try {
+                sendJson(res, await merkleDropsLPService.previewReclaimStaleSnapshots());
+            }
+            catch (error) {
+                logger_1.logger.error('Error previewing LP reclaim:', error);
+                res.status(500).json({ error: String(error) });
+            }
+        });
+        app.post('/api/admin/merkle-lp/reclaim/execute', async (_req, res) => {
+            try {
+                sendJson(res, await merkleDropsLPService.reclaimStaleSnapshots());
+            }
+            catch (error) {
+                logger_1.logger.error('Error executing LP reclaim:', error);
                 res.status(500).json({ error: String(error) });
             }
         });

@@ -25,9 +25,16 @@ async function recoverPokerRuntimeState(dbService, pokerGameService) {
     }
     try {
         const pool = dbService.getPool();
-        const staleResult = await pool.query(`UPDATE poker_hands SET completed_at = NOW(), acting_position = NULL
-       WHERE completed_at IS NULL
-       RETURNING id, table_id`);
+        // Force-complete any in-progress hand AND mark its post-hand work
+        // already processed — these are not real showdowns (no winners, no
+        // chip distribution), so the recovery sweep should not run
+        // `syncAfterHand` against them.
+        const staleResult = await pool.query(`UPDATE poker_hands
+          SET completed_at = NOW(),
+              acting_position = NULL,
+              post_hand_processed_at = NOW()
+        WHERE completed_at IS NULL
+        RETURNING id, table_id`);
         if (staleResult.rows.length > 0) {
             logger_1.logger.info(`Poker: cleared ${staleResult.rows.length} stale hand(s) from previous session`);
             await pool.query(`UPDATE poker_tables SET status = 'waiting' WHERE status = 'playing'`);
@@ -60,6 +67,13 @@ async function initializeRuntimeServices(server, port) {
     pokerGameService.setPostHandCallback((tableId, handNumber) => pokerTournamentService.syncAfterHand(tableId, handNumber));
     pokerGameService.setTournamentUnderfilledRecovery((tableId) => pokerTournamentService.recoverTournamentTableIfUnderTwoStackedSeats(tableId));
     bjMultiService.setBroadcastCallback((tableId) => wsService.broadcastBJMultiTableState(tableId));
+    // Run the post-hand recovery sweep once at startup so any showdown that
+    // was mid-window when the previous process exited gets unstuck without
+    // waiting for the 5s periodic interval. Fire-and-forget — the periodic
+    // interval will retry anything we miss.
+    pokerGameService
+        .recoverStuckPostHandTables()
+        .catch((err) => logger_1.logger.error('Startup poker post-hand recovery failed', { err }));
     // Kick players who have been sitting out for >= 15 minutes (cash games only)
     setInterval(() => {
         pokerGameService.kickStaleSitOuts().catch((err) => logger_1.logger.warn('Sit-out timeout cron error', { error: err }));

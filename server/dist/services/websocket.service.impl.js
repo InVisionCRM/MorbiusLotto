@@ -135,6 +135,17 @@ class WebSocketService {
                 catch (err) {
                     logger_1.logger.error('Poker auto-fold watchdog error', err);
                 }
+                // Self-healing sweep — picks up any showdown whose deferred
+                // post-hand work was lost (server restart mid-window, etc.).
+                // See `recoverStuckPostHandTables` in PokerGameService.
+                try {
+                    if (typeof this.pokerGameService.recoverStuckPostHandTables === 'function') {
+                        await this.pokerGameService.recoverStuckPostHandTables();
+                    }
+                }
+                catch (err) {
+                    logger_1.logger.error('Poker post-hand recovery sweep error', err);
+                }
             }, 5000);
             // In-process tournament bot actions (POKER_BOT_ADDRESSES on game server; no WS child required)
             this.pokerServerBotInterval = setInterval(async () => {

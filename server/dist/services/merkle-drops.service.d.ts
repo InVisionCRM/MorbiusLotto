@@ -130,6 +130,54 @@ export declare class MerkleDropsService {
      */
     syncClaimStatus(): Promise<number>;
     /**
+     * Preview which published epochs are eligible for stale-snapshot reclamation.
+     * Returns the per-epoch breakdown without making any on-chain or DB writes.
+     *
+     * An epoch is eligible when:
+     *   - status = 'published'
+     *   - published_at < NOW() - reclaim_stale_age_days
+     *   - epoch_number <= max(epoch_number) - reclaim_min_epochs_back
+     *   - it has at least one snapshot with reward > 0 that is unclaimed,
+     *     not superseded, and not already reclaimed
+     *   - on-chain epochClaimedAmount[epoch_number] == 0  (otherwise revokeEpoch reverts)
+     */
+    previewReclaimStaleSnapshots(): Promise<{
+        ageDays: number;
+        minEpochsBack: number;
+        candidates: Array<{
+            epochNumber: number;
+            epochId: number;
+            publishedAt: string;
+            unclaimedSnapshots: number;
+            reclaimableWei: string;
+            onChainClaimedWei: string;
+            revocable: boolean;
+        }>;
+        totalReclaimableWei: string;
+    }>;
+    /**
+     * Execute reclamation: for every eligible epoch (per previewReclaimStaleSnapshots),
+     * call revokeEpoch() on-chain and mark matching snapshot rows as reclaimed_at.
+     *
+     * On-chain revoke MUST succeed before the DB row is marked. If revoke reverts
+     * (e.g. someone claimed directly from the old root in the meantime), the
+     * snapshot row stays as-is and is excluded from this reclamation pass.
+     *
+     * Returns the per-epoch result and the total wei freed.
+     */
+    reclaimStaleSnapshots(): Promise<{
+        results: Array<{
+            epochNumber: number;
+            epochId: number;
+            reclaimableWei: string;
+            reclaimedSnapshots: number;
+            revoked: boolean;
+            txHash?: string;
+            error?: string;
+        }>;
+        totalReclaimedWei: string;
+    }>;
+    /**
      * Query the on-chain MORBIUS balance of the MerkleClaim contract,
      * subtract what's still owed to users (unclaimed rewards from published epochs),
      * and return the available amount for a new epoch.

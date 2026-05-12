@@ -11,8 +11,12 @@
  */
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.isMerkleKeeperConfigured = isMerkleKeeperConfigured;
+exports.isMerkleOwnerConfigured = isMerkleOwnerConfigured;
+exports.getMerkleOwnerKeyAddress = getMerkleOwnerKeyAddress;
 exports.getContractMorbiusBalance = getContractMorbiusBalance;
 exports.checkHasClaimed = checkHasClaimed;
+exports.getEpochClaimedAmount = getEpochClaimedAmount;
+exports.revokeEpochOnChain = revokeEpochOnChain;
 exports.setEpochRootOnChain = setEpochRootOnChain;
 exports.getPairReserveInfo = getPairReserveInfo;
 exports.calcMorbiusEquivalent = calcMorbiusEquivalent;
@@ -28,7 +32,12 @@ const logger_1 = require("./logger");
 const MERKLE_CLAIM_LP_ADDRESS = (process.env.MERKLE_CLAIM_LP_ADDRESS || process.env.NEXT_PUBLIC_MERKLE_CLAIM_LP_ADDRESS || '0x64Dd1c933027d757212E43725c99bD4402211A1A');
 const MORBIUS_TOKEN_ADDRESS = '0xB7d4eB5fDfE3d4d3B5C16a44A49948c6EC77c6F1';
 const KEEPER_KEY = (process.env.MERKLE_KEEPER_PRIVATE_KEY || process.env.SETTLEMENT_PRIVATE_KEY);
+// revokeEpoch is onlyOwner — keeper (operator) cannot call it.
+function getOwnerKey() {
+    return process.env.MERKLE_OWNER_PRIVATE_KEY;
+}
 let walletClient = null;
+let ownerWalletClient = null;
 function getWalletClient() {
     if (!KEEPER_KEY) {
         throw new Error('MERKLE_KEEPER_PRIVATE_KEY or SETTLEMENT_PRIVATE_KEY not set');
@@ -43,8 +52,39 @@ function getWalletClient() {
     }
     return walletClient;
 }
+function getOwnerWalletClient() {
+    const key = getOwnerKey();
+    if (!key) {
+        throw new Error('MERKLE_OWNER_PRIVATE_KEY not set — required for revokeEpoch (onlyOwner)');
+    }
+    if (!ownerWalletClient) {
+        const account = (0, accounts_1.privateKeyToAccount)(key);
+        ownerWalletClient = (0, viem_1.createWalletClient)({
+            account,
+            chain: chains_1.pulsechain,
+            transport: (0, viem_1.http)(process.env.PULSECHAIN_RPC_URL || 'https://rpc.pulsechain.com'),
+        });
+    }
+    return ownerWalletClient;
+}
 function isMerkleKeeperConfigured() {
     return Boolean(KEEPER_KEY);
+}
+/** Returns true if the owner private key is configured (required for revokeEpoch). */
+function isMerkleOwnerConfigured() {
+    return Boolean(getOwnerKey());
+}
+/** Returns the configured owner-key wallet address, or null if not configured. */
+function getMerkleOwnerKeyAddress() {
+    const k = getOwnerKey();
+    if (!k)
+        return null;
+    try {
+        return (0, accounts_1.privateKeyToAccount)(k).address;
+    }
+    catch {
+        return null;
+    }
 }
 /**
  * Read the MORBIUS balance held by the MerkleClaimLP contract.
@@ -71,6 +111,53 @@ async function checkHasClaimed(epochNumber, walletAddress) {
         args: [BigInt(epochNumber), walletAddress],
     });
     return result;
+}
+/**
+ * Read the on-chain claimed amount for an LP epoch.
+ * If > 0, revokeEpoch() will revert with "already has claims".
+ */
+async function getEpochClaimedAmount(epochNumber) {
+    const publicClient = (0, chain_client_1.getPublicClient)();
+    const result = (await publicClient.readContract({
+        address: MERKLE_CLAIM_LP_ADDRESS,
+        abi: merkle_claim_lp_1.merkleClaimLpAbi,
+        functionName: 'epochClaimedAmount',
+        args: [BigInt(epochNumber)],
+    }));
+    return result;
+}
+/**
+ * Revoke an LP epoch root on-chain. Only succeeds when no on-chain claims
+ * have been made against this epoch yet.
+ *
+ * NOTE: revokeEpoch is onlyOwner. Signed by MERKLE_OWNER_PRIVATE_KEY.
+ */
+async function revokeEpochOnChain(epochNumber) {
+    const maxRetries = 2;
+    for (let attempt = 0; attempt <= maxRetries; attempt++) {
+        try {
+            const client = getOwnerWalletClient();
+            const publicClient = (0, chain_client_1.getPublicClient)();
+            const hash = await client.writeContract({
+                account: client.account,
+                chain: chains_1.pulsechain,
+                address: MERKLE_CLAIM_LP_ADDRESS,
+                abi: merkle_claim_lp_1.merkleClaimLpAbi,
+                functionName: 'revokeEpoch',
+                args: [BigInt(epochNumber)],
+            });
+            logger_1.logger.info('[MerkleClaimLP] revokeEpoch tx sent', { epochNumber, txHash: hash });
+            await publicClient.waitForTransactionReceipt({ hash });
+            return { success: true, txHash: hash };
+        }
+        catch (err) {
+            const msg = err instanceof Error ? err.message : String(err);
+            logger_1.logger.error('[MerkleClaimLP] revokeEpoch failed', { epochNumber, attempt, error: msg });
+            if (attempt === maxRetries)
+                return { success: false, error: msg };
+        }
+    }
+    return { success: false, error: 'Max retries exceeded' };
 }
 /**
  * Publish the Merkle root for an epoch on-chain.

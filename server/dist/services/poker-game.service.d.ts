@@ -129,6 +129,17 @@ export declare class PokerGameService {
     private tableLocks;
     /** Starting stacks (whole chips) captured at hand deal, keyed by handId -> address. */
     private handStartingStacks;
+    /**
+     * Hand number of the most-recently-completed hand per tableId, stashed by
+     * `persistShowdown` so the deferred post-hand callback (eliminations, blind
+     * updates) can fire from inside the inter-hand timer instead of immediately
+     * on showdown — that way the busted tournament player stays seated through
+     * the full reveal + 15-second post-showdown window. Read+deleted by
+     * `scheduleNextHandAfterShowdown`'s timer body.
+     */
+    private pendingPostHandHandNumbers;
+    /** Bail flag for `recoverStuckPostHandTables` so overlapping ticks can't pile up. */
+    private recoveryInFlight;
     constructor(dbService: DatabaseService, pfService: ProvablyFairService);
     /** Wire in the WebSocket broadcast so actions push state to clients. */
     setBroadcastCallback(cb: (tableId: string) => Promise<void>): void;
@@ -165,9 +176,25 @@ export declare class PokerGameService {
      */
     private completeShowdownWithOptionalRunout;
     /**
-     * Keep showdown delay transition behavior centralized for deterministic restart/reconnect handling.
+     * Centralizes the post-showdown transition: waits SHOWDOWN_DELAY_MS, then
+     * runs the tournament post-hand callback (eliminations + blind updates)
+     * BEFORE starting the next hand. Eliminations are deliberately deferred to
+     * this moment so a busted player remains seated through the full reveal
+     * window (cards stay flipped, chat works, no surprise auto-leave) and the
+     * tournament-end check runs in time to cancel a stale `tryStartNextHand`.
      */
     private scheduleNextHandAfterShowdown;
+    /**
+     * Self-healing sweep — finds any showdown whose deferred post-hand work
+     * never ran (server restart during the 15s window, lost in-memory timer,
+     * etc.) and finishes it. Must be safe to call repeatedly: every step
+     * re-checks the `post_hand_processed_at` marker under the per-table lock
+     * before mutating, and the partial index keeps the scan cheap.
+     *
+     * Wired into the existing 5s `pokerAutoFoldInterval` and called once
+     * during server bootstrap.
+     */
+    recoverStuckPostHandTables(): Promise<void>;
     private broadcastState;
     listTables(): Promise<PokerTableSummary[]>;
     createTable(smallBlindChips: number, bigBlindChips: number, maxSeats: number, pinCode?: string, creatorAddress?: string | null): Promise<string>;
