@@ -17,7 +17,15 @@ const KEEPER_KEY = (
   process.env.MERKLE_KEEPER_PRIVATE_KEY || process.env.SETTLEMENT_PRIVATE_KEY
 ) as `0x${string}` | undefined;
 
+// revokeEpoch is onlyOwner on the contract — the keeper (operator) cannot
+// call it. Configure the owner private key separately. Read lazily so the
+// helper still loads when reclamation isn't being used.
+function getOwnerKey(): `0x${string}` | undefined {
+  return process.env.MERKLE_OWNER_PRIVATE_KEY as `0x${string}` | undefined;
+}
+
 let walletClient: ReturnType<typeof createWalletClient> | null = null;
+let ownerWalletClient: ReturnType<typeof createWalletClient> | null = null;
 
 function getWalletClient() {
   if (!KEEPER_KEY) {
@@ -34,6 +42,22 @@ function getWalletClient() {
   return walletClient;
 }
 
+function getOwnerWalletClient() {
+  const key = getOwnerKey();
+  if (!key) {
+    throw new Error('MERKLE_OWNER_PRIVATE_KEY not set — required for revokeEpoch (onlyOwner)');
+  }
+  if (!ownerWalletClient) {
+    const account = privateKeyToAccount(key);
+    ownerWalletClient = createWalletClient({
+      account,
+      chain: pulsechain,
+      transport: http(process.env.PULSECHAIN_RPC_URL || 'https://rpc.pulsechain.com'),
+    });
+  }
+  return ownerWalletClient;
+}
+
 /** Returns true if a keeper private key is configured. */
 export function isMerkleKeeperConfigured(): boolean {
   return Boolean(KEEPER_KEY);
@@ -48,6 +72,18 @@ export function getMerkleKeeperAddress(): string | null {
   } catch {
     return null;
   }
+}
+
+/** Returns true if the owner private key is configured (required for revokeEpoch). */
+export function isMerkleOwnerConfigured(): boolean {
+  return Boolean(getOwnerKey());
+}
+
+/** Returns the configured owner-key wallet address, or null if not configured. */
+export function getMerkleOwnerKeyAddress(): string | null {
+  const k = getOwnerKey();
+  if (!k) return null;
+  try { return privateKeyToAccount(k).address; } catch { return null; }
 }
 
 /**
@@ -165,6 +201,54 @@ export async function depositMorbiusRewards(amount: bigint): Promise<TxResult> {
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
       logger.error('[MerkleClaim] depositRewards failed', { attempt, error: msg });
+      if (attempt === maxRetries) return { success: false, error: msg };
+    }
+  }
+  return { success: false, error: 'Max retries exceeded' };
+}
+
+/**
+ * Read the on-chain claimed amount for an epoch.
+ * If > 0, revokeEpoch() will revert with "already has claims".
+ */
+export async function getEpochClaimedAmount(epochNumber: number): Promise<bigint> {
+  const publicClient = getPublicClient();
+  const result = (await publicClient.readContract({
+    address: MERKLE_CLAIM_ADDRESS,
+    abi: merkleClaimMorbiusAbi,
+    functionName: 'epochClaimedAmount',
+    args: [BigInt(epochNumber)],
+  })) as bigint;
+  return result;
+}
+
+/**
+ * Revoke an epoch root on-chain. Only succeeds when no on-chain claims have
+ * been made against this epoch yet (epochClaimedAmount[epochId] == 0).
+ *
+ * NOTE: revokeEpoch is onlyOwner on the contract. Signed by the wallet
+ * derived from MERKLE_OWNER_PRIVATE_KEY (NOT the keeper).
+ */
+export async function revokeEpochOnChain(epochNumber: number): Promise<TxResult> {
+  const maxRetries = 2;
+  for (let attempt = 0; attempt <= maxRetries; attempt++) {
+    try {
+      const client = getOwnerWalletClient();
+      const publicClient = getPublicClient();
+      const hash = await client.writeContract({
+        account: client.account!,
+        chain: pulsechain,
+        address: MERKLE_CLAIM_ADDRESS,
+        abi: merkleClaimMorbiusAbi,
+        functionName: 'revokeEpoch',
+        args: [BigInt(epochNumber)],
+      });
+      logger.info('[MerkleClaim] revokeEpoch tx sent', { epochNumber, txHash: hash });
+      await publicClient.waitForTransactionReceipt({ hash });
+      return { success: true, txHash: hash };
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      logger.error('[MerkleClaim] revokeEpoch failed', { epochNumber, attempt, error: msg });
       if (attempt === maxRetries) return { success: false, error: msg };
     }
   }

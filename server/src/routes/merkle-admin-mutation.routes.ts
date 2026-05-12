@@ -139,6 +139,9 @@ export function registerMerkleAdminMutationRoutes({
         'default_reward_wei',
         'auto_publish_onchain',
         'countdown_duration',
+        'reclaim_stale_enabled',
+        'reclaim_stale_age_days',
+        'reclaim_min_epochs_back',
       ]);
       const patch: Record<string, string> = {};
       for (const [k, v] of Object.entries(req.body as Record<string, unknown>)) {
@@ -298,6 +301,50 @@ export function registerMerkleAdminMutationRoutes({
       await merkleDropsLPService.updateSettings(patch);
       sendJson(res, await merkleDropsLPService.getSettings());
     } catch (error) {
+      res.status(500).json({ error: String(error) });
+    }
+  });
+
+  // ── Stale-snapshot reclamation (holder + LP) ─────────────────────────────
+  // Preview is a dry-run: returns the candidate epochs and whether each is
+  // revocable on-chain (epochClaimedAmount == 0). Execute does the on-chain
+  // revoke + DB update; never marks a snapshot reclaimed unless the on-chain
+  // revoke for that epoch succeeded.
+
+  app.get('/api/admin/merkle/reclaim/preview', async (_req, res) => {
+    try {
+      sendJson(res, await merkleDropsService.previewReclaimStaleSnapshots());
+    } catch (error) {
+      logger.error('Error previewing merkle reclaim:', error);
+      res.status(500).json({ error: String(error) });
+    }
+  });
+
+  app.post('/api/admin/merkle/reclaim/execute', async (_req, res) => {
+    try {
+      const out = await merkleDropsService.reclaimStaleSnapshots();
+      sendJson(res, out);
+    } catch (error) {
+      logger.error('Error executing merkle reclaim:', error);
+      res.status(500).json({ error: String(error) });
+    }
+  });
+
+  app.get('/api/admin/merkle-lp/reclaim/preview', async (_req, res) => {
+    try {
+      sendJson(res, await merkleDropsLPService.previewReclaimStaleSnapshots());
+    } catch (error) {
+      logger.error('Error previewing LP reclaim:', error);
+      res.status(500).json({ error: String(error) });
+    }
+  });
+
+  app.post('/api/admin/merkle-lp/reclaim/execute', async (_req, res) => {
+    try {
+      const out = await merkleDropsLPService.reclaimStaleSnapshots();
+      sendJson(res, out);
+    } catch (error) {
+      logger.error('Error executing LP reclaim:', error);
       res.status(500).json({ error: String(error) });
     }
   });

@@ -14,6 +14,7 @@ import { ethers } from 'ethers';
 import { logger } from '../utils/logger';
 import {
   isMerkleKeeperConfigured,
+  isMerkleOwnerConfigured,
   setEpochRootOnChain,
   getContractMorbiusBalance,
   checkHasClaimed,
@@ -21,6 +22,8 @@ import {
   getPairReserveInfo,
   calcMorbiusEquivalent,
   getLatestBlock,
+  getEpochClaimedAmount,
+  revokeEpochOnChain,
 } from '../utils/merkle-claim-lp';
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -386,6 +389,7 @@ export class MerkleDropsLPService {
          AND me.status = 'published'
          AND ms.superseded_by_epoch_id IS NULL
          AND ms.claimed_at IS NULL
+         AND ms.reclaimed_at IS NULL
          AND ms.epoch_id != $2
          AND CAST(ms.reward_amount AS NUMERIC) > 0`,
       [walletAddresses, epochId],
@@ -671,11 +675,213 @@ export class MerkleDropsLPService {
     logger.info('[MerkleLP] Settings updated', patch);
   }
 
+  // ── Stale-snapshot reclamation ──────────────────────────────────────────────
+
+  /**
+   * Preview which published LP epochs are eligible for stale-snapshot reclamation.
+   * Mirrors MerkleDropsService.previewReclaimStaleSnapshots.
+   */
+  async previewReclaimStaleSnapshots(): Promise<{
+    ageDays: number;
+    minEpochsBack: number;
+    candidates: Array<{
+      epochNumber: number;
+      epochId: number;
+      publishedAt: string;
+      unclaimedSnapshots: number;
+      reclaimableWei: string;
+      onChainClaimedWei: string;
+      revocable: boolean;
+    }>;
+    totalReclaimableWei: string;
+  }> {
+    const settings = await this.getSettings();
+    const ageDays = parseInt(settings['reclaim_stale_age_days'] ?? '30', 10);
+    const minEpochsBack = parseInt(settings['reclaim_min_epochs_back'] ?? '2', 10);
+
+    const { rows } = await this.pool.query<{
+      epoch_id: number;
+      epoch_number: number;
+      published_at: string;
+      unclaimed_count: string;
+      reclaimable_wei: string;
+    }>(
+      `WITH max_epoch AS (
+         SELECT MAX(epoch_number) AS max FROM merkle_lp_epochs WHERE status = 'published'
+       )
+       SELECT me.id AS epoch_id,
+              me.epoch_number,
+              me.published_at,
+              COUNT(ms.id)::text AS unclaimed_count,
+              COALESCE(SUM(CAST(ms.reward_amount AS NUMERIC)), 0)::text AS reclaimable_wei
+       FROM merkle_lp_epochs me
+       LEFT JOIN merkle_lp_snapshots ms ON ms.epoch_id = me.id
+         AND ms.claimed_at IS NULL
+         AND ms.superseded_by_epoch_id IS NULL
+         AND ms.reclaimed_at IS NULL
+         AND CAST(ms.reward_amount AS NUMERIC) > 0
+       WHERE me.status = 'published'
+         AND me.published_at < NOW() - ($1 || ' days')::interval
+         AND me.epoch_number <= (SELECT max FROM max_epoch) - $2
+       GROUP BY me.id, me.epoch_number, me.published_at
+       HAVING COALESCE(SUM(CAST(ms.reward_amount AS NUMERIC)), 0) > 0
+       ORDER BY me.epoch_number ASC`,
+      [String(ageDays), minEpochsBack],
+    );
+
+    const candidates = await Promise.all(
+      rows.map(async (r) => {
+        let onChainClaimed = 0n;
+        let revocable = false;
+        try {
+          onChainClaimed = await getEpochClaimedAmount(r.epoch_number);
+          revocable = onChainClaimed === 0n;
+        } catch (err) {
+          logger.warn(`[MerkleLP] Could not read epochClaimedAmount(#${r.epoch_number})`, err);
+        }
+        return {
+          epochNumber: r.epoch_number,
+          epochId: r.epoch_id,
+          publishedAt: r.published_at,
+          unclaimedSnapshots: Number(r.unclaimed_count),
+          reclaimableWei: r.reclaimable_wei,
+          onChainClaimedWei: onChainClaimed.toString(),
+          revocable,
+        };
+      }),
+    );
+
+    const totalReclaimable = candidates
+      .filter((c) => c.revocable)
+      .reduce((sum, c) => sum + BigInt(c.reclaimableWei), 0n);
+
+    return {
+      ageDays,
+      minEpochsBack,
+      candidates,
+      totalReclaimableWei: totalReclaimable.toString(),
+    };
+  }
+
+  /**
+   * Execute stale-snapshot reclamation. See MerkleDropsService.reclaimStaleSnapshots
+   * for ordering and safety notes (revoke on-chain first, mark DB second).
+   */
+  async reclaimStaleSnapshots(): Promise<{
+    results: Array<{
+      epochNumber: number;
+      epochId: number;
+      reclaimableWei: string;
+      reclaimedSnapshots: number;
+      revoked: boolean;
+      txHash?: string;
+      error?: string;
+    }>;
+    totalReclaimedWei: string;
+  }> {
+    if (!isMerkleOwnerConfigured()) {
+      throw new Error('MERKLE_OWNER_PRIVATE_KEY not configured — required for revokeEpoch (onlyOwner)');
+    }
+
+    const preview = await this.previewReclaimStaleSnapshots();
+    const results: Array<{
+      epochNumber: number;
+      epochId: number;
+      reclaimableWei: string;
+      reclaimedSnapshots: number;
+      revoked: boolean;
+      txHash?: string;
+      error?: string;
+    }> = [];
+    let totalReclaimed = 0n;
+
+    for (const candidate of preview.candidates) {
+      if (!candidate.revocable) {
+        results.push({
+          epochNumber: candidate.epochNumber,
+          epochId: candidate.epochId,
+          reclaimableWei: candidate.reclaimableWei,
+          reclaimedSnapshots: 0,
+          revoked: false,
+          error: `epochClaimedAmount=${candidate.onChainClaimedWei} — already has on-chain claims; cannot revoke`,
+        });
+        continue;
+      }
+
+      const tx = await revokeEpochOnChain(candidate.epochNumber);
+      if (!tx.success) {
+        const isAlreadyCleared = tx.error && /epoch not set/i.test(tx.error);
+        if (isAlreadyCleared) {
+          logger.info(`[MerkleLP] Epoch #${candidate.epochNumber} root already cleared on-chain — marking DB`);
+        } else {
+          results.push({
+            epochNumber: candidate.epochNumber,
+            epochId: candidate.epochId,
+            reclaimableWei: candidate.reclaimableWei,
+            reclaimedSnapshots: 0,
+            revoked: false,
+            error: tx.error,
+          });
+          continue;
+        }
+      }
+
+      const client = await this.pool.connect();
+      try {
+        await client.query('BEGIN');
+        const upd = await client.query<{ reward_amount: string }>(
+          `UPDATE merkle_lp_snapshots
+           SET reclaimed_at = NOW()
+           WHERE epoch_id = $1
+             AND claimed_at IS NULL
+             AND superseded_by_epoch_id IS NULL
+             AND reclaimed_at IS NULL
+             AND CAST(reward_amount AS NUMERIC) > 0
+           RETURNING reward_amount`,
+          [candidate.epochId],
+        );
+        const reclaimedSum = upd.rows.reduce((s, r) => s + BigInt(r.reward_amount), 0n);
+        await client.query('COMMIT');
+
+        totalReclaimed += reclaimedSum;
+        results.push({
+          epochNumber: candidate.epochNumber,
+          epochId: candidate.epochId,
+          reclaimableWei: reclaimedSum.toString(),
+          reclaimedSnapshots: upd.rowCount ?? 0,
+          revoked: true,
+          txHash: tx.txHash,
+        });
+        logger.info(
+          `[MerkleLP] Reclaimed epoch #${candidate.epochNumber}: ${upd.rowCount} snapshots, ` +
+          `${ethers.formatEther(reclaimedSum)} MORBIUS freed`,
+        );
+      } catch (err) {
+        await client.query('ROLLBACK');
+        results.push({
+          epochNumber: candidate.epochNumber,
+          epochId: candidate.epochId,
+          reclaimableWei: candidate.reclaimableWei,
+          reclaimedSnapshots: 0,
+          revoked: true,
+          txHash: tx.txHash,
+          error: `revoked on-chain but DB update failed: ${err instanceof Error ? err.message : String(err)}`,
+        });
+      } finally {
+        client.release();
+      }
+    }
+
+    return { results, totalReclaimedWei: totalReclaimed.toString() };
+  }
+
   // ── Available contract balance ──────────────────────────────────────────────
 
   async getAvailableContractBalance(): Promise<bigint> {
     const contractBalance = await getContractMorbiusBalance();
 
+    // Reclaimed snapshots had their epoch revoked on-chain — funds are
+    // redistributable, so they're NOT subtracted from available.
     const { rows } = await this.pool.query<{ total: string }>(
       `SELECT COALESCE(SUM(CAST(ms.reward_amount AS NUMERIC)), 0) AS total
        FROM merkle_lp_snapshots ms
@@ -683,6 +889,7 @@ export class MerkleDropsLPService {
        WHERE me.status = 'published'
          AND ms.claimed_at IS NULL
          AND ms.superseded_by_epoch_id IS NULL
+         AND ms.reclaimed_at IS NULL
          AND CAST(ms.reward_amount AS NUMERIC) > 0`,
     );
     const owedWei = BigInt(rows[0]?.total ?? '0');
@@ -705,6 +912,7 @@ export class MerkleDropsLPService {
        WHERE me.status = 'published'
          AND ms.claimed_at IS NULL
          AND ms.superseded_by_epoch_id IS NULL
+         AND ms.reclaimed_at IS NULL
          AND CAST(ms.reward_amount AS NUMERIC) > 0`,
     );
 
@@ -910,6 +1118,22 @@ export class MerkleDropsLPService {
 
         try { await this.syncClaimStatus(); } catch (err) {
           logger.error('[MerkleLP] Sync claim status failed — continuing', err);
+        }
+
+        // Optionally reclaim stale LP snapshots before computing available balance.
+        // Default OFF — admin opts in via reclaim_stale_enabled setting.
+        if (settings['reclaim_stale_enabled'] === 'true') {
+          try {
+            const out = await this.reclaimStaleSnapshots();
+            if (out.totalReclaimedWei !== '0') {
+              logger.info(
+                `[MerkleLP] Stale reclamation freed ${ethers.formatEther(out.totalReclaimedWei)} MORBIUS ` +
+                `across ${out.results.filter((r) => r.revoked && !r.error).length} epoch(s)`,
+              );
+            }
+          } catch (err) {
+            logger.error('[MerkleLP] Stale reclamation pass failed — continuing', err);
+          }
         }
 
         let rewardWei = defaultRewardWei;

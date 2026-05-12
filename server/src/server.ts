@@ -4402,7 +4402,7 @@ async function initializeServices() {
 
     app.post('/api/admin/merkle/settings', async (req, res) => {
       try {
-        const allowed = new Set(['schedule_type', 'schedule_day', 'schedule_hour_utc', 'schedule_interval', 'default_reward_wei', 'auto_publish_onchain', 'countdown_duration']);
+        const allowed = new Set(['schedule_type', 'schedule_day', 'schedule_hour_utc', 'schedule_interval', 'default_reward_wei', 'auto_publish_onchain', 'countdown_duration', 'reclaim_stale_enabled', 'reclaim_stale_age_days', 'reclaim_min_epochs_back']);
         const patch: Record<string, string> = {};
         for (const [k, v] of Object.entries(req.body as Record<string, unknown>)) {
           if (allowed.has(k) && typeof v === 'string') patch[k] = v;
@@ -4416,6 +4416,27 @@ async function initializeServices() {
         sendJson(res, updated);
       } catch (error) {
         logger.error('Error updating merkle settings:', error);
+        res.status(500).json({ error: String(error) });
+      }
+    });
+
+    // Admin: stale-snapshot reclamation (holder).
+    // Preview is a dry-run; execute calls revokeEpoch() on-chain and marks
+    // matching snapshots reclaimed_at. Funds become available for the next epoch.
+    app.get('/api/admin/merkle/reclaim/preview', async (_req, res) => {
+      try {
+        sendJson(res, await merkleDropsService!.previewReclaimStaleSnapshots());
+      } catch (error) {
+        logger.error('Error previewing merkle reclaim:', error);
+        res.status(500).json({ error: String(error) });
+      }
+    });
+
+    app.post('/api/admin/merkle/reclaim/execute', async (_req, res) => {
+      try {
+        sendJson(res, await merkleDropsService!.reclaimStaleSnapshots());
+      } catch (error) {
+        logger.error('Error executing merkle reclaim:', error);
         res.status(500).json({ error: String(error) });
       }
     });
@@ -4656,6 +4677,25 @@ async function initializeServices() {
         await merkleDropsLPService!.updateSettings(patch);
         sendJson(res, await merkleDropsLPService!.getSettings());
       } catch (error) {
+        res.status(500).json({ error: String(error) });
+      }
+    });
+
+    // Admin: stale-snapshot reclamation (LP). See /api/admin/merkle/reclaim above.
+    app.get('/api/admin/merkle-lp/reclaim/preview', async (_req, res) => {
+      try {
+        sendJson(res, await merkleDropsLPService!.previewReclaimStaleSnapshots());
+      } catch (error) {
+        logger.error('Error previewing LP reclaim:', error);
+        res.status(500).json({ error: String(error) });
+      }
+    });
+
+    app.post('/api/admin/merkle-lp/reclaim/execute', async (_req, res) => {
+      try {
+        sendJson(res, await merkleDropsLPService!.reclaimStaleSnapshots());
+      } catch (error) {
+        logger.error('Error executing LP reclaim:', error);
         res.status(500).json({ error: String(error) });
       }
     });
