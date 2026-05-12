@@ -14,6 +14,7 @@ import {
   type PokerBlindIncreaseMode,
 } from '@/hooks/use-poker-tournament';
 import { formatChips } from '@/lib/format-poker-chips';
+import { POKER_MORBIUS_SHARE_LOGO_PUBLIC_URL } from '@/lib/poker-table-logo-constants';
 import { isAdminWallet } from '@/lib/admin';
 import {
   buildPrizePercents,
@@ -393,6 +394,21 @@ function parseLocalDateTime(dateStr: string, timeStr: string): Date | null {
     return null;
   }
   return new Date(y, mo - 1, d, hh, mm, 0, 0);
+}
+
+function shortTimeZoneName(local: Date): string {
+  try {
+    const parts = new Intl.DateTimeFormat(undefined, { timeZoneName: 'short' }).formatToParts(local);
+    return parts.find((p) => p.type === 'timeZoneName')?.value?.trim() ?? '';
+  } catch {
+    return '';
+  }
+}
+
+function formatShareScheduleLine(local: Date): string {
+  const base = format(local, 'EEE, MMM d, yyyy · h:mm a');
+  const tz = shortTimeZoneName(local);
+  return tz ? `${base} ${tz}` : base;
 }
 
 /** Opens the native date/time UI from a surrounding click (not only the small icon). */
@@ -1529,9 +1545,29 @@ export function PokerTournamentCreator({ creatorAddress, onClose, onCreate }: Po
 
   const shareOverlaySnapshot = useMemo(() => {
     const local = parseLocalDateTime(scheduledDate, scheduledTime);
-    const scheduleLine = local
-      ? format(local, 'EEE, MMM d, yyyy · h:mm a')
-      : 'Start time: set on Start time tab';
+    const scheduleLine = local ? formatShareScheduleLine(local) : 'Start time: set on Start time tab';
+
+    let shareTokenSymbol: string | null = null;
+    let shareTokenLogoUrl: string | null = null;
+    if (isFreeroll) {
+      if (prizeSource === 'custom_token') {
+        if (selectedToken) {
+          shareTokenSymbol = selectedToken.symbol?.trim() || 'Token';
+          shareTokenLogoUrl = selectedToken.logoUrl;
+        }
+      } else {
+        shareTokenSymbol = 'MORBIUS';
+        shareTokenLogoUrl = POKER_MORBIUS_SHARE_LOGO_PUBLIC_URL;
+      }
+    } else if (buyInPrizeSource === 'custom_token_buyin') {
+      if (selectedToken) {
+        shareTokenSymbol = selectedToken.symbol?.trim() || 'Token';
+        shareTokenLogoUrl = selectedToken.logoUrl;
+      }
+    } else {
+      shareTokenSymbol = 'MORBIUS';
+      shareTokenLogoUrl = POKER_MORBIUS_SHARE_LOGO_PUBLIC_URL;
+    }
 
     const pctCompact = prizePercents
       .filter((p) => p > 0)
@@ -1559,8 +1595,8 @@ export function PokerTournamentCreator({ creatorAddress, onClose, onCreate }: Po
         const g = parsePositiveWholeChips(guaranteedPool);
         prizeLine =
           g > 0n
-            ? `${formatChips(g)} chips${prizeSource === 'platform_promo' ? ' · promo' : ''}`
-            : 'Guaranteed chips (Basics)';
+            ? `${formatChips(g)} MORBIUS${prizeSource === 'platform_promo' ? ' · promo' : ''}`
+            : 'Guaranteed MORBIUS (Basics)';
       }
     } else if (buyInPrizeSource === 'custom_token_buyin') {
       if (selectedToken && buyInTokenWei > 0n) {
@@ -1581,11 +1617,11 @@ export function PokerTournamentCreator({ creatorAddress, onClose, onCreate }: Po
       const pool = buy * BigInt(prizeSlotCount);
       prizeLine =
         buy > 0n
-          ? `${formatChips(pool)} chips max · ${formatChips(buy)} × ${prizeSlotCount} seats`
+          ? `${formatChips(pool)} MORBIUS max · ${formatChips(buy)} MORBIUS × ${prizeSlotCount} seats`
           : 'Buy-in (Basics)';
     }
 
-    return { scheduleLine, prizeLine, payoutLine };
+    return { scheduleLine, prizeLine, payoutLine, shareTokenSymbol, shareTokenLogoUrl };
   }, [
     scheduledDate,
     scheduledTime,
@@ -2441,6 +2477,8 @@ export function PokerTournamentCreator({ creatorAddress, onClose, onCreate }: Po
                 scheduleLine={shareOverlaySnapshot.scheduleLine}
                 prizeLine={shareOverlaySnapshot.prizeLine}
                 payoutLine={shareOverlaySnapshot.payoutLine}
+                shareTokenSymbol={shareOverlaySnapshot.shareTokenSymbol}
+                shareTokenLogoUrl={shareOverlaySnapshot.shareTokenLogoUrl}
               />
             </TabsContent>
 

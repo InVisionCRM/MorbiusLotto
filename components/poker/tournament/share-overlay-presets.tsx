@@ -35,7 +35,56 @@ export type ShareOverlayProps = {
   scheduleLine: string;
   prizeLine: string;
   payoutLine: string;
+  /** Token ticker as it appears in `prizeLine` (e.g. MORBIUS, USDC) — used to place the inline logo after the first match. */
+  prizeTokenSymbol?: string | null;
+  /** PulseChain / same-origin URL for the small inline prize icon and large corner badge. */
+  prizeTokenLogoUrl?: string | null;
 };
+
+function renderPrizeLineWithInlineLogo(
+  prizeLine: string,
+  tokenSymbol: string | null | undefined,
+  tokenLogoUrl: string | null | undefined,
+): React.ReactNode {
+  const url = tokenLogoUrl?.trim();
+  if (!url) return prizeLine;
+  const sym = tokenSymbol?.trim();
+  const imgStyle: React.CSSProperties = {
+    display: 'inline-block',
+    width: '1.1em',
+    height: '1.1em',
+    marginLeft: '0.22em',
+    verticalAlign: '-0.14em',
+    objectFit: 'contain',
+    flexShrink: 0,
+  };
+  const img = <img src={url} alt="" style={imgStyle} />;
+  if (!sym) {
+    return (
+      <>
+        {prizeLine}
+        {img}
+      </>
+    );
+  }
+  const idx = prizeLine.indexOf(sym);
+  if (idx === -1) {
+    return (
+      <>
+        {prizeLine}
+        {img}
+      </>
+    );
+  }
+  const end = idx + sym.length;
+  return (
+    <>
+      {prizeLine.slice(0, end)}
+      {img}
+      {prizeLine.slice(end)}
+    </>
+  );
+}
 
 export const SHARE_OVERLAY_OPTIONS: readonly {
   id: ShareOverlayId;
@@ -60,6 +109,8 @@ export function NeonHeroOverlay({
   scheduleLine,
   prizeLine,
   payoutLine,
+  prizeTokenSymbol = null,
+  prizeTokenLogoUrl = null,
 }: ShareOverlayProps) {
   const name = clampName(tournamentName, 42);
   const meta: React.CSSProperties = {
@@ -119,7 +170,7 @@ export function NeonHeroOverlay({
         <p style={{ textShadow: '0 1px 8px rgba(0,0,0,0.9)' }}>
           <span style={label}>Prize</span>
           <span style={{ color: C.white50 }}> · </span>
-          {prizeLine}
+          {renderPrizeLineWithInlineLogo(prizeLine, prizeTokenSymbol, prizeTokenLogoUrl)}
         </p>
         <p className="line-clamp-3" style={{ textShadow: '0 1px 8px rgba(0,0,0,0.9)' }}>
           <span style={label}>Payout</span>
@@ -149,6 +200,8 @@ export function FilmBottomOverlay({
   scheduleLine,
   prizeLine,
   payoutLine,
+  prizeTokenSymbol = null,
+  prizeTokenLogoUrl = null,
 }: ShareOverlayProps) {
   const name = clampName(tournamentName, 48);
   return (
@@ -184,7 +237,8 @@ export function FilmBottomOverlay({
             <span style={{ fontWeight: 600, color: 'rgba(165, 243, 252, 0.9)' }}>Starts</span> · {scheduleLine}
           </p>
           <p>
-            <span style={{ fontWeight: 600, color: 'rgba(165, 243, 252, 0.9)' }}>Prize</span> · {prizeLine}
+            <span style={{ fontWeight: 600, color: 'rgba(165, 243, 252, 0.9)' }}>Prize</span> ·{' '}
+            {renderPrizeLineWithInlineLogo(prizeLine, prizeTokenSymbol, prizeTokenLogoUrl)}
           </p>
           <p className="line-clamp-3">
             <span style={{ fontWeight: 600, color: 'rgba(165, 243, 252, 0.9)' }}>Payout</span> · {payoutLine}
@@ -205,6 +259,8 @@ export function MinimalCornerOverlay({
   scheduleLine,
   prizeLine,
   payoutLine,
+  prizeTokenSymbol = null,
+  prizeTokenLogoUrl = null,
 }: ShareOverlayProps) {
   const name = clampName(tournamentName, 36);
   return (
@@ -238,7 +294,8 @@ export function MinimalCornerOverlay({
             <span style={{ color: C.cyanMuted }}>Starts</span> {scheduleLine}
           </p>
           <p>
-            <span style={{ color: C.cyanMuted }}>Prize</span> {prizeLine}
+            <span style={{ color: C.cyanMuted }}>Prize</span>{' '}
+            {renderPrizeLineWithInlineLogo(prizeLine, prizeTokenSymbol, prizeTokenLogoUrl)}
           </p>
           <p className="line-clamp-2">
             <span style={{ color: C.cyanMuted }}>Payout</span> {payoutLine}
@@ -256,6 +313,8 @@ export function BracketTitleOverlay({
   scheduleLine,
   prizeLine,
   payoutLine,
+  prizeTokenSymbol = null,
+  prizeTokenLogoUrl = null,
 }: ShareOverlayProps) {
   const name = clampName(tournamentName, 40);
   const corner: React.CSSProperties = {
@@ -308,7 +367,8 @@ export function BracketTitleOverlay({
               <span style={{ fontWeight: 600, color: 'rgba(103, 232, 249, 0.9)' }}>Starts</span> · {scheduleLine}
             </p>
             <p>
-              <span style={{ fontWeight: 600, color: 'rgba(103, 232, 249, 0.9)' }}>Prize</span> · {prizeLine}
+              <span style={{ fontWeight: 600, color: 'rgba(103, 232, 249, 0.9)' }}>Prize</span> ·{' '}
+              {renderPrizeLineWithInlineLogo(prizeLine, prizeTokenSymbol, prizeTokenLogoUrl)}
             </p>
             <p className="line-clamp-2">
               <span style={{ fontWeight: 600, color: 'rgba(103, 232, 249, 0.9)' }}>Payout</span> · {payoutLine}

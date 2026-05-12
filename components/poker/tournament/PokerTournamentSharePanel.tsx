@@ -38,6 +38,10 @@ export type PokerTournamentSharePanelProps = {
   scheduleLine: string;
   prizeLine: string;
   payoutLine: string;
+  /** Ticker for inline logo placement (first occurrence in `prizeLine`). */
+  shareTokenSymbol?: string | null;
+  /** Logo URL for inline prize icon + large top-right badge (same-origin or CORS-friendly). */
+  shareTokenLogoUrl?: string | null;
 };
 
 export function PokerTournamentSharePanel({
@@ -47,6 +51,8 @@ export function PokerTournamentSharePanel({
   scheduleLine,
   prizeLine,
   payoutLine,
+  shareTokenSymbol = null,
+  shareTokenLogoUrl = null,
 }: PokerTournamentSharePanelProps) {
   const shareCardRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -152,6 +158,8 @@ export function PokerTournamentSharePanel({
     scheduleLine,
     prizeLine,
     payoutLine,
+    prizeTokenSymbol: shareTokenSymbol,
+    prizeTokenLogoUrl: shareTokenLogoUrl,
   };
 
   /**
@@ -199,6 +207,8 @@ export function PokerTournamentSharePanel({
     scheduleLine,
     prizeLine,
     payoutLine,
+    shareTokenSymbol,
+    shareTokenLogoUrl,
     runExportBlob,
   ]);
 
@@ -343,18 +353,33 @@ export function PokerTournamentSharePanel({
 
       <div className="space-y-2">
         <p className="text-center text-xs font-medium uppercase tracking-wide text-white/50">Preview</p>
-        <div className="flex justify-center overflow-x-auto pb-1">
+        <div className="flex justify-center overflow-visible px-6 pb-10 pt-14 sm:px-10 sm:pt-16 sm:pb-12">
           <div
             ref={shareCardRef}
-            className="relative aspect-[1200/630] w-full max-w-[600px] shrink-0 overflow-hidden rounded-xl"
+            className="relative aspect-[1200/630] w-full max-w-[600px] shrink-0 overflow-visible rounded-xl"
             style={{
               background: 'linear-gradient(145deg, #0f172a 0%, #0c1524 45%, #0f172a 100%)',
               border: '1px solid rgba(6, 182, 212, 0.28)',
               boxShadow: '0 10px 15px -3px rgba(0,0,0,0.45)',
-              /* Avoid inheriting theme oklch() from ancestors — html2canvas cannot parse it. */
               color: 'rgb(255, 255, 255)',
             }}
           >
+            {shareTokenLogoUrl ? (
+              <img
+                src={shareTokenLogoUrl}
+                alt=""
+                className="pointer-events-none absolute z-[12]"
+                style={{
+                  top: '-14%',
+                  right: '-10%',
+                  width: 'min(52%, 280px)',
+                  height: 'auto',
+                  maxWidth: 'none',
+                  objectFit: 'contain',
+                  filter: 'drop-shadow(0 12px 32px rgba(0,0,0,0.6))',
+                }}
+              />
+            ) : null}
             {previewUrl ? (
               <>
                 <img
