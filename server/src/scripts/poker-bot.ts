@@ -105,17 +105,7 @@ function formatError(err: unknown): string {
 
 function createWsClient(address: string): Promise<WebSocket> {
   const url = WS_URL.replace(/^https/, 'wss').replace(/^http/, 'ws');
-  // Trusted-bot auth bypass: when the server's `REQUIRE_WS_AUTH=true` is set,
-  // bots can't sign the EIP-712 challenge. Sending `botToken` (matched against
-  // `WS_BOT_AUTH_TOKEN` on the server) AND a whitelisted address in
-  // `WS_BOT_ALLOWED_ADDRESSES`/`POKER_BOT_ADDRESSES` lets the connection
-  // through without a signature. If the env var is unset locally, this is a
-  // harmless no-op.
-  const botToken = (process.env.WS_BOT_AUTH_TOKEN ?? '').trim();
-  const sep = url.includes('?') ? '&' : '?';
-  const withAuth = botToken
-    ? `${url}${sep}address=${address.toLowerCase()}&botToken=${encodeURIComponent(botToken)}`
-    : `${url}${sep}address=${address.toLowerCase()}`;
+  const withAuth = `${url}${url.includes('?') ? '&' : '?'}address=${address.toLowerCase()}`;
   return new Promise((resolve, reject) => {
     const ws = new WebSocket(withAuth);
     const timeout = setTimeout(() => {
@@ -161,9 +151,7 @@ function waitForAuth(ws: WebSocket): Promise<void> {
           clearTimeout(timeout);
           ws.removeListener('message', handler);
           reject(new Error(
-            'Server sent auth_challenge but no bot bypass matched. Either:\n' +
-            '  (a) set WS_BOT_AUTH_TOKEN (bot env) and matching WS_BOT_AUTH_TOKEN + WS_BOT_ALLOWED_ADDRESSES (server env);\n' +
-            '  (b) set DISABLE_WS_AUTH=true on the server (local dev only).'
+            'Server requires signed WebSocket auth challenge. Bots cannot sign. Set DISABLE_WS_AUTH=true on server for local bot testing.'
           ));
         }
         if (msg.type === 'error') {

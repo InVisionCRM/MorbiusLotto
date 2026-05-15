@@ -80,14 +80,7 @@ interface GameState {
 
 function createWsClient(address: string): Promise<WebSocket> {
   const url = WS_URL.replace(/^https/, 'wss').replace(/^http/, 'ws');
-  // Trusted-bot auth bypass — see comment in scripts/poker-bot.ts. If
-  // `WS_BOT_AUTH_TOKEN` is set, append it so the server skips the EIP-712
-  // challenge for whitelisted bot addresses.
-  const botToken = (process.env.WS_BOT_AUTH_TOKEN ?? '').trim();
-  const sep = url.includes('?') ? '&' : '?';
-  const withAuth = botToken
-    ? `${url}${sep}address=${address}&botToken=${encodeURIComponent(botToken)}`
-    : `${url}${sep}address=${address}`;
+  const withAuth = `${url}${url.includes('?') ? '&' : '?'}address=${address}`;
   return new Promise((resolve, reject) => {
     const ws = new WebSocket(withAuth);
     const timeout = setTimeout(() => {
