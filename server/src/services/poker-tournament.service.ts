@@ -1275,8 +1275,9 @@ export class PokerTournamentService {
    *   - Only fills tournaments with `buy_in_amount = 0` (freerolls). Bots
    *     have no MORBIUS balance — joining a paid tournament would burn the
    *     wallet pool.
-   *   - Only fills tournaments that have been open >= `POKER_BOT_FILL_DELAY_SECONDS`
-   *     (default 30s). Gives real players a window to join first.
+   *   - Optional pre-fill delay via `POKER_BOT_FILL_DELAY_SECONDS` (default 0).
+   *     Set this if you want to give real players a window to join before bots
+   *     show up. Default 0 so a created tournament fills on the next tick.
    *   - Adds up to `minPlayers - currentCount` bots per tick (or fewer if
    *     the wallet pool is exhausted).
    */
@@ -1288,14 +1289,15 @@ export class PokerTournamentService {
     if (botSet.size === 0) return;
 
     const rawDelay = process.env.POKER_BOT_FILL_DELAY_SECONDS;
-    let delaySeconds = 30;
+    let delaySeconds = 0;
     if (rawDelay) {
       const n = Number(rawDelay);
       if (Number.isFinite(n) && n >= 0 && n <= 3600) delaySeconds = Math.floor(n);
     }
 
-    // Candidate: freerolls still registering, opened long enough ago, not
-    // already past their scheduled start time (the scheduler handles those).
+    // Candidate: freerolls still registering, not past their scheduled start
+    // time (the scheduler handles those). When `delaySeconds > 0`, also require
+    // the tournament to have been open at least that long.
     const candidates = await this.pool.query<{
       id: string;
       poker_config: unknown;
@@ -1305,7 +1307,7 @@ export class PokerTournamentService {
         WHERE t.game_type = 'poker'
           AND t.status = 'registration'
           AND COALESCE(t.buy_in_amount, 0) = 0
-          AND t.created_at < NOW() - ($1 * INTERVAL '1 second')
+          AND ($1 = 0 OR t.created_at < NOW() - ($1 * INTERVAL '1 second'))
           AND (t.scheduled_start_at IS NULL OR t.scheduled_start_at > NOW())
         ORDER BY t.created_at ASC
         LIMIT 25`,
