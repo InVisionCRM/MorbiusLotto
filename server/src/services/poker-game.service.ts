@@ -3402,10 +3402,22 @@ export class PokerGameService {
    *
    * **Do NOT call this from a code path that already holds the table lock**
    * (the lock is not re-entrant — it would deadlock). Internal callers under
-   * a held lock should call `_leaveTableTournament` directly.
+   * a held lock should call `leaveTableTournamentNoLock` instead.
    */
   async leaveTableTournament(tableId: string, playerAddress: string): Promise<void> {
     return this.withTableLock(tableId, () => this._leaveTableTournament(tableId, playerAddress));
+  }
+
+  /**
+   * Lock-free variant of {@link leaveTableTournament}. Assumes the caller
+   * already holds the per-table lock — used by recovery paths fired from
+   * inside `tryStartNextHand`'s lock body (e.g.
+   * `recoverTournamentTableIfUnderTwoStackedSeats`). Using the lock-acquiring
+   * public method from those paths would deadlock since `withTableLock` is
+   * not re-entrant.
+   */
+  async leaveTableTournamentNoLock(tableId: string, playerAddress: string): Promise<void> {
+    return this._leaveTableTournament(tableId, playerAddress);
   }
 
   private async _leaveTableTournament(tableId: string, playerAddress: string): Promise<void> {
