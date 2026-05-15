@@ -61,6 +61,38 @@ function getTournamentIdFromRoom(room) {
 const REQUIRE_WS_AUTH = process.env.REQUIRE_WS_AUTH === 'true';
 // When true, never send auth_challenge — always trust query-param address (stops sign prompts for testing).
 const DISABLE_WS_AUTH = process.env.DISABLE_WS_AUTH === 'true';
+// Server-controlled bot auth bypass — lets in-house bot scripts connect under
+// REQUIRE_WS_AUTH=true (real users still need EIP-712 signatures). BOTH must
+// match for the bypass to apply:
+//   - `WS_BOT_AUTH_TOKEN` (shared secret) passed by the bot as `?botToken=…`
+//   - claimed address must be in `WS_BOT_ALLOWED_ADDRESSES` (or `POKER_BOT_ADDRESSES`)
+// Neither alone is enough: a leaked token can't claim arbitrary wallets, and
+// a spoofed address can't connect without the token. Set both in Railway env
+// and pass the token from the bot CLI scripts.
+const WS_BOT_AUTH_TOKEN = (process.env.WS_BOT_AUTH_TOKEN ?? '').trim();
+function getBotAllowedAddresses() {
+    const list = (process.env.WS_BOT_ALLOWED_ADDRESSES ?? process.env.POKER_BOT_ADDRESSES ?? '').trim();
+    if (!list) return new Set();
+    return new Set(
+        list
+            .split(/[,\s]+/)
+            .map((a) => a.trim().toLowerCase())
+            .filter((a) => a.startsWith('0x') && a.length === 42),
+    );
+}
+function isTrustedBotConnect(claimedAddress, botToken) {
+    if (!WS_BOT_AUTH_TOKEN || !botToken) return false;
+    // Constant-time comparison to avoid token leaks via timing.
+    if (botToken.length !== WS_BOT_AUTH_TOKEN.length) return false;
+    let mismatch = 0;
+    for (let i = 0; i < botToken.length; i++) {
+        mismatch |= botToken.charCodeAt(i) ^ WS_BOT_AUTH_TOKEN.charCodeAt(i);
+    }
+    if (mismatch !== 0) return false;
+    if (!claimedAddress) return false;
+    const allowed = getBotAllowedAddresses();
+    return allowed.has(claimedAddress.toLowerCase());
+}
 const CHAT_MAX_LENGTH = 500;
 const CHAT_RATE_LIMIT_MS = 2000; // min 2s between messages per connection
 const CHAT_RECENT_MESSAGES_LIMIT = 50;
@@ -290,6 +322,8 @@ class WebSocketService {
         // Extract player address from query parameters (used as claimed address, verified via EIP-712)
         const url = new URL(request.url || '', 'http://localhost');
         const claimedAddress = url.searchParams.get('address')?.toLowerCase();
+        const botToken = url.searchParams.get('botToken') ?? undefined;
+        const isBotConnection = isTrustedBotConnect(claimedAddress, botToken);
         // IMPORTANT: attach handlers immediately. If we await DB calls before registering
         // ws.on('message'), early client requests (like get_balance right after connect)
         // can be dropped and will timeout client-side.
@@ -329,6 +363,30 @@ class WebSocketService {
             logger_1.logger.error('WebSocket error', { connectionId: ws.connectionId, error });
         });
         this.clients.set(connectionId, ws);
+        // Trusted bot bypass — see WS_BOT_AUTH_TOKEN / WS_BOT_ALLOWED_ADDRESSES
+        // at top of file. Lets in-house bot scripts join under
+        // REQUIRE_WS_AUTH=true without needing to sign an EIP-712 challenge.
+        if (isBotConnection && claimedAddress) {
+            ws.playerAddress = claimedAddress;
+            ws.isAuthenticated = true;
+            logger_1.logger.info('WS Auth: bot bypass', { connectionId, claimedAddress });
+            try {
+                const player = await this.dbService.getOrCreatePlayer(claimedAddress);
+                await this.dbService.addActiveConnection(player.id, connectionId);
+            }
+            catch (error) {
+                logger_1.logger.error('Failed to track active connection (bot)', { connectionId, claimedAddress, error });
+            }
+            let pokerChipBalance = '0';
+            try {
+                pokerChipBalance = (await (0, poker_chip_wallet_1.getPokerChipBalance)(this.dbService.getPool(), claimedAddress)).toString();
+            } catch (_a) { /* ignore */ }
+            this.sendMessage(ws, {
+                type: 'connection_established',
+                payload: { connectionId, playerAddress: claimedAddress, pokerChipBalance }
+            });
+            return;
+        }
         const sendAuthChallenge = REQUIRE_WS_AUTH && !DISABLE_WS_AUTH;
         if (sendAuthChallenge) {
             // Strict mode: generate auth challenge, client must sign to proceed
