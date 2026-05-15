@@ -6,6 +6,7 @@ import { isAdminWallet } from '../lib/cosmetics-catalog';
 import { TournamentService } from './tournament.service';
 import { PokerGameService } from './poker-game.service';
 import { applyPokerChipDelta } from './poker-chip-wallet';
+import { getServerPokerBotAddressSet } from '../lib/poker-server-bot-addresses';
 import { getEscrowPoolStatus } from '../utils/escrow-status';
 import { tournamentIdToBytes32 } from '../utils/tournament-id-bytes32';
 import {
@@ -1249,6 +1250,115 @@ export class PokerTournamentService {
     }
 
     await this.activateTournament(tournamentId);
+  }
+
+  // ---------------------------------------------------------------------------
+  // In-process bot fill
+  // ---------------------------------------------------------------------------
+
+  /**
+   * Periodic tick called by the WS service every few seconds. Finds freeroll
+   * tournaments still in `registration` that need more players to start, and
+   * registers in-house bot wallets (from `POKER_BOT_ADDRESSES`) directly via
+   * `joinPokerTournament` — no WebSocket, no signed auth, no external CLI.
+   *
+   * Why in-process: bot scripts running as external clients have to go
+   * through the same EIP-712 auth path as real users. The C1 production
+   * guard (`REQUIRE_WS_AUTH=true`) closes the impersonation hole for real
+   * users but bots have no private key to sign with — they would need a
+   * permanent bypass token/allowlist. Calling the service directly from
+   * inside the server process sidesteps that entire control surface.
+   *
+   * Behavior gates:
+   *   - Disabled unless `POKER_BOT_FILL_ENABLED=true`. Default off so this
+   *     never surprises someone running staging/prod without bots.
+   *   - Only fills tournaments with `buy_in_amount = 0` (freerolls). Bots
+   *     have no MORBIUS balance — joining a paid tournament would burn the
+   *     wallet pool.
+   *   - Only fills tournaments that have been open >= `POKER_BOT_FILL_DELAY_SECONDS`
+   *     (default 30s). Gives real players a window to join first.
+   *   - Adds up to `minPlayers - currentCount` bots per tick (or fewer if
+   *     the wallet pool is exhausted).
+   */
+  async tickFillTournamentsWithBots(): Promise<void> {
+    const flag = String(process.env.POKER_BOT_FILL_ENABLED ?? '').toLowerCase();
+    if (flag !== 'true' && flag !== '1' && flag !== 'yes') return;
+
+    const botSet = getServerPokerBotAddressSet();
+    if (botSet.size === 0) return;
+
+    const rawDelay = process.env.POKER_BOT_FILL_DELAY_SECONDS;
+    let delaySeconds = 30;
+    if (rawDelay) {
+      const n = Number(rawDelay);
+      if (Number.isFinite(n) && n >= 0 && n <= 3600) delaySeconds = Math.floor(n);
+    }
+
+    // Candidate: freerolls still registering, opened long enough ago, not
+    // already past their scheduled start time (the scheduler handles those).
+    const candidates = await this.pool.query<{
+      id: string;
+      poker_config: unknown;
+    }>(
+      `SELECT t.id, t.poker_config
+         FROM tournaments t
+        WHERE t.game_type = 'poker'
+          AND t.status = 'registration'
+          AND COALESCE(t.buy_in_amount, 0) = 0
+          AND t.created_at < NOW() - ($1 * INTERVAL '1 second')
+          AND (t.scheduled_start_at IS NULL OR t.scheduled_start_at > NOW())
+        ORDER BY t.created_at ASC
+        LIMIT 25`,
+      [delaySeconds],
+    );
+
+    if (candidates.rows.length === 0) return;
+
+    for (const row of candidates.rows) {
+      const tournamentId = row.id;
+      try {
+        const config = this.parsePokerConfig(row.poker_config);
+        // Count current registered + identify which bots aren't already in.
+        const reg = await this.pool.query<{ player_address: string }>(
+          `SELECT player_address FROM tournament_entries
+            WHERE tournament_id = $1 AND status NOT IN ('busted', 'completed')`,
+          [tournamentId],
+        );
+        const registeredAddrs = new Set(
+          reg.rows.map((r) => (r.player_address ?? '').toLowerCase()),
+        );
+        const currentCount = registeredAddrs.size;
+        if (currentCount >= config.minPlayers) continue;
+
+        const need = config.minPlayers - currentCount;
+        const availableBots = [...botSet].filter((addr) => !registeredAddrs.has(addr));
+        const toJoin = availableBots.slice(0, need);
+        if (toJoin.length === 0) continue;
+
+        for (const botAddr of toJoin) {
+          try {
+            await this.joinPokerTournament(tournamentId, botAddr);
+          } catch (err) {
+            logger.warn('Bot tournament join failed', {
+              tournamentId,
+              botAddr,
+              err: err instanceof Error ? err.message : err,
+            });
+          }
+        }
+        logger.info('Filled poker tournament with bots', {
+          tournamentId,
+          minPlayers: config.minPlayers,
+          beforeCount: currentCount,
+          attempted: toJoin.length,
+        });
+      } catch (err) {
+        logger.error('tickFillTournamentsWithBots: candidate error', {
+          tournamentId,
+          err: err instanceof Error ? err.message : err,
+        });
+      }
+    }
   }
 
   // ---------------------------------------------------------------------------
