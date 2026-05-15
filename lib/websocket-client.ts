@@ -168,6 +168,14 @@ export interface PokerCurrentHand {
   handWentToShowdown?: boolean;
   /** At showdown: winner(s), amount each receives, optional hand name, and 5 card indices forming best hand */
   winners?: { address: string; amount: string; handName?: string; winningCardIndices?: number[] }[];
+  /**
+   * Provably-fair commitment — `SHA-256(serverSeed)` published at hand start.
+   * The plaintext seed is hidden until showdown; this hash lets the UI prove
+   * "deck was locked in before the deal" while the hand is in progress.
+   * After showdown, the verify page (`/poker/verify?handId=...`) reveals the
+   * seed and walks through the full proof.
+   */
+  serverSeedHash?: string;
 }
 
 export interface PokerTableState {

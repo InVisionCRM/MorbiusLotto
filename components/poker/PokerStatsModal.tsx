@@ -415,6 +415,19 @@ function HandReplay({
           </ul>
         </div>
       )}
+      {/* Provably-fair verification link. Lands on /poker/verify with this
+          hand pre-filled; the page re-derives the shuffle in the browser and
+          confirms the deal wasn't rigged. */}
+      <div className="pt-2 border-t border-gray-700/40">
+        <a
+          href={`/poker/verify?handId=${entry.id}`}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="inline-flex items-center gap-1 text-xs text-cyan-400 hover:text-cyan-300 transition-colors"
+        >
+          Verify this hand <span aria-hidden>↗</span>
+        </a>
+      </div>
     </div>
   );
 }

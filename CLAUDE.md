@@ -58,6 +58,10 @@ cd contracts && npx hardhat test
 
 **Currency**: The in-game currency ticker is **MORBIUS** — never abbreviate as MRB. Display as "MORBIUS" in all UI labels and code comments.
 
+**Poker all-in runout (server-driven)**: When chevtek auto-resolves multiple streets in one tick (all-in showdown), the server *paces* the reveal by emitting separate flop / turn / river / showdown broadcasts on a timer chain (`scheduleRunout` in `poker-game.service.ts`). Hole cards appear at the first runout frame (`showdownHands` is exposed once `runout_resolved_at` is set in DB, even while `street` is still flop/turn/river). The client just renders whatever street the server says — there is **no** client-side staged reveal anymore. If you find yourself adding `setTimeout` reveal logic in `PokerTable.tsx`, you're on the wrong path; the timing belongs on the server. `setRunoutDelaysForTesting(false)` (default under NODE_ENV=test) collapses the runout to a single inline `persistShowdown` call so existing tests keep their fast/synchronous assertions.
+
+**Poker provably-fair shuffle**: Each hand's deck is deterministically derived from `pfService.fisherYatesShuffle(serverSeed, clientSeed, 0)` — chevtek's `Math.random()` shuffle is bypassed by overriding `table.newDeck` on the instance before `dealCards()`. The plaintext `serverSeed` is hidden in `poker_hand_pending_seeds` during the hand and only published to `poker_hands.server_seed` at showdown (via `persistShowdown`). The verify endpoint `GET /api/poker/verify/:handId` returns the commitment, the revealed seed, and the deck-deal recipe so anyone can independently confirm card order wasn't rigged. **Never re-introduce `Math.random()`-driven dealing** — search for any `table.deck = newDeck()` pattern and route it through `pfService.fisherYatesShuffle` instead.
+
 **PulseChain APIs**:
 - Token search: `api.scan.pulsechain.com/api/v2/search?q=`
 - Token details: `api.scan.pulsechain.com/api/v2/tokens/{address}`

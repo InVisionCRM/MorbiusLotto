@@ -5,6 +5,7 @@ import { toBigIntSafe } from '@/lib/safe-bigint';
 import { motion, AnimatePresence } from 'framer-motion';
 import { PokerSeat, PokerChipStack } from './PokerSeat';
 import { PokerBoard } from './PokerBoard';
+import { ProvablyFairBadge } from './ProvablyFairBadge';
 import { CardDisplay } from './CardDisplay';
 import type { PokerTableState as TableState } from '@/lib/websocket-client';
 import { BackgroundBeams, type BeamColorPalette } from '@/components/ui/background-beams';
@@ -42,12 +43,6 @@ const BEAM_PALETTES: BeamColorPalette[] = [
 const POT_ANCHOR = POKER_POT_ANCHOR;
 const SHOWDOWN_CARD_PULL_RATIO = 0.18;
 const SHOWDOWN_CARD_PULL_MAX_PX = 70;
-
-// Staged showdown reveal — community run-out can be stepped; hole cards flip
-// together, then a short beat before the winner medallion.
-const REVEAL_COMMUNITY_STEP_MS = 2000;  // gap between each community card during all-in runout
-const REVEAL_BEFORE_HANDS_MS = 600;     // beat after final community card before all hole cards flip
-const REVEAL_BEFORE_MEDALLION_MS = 700; // beat after hole cards before medallion appears
 
 // Seat base geometry: `lib/poker-seat-layout.ts` (SEAT_ANCHOR_RING + authoredSeatAnchors).
 
@@ -219,166 +214,26 @@ export function PokerTable({ state, currentPlayerAddress, timeLeft, chatBubbleBy
   }, [isShowdownWithWinners, hand?.winners]);
   const winnerAddressSet = new Set((isShowdownWithWinners ? hand!.winners! : []).map((w) => w.address.toLowerCase()));
 
-  // ── Staged showdown reveal ──────────────────────────────────────────────
-  // The server can flip straight to `street === 'showdown'` with the full
-  // board + every hand revealed (especially on all-in run-outs where chevtek
-  // auto-resolves all remaining streets in a single tick). Replay it here as
-  // a cinematic sequence: missing community cards → all hole cards at once
-  // → winner medallion. On reconnect mid-showdown, jump to
-  // the final state instead of replaying.
-  const preShowdownCommunityCountRef = useRef(0);
-  useEffect(() => {
-    if (hand && hand.street !== 'showdown') {
-      preShowdownCommunityCountRef.current = hand.communityCards?.length ?? 0;
-    }
-  }, [hand?.handId, hand?.street, hand?.communityCards?.length]);
-
+  // Server-driven runout: the server emits one broadcast per street
+  // (flop → turn → river → showdown) with built-in pacing, and hole cards
+  // appear in `hand.showdownHands` as soon as the all-in locks — so we just
+  // render whatever the server currently says. No client-side staging or
+  // reconnect heuristic.
   const totalCommunityCount = hand?.communityCards?.length ?? 0;
-  /** Stable across object reference churn from WS — used only to re-run showdown scheduling when content changes. */
-  const showdownRevealScheduleKey = useMemo(() => {
-    if (!hand?.showdownHands) return '';
-    return Object.keys(hand.showdownHands)
-      .map((a) => a.toLowerCase())
-      .sort()
-      .join('|');
+  const revealedCommunityCount = totalCommunityCount;
+  const revealedHandAddrs = useMemo(() => {
+    const set = new Set<string>();
+    if (hand?.showdownHands) {
+      for (const addr of Object.keys(hand.showdownHands)) set.add(addr.toLowerCase());
+    }
+    return set;
   }, [hand?.showdownHands]);
-  const winnersRevealScheduleKey = useMemo(() => {
-    if (!hand?.winners?.length) return '';
-    return hand.winners
-      .map((w) => w.address.toLowerCase())
-      .sort()
-      .join('|');
-  }, [hand?.winners]);
 
-  const [revealedCommunityCount, setRevealedCommunityCount] = useState(0);
-  const [revealedHandAddrs, setRevealedHandAddrs] = useState<Set<string>>(new Set());
-  const [medallionReady, setMedallionReady] = useState(false);
-  const revealHandIdRef = useRef<string | null>(null);
-  /** Dedupes effect re-runs for the same hand when only object references changed (avoids clearing timeouts then bailing). */
-  const revealScheduleSigRef = useRef<string | null>(null);
-  /** Read inside timeouts so Strict Mode / dedupe rescue never reads a stale medallion flag. */
-  const medallionReadyRef = useRef(false);
-  medallionReadyRef.current = medallionReady;
-
-  useEffect(() => {
-    if (!isShowdownWithWinners || !hand?.handId) {
-      // Reset whenever we leave the showdown state (new hand, etc).
-      if (revealHandIdRef.current !== null) {
-        revealHandIdRef.current = null;
-        revealScheduleSigRef.current = null;
-        setRevealedCommunityCount(0);
-        setRevealedHandAddrs(new Set());
-        setMedallionReady(false);
-      }
-      return;
-    }
-
-    const scheduleSig = `${hand.handId}\u0001${showdownRevealScheduleKey}\u0001${winnersRevealScheduleKey}\u0001${totalCommunityCount}`;
-
-    // Same signature as the last scheduled run.
-    if (revealScheduleSigRef.current === scheduleSig) {
-      if (medallionReadyRef.current) return;
-      // React Strict Mode (or a churned effect) can clear timeouts then re-enter with the
-      // same sig before Stage 3 fires — recover instead of leaving the table stuck with no dim.
-      if (!showdownRevealScheduleKey) {
-        setRevealedCommunityCount(totalCommunityCount);
-        setRevealedHandAddrs(new Set());
-        setMedallionReady(true);
-        return;
-      }
-      // Real showdown: allow a full reschedule (do not skip hole-card beats).
-      revealScheduleSigRef.current = null;
-    }
-
-    if (revealScheduleSigRef.current === scheduleSig) return;
-    revealScheduleSigRef.current = scheduleSig;
-
-    const isFirstObservation = revealHandIdRef.current === null;
-    revealHandIdRef.current = hand.handId;
-
-    const showdownKeys = hand.showdownHands ? Object.keys(hand.showdownHands) : [];
-    const showdownAddrsAll = [...showdownKeys].sort((a, b) => {
-      const ia = state.seats.findIndex((s) => s.playerAddress?.toLowerCase() === a.toLowerCase());
-      const ib = state.seats.findIndex((s) => s.playerAddress?.toLowerCase() === b.toLowerCase());
-      if (ia >= 0 && ib >= 0 && ia !== ib) return ia - ib;
-      if (ia >= 0 && ib < 0) return -1;
-      if (ia < 0 && ib >= 0) return 1;
-      return a.toLowerCase().localeCompare(b.toLowerCase());
-    });
-    const skipHoleReveal = showdownAddrsAll.length === 0;
-    // Reconnect heuristic: if this is the very first hand we're seeing and it
-    // arrives already in showdown, we likely joined mid-resolve — jump to end.
-    const isReconnect = isFirstObservation && preShowdownCommunityCountRef.current === 0;
-    if (isReconnect) {
-      setRevealedCommunityCount(totalCommunityCount);
-      setRevealedHandAddrs(new Set(showdownAddrsAll.map((a) => a.toLowerCase())));
-      setMedallionReady(true);
-      return;
-    }
-
-    const startCommunity = Math.min(preShowdownCommunityCountRef.current, totalCommunityCount);
-
-    // Fold-out (or any end state with winners but no public hole cards): no card-flip step.
-    // When the board is already fully dealt, jump straight to winner dim / highlight.
-    if (skipHoleReveal && startCommunity >= totalCommunityCount) {
-      setRevealedCommunityCount(totalCommunityCount);
-      setRevealedHandAddrs(new Set());
-      setMedallionReady(true);
-      return;
-    }
-
-    setRevealedCommunityCount(startCommunity);
-    setRevealedHandAddrs(new Set());
-    setMedallionReady(false);
-
-    const timeouts: ReturnType<typeof setTimeout>[] = [];
-    let cursor = 0;
-    const allShowdownLower = showdownAddrsAll.map((a) => a.toLowerCase());
-
-    if (skipHoleReveal) {
-      // Fold-out / no hole cards to show: run out the board, then winner visuals.
-      for (let n = startCommunity + 1; n <= totalCommunityCount; n += 1) {
-        cursor += REVEAL_COMMUNITY_STEP_MS;
-        const target = n;
-        timeouts.push(setTimeout(() => setRevealedCommunityCount(target), cursor));
-      }
-      cursor += REVEAL_BEFORE_MEDALLION_MS;
-      timeouts.push(setTimeout(() => setMedallionReady(true), cursor));
-    } else {
-      // All-in showdown: hole cards flip first, then board runs out, then winner.
-      // Stage 1: reveal all hole cards immediately.
-      cursor += REVEAL_BEFORE_HANDS_MS;
-      timeouts.push(
-        setTimeout(() => {
-          setRevealedHandAddrs(new Set(allShowdownLower));
-        }, cursor),
-      );
-
-      // Stage 2: deal remaining community cards one at a time.
-      for (let n = startCommunity + 1; n <= totalCommunityCount; n += 1) {
-        cursor += REVEAL_COMMUNITY_STEP_MS;
-        const target = n;
-        timeouts.push(setTimeout(() => setRevealedCommunityCount(target), cursor));
-      }
-
-      // Stage 3: brief beat, then mount the winner medallion.
-      cursor += REVEAL_BEFORE_MEDALLION_MS;
-      timeouts.push(setTimeout(() => setMedallionReady(true), cursor));
-    }
-
-    return () => {
-      for (const t of timeouts) clearTimeout(t);
-    };
-  }, [
-    isShowdownWithWinners,
-    hand?.handId,
-    totalCommunityCount,
-    showdownRevealScheduleKey,
-    winnersRevealScheduleKey,
-  ]);
-
-  // What the rest of the component should treat as "the medallion moment".
-  const showFinalShowdownVisuals = !!isShowdownWithWinners && medallionReady;
+  // "Final showdown" visuals (winner medallion / dim non-winners) are gated on
+  // the server's showdown frame. During the server-driven runout's intermediate
+  // flop/turn/river frames, hole cards are visible but the winner UI stays
+  // hidden until the final broadcast.
+  const showFinalShowdownVisuals = !!isShowdownWithWinners;
 
   /** Server deadline for auto next hand (ISO). Omitted on older backends. */
   const serverNextHandMs = useMemo(() => {
@@ -389,8 +244,8 @@ export function PokerTable({ state, currentPlayerAddress, timeLeft, chatBubbleBy
   }, [hand?.nextHandAt]);
 
   /**
-   * If `nextHandAt` is missing, approximate the 15s window from medallion time so the
-   * intermission UI still appears (matches common "only Time to act after next hand" report).
+   * If `nextHandAt` is missing, approximate the 15s window from the showdown
+   * frame so the intermission UI still appears.
    */
   const [clientIntermissionEndMs, setClientIntermissionEndMs] = useState<number | null>(null);
   useEffect(() => {
@@ -402,19 +257,12 @@ export function PokerTable({ state, currentPlayerAddress, timeLeft, chatBubbleBy
       setClientIntermissionEndMs(null);
       return;
     }
-    if (medallionReady) {
-      setClientIntermissionEndMs((prev) => prev ?? Date.now() + POKER_BETWEEN_HANDS_DELAY_MS);
-    }
-  }, [isShowdownWithWinners, hand?.handId, hand?.nextHandAt, medallionReady]);
+    setClientIntermissionEndMs((prev) => prev ?? Date.now() + POKER_BETWEEN_HANDS_DELAY_MS);
+  }, [isShowdownWithWinners, hand?.handId, hand?.nextHandAt]);
 
   const intermissionEndMs =
     isShowdownWithWinners && hand ? (serverNextHandMs ?? clientIntermissionEndMs) : null;
-  // Don't render the inter-hand countdown until the medallion mounts — the
-  // absolute deadline (`nextHandAt`) is still set immediately by the server,
-  // so the bar simply appears partway through its progress once the runout
-  // reveal finishes. This stops the timer from showing while the cards are
-  // still flipping.
-  const showBetweenHandsTimer = intermissionEndMs != null && medallionReady;
+  const showBetweenHandsTimer = intermissionEndMs != null;
 
   useEffect(() => {
     if (!showFinalShowdownVisuals || !isCurrentPlayerWinner || !hand?.handId) return;
@@ -779,6 +627,17 @@ export function PokerTable({ state, currentPlayerAddress, timeLeft, chatBubbleBy
                   : null
               }
             />
+            {/* Provably-fair commitment badge — shows the deck hash so players
+                can verify the deal wasn't rigged once the seed is revealed at
+                showdown. Renders nothing if the server didn't include the hash
+                (legacy hands etc.). */}
+            <div className="mt-1.5">
+              <ProvablyFairBadge
+                serverSeedHash={hand.serverSeedHash}
+                handId={hand.handId}
+                isComplete={hand.street === 'showdown' && !!hand.winners?.length}
+              />
+            </div>
           </>
         ) : (
           <span
