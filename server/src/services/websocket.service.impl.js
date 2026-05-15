@@ -25,43 +25,17 @@ const poker_router_1 = require("./websocket/poker-router");
 const bj_multi_router_1 = require("./websocket/bj-multi-router");
 const poker_chip_wallet_1 = require("./poker-chip-wallet");
 const stream_voice_service_1 = require("./stream-voice.service");
-// EIP-712 domain + types for WebSocket sign-in.
-//
-// Schema design notes:
-//   - Domain `name` is the site origin ("morbius.io") not a game ("Blackjack").
-//     The auth covers the whole platform, so the prompt should match the URL
-//     bar the user is signing from.
-//   - `primaryType` is descriptive (`SignInToMorbius`) so wallets display
-//     intent clearly instead of a generic "AuthChallenge".
-//   - Message body carries a plain-English `statement`, the claimed `address`,
-//     the canonical `uri`, the `nonce`, and `issuedAt` / `expiresAt`
-//     timestamps. A signer in MetaMask can verify freshness, that the URL
-//     matches their browser, and that the wallet address is their own —
-//     all without trusting the JSON keys alone.
-//   - JSON field order does NOT affect the signature; wallets render the
-//     `message` block on top regardless.
+// EIP-712 domain and types for WebSocket authentication
 const AUTH_EIP712_DOMAIN = {
-    name: 'morbius.io',
+    name: 'MORBlotto Blackjack',
     version: '1',
     chainId: 369,
 };
 const AUTH_EIP712_TYPES = {
-    SignInToMorbius: [
-        { name: 'statement', type: 'string' },
-        { name: 'address', type: 'address' },
-        { name: 'uri', type: 'string' },
+    AuthChallenge: [
         { name: 'nonce', type: 'string' },
-        { name: 'issuedAt', type: 'string' },
-        { name: 'expiresAt', type: 'string' },
     ],
 };
-const AUTH_PRIMARY_TYPE = 'SignInToMorbius';
-const AUTH_STATEMENT = 'Sign in to MORBlotto. This proves you own this wallet — no funds are moved and no on-chain transaction is created.';
-const AUTH_URI = process.env.PUBLIC_SITE_URL || 'https://morbius.io';
-// How long a challenge stays valid before the signed `expiresAt` is in the past.
-// 5 minutes matches typical Web3 sign-in flows; tightens replay window over
-// nonce-alone schemes.
-const AUTH_CHALLENGE_TTL_MS = 5 * 60 * 1000;
 // Allowed chat rooms: main (home) + per-game
 const ALLOWED_CHAT_ROOMS = new Set([
     'main',
@@ -373,45 +347,13 @@ class WebSocketService {
         this.clients.set(connectionId, ws);
         const sendAuthChallenge = REQUIRE_WS_AUTH && !DISABLE_WS_AUTH;
         if (sendAuthChallenge) {
-            // Strict mode: send a self-describing EIP-712 sign-in challenge.
-            // The client must sign the FULL message (statement + address + uri +
-            // nonce + issuedAt + expiresAt). The server stashes the same values
-            // on `ws` so handleAuthResponse rebuilds the exact payload byte-for-
-            // byte before calling verifyTypedData — any drift would invalidate
-            // the signature.
+            // Strict mode: generate auth challenge, client must sign to proceed
             const authNonce = crypto_1.default.randomBytes(32).toString('hex');
-            const issuedAt = new Date();
-            const expiresAt = new Date(issuedAt.getTime() + AUTH_CHALLENGE_TTL_MS);
-            // claimedAddress may be unset (legacy clients hitting strict mode);
-            // bind to the all-zero address so the signed payload is still
-            // well-formed and the verifier sees the mismatch.
-            const challengeAddress = (claimedAddress || '0x0000000000000000000000000000000000000000').toLowerCase();
-            const challengeMessage = {
-                statement: AUTH_STATEMENT,
-                address: challengeAddress,
-                uri: AUTH_URI,
-                nonce: authNonce,
-                issuedAt: issuedAt.toISOString(),
-                expiresAt: expiresAt.toISOString(),
-            };
-            ws.authChallenge = challengeMessage;
-            ws.authNonce = authNonce; // kept for backward-compat logging only
-            logger_1.logger.info('WS Auth: sending auth_challenge', { connectionId, claimedAddress, noncePrefix: authNonce.slice(0, 8), expiresAt: challengeMessage.expiresAt });
+            ws.authNonce = authNonce;
+            logger_1.logger.info('WS Auth: sending auth_challenge', { connectionId, claimedAddress, noncePrefix: authNonce.slice(0, 8) });
             this.sendMessage(ws, {
                 type: 'auth_challenge',
-                payload: {
-                    connectionId,
-                    claimedAddress,
-                    // Full EIP-712 payload the wallet should sign. Client passes
-                    // these to `signTypedData` (viem / ethers / wagmi) unchanged.
-                    domain: AUTH_EIP712_DOMAIN,
-                    types: AUTH_EIP712_TYPES,
-                    primaryType: AUTH_PRIMARY_TYPE,
-                    message: challengeMessage,
-                    // Legacy field — old clients still read `nonce` directly.
-                    // Safe to keep for one release while frontends update.
-                    nonce: authNonce,
-                },
+                payload: { connectionId, nonce: authNonce, claimedAddress }
             });
         }
         else {
@@ -569,46 +511,19 @@ class WebSocketService {
                 logger_1.logger.warn('WS Auth: missing address or signature');
                 return this.sendError(ws, 'address and signature required', message.requestId);
             }
-            if (!ws.authChallenge) {
-                logger_1.logger.warn('WS Auth: no auth challenge pending', { connectionId: ws.connectionId });
+            if (!ws.authNonce) {
+                logger_1.logger.warn('WS Auth: no auth nonce pending', { connectionId: ws.connectionId });
                 return this.sendError(ws, 'No auth challenge pending', message.requestId);
             }
             const normalizedAddress = address.toLowerCase();
-            // Server-enforced expiry — even if the signature is valid, refuse
-            // it once `expiresAt` is past. Stops a captured/leaked signature
-            // from being replayed weeks later. The same `expiresAt` is in the
-            // signed payload so the user verified freshness too.
-            const expiresAtMs = Date.parse(ws.authChallenge.expiresAt);
-            if (!Number.isFinite(expiresAtMs) || expiresAtMs < Date.now()) {
-                logger_1.logger.warn('WS Auth: challenge expired', { connectionId: ws.connectionId, expiresAt: ws.authChallenge.expiresAt });
-                return this.sendError(ws, 'Auth challenge expired — reconnect to retry.', message.requestId);
-            }
-            // The challenge bound to a specific claimedAddress when one was
-            // sent. Reject mismatches up-front — viem would catch it too, but
-            // explicit beats implicit.
-            if (ws.authChallenge.address && ws.authChallenge.address !== '0x0000000000000000000000000000000000000000' && ws.authChallenge.address !== normalizedAddress) {
-                logger_1.logger.warn('WS Auth: address mismatch with challenge', { challengeAddress: ws.authChallenge.address, signedAddress: normalizedAddress });
-                return this.sendError(ws, 'Signed address does not match the challenge.', message.requestId);
-            }
-            logger_1.logger.info('WS Auth: verifying EIP-712 signature', { address: normalizedAddress, noncePrefix: ws.authChallenge.nonce.slice(0, 8) });
-            // Rebuild the exact message the client should have signed. ANY drift
-            // (statement text, uri, timestamp formatting) would invalidate the
-            // signature — that's the whole point.
-            const verifyMessage = {
-                ...ws.authChallenge,
-                // If the original challenge was sent with the zero-address
-                // placeholder (legacy clients without a query-param address),
-                // verify against whatever the client actually signed.
-                address: ws.authChallenge.address === '0x0000000000000000000000000000000000000000'
-                    ? normalizedAddress
-                    : ws.authChallenge.address,
-            };
+            logger_1.logger.info('WS Auth: verifying EIP-712 signature', { address: normalizedAddress, noncePrefix: ws.authNonce.slice(0, 8) });
+            // Verify EIP-712 typed data signature
             const valid = await (0, viem_1.verifyTypedData)({
                 address: normalizedAddress,
                 domain: AUTH_EIP712_DOMAIN,
                 types: AUTH_EIP712_TYPES,
-                primaryType: AUTH_PRIMARY_TYPE,
-                message: verifyMessage,
+                primaryType: 'AuthChallenge',
+                message: { nonce: ws.authNonce },
                 signature,
             });
             if (!valid) {
@@ -619,8 +534,7 @@ class WebSocketService {
             logger_1.logger.info('WS Auth: auth successful', { address: normalizedAddress });
             ws.playerAddress = normalizedAddress;
             ws.isAuthenticated = true;
-            ws.authNonce = undefined; // legacy field — see auth_challenge handler
-            ws.authChallenge = undefined; // consume challenge so it can't be replayed
+            ws.authNonce = undefined; // consume nonce
             // Track active connection
             try {
                 const player = await this.dbService.getOrCreatePlayer(normalizedAddress);
