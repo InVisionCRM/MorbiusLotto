@@ -193,6 +193,10 @@ const GAME_FAQS: Record<GameFAQProps['game'], { q: string; a: React.ReactNode }[
       a: 'No separate claim is needed during table play. Pots and stacks update automatically as hands resolve.',
     },
     {
+      q: 'How do I know the cards aren\'t rigged?',
+      a: 'Poker uses the same provably fair system as Blackjack. Before each hand starts the server commits to a deck by publishing a hash of its secret seed; the plaintext seed stays hidden until the hand ends. The deck order is derived from that seed via HMAC-SHA256 and a Fisher–Yates shuffle, so once the seed is revealed anyone can re-run the math and confirm the deck was fixed before any card was dealt. After the hand, visit the Poker Verify page (or click "Verify this hand ↗" in your hand history) to see the commitment, the revealed seed, the deck order, and three green ✅ checks: hash match, deck reproducible, deal order matches.',
+    },
+    {
       q: 'My transaction is stuck. What can I do?',
       a: 'Try sending 1 PLS to yourself (your own wallet address) from the same wallet. This can clear stuck nonces and help the network process pending transactions.',
     },

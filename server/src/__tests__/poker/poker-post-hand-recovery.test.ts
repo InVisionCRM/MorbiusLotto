@@ -164,10 +164,20 @@ async function simulateRestartMidPostHandWindow(
     [handId],
   );
 
-  // Force the bust we want recovery to process.
+  // Force the bust we want recovery to process. Chevtek decides the all-in
+  // winner randomly, so we have to be explicit about BOTH seats: the named
+  // bustAddress goes to 0, and the other seat is restored to a positive
+  // stack. Without the second clause, if chevtek happened to make
+  // `bustAddress` the winner, the actual chevtek-loser would also have
+  // stack=0 and `syncAfterHand` would bust two players instead of one.
   await testPool.query(
     `UPDATE poker_seats SET stack = 0
       WHERE table_id = $1 AND LOWER(player_address) = LOWER($2)`,
+    [tableId, bustAddress],
+  );
+  await testPool.query(
+    `UPDATE poker_seats SET stack = GREATEST(stack, 100)
+      WHERE table_id = $1 AND LOWER(player_address) != LOWER($2)`,
     [tableId, bustAddress],
   );
 
@@ -197,14 +207,25 @@ describe('Poker post-hand recovery', () => {
     const tableId = await startTournamentAndGetTableId(tournamentId, [PLAYER_1, PLAYER_2]);
     const handId = await playAllInToShowdown(tableId);
 
-    // Wait out the 15s SHOWDOWN_DELAY_MS so the happy-path timer fires.
-    await new Promise((resolve) => setTimeout(resolve, 17_000));
-
-    const r = await testPool.query(
-      `SELECT post_hand_processed_at FROM poker_hands WHERE id = $1`,
-      [handId],
-    );
-    expect(r.rows[0].post_hand_processed_at).not.toBeNull();
+    // Poll for the marker instead of sleeping a fixed 17s. The happy-path
+    // timer fires after SHOWDOWN_DELAY_MS (15s) and then has to run
+    // syncAfterHand + a DB UPDATE — under Neon latency that tail can spill
+    // past a tight 2s margin and produce a flake. 30s gives the chain
+    // plenty of slack without slowing the green path.
+    const deadline = Date.now() + 30_000;
+    let stamp: Date | null = null;
+    while (Date.now() < deadline) {
+      const r = await testPool.query(
+        `SELECT post_hand_processed_at FROM poker_hands WHERE id = $1`,
+        [handId],
+      );
+      if (r.rows[0]?.post_hand_processed_at != null) {
+        stamp = r.rows[0].post_hand_processed_at;
+        break;
+      }
+      await new Promise((resolve) => setTimeout(resolve, 250));
+    }
+    expect(stamp).not.toBeNull();
   }, 60_000);
 
   it('recoverStuckPostHandTables unsticks a hand whose timer was lost mid-window', async () => {

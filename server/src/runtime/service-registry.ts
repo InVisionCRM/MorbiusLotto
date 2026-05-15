@@ -66,6 +66,28 @@ async function recoverPokerRuntimeState(dbService: DatabaseService, pokerGameSer
 }
 
 export async function initializeRuntimeServices(server: HttpServer, port: string | number): Promise<RuntimeServices> {
+  // ── Production WS auth guard ──────────────────────────────────────────────
+  // The WS layer trusts whatever address a client sends as `?address=0x...` in
+  // the connection URL UNLESS `REQUIRE_WS_AUTH=true` is set. In dev / local
+  // testing that's fine; in production it's a complete impersonation hole
+  // (act as any seated player, see their hole cards via poker_get_state).
+  // Fail-fast on boot rather than silently shipping the insecure default.
+  if (process.env.NODE_ENV === 'production') {
+    if (process.env.REQUIRE_WS_AUTH !== 'true') {
+      throw new Error(
+        'REQUIRE_WS_AUTH must be "true" in production. The WS layer otherwise trusts ' +
+        'the unauthenticated `?address=` query param, allowing player impersonation. ' +
+        'Set REQUIRE_WS_AUTH=true and ensure DISABLE_WS_AUTH is not set.',
+      );
+    }
+    if (process.env.DISABLE_WS_AUTH === 'true') {
+      throw new Error(
+        'DISABLE_WS_AUTH must not be "true" in production — it bypasses signature ' +
+        'verification on the WebSocket handshake.',
+      );
+    }
+  }
+
   server.listen(port, () => {
     logger.info(`Blackjack server running on port ${port}`);
   });
