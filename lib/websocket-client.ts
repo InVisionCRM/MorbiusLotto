@@ -280,26 +280,36 @@ export interface BJMultiTableSummary {
   themeId: string;
 }
 
-/** EIP-712 domain for WebSocket auth (must match server) */
-const AUTH_EIP712_DOMAIN = {
+/**
+ * EIP-712 sign-in for the WebSocket connection. The full typed-data payload
+ * (domain + types + primaryType + message) is now sent BY THE SERVER as part
+ * of `auth_challenge` — the client just forwards it to the wallet via
+ * `signTypedData`. This lets the server upgrade the schema (extra fields,
+ * tighter expiry, etc.) without requiring a coordinated client redeploy.
+ *
+ * The legacy hardcoded constants below are kept so older server builds (which
+ * send `payload.nonce` only) still work; new servers send the full payload
+ * and the client signs whatever the server provided.
+ */
+const LEGACY_AUTH_EIP712_DOMAIN = {
   name: 'MORBlotto Blackjack' as const,
   version: '1' as const,
   chainId: 369,
 };
 
-/** EIP-712 types for WebSocket auth (must match server) */
-const AUTH_EIP712_TYPES = {
+const LEGACY_AUTH_EIP712_TYPES = {
   AuthChallenge: [
     { name: 'nonce', type: 'string' },
   ],
 } as const;
 
-/** Function signature that matches wagmi's signTypedDataAsync */
+/** Function signature that matches wagmi's signTypedDataAsync — accepts any
+ *  domain/types/message shape the server hands us. */
 export type SignTypedDataFn = (params: {
-  domain: typeof AUTH_EIP712_DOMAIN;
-  types: typeof AUTH_EIP712_TYPES;
-  primaryType: 'AuthChallenge';
-  message: { nonce: string };
+  domain: Record<string, unknown>;
+  types: Record<string, ReadonlyArray<{ name: string; type: string }>>;
+  primaryType: string;
+  message: Record<string, unknown>;
 }) => Promise<`0x${string}`>;
 
 export class BlackjackWebSocketClient {
@@ -538,7 +548,15 @@ export class BlackjackWebSocketClient {
   /**
    * Handle auth challenge from server: sign nonce with EIP-712 and send back
    */
-  private async handleAuthChallenge(payload: { nonce: string; claimedAddress?: string }): Promise<void> {
+  private async handleAuthChallenge(payload: {
+    nonce: string;
+    claimedAddress?: string;
+    /** New servers send the full typed-data payload; old servers send only `nonce`. */
+    domain?: Record<string, unknown>;
+    types?: Record<string, ReadonlyArray<{ name: string; type: string }>>;
+    primaryType?: string;
+    message?: Record<string, unknown>;
+  }): Promise<void> {
     if (!this.signTypedData) {
       throw new Error('signTypedData function not provided — cannot authenticate');
     }
@@ -547,12 +565,28 @@ export class BlackjackWebSocketClient {
       throw new Error('No player address — cannot authenticate');
     }
 
-    const signature = await this.signTypedData({
-      domain: AUTH_EIP712_DOMAIN,
-      types: AUTH_EIP712_TYPES,
-      primaryType: 'AuthChallenge',
-      message: { nonce: payload.nonce },
-    });
+    // Prefer the server-supplied payload so the wallet prompt shows the
+    // statement / uri / expiresAt the server actually wants to verify. Fall
+    // back to the legacy `nonce`-only schema if a stale server build hasn't
+    // been redeployed yet.
+    const useServerPayload =
+      !!payload.domain && !!payload.types && !!payload.primaryType && !!payload.message;
+
+    const signature = await this.signTypedData(
+      useServerPayload
+        ? {
+            domain: payload.domain!,
+            types: payload.types!,
+            primaryType: payload.primaryType!,
+            message: payload.message!,
+          }
+        : {
+            domain: LEGACY_AUTH_EIP712_DOMAIN,
+            types: LEGACY_AUTH_EIP712_TYPES,
+            primaryType: 'AuthChallenge',
+            message: { nonce: payload.nonce },
+          },
+    );
 
     if (this.ws?.readyState === WebSocket.OPEN) {
       this.ws.send(JSON.stringify({
