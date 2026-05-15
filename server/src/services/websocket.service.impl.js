@@ -88,6 +88,7 @@ class WebSocketService {
     chatRateLimitCleanupInterval;
     pokerAutoFoldInterval = null;
     pokerServerBotInterval = null;
+    pokerBotFillInterval = null;
     publicClient;
     contractAddress;
     tournamentService;
@@ -158,6 +159,21 @@ class WebSocketService {
                     logger_1.logger.error('Poker server tournament bot tick error', err);
                 }
             }, 2000);
+            // In-process tournament bot JOINS — keeps unfilled freerolls from
+            // cancelling. Gated on POKER_BOT_FILL_ENABLED inside the method
+            // itself; safe to run unconditionally here. Uses the registered
+            // PokerTournamentService (wired after this init in service-registry).
+            // 10s interval is plenty — joins are less time-sensitive than turns.
+            this.pokerBotFillInterval = setInterval(async () => {
+                try {
+                    if (this.pokerTournamentService && typeof this.pokerTournamentService.tickFillTournamentsWithBots === 'function') {
+                        await this.pokerTournamentService.tickFillTournamentsWithBots();
+                    }
+                }
+                catch (err) {
+                    logger_1.logger.error('Poker tournament bot-fill tick error', err);
+                }
+            }, 10000);
         }
         // Multiplayer blackjack turn timer + betting timeout enforcement (5s poll)
         if (this.bjMultiService) {
@@ -3068,6 +3084,9 @@ class WebSocketService {
         }
         if (this.pokerServerBotInterval) {
             clearInterval(this.pokerServerBotInterval);
+        }
+        if (this.pokerBotFillInterval) {
+            clearInterval(this.pokerBotFillInterval);
         }
         if (this.bjMultiTimerInterval) {
             clearInterval(this.bjMultiTimerInterval);
