@@ -66,24 +66,29 @@ async function recoverPokerRuntimeState(dbService: DatabaseService, pokerGameSer
 }
 
 export async function initializeRuntimeServices(server: HttpServer, port: string | number): Promise<RuntimeServices> {
-  // ── Production WS auth guard ──────────────────────────────────────────────
+  // ── Production WS auth advisory ───────────────────────────────────────────
   // The WS layer trusts whatever address a client sends as `?address=0x...` in
-  // the connection URL UNLESS `REQUIRE_WS_AUTH=true` is set. In dev / local
-  // testing that's fine; in production it's a complete impersonation hole
-  // (act as any seated player, see their hole cards via poker_get_state).
-  // Fail-fast on boot rather than silently shipping the insecure default.
+  // the connection URL UNLESS `REQUIRE_WS_AUTH=true` is set. In production
+  // that's an impersonation hole (act as any seated player). This was a hard
+  // boot-stop, but a strict gate proved too fragile during launch ops: any env
+  // mishap took the whole site down. Now it logs a loud warning at startup so
+  // the operator sees it in deployment logs without blocking boot. Track in
+  // the audit follow-up: fix the client-side message-vs-auth race condition,
+  // then re-enable the hard gate.
   if (process.env.NODE_ENV === 'production') {
     if (process.env.REQUIRE_WS_AUTH !== 'true') {
-      throw new Error(
-        'REQUIRE_WS_AUTH must be "true" in production. The WS layer otherwise trusts ' +
-        'the unauthenticated `?address=` query param, allowing player impersonation. ' +
-        'Set REQUIRE_WS_AUTH=true and ensure DISABLE_WS_AUTH is not set.',
+      logger.warn(
+        '[SECURITY] REQUIRE_WS_AUTH is not "true" in production. The WS layer ' +
+        'will trust unauthenticated `?address=` query params, allowing player ' +
+        'impersonation. Set REQUIRE_WS_AUTH=true once the client-side auth ' +
+        'race condition is fixed.',
       );
     }
     if (process.env.DISABLE_WS_AUTH === 'true') {
-      throw new Error(
-        'DISABLE_WS_AUTH must not be "true" in production — it bypasses signature ' +
-        'verification on the WebSocket handshake.',
+      logger.warn(
+        '[SECURITY] DISABLE_WS_AUTH=true is set in production. EIP-712 ' +
+        'signature verification is bypassed on the WebSocket handshake. ' +
+        'Unset this flag as soon as possible.',
       );
     }
   }
