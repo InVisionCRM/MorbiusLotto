@@ -1779,12 +1779,17 @@ export class PokerTournamentService {
       if (stackChips === 0) bustedAddresses.push(addr);
     }
 
+    // `recoverTournamentTableIfUnderTwoStackedSeats` is invoked from inside
+    // `tryStartNextHand`'s table-lock body. Pass `assumeLockHeld=true` so the
+    // eliminations use the no-lock variant of leaveTableTournament — the
+    // public variant re-acquires the same per-table lock and would deadlock.
     await this.eliminateBustedTournamentSeats(
       tableId,
       tournamentId,
       bustedAddresses,
       handNumber,
       seats.rows.length,
+      true,
     );
 
     let blindsUpdated = false;
@@ -2741,12 +2746,25 @@ export class PokerTournamentService {
   // Helpers
   // ---------------------------------------------------------------------------
 
+  /**
+   * Eliminate a list of busted players from a tournament table.
+   *
+   * `assumeLockHeld` controls which `leaveTableTournament` variant is called:
+   *   - `false` (default): used by `syncAfterHand` (post-hand callback), which
+   *     runs OUTSIDE the per-table lock. The public `leaveTableTournament`
+   *     re-acquires the lock cleanly.
+   *   - `true`: used by `recoverTournamentTableIfUnderTwoStackedSeats`, which
+   *     is invoked from inside `tryStartNextHand`'s lock body. Calling the
+   *     lock-acquiring variant from that path would deadlock since
+   *     `withTableLock` is not re-entrant.
+   */
   private async eliminateBustedTournamentSeats(
     tableId: string,
     tournamentId: string,
     bustedAddresses: string[],
     handNumber: number,
     seatCount: number,
+    assumeLockHeld: boolean = false,
   ): Promise<void> {
     let remainingAfterElim = seatCount - bustedAddresses.length;
 
@@ -2774,7 +2792,11 @@ export class PokerTournamentService {
         [entryId, rank]
       );
 
-      await this.pokerGameService.leaveTableTournament(tableId, addr);
+      if (assumeLockHeld) {
+        await this.pokerGameService.leaveTableTournamentNoLock(tableId, addr);
+      } else {
+        await this.pokerGameService.leaveTableTournament(tableId, addr);
+      }
 
       logger.info('Poker tournament player eliminated', { tournamentId, playerAddress: addr, rank, handNumber });
 
