@@ -3823,12 +3823,16 @@ export class DatabaseService implements MoneyDatabaseQueries {
   }> {
     const safeLimit = Math.min(Math.max(limit | 0, 1), 100);
     // net_chips / biggest_pot are aggregated as TEXT (NUMERIC(78,0) cast to TEXT
-    // to ferry whole-chip integers across the wire) — cast back to NUMERIC for
-    // the ORDER BY so we get numeric ordering instead of lexicographic.
+    // to ferry whole-chip integers across the wire) — we still want numeric
+    // (not lexicographic) ordering on the leaderboard. Postgres won't resolve
+    // a SELECT-list alias inside a cast expression in ORDER BY (`alias::TYPE`
+    // tries to look up `alias` as a real column and errors with 42703), so we
+    // wrap the GROUP BY in a subquery to promote the TEXT alias into a real
+    // column that can then be cast back to NUMERIC for sorting.
     const orderClause =
-      category === 'net_chips' ? 'net_chips::NUMERIC DESC'
-      : category === 'biggest_pot' ? 'biggest_pot::NUMERIC DESC'
-      : 'hands_played DESC';
+      category === 'net_chips' ? 't.net_chips::NUMERIC DESC'
+      : category === 'biggest_pot' ? 't.biggest_pot::NUMERIC DESC'
+      : 't.hands_played DESC';
 
     const baseSelect = `
       SELECT
@@ -3843,7 +3847,7 @@ export class DatabaseService implements MoneyDatabaseQueries {
     `;
 
     const topResult = await this.pool.query(
-      `${baseSelect} ORDER BY ${orderClause} LIMIT $1`,
+      `SELECT * FROM (${baseSelect}) t ORDER BY ${orderClause} LIMIT $1`,
       [safeLimit]
     );
     const rows = topResult.rows.map((r: any, idx: number) => ({
