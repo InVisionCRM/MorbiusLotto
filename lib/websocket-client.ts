@@ -137,7 +137,19 @@ export interface PokerCurrentHand {
   handId: string;
   street: string;
   communityCards: number[];
+  /** Sum of all pots (kept as scalar for backward compat). */
   pot: string;
+  /**
+   * Per-pot breakdown so the client can render main / side / uncalled pots
+   * as separately labeled stacks and animate chip flow per-pot at showdown.
+   * Missing on legacy backends — fall back to the scalar `pot`.
+   */
+  pots?: {
+    amount: string;
+    label: string;
+    /** Lowercase player addresses chevtek paid this pot to (set at showdown). */
+    winnerAddresses?: string[];
+  }[];
   actingPosition: number | null;
   lastAction: { position: number; action: string; amount: string } | null;
   /**
