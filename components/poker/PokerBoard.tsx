@@ -266,9 +266,6 @@ export function PokerBoard({
                   suppressEntryMotion={suppressCommunityEntryMotion}
                   isWinningCard={winningCardIndices?.includes(idx)}
                   isDimmed={dimNonWinning && !winningCardIndices?.includes(idx)}
-                  showCenterRankSuitOverlay
-                  variant="community"
-                  dealFromOffset={dealFromOffset}
                 />
               ) : (
                 <CardDisplay key={`empty-${i}`} cardIndex={undefined} />
