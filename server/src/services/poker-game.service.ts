@@ -62,7 +62,25 @@ export interface PokerCurrentHand {
   handId: string;
   street: PokerStreet;
   communityCards: number[];
+  /** Sum of all pots (kept as scalar for backward-compat clients). */
   pot: string;
+  /**
+   * Structured pot breakdown — main pot + each side/uncalled pot, in the
+   * order chevtek created them. Lets the client render side pots as
+   * separately labeled stacks instead of a single flat total, and drive
+   * per-pot chip-flow animations at showdown (each pot's chips fly to
+   * THAT pot's winner). Only populated while a hand is in progress with
+   * an active in-memory table — falls back to the `pot` scalar otherwise.
+   *
+   * `winnerAddresses` is populated once chevtek's `showdown()` has run,
+   * including for "uncalled" refund pots (sole eligible player) so the
+   * client can fly those chips back to the over-bettor.
+   */
+  pots?: {
+    amount: string;
+    label: string;
+    winnerAddresses?: string[];
+  }[];
   actingPosition: number | null;
   lastAction: { position: number; action: string; amount: string } | null;
   /**
@@ -239,6 +257,16 @@ export class PokerGameService {
    *  to know "is the table mid-resolve" without hitting the DB. */
   private runoutInFlight: Set<string> = new Set();
   /**
+   * Per-table snapshot of each player's pre-payout chip stack, used to freeze
+   * the displayed stacks during an all-in runout so the board reveal doesn't
+   * leak the winner (otherwise the seat plate updates to the post-payout
+   * value the instant chevtek auto-resolves). Keyed by tableId → (lowercase
+   * player address → chip-int string). Populated in `scheduleRunout` before
+   * the first staged broadcast and cleared at the showdown frame so the
+   * stack change is revealed alongside the winner badges.
+   */
+  private runoutFrozenStacks: Map<string, Map<string, string>> = new Map();
+  /**
    * Per-step runout delays default on in production, off under jest. When
    * disabled `scheduleRunout` runs all frames inline (no setTimeout chain),
    * so existing integration tests can assert on post-showdown DB state
@@ -362,6 +390,7 @@ export class PokerGameService {
       this.runoutTimers.delete(tableId);
     }
     this.runoutInFlight.delete(tableId);
+    this.runoutFrozenStacks.delete(tableId);
   }
 
   /**
@@ -431,9 +460,36 @@ export class PokerGameService {
 
     // Stamp the runout snapshot before any broadcast. After this point the
     // recovery sweep can finish the hand even if the server dies right now.
-    // Also sync seat stacks — chevtek already moved chips into the pots, so
-    // showing the live stacks reflects "all-in" correctly for the duration
-    // of the runout (no chips flicker back-and-forth between steps).
+    //
+    // chevtek's `nextAction` → `showdown` already auto-resolved the hand,
+    // which means `player.stackSize` includes the pot awards. If we let the
+    // staged flop/turn/river broadcasts go out with those values, the seat
+    // plate updates before the cards reveal and the winner is leaked. So we
+    // snapshot the *pre-payout* stack for each player here (post − winnings
+    // from each pot they won) and serve that from getTableState until
+    // finalizeShowdown clears the snapshot at the showdown frame. The DB
+    // gets the true post-payout values from syncSeatsFromTable below (kept
+    // current for crash recovery) — only the wire format is frozen.
+    const winningsByAddr = new Map<string, bigint>();
+    for (const pot of table.pots) {
+      if (!pot.winners || pot.winners.length === 0) continue;
+      const potChips = BigInt(Math.max(0, Math.round(pot.amount)));
+      const ids = pot.winners.map((w: any) => w.id as string);
+      const shares = splitBigIntEqually(potChips, ids.length);
+      for (let i = 0; i < ids.length; i++) {
+        winningsByAddr.set(ids[i], (winningsByAddr.get(ids[i]) ?? 0n) + shares[i]);
+      }
+    }
+    const frozen = new Map<string, string>();
+    for (const player of table.players) {
+      if (!player) continue;
+      const post = BigInt(Math.max(0, Math.round(player.stackSize)));
+      const won = winningsByAddr.get(player.id) ?? 0n;
+      const pre = post > won ? post - won : 0n;
+      frozen.set(this.normalizeAddress(player.id), pre.toString());
+    }
+    this.runoutFrozenStacks.set(tableId, frozen);
+
     await this.syncSeatsFromTable(pool, tableId, table);
     await pool.query(
       `UPDATE poker_hands
@@ -474,6 +530,10 @@ export class PokerGameService {
 
     const finalizeShowdown = async (): Promise<void> => {
       await this.persistShowdown(pool, tableId, handId, table);
+      // Drop the frozen-stack overlay BEFORE the final broadcast so the
+      // showdown frame reveals the true post-payout stacks alongside the
+      // winner badges. Order matters: clear, then broadcast.
+      this.runoutFrozenStacks.delete(tableId);
       await this.broadcastState(tableId);
       this.runoutInFlight.delete(tableId);
       this.runoutTimers.delete(tableId);
@@ -580,6 +640,7 @@ export class PokerGameService {
 
     try {
       await this.persistShowdown(pool, tableId, handId, table);
+      this.runoutFrozenStacks.delete(tableId);
       await this.broadcastState(tableId);
       this.scheduleNextHandAfterShowdown(tableId);
     } catch (err) {
@@ -1354,6 +1415,19 @@ export class PokerGameService {
         }
       }
 
+      // Freeze the displayed stack at its pre-payout value during an all-in
+      // runout. Without this overlay the seat plate updates to the resolved
+      // post-payout amount the moment chevtek auto-resolves, leaking the
+      // winner before the staged board reveal completes. Cleared at the
+      // showdown frame in finalizeShowdown.
+      const frozen = this.runoutFrozenStacks.get(tableId);
+      if (frozen && s?.playerAddress) {
+        const override = frozen.get(this.normalizeAddress(s.playerAddress));
+        if (override !== undefined) {
+          stack = override;
+        }
+      }
+
       seats.push({
         position: pos,
         playerAddress: s?.playerAddress ?? null,
@@ -1576,11 +1650,48 @@ export class PokerGameService {
         }
       }
 
+      // Structured per-pot breakdown for the UI (main / side / uncalled).
+      // Sourced from chevtek's live table.pots which is authoritative while
+      // a hand is in progress. Skipped when no live table (e.g. between
+      // hands) — the client falls back to the `pot` scalar.
+      let potsArr: PokerCurrentHand['pots'] | undefined;
+      if (liveTable && Array.isArray(liveTable.pots) && liveTable.pots.length > 0) {
+        // Drop the trailing empty pot chevtek always pushes after the all-in loop.
+        const realPots = liveTable.pots.filter((p: any) => p && p.amount > 0);
+        if (realPots.length > 0) {
+          potsArr = realPots.map((p: any, i: number) => {
+            const isLast = i === realPots.length - 1;
+            const isRefund =
+              realPots.length > 1 &&
+              isLast &&
+              Array.isArray(p.eligiblePlayers) &&
+              p.eligiblePlayers.length === 1;
+            let label: string;
+            if (realPots.length === 1) label = 'Pot';
+            else if (i === 0) label = 'Main Pot';
+            else if (isRefund) label = 'Uncalled';
+            else label = realPots.length === 2 ? 'Side Pot' : `Side Pot ${i}`;
+            const winnerAddresses =
+              Array.isArray(p.winners) && p.winners.length > 0
+                ? p.winners
+                    .filter((w: any) => w && !w.folded)
+                    .map((w: any) => this.normalizeAddress(w.id))
+                : undefined;
+            return {
+              amount: String(Math.max(0, Math.round(p.amount))),
+              label,
+              winnerAddresses,
+            };
+          });
+        }
+      }
+
       currentHand = {
         handId,
         street,
         communityCards,
         pot: potStr,
+        pots: potsArr,
         actingPosition,
         lastAction,
         recentActions,
@@ -2378,10 +2489,26 @@ export class PokerGameService {
 
     // Integer chip split per pot (no float drift), then convert to wei for cash.
     const winnerChips = new Map<string, bigint>();
+    // Refund-pot detection is gated on activePlayers.length >= 2 (a real
+    // showdown). On a fold-out (single survivor), chevtek's line-346
+    // filter strips folded players from each pot's eligibles, often
+    // leaving the survivor as the sole eligible player even for the main
+    // pot — that's a legit win, NOT a refund, so we must not skip those.
+    const realShowdown = Array.isArray(table.activePlayers) && table.activePlayers.length >= 2;
     for (const pot of table.pots) {
       if (!pot.winners || pot.winners.length === 0) continue;
       const nonFoldedWinners = pot.winners.filter((w: any) => !w.folded);
       if (nonFoldedWinners.length === 0) continue;
+      // Uncalled-bet refund pot — at a real showdown, a pot with only one
+      // eligible player can only arise because that player over-bet the
+      // covering opponent (e.g. SB posts 3,200 while the only opponent's
+      // BB is all-in for 2,000; SB's 1,200 surplus comes back here).
+      // Industry rooms don't treat this as winning the hand. Skip it from
+      // winnerChips so the player gets no WINNER badge, no hand-name
+      // pill, no rake, and no entry in the activity feed. Their stack
+      // already reflects the refund — chevtek credits .stackSize during
+      // showdown().
+      if (realShowdown && Array.isArray(pot.eligiblePlayers) && pot.eligiblePlayers.length <= 1) continue;
       const potChips = BigInt(Math.max(0, Math.round(pot.amount)));
       const ids = nonFoldedWinners.map((w: any) => w.id as string);
       const shares = splitBigIntEqually(potChips, ids.length);

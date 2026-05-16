@@ -6,7 +6,7 @@ import { formatChips } from '@/lib/format-poker-chips';
 import { BetChip, formatChipLabel } from '@/components/ui/BetChip';
 import { CardDisplay } from './CardDisplay';
 import type { PokerSeatState as SeatState } from '@/lib/websocket-client';
-import { motion, AnimatePresence } from 'framer-motion';
+import { motion, AnimatePresence, useMotionValue, useSpring, useTransform } from 'framer-motion';
 import type { LucideIcon } from 'lucide-react';
 import {
   ArrowLeft,
@@ -82,6 +82,103 @@ export function PokerChipStack({ weiAmount }: { weiAmount: string }) {
 
   return (
     <BetChip label={formatChipLabel(amount)} amount={amount} size={POKER_UI_CQW.betChip} />
+  );
+}
+
+// ── Animated stack value (count-up + gain flash + floating delta) ──────────
+//
+// The seat plate "X chips" number used to jump instantly when stacks
+// changed — easy to miss whether you won or lost. This wrapper springs
+// the displayed number from old to new value, briefly flashes the text
+// color on a gain, and floats a "+1,200" pill above the seat that rises
+// and fades. Losses count down without the flash/floater because chips
+// already animate visibly into the bet area as a player commits them.
+function safeChipNumber(value: string): number {
+  try {
+    const b = toBigIntSafe(value);
+    return b <= BigInt(Number.MAX_SAFE_INTEGER) ? Number(b) : Number.MAX_SAFE_INTEGER;
+  } catch {
+    return 0;
+  }
+}
+
+function AnimatedStackValue({ value, baseColor }: { value: string; baseColor: string }) {
+  const targetNum = useMemo(() => safeChipNumber(value), [value]);
+  const mv = useMotionValue(targetNum);
+  // Slower than the pot spring so the count-up reads clearly; the seat
+  // plate has less ink for the eye to track.
+  const spring = useSpring(mv, { stiffness: 110, damping: 22, mass: 0.9 });
+  const display = useTransform(spring, (v) =>
+    Math.max(0, Math.floor(v)).toLocaleString('en-US')
+  );
+
+  // Detect a positive delta against the last *target* (not the spring
+  // mid-value) to gate the gain flash + floating delta pill.
+  const lastTargetRef = useRef<number>(targetNum);
+  const [flashKey, setFlashKey] = useState(0);
+  const [delta, setDelta] = useState(0);
+  useEffect(() => {
+    const prev = lastTargetRef.current;
+    if (targetNum > prev) {
+      setDelta(targetNum - prev);
+      setFlashKey((k) => k + 1);
+    }
+    lastTargetRef.current = targetNum;
+    mv.set(targetNum);
+  }, [targetNum, mv]);
+
+  // The flash color rides on top of the seat's existing chip color. We
+  // animate to a punchy gold-green then back to baseColor over ~600ms.
+  const flashColor = useTransform(
+    useSpring(useMotionValue(0), { stiffness: 220, damping: 18 }),
+    () => baseColor
+  );
+  void flashColor; // (motion-value declared to keep API consistent; color animation is keyframed below)
+
+  return (
+    <span style={{ position: 'relative', display: 'inline-flex', alignItems: 'center' }}>
+      <motion.span
+        key={`flash-${flashKey}`}
+        animate={flashKey === 0
+          ? { color: baseColor, textShadow: '0 0 0px rgba(0,0,0,0)' }
+          : {
+              color: [baseColor, '#bbf7d0', '#fde68a', baseColor],
+              textShadow: [
+                '0 0 0px rgba(0,0,0,0)',
+                '0 0 14px rgba(134,239,172,0.9)',
+                '0 0 10px rgba(253,224,71,0.75)',
+                '0 0 0px rgba(0,0,0,0)',
+              ],
+            }}
+        transition={{ duration: 0.6, ease: 'easeOut' }}
+        className="tabular-nums"
+      >
+        {display}
+      </motion.span>
+      <AnimatePresence>
+        {flashKey > 0 && delta > 0 && (
+          <motion.span
+            key={`delta-${flashKey}`}
+            initial={{ opacity: 0, y: 4, scale: 0.85 }}
+            animate={{ opacity: [0, 1, 1, 0], y: [-2, -18, -26, -32], scale: [0.85, 1.1, 1.0, 0.95] }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: 1.2, ease: 'easeOut', times: [0, 0.18, 0.7, 1] }}
+            className="absolute font-bold tabular-nums pointer-events-none"
+            style={{
+              left: '50%',
+              top: '-1.2em',
+              transform: 'translateX(-50%)',
+              color: '#86efac',
+              textShadow: '0 0 8px rgba(134,239,172,0.95), 0 1px 3px rgba(0,0,0,0.85)',
+              fontSize: '0.85em',
+              whiteSpace: 'nowrap',
+            }}
+          >
+            +{formatChipLabel(delta)}
+          </motion.span>
+        )}
+      </AnimatePresence>
+    </span>
   );
 }
 
@@ -766,6 +863,73 @@ export function PokerSeat({ seat, index, holeCards, isCurrentPlayer, showCardBac
             <CircularTimerRing timeLeft={timeLeft} maxTime={maxTime} />
           )}
 
+          {/* Winner glow + halo — arcady "you won!" feedback. Pulses behind
+              the avatar during the showdown reveal. */}
+          <AnimatePresence>
+            {isHandWinner && (
+              <motion.div
+                key="winner-glow"
+                className="pointer-events-none absolute"
+                style={{
+                  left: '50%',
+                  top: '50%',
+                  width: '180%',
+                  height: '180%',
+                  transform: 'translate(-50%, -50%)',
+                  borderRadius: '9999px',
+                  zIndex: 0,
+                  background:
+                    'radial-gradient(circle, rgba(251,191,36,0.55) 0%, rgba(251,191,36,0.18) 35%, rgba(251,191,36,0) 65%)',
+                  filter: 'blur(2px)',
+                }}
+                initial={{ opacity: 0, scale: 0.6 }}
+                animate={{
+                  opacity: [0, 0.9, 0.65, 0.95, 0.7],
+                  scale: [0.6, 1.05, 0.95, 1.08, 1.0],
+                }}
+                exit={{ opacity: 0, scale: 0.7 }}
+                transition={{ duration: 2.4, ease: 'easeOut', times: [0, 0.18, 0.45, 0.7, 1] }}
+                aria-hidden
+              />
+            )}
+          </AnimatePresence>
+
+          {/* Gold rotating shimmer ring on winner — adds the arcade-cabinet feel. */}
+          <AnimatePresence>
+            {isHandWinner && (
+              <motion.div
+                key="winner-shimmer"
+                className="pointer-events-none absolute"
+                style={{
+                  left: '50%',
+                  top: '50%',
+                  width: '128%',
+                  height: '128%',
+                  transform: 'translate(-50%, -50%)',
+                  borderRadius: '9999px',
+                  zIndex: 0,
+                  border: '2px solid rgba(253, 224, 71, 0.7)',
+                  boxShadow:
+                    '0 0 18px rgba(253, 224, 71, 0.6), inset 0 0 14px rgba(253, 224, 71, 0.45)',
+                  background:
+                    'conic-gradient(from 0deg, rgba(253,224,71,0) 0%, rgba(253,224,71,0.55) 18%, rgba(253,224,71,0) 36%, rgba(253,224,71,0) 100%)',
+                  WebkitMaskImage:
+                    'radial-gradient(circle, transparent 64%, black 67%, black 100%)',
+                  maskImage:
+                    'radial-gradient(circle, transparent 64%, black 67%, black 100%)',
+                }}
+                initial={{ opacity: 0, rotate: 0 }}
+                animate={{ opacity: 1, rotate: 360 }}
+                exit={{ opacity: 0 }}
+                transition={{
+                  opacity: { duration: 0.4 },
+                  rotate: { duration: 3.6, ease: 'linear', repeat: Infinity },
+                }}
+                aria-hidden
+              />
+            )}
+          </AnimatePresence>
+
           {/* Avatar — current player: tap opens action radial; opponent: context radial + click profile */}
           {(() => {
             const avatarCard = (
@@ -774,14 +938,24 @@ export function PokerSeat({ seat, index, holeCards, isCurrentPlayer, showCardBac
                 className="relative select-none overflow-hidden rounded-full outline-none"
                 style={{
                   ...AVATAR_BOX_STYLE,
-                  border: isActing
+                  border: isHandWinner
+                    ? '2px solid rgba(253,224,71,0.95)'
+                    : isActing
                     ? '2px solid transparent'
                     : isCurrentPlayer
                       ? '2px solid rgba(251,191,36,0.6)'
                       : '2px solid rgba(255,255,255,0.18)',
                   background: 'rgba(0,0,0,0.6)',
                   cursor: (isCurrentPlayer || (!isCurrentPlayer && onOpponentClick && seat.playerAddress)) ? 'pointer' : 'default',
-                  boxShadow: isCurrentPlayer ? '0 0 0 1px rgba(251,191,36,0.15)' : '0 2px 8px rgba(0,0,0,0.6)',
+                  boxShadow: isHandWinner
+                    ? '0 0 18px rgba(253,224,71,0.85), 0 0 4px rgba(253,224,71,1)'
+                    : isCurrentPlayer
+                    ? '0 0 0 1px rgba(251,191,36,0.15)'
+                    : '0 2px 8px rgba(0,0,0,0.6)',
+                  transform: isHandWinner ? 'scale(1.08)' : 'scale(1)',
+                  transition: 'transform 380ms cubic-bezier(0.2, 1.4, 0.4, 1), box-shadow 380ms ease, border-color 200ms ease',
+                  position: 'relative',
+                  zIndex: 1,
                 }}
                 onClick={
                   isCurrentPlayer
@@ -1022,7 +1196,7 @@ export function PokerSeat({ seat, index, holeCards, isCurrentPlayer, showCardBac
                 className="font-bold tabular-nums leading-tight flex items-center justify-center gap-0.5"
                 style={{ color: '#fbbf24', fontSize: POKER_UI_CQW.playerTagChips, whiteSpace: 'nowrap' }}
               >
-                {formatChips(seat.stack)}
+                <AnimatedStackValue value={String(seat.stack ?? '0')} baseColor="#fbbf24" />
                 <img src="/morbius/MorbiusLogo%20(3).png" alt="" aria-hidden className="shrink-0" style={{ height: '1em', width: 'auto', verticalAlign: 'middle' }} />
               </div>
             </div>

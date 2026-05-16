@@ -44,6 +44,13 @@ const POT_ANCHOR = POKER_POT_ANCHOR;
 const SHOWDOWN_CARD_PULL_RATIO = 0.18;
 const SHOWDOWN_CARD_PULL_MAX_PX = 70;
 
+// Per-pot payout choreography (showdown). Tuned to give the player time
+// to read the winning hand before any chips start moving, then pay each
+// pot in sequence with a clear beat between them.
+const SHOWDOWN_INITIAL_DELAY_MS = 600;
+const CHIP_FLY_DURATION_MS = 700;
+const POT_STAGGER_MS = 380;
+
 // Seat base geometry: `lib/poker-seat-layout.ts` (SEAT_ANCHOR_RING + authoredSeatAnchors).
 
 export interface PokerTableProps {
@@ -116,6 +123,16 @@ export function PokerTable({ state, currentPlayerAddress, timeLeft, chatBubbleBy
   const [foldFlyouts, setFoldFlyouts] = useState<Array<{ id: string; from: { fx: number; fy: number }; holeCards?: number[]; showBacks: boolean }>>([]);
   const foldFlyoutTimeoutsRef = useRef<Array<ReturnType<typeof setTimeout>>>([]);
 
+  // Bet-to-pot gather animation state. When the street advances, the
+  // server clears every seat's `currentBet` in the same WS update that
+  // sets the new street. We capture the *previous* render's bets in
+  // `lastBetsRef` and use them to fly chip stacks from each seat into
+  // the pot center for ~700ms — replacing the previous in-place vanish.
+  type GatherEntry = { key: string; amount: string; fx: number; fy: number };
+  const [gatheringBets, setGatheringBets] = useState<GatherEntry[]>([]);
+  const lastBetsRef = useRef<Record<number, { amount: string; fx: number; fy: number }>>({});
+  const lastStreetRef = useRef<{ handId?: string; street?: string }>({});
+
   // ── Beam color cycling: cross-fade two layers every 5 hands over 15s ─
   // Two permanent beam layers (A/B). `activeBeamLayer` toggles which is
   // visible; the CSS transition handles the 15s fade between them.
@@ -175,30 +192,113 @@ export function PokerTable({ state, currentPlayerAddress, timeLeft, chatBubbleBy
     actingPosition != null &&
     actingRingIndex != null;
   const isShowdownWithWinners = hand?.street === 'showdown' && hand?.winners?.length;
-  const winnerPotChipTargets = useMemo(() => {
-    if (!isShowdownWithWinners || !hand?.winners?.length) return [] as { key: string; amount: string; fx: number; fy: number }[];
-    const targets: { key: string; amount: string; fx: number; fy: number }[] = [];
-    for (const w of hand.winners) {
-      let amountStr = w.amount ?? '0';
-      let amountBi = toBigIntSafe(amountStr);
-      if (amountBi <= 0n && hand.winners.length === 1 && hand.pot) {
-        amountBi = toBigIntSafe(hand.pot);
-        amountStr = hand.pot;
-      }
-      if (amountBi <= 0n) continue;
-      const seatIdx = state.seats.findIndex(
-        (s) => (s.playerAddress ?? '').toLowerCase() === w.address.toLowerCase(),
-      );
-      if (seatIdx < 0) continue;
-      const displaySlot =
-        mySeatIndex >= 0
-          ? (seatIdx - mySeatIndex + state.seats.length) % state.seats.length
-          : seatIdx;
-      const { fx, fy } = winningPotChipAnchorForDisplaySlot(state.seats.length, displaySlot);
-      targets.push({ key: w.address.toLowerCase(), amount: amountStr, fx, fy });
+
+  // ── Per-pot payout choreography ────────────────────────────────────────
+  // Each pot pays in sequence: main pot → side pot 1 → side pot 2 → ...
+  // For each pot we (a) fly its chips from the pot center to its winners
+  // and (b) drain the source pot's displayed amount to zero once chips
+  // arrive — so the user can actually watch each pot empty into the seat
+  // it belongs to instead of all chips appearing/disappearing at once.
+  // Falls back to a single synthesized pot when the server didn't send
+  // the structured breakdown (legacy backends).
+  const showdownPots = useMemo<{ amount: string; winnerAddresses: string[] }[]>(() => {
+    if (!isShowdownWithWinners) return [];
+    if (hand?.pots && hand.pots.length > 0) {
+      return hand.pots.map((p) => ({
+        amount: p.amount,
+        winnerAddresses: p.winnerAddresses ?? [],
+      }));
     }
-    return targets;
-  }, [isShowdownWithWinners, hand, mySeatIndex, state.seats]);
+    return [
+      {
+        amount: hand?.pot ?? '0',
+        winnerAddresses: (hand?.winners ?? []).map((w) => w.address.toLowerCase()),
+      },
+    ];
+  }, [isShowdownWithWinners, hand?.pots, hand?.pot, hand?.winners]);
+
+  const perPotChipFlights = useMemo(() => {
+    if (!isShowdownWithWinners || showdownPots.length === 0) {
+      return [] as { key: string; amount: string; fx: number; fy: number; delaySec: number }[];
+    }
+    const out: { key: string; amount: string; fx: number; fy: number; delaySec: number }[] = [];
+    for (let pi = 0; pi < showdownPots.length; pi++) {
+      const p = showdownPots[pi];
+      const potAmount = toBigIntSafe(p.amount);
+      if (potAmount <= 0n) continue;
+      const addrs = p.winnerAddresses.filter((a) => !!a);
+      if (addrs.length === 0) continue;
+      // Even split with remainder distributed to leading shares — same
+      // rule the server uses (`splitBigIntEqually`), kept inline so we
+      // don't have to plumb chip-int math into the client.
+      const n = BigInt(addrs.length);
+      const per = potAmount / n;
+      const remainder = potAmount - per * n;
+      const baseDelaySec =
+        (SHOWDOWN_INITIAL_DELAY_MS + pi * (CHIP_FLY_DURATION_MS + POT_STAGGER_MS)) / 1000;
+      for (let wi = 0; wi < addrs.length; wi++) {
+        const share = per + (BigInt(wi) < remainder ? 1n : 0n);
+        const seatIdx = state.seats.findIndex(
+          (s) => (s.playerAddress ?? '').toLowerCase() === addrs[wi],
+        );
+        if (seatIdx < 0) continue;
+        const displaySlot =
+          mySeatIndex >= 0
+            ? (seatIdx - mySeatIndex + state.seats.length) % state.seats.length
+            : seatIdx;
+        const { fx, fy } = winningPotChipAnchorForDisplaySlot(state.seats.length, displaySlot);
+        out.push({
+          key: `pot${pi}-${addrs[wi]}`,
+          amount: share.toString(),
+          fx,
+          fy,
+          delaySec: baseDelaySec,
+        });
+      }
+    }
+    return out;
+  }, [isShowdownWithWinners, showdownPots, state.seats, mySeatIndex]);
+
+  // Drain the source pots as chips arrive at the seats. Each pot reaches
+  // zero one fly-duration after its launch delay.
+  const [paidPotIndex, setPaidPotIndex] = useState(-1);
+  useEffect(() => {
+    if (!isShowdownWithWinners || !hand?.handId || showdownPots.length === 0) {
+      setPaidPotIndex(-1);
+      return;
+    }
+    setPaidPotIndex(-1);
+    const timers: ReturnType<typeof setTimeout>[] = [];
+    for (let i = 0; i < showdownPots.length; i++) {
+      const arrivalMs =
+        SHOWDOWN_INITIAL_DELAY_MS +
+        i * (CHIP_FLY_DURATION_MS + POT_STAGGER_MS) +
+        CHIP_FLY_DURATION_MS;
+      timers.push(setTimeout(() => setPaidPotIndex(i), arrivalMs));
+    }
+    return () => {
+      for (const t of timers) clearTimeout(t);
+    };
+  }, [isShowdownWithWinners, hand?.handId, showdownPots.length]);
+
+  const displayedPots = useMemo(() => {
+    if (!hand?.pots) return undefined;
+    if (!isShowdownWithWinners) return hand.pots;
+    return hand.pots.map((p, i) => (i <= paidPotIndex ? { ...p, amount: '0' } : p));
+  }, [hand?.pots, isShowdownWithWinners, paidPotIndex]);
+
+  const displayedPotScalar = useMemo(() => {
+    if (!isShowdownWithWinners) return hand?.pot ?? '0';
+    if (displayedPots && displayedPots.length > 0) {
+      let total = 0n;
+      for (const p of displayedPots) total += toBigIntSafe(p.amount);
+      return total.toString();
+    }
+    // Legacy single-pot path: drop to zero as soon as the first (only) pot
+    // has finished paying out so the scalar pot UI also drains visually.
+    if (paidPotIndex >= 0) return '0';
+    return hand?.pot ?? '0';
+  }, [isShowdownWithWinners, displayedPots, paidPotIndex, hand?.pot]);
   const firstWinner = isShowdownWithWinners ? hand!.winners![0] : null;
   const firstWinnerAddr = firstWinner?.address ?? null;
   const isCurrentPlayerWinner = firstWinnerAddr && currentPlayerAddress && firstWinnerAddr === currentPlayerAddress.toLowerCase();
@@ -299,6 +399,67 @@ export function PokerTable({ state, currentPlayerAddress, timeLeft, chatBubbleBy
       [lastAction.position]: { action: lastAction.action, amount: lastAction.amount },
     }));
   }, [hand?.handId, hand?.street, hand?.lastAction]);
+
+  // Bet-to-pot gather: on every render snapshot current bets into
+  // `lastBetsRef`, BUT when the street has just advanced read the *prior*
+  // snapshot first to launch fly-to-pot animations. Skip the showdown
+  // frame (per-pot payout choreography owns that transition) and skip
+  // hand boundaries (chips from a finished hand shouldn't merge into a
+  // new hand's empty pot).
+  useEffect(() => {
+    if (!hand) {
+      lastStreetRef.current = {};
+      lastBetsRef.current = {};
+      return;
+    }
+    const prev = lastStreetRef.current;
+    const isStreetAdvance =
+      prev.handId === hand.handId &&
+      !!prev.street &&
+      prev.street !== hand.street &&
+      hand.street !== 'showdown';
+
+    let cleanup: (() => void) | undefined;
+    if (isStreetAdvance) {
+      const entries: GatherEntry[] = [];
+      for (const [seatIdxStr, bet] of Object.entries(lastBetsRef.current)) {
+        if (toBigIntSafe(bet.amount) > 0n) {
+          entries.push({
+            key: `gather-${hand.handId}-${prev.street}-${seatIdxStr}`,
+            amount: bet.amount,
+            fx: bet.fx,
+            fy: bet.fy,
+          });
+        }
+      }
+      if (entries.length > 0) {
+        setGatheringBets((cur) => [...cur, ...entries]);
+        const ids = new Set(entries.map((e) => e.key));
+        const t = setTimeout(() => {
+          setGatheringBets((cur) => cur.filter((e) => !ids.has(e.key)));
+        }, 850);
+        cleanup = () => clearTimeout(t);
+      }
+    }
+
+    // Always advance refs — whether or not we fired a gather — so the
+    // next render doesn't re-detect the same street transition.
+    lastStreetRef.current = { handId: hand.handId, street: hand.street };
+    const nextBets: Record<number, { amount: string; fx: number; fy: number }> = {};
+    for (let displaySlot = 0; displaySlot < state.seats.length; displaySlot++) {
+      const actualIdx =
+        mySeatIndex >= 0
+          ? (mySeatIndex + displaySlot) % state.seats.length
+          : displaySlot;
+      const seat = state.seats[actualIdx];
+      if (toBigIntSafe(seat.currentBet ?? 0) > 0n) {
+        const { fx, fy } = betChipAnchorForDisplaySlot(state.seats.length, displaySlot);
+        nextBets[actualIdx] = { amount: seat.currentBet ?? '0', fx, fy };
+      }
+    }
+    lastBetsRef.current = nextBets;
+    return cleanup;
+  }, [hand?.handId, hand?.street, state.seats, mySeatIndex]);
 
   useEffect(() => {
     for (let idx = 0; idx < state.seats.length; idx += 1) {
@@ -616,7 +777,8 @@ export function PokerTable({ state, currentPlayerAddress, timeLeft, chatBubbleBy
                   ? hand.communityCards.slice(0, revealedCommunityCount)
                   : hand.communityCards
               }
-              pot={hand.pot}
+              pot={displayedPotScalar}
+              pots={displayedPots}
               winningCardIndices={showFinalShowdownVisuals ? winningCardIndices : []}
               dimNonWinning={showFinalShowdownVisuals}
               suppressCommunityEntryMotion={!!isShowdownWithWinners}
@@ -665,10 +827,11 @@ export function PokerTable({ state, currentPlayerAddress, timeLeft, chatBubbleBy
         )}
       </AnimatePresence>
 
-      {/* Chips sliding from pot to winner at showdown */}
+      {/* Per-pot chip flow at showdown — each pot pays its winners in
+          sequence, source pot drains in lockstep via `displayedPots`. */}
       <AnimatePresence>
         {showFinalShowdownVisuals &&
-          winnerPotChipTargets.map((t, i) => (
+          perPotChipFlights.map((t) => (
             <motion.div
               key={`chips-to-winner-${hand!.handId}-${t.key}`}
               className="absolute z-[35] pointer-events-none"
@@ -676,22 +839,58 @@ export function PokerTable({ state, currentPlayerAddress, timeLeft, chatBubbleBy
               initial={{
                 left: `${POT_ANCHOR.fx * 100}%`,
                 top: `${POT_ANCHOR.fy * 100}%`,
+                scale: 0.9,
+                opacity: 0,
               }}
               animate={{
                 left: `${t.fx * 100}%`,
                 top: `${t.fy * 100}%`,
+                scale: [0.9, 1.18, 1.0],
+                opacity: [0, 1, 1],
               }}
-              exit={{ opacity: 0 }}
+              exit={{ opacity: 0, scale: 0.7 }}
               transition={{
-                type: 'spring',
-                stiffness: 80,
-                damping: 18,
-                delay: 0.4 + i * 0.09,
+                left: { type: 'spring', stiffness: 80, damping: 18, delay: t.delaySec },
+                top: { type: 'spring', stiffness: 80, damping: 18, delay: t.delaySec },
+                scale: { duration: CHIP_FLY_DURATION_MS / 1000, ease: 'easeOut', delay: t.delaySec },
+                opacity: { duration: CHIP_FLY_DURATION_MS / 1000, ease: 'easeOut', delay: t.delaySec },
               }}
             >
               <PokerChipStack weiAmount={t.amount} />
             </motion.div>
           ))}
+      </AnimatePresence>
+
+      {/* Splash burst — radial pulse that fires the instant chips arrive
+          at a winner seat. Gives the payout a satisfying "thud" of impact
+          and visually anchors which seat just got paid. */}
+      <AnimatePresence>
+        {showFinalShowdownVisuals &&
+          perPotChipFlights.map((t) => {
+            const arrivalDelaySec = t.delaySec + (CHIP_FLY_DURATION_MS - 80) / 1000;
+            return (
+              <motion.div
+                key={`splash-${hand!.handId}-${t.key}`}
+                className="absolute z-[36] pointer-events-none"
+                style={{
+                  left: `${t.fx * 100}%`,
+                  top: `${t.fy * 100}%`,
+                  transform: 'translate(-50%, -50%)',
+                  width: 'clamp(56px, 8cqw, 96px)',
+                  height: 'clamp(56px, 8cqw, 96px)',
+                  borderRadius: '9999px',
+                  background:
+                    'radial-gradient(circle, rgba(253,224,71,0.85) 0%, rgba(251,191,36,0.45) 30%, rgba(251,191,36,0.0) 65%)',
+                  filter: 'blur(1.5px)',
+                }}
+                initial={{ opacity: 0, scale: 0.35 }}
+                animate={{ opacity: [0, 1, 0], scale: [0.35, 2.6, 3.2] }}
+                exit={{ opacity: 0 }}
+                transition={{ delay: arrivalDelaySec, duration: 0.85, ease: 'easeOut', times: [0, 0.32, 1] }}
+                aria-hidden
+              />
+            );
+          })}
       </AnimatePresence>
 
       {/* Chip stacks — between each seat and pot (hidden at showdown so only sliding pot shows) */}
@@ -714,7 +913,9 @@ export function PokerTable({ state, currentPlayerAddress, timeLeft, chatBubbleBy
               className="absolute pointer-events-none"
               initial={{ scale: 0, opacity: 0 }}
               animate={{ scale: 1, opacity: 1 }}
-              exit={{ scale: 0, opacity: 0 }}
+              // Snappier exit-in-place so it visually clears for the
+              // gather chip without lingering as a "shadow" at the seat.
+              exit={{ opacity: 0, scale: 0.85 }}
               transition={{ type: 'spring', stiffness: 320, damping: 24 }}
               style={{
                 left: `${cfx * 100}%`,
@@ -729,6 +930,45 @@ export function PokerTable({ state, currentPlayerAddress, timeLeft, chatBubbleBy
         })}
       </AnimatePresence>
       )}
+
+      {/* Bet-to-pot gather — fly each seat's committed chip stack into
+          the pot at street's end. Spawned by the street-transition
+          useEffect; AnimatePresence sweep removes them after the cleanup
+          timer fires. Replaces the previous "bets vanish in place" look. */}
+      <AnimatePresence>
+        {gatheringBets.map((g) => (
+          <motion.div
+            key={g.key}
+            className="absolute pointer-events-none"
+            style={{
+              transform: 'translate(-50%, -50%)',
+              zIndex: 30,
+            }}
+            initial={{
+              left: `${g.fx * 100}%`,
+              top: `${g.fy * 100}%`,
+              scale: 1,
+              opacity: 1,
+            }}
+            animate={{
+              left: `${POT_ANCHOR.fx * 100}%`,
+              top: `${POT_ANCHOR.fy * 100}%`,
+              // Slight mid-flight bulge then settle — "scooped into the pot".
+              scale: [1, 1.08, 0.85],
+              opacity: [1, 1, 0],
+            }}
+            exit={{ opacity: 0 }}
+            transition={{
+              left: { type: 'spring', stiffness: 90, damping: 20 },
+              top: { type: 'spring', stiffness: 90, damping: 20 },
+              scale: { duration: 0.7, ease: 'easeIn', times: [0, 0.55, 1] },
+              opacity: { duration: 0.7, ease: 'easeIn', times: [0, 0.7, 1] },
+            }}
+          >
+            <PokerChipStack weiAmount={g.amount} />
+          </motion.div>
+        ))}
+      </AnimatePresence>
 
       {/* Folded cards: fly from seat to center, then vanish */}
       <AnimatePresence>
