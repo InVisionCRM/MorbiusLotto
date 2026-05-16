@@ -110,6 +110,12 @@ export interface PokerTournamentSummary {
   prizeDistributionType: string;
   scheduledStartAt: string | null;
   isRegistered: boolean;
+  /**
+   * Server-provided status of the caller's `tournament_entries` row, or `null` when they
+   * never registered. Set even when `isRegistered` is false (e.g. busted entries) so the
+   * client can restore the table view for spectating after a refresh.
+   */
+  myEntryStatus?: 'playing' | 'busted' | 'completed' | null;
   /** Present when server runs migration 093+ / updated API */
   isPrivate?: boolean;
   /** Lobby blinds: live table or level 1 from config (chip ints). */
@@ -415,20 +421,29 @@ export function usePokerTournament({
       const tournaments: PokerTournamentSummary[] = response?.tournaments ?? [];
       setOpenTournaments(tournaments);
 
-      // Restore active tournament state from list (handles page refresh)
-      const active = tournaments.find((t) => t.isRegistered && t.status === 'active' && t.tableId);
+      // Restore active tournament state from list (handles page refresh).
+      // Includes busted entries so a player who refreshes after busting still rejoins
+      // the room for spectator events and can navigate back to the live table.
+      const active = tournaments.find((t) =>
+        (t.isRegistered || t.myEntryStatus === 'busted')
+        && t.status === 'active'
+        && t.tableId,
+      );
       if (active) {
         setMyTournamentId((prev) => prev ?? active.tournamentId);
         setMyTableId((prev) => prev ?? active.tableId);
-        setMyEntryStatus('playing');
+        setMyEntryStatus(active.myEntryStatus ?? 'playing');
       }
 
       // Re-subscribe to registered tournament rooms (registration + active) for WS events.
       // Skip tournaments we've already subscribed to on this WS connection — re-firing
       // `poker_tournament_join` hits Postgres (`SELECT ... FOR UPDATE`, table lookup) and
       // was overloading the server when called on every refresh / poll cycle.
+      // Busted entries also subscribe: the server's fast-path returns spectator entries so the
+      // room.add succeeds without re-running the join machinery.
       for (const t of tournaments) {
-        if (!t.isRegistered) continue;
+        const canSubscribe = t.isRegistered || t.myEntryStatus === 'busted';
+        if (!canSubscribe) continue;
         if (t.status !== 'registration' && t.status !== 'active') continue;
         if (subscribedTournamentsRef.current.has(t.tournamentId)) continue;
         subscribedTournamentsRef.current.add(t.tournamentId);
