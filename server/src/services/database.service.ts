@@ -3768,6 +3768,129 @@ export class DatabaseService implements MoneyDatabaseQueries {
     };
   }
 
+  // ── Poker lobby aggregates (House Records + Top Players) ─────────────────
+
+  async getPokerHouseRecords(): Promise<{
+    hands_dealt: number;
+    largest_pot: { amount: string; hand_id: string | null };
+    tournaments_played: number;
+    total_rake: string;
+  }> {
+    const [handsRes, potRes, tourRes, rakeRes] = await Promise.all([
+      this.pool.query(
+        `SELECT COUNT(*)::BIGINT AS n
+           FROM poker_hands
+          WHERE completed_at IS NOT NULL`
+      ),
+      this.pool.query(
+        `SELECT id, pot_amount::TEXT AS amount
+           FROM poker_hands
+          WHERE completed_at IS NOT NULL
+          ORDER BY pot_amount DESC NULLS LAST
+          LIMIT 1`
+      ),
+      this.pool.query(
+        `SELECT COUNT(*)::BIGINT AS n
+           FROM tournaments
+          WHERE game_type = 'poker' AND status = 'completed'`
+      ),
+      this.pool.query(
+        `SELECT COALESCE(SUM(rake_paid), 0)::TEXT AS total
+           FROM poker_hand_players`
+      ),
+    ]);
+
+    const potRow = potRes.rows[0];
+    return {
+      hands_dealt: Number(handsRes.rows[0]?.n ?? 0),
+      largest_pot: {
+        amount: String(potRow?.amount ?? '0'),
+        hand_id: potRow?.id ?? null,
+      },
+      tournaments_played: Number(tourRes.rows[0]?.n ?? 0),
+      total_rake: String(rakeRes.rows[0]?.total ?? '0'),
+    };
+  }
+
+  async getPokerTopPlayers(
+    category: 'net_chips' | 'biggest_pot' | 'hands_played',
+    limit: number,
+    requesterAddress?: string | null
+  ): Promise<{
+    category: 'net_chips' | 'biggest_pot' | 'hands_played';
+    rows: Array<{ rank: number; address: string; net_chips: string; biggest_pot: string; hands_played: number }>;
+    requester: { rank: number; address: string; net_chips: string; biggest_pot: string; hands_played: number } | null;
+  }> {
+    const safeLimit = Math.min(Math.max(limit | 0, 1), 100);
+    const orderClause =
+      category === 'net_chips' ? 'net_chips DESC'
+      : category === 'biggest_pot' ? 'biggest_pot DESC'
+      : 'hands_played DESC';
+
+    const baseSelect = `
+      SELECT
+        LOWER(p.player_address) AS address,
+        COALESCE(SUM(p.won_amount - p.contributed), 0)::TEXT AS net_chips,
+        COALESCE(MAX(p.won_amount) FILTER (WHERE p.won), 0)::TEXT AS biggest_pot,
+        COUNT(*)::INT AS hands_played
+      FROM poker_hand_players p
+      JOIN poker_hands h ON h.id = p.hand_id
+      WHERE h.completed_at IS NOT NULL
+      GROUP BY LOWER(p.player_address)
+    `;
+
+    const topResult = await this.pool.query(
+      `${baseSelect} ORDER BY ${orderClause} LIMIT $1`,
+      [safeLimit]
+    );
+    const rows = topResult.rows.map((r: any, idx: number) => ({
+      rank: idx + 1,
+      address: String(r.address),
+      net_chips: String(r.net_chips ?? '0'),
+      biggest_pot: String(r.biggest_pot ?? '0'),
+      hands_played: Number(r.hands_played ?? 0),
+    }));
+
+    let requester: typeof rows[number] | null = null;
+    if (requesterAddress) {
+      const normalized = this.normalizeAddress(requesterAddress);
+      const inTopN = rows.find((r) => r.address === normalized);
+      if (!inTopN) {
+        const rankResult = await this.pool.query(
+          `
+          WITH agg AS (${baseSelect})
+          SELECT *, (
+            SELECT COUNT(*) + 1
+              FROM agg b
+             WHERE
+               CASE
+                 WHEN $1::text = 'net_chips' THEN b.net_chips::NUMERIC > a.net_chips::NUMERIC
+                 WHEN $1::text = 'biggest_pot' THEN b.biggest_pot::NUMERIC > a.biggest_pot::NUMERIC
+                 ELSE b.hands_played > a.hands_played
+               END
+          )::INT AS rank
+            FROM agg a
+           WHERE a.address = $2
+           LIMIT 1
+          `,
+          [category, normalized]
+        );
+        const row = rankResult.rows[0];
+        if (row) {
+          requester = {
+            rank: Number(row.rank),
+            address: String(row.address),
+            net_chips: String(row.net_chips ?? '0'),
+            biggest_pot: String(row.biggest_pot ?? '0'),
+            hands_played: Number(row.hands_played ?? 0),
+          };
+        }
+      }
+    }
+
+    return { category, rows, requester };
+  }
+
   // ── Poker table-level dashboard stats (admin) ─────────────────────────────
 
   async getPokerTableDashboardStats(tableId: string): Promise<{
