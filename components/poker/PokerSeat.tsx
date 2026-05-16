@@ -790,8 +790,13 @@ export function PokerSeat({ seat, index, holeCards, isCurrentPlayer, showCardBac
         )}
       </AnimatePresence>
 
-      {/* ── Cards — hero only. Opponent cards are rendered by PokerTable via CARD_ANCHOR_RING. ── */}
-      <AnimatePresence>
+      {/* ── Cards — hero only. Opponent cards are rendered by PokerTable via CARD_ANCHOR_RING. ──
+          No <AnimatePresence> wrapper: when the hero folds, PokerTable's
+          fold flyout flies a copy of these cards from seat to pot. If we
+          let this motion.div exit-animate at the same time, the user
+          sees two card stacks transitioning at once. Removing the
+          wrapper makes the hero cards unmount instantly on fold so the
+          flyout is the only visible animation. */}
       {hasCards && showMyCards && isCurrentPlayer && (
         <motion.div
           data-testid={`poker-seat-cards-${index}`}
@@ -801,7 +806,6 @@ export function PokerSeat({ seat, index, holeCards, isCurrentPlayer, showCardBac
             x: showdownCardOffset?.x ?? 0,
             y: showdownCardOffset?.y ?? 0,
           }}
-          exit={{ transition: { duration: 0.5 } }}
           transition={{ type: 'spring', stiffness: 180, damping: 22 }}
           style={{
             width: showMyCards ? POKER_UI_CQW.heroCardAreaW : POKER_UI_CQW.flyoutRowW,
@@ -835,12 +839,10 @@ export function PokerSeat({ seat, index, holeCards, isCurrentPlayer, showCardBac
                     <CardDisplay
                       cardIndex={holeCards![ci]}
                       isWinningCard={winningCardIndices?.includes(holeCards![ci])}
-                      variant="hole"
-                      dealDelay={ci * 0.12}
-                      dealFromOffset={cardDealFromOffset}
+                      dealDelay={ci * 0.06}
                     />
                   )
-                : <CardDisplay cardIndex={null} small faceDown variant="hole" dealDelay={ci * 0.12} dealFromOffset={cardDealFromOffset} cardBackSrc={cardBackSrc} />}
+                : <CardDisplay cardIndex={null} small faceDown dealDelay={ci * 0.06} cardBackSrc={cardBackSrc} />}
             </div>
           ))}
           {isActing && (
@@ -852,7 +854,6 @@ export function PokerSeat({ seat, index, holeCards, isCurrentPlayer, showCardBac
           )}
         </motion.div>
       )}
-      </AnimatePresence>
 
       {/* ── Avatar (desktop) or compact timer + roles (narrow) ── */}
       {!hideSeatAvatar ? (
@@ -863,72 +864,6 @@ export function PokerSeat({ seat, index, holeCards, isCurrentPlayer, showCardBac
             <CircularTimerRing timeLeft={timeLeft} maxTime={maxTime} />
           )}
 
-          {/* Winner glow + halo — arcady "you won!" feedback. Pulses behind
-              the avatar during the showdown reveal. */}
-          <AnimatePresence>
-            {isHandWinner && (
-              <motion.div
-                key="winner-glow"
-                className="pointer-events-none absolute"
-                style={{
-                  left: '50%',
-                  top: '50%',
-                  width: '180%',
-                  height: '180%',
-                  transform: 'translate(-50%, -50%)',
-                  borderRadius: '9999px',
-                  zIndex: 0,
-                  background:
-                    'radial-gradient(circle, rgba(251,191,36,0.55) 0%, rgba(251,191,36,0.18) 35%, rgba(251,191,36,0) 65%)',
-                  filter: 'blur(2px)',
-                }}
-                initial={{ opacity: 0, scale: 0.6 }}
-                animate={{
-                  opacity: [0, 0.9, 0.65, 0.95, 0.7],
-                  scale: [0.6, 1.05, 0.95, 1.08, 1.0],
-                }}
-                exit={{ opacity: 0, scale: 0.7 }}
-                transition={{ duration: 2.4, ease: 'easeOut', times: [0, 0.18, 0.45, 0.7, 1] }}
-                aria-hidden
-              />
-            )}
-          </AnimatePresence>
-
-          {/* Gold rotating shimmer ring on winner — adds the arcade-cabinet feel. */}
-          <AnimatePresence>
-            {isHandWinner && (
-              <motion.div
-                key="winner-shimmer"
-                className="pointer-events-none absolute"
-                style={{
-                  left: '50%',
-                  top: '50%',
-                  width: '128%',
-                  height: '128%',
-                  transform: 'translate(-50%, -50%)',
-                  borderRadius: '9999px',
-                  zIndex: 0,
-                  border: '2px solid rgba(253, 224, 71, 0.7)',
-                  boxShadow:
-                    '0 0 18px rgba(253, 224, 71, 0.6), inset 0 0 14px rgba(253, 224, 71, 0.45)',
-                  background:
-                    'conic-gradient(from 0deg, rgba(253,224,71,0) 0%, rgba(253,224,71,0.55) 18%, rgba(253,224,71,0) 36%, rgba(253,224,71,0) 100%)',
-                  WebkitMaskImage:
-                    'radial-gradient(circle, transparent 64%, black 67%, black 100%)',
-                  maskImage:
-                    'radial-gradient(circle, transparent 64%, black 67%, black 100%)',
-                }}
-                initial={{ opacity: 0, rotate: 0 }}
-                animate={{ opacity: 1, rotate: 360 }}
-                exit={{ opacity: 0 }}
-                transition={{
-                  opacity: { duration: 0.4 },
-                  rotate: { duration: 3.6, ease: 'linear', repeat: Infinity },
-                }}
-                aria-hidden
-              />
-            )}
-          </AnimatePresence>
 
           {/* Avatar — current player: tap opens action radial; opponent: context radial + click profile */}
           {(() => {
@@ -938,24 +873,14 @@ export function PokerSeat({ seat, index, holeCards, isCurrentPlayer, showCardBac
                 className="relative select-none overflow-hidden rounded-full outline-none"
                 style={{
                   ...AVATAR_BOX_STYLE,
-                  border: isHandWinner
-                    ? '2px solid rgba(253,224,71,0.95)'
-                    : isActing
+                  border: isActing
                     ? '2px solid transparent'
                     : isCurrentPlayer
                       ? '2px solid rgba(251,191,36,0.6)'
                       : '2px solid rgba(255,255,255,0.18)',
                   background: 'rgba(0,0,0,0.6)',
                   cursor: (isCurrentPlayer || (!isCurrentPlayer && onOpponentClick && seat.playerAddress)) ? 'pointer' : 'default',
-                  boxShadow: isHandWinner
-                    ? '0 0 18px rgba(253,224,71,0.85), 0 0 4px rgba(253,224,71,1)'
-                    : isCurrentPlayer
-                    ? '0 0 0 1px rgba(251,191,36,0.15)'
-                    : '0 2px 8px rgba(0,0,0,0.6)',
-                  transform: isHandWinner ? 'scale(1.08)' : 'scale(1)',
-                  transition: 'transform 380ms cubic-bezier(0.2, 1.4, 0.4, 1), box-shadow 380ms ease, border-color 200ms ease',
-                  position: 'relative',
-                  zIndex: 1,
+                  boxShadow: isCurrentPlayer ? '0 0 0 1px rgba(251,191,36,0.15)' : '0 2px 8px rgba(0,0,0,0.6)',
                 }}
                 onClick={
                   isCurrentPlayer

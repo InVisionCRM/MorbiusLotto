@@ -252,10 +252,6 @@ export function PokerBoard({
 
       <div className="flex gap-2 sm:gap-3" data-testid="poker-community-cards">
         {[0, 1, 2, 3, 4].map((i) => {
-          // Each card starts at the pot (board center) and flies out to its slot.
-          // Approximate cell width (card + gap) — tuned for the `clamp()` sizes in CardDisplay.
-          const CELL_WIDTH_PX = 84;
-          const dealFromOffset = { dx: (2 - i) * CELL_WIDTH_PX, dy: 0 };
           const idx = communityCards[i];
           const suitIdx = idx != null ? pokerCardSuitIndex(idx) : null;
           const labelColor =

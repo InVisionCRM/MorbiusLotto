@@ -1035,10 +1035,6 @@ export function PokerTable({ state, currentPlayerAddress, timeLeft, chatBubbleBy
         const displaySlot = toDisplaySlot(idx);
         const { fx, fy } = cardAnchorForDisplaySlot(state.seats.length, displaySlot);
         const faceDown = !showdownCards?.length;
-        const dealFromOffset = {
-          dx: (POT_ANCHOR.fx - fx) * dims.w,
-          dy: (POT_ANCHOR.fy - fy) * dims.h,
-        };
         const seatLowerForZ = seat.playerAddress.toLowerCase();
         const isWinnerHoleCards =
           showFinalShowdownVisuals && winnerAddressSet.has(seatLowerForZ);
@@ -1072,13 +1068,11 @@ export function PokerTable({ state, currentPlayerAddress, timeLeft, chatBubbleBy
                 }}
               >
                 {faceDown
-                  ? <CardDisplay cardIndex={null} small faceDown variant="hole" dealDelay={ci * 0.12} dealFromOffset={dealFromOffset} cardBackSrc={floatingTableLogoSrc} />
+                  ? <CardDisplay cardIndex={null} small faceDown dealDelay={ci * 0.06} cardBackSrc={floatingTableLogoSrc} />
                   : (
                       <CardDisplay
                         cardIndex={showdownCards![ci] ?? null}
-                        variant="hole"
-                        dealDelay={ci * 0.12}
-                        dealFromOffset={dealFromOffset}
+                        dealDelay={ci * 0.06}
                         suppressEntryMotion
                       />
                     )}
