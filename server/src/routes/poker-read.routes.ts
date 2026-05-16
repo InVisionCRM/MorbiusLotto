@@ -82,35 +82,6 @@ export function registerPokerReadRoutes({
     }
   });
 
-  app.get('/api/poker/house-records', async (_req, res) => {
-    try {
-      const records = await dbService.getPokerHouseRecords();
-      sendJson(res, records);
-    } catch (error) {
-      logger.error('Error fetching poker house records:', error);
-      res.status(500).json({ error: 'Internal server error' });
-    }
-  });
-
-  app.get('/api/poker/top-players', async (req, res) => {
-    try {
-      const rawCategory = String(req.query.category ?? 'net_chips');
-      const category: 'net_chips' | 'biggest_pot' | 'hands_played' =
-        rawCategory === 'biggest_pot' || rawCategory === 'hands_played'
-          ? rawCategory
-          : 'net_chips';
-      const limit = Math.min(Math.max(parseInt(req.query.limit as string) || 10, 1), 100);
-      const requester = typeof req.query.address === 'string' && ADDRESS_REGEX.test(req.query.address)
-        ? req.query.address
-        : null;
-      const data = await dbService.getPokerTopPlayers(category, limit, requester);
-      sendJson(res, data);
-    } catch (error) {
-      logger.error('Error fetching poker top players:', error);
-      res.status(500).json({ error: 'Internal server error' });
-    }
-  });
-
   app.get('/api/poker/hands/:handId', async (req, res) => {
     try {
       const { handId } = req.params;
