@@ -653,6 +653,8 @@ export interface UsePokerTableTournamentHudOptions {
   onTournamentCancelled?: () => void;
   /** Fired on `poker_tournament_blind_level_up` for this table (visual overlay, not sonner). */
   onBlindLevelUp?: (payload: { newLevel: number; smallBlind: number; bigBlind: number }) => void;
+  /** Fired on `poker_tournament_player_eliminated` for this tournament (any player). */
+  onPlayerEliminated?: (playerAddress: string, finalRank: number) => void;
 }
 
 /**
@@ -668,6 +670,7 @@ export function usePokerTableTournamentHud({
   onTournamentCompleted,
   onTournamentCancelled,
   onBlindLevelUp,
+  onPlayerEliminated,
 }: UsePokerTableTournamentHudOptions): PokerTournamentState | null {
   const [state, setState] = useState<PokerTournamentState | null>(null);
   const tid = (tournamentId && String(tournamentId).trim()) || null;
@@ -675,6 +678,7 @@ export function usePokerTableTournamentHud({
   const onCompletedRef = useRef(onTournamentCompleted);
   const onCancelledRef = useRef(onTournamentCancelled);
   const onBlindUpRef = useRef(onBlindLevelUp);
+  const onPlayerEliminatedRef = useRef(onPlayerEliminated);
   useEffect(() => {
     onCompletedRef.current = onTournamentCompleted;
   }, [onTournamentCompleted]);
@@ -684,6 +688,9 @@ export function usePokerTableTournamentHud({
   useEffect(() => {
     onBlindUpRef.current = onBlindLevelUp;
   }, [onBlindLevelUp]);
+  useEffect(() => {
+    onPlayerEliminatedRef.current = onPlayerEliminated;
+  }, [onPlayerEliminated]);
 
   // Join room + load snapshot when connected
   useEffect(() => {
@@ -770,6 +777,7 @@ export function usePokerTableTournamentHud({
           ),
         };
       });
+      onPlayerEliminatedRef.current?.(payload.playerAddress, payload.finalRank);
     };
 
     const onCompleted = (payload: unknown) => {
