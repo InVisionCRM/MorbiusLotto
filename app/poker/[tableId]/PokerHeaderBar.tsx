@@ -140,6 +140,8 @@ interface PokerHeaderBarProps {
   /** Spectator / eliminated: show Exit instead of Leave (return to lobby without a seated stack). */
   showExitToLobby?: boolean;
   onExitClick?: () => void;
+  /** True when the local user busted out of this tournament and chose to stay & watch. */
+  isBustedSpectator?: boolean;
   /** Whether the seated player has auto-rebuy enabled. Only shown when player is seated. */
   autoRebuy?: boolean;
   onToggleAutoRebuy?: () => void;
@@ -187,6 +189,7 @@ export function PokerHeaderBar({
   onLeaveClick,
   showExitToLobby = false,
   onExitClick,
+  isBustedSpectator = false,
   autoRebuy = false,
   onToggleAutoRebuy,
   showTableBrandingActions = false,
@@ -298,6 +301,24 @@ export function PokerHeaderBar({
             {fmtChips(renderedState.smallBlind)}/{fmtChips(renderedState.bigBlind)}
           </span>
           {tournamentState && <TournamentReadout state={tournamentState} />}
+          {isBustedSpectator && (
+            <span
+              className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-sm text-[10px] sm:text-[11px] font-bold uppercase tracking-[0.14em] whitespace-nowrap"
+              style={{
+                color: 'rgba(244,63,94,0.95)',
+                background: 'rgba(244,63,94,0.10)',
+                border: '1px solid rgba(244,63,94,0.30)',
+              }}
+              title="You busted out of this tournament and are watching as a spectator"
+            >
+              <span
+                aria-hidden
+                className="w-1.5 h-1.5 rounded-full"
+                style={{ background: 'rgba(244,63,94,0.95)' }}
+              />
+              Spectating
+            </span>
+          )}
         </div>
       ) : (
         <div className="min-w-0" />

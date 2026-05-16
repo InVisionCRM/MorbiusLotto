@@ -37,6 +37,7 @@ import { usePokerTableTournamentHud } from '@/hooks/use-poker-tournament';
 import { TournamentBlindIncreaseOverlay } from '@/components/poker/tournament/TournamentBlindIncreaseOverlay';
 import { PokerTournamentHUD } from '@/components/poker/tournament/PokerTournamentHUD';
 import { PokerTournamentResultsModal } from '@/components/poker/tournament/PokerTournamentResultsModal';
+import { PokerBustOutModal } from '@/components/poker/tournament/PokerBustOutModal';
 import type { PokerTournamentCompletedPayload } from '@/lib/poker-tournament-completed';
 import { PokerActivityFeed } from '@/components/poker/PokerActivityFeed';
 import { VoiceChatPanel } from '@/components/poker/VoiceChatPanel';
@@ -81,6 +82,8 @@ export default function PokerTablePage() {
   /** Bumped to open Activity drawer from seat radial on mobile. */
   const [activityMobileOpenSerial, setActivityMobileOpenSerial] = useState(0);
   const [tournamentResults, setTournamentResults] = useState<PokerTournamentCompletedPayload | null>(null);
+  const [bustOutModal, setBustOutModal] = useState<{ finalRank: number | null } | null>(null);
+  const [isBustedSpectator, setIsBustedSpectator] = useState(false);
 
   const normalizedAddress = address?.toLowerCase() ?? null;
   const effectivePlayerAddress = normalizedAddress ?? (isE2EMock ? POKER_E2E_MOCK_ADDRESS : null);
@@ -160,6 +163,15 @@ export default function PokerTablePage() {
     [],
   );
 
+  const handlePlayerEliminated = useCallback(
+    (playerAddress: string, finalRank: number) => {
+      const me = normalizedAddress;
+      if (!me || playerAddress.toLowerCase() !== me) return;
+      setBustOutModal({ finalRank: finalRank > 0 ? finalRank : null });
+    },
+    [normalizedAddress],
+  );
+
   /** Prefer server `PokerTableState.tournamentId`; once a snapshot exists, ignore stray `?tournament=` on cash tables. */
   const resolvedTournamentId = useMemo(() => {
     if (renderedState) {
@@ -181,6 +193,7 @@ export default function PokerTablePage() {
     onTournamentCompleted: handleTournamentCompleted,
     onTournamentCancelled: handleTournamentCancelled,
     onBlindLevelUp: handleBlindLevelUp,
+    onPlayerEliminated: handlePlayerEliminated,
   });
 
   const tournamentHUDProp =
@@ -282,6 +295,22 @@ export default function PokerTablePage() {
       go();
     }
   }, [tableId, router]);
+
+  const handleBustLeave = useCallback(() => {
+    setBustOutModal(null);
+    setIsBustedSpectator(false);
+    handleExitToLobby();
+  }, [handleExitToLobby]);
+
+  const handleBustStay = useCallback(() => {
+    setBustOutModal(null);
+    setIsBustedSpectator(true);
+  }, []);
+
+  // Reset spectator flag if the user gets re-seated (e.g. registering for a fresh tournament on the same page).
+  useEffect(() => {
+    if (mySeat) setIsBustedSpectator(false);
+  }, [mySeat]);
 
   // ── Voice commands ────────────────────────────────────────────────────────
   const { enabled: speechEnabled, setEnabled: setSpeechEnabled } = useSpeechEnabled(address);
@@ -718,6 +747,7 @@ export default function PokerTablePage() {
             onLeaveClick={handleLeaveClick}
             showExitToLobby={!mySeat}
             onExitClick={handleExitClick}
+            isBustedSpectator={isBustedSpectator && !mySeat}
             autoRebuy={autoRebuy}
             onToggleAutoRebuy={mySeat ? () => setAutoRebuy((v) => !v) : undefined}
             showTableBrandingActions={Boolean(effectivePlayerAddress && wsConnected && mySeat)}
@@ -957,6 +987,12 @@ export default function PokerTablePage() {
           onDismiss={dismissTournamentResults}
         />
       )}
+      <PokerBustOutModal
+        isOpen={bustOutModal !== null}
+        finalRank={bustOutModal?.finalRank ?? null}
+        onLeave={handleBustLeave}
+        onStay={handleBustStay}
+      />
     </>
   );
 }
