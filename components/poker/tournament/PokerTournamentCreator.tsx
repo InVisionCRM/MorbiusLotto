@@ -461,10 +461,6 @@ const BLIND_ROLODEX_ROW_PX = 40;
 
 const PLAYER_COUNT_OPTIONS: readonly number[] = [2, 3, 4, 5, 6, 7, 8, 9, 10];
 
-const CHIPS_POOL_SELECT_VALUES: readonly number[] = [
-  50, 100, 250, 500, 750, 1000, 1500, 2000, 2500, 3000, 4000, 5000, 7500, 10000, 15000, 25000, 50000, 100000,
-];
-
 const STARTING_STACK_SELECT_VALUES: readonly number[] = STARTING_STACK_PRESETS.map((p) => parseInt(p.value, 10));
 
 function snapToNearestInList(n: number, list: readonly number[]): number {
@@ -1001,19 +997,6 @@ export function PokerTournamentCreator({ creatorAddress, onClose, onCreate }: Po
   useEffect(() => {
     if (!isAdmin) setBotsToAdd(0);
   }, [isAdmin]);
-
-  useEffect(() => {
-    if (isFreeroll && prizeSource === 'custom_token') return;
-    if (!isFreeroll && buyInPrizeSource === 'custom_token_buyin') return;
-    const raw = parseInt(isFreeroll ? guaranteedPool : buyIn, 10) || (isFreeroll ? 5000 : 1000);
-    const clamped = Math.max(1, Math.min(100_000, raw));
-    const s = snapToNearestInList(clamped, CHIPS_POOL_SELECT_VALUES);
-    const field = isFreeroll ? guaranteedPool : buyIn;
-    if (String(s) !== field) {
-      if (isFreeroll) setGuaranteedPool(String(s));
-      else setBuyIn(String(s));
-    }
-  }, [isFreeroll, prizeSource, buyIn, guaranteedPool, buyInPrizeSource]);
 
   useEffect(() => {
     const fallback = parseInt(STARTING_STACK_PRESETS[STARTING_STACK_PRESETS.length - 1].value, 10);
@@ -2176,40 +2159,23 @@ export function PokerTournamentCreator({ creatorAddress, onClose, onCreate }: Po
                     <label htmlFor="poker-basics-pool-buyin" className={labelClass}>
                       {isFreeroll ? 'Guaranteed prize pool' : 'Buy-in per player'}
                     </label>
-                    <Select
-                      value={String(
-                        snapToNearestInList(
-                          Math.max(
-                            1,
-                            Math.min(
-                              100_000,
-                              parseInt(isFreeroll ? guaranteedPool : buyIn, 10) || (isFreeroll ? 5000 : 1000),
-                            ),
-                          ),
-                          CHIPS_POOL_SELECT_VALUES,
-                        ),
-                      )}
-                      onValueChange={(v) => {
-                        if (isFreeroll) setGuaranteedPool(v);
-                        else setBuyIn(v);
+                    <input
+                      id="poker-basics-pool-buyin"
+                      type="text"
+                      inputMode="numeric"
+                      autoComplete="off"
+                      value={isFreeroll ? guaranteedPool : buyIn}
+                      placeholder={isFreeroll ? 'e.g. 5000' : 'e.g. 1000'}
+                      onChange={(e) => {
+                        const digits = e.target.value.replace(/[^\d]/g, '');
+                        if (isFreeroll) setGuaranteedPool(digits);
+                        else setBuyIn(digits);
                       }}
-                    >
-                      <SelectTrigger id="poker-basics-pool-buyin" className={selectTriggerBasicsClass}>
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent className="max-h-64 bg-slate-900 border border-cyan-500/30 text-white shadow-xl z-[200]">
-                        {CHIPS_POOL_SELECT_VALUES.map((n) => (
-                          <SelectItem
-                            key={n}
-                            value={String(n)}
-                            textValue={`${n.toLocaleString()} chips`}
-                            className="focus:bg-cyan-500/15 focus:text-white cursor-pointer"
-                          >
-                            {n.toLocaleString()} chips
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
+                      className={fieldClass}
+                    />
+                    <p className="mt-1 text-[10px] text-white/40">
+                      Any whole number of chips. No cap.
+                    </p>
                   </div>
                 )}
                 <div
