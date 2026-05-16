@@ -1547,15 +1547,27 @@ async function initializeServices() {
           ? h.community_cards
           : (h.community_cards ? JSON.parse(JSON.stringify(h.community_cards)) : []);
 
-        // Hole cards: all dealt-in players. Ordered by seat position so the
-        // verifier can reconstruct chevtek's deal sequence (cards popped from
-        // the end of the deck go to seat 0, then seat 1, etc.).
+        // Hole cards: all dealt-in players. Ordered by the *deal-time* seat
+        // position captured in `poker_hand_players.seat_position` (mirrors
+        // chevtek's `table.players` array index at the moment dealCards() ran).
+        // We deliberately do NOT join on `poker_seats` here — that table is the
+        // *live* seating state, which may have changed since the hand finished
+        // (player left, swapped seats, etc.), producing the wrong order.
+        // `poker_seats.position` is used only as a fallback for legacy hands
+        // where `populateHandPlayers` failed and no per-hand snapshot exists.
         const holeRows = await dbService.getPool().query(
-          `SELECT hc.player_address, hc.cards, ps.position
+          `SELECT hc.player_address, hc.cards,
+                  COALESCE(hp.seat_position, ps.position) AS position
              FROM poker_hand_hole_cards hc
-             LEFT JOIN poker_seats ps ON ps.table_id = $2 AND ps.player_address = hc.player_address
+             LEFT JOIN poker_hand_players hp
+                    ON hp.hand_id = hc.hand_id
+                   AND hp.player_address = hc.player_address
+             LEFT JOIN poker_seats ps
+                    ON ps.table_id = $2
+                   AND ps.player_address = hc.player_address
             WHERE hc.hand_id = $1
-            ORDER BY ps.position ASC NULLS LAST, hc.player_address ASC`,
+            ORDER BY COALESCE(hp.seat_position, ps.position) ASC NULLS LAST,
+                     hc.player_address ASC`,
           [handId, h.table_id],
         );
         const players = holeRows.rows.map((r: any) => ({
