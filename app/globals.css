@@ -1106,6 +1106,18 @@ body {
   pointer-events: none;
 }
 
+/* Top-3 podium sheen — a thin diagonal highlight slowly sweeping across the
+   champion tile in the leaderboard. The animated element is positioned
+   absolutely inside the tile; this keyframe just slides it past. */
+@keyframes poker-shimmer {
+  0%   { transform: translateX(-150%) skewX(-18deg); }
+  60%  { transform: translateX(420%)  skewX(-18deg); }
+  100% { transform: translateX(420%)  skewX(-18deg); }
+}
+.animate-poker-shimmer {
+  animation: poker-shimmer 4.5s ease-in-out infinite;
+}
+
 /* Connection dot — gentle breathing when live. */
 @keyframes morb-poker-conn-pulse {
   0%, 100% { box-shadow: 0 0 0 0 rgba(52, 211, 153, 0.45); }
