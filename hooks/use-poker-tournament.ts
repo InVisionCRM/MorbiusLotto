@@ -175,14 +175,26 @@ export interface CreatePokerTournamentParams {
 }
 
 export const DEFAULT_BLIND_SCHEDULE: BlindLevel[] = [
-  { level: 1, smallBlind: 25,  bigBlind: 50,   handsPerLevel: 10 },
-  { level: 2, smallBlind: 50,  bigBlind: 100,  handsPerLevel: 10 },
-  { level: 3, smallBlind: 75,  bigBlind: 150,  handsPerLevel: 8  },
-  { level: 4, smallBlind: 100, bigBlind: 200,  handsPerLevel: 8  },
-  { level: 5, smallBlind: 150, bigBlind: 300,  handsPerLevel: 6  },
-  { level: 6, smallBlind: 200, bigBlind: 400,  handsPerLevel: 6  },
-  { level: 7, smallBlind: 300, bigBlind: 600,  handsPerLevel: 5  },
-  { level: 8, smallBlind: 500, bigBlind: 1000, handsPerLevel: 999 },
+  { level: 1,  smallBlind: 25,    bigBlind: 50,     handsPerLevel: 10 },
+  { level: 2,  smallBlind: 50,    bigBlind: 100,    handsPerLevel: 10 },
+  { level: 3,  smallBlind: 75,    bigBlind: 150,    handsPerLevel: 8  },
+  { level: 4,  smallBlind: 100,   bigBlind: 200,    handsPerLevel: 8  },
+  { level: 5,  smallBlind: 150,   bigBlind: 300,    handsPerLevel: 6  },
+  { level: 6,  smallBlind: 200,   bigBlind: 400,    handsPerLevel: 6  },
+  { level: 7,  smallBlind: 300,   bigBlind: 600,    handsPerLevel: 5  },
+  { level: 8,  smallBlind: 500,   bigBlind: 1000,   handsPerLevel: 5  },
+  { level: 9,  smallBlind: 750,   bigBlind: 1500,   handsPerLevel: 5  },
+  { level: 10, smallBlind: 1000,  bigBlind: 2000,   handsPerLevel: 5  },
+  { level: 11, smallBlind: 1500,  bigBlind: 3000,   handsPerLevel: 5  },
+  { level: 12, smallBlind: 2000,  bigBlind: 4000,   handsPerLevel: 5  },
+  { level: 13, smallBlind: 3000,  bigBlind: 6000,   handsPerLevel: 5  },
+  { level: 14, smallBlind: 5000,  bigBlind: 10000,  handsPerLevel: 5  },
+  { level: 15, smallBlind: 7500,  bigBlind: 15000,  handsPerLevel: 5  },
+  { level: 16, smallBlind: 10000, bigBlind: 20000,  handsPerLevel: 5  },
+  { level: 17, smallBlind: 15000, bigBlind: 30000,  handsPerLevel: 5  },
+  { level: 18, smallBlind: 20000, bigBlind: 40000,  handsPerLevel: 5  },
+  { level: 19, smallBlind: 30000, bigBlind: 60000,  handsPerLevel: 5  },
+  { level: 20, smallBlind: 50000, bigBlind: 100000, handsPerLevel: 999 },
 ];
 
 export const POKER_TOURNAMENT_DEFAULT_CONFIG: PokerTournamentConfig = {
