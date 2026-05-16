@@ -217,4 +217,123 @@ describe('Provably-fair poker', () => {
     // dealt sequence card-for-card.
     expect(popOrder.slice(0, expectedDealt.length)).toEqual(expectedDealt);
   }, 30_000);
+
+  it('verifier deal-order survives a player leaving after the hand', async () => {
+    // Regression: the verify endpoint used to LEFT JOIN `poker_seats` for
+    // seat positions. When a player left after a hand, their `poker_seats`
+    // row was deleted and the join yielded a NULL position, dropping them
+    // to the end of the expected deal order — causing 6+ phantom mismatches
+    // even though the deck and hole-card data were perfectly intact. The
+    // fix sources seat positions from `poker_hand_players` (per-hand
+    // snapshot frozen at showdown).
+    const PLAYER_3 = TEST_PLAYERS[2];
+    const buyIn = BigInt(BB) * 40n;
+    const tableId = await createTable([PLAYER_1, PLAYER_2, PLAYER_3], buyIn);
+
+    const handRow = await testPool.query(
+      `SELECT id FROM poker_hands WHERE table_id = $1 AND completed_at IS NULL
+        ORDER BY created_at DESC LIMIT 1`,
+      [tableId],
+    );
+    const handId = handRow.rows[0].id;
+
+    // Fold around to BB so the hand completes cleanly with all 3 players
+    // still seated and unbusted — no all-ins, no side pots, no removals.
+    for (let i = 0; i < 6; i++) {
+      const state = await pokerGameService.getTableState(tableId, null);
+      if (!state.currentHand || state.currentHand.actingPosition == null) break;
+      const { addr } = getActing(state);
+      await pokerGameService.playerAction(tableId, handId, addr, 'fold');
+    }
+
+    // Wait for completed_at + server_seed AND populateHandPlayers to land.
+    // populateHandPlayers runs *after* the transaction that sets completed_at,
+    // so polling on completed_at alone races the per-hand snapshot insert.
+    let final: any;
+    let expectedSeatRows: any;
+    for (let i = 0; i < 40; i++) {
+      final = (await testPool.query(
+        `SELECT server_seed, client_seed, community_cards, completed_at
+           FROM poker_hands WHERE id = $1`,
+        [handId],
+      )).rows[0];
+      expectedSeatRows = await testPool.query(
+        `SELECT hp.player_address, hp.seat_position, hc.cards
+           FROM poker_hand_players hp
+           JOIN poker_hand_hole_cards hc
+                ON hc.hand_id = hp.hand_id AND hc.player_address = hp.player_address
+          WHERE hp.hand_id = $1
+          ORDER BY hp.seat_position ASC`,
+        [handId],
+      );
+      if (final?.server_seed && final.completed_at && expectedSeatRows.rows.length === 3) break;
+      await new Promise((r) => setTimeout(r, 50));
+    }
+    expect(final.server_seed).toBeTruthy();
+
+    if (expectedSeatRows.rows.length !== 3) {
+      const allHole = await testPool.query(
+        `SELECT player_address, cards FROM poker_hand_hole_cards WHERE hand_id = $1`,
+        [handId],
+      );
+      const allHp = await testPool.query(
+        `SELECT player_address, seat_position, folded FROM poker_hand_players WHERE hand_id = $1 ORDER BY seat_position`,
+        [handId],
+      );
+      const seats = await testPool.query(
+        `SELECT player_address, position FROM poker_seats WHERE table_id = $1 ORDER BY position`,
+        [tableId],
+      );
+      // eslint-disable-next-line no-console
+      console.log('DEBUG hole_cards:', allHole.rows, 'hand_players:', allHp.rows, 'live seats:', seats.rows);
+    }
+    expect(expectedSeatRows.rows.length).toBe(3);
+
+    // The player whose departure used to corrupt the verifier — pick a
+    // middle-seat player so their absence shifts every later player's slot.
+    const departing = expectedSeatRows.rows[1].player_address;
+    await pokerGameService.leaveTable(tableId, departing);
+
+    // Confirm `poker_seats` no longer has the departed player (LEFT JOIN on
+    // poker_seats would now yield NULL — the old bug's trigger).
+    const liveSeats = await testPool.query(
+      `SELECT player_address FROM poker_seats WHERE table_id = $1 AND LOWER(player_address) = LOWER($2)`,
+      [tableId, departing],
+    );
+    expect(liveSeats.rows.length).toBe(0);
+
+    // Run the verifier's query (the one in `server.ts` GET /api/poker/verify).
+    // If this regresses to joining only on poker_seats, the departed player
+    // sorts last and the expected deal order is wrong.
+    const verifierRows = await testPool.query(
+      `SELECT hc.player_address, hc.cards,
+              COALESCE(hp.seat_position, ps.position) AS position
+         FROM poker_hand_hole_cards hc
+         LEFT JOIN poker_hand_players hp
+                ON hp.hand_id = hc.hand_id
+               AND hp.player_address = hc.player_address
+         LEFT JOIN poker_seats ps
+                ON ps.table_id = $2
+               AND ps.player_address = hc.player_address
+        WHERE hc.hand_id = $1
+        ORDER BY COALESCE(hp.seat_position, ps.position) ASC NULLS LAST,
+                 hc.player_address ASC`,
+      [handId, tableId],
+    );
+
+    const communityCards: number[] = Array.isArray(final.community_cards)
+      ? final.community_cards
+      : JSON.parse(final.community_cards ?? '[]');
+    const deckIndices = pfService.fisherYatesShuffle(final.server_seed, final.client_seed, 0);
+    const popOrder = deckIndices.slice().reverse();
+
+    const expectedDealt: number[] = [];
+    for (const r of verifierRows.rows) {
+      const cards = Array.isArray(r.cards) ? r.cards : JSON.parse(r.cards ?? '[]');
+      expectedDealt.push(...cards);
+    }
+    expectedDealt.push(...communityCards);
+
+    expect(popOrder.slice(0, expectedDealt.length)).toEqual(expectedDealt);
+  }, 30_000);
 });
