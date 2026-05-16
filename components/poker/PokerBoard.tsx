@@ -252,43 +252,34 @@ export function PokerBoard({
 
       <div className="flex gap-2 sm:gap-3" data-testid="poker-community-cards">
         {[0, 1, 2, 3, 4].map((i) => {
-          // Each card starts at the pot (board center) and flies out to its slot.
-          // Approximate cell width (card + gap) — tuned for the `clamp()` sizes in CardDisplay.
-          const CELL_WIDTH_PX = 84;
-          const dealFromOffset = { dx: (2 - i) * CELL_WIDTH_PX, dy: 0 };
           const idx = communityCards[i];
           const suitIdx = idx != null ? pokerCardSuitIndex(idx) : null;
           const labelColor =
             suitIdx != null ? POKER_RANK_SUIT_LABEL_COLORS[suitIdx] : 'rgba(255, 255, 255, 1)';
           return (
-            <AnimatePresence key={i} mode="wait">
-              <div className="flex min-w-0 flex-col items-center gap-0.5">
-                {idx != null ? (
-                  <CardDisplay
-                    key={idx}
-                    cardIndex={idx}
-                    dealDelay={i * 0.12}
-                    suppressEntryMotion={suppressCommunityEntryMotion}
-                    isWinningCard={winningCardIndices?.includes(idx)}
-                    isDimmed={dimNonWinning && !winningCardIndices?.includes(idx)}
-                    showCenterRankSuitOverlay
-                    variant="community"
-                    dealFromOffset={dealFromOffset}
-                  />
-                ) : (
-                  <CardDisplay key={`empty-${i}`} cardIndex={undefined} />
-                )}
-                {idx != null && (
-                  <span
-                    className="font-jost font-bold max-w-full truncate text-center text-[17px] leading-tight tracking-tight sm:text-[18px] tabular-nums"
-                    style={{ color: labelColor }}
-                    aria-hidden
-                  >
-                    {formatPokerCardIndexLabel(idx)}
-                  </span>
-                )}
-              </div>
-            </AnimatePresence>
+            <div key={i} className="flex min-w-0 flex-col items-center gap-0.5">
+              {idx != null ? (
+                <CardDisplay
+                  key={idx}
+                  cardIndex={idx}
+                  dealDelay={i * 0.06}
+                  suppressEntryMotion={suppressCommunityEntryMotion}
+                  isWinningCard={winningCardIndices?.includes(idx)}
+                  isDimmed={dimNonWinning && !winningCardIndices?.includes(idx)}
+                />
+              ) : (
+                <CardDisplay key={`empty-${i}`} cardIndex={undefined} />
+              )}
+              {idx != null && (
+                <span
+                  className="font-jost font-bold max-w-full truncate text-center text-[17px] leading-tight tracking-tight sm:text-[18px] tabular-nums"
+                  style={{ color: labelColor }}
+                  aria-hidden
+                >
+                  {formatPokerCardIndexLabel(idx)}
+                </span>
+              )}
+            </div>
           );
         })}
       </div>
