@@ -100,15 +100,25 @@ export function PokerTopPlayers({ myAddress }: Props) {
     setErrored(false);
     const qs = new URLSearchParams({ category, limit: '10' });
     if (requesterLower) qs.set('address', requesterLower);
-    fetch(`/api/poker/top-players?${qs.toString()}`)
-      .then((r) => (r.ok ? r.json() : Promise.reject(r.statusText)))
+    const url = `/api/poker/top-players?${qs.toString()}`;
+    fetch(url)
+      .then(async (r) => {
+        if (!r.ok) {
+          const body = await r.text().catch(() => '');
+          throw new Error(`HTTP ${r.status} ${r.statusText} :: ${body.slice(0, 200)}`);
+        }
+        return r.json();
+      })
       .then((d: ApiResponse) => {
         if (alive) {
           setData(d);
           setLoading(false);
         }
       })
-      .catch(() => {
+      .catch((err) => {
+        // Surface the failure to the console so we can diagnose; render a
+        // visible error state below instead of silently hiding the section.
+        console.error('[PokerTopPlayers] fetch failed:', url, err);
         if (alive) {
           setErrored(true);
           setLoading(false);
@@ -118,8 +128,6 @@ export function PokerTopPlayers({ myAddress }: Props) {
       alive = false;
     };
   }, [category, requesterLower]);
-
-  if (errored) return null;
 
   const rows = data?.rows ?? [];
   const requester = data?.requester ?? null;
@@ -250,7 +258,14 @@ export function PokerTopPlayers({ myAddress }: Props) {
                   </td>
                 </tr>
               )}
-              {!loading && !hasRows && (
+              {!loading && errored && (
+                <tr>
+                  <td colSpan={category === 'hands_played' ? 3 : 4} className="py-6 text-center text-sm text-rose-300/80">
+                    Couldn&apos;t load the leaderboard. Check the browser console for details and try again in a moment.
+                  </td>
+                </tr>
+              )}
+              {!loading && !errored && !hasRows && (
                 <tr>
                   <td colSpan={category === 'hands_played' ? 3 : 4} className="py-6 text-center text-sm text-slate-500">
                     No hands played yet. Be the first to make the board.

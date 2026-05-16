@@ -36,11 +36,18 @@ export function PokerHouseRecords() {
   useEffect(() => {
     let alive = true;
     fetch('/api/poker/house-records')
-      .then((r) => (r.ok ? r.json() : Promise.reject(r.statusText)))
+      .then(async (r) => {
+        if (!r.ok) {
+          const body = await r.text().catch(() => '');
+          throw new Error(`HTTP ${r.status} ${r.statusText} :: ${body.slice(0, 200)}`);
+        }
+        return r.json();
+      })
       .then((d: Records) => {
         if (alive) setData(d);
       })
-      .catch(() => {
+      .catch((err) => {
+        console.error('[PokerHouseRecords] fetch failed:', err);
         if (alive) setErrored(true);
       });
     return () => {
@@ -48,7 +55,9 @@ export function PokerHouseRecords() {
     };
   }, []);
 
-  if (errored) return null;
+  // Don't silently hide on error — render the panel with placeholder dashes so
+  // the section is still visible and the user (and we) can see something went
+  // wrong. Detail is in the browser console.
 
   const tiles = [
     {
