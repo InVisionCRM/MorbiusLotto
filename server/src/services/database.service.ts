@@ -115,6 +115,25 @@ export interface TopPlayerEntry {
 /** Instant lottery leaderboard entry (same shape as TopPlayerEntry for API consistency). */
 export type LotteryTopPlayerEntry = TopPlayerEntry;
 
+/**
+ * Poker leaderboard row — one player's all-time aggregate across completed
+ * hands, joined with their `chat_display_names` profile for username display.
+ * Chip-denominated fields ride the wire as TEXT to preserve the NUMERIC(78,0)
+ * precision used in the underlying tables.
+ */
+export interface PokerTopPlayerRow {
+  rank: number;
+  address: string;
+  display_name: string | null;
+  profile_image_url: string | null;
+  net_chips: string;
+  biggest_pot: string;
+  hands_played: number;
+  hands_won: number;
+  vpip_hands: number;
+  showdowns: number;
+}
+
 /** Instant lottery per-player stats (from indexed plays). */
 export interface LotteryPlayerStats {
   total_games: number;
@@ -3818,8 +3837,8 @@ export class DatabaseService implements MoneyDatabaseQueries {
     requesterAddress?: string | null
   ): Promise<{
     category: 'net_chips' | 'biggest_pot' | 'hands_played';
-    rows: Array<{ rank: number; address: string; net_chips: string; biggest_pot: string; hands_played: number }>;
-    requester: { rank: number; address: string; net_chips: string; biggest_pot: string; hands_played: number } | null;
+    rows: PokerTopPlayerRow[];
+    requester: PokerTopPlayerRow | null;
   }> {
     const safeLimit = Math.min(Math.max(limit | 0, 1), 100);
     // net_chips / biggest_pot are aggregated as TEXT (NUMERIC(78,0) cast to TEXT
@@ -3834,14 +3853,26 @@ export class DatabaseService implements MoneyDatabaseQueries {
       : category === 'biggest_pot' ? 't.biggest_pot::NUMERIC DESC'
       : 't.hands_played DESC';
 
+    // chat_display_names.wallet_address is always stored lowercase (enforced by
+    // the upsert paths in this service and poker-bot.ts), so the join doesn't
+    // need LOWER() on the cdn side — keeps the lookup index-friendly. We
+    // aggregate display_name/profile_image_url with MAX() purely so we don't
+    // have to mention them in GROUP BY; cdn is uniquely keyed by wallet so the
+    // "MAX of one" is just a passthrough.
     const baseSelect = `
       SELECT
         LOWER(p.player_address) AS address,
+        MAX(cdn.display_name) AS display_name,
+        MAX(cdn.profile_image_url) AS profile_image_url,
         COALESCE(SUM(p.won_amount - p.contributed), 0)::TEXT AS net_chips,
         COALESCE(MAX(p.won_amount) FILTER (WHERE p.won), 0)::TEXT AS biggest_pot,
-        COUNT(*)::INT AS hands_played
+        COUNT(*)::INT AS hands_played,
+        COUNT(*) FILTER (WHERE p.won)::INT AS hands_won,
+        COUNT(*) FILTER (WHERE p.vpip)::INT AS vpip_hands,
+        COUNT(*) FILTER (WHERE p.saw_showdown)::INT AS showdowns
       FROM poker_hand_players p
       JOIN poker_hands h ON h.id = p.hand_id
+      LEFT JOIN chat_display_names cdn ON cdn.wallet_address = LOWER(p.player_address)
       WHERE h.completed_at IS NOT NULL
       GROUP BY LOWER(p.player_address)
     `;
@@ -3850,15 +3881,21 @@ export class DatabaseService implements MoneyDatabaseQueries {
       `SELECT * FROM (${baseSelect}) t ORDER BY ${orderClause} LIMIT $1`,
       [safeLimit]
     );
-    const rows = topResult.rows.map((r: any, idx: number) => ({
+    const mapRow = (r: any, idx: number): PokerTopPlayerRow => ({
       rank: idx + 1,
       address: String(r.address),
+      display_name: r.display_name ?? null,
+      profile_image_url: r.profile_image_url ?? null,
       net_chips: String(r.net_chips ?? '0'),
       biggest_pot: String(r.biggest_pot ?? '0'),
       hands_played: Number(r.hands_played ?? 0),
-    }));
+      hands_won: Number(r.hands_won ?? 0),
+      vpip_hands: Number(r.vpip_hands ?? 0),
+      showdowns: Number(r.showdowns ?? 0),
+    });
+    const rows = topResult.rows.map((r: any, idx: number) => mapRow(r, idx));
 
-    let requester: typeof rows[number] | null = null;
+    let requester: PokerTopPlayerRow | null = null;
     if (requesterAddress) {
       const normalized = this.normalizeAddress(requesterAddress);
       const inTopN = rows.find((r) => r.address === normalized);
@@ -3884,11 +3921,8 @@ export class DatabaseService implements MoneyDatabaseQueries {
         const row = rankResult.rows[0];
         if (row) {
           requester = {
+            ...mapRow(row, 0),
             rank: Number(row.rank),
-            address: String(row.address),
-            net_chips: String(row.net_chips ?? '0'),
-            biggest_pot: String(row.biggest_pot ?? '0'),
-            hands_played: Number(row.hands_played ?? 0),
           };
         }
       }
