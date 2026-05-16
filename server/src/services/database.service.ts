@@ -3822,9 +3822,12 @@ export class DatabaseService implements MoneyDatabaseQueries {
     requester: { rank: number; address: string; net_chips: string; biggest_pot: string; hands_played: number } | null;
   }> {
     const safeLimit = Math.min(Math.max(limit | 0, 1), 100);
+    // net_chips / biggest_pot are aggregated as TEXT (NUMERIC(78,0) cast to TEXT
+    // to ferry whole-chip integers across the wire) — cast back to NUMERIC for
+    // the ORDER BY so we get numeric ordering instead of lexicographic.
     const orderClause =
-      category === 'net_chips' ? 'net_chips DESC'
-      : category === 'biggest_pot' ? 'biggest_pot DESC'
+      category === 'net_chips' ? 'net_chips::NUMERIC DESC'
+      : category === 'biggest_pot' ? 'biggest_pot::NUMERIC DESC'
       : 'hands_played DESC';
 
     const baseSelect = `
@@ -3856,24 +3859,23 @@ export class DatabaseService implements MoneyDatabaseQueries {
       const normalized = this.normalizeAddress(requesterAddress);
       const inTopN = rows.find((r) => r.address === normalized);
       if (!inTopN) {
+        // Branch on category so we can use a single ORDER BY in ROW_NUMBER().
+        // Cast aggregated TEXT chip values back to NUMERIC for correct ordering.
+        const rankOrder =
+          category === 'net_chips' ? 'net_chips::NUMERIC DESC'
+          : category === 'biggest_pot' ? 'biggest_pot::NUMERIC DESC'
+          : 'hands_played DESC';
+
         const rankResult = await this.pool.query(
           `
-          WITH agg AS (${baseSelect})
-          SELECT *, (
-            SELECT COUNT(*) + 1
-              FROM agg b
-             WHERE
-               CASE
-                 WHEN $1::text = 'net_chips' THEN b.net_chips::NUMERIC > a.net_chips::NUMERIC
-                 WHEN $1::text = 'biggest_pot' THEN b.biggest_pot::NUMERIC > a.biggest_pot::NUMERIC
-                 ELSE b.hands_played > a.hands_played
-               END
-          )::INT AS rank
-            FROM agg a
-           WHERE a.address = $2
-           LIMIT 1
+          WITH agg AS (${baseSelect}),
+               ranked AS (
+                 SELECT *, ROW_NUMBER() OVER (ORDER BY ${rankOrder})::INT AS rank
+                   FROM agg
+               )
+          SELECT * FROM ranked WHERE address = $1 LIMIT 1
           `,
-          [category, normalized]
+          [normalized]
         );
         const row = rankResult.rows[0];
         if (row) {
