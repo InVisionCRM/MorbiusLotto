@@ -705,13 +705,16 @@ describe('4 - computeBlindLevel', () => {
     expect(pokerTournamentService.computeBlindLevel(schedule, 9999).smallBlind).toBe(500);
   });
 
-  it('uses DEFAULT_BLIND_SCHEDULE correctly (8 levels)', () => {
+  it('uses DEFAULT_BLIND_SCHEDULE correctly (extended schedule)', () => {
+    const last = DEFAULT_BLIND_SCHEDULE[DEFAULT_BLIND_SCHEDULE.length - 1];
     // Level 1: hands 1-10
     expect(pokerTournamentService.computeBlindLevel(DEFAULT_BLIND_SCHEDULE, 5).level).toBe(1);
     // Level 2: hands 11-20
     expect(pokerTournamentService.computeBlindLevel(DEFAULT_BLIND_SCHEDULE, 15).level).toBe(2);
-    // Level 8: last level
-    expect(pokerTournamentService.computeBlindLevel(DEFAULT_BLIND_SCHEDULE, 999).level).toBe(8);
+    // Very high hand count clamps to the final level
+    expect(pokerTournamentService.computeBlindLevel(DEFAULT_BLIND_SCHEDULE, 9999).level).toBe(last.level);
+    // Schedule must be long enough to outlast a multi-hour freeroll
+    expect(DEFAULT_BLIND_SCHEDULE.length).toBeGreaterThanOrEqual(15);
   });
 
   it('coerces string handsPerLevel from JSON so level boundaries stay correct', () => {
@@ -752,6 +755,74 @@ describe('4c - blindsForNextHand', () => {
     const b = pokerTournamentService.blindsForNextHand(schedule, 2);
     expect(b.level).toBe(2);
     expect(b.smallBlind).toBe(50);
+  });
+});
+
+describe('4d - computeBlindLevelByTime extrapolation', () => {
+  const shortSchedule: BlindLevel[] = [
+    { level: 1, smallBlind: 100, bigBlind: 200, handsPerLevel: 5 },
+    { level: 2, smallBlind: 200, bigBlind: 400, handsPerLevel: 5 },
+    { level: 3, smallBlind: 300, bigBlind: 600, handsPerLevel: 5 },
+  ];
+
+  it('returns scheduled level when within bounds', () => {
+    const started = new Date('2026-01-01T00:00:00Z');
+    const now = new Date('2026-01-01T00:30:00Z'); // 30 min, 2 intervals at 15 min
+    const r = pokerTournamentService.computeBlindLevelByTime(shortSchedule, 15, started, 1, now);
+    expect(r.level).toBe(3);
+    expect(r.smallBlind).toBe(300);
+  });
+
+  it('extrapolates one level past the end without freezing', () => {
+    const started = new Date('2026-01-01T00:00:00Z');
+    const now = new Date('2026-01-01T00:45:00Z'); // 45 min, 3 intervals — overshoots by 1
+    const r = pokerTournamentService.computeBlindLevelByTime(shortSchedule, 15, started, 1, now);
+    expect(r.level).toBe(4);
+    expect(r.smallBlind).toBeGreaterThan(300);
+    expect(r.bigBlind).toBeGreaterThan(600);
+  });
+
+  it('keeps advancing many levels past the end (no clamp)', () => {
+    const started = new Date('2026-01-01T00:00:00Z');
+    // 5 hours later @ 15 min/level = 20 intervals → far past 3-level schedule
+    const now = new Date('2026-01-01T05:00:00Z');
+    const r = pokerTournamentService.computeBlindLevelByTime(shortSchedule, 15, started, 1, now);
+    expect(r.level).toBeGreaterThan(shortSchedule.length);
+    expect(r.bigBlind).toBeGreaterThan(shortSchedule[shortSchedule.length - 1].bigBlind);
+  });
+
+  it('extrapolated blinds are strictly monotonic per step', () => {
+    let prevBB = shortSchedule[shortSchedule.length - 1].bigBlind;
+    for (let extra = 1; extra <= 10; extra++) {
+      const targetIdx = (shortSchedule.length - 1) + extra;
+      const r = pokerTournamentService.extrapolateBlindLevel(shortSchedule, targetIdx);
+      expect(r.bigBlind).toBeGreaterThan(prevBB);
+      expect(r.smallBlind).toBeGreaterThan(0);
+      prevBB = r.bigBlind;
+    }
+  });
+
+  it('falls back to 1.5x growth for single-level schedules', () => {
+    const single: BlindLevel[] = [{ level: 1, smallBlind: 100, bigBlind: 200, handsPerLevel: 999 }];
+    const r = pokerTournamentService.extrapolateBlindLevel(single, 1);
+    expect(r.level).toBe(2);
+    expect(r.bigBlind).toBeGreaterThan(200);
+  });
+
+  it('DEFAULT_BLIND_SCHEDULE keeps advancing past its last level', () => {
+    const started = new Date('2026-01-01T00:00:00Z');
+    // Simulate a player stuck at the schedule's last level for 1 extra hour @ 15 min
+    const lastLevel = DEFAULT_BLIND_SCHEDULE[DEFAULT_BLIND_SCHEDULE.length - 1];
+    const now = new Date('2026-01-01T01:00:00Z');
+    const r = pokerTournamentService.computeBlindLevelByTime(
+      DEFAULT_BLIND_SCHEDULE,
+      15,
+      started,
+      lastLevel.level,
+      now,
+    );
+    expect(r.level).toBeGreaterThan(lastLevel.level);
+    expect(r.bigBlind).toBeGreaterThan(lastLevel.bigBlind);
   });
 });
 

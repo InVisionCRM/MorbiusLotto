@@ -262,10 +262,13 @@ export function PokerBoard({
                 <CardDisplay
                   key={idx}
                   cardIndex={idx}
-                  dealDelay={i * 0.06}
+                  dealDelay={i * 0.12}
                   suppressEntryMotion={suppressCommunityEntryMotion}
                   isWinningCard={winningCardIndices?.includes(idx)}
                   isDimmed={dimNonWinning && !winningCardIndices?.includes(idx)}
+                  showCenterRankSuitOverlay
+                  variant="community"
+                  dealFromOffset={dealFromOffset}
                 />
               ) : (
                 <CardDisplay key={`empty-${i}`} cardIndex={undefined} />

@@ -26,6 +26,8 @@ import { InsufficientBalanceDialog } from '@/components/shared/InsufficientBalan
 import { PokerBetaSplash } from '@/components/poker/PokerBetaSplash';
 import { PokerHowToPlayModal } from '@/components/poker/PokerHowToPlayModal';
 import { PokerStatsModal } from '@/components/poker/PokerStatsModal';
+import { PokerHouseRecords } from '@/components/poker/PokerHouseRecords';
+import { PokerTopPlayers } from '@/components/poker/PokerTopPlayers';
 import GlobalMainNav from '@/components/shared/GlobalMainNav';
 import { PokerTournamentLobby } from '@/components/poker/tournament/PokerTournamentLobby';
 import { PokerTournamentHistory } from '@/components/poker/tournament/PokerTournamentHistory';
@@ -706,6 +708,8 @@ export default function PokerLobbyPage() {
               </section>
             )}
 
+            <PokerHouseRecords />
+
             {/* Tab bar */}
             <div
               className="flex items-center gap-1 px-5 sm:px-10 py-3.5 sm:py-4 mb-6 sm:mb-8 rounded-2xl border border-white/25"
@@ -970,6 +974,8 @@ export default function PokerLobbyPage() {
                 </div>
               </div>
             )}
+
+            <PokerTopPlayers myAddress={address ?? null} />
 
             <div className="mt-6">
               <GameFAQ
