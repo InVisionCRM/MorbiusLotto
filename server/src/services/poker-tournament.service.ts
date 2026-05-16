@@ -144,6 +144,12 @@ export interface PokerTournamentSummary {
   prizeDistributionType: string;
   scheduledStartAt: string | null;
   isRegistered: boolean;
+  /**
+   * The caller's most recent `tournament_entries.status` for this tournament, or `null`
+   * if they never registered. Lets the client distinguish active membership (`'playing'`)
+   * from busted/completed entries that should re-attach as spectators on page refresh.
+   */
+  myEntryStatus: 'playing' | 'busted' | 'completed' | null;
   isPrivate: boolean;
   /** Level-1 or live table blinds (chip ints). */
   smallBlind: number;
@@ -869,22 +875,30 @@ export class PokerTournamentService {
     // Cheap fast path: when the caller is already registered (very common — table HUD reconnects,
     // `refreshTournaments` re-subscribing to rooms, retry storms), skip opening a transaction with
     // `SELECT ... FOR UPDATE`. Two simple reads instead of the full lock + 5+ queries.
+    //
+    // Busted/completed entries are also returned here so the WS handler can subscribe the
+    // socket to the tournament room for spectator events (blind level up, eliminations,
+    // completed). Without this, refreshing the page after busting drops the player out of
+    // the tournament room — they keep seeing the table HUD but get no tournament updates.
     const fastCheck = await this.pool.query(
-      `SELECT te.id AS entry_id, t.status AS tournament_status, t.is_private, t.pin_code,
+      `SELECT te.id AS entry_id, te.status AS entry_status,
+              t.status AS tournament_status, t.is_private, t.pin_code,
               (SELECT id FROM poker_tables WHERE tournament_id = $1 LIMIT 1) AS table_id
          FROM tournament_entries te
          JOIN tournaments t ON t.id = te.tournament_id
         WHERE te.tournament_id = $1
           AND LOWER(te.player_address) = $2
-          AND te.status NOT IN ('busted', 'completed')
         LIMIT 1`,
       [tournamentId, normalized]
     );
     if (fastCheck.rows.length > 0) {
       const row = fastCheck.rows[0];
       const status = String(row.tournament_status ?? '');
+      const entryStatus = String(row.entry_status ?? '');
+      const isSpectator = entryStatus === 'busted' || entryStatus === 'completed';
       if (status === 'registration' || status === 'active') {
-        if (row.is_private && pinCode !== row.pin_code) {
+        // PIN was already validated when this entry was first created; spectators don't re-prove it.
+        if (!isSpectator && row.is_private && pinCode !== row.pin_code) {
           throw new Error('Incorrect PIN code');
         }
         return {
@@ -2632,7 +2646,12 @@ export class PokerTournamentService {
            WHERE te.tournament_id = r.tournament_id
              AND LOWER(te.player_address) = $1::text
              AND te.status NOT IN ('busted', 'completed')
-         ) THEN TRUE ELSE FALSE END AS is_registered
+         ) THEN TRUE ELSE FALSE END AS is_registered,
+         (SELECT te.status FROM tournament_entries te
+            WHERE te.tournament_id = r.tournament_id
+              AND $1::text IS NOT NULL
+              AND LOWER(te.player_address) = $1::text
+            LIMIT 1) AS my_entry_status
        FROM poker_tournament_registrations r
        LEFT JOIN poker_tables pt ON pt.id = r.table_id
        WHERE (
@@ -2684,6 +2703,9 @@ export class PokerTournamentService {
         prizeDistributionType: r.prize_distribution_type ?? 'winner_takes_all',
         scheduledStartAt:      r.scheduled_start_at ? new Date(r.scheduled_start_at).toISOString() : null,
         isRegistered:          r.is_registered === true,
+        myEntryStatus:         (r.my_entry_status === 'playing' || r.my_entry_status === 'busted' || r.my_entry_status === 'completed')
+          ? r.my_entry_status
+          : null,
         isPrivate:             Boolean(r.is_private),
         smallBlind,
         bigBlind,
