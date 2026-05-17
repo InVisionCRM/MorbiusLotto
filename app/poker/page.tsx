@@ -23,6 +23,9 @@ import { formatChips, parseChipInput } from '@/lib/format-poker-chips';
 import { formatMorbiusFloor } from '@/lib/format-morbius-display';
 import { PokerChipExchangeModal } from '@/components/poker/PokerChipExchangeModal';
 import { InsufficientBalanceDialog } from '@/components/shared/InsufficientBalanceDialog';
+import { PokerOnboardingWizard } from '@/components/poker/PokerOnboardingWizard';
+import { PokerOnboardingChecklist } from '@/components/poker/PokerOnboardingChecklist';
+import { usePokerOnboarding } from '@/hooks/use-poker-onboarding';
 import { PokerBetaSplash } from '@/components/poker/PokerBetaSplash';
 import { PokerHowToPlayModal } from '@/components/poker/PokerHowToPlayModal';
 import { PokerStatsModal } from '@/components/poker/PokerStatsModal';
@@ -143,6 +146,14 @@ export default function PokerLobbyPage() {
   const [showDepositModal, setShowDepositModal] = useState(false);
   const [showChipExchange, setShowChipExchange] = useState(false);
   const [showInsufficientChips, setShowInsufficientChips] = useState(false);
+  const [showOnboardingWizard, setShowOnboardingWizard] = useState(false);
+
+  const onboarding = usePokerOnboarding({
+    address: address as `0x${string}` | undefined,
+    isConnected,
+    playBalanceWei: balance,
+    chipBalance,
+  });
 
   useEffect(() => {
     const open = () => setShowChipExchange(true);
@@ -632,6 +643,16 @@ export default function PokerLobbyPage() {
               </div>
             </div>
 
+            <div className="mb-4 sm:mb-6">
+              <PokerOnboardingChecklist
+                step={onboarding.currentStep}
+                isConnected={isConnected}
+                dismissed={onboarding.dismissed}
+                onResume={() => setShowOnboardingWizard(true)}
+                onDismiss={onboarding.dismiss}
+              />
+            </div>
+
             {isConnected && address && (
               <section
                 className="relative mb-6 sm:mb-8 rounded-2xl sm:rounded-3xl overflow-hidden border-2 border-white/25"
@@ -882,19 +903,34 @@ export default function PokerLobbyPage() {
                                     Watch
                                   </Link>
                                   {isConnected && (
-                                    <button
-                                      type="button"
-                                      onClick={() => {
-                                        const bbChips = BigInt(t.bigBlind);
-                                        const { maxChips } = getCashBuyInBoundsChips(bbChips);
-                                        setBuyIn(maxChips.toString());
-                                        setJoinModal({ tableId: t.id, hasPin: t.hasPin, bigBlindChips: t.bigBlind });
-                                        setJoinPin('');
-                                      }}
-                                      className={btnPrimary}
-                                    >
-                                      Sit
-                                    </button>
+                                    onboarding.currentStep < 4 ? (
+                                      <button
+                                        type="button"
+                                        onClick={() => setShowOnboardingWizard(true)}
+                                        className={btnPrimary}
+                                        style={{
+                                          background: 'linear-gradient(135deg, #f59e0b, #ef4444)',
+                                          boxShadow: '0 6px 20px -6px rgba(245,158,11,0.5)',
+                                        }}
+                                        title="You need chips to sit — we'll walk you through it"
+                                      >
+                                        Get chips →
+                                      </button>
+                                    ) : (
+                                      <button
+                                        type="button"
+                                        onClick={() => {
+                                          const bbChips = BigInt(t.bigBlind);
+                                          const { maxChips } = getCashBuyInBoundsChips(bbChips);
+                                          setBuyIn(maxChips.toString());
+                                          setJoinModal({ tableId: t.id, hasPin: t.hasPin, bigBlindChips: t.bigBlind });
+                                          setJoinPin('');
+                                        }}
+                                        className={btnPrimary}
+                                      >
+                                        Sit
+                                      </button>
+                                    )
                                   )}
                                 </div>
                                 <div className="flex items-center justify-end gap-2">
@@ -1218,10 +1254,22 @@ export default function PokerLobbyPage() {
         isOpen={showInsufficientChips}
         onClose={() => setShowInsufficientChips(false)}
         title="Not Enough Poker Chips"
-        message="Your poker chip balance isn't enough for this buy-in. Open the chip exchange to convert MORBIUS into chips, or top up your MORBIUS balance first."
+        message="Your poker chip balance isn't enough for this buy-in. Walk through deposit and chip exchange in a guided flow, or open the exchange directly."
         required={(() => { try { return `${formatChips(BigInt(parseChipInput(buyIn)))} chips`; } catch { return undefined; } })()}
         balance={chipBalance != null ? `${formatChips(BigInt(chipBalance))} chips` : undefined}
-        actionLabel="Open Chip Exchange"
+        actionLabel="Walk me through it"
+        onOpenExchange={() => setShowOnboardingWizard(true)}
+      />
+
+      <PokerOnboardingWizard
+        isOpen={showOnboardingWizard}
+        onClose={() => setShowOnboardingWizard(false)}
+        step={onboarding.currentStep}
+        isConnected={isConnected}
+        walletMorbiusWei={onboarding.walletMorbiusWei}
+        playBalanceWei={onboarding.playBalanceBn}
+        chipsBn={onboarding.chipsBn}
+        onOpenDeposit={() => setShowDepositModal(true)}
         onOpenExchange={() => setShowChipExchange(true)}
       />
     </>
