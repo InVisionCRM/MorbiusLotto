@@ -7,6 +7,7 @@ import { usePublicClient, useReadContract, useReadContracts, useWaitForTransacti
 import { triggerSuccessConfetti } from '@/lib/utils'
 import { KENO_ABI } from '@/lib/keno-abi'
 import { KENO_ADDRESS, MORBIUS_TOKEN_ADDRESS, PULSEX_V1_ROUTER_ADDRESS, WPLS_TOKEN_ADDRESS } from '@/lib/contracts'
+import { useGasParams } from '@/lib/tx-gas'
 
 const MAX_UINT256 = (1n << 256n) - 1n
 
@@ -67,6 +68,7 @@ export function useKenoPlayFlow({
   wager,
 }: UseKenoPlayFlowParams) {
   const publicClient = usePublicClient()
+  const getGas = useGasParams()
   const [paymentMethod, setPaymentMethod] = useState<'MORBIUS' | 'PLS'>('MORBIUS')
   const [isPlaying, setIsPlaying] = useState(false)
   const [lastResult, setLastResult] = useState<KenoLastResult | null>(null)
@@ -203,6 +205,7 @@ export function useKenoPlayFlow({
           functionName: 'playKenoWithPLS',
           args: [numbersArg, spotSize],
           value: wplsRequiredWei,
+          ...getGas(),
         } as any)
         const receipt = await publicClient?.waitForTransactionReceipt({ hash })
         if (receipt) {
@@ -233,6 +236,7 @@ export function useKenoPlayFlow({
         abi: ERC20_ABI,
         functionName: 'approve',
         args: [KENO_ADDRESS, MAX_UINT256],
+        ...getGas(),
       } as any)
       return
     }
@@ -246,6 +250,7 @@ export function useKenoPlayFlow({
         abi: KENO_ABI,
         functionName: 'playKeno',
         args: [numbersArg, spotSize, wagerWei],
+        ...getGas(),
       } as any)
       const receipt = await publicClient?.waitForTransactionReceipt({ hash })
       if (receipt) {
@@ -281,6 +286,7 @@ export function useKenoPlayFlow({
     wplsRequiredWei,
     writeApprove,
     writePlayAsync,
+    getGas,
   ])
 
   useEffect(() => {

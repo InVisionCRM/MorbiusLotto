@@ -30,6 +30,7 @@ import { ERC20_ABI } from '@/abi/erc20';
 import { useTokenInfo, type TokenInfo } from '@/hooks/use-token-info';
 import { TokenWithLogo } from '@/components/Creators/TokenWithLogo';
 import { Theme } from '@/lib/theme';
+import { useGasParams } from '@/lib/tx-gas';
 import {
   Table,
   TableBody,
@@ -109,6 +110,7 @@ function FundTournamentEscrowModal({
   const { address } = useAccount();
   const { writeContractAsync } = useWriteContract();
   const publicClient = usePublicClient();
+  const getGas = useGasParams();
   const [step, setStep] = useState<'idle' | 'approving' | 'approved' | 'depositing' | 'done'>('idle');
   const [error, setError] = useState<string | null>(null);
 
@@ -144,7 +146,7 @@ function FundTournamentEscrowModal({
         args: [escrow, amountWei],
         account: address,
         chain: PULSECHAIN,
-        maxPriorityFeePerGas: 200_000n, // PulseChain tip
+        ...getGas(),
       });
       if (publicClient && hash) {
         try {
@@ -174,7 +176,7 @@ function FundTournamentEscrowModal({
         args: [idBytes32, token, amountWei],
         account: address,
         chain: PULSECHAIN,
-        maxPriorityFeePerGas: 200_000n, // PulseChain tip
+        ...getGas(),
       });
       if (publicClient && hash) {
         try {

@@ -2,6 +2,7 @@ import { useReadContract, useWriteContract, useWatchContractEvent } from 'wagmi'
 import { blackjackAbi } from '../abi/blackjack'
 import { BLACKJACK_ADDRESS, BLACKJACK_LEGACY_ADDRESS, BLACKJACK_LEGACY_ADDRESS_2, BLACKJACK_LEGACY_ADDRESS_3, LEGACY_BLACKJACK_ADDRESSES } from '../lib/contracts'
 import { useAccount } from 'wagmi'
+import { useGasParams } from '../lib/tx-gas'
 
 const LEGACY_ZERO = '0x0000000000000000000000000000000000000000'
 
@@ -316,6 +317,7 @@ export function useWatchGameSettlements(onSettlement?: (player: string, amount: 
  */
 export function useBlackjackContract() {
   const { address } = useAccount()
+  const getGas = useGasParams()
 
   // Read hooks (per-player on-chain reserve intentionally omitted — server DB is playable balance)
   const totalReserves = useTotalReserves()
@@ -347,7 +349,7 @@ export function useBlackjackContract() {
       abi: blackjackAbi,
       functionName: 'deposit',
       value: plsAmount, // Send PLS to deposit function
-      maxPriorityFeePerGas: 200_000n, // PulseChain tip
+      ...getGas(),
     } as unknown as Parameters<typeof depositContract.writeContractAsync>[0])
   }
 
@@ -359,7 +361,7 @@ export function useBlackjackContract() {
       abi: blackjackAbi,
       functionName: 'depositMORBIUS',
       args: [amount],
-      maxPriorityFeePerGas: 200_000n, // PulseChain tip
+      ...getGas(),
     } as unknown as Parameters<typeof depositMORBIUSContract.writeContractAsync>[0])
   }
 
@@ -371,7 +373,7 @@ export function useBlackjackContract() {
       abi: blackjackAbi,
       functionName: 'withdraw',
       args: [amount],
-      maxPriorityFeePerGas: 200_000n, // PulseChain tip
+      ...getGas(),
     } as unknown as Parameters<typeof withdrawContract.writeContractAsync>[0])
   }
 
@@ -386,7 +388,7 @@ export function useBlackjackContract() {
       functionName: 'withdraw',
       args: [amount],
       gas: 700_000n, // 2x legacy gas for safety; avoids "Internal Transaction Awaiting" / stuck estimates
-      maxPriorityFeePerGas: 200_000n, // 200k wei/beats tip (PulseChain) for faster inclusion
+      ...getGas(),
     } as unknown as Parameters<typeof withdrawContract.writeContractAsync>[0])
   }
 
@@ -406,7 +408,7 @@ export function useBlackjackContract() {
       functionName: 'withdrawWithSignature',
       args: [amount, nonce, expiryTimestamp, v, r, s],
       gas: 500_000n, // Manual gas limit — avoids estimation failures that block the tx entirely
-      maxPriorityFeePerGas: 200_000n, // PulseChain tip
+      ...getGas(),
     } as any)
   }
 
@@ -418,7 +420,7 @@ export function useBlackjackContract() {
       abi: blackjackAbi,
       functionName: 'revealServerSeed',
       args: [serverSeed as `0x${string}`],
-      maxPriorityFeePerGas: 200_000n, // PulseChain tip
+      ...getGas(),
     } as unknown as Parameters<typeof revealSeedContract.writeContractAsync>[0])
   }
 
@@ -430,7 +432,7 @@ export function useBlackjackContract() {
       abi: blackjackAbi,
       functionName: 'placeBet',
       args: [gameHash, betAmount],
-      maxPriorityFeePerGas: 200_000n, // PulseChain tip
+      ...getGas(),
     } as any)
   }
 

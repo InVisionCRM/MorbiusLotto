@@ -15,6 +15,7 @@ import {
   decodePlinkoBallDroppedLog,
   getPlinkoTransactionErrorMessage,
 } from '@/lib/plinko-transaction-utils';
+import { useGasParams } from '@/lib/tx-gas';
 
 export type RiskLevelMap = Record<'green' | 'yellow' | 'red', number>;
 
@@ -84,6 +85,8 @@ export function usePlinkoTransactionFlow({
   setAnimationQueue,
   setDropSummaryData,
 }: UsePlinkoTransactionFlowParams) {
+  const getGas = useGasParams();
+
   const pollForReceipt = useCallback(async (
     txHash: `0x${string}`,
     options: {
@@ -151,7 +154,7 @@ export function usePlinkoTransactionFlow({
           args: [BigInt(count), Number(contractRiskLevel)],
           value: plsNeeded,
           gas: 2n * (BigInt(500_000) + BigInt(count) * BigInt(150_000)),
-          maxPriorityFeePerGas: 200_000n,
+          ...getGas(),
         });
       } else {
         txHash = await writeContractAsync({
@@ -160,7 +163,7 @@ export function usePlinkoTransactionFlow({
           functionName: 'buyBallsAndDrop',
           args: [BigInt(count), wagerAmount, Number(contractRiskLevel)],
           gas: 2n * (BigInt(400_000) + BigInt(count) * BigInt(150_000)),
-          maxPriorityFeePerGas: 200_000n,
+          ...getGas(),
         });
       }
 
@@ -256,6 +259,7 @@ export function usePlinkoTransactionFlow({
     riskLevelMap,
     wplsPerMORBIUS,
     writeContractAsync,
+    getGas,
     pollForReceipt,
     plinkoHistory,
     playerInfo,

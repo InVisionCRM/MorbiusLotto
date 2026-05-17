@@ -31,6 +31,7 @@ import {
 import { pulsechain } from '@/lib/chains';
 import { getApiUrlOptional } from '@/lib/api-urls';
 import { SNAPSHOT_EXCLUSION_SET } from '@/lib/snapshot-exclusions';
+import { useGasParams } from '@/lib/tx-gas';
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -162,6 +163,7 @@ function OnchainActions({
 }) {
   const publicClient = usePublicClient();
   const { writeContractAsync } = useWriteContract();
+  const getGas = useGasParams();
 
   // Only deposit the NEW rewards; rolled-up amounts are already in the contract.
   const depositWei = BigInt(epoch.new_reward_amount || epoch.total_reward_amount || '0');
@@ -235,7 +237,7 @@ function OnchainActions({
         abi: ERC20_ABI,
         functionName: 'approve',
         args: [MERKLE_ADDR, MAX_UINT256],
-        maxPriorityFeePerGas: 200_000n,
+        ...getGas(),
         chain: pulsechain,
         account: adminAddr,
       });
@@ -260,7 +262,7 @@ function OnchainActions({
         abi: merkleClaimMorbiusAbi,
         functionName: 'depositRewards',
         args: [depositWei],
-        maxPriorityFeePerGas: 200_000n,
+        ...getGas(),
         chain: pulsechain,
         account: adminAddr,
       });
@@ -284,7 +286,7 @@ function OnchainActions({
         abi: merkleClaimMorbiusAbi,
         functionName: 'setEpochRoot',
         args: [BigInt(epoch.epoch_number), epoch.merkle_root as `0x${string}`, totalWei],
-        maxPriorityFeePerGas: 200_000n,
+        ...getGas(),
         chain: pulsechain,
         account: adminAddr,
       });
@@ -427,6 +429,7 @@ function OnchainActions({
 function StandaloneDepositButton({ adminAddr }: { adminAddr: `0x${string}` }) {
   const publicClient = usePublicClient();
   const { writeContractAsync } = useWriteContract();
+  const getGas = useGasParams();
 
   const [amountInput, setAmountInput] = useState('');
   const [step, setStep] = useState<'idle' | 'approve' | 'deposit' | 'done'>('idle');
@@ -478,7 +481,7 @@ function StandaloneDepositButton({ adminAddr }: { adminAddr: `0x${string}` }) {
         abi: ERC20_ABI,
         functionName: 'approve',
         args: [MERKLE_ADDR, MAX_UINT256],
-        maxPriorityFeePerGas: 200_000n,
+        ...getGas(),
         chain: pulsechain,
         account: adminAddr,
       });
@@ -500,7 +503,7 @@ function StandaloneDepositButton({ adminAddr }: { adminAddr: `0x${string}` }) {
         abi: merkleClaimMorbiusAbi,
         functionName: 'depositRewards',
         args: [parsedWei],
-        maxPriorityFeePerGas: 200_000n,
+        ...getGas(),
         chain: pulsechain,
         account: adminAddr,
       });
@@ -602,6 +605,7 @@ export default function AdminMerkleDropsTab() {
   const { address } = useAccount();
   const publicClient = usePublicClient();
   const { writeContractAsync } = useWriteContract();
+  const getGas = useGasParams();
 
   const [epochs, setEpochs] = useState<EpochRecord[]>([]);
   const [loading, setLoading] = useState(true);
@@ -1074,7 +1078,7 @@ export default function AdminMerkleDropsTab() {
         abi: merkleClaimMorbiusAbi,
         functionName: 'addOperator',
         args: [newOperatorAddr.trim() as `0x${string}`],
-        maxPriorityFeePerGas: 200_000n,
+        ...getGas(),
         chain: pulsechain,
         account: address!,
       });
@@ -1097,7 +1101,7 @@ export default function AdminMerkleDropsTab() {
         abi: merkleClaimMorbiusAbi,
         functionName: 'removeOperator',
         args: [addr as `0x${string}`],
-        maxPriorityFeePerGas: 200_000n,
+        ...getGas(),
         chain: pulsechain,
         account: address!,
       });
@@ -1122,7 +1126,7 @@ export default function AdminMerkleDropsTab() {
         abi: merkleClaimMorbiusAbi,
         functionName: 'revokeEpoch',
         args: [BigInt(epoch.epoch_number)],
-        maxPriorityFeePerGas: 200_000n,
+        ...getGas(),
         chain: pulsechain,
         account: address!,
       });

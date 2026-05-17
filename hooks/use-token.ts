@@ -3,6 +3,7 @@ import { MORBIUS_TOKEN_ADDRESS, LOTTERY_INSTANT_ADDRESS, TOKEN_DECIMALS } from '
 import { ERC20_ABI } from '@/abi/erc20'
 import { formatEther, parseEther, formatUnits } from 'viem'
 import { maxUint256 } from 'viem'
+import { useGasParams } from '@/lib/tx-gas'
 
 // Read token decimals (default to configured TOKEN_DECIMALS)
 export function useTokenDecimals() {
@@ -85,6 +86,7 @@ export function useTokenAllowance(owner?: `0x${string}`) {
 export function useApproveToken() {
   const { writeContract, data: hash, isPending, error } = useWriteContract()
   const { isLoading: isConfirming, isSuccess } = useWaitForTransactionReceipt({ hash })
+  const getGas = useGasParams()
 
   const approve = (amount?: bigint) => {
     writeContract({
@@ -92,7 +94,7 @@ export function useApproveToken() {
       abi: ERC20_ABI,
       functionName: 'approve',
       args: [LOTTERY_INSTANT_ADDRESS, amount || maxUint256], // Approve infinite by default
-      maxPriorityFeePerGas: 200_000n, // PulseChain tip
+      ...getGas(),
     } as unknown as Parameters<typeof writeContract>[0])
   }
 

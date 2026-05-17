@@ -19,6 +19,7 @@ import { pulsechain } from '@/lib/chains';
 import { getApiUrlOptional } from '@/lib/api-urls';
 import { SNAPSHOT_EXCLUSION_CONTRACTS } from '@/lib/snapshot-exclusions';
 import { fetchDexScreenerProxy } from '@/lib/dexscreener-client';
+import { useGasParams } from '@/lib/tx-gas';
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
@@ -165,6 +166,7 @@ function OnchainActions({
 }) {
   const publicClient = usePublicClient();
   const { writeContractAsync } = useWriteContract();
+  const getGas = useGasParams();
 
   // LP contract has no depositRewards — fund by ERC20 transfer to contract
   const depositWei = BigInt(epoch.new_reward_amount || epoch.total_reward_amount || '0');
@@ -242,7 +244,7 @@ function OnchainActions({
         abi: ERC20_ABI,
         functionName: 'approve',
         args: [MERKLE_ADDR, MAX_UINT256],
-        maxPriorityFeePerGas: 200_000n,
+        ...getGas(),
         chain: pulsechain,
         account: adminAddr,
       });
@@ -266,7 +268,7 @@ function OnchainActions({
         abi: ERC20_ABI,
         functionName: 'transfer',
         args: [MERKLE_ADDR, depositWei],
-        maxPriorityFeePerGas: 200_000n,
+        ...getGas(),
         chain: pulsechain,
         account: adminAddr,
       });
@@ -289,7 +291,7 @@ function OnchainActions({
         abi: merkleClaimLpAbi,
         functionName: 'setEpochRoot',
         args: [BigInt(epoch.epoch_number), epoch.merkle_root as `0x${string}`, totalWei],
-        maxPriorityFeePerGas: 200_000n,
+        ...getGas(),
         chain: pulsechain,
         account: adminAddr,
       });
@@ -413,6 +415,7 @@ export default function AdminLPStakingTab() {
   const { address } = useAccount();
   const publicClient = usePublicClient();
   const { writeContractAsync } = useWriteContract();
+  const getGas = useGasParams();
   const apiBase = getApiUrlOptional() ?? '';
   const adminBase = ADMIN_API_BASE;
 
@@ -823,7 +826,7 @@ export default function AdminLPStakingTab() {
         abi: merkleClaimLpAbi,
         functionName: 'revokeEpoch',
         args: [BigInt(epoch.epoch_number)],
-        maxPriorityFeePerGas: 200_000n, // PulseChain tip
+        ...getGas(),
       });
       setEpochMsg(epoch.id, `Revoking on-chain… tx: ${hash.slice(0, 14)}…`);
       await publicClient!.waitForTransactionReceipt({ hash });
@@ -940,7 +943,7 @@ export default function AdminLPStakingTab() {
         abi: merkleClaimLpAbi,
         functionName: 'addOperator',
         args: [newOperatorAddr.trim() as `0x${string}`],
-        maxPriorityFeePerGas: 200_000n, // PulseChain tip
+        ...getGas(),
       });
       setOperatorMsg(`✓ Operator added — tx: ${hash.slice(0, 14)}…`);
       setNewOperatorAddr('');
@@ -960,7 +963,7 @@ export default function AdminLPStakingTab() {
         abi: merkleClaimLpAbi,
         functionName: 'removeOperator',
         args: [addr as `0x${string}`],
-        maxPriorityFeePerGas: 200_000n, // PulseChain tip
+        ...getGas(),
       });
       setOperatorMsg(`✓ Operator removed — tx: ${hash.slice(0, 14)}…`);
       setTimeout(fetchCurrentOperators, 3000);
