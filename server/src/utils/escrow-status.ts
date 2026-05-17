@@ -1,5 +1,5 @@
 import { getPublicClient } from './chain-client';
-import { tournamentPrizeEscrowV2Abi } from '../abi/tournament-prize-escrow-v2';
+import { tournamentPrizeEscrowV6Abi } from '../abi/tournament-prize-escrow-v6';
 import { tournamentPrizeEscrowV3Abi } from '../abi/tournament-prize-escrow-v3';
 import { tournamentIdToBytes32 } from './tournament-id-bytes32';
 import { getTournamentPrizeEscrowAddress } from './tournament-escrow-address';
@@ -40,7 +40,7 @@ export async function getEscrowPoolStatus(tournamentId: string): Promise<EscrowP
     const idBytes32 = tournamentIdToBytes32(tournamentId);
     const result = await client.readContract({
       address: escrowBytes32Address(),
-      abi: tournamentPrizeEscrowV2Abi,
+      abi: tournamentPrizeEscrowV6Abi,
       functionName: 'getPool',
       args: [idBytes32],
     });

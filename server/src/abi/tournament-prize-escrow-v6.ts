@@ -1,13 +1,21 @@
 /**
- * ABI for the deployed escrow contract at TOURNAMENT_PRIZE_ESCROW_ADDRESS.
+ * ABI for TournamentPrizeEscrowV6 — gas-optimized successor to V5.
  *
- * Filename retained for compatibility — targets V5 (V4 + `addToPrizePool`). Differences vs legacy V2:
- *   - getPool returns 6 fields (no `active`); derive `active = !cancelled && remaining > 0`
- *   - payoutMultiple takes uint256[] amounts (raw wei), NOT percentages
- *   - setUnclaimedShares + claim + unclaimedOf added for the pull-backup path
+ * Same external API as V5 (drop-in compatible for `getPool`, `depositPrizePool`, `addToPrizePool`,
+ * `payout` / `payoutMultiple`, `setUnclaimedShares` / `claim` / `unclaimedOf`,
+ * `cancelTournament` / `creatorReclaim` / `payoutRemainderTo`).
+ *
+ * New entrypoints:
+ *   - `depositPrizePoolWithPermit(tournamentId, token, amount, deadline, v, r, s)`
+ *   - `addToPrizePoolWithPermit(tournamentId, token, amount, deadline, v, r, s)`
+ *
+ * Removed (vs V5 ABI):
+ *   - `tournamentIds(uint256)` auto-getter, `getTournamentCount()`, `getAllTournamentIds()` —
+ *     enumeration views were unused by the app. Use Postgres + indexed `PrizePoolDeposited` /
+ *     `PrizePoolAdded` events instead.
  */
-export const tournamentPrizeEscrowV2Abi = [
-  // Funding
+export const tournamentPrizeEscrowV6Abi = [
+  // ============ Funding ============
   {
     inputs: [
       { name: 'tournamentId', type: 'bytes32' },
@@ -30,8 +38,38 @@ export const tournamentPrizeEscrowV2Abi = [
     stateMutability: 'nonpayable',
     type: 'function',
   },
+  {
+    inputs: [
+      { name: 'tournamentId', type: 'bytes32' },
+      { name: 'token', type: 'address' },
+      { name: 'amount', type: 'uint256' },
+      { name: 'deadline', type: 'uint256' },
+      { name: 'v', type: 'uint8' },
+      { name: 'r', type: 'bytes32' },
+      { name: 's', type: 'bytes32' },
+    ],
+    name: 'depositPrizePoolWithPermit',
+    outputs: [],
+    stateMutability: 'nonpayable',
+    type: 'function',
+  },
+  {
+    inputs: [
+      { name: 'tournamentId', type: 'bytes32' },
+      { name: 'token', type: 'address' },
+      { name: 'amount', type: 'uint256' },
+      { name: 'deadline', type: 'uint256' },
+      { name: 'v', type: 'uint8' },
+      { name: 'r', type: 'bytes32' },
+      { name: 's', type: 'bytes32' },
+    ],
+    name: 'addToPrizePoolWithPermit',
+    outputs: [],
+    stateMutability: 'nonpayable',
+    type: 'function',
+  },
 
-  // Push payouts
+  // ============ Push payouts ============
   {
     inputs: [
       { name: 'tournamentId', type: 'bytes32' },
@@ -55,7 +93,7 @@ export const tournamentPrizeEscrowV2Abi = [
     type: 'function',
   },
 
-  // Pull payouts (backup path)
+  // ============ Pull payouts ============
   {
     inputs: [
       { name: 'tournamentId', type: 'bytes32' },
@@ -85,7 +123,7 @@ export const tournamentPrizeEscrowV2Abi = [
     type: 'function',
   },
 
-  // Cancel + reclaim
+  // ============ Cancel + reclaim ============
   {
     inputs: [{ name: 'tournamentId', type: 'bytes32' }],
     name: 'cancelTournament',
@@ -111,7 +149,7 @@ export const tournamentPrizeEscrowV2Abi = [
     type: 'function',
   },
 
-  // Admin
+  // ============ Admin ============
   {
     inputs: [],
     name: 'authorizedServer',
@@ -134,7 +172,7 @@ export const tournamentPrizeEscrowV2Abi = [
     type: 'function',
   },
 
-  // Reads — getPool returns 6 fields (no `active`)
+  // ============ Reads (V5-compatible shape) ============
   {
     inputs: [{ name: 'tournamentId', type: 'bytes32' }],
     name: 'getPool',
@@ -156,22 +194,8 @@ export const tournamentPrizeEscrowV2Abi = [
     stateMutability: 'view',
     type: 'function',
   },
-  {
-    inputs: [],
-    name: 'getTournamentCount',
-    outputs: [{ type: 'uint256' }],
-    stateMutability: 'view',
-    type: 'function',
-  },
-  {
-    inputs: [],
-    name: 'getAllTournamentIds',
-    outputs: [{ type: 'bytes32[]' }],
-    stateMutability: 'view',
-    type: 'function',
-  },
 
-  // Events
+  // ============ Events (identical topics to V5) ============
   {
     anonymous: false,
     inputs: [

@@ -17,7 +17,7 @@ import { formatPrizePoolDisplay, formatPrizeTokenUnitLabel } from '@/lib/format-
 import { formatUnits } from 'viem';
 import { useWriteContract, usePublicClient } from 'wagmi';
 import { TOURNAMENT_PRIZE_ESCROW_ADDRESS } from '@/lib/contracts';
-import { tournamentPrizeEscrowV2Abi } from '@/abi/tournament-prize-escrow-v2';
+import { tournamentPrizeEscrowV6Abi } from '@/abi/tournament-prize-escrow-v6';
 import { tournamentIdToBytes32 } from '@/lib/tournament-id-bytes32';
 import type { BlackjackWebSocketClient } from '@/lib/websocket-client';
 import { isAdminWallet } from '@/lib/admin';
@@ -1045,6 +1045,7 @@ export function PokerTournamentLobby({
                   tokenSymbol={t.prizeTokenSymbol ?? null}
                   tokenName={t.prizeTokenName ?? null}
                   buyInWei={buyInWei}
+                  creatorFeePercent={t.creatorFeePercent}
                   disabled={joiningId === t.tournamentId}
                   onCancel={() => setJoinFlow(null)}
                   onSuccess={async (hash) => {
@@ -1210,7 +1211,7 @@ function ReclaimableEscrowBanner({
           const idBytes32 = c.escrowTournamentIdBytes32 ?? tournamentIdToBytes32(c.tournamentId);
           const result = await publicClient.readContract({
             address: TOURNAMENT_PRIZE_ESCROW_ADDRESS,
-            abi: tournamentPrizeEscrowV2Abi,
+            abi: tournamentPrizeEscrowV6Abi,
             functionName: 'getPool',
             args: [idBytes32 as `0x${string}`],
           });
@@ -1243,7 +1244,7 @@ function ReclaimableEscrowBanner({
       const idBytes32 = c.escrowTournamentIdBytes32 ?? tournamentIdToBytes32(c.tournamentId);
       const hash = await writeContractAsync({
         address: TOURNAMENT_PRIZE_ESCROW_ADDRESS,
-        abi: tournamentPrizeEscrowV2Abi,
+        abi: tournamentPrizeEscrowV6Abi,
         functionName: 'creatorReclaim',
         args: [idBytes32 as `0x${string}`],
       });
@@ -1367,7 +1368,7 @@ function ClaimableEscrowBanner({
           const idBytes32 = c.escrowTournamentIdBytes32 ?? tournamentIdToBytes32(c.tournamentId);
           const amount = (await publicClient.readContract({
             address: TOURNAMENT_PRIZE_ESCROW_ADDRESS,
-            abi: tournamentPrizeEscrowV2Abi,
+            abi: tournamentPrizeEscrowV6Abi,
             functionName: 'unclaimedOf',
             args: [idBytes32 as `0x${string}`, myAddress as `0x${string}`],
           })) as bigint;
@@ -1395,7 +1396,7 @@ function ClaimableEscrowBanner({
       const idBytes32 = c.escrowTournamentIdBytes32 ?? tournamentIdToBytes32(c.tournamentId);
       const hash = await writeContractAsync({
         address: TOURNAMENT_PRIZE_ESCROW_ADDRESS,
-        abi: tournamentPrizeEscrowV2Abi,
+        abi: tournamentPrizeEscrowV6Abi,
         functionName: 'claim',
         args: [idBytes32 as `0x${string}`],
       });

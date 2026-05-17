@@ -1,5 +1,5 @@
 import { getPublicClient } from './chain-client';
-import { tournamentPrizeEscrowV2Abi } from '../abi/tournament-prize-escrow-v2';
+import { tournamentPrizeEscrowV6Abi } from '../abi/tournament-prize-escrow-v6';
 import { tournamentIdToBytes32 } from './tournament-id-bytes32';
 import { getTournamentPrizeEscrowAddress } from './tournament-escrow-address';
 
@@ -48,7 +48,7 @@ async function readAllPools(): Promise<RawPool[]> {
   const client = getPublicClient();
   const idsRaw = (await client.readContract({
     address: escrowBytes32Address(),
-    abi: tournamentPrizeEscrowV2Abi,
+    abi: tournamentPrizeEscrowV6Abi,
     functionName: 'getAllTournamentIds',
   })) as readonly `0x${string}`[];
   const ids = idsRaw as `0x${string}`[];
@@ -58,7 +58,7 @@ async function readAllPools(): Promise<RawPool[]> {
     ids.map(async (id) => {
       const r = (await client.readContract({
         address: escrowBytes32Address(),
-        abi: tournamentPrizeEscrowV2Abi,
+        abi: tournamentPrizeEscrowV6Abi,
         functionName: 'getPool',
         args: [id],
       })) as readonly [`0x${string}`, `0x${string}`, bigint, bigint, bigint, boolean];
@@ -170,7 +170,7 @@ export async function getPoolDetails(tournamentId: string): Promise<EscrowPoolDe
     const idBytes32 = tournamentIdToBytes32(tournamentId);
     const r = (await client.readContract({
       address: escrowBytes32Address(),
-      abi: tournamentPrizeEscrowV2Abi,
+      abi: tournamentPrizeEscrowV6Abi,
       functionName: 'getPool',
       args: [idBytes32],
     })) as readonly [`0x${string}`, `0x${string}`, bigint, bigint, bigint, boolean];

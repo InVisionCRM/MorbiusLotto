@@ -54,9 +54,16 @@ import { formatUnits, parseUnits } from 'viem';
 import { useConnectModal } from '@rainbow-me/rainbowkit';
 import { useWriteContract, usePublicClient, useAccount } from 'wagmi';
 import { ERC20_ABI } from '@/abi/erc20';
-import { tournamentPrizeEscrowV2Abi } from '@/abi/tournament-prize-escrow-v2';
+import { tournamentPrizeEscrowV6Abi } from '@/abi/tournament-prize-escrow-v6';
 import { TOURNAMENT_PRIZE_ESCROW_ADDRESS, WPLS_TOKEN_ADDRESS } from '@/lib/contracts';
 import { tournamentIdToBytes32 } from '@/lib/tournament-id-bytes32';
+import {
+  CREATOR_FEE_MIN,
+  CREATOR_FEE_MAX,
+  CREATOR_FEE_DEFAULT,
+  PLATFORM_FEE_BUYIN_PERCENT,
+  clampCreatorFeePercent,
+} from '@/lib/tournament-types';
 
 /** Where the freeroll guarantee comes from. Mirrors server `GuaranteedPrizePoolSource`. */
 type PrizeSource = 'chips' | 'platform_promo' | 'custom_token';
@@ -938,6 +945,11 @@ export function PokerTournamentCreator({ creatorAddress, onClose, onCreate }: Po
   const [maxPlayers, setMaxPlayers] = useState('10');
   const [isPrivate, setIsPrivate] = useState(false);
   const [privatePin, setPrivatePin] = useState('');
+  /**
+   * Creator-chosen cut from the prize pool (integer 0–15). Default 2 matches pre-feature behavior.
+   * Freerolls store the value but the server overrides payouts to 0% since the creator funded the pool.
+   */
+  const [creatorFeePercent, setCreatorFeePercent] = useState<number>(CREATOR_FEE_DEFAULT);
   const [botsToAdd, setBotsToAdd] = useState(0);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [showConfirm, setShowConfirm] = useState(false);
@@ -1235,6 +1247,7 @@ export function PokerTournamentCreator({ creatorAddress, onClose, onCreate }: Po
         isPrivate,
         ...(pinForCreate ? { pinCode: pinForCreate } : {}),
         scheduledStartAt,
+        creatorFeePercent: clampCreatorFeePercent(creatorFeePercent),
       },
       addBots: isAdmin ? Math.max(0, Math.min(10, Math.floor(botsToAdd))) : 0,
     };
@@ -1381,7 +1394,7 @@ export function PokerTournamentCreator({ creatorAddress, onClose, onCreate }: Po
             }) as Promise<bigint>,
             publicClient.readContract({
               address: TOURNAMENT_PRIZE_ESCROW_ADDRESS,
-              abi: tournamentPrizeEscrowV2Abi,
+              abi: tournamentPrizeEscrowV6Abi,
               functionName: 'getPool',
               args: [bytes32Id],
             }) as Promise<readonly [`0x${string}`, `0x${string}`, bigint, bigint, bigint, boolean]>,
@@ -1417,7 +1430,7 @@ export function PokerTournamentCreator({ creatorAddress, onClose, onCreate }: Po
 
       const hash = await writeContractAsync({
         address: TOURNAMENT_PRIZE_ESCROW_ADDRESS,
-        abi: tournamentPrizeEscrowV2Abi,
+        abi: tournamentPrizeEscrowV6Abi,
         functionName: 'depositPrizePool',
         args: [bytes32Id, selectedToken.address as `0x${string}`, customTokenAmountWei],
       });
@@ -1491,7 +1504,7 @@ export function PokerTournamentCreator({ creatorAddress, onClose, onCreate }: Po
       const bytes32Id = tournamentIdToBytes32(fundingTournamentId);
       const hash = await writeContractAsync({
         address: TOURNAMENT_PRIZE_ESCROW_ADDRESS,
-        abi: tournamentPrizeEscrowV2Abi,
+        abi: tournamentPrizeEscrowV6Abi,
         functionName: 'creatorReclaim',
         args: [bytes32Id],
       });
@@ -2405,6 +2418,60 @@ export function PokerTournamentCreator({ creatorAddress, onClose, onCreate }: Po
             </TabsContent>
 
             <TabsContent value="prizes" className="mt-4 space-y-4 outline-none">
+              {/*
+                Creator fee slider. Buy-in tournaments only — freerolls already pay the creator
+                via the prize pool they funded, so the server overrides their fee to 0% at payout.
+              */}
+              {!isFreeroll && (() => {
+                const pct = clampCreatorFeePercent(creatorFeePercent);
+                const totalFee = pct + PLATFORM_FEE_BUYIN_PERCENT;
+                const toWinners = Math.max(0, 100 - totalFee);
+                return (
+                  <div className="rounded-xl border border-cyan-500/25 bg-black/30 p-4 space-y-3">
+                    <div className="flex items-baseline justify-between gap-3">
+                      <label htmlFor="poker-creator-fee" className={labelClass}>
+                        Your cut per buy-in
+                      </label>
+                      <span className="font-mono tabular-nums text-cyan-300 text-lg font-bold">
+                        {pct}%
+                      </span>
+                    </div>
+                    <input
+                      id="poker-creator-fee"
+                      type="range"
+                      min={CREATOR_FEE_MIN}
+                      max={CREATOR_FEE_MAX}
+                      step={1}
+                      value={pct}
+                      onChange={(e) => setCreatorFeePercent(clampCreatorFeePercent(e.target.value))}
+                      className="w-full accent-cyan-400 cursor-pointer"
+                      aria-label={`Creator fee percent (${CREATOR_FEE_MIN}–${CREATOR_FEE_MAX})`}
+                    />
+                    <div className="flex justify-between text-[10px] text-white/45 font-mono tabular-nums">
+                      <span>{CREATOR_FEE_MIN}%</span>
+                      <span>{CREATOR_FEE_MAX}%</span>
+                    </div>
+                    <div className="rounded-md bg-black/30 px-3 py-2 text-[11px] leading-relaxed text-white/70 space-y-0.5">
+                      <div className="flex justify-between">
+                        <span>Platform fee</span>
+                        <span className="font-mono tabular-nums text-white/85">{PLATFORM_FEE_BUYIN_PERCENT}%</span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span>Your fee</span>
+                        <span className="font-mono tabular-nums text-cyan-300">{pct}%</span>
+                      </div>
+                      <div className="flex justify-between border-t border-white/10 pt-1 mt-1 font-semibold">
+                        <span className="text-white/90">To winners</span>
+                        <span className="font-mono tabular-nums text-emerald-300">{toWinners}%</span>
+                      </div>
+                    </div>
+                    <p className="text-[10px] text-white/40">
+                      Deducted from the total prize pool before payouts. Players see this in the lobby before they join.
+                    </p>
+                  </div>
+                );
+              })()}
+
               <div>
                 <label className={labelClass}>Prize split preset</label>
                 <Select value={prizePresetId} onValueChange={(v) => setPrizePresetId(v as PokerPrizePresetId)}>

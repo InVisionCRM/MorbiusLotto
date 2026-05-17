@@ -1,6 +1,6 @@
 import { decodeEventLog, type Hex } from 'viem';
 import { getPublicClient } from './chain-client';
-import { tournamentPrizeEscrowV2Abi } from '../abi/tournament-prize-escrow-v2';
+import { tournamentPrizeEscrowV6Abi } from '../abi/tournament-prize-escrow-v6';
 import { tournamentIdToBytes32 } from './tournament-id-bytes32';
 import { getTournamentPrizeEscrowAddress } from './tournament-escrow-address';
 
@@ -69,7 +69,7 @@ export async function verifyEscrowAddToPrizePoolJoinTx(params: {
       if (!log.topics?.length) continue;
       try {
         const decoded = decodeEventLog({
-          abi: tournamentPrizeEscrowV2Abi,
+          abi: tournamentPrizeEscrowV6Abi,
           data: (log.data ?? '0x') as Hex,
           topics: log.topics as [Hex, ...Hex[]],
           strict: false,

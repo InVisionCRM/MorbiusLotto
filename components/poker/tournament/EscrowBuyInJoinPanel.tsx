@@ -6,14 +6,20 @@
 
 import React, { useCallback, useEffect, useState } from 'react';
 import { erc20Abi, formatUnits } from 'viem';
-import { useAccount, usePublicClient, useWriteContract } from 'wagmi';
-import { TOURNAMENT_PRIZE_ESCROW_ADDRESS, WPLS_TOKEN_ADDRESS } from '@/lib/contracts';
+import { useAccount, usePublicClient, useWalletClient, useWriteContract } from 'wagmi';
+import { TOURNAMENT_PRIZE_ESCROW_ADDRESS, TOURNAMENT_PRIZE_ESCROW_V6_ADDRESS, WPLS_TOKEN_ADDRESS } from '@/lib/contracts';
 import { getWplsShortfall, WPLS_DEPOSIT_ABI } from '@/lib/ensure-wpls-balance';
-import { tournamentPrizeEscrowV2Abi } from '@/abi/tournament-prize-escrow-v2';
+import { tournamentPrizeEscrowV6Abi } from '@/abi/tournament-prize-escrow-v6';
 import { tournamentIdToBytes32 } from '@/lib/tournament-id-bytes32';
 import { formatPrizeTokenUnitLabel } from '@/lib/format-poker-tournament-prize-display';
 import { fetchDexScreenerTokenInfo } from '@/lib/dexscreener-token-info';
 import { BackgroundBeams } from '@/components/ui/background-beams';
+import {
+  CREATOR_FEE_DEFAULT,
+  PLATFORM_FEE_BUYIN_PERCENT,
+  clampCreatorFeePercent,
+} from '@/lib/tournament-types';
+import { detectPermitSupport, signErc20Permit } from '@/lib/erc20-permit';
 
 export type EscrowBuyInJoinStep =
   | 'idle'
@@ -31,6 +37,7 @@ export function EscrowBuyInJoinPanel({
   tokenSymbol,
   tokenName,
   buyInWei,
+  creatorFeePercent,
   onSuccess,
   onCancel,
   disabled,
@@ -41,16 +48,39 @@ export function EscrowBuyInJoinPanel({
   tokenSymbol: string | null;
   tokenName: string | null;
   buyInWei: bigint;
+  /** Creator's chosen cut (0–15). Default 2 for back-compat with tournaments created pre-feature. */
+  creatorFeePercent?: number;
   onSuccess: (depositTxHash: `0x${string}`) => void | Promise<void>;
   onCancel: () => void;
   disabled?: boolean;
 }) {
   const { address } = useAccount();
   const publicClient = usePublicClient();
+  const { data: walletClient } = useWalletClient();
   const { writeContractAsync } = useWriteContract();
   const [step, setStep] = useState<EscrowBuyInJoinStep>('idle');
   const [err, setErr] = useState<string | null>(null);
   const [logoUrl, setLogoUrl] = useState<string | null>(null);
+  /**
+   * `null` = not yet probed, `true` = use single-tx permit flow, `false` = fall back to approve+deposit.
+   * Probed lazily on mount; result is cached for the panel's lifetime.
+   */
+  const [permitSupported, setPermitSupported] = useState<boolean | null>(null);
+
+  useEffect(() => {
+    if (!address || !publicClient) return;
+    let cancelled = false;
+    void (async () => {
+      // WPLS doesn't implement EIP-2612 (it's a thin wrapper around PLS) — skip the probe.
+      if (tokenAddress.toLowerCase() === WPLS_TOKEN_ADDRESS.toLowerCase()) {
+        if (!cancelled) setPermitSupported(false);
+        return;
+      }
+      const supported = await detectPermitSupport({ publicClient, token: tokenAddress, owner: address });
+      if (!cancelled) setPermitSupported(supported);
+    })();
+    return () => { cancelled = true; };
+  }, [address, publicClient, tokenAddress]);
 
   useEffect(() => {
     let cancelled = false;
@@ -137,9 +167,54 @@ export function EscrowBuyInJoinPanel({
       return;
     }
     setErr(null);
+    const escrow = TOURNAMENT_PRIZE_ESCROW_ADDRESS as `0x${string}`;
+    const bytes32 = tournamentIdToBytes32(tournamentId) as `0x${string}`;
+    // Defensive gate: the *WithPermit entrypoints only exist on V6. If the env var ever flips
+    // back to V5 in an emergency rollback, fall through to the classic approve+deposit path so
+    // the buy-in still completes instead of reverting on a missing function selector.
+    const escrowIsV6 = escrow.toLowerCase() === TOURNAMENT_PRIZE_ESCROW_V6_ADDRESS.toLowerCase();
+
+    // ====== Fast path: EIP-2612 permit (single tx, single wallet popup) ======
+    // Requires V6 escrow's `addToPrizePoolWithPermit`. Sign typed data off-chain, then one tx.
+    // We DO NOT fall back to approve+deposit if the signature step fails — that would surprise the user
+    // with an unexpected second popup. The user can retry, and on retry we re-probe / re-sign.
+    if (permitSupported === true && walletClient && escrowIsV6) {
+      setStep('depositing'); // skip the 'approving' step in the tracker since there's no separate approve
+      try {
+        const { v, r, s, deadline } = await signErc20Permit({
+          publicClient,
+          walletClient,
+          token: tokenAddress,
+          owner: address,
+          spender: escrow,
+          value: buyInWei,
+        });
+        const depositHash = await writeContractAsync({
+          address: escrow,
+          abi: tournamentPrizeEscrowV6Abi,
+          functionName: 'addToPrizePoolWithPermit',
+          args: [bytes32, tokenAddress, buyInWei, deadline, v, r, s],
+        });
+        await publicClient.waitForTransactionReceipt({ hash: depositHash });
+        setStep('done');
+        await onSuccess(depositHash);
+        return;
+      } catch (e) {
+        // If the user rejected the signature, surface that cleanly. Otherwise let them retry — and
+        // disable the permit fast path for the rest of the session in case the token's permit is broken.
+        const msg = (e as Error).message ?? 'Permit signature failed';
+        if (!/user rejected|user denied/i.test(msg)) {
+          setPermitSupported(false);
+        }
+        setStep('failed');
+        setErr(msg);
+        return;
+      }
+    }
+
+    // ====== Fallback: classic approve + deposit (two txs, two popups) ======
     setStep('approving');
     try {
-      const escrow = TOURNAMENT_PRIZE_ESCROW_ADDRESS as `0x${string}`;
       const allowance = await publicClient.readContract({
         address: tokenAddress,
         abi: erc20Abi,
@@ -156,10 +231,9 @@ export function EscrowBuyInJoinPanel({
         await publicClient.waitForTransactionReceipt({ hash: approveHash });
       }
       setStep('depositing');
-      const bytes32 = tournamentIdToBytes32(tournamentId) as `0x${string}`;
       const depositHash = await writeContractAsync({
         address: escrow,
-        abi: tournamentPrizeEscrowV2Abi,
+        abi: tournamentPrizeEscrowV6Abi,
         functionName: 'addToPrizePool',
         args: [bytes32, tokenAddress, buyInWei],
       });
@@ -170,12 +244,18 @@ export function EscrowBuyInJoinPanel({
       setStep('failed');
       setErr((e as Error).message ?? 'Transaction failed');
     }
-  }, [address, publicClient, tokenAddress, buyInWei, tournamentId, writeContractAsync, onSuccess]);
+  }, [address, publicClient, walletClient, permitSupported, tokenAddress, buyInWei, tournamentId, writeContractAsync, onSuccess]);
 
   const busy = step === 'wrapping' || step === 'approving' || step === 'depositing';
   const symbolForBadge = (tokenSymbol ?? '?').slice(0, 4).toUpperCase();
   const initial = symbolForBadge.charAt(0);
 
+  // Permit-supporting tokens collapse approve+deposit into a single signature + one tx, BUT only
+  // when the deployed escrow address is V6 (the `*WithPermit` entrypoints don't exist on V5).
+  // WPLS doesn't implement permit so it keeps the legacy three-step flow regardless.
+  const escrowIsV6Address =
+    TOURNAMENT_PRIZE_ESCROW_ADDRESS.toLowerCase() === TOURNAMENT_PRIZE_ESCROW_V6_ADDRESS.toLowerCase();
+  const usingPermit = permitSupported === true && !isWplsToken && escrowIsV6Address;
   const STEPS: { key: 'wrap' | 'approve' | 'deposit' | 'done'; label: string }[] = isWplsToken
     ? [
         { key: 'wrap', label: 'Wrap PLS' },
@@ -183,11 +263,16 @@ export function EscrowBuyInJoinPanel({
         { key: 'deposit', label: 'Deposit' },
         { key: 'done', label: 'Joined' },
       ]
-    : [
-        { key: 'approve', label: 'Approve token' },
-        { key: 'deposit', label: 'Deposit to escrow' },
-        { key: 'done', label: 'Joined' },
-      ];
+    : usingPermit
+      ? [
+          { key: 'deposit', label: 'Sign & deposit' },
+          { key: 'done', label: 'Joined' },
+        ]
+      : [
+          { key: 'approve', label: 'Approve token' },
+          { key: 'deposit', label: 'Deposit to escrow' },
+          { key: 'done', label: 'Joined' },
+        ];
 
   const stepStateOf = (key: 'wrap' | 'approve' | 'deposit' | 'done'): 'pending' | 'active' | 'complete' => {
     if (key === 'wrap') {
@@ -213,12 +298,14 @@ export function EscrowBuyInJoinPanel({
     : step === 'approving'
       ? 'Approving…'
       : step === 'depositing'
-        ? 'Depositing…'
+        ? usingPermit ? 'Signing & depositing…' : 'Depositing…'
         : step === 'done'
           ? 'Joined ✓'
           : step === 'failed'
             ? 'Try again'
-            : 'Approve & pay buy-in';
+            : usingPermit
+              ? 'Sign & pay buy-in'
+              : 'Approve & pay buy-in';
 
   const onCtaClick = wrapNeeded ? runWrap : runApproveAndDeposit;
 
@@ -280,6 +367,45 @@ export function EscrowBuyInJoinPanel({
             </div>
           )}
         </div>
+
+        {/* Fee breakdown — shown so the player knows what fraction of their buy-in reaches winners. */}
+        {(() => {
+          const creatorPct = clampCreatorFeePercent(
+            creatorFeePercent ?? CREATOR_FEE_DEFAULT,
+          );
+          const platformPct = PLATFORM_FEE_BUYIN_PERCENT;
+          const toWinnersPct = Math.max(0, 100 - creatorPct - platformPct);
+          let toWinnersHuman = '';
+          try {
+            const toWinnersWei = (buyInWei * BigInt(toWinnersPct)) / 100n;
+            toWinnersHuman = formatUnits(toWinnersWei, tokenDecimals);
+          } catch {
+            toWinnersHuman = '';
+          }
+          return (
+            <div className="rounded-xl border border-white/10 bg-slate-900/60 px-3 py-2.5 text-[11px] text-slate-300 space-y-1">
+              <div className="flex items-center justify-between">
+                <span>Platform fee</span>
+                <span className="font-mono tabular-nums text-slate-200">{platformPct}%</span>
+              </div>
+              <div className="flex items-center justify-between">
+                <span>Creator fee</span>
+                <span className="font-mono tabular-nums text-cyan-300">{creatorPct}%</span>
+              </div>
+              <div className="flex items-center justify-between border-t border-white/10 pt-1.5 mt-1.5 font-semibold">
+                <span className="text-white/90">Goes to prize pool</span>
+                <span className="font-mono tabular-nums text-emerald-300">
+                  {toWinnersPct}%
+                  {toWinnersHuman && (
+                    <span className="text-emerald-200/70 font-normal ml-1.5">
+                      (~{toWinnersHuman} {ticker})
+                    </span>
+                  )}
+                </span>
+              </div>
+            </div>
+          );
+        })()}
 
         {/* Step tracker */}
         <div className="rounded-xl border border-white/10 bg-slate-900/60 backdrop-blur-sm p-3">

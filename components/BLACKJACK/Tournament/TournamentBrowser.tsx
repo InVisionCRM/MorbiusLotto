@@ -24,7 +24,7 @@ import { InsufficientBalanceDialog } from '@/components/shared/InsufficientBalan
 import { useOutsideClick } from '@/hooks/use-outside-click';
 import type { BlackjackWebSocketClient, ChatMessagePayload } from '@/lib/websocket-client';
 import { TOURNAMENT_PRIZE_ESCROW_ADDRESS } from '@/lib/contracts';
-import { tournamentPrizeEscrowV2Abi } from '@/abi/tournament-prize-escrow-v2';
+import { tournamentPrizeEscrowV6Abi } from '@/abi/tournament-prize-escrow-v6';
 import { tournamentIdToBytes32 } from '@/lib/tournament-id-bytes32';
 import { ERC20_ABI } from '@/abi/erc20';
 import { useTokenInfo, type TokenInfo } from '@/hooks/use-token-info';
@@ -169,7 +169,7 @@ function FundTournamentEscrowModal({
       const idBytes32 = tournamentIdToBytes32(tournament.id);
       const hash = await writeContractAsync({
         address: escrow as `0x${string}`,
-        abi: tournamentPrizeEscrowV2Abi,
+        abi: tournamentPrizeEscrowV6Abi,
         functionName: 'depositPrizePool',
         args: [idBytes32, token, amountWei],
         account: address,
@@ -1358,6 +1358,20 @@ function ExpandedCard({
             />
           );
         }
+        // Fee breakdown: buy-ins pay creator (0–15%, chosen by creator) + platform 3%; rest goes to winners.
+        // Freerolls pay neither (creator funded the pool; server redirects creator fee to platform).
+        const creatorPct = isFreeroll
+          ? 0
+          : Math.max(0, Math.min(15, Math.round(Number(t.creatorFeePercent ?? 2))));
+        const platformPct = isFreeroll ? 5 : 3;
+        const toWinnersPct = Math.max(0, 100 - creatorPct - platformPct);
+        const feeRows: { label: string; value: string; accent: 'yellow' | 'cyan' | 'green' | 'white' }[] = isFreeroll
+          ? []
+          : [
+              { label: 'Creator fee', value: `${creatorPct}%`, accent: 'cyan' },
+              { label: 'Platform fee', value: `${platformPct}%`, accent: 'white' },
+              { label: 'To winners', value: `${toWinnersPct}% of pool`, accent: 'green' },
+            ];
         return (
           <ConfirmActionCard
             title={isFreeroll ? 'Join Freeroll' : 'Join Tournament'}
@@ -1366,6 +1380,7 @@ function ExpandedCard({
               { label: 'Buy-in', value: buyInDisplay, accent: 'yellow' },
               { label: 'Prize Pool', value: prizeDisplay, accent: 'yellow' },
               { label: 'Prize Distribution', value: prizeLabel, accent: 'cyan' },
+              ...feeRows,
               { label: 'Starting Chips', value: t.startingChips.toLocaleString(), accent: 'green' },
               { label: 'Max Hands', value: t.maxHands, accent: 'white' },
               { label: 'Time Limit', value: timeLimitLabel, accent: 'white' },
@@ -1623,7 +1638,7 @@ function HowPayoutsWork() {
           <ul className="list-disc list-inside space-y-1 text-gray-300">
             <li><strong className="text-cyan-400/90">MORBIUS pools:</strong> Prize pool is the sum of buy-ins. When the tournament ends, winners are ranked by chips; each gets a share of the pool (e.g. 40% / 20% / 10% for top 3). Payouts are added to your platform balance.</li>
             <li><strong className="text-cyan-400/90">Custom token pools:</strong> The creator (or anyone) funds the prize escrow on-chain. Same ranking and percentages apply; payouts are sent in that token from the escrow contract to your wallet.</li>
-            <li><strong className="text-cyan-400/90">Fees:</strong> A small platform fee (and optional creator fee) is taken from the prize pool before player shares are calculated. You see the net distributable pool in the prize structure.</li>
+            <li><strong className="text-cyan-400/90">Fees:</strong> Buy-in tournaments deduct a 3% platform fee plus the creator's chosen cut (0–15%, set when they create the tournament) from the prize pool before player shares are calculated. The exact split for each tournament is shown on the Join screen.</li>
             <li><strong className="text-cyan-400/90">When:</strong> Payouts run automatically once every player has finished (busted or completed max hands). No action needed from you.</li>
           </ul>
         </div>

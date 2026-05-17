@@ -99,6 +99,8 @@ export interface CreateFreerollRequest {
   prizeTokenAddress?: string | null;
   prizeAmount?: string; // token smallest unit
   prizeTokenDecimals?: number | null;
+  /** Creator's chosen fee percent (0–15 integer). Server validates + clamps; defaults to 2. */
+  creatorFeePercent?: number;
 }
 
 // Validation constants
@@ -108,6 +110,47 @@ export const TOURNAMENT_VALIDATION = {
   TIME_LIMIT_OPTIONS: [null, 60, 120, 240, 1440] as const, // minutes (null = no limit)
   PIN_LENGTH: 4,
 };
+
+/** Creator fee bounds (integer percent). Source of truth for client + server validation. */
+export const CREATOR_FEE_MIN = 0;
+export const CREATOR_FEE_MAX = 15;
+export const CREATOR_FEE_DEFAULT = 2;
+
+/** Platform fee for buy-in tournaments (deducted from the prize pool alongside the creator fee). */
+export const PLATFORM_FEE_BUYIN_PERCENT = 3;
+
+/**
+ * Clamp any value to the [CREATOR_FEE_MIN, CREATOR_FEE_MAX] integer range.
+ * `null` / `undefined` / non-finite values → default (user didn't supply a value).
+ * Note: `Number(null) === 0`, so the explicit null/undefined check is essential —
+ * without it, a missing field would silently become 0% creator fee.
+ */
+export function clampCreatorFeePercent(raw: unknown): number {
+  if (raw === null || raw === undefined) return CREATOR_FEE_DEFAULT;
+  const n = Number(raw);
+  if (!Number.isFinite(n)) return CREATOR_FEE_DEFAULT;
+  return Math.max(CREATOR_FEE_MIN, Math.min(CREATOR_FEE_MAX, Math.round(n)));
+}
+
+/**
+ * Net prize pool after the platform fee + creator fee are deducted.
+ * Used by player-facing displays so the "to winners" number matches actual payouts.
+ *
+ * Freerolls override the creator fee to 0 (the creator funded the prize pool themselves;
+ * see tournament.service.ts:1083).
+ */
+export function computeNetPrizePoolWei(args: {
+  grossPoolWei: bigint;
+  creatorFeePercent: number;
+  isFreeroll: boolean;
+}): { netWei: bigint; creatorFeeWei: bigint; platformFeeWei: bigint } {
+  const creatorPct = args.isFreeroll ? 0 : clampCreatorFeePercent(args.creatorFeePercent);
+  const platformPct = args.isFreeroll ? 5 : PLATFORM_FEE_BUYIN_PERCENT; // mirror server (line 1082)
+  const creatorFeeWei = (args.grossPoolWei * BigInt(creatorPct)) / 100n;
+  const platformFeeWei = (args.grossPoolWei * BigInt(platformPct)) / 100n;
+  const netWei = args.grossPoolWei - creatorFeeWei - platformFeeWei;
+  return { netWei, creatorFeeWei, platformFeeWei };
+}
 
 // Time limit labels for display
 export const TIME_LIMIT_LABELS: Record<number | 'null', string> = {
@@ -136,6 +179,8 @@ export interface CreateTournamentRequest {
   prizeTokenDecimals?: number | null;
   /** Optional PIN for private tournaments; if not set, server generates one */
   pinCode?: string | null;
+  /** Creator's chosen fee percent (0–15 integer). Server validates + clamps; defaults to 2. */
+  creatorFeePercent?: number;
 }
 
 // Create tournament response

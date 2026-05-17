@@ -24,6 +24,11 @@ import {
   CreateFreerollRequest,
   getExamplePrizeDistribution,
   DEFAULT_TOUR_CARDS,
+  CREATOR_FEE_MIN,
+  CREATOR_FEE_MAX,
+  CREATOR_FEE_DEFAULT,
+  PLATFORM_FEE_BUYIN_PERCENT,
+  clampCreatorFeePercent,
 } from '@/lib/tournament-types';
 import {
   BLACKJACK_IMAGE_BACKGROUNDS,
@@ -40,7 +45,7 @@ import { Prc20TokenPicker, type SelectedPrc20Token } from '@/components/shared/P
 
 const ESCROW_ZERO = '0x0000000000000000000000000000000000000000';
 const isEscrowConfigured = (TOURNAMENT_PRIZE_ESCROW_ADDRESS as string) !== ESCROW_ZERO;
-import { tournamentPrizeEscrowV2Abi } from '@/abi/tournament-prize-escrow-v2';
+import { tournamentPrizeEscrowV6Abi } from '@/abi/tournament-prize-escrow-v6';
 import { tournamentIdToBytes32 } from '@/lib/tournament-id-bytes32';
 import { ERC20_ABI } from '@/abi/erc20';
 
@@ -127,6 +132,11 @@ export function BlackjackTournamentCreator({
   const [buyInAmount, setBuyInAmount] = useState('1000'); // In MORBIUS
   const [isPrivate, setIsPrivate] = useState(false);
   const [manualPin, setManualPin] = useState('');
+  /**
+   * Creator-chosen cut from the prize pool (integer 0–15). Default 2 matches pre-feature behavior.
+   * Freerolls store the value but the server overrides payouts to 0% since the creator funded the pool.
+   */
+  const [creatorFeePercent, setCreatorFeePercent] = useState<number>(CREATOR_FEE_DEFAULT);
   const startingChips = 5000;
   const maxHands = 25;
   const [timeLimitMinutes, setTimeLimitMinutes] = useState<number | null>(null);
@@ -233,9 +243,12 @@ export function BlackjackTournamentCreator({
     [prizeDistributionType]
   );
 
-  // Example prize distribution preview (3% protocol + 2% creator = 5%)
+  // Example prize distribution preview. Buy-ins: platform (3%) + creator (0–15%). Freerolls: 5% flat
+  // (server overrides creator fee to 0 since the creator funded the pool — see tournament.service.ts:1083).
   const examplePrizePool = buyInAmountWei * BigInt(10); // Simulate 10 players
-  const totalFeePercent = 5;
+  const effectiveCreatorFee = tournamentType === 'freeroll' ? 0 : clampCreatorFeePercent(creatorFeePercent);
+  const effectivePlatformFee = tournamentType === 'freeroll' ? 5 : PLATFORM_FEE_BUYIN_PERCENT;
+  const totalFeePercent = effectiveCreatorFee + effectivePlatformFee;
   const prizePreview = useMemo(() => {
     if (!selectedPreset) return [];
     return getExamplePrizeDistribution(examplePrizePool, selectedPreset.percentages, totalFeePercent);
@@ -302,6 +315,7 @@ export function BlackjackTournamentCreator({
         maxPlayers: maxP,
         customImage: customImage || undefined,
         pinCode: isPrivate && manualPin.trim() ? manualPin.trim() : undefined,
+        creatorFeePercent: clampCreatorFeePercent(creatorFeePercent),
       };
       if (prizeType === 'custom' && selectedToken && prizeTokenAddress.trim() && prizeAmountHuman.trim()) {
         const dec = Math.min(18, Math.max(0, prizeTokenDecimals));
@@ -339,6 +353,7 @@ export function BlackjackTournamentCreator({
       prizeDistributionType,
       customImage: customImage || undefined,
       pinCode: isPrivate && manualPin.trim() ? manualPin.trim() : undefined,
+      creatorFeePercent: clampCreatorFeePercent(creatorFeePercent),
     };
     if (prizeType === 'custom' && prizeTokenAddress.trim() && prizeAmountHuman.trim()) {
       const dec = Math.min(18, Math.max(0, prizeTokenDecimals));
@@ -477,7 +492,7 @@ export function BlackjackTournamentCreator({
       const idBytes32 = tournamentIdToBytes32(createdTournament.id);
       const hash = await writeContractAsync({
         address: escrow as `0x${string}`,
-        abi: tournamentPrizeEscrowV2Abi,
+        abi: tournamentPrizeEscrowV6Abi,
         functionName: 'depositPrizePool',
         args: [idBytes32, token, prizeAmountWeiForReview],
         account: address,
@@ -938,6 +953,58 @@ export function BlackjackTournamentCreator({
                   )}
                 </div>
               )}
+
+              {/*
+                Creator fee slider. Buy-in tournaments only — freerolls already pay the creator
+                via the prize pool they funded, so the server overrides their fee to 0% at payout.
+              */}
+              {tournamentType === 'buyin' && (() => {
+                const pct = clampCreatorFeePercent(creatorFeePercent);
+                const totalFee = pct + PLATFORM_FEE_BUYIN_PERCENT;
+                const toWinners = Math.max(0, 100 - totalFee);
+                return (
+                  <div className="rounded-xl border border-cyan-500/25 bg-black/30 p-4 space-y-3">
+                    <div className="flex items-baseline justify-between gap-3">
+                      <label htmlFor="bj-creator-fee" className="block text-gray-300 text-sm font-medium">
+                        Your cut per buy-in
+                      </label>
+                      <span className="font-mono tabular-nums text-cyan-300 text-lg font-bold">{pct}%</span>
+                    </div>
+                    <input
+                      id="bj-creator-fee"
+                      type="range"
+                      min={CREATOR_FEE_MIN}
+                      max={CREATOR_FEE_MAX}
+                      step={1}
+                      value={pct}
+                      onChange={(e) => setCreatorFeePercent(clampCreatorFeePercent(e.target.value))}
+                      className="w-full accent-cyan-400 cursor-pointer"
+                      aria-label={`Creator fee percent (${CREATOR_FEE_MIN}–${CREATOR_FEE_MAX})`}
+                    />
+                    <div className="flex justify-between text-[10px] text-white/45 font-mono tabular-nums">
+                      <span>{CREATOR_FEE_MIN}%</span>
+                      <span>{CREATOR_FEE_MAX}%</span>
+                    </div>
+                    <div className="rounded-md bg-black/30 px-3 py-2 text-[11px] leading-relaxed text-white/70 space-y-0.5">
+                      <div className="flex justify-between">
+                        <span>Platform fee</span>
+                        <span className="font-mono tabular-nums text-white/85">{PLATFORM_FEE_BUYIN_PERCENT}%</span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span>Your fee</span>
+                        <span className="font-mono tabular-nums text-cyan-300">{pct}%</span>
+                      </div>
+                      <div className="flex justify-between border-t border-white/10 pt-1 mt-1 font-semibold">
+                        <span className="text-white/90">To winners</span>
+                        <span className="font-mono tabular-nums text-emerald-300">{toWinners}%</span>
+                      </div>
+                    </div>
+                    <p className="text-[10px] text-white/40">
+                      Deducted from the total prize pool before payouts. Players see this in the lobby before they join.
+                    </p>
+                  </div>
+                );
+              })()}
 
               {tournamentType === 'freeroll' && (
                 <div className="grid grid-cols-2 gap-3">
