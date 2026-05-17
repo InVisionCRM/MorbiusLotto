@@ -8,6 +8,7 @@ import { merkleClaimMorbiusAbi } from '@/abi/merkle-claim-morbius';
 import { MERKLE_CLAIM_MORBIUS_ADDRESS } from '@/lib/contracts';
 import { getMerkleClaimPath, getMerkleEpochsPath } from '@/lib/api-urls';
 import { pulsechain } from 'viem/chains';
+import { useGasParams } from '@/lib/tx-gas';
 
 export interface PublishedEpoch {
   id: number;
@@ -160,6 +161,7 @@ export function useMerkleClaims(): UseMerkleClaimsReturn {
   // ── Claim transaction ───────────────────────────────────────────────────────
   const { writeContractAsync } = useWriteContract();
   const publicClient = usePublicClient();
+  const getGas = useGasParams();
   const [claimConfirmed, setClaimConfirmed] = useState(false);
 
   const isClaiming = claimingEpochId !== null;
@@ -179,7 +181,7 @@ export function useMerkleClaims(): UseMerkleClaimsReturn {
           functionName: 'claim',
           args,
           gas: 2_000_000n,
-          maxPriorityFeePerGas: 200_000n,
+          ...getGas(),
           chain: pulsechain,
           account: address,
         });
@@ -204,7 +206,7 @@ export function useMerkleClaims(): UseMerkleClaimsReturn {
         setClaimingEpochId(null);
       }
     },
-    [contractAddress, address, writeContractAsync, refetchClaimed, publicClient],
+    [contractAddress, address, writeContractAsync, refetchClaimed, publicClient, getGas],
   );
 
   const refetch = useCallback(() => {

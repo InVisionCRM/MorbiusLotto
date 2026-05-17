@@ -7,6 +7,7 @@ import { toast } from 'sonner';
 import { merkleClaimLpAbi } from '@/abi/merkle-claim-lp';
 import { MERKLE_CLAIM_LP_ADDRESS } from '@/lib/contracts';
 import { getMerkleLpClaimPath, getMerkleLpEpochsPath } from '@/lib/api-urls';
+import { useGasParams } from '@/lib/tx-gas';
 
 export interface LPPublishedEpoch {
   id: number;
@@ -151,6 +152,7 @@ export function useMerkleClaimsLP(): UseMerkleClaimsLPReturn {
   // Claim transaction
   const { writeContractAsync } = useWriteContract();
   const publicClient = usePublicClient();
+  const getGas = useGasParams();
   const [claimConfirmed, setClaimConfirmed] = useState(false);
 
   const isClaiming = claimingEpochId !== null;
@@ -185,7 +187,7 @@ export function useMerkleClaimsLP(): UseMerkleClaimsLPReturn {
           functionName: 'claim',
           args,
           gas: gasLimit,
-          maxPriorityFeePerGas: 200_000n, // 200k wei/beats tip (PulseChain) for faster inclusion
+          ...getGas(),
         });
         toast.success('Claim submitted! Waiting for confirmation…');
         if (publicClient) {
@@ -207,7 +209,7 @@ export function useMerkleClaimsLP(): UseMerkleClaimsLPReturn {
         setClaimingEpochId(null);
       }
     },
-    [contractAddress, address, writeContractAsync, refetchClaimed, publicClient],
+    [contractAddress, address, writeContractAsync, refetchClaimed, publicClient, getGas],
   );
 
   const refetch = useCallback(() => {

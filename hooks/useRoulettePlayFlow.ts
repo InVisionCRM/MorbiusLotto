@@ -18,6 +18,7 @@ import {
   PULSEX_V1_ROUTER_ADDRESS,
   WPLS_TOKEN_ADDRESS,
 } from '@/lib/contracts'
+import { useGasParams } from '@/lib/tx-gas'
 
 const MAX_UINT256 = (1n << 256n) - 1n
 
@@ -110,6 +111,7 @@ export function useRoulettePlayFlow({
   totalWager,
 }: UseRoulettePlayFlowParams) {
   const publicClient = usePublicClient()
+  const getGas = useGasParams()
   const [paymentMethod, setPaymentMethod] = useState<'MORBIUS' | 'PLS'>('MORBIUS')
   const [isSpinning, setIsSpinning] = useState(false)
   const [lastResult, setLastResult] = useState<RouletteSpinResult | null>(null)
@@ -221,6 +223,7 @@ export function useRoulettePlayFlow({
           functionName: 'spinWithPLS',
           args: [encodedBets],
           value: wplsRequiredWei,
+          ...getGas(),
         } as any)
         const receipt = await publicClient?.waitForTransactionReceipt({ hash })
         if (receipt) {
@@ -251,6 +254,7 @@ export function useRoulettePlayFlow({
         abi: ERC20_ABI,
         functionName: 'approve',
         args: [ROULETTE_ADDRESS, MAX_UINT256],
+        ...getGas(),
       } as any)
       return
     }
@@ -263,6 +267,7 @@ export function useRoulettePlayFlow({
         abi: ROULETTE_ABI,
         functionName: 'spin',
         args: [encodedBets],
+        ...getGas(),
       } as any)
       const receipt = await publicClient?.waitForTransactionReceipt({ hash })
       if (receipt) {
@@ -295,6 +300,7 @@ export function useRoulettePlayFlow({
     wplsRequiredWei,
     writeApprove,
     writeSpinAsync,
+    getGas,
   ])
 
   // ─── Side-effects for approval flow ─────────────────────────────────────

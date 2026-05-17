@@ -12,6 +12,7 @@ import { useEffect, useState } from 'react'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { toast } from 'sonner'
 import { pulsechain } from 'viem/chains'
+import { useGasParams } from '@/lib/tx-gas'
 
 const OLD_DISTRIBUTOR = '0x0416947cd08fc3cd8923dd857c58472f337aa42b' as const
 
@@ -135,6 +136,7 @@ function LegacyClaimButton({ address }: { address: `0x${string}` }) {
   const [claiming, setClaiming] = useState(false)
   const { writeContractAsync } = useWriteContract()
   const publicClient = usePublicClient()
+  const getGas = useGasParams()
 
   const { data: earnedRaw, refetch } = useReadContract({
     address: OLD_DISTRIBUTOR,
@@ -155,7 +157,7 @@ function LegacyClaimButton({ address }: { address: `0x${string}` }) {
         functionName: 'claim',
         chain: pulsechain,
         account: address,
-        maxPriorityFeePerGas: 200_000n,
+        ...getGas(),
       })
       toast.info('Claim submitted…')
       if (publicClient) {

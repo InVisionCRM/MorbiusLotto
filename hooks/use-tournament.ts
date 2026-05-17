@@ -8,6 +8,7 @@ import { MORBIUS_TOURNAMENT_ADDRESS, MORBIUS_TOKEN_ADDRESS } from '@/lib/contrac
 import { morbiusTournamentAbi } from '@/abi/morbius-tournament';
 import { ERC20_ABI } from '@/abi/erc20';
 import { pulsechain } from '@/lib/chains';
+import { useGasParams } from '@/lib/tx-gas';
 import {
   CreateTournamentRequest,
   CreateFreerollRequest,
@@ -137,6 +138,7 @@ export function useTournament(options: UseTournamentOptions) {
   const { address, isConnected } = useAccount();
   const { writeContractAsync } = useWriteContract();
   const publicClient = usePublicClient();
+  const getGas = useGasParams();
 
   // Tournament state
   const [tournamentState, setTournamentState] = useState<TournamentState>({
@@ -784,7 +786,7 @@ export function useTournament(options: UseTournamentOptions) {
           functionName: 'createTournament',
           args: [buyInAmount, BigInt(maxPlayers), prizeToken, prizeAmount],
           chain: pulsechain,
-          maxPriorityFeePerGas: 200_000n, // PulseChain tip
+          ...getGas(),
         });
 
         const receipt = await publicClient.waitForTransactionReceipt({ hash });
@@ -841,7 +843,7 @@ export function useTournament(options: UseTournamentOptions) {
     } finally {
       setIsLoading(false);
     }
-  }, [wsClient, address, writeContractAsync, publicClient]);
+  }, [wsClient, address, writeContractAsync, publicClient, getGas]);
 
   /**
    * Create a new freeroll tournament
@@ -954,7 +956,7 @@ export function useTournament(options: UseTournamentOptions) {
               functionName: 'approve',
               args: [MORBIUS_TOURNAMENT_ADDRESS, buyInWei],
               chain: pulsechain,
-              maxPriorityFeePerGas: 200_000n, // PulseChain tip
+              ...getGas(),
             });
             // Do NOT await receipt here — that would lose the user-gesture context and
             // prevent the join wallet popup from appearing. Instead, wait in the background
@@ -973,7 +975,7 @@ export function useTournament(options: UseTournamentOptions) {
             functionName: 'joinTournament',
             args: [BigInt(onChainTournamentId)],
             chain: pulsechain,
-            maxPriorityFeePerGas: 200_000n, // PulseChain tip
+            ...getGas(),
           });
 
           // Wait for join transaction to confirm
@@ -1029,7 +1031,7 @@ export function useTournament(options: UseTournamentOptions) {
     } finally {
       setIsJoinLoading(false);
     }
-  }, [wsClient, address, writeContractAsync, publicClient]);
+  }, [wsClient, address, writeContractAsync, publicClient, getGas]);
 
   /**
    * Phase 2 of the on-chain join flow for buy-in tournaments.
@@ -1051,7 +1053,7 @@ export function useTournament(options: UseTournamentOptions) {
         functionName: 'joinTournament',
         args: [BigInt(onChainTournamentId)],
         chain: pulsechain,
-        maxPriorityFeePerGas: 200_000n, // PulseChain tip
+        ...getGas(),
       });
 
       if (publicClient) {
@@ -1096,7 +1098,7 @@ export function useTournament(options: UseTournamentOptions) {
     } finally {
       setIsJoinLoading(false);
     }
-  }, [pendingJoinState, writeContractAsync, publicClient, wsClient, address]);
+  }, [pendingJoinState, writeContractAsync, publicClient, wsClient, address, getGas]);
 
   /**
    * Unregister from a tournament during registration phase. MORBIUS platform tournaments only.

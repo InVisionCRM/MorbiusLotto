@@ -34,6 +34,7 @@ import { PlinkoRecentPlays } from '@/components/PLINKO/PlinkoRecentPlays';
 import { PlinkoRecentGames } from '@/components/PLINKO/PlinkoRecentGames';
 import { PlinkoPlayerDashboard } from '@/components/PLINKO/PlinkoPlayerDashboard';
 import type { PlayerProfileGame } from '@/components/shared/PlayerProfileModal';
+import { useGasParams } from '@/lib/tx-gas';
 
 interface IntroScreenProps {
   onComplete: () => void;
@@ -158,6 +159,7 @@ const Home: React.FC = () => {
   const playerInfo = usePlayerInfo(address);
   const wagerLimitsData = useWagerLimits();
   const { writeContractAsync } = usePlinkoWrite();
+  const getGas = useGasParams();
   const { wplsPerMORBIUS, morbiusPerPLS, isLoading: isLoadingPrice, error: priceError, source: priceSource } = useWplsPrice(); // Get PLS/MORBIUS price for native PLS purchases
   const [buyBallsCount, setBuyBallsCount] = useState(10);
   const [wagerPerBall, setWagerPerBall] = useState(10); // Default 10 MORBIUS per ball (V5)
@@ -445,7 +447,7 @@ const Home: React.FC = () => {
         abi: PLINKO_ABI,
         functionName: 'dropMultipleBalls',
         args: [BigInt(ballsToUpdate), Number(contractRiskLevel)],
-        maxPriorityFeePerGas: 200_000n, // 200k wei/beats tip (PulseChain) for faster inclusion
+        ...getGas(),
       });
 
       // Wait for transaction confirmation with polling
@@ -477,7 +479,7 @@ const Home: React.FC = () => {
       const errorMessage = error instanceof Error ? error.message : 'Unknown error';
       alert(`Failed to drop balls: ${errorMessage}`);
     }
-  }, [address, isConnected, contractBallBalance, writeContractAsync, publicClient, playerInfo, pollForReceipt]);
+  }, [address, isConnected, contractBallBalance, writeContractAsync, publicClient, playerInfo, pollForReceipt, getGas]);
 
   const dropBall = useCallback((risk: RiskLevel) => {
     // Update selected risk level
