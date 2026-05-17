@@ -177,7 +177,7 @@ export interface CustomTokenBuyInMeta {
 
 /**
  * Funding payload supplied by the client when the prize pool is held in the
- * `TournamentPrizeEscrowV2` contract for an arbitrary PRC-20 token.
+ * `TournamentPrizeEscrow` contract for an arbitrary PRC-20 token.
  *
  * The client deposits BEFORE this call; the server re-reads on-chain state to
  * verify the deposit is real, matches the supplied token + amount, and was made
@@ -225,6 +225,8 @@ export interface CreatePokerTournamentParams {
   pinCode?: string | null;
   /** Required — must be a finite `Date` strictly in the future (enforced at create). */
   scheduledStartAt: Date;
+  /** Creator's chosen fee percent (0–15 integer). Clamped server-side; default 2. */
+  creatorFeePercent?: number;
 }
 
 /**
@@ -768,6 +770,14 @@ export class PokerTournamentService {
     try {
       await client.query('BEGIN');
 
+      // Creator-chosen fee (0–15 integer). Default 2 if missing/invalid. DB CHECK constraint
+      // (migration 120) provides a second line of defense. Freerolls override to 0 at payout
+      // time (server-side in tournament.service.ts:1083) but we still persist the user's choice.
+      const rawCreatorFee = Number(params.creatorFeePercent);
+      const creatorFeePercent = Number.isFinite(rawCreatorFee)
+        ? Math.max(0, Math.min(15, Math.round(rawCreatorFee)))
+        : 2;
+
       const result = await client.query(
         `INSERT INTO tournaments (
         id,
@@ -783,7 +793,7 @@ export class PokerTournamentService {
         $1, $2, $3::NUMERIC, $4, 999, $5,
         $6, $7::JSONB, $8::JSONB, $9, $10,
         $11, $12::JSONB, $13::NUMERIC, $14,
-        2, 3, 'registration',
+        $24, 3, 'registration',
         'poker', $15::JSONB, $16,
         $18, $19, $20, $21,
         $22, $23
@@ -812,6 +822,7 @@ export class PokerTournamentService {
           escrowVerified?.name ?? customBuyInRow?.name ?? null,
           escrowVerified?.txHash ?? null,
           escrowVerified?.bytes32Id ?? customBuyInRow?.bytes32Id ?? null,
+          creatorFeePercent,
         ]
       );
 
@@ -2233,7 +2244,9 @@ export class PokerTournamentService {
     if (metaRes.rows.length === 0) return;
     const meta = metaRes.rows[0];
     const grossPool = toBigIntSafe(meta.prize_pool);
-    const creatorPct = Math.min(100, Math.max(0, Number(meta.creator_fee_percent ?? 2)));
+    // Creator fee bound to 0–15 (migration 120 + UI slider). Defense-in-depth clamp here in case
+    // an old row predates the constraint or somehow holds a stale value.
+    const creatorPct = Math.min(15, Math.max(0, Number(meta.creator_fee_percent ?? 2)));
     const platformPct = Math.min(100, Math.max(0, Number(meta.platform_fee_percent ?? 3)));
 
     let totalHands = 0;
@@ -2710,6 +2723,9 @@ export class PokerTournamentService {
         smallBlind,
         bigBlind,
         blindIncreaseMode,
+        // Exposed to clients so the buy-in panel + lobby can show "X% to creator, Y% to winners".
+        // Migration 120 caps the column to 0–15; old rows default to 2 via DB default + JS fallback.
+        creatorFeePercent:     r.creator_fee_percent != null ? Number(r.creator_fee_percent) : 2,
       };
     });
   }

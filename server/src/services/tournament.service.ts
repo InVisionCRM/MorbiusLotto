@@ -134,6 +134,8 @@ export interface CreateTournamentParams {
   pinCode?: string | null;
   /** uint256 from MorbiusTournament.createTournament; when set, create/join use on-chain flow */
   onChainTournamentId?: number | bigint | null;
+  /** Creator's chosen fee percent (0–15 integer). Clamped server-side; default 2. */
+  creatorFeePercent?: number;
 }
 
 /** Create freeroll tournament (no buy-in, scheduled start). Chip-count only. */
@@ -155,6 +157,11 @@ export interface CreateFreerollParams {
   prizeTokenAddress?: string | null;
   prizeAmount?: string;
   prizeTokenDecimals?: number | null;
+  /**
+   * Creator's chosen fee percent (0–15 integer). Persisted on the row but the payout path
+   * overrides freerolls to 0% since the creator funds the pool themselves.
+   */
+  creatorFeePercent?: number;
 }
 
 // Freeroll list item (from list_freeroll_tournaments)
@@ -1073,14 +1080,19 @@ export class TournamentService {
 
       // Fees — same pattern: queue on-chain, apply off-chain in transaction.
       //
-      // Poker freerolls (buy_in_amount = 0) redirect the 2% creator fee to the platform,
+      // Poker freerolls (buy_in_amount = 0) redirect the creator fee to the platform,
       // so the full 5% goes to the platform wallet. The creator funded the prize pool,
-      // so paying them 2% of their own funds back is meaningless — it just rounds the
-      // donation. Blackjack and all buy-in tournaments keep the 3/2 split unchanged.
+      // so paying them N% of their own funds back is meaningless — it just rounds the
+      // donation. Buy-in tournaments use the creator's chosen percent (0–15, default 2)
+      // from `tournaments.creator_fee_percent`, hard-clamped here as a final defense
+      // against any out-of-range value that bypassed the API + DB CHECK constraint.
       const isPokerFreeroll =
         String(tournament.game_type ?? '') === 'poker' && tournament.buy_in_amount === 0n;
       const platformFeePercent = isPokerFreeroll ? 5 : 3;
-      const creatorFeePercent = isPokerFreeroll ? 0 : 2;
+      const rawCreatorFee = Number(tournament.creator_fee_percent ?? 2);
+      const creatorFeePercent = isPokerFreeroll
+        ? 0
+        : Math.max(0, Math.min(15, Number.isFinite(rawCreatorFee) ? Math.round(rawCreatorFee) : 2));
       const totalPool = actualPrizePool;
 
       const platformWalletEnv = process.env.PLATFORM_FEE_WALLET?.trim();
@@ -1634,7 +1646,12 @@ export class TournamentService {
     const initialPrizePool = hasCustomPrizeToken && params.prizeAmount ? params.prizeAmount : '0';
 
     const platformFeePercent = 3;
-    const creatorFeePercent = 2;
+    // Creator-chosen fee. Clamp 0–15, default 2 if missing / invalid. DB CHECK constraint
+    // (migration 120) provides a second line of defense.
+    const rawCreatorFee = Number(params.creatorFeePercent);
+    const creatorFeePercent = Number.isFinite(rawCreatorFee)
+      ? Math.max(0, Math.min(15, Math.round(rawCreatorFee)))
+      : 2;
 
     const onChainId = params.onChainTournamentId != null ? Number(params.onChainTournamentId) : null;
     const minPlayers = this.getMinPlayersFromPrizeDistribution(params.prizeDistributionType);
@@ -1776,7 +1793,12 @@ export class TournamentService {
     const rebuyConfig = { enabled: false, maxRebuys: 0 };
 
     const platformFeePercent = 3;
-    const creatorFeePercent = 2;
+    // Creator-chosen fee. Freerolls store the choice, but payout overrides to 0
+    // (see fees section near tournament.service.ts:1083). Clamp 0–15, default 2.
+    const rawCreatorFee = Number(params.creatorFeePercent);
+    const creatorFeePercent = Number.isFinite(rawCreatorFee)
+      ? Math.max(0, Math.min(15, Math.round(rawCreatorFee)))
+      : 2;
 
     const hasCustomPrizeToken = params.prizeTokenAddress != null && params.prizeTokenAddress.trim() !== '';
     const initialPrizePool = hasCustomPrizeToken && params.prizeAmount ? params.prizeAmount : '0';

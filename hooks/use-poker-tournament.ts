@@ -122,11 +122,13 @@ export interface PokerTournamentSummary {
   smallBlind?: number;
   bigBlind?: number;
   blindIncreaseMode?: PokerBlindIncreaseMode;
+  /** Creator-chosen fee cut (0–15 integer); falls back to 2 if missing on the row. */
+  creatorFeePercent?: number;
 }
 
 /**
  * Funding payload supplied when `guaranteedPrizePoolSource === 'custom_token'`.
- * The client deposits to `TournamentPrizeEscrowV2` BEFORE calling create; the
+ * The client deposits to `TournamentPrizeEscrow` BEFORE calling create; the
  * server re-reads on-chain state and rejects if anything doesn't match.
  *
  * `tournamentId` is a client-generated UUID v4 used as both the DB row id and
@@ -178,6 +180,8 @@ export interface CreatePokerTournamentParams {
   pinCode?: string;
   /** ISO 8601 start time — required; server rejects missing or past times. */
   scheduledStartAt: string;
+  /** Creator's chosen fee percent (0–15 integer). Server clamps + defaults to 2 if missing. */
+  creatorFeePercent?: number;
 }
 
 export const DEFAULT_BLIND_SCHEDULE: BlindLevel[] = [

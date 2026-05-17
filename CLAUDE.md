@@ -45,7 +45,7 @@ cd contracts && npx hardhat test
 
 ### Smart Contracts (`contracts/`, `abi/`)
 - Solidity contracts deployed on PulseChain; ABIs compiled to `abi/`
-- Key contracts: Lottery6of55, Plinko, Blackjack, Keno, MorbiusTournament, TournamentPrizeEscrowV3
+- Key contracts: Lottery6of55, Plinko, Blackjack, Keno, MorbiusTournament, TournamentPrizeEscrow (V5 live, V6 gas-optimized successor pending deploy)
 - Contract addresses centralized in `lib/contracts.ts`
 
 ## Key Patterns

@@ -161,7 +161,7 @@ contract MorbiusTournament is Ownable, ReentrancyGuard {
 
     /**
      * @notice Pay out prize to winner. Only for platform MORBIUS tournaments.
-     *         Custom token payouts go through TournamentPrizeEscrowV3.
+     *         Custom token payouts go through TournamentPrizeEscrow.
      */
     function payout(uint256 tournamentId, address winner, uint256 amount) external onlyAuthorizedServer nonReentrant {
         require(winner != address(0), "Invalid winner");

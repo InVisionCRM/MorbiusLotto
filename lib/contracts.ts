@@ -106,8 +106,13 @@ export const LEGACY_BLACKJACK_ADDRESSES: readonly `0x${string}`[] = [
   ...(BLACKJACK_LEGACY_ADDRESS_7 ? [BLACKJACK_LEGACY_ADDRESS_7] : []),
 ]
 
-// Tournament Prize Escrow V5 (addToPrizePool + V4-compatible ABI). Override via NEXT_PUBLIC_TOURNAMENT_PRIZE_ESCROW_ADDRESS after deploy.
-const DEFAULT_TOURNAMENT_PRIZE_ESCROW_ADDRESS = '0xA54da628C54d2C9885a537f18dc9c22856510eDf' as const
+// Tournament Prize Escrow V6 (gas-optimized: packed Pool struct, no tournamentIds array, optional EIP-2612 permit).
+// Deployed at 0xF3E44A91847Ed037C63A7DBe4eba0B51367477a7 on PulseChain (verified, tx 0x7657...8290).
+// Override via NEXT_PUBLIC_TOURNAMENT_PRIZE_ESCROW_ADDRESS for future redeploys without code changes.
+const DEFAULT_TOURNAMENT_PRIZE_ESCROW_ADDRESS = '0xF3E44A91847Ed037C63A7DBe4eba0B51367477a7' as const
+
+/** Previous live escrow (V5). Kept only so funds parked in old V5 pools can still be queried / reclaimed. */
+export const TOURNAMENT_PRIZE_ESCROW_V5_LEGACY_ADDRESS = '0xA54da628C54d2C9885a537f18dc9c22856510eDf' as const
 
 function resolveTournamentPrizeEscrowAddress(): `0x${string}` {
   const raw =
@@ -121,14 +126,11 @@ function resolveTournamentPrizeEscrowAddress(): `0x${string}` {
 
 export const TOURNAMENT_PRIZE_ESCROW_ADDRESS = resolveTournamentPrizeEscrowAddress()
 
-/** Legacy V2 address — kept only so funds parked in old pools can still be reclaimed. */
-export const TOURNAMENT_PRIZE_ESCROW_V2_LEGACY_ADDRESS = '0x52cbF18A8AE0Fd4324B045E13532d35CF05Af3e1' as const
+/** Same as the default `TOURNAMENT_PRIZE_ESCROW_ADDRESS` post-cutover; exposed for code that wants to assert V6 specifically. */
+export const TOURNAMENT_PRIZE_ESCROW_V6_ADDRESS = DEFAULT_TOURNAMENT_PRIZE_ESCROW_ADDRESS
 
 // MorbiusTournament (on-chain create/join, uint256 IDs)
 export const MORBIUS_TOURNAMENT_ADDRESS = '0x1F30Aa16B4Da0124308E33b8650C351BBCA70704' as const
-
-/** @deprecated Use TOURNAMENT_PRIZE_ESCROW_ADDRESS (V2) - V3 kept for legacy cancel/reclaim */
-export const TOURNAMENT_PRIZE_ESCROW_V3_ADDRESS = '0xa114a8974D4478b09FE9d2E2bf1BdCF28dE5bd25' as const
 
 // MORBIUS Holder Distributor (receives MORBIUS; holders claim proportional share)
 // V1: 0x011eE5F4658c5183FB9f8cd72e264ca5DBd404ab (original; has ~1100 MORBIUS)

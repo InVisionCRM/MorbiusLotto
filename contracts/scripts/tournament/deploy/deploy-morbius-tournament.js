@@ -7,7 +7,7 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
 /**
  * Deploy MorbiusTournament contract.
- * Uses uint256 tournament IDs. Works with TournamentPrizeEscrowV3 for custom token prizes.
+ * Uses uint256 tournament IDs. Works with TournamentPrizeEscrow for custom token prizes.
  *
  * Usage:
  *   cd contracts && npx hardhat run scripts/deploy-morbius-tournament.js --network pulsechain

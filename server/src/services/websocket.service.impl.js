@@ -1736,6 +1736,8 @@ class WebSocketService {
                 isPrivate: p.isPrivate ?? false,
                 pinCode: p.pinCode ?? null,
                 scheduledStartAt,
+                // Creator-chosen fee 0–15; the service clamps + defaults to 2 if missing/invalid.
+                creatorFeePercent: p.creatorFeePercent,
             });
             this.sendMessage(ws, { type: 'poker_tournament_created', payload: result, requestId: message.requestId });
         }
@@ -2489,6 +2491,8 @@ class WebSocketService {
                 prizeTokenDecimals: payload.prizeTokenDecimals,
                 pinCode: payload.pinCode,
                 onChainTournamentId: payload.onChainTournamentId != null ? payload.onChainTournamentId : undefined,
+                // Creator-chosen fee 0–15; the service clamps + defaults to 2 if missing/invalid.
+                creatorFeePercent: payload.creatorFeePercent,
             });
             const prizePercentages = this.getPrizePercentagesForType(tournament.prize_distribution_type);
             this.sendMessage(ws, {
@@ -2591,6 +2595,8 @@ class WebSocketService {
                 prizeTokenAddress: payload.prizeTokenAddress,
                 prizeAmount: payload.prizeAmount,
                 prizeTokenDecimals: payload.prizeTokenDecimals,
+                // Persisted but the payout path overrides freerolls to 0% (the creator funded the pool).
+                creatorFeePercent: payload.creatorFeePercent,
             });
             this.sendMessage(ws, {
                 type: 'freeroll_created',

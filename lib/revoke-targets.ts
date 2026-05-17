@@ -12,8 +12,6 @@ import {
   MORBIUS_STAKING_ADDRESS,
   MORBIUS_LP_STAKING_ADDRESS,
   TOURNAMENT_PRIZE_ESCROW_ADDRESS,
-  TOURNAMENT_PRIZE_ESCROW_V2_LEGACY_ADDRESS,
-  TOURNAMENT_PRIZE_ESCROW_V3_ADDRESS,
   MORBIUS_TOURNAMENT_ADDRESS,
 } from './contracts'
 
@@ -68,10 +66,6 @@ const RAW_PAIRS: Pair[] = [
     spenderLabel: `Blackjack (legacy${LEGACY_BLACKJACK_ADDRESSES.length > 1 ? ` ${i + 1}` : ''})`,
     isLegacy: true,
   })),
-  { token: MORBIUS_TOKEN_ADDRESS, tokenLabel: 'MORBIUS', spender: TOURNAMENT_PRIZE_ESCROW_V2_LEGACY_ADDRESS, spenderLabel: 'Prize Escrow (V2 legacy)', isLegacy: true },
-  { token: MORBIUS_TOKEN_ADDRESS, tokenLabel: 'MORBIUS', spender: TOURNAMENT_PRIZE_ESCROW_V3_ADDRESS, spenderLabel: 'Prize Escrow (V3 legacy)', isLegacy: true },
-  { token: WPLS_TOKEN_ADDRESS, tokenLabel: 'WPLS', spender: TOURNAMENT_PRIZE_ESCROW_V2_LEGACY_ADDRESS, spenderLabel: 'Prize Escrow (V2 legacy)', isLegacy: true },
-  { token: WPLS_TOKEN_ADDRESS, tokenLabel: 'WPLS', spender: TOURNAMENT_PRIZE_ESCROW_V3_ADDRESS, spenderLabel: 'Prize Escrow (V3 legacy)', isLegacy: true },
 ]
 
 export const REVOKE_TARGETS: RevokeTarget[] = RAW_PAIRS

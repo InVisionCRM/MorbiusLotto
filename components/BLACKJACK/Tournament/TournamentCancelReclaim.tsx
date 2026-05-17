@@ -7,7 +7,7 @@ import { formatEther } from 'viem';
 import { pulsechain } from 'viem/chains';
 import type { BlackjackWebSocketClient } from '@/lib/websocket-client';
 import { TOURNAMENT_PRIZE_ESCROW_ADDRESS } from '@/lib/contracts';
-import { tournamentPrizeEscrowV2Abi } from '@/abi/tournament-prize-escrow-v2';
+import { tournamentPrizeEscrowV6Abi } from '@/abi/tournament-prize-escrow-v6';
 import { tournamentIdToBytes32 } from '@/lib/tournament-id-bytes32';
 import { useGasParams } from '@/lib/tx-gas';
 
@@ -104,7 +104,7 @@ export function TournamentCancelReclaim({
       const idBytes32 = tournamentIdToBytes32(tournamentId);
       const hash = await writeContractAsync({
         address: TOURNAMENT_PRIZE_ESCROW_ADDRESS,
-        abi: tournamentPrizeEscrowV2Abi,
+        abi: tournamentPrizeEscrowV6Abi,
         functionName: 'creatorReclaim',
         args: [idBytes32],
         account: address,
