@@ -31,6 +31,27 @@ export function registerPokerReadRoutes({
     }
   });
 
+  app.get('/api/poker/player/:address/chip-ledger', async (req, res) => {
+    try {
+      const { address } = req.params;
+      if (!address || !ADDRESS_REGEX.test(address)) {
+        return res.status(400).json({ error: 'Invalid address' });
+      }
+      const limit = Math.min(Math.max(parseInt(req.query.limit as string) || 5, 1), 200);
+      const offset = Math.max(parseInt(req.query.offset as string) || 0, 0);
+      const rawCategory = String(req.query.category ?? 'all');
+      const category: 'all' | 'cash' | 'tournaments' | 'exchanges' =
+        rawCategory === 'cash' || rawCategory === 'tournaments' || rawCategory === 'exchanges'
+          ? rawCategory
+          : 'all';
+      const data = await dbService.getPokerChipLedger(address, { limit, offset, category });
+      sendJson(res, data);
+    } catch (error) {
+      logger.error('Error fetching poker chip ledger:', error);
+      res.status(500).json({ error: 'Internal server error' });
+    }
+  });
+
   app.get('/api/poker/player/:address/stats', async (req, res) => {
     try {
       const { address } = req.params;
