@@ -16,6 +16,12 @@ export interface BettingPanelMobileProps {
   playerReserves?: bigint;
   /** Active tier limits — defaults to BET_LIMITS if not provided */
   betLimits?: { MIN_BET: bigint; MAX_BET: bigint };
+  /** Token logo shown next to the bet input. Defaults to MORBIUS. */
+  logoUrl?: string;
+  /** Alt text for the token logo. Defaults to "MORBIUS". */
+  logoAlt?: string;
+  /** When provided, the logo becomes a button that opens the table switcher. */
+  onLogoClick?: () => void;
 }
 
 /** Betting panel for all screens: amount input, Morbius logo, 1/2 and 2x buttons. Chip stack on table updates as user types. */
@@ -28,6 +34,9 @@ export function BettingPanelMobile({
   onDoubleBet,
   playerReserves,
   betLimits = BET_LIMITS,
+  logoUrl = '/morbius/MorbiusLogo (3).png',
+  logoAlt = 'MORBIUS',
+  onLogoClick,
 }: BettingPanelMobileProps) {
   const numValue = Math.floor(parseFloat(currentBetAmount || '0') || 0);
   const displayValue = numValue === 0 ? '0' : String(numValue);
@@ -139,13 +148,33 @@ export function BettingPanelMobile({
               placeholder={`Min ${formatThousands(minBetNum)} · Max ${formatThousands(maxBetNum)}`}
               aria-label="Bet amount in MORBIUS"
             />
-            <Image
-              src="/morbius/MorbiusLogo (3).png"
-              alt="MORBIUS"
-              width={20}
-              height={20}
-              className="object-contain flex-shrink-0"
-            />
+            {onLogoClick ? (
+              <button
+                type="button"
+                onClick={onLogoClick}
+                className="shrink-0 rounded-full p-0.5 hover:bg-white/10 active:bg-white/15 transition-colors"
+                aria-label={`Switch table (current: ${logoAlt})`}
+                title={`Switch table — currently ${logoAlt}`}
+              >
+                <Image
+                  src={logoUrl}
+                  alt={logoAlt}
+                  width={20}
+                  height={20}
+                  className="object-contain"
+                  unoptimized
+                />
+              </button>
+            ) : (
+              <Image
+                src={logoUrl}
+                alt={logoAlt}
+                width={20}
+                height={20}
+                className="object-contain flex-shrink-0"
+                unoptimized
+              />
+            )}
           </div>
           {/* 1/2 and 2x */}
           <div className="flex items-stretch flex-shrink-0">
