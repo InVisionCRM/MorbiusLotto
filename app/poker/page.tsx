@@ -20,12 +20,12 @@ import {
   POKER_CASH_MIN_BUY_IN_BB,
 } from '@/lib/poker-buy-in';
 import { formatChips, parseChipInput } from '@/lib/format-poker-chips';
-import { formatMorbiusFloor } from '@/lib/format-morbius-display';
 import { PokerChipExchangeModal } from '@/components/poker/PokerChipExchangeModal';
 import { InsufficientBalanceDialog } from '@/components/shared/InsufficientBalanceDialog';
 import { PokerOnboardingWizard } from '@/components/poker/PokerOnboardingWizard';
 import { PokerOnboardingChecklist } from '@/components/poker/PokerOnboardingChecklist';
 import { PokerYourStatsPanel } from '@/components/poker/PokerYourStatsPanel';
+import { PokerBalanceBar } from '@/components/poker/PokerBalanceBar';
 import { usePokerOnboarding } from '@/hooks/use-poker-onboarding';
 import { PokerBetaSplash } from '@/components/poker/PokerBetaSplash';
 import { PokerHowToPlayModal } from '@/components/poker/PokerHowToPlayModal';
@@ -42,7 +42,7 @@ import {
   MorbInput,
   MorbHeroAmount,
 } from '@/components/ui/morb-card';
-import { Coins, Lock } from 'lucide-react';
+import { Lock } from 'lucide-react';
 import { formatDistanceToNow } from 'date-fns';
 
 function shortenHexAddress(addr: string | null | undefined): string {
@@ -152,6 +152,7 @@ export default function PokerLobbyPage() {
   const [showHowToPlay, setShowHowToPlay] = useState(false);
   const [showStatsModal, setShowStatsModal] = useState(false);
   const [showDepositModal, setShowDepositModal] = useState(false);
+  const [walletDefaultTab, setWalletDefaultTab] = useState<'deposit' | 'withdraw'>('deposit');
   const [showChipExchange, setShowChipExchange] = useState(false);
   const [showInsufficientChips, setShowInsufficientChips] = useState(false);
   const [showOnboardingWizard, setShowOnboardingWizard] = useState(false);
@@ -689,79 +690,16 @@ export default function PokerLobbyPage() {
             </div>
 
             {isConnected && address && (
-              <section
-                className="relative mb-6 sm:mb-8 rounded-2xl sm:rounded-3xl overflow-hidden border-2 border-white/25"
-                style={{
-                  background: 'linear-gradient(325deg, rgba(20, 20, 20, 0.8), rgba(40, 40, 40, 0.6))',
-                  boxShadow:
-                    'inset 0 3px 6px rgba(0, 0, 0, 0.8), inset 0 -3px 6px rgba(255, 255, 255, 0.1), 0 1px 3px rgba(0, 0, 0, 0.5), 0 0 50px rgba(34, 211, 238, 0.06)',
-                }}
-              >
-                <div className="absolute inset-0 pointer-events-none bg-[radial-gradient(ellipse_90%_80%_at_50%_0%,rgba(34,211,238,0.15),transparent_55%)]" />
-                <div className="absolute inset-0 pointer-events-none bg-[radial-gradient(circle_at_100%_50%,rgba(34,211,238,0.08),transparent_50%)]" />
-                <div className="relative h-1 bg-gradient-to-r from-transparent via-cyan-400/50 to-transparent" aria-hidden />
-                <div className="relative px-4 py-5 sm:px-8 sm:py-6 flex flex-col lg:flex-row lg:items-center gap-5 lg:gap-8">
-                  <div className="flex items-start gap-3 sm:gap-4 min-w-0 flex-1">
-                    <div
-                      className="shrink-0 w-12 h-12 sm:w-14 sm:h-14 rounded-2xl flex items-center justify-center border border-white/30"
-                      style={{
-                        background: 'linear-gradient(145deg, rgb(16, 26, 35), rgb(35, 36, 41))',
-                        boxShadow: 'inset 0 3px 6px rgba(0,0,0,0.8), 0 0 20px rgba(34,211,238,0.12)',
-                      }}
-                    >
-                      <Coins className="w-6 h-6 sm:w-7 sm:h-7 text-cyan-300" aria-hidden />
-                    </div>
-                    <div className="min-w-0 pt-0.5">
-                      <h2 className="text-base sm:text-lg font-black tracking-tight text-white">
-                        MORBIUS <span className="text-cyan-400/90">↔</span> poker chips
-                      </h2>
-                      <p className="text-xs sm:text-sm text-slate-500 mt-1 max-w-md leading-relaxed">
-                        Same rate everywhere at the table: 1 chip = 1 MORBIUS. Move funds before you sit.
-                      </p>
-                    </div>
-                  </div>
-                  <div className="flex flex-col sm:flex-row items-stretch sm:items-end gap-4 lg:gap-6 lg:ml-auto">
-                    <div className="grid grid-cols-2 gap-3 sm:gap-6 flex-1 sm:flex-initial min-w-0">
-                      <div
-                        className="rounded-xl px-4 py-3 border border-white/[0.06]"
-                        style={{
-                          background: 'linear-gradient(145deg, rgba(0,0,0,0.35), rgba(30,30,30,0.25))',
-                          boxShadow: 'inset 0 2px 4px rgba(0,0,0,0.5)',
-                        }}
-                      >
-                        <div className="text-[10px] uppercase tracking-[0.2em] text-slate-500 font-bold">Play balance</div>
-                        <div className="text-xl sm:text-2xl font-black tabular-nums text-white mt-1 leading-none truncate">
-                          {balance != null ? formatMorbiusFloor(balance) : '—'}
-                        </div>
-                        <div className="text-[10px] text-cyan-500/60 font-semibold mt-1.5">MORBIUS</div>
-                      </div>
-                      <div
-                        className="rounded-xl px-4 py-3 border border-white/20"
-                        style={{
-                          background: 'linear-gradient(145deg, rgba(6, 55, 65, 0.25), rgba(20, 20, 20, 0.45))',
-                          boxShadow: 'inset 0 2px 4px rgba(0,0,0,0.5), 0 0 24px rgba(34,211,238,0.06)',
-                        }}
-                      >
-                        <div className="text-[10px] uppercase tracking-[0.2em] text-slate-500 font-bold">Poker chips</div>
-                        <div className="text-xl sm:text-2xl font-black tabular-nums text-cyan-200 mt-1 leading-none truncate">
-                          {chipBalance != null ? formatChips(chipBalance) : '—'}
-                        </div>
-                      </div>
-                    </div>
-                    <button
-                      type="button"
-                      onClick={() => setShowChipExchange(true)}
-                      className="shrink-0 w-full sm:w-auto min-h-[3rem] px-6 sm:px-8 rounded-xl text-sm font-bold text-white transition-all hover:opacity-95 hover:scale-[1.02] active:scale-[0.99] border border-white/20"
-                      style={{
-                        background: 'linear-gradient(135deg, #0891b2, #2563eb)',
-                        boxShadow: '0 8px 32px rgba(6, 182, 212, 0.25), 0 0 0 1px rgba(34, 211, 238, 0.2), inset 0 1px 0 rgba(255,255,255,0.15)',
-                      }}
-                    >
-                      Open exchange
-                    </button>
-                  </div>
-                </div>
-              </section>
+              <div className="mb-6 sm:mb-8">
+                <PokerBalanceBar
+                  address={address.toLowerCase()}
+                  morbiusBalanceWei={balance}
+                  chipBalance={chipBalance}
+                  onDeposit={() => { setWalletDefaultTab('deposit'); setShowDepositModal(true); }}
+                  onWithdraw={() => { setWalletDefaultTab('withdraw'); setShowDepositModal(true); }}
+                  onOpenExchange={() => setShowChipExchange(true)}
+                />
+              </div>
             )}
 
             {isConnected && address && (
@@ -1304,6 +1242,7 @@ export default function PokerLobbyPage() {
         isOpen={showDepositModal}
         onClose={() => setShowDepositModal(false)}
         balanceLabel="Poker Balance"
+        defaultTab={walletDefaultTab}
       />
       <PokerChipExchangeModal
         isOpen={showChipExchange}
