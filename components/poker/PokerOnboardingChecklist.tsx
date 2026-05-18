@@ -2,7 +2,7 @@
 
 import React, { useMemo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Check, ArrowRight, X } from 'lucide-react';
+import { ArrowRight, X } from 'lucide-react';
 import type { PokerOnboardingStep } from '@/hooks/use-poker-onboarding';
 
 export interface PokerOnboardingChecklistProps {
@@ -16,38 +16,58 @@ export interface PokerOnboardingChecklistProps {
   onDismiss: () => void;
 }
 
+type RowState = 'done' | 'active' | 'todo';
 interface Row {
-  label: string;
-  state: 'done' | 'active' | 'todo';
+  /** Short tag shown in the brutalist label strip. */
+  tag: string;
+  state: RowState;
 }
 
+const NUMBER_WORDS = ['Zero', 'One', 'Two', 'Three', 'Four'] as const;
+
 function rowsForStep(step: PokerOnboardingStep, isConnected: boolean): Row[] {
-  const get = (idx: 1 | 2 | 3 | 4): 'done' | 'active' | 'todo' => {
+  const get = (idx: 1 | 2 | 3 | 4): RowState => {
     if (step === 5) return 'done';
-    // For row 1 (Connect wallet), use isConnected as the source of truth.
     if (idx === 1) return isConnected ? 'done' : 'active';
-    // Map "Get MORBIUS" → step >= 2 means we're past it.
     if (idx === 2) {
       if (step >= 2) return 'done';
       if (step === 1) return 'active';
       return 'todo';
     }
-    // "Deposit & convert to chips" → step >= 4 means done.
     if (idx === 3) {
       if (step >= 4) return 'done';
       if (step === 2 || step === 3) return 'active';
       return 'todo';
     }
-    // "Play your first hand" → only done at step 5.
     if (step === 4) return 'active';
     return 'todo';
   };
   return [
-    { label: 'Connect your wallet', state: get(1) },
-    { label: 'Get MORBIUS in your wallet', state: get(2) },
-    { label: 'Deposit & convert to chips', state: get(3) },
-    { label: 'Sit down at a table', state: get(4) },
+    { tag: 'Wallet', state: get(1) },
+    { tag: 'MORBIUS', state: get(2) },
+    { tag: 'Chips', state: get(3) },
+    { tag: 'Sit', state: get(4) },
   ];
+}
+
+function subtitleFor(step: PokerOnboardingStep, isConnected: boolean): string {
+  if (!isConnected) {
+    return 'Connect your wallet up top to start. Four quick steps and you’re at the table.';
+  }
+  if (step === 1) return 'First up: grab some MORBIUS on PulseX and we’ll walk you through the rest.';
+  if (step === 2) return 'MORBIUS is in your wallet. Deposit it to your play balance next.';
+  if (step === 3) return 'Funded. One more swap to chips and you’re sitting down.';
+  if (step === 4) return 'You’ve connected, funded, and stacked your chips. Pick any open seat below and you’re in.';
+  return 'Almost there — we’ll walk you through each step.';
+}
+
+function ctaLabelFor(step: PokerOnboardingStep): string {
+  if (step === 0) return 'Connect wallet';
+  if (step === 1) return 'Get MORBIUS';
+  if (step === 2) return 'Deposit MORBIUS';
+  if (step === 3) return 'Get chips';
+  if (step === 4) return 'Pick a table';
+  return 'Continue setup';
 }
 
 export function PokerOnboardingChecklist({
@@ -60,19 +80,12 @@ export function PokerOnboardingChecklist({
   const visible = step < 5 && !dismissed;
 
   const rows = useMemo(() => rowsForStep(step, isConnected), [step, isConnected]);
-  const completed = rows.filter((r) => r.state === 'done').length;
-  const total = rows.length;
-  const pct = Math.round((completed / total) * 100);
-
-  // Friendly call-to-action text per step.
-  const ctaLabel = useMemo(() => {
-    if (step === 0) return 'Connect wallet to start';
-    if (step === 1) return 'Get MORBIUS';
-    if (step === 2) return 'Deposit MORBIUS';
-    if (step === 3) return 'Get chips';
-    if (step === 4) return "I'm ready — pick a table";
-    return 'Continue setup';
-  }, [step]);
+  const done = rows.filter((r) => r.state === 'done').length;
+  const remaining = rows.length - done;
+  const remainingWord = NUMBER_WORDS[remaining] ?? String(remaining);
+  const remainingNoun = remaining === 1 ? 'Step left' : 'Steps left';
+  const subtitle = subtitleFor(step, isConnected);
+  const ctaLabel = ctaLabelFor(step);
 
   return (
     <AnimatePresence>
@@ -82,95 +95,165 @@ export function PokerOnboardingChecklist({
           animate={{ opacity: 1, y: 0 }}
           exit={{ opacity: 0, y: -8 }}
           transition={{ duration: 0.22 }}
-          className="relative rounded-2xl border border-cyan-500/30 overflow-hidden"
+          className="relative rounded-2xl overflow-hidden border border-cyan-500/25"
           style={{
-            background: 'linear-gradient(135deg, rgba(6,182,212,0.10), rgba(59,130,246,0.05))',
-            boxShadow: '0 0 32px rgba(34,211,238,0.08), inset 0 1px 0 rgba(255,255,255,0.04)',
+            background: 'linear-gradient(135deg, #0c1929 0%, #050a14 100%)',
           }}
         >
-          <div className="px-4 py-3 sm:px-5 sm:py-4 flex items-start gap-4 flex-col sm:flex-row">
-            <div className="flex-1 min-w-0 w-full">
-              <div className="flex items-center justify-between gap-3">
-                <div className="flex items-center gap-2">
-                  <span className="text-[10px] uppercase tracking-[0.2em] text-cyan-300/90 font-bold">
-                    Getting started
-                  </span>
-                  <span className="text-[11px] text-cyan-200/80 font-semibold tabular-nums">
-                    {completed} / {total}
-                  </span>
-                </div>
-                <button
-                  type="button"
-                  onClick={onDismiss}
-                  className="rounded-full p-1 text-slate-500 hover:text-white hover:bg-white/10 transition-colors shrink-0"
-                  aria-label="Hide getting-started checklist"
-                >
-                  <X size={14} />
-                </button>
+          {/* Cyan glow on the right */}
+          <div
+            className="absolute inset-0 pointer-events-none"
+            style={{
+              background:
+                'radial-gradient(circle at 90% 50%, rgba(6,182,212,0.18), transparent 60%)',
+            }}
+            aria-hidden
+          />
+          {/* Top accent line */}
+          <div
+            className="absolute inset-x-0 top-0 h-px"
+            style={{
+              background:
+                'linear-gradient(90deg, transparent, rgba(34,211,238,0.55), transparent)',
+            }}
+            aria-hidden
+          />
+
+          {/* Dismiss */}
+          <button
+            type="button"
+            onClick={onDismiss}
+            className="absolute top-3 right-3 z-10 rounded-full p-1.5 text-slate-500 hover:text-white hover:bg-white/10 transition-colors"
+            aria-label="Hide getting-started checklist"
+          >
+            <X size={14} />
+          </button>
+
+          {/* Content */}
+          <div className="relative grid items-center gap-6 px-6 py-7 sm:gap-8 sm:px-9 sm:py-8 lg:grid-cols-[1fr_auto]">
+            {/* Left column */}
+            <div className="min-w-0">
+              <div
+                className="text-[11px] font-bold uppercase text-cyan-400"
+                style={{ letterSpacing: '0.3em' }}
+              >
+                Getting started
               </div>
 
-              {/* Progress bar */}
-              <div className="mt-2 h-1 rounded-full bg-white/[0.08] overflow-hidden">
-                <motion.div
-                  className="h-full rounded-full"
-                  style={{
-                    background: 'linear-gradient(90deg, #06b6d4, #3b82f6)',
-                  }}
-                  animate={{ width: `${pct}%` }}
-                  transition={{ duration: 0.4, ease: 'easeOut' }}
-                />
-              </div>
+              <h2
+                className="mt-2 text-white"
+                style={{
+                  fontFamily: '"Mitr", sans-serif',
+                  fontWeight: 700,
+                  fontSize: 'clamp(32px, 5vw, 56px)',
+                  lineHeight: 0.95,
+                  letterSpacing: '-0.02em',
+                }}
+              >
+                {remainingWord} {remaining === 1 ? 'step' : 'steps'}{' '}
+                <span style={{ color: '#06b6d4', fontStyle: 'italic' }}>
+                  to your<br className="hidden sm:inline" /> first hand
+                </span>
+              </h2>
 
-              {/* Rows */}
-              <ul className="mt-3 grid grid-cols-1 sm:grid-cols-2 gap-x-4 gap-y-1.5">
-                {rows.map((row) => (
-                  <li
-                    key={row.label}
-                    className={`flex items-center gap-2 text-xs ${
-                      row.state === 'done'
-                        ? 'text-slate-300'
-                        : row.state === 'active'
-                          ? 'text-white'
-                          : 'text-slate-500'
-                    }`}
-                  >
-                    <span
-                      className={`w-4 h-4 rounded-full inline-flex items-center justify-center text-[10px] font-bold shrink-0 ${
+              <p className="mt-4 max-w-[460px] text-sm leading-relaxed text-slate-400 sm:text-[15px]">
+                {subtitle}
+              </p>
+
+              {/* Segmented progress bar */}
+              <div className="mt-6 flex gap-1.5" aria-hidden>
+                {rows.map((row, i) => (
+                  <div
+                    key={i}
+                    className="h-1.5 flex-1 overflow-hidden rounded-full"
+                    style={{
+                      background:
                         row.state === 'done'
-                          ? 'bg-emerald-500 text-white'
+                          ? '#06b6d4'
                           : row.state === 'active'
-                            ? 'border-2 border-cyan-400 text-cyan-300 animate-pulse'
-                            : 'border-2 border-white/15 text-transparent'
-                      }`}
-                      aria-hidden
-                    >
-                      {row.state === 'done' ? <Check size={10} strokeWidth={3} /> : '·'}
-                    </span>
-                    <span className={row.state === 'done' ? 'line-through opacity-70' : ''}>
-                      {row.label}
-                    </span>
-                  </li>
+                            ? 'linear-gradient(90deg, #06b6d4 50%, rgba(6,182,212,0.2) 50%)'
+                            : 'rgba(148,163,184,0.15)',
+                      animation:
+                        row.state === 'active'
+                          ? 'morblotto-onboard-flash 1.8s ease-in-out infinite'
+                          : undefined,
+                    }}
+                  />
                 ))}
-              </ul>
+              </div>
+
+              {/* Step tags */}
+              <div className="mt-2.5 flex gap-1.5 text-[10px] font-semibold uppercase tracking-[0.1em]">
+                {rows.map((row) => (
+                  <div
+                    key={row.tag}
+                    className="flex-1"
+                    style={{
+                      color:
+                        row.state === 'done'
+                          ? '#06b6d4'
+                          : row.state === 'active'
+                            ? '#ffffff'
+                            : '#475569',
+                    }}
+                  >
+                    {row.tag}
+                  </div>
+                ))}
+              </div>
             </div>
 
-            <div className="shrink-0 w-full sm:w-auto sm:self-center">
+            {/* Right column — giant number + CTA */}
+            <div className="flex flex-row items-end gap-5 lg:flex-col lg:items-end lg:gap-5">
+              <div className="text-right">
+                <div
+                  className="text-white tabular-nums"
+                  style={{
+                    fontFamily: '"Mitr", sans-serif',
+                    fontWeight: 700,
+                    fontSize: 'clamp(80px, 14vw, 140px)',
+                    lineHeight: 0.85,
+                    letterSpacing: '-0.05em',
+                  }}
+                >
+                  {remaining}
+                </div>
+                <div
+                  className="mt-1 text-[11px] font-bold uppercase text-cyan-400"
+                  style={{ letterSpacing: '0.2em' }}
+                >
+                  {remainingNoun}
+                </div>
+              </div>
+
               <button
                 type="button"
                 onClick={onResume}
-                className="w-full sm:w-auto px-5 py-2.5 rounded-xl text-xs font-bold text-white transition-all hover:scale-[1.02]"
+                className="rounded-xl px-6 py-3.5 text-sm font-bold text-white transition-transform hover:scale-[1.02] sm:text-[15px] lg:w-full"
                 style={{
                   background: 'linear-gradient(135deg, #0891b2, #2563eb)',
-                  boxShadow: '0 6px 24px rgba(6,182,212,0.25), 0 0 0 1px rgba(34,211,238,0.2)',
+                  boxShadow:
+                    '0 8px 28px -8px rgba(6,182,212,0.55), 0 0 0 1px rgba(34,211,238,0.2)',
                 }}
               >
-                <span className="inline-flex items-center gap-1.5">
+                <span className="inline-flex items-center justify-center gap-2 whitespace-nowrap">
                   {ctaLabel}
-                  <ArrowRight size={13} />
+                  <ArrowRight size={15} />
                 </span>
               </button>
             </div>
           </div>
+
+          <style jsx>{`
+            @keyframes morblotto-onboard-flash {
+              0%, 100% {
+                opacity: 1;
+              }
+              50% {
+                opacity: 0.55;
+              }
+            }
+          `}</style>
         </motion.div>
       )}
     </AnimatePresence>
