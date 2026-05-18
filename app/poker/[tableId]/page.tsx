@@ -17,6 +17,7 @@ import { isAdminWallet } from '@/lib/admin';
 import { useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import { PokerBetaSplash } from '@/components/poker/PokerBetaSplash';
+import { DisplayNameWelcomeModal } from '@/components/shared/DisplayNameWelcomeModal';
 import { useSpeechCommands, type PokerSpeechAction } from '@/hooks/use-speech-commands';
 import { useSpeechEnabled } from '@/hooks/use-speech-enabled';
 import { SpeechHUD } from '@/components/shared/SpeechHUD';
@@ -667,6 +668,13 @@ export default function PokerTablePage() {
     <PokerThemeProvider themeId={pokerTheme}>
       <PokerTableEffectProvider>
         {!isE2EMock && <PokerBetaSplash />}
+        {!isE2EMock && (
+          <DisplayNameWelcomeModal
+            wsClient={wsClient}
+            wsConnected={wsConnected}
+            hint="You're about to join the poker table — pick a name so other players know who you are."
+          />
+        )}
 
         {/* Portrait blocker: shown on mobile when holding phone upright */}
         {isPortraitMobile && (

@@ -5,6 +5,7 @@ import { MessageCircle, BarChart3, HelpCircle, History } from 'lucide-react';
 import { toast } from 'sonner';
 import { Input } from '@/components/ui/input';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
+import { useDisplayNameGate } from '@/hooks/use-display-name-gate';
 import BlackjackMultiRealTimeBetChart, {
   type BlackjackMultiRealTimeBetChartRef,
 } from '@/components/BLACKJACK/BlackjackMultiRealTimeBetChart';
@@ -47,6 +48,8 @@ type BlackjackMultiInfoPanelProps = {
   address?: string;
   wsConnected: boolean;
   onSendChatMessage: (text: string) => void;
+  /** Optional — when provided, an empty display name triggers the JIT prompt on first send. */
+  setDisplayName?: (name: string) => Promise<unknown> | void;
   chartRef: React.RefObject<BlackjackMultiRealTimeBetChartRef | null>;
   chartSessionStartTime: number;
   formatMorbius: (wei: string) => string;
@@ -141,13 +144,20 @@ function ChatMessages({
   );
 }
 
-function ChatInput({ onSend }: { onSend: (text: string) => void }) {
+function ChatInput({
+  onSend,
+  setDisplayName,
+}: {
+  onSend: (text: string) => void;
+  setDisplayName?: (name: string) => Promise<unknown> | void;
+}) {
   const [text, setText] = useState('');
   const sentTimestamps = useRef<number[]>([]);
   const lastCooldownToastAt = useRef(0);
   const maxLengthToastShownForDraft = useRef(false);
   const [cooldownEnd, setCooldownEnd] = useState(0);
   const [cooldownLeft, setCooldownLeft] = useState(0);
+  const { gate: displayNameGate, prompt: displayNamePrompt } = useDisplayNameGate(setDisplayName);
 
   useEffect(() => {
     if (cooldownEnd <= Date.now()) { setCooldownLeft(0); return; }
@@ -185,15 +195,21 @@ function ChatInput({ onSend }: { onSend: (text: string) => void }) {
       return;
     }
 
-    sentTimestamps.current.push(now);
-    onSend(msg);
-    setText('');
-    maxLengthToastShownForDraft.current = false;
+    const flush = () => {
+      sentTimestamps.current.push(now);
+      onSend(msg);
+      setText('');
+      maxLengthToastShownForDraft.current = false;
+    };
+    if (displayNameGate(flush)) return;
+    flush();
   };
 
   const onCooldown = cooldownLeft > 0;
 
   return (
+    <>
+    {displayNamePrompt}
     <form className="flex gap-2 mt-1.5" onSubmit={(e) => { e.preventDefault(); handleSend(); }}>
       <div className="relative flex-1">
         <Input
@@ -223,6 +239,7 @@ function ChatInput({ onSend }: { onSend: (text: string) => void }) {
         Send
       </button>
     </form>
+    </>
   );
 }
 
@@ -233,6 +250,7 @@ export function BlackjackMultiInfoPanel({
   address,
   wsConnected,
   onSendChatMessage,
+  setDisplayName,
   chartRef,
   chartSessionStartTime,
   formatMorbius,
@@ -285,7 +303,7 @@ export function BlackjackMultiInfoPanel({
             <ChatMessages messages={chatMessages} systemMessages={systemChatMessages} />
             <div className="px-3 pb-3 pt-1 mt-auto border-t border-white/5">
               {address && wsConnected ? (
-                <ChatInput onSend={onSendChatMessage} />
+                <ChatInput onSend={onSendChatMessage} setDisplayName={setDisplayName} />
               ) : (
                 <p className="text-[11px] text-white/40 text-center py-1">Connect wallet to chat</p>
               )}
