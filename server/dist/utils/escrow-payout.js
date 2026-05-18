@@ -12,7 +12,7 @@ exports.creatorReclaimFromEscrow = creatorReclaimFromEscrow;
 const viem_1 = require("viem");
 const accounts_1 = require("viem/accounts");
 const chains_1 = require("viem/chains");
-const tournament_prize_escrow_v2_1 = require("../abi/tournament-prize-escrow-v2");
+const tournament_prize_escrow_v6_1 = require("../abi/tournament-prize-escrow-v6");
 const tournament_prize_escrow_v3_1 = require("../abi/tournament-prize-escrow-v3");
 const escrow_status_1 = require("./escrow-status");
 const tournament_id_bytes32_1 = require("./tournament-id-bytes32");
@@ -68,7 +68,7 @@ async function sendEscrowPayout(tournamentId, winnerAddress, amount) {
                 account: client.account,
                 chain: chains_1.pulsechain,
                 address: escrowBytes32Address(),
-                abi: tournament_prize_escrow_v2_1.tournamentPrizeEscrowV2Abi,
+                abi: tournament_prize_escrow_v6_1.tournamentPrizeEscrowV6Abi,
                 functionName: 'payout',
                 args: [idBytes32, winner, amount],
             });
@@ -131,7 +131,7 @@ async function sendEscrowPayoutMultiple(tournamentId, recipients) {
                 account: client.account,
                 chain: chains_1.pulsechain,
                 address: escrowBytes32Address(),
-                abi: tournament_prize_escrow_v2_1.tournamentPrizeEscrowV2Abi,
+                abi: tournament_prize_escrow_v6_1.tournamentPrizeEscrowV6Abi,
                 functionName: 'payoutMultiple',
                 args: [idBytes32, winners, amounts],
             });
@@ -182,7 +182,7 @@ async function setEscrowUnclaimedShares(tournamentId, recipients) {
                 account: client.account,
                 chain: chains_1.pulsechain,
                 address: escrowBytes32Address(),
-                abi: tournament_prize_escrow_v2_1.tournamentPrizeEscrowV2Abi,
+                abi: tournament_prize_escrow_v6_1.tournamentPrizeEscrowV6Abi,
                 functionName: 'setUnclaimedShares',
                 args: [idBytes32, winners, amounts],
             });
@@ -224,7 +224,7 @@ async function sendEscrowRemainderToReclaimWallet(tournamentId) {
                 account: client.account,
                 chain: chains_1.pulsechain,
                 address: escrowBytes32Address(),
-                abi: tournament_prize_escrow_v2_1.tournamentPrizeEscrowV2Abi,
+                abi: tournament_prize_escrow_v6_1.tournamentPrizeEscrowV6Abi,
                 functionName: 'payoutRemainderTo',
                 args: [idBytes32, RECLAIM_WALLET],
             });
@@ -324,7 +324,7 @@ async function cancelTournamentInEscrow(tournamentId) {
                 account: client.account,
                 chain: chains_1.pulsechain,
                 address: escrowBytes32Address(),
-                abi: tournament_prize_escrow_v2_1.tournamentPrizeEscrowV2Abi,
+                abi: tournament_prize_escrow_v6_1.tournamentPrizeEscrowV6Abi,
                 functionName: 'cancelTournament',
                 args: [idBytes32],
             });

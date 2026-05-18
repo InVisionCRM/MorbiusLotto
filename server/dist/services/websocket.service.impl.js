@@ -88,6 +88,7 @@ class WebSocketService {
     chatRateLimitCleanupInterval;
     pokerAutoFoldInterval = null;
     pokerServerBotInterval = null;
+    pokerBotFillInterval = null;
     publicClient;
     contractAddress;
     tournamentService;
@@ -158,6 +159,21 @@ class WebSocketService {
                     logger_1.logger.error('Poker server tournament bot tick error', err);
                 }
             }, 2000);
+            // In-process tournament bot JOINS — keeps unfilled freerolls from
+            // cancelling. Gated on POKER_BOT_FILL_ENABLED inside the method
+            // itself; safe to run unconditionally here. Uses the registered
+            // PokerTournamentService (wired after this init in service-registry).
+            // 10s interval is plenty — joins are less time-sensitive than turns.
+            this.pokerBotFillInterval = setInterval(async () => {
+                try {
+                    if (this.pokerTournamentService && typeof this.pokerTournamentService.tickFillTournamentsWithBots === 'function') {
+                        await this.pokerTournamentService.tickFillTournamentsWithBots();
+                    }
+                }
+                catch (err) {
+                    logger_1.logger.error('Poker tournament bot-fill tick error', err);
+                }
+            }, 10000);
         }
         // Multiplayer blackjack turn timer + betting timeout enforcement (5s poll)
         if (this.bjMultiService) {
@@ -1720,6 +1736,8 @@ class WebSocketService {
                 isPrivate: p.isPrivate ?? false,
                 pinCode: p.pinCode ?? null,
                 scheduledStartAt,
+                // Creator-chosen fee 0–15; the service clamps + defaults to 2 if missing/invalid.
+                creatorFeePercent: p.creatorFeePercent,
             });
             this.sendMessage(ws, { type: 'poker_tournament_created', payload: result, requestId: message.requestId });
         }
@@ -2473,6 +2491,8 @@ class WebSocketService {
                 prizeTokenDecimals: payload.prizeTokenDecimals,
                 pinCode: payload.pinCode,
                 onChainTournamentId: payload.onChainTournamentId != null ? payload.onChainTournamentId : undefined,
+                // Creator-chosen fee 0–15; the service clamps + defaults to 2 if missing/invalid.
+                creatorFeePercent: payload.creatorFeePercent,
             });
             const prizePercentages = this.getPrizePercentagesForType(tournament.prize_distribution_type);
             this.sendMessage(ws, {
@@ -2575,6 +2595,8 @@ class WebSocketService {
                 prizeTokenAddress: payload.prizeTokenAddress,
                 prizeAmount: payload.prizeAmount,
                 prizeTokenDecimals: payload.prizeTokenDecimals,
+                // Persisted but the payout path overrides freerolls to 0% (the creator funded the pool).
+                creatorFeePercent: payload.creatorFeePercent,
             });
             this.sendMessage(ws, {
                 type: 'freeroll_created',
@@ -3068,6 +3090,9 @@ class WebSocketService {
         }
         if (this.pokerServerBotInterval) {
             clearInterval(this.pokerServerBotInterval);
+        }
+        if (this.pokerBotFillInterval) {
+            clearInterval(this.pokerBotFillInterval);
         }
         if (this.bjMultiTimerInterval) {
             clearInterval(this.bjMultiTimerInterval);

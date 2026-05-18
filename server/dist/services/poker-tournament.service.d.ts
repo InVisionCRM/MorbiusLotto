@@ -97,6 +97,12 @@ export interface PokerTournamentSummary {
     prizeDistributionType: string;
     scheduledStartAt: string | null;
     isRegistered: boolean;
+    /**
+     * The caller's most recent `tournament_entries.status` for this tournament, or `null`
+     * if they never registered. Lets the client distinguish active membership (`'playing'`)
+     * from busted/completed entries that should re-attach as spectators on page refresh.
+     */
+    myEntryStatus: 'playing' | 'busted' | 'completed' | null;
     isPrivate: boolean;
     /** Level-1 or live table blinds (chip ints). */
     smallBlind: number;
@@ -117,7 +123,7 @@ export interface CustomTokenBuyInMeta {
 }
 /**
  * Funding payload supplied by the client when the prize pool is held in the
- * `TournamentPrizeEscrowV2` contract for an arbitrary PRC-20 token.
+ * `TournamentPrizeEscrow` contract for an arbitrary PRC-20 token.
  *
  * The client deposits BEFORE this call; the server re-reads on-chain state to
  * verify the deposit is real, matches the supplied token + amount, and was made
@@ -164,6 +170,8 @@ export interface CreatePokerTournamentParams {
     pinCode?: string | null;
     /** Required — must be a finite `Date` strictly in the future (enforced at create). */
     scheduledStartAt: Date;
+    /** Creator's chosen fee percent (0–15 integer). Clamped server-side; default 2. */
+    creatorFeePercent?: number;
 }
 /**
  * Validates creator prize % per finishing rank (index 0 = 1st place … index maxPlayers-1).
@@ -204,7 +212,8 @@ export declare class PokerTournamentService {
     knockoutBlindDisplayLevel(blindSchedule: BlindLevel[], smallBlindChips: number): number;
     /**
      * `by_time`: how many full intervals have elapsed since `levelStartedAt`.
-     * Capped at the schedule length so we never read past the last level.
+     * Past the end of the schedule the function extrapolates additional levels
+     * so blinds never freeze in `by_time` mode — see `extrapolateBlindLevel`.
      * Returns the level number (1-based) that should currently be in effect.
      *
      * Example: schedule has 8 levels, interval = 30 min, levelStartedAt was the
@@ -212,6 +221,18 @@ export declare class PokerTournamentService {
      * effective level is `1 + 2 = 3`.
      */
     computeBlindLevelByTime(blindSchedule: BlindLevel[], intervalMinutes: number, levelStartedAt: Date, startingLevel: number, now?: Date): BlindLevel;
+    /**
+     * Synthesize a blind level past the end of `blindSchedule` so tournaments
+     * in `by_time` mode keep advancing instead of freezing once they reach the
+     * last configured level. Growth rate is derived from the ratio between the
+     * schedule's final two levels (falls back to 1.5x per step when the schedule
+     * has only one level or the ratio is degenerate). Synthesized SB/BB values
+     * are rounded to the nearest "nice" chip step matching their magnitude, and
+     * are guaranteed to be strictly greater than the previous step.
+     */
+    extrapolateBlindLevel(blindSchedule: BlindLevel[], targetIdx: number): BlindLevel;
+    /** Round a chip value to a 1/2/5-style step matching its magnitude (25, 100, 500, 1k, 10k, ...). */
+    private roundChipStep;
     /** Blinds that apply to the next hand after `completedHandNumber` (1-based) finishes. */
     blindsForNextHand(blindSchedule: BlindLevel[], completedHandNumber: number): BlindLevel;
     private getBlindIncreaseMode;
@@ -241,6 +262,32 @@ export declare class PokerTournamentService {
      * Cancels + refunds if below minPlayers; otherwise activates (status must become active for sync + payouts).
      */
     startScheduledPokerTournament(tournamentId: string): Promise<void>;
+    /**
+     * Periodic tick called by the WS service every few seconds. Finds freeroll
+     * tournaments still in `registration` that need more players to start, and
+     * registers in-house bot wallets (from `POKER_BOT_ADDRESSES`) directly via
+     * `joinPokerTournament` — no WebSocket, no signed auth, no external CLI.
+     *
+     * Why in-process: bot scripts running as external clients have to go
+     * through the same EIP-712 auth path as real users. The C1 production
+     * guard (`REQUIRE_WS_AUTH=true`) closes the impersonation hole for real
+     * users but bots have no private key to sign with — they would need a
+     * permanent bypass token/allowlist. Calling the service directly from
+     * inside the server process sidesteps that entire control surface.
+     *
+     * Behavior gates:
+     *   - Disabled unless `POKER_BOT_FILL_ENABLED=true`. Default off so this
+     *     never surprises someone running staging/prod without bots.
+     *   - Only fills tournaments with `buy_in_amount = 0` (freerolls). Bots
+     *     have no MORBIUS balance — joining a paid tournament would burn the
+     *     wallet pool.
+     *   - Optional pre-fill delay via `POKER_BOT_FILL_DELAY_SECONDS` (default 0).
+     *     Set this if you want to give real players a window to join before bots
+     *     show up. Default 0 so a created tournament fills on the next tick.
+     *   - Adds up to `minPlayers - currentCount` bots per tick (or fewer if
+     *     the wallet pool is exhausted).
+     */
+    tickFillTournamentsWithBots(): Promise<void>;
     /**
      * Transition tournament from registration → active.
      * Creates a dedicated poker table (tournament_mode=TRUE), seats all players,
@@ -353,6 +400,18 @@ export declare class PokerTournamentService {
     }>>;
     getTournamentState(tournamentId: string): Promise<PokerTournamentState | null>;
     getPlayerEntryStatus(tournamentId: string, playerAddress: string): Promise<PokerTournamentPlayer | null>;
+    /**
+     * Eliminate a list of busted players from a tournament table.
+     *
+     * `assumeLockHeld` controls which `leaveTableTournament` variant is called:
+     *   - `false` (default): used by `syncAfterHand` (post-hand callback), which
+     *     runs OUTSIDE the per-table lock. The public `leaveTableTournament`
+     *     re-acquires the lock cleanly.
+     *   - `true`: used by `recoverTournamentTableIfUnderTwoStackedSeats`, which
+     *     is invoked from inside `tryStartNextHand`'s lock body. Calling the
+     *     lock-acquiring variant from that path would deadlock since
+     *     `withTableLock` is not re-entrant.
+     */
     private eliminateBustedTournamentSeats;
     private getTableIdForTournament;
 }

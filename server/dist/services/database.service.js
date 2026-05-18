@@ -2868,6 +2868,97 @@ class DatabaseService {
             holeCards,
         };
     }
+    // ── Poker lobby aggregates (House Records + Top Players) ─────────────────
+    async getPokerHouseRecords() {
+        const [handsRes, potRes, tourRes, rakeRes] = await Promise.all([
+            this.pool.query(`SELECT COUNT(*)::BIGINT AS n
+           FROM poker_hands
+          WHERE completed_at IS NOT NULL`),
+            this.pool.query(`SELECT id, pot_amount::TEXT AS amount
+           FROM poker_hands
+          WHERE completed_at IS NOT NULL
+          ORDER BY pot_amount DESC NULLS LAST
+          LIMIT 1`),
+            this.pool.query(`SELECT COUNT(*)::BIGINT AS n
+           FROM tournaments
+          WHERE game_type = 'poker' AND status = 'completed'`),
+            this.pool.query(`SELECT COALESCE(SUM(rake_paid), 0)::TEXT AS total
+           FROM poker_hand_players`),
+        ]);
+        const potRow = potRes.rows[0];
+        return {
+            hands_dealt: Number(handsRes.rows[0]?.n ?? 0),
+            largest_pot: {
+                amount: String(potRow?.amount ?? '0'),
+                hand_id: potRow?.id ?? null,
+            },
+            tournaments_played: Number(tourRes.rows[0]?.n ?? 0),
+            total_rake: String(rakeRes.rows[0]?.total ?? '0'),
+        };
+    }
+    async getPokerTopPlayers(category, limit, requesterAddress) {
+        const safeLimit = Math.min(Math.max(limit | 0, 1), 100);
+        // net_chips / biggest_pot are aggregated as TEXT (NUMERIC(78,0) cast to TEXT
+        // to ferry whole-chip integers across the wire) — we still want numeric
+        // (not lexicographic) ordering on the leaderboard. Postgres won't resolve
+        // a SELECT-list alias inside a cast expression in ORDER BY (`alias::TYPE`
+        // tries to look up `alias` as a real column and errors with 42703), so we
+        // wrap the GROUP BY in a subquery to promote the TEXT alias into a real
+        // column that can then be cast back to NUMERIC for sorting.
+        const orderClause = category === 'net_chips' ? 't.net_chips::NUMERIC DESC'
+            : category === 'biggest_pot' ? 't.biggest_pot::NUMERIC DESC'
+                : 't.hands_played DESC';
+        const baseSelect = `
+      SELECT
+        LOWER(p.player_address) AS address,
+        COALESCE(SUM(p.won_amount - p.contributed), 0)::TEXT AS net_chips,
+        COALESCE(MAX(p.won_amount) FILTER (WHERE p.won), 0)::TEXT AS biggest_pot,
+        COUNT(*)::INT AS hands_played
+      FROM poker_hand_players p
+      JOIN poker_hands h ON h.id = p.hand_id
+      WHERE h.completed_at IS NOT NULL
+      GROUP BY LOWER(p.player_address)
+    `;
+        const topResult = await this.pool.query(`SELECT * FROM (${baseSelect}) t ORDER BY ${orderClause} LIMIT $1`, [safeLimit]);
+        const rows = topResult.rows.map((r, idx) => ({
+            rank: idx + 1,
+            address: String(r.address),
+            net_chips: String(r.net_chips ?? '0'),
+            biggest_pot: String(r.biggest_pot ?? '0'),
+            hands_played: Number(r.hands_played ?? 0),
+        }));
+        let requester = null;
+        if (requesterAddress) {
+            const normalized = this.normalizeAddress(requesterAddress);
+            const inTopN = rows.find((r) => r.address === normalized);
+            if (!inTopN) {
+                // Branch on category so we can use a single ORDER BY in ROW_NUMBER().
+                // Cast aggregated TEXT chip values back to NUMERIC for correct ordering.
+                const rankOrder = category === 'net_chips' ? 'net_chips::NUMERIC DESC'
+                    : category === 'biggest_pot' ? 'biggest_pot::NUMERIC DESC'
+                        : 'hands_played DESC';
+                const rankResult = await this.pool.query(`
+          WITH agg AS (${baseSelect}),
+               ranked AS (
+                 SELECT *, ROW_NUMBER() OVER (ORDER BY ${rankOrder})::INT AS rank
+                   FROM agg
+               )
+          SELECT * FROM ranked WHERE address = $1 LIMIT 1
+          `, [normalized]);
+                const row = rankResult.rows[0];
+                if (row) {
+                    requester = {
+                        rank: Number(row.rank),
+                        address: String(row.address),
+                        net_chips: String(row.net_chips ?? '0'),
+                        biggest_pot: String(row.biggest_pot ?? '0'),
+                        hands_played: Number(row.hands_played ?? 0),
+                    };
+                }
+            }
+        }
+        return { category, rows, requester };
+    }
     // ── Poker table-level dashboard stats (admin) ─────────────────────────────
     async getPokerTableDashboardStats(tableId) {
         // Table info

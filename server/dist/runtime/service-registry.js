@@ -45,6 +45,28 @@ async function recoverPokerRuntimeState(dbService, pokerGameService) {
     }
 }
 async function initializeRuntimeServices(server, port) {
+    // ── Production WS auth advisory ───────────────────────────────────────────
+    // The WS layer trusts whatever address a client sends as `?address=0x...` in
+    // the connection URL UNLESS `REQUIRE_WS_AUTH=true` is set. In production
+    // that's an impersonation hole (act as any seated player). This was a hard
+    // boot-stop, but a strict gate proved too fragile during launch ops: any env
+    // mishap took the whole site down. Now it logs a loud warning at startup so
+    // the operator sees it in deployment logs without blocking boot. Track in
+    // the audit follow-up: fix the client-side message-vs-auth race condition,
+    // then re-enable the hard gate.
+    if (process.env.NODE_ENV === 'production') {
+        if (process.env.REQUIRE_WS_AUTH !== 'true') {
+            logger_1.logger.warn('[SECURITY] REQUIRE_WS_AUTH is not "true" in production. The WS layer ' +
+                'will trust unauthenticated `?address=` query params, allowing player ' +
+                'impersonation. Set REQUIRE_WS_AUTH=true once the client-side auth ' +
+                'race condition is fixed.');
+        }
+        if (process.env.DISABLE_WS_AUTH === 'true') {
+            logger_1.logger.warn('[SECURITY] DISABLE_WS_AUTH=true is set in production. EIP-712 ' +
+                'signature verification is bypassed on the WebSocket handshake. ' +
+                'Unset this flag as soon as possible.');
+        }
+    }
     server.listen(port, () => {
         logger_1.logger.info(`Blackjack server running on port ${port}`);
     });

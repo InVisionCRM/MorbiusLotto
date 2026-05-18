@@ -109,6 +109,8 @@ export interface CreateTournamentParams {
     pinCode?: string | null;
     /** uint256 from MorbiusTournament.createTournament; when set, create/join use on-chain flow */
     onChainTournamentId?: number | bigint | null;
+    /** Creator's chosen fee percent (0–15 integer). Clamped server-side; default 2. */
+    creatorFeePercent?: number;
 }
 /** Create freeroll tournament (no buy-in, scheduled start). Chip-count only. */
 export interface CreateFreerollParams {
@@ -129,6 +131,11 @@ export interface CreateFreerollParams {
     prizeTokenAddress?: string | null;
     prizeAmount?: string;
     prizeTokenDecimals?: number | null;
+    /**
+     * Creator's chosen fee percent (0–15 integer). Persisted on the row but the payout path
+     * overrides freerolls to 0% since the creator funds the pool themselves.
+     */
+    creatorFeePercent?: number;
 }
 export interface FreerollListItem {
     id: string;

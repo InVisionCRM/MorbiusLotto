@@ -62,6 +62,22 @@ const RAKE_PERCENT = 5; // 5% of each pot
 // `POKER_BETWEEN_HANDS_DELAY_MS` in `lib/poker-between-hands-delay.ts`.
 const SHOWDOWN_DELAY_MS = 15_000;
 const SHOWDOWN_DELAY_SECONDS = SHOWDOWN_DELAY_MS / 1000;
+// Server-driven all-in runout: per-street pause between broadcasts. The total
+// time from "runout begins" to "showdown frame" is the sum of the steps that
+// actually fire. Preflop all-in = flop + turn + river ≈ 5.5s before showdown.
+// Tunable but kept close to the previous client-side cadence so the feel is
+// preserved.
+const RUNOUT_STEP_DELAY_MS = {
+    toFlop: 2000,
+    toTurn: 2000,
+    toRiver: 1500,
+    /** Tiny beat after the river frame before flipping hole cards + winners. */
+    toShowdown: 600,
+};
+// Recovery sweep waits this long after `runout_resolved_at` before
+// fast-forwarding a stuck mid-runout hand. Picked so a normal preflop runout
+// (~6s wall clock) finishes well before the threshold.
+const RUNOUT_STUCK_THRESHOLD_SECONDS = 30;
 // ---------------------------------------------------------------------------
 // PokerGameService
 // ---------------------------------------------------------------------------
@@ -90,6 +106,34 @@ class PokerGameService {
     pendingPostHandHandNumbers = new Map();
     /** Bail flag for `recoverStuckPostHandTables` so overlapping ticks can't pile up. */
     recoveryInFlight = false;
+    /**
+     * Active server-driven runout timers — one per table. Cleared on completion,
+     * on `clearScheduledNextHand` (leaveTable / standUp mid-runout), and on
+     * recovery fast-forward.
+     */
+    runoutTimers = new Map();
+    /** Tables currently animating an all-in runout. Read by callers that need
+     *  to know "is the table mid-resolve" without hitting the DB. */
+    runoutInFlight = new Set();
+    /**
+     * Per-table snapshot of each player's pre-payout chip stack, used to freeze
+     * the displayed stacks during an all-in runout so the board reveal doesn't
+     * leak the winner (otherwise the seat plate updates to the post-payout
+     * value the instant chevtek auto-resolves). Keyed by tableId → (lowercase
+     * player address → chip-int string). Populated in `scheduleRunout` before
+     * the first staged broadcast and cleared at the showdown frame so the
+     * stack change is revealed alongside the winner badges.
+     */
+    runoutFrozenStacks = new Map();
+    /**
+     * Per-step runout delays default on in production, off under jest. When
+     * disabled `scheduleRunout` runs all frames inline (no setTimeout chain),
+     * so existing integration tests can assert on post-showdown DB state
+     * immediately after the triggering action without polling. Toggle via
+     * `setRunoutDelaysForTesting(enabled)` if a test needs the production
+     * pacing.
+     */
+    runoutDelaysEnabled = process.env.NODE_ENV !== 'test';
     constructor(dbService, pfService) {
         this.dbService = dbService;
         this.pfService = pfService;
@@ -182,15 +226,238 @@ class PokerGameService {
             clearTimeout(timer);
             this.nextHandTimers.delete(tableId);
         }
+        this.clearRunoutTimer(tableId);
+    }
+    clearRunoutTimer(tableId) {
+        const timer = this.runoutTimers.get(tableId);
+        if (timer) {
+            clearTimeout(timer);
+            this.runoutTimers.delete(tableId);
+        }
+        this.runoutInFlight.delete(tableId);
+        this.runoutFrozenStacks.delete(tableId);
     }
     /**
-     * All-in showdown: chevtek already resolved the full board in memory.
-     * Persist immediately — the client handles staged card reveal animation.
-     * Always returns false (caller should call scheduleNextHandAfterShowdown).
+     * Test-only: drop runout per-step delays to 0 so tests can drive a full
+     * runout synchronously. Mirrors the production pacing in semantics — just
+     * collapses the wall-clock waits.
      */
-    async completeShowdownWithOptionalRunout(pool, tableId, handId, table, _communityLenBefore) {
+    setRunoutDelaysForTesting(enabled) {
+        this.runoutDelaysEnabled = enabled;
+    }
+    /**
+     * Showdown entry point. Two paths:
+     *
+     * (a) Single-street showdown — river already on the board (or fold-out
+     *     resolution): persist immediately. Caller schedules next hand.
+     *
+     * (b) Multi-street all-in runout — chevtek auto-resolved one or more
+     *     streets in this action. Snapshot the final state, then chain
+     *     intermediate broadcasts (flop / turn / river) before finally calling
+     *     persistShowdown on the showdown frame. Caller does NOT schedule next
+     *     hand; the final runout step schedules it.
+     *
+     * Returns `true` when the showdown work is deferred to runout timers; the
+     * caller should NOT call `scheduleNextHandAfterShowdown` in that case
+     * (the runout chain does it). Returns `false` when persistShowdown ran
+     * inline.
+     */
+    async completeShowdownWithOptionalRunout(pool, tableId, handId, table, communityLenBefore) {
+        const communityLenAfter = table.communityCards?.length ?? 0;
+        const runoutSteps = Math.max(0, communityLenAfter - communityLenBefore);
+        // ≥1 extra community card means chevtek dealt streets we haven't shown
+        // the client yet. Stage them. Note: river already on board (communityLenBefore===5)
+        // would be runoutSteps===0, falling through to inline persist — correct.
+        if (runoutSteps >= 1) {
+            await this.scheduleRunout(pool, tableId, handId, table, communityLenBefore);
+            return true;
+        }
         await this.persistShowdown(pool, tableId, handId, table);
         return false;
+    }
+    /**
+     * Snapshot the resolved table + chain intermediate broadcasts. Each tick
+     * updates `poker_hands.street` + `community_cards` to the in-progress
+     * intermediate value and broadcasts. The final tick calls `persistShowdown`
+     * (which writes winners, completed_at, etc.) and schedules the next hand.
+     *
+     * The full final board is also persisted to `runout_final_community_cards`
+     * up-front so the recovery sweep can fast-forward if the server crashes
+     * mid-stream.
+     */
+    async scheduleRunout(pool, tableId, handId, table, communityLenBefore) {
+        const finalCommunityInts = table.communityCards.map(cardToInt);
+        // Stamp the runout snapshot before any broadcast. After this point the
+        // recovery sweep can finish the hand even if the server dies right now.
+        //
+        // chevtek's `nextAction` → `showdown` already auto-resolved the hand,
+        // which means `player.stackSize` includes the pot awards. If we let the
+        // staged flop/turn/river broadcasts go out with those values, the seat
+        // plate updates before the cards reveal and the winner is leaked. So we
+        // snapshot the *pre-payout* stack for each player here (post − winnings
+        // from each pot they won) and serve that from getTableState until
+        // finalizeShowdown clears the snapshot at the showdown frame. The DB
+        // gets the true post-payout values from syncSeatsFromTable below (kept
+        // current for crash recovery) — only the wire format is frozen.
+        const winningsByAddr = new Map();
+        for (const pot of table.pots) {
+            if (!pot.winners || pot.winners.length === 0)
+                continue;
+            const potChips = BigInt(Math.max(0, Math.round(pot.amount)));
+            const ids = pot.winners.map((w) => w.id);
+            const shares = (0, poker_chip_scale_1.splitBigIntEqually)(potChips, ids.length);
+            for (let i = 0; i < ids.length; i++) {
+                winningsByAddr.set(ids[i], (winningsByAddr.get(ids[i]) ?? 0n) + shares[i]);
+            }
+        }
+        const frozen = new Map();
+        for (const player of table.players) {
+            if (!player)
+                continue;
+            const post = BigInt(Math.max(0, Math.round(player.stackSize)));
+            const won = winningsByAddr.get(player.id) ?? 0n;
+            const pre = post > won ? post - won : 0n;
+            frozen.set(this.normalizeAddress(player.id), pre.toString());
+        }
+        this.runoutFrozenStacks.set(tableId, frozen);
+        await this.syncSeatsFromTable(pool, tableId, table);
+        await pool.query(`UPDATE poker_hands
+          SET runout_resolved_at = NOW(),
+              runout_final_community_cards = $2::JSONB
+        WHERE id = $1`, [handId, JSON.stringify(finalCommunityInts)]);
+        this.runoutInFlight.add(tableId);
+        const steps = [];
+        if (communityLenBefore < 3)
+            steps.push({ count: 3, street: 'flop', delayMs: RUNOUT_STEP_DELAY_MS.toFlop });
+        if (communityLenBefore < 4)
+            steps.push({ count: 4, street: 'turn', delayMs: RUNOUT_STEP_DELAY_MS.toTurn });
+        if (communityLenBefore < 5)
+            steps.push({ count: 5, street: 'river', delayMs: RUNOUT_STEP_DELAY_MS.toRiver });
+        const publishStep = async (idx) => {
+            const step = steps[idx];
+            try {
+                const partial = finalCommunityInts.slice(0, step.count);
+                await pool.query(`UPDATE poker_hands
+              SET street = $2, community_cards = $3::JSONB
+            WHERE id = $1`, [handId, step.street, JSON.stringify(partial)]);
+                await this.broadcastState(tableId);
+            }
+            catch (err) {
+                logger_1.logger.error('Poker runout step persist/broadcast failed', { tableId, handId, idx, err });
+                // Don't abort the chain on a single step failure — the recovery sweep
+                // will catch a fully stuck runout, but in the meantime keep moving
+                // toward showdown so chips don't sit frozen indefinitely.
+            }
+        };
+        const finalizeShowdown = async () => {
+            await this.persistShowdown(pool, tableId, handId, table);
+            // Drop the frozen-stack overlay BEFORE the final broadcast so the
+            // showdown frame reveals the true post-payout stacks alongside the
+            // winner badges. Order matters: clear, then broadcast.
+            this.runoutFrozenStacks.delete(tableId);
+            await this.broadcastState(tableId);
+            this.runoutInFlight.delete(tableId);
+            this.runoutTimers.delete(tableId);
+            this.scheduleNextHandAfterShowdown(tableId);
+        };
+        if (!this.runoutDelaysEnabled) {
+            // Test / synchronous mode: skip the intermediate broadcasts and finalize
+            // immediately. The intermediate frames are a UX concern, not a
+            // correctness concern — collapsing them in tests preserves the pre-Phase-2
+            // semantics existing assertions expect ("right after all-in →
+            // completed_at is set"). Tests that specifically want to observe the
+            // intermediate frames opt back into production pacing via
+            // `setRunoutDelaysForTesting(true)`.
+            await finalizeShowdown();
+            return;
+        }
+        // Production: chain setTimeouts so observers see each frame paced. Each
+        // tick acquires the per-table lock so a concurrent `playerAction`,
+        // `leaveTable`, or `autoFoldTimedOutTurns` can't interleave with a
+        // mid-flight DB UPDATE or broadcast. If something else already collapsed
+        // the runout (e.g. a player left and triggered `finalizeRunoutImmediately`),
+        // the `runoutInFlight` check at the top of the locked region makes this
+        // tick a no-op.
+        const runStep = async (idx) => {
+            await this.withTableLock(tableId, async () => {
+                if (!this.runoutInFlight.has(tableId)) {
+                    // Runout was finalized out from under us. The cleared timer should
+                    // already have prevented this tick from firing, but defensively
+                    // abort here in case the timer was already in flight when the
+                    // finalize ran.
+                    return;
+                }
+                if (idx >= steps.length) {
+                    await finalizeShowdown();
+                    return;
+                }
+                await publishStep(idx);
+                const nextDelay = steps[idx + 1]?.delayMs ?? RUNOUT_STEP_DELAY_MS.toShowdown;
+                const timer = setTimeout(() => {
+                    runStep(idx + 1).catch((err) => logger_1.logger.error('Poker runout chain error', { tableId, handId, err }));
+                }, nextDelay);
+                this.runoutTimers.set(tableId, timer);
+            });
+        };
+        const firstTimer = setTimeout(() => {
+            runStep(0).catch((err) => logger_1.logger.error('Poker runout chain error (first step)', { tableId, handId, err }));
+        }, steps[0].delayMs);
+        this.runoutTimers.set(tableId, firstTimer);
+    }
+    /**
+     * Collapse an in-flight runout to its final showdown state right now.
+     *
+     * Two call sites:
+     * 1. Live: player leaves mid-runout and we need their stack credited
+     *    before we strip their seat. The in-memory chevtek table is present;
+     *    we cancel pending timers and finalize.
+     * 2. Recovery: server restarted with `runout_resolved_at IS NOT NULL AND
+     *    completed_at IS NULL` rows on disk. In-memory state is gone; we
+     *    reconstruct from DB, which deterministically produces the same
+     *    final chevtek state.
+     *
+     * No-op when no hand is mid-runout (idempotent — safe to call repeatedly
+     * from a recovery sweep that may double-fire after a race).
+     */
+    async finalizeRunoutImmediately(tableId) {
+        this.clearRunoutTimer(tableId);
+        const pool = this.getPool();
+        const handRow = await pool.query(`SELECT id FROM poker_hands
+        WHERE table_id = $1 AND completed_at IS NULL AND runout_resolved_at IS NOT NULL
+        ORDER BY hand_number DESC LIMIT 1`, [tableId]);
+        if (handRow.rows.length === 0)
+            return;
+        const handId = handRow.rows[0].id;
+        let table;
+        try {
+            table = await this.getOrReconstructActiveTable(tableId, pool, 'player_action');
+        }
+        catch (err) {
+            logger_1.logger.error('finalizeRunoutImmediately: table reconstruction failed', { tableId, handId, err });
+            return;
+        }
+        // If reconstruction didn't yield a resolved state (no winners), force
+        // chevtek to advance through any remaining streets. Defensive — should
+        // already be at showdown since runout_resolved_at was set.
+        if (table.currentRound || !table.winners) {
+            try {
+                while (table.currentRound)
+                    table.nextAction();
+            }
+            catch (err) {
+                logger_1.logger.error('finalizeRunoutImmediately: forced advance failed', { tableId, handId, err });
+                return;
+            }
+        }
+        try {
+            await this.persistShowdown(pool, tableId, handId, table);
+            this.runoutFrozenStacks.delete(tableId);
+            await this.broadcastState(tableId);
+            this.scheduleNextHandAfterShowdown(tableId);
+        }
+        catch (err) {
+            logger_1.logger.error('finalizeRunoutImmediately: persist/broadcast failed', { tableId, handId, err });
+        }
     }
     /**
      * Centralizes the post-showdown transition: waits SHOWDOWN_DELAY_MS, then
@@ -255,6 +522,41 @@ class PokerGameService {
         this.recoveryInFlight = true;
         try {
             const pool = this.getPool();
+            // ── Mid-runout recovery ───────────────────────────────────────────────
+            // Hands whose runout timer was lost (server restart between
+            // `runout_resolved_at` and `completed_at`). Wall-clock budget for a
+            // normal runout is ~6s, so anything older than 30s is genuinely stuck.
+            // `finalizeRunoutImmediately` is idempotent and re-acquires the table
+            // lock via persistShowdown → syncSeatsFromTable; we wrap each call in
+            // `withTableLock` so a live action can't race us.
+            const stuckRunouts = await pool.query(`SELECT table_id, id AS hand_id
+           FROM poker_hands
+          WHERE runout_resolved_at IS NOT NULL
+            AND completed_at IS NULL
+            AND runout_resolved_at < NOW() - INTERVAL '${RUNOUT_STUCK_THRESHOLD_SECONDS} seconds'
+          ORDER BY runout_resolved_at ASC
+          LIMIT 25`);
+            for (const row of stuckRunouts.rows) {
+                try {
+                    await this.withTableLock(row.table_id, async () => {
+                        // Re-check inside lock — a live finalize may have just landed.
+                        const stillStuck = await pool.query(`SELECT 1 FROM poker_hands
+                WHERE id = $1 AND completed_at IS NULL AND runout_resolved_at IS NOT NULL`, [row.hand_id]);
+                        if (stillStuck.rows.length === 0)
+                            return;
+                        await this.finalizeRunoutImmediately(row.table_id);
+                        logger_1.logger.info('Recovered stuck poker runout', { tableId: row.table_id, handId: row.hand_id });
+                    });
+                }
+                catch (err) {
+                    logger_1.logger.error('Recovery: failed to finalize stuck runout', {
+                        tableId: row.table_id,
+                        handId: row.hand_id,
+                        err,
+                    });
+                }
+            }
+            // ── Post-hand recovery (unchanged) ────────────────────────────────────
             // 20s threshold = 15s SHOWDOWN_DELAY_MS + 5s margin so we never race
             // the happy-path timer. LIMIT 25 keeps a single tick bounded; the
             // sweep runs again every 5s until the backlog is drained.
@@ -277,31 +579,17 @@ class PokerGameService {
                     : -1;
                 let claimed = false;
                 try {
-                    // Phase 1: do the per-table work (callback + mark processed +
-                    // drop stale in-memory timers) under the table lock so a player
-                    // action can't race us.
+                    // Phase 1: atomically claim the row under the table lock so a
+                    // concurrent player action / live finalize can't race us. We mark
+                    // processed BEFORE running the post-hand callback — the callback
+                    // may call back into PokerGameService methods that take this same
+                    // lock (`leaveTableTournament` → `withTableLock`), so we must
+                    // release before invoking it.
                     await this.withTableLock(tableId, async () => {
-                        // Re-check inside the lock — the happy-path timer or another
-                        // sweep tick may have processed it between query and acquire.
                         const stillPending = await pool.query(`SELECT 1 FROM poker_hands
                 WHERE id = $1 AND post_hand_processed_at IS NULL`, [handId]);
                         if (stillPending.rows.length === 0)
                             return;
-                        if (this.postHandCallback) {
-                            try {
-                                await this.postHandCallback(tableId, handNumber);
-                            }
-                            catch (err) {
-                                logger_1.logger.error('Recovery: post-hand callback error', {
-                                    tableId,
-                                    handNumber,
-                                    err,
-                                });
-                            }
-                        }
-                        // Atomic claim — also serves as a second-level race guard if
-                        // the happy-path timer somehow wrote the marker between our
-                        // re-check and now.
                         const updated = await pool.query(`UPDATE poker_hands
                   SET post_hand_processed_at = NOW()
                 WHERE id = $1 AND post_hand_processed_at IS NULL`, [handId]);
@@ -317,11 +605,29 @@ class PokerGameService {
                             this.nextHandTimers.delete(tableId);
                         }
                     });
-                    // Phase 2: kick off the next hand OUTSIDE the per-table lock —
-                    // `tryStartNextHand` acquires the same lock internally, so doing
-                    // it inside Phase 1 would deadlock. We already filtered on
-                    // completed_at > 20s ago, so the SHOWDOWN_DELAY_MS window has
-                    // elapsed and there's no need to arm another timer.
+                    // Phase 2: run the post-hand callback OUTSIDE the per-table lock.
+                    // `syncAfterHand` ultimately calls `leaveTableTournament`, which
+                    // acquires this same lock — keeping the callback inside Phase 1
+                    // would deadlock. Order doesn't matter: marking processed before
+                    // the callback still prevents tight retry loops if the callback
+                    // throws (matches the original "mark after, succeed-or-throw"
+                    // intent — the marker is set unconditionally either way).
+                    if (claimed && this.postHandCallback) {
+                        try {
+                            await this.postHandCallback(tableId, handNumber);
+                        }
+                        catch (err) {
+                            logger_1.logger.error('Recovery: post-hand callback error', {
+                                tableId,
+                                handNumber,
+                                err,
+                            });
+                        }
+                    }
+                    // Phase 3: kick off the next hand OUTSIDE the per-table lock —
+                    // `tryStartNextHand` acquires the same lock internally. We already
+                    // filtered on completed_at > 20s ago, so the SHOWDOWN_DELAY_MS
+                    // window has elapsed and there's no need to arm another timer.
                     if (claimed) {
                         await this.tryStartNextHand(tableId);
                         await this.broadcastState(tableId);
@@ -527,7 +833,10 @@ class PokerGameService {
             if (modeRow.rows.length === 0)
                 throw new Error('Table not found');
             if (modeRow.rows[0].tournament_mode) {
-                await this.leaveTableTournament(tableId, playerAddress);
+                // Call the internal helper, not the public method — we already hold
+                // the lock here and the public method would re-acquire it (deadlock,
+                // since withTableLock is not re-entrant).
+                await this._leaveTableTournament(tableId, playerAddress);
                 return this.getTableState(tableId, null);
             }
             return this._leaveTable(tableId, playerAddress);
@@ -539,6 +848,14 @@ class PokerGameService {
         const seatResult = await pool.query('SELECT id, stack, position FROM poker_seats WHERE table_id = $1 AND player_address = $2', [tableId, normalized]);
         if (seatResult.rows.length === 0)
             throw new Error('Not seated at this table');
+        // If a server-driven runout is mid-flight, finalize it now so all stacks
+        // (including the leaving player's all-in winnings) settle to poker_seats
+        // BEFORE we strip the seat row. Other players at the table see the runout
+        // collapse to showdown immediately — acceptable trade-off vs. forfeiting
+        // a leaving player's committed pot share.
+        if (this.runoutInFlight.has(tableId)) {
+            await this.finalizeRunoutImmediately(tableId);
+        }
         const activeHandResult = await pool.query(`SELECT id FROM poker_hands WHERE table_id = $1 AND completed_at IS NULL LIMIT 1`, [tableId]);
         // If there's an active hand, use chevtek standUp so it handles fold + advance
         const activeTable = this.activeTables.get(tableId);
@@ -716,6 +1033,18 @@ class PokerGameService {
                     currentBet = String(Math.max(0, Math.round(livePlayer.bet)));
                 }
             }
+            // Freeze the displayed stack at its pre-payout value during an all-in
+            // runout. Without this overlay the seat plate updates to the resolved
+            // post-payout amount the moment chevtek auto-resolves, leaking the
+            // winner before the staged board reveal completes. Cleared at the
+            // showdown frame in finalizeShowdown.
+            const frozen = this.runoutFrozenStacks.get(tableId);
+            if (frozen && s?.playerAddress) {
+                const override = frozen.get(this.normalizeAddress(s.playerAddress));
+                if (override !== undefined) {
+                    stack = override;
+                }
+            }
             seats.push({
                 position: pos,
                 playerAddress: s?.playerAddress ?? null,
@@ -766,7 +1095,8 @@ class PokerGameService {
         let currentHand = null;
         let myHoleCards = null;
         const handRow = await pool.query(`SELECT id, hand_number, button_position, community_cards, pot_amount, street,
-              acting_position, turn_started_at, result, last_raise_size, completed_at
+              acting_position, turn_started_at, result, last_raise_size, completed_at,
+              runout_resolved_at, server_seed_hash
        FROM poker_hands WHERE table_id = $1
          AND (completed_at IS NULL OR (street = 'showdown' AND completed_at > NOW() - INTERVAL '${SHOWDOWN_DELAY_SECONDS} seconds'))
        ORDER BY CASE WHEN completed_at IS NULL THEN 0 ELSE 1 END, created_at DESC LIMIT 1`, [tableId]);
@@ -913,11 +1243,49 @@ class PokerGameService {
                     }
                 }
             }
+            // Structured per-pot breakdown for the UI (main / side / uncalled).
+            // Sourced from chevtek's live table.pots which is authoritative while
+            // a hand is in progress. Skipped when no live table (e.g. between
+            // hands) — the client falls back to the `pot` scalar.
+            let potsArr;
+            if (liveTable && Array.isArray(liveTable.pots) && liveTable.pots.length > 0) {
+                // Drop the trailing empty pot chevtek always pushes after the all-in loop.
+                const realPots = liveTable.pots.filter((p) => p && p.amount > 0);
+                if (realPots.length > 0) {
+                    potsArr = realPots.map((p, i) => {
+                        const isLast = i === realPots.length - 1;
+                        const isRefund = realPots.length > 1 &&
+                            isLast &&
+                            Array.isArray(p.eligiblePlayers) &&
+                            p.eligiblePlayers.length === 1;
+                        let label;
+                        if (realPots.length === 1)
+                            label = 'Pot';
+                        else if (i === 0)
+                            label = 'Main Pot';
+                        else if (isRefund)
+                            label = 'Uncalled';
+                        else
+                            label = realPots.length === 2 ? 'Side Pot' : `Side Pot ${i}`;
+                        const winnerAddresses = Array.isArray(p.winners) && p.winners.length > 0
+                            ? p.winners
+                                .filter((w) => w && !w.folded)
+                                .map((w) => this.normalizeAddress(w.id))
+                            : undefined;
+                        return {
+                            amount: String(Math.max(0, Math.round(p.amount))),
+                            label,
+                            winnerAddresses,
+                        };
+                    });
+                }
+            }
             currentHand = {
                 handId,
                 street,
                 communityCards,
                 pot: potStr,
+                pots: potsArr,
                 actingPosition,
                 lastAction,
                 recentActions,
@@ -925,6 +1293,11 @@ class PokerGameService {
                 minRaise,
                 toCall,
                 turnStartedAt: h.turn_started_at ? new Date(h.turn_started_at).toISOString() : null,
+                // Provably-fair commitment — the hash of the server seed the deck was
+                // derived from. Published at hand start; the plaintext seed stays
+                // hidden until showdown. Lets the UI surface "the cards were locked in
+                // before the deal" in real time.
+                serverSeedHash: h.server_seed_hash ?? undefined,
             };
             // Hole cards for requesting player
             if (forPlayerAddr) {
@@ -935,8 +1308,11 @@ class PokerGameService {
                         : JSON.parse(holeResult.rows[0].cards);
                 }
             }
-            // Showdown: winners always; hole cards only when ≥2 dealt players reached the end without folding.
-            if (street === 'showdown') {
+            // Showdown (or mid-runout): winners on the final frame; hole cards exposed
+            // as soon as the all-in is locked so the runout build-up matches real-poker
+            // UX (cards revealed BEFORE the board runs out).
+            const isMidRunout = h.runout_resolved_at != null && h.completed_at == null;
+            if (street === 'showdown' || isMidRunout) {
                 const dealtHoleResult = await pool.query('SELECT player_address FROM poker_hand_hole_cards WHERE hand_id = $1', [handId]);
                 const dealtAddrs = new Set(dealtHoleResult.rows.map((r) => this.normalizeAddress(r.player_address)));
                 let nonFoldedDealtCount = 0;
@@ -951,6 +1327,11 @@ class PokerGameService {
                     const showdownHands = {};
                     for (const row of allHoleResult.rows) {
                         const cards = Array.isArray(row.cards) ? row.cards : JSON.parse(row.cards ?? '[]');
+                        // Exclude players who folded before the all-in — they shouldn't have
+                        // their cards exposed during the runout. (At final showdown we keep
+                        // the existing behavior of exposing all dealt-in hole cards.)
+                        if (isMidRunout && foldedSet.has(this.normalizeAddress(row.player_address)))
+                            continue;
                         showdownHands[this.normalizeAddress(row.player_address)] = cards;
                     }
                     currentHand.showdownHands = showdownHands;
@@ -1130,35 +1511,39 @@ class PokerGameService {
     // setSitOut / setSitBack — voluntary sit-out for cash games
     // ---------------------------------------------------------------------------
     async setSitOut(tableId, playerAddress) {
-        const pool = this.getPool();
-        const normalized = playerAddress.toLowerCase();
-        const result = await pool.query(`UPDATE poker_seats
-       SET status = 'sitting_out', sit_out_since = NOW(), consecutive_timeouts = 0
-       WHERE table_id = $1 AND player_address = $2
-       RETURNING player_address`, [tableId, normalized]);
-        if (result.rows.length === 0)
-            throw new Error('Seat not found');
-        this.notifyCallback?.(`poker:table:${tableId}`, 'poker_player_sitting_out', {
-            tableId,
-            playerAddress: normalized,
-            reason: 'voluntary',
+        return this.withTableLock(tableId, async () => {
+            const pool = this.getPool();
+            const normalized = this.normalizeAddress(playerAddress);
+            const result = await pool.query(`UPDATE poker_seats
+         SET status = 'sitting_out', sit_out_since = NOW(), consecutive_timeouts = 0
+         WHERE table_id = $1 AND player_address = $2
+         RETURNING player_address`, [tableId, normalized]);
+            if (result.rows.length === 0)
+                throw new Error('Seat not found');
+            this.notifyCallback?.(`poker:table:${tableId}`, 'poker_player_sitting_out', {
+                tableId,
+                playerAddress: normalized,
+                reason: 'voluntary',
+            });
+            logger_1.logger.info('Player voluntarily sitting out', { tableId, player: normalized });
+            await this.broadcastState(tableId);
+            return this.getTableState(tableId, normalized);
         });
-        logger_1.logger.info('Player voluntarily sitting out', { tableId, player: normalized });
-        await this.broadcastState(tableId);
-        return this.getTableState(tableId, normalized);
     }
     async setSitBack(tableId, playerAddress) {
-        const pool = this.getPool();
-        const normalized = playerAddress.toLowerCase();
-        const result = await pool.query(`UPDATE poker_seats
-       SET status = 'active', sit_out_since = NULL, consecutive_timeouts = 0
-       WHERE table_id = $1 AND player_address = $2 AND status = 'sitting_out'
-       RETURNING player_address`, [tableId, normalized]);
-        if (result.rows.length === 0)
-            throw new Error('Seat not found or not sitting out');
-        logger_1.logger.info('Player sitting back in', { tableId, player: normalized });
-        await this.broadcastState(tableId);
-        return this.getTableState(tableId, normalized);
+        return this.withTableLock(tableId, async () => {
+            const pool = this.getPool();
+            const normalized = this.normalizeAddress(playerAddress);
+            const result = await pool.query(`UPDATE poker_seats
+         SET status = 'active', sit_out_since = NULL, consecutive_timeouts = 0
+         WHERE table_id = $1 AND player_address = $2 AND status = 'sitting_out'
+         RETURNING player_address`, [tableId, normalized]);
+            if (result.rows.length === 0)
+                throw new Error('Seat not found or not sitting out');
+            logger_1.logger.info('Player sitting back in', { tableId, player: normalized });
+            await this.broadcastState(tableId);
+            return this.getTableState(tableId, normalized);
+        });
     }
     /** Kick players who have been sitting out for >= 15 minutes (cash games only). */
     async kickStaleSitOuts() {
@@ -1245,11 +1630,23 @@ class PokerGameService {
         table.moveDealer(desiredDealer);
         // Set handNumber to 0 so dealCards() increments to 1, and (1 > 1) = false → no auto-move
         table.handNumber = 0;
-        // Generate seeds for DB record (deck is chevtek's internal shuffle)
+        // Provably-fair seeds for THIS hand. The plaintext server seed must never
+        // hit the live `poker_hands` row — it stays in `poker_hand_pending_seeds`
+        // until showdown, then moves into `poker_hands.server_seed` via
+        // `persistShowdown`. The deck below is *deterministically* derived from
+        // (serverSeed, clientSeed, nonce=0) — chevtek's Math.random() shuffle is
+        // bypassed by overriding `table.newDeck` on the instance.
         const handNumber = Number(tblRow.hand_number) + 1;
         const serverSeed = crypto_1.default.randomBytes(32).toString('hex');
         const serverSeedHash = this.pfService.createServerSeedHash(serverSeed);
         const clientSeed = crypto_1.default.randomBytes(16).toString('hex');
+        const deckInts = this.pfService.fisherYatesShuffle(serverSeed, clientSeed, 0);
+        const deckCards = deckInts.map(intToCard);
+        // Instance method override — chevtek's `dealCards()` calls `this.newDeck()`
+        // which now returns our seed-derived deck. `slice()` so each call gets a
+        // fresh array (in case anything calls newDeck twice). Cards are popped
+        // from the end; deckInts[51] is the first card dealt.
+        table.newDeck = () => deckCards.slice();
         // Capture starting stacks BEFORE dealCards() posts blinds.
         const startingStacksByAddr = new Map();
         for (const player of table.players) {
@@ -1257,7 +1654,8 @@ class PokerGameService {
                 continue;
             startingStacksByAddr.set(player.id, BigInt(Math.max(0, Math.round(player.stackSize))));
         }
-        // Deal cards (sets currentRound, posts blinds, sets currentPosition, shuffles deck internally)
+        // Deal cards: with our newDeck override above, chevtek now pops from the
+        // deterministic deck. Blinds posted, currentRound set, currentPosition set.
         table.dealCards();
         // Store live table
         this.activeTables.set(tableId, table);
@@ -1282,27 +1680,33 @@ class PokerGameService {
         if (table.currentRound && table.actingPlayers.length <= 1) {
             table.nextAction();
         }
-        // Insert hand into DB (chip ints)
+        // Insert hand into DB (chip ints). Plaintext serverSeed goes into the
+        // companion `poker_hand_pending_seeds` row, not the live `poker_hands`
+        // row — both writes share a transaction so the seed is recoverable iff
+        // the hand was committed.
         const potStr0 = String(Math.max(0, Math.round((0, poker_chip_scale_1.totalPotChips)(table))));
         const lastRaiseSizeStr = String(Math.round(bb));
         const tournamentIdForHand = tblRow.tournament_id ?? null;
-        const handInsert = await pool.query(`INSERT INTO poker_hands
-         (table_id, tournament_id, hand_number, button_position, server_seed_hash, server_seed, client_seed,
-          community_cards, pot_amount, street, acting_position, turn_started_at, last_raise_size)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, '[]'::JSONB, $8::NUMERIC, 'preflop', $9, NOW(), $10)
-       RETURNING id`, [
-            tableId,
-            tournamentIdForHand,
-            handNumber,
-            table.dealerPosition,
-            serverSeedHash,
-            serverSeed,
-            clientSeed,
-            potStr0,
-            table.currentPosition ?? null,
-            lastRaiseSizeStr,
-        ]);
-        const handId = handInsert.rows[0].id;
+        const handId = await this.dbService.withTransaction(async (client) => {
+            const handInsert = await client.query(`INSERT INTO poker_hands
+           (table_id, tournament_id, hand_number, button_position, server_seed_hash, server_seed, client_seed,
+            community_cards, pot_amount, street, acting_position, turn_started_at, last_raise_size)
+         VALUES ($1, $2, $3, $4, $5, NULL, $6, '[]'::JSONB, $7::NUMERIC, 'preflop', $8, NOW(), $9)
+         RETURNING id`, [
+                tableId,
+                tournamentIdForHand,
+                handNumber,
+                table.dealerPosition,
+                serverSeedHash,
+                clientSeed,
+                potStr0,
+                table.currentPosition ?? null,
+                lastRaiseSizeStr,
+            ]);
+            const id = handInsert.rows[0].id;
+            await client.query(`INSERT INTO poker_hand_pending_seeds (hand_id, server_seed) VALUES ($1, $2)`, [id, serverSeed]);
+            return id;
+        });
         this.handStartingStacks.set(handId, startingStacksByAddr);
         // Insert hole cards
         for (const [addr, cards] of holeCardsByAddr) {
@@ -1376,8 +1780,14 @@ class PokerGameService {
         const tableRow = await pool.query('SELECT big_blind FROM poker_tables WHERE id = $1', [tableId]);
         const bbChips = Number(tableRow.rows[0]?.big_blind ?? 0);
         const parseAmountChips = () => {
-            const raw = BigInt(amount ?? '0');
-            let amt = Math.min(Number(raw), actor.stackSize);
+            // Validate before BigInt() — BigInt throws on "NaN", "abc", "1e308",
+            // decimals etc., which would surface as an uncaught error rather than
+            // a clean "Invalid amount" response to the client.
+            const raw = amount ?? '0';
+            if (typeof raw !== 'string' || !/^-?\d+$/.test(raw)) {
+                throw new Error('Invalid amount: must be a whole-number integer string');
+            }
+            let amt = Math.min(Number(BigInt(raw)), actor.stackSize);
             if (!Number.isFinite(amt) || amt < 0)
                 amt = 0;
             return amt;
@@ -1497,11 +1907,28 @@ class PokerGameService {
         const resultWinners = [];
         // Integer chip split per pot (no float drift), then convert to wei for cash.
         const winnerChips = new Map();
+        // Refund-pot detection is gated on activePlayers.length >= 2 (a real
+        // showdown). On a fold-out (single survivor), chevtek's line-346
+        // filter strips folded players from each pot's eligibles, often
+        // leaving the survivor as the sole eligible player even for the main
+        // pot — that's a legit win, NOT a refund, so we must not skip those.
+        const realShowdown = Array.isArray(table.activePlayers) && table.activePlayers.length >= 2;
         for (const pot of table.pots) {
             if (!pot.winners || pot.winners.length === 0)
                 continue;
             const nonFoldedWinners = pot.winners.filter((w) => !w.folded);
             if (nonFoldedWinners.length === 0)
+                continue;
+            // Uncalled-bet refund pot — at a real showdown, a pot with only one
+            // eligible player can only arise because that player over-bet the
+            // covering opponent (e.g. SB posts 3,200 while the only opponent's
+            // BB is all-in for 2,000; SB's 1,200 surplus comes back here).
+            // Industry rooms don't treat this as winning the hand. Skip it from
+            // winnerChips so the player gets no WINNER badge, no hand-name
+            // pill, no rake, and no entry in the activity feed. Their stack
+            // already reflects the refund — chevtek credits .stackSize during
+            // showdown().
+            if (realShowdown && Array.isArray(pot.eligiblePlayers) && pot.eligiblePlayers.length <= 1)
                 continue;
             const potChips = BigInt(Math.max(0, Math.round(pot.amount)));
             const ids = nonFoldedWinners.map((w) => w.id);
@@ -1568,10 +1995,31 @@ class PokerGameService {
             }
             resultWinners.push({ address: addr, amount: amount.toString(), handName, winningCardIndices });
         }
-        await pool.query(`UPDATE poker_hands
-       SET completed_at = NOW(), street = 'showdown', acting_position = NULL,
-           community_cards = $2::JSONB, result = $3::JSONB, rake_amount = $4::NUMERIC
-       WHERE id = $1`, [handId, JSON.stringify(communityInts), JSON.stringify({ winners: resultWinners }), totalRakeChips.toString()]);
+        // Reveal the provably-fair server seed: move the plaintext from
+        // `poker_hand_pending_seeds` into `poker_hands.server_seed` and complete
+        // the hand. Wrapped in a transaction so a crash between the reveal and
+        // the completion can't leave the seed published before completed_at is
+        // set (which is the integrity guarantee the verify endpoint relies on).
+        // For legacy hands started before migration 119 the SELECT returns 0 rows
+        // and the seed write is skipped — backward-safe.
+        await this.dbService.withTransaction(async (client) => {
+            const pending = await client.query(`SELECT server_seed FROM poker_hand_pending_seeds WHERE hand_id = $1`, [handId]);
+            const revealedSeed = pending.rows[0]?.server_seed ?? null;
+            await client.query(`UPDATE poker_hands
+         SET completed_at = NOW(), street = 'showdown', acting_position = NULL,
+             community_cards = $2::JSONB, result = $3::JSONB, rake_amount = $4::NUMERIC,
+             server_seed = COALESCE($5, server_seed)
+         WHERE id = $1`, [
+                handId,
+                JSON.stringify(communityInts),
+                JSON.stringify({ winners: resultWinners }),
+                totalRakeChips.toString(),
+                revealedSeed,
+            ]);
+            if (revealedSeed != null) {
+                await client.query(`DELETE FROM poker_hand_pending_seeds WHERE hand_id = $1`, [handId]);
+            }
+        });
         try {
             await this.populateHandPlayers(pool, handId, table, {
                 winnerChips,
@@ -2323,9 +2771,40 @@ class PokerGameService {
      * Remove a player from a tournament table without crediting their stack back.
      * Used by PokerTournamentService when a player is eliminated.
      */
+    /**
+     * Public entry: tournament-side leave / elimination. Takes the per-table
+     * lock so concurrent `playerAction` / `autoFoldTimedOutTurns` ticks can't
+     * race the `standUp` + DB writes. Called from `eliminateBustedTournamentSeats`
+     * in the post-hand timer body (which does NOT hold the lock).
+     *
+     * **Do NOT call this from a code path that already holds the table lock**
+     * (the lock is not re-entrant — it would deadlock). Internal callers under
+     * a held lock should call `leaveTableTournamentNoLock` instead.
+     */
     async leaveTableTournament(tableId, playerAddress) {
+        return this.withTableLock(tableId, () => this._leaveTableTournament(tableId, playerAddress));
+    }
+    /**
+     * Lock-free variant of {@link leaveTableTournament}. Assumes the caller
+     * already holds the per-table lock — used by recovery paths fired from
+     * inside `tryStartNextHand`'s lock body (e.g.
+     * `recoverTournamentTableIfUnderTwoStackedSeats`). Using the lock-acquiring
+     * public method from those paths would deadlock since `withTableLock` is
+     * not re-entrant.
+     */
+    async leaveTableTournamentNoLock(tableId, playerAddress) {
+        return this._leaveTableTournament(tableId, playerAddress);
+    }
+    async _leaveTableTournament(tableId, playerAddress) {
         const normalized = this.normalizeAddress(playerAddress);
         const pool = this.getPool();
+        // Collapse any in-flight runout so the leaving player's resolved stack
+        // matches what they should be eliminated/credited with. Tournament leaves
+        // (eliminations) typically arrive AFTER the hand completes, but a
+        // forced-leave during a mid-runout window must finalize first.
+        if (this.runoutInFlight.has(tableId)) {
+            await this.finalizeRunoutImmediately(tableId);
+        }
         const activeHandResult = await pool.query(`SELECT id FROM poker_hands WHERE table_id = $1 AND completed_at IS NULL LIMIT 1`, [tableId]);
         const activeTable = this.activeTables.get(tableId);
         if (activeHandResult.rows.length > 0 && activeTable) {

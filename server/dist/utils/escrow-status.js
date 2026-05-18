@@ -3,7 +3,7 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.getEscrowPoolStatus = getEscrowPoolStatus;
 exports.getEscrowV3PoolStatus = getEscrowV3PoolStatus;
 const chain_client_1 = require("./chain-client");
-const tournament_prize_escrow_v2_1 = require("../abi/tournament-prize-escrow-v2");
+const tournament_prize_escrow_v6_1 = require("../abi/tournament-prize-escrow-v6");
 const tournament_prize_escrow_v3_1 = require("../abi/tournament-prize-escrow-v3");
 const tournament_id_bytes32_1 = require("./tournament-id-bytes32");
 const tournament_escrow_address_1 = require("./tournament-escrow-address");
@@ -28,7 +28,7 @@ async function getEscrowPoolStatus(tournamentId) {
         const idBytes32 = (0, tournament_id_bytes32_1.tournamentIdToBytes32)(tournamentId);
         const result = await client.readContract({
             address: escrowBytes32Address(),
-            abi: tournament_prize_escrow_v2_1.tournamentPrizeEscrowV2Abi,
+            abi: tournament_prize_escrow_v6_1.tournamentPrizeEscrowV6Abi,
             functionName: 'getPool',
             args: [idBytes32],
         });

@@ -7,7 +7,7 @@ exports.getActivePools = getActivePools;
 exports.getPoolDetails = getPoolDetails;
 exports.getTotalValueLocked = getTotalValueLocked;
 const chain_client_1 = require("./chain-client");
-const tournament_prize_escrow_v2_1 = require("../abi/tournament-prize-escrow-v2");
+const tournament_prize_escrow_v6_1 = require("../abi/tournament-prize-escrow-v6");
 const tournament_id_bytes32_1 = require("./tournament-id-bytes32");
 const tournament_escrow_address_1 = require("./tournament-escrow-address");
 function escrowBytes32Address() {
@@ -18,7 +18,7 @@ async function readAllPools() {
     const client = (0, chain_client_1.getPublicClient)();
     const idsRaw = (await client.readContract({
         address: escrowBytes32Address(),
-        abi: tournament_prize_escrow_v2_1.tournamentPrizeEscrowV2Abi,
+        abi: tournament_prize_escrow_v6_1.tournamentPrizeEscrowV6Abi,
         functionName: 'getAllTournamentIds',
     }));
     const ids = idsRaw;
@@ -28,7 +28,7 @@ async function readAllPools() {
     const pools = await Promise.all(ids.map(async (id) => {
         const r = (await client.readContract({
             address: escrowBytes32Address(),
-            abi: tournament_prize_escrow_v2_1.tournamentPrizeEscrowV2Abi,
+            abi: tournament_prize_escrow_v6_1.tournamentPrizeEscrowV6Abi,
             functionName: 'getPool',
             args: [id],
         }));
@@ -137,7 +137,7 @@ async function getPoolDetails(tournamentId) {
         const idBytes32 = (0, tournament_id_bytes32_1.tournamentIdToBytes32)(tournamentId);
         const r = (await client.readContract({
             address: escrowBytes32Address(),
-            abi: tournament_prize_escrow_v2_1.tournamentPrizeEscrowV2Abi,
+            abi: tournament_prize_escrow_v6_1.tournamentPrizeEscrowV6Abi,
             functionName: 'getPool',
             args: [idBytes32],
         }));

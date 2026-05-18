@@ -3,7 +3,7 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.verifyEscrowAddToPrizePoolJoinTx = verifyEscrowAddToPrizePoolJoinTx;
 const viem_1 = require("viem");
 const chain_client_1 = require("./chain-client");
-const tournament_prize_escrow_v2_1 = require("../abi/tournament-prize-escrow-v2");
+const tournament_prize_escrow_v6_1 = require("../abi/tournament-prize-escrow-v6");
 const tournament_id_bytes32_1 = require("./tournament-id-bytes32");
 const tournament_escrow_address_1 = require("./tournament-escrow-address");
 /**
@@ -55,7 +55,7 @@ async function verifyEscrowAddToPrizePoolJoinTx(params) {
                 continue;
             try {
                 const decoded = (0, viem_1.decodeEventLog)({
-                    abi: tournament_prize_escrow_v2_1.tournamentPrizeEscrowV2Abi,
+                    abi: tournament_prize_escrow_v6_1.tournamentPrizeEscrowV6Abi,
                     data: (log.data ?? '0x'),
                     topics: log.topics,
                     strict: false,
