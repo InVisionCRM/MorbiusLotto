@@ -28,7 +28,11 @@ import { PokerPopups } from './PokerPopups';
 import { PokerPanels } from './PokerPanels';
 import { PokerBottomBar, POKER_BOTTOM_RESERVE_VAR } from './PokerBottomBar';
 import { usePokerConnection } from './PokerConnection';
-import { usePokerActionsLogic } from './PokerActionsLogic';
+import {
+  usePokerActionsLogic,
+  applyPokerOptimisticOverlay,
+  type PokerOptimisticOverlay,
+} from './PokerActionsLogic';
 import { usePokerSeatOverlays } from './PokerSeatOverlays';
 import { usePokerMobileZoomLock } from './PokerMobileZoomLock';
 import { usePokerTurnClock } from './PokerTurnClock';
@@ -117,7 +121,12 @@ export default function PokerTablePage() {
     replaceUrl,
     skipLeaveOnUnload: Boolean(tournamentIdParam),
   });
-  const renderedState = testStateOverride ?? state;
+  const [optimisticOverlay, setOptimisticOverlay] = useState<PokerOptimisticOverlay | null>(null);
+  const renderedState = useMemo(() => {
+    if (testStateOverride) return testStateOverride;
+    if (!state || !optimisticOverlay) return state;
+    return applyPokerOptimisticOverlay(state, optimisticOverlay);
+  }, [testStateOverride, state, optimisticOverlay]);
 
   const handleTournamentCompleted = useCallback(
     (payload: PokerTournamentCompletedPayload) => {
@@ -269,6 +278,7 @@ export default function PokerTablePage() {
     effectivePlayerAddress,
     clientRef,
     applyE2EMockAction,
+    setOptimisticOverlay,
   });
 
   const handleLeaveClick = useCallback(() => {
