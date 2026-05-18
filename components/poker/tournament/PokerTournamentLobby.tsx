@@ -313,8 +313,12 @@ export function PokerTournamentLobby({
 
   const tournamentHook = usePokerTournament({
     wsClient,
+    myAddress: meLower,
     onTournamentStarted: (tournamentId, tableId) => {
       onGoToTable?.(tableId, tournamentId);
+    },
+    onMyTableChanged: (newTableId, tournamentId) => {
+      onGoToTable?.(newTableId, tournamentId);
     },
     onTournamentCompleted: (payload) => {
       const list = payload.standings;
