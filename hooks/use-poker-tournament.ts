@@ -131,6 +131,12 @@ export interface PokerTournamentSummary {
   /** Token contract name for UI when available. */
   prizeTokenName?: string | null;
   tableId: string | null;
+  /**
+   * MTT: caller's actual seat table. SNG: equals `tableId`. Null when caller isn't seated.
+   * Prefer `myTableId ?? tableId` for "go to my table" navigation — bare `tableId` is the
+   * lowest-seq table and is wrong for MTT players seated at table 2, 3, ...
+   */
+  myTableId?: string | null;
   createdAt: string;
   creatorAddress: string | null;
   prizeDistributionType: string;
@@ -519,14 +525,16 @@ export function usePokerTournament({
       // Restore active tournament state from list (handles page refresh).
       // Includes busted entries so a player who refreshes after busting still rejoins
       // the room for spectator events and can navigate back to the live table.
+      // MTT: `myTableId` is the caller's actual seat (set by the server when seated);
+      // fall back to `tableId` (lowest-seq) for SNG and spectators.
       const active = tournaments.find((t) =>
         (t.isRegistered || t.myEntryStatus === 'busted')
         && t.status === 'active'
-        && t.tableId,
+        && (t.myTableId || t.tableId),
       );
       if (active) {
         setMyTournamentId((prev) => prev ?? active.tournamentId);
-        setMyTableId((prev) => prev ?? active.tableId);
+        setMyTableId((prev) => prev ?? (active.myTableId ?? active.tableId));
         setMyEntryStatus(active.myEntryStatus ?? 'playing');
       }
 
@@ -710,10 +718,12 @@ export function usePokerTournament({
       if (!t.isRegistered || !t.scheduledStartAt) return false;
       if (t.status === 'cancelled') return false;
       if (new Date(t.scheduledStartAt).getTime() > Date.now()) return false;
-      if (t.status === 'active' && t.tableId && myTableId === t.tableId && myTournamentId === t.tournamentId) {
+      // MTT: my actual seat table is `myTableId`; SNG: falls back to `tableId`.
+      const myAssigned = t.myTableId ?? t.tableId;
+      if (t.status === 'active' && myAssigned && myTableId === myAssigned && myTournamentId === t.tournamentId) {
         return false;
       }
-      return t.status === 'registration' || (t.status === 'active' && (!t.tableId || myTableId !== t.tableId || myTournamentId !== t.tournamentId));
+      return t.status === 'registration' || (t.status === 'active' && (!myAssigned || myTableId !== myAssigned || myTournamentId !== t.tournamentId));
     });
 
     let intervalId: ReturnType<typeof setInterval> | null = null;

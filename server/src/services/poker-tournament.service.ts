@@ -167,6 +167,14 @@ export interface PokerTournamentSummary {
   /** Token contract name for UI (e.g. from PulseScan); null = use symbol / generic label. */
   prizeTokenName: string | null;
   tableId: string | null;
+  /**
+   * MTT: the requesting wallet's actual seat table. SNG: equals `tableId`. Null when the
+   * caller isn't seated (spectator / busted / pre-activation / no wallet on request).
+   * Clients should prefer `myTableId ?? tableId` for "navigate to my table" affordances —
+   * the bare `tableId` is the lowest-table-seq table and is wrong for MTT players
+   * who landed at table 2, 3, …
+   */
+  myTableId: string | null;
   createdAt: string;
   creatorAddress: string | null;
   prizeDistributionType: string;
@@ -982,7 +990,19 @@ export class PokerTournamentService {
     const fastCheck = await this.pool.query(
       `SELECT te.id AS entry_id, te.status AS entry_status,
               t.status AS tournament_status, t.is_private, t.pin_code,
-              (SELECT id FROM poker_tables WHERE tournament_id = $1 LIMIT 1) AS table_id
+              /* MTT: prefer the caller's actual seat table over the lowest-seq table.
+                 Falls back to the lowest-seq table for spectators / pre-activation. */
+              COALESCE(
+                (SELECT ps.table_id FROM poker_seats ps
+                   JOIN poker_tables pkt ON pkt.id = ps.table_id
+                  WHERE pkt.tournament_id = $1
+                    AND LOWER(ps.player_address) = $2
+                  LIMIT 1),
+                (SELECT id FROM poker_tables
+                  WHERE tournament_id = $1
+                  ORDER BY table_seq NULLS LAST, created_at
+                  LIMIT 1)
+              ) AS table_id
          FROM tournament_entries te
          JOIN tournaments t ON t.id = te.tournament_id
         WHERE te.tournament_id = $1
@@ -1057,9 +1077,21 @@ export class PokerTournamentService {
         const entryId = existing.rows[0].id;
         // Use same checked-out client — do not call `pool.query` here while still holding `client`
         // (would consume two pool slots and contributes to "timeout exceeded when trying to connect").
+        // MTT: caller's actual seat table comes first; fall back to the lowest-seq table for
+        // spectators or any case where they aren't yet seated.
         const tableResult = await client.query(
-          'SELECT id FROM poker_tables WHERE tournament_id = $1 LIMIT 1',
-          [tournamentId]
+          `SELECT COALESCE(
+             (SELECT ps.table_id FROM poker_seats ps
+                JOIN poker_tables pkt ON pkt.id = ps.table_id
+               WHERE pkt.tournament_id = $1
+                 AND LOWER(ps.player_address) = $2
+               LIMIT 1),
+             (SELECT id FROM poker_tables
+                WHERE tournament_id = $1
+                ORDER BY table_seq NULLS LAST, created_at
+                LIMIT 1)
+           ) AS id`,
+          [tournamentId, normalized]
         );
         const tableId = tableResult.rows[0]?.id ?? null;
         logger.info('Player already registered for poker tournament, returning existing entry', { tournamentId, playerAddress: normalized, entryId, tableId });
@@ -2830,7 +2862,18 @@ export class PokerTournamentService {
             WHERE te.tournament_id = r.tournament_id
               AND $1::text IS NOT NULL
               AND LOWER(te.player_address) = $1::text
-            LIMIT 1) AS my_entry_status
+            LIMIT 1) AS my_entry_status,
+         /* MTT: the caller's actual seat table (NULL for non-MTT or non-seated/spectator).
+            Lobby uses this when present so each MTT player navigates to THEIR table, not the
+            first one by table_seq. Falls back to r.table_id on the client when null. */
+         CASE WHEN $1::text IS NOT NULL THEN (
+           SELECT ps.table_id
+             FROM poker_seats ps
+             JOIN poker_tables pkt ON pkt.id = ps.table_id
+            WHERE pkt.tournament_id = r.tournament_id
+              AND LOWER(ps.player_address) = $1::text
+            LIMIT 1
+         ) ELSE NULL END AS my_table_id
        FROM poker_tournament_registrations r
        LEFT JOIN poker_tables pt ON pt.id = r.table_id
        WHERE (
@@ -2877,6 +2920,7 @@ export class PokerTournamentService {
         prizeTokenSymbol:      r.prize_token_symbol ?? null,
         prizeTokenName:        r.prize_token_name ?? null,
         tableId:               r.table_id ?? null,
+        myTableId:             r.my_table_id ?? null,
         createdAt:             r.created_at?.toISOString() ?? '',
         creatorAddress:        r.creator_address ?? null,
         prizeDistributionType: r.prize_distribution_type ?? 'winner_takes_all',
