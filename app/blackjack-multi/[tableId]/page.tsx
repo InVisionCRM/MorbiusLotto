@@ -16,6 +16,7 @@ import { BlackjackMultiSoundPanel } from '@/components/BLACKJACK/multi/Blackjack
 import { BlackjackMultiConnectionOverlay } from '@/components/BLACKJACK/multi/BlackjackMultiConnectionOverlay';
 import { BlackjackMultiTopBar } from '@/components/BLACKJACK/multi/BlackjackMultiTopBar';
 import { BlackjackMultiBetActionPanel } from '@/components/BLACKJACK/multi/BlackjackMultiBetActionPanel';
+import { BlackjackTableSwitcherModal } from '@/components/BLACKJACK/multi/BlackjackTableSwitcherModal';
 import { BlackjackMultiTipDealerControl } from '@/components/BLACKJACK/multi/BlackjackMultiTipDealerControl';
 import { BlackjackMultiDealerArea } from '@/components/BLACKJACK/multi/BlackjackMultiDealerArea';
 import {
@@ -33,7 +34,6 @@ import type { BlackjackMultiRealTimeBetChartRef } from '@/components/BLACKJACK/B
 import { PlayerStatsDashboard } from '@/components/BLACKJACK/PlayerStatsDashboard';
 import { TableTokenProfileCard } from '@/components/BLACKJACK/TableTokenProfileCard';
 import { PlayerProfileModal } from '@/components/shared/PlayerProfileModal';
-import { DisplayNameWelcomeModal } from '@/components/shared/DisplayNameWelcomeModal';
 import { BLACKJACK_ADDRESS, MORBIUS_TOKEN_ADDRESS } from '@/lib/contracts';
 import Image from 'next/image';
 import { BLACKJACK_IMAGE_BACKGROUNDS, SOUNDS_BETTING_OPEN, SOUNDS_BETTING_CLOSED, SOUNDS_DEALER_PHRASE, SOUNDS_PLAYER_WINS, SOUNDS_PLAYER_BLACKJACK, SOUNDS_DEALER_WINS, SOUNDS_DEALER_BLACKJACK, SOUNDS_TIP, SOUND_PUSH, pickRandom } from '@/app/BLACKJACK/constants';
@@ -171,6 +171,7 @@ export default function BlackjackMultiTablePage() {
   const [tipAnimating, setTipAnimating] = useState(false);
   const [multiClientSeed, setMultiClientSeed] = useState(() => generateHexClientSeed());
   const [provablyFairOpen, setProvablyFairOpen] = useState(false);
+  const [tableSwitcherOpen, setTableSwitcherOpen] = useState(false);
   const wsClientRef = useRef<BlackjackWebSocketClient | null>(null);
   const [wsClient, setWsClient] = useState<BlackjackWebSocketClient | null>(null);
   const latestStateVersionRef = useRef(0);
@@ -847,7 +848,7 @@ export default function BlackjackMultiTablePage() {
   }, []);
 
   const roomId = `blackjack:table:${tableId}`;
-  const { messages: chatMessages, sendMessage: sendChatMessage, setDisplayName: setChatDisplayName } = useChat(roomId, { wsClient, wsConnected });
+  const { messages: chatMessages, sendMessage: sendChatMessage } = useChat(roomId, { wsClient, wsConnected });
 
   // ── System chat messages (welcome, FactBot, idle warnings) ──
   const [systemChatMessages, setSystemChatMessages] = useState<BlackjackMultiSystemChatMessage[]>([]);
@@ -1086,6 +1087,7 @@ export default function BlackjackMultiTablePage() {
     id: state?.themeId ?? 'glowingTable',
   });
   const tableImageSrc = theme.kind === 'image' ? theme.src : BLACKJACK_IMAGE_BACKGROUNDS[0].src;
+  const tableProfile = getTableProfile('image', state?.themeId ?? BLACKJACK_IMAGE_BACKGROUNDS[0].id);
 
   // Scale board content to fill the 16:9 container at any size
   const tableRef = useRef<HTMLDivElement>(null);
@@ -1108,11 +1110,6 @@ export default function BlackjackMultiTablePage() {
 
   return (
     <GlobalMainNav page="blackjackMulti" showBackArrow backArrowHref="/blackjack-multi" backArrowLabel="Lobby">
-      <DisplayNameWelcomeModal
-        wsClient={wsClient}
-        wsConnected={wsConnected}
-        hint="You're about to join the blackjack table — pick a name so other players know who you are."
-      />
       <div
         className="relative min-h-screen h-full w-full text-white"
         style={{
@@ -1469,6 +1466,13 @@ export default function BlackjackMultiTablePage() {
           soundEnabled={soundEnabled}
           playSound={playSound}
           placeBet={placeBet}
+          tokenLogoUrl={tableProfile?.logo_url ?? null}
+          tokenTicker={tableProfile?.ticker ?? null}
+          onChangeTable={() => router.push('/blackjack-multi')}
+          onLogoClick={() => setTableSwitcherOpen(true)}
+          actingSeatPosition={state?.actingSeatPosition ?? null}
+          bettingStartedAt={state?.bettingStartedAt ?? null}
+          turnStartedAt={state?.turnStartedAt ?? null}
         />
 
         <BlackjackMultiInfoPanel
@@ -1478,7 +1482,6 @@ export default function BlackjackMultiTablePage() {
           address={address}
           wsConnected={wsConnected}
           onSendChatMessage={sendChatMessage}
-          setDisplayName={setChatDisplayName}
           chartRef={chartRef}
           chartSessionStartTime={chartSessionStartTime.current}
           formatMorbius={formatMorbius}
@@ -1551,6 +1554,13 @@ export default function BlackjackMultiTablePage() {
         onOpenChange={setProvablyFairOpen}
         value={multiClientSeed}
         onChange={setMultiClientSeed}
+      />
+
+      <BlackjackTableSwitcherModal
+        open={tableSwitcherOpen}
+        onClose={() => setTableSwitcherOpen(false)}
+        currentTableId={tableId}
+        getTableProfile={getTableProfile}
       />
 
       </main>
