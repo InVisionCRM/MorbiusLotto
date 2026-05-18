@@ -1,0 +1,858 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>MTT Creator — Design Preview</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Mitr:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          fontFamily: {
+            mitr: ['Mitr', 'sans-serif'],
+            mono: ['JetBrains Mono', 'ui-monospace', 'monospace'],
+          },
+        },
+      },
+    };
+  </script>
+  <style>
+    body { background: #020409; }
+    @keyframes mtt-step-flash {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.55; }
+    }
+    .mtt-flash { animation: mtt-step-flash 1.8s ease-in-out infinite; }
+    .screen { display: none; min-height: 100vh; }
+    .screen.active { display: block; }
+    .bg-hero {
+      background:
+        radial-gradient(ellipse at top, rgba(6,182,212,0.10), transparent 60%),
+        linear-gradient(180deg, #050a14 0%, #020409 100%);
+    }
+    .bg-step-header {
+      background: linear-gradient(135deg, #0c1929 0%, #050a14 100%);
+    }
+    .bg-step-card {
+      background: linear-gradient(155deg, #0c1929 0%, #0a0f1a 50%, #0d1117 100%);
+      box-shadow: 0 24px 60px -28px rgba(6,182,212,0.25);
+    }
+    .bg-template-card {
+      background: linear-gradient(155deg, #0c1929 0%, #0a0f1a 60%, #0d1117 100%);
+      box-shadow: 0 14px 40px -22px rgba(6,182,212,0.25);
+    }
+    .accent-line {
+      background: linear-gradient(90deg, transparent, rgba(34,211,238,0.55), transparent);
+    }
+    .glow-right {
+      background: radial-gradient(circle at 92% 50%, rgba(6,182,212,0.18), transparent 60%);
+    }
+    .btn-cyan {
+      background: linear-gradient(135deg, #0891b2, #2563eb);
+      box-shadow: 0 8px 28px -8px rgba(6,182,212,0.55), 0 0 0 1px rgba(34,211,238,0.2);
+    }
+    .btn-publish {
+      background: linear-gradient(135deg, #10b981, #06b6d4);
+      box-shadow: 0 8px 28px -8px rgba(16,185,129,0.55), 0 0 0 1px rgba(16,185,129,0.3);
+    }
+    /* Top accent line on cards */
+    .card-accent::before {
+      content: '';
+      position: absolute;
+      top: 0; left: 0; right: 0;
+      height: 1px;
+      background: linear-gradient(90deg, transparent, rgba(34,211,238,0.55), transparent);
+      pointer-events: none;
+    }
+    /* Scrollbar */
+    ::-webkit-scrollbar { width: 10px; height: 10px; }
+    ::-webkit-scrollbar-track { background: #050a14; }
+    ::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.1); border-radius: 6px; }
+    ::-webkit-scrollbar-thumb:hover { background: rgba(255,255,255,0.18); }
+    /* Tab nav button */
+    .tab-btn {
+      padding: 0.5rem 0.85rem;
+      font-size: 11px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.15em;
+      border-radius: 8px;
+      color: #64748b;
+      transition: all 0.15s;
+      cursor: pointer;
+      border: 1px solid transparent;
+      white-space: nowrap;
+    }
+    .tab-btn:hover { color: #cbd5e1; background: rgba(255,255,255,0.04); }
+    .tab-btn.active {
+      color: #06b6d4;
+      background: rgba(6,182,212,0.10);
+      border-color: rgba(6,182,212,0.30);
+    }
+  </style>
+</head>
+<body class="text-white">
+  <!-- Top screen-selector strip -->
+  <nav id="screen-nav" class="sticky top-0 z-50 border-b border-white/10 bg-black/80 backdrop-blur-md">
+    <div class="mx-auto flex max-w-6xl items-center justify-between gap-4 px-4 py-3 sm:px-6">
+      <div class="flex items-center gap-2 text-[10px] font-bold uppercase tracking-[0.25em] text-cyan-400">
+        MTT Creator
+        <span class="rounded-full bg-cyan-500/10 px-2 py-0.5 text-[9px] text-cyan-300 border border-cyan-500/30">Design preview</span>
+      </div>
+      <div class="hidden sm:flex flex-wrap items-center gap-1">
+        <button class="tab-btn active" data-target="template">0 · Template</button>
+        <button class="tab-btn" data-target="name">1 · Name</button>
+        <button class="tab-btn" data-target="buy-in">2 · Buy-in</button>
+        <button class="tab-btn" data-target="field">3 · Field</button>
+        <button class="tab-btn" data-target="stack">4 · Stack</button>
+        <button class="tab-btn" data-target="blinds">5 · Blinds</button>
+        <button class="tab-btn" data-target="payouts">6 · Payouts</button>
+        <button class="tab-btn" data-target="review">7 · Review</button>
+      </div>
+      <div class="sm:hidden text-[11px] font-bold text-slate-400" id="mobile-screen-label">Template</div>
+    </div>
+  </nav>
+
+  <main>
+
+    <!-- ─────────────────────────────────────────────────────────── -->
+    <!-- SCREEN 0 — TEMPLATE PICKER -->
+    <!-- ─────────────────────────────────────────────────────────── -->
+    <section class="screen active bg-hero relative" data-screen="template">
+      <button class="absolute top-4 right-4 z-10 rounded-full p-2 text-slate-500 hover:text-white hover:bg-white/10 transition-colors" aria-label="Close">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6 6 18M6 6l12 12"/></svg>
+      </button>
+      <div class="mx-auto flex w-full max-w-5xl flex-col items-stretch gap-10 px-6 py-12 sm:px-10 sm:py-16">
+        <!-- Hero -->
+        <div class="text-center">
+          <div class="inline-flex items-center gap-2 rounded-full border border-cyan-500/30 bg-cyan-500/10 px-3 py-1 text-[11px] font-bold uppercase text-cyan-300" style="letter-spacing:0.2em">
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m12 3-1.9 5.8a2 2 0 0 1-1.287 1.288L3 12l5.8 1.9a2 2 0 0 1 1.288 1.287L12 21l1.9-5.8a2 2 0 0 1 1.287-1.288L21 12l-5.8-1.9a2 2 0 0 1-1.288-1.287Z"/></svg>
+            Multi-Table Tournament
+          </div>
+          <h1 class="mx-auto mt-5 max-w-3xl text-white font-mitr font-bold" style="font-size:clamp(40px,7vw,72px);line-height:.95;letter-spacing:-0.02em">
+            Pick a template <span class="italic" style="color:#06b6d4">or build your own</span>
+          </h1>
+          <p class="mx-auto mt-4 max-w-xl text-[15px] leading-relaxed text-slate-400">
+            Templates fill in everything except your tournament name and start time. Tweak any setting before you publish.
+          </p>
+        </div>
+
+        <!-- Template grid -->
+        <div class="grid grid-cols-1 gap-4 sm:grid-cols-3">
+          <!-- Sunday Major -->
+          <button class="group relative flex flex-col gap-4 overflow-hidden rounded-2xl border border-white/10 p-5 text-left transition-all hover:-translate-y-1 hover:border-cyan-500/50 bg-template-card card-accent">
+            <div class="self-start rounded-full border border-cyan-500/30 bg-cyan-500/10 px-2.5 py-0.5 text-[10px] font-bold uppercase text-cyan-300" style="letter-spacing:0.18em">Popular</div>
+            <div>
+              <h3 class="text-white font-mitr font-bold" style="font-size:clamp(22px,2.5vw,28px);line-height:1.05;letter-spacing:-0.01em">Sunday Major</h3>
+              <p class="mt-2 text-[13px] leading-relaxed text-slate-300">100-player MTT · 15k stack · 15-min levels</p>
+            </div>
+            <div class="mt-auto flex items-end justify-between gap-3 pt-3">
+              <div class="text-[11px] text-slate-500">
+                <div class="font-mono tabular-nums">100 players · 12 tables</div>
+                <div class="mt-0.5 font-mono tabular-nums">500 MORBIUS buy-in</div>
+              </div>
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#06b6d4" stroke-width="2" class="transition-transform group-hover:translate-x-1"><path d="M5 12h14M12 5l7 7-7 7"/></svg>
+            </div>
+          </button>
+
+          <!-- Turbo MTT -->
+          <button class="group relative flex flex-col gap-4 overflow-hidden rounded-2xl border border-white/10 p-5 text-left transition-all hover:-translate-y-1 hover:border-cyan-500/50 bg-template-card card-accent">
+            <div class="self-start rounded-full border border-cyan-500/30 bg-cyan-500/10 px-2.5 py-0.5 text-[10px] font-bold uppercase text-cyan-300" style="letter-spacing:0.18em">Fastest</div>
+            <div>
+              <h3 class="text-white font-mitr font-bold" style="font-size:clamp(22px,2.5vw,28px);line-height:1.05;letter-spacing:-0.01em">Turbo MTT</h3>
+              <p class="mt-2 text-[13px] leading-relaxed text-slate-300">27-player turbo · 6-max · 5-min levels</p>
+            </div>
+            <div class="mt-auto flex items-end justify-between gap-3 pt-3">
+              <div class="text-[11px] text-slate-500">
+                <div class="font-mono tabular-nums">27 players · 5 tables</div>
+                <div class="mt-0.5 font-mono tabular-nums">100 MORBIUS buy-in</div>
+              </div>
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#06b6d4" stroke-width="2" class="transition-transform group-hover:translate-x-1"><path d="M5 12h14M12 5l7 7-7 7"/></svg>
+            </div>
+          </button>
+
+          <!-- Freeroll Friday -->
+          <button class="group relative flex flex-col gap-4 overflow-hidden rounded-2xl border border-white/10 p-5 text-left transition-all hover:-translate-y-1 hover:border-cyan-500/50 bg-template-card card-accent">
+            <div class="self-start rounded-full border border-cyan-500/30 bg-cyan-500/10 px-2.5 py-0.5 text-[10px] font-bold uppercase text-cyan-300" style="letter-spacing:0.18em">Free</div>
+            <div>
+              <h3 class="text-white font-mitr font-bold" style="font-size:clamp(22px,2.5vw,28px);line-height:1.05;letter-spacing:-0.01em">Freeroll Friday</h3>
+              <p class="mt-2 text-[13px] leading-relaxed text-slate-300">50-player freeroll · 10k guaranteed</p>
+            </div>
+            <div class="mt-auto flex items-end justify-between gap-3 pt-3">
+              <div class="text-[11px] text-slate-500">
+                <div class="font-mono tabular-nums">50 players · 6 tables</div>
+                <div class="mt-0.5 font-mono tabular-nums">Freeroll · 10,000 pool</div>
+              </div>
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#06b6d4" stroke-width="2" class="transition-transform group-hover:translate-x-1"><path d="M5 12h14M12 5l7 7-7 7"/></svg>
+            </div>
+          </button>
+        </div>
+
+        <!-- Divider + scratch button -->
+        <div class="mx-auto flex w-full max-w-md flex-col items-center gap-4">
+          <div class="flex w-full items-center gap-3 text-[10px] font-semibold uppercase tracking-[0.25em] text-slate-600">
+            <div class="h-px flex-1 bg-white/10"></div>or<div class="h-px flex-1 bg-white/10"></div>
+          </div>
+          <button class="group inline-flex items-center gap-2 rounded-xl border border-white/10 bg-white/5 px-6 py-3 text-sm font-semibold text-slate-200 transition-colors hover:border-cyan-500/40 hover:bg-cyan-500/10 hover:text-white">
+            Start from scratch
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 12h14M12 5l7 7-7 7"/></svg>
+          </button>
+        </div>
+
+        <p class="text-center text-xs text-slate-500">
+          Need a custom PRC-20 token tournament?
+          <a href="#" class="text-cyan-400 underline-offset-2 hover:text-cyan-300 hover:underline">Use the classic creator</a>.
+        </p>
+      </div>
+    </section>
+
+    <!-- ─────────────────────────────────────────────────────────── -->
+    <!-- SHARED STEP HEADER (rendered per step below) -->
+    <!-- ─────────────────────────────────────────────────────────── -->
+
+    <!-- SCREEN 1 — NAME -->
+    <section class="screen bg-hero" data-screen="name">
+      <!-- Header -->
+      <div class="relative w-full overflow-hidden border-b border-cyan-500/20 bg-step-header">
+        <div class="absolute inset-0 pointer-events-none glow-right"></div>
+        <div class="absolute inset-x-0 top-0 h-px pointer-events-none accent-line"></div>
+        <button class="absolute top-3 right-3 z-10 rounded-full p-1.5 text-slate-500 hover:text-white hover:bg-white/10 transition-colors" aria-label="Close">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 6 6 18M6 6l12 12"/></svg>
+        </button>
+        <div class="relative mx-auto grid w-full max-w-5xl items-center gap-6 px-6 py-7 sm:gap-8 sm:px-9 sm:py-8 lg:grid-cols-[1fr_auto]">
+          <div class="min-w-0">
+            <div class="text-[11px] font-bold uppercase text-cyan-400" style="letter-spacing:0.3em">Create MTT</div>
+            <h2 class="mt-2 text-white font-mitr font-bold" style="font-size:clamp(32px,5vw,56px);line-height:.95;letter-spacing:-0.02em">
+              Name <span class="italic" style="color:#06b6d4">your tournament</span>
+            </h2>
+            <p class="mt-4 max-w-[460px] text-sm leading-relaxed text-slate-400 sm:text-[15px]">One decision at a time. You can jump back to edit anything before publishing.</p>
+            <!-- Progress bar -->
+            <div class="mt-6 flex gap-1.5">
+              <div class="h-1.5 flex-1 overflow-hidden rounded-full mtt-flash" style="background:linear-gradient(90deg,#06b6d4 50%,rgba(6,182,212,0.2) 50%)"></div>
+              <div class="h-1.5 flex-1 overflow-hidden rounded-full" style="background:rgba(148,163,184,0.15)"></div>
+              <div class="h-1.5 flex-1 overflow-hidden rounded-full" style="background:rgba(148,163,184,0.15)"></div>
+              <div class="h-1.5 flex-1 overflow-hidden rounded-full" style="background:rgba(148,163,184,0.15)"></div>
+              <div class="h-1.5 flex-1 overflow-hidden rounded-full" style="background:rgba(148,163,184,0.15)"></div>
+              <div class="h-1.5 flex-1 overflow-hidden rounded-full" style="background:rgba(148,163,184,0.15)"></div>
+            </div>
+            <!-- Tags -->
+            <div class="mt-2.5 flex gap-1.5 text-[10px] font-semibold uppercase tracking-[0.1em]">
+              <div class="flex-1" style="color:#ffffff">Name</div>
+              <div class="flex-1" style="color:#475569">Buy-in</div>
+              <div class="flex-1" style="color:#475569">Field</div>
+              <div class="flex-1" style="color:#475569">Stack</div>
+              <div class="flex-1" style="color:#475569">Blinds</div>
+              <div class="flex-1" style="color:#475569">Payouts</div>
+            </div>
+          </div>
+          <div class="flex flex-row items-end gap-5 lg:flex-col lg:items-end lg:gap-5">
+            <div class="text-right">
+              <div class="text-white tabular-nums font-mitr font-bold" style="font-size:clamp(80px,14vw,140px);line-height:.85;letter-spacing:-0.05em">5</div>
+              <div class="mt-1 text-[11px] font-bold uppercase text-cyan-400" style="letter-spacing:0.2em">Steps left</div>
+            </div>
+          </div>
+        </div>
+      </div>
+      <!-- Body -->
+      <div class="mx-auto w-full max-w-3xl px-6 py-10 sm:px-10 sm:py-12">
+        <div class="relative overflow-hidden rounded-2xl border border-cyan-500/20 p-6 sm:p-8 bg-step-card card-accent">
+          <h3 class="text-white font-mitr font-bold" style="font-size:clamp(22px,3vw,28px);line-height:1.05;letter-spacing:-0.01em">Name your tournament</h3>
+          <p class="mt-2 text-sm leading-relaxed text-slate-400 sm:text-[15px]">Give it something memorable. Players see this in the lobby — make it stand out.</p>
+          <div class="mt-6 space-y-5">
+            <div>
+              <label class="text-[11px] font-bold uppercase text-slate-400 mb-2 block">Tournament name</label>
+              <input type="text" value="Friday Night Madness" class="w-full rounded-xl border border-white/10 bg-black/40 px-4 py-3 text-sm text-white placeholder-slate-500 outline-none focus:border-cyan-500/60 focus:bg-black/60">
+            </div>
+            <div class="grid grid-cols-1 gap-4 sm:grid-cols-2">
+              <div>
+                <label class="text-[11px] font-bold uppercase text-slate-400 mb-2 block">Start date</label>
+                <input type="date" value="2026-05-22" class="w-full rounded-xl border border-white/10 bg-black/40 px-4 py-3 text-sm text-white outline-none focus:border-cyan-500/60 focus:bg-black/60">
+              </div>
+              <div>
+                <label class="text-[11px] font-bold uppercase text-slate-400 mb-2 block">Start time</label>
+                <input type="time" value="20:00" class="w-full rounded-xl border border-white/10 bg-black/40 px-4 py-3 text-sm text-white outline-none focus:border-cyan-500/60 focus:bg-black/60">
+              </div>
+            </div>
+            <div class="rounded-xl border border-white/[0.06] bg-black/30 p-4">
+              <label class="flex cursor-pointer items-start gap-3">
+                <input type="checkbox" class="mt-0.5 h-4 w-4 rounded border-white/20 bg-black/40 text-cyan-500 focus:ring-cyan-500/40">
+                <div class="flex-1">
+                  <div class="flex items-center gap-2 text-sm font-semibold text-white">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#06b6d4" stroke-width="2"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+                    Private — invite-only
+                  </div>
+                  <p class="mt-1 text-[12px] leading-relaxed text-slate-500">Players join with a 4–12 digit PIN. Leave blank and we'll auto-generate one.</p>
+                </div>
+              </label>
+            </div>
+          </div>
+        </div>
+        <!-- Footer -->
+        <div class="mt-8 flex items-center justify-between gap-4">
+          <button class="inline-flex items-center gap-2 rounded-xl border border-white/10 bg-white/5 px-5 py-3 text-sm font-semibold text-slate-200 hover:border-white/20 hover:bg-white/10">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m12 19-7-7 7-7M19 12H5"/></svg> Back
+          </button>
+          <button class="inline-flex items-center gap-2 rounded-xl px-7 py-3.5 text-sm font-bold text-white btn-cyan hover:scale-[1.02] transition-transform sm:text-[15px]">
+            Continue <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 12h14M12 5l7 7-7 7"/></svg>
+          </button>
+        </div>
+      </div>
+    </section>
+
+    <!-- SCREEN 2 — BUY-IN -->
+    <section class="screen bg-hero" data-screen="buy-in">
+      <div class="relative w-full overflow-hidden border-b border-cyan-500/20 bg-step-header">
+        <div class="absolute inset-0 pointer-events-none glow-right"></div>
+        <div class="absolute inset-x-0 top-0 h-px pointer-events-none accent-line"></div>
+        <button class="absolute top-3 right-3 z-10 rounded-full p-1.5 text-slate-500 hover:text-white hover:bg-white/10 transition-colors"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 6 6 18M6 6l12 12"/></svg></button>
+        <div class="relative mx-auto grid w-full max-w-5xl items-center gap-6 px-6 py-7 sm:gap-8 sm:px-9 sm:py-8 lg:grid-cols-[1fr_auto]">
+          <div class="min-w-0">
+            <div class="text-[11px] font-bold uppercase text-cyan-400" style="letter-spacing:0.3em">Create MTT</div>
+            <h2 class="mt-2 text-white font-mitr font-bold" style="font-size:clamp(32px,5vw,56px);line-height:.95;letter-spacing:-0.02em">
+              Buy-in <span class="italic" style="color:#06b6d4">your tournament</span>
+            </h2>
+            <p class="mt-4 max-w-[460px] text-sm leading-relaxed text-slate-400 sm:text-[15px]">One decision at a time. You can jump back to edit anything before publishing.</p>
+            <div class="mt-6 flex gap-1.5">
+              <div class="h-1.5 flex-1 rounded-full" style="background:#06b6d4"></div>
+              <div class="h-1.5 flex-1 rounded-full mtt-flash" style="background:linear-gradient(90deg,#06b6d4 50%,rgba(6,182,212,0.2) 50%)"></div>
+              <div class="h-1.5 flex-1 rounded-full" style="background:rgba(148,163,184,0.15)"></div>
+              <div class="h-1.5 flex-1 rounded-full" style="background:rgba(148,163,184,0.15)"></div>
+              <div class="h-1.5 flex-1 rounded-full" style="background:rgba(148,163,184,0.15)"></div>
+              <div class="h-1.5 flex-1 rounded-full" style="background:rgba(148,163,184,0.15)"></div>
+            </div>
+            <div class="mt-2.5 flex gap-1.5 text-[10px] font-semibold uppercase tracking-[0.1em]">
+              <div class="flex-1" style="color:#06b6d4">Name</div>
+              <div class="flex-1" style="color:#ffffff">Buy-in</div>
+              <div class="flex-1" style="color:#475569">Field</div>
+              <div class="flex-1" style="color:#475569">Stack</div>
+              <div class="flex-1" style="color:#475569">Blinds</div>
+              <div class="flex-1" style="color:#475569">Payouts</div>
+            </div>
+          </div>
+          <div class="flex flex-row items-end gap-5 lg:flex-col lg:items-end lg:gap-5">
+            <div class="text-right">
+              <div class="text-white tabular-nums font-mitr font-bold" style="font-size:clamp(80px,14vw,140px);line-height:.85;letter-spacing:-0.05em">4</div>
+              <div class="mt-1 text-[11px] font-bold uppercase text-cyan-400" style="letter-spacing:0.2em">Steps left</div>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="mx-auto w-full max-w-3xl px-6 py-10 sm:px-10 sm:py-12">
+        <div class="relative overflow-hidden rounded-2xl border border-cyan-500/20 p-6 sm:p-8 bg-step-card card-accent">
+          <h3 class="text-white font-mitr font-bold" style="font-size:clamp(22px,3vw,28px);line-height:1.05;letter-spacing:-0.01em">How do players buy in?</h3>
+          <p class="mt-2 text-sm leading-relaxed text-slate-400 sm:text-[15px]">Charge a buy-in to build the prize pool, or run a freeroll where you fund the pool from your chips.</p>
+          <div class="mt-6 space-y-5">
+            <div class="grid grid-cols-1 gap-3 sm:grid-cols-2">
+              <!-- Chips (active) -->
+              <button class="flex flex-col gap-2 rounded-xl border p-4 text-left border-cyan-500/60 bg-cyan-500/10">
+                <div class="inline-flex items-center gap-2 text-sm font-bold text-cyan-300">
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="8" cy="8" r="6"/><path d="M18.09 10.37A6 6 0 1 1 10.34 18M7 6h1v4M16.71 13.88l.7.71-2.82 2.82"/></svg>
+                  Buy-in
+                </div>
+                <div class="text-[12px] leading-relaxed text-slate-400">Players pay MORBIUS chips to enter</div>
+              </button>
+              <!-- Freeroll -->
+              <button class="flex flex-col gap-2 rounded-xl border p-4 text-left border-white/10 bg-black/30 hover:border-white/20">
+                <div class="inline-flex items-center gap-2 text-sm font-bold text-white">
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 12 20 22 4 22 4 12"/><rect x="2" y="7" width="20" height="5"/><line x1="12" y1="22" x2="12" y2="7"/><path d="M12 7H7.5a2.5 2.5 0 0 1 0-5C11 2 12 7 12 7zM12 7h4.5a2.5 2.5 0 0 0 0-5C13 2 12 7 12 7z"/></svg>
+                  Freeroll
+                </div>
+                <div class="text-[12px] leading-relaxed text-slate-400">No buy-in. You fund the prize pool.</div>
+              </button>
+            </div>
+            <div>
+              <label class="text-[11px] font-bold uppercase text-slate-400 mb-2 block">Buy-in per player (MORBIUS chips)</label>
+              <input type="text" value="500" class="w-full rounded-xl border border-white/10 bg-black/40 px-4 py-3 text-sm font-mono tabular-nums text-white outline-none focus:border-cyan-500/60 focus:bg-black/60">
+              <p class="mt-2 text-[12px] leading-relaxed text-slate-500">Up to <span class="font-mono tabular-nums text-cyan-400">500 × 100</span> = <span class="font-mono tabular-nums text-white">50,000 MORBIUS</span> prize pool if the field is full.</p>
+            </div>
+          </div>
+        </div>
+        <div class="mt-8 flex items-center justify-between gap-4">
+          <button class="inline-flex items-center gap-2 rounded-xl border border-white/10 bg-white/5 px-5 py-3 text-sm font-semibold text-slate-200 hover:border-white/20 hover:bg-white/10"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m12 19-7-7 7-7M19 12H5"/></svg> Back</button>
+          <button class="inline-flex items-center gap-2 rounded-xl px-7 py-3.5 text-sm font-bold text-white btn-cyan hover:scale-[1.02] transition-transform sm:text-[15px]">Continue <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 12h14M12 5l7 7-7 7"/></svg></button>
+        </div>
+      </div>
+    </section>
+
+    <!-- SCREEN 3 — FIELD -->
+    <section class="screen bg-hero" data-screen="field">
+      <div class="relative w-full overflow-hidden border-b border-cyan-500/20 bg-step-header">
+        <div class="absolute inset-0 pointer-events-none glow-right"></div>
+        <div class="absolute inset-x-0 top-0 h-px pointer-events-none accent-line"></div>
+        <button class="absolute top-3 right-3 z-10 rounded-full p-1.5 text-slate-500 hover:text-white hover:bg-white/10"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 6 6 18M6 6l12 12"/></svg></button>
+        <div class="relative mx-auto grid w-full max-w-5xl items-center gap-6 px-6 py-7 sm:gap-8 sm:px-9 sm:py-8 lg:grid-cols-[1fr_auto]">
+          <div class="min-w-0">
+            <div class="text-[11px] font-bold uppercase text-cyan-400" style="letter-spacing:0.3em">Create MTT</div>
+            <h2 class="mt-2 text-white font-mitr font-bold" style="font-size:clamp(32px,5vw,56px);line-height:.95;letter-spacing:-0.02em">
+              Field <span class="italic" style="color:#06b6d4">your tournament</span>
+            </h2>
+            <p class="mt-4 max-w-[460px] text-sm leading-relaxed text-slate-400 sm:text-[15px]">One decision at a time. You can jump back to edit anything before publishing.</p>
+            <div class="mt-6 flex gap-1.5">
+              <div class="h-1.5 flex-1 rounded-full" style="background:#06b6d4"></div>
+              <div class="h-1.5 flex-1 rounded-full" style="background:#06b6d4"></div>
+              <div class="h-1.5 flex-1 rounded-full mtt-flash" style="background:linear-gradient(90deg,#06b6d4 50%,rgba(6,182,212,0.2) 50%)"></div>
+              <div class="h-1.5 flex-1 rounded-full" style="background:rgba(148,163,184,0.15)"></div>
+              <div class="h-1.5 flex-1 rounded-full" style="background:rgba(148,163,184,0.15)"></div>
+              <div class="h-1.5 flex-1 rounded-full" style="background:rgba(148,163,184,0.15)"></div>
+            </div>
+            <div class="mt-2.5 flex gap-1.5 text-[10px] font-semibold uppercase tracking-[0.1em]">
+              <div class="flex-1" style="color:#06b6d4">Name</div>
+              <div class="flex-1" style="color:#06b6d4">Buy-in</div>
+              <div class="flex-1" style="color:#ffffff">Field</div>
+              <div class="flex-1" style="color:#475569">Stack</div>
+              <div class="flex-1" style="color:#475569">Blinds</div>
+              <div class="flex-1" style="color:#475569">Payouts</div>
+            </div>
+          </div>
+          <div class="flex flex-row items-end gap-5 lg:flex-col lg:items-end lg:gap-5">
+            <div class="text-right">
+              <div class="text-white tabular-nums font-mitr font-bold" style="font-size:clamp(80px,14vw,140px);line-height:.85;letter-spacing:-0.05em">3</div>
+              <div class="mt-1 text-[11px] font-bold uppercase text-cyan-400" style="letter-spacing:0.2em">Steps left</div>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="mx-auto w-full max-w-3xl px-6 py-10 sm:px-10 sm:py-12">
+        <div class="relative overflow-hidden rounded-2xl border border-cyan-500/20 p-6 sm:p-8 bg-step-card card-accent">
+          <h3 class="text-white font-mitr font-bold" style="font-size:clamp(22px,3vw,28px);line-height:1.05;letter-spacing:-0.01em">Set your field</h3>
+          <p class="mt-2 text-sm leading-relaxed text-slate-400 sm:text-[15px]">How many players can register, and how many seats per table. We'll split everyone across tables and collapse them into a final table as players bust.</p>
+          <div class="mt-6 space-y-6">
+            <div class="grid grid-cols-1 gap-4 sm:grid-cols-2">
+              <div>
+                <label class="text-[11px] font-bold uppercase text-slate-400 mb-2 block">Field size</label>
+                <div class="relative">
+                  <select class="w-full appearance-none rounded-xl border border-white/10 bg-black/40 px-4 py-3 text-sm font-mono tabular-nums text-white outline-none focus:border-cyan-500/60">
+                    <option>45 players</option>
+                  </select>
+                  <div class="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-slate-500">▾</div>
+                </div>
+              </div>
+              <div>
+                <label class="text-[11px] font-bold uppercase text-slate-400 mb-2 block">Seats per table</label>
+                <div class="relative">
+                  <select class="w-full appearance-none rounded-xl border border-white/10 bg-black/40 px-4 py-3 text-sm font-mono tabular-nums text-white outline-none focus:border-cyan-500/60">
+                    <option>9-max</option>
+                  </select>
+                  <div class="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-slate-500">▾</div>
+                </div>
+              </div>
+            </div>
+            <!-- Preview -->
+            <div class="rounded-xl border border-cyan-500/20 bg-black/40 p-5">
+              <div class="flex items-center justify-between gap-4">
+                <div>
+                  <div class="text-[10px] font-bold uppercase text-cyan-400" style="letter-spacing:0.25em">Projected layout</div>
+                  <div class="mt-1 text-white tabular-nums font-mitr font-bold" style="font-size:clamp(28px,4vw,40px);line-height:1;letter-spacing:-0.02em">5 tables</div>
+                  <div class="mt-1 text-[12px] text-slate-500">Up to <span class="font-mono tabular-nums text-slate-300">9</span> seats each · <span class="font-mono tabular-nums text-slate-300">45</span> total players · Top 10 ranks paid</div>
+                </div>
+              </div>
+              <div class="mt-4 flex flex-wrap items-center gap-2">
+                <div class="relative flex items-center justify-center rounded-md border border-cyan-500/30 bg-cyan-500/10 text-[10px] font-bold text-cyan-200" style="width:44px;height:44px;letter-spacing:0.08em">T1</div>
+                <div class="relative flex items-center justify-center rounded-md border border-cyan-500/30 bg-cyan-500/10 text-[10px] font-bold text-cyan-200" style="width:44px;height:44px;letter-spacing:0.08em">T2</div>
+                <div class="relative flex items-center justify-center rounded-md border border-cyan-500/30 bg-cyan-500/10 text-[10px] font-bold text-cyan-200" style="width:44px;height:44px;letter-spacing:0.08em">T3</div>
+                <div class="relative flex items-center justify-center rounded-md border border-cyan-500/30 bg-cyan-500/10 text-[10px] font-bold text-cyan-200" style="width:44px;height:44px;letter-spacing:0.08em">T4</div>
+                <div class="relative flex items-center justify-center rounded-md border border-cyan-500/30 bg-cyan-500/10 text-[10px] font-bold text-cyan-200" style="width:44px;height:44px;letter-spacing:0.08em">T5</div>
+              </div>
+              <div class="mt-4 rounded-lg border border-white/[0.06] bg-white/[0.02] px-3 py-2 text-[11px] leading-relaxed text-slate-400">
+                Tables consolidate to the <span class="font-semibold text-cyan-300">final table</span> when the field drops to <span class="font-mono tabular-nums text-white">9</span> players.
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="mt-8 flex items-center justify-between gap-4">
+          <button class="inline-flex items-center gap-2 rounded-xl border border-white/10 bg-white/5 px-5 py-3 text-sm font-semibold text-slate-200 hover:border-white/20 hover:bg-white/10"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m12 19-7-7 7-7M19 12H5"/></svg> Back</button>
+          <button class="inline-flex items-center gap-2 rounded-xl px-7 py-3.5 text-sm font-bold text-white btn-cyan hover:scale-[1.02] sm:text-[15px]">Continue <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 12h14M12 5l7 7-7 7"/></svg></button>
+        </div>
+      </div>
+    </section>
+
+    <!-- SCREEN 4 — STACK -->
+    <section class="screen bg-hero" data-screen="stack">
+      <div class="relative w-full overflow-hidden border-b border-cyan-500/20 bg-step-header">
+        <div class="absolute inset-0 pointer-events-none glow-right"></div>
+        <div class="absolute inset-x-0 top-0 h-px pointer-events-none accent-line"></div>
+        <button class="absolute top-3 right-3 z-10 rounded-full p-1.5 text-slate-500 hover:text-white hover:bg-white/10"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 6 6 18M6 6l12 12"/></svg></button>
+        <div class="relative mx-auto grid w-full max-w-5xl items-center gap-6 px-6 py-7 sm:gap-8 sm:px-9 sm:py-8 lg:grid-cols-[1fr_auto]">
+          <div class="min-w-0">
+            <div class="text-[11px] font-bold uppercase text-cyan-400" style="letter-spacing:0.3em">Create MTT</div>
+            <h2 class="mt-2 text-white font-mitr font-bold" style="font-size:clamp(32px,5vw,56px);line-height:.95;letter-spacing:-0.02em">Stack <span class="italic" style="color:#06b6d4">your tournament</span></h2>
+            <p class="mt-4 max-w-[460px] text-sm leading-relaxed text-slate-400 sm:text-[15px]">One decision at a time. You can jump back to edit anything before publishing.</p>
+            <div class="mt-6 flex gap-1.5">
+              <div class="h-1.5 flex-1 rounded-full" style="background:#06b6d4"></div><div class="h-1.5 flex-1 rounded-full" style="background:#06b6d4"></div><div class="h-1.5 flex-1 rounded-full" style="background:#06b6d4"></div>
+              <div class="h-1.5 flex-1 rounded-full mtt-flash" style="background:linear-gradient(90deg,#06b6d4 50%,rgba(6,182,212,0.2) 50%)"></div>
+              <div class="h-1.5 flex-1 rounded-full" style="background:rgba(148,163,184,0.15)"></div><div class="h-1.5 flex-1 rounded-full" style="background:rgba(148,163,184,0.15)"></div>
+            </div>
+            <div class="mt-2.5 flex gap-1.5 text-[10px] font-semibold uppercase tracking-[0.1em]">
+              <div class="flex-1" style="color:#06b6d4">Name</div><div class="flex-1" style="color:#06b6d4">Buy-in</div><div class="flex-1" style="color:#06b6d4">Field</div>
+              <div class="flex-1" style="color:#ffffff">Stack</div>
+              <div class="flex-1" style="color:#475569">Blinds</div><div class="flex-1" style="color:#475569">Payouts</div>
+            </div>
+          </div>
+          <div class="flex flex-row items-end gap-5 lg:flex-col lg:items-end lg:gap-5">
+            <div class="text-right">
+              <div class="text-white tabular-nums font-mitr font-bold" style="font-size:clamp(80px,14vw,140px);line-height:.85;letter-spacing:-0.05em">2</div>
+              <div class="mt-1 text-[11px] font-bold uppercase text-cyan-400" style="letter-spacing:0.2em">Steps left</div>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="mx-auto w-full max-w-3xl px-6 py-10 sm:px-10 sm:py-12">
+        <div class="relative overflow-hidden rounded-2xl border border-cyan-500/20 p-6 sm:p-8 bg-step-card card-accent">
+          <h3 class="text-white font-mitr font-bold" style="font-size:clamp(22px,3vw,28px);line-height:1.05;letter-spacing:-0.01em">Choose the starting stack</h3>
+          <p class="mt-2 text-sm leading-relaxed text-slate-400 sm:text-[15px]">Every player starts with this many chips. Bigger stacks = more decisions per hand and a longer tournament.</p>
+          <div class="mt-6 grid grid-cols-2 gap-3 sm:grid-cols-4">
+            <button class="flex flex-col items-start gap-1 rounded-xl border p-4 text-left border-white/10 bg-black/30 hover:border-white/20">
+              <div class="text-white tabular-nums font-mitr font-bold" style="font-size:clamp(20px,2.5vw,26px);line-height:1">1,500</div>
+              <div class="text-[11px] font-bold uppercase tracking-[0.15em] text-slate-400">Short</div>
+              <div class="text-[11px] text-slate-500">Fast, push-fold heavy</div>
+            </button>
+            <button class="flex flex-col items-start gap-1 rounded-xl border p-4 text-left border-white/10 bg-black/30 hover:border-white/20">
+              <div class="text-white tabular-nums font-mitr font-bold" style="font-size:clamp(20px,2.5vw,26px);line-height:1">5,000</div>
+              <div class="text-[11px] font-bold uppercase tracking-[0.15em] text-slate-400">Standard</div>
+              <div class="text-[11px] text-slate-500">Balanced</div>
+            </button>
+            <button class="flex flex-col items-start gap-1 rounded-xl border p-4 text-left border-cyan-500/60 bg-cyan-500/10">
+              <div class="text-cyan-300 tabular-nums font-mitr font-bold" style="font-size:clamp(20px,2.5vw,26px);line-height:1">10,000</div>
+              <div class="text-[11px] font-bold uppercase tracking-[0.15em] text-slate-400">Deep</div>
+              <div class="text-[11px] text-slate-500">Lots of postflop play</div>
+            </button>
+            <button class="flex flex-col items-start gap-1 rounded-xl border p-4 text-left border-white/10 bg-black/30 hover:border-white/20">
+              <div class="text-white tabular-nums font-mitr font-bold" style="font-size:clamp(20px,2.5vw,26px);line-height:1">20,000</div>
+              <div class="text-[11px] font-bold uppercase tracking-[0.15em] text-slate-400">Deeper</div>
+              <div class="text-[11px] text-slate-500">Marathon — multi-hour fields</div>
+            </button>
+          </div>
+          <div class="mt-6 rounded-xl border border-white/[0.06] bg-black/30 px-4 py-3 text-[12px] leading-relaxed text-slate-400">
+            The big blind at level 1 is <span class="font-mono tabular-nums text-cyan-300">50</span> chips, so a <span class="font-mono tabular-nums text-white">10,000</span> stack starts you at <span class="font-mono tabular-nums text-white">200</span> big blinds.
+          </div>
+        </div>
+        <div class="mt-8 flex items-center justify-between gap-4">
+          <button class="inline-flex items-center gap-2 rounded-xl border border-white/10 bg-white/5 px-5 py-3 text-sm font-semibold text-slate-200 hover:border-white/20 hover:bg-white/10"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m12 19-7-7 7-7M19 12H5"/></svg> Back</button>
+          <button class="inline-flex items-center gap-2 rounded-xl px-7 py-3.5 text-sm font-bold text-white btn-cyan hover:scale-[1.02] sm:text-[15px]">Continue <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 12h14M12 5l7 7-7 7"/></svg></button>
+        </div>
+      </div>
+    </section>
+
+    <!-- SCREEN 5 — BLINDS -->
+    <section class="screen bg-hero" data-screen="blinds">
+      <div class="relative w-full overflow-hidden border-b border-cyan-500/20 bg-step-header">
+        <div class="absolute inset-0 pointer-events-none glow-right"></div>
+        <div class="absolute inset-x-0 top-0 h-px pointer-events-none accent-line"></div>
+        <button class="absolute top-3 right-3 z-10 rounded-full p-1.5 text-slate-500 hover:text-white hover:bg-white/10"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 6 6 18M6 6l12 12"/></svg></button>
+        <div class="relative mx-auto grid w-full max-w-5xl items-center gap-6 px-6 py-7 sm:gap-8 sm:px-9 sm:py-8 lg:grid-cols-[1fr_auto]">
+          <div class="min-w-0">
+            <div class="text-[11px] font-bold uppercase text-cyan-400" style="letter-spacing:0.3em">Create MTT</div>
+            <h2 class="mt-2 text-white font-mitr font-bold" style="font-size:clamp(32px,5vw,56px);line-height:.95;letter-spacing:-0.02em">Blinds <span class="italic" style="color:#06b6d4">your tournament</span></h2>
+            <p class="mt-4 max-w-[460px] text-sm leading-relaxed text-slate-400 sm:text-[15px]">One decision at a time. You can jump back to edit anything before publishing.</p>
+            <div class="mt-6 flex gap-1.5">
+              <div class="h-1.5 flex-1 rounded-full" style="background:#06b6d4"></div><div class="h-1.5 flex-1 rounded-full" style="background:#06b6d4"></div><div class="h-1.5 flex-1 rounded-full" style="background:#06b6d4"></div><div class="h-1.5 flex-1 rounded-full" style="background:#06b6d4"></div>
+              <div class="h-1.5 flex-1 rounded-full mtt-flash" style="background:linear-gradient(90deg,#06b6d4 50%,rgba(6,182,212,0.2) 50%)"></div>
+              <div class="h-1.5 flex-1 rounded-full" style="background:rgba(148,163,184,0.15)"></div>
+            </div>
+            <div class="mt-2.5 flex gap-1.5 text-[10px] font-semibold uppercase tracking-[0.1em]">
+              <div class="flex-1" style="color:#06b6d4">Name</div><div class="flex-1" style="color:#06b6d4">Buy-in</div><div class="flex-1" style="color:#06b6d4">Field</div><div class="flex-1" style="color:#06b6d4">Stack</div>
+              <div class="flex-1" style="color:#ffffff">Blinds</div>
+              <div class="flex-1" style="color:#475569">Payouts</div>
+            </div>
+          </div>
+          <div class="flex flex-row items-end gap-5 lg:flex-col lg:items-end lg:gap-5">
+            <div class="text-right">
+              <div class="text-white tabular-nums font-mitr font-bold" style="font-size:clamp(80px,14vw,140px);line-height:.85;letter-spacing:-0.05em">1</div>
+              <div class="mt-1 text-[11px] font-bold uppercase text-cyan-400" style="letter-spacing:0.2em">Step left</div>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="mx-auto w-full max-w-3xl px-6 py-10 sm:px-10 sm:py-12">
+        <div class="relative overflow-hidden rounded-2xl border border-cyan-500/20 p-6 sm:p-8 bg-step-card card-accent">
+          <h3 class="text-white font-mitr font-bold" style="font-size:clamp(22px,3vw,28px);line-height:1.05;letter-spacing:-0.01em">How do the blinds go up?</h3>
+          <p class="mt-2 text-sm leading-relaxed text-slate-400 sm:text-[15px]">Faster blinds = shorter tournament. Slower blinds = more skill-favored. Pick what fits your players.</p>
+          <div class="mt-6 space-y-5">
+            <div class="grid grid-cols-1 gap-3 sm:grid-cols-3">
+              <!-- By time (active) -->
+              <button class="flex flex-col gap-2 rounded-xl border p-4 text-left border-cyan-500/60 bg-cyan-500/10">
+                <div class="inline-flex items-center gap-2 text-sm font-bold text-cyan-300">
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+                  By time
+                </div>
+                <div class="text-[12px] leading-relaxed text-slate-400">Blinds go up every N minutes</div>
+              </button>
+              <button class="flex flex-col gap-2 rounded-xl border p-4 text-left border-white/10 bg-black/30 hover:border-white/20">
+                <div class="inline-flex items-center gap-2 text-sm font-bold text-white">
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 11V6a2 2 0 0 0-4 0v5M14 10V4a2 2 0 0 0-4 0v6M10 10.5V6a2 2 0 0 0-4 0v8.5M18 8a2 2 0 1 1 4 0v6a8 8 0 0 1-8 8h-2c-2.8 0-4.5-.86-5.99-2.34l-3.6-3.6a2 2 0 0 1 2.83-2.82L7 15"/></svg>
+                  By hand
+                </div>
+                <div class="text-[12px] leading-relaxed text-slate-400">Blinds advance after a fixed number of hands</div>
+              </button>
+              <button class="flex flex-col gap-2 rounded-xl border p-4 text-left border-white/10 bg-black/30 hover:border-white/20">
+                <div class="inline-flex items-center gap-2 text-sm font-bold text-white">
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 9H4.5a2.5 2.5 0 0 1 0-5H6M18 9h1.5a2.5 2.5 0 0 0 0-5H18M4 22h16M10 14.66V17c0 .55-.47.98-.97 1.21C7.85 18.75 7 20.24 7 22M14 14.66V17c0 .55.47.98.97 1.21C16.15 18.75 17 20.24 17 22M18 2H6v7a6 6 0 0 0 12 0V2Z"/></svg>
+                  Knockout
+                </div>
+                <div class="text-[12px] leading-relaxed text-slate-400">Blinds double whenever a player busts</div>
+              </button>
+            </div>
+            <div>
+              <label class="text-[11px] font-bold uppercase text-slate-400 mb-2 block">Minutes per level</label>
+              <div class="grid grid-cols-3 gap-2 sm:grid-cols-6">
+                <button class="rounded-xl border py-2.5 text-center font-mono text-sm tabular-nums border-white/10 bg-black/30 text-slate-300 hover:border-white/20">5m</button>
+                <button class="rounded-xl border py-2.5 text-center font-mono text-sm tabular-nums border-white/10 bg-black/30 text-slate-300 hover:border-white/20">10m</button>
+                <button class="rounded-xl border py-2.5 text-center font-mono text-sm tabular-nums border-cyan-500/60 bg-cyan-500/10 text-cyan-200">15m</button>
+                <button class="rounded-xl border py-2.5 text-center font-mono text-sm tabular-nums border-white/10 bg-black/30 text-slate-300 hover:border-white/20">20m</button>
+                <button class="rounded-xl border py-2.5 text-center font-mono text-sm tabular-nums border-white/10 bg-black/30 text-slate-300 hover:border-white/20">30m</button>
+                <button class="rounded-xl border py-2.5 text-center font-mono text-sm tabular-nums border-white/10 bg-black/30 text-slate-300 hover:border-white/20">45m</button>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="mt-8 flex items-center justify-between gap-4">
+          <button class="inline-flex items-center gap-2 rounded-xl border border-white/10 bg-white/5 px-5 py-3 text-sm font-semibold text-slate-200 hover:border-white/20 hover:bg-white/10"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m12 19-7-7 7-7M19 12H5"/></svg> Back</button>
+          <button class="inline-flex items-center gap-2 rounded-xl px-7 py-3.5 text-sm font-bold text-white btn-cyan hover:scale-[1.02] sm:text-[15px]">Continue <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 12h14M12 5l7 7-7 7"/></svg></button>
+        </div>
+      </div>
+    </section>
+
+    <!-- SCREEN 6 — PAYOUTS -->
+    <section class="screen bg-hero" data-screen="payouts">
+      <div class="relative w-full overflow-hidden border-b border-cyan-500/20 bg-step-header">
+        <div class="absolute inset-0 pointer-events-none glow-right"></div>
+        <div class="absolute inset-x-0 top-0 h-px pointer-events-none accent-line"></div>
+        <button class="absolute top-3 right-3 z-10 rounded-full p-1.5 text-slate-500 hover:text-white hover:bg-white/10"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 6 6 18M6 6l12 12"/></svg></button>
+        <div class="relative mx-auto grid w-full max-w-5xl items-center gap-6 px-6 py-7 sm:gap-8 sm:px-9 sm:py-8 lg:grid-cols-[1fr_auto]">
+          <div class="min-w-0">
+            <div class="text-[11px] font-bold uppercase text-cyan-400" style="letter-spacing:0.3em">Create MTT</div>
+            <h2 class="mt-2 text-white font-mitr font-bold" style="font-size:clamp(32px,5vw,56px);line-height:.95;letter-spacing:-0.02em">Payouts <span class="italic" style="color:#06b6d4">your tournament</span></h2>
+            <p class="mt-4 max-w-[460px] text-sm leading-relaxed text-slate-400 sm:text-[15px]">One decision at a time. You can jump back to edit anything before publishing.</p>
+            <div class="mt-6 flex gap-1.5">
+              <div class="h-1.5 flex-1 rounded-full" style="background:#06b6d4"></div><div class="h-1.5 flex-1 rounded-full" style="background:#06b6d4"></div><div class="h-1.5 flex-1 rounded-full" style="background:#06b6d4"></div><div class="h-1.5 flex-1 rounded-full" style="background:#06b6d4"></div><div class="h-1.5 flex-1 rounded-full" style="background:#06b6d4"></div>
+              <div class="h-1.5 flex-1 rounded-full mtt-flash" style="background:linear-gradient(90deg,#06b6d4 50%,rgba(6,182,212,0.2) 50%)"></div>
+            </div>
+            <div class="mt-2.5 flex gap-1.5 text-[10px] font-semibold uppercase tracking-[0.1em]">
+              <div class="flex-1" style="color:#06b6d4">Name</div><div class="flex-1" style="color:#06b6d4">Buy-in</div><div class="flex-1" style="color:#06b6d4">Field</div><div class="flex-1" style="color:#06b6d4">Stack</div><div class="flex-1" style="color:#06b6d4">Blinds</div>
+              <div class="flex-1" style="color:#ffffff">Payouts</div>
+            </div>
+          </div>
+          <div class="flex flex-row items-end gap-5 lg:flex-col lg:items-end lg:gap-5">
+            <div class="text-right">
+              <div class="text-white tabular-nums font-mitr font-bold" style="font-size:clamp(80px,14vw,140px);line-height:.85;letter-spacing:-0.05em">0</div>
+              <div class="mt-1 text-[11px] font-bold uppercase text-cyan-400" style="letter-spacing:0.2em">Steps left</div>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="mx-auto w-full max-w-3xl px-6 py-10 sm:px-10 sm:py-12">
+        <div class="relative overflow-hidden rounded-2xl border border-cyan-500/20 p-6 sm:p-8 bg-step-card card-accent">
+          <h3 class="text-white font-mitr font-bold" style="font-size:clamp(22px,3vw,28px);line-height:1.05;letter-spacing:-0.01em">How are the prizes split?</h3>
+          <p class="mt-2 text-sm leading-relaxed text-slate-400 sm:text-[15px]">Top 10 finishers get paid. Pick a curve that matches your event — top-heavy rewards skill; flatter pays more players.</p>
+          <div class="mt-6 space-y-6">
+            <div class="grid grid-cols-1 gap-3 sm:grid-cols-2">
+              <button class="flex flex-col gap-1 rounded-xl border p-4 text-left border-white/10 bg-black/30 hover:border-white/20">
+                <div class="text-sm font-bold text-white">Winner takes all</div>
+                <div class="text-[12px] leading-relaxed text-slate-400">100% to 1st</div>
+              </button>
+              <button class="flex flex-col gap-1 rounded-xl border p-4 text-left border-cyan-500/60 bg-cyan-500/10">
+                <div class="text-sm font-bold text-cyan-300">Podium classic</div>
+                <div class="text-[12px] leading-relaxed text-slate-400">50/30/20 to top three</div>
+              </button>
+              <button class="flex flex-col gap-1 rounded-xl border p-4 text-left border-white/10 bg-black/30 hover:border-white/20">
+                <div class="text-sm font-bold text-white">Top two</div>
+                <div class="text-[12px] leading-relaxed text-slate-400">70/30</div>
+              </button>
+              <button class="flex flex-col gap-1 rounded-xl border p-4 text-left border-white/10 bg-black/30 hover:border-white/20">
+                <div class="text-sm font-bold text-white">Top five</div>
+                <div class="text-[12px] leading-relaxed text-slate-400">45/22/15/10/8</div>
+              </button>
+              <button class="flex flex-col gap-1 rounded-xl border p-4 text-left border-white/10 bg-black/30 hover:border-white/20">
+                <div class="text-sm font-bold text-white">Champion heavy</div>
+                <div class="text-[12px] leading-relaxed text-slate-400">82 / 12 / 6 — winner-favored</div>
+              </button>
+              <button class="flex flex-col gap-1 rounded-xl border p-4 text-left border-white/10 bg-black/30 hover:border-white/20">
+                <div class="text-sm font-bold text-white">Deep table</div>
+                <div class="text-[12px] leading-relaxed text-slate-400">Six-way curve down the field</div>
+              </button>
+            </div>
+            <!-- Live split preview -->
+            <div class="rounded-xl border border-cyan-500/20 bg-black/40 p-5">
+              <div class="flex items-baseline justify-between gap-2">
+                <div class="text-[10px] font-bold uppercase text-cyan-400" style="letter-spacing:0.25em">Estimated split</div>
+                <div class="text-[11px] text-slate-500">Pool ≈ <span class="font-mono tabular-nums text-slate-300">22,500 chips</span></div>
+              </div>
+              <div class="mt-3 space-y-1.5">
+                <div class="flex items-center gap-3 text-[12px]">
+                  <div class="w-6 text-slate-500">#1</div>
+                  <div class="relative flex-1 overflow-hidden rounded-full bg-white/[0.04]"><div class="h-2 rounded-full" style="width:50%;background:linear-gradient(90deg,#06b6d4,#2563eb)"></div></div>
+                  <div class="w-14 text-right font-mono tabular-nums text-slate-300">50%</div>
+                  <div class="w-28 text-right font-mono tabular-nums text-slate-500">11,250</div>
+                </div>
+                <div class="flex items-center gap-3 text-[12px]">
+                  <div class="w-6 text-slate-500">#2</div>
+                  <div class="relative flex-1 overflow-hidden rounded-full bg-white/[0.04]"><div class="h-2 rounded-full" style="width:30%;background:linear-gradient(90deg,#06b6d4,#2563eb)"></div></div>
+                  <div class="w-14 text-right font-mono tabular-nums text-slate-300">30%</div>
+                  <div class="w-28 text-right font-mono tabular-nums text-slate-500">6,750</div>
+                </div>
+                <div class="flex items-center gap-3 text-[12px]">
+                  <div class="w-6 text-slate-500">#3</div>
+                  <div class="relative flex-1 overflow-hidden rounded-full bg-white/[0.04]"><div class="h-2 rounded-full" style="width:20%;background:linear-gradient(90deg,#06b6d4,#2563eb)"></div></div>
+                  <div class="w-14 text-right font-mono tabular-nums text-slate-300">20%</div>
+                  <div class="w-28 text-right font-mono tabular-nums text-slate-500">4,500</div>
+                </div>
+              </div>
+            </div>
+            <!-- Creator fee -->
+            <div>
+              <label class="text-[11px] font-bold uppercase text-slate-400 mb-2 block">Your cut of the prize pool</label>
+              <div class="grid grid-cols-4 gap-2 sm:grid-cols-8">
+                <button class="rounded-xl border py-2.5 text-center font-mono text-sm tabular-nums border-white/10 bg-black/30 text-slate-300 hover:border-white/20">0%</button>
+                <button class="rounded-xl border py-2.5 text-center font-mono text-sm tabular-nums border-white/10 bg-black/30 text-slate-300 hover:border-white/20">1%</button>
+                <button class="rounded-xl border py-2.5 text-center font-mono text-sm tabular-nums border-cyan-500/60 bg-cyan-500/10 text-cyan-200">2%</button>
+                <button class="rounded-xl border py-2.5 text-center font-mono text-sm tabular-nums border-white/10 bg-black/30 text-slate-300 hover:border-white/20">3%</button>
+                <button class="rounded-xl border py-2.5 text-center font-mono text-sm tabular-nums border-white/10 bg-black/30 text-slate-300 hover:border-white/20">5%</button>
+                <button class="rounded-xl border py-2.5 text-center font-mono text-sm tabular-nums border-white/10 bg-black/30 text-slate-300 hover:border-white/20">7%</button>
+                <button class="rounded-xl border py-2.5 text-center font-mono text-sm tabular-nums border-white/10 bg-black/30 text-slate-300 hover:border-white/20">10%</button>
+                <button class="rounded-xl border py-2.5 text-center font-mono text-sm tabular-nums border-white/10 bg-black/30 text-slate-300 hover:border-white/20">15%</button>
+              </div>
+              <p class="mt-2 text-[12px] leading-relaxed text-slate-500">2% of the prize pool is paid to you when the tournament ends. The platform also takes a small fee on top.</p>
+            </div>
+          </div>
+        </div>
+        <div class="mt-8 flex items-center justify-between gap-4">
+          <button class="inline-flex items-center gap-2 rounded-xl border border-white/10 bg-white/5 px-5 py-3 text-sm font-semibold text-slate-200 hover:border-white/20 hover:bg-white/10"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m12 19-7-7 7-7M19 12H5"/></svg> Back</button>
+          <button class="inline-flex items-center gap-2 rounded-xl px-7 py-3.5 text-sm font-bold text-white btn-cyan hover:scale-[1.02] sm:text-[15px]">Continue <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 12h14M12 5l7 7-7 7"/></svg></button>
+        </div>
+      </div>
+    </section>
+
+    <!-- SCREEN 7 — REVIEW -->
+    <section class="screen bg-hero relative" data-screen="review">
+      <button class="absolute top-4 right-4 z-10 rounded-full p-2 text-slate-500 hover:text-white hover:bg-white/10"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 6 6 18M6 6l12 12"/></svg></button>
+      <div class="mx-auto flex w-full max-w-3xl flex-col gap-8 px-6 py-12 sm:px-10 sm:py-16">
+        <div class="text-center">
+          <div class="inline-flex items-center gap-2 rounded-full border border-cyan-500/30 bg-cyan-500/10 px-3 py-1 text-[11px] font-bold uppercase text-cyan-300" style="letter-spacing:0.2em">
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>
+            Ready to publish
+          </div>
+          <h1 class="mt-5 text-white font-mitr font-bold" style="font-size:clamp(36px,6vw,64px);line-height:.95;letter-spacing:-0.02em">Friday Night Madness</h1>
+          <p class="mt-2 text-sm text-slate-400">Starts <span class="font-mono tabular-nums text-slate-200">Fri, May 22, 8:00 PM</span></p>
+        </div>
+        <div class="space-y-3">
+          <div class="group flex items-center justify-between gap-4 rounded-xl border border-white/10 bg-black/30 px-4 py-3">
+            <div class="min-w-0">
+              <div class="text-[10px] font-bold uppercase text-cyan-400" style="letter-spacing:0.2em">Name & schedule</div>
+              <div class="mt-0.5 truncate text-sm font-semibold text-white">Friday Night Madness</div>
+              <div class="mt-0.5 truncate text-[12px] text-slate-500">Fri, May 22, 8:00 PM</div>
+            </div>
+            <button class="shrink-0 rounded-lg border border-white/10 bg-white/[0.04] p-2 text-slate-400 hover:border-cyan-500/40 hover:bg-cyan-500/10 hover:text-cyan-300"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"/></svg></button>
+          </div>
+          <div class="group flex items-center justify-between gap-4 rounded-xl border border-white/10 bg-black/30 px-4 py-3">
+            <div class="min-w-0">
+              <div class="text-[10px] font-bold uppercase text-cyan-400" style="letter-spacing:0.2em">Buy-in</div>
+              <div class="mt-0.5 truncate text-sm font-semibold text-white">500 MORBIUS / player</div>
+            </div>
+            <button class="shrink-0 rounded-lg border border-white/10 bg-white/[0.04] p-2 text-slate-400 hover:border-cyan-500/40 hover:bg-cyan-500/10 hover:text-cyan-300"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"/></svg></button>
+          </div>
+          <div class="group flex items-center justify-between gap-4 rounded-xl border border-white/10 bg-black/30 px-4 py-3">
+            <div class="min-w-0">
+              <div class="text-[10px] font-bold uppercase text-cyan-400" style="letter-spacing:0.2em">Field</div>
+              <div class="mt-0.5 truncate text-sm font-semibold text-white">45 players · 9-max</div>
+              <div class="mt-0.5 truncate text-[12px] text-slate-500">5 tables at start · Top 10 paid</div>
+            </div>
+            <button class="shrink-0 rounded-lg border border-white/10 bg-white/[0.04] p-2 text-slate-400 hover:border-cyan-500/40 hover:bg-cyan-500/10 hover:text-cyan-300"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"/></svg></button>
+          </div>
+          <div class="group flex items-center justify-between gap-4 rounded-xl border border-white/10 bg-black/30 px-4 py-3">
+            <div class="min-w-0">
+              <div class="text-[10px] font-bold uppercase text-cyan-400" style="letter-spacing:0.2em">Starting stack</div>
+              <div class="mt-0.5 truncate text-sm font-semibold text-white">10,000 chips</div>
+            </div>
+            <button class="shrink-0 rounded-lg border border-white/10 bg-white/[0.04] p-2 text-slate-400 hover:border-cyan-500/40 hover:bg-cyan-500/10 hover:text-cyan-300"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"/></svg></button>
+          </div>
+          <div class="group flex items-center justify-between gap-4 rounded-xl border border-white/10 bg-black/30 px-4 py-3">
+            <div class="min-w-0">
+              <div class="text-[10px] font-bold uppercase text-cyan-400" style="letter-spacing:0.2em">Blinds</div>
+              <div class="mt-0.5 truncate text-sm font-semibold text-white">By time · 15 min levels</div>
+            </div>
+            <button class="shrink-0 rounded-lg border border-white/10 bg-white/[0.04] p-2 text-slate-400 hover:border-cyan-500/40 hover:bg-cyan-500/10 hover:text-cyan-300"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"/></svg></button>
+          </div>
+          <div class="group flex items-center justify-between gap-4 rounded-xl border border-white/10 bg-black/30 px-4 py-3">
+            <div class="min-w-0">
+              <div class="text-[10px] font-bold uppercase text-cyan-400" style="letter-spacing:0.2em">Payouts</div>
+              <div class="mt-0.5 truncate text-sm font-semibold text-white">Podium classic</div>
+              <div class="mt-0.5 truncate text-[12px] text-slate-500">Creator cut: 2%</div>
+            </div>
+            <button class="shrink-0 rounded-lg border border-white/10 bg-white/[0.04] p-2 text-slate-400 hover:border-cyan-500/40 hover:bg-cyan-500/10 hover:text-cyan-300"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"/></svg></button>
+          </div>
+        </div>
+        <div class="flex items-center justify-between gap-4 pt-2">
+          <button class="inline-flex items-center gap-2 rounded-xl border border-white/10 bg-white/5 px-5 py-3 text-sm font-semibold text-slate-200 hover:border-white/20 hover:bg-white/10"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m12 19-7-7 7-7M19 12H5"/></svg> Back</button>
+          <button class="inline-flex items-center gap-2 rounded-xl px-8 py-3.5 text-sm font-bold text-white btn-publish hover:scale-[1.02] sm:text-[15px]">Publish tournament <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 12h14M12 5l7 7-7 7"/></svg></button>
+        </div>
+        <p class="text-center text-[11px] text-slate-600">Pencil edit any row above to jump back. Your inputs are kept until you close this page.</p>
+      </div>
+    </section>
+
+  </main>
+
+  <!-- Floating bottom controls -->
+  <div class="fixed bottom-4 left-1/2 -translate-x-1/2 z-50 flex items-center gap-2 rounded-full border border-white/10 bg-black/80 backdrop-blur-md px-3 py-2 shadow-xl">
+    <button id="btn-prev" class="rounded-full p-1.5 text-slate-400 hover:text-white hover:bg-white/10 transition-colors disabled:opacity-30" title="Previous (←)">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="15 18 9 12 15 6"/></svg>
+    </button>
+    <span id="screen-pos" class="text-[11px] font-mono tabular-nums text-slate-400 px-1">0 / 7</span>
+    <button id="btn-next" class="rounded-full p-1.5 text-slate-400 hover:text-white hover:bg-white/10 transition-colors disabled:opacity-30" title="Next (→)">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9 18 15 12 9 6"/></svg>
+    </button>
+  </div>
+
+  <script>
+    const SCREENS = ['template','name','buy-in','field','stack','blinds','payouts','review'];
+    const LABELS = {
+      'template':'Template','name':'Name','buy-in':'Buy-in','field':'Field',
+      'stack':'Stack','blinds':'Blinds','payouts':'Payouts','review':'Review',
+    };
+    let idx = 0;
+
+    function show(i) {
+      idx = Math.max(0, Math.min(SCREENS.length - 1, i));
+      const target = SCREENS[idx];
+      document.querySelectorAll('.screen').forEach(s => {
+        s.classList.toggle('active', s.dataset.screen === target);
+      });
+      document.querySelectorAll('.tab-btn').forEach(b => {
+        b.classList.toggle('active', b.dataset.target === target);
+      });
+      document.getElementById('screen-pos').textContent = `${idx} / ${SCREENS.length - 1}`;
+      document.getElementById('mobile-screen-label').textContent = LABELS[target];
+      document.getElementById('btn-prev').disabled = idx === 0;
+      document.getElementById('btn-next').disabled = idx === SCREENS.length - 1;
+      window.scrollTo({ top: 0, behavior: 'instant' });
+      // URL hash for direct linking + reload memory
+      if (location.hash.replace('#','') !== target) {
+        history.replaceState(null, '', `#${target}`);
+      }
+    }
+
+    document.querySelectorAll('.tab-btn').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const target = btn.dataset.target;
+        show(SCREENS.indexOf(target));
+      });
+    });
+    document.getElementById('btn-prev').addEventListener('click', () => show(idx - 1));
+    document.getElementById('btn-next').addEventListener('click', () => show(idx + 1));
+
+    document.addEventListener('keydown', e => {
+      if (e.key === 'ArrowLeft') { e.preventDefault(); show(idx - 1); }
+      else if (e.key === 'ArrowRight') { e.preventDefault(); show(idx + 1); }
+      else if (e.key >= '0' && e.key <= '7') { show(parseInt(e.key, 10)); }
+    });
+
+    // Initial: read hash
+    const initialHash = location.hash.replace('#','');
+    const initialIdx = SCREENS.indexOf(initialHash);
+    show(initialIdx >= 0 ? initialIdx : 0);
+  </script>
+</body>
+</html>
