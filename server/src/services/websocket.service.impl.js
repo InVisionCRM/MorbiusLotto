@@ -1085,9 +1085,10 @@ class WebSocketService {
             }
             const amount = payload.amount != null ? String(payload.amount) : undefined;
             const state = await this.pokerGameService.playerAction(tableId, handId, ws.playerAddress, action, amount);
+            // playerAction → broadcastState → broadcastPokerTableState already pushed
+            // the new state to the whole room. No need to re-issue getTableState +
+            // broadcastToRoom here; the actor's response below carries hole cards.
             this.sendMessage(ws, { type: 'poker_table_state', payload: state, requestId: message.requestId });
-            const broadcastState = await this.pokerGameService.getTableState(tableId, null);
-            this.broadcastToRoom(`poker:table:${tableId}`, { type: 'poker_table_state', payload: broadcastState });
         }
         catch (error) {
             logger_1.logger.error('Error poker action:', error);
