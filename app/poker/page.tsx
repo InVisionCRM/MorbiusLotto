@@ -25,6 +25,7 @@ import { PokerChipExchangeModal } from '@/components/poker/PokerChipExchangeModa
 import { InsufficientBalanceDialog } from '@/components/shared/InsufficientBalanceDialog';
 import { PokerOnboardingWizard } from '@/components/poker/PokerOnboardingWizard';
 import { PokerOnboardingChecklist } from '@/components/poker/PokerOnboardingChecklist';
+import { PokerYourStatsPanel } from '@/components/poker/PokerYourStatsPanel';
 import { usePokerOnboarding } from '@/hooks/use-poker-onboarding';
 import { PokerBetaSplash } from '@/components/poker/PokerBetaSplash';
 import { PokerHowToPlayModal } from '@/components/poker/PokerHowToPlayModal';
@@ -734,6 +735,15 @@ export default function PokerLobbyPage() {
                   </div>
                 </div>
               </section>
+            )}
+
+            {isConnected && address && (
+              <div className="mb-6 sm:mb-8">
+                <PokerYourStatsPanel
+                  address={address.toLowerCase()}
+                  onOpenAllStats={() => setShowStatsModal(true)}
+                />
+              </div>
             )}
 
             <PokerHouseRecords />
