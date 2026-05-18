@@ -34,6 +34,13 @@ import { PokerTopPlayers } from '@/components/poker/PokerTopPlayers';
 import GlobalMainNav from '@/components/shared/GlobalMainNav';
 import { PokerTournamentLobby } from '@/components/poker/tournament/PokerTournamentLobby';
 import { PokerTournamentHistory } from '@/components/poker/tournament/PokerTournamentHistory';
+import {
+  MorbCard,
+  MorbGradientButton,
+  MorbSecondaryButton,
+  MorbInput,
+  MorbHeroAmount,
+} from '@/components/ui/morb-card';
 import { Coins, Lock } from 'lucide-react';
 import { formatDistanceToNow } from 'date-fns';
 
@@ -1141,99 +1148,116 @@ export default function PokerLobbyPage() {
             playerAddress={address ?? null}
           />
 
-          {createModal && (
-          <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-3">
-            <div
-              className="bg-gradient-to-br from-slate-900 to-slate-800 border-2 border-white/25 rounded-xl shadow-2xl max-w-xs w-full overflow-hidden"
-              style={Theme.panel?.base}
-            >
-              <div className="px-3 py-2.5 border-b border-white/25">
-                <h3 className="text-sm font-semibold text-cyan-400">Create Cash Game</h3>
-              </div>
-              <div className="p-3 space-y-2.5">
-                <p className="text-[11px] text-slate-500">Blinds in MORBIUS (e.g. 10 = 10 MORBIUS)</p>
-                <div>
-                  <label className="block text-xs text-slate-400 mb-1">Small blind</label>
-                  <input
-                    type="text"
-                    value={createModal.smallBlind}
-                    onChange={(e) => setCreateModal((m) => m ? { ...m, smallBlind: e.target.value } : null)}
-                    className="w-full rounded-lg bg-slate-800 border border-white/25 px-2.5 py-1.5 text-sm text-white"
-                  />
-                </div>
-                <div>
-                  <label className="block text-xs text-slate-400 mb-1">Big blind</label>
-                  <input
-                    type="text"
-                    value={createModal.bigBlind}
-                    onChange={(e) => setCreateModal((m) => m ? { ...m, bigBlind: e.target.value } : null)}
-                    className="w-full rounded-lg bg-slate-800 border border-white/25 px-2.5 py-1.5 text-sm text-white"
-                  />
-                </div>
-                <div>
-                  <label className="block text-xs text-slate-400 mb-1">Max seats (2–10)</label>
-                  <input
-                    type="number"
-                    min={2}
-                    max={10}
-                    value={createModal.maxSeats}
-                    onChange={(e) => setCreateModal((m) => m ? { ...m, maxSeats: Math.min(10, Math.max(2, Number(e.target.value) || 10)) } : null)}
-                    className="w-full rounded-lg bg-slate-800 border border-white/25 px-2.5 py-1.5 text-sm text-white"
-                  />
-                </div>
-                {/* Private table PIN toggle */}
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-1.5">
-                    <svg className="w-3.5 h-3.5 text-slate-500" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2C9.24 2 7 4.24 7 7v3H6a2 2 0 00-2 2v8a2 2 0 002 2h12a2 2 0 002-2v-8a2 2 0 00-2-2h-1V7c0-2.76-2.24-5-5-5zm0 2c1.66 0 3 1.34 3 3v3H9V7c0-1.66 1.34-3 3-3zm0 10c1.1 0 2 .9 2 2s-.9 2-2 2-2-.9-2-2 .9-2 2-2z" /></svg>
-                    <span className="text-xs text-slate-400">Private table</span>
-                  </div>
-                  <button
-                    type="button"
-                    onClick={() => setCreateModal((m) => m ? { ...m, pinEnabled: !m.pinEnabled, pinCode: '' } : null)}
-                    className={`relative w-9 h-5 rounded-full transition-colors ${createModal.pinEnabled ? 'bg-cyan-500' : 'bg-slate-700'}`}
-                  >
-                    <span className={`absolute top-0.5 left-0.5 w-4 h-4 rounded-full bg-white transition-transform ${createModal.pinEnabled ? 'translate-x-4' : ''}`} />
-                  </button>
-                </div>
-                {createModal.pinEnabled && (
-                  <div>
-                    <label className="block text-xs text-slate-400 mb-1">4-digit PIN</label>
-                    <input
-                      type="text"
-                      inputMode="numeric"
-                      maxLength={4}
-                      value={createModal.pinCode}
-                      onChange={(e) => {
-                        const v = e.target.value.replace(/\D/g, '').slice(0, 4);
-                        setCreateModal((m) => m ? { ...m, pinCode: v } : null);
-                      }}
-                      placeholder="0000"
-                      className="w-full rounded-lg bg-slate-800 border border-white/25 px-2.5 py-1.5 text-sm text-white text-center tracking-[0.5em] font-mono"
+          {createModal && (() => {
+            const sb = Number(createModal.smallBlind) || 0;
+            const bb = Number(createModal.bigBlind) || 0;
+            const blindsValid = sb > 0 && bb > 0;
+            const pinValid = !createModal.pinEnabled || /^\d{4}$/.test(createModal.pinCode);
+            const canCreate = !creating && blindsValid && pinValid;
+            return (
+              <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4">
+                <MorbCard className="w-full max-w-sm" beams glowIntensity="normal">
+                  <div className="p-5 space-y-4">
+                    <MorbHeroAmount
+                      label="CASH GAME · MORBIUS"
+                      amount={blindsValid ? `${sb} / ${bb}` : '— / —'}
+                      ticker="SB / BB"
+                      secondary={`Up to ${createModal.maxSeats} seats`}
                     />
-                    <p className="text-[10px] text-slate-600 mt-1">Share this PIN with invited players.</p>
+
+                    <div className="rounded-xl border border-white/10 bg-slate-900/60 p-3 space-y-2.5">
+                      <p className="text-[10px] uppercase tracking-[0.18em] text-cyan-300/70">Table setup</p>
+                      <div className="grid grid-cols-2 gap-2.5">
+                        <div>
+                          <label className="block text-[10px] uppercase tracking-wider text-slate-400 mb-1">Small blind</label>
+                          <MorbInput
+                            type="text"
+                            inputMode="decimal"
+                            value={createModal.smallBlind}
+                            onChange={(e) => setCreateModal((m) => m ? { ...m, smallBlind: e.target.value } : null)}
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-[10px] uppercase tracking-wider text-slate-400 mb-1">Big blind</label>
+                          <MorbInput
+                            type="text"
+                            inputMode="decimal"
+                            value={createModal.bigBlind}
+                            onChange={(e) => setCreateModal((m) => m ? { ...m, bigBlind: e.target.value } : null)}
+                          />
+                        </div>
+                      </div>
+                      <div>
+                        <label className="block text-[10px] uppercase tracking-wider text-slate-400 mb-1">Max seats (2–10)</label>
+                        <MorbInput
+                          type="number"
+                          min={2}
+                          max={10}
+                          value={createModal.maxSeats}
+                          onChange={(e) => setCreateModal((m) => m ? { ...m, maxSeats: Math.min(10, Math.max(2, Number(e.target.value) || 10)) } : null)}
+                        />
+                      </div>
+                      <p className="text-[10px] text-slate-500">Blinds are in MORBIUS (e.g. 10 = 10 MORBIUS).</p>
+                    </div>
+
+                    <div className="rounded-xl border border-white/10 bg-slate-900/60 p-3 space-y-2.5">
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-2">
+                          <Lock className="h-3.5 w-3.5 text-slate-400" />
+                          <span className="text-xs text-slate-200">Private table</span>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => setCreateModal((m) => m ? { ...m, pinEnabled: !m.pinEnabled, pinCode: '' } : null)}
+                          aria-pressed={createModal.pinEnabled}
+                          className={`relative w-9 h-5 rounded-full transition-colors ${createModal.pinEnabled ? 'bg-cyan-500 shadow-[0_0_10px_rgba(34,211,238,0.5)]' : 'bg-slate-700'}`}
+                        >
+                          <span className={`absolute top-0.5 left-0.5 w-4 h-4 rounded-full bg-white transition-transform ${createModal.pinEnabled ? 'translate-x-4' : ''}`} />
+                        </button>
+                      </div>
+                      {createModal.pinEnabled && (
+                        <div>
+                          <label className="block text-[10px] uppercase tracking-wider text-slate-400 mb-1">4-digit PIN</label>
+                          <MorbInput
+                            type="text"
+                            inputMode="numeric"
+                            maxLength={4}
+                            value={createModal.pinCode}
+                            onChange={(e) => {
+                              const v = e.target.value.replace(/\D/g, '').slice(0, 4);
+                              setCreateModal((m) => m ? { ...m, pinCode: v } : null);
+                            }}
+                            placeholder="0000"
+                            className="text-center tracking-[0.5em] font-mono"
+                          />
+                          <p className="text-[10px] text-slate-500 mt-1">Share this PIN with invited players.</p>
+                        </div>
+                      )}
+                    </div>
+
+                    <div className="flex gap-2 pt-1">
+                      <MorbSecondaryButton
+                        type="button"
+                        onClick={() => setCreateModal(null)}
+                        className="flex-1"
+                      >
+                        Cancel
+                      </MorbSecondaryButton>
+                      <MorbGradientButton
+                        type="button"
+                        onClick={handleCreateTable}
+                        disabled={!canCreate}
+                        loading={creating}
+                        className="flex-1"
+                      >
+                        {creating ? 'Creating…' : 'Create table'}
+                      </MorbGradientButton>
+                    </div>
                   </div>
-                )}
-                <div className="flex gap-2 pt-0.5">
-                  <button
-                    type="button"
-                    onClick={() => setCreateModal(null)}
-                    className="flex-1 py-1.5 text-sm rounded-lg border border-slate-500 text-slate-300"
-                  >
-                    Cancel
-                  </button>
-                  <button
-                    type="button"
-                    onClick={handleCreateTable}
-                    disabled={creating || !createModal.smallBlind || !createModal.bigBlind || (createModal.pinEnabled && !/^\d{4}$/.test(createModal.pinCode))}
-                    className="flex-1 py-1.5 text-sm rounded-lg bg-gradient-to-r from-cyan-600 to-blue-600 text-white disabled:opacity-50"
-                  >
-                    {creating ? 'Creating...' : 'Create'}
-                  </button>
-                </div>
+                </MorbCard>
               </div>
-            </div>
-          </div>
-        )}
+            );
+          })()}
 
           <Footer />
         </div>

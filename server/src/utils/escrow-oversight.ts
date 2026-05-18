@@ -9,9 +9,21 @@ function escrowBytes32Address(): `0x${string}` {
 
 /**
  * V4 dropped the on-chain aggregation helpers (`getEscrowSummary`, `getActivePools`,
- * `getPoolsByDepositor`, `getTotalValueLocked`) to keep the contract small. We compute
- * them in JS off `getAllTournamentIds()` + per-id `getPool()` instead. For the small
- * tournament counts we have, the cost is trivial; for larger counts we'd cache or paginate.
+ * `getPoolsByDepositor`, `getTotalValueLocked`); V6 went a step further and removed
+ * `getAllTournamentIds()` / the `tournamentIds[]` array entirely (per the V6 commit:
+ * "Removed unused tournamentIds[] array + enumeration views"). There is no longer any
+ * way to enumerate every pool from the chain.
+ *
+ * Until we wire enumeration to the DB (query `tournaments.escrow_tournament_id_bytes32
+ * WHERE NOT NULL`, then read each pool with `getPool(id)`), the aggregator functions
+ * below return safe-empty results. Single-pool reads via `getPoolDetails(uuid)` still
+ * work because they go straight through `tournamentIdToBytes32` → `getPool`.
+ *
+ * TODO(escrow-oversight): swap stubbed enumeration for the DB-backed list. See:
+ *   - server/src/services/poker-tournament.service.ts (existing query reads
+ *     escrow_tournament_id_bytes32 for the reclaim list)
+ *   - admin oversight endpoints under server/src/routes/admin.routes.ts that consume
+ *     getEscrowSummary / getPoolsByDepositor / getActivePools / getTotalValueLocked
  */
 
 export interface EscrowPoolDetails {
@@ -43,38 +55,17 @@ interface RawPool {
   cancelled: boolean;
 }
 
-/** Read every pool from the contract. Single source of truth for the JS aggregators below. */
+/**
+ * Stubbed: V6 removed `getAllTournamentIds`. Always returns []. Touch chain only via
+ * `getPoolDetails(uuid)` until the DB-backed enumeration lands (see TODO at top of file).
+ * Unused-import suppression — `getPublicClient` is still used by `getPoolDetails` below.
+ */
 async function readAllPools(): Promise<RawPool[]> {
-  const client = getPublicClient();
-  const idsRaw = (await client.readContract({
-    address: escrowBytes32Address(),
-    abi: tournamentPrizeEscrowV6Abi,
-    functionName: 'getAllTournamentIds',
-  })) as readonly `0x${string}`[];
-  const ids = idsRaw as `0x${string}`[];
-  if (ids.length === 0) return [];
-  // Read pools in parallel — small N, public RPC handles burst fine.
-  const pools = await Promise.all(
-    ids.map(async (id) => {
-      const r = (await client.readContract({
-        address: escrowBytes32Address(),
-        abi: tournamentPrizeEscrowV6Abi,
-        functionName: 'getPool',
-        args: [id],
-      })) as readonly [`0x${string}`, `0x${string}`, bigint, bigint, bigint, boolean];
-      return {
-        id,
-        token: r[0],
-        depositor: r[1],
-        totalDeposited: r[2],
-        amountPaidOut: r[3],
-        depositedAt: r[4],
-        cancelled: r[5],
-      } satisfies RawPool;
-    }),
-  );
-  return pools;
+  return [];
 }
+// Reference the client import so tsc's `noUnusedLocals` doesn't flip it red in future
+// builds. `getPoolDetails` already consumes it; this is a no-op at runtime.
+void getPublicClient;
 
 /** Aggregate over all pools in JS — replaces the contract's removed `getEscrowSummary`. */
 export async function getEscrowSummary(): Promise<EscrowSummary | null> {

@@ -767,6 +767,32 @@ export declare class DatabaseService implements MoneyDatabaseQueries {
         }>;
         holeCards: number[] | null;
     } | null>;
+    getPokerHouseRecords(): Promise<{
+        hands_dealt: number;
+        largest_pot: {
+            amount: string;
+            hand_id: string | null;
+        };
+        tournaments_played: number;
+        total_rake: string;
+    }>;
+    getPokerTopPlayers(category: 'net_chips' | 'biggest_pot' | 'hands_played', limit: number, requesterAddress?: string | null): Promise<{
+        category: 'net_chips' | 'biggest_pot' | 'hands_played';
+        rows: Array<{
+            rank: number;
+            address: string;
+            net_chips: string;
+            biggest_pot: string;
+            hands_played: number;
+        }>;
+        requester: {
+            rank: number;
+            address: string;
+            net_chips: string;
+            biggest_pot: string;
+            hands_played: number;
+        } | null;
+    }>;
     getPokerTableDashboardStats(tableId: string): Promise<{
         table: {
             id: string;

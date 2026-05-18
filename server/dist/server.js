@@ -256,6 +256,17 @@ app.get('/health', (req, res) => {
 // Initialize services
 async function initializeServices() {
     try {
+        // Production WS auth advisory — see runtime/service-registry.ts. Logs a
+        // loud warning instead of hard-stopping boot; the strict gate proved too
+        // fragile during launch ops.
+        if (process.env.NODE_ENV === 'production') {
+            if (process.env.REQUIRE_WS_AUTH !== 'true') {
+                logger_1.logger.warn('[SECURITY] REQUIRE_WS_AUTH is not "true" in production. WS layer trusts unauthenticated `?address=` query params.');
+            }
+            if (process.env.DISABLE_WS_AUTH === 'true') {
+                logger_1.logger.warn('[SECURITY] DISABLE_WS_AUTH=true is set in production. EIP-712 signature verification bypassed.');
+            }
+        }
         // Start HTTP server immediately so /health responds during init (avoids Railway health-check timeout)
         server.listen(PORT, () => {
             logger_1.logger.info(`Blackjack server running on port ${PORT}`);
@@ -1407,6 +1418,171 @@ async function initializeServices() {
             }
             catch (error) {
                 logger_1.logger.error('Error fetching poker hand detail:', error);
+                res.status(500).json({ error: 'Internal server error' });
+            }
+        });
+        app.get('/api/poker/house-records', async (_req, res) => {
+            try {
+                const records = await dbService.getPokerHouseRecords();
+                sendJson(res, records);
+            }
+            catch (error) {
+                logger_1.logger.error('Error fetching poker house records:', error);
+                res.status(500).json({ error: 'Internal server error' });
+            }
+        });
+        app.get('/api/poker/top-players', async (req, res) => {
+            try {
+                const rawCategory = String(req.query.category ?? 'net_chips');
+                const category = rawCategory === 'biggest_pot' || rawCategory === 'hands_played'
+                    ? rawCategory
+                    : 'net_chips';
+                const limit = Math.min(Math.max(parseInt(req.query.limit) || 10, 1), 100);
+                const requester = typeof req.query.address === 'string' && /^0x[a-fA-F0-9]{40}$/.test(req.query.address)
+                    ? req.query.address
+                    : null;
+                const data = await dbService.getPokerTopPlayers(category, limit, requester);
+                sendJson(res, data);
+            }
+            catch (error) {
+                logger_1.logger.error('Error fetching poker top players:', error);
+                res.status(500).json({ error: 'Internal server error' });
+            }
+        });
+        // ───────────────────────────────────────────────────────────────────────
+        // Provably-fair poker verify endpoint
+        // ───────────────────────────────────────────────────────────────────────
+        // Returns everything a third party needs to independently re-derive the
+        // deck order for a completed hand and confirm the deal wasn't rigged.
+        //
+        // Protocol:
+        //   1. The server commits to `serverSeedHash = SHA256(serverSeed)` at
+        //      hand start. The plaintext `serverSeed` is hidden in
+        //      `poker_hand_pending_seeds` and is NEVER readable from
+        //      `poker_hands.server_seed` until `completed_at` is set.
+        //   2. The deck is `fisherYatesShuffle(serverSeed, clientSeed, nonce=0)`
+        //      — a deterministic 52-card permutation derived via HMAC-SHA256
+        //      byte stream (see `ProvablyFairService.fisherYatesShuffle`).
+        //   3. After showdown the plaintext seed is published in the verify
+        //      payload below. Anyone can:
+        //        a. Confirm SHA256(serverSeed) === serverSeedHash.
+        //        b. Re-run fisherYatesShuffle(...) and confirm the deck matches.
+        //        c. Walk the actions list to verify the game played out from that
+        //           deck (community cards + hole cards must be consistent).
+        //
+        // Cards are popped from the END of the deck array (chevtek's behavior),
+        // so `deck.indices[51]` is the first card dealt. The `dealOrder` field
+        // below is a convenience that reverses this for human-readability:
+        // `dealOrder[0]` is the first card dealt.
+        app.get('/api/poker/verify/:handId', async (req, res) => {
+            try {
+                const { handId } = req.params;
+                if (!handId || !UUID_REGEX.test(handId)) {
+                    return res.status(400).json({ error: 'Invalid hand ID' });
+                }
+                const handRow = await dbService.getPool().query(`SELECT id, table_id, tournament_id, hand_number, completed_at,
+                  server_seed, server_seed_hash, client_seed,
+                  community_cards, result
+             FROM poker_hands
+            WHERE id = $1`, [handId]);
+                if (handRow.rows.length === 0) {
+                    return res.status(404).json({ error: 'Hand not found' });
+                }
+                const h = handRow.rows[0];
+                if (h.completed_at == null) {
+                    return res.status(404).json({
+                        error: 'Hand not yet complete',
+                        message: 'Verification data is only published after the hand finishes (street=showdown, completed_at set). Try again after the hand ends.',
+                    });
+                }
+                // For provably-fair hands (post-migration 119), `server_seed` is
+                // populated by `persistShowdown` after the reveal. If it's NULL the
+                // row is either a legacy pre-launch hand (no deterministic shuffle)
+                // or a hand that was started but never properly completed.
+                if (h.server_seed == null) {
+                    return res.status(404).json({
+                        error: 'Hand not verifiable',
+                        message: 'No revealed server seed for this hand. This is normal for legacy hands; new hands always populate the seed at showdown.',
+                    });
+                }
+                const serverSeed = h.server_seed;
+                const clientSeed = h.client_seed ?? '';
+                const serverSeedHash = h.server_seed_hash;
+                // Independently re-derive everything the verifier needs.
+                const recomputedHash = pfService.createServerSeedHash(serverSeed);
+                const deckIndices = pfService.fisherYatesShuffle(serverSeed, clientSeed, 0);
+                const dealOrder = deckIndices.slice().reverse(); // pop order: end of array first
+                const communityCards = Array.isArray(h.community_cards)
+                    ? h.community_cards
+                    : (h.community_cards ? JSON.parse(JSON.stringify(h.community_cards)) : []);
+                // Hole cards: all dealt-in players. Ordered by the *deal-time* seat
+                // position captured in `poker_hand_players.seat_position` (mirrors
+                // chevtek's `table.players` array index at the moment dealCards() ran).
+                // We deliberately do NOT join on `poker_seats` here — that table is the
+                // *live* seating state, which may have changed since the hand finished
+                // (player left, swapped seats, etc.), producing the wrong order.
+                // `poker_seats.position` is used only as a fallback for legacy hands
+                // where `populateHandPlayers` failed and no per-hand snapshot exists.
+                const holeRows = await dbService.getPool().query(`SELECT hc.player_address, hc.cards,
+                  COALESCE(hp.seat_position, ps.position) AS position
+             FROM poker_hand_hole_cards hc
+             LEFT JOIN poker_hand_players hp
+                    ON hp.hand_id = hc.hand_id
+                   AND hp.player_address = hc.player_address
+             LEFT JOIN poker_seats ps
+                    ON ps.table_id = $2
+                   AND ps.player_address = hc.player_address
+            WHERE hc.hand_id = $1
+            ORDER BY COALESCE(hp.seat_position, ps.position) ASC NULLS LAST,
+                     hc.player_address ASC`, [handId, h.table_id]);
+                const players = holeRows.rows.map((r) => ({
+                    address: (r.player_address || '').toLowerCase(),
+                    seatPosition: r.position != null ? Number(r.position) : null,
+                    holeCards: Array.isArray(r.cards) ? r.cards : JSON.parse(r.cards ?? '[]'),
+                }));
+                // Action log for full game reconstruction.
+                const actionRows = await dbService.getPool().query(`SELECT "order", player_address, street, action, amount
+             FROM poker_hand_actions WHERE hand_id = $1 ORDER BY "order" ASC`, [handId]);
+                const actions = actionRows.rows.map((r) => ({
+                    order: Number(r.order),
+                    street: r.street,
+                    address: (r.player_address || '').toLowerCase(),
+                    action: r.action,
+                    amount: r.amount?.toString() ?? '0',
+                }));
+                const result = h.result
+                    ? (typeof h.result === 'string' ? JSON.parse(h.result) : h.result)
+                    : null;
+                sendJson(res, {
+                    handId: h.id,
+                    handNumber: Number(h.hand_number),
+                    tableId: h.table_id,
+                    tournamentId: h.tournament_id ?? null,
+                    completedAt: h.completed_at instanceof Date
+                        ? h.completed_at.toISOString()
+                        : new Date(h.completed_at).toISOString(),
+                    verifiable: recomputedHash === serverSeedHash,
+                    commitment: { serverSeedHash },
+                    reveal: { serverSeed, clientSeed, nonce: 0 },
+                    deck: {
+                        indices: deckIndices,
+                        dealOrder,
+                        encoding: '0-51: rank = idx % 13 (0=2 … 12=A), suit = floor(idx / 13) (0=clubs, 1=diamonds, 2=hearts, 3=spades).',
+                    },
+                    players,
+                    communityCards,
+                    actions,
+                    result,
+                    howToVerify: [
+                        '1. Recompute SHA256(reveal.serverSeed). It must equal commitment.serverSeedHash.',
+                        '2. Call fisherYatesShuffle(reveal.serverSeed, reveal.clientSeed, nonce=0) — see server/src/services/provably-fair.service.ts. The result must equal deck.indices.',
+                        '3. Cards are popped from the END of deck.indices. The first 2N values (from the end) are dealt as hole cards in seat order; the next 3+1+1 build flop/turn/river. See dealOrder for the human-readable sequence.',
+                        '4. Reconstruct the betting via `actions[]` to confirm the recorded winners are correct.',
+                    ],
+                });
+            }
+            catch (error) {
+                logger_1.logger.error('Error verifying poker hand:', error);
                 res.status(500).json({ error: 'Internal server error' });
             }
         });

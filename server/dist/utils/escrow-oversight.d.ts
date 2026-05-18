@@ -1,8 +1,20 @@
 /**
  * V4 dropped the on-chain aggregation helpers (`getEscrowSummary`, `getActivePools`,
- * `getPoolsByDepositor`, `getTotalValueLocked`) to keep the contract small. We compute
- * them in JS off `getAllTournamentIds()` + per-id `getPool()` instead. For the small
- * tournament counts we have, the cost is trivial; for larger counts we'd cache or paginate.
+ * `getPoolsByDepositor`, `getTotalValueLocked`); V6 went a step further and removed
+ * `getAllTournamentIds()` / the `tournamentIds[]` array entirely (per the V6 commit:
+ * "Removed unused tournamentIds[] array + enumeration views"). There is no longer any
+ * way to enumerate every pool from the chain.
+ *
+ * Until we wire enumeration to the DB (query `tournaments.escrow_tournament_id_bytes32
+ * WHERE NOT NULL`, then read each pool with `getPool(id)`), the aggregator functions
+ * below return safe-empty results. Single-pool reads via `getPoolDetails(uuid)` still
+ * work because they go straight through `tournamentIdToBytes32` → `getPool`.
+ *
+ * TODO(escrow-oversight): swap stubbed enumeration for the DB-backed list. See:
+ *   - server/src/services/poker-tournament.service.ts (existing query reads
+ *     escrow_tournament_id_bytes32 for the reclaim list)
+ *   - admin oversight endpoints under server/src/routes/admin.routes.ts that consume
+ *     getEscrowSummary / getPoolsByDepositor / getActivePools / getTotalValueLocked
  */
 export interface EscrowPoolDetails {
     tournamentId: string;

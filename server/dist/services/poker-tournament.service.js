@@ -7,6 +7,7 @@ const logger_1 = require("../utils/logger");
 const safe_bigint_1 = require("../utils/safe-bigint");
 const cosmetics_catalog_1 = require("../lib/cosmetics-catalog");
 const poker_chip_wallet_1 = require("./poker-chip-wallet");
+const poker_server_bot_addresses_1 = require("../lib/poker-server-bot-addresses");
 const escrow_status_1 = require("../utils/escrow-status");
 const tournament_id_bytes32_1 = require("../utils/tournament-id-bytes32");
 const escrow_payout_1 = require("../utils/escrow-payout");
@@ -22,7 +23,19 @@ exports.DEFAULT_BLIND_SCHEDULE = [
     { level: 5, smallBlind: 150, bigBlind: 300, handsPerLevel: 6 },
     { level: 6, smallBlind: 200, bigBlind: 400, handsPerLevel: 6 },
     { level: 7, smallBlind: 300, bigBlind: 600, handsPerLevel: 5 },
-    { level: 8, smallBlind: 500, bigBlind: 1000, handsPerLevel: 999 },
+    { level: 8, smallBlind: 500, bigBlind: 1000, handsPerLevel: 5 },
+    { level: 9, smallBlind: 750, bigBlind: 1500, handsPerLevel: 5 },
+    { level: 10, smallBlind: 1000, bigBlind: 2000, handsPerLevel: 5 },
+    { level: 11, smallBlind: 1500, bigBlind: 3000, handsPerLevel: 5 },
+    { level: 12, smallBlind: 2000, bigBlind: 4000, handsPerLevel: 5 },
+    { level: 13, smallBlind: 3000, bigBlind: 6000, handsPerLevel: 5 },
+    { level: 14, smallBlind: 5000, bigBlind: 10000, handsPerLevel: 5 },
+    { level: 15, smallBlind: 7500, bigBlind: 15000, handsPerLevel: 5 },
+    { level: 16, smallBlind: 10000, bigBlind: 20000, handsPerLevel: 5 },
+    { level: 17, smallBlind: 15000, bigBlind: 30000, handsPerLevel: 5 },
+    { level: 18, smallBlind: 20000, bigBlind: 40000, handsPerLevel: 5 },
+    { level: 19, smallBlind: 30000, bigBlind: 60000, handsPerLevel: 5 },
+    { level: 20, smallBlind: 50000, bigBlind: 100000, handsPerLevel: 999 },
 ];
 /**
  * Validates creator prize % per finishing rank (index 0 = 1st place … index maxPlayers-1).
@@ -157,7 +170,8 @@ class PokerTournamentService {
     }
     /**
      * `by_time`: how many full intervals have elapsed since `levelStartedAt`.
-     * Capped at the schedule length so we never read past the last level.
+     * Past the end of the schedule the function extrapolates additional levels
+     * so blinds never freeze in `by_time` mode — see `extrapolateBlindLevel`.
      * Returns the level number (1-based) that should currently be in effect.
      *
      * Example: schedule has 8 levels, interval = 30 min, levelStartedAt was the
@@ -173,8 +187,69 @@ class PokerTournamentService {
         const elapsedMs = Math.max(0, now.getTime() - levelStartedAt.getTime());
         const intervalMs = safeInterval * 60_000;
         const stepsElapsed = Math.floor(elapsedMs / intervalMs);
-        const targetIdx = Math.min(blindSchedule.length - 1, safeStart - 1 + stepsElapsed);
-        return blindSchedule[targetIdx];
+        const targetIdx = safeStart - 1 + stepsElapsed;
+        if (targetIdx < blindSchedule.length) {
+            return blindSchedule[targetIdx];
+        }
+        return this.extrapolateBlindLevel(blindSchedule, targetIdx);
+    }
+    /**
+     * Synthesize a blind level past the end of `blindSchedule` so tournaments
+     * in `by_time` mode keep advancing instead of freezing once they reach the
+     * last configured level. Growth rate is derived from the ratio between the
+     * schedule's final two levels (falls back to 1.5x per step when the schedule
+     * has only one level or the ratio is degenerate). Synthesized SB/BB values
+     * are rounded to the nearest "nice" chip step matching their magnitude, and
+     * are guaranteed to be strictly greater than the previous step.
+     */
+    extrapolateBlindLevel(blindSchedule, targetIdx) {
+        if (!blindSchedule.length) {
+            throw new Error('extrapolateBlindLevel: empty schedule');
+        }
+        const last = blindSchedule[blindSchedule.length - 1];
+        const lastIdx = blindSchedule.length - 1;
+        const extraSteps = Math.max(1, targetIdx - lastIdx);
+        let multiplier = 1.5;
+        if (blindSchedule.length >= 2) {
+            const prev = blindSchedule[blindSchedule.length - 2];
+            const ratio = prev.bigBlind > 0 ? last.bigBlind / prev.bigBlind : 0;
+            if (Number.isFinite(ratio) && ratio > 1)
+                multiplier = ratio;
+        }
+        let sb = last.smallBlind;
+        let bb = last.bigBlind;
+        for (let i = 0; i < extraSteps; i++) {
+            const nextSB = this.roundChipStep(sb * multiplier);
+            const nextBB = this.roundChipStep(bb * multiplier);
+            sb = nextSB > sb ? nextSB : sb + 1;
+            bb = nextBB > bb ? nextBB : bb + 1;
+        }
+        return {
+            level: last.level + extraSteps,
+            smallBlind: sb,
+            bigBlind: bb,
+            handsPerLevel: 999,
+        };
+    }
+    /** Round a chip value to a 1/2/5-style step matching its magnitude (25, 100, 500, 1k, 10k, ...). */
+    roundChipStep(value) {
+        if (!Number.isFinite(value) || value <= 0)
+            return 0;
+        const mag = Math.pow(10, Math.floor(Math.log10(value)));
+        let step;
+        if (mag < 100)
+            step = 25;
+        else if (mag < 1_000)
+            step = 50;
+        else if (mag < 10_000)
+            step = 250;
+        else if (mag < 100_000)
+            step = 1_000;
+        else if (mag < 1_000_000)
+            step = 10_000;
+        else
+            step = Math.floor(mag / 10);
+        return Math.max(step, Math.ceil(value / step) * step);
     }
     /** Blinds that apply to the next hand after `completedHandNumber` (1-based) finishes. */
     blindsForNextHand(blindSchedule, completedHandNumber) {
@@ -461,6 +536,13 @@ class PokerTournamentService {
         const client = await this.pool.connect();
         try {
             await client.query('BEGIN');
+            // Creator-chosen fee (0–15 integer). Default 2 if missing/invalid. DB CHECK constraint
+            // (migration 120) provides a second line of defense. Freerolls override to 0 at payout
+            // time (server-side in tournament.service.ts:1083) but we still persist the user's choice.
+            const rawCreatorFee = Number(params.creatorFeePercent);
+            const creatorFeePercent = Number.isFinite(rawCreatorFee)
+                ? Math.max(0, Math.min(15, Math.round(rawCreatorFee)))
+                : 2;
             const result = await client.query(`INSERT INTO tournaments (
         id,
         name, creator_address, buy_in_amount, starting_chips, max_hands, min_players,
@@ -475,7 +557,7 @@ class PokerTournamentService {
         $1, $2, $3::NUMERIC, $4, 999, $5,
         $6, $7::JSONB, $8::JSONB, $9, $10,
         $11, $12::JSONB, $13::NUMERIC, $14,
-        2, 3, 'registration',
+        $24, 3, 'registration',
         'poker', $15::JSONB, $16,
         $18, $19, $20, $21,
         $22, $23
@@ -503,6 +585,7 @@ class PokerTournamentService {
                 escrowVerified?.name ?? customBuyInRow?.name ?? null,
                 escrowVerified?.txHash ?? null,
                 escrowVerified?.bytes32Id ?? customBuyInRow?.bytes32Id ?? null,
+                creatorFeePercent,
             ]);
             const tournamentId = result.rows[0].id;
             if (buyIn === 0n && debitAddress) {
@@ -543,19 +626,27 @@ class PokerTournamentService {
         // Cheap fast path: when the caller is already registered (very common — table HUD reconnects,
         // `refreshTournaments` re-subscribing to rooms, retry storms), skip opening a transaction with
         // `SELECT ... FOR UPDATE`. Two simple reads instead of the full lock + 5+ queries.
-        const fastCheck = await this.pool.query(`SELECT te.id AS entry_id, t.status AS tournament_status, t.is_private, t.pin_code,
+        //
+        // Busted/completed entries are also returned here so the WS handler can subscribe the
+        // socket to the tournament room for spectator events (blind level up, eliminations,
+        // completed). Without this, refreshing the page after busting drops the player out of
+        // the tournament room — they keep seeing the table HUD but get no tournament updates.
+        const fastCheck = await this.pool.query(`SELECT te.id AS entry_id, te.status AS entry_status,
+              t.status AS tournament_status, t.is_private, t.pin_code,
               (SELECT id FROM poker_tables WHERE tournament_id = $1 LIMIT 1) AS table_id
          FROM tournament_entries te
          JOIN tournaments t ON t.id = te.tournament_id
         WHERE te.tournament_id = $1
           AND LOWER(te.player_address) = $2
-          AND te.status NOT IN ('busted', 'completed')
         LIMIT 1`, [tournamentId, normalized]);
         if (fastCheck.rows.length > 0) {
             const row = fastCheck.rows[0];
             const status = String(row.tournament_status ?? '');
+            const entryStatus = String(row.entry_status ?? '');
+            const isSpectator = entryStatus === 'busted' || entryStatus === 'completed';
             if (status === 'registration' || status === 'active') {
-                if (row.is_private && pinCode !== row.pin_code) {
+                // PIN was already validated when this entry was first created; spectators don't re-prove it.
+                if (!isSpectator && row.is_private && pinCode !== row.pin_code) {
                     throw new Error('Incorrect PIN code');
                 }
                 return {
@@ -887,6 +978,105 @@ class PokerTournamentService {
             client.release();
         }
         await this.activateTournament(tournamentId);
+    }
+    // ---------------------------------------------------------------------------
+    // In-process bot fill
+    // ---------------------------------------------------------------------------
+    /**
+     * Periodic tick called by the WS service every few seconds. Finds freeroll
+     * tournaments still in `registration` that need more players to start, and
+     * registers in-house bot wallets (from `POKER_BOT_ADDRESSES`) directly via
+     * `joinPokerTournament` — no WebSocket, no signed auth, no external CLI.
+     *
+     * Why in-process: bot scripts running as external clients have to go
+     * through the same EIP-712 auth path as real users. The C1 production
+     * guard (`REQUIRE_WS_AUTH=true`) closes the impersonation hole for real
+     * users but bots have no private key to sign with — they would need a
+     * permanent bypass token/allowlist. Calling the service directly from
+     * inside the server process sidesteps that entire control surface.
+     *
+     * Behavior gates:
+     *   - Disabled unless `POKER_BOT_FILL_ENABLED=true`. Default off so this
+     *     never surprises someone running staging/prod without bots.
+     *   - Only fills tournaments with `buy_in_amount = 0` (freerolls). Bots
+     *     have no MORBIUS balance — joining a paid tournament would burn the
+     *     wallet pool.
+     *   - Optional pre-fill delay via `POKER_BOT_FILL_DELAY_SECONDS` (default 0).
+     *     Set this if you want to give real players a window to join before bots
+     *     show up. Default 0 so a created tournament fills on the next tick.
+     *   - Adds up to `minPlayers - currentCount` bots per tick (or fewer if
+     *     the wallet pool is exhausted).
+     */
+    async tickFillTournamentsWithBots() {
+        const flag = String(process.env.POKER_BOT_FILL_ENABLED ?? '').toLowerCase();
+        if (flag !== 'true' && flag !== '1' && flag !== 'yes')
+            return;
+        const botSet = (0, poker_server_bot_addresses_1.getServerPokerBotAddressSet)();
+        if (botSet.size === 0)
+            return;
+        const rawDelay = process.env.POKER_BOT_FILL_DELAY_SECONDS;
+        let delaySeconds = 0;
+        if (rawDelay) {
+            const n = Number(rawDelay);
+            if (Number.isFinite(n) && n >= 0 && n <= 3600)
+                delaySeconds = Math.floor(n);
+        }
+        // Candidate: freerolls still registering, not past their scheduled start
+        // time (the scheduler handles those). When `delaySeconds > 0`, also require
+        // the tournament to have been open at least that long.
+        const candidates = await this.pool.query(`SELECT t.id, t.poker_config
+         FROM tournaments t
+        WHERE t.game_type = 'poker'
+          AND t.status = 'registration'
+          AND COALESCE(t.buy_in_amount, 0) = 0
+          AND ($1 = 0 OR t.created_at < NOW() - ($1 * INTERVAL '1 second'))
+          AND (t.scheduled_start_at IS NULL OR t.scheduled_start_at > NOW())
+        ORDER BY t.created_at ASC
+        LIMIT 25`, [delaySeconds]);
+        if (candidates.rows.length === 0)
+            return;
+        for (const row of candidates.rows) {
+            const tournamentId = row.id;
+            try {
+                const config = this.parsePokerConfig(row.poker_config);
+                // Count current registered + identify which bots aren't already in.
+                const reg = await this.pool.query(`SELECT player_address FROM tournament_entries
+            WHERE tournament_id = $1 AND status NOT IN ('busted', 'completed')`, [tournamentId]);
+                const registeredAddrs = new Set(reg.rows.map((r) => (r.player_address ?? '').toLowerCase()));
+                const currentCount = registeredAddrs.size;
+                if (currentCount >= config.minPlayers)
+                    continue;
+                const need = config.minPlayers - currentCount;
+                const availableBots = [...botSet].filter((addr) => !registeredAddrs.has(addr));
+                const toJoin = availableBots.slice(0, need);
+                if (toJoin.length === 0)
+                    continue;
+                for (const botAddr of toJoin) {
+                    try {
+                        await this.joinPokerTournament(tournamentId, botAddr);
+                    }
+                    catch (err) {
+                        logger_1.logger.warn('Bot tournament join failed', {
+                            tournamentId,
+                            botAddr,
+                            err: err instanceof Error ? err.message : err,
+                        });
+                    }
+                }
+                logger_1.logger.info('Filled poker tournament with bots', {
+                    tournamentId,
+                    minPlayers: config.minPlayers,
+                    beforeCount: currentCount,
+                    attempted: toJoin.length,
+                });
+            }
+            catch (err) {
+                logger_1.logger.error('tickFillTournamentsWithBots: candidate error', {
+                    tournamentId,
+                    err: err instanceof Error ? err.message : err,
+                });
+            }
+        }
     }
     // ---------------------------------------------------------------------------
     // Activate
@@ -1240,7 +1430,11 @@ class PokerTournamentService {
             if (stackChips === 0)
                 bustedAddresses.push(addr);
         }
-        await this.eliminateBustedTournamentSeats(tableId, tournamentId, bustedAddresses, handNumber, seats.rows.length);
+        // `recoverTournamentTableIfUnderTwoStackedSeats` is invoked from inside
+        // `tryStartNextHand`'s table-lock body. Pass `assumeLockHeld=true` so the
+        // eliminations use the no-lock variant of leaveTableTournament — the
+        // public variant re-acquires the same per-table lock and would deadlock.
+        await this.eliminateBustedTournamentSeats(tableId, tournamentId, bustedAddresses, handNumber, seats.rows.length, true);
         let blindsUpdated = false;
         const blindModeRecover = this.getBlindIncreaseMode(config);
         const elimCount = bustedAddresses.length;
@@ -1424,7 +1618,9 @@ class PokerTournamentService {
             return;
         const meta = metaRes.rows[0];
         const grossPool = (0, safe_bigint_1.toBigIntSafe)(meta.prize_pool);
-        const creatorPct = Math.min(100, Math.max(0, Number(meta.creator_fee_percent ?? 2)));
+        // Creator fee bound to 0–15 (migration 120 + UI slider). Defense-in-depth clamp here in case
+        // an old row predates the constraint or somehow holds a stale value.
+        const creatorPct = Math.min(15, Math.max(0, Number(meta.creator_fee_percent ?? 2)));
         const platformPct = Math.min(100, Math.max(0, Number(meta.platform_fee_percent ?? 3)));
         let totalHands = 0;
         let totalRakeChips = 0n;
@@ -1715,7 +1911,12 @@ class PokerTournamentService {
            WHERE te.tournament_id = r.tournament_id
              AND LOWER(te.player_address) = $1::text
              AND te.status NOT IN ('busted', 'completed')
-         ) THEN TRUE ELSE FALSE END AS is_registered
+         ) THEN TRUE ELSE FALSE END AS is_registered,
+         (SELECT te.status FROM tournament_entries te
+            WHERE te.tournament_id = r.tournament_id
+              AND $1::text IS NOT NULL
+              AND LOWER(te.player_address) = $1::text
+            LIMIT 1) AS my_entry_status
        FROM poker_tournament_registrations r
        LEFT JOIN poker_tables pt ON pt.id = r.table_id
        WHERE (
@@ -1762,10 +1963,16 @@ class PokerTournamentService {
                 prizeDistributionType: r.prize_distribution_type ?? 'winner_takes_all',
                 scheduledStartAt: r.scheduled_start_at ? new Date(r.scheduled_start_at).toISOString() : null,
                 isRegistered: r.is_registered === true,
+                myEntryStatus: (r.my_entry_status === 'playing' || r.my_entry_status === 'busted' || r.my_entry_status === 'completed')
+                    ? r.my_entry_status
+                    : null,
                 isPrivate: Boolean(r.is_private),
                 smallBlind,
                 bigBlind,
                 blindIncreaseMode,
+                // Exposed to clients so the buy-in panel + lobby can show "X% to creator, Y% to winners".
+                // Migration 120 caps the column to 0–15; old rows default to 2 via DB default + JS fallback.
+                creatorFeePercent: r.creator_fee_percent != null ? Number(r.creator_fee_percent) : 2,
             };
         });
     }
@@ -1949,7 +2156,19 @@ class PokerTournamentService {
     // ---------------------------------------------------------------------------
     // Helpers
     // ---------------------------------------------------------------------------
-    async eliminateBustedTournamentSeats(tableId, tournamentId, bustedAddresses, handNumber, seatCount) {
+    /**
+     * Eliminate a list of busted players from a tournament table.
+     *
+     * `assumeLockHeld` controls which `leaveTableTournament` variant is called:
+     *   - `false` (default): used by `syncAfterHand` (post-hand callback), which
+     *     runs OUTSIDE the per-table lock. The public `leaveTableTournament`
+     *     re-acquires the lock cleanly.
+     *   - `true`: used by `recoverTournamentTableIfUnderTwoStackedSeats`, which
+     *     is invoked from inside `tryStartNextHand`'s lock body. Calling the
+     *     lock-acquiring variant from that path would deadlock since
+     *     `withTableLock` is not re-entrant.
+     */
+    async eliminateBustedTournamentSeats(tableId, tournamentId, bustedAddresses, handNumber, seatCount, assumeLockHeld = false) {
         let remainingAfterElim = seatCount - bustedAddresses.length;
         for (const addr of bustedAddresses) {
             const pts = await this.pool.query(`SELECT pts.entry_id FROM poker_tournament_seats pts
@@ -1963,7 +2182,12 @@ class PokerTournamentService {
          WHERE id = $1`, [entryId, rank]);
             await this.pool.query(`UPDATE poker_tournament_seats SET eliminated_at = NOW(), final_rank = $2
          WHERE entry_id = $1`, [entryId, rank]);
-            await this.pokerGameService.leaveTableTournament(tableId, addr);
+            if (assumeLockHeld) {
+                await this.pokerGameService.leaveTableTournamentNoLock(tableId, addr);
+            }
+            else {
+                await this.pokerGameService.leaveTableTournament(tableId, addr);
+            }
             logger_1.logger.info('Poker tournament player eliminated', { tournamentId, playerAddress: addr, rank, handNumber });
             this.broadcast(`poker_tournament:${tournamentId}`, 'poker_tournament_player_eliminated', {
                 tournamentId,

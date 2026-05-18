@@ -7,43 +7,23 @@ exports.getActivePools = getActivePools;
 exports.getPoolDetails = getPoolDetails;
 exports.getTotalValueLocked = getTotalValueLocked;
 const chain_client_1 = require("./chain-client");
-const tournament_prize_escrow_v2_1 = require("../abi/tournament-prize-escrow-v2");
+const tournament_prize_escrow_v6_1 = require("../abi/tournament-prize-escrow-v6");
 const tournament_id_bytes32_1 = require("./tournament-id-bytes32");
 const tournament_escrow_address_1 = require("./tournament-escrow-address");
 function escrowBytes32Address() {
     return (0, tournament_escrow_address_1.getTournamentPrizeEscrowAddress)();
 }
-/** Read every pool from the contract. Single source of truth for the JS aggregators below. */
+/**
+ * Stubbed: V6 removed `getAllTournamentIds`. Always returns []. Touch chain only via
+ * `getPoolDetails(uuid)` until the DB-backed enumeration lands (see TODO at top of file).
+ * Unused-import suppression — `getPublicClient` is still used by `getPoolDetails` below.
+ */
 async function readAllPools() {
-    const client = (0, chain_client_1.getPublicClient)();
-    const idsRaw = (await client.readContract({
-        address: escrowBytes32Address(),
-        abi: tournament_prize_escrow_v2_1.tournamentPrizeEscrowV2Abi,
-        functionName: 'getAllTournamentIds',
-    }));
-    const ids = idsRaw;
-    if (ids.length === 0)
-        return [];
-    // Read pools in parallel — small N, public RPC handles burst fine.
-    const pools = await Promise.all(ids.map(async (id) => {
-        const r = (await client.readContract({
-            address: escrowBytes32Address(),
-            abi: tournament_prize_escrow_v2_1.tournamentPrizeEscrowV2Abi,
-            functionName: 'getPool',
-            args: [id],
-        }));
-        return {
-            id,
-            token: r[0],
-            depositor: r[1],
-            totalDeposited: r[2],
-            amountPaidOut: r[3],
-            depositedAt: r[4],
-            cancelled: r[5],
-        };
-    }));
-    return pools;
+    return [];
 }
+// Reference the client import so tsc's `noUnusedLocals` doesn't flip it red in future
+// builds. `getPoolDetails` already consumes it; this is a no-op at runtime.
+void chain_client_1.getPublicClient;
 /** Aggregate over all pools in JS — replaces the contract's removed `getEscrowSummary`. */
 async function getEscrowSummary() {
     try {
@@ -137,7 +117,7 @@ async function getPoolDetails(tournamentId) {
         const idBytes32 = (0, tournament_id_bytes32_1.tournamentIdToBytes32)(tournamentId);
         const r = (await client.readContract({
             address: escrowBytes32Address(),
-            abi: tournament_prize_escrow_v2_1.tournamentPrizeEscrowV2Abi,
+            abi: tournament_prize_escrow_v6_1.tournamentPrizeEscrowV6Abi,
             functionName: 'getPool',
             args: [idBytes32],
         }));

@@ -12,6 +12,7 @@ export class WebSocketService {
     chatRateLimitCleanupInterval: NodeJS.Timeout;
     pokerAutoFoldInterval: null;
     pokerServerBotInterval: null;
+    pokerBotFillInterval: null;
     publicClient: {
         account: undefined;
         batch?: {

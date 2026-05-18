@@ -36,7 +36,25 @@ export interface PokerCurrentHand {
     handId: string;
     street: PokerStreet;
     communityCards: number[];
+    /** Sum of all pots (kept as scalar for backward-compat clients). */
     pot: string;
+    /**
+     * Structured pot breakdown — main pot + each side/uncalled pot, in the
+     * order chevtek created them. Lets the client render side pots as
+     * separately labeled stacks instead of a single flat total, and drive
+     * per-pot chip-flow animations at showdown (each pot's chips fly to
+     * THAT pot's winner). Only populated while a hand is in progress with
+     * an active in-memory table — falls back to the `pot` scalar otherwise.
+     *
+     * `winnerAddresses` is populated once chevtek's `showdown()` has run,
+     * including for "uncalled" refund pots (sole eligible player) so the
+     * client can fly those chips back to the over-bettor.
+     */
+    pots?: {
+        amount: string;
+        label: string;
+        winnerAddresses?: string[];
+    }[];
     actingPosition: number | null;
     lastAction: {
         position: number;
@@ -81,6 +99,14 @@ export interface PokerCurrentHand {
     }[];
     /** ISO wall time when the server will auto-start the next hand (showdown intermission only). */
     nextHandAt?: string | null;
+    /**
+     * Provably-fair commitment — `SHA-256(serverSeed)` published at hand start.
+     * Plaintext `serverSeed` stays hidden until showdown (see
+     * `poker_hand_pending_seeds`); the hash lets the UI prove "deck was
+     * locked in before the deal" in real time. After showdown, players can
+     * verify the full proof at `/poker/verify?handId={handId}`.
+     */
+    serverSeedHash?: string;
 }
 export interface PokerTableState {
     tableId: string;
@@ -140,6 +166,34 @@ export declare class PokerGameService {
     private pendingPostHandHandNumbers;
     /** Bail flag for `recoverStuckPostHandTables` so overlapping ticks can't pile up. */
     private recoveryInFlight;
+    /**
+     * Active server-driven runout timers — one per table. Cleared on completion,
+     * on `clearScheduledNextHand` (leaveTable / standUp mid-runout), and on
+     * recovery fast-forward.
+     */
+    private runoutTimers;
+    /** Tables currently animating an all-in runout. Read by callers that need
+     *  to know "is the table mid-resolve" without hitting the DB. */
+    private runoutInFlight;
+    /**
+     * Per-table snapshot of each player's pre-payout chip stack, used to freeze
+     * the displayed stacks during an all-in runout so the board reveal doesn't
+     * leak the winner (otherwise the seat plate updates to the post-payout
+     * value the instant chevtek auto-resolves). Keyed by tableId → (lowercase
+     * player address → chip-int string). Populated in `scheduleRunout` before
+     * the first staged broadcast and cleared at the showdown frame so the
+     * stack change is revealed alongside the winner badges.
+     */
+    private runoutFrozenStacks;
+    /**
+     * Per-step runout delays default on in production, off under jest. When
+     * disabled `scheduleRunout` runs all frames inline (no setTimeout chain),
+     * so existing integration tests can assert on post-showdown DB state
+     * immediately after the triggering action without polling. Toggle via
+     * `setRunoutDelaysForTesting(enabled)` if a test needs the production
+     * pacing.
+     */
+    private runoutDelaysEnabled;
     constructor(dbService: DatabaseService, pfService: ProvablyFairService);
     /** Wire in the WebSocket broadcast so actions push state to clients. */
     setBroadcastCallback(cb: (tableId: string) => Promise<void>): void;
@@ -169,12 +223,58 @@ export declare class PokerGameService {
      */
     private getOrReconstructActiveTable;
     private clearScheduledNextHand;
+    private clearRunoutTimer;
     /**
-     * All-in showdown: chevtek already resolved the full board in memory.
-     * Persist immediately — the client handles staged card reveal animation.
-     * Always returns false (caller should call scheduleNextHandAfterShowdown).
+     * Test-only: drop runout per-step delays to 0 so tests can drive a full
+     * runout synchronously. Mirrors the production pacing in semantics — just
+     * collapses the wall-clock waits.
+     */
+    setRunoutDelaysForTesting(enabled: boolean): void;
+    /**
+     * Showdown entry point. Two paths:
+     *
+     * (a) Single-street showdown — river already on the board (or fold-out
+     *     resolution): persist immediately. Caller schedules next hand.
+     *
+     * (b) Multi-street all-in runout — chevtek auto-resolved one or more
+     *     streets in this action. Snapshot the final state, then chain
+     *     intermediate broadcasts (flop / turn / river) before finally calling
+     *     persistShowdown on the showdown frame. Caller does NOT schedule next
+     *     hand; the final runout step schedules it.
+     *
+     * Returns `true` when the showdown work is deferred to runout timers; the
+     * caller should NOT call `scheduleNextHandAfterShowdown` in that case
+     * (the runout chain does it). Returns `false` when persistShowdown ran
+     * inline.
      */
     private completeShowdownWithOptionalRunout;
+    /**
+     * Snapshot the resolved table + chain intermediate broadcasts. Each tick
+     * updates `poker_hands.street` + `community_cards` to the in-progress
+     * intermediate value and broadcasts. The final tick calls `persistShowdown`
+     * (which writes winners, completed_at, etc.) and schedules the next hand.
+     *
+     * The full final board is also persisted to `runout_final_community_cards`
+     * up-front so the recovery sweep can fast-forward if the server crashes
+     * mid-stream.
+     */
+    private scheduleRunout;
+    /**
+     * Collapse an in-flight runout to its final showdown state right now.
+     *
+     * Two call sites:
+     * 1. Live: player leaves mid-runout and we need their stack credited
+     *    before we strip their seat. The in-memory chevtek table is present;
+     *    we cancel pending timers and finalize.
+     * 2. Recovery: server restarted with `runout_resolved_at IS NOT NULL AND
+     *    completed_at IS NULL` rows on disk. In-memory state is gone; we
+     *    reconstruct from DB, which deterministically produces the same
+     *    final chevtek state.
+     *
+     * No-op when no hand is mid-runout (idempotent — safe to call repeatedly
+     * from a recovery sweep that may double-fire after a race).
+     */
+    private finalizeRunoutImmediately;
     /**
      * Centralizes the post-showdown transition: waits SHOWDOWN_DELAY_MS, then
      * runs the tournament post-hand callback (eliminations + blind updates)
@@ -257,7 +357,27 @@ export declare class PokerGameService {
      * Remove a player from a tournament table without crediting their stack back.
      * Used by PokerTournamentService when a player is eliminated.
      */
+    /**
+     * Public entry: tournament-side leave / elimination. Takes the per-table
+     * lock so concurrent `playerAction` / `autoFoldTimedOutTurns` ticks can't
+     * race the `standUp` + DB writes. Called from `eliminateBustedTournamentSeats`
+     * in the post-hand timer body (which does NOT hold the lock).
+     *
+     * **Do NOT call this from a code path that already holds the table lock**
+     * (the lock is not re-entrant — it would deadlock). Internal callers under
+     * a held lock should call `leaveTableTournamentNoLock` instead.
+     */
     leaveTableTournament(tableId: string, playerAddress: string): Promise<void>;
+    /**
+     * Lock-free variant of {@link leaveTableTournament}. Assumes the caller
+     * already holds the per-table lock — used by recovery paths fired from
+     * inside `tryStartNextHand`'s lock body (e.g.
+     * `recoverTournamentTableIfUnderTwoStackedSeats`). Using the lock-acquiring
+     * public method from those paths would deadlock since `withTableLock` is
+     * not re-entrant.
+     */
+    leaveTableTournamentNoLock(tableId: string, playerAddress: string): Promise<void>;
+    private _leaveTableTournament;
     /**
      * Delete a tournament table without crediting player stacks back.
      * Used by PokerTournamentService after prize distribution.
