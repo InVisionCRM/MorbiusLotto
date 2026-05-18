@@ -3378,6 +3378,110 @@ export class DatabaseService implements MoneyDatabaseQueries {
     }));
   }
 
+  /**
+   * Paginated chip ledger for a player, oldest-row-first not — newest first.
+   * Joins tournaments + poker_tables to surface a friendly `refName` so callers
+   * can render "Friday Night $5" instead of a UUID.
+   *
+   * Category filter maps to subsets of PokerChipLedgerReason:
+   *   - cash         → cash_join, cash_leave, cash_reup, cash_admin_return
+   *   - tournaments  → tournament_create_guarantee, tournament_buyin, tournament_refund, tournament_prize
+   *   - exchanges    → purchase, cashout
+   *   - all (default)→ no filter
+   *
+   * Returns the page plus an unfiltered total so the UI can show "1 of 247".
+   */
+  async getPokerChipLedger(
+    address: string,
+    options: {
+      limit?: number;
+      offset?: number;
+      category?: 'all' | 'cash' | 'tournaments' | 'exchanges';
+    } = {}
+  ): Promise<{
+    entries: Array<{
+      id: string;
+      delta: string;
+      balanceAfter: string;
+      reason: string;
+      refType: string | null;
+      refId: string | null;
+      refName: string | null;
+      createdAt: string;
+    }>;
+    total: number;
+    limit: number;
+    offset: number;
+  }> {
+    const normalized = this.normalizeAddress(address);
+    const limit = Math.min(Math.max(options.limit ?? 5, 1), 200);
+    const offset = Math.max(options.offset ?? 0, 0);
+    const category = options.category ?? 'all';
+
+    const CATEGORY_REASONS: Record<'cash' | 'tournaments' | 'exchanges', readonly string[]> = {
+      cash: ['cash_join', 'cash_leave', 'cash_reup', 'cash_admin_return'],
+      tournaments: [
+        'tournament_create_guarantee',
+        'tournament_buyin',
+        'tournament_refund',
+        'tournament_prize',
+      ],
+      exchanges: ['purchase', 'cashout'],
+    };
+
+    const params: unknown[] = [normalized];
+    let reasonClause = '';
+    if (category !== 'all') {
+      params.push(CATEGORY_REASONS[category]);
+      reasonClause = ` AND l.reason = ANY($${params.length}::text[])`;
+    }
+
+    // Use COUNT(*) OVER() so the page and total come back in one round trip;
+    // the wallet+created_at index keeps this efficient even for large ledgers.
+    // Poker cash tables don't have human names, so refName only resolves for
+    // tournaments. Client can render a short ref_id for table rows.
+    params.push(limit, offset);
+    const query = `
+      SELECT
+        l.id,
+        l.delta::TEXT AS delta,
+        l.balance_after::TEXT AS balance_after,
+        l.reason,
+        l.ref_type,
+        l.ref_id,
+        l.created_at AT TIME ZONE 'UTC' AS created_at,
+        COUNT(*) OVER() AS total,
+        CASE
+          WHEN l.ref_type = 'tournament' THEN tour.name
+          ELSE NULL
+        END AS ref_name
+      FROM poker_chip_ledger l
+      LEFT JOIN tournaments tour ON l.ref_type = 'tournament' AND tour.id = l.ref_id
+      WHERE l.wallet_address = $1
+      ${reasonClause}
+      ORDER BY l.created_at DESC
+      LIMIT $${params.length - 1} OFFSET $${params.length}
+    `;
+
+    const result = await this.pool.query(query, params);
+    const total = result.rows.length > 0 ? Number(result.rows[0].total) : 0;
+    return {
+      entries: result.rows.map((r: any) => ({
+        id: String(r.id),
+        delta: String(r.delta ?? '0'),
+        balanceAfter: String(r.balance_after ?? '0'),
+        reason: String(r.reason),
+        refType: r.ref_type ?? null,
+        refId: r.ref_id ?? null,
+        refName: r.ref_name ?? null,
+        createdAt: r.created_at ? new Date(r.created_at).toISOString() : '',
+      })),
+      total,
+      limit,
+      offset,
+    };
+  }
+
   /** Aggregate poker stats for a player (from completed hands). */
   async getPokerPlayerStats(address: string, scope: 'cash' | 'tournament' | 'all' = 'cash'): Promise<{
     total_hands: number;
