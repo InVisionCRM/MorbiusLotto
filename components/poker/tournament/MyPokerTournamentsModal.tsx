@@ -103,9 +103,13 @@ export function MyPokerTournamentsModal({
             <ul className="space-y-2.5">
               {mine.map((t) => {
                 const status = statusLabel(t.status);
+                // MTT: prefer caller's actual seat table over the lowest-seq table — without
+                // this, players seated at table 2/3/... would see no "Go to table" button or
+                // be sent to table 1.
+                const myAssignedTable = t.myTableId ?? t.tableId;
                 const isActiveTable =
-                  t.status === 'active' && !!t.tableId &&
-                  myTournamentId === t.tournamentId && myTableId === t.tableId;
+                  t.status === 'active' && !!myAssignedTable &&
+                  myTournamentId === t.tournamentId && myTableId === myAssignedTable;
                 return (
                   <li
                     key={t.tournamentId}
@@ -139,11 +143,11 @@ export function MyPokerTournamentsModal({
                           Share
                         </button>
                       )}
-                      {isActiveTable && t.tableId && (
+                      {isActiveTable && myAssignedTable && (
                         <button
                           type="button"
                           onClick={() => {
-                            onGoToTable(t.tableId!, t.tournamentId);
+                            onGoToTable(myAssignedTable, t.tournamentId);
                             onClose();
                           }}
                           className="h-8 px-3 rounded-lg bg-yellow-500 hover:bg-yellow-400 text-xs font-semibold text-black transition-colors"

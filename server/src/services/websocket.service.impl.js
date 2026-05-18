@@ -1813,7 +1813,21 @@ class WebSocketService {
             if (!tournamentId)
                 return this.sendError(ws, 'tournamentId required', message.requestId);
             const state = await this.pokerTournamentService.getTournamentState(tournamentId);
-            this.sendMessage(ws, { type: 'poker_tournament_state', payload: state, requestId: message.requestId });
+            // MTT: attach the requesting wallet's current table assignment so the client can render
+            // / navigate to its own table. SNG = same as `state.tableId`; MTT = whichever table the
+            // player was seated at (post-consolidation, the final table for survivors). `null` when
+            // wallet isn't seated (spectator, busted, or pre-activation registration).
+            let myTableId = null;
+            if (state && ws.playerAddress) {
+                try {
+                    myTableId = await this.pokerTournamentService.getPlayerTableId(tournamentId, ws.playerAddress);
+                }
+                catch (lookupErr) {
+                    logger_1.logger.warn('getPlayerTableId failed (returning null myTableId)', { tournamentId, err: lookupErr });
+                }
+            }
+            const payload = state ? { ...state, myTableId } : state;
+            this.sendMessage(ws, { type: 'poker_tournament_state', payload, requestId: message.requestId });
         }
         catch (error) {
             logger_1.logger.error('Error getting poker tournament state:', error);

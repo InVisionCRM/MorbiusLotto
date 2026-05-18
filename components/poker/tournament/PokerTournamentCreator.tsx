@@ -564,6 +564,12 @@ const BLIND_ROLODEX_ROW_PX = 40;
 
 const PLAYER_COUNT_OPTIONS: readonly number[] = [2, 3, 4, 5, 6, 7, 8, 9, 10];
 
+/** MTT-mode picker options. Tight at the low end, then ladder up to keep the dropdown short. */
+const MTT_FIELD_SIZE_OPTIONS: readonly number[] = [12, 18, 24, 30, 36, 45, 54, 63, 72, 81, 90, 100];
+
+/** Seats per table when running an MTT. Standard live poker = 9; 6-max = popular online. */
+const MTT_SEATS_PER_TABLE_OPTIONS: readonly number[] = [6, 7, 8, 9, 10];
+
 const STARTING_STACK_SELECT_VALUES: readonly number[] = STARTING_STACK_PRESETS.map((p) => parseInt(p.value, 10));
 
 function snapToNearestInList(n: number, list: readonly number[]): number {
@@ -1039,6 +1045,15 @@ export function PokerTournamentCreator({ creatorAddress, onClose, onCreate }: Po
   const [startingStack, setStartingStack] = useState<string>('10000');
   const [minPlayers, setMinPlayers] = useState('2');
   const [maxPlayers, setMaxPlayers] = useState('10');
+  /**
+   * Tournament format. `sng` = single table (legacy, cap 10 players).
+   * `mtt` = multi-table — lifts maxPlayers cap, exposes seatsPerTable, and the server
+   * spins up `ceil(playerCount / seatsPerTable)` poker_tables on activation and
+   * consolidates them as players bust.
+   */
+  const [tournamentFormat, setTournamentFormat] = useState<'sng' | 'mtt'>('sng');
+  /** MTT only: seats per physical table (4–10). Default 9 = standard live poker. */
+  const [seatsPerTable, setSeatsPerTable] = useState<number>(9);
   const [isPrivate, setIsPrivate] = useState(false);
   const [privatePin, setPrivatePin] = useState('');
   /**
@@ -1171,15 +1186,39 @@ export function PokerTournamentCreator({ creatorAddress, onClose, onCreate }: Po
     }
   }, [buyInPrizeSource, selectedToken, buyInTokenHumanAmount]);
 
+  /** Hard cap on tournament size in MTT mode. Practical bound to keep DB/WS load sensible. */
+  const MTT_MAX_PLAYERS = 100;
+
+  /**
+   * Slots receiving prize money. Always capped at 10 — MTTs pay only top-10 regardless of
+   * field size (matches `buildPrizePercents` and the server validator). For SNG this equals
+   * the actual max table size.
+   */
   const prizeSlotCount = useMemo(() => {
     const minP = Math.max(2, Math.min(10, parseInt(minPlayers, 10) || 2));
     const rawMax = parseInt(maxPlayers, 10);
+    const maxPClamp = tournamentFormat === 'mtt' ? MTT_MAX_PLAYERS : 10;
     const maxP = Math.max(
       minP,
-      Math.max(2, Math.min(10, Number.isFinite(rawMax) ? rawMax : 10)),
+      Math.max(2, Math.min(maxPClamp, Number.isFinite(rawMax) ? rawMax : 10)),
     );
-    return maxP;
-  }, [minPlayers, maxPlayers]);
+    // Prize slots themselves are capped at 10; MTT field can be larger.
+    return Math.min(10, maxP);
+  }, [minPlayers, maxPlayers, tournamentFormat]);
+
+  /** Tournament field size (registrations cap). Diverges from prizeSlotCount only in MTT mode. */
+  const effectiveMaxPlayers = useMemo(() => {
+    const minP = Math.max(2, parseInt(minPlayers, 10) || 2);
+    const rawMax = parseInt(maxPlayers, 10);
+    const cap = tournamentFormat === 'mtt' ? MTT_MAX_PLAYERS : 10;
+    return Math.max(minP, Math.max(2, Math.min(cap, Number.isFinite(rawMax) ? rawMax : 10)));
+  }, [minPlayers, maxPlayers, tournamentFormat]);
+
+  /** MTT only: how many tables the server will spin up given the field cap + seatsPerTable. */
+  const projectedTableCount = useMemo(() => {
+    if (tournamentFormat !== 'mtt') return 1;
+    return Math.max(1, Math.ceil(effectiveMaxPlayers / seatsPerTable));
+  }, [tournamentFormat, effectiveMaxPlayers, seatsPerTable]);
 
   const prizePercents = useMemo(
     () => buildPrizePercents(prizePresetId, prizeSlotCount),
@@ -1343,10 +1382,13 @@ export function PokerTournamentCreator({ creatorAddress, onClose, onCreate }: Po
             100,
             parseInt(startingStack, 10) || Number(STARTING_STACK_PRESETS[STARTING_STACK_PRESETS.length - 1].value),
           ),
-          minPlayers: Math.max(2, Math.min(10, parseInt(minPlayers, 10) || 2)),
-          maxPlayers: prizeSlotCount,
+          minPlayers: Math.max(2, parseInt(minPlayers, 10) || 2),
+          // MTT: maxPlayers may exceed 10 (the field cap), while prize slots stay at prizeSlotCount (≤10).
+          // SNG: maxPlayers === prizeSlotCount, same as legacy.
+          maxPlayers: effectiveMaxPlayers,
           blindIncreaseMode,
           ...(blindIncreaseMode === 'by_time' ? { blindIntervalMinutes } : {}),
+          ...(tournamentFormat === 'mtt' ? { seatsPerTable } : {}),
         },
         isPrivate,
         ...(pinForCreate ? { pinCode: pinForCreate } : {}),
@@ -2221,6 +2263,72 @@ export function PokerTournamentCreator({ creatorAddress, onClose, onCreate }: Po
                 </div>
               )}
 
+              <div className="mt-1 space-y-2">
+                <label className={labelClass}>Format</label>
+                <div className="grid grid-cols-2 gap-2">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setTournamentFormat('sng');
+                      // Clamp maxPlayers back into SNG range when toggling.
+                      const cur = parseInt(maxPlayers, 10);
+                      if (!Number.isFinite(cur) || cur > 10) setMaxPlayers('10');
+                    }}
+                    className={`rounded-lg px-3 py-2 text-xs font-medium border transition-colors ${tournamentFormat === 'sng' ? 'bg-cyan-600/30 border-cyan-500/50 text-white' : 'bg-black/30 border-white/10 text-white/60 hover:text-white'}`}
+                  >
+                    Single table (SNG)
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setTournamentFormat('mtt');
+                      // Snap maxPlayers up to first MTT option if currently in SNG range.
+                      const cur = parseInt(maxPlayers, 10);
+                      if (!Number.isFinite(cur) || cur <= 10) setMaxPlayers(String(MTT_FIELD_SIZE_OPTIONS[0]));
+                    }}
+                    className={`rounded-lg px-3 py-2 text-xs font-medium border transition-colors ${tournamentFormat === 'mtt' ? 'bg-cyan-600/30 border-cyan-500/50 text-white' : 'bg-black/30 border-white/10 text-white/60 hover:text-white'}`}
+                  >
+                    Multi-table (MTT)
+                  </button>
+                </div>
+                {tournamentFormat === 'mtt' && (
+                  <p className="text-[11px] leading-relaxed text-white/60">
+                    {projectedTableCount} {projectedTableCount === 1 ? 'table' : 'tables'} of up to {seatsPerTable} seats. Tables consolidate to a final table at {Math.min(seatsPerTable, 9)} players. Top {prizeSlotCount} ranks paid.
+                  </p>
+                )}
+              </div>
+
+              {tournamentFormat === 'mtt' && (
+                <div className="flex min-w-0 flex-col">
+                  <label htmlFor="poker-mtt-seats-per-table" className={labelClass}>
+                    Seats per table
+                  </label>
+                  <Select
+                    value={String(seatsPerTable)}
+                    onValueChange={(v) => {
+                      const n = parseInt(v, 10);
+                      if (Number.isFinite(n)) setSeatsPerTable(Math.max(4, Math.min(10, n)));
+                    }}
+                  >
+                    <SelectTrigger id="poker-mtt-seats-per-table" className={selectTriggerBasicsClass}>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent className="max-h-64 bg-slate-900 border border-cyan-500/30 text-white shadow-xl z-[200]">
+                      {MTT_SEATS_PER_TABLE_OPTIONS.map((n) => (
+                        <SelectItem
+                          key={n}
+                          value={String(n)}
+                          textValue={`${n}-max`}
+                          className="focus:bg-cyan-500/15 focus:text-white cursor-pointer"
+                        >
+                          {n}-max
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              )}
+
               <div className="mt-1 grid grid-cols-2 gap-x-4 gap-y-4">
                 <div className="flex min-w-0 flex-col">
                   <label htmlFor="poker-basics-min-players" className={labelClass}>
@@ -2254,27 +2362,22 @@ export function PokerTournamentCreator({ creatorAddress, onClose, onCreate }: Po
                 </div>
                 <div className="flex min-w-0 flex-col">
                   <label htmlFor="poker-basics-max-players" className={labelClass}>
-                    Max players
+                    {tournamentFormat === 'mtt' ? 'Field cap' : 'Max players'}
                   </label>
                   <Select
-                    value={String(
-                      Math.max(
-                        Math.max(2, Math.min(10, parseInt(minPlayers, 10) || 2)),
-                        Math.min(10, parseInt(maxPlayers, 10) || 10),
-                      ),
-                    )}
+                    value={String(effectiveMaxPlayers)}
                     onValueChange={(v) => {
                       const n = parseInt(v, 10);
                       setMaxPlayers(String(n));
                       const mn = parseInt(minPlayers, 10);
-                      if (!Number.isFinite(mn) || mn > n) setMinPlayers(String(n));
+                      if (!Number.isFinite(mn) || mn > n) setMinPlayers(String(Math.min(n, 10)));
                     }}
                   >
                     <SelectTrigger id="poker-basics-max-players" className={selectTriggerBasicsClass}>
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent className="max-h-64 bg-slate-900 border border-cyan-500/30 text-white shadow-xl z-[200]">
-                      {PLAYER_COUNT_OPTIONS.map((n) => (
+                      {(tournamentFormat === 'mtt' ? MTT_FIELD_SIZE_OPTIONS : PLAYER_COUNT_OPTIONS).map((n) => (
                         <SelectItem
                           key={n}
                           value={String(n)}

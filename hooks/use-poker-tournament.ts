@@ -25,6 +25,10 @@ export const BLIND_INTERVAL_MINUTES_MIN = 1;
 export const BLIND_INTERVAL_MINUTES_MAX = 60;
 export type BlindIntervalMinutes = number;
 
+/** MTT: same constants as server. */
+export const POKER_MTT_SEATS_PER_TABLE_MIN = 4;
+export const POKER_MTT_SEATS_PER_TABLE_MAX = 10;
+
 export interface PokerTournamentConfig {
   startingStack: number;
   minPlayers: number;
@@ -38,6 +42,24 @@ export interface PokerTournamentConfig {
   blindIncreaseMode?: PokerBlindIncreaseMode;
   /** Required when `blindIncreaseMode === 'by_time'`. Integer minutes from `BLIND_INTERVAL_MINUTES_MIN` to `BLIND_INTERVAL_MINUTES_MAX`. */
   blindIntervalMinutes?: BlindIntervalMinutes;
+  /**
+   * MTT: max seats per physical table (4–10). When unset / equal to maxPlayers the tournament
+   * runs as legacy single-table SNG. When < maxPlayers the server spins up
+   * `ceil(playerCount / seatsPerTable)` tables and consolidates as players bust.
+   */
+  seatsPerTable?: number;
+}
+
+/** Server snapshot of one poker_tables row for the tournament. */
+export interface PokerTournamentTableSummary {
+  tableId: string;
+  /** 1-based "Table N" label; null for legacy SNG. */
+  seq: number | null;
+  isFinalTable: boolean;
+  playerCount: number;
+  smallBlind: number;
+  bigBlind: number;
+  handNumber: number;
 }
 
 export interface PokerTournamentPlayer {
@@ -56,6 +78,10 @@ export interface PokerTournamentState {
   name: string;
   status: string;
   tableId: string | null;
+  /** MTT: the requesting wallet's current table assignment (null = spectator / busted / pre-activation). */
+  myTableId?: string | null;
+  /** MTT: live snapshot of every poker_tables row for the tournament. Empty / undefined for SNG. */
+  tables?: PokerTournamentTableSummary[];
   blindLevel: number;
   smallBlind: number;
   bigBlind: number;
@@ -105,6 +131,12 @@ export interface PokerTournamentSummary {
   /** Token contract name for UI when available. */
   prizeTokenName?: string | null;
   tableId: string | null;
+  /**
+   * MTT: caller's actual seat table. SNG: equals `tableId`. Null when caller isn't seated.
+   * Prefer `myTableId ?? tableId` for "go to my table" navigation — bare `tableId` is the
+   * lowest-seq table and is wrong for MTT players seated at table 2, 3, ...
+   */
+  myTableId?: string | null;
   createdAt: string;
   creatorAddress: string | null;
   prizeDistributionType: string;
@@ -221,10 +253,24 @@ export const POKER_TOURNAMENT_DEFAULT_CONFIG: PokerTournamentConfig = {
 
 export interface UsePokerTournamentOptions {
   wsClient: BlackjackWebSocketClient | null;
+  /**
+   * Caller's wallet address (lowercase). Required so MTT broadcasts that include
+   * `tableAssignments` / `moves` can resolve "which tableId is for me" — the lobby uses
+   * this to navigate the current player to their assigned table when an MTT starts or
+   * a consolidation happens.
+   */
+  myAddress?: string | null;
+  /** Fires with the tableId the caller should navigate to (their own assignment for MTT). */
   onTournamentStarted?: (tournamentId: string, tableId: string) => void;
   onBlindLevelUp?: (level: number, smallBlind: number, bigBlind: number) => void;
   onPlayerEliminated?: (playerAddress: string, rank: number) => void;
   onTournamentCompleted?: (payload: PokerTournamentCompletedPayload) => void;
+  /**
+   * MTT: caller was moved to a new table (lone-survivor consolidation or final-table
+   * collapse). Passes the new tableId so the caller can `router.replace` to the new URL.
+   * Server filters per-player are not used — the hook does the address comparison.
+   */
+  onMyTableChanged?: (newTableId: string, tournamentId: string) => void;
 }
 
 /** Cancelled custom-token poker tournament rows the connected wallet may still reclaim. */
@@ -298,10 +344,12 @@ export interface UsePokerTournamentReturn {
 
 export function usePokerTournament({
   wsClient,
+  myAddress,
   onTournamentStarted,
   onBlindLevelUp,
   onPlayerEliminated,
   onTournamentCompleted,
+  onMyTableChanged,
 }: UsePokerTournamentOptions): UsePokerTournamentReturn {
   const [openTournaments, setOpenTournaments]     = useState<PokerTournamentSummary[]>([]);
   const [isLoadingTournaments, setIsLoading]       = useState(false);
@@ -315,6 +363,8 @@ export function usePokerTournament({
   const onLevelUpRef    = useRef(onBlindLevelUp);
   const onEliminatedRef = useRef(onPlayerEliminated);
   const onCompletedRef  = useRef(onTournamentCompleted);
+  const onMyTableChangedRef = useRef(onMyTableChanged);
+  const myAddressRef = useRef<string | null>(myAddress?.toLowerCase() ?? null);
   const myTournamentIdRef = useRef(myTournamentId);
   /**
    * Tracks which tournament rooms the current WS connection is already subscribed to.
@@ -330,6 +380,8 @@ export function usePokerTournament({
   useEffect(() => { onLevelUpRef.current    = onBlindLevelUp; },        [onBlindLevelUp]);
   useEffect(() => { onEliminatedRef.current = onPlayerEliminated; },    [onPlayerEliminated]);
   useEffect(() => { onCompletedRef.current  = onTournamentCompleted; }, [onTournamentCompleted]);
+  useEffect(() => { onMyTableChangedRef.current = onMyTableChanged; },  [onMyTableChanged]);
+  useEffect(() => { myAddressRef.current = myAddress?.toLowerCase() ?? null; }, [myAddress]);
   useEffect(() => { myTournamentIdRef.current = myTournamentId; },      [myTournamentId]);
 
   // ---------------------------------------------------------------------------
@@ -340,17 +392,58 @@ export function usePokerTournament({
     if (!wsClient) return;
 
     const handleStarted = (payload: {
-      tournamentId: string; tableId: string; blindLevel: number; smallBlind: number; bigBlind: number;
+      tournamentId: string;
+      tableId: string;
+      blindLevel: number;
+      smallBlind: number;
+      bigBlind: number;
+      /** MTT: address (lowercase) → tableId. Absent / has a single entry for SNG. */
+      tableAssignments?: Record<string, string>;
     }) => {
-      setMyTableId(payload.tableId);
+      // MTT: pick the caller's own table assignment when present so they navigate to their own
+      // table, not the broadcaster's first table. SNG falls back to the legacy `tableId` field.
+      const me = myAddressRef.current;
+      const myAssigned =
+        me && payload.tableAssignments && payload.tableAssignments[me]
+          ? payload.tableAssignments[me]
+          : payload.tableId;
+      setMyTableId(myAssigned);
       setMyTournamentId((prev) => prev ?? payload.tournamentId);
-      onStartedRef.current?.(payload.tournamentId, payload.tableId);
+      onStartedRef.current?.(payload.tournamentId, myAssigned);
+    };
+
+    const handlePlayerMoved = (payload: {
+      tournamentId: string;
+      playerAddress: string;
+      fromTableId: string;
+      toTableId: string;
+    }) => {
+      const me = myAddressRef.current;
+      if (!me || payload.playerAddress.toLowerCase() !== me) return;
+      setMyTableId(payload.toTableId);
+      onMyTableChangedRef.current?.(payload.toTableId, payload.tournamentId);
+    };
+
+    const handleTableConsolidated = (payload: {
+      tournamentId: string;
+      finalTableId: string;
+      moves: Array<{ address: string; fromTableId: string; toTableId: string }>;
+    }) => {
+      const me = myAddressRef.current;
+      if (!me) return;
+      const myMove = payload.moves.find((m) => m.address.toLowerCase() === me);
+      if (!myMove) return;
+      setMyTableId(myMove.toTableId);
+      onMyTableChangedRef.current?.(myMove.toTableId, payload.tournamentId);
     };
 
     const handleState = (payload: PokerTournamentState) => {
       if (payload) {
         setMyTournamentState(payload);
-        if (payload.tableId) setMyTableId(payload.tableId);
+        // MTT prefers `myTableId` (per-player assignment). SNG / pre-MTT servers will only
+        // send `tableId`; treat it as the same when myTableId is absent.
+        const mine = payload.myTableId ?? payload.tableId ?? null;
+        if (mine) setMyTableId(mine);
       }
     };
 
@@ -401,6 +494,8 @@ export function usePokerTournament({
     wsClient.on('poker_tournament_player_eliminated', handleEliminated);
     wsClient.on('poker_tournament_completed', handleCompleted);
     wsClient.on('poker_tournament_cancelled', handleCancelled);
+    wsClient.on('poker_tournament_player_moved', handlePlayerMoved);
+    wsClient.on('poker_tournament_table_consolidated', handleTableConsolidated);
 
     return () => {
       wsClient.off('poker_tournament_started');
@@ -409,6 +504,8 @@ export function usePokerTournament({
       wsClient.off('poker_tournament_player_eliminated');
       wsClient.off('poker_tournament_completed');
       wsClient.off('poker_tournament_cancelled');
+      wsClient.off('poker_tournament_player_moved');
+      wsClient.off('poker_tournament_table_consolidated');
     };
   }, [wsClient]);
 
@@ -428,14 +525,16 @@ export function usePokerTournament({
       // Restore active tournament state from list (handles page refresh).
       // Includes busted entries so a player who refreshes after busting still rejoins
       // the room for spectator events and can navigate back to the live table.
+      // MTT: `myTableId` is the caller's actual seat (set by the server when seated);
+      // fall back to `tableId` (lowest-seq) for SNG and spectators.
       const active = tournaments.find((t) =>
         (t.isRegistered || t.myEntryStatus === 'busted')
         && t.status === 'active'
-        && t.tableId,
+        && (t.myTableId || t.tableId),
       );
       if (active) {
         setMyTournamentId((prev) => prev ?? active.tournamentId);
-        setMyTableId((prev) => prev ?? active.tableId);
+        setMyTableId((prev) => prev ?? (active.myTableId ?? active.tableId));
         setMyEntryStatus(active.myEntryStatus ?? 'playing');
       }
 
@@ -619,10 +718,12 @@ export function usePokerTournament({
       if (!t.isRegistered || !t.scheduledStartAt) return false;
       if (t.status === 'cancelled') return false;
       if (new Date(t.scheduledStartAt).getTime() > Date.now()) return false;
-      if (t.status === 'active' && t.tableId && myTableId === t.tableId && myTournamentId === t.tournamentId) {
+      // MTT: my actual seat table is `myTableId`; SNG: falls back to `tableId`.
+      const myAssigned = t.myTableId ?? t.tableId;
+      if (t.status === 'active' && myAssigned && myTableId === myAssigned && myTournamentId === t.tournamentId) {
         return false;
       }
-      return t.status === 'registration' || (t.status === 'active' && (!t.tableId || myTableId !== t.tableId || myTournamentId !== t.tournamentId));
+      return t.status === 'registration' || (t.status === 'active' && (!myAssigned || myTableId !== myAssigned || myTournamentId !== t.tournamentId));
     });
 
     let intervalId: ReturnType<typeof setInterval> | null = null;
@@ -666,6 +767,12 @@ export interface UsePokerTableTournamentHudOptions {
   wsConnected: boolean;
   tournamentId: string | null | undefined;
   tableId: string;
+  /**
+   * Caller's wallet (lowercase). When provided, MTT events (`poker_tournament_player_moved`,
+   * `poker_tournament_table_consolidated`) trigger `onMyTableChanged` so the page can
+   * navigate to the new tableId URL. Optional — when absent the hook ignores MTT moves.
+   */
+  myAddress?: string | null;
   /** Current poker hand id — when it changes, refresh tournament snapshot (chips + hand #). */
   pokerHandId: string | null | undefined;
   onTournamentCompleted?: (payload: PokerTournamentCompletedPayload) => void;
@@ -674,6 +781,12 @@ export interface UsePokerTableTournamentHudOptions {
   onBlindLevelUp?: (payload: { newLevel: number; smallBlind: number; bigBlind: number }) => void;
   /** Fired on `poker_tournament_player_eliminated` for this tournament (any player). */
   onPlayerEliminated?: (playerAddress: string, finalRank: number) => void;
+  /**
+   * MTT: caller was moved to a new table while sitting at `tableId`. Page should `router.replace`
+   * to `/poker/${newTableId}?tournament=${tournamentId}`. The bridge from the old WS connection
+   * is implicit — the page remount picks up the new tableId in `usePokerConnection`.
+   */
+  onMyTableChanged?: (newTableId: string) => void;
 }
 
 /**
@@ -685,19 +798,23 @@ export function usePokerTableTournamentHud({
   wsConnected,
   tournamentId,
   tableId,
+  myAddress,
   pokerHandId,
   onTournamentCompleted,
   onTournamentCancelled,
   onBlindLevelUp,
   onPlayerEliminated,
+  onMyTableChanged,
 }: UsePokerTableTournamentHudOptions): PokerTournamentState | null {
   const [state, setState] = useState<PokerTournamentState | null>(null);
   const tid = (tournamentId && String(tournamentId).trim()) || null;
+  const me = (myAddress ?? '').toLowerCase();
 
   const onCompletedRef = useRef(onTournamentCompleted);
   const onCancelledRef = useRef(onTournamentCancelled);
   const onBlindUpRef = useRef(onBlindLevelUp);
   const onPlayerEliminatedRef = useRef(onPlayerEliminated);
+  const onMyTableChangedRef = useRef(onMyTableChanged);
   useEffect(() => {
     onCompletedRef.current = onTournamentCompleted;
   }, [onTournamentCompleted]);
@@ -710,6 +827,9 @@ export function usePokerTableTournamentHud({
   useEffect(() => {
     onPlayerEliminatedRef.current = onPlayerEliminated;
   }, [onPlayerEliminated]);
+  useEffect(() => {
+    onMyTableChangedRef.current = onMyTableChanged;
+  }, [onMyTableChanged]);
 
   // Join room + load snapshot when connected
   useEffect(() => {
@@ -728,7 +848,11 @@ export function usePokerTableTournamentHud({
           tournamentId: tid,
         });
         if (cancelled) return;
-        if (res?.tableId === tableId) setState(res);
+        // MTT: server's primary `tableId` is the final-table id (post-consolidation) or the
+        // lowest-seq table; the caller's actual table may be different. Match `myTableId` first,
+        // then fall back to `tableId` for legacy SNG payloads / pre-MTT servers.
+        const matchesMine = res?.myTableId === tableId || res?.tableId === tableId;
+        if (matchesMine) setState(res);
         else setState(null);
       } catch {
         if (!cancelled) setState(null);
@@ -753,7 +877,34 @@ export function usePokerTableTournamentHud({
     if (!wsClient || !tid) return;
 
     const onState = (payload: PokerTournamentState) => {
-      if (payload?.tournamentId === tid && payload.tableId === tableId) setState(payload);
+      if (payload?.tournamentId !== tid) return;
+      // MTT: only accept the payload if it's for this client's current table — the same
+      // tournament has multiple tables, but the HUD is per-table.
+      const matchesMine = payload.myTableId === tableId || payload.tableId === tableId;
+      if (matchesMine) setState(payload);
+    };
+
+    const onPlayerMoved = (payload: {
+      tournamentId: string;
+      playerAddress: string;
+      fromTableId: string;
+      toTableId: string;
+    }) => {
+      if (payload.tournamentId !== tid) return;
+      if (!me || payload.playerAddress.toLowerCase() !== me) return;
+      if (payload.fromTableId !== tableId) return;
+      onMyTableChangedRef.current?.(payload.toTableId);
+    };
+
+    const onTableConsolidated = (payload: {
+      tournamentId: string;
+      finalTableId: string;
+      moves: Array<{ address: string; fromTableId: string; toTableId: string }>;
+    }) => {
+      if (payload.tournamentId !== tid) return;
+      if (!me) return;
+      const myMove = payload.moves.find((m) => m.address.toLowerCase() === me && m.fromTableId === tableId);
+      if (myMove) onMyTableChangedRef.current?.(myMove.toTableId);
     };
 
     const onBlind = (payload: {
@@ -817,6 +968,8 @@ export function usePokerTableTournamentHud({
     wsClient.on('poker_tournament_player_eliminated', onEliminated);
     wsClient.on('poker_tournament_completed', onCompleted);
     wsClient.on('poker_tournament_cancelled', onCancelled);
+    wsClient.on('poker_tournament_player_moved', onPlayerMoved);
+    wsClient.on('poker_tournament_table_consolidated', onTableConsolidated);
 
     return () => {
       wsClient.off('poker_tournament_state', onState);
@@ -824,8 +977,10 @@ export function usePokerTableTournamentHud({
       wsClient.off('poker_tournament_player_eliminated', onEliminated);
       wsClient.off('poker_tournament_completed', onCompleted);
       wsClient.off('poker_tournament_cancelled', onCancelled);
+      wsClient.off('poker_tournament_player_moved', onPlayerMoved);
+      wsClient.off('poker_tournament_table_consolidated', onTableConsolidated);
     };
-  }, [wsClient, tid, tableId]);
+  }, [wsClient, tid, tableId, me]);
 
   // After each new hand, refresh entries + hand_number from DB (WS does not push full state each hand).
   useEffect(() => {
@@ -834,7 +989,9 @@ export function usePokerTableTournamentHud({
       wsClient
         .sendRequest('poker_tournament_get_state', { tournamentId: tid })
         .then((res: PokerTournamentState | null) => {
-          if (res?.tableId === tableId) setState(res);
+          if (!res) return;
+          const matchesMine = res.myTableId === tableId || res.tableId === tableId;
+          if (matchesMine) setState(res);
         })
         .catch(() => {});
     }, 400);

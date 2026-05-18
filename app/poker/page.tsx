@@ -325,11 +325,21 @@ export default function PokerLobbyPage() {
       setTables(payload.tables ?? []);
     });
 
-    // Navigate to tournament table when tournament starts (regardless of active tab)
-    client.on('poker_tournament_started', (payload: { tournamentId: string; tableId: string }) => {
-      if (payload?.tableId && payload?.tournamentId) {
-        router.push(`/poker/${payload.tableId}?tournament=${payload.tournamentId}`);
-      }
+    // Navigate to tournament table when tournament starts (regardless of active tab).
+    // MTT: `tableAssignments` maps wallet → tableId; pick the caller's own assignment so each
+    // player navigates to their own table, not the broadcaster's first table.
+    client.on('poker_tournament_started', (payload: {
+      tournamentId: string;
+      tableId: string;
+      tableAssignments?: Record<string, string>;
+    }) => {
+      if (!payload?.tableId || !payload?.tournamentId) return;
+      const me = address?.toLowerCase() ?? null;
+      const targetTableId =
+        me && payload.tableAssignments && payload.tableAssignments[me]
+          ? payload.tableAssignments[me]
+          : payload.tableId;
+      router.push(`/poker/${targetTableId}?tournament=${payload.tournamentId}`);
     });
 
     client
@@ -588,6 +598,23 @@ export default function PokerLobbyPage() {
                       }}
                     >
                       Create Tournament
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => router.push('/poker/tournaments/create-mtt')}
+                      className="relative flex items-center gap-2 px-6 py-3.5 rounded-2xl text-sm font-bold text-white transition-all hover:brightness-110 active:scale-[0.99]"
+                      style={{
+                        background: 'linear-gradient(135deg, #0891b2, #2563eb)',
+                        boxShadow: '0 2px 12px rgba(6, 182, 212, 0.3), 0 0 0 1px rgba(34,211,238,0.2)',
+                      }}
+                    >
+                      Create MTT
+                      <span
+                        className="rounded-full bg-cyan-300/20 px-1.5 py-0.5 text-[9px] font-bold uppercase text-cyan-100"
+                        style={{ letterSpacing: '0.15em' }}
+                      >
+                        new
+                      </span>
                     </button>
                     {address && (
                       <button

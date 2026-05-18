@@ -35,6 +35,12 @@ export const BLIND_INTERVAL_MINUTES_MIN = 1;
 export const BLIND_INTERVAL_MINUTES_MAX = 60;
 export type BlindIntervalMinutes = number;
 
+/** Inclusive cap on tournament seats per physical table. */
+export const POKER_MTT_SEATS_PER_TABLE_MIN = 4;
+export const POKER_MTT_SEATS_PER_TABLE_MAX = 10;
+/** Number of players who reach the final table; below this we collapse remaining tables into one. */
+export const POKER_MTT_FINAL_TABLE_SIZE_DEFAULT = 9;
+
 export interface PokerTournamentConfig {
   startingStack: number;
   minPlayers: number;
@@ -48,6 +54,13 @@ export interface PokerTournamentConfig {
   blindIncreaseMode?: PokerBlindIncreaseMode;
   /** Required when `blindIncreaseMode === 'by_time'`. Integer minutes from `BLIND_INTERVAL_MINUTES_MIN` to `BLIND_INTERVAL_MINUTES_MAX`. */
   blindIntervalMinutes?: BlindIntervalMinutes;
+  /**
+   * MTT: max seats per physical table (4–10). When unset or equal to maxPlayers,
+   * the tournament runs as legacy single-table SNG. When set and < maxPlayers,
+   * `activateTournament` spins up `ceil(playerCount / seatsPerTable)` tables and
+   * consolidates them as players bust.
+   */
+  seatsPerTable?: number;
 }
 
 export const DEFAULT_BLIND_SCHEDULE: BlindLevel[] = [
@@ -84,6 +97,19 @@ export interface PokerTournamentPlayer {
   prizeWon: string;
 }
 
+/** One row per live poker_tables row for the tournament. MTT lobby + HUD use these. */
+export interface PokerTournamentTableSummary {
+  tableId: string;
+  /** 1-based label ("Table 1", "Table 2"). NULL for legacy single-table SNG. */
+  seq: number | null;
+  isFinalTable: boolean;
+  /** Active seats currently sitting at this table (excludes already-busted players). */
+  playerCount: number;
+  smallBlind: number;
+  bigBlind: number;
+  handNumber: number;
+}
+
 export interface PokerTournamentState {
   tournamentId: string;
   name: string;
@@ -94,6 +120,8 @@ export interface PokerTournamentState {
   bigBlind: number;
   handNumber: number;
   players: PokerTournamentPlayer[];
+  /** All live tables for the tournament. Empty/undefined for pre-active SNG; one row for SNG-after-activate; N for MTT. */
+  tables?: PokerTournamentTableSummary[];
   /** Chip-int for chips/promo; token-wei for custom-token (pair with `prizeTokenDecimals`). */
   prizePool: string;
   /** ERC-20 address when prize is a custom PRC-20; null/absent = chips. */
@@ -139,6 +167,14 @@ export interface PokerTournamentSummary {
   /** Token contract name for UI (e.g. from PulseScan); null = use symbol / generic label. */
   prizeTokenName: string | null;
   tableId: string | null;
+  /**
+   * MTT: the requesting wallet's actual seat table. SNG: equals `tableId`. Null when the
+   * caller isn't seated (spectator / busted / pre-activation / no wallet on request).
+   * Clients should prefer `myTableId ?? tableId` for "navigate to my table" affordances —
+   * the bare `tableId` is the lowest-table-seq table and is wrong for MTT players
+   * who landed at table 2, 3, …
+   */
+  myTableId: string | null;
   createdAt: string;
   creatorAddress: string | null;
   prizeDistributionType: string;
@@ -230,18 +266,28 @@ export interface CreatePokerTournamentParams {
 }
 
 /**
- * Validates creator prize % per finishing rank (index 0 = 1st place … index maxPlayers-1).
- * Integers 0–100; unused ranks may be 0; must sum to exactly 100.
+ * Validates creator prize % per finishing rank (index 0 = 1st place …).
+ *
+ * SNG (maxPlayers ≤ 10): array length must equal `maxPlayers`.
+ * MTT (maxPlayers > 10): array length must equal 10 (paid ranks are capped at top-10).
+ *
+ * In both cases integers 0–100, unused trailing ranks may be 0, and the array must sum to
+ * exactly 100. The cap matches the `buildPrizePercents` UI helper (also capped at 10).
  */
 export function normalizePokerTournamentPrizePercents(maxPlayers: number, raw: unknown): number[] {
-  if (!Number.isFinite(maxPlayers) || maxPlayers < 2 || maxPlayers > 10) {
-    throw new Error('maxPlayers must be between 2 and 10');
+  if (!Number.isFinite(maxPlayers) || maxPlayers < 2) {
+    throw new Error('maxPlayers must be at least 2');
   }
+  const expectedLen = Math.min(10, Math.floor(maxPlayers));
   if (!Array.isArray(raw)) {
     throw new Error('prizePercentages must be an array');
   }
-  if (raw.length !== maxPlayers) {
-    throw new Error(`prizePercentages must have ${maxPlayers} entries (one per max seat)`);
+  if (raw.length !== expectedLen) {
+    throw new Error(
+      maxPlayers > 10
+        ? `prizePercentages must have 10 entries (MTT pays top 10 ranks)`
+        : `prizePercentages must have ${expectedLen} entries (one per max seat)`,
+    );
   }
   const out: number[] = [];
   let sum = 0;
@@ -488,6 +534,10 @@ export class PokerTournamentService {
     const blindIncreaseMode = this.normalizeBlindIncreaseMode(modeRaw);
     const intervalRaw = obj.blindIntervalMinutes ?? obj.blind_interval_minutes;
     const interval = this.normalizeBlindIntervalMinutes(intervalRaw);
+    const seatsPerTable = this.normalizeSeatsPerTable(
+      obj.seatsPerTable ?? obj.seats_per_table,
+      Number(obj.maxPlayers ?? 10),
+    );
     return {
       startingStack: Number(obj.startingStack ?? 5000),
       minPlayers:    Number(obj.minPlayers    ?? 2),
@@ -497,7 +547,53 @@ export class PokerTournamentService {
         : DEFAULT_BLIND_SCHEDULE,
       blindIncreaseMode,
       ...(blindIncreaseMode === 'by_time' && interval ? { blindIntervalMinutes: interval } : {}),
+      ...(seatsPerTable != null ? { seatsPerTable } : {}),
     };
+  }
+
+  /**
+   * MTT: clamp `seatsPerTable` into [POKER_MTT_SEATS_PER_TABLE_MIN, POKER_MTT_SEATS_PER_TABLE_MAX].
+   * Returns null when not configured (single-table SNG) or out of range. When equal to or above
+   * maxPlayers the tournament still runs as single-table SNG — N tables only spin up when
+   * playerCount > seatsPerTable.
+   */
+  private normalizeSeatsPerTable(raw: unknown, maxPlayers: number): number | null {
+    if (raw == null || raw === '') return null;
+    const n = Math.floor(Number(raw));
+    if (!Number.isFinite(n)) return null;
+    if (n < POKER_MTT_SEATS_PER_TABLE_MIN || n > POKER_MTT_SEATS_PER_TABLE_MAX) return null;
+    if (Number.isFinite(maxPlayers) && maxPlayers > 0 && n > maxPlayers) return maxPlayers;
+    return n;
+  }
+
+  /**
+   * Effective per-table seat cap for activation / consolidation. SNG fallback = maxPlayers
+   * (capped at 10 to match the legacy chevtek table) so existing tournaments behave identically.
+   */
+  private effectiveSeatsPerTable(config: PokerTournamentConfig): number {
+    const fromCfg = this.normalizeSeatsPerTable(config.seatsPerTable, config.maxPlayers);
+    if (fromCfg != null) return fromCfg;
+    return Math.min(POKER_MTT_SEATS_PER_TABLE_MAX, Math.max(2, Math.floor(config.maxPlayers || 10)));
+  }
+
+  /** Final table seat target: the smaller of seatsPerTable and POKER_MTT_FINAL_TABLE_SIZE_DEFAULT. */
+  private effectiveFinalTableSize(config: PokerTournamentConfig): number {
+    const seats = this.effectiveSeatsPerTable(config);
+    return Math.min(seats, POKER_MTT_FINAL_TABLE_SIZE_DEFAULT);
+  }
+
+  /**
+   * Fisher-Yates shuffle. Used for initial table assignment + final-table seat draw.
+   * NOT card dealing (deck shuffles go through `pfService.fisherYatesShuffle` — see CLAUDE.md).
+   */
+  private shuffleInPlace<T>(arr: T[]): T[] {
+    for (let i = arr.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      const tmp = arr[i];
+      arr[i] = arr[j];
+      arr[j] = tmp;
+    }
+    return arr;
   }
 
   // ---------------------------------------------------------------------------
@@ -894,7 +990,19 @@ export class PokerTournamentService {
     const fastCheck = await this.pool.query(
       `SELECT te.id AS entry_id, te.status AS entry_status,
               t.status AS tournament_status, t.is_private, t.pin_code,
-              (SELECT id FROM poker_tables WHERE tournament_id = $1 LIMIT 1) AS table_id
+              /* MTT: prefer the caller's actual seat table over the lowest-seq table.
+                 Falls back to the lowest-seq table for spectators / pre-activation. */
+              COALESCE(
+                (SELECT ps.table_id FROM poker_seats ps
+                   JOIN poker_tables pkt ON pkt.id = ps.table_id
+                  WHERE pkt.tournament_id = $1
+                    AND LOWER(ps.player_address) = $2
+                  LIMIT 1),
+                (SELECT id FROM poker_tables
+                  WHERE tournament_id = $1
+                  ORDER BY table_seq NULLS LAST, created_at
+                  LIMIT 1)
+              ) AS table_id
          FROM tournament_entries te
          JOIN tournaments t ON t.id = te.tournament_id
         WHERE te.tournament_id = $1
@@ -969,9 +1077,21 @@ export class PokerTournamentService {
         const entryId = existing.rows[0].id;
         // Use same checked-out client — do not call `pool.query` here while still holding `client`
         // (would consume two pool slots and contributes to "timeout exceeded when trying to connect").
+        // MTT: caller's actual seat table comes first; fall back to the lowest-seq table for
+        // spectators or any case where they aren't yet seated.
         const tableResult = await client.query(
-          'SELECT id FROM poker_tables WHERE tournament_id = $1 LIMIT 1',
-          [tournamentId]
+          `SELECT COALESCE(
+             (SELECT ps.table_id FROM poker_seats ps
+                JOIN poker_tables pkt ON pkt.id = ps.table_id
+               WHERE pkt.tournament_id = $1
+                 AND LOWER(ps.player_address) = $2
+               LIMIT 1),
+             (SELECT id FROM poker_tables
+                WHERE tournament_id = $1
+                ORDER BY table_seq NULLS LAST, created_at
+                LIMIT 1)
+           ) AS id`,
+          [tournamentId, normalized]
         );
         const tableId = tableResult.rows[0]?.id ?? null;
         logger.info('Player already registered for poker tournament, returning existing entry', { tournamentId, playerAddress: normalized, entryId, tableId });
@@ -1468,9 +1588,21 @@ export class PokerTournamentService {
    * Creates a dedicated poker table (tournament_mode=TRUE), seats all players,
    * starts the first hand.
    */
+  /**
+   * Activate a registered poker tournament: flip status, spin up tables, seat players,
+   * deal the first hand. Returns the **first** tableId (for legacy SNG / single-table
+   * callers); MTT callers should use `getTournamentState` to enumerate all tables or
+   * `getPlayerTableId` for the requesting player's assignment.
+   *
+   * MTT: when `config.seatsPerTable < playerCount`, players are shuffled randomly and
+   * distributed across `ceil(playerCount / seatsPerTable)` tables. All tables share the
+   * same `current_blind_level_started_at` instant so the by-time scheduler advances
+   * blinds in lock-step. The `poker_tournament_started` broadcast includes
+   * `tableAssignments` so each client can navigate to its own table URL.
+   */
   async activateTournament(tournamentId: string): Promise<string> {
     const existing = await this.pool.query(
-      `SELECT id FROM poker_tables WHERE tournament_id = $1 LIMIT 1`,
+      `SELECT id FROM poker_tables WHERE tournament_id = $1 ORDER BY table_seq NULLS LAST, created_at LIMIT 1`,
       [tournamentId]
     );
     if (existing.rows.length > 0) {
@@ -1512,53 +1644,118 @@ export class PokerTournamentService {
     const bbChips = BigInt(firstLevel.bigBlind).toString();
     const startingStackChips = BigInt(config.startingStack).toString();
 
-    // Create dedicated tournament poker table
+    // MTT table layout. seatsPerTable applies only when player count exceeds it; otherwise
+    // we fall back to the legacy single-table SNG path so existing tournaments are untouched.
+    const seatsPerTable = this.effectiveSeatsPerTable(config);
+    const playerCount = entries.rows.length;
+    const tableCount = Math.max(1, Math.ceil(playerCount / seatsPerTable));
+    const isMTT = tableCount > 1;
+
+    // Shuffle entries before round-robin so seat order isn't bought_in_at ordering.
+    const seating = this.shuffleInPlace(entries.rows.slice());
+
     const isByTime = this.getBlindIncreaseMode(config) === 'by_time';
-    const tableRow = await this.pool.query(
-      `INSERT INTO poker_tables (
-         small_blind, big_blind, max_seats, status, tournament_id, tournament_mode,
-         current_blind_level, current_blind_level_started_at
-       )
-       VALUES ($1::NUMERIC, $2::NUMERIC, $3, 'waiting', $4, TRUE, $5, $6)
-       RETURNING id`,
-      [
-        sbChips,
-        bbChips,
-        config.maxPlayers,
-        tournamentId,
-        isByTime ? firstLevel.level : null,
-        isByTime ? new Date() : null,
-      ]
-    );
-    const tableId = tableRow.rows[0].id;
+    const sharedLevelStartedAt = isByTime ? new Date() : null;
 
-    // Seat all players with virtual chips
-    for (const entry of entries.rows) {
-      await this.pokerGameService.joinTableTournament(tableId, entry.player_address, startingStackChips);
+    type CreatedTable = {
+      id: string;
+      seq: number | null;
+      assignedAddresses: string[];
+      assignedEntryIds: string[];
+    };
+    const created: CreatedTable[] = [];
 
-      // Record in bridge table
-      await this.pool.query(
-        `INSERT INTO poker_tournament_seats (tournament_id, entry_id, table_id, player_address)
-         VALUES ($1, $2, $3, $4) ON CONFLICT (tournament_id, player_address) DO NOTHING`,
-        [tournamentId, entry.id, tableId, entry.player_address.toLowerCase()]
+    for (let t = 0; t < tableCount; t++) {
+      const seq = isMTT ? t + 1 : null;
+      const insertRes = await this.pool.query(
+        `INSERT INTO poker_tables (
+           small_blind, big_blind, max_seats, status, tournament_id, tournament_mode,
+           current_blind_level, current_blind_level_started_at, table_seq, is_final_table
+         )
+         VALUES ($1::NUMERIC, $2::NUMERIC, $3, 'waiting', $4, TRUE, $5, $6, $7, FALSE)
+         RETURNING id`,
+        [
+          sbChips,
+          bbChips,
+          seatsPerTable,
+          tournamentId,
+          isByTime ? firstLevel.level : null,
+          sharedLevelStartedAt,
+          seq,
+        ]
       );
+      created.push({
+        id: insertRes.rows[0].id as string,
+        seq,
+        assignedAddresses: [],
+        assignedEntryIds: [],
+      });
     }
 
-    // Start first hand
-    await this.pokerGameService.startHand(tableId);
+    // Round-robin (snake) deal: pick from shuffled `seating` into tables to balance counts.
+    // For 18 players × 3 tables → 6/6/6. For 17 × 3 → 6/6/5.
+    for (let i = 0; i < seating.length; i++) {
+      const tableIdx = i % tableCount;
+      const entry = seating[i];
+      created[tableIdx].assignedAddresses.push(entry.player_address);
+      created[tableIdx].assignedEntryIds.push(entry.id);
+    }
 
-    logger.info('Poker tournament activated', { tournamentId, tableId, players: entries.rows.length });
+    for (const table of created) {
+      for (let i = 0; i < table.assignedAddresses.length; i++) {
+        const addr = table.assignedAddresses[i];
+        const entryId = table.assignedEntryIds[i];
+        await this.pokerGameService.joinTableTournament(table.id, addr, startingStackChips);
+
+        await this.pool.query(
+          `INSERT INTO poker_tournament_seats (tournament_id, entry_id, table_id, player_address)
+           VALUES ($1, $2, $3, $4) ON CONFLICT (tournament_id, player_address) DO NOTHING`,
+          [tournamentId, entryId, table.id, addr.toLowerCase()]
+        );
+      }
+    }
+
+    // Start the first hand on each table. Tables with < 2 stacked seats no-op (startHand returns null).
+    for (const table of created) {
+      try {
+        await this.pokerGameService.startHand(table.id);
+      } catch (err) {
+        logger.warn('MTT activate: startHand failed for table', { tournamentId, tableId: table.id, err });
+      }
+    }
+
+    // Map for the broadcast: each client filters for its own assignment to navigate to /poker/{tableId}.
+    const tableAssignments: Record<string, string> = {};
+    for (const table of created) {
+      for (const addr of table.assignedAddresses) {
+        tableAssignments[addr.toLowerCase()] = table.id;
+      }
+    }
+
+    const firstTableId = created[0].id;
+
+    logger.info('Poker tournament activated', {
+      tournamentId,
+      tableId: firstTableId,
+      tableCount,
+      seatsPerTable,
+      players: playerCount,
+      mtt: isMTT,
+    });
 
     this.broadcast(`poker_tournament:${tournamentId}`, 'poker_tournament_started', {
       tournamentId,
-      tableId,
+      tableId: firstTableId,
       blindLevel: firstLevel.level,
       smallBlind: firstLevel.smallBlind,
       bigBlind: firstLevel.bigBlind,
-      playerCount: entries.rows.length,
+      playerCount,
+      // MTT-specific. Legacy single-table clients ignore these.
+      tableCount,
+      tableAssignments,
     });
 
-    return tableId;
+    return firstTableId;
   }
 
   // ---------------------------------------------------------------------------
@@ -1721,6 +1918,15 @@ export class PokerTournamentService {
 
     if (activeCount <= 1) {
       await this.completeTournament(tournamentId, tableId);
+      return;
+    }
+
+    // MTT: after eliminations + blind adjust, fold short tables into the final table when the
+    // total seated count drops to the final-table threshold. No-op for single-table SNG.
+    try {
+      await this.maybeConsolidateTables(tournamentId, config, tableId);
+    } catch (err) {
+      logger.error('MTT maybeConsolidateTables failed (continuing)', { tournamentId, tableId, err });
     }
   }
 
@@ -2211,14 +2417,9 @@ export class PokerTournamentService {
     const statusRow = await this.pool.query(`SELECT status FROM tournaments WHERE id = $1`, [tournamentId]);
     if (statusRow.rows.length === 0) return;
     if (statusRow.rows[0].status === 'completed') {
-      const resolvedTableId = tableId ?? await this.getTableIdForTournament(tournamentId);
-      if (resolvedTableId) {
-        try {
-          await this.pokerGameService.deleteTableTournament(resolvedTableId);
-        } catch (err) {
-          logger.warn('Failed to delete tournament poker table (already completed)', { resolvedTableId, err });
-        }
-      }
+      // MTT: a re-entry into completeTournament after first completion should still GC every
+      // poker_tables row, not only the "primary" one. Otherwise consolidation orphans linger.
+      await this.deleteAllTournamentTables(tournamentId);
       return;
     }
 
@@ -2357,13 +2558,10 @@ export class PokerTournamentService {
     );
     const endedAt = endedRes.rows[0]?.ended_at ? new Date(endedRes.rows[0].ended_at).toISOString() : null;
 
-    if (resolvedTableId) {
-      try {
-        await this.pokerGameService.deleteTableTournament(resolvedTableId);
-      } catch (err) {
-        logger.warn('Failed to delete tournament poker table', { resolvedTableId, err });
-      }
-    }
+    // MTT: tear down every remaining table for this tournament (the final-table id is whatever
+    // survived consolidation; resolvedTableId may point at the triggering — possibly empty —
+    // table). Loop ensures any stragglers from a botched consolidation are also reaped.
+    await this.deleteAllTournamentTables(tournamentId);
 
     const creatorFeeChips = (grossPool * BigInt(creatorPct)) / 100n;
     const platformFeeChips = (grossPool * BigInt(platformPct)) / 100n;
@@ -2664,7 +2862,18 @@ export class PokerTournamentService {
             WHERE te.tournament_id = r.tournament_id
               AND $1::text IS NOT NULL
               AND LOWER(te.player_address) = $1::text
-            LIMIT 1) AS my_entry_status
+            LIMIT 1) AS my_entry_status,
+         /* MTT: the caller's actual seat table (NULL for non-MTT or non-seated/spectator).
+            Lobby uses this when present so each MTT player navigates to THEIR table, not the
+            first one by table_seq. Falls back to r.table_id on the client when null. */
+         CASE WHEN $1::text IS NOT NULL THEN (
+           SELECT ps.table_id
+             FROM poker_seats ps
+             JOIN poker_tables pkt ON pkt.id = ps.table_id
+            WHERE pkt.tournament_id = r.tournament_id
+              AND LOWER(ps.player_address) = $1::text
+            LIMIT 1
+         ) ELSE NULL END AS my_table_id
        FROM poker_tournament_registrations r
        LEFT JOIN poker_tables pt ON pt.id = r.table_id
        WHERE (
@@ -2711,6 +2920,7 @@ export class PokerTournamentService {
         prizeTokenSymbol:      r.prize_token_symbol ?? null,
         prizeTokenName:        r.prize_token_name ?? null,
         tableId:               r.table_id ?? null,
+        myTableId:             r.my_table_id ?? null,
         createdAt:             r.created_at?.toISOString() ?? '',
         creatorAddress:        r.creator_address ?? null,
         prizeDistributionType: r.prize_distribution_type ?? 'winner_takes_all',
@@ -2829,11 +3039,22 @@ export class PokerTournamentService {
   }
 
   async getTournamentState(tournamentId: string): Promise<PokerTournamentState | null> {
+    // For MTT we want the lobby/HUD's "primary" table_id to point at the final table once
+    // consolidation has happened, falling back to the lowest table_seq otherwise. The
+    // LEFT JOIN below picks whichever table the ORDER BY puts first; for SNG with a single
+    // poker_tables row this is unchanged from the pre-MTT query.
     const tRow = await this.pool.query(
       `SELECT t.*, pt.id AS table_id, pt.hand_number, pt.small_blind, pt.big_blind,
               pt.current_blind_level, pt.current_blind_level_started_at
        FROM tournaments t
-       LEFT JOIN poker_tables pt ON pt.tournament_id = t.id
+       LEFT JOIN LATERAL (
+         SELECT id, hand_number, small_blind, big_blind,
+                current_blind_level, current_blind_level_started_at
+           FROM poker_tables
+          WHERE tournament_id = t.id
+          ORDER BY is_final_table DESC, table_seq NULLS LAST, created_at
+          LIMIT 1
+       ) pt ON TRUE
        WHERE t.id = $1 AND t.game_type = 'poker'`,
       [tournamentId]
     );
@@ -2886,6 +3107,20 @@ export class PokerTournamentService {
       String(t.prize_distribution_type ?? 'winner_takes_all'),
     );
 
+    // MTT tables snapshot: empty when no poker_tables rows exist yet (pre-activation SNG).
+    const tableRows = await this.listTournamentTables(tournamentId);
+    const tables: PokerTournamentTableSummary[] = tableRows.map((tr) => ({
+      tableId: tr.id,
+      seq: tr.seq,
+      isFinalTable: tr.isFinalTable,
+      playerCount: tr.seatCount,
+      smallBlind: tr.smallBlind,
+      bigBlind: tr.bigBlind,
+      handNumber: tr.handNumber,
+    }));
+
+    const seatsPerTable = this.effectiveSeatsPerTable(config);
+
     return {
       tournamentId,
       name:                  t.name,
@@ -2912,6 +3147,7 @@ export class PokerTournamentService {
         finalRank:       e.final_rank ?? null,
         prizeWon:        (e.prize_won ?? '0').toString(),
       })),
+      tables: tables.length > 0 ? tables : undefined,
       prizePool:           t.prize_pool?.toString() ?? '0',
       prizeTokenAddress:   t.prize_token_address ?? null,
       prizeTokenDecimals:  t.prize_token_decimals != null ? Number(t.prize_token_decimals) : null,
@@ -2929,6 +3165,7 @@ export class PokerTournamentService {
         ...(blindModeState === 'by_time' && config.blindIntervalMinutes
           ? { blindIntervalMinutes: config.blindIntervalMinutes }
           : {}),
+        seatsPerTable,
       },
       actionTimerSeconds: t.action_timer_seconds != null ? Number(t.action_timer_seconds) : null,
       prizeSplitPercentages,
@@ -3032,10 +3269,337 @@ export class PokerTournamentService {
 
   private async getTableIdForTournament(tournamentId: string): Promise<string | null> {
     const r = await this.pool.query(
-      `SELECT id FROM poker_tables WHERE tournament_id = $1 LIMIT 1`,
+      `SELECT id FROM poker_tables WHERE tournament_id = $1 ORDER BY table_seq NULLS LAST, created_at LIMIT 1`,
       [tournamentId]
     );
     return r.rows[0]?.id ?? null;
+  }
+
+  /**
+   * Tear down every poker_tables row for a tournament. Used by `completeTournament`
+   * (MTT: many tables remain after consolidation if anything went sideways; SNG: one table)
+   * and by re-entries when status is already 'completed'.
+   */
+  private async deleteAllTournamentTables(tournamentId: string): Promise<void> {
+    const rows = await this.pool.query<{ id: string }>(
+      `SELECT id FROM poker_tables WHERE tournament_id = $1`,
+      [tournamentId],
+    );
+    for (const row of rows.rows) {
+      try {
+        await this.pokerGameService.deleteTableTournament(row.id);
+      } catch (err) {
+        logger.warn('Failed to delete tournament poker table', { tournamentId, tableId: row.id, err });
+      }
+    }
+  }
+
+  /**
+   * All live poker_tables rows for a tournament with seat counts (active seats only — busted
+   * players have already had their seat deleted by `eliminateBustedTournamentSeats`).
+   * Ordered by table_seq so the lobby/HUD renders Table 1, Table 2, … consistently.
+   */
+  private async listTournamentTables(tournamentId: string): Promise<Array<{
+    id: string;
+    seq: number | null;
+    isFinalTable: boolean;
+    seatCount: number;
+    smallBlind: number;
+    bigBlind: number;
+    handNumber: number;
+  }>> {
+    const res = await this.pool.query<{
+      id: string;
+      table_seq: number | null;
+      is_final_table: boolean;
+      seat_count: string;
+      small_blind: unknown;
+      big_blind: unknown;
+      hand_number: number | null;
+    }>(
+      `SELECT pt.id, pt.table_seq, pt.is_final_table,
+              (SELECT COUNT(*) FROM poker_seats ps WHERE ps.table_id = pt.id)::text AS seat_count,
+              pt.small_blind, pt.big_blind, pt.hand_number
+         FROM poker_tables pt
+        WHERE pt.tournament_id = $1
+        ORDER BY pt.table_seq NULLS LAST, pt.created_at`,
+      [tournamentId],
+    );
+    return res.rows.map((r) => ({
+      id: r.id,
+      seq: r.table_seq != null ? Number(r.table_seq) : null,
+      isFinalTable: Boolean(r.is_final_table),
+      seatCount: Number(r.seat_count) || 0,
+      smallBlind: Number(toBigIntSafe(r.small_blind ?? 0)),
+      bigBlind: Number(toBigIntSafe(r.big_blind ?? 0)),
+      handNumber: Number(r.hand_number ?? 0),
+    }));
+  }
+
+  /**
+   * Find the live tableId for a specific player in an MTT (or single-table SNG).
+   * Returns null if the player is busted, has never been seated, or the tournament has no tables.
+   */
+  async getPlayerTableId(tournamentId: string, playerAddress: string): Promise<string | null> {
+    const normalized = this.normalizeAddress(playerAddress);
+    const r = await this.pool.query<{ table_id: string }>(
+      `SELECT ps.table_id
+         FROM poker_seats ps
+         JOIN poker_tables pt ON pt.id = ps.table_id
+        WHERE pt.tournament_id = $1
+          AND LOWER(ps.player_address) = $2
+        LIMIT 1`,
+      [tournamentId, normalized],
+    );
+    return r.rows[0]?.table_id ?? null;
+  }
+
+  /**
+   * MTT primitive: move a still-stacked player from one poker_tables row to another. Used by
+   * final-table consolidation and (future) lone-survivor consolidation. Safe to call **only**
+   * when the source table is between hands (`syncAfterHand` is the canonical caller) — moving
+   * a player mid-hand would break the active chevtek Table instance.
+   *
+   * Steps:
+   *   1. SELECT the seated player's stack from the source table.
+   *   2. INSERT a new seat at the first open position on the destination table.
+   *   3. DELETE the original seat row.
+   *   4. UPDATE poker_tournament_seats so future lookups resolve to the new table.
+   *   5. Broadcast `poker_tournament_player_moved` to the tournament room.
+   *
+   * Throws when either table is missing, when the player isn't seated at the source, or when
+   * the destination is full. Callers should catch + log and continue (the tournament loop
+   * doesn't depend on every move succeeding).
+   */
+  private async movePlayerBetweenTables(
+    tournamentId: string,
+    fromTableId: string,
+    toTableId: string,
+    playerAddress: string,
+  ): Promise<void> {
+    const normalized = this.normalizeAddress(playerAddress);
+    if (fromTableId === toTableId) return;
+
+    const srcSeat = await this.pool.query<{ stack: unknown; status: string }>(
+      `SELECT stack, status FROM poker_seats WHERE table_id = $1 AND LOWER(player_address) = $2`,
+      [fromTableId, normalized],
+    );
+    if (srcSeat.rows.length === 0) {
+      logger.warn('MTT move: source seat missing', { tournamentId, fromTableId, toTableId, normalized });
+      return;
+    }
+    const stackChips = toBigIntSafe(srcSeat.rows[0].stack ?? 0).toString();
+    const srcStatus = srcSeat.rows[0].status ?? 'active';
+
+    const dstTable = await this.pool.query<{ max_seats: number; tournament_mode: boolean }>(
+      `SELECT max_seats, tournament_mode FROM poker_tables WHERE id = $1`,
+      [toTableId],
+    );
+    if (dstTable.rows.length === 0 || !dstTable.rows[0].tournament_mode) {
+      throw new Error('Destination is not a tournament table');
+    }
+    const maxSeats = Number(dstTable.rows[0].max_seats) || POKER_MTT_SEATS_PER_TABLE_MAX;
+
+    const dstSeats = await this.pool.query<{ position: number }>(
+      `SELECT position FROM poker_seats WHERE table_id = $1`,
+      [toTableId],
+    );
+    if (dstSeats.rows.length >= maxSeats) {
+      throw new Error('Destination table full');
+    }
+    const usedPositions = new Set(dstSeats.rows.map((r) => Number(r.position)));
+    let newPos = 0;
+    while (usedPositions.has(newPos)) newPos++;
+
+    // Sequence matters: insert into dest BEFORE delete-from-source so the player is never seatless.
+    // Both rows share UNIQUE (table_id, player_address) so an accidental double-insert at the
+    // source would also fail loudly — but the source UNIQUE doesn't block the dest insert.
+    await this.pool.query(
+      `INSERT INTO poker_seats (table_id, position, player_address, stack, status)
+       VALUES ($1, $2, $3, $4::NUMERIC, $5)`,
+      [toTableId, newPos, normalized, stackChips, srcStatus],
+    );
+    await this.pool.query(
+      `DELETE FROM poker_seats WHERE table_id = $1 AND LOWER(player_address) = $2`,
+      [fromTableId, normalized],
+    );
+    await this.pool.query(
+      `UPDATE poker_tournament_seats SET table_id = $1 WHERE tournament_id = $2 AND LOWER(player_address) = $3`,
+      [toTableId, tournamentId, normalized],
+    );
+
+    logger.info('MTT player moved', { tournamentId, fromTableId, toTableId, playerAddress: normalized, stackChips });
+
+    this.broadcast(`poker_tournament:${tournamentId}`, 'poker_tournament_player_moved', {
+      tournamentId,
+      playerAddress: normalized,
+      fromTableId,
+      toTableId,
+    });
+  }
+
+  /**
+   * Drop tables that ended up with zero seats after eliminations / consolidation. Keeps the
+   * tables list tight for the lobby + HUD and lets `tickTimeBasedBlindAdvances` scan fewer rows.
+   * No-op on the final/winning table since the next-hand path keeps it alive until completion.
+   */
+  private async pruneEmptyTournamentTables(tournamentId: string, keepTableId?: string): Promise<void> {
+    const emptyTables = await this.pool.query<{ id: string }>(
+      `SELECT pt.id
+         FROM poker_tables pt
+        WHERE pt.tournament_id = $1
+          AND NOT EXISTS (SELECT 1 FROM poker_seats ps WHERE ps.table_id = pt.id)
+          ${keepTableId ? 'AND pt.id <> $2' : ''}`,
+      keepTableId ? [tournamentId, keepTableId] : [tournamentId],
+    );
+    for (const row of emptyTables.rows) {
+      try {
+        await this.pokerGameService.deleteTableTournament(row.id);
+        logger.info('MTT pruned empty table', { tournamentId, tableId: row.id });
+      } catch (err) {
+        logger.warn('MTT prune failed', { tournamentId, tableId: row.id, err });
+      }
+    }
+  }
+
+  /** True if the table has an uncompleted poker_hand row (still mid-deal). */
+  private async isTableMidHand(tableId: string): Promise<boolean> {
+    const r = await this.pool.query(
+      `SELECT 1 FROM poker_hands WHERE table_id = $1 AND completed_at IS NULL LIMIT 1`,
+      [tableId],
+    );
+    return r.rows.length > 0;
+  }
+
+  /**
+   * MTT post-hand hook. Two responsibilities:
+   *
+   *  1. Final-table collapse: when total seated (across all tables) ≤ final-table size AND
+   *     there are 2+ tables, mark the triggering table as `is_final_table = TRUE` and move
+   *     every player from the (between-hands) source tables onto it. Sources that are
+   *     currently mid-hand are skipped — they'll be moved on their own post-hand pass, so
+   *     consolidation completes incrementally over the next few hands.
+   *
+   *  2. Empty-table pruning: tables left without seats after eliminations are dropped from
+   *     `poker_tables` so the scheduler + HUD ignore them.
+   *
+   * Why the triggering table is the target: it's guaranteed between hands (we're inside its
+   * post-hand callback). Picking the "most populated" table as the target would risk moving
+   * players INTO a mid-hand chevtek instance — the player's seat would exist in the DB but
+   * the in-memory `Table` wouldn't know about them until the hand resolved.
+   *
+   * Lone-survivor consolidation (single player at a non-final table while another table still
+   * has spots) is intentionally deferred to Phase 2.
+   */
+  private async maybeConsolidateTables(
+    tournamentId: string,
+    config: PokerTournamentConfig,
+    triggeringTableId: string,
+  ): Promise<void> {
+    const tables = await this.listTournamentTables(tournamentId);
+    if (tables.length <= 1) {
+      // SNG or already-consolidated MTT — nothing to do beyond empty-table pruning (which
+      // already happened in syncAfterHand's elimination loop).
+      return;
+    }
+
+    const finalSize = this.effectiveFinalTableSize(config);
+    const totalSeated = tables.reduce((sum, t) => sum + t.seatCount, 0);
+
+    // Prune empty tables first so they don't show up as sources / inflate table count.
+    const nonEmpty = tables.filter((t) => t.seatCount > 0);
+    if (nonEmpty.length < tables.length) {
+      await this.pruneEmptyTournamentTables(tournamentId, triggeringTableId);
+    }
+
+    if (nonEmpty.length <= 1) return;
+    if (totalSeated > finalSize) return;
+    if (totalSeated < 2) return; // Tournament is about to complete — let syncAfterHand handle it.
+
+    // Target = the table we're already between hands on. If the triggering table is already
+    // empty (everyone busted on it this hand) we cannot use it; fall back to *any* non-empty
+    // table that isn't mid-hand. That fallback is rare enough that the simple linear scan is fine.
+    let target = nonEmpty.find((t) => t.id === triggeringTableId) ?? null;
+    if (!target) {
+      for (const candidate of nonEmpty) {
+        if (!(await this.isTableMidHand(candidate.id))) {
+          target = candidate;
+          break;
+        }
+      }
+    }
+    if (!target) {
+      logger.info('MTT consolidation deferred: no safe target table (all mid-hand)', { tournamentId, totalSeated, finalSize });
+      return;
+    }
+
+    // Filter source tables to those safe to move from RIGHT NOW (not mid-hand). Mid-hand
+    // tables get skipped this pass — their own post-hand callback will pull them in next.
+    const sourceCandidates = nonEmpty.filter((t) => t.id !== target!.id);
+    const sources: typeof sourceCandidates = [];
+    for (const src of sourceCandidates) {
+      if (await this.isTableMidHand(src.id)) {
+        logger.info('MTT consolidation: source table mid-hand, deferring', { tournamentId, sourceTableId: src.id });
+        continue;
+      }
+      sources.push(src);
+    }
+    if (sources.length === 0) {
+      // No-op this pass; the deferred sources will re-trigger consolidation on their own
+      // post-hand callbacks. Still flip is_final_table on target so the HUD knows.
+      await this.pool.query(`UPDATE poker_tables SET is_final_table = TRUE WHERE id = $1`, [target.id]);
+      return;
+    }
+
+    logger.info('MTT consolidating to final table', {
+      tournamentId,
+      targetTableId: target.id,
+      targetSeq: target.seq,
+      totalSeated,
+      finalSize,
+      sourceTables: sources.map((s) => ({ id: s.id, seatCount: s.seatCount })),
+    });
+
+    // Mark target as the final table so the HUD can show the badge before the moves land.
+    await this.pool.query(
+      `UPDATE poker_tables SET is_final_table = TRUE WHERE id = $1`,
+      [target.id],
+    );
+
+    const movedPlayers: Array<{ address: string; fromTableId: string; toTableId: string }> = [];
+    for (const src of sources) {
+      const seats = await this.pool.query<{ player_address: string }>(
+        `SELECT player_address FROM poker_seats WHERE table_id = $1 ORDER BY position`,
+        [src.id],
+      );
+      for (const seat of seats.rows) {
+        const addr = seat.player_address;
+        try {
+          await this.movePlayerBetweenTables(tournamentId, src.id, target.id, addr);
+          movedPlayers.push({ address: addr.toLowerCase(), fromTableId: src.id, toTableId: target.id });
+        } catch (err) {
+          logger.error('MTT move during consolidation failed', {
+            tournamentId, fromTableId: src.id, toTableId: target.id, addr, err,
+          });
+        }
+      }
+    }
+
+    await this.pruneEmptyTournamentTables(tournamentId, target.id);
+
+    this.broadcast(`poker_tournament:${tournamentId}`, 'poker_tournament_table_consolidated', {
+      tournamentId,
+      finalTableId: target.id,
+      finalTableSeq: target.seq,
+      moves: movedPlayers,
+    });
+
+    // Kick the final table to start its next hand if it isn't already running one.
+    try {
+      await this.pokerGameService.startHand(target.id);
+    } catch (err) {
+      logger.warn('MTT final-table startHand after consolidation failed', { tournamentId, targetTableId: target.id, err });
+    }
   }
 }
 

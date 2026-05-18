@@ -194,16 +194,31 @@ export default function PokerTablePage() {
     return tournamentIdParam && tournamentIdParam.length > 0 ? tournamentIdParam : null;
   }, [renderedState, state?.tournamentId, tournamentIdParam]);
 
+  const handleMyTableChanged = useCallback(
+    (newTableId: string) => {
+      if (!newTableId || newTableId === tableId) return;
+      const qs = resolvedTournamentId
+        ? `?tournament=${encodeURIComponent(resolvedTournamentId)}`
+        : '';
+      toast.info('You have been moved to the final table.');
+      // `replace` (not push) so the browser back button doesn't return to the dead table.
+      router.replace(`/poker/${newTableId}${qs}`);
+    },
+    [router, resolvedTournamentId, tableId],
+  );
+
   const tournamentHudState = usePokerTableTournamentHud({
     wsClient,
     wsConnected,
     tournamentId: resolvedTournamentId,
     tableId,
+    myAddress: normalizedAddress,
     pokerHandId: renderedState?.currentHand?.handId,
     onTournamentCompleted: handleTournamentCompleted,
     onTournamentCancelled: handleTournamentCancelled,
     onBlindLevelUp: handleBlindLevelUp,
     onPlayerEliminated: handlePlayerEliminated,
+    onMyTableChanged: handleMyTableChanged,
   });
 
   const tournamentHUDProp =
