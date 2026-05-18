@@ -38,13 +38,21 @@ export function MttStepReview({ onClose, onPublish, onPublished }: MttStepReview
     try {
       const result = await onPublish(params);
       if (!result?.tournamentId) {
-        setError('Server did not return a tournament id. Try again.');
+        // Server responded but the payload was empty / malformed. Log the actual
+        // response for debugging so support can copy it.
+        // eslint-disable-next-line no-console
+        console.error('MTT publish: server returned no tournamentId', { params, result });
+        setError(
+          'Server responded but did not include a tournament id. Check the browser console for the raw response and try again.',
+        );
         return;
       }
       toast.success('Tournament published!');
       onPublished(result);
     } catch (err) {
       const msg = (err as Error).message ?? 'Publish failed';
+      // eslint-disable-next-line no-console
+      console.error('MTT publish failed', { params, error: err });
       setError(msg);
       toast.error(msg);
     } finally {
