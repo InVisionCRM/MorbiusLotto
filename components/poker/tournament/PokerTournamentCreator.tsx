@@ -948,8 +948,16 @@ export function PokerTournamentCreator({ creatorAddress, onClose, onCreate }: Po
   /**
    * Creator-chosen cut from the prize pool (integer 0–15). Default 2 matches pre-feature behavior.
    * Freerolls store the value but the server overrides payouts to 0% since the creator funded the pool.
+   *
+   * Mirrored into a ref so `buildCreateParams` reads the latest committed slider value even if a
+   * batched render / stale closure window opens between "Review & create" and "Publish tournament".
+   * The bug we hit before this guard: slider visually moved to 15% but the persisted row was 2%.
    */
   const [creatorFeePercent, setCreatorFeePercent] = useState<number>(CREATOR_FEE_DEFAULT);
+  const creatorFeePercentRef = useRef<number>(CREATOR_FEE_DEFAULT);
+  useEffect(() => {
+    creatorFeePercentRef.current = creatorFeePercent;
+  }, [creatorFeePercent]);
   const [botsToAdd, setBotsToAdd] = useState(0);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [showConfirm, setShowConfirm] = useState(false);
@@ -1247,7 +1255,9 @@ export function PokerTournamentCreator({ creatorAddress, onClose, onCreate }: Po
         isPrivate,
         ...(pinForCreate ? { pinCode: pinForCreate } : {}),
         scheduledStartAt,
-        creatorFeePercent: clampCreatorFeePercent(creatorFeePercent),
+        // Read via ref so we always pick up the latest slider position, even if React batched a
+        // render between the slider's onChange and the click that opened the confirm modal.
+        creatorFeePercent: clampCreatorFeePercent(creatorFeePercentRef.current),
       },
       addBots: isAdmin ? Math.max(0, Math.min(10, Math.floor(botsToAdd))) : 0,
     };
@@ -2701,6 +2711,15 @@ export function PokerTournamentCreator({ creatorAddress, onClose, onCreate }: Po
               { label: 'Players', value: `${minPlayers}–${maxPlayers}`, accent: 'white' },
               { label: 'Prize preset', value: prizePresetLabel, accent: 'cyan' },
               { label: 'Split preview', value: topSplit || '—', accent: 'white' },
+              // Surface the creator fee here so it's visible BEFORE publish — the value the user sees here is
+              // exactly what the server will receive (read from the same ref in buildCreateParams).
+              ...(!isFreeroll
+                ? [{
+                    label: 'Your fee',
+                    value: `${clampCreatorFeePercent(creatorFeePercentRef.current)}% of each buy-in`,
+                    accent: 'cyan' as const,
+                  }]
+                : []),
               { label: 'Starts', value: scheduleDisplay, accent: 'white' },
               { label: 'Private', value: isPrivate ? 'Yes (PIN required)' : 'No', accent: 'white' },
               ...(isAdmin && botsToAdd > 0
