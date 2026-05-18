@@ -39,6 +39,8 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Dialog, DialogOverlay, DialogPortal } from '@/components/ui/dialog';
 import * as DialogPrimitive from '@radix-ui/react-dialog';
 import { cn } from '@/lib/utils';
+import { BackgroundBeams } from '@/components/ui/background-beams';
+import { MorbGradientButton, MorbSecondaryButton } from '@/components/ui/morb-card';
 import { IconShare } from '@tabler/icons-react';
 import type { PieLabelRenderProps } from 'recharts';
 import { Cell, Pie, PieChart, ResponsiveContainer } from 'recharts';
@@ -198,6 +200,14 @@ const PRIZE_PIE_COLORS = [
   '#334155',
 ] as const;
 
+/** Outer-ring colors for the "where the buy-in goes" breakdown. Kept distinct from the */
+/* prize-position palette so the eye lands on the prize pool first. */
+const FEE_RING_COLORS = {
+  platform: '#64748b', // slate-500 — neutral, this is "to the house"
+  creator:  '#f97316', // orange-500 — warm accent, this is "to you (creator)"
+  pool:     '#0ea5e9', // sky-500   — anchors the prize pool back to the cyan prize pie
+} as const;
+
 const PRIZE_PIE_LABEL_RADIAN = Math.PI / 180;
 
 /** Pool used to show per-rank prize amounts in the creator preview (chips or escrowed ERC-20). */
@@ -265,10 +275,16 @@ function renderPrizePieLabel(props: PieLabelRenderProps) {
 function PrizeSplit3DPie({
   percents,
   poolPreview,
+  platformFeePercent,
+  creatorFeePercent,
 }: {
   percents: number[];
   /** When set, legend rows show estimated payout for that share of the pool. */
   poolPreview: PrizeSplitPoolPreview | null;
+  /** Platform cut taken off the top of each buy-in. Omit for freerolls / chip-only flows that show no fee ring. */
+  platformFeePercent?: number;
+  /** Creator's chosen cut (0–15). Omit/0 for freerolls. */
+  creatorFeePercent?: number;
 }) {
   const uid = React.useId().replace(/:/g, '');
   const chartSlices = useMemo(
@@ -285,11 +301,36 @@ function PrizeSplit3DPie({
 
   const legendRows = useMemo(() => buildPrizeSplitLegendRows(percents), [percents]);
 
+  // Outer-ring data: present the same Platform/Your-fee/To-winners math that the slider card
+  // shows, but as a visual ring around the prize pie. Sums to 100% of the buy-in by construction.
+  // Skipped entirely when caller passes no fee props (freeroll, chip-only previews, etc).
+  const feeRing = useMemo(() => {
+    if (platformFeePercent == null && creatorFeePercent == null) return null;
+    const platform = Math.max(0, Math.min(100, Number(platformFeePercent ?? 0)));
+    const creator = Math.max(0, Math.min(100, Number(creatorFeePercent ?? 0)));
+    const pool = Math.max(0, 100 - platform - creator);
+    if (platform + creator === 0) return null; // no fees → nothing to add
+    return [
+      { name: 'Prize pool', value: pool, key: 'pool' as const, color: FEE_RING_COLORS.pool },
+      { name: 'Your fee', value: creator, key: 'creator' as const, color: FEE_RING_COLORS.creator },
+      { name: 'Platform fee', value: platform, key: 'platform' as const, color: FEE_RING_COLORS.platform },
+    ].filter((s) => s.value > 0);
+  }, [platformFeePercent, creatorFeePercent]);
+
   if (chartSlices.length === 0) {
     return (
       <p className="py-8 text-center text-sm text-slate-500">No paid positions in this split.</p>
     );
   }
+
+  // When the fee ring is shown the inner pie shrinks so both rings fit cleanly without overlapping
+  // labels. Without the fee ring the inner pie keeps its previous radius for back-compat with the
+  // freeroll layout (which deliberately doesn't render fees).
+  const showFeeRing = feeRing != null && feeRing.length > 0;
+  const innerR = showFeeRing ? '28%' : '34%';
+  const innerOuterR = showFeeRing ? '62%' : '78%';
+  const ringInnerR = '68%';
+  const ringOuterR = '86%';
 
   return (
     <div className="flex flex-col items-center gap-5 py-5 px-3 sm:flex-row sm:justify-center sm:gap-10">
@@ -308,7 +349,40 @@ function PrizeSplit3DPie({
                     />
                   </radialGradient>
                 ))}
+                {showFeeRing
+                  ? feeRing.map((s) => (
+                      <radialGradient key={`fee-${s.key}`} id={`${uid}-fee-${s.key}`} cx="32%" cy="28%" r="92%">
+                        <stop offset="0%" stopColor={s.color} stopOpacity={0.95} />
+                        <stop offset="100%" stopColor={s.color} stopOpacity={0.45} />
+                      </radialGradient>
+                    ))
+                  : null}
               </defs>
+              {/* Outer ring: where the buy-in goes (platform / creator / prize pool). */}
+              {showFeeRing ? (
+                <Pie
+                  data={feeRing}
+                  dataKey="value"
+                  nameKey="name"
+                  cx="50%"
+                  cy="50%"
+                  startAngle={90}
+                  endAngle={-270}
+                  innerRadius={ringInnerR}
+                  outerRadius={ringOuterR}
+                  paddingAngle={1.5}
+                  cornerRadius={0}
+                  stroke="rgba(0,0,0,0.12)"
+                  strokeWidth={1}
+                  labelLine={false}
+                  isAnimationActive={false}
+                >
+                  {feeRing.map((s) => (
+                    <Cell key={s.key} fill={`url(#${uid}-fee-${s.key})`} />
+                  ))}
+                </Pie>
+              ) : null}
+              {/* Inner pie: how the prize pool is split among finishers. */}
               <Pie
                 data={chartSlices}
                 dataKey="value"
@@ -317,8 +391,8 @@ function PrizeSplit3DPie({
                 cy="50%"
                 startAngle={90}
                 endAngle={-270}
-                innerRadius="34%"
-                outerRadius="78%"
+                innerRadius={innerR}
+                outerRadius={innerOuterR}
                 paddingAngle={2}
                 cornerRadius={0}
                 stroke="rgba(0,0,0,0.1)"
@@ -336,6 +410,28 @@ function PrizeSplit3DPie({
         </div>
       </div>
       <div className="flex w-full max-w-sm flex-col gap-2 sm:max-w-[220px]">
+        {showFeeRing ? (
+          <div className="rounded-lg border border-white/10 bg-black/20 px-2.5 py-2 mb-1">
+            <div className="text-[10px] uppercase tracking-[0.15em] text-white/45 mb-1.5">Where the buy-in goes</div>
+            <div className="space-y-1 text-[11px]">
+              {feeRing.map((s) => (
+                <div key={s.key} className="flex items-center justify-between gap-2">
+                  <div className="flex items-center gap-1.5 min-w-0">
+                    <span
+                      className="h-2 w-2 shrink-0 rounded-sm ring-1 ring-black/10"
+                      style={{ background: s.color }}
+                    />
+                    <span className={s.key === 'pool' ? 'text-emerald-200/90 font-medium' : 'text-white/75'}>{s.name}</span>
+                  </div>
+                  <span className="font-mono tabular-nums text-white/85">{s.value}%</span>
+                </div>
+              ))}
+            </div>
+            <div className="mt-1.5 pt-1.5 border-t border-white/10 text-[10px] text-white/40">
+              Inner pie below shows how the prize pool is split among finishers.
+            </div>
+          </div>
+        ) : null}
         <div className="flex flex-wrap justify-center gap-x-5 gap-y-2.5 text-xs sm:justify-start">
           {legendRows.map((row) => {
             if (row.kind === 'paid') {
@@ -451,11 +547,11 @@ export interface PokerTournamentCreatorProps {
   ) => Promise<{ tournamentId: string; pinCode?: string | null } | null>;
 }
 
-/** Embossed Plinko-style panel — shared by tab bar, FAQ, and tournament name field. */
+/** Morb-style slate panel — shared by tab bar, FAQ, and tournament name field. */
+/* Flat, no embossed inset shadows. Matches EscrowBuyInJoinPanel's slate-900/60 + white/10 ring. */
 const POKER_BASICS_FAQ_PANEL_STYLE: React.CSSProperties = {
-  background: 'linear-gradient(325deg, rgba(20, 20, 20, 0.8), rgba(40, 40, 40, 0.6))',
-  boxShadow: 'inset 0 3px 6px rgba(0, 0, 0, 0.8), inset 0 -3px 6px rgba(255, 255, 255, 0.1), 0 1px 3px rgba(0, 0, 0, 0.5)',
-  border: '1px inset rgba(60, 60, 60, 0.5)',
+  background: 'rgba(15, 23, 42, 0.55)',
+  border: '1px solid rgba(255, 255, 255, 0.08)',
   borderRadius: '1rem',
 };
 
@@ -840,7 +936,7 @@ function BlindIntervalRolodex({
           type="button"
           onClick={() => nudge(-1)}
           aria-label="Decrease by one minute"
-          className="flex h-9 w-9 items-center justify-center rounded-lg border border-cyan-500/30 bg-black/40 text-cyan-200 shadow-[inset_0_2px_4px_rgba(0,0,0,0.5)] transition-colors hover:bg-cyan-500/15 hover:text-white"
+          className="flex h-9 w-9 items-center justify-center rounded-lg border border-cyan-500/30 bg-slate-900/60 text-cyan-200 transition-colors hover:bg-cyan-500/15 hover:text-white"
         >
           <span className="text-lg leading-none" aria-hidden>
             −
@@ -850,7 +946,7 @@ function BlindIntervalRolodex({
           type="button"
           onClick={() => nudge(1)}
           aria-label="Increase by one minute"
-          className="flex h-9 w-9 items-center justify-center rounded-lg border border-cyan-500/30 bg-black/40 text-cyan-200 shadow-[inset_0_2px_4px_rgba(0,0,0,0.5)] transition-colors hover:bg-cyan-500/15 hover:text-white"
+          className="flex h-9 w-9 items-center justify-center rounded-lg border border-cyan-500/30 bg-slate-900/60 text-cyan-200 transition-colors hover:bg-cyan-500/15 hover:text-white"
         >
           <span className="text-lg leading-none" aria-hidden>
             +
@@ -881,7 +977,7 @@ function BlindIntervalRolodex({
               nudge(5);
             }
           }}
-          className="relative z-0 h-[200px] overflow-y-auto overflow-x-hidden rounded-xl border border-cyan-500/25 bg-black/30 shadow-[inset_0_2px_6px_rgba(0,0,0,0.65)] outline-none focus-visible:ring-2 focus-visible:ring-cyan-500/45 [scrollbar-color:rgba(34,211,238,0.35)_transparent] [scrollbar-width:thin]"
+          className="relative z-0 h-[200px] overflow-y-auto overflow-x-hidden rounded-xl border border-cyan-500/25 bg-slate-900/60 outline-none focus-visible:ring-2 focus-visible:ring-cyan-500/45 [scrollbar-color:rgba(34,211,238,0.35)_transparent] [scrollbar-width:thin]"
           style={{
             scrollSnapType: 'y proximity',
             WebkitMaskImage: 'linear-gradient(to bottom, transparent 0%, black 12%, black 88%, transparent 100%)',
@@ -1641,12 +1737,15 @@ export function PokerTournamentCreator({ creatorAddress, onClose, onCreate }: Po
           className="pointer-events-none fixed inset-0 z-[51] h-full w-full"
         />
         <div
-          className="relative z-[52] w-full max-w-md rounded-2xl border-2 border-cyan-500/30 bg-gradient-to-br from-slate-900 to-slate-800 p-6 shadow-2xl overflow-hidden"
-          style={{
-            boxShadow: '0 8px 32px rgba(0,0,0,0.55), inset 0 3px 6px rgba(0,0,0,0.8), inset 0 -3px 6px rgba(255,255,255,0.08)',
-          }}
+          className="relative z-[52] w-full max-w-md rounded-2xl border border-cyan-500/30 bg-slate-950 p-6 overflow-hidden shadow-[0_0_60px_-15px_rgba(34,211,238,0.35)]"
         >
-          <div className="absolute inset-0 pointer-events-none bg-[radial-gradient(circle_at_50%_0%,rgba(34,211,238,0.18),transparent_55%)]" />
+          <div
+            className="absolute inset-x-0 top-0 z-0 h-40 pointer-events-none"
+            style={{
+              background:
+                'radial-gradient(60% 100% at 50% 0%, rgba(34,211,238,0.18) 0%, rgba(99,68,245,0.10) 45%, transparent 80%)',
+            }}
+          />
           <div className="relative text-center space-y-4">
             <div className="inline-flex h-14 w-14 items-center justify-center rounded-full border border-emerald-500/40 bg-emerald-500/15 text-2xl">
               ✓
@@ -1717,12 +1816,15 @@ export function PokerTournamentCreator({ creatorAddress, onClose, onCreate }: Po
               Connect a wallet to create a poker tournament.
             </DialogPrimitive.Description>
             <div
-              className="relative w-full max-w-sm rounded-2xl border-2 border-cyan-500/30 bg-gradient-to-br from-slate-900 to-slate-800 p-6 shadow-2xl overflow-hidden"
-              style={{
-                boxShadow: '0 8px 32px rgba(0,0,0,0.5), inset 0 3px 6px rgba(0,0,0,0.8), inset 0 -3px 6px rgba(255,255,255,0.08)',
-              }}
+              className="relative w-full max-w-sm rounded-2xl border border-cyan-500/30 bg-slate-950 p-6 overflow-hidden shadow-[0_0_60px_-15px_rgba(34,211,238,0.35)]"
             >
-              <div className="absolute inset-0 pointer-events-none bg-[radial-gradient(circle_at_50%_0%,rgba(34,211,238,0.12),transparent_55%)]" />
+              <div
+                className="absolute inset-x-0 top-0 z-0 h-40 pointer-events-none"
+                style={{
+                  background:
+                    'radial-gradient(60% 100% at 50% 0%, rgba(34,211,238,0.18) 0%, rgba(99,68,245,0.10) 45%, transparent 80%)',
+                }}
+              />
               <div className="relative flex items-start justify-between gap-3 mb-4">
                 <h2 className="text-lg font-bold text-white tracking-tight pr-2">Connect your wallet</h2>
                 <button
@@ -1807,12 +1909,20 @@ export function PokerTournamentCreator({ creatorAddress, onClose, onCreate }: Po
             Configure a scheduled Sit and Go: funding, blinds, prizes, and start time.
           </DialogPrimitive.Description>
       <div
-        className="relative w-full max-w-xl max-h-[92vh] flex flex-col rounded-2xl border-2 border-cyan-500/30 bg-gradient-to-br from-slate-900 to-slate-800 shadow-2xl overflow-hidden"
-        style={{
-          boxShadow: '0 8px 32px rgba(0,0,0,0.5), inset 0 3px 6px rgba(0,0,0,0.8), inset 0 -3px 6px rgba(255,255,255,0.08)',
-        }}
+        className="relative w-full max-w-xl max-h-[92vh] flex flex-col rounded-2xl border border-cyan-500/30 bg-slate-950 overflow-hidden shadow-[0_0_60px_-15px_rgba(34,211,238,0.35)]"
       >
-        <div className="absolute inset-0 pointer-events-none bg-[radial-gradient(circle_at_50%_0%,rgba(34,211,238,0.12),transparent_55%)]" />
+        {/* Animated beams — matches EscrowBuyInJoinPanel theme. Low opacity so the dense tab content stays readable. */}
+        <div className="pointer-events-none absolute inset-0 z-0 opacity-40">
+          <BackgroundBeams palette={{ primary: '#3B82F6', accent: '#A855F7', tail: '#EC4899' }} />
+        </div>
+        {/* Soft cyan/violet top glow */}
+        <div
+          className="pointer-events-none absolute inset-x-0 top-0 z-0 h-40"
+          style={{
+            background:
+              'radial-gradient(60% 100% at 50% 0%, rgba(34,211,238,0.18) 0%, rgba(99,68,245,0.10) 45%, transparent 80%)',
+          }}
+        />
         <div className="relative shrink-0 flex items-center justify-between px-5 pt-5 pb-3 border-b border-cyan-500/20">
           <div>
             <h2 className="text-lg font-bold text-white tracking-tight">Create a poker tournament</h2>
@@ -1883,7 +1993,7 @@ export function PokerTournamentCreator({ creatorAddress, onClose, onCreate }: Po
                   Pick one
                 </p>
                 <div
-                  className="grid min-h-[11.5rem] grid-cols-2 items-stretch gap-0 overflow-hidden rounded-xl border border-cyan-500/25 bg-black/30 shadow-[inset_0_2px_6px_rgba(0,0,0,0.65)] sm:min-h-[12.5rem]"
+                  className="grid min-h-[11.5rem] grid-cols-2 items-stretch gap-0 overflow-hidden rounded-xl border border-white/10 bg-slate-900/60 sm:min-h-[12.5rem]"
                   role="group"
                   aria-label="Tournament funding type"
                 >
@@ -2010,7 +2120,7 @@ export function PokerTournamentCreator({ creatorAddress, onClose, onCreate }: Po
             </TabsContent>
 
             <TabsContent value="basics" className="mt-4 space-y-4 outline-none">
-              <div className="rounded-xl border border-cyan-500/20 bg-black/25 px-3 py-2.5 text-center shadow-[inset_0_2px_6px_rgba(0,0,0,0.45)]">
+              <div className="rounded-xl border border-white/10 bg-slate-900/60 px-3 py-2.5 text-center">
                 <p className="text-[11px] font-semibold uppercase tracking-wide text-cyan-200/90">{name.trim() || '—'}</p>
                 <p className="text-[10px] text-white/50 mt-0.5">
                   {isFreeroll ? 'Freeroll' : 'Buy-in'}
@@ -2047,7 +2157,7 @@ export function PokerTournamentCreator({ creatorAddress, onClose, onCreate }: Po
                     </button>
                   </div>
                   {prizeSource === 'custom_token' && (
-                    <div className="space-y-3 rounded-xl border border-cyan-500/25 bg-black/25 p-3 shadow-[inset_0_2px_6px_rgba(0,0,0,0.45)]">
+                    <div className="space-y-3 rounded-xl border border-cyan-500/25 bg-slate-900/60 p-3">
                       <p className="text-[11px] leading-relaxed text-white/70">
                         Pick any PulseChain token. You will approve and deposit the prize amount on-chain when you publish — two wallet popups, then the tournament is created.
                       </p>
@@ -2089,7 +2199,7 @@ export function PokerTournamentCreator({ creatorAddress, onClose, onCreate }: Po
                     </button>
                   </div>
                   {buyInPrizeSource === 'custom_token_buyin' && (
-                    <div className="space-y-3 rounded-xl border border-cyan-500/25 bg-black/25 p-3 shadow-[inset_0_2px_6px_rgba(0,0,0,0.45)]">
+                    <div className="space-y-3 rounded-xl border border-cyan-500/25 bg-slate-900/60 p-3">
                       <p className="text-[11px] leading-relaxed text-white/70">
                         Pick the token and buy-in per seat. Players pay into the prize escrow when they join — you are not charged when you publish this tournament.
                       </p>
@@ -2258,15 +2368,8 @@ export function PokerTournamentCreator({ creatorAddress, onClose, onCreate }: Po
                   When the table opens
                 </p>
                 {schedulePreview && (
-                  <div
-                    className="relative mx-auto w-full max-w-md space-y-1 rounded-2xl px-5 py-5 text-center"
-                    style={{
-                      background: 'linear-gradient(145deg, rgb(16, 26, 35), rgb(35, 36, 41))',
-                      border: '1px inset rgba(60, 60, 60, 0.5)',
-                      boxShadow: 'inset 0 3px 6px rgba(0, 0, 0, 0.8), inset 0 -3px 6px rgba(255, 255, 255, 0.1), 0 1px 3px rgba(0, 0, 0, 0.5)',
-                    }}
-                  >
-                    <div className="absolute inset-0 rounded-2xl pointer-events-none bg-[radial-gradient(circle_at_50%_40%,rgba(34,211,238,0.22),transparent_65%)]" />
+                  <div className="relative mx-auto w-full max-w-md space-y-1 rounded-2xl border border-cyan-500/25 bg-slate-900/60 px-5 py-5 text-center shadow-[0_0_30px_-20px_rgba(34,211,238,0.5)]">
+                    <div className="absolute inset-0 rounded-2xl pointer-events-none bg-[radial-gradient(circle_at_50%_40%,rgba(34,211,238,0.15),transparent_65%)]" />
                     <p className="text-xs font-semibold uppercase tracking-widest text-cyan-300/90">Starts</p>
                     <p className="text-lg font-semibold text-white">{schedulePreview.weekday}</p>
                     <p className="text-sm text-white/70">{schedulePreview.dayLine}</p>
@@ -2386,14 +2489,7 @@ export function PokerTournamentCreator({ creatorAddress, onClose, onCreate }: Po
                     {blindIncreaseMode === 'by_time' &&
                       `Each level lasts ${blindIntervalMinutes} minutes of real time, then blinds bump to the next row regardless of hands played.`}
                   </p>
-                  <div
-                    className="rounded-lg overflow-hidden border border-cyan-500/20 text-xs"
-                    style={{
-                      background: 'linear-gradient(325deg, rgba(20, 20, 20, 0.85), rgba(40, 40, 40, 0.55))',
-                      boxShadow:
-                        'inset 0 2px 4px rgba(0,0,0,0.75), inset 0 -2px 4px rgba(255,255,255,0.06)',
-                    }}
-                  >
+                  <div className="rounded-lg overflow-hidden border border-white/10 bg-slate-900/60 text-xs">
                     <table className="w-full text-left border-collapse">
                       <thead>
                         <tr className="text-white/50 border-b border-white/10">
@@ -2507,15 +2603,16 @@ export function PokerTournamentCreator({ creatorAddress, onClose, onCreate }: Po
                 </p>
               </div>
 
-              <div
-                className="rounded-xl overflow-visible"
-                style={{
-                  background: 'linear-gradient(325deg, rgba(20, 20, 20, 0.8), rgba(40, 40, 40, 0.55))',
-                  border: '1px inset rgba(60, 60, 60, 0.5)',
-                  boxShadow: 'inset 0 3px 6px rgba(0, 0, 0, 0.8), inset 0 -3px 6px rgba(255, 255, 255, 0.08)',
-                }}
-              >
-                <PrizeSplit3DPie percents={prizePercents} poolPreview={prizeSplitPoolPreview} />
+              <div className="rounded-xl overflow-visible border border-white/10 bg-slate-900/60">
+                <PrizeSplit3DPie
+                  percents={prizePercents}
+                  poolPreview={prizeSplitPoolPreview}
+                  // Only attach the fee ring for buy-in tournaments — freerolls override creator
+                  // fee to 0% at payout (creator funded the pool themselves) so showing a fee ring
+                  // there would be misleading.
+                  platformFeePercent={!isFreeroll ? PLATFORM_FEE_BUYIN_PERCENT : undefined}
+                  creatorFeePercent={!isFreeroll ? clampCreatorFeePercent(creatorFeePercent) : undefined}
+                />
               </div>
               <PokerTournamentTabFaqPanel idPrefix="prizes" entries={POKER_CREATOR_PRIZES_FAQ} />
             </TabsContent>
@@ -2554,15 +2651,15 @@ export function PokerTournamentCreator({ creatorAddress, onClose, onCreate }: Po
           </Tabs>
         </div>
 
-        <div className="relative shrink-0 flex gap-3 px-5 py-4 border-t border-cyan-500/20 bg-black/20">
-          <button
+        <div className="relative shrink-0 flex gap-3 px-5 py-4 border-t border-cyan-500/20 bg-slate-950/60 backdrop-blur-sm">
+          <MorbSecondaryButton
             type="button"
             onClick={onClose}
-            className="flex-1 rounded-xl border border-white/15 text-white/80 text-sm font-medium py-2.5 hover:bg-white/5 transition-colors"
+            className="flex-1"
           >
             Cancel
-          </button>
-          <button
+          </MorbSecondaryButton>
+          <MorbGradientButton
             type="button"
             onClick={() => {
               const e = validateSchedule();
@@ -2575,10 +2672,11 @@ export function PokerTournamentCreator({ creatorAddress, onClose, onCreate }: Po
               } else setShowConfirm(true);
             }}
             disabled={createDisabled}
-            className="flex-1 rounded-xl bg-gradient-to-r from-cyan-600 to-blue-600 hover:opacity-95 disabled:opacity-40 disabled:pointer-events-none text-white text-sm font-semibold py-2.5 transition-opacity"
+            loading={isSubmitting}
+            className="flex-1"
           >
             {isSubmitting ? 'Creating…' : 'Review & create'}
-          </button>
+          </MorbGradientButton>
         </div>
 
         {nameGateOpen ? (
@@ -2588,13 +2686,14 @@ export function PokerTournamentCreator({ creatorAddress, onClose, onCreate }: Po
             aria-modal="true"
             aria-labelledby="poker-tourney-name-gate-title"
           >
-            <div
-              className="relative w-full max-w-sm overflow-hidden rounded-2xl border-2 border-cyan-500/30 bg-gradient-to-br from-slate-900 to-slate-800 p-5 shadow-2xl"
-              style={{
-                boxShadow: '0 8px 32px rgba(0,0,0,0.5), inset 0 3px 6px rgba(0,0,0,0.8), inset 0 -3px 6px rgba(255,255,255,0.08)',
-              }}
-            >
-              <div className="absolute inset-0 pointer-events-none bg-[radial-gradient(circle_at_50%_0%,rgba(34,211,238,0.12),transparent_55%)]" />
+            <div className="relative w-full max-w-sm overflow-hidden rounded-2xl border border-cyan-500/30 bg-slate-950 p-5 shadow-[0_0_60px_-15px_rgba(34,211,238,0.35)]">
+              <div
+                className="absolute inset-x-0 top-0 z-0 h-32 pointer-events-none"
+                style={{
+                  background:
+                    'radial-gradient(60% 100% at 50% 0%, rgba(34,211,238,0.18) 0%, rgba(99,68,245,0.10) 45%, transparent 80%)',
+                }}
+              />
               <div className="relative space-y-4">
                 <div>
                   <h3 id="poker-tourney-name-gate-title" className="text-base font-bold text-white text-center tracking-tight">
@@ -2787,114 +2886,201 @@ function CustomTokenFunderCard({
     && fundingStep !== 'creating';
   if (!token || amountWei <= 0n) return null;
 
-  const stepBadge = (label: string, state: 'pending' | 'active' | 'done' | 'failed') => {
-    const cls =
-      state === 'done'
-        ? 'bg-emerald-500/20 border-emerald-500/40 text-emerald-100'
-        : state === 'active'
-          ? 'bg-cyan-500/20 border-cyan-500/40 text-cyan-100 animate-pulse'
-          : state === 'failed'
-            ? 'bg-red-500/20 border-red-500/40 text-red-100'
-            : 'bg-black/30 border-white/10 text-white/50';
-    const icon = state === 'done' ? '✓' : state === 'failed' ? '×' : '·';
-    return (
-      <div className={`flex items-center gap-2 rounded-lg border px-3 py-2 ${cls}`}>
-        <span className="font-mono text-sm">{icon}</span>
-        <span className="text-xs font-medium">{label}</span>
-      </div>
-    );
-  };
+  type StepKey = 'wrap' | 'approve' | 'deposit' | 'create';
+  type StepState = 'pending' | 'active' | 'complete' | 'failed';
 
-  const wrapState: 'pending' | 'active' | 'done' | 'failed' =
+  const wrapState: StepState =
     fundingStep === 'wrapping' ? 'active'
-      : fundingStep === 'wrapped' || (wrapShortfall === 0n && fundingStep !== 'idle') ? 'done'
+      : fundingStep === 'wrapped' || (wrapShortfall === 0n && fundingStep !== 'idle') ? 'complete'
         : 'pending';
-  const approveState: 'pending' | 'active' | 'done' | 'failed' =
+  const approveState: StepState =
     fundingStep === 'idle' || fundingStep === 'wrapping' || fundingStep === 'wrapped' ? 'pending'
       : fundingStep === 'approving' ? 'active'
-        : 'done';
-  const depositState: 'pending' | 'active' | 'done' | 'failed' =
+        : 'complete';
+  const depositState: StepState =
     fundingStep === 'idle' || fundingStep === 'wrapping' || fundingStep === 'wrapped' || fundingStep === 'approving' ? 'pending'
       : fundingStep === 'approved' ? 'pending'
         : fundingStep === 'depositing' ? 'active'
-          : fundingStep === 'deposited' || fundingStep === 'creating' ? 'done'
-            : fundingStep === 'failed' ? 'done'
+          : fundingStep === 'deposited' || fundingStep === 'creating' ? 'complete'
+            : fundingStep === 'failed' ? 'complete'
               : 'pending';
-  const createState: 'pending' | 'active' | 'done' | 'failed' =
+  const createState: StepState =
     fundingStep === 'creating' ? 'active'
       : fundingStep === 'failed' ? 'failed'
         : fundingStep === 'idle' || fundingStep === 'wrapping' || fundingStep === 'wrapped' || fundingStep === 'approving' || fundingStep === 'approved' || fundingStep === 'depositing' ? 'pending'
-          : 'done';
+          : 'complete';
+
+  // Step list — mirror EscrowBuyInJoinPanel's numbered-circle + connector tracker.
+  const includeWrap = wrapNeeded || fundingStep === 'wrapping' || fundingStep === 'wrapped';
+  const steps: Array<{ key: StepKey; label: string; state: StepState }> = [
+    ...(includeWrap ? [{ key: 'wrap' as const, label: 'Wrap PLS', state: wrapState }] : []),
+    { key: 'approve', label: 'Approve', state: approveState },
+    { key: 'deposit', label: 'Deposit', state: depositState },
+    { key: 'create', label: 'Create', state: createState },
+  ];
+
+  const symbolBadge = (token.symbol ?? '?').slice(0, 4).toUpperCase();
+  const initial = symbolBadge.charAt(0);
 
   return (
     <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm">
-      <div className="relative w-full max-w-md rounded-2xl border-2 border-emerald-500/30 bg-gradient-to-br from-slate-900 to-slate-800 p-5 shadow-2xl">
-        <h3 className="text-lg font-bold text-white">Fund prize pool on-chain</h3>
-        <p className="text-xs text-white/55 mt-1">
-          {wrapNeeded
-            ? 'Three wallet popups — wrap PLS, approve, then deposit. Each step needs its own tap so your mobile wallet keeps the popup open.'
-            : 'Two wallet popups — approve, then deposit. Tournament is created automatically once the deposit confirms.'}
-        </p>
-
-        <div className="mt-4 space-y-2 text-xs">
-          <div className="flex justify-between"><span className="text-white/50">Tournament</span><span className="text-white font-medium truncate ml-3">{tournamentName}</span></div>
-          <div className="flex justify-between"><span className="text-white/50">Token</span><span className="text-white font-medium">{token.symbol}</span></div>
-          <div className="flex justify-between"><span className="text-white/50">Prize amount</span><span className="text-emerald-200 font-mono">{amount}</span></div>
-          <div className="flex justify-between"><span className="text-white/50">Starts</span><span className="text-white">{scheduleDisplay}</span></div>
-          <div className="flex justify-between"><span className="text-white/50">Split</span><span className="text-white truncate ml-3">{prizeSplitPreview}</span></div>
+      <div className="relative w-full max-w-md overflow-hidden rounded-2xl border border-cyan-500/30 bg-slate-950 shadow-[0_0_60px_-15px_rgba(34,211,238,0.35)]">
+        {/* Animated beams + soft top glow — matches the join panel */}
+        <div className="pointer-events-none absolute inset-0 z-0 opacity-60">
+          <BackgroundBeams palette={{ primary: '#3B82F6', accent: '#A855F7', tail: '#EC4899' }} />
         </div>
+        <div
+          className="pointer-events-none absolute inset-x-0 top-0 z-0 h-40"
+          style={{
+            background:
+              'radial-gradient(60% 100% at 50% 0%, rgba(34,211,238,0.18) 0%, rgba(99,68,245,0.10) 45%, transparent 80%)',
+          }}
+        />
 
-        <div className={`mt-4 grid gap-2 ${(wrapNeeded || fundingStep === 'wrapping' || fundingStep === 'wrapped') ? 'grid-cols-4' : 'grid-cols-3'}`}>
-          {(wrapNeeded || fundingStep === 'wrapping' || fundingStep === 'wrapped') && stepBadge('Wrap', wrapState)}
-          {stepBadge('Approve', approveState)}
-          {stepBadge('Deposit', depositState)}
-          {stepBadge('Create', createState)}
-        </div>
+        <div className="relative z-10 p-5 space-y-5">
+          {/* Token spotlight */}
+          <div className="flex flex-col items-center text-center pt-2">
+            <div className="relative">
+              <div
+                className="absolute -inset-3 rounded-full blur-2xl opacity-70"
+                style={{
+                  background:
+                    'conic-gradient(from 0deg, #18CCFC, #6344F5, #AE48FF, #18CCFC)',
+                }}
+              />
+              <div className="relative h-20 w-20 rounded-full ring-2 ring-cyan-400/60 bg-slate-900 overflow-hidden flex items-center justify-center">
+                <span className="text-2xl font-extrabold tracking-tight text-white/90">{initial}</span>
+              </div>
+            </div>
+            <div className="mt-3 text-[10px] uppercase tracking-[0.2em] text-cyan-300/80">Fund prize pool</div>
+            <div className="mt-1 flex items-baseline justify-center gap-2">
+              <span className="font-mono tabular-nums text-3xl font-bold text-white">{amount}</span>
+              <span className="text-sm font-semibold text-cyan-200/90">{token.symbol}</span>
+            </div>
+            <p className="mt-2 text-[11px] text-white/55 max-w-[28ch]">
+              {wrapNeeded
+                ? 'Three wallet popups — wrap PLS, approve, then deposit. Each step needs its own tap.'
+                : 'Two wallet popups — approve, then deposit. Tournament is created automatically once the deposit confirms.'}
+            </p>
+          </div>
 
-        {fundingError && (
-          <p className="mt-3 text-xs text-red-300 bg-red-500/10 border border-red-500/30 rounded-lg p-2 break-words">{fundingError}</p>
-        )}
+          {/* Tournament details */}
+          <div className="rounded-xl border border-white/10 bg-slate-900/60 px-3 py-2.5 text-[11px] text-slate-300 space-y-1">
+            <div className="flex justify-between gap-3"><span className="text-slate-500">Tournament</span><span className="text-white font-medium truncate">{tournamentName}</span></div>
+            <div className="flex justify-between gap-3"><span className="text-slate-500">Token</span><span className="text-cyan-200">{token.symbol}</span></div>
+            <div className="flex justify-between gap-3"><span className="text-slate-500">Starts</span><span className="text-white">{scheduleDisplay}</span></div>
+            <div className="flex justify-between gap-3"><span className="text-slate-500">Split</span><span className="text-white truncate">{prizeSplitPreview}</span></div>
+          </div>
 
-        <div className="mt-4 flex flex-col gap-2">
-          {wrapNeeded && fundingStep !== 'wrapping' && (
-            <button onClick={onWrap} className="w-full rounded-xl bg-gradient-to-r from-violet-600 to-cyan-600 text-white text-sm font-semibold py-2.5">
-              0. Wrap PLS
-            </button>
-          )}
-          {fundingStep === 'wrapping' && (
-            <button disabled className="w-full rounded-xl bg-violet-600/40 text-white/80 text-sm font-semibold py-2.5">Wrapping PLS…</button>
-          )}
-          {(fundingStep === 'idle' || fundingStep === 'wrapped') && !wrapNeeded && (
-            <button onClick={onApprove} className="w-full rounded-xl bg-gradient-to-r from-cyan-600 to-blue-600 text-white text-sm font-semibold py-2.5">
-              1. Approve {token.symbol}
-            </button>
-          )}
-          {fundingStep === 'approving' && (
-            <button disabled className="w-full rounded-xl bg-cyan-600/40 text-white/80 text-sm font-semibold py-2.5">Waiting for approval…</button>
-          )}
-          {fundingStep === 'approved' && (
-            <button onClick={onDeposit} className="w-full rounded-xl bg-gradient-to-r from-emerald-600 to-cyan-600 text-white text-sm font-semibold py-2.5">
-              2. Deposit & create
-            </button>
-          )}
-          {fundingStep === 'depositing' && (
-            <button disabled className="w-full rounded-xl bg-emerald-600/40 text-white/80 text-sm font-semibold py-2.5">Depositing on-chain…</button>
-          )}
-          {(fundingStep === 'deposited' || fundingStep === 'creating') && (
-            <button disabled className="w-full rounded-xl bg-emerald-600/40 text-white/80 text-sm font-semibold py-2.5">Creating tournament…</button>
-          )}
-          {fundingStep === 'failed' && (
-            <button onClick={onReclaim} className="w-full rounded-xl bg-gradient-to-r from-amber-600 to-red-600 text-white text-sm font-semibold py-2.5">
-              Reclaim deposit
-            </button>
-          )}
-          <button
-            onClick={onCancel}
-            disabled={!canCancel}
-            className="w-full rounded-xl border border-white/15 text-white/70 text-sm font-medium py-2 hover:bg-white/5 disabled:opacity-30 disabled:pointer-events-none"
-          >
-            {canCancel ? 'Back' : 'Funding in progress…'}
-          </button>
+          {/* Step tracker — numbered circles with connector lines (matches join panel) */}
+          <div className="rounded-xl border border-white/10 bg-slate-900/60 backdrop-blur-sm p-3">
+            <div className="flex items-center justify-between">
+              {steps.map((s, i) => {
+                const isLast = i === steps.length - 1;
+                const circleBase = 'relative h-7 w-7 rounded-full flex items-center justify-center text-[11px] font-bold transition-all';
+                const circleCls =
+                  s.state === 'complete'
+                    ? 'bg-emerald-500 text-white shadow-[0_0_12px_rgba(16,185,129,0.6)]'
+                    : s.state === 'active'
+                      ? 'bg-cyan-500 text-white shadow-[0_0_14px_rgba(34,211,238,0.7)]'
+                      : s.state === 'failed'
+                        ? 'bg-red-500 text-white shadow-[0_0_12px_rgba(239,68,68,0.6)]'
+                        : 'bg-slate-800 text-slate-500 ring-1 ring-white/10';
+                const labelCls =
+                  s.state === 'complete'
+                    ? 'text-emerald-300'
+                    : s.state === 'active'
+                      ? 'text-cyan-200'
+                      : s.state === 'failed'
+                        ? 'text-red-300'
+                        : 'text-slate-500';
+                const connectorCls =
+                  s.state === 'complete' || s.state === 'active' ? 'bg-cyan-400/60' : 'bg-white/10';
+                return (
+                  <React.Fragment key={s.key}>
+                    <div className="flex flex-col items-center gap-1.5 flex-1 min-w-0">
+                      <div className={`${circleBase} ${circleCls}`}>
+                        {s.state === 'active' ? (
+                          <span className="absolute inset-0 rounded-full animate-ping bg-cyan-400/40" />
+                        ) : null}
+                        <span className="relative">
+                          {s.state === 'complete' ? '✓' : s.state === 'failed' ? '×' : i + 1}
+                        </span>
+                      </div>
+                      <span className={`text-[10px] uppercase tracking-wider truncate max-w-full px-1 ${labelCls}`}>
+                        {s.label}
+                      </span>
+                    </div>
+                    {!isLast ? (
+                      <span className={`h-px flex-1 mx-1 transition-colors ${connectorCls}`} />
+                    ) : null}
+                  </React.Fragment>
+                );
+              })}
+            </div>
+          </div>
+
+          {fundingError ? (
+            <p className="text-xs text-red-300 bg-red-500/10 border border-red-500/30 rounded-lg p-2 break-words">
+              {fundingError}
+            </p>
+          ) : null}
+
+          {/* Action buttons */}
+          <div className="flex flex-col gap-2">
+            {wrapNeeded && fundingStep !== 'wrapping' && (
+              <MorbGradientButton type="button" onClick={onWrap} className="w-full">
+                Wrap PLS
+              </MorbGradientButton>
+            )}
+            {fundingStep === 'wrapping' && (
+              <MorbGradientButton type="button" disabled loading className="w-full">
+                Wrapping PLS…
+              </MorbGradientButton>
+            )}
+            {(fundingStep === 'idle' || fundingStep === 'wrapped') && !wrapNeeded && (
+              <MorbGradientButton type="button" onClick={onApprove} className="w-full">
+                Approve {token.symbol}
+              </MorbGradientButton>
+            )}
+            {fundingStep === 'approving' && (
+              <MorbGradientButton type="button" disabled loading className="w-full">
+                Waiting for approval…
+              </MorbGradientButton>
+            )}
+            {fundingStep === 'approved' && (
+              <MorbGradientButton type="button" onClick={onDeposit} className="w-full">
+                Deposit & create
+              </MorbGradientButton>
+            )}
+            {fundingStep === 'depositing' && (
+              <MorbGradientButton type="button" disabled loading className="w-full">
+                Depositing on-chain…
+              </MorbGradientButton>
+            )}
+            {(fundingStep === 'deposited' || fundingStep === 'creating') && (
+              <MorbGradientButton type="button" disabled loading className="w-full">
+                Creating tournament…
+              </MorbGradientButton>
+            )}
+            {fundingStep === 'failed' && (
+              <button
+                type="button"
+                onClick={onReclaim}
+                className="relative inline-flex w-full items-center justify-center overflow-hidden rounded-xl bg-gradient-to-r from-amber-500 to-red-500 px-4 py-3 text-sm font-semibold text-white shadow-lg shadow-amber-500/20 transition-all hover:shadow-amber-500/40"
+              >
+                Reclaim deposit
+              </button>
+            )}
+            <MorbSecondaryButton
+              type="button"
+              onClick={onCancel}
+              disabled={!canCancel}
+              className="w-full"
+            >
+              {canCancel ? 'Back' : 'Funding in progress…'}
+            </MorbSecondaryButton>
+          </div>
         </div>
       </div>
     </div>
