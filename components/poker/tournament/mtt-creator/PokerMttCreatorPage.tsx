@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation';
 import { useAccount, useSignTypedData } from 'wagmi';
 import { BlackjackWebSocketClient, type SignTypedDataFn } from '@/lib/websocket-client';
 import { getWebSocketUrlOptional } from '@/lib/api-urls';
-import { usePokerTournament, type CreatePokerTournamentParams } from '@/hooks/use-poker-tournament';
+import type { CreatePokerTournamentParams } from '@/hooks/use-poker-tournament';
 import { MttCreatorProvider, useMttCreator } from './MttCreatorContext';
 import { MttStepHeader } from './MttStepHeader';
 import { MttTemplatePicker } from './MttTemplatePicker';
@@ -53,19 +53,27 @@ export function PokerMttCreatorPage() {
     };
   }, [address, signTypedDataAsync]);
 
-  const { createTournament } = usePokerTournament({
-    wsClient,
-    myAddress: address?.toLowerCase() ?? null,
-  });
-
   const handleClose = () => {
     router.push('/poker?tab=tournaments');
   };
 
+  /**
+   * Send the create request directly through the WS client so server errors throw and
+   * propagate to the Review screen's catch handler. We intentionally bypass
+   * `usePokerTournament().createTournament` here — that wrapper swallows errors into
+   * the hook's internal `error` state and returns `null`, which the wizard reads as
+   * a generic "no tournament id" failure and hides the real cause from the user.
+   */
   const handlePublish = async (
     params: CreatePokerTournamentParams,
   ): Promise<{ tournamentId: string; pinCode?: string | null } | null> => {
-    return createTournament(params);
+    if (!wsClient) {
+      throw new Error('Connection not ready. Refresh and try again.');
+    }
+    const response = (await wsClient.sendRequest('poker_tournament_create', params)) as
+      | { tournamentId: string; pinCode?: string | null }
+      | null;
+    return response;
   };
 
   const handlePublished = (result: { tournamentId: string; pinCode?: string | null }) => {
