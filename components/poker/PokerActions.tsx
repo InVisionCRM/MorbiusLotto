@@ -181,6 +181,36 @@ export function PokerActions({
     setCustomAmount(formatAmount(next));
   };
 
+  const handleAmountBlur = () => {
+    const p = safeParseAmount(customAmount);
+    if (p == null) {
+      setCustomAmount(formatAmount(minRaiseAmt));
+    } else {
+      setCustomAmount(formatAmount(clampAmount(p, minRaiseAmt, stackAmt)));
+    }
+  };
+
+  const embeddedAmountInputBaseClass =
+    'w-full max-w-full bg-transparent border-0 outline-none text-center font-jost font-semibold normal-case tabular-nums text-white focus:outline-none focus:ring-1 focus:ring-white/45 focus:ring-inset rounded-sm px-0.5 truncate select-text disabled:cursor-not-allowed';
+
+  const embeddedInputHandlers = {
+    onChange: (e: React.ChangeEvent<HTMLInputElement>) => setCustomAmount(e.target.value),
+    onBlur: handleAmountBlur,
+    onFocus: (e: React.FocusEvent<HTMLInputElement>) => e.currentTarget.select(),
+    onClick: (e: React.MouseEvent<HTMLInputElement>) => e.stopPropagation(),
+    onMouseDown: (e: React.MouseEvent<HTMLInputElement>) => e.stopPropagation(),
+    onKeyDown: (e: React.KeyboardEvent<HTMLInputElement>) => {
+      if (e.key === 'Enter') {
+        e.preventDefault();
+        e.stopPropagation();
+        handleAmountBlur();
+        if (canAct && hasValidAmount) handlePrimary();
+      } else if (e.key === ' ') {
+        e.stopPropagation();
+      }
+    },
+  };
+
   const sliderFillPct = maxOffsetChips > 0 ? (sliderChips / maxOffsetChips) * 100 : 0;
 
   const primaryReady = canAct && hasValidAmount;
@@ -416,22 +446,37 @@ export function PokerActions({
 
         <div className="hidden h-8 w-px shrink-0 self-center bg-white/10 min-[520px]:block" aria-hidden />
 
-        {/* Raise/Bet button */}
-        <button
+        {/* Raise/Bet — wrapper acts as the commit button; embedded input edits the amount */}
+        <div
           data-testid="poker-action-primary"
-          type="button"
-          onClick={handlePrimary}
-          disabled={!canAct || !hasValidAmount}
-          className={`flex min-h-[2.65rem] w-full min-w-0 flex-1 flex-col items-center justify-center rounded-lg px-1 text-[11px] font-bold leading-tight tracking-wide transition-all active:scale-[0.97] min-[520px]:min-h-[2.75rem] min-[520px]:max-w-[11rem] min-[520px]:shrink min-[520px]:grow-[2] min-[520px]:rounded-xl min-[520px]:text-sm md:min-h-[3.25rem] md:max-w-[13rem] md:text-base ${primaryBtnClass}`}
+          role="button"
+          tabIndex={canAct && hasValidAmount ? 0 : -1}
+          aria-disabled={!canAct || !hasValidAmount}
+          aria-label={`${isFacingBet ? 'Raise' : 'Bet'} ${customAmount}`}
+          onClick={() => { if (canAct && hasValidAmount) handlePrimary(); }}
+          onKeyDown={(e) => {
+            if ((e.key === 'Enter' || e.key === ' ') && canAct && hasValidAmount) {
+              e.preventDefault();
+              handlePrimary();
+            }
+          }}
+          className={`flex min-h-[2.65rem] w-full min-w-0 flex-1 flex-col items-center justify-center rounded-lg px-1 text-[11px] font-bold leading-tight tracking-wide transition-all active:scale-[0.97] select-none focus:outline-none focus-visible:ring-1 focus-visible:ring-white/50 min-[520px]:min-h-[2.75rem] min-[520px]:max-w-[11rem] min-[520px]:shrink min-[520px]:grow-[2] min-[520px]:rounded-xl min-[520px]:text-sm md:min-h-[3.25rem] md:max-w-[13rem] md:text-base ${primaryBtnClass} ${canAct && hasValidAmount ? 'cursor-pointer' : 'cursor-not-allowed'}`}
           style={{ ...primaryBtnStyle, ...dimCommitWhenNotActing }}
         >
-          <span className="flex max-w-full flex-col items-center justify-center gap-0.5 leading-tight">
+          <span className="flex w-full max-w-full flex-col items-center justify-center gap-0.5 leading-tight">
             <span>{isFacingBet ? 'Raise' : 'Bet'}</span>
-            {hasValidAmount && clamped && (
-              <span className="max-w-full truncate text-[10px] font-semibold normal-case tabular-nums min-[520px]:text-sm md:text-base">{formatAmount(clamped)}</span>
-            )}
+            <input
+              data-testid="poker-action-amount-input"
+              type="text"
+              inputMode="numeric"
+              value={customAmount}
+              disabled={stackAmt === 0n}
+              aria-label="Bet amount"
+              className={`${embeddedAmountInputBaseClass} text-[10px] min-[520px]:text-sm md:text-base`}
+              {...embeddedInputHandlers}
+            />
           </span>
-        </button>
+        </div>
 
         <style jsx>{`
           .poker-slider {
@@ -598,21 +643,36 @@ export function PokerActions({
             </div>
           </div>
           <div className="flex min-w-0 flex-1 flex-col gap-0.5 p-0.5" style={tuneZoneStyle}>
-            <button
+            <div
               data-testid="poker-action-primary"
-              type="button"
-              onClick={handlePrimary}
-              disabled={!canAct || !hasValidAmount}
-              className={`h-9 w-full rounded-lg px-1 text-sm font-bold tracking-wide transition-all active:scale-[0.97] ${primaryBtnClass}`}
+              role="button"
+              tabIndex={canAct && hasValidAmount ? 0 : -1}
+              aria-disabled={!canAct || !hasValidAmount}
+              aria-label={`${isFacingBet ? 'Raise' : 'Bet'} ${customAmount}`}
+              onClick={() => { if (canAct && hasValidAmount) handlePrimary(); }}
+              onKeyDown={(e) => {
+                if ((e.key === 'Enter' || e.key === ' ') && canAct && hasValidAmount) {
+                  e.preventDefault();
+                  handlePrimary();
+                }
+              }}
+              className={`flex h-9 w-full items-center justify-center rounded-lg px-1 text-sm font-bold tracking-wide transition-all active:scale-[0.97] select-none focus:outline-none focus-visible:ring-1 focus-visible:ring-white/50 ${primaryBtnClass} ${canAct && hasValidAmount ? 'cursor-pointer' : 'cursor-not-allowed'}`}
               style={{ ...primaryBtnStyle, ...dimCommitWhenNotActing }}
             >
-              <span className="flex flex-row items-center justify-center gap-1 whitespace-normal leading-none">
-                <span>{isFacingBet ? 'Raise' : 'Bet'}</span>
-                <span className="text-xs font-semibold normal-case tabular-nums">
-                  {hasValidAmount && clamped ? formatAmount(clamped) : '—'}
-                </span>
+              <span className="flex w-full flex-row items-center justify-center gap-1.5 whitespace-normal leading-none">
+                <span className="shrink-0">{isFacingBet ? 'Raise' : 'Bet'}</span>
+                <input
+                  data-testid="poker-action-amount-input"
+                  type="text"
+                  inputMode="numeric"
+                  value={customAmount}
+                  disabled={stackAmt === 0n}
+                  aria-label="Bet amount"
+                  className={`${embeddedAmountInputBaseClass} w-20 text-xs`}
+                  {...embeddedInputHandlers}
+                />
               </span>
-            </button>
+            </div>
           <div className="flex shrink-0 items-center gap-1" style={{ width: '100%' }}>
             <button
               data-testid="poker-action-nudge-down"
@@ -759,21 +819,36 @@ export function PokerActions({
             </div>
           </div>
           <div className="flex min-w-0 flex-1 flex-col gap-1.5 p-1 min-[520px]:flex-row min-[520px]:items-stretch min-[520px]:gap-2 md:p-1.5 md:gap-2" style={tuneZoneStyle}>
-            <button
+            <div
               data-testid="poker-action-primary"
-              type="button"
-              onClick={handlePrimary}
-              disabled={!canAct || !hasValidAmount}
-              className={`flex min-h-11 w-full min-w-0 flex-1 flex-col items-center justify-center rounded-lg px-0.5 text-[10px] font-bold leading-tight tracking-wide transition-all active:scale-[0.97] min-[520px]:min-h-[3.25rem] min-[520px]:max-w-none min-[520px]:rounded-xl min-[520px]:px-1 min-[520px]:text-xs min-[700px]:min-h-[3.5rem] min-[700px]:grow-[2] md:min-h-[4rem] md:px-2 md:text-sm lg:text-base ${primaryBtnClass}`}
+              role="button"
+              tabIndex={canAct && hasValidAmount ? 0 : -1}
+              aria-disabled={!canAct || !hasValidAmount}
+              aria-label={`${isFacingBet ? 'Raise' : 'Bet'} ${customAmount}`}
+              onClick={() => { if (canAct && hasValidAmount) handlePrimary(); }}
+              onKeyDown={(e) => {
+                if ((e.key === 'Enter' || e.key === ' ') && canAct && hasValidAmount) {
+                  e.preventDefault();
+                  handlePrimary();
+                }
+              }}
+              className={`flex min-h-11 w-full min-w-0 flex-1 flex-col items-center justify-center rounded-lg px-0.5 text-[10px] font-bold leading-tight tracking-wide transition-all active:scale-[0.97] select-none focus:outline-none focus-visible:ring-1 focus-visible:ring-white/50 min-[520px]:min-h-[3.25rem] min-[520px]:max-w-none min-[520px]:rounded-xl min-[520px]:px-1 min-[520px]:text-xs min-[700px]:min-h-[3.5rem] min-[700px]:grow-[2] md:min-h-[4rem] md:px-2 md:text-sm lg:text-base ${primaryBtnClass} ${canAct && hasValidAmount ? 'cursor-pointer' : 'cursor-not-allowed'}`}
               style={{ ...primaryBtnStyle, ...dimCommitWhenNotActing }}
             >
-              <span className="flex max-w-full flex-col items-center justify-center gap-0.5 leading-tight">
+              <span className="flex w-full max-w-full flex-col items-center justify-center gap-0.5 leading-tight">
                 <span>{isFacingBet ? 'Raise' : 'Bet'}</span>
-                <span className="max-w-full truncate text-[9px] font-semibold normal-case tabular-nums min-[520px]:text-xs md:text-base">
-                  {hasValidAmount && clamped ? formatAmount(clamped) : '—'}
-                </span>
+                <input
+                  data-testid="poker-action-amount-input"
+                  type="text"
+                  inputMode="numeric"
+                  value={customAmount}
+                  disabled={stackAmt === 0n}
+                  aria-label="Bet amount"
+                  className={`${embeddedAmountInputBaseClass} text-[9px] min-[520px]:text-xs md:text-base`}
+                  {...embeddedInputHandlers}
+                />
               </span>
-            </button>
+            </div>
           <div className="flex min-h-10 min-w-0 w-full flex-1 items-center justify-center gap-1 min-[520px]:min-h-0 min-[520px]:flex-1 md:gap-2">
             <button
               data-testid="poker-action-nudge-down"
