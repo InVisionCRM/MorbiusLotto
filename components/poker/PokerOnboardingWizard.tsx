@@ -12,6 +12,25 @@ import type { PokerOnboardingStep } from '@/hooks/use-poker-onboarding';
 const PULSEX_SWAP_URL = `https://app.pulsex.com/swap?outputCurrency=${MORBIUS_TOKEN_ADDRESS}`;
 const MORBIUS_LOGO = '/morbius/MorbiusLogo-2.svg';
 
+// Switch.Win embedded swap widget. PLS (0xeee… sentinel) → MORBIUS, themed to match
+// the lobby. partnerAddress is the MORBlotto fee/referral address so we earn a cut
+// of swaps users make through this widget.
+const SWITCH_WIN_PARTNER = '0xAd68d9aB6a8dc413133573BEAE2B1b9Fa4a5b03E';
+const SWITCH_WIN_WIDGET_URL = (() => {
+  const params = new URLSearchParams({
+    network: 'pulsechain',
+    background_color: '050a12',
+    font_color: 'ffffff',
+    secondary_font_color: '7a7a7a',
+    border_color: '22d3ee',
+    backdrop_color: 'transparent',
+    from: '0xeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee',
+    to: MORBIUS_TOKEN_ADDRESS,
+    partnerAddress: SWITCH_WIN_PARTNER,
+  });
+  return `https://switch.win/widget?${params.toString()}`;
+})();
+
 export interface PokerOnboardingWizardProps {
   isOpen: boolean;
   onClose: () => void;
@@ -148,7 +167,7 @@ export function PokerOnboardingWizard({
               animate={{ opacity: 1, y: 0, scale: 1 }}
               exit={{ opacity: 0, y: 16, scale: 0.97 }}
               transition={{ type: 'spring', stiffness: 320, damping: 28 }}
-              className="pointer-events-auto relative w-full max-w-md rounded-2xl overflow-hidden border-2 border-cyan-500/30 shadow-2xl shadow-cyan-500/10"
+              className="pointer-events-auto relative w-full max-w-lg rounded-2xl overflow-hidden border-2 border-cyan-500/30 shadow-2xl shadow-cyan-500/10 max-h-[calc(100vh-2rem)] flex flex-col"
               style={{
                 background: 'linear-gradient(155deg, #0c1929 0%, #0a0f1a 50%, #0d1117 100%)',
               }}
@@ -181,7 +200,7 @@ export function PokerOnboardingWizard({
               </div>
 
               {/* Body */}
-              <div className="px-5 pb-5 pt-2">
+              <div className="px-5 pb-5 pt-2 overflow-y-auto flex-1">
                 {displayStep === 1 && (
                   <Step1GetMorbius
                     isConnected={isConnected}
@@ -237,32 +256,20 @@ function Step1GetMorbius({
   formatMorb: (wei: bigint) => string;
 }) {
   return (
-    <div className="space-y-4">
+    <div className="space-y-3">
       <p className="text-sm text-slate-300 leading-relaxed">
-        MORBIUS is the in-game currency. Buy it once on PulseX, and use it across every game on MORBlotto.
+        Swap PLS (PulseChain&apos;s native coin) for MORBIUS right here. $20–$50 worth is plenty to start.
       </p>
 
-      <div
-        className="rounded-xl p-4 border border-purple-400/25"
-        style={{
-          background: 'linear-gradient(135deg, rgba(168,85,247,0.10), rgba(236,72,153,0.06))',
-        }}
-      >
-        <div className="flex items-center gap-2 mb-2">
-          <span className="text-xs uppercase tracking-wider text-purple-200/80 font-semibold">Where to buy</span>
-        </div>
-        <p className="text-xs text-purple-100/85 leading-relaxed mb-3">
-          PulseX is the main exchange on PulseChain. We&apos;ll open it with MORBIUS pre-selected — just pick an amount and swap.
-          For poker, $20–$50 worth is plenty to get started.
-        </p>
-        <a
-          href={PULSEX_SWAP_URL}
-          target="_blank"
-          rel="noopener noreferrer"
-          className="inline-flex w-full items-center justify-center gap-2 py-2.5 rounded-lg bg-gradient-to-r from-purple-500 to-pink-500 text-white text-sm font-semibold transition-transform hover:scale-[1.01]"
-        >
-          Open PulseX <ExternalLink size={14} />
-        </a>
+      {/* Switch.Win embedded swap widget — themed dark/cyan to match the wizard. */}
+      <div className="rounded-xl overflow-hidden border border-cyan-500/25 bg-[#050a12]">
+        <iframe
+          src={SWITCH_WIN_WIDGET_URL}
+          title="Switch.Win — swap PLS to MORBIUS"
+          allow="clipboard-read; clipboard-write"
+          className="block w-full"
+          style={{ height: 580, border: 0 }}
+        />
       </div>
 
       <div className="rounded-xl bg-slate-900/60 border border-white/[0.06] p-3 text-xs">
@@ -281,9 +288,17 @@ function Step1GetMorbius({
         />
       </div>
 
-      <p className="text-xs text-slate-500 text-center">
-        Once you have MORBIUS in your wallet, this window will auto-advance.
-      </p>
+      <div className="flex items-center justify-between gap-3 text-[11px] text-slate-500">
+        <span>Once MORBIUS lands in your wallet, this window auto-advances.</span>
+        <a
+          href={PULSEX_SWAP_URL}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="inline-flex items-center gap-1 text-slate-400 hover:text-cyan-300 transition-colors shrink-0"
+        >
+          PulseX <ExternalLink size={11} />
+        </a>
+      </div>
     </div>
   );
 }
