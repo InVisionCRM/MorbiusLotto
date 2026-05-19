@@ -314,8 +314,10 @@ async function initializeServices() {
     // Initialize multiplayer blackjack service
     const bjMultiService = new BlackjackMultiGameService(dbService, pfService);
 
-    // Initialize WebSocket service
-    const wsService = new WebSocketService(server, gameService, dbService, tournamentService, pokerGameService, bjMultiService);
+    // Initialize WebSocket service. authService is passed last so WS upgrades
+    // can read the SIWE session cookie and skip the EIP-712 challenge for
+    // already-signed-in users (eliminates the second in-game wallet popup).
+    const wsService = new WebSocketService(server, gameService, dbService, tournamentService, pokerGameService, bjMultiService, authService);
 
     // Wire broadcast so bot actions (which bypass the WS handler) still push state to clients
     pokerGameService.setBroadcastCallback((tableId) => wsService.broadcastPokerTableState(tableId));

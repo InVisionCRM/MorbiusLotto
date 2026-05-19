@@ -91,7 +91,8 @@ export function SiweProvider({ children }: { children: React.ReactNode }) {
         const message = new SiweMessage({
           domain: window.location.host,
           address: connectedAddress,
-          statement: 'Sign in to MORBlotto. This proves you own this wallet — no funds will move.',
+          // EIP-4361 requires ASCII-only in the statement. No em-dashes, smart quotes, etc.
+          statement: 'Sign in to MORBlotto. This proves you own this wallet. No funds will move.',
           uri: window.location.origin,
           version: '1',
           chainId: chain?.id ?? 369, // PulseChain

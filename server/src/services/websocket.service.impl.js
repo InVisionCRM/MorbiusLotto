@@ -61,6 +61,16 @@ function getTournamentIdFromRoom(room) {
 const REQUIRE_WS_AUTH = process.env.REQUIRE_WS_AUTH === 'true';
 // When true, never send auth_challenge — always trust query-param address (stops sign prompts for testing).
 const DISABLE_WS_AUTH = process.env.DISABLE_WS_AUTH === 'true';
+// Session cookie name used by /api/auth/verify (see auth.routes.ts).
+const SESSION_COOKIE_NAME = 'morb_session';
+function parseSessionCookie(cookieHeader) {
+    if (!cookieHeader) return null;
+    // Minimal "find one cookie by name" parse — no need to pull in cookie-parser
+    // for a single value. Matches "name=value" with optional surrounding semicolons.
+    const re = new RegExp('(?:^|;\\s*)' + SESSION_COOKIE_NAME + '=([^;]+)');
+    const m = cookieHeader.match(re);
+    return m ? decodeURIComponent(m[1]) : null;
+}
 const CHAT_MAX_LENGTH = 500;
 const CHAT_RATE_LIMIT_MS = 2000; // min 2s between messages per connection
 const CHAT_RECENT_MESSAGES_LIMIT = 50;
@@ -99,12 +109,15 @@ class WebSocketService {
     // Per-action rate limiting for BJ multi: address -> timestamp array (5 actions per 3s window)
     bjMultiActionTimestamps = new Map();
     betLimitsCache = null;
-    constructor(server, gameService, dbService, tournamentService, pokerGameService, bjMultiService) {
+    constructor(server, gameService, dbService, tournamentService, pokerGameService, bjMultiService, authService) {
         this.gameService = gameService;
         this.dbService = dbService;
         this.tournamentService = tournamentService;
         this.pokerGameService = pokerGameService ?? null;
         this.bjMultiService = bjMultiService ?? null;
+        // SIWE session lookup. When present, WS upgrades that carry a valid
+        // `morb_session` cookie are auto-authed without the EIP-712 challenge.
+        this.authService = authService ?? null;
         this.wss = new ws_1.WebSocketServer({ server });
         // Initialize public client for reading contract state
         this.publicClient = (0, chain_client_1.getPublicClient)();
@@ -303,9 +316,13 @@ class WebSocketService {
         ws.connectionId = connectionId;
         ws.isAlive = true;
         ws.isAuthenticated = false;
-        // Extract player address from query parameters (used as claimed address, verified via EIP-712)
+        // Extract player address from query parameters (legacy claimed address path).
         const url = new URL(request.url || '', 'http://localhost');
         const claimedAddress = url.searchParams.get('address')?.toLowerCase();
+        // SIWE cookie session token, if present. Set by /api/auth/verify on the
+        // backend host; browser includes it automatically on the WS upgrade
+        // request when SameSite=None + Secure (prod) — see auth.routes.ts.
+        const sessionToken = parseSessionCookie(request.headers.cookie || '');
         // IMPORTANT: attach handlers immediately. If we await DB calls before registering
         // ws.on('message'), early client requests (like get_balance right after connect)
         // can be dropped and will timeout client-side.
@@ -345,6 +362,44 @@ class WebSocketService {
             logger_1.logger.error('WebSocket error', { connectionId: ws.connectionId, error });
         });
         this.clients.set(connectionId, ws);
+        // ── Cookie-first auth (SIWE) ───────────────────────────────────────────
+        // If the upgrade request carries a valid `morb_session` cookie, use that
+        // as the authoritative wallet identity and skip the EIP-712 challenge.
+        // This is the path that eliminates the in-game wallet sign popup for
+        // users who already signed in via SIWE on the HTTP side.
+        if (sessionToken && this.authService) {
+            try {
+                const session = await this.authService.lookupSession(sessionToken);
+                if (session) {
+                    const walletAddress = session.walletAddress.toLowerCase();
+                    ws.playerAddress = walletAddress;
+                    ws.isAuthenticated = true;
+                    logger_1.logger.info('WS Auth: cookie session accepted', { connectionId, playerAddress: walletAddress });
+                    try {
+                        const player = await this.dbService.getOrCreatePlayer(walletAddress);
+                        await this.dbService.addActiveConnection(player.id, connectionId);
+                    }
+                    catch (error) {
+                        logger_1.logger.error('Failed to track active connection (cookie auth)', { connectionId, playerAddress: walletAddress, error });
+                    }
+                    let pokerChipBalance = '0';
+                    try {
+                        pokerChipBalance = (await (0, poker_chip_wallet_1.getPokerChipBalance)(this.dbService.getPool(), walletAddress)).toString();
+                    }
+                    catch (_a) { /* ignore */ }
+                    this.sendMessage(ws, {
+                        type: 'connection_established',
+                        payload: { connectionId, playerAddress: walletAddress, pokerChipBalance }
+                    });
+                    return; // Short-circuit — no challenge, no query-param fallback needed.
+                }
+                logger_1.logger.info('WS Auth: cookie present but session not found / expired', { connectionId });
+            }
+            catch (error) {
+                logger_1.logger.warn('WS Auth: cookie lookup failed', { connectionId, error });
+            }
+        }
+        // ── End cookie-first path. Fall through to legacy challenge / query-param.
         const sendAuthChallenge = REQUIRE_WS_AUTH && !DISABLE_WS_AUTH;
         if (sendAuthChallenge) {
             // Strict mode: generate auth challenge, client must sign to proceed
