@@ -1,17 +1,34 @@
 import { getApiUrl } from './api-urls';
 
 /**
+ * Optional callback invoked when a request returns 401. Set by SiweProvider
+ * via `setAuthFailureHandler(signInIfNeeded)`. When present, apiFetch will
+ * call this once on a 401, await it (typically a wallet popup), then retry
+ * the request a single time. If the retry also 401s, the original error
+ * surfaces to the caller.
+ *
+ * This lets every call site stay one line — they don't have to manually
+ * call `signInIfNeeded()` before each authed request.
+ */
+let authFailureHandler: (() => Promise<unknown>) | null = null;
+
+export function setAuthFailureHandler(handler: (() => Promise<unknown>) | null): void {
+  authFailureHandler = handler;
+}
+
+/**
  * Authenticated fetch helper. Always sends the SIWE session cookie via
- * `credentials: 'include'`, and prefixes the URL with the backend base.
+ * `credentials: 'include'`, prefixes the URL with the backend base, and
+ * auto-handles 401 by triggering a sign-in prompt and retrying once.
  *
  * Use for any call to a route protected by `requireAuth` on the server. For
  * public read endpoints, plain `fetch` is fine — but using this helper for
- * everything keeps the cookie behavior consistent.
+ * everything keeps the cookie behavior and auth-recovery consistent.
  *
  *   await apiFetch('/api/withdraw', { method: 'POST', body: JSON.stringify({ amount }) });
  *
  * Throws a thin Error with the response's `error` field when the request is
- * not 2xx.
+ * not 2xx (after the optional retry).
  */
 export async function apiFetch(path: string, init: RequestInit = {}): Promise<Response> {
   const base = getApiUrl();
@@ -22,7 +39,19 @@ export async function apiFetch(path: string, init: RequestInit = {}): Promise<Re
     headers.set('Content-Type', 'application/json');
   }
 
-  const res = await fetch(url, { ...init, headers, credentials: 'include' });
+  const doFetch = () => fetch(url, { ...init, headers, credentials: 'include' });
+
+  let res = await doFetch();
+
+  // If unauthenticated and we have a sign-in handler, prompt the user and retry once.
+  if (res.status === 401 && authFailureHandler) {
+    try {
+      await authFailureHandler();
+    } catch {
+      // User dismissed the wallet popup or wallet errored — fall through with the original 401.
+    }
+    res = await doFetch();
+  }
 
   if (!res.ok) {
     let detail = '';

@@ -4,6 +4,7 @@ import { createContext, useCallback, useContext, useEffect, useRef, useState } f
 import { useAccount, useSignMessage } from 'wagmi';
 import { SiweMessage } from 'siwe';
 import { getApiUrl } from '@/lib/api-urls';
+import { setAuthFailureHandler } from '@/lib/api-auth';
 
 interface SiweState {
   /** Address of the wallet currently signed in via SIWE (checksummed). Null if not signed in. */
@@ -123,6 +124,15 @@ export function SiweProvider({ children }: { children: React.ReactNode }) {
     }
     return signIn();
   }, [authedAddress, connectedAddress, signIn]);
+
+  // Register signInIfNeeded as the global 401 recovery handler so apiFetch
+  // can automatically prompt a sign-in popup when any authed route returns 401.
+  // Without this, callers would have to manually call signInIfNeeded before each
+  // authed request — easy to forget, fragile across the codebase.
+  useEffect(() => {
+    setAuthFailureHandler(signInIfNeeded);
+    return () => setAuthFailureHandler(null);
+  }, [signInIfNeeded]);
 
   const signOut = useCallback(async () => {
     const base = apiBase();
