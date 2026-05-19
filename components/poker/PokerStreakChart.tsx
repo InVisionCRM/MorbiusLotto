@@ -9,26 +9,26 @@ export interface PokerStreakChartProps {
   hands: PokerHandListEntry[];
   /** All-time net (used for the right-side anchor; falls back to current cumulative). */
   lifetimeNetChips?: bigint | null;
+  /** Showdown win rate, 0-100. Rendered in the footer as the skill metric. */
+  showdownWinRate?: number | null;
+  /** Average chip profit per hand (career). */
+  profitPerHand?: bigint | null;
+  /** Big blinds per 100 hands. */
+  bbPer100?: number | null;
 }
 
-interface StreakComputed {
+interface ChartComputed {
   /** Cumulative chip deltas in chronological order (oldest → newest). */
   points: number[];
   /** Peak cumulative value and its index in `points`. */
   peak: { value: number; index: number };
   /** Trough cumulative value after the peak (deepest drawdown) and its index. */
   trough: { value: number; index: number };
-  /** Longest consecutive run of winning hands. */
-  longestWinStreak: { count: number; net: number };
-  /** Longest consecutive run of losing hands. */
-  longestLossStreak: { count: number; net: number };
-  /** Current run from the most recent hand backwards. */
-  currentStreak: { kind: 'win' | 'loss' | 'none'; count: number; net: number };
   /** Cumulative net at the end of the series. */
   endingNet: number;
 }
 
-function computeStreaks(hands: PokerHandListEntry[]): StreakComputed {
+function computeChart(hands: PokerHandListEntry[]): ChartComputed {
   // `hands` arrives newest-first from the server. Reverse to chronological for cumulative math.
   const ordered = [...hands].reverse();
 
@@ -37,18 +37,6 @@ function computeStreaks(hands: PokerHandListEntry[]): StreakComputed {
   let peak = { value: -Infinity, index: 0 };
   let trough = { value: 0, index: 0 };
   let postPeakTrough = { value: 0, index: 0 };
-
-  let longestWin = { count: 0, net: 0 };
-  let longestLoss = { count: 0, net: 0 };
-
-  let runKind: 'win' | 'loss' | 'none' = 'none';
-  let runCount = 0;
-  let runNet = 0;
-
-  const flushRun = () => {
-    if (runKind === 'win' && runCount > longestWin.count) longestWin = { count: runCount, net: runNet };
-    if (runKind === 'loss' && runCount > longestLoss.count) longestLoss = { count: runCount, net: runNet };
-  };
 
   for (let i = 0; i < ordered.length; i++) {
     const h = ordered[i];
@@ -67,37 +55,14 @@ function computeStreaks(hands: PokerHandListEntry[]): StreakComputed {
       postPeakTrough = { value: cumulative, index: i };
     }
     if (cumulative < trough.value) trough = { value: cumulative, index: i };
-
-    const isWin = delta > 0;
-    const isLoss = delta < 0;
-    const kind: 'win' | 'loss' | 'none' = isWin ? 'win' : isLoss ? 'loss' : 'none';
-
-    if (kind === 'none') {
-      // Folded-pre / chopped pot — break the streak but don't start a new one.
-      flushRun();
-      runKind = 'none';
-      runCount = 0;
-      runNet = 0;
-    } else if (kind === runKind) {
-      runCount++;
-      runNet += delta;
-    } else {
-      flushRun();
-      runKind = kind;
-      runCount = 1;
-      runNet = delta;
-    }
   }
-  flushRun();
 
   if (peak.value === -Infinity) peak = { value: 0, index: 0 };
   return {
     points,
     peak,
+    // Prefer the post-peak drawdown if there is one; otherwise the absolute low.
     trough: postPeakTrough.value < 0 ? postPeakTrough : trough,
-    longestWinStreak: longestWin,
-    longestLossStreak: longestLoss,
-    currentStreak: { kind: runKind, count: runCount, net: runNet },
     endingNet: cumulative,
   };
 }
@@ -112,16 +77,21 @@ function makeYMapper(points: number[]): (v: number) => number {
   return (v: number) => 70 - (v / range) * 64;
 }
 
-export function PokerStreakChart({ hands, lifetimeNetChips }: PokerStreakChartProps) {
-  const computed = useMemo(() => computeStreaks(hands), [hands]);
-  const { points, peak, trough, longestWinStreak, longestLossStreak, currentStreak, endingNet } = computed;
+export function PokerStreakChart({
+  hands,
+  lifetimeNetChips,
+  showdownWinRate,
+  profitPerHand,
+  bbPer100,
+}: PokerStreakChartProps) {
+  const computed = useMemo(() => computeChart(hands), [hands]);
+  const { points, peak, trough, endingNet } = computed;
 
   const yMap = useMemo(() => makeYMapper(points), [points]);
 
   const n = points.length;
   const xFor = (i: number) => (n <= 1 ? 200 : (i / (n - 1)) * 400);
 
-  // Build path strings: the main poly-line and the two area fills (above/below zero).
   const linePath = useMemo(() => {
     if (n === 0) return '';
     return points
@@ -129,15 +99,13 @@ export function PokerStreakChart({ hands, lifetimeNetChips }: PokerStreakChartPr
       .join(' ');
   }, [points, yMap, n]);
 
-  const areaWinPath = useMemo(() => {
+  const areaPath = useMemo(() => {
     if (n === 0) return '';
     const inner = points
       .map((v, i) => `L ${xFor(i).toFixed(1)} ${yMap(v).toFixed(1)}`)
       .join(' ');
     return `M 0 70 ${inner} L ${xFor(n - 1).toFixed(1)} 70 Z`;
   }, [points, yMap, n]);
-
-  const areaLossPath = areaWinPath; // same outline; both gradients are clipped above/below the zero line.
 
   const displayNet = lifetimeNetChips != null ? lifetimeNetChips : BigInt(Math.round(endingNet));
   const isNetWin = (typeof displayNet === 'bigint' ? displayNet : 0n) >= 0n;
@@ -148,6 +116,25 @@ export function PokerStreakChart({ hands, lifetimeNetChips }: PokerStreakChartPr
   const showPeakMarker = peak.value > 0 && n > 1;
   const showTroughMarker = trough.value < 0 && n > 1;
   const showNowDot = n > 0;
+
+  const showdownWrText =
+    showdownWinRate != null && Number.isFinite(showdownWinRate)
+      ? `${showdownWinRate.toFixed(0)}%`
+      : '—';
+
+  const profitPerHandText = useMemo(() => {
+    if (profitPerHand == null) return '—';
+    const sign = profitPerHand >= 0n ? '+' : '−';
+    const abs = profitPerHand < 0n ? -profitPerHand : profitPerHand;
+    return `${sign}${formatChips(abs)}`;
+  }, [profitPerHand]);
+
+  const bbPer100Text =
+    bbPer100 != null && Number.isFinite(bbPer100)
+      ? bbPer100 >= 0
+        ? `+${bbPer100.toFixed(1)}`
+        : `−${Math.abs(bbPer100).toFixed(1)}`
+      : '—';
 
   return (
     <div className="flex flex-col h-full min-h-[240px]">
@@ -202,8 +189,8 @@ export function PokerStreakChart({ hands, lifetimeNetChips }: PokerStreakChartPr
 
             <line x1="0" y1="70" x2="400" y2="70" stroke="rgba(148,163,184,0.18)" strokeWidth="1" strokeDasharray="2 4" />
 
-            <path d={areaWinPath} clipPath="url(#streakClipWin)" fill="url(#streakGradWin)" />
-            <path d={areaLossPath} clipPath="url(#streakClipLoss)" fill="url(#streakGradLoss)" />
+            <path d={areaPath} clipPath="url(#streakClipWin)" fill="url(#streakGradWin)" />
+            <path d={areaPath} clipPath="url(#streakClipLoss)" fill="url(#streakGradLoss)" />
 
             <path
               d={linePath}
@@ -239,37 +226,25 @@ export function PokerStreakChart({ hands, lifetimeNetChips }: PokerStreakChartPr
         <span className="text-cyan-400 font-semibold">NOW</span>
       </div>
 
-      <div className="mt-3 pt-3 border-t border-white/[0.06] grid grid-cols-3 gap-0">
-        <StreakStat
-          label="Hot streak"
-          tone="win"
-          value={longestWinStreak.count > 0 ? `${longestWinStreak.count} ${longestWinStreak.count === 1 ? 'hand' : 'hands'}` : '—'}
-          sub={longestWinStreak.count > 0 ? `+${formatChips(BigInt(Math.round(longestWinStreak.net)))}` : 'no streak yet'}
+      {/* Career stats footer — replaces the old hot/cold/right-now streak tiles. */}
+      <div className="mt-3 pt-3 border-t border-white/[0.06] grid grid-cols-3">
+        <CareerStat
+          label="Showdown WR"
+          value={showdownWrText}
+          sub="won at showdown"
           divider={false}
         />
-        <StreakStat
-          label="Cold streak"
-          tone="loss"
-          value={longestLossStreak.count > 0 ? `${longestLossStreak.count} ${longestLossStreak.count === 1 ? 'hand' : 'hands'}` : '—'}
-          sub={longestLossStreak.count > 0 ? `−${formatChips(BigInt(Math.round(-longestLossStreak.net)))}` : 'no streak yet'}
+        <CareerStat
+          label="Profit / hand"
+          value={profitPerHandText}
+          sub="career avg"
+          tone={profitPerHand != null && profitPerHand < 0n ? 'loss' : 'win'}
         />
-        <StreakStat
-          label="Right now"
-          tone={currentStreak.kind === 'win' ? 'win' : currentStreak.kind === 'loss' ? 'loss' : 'neutral'}
-          value={
-            currentStreak.kind === 'none' || currentStreak.count === 0
-              ? '—'
-              : currentStreak.kind === 'win'
-                ? `🔥 ${currentStreak.count}W`
-                : `${currentStreak.count}L`
-          }
-          sub={
-            currentStreak.count === 0
-              ? 'idle'
-              : currentStreak.kind === 'win'
-                ? `+${formatChips(BigInt(Math.round(currentStreak.net)))}`
-                : `−${formatChips(BigInt(Math.round(-currentStreak.net)))}`
-          }
+        <CareerStat
+          label="BB / 100"
+          value={bbPer100Text}
+          sub="skill metric"
+          tone={bbPer100 != null && bbPer100 < 0 ? 'loss' : 'win'}
         />
       </div>
 
@@ -287,29 +262,35 @@ export function PokerStreakChart({ hands, lifetimeNetChips }: PokerStreakChartPr
   );
 }
 
-function StreakStat({
+function CareerStat({
   label,
-  tone,
   value,
   sub,
+  tone = 'neutral',
   divider = true,
 }: {
   label: string;
-  tone: 'win' | 'loss' | 'neutral';
   value: string;
   sub: string;
+  tone?: 'win' | 'loss' | 'neutral';
   divider?: boolean;
 }) {
-  const toneClass = tone === 'win' ? 'text-emerald-300' : tone === 'loss' ? 'text-rose-300' : 'text-white';
+  const toneClass =
+    tone === 'win' ? 'text-emerald-300'
+      : tone === 'loss' ? 'text-rose-300'
+        : 'text-white';
   return (
-    <div className={`px-3 first:pl-0 last:pr-0 relative ${divider ? '' : ''}`}>
+    <div className={`px-3 first:pl-0 last:pr-0 relative`}>
       {divider && (
         <span className="absolute left-0 top-[15%] bottom-[15%] w-px bg-white/[0.08]" aria-hidden />
       )}
       <div className="text-[9px] uppercase tracking-[0.18em] text-slate-500 font-semibold">
         {label}
       </div>
-      <div className={`mt-1.5 leading-none ${toneClass}`} style={{ fontFamily: 'Mitr, sans-serif', fontWeight: 600, fontSize: 16, letterSpacing: '-0.01em' }}>
+      <div
+        className={`mt-1.5 leading-none ${toneClass} tabular-nums`}
+        style={{ fontFamily: 'Mitr, sans-serif', fontWeight: 600, fontSize: 16, letterSpacing: '-0.01em' }}
+      >
         {value}
       </div>
       <div className="mt-1 text-[9px] font-mono text-slate-500 tracking-wider">{sub}</div>

@@ -2,13 +2,12 @@
 
 import React, { useMemo, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { ArrowRight, Crown, Trophy, Medal, Sparkles, type LucideIcon } from 'lucide-react';
+import { ArrowRight, Crown, Trophy, Medal, PencilLine, Plus } from 'lucide-react';
+import { AvatarView } from '@/components/avatar';
+import { useProfile } from '@/hooks/use-player-profile';
 import { usePokerPlayerStats, usePokerPlayerHands, type PokerPlayerStats } from '@/hooks/use-poker-stats';
-import { usePokerChipLedger } from '@/hooks/use-poker-chip-ledger';
 import { PokerStreakChart } from './PokerStreakChart';
 import { PokerChipLedgerModal } from './PokerChipLedgerModal';
-import { LedgerDirectionIcon } from './LedgerDirectionIcon';
-import { ledgerDisplay, formatRelativeTime, formatDelta } from '@/lib/poker-chip-ledger-display';
 import { formatChips } from '@/lib/format-poker-chips';
 
 export interface PokerYourStatsPanelProps {
@@ -59,225 +58,48 @@ function usePokerPlayerRank(address: string | null) {
   });
 }
 
-type TierKey = 'champion' | 'top3' | 'top10' | 'gold' | 'silver' | 'bronze' | 'unranked';
-
-interface TierConfig {
-  tier: TierKey;
-  label: string;
-  rankText: string;
-  icon: LucideIcon;
-  iconColor: string;
-  iconBgCss: string;
-  iconBorderCss: string;
-  textColor: string;
-  borderColorCss: string;
-  bgFromCss: string;
-  bgToCss: string;
-  glowColorCss: string;
-  barGradientCss: string;
-  barGlowCss: string;
-  progress: number | null;
-  progressText: string | null;
-  nextLabel: string | null;
-  sublabel: string | null;
-}
-
-function pluralRanks(n: number) {
-  return `${n} rank${n === 1 ? '' : 's'}`;
-}
-
-function tierFor(rank: number | null | undefined, totalHands: number): TierConfig {
-  if (totalHands === 0 || rank == null) {
-    return {
-      tier: 'unranked',
-      label: 'Unranked',
-      rankText: '—',
-      icon: Sparkles,
-      iconColor: 'text-slate-400',
-      iconBgCss: 'linear-gradient(135deg, rgba(148,163,184,0.14), rgba(100,116,139,0.06))',
-      iconBorderCss: 'rgba(148,163,184,0.28)',
-      textColor: 'text-slate-300',
-      borderColorCss: 'rgba(148,163,184,0.18)',
-      bgFromCss: 'rgba(30,41,59,0.45)',
-      bgToCss: 'rgba(15,23,42,0.25)',
-      glowColorCss: 'rgba(148,163,184,0.10)',
-      barGradientCss: '',
-      barGlowCss: '',
-      progress: null,
-      progressText: null,
-      nextLabel: null,
-      sublabel: totalHands === 0
-        ? 'Play your first hand to enter the leaderboard'
-        : 'Climb the leaderboard to earn a tier',
-    };
-  }
-  if (rank === 1) {
-    return {
-      tier: 'champion',
-      label: 'Champion',
-      rankText: '#1',
-      icon: Crown,
-      iconColor: 'text-amber-200',
-      iconBgCss: 'linear-gradient(135deg, rgba(251,191,36,0.28), rgba(245,158,11,0.10))',
-      iconBorderCss: 'rgba(251,191,36,0.55)',
-      textColor: 'text-amber-200',
-      borderColorCss: 'rgba(251,191,36,0.40)',
-      bgFromCss: 'rgba(120,53,15,0.40)',
-      bgToCss: 'rgba(15,23,42,0.20)',
-      glowColorCss: 'rgba(251,191,36,0.28)',
-      barGradientCss: '',
-      barGlowCss: '',
-      progress: null,
-      progressText: null,
-      nextLabel: null,
-      sublabel: 'Untouchable — best of all time',
-    };
-  }
-  if (rank <= 3) {
-    return {
-      tier: 'top3',
-      label: 'Top 3',
-      rankText: `#${rank}`,
-      icon: Trophy,
-      iconColor: 'text-amber-300',
-      iconBgCss: 'linear-gradient(135deg, rgba(251,191,36,0.20), rgba(245,158,11,0.08))',
-      iconBorderCss: 'rgba(251,191,36,0.45)',
-      textColor: 'text-amber-300',
-      borderColorCss: 'rgba(251,191,36,0.32)',
-      bgFromCss: 'rgba(120,53,15,0.25)',
-      bgToCss: 'rgba(15,23,42,0.25)',
-      glowColorCss: 'rgba(251,191,36,0.20)',
-      barGradientCss: 'linear-gradient(90deg, #fbbf24, #f59e0b)',
-      barGlowCss: '0 0 8px rgba(251,191,36,0.45)',
-      progress: (3 - rank) / 2,
-      progressText: `${pluralRanks(rank - 1)} from #1`,
-      nextLabel: 'Champion',
-      sublabel: null,
-    };
-  }
-  if (rank <= 10) {
-    return {
-      tier: 'top10',
-      label: 'Top 10',
-      rankText: `#${rank}`,
-      icon: Trophy,
-      iconColor: 'text-amber-300',
-      iconBgCss: 'linear-gradient(135deg, rgba(251,191,36,0.16), rgba(245,158,11,0.06))',
-      iconBorderCss: 'rgba(251,191,36,0.38)',
-      textColor: 'text-amber-300',
-      borderColorCss: 'rgba(251,191,36,0.26)',
-      bgFromCss: 'rgba(120,53,15,0.18)',
-      bgToCss: 'rgba(15,23,42,0.30)',
-      glowColorCss: 'rgba(251,191,36,0.16)',
-      barGradientCss: 'linear-gradient(90deg, #fcd34d, #fbbf24)',
-      barGlowCss: '0 0 6px rgba(251,191,36,0.35)',
-      progress: (10 - rank) / 7,
-      progressText: `${pluralRanks(rank - 3)} from Top 3`,
-      nextLabel: 'Top 3',
-      sublabel: null,
-    };
-  }
-  if (rank <= 50) {
-    return {
-      tier: 'gold',
-      label: 'Gold',
-      rankText: `#${rank}`,
-      icon: Medal,
-      iconColor: 'text-amber-300',
-      iconBgCss: 'linear-gradient(135deg, rgba(251,191,36,0.14), rgba(245,158,11,0.05))',
-      iconBorderCss: 'rgba(251,191,36,0.32)',
-      textColor: 'text-amber-300',
-      borderColorCss: 'rgba(251,191,36,0.22)',
-      bgFromCss: 'rgba(120,53,15,0.14)',
-      bgToCss: 'rgba(15,23,42,0.30)',
-      glowColorCss: 'rgba(251,191,36,0.13)',
-      barGradientCss: 'linear-gradient(90deg, #fde68a, #fcd34d)',
-      barGlowCss: '0 0 5px rgba(252,211,77,0.30)',
-      progress: (50 - rank) / 40,
-      progressText: `${pluralRanks(rank - 10)} from Top 10`,
-      nextLabel: 'Top 10',
-      sublabel: null,
-    };
-  }
-  if (rank <= 200) {
-    return {
-      tier: 'silver',
-      label: 'Silver',
-      rankText: `#${rank}`,
-      icon: Medal,
-      iconColor: 'text-slate-200',
-      iconBgCss: 'linear-gradient(135deg, rgba(226,232,240,0.14), rgba(148,163,184,0.05))',
-      iconBorderCss: 'rgba(226,232,240,0.32)',
-      textColor: 'text-slate-200',
-      borderColorCss: 'rgba(203,213,225,0.22)',
-      bgFromCss: 'rgba(51,65,85,0.35)',
-      bgToCss: 'rgba(15,23,42,0.30)',
-      glowColorCss: 'rgba(203,213,225,0.12)',
-      barGradientCss: 'linear-gradient(90deg, #f1f5f9, #cbd5e1)',
-      barGlowCss: '0 0 5px rgba(226,232,240,0.22)',
-      progress: (200 - rank) / 150,
-      progressText: `${pluralRanks(rank - 50)} from Gold`,
-      nextLabel: 'Gold',
-      sublabel: null,
-    };
-  }
-  // Bronze (#201+) — unbounded, so use a soft curve toward Silver.
-  const ranksToSilver = rank - 200;
-  const softProgress = Math.max(0.04, Math.min(0.40, 50 / ranksToSilver));
-  return {
-    tier: 'bronze',
-    label: 'Bronze',
-    rankText: `#${rank}`,
-    icon: Medal,
-    iconColor: 'text-orange-300',
-    iconBgCss: 'linear-gradient(135deg, rgba(251,146,60,0.12), rgba(234,88,12,0.04))',
-    iconBorderCss: 'rgba(251,146,60,0.32)',
-    textColor: 'text-orange-300',
-    borderColorCss: 'rgba(251,146,60,0.22)',
-    bgFromCss: 'rgba(120,53,15,0.12)',
-    bgToCss: 'rgba(15,23,42,0.30)',
-    glowColorCss: 'rgba(251,146,60,0.12)',
-    barGradientCss: 'linear-gradient(90deg, #fdba74, #fb923c)',
-    barGlowCss: '0 0 4px rgba(251,146,60,0.28)',
-    progress: softProgress,
-    progressText: `${pluralRanks(ranksToSilver)} from Silver`,
-    nextLabel: 'Silver',
-    sublabel: null,
-  };
-}
-
 export function PokerYourStatsPanel({ address, onOpenAllStats }: PokerYourStatsPanelProps) {
   const [ledgerModalOpen, setLedgerModalOpen] = useState(false);
 
   const { data: stats } = usePokerPlayerStats(address, 'all');
   const { data: hands } = usePokerPlayerHands(address, 200);
-  const { data: ledger } = usePokerChipLedger({ address, limit: 5, offset: 0, category: 'all' });
   const { data: rankRow } = usePokerPlayerRank(address);
+  const { profileDisplayName, avatarConfig } = useProfile();
 
   const archetype = useMemo(() => archetypeFor(stats ?? undefined), [stats]);
 
   const totalHands = stats?.total_hands ?? 0;
-  const tier = useMemo(() => tierFor(rankRow?.rank, totalHands), [rankRow?.rank, totalHands]);
-
-  const totalWonBn = useMemo(() => {
-    try { return BigInt(stats?.total_won ?? '0'); } catch { return 0n; }
-  }, [stats?.total_won]);
 
   const profitLossBn = useMemo(() => {
     try { return BigInt(stats?.profit_loss ?? '0'); } catch { return 0n; }
   }, [stats?.profit_loss]);
 
+  const profitPerHandBn = useMemo(() => {
+    if (totalHands === 0) return null;
+    return profitLossBn / BigInt(totalHands);
+  }, [profitLossBn, totalHands]);
+
   const tournamentHands = stats?.tournament_hands ?? 0;
 
-  const handsList = hands ?? [];
+  const biggestPotBn = useMemo(() => {
+    try { return BigInt(stats?.biggest_pot_won ?? '0'); } catch { return 0n; }
+  }, [stats?.biggest_pot_won]);
 
-  const recent = ledger?.entries ?? [];
-  const ledgerTotal = ledger?.total ?? 0;
+  const handsList = hands ?? [];
 
   if (!address) {
     // Don't render at all when wallet is disconnected — the lobby already shows a connect CTA up top.
     return null;
   }
+
+  const shortAddress = `0x${address.slice(2, 6)}…${address.slice(-4)}`;
+  const displayName = profileDisplayName?.trim() || shortAddress;
+
+  const handleCustomizeAvatar = () => {
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new Event('sophie:open_avatar_editor'));
+    }
+  };
 
   return (
     <>
@@ -292,171 +114,117 @@ export function PokerYourStatsPanel({ address, onOpenAllStats }: PokerYourStatsP
         />
 
         <div className="relative px-5 sm:px-8 py-6 sm:py-7">
-          <div className="grid gap-7 sm:gap-8 lg:gap-9 grid-cols-1 lg:grid-cols-[1fr_1.4fr_1fr]">
-            {/* ── COLUMN 1 · Profile ── */}
-            <div className="flex flex-col">
-              <div className="flex items-end gap-3 mb-1.5">
+          {/* ── Title row · YOUR POKER FACE + big rank ── */}
+          <div className="flex items-start justify-between mb-6 sm:mb-7 gap-4">
+            <div className="flex items-center gap-2.5 pt-1 min-w-0">
+              <div className="w-1 h-7 rounded-full bg-gradient-to-b from-cyan-400 to-purple-500 shrink-0" aria-hidden />
+              <div className="min-w-0">
+                <div className="text-[10px] font-mono tracking-[0.35em] uppercase text-cyan-400 font-bold">YOUR POKER FACE</div>
                 <div
-                  className="w-11 h-11 rounded-xl flex items-center justify-center text-2xl shrink-0"
-                  style={{
-                    background: 'linear-gradient(135deg, rgba(6,182,212,0.2), rgba(59,130,246,0.1))',
-                    border: '1px solid rgba(6,182,212,0.4)',
-                  }}
-                  aria-hidden
+                  className="font-medium text-white text-[15px] mt-0.5 truncate"
+                  style={{ fontFamily: 'Mitr, sans-serif', letterSpacing: '-0.01em' }}
                 >
-                  {archetype.emoji}
-                </div>
-                <div>
-                  <div className="text-[10px] font-mono text-slate-500 tracking-wider mb-0.5">You're a</div>
-                  <div
-                    className="text-white leading-none"
-                    style={{ fontFamily: 'Mitr, sans-serif', fontWeight: 700, fontSize: 24, letterSpacing: '-0.02em' }}
-                  >
-                    {archetype.name}{' '}
-                    <span className="italic text-cyan-400" style={{ fontSize: 18 }}>{archetype.modifier}</span>
-                  </div>
+                  {displayName}
+                  <span className="text-slate-500 mx-1.5">·</span>
+                  <span>{archetype.emoji} {archetype.name}</span>
+                  <span className="italic text-cyan-400 ml-1">{archetype.modifier}</span>
                 </div>
               </div>
-              <div className="text-[11px] text-slate-500 font-mono mb-5 tracking-wider">
-                VPIP <strong className="text-cyan-300">{stats ? `${stats.vpip_pct.toFixed(0)}%` : '—'}</strong>
-                {' · '}PFR <strong className="text-cyan-300">{stats ? `${stats.pfr_pct.toFixed(0)}%` : '—'}</strong>
-                {' · '}Agg <strong className="text-cyan-300">{stats?.aggression_factor != null ? stats.aggression_factor.toFixed(1) : '—'}</strong>
-              </div>
-
-              <div className="flex flex-col gap-2.5">
-                <StatRow label="Total hands" value={totalHands.toLocaleString()} />
-                <StatRow
-                  label="Total won"
-                  value={`${profitLossBn >= 0n ? '+' : '−'}${formatChips(profitLossBn < 0n ? -profitLossBn : profitLossBn)}`}
-                  tone={profitLossBn >= 0n ? 'win' : 'loss'}
-                  unit="MORB"
-                />
-                <StatRow label="Tournament hands" value={tournamentHands.toLocaleString()} />
-              </div>
-
-              <div className="mt-4 flex-1">
-                <GlobalRankCard tier={tier} />
-              </div>
-
-              <button
-                type="button"
-                onClick={onOpenAllStats}
-                className="mt-5 inline-flex items-center justify-center gap-2 w-full px-5 py-3 rounded-xl text-[13px] font-bold text-white transition-transform hover:scale-[1.01]"
-                style={{
-                  background: 'linear-gradient(135deg, #0891b2, #2563eb)',
-                  boxShadow: '0 6px 18px -6px rgba(6,182,212,0.55), 0 0 0 1px rgba(34,211,238,0.18)',
-                }}
-              >
-                View all stats <ArrowRight size={14} />
-              </button>
             </div>
+            <RankHeader rank={rankRow?.rank} totalHands={totalHands} />
+          </div>
 
-            {/* ── DIVIDER 1 (only on desktop) ── */}
-            <div className="hidden lg:block absolute" style={{ left: '27.78%', top: '8%', bottom: '8%', width: 1, background: 'linear-gradient(180deg, transparent, rgba(148,163,184,0.15), transparent)' }} aria-hidden />
-
-            {/* ── COLUMN 2 · Streak chart ── */}
-            <div>
-              <PokerStreakChart hands={handsList} lifetimeNetChips={profitLossBn} />
-            </div>
-
-            {/* ── DIVIDER 2 (only on desktop) ── */}
-            <div className="hidden lg:block absolute" style={{ left: '66.67%', top: '8%', bottom: '8%', width: 1, background: 'linear-gradient(180deg, transparent, rgba(148,163,184,0.15), transparent)' }} aria-hidden />
-
-            {/* ── COLUMN 3 · Chip ledger ── */}
-            <div className="flex flex-col">
-              <div className="flex justify-between items-start mb-3">
-                <div>
-                  <div className="text-[10px] uppercase tracking-[0.3em] text-cyan-400 font-bold">
-                    Recent activity
-                  </div>
-                  <div className="mt-1.5 font-medium text-white text-[15px]" style={{ fontFamily: 'Mitr, sans-serif', letterSpacing: '-0.01em' }}>
-                    Chip ledger
-                  </div>
-                  <div className="mt-1 text-[10px] font-mono text-slate-500 tracking-wider">
-                    Last 5 of {ledgerTotal.toLocaleString()} {ledgerTotal === 1 ? 'event' : 'events'}
-                  </div>
-                </div>
-                <span
-                  className="inline-flex items-center gap-1.5 px-2 py-1 rounded-full text-[9px] font-bold tracking-wider uppercase text-emerald-300"
+          {/* ── Body · avatar + stats | chart ── */}
+          <div className="grid grid-cols-1 lg:grid-cols-[240px_1fr] gap-6 lg:gap-8 items-stretch">
+            {/* LEFT · avatar + stat grid */}
+            <div className="space-y-4">
+              <div className="relative">
+                <div
+                  className="rounded-2xl p-3 relative overflow-hidden aspect-square"
                   style={{
-                    background: 'rgba(16,185,129,0.1)',
-                    border: '1px solid rgba(16,185,129,0.3)',
+                    background:
+                      'radial-gradient(circle at 30% 20%, rgba(34,211,238,0.20), transparent 55%), radial-gradient(circle at 70% 80%, rgba(168,85,247,0.16), transparent 55%), linear-gradient(160deg, #0b1a2e, #050a14)',
+                    boxShadow: '0 0 24px -2px rgba(34,211,238,0.45), 0 0 0 1px rgba(34,211,238,0.35) inset',
                   }}
                 >
-                  <span
-                    className="w-1.5 h-1.5 rounded-full bg-emerald-400"
-                    style={{ boxShadow: '0 0 6px rgba(16,185,129,0.6)', animation: 'morblotto-live-pulse 1.8s ease-in-out infinite' }}
-                  />
-                  Live
-                </span>
-              </div>
+                  {avatarConfig ? (
+                    <AvatarView config={avatarConfig} className="w-full h-full" />
+                  ) : (
+                    <div className="w-full h-full flex items-center justify-center" aria-hidden>
+                      <span style={{ fontSize: 72 }}>{archetype.emoji}</span>
+                    </div>
+                  )}
+                </div>
 
-              <div className="flex-1">
-                {recent.length === 0 ? (
-                  <div className="py-6 text-center text-xs text-slate-500 font-mono tracking-wider">
-                    No chip activity yet.
-                  </div>
-                ) : (
-                  recent.map((entry, idx) => {
-                    const d = ledgerDisplay(entry);
-                    const { display: deltaText, isCredit } = formatDelta(entry.delta);
-                    let balanceAfterDisplay = '—';
-                    try { balanceAfterDisplay = formatChips(BigInt(entry.balanceAfter)); } catch { /* ignore */ }
-                    return (
-                      <div
-                        key={entry.id ?? idx}
-                        className={`grid grid-cols-[44px_1fr_auto] gap-3 py-3 items-center ${
-                          idx === 0 ? 'pt-0' : ''
-                        } ${idx === recent.length - 1 ? '' : 'border-b border-white/[0.05]'}`}
-                      >
-                        <LedgerDirectionIcon direction={d.direction} size="md" />
-                        <div className="min-w-0">
-                          <div className="text-[13px] text-white font-medium leading-tight truncate">
-                            {d.label}
-                          </div>
-                          <div className="text-[11px] text-slate-500 font-mono truncate mt-0.5">
-                            <span className="text-slate-400">{d.meta}</span>
-                            <span className="mx-1.5 text-slate-700">·</span>
-                            <span>{formatRelativeTime(entry.createdAt)}</span>
-                          </div>
-                        </div>
-                        <div className="text-right min-w-[64px]">
-                          <div
-                            className={`leading-none tabular-nums ${isCredit ? 'text-emerald-300' : 'text-rose-300'}`}
-                            style={{ fontFamily: 'Mitr, sans-serif', fontWeight: 700, fontSize: 16, letterSpacing: '-0.01em' }}
-                          >
-                            {deltaText}
-                          </div>
-                          <div className="mt-1 text-[9px] font-mono text-slate-500 tracking-wider">
-                            → {balanceAfterDisplay}
-                          </div>
-                        </div>
-                      </div>
-                    );
-                  })
-                )}
-              </div>
+                {/* REP badge · placeholder for the upcoming PulseChain token rep feature */}
+                <RepBadge />
 
-              <div className="mt-3 pt-3 border-t border-white/[0.1]">
+                {/* Customize avatar button · overhangs the bottom-left */}
                 <button
                   type="button"
-                  onClick={() => setLedgerModalOpen(true)}
-                  className="w-full inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl border border-white/[0.15] text-[12px] font-bold text-slate-200 hover:border-cyan-400/40 hover:text-white transition-colors"
+                  onClick={handleCustomizeAvatar}
+                  className="absolute left-[28%] -translate-x-1/2 -bottom-4 inline-flex items-center gap-1.5 px-4 py-2 rounded-xl text-[11px] font-bold uppercase tracking-wider text-white whitespace-nowrap hover:scale-105 transition-transform"
+                  style={{
+                    background: 'linear-gradient(135deg, #0891b2, #2563eb)',
+                    boxShadow: '0 8px 22px -6px rgba(6,182,212,0.65), 0 0 0 1px rgba(34,211,238,0.25)',
+                  }}
                 >
-                  <span>View all transactions</span>
-                  <span className="text-slate-500 font-mono text-[11px]">{ledgerTotal.toLocaleString()}</span>
-                  <ArrowRight size={13} />
+                  <PencilLine size={12} strokeWidth={2.5} />
+                  Customize
                 </button>
               </div>
+
+              {/* Stat grid · VPIP/PFR/Agg + Hands/Tourney/Biggest */}
+              <div className="grid grid-cols-3 gap-x-2 gap-y-3 pt-4">
+                <StatCell label="VPIP" value={stats ? `${stats.vpip_pct.toFixed(0)}%` : '—'} accent />
+                <StatCell label="PFR" value={stats ? `${stats.pfr_pct.toFixed(0)}%` : '—'} accent />
+                <StatCell
+                  label="Agg"
+                  value={stats?.aggression_factor != null ? stats.aggression_factor.toFixed(1) : '—'}
+                  accent
+                />
+                <StatCell label="Hands" value={totalHands.toLocaleString()} />
+                <StatCell label="Tourney" value={tournamentHands.toLocaleString()} />
+                <StatCell label="Biggest" value={biggestPotBn > 0n ? formatChips(biggestPotBn) : '—'} />
+              </div>
             </div>
+
+            {/* RIGHT · profit/loss chart */}
+            <div className="min-w-0">
+              <PokerStreakChart
+                hands={handsList}
+                lifetimeNetChips={profitLossBn}
+                showdownWinRate={stats?.showdown_win_rate ?? null}
+                profitPerHand={profitPerHandBn}
+                bbPer100={stats?.bb_per_100 ?? null}
+              />
+            </div>
+          </div>
+
+          {/* ── Action buttons · all stats + all transactions ── */}
+          <div className="mt-6 sm:mt-7 grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <button
+              type="button"
+              onClick={onOpenAllStats}
+              className="inline-flex items-center justify-center gap-2 px-5 py-3 rounded-xl text-[13px] font-bold text-white transition-transform hover:scale-[1.01]"
+              style={{
+                background: 'linear-gradient(135deg, #0891b2, #2563eb)',
+                boxShadow: '0 6px 18px -6px rgba(6,182,212,0.55), 0 0 0 1px rgba(34,211,238,0.18)',
+              }}
+            >
+              View all stats <ArrowRight size={14} />
+            </button>
+            <button
+              type="button"
+              onClick={() => setLedgerModalOpen(true)}
+              className="inline-flex items-center justify-center gap-2 px-5 py-3 rounded-xl text-[13px] font-bold border border-white/[0.15] text-slate-200 hover:border-cyan-400/40 hover:text-white transition-colors"
+            >
+              View all transactions <ArrowRight size={14} />
+            </button>
           </div>
         </div>
 
         <style jsx>{`
-          @keyframes morblotto-live-pulse {
-            0%, 100% { opacity: 1; }
-            50% { opacity: 0.45; }
-          }
           @keyframes morblotto-rank-sparkle {
             0%, 100% { opacity: 0.25; transform: scale(0.85) rotate(0deg); }
             50% { opacity: 1; transform: scale(1.15) rotate(20deg); }
@@ -473,137 +241,135 @@ export function PokerYourStatsPanel({ address, onOpenAllStats }: PokerYourStatsP
   );
 }
 
-function GlobalRankCard({ tier }: { tier: TierConfig }) {
-  const Icon = tier.icon;
-  const isChampion = tier.tier === 'champion';
-  const isUnranked = tier.tier === 'unranked';
-  const showProgress = tier.progress != null && tier.progressText && tier.nextLabel;
-
-  return (
-    <div
-      className="relative rounded-xl border overflow-hidden p-4"
-      style={{
-        borderColor: tier.borderColorCss,
-        background: `linear-gradient(135deg, ${tier.bgFromCss} 0%, ${tier.bgToCss} 100%)`,
-      }}
-    >
-      <div
-        className="absolute -top-14 -right-14 w-36 h-36 rounded-full blur-3xl pointer-events-none"
-        style={{ background: tier.glowColorCss }}
-        aria-hidden
-      />
-      {isChampion && (
-        <>
-          <Sparkles
-            size={11}
-            className="absolute top-2 right-2 text-amber-300/70 pointer-events-none"
-            style={{ animation: 'morblotto-rank-sparkle 2.4s ease-in-out infinite' }}
-            aria-hidden
-          />
-          <Sparkles
-            size={9}
-            className="absolute top-5 right-7 text-amber-200/50 pointer-events-none"
-            style={{ animation: 'morblotto-rank-sparkle 2.4s ease-in-out infinite 0.6s' }}
-            aria-hidden
-          />
-        </>
-      )}
-
-      <div className="relative flex items-center gap-3 mb-3">
+/** Big rank treatment — clean white number for #4+, medal styling for #1/#2/#3. */
+function RankHeader({ rank, totalHands }: { rank: number | null | undefined; totalHands: number }) {
+  if (totalHands === 0 || rank == null) {
+    return (
+      <div className="text-right shrink-0">
+        <div className="text-[9px] font-mono uppercase tracking-[0.3em] text-slate-500 font-bold">Global rank</div>
         <div
-          className="w-10 h-10 rounded-lg flex items-center justify-center shrink-0"
-          style={{ background: tier.iconBgCss, border: `1px solid ${tier.iconBorderCss}` }}
-          aria-hidden
+          className="leading-[0.9] mt-1.5 text-slate-500 tabular-nums"
+          style={{ fontFamily: 'Mitr, sans-serif', fontWeight: 700, fontSize: 44, letterSpacing: '-0.04em' }}
         >
-          <Icon size={20} className={tier.iconColor} strokeWidth={2.25} />
-        </div>
-        <div className="flex-1 min-w-0">
-          <div className="text-[9px] uppercase tracking-[0.28em] font-bold text-slate-400 mb-1">
-            Global rank
-          </div>
-          <div className="flex items-baseline gap-2 leading-none">
-            <span
-              className="text-white"
-              style={{ fontFamily: 'Mitr, sans-serif', fontWeight: 700, fontSize: 26, letterSpacing: '-0.02em' }}
-            >
-              {tier.rankText}
-            </span>
-            <span
-              className={`text-[10px] font-bold tracking-[0.18em] uppercase ${tier.textColor}`}
-            >
-              {tier.label}
-            </span>
-          </div>
+          —
         </div>
       </div>
-
-      {showProgress && (
-        <div className="relative">
-          <div className="flex justify-between items-center mb-1.5">
-            <span className="text-[10px] font-mono text-slate-400 tracking-wide">
-              {tier.progressText}
-            </span>
-            <span className="text-[10px] font-mono text-slate-300 tracking-wide">
-              → {tier.nextLabel}
-            </span>
-          </div>
-          <div className="h-1.5 rounded-full bg-white/[0.07] overflow-hidden">
-            <div
-              className="h-full rounded-full transition-all duration-700"
-              style={{
-                width: `${Math.max(3, (tier.progress ?? 0) * 100)}%`,
-                background: tier.barGradientCss,
-                boxShadow: tier.barGlowCss,
-              }}
-            />
-          </div>
+    );
+  }
+  if (rank === 1) {
+    return (
+      <div className="text-right shrink-0 relative">
+        <div className="text-[9px] font-mono uppercase tracking-[0.3em] text-amber-300/80 font-bold flex items-center justify-end gap-1.5">
+          <Crown size={11} strokeWidth={2.5} /> Champion
         </div>
-      )}
-      {(isChampion || isUnranked) && tier.sublabel && (
         <div
-          className={`relative text-[10px] font-mono tracking-wide flex items-center gap-1.5 ${
-            isChampion ? 'text-amber-300/90' : 'text-slate-400'
-          }`}
+          className="leading-[0.9] mt-1.5 text-amber-200 tabular-nums"
+          style={{
+            fontFamily: 'Mitr, sans-serif',
+            fontWeight: 700,
+            fontSize: 52,
+            letterSpacing: '-0.04em',
+            textShadow: '0 0 18px rgba(251,191,36,0.55)',
+          }}
         >
-          {isChampion && <Crown size={11} className="shrink-0" aria-hidden />}
-          <span>{tier.sublabel}</span>
+          #1
         </div>
-      )}
+      </div>
+    );
+  }
+  if (rank === 2) {
+    return (
+      <div className="text-right shrink-0">
+        <div className="text-[9px] font-mono uppercase tracking-[0.3em] text-slate-300/90 font-bold flex items-center justify-end gap-1.5">
+          <Medal size={11} strokeWidth={2.5} /> Runner-up
+        </div>
+        <div
+          className="leading-[0.9] mt-1.5 text-slate-100 tabular-nums"
+          style={{
+            fontFamily: 'Mitr, sans-serif',
+            fontWeight: 700,
+            fontSize: 52,
+            letterSpacing: '-0.04em',
+            textShadow: '0 0 14px rgba(226,232,240,0.40)',
+          }}
+        >
+          #2
+        </div>
+      </div>
+    );
+  }
+  if (rank === 3) {
+    return (
+      <div className="text-right shrink-0">
+        <div className="text-[9px] font-mono uppercase tracking-[0.3em] text-orange-300/90 font-bold flex items-center justify-end gap-1.5">
+          <Trophy size={11} strokeWidth={2.5} /> Third
+        </div>
+        <div
+          className="leading-[0.9] mt-1.5 text-orange-200 tabular-nums"
+          style={{
+            fontFamily: 'Mitr, sans-serif',
+            fontWeight: 700,
+            fontSize: 52,
+            letterSpacing: '-0.04em',
+            textShadow: '0 0 14px rgba(251,146,60,0.45)',
+          }}
+        >
+          #3
+        </div>
+      </div>
+    );
+  }
+  return (
+    <div className="text-right shrink-0">
+      <div className="text-[9px] font-mono uppercase tracking-[0.3em] text-slate-500 font-bold">Global rank</div>
+      <div
+        className="leading-[0.9] mt-1.5 text-white tabular-nums"
+        style={{ fontFamily: 'Mitr, sans-serif', fontWeight: 700, fontSize: 52, letterSpacing: '-0.04em' }}
+      >
+        #{rank}
+      </div>
     </div>
   );
 }
 
-function StatRow({
-  label,
-  value,
-  rightSlot,
-  tone = 'neutral',
-  unit,
-}: {
-  label: string;
-  value?: string;
-  rightSlot?: React.ReactNode;
-  tone?: 'win' | 'loss' | 'neutral';
-  unit?: string;
-}) {
-  const toneClass =
-    tone === 'win' ? 'text-emerald-300'
-      : tone === 'loss' ? 'text-rose-300'
-        : 'text-white';
+/**
+ * REP badge — bottom-right of the avatar. Empty by default ("REP +"). Clicking
+ * opens a PulseChain token search so the player can link a token logo as their
+ * "rep". TODO: wire up the token-picker — for now the click is a no-op so the
+ * affordance shows up in the UI.
+ */
+function RepBadge() {
   return (
-    <div className="flex justify-between items-baseline gap-3 pb-2 border-b border-white/[0.06] last:border-b-0">
-      <span className="text-[9px] uppercase tracking-[0.2em] text-slate-500 font-semibold whitespace-nowrap">
+    <button
+      type="button"
+      onClick={() => { /* TODO: open PulseChain token search modal */ }}
+      className="absolute -bottom-3 -right-3 w-14 h-14 rounded-full flex flex-col items-center justify-center transition-transform hover:scale-110 group z-10"
+      style={{
+        background: 'radial-gradient(circle at 30% 30%, rgba(8,145,178,0.35), rgba(15,23,42,0.97))',
+        border: '2px solid rgba(34,211,238,0.55)',
+        boxShadow: '0 0 18px rgba(6,182,212,0.45), 0 0 0 3px #050a14',
+      }}
+      aria-label="Link a PulseChain token as your rep"
+      title="Link a PulseChain token as your rep"
+    >
+      <span className="font-mono text-[8px] tracking-[0.25em] font-bold text-cyan-300 leading-none">REP</span>
+      <Plus size={14} strokeWidth={3} className="text-cyan-300 mt-1 transition-transform group-hover:rotate-90" aria-hidden />
+    </button>
+  );
+}
+
+function StatCell({ label, value, accent = false }: { label: string; value: string; accent?: boolean }) {
+  return (
+    <div>
+      <div className="text-[8px] uppercase tracking-[0.2em] text-slate-500 font-mono font-bold">
         {label}
-      </span>
-      {rightSlot ?? (
-        <span
-          className={`${toneClass} text-right leading-none tabular-nums`}
-          style={{ fontFamily: 'Mitr, sans-serif', fontWeight: 600, fontSize: 20, letterSpacing: '-0.01em' }}
-        >
-          {value ?? '—'}
-          {unit && <span className="text-[10px] text-slate-500 font-medium ml-1">{unit}</span>}
-        </span>
-      )}
+      </div>
+      <div
+        className={`mt-0.5 tabular-nums leading-none ${accent ? 'text-cyan-300' : 'text-white'}`}
+        style={{ fontFamily: 'Mitr, sans-serif', fontWeight: 600, fontSize: 18, letterSpacing: '-0.01em' }}
+      >
+        {value}
+      </div>
     </div>
   );
 }
