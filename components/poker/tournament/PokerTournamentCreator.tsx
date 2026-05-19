@@ -545,6 +545,66 @@ export interface PokerTournamentCreatorProps {
     params: CreatePokerTournamentParams,
     opts: { addBots: number },
   ) => Promise<{ tournamentId: string; pinCode?: string | null } | null>;
+  /**
+   * `'modal'` (default): renders inside a Radix `<Dialog>` overlay. Used by the lobby.
+   * `'page'`: renders on a full-bleed gradient page surface for the dedicated
+   *   `/poker/tournaments/create` route. The page itself scrolls; no Dialog wrapper.
+   */
+  variant?: 'modal' | 'page';
+}
+
+/**
+ * Conditional wrapper: Radix Dialog in modal mode, full-bleed page surface in page mode.
+ * The visual style of the inner card is unchanged — only the outer chrome differs.
+ */
+function CreatorShell({
+  variant,
+  modal = true,
+  onClose,
+  srTitle,
+  srDescription,
+  children,
+}: {
+  variant: 'modal' | 'page';
+  modal?: boolean;
+  onClose: () => void;
+  srTitle: string;
+  srDescription: string;
+  children: React.ReactNode;
+}) {
+  if (variant === 'page') {
+    return (
+      <div
+        className="relative min-h-screen w-full"
+        style={{
+          background:
+            'radial-gradient(ellipse at top, rgba(6,182,212,0.10), transparent 60%), linear-gradient(180deg, #050a14 0%, #020409 100%)',
+        }}
+      >
+        <div className="mx-auto flex w-full max-w-2xl items-start justify-center px-4 py-6 sm:py-10">
+          {children}
+        </div>
+      </div>
+    );
+  }
+  return (
+    <Dialog modal={modal} defaultOpen onOpenChange={(open) => { if (!open) onClose(); }}>
+      <DialogPortal>
+        <DialogOverlay className="z-50 bg-black/80 backdrop-blur-sm data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0" />
+        <DialogPrimitive.Content
+          className={cn(
+            'fixed inset-0 z-50 flex flex-col items-center justify-center border-0 bg-transparent p-4 shadow-none outline-none',
+            'overflow-y-auto scroll-smooth overscroll-y-contain',
+            'data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 duration-200',
+          )}
+        >
+          <DialogPrimitive.Title className="sr-only">{srTitle}</DialogPrimitive.Title>
+          <DialogPrimitive.Description className="sr-only">{srDescription}</DialogPrimitive.Description>
+          {children}
+        </DialogPrimitive.Content>
+      </DialogPortal>
+    </Dialog>
+  );
 }
 
 /** Morb-style slate panel — shared by tab bar, FAQ, and tournament name field. */
@@ -1019,7 +1079,7 @@ function BlindIntervalRolodex({
   );
 }
 
-export function PokerTournamentCreator({ creatorAddress, onClose, onCreate }: PokerTournamentCreatorProps) {
+export function PokerTournamentCreator({ creatorAddress, onClose, onCreate, variant = 'modal' }: PokerTournamentCreatorProps) {
   const isAdmin = isAdminWallet(creatorAddress);
   const [name, setName] = useState('My Tournament');
   /** `null` until the user picks freeroll vs buy-in on the Type tab. */
@@ -1843,20 +1903,13 @@ export function PokerTournamentCreator({ creatorAddress, onClose, onCreate }: Po
 
   if (!creatorAddress) {
     return (
-      <Dialog modal={false} defaultOpen onOpenChange={(open) => { if (!open) onClose(); }}>
-        <DialogPortal>
-          <DialogOverlay className="z-50 bg-black/80 backdrop-blur-sm data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0" />
-          <DialogPrimitive.Content
-            className={cn(
-              'fixed inset-0 z-50 flex flex-col items-center justify-center border-0 bg-transparent p-4 shadow-none outline-none',
-              'overflow-y-auto scroll-smooth overscroll-y-contain',
-              'data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 duration-200',
-            )}
-          >
-            <DialogPrimitive.Title className="sr-only">Connect your wallet</DialogPrimitive.Title>
-            <DialogPrimitive.Description className="sr-only">
-              Connect a wallet to create a poker tournament.
-            </DialogPrimitive.Description>
+      <CreatorShell
+        variant={variant}
+        modal={false}
+        onClose={onClose}
+        srTitle="Connect your wallet"
+        srDescription="Connect a wallet to create a poker tournament."
+      >
             <div
               className="relative w-full max-w-sm rounded-2xl border border-cyan-500/30 bg-slate-950 p-6 overflow-hidden shadow-[0_0_60px_-15px_rgba(34,211,238,0.35)]"
             >
@@ -1889,9 +1942,7 @@ export function PokerTournamentCreator({ creatorAddress, onClose, onCreate }: Po
                 Connect wallet
               </button>
             </div>
-          </DialogPrimitive.Content>
-        </DialogPortal>
-      </Dialog>
+      </CreatorShell>
     );
   }
 
@@ -1936,22 +1987,19 @@ export function PokerTournamentCreator({ creatorAddress, onClose, onCreate }: Po
   };
 
   return (
-    <Dialog defaultOpen onOpenChange={(open) => { if (!open) onClose(); }}>
-      <DialogPortal>
-        <DialogOverlay className="z-50 bg-black/80 backdrop-blur-sm data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0" />
-        <DialogPrimitive.Content
-          className={cn(
-            'fixed inset-0 z-50 flex flex-col items-center justify-center border-0 bg-transparent p-4 shadow-none outline-none',
-            'overflow-y-auto scroll-smooth overscroll-y-contain',
-            'data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 duration-200',
-          )}
-        >
-          <DialogPrimitive.Title className="sr-only">Create a poker tournament</DialogPrimitive.Title>
-          <DialogPrimitive.Description className="sr-only">
-            Configure a scheduled Sit and Go: funding, blinds, prizes, and start time.
-          </DialogPrimitive.Description>
+    <CreatorShell
+      variant={variant}
+      onClose={onClose}
+      srTitle="Create a poker tournament"
+      srDescription="Configure a scheduled Sit and Go: funding, blinds, prizes, and start time."
+    >
       <div
-        className="relative w-full max-w-xl max-h-[92vh] flex flex-col rounded-2xl border border-cyan-500/30 bg-slate-950 overflow-hidden shadow-[0_0_60px_-15px_rgba(34,211,238,0.35)]"
+        className={cn(
+          'relative w-full max-w-xl flex flex-col rounded-2xl border border-cyan-500/30 bg-slate-950 overflow-hidden shadow-[0_0_60px_-15px_rgba(34,211,238,0.35)]',
+          // In modal mode the panel is height-bound so the inner area scrolls inside it;
+          // in page mode the panel grows naturally and the page itself scrolls.
+          variant === 'modal' && 'max-h-[92vh]',
+        )}
       >
         {/* Animated beams — matches EscrowBuyInJoinPanel theme. Low opacity so the dense tab content stays readable. */}
         <div className="pointer-events-none absolute inset-0 z-0 opacity-40">
@@ -2937,9 +2985,7 @@ export function PokerTournamentCreator({ creatorAddress, onClose, onCreate }: Po
           />
         );
       })()}
-        </DialogPrimitive.Content>
-      </DialogPortal>
-    </Dialog>
+    </CreatorShell>
   );
 }
 
