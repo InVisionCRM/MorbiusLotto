@@ -25,7 +25,6 @@ import { InsufficientBalanceDialog } from '@/components/shared/InsufficientBalan
 import { PokerOnboardingWizard } from '@/components/poker/PokerOnboardingWizard';
 import { PokerOnboardingChecklist } from '@/components/poker/PokerOnboardingChecklist';
 import { PokerYourStatsPanel } from '@/components/poker/PokerYourStatsPanel';
-import { PokerBalanceBar } from '@/components/poker/PokerBalanceBar';
 import { usePokerOnboarding } from '@/hooks/use-poker-onboarding';
 import { PokerBetaSplash } from '@/components/poker/PokerBetaSplash';
 import { PokerHowToPlayModal } from '@/components/poker/PokerHowToPlayModal';
@@ -691,22 +690,14 @@ export default function PokerLobbyPage() {
 
             {isConnected && address && (
               <div className="mb-6 sm:mb-8">
-                <PokerBalanceBar
+                <PokerYourStatsPanel
                   address={address.toLowerCase()}
+                  onOpenAllStats={() => setShowStatsModal(true)}
                   morbiusBalanceWei={balance}
                   chipBalance={chipBalance}
                   onDeposit={() => { setWalletDefaultTab('deposit'); setShowDepositModal(true); }}
                   onWithdraw={() => { setWalletDefaultTab('withdraw'); setShowDepositModal(true); }}
                   onOpenExchange={() => setShowChipExchange(true)}
-                />
-              </div>
-            )}
-
-            {isConnected && address && (
-              <div className="mb-6 sm:mb-8">
-                <PokerYourStatsPanel
-                  address={address.toLowerCase()}
-                  onOpenAllStats={() => setShowStatsModal(true)}
                 />
               </div>
             )}
