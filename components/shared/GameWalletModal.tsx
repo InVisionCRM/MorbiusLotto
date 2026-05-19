@@ -27,6 +27,7 @@ import {
   MORBIUS_TOKEN_ADDRESS,
 } from '@/lib/contracts';
 import { getBlackjackServerUrlOptional } from '@/lib/api-urls';
+import { apiFetch } from '@/lib/api-auth';
 import { CustomApprovalModal } from '@/components/BLACKJACK/CustomApprovalModal';
 import { ReportModal } from '@/components/shared/ReportModal';
 import { toast } from 'sonner';
@@ -660,31 +661,21 @@ export function GameWalletModal({
       return { ok: false, status: 0, message: 'Backend URL not configured (NEXT_PUBLIC_API_URL).' };
     }
     try {
-      const res = await fetch(`${serverUrl}/api/deposit/notify`, {
+      // apiFetch sends the SIWE session cookie and auto-prompts a sign-in
+      // wallet popup on 401, then retries once. walletAddress is no longer
+      // sent in the body — the server reads it from the session.
+      await apiFetch('/api/deposit/notify', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ walletAddress: address, txHash, amount: amountWei.toString() }),
+        body: JSON.stringify({ txHash, amount: amountWei.toString() }),
       });
-      let body: { error?: string } = {};
-      try {
-        body = (await res.json()) as { error?: string };
-      } catch {
-        /* non-JSON */
-      }
-      if (!res.ok) {
-        return {
-          ok: false,
-          status: res.status,
-          message: typeof body.error === 'string' ? body.error : `HTTP ${res.status}`,
-        };
-      }
       setTxLoaded(false);
       return { ok: true };
     } catch (e) {
+      const err = e as Error & { status?: number };
       return {
         ok: false,
-        status: 0,
-        message: e instanceof Error ? e.message : 'Network error',
+        status: err.status ?? 0,
+        message: err.message ?? 'Network error',
       };
     }
   };
@@ -922,13 +913,14 @@ export function GameWalletModal({
     setIsPreparingWithdraw(true);
     const toastId = toast.loading('Withdrawal queued...');
     try {
-      const res = await fetch(`${serverUrl}/api/withdraw`, {
+      // apiFetch sends the SIWE session cookie and auto-prompts a sign-in
+      // wallet popup on 401, then retries once. address is no longer sent in
+      // the body — the server reads it from the session.
+      const res = await apiFetch('/api/withdraw', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ address, amount: amountWei.toString() }),
+        body: JSON.stringify({ amount: amountWei.toString() }),
       });
       const data = await res.json();
-      if (!res.ok) throw new Error(data.error || 'Withdrawal failed');
       const jobId = data.jobId;
       if (!jobId) throw new Error('Server did not return jobId');
       await pollWithdrawJob(jobId, toastId);

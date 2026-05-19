@@ -11,6 +11,7 @@ import {
   type LockedField,
 } from '@/lib/cosmetics-catalog';
 import type { AvatarConfig, AvatarPayload } from '@/lib/websocket-client';
+import { apiFetch } from '@/lib/api-auth';
 
 export type { CosmeticItem, LockedField, AvatarField };
 export { getItemKeyForValue, getLockedFields, ITEM_CATALOG };
@@ -172,15 +173,17 @@ export async function purchaseItem(
   return data.items ?? [];
 }
 
-/** Gift an item to another player. Ownership transfers to recipient. */
-export async function giftItem(fromAddress: string, toAddress: string, itemKey: string): Promise<string[]> {
-  const res = await fetch('/api/cosmetics/gift', {
+/**
+ * Gift an item to another player. Ownership transfers to recipient.
+ * The sender ("from") is the signed-in wallet — not read from arguments here;
+ * `fromAddress` is accepted for API back-compat but ignored by the server.
+ */
+export async function giftItem(_fromAddress: string, toAddress: string, itemKey: string): Promise<string[]> {
+  const res = await apiFetch('/api/cosmetics/gift', {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ fromAddress, toAddress, itemKey }),
+    body: JSON.stringify({ toAddress, itemKey }),
   });
   const data = await res.json();
-  if (!res.ok) throw new Error(data.error ?? 'Gift failed');
   return data.items ?? [];
 }
 

@@ -12,6 +12,7 @@ import { INSTANT_LOTTERY_6OF55_ABI } from '@/abi/instant-lottery-6of55'
 import { useNetworkValidation } from '@/hooks/use-network-validation'
 import { useWplsPrice, calculateWplsAmount } from '@/hooks/use-wpls-price'
 import { getApiUrlOptional } from '@/lib/api-urls'
+import { apiFetch } from '@/lib/api-auth'
 import { cn } from '@/lib/utils'
 import { toast } from 'sonner'
 import { Loader2 } from 'lucide-react'
@@ -263,21 +264,18 @@ export function InstantLotteryPlayPanel({
     if (useApiPlay) {
       setApiPlaying(true)
       try {
-        const res = await fetch(`${apiUrl}/api/lottery/instant/play`, {
+        // SIWE-gated. apiFetch sends the session cookie + triggers wallet
+        // sign-in popup on 401, then retries. address is no longer in the
+        // body — server reads it from the session.
+        const res = await apiFetch('/api/lottery/instant/play', {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
-            address,
             numbers: ticket,
             wager: wagerWei.toString(),
             clientSeed: (clientSeed.trim() || 'default').slice(0, 255),
           }),
         })
         const data = await res.json().catch(() => ({}))
-        if (!res.ok) {
-          onError?.(new Error(data?.error ?? `Play failed (${res.status})`))
-          return
-        }
         onResult?.({
           playerNumbers: ticket,
           winningNumbers: data.winningNumbers ?? [],

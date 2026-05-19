@@ -5,6 +5,7 @@ import { AnimatePresence, motion } from 'framer-motion';
 import { X, Loader2, RefreshCw, ArrowDownCircle, ArrowUpCircle } from 'lucide-react';
 import { toast } from 'sonner';
 import { getApiUrlOptional } from '@/lib/api-urls';
+import { apiFetch } from '@/lib/api-auth';
 import { formatChips, parseChipInput } from '@/lib/format-poker-chips';
 import { formatMorbiusFloor } from '@/lib/format-morbius-display';
 import { POKER_CHIP_WEI } from '@/lib/poker-buy-in';
@@ -146,15 +147,11 @@ export function PokerChipExchangeModal({
     }
     setSubmitting(true);
     try {
-      const res = await fetch(`${api}/api/poker/chips/purchase`, {
+      // SIWE-gated. address dropped from body — server reads it from session.
+      const res = await apiFetch('/api/poker/chips/purchase', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ address: addr, chips: buyChipsParsed }),
+        body: JSON.stringify({ chips: buyChipsParsed }),
       });
-      if (!res.ok) {
-        toast.error(await readJsonError(res));
-        return;
-      }
       await res.json();
       setBuyInput('');
       toast.success(`Received ${formatChips(buyChipsParsed)} chips`);
@@ -188,15 +185,11 @@ export function PokerChipExchangeModal({
     }
     setSubmitting(true);
     try {
-      const res = await fetch(`${api}/api/poker/chips/cashout`, {
+      // SIWE-gated. address dropped from body — server reads it from session.
+      const res = await apiFetch('/api/poker/chips/cashout', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ address: addr, chips: sellChipsParsed }),
+        body: JSON.stringify({ chips: sellChipsParsed }),
       });
-      if (!res.ok) {
-        toast.error(await readJsonError(res));
-        return;
-      }
       const j = await res.json();
       const creditedWei = toBigIntSafe(j?.morbiusCreditedWei);
       setSellInput('');
