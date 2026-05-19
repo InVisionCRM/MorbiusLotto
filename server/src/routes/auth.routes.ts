@@ -23,6 +23,28 @@ interface Options {
 export function registerAuthRoutes({ app, authService }: Options): void {
   const isProd = process.env.NODE_ENV === 'production';
 
+  /**
+   * Decide cookie SameSite + Secure attributes from the actual request,
+   * not from `NODE_ENV` (which may not be set on some deploys). The cookie
+   * MUST be `SameSite=None; Secure` for the browser to send it on
+   * cross-origin requests from morbius.io → api.morbius.io. If we set
+   * `SameSite=Lax`, the cookie is stored but never travels — auth silently
+   * fails on every subsequent call.
+   *
+   * `req.secure` is set by Express when behind a trusted reverse proxy
+   * (Railway sets `X-Forwarded-Proto: https`, and `app.set('trust proxy', 1)`
+   * is set in server.ts).
+   */
+  const cookieAttrs = (req: import('express').Request) => {
+    const isSecure = req.secure || isProd;
+    return {
+      httpOnly: true as const,
+      secure: isSecure,
+      sameSite: (isSecure ? 'none' : 'lax') as 'none' | 'lax',
+      path: '/' as const,
+    };
+  };
+
   app.get('/api/auth/nonce', async (_req, res) => {
     try {
       const { nonce, expiresAt } = await authService.issueNonce();
@@ -47,11 +69,8 @@ export function registerAuthRoutes({ app, authService }: Options): void {
       const session = await authService.verifyAndCreateSession(message, signature, { ip, userAgent });
 
       res.cookie(SESSION_COOKIE_NAME, session.token, {
-        httpOnly: true,
-        secure: isProd,
-        sameSite: isProd ? 'none' : 'lax', // 'none' required cross-origin in prod (frontend != backend host)
+        ...cookieAttrs(req),
         expires: session.expiresAt,
-        path: '/',
       });
 
       return sendJson(res, {
@@ -69,7 +88,9 @@ export function registerAuthRoutes({ app, authService }: Options): void {
     try {
       const token = (req as typeof req & { cookies?: Record<string, string> }).cookies?.[SESSION_COOKIE_NAME];
       if (token) await authService.revokeSession(token);
-      res.clearCookie(SESSION_COOKIE_NAME, { path: '/' });
+      // clearCookie must match the SameSite/Secure attrs that were set, or
+      // the browser keeps the old cookie.
+      res.clearCookie(SESSION_COOKIE_NAME, cookieAttrs(req));
       sendJson(res, { ok: true });
     } catch (err) {
       logger.error('auth.logout.error', { err: String(err) });
