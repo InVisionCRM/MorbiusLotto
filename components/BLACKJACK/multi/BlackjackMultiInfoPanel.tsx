@@ -133,7 +133,8 @@ function ChatMessages({
             {isWelcome && <span className="font-bold text-white">Morbius: </span>}
             {isFactBot && <span className="font-bold text-emerald-400">FactBot: </span>}
             {isIdle && <span className="font-bold text-orange-400">⚠ System: </span>}
-            {isWelcome ? <span dangerouslySetInnerHTML={{ __html: m.text }} /> : m.text}
+            {/* Render as text. Rendering server-supplied chat as HTML was a session-theft vector (FE-008 / audit). */}
+            {m.text}
           </div>
         );
       })}
