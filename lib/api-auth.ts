@@ -1,4 +1,8 @@
-import { getApiUrl } from './api-urls';
+// Direct literal property access — Next.js inlines `process.env.NEXT_PUBLIC_*`
+// at build time ONLY when accessed by literal name. The helper in api-urls.ts
+// uses dynamic `process.env[name]` which doesn't get inlined in the client
+// bundle, so we read the var directly here.
+const API_BASE = (process.env.NEXT_PUBLIC_API_URL ?? '').trim();
 
 /**
  * Optional callback invoked when a request returns 401. Set by SiweProvider
@@ -31,8 +35,10 @@ export function setAuthFailureHandler(handler: (() => Promise<unknown>) | null):
  * not 2xx (after the optional retry).
  */
 export async function apiFetch(path: string, init: RequestInit = {}): Promise<Response> {
-  const base = getApiUrl();
-  const url = path.startsWith('http') ? path : `${base}${path}`;
+  if (!API_BASE) {
+    throw new Error('Missing NEXT_PUBLIC_API_URL. Add it in Vercel (frontend) Settings → Environment Variables, then trigger a fresh build (the value is baked in at build time).');
+  }
+  const url = path.startsWith('http') ? path : `${API_BASE}${path}`;
 
   const headers = new Headers(init.headers);
   if (init.body && !headers.has('Content-Type') && typeof init.body === 'string') {

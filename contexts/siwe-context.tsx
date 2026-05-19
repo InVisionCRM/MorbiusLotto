@@ -3,8 +3,12 @@
 import { createContext, useCallback, useContext, useEffect, useRef, useState } from 'react';
 import { useAccount, useSignMessage } from 'wagmi';
 import { SiweMessage } from 'siwe';
-import { getApiUrl } from '@/lib/api-urls';
 import { setAuthFailureHandler } from '@/lib/api-auth';
+
+// Direct literal property access — Next.js inlines `process.env.NEXT_PUBLIC_*`
+// at build time ONLY when accessed by literal name. `getApiUrl()` in api-urls.ts
+// goes through a `process.env[name]` indirection that doesn't get inlined.
+const API_BASE = (process.env.NEXT_PUBLIC_API_URL ?? '').trim();
 
 interface SiweState {
   /** Address of the wallet currently signed in via SIWE (checksummed). Null if not signed in. */
@@ -26,9 +30,7 @@ interface SiweState {
 
 const SiweContext = createContext<SiweState | null>(null);
 
-const apiBase = () => {
-  try { return getApiUrl(); } catch { return ''; }
-};
+const apiBase = () => API_BASE;
 
 async function fetchJson(url: string, init?: RequestInit) {
   const res = await fetch(url, { credentials: 'include', ...init });
