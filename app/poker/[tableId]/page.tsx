@@ -3,6 +3,7 @@
 import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { useParams, useRouter, useSearchParams } from 'next/navigation';
 import { useAccount, useSignTypedData } from 'wagmi';
+import { apiFetch } from '@/lib/api-auth';
 import { formatChips } from '@/lib/format-poker-chips';
 import { formatPokerLastActionLine } from '@/lib/format-poker-last-action';
 import { POKER_CASH_MIN_BUY_IN_BB, POKER_CASH_MAX_BUY_IN_BB } from '@/lib/poker-buy-in';
@@ -418,20 +419,17 @@ export default function PokerTablePage() {
           });
 
           if (isFollowing) {
-            const res = await fetch(`/api/player/${addr}/follow`, {
+            // SIWE-gated. Follower comes from session, target stays in URL.
+            await apiFetch(`/api/player/${addr}/follow`, {
               method: 'DELETE',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ follower: me }),
+              body: JSON.stringify({}),
             });
-            if (!res.ok) throw new Error('Failed to unfollow');
             toast.success('Unfollowed');
           } else {
-            const res = await fetch(`/api/player/${addr}/follow`, {
+            await apiFetch(`/api/player/${addr}/follow`, {
               method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ follower: me }),
+              body: JSON.stringify({}),
             });
-            if (!res.ok) throw new Error('Failed to follow');
             toast.success('Following');
           }
           await queryClient.invalidateQueries({ queryKey: ['isFollowing', me, addr] });

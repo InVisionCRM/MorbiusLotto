@@ -11,6 +11,7 @@ import { parseAvatarPayload } from '@/lib/avatar-payload';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useProfileWs } from '@/contexts/profile-ws-context';
 import { useInventory } from '@/hooks/use-cosmetics';
+import { apiFetch } from '@/lib/api-auth';
 import { isAdminWallet, ITEM_CATALOG, type CosmeticItem, type ItemTier } from '@/lib/cosmetics-catalog';
 import {
   AVATAR_RANDOMIZE_FIELD_PINS_KEY,
@@ -253,21 +254,16 @@ export function ProfileAvatarModal({ open, onClose, wsClient: wsClientProp, onSa
         setError('Connect your wallet to save');
         return;
       }
-      const res = await fetch('/api/player/profile', {
+      // SIWE-gated. address dropped from body — server reads from session.
+      await apiFetch('/api/player/profile', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          address,
           displayName: name,
           profileImageUrl: profileImageUrl ?? '',
           avatarConfig: avatarPayload,
           profileDisplayMode,
         }),
       });
-      if (!res.ok) {
-        const data = await res.json().catch(() => ({}));
-        throw new Error(data.error || 'Failed to save profile');
-      }
       onSave?.();
       onClose();
     } catch (e) {

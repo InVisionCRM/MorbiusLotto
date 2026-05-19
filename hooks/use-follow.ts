@@ -1,6 +1,7 @@
 'use client';
 
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { apiFetch } from '@/lib/api-auth';
 
 export interface FollowEntry {
   address: string;
@@ -89,12 +90,11 @@ export function useFollowMutation(myAddress: string | null, targetAddress: strin
 
   const follow = useMutation({
     mutationFn: async () => {
-      const res = await fetch(`/api/player/${targetAddress}/follow`, {
+      // Follower is the signed-in wallet (server reads from session). Empty body.
+      const res = await apiFetch(`/api/player/${targetAddress}/follow`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ follower: myAddress }),
+        body: JSON.stringify({}),
       });
-      if (!res.ok) throw new Error('Failed to follow');
       return res.json();
     },
     onSuccess: () => {
@@ -106,12 +106,10 @@ export function useFollowMutation(myAddress: string | null, targetAddress: strin
 
   const unfollow = useMutation({
     mutationFn: async () => {
-      const res = await fetch(`/api/player/${targetAddress}/follow`, {
+      const res = await apiFetch(`/api/player/${targetAddress}/follow`, {
         method: 'DELETE',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ follower: myAddress }),
+        body: JSON.stringify({}),
       });
-      if (!res.ok) throw new Error('Failed to unfollow');
       return res.json();
     },
     onSuccess: () => {
