@@ -7,6 +7,10 @@ import multer from 'multer';
 import cors from 'cors';
 import helmet from 'helmet';
 import rateLimit from 'express-rate-limit';
+import cookieParser from 'cookie-parser';
+import { AuthService } from './services/auth.service';
+import { registerAuthRoutes } from './routes/auth.routes';
+import { requireAuth, requireSameAddress } from './middleware/require-auth';
 import { DatabaseService, type BlackjackSpWagerTierRow } from './services/database.service';
 import { ProvablyFairService } from './services/provably-fair.service';
 import { BlackjackGameService } from './services/blackjack-game.service';
@@ -126,6 +130,9 @@ app.use('/api/', limiter);
 // Body parsing
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
+
+// Cookie parsing for SIWE session lookup. Must come before any handler that reads cookies.
+app.use(cookieParser());
 
 // Uploaded files: serve from uploads/ (relative to process cwd when running from dist/)
 const uploadsDir = path.join(process.cwd(), 'uploads');
@@ -252,6 +259,11 @@ async function initializeServices() {
     // Initialize database
     const dbService = new DatabaseService();
     await dbService.connect();
+
+    // SIWE auth: nonce + verify + logout + me endpoints. Session cookies are
+    // looked up server-side against the `sessions` table (see migration 123).
+    const authService = new AuthService(dbService.getPool());
+    registerAuthRoutes({ app, authService });
 
     // Initialize provably fair service
     const pfService = new ProvablyFairService();
@@ -396,12 +408,10 @@ async function initializeServices() {
       }
     });
 
-    // Update profile by address (display name, profile image URL, avatar config). No signature required.
-    app.post('/api/player/profile', express.json(), async (req, res) => {
+    // Update profile. SIWE-gated: the owning address is the signed-in wallet.
+    app.post('/api/player/profile', express.json(), requireAuth(authService), async (req, res) => {
       try {
         const {
-          address: bodyAddress,
-          walletAddress: bodyWalletAddress,
           displayName: rawDisplayName,
           profileImageUrl: rawProfileImageUrl,
           avatarConfig: rawAvatarConfig,
@@ -410,16 +420,7 @@ async function initializeServices() {
           tgHandle: rawTgHandle,
           profileDisplayMode: rawProfileDisplayMode,
         } = req.body ?? {};
-        const addressRaw =
-          typeof bodyAddress === 'string' && bodyAddress.trim() !== ''
-            ? bodyAddress
-            : typeof bodyWalletAddress === 'string' && bodyWalletAddress.trim() !== ''
-              ? bodyWalletAddress
-              : '';
-        if (!addressRaw) {
-          return res.status(400).json({ error: 'address required' });
-        }
-        const normalizedAddress = getAddress(addressRaw);
+        const normalizedAddress = getAddress(req.user!.address);
         const displayName = await resolveDisplayNameForProfileUpsert(
           dbService,
           normalizedAddress,
@@ -542,13 +543,15 @@ async function initializeServices() {
       }
     });
 
-    // POST /api/cosmetics/gift — transfer item from one player to another
-    // Body: { fromAddress, toAddress, itemKey }
-    app.post('/api/cosmetics/gift', express.json(), async (req, res) => {
+    // POST /api/cosmetics/gift — transfer item from one player to another.
+    // SIWE-gated: sender is the signed-in wallet, recipient comes from body.
+    // Body: { toAddress, itemKey }
+    app.post('/api/cosmetics/gift', express.json(), requireAuth(authService), async (req, res) => {
       try {
-        const { fromAddress, toAddress, itemKey } = req.body ?? {};
-        if (!fromAddress || !toAddress || !itemKey) {
-          return res.status(400).json({ error: 'fromAddress, toAddress, and itemKey required' });
+        const { toAddress, itemKey } = req.body ?? {};
+        const fromAddress = req.user!.address;
+        if (!toAddress || !itemKey) {
+          return res.status(400).json({ error: 'toAddress and itemKey required' });
         }
         if (fromAddress.toLowerCase() === toAddress.toLowerCase()) {
           return res.status(400).json({ error: 'Cannot gift to yourself' });
@@ -564,13 +567,15 @@ async function initializeServices() {
       }
     });
 
-    // POST /api/cosmetics/grant — admin-only: grant item to a player for free
-    // Body: { targetAddress, itemKey, adminKey }
-    app.post('/api/cosmetics/grant', express.json(), async (req, res) => {
+    // POST /api/cosmetics/grant — admin-only: grant item to a player for free.
+    // SIWE-gated: caller must be signed in AND must be an admin wallet.
+    // Body: { targetAddress, itemKey }
+    app.post('/api/cosmetics/grant', express.json(), requireAuth(authService), async (req, res) => {
       try {
-        const { targetAddress, itemKey, adminAddress } = req.body ?? {};
-        if (!targetAddress || !itemKey || !adminAddress) {
-          return res.status(400).json({ error: 'targetAddress, itemKey, and adminAddress required' });
+        const { targetAddress, itemKey } = req.body ?? {};
+        const adminAddress = req.user!.address;
+        if (!targetAddress || !itemKey) {
+          return res.status(400).json({ error: 'targetAddress and itemKey required' });
         }
         if (!isAdminWallet(adminAddress)) {
           return res.status(403).json({ error: 'Unauthorized' });
@@ -1910,15 +1915,12 @@ async function initializeServices() {
       }
     });
 
-    // Cancel tournament (creator only)
-    app.post('/api/tournament/:tournamentId/cancel', async (req, res) => {
+    // Cancel tournament (creator only). SIWE-gated: the canceller IS the signed-in wallet.
+    // tournamentService.cancelTournament still verifies that this address is the creator.
+    app.post('/api/tournament/:tournamentId/cancel', requireAuth(authService), async (req, res) => {
       try {
         const { tournamentId } = req.params;
-        const { cancellerAddress } = req.body;
-        
-        if (!cancellerAddress || typeof cancellerAddress !== 'string') {
-          return res.status(400).json({ error: 'cancellerAddress is required' });
-        }
+        const cancellerAddress = req.user!.address;
 
         await tournamentService.cancelTournament(tournamentId, cancellerAddress);
         sendJson(res, { success: true, message: 'Tournament cancelled successfully' });
@@ -1931,15 +1933,11 @@ async function initializeServices() {
       }
     });
 
-    // Creator reclaim funds from cancelled tournament
-    app.post('/api/tournament/:tournamentId/reclaim', async (req, res) => {
+    // Creator reclaim funds from cancelled tournament. SIWE-gated.
+    app.post('/api/tournament/:tournamentId/reclaim', requireAuth(authService), async (req, res) => {
       try {
         const { tournamentId } = req.params;
-        const { creatorAddress } = req.body;
-        
-        if (!creatorAddress || typeof creatorAddress !== 'string') {
-          return res.status(400).json({ error: 'creatorAddress is required' });
-        }
+        const creatorAddress = req.user!.address;
 
         const result = await tournamentService.creatorReclaimFunds(tournamentId, creatorAddress);
         if (result.success) {
@@ -3711,12 +3709,14 @@ async function initializeServices() {
     const DEPOSIT_MORBIUS_ABI = [
       { type: 'event', name: 'DepositMORBIUS', inputs: [{ name: 'player', type: 'address', indexed: true }, { name: 'amount', type: 'uint256', indexed: false }] },
     ] as const;
-    app.post('/api/deposit/notify', async (req, res) => {
+    // SIWE-gated. The wallet whose deposit gets credited IS the signed-in wallet —
+    // not an arbitrary value from the body. Server still verifies the on-chain
+    // tx and its from/to fields below, so a spammer can't credit themselves
+    // for someone else's deposit.
+    app.post('/api/deposit/notify', requireAuth(authService), async (req, res) => {
       try {
-        const { walletAddress, txHash } = req.body;
-        if (!walletAddress || typeof walletAddress !== 'string' || !/^0x[0-9a-fA-F]{40}$/.test(walletAddress)) {
-          return res.status(400).json({ error: 'Invalid wallet address' });
-        }
+        const { txHash } = req.body ?? {};
+        const walletAddress = req.user!.address;
         if (!txHash || typeof txHash !== 'string' || !/^0x[0-9a-fA-F]{64}$/.test(txHash)) {
           return res.status(400).json({ error: 'Invalid tx hash' });
         }
@@ -4203,19 +4203,11 @@ async function initializeServices() {
     });
 
     // Hot-wallet auto-withdrawal: payouts are ERC20 transfers from HOT_WALLET — not from the Blackjack contract.
-    app.post('/api/withdraw', async (req, res) => {
+    // SIWE-gated: the withdrawing address is the signed-in wallet, never read from the request body.
+    app.post('/api/withdraw', requireAuth(authService), async (req, res) => {
       try {
-        const { address, amount } = req.body;
-
-        if (!address || typeof address !== 'string') {
-          return res.status(400).json({ error: 'Address required' });
-        }
-        const normalizedAddress = address.toLowerCase().startsWith('0x')
-          ? address.toLowerCase()
-          : `0x${address.toLowerCase()}`;
-        if (normalizedAddress.length !== 42) {
-          return res.status(400).json({ error: 'Invalid address' });
-        }
+        const { amount } = req.body ?? {};
+        const normalizedAddress = req.user!.address.toLowerCase();
 
         const amountBigInt = amount != null ? BigInt(String(amount)) : 0n;
         if (amountBigInt < MIN_WITHDRAWAL_WEI) {
