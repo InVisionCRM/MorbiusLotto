@@ -144,10 +144,10 @@ export function PokerStreakChart({
             Profit / loss
           </div>
           <div className="mt-1.5 font-medium text-white text-[15px]" style={{ fontFamily: 'Mitr, sans-serif', letterSpacing: '-0.01em' }}>
-            Last {n} hands
+            {n === 0 ? 'No hands yet' : n === 1 ? '1 hand' : `${n.toLocaleString()} hands`}
           </div>
           <div className="mt-1 text-[10px] font-mono text-slate-500 tracking-wider">
-            Cumulative · 1 step = 1 hand
+            Lifetime · cumulative chip P/L
           </div>
         </div>
         <div className="text-right">
@@ -222,7 +222,7 @@ export function PokerStreakChart({
       </div>
 
       <div className="mt-1 flex justify-between text-[9px] font-mono text-slate-500 tracking-wider">
-        <span>{n > 0 ? `${n} hand${n === 1 ? '' : 's'} ago` : 'Empty'}</span>
+        <span>{n > 0 ? 'First hand' : 'Empty'}</span>
         <span className="text-cyan-400 font-semibold">NOW</span>
       </div>
 

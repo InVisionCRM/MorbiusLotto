@@ -15,7 +15,6 @@ interface TokenSearchResult {
   address: string;
   name: string;
   symbol: string;
-  iconUrl: string | null;
 }
 
 export interface Prc20TokenPickerProps {
@@ -98,23 +97,22 @@ export function Prc20TokenPicker({
       let symbol = fallbackSymbol;
       let decimals = 18;
       let logoUrl: string | null = null;
+      // scan.pulsechain.com is used for name/symbol/decimals only — never for
+      // logos. Logos always come from DexScreener (see below).
       try {
         const res = await fetch(`https://api.scan.pulsechain.com/api/v2/tokens/${address}`);
         const data = await res.json();
         if (data.decimals != null) decimals = Number(data.decimals);
         if (data.name) name = data.name;
         if (data.symbol) symbol = data.symbol;
-        if (data.icon_url) logoUrl = data.icon_url;
       } catch { /* defaults */ }
 
-      if (!logoUrl) {
-        try {
-          const res = await fetchDexScreenerProxy('tokens', address);
-          const data = await res.json();
-          const img = data.pairs?.[0]?.info?.imageUrl;
-          if (img) logoUrl = img;
-        } catch { /* no logo */ }
-      }
+      try {
+        const res = await fetchDexScreenerProxy('tokens', address);
+        const data = await res.json();
+        const img = data.pairs?.[0]?.info?.imageUrl;
+        if (img) logoUrl = img;
+      } catch { /* no logo */ }
 
       if (displayOverride) {
         name = displayOverride.name;
@@ -150,7 +148,6 @@ export function Prc20TokenPicker({
             address: item.address,
             name: item.name || 'Unknown',
             symbol: item.symbol || '???',
-            iconUrl: item.icon_url || null,
           }));
         setResults(items);
       } catch {
@@ -240,7 +237,6 @@ export function Prc20TokenPicker({
               onClick={() => fetchTokenDetails(r.address, r.name, r.symbol)}
               className="w-full px-3 py-2 text-left text-sm hover:bg-gray-700 flex items-center gap-2"
             >
-              {r.iconUrl && <img src={r.iconUrl} alt="" className="w-4 h-4 rounded-full" />}
               <span className="text-white truncate">{r.symbol}</span>
               <span className="text-gray-500 text-xs truncate">{r.name}</span>
             </button>

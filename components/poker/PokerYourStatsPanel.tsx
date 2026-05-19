@@ -2,18 +2,32 @@
 
 import React, { useMemo, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { ArrowRight, Crown, Trophy, Medal, PencilLine, Plus } from 'lucide-react';
+import { ArrowRight, ArrowDownCircle, ArrowUpCircle, ArrowRightLeft, Crown, Trophy, Medal, PencilLine, Plus } from 'lucide-react';
 import { AvatarView } from '@/components/avatar';
 import { useProfile } from '@/hooks/use-player-profile';
 import { usePokerPlayerStats, usePokerPlayerHands, type PokerPlayerStats } from '@/hooks/use-poker-stats';
+import { useTokenBalance } from '@/hooks/use-token';
 import { PokerStreakChart } from './PokerStreakChart';
 import { PokerChipLedgerModal } from './PokerChipLedgerModal';
+import { PokerRepTokenModal } from './PokerRepTokenModal';
+import { useRepToken, type PokerRepToken } from '@/hooks/use-poker-rep-token';
 import { formatChips } from '@/lib/format-poker-chips';
+import { formatMorbiusFloor } from '@/lib/format-morbius-display';
 
 export interface PokerYourStatsPanelProps {
   address: string | null;
   /** Open the existing PokerStatsModal — wired up by the lobby page. */
   onOpenAllStats: () => void;
+  /** In-game (server-held) MORBIUS play balance, wei string. */
+  morbiusBalanceWei: string | null;
+  /** Poker chip balance, chip-count string. */
+  chipBalance: string | null;
+  /** Open the wallet modal on the deposit tab. */
+  onDeposit: () => void;
+  /** Open the wallet modal on the withdraw tab. */
+  onWithdraw: () => void;
+  /** Open the MORBIUS ↔ chips exchange modal. */
+  onOpenExchange: () => void;
 }
 
 interface Archetype {
@@ -58,13 +72,46 @@ function usePokerPlayerRank(address: string | null) {
   });
 }
 
-export function PokerYourStatsPanel({ address, onOpenAllStats }: PokerYourStatsPanelProps) {
+export function PokerYourStatsPanel({
+  address,
+  onOpenAllStats,
+  morbiusBalanceWei,
+  chipBalance,
+  onDeposit,
+  onWithdraw,
+  onOpenExchange,
+}: PokerYourStatsPanelProps) {
   const [ledgerModalOpen, setLedgerModalOpen] = useState(false);
+  const [repModalOpen, setRepModalOpen] = useState(false);
 
   const { data: stats } = usePokerPlayerStats(address, 'all');
-  const { data: hands } = usePokerPlayerHands(address, 200);
+  // Pull the player's full lifetime hand history so the chart plots the
+  // entire P/L journey, not just a recent tail. Server caps at 25k, which
+  // safely covers the high-volume players the project has today.
+  const { data: hands } = usePokerPlayerHands(address, 25_000);
   const { data: rankRow } = usePokerPlayerRank(address);
   const { profileDisplayName, avatarConfig } = useProfile();
+  const { token: repToken, setToken: setRepToken } = useRepToken(address);
+
+  // On-chain MORBIUS balance from the connected wallet. Separate from the
+  // server-held "play balance" (morbiusBalanceWei prop) which represents what
+  // has already been deposited into the platform.
+  const { balance: walletMorbiusWei } = useTokenBalance(
+    (address ?? undefined) as `0x${string}` | undefined,
+  );
+
+  const morbiusPlayDisplay = useMemo(
+    () => (morbiusBalanceWei != null ? formatMorbiusFloor(morbiusBalanceWei) : '—'),
+    [morbiusBalanceWei],
+  );
+  const walletMorbiusDisplay = useMemo(
+    () => formatMorbiusFloor(walletMorbiusWei),
+    [walletMorbiusWei],
+  );
+  const chipsDisplay = useMemo(
+    () => (chipBalance != null ? formatChips(chipBalance) : '—'),
+    [chipBalance],
+  );
 
   const archetype = useMemo(() => archetypeFor(stats ?? undefined), [stats]);
 
@@ -78,12 +125,6 @@ export function PokerYourStatsPanel({ address, onOpenAllStats }: PokerYourStatsP
     if (totalHands === 0) return null;
     return profitLossBn / BigInt(totalHands);
   }, [profitLossBn, totalHands]);
-
-  const tournamentHands = stats?.tournament_hands ?? 0;
-
-  const biggestPotBn = useMemo(() => {
-    try { return BigInt(stats?.biggest_pot_won ?? '0'); } catch { return 0n; }
-  }, [stats?.biggest_pot_won]);
 
   const handsList = hands ?? [];
 
@@ -156,8 +197,8 @@ export function PokerYourStatsPanel({ address, onOpenAllStats }: PokerYourStatsP
                   )}
                 </div>
 
-                {/* REP badge · placeholder for the upcoming PulseChain token rep feature */}
-                <RepBadge />
+                {/* REP badge · linked PulseChain token (or empty placeholder) */}
+                <RepBadge token={repToken} onClick={() => setRepModalOpen(true)} />
 
                 {/* Customize avatar button · overhangs the bottom-left */}
                 <button
@@ -174,19 +215,46 @@ export function PokerYourStatsPanel({ address, onOpenAllStats }: PokerYourStatsP
                 </button>
               </div>
 
-              {/* Stat grid · VPIP/PFR/Agg + Hands/Tourney/Biggest */}
-              <div className="grid grid-cols-3 gap-x-2 gap-y-3 pt-4">
-                <StatCell label="VPIP" value={stats ? `${stats.vpip_pct.toFixed(0)}%` : '—'} accent />
-                <StatCell label="PFR" value={stats ? `${stats.pfr_pct.toFixed(0)}%` : '—'} accent />
-                <StatCell
-                  label="Agg"
-                  value={stats?.aggression_factor != null ? stats.aggression_factor.toFixed(1) : '—'}
-                  accent
-                />
-                <StatCell label="Hands" value={totalHands.toLocaleString()} />
-                <StatCell label="Tourney" value={tournamentHands.toLocaleString()} />
-                <StatCell label="Biggest" value={biggestPotBn > 0n ? formatChips(biggestPotBn) : '—'} />
+              {/* Balances · MORBIUS play · in-wallet MORBIUS · poker chips */}
+              <div className="grid grid-cols-3 gap-2 pt-4">
+                <BalanceCell label="MORBIUS" value={morbiusPlayDisplay} unit="play" accent="cyan" />
+                <BalanceCell label="In-wallet" value={walletMorbiusDisplay} unit="MORBIUS" />
+                <BalanceCell label="Poker chips" value={chipsDisplay} unit="chips" accent="emerald" />
               </div>
+
+              {/* Wallet actions */}
+              <div className="grid grid-cols-2 gap-2 mt-3">
+                <button
+                  type="button"
+                  onClick={onDeposit}
+                  className="inline-flex items-center justify-center gap-1.5 px-3 py-2.5 rounded-xl text-[12px] font-bold text-white transition-transform hover:scale-[1.02]"
+                  style={{
+                    background: 'linear-gradient(135deg, #0891b2, #2563eb)',
+                    boxShadow: '0 6px 16px -6px rgba(6,182,212,0.5), 0 0 0 1px rgba(34,211,238,0.18)',
+                  }}
+                >
+                  <ArrowDownCircle size={13} strokeWidth={2.5} />
+                  Deposit
+                </button>
+                <button
+                  type="button"
+                  onClick={onWithdraw}
+                  className="inline-flex items-center justify-center gap-1.5 px-3 py-2.5 rounded-xl text-[12px] font-bold text-slate-200 border border-white/[0.15] hover:border-cyan-400/40 hover:text-white transition-colors"
+                >
+                  <ArrowUpCircle size={13} strokeWidth={2.5} />
+                  Withdraw
+                </button>
+              </div>
+
+              {/* Exchange — secondary, full-width */}
+              <button
+                type="button"
+                onClick={onOpenExchange}
+                className="mt-2 inline-flex items-center justify-center gap-1.5 w-full px-3 py-2 rounded-lg text-[11px] font-semibold text-cyan-300 border border-cyan-500/25 hover:border-cyan-400/55 hover:text-cyan-200 hover:bg-cyan-500/[0.06] transition-colors"
+              >
+                <ArrowRightLeft size={12} strokeWidth={2.5} />
+                Open chip exchange
+              </button>
             </div>
 
             {/* RIGHT · profit/loss chart */}
@@ -236,6 +304,14 @@ export function PokerYourStatsPanel({ address, onOpenAllStats }: PokerYourStatsP
         isOpen={ledgerModalOpen}
         onClose={() => setLedgerModalOpen(false)}
         address={address}
+      />
+
+      <PokerRepTokenModal
+        isOpen={repModalOpen}
+        onClose={() => setRepModalOpen(false)}
+        currentToken={repToken}
+        onSelect={(t) => setRepToken(t)}
+        onClear={() => setRepToken(null)}
       />
     </>
   );
@@ -333,16 +409,62 @@ function RankHeader({ rank, totalHands }: { rank: number | null | undefined; tot
 }
 
 /**
- * REP badge — bottom-right of the avatar. Empty by default ("REP +"). Clicking
- * opens a PulseChain token search so the player can link a token logo as their
- * "rep". TODO: wire up the token-picker — for now the click is a no-op so the
- * affordance shows up in the UI.
+ * REP badge — bottom-right of the avatar. Empty state shows "REP +" inviting
+ * the user to link a PulseChain token; once a token is set, the badge shows
+ * the token's logo (or its symbol initial as a fallback). Click opens the
+ * token-picker modal so the player can change or remove their rep token.
  */
-function RepBadge() {
+function RepBadge({
+  token,
+  onClick,
+}: {
+  token: PokerRepToken | null;
+  onClick: () => void;
+}) {
+  if (token) {
+    const symbolInitial = (token.symbol || '?').trim().charAt(0).toUpperCase();
+    return (
+      <button
+        type="button"
+        onClick={onClick}
+        className="absolute -bottom-3 -right-3 w-14 h-14 rounded-full flex items-center justify-center overflow-hidden transition-transform hover:scale-110 z-10"
+        style={{
+          background: 'radial-gradient(circle at 30% 30%, rgba(8,145,178,0.18), rgba(15,23,42,0.97))',
+          border: '2px solid rgba(34,211,238,0.55)',
+          boxShadow: '0 0 18px rgba(6,182,212,0.45), 0 0 0 3px #050a14',
+        }}
+        aria-label={`Rep token: ${token.symbol}. Click to change.`}
+        title={`${token.symbol} · ${token.name}`}
+      >
+        {token.logoUrl ? (
+          <img
+            src={token.logoUrl}
+            alt=""
+            className="w-full h-full object-cover rounded-full"
+            draggable={false}
+            onError={(e) => {
+              // If the logo URL 404s, hide the broken-image icon and let the
+              // symbol initial show through as a fallback.
+              (e.currentTarget as HTMLImageElement).style.display = 'none';
+            }}
+          />
+        ) : null}
+        {!token.logoUrl && (
+          <span
+            className="font-bold text-cyan-200 leading-none"
+            style={{ fontFamily: 'Mitr, sans-serif', fontSize: 20, letterSpacing: '-0.04em' }}
+          >
+            {symbolInitial}
+          </span>
+        )}
+      </button>
+    );
+  }
+
   return (
     <button
       type="button"
-      onClick={() => { /* TODO: open PulseChain token search modal */ }}
+      onClick={onClick}
       className="absolute -bottom-3 -right-3 w-14 h-14 rounded-full flex flex-col items-center justify-center transition-transform hover:scale-110 group z-10"
       style={{
         background: 'radial-gradient(circle at 30% 30%, rgba(8,145,178,0.35), rgba(15,23,42,0.97))',
@@ -358,17 +480,42 @@ function RepBadge() {
   );
 }
 
-function StatCell({ label, value, accent = false }: { label: string; value: string; accent?: boolean }) {
+function BalanceCell({
+  label,
+  value,
+  unit,
+  accent = 'neutral',
+}: {
+  label: string;
+  value: string;
+  unit: string;
+  accent?: 'cyan' | 'emerald' | 'neutral';
+}) {
+  const valueClass =
+    accent === 'cyan' ? 'text-cyan-200'
+      : accent === 'emerald' ? 'text-emerald-200'
+        : 'text-white';
+  const borderClass =
+    accent === 'cyan' ? 'border-cyan-500/25'
+      : accent === 'emerald' ? 'border-emerald-500/25'
+        : 'border-white/[0.08]';
   return (
-    <div>
-      <div className="text-[8px] uppercase tracking-[0.2em] text-slate-500 font-mono font-bold">
+    <div
+      className={`rounded-lg px-2.5 py-2 border ${borderClass}`}
+      style={{ background: 'rgba(0,0,0,0.25)' }}
+    >
+      <div className="text-[8px] uppercase tracking-[0.2em] text-slate-500 font-mono font-bold truncate">
         {label}
       </div>
       <div
-        className={`mt-0.5 tabular-nums leading-none ${accent ? 'text-cyan-300' : 'text-white'}`}
-        style={{ fontFamily: 'Mitr, sans-serif', fontWeight: 600, fontSize: 18, letterSpacing: '-0.01em' }}
+        className={`mt-1 tabular-nums leading-none truncate ${valueClass}`}
+        style={{ fontFamily: 'Mitr, sans-serif', fontWeight: 700, fontSize: 18, letterSpacing: '-0.02em' }}
+        title={value}
       >
         {value}
+      </div>
+      <div className="mt-1 text-[8px] uppercase tracking-[0.18em] text-slate-500 font-mono truncate">
+        {unit}
       </div>
     </div>
   );
