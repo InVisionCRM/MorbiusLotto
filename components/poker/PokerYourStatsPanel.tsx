@@ -2,11 +2,12 @@
 
 import React, { useMemo, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { ArrowRight } from 'lucide-react';
+import { ArrowRight, Crown, Trophy, Medal, Sparkles, type LucideIcon } from 'lucide-react';
 import { usePokerPlayerStats, usePokerPlayerHands, type PokerPlayerStats } from '@/hooks/use-poker-stats';
 import { usePokerChipLedger } from '@/hooks/use-poker-chip-ledger';
 import { PokerStreakChart } from './PokerStreakChart';
 import { PokerChipLedgerModal } from './PokerChipLedgerModal';
+import { LedgerDirectionIcon } from './LedgerDirectionIcon';
 import { ledgerDisplay, formatRelativeTime, formatDelta } from '@/lib/poker-chip-ledger-display';
 import { formatChips } from '@/lib/format-poker-chips';
 
@@ -58,14 +59,191 @@ function usePokerPlayerRank(address: string | null) {
   });
 }
 
-function rankTier(rank: number | null | undefined): { label: string; color: string } {
-  if (rank == null) return { label: 'Unranked', color: 'text-slate-500 border-slate-500/30' };
-  if (rank === 1) return { label: 'Champion', color: 'text-amber-200 border-amber-300/40' };
-  if (rank <= 3) return { label: `#${rank} · Top 3`, color: 'text-amber-300 border-amber-400/35' };
-  if (rank <= 10) return { label: `#${rank} · Top 10`, color: 'text-amber-300 border-amber-400/30' };
-  if (rank <= 50) return { label: `#${rank} · Gold`, color: 'text-amber-300 border-amber-400/30' };
-  if (rank <= 200) return { label: `#${rank} · Silver`, color: 'text-slate-200 border-slate-300/35' };
-  return { label: `#${rank}`, color: 'text-slate-300 border-slate-400/25' };
+type TierKey = 'champion' | 'top3' | 'top10' | 'gold' | 'silver' | 'bronze' | 'unranked';
+
+interface TierConfig {
+  tier: TierKey;
+  label: string;
+  rankText: string;
+  icon: LucideIcon;
+  iconColor: string;
+  iconBgCss: string;
+  iconBorderCss: string;
+  textColor: string;
+  borderColorCss: string;
+  bgFromCss: string;
+  bgToCss: string;
+  glowColorCss: string;
+  barGradientCss: string;
+  barGlowCss: string;
+  progress: number | null;
+  progressText: string | null;
+  nextLabel: string | null;
+  sublabel: string | null;
+}
+
+function pluralRanks(n: number) {
+  return `${n} rank${n === 1 ? '' : 's'}`;
+}
+
+function tierFor(rank: number | null | undefined, totalHands: number): TierConfig {
+  if (totalHands === 0 || rank == null) {
+    return {
+      tier: 'unranked',
+      label: 'Unranked',
+      rankText: '—',
+      icon: Sparkles,
+      iconColor: 'text-slate-400',
+      iconBgCss: 'linear-gradient(135deg, rgba(148,163,184,0.14), rgba(100,116,139,0.06))',
+      iconBorderCss: 'rgba(148,163,184,0.28)',
+      textColor: 'text-slate-300',
+      borderColorCss: 'rgba(148,163,184,0.18)',
+      bgFromCss: 'rgba(30,41,59,0.45)',
+      bgToCss: 'rgba(15,23,42,0.25)',
+      glowColorCss: 'rgba(148,163,184,0.10)',
+      barGradientCss: '',
+      barGlowCss: '',
+      progress: null,
+      progressText: null,
+      nextLabel: null,
+      sublabel: totalHands === 0
+        ? 'Play your first hand to enter the leaderboard'
+        : 'Climb the leaderboard to earn a tier',
+    };
+  }
+  if (rank === 1) {
+    return {
+      tier: 'champion',
+      label: 'Champion',
+      rankText: '#1',
+      icon: Crown,
+      iconColor: 'text-amber-200',
+      iconBgCss: 'linear-gradient(135deg, rgba(251,191,36,0.28), rgba(245,158,11,0.10))',
+      iconBorderCss: 'rgba(251,191,36,0.55)',
+      textColor: 'text-amber-200',
+      borderColorCss: 'rgba(251,191,36,0.40)',
+      bgFromCss: 'rgba(120,53,15,0.40)',
+      bgToCss: 'rgba(15,23,42,0.20)',
+      glowColorCss: 'rgba(251,191,36,0.28)',
+      barGradientCss: '',
+      barGlowCss: '',
+      progress: null,
+      progressText: null,
+      nextLabel: null,
+      sublabel: 'Untouchable — best of all time',
+    };
+  }
+  if (rank <= 3) {
+    return {
+      tier: 'top3',
+      label: 'Top 3',
+      rankText: `#${rank}`,
+      icon: Trophy,
+      iconColor: 'text-amber-300',
+      iconBgCss: 'linear-gradient(135deg, rgba(251,191,36,0.20), rgba(245,158,11,0.08))',
+      iconBorderCss: 'rgba(251,191,36,0.45)',
+      textColor: 'text-amber-300',
+      borderColorCss: 'rgba(251,191,36,0.32)',
+      bgFromCss: 'rgba(120,53,15,0.25)',
+      bgToCss: 'rgba(15,23,42,0.25)',
+      glowColorCss: 'rgba(251,191,36,0.20)',
+      barGradientCss: 'linear-gradient(90deg, #fbbf24, #f59e0b)',
+      barGlowCss: '0 0 8px rgba(251,191,36,0.45)',
+      progress: (3 - rank) / 2,
+      progressText: `${pluralRanks(rank - 1)} from #1`,
+      nextLabel: 'Champion',
+      sublabel: null,
+    };
+  }
+  if (rank <= 10) {
+    return {
+      tier: 'top10',
+      label: 'Top 10',
+      rankText: `#${rank}`,
+      icon: Trophy,
+      iconColor: 'text-amber-300',
+      iconBgCss: 'linear-gradient(135deg, rgba(251,191,36,0.16), rgba(245,158,11,0.06))',
+      iconBorderCss: 'rgba(251,191,36,0.38)',
+      textColor: 'text-amber-300',
+      borderColorCss: 'rgba(251,191,36,0.26)',
+      bgFromCss: 'rgba(120,53,15,0.18)',
+      bgToCss: 'rgba(15,23,42,0.30)',
+      glowColorCss: 'rgba(251,191,36,0.16)',
+      barGradientCss: 'linear-gradient(90deg, #fcd34d, #fbbf24)',
+      barGlowCss: '0 0 6px rgba(251,191,36,0.35)',
+      progress: (10 - rank) / 7,
+      progressText: `${pluralRanks(rank - 3)} from Top 3`,
+      nextLabel: 'Top 3',
+      sublabel: null,
+    };
+  }
+  if (rank <= 50) {
+    return {
+      tier: 'gold',
+      label: 'Gold',
+      rankText: `#${rank}`,
+      icon: Medal,
+      iconColor: 'text-amber-300',
+      iconBgCss: 'linear-gradient(135deg, rgba(251,191,36,0.14), rgba(245,158,11,0.05))',
+      iconBorderCss: 'rgba(251,191,36,0.32)',
+      textColor: 'text-amber-300',
+      borderColorCss: 'rgba(251,191,36,0.22)',
+      bgFromCss: 'rgba(120,53,15,0.14)',
+      bgToCss: 'rgba(15,23,42,0.30)',
+      glowColorCss: 'rgba(251,191,36,0.13)',
+      barGradientCss: 'linear-gradient(90deg, #fde68a, #fcd34d)',
+      barGlowCss: '0 0 5px rgba(252,211,77,0.30)',
+      progress: (50 - rank) / 40,
+      progressText: `${pluralRanks(rank - 10)} from Top 10`,
+      nextLabel: 'Top 10',
+      sublabel: null,
+    };
+  }
+  if (rank <= 200) {
+    return {
+      tier: 'silver',
+      label: 'Silver',
+      rankText: `#${rank}`,
+      icon: Medal,
+      iconColor: 'text-slate-200',
+      iconBgCss: 'linear-gradient(135deg, rgba(226,232,240,0.14), rgba(148,163,184,0.05))',
+      iconBorderCss: 'rgba(226,232,240,0.32)',
+      textColor: 'text-slate-200',
+      borderColorCss: 'rgba(203,213,225,0.22)',
+      bgFromCss: 'rgba(51,65,85,0.35)',
+      bgToCss: 'rgba(15,23,42,0.30)',
+      glowColorCss: 'rgba(203,213,225,0.12)',
+      barGradientCss: 'linear-gradient(90deg, #f1f5f9, #cbd5e1)',
+      barGlowCss: '0 0 5px rgba(226,232,240,0.22)',
+      progress: (200 - rank) / 150,
+      progressText: `${pluralRanks(rank - 50)} from Gold`,
+      nextLabel: 'Gold',
+      sublabel: null,
+    };
+  }
+  // Bronze (#201+) — unbounded, so use a soft curve toward Silver.
+  const ranksToSilver = rank - 200;
+  const softProgress = Math.max(0.04, Math.min(0.40, 50 / ranksToSilver));
+  return {
+    tier: 'bronze',
+    label: 'Bronze',
+    rankText: `#${rank}`,
+    icon: Medal,
+    iconColor: 'text-orange-300',
+    iconBgCss: 'linear-gradient(135deg, rgba(251,146,60,0.12), rgba(234,88,12,0.04))',
+    iconBorderCss: 'rgba(251,146,60,0.32)',
+    textColor: 'text-orange-300',
+    borderColorCss: 'rgba(251,146,60,0.22)',
+    bgFromCss: 'rgba(120,53,15,0.12)',
+    bgToCss: 'rgba(15,23,42,0.30)',
+    glowColorCss: 'rgba(251,146,60,0.12)',
+    barGradientCss: 'linear-gradient(90deg, #fdba74, #fb923c)',
+    barGlowCss: '0 0 4px rgba(251,146,60,0.28)',
+    progress: softProgress,
+    progressText: `${pluralRanks(ranksToSilver)} from Silver`,
+    nextLabel: 'Silver',
+    sublabel: null,
+  };
 }
 
 export function PokerYourStatsPanel({ address, onOpenAllStats }: PokerYourStatsPanelProps) {
@@ -78,8 +256,8 @@ export function PokerYourStatsPanel({ address, onOpenAllStats }: PokerYourStatsP
 
   const archetype = useMemo(() => archetypeFor(stats ?? undefined), [stats]);
 
-  const tier = rankTier(rankRow?.rank);
   const totalHands = stats?.total_hands ?? 0;
+  const tier = useMemo(() => tierFor(rankRow?.rank, totalHands), [rankRow?.rank, totalHands]);
 
   const totalWonBn = useMemo(() => {
     try { return BigInt(stats?.total_won ?? '0'); } catch { return 0n; }
@@ -145,7 +323,7 @@ export function PokerYourStatsPanel({ address, onOpenAllStats }: PokerYourStatsP
                 {' · '}Agg <strong className="text-cyan-300">{stats?.aggression_factor != null ? stats.aggression_factor.toFixed(1) : '—'}</strong>
               </div>
 
-              <div className="flex flex-col gap-2.5 flex-1">
+              <div className="flex flex-col gap-2.5">
                 <StatRow label="Total hands" value={totalHands.toLocaleString()} />
                 <StatRow
                   label="Total won"
@@ -154,17 +332,10 @@ export function PokerYourStatsPanel({ address, onOpenAllStats }: PokerYourStatsP
                   unit="MORB"
                 />
                 <StatRow label="Tournament hands" value={tournamentHands.toLocaleString()} />
-                <StatRow
-                  label="Global rank"
-                  rightSlot={
-                    <span
-                      className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[10px] font-bold tracking-wider uppercase ${tier.color}`}
-                      style={{ background: 'linear-gradient(135deg, rgba(251,191,36,0.10), rgba(245,158,11,0.04))', border: '1px solid' }}
-                    >
-                      ★ {tier.label}
-                    </span>
-                  }
-                />
+              </div>
+
+              <div className="mt-4 flex-1">
+                <GlobalRankCard tier={tier} />
               </div>
 
               <button
@@ -234,34 +405,25 @@ export function PokerYourStatsPanel({ address, onOpenAllStats }: PokerYourStatsP
                     return (
                       <div
                         key={entry.id ?? idx}
-                        className={`grid grid-cols-[28px_1fr_auto] gap-2.5 py-2.5 items-center ${
+                        className={`grid grid-cols-[44px_1fr_auto] gap-3 py-3 items-center ${
                           idx === 0 ? 'pt-0' : ''
-                        } ${idx === recent.length - 1 ? '' : 'border-b border-white/[0.06]'}`}
+                        } ${idx === recent.length - 1 ? '' : 'border-b border-white/[0.05]'}`}
                       >
-                        <span
-                          className={`inline-flex w-7 h-7 rounded-lg items-center justify-center text-[13px] ${
-                            d.tone === 'win' ? 'bg-cyan-500/[0.12] border border-cyan-500/25'
-                              : d.tone === 'loss' ? 'bg-rose-500/[0.10] border border-rose-500/20'
-                              : d.tone === 'exchange' ? 'bg-violet-500/[0.12] border border-violet-500/25'
-                              : d.tone === 'tourney' ? 'bg-amber-500/[0.12] border border-amber-500/25'
-                              : 'bg-slate-500/[0.10] border border-slate-500/15'
-                          }`}
-                          aria-hidden
-                        >
-                          {d.icon}
-                        </span>
+                        <LedgerDirectionIcon direction={d.direction} size="md" />
                         <div className="min-w-0">
-                          <div className="text-[12px] text-white font-medium leading-tight truncate">
+                          <div className="text-[13px] text-white font-medium leading-tight truncate">
                             {d.label}
                           </div>
-                          <div className="text-[10px] text-slate-500 font-mono truncate">
-                            {d.meta} · {formatRelativeTime(entry.createdAt)}
+                          <div className="text-[11px] text-slate-500 font-mono truncate mt-0.5">
+                            <span className="text-slate-400">{d.meta}</span>
+                            <span className="mx-1.5 text-slate-700">·</span>
+                            <span>{formatRelativeTime(entry.createdAt)}</span>
                           </div>
                         </div>
-                        <div className="text-right min-w-[60px]">
+                        <div className="text-right min-w-[64px]">
                           <div
                             className={`leading-none tabular-nums ${isCredit ? 'text-emerald-300' : 'text-rose-300'}`}
-                            style={{ fontFamily: 'Mitr, sans-serif', fontWeight: 700, fontSize: 14 }}
+                            style={{ fontFamily: 'Mitr, sans-serif', fontWeight: 700, fontSize: 16, letterSpacing: '-0.01em' }}
                           >
                             {deltaText}
                           </div>
@@ -295,6 +457,10 @@ export function PokerYourStatsPanel({ address, onOpenAllStats }: PokerYourStatsP
             0%, 100% { opacity: 1; }
             50% { opacity: 0.45; }
           }
+          @keyframes morblotto-rank-sparkle {
+            0%, 100% { opacity: 0.25; transform: scale(0.85) rotate(0deg); }
+            50% { opacity: 1; transform: scale(1.15) rotate(20deg); }
+          }
         `}</style>
       </section>
 
@@ -304,6 +470,106 @@ export function PokerYourStatsPanel({ address, onOpenAllStats }: PokerYourStatsP
         address={address}
       />
     </>
+  );
+}
+
+function GlobalRankCard({ tier }: { tier: TierConfig }) {
+  const Icon = tier.icon;
+  const isChampion = tier.tier === 'champion';
+  const isUnranked = tier.tier === 'unranked';
+  const showProgress = tier.progress != null && tier.progressText && tier.nextLabel;
+
+  return (
+    <div
+      className="relative rounded-xl border overflow-hidden p-4"
+      style={{
+        borderColor: tier.borderColorCss,
+        background: `linear-gradient(135deg, ${tier.bgFromCss} 0%, ${tier.bgToCss} 100%)`,
+      }}
+    >
+      <div
+        className="absolute -top-14 -right-14 w-36 h-36 rounded-full blur-3xl pointer-events-none"
+        style={{ background: tier.glowColorCss }}
+        aria-hidden
+      />
+      {isChampion && (
+        <>
+          <Sparkles
+            size={11}
+            className="absolute top-2 right-2 text-amber-300/70 pointer-events-none"
+            style={{ animation: 'morblotto-rank-sparkle 2.4s ease-in-out infinite' }}
+            aria-hidden
+          />
+          <Sparkles
+            size={9}
+            className="absolute top-5 right-7 text-amber-200/50 pointer-events-none"
+            style={{ animation: 'morblotto-rank-sparkle 2.4s ease-in-out infinite 0.6s' }}
+            aria-hidden
+          />
+        </>
+      )}
+
+      <div className="relative flex items-center gap-3 mb-3">
+        <div
+          className="w-10 h-10 rounded-lg flex items-center justify-center shrink-0"
+          style={{ background: tier.iconBgCss, border: `1px solid ${tier.iconBorderCss}` }}
+          aria-hidden
+        >
+          <Icon size={20} className={tier.iconColor} strokeWidth={2.25} />
+        </div>
+        <div className="flex-1 min-w-0">
+          <div className="text-[9px] uppercase tracking-[0.28em] font-bold text-slate-400 mb-1">
+            Global rank
+          </div>
+          <div className="flex items-baseline gap-2 leading-none">
+            <span
+              className="text-white"
+              style={{ fontFamily: 'Mitr, sans-serif', fontWeight: 700, fontSize: 26, letterSpacing: '-0.02em' }}
+            >
+              {tier.rankText}
+            </span>
+            <span
+              className={`text-[10px] font-bold tracking-[0.18em] uppercase ${tier.textColor}`}
+            >
+              {tier.label}
+            </span>
+          </div>
+        </div>
+      </div>
+
+      {showProgress && (
+        <div className="relative">
+          <div className="flex justify-between items-center mb-1.5">
+            <span className="text-[10px] font-mono text-slate-400 tracking-wide">
+              {tier.progressText}
+            </span>
+            <span className="text-[10px] font-mono text-slate-300 tracking-wide">
+              → {tier.nextLabel}
+            </span>
+          </div>
+          <div className="h-1.5 rounded-full bg-white/[0.07] overflow-hidden">
+            <div
+              className="h-full rounded-full transition-all duration-700"
+              style={{
+                width: `${Math.max(3, (tier.progress ?? 0) * 100)}%`,
+                background: tier.barGradientCss,
+                boxShadow: tier.barGlowCss,
+              }}
+            />
+          </div>
+        </div>
+      )}
+      {(isChampion || isUnranked) && tier.sublabel && (
+        <div
+          className={`relative text-[10px] font-mono tracking-wide flex items-center gap-1.5 ${
+            isChampion ? 'text-amber-300/90' : 'text-slate-400'
+          }`}
+        >
+          {isChampion && <Crown size={11} className="shrink-0" aria-hidden />}
+          <span>{tier.sublabel}</span>
+        </div>
+      )}
+    </div>
   );
 }
 

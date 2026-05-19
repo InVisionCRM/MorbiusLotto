@@ -7,6 +7,7 @@ import { X } from 'lucide-react';
 import { usePokerChipLedger, type PokerChipLedgerCategory } from '@/hooks/use-poker-chip-ledger';
 import { ledgerDisplay, formatRelativeTime, formatDelta } from '@/lib/poker-chip-ledger-display';
 import { formatChips } from '@/lib/format-poker-chips';
+import { LedgerDirectionIcon } from './LedgerDirectionIcon';
 
 export interface PokerChipLedgerModalProps {
   isOpen: boolean;
@@ -22,15 +23,6 @@ const CATEGORIES: Array<{ id: PokerChipLedgerCategory; label: string }> = [
   { id: 'tournaments', label: 'Tournaments' },
   { id: 'exchanges', label: 'Exchanges' },
 ];
-
-const TONE_BG: Record<string, string> = {
-  win: 'bg-cyan-500/10 border border-cyan-500/30',
-  loss: 'bg-rose-500/10 border border-rose-500/25',
-  exchange: 'bg-violet-500/10 border border-violet-500/30',
-  tourney: 'bg-amber-500/10 border border-amber-500/30',
-  fee: 'bg-slate-500/10 border border-slate-500/25',
-  neutral: 'bg-slate-500/10 border border-slate-500/15',
-};
 
 export function PokerChipLedgerModal({ isOpen, onClose, address }: PokerChipLedgerModalProps) {
   const [category, setCategory] = useState<PokerChipLedgerCategory>('all');
@@ -148,7 +140,7 @@ export function PokerChipLedgerModal({ isOpen, onClose, address }: PokerChipLedg
                 ) : (
                   <div>
                     {/* Table header (desktop only) */}
-                    <div className="hidden md:grid grid-cols-[40px_1fr_1fr_120px_120px] gap-3 pb-2 mb-1 border-b border-white/[0.06] text-[9px] uppercase tracking-[0.2em] text-slate-500 font-semibold">
+                    <div className="hidden md:grid grid-cols-[52px_1fr_1fr_120px_120px] gap-3 pb-2 mb-1 border-b border-white/[0.06] text-[9px] uppercase tracking-[0.2em] text-slate-500 font-semibold">
                       <div />
                       <div>Event</div>
                       <div>Reference</div>
@@ -166,16 +158,14 @@ export function PokerChipLedgerModal({ isOpen, onClose, address }: PokerChipLedg
                       return (
                         <div
                           key={entry.id}
-                          className="grid grid-cols-1 md:grid-cols-[40px_1fr_1fr_120px_120px] gap-2 md:gap-3 py-3 border-b border-white/[0.04] items-center"
+                          className="grid grid-cols-1 md:grid-cols-[52px_1fr_1fr_120px_120px] gap-2 md:gap-3 py-3 border-b border-white/[0.05] items-center"
                         >
                           <div className="flex md:block">
-                            <span className={`inline-flex w-8 h-8 rounded-lg items-center justify-center text-sm ${TONE_BG[d.tone] ?? TONE_BG.neutral}`}>
-                              {d.icon}
-                            </span>
+                            <LedgerDirectionIcon direction={d.direction} size="md" />
                           </div>
                           <div className="min-w-0">
                             <div className="text-[13px] text-white font-medium leading-tight">{d.label}</div>
-                            <div className="text-[11px] text-slate-500 font-mono">{d.meta}</div>
+                            <div className="text-[11px] text-slate-500 font-mono mt-0.5">{d.meta}</div>
                           </div>
                           <div className="text-[11px] text-slate-500 font-mono leading-tight">
                             <div>{formatRelativeTime(entry.createdAt)}</div>
@@ -183,11 +173,11 @@ export function PokerChipLedgerModal({ isOpen, onClose, address }: PokerChipLedg
                           </div>
                           <div
                             className={`text-right tabular-nums ${isCredit ? 'text-emerald-300' : 'text-rose-300'}`}
-                            style={{ fontFamily: 'Mitr, sans-serif', fontWeight: 600, fontSize: 16 }}
+                            style={{ fontFamily: 'Mitr, sans-serif', fontWeight: 700, fontSize: 17, letterSpacing: '-0.01em' }}
                           >
                             {deltaText}
                           </div>
-                          <div className="text-right text-xs text-slate-300 font-mono">{balanceAfter}</div>
+                          <div className="text-right text-xs text-slate-300 font-mono tabular-nums">{balanceAfter}</div>
                         </div>
                       );
                     })}
