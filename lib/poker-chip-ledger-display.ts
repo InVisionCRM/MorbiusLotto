@@ -1,106 +1,63 @@
 import type { PokerChipLedgerEntry, PokerChipLedgerReason } from '@/hooks/use-poker-chip-ledger';
 
-export type LedgerTone = 'win' | 'loss' | 'exchange' | 'tourney' | 'fee' | 'neutral';
+export type LedgerDirection = 'in' | 'out' | 'prize' | 'exchange';
 
 export interface LedgerDisplay {
-  icon: string;        // emoji
-  tone: LedgerTone;    // for color coding
+  direction: LedgerDirection;
   label: string;       // primary text on the row
   meta: string;        // secondary text (table / direction / etc.)
 }
 
+function deriveDirection(reason: PokerChipLedgerReason, delta: string): LedgerDirection {
+  if (reason === 'tournament_prize') return 'prize';
+  if (reason === 'purchase' || reason === 'cashout') return 'exchange';
+  try {
+    return BigInt(delta) >= 0n ? 'in' : 'out';
+  } catch {
+    return 'in';
+  }
+}
+
 /**
- * Map a chip-ledger reason + optional refName to display strings/icon for the
+ * Map a chip-ledger reason + optional refName to display strings for the
  * lobby's inline list and the transaction-history modal. Keeps the mapping in
- * one place so the two views can't drift.
+ * one place so the two views can't drift. The icon is rendered by the
+ * shared `<LedgerDirectionIcon />` based on the `direction` field below.
  */
 export function ledgerDisplay(entry: PokerChipLedgerEntry): LedgerDisplay {
   const { reason, refName, refType, refId, delta } = entry;
-  const isCredit = (() => {
-    try { return BigInt(delta) >= 0n; } catch { return true; }
-  })();
+  const direction = deriveDirection(reason as PokerChipLedgerReason, delta);
 
   switch (reason as PokerChipLedgerReason) {
     case 'purchase':
-      return {
-        icon: '💰',
-        tone: 'exchange',
-        label: 'Bought chips',
-        meta: 'MORBIUS → chips',
-      };
+      return { direction, label: 'Bought chips', meta: 'MORBIUS → chips' };
     case 'cashout':
-      return {
-        icon: '💵',
-        tone: 'exchange',
-        label: 'Cashed out',
-        meta: 'chips → MORBIUS',
-      };
+      return { direction, label: 'Cashed out', meta: 'chips → MORBIUS' };
     case 'cash_join':
-      return {
-        icon: '🪑',
-        tone: 'loss',
-        label: 'Sat at cash table',
-        meta: refName ?? (refId ? `Table ${shortRef(refId)}` : 'Cash game'),
-      };
+      return { direction, label: 'Sat at cash table', meta: refName ?? (refId ? `Table ${shortRef(refId)}` : 'Cash game') };
     case 'cash_leave':
-      return {
-        icon: '🚪',
-        tone: isCredit ? 'win' : 'loss',
-        label: 'Left cash table',
-        meta: refName ?? (refId ? `Table ${shortRef(refId)}` : 'Cash game'),
-      };
+      return { direction, label: 'Left cash table', meta: refName ?? (refId ? `Table ${shortRef(refId)}` : 'Cash game') };
     case 'cash_reup':
-      return {
-        icon: '⬆️',
-        tone: 'loss',
-        label: 'Topped up stack',
-        meta: refName ?? (refId ? `Table ${shortRef(refId)}` : 'Cash game'),
-      };
+      return { direction, label: 'Topped up stack', meta: refName ?? (refId ? `Table ${shortRef(refId)}` : 'Cash game') };
     case 'cash_admin_return':
-      return {
-        icon: '↩️',
-        tone: 'win',
-        label: 'Admin chip refund',
-        meta: refName ?? 'Refund',
-      };
+      return { direction, label: 'Admin chip refund', meta: refName ?? 'Refund' };
     case 'tournament_buyin':
-      return {
-        icon: '🎫',
-        tone: 'loss',
-        label: 'Tournament buy-in',
-        meta: refName ?? 'Tournament',
-      };
+      return { direction, label: 'Tournament buy-in', meta: refName ?? 'Tournament' };
     case 'tournament_create_guarantee':
-      return {
-        icon: '🛡️',
-        tone: 'loss',
-        label: 'Funded guarantee',
-        meta: refName ?? 'Tournament',
-      };
+      return { direction, label: 'Funded guarantee', meta: refName ?? 'Tournament' };
     case 'tournament_refund':
-      return {
-        icon: '↩️',
-        tone: 'win',
-        label: 'Tournament refund',
-        meta: refName ?? 'Tournament',
-      };
+      return { direction, label: 'Tournament refund', meta: refName ?? 'Tournament' };
     case 'tournament_prize':
-      return {
-        icon: '🏆',
-        tone: 'tourney',
-        label: 'Tournament prize',
-        meta: refName ?? 'Tournament',
-      };
+      return { direction, label: 'Tournament prize', meta: refName ?? 'Tournament' };
     case 'rake':
-      return { icon: '🪙', tone: 'fee', label: 'Rake', meta: refType ?? 'House fee' };
+      return { direction, label: 'Rake', meta: refType ?? 'House fee' };
     case 'creator_fee':
-      return { icon: '👤', tone: 'fee', label: 'Creator fee', meta: refType ?? 'Table host' };
+      return { direction, label: 'Creator fee', meta: refType ?? 'Table host' };
     case 'platform_fee':
-      return { icon: '🏛️', tone: 'fee', label: 'Platform fee', meta: refType ?? 'Platform' };
+      return { direction, label: 'Platform fee', meta: refType ?? 'Platform' };
     default:
       return {
-        icon: '🔹',
-        tone: 'neutral',
+        direction,
         label: prettify(String(reason)),
         meta: refName ?? refType ?? '—',
       };

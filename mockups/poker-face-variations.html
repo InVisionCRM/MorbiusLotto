@@ -1,0 +1,1612 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Your Poker Face — Variations</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Mitr:wght@400;500;600;700&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
+<script src="https://unpkg.com/lucide@latest/dist/umd/lucide.js"></script>
+<style>
+  body {
+    font-family: 'Inter', system-ui, sans-serif;
+    background: radial-gradient(ellipse at top, #0a1628 0%, #030611 70%);
+    min-height: 100vh;
+  }
+  .mitr { font-family: 'Mitr', sans-serif; }
+  .mono { font-family: 'JetBrains Mono', monospace; }
+  .panel-bg { background: linear-gradient(135deg, #0c1929 0%, #050a14 100%); }
+  .top-glow {
+    background: linear-gradient(90deg, transparent, rgba(34,211,238,0.55), transparent);
+  }
+  .avatar-frame-bg {
+    background:
+      radial-gradient(circle at 30% 20%, rgba(34,211,238,0.20), transparent 55%),
+      radial-gradient(circle at 70% 80%, rgba(168,85,247,0.16), transparent 55%),
+      linear-gradient(160deg, #0b1a2e, #050a14);
+  }
+  .avatar-img {
+    image-rendering: pixelated;
+    image-rendering: -moz-crisp-edges;
+    image-rendering: crisp-edges;
+  }
+  .glow-cyan { box-shadow: 0 0 24px -2px rgba(34,211,238,0.45), 0 0 0 1px rgba(34,211,238,0.35) inset; }
+  .glow-gold { box-shadow: 0 0 28px -2px rgba(251,191,36,0.55), 0 0 0 1px rgba(251,191,36,0.45) inset; }
+  .glow-purple { box-shadow: 0 0 24px -2px rgba(168,85,247,0.50), 0 0 0 1px rgba(168,85,247,0.40) inset; }
+  .pulse-dot { animation: pulse-dot 1.8s ease-in-out infinite; }
+  @keyframes pulse-dot {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.4; }
+  }
+  .sparkle { animation: sparkle 2.4s ease-in-out infinite; }
+  .sparkle-delay { animation: sparkle 2.4s ease-in-out infinite 0.7s; }
+  @keyframes sparkle {
+    0%, 100% { opacity: 0.3; transform: scale(0.85) rotate(0deg); }
+    50% { opacity: 1; transform: scale(1.15) rotate(20deg); }
+  }
+  .progress-shimmer {
+    background-size: 200% 100%;
+    animation: shimmer 2.5s linear infinite;
+  }
+  @keyframes shimmer {
+    0% { background-position: 0% 50%; }
+    100% { background-position: 200% 50%; }
+  }
+  .hex-clip {
+    clip-path: polygon(50% 0%, 100% 25%, 100% 75%, 50% 100%, 0% 75%, 0% 25%);
+  }
+</style>
+</head>
+<body class="text-slate-100 antialiased">
+
+<div class="max-w-7xl mx-auto px-6 py-12 space-y-16">
+
+  <!-- Header -->
+  <header class="text-center space-y-2">
+    <p class="mono text-xs tracking-[0.4em] uppercase text-cyan-400 font-bold">Design exploration</p>
+    <h1 class="mitr font-bold text-3xl tracking-tight">Your Poker Face — Variations</h1>
+    <p class="text-slate-400 text-sm max-w-xl mx-auto">
+      Three takes on integrating the avatar + stats dashboard into the poker page. Each shows where the
+      <em>Customize</em> button overhangs the avatar and how the player stats braid in.
+    </p>
+  </header>
+
+  <!-- =========================================================== -->
+  <!-- VARIATION A · WIDE HERO BANNER                              -->
+  <!-- =========================================================== -->
+  <section class="space-y-4">
+    <div class="flex items-end justify-between gap-4">
+      <div>
+        <div class="mono text-[10px] tracking-[0.4em] text-cyan-400 font-bold">Variation A</div>
+        <h2 class="mitr text-xl font-bold mt-1">Wide Hero Banner</h2>
+      </div>
+      <p class="text-xs text-slate-400 max-w-md text-right">
+        Sits as a full-width banner above the existing 3-column stats grid. Avatar anchors the left,
+        stats spread horizontally. Most prominent.
+      </p>
+    </div>
+
+    <div class="panel-bg relative rounded-2xl overflow-hidden border border-cyan-500/25">
+      <div class="absolute inset-x-0 top-0 h-px top-glow"></div>
+
+      <div class="relative px-6 sm:px-10 py-7">
+        <!-- Title row -->
+        <div class="flex items-center justify-between mb-6">
+          <div class="flex items-center gap-2.5">
+            <div class="w-1 h-7 rounded-full bg-gradient-to-b from-cyan-400 to-purple-500"></div>
+            <div>
+              <div class="mono text-[10px] tracking-[0.35em] text-cyan-400 font-bold">YOUR POKER FACE</div>
+              <div class="mitr font-medium text-white text-[15px]">Player Identity</div>
+            </div>
+          </div>
+          <span class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[10px] font-bold tracking-wider uppercase text-amber-300 border border-amber-400/40"
+                style="background: linear-gradient(135deg, rgba(251,191,36,0.14), rgba(245,158,11,0.06));">
+            ★ #4 · Gold
+          </span>
+        </div>
+
+        <div class="grid grid-cols-1 sm:grid-cols-[auto_1fr] gap-8 items-center">
+          <!-- Avatar block -->
+          <div class="relative w-[180px] mx-auto sm:mx-0">
+            <div class="avatar-frame-bg rounded-2xl glow-cyan p-3 relative overflow-hidden">
+              <!-- Subtle suit watermarks -->
+              <div class="absolute inset-0 opacity-[0.06] pointer-events-none flex items-center justify-center mitr text-[140px] font-bold">♠</div>
+              <img src="/avatars/pigtails-pixel-girl.png"
+                   class="avatar-img relative w-full h-[160px] object-contain"
+                   alt="Avatar preview" />
+            </div>
+            <!-- Overhanging customize button -->
+            <button class="absolute left-1/2 -translate-x-1/2 -bottom-4 inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-[11px] font-bold uppercase tracking-wider text-white whitespace-nowrap hover:scale-105 transition-transform"
+                    style="background: linear-gradient(135deg, #0891b2, #2563eb); box-shadow: 0 8px 22px -6px rgba(6,182,212,0.65), 0 0 0 1px rgba(34,211,238,0.25);">
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M12 20h9M16.5 3.5a2.121 2.121 0 113 3L7 19l-4 1 1-4L16.5 3.5z"/></svg>
+              Customize
+            </button>
+          </div>
+
+          <!-- Identity + stats -->
+          <div class="space-y-5 pt-4 sm:pt-0">
+            <!-- Name + archetype -->
+            <div>
+              <div class="flex items-center gap-2 mb-1">
+                <span class="mitr text-2xl font-bold text-white tracking-tight">kyle.eth</span>
+                <span class="mono text-[10px] text-slate-500">0x9c8a…3bd2</span>
+              </div>
+              <div class="flex items-center gap-2 mb-2">
+                <span class="text-lg">🦈</span>
+                <span class="mitr text-lg font-semibold text-white">Shark</span>
+                <span class="italic text-cyan-400 text-sm">/ tight-aggressive</span>
+              </div>
+              <div class="mono text-[11px] text-slate-500 tracking-wider">
+                VPIP <strong class="text-cyan-300">24%</strong>
+                · PFR <strong class="text-cyan-300">18%</strong>
+                · Agg <strong class="text-cyan-300">3.2</strong>
+              </div>
+            </div>
+
+            <!-- Stat strip -->
+            <div class="grid grid-cols-2 sm:grid-cols-5 gap-3">
+              <div class="rounded-xl border border-white/[0.08] bg-white/[0.02] px-3 py-2.5">
+                <div class="mono text-[9px] uppercase tracking-[0.2em] text-slate-500 font-bold">Total hands</div>
+                <div class="mitr text-xl font-semibold text-white mt-1 tabular-nums">1,234</div>
+              </div>
+              <div class="rounded-xl border border-emerald-500/20 bg-emerald-500/[0.04] px-3 py-2.5">
+                <div class="mono text-[9px] uppercase tracking-[0.2em] text-slate-500 font-bold">Profit</div>
+                <div class="mitr text-xl font-semibold text-emerald-300 mt-1 tabular-nums">+1.4M<span class="text-[10px] text-slate-500 ml-1">MORB</span></div>
+              </div>
+              <div class="rounded-xl border border-white/[0.08] bg-white/[0.02] px-3 py-2.5">
+                <div class="mono text-[9px] uppercase tracking-[0.2em] text-slate-500 font-bold">Tournament</div>
+                <div class="mitr text-xl font-semibold text-white mt-1 tabular-nums">342</div>
+              </div>
+              <div class="rounded-xl border border-white/[0.08] bg-white/[0.02] px-3 py-2.5">
+                <div class="mono text-[9px] uppercase tracking-[0.2em] text-slate-500 font-bold">Biggest pot</div>
+                <div class="mitr text-xl font-semibold text-white mt-1 tabular-nums">850K<span class="text-[10px] text-slate-500 ml-1">MORB</span></div>
+              </div>
+              <div class="rounded-xl border border-cyan-500/25 bg-cyan-500/[0.05] px-3 py-2.5">
+                <div class="mono text-[9px] uppercase tracking-[0.2em] text-cyan-400 font-bold flex items-center gap-1">
+                  <span class="w-1.5 h-1.5 rounded-full bg-emerald-400 pulse-dot"></span>
+                  Hot streak
+                </div>
+                <div class="mitr text-xl font-semibold text-emerald-300 mt-1 tabular-nums">+7 wins</div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- =========================================================== -->
+  <!-- VARIATION B · VERTICAL PROFILE CARD                         -->
+  <!-- =========================================================== -->
+  <section class="space-y-4">
+    <div class="flex items-end justify-between gap-4">
+      <div>
+        <div class="mono text-[10px] tracking-[0.4em] text-cyan-400 font-bold">Variation B</div>
+        <h2 class="mitr text-xl font-bold mt-1">Vertical Profile Card</h2>
+      </div>
+      <p class="text-xs text-slate-400 max-w-md text-right">
+        Replaces the current left column (profile/archetype). Big square avatar, stats list below,
+        global rank card as a finisher. Slots cleanly into the existing 3-col grid.
+      </p>
+    </div>
+
+    <div class="grid grid-cols-1 lg:grid-cols-[1fr_1.4fr_1fr] gap-7">
+      <!-- B column · the new profile -->
+      <div class="panel-bg relative rounded-2xl overflow-hidden border border-cyan-500/25">
+        <div class="absolute inset-x-0 top-0 h-px top-glow"></div>
+        <div class="relative p-5 flex flex-col">
+          <!-- Section header -->
+          <div class="flex items-center justify-between mb-4">
+            <div class="flex items-center gap-2">
+              <div class="w-1 h-5 rounded-full bg-gradient-to-b from-cyan-400 to-purple-500"></div>
+              <div class="mono text-[10px] tracking-[0.32em] text-cyan-400 font-bold">YOUR POKER FACE</div>
+            </div>
+            <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[9px] font-bold uppercase tracking-wider text-emerald-300 border border-emerald-500/30 bg-emerald-500/10">
+              <span class="w-1 h-1 rounded-full bg-emerald-400 pulse-dot"></span>
+              Live
+            </span>
+          </div>
+
+          <!-- Avatar with overhang -->
+          <div class="relative mx-auto w-full max-w-[220px] mb-9">
+            <div class="avatar-frame-bg rounded-2xl glow-cyan p-3 relative overflow-hidden aspect-square">
+              <!-- corner card-suit chips -->
+              <span class="absolute top-2 left-2 mono text-[10px] text-cyan-400/60">♠</span>
+              <span class="absolute top-2 right-2 mono text-[10px] text-cyan-400/60">♥</span>
+              <span class="absolute bottom-2 left-2 mono text-[10px] text-cyan-400/60">♦</span>
+              <span class="absolute bottom-2 right-2 mono text-[10px] text-cyan-400/60">♣</span>
+              <img src="/avatars/pigtails-pixel-girl.png" class="avatar-img w-full h-full object-contain" alt="" />
+            </div>
+            <button class="absolute left-1/2 -translate-x-1/2 -bottom-4 inline-flex items-center gap-1.5 px-4 py-2 rounded-xl text-[11px] font-bold uppercase tracking-wider text-white whitespace-nowrap hover:scale-105 transition-transform"
+                    style="background: linear-gradient(135deg, #0891b2, #2563eb); box-shadow: 0 8px 22px -6px rgba(6,182,212,0.65), 0 0 0 1px rgba(34,211,238,0.25);">
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M12 20h9M16.5 3.5a2.121 2.121 0 113 3L7 19l-4 1 1-4L16.5 3.5z"/></svg>
+              Customize
+            </button>
+          </div>
+
+          <!-- Identity -->
+          <div class="text-center mb-5">
+            <div class="mitr text-xl font-bold text-white tracking-tight">kyle.eth</div>
+            <div class="flex items-center justify-center gap-1.5 mt-1">
+              <span class="text-base">🦈</span>
+              <span class="mitr text-base font-semibold text-white">Shark</span>
+              <span class="italic text-cyan-400 text-sm">/ TAG</span>
+            </div>
+            <div class="mono text-[10px] text-slate-500 tracking-wider mt-1.5">
+              V <strong class="text-cyan-300">24%</strong>
+              · P <strong class="text-cyan-300">18%</strong>
+              · A <strong class="text-cyan-300">3.2</strong>
+            </div>
+          </div>
+
+          <!-- Stat list -->
+          <div class="flex flex-col gap-2.5 mb-4">
+            <div class="flex justify-between items-baseline pb-2 border-b border-white/[0.06]">
+              <span class="mono text-[9px] uppercase tracking-[0.2em] text-slate-500 font-bold">Total hands</span>
+              <span class="mitr text-lg font-semibold text-white tabular-nums">1,234</span>
+            </div>
+            <div class="flex justify-between items-baseline pb-2 border-b border-white/[0.06]">
+              <span class="mono text-[9px] uppercase tracking-[0.2em] text-slate-500 font-bold">Total won</span>
+              <span class="mitr text-lg font-semibold text-emerald-300 tabular-nums">+1.4M<span class="text-[10px] text-slate-500 ml-1">MORB</span></span>
+            </div>
+            <div class="flex justify-between items-baseline">
+              <span class="mono text-[9px] uppercase tracking-[0.2em] text-slate-500 font-bold">Tournament hands</span>
+              <span class="mitr text-lg font-semibold text-white tabular-nums">342</span>
+            </div>
+          </div>
+
+          <!-- Global rank card (the one we built) -->
+          <div class="relative rounded-xl border overflow-hidden p-4 flex-1"
+               style="border-color: rgba(251,191,36,0.22); background: linear-gradient(135deg, rgba(120,53,15,0.14) 0%, rgba(15,23,42,0.3) 100%);">
+            <div class="absolute -top-14 -right-14 w-36 h-36 rounded-full blur-3xl pointer-events-none" style="background: rgba(251,191,36,0.13);"></div>
+            <div class="relative flex items-center gap-3 mb-3">
+              <div class="w-10 h-10 rounded-lg flex items-center justify-center shrink-0"
+                   style="background: linear-gradient(135deg, rgba(251,191,36,0.14), rgba(245,158,11,0.05)); border: 1px solid rgba(251,191,36,0.32);">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.25" class="text-amber-300"><circle cx="12" cy="8" r="6"/><path d="M15.477 12.89L17 22l-5-3-5 3 1.523-9.11"/></svg>
+              </div>
+              <div class="flex-1 min-w-0">
+                <div class="mono text-[9px] uppercase tracking-[0.28em] font-bold text-slate-400 mb-1">Global rank</div>
+                <div class="flex items-baseline gap-2 leading-none">
+                  <span class="mitr text-white" style="font-weight:700; font-size:26px; letter-spacing:-0.02em">#4</span>
+                  <span class="text-[10px] font-bold tracking-[0.18em] uppercase text-amber-300">Gold</span>
+                </div>
+              </div>
+            </div>
+            <div class="flex justify-between items-center mb-1.5">
+              <span class="mono text-[10px] text-slate-400 tracking-wide">1 rank from Top 10</span>
+              <span class="mono text-[10px] text-slate-300">→ Top 10</span>
+            </div>
+            <div class="h-1.5 rounded-full bg-white/[0.07] overflow-hidden">
+              <div class="h-full rounded-full transition-all duration-700"
+                   style="width: 86%; background: linear-gradient(90deg, #fde68a, #fcd34d); box-shadow: 0 0 5px rgba(252,211,77,0.30)"></div>
+            </div>
+          </div>
+
+          <!-- Action -->
+          <button class="mt-4 inline-flex items-center justify-center gap-2 w-full px-5 py-3 rounded-xl text-[13px] font-bold text-white hover:scale-[1.01] transition-transform"
+                  style="background: linear-gradient(135deg, #0891b2, #2563eb); box-shadow: 0 6px 18px -6px rgba(6,182,212,0.55), 0 0 0 1px rgba(34,211,238,0.18);">
+            View all stats
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M5 12h14M12 5l7 7-7 7"/></svg>
+          </button>
+        </div>
+      </div>
+
+      <!-- Placeholder for chart column -->
+      <div class="panel-bg relative rounded-2xl border border-cyan-500/15 p-5 flex items-center justify-center min-h-[500px]">
+        <div class="text-center space-y-2">
+          <div class="mono text-[10px] tracking-[0.32em] text-cyan-400 font-bold">STREAK CHART</div>
+          <div class="text-xs text-slate-500">(existing component, unchanged)</div>
+        </div>
+      </div>
+
+      <!-- Placeholder for ledger column -->
+      <div class="panel-bg relative rounded-2xl border border-cyan-500/15 p-5 flex items-center justify-center min-h-[500px]">
+        <div class="text-center space-y-2">
+          <div class="mono text-[10px] tracking-[0.32em] text-cyan-400 font-bold">CHIP LEDGER</div>
+          <div class="text-xs text-slate-500">(existing component, unchanged)</div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- =========================================================== -->
+  <!-- VARIATION C · ASYMMETRIC SHOWCASE                           -->
+  <!-- =========================================================== -->
+  <section class="space-y-4">
+    <div class="flex items-end justify-between gap-4">
+      <div>
+        <div class="mono text-[10px] tracking-[0.4em] text-cyan-400 font-bold">Variation C</div>
+        <h2 class="mitr text-xl font-bold mt-1">Asymmetric Showcase</h2>
+      </div>
+      <p class="text-xs text-slate-400 max-w-md text-right">
+        Most distinctive: hex-clipped avatar, stat rings orbiting key numbers, holographic shimmer
+        on the rank bar. Higher visual energy.
+      </p>
+    </div>
+
+    <div class="panel-bg relative rounded-2xl overflow-hidden border border-cyan-500/25">
+      <div class="absolute inset-x-0 top-0 h-px top-glow"></div>
+      <!-- Decorative grid lines -->
+      <div class="absolute inset-0 pointer-events-none opacity-[0.04]"
+           style="background-image: linear-gradient(to right, #22d3ee 1px, transparent 1px), linear-gradient(to bottom, #22d3ee 1px, transparent 1px); background-size: 32px 32px;"></div>
+      <!-- Corner glow -->
+      <div class="absolute -top-32 -right-32 w-96 h-96 rounded-full blur-3xl pointer-events-none" style="background: rgba(168,85,247,0.18);"></div>
+      <div class="absolute -bottom-32 -left-32 w-96 h-96 rounded-full blur-3xl pointer-events-none" style="background: rgba(34,211,238,0.15);"></div>
+
+      <div class="relative px-6 sm:px-10 py-8">
+
+        <div class="flex items-center justify-between mb-7">
+          <div class="flex items-center gap-2.5">
+            <div class="w-1 h-7 rounded-full bg-gradient-to-b from-cyan-400 to-purple-500"></div>
+            <div>
+              <div class="mono text-[10px] tracking-[0.35em] text-cyan-400 font-bold">YOUR POKER FACE</div>
+              <div class="mitr font-medium text-white text-[15px]">kyle.eth · Active table seat 4</div>
+            </div>
+          </div>
+          <div class="hidden sm:flex items-center gap-3">
+            <span class="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider text-emerald-300 border border-emerald-500/30 bg-emerald-500/10">
+              <span class="w-1.5 h-1.5 rounded-full bg-emerald-400 pulse-dot"></span>
+              Online · 3h play
+            </span>
+          </div>
+        </div>
+
+        <div class="grid grid-cols-1 md:grid-cols-[auto_1fr] gap-10 items-center">
+          <!-- Hex avatar block -->
+          <div class="relative w-[200px] mx-auto md:mx-0">
+            <!-- Outer hex glow ring -->
+            <div class="absolute inset-0 hex-clip" style="background: linear-gradient(135deg, #22d3ee, #a855f7); filter: blur(14px); opacity: 0.55;"></div>
+            <!-- Hex frame -->
+            <div class="relative hex-clip" style="background: linear-gradient(135deg, #22d3ee, #a855f7); padding: 3px;">
+              <div class="hex-clip avatar-frame-bg w-full aspect-[1/1.155] flex items-center justify-center overflow-hidden">
+                <img src="/avatars/pigtails-pixel-girl.png" class="avatar-img w-[78%] h-[78%] object-contain" alt="" />
+              </div>
+            </div>
+            <!-- Sparkle accents -->
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor" class="absolute top-3 -right-2 text-amber-300 sparkle pointer-events-none"><path d="M12 0l2.45 9.55L24 12l-9.55 2.45L12 24l-2.45-9.55L0 12l9.55-2.45z"/></svg>
+            <svg width="10" height="10" viewBox="0 0 24 24" fill="currentColor" class="absolute -top-1 right-8 text-amber-200 sparkle-delay pointer-events-none"><path d="M12 0l2.45 9.55L24 12l-9.55 2.45L12 24l-2.45-9.55L0 12l9.55-2.45z"/></svg>
+
+            <!-- Archetype emoji disc bottom-left -->
+            <div class="absolute -bottom-1 -left-2 w-12 h-12 rounded-full flex items-center justify-center text-2xl"
+                 style="background: linear-gradient(135deg, rgba(6,182,212,0.30), rgba(59,130,246,0.10)); border: 2px solid rgba(34,211,238,0.55); backdrop-filter: blur(6px);">
+              🦈
+            </div>
+
+            <!-- Overhanging customize button (bottom-center) -->
+            <button class="absolute left-1/2 -translate-x-1/2 -bottom-5 inline-flex items-center gap-1.5 px-4 py-2 rounded-full text-[11px] font-bold uppercase tracking-wider text-white whitespace-nowrap hover:scale-105 transition-transform"
+                    style="background: linear-gradient(135deg, #0891b2, #2563eb); box-shadow: 0 10px 26px -6px rgba(6,182,212,0.7), 0 0 0 2px rgba(3,11,21,1), 0 0 0 3px rgba(34,211,238,0.45);">
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M12 20h9M16.5 3.5a2.121 2.121 0 113 3L7 19l-4 1 1-4L16.5 3.5z"/></svg>
+              Edit Avatar
+            </button>
+          </div>
+
+          <!-- Right side -->
+          <div class="space-y-5">
+            <!-- Headline strip -->
+            <div class="flex items-end gap-3 flex-wrap">
+              <span class="mitr text-3xl font-bold text-white tracking-tight">Shark</span>
+              <span class="italic text-cyan-400 text-base">/ tight-aggressive</span>
+              <span class="ml-auto inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-[10px] font-bold tracking-wider uppercase glow-gold text-amber-200"
+                    style="background: linear-gradient(135deg, rgba(120,53,15,0.5), rgba(15,23,42,0.3));">
+                <svg width="11" height="11" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2L9 9H2l5.5 4-2 7L12 16l6.5 4-2-7L22 9h-7z"/></svg>
+                #4 · Gold
+              </span>
+            </div>
+
+            <!-- Progress to top 3 -->
+            <div>
+              <div class="flex justify-between items-center mb-1.5">
+                <span class="mono text-[10px] uppercase tracking-[0.25em] text-slate-400 font-bold">Climb to Top 3</span>
+                <span class="mono text-[10px] text-slate-300">1 rank away</span>
+              </div>
+              <div class="h-2 rounded-full bg-white/[0.05] overflow-hidden border border-white/[0.06]">
+                <div class="h-full rounded-full progress-shimmer"
+                     style="width: 86%; background: linear-gradient(90deg, #fcd34d, #fbbf24, #f59e0b, #fcd34d); box-shadow: 0 0 12px rgba(251,191,36,0.55);"></div>
+              </div>
+            </div>
+
+            <!-- Big stats row with ring framing -->
+            <div class="grid grid-cols-2 sm:grid-cols-4 gap-3 pt-2">
+              <div class="relative rounded-xl border border-white/[0.10] bg-white/[0.02] px-4 py-3 overflow-hidden">
+                <div class="absolute -top-6 -right-6 w-16 h-16 rounded-full blur-2xl" style="background: rgba(34,211,238,0.18);"></div>
+                <div class="relative mono text-[9px] uppercase tracking-[0.2em] text-cyan-300 font-bold">Hands</div>
+                <div class="relative mitr text-2xl font-bold text-white mt-0.5 tabular-nums">1,234</div>
+                <div class="relative mono text-[10px] text-slate-500 mt-0.5">342 tourney</div>
+              </div>
+              <div class="relative rounded-xl border border-emerald-500/20 bg-emerald-500/[0.04] px-4 py-3 overflow-hidden">
+                <div class="absolute -top-6 -right-6 w-16 h-16 rounded-full blur-2xl" style="background: rgba(16,185,129,0.20);"></div>
+                <div class="relative mono text-[9px] uppercase tracking-[0.2em] text-emerald-300 font-bold">Lifetime net</div>
+                <div class="relative mitr text-2xl font-bold text-emerald-300 mt-0.5 tabular-nums">+1.4M</div>
+                <div class="relative mono text-[10px] text-slate-500 mt-0.5">MORB · all time</div>
+              </div>
+              <div class="relative rounded-xl border border-purple-500/20 bg-purple-500/[0.04] px-4 py-3 overflow-hidden">
+                <div class="absolute -top-6 -right-6 w-16 h-16 rounded-full blur-2xl" style="background: rgba(168,85,247,0.20);"></div>
+                <div class="relative mono text-[9px] uppercase tracking-[0.2em] text-purple-300 font-bold">Biggest pot</div>
+                <div class="relative mitr text-2xl font-bold text-white mt-0.5 tabular-nums">850K</div>
+                <div class="relative mono text-[10px] text-slate-500 mt-0.5">14 days ago</div>
+              </div>
+              <div class="relative rounded-xl border border-rose-500/20 bg-rose-500/[0.04] px-4 py-3 overflow-hidden">
+                <div class="absolute -top-6 -right-6 w-16 h-16 rounded-full blur-2xl" style="background: rgba(244,63,94,0.20);"></div>
+                <div class="relative mono text-[9px] uppercase tracking-[0.2em] text-rose-300 font-bold flex items-center gap-1">
+                  <span class="w-1.5 h-1.5 rounded-full bg-emerald-400 pulse-dot"></span> Streak
+                </div>
+                <div class="relative mitr text-2xl font-bold text-emerald-300 mt-0.5 tabular-nums">+7</div>
+                <div class="relative mono text-[10px] text-slate-500 mt-0.5">hot · 3h ago</div>
+              </div>
+            </div>
+
+            <!-- Mini metric belt -->
+            <div class="flex flex-wrap items-center gap-x-5 gap-y-2 pt-1 mono text-[11px] text-slate-400">
+              <span>VPIP <strong class="text-cyan-300">24%</strong></span>
+              <span class="text-slate-700">·</span>
+              <span>PFR <strong class="text-cyan-300">18%</strong></span>
+              <span class="text-slate-700">·</span>
+              <span>Agg <strong class="text-cyan-300">3.2</strong></span>
+              <span class="text-slate-700">·</span>
+              <span>3-Bet <strong class="text-cyan-300">9%</strong></span>
+              <span class="text-slate-700">·</span>
+              <span>Showdowns <strong class="text-cyan-300">28%</strong></span>
+              <button class="ml-auto inline-flex items-center gap-1.5 text-cyan-400 hover:text-cyan-300 font-bold text-[11px] uppercase tracking-wider">
+                View all stats
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M5 12h14M12 5l7 7-7 7"/></svg>
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- =========================================================== -->
+  <!-- SVG DEFS — shared line-chart helpers (reused below)         -->
+  <!-- =========================================================== -->
+  <svg width="0" height="0" style="position:absolute" aria-hidden>
+    <defs>
+      <linearGradient id="winGrad" x1="0" x2="0" y1="0" y2="1">
+        <stop offset="0%" stop-color="#06b6d4" stop-opacity="0.55"/>
+        <stop offset="100%" stop-color="#06b6d4" stop-opacity="0"/>
+      </linearGradient>
+      <linearGradient id="lossGrad" x1="0" x2="0" y1="1" y2="0">
+        <stop offset="0%" stop-color="#ef4444" stop-opacity="0.45"/>
+        <stop offset="100%" stop-color="#ef4444" stop-opacity="0"/>
+      </linearGradient>
+      <clipPath id="winClip"><rect x="0" y="0" width="400" height="70"/></clipPath>
+      <clipPath id="lossClip"><rect x="0" y="70" width="400" height="70"/></clipPath>
+      <linearGradient id="winGradMini" x1="0" x2="0" y1="0" y2="1">
+        <stop offset="0%" stop-color="#06b6d4" stop-opacity="0.55"/>
+        <stop offset="100%" stop-color="#06b6d4" stop-opacity="0"/>
+      </linearGradient>
+      <linearGradient id="lossGradMini" x1="0" x2="0" y1="1" y2="0">
+        <stop offset="0%" stop-color="#ef4444" stop-opacity="0.45"/>
+        <stop offset="100%" stop-color="#ef4444" stop-opacity="0"/>
+      </linearGradient>
+      <clipPath id="winClipMini"><rect x="0" y="0" width="400" height="50"/></clipPath>
+      <clipPath id="lossClipMini"><rect x="0" y="50" width="400" height="50"/></clipPath>
+      <!-- Sample PulseChain token gradients for REP badge demo -->
+      <linearGradient id="plsLogoGrad" x1="0" x2="1" y1="0" y2="1">
+        <stop offset="0%" stop-color="#ec4899"/>
+        <stop offset="100%" stop-color="#8b5cf6"/>
+      </linearGradient>
+      <linearGradient id="hexLogoGrad" x1="0" x2="1" y1="0" y2="1">
+        <stop offset="0%" stop-color="#f59e0b"/>
+        <stop offset="100%" stop-color="#dc2626"/>
+      </linearGradient>
+      <linearGradient id="plsxLogoGrad" x1="0" x2="1" y1="0" y2="1">
+        <stop offset="0%" stop-color="#22d3ee"/>
+        <stop offset="100%" stop-color="#a855f7"/>
+      </linearGradient>
+      <!-- Holographic foil gradient for D2 -->
+      <linearGradient id="holoGrad" x1="0" x2="1" y1="0" y2="1">
+        <stop offset="0%" stop-color="#ec4899"/>
+        <stop offset="20%" stop-color="#f59e0b"/>
+        <stop offset="40%" stop-color="#10b981"/>
+        <stop offset="60%" stop-color="#06b6d4"/>
+        <stop offset="80%" stop-color="#8b5cf6"/>
+        <stop offset="100%" stop-color="#ec4899"/>
+      </linearGradient>
+      <linearGradient id="holoGradSubtle" x1="0" x2="1" y1="0" y2="1">
+        <stop offset="0%" stop-color="#ec4899" stop-opacity="0.4"/>
+        <stop offset="33%" stop-color="#06b6d4" stop-opacity="0.4"/>
+        <stop offset="66%" stop-color="#a855f7" stop-opacity="0.4"/>
+        <stop offset="100%" stop-color="#f59e0b" stop-opacity="0.4"/>
+      </linearGradient>
+    </defs>
+  </svg>
+
+  <!-- =========================================================== -->
+  <!-- VARIATION D · TRADING CARD                                  -->
+  <!-- =========================================================== -->
+  <section class="space-y-4">
+    <div class="flex items-end justify-between gap-4">
+      <div>
+        <div class="mono text-[10px] tracking-[0.4em] text-cyan-400 font-bold">Variation D</div>
+        <h2 class="mitr text-xl font-bold mt-1">Trading Card</h2>
+      </div>
+      <p class="text-xs text-slate-400 max-w-md text-right">
+        Vertical card with avatar dominant at the top and a mini win/loss line at the bottom — like
+        a baseball card's stat strip. Slots into the left column. Collectible feel.
+      </p>
+    </div>
+
+    <div class="grid grid-cols-1 lg:grid-cols-[1fr_1.4fr_1fr] gap-7">
+      <!-- Trading card -->
+      <div class="relative rounded-2xl overflow-hidden border-2 border-amber-400/40"
+           style="background: linear-gradient(155deg, #0c1929 0%, #050a14 60%, #2a1a0a 100%); box-shadow: 0 0 40px -8px rgba(251,191,36,0.18), inset 0 0 0 1px rgba(251,191,36,0.10);">
+        <!-- Holographic shimmer overlay -->
+        <div class="absolute inset-0 pointer-events-none opacity-30 mix-blend-screen"
+             style="background: linear-gradient(125deg, transparent 30%, rgba(168,85,247,0.18) 45%, rgba(34,211,238,0.18) 55%, transparent 70%); background-size: 200% 100%; animation: shimmer 5s linear infinite;"></div>
+        <!-- Subtle card-suit watermark -->
+        <div class="absolute top-1/3 -right-6 text-[200px] mitr font-bold pointer-events-none opacity-[0.05]">♠</div>
+
+        <div class="relative p-5">
+          <!-- Card header band -->
+          <div class="flex items-center justify-between mb-4">
+            <div>
+              <div class="mono text-[9px] tracking-[0.32em] text-amber-300 font-bold">RANK 4 · GOLD TIER</div>
+              <div class="mitr text-2xl font-bold text-white tracking-tight leading-none mt-1">SHARK</div>
+              <div class="italic text-cyan-400 text-sm">/ tight-aggressive</div>
+            </div>
+            <div class="text-right">
+              <svg width="32" height="32" viewBox="0 0 24 24" fill="currentColor" class="text-amber-300 inline-block"
+                   style="filter: drop-shadow(0 0 8px rgba(251,191,36,0.6))">
+                <circle cx="12" cy="8" r="6"/>
+                <path d="M15.477 12.89L17 22l-5-3-5 3 1.523-9.11" fill="none" stroke="currentColor" stroke-width="2"/>
+              </svg>
+            </div>
+          </div>
+
+          <!-- Avatar block (the centerpiece of the card) -->
+          <div class="relative mb-9">
+            <div class="avatar-frame-bg rounded-2xl glow-gold p-3 relative overflow-hidden aspect-square">
+              <!-- Stripe accents at corners -->
+              <div class="absolute top-0 left-0 w-12 h-1 bg-gradient-to-r from-amber-400 to-transparent"></div>
+              <div class="absolute top-0 right-0 w-12 h-1 bg-gradient-to-l from-amber-400 to-transparent"></div>
+              <div class="absolute bottom-0 left-0 w-12 h-1 bg-gradient-to-r from-amber-400 to-transparent"></div>
+              <div class="absolute bottom-0 right-0 w-12 h-1 bg-gradient-to-l from-amber-400 to-transparent"></div>
+              <img src="/avatars/pigtails-pixel-girl.png" class="avatar-img w-full h-full object-contain" alt="" />
+              <!-- Identity overlay -->
+              <div class="absolute bottom-0 left-0 right-0 p-2 bg-gradient-to-t from-black/80 to-transparent">
+                <div class="mono text-[9px] text-amber-300/80 tracking-wider">kyle.eth</div>
+                <div class="mono text-[8px] text-slate-500">0x9c8a…3bd2</div>
+              </div>
+            </div>
+            <button class="absolute right-3 -bottom-4 inline-flex items-center gap-1.5 px-3 py-2 rounded-full text-[11px] font-bold uppercase tracking-wider text-white whitespace-nowrap hover:scale-105 transition-transform"
+                    style="background: linear-gradient(135deg, #f59e0b, #d97706); box-shadow: 0 8px 20px -4px rgba(245,158,11,0.6), 0 0 0 2px rgba(3,11,21,1), 0 0 0 3px rgba(245,158,11,0.45);">
+              <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M12 20h9M16.5 3.5a2.121 2.121 0 113 3L7 19l-4 1 1-4L16.5 3.5z"/></svg>
+              Edit
+            </button>
+          </div>
+
+          <!-- Card stat strip (sports-card style) -->
+          <div class="grid grid-cols-4 gap-1 mb-4 pt-3 border-t border-amber-400/20">
+            <div class="text-center">
+              <div class="mono text-[8px] uppercase tracking-wider text-amber-300/70 font-bold">HANDS</div>
+              <div class="mitr text-base font-bold text-white tabular-nums">1,234</div>
+            </div>
+            <div class="text-center">
+              <div class="mono text-[8px] uppercase tracking-wider text-amber-300/70 font-bold">P/L</div>
+              <div class="mitr text-base font-bold text-emerald-300 tabular-nums">+1.4M</div>
+            </div>
+            <div class="text-center">
+              <div class="mono text-[8px] uppercase tracking-wider text-amber-300/70 font-bold">TRN</div>
+              <div class="mitr text-base font-bold text-white tabular-nums">342</div>
+            </div>
+            <div class="text-center">
+              <div class="mono text-[8px] uppercase tracking-wider text-amber-300/70 font-bold">VPIP</div>
+              <div class="mitr text-base font-bold text-cyan-300 tabular-nums">24</div>
+            </div>
+          </div>
+
+          <!-- Mini embedded win/loss line chart -->
+          <div class="rounded-lg bg-black/30 border border-amber-400/15 p-2.5">
+            <div class="flex justify-between items-baseline mb-1">
+              <div class="mono text-[8px] uppercase tracking-[0.25em] text-cyan-400 font-bold">Last 200 hands</div>
+              <div class="mitr text-xs font-bold text-emerald-300">+1.4M</div>
+            </div>
+            <svg viewBox="0 0 400 100" preserveAspectRatio="none" class="w-full h-12 overflow-visible">
+              <line x1="0" y1="50" x2="400" y2="50" stroke="rgba(148,163,184,0.15)" stroke-width="1" stroke-dasharray="2 4"/>
+              <path d="M 0 50 L 20 60 L 40 70 L 60 55 L 80 40 L 100 35 L 120 50 L 140 30 L 160 25 L 180 35 L 200 20 L 220 15 L 240 25 L 260 10 L 280 18 L 300 8 L 320 14 L 340 5 L 360 10 L 380 3 L 400 8 L 400 50 Z"
+                    clip-path="url(#winClipMini)" fill="url(#winGradMini)"/>
+              <path d="M 0 50 L 20 60 L 40 70 L 60 55 L 80 40 L 100 35 L 120 50 L 140 30 L 160 25 L 180 35 L 200 20 L 220 15 L 240 25 L 260 10 L 280 18 L 300 8 L 320 14 L 340 5 L 360 10 L 380 3 L 400 8 L 400 50 Z"
+                    clip-path="url(#lossClipMini)" fill="url(#lossGradMini)"/>
+              <path d="M 0 50 L 20 60 L 40 70 L 60 55 L 80 40 L 100 35 L 120 50 L 140 30 L 160 25 L 180 35 L 200 20 L 220 15 L 240 25 L 260 10 L 280 18 L 300 8 L 320 14 L 340 5 L 360 10 L 380 3 L 400 8"
+                    fill="none" stroke="#06b6d4" stroke-width="1.5" style="filter: drop-shadow(0 0 4px rgba(6,182,212,0.5))"/>
+              <circle cx="40" cy="70" r="3" fill="#f87171" stroke="#0c1929" stroke-width="1"/>
+              <circle cx="380" cy="3" r="3" fill="#67e8f9" stroke="#0c1929" stroke-width="1"/>
+              <circle cx="400" cy="8" r="4" fill="#06b6d4" stroke="white" stroke-width="1" style="filter: drop-shadow(0 0 6px rgba(6,182,212,0.8))"/>
+            </svg>
+            <div class="flex justify-between mt-1 mono text-[8px] text-slate-500 tracking-wider">
+              <span class="text-rose-300">▼ −340K</span>
+              <span class="text-cyan-300">▲ peak +1.5M</span>
+            </div>
+          </div>
+
+          <!-- Customize CTA -->
+          <button class="mt-4 inline-flex items-center justify-center gap-2 w-full px-4 py-2.5 rounded-xl border border-amber-400/30 hover:border-amber-300/50 text-[12px] font-bold text-amber-200 hover:bg-amber-400/10 transition-colors">
+            View card details
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M5 12h14M12 5l7 7-7 7"/></svg>
+          </button>
+        </div>
+      </div>
+
+      <!-- Placeholder columns -->
+      <div class="panel-bg rounded-2xl border border-cyan-500/15 p-5 flex items-center justify-center min-h-[500px] col-span-2">
+        <div class="text-center space-y-2">
+          <div class="mono text-[10px] tracking-[0.32em] text-cyan-400 font-bold">STREAK CHART · CHIP LEDGER</div>
+          <div class="text-xs text-slate-500">(existing 2-column layout — chart shrinks to fit since the card has its own embedded mini-chart)</div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- =========================================================== -->
+  <!-- VARIATION D2 · FOIL HOLOGRAPHIC                             -->
+  <!-- =========================================================== -->
+  <section class="space-y-4">
+    <div class="flex items-end justify-between gap-4">
+      <div>
+        <div class="mono text-[10px] tracking-[0.4em] text-cyan-400 font-bold">Variation D2</div>
+        <h2 class="mitr text-xl font-bold mt-1">Foil Holographic Card</h2>
+      </div>
+      <p class="text-xs text-slate-400 max-w-md text-right">
+        Rare-card aesthetic — hex avatar window, rainbow foil sweep, rarity tag that
+        scales with rank (LEGENDARY for #1-3, EPIC for top 10, RARE for top 50).
+      </p>
+    </div>
+
+    <div class="grid grid-cols-1 lg:grid-cols-[1fr_1.4fr_1fr] gap-7">
+      <!-- D2 card -->
+      <div class="relative rounded-2xl overflow-hidden"
+           style="padding: 2.5px; background: linear-gradient(135deg, #ec4899, #f59e0b, #10b981, #06b6d4, #8b5cf6, #ec4899); background-size: 300% 300%; animation: shimmer 6s linear infinite;">
+        <div class="relative rounded-[14px] overflow-hidden"
+             style="background: linear-gradient(155deg, #0c1929 0%, #050a14 100%);">
+          <!-- Foil sweep overlay -->
+          <div class="absolute inset-0 pointer-events-none opacity-30 mix-blend-screen"
+               style="background: linear-gradient(125deg, transparent 30%, rgba(236,72,153,0.25) 40%, rgba(6,182,212,0.25) 50%, rgba(168,85,247,0.25) 60%, transparent 70%); background-size: 250% 100%; animation: shimmer 4s linear infinite;"></div>
+          <!-- Subtle prism speckles -->
+          <div class="absolute inset-0 pointer-events-none opacity-[0.10] mix-blend-screen"
+               style="background:
+                  radial-gradient(circle at 15% 25%, #ec4899 0%, transparent 6%),
+                  radial-gradient(circle at 75% 80%, #06b6d4 0%, transparent 6%),
+                  radial-gradient(circle at 50% 50%, #8b5cf6 0%, transparent 6%),
+                  radial-gradient(circle at 30% 70%, #f59e0b 0%, transparent 6%);"></div>
+
+          <div class="relative p-5">
+            <!-- Rarity + rank header -->
+            <div class="flex items-center justify-between mb-4">
+              <div class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[9px] font-bold tracking-[0.25em] uppercase"
+                   style="background: linear-gradient(135deg, rgba(168,85,247,0.30), rgba(236,72,153,0.20));
+                          border: 1px solid rgba(168,85,247,0.50);
+                          color: #e9d5ff;
+                          text-shadow: 0 0 6px rgba(168,85,247,0.6);">
+                <svg width="9" height="9" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2l2.5 7.5L22 12l-7.5 2.5L12 22l-2.5-7.5L2 12l7.5-2.5z"/></svg>
+                ★ Epic
+              </div>
+              <div class="text-right">
+                <div class="mono text-[8px] uppercase tracking-[0.28em] text-slate-500 font-bold">Rank</div>
+                <div class="mitr text-white leading-none tabular-nums" style="font-weight:700; font-size:32px; letter-spacing:-0.04em">#4</div>
+              </div>
+            </div>
+
+            <!-- Archetype banner -->
+            <div class="mb-4">
+              <div class="mitr text-2xl font-bold text-white tracking-tight leading-none">SHARK</div>
+              <div class="italic text-sm" style="background: linear-gradient(90deg, #ec4899, #06b6d4, #8b5cf6); -webkit-background-clip: text; background-clip: text; color: transparent;">/ tight-aggressive</div>
+            </div>
+
+            <!-- Hex avatar window -->
+            <div class="relative mx-auto w-[200px] mb-9">
+              <!-- Hex glow halo -->
+              <div class="absolute inset-0 hex-clip" style="background: linear-gradient(135deg, #ec4899, #06b6d4, #8b5cf6, #f59e0b); background-size: 200% 200%; animation: shimmer 5s linear infinite; filter: blur(14px); opacity: 0.55;"></div>
+              <!-- Hex frame -->
+              <div class="relative hex-clip" style="background: linear-gradient(135deg, #ec4899, #f59e0b, #06b6d4, #8b5cf6); background-size: 200% 200%; animation: shimmer 5s linear infinite; padding: 3px;">
+                <div class="hex-clip avatar-frame-bg w-full aspect-[1/1.155] flex items-center justify-center overflow-hidden">
+                  <img src="/avatars/pigtails-pixel-girl.png" class="avatar-img w-[80%] h-[80%] object-contain" alt="" />
+                </div>
+              </div>
+              <!-- Foil sparkles -->
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="#f9a8d4" class="absolute top-3 -right-1 sparkle pointer-events-none" style="filter: drop-shadow(0 0 4px rgba(236,72,153,0.6))"><path d="M12 0l2.45 9.55L24 12l-9.55 2.45L12 24l-2.45-9.55L0 12l9.55-2.45z"/></svg>
+              <svg width="10" height="10" viewBox="0 0 24 24" fill="#67e8f9" class="absolute -top-1 right-10 sparkle-delay pointer-events-none" style="filter: drop-shadow(0 0 4px rgba(34,211,238,0.6))"><path d="M12 0l2.45 9.55L24 12l-9.55 2.45L12 24l-2.45-9.55L0 12l9.55-2.45z"/></svg>
+
+              <!-- REP badge -->
+              <button class="absolute right-0 bottom-4 w-14 h-14 rounded-full flex flex-col items-center justify-center group hover:scale-110 transition-all"
+                      style="background: radial-gradient(circle at 30% 30%, rgba(8,145,178,0.4), rgba(15,23,42,0.97));
+                             border: 2px solid rgba(34,211,238,0.6);
+                             box-shadow: 0 0 16px rgba(6,182,212,0.5), 0 0 0 3px #050a14;">
+                <span class="mono text-[8px] tracking-[0.25em] font-bold text-cyan-300 leading-none">REP</span>
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" class="text-cyan-300 mt-0.5"><path d="M12 5v14M5 12h14"/></svg>
+              </button>
+
+              <!-- Edit avatar (bottom-center, smaller) -->
+              <button class="absolute left-[28%] -translate-x-1/2 -bottom-4 inline-flex items-center gap-1 px-3 py-1.5 rounded-full text-[10px] font-bold uppercase tracking-wider text-white whitespace-nowrap hover:scale-105 transition-transform"
+                      style="background: linear-gradient(135deg, #0891b2, #2563eb); box-shadow: 0 6px 18px -4px rgba(6,182,212,0.6), 0 0 0 2px #050a14, 0 0 0 3px rgba(34,211,238,0.4);">
+                <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M12 20h9M16.5 3.5a2.121 2.121 0 113 3L7 19l-4 1 1-4L16.5 3.5z"/></svg>
+                Edit
+              </button>
+            </div>
+
+            <!-- Holo stat strip -->
+            <div class="relative rounded-lg overflow-hidden mb-4"
+                 style="background: rgba(0,0,0,0.35); border: 1px solid rgba(168,85,247,0.25);">
+              <div class="absolute inset-x-0 top-0 h-px"
+                   style="background: linear-gradient(90deg, transparent, #ec4899, #06b6d4, #8b5cf6, transparent);"></div>
+              <div class="grid grid-cols-4 gap-0 px-2 py-3">
+                <div class="text-center border-r border-white/[0.06]">
+                  <div class="mono text-[8px] uppercase tracking-wider text-pink-300/80 font-bold">HANDS</div>
+                  <div class="mitr text-base font-bold text-white tabular-nums">1.2K</div>
+                </div>
+                <div class="text-center border-r border-white/[0.06]">
+                  <div class="mono text-[8px] uppercase tracking-wider text-amber-300/80 font-bold">P/L</div>
+                  <div class="mitr text-base font-bold text-emerald-300 tabular-nums">+1.4M</div>
+                </div>
+                <div class="text-center border-r border-white/[0.06]">
+                  <div class="mono text-[8px] uppercase tracking-wider text-cyan-300/80 font-bold">SD WR</div>
+                  <div class="mitr text-base font-bold text-white tabular-nums">48%</div>
+                </div>
+                <div class="text-center">
+                  <div class="mono text-[8px] uppercase tracking-wider text-purple-300/80 font-bold">VPIP</div>
+                  <div class="mitr text-base font-bold text-white tabular-nums">24</div>
+                </div>
+              </div>
+            </div>
+
+            <!-- Embedded mini chart -->
+            <div class="rounded-lg p-2.5 relative overflow-hidden"
+                 style="background: rgba(0,0,0,0.4); border: 1px solid rgba(168,85,247,0.20);">
+              <div class="absolute inset-0 pointer-events-none opacity-30 mix-blend-screen"
+                   style="background: linear-gradient(110deg, transparent 40%, rgba(236,72,153,0.15) 50%, transparent 60%); background-size: 300% 100%; animation: shimmer 4s linear infinite;"></div>
+              <div class="relative flex justify-between items-baseline mb-1">
+                <div class="mono text-[8px] uppercase tracking-[0.25em] text-purple-300 font-bold">200-hand trail</div>
+                <div class="mitr text-xs font-bold text-emerald-300">+1.4M</div>
+              </div>
+              <svg viewBox="0 0 400 100" preserveAspectRatio="none" class="relative w-full h-12 overflow-visible">
+                <line x1="0" y1="50" x2="400" y2="50" stroke="rgba(168,85,247,0.20)" stroke-width="1" stroke-dasharray="2 4"/>
+                <path d="M 0 50 L 20 60 L 40 70 L 60 55 L 80 40 L 100 35 L 120 50 L 140 30 L 160 25 L 180 35 L 200 20 L 220 15 L 240 25 L 260 10 L 280 18 L 300 8 L 320 14 L 340 5 L 360 10 L 380 3 L 400 8 L 400 50 Z"
+                      clip-path="url(#winClipMini)" fill="url(#winGradMini)"/>
+                <path d="M 0 50 L 20 60 L 40 70 L 60 55 L 80 40 L 100 35 L 120 50 L 140 30 L 160 25 L 180 35 L 200 20 L 220 15 L 240 25 L 260 10 L 280 18 L 300 8 L 320 14 L 340 5 L 360 10 L 380 3 L 400 8 L 400 50 Z"
+                      clip-path="url(#lossClipMini)" fill="url(#lossGradMini)"/>
+                <path d="M 0 50 L 20 60 L 40 70 L 60 55 L 80 40 L 100 35 L 120 50 L 140 30 L 160 25 L 180 35 L 200 20 L 220 15 L 240 25 L 260 10 L 280 18 L 300 8 L 320 14 L 340 5 L 360 10 L 380 3 L 400 8"
+                      fill="none" stroke="url(#holoGrad)" stroke-width="1.8" style="filter: drop-shadow(0 0 4px rgba(168,85,247,0.5))"/>
+                <circle cx="40" cy="70" r="3" fill="#f87171" stroke="#0c1929" stroke-width="1"/>
+                <circle cx="380" cy="3" r="3" fill="#67e8f9" stroke="#0c1929" stroke-width="1"/>
+                <circle cx="400" cy="8" r="4" fill="#ec4899" stroke="white" stroke-width="1" style="filter: drop-shadow(0 0 6px rgba(236,72,153,0.8))"/>
+              </svg>
+            </div>
+
+            <!-- Card serial bottom -->
+            <div class="mt-3 flex justify-between items-center mono text-[8px] tracking-[0.25em] uppercase">
+              <span style="background: linear-gradient(90deg, #ec4899, #06b6d4); -webkit-background-clip: text; background-clip: text; color: transparent; font-weight: 700;">★ Epic foil</span>
+              <span class="text-slate-600">Ed. 04/∞</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Placeholder columns -->
+      <div class="panel-bg rounded-2xl border border-cyan-500/15 p-5 flex items-center justify-center min-h-[500px] col-span-2">
+        <div class="text-center space-y-2">
+          <div class="mono text-[10px] tracking-[0.32em] text-cyan-400 font-bold">STREAK CHART · CHIP LEDGER</div>
+          <div class="text-xs text-slate-500">(existing 2-column layout)</div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- =========================================================== -->
+  <!-- VARIATION D3 · PLAYING CARD (ROYAL COURT)                   -->
+  <!-- =========================================================== -->
+  <section class="space-y-4">
+    <div class="flex items-end justify-between gap-4">
+      <div>
+        <div class="mono text-[10px] tracking-[0.4em] text-cyan-400 font-bold">Variation D3</div>
+        <h2 class="mitr text-xl font-bold mt-1">Royal Court (Playing Card)</h2>
+      </div>
+      <p class="text-xs text-slate-400 max-w-md text-right">
+        Looks like an actual face card. Cream paper, corner suit pips
+        (Shark = K♠, Maniac = Joker, Nit = K♣ …), ornate border, the chart sits as
+        a subtle "deck cut" stripe.
+      </p>
+    </div>
+
+    <div class="grid grid-cols-1 lg:grid-cols-[1fr_1.4fr_1fr] gap-7">
+      <!-- D3 playing card -->
+      <div class="relative rounded-2xl overflow-hidden"
+           style="background: #f5ecd7; border: 1px solid rgba(0,0,0,0.5); box-shadow: 0 12px 40px -8px rgba(0,0,0,0.6), inset 0 0 0 6px #f5ecd7, inset 0 0 0 7px rgba(0,0,0,0.4);">
+        <!-- Decorative inner border -->
+        <div class="absolute inset-3 rounded-xl pointer-events-none"
+             style="border: 1.5px solid rgba(127,29,29,0.35); box-shadow: inset 0 0 0 4px transparent, inset 0 0 0 5px rgba(127,29,29,0.15);"></div>
+        <!-- Faded suit watermark -->
+        <div class="absolute inset-0 flex items-center justify-center pointer-events-none">
+          <span class="text-[280px] font-bold leading-none" style="color: rgba(0,0,0,0.04); font-family: serif;">♠</span>
+        </div>
+
+        <!-- Top-left pip (K♠) -->
+        <div class="absolute top-4 left-4 flex flex-col items-center leading-none">
+          <span class="font-bold text-2xl" style="color: #1a1a1a; font-family: 'Mitr', serif;">K</span>
+          <span class="text-xl -mt-0.5" style="color: #1a1a1a;">♠</span>
+        </div>
+        <!-- Bottom-right pip rotated -->
+        <div class="absolute bottom-4 right-4 flex flex-col items-center leading-none transform rotate-180">
+          <span class="font-bold text-2xl" style="color: #1a1a1a; font-family: 'Mitr', serif;">K</span>
+          <span class="text-xl -mt-0.5" style="color: #1a1a1a;">♠</span>
+        </div>
+
+        <!-- Top-right rank pip (red for emphasis) -->
+        <div class="absolute top-4 right-4 flex flex-col items-end leading-none">
+          <span class="mono text-[8px] tracking-[0.2em] uppercase font-bold" style="color: rgba(127,29,29,0.7);">Rank</span>
+          <span class="mitr font-bold tabular-nums" style="color: #1a1a1a; font-size: 32px; letter-spacing: -0.04em; line-height: 0.9;">#4</span>
+        </div>
+
+        <div class="relative px-5 pt-16 pb-12">
+          <!-- Title -->
+          <div class="text-center mb-1">
+            <div class="mono text-[9px] tracking-[0.35em] uppercase font-bold" style="color: #7f1d1d;">The Shark</div>
+            <div class="italic text-sm mt-1" style="color: rgba(0,0,0,0.55); font-family: 'Georgia', serif;">King of Spades · Tight-Aggressive</div>
+          </div>
+
+          <!-- Avatar in vignette -->
+          <div class="relative mx-auto w-[170px] my-6">
+            <!-- Ornate ring -->
+            <div class="absolute inset-0 rounded-full"
+                 style="background: radial-gradient(circle, rgba(127,29,29,0.10) 60%, transparent 70%);"></div>
+            <div class="relative rounded-full aspect-square overflow-hidden"
+                 style="background: radial-gradient(circle, #fff8e6 0%, #e8dcb8 100%); border: 3px double #1a1a1a; box-shadow: inset 0 0 16px rgba(127,29,29,0.18);">
+              <img src="/avatars/pigtails-pixel-girl.png" class="avatar-img absolute inset-2 w-[calc(100%-1rem)] h-[calc(100%-1rem)] object-contain" alt="" />
+            </div>
+            <!-- Decorative flourishes -->
+            <div class="absolute -left-3 top-1/2 -translate-y-1/2 text-base leading-none" style="color: #7f1d1d;">❦</div>
+            <div class="absolute -right-3 top-1/2 -translate-y-1/2 text-base leading-none" style="color: #7f1d1d;">❦</div>
+
+            <!-- REP badge (subtle, looks like a wax seal) -->
+            <button class="absolute -bottom-2 -right-2 w-12 h-12 rounded-full flex flex-col items-center justify-center hover:scale-110 transition-transform"
+                    style="background: radial-gradient(circle at 30% 30%, #b91c1c, #7f1d1d);
+                           border: 2px solid #f5ecd7;
+                           box-shadow: 0 3px 8px rgba(0,0,0,0.4);">
+              <span class="mono text-[7px] tracking-[0.18em] font-bold leading-none" style="color: #f5ecd7;">REP</span>
+              <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" style="color: #f5ecd7" class="mt-0.5"><path d="M12 5v14M5 12h14"/></svg>
+            </button>
+
+            <!-- Edit avatar pip -->
+            <button class="absolute -bottom-2 left-2 inline-flex items-center gap-1 px-2.5 py-1.5 rounded-full text-[9px] font-bold uppercase tracking-wider hover:scale-105 transition-transform"
+                    style="background: #1a1a1a; color: #f5ecd7; border: 1px solid #7f1d1d;">
+              <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M12 20h9M16.5 3.5a2.121 2.121 0 113 3L7 19l-4 1 1-4L16.5 3.5z"/></svg>
+              Edit
+            </button>
+          </div>
+
+          <!-- Player identity -->
+          <div class="text-center mb-4">
+            <div class="font-bold text-lg leading-none" style="color: #1a1a1a; font-family: 'Mitr', serif;">kyle.eth</div>
+            <div class="mono text-[9px] tracking-wider mt-1" style="color: rgba(0,0,0,0.45);">0x9c8a…3bd2</div>
+          </div>
+
+          <!-- Decorative divider -->
+          <div class="flex items-center gap-2 my-4">
+            <div class="flex-1 h-px" style="background: linear-gradient(90deg, transparent, rgba(127,29,29,0.5), transparent);"></div>
+            <span style="color: #7f1d1d;">♠</span>
+            <div class="flex-1 h-px" style="background: linear-gradient(90deg, transparent, rgba(127,29,29,0.5), transparent);"></div>
+          </div>
+
+          <!-- Card values (stats arranged like card pips) -->
+          <div class="grid grid-cols-3 gap-2 mb-4">
+            <div class="text-center">
+              <div class="mono text-[8px] uppercase tracking-[0.18em] font-bold" style="color: #7f1d1d;">Hands</div>
+              <div class="font-bold text-xl tabular-nums" style="color: #1a1a1a; font-family: 'Mitr', serif;">1,234</div>
+            </div>
+            <div class="text-center" style="border-left: 1px solid rgba(127,29,29,0.25); border-right: 1px solid rgba(127,29,29,0.25);">
+              <div class="mono text-[8px] uppercase tracking-[0.18em] font-bold" style="color: #7f1d1d;">P/L</div>
+              <div class="font-bold text-xl tabular-nums" style="color: #166534; font-family: 'Mitr', serif;">+1.4M</div>
+            </div>
+            <div class="text-center">
+              <div class="mono text-[8px] uppercase tracking-[0.18em] font-bold" style="color: #7f1d1d;">SD WR</div>
+              <div class="font-bold text-xl tabular-nums" style="color: #1a1a1a; font-family: 'Mitr', serif;">48%</div>
+            </div>
+          </div>
+
+          <!-- Deck cut chart -->
+          <div class="rounded p-2.5"
+               style="background: rgba(26,26,26,0.05); border-top: 1px solid rgba(127,29,29,0.25); border-bottom: 1px solid rgba(127,29,29,0.25);">
+            <div class="flex justify-between items-baseline mb-1">
+              <span class="mono text-[8px] uppercase tracking-[0.2em] font-bold" style="color: #7f1d1d;">The Run</span>
+              <span class="mono text-[9px]" style="color: rgba(0,0,0,0.55);">last 200 hands</span>
+            </div>
+            <svg viewBox="0 0 400 100" preserveAspectRatio="none" class="w-full h-10 overflow-visible">
+              <line x1="0" y1="50" x2="400" y2="50" stroke="rgba(127,29,29,0.20)" stroke-width="1" stroke-dasharray="2 3"/>
+              <path d="M 0 50 L 20 60 L 40 70 L 60 55 L 80 40 L 100 35 L 120 50 L 140 30 L 160 25 L 180 35 L 200 20 L 220 15 L 240 25 L 260 10 L 280 18 L 300 8 L 320 14 L 340 5 L 360 10 L 380 3 L 400 8"
+                    fill="none" stroke="#166534" stroke-width="1.8" stroke-linejoin="round"/>
+              <circle cx="40" cy="70" r="2.5" fill="#7f1d1d"/>
+              <circle cx="380" cy="3" r="2.5" fill="#166534"/>
+              <circle cx="400" cy="8" r="3.5" fill="#1a1a1a" stroke="#f5ecd7" stroke-width="1"/>
+            </svg>
+          </div>
+        </div>
+      </div>
+
+      <!-- Placeholder columns -->
+      <div class="panel-bg rounded-2xl border border-cyan-500/15 p-5 flex items-center justify-center min-h-[500px] col-span-2">
+        <div class="text-center space-y-2">
+          <div class="mono text-[10px] tracking-[0.32em] text-cyan-400 font-bold">STREAK CHART · CHIP LEDGER</div>
+          <div class="text-xs text-slate-500">(existing 2-column layout)</div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- =========================================================== -->
+  <!-- VARIATION D4 · CYBERPUNK OPERATIVE ID                       -->
+  <!-- =========================================================== -->
+  <section class="space-y-4">
+    <div class="flex items-end justify-between gap-4">
+      <div>
+        <div class="mono text-[10px] tracking-[0.4em] text-cyan-400 font-bold">Variation D4</div>
+        <h2 class="mitr text-xl font-bold mt-1">Operative ID (Cyberpunk)</h2>
+      </div>
+      <p class="text-xs text-slate-400 max-w-md text-right">
+        Tactical / dossier vibe. Mono-spaced everywhere, scan lines, corner brackets,
+        barcode footer, technical readouts. Reads like a security badge.
+      </p>
+    </div>
+
+    <div class="grid grid-cols-1 lg:grid-cols-[1fr_1.4fr_1fr] gap-7">
+      <!-- D4 operative card -->
+      <div class="relative rounded-lg overflow-hidden"
+           style="background: linear-gradient(160deg, #0a1a14 0%, #050a0a 100%); border: 1px solid rgba(34,197,94,0.30); box-shadow: 0 0 24px -4px rgba(34,197,94,0.15), inset 0 0 0 1px rgba(34,197,94,0.08);">
+        <!-- Scan lines -->
+        <div class="absolute inset-0 pointer-events-none opacity-30"
+             style="background: repeating-linear-gradient(0deg, transparent, transparent 2px, rgba(34,197,94,0.05) 2px, rgba(34,197,94,0.05) 3px);"></div>
+        <!-- Hex grid bg -->
+        <div class="absolute inset-0 pointer-events-none opacity-[0.05]"
+             style="background-image: linear-gradient(60deg, #22c55e 1px, transparent 1px), linear-gradient(-60deg, #22c55e 1px, transparent 1px); background-size: 24px 42px;"></div>
+        <!-- Side classification stripe -->
+        <div class="absolute top-0 bottom-0 left-0 w-1.5"
+             style="background: repeating-linear-gradient(0deg, #22c55e 0px, #22c55e 8px, transparent 8px, transparent 16px);"></div>
+
+        <div class="relative pl-4 pr-4 py-4">
+          <!-- ID header bar -->
+          <div class="flex items-center justify-between mb-3 pb-2 border-b border-emerald-500/25">
+            <div>
+              <div class="mono text-[8px] tracking-[0.3em] uppercase text-emerald-400 font-bold">MORBLOTTO POKER</div>
+              <div class="mono text-[10px] uppercase text-emerald-300/80 tracking-wider">Operative Profile</div>
+            </div>
+            <div class="text-right">
+              <div class="mono text-[8px] uppercase tracking-[0.25em] text-emerald-400/60">Clearance</div>
+              <div class="mono text-xs text-emerald-200 tracking-wider">LVL 04 / EPIC</div>
+            </div>
+          </div>
+
+          <!-- Big rank readout -->
+          <div class="flex items-end gap-3 mb-4 pb-3 border-b border-emerald-500/15">
+            <div class="flex-1">
+              <div class="mono text-[8px] uppercase tracking-[0.3em] text-emerald-400/60 font-bold">GLOBAL_RANK</div>
+              <div class="mitr text-white leading-[0.85] mt-1 tabular-nums" style="font-weight:700; font-size:48px; letter-spacing:-0.04em">
+                #04
+              </div>
+            </div>
+            <div class="text-right pb-1">
+              <div class="mono text-[8px] uppercase tracking-[0.2em] text-emerald-400/60">ID</div>
+              <div class="mono text-[11px] text-emerald-200 tracking-wider">9C8A-3BD2</div>
+            </div>
+          </div>
+
+          <!-- Biometric sample (avatar) -->
+          <div class="grid grid-cols-[140px_1fr] gap-4 mb-4">
+            <div class="relative">
+              <div class="mono text-[8px] uppercase tracking-[0.25em] text-emerald-400/60 mb-1.5">BIOMETRIC</div>
+              <div class="relative aspect-square rounded-sm overflow-hidden"
+                   style="background: linear-gradient(135deg, #052e1a, #0a1a14); border: 1px solid rgba(34,197,94,0.40);">
+                <!-- Corner brackets -->
+                <div class="absolute top-0 left-0 w-3 h-3 border-l-2 border-t-2 border-emerald-400"></div>
+                <div class="absolute top-0 right-0 w-3 h-3 border-r-2 border-t-2 border-emerald-400"></div>
+                <div class="absolute bottom-0 left-0 w-3 h-3 border-l-2 border-b-2 border-emerald-400"></div>
+                <div class="absolute bottom-0 right-0 w-3 h-3 border-r-2 border-b-2 border-emerald-400"></div>
+                <!-- Sweep line -->
+                <div class="absolute inset-x-0 h-px opacity-50"
+                     style="top: 50%; background: linear-gradient(90deg, transparent, #22c55e, transparent); animation: sweep 3s linear infinite;"></div>
+                <img src="/avatars/pigtails-pixel-girl.png" class="avatar-img w-full h-full object-contain p-2" alt="" />
+
+                <!-- REP badge -->
+                <button class="absolute -bottom-2 -right-2 w-11 h-11 rounded-full flex flex-col items-center justify-center hover:scale-110 transition-transform"
+                        style="background: radial-gradient(circle at 30% 30%, rgba(34,197,94,0.4), rgba(15,23,42,0.97));
+                               border: 2px solid rgba(34,197,94,0.7);
+                               box-shadow: 0 0 12px rgba(34,197,94,0.5), 0 0 0 2px #050a0a;">
+                  <span class="mono text-[7px] tracking-[0.25em] font-bold text-emerald-300 leading-none">REP</span>
+                  <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" class="text-emerald-300 mt-0.5"><path d="M12 5v14M5 12h14"/></svg>
+                </button>
+              </div>
+              <button class="mt-2 w-full inline-flex items-center justify-center gap-1 px-2 py-1 rounded text-[9px] font-bold uppercase tracking-wider hover:bg-emerald-500/10 transition-colors text-emerald-300"
+                      style="background: rgba(34,197,94,0.06); border: 1px solid rgba(34,197,94,0.30);">
+                <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M12 20h9M16.5 3.5a2.121 2.121 0 113 3L7 19l-4 1 1-4L16.5 3.5z"/></svg>
+                Mod Avatar
+              </button>
+            </div>
+
+            <!-- Designation + readouts -->
+            <div class="space-y-2.5">
+              <div>
+                <div class="mono text-[8px] uppercase tracking-[0.25em] text-emerald-400/60">Designation</div>
+                <div class="mitr text-xl font-bold text-white leading-none mt-1">SHARK</div>
+                <div class="mono text-[10px] text-emerald-300/80 mt-0.5">/ tight-aggressive</div>
+              </div>
+              <div>
+                <div class="mono text-[8px] uppercase tracking-[0.25em] text-emerald-400/60">Callsign</div>
+                <div class="mono text-sm text-white">kyle.eth</div>
+              </div>
+
+              <div class="grid grid-cols-3 gap-1.5 pt-1">
+                <div class="rounded-sm px-1.5 py-1" style="background: rgba(34,197,94,0.05); border: 1px solid rgba(34,197,94,0.15);">
+                  <div class="mono text-[7px] tracking-wider text-emerald-400/70">VPIP</div>
+                  <div class="mono text-[12px] font-bold text-white tabular-nums">24%</div>
+                </div>
+                <div class="rounded-sm px-1.5 py-1" style="background: rgba(34,197,94,0.05); border: 1px solid rgba(34,197,94,0.15);">
+                  <div class="mono text-[7px] tracking-wider text-emerald-400/70">PFR</div>
+                  <div class="mono text-[12px] font-bold text-white tabular-nums">18%</div>
+                </div>
+                <div class="rounded-sm px-1.5 py-1" style="background: rgba(34,197,94,0.05); border: 1px solid rgba(34,197,94,0.15);">
+                  <div class="mono text-[7px] tracking-wider text-emerald-400/70">AGG</div>
+                  <div class="mono text-[12px] font-bold text-white tabular-nums">3.2</div>
+                </div>
+                <div class="rounded-sm px-1.5 py-1" style="background: rgba(34,197,94,0.05); border: 1px solid rgba(34,197,94,0.15);">
+                  <div class="mono text-[7px] tracking-wider text-emerald-400/70">HANDS</div>
+                  <div class="mono text-[12px] font-bold text-white tabular-nums">1234</div>
+                </div>
+                <div class="rounded-sm px-1.5 py-1" style="background: rgba(34,197,94,0.05); border: 1px solid rgba(34,197,94,0.15);">
+                  <div class="mono text-[7px] tracking-wider text-emerald-400/70">SD WR</div>
+                  <div class="mono text-[12px] font-bold text-white tabular-nums">48%</div>
+                </div>
+                <div class="rounded-sm px-1.5 py-1" style="background: rgba(34,197,94,0.05); border: 1px solid rgba(34,197,94,0.15);">
+                  <div class="mono text-[7px] tracking-wider text-emerald-400/70">P/HAND</div>
+                  <div class="mono text-[12px] font-bold text-emerald-300 tabular-nums">+1.1K</div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Engagement trail (chart) -->
+          <div class="rounded-sm relative overflow-hidden mb-3"
+               style="background: rgba(0,0,0,0.4); border: 1px solid rgba(34,197,94,0.20);">
+            <div class="absolute inset-0 pointer-events-none opacity-40"
+                 style="background: repeating-linear-gradient(0deg, transparent, transparent 1px, rgba(34,197,94,0.06) 1px, rgba(34,197,94,0.06) 2px);"></div>
+            <div class="relative px-2.5 py-2">
+              <div class="flex justify-between items-baseline mb-1">
+                <div class="mono text-[8px] uppercase tracking-[0.25em] text-emerald-400/70 font-bold">Engagement Trail · 200 events</div>
+                <div class="mono text-[10px] text-emerald-300 font-bold">+1.4M</div>
+              </div>
+              <svg viewBox="0 0 400 100" preserveAspectRatio="none" class="w-full h-12 overflow-visible">
+                <line x1="0" y1="50" x2="400" y2="50" stroke="rgba(34,197,94,0.20)" stroke-width="1" stroke-dasharray="2 4"/>
+                <path d="M 0 50 L 20 60 L 40 70 L 60 55 L 80 40 L 100 35 L 120 50 L 140 30 L 160 25 L 180 35 L 200 20 L 220 15 L 240 25 L 260 10 L 280 18 L 300 8 L 320 14 L 340 5 L 360 10 L 380 3 L 400 8 L 400 50 Z"
+                      fill="rgba(34,197,94,0.15)" clip-path="url(#winClipMini)"/>
+                <path d="M 0 50 L 20 60 L 40 70 L 60 55 L 80 40 L 100 35 L 120 50 L 140 30 L 160 25 L 180 35 L 200 20 L 220 15 L 240 25 L 260 10 L 280 18 L 300 8 L 320 14 L 340 5 L 360 10 L 380 3 L 400 8"
+                      fill="none" stroke="#22c55e" stroke-width="1.5" style="filter: drop-shadow(0 0 4px rgba(34,197,94,0.6))"/>
+                <circle cx="40" cy="70" r="3" fill="#f87171" stroke="#050a0a" stroke-width="1"/>
+                <circle cx="380" cy="3" r="3" fill="#bbf7d0" stroke="#050a0a" stroke-width="1"/>
+                <circle cx="400" cy="8" r="4" fill="#22c55e" stroke="#bbf7d0" stroke-width="1" style="filter: drop-shadow(0 0 6px rgba(34,197,94,0.8))"/>
+              </svg>
+              <div class="flex justify-between mt-1 mono text-[8px] text-emerald-400/60">
+                <span>T-200</span>
+                <span class="text-emerald-300">NOW</span>
+              </div>
+            </div>
+          </div>
+
+          <!-- Barcode footer -->
+          <div class="pt-2 border-t border-emerald-500/15 flex items-end justify-between gap-2">
+            <div class="flex-1">
+              <div class="mono text-[7px] tracking-[0.2em] text-emerald-400/50 uppercase mb-1">Auth</div>
+              <div class="flex gap-px h-4 items-stretch">
+                <!-- Pseudo barcode -->
+                <div class="w-px h-full bg-emerald-300"></div>
+                <div class="w-0.5 h-full bg-emerald-300"></div>
+                <div class="w-px h-full bg-emerald-300/30"></div>
+                <div class="w-1 h-full bg-emerald-300"></div>
+                <div class="w-px h-full bg-emerald-300"></div>
+                <div class="w-px h-full bg-emerald-300/40"></div>
+                <div class="w-0.5 h-full bg-emerald-300"></div>
+                <div class="w-px h-full bg-emerald-300/30"></div>
+                <div class="w-1 h-full bg-emerald-300"></div>
+                <div class="w-0.5 h-full bg-emerald-300/60"></div>
+                <div class="w-px h-full bg-emerald-300"></div>
+                <div class="w-0.5 h-full bg-emerald-300/30"></div>
+                <div class="w-1 h-full bg-emerald-300"></div>
+                <div class="w-px h-full bg-emerald-300"></div>
+                <div class="w-px h-full bg-emerald-300/60"></div>
+                <div class="w-0.5 h-full bg-emerald-300"></div>
+                <div class="w-px h-full bg-emerald-300/30"></div>
+                <div class="w-1 h-full bg-emerald-300"></div>
+                <div class="w-px h-full bg-emerald-300/60"></div>
+                <div class="w-0.5 h-full bg-emerald-300"></div>
+                <div class="w-px h-full bg-emerald-300/40"></div>
+                <div class="w-0.5 h-full bg-emerald-300"></div>
+                <div class="w-px h-full bg-emerald-300/60"></div>
+                <div class="w-1 h-full bg-emerald-300"></div>
+              </div>
+              <div class="mono text-[8px] text-emerald-400/50 tracking-[0.3em] mt-0.5">0x9C8A···3BD2</div>
+            </div>
+            <div class="text-right">
+              <div class="mono text-[7px] tracking-[0.2em] text-emerald-400/50 uppercase">Issued</div>
+              <div class="mono text-[10px] text-emerald-200">2025.12 ▸ ACTIVE</div>
+            </div>
+          </div>
+        </div>
+
+        <style>
+          @keyframes sweep {
+            0% { transform: translateY(-80px); }
+            100% { transform: translateY(80px); }
+          }
+        </style>
+      </div>
+
+      <!-- Placeholder columns -->
+      <div class="panel-bg rounded-2xl border border-cyan-500/15 p-5 flex items-center justify-center min-h-[500px] col-span-2">
+        <div class="text-center space-y-2">
+          <div class="mono text-[10px] tracking-[0.32em] text-cyan-400 font-bold">STREAK CHART · CHIP LEDGER</div>
+          <div class="text-xs text-slate-500">(existing 2-column layout)</div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- =========================================================== -->
+  <!-- VARIATION E · WIDE BANNER + EMBEDDED CHART                  -->
+  <!-- =========================================================== -->
+  <section class="space-y-4">
+    <div class="flex items-end justify-between gap-4">
+      <div>
+        <div class="mono text-[10px] tracking-[0.4em] text-cyan-400 font-bold">Variation E</div>
+        <h2 class="mitr text-xl font-bold mt-1">Banner with Embedded Chart</h2>
+      </div>
+      <p class="text-xs text-slate-400 max-w-md text-right">
+        Pulls the existing win/loss line into the profile banner. Avatar left, full chart right.
+        Could replace the current 3-col stats panel entirely.
+      </p>
+    </div>
+
+    <div class="panel-bg relative rounded-2xl overflow-hidden border border-cyan-500/25">
+      <div class="absolute inset-x-0 top-0 h-px top-glow"></div>
+
+      <div class="relative px-6 sm:px-10 py-7">
+        <!-- Title row · big clean rank on the right -->
+        <div class="flex items-start justify-between mb-7">
+          <div class="flex items-center gap-2.5 pt-1">
+            <div class="w-1 h-7 rounded-full bg-gradient-to-b from-cyan-400 to-purple-500"></div>
+            <div>
+              <div class="mono text-[10px] tracking-[0.35em] text-cyan-400 font-bold">YOUR POKER FACE</div>
+              <div class="mitr font-medium text-white text-[15px]">kyle.eth · Shark / TAG</div>
+            </div>
+          </div>
+          <div class="text-right">
+            <div class="mono text-[9px] uppercase tracking-[0.32em] text-slate-500 font-bold">Global rank</div>
+            <div class="mitr text-white leading-[0.9] mt-1.5 tabular-nums" style="font-weight:700; font-size:52px; letter-spacing:-0.04em">#4</div>
+          </div>
+        </div>
+
+        <div class="grid grid-cols-1 lg:grid-cols-[260px_1fr] gap-8 items-stretch">
+          <!-- Avatar + identity -->
+          <div class="space-y-4">
+            <div class="relative">
+              <div class="avatar-frame-bg rounded-2xl glow-cyan p-3 relative overflow-hidden aspect-square">
+                <img src="/avatars/pigtails-pixel-girl.png" class="avatar-img w-full h-full object-contain" alt="" />
+              </div>
+
+              <!-- REP badge · bottom-right, empty state -->
+              <button class="absolute -bottom-3 -right-3 w-16 h-16 rounded-full flex flex-col items-center justify-center transition-all hover:scale-110 group"
+                      style="background: radial-gradient(circle at 30% 30%, rgba(8,145,178,0.35), rgba(15,23,42,0.97));
+                             border: 2px solid rgba(34,211,238,0.55);
+                             box-shadow: 0 0 18px rgba(6,182,212,0.45), 0 0 0 3px #050a14;"
+                      title="Link a PulseChain token as your rep">
+                <span class="mono text-[9px] tracking-[0.28em] font-bold text-cyan-300 leading-none">REP</span>
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" class="text-cyan-300 mt-1 group-hover:rotate-90 transition-transform"><path d="M12 5v14M5 12h14"/></svg>
+              </button>
+
+              <!-- Customize button overhangs bottom-center, shifted left to make room for REP -->
+              <button class="absolute left-[30%] -translate-x-1/2 -bottom-4 inline-flex items-center gap-1.5 px-4 py-2 rounded-xl text-[11px] font-bold uppercase tracking-wider text-white whitespace-nowrap hover:scale-105 transition-transform"
+                      style="background: linear-gradient(135deg, #0891b2, #2563eb); box-shadow: 0 8px 22px -6px rgba(6,182,212,0.65), 0 0 0 1px rgba(34,211,238,0.25);">
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M12 20h9M16.5 3.5a2.121 2.121 0 113 3L7 19l-4 1 1-4L16.5 3.5z"/></svg>
+                Customize
+              </button>
+            </div>
+            <div class="grid grid-cols-3 gap-2 pt-3">
+              <div>
+                <div class="mono text-[8px] uppercase tracking-wider text-slate-500 font-bold">VPIP</div>
+                <div class="mitr text-base font-bold text-cyan-300 tabular-nums">24%</div>
+              </div>
+              <div>
+                <div class="mono text-[8px] uppercase tracking-wider text-slate-500 font-bold">PFR</div>
+                <div class="mitr text-base font-bold text-cyan-300 tabular-nums">18%</div>
+              </div>
+              <div>
+                <div class="mono text-[8px] uppercase tracking-wider text-slate-500 font-bold">Agg</div>
+                <div class="mitr text-base font-bold text-cyan-300 tabular-nums">3.2</div>
+              </div>
+              <div>
+                <div class="mono text-[8px] uppercase tracking-wider text-slate-500 font-bold">Hands</div>
+                <div class="mitr text-base font-bold text-white tabular-nums">1,234</div>
+              </div>
+              <div>
+                <div class="mono text-[8px] uppercase tracking-wider text-slate-500 font-bold">Tourney</div>
+                <div class="mitr text-base font-bold text-white tabular-nums">342</div>
+              </div>
+              <div>
+                <div class="mono text-[8px] uppercase tracking-wider text-slate-500 font-bold">Biggest</div>
+                <div class="mitr text-base font-bold text-white tabular-nums">850K</div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Embedded win/loss line chart -->
+          <div class="flex flex-col h-full min-h-[280px]">
+            <div class="flex justify-between items-end mb-3">
+              <div>
+                <div class="mono text-[10px] uppercase tracking-[0.3em] text-cyan-400 font-bold">Profit / loss</div>
+                <div class="mitr font-medium text-white text-[15px] mt-1.5">Last 200 hands</div>
+                <div class="mono text-[10px] text-slate-500 tracking-wider mt-1">Cumulative · 1 step = 1 hand</div>
+              </div>
+              <div class="text-right">
+                <div class="mitr text-emerald-300 leading-none" style="font-weight:700; font-size:26px; letter-spacing:-0.02em">+1.4M</div>
+                <div class="mono text-[9px] uppercase tracking-[0.15em] text-slate-500 font-semibold mt-1">Lifetime net</div>
+              </div>
+            </div>
+
+            <div class="relative flex-1 min-h-[160px]">
+              <svg viewBox="0 0 400 140" preserveAspectRatio="none" class="w-full h-full overflow-visible">
+                <line x1="0" y1="70" x2="400" y2="70" stroke="rgba(148,163,184,0.18)" stroke-width="1" stroke-dasharray="2 4"/>
+                <path d="M 0 70 L 15 78 L 30 85 L 50 80 L 70 70 L 90 62 L 110 55 L 130 65 L 150 50 L 170 42 L 190 35 L 210 45 L 230 30 L 250 22 L 270 28 L 290 18 L 310 12 L 330 20 L 350 10 L 370 15 L 390 8 L 400 12 L 400 70 Z"
+                      clip-path="url(#winClip)" fill="url(#winGrad)"/>
+                <path d="M 0 70 L 15 78 L 30 85 L 50 80 L 70 70 L 90 62 L 110 55 L 130 65 L 150 50 L 170 42 L 190 35 L 210 45 L 230 30 L 250 22 L 270 28 L 290 18 L 310 12 L 330 20 L 350 10 L 370 15 L 390 8 L 400 12 L 400 70 Z"
+                      clip-path="url(#lossClip)" fill="url(#lossGrad)"/>
+                <path d="M 0 70 L 15 78 L 30 85 L 50 80 L 70 70 L 90 62 L 110 55 L 130 65 L 150 50 L 170 42 L 190 35 L 210 45 L 230 30 L 250 22 L 270 28 L 290 18 L 310 12 L 330 20 L 350 10 L 370 15 L 390 8 L 400 12"
+                      fill="none" stroke="#06b6d4" stroke-width="1.8" style="filter: drop-shadow(0 0 4px rgba(6,182,212,0.4))"/>
+                <circle cx="30" cy="85" r="4" fill="#f87171" stroke="#0c1929" stroke-width="1.5"/>
+                <circle cx="390" cy="8" r="4" fill="#67e8f9" stroke="#0c1929" stroke-width="1.5"/>
+                <circle cx="400" cy="12" r="5" fill="#06b6d4" stroke="white" stroke-width="1.5" style="filter: drop-shadow(0 0 6px rgba(6,182,212,0.8))"/>
+              </svg>
+            </div>
+
+            <div class="mt-1 flex justify-between mono text-[9px] text-slate-500 tracking-wider">
+              <span>200 hands ago</span>
+              <span class="text-cyan-400 font-semibold">NOW</span>
+            </div>
+
+            <!-- Performance footer · career stats instead of streak -->
+            <div class="mt-3 pt-3 border-t border-white/[0.06] grid grid-cols-3">
+              <div>
+                <div class="mono text-[9px] uppercase tracking-[0.18em] text-slate-500 font-bold">Showdown WR</div>
+                <div class="mitr text-white text-base font-semibold mt-0.5">48<span class="text-[11px] text-slate-500 ml-0.5">%</span></div>
+                <div class="mono text-[9px] text-slate-500 mt-0.5">won at showdown</div>
+              </div>
+              <div class="border-l border-white/[0.06] pl-3">
+                <div class="mono text-[9px] uppercase tracking-[0.18em] text-slate-500 font-bold">Profit / hand</div>
+                <div class="mitr text-emerald-300 text-base font-semibold mt-0.5">+1.1K<span class="text-[10px] text-slate-500 ml-1">MORB</span></div>
+                <div class="mono text-[9px] text-slate-500 mt-0.5">career avg</div>
+              </div>
+              <div class="border-l border-white/[0.06] pl-3">
+                <div class="mono text-[9px] uppercase tracking-[0.18em] text-slate-500 font-bold">Best month</div>
+                <div class="mitr text-emerald-300 text-base font-semibold mt-0.5">+680K</div>
+                <div class="mono text-[9px] text-slate-500 mt-0.5">Mar '26</div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ============================================== -->
+    <!-- E · Rank styles + REP badge states reference   -->
+    <!-- ============================================== -->
+    <div class="grid grid-cols-1 lg:grid-cols-2 gap-4">
+      <!-- Rank treatment rule -->
+      <div class="panel-bg rounded-2xl border border-white/[0.06] p-5">
+        <div class="mono text-[10px] tracking-[0.32em] text-cyan-400 font-bold mb-1">RANK STYLES</div>
+        <div class="text-[11px] text-slate-400 mb-4">Medal treatment only for top 3 — everything else is just a big white number.</div>
+        <div class="grid grid-cols-4 gap-3">
+          <!-- #1 Champion -->
+          <div class="text-center rounded-xl p-3 relative overflow-hidden"
+               style="background: linear-gradient(135deg, rgba(120,53,15,0.4), rgba(15,23,42,0.3)); border: 1px solid rgba(251,191,36,0.45);">
+            <div class="mono text-[8px] uppercase tracking-[0.2em] font-bold text-amber-300/80 mb-1">Champion</div>
+            <div class="flex items-center justify-center gap-1">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor" class="text-amber-300" style="filter: drop-shadow(0 0 6px rgba(251,191,36,0.6))"><path d="M5 16L3 5l5.5 4L12 4l3.5 5L21 5l-2 11H5zM5 19h14v2H5z"/></svg>
+              <span class="mitr text-amber-200 leading-none" style="font-weight:700; font-size:32px; letter-spacing:-0.04em">#1</span>
+            </div>
+          </div>
+          <!-- #2 Runner-up -->
+          <div class="text-center rounded-xl p-3 relative overflow-hidden"
+               style="background: linear-gradient(135deg, rgba(51,65,85,0.4), rgba(15,23,42,0.3)); border: 1px solid rgba(203,213,225,0.40);">
+            <div class="mono text-[8px] uppercase tracking-[0.2em] font-bold text-slate-300/90 mb-1">Runner-up</div>
+            <div class="flex items-center justify-center gap-1">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor" class="text-slate-200" style="filter: drop-shadow(0 0 6px rgba(203,213,225,0.5))"><circle cx="12" cy="8" r="6"/><path d="M15.477 12.89L17 22l-5-3-5 3 1.523-9.11" fill="none" stroke="currentColor" stroke-width="2"/></svg>
+              <span class="mitr text-slate-100 leading-none" style="font-weight:700; font-size:32px; letter-spacing:-0.04em">#2</span>
+            </div>
+          </div>
+          <!-- #3 Third -->
+          <div class="text-center rounded-xl p-3 relative overflow-hidden"
+               style="background: linear-gradient(135deg, rgba(120,53,15,0.25), rgba(15,23,42,0.3)); border: 1px solid rgba(251,146,60,0.40);">
+            <div class="mono text-[8px] uppercase tracking-[0.2em] font-bold text-orange-300/90 mb-1">Third</div>
+            <div class="flex items-center justify-center gap-1">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor" class="text-orange-300" style="filter: drop-shadow(0 0 6px rgba(251,146,60,0.5))"><circle cx="12" cy="8" r="6"/><path d="M15.477 12.89L17 22l-5-3-5 3 1.523-9.11" fill="none" stroke="currentColor" stroke-width="2"/></svg>
+              <span class="mitr text-orange-200 leading-none" style="font-weight:700; font-size:32px; letter-spacing:-0.04em">#3</span>
+            </div>
+          </div>
+          <!-- #4+ -->
+          <div class="text-center rounded-xl p-3 relative overflow-hidden"
+               style="background: rgba(255,255,255,0.02); border: 1px solid rgba(255,255,255,0.08);">
+            <div class="mono text-[8px] uppercase tracking-[0.2em] font-bold text-slate-500 mb-1">Rank 4+</div>
+            <span class="mitr text-white leading-none block tabular-nums" style="font-weight:700; font-size:32px; letter-spacing:-0.04em">#4</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- REP badge states -->
+      <div class="panel-bg rounded-2xl border border-white/[0.06] p-5">
+        <div class="mono text-[10px] tracking-[0.32em] text-cyan-400 font-bold mb-1">REP BADGE</div>
+        <div class="text-[11px] text-slate-400 mb-4">Click <span class="text-cyan-300 font-bold">+</span> to search for a PulseChain token. The token's logo replaces the badge.</div>
+        <div class="grid grid-cols-4 gap-3 items-center">
+          <!-- Empty -->
+          <div class="text-center">
+            <div class="mono text-[8px] uppercase tracking-[0.2em] font-bold text-slate-500 mb-2">Empty</div>
+            <div class="mx-auto w-14 h-14 rounded-full flex flex-col items-center justify-center"
+                 style="background: radial-gradient(circle at 30% 30%, rgba(8,145,178,0.35), rgba(15,23,42,0.97));
+                        border: 2px solid rgba(34,211,238,0.55);
+                        box-shadow: 0 0 14px rgba(6,182,212,0.4);">
+              <span class="mono text-[8px] tracking-[0.25em] font-bold text-cyan-300 leading-none">REP</span>
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" class="text-cyan-300 mt-0.5"><path d="M12 5v14M5 12h14"/></svg>
+            </div>
+            <div class="mono text-[8px] text-slate-500 mt-2">click to link</div>
+          </div>
+          <!-- PLS -->
+          <div class="text-center">
+            <div class="mono text-[8px] uppercase tracking-[0.2em] font-bold text-slate-500 mb-2">PLS</div>
+            <div class="mx-auto w-14 h-14 rounded-full flex items-center justify-center overflow-hidden"
+                 style="background: rgba(15,23,42,0.97);
+                        border: 2px solid rgba(236,72,153,0.55);
+                        box-shadow: 0 0 14px rgba(236,72,153,0.45);">
+              <svg width="40" height="40" viewBox="0 0 32 32">
+                <circle cx="16" cy="16" r="15" fill="url(#plsLogoGrad)"/>
+                <path d="M 8 16 L 11 16 L 13 11 L 16 21 L 19 13 L 21 16 L 24 16" fill="none" stroke="white" stroke-width="1.8" stroke-linejoin="round" stroke-linecap="round"/>
+              </svg>
+            </div>
+            <div class="mono text-[8px] text-slate-500 mt-2">PulseChain</div>
+          </div>
+          <!-- HEX -->
+          <div class="text-center">
+            <div class="mono text-[8px] uppercase tracking-[0.2em] font-bold text-slate-500 mb-2">HEX</div>
+            <div class="mx-auto w-14 h-14 rounded-full flex items-center justify-center overflow-hidden"
+                 style="background: rgba(15,23,42,0.97);
+                        border: 2px solid rgba(245,158,11,0.55);
+                        box-shadow: 0 0 14px rgba(245,158,11,0.45);">
+              <svg width="40" height="40" viewBox="0 0 32 32">
+                <circle cx="16" cy="16" r="15" fill="url(#hexLogoGrad)"/>
+                <polygon points="16,6 24,11 24,21 16,26 8,21 8,11" fill="none" stroke="white" stroke-width="1.8" stroke-linejoin="round"/>
+              </svg>
+            </div>
+            <div class="mono text-[8px] text-slate-500 mt-2">HEX token</div>
+          </div>
+          <!-- PLSX -->
+          <div class="text-center">
+            <div class="mono text-[8px] uppercase tracking-[0.2em] font-bold text-slate-500 mb-2">PLSX</div>
+            <div class="mx-auto w-14 h-14 rounded-full flex items-center justify-center overflow-hidden"
+                 style="background: rgba(15,23,42,0.97);
+                        border: 2px solid rgba(168,85,247,0.55);
+                        box-shadow: 0 0 14px rgba(168,85,247,0.45);">
+              <svg width="40" height="40" viewBox="0 0 32 32">
+                <circle cx="16" cy="16" r="15" fill="url(#plsxLogoGrad)"/>
+                <path d="M 10 11 L 22 21 M 22 11 L 10 21" stroke="white" stroke-width="2" stroke-linecap="round"/>
+              </svg>
+            </div>
+            <div class="mono text-[8px] text-slate-500 mt-2">PulseX</div>
+          </div>
+        </div>
+
+        <!-- Search hint -->
+        <div class="mt-4 pt-3 border-t border-white/[0.06]">
+          <div class="flex items-center gap-2 px-3 py-2 rounded-lg bg-black/30 border border-white/[0.08]">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" class="text-slate-500"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3"/></svg>
+            <span class="mono text-[10px] text-slate-500">Search tokens on PulseChain…</span>
+            <span class="ml-auto mono text-[9px] text-slate-600 tracking-wider">via scan.pulsechain.com</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- =========================================================== -->
+  <!-- VARIATION F · SPLIT DIPTYCH (Avatar | Performance)          -->
+  <!-- =========================================================== -->
+  <section class="space-y-4">
+    <div class="flex items-end justify-between gap-4">
+      <div>
+        <div class="mono text-[10px] tracking-[0.4em] text-cyan-400 font-bold">Variation F</div>
+        <h2 class="mitr text-xl font-bold mt-1">Split Diptych</h2>
+      </div>
+      <p class="text-xs text-slate-400 max-w-md text-right">
+        Two equal panels joined by a glowing seam — left is Identity, right is Performance Trail.
+        Feels like one unified profile-and-progress card.
+      </p>
+    </div>
+
+    <div class="relative grid grid-cols-1 lg:grid-cols-2 gap-0 rounded-2xl overflow-hidden border border-cyan-500/25"
+         style="background: linear-gradient(135deg, #0c1929 0%, #050a14 100%);">
+      <!-- Top accent strip -->
+      <div class="absolute inset-x-0 top-0 h-px top-glow col-span-2"></div>
+      <!-- Middle seam (only on lg) -->
+      <div class="hidden lg:block absolute top-6 bottom-6 left-1/2 w-px"
+           style="background: linear-gradient(180deg, transparent, rgba(34,211,238,0.5), rgba(168,85,247,0.4), transparent);"></div>
+      <!-- Seam connector dot -->
+      <div class="hidden lg:flex absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 w-9 h-9 rounded-full items-center justify-center z-10"
+           style="background: linear-gradient(135deg, #22d3ee, #a855f7); box-shadow: 0 0 24px rgba(34,211,238,0.6), 0 0 0 4px #050a14;">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor" class="text-white">
+          <path d="M12 2L4 8v8l8 6 8-6V8z" stroke="white" stroke-width="1.5" fill="none"/>
+          <circle cx="12" cy="12" r="3" fill="white"/>
+        </svg>
+      </div>
+
+      <!-- LEFT PANEL · Identity -->
+      <div class="relative p-7 lg:pr-12">
+        <div class="flex items-center gap-2 mb-5">
+          <div class="w-1 h-5 rounded-full bg-gradient-to-b from-cyan-400 to-purple-500"></div>
+          <div class="mono text-[10px] tracking-[0.32em] text-cyan-400 font-bold">YOUR POKER FACE</div>
+        </div>
+
+        <div class="grid grid-cols-[auto_1fr] gap-5 items-start">
+          <!-- Avatar (smaller, anchored top-left) -->
+          <div class="relative w-[140px]">
+            <div class="avatar-frame-bg rounded-2xl glow-cyan p-2.5 relative overflow-hidden aspect-square">
+              <img src="/avatars/pigtails-pixel-girl.png" class="avatar-img w-full h-full object-contain" alt="" />
+            </div>
+            <button class="absolute left-1/2 -translate-x-1/2 -bottom-3.5 inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-[10px] font-bold uppercase tracking-wider text-white whitespace-nowrap hover:scale-105 transition-transform"
+                    style="background: linear-gradient(135deg, #0891b2, #2563eb); box-shadow: 0 6px 16px -4px rgba(6,182,212,0.6), 0 0 0 1px rgba(34,211,238,0.3);">
+              <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M12 20h9M16.5 3.5a2.121 2.121 0 113 3L7 19l-4 1 1-4L16.5 3.5z"/></svg>
+              Edit
+            </button>
+          </div>
+
+          <!-- Identity stack -->
+          <div class="space-y-3">
+            <div>
+              <div class="mitr text-2xl font-bold text-white tracking-tight">kyle.eth</div>
+              <div class="mono text-[10px] text-slate-500 mt-0.5">0x9c8a…3bd2</div>
+            </div>
+            <div class="flex items-center gap-1.5">
+              <span class="text-lg">🦈</span>
+              <span class="mitr text-lg font-semibold text-white">Shark</span>
+              <span class="italic text-cyan-400 text-sm">/ TAG</span>
+            </div>
+            <div class="mono text-[10px] text-slate-500 tracking-wider">
+              VPIP <strong class="text-cyan-300">24%</strong>
+              · PFR <strong class="text-cyan-300">18%</strong>
+              · Agg <strong class="text-cyan-300">3.2</strong>
+            </div>
+
+            <!-- Rank pill (gold) -->
+            <div class="inline-flex items-center gap-2 px-3 py-1.5 rounded-full"
+                 style="background: linear-gradient(135deg, rgba(120,53,15,0.4), rgba(15,23,42,0.4)); border: 1px solid rgba(251,191,36,0.32);">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor" class="text-amber-300"><circle cx="12" cy="8" r="6"/><path d="M15.477 12.89L17 22l-5-3-5 3 1.523-9.11" fill="none" stroke="currentColor" stroke-width="2"/></svg>
+              <div>
+                <div class="mitr text-lg font-bold text-white leading-none">#4</div>
+              </div>
+              <div class="text-[10px] font-bold tracking-[0.18em] uppercase text-amber-300 leading-none">Gold</div>
+              <div class="ml-1 mono text-[9px] text-slate-400">1 from Top 3</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Bottom stats row in left panel -->
+        <div class="mt-7 grid grid-cols-3 gap-3 pt-5 border-t border-white/[0.06]">
+          <div>
+            <div class="mono text-[9px] uppercase tracking-[0.2em] text-slate-500 font-bold">Hands</div>
+            <div class="mitr text-xl font-bold text-white tabular-nums mt-0.5">1,234</div>
+            <div class="mono text-[10px] text-slate-500 mt-0.5">342 tourney</div>
+          </div>
+          <div>
+            <div class="mono text-[9px] uppercase tracking-[0.2em] text-slate-500 font-bold">Showdowns</div>
+            <div class="mitr text-xl font-bold text-white tabular-nums mt-0.5">28%</div>
+            <div class="mono text-[10px] text-slate-500 mt-0.5">345 reached</div>
+          </div>
+          <div>
+            <div class="mono text-[9px] uppercase tracking-[0.2em] text-slate-500 font-bold">Win rate</div>
+            <div class="mitr text-xl font-bold text-emerald-300 tabular-nums mt-0.5">48%</div>
+            <div class="mono text-[10px] text-slate-500 mt-0.5">at showdown</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- RIGHT PANEL · Performance Trail -->
+      <div class="relative p-7 lg:pl-12 border-t lg:border-t-0 lg:border-l border-cyan-500/15">
+        <div class="flex items-center justify-between mb-5">
+          <div class="flex items-center gap-2">
+            <div class="w-1 h-5 rounded-full bg-gradient-to-b from-cyan-400 to-purple-500"></div>
+            <div class="mono text-[10px] tracking-[0.32em] text-cyan-400 font-bold">PERFORMANCE TRAIL</div>
+          </div>
+          <div class="text-right">
+            <div class="mitr text-emerald-300 leading-none" style="font-weight:700; font-size:24px; letter-spacing:-0.02em">+1.4M</div>
+            <div class="mono text-[9px] uppercase tracking-[0.15em] text-slate-500 font-semibold mt-1">Lifetime net</div>
+          </div>
+        </div>
+
+        <!-- Win/loss chart (full size) -->
+        <div class="relative h-[150px]">
+          <svg viewBox="0 0 400 140" preserveAspectRatio="none" class="w-full h-full overflow-visible">
+            <line x1="0" y1="70" x2="400" y2="70" stroke="rgba(148,163,184,0.18)" stroke-width="1" stroke-dasharray="2 4"/>
+            <path d="M 0 70 L 15 78 L 30 85 L 50 80 L 70 70 L 90 62 L 110 55 L 130 65 L 150 50 L 170 42 L 190 35 L 210 45 L 230 30 L 250 22 L 270 28 L 290 18 L 310 12 L 330 20 L 350 10 L 370 15 L 390 8 L 400 12 L 400 70 Z"
+                  clip-path="url(#winClip)" fill="url(#winGrad)"/>
+            <path d="M 0 70 L 15 78 L 30 85 L 50 80 L 70 70 L 90 62 L 110 55 L 130 65 L 150 50 L 170 42 L 190 35 L 210 45 L 230 30 L 250 22 L 270 28 L 290 18 L 310 12 L 330 20 L 350 10 L 370 15 L 390 8 L 400 12 L 400 70 Z"
+                  clip-path="url(#lossClip)" fill="url(#lossGrad)"/>
+            <path d="M 0 70 L 15 78 L 30 85 L 50 80 L 70 70 L 90 62 L 110 55 L 130 65 L 150 50 L 170 42 L 190 35 L 210 45 L 230 30 L 250 22 L 270 28 L 290 18 L 310 12 L 330 20 L 350 10 L 370 15 L 390 8 L 400 12"
+                  fill="none" stroke="#06b6d4" stroke-width="1.8" style="filter: drop-shadow(0 0 4px rgba(6,182,212,0.4))"/>
+            <circle cx="30" cy="85" r="4" fill="#f87171" stroke="#0c1929" stroke-width="1.5"/>
+            <circle cx="390" cy="8" r="4" fill="#67e8f9" stroke="#0c1929" stroke-width="1.5"/>
+            <circle cx="400" cy="12" r="5" fill="#06b6d4" stroke="white" stroke-width="1.5" style="filter: drop-shadow(0 0 6px rgba(6,182,212,0.8))"/>
+          </svg>
+        </div>
+
+        <div class="mt-1 flex justify-between mono text-[9px] text-slate-500 tracking-wider">
+          <span>200 hands ago</span>
+          <span class="text-cyan-400 font-semibold">NOW</span>
+        </div>
+
+        <!-- Peak/trough callouts -->
+        <div class="mt-3 flex justify-between mono text-[10px]">
+          <span class="text-rose-300">▼ deepest drawdown −340K</span>
+          <span class="text-cyan-300">▲ peak +1.5M</span>
+        </div>
+
+        <!-- Streak footer -->
+        <div class="mt-4 pt-4 border-t border-white/[0.06] grid grid-cols-3">
+          <div>
+            <div class="mono text-[9px] uppercase tracking-[0.18em] text-emerald-300 font-bold">Hot streak</div>
+            <div class="mitr text-white text-base font-semibold mt-0.5">12 hands</div>
+            <div class="mono text-[9px] text-slate-500 mt-0.5">+520K</div>
+          </div>
+          <div class="border-l border-white/[0.06] pl-3">
+            <div class="mono text-[9px] uppercase tracking-[0.18em] text-rose-300 font-bold">Cold streak</div>
+            <div class="mitr text-white text-base font-semibold mt-0.5">5 hands</div>
+            <div class="mono text-[9px] text-slate-500 mt-0.5">−180K</div>
+          </div>
+          <div class="border-l border-white/[0.06] pl-3">
+            <div class="mono text-[9px] uppercase tracking-[0.18em] text-cyan-300 font-bold">Right now</div>
+            <div class="mitr text-emerald-300 text-base font-semibold mt-0.5">🔥 7W</div>
+            <div class="mono text-[9px] text-slate-500 mt-0.5">+340K</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- =========================================================== -->
+  <!-- COMPARISON FOOTER                                            -->
+  <!-- =========================================================== -->
+  <section class="rounded-2xl border border-cyan-500/15 panel-bg p-6">
+    <div class="mono text-[10px] tracking-[0.35em] text-cyan-400 font-bold mb-3">PICK YOUR DIRECTION</div>
+    <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 text-sm">
+      <div>
+        <div class="mitr font-bold text-white mb-1">A · Wide Hero Banner</div>
+        <div class="text-slate-400 text-xs leading-relaxed">Full-width banner above the existing 3-col grid. Lowest-risk drop-in.</div>
+      </div>
+      <div>
+        <div class="mitr font-bold text-white mb-1">B · Vertical Profile Card</div>
+        <div class="text-slate-400 text-xs leading-relaxed">Swaps the current archetype/stats column. No layout shift.</div>
+      </div>
+      <div>
+        <div class="mitr font-bold text-white mb-1">C · Asymmetric Showcase</div>
+        <div class="text-slate-400 text-xs leading-relaxed">Hex frame, shimmer bar, ring-framed stats. Highest energy.</div>
+      </div>
+      <div>
+        <div class="mitr font-bold text-white mb-1 text-cyan-300">D · Trading Card</div>
+        <div class="text-slate-400 text-xs leading-relaxed">Vertical card with embedded mini line chart at the bottom. Collectible feel — keeps the big chart in its own column too.</div>
+      </div>
+      <div>
+        <div class="mitr font-bold text-white mb-1 text-cyan-300">E · Banner + Embedded Chart</div>
+        <div class="text-slate-400 text-xs leading-relaxed">Pulls the win/loss line into the profile banner. Avatar left, full chart right. Could replace the entire 3-col panel.</div>
+      </div>
+      <div>
+        <div class="mitr font-bold text-white mb-1 text-cyan-300">F · Split Diptych</div>
+        <div class="text-slate-400 text-xs leading-relaxed">Two equal panels joined by a glowing seam — Identity ⟷ Performance Trail. One unified card.</div>
+      </div>
+    </div>
+  </section>
+
+</div>
+
+</body>
+</html>

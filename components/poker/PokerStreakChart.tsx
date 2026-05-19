@@ -154,13 +154,13 @@ export function PokerStreakChart({ hands, lifetimeNetChips }: PokerStreakChartPr
       <div className="flex justify-between items-end mb-3">
         <div>
           <div className="text-[10px] uppercase tracking-[0.3em] text-cyan-400 font-bold">
-            Win / loss line
+            Profit / loss
           </div>
           <div className="mt-1.5 font-medium text-white text-[15px]" style={{ fontFamily: 'Mitr, sans-serif', letterSpacing: '-0.01em' }}>
             Last {n} hands
           </div>
           <div className="mt-1 text-[10px] font-mono text-slate-500 tracking-wider">
-            Each step = 1 hand
+            Cumulative · 1 step = 1 hand
           </div>
         </div>
         <div className="text-right">
