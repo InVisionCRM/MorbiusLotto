@@ -589,15 +589,16 @@ async function initializeServices() {
       }
     });
 
-    // POST /api/cosmetics/admin/create-item — create a new dynamic item (admin only)
-    // Body: { adminAddress, itemKey, displayName, tier, priceMorbius, maxSupply, unlocksField, unlocksValue }
-    app.post('/api/cosmetics/admin/create-item', express.json(), async (req, res) => {
+    // POST /api/cosmetics/admin/create-item — create a new dynamic item (admin only).
+    // SIWE-gated: caller must be signed in AND be an admin wallet.
+    // Body: { itemKey, displayName, tier, priceMorbius, maxSupply, unlocksField, unlocksValue }
+    app.post('/api/cosmetics/admin/create-item', express.json(), requireAuth(authService), async (req, res) => {
       try {
-        const { adminAddress, itemKey, displayName, tier, priceMorbius, maxSupply, unlocksField, unlocksValue } = req.body ?? {};
-        if (!adminAddress || !itemKey || !displayName || !tier || !unlocksField || !unlocksValue) {
+        const { itemKey, displayName, tier, priceMorbius, maxSupply, unlocksField, unlocksValue } = req.body ?? {};
+        if (!itemKey || !displayName || !tier || !unlocksField || !unlocksValue) {
           return res.status(400).json({ error: 'Missing required fields' });
         }
-        if (!isAdminWallet(adminAddress)) {
+        if (!isAdminWallet(req.user!.address)) {
           return res.status(403).json({ error: 'Unauthorized' });
         }
         const result = await cosmeticsService.createItem({
@@ -615,15 +616,15 @@ async function initializeServices() {
       }
     });
 
-    // PATCH /api/cosmetics/admin/item — update tier/price/maxSupply/shopListed (admin only)
-    // Body: { adminAddress, itemKey, tier?, priceMorbius?, maxSupply?, shopListed? }
-    app.patch('/api/cosmetics/admin/item', express.json(), async (req, res) => {
+    // PATCH /api/cosmetics/admin/item — update tier/price/maxSupply/shopListed (admin only). SIWE-gated.
+    // Body: { itemKey, tier?, priceMorbius?, maxSupply?, shopListed? }
+    app.patch('/api/cosmetics/admin/item', express.json(), requireAuth(authService), async (req, res) => {
       try {
-        const { adminAddress, itemKey, tier, priceMorbius, maxSupply, shopListed } = req.body ?? {};
-        if (!adminAddress || !itemKey) {
-          return res.status(400).json({ error: 'adminAddress and itemKey required' });
+        const { itemKey, tier, priceMorbius, maxSupply, shopListed } = req.body ?? {};
+        if (!itemKey) {
+          return res.status(400).json({ error: 'itemKey required' });
         }
-        if (!isAdminWallet(adminAddress)) {
+        if (!isAdminWallet(req.user!.address)) {
           return res.status(403).json({ error: 'Unauthorized' });
         }
         const result = await cosmeticsService.updateItem(itemKey, {
@@ -641,15 +642,15 @@ async function initializeServices() {
       }
     });
 
-    // POST /api/cosmetics/admin/bulk-shop-listed — batch shop_listed from variant review (admin only)
-    // Body: { adminAddress, updates: [{ itemKey, shopListed: boolean }, ...] }
-    app.post('/api/cosmetics/admin/bulk-shop-listed', express.json(), async (req, res) => {
+    // POST /api/cosmetics/admin/bulk-shop-listed — batch shop_listed from variant review (admin only). SIWE-gated.
+    // Body: { updates: [{ itemKey, shopListed: boolean }, ...] }
+    app.post('/api/cosmetics/admin/bulk-shop-listed', express.json(), requireAuth(authService), async (req, res) => {
       try {
-        const { adminAddress, updates } = req.body ?? {};
-        if (!adminAddress || !Array.isArray(updates)) {
-          return res.status(400).json({ error: 'adminAddress and updates array required' });
+        const { updates } = req.body ?? {};
+        if (!Array.isArray(updates)) {
+          return res.status(400).json({ error: 'updates array required' });
         }
-        if (!isAdminWallet(adminAddress)) {
+        if (!isAdminWallet(req.user!.address)) {
           return res.status(403).json({ error: 'Unauthorized' });
         }
         const max = 500;
@@ -674,15 +675,15 @@ async function initializeServices() {
       }
     });
 
-    // PATCH /api/cosmetics/admin/tier-pricing — set MORBIUS price for all items of a tier (admin only)
-    // Body: { adminAddress, tier, priceMorbius }
-    app.patch('/api/cosmetics/admin/tier-pricing', express.json(), async (req, res) => {
+    // PATCH /api/cosmetics/admin/tier-pricing — set MORBIUS price for all items of a tier (admin only). SIWE-gated.
+    // Body: { tier, priceMorbius }
+    app.patch('/api/cosmetics/admin/tier-pricing', express.json(), requireAuth(authService), async (req, res) => {
       try {
-        const { adminAddress, tier, priceMorbius } = req.body ?? {};
-        if (!adminAddress || !tier || priceMorbius === undefined) {
-          return res.status(400).json({ error: 'adminAddress, tier, and priceMorbius required' });
+        const { tier, priceMorbius } = req.body ?? {};
+        if (!tier || priceMorbius === undefined) {
+          return res.status(400).json({ error: 'tier and priceMorbius required' });
         }
-        if (!isAdminWallet(adminAddress)) {
+        if (!isAdminWallet(req.user!.address)) {
           return res.status(403).json({ error: 'Unauthorized' });
         }
         const validTiers = ['common', 'uncommon', 'rare', 'legendary'];
@@ -701,15 +702,14 @@ async function initializeServices() {
       }
     });
 
-    // GET /api/cosmetics/admin/item-owners?adminAddress=&itemKey= — list wallets that own an item (admin only)
-    app.get('/api/cosmetics/admin/item-owners', async (req, res) => {
+    // GET /api/cosmetics/admin/item-owners?itemKey= — list wallets that own an item (admin only). SIWE-gated.
+    app.get('/api/cosmetics/admin/item-owners', requireAuth(authService), async (req, res) => {
       try {
-        const adminAddress = typeof req.query.adminAddress === 'string' ? req.query.adminAddress : '';
         const itemKey = typeof req.query.itemKey === 'string' ? req.query.itemKey : '';
-        if (!adminAddress || !itemKey) {
-          return res.status(400).json({ error: 'adminAddress and itemKey query params required' });
+        if (!itemKey) {
+          return res.status(400).json({ error: 'itemKey query param required' });
         }
-        if (!isAdminWallet(adminAddress)) {
+        if (!isAdminWallet(req.user!.address)) {
           return res.status(403).json({ error: 'Unauthorized' });
         }
         const owners = await cosmeticsService.getOwnersForItem(itemKey);
@@ -834,12 +834,11 @@ async function initializeServices() {
 
     // ── Follow system ─────────────────────────────────────────────────────────
 
-    // Follow a player (body: { follower: string })
-    app.post('/api/player/:address/follow', express.json(), async (req, res) => {
+    // Follow a player. SIWE-gated: follower is the signed-in wallet; target is the URL param.
+    app.post('/api/player/:address/follow', express.json(), requireAuth(authService), async (req, res) => {
       try {
         const following = req.params.address;
-        const { follower } = req.body ?? {};
-        if (!follower || typeof follower !== 'string') return res.status(400).json({ error: 'follower address required' });
+        const follower = req.user!.address;
         if (follower.toLowerCase() === following.toLowerCase()) return res.status(400).json({ error: 'Cannot follow yourself' });
         await dbService.followPlayer(follower, following);
         const counts = await dbService.getFollowCounts(following);
@@ -850,12 +849,11 @@ async function initializeServices() {
       }
     });
 
-    // Unfollow a player (body: { follower: string })
-    app.delete('/api/player/:address/follow', express.json(), async (req, res) => {
+    // Unfollow a player. SIWE-gated.
+    app.delete('/api/player/:address/follow', express.json(), requireAuth(authService), async (req, res) => {
       try {
         const following = req.params.address;
-        const { follower } = req.body ?? {};
-        if (!follower || typeof follower !== 'string') return res.status(400).json({ error: 'follower address required' });
+        const follower = req.user!.address;
         await dbService.unfollowPlayer(follower, following);
         const counts = await dbService.getFollowCounts(following);
         sendJson(res, { success: true, ...counts });
@@ -1072,18 +1070,18 @@ async function initializeServices() {
       message: 'Too many instant lottery plays from this IP, try again later.',
       validate: { xForwardedForHeader: false },
     });
-    app.post('/api/lottery/instant/play', instantLotteryPlayLimiter, async (req, res) => {
+    app.post('/api/lottery/instant/play', instantLotteryPlayLimiter, requireAuth(authService), async (req, res) => {
       try {
         if (!instantLotteryService.isConfigured()) {
           return res.status(503).json({ error: 'Instant lottery (provably fair) is not configured' });
         }
-        const body = req.body as { address?: unknown; numbers?: unknown; wager?: unknown; clientSeed?: unknown };
-        const address = typeof body?.address === 'string' ? body.address.trim() : '';
+        const body = req.body as { numbers?: unknown; wager?: unknown; clientSeed?: unknown };
+        const address = req.user!.address;
         const numbers = body?.numbers;
         const wager = typeof body?.wager === 'string' ? body.wager : (body?.wager != null ? String(body.wager) : '');
         const clientSeed = typeof body?.clientSeed === 'string' ? body.clientSeed : undefined;
-        if (!address || !numbers || !wager) {
-          return res.status(400).json({ error: 'address, numbers (array of 6), and wager (string) required' });
+        if (!numbers || !wager) {
+          return res.status(400).json({ error: 'numbers (array of 6) and wager (string) required' });
         }
         const result = await instantLotteryService.play({ address, numbers, wager, clientSeed });
         sendJson(res, result);
@@ -1647,13 +1645,10 @@ async function initializeServices() {
       }
     });
 
-    app.post('/api/poker/chips/purchase', express.json(), async (req, res) => {
+    app.post('/api/poker/chips/purchase', express.json(), requireAuth(authService), async (req, res) => {
       try {
-        const { address, chips } = req.body ?? {};
-        if (!address || typeof address !== 'string' || !/^0x[a-fA-F0-9]{40}$/i.test(address)) {
-          return res.status(400).json({ error: 'address required' });
-        }
-        const normalized = address.toLowerCase();
+        const { chips } = req.body ?? {};
+        const normalized = req.user!.address.toLowerCase();
         let chipsBn: bigint;
         try {
           chipsBn = BigInt(String(chips ?? '0'));
@@ -1689,13 +1684,10 @@ async function initializeServices() {
       }
     });
 
-    app.post('/api/poker/chips/cashout', express.json(), async (req, res) => {
+    app.post('/api/poker/chips/cashout', express.json(), requireAuth(authService), async (req, res) => {
       try {
-        const { address, chips } = req.body ?? {};
-        if (!address || typeof address !== 'string' || !/^0x[a-fA-F0-9]{40}$/i.test(address)) {
-          return res.status(400).json({ error: 'address required' });
-        }
-        const normalized = address.toLowerCase();
+        const { chips } = req.body ?? {};
+        const normalized = req.user!.address.toLowerCase();
         let chipsBn: bigint;
         try {
           chipsBn = BigInt(String(chips ?? '0'));
