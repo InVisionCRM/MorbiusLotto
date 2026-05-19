@@ -400,6 +400,30 @@ class WebSocketService {
             }
         }
         // ── End cookie-first path. Fall through to legacy challenge / query-param.
+
+        // For BROWSER clients with no valid cookie (e.g. user landed on poker
+        // page before clicking deposit/withdraw), don't send the cryptic
+        // EIP-712 challenge. Send `siwe_required` so the client can trigger
+        // the friendly plain-text SIWE popup via the same path as apiFetch
+        // uses for HTTP 401s, then reconnect with the cookie set.
+        //
+        // Browsers always include `Origin` on cross-origin WS upgrades.
+        // Node.js bots and other private-key signers don't set Origin and
+        // continue down the legacy auth_challenge path.
+        const hasBrowserOrigin = typeof request.headers.origin === 'string' && request.headers.origin.length > 0;
+        if (hasBrowserOrigin && !ws.isAuthenticated) {
+            logger_1.logger.info('WS Auth: no session — prompting SIWE on browser client', { connectionId });
+            this.sendMessage(ws, {
+                type: 'siwe_required',
+                payload: { reason: sessionToken ? 'session_expired' : 'no_session' },
+            });
+            // Close with a custom code so the client knows this isn't a transport
+            // error. The client trigger code will sign SIWE, then reconnect.
+            try { ws.close(4001, 'siwe_required'); }
+            catch (_b) { /* socket may already be closed */ }
+            return;
+        }
+
         const sendAuthChallenge = REQUIRE_WS_AUTH && !DISABLE_WS_AUTH;
         if (sendAuthChallenge) {
             // Strict mode: generate auth challenge, client must sign to proceed

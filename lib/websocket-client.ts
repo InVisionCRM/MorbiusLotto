@@ -418,6 +418,28 @@ export class BlackjackWebSocketClient {
         try {
           const msg = JSON.parse(event.data as string);
 
+          // Server tells us we need a SIWE session before we can connect.
+          // Trigger the friendly plain-text SIWE popup via the same handler
+          // apiFetch uses for HTTP 401s, then reconnect once the cookie is set.
+          if (msg.type === 'siwe_required' && !settled) {
+            settled = true;
+            logger.info('WebSocket: server requested SIWE sign-in', { reason: msg.payload?.reason });
+            // Lazy-import to avoid pulling apiFetch into bundles that don't need it.
+            import('./api-auth')
+              .then(({ triggerSignIn }) => triggerSignIn())
+              .then(() => {
+                // Cookie is set. Reconnect; server will accept us via cookie auth.
+                logger.info('WebSocket: SIWE sign-in complete, reconnecting');
+                this.connect().catch((err) => logger.error('WS reconnect after SIWE failed', err));
+                resolve();
+              })
+              .catch((err) => {
+                logger.warn('WebSocket: SIWE sign-in declined or failed', err);
+                reject(new Error('SIWE sign-in required to connect'));
+              });
+            return;
+          }
+
           if (msg.type === WS_MESSAGE_TYPES.authChallenge && !settled) {
             const skipAuth = typeof process !== 'undefined' && process.env.NEXT_PUBLIC_SKIP_WS_AUTH === 'true';
             if (skipAuth) {

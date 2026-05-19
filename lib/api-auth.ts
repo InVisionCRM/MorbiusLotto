@@ -21,6 +21,21 @@ export function setAuthFailureHandler(handler: (() => Promise<unknown>) | null):
 }
 
 /**
+ * Invoke the registered SIWE sign-in handler (typically `signInIfNeeded`
+ * from <SiweProvider>). Use this from non-React code (e.g. the WebSocket
+ * client) when it needs to trigger a sign-in popup outside of an apiFetch
+ * 401 retry — for example, when the WS server sends `siwe_required`.
+ *
+ * Throws if no handler is registered (the SiweProvider hasn't mounted yet).
+ */
+export async function triggerSignIn(): Promise<unknown> {
+  if (!authFailureHandler) {
+    throw new Error('SIWE handler not registered — SiweProvider must mount before triggerSignIn is called');
+  }
+  return authFailureHandler();
+}
+
+/**
  * Authenticated fetch helper. Always sends the SIWE session cookie via
  * `credentials: 'include'`, prefixes the URL with the backend base, and
  * auto-handles 401 by triggering a sign-in prompt and retrying once.
