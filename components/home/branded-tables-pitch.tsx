@@ -3,12 +3,6 @@
 import Image from 'next/image'
 import Link from 'next/link'
 import { Marquee } from '@/components/ui/marquee'
-import { cn } from '@/lib/utils'
-import {
-  homeSectionSubtitleClass,
-  homeSectionTitleClass,
-  homeSectionTitleGradientClass,
-} from '@/lib/home-section-typography'
 import { ChevronRight } from 'lucide-react'
 
 // ── Branded table assets for marquee rows (3 × 5) ───────────────────────────
@@ -35,20 +29,15 @@ const TABLE_PRODUCTS = [
 
 function ParallaxHeader() {
   return (
-    <div className="max-w-7xl relative mx-auto flex w-full flex-col items-center px-4 pt-10 pb-2 text-center md:pt-16 md:pb-4">
-      <h1 className={cn(homeSectionTitleClass, 'mb-3 max-w-4xl leading-tight')}>
-        <span className="text-white">Bring Your Brand</span>
-        <br />
-        <span className={homeSectionTitleGradientClass}>To The Table</span>
-      </h1>
-
-      <p className={cn(homeSectionSubtitleClass, 'mb-4 max-w-2xl text-pretty')}>
-        Morbius builds a fully branded game table for your token — live in{' '}
-        <span className="text-white font-semibold">24 hours</span>, with a token profile,
-        Gold Badge, and your design auto-applied to every future game we launch.
+    <div className="max-w-7xl relative mx-auto flex w-full flex-col items-center px-4 pt-4 pb-2 text-center md:pt-6 md:pb-3">
+      <p className="mb-3 text-[11px] font-bold uppercase tracking-[0.3em] text-cyan-300/80">
+        Want yours next?
       </p>
+      <h2 className="mb-4 max-w-3xl text-3xl font-bold leading-tight text-white sm:text-4xl">
+        Bring your brand <span className="text-cyan-300">to the table.</span>
+      </h2>
 
-      <div className="mb-4 flex flex-wrap justify-center gap-3">
+      <div className="flex flex-wrap justify-center gap-3">
         <Link
           href="/marketing#payment"
           className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-400 hover:to-blue-500 text-white font-bold text-sm shadow-lg shadow-cyan-900/30 transition-all"
@@ -111,7 +100,7 @@ function TableMarqueeStrip({
 
 // ── Section export (marquee strips + parallax header) ─
 
-export function PulseChainSection() {
+export function BrandedTablesPitch() {
   const row1 = TABLE_PRODUCTS.slice(0, 5)
   const row2 = TABLE_PRODUCTS.slice(5, 10)
   const row3 = TABLE_PRODUCTS.slice(10, 15)
