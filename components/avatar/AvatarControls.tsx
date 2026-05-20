@@ -6,14 +6,13 @@ import {
   ChevronLeft,
   ChevronRight,
   Image as ImageIcon,
-  Lock,
   Paintbrush,
   Pin,
   Shirt,
   Sparkles,
   UserRound,
 } from 'lucide-react';
-import { getItemKeyForValue, type AvatarField } from '@/lib/cosmetics-catalog';
+import type { AvatarField } from '@/lib/cosmetics-catalog';
 import { AVATAR_FEATURE_REGISTRY } from '@/lib/avatar-feature-registry';
 import { AVATAR_RANDOMIZE_FIELD_KEYS, type AvatarRandomizeFieldKey } from '@/lib/avatar-randomize-pins';
 import {
@@ -43,9 +42,6 @@ type AvatarControlsProps = {
   config: AvatarConfig;
   onChange: (c: AvatarConfig) => void;
   compact?: boolean;
-  ownedItems?: Set<string>;
-  isAdmin?: boolean;
-  onLockedItemClick?: (itemKey: string) => void;
   pinnedRandomFields?: Set<string>;
   onToggleRandomPin?: (field: AvatarRandomizeFieldKey) => void;
 };
@@ -54,7 +50,6 @@ type PickerOption = {
   value: string;
   label: string;
   previewKind?: 'color' | 'background' | 'avatar';
-  itemKey?: string;
   previewPatch?: Partial<AvatarConfig>;
 };
 
@@ -148,7 +143,6 @@ function buildOptionSet(
     value,
     label: previewKind === 'color' ? labelForColor(field, value, index) : value,
     previewKind,
-    itemKey: getItemKeyForValue(field, value) ?? undefined,
     previewPatch: previewKind === 'avatar' ? { [field]: value } as Partial<AvatarConfig> : undefined,
   }));
 }
@@ -159,7 +153,7 @@ function buildCustomFeatureOptions(category: 'mouth' | 'nose' | 'hair'): PickerO
 }
 
 function buildBackgroundOptions(
-  bgItems: Array<{ itemKey: string; displayName: string; unlocks: Array<{ field: string; value: string }> }>,
+  bgItems: Array<{ displayName: string; unlocks: Array<{ field: string; value: string }> }>,
 ) {
   const options: PickerOption[] = [{ value: '', label: 'None' }];
   bgItems.forEach((bgItem) => {
@@ -169,7 +163,6 @@ function buildBackgroundOptions(
       value,
       label: bgItem.displayName,
       previewKind: 'background',
-      itemKey: bgItem.itemKey,
     });
   });
   return options;
@@ -179,9 +172,6 @@ export default function AvatarControls({
   config,
   onChange,
   compact = false,
-  ownedItems,
-  isAdmin = false,
-  onLockedItemClick,
   pinnedRandomFields,
   onToggleRandomPin,
 }: AvatarControlsProps) {
@@ -201,18 +191,6 @@ export default function AvatarControls({
     () => new Set<string>(AVATAR_RANDOMIZE_FIELD_KEYS as readonly string[]),
     [],
   );
-
-  const isCatalogField = (field: EditorField): field is AvatarField =>
-    !field.startsWith('custom');
-
-  const isLocked = (field: EditorField, value: string): boolean => {
-    if (!isCatalogField(field)) return false;
-    if (isAdmin) return false;
-    if (!ownedItems) return false;
-    const itemKey = getItemKeyForValue(field, value);
-    if (!itemKey) return false;
-    return !ownedItems.has(itemKey);
-  };
 
   const baseGroup: PickerGroup = {
     id: 'base',
@@ -296,9 +274,6 @@ export default function AvatarControls({
 
   const activeRow = activeGroup.rows.find((row) => row.field === activeField) ?? activeGroup.rows[0];
   const currentValue = activeRow ? ((config[activeRow.field] as string | undefined) ?? '') : '';
-  const currentOption = activeRow?.options.find((option) => option.value === currentValue) ?? activeRow?.options[0];
-  const currentLocked = activeRow && currentOption ? isLocked(activeRow.field, currentOption.value) : false;
-  const currentItemKey = currentOption?.itemKey;
 
   React.useEffect(() => {
     const node = optionsScrollRef.current;
@@ -309,11 +284,6 @@ export default function AvatarControls({
   }, [activeRow?.field, currentValue]);
 
   const tryApplyOption = React.useCallback((row: PickerRow, option: PickerOption) => {
-    const locked = isLocked(row.field, option.value);
-    if (locked) {
-      if (option.itemKey && onLockedItemClick) onLockedItemClick(option.itemKey);
-      return false;
-    }
     if (row.field === 'hairStyle') {
       onChange({
         ...config,
@@ -325,18 +295,15 @@ export default function AvatarControls({
     }
     update(row.field, option.value);
     return true;
-  }, [config, isLocked, onChange, onLockedItemClick, update]);
+  }, [config, onChange, update]);
 
   const cycleActive = (direction: -1 | 1) => {
     if (!activeRow || !activeRow.options.length) return;
     const opts = activeRow.options;
     const idx = opts.findIndex((option) => option.value === currentValue);
     const start = idx >= 0 ? idx : 0;
-    for (let step = 1; step <= opts.length; step += 1) {
-      const next = (start + direction * step + opts.length) % opts.length;
-      const option = opts[next]!;
-      if (tryApplyOption(activeRow, option)) return;
-    }
+    const nextIdx = (start + direction + opts.length) % opts.length;
+    tryApplyOption(activeRow, opts[nextIdx]!);
   };
 
   const scrollTabs = (direction: -1 | 1) => {
@@ -499,7 +466,6 @@ export default function AvatarControls({
                   className="flex touch-pan-x gap-2 overflow-x-auto px-10 py-1.5 scrollbar-hide snap-x snap-mandatory"
                 >
                   {activeRow?.options.map((option) => {
-                    const locked = isLocked(activeRow.field, option.value);
                     const selected = option.value === currentValue;
                     const isColorCard = option.previewKind === 'color' && option.value.trim().length > 0;
                     const darkColorCard = isColorCard ? isDarkCssColor(option.value) : false;
@@ -543,12 +509,6 @@ export default function AvatarControls({
                           >
                             {option.label}
                           </span>
-                          {locked ? (
-                            <Lock
-                              size={13}
-                              className={`shrink-0 ${isColorCard && darkColorCard ? 'text-amber-200' : 'text-amber-500'}`}
-                            />
-                          ) : null}
                         </div>
                         <p
                           className={`mt-1 text-[11px] leading-none ${
@@ -559,7 +519,7 @@ export default function AvatarControls({
                               : 'text-slate-500'
                           }`}
                         >
-                          {locked ? 'Locked cosmetic' : selected ? 'Selected' : 'Tap to apply'}
+                          {selected ? 'Selected' : 'Tap to apply'}
                         </p>
                       </button>
                     );
@@ -567,17 +527,6 @@ export default function AvatarControls({
                 </div>
               </div>
             </div>
-
-            {currentLocked && currentItemKey && onLockedItemClick ? (
-              <button
-                type="button"
-                onClick={() => onLockedItemClick(currentItemKey)}
-                className="inline-flex items-center gap-1.5 rounded-xl border border-amber-300 bg-amber-50 px-3 py-2 text-xs font-medium text-amber-700 hover:bg-amber-100 transition-colors touch-manipulation"
-              >
-                <Lock size={12} />
-                Unlock This Cosmetic
-              </button>
-            ) : null}
           </div>
         </div>
       </div>

@@ -1,9 +1,7 @@
 import type { Express } from 'express';
 import express from 'express';
 import { getAddress } from 'viem';
-import { CosmeticsService } from '../services/cosmetics.service';
 import { DatabaseService } from '../services/database.service';
-import { getLockedFields, isAdminWallet } from '../lib/cosmetics-catalog';
 import { sendJson } from '../http/json';
 import { logger } from '../utils/logger';
 import { resolveDisplayNameForProfileUpsert } from '../lib/resolve-profile-display-name';
@@ -11,13 +9,11 @@ import { resolveDisplayNameForProfileUpsert } from '../lib/resolve-profile-displ
 interface RegisterPlayerMutationRoutesOptions {
   app: Express;
   dbService: DatabaseService;
-  cosmeticsService: CosmeticsService;
 }
 
 export function registerPlayerMutationRoutes({
   app,
   dbService,
-  cosmeticsService,
 }: RegisterPlayerMutationRoutesOptions): void {
   app.post('/api/player/profile', express.json(), async (req, res) => {
     try {
@@ -73,37 +69,6 @@ export function registerPlayerMutationRoutes({
         rawProfileDisplayMode === 'photo' || rawProfileDisplayMode === 'avatar'
           ? rawProfileDisplayMode
           : undefined;
-
-      if (avatarConfig && !isAdminWallet(normalizedAddress)) {
-        const inventory = await cosmeticsService.getInventory(normalizedAddress);
-        const ownedSet = new Set(inventory);
-        const locked = getLockedFields(avatarConfig as Record<string, string>, ownedSet);
-        if (locked.length > 0) {
-          const names = locked.map((l) => l.displayName ?? l.itemKey ?? l.value).join(', ');
-          return res.status(403).json({
-            error: `Avatar contains items you don't own: ${names}`,
-            lockedItems: locked,
-          });
-        }
-
-        const dbValueMap = await cosmeticsService.getDbValueMap();
-        if (dbValueMap.size > 0) {
-          const config = avatarConfig as Record<string, string>;
-          const dbLocked: string[] = [];
-          for (const [key, itemKey] of dbValueMap) {
-            const [field, value] = key.split(':');
-            if (config[field] === value && !ownedSet.has(itemKey)) {
-              dbLocked.push(itemKey);
-            }
-          }
-          if (dbLocked.length > 0) {
-            return res.status(403).json({
-              error: `Avatar contains items you don't own: ${dbLocked.join(', ')}`,
-              lockedItems: dbLocked.map((k) => ({ itemKey: k, value: null, field: null })),
-            });
-          }
-        }
-      }
 
       await dbService.setDisplayName(normalizedAddress, displayName, profileImageUrl, avatarConfig, bio, xHandle, tgHandle, profileDisplayMode);
       const profile = await dbService.getProfile(normalizedAddress);
