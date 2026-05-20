@@ -28,7 +28,7 @@ import { InstantLotteryService } from './services/instant-lottery.service';
 import { MerkleDropsService } from './services/merkle-drops.service';
 import { MerkleDropsLPService } from './services/merkle-lp-drops.service';
 import { CosmeticsService } from './services/cosmetics.service';
-import { isAdminWallet, getLockedFields, ITEM_CATALOG } from './lib/cosmetics-catalog';
+import { isAdminWallet } from './lib/cosmetics-catalog';
 import { resolveDisplayNameForProfileUpsert } from './lib/resolve-profile-display-name';
 import { logger } from './utils/logger';
 import { assertPokerBotControlAllowed, assertPokerTournamentBotControlAllowed } from './utils/poker-bot-auth';
@@ -440,39 +440,6 @@ async function initializeServices() {
         const profileDisplayMode: 'avatar' | 'photo' | undefined =
           rawProfileDisplayMode === 'photo' || rawProfileDisplayMode === 'avatar' ? rawProfileDisplayMode : undefined;
 
-        // Cosmetics ownership check (skip for admin wallets)
-        if (avatarConfig && !isAdminWallet(normalizedAddress)) {
-          const inventory = await cosmeticsService.getInventory(normalizedAddress);
-          const ownedSet = new Set(inventory);
-          const locked = getLockedFields(avatarConfig as Record<string, string>, ownedSet);
-          if (locked.length > 0) {
-            const names = locked.map((l) => l.displayName ?? l.itemKey ?? l.value).join(', ');
-            return res.status(403).json({
-              error: `Avatar contains items you don\'t own: ${names}`,
-              lockedItems: locked,
-            });
-          }
-
-          // DB-created items check (colors added via the builder won't be in the static catalog)
-          const dbValueMap = await cosmeticsService.getDbValueMap();
-          if (dbValueMap.size > 0) {
-            const config = avatarConfig as Record<string, string>;
-            const dbLocked: string[] = [];
-            for (const [key, itemKey] of dbValueMap) {
-              const [field, value] = key.split(':');
-              if (config[field] === value && !ownedSet.has(itemKey)) {
-                dbLocked.push(itemKey);
-              }
-            }
-            if (dbLocked.length > 0) {
-              return res.status(403).json({
-                error: `Avatar contains items you don't own: ${dbLocked.join(', ')}`,
-                lockedItems: dbLocked.map((k) => ({ itemKey: k, value: null, field: null })),
-              });
-            }
-          }
-        }
-
         await dbService.setDisplayName(normalizedAddress, displayName, profileImageUrl, avatarConfig, bio, xHandle, tgHandle, profileDisplayMode);
         const profile = await dbService.getProfile(normalizedAddress);
         sendJson(res, profile ?? { displayName: null, profileImageUrl: null, avatarConfig: null });
@@ -510,64 +477,14 @@ async function initializeServices() {
       }
     });
 
-    // POST /api/cosmetics/purchase — verify on-chain payment and record ownership
-    // Body: { walletAddress, itemKey, txHash, currency: 'PLS' | 'MORBIUS' }
-    app.post('/api/cosmetics/purchase', express.json(), async (req, res) => {
-      try {
-        const { walletAddress, itemKey, txHash, currency } = req.body ?? {};
-        if (!walletAddress || !itemKey || !txHash || !currency) {
-          return res.status(400).json({ error: 'walletAddress, itemKey, txHash, and currency required' });
-        }
-        if (currency !== 'PLS' && currency !== 'MORBIUS') {
-          return res.status(400).json({ error: 'currency must be PLS or MORBIUS' });
-        }
-        const result = await cosmeticsService.recordPurchase(walletAddress, itemKey, txHash, currency);
-        const statusMap: Record<string, number> = {
-          not_found: 404,
-          not_listed: 403,
-          already_owned: 409,
-          tx_already_used: 409,
-          tx_not_found: 422,
-          tx_wrong_sender: 422,
-          tx_wrong_recipient: 422,
-          tx_insufficient_amount: 422,
-          tx_reverted: 422,
-        };
-        if (result !== 'ok') {
-          const status = statusMap[result] ?? 422;
-          return res.status(status).json({ error: result.replace(/_/g, ' ') });
-        }
-        const inventory = await cosmeticsService.getInventory(walletAddress);
-        sendJson(res, { success: true, items: inventory });
-      } catch (error) {
-        logger.error('Error recording cosmetic purchase:', error);
-        res.status(500).json({ error: 'Internal server error' });
-      }
-    });
-
-    // POST /api/cosmetics/gift — transfer item from one player to another.
-    // SIWE-gated: sender is the signed-in wallet, recipient comes from body.
-    // Body: { toAddress, itemKey }
-    app.post('/api/cosmetics/gift', express.json(), requireAuth(authService), async (req, res) => {
-      try {
-        const { toAddress, itemKey } = req.body ?? {};
-        const fromAddress = req.user!.address;
-        if (!toAddress || !itemKey) {
-          return res.status(400).json({ error: 'toAddress and itemKey required' });
-        }
-        if (fromAddress.toLowerCase() === toAddress.toLowerCase()) {
-          return res.status(400).json({ error: 'Cannot gift to yourself' });
-        }
-        const result = await cosmeticsService.giftItem(fromAddress, toAddress, itemKey);
-        if (result === 'not_owned') return res.status(403).json({ error: 'You do not own this item' });
-        if (result === 'already_owned') return res.status(409).json({ error: 'Recipient already owns this item' });
-        const inventory = await cosmeticsService.getInventory(fromAddress);
-        sendJson(res, { success: true, items: inventory });
-      } catch (error) {
-        logger.error('Error gifting cosmetic item:', error);
-        res.status(500).json({ error: 'Internal server error' });
-      }
-    });
+    // Cosmetic purchases, gifts, and the player marketplace were removed:
+    // all avatar items are now free. Stale clients still calling these
+    // endpoints get a 410 Gone so the failure is obvious rather than silent.
+    const cosmeticsRetired = (_req: express.Request, res: express.Response) => {
+      res.status(410).json({ error: 'All cosmetics are free — payment endpoints are retired.' });
+    };
+    app.post('/api/cosmetics/purchase', cosmeticsRetired);
+    app.post('/api/cosmetics/gift', cosmeticsRetired);
 
     // POST /api/cosmetics/grant — admin-only: grant item to a player for free.
     // SIWE-gated: caller must be signed in AND must be an admin wallet.
@@ -722,117 +639,17 @@ async function initializeServices() {
       }
     });
 
-    // ── Marketplace ───────────────────────────────────────────────────────────
-
-    // GET /api/cosmetics/market — active listings (optional ?itemKey=&sellerAddress=)
-    app.get('/api/cosmetics/market', async (req, res) => {
-      try {
-        const { itemKey, sellerAddress } = req.query as Record<string, string | undefined>;
-        const listings = await cosmeticsService.getListings({
-          itemKey: itemKey || undefined,
-          sellerAddress: sellerAddress || undefined,
-        });
-        res.json({ listings });
-      } catch (error) {
-        logger.error('Error fetching market listings:', error);
-        res.status(500).json({ error: 'Internal server error' });
-      }
+    // ── Marketplace (retired) ────────────────────────────────────────────────
+    // The player-to-player cosmetics marketplace was removed alongside paid
+    // cosmetics. The list endpoint returns an empty list so stale clients
+    // render gracefully; mutation endpoints return 410.
+    app.get('/api/cosmetics/market', (_req, res) => {
+      res.json({ listings: [] });
     });
-
-    // POST /api/cosmetics/market/list — create a listing
-    // Body: { sellerAddress, itemKey, priceMorbius }
-    app.post('/api/cosmetics/market/list', express.json(), async (req, res) => {
-      try {
-        const { sellerAddress, itemKey, priceMorbius } = req.body ?? {};
-        if (!sellerAddress || !itemKey || !priceMorbius) {
-          return res.status(400).json({ error: 'sellerAddress, itemKey, and priceMorbius required' });
-        }
-        const price = parseInt(priceMorbius, 10);
-        if (isNaN(price) || price <= 0) {
-          return res.status(400).json({ error: 'priceMorbius must be a positive number' });
-        }
-        const result = await cosmeticsService.createListing(sellerAddress, itemKey, price);
-        if (result === 'not_owned')     return res.status(403).json({ error: 'You do not own this item' });
-        if (result === 'already_listed') return res.status(409).json({ error: 'Item already listed for sale' });
-        if (result === 'item_not_found') return res.status(404).json({ error: 'Item not found' });
-        res.json({ success: true });
-      } catch (error) {
-        logger.error('Error creating market listing:', error);
-        res.status(500).json({ error: 'Internal server error' });
-      }
-    });
-
-    // POST /api/cosmetics/market/cancel — cancel a listing
-    // Body: { sellerAddress, listingId }
-    app.post('/api/cosmetics/market/cancel', express.json(), async (req, res) => {
-      try {
-        const { sellerAddress, listingId } = req.body ?? {};
-        if (!sellerAddress || !listingId) {
-          return res.status(400).json({ error: 'sellerAddress and listingId required' });
-        }
-        const result = await cosmeticsService.cancelListing(sellerAddress, parseInt(listingId, 10));
-        if (result === 'not_found') return res.status(404).json({ error: 'Listing not found' });
-        if (result === 'not_yours')  return res.status(403).json({ error: 'Not your listing' });
-        res.json({ success: true });
-      } catch (error) {
-        logger.error('Error cancelling market listing:', error);
-        res.status(500).json({ error: 'Internal server error' });
-      }
-    });
-
-    // POST /api/cosmetics/market/update-price — update listing price
-    // Body: { sellerAddress, listingId, newPrice }
-    app.post('/api/cosmetics/market/update-price', express.json(), async (req, res) => {
-      try {
-        const { sellerAddress, listingId, newPrice } = req.body ?? {};
-        if (!sellerAddress || !listingId || !newPrice) {
-          return res.status(400).json({ error: 'sellerAddress, listingId, and newPrice required' });
-        }
-        const p = Number(newPrice);
-        if (!Number.isFinite(p) || p <= 0) {
-          return res.status(400).json({ error: 'newPrice must be a positive number' });
-        }
-        const result = await cosmeticsService.updateListingPrice(sellerAddress, parseInt(listingId, 10), p);
-        if (result === 'not_found') return res.status(404).json({ error: 'Listing not found or already sold/cancelled' });
-        if (result === 'not_yours')  return res.status(403).json({ error: 'Not your listing' });
-        res.json({ success: true });
-      } catch (error) {
-        logger.error('Error updating listing price:', error);
-        res.status(500).json({ error: 'Internal server error' });
-      }
-    });
-
-    // POST /api/cosmetics/market/buy — buy a marketplace listing
-    // Body: { buyerAddress, listingId, txHash }
-    app.post('/api/cosmetics/market/buy', express.json(), async (req, res) => {
-      try {
-        const { buyerAddress, listingId, txHash } = req.body ?? {};
-        if (!buyerAddress || !listingId || !txHash) {
-          return res.status(400).json({ error: 'buyerAddress, listingId, and txHash required' });
-        }
-        const result = await cosmeticsService.buyListing(buyerAddress, parseInt(listingId, 10), txHash);
-        const errorMap: Record<string, [number, string]> = {
-          listing_not_found:     [404, 'Listing not found'],
-          already_sold:          [409, 'Listing already sold or cancelled'],
-          seller_no_longer_owns: [409, 'Seller no longer owns this item'],
-          tx_already_used:       [409, 'Transaction already used'],
-          tx_not_found:          [400, 'Transaction not found on chain'],
-          tx_wrong_sender:       [400, 'Transaction not sent from your wallet'],
-          tx_wrong_recipient:    [400, 'Transaction sent to wrong address'],
-          tx_insufficient_amount:[400, 'Transaction amount is too low'],
-          tx_reverted:           [400, 'Transaction was reverted'],
-        };
-        if (result !== 'ok') {
-          const [status, message] = errorMap[result] ?? [500, 'Unknown error'];
-          return res.status(status).json({ error: message });
-        }
-        const inventory = await cosmeticsService.getInventory(buyerAddress);
-        res.json({ success: true, items: inventory });
-      } catch (error) {
-        logger.error('Error buying market listing:', error);
-        res.status(500).json({ error: 'Internal server error' });
-      }
-    });
+    app.post('/api/cosmetics/market/list', cosmeticsRetired);
+    app.post('/api/cosmetics/market/cancel', cosmeticsRetired);
+    app.post('/api/cosmetics/market/update-price', cosmeticsRetired);
+    app.post('/api/cosmetics/market/buy', cosmeticsRetired);
 
     // ── Follow system ─────────────────────────────────────────────────────────
 

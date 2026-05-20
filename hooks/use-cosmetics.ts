@@ -4,14 +4,12 @@ import { useState, useEffect, useCallback } from 'react';
 import {
   getItemKeyForValue,
   getLockedFields,
-  isAdminWallet,
   ITEM_CATALOG,
   type AvatarField,
   type CosmeticItem,
   type LockedField,
 } from '@/lib/cosmetics-catalog';
 import type { AvatarConfig, AvatarPayload } from '@/lib/websocket-client';
-import { apiFetch } from '@/lib/api-auth';
 
 export type { CosmeticItem, LockedField, AvatarField };
 export { getItemKeyForValue, getLockedFields, ITEM_CATALOG };
@@ -22,23 +20,10 @@ export interface CosmeticItemWithSupply extends CosmeticItem {
   soldOut: boolean;
 }
 
-export interface MarketListing {
-  id: number;
-  sellerAddress: string;
-  itemKey: string;
-  priceMorbius: number;
-  status: 'active' | 'sold' | 'cancelled';
-  listedAt: string;
-  soldAt: string | null;
-  buyerAddress: string | null;
-  txHash: string | null;
-  displayName: string;
-  tier: string;
-}
-
 /**
- * Fetches the player's cosmetic inventory (owned item keys).
- * Returns an empty array if address is not provided.
+ * Fetches the player's cosmetic inventory (owned item keys from the legacy
+ * paid catalog). Kept for admin tools and historical display; all avatar
+ * cosmetics are now free regardless of ownership.
  */
 export function useInventory(address: string | undefined) {
   const [items, setItems] = useState<string[]>([]);
@@ -63,33 +48,18 @@ export function useInventory(address: string | undefined) {
   useEffect(() => { refresh(); }, [refresh]);
 
   const ownedSet = new Set(items);
-
-  /** True if the player owns the given item key (or is an admin). */
   const owns = (itemKey: string) => ownedSet.has(itemKey);
-
-  /** True if the player can freely use this field+value (free item OR owned). */
-  const canUse = (field: AvatarField, value: string, adminBypass = false): boolean => {
-    if (adminBypass) return true;
-    const itemKey = getItemKeyForValue(field, value);
-    if (!itemKey) return true; // free
-    return ownedSet.has(itemKey);
-  };
-
-  const lockedIn = (config: Partial<AvatarConfig>, adminBypass = false): LockedField[] => {
-    if (adminBypass) return [];
-    return getLockedFields(config as Record<string, string>, ownedSet);
-  };
-
-  const lockedInPayload = (payload: AvatarPayload | null | undefined, adminBypass = false): LockedField[] => {
-    if (adminBypass || !payload) return [];
-    return getLockedFields(payload as Record<string, string>, ownedSet);
-  };
+  /** All cosmetics are free; kept as a stable shim for legacy callers. */
+  const canUse = (_field: AvatarField, _value: string, _adminBypass = false): boolean => true;
+  const lockedIn = (_config: Partial<AvatarConfig>, _adminBypass = false): LockedField[] => [];
+  const lockedInPayload = (_payload: AvatarPayload | null | undefined, _adminBypass = false): LockedField[] => [];
 
   return { items, ownedSet, loading, refresh, owns, canUse, lockedIn, lockedInPayload };
 }
 
 /**
- * Fetches the full catalog with live minted counts from the server.
+ * Fetches the full catalog. Used by the avatar editor to discover dynamic
+ * background items added by admins. Pricing/supply fields are vestigial.
  */
 export function useCatalog() {
   const [items, setItems] = useState<CosmeticItemWithSupply[]>([]);
@@ -124,110 +94,4 @@ export function useCatalog() {
   useEffect(() => { refresh(); }, [refresh]);
 
   return { items, loading, refresh };
-}
-
-/**
- * Fetches active marketplace listings.
- */
-export function useMarketListings(filters?: { itemKey?: string; sellerAddress?: string }) {
-  const [listings, setListings] = useState<MarketListing[]>([]);
-  const [loading, setLoading] = useState(false);
-
-  const refresh = useCallback(async () => {
-    setLoading(true);
-    try {
-      const params = new URLSearchParams();
-      if (filters?.itemKey) params.set('itemKey', filters.itemKey);
-      if (filters?.sellerAddress) params.set('sellerAddress', filters.sellerAddress);
-      const res = await fetch(`/api/cosmetics/market?${params}`);
-      if (res.ok) {
-        const data = await res.json();
-        setListings(Array.isArray(data.listings) ? data.listings : []);
-      }
-    } catch {
-      // silently keep last value
-    } finally {
-      setLoading(false);
-    }
-  }, [filters?.itemKey, filters?.sellerAddress]);
-
-  useEffect(() => { refresh(); }, [refresh]);
-
-  return { listings, loading, refresh };
-}
-
-/** Record a purchase after on-chain payment. Backend verifies the txHash. */
-export async function purchaseItem(
-  walletAddress: string,
-  itemKey: string,
-  txHash: string,
-  currency: 'PLS' | 'MORBIUS',
-): Promise<string[]> {
-  const res = await fetch('/api/cosmetics/purchase', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ walletAddress, itemKey, txHash, currency }),
-  });
-  const data = await res.json();
-  if (!res.ok) throw new Error(data.error ?? 'Purchase failed');
-  return data.items ?? [];
-}
-
-/**
- * Gift an item to another player. Ownership transfers to recipient.
- * The sender ("from") is the signed-in wallet — not read from arguments here;
- * `fromAddress` is accepted for API back-compat but ignored by the server.
- */
-export async function giftItem(_fromAddress: string, toAddress: string, itemKey: string): Promise<string[]> {
-  const res = await apiFetch('/api/cosmetics/gift', {
-    method: 'POST',
-    body: JSON.stringify({ toAddress, itemKey }),
-  });
-  const data = await res.json();
-  return data.items ?? [];
-}
-
-/** List an owned item on the marketplace. */
-export async function createListing(sellerAddress: string, itemKey: string, priceMorbius: number): Promise<void> {
-  const res = await fetch('/api/cosmetics/market/list', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ sellerAddress, itemKey, priceMorbius }),
-  });
-  const data = await res.json();
-  if (!res.ok) throw new Error(data.error ?? 'Listing failed');
-}
-
-/** Update the price of an active marketplace listing. */
-export async function updateListingPrice(sellerAddress: string, listingId: number, newPrice: number): Promise<void> {
-  const res = await fetch('/api/cosmetics/market/update-price', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ sellerAddress, listingId, newPrice }),
-  });
-  const data = await res.json();
-  if (!res.ok) throw new Error(data.error ?? 'Update failed');
-}
-
-/** Cancel an active marketplace listing. */
-export async function cancelListing(sellerAddress: string, listingId: number): Promise<void> {
-  const res = await fetch('/api/cosmetics/market/cancel', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ sellerAddress, listingId }),
-  });
-  const data = await res.json();
-  if (!res.ok) throw new Error(data.error ?? 'Cancel failed');
-}
-
-/** Buy a marketplace listing after on-chain payment to seller. */
-export async function buyListing(buyerAddress: string, listingId: number, txHash: string): Promise<string[]> {
-  const res = await fetch('/api/cosmetics/market/buy', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ buyerAddress, listingId, txHash }),
-  });
-  const data = await res.json();
-  if (!res.ok) throw new Error(data.error ?? 'Purchase failed');
-  return data.items ?? [];
 }

@@ -5,23 +5,21 @@ import type { AvatarConfig } from '@/lib/websocket-client';
 import { AVATAR_V1_DEFAULTS } from '@/lib/avatar-payload';
 import AvatarControls from './AvatarControls';
 import { Shuffle } from 'lucide-react';
-import { ITEM_CATALOG, getUnlockedValuesPerField, type AvatarField } from '@/lib/cosmetics-catalog';
+import { getUnlockedValuesPerField, type AvatarField } from '@/lib/cosmetics-catalog';
 import type { AvatarRandomizeFieldKey } from '@/lib/avatar-randomize-pins';
 
 export const DEFAULT_AVATAR_CONFIG: AvatarConfig = AVATAR_V1_DEFAULTS;
 
 export type RandomizeConfigOptions = {
-  /** Catalog item keys pinned in the shop — unlock fields applied after the random roll. */
-  pinnedItemKeys?: Set<string>;
-  /** Current avatar — values are copied for each key in `pinnedFields` after shop pins (editor pins win). */
+  /** Current avatar — values are copied for each key in `pinnedFields`. */
   preserveFrom?: AvatarConfig;
-  /** Avatar field keys to keep from `preserveFrom` (any source: free color, owned, gift, background URL, etc.). */
+  /** Avatar field keys to keep from `preserveFrom`. */
   pinnedFields?: Set<string>;
 };
 
-/** Randomizes only values the player may use: free tier plus cosmetics they own. */
-export function randomizeConfig(ownedItems?: Set<string>, options?: RandomizeConfigOptions): AvatarConfig {
-  const unlocked = getUnlockedValuesPerField(ownedItems ?? new Set());
+/** Randomizes the full set of available avatar values. */
+export function randomizeConfig(_ownedItems?: Set<string>, options?: RandomizeConfigOptions): AvatarConfig {
+  const unlocked = getUnlockedValuesPerField();
   const roll = (field: AvatarField, fallback: string): string => {
     const pool = unlocked[field];
     if (!pool?.length) return fallback;
@@ -52,17 +50,6 @@ export function randomizeConfig(ownedItems?: Set<string>, options?: RandomizeCon
     customPattern: roll('customPattern', ''),
   };
 
-  const shopPins = options?.pinnedItemKeys;
-  if (shopPins?.size) {
-    for (const key of shopPins) {
-      const item = ITEM_CATALOG.find((i) => i.itemKey === key);
-      if (!item) continue;
-      for (const u of item.unlocks) {
-        Object.assign(base, { [u.field]: u.value } as Partial<AvatarConfig>);
-      }
-    }
-  }
-
   const preserve = options?.preserveFrom;
   const fieldPins = options?.pinnedFields;
   if (preserve && fieldPins?.size) {
@@ -88,20 +75,12 @@ type CharacterCreatorProps = {
   onDisplayNameChange?: (value: string) => void;
   /** Tighter layout for modals (smaller avatar, tabs, and controls). */
   compact?: boolean;
-  /** Item keys the player owns — passed through to AvatarControls for lock indicators. */
-  ownedItems?: Set<string>;
-  /** Admin wallets bypass all cosmetics locks. */
-  isAdmin?: boolean;
-  /** Called when user clicks a locked item — opens the purchase sheet in the parent. */
-  onLockedItemClick?: (itemKey: string) => void;
-  /** Keys locked in the cosmetics shop — Randomize keeps those catalog unlocks. */
-  pinnedItemKeys?: Set<string>;
-  /** Field keys pinned in the editor — Randomize keeps current values (owned, free, gift, etc.). */
+  /** Field keys pinned in the editor — Randomize keeps those current values. */
   pinnedRandomFields?: Set<string>;
   onToggleRandomPin?: (field: AvatarRandomizeFieldKey) => void;
 };
 
-export default function CharacterCreator({ config: controlledConfig, onChange, initialConfig, displayName, onDisplayNameChange, compact = false, ownedItems, isAdmin = false, onLockedItemClick, pinnedItemKeys, pinnedRandomFields, onToggleRandomPin }: CharacterCreatorProps) {
+export default function CharacterCreator({ config: controlledConfig, onChange, initialConfig, displayName, onDisplayNameChange, compact = false, pinnedRandomFields, onToggleRandomPin }: CharacterCreatorProps) {
   const [internalConfig, setInternalConfig] = useState<AvatarConfig>(initialConfig ?? DEFAULT_AVATAR_CONFIG);
   const config = controlledConfig ?? internalConfig;
   const setConfig = onChange ?? setInternalConfig;
@@ -114,12 +93,11 @@ export default function CharacterCreator({ config: controlledConfig, onChange, i
 
   const handleRandomizeAll = () => {
     const opts: RandomizeConfigOptions = {};
-    if (pinnedItemKeys?.size) opts.pinnedItemKeys = pinnedItemKeys;
     if (pinnedRandomFields?.size) {
       opts.preserveFrom = config;
       opts.pinnedFields = pinnedRandomFields;
     }
-    setConfig(randomizeConfig(ownedItems, Object.keys(opts).length ? opts : undefined));
+    setConfig(randomizeConfig(undefined, Object.keys(opts).length ? opts : undefined));
   };
 
   return (
@@ -165,9 +143,6 @@ export default function CharacterCreator({ config: controlledConfig, onChange, i
               config={config}
               onChange={setConfig}
               compact={compact}
-              ownedItems={ownedItems}
-              isAdmin={isAdmin}
-              onLockedItemClick={onLockedItemClick}
               pinnedRandomFields={pinnedRandomFields}
               onToggleRandomPin={onToggleRandomPin}
             />

@@ -211,21 +211,9 @@ const ACCESSORY_ITEMS: CosmeticItem[] = [
   item('acc_cyberpunk', 'Cyberpunk Visor', 'legendary', [{ field: 'accessory', value: 'Cyberpunk' }]),
 ];
 
-/** Retired from shop/UI; keeps acc_round → value for existing mints. */
-const LEGACY_ROUND_GLASSES_RETIRED: CosmeticItem[] = [
-  item('acc_round', 'Round Glasses', 'rare', [{ field: 'accessory', value: 'Round Glasses' }]),
-];
-
 /** Keys `acc_shades_vN` match AdminCosmeticsTab `toItemKey` for accessory + Shades VN. */
 const SHADES_VARIANT_ITEMS: CosmeticItem[] = Array.from({ length: 3 }, (_, i) => {
   const n = i + 1;
-  const value = `Shades V${n}`;
-  return item(`acc_shades_v${n}`, value, 'uncommon', [{ field: 'accessory', value }]);
-});
-
-/** Retired from shop/UI; still maps value → itemKey so existing mints enforce ownership. */
-const LEGACY_SHADES_RETIRED_ITEMS: CosmeticItem[] = Array.from({ length: 7 }, (_, i) => {
-  const n = i + 4;
   const value = `Shades V${n}`;
   return item(`acc_shades_v${n}`, value, 'uncommon', [{ field: 'accessory', value }]);
 });
@@ -244,12 +232,6 @@ const HAT_VARIANT_ITEMS: CosmeticItem[] = HAT_VARIANT_NUMBERS.map((n) =>
   item(`hat_hat_v${n}`, `Hat V${n}`, 'uncommon', [{ field: 'hat', value: `Hat V${n}` }]),
 );
 
-/** Retired hat shapes — not in shop/UI; keeps value → itemKey for existing mints. */
-const LEGACY_HAT_RETIRED_ITEMS: CosmeticItem[] = [
-  item('hat_hat_v6', 'Hat V6', 'uncommon', [{ field: 'hat', value: 'Hat V6' }]),
-  item('hat_hat_v9', 'Hat V9', 'uncommon', [{ field: 'hat', value: 'Hat V9' }]),
-];
-
 /** Legendary hat tints — same hexes as skin legendary spectrum (`skin_orange_red`, etc.). */
 const HAT_COLOR_LEGENDARY_ITEMS: CosmeticItem[] = [
   item('hat_clr_phoenix', 'Hat Tint: Phoenix', 'legendary', [{ field: 'hatColor', value: '#FF4500' }]),
@@ -263,11 +245,6 @@ const HAT_COLOR_LEGENDARY_ITEMS: CosmeticItem[] = [
 const NECKLACE_ITEMS: CosmeticItem[] = [
   item('neck_silver',  'Silver Chain', 'common',    [{ field: 'necklace', value: 'Silver Chain' }]),
   item('neck_gold',    'Gold Chain',   'rare',      [{ field: 'necklace', value: 'Gold Chain' }]),
-];
-
-const LEGACY_NECKLACE_RETIRED_ITEMS: CosmeticItem[] = [
-  item('neck_pearl', 'Pearl', 'uncommon', [{ field: 'necklace', value: 'Pearl' }]),
-  item('neck_pendant', 'Pendant', 'legendary', [{ field: 'necklace', value: 'Pendant' }]),
 ];
 
 // ── Shirt colors ──────────────────────────────────────────────────────────────
@@ -360,70 +337,34 @@ export const ITEM_CATALOG: CosmeticItem[] = [
 
 // ─── Lookup helpers ───────────────────────────────────────────────────────────
 
-/** Map from "field:value" → itemKey for O(1) lookup */
-const _valueToItemKey = new Map<string, string>();
+// All cosmetics are free — gating is disabled. The catalog stays as reference
+// data (display names, tiers); ownership no longer restricts what a player
+// can wear, and `getLockedFields` always returns an empty list.
 
-for (const ci of [...ITEM_CATALOG, ...LEGACY_SHADES_RETIRED_ITEMS, ...LEGACY_HAT_RETIRED_ITEMS, ...LEGACY_ROUND_GLASSES_RETIRED, ...LEGACY_NECKLACE_RETIRED_ITEMS]) {
-  for (const u of ci.unlocks) {
-    if (u.value !== '__any_non_empty__') {
-      _valueToItemKey.set(`${u.field}:${u.value}`, ci.itemKey);
-    }
-  }
-}
-
-/** Returns the itemKey required to use this field+value, or null if it's free. */
-export function getItemKeyForValue(field: AvatarField, value: string): string | null {
-  const freeSet = FREE_VALUES[field];
-  if (freeSet?.has(value)) return null;
-  return _valueToItemKey.get(`${field}:${value}`) ?? null;
+export function getItemKeyForValue(_field: AvatarField, _value: string): string | null {
+  return null;
 }
 
 export interface LockedField {
   field: AvatarField;
   value: string;
-  itemKey: string | null; // null = locked but item not in catalog (shouldn't happen)
+  itemKey: string | null;
   displayName: string | null;
 }
 
-/**
- * Given an avatar config and a set of owned item keys, returns the list of
- * fields that are locked (require items the player doesn't own).
- */
 export function getLockedFields(
-  config: Partial<Record<string, string>>,
-  ownedItemKeys: Set<string>,
+  _config: Partial<Record<string, string>>,
+  _ownedItemKeys: Set<string>,
 ): LockedField[] {
-  const locked: LockedField[] = [];
-  const fields: AvatarField[] = [
-    'skinColor', 'hairStyle', 'hairColor', 'accessoryColor', 'eyeShape', 'eyeColor', 'faceShape',
-    'noseShape', 'lipShape', 'accessory', 'hat', 'hatColor', 'necklace', 'mouthAccessory', 'makeup', 'facialHair',
-    'shirtColor', 'shirtStyle',
-    'backgroundImage', 'overlayImage',
-  ];
-  for (const field of fields) {
-    const value = config[field];
-    if (!value) continue;
-    const val = value ?? '';
-    const itemKey = getItemKeyForValue(field, val);
-    if (itemKey && !ownedItemKeys.has(itemKey)) {
-      const catalogItem = ITEM_CATALOG.find(i => i.itemKey === itemKey) ?? null;
-      locked.push({ field, value: val, itemKey, displayName: catalogItem?.displayName ?? null });
-    }
-  }
-  return locked;
+  return [];
 }
 
-/**
- * For each avatar field, values the player may use: free defaults plus anything
- * unlocked by an owned catalog item.
- */
-export function getUnlockedValuesPerField(ownedItemKeys: Set<string>): Record<AvatarField, string[]> {
+/** All values across free defaults and the full catalog — everything is selectable. */
+export function getUnlockedValuesPerField(_ownedItemKeys?: Set<string>): Record<AvatarField, string[]> {
   const result = {} as Record<AvatarField, string[]>;
   for (const field of Object.keys(FREE_VALUES) as AvatarField[]) {
-    const freeSet = FREE_VALUES[field];
-    const values = new Set<string>(freeSet ?? []);
+    const values = new Set<string>(FREE_VALUES[field] ?? []);
     for (const catalogItem of ITEM_CATALOG) {
-      if (!ownedItemKeys.has(catalogItem.itemKey)) continue;
       for (const u of catalogItem.unlocks) {
         if (u.field === field && u.value !== '__any_non_empty__') values.add(u.value);
       }
