@@ -66,31 +66,18 @@ import {
   PLATFORM_FEE_BUYIN_PERCENT,
   clampCreatorFeePercent,
 } from '@/lib/tournament-types';
+import {
+  defaultScheduledFields,
+  localYyyyMmDd,
+  openDateOrTimePicker,
+  parseLocalDateTime,
+} from '@/lib/poker-tournament-schedule';
 
 /** Where the freeroll guarantee comes from. Mirrors server `GuaranteedPrizePoolSource`. */
 type PrizeSource = 'chips' | 'platform_promo' | 'custom_token';
 
 /** Buy-in tournaments: off-chain chips vs per-seat PRC-20 via escrow (`custom_token_buyin`). */
 type BuyInPrizeSource = 'chips' | 'custom_token_buyin';
-
-function defaultScheduledFields(): { date: string; time: string } {
-  const from = new Date(Date.now() + 120_000);
-  from.setSeconds(0, 0);
-  while (from.getTime() < Date.now() + 60_000) {
-    from.setMinutes(from.getMinutes() + 1);
-  }
-  return {
-    date: localYyyyMmDd(from),
-    time: `${String(from.getHours()).padStart(2, '0')}:${String(from.getMinutes()).padStart(2, '0')}`,
-  };
-}
-
-function localYyyyMmDd(d: Date): string {
-  const y = d.getFullYear();
-  const mo = String(d.getMonth() + 1).padStart(2, '0');
-  const day = String(d.getDate()).padStart(2, '0');
-  return `${y}-${mo}-${day}`;
-}
 
 /** Whole off-chain poker chips (integer string). */
 function parsePositiveWholeChips(val: string): bigint {
@@ -488,34 +475,8 @@ function PrizeSplit3DPie({
   );
 }
 
-function parseLocalDateTime(dateStr: string, timeStr: string): Date | null {
-  const parts = dateStr.split('-').map(Number);
-  const timeOnly = timeStr.slice(0, 5);
-  const timeParts = timeOnly.split(':').map(Number);
-  if (parts.length !== 3 || timeParts.length !== 2) return null;
-  const [y, mo, d] = parts;
-  const [hh, mm] = timeParts;
-  if (!Number.isFinite(y) || !Number.isFinite(mo) || !Number.isFinite(d) || !Number.isFinite(hh) || !Number.isFinite(mm)) {
-    return null;
-  }
-  return new Date(y, mo - 1, d, hh, mm, 0, 0);
-}
-
-/** Opens the native date/time UI from a surrounding click (not only the small icon). */
-function openDateOrTimePicker(input: HTMLInputElement | null) {
-  if (!input) return;
-  const withPicker = input as HTMLInputElement & { showPicker?: () => void };
-  if (typeof withPicker.showPicker === 'function') {
-    try {
-      withPicker.showPicker();
-      return;
-    } catch {
-      /* secure context / user gesture quirks */
-    }
-  }
-  input.focus();
-  input.click();
-}
+// `parseLocalDateTime` + `openDateOrTimePicker` now live in `lib/poker-tournament-schedule.ts`
+// so the MTT wizard and the classic creator stay in lockstep on date handling + picker UX.
 
 /** Inline USD-value preview for the custom-token amount input. Hidden until the picker resolves a token. */
 function CustomTokenUsdHint({ token, amount }: { token: SelectedPrc20Token | null; amount: string }) {

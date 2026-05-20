@@ -9,6 +9,7 @@ import {
   type PokerBlindIncreaseMode,
 } from '@/hooks/use-poker-tournament';
 import { buildPrizePercents, findPokerPrizePresetMeta } from '@/lib/poker-tournament-prize-presets';
+import { parseLocalDateTime } from '@/lib/poker-tournament-schedule';
 import { MTT_STEP_TAGS, MTT_WIZARD_STEPS, useMttCreator, type MttWizardScreen } from '../MttCreatorContext';
 import type { MttFormValues } from '../MttCreatorContext';
 
@@ -38,13 +39,21 @@ export function MttStepReview({ onClose, onPublish, onPublished }: MttStepReview
     try {
       const result = await onPublish(params);
       if (!result?.tournamentId) {
-        setError('Server did not return a tournament id. Try again.');
+        // Server responded but the payload was empty / malformed. Log the actual
+        // response for debugging so support can copy it.
+        // eslint-disable-next-line no-console
+        console.error('MTT publish: server returned no tournamentId', { params, result });
+        setError(
+          'Server responded but did not include a tournament id. Check the browser console for the raw response and try again.',
+        );
         return;
       }
       toast.success('Tournament published!');
       onPublished(result);
     } catch (err) {
       const msg = (err as Error).message ?? 'Publish failed';
+      // eslint-disable-next-line no-console
+      console.error('MTT publish failed', { params, error: err });
       setError(msg);
       toast.error(msg);
     } finally {
@@ -265,8 +274,9 @@ interface Validation {
 function validateValues(v: MttFormValues): Validation {
   if (!v.name.trim() || v.name.trim().length < 3) return { ok: false, firstError: 'name is required' };
   if (!v.scheduledDate || !v.scheduledTime) return { ok: false, firstError: 'start time is required' };
-  const start = new Date(`${v.scheduledDate}T${v.scheduledTime}`).getTime();
-  if (!Number.isFinite(start) || start <= Date.now()) return { ok: false, firstError: 'start time must be in the future' };
+  const startLocal = parseLocalDateTime(v.scheduledDate, v.scheduledTime);
+  if (!startLocal || !Number.isFinite(startLocal.getTime())) return { ok: false, firstError: 'start time is invalid' };
+  if (startLocal.getTime() <= Date.now()) return { ok: false, firstError: 'start time must be in the future' };
   if (v.buyInMode === 'chips') {
     if (!/^\d+$/.test(v.buyInChips) || Number(v.buyInChips) <= 0) return { ok: false, firstError: 'buy-in must be positive' };
   } else {
@@ -293,7 +303,10 @@ function buildCreateParams(v: MttFormValues): CreatePokerTournamentParams | null
   const prizeSlotCount = Math.min(10, v.maxPlayers);
   const prizePercentages = buildPrizePercents(v.prizePresetId, prizeSlotCount);
 
-  const scheduledStartAtIso = new Date(`${v.scheduledDate}T${v.scheduledTime}`).toISOString();
+  // Use the shared local-time parser so the wall-clock instant the user picked survives the
+  // round-trip into UTC. `new Date(\`${date}T${time}\`)` happens to behave the same way on
+  // modern browsers but `parseLocalDateTime` is explicit and matches the classic creator.
+  const scheduledStartAtIso = parseLocalDateTime(v.scheduledDate, v.scheduledTime)!.toISOString();
 
   // Freerolls have buy-in 0 + guaranteed pool from creator chip wallet.
   // Buy-in tournaments have positive buy-in and no guaranteed pool.

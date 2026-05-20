@@ -3,6 +3,7 @@
 import React, { createContext, useCallback, useContext, useMemo, useState } from 'react';
 import type { PokerBlindIncreaseMode } from '@/hooks/use-poker-tournament';
 import type { PokerPrizePresetId } from '@/lib/poker-tournament-prize-presets';
+import { defaultScheduledFields } from '@/lib/poker-tournament-schedule';
 import type { MttTemplate } from './mtt-templates';
 
 /**
@@ -73,23 +74,41 @@ export interface MttFormValues {
   creatorFeePercent: number;
 }
 
-export const MTT_DEFAULT_VALUES: MttFormValues = {
-  name: '',
-  scheduledDate: '',
-  scheduledTime: '',
-  isPrivate: false,
-  privatePin: '',
-  buyInMode: 'chips',
-  buyInChips: '500',
-  guaranteedPool: '0',
-  maxPlayers: 27,
-  seatsPerTable: 9,
-  startingStack: 10000,
-  blindMode: 'by_time',
-  blindIntervalMinutes: 10,
-  prizePresetId: 'podium_classic',
-  creatorFeePercent: 2,
-};
+/**
+ * Compute fresh form defaults at provider-mount time. The date/time fields need
+ * to be evaluated lazily (not as module-level constants) so they reflect the
+ * user's wall clock at the moment they open the wizard — otherwise an idle tab
+ * keeps stale "2 minutes from now" values that have already drifted into the
+ * past, and publish fails the future-time validator.
+ */
+export function buildMttDefaultValues(): MttFormValues {
+  const schedule = defaultScheduledFields();
+  return {
+    name: '',
+    scheduledDate: schedule.date,
+    scheduledTime: schedule.time,
+    isPrivate: false,
+    privatePin: '',
+    buyInMode: 'chips',
+    buyInChips: '500',
+    guaranteedPool: '0',
+    maxPlayers: 27,
+    seatsPerTable: 9,
+    startingStack: 10000,
+    blindMode: 'by_time',
+    blindIntervalMinutes: 10,
+    prizePresetId: 'podium_classic',
+    creatorFeePercent: 2,
+  };
+}
+
+/**
+ * Static defaults snapshot. Date/time fields here will be stale by the time the
+ * wizard renders — kept exported only so test code / Storybook entries can
+ * seed the form without calling the function. Prefer `buildMttDefaultValues()`
+ * for live usage so the schedule fields are fresh.
+ */
+export const MTT_DEFAULT_VALUES: MttFormValues = buildMttDefaultValues();
 
 interface MttCreatorContextValue {
   screen: MttWizardScreen;
@@ -116,15 +135,18 @@ const MttCreatorContext = createContext<MttCreatorContextValue | null>(null);
 
 export function MttCreatorProvider({
   children,
-  initialValues = MTT_DEFAULT_VALUES,
+  initialValues,
   initialScreen = 'template',
 }: {
   children: React.ReactNode;
+  /** Override defaults (e.g. tests, deep-link prefills). When omitted, the provider builds fresh defaults at mount so the schedule fields reflect "now + 2 minutes" in the user's local timezone. */
   initialValues?: MttFormValues;
   initialScreen?: MttWizardScreen;
 }) {
   const [screen, setScreen] = useState<MttWizardScreen>(initialScreen);
-  const [values, setValuesState] = useState<MttFormValues>(initialValues);
+  // Lazy initial state: `buildMttDefaultValues()` is computed once at mount,
+  // not on every render. Re-renders never replace the user's typed values.
+  const [values, setValuesState] = useState<MttFormValues>(() => initialValues ?? buildMttDefaultValues());
 
   const setValues = useCallback((patch: Partial<MttFormValues>) => {
     setValuesState((prev) => ({ ...prev, ...patch }));
