@@ -79,6 +79,7 @@ export declare class WebSocketService {
     private handlePokerLeaveTable;
     private handlePokerAddChips;
     private handlePokerAction;
+    private handlePokerShowCards;
     private handlePokerGetState;
     private handlePokerQuickReaction;
     private static readonly POKER_AVATAR_EMOTIONS;

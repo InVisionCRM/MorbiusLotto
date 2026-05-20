@@ -178,6 +178,23 @@ export interface PokerCurrentHand {
    * False on fold-out wins — uncalled winners' hole cards are not public.
    */
   handWentToShowdown?: boolean;
+  /**
+   * Lowercase address of the fold-out (uncontested) winner. Set only when
+   * `handWentToShowdown === false`. Clients use this to offer the matching
+   * player a Show / Muck choice during the post-hand intermission.
+   */
+  foldOutWinnerAddress?: string;
+  /**
+   * ISO wall time the fold-out Show/Muck window closes. Present while the
+   * choice is still pending; omitted once the winner decides or the window
+   * elapses.
+   */
+  foldOutShowMuckExpiresAt?: string;
+  /**
+   * Outcome of the fold-out winner's Show/Muck choice. `'shown'` exposes their
+   * hole cards via `showdownHands`; `'mucked'` keeps them hidden.
+   */
+  foldOutShowDecision?: 'pending' | 'shown' | 'mucked';
   /** At showdown: winner(s), amount each receives, optional hand name, and 5 card indices forming best hand */
   winners?: { address: string; amount: string; handName?: string; winningCardIndices?: number[] }[];
   /**
@@ -920,6 +937,15 @@ export class BlackjackWebSocketClient {
     const payload: { tableId: string; handId: string; action: string; amount?: string } = { tableId, handId, action };
     if (amount != null) payload.amount = amount;
     return this.sendRequest(WS_MESSAGE_TYPES.pokerAction, payload);
+  }
+
+  /**
+   * Decide Show / Muck for a fold-out (uncontested) win. Only the winning
+   * player can call this, and only during the short window the server
+   * advertises via `currentHand.foldOutShowMuckExpiresAt`.
+   */
+  async pokerShowCards(tableId: string, handId: string, decision: 'show' | 'muck'): Promise<PokerTableState> {
+    return this.sendRequest(WS_MESSAGE_TYPES.pokerShowCards, { tableId, handId, decision });
   }
 
   /** Voluntarily sit out of future hands. Seat is held; blinds still post. Auth required. */

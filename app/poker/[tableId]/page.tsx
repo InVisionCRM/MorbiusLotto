@@ -602,6 +602,35 @@ export default function PokerTablePage() {
     }
   }, [wsClient, tableId, setState]);
 
+  const handleShowCards = useCallback(async () => {
+    if (!wsClient || !hand?.handId) return;
+    try {
+      const next = await wsClient.pokerShowCards(tableId, hand.handId, 'show');
+      setState(next);
+    } catch (err) {
+      toast.error((err as Error).message || 'Failed to show cards');
+    }
+  }, [wsClient, tableId, hand?.handId, setState]);
+
+  const handleMuckCards = useCallback(async () => {
+    if (!wsClient || !hand?.handId) return;
+    try {
+      const next = await wsClient.pokerShowCards(tableId, hand.handId, 'muck');
+      setState(next);
+    } catch (err) {
+      toast.error((err as Error).message || 'Failed to muck cards');
+    }
+  }, [wsClient, tableId, hand?.handId, setState]);
+
+  const foldOutShowEligible = !!(
+    hand &&
+    hand.handWentToShowdown === false &&
+    hand.foldOutWinnerAddress &&
+    normalizedAddress &&
+    hand.foldOutWinnerAddress === normalizedAddress &&
+    hand.foldOutShowDecision === 'pending'
+  );
+
   const onTipDealer = useCallback(async () => {
     if (!wsClient) return;
     playClick();
@@ -886,6 +915,8 @@ export default function PokerTablePage() {
                 onOpenLogoSponsor={() => setLogoSponsorOpen(true)}
                 onSitOut={mySeat ? handleSitOut : undefined}
                 onSitBack={mySeat ? handleSitBack : undefined}
+                onShowCards={foldOutShowEligible ? handleShowCards : undefined}
+                onMuckCards={foldOutShowEligible ? handleMuckCards : undefined}
               />
 
               <PokerBottomBar

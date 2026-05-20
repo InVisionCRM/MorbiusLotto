@@ -60,6 +60,7 @@ export const WS_POKER_MESSAGES = [
   'poker_leave_table',
   'poker_add_chips',
   'poker_action',
+  'poker_show_cards',
   'poker_get_state',
   'poker_create_table',
   'poker_update_table_logo',
