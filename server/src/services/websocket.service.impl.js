@@ -1174,6 +1174,35 @@ class WebSocketService {
             this.sendError(ws, error.message || 'Action failed', message.requestId);
         }
     }
+    async handlePokerShowCards(ws, message) {
+        try {
+            if (!this.pokerGameService || !ws.playerAddress) {
+                return this.sendError(ws, 'Poker not available or wallet required', message.requestId);
+            }
+            const payload = message.payload ?? {};
+            const { tableId, handId, decision } = payload;
+            if (!tableId || typeof tableId !== 'string') {
+                return this.sendError(ws, 'tableId required', message.requestId);
+            }
+            if (!handId || typeof handId !== 'string') {
+                return this.sendError(ws, 'handId required', message.requestId);
+            }
+            if (decision !== 'show' && decision !== 'muck') {
+                return this.sendError(ws, 'decision must be "show" or "muck"', message.requestId);
+            }
+            const state = await this.pokerGameService.decideFoldOutShow(tableId, handId, ws.playerAddress, decision);
+            this.sendMessage(ws, { type: 'poker_table_state', payload: state, requestId: message.requestId });
+            // Broadcast so spectators / other seats see the buttons disappear and
+            // (on 'show') the revealed hole cards.
+            const roomId = `poker:table:${tableId}`;
+            const broadcastState = await this.pokerGameService.getTableState(tableId, null);
+            this.broadcastToRoom(roomId, { type: 'poker_table_state', payload: broadcastState });
+        }
+        catch (error) {
+            logger_1.logger.error('Error poker show cards:', error);
+            this.sendError(ws, error.message || 'Show/muck failed', message.requestId);
+        }
+    }
     async handlePokerGetState(ws, message) {
         try {
             if (!this.pokerGameService || !ws.playerAddress) {

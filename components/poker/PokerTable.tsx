@@ -25,6 +25,7 @@ import confetti from 'canvas-confetti';
 import { FloatingTableLogo } from './FloatingTableLogo';
 import { PokerRailActingHighlight } from './PokerRailActingHighlight';
 import { DealerButton } from './DealerButton';
+import { PokerShowMuckOverlay } from './PokerShowMuckOverlay';
 import {
   POKER_BETWEEN_HANDS_DELAY_MS,
 } from '@/lib/poker-between-hands-delay';
@@ -88,6 +89,13 @@ export interface PokerTableProps {
   onSitOut?: () => void;
   /** Return from sitting out (player radial). */
   onSitBack?: () => void;
+  /**
+   * Fold-out winner clicked "Show" — reveal hole cards to the table.
+   * Only rendered when the current player is the uncalled winner.
+   */
+  onShowCards?: () => void;
+  /** Fold-out winner clicked "Muck" — keep cards hidden. */
+  onMuckCards?: () => void;
   /** Add `data-tutorial-target` on table, board, seats (for poker tutorial overlay). */
   tutorialTargets?: boolean;
   /** Wrap pot for tutorial spotlight (forwarded to `PokerBoard`). */
@@ -100,7 +108,7 @@ export interface PokerTableProps {
   showDealerAnchorGuides?: boolean;
 }
 
-export function PokerTable({ state, currentPlayerAddress, timeLeft, chatBubbleBySeatIndex, onReUpClick, onMenuClick, reactionBySeatIndex, broadcastEmotionBySeatIndex, onPhraseReaction, onAnimationReaction, onOpponentClick, onOpponentRadialAction, quickChatPhrases, setQuickChatPhrases, onOpenEditQuickChat, onLeave, onRequestMobileActivity, onSitOut, onSitBack, tutorialTargets, dataTutorialTargetPot, showDealerAnchorGuides = false }: PokerTableProps) {
+export function PokerTable({ state, currentPlayerAddress, timeLeft, chatBubbleBySeatIndex, onReUpClick, onMenuClick, reactionBySeatIndex, broadcastEmotionBySeatIndex, onPhraseReaction, onAnimationReaction, onOpponentClick, onOpponentRadialAction, quickChatPhrases, setQuickChatPhrases, onOpenEditQuickChat, onLeave, onRequestMobileActivity, onSitOut, onSitBack, onShowCards, onMuckCards, tutorialTargets, dataTutorialTargetPot, showDealerAnchorGuides = false }: PokerTableProps) {
   const tableRef = useRef<HTMLDivElement>(null);
   const [dims, setDims] = useState({ w: 640, h: 500 });
   const { effect: tableEffect, feltGradient, railStyle } = usePokerTableEffect();
@@ -334,6 +342,21 @@ export function PokerTable({ state, currentPlayerAddress, timeLeft, chatBubbleBy
   // flop/turn/river frames, hole cards are visible but the winner UI stays
   // hidden until the final broadcast.
   const showFinalShowdownVisuals = !!isShowdownWithWinners;
+
+  // Fold-out (uncontested) Show / Muck offer — visible only when I'm the
+  // sole winner of a hand that didn't reach showdown and the server-side
+  // window is still open. Server gates this; the client just renders the
+  // overlay it advertises.
+  const myAddrLower = currentPlayerAddress?.toLowerCase() ?? null;
+  const showMuckOffer = !!(
+    hand &&
+    !hand.handWentToShowdown &&
+    hand.foldOutWinnerAddress &&
+    myAddrLower &&
+    hand.foldOutWinnerAddress === myAddrLower &&
+    hand.foldOutShowDecision === 'pending' &&
+    hand.foldOutShowMuckExpiresAt
+  );
 
   /** Server deadline for auto next hand (ISO). Omitted on older backends. */
   const serverNextHandMs = useMemo(() => {
@@ -1162,6 +1185,15 @@ export function PokerTable({ state, currentPlayerAddress, timeLeft, chatBubbleBy
           </div>
         );
       })}
+
+      {showMuckOffer && onShowCards && onMuckCards && hand?.foldOutShowMuckExpiresAt && (
+        <PokerShowMuckOverlay
+          expiresAtIso={hand.foldOutShowMuckExpiresAt}
+          pending={hand.foldOutShowDecision === 'pending'}
+          onShow={onShowCards}
+          onMuck={onMuckCards}
+        />
+      )}
 
     </div>
   );
