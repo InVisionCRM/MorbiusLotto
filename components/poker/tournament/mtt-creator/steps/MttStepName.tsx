@@ -1,38 +1,40 @@
 'use client';
 
-import React, { useMemo } from 'react';
+import React, { useMemo, useRef } from 'react';
 import { Lock } from 'lucide-react';
 import { MttFooter, MttStepCard } from '../MttFooter';
 import { useMttCreator } from '../MttCreatorContext';
+import {
+  localYyyyMmDd,
+  openDateOrTimePicker,
+  parseLocalDateTime,
+} from '@/lib/poker-tournament-schedule';
 
 const FIELD_CLASS =
-  'w-full rounded-xl border border-white/10 bg-black/40 px-4 py-3 text-sm text-white placeholder-slate-500 outline-none transition-colors focus:border-cyan-500/60 focus:bg-black/60';
+  'w-full rounded-xl border border-white/10 bg-black/40 px-4 py-3 text-sm text-white placeholder-slate-500 outline-none transition-colors focus:border-cyan-500/60 focus:bg-black/60 [color-scheme:dark]';
 
 const LABEL_CLASS = 'text-[11px] font-bold uppercase text-slate-400 mb-2 block';
 
-function todayYyyyMmDd(): string {
-  const d = new Date();
-  const yyyy = d.getFullYear();
-  const mm = String(d.getMonth() + 1).padStart(2, '0');
-  const dd = String(d.getDate()).padStart(2, '0');
-  return `${yyyy}-${mm}-${dd}`;
-}
-
 export function MttStepName() {
   const { values, setValues } = useMttCreator();
-  const minDate = useMemo(() => todayYyyyMmDd(), []);
+  const minDate = useMemo(() => localYyyyMmDd(new Date()), []);
+
+  // Refs so clicking the label (or the column wrapper) opens the native picker,
+  // not just the tiny calendar/clock icon. Matches the classic creator UX.
+  const dateInputRef = useRef<HTMLInputElement>(null);
+  const timeInputRef = useRef<HTMLInputElement>(null);
 
   const trimmedName = values.name.trim();
   const hasName = trimmedName.length >= 3;
   const hasDate = !!values.scheduledDate;
   const hasTime = !!values.scheduledTime;
 
-  // Reject past start times (matches server validation: scheduledStartAt must be future).
+  // Reject past start times — same parser the classic creator uses so the validation
+  // window matches across both surfaces.
   const startInFuture = useMemo(() => {
     if (!hasDate || !hasTime) return false;
-    const iso = `${values.scheduledDate}T${values.scheduledTime}`;
-    const t = new Date(iso).getTime();
-    return Number.isFinite(t) && t > Date.now();
+    const local = parseLocalDateTime(values.scheduledDate, values.scheduledTime);
+    return !!local && local.getTime() > Date.now();
   }, [hasDate, hasTime, values.scheduledDate, values.scheduledTime]);
 
   const pinOk = !values.isPrivate || values.privatePin === '' || /^\d{4,12}$/.test(values.privatePin);
@@ -62,11 +64,15 @@ export function MttStepName() {
           </div>
 
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-            <div>
+            <div
+              className="cursor-pointer"
+              onClick={() => openDateOrTimePicker(dateInputRef.current)}
+            >
               <label htmlFor="mtt-date" className={LABEL_CLASS}>
                 Start date
               </label>
               <input
+                ref={dateInputRef}
                 id="mtt-date"
                 type="date"
                 value={values.scheduledDate}
@@ -75,15 +81,20 @@ export function MttStepName() {
                 className={FIELD_CLASS}
               />
             </div>
-            <div>
+            <div
+              className="cursor-pointer"
+              onClick={() => openDateOrTimePicker(timeInputRef.current)}
+            >
               <label htmlFor="mtt-time" className={LABEL_CLASS}>
                 Start time
               </label>
               <input
+                ref={timeInputRef}
                 id="mtt-time"
                 type="time"
-                value={values.scheduledTime}
-                onChange={(e) => setValues({ scheduledTime: e.target.value })}
+                step={60}
+                value={values.scheduledTime.length >= 5 ? values.scheduledTime.slice(0, 5) : values.scheduledTime}
+                onChange={(e) => setValues({ scheduledTime: e.target.value.slice(0, 5) })}
                 className={FIELD_CLASS}
               />
             </div>
