@@ -155,7 +155,7 @@ export default function ThemeSelectionModal({
   return createPortal(
     <>
       <div
-        className="fixed inset-0 z-[100000] flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm"
+        className="fixed inset-0 z-[200000] flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm"
         onClick={onClose}
       >
         <div
@@ -295,7 +295,7 @@ export default function ThemeSelectionModal({
       {/* Expand overlay */}
       {expandSrc && (
         <div
-          className="fixed inset-0 z-[100001] flex items-center justify-center p-4 bg-black/90"
+          className="fixed inset-0 z-[200001] flex items-center justify-center p-4 bg-black/90"
           onClick={() => {
             setExpandSrc(null)
             setExpandVideo(false)
