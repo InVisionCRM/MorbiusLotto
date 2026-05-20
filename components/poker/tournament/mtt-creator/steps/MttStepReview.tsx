@@ -9,6 +9,7 @@ import {
   type PokerBlindIncreaseMode,
 } from '@/hooks/use-poker-tournament';
 import { buildPrizePercents, findPokerPrizePresetMeta } from '@/lib/poker-tournament-prize-presets';
+import { parseLocalDateTime } from '@/lib/poker-tournament-schedule';
 import { MTT_STEP_TAGS, MTT_WIZARD_STEPS, useMttCreator, type MttWizardScreen } from '../MttCreatorContext';
 import type { MttFormValues } from '../MttCreatorContext';
 
@@ -273,8 +274,9 @@ interface Validation {
 function validateValues(v: MttFormValues): Validation {
   if (!v.name.trim() || v.name.trim().length < 3) return { ok: false, firstError: 'name is required' };
   if (!v.scheduledDate || !v.scheduledTime) return { ok: false, firstError: 'start time is required' };
-  const start = new Date(`${v.scheduledDate}T${v.scheduledTime}`).getTime();
-  if (!Number.isFinite(start) || start <= Date.now()) return { ok: false, firstError: 'start time must be in the future' };
+  const startLocal = parseLocalDateTime(v.scheduledDate, v.scheduledTime);
+  if (!startLocal || !Number.isFinite(startLocal.getTime())) return { ok: false, firstError: 'start time is invalid' };
+  if (startLocal.getTime() <= Date.now()) return { ok: false, firstError: 'start time must be in the future' };
   if (v.buyInMode === 'chips') {
     if (!/^\d+$/.test(v.buyInChips) || Number(v.buyInChips) <= 0) return { ok: false, firstError: 'buy-in must be positive' };
   } else {
@@ -301,7 +303,10 @@ function buildCreateParams(v: MttFormValues): CreatePokerTournamentParams | null
   const prizeSlotCount = Math.min(10, v.maxPlayers);
   const prizePercentages = buildPrizePercents(v.prizePresetId, prizeSlotCount);
 
-  const scheduledStartAtIso = new Date(`${v.scheduledDate}T${v.scheduledTime}`).toISOString();
+  // Use the shared local-time parser so the wall-clock instant the user picked survives the
+  // round-trip into UTC. `new Date(\`${date}T${time}\`)` happens to behave the same way on
+  // modern browsers but `parseLocalDateTime` is explicit and matches the classic creator.
+  const scheduledStartAtIso = parseLocalDateTime(v.scheduledDate, v.scheduledTime)!.toISOString();
 
   // Freerolls have buy-in 0 + guaranteed pool from creator chip wallet.
   // Buy-in tournaments have positive buy-in and no guaranteed pool.
