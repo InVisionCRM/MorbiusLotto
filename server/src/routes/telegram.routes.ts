@@ -35,10 +35,12 @@ import {
   verifyTelegramInitData,
 } from '../services/telegram.service';
 import { getPokerChipBalance } from '../services/poker-chip-wallet';
+import type { DatabaseService } from '../services/database.service';
 
 interface RegisterTelegramRoutesOptions {
   app: Express;
   pool: Pool;
+  dbService: DatabaseService;
 }
 
 /** Validate + normalize an EVM wallet address to lowercase. Returns null if bad. */
@@ -54,7 +56,7 @@ function getBotUsername(): string | null {
   return u.length > 0 ? u : null;
 }
 
-export function registerTelegramRoutes({ app, pool }: RegisterTelegramRoutesOptions): void {
+export function registerTelegramRoutes({ app, pool, dbService }: RegisterTelegramRoutesOptions): void {
   // -------------------------------------------------------------------------
   // POST /api/telegram/webhook — inbound updates from Telegram.
   // -------------------------------------------------------------------------
@@ -368,6 +370,74 @@ export function registerTelegramRoutes({ app, pool }: RegisterTelegramRoutesOpti
     } catch (err) {
       logger.error('[telegram] miniapp session failed', { error: (err as Error).message });
       return res.status(500).json({ ok: false, error: 'Could not load your session.' });
+    }
+  });
+
+  // -------------------------------------------------------------------------
+  // POST /api/telegram/miniapp/profile — save the linked player's profile
+  // (avatar, display name, bio, X / Telegram handles) from inside the Mini App.
+  // Auth is the signed Telegram `initData`; a player can only write their own
+  // linked wallet. No funds are touched here. Field handling mirrors the
+  // website's POST /api/player/profile route.
+  // -------------------------------------------------------------------------
+  app.post('/api/telegram/miniapp/profile', async (req: Request, res: Response) => {
+    const initData = typeof req.body?.initData === 'string' ? req.body.initData : '';
+    const tgUser = verifyTelegramInitData(initData);
+    if (!tgUser) {
+      return res.status(401).json({ ok: false, error: 'Invalid or expired Telegram session.' });
+    }
+    try {
+      const linkRow = await pool.query(
+        'SELECT wallet_address FROM telegram_links WHERE telegram_chat_id = $1',
+        [tgUser.id],
+      );
+      if (linkRow.rows.length === 0) {
+        return res
+          .status(403)
+          .json({ ok: false, error: 'No wallet is linked to this Telegram account.' });
+      }
+      const wallet = String(linkRow.rows[0].wallet_address);
+      const body = (req.body ?? {}) as Record<string, unknown>;
+
+      // display_name is always written by setDisplayName, so fall back to the
+      // current stored value when the Mini App sends a blank name.
+      const current = await dbService.getProfile(wallet);
+      const rawName =
+        typeof body.displayName === 'string' ? body.displayName.trim().slice(0, 32) : '';
+      const displayName = rawName || current?.displayName || 'MORBIUS player';
+
+      // A string updates the field; a blank/missing value leaves the stored
+      // value untouched (setDisplayName COALESCEs NULLs to the existing value).
+      const avatarConfig =
+        body.avatarConfig != null && typeof body.avatarConfig === 'object'
+          ? (body.avatarConfig as Record<string, unknown>)
+          : undefined;
+      const bio =
+        typeof body.bio === 'string' ? body.bio.trim().slice(0, 200) || null : undefined;
+      const xHandle =
+        typeof body.xHandle === 'string'
+          ? body.xHandle.trim().replace(/^@/, '').slice(0, 50) || null
+          : undefined;
+      const tgHandle =
+        typeof body.tgHandle === 'string'
+          ? body.tgHandle.trim().replace(/^@/, '').slice(0, 50) || null
+          : undefined;
+
+      await dbService.setDisplayName(
+        wallet,
+        displayName,
+        undefined,
+        avatarConfig,
+        bio,
+        xHandle,
+        tgHandle,
+        undefined,
+      );
+      const profile = await dbService.getProfile(wallet);
+      return res.json({ ok: true, profile });
+    } catch (err) {
+      logger.error('[telegram] miniapp profile save failed', { error: (err as Error).message });
+      return res.status(500).json({ ok: false, error: 'Could not save your profile.' });
     }
   });
 
