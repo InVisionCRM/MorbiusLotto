@@ -13,7 +13,7 @@
  *      (this file just provides setTelegramWebhook() to register that webhook).
  */
 
-import { randomInt } from 'crypto';
+import { randomInt, createHmac } from 'crypto';
 import { logger } from '../utils/logger';
 
 const TELEGRAM_API_BASE = 'https://api.telegram.org';
@@ -249,4 +249,50 @@ export function shortWallet(address: string): string {
   const a = (address || '').trim();
   if (a.length < 12) return a;
   return `${a.slice(0, 6)}…${a.slice(-4)}`;
+}
+
+export interface TelegramWebAppUser {
+  id: number;
+  username?: string;
+  firstName?: string;
+}
+
+/**
+ * Verify a Telegram Mini App `initData` string against the bot token, using
+ * Telegram's documented HMAC-SHA256 scheme. Returns the authenticated user, or
+ * null when the signature is invalid, the data is stale (>24h), or the token is
+ * unset. This is the trust anchor for the Mini App — never skip it.
+ */
+export function verifyTelegramInitData(initData: string): TelegramWebAppUser | null {
+  const token = getBotToken();
+  if (!token || !initData) return null;
+  try {
+    const params = new URLSearchParams(initData);
+    const hash = params.get('hash');
+    if (!hash) return null;
+    params.delete('hash');
+
+    // data_check_string: every remaining pair as "key=value", sorted by key,
+    // joined with newlines.
+    const dataCheckString = [...params.entries()]
+      .sort((a, b) => a[0].localeCompare(b[0]))
+      .map(([k, v]) => `${k}=${v}`)
+      .join('\n');
+
+    const secretKey = createHmac('sha256', 'WebAppData').update(token).digest();
+    const computed = createHmac('sha256', secretKey).update(dataCheckString).digest('hex');
+    if (computed !== hash) return null;
+
+    // Reject stale initData (older than 24h) to limit replay.
+    const authDate = Number(params.get('auth_date') || '0');
+    if (!authDate || Date.now() / 1000 - authDate > 86_400) return null;
+
+    const userRaw = params.get('user');
+    if (!userRaw) return null;
+    const user = JSON.parse(userRaw) as { id?: number; username?: string; first_name?: string };
+    if (!user || typeof user.id !== 'number') return null;
+    return { id: user.id, username: user.username, firstName: user.first_name };
+  } catch {
+    return null;
+  }
 }

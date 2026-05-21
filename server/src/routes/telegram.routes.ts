@@ -32,7 +32,9 @@ import {
   getPublicAppUrl,
   isTelegramConfigured,
   shortWallet,
+  verifyTelegramInitData,
 } from '../services/telegram.service';
+import { getPokerChipBalance } from '../services/poker-chip-wallet';
 
 interface RegisterTelegramRoutesOptions {
   app: Express;
@@ -91,10 +93,10 @@ export function registerTelegramRoutes({ app, pool }: RegisterTelegramRoutesOpti
         if (!arg) {
           await sendTelegramMessage(
             chatId,
-            '👋 Welcome to MORBlotto notifications!\n\n' +
+            '👋 Welcome to MORBIUS notifications!\n\n' +
               'To get pinged when your poker tournaments are about to start, link your ' +
               'wallet:\n\n' +
-              '1. Open Settings → Notifications on the MORBlotto website.\n' +
+              '1. Open Settings → Notifications on the MORBIUS website.\n' +
               '2. Tap "Link Telegram" to get a 6-character code.\n' +
               '3. Send it here as:  /link YOURCODE\n\n' +
               'Send /help anytime to see commands.',
@@ -108,7 +110,7 @@ export function registerTelegramRoutes({ app, pool }: RegisterTelegramRoutesOpti
             await sendTelegramMessage(
               chatId,
               `✅ Linked to wallet ${shortWallet(result.wallet)}.\n\n` +
-                "You'll get a heads-up here when your MORBlotto poker tournaments are " +
+                "You'll get a heads-up here when your MORBIUS poker tournaments are " +
                 'about to start. Send /unlink anytime to stop.',
             );
           } else {
@@ -161,7 +163,7 @@ export function registerTelegramRoutes({ app, pool }: RegisterTelegramRoutesOpti
         await sendTelegramMessage(
           chatId,
           `This chat's ID is:\n\n<code>${chatId}</code>\n\n` +
-            'To make this group the MORBlotto activity feed, set ' +
+            'To make this group the MORBIUS activity feed, set ' +
             'TELEGRAM_GROUP_CHAT_ID to that value in the server environment.',
           { parseMode: 'HTML' },
         );
@@ -171,7 +173,7 @@ export function registerTelegramRoutes({ app, pool }: RegisterTelegramRoutesOpti
       // /help and everything else.
       await sendTelegramMessage(
         chatId,
-        'MORBlotto bot commands:\n\n' +
+        'MORBIUS bot commands:\n\n' +
           '/link <code> — connect your wallet (get a code from the website: Settings → Notifications)\n' +
           '/unlink — disconnect and stop notifications\n' +
           '/help — show this message',
@@ -318,6 +320,55 @@ export function registerTelegramRoutes({ app, pool }: RegisterTelegramRoutesOpti
     }
     logger.info('[telegram] webhook registered', { url });
     res.json({ ok: true, url });
+  });
+
+  // -------------------------------------------------------------------------
+  // POST /api/telegram/miniapp/session — verify a Telegram Mini App `initData`
+  // payload and return the player's session: linked wallet, name, balances.
+  // This is the auth entry point for the whole Mini App.
+  // -------------------------------------------------------------------------
+  app.post('/api/telegram/miniapp/session', async (req: Request, res: Response) => {
+    const initData = typeof req.body?.initData === 'string' ? req.body.initData : '';
+    const tgUser = verifyTelegramInitData(initData);
+    if (!tgUser) {
+      return res.status(401).json({ ok: false, error: 'Invalid or expired Telegram session.' });
+    }
+    try {
+      const linkRow = await pool.query(
+        'SELECT wallet_address FROM telegram_links WHERE telegram_chat_id = $1',
+        [tgUser.id],
+      );
+      if (linkRow.rows.length === 0) {
+        return res.json({
+          ok: true,
+          linked: false,
+          telegramUsername: tgUser.username ?? null,
+          telegramName: tgUser.firstName ?? null,
+        });
+      }
+      const wallet = String(linkRow.rows[0].wallet_address);
+      const [balRow, chips, nameRow] = await Promise.all([
+        pool.query('SELECT balance FROM players WHERE LOWER(wallet_address) = LOWER($1)', [wallet]),
+        getPokerChipBalance(pool, wallet),
+        pool.query(
+          'SELECT display_name FROM chat_display_names WHERE LOWER(wallet_address) = LOWER($1)',
+          [wallet],
+        ),
+      ]);
+      return res.json({
+        ok: true,
+        linked: true,
+        walletAddress: wallet,
+        telegramUsername: tgUser.username ?? null,
+        telegramName: tgUser.firstName ?? null,
+        displayName: nameRow.rows[0]?.display_name ?? null,
+        morbiusBalanceWei: balRow.rows[0]?.balance != null ? String(balRow.rows[0].balance) : '0',
+        chipBalance: chips.toString(),
+      });
+    } catch (err) {
+      logger.error('[telegram] miniapp session failed', { error: (err as Error).message });
+      return res.status(500).json({ ok: false, error: 'Could not load your session.' });
+    }
   });
 
   logger.info('[telegram] routes registered');

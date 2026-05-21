@@ -5,6 +5,46 @@ Each entry records what changed, why, and the verification outcome.
 
 ---
 
+## 2026-05-21 — Telegram Mini App, Phase 1 (foundation + home hub)
+
+**What & why:** First slice of the MORBIUS Telegram Mini App — an account hub
+that opens inside Telegram. Phase 1 lays the foundation: a chrome-free route,
+the Telegram WebApp SDK, verified auth, and the home screen. Phases 2–3 (stats,
+wallet/swap, profile + avatar editor) build on this.
+
+### Added
+
+- `app/tg/page.tsx` — the Mini App route `/tg`, with no site chrome. Loads
+  Telegram's WebApp SDK, sends the signed `initData` to the backend, and renders
+  the home hub: avatar + name, MORBIUS + poker-chip balances, and section tiles
+  (Profile, Stats, Wallet — marked "Soon", wired up in Phases 2–3). Handles the
+  not-linked and opened-outside-Telegram states cleanly.
+- `POST /api/telegram/miniapp/session` — verifies a Telegram Mini App `initData`
+  payload and returns the player's session (linked wallet, display name,
+  MORBIUS + chip balances).
+- `verifyTelegramInitData()` in `telegram.service.ts` — Telegram's documented
+  HMAC-SHA256 `initData` validation; rejects invalid or stale (>24h) signatures.
+  This is the Mini App's trust anchor.
+
+### Changed
+
+- Renamed "MORBlotto" → "MORBIUS" in all Telegram-facing text (bot messages,
+  the link UI). Pre-existing non-Telegram occurrences were left untouched.
+
+### Verification outcome
+
+- All changed/new files transpile clean; backend `tsc --noEmit` clean; ESLint
+  clean on `app/tg/page.tsx`.
+- **Not yet done:** live test — needs the Mini App registered with BotFather.
+
+### Action items for the user
+
+1. Register the Mini App with `@BotFather` — `/newapp`, point it at
+   `https://morbius.io/tg` (and/or set it as the bot's Menu Button).
+2. Deploy. Opening the Mini App from the bot then loads the hub.
+
+---
+
 ## 2026-05-21 — Telegram tournament feed ("The Rail") + player DM alerts
 
 **What & why:** A live Telegram feed of poker tournament activity. When a
