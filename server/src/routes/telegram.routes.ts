@@ -28,11 +28,14 @@ import { logger } from '../utils/logger';
 import {
   sendTelegramMessage,
   setTelegramWebhook,
+  setTelegramCommands,
+  setTelegramMenuButton,
   generateLinkCode,
   getPublicAppUrl,
   isTelegramConfigured,
   shortWallet,
   verifyTelegramInitData,
+  type TelegramCommand,
 } from '../services/telegram.service';
 import { getPokerChipBalance } from '../services/poker-chip-wallet';
 import type { DatabaseService } from '../services/database.service';
@@ -56,6 +59,15 @@ function getBotUsername(): string | null {
   return u.length > 0 ? u : null;
 }
 
+/** The wallet linked to a Telegram chat, or null when the chat isn't linked. */
+async function getLinkedWallet(pool: Pool, chatId: number): Promise<string | null> {
+  const r = await pool.query(
+    'SELECT wallet_address FROM telegram_links WHERE telegram_chat_id = $1',
+    [chatId],
+  );
+  return r.rows.length > 0 ? String(r.rows[0].wallet_address) : null;
+}
+
 export function registerTelegramRoutes({ app, pool, dbService }: RegisterTelegramRoutesOptions): void {
   // -------------------------------------------------------------------------
   // POST /api/telegram/webhook — inbound updates from Telegram.
@@ -77,6 +89,7 @@ export function registerTelegramRoutes({ app, pool, dbService }: RegisterTelegra
     try {
       const message = req.body?.message;
       const chatId = Number(message?.chat?.id);
+      const chatType = typeof message?.chat?.type === 'string' ? message.chat.type : '';
       const text = typeof message?.text === 'string' ? message.text.trim() : '';
       const fromUsername =
         typeof message?.from?.username === 'string' ? message.from.username : null;
@@ -172,12 +185,152 @@ export function registerTelegramRoutes({ app, pool, dbService }: RegisterTelegra
         return res.json({ ok: true });
       }
 
+      if (command === '/app') {
+        const base = getPublicAppUrl() || 'https://morbius.io';
+        if (chatType === 'private') {
+          await sendTelegramMessage(
+            chatId,
+            '🎮 Your MORBIUS hub — balances, stats, wallet and profile in one place.',
+            { buttons: [{ text: 'Open MORBIUS', webAppUrl: `${base}/tg` }] },
+          );
+        } else {
+          const bot = getBotUsername();
+          await sendTelegramMessage(
+            chatId,
+            'Open the MORBIUS app from a direct chat with me — tap the menu button there, ' +
+              'or use the link below.',
+            bot ? { buttons: [{ text: 'Message the MORBIUS bot', url: `https://t.me/${bot}` }] } : {},
+          );
+        }
+        return res.json({ ok: true });
+      }
+
+      if (command === '/balance') {
+        if (chatType !== 'private') {
+          await sendTelegramMessage(
+            chatId,
+            'Send /balance to me in a direct message — I will not post your balance in a group.',
+          );
+          return res.json({ ok: true });
+        }
+        const wallet = await getLinkedWallet(pool, chatId);
+        if (!wallet) {
+          await sendTelegramMessage(
+            chatId,
+            'No wallet is linked yet. Get a code on the website (Settings → Notifications) ' +
+              'and send:  /link YOURCODE',
+          );
+          return res.json({ ok: true });
+        }
+        try {
+          const [balRow, chips] = await Promise.all([
+            pool.query('SELECT balance FROM players WHERE LOWER(wallet_address) = LOWER($1)', [
+              wallet,
+            ]),
+            getPokerChipBalance(pool, wallet),
+          ]);
+          const wei =
+            balRow.rows[0]?.balance != null
+              ? BigInt(String(balRow.rows[0].balance).split('.')[0] || '0')
+              : 0n;
+          const morbius = (wei / 10n ** 18n).toLocaleString('en-US');
+          await sendTelegramMessage(
+            chatId,
+            '💰 Your MORBIUS balance\n\n' +
+              `MORBIUS: ${morbius}\n` +
+              `Poker chips: ${chips.toLocaleString('en-US')}`,
+          );
+        } catch (err) {
+          logger.error('[telegram] /balance failed', { error: (err as Error).message });
+          await sendTelegramMessage(chatId, '⚠️ Could not load your balance. Try again shortly.');
+        }
+        return res.json({ ok: true });
+      }
+
+      if (command === '/stats') {
+        if (chatType !== 'private') {
+          await sendTelegramMessage(
+            chatId,
+            'Send /stats to me in a direct message for your personal poker numbers.',
+          );
+          return res.json({ ok: true });
+        }
+        const wallet = await getLinkedWallet(pool, chatId);
+        if (!wallet) {
+          await sendTelegramMessage(
+            chatId,
+            'No wallet is linked yet. Get a code on the website (Settings → Notifications) ' +
+              'and send:  /link YOURCODE',
+          );
+          return res.json({ ok: true });
+        }
+        try {
+          const s = await dbService.getPokerPlayerStats(wallet, 'all');
+          const pl = BigInt(String(s.profit_loss || '0').split('.')[0] || '0');
+          const plText = `${pl >= 0n ? '+' : '-'}${(pl < 0n ? -pl : pl).toLocaleString('en-US')}`;
+          await sendTelegramMessage(
+            chatId,
+            '♠️ Your poker stats (all games)\n\n' +
+              `Hands played: ${s.total_hands.toLocaleString('en-US')}\n` +
+              `Win rate: ${s.win_rate.toFixed(1)}%\n` +
+              `Net profit/loss: ${plText} chips\n` +
+              `Best streak: ${s.best_streak}`,
+          );
+        } catch (err) {
+          logger.error('[telegram] /stats failed', { error: (err as Error).message });
+          await sendTelegramMessage(chatId, '⚠️ Could not load your stats. Try again shortly.');
+        }
+        return res.json({ ok: true });
+      }
+
+      if (command === '/lobby') {
+        const base = getPublicAppUrl() || 'https://morbius.io';
+        try {
+          const open = await pool.query(
+            `SELECT name, buy_in_amount, registered_count, max_players
+               FROM poker_tournament_registrations
+              WHERE status = 'registration' AND COALESCE(is_private, FALSE) = FALSE
+              ORDER BY created_at DESC
+              LIMIT 10`,
+          );
+          if (open.rows.length === 0) {
+            await sendTelegramMessage(
+              chatId,
+              'No tournaments are open for registration right now. Check back soon — ' +
+                'or start one yourself.',
+              { buttons: [{ text: 'Open the poker lobby', url: `${base}/poker` }] },
+            );
+            return res.json({ ok: true });
+          }
+          const lines = open.rows.map((t) => {
+            const raw = BigInt(String(t.buy_in_amount ?? '0').split('.')[0] || '0');
+            const buy = raw > 0n ? `${raw.toLocaleString('en-US')} buy-in` : 'Free';
+            const seats = `${Number(t.registered_count ?? 0)}/${Number(t.max_players ?? 0)} players`;
+            return `• ${t.name} — ${buy} · ${seats}`;
+          });
+          await sendTelegramMessage(
+            chatId,
+            `🎲 Tournaments open now (${open.rows.length})\n\n${lines.join('\n')}`,
+            { buttons: [{ text: 'Open the poker lobby', url: `${base}/poker` }] },
+          );
+        } catch (err) {
+          logger.error('[telegram] /lobby failed', { error: (err as Error).message });
+          await sendTelegramMessage(chatId, '⚠️ Could not load the lobby. Try again shortly.');
+        }
+        return res.json({ ok: true });
+      }
+
       // /help and everything else.
       await sendTelegramMessage(
         chatId,
         'MORBIUS bot commands:\n\n' +
-          '/link <code> — connect your wallet (get a code from the website: Settings → Notifications)\n' +
+          '/app — open the MORBIUS app (hub, stats, wallet, profile)\n' +
+          '/balance — your MORBIUS + poker chip balance\n' +
+          '/stats — your poker stats\n' +
+          '/lobby — tournaments open right now\n' +
+          '/link <code> — connect your wallet (code from the website: Settings → Notifications)\n' +
           '/unlink — disconnect and stop notifications\n' +
+          '/chatid — show the chat ID (for group setup)\n' +
           '/help — show this message',
       );
       return res.json({ ok: true });
@@ -322,6 +475,37 @@ export function registerTelegramRoutes({ app, pool, dbService }: RegisterTelegra
     }
     logger.info('[telegram] webhook registered', { url });
     res.json({ ok: true, url });
+  });
+
+  // -------------------------------------------------------------------------
+  // POST /api/admin/telegram/setup-bot — register the bot's "/" command menu
+  // and point its menu button at the Mini App. Run once (and again after the
+  // command list changes). Mounted under /api/admin so it inherits the guard.
+  // -------------------------------------------------------------------------
+  app.post('/api/admin/telegram/setup-bot', async (_req: Request, res: Response) => {
+    if (!isTelegramConfigured()) {
+      return res.status(503).json({ error: 'TELEGRAM_BOT_TOKEN is not set on the server.' });
+    }
+    const commands: TelegramCommand[] = [
+      { command: 'app', description: 'Open the MORBIUS app' },
+      { command: 'balance', description: 'Your MORBIUS + poker chip balance' },
+      { command: 'stats', description: 'Your poker stats' },
+      { command: 'lobby', description: 'Tournaments open right now' },
+      { command: 'link', description: 'Connect your wallet' },
+      { command: 'unlink', description: 'Stop notifications' },
+      { command: 'chatid', description: 'Show the chat ID (group setup)' },
+      { command: 'help', description: 'Show all commands' },
+    ];
+    const commandsResult = await setTelegramCommands(commands);
+    const base = getPublicAppUrl();
+    const menuResult = base
+      ? await setTelegramMenuButton(`${base}/tg`, 'Open MORBIUS')
+      : { ok: false, error: 'PUBLIC_APP_URL is not set — cannot build the Mini App URL.' };
+    return res.json({
+      ok: commandsResult.ok && menuResult.ok,
+      commands: commandsResult,
+      menuButton: menuResult,
+    });
   });
 
   // -------------------------------------------------------------------------

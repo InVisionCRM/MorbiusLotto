@@ -5,6 +5,47 @@ Each entry records what changed, why, and the verification outcome.
 
 ---
 
+## 2026-05-21 — Telegram bot: menu button, command menu & new commands
+
+**What & why:** Makes the bot a real front door to MORBIUS. Adds a persistent
+Mini App launch button, a proper "/" command menu, and four self-service
+commands so players can do things without opening anything.
+
+### Added
+
+- `setTelegramMenuButton()` + `setTelegramCommands()` in `telegram.service.ts`
+  — thin Bot API wrappers (`setChatMenuButton`, `setMyCommands`), best-effort
+  like the rest of the file. `TelegramButton` now also supports `web_app`
+  buttons.
+- New bot commands in the webhook handler:
+  - `/app` — opens the Mini App. In a private chat it sends a Web App button;
+    in a group it points to a DM with the bot.
+  - `/balance` — the linked wallet's MORBIUS + poker chip balance (private
+    chats only, for privacy).
+  - `/stats` — the linked wallet's poker stats (private chats only).
+  - `/lobby` — lists tournaments open for registration right now, with a
+    button through to the poker lobby. Works in DMs and groups.
+- `POST /api/admin/telegram/setup-bot` — one-time admin endpoint that registers
+  the command menu and sets the menu button to open the Mini App
+  (`PUBLIC_APP_URL` + `/tg`). Mounted under `/api/admin` so it inherits the
+  admin guard.
+
+### Changed
+
+- `/help` now lists every command.
+
+### Verification outcome
+
+- Both changed server files transpile clean (`ts.transpileModule`).
+- Hand-reviewed: command handlers follow the existing webhook dispatch pattern;
+  balance/stats are gated to private chats; all DB reads are wrapped so a
+  failure replies gracefully instead of throwing.
+- **Action item:** after deploy, call `POST /api/admin/telegram/setup-bot` once
+  (with the admin secret) so the menu button and "/" command menu appear.
+- **Not yet done:** live test in Telegram — needs deploy.
+
+---
+
 ## 2026-05-21 — Telegram Mini App, Phase 3 (Profile + avatar editor)
 
 **What & why:** The last "Soon" tile on the Mini App hub is now live. Players
