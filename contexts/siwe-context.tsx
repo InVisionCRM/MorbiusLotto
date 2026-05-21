@@ -62,12 +62,28 @@ export function SiweProvider({ children }: { children: React.ReactNode }) {
       try {
         const me: { address?: string } = await fetchJson(`${base}/api/auth/me`);
         if (cancelled) return;
-        if (me.address && connectedAddress && me.address.toLowerCase() === connectedAddress.toLowerCase()) {
+        const sessionAddrLower = me.address?.toLowerCase();
+        const connectedAddrLower = connectedAddress?.toLowerCase();
+        if (sessionAddrLower && connectedAddrLower && sessionAddrLower === connectedAddrLower) {
           setAuthedAddress(me.address as `0x${string}`);
-        } else {
-          // Either no session, or session is for a different wallet (user switched accounts).
-          setAuthedAddress(null);
+          return;
         }
+        // Cookie is for a different wallet than the one currently connected.
+        // Clear it now — otherwise the WS upgrade keeps authenticating as the
+        // old wallet via the stale cookie, so server-side `ws.playerAddress`
+        // (and admin/per-wallet checks) stay pinned to the previous account
+        // even though the UI shows the new one. We require `connectedAddrLower`
+        // to be set so we don't nuke the session during a brief disconnect
+        // (e.g. opening MetaMask to switch accounts).
+        if (sessionAddrLower && connectedAddrLower && sessionAddrLower !== connectedAddrLower) {
+          try {
+            await fetch(`${base}/api/auth/logout`, { method: 'POST', credentials: 'include' });
+            if (typeof window !== 'undefined') {
+              window.dispatchEvent(new CustomEvent('siwe:session-cleared', { detail: { reason: 'wallet-mismatch' } }));
+            }
+          } catch { /* best-effort; next 401 will recover */ }
+        }
+        if (!cancelled) setAuthedAddress(null);
       } catch {
         if (!cancelled) setAuthedAddress(null);
       }
@@ -142,6 +158,9 @@ export function SiweProvider({ children }: { children: React.ReactNode }) {
     if (!base) return;
     try {
       await fetch(`${base}/api/auth/logout`, { method: 'POST', credentials: 'include' });
+      if (typeof window !== 'undefined') {
+        window.dispatchEvent(new CustomEvent('siwe:session-cleared', { detail: { reason: 'sign-out' } }));
+      }
     } finally {
       setAuthedAddress(null);
     }

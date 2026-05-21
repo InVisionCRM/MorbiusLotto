@@ -365,6 +365,8 @@ export class BlackjackWebSocketClient {
     }
   }
 
+  private sessionClearedHandler: (() => void) | null = null;
+
   constructor(
     private serverUrl: string,
     private playerAddress?: string,
@@ -376,6 +378,19 @@ export class BlackjackWebSocketClient {
       );
     }
     this.signTypedData = signTypedData ?? null;
+
+    // When SiweProvider clears the session cookie (wallet mismatch / manual sign-out),
+    // drop the current socket so it can't keep authenticating as the old wallet.
+    // The next caller of connect() will hit `siwe_required` and prompt a fresh SIWE
+    // sign-in for whichever wallet is now connected.
+    if (typeof window !== 'undefined') {
+      this.sessionClearedHandler = () => {
+        if (this.ws) {
+          try { this.ws.close(); } catch { /* ignore */ }
+        }
+      };
+      window.addEventListener('siwe:session-cleared', this.sessionClearedHandler);
+    }
   }
 
   /**
@@ -622,6 +637,10 @@ export class BlackjackWebSocketClient {
   disconnect() {
     this.intentionalClose = true;
     this.rejectAllPendingRequests('WebSocket disconnected');
+    if (typeof window !== 'undefined' && this.sessionClearedHandler) {
+      window.removeEventListener('siwe:session-cleared', this.sessionClearedHandler);
+      this.sessionClearedHandler = null;
+    }
     if (this.ws) {
       const w = this.ws;
       this.ws = null;
