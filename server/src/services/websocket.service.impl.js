@@ -403,6 +403,52 @@ class WebSocketService {
         }
         // ── End cookie-first path. Fall through to legacy challenge / query-param.
 
+        // ── Bot-token auth ────────────────────────────────────────────────
+        // Server-side scripts (poker-bot, simulators, CI) authenticate by
+        // sending a shared secret in the `x-bot-auth-token` header. The
+        // claimed `?address=` must also appear in POKER_BOT_ADDRESSES. This
+        // path is unreachable from browsers because the WebSocket API in
+        // browsers can't set custom headers on upgrade requests — even if
+        // the token leaked into a client bundle, a browser couldn't use it.
+        // Order matters: we check this BEFORE the browser-origin SIWE
+        // branch so a bot connection that also happens to have an `Origin`
+        // (curl test, etc.) still authenticates correctly.
+        const botToken = typeof request.headers['x-bot-auth-token'] === 'string'
+            ? request.headers['x-bot-auth-token']
+            : Array.isArray(request.headers['x-bot-auth-token'])
+                ? request.headers['x-bot-auth-token'][0]
+                : undefined;
+        const expectedBotToken = process.env.POKER_BOT_AUTH_TOKEN?.trim();
+        if (botToken && expectedBotToken && botToken === expectedBotToken && claimedAddress) {
+            const botAddresses = (process.env.POKER_BOT_ADDRESSES ?? '')
+                .split(',')
+                .map(a => a.trim().toLowerCase())
+                .filter(Boolean);
+            if (botAddresses.includes(claimedAddress)) {
+                ws.playerAddress = claimedAddress;
+                ws.isAuthenticated = true;
+                logger_1.logger.info('WS Auth: bot token accepted', { connectionId, playerAddress: claimedAddress });
+                try {
+                    const player = await this.dbService.getOrCreatePlayer(claimedAddress);
+                    await this.dbService.addActiveConnection(player.id, connectionId);
+                }
+                catch (error) {
+                    logger_1.logger.error('Failed to track active connection (bot auth)', { connectionId, playerAddress: claimedAddress, error });
+                }
+                let pokerChipBalance = '0';
+                try {
+                    pokerChipBalance = (await (0, poker_chip_wallet_1.getPokerChipBalance)(this.dbService.getPool(), claimedAddress)).toString();
+                }
+                catch (_c) { /* ignore */ }
+                this.sendMessage(ws, {
+                    type: 'connection_established',
+                    payload: { connectionId, playerAddress: claimedAddress, pokerChipBalance }
+                });
+                return;
+            }
+            logger_1.logger.warn('WS Auth: bot token presented but address not in POKER_BOT_ADDRESSES', { connectionId, claimedAddress });
+        }
+
         // For BROWSER clients with no valid cookie (e.g. user landed on poker
         // page before clicking deposit/withdraw), don't send the cryptic
         // EIP-712 challenge. Send `siwe_required` so the client can trigger

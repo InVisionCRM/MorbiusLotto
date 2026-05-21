@@ -25,7 +25,11 @@
  *     Cash and tournament modes use the same POKER_BOT_ADDRESSES list — no separate tournament wallets.
  *   POKER_BOT_SKIP_DB - If 1/true, skip all DB writes (you must already have players + balance).
  *   POKER_BOT_BUY_IN - Buy-in amount in human chips (default: 1000)
- *   POKER_BOT_ADDRESSES - Comma-separated bot wallet addresses (preferred in production)
+ *   POKER_BOT_ADDRESSES - Comma-separated bot wallet addresses. Server uses the same env var as an
+ *     allowlist for the bot-token auth path, so the value MUST match what's set server-side.
+ *   POKER_BOT_AUTH_TOKEN - Shared secret. Sent as `x-bot-auth-token` on the WS upgrade. Server must
+ *     have the same value in its env, plus the bot's wallet in POKER_BOT_ADDRESSES. Without this,
+ *     bots can't connect to a server running with SIWE / REQUIRE_WS_AUTH (i.e. any prod-like setup).
  *   POKER_BOT_TOURNAMENT_ID - UUID of poker tournament (alternative to --tournament)
  *   POKER_BOT_TOURNAMENT_PIN - PIN for private tournaments
  *   CYPRESS_POKER_TEST_PLAYERS / POKER_TEST_PLAYERS - fallback wallet list
@@ -106,8 +110,15 @@ function formatError(err: unknown): string {
 function createWsClient(address: string): Promise<WebSocket> {
   const url = WS_URL.replace(/^https/, 'wss').replace(/^http/, 'ws');
   const withAuth = `${url}${url.includes('?') ? '&' : '?'}address=${address.toLowerCase()}`;
+  // Send the bot-auth shared secret if configured. Server bypasses SIWE /
+  // EIP-712 for upgrade requests that present a matching token AND a
+  // claimed address that's in POKER_BOT_ADDRESSES on the server side.
+  // Browsers can't set custom headers on WS upgrades, so this is safe to
+  // ship alongside SIWE without weakening browser auth.
+  const botToken = process.env.POKER_BOT_AUTH_TOKEN?.trim();
+  const headers = botToken ? { 'x-bot-auth-token': botToken } : undefined;
   return new Promise((resolve, reject) => {
-    const ws = new WebSocket(withAuth);
+    const ws = new WebSocket(withAuth, { headers });
     const timeout = setTimeout(() => {
       ws.close();
       reject(new Error('WS connect timeout'));
@@ -151,7 +162,20 @@ function waitForAuth(ws: WebSocket): Promise<void> {
           clearTimeout(timeout);
           ws.removeListener('message', handler);
           reject(new Error(
-            'Server requires signed WebSocket auth challenge. Bots cannot sign. Set DISABLE_WS_AUTH=true on server for local bot testing.'
+            'Server is asking for an EIP-712 signed auth challenge — bots have no private key. '
+            + 'Configure POKER_BOT_AUTH_TOKEN on the server AND POKER_BOT_ADDRESSES with this bot wallet, '
+            + 'then set the same POKER_BOT_AUTH_TOKEN in the bot script env. (For pure local testing without '
+            + 'tokens, DISABLE_WS_AUTH=true on the server still works.)'
+          ));
+        }
+        if (msg.type === 'siwe_required') {
+          clearTimeout(timeout);
+          ws.removeListener('message', handler);
+          reject(new Error(
+            'Server is asking for SIWE sign-in — bots cannot sign. This usually means POKER_BOT_AUTH_TOKEN '
+            + 'is missing or mismatched, OR this bot address is not in the server-side POKER_BOT_ADDRESSES list. '
+            + '(Note: the server only takes the SIWE-required path when it sees an Origin header, so if you see '
+            + 'this from a Node bot something is setting Origin on the upgrade.)'
           ));
         }
         if (msg.type === 'error') {
