@@ -38,7 +38,7 @@ import {
 } from '@/components/ui/accordion';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Dialog, DialogOverlay, DialogPortal } from '@/components/ui/dialog';
-import { TelegramNudgeDialog } from '@/components/settings/TelegramNudgeDialog';
+import { TelegramAlerts } from '@/components/telegram/TelegramAlerts';
 import * as DialogPrimitive from '@radix-ui/react-dialog';
 import { cn } from '@/lib/utils';
 import { BackgroundBeams } from '@/components/ui/background-beams';
@@ -1770,6 +1770,11 @@ export function PokerTournamentCreator({ creatorAddress, onClose, onCreate }: Po
                 Private PIN: <span className="font-mono font-semibold tracking-wider">{created.pinCode}</span>
               </p>
             )}
+            {creatorAddress && (
+              <div className="pt-1 text-left">
+                <TelegramAlerts walletAddress={creatorAddress} placement="panel" />
+              </div>
+            )}
             <div className="flex flex-col sm:flex-row gap-2 pt-2">
               <Link
                 href="/creators"
@@ -1806,9 +1811,6 @@ export function PokerTournamentCreator({ creatorAddress, onClose, onCreate }: Po
           shareTokenSymbol={shareOverlaySnapshot.shareTokenSymbol}
           shareTokenLogoUrl={shareOverlaySnapshot.shareTokenLogoUrl}
         />
-        {/* One-time nudge: offer Telegram notifications if this wallet hasn't
-            linked yet. Renders nothing when already linked. */}
-        <TelegramNudgeDialog walletAddress={creatorAddress} />
       </div>
     );
   }

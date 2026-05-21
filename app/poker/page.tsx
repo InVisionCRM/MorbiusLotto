@@ -30,6 +30,7 @@ import { PokerHouseRecords } from '@/components/poker/PokerHouseRecords';
 import { PokerTopPlayers } from '@/components/poker/PokerTopPlayers';
 import GlobalMainNav from '@/components/shared/GlobalMainNav';
 import { PokerTournamentLobby } from '@/components/poker/tournament/PokerTournamentLobby';
+import { TelegramAlerts } from '@/components/telegram/TelegramAlerts';
 import { PokerTournamentHistory } from '@/components/poker/tournament/PokerTournamentHistory';
 import {
   MorbCard,
@@ -784,6 +785,11 @@ export default function PokerLobbyPage() {
                       <p className="text-sm text-cyan-200/80 mb-4 rounded-lg border border-white/20 bg-cyan-500/5 px-3 py-2">
                         Connect your wallet to create or join Sit &amp; Go tournaments.
                       </p>
+                    )}
+                    {isConnected && address && (
+                      <div className="mb-4">
+                        <TelegramAlerts walletAddress={address} placement="panel" />
+                      </div>
                     )}
                     <PokerTournamentLobby
                       wsClient={wsClient}

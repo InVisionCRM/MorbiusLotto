@@ -5,6 +5,45 @@ Each entry records what changed, why, and the verification outcome.
 
 ---
 
+## 2026-05-21 — Telegram alerts moved into the app (settings page removed)
+
+**What & why:** Replaced the standalone `/settings` page with a compact,
+reusable "Telegram alerts" control, placed where it's actually useful: the
+wallet dropdown menu, the poker page, and the tournament-create success popup.
+A buried settings page nobody visits became an in-context control.
+
+### How it works
+
+- New `components/telegram/TelegramAlerts.tsx` — a "smart toggle", because
+  Telegram alerts can't be a plain switch:
+  - **Not linked** → flipping it on opens the one-time link flow (code → bot).
+  - **Linked** → a real on/off switch for notifications + a small Unlink link.
+  - Resilient — a failed status check still shows an actionable control (this
+    also fixes the empty-panel bug from the old settings page).
+  - Two placements: `menu` (wallet-dropdown row) and `panel` (bordered panel).
+
+### Changed
+
+- `components/shared/WalletMenu.tsx` — added the Telegram alerts row to the
+  wallet dropdown; the dropdown now stays open while the link modal is up so it
+  can't unmount the modal mid-flow.
+- `app/poker/page.tsx` — the alerts panel sits above the tournament lobby.
+- `components/poker/tournament/PokerTournamentCreator.tsx` — the create-success
+  popup now shows the inline alerts panel, replacing the old one-time nudge
+  dialog.
+
+### Removed
+
+- `app/settings/page.tsx`, `components/settings/TelegramLink.tsx`,
+  `components/settings/TelegramNudgeDialog.tsx` — superseded by the new control.
+  (`hooks/useTelegramStatus.ts` and the `/api/telegram` proxy are unchanged.)
+
+### Verification outcome
+
+- All changed files transpile clean; ESLint clean.
+
+---
+
 ## 2026-05-20 — Poker lobby shows every tournament
 
 **What & why:** The poker lobby previously hid empty tournaments older than 7
