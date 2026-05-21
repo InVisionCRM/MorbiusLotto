@@ -1,7 +1,8 @@
 /**
  * Jest global setup for poker tournament integration tests.
- * Uses the real DATABASE_URL from server/.env.
- * Each test should wrap mutations in a transaction and ROLLBACK for isolation.
+ * Prefers TEST_DATABASE_URL; falls back to DATABASE_URL only when it looks
+ * safe (localhost, or db name contains "test"). Set ALLOW_PROD_DB_FOR_TESTS=1
+ * to bypass — last resort, leaves leftover rows in prod on a crash.
  */
 import { Pool, PoolClient } from 'pg';
 import * as dotenv from 'dotenv';
@@ -9,6 +10,40 @@ import * as path from 'path';
 
 // Load server/.env (running from server/ directory via jest)
 dotenv.config({ path: path.resolve(__dirname, '../../.env') });
+
+function resolveTestDatabaseUrl(): string {
+  const explicit = process.env.TEST_DATABASE_URL;
+  if (explicit) return explicit;
+
+  const fallback = process.env.DATABASE_URL;
+  if (!fallback) {
+    throw new Error(
+      'No test database URL configured. Set TEST_DATABASE_URL (recommended) or DATABASE_URL in server/.env.',
+    );
+  }
+
+  if (process.env.ALLOW_PROD_DB_FOR_TESTS === '1') return fallback;
+
+  let host = '';
+  let dbName = '';
+  try {
+    const parsed = new URL(fallback);
+    host = parsed.hostname.toLowerCase();
+    dbName = parsed.pathname.replace(/^\//, '').toLowerCase();
+  } catch {
+    throw new Error(`DATABASE_URL is not a valid URL: ${fallback}`);
+  }
+
+  const looksLocal = host === 'localhost' || host === '127.0.0.1' || host === '::1';
+  const looksLikeTestDb = /test/.test(dbName);
+  if (looksLocal || looksLikeTestDb) return fallback;
+
+  throw new Error(
+    `Refusing to run integration tests against DATABASE_URL host "${host}" (db "${dbName}") — ` +
+      `this looks like a production database. ` +
+      `Set TEST_DATABASE_URL to a dedicated test DB, or set ALLOW_PROD_DB_FOR_TESTS=1 to override.`,
+  );
+}
 
 // Test player addresses (valid 42-char Ethereum addresses)
 export const TEST_PLAYERS = [
@@ -38,11 +73,8 @@ export const TEST_POKER_CHIPS_PER_PLAYER = '1000000000000000000000000';
 export let testPool: Pool;
 
 beforeAll(async () => {
-  if (!process.env.DATABASE_URL) {
-    throw new Error('DATABASE_URL is not set — create server/.env with DATABASE_URL before running tests');
-  }
-
-  testPool = new Pool({ connectionString: process.env.DATABASE_URL });
+  const connectionString = resolveTestDatabaseUrl();
+  testPool = new Pool({ connectionString });
 
   // Seed test players — upsert so re-runs don't fail
   await testPool.query(`
