@@ -15,6 +15,16 @@ import {
   sendEscrowPayoutMultiple,
 } from '../utils/escrow-payout';
 import { verifyEscrowAddToPrizePoolJoinTx } from '../utils/escrow-join-verify';
+import {
+  railTournamentCreated,
+  railPlayerJoined,
+  railPlayerLeft,
+  railTournamentFilled,
+  railTournamentStarted,
+  railTournamentCompleted,
+  railTournamentCancelled,
+  dmPlayersBusted,
+} from './telegram-rail.service';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -991,6 +1001,9 @@ export class PokerTournamentService {
           buyIn === 0n ? poolSource : poolSource === 'custom_token_buyin' ? poolSource : undefined,
       });
 
+      // The Rail: post the tournament card to the Telegram group (best-effort).
+      void railTournamentCreated(this.pool, tournamentId);
+
       return { tournamentId, pinCode: params.isPrivate ? pinCode : null };
     } catch (err) {
       await client.query('ROLLBACK');
@@ -1069,6 +1082,7 @@ export class PokerTournamentService {
     /** Set only on successful new-registration path; idempotent path returns from inside `connect` block. */
     let committedEntryId: string | null = null;
     let committedShouldAutoStart = false;
+    let committedFillCountdown = false;
 
     /** When join fails after an escrow deposit was verified (e.g. tournament full). */
     let refundEscrowAfterRollback: {
@@ -1270,6 +1284,7 @@ export class PokerTournamentService {
       committedEntryId = entryId;
       // Fill countdown activates later via the scheduler, never inline here.
       committedShouldAutoStart = false;
+      committedFillCountdown = shouldStartFillCountdown;
     } catch (err) {
       try {
         await client.query('ROLLBACK');
@@ -1303,6 +1318,16 @@ export class PokerTournamentService {
       throw err;
     } finally {
       client.release();
+    }
+
+    // The Rail: a seat-filling join flips the card to "full"; any other join
+    // posts a "took a seat" line. Best-effort, fire-and-forget.
+    if (committedEntryId) {
+      if (committedFillCountdown) {
+        void railTournamentFilled(this.pool, tournamentId);
+      } else {
+        void railPlayerJoined(this.pool, tournamentId, normalized);
+      }
     }
 
     // Release pool slot before activation: `activateTournament` runs many queries and must not overlap
@@ -1454,6 +1479,9 @@ export class PokerTournamentService {
       tournamentId,
       playerAddress: normalized,
     });
+
+    // The Rail: refresh the card + post a "left" line (best-effort).
+    void railPlayerLeft(this.pool, tournamentId, normalized);
   }
 
   // ---------------------------------------------------------------------------
@@ -1540,6 +1568,8 @@ export class PokerTournamentService {
           );
         }
         await client.query('COMMIT');
+        // The Rail: cancellation notice + refund DMs (best-effort, fire-and-forget).
+        void railTournamentCancelled(this.pool, tournamentId);
         // Custom-token buy-in: push refunds before marking escrow cancelled.
         if (isEscrowBuyIn && entries.rows.length > 0) {
           try {
@@ -1885,6 +1915,9 @@ export class PokerTournamentService {
       tableAssignments,
     });
 
+    // The Rail: flip the card to "live" (best-effort, fire-and-forget).
+    void railTournamentStarted(this.pool, tournamentId, firstTableId);
+
     return firstTableId;
   }
 
@@ -1951,6 +1984,11 @@ export class PokerTournamentService {
       handNumber,
       seats.rows.length,
     );
+
+    // DM busted players (best-effort, fire-and-forget).
+    if (bustedAddresses.length > 0) {
+      void dmPlayersBusted(this.pool, tournamentId, bustedAddresses);
+    }
 
     let blindsUpdated = false;
     const blindMode = this.getBlindIncreaseMode(config);
@@ -2700,6 +2738,9 @@ export class PokerTournamentService {
 
     logger.info('Poker tournament completed', { tournamentId, winners: prizeDistributions });
 
+    // The Rail: winner announcement + results DMs (best-effort, fire-and-forget).
+    void railTournamentCompleted(this.pool, tournamentId, standings);
+
     this.broadcast(`poker_tournament:${tournamentId}`, 'poker_tournament_completed', {
       tournamentId,
       name: String(meta.name ?? 'Tournament'),
@@ -2808,6 +2849,9 @@ export class PokerTournamentService {
     } finally {
       client.release();
     }
+
+    // The Rail: cancellation notice + refund DMs (best-effort, fire-and-forget).
+    void railTournamentCancelled(this.pool, tournamentId);
 
     // On-chain cancel happens after the DB transaction so a failed RPC call doesn't roll back the cancel.
     // Worst case: DB shows cancelled but the escrow remains active — admins can retry, and the creator

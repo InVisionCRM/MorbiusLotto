@@ -5,6 +5,64 @@ Each entry records what changed, why, and the verification outcome.
 
 ---
 
+## 2026-05-21 — Telegram tournament feed ("The Rail") + player DM alerts
+
+**What & why:** A live Telegram feed of poker tournament activity. When a
+tournament is created, the bot posts a formatted card into the group; as players
+take seats it edits the card in place and posts join/leave lines; when the table
+fills / goes live / finishes it updates again. Alongside it, linked players get
+personal DMs for the moments that matter to them.
+
+### How it works
+
+- New `server/src/services/telegram-rail.service.ts` owns all of it. Every
+  exported function is best-effort — it catches everything internally and never
+  throws. The hooks in `poker-tournament.service.ts` call them fire-and-forget
+  (`void railX(...)`), so Telegram can never delay or break gameplay.
+- **The Rail (group):** card on create → edited as seats fill → "took a seat" /
+  "left" lines → "full" → "live" (with a Spectate button) → winner line. The
+  card is one message edited in place via `editMessageText`.
+- **DM alerts (linked players):** busted out, results (finished #N, won X),
+  tournament cancelled + refunded, and creator alerts (your tournament filled /
+  finished).
+- Posts to the group only when `TELEGRAM_GROUP_CHAT_ID` is set; DMs only to
+  wallets with Telegram linked and notifications enabled. Everything is a silent
+  no-op until configured.
+
+### Added
+
+- `server/migrations/124_telegram_tournament_cards.sql` — stores the group card
+  message id per tournament so it can be edited in place. (Numbered 124 — 122 is
+  duplicated and 123 exists from main's merge.)
+- `server/src/services/telegram-rail.service.ts` — the Rail + DM module.
+- `/chatid` bot command — returns a chat's id so an admin can wire up the group.
+- `TELEGRAM_GROUP_CHAT_ID` env placeholder.
+
+### Changed
+
+- `server/src/services/telegram.service.ts` — added `editTelegramMessage` and
+  `getTelegramGroupChatId`; `sendTelegramMessage` now returns the `messageId`.
+- `server/src/services/poker-tournament.service.ts` — eight fire-and-forget
+  lifecycle hooks (created, joined, left, filled, started, busted, completed,
+  cancelled).
+- `server/src/routes/telegram.routes.ts` — the `/chatid` command.
+
+### Verification outcome
+
+- All changed files transpile clean; backend `tsc --noEmit` clean for every
+  Telegram and poker-tournament file.
+- **Not yet done (needs environment access):** migration 124 not applied
+  (sandbox has no DB); live Telegram delivery untested.
+
+### Action items for the user
+
+1. Apply the migration: `node server/run-migration.js migrations/124_telegram_tournament_cards.sql`
+2. Add the bot to your Telegram group, send it `/chatid`, and set
+   `TELEGRAM_GROUP_CHAT_ID` to that value — in `server/.env` and on Railway.
+3. Deploy. The Rail goes live once the group id is set.
+
+---
+
 ## 2026-05-21 — Telegram alerts moved into the app (settings page removed)
 
 **What & why:** Replaced the standalone `/settings` page with a compact,
