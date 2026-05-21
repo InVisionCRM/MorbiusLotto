@@ -10,6 +10,7 @@ import rateLimit from 'express-rate-limit';
 import cookieParser from 'cookie-parser';
 import { AuthService } from './services/auth.service';
 import { registerAuthRoutes } from './routes/auth.routes';
+import { registerTelegramRoutes } from './routes/telegram.routes';
 import { requireAuth, requireSameAddress } from './middleware/require-auth';
 import { DatabaseService, type BlackjackSpWagerTierRow } from './services/database.service';
 import { ProvablyFairService } from './services/provably-fair.service';
@@ -382,6 +383,12 @@ async function initializeServices() {
     }
 
     // API routes
+
+    // Telegram notification routes (inbound webhook + wallet-link flow).
+    // Registered here in the live server.ts path. Degrades gracefully when
+    // TELEGRAM_BOT_TOKEN is unset.
+    registerTelegramRoutes({ app, pool: dbService.getPool() });
+
     // Public config (whitelisted keys only; used for ad creatives, etc.)
     const PUBLIC_CONFIG_KEYS = ['ad_creative_url', 'ad_creative_hero_url', 'ad_creative_loading_url'];
     app.get('/api/config/public', async (req, res) => {
