@@ -74,3 +74,6 @@ public/swe-worker*
 
 # cursor (IDE / debug logs)
 .cursor
+
+# claude code (session worktrees — local scratch, never commit)
+.claude/worktrees/

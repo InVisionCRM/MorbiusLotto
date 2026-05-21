@@ -1,7 +1,7 @@
 import { PokerMttCreatorPage } from '@/components/poker/tournament/mtt-creator/PokerMttCreatorPage';
 
 export const metadata = {
-  title: 'Create MTT · MORBlotto Poker',
+  title: 'Create MTT · MORBIUS Poker',
   description: 'Multi-table tournament creator',
 };
 

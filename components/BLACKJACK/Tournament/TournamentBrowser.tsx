@@ -900,7 +900,7 @@ function ExpandedCardContent({
             <button
               onClick={() => {
                 const url = `${window.location.origin}/BLACKJACK?tournament=${tournament.id}`;
-                const text = `Join "${tournament.name}" tournament on MORBlotto! ${url}`;
+                const text = `Join "${tournament.name}" tournament on MORBIUS! ${url}`;
                 window.open(
                   `https://twitter.com/intent/tweet?text=${encodeURIComponent(text)}`,
                   '_blank'

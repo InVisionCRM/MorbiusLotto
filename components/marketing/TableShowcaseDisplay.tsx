@@ -95,7 +95,7 @@ function BrowserMockup({ data, index }: { data: ShowcaseData; index: number }) {
             </div>
             <div className="flex-1 px-3 py-1 rounded-md text-[11px] text-slate-500 text-center truncate"
               style={{ background: 'rgba(0,0,0,0.35)' }}>
-              morblotto.com/blackjack/{data.name.toLowerCase()}
+              morbius.io/blackjack/{data.name.toLowerCase()}
             </div>
           </div>
 
