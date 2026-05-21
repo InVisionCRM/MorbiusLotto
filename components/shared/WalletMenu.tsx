@@ -7,6 +7,7 @@ import { useProfile } from '@/hooks/use-player-profile'
 import Image from 'next/image'
 import { AvatarView } from '@/components/avatar'
 import { DEFAULT_AVATAR_CONFIG } from '@/components/avatar'
+import { TelegramAlerts } from '@/components/telegram/TelegramAlerts'
 import {
   IconUser,
   IconChevronDown,
@@ -68,6 +69,9 @@ export function WalletMenu({
   const effectiveProfileDisplayName = profileDisplayName ?? profileDisplayNameFromHook
   const effectiveProfileImageUrl = profileImageUrl ?? profileImageUrlFromHook
   const [isWalletDropdownOpen, setIsWalletDropdownOpen] = useState(false)
+  // True while the Telegram link modal is open — keeps the dropdown from
+  // closing (and unmounting the modal) when the user clicks into the modal.
+  const [telegramModalOpen, setTelegramModalOpen] = useState(false)
   const [isGameWalletOpen, setIsGameWalletOpen] = useState(false)
   const [isRevokeOpen, setIsRevokeOpen] = useState(false)
   const [copied, setCopied] = useState(false)
@@ -100,6 +104,9 @@ export function WalletMenu({
 
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
+      // Keep the dropdown open while the Telegram link modal is up — otherwise
+      // it would unmount the modal mid-flow.
+      if (telegramModalOpen) return
       if (walletDropdownRef.current && !walletDropdownRef.current.contains(event.target as Node)) {
         setIsWalletDropdownOpen(false)
       }
@@ -108,7 +115,7 @@ export function WalletMenu({
       document.addEventListener('mousedown', handleClickOutside)
     }
     return () => document.removeEventListener('mousedown', handleClickOutside)
-  }, [isWalletDropdownOpen])
+  }, [isWalletDropdownOpen, telegramModalOpen])
 
   const handleDepositWithdraw = useCallback(() => {
     if (onOpenDepositModal) {
@@ -236,6 +243,11 @@ export function WalletMenu({
                   <IconShieldOff size={16} aria-hidden />
                   <span className="text-sm font-medium">Manage approvals</span>
                 </button>
+                <TelegramAlerts
+                  walletAddress={address}
+                  placement="menu"
+                  onModalOpenChange={setTelegramModalOpen}
+                />
                 <button
                   onClick={() => {
                     disconnect()

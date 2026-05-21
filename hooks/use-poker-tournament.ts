@@ -20,6 +20,13 @@ export interface BlindLevel {
 /** Mirrors server `PokerBlindIncreaseMode`. */
 export type PokerBlindIncreaseMode = 'knockout' | 'by_hand' | 'by_time';
 
+/**
+ * Mirrors server `PokerStartMode`:
+ *  - `time`: classic scheduled tournament (starts at a fixed time).
+ *  - `fill`: Sit & Go — no clock, starts when every seat is taken.
+ */
+export type PokerStartMode = 'time' | 'fill';
+
 /** Mirrors server: wall-clock minutes per blind level in `by_time` mode (inclusive). */
 export const BLIND_INTERVAL_MINUTES_MIN = 1;
 export const BLIND_INTERVAL_MINUTES_MAX = 60;
@@ -42,6 +49,8 @@ export interface PokerTournamentConfig {
   blindIncreaseMode?: PokerBlindIncreaseMode;
   /** Required when `blindIncreaseMode === 'by_time'`. Integer minutes from `BLIND_INTERVAL_MINUTES_MIN` to `BLIND_INTERVAL_MINUTES_MAX`. */
   blindIntervalMinutes?: BlindIntervalMinutes;
+  /** Start mode — defaults to `time` when absent (back-compat with pre-Sit-&-Go rows). */
+  startMode?: PokerStartMode;
   /**
    * MTT: max seats per physical table (4–10). When unset / equal to maxPlayers the tournament
    * runs as legacy single-table SNG. When < maxPlayers the server spins up
@@ -156,6 +165,8 @@ export interface PokerTournamentSummary {
   blindIncreaseMode?: PokerBlindIncreaseMode;
   /** Creator-chosen fee cut (0–15 integer); falls back to 2 if missing on the row. */
   creatorFeePercent?: number;
+  /** `time` = scheduled start; `fill` = Sit & Go. Absent on pre-Sit-&-Go servers. */
+  startMode?: PokerStartMode;
 }
 
 /**
@@ -210,8 +221,11 @@ export interface CreatePokerTournamentParams {
   config: PokerTournamentConfig;
   isPrivate?: boolean;
   pinCode?: string;
-  /** ISO 8601 start time — required; server rejects missing or past times. */
-  scheduledStartAt: string;
+  /**
+   * ISO 8601 start time. Required for `time` start mode (server rejects missing
+   * or past times); omitted for `fill` mode (a Sit & Go has no scheduled time).
+   */
+  scheduledStartAt?: string;
   /** Creator's chosen fee percent (0–15 integer). Server clamps + defaults to 2 if missing. */
   creatorFeePercent?: number;
 }

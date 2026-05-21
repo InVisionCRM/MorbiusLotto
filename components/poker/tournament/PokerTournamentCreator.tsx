@@ -12,6 +12,7 @@ import {
   type CustomTokenBuyInMeta,
   type CustomTokenEscrowFunding,
   type PokerBlindIncreaseMode,
+  type PokerStartMode,
 } from '@/hooks/use-poker-tournament';
 import { formatChips } from '@/lib/format-poker-chips';
 import { POKER_MORBIUS_SHARE_LOGO_PUBLIC_URL } from '@/lib/poker-table-logo-constants';
@@ -37,6 +38,7 @@ import {
 } from '@/components/ui/accordion';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Dialog, DialogOverlay, DialogPortal } from '@/components/ui/dialog';
+import { TelegramAlerts } from '@/components/telegram/TelegramAlerts';
 import * as DialogPrimitive from '@radix-ui/react-dialog';
 import { cn } from '@/lib/utils';
 import { BackgroundBeams } from '@/components/ui/background-beams';
@@ -1114,6 +1116,8 @@ export function PokerTournamentCreator({ creatorAddress, onClose, onCreate, vari
   const { openConnectModal } = useConnectModal();
   const [activeTab, setActiveTab] = useState('type');
   const initialSchedule = useMemo(() => defaultScheduledFields(), []);
+  // 'time' = classic scheduled start; 'fill' = Sit & Go (starts when the table fills).
+  const [startMode, setStartMode] = useState<PokerStartMode>('time');
   const [scheduledDate, setScheduledDate] = useState(initialSchedule.date);
   const [scheduledTime, setScheduledTime] = useState(initialSchedule.time);
   const [scheduleError, setScheduleError] = useState<string | null>(null);
@@ -1330,6 +1334,9 @@ export function PokerTournamentCreator({ creatorAddress, onClose, onCreate, vari
   }, [created]);
 
   const validateSchedule = (): string | null => {
+    // A Sit & Go has no clock — it starts when the table fills, so there is
+    // nothing to validate here.
+    if (startMode === 'fill') return null;
     if (!scheduledDate.trim()) return 'Pick a start date.';
     const local = parseLocalDateTime(scheduledDate, scheduledTime);
     if (!local) return 'Pick a valid date and time.';
@@ -1356,8 +1363,11 @@ export function PokerTournamentCreator({ creatorAddress, onClose, onCreate, vari
     setScheduleError(err);
     if (err) return null;
 
-    const local = parseLocalDateTime(scheduledDate, scheduledTime)!;
-    const scheduledStartAt = local.toISOString();
+    // Sit & Go has no scheduled time; classic mode parses the picked date/time.
+    const scheduledStartAt =
+      startMode === 'fill'
+        ? undefined
+        : parseLocalDateTime(scheduledDate, scheduledTime)!.toISOString();
 
     let sourceField: {
       guaranteedPrizePoolSource?: 'platform_promo' | 'custom_token' | 'custom_token_buyin';
@@ -1408,12 +1418,13 @@ export function PokerTournamentCreator({ creatorAddress, onClose, onCreate, vari
           // SNG: maxPlayers === prizeSlotCount, same as legacy.
           maxPlayers: effectiveMaxPlayers,
           blindIncreaseMode,
+          startMode,
           ...(blindIncreaseMode === 'by_time' ? { blindIntervalMinutes } : {}),
           ...(tournamentFormat === 'mtt' ? { seatsPerTable } : {}),
         },
         isPrivate,
         ...(pinForCreate ? { pinCode: pinForCreate } : {}),
-        scheduledStartAt,
+        ...(scheduledStartAt ? { scheduledStartAt } : {}),
         // Read via ref so we always pick up the latest slider position, even if React batched a
         // render between the slider's onChange and the click that opened the confirm modal.
         creatorFeePercent: clampCreatorFeePercent(creatorFeePercentRef.current),
@@ -1821,6 +1832,11 @@ export function PokerTournamentCreator({ creatorAddress, onClose, onCreate, vari
               <p className="text-xs text-amber-200/90 rounded-lg border border-amber-500/25 bg-amber-500/10 px-3 py-2">
                 Private PIN: <span className="font-mono font-semibold tracking-wider">{created.pinCode}</span>
               </p>
+            )}
+            {creatorAddress && (
+              <div className="pt-1 text-left">
+                <TelegramAlerts walletAddress={creatorAddress} placement="panel" />
+              </div>
             )}
             <div className="flex flex-col sm:flex-row gap-2 pt-2">
               <Link
@@ -2479,62 +2495,130 @@ export function PokerTournamentCreator({ creatorAddress, onClose, onCreate, vari
                 <p className="w-full text-center text-xs font-semibold uppercase tracking-wide text-white/55">
                   When the table opens
                 </p>
-                {schedulePreview && (
-                  <div className="relative mx-auto w-full max-w-md space-y-1 rounded-2xl border border-cyan-500/25 bg-slate-900/60 px-5 py-5 text-center shadow-[0_0_30px_-20px_rgba(34,211,238,0.5)]">
-                    <div className="absolute inset-0 rounded-2xl pointer-events-none bg-[radial-gradient(circle_at_50%_40%,rgba(34,211,238,0.15),transparent_65%)]" />
-                    <p className="text-xs font-semibold uppercase tracking-widest text-cyan-300/90">Starts</p>
-                    <p className="text-lg font-semibold text-white">{schedulePreview.weekday}</p>
-                    <p className="text-sm text-white/70">{schedulePreview.dayLine}</p>
-                    <p className="text-3xl font-bold tabular-nums text-white tracking-tight pt-1">{schedulePreview.timeLine}</p>
-                    <p className="text-[11px] text-white/40 pt-2">Your local time · any minute</p>
-                  </div>
+
+                {/* Start mode — classic scheduled start vs. Sit & Go (deals when full). */}
+                <div
+                  className="mx-auto grid w-full max-w-md grid-cols-2 gap-2"
+                  role="radiogroup"
+                  aria-label="Start mode"
+                >
+                  <button
+                    type="button"
+                    role="radio"
+                    aria-checked={startMode === 'time'}
+                    onClick={() => {
+                      setStartMode('time');
+                      setScheduleError(null);
+                    }}
+                    className={`rounded-xl border px-3 py-3 text-sm font-semibold transition-colors ${
+                      startMode === 'time'
+                        ? 'border-cyan-400/70 bg-cyan-500/15 text-cyan-100'
+                        : 'border-white/10 bg-white/[0.03] text-white/60 hover:bg-white/[0.06]'
+                    }`}
+                  >
+                    Scheduled
+                    <span className="mt-0.5 block text-[11px] font-normal text-white/45">
+                      Starts at a set time
+                    </span>
+                  </button>
+                  <button
+                    type="button"
+                    role="radio"
+                    aria-checked={startMode === 'fill'}
+                    onClick={() => {
+                      setStartMode('fill');
+                      setScheduleError(null);
+                    }}
+                    className={`rounded-xl border px-3 py-3 text-sm font-semibold transition-colors ${
+                      startMode === 'fill'
+                        ? 'border-cyan-400/70 bg-cyan-500/15 text-cyan-100'
+                        : 'border-white/10 bg-white/[0.03] text-white/60 hover:bg-white/[0.06]'
+                    }`}
+                  >
+                    Sit &amp; Go
+                    <span className="mt-0.5 block text-[11px] font-normal text-white/45">
+                      Starts when the table fills
+                    </span>
+                  </button>
+                </div>
+
+                {startMode === 'time' && (
+                  <>
+                    {schedulePreview && (
+                      <div className="relative mx-auto w-full max-w-md space-y-1 rounded-2xl border border-cyan-500/25 bg-slate-900/60 px-5 py-5 text-center shadow-[0_0_30px_-20px_rgba(34,211,238,0.5)]">
+                        <div className="absolute inset-0 rounded-2xl pointer-events-none bg-[radial-gradient(circle_at_50%_40%,rgba(34,211,238,0.15),transparent_65%)]" />
+                        <p className="text-xs font-semibold uppercase tracking-widest text-cyan-300/90">Starts</p>
+                        <p className="text-lg font-semibold text-white">{schedulePreview.weekday}</p>
+                        <p className="text-sm text-white/70">{schedulePreview.dayLine}</p>
+                        <p className="text-3xl font-bold tabular-nums text-white tracking-tight pt-1">{schedulePreview.timeLine}</p>
+                        <p className="text-[11px] text-white/40 pt-2">Your local time · any minute</p>
+                      </div>
+                    )}
+
+                    <div className="mx-auto grid w-full max-w-md grid-cols-2 gap-4">
+                      <div
+                        className="min-w-0 cursor-pointer flex flex-col items-center"
+                        onClick={() => openDateOrTimePicker(scheduleDateInputRef.current)}
+                      >
+                        <label htmlFor="poker-tourney-schedule-date" className={`${labelClass} w-full text-center`}>
+                          Calendar date
+                        </label>
+                        <input
+                          ref={scheduleDateInputRef}
+                          id="poker-tourney-schedule-date"
+                          type="date"
+                          value={scheduledDate}
+                          min={minScheduleDate}
+                          onChange={(e) => {
+                            setScheduledDate(e.target.value);
+                            setScheduleError(null);
+                          }}
+                          className={schedulePickerFieldClass}
+                        />
+                      </div>
+                      <div
+                        className="min-w-0 cursor-pointer flex flex-col items-center"
+                        onClick={() => openDateOrTimePicker(scheduleTimeInputRef.current)}
+                      >
+                        <label htmlFor="poker-tourney-schedule-time" className={`${labelClass} w-full text-center`}>
+                          Clock time
+                        </label>
+                        <input
+                          ref={scheduleTimeInputRef}
+                          id="poker-tourney-schedule-time"
+                          type="time"
+                          step={60}
+                          value={scheduledTime.length >= 5 ? scheduledTime.slice(0, 5) : scheduledTime}
+                          onChange={(e) => {
+                            const v = e.target.value;
+                            if (v) setScheduledTime(v.slice(0, 5));
+                            setScheduleError(null);
+                          }}
+                          className={schedulePickerFieldClass}
+                        />
+                        <p className="mt-1.5 text-center text-[11px] text-white/40">Pick any hour and minute (local).</p>
+                      </div>
+                    </div>
+                    {scheduleError && <p className="w-full text-center text-xs text-red-400">{scheduleError}</p>}
+                  </>
                 )}
 
-                <div className="mx-auto grid w-full max-w-md grid-cols-2 gap-4">
-                  <div
-                    className="min-w-0 cursor-pointer flex flex-col items-center"
-                    onClick={() => openDateOrTimePicker(scheduleDateInputRef.current)}
-                  >
-                    <label htmlFor="poker-tourney-schedule-date" className={`${labelClass} w-full text-center`}>
-                      Calendar date
-                    </label>
-                    <input
-                      ref={scheduleDateInputRef}
-                      id="poker-tourney-schedule-date"
-                      type="date"
-                      value={scheduledDate}
-                      min={minScheduleDate}
-                      onChange={(e) => {
-                        setScheduledDate(e.target.value);
-                        setScheduleError(null);
-                      }}
-                      className={schedulePickerFieldClass}
-                    />
+                {startMode === 'fill' && (
+                  <div className="relative mx-auto w-full max-w-md space-y-2 rounded-2xl border border-cyan-500/25 bg-slate-900/60 px-5 py-6 text-center shadow-[0_0_30px_-20px_rgba(34,211,238,0.5)]">
+                    <div className="absolute inset-0 rounded-2xl pointer-events-none bg-[radial-gradient(circle_at_50%_40%,rgba(34,211,238,0.15),transparent_65%)]" />
+                    <p className="text-xs font-semibold uppercase tracking-widest text-cyan-300/90">Sit &amp; Go</p>
+                    <p className="text-lg font-semibold text-white">Starts when the table fills</p>
+                    <p className="text-sm text-white/65 leading-relaxed">
+                      No clock. The moment all{' '}
+                      <span className="font-semibold text-white">{prizeSlotCount}</span> seats are taken, a
+                      60-second countdown begins and then the cards are dealt.
+                    </p>
+                    <p className="text-[11px] text-white/40 pt-1">
+                      Players can register and walk away — anyone who linked Telegram gets pinged before it
+                      starts, and registered players can unregister for a full refund any time before it fills.
+                    </p>
                   </div>
-                  <div
-                    className="min-w-0 cursor-pointer flex flex-col items-center"
-                    onClick={() => openDateOrTimePicker(scheduleTimeInputRef.current)}
-                  >
-                    <label htmlFor="poker-tourney-schedule-time" className={`${labelClass} w-full text-center`}>
-                      Clock time
-                    </label>
-                    <input
-                      ref={scheduleTimeInputRef}
-                      id="poker-tourney-schedule-time"
-                      type="time"
-                      step={60}
-                      value={scheduledTime.length >= 5 ? scheduledTime.slice(0, 5) : scheduledTime}
-                      onChange={(e) => {
-                        const v = e.target.value;
-                        if (v) setScheduledTime(v.slice(0, 5));
-                        setScheduleError(null);
-                      }}
-                      className={schedulePickerFieldClass}
-                    />
-                    <p className="mt-1.5 text-center text-[11px] text-white/40">Pick any hour and minute (local).</p>
-                  </div>
-                </div>
-                {scheduleError && <p className="w-full text-center text-xs text-red-400">{scheduleError}</p>}
+                )}
               </div>
               <PokerTournamentTabFaqPanel idPrefix="schedule" entries={POKER_CREATOR_SCHEDULE_FAQ} />
             </TabsContent>
@@ -2863,7 +2947,9 @@ export function PokerTournamentCreator({ creatorAddress, onClose, onCreate, vari
         const local = parseLocalDateTime(scheduledDate, scheduledTime);
         const scheduleDisplay = local
           ? local.toLocaleString(undefined, { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })
-          : '—';
+          : startMode === 'fill'
+            ? 'When the table fills'
+            : '—';
         const topSplit = prizePercents
           .map((p, i) => (p > 0 ? `${finishOrdinal(i + 1)} ${p}%` : null))
           .filter(Boolean)

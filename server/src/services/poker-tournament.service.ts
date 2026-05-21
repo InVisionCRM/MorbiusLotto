@@ -30,6 +30,14 @@ export interface BlindLevel {
 /** How posted blinds go up during the event (stored in `poker_config`). */
 export type PokerBlindIncreaseMode = 'knockout' | 'by_hand' | 'by_time';
 
+/**
+ * How a poker tournament decides when to start (stored in `poker_config`):
+ *  - `time` (default): starts at a fixed `scheduled_start_at` (classic scheduled tournament).
+ *  - `fill`: a Sit & Go — no clock; starts when every seat is taken. On a full
+ *    table the server sets a 60s countdown, then deals.
+ */
+export type PokerStartMode = 'time' | 'fill';
+
 /** Allowed wall-clock interval (minutes) for `by_time` mode — integers 1–60 inclusive. */
 export const BLIND_INTERVAL_MINUTES_MIN = 1;
 export const BLIND_INTERVAL_MINUTES_MAX = 60;
@@ -54,6 +62,8 @@ export interface PokerTournamentConfig {
   blindIncreaseMode?: PokerBlindIncreaseMode;
   /** Required when `blindIncreaseMode === 'by_time'`. Integer minutes from `BLIND_INTERVAL_MINUTES_MIN` to `BLIND_INTERVAL_MINUTES_MAX`. */
   blindIntervalMinutes?: BlindIntervalMinutes;
+  /** Start mode — defaults to `time` when absent (back-compat with pre-Sit-&-Go rows). */
+  startMode?: PokerStartMode;
   /**
    * MTT: max seats per physical table (4–10). When unset or equal to maxPlayers,
    * the tournament runs as legacy single-table SNG. When set and < maxPlayers,
@@ -194,6 +204,8 @@ export interface PokerTournamentSummary {
   blindIncreaseMode: PokerBlindIncreaseMode;
   /** Set only when `blindIncreaseMode === 'by_time'`. */
   blindIntervalMinutes?: BlindIntervalMinutes;
+  /** `time` = classic scheduled start; `fill` = Sit & Go (starts when the table fills). */
+  startMode: PokerStartMode;
 }
 
 /** Where the initial guaranteed pool is debited when buy-in is 0; `custom_token_buyin` is buy-in paid in PRC-20 via escrow. */
@@ -259,8 +271,11 @@ export interface CreatePokerTournamentParams {
   config: PokerTournamentConfig;
   isPrivate?: boolean;
   pinCode?: string | null;
-  /** Required — must be a finite `Date` strictly in the future (enforced at create). */
-  scheduledStartAt: Date;
+  /**
+   * Required for `time` start mode — must be a finite `Date` strictly in the
+   * future. Omitted/undefined for `fill` mode (a Sit & Go has no scheduled time).
+   */
+  scheduledStartAt?: Date;
   /** Creator's chosen fee percent (0–15 integer). Clamped server-side; default 2. */
   creatorFeePercent?: number;
 }
@@ -534,6 +549,9 @@ export class PokerTournamentService {
     const blindIncreaseMode = this.normalizeBlindIncreaseMode(modeRaw);
     const intervalRaw = obj.blindIntervalMinutes ?? obj.blind_interval_minutes;
     const interval = this.normalizeBlindIntervalMinutes(intervalRaw);
+    // Back-compat: rows created before Sit & Go have no startMode → treat as 'time'.
+    const startMode: PokerStartMode =
+      (obj.startMode ?? obj.start_mode) === 'fill' ? 'fill' : 'time';
     const seatsPerTable = this.normalizeSeatsPerTable(
       obj.seatsPerTable ?? obj.seats_per_table,
       Number(obj.maxPlayers ?? 10),
@@ -546,6 +564,7 @@ export class PokerTournamentService {
         ? obj.blindSchedule as BlindLevel[]
         : DEFAULT_BLIND_SCHEDULE,
       blindIncreaseMode,
+      startMode,
       ...(blindIncreaseMode === 'by_time' && interval ? { blindIntervalMinutes: interval } : {}),
       ...(seatsPerTable != null ? { seatsPerTable } : {}),
     };
@@ -623,12 +642,25 @@ export class PokerTournamentService {
     if (config.startingStack < 100) throw new Error('startingStack must be at least 100');
     if (!params.name?.trim()) throw new Error('Tournament name required');
 
-    const scheduled = params.scheduledStartAt;
-    if (!(scheduled instanceof Date) || Number.isNaN(scheduled.getTime())) {
-      throw new Error('scheduledStartAt is required for poker tournaments');
+    // Start mode: a Sit & Go ('fill') has no clock — it starts when the table
+    // fills. A classic tournament ('time') requires a future scheduled start.
+    const startMode: PokerStartMode = config.startMode === 'fill' ? 'fill' : 'time';
+    // A Sit & Go has a fixed seat count: it only starts once every seat is
+    // taken, so minPlayers and maxPlayers are the same number.
+    if (startMode === 'fill') {
+      config.minPlayers = config.maxPlayers;
     }
-    if (scheduled.getTime() <= Date.now()) {
-      throw new Error('scheduledStartAt must be in the future');
+
+    let scheduled: Date | null = null;
+    if (startMode === 'time') {
+      const s = params.scheduledStartAt;
+      if (!(s instanceof Date) || Number.isNaN(s.getTime())) {
+        throw new Error('scheduledStartAt is required for scheduled poker tournaments');
+      }
+      if (s.getTime() <= Date.now()) {
+        throw new Error('scheduledStartAt must be in the future');
+      }
+      scheduled = s;
     }
 
     const buyIn = params.buyInAmount;
@@ -827,6 +859,7 @@ export class PokerTournamentService {
     const configForDb: PokerTournamentConfig = {
       ...config,
       blindIncreaseMode,
+      startMode,
       ...(blindIntervalMinutes ? { blindIntervalMinutes } : {}),
     };
     // Strip a stale interval if mode isn't by_time so it doesn't accidentally persist.
@@ -910,7 +943,7 @@ export class PokerTournamentService {
           initialPrizePool,
           guaranteedPrizeFunderAddress,
           JSON.stringify(configForDb),
-          scheduled.toISOString(),
+          scheduled ? scheduled.toISOString() : null,
           escrowVerified?.tournamentId ?? customBuyInRow?.tournamentId ?? null,
           escrowVerified?.tokenAddress ?? customBuyInRow?.tokenAddress ?? null,
           escrowVerified?.decimals ?? customBuyInRow?.decimals ?? null,
@@ -934,11 +967,15 @@ export class PokerTournamentService {
         );
       }
 
-      await client.query(
-        `INSERT INTO tournament_scheduled_events (tournament_id, event_type, scheduled_at, status)
-         VALUES ($1, 'poker_start', $2, 'pending')`,
-        [tournamentId, scheduled.toISOString()],
-      );
+      // Fill-mode Sit & Gos have no scheduled start, so no poker_start event is
+      // created here — joinPokerTournament schedules one when the table fills.
+      if (scheduled) {
+        await client.query(
+          `INSERT INTO tournament_scheduled_events (tournament_id, event_type, scheduled_at, status)
+           VALUES ($1, 'poker_start', $2, 'pending')`,
+          [tournamentId, scheduled.toISOString()],
+        );
+      }
 
       await client.query('COMMIT');
 
@@ -946,7 +983,8 @@ export class PokerTournamentService {
         tournamentId,
         name: params.name,
         creator: normalizedCreator,
-        scheduledStartAt: scheduled.toISOString(),
+        startMode,
+        scheduledStartAt: scheduled ? scheduled.toISOString() : null,
         buyIn: buyIn.toString(),
         guaranteedPrizePool: buyIn === 0n ? guaranteed.toString() : undefined,
         guaranteedPrizePoolSource:
@@ -1191,26 +1229,47 @@ export class PokerTournamentService {
       const entryId = entryRow.rows[0].id;
 
       const newRegistered = registered + 1;
-      // Registration fills until scheduled_start_at; activation is always via startScheduledPokerTournament (scheduler).
+      // Fill-based Sit & Go: when the final seat is taken, lock in a 60-second
+      // countdown instead of dealing instantly. That gives walked-away players
+      // time to return and fires the Telegram "starting soon" pings. Activation
+      // itself then runs via the scheduler's poker_start event — identical to a
+      // time-based tournament. Classic time-based tournaments always already
+      // have a scheduled_start_at, so this branch never fires for them.
+      const startMode = config.startMode === 'fill' ? 'fill' : 'time';
       const hasScheduledStart = tournament.scheduled_start_at != null;
-      const scheduledStart = tournament.scheduled_start_at ? new Date(tournament.scheduled_start_at) : null;
-      const isScheduledInFuture = !!(scheduledStart && scheduledStart.getTime() > Date.now());
-      const shouldAutoStart =
-        !hasScheduledStart && !isScheduledInFuture && newRegistered >= config.minPlayers;
+      const shouldStartFillCountdown =
+        startMode === 'fill' && !hasScheduledStart && newRegistered >= config.maxPlayers;
 
-      if (shouldAutoStart) {
+      if (shouldStartFillCountdown) {
+        // The `scheduled_start_at IS NULL` guard makes this idempotent — only
+        // the first seat-filling join wins the countdown.
         await client.query(
-          `UPDATE tournaments SET status = 'active', activated_at = COALESCE(activated_at, NOW()) WHERE id = $1`,
-          [tournamentId]
+          `UPDATE tournaments
+             SET scheduled_start_at = NOW() + INTERVAL '60 seconds'
+           WHERE id = $1 AND scheduled_start_at IS NULL`,
+          [tournamentId],
+        );
+        await client.query(
+          `INSERT INTO tournament_scheduled_events (tournament_id, event_type, scheduled_at, status)
+           VALUES ($1, 'poker_start', NOW() + INTERVAL '60 seconds', 'pending')`,
+          [tournamentId],
         );
       }
 
       await client.query('COMMIT');
 
-      logger.info('Player joined poker tournament', { tournamentId, playerAddress: normalized, entryId, registered: newRegistered });
+      logger.info('Player joined poker tournament', {
+        tournamentId,
+        playerAddress: normalized,
+        entryId,
+        registered: newRegistered,
+        startMode,
+        fillCountdownStarted: shouldStartFillCountdown,
+      });
 
       committedEntryId = entryId;
-      committedShouldAutoStart = shouldAutoStart;
+      // Fill countdown activates later via the scheduler, never inline here.
+      committedShouldAutoStart = false;
     } catch (err) {
       try {
         await client.query('ROLLBACK');
@@ -1260,28 +1319,39 @@ export class PokerTournamentService {
   }
 
   /**
-   * Registration-phase exit for custom-token buy-in tournaments: server pushes buy-in back from escrow, then removes DB entry.
+   * Registration-phase exit — "unregister". Returns the player's buy-in and
+   * removes their entry. Works for every buy-in type:
+   *  - custom-token escrow : on-chain refund pushed from the escrow contract
+   *  - MORBIUS chip buy-in : chips credited straight back to the player
+   *  - freeroll (zero buy-in): entry simply removed, nothing to refund
+   *
+   * Allowed only while the tournament is still in `registration`, and blocked
+   * once a Sit & Go has filled and locked into its starting countdown.
    */
   async leavePokerTournamentRegistration(tournamentId: string, playerAddress: string): Promise<void> {
     const normalized = this.normalizeAddress(playerAddress);
 
     const tRow = await this.pool.query(
-      `SELECT id, status, buy_in_amount, prize_token_address
+      `SELECT id, status, buy_in_amount, prize_token_address, poker_config, scheduled_start_at
        FROM tournaments WHERE id = $1 AND game_type = 'poker'`,
       [tournamentId],
     );
     if (tRow.rows.length === 0) throw new Error('Poker tournament not found');
     const t = tRow.rows[0];
     if (String(t.status ?? '') !== 'registration') {
-      throw new Error('You can only leave during registration');
+      throw new Error('You can only unregister while the tournament is still in registration');
+    }
+
+    const config = this.parsePokerConfig(t.poker_config);
+    // A Sit & Go that has filled has scheduled_start_at set and is counting down
+    // to deal — seats are locked at that point, so no more unregistering.
+    if (config.startMode === 'fill' && t.scheduled_start_at != null) {
+      throw new Error('This Sit & Go is full and starting — you can no longer unregister');
     }
 
     const buyIn = this.parseBigInt(t.buy_in_amount);
     const prizeTok = t.prize_token_address ? String(t.prize_token_address).trim() : '';
     const isEscrowBuyIn = buyIn > 0n && prizeTok.startsWith('0x');
-    if (!isEscrowBuyIn) {
-      throw new Error('Leave-with-refund is only available for custom-token buy-in tournaments');
-    }
 
     const entryRow = await this.pool.query(
       `SELECT id FROM tournament_entries
@@ -1291,33 +1361,93 @@ export class PokerTournamentService {
     );
     if (entryRow.rows.length === 0) throw new Error('You are not registered for this tournament');
 
-    const pay = await sendEscrowPayout(tournamentId, normalized, buyIn);
-    if (!pay.success) {
-      throw new Error(pay.error || 'On-chain refund failed; try again or contact support');
+    if (isEscrowBuyIn) {
+      // Custom-token buy-in — push the refund back from the on-chain escrow
+      // first, then remove the entry. The payout can't be undone, so it must
+      // precede the DB write.
+      const pay = await sendEscrowPayout(tournamentId, normalized, buyIn);
+      if (!pay.success) {
+        throw new Error(pay.error || 'On-chain refund failed; try again or contact support');
+      }
+      const client = await this.pool.connect();
+      try {
+        await client.query('BEGIN');
+        await client.query(
+          `UPDATE tournament_entries SET status = 'busted', finished_at = NOW() WHERE id = $1`,
+          [entryRow.rows[0].id],
+        );
+        await client.query(
+          `UPDATE tournaments SET prize_pool = GREATEST(prize_pool - $1::NUMERIC, 0) WHERE id = $2`,
+          [buyIn.toString(), tournamentId],
+        );
+        await client.query('COMMIT');
+      } catch (e) {
+        await client.query('ROLLBACK').catch(() => {});
+        throw e;
+      } finally {
+        client.release();
+      }
+    } else {
+      // MORBIUS-chip buy-in or freeroll — handled entirely in one DB transaction.
+      // The tournament row is locked FOR UPDATE so this serializes against a
+      // concurrent join that may be filling the table at the same instant.
+      const client = await this.pool.connect();
+      try {
+        await client.query('BEGIN');
+        const lockRow = await client.query(
+          `SELECT status, scheduled_start_at FROM tournaments WHERE id = $1 FOR UPDATE`,
+          [tournamentId],
+        );
+        if (lockRow.rows.length === 0) throw new Error('Poker tournament not found');
+        if (String(lockRow.rows[0].status ?? '') !== 'registration') {
+          throw new Error('You can only unregister while the tournament is still in registration');
+        }
+        if (config.startMode === 'fill' && lockRow.rows[0].scheduled_start_at != null) {
+          throw new Error('This Sit & Go is full and starting — you can no longer unregister');
+        }
+        // Re-find the entry under the lock — it could have changed since the
+        // pre-check above.
+        const liveEntry = await client.query(
+          `SELECT id FROM tournament_entries
+           WHERE tournament_id = $1 AND LOWER(player_address) = LOWER($2)
+             AND status NOT IN ('busted', 'completed')`,
+          [tournamentId, normalized],
+        );
+        if (liveEntry.rows.length === 0) {
+          throw new Error('You are not registered for this tournament');
+        }
+        await client.query(
+          `UPDATE tournament_entries SET status = 'busted', finished_at = NOW() WHERE id = $1`,
+          [liveEntry.rows[0].id],
+        );
+        if (buyIn > 0n) {
+          // Chip buy-in — credit the chips straight back and unwind the pool.
+          await applyPokerChipDelta(
+            client,
+            normalized,
+            buyIn,
+            'tournament_refund',
+            { type: 'tournament', id: tournamentId },
+          );
+          await client.query(
+            `UPDATE tournaments SET prize_pool = GREATEST(prize_pool - $1::NUMERIC, 0) WHERE id = $2`,
+            [buyIn.toString(), tournamentId],
+          );
+        }
+        // Freeroll (buyIn === 0): nothing to refund — removing the entry is all.
+        await client.query('COMMIT');
+      } catch (e) {
+        await client.query('ROLLBACK').catch(() => {});
+        throw e;
+      } finally {
+        client.release();
+      }
     }
 
-    const client = await this.pool.connect();
-    try {
-      await client.query('BEGIN');
-      await client.query(
-        `UPDATE tournament_entries SET status = 'busted', finished_at = NOW() WHERE id = $1`,
-        [entryRow.rows[0].id],
-      );
-      await client.query(
-        `UPDATE tournaments SET prize_pool = GREATEST(prize_pool - $1::NUMERIC, 0) WHERE id = $2`,
-        [buyIn.toString(), tournamentId],
-      );
-      await client.query('COMMIT');
-    } catch (e) {
-      await client.query('ROLLBACK');
-      throw e;
-    } finally {
-      client.release();
-    }
-
-    logger.info('Player left poker tournament registration (escrow refund)', {
+    logger.info('Player unregistered from poker tournament', {
       tournamentId,
       playerAddress: normalized,
+      buyInType: isEscrowBuyIn ? 'escrow' : buyIn > 0n ? 'chips' : 'freeroll',
     });
 
     this.broadcast(`poker_tournament:${tournamentId}`, 'poker_tournament_registration_left', {
@@ -2844,9 +2974,11 @@ export class PokerTournamentService {
   async listPokerTournaments(playerAddress?: string): Promise<PokerTournamentSummary[]> {
     const normalized = playerAddress ? this.normalizeAddress(playerAddress) : null;
 
-    /** Cuts lobby noise: hide stale empty registration buckets; always show active, any with players, recent creates, upcoming scheduled, or rows the viewer is in. */
-    const LOBBY_MAX_ROWS = 50;
-    const STALE_EMPTY_REG_DAYS = 7;
+    // The lobby shows EVERY poker tournament — nothing is hidden by age,
+    // emptiness, or status (cancelled and completed rows are included too).
+    // LOBBY_MAX_ROWS is only a defensive backstop against a pathological row
+    // count; on normal traffic it is never reached.
+    const LOBBY_MAX_ROWS = 1000;
 
     const result = await this.pool.query(
       `SELECT r.*,
@@ -2876,23 +3008,9 @@ export class PokerTournamentService {
          ) ELSE NULL END AS my_table_id
        FROM poker_tournament_registrations r
        LEFT JOIN poker_tables pt ON pt.id = r.table_id
-       WHERE (
-         r.status = 'active'
-         OR COALESCE(r.registered_count, 0) > 0
-         OR r.created_at >= NOW() - ($2::int * INTERVAL '1 day')
-         OR (r.scheduled_start_at IS NOT NULL AND r.scheduled_start_at > NOW())
-         OR (
-           $1::text IS NOT NULL AND EXISTS (
-             SELECT 1 FROM tournament_entries te
-             WHERE te.tournament_id = r.tournament_id
-               AND LOWER(te.player_address) = $1::text
-               AND te.status NOT IN ('busted', 'completed')
-           )
-         )
-       )
        ORDER BY r.created_at DESC
-       LIMIT $3`,
-      [normalized, STALE_EMPTY_REG_DAYS, LOBBY_MAX_ROWS]
+       LIMIT $2`,
+      [normalized, LOBBY_MAX_ROWS]
     );
 
     return result.rows.map((r) => {
@@ -2933,6 +3051,7 @@ export class PokerTournamentService {
         smallBlind,
         bigBlind,
         blindIncreaseMode,
+        startMode:             config.startMode ?? 'time',
         // Exposed to clients so the buy-in panel + lobby can show "X% to creator, Y% to winners".
         // Migration 120 caps the column to 0–15; old rows default to 2 via DB default + JS fallback.
         creatorFeePercent:     r.creator_fee_percent != null ? Number(r.creator_fee_percent) : 2,
