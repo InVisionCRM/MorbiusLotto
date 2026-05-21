@@ -3,6 +3,7 @@
 import { useState, useRef, useEffect } from 'react';
 import { useAccount } from 'wagmi';
 import { useChat } from '@/hooks/use-chat';
+import { useDisplayNameGate } from '@/hooks/use-display-name-gate';
 import { PlayerProfileModal } from '@/components/shared/PlayerProfileModal';
 import type { BlackjackWebSocketClient, ChatMessagePayload } from '@/lib/websocket-client';
 
@@ -105,9 +106,6 @@ export function ChatPanel({
   const { messages, sendMessage, connected, error, setDisplayName, loadMore, loadingMore, chatPaused } = useChat(roomId, { wsClient, wsConnected });
   const [input, setInput] = useState('');
   const [open, setOpen] = useState(false);
-  const [showNameInput, setShowNameInput] = useState(false);
-  const [nameInput, setNameInput] = useState('');
-  const [nameSaving, setNameSaving] = useState(false);
   const [profileModalAddress, setProfileModalAddress] = useState<string | null>(null);
   const [unreadCount, setUnreadCount] = useState(0);
   const [showScrollToBottom, setShowScrollToBottom] = useState(false);
@@ -118,6 +116,7 @@ export function ChatPanel({
   const lastReadWhenSheetOpenRef = useRef(0);
   const lastMessageIdRef = useRef<string | null>(null);
   const { address: walletAddress } = useAccount();
+  const { gate: displayNameGate, openPrompt: openDisplayNamePrompt, prompt: displayNamePrompt } = useDisplayNameGate(setDisplayName);
 
   // Unread: when panel is open, mark all as read; when closed and messages grow, increment unread (skip initial load)
   useEffect(() => {
@@ -170,32 +169,30 @@ export function ChatPanel({
     }
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
+  const trySend = () => {
     const trimmed = input.trim();
     if (!trimmed || !connected || chatPaused) return;
-    sendMessage(trimmed);
-    setInput('');
+    const flush = () => {
+      sendMessage(trimmed);
+      setInput('');
+    };
+    if (displayNameGate(flush)) return;
+    flush();
+  };
+
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    trySend();
   };
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
     if (e.key !== 'Enter') return;
     if (compact) {
       e.preventDefault();
-      const trimmed = input.trim();
-      if (trimmed && connected && !chatPaused) {
-        sendMessage(trimmed);
-        setInput('');
-      }
-    } else {
-      if (!e.shiftKey) {
-        e.preventDefault();
-        const trimmed = input.trim();
-        if (trimmed && connected && !chatPaused) {
-          sendMessage(trimmed);
-          setInput('');
-        }
-      }
+      trySend();
+    } else if (!e.shiftKey) {
+      e.preventDefault();
+      trySend();
     }
   };
 
@@ -216,21 +213,6 @@ export function ChatPanel({
       });
     } else {
       setInput((prev) => (prev + emoji).slice(0, CHAT_MESSAGE_MAX_LENGTH));
-    }
-  };
-
-  const handleSaveDisplayName = async () => {
-    const trimmed = nameInput.trim();
-    if (!trimmed || trimmed.length < 3 || trimmed.length > 32 || !setDisplayName || nameSaving) return;
-    setNameSaving(true);
-    try {
-      await setDisplayName(trimmed);
-      setShowNameInput(false);
-      setNameInput('');
-    } catch {
-      // Error already surfaced by useChat/sendRequest
-    } finally {
-      setNameSaving(false);
     }
   };
 
@@ -417,10 +399,10 @@ export function ChatPanel({
           <div className="flex items-center justify-between gap-2">
             <span className="text-white font-semibold text-sm tracking-tight truncate">{title}</span>
             <div className="flex items-center gap-2 shrink-0">
-              {!compact && walletAddress && connected && !showNameInput && (
+              {!compact && walletAddress && connected && (
                 <button
                   type="button"
-                  onClick={() => setShowNameInput(true)}
+                  onClick={openDisplayNamePrompt}
                   className="text-xs shrink-0 text-cyan-400/90 hover:text-cyan-300 transition-colors"
                 >
                   Set display name
@@ -429,33 +411,7 @@ export function ChatPanel({
               {headerActions}
             </div>
           </div>
-          {walletAddress && connected && showNameInput && (
-            <div className="flex gap-2 items-center mt-1 flex-wrap">
-              <input
-                type="text"
-                value={nameInput}
-                onChange={(e) => setNameInput(e.target.value)}
-                placeholder="Display name (3–32 chars)"
-                maxLength={32}
-                className="flex-1 min-w-0 min-w-[120px] rounded-lg px-2 py-1.5 text-xs border border-white/20 bg-white/10 text-white placeholder:text-white/45 focus:outline-none focus:ring-1 focus:ring-cyan-500/50"
-              />
-              <button
-                type="button"
-                onClick={handleSaveDisplayName}
-                disabled={nameInput.trim().length < 3 || nameSaving}
-                className="px-2 py-1.5 rounded-lg text-xs font-medium shrink-0 bg-gradient-to-r from-cyan-600 to-cyan-700 text-white border border-cyan-500/40 disabled:opacity-40"
-              >
-                {nameSaving ? '…' : 'Save'}
-              </button>
-              <button
-                type="button"
-                onClick={() => { setShowNameInput(false); setNameInput(''); }}
-                className="px-2 py-1.5 rounded-lg text-xs shrink-0 text-white/60 hover:text-white transition-colors"
-              >
-                Cancel
-              </button>
-            </div>
-          )}
+          {walletAddress && connected && displayNamePrompt}
         </div>
       )}
       {panelContent}

@@ -61,6 +61,16 @@ function getTournamentIdFromRoom(room) {
 const REQUIRE_WS_AUTH = process.env.REQUIRE_WS_AUTH === 'true';
 // When true, never send auth_challenge — always trust query-param address (stops sign prompts for testing).
 const DISABLE_WS_AUTH = process.env.DISABLE_WS_AUTH === 'true';
+// Session cookie name used by /api/auth/verify (see auth.routes.ts).
+const SESSION_COOKIE_NAME = 'morb_session';
+function parseSessionCookie(cookieHeader) {
+    if (!cookieHeader) return null;
+    // Minimal "find one cookie by name" parse — no need to pull in cookie-parser
+    // for a single value. Matches "name=value" with optional surrounding semicolons.
+    const re = new RegExp('(?:^|;\\s*)' + SESSION_COOKIE_NAME + '=([^;]+)');
+    const m = cookieHeader.match(re);
+    return m ? decodeURIComponent(m[1]) : null;
+}
 const CHAT_MAX_LENGTH = 500;
 const CHAT_RATE_LIMIT_MS = 2000; // min 2s between messages per connection
 const CHAT_RECENT_MESSAGES_LIMIT = 50;
@@ -99,12 +109,15 @@ class WebSocketService {
     // Per-action rate limiting for BJ multi: address -> timestamp array (5 actions per 3s window)
     bjMultiActionTimestamps = new Map();
     betLimitsCache = null;
-    constructor(server, gameService, dbService, tournamentService, pokerGameService, bjMultiService) {
+    constructor(server, gameService, dbService, tournamentService, pokerGameService, bjMultiService, authService) {
         this.gameService = gameService;
         this.dbService = dbService;
         this.tournamentService = tournamentService;
         this.pokerGameService = pokerGameService ?? null;
         this.bjMultiService = bjMultiService ?? null;
+        // SIWE session lookup. When present, WS upgrades that carry a valid
+        // `morb_session` cookie are auto-authed without the EIP-712 challenge.
+        this.authService = authService ?? null;
         this.wss = new ws_1.WebSocketServer({ server });
         // Initialize public client for reading contract state
         this.publicClient = (0, chain_client_1.getPublicClient)();
@@ -303,9 +316,13 @@ class WebSocketService {
         ws.connectionId = connectionId;
         ws.isAlive = true;
         ws.isAuthenticated = false;
-        // Extract player address from query parameters (used as claimed address, verified via EIP-712)
+        // Extract player address from query parameters (legacy claimed address path).
         const url = new URL(request.url || '', 'http://localhost');
         const claimedAddress = url.searchParams.get('address')?.toLowerCase();
+        // SIWE cookie session token, if present. Set by /api/auth/verify on the
+        // backend host; browser includes it automatically on the WS upgrade
+        // request when SameSite=None + Secure (prod) — see auth.routes.ts.
+        const sessionToken = parseSessionCookie(request.headers.cookie || '');
         // IMPORTANT: attach handlers immediately. If we await DB calls before registering
         // ws.on('message'), early client requests (like get_balance right after connect)
         // can be dropped and will timeout client-side.
@@ -345,6 +362,68 @@ class WebSocketService {
             logger_1.logger.error('WebSocket error', { connectionId: ws.connectionId, error });
         });
         this.clients.set(connectionId, ws);
+        // ── Cookie-first auth (SIWE) ───────────────────────────────────────────
+        // If the upgrade request carries a valid `morb_session` cookie, use that
+        // as the authoritative wallet identity and skip the EIP-712 challenge.
+        // This is the path that eliminates the in-game wallet sign popup for
+        // users who already signed in via SIWE on the HTTP side.
+        if (sessionToken && this.authService) {
+            try {
+                const session = await this.authService.lookupSession(sessionToken);
+                if (session) {
+                    const walletAddress = session.walletAddress.toLowerCase();
+                    ws.playerAddress = walletAddress;
+                    ws.isAuthenticated = true;
+                    logger_1.logger.info('WS Auth: cookie session accepted', { connectionId, playerAddress: walletAddress });
+                    try {
+                        const player = await this.dbService.getOrCreatePlayer(walletAddress);
+                        await this.dbService.addActiveConnection(player.id, connectionId);
+                    }
+                    catch (error) {
+                        logger_1.logger.error('Failed to track active connection (cookie auth)', { connectionId, playerAddress: walletAddress, error });
+                    }
+                    let pokerChipBalance = '0';
+                    try {
+                        pokerChipBalance = (await (0, poker_chip_wallet_1.getPokerChipBalance)(this.dbService.getPool(), walletAddress)).toString();
+                    }
+                    catch (_a) { /* ignore */ }
+                    this.sendMessage(ws, {
+                        type: 'connection_established',
+                        payload: { connectionId, playerAddress: walletAddress, pokerChipBalance }
+                    });
+                    return; // Short-circuit — no challenge, no query-param fallback needed.
+                }
+                logger_1.logger.info('WS Auth: cookie present but session not found / expired', { connectionId });
+            }
+            catch (error) {
+                logger_1.logger.warn('WS Auth: cookie lookup failed', { connectionId, error });
+            }
+        }
+        // ── End cookie-first path. Fall through to legacy challenge / query-param.
+
+        // For BROWSER clients with no valid cookie (e.g. user landed on poker
+        // page before clicking deposit/withdraw), don't send the cryptic
+        // EIP-712 challenge. Send `siwe_required` so the client can trigger
+        // the friendly plain-text SIWE popup via the same path as apiFetch
+        // uses for HTTP 401s, then reconnect with the cookie set.
+        //
+        // Browsers always include `Origin` on cross-origin WS upgrades.
+        // Node.js bots and other private-key signers don't set Origin and
+        // continue down the legacy auth_challenge path.
+        const hasBrowserOrigin = typeof request.headers.origin === 'string' && request.headers.origin.length > 0;
+        if (hasBrowserOrigin && !ws.isAuthenticated) {
+            logger_1.logger.info('WS Auth: no session — prompting SIWE on browser client', { connectionId });
+            this.sendMessage(ws, {
+                type: 'siwe_required',
+                payload: { reason: sessionToken ? 'session_expired' : 'no_session' },
+            });
+            // Close with a custom code so the client knows this isn't a transport
+            // error. The client trigger code will sign SIWE, then reconnect.
+            try { ws.close(4001, 'siwe_required'); }
+            catch (_b) { /* socket may already be closed */ }
+            return;
+        }
+
         const sendAuthChallenge = REQUIRE_WS_AUTH && !DISABLE_WS_AUTH;
         if (sendAuthChallenge) {
             // Strict mode: generate auth challenge, client must sign to proceed
@@ -1085,13 +1164,43 @@ class WebSocketService {
             }
             const amount = payload.amount != null ? String(payload.amount) : undefined;
             const state = await this.pokerGameService.playerAction(tableId, handId, ws.playerAddress, action, amount);
+            // playerAction → broadcastState → broadcastPokerTableState already pushed
+            // the new state to the whole room. No need to re-issue getTableState +
+            // broadcastToRoom here; the actor's response below carries hole cards.
             this.sendMessage(ws, { type: 'poker_table_state', payload: state, requestId: message.requestId });
-            const broadcastState = await this.pokerGameService.getTableState(tableId, null);
-            this.broadcastToRoom(`poker:table:${tableId}`, { type: 'poker_table_state', payload: broadcastState });
         }
         catch (error) {
             logger_1.logger.error('Error poker action:', error);
             this.sendError(ws, error.message || 'Action failed', message.requestId);
+        }
+    }
+    async handlePokerShowCards(ws, message) {
+        try {
+            if (!this.pokerGameService || !ws.playerAddress) {
+                return this.sendError(ws, 'Poker not available or wallet required', message.requestId);
+            }
+            const payload = message.payload ?? {};
+            const { tableId, handId, decision } = payload;
+            if (!tableId || typeof tableId !== 'string') {
+                return this.sendError(ws, 'tableId required', message.requestId);
+            }
+            if (!handId || typeof handId !== 'string') {
+                return this.sendError(ws, 'handId required', message.requestId);
+            }
+            if (decision !== 'show' && decision !== 'muck') {
+                return this.sendError(ws, 'decision must be "show" or "muck"', message.requestId);
+            }
+            const state = await this.pokerGameService.decideFoldOutShow(tableId, handId, ws.playerAddress, decision);
+            this.sendMessage(ws, { type: 'poker_table_state', payload: state, requestId: message.requestId });
+            // Broadcast so spectators / other seats see the buttons disappear and
+            // (on 'show') the revealed hole cards.
+            const roomId = `poker:table:${tableId}`;
+            const broadcastState = await this.pokerGameService.getTableState(tableId, null);
+            this.broadcastToRoom(roomId, { type: 'poker_table_state', payload: broadcastState });
+        }
+        catch (error) {
+            logger_1.logger.error('Error poker show cards:', error);
+            this.sendError(ws, error.message || 'Show/muck failed', message.requestId);
         }
     }
     async handlePokerGetState(ws, message) {
@@ -1833,7 +1942,21 @@ class WebSocketService {
             if (!tournamentId)
                 return this.sendError(ws, 'tournamentId required', message.requestId);
             const state = await this.pokerTournamentService.getTournamentState(tournamentId);
-            this.sendMessage(ws, { type: 'poker_tournament_state', payload: state, requestId: message.requestId });
+            // MTT: attach the requesting wallet's current table assignment so the client can render
+            // / navigate to its own table. SNG = same as `state.tableId`; MTT = whichever table the
+            // player was seated at (post-consolidation, the final table for survivors). `null` when
+            // wallet isn't seated (spectator, busted, or pre-activation registration).
+            let myTableId = null;
+            if (state && ws.playerAddress) {
+                try {
+                    myTableId = await this.pokerTournamentService.getPlayerTableId(tournamentId, ws.playerAddress);
+                }
+                catch (lookupErr) {
+                    logger_1.logger.warn('getPlayerTableId failed (returning null myTableId)', { tournamentId, err: lookupErr });
+                }
+            }
+            const payload = state ? { ...state, myTableId } : state;
+            this.sendMessage(ws, { type: 'poker_tournament_state', payload, requestId: message.requestId });
         }
         catch (error) {
             logger_1.logger.error('Error getting poker tournament state:', error);

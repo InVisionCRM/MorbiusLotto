@@ -23,8 +23,8 @@ const TokenomicsSection = dynamic(
   () => import('@/components/home/tokenomics-section').then((m) => m.TokenomicsSection),
   { loading: () => <LoadingTip variant="inline" /> }
 )
-const PulseChainSection = dynamic(
-  () => import('@/components/home/pulsechain-section').then((m) => m.PulseChainSection),
+const BrandedTablesPitch = dynamic(
+  () => import('@/components/home/branded-tables-pitch').then((m) => m.BrandedTablesPitch),
   { loading: () => <LoadingTip variant="inline" /> }
 )
 const TableShowcaseDisplay = dynamic(
@@ -109,10 +109,8 @@ export default function HomePageClient() {
               <PlatformStatsSection />
 
               <HomeSectionDivider />
-              <PulseChainSection />
-
-              <HomeSectionDivider />
               <TableShowcaseDisplay />
+              <BrandedTablesPitch />
 
               <HomeSectionDivider />
               <SocialsSection />

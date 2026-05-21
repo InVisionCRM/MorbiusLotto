@@ -8,6 +8,7 @@ import { MORBIUS_HOLDER_DISTRIBUTOR_ADDRESS } from '@/lib/contracts';
 import { morbiusHolderDistributorAbi } from '@/abi/morbius-holder-distributor';
 import { pulsechain } from '@/lib/chains';
 import { toast } from 'sonner';
+import { useGasParams } from '@/lib/tx-gas';
 
 const DISTRIBUTOR_ADDRESS = MORBIUS_HOLDER_DISTRIBUTOR_ADDRESS as `0x${string}`;
 
@@ -37,6 +38,7 @@ export default function ClaimFeesPage() {
 
   const { writeContract, data: txHash, isPending, error: writeError } = useWriteContract();
   const { isLoading: isConfirming, isSuccess, isError, error: receiptError } = useWaitForTransactionReceipt({ hash: txHash });
+  const getGas = useGasParams();
 
   const earnedBigInt = earned ?? 0n;
   const hasClaimable = earnedBigInt > 0n;
@@ -74,7 +76,7 @@ export default function ClaimFeesPage() {
         address: DISTRIBUTOR_ADDRESS,
         abi: morbiusHolderDistributorAbi,
         functionName: 'updatePool',
-        maxPriorityFeePerGas: 200_000n, // PulseChain tip
+        ...getGas(),
       } as unknown as Parameters<typeof writeContract>[0]);
     }).catch((e) => toast.error(e instanceof Error ? e.message : 'Failed to switch chain'));
   };
@@ -89,7 +91,7 @@ export default function ClaimFeesPage() {
         address: DISTRIBUTOR_ADDRESS,
         abi: morbiusHolderDistributorAbi,
         functionName: 'claim',
-        maxPriorityFeePerGas: 200_000n, // PulseChain tip
+        ...getGas(),
       } as unknown as Parameters<typeof writeContract>[0]);
     }).catch((e) => toast.error(e instanceof Error ? e.message : 'Failed to switch chain'));
   };

@@ -9,6 +9,7 @@ import type { BlackjackWebSocketClient } from '@/lib/websocket-client';
 import { TOURNAMENT_PRIZE_ESCROW_ADDRESS } from '@/lib/contracts';
 import { tournamentPrizeEscrowV6Abi } from '@/abi/tournament-prize-escrow-v6';
 import { tournamentIdToBytes32 } from '@/lib/tournament-id-bytes32';
+import { useGasParams } from '@/lib/tx-gas';
 
 const ESCROW_ZERO = '0x0000000000000000000000000000000000000000';
 
@@ -43,6 +44,7 @@ export function TournamentCancelReclaim({
 }: TournamentCancelReclaimProps) {
   const { address } = useAccount();
   const { writeContractAsync } = useWriteContract();
+  const getGas = useGasParams();
   const [isCancelling, setIsCancelling] = useState(false);
   const [isReclaiming, setIsReclaiming] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -107,7 +109,7 @@ export function TournamentCancelReclaim({
         args: [idBytes32],
         account: address,
         chain: pulsechain,
-        maxPriorityFeePerGas: 200_000n, // PulseChain tip
+        ...getGas(),
       });
       setSuccess(`Funds reclaimed successfully! Transaction: ${hash.slice(0, 10)}...`);
       onReclaim?.();

@@ -8,6 +8,100 @@ import type { PreActionOption } from '@/components/poker/PokerActions';
 
 type PokerActionType = 'fold' | 'check' | 'call' | 'bet' | 'raise';
 
+/**
+ * Local prediction applied to {@link PokerTableState} immediately after the
+ * user clicks fold/check/call, so the UI updates without waiting on the
+ * server round-trip. Cleared once the authoritative response/broadcast lands.
+ */
+export type PokerOptimisticOverlay = {
+  handId: string;
+  seatIndex: number;
+  action: 'fold' | 'check' | 'call';
+  /** Chips moved from stack → pot on `call`. '0' for fold/check. */
+  callChips: string;
+};
+
+/**
+ * Apply an optimistic overlay to authoritative state. Idempotent: skipped
+ * when the server's `lastAction` already reflects the same action (broadcast
+ * landed before the response resolved). Stale overlays from a prior hand are
+ * also skipped.
+ */
+export function applyPokerOptimisticOverlay(
+  state: PokerTableState,
+  overlay: PokerOptimisticOverlay,
+): PokerTableState {
+  const hand = state.currentHand;
+  if (!hand || hand.handId !== overlay.handId) return state;
+
+  // If the server's most recent action equals our optimistic one, the
+  // authoritative broadcast already lands the same change — don't double-apply.
+  // (Single WebSocket connection delivers broadcast → response in send-order, so
+  // our `.then()` clears the overlay before any later broadcast can arrive.)
+  const la = hand.lastAction;
+  if (la && la.position === overlay.seatIndex && la.action === overlay.action) {
+    return state;
+  }
+
+  const seat = state.seats[overlay.seatIndex];
+  if (!seat) return state;
+
+  const nextSeats = state.seats.map((s, i) => {
+    if (i !== overlay.seatIndex) return { ...s, isActing: false };
+    if (overlay.action === 'fold') return { ...s, folded: true, isActing: false };
+    if (overlay.action === 'check') return { ...s, isActing: false };
+    // call
+    let chips: bigint;
+    try {
+      chips = BigInt(overlay.callChips);
+    } catch {
+      chips = 0n;
+    }
+    const stackBI = safeBigInt(s.stack);
+    const clamped = chips > stackBI ? stackBI : chips;
+    return {
+      ...s,
+      stack: (stackBI - clamped).toString(),
+      currentBet: (safeBigInt(s.currentBet) + clamped).toString(),
+      isActing: false,
+    };
+  });
+
+  let nextPot = hand.pot;
+  if (overlay.action === 'call') {
+    const chips = safeBigInt(overlay.callChips);
+    const stackBI = safeBigInt(seat.stack);
+    const clamped = chips > stackBI ? stackBI : chips;
+    nextPot = (safeBigInt(hand.pot) + clamped).toString();
+  }
+
+  return {
+    ...state,
+    seats: nextSeats,
+    currentHand: {
+      ...hand,
+      // Null out actingPosition so canAct flips to false everywhere until the
+      // server tells us who's next. Avoids guessing chevtek's next-actor logic.
+      actingPosition: null,
+      pot: nextPot,
+      lastAction: {
+        position: overlay.seatIndex,
+        action: overlay.action,
+        amount: overlay.action === 'call' ? overlay.callChips : '0',
+      },
+    },
+  };
+}
+
+function safeBigInt(s: string | null | undefined): bigint {
+  if (!s) return 0n;
+  try {
+    return BigInt(s);
+  } catch {
+    return 0n;
+  }
+}
+
 interface UsePokerActionsLogicArgs {
   tableId: string;
   state: PokerTableState | null;
@@ -16,6 +110,7 @@ interface UsePokerActionsLogicArgs {
   effectivePlayerAddress: string | null;
   clientRef: MutableRefObject<BlackjackWebSocketClient | null>;
   applyE2EMockAction: (action: PokerActionType, amount?: string) => boolean;
+  setOptimisticOverlay: Dispatch<SetStateAction<PokerOptimisticOverlay | null>>;
 }
 
 export function usePokerActionsLogic({
@@ -26,6 +121,7 @@ export function usePokerActionsLogic({
   effectivePlayerAddress,
   clientRef,
   applyE2EMockAction,
+  setOptimisticOverlay,
 }: UsePokerActionsLogicArgs) {
   const [queuedPreAction, setQueuedPreAction] = useState<PreActionOption>(null);
 
@@ -61,6 +157,22 @@ export function usePokerActionsLogic({
       if (!currentHand || !clientRef.current) return;
       // Manual action wins over any queued pre-action.
       setQueuedPreAction(null);
+
+      // Optimistic update for the three actions whose outcome is mechanically
+      // deterministic from current state. bet/raise need server-side min-raise
+      // validation, so we wait for the authoritative response there.
+      if (
+        (action === 'fold' || action === 'check' || action === 'call') &&
+        mySeatIndex >= 0
+      ) {
+        setOptimisticOverlay({
+          handId: currentHand.handId,
+          seatIndex: mySeatIndex,
+          action,
+          callChips: action === 'call' ? (currentHand.toCall || '0') : '0',
+        });
+      }
+
       clientRef.current
         .pokerAction(
           tableId,
@@ -68,10 +180,16 @@ export function usePokerActionsLogic({
           action,
           amount ?? (action === 'call' ? currentHand.toCall : undefined),
         )
-        .then(setState)
-        .catch((err) => toast.error((err as Error).message));
+        .then((next) => {
+          setState(next);
+          setOptimisticOverlay(null);
+        })
+        .catch((err) => {
+          setOptimisticOverlay(null);
+          toast.error((err as Error).message);
+        });
     },
-    [tableId, currentHand, applyE2EMockAction, clientRef, setState]
+    [tableId, currentHand, mySeatIndex, applyE2EMockAction, clientRef, setState, setOptimisticOverlay]
   );
 
   const handleFold = useCallback(() => {
@@ -105,9 +223,10 @@ export function usePokerActionsLogic({
   );
 
   useEffect(() => {
-    // Keep pre-actions scoped to the current hand only.
+    // Keep pre-actions and any stale optimistic overlay scoped to the current hand only.
     setQueuedPreAction(null);
-  }, [hand?.handId]);
+    setOptimisticOverlay(null);
+  }, [hand?.handId, setOptimisticOverlay]);
 
   const autoActionKeyRef = useRef<string | null>(null);
   useEffect(() => {

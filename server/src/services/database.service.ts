@@ -115,6 +115,25 @@ export interface TopPlayerEntry {
 /** Instant lottery leaderboard entry (same shape as TopPlayerEntry for API consistency). */
 export type LotteryTopPlayerEntry = TopPlayerEntry;
 
+/**
+ * Poker leaderboard row — one player's all-time aggregate across completed
+ * hands, joined with their `chat_display_names` profile for username display.
+ * Chip-denominated fields ride the wire as TEXT to preserve the NUMERIC(78,0)
+ * precision used in the underlying tables.
+ */
+export interface PokerTopPlayerRow {
+  rank: number;
+  address: string;
+  display_name: string | null;
+  profile_image_url: string | null;
+  net_chips: string;
+  biggest_pot: string;
+  hands_played: number;
+  hands_won: number;
+  vpip_hands: number;
+  showdowns: number;
+}
+
 /** Instant lottery per-player stats (from indexed plays). */
 export interface LotteryPlayerStats {
   total_games: number;
@@ -3359,6 +3378,110 @@ export class DatabaseService implements MoneyDatabaseQueries {
     }));
   }
 
+  /**
+   * Paginated chip ledger for a player, oldest-row-first not — newest first.
+   * Joins tournaments + poker_tables to surface a friendly `refName` so callers
+   * can render "Friday Night $5" instead of a UUID.
+   *
+   * Category filter maps to subsets of PokerChipLedgerReason:
+   *   - cash         → cash_join, cash_leave, cash_reup, cash_admin_return
+   *   - tournaments  → tournament_create_guarantee, tournament_buyin, tournament_refund, tournament_prize
+   *   - exchanges    → purchase, cashout
+   *   - all (default)→ no filter
+   *
+   * Returns the page plus an unfiltered total so the UI can show "1 of 247".
+   */
+  async getPokerChipLedger(
+    address: string,
+    options: {
+      limit?: number;
+      offset?: number;
+      category?: 'all' | 'cash' | 'tournaments' | 'exchanges';
+    } = {}
+  ): Promise<{
+    entries: Array<{
+      id: string;
+      delta: string;
+      balanceAfter: string;
+      reason: string;
+      refType: string | null;
+      refId: string | null;
+      refName: string | null;
+      createdAt: string;
+    }>;
+    total: number;
+    limit: number;
+    offset: number;
+  }> {
+    const normalized = this.normalizeAddress(address);
+    const limit = Math.min(Math.max(options.limit ?? 5, 1), 200);
+    const offset = Math.max(options.offset ?? 0, 0);
+    const category = options.category ?? 'all';
+
+    const CATEGORY_REASONS: Record<'cash' | 'tournaments' | 'exchanges', readonly string[]> = {
+      cash: ['cash_join', 'cash_leave', 'cash_reup', 'cash_admin_return'],
+      tournaments: [
+        'tournament_create_guarantee',
+        'tournament_buyin',
+        'tournament_refund',
+        'tournament_prize',
+      ],
+      exchanges: ['purchase', 'cashout'],
+    };
+
+    const params: unknown[] = [normalized];
+    let reasonClause = '';
+    if (category !== 'all') {
+      params.push(CATEGORY_REASONS[category]);
+      reasonClause = ` AND l.reason = ANY($${params.length}::text[])`;
+    }
+
+    // Use COUNT(*) OVER() so the page and total come back in one round trip;
+    // the wallet+created_at index keeps this efficient even for large ledgers.
+    // Poker cash tables don't have human names, so refName only resolves for
+    // tournaments. Client can render a short ref_id for table rows.
+    params.push(limit, offset);
+    const query = `
+      SELECT
+        l.id,
+        l.delta::TEXT AS delta,
+        l.balance_after::TEXT AS balance_after,
+        l.reason,
+        l.ref_type,
+        l.ref_id,
+        l.created_at AT TIME ZONE 'UTC' AS created_at,
+        COUNT(*) OVER() AS total,
+        CASE
+          WHEN l.ref_type = 'tournament' THEN tour.name
+          ELSE NULL
+        END AS ref_name
+      FROM poker_chip_ledger l
+      LEFT JOIN tournaments tour ON l.ref_type = 'tournament' AND tour.id = l.ref_id
+      WHERE l.wallet_address = $1
+      ${reasonClause}
+      ORDER BY l.created_at DESC
+      LIMIT $${params.length - 1} OFFSET $${params.length}
+    `;
+
+    const result = await this.pool.query(query, params);
+    const total = result.rows.length > 0 ? Number(result.rows[0].total) : 0;
+    return {
+      entries: result.rows.map((r: any) => ({
+        id: String(r.id),
+        delta: String(r.delta ?? '0'),
+        balanceAfter: String(r.balance_after ?? '0'),
+        reason: String(r.reason),
+        refType: r.ref_type ?? null,
+        refId: r.ref_id ?? null,
+        refName: r.ref_name ?? null,
+        createdAt: r.created_at ? new Date(r.created_at).toISOString() : '',
+      })),
+      total,
+      limit,
+      offset,
+    };
+  }
+
   /** Aggregate poker stats for a player (from completed hands). */
   async getPokerPlayerStats(address: string, scope: 'cash' | 'tournament' | 'all' = 'cash'): Promise<{
     total_hands: number;
@@ -3818,8 +3941,8 @@ export class DatabaseService implements MoneyDatabaseQueries {
     requesterAddress?: string | null
   ): Promise<{
     category: 'net_chips' | 'biggest_pot' | 'hands_played';
-    rows: Array<{ rank: number; address: string; net_chips: string; biggest_pot: string; hands_played: number }>;
-    requester: { rank: number; address: string; net_chips: string; biggest_pot: string; hands_played: number } | null;
+    rows: PokerTopPlayerRow[];
+    requester: PokerTopPlayerRow | null;
   }> {
     const safeLimit = Math.min(Math.max(limit | 0, 1), 100);
     // net_chips / biggest_pot are aggregated as TEXT (NUMERIC(78,0) cast to TEXT
@@ -3834,14 +3957,26 @@ export class DatabaseService implements MoneyDatabaseQueries {
       : category === 'biggest_pot' ? 't.biggest_pot::NUMERIC DESC'
       : 't.hands_played DESC';
 
+    // chat_display_names.wallet_address is always stored lowercase (enforced by
+    // the upsert paths in this service and poker-bot.ts), so the join doesn't
+    // need LOWER() on the cdn side — keeps the lookup index-friendly. We
+    // aggregate display_name/profile_image_url with MAX() purely so we don't
+    // have to mention them in GROUP BY; cdn is uniquely keyed by wallet so the
+    // "MAX of one" is just a passthrough.
     const baseSelect = `
       SELECT
         LOWER(p.player_address) AS address,
+        MAX(cdn.display_name) AS display_name,
+        MAX(cdn.profile_image_url) AS profile_image_url,
         COALESCE(SUM(p.won_amount - p.contributed), 0)::TEXT AS net_chips,
         COALESCE(MAX(p.won_amount) FILTER (WHERE p.won), 0)::TEXT AS biggest_pot,
-        COUNT(*)::INT AS hands_played
+        COUNT(*)::INT AS hands_played,
+        COUNT(*) FILTER (WHERE p.won)::INT AS hands_won,
+        COUNT(*) FILTER (WHERE p.vpip)::INT AS vpip_hands,
+        COUNT(*) FILTER (WHERE p.saw_showdown)::INT AS showdowns
       FROM poker_hand_players p
       JOIN poker_hands h ON h.id = p.hand_id
+      LEFT JOIN chat_display_names cdn ON cdn.wallet_address = LOWER(p.player_address)
       WHERE h.completed_at IS NOT NULL
       GROUP BY LOWER(p.player_address)
     `;
@@ -3850,15 +3985,21 @@ export class DatabaseService implements MoneyDatabaseQueries {
       `SELECT * FROM (${baseSelect}) t ORDER BY ${orderClause} LIMIT $1`,
       [safeLimit]
     );
-    const rows = topResult.rows.map((r: any, idx: number) => ({
+    const mapRow = (r: any, idx: number): PokerTopPlayerRow => ({
       rank: idx + 1,
       address: String(r.address),
+      display_name: r.display_name ?? null,
+      profile_image_url: r.profile_image_url ?? null,
       net_chips: String(r.net_chips ?? '0'),
       biggest_pot: String(r.biggest_pot ?? '0'),
       hands_played: Number(r.hands_played ?? 0),
-    }));
+      hands_won: Number(r.hands_won ?? 0),
+      vpip_hands: Number(r.vpip_hands ?? 0),
+      showdowns: Number(r.showdowns ?? 0),
+    });
+    const rows = topResult.rows.map((r: any, idx: number) => mapRow(r, idx));
 
-    let requester: typeof rows[number] | null = null;
+    let requester: PokerTopPlayerRow | null = null;
     if (requesterAddress) {
       const normalized = this.normalizeAddress(requesterAddress);
       const inTopN = rows.find((r) => r.address === normalized);
@@ -3884,11 +4025,8 @@ export class DatabaseService implements MoneyDatabaseQueries {
         const row = rankResult.rows[0];
         if (row) {
           requester = {
+            ...mapRow(row, 0),
             rank: Number(row.rank),
-            address: String(row.address),
-            net_chips: String(row.net_chips ?? '0'),
-            biggest_pot: String(row.biggest_pot ?? '0'),
-            hands_played: Number(row.hands_played ?? 0),
           };
         }
       }

@@ -3,6 +3,7 @@ import { useReadContract, useWriteContract, useWaitForTransactionReceipt } from 
 import type { Address } from 'viem'
 import { ERC20_ABI } from '@/abi/erc20'
 import { pulsechain } from '@/lib/chains'
+import { useGasParams } from '@/lib/tx-gas'
 
 interface UseTokenApprovalParams {
   tokenAddress: Address
@@ -37,6 +38,7 @@ export function useTokenApproval({
   defaultToUnlimited = false,
 }: UseTokenApprovalParams): UseTokenApprovalReturn {
   const [optimisticAllowance, setOptimisticAllowance] = useState<bigint | null>(null)
+  const getGas = useGasParams()
 
   // Read current allowance
   const {
@@ -111,7 +113,7 @@ export function useTokenApproval({
         functionName: 'approve',
         args: [spenderAddress, amountToApprove],
         chainId: pulsechain.id,
-        maxPriorityFeePerGas: 200_000n, // PulseChain tip
+        ...getGas(),
       })
     } catch (error) {
       console.error('Approval error:', error)

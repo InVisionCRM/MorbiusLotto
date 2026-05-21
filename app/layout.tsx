@@ -95,10 +95,6 @@ export default function RootLayout({
         <link rel="apple-touch-startup-image" media="(device-width:744px) and (device-height:1133px) and (-webkit-device-pixel-ratio:2) and (orientation:portrait)" href="/icons/splash/ipad-mini-portrait.png" />
         <link rel="apple-touch-startup-image" media="(device-width:744px) and (device-height:1133px) and (-webkit-device-pixel-ratio:2) and (orientation:landscape)" href="/icons/splash/ipad-mini-landscape.png" />
 
-        {/* Preload hero background images so LCP isn't delayed by CSS discovery */}
-        <link rel="preload" as="image" href="/morbius/Morbius-glass-chip-16x9.jpeg" media="(max-width: 767px)" />
-        <link rel="preload" as="image" href="/morbius/Morbius-glass-chip-16x9.jpeg" media="(min-width: 768px)" />
-
         {/* Wallet / modal SDKs — warm connections early (Lighthouse preconnect candidates) */}
         <link rel="preconnect" href="https://pulse.walletconnect.org" />
         <link rel="preconnect" href="https://api.web3modal.org" />

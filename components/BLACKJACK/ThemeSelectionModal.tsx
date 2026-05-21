@@ -221,7 +221,7 @@ export default function ThemeSelectionModal({
             </select>
           </div>
 
-          <div className="flex-1 overflow-y-auto">
+          <div className="flex-1 min-h-0 overflow-y-auto overscroll-contain">
             {activeTab === 'images' && (
               <div className="grid grid-cols-2 sm:grid-cols-5 gap-0">
                 {filteredImages.length === 0 ? (

@@ -109,6 +109,24 @@ export interface PokerCurrentHand {
    * False on fold-out wins — clients must not expose uncalled winners' hole cards.
    */
   handWentToShowdown?: boolean;
+  /**
+   * Fold-out (uncontested) winner address when handWentToShowdown=false. Used by
+   * the client to offer that player the "Show / Muck" choice during the brief
+   * window after the hand resolves. Lowercase.
+   */
+  foldOutWinnerAddress?: string;
+  /**
+   * ISO wall time when the fold-out winner's Show/Muck choice expires. Set
+   * while `foldOutShowDecision === 'pending'` and the window is still open.
+   * Omitted once the player decides or the window closes.
+   */
+  foldOutShowMuckExpiresAt?: string;
+  /**
+   * Outcome of the fold-out winner's choice: `'pending'` while the window is
+   * open, `'shown'` after they opted to reveal, `'mucked'` after they opted to
+   * hide. Cleared on the next hand.
+   */
+  foldOutShowDecision?: 'pending' | 'shown' | 'mucked';
   /** At showdown: winner(s), amount each receives, optional hand name, and 5 card indices forming best hand */
   winners?: { address: string; amount: string; handName?: string; winningCardIndices?: number[] }[];
   /** ISO wall time when the server will auto-start the next hand (showdown intermission only). */
@@ -220,6 +238,22 @@ const RUNOUT_STEP_DELAY_MS = {
 // (~6s wall clock) finishes well before the threshold.
 const RUNOUT_STUCK_THRESHOLD_SECONDS = 30;
 
+// Fold-out (uncontested) win: time the winning player has to choose "Show" vs
+// "Muck" before the window closes and the cards stay hidden. Must be shorter
+// than SHOWDOWN_DELAY_MS so the offer never overlaps the next hand's deal.
+const FOLD_OUT_SHOW_WINDOW_MS = 8_000;
+
+interface FoldOutShowEligibility {
+  handId: string;
+  /** Lowercase winner address. */
+  winnerAddress: string;
+  /** Epoch-ms after which the offer has expired. */
+  expiresAt: number;
+  decision: 'pending' | 'shown' | 'mucked';
+  /** Populated once the winner clicks "Show". */
+  revealedHoleCards?: number[];
+}
+
 // ---------------------------------------------------------------------------
 // PokerGameService
 // ---------------------------------------------------------------------------
@@ -266,6 +300,14 @@ export class PokerGameService {
    * stack change is revealed alongside the winner badges.
    */
   private runoutFrozenStacks: Map<string, Map<string, string>> = new Map();
+  /**
+   * Per-table fold-out show/muck offer state. Populated by `persistShowdown`
+   * when the hand ended without a showdown (sole survivor), consumed by
+   * `getTableState` (to expose offer / revealed cards) and `decideFoldOutShow`
+   * (to record the winner's choice). Stale entries are harmless — readers
+   * always gate on `handId === currentHand.handId`.
+   */
+  private foldOutShowEligibility: Map<string, FoldOutShowEligibility> = new Map();
   /**
    * Per-step runout delays default on in production, off under jest. When
    * disabled `scheduleRunout` runs all frames inline (no setTimeout chain),
@@ -1753,6 +1795,25 @@ export class PokerGameService {
             showdownHands[this.normalizeAddress(row.player_address)] = cards;
           }
           currentHand.showdownHands = showdownHands;
+        } else {
+          // Fold-out win: surface the Show/Muck offer (if still open) and any
+          // already-revealed hole cards. handId-scoped so a stale entry from a
+          // prior hand never leaks into the current one.
+          const elig = this.foldOutShowEligibility.get(tableId);
+          if (elig && elig.handId === handId) {
+            const stillOpen = elig.decision === 'pending' && Date.now() < elig.expiresAt;
+            currentHand.foldOutWinnerAddress = elig.winnerAddress;
+            currentHand.foldOutShowDecision = elig.decision;
+            if (stillOpen) {
+              currentHand.foldOutShowMuckExpiresAt = new Date(elig.expiresAt).toISOString();
+            }
+            if (elig.decision === 'shown' && elig.revealedHoleCards) {
+              currentHand.showdownHands = {
+                ...(currentHand.showdownHands ?? {}),
+                [elig.winnerAddress]: elig.revealedHoleCards,
+              };
+            }
+          }
         }
 
         if (h.result) {
@@ -2645,6 +2706,76 @@ export class PokerGameService {
     const handRow = await pool.query('SELECT hand_number FROM poker_hands WHERE id = $1', [handId]);
     const handNumber = Number(handRow.rows[0]?.hand_number ?? 0);
     this.pendingPostHandHandNumbers.set(tableId, handNumber);
+
+    // Fold-out show/muck offer: when the hand ended with no showdown (sole
+    // survivor — everyone else folded), give that winner a short window to
+    // optionally reveal their hole cards. `realShowdown` here is the same
+    // signal used above to skip refund pots — true if ≥2 players were still
+    // in at resolution. A real showdown auto-exposes hole cards, so the
+    // offer only makes sense for the fold-out branch.
+    if (!realShowdown && resultWinners.length === 1) {
+      this.foldOutShowEligibility.set(tableId, {
+        handId,
+        winnerAddress: this.normalizeAddress(resultWinners[0].address),
+        expiresAt: Date.now() + FOLD_OUT_SHOW_WINDOW_MS,
+        decision: 'pending',
+      });
+    } else {
+      this.foldOutShowEligibility.delete(tableId);
+    }
+  }
+
+  // ---------------------------------------------------------------------------
+  // decideFoldOutShow — winner of an uncontested pot picks Show vs Muck
+  // ---------------------------------------------------------------------------
+
+  /**
+   * Record the fold-out winner's Show/Muck decision. On 'show', looks up their
+   * hole cards from `poker_hand_hole_cards` and stores them in-memory so the
+   * next `getTableState` broadcast can reveal them to the room. On 'muck',
+   * just marks the decision so the buttons disappear for everyone.
+   *
+   * Returns the updated table state for the caller; the websocket layer is
+   * responsible for broadcasting it to the room.
+   */
+  async decideFoldOutShow(
+    tableId: string,
+    handId: string,
+    playerAddress: string,
+    decision: 'show' | 'muck',
+  ): Promise<PokerTableState> {
+    const elig = this.foldOutShowEligibility.get(tableId);
+    if (!elig) throw new Error('No show/muck offer is active');
+    if (elig.handId !== handId) throw new Error('Hand has already changed');
+    if (elig.decision !== 'pending') throw new Error('Decision already made');
+    if (Date.now() > elig.expiresAt) {
+      elig.decision = 'mucked';
+      throw new Error('Show/muck window has expired');
+    }
+    const normalized = this.normalizeAddress(playerAddress);
+    if (elig.winnerAddress !== normalized) {
+      throw new Error('Only the uncalled winner can show or muck');
+    }
+
+    if (decision === 'muck') {
+      elig.decision = 'mucked';
+    } else {
+      const pool = this.getPool();
+      const r = await pool.query(
+        'SELECT cards FROM poker_hand_hole_cards WHERE hand_id = $1 AND player_address = $2',
+        [handId, normalized],
+      );
+      if (r.rows.length === 0) {
+        throw new Error('Hole cards no longer available');
+      }
+      const cards = Array.isArray(r.rows[0].cards)
+        ? (r.rows[0].cards as number[])
+        : (JSON.parse(r.rows[0].cards ?? '[]') as number[]);
+      elig.decision = 'shown';
+      elig.revealedHoleCards = cards;
+    }
+
+    return this.getTableState(tableId, normalized);
   }
 
   // ---------------------------------------------------------------------------

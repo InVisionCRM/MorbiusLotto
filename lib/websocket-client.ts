@@ -178,6 +178,23 @@ export interface PokerCurrentHand {
    * False on fold-out wins — uncalled winners' hole cards are not public.
    */
   handWentToShowdown?: boolean;
+  /**
+   * Lowercase address of the fold-out (uncontested) winner. Set only when
+   * `handWentToShowdown === false`. Clients use this to offer the matching
+   * player a Show / Muck choice during the post-hand intermission.
+   */
+  foldOutWinnerAddress?: string;
+  /**
+   * ISO wall time the fold-out Show/Muck window closes. Present while the
+   * choice is still pending; omitted once the winner decides or the window
+   * elapses.
+   */
+  foldOutShowMuckExpiresAt?: string;
+  /**
+   * Outcome of the fold-out winner's Show/Muck choice. `'shown'` exposes their
+   * hole cards via `showdownHands`; `'mucked'` keeps them hidden.
+   */
+  foldOutShowDecision?: 'pending' | 'shown' | 'mucked';
   /** At showdown: winner(s), amount each receives, optional hand name, and 5 card indices forming best hand */
   winners?: { address: string; amount: string; handName?: string; winningCardIndices?: number[] }[];
   /**
@@ -348,6 +365,8 @@ export class BlackjackWebSocketClient {
     }
   }
 
+  private sessionClearedHandler: (() => void) | null = null;
+
   constructor(
     private serverUrl: string,
     private playerAddress?: string,
@@ -359,6 +378,19 @@ export class BlackjackWebSocketClient {
       );
     }
     this.signTypedData = signTypedData ?? null;
+
+    // When SiweProvider clears the session cookie (wallet mismatch / manual sign-out),
+    // drop the current socket so it can't keep authenticating as the old wallet.
+    // The next caller of connect() will hit `siwe_required` and prompt a fresh SIWE
+    // sign-in for whichever wallet is now connected.
+    if (typeof window !== 'undefined') {
+      this.sessionClearedHandler = () => {
+        if (this.ws) {
+          try { this.ws.close(); } catch { /* ignore */ }
+        }
+      };
+      window.addEventListener('siwe:session-cleared', this.sessionClearedHandler);
+    }
   }
 
   /**
@@ -417,6 +449,28 @@ export class BlackjackWebSocketClient {
       socket.onmessage = (event) => {
         try {
           const msg = JSON.parse(event.data as string);
+
+          // Server tells us we need a SIWE session before we can connect.
+          // Trigger the friendly plain-text SIWE popup via the same handler
+          // apiFetch uses for HTTP 401s, then reconnect once the cookie is set.
+          if (msg.type === 'siwe_required' && !settled) {
+            settled = true;
+            logger.info('WebSocket: server requested SIWE sign-in', { reason: msg.payload?.reason });
+            // Lazy-import to avoid pulling apiFetch into bundles that don't need it.
+            import('./api-auth')
+              .then(({ triggerSignIn }) => triggerSignIn())
+              .then(() => {
+                // Cookie is set. Reconnect; server will accept us via cookie auth.
+                logger.info('WebSocket: SIWE sign-in complete, reconnecting');
+                this.connect().catch((err) => logger.error('WS reconnect after SIWE failed', err));
+                resolve();
+              })
+              .catch((err) => {
+                logger.warn('WebSocket: SIWE sign-in declined or failed', err);
+                reject(new Error('SIWE sign-in required to connect'));
+              });
+            return;
+          }
 
           if (msg.type === WS_MESSAGE_TYPES.authChallenge && !settled) {
             const skipAuth = typeof process !== 'undefined' && process.env.NEXT_PUBLIC_SKIP_WS_AUTH === 'true';
@@ -583,6 +637,10 @@ export class BlackjackWebSocketClient {
   disconnect() {
     this.intentionalClose = true;
     this.rejectAllPendingRequests('WebSocket disconnected');
+    if (typeof window !== 'undefined' && this.sessionClearedHandler) {
+      window.removeEventListener('siwe:session-cleared', this.sessionClearedHandler);
+      this.sessionClearedHandler = null;
+    }
     if (this.ws) {
       const w = this.ws;
       this.ws = null;
@@ -898,6 +956,15 @@ export class BlackjackWebSocketClient {
     const payload: { tableId: string; handId: string; action: string; amount?: string } = { tableId, handId, action };
     if (amount != null) payload.amount = amount;
     return this.sendRequest(WS_MESSAGE_TYPES.pokerAction, payload);
+  }
+
+  /**
+   * Decide Show / Muck for a fold-out (uncontested) win. Only the winning
+   * player can call this, and only during the short window the server
+   * advertises via `currentHand.foldOutShowMuckExpiresAt`.
+   */
+  async pokerShowCards(tableId: string, handId: string, decision: 'show' | 'muck'): Promise<PokerTableState> {
+    return this.sendRequest(WS_MESSAGE_TYPES.pokerShowCards, { tableId, handId, decision });
   }
 
   /** Voluntarily sit out of future hands. Seat is held; blinds still post. Auth required. */

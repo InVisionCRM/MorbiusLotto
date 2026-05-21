@@ -1,10 +1,180 @@
 'use client';
 
-import React from 'react';
+import React, { useEffect, useState } from 'react';
+import Image from 'next/image';
 import { parseEther } from 'viem';
 import { BlackjackMobileActionBar } from '@/components/BLACKJACK/BlackjackMobileActionBar';
 import { BettingPanelMobile } from '@/components/BLACKJACK/BettingPanelMobile';
 import type { BJMultiHandObj } from '@/lib/websocket-client';
+
+const DEFAULT_TOKEN_LOGO = '/morbius/MorbiusLogo (3).png';
+const DEFAULT_TOKEN_TICKER = 'MORBIUS';
+const BETTING_TIMEOUT_SECONDS = 15;
+const TURN_TIMEOUT_SECONDS = 30;
+
+type SpectatorPhase = 'waiting' | 'betting' | 'playing' | 'dealer_turn' | 'completed' | undefined;
+
+function useNowTick(enabled: boolean, intervalMs = 500) {
+  const [now, setNow] = useState(() => Date.now());
+  useEffect(() => {
+    if (!enabled) return;
+    const id = setInterval(() => setNow(Date.now()), intervalMs);
+    return () => clearInterval(id);
+  }, [enabled, intervalMs]);
+  return now;
+}
+
+function formatCountdown(seconds: number): string {
+  const s = Math.max(0, Math.floor(seconds));
+  const m = Math.floor(s / 60);
+  const r = s % 60;
+  return `${m}:${r.toString().padStart(2, '0')}`;
+}
+
+function getCountdownSeconds(startedAt: string | null, maxSeconds: number, nowMs: number): number | null {
+  if (!startedAt) return null;
+  const startMs = new Date(startedAt).getTime();
+  if (!Number.isFinite(startMs) || startMs <= 0) return null;
+  return Math.max(0, maxSeconds - (nowMs - startMs) / 1000);
+}
+
+function describePhase(
+  phase: SpectatorPhase,
+  actingSeatPosition: number | null,
+  bettingStartedAt: string | null,
+  turnStartedAt: string | null,
+  nowMs: number,
+): { label: string; countdown: string | null; tone: 'cyan' | 'yellow' | 'amber' | 'green' | 'gray' } {
+  if (phase === 'betting') {
+    const remaining = getCountdownSeconds(bettingStartedAt, BETTING_TIMEOUT_SECONDS, nowMs);
+    return {
+      label: 'Bets open',
+      countdown: remaining != null ? formatCountdown(remaining) : null,
+      tone: 'cyan',
+    };
+  }
+  if (phase === 'playing') {
+    const remaining = getCountdownSeconds(turnStartedAt, TURN_TIMEOUT_SECONDS, nowMs);
+    const label = actingSeatPosition != null ? `Seat ${actingSeatPosition + 1}'s turn` : 'In play';
+    return {
+      label,
+      countdown: remaining != null ? formatCountdown(remaining) : null,
+      tone: 'yellow',
+    };
+  }
+  if (phase === 'dealer_turn') {
+    return { label: 'Dealer playing', countdown: null, tone: 'amber' };
+  }
+  if (phase === 'completed') {
+    return { label: 'Round over', countdown: null, tone: 'green' };
+  }
+  return { label: 'Waiting for players', countdown: null, tone: 'gray' };
+}
+
+const TONE_CLASSNAMES: Record<'cyan' | 'yellow' | 'amber' | 'green' | 'gray', string> = {
+  cyan: 'text-cyan-300',
+  yellow: 'text-yellow-300',
+  amber: 'text-amber-300',
+  green: 'text-emerald-300',
+  gray: 'text-white/60',
+};
+
+function SpectatorTickerBar({
+  phase,
+  actingSeatPosition,
+  bettingStartedAt,
+  turnStartedAt,
+  tableMinBetWhole,
+  tableMaxBetWhole,
+  tokenLogoUrl,
+  tokenTicker,
+  onLogoClick,
+  onChangeTable,
+}: {
+  phase: SpectatorPhase;
+  actingSeatPosition: number | null;
+  bettingStartedAt: string | null;
+  turnStartedAt: string | null;
+  tableMinBetWhole: number;
+  tableMaxBetWhole: number;
+  tokenLogoUrl: string;
+  tokenTicker: string;
+  onLogoClick?: () => void;
+  onChangeTable?: () => void;
+}) {
+  const tickEnabled = phase === 'betting' || phase === 'playing';
+  const nowMs = useNowTick(tickEnabled, 500);
+  const { label, countdown, tone } = describePhase(phase, actingSeatPosition, bettingStartedAt, turnStartedAt, nowMs);
+  const formatThousands = (n: number) => n.toLocaleString('en-US');
+
+  return (
+    <section className="w-full px-2 py-1">
+      <div className="flex flex-col gap-1 w-full">
+        <div className="flex items-center justify-between gap-2 w-full">
+          <div className="flex items-baseline gap-2 min-w-0">
+            <span className="text-xs uppercase tracking-wider text-cyan-300/80">Spectating</span>
+            <span className="text-[10px] sm:text-xs text-gray-500 font-poppins tabular-nums truncate">
+              Min {formatThousands(tableMinBetWhole)} · Max {formatThousands(tableMaxBetWhole)}
+            </span>
+          </div>
+          {onChangeTable && (
+            <button
+              type="button"
+              onClick={onChangeTable}
+              className="text-cyan-300/80 hover:text-cyan-300 text-xs font-medium shrink-0 transition-colors"
+            >
+              Change Table
+            </button>
+          )}
+        </div>
+        <div
+          className="flex items-center w-full rounded-lg border border-white/20 overflow-hidden"
+          style={{ minHeight: '36px' }}
+          aria-label={`Currently spectating a ${tokenTicker} table`}
+        >
+          <div className="flex-1 flex items-center gap-2 pl-2 pr-2 min-w-0">
+            <span className={`flex-1 min-w-0 truncate font-semibold text-sm ${TONE_CLASSNAMES[tone]}`}>
+              {label}
+              {countdown && (
+                <span className="ml-1.5 text-white/85 font-bold tabular-nums">{countdown}</span>
+              )}
+            </span>
+            <span className="hidden sm:inline text-[11px] text-white/45 font-bold tabular-nums truncate">
+              {tokenTicker}
+            </span>
+            {onLogoClick ? (
+              <button
+                type="button"
+                onClick={onLogoClick}
+                className="shrink-0 rounded-full p-0.5 hover:bg-white/10 active:bg-white/15 transition-colors"
+                aria-label={`Switch table (current: ${tokenTicker})`}
+                title={`Switch table — currently ${tokenTicker}`}
+              >
+                <Image
+                  src={tokenLogoUrl}
+                  alt={tokenTicker}
+                  width={20}
+                  height={20}
+                  className="object-contain"
+                  unoptimized
+                />
+              </button>
+            ) : (
+              <Image
+                src={tokenLogoUrl}
+                alt={tokenTicker}
+                width={20}
+                height={20}
+                className="object-contain flex-shrink-0"
+                unoptimized
+              />
+            )}
+          </div>
+        </div>
+      </div>
+    </section>
+  );
+}
 
 export function BlackjackMultiBetActionPanel({
   myPosition,
@@ -23,9 +193,16 @@ export function BlackjackMultiBetActionPanel({
   soundEnabled,
   playSound,
   placeBet,
+  tokenLogoUrl,
+  tokenTicker,
+  onChangeTable,
+  onLogoClick,
+  actingSeatPosition,
+  bettingStartedAt,
+  turnStartedAt,
 }: {
   myPosition: number | null;
-  phase: 'waiting' | 'betting' | 'playing' | 'dealer_turn' | 'completed' | undefined;
+  phase: SpectatorPhase;
   hasBet: boolean;
   consecutiveTimeouts: number;
   afkTimeoutsBeforeKick: number;
@@ -40,8 +217,33 @@ export function BlackjackMultiBetActionPanel({
   soundEnabled: boolean;
   playSound: (path: string, volume?: number) => void;
   placeBet: () => void;
+  tokenLogoUrl?: string | null;
+  tokenTicker?: string | null;
+  onChangeTable?: () => void;
+  onLogoClick?: () => void;
+  actingSeatPosition?: number | null;
+  bettingStartedAt?: string | null;
+  turnStartedAt?: string | null;
 }) {
-  if (myPosition === null) return null;
+  const resolvedLogo = tokenLogoUrl && tokenLogoUrl.trim() !== '' ? tokenLogoUrl : DEFAULT_TOKEN_LOGO;
+  const resolvedTicker = tokenTicker && tokenTicker.trim() !== '' ? tokenTicker : DEFAULT_TOKEN_TICKER;
+
+  if (myPosition === null) {
+    return (
+      <SpectatorTickerBar
+        phase={phase}
+        actingSeatPosition={actingSeatPosition ?? null}
+        bettingStartedAt={bettingStartedAt ?? null}
+        turnStartedAt={turnStartedAt ?? null}
+        tableMinBetWhole={tableMinBetWhole}
+        tableMaxBetWhole={tableMaxBetWhole}
+        tokenLogoUrl={resolvedLogo}
+        tokenTicker={resolvedTicker}
+        onLogoClick={onLogoClick}
+        onChangeTable={onChangeTable}
+      />
+    );
+  }
 
   const tableBetLimits = {
     MIN_BET: parseEther(String(tableMinBetWhole)),
@@ -68,6 +270,9 @@ export function BlackjackMultiBetActionPanel({
           }}
           playerReserves={playerBalanceWei}
           betLimits={tableBetLimits}
+          logoUrl={resolvedLogo}
+          logoAlt={resolvedTicker}
+          onLogoClick={onLogoClick}
         />
       </div>
       <div className="w-1/2 md:w-full flex items-stretch min-w-0">

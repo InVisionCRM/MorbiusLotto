@@ -27,6 +27,7 @@ import {
   MORBIUS_TOKEN_ADDRESS,
 } from '@/lib/contracts';
 import { getBlackjackServerUrlOptional } from '@/lib/api-urls';
+import { apiFetch } from '@/lib/api-auth';
 import { CustomApprovalModal } from '@/components/BLACKJACK/CustomApprovalModal';
 import { ReportModal } from '@/components/shared/ReportModal';
 import { toast } from 'sonner';
@@ -110,7 +111,7 @@ function WalletHowToVideoModal({
 
 type Tab = 'deposit' | 'withdraw' | 'reup' | 'history';
 type DepositMethod = 'pls' | 'morbius';
-type DepositPhase = 'idle' | 'confirming' | 'confirming_on_chain' | 'success' | 'error';
+type DepositPhase = 'idle' | 'confirming' | 'confirming_on_chain' | 'crediting' | 'success' | 'error';
 type WithdrawPhase = 'idle' | 'queued' | 'confirming' | 'success' | 'error';
 
 interface TxHistoryItem {
@@ -261,6 +262,20 @@ export function GameWalletModal({
       setBalanceLoading(false);
     }
   }, [address, serverUrl, isSelfManaged]);
+
+  // Direct server balance fetch — used by the post-deposit credit poll to compare against
+  // pre-deposit balance without depending on React rendering timing of `displayBalance`.
+  const fetchServerBalanceDirect = useCallback(async (): Promise<bigint | null> => {
+    if (!address || !serverUrl) return null;
+    try {
+      const res = await fetch(`${serverUrl}/api/player/${address}/balance`, { cache: 'no-store' });
+      if (!res.ok) return null;
+      const data = await res.json();
+      return BigInt(data.balance ?? '0');
+    } catch {
+      return null;
+    }
+  }, [address, serverUrl]);
 
   const displayBalance: bigint | null =
     externalBalance !== undefined
@@ -518,26 +533,73 @@ export function GameWalletModal({
           const notifyResult = await notifyDeposit(depositTxHash, depositNotifyAmountWei);
           if (notifyResult.ok) {
             clearPendingDepositStorage();
+
+            // The server's `/api/deposit/notify` only records a pending deposit — the actual
+            // DB balance credit happens async after additional on-chain confirmations on the
+            // backend. Showing "Deposit successful" here is premature: there's a ~15s window
+            // where the user's balance hasn't updated yet and they have no idea why.
+            //
+            // Move to a `crediting` phase, then poll the server balance until it actually
+            // increases (or we time out). This auto-refreshes the UI without the user having
+            // to refresh manually.
             if (depositToastIdRef.current != null) {
-              toast.success('Deposit successful', {
+              toast.loading('Crediting your balance…', {
                 id: depositToastIdRef.current,
-                description: 'Funds are now available in your balance.',
-                duration: 5000,
+                description: 'This usually takes ~15 seconds',
               });
             }
-            if (onBalanceSync) {
-              try { await onBalanceSync(); } catch {
-                if (onRefreshBalance) onRefreshBalance().catch(() => {});
-              }
-            } else if (isSelfManaged) {
-              setTimeout(fetchBalance, 1000);
-            }
+            setDepositPhase('crediting');
             setDepositAmount('');
-            setDepositPhase('success');
             setDepositBlockNumber(null);
             setDepositTxHash(null);
+
+            const initialBalance = (await fetchServerBalanceDirect()) ?? 0n;
+            const startedAt = Date.now();
+            const CREDIT_TIMEOUT_MS = 60_000;
+            const CREDIT_POLL_MS = 2_000;
+            let credited = false;
+
+            while (Date.now() - startedAt < CREDIT_TIMEOUT_MS) {
+              await new Promise<void>((r) => setTimeout(r, CREDIT_POLL_MS));
+
+              // Trigger parent UI refetch so its displayed balance updates too.
+              try {
+                if (onBalanceSync) await onBalanceSync();
+                else if (onRefreshBalance) await onRefreshBalance();
+                else if (isSelfManaged) await fetchBalance();
+              } catch {
+                // ignore — we'll still check via direct fetch
+              }
+
+              const latest = await fetchServerBalanceDirect();
+              if (latest != null && latest > initialBalance) {
+                credited = true;
+                break;
+              }
+            }
+
             setDepositNotifyAmountWei(null);
-            setTimeout(() => setDepositPhase('idle'), 2000);
+
+            if (credited) {
+              if (depositToastIdRef.current != null) {
+                toast.success('Deposit successful', {
+                  id: depositToastIdRef.current,
+                  description: 'Funds are now in your balance.',
+                  duration: 5000,
+                });
+              }
+              setDepositPhase('success');
+              setTimeout(() => setDepositPhase('idle'), 2000);
+            } else {
+              if (depositToastIdRef.current != null) {
+                toast.message('Deposit recorded', {
+                  id: depositToastIdRef.current,
+                  description: 'Your balance is taking longer than usual to update. Refresh in a moment if it doesn’t appear.',
+                  duration: 8000,
+                });
+              }
+              setDepositPhase('idle');
+            }
             return;
           } else if (notifyResult.ok === false) {
             const { status, message } = notifyResult;
@@ -563,7 +625,7 @@ export function GameWalletModal({
     poll();
     const interval = setInterval(poll, 2000);
     return () => { cancelled = true; clearInterval(interval); };
-  }, [depositBlockNumber, depositPhase, publicClient, depositTxHash, depositNotifyAmountWei]);
+  }, [depositBlockNumber, depositPhase, publicClient, depositTxHash, depositNotifyAmountWei, fetchServerBalanceDirect, onBalanceSync, onRefreshBalance, isSelfManaged, fetchBalance]);
 
   // ── Tx history ─────────────────────────────────────────────────────────
   const fetchTxHistory = useCallback(async () => {
@@ -599,31 +661,21 @@ export function GameWalletModal({
       return { ok: false, status: 0, message: 'Backend URL not configured (NEXT_PUBLIC_API_URL).' };
     }
     try {
-      const res = await fetch(`${serverUrl}/api/deposit/notify`, {
+      // apiFetch sends the SIWE session cookie and auto-prompts a sign-in
+      // wallet popup on 401, then retries once. walletAddress is no longer
+      // sent in the body — the server reads it from the session.
+      await apiFetch('/api/deposit/notify', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ walletAddress: address, txHash, amount: amountWei.toString() }),
+        body: JSON.stringify({ txHash, amount: amountWei.toString() }),
       });
-      let body: { error?: string } = {};
-      try {
-        body = (await res.json()) as { error?: string };
-      } catch {
-        /* non-JSON */
-      }
-      if (!res.ok) {
-        return {
-          ok: false,
-          status: res.status,
-          message: typeof body.error === 'string' ? body.error : `HTTP ${res.status}`,
-        };
-      }
       setTxLoaded(false);
       return { ok: true };
     } catch (e) {
+      const err = e as Error & { status?: number };
       return {
         ok: false,
-        status: 0,
-        message: e instanceof Error ? e.message : 'Network error',
+        status: err.status ?? 0,
+        message: err.message ?? 'Network error',
       };
     }
   };
@@ -861,13 +913,14 @@ export function GameWalletModal({
     setIsPreparingWithdraw(true);
     const toastId = toast.loading('Withdrawal queued...');
     try {
-      const res = await fetch(`${serverUrl}/api/withdraw`, {
+      // apiFetch sends the SIWE session cookie and auto-prompts a sign-in
+      // wallet popup on 401, then retries once. address is no longer sent in
+      // the body — the server reads it from the session.
+      const res = await apiFetch('/api/withdraw', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ address, amount: amountWei.toString() }),
+        body: JSON.stringify({ amount: amountWei.toString() }),
       });
       const data = await res.json();
-      if (!res.ok) throw new Error(data.error || 'Withdrawal failed');
       const jobId = data.jobId;
       if (!jobId) throw new Error('Server did not return jobId');
       await pollWithdrawJob(jobId, toastId);
@@ -1251,6 +1304,7 @@ export function GameWalletModal({
                             (depositMethod === 'morbius' && isApproving) ||
                             depositPhase === 'confirming' ||
                             depositPhase === 'confirming_on_chain' ||
+                            depositPhase === 'crediting' ||
                             depositPhase === 'success'
                           }
                           className={`w-full py-4 text-sm font-medium rounded-xl flex items-center justify-center transition-colors disabled:cursor-not-allowed ${
@@ -1266,6 +1320,9 @@ export function GameWalletModal({
                           )}
                           {depositPhase === 'confirming_on_chain' && (
                             <><Loader2 className="w-4 h-4 mr-2 animate-spin" />Confirming...</>
+                          )}
+                          {depositPhase === 'crediting' && (
+                            <><Loader2 className="w-4 h-4 mr-2 animate-spin" />Crediting balance...</>
                           )}
                           {depositPhase === 'success' && (
                             <><Check className="w-4 h-4 mr-2" />Deposit successful</>
@@ -1294,6 +1351,7 @@ export function GameWalletModal({
                               (depositBlockNumber != null
                                 ? `${depositConfirmations}/${DEPOSIT_CONFIRMATIONS_REQUIRED} confirmations`
                                 : 'Waiting for blockchain confirmation')}
+                            {depositPhase === 'crediting' && 'Updating your balance — usually ~15s'}
                             {depositPhase === 'success' && 'Funds are now in your balance'}
                           </p>
                         )}

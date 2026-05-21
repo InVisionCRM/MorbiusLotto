@@ -7,6 +7,7 @@ import Image from 'next/image';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { useAccount } from 'wagmi';
+import { apiFetch } from '@/lib/api-auth';
 import { useProfile } from '@/hooks/use-player-profile';
 import { usePlayerServerBalance } from '@/hooks/use-player-server-balance';
 import { useTokenBalance } from '@/hooks/use-token';
@@ -723,16 +724,13 @@ export default function GlobalMainNav({
   const effectiveProfileImageUrl = profileImageUrl ?? profileImageUrlFromHook;
 
   const handleInternalSaveProfile = useCallback(async (name: string, img: string | null, bio: string | null, x: string | null, tg: string | null) => {
-    if (!address) return;
-    const res = await fetch('/api/player/profile', {
+    if (!address) throw new Error('Connect your wallet to save your profile.');
+    // SIWE-gated. apiFetch sends the session cookie and triggers the sign-in
+    // popup on 401, then retries. address dropped from body.
+    await apiFetch('/api/player/profile', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ address, displayName: name, profileImageUrl: img, bio, xHandle: x, tgHandle: tg }),
+      body: JSON.stringify({ displayName: name, profileImageUrl: img, bio, xHandle: x, tgHandle: tg }),
     });
-    if (!res.ok) {
-      const data = (await res.json().catch(() => ({}))) as { error?: string };
-      throw new Error(typeof data.error === 'string' ? data.error : 'Failed to save profile');
-    }
     queryClient.invalidateQueries({ queryKey: ['playerProfile'] });
   }, [address, queryClient]);
 

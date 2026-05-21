@@ -6,6 +6,7 @@ import { useAccount } from 'wagmi';
 import { formatChips } from '@/lib/format-poker-chips';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useChat } from '@/hooks/use-chat';
+import { useDisplayNameGate } from '@/hooks/use-display-name-gate';
 import type { BlackjackWebSocketClient, PokerTableState } from '@/lib/websocket-client';
 import { POKER_FACTS } from '@/app/poker/poker-facts';
 import { POKER_RANK_SUIT_LABEL_COLORS } from '@/components/poker/CardDisplay';
@@ -248,7 +249,8 @@ export function PokerActivityFeed({
   const { address: connectedAddress } = useAccount();
   const myAddr = useMemo(() => connectedAddress?.toLowerCase() ?? null, [connectedAddress]);
 
-  const { messages, sendMessage, connected } = useChat(roomId, { wsClient, wsConnected });
+  const { messages, sendMessage, connected, setDisplayName } = useChat(roomId, { wsClient, wsConnected });
+  const { gate: displayNameGate, prompt: displayNamePrompt } = useDisplayNameGate(setDisplayName);
 
   const [entries, setEntries] = useState<Entry[]>([]);
   const [input, setInput] = useState('');
@@ -741,20 +743,24 @@ export function PokerActivityFeed({
   }, []);
 
   // ── Send ──────────────────────────────────────────────────────────────────
-  const handleSend = useCallback((e: React.FormEvent) => {
-    e.preventDefault();
+  const trySend = useCallback(() => {
     const t = input.trim();
     if (!t || !connected) return;
-    sendMessage(t);
-    setInput('');
-  }, [input, connected, sendMessage]);
+    const flush = () => { sendMessage(t); setInput(''); };
+    if (displayNameGate(flush)) return;
+    flush();
+  }, [input, connected, sendMessage, displayNameGate]);
+
+  const handleSend = useCallback((e: React.FormEvent) => {
+    e.preventDefault();
+    trySend();
+  }, [trySend]);
 
   const handleKeyDown = useCallback((e: React.KeyboardEvent<HTMLInputElement>) => {
     if (e.key !== 'Enter') return;
     e.preventDefault();
-    const t = input.trim();
-    if (t && connected) { sendMessage(t); setInput(''); }
-  }, [input, connected, sendMessage]);
+    trySend();
+  }, [trySend]);
 
   // ── Entry renderer (player name muted; verb uses `ACTION_COLORS` = PokerActions button hues) ──
   function renderEntry(entry: Entry) {
@@ -1237,10 +1243,16 @@ export function PokerActivityFeed({
         </div>
       ) : null}
 
+      {displayNamePrompt && (
+        <div className="shrink-0 px-2 pt-1.5" style={{ borderTop: '1px solid rgba(255,255,255,0.07)' }}>
+          {displayNamePrompt}
+        </div>
+      )}
+
       <form
         onSubmit={handleSend}
         className="flex shrink-0 items-center gap-1.5 px-2 py-1.5"
-        style={{ borderTop: '1px solid rgba(255,255,255,0.07)' }}
+        style={{ borderTop: displayNamePrompt ? 'none' : '1px solid rgba(255,255,255,0.07)' }}
       >
         <input
           type="text"

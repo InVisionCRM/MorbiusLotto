@@ -48,6 +48,7 @@ const isEscrowConfigured = (TOURNAMENT_PRIZE_ESCROW_ADDRESS as string) !== ESCRO
 import { tournamentPrizeEscrowV6Abi } from '@/abi/tournament-prize-escrow-v6';
 import { tournamentIdToBytes32 } from '@/lib/tournament-id-bytes32';
 import { ERC20_ABI } from '@/abi/erc20';
+import { useGasParams } from '@/lib/tx-gas';
 
 type FundingStep = 'idle' | 'approving' | 'approved' | 'depositing' | 'done';
 
@@ -112,6 +113,7 @@ export function BlackjackTournamentCreator({
   const { openConnectModal } = useConnectModal();
   const { writeContractAsync } = useWriteContract();
   const publicClient = usePublicClient();
+  const getGas = useGasParams();
 
   // Wizard: 1=Basics, 2=When & Rules, 3=Prizes & Entry, 4=Options, 5=Review
   const [wizardStep, setWizardStep] = useState(1);
@@ -452,7 +454,7 @@ export function BlackjackTournamentCreator({
         args: [escrow, prizeAmountWeiForReview],
         account: address,
         chain: pulsechain,
-        maxPriorityFeePerGas: 200_000n, // PulseChain tip
+        ...getGas(),
       });
       setApprovalTxHash(hash);
       if (publicClient && hash) {
@@ -497,7 +499,7 @@ export function BlackjackTournamentCreator({
         args: [idBytes32, token, prizeAmountWeiForReview],
         account: address,
         chain: pulsechain,
-        maxPriorityFeePerGas: 200_000n, // PulseChain tip
+        ...getGas(),
       });
       if (publicClient && hash) {
         try {

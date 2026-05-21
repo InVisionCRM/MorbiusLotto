@@ -43,6 +43,8 @@ interface PokerTableViewProps {
   onOpenLogoSponsor?: () => void;
   onSitOut?: () => void;
   onSitBack?: () => void;
+  onShowCards?: () => void;
+  onMuckCards?: () => void;
 }
 
 /* LANDSCAPE NOTE: The old formula `calc((100dvh - 160px) * 2.4)` punished
@@ -97,6 +99,8 @@ export function PokerTableView({
   onOpenLogoSponsor,
   onSitOut,
   onSitBack,
+  onShowCards,
+  onMuckCards,
 }: PokerTableViewProps) {
   const isMobileScale = tableScale < 1;
 
@@ -210,6 +214,8 @@ export function PokerTableView({
           onOpenEditQuickChat={() => setShowEditQuickChatModal(true)}
           onSitOut={onSitOut}
           onSitBack={onSitBack}
+          onShowCards={onShowCards}
+          onMuckCards={onMuckCards}
         />
       ) : !error ? (
         <div className="absolute inset-0 flex items-center justify-center text-[var(--poker-text-muted)] text-sm">

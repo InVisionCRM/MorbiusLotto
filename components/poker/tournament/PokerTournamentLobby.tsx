@@ -329,8 +329,12 @@ export function PokerTournamentLobby({
 
   const tournamentHook = usePokerTournament({
     wsClient,
+    myAddress: meLower,
     onTournamentStarted: (tournamentId, tableId) => {
       onGoToTable?.(tableId, tournamentId);
+    },
+    onMyTableChanged: (newTableId, tournamentId) => {
+      onGoToTable?.(newTableId, tournamentId);
     },
     onTournamentCompleted: (payload) => {
       const list = payload.standings;
@@ -394,12 +398,14 @@ export function PokerTournamentLobby({
       if (!t.isRegistered || !t.scheduledStartAt) return false;
       if (t.status === 'cancelled') return false;
       if (new Date(t.scheduledStartAt).getTime() > Date.now()) return false;
-      if (t.status === 'active' && t.tableId && myTableId === t.tableId && myTournamentId === t.tournamentId) {
+      // MTT: caller's actual seat is `myTableId`; SNG falls back to the lobby `tableId`.
+      const myAssigned = t.myTableId ?? t.tableId;
+      if (t.status === 'active' && myAssigned && myTableId === myAssigned && myTournamentId === t.tournamentId) {
         return false;
       }
       return (
         t.status === 'registration' ||
-        (t.status === 'active' && (!t.tableId || myTableId !== t.tableId || myTournamentId !== t.tournamentId))
+        (t.status === 'active' && (!myAssigned || myTableId !== myAssigned || myTournamentId !== t.tournamentId))
       );
     });
   }, [openTournaments, meLower, myTableId, myTournamentId]);
@@ -741,9 +747,13 @@ export function PokerTournamentLobby({
                 const isActive = t.status === 'active';
                 const isPrivate = t.isPrivate === true;
                 const canJoin = !t.isRegistered && !isActive && !isFull && !!myAddress;
+                // MTT: prefer the caller's actual seat table over the lowest-seq table so
+                // refreshing the lobby and clicking back into an active MTT lands the player
+                // on THEIR table, not table 1.
+                const myAssignedTable = t.myTableId ?? t.tableId;
                 const watchHref =
-                  t.tableId != null && t.tableId.length > 0
-                    ? `/poker/${t.tableId}?tournament=${encodeURIComponent(t.tournamentId)}`
+                  myAssignedTable != null && myAssignedTable.length > 0
+                    ? `/poker/${myAssignedTable}?tournament=${encodeURIComponent(t.tournamentId)}`
                     : null;
                 const isCreator = t.creatorAddress?.toLowerCase() === meLower;
                 const showBotsToggle =
@@ -868,8 +878,8 @@ export function PokerTournamentLobby({
                           {isActive && t.isRegistered && (
                             <button
                               type="button"
-                              onClick={() => t.tableId && onGoToTable?.(t.tableId, t.tournamentId)}
-                              disabled={!t.tableId}
+                              onClick={() => myAssignedTable && onGoToTable?.(myAssignedTable, t.tournamentId)}
+                              disabled={!myAssignedTable}
                               className={actionBtnPrimary}
                             >
                               Table

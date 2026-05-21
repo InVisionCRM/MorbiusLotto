@@ -12,6 +12,7 @@ import {
 import { INSTANT_LOTTERY_6OF55_ABI } from '@/abi/instant-lottery-6of55'
 import { LOTTERY_INSTANT_ADDRESS } from '@/lib/contracts'
 import { pulsechain } from '@/lib/chains'
+import { useGasParams } from '@/lib/tx-gas'
 import { getApiUrlOptional } from '@/lib/api-urls'
 import { toBigIntSafe } from '@/lib/safe-bigint'
 
@@ -95,6 +96,7 @@ export function useInstantLotteryStats() {
 export function usePlayLottery() {
   const { address } = useAccount()
   const { writeContract, ...rest } = useWriteContract()
+  const getGas = useGasParams()
 
   const playLottery = useCallback(
     (numbers: [number, number, number, number, number, number], wager: bigint) => {
@@ -105,10 +107,10 @@ export function usePlayLottery() {
         args: [numbers, wager],
         chain: pulsechain,
         account: address!,
-        maxPriorityFeePerGas: 200_000n,
+        ...getGas(),
       })
     },
-    [writeContract, address]
+    [writeContract, address, getGas]
   )
 
   return { playLottery, ...rest }
@@ -117,6 +119,7 @@ export function usePlayLottery() {
 export function usePlayLotteryWithPLS() {
   const { address } = useAccount()
   const { writeContract, ...rest } = useWriteContract()
+  const getGas = useGasParams()
 
   const playLotteryWithPLS = useCallback(
     (numbers: [number, number, number, number, number, number], valueWei: bigint) => {
@@ -128,10 +131,10 @@ export function usePlayLotteryWithPLS() {
         chain: pulsechain,
         account: address!,
         value: valueWei,
-        maxPriorityFeePerGas: 200_000n,
+        ...getGas(),
       })
     },
-    [writeContract, address]
+    [writeContract, address, getGas]
   )
 
   return { playLotteryWithPLS, ...rest }

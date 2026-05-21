@@ -3,6 +3,7 @@ export const POKER_MESSAGE_HANDLER_MAP: Record<string, string> = {
   poker_leave_table: 'handlePokerLeaveTable',
   poker_add_chips: 'handlePokerAddChips',
   poker_action: 'handlePokerAction',
+  poker_show_cards: 'handlePokerShowCards',
   poker_get_state: 'handlePokerGetState',
   poker_create_table: 'handlePokerCreateTable',
   poker_update_table_logo: 'handlePokerUpdateTableLogo',

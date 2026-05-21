@@ -42,6 +42,7 @@ import { MerkleClaimsLPPanel } from '@/components/staking/MerkleClaimsLPPanel'
 import { useMerkleClaims } from '@/hooks/use-merkle-claims'
 import { getApiUrlOptional } from '@/lib/api-urls'
 import { HOW_TO_CLAIM_VIDEO_URL } from '@/lib/how-to-video-urls'
+import { useGasParams } from '@/lib/tx-gas'
 
 const STAKING_ADDR = MORBIUS_STAKING_ADDRESS as `0x${string}`
 const LP_STAKING_ADDR = MORBIUS_LP_STAKING_ADDRESS as `0x${string}`
@@ -301,6 +302,7 @@ export default function ClaimPage() {
   const { switchChainAsync } = useSwitchChain()
   const publicClient = usePublicClient()
   const { writeContractAsync } = useWriteContract()
+  const getGas = useGasParams()
   const isWrongChain = chainId !== pulsechain.id
 
   const [mStakeInput, setMStakeInput] = useState('')
@@ -588,7 +590,7 @@ export default function ClaimPage() {
         functionName: 'approve',
         args: [STAKING_ADDR, MAX_UINT256],
         chainId: pulsechain.id,
-        maxPriorityFeePerGas: 200000n,
+        ...getGas(),
         account: address,
         chain: pulsechain,
       })
@@ -626,7 +628,7 @@ export default function ClaimPage() {
           functionName: 'stake',
           args: [mStakeWei],
           chainId: pulsechain.id,
-          maxPriorityFeePerGas: 200_000n,
+          ...getGas(),
           account: address,
           chain: pulsechain, // Fixes type error expecting "chain"
         }),
@@ -646,7 +648,7 @@ export default function ClaimPage() {
           functionName: 'unstake',
           args: [amt],
           chainId: pulsechain.id,
-          maxPriorityFeePerGas: 200_000n,
+          ...getGas(),
           account: address,
           chain: pulsechain, // Fixes type error expecting "chain"
         }),
@@ -661,7 +663,7 @@ export default function ClaimPage() {
       abi: morbiusStakingAbi,
       functionName: 'claim',
       chainId: pulsechain.id,
-      maxPriorityFeePerGas: 200_000n,
+      ...getGas(),
       account: address,
       chain: pulsechain, // Fixes type error expecting "chain"
     }), 'Rewards claimed')
@@ -673,7 +675,7 @@ export default function ClaimPage() {
       abi: morbiusStakingAbi,
       functionName: 'updatePool',
       chainId: pulsechain.id,
-      maxPriorityFeePerGas: 200_000n,
+      ...getGas(),
       account: address,
       chain: pulsechain, // Fixes type error expecting "chain"
     }), 'Pool updated')
@@ -688,7 +690,7 @@ export default function ClaimPage() {
     try {
       await ensureChain()
       const hash = await writeContractAsync({
-        address: PLP_ADDR, abi: ERC20_ABI, functionName: 'approve', args: [LP_STAKING_ADDR, MAX_UINT256], chainId: pulsechain.id, maxPriorityFeePerGas: 200000n,
+        address: PLP_ADDR, abi: ERC20_ABI, functionName: 'approve', args: [LP_STAKING_ADDR, MAX_UINT256], chainId: pulsechain.id, ...getGas(),
         chain: pulsechain,
         account: address,
       })
@@ -714,7 +716,7 @@ export default function ClaimPage() {
       functionName: 'stake',
       args: [lpStakeWei],
       chainId: pulsechain.id,
-      maxPriorityFeePerGas: 200000n,
+      ...getGas(),
       chain: pulsechain,
       account: address,
     }), 'LP tokens staked')
@@ -732,7 +734,7 @@ export default function ClaimPage() {
           functionName: 'unstake',
           args: [amt],
           chainId: pulsechain.id,
-          maxPriorityFeePerGas: 200_000n,
+          ...getGas(),
           account: address,
           chain: pulsechain, // Fixes potential type error expecting "chain"
         }),
@@ -743,7 +745,7 @@ export default function ClaimPage() {
   const handleLPClaim = () => {
     if (lpEarnedBal <= 0n) { toast.error('Nothing to claim'); return }
     execLPTx('Claiming rewards', () => writeContractAsync({
-      address: LP_STAKING_ADDR, abi: morbiusLPStakingAbi, functionName: 'claim', chainId: pulsechain.id, maxPriorityFeePerGas: 200000n,
+      address: LP_STAKING_ADDR, abi: morbiusLPStakingAbi, functionName: 'claim', chainId: pulsechain.id, ...getGas(),
       chain: pulsechain,
       account: address,
     }), 'Rewards claimed')
@@ -756,7 +758,7 @@ export default function ClaimPage() {
       functionName: 'updatePool',
       args: [],
       chainId: pulsechain.id,
-      maxPriorityFeePerGas: 200_000n,
+      ...getGas(),
       account: address,
       chain: pulsechain,
     }), 'Pool updated')

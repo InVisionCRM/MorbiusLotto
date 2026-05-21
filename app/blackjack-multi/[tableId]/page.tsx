@@ -16,6 +16,7 @@ import { BlackjackMultiSoundPanel } from '@/components/BLACKJACK/multi/Blackjack
 import { BlackjackMultiConnectionOverlay } from '@/components/BLACKJACK/multi/BlackjackMultiConnectionOverlay';
 import { BlackjackMultiTopBar } from '@/components/BLACKJACK/multi/BlackjackMultiTopBar';
 import { BlackjackMultiBetActionPanel } from '@/components/BLACKJACK/multi/BlackjackMultiBetActionPanel';
+import { BlackjackTableSwitcherModal } from '@/components/BLACKJACK/multi/BlackjackTableSwitcherModal';
 import { BlackjackMultiTipDealerControl } from '@/components/BLACKJACK/multi/BlackjackMultiTipDealerControl';
 import { BlackjackMultiDealerArea } from '@/components/BLACKJACK/multi/BlackjackMultiDealerArea';
 import {
@@ -170,6 +171,7 @@ export default function BlackjackMultiTablePage() {
   const [tipAnimating, setTipAnimating] = useState(false);
   const [multiClientSeed, setMultiClientSeed] = useState(() => generateHexClientSeed());
   const [provablyFairOpen, setProvablyFairOpen] = useState(false);
+  const [tableSwitcherOpen, setTableSwitcherOpen] = useState(false);
   const wsClientRef = useRef<BlackjackWebSocketClient | null>(null);
   const [wsClient, setWsClient] = useState<BlackjackWebSocketClient | null>(null);
   const latestStateVersionRef = useRef(0);
@@ -1085,6 +1087,7 @@ export default function BlackjackMultiTablePage() {
     id: state?.themeId ?? 'glowingTable',
   });
   const tableImageSrc = theme.kind === 'image' ? theme.src : BLACKJACK_IMAGE_BACKGROUNDS[0].src;
+  const tableProfile = getTableProfile('image', state?.themeId ?? BLACKJACK_IMAGE_BACKGROUNDS[0].id);
 
   // Scale board content to fill the 16:9 container at any size
   const tableRef = useRef<HTMLDivElement>(null);
@@ -1463,6 +1466,13 @@ export default function BlackjackMultiTablePage() {
           soundEnabled={soundEnabled}
           playSound={playSound}
           placeBet={placeBet}
+          tokenLogoUrl={tableProfile?.logo_url ?? null}
+          tokenTicker={tableProfile?.ticker ?? null}
+          onChangeTable={() => router.push('/blackjack-multi')}
+          onLogoClick={() => setTableSwitcherOpen(true)}
+          actingSeatPosition={state?.actingSeatPosition ?? null}
+          bettingStartedAt={state?.bettingStartedAt ?? null}
+          turnStartedAt={state?.turnStartedAt ?? null}
         />
 
         <BlackjackMultiInfoPanel
@@ -1544,6 +1554,13 @@ export default function BlackjackMultiTablePage() {
         onOpenChange={setProvablyFairOpen}
         value={multiClientSeed}
         onChange={setMultiClientSeed}
+      />
+
+      <BlackjackTableSwitcherModal
+        open={tableSwitcherOpen}
+        onClose={() => setTableSwitcherOpen(false)}
+        currentTableId={tableId}
+        getTableProfile={getTableProfile}
       />
 
       </main>

@@ -3,6 +3,7 @@
 import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { useParams, useRouter, useSearchParams } from 'next/navigation';
 import { useAccount, useSignTypedData } from 'wagmi';
+import { apiFetch } from '@/lib/api-auth';
 import { formatChips } from '@/lib/format-poker-chips';
 import { formatPokerLastActionLine } from '@/lib/format-poker-last-action';
 import { POKER_CASH_MIN_BUY_IN_BB, POKER_CASH_MAX_BUY_IN_BB } from '@/lib/poker-buy-in';
@@ -17,6 +18,7 @@ import { isAdminWallet } from '@/lib/admin';
 import { useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import { PokerBetaSplash } from '@/components/poker/PokerBetaSplash';
+import { DisplayNameWelcomeModal } from '@/components/shared/DisplayNameWelcomeModal';
 import { useSpeechCommands, type PokerSpeechAction } from '@/hooks/use-speech-commands';
 import { useSpeechEnabled } from '@/hooks/use-speech-enabled';
 import { SpeechHUD } from '@/components/shared/SpeechHUD';
@@ -28,7 +30,11 @@ import { PokerPopups } from './PokerPopups';
 import { PokerPanels } from './PokerPanels';
 import { PokerBottomBar, POKER_BOTTOM_RESERVE_VAR } from './PokerBottomBar';
 import { usePokerConnection } from './PokerConnection';
-import { usePokerActionsLogic } from './PokerActionsLogic';
+import {
+  usePokerActionsLogic,
+  applyPokerOptimisticOverlay,
+  type PokerOptimisticOverlay,
+} from './PokerActionsLogic';
 import { usePokerSeatOverlays } from './PokerSeatOverlays';
 import { usePokerMobileZoomLock } from './PokerMobileZoomLock';
 import { usePokerTurnClock } from './PokerTurnClock';
@@ -117,7 +123,12 @@ export default function PokerTablePage() {
     replaceUrl,
     skipLeaveOnUnload: Boolean(tournamentIdParam),
   });
-  const renderedState = testStateOverride ?? state;
+  const [optimisticOverlay, setOptimisticOverlay] = useState<PokerOptimisticOverlay | null>(null);
+  const renderedState = useMemo(() => {
+    if (testStateOverride) return testStateOverride;
+    if (!state || !optimisticOverlay) return state;
+    return applyPokerOptimisticOverlay(state, optimisticOverlay);
+  }, [testStateOverride, state, optimisticOverlay]);
 
   const handleTournamentCompleted = useCallback(
     (payload: PokerTournamentCompletedPayload) => {
@@ -184,16 +195,31 @@ export default function PokerTablePage() {
     return tournamentIdParam && tournamentIdParam.length > 0 ? tournamentIdParam : null;
   }, [renderedState, state?.tournamentId, tournamentIdParam]);
 
+  const handleMyTableChanged = useCallback(
+    (newTableId: string) => {
+      if (!newTableId || newTableId === tableId) return;
+      const qs = resolvedTournamentId
+        ? `?tournament=${encodeURIComponent(resolvedTournamentId)}`
+        : '';
+      toast.info('You have been moved to the final table.');
+      // `replace` (not push) so the browser back button doesn't return to the dead table.
+      router.replace(`/poker/${newTableId}${qs}`);
+    },
+    [router, resolvedTournamentId, tableId],
+  );
+
   const tournamentHudState = usePokerTableTournamentHud({
     wsClient,
     wsConnected,
     tournamentId: resolvedTournamentId,
     tableId,
+    myAddress: normalizedAddress,
     pokerHandId: renderedState?.currentHand?.handId,
     onTournamentCompleted: handleTournamentCompleted,
     onTournamentCancelled: handleTournamentCancelled,
     onBlindLevelUp: handleBlindLevelUp,
     onPlayerEliminated: handlePlayerEliminated,
+    onMyTableChanged: handleMyTableChanged,
   });
 
   const tournamentHUDProp =
@@ -269,6 +295,7 @@ export default function PokerTablePage() {
     effectivePlayerAddress,
     clientRef,
     applyE2EMockAction,
+    setOptimisticOverlay,
   });
 
   const handleLeaveClick = useCallback(() => {
@@ -392,20 +419,17 @@ export default function PokerTablePage() {
           });
 
           if (isFollowing) {
-            const res = await fetch(`/api/player/${addr}/follow`, {
+            // SIWE-gated. Follower comes from session, target stays in URL.
+            await apiFetch(`/api/player/${addr}/follow`, {
               method: 'DELETE',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ follower: me }),
+              body: JSON.stringify({}),
             });
-            if (!res.ok) throw new Error('Failed to unfollow');
             toast.success('Unfollowed');
           } else {
-            const res = await fetch(`/api/player/${addr}/follow`, {
+            await apiFetch(`/api/player/${addr}/follow`, {
               method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ follower: me }),
+              body: JSON.stringify({}),
             });
-            if (!res.ok) throw new Error('Failed to follow');
             toast.success('Following');
           }
           await queryClient.invalidateQueries({ queryKey: ['isFollowing', me, addr] });
@@ -578,6 +602,35 @@ export default function PokerTablePage() {
     }
   }, [wsClient, tableId, setState]);
 
+  const handleShowCards = useCallback(async () => {
+    if (!wsClient || !hand?.handId) return;
+    try {
+      const next = await wsClient.pokerShowCards(tableId, hand.handId, 'show');
+      setState(next);
+    } catch (err) {
+      toast.error((err as Error).message || 'Failed to show cards');
+    }
+  }, [wsClient, tableId, hand?.handId, setState]);
+
+  const handleMuckCards = useCallback(async () => {
+    if (!wsClient || !hand?.handId) return;
+    try {
+      const next = await wsClient.pokerShowCards(tableId, hand.handId, 'muck');
+      setState(next);
+    } catch (err) {
+      toast.error((err as Error).message || 'Failed to muck cards');
+    }
+  }, [wsClient, tableId, hand?.handId, setState]);
+
+  const foldOutShowEligible = !!(
+    hand &&
+    hand.handWentToShowdown === false &&
+    hand.foldOutWinnerAddress &&
+    normalizedAddress &&
+    hand.foldOutWinnerAddress === normalizedAddress &&
+    hand.foldOutShowDecision === 'pending'
+  );
+
   const onTipDealer = useCallback(async () => {
     if (!wsClient) return;
     playClick();
@@ -667,6 +720,13 @@ export default function PokerTablePage() {
     <PokerThemeProvider themeId={pokerTheme}>
       <PokerTableEffectProvider>
         {!isE2EMock && <PokerBetaSplash />}
+        {!isE2EMock && (
+          <DisplayNameWelcomeModal
+            wsClient={wsClient}
+            wsConnected={wsConnected}
+            hint="You're about to join the poker table — pick a name so other players know who you are."
+          />
+        )}
 
         {/* Portrait blocker: shown on mobile when holding phone upright */}
         {isPortraitMobile && (
@@ -855,6 +915,8 @@ export default function PokerTablePage() {
                 onOpenLogoSponsor={() => setLogoSponsorOpen(true)}
                 onSitOut={mySeat ? handleSitOut : undefined}
                 onSitBack={mySeat ? handleSitBack : undefined}
+                onShowCards={foldOutShowEligible ? handleShowCards : undefined}
+                onMuckCards={foldOutShowEligible ? handleMuckCards : undefined}
               />
 
               <PokerBottomBar

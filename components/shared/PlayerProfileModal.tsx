@@ -3,13 +3,11 @@
 import React, { useState } from 'react'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
-import { Gift, UserPlus, UserCheck } from 'lucide-react'
+import { UserPlus, UserCheck } from 'lucide-react'
 import { CopyButton } from '@/components/ui/copy-button'
 import { useAccount } from 'wagmi'
-import { useInventory } from '@/hooks/use-cosmetics'
 import { useProfileForAddress } from '@/hooks/use-player-profile'
 import { useFollowCounts, useIsFollowing, useFollowMutation } from '@/hooks/use-follow'
-import { GiftItemModal } from '@/components/shared/GiftItemModal'
 import {
   PlayerProfileDashboard,
   type PlayerProfileGame,
@@ -44,12 +42,10 @@ interface PlayerProfileModalProps {
 }
 
 export function PlayerProfileModal({ isOpen, onClose, address, game = 'all', modalZIndex }: PlayerProfileModalProps) {
-  const [giftOpen, setGiftOpen] = useState(false)
   const [copiedLabel, setCopiedLabel] = useState(false)
 
   const { address: myAddress } = useAccount()
   const me = myAddress?.toLowerCase() ?? null
-  const { ownedSet, items: ownedItemKeys, refresh: refreshInventory } = useInventory(myAddress)
   const isOwnProfile = me === address?.toLowerCase()
   const { displayName, bio, xHandle, tgHandle } = useProfileForAddress(address)
   const { data: counts } = useFollowCounts(address)
@@ -115,16 +111,6 @@ export function PlayerProfileModal({ isOpen, onClose, address, game = 'all', mod
                     {isFollowing ? <UserCheck className="w-3.5 h-3.5 mr-1" /> : <UserPlus className="w-3.5 h-3.5 mr-1" />}
                     {isFollowing ? 'Following' : 'Follow'}
                   </Button>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    className="text-pink-300 border-pink-500/40 hover:bg-pink-500/10"
-                    disabled={!myAddress || ownedItemKeys.length === 0 || isOwnProfile}
-                    onClick={() => setGiftOpen(true)}
-                  >
-                    <Gift className="w-3.5 h-3.5 mr-1" />
-                    Give Gift
-                  </Button>
                 </div>
               )}
             </div>
@@ -179,16 +165,6 @@ export function PlayerProfileModal({ isOpen, onClose, address, game = 'all', mod
         </DialogContent>
       </Dialog>
 
-      {myAddress && address && (
-        <GiftItemModal
-          open={giftOpen}
-          onClose={() => setGiftOpen(false)}
-          fromAddress={myAddress}
-          toAddress={address}
-          ownedItems={ownedSet}
-          onGifted={() => refreshInventory()}
-        />
-      )}
     </>
   )
 }

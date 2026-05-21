@@ -38,6 +38,7 @@ import { blackjackAbi } from '@/abi/blackjack';
 import { ERC20_ABI } from '@/abi/erc20';
 import { pulsechain } from '@/lib/chains';
 import { toast } from 'sonner';
+import { useGasParams } from '@/lib/tx-gas';
 
 export interface BlackjackContractReserves {
   contractAddress: string;
@@ -458,6 +459,7 @@ export default function AdminHealthTab() {
   } | null>(null);
   const [rewardsClaimsError, setRewardsClaimsError] = useState<string | null>(null);
   const { writeContractAsync } = useWriteContract();
+  const getGas = useGasParams();
 
   // On-chain contract reads for movement charts
   const { data: plinkoStats } = useReadContract({
@@ -701,7 +703,7 @@ export default function AdminHealthTab() {
           args: [game.address, MAX_UINT256],
           chain: pulsechain,
           account: address,
-          maxPriorityFeePerGas: 200_000n,
+          ...getGas(),
         } as any);
         toast.success(`${game.label}: MORBIUS approved`);
       } catch (e: unknown) {
@@ -711,7 +713,7 @@ export default function AdminHealthTab() {
         setFundingGame(null);
       }
     },
-    [address, writeContractAsync]
+    [address, writeContractAsync, getGas]
   );
 
   const handleFund = useCallback(
@@ -743,7 +745,7 @@ export default function AdminHealthTab() {
             args: [amount],
             chain: pulsechain,
             account: address,
-            maxPriorityFeePerGas: 200_000n,
+            ...getGas(),
           } as any);
         } else if (game.useFundContract) {
           const abi = gameKey === 'lottery' ? INSTANT_LOTTERY_6OF55_ABI : gameKey === 'plinko' ? PLINKO_ABI : KENO_ABI;
@@ -754,7 +756,7 @@ export default function AdminHealthTab() {
             args: [amount],
             chain: pulsechain,
             account: address,
-            maxPriorityFeePerGas: 200_000n,
+            ...getGas(),
           } as any);
         } else {
           await writeContractAsync({
@@ -764,7 +766,7 @@ export default function AdminHealthTab() {
             args: [game.address, amount],
             chain: pulsechain,
             account: address,
-            maxPriorityFeePerGas: 200_000n,
+            ...getGas(),
           } as any);
         }
         toast.success(`${game.label}: funded ${amountStr} MORBIUS`);
@@ -777,7 +779,7 @@ export default function AdminHealthTab() {
         setFundingGame(null);
       }
     },
-    [address, fundAmounts, writeContractAsync, fetchHealth]
+    [address, fundAmounts, writeContractAsync, fetchHealth, getGas]
   );
 
   const isPaused = useCallback((gameKey: FundableGameKey) => {
@@ -806,7 +808,7 @@ export default function AdminHealthTab() {
             functionName: 'emergencyPause',
             chain: pulsechain,
             account: address,
-            maxPriorityFeePerGas: 200_000n,
+            ...getGas(),
           } as any);
         } else if (gameKey === 'blackjack') {
           await writeContractAsync({
@@ -815,7 +817,7 @@ export default function AdminHealthTab() {
             functionName: 'pause',
             chain: pulsechain,
             account: address,
-            maxPriorityFeePerGas: 200_000n,
+            ...getGas(),
           } as any);
         } else {
           const abi = gameKey === 'plinko' ? PLINKO_ABI : KENO_ABI;
@@ -825,7 +827,7 @@ export default function AdminHealthTab() {
             functionName: 'pause',
             chain: pulsechain,
             account: address,
-            maxPriorityFeePerGas: 200_000n,
+            ...getGas(),
           } as any);
         }
         toast.success(`${game.label}: paused`);
@@ -837,7 +839,7 @@ export default function AdminHealthTab() {
         setActionType(null);
       }
     },
-    [address, writeContractAsync, fetchHealth]
+    [address, writeContractAsync, fetchHealth, getGas]
   );
 
   const handleUnpause = useCallback(
@@ -855,7 +857,7 @@ export default function AdminHealthTab() {
             functionName: 'emergencyUnpause',
             chain: pulsechain,
             account: address,
-            maxPriorityFeePerGas: 200_000n,
+            ...getGas(),
           } as any);
         } else if (gameKey === 'blackjack') {
           await writeContractAsync({
@@ -864,7 +866,7 @@ export default function AdminHealthTab() {
             functionName: 'unpause',
             chain: pulsechain,
             account: address,
-            maxPriorityFeePerGas: 200_000n,
+            ...getGas(),
           } as any);
         } else {
           const abi = gameKey === 'plinko' ? PLINKO_ABI : KENO_ABI;
@@ -874,7 +876,7 @@ export default function AdminHealthTab() {
             functionName: 'unpause',
             chain: pulsechain,
             account: address,
-            maxPriorityFeePerGas: 200_000n,
+            ...getGas(),
           } as any);
         }
         toast.success(`${game.label}: unpaused`);
@@ -886,7 +888,7 @@ export default function AdminHealthTab() {
         setActionType(null);
       }
     },
-    [address, writeContractAsync, fetchHealth]
+    [address, writeContractAsync, fetchHealth, getGas]
   );
 
   const handleWithdraw = useCallback(
@@ -920,7 +922,7 @@ export default function AdminHealthTab() {
             args: [amount],
             chain: pulsechain,
             account: address,
-            maxPriorityFeePerGas: 200_000n,
+            ...getGas(),
           } as any);
         } else if (gameKey === 'blackjack') {
           await writeContractAsync({
@@ -930,7 +932,7 @@ export default function AdminHealthTab() {
             args: [amount],
             chain: pulsechain,
             account: address,
-            maxPriorityFeePerGas: 200_000n,
+            ...getGas(),
           } as any);
         } else {
           const abi = gameKey === 'plinko' ? PLINKO_ABI : KENO_ABI;
@@ -941,7 +943,7 @@ export default function AdminHealthTab() {
             args: [amount],
             chain: pulsechain,
             account: address,
-            maxPriorityFeePerGas: 200_000n,
+            ...getGas(),
           } as any);
         }
         toast.success(`${game.label}: withdrew ${amountStr} MORBIUS`);
@@ -954,7 +956,7 @@ export default function AdminHealthTab() {
         setActionType(null);
       }
     },
-    [address, fundAmounts, writeContractAsync, fetchHealth]
+    [address, fundAmounts, writeContractAsync, fetchHealth, getGas]
   );
 
   // All Blackjack contracts with reserves (current + legacy)

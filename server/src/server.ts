@@ -7,6 +7,10 @@ import multer from 'multer';
 import cors from 'cors';
 import helmet from 'helmet';
 import rateLimit from 'express-rate-limit';
+import cookieParser from 'cookie-parser';
+import { AuthService } from './services/auth.service';
+import { registerAuthRoutes } from './routes/auth.routes';
+import { requireAuth, requireSameAddress } from './middleware/require-auth';
 import { DatabaseService, type BlackjackSpWagerTierRow } from './services/database.service';
 import { ProvablyFairService } from './services/provably-fair.service';
 import { BlackjackGameService } from './services/blackjack-game.service';
@@ -24,7 +28,7 @@ import { InstantLotteryService } from './services/instant-lottery.service';
 import { MerkleDropsService } from './services/merkle-drops.service';
 import { MerkleDropsLPService } from './services/merkle-lp-drops.service';
 import { CosmeticsService } from './services/cosmetics.service';
-import { isAdminWallet, getLockedFields, ITEM_CATALOG } from './lib/cosmetics-catalog';
+import { isAdminWallet } from './lib/cosmetics-catalog';
 import { resolveDisplayNameForProfileUpsert } from './lib/resolve-profile-display-name';
 import { logger } from './utils/logger';
 import { assertPokerBotControlAllowed, assertPokerTournamentBotControlAllowed } from './utils/poker-bot-auth';
@@ -126,6 +130,9 @@ app.use('/api/', limiter);
 // Body parsing
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
+
+// Cookie parsing for SIWE session lookup. Must come before any handler that reads cookies.
+app.use(cookieParser());
 
 // Uploaded files: serve from uploads/ (relative to process cwd when running from dist/)
 const uploadsDir = path.join(process.cwd(), 'uploads');
@@ -253,6 +260,11 @@ async function initializeServices() {
     const dbService = new DatabaseService();
     await dbService.connect();
 
+    // SIWE auth: nonce + verify + logout + me endpoints. Session cookies are
+    // looked up server-side against the `sessions` table (see migration 123).
+    const authService = new AuthService(dbService.getPool());
+    registerAuthRoutes({ app, authService });
+
     // Initialize provably fair service
     const pfService = new ProvablyFairService();
 
@@ -302,8 +314,10 @@ async function initializeServices() {
     // Initialize multiplayer blackjack service
     const bjMultiService = new BlackjackMultiGameService(dbService, pfService);
 
-    // Initialize WebSocket service
-    const wsService = new WebSocketService(server, gameService, dbService, tournamentService, pokerGameService, bjMultiService);
+    // Initialize WebSocket service. authService is passed last so WS upgrades
+    // can read the SIWE session cookie and skip the EIP-712 challenge for
+    // already-signed-in users (eliminates the second in-game wallet popup).
+    const wsService = new WebSocketService(server, gameService, dbService, tournamentService, pokerGameService, bjMultiService, authService);
 
     // Wire broadcast so bot actions (which bypass the WS handler) still push state to clients
     pokerGameService.setBroadcastCallback((tableId) => wsService.broadcastPokerTableState(tableId));
@@ -396,12 +410,10 @@ async function initializeServices() {
       }
     });
 
-    // Update profile by address (display name, profile image URL, avatar config). No signature required.
-    app.post('/api/player/profile', express.json(), async (req, res) => {
+    // Update profile. SIWE-gated: the owning address is the signed-in wallet.
+    app.post('/api/player/profile', express.json(), requireAuth(authService), async (req, res) => {
       try {
         const {
-          address: bodyAddress,
-          walletAddress: bodyWalletAddress,
           displayName: rawDisplayName,
           profileImageUrl: rawProfileImageUrl,
           avatarConfig: rawAvatarConfig,
@@ -410,16 +422,7 @@ async function initializeServices() {
           tgHandle: rawTgHandle,
           profileDisplayMode: rawProfileDisplayMode,
         } = req.body ?? {};
-        const addressRaw =
-          typeof bodyAddress === 'string' && bodyAddress.trim() !== ''
-            ? bodyAddress
-            : typeof bodyWalletAddress === 'string' && bodyWalletAddress.trim() !== ''
-              ? bodyWalletAddress
-              : '';
-        if (!addressRaw) {
-          return res.status(400).json({ error: 'address required' });
-        }
-        const normalizedAddress = getAddress(addressRaw);
+        const normalizedAddress = getAddress(req.user!.address);
         const displayName = await resolveDisplayNameForProfileUpsert(
           dbService,
           normalizedAddress,
@@ -436,39 +439,6 @@ async function initializeServices() {
         const tgHandle = rawTgHandle !== undefined ? (typeof rawTgHandle === 'string' ? rawTgHandle.trim().replace(/^@/, '').slice(0, 50) || null : null) : undefined;
         const profileDisplayMode: 'avatar' | 'photo' | undefined =
           rawProfileDisplayMode === 'photo' || rawProfileDisplayMode === 'avatar' ? rawProfileDisplayMode : undefined;
-
-        // Cosmetics ownership check (skip for admin wallets)
-        if (avatarConfig && !isAdminWallet(normalizedAddress)) {
-          const inventory = await cosmeticsService.getInventory(normalizedAddress);
-          const ownedSet = new Set(inventory);
-          const locked = getLockedFields(avatarConfig as Record<string, string>, ownedSet);
-          if (locked.length > 0) {
-            const names = locked.map((l) => l.displayName ?? l.itemKey ?? l.value).join(', ');
-            return res.status(403).json({
-              error: `Avatar contains items you don\'t own: ${names}`,
-              lockedItems: locked,
-            });
-          }
-
-          // DB-created items check (colors added via the builder won't be in the static catalog)
-          const dbValueMap = await cosmeticsService.getDbValueMap();
-          if (dbValueMap.size > 0) {
-            const config = avatarConfig as Record<string, string>;
-            const dbLocked: string[] = [];
-            for (const [key, itemKey] of dbValueMap) {
-              const [field, value] = key.split(':');
-              if (config[field] === value && !ownedSet.has(itemKey)) {
-                dbLocked.push(itemKey);
-              }
-            }
-            if (dbLocked.length > 0) {
-              return res.status(403).json({
-                error: `Avatar contains items you don't own: ${dbLocked.join(', ')}`,
-                lockedItems: dbLocked.map((k) => ({ itemKey: k, value: null, field: null })),
-              });
-            }
-          }
-        }
 
         await dbService.setDisplayName(normalizedAddress, displayName, profileImageUrl, avatarConfig, bio, xHandle, tgHandle, profileDisplayMode);
         const profile = await dbService.getProfile(normalizedAddress);
@@ -507,70 +477,24 @@ async function initializeServices() {
       }
     });
 
-    // POST /api/cosmetics/purchase — verify on-chain payment and record ownership
-    // Body: { walletAddress, itemKey, txHash, currency: 'PLS' | 'MORBIUS' }
-    app.post('/api/cosmetics/purchase', express.json(), async (req, res) => {
-      try {
-        const { walletAddress, itemKey, txHash, currency } = req.body ?? {};
-        if (!walletAddress || !itemKey || !txHash || !currency) {
-          return res.status(400).json({ error: 'walletAddress, itemKey, txHash, and currency required' });
-        }
-        if (currency !== 'PLS' && currency !== 'MORBIUS') {
-          return res.status(400).json({ error: 'currency must be PLS or MORBIUS' });
-        }
-        const result = await cosmeticsService.recordPurchase(walletAddress, itemKey, txHash, currency);
-        const statusMap: Record<string, number> = {
-          not_found: 404,
-          not_listed: 403,
-          already_owned: 409,
-          tx_already_used: 409,
-          tx_not_found: 422,
-          tx_wrong_sender: 422,
-          tx_wrong_recipient: 422,
-          tx_insufficient_amount: 422,
-          tx_reverted: 422,
-        };
-        if (result !== 'ok') {
-          const status = statusMap[result] ?? 422;
-          return res.status(status).json({ error: result.replace(/_/g, ' ') });
-        }
-        const inventory = await cosmeticsService.getInventory(walletAddress);
-        sendJson(res, { success: true, items: inventory });
-      } catch (error) {
-        logger.error('Error recording cosmetic purchase:', error);
-        res.status(500).json({ error: 'Internal server error' });
-      }
-    });
+    // Cosmetic purchases, gifts, and the player marketplace were removed:
+    // all avatar items are now free. Stale clients still calling these
+    // endpoints get a 410 Gone so the failure is obvious rather than silent.
+    const cosmeticsRetired = (_req: express.Request, res: express.Response) => {
+      res.status(410).json({ error: 'All cosmetics are free — payment endpoints are retired.' });
+    };
+    app.post('/api/cosmetics/purchase', cosmeticsRetired);
+    app.post('/api/cosmetics/gift', cosmeticsRetired);
 
-    // POST /api/cosmetics/gift — transfer item from one player to another
-    // Body: { fromAddress, toAddress, itemKey }
-    app.post('/api/cosmetics/gift', express.json(), async (req, res) => {
+    // POST /api/cosmetics/grant — admin-only: grant item to a player for free.
+    // SIWE-gated: caller must be signed in AND must be an admin wallet.
+    // Body: { targetAddress, itemKey }
+    app.post('/api/cosmetics/grant', express.json(), requireAuth(authService), async (req, res) => {
       try {
-        const { fromAddress, toAddress, itemKey } = req.body ?? {};
-        if (!fromAddress || !toAddress || !itemKey) {
-          return res.status(400).json({ error: 'fromAddress, toAddress, and itemKey required' });
-        }
-        if (fromAddress.toLowerCase() === toAddress.toLowerCase()) {
-          return res.status(400).json({ error: 'Cannot gift to yourself' });
-        }
-        const result = await cosmeticsService.giftItem(fromAddress, toAddress, itemKey);
-        if (result === 'not_owned') return res.status(403).json({ error: 'You do not own this item' });
-        if (result === 'already_owned') return res.status(409).json({ error: 'Recipient already owns this item' });
-        const inventory = await cosmeticsService.getInventory(fromAddress);
-        sendJson(res, { success: true, items: inventory });
-      } catch (error) {
-        logger.error('Error gifting cosmetic item:', error);
-        res.status(500).json({ error: 'Internal server error' });
-      }
-    });
-
-    // POST /api/cosmetics/grant — admin-only: grant item to a player for free
-    // Body: { targetAddress, itemKey, adminKey }
-    app.post('/api/cosmetics/grant', express.json(), async (req, res) => {
-      try {
-        const { targetAddress, itemKey, adminAddress } = req.body ?? {};
-        if (!targetAddress || !itemKey || !adminAddress) {
-          return res.status(400).json({ error: 'targetAddress, itemKey, and adminAddress required' });
+        const { targetAddress, itemKey } = req.body ?? {};
+        const adminAddress = req.user!.address;
+        if (!targetAddress || !itemKey) {
+          return res.status(400).json({ error: 'targetAddress and itemKey required' });
         }
         if (!isAdminWallet(adminAddress)) {
           return res.status(403).json({ error: 'Unauthorized' });
@@ -584,15 +508,16 @@ async function initializeServices() {
       }
     });
 
-    // POST /api/cosmetics/admin/create-item — create a new dynamic item (admin only)
-    // Body: { adminAddress, itemKey, displayName, tier, priceMorbius, maxSupply, unlocksField, unlocksValue }
-    app.post('/api/cosmetics/admin/create-item', express.json(), async (req, res) => {
+    // POST /api/cosmetics/admin/create-item — create a new dynamic item (admin only).
+    // SIWE-gated: caller must be signed in AND be an admin wallet.
+    // Body: { itemKey, displayName, tier, priceMorbius, maxSupply, unlocksField, unlocksValue }
+    app.post('/api/cosmetics/admin/create-item', express.json(), requireAuth(authService), async (req, res) => {
       try {
-        const { adminAddress, itemKey, displayName, tier, priceMorbius, maxSupply, unlocksField, unlocksValue } = req.body ?? {};
-        if (!adminAddress || !itemKey || !displayName || !tier || !unlocksField || !unlocksValue) {
+        const { itemKey, displayName, tier, priceMorbius, maxSupply, unlocksField, unlocksValue } = req.body ?? {};
+        if (!itemKey || !displayName || !tier || !unlocksField || !unlocksValue) {
           return res.status(400).json({ error: 'Missing required fields' });
         }
-        if (!isAdminWallet(adminAddress)) {
+        if (!isAdminWallet(req.user!.address)) {
           return res.status(403).json({ error: 'Unauthorized' });
         }
         const result = await cosmeticsService.createItem({
@@ -610,15 +535,15 @@ async function initializeServices() {
       }
     });
 
-    // PATCH /api/cosmetics/admin/item — update tier/price/maxSupply/shopListed (admin only)
-    // Body: { adminAddress, itemKey, tier?, priceMorbius?, maxSupply?, shopListed? }
-    app.patch('/api/cosmetics/admin/item', express.json(), async (req, res) => {
+    // PATCH /api/cosmetics/admin/item — update tier/price/maxSupply/shopListed (admin only). SIWE-gated.
+    // Body: { itemKey, tier?, priceMorbius?, maxSupply?, shopListed? }
+    app.patch('/api/cosmetics/admin/item', express.json(), requireAuth(authService), async (req, res) => {
       try {
-        const { adminAddress, itemKey, tier, priceMorbius, maxSupply, shopListed } = req.body ?? {};
-        if (!adminAddress || !itemKey) {
-          return res.status(400).json({ error: 'adminAddress and itemKey required' });
+        const { itemKey, tier, priceMorbius, maxSupply, shopListed } = req.body ?? {};
+        if (!itemKey) {
+          return res.status(400).json({ error: 'itemKey required' });
         }
-        if (!isAdminWallet(adminAddress)) {
+        if (!isAdminWallet(req.user!.address)) {
           return res.status(403).json({ error: 'Unauthorized' });
         }
         const result = await cosmeticsService.updateItem(itemKey, {
@@ -636,15 +561,15 @@ async function initializeServices() {
       }
     });
 
-    // POST /api/cosmetics/admin/bulk-shop-listed — batch shop_listed from variant review (admin only)
-    // Body: { adminAddress, updates: [{ itemKey, shopListed: boolean }, ...] }
-    app.post('/api/cosmetics/admin/bulk-shop-listed', express.json(), async (req, res) => {
+    // POST /api/cosmetics/admin/bulk-shop-listed — batch shop_listed from variant review (admin only). SIWE-gated.
+    // Body: { updates: [{ itemKey, shopListed: boolean }, ...] }
+    app.post('/api/cosmetics/admin/bulk-shop-listed', express.json(), requireAuth(authService), async (req, res) => {
       try {
-        const { adminAddress, updates } = req.body ?? {};
-        if (!adminAddress || !Array.isArray(updates)) {
-          return res.status(400).json({ error: 'adminAddress and updates array required' });
+        const { updates } = req.body ?? {};
+        if (!Array.isArray(updates)) {
+          return res.status(400).json({ error: 'updates array required' });
         }
-        if (!isAdminWallet(adminAddress)) {
+        if (!isAdminWallet(req.user!.address)) {
           return res.status(403).json({ error: 'Unauthorized' });
         }
         const max = 500;
@@ -669,15 +594,15 @@ async function initializeServices() {
       }
     });
 
-    // PATCH /api/cosmetics/admin/tier-pricing — set MORBIUS price for all items of a tier (admin only)
-    // Body: { adminAddress, tier, priceMorbius }
-    app.patch('/api/cosmetics/admin/tier-pricing', express.json(), async (req, res) => {
+    // PATCH /api/cosmetics/admin/tier-pricing — set MORBIUS price for all items of a tier (admin only). SIWE-gated.
+    // Body: { tier, priceMorbius }
+    app.patch('/api/cosmetics/admin/tier-pricing', express.json(), requireAuth(authService), async (req, res) => {
       try {
-        const { adminAddress, tier, priceMorbius } = req.body ?? {};
-        if (!adminAddress || !tier || priceMorbius === undefined) {
-          return res.status(400).json({ error: 'adminAddress, tier, and priceMorbius required' });
+        const { tier, priceMorbius } = req.body ?? {};
+        if (!tier || priceMorbius === undefined) {
+          return res.status(400).json({ error: 'tier and priceMorbius required' });
         }
-        if (!isAdminWallet(adminAddress)) {
+        if (!isAdminWallet(req.user!.address)) {
           return res.status(403).json({ error: 'Unauthorized' });
         }
         const validTiers = ['common', 'uncommon', 'rare', 'legendary'];
@@ -696,15 +621,14 @@ async function initializeServices() {
       }
     });
 
-    // GET /api/cosmetics/admin/item-owners?adminAddress=&itemKey= — list wallets that own an item (admin only)
-    app.get('/api/cosmetics/admin/item-owners', async (req, res) => {
+    // GET /api/cosmetics/admin/item-owners?itemKey= — list wallets that own an item (admin only). SIWE-gated.
+    app.get('/api/cosmetics/admin/item-owners', requireAuth(authService), async (req, res) => {
       try {
-        const adminAddress = typeof req.query.adminAddress === 'string' ? req.query.adminAddress : '';
         const itemKey = typeof req.query.itemKey === 'string' ? req.query.itemKey : '';
-        if (!adminAddress || !itemKey) {
-          return res.status(400).json({ error: 'adminAddress and itemKey query params required' });
+        if (!itemKey) {
+          return res.status(400).json({ error: 'itemKey query param required' });
         }
-        if (!isAdminWallet(adminAddress)) {
+        if (!isAdminWallet(req.user!.address)) {
           return res.status(403).json({ error: 'Unauthorized' });
         }
         const owners = await cosmeticsService.getOwnersForItem(itemKey);
@@ -715,126 +639,25 @@ async function initializeServices() {
       }
     });
 
-    // ── Marketplace ───────────────────────────────────────────────────────────
-
-    // GET /api/cosmetics/market — active listings (optional ?itemKey=&sellerAddress=)
-    app.get('/api/cosmetics/market', async (req, res) => {
-      try {
-        const { itemKey, sellerAddress } = req.query as Record<string, string | undefined>;
-        const listings = await cosmeticsService.getListings({
-          itemKey: itemKey || undefined,
-          sellerAddress: sellerAddress || undefined,
-        });
-        res.json({ listings });
-      } catch (error) {
-        logger.error('Error fetching market listings:', error);
-        res.status(500).json({ error: 'Internal server error' });
-      }
+    // ── Marketplace (retired) ────────────────────────────────────────────────
+    // The player-to-player cosmetics marketplace was removed alongside paid
+    // cosmetics. The list endpoint returns an empty list so stale clients
+    // render gracefully; mutation endpoints return 410.
+    app.get('/api/cosmetics/market', (_req, res) => {
+      res.json({ listings: [] });
     });
-
-    // POST /api/cosmetics/market/list — create a listing
-    // Body: { sellerAddress, itemKey, priceMorbius }
-    app.post('/api/cosmetics/market/list', express.json(), async (req, res) => {
-      try {
-        const { sellerAddress, itemKey, priceMorbius } = req.body ?? {};
-        if (!sellerAddress || !itemKey || !priceMorbius) {
-          return res.status(400).json({ error: 'sellerAddress, itemKey, and priceMorbius required' });
-        }
-        const price = parseInt(priceMorbius, 10);
-        if (isNaN(price) || price <= 0) {
-          return res.status(400).json({ error: 'priceMorbius must be a positive number' });
-        }
-        const result = await cosmeticsService.createListing(sellerAddress, itemKey, price);
-        if (result === 'not_owned')     return res.status(403).json({ error: 'You do not own this item' });
-        if (result === 'already_listed') return res.status(409).json({ error: 'Item already listed for sale' });
-        if (result === 'item_not_found') return res.status(404).json({ error: 'Item not found' });
-        res.json({ success: true });
-      } catch (error) {
-        logger.error('Error creating market listing:', error);
-        res.status(500).json({ error: 'Internal server error' });
-      }
-    });
-
-    // POST /api/cosmetics/market/cancel — cancel a listing
-    // Body: { sellerAddress, listingId }
-    app.post('/api/cosmetics/market/cancel', express.json(), async (req, res) => {
-      try {
-        const { sellerAddress, listingId } = req.body ?? {};
-        if (!sellerAddress || !listingId) {
-          return res.status(400).json({ error: 'sellerAddress and listingId required' });
-        }
-        const result = await cosmeticsService.cancelListing(sellerAddress, parseInt(listingId, 10));
-        if (result === 'not_found') return res.status(404).json({ error: 'Listing not found' });
-        if (result === 'not_yours')  return res.status(403).json({ error: 'Not your listing' });
-        res.json({ success: true });
-      } catch (error) {
-        logger.error('Error cancelling market listing:', error);
-        res.status(500).json({ error: 'Internal server error' });
-      }
-    });
-
-    // POST /api/cosmetics/market/update-price — update listing price
-    // Body: { sellerAddress, listingId, newPrice }
-    app.post('/api/cosmetics/market/update-price', express.json(), async (req, res) => {
-      try {
-        const { sellerAddress, listingId, newPrice } = req.body ?? {};
-        if (!sellerAddress || !listingId || !newPrice) {
-          return res.status(400).json({ error: 'sellerAddress, listingId, and newPrice required' });
-        }
-        const p = Number(newPrice);
-        if (!Number.isFinite(p) || p <= 0) {
-          return res.status(400).json({ error: 'newPrice must be a positive number' });
-        }
-        const result = await cosmeticsService.updateListingPrice(sellerAddress, parseInt(listingId, 10), p);
-        if (result === 'not_found') return res.status(404).json({ error: 'Listing not found or already sold/cancelled' });
-        if (result === 'not_yours')  return res.status(403).json({ error: 'Not your listing' });
-        res.json({ success: true });
-      } catch (error) {
-        logger.error('Error updating listing price:', error);
-        res.status(500).json({ error: 'Internal server error' });
-      }
-    });
-
-    // POST /api/cosmetics/market/buy — buy a marketplace listing
-    // Body: { buyerAddress, listingId, txHash }
-    app.post('/api/cosmetics/market/buy', express.json(), async (req, res) => {
-      try {
-        const { buyerAddress, listingId, txHash } = req.body ?? {};
-        if (!buyerAddress || !listingId || !txHash) {
-          return res.status(400).json({ error: 'buyerAddress, listingId, and txHash required' });
-        }
-        const result = await cosmeticsService.buyListing(buyerAddress, parseInt(listingId, 10), txHash);
-        const errorMap: Record<string, [number, string]> = {
-          listing_not_found:     [404, 'Listing not found'],
-          already_sold:          [409, 'Listing already sold or cancelled'],
-          seller_no_longer_owns: [409, 'Seller no longer owns this item'],
-          tx_already_used:       [409, 'Transaction already used'],
-          tx_not_found:          [400, 'Transaction not found on chain'],
-          tx_wrong_sender:       [400, 'Transaction not sent from your wallet'],
-          tx_wrong_recipient:    [400, 'Transaction sent to wrong address'],
-          tx_insufficient_amount:[400, 'Transaction amount is too low'],
-          tx_reverted:           [400, 'Transaction was reverted'],
-        };
-        if (result !== 'ok') {
-          const [status, message] = errorMap[result] ?? [500, 'Unknown error'];
-          return res.status(status).json({ error: message });
-        }
-        const inventory = await cosmeticsService.getInventory(buyerAddress);
-        res.json({ success: true, items: inventory });
-      } catch (error) {
-        logger.error('Error buying market listing:', error);
-        res.status(500).json({ error: 'Internal server error' });
-      }
-    });
+    app.post('/api/cosmetics/market/list', cosmeticsRetired);
+    app.post('/api/cosmetics/market/cancel', cosmeticsRetired);
+    app.post('/api/cosmetics/market/update-price', cosmeticsRetired);
+    app.post('/api/cosmetics/market/buy', cosmeticsRetired);
 
     // ── Follow system ─────────────────────────────────────────────────────────
 
-    // Follow a player (body: { follower: string })
-    app.post('/api/player/:address/follow', express.json(), async (req, res) => {
+    // Follow a player. SIWE-gated: follower is the signed-in wallet; target is the URL param.
+    app.post('/api/player/:address/follow', express.json(), requireAuth(authService), async (req, res) => {
       try {
         const following = req.params.address;
-        const { follower } = req.body ?? {};
-        if (!follower || typeof follower !== 'string') return res.status(400).json({ error: 'follower address required' });
+        const follower = req.user!.address;
         if (follower.toLowerCase() === following.toLowerCase()) return res.status(400).json({ error: 'Cannot follow yourself' });
         await dbService.followPlayer(follower, following);
         const counts = await dbService.getFollowCounts(following);
@@ -845,12 +668,11 @@ async function initializeServices() {
       }
     });
 
-    // Unfollow a player (body: { follower: string })
-    app.delete('/api/player/:address/follow', express.json(), async (req, res) => {
+    // Unfollow a player. SIWE-gated.
+    app.delete('/api/player/:address/follow', express.json(), requireAuth(authService), async (req, res) => {
       try {
         const following = req.params.address;
-        const { follower } = req.body ?? {};
-        if (!follower || typeof follower !== 'string') return res.status(400).json({ error: 'follower address required' });
+        const follower = req.user!.address;
         await dbService.unfollowPlayer(follower, following);
         const counts = await dbService.getFollowCounts(following);
         sendJson(res, { success: true, ...counts });
@@ -1067,18 +889,18 @@ async function initializeServices() {
       message: 'Too many instant lottery plays from this IP, try again later.',
       validate: { xForwardedForHeader: false },
     });
-    app.post('/api/lottery/instant/play', instantLotteryPlayLimiter, async (req, res) => {
+    app.post('/api/lottery/instant/play', instantLotteryPlayLimiter, requireAuth(authService), async (req, res) => {
       try {
         if (!instantLotteryService.isConfigured()) {
           return res.status(503).json({ error: 'Instant lottery (provably fair) is not configured' });
         }
-        const body = req.body as { address?: unknown; numbers?: unknown; wager?: unknown; clientSeed?: unknown };
-        const address = typeof body?.address === 'string' ? body.address.trim() : '';
+        const body = req.body as { numbers?: unknown; wager?: unknown; clientSeed?: unknown };
+        const address = req.user!.address;
         const numbers = body?.numbers;
         const wager = typeof body?.wager === 'string' ? body.wager : (body?.wager != null ? String(body.wager) : '');
         const clientSeed = typeof body?.clientSeed === 'string' ? body.clientSeed : undefined;
-        if (!address || !numbers || !wager) {
-          return res.status(400).json({ error: 'address, numbers (array of 6), and wager (string) required' });
+        if (!numbers || !wager) {
+          return res.status(400).json({ error: 'numbers (array of 6) and wager (string) required' });
         }
         const result = await instantLotteryService.play({ address, numbers, wager, clientSeed });
         sendJson(res, result);
@@ -1387,6 +1209,27 @@ async function initializeServices() {
       }
     });
 
+    app.get('/api/poker/player/:address/chip-ledger', async (req, res) => {
+      try {
+        const { address } = req.params;
+        if (!address || !/^0x[a-fA-F0-9]{40}$/.test(address)) {
+          return res.status(400).json({ error: 'Invalid address' });
+        }
+        const limit = Math.min(Math.max(parseInt(req.query.limit as string) || 5, 1), 200);
+        const offset = Math.max(parseInt(req.query.offset as string) || 0, 0);
+        const rawCategory = String(req.query.category ?? 'all');
+        const category: 'all' | 'cash' | 'tournaments' | 'exchanges' =
+          rawCategory === 'cash' || rawCategory === 'tournaments' || rawCategory === 'exchanges'
+            ? rawCategory
+            : 'all';
+        const data = await dbService.getPokerChipLedger(address, { limit, offset, category });
+        sendJson(res, data);
+      } catch (error) {
+        logger.error('Error fetching poker chip ledger:', error);
+        res.status(500).json({ error: 'Internal server error' });
+      }
+    });
+
     const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
     app.get('/api/poker/table/:tableId/dashboard', async (req, res) => {
@@ -1642,13 +1485,10 @@ async function initializeServices() {
       }
     });
 
-    app.post('/api/poker/chips/purchase', express.json(), async (req, res) => {
+    app.post('/api/poker/chips/purchase', express.json(), requireAuth(authService), async (req, res) => {
       try {
-        const { address, chips } = req.body ?? {};
-        if (!address || typeof address !== 'string' || !/^0x[a-fA-F0-9]{40}$/i.test(address)) {
-          return res.status(400).json({ error: 'address required' });
-        }
-        const normalized = address.toLowerCase();
+        const { chips } = req.body ?? {};
+        const normalized = req.user!.address.toLowerCase();
         let chipsBn: bigint;
         try {
           chipsBn = BigInt(String(chips ?? '0'));
@@ -1684,13 +1524,10 @@ async function initializeServices() {
       }
     });
 
-    app.post('/api/poker/chips/cashout', express.json(), async (req, res) => {
+    app.post('/api/poker/chips/cashout', express.json(), requireAuth(authService), async (req, res) => {
       try {
-        const { address, chips } = req.body ?? {};
-        if (!address || typeof address !== 'string' || !/^0x[a-fA-F0-9]{40}$/i.test(address)) {
-          return res.status(400).json({ error: 'address required' });
-        }
-        const normalized = address.toLowerCase();
+        const { chips } = req.body ?? {};
+        const normalized = req.user!.address.toLowerCase();
         let chipsBn: bigint;
         try {
           chipsBn = BigInt(String(chips ?? '0'));
@@ -1910,15 +1747,12 @@ async function initializeServices() {
       }
     });
 
-    // Cancel tournament (creator only)
-    app.post('/api/tournament/:tournamentId/cancel', async (req, res) => {
+    // Cancel tournament (creator only). SIWE-gated: the canceller IS the signed-in wallet.
+    // tournamentService.cancelTournament still verifies that this address is the creator.
+    app.post('/api/tournament/:tournamentId/cancel', requireAuth(authService), async (req, res) => {
       try {
         const { tournamentId } = req.params;
-        const { cancellerAddress } = req.body;
-        
-        if (!cancellerAddress || typeof cancellerAddress !== 'string') {
-          return res.status(400).json({ error: 'cancellerAddress is required' });
-        }
+        const cancellerAddress = req.user!.address;
 
         await tournamentService.cancelTournament(tournamentId, cancellerAddress);
         sendJson(res, { success: true, message: 'Tournament cancelled successfully' });
@@ -1931,15 +1765,11 @@ async function initializeServices() {
       }
     });
 
-    // Creator reclaim funds from cancelled tournament
-    app.post('/api/tournament/:tournamentId/reclaim', async (req, res) => {
+    // Creator reclaim funds from cancelled tournament. SIWE-gated.
+    app.post('/api/tournament/:tournamentId/reclaim', requireAuth(authService), async (req, res) => {
       try {
         const { tournamentId } = req.params;
-        const { creatorAddress } = req.body;
-        
-        if (!creatorAddress || typeof creatorAddress !== 'string') {
-          return res.status(400).json({ error: 'creatorAddress is required' });
-        }
+        const creatorAddress = req.user!.address;
 
         const result = await tournamentService.creatorReclaimFunds(tournamentId, creatorAddress);
         if (result.success) {
@@ -3711,12 +3541,14 @@ async function initializeServices() {
     const DEPOSIT_MORBIUS_ABI = [
       { type: 'event', name: 'DepositMORBIUS', inputs: [{ name: 'player', type: 'address', indexed: true }, { name: 'amount', type: 'uint256', indexed: false }] },
     ] as const;
-    app.post('/api/deposit/notify', async (req, res) => {
+    // SIWE-gated. The wallet whose deposit gets credited IS the signed-in wallet —
+    // not an arbitrary value from the body. Server still verifies the on-chain
+    // tx and its from/to fields below, so a spammer can't credit themselves
+    // for someone else's deposit.
+    app.post('/api/deposit/notify', requireAuth(authService), async (req, res) => {
       try {
-        const { walletAddress, txHash } = req.body;
-        if (!walletAddress || typeof walletAddress !== 'string' || !/^0x[0-9a-fA-F]{40}$/.test(walletAddress)) {
-          return res.status(400).json({ error: 'Invalid wallet address' });
-        }
+        const { txHash } = req.body ?? {};
+        const walletAddress = req.user!.address;
         if (!txHash || typeof txHash !== 'string' || !/^0x[0-9a-fA-F]{64}$/.test(txHash)) {
           return res.status(400).json({ error: 'Invalid tx hash' });
         }
@@ -4203,19 +4035,11 @@ async function initializeServices() {
     });
 
     // Hot-wallet auto-withdrawal: payouts are ERC20 transfers from HOT_WALLET — not from the Blackjack contract.
-    app.post('/api/withdraw', async (req, res) => {
+    // SIWE-gated: the withdrawing address is the signed-in wallet, never read from the request body.
+    app.post('/api/withdraw', requireAuth(authService), async (req, res) => {
       try {
-        const { address, amount } = req.body;
-
-        if (!address || typeof address !== 'string') {
-          return res.status(400).json({ error: 'Address required' });
-        }
-        const normalizedAddress = address.toLowerCase().startsWith('0x')
-          ? address.toLowerCase()
-          : `0x${address.toLowerCase()}`;
-        if (normalizedAddress.length !== 42) {
-          return res.status(400).json({ error: 'Invalid address' });
-        }
+        const { amount } = req.body ?? {};
+        const normalizedAddress = req.user!.address.toLowerCase();
 
         const amountBigInt = amount != null ? BigInt(String(amount)) : 0n;
         if (amountBigInt < MIN_WITHDRAWAL_WEI) {

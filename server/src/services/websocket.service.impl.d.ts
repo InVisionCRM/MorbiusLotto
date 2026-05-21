@@ -4,6 +4,7 @@ import { TournamentService } from './tournament.service';
 import { PokerGameService } from './poker-game.service';
 import { PokerTournamentService } from './poker-tournament.service';
 import { BlackjackMultiGameService } from './blackjack-multi-game.service';
+import { AuthService } from './auth.service';
 interface WebSocketMessage {
     type: string;
     payload: any;
@@ -29,7 +30,8 @@ export declare class WebSocketService {
     private bjMultiTimerInterval;
     private bjMultiActionTimestamps;
     private betLimitsCache;
-    constructor(server: any, gameService: BlackjackGameService, dbService: DatabaseService, tournamentService?: TournamentService, pokerGameService?: PokerGameService | null, bjMultiService?: BlackjackMultiGameService | null);
+    private authService;
+    constructor(server: any, gameService: BlackjackGameService, dbService: DatabaseService, tournamentService?: TournamentService, pokerGameService?: PokerGameService | null, bjMultiService?: BlackjackMultiGameService | null, authService?: AuthService | null);
     /** Wire in the PokerTournamentService after construction. */
     setPokerTournamentService(service: PokerTournamentService): void;
     /** Prune addresses with no timestamps in the current window to avoid unbounded map growth. */
@@ -77,6 +79,7 @@ export declare class WebSocketService {
     private handlePokerLeaveTable;
     private handlePokerAddChips;
     private handlePokerAction;
+    private handlePokerShowCards;
     private handlePokerGetState;
     private handlePokerQuickReaction;
     private static readonly POKER_AVATAR_EMOTIONS;

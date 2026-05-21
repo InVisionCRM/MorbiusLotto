@@ -20,9 +20,12 @@ import {
   POKER_CASH_MIN_BUY_IN_BB,
 } from '@/lib/poker-buy-in';
 import { formatChips, parseChipInput } from '@/lib/format-poker-chips';
-import { formatMorbiusFloor } from '@/lib/format-morbius-display';
 import { PokerChipExchangeModal } from '@/components/poker/PokerChipExchangeModal';
 import { InsufficientBalanceDialog } from '@/components/shared/InsufficientBalanceDialog';
+import { PokerOnboardingWizard } from '@/components/poker/PokerOnboardingWizard';
+import { PokerOnboardingChecklist } from '@/components/poker/PokerOnboardingChecklist';
+import { PokerYourStatsPanel } from '@/components/poker/PokerYourStatsPanel';
+import { usePokerOnboarding } from '@/hooks/use-poker-onboarding';
 import { PokerBetaSplash } from '@/components/poker/PokerBetaSplash';
 import { PokerHowToPlayModal } from '@/components/poker/PokerHowToPlayModal';
 import { PokerStatsModal } from '@/components/poker/PokerStatsModal';
@@ -39,7 +42,7 @@ import {
   MorbInput,
   MorbHeroAmount,
 } from '@/components/ui/morb-card';
-import { Coins, Lock } from 'lucide-react';
+import { Lock } from 'lucide-react';
 import { formatDistanceToNow } from 'date-fns';
 
 function shortenHexAddress(addr: string | null | undefined): string {
@@ -149,8 +152,17 @@ export default function PokerLobbyPage() {
   const [showHowToPlay, setShowHowToPlay] = useState(false);
   const [showStatsModal, setShowStatsModal] = useState(false);
   const [showDepositModal, setShowDepositModal] = useState(false);
+  const [walletDefaultTab, setWalletDefaultTab] = useState<'deposit' | 'withdraw'>('deposit');
   const [showChipExchange, setShowChipExchange] = useState(false);
   const [showInsufficientChips, setShowInsufficientChips] = useState(false);
+  const [showOnboardingWizard, setShowOnboardingWizard] = useState(false);
+
+  const onboarding = usePokerOnboarding({
+    address: address as `0x${string}` | undefined,
+    isConnected,
+    playBalanceWei: balance,
+    chipBalance,
+  });
 
   useEffect(() => {
     const open = () => setShowChipExchange(true);
@@ -315,11 +327,21 @@ export default function PokerLobbyPage() {
       setTables(payload.tables ?? []);
     });
 
-    // Navigate to tournament table when tournament starts (regardless of active tab)
-    client.on('poker_tournament_started', (payload: { tournamentId: string; tableId: string }) => {
-      if (payload?.tableId && payload?.tournamentId) {
-        router.push(`/poker/${payload.tableId}?tournament=${payload.tournamentId}`);
-      }
+    // Navigate to tournament table when tournament starts (regardless of active tab).
+    // MTT: `tableAssignments` maps wallet → tableId; pick the caller's own assignment so each
+    // player navigates to their own table, not the broadcaster's first table.
+    client.on('poker_tournament_started', (payload: {
+      tournamentId: string;
+      tableId: string;
+      tableAssignments?: Record<string, string>;
+    }) => {
+      if (!payload?.tableId || !payload?.tournamentId) return;
+      const me = address?.toLowerCase() ?? null;
+      const targetTableId =
+        me && payload.tableAssignments && payload.tableAssignments[me]
+          ? payload.tableAssignments[me]
+          : payload.tableId;
+      router.push(`/poker/${targetTableId}?tournament=${payload.tournamentId}`);
     });
 
     client
@@ -588,6 +610,23 @@ export default function PokerLobbyPage() {
                     >
                       Create Tournament
                     </button>
+                    <button
+                      type="button"
+                      onClick={() => router.push('/poker/tournaments/create-mtt')}
+                      className="relative flex items-center gap-2 px-6 py-3.5 rounded-2xl text-sm font-bold text-white transition-all hover:brightness-110 active:scale-[0.99]"
+                      style={{
+                        background: 'linear-gradient(135deg, #0891b2, #2563eb)',
+                        boxShadow: '0 2px 12px rgba(6, 182, 212, 0.3), 0 0 0 1px rgba(34,211,238,0.2)',
+                      }}
+                    >
+                      Create MTT
+                      <span
+                        className="rounded-full bg-cyan-300/20 px-1.5 py-0.5 text-[9px] font-bold uppercase text-cyan-100"
+                        style={{ letterSpacing: '0.15em' }}
+                      >
+                        new
+                      </span>
+                    </button>
                     {address && (
                       <button
                         type="button"
@@ -649,80 +688,28 @@ export default function PokerLobbyPage() {
               </div>
             </div>
 
+            <div className="mb-4 sm:mb-6">
+              <PokerOnboardingChecklist
+                step={onboarding.currentStep}
+                isConnected={isConnected}
+                dismissed={onboarding.dismissed}
+                onResume={() => setShowOnboardingWizard(true)}
+                onDismiss={onboarding.dismiss}
+              />
+            </div>
+
             {isConnected && address && (
-              <section
-                className="relative mb-6 sm:mb-8 rounded-2xl sm:rounded-3xl overflow-hidden border-2 border-white/25"
-                style={{
-                  background: 'linear-gradient(325deg, rgba(20, 20, 20, 0.8), rgba(40, 40, 40, 0.6))',
-                  boxShadow:
-                    'inset 0 3px 6px rgba(0, 0, 0, 0.8), inset 0 -3px 6px rgba(255, 255, 255, 0.1), 0 1px 3px rgba(0, 0, 0, 0.5), 0 0 50px rgba(34, 211, 238, 0.06)',
-                }}
-              >
-                <div className="absolute inset-0 pointer-events-none bg-[radial-gradient(ellipse_90%_80%_at_50%_0%,rgba(34,211,238,0.15),transparent_55%)]" />
-                <div className="absolute inset-0 pointer-events-none bg-[radial-gradient(circle_at_100%_50%,rgba(34,211,238,0.08),transparent_50%)]" />
-                <div className="relative h-1 bg-gradient-to-r from-transparent via-cyan-400/50 to-transparent" aria-hidden />
-                <div className="relative px-4 py-5 sm:px-8 sm:py-6 flex flex-col lg:flex-row lg:items-center gap-5 lg:gap-8">
-                  <div className="flex items-start gap-3 sm:gap-4 min-w-0 flex-1">
-                    <div
-                      className="shrink-0 w-12 h-12 sm:w-14 sm:h-14 rounded-2xl flex items-center justify-center border border-white/30"
-                      style={{
-                        background: 'linear-gradient(145deg, rgb(16, 26, 35), rgb(35, 36, 41))',
-                        boxShadow: 'inset 0 3px 6px rgba(0,0,0,0.8), 0 0 20px rgba(34,211,238,0.12)',
-                      }}
-                    >
-                      <Coins className="w-6 h-6 sm:w-7 sm:h-7 text-cyan-300" aria-hidden />
-                    </div>
-                    <div className="min-w-0 pt-0.5">
-                      <h2 className="text-base sm:text-lg font-black tracking-tight text-white">
-                        MORBIUS <span className="text-cyan-400/90">↔</span> poker chips
-                      </h2>
-                      <p className="text-xs sm:text-sm text-slate-500 mt-1 max-w-md leading-relaxed">
-                        Same rate everywhere at the table: 1 chip = 1 MORBIUS. Move funds before you sit.
-                      </p>
-                    </div>
-                  </div>
-                  <div className="flex flex-col sm:flex-row items-stretch sm:items-end gap-4 lg:gap-6 lg:ml-auto">
-                    <div className="grid grid-cols-2 gap-3 sm:gap-6 flex-1 sm:flex-initial min-w-0">
-                      <div
-                        className="rounded-xl px-4 py-3 border border-white/[0.06]"
-                        style={{
-                          background: 'linear-gradient(145deg, rgba(0,0,0,0.35), rgba(30,30,30,0.25))',
-                          boxShadow: 'inset 0 2px 4px rgba(0,0,0,0.5)',
-                        }}
-                      >
-                        <div className="text-[10px] uppercase tracking-[0.2em] text-slate-500 font-bold">Play balance</div>
-                        <div className="text-xl sm:text-2xl font-black tabular-nums text-white mt-1 leading-none truncate">
-                          {balance != null ? formatMorbiusFloor(balance) : '—'}
-                        </div>
-                        <div className="text-[10px] text-cyan-500/60 font-semibold mt-1.5">MORBIUS</div>
-                      </div>
-                      <div
-                        className="rounded-xl px-4 py-3 border border-white/20"
-                        style={{
-                          background: 'linear-gradient(145deg, rgba(6, 55, 65, 0.25), rgba(20, 20, 20, 0.45))',
-                          boxShadow: 'inset 0 2px 4px rgba(0,0,0,0.5), 0 0 24px rgba(34,211,238,0.06)',
-                        }}
-                      >
-                        <div className="text-[10px] uppercase tracking-[0.2em] text-slate-500 font-bold">Poker chips</div>
-                        <div className="text-xl sm:text-2xl font-black tabular-nums text-cyan-200 mt-1 leading-none truncate">
-                          {chipBalance != null ? formatChips(chipBalance) : '—'}
-                        </div>
-                      </div>
-                    </div>
-                    <button
-                      type="button"
-                      onClick={() => setShowChipExchange(true)}
-                      className="shrink-0 w-full sm:w-auto min-h-[3rem] px-6 sm:px-8 rounded-xl text-sm font-bold text-white transition-all hover:opacity-95 hover:scale-[1.02] active:scale-[0.99] border border-white/20"
-                      style={{
-                        background: 'linear-gradient(135deg, #0891b2, #2563eb)',
-                        boxShadow: '0 8px 32px rgba(6, 182, 212, 0.25), 0 0 0 1px rgba(34, 211, 238, 0.2), inset 0 1px 0 rgba(255,255,255,0.15)',
-                      }}
-                    >
-                      Open exchange
-                    </button>
-                  </div>
-                </div>
-              </section>
+              <div className="mb-6 sm:mb-8">
+                <PokerYourStatsPanel
+                  address={address.toLowerCase()}
+                  onOpenAllStats={() => setShowStatsModal(true)}
+                  morbiusBalanceWei={balance}
+                  chipBalance={chipBalance}
+                  onDeposit={() => { setWalletDefaultTab('deposit'); setShowDepositModal(true); }}
+                  onWithdraw={() => { setWalletDefaultTab('withdraw'); setShowDepositModal(true); }}
+                  onOpenExchange={() => setShowChipExchange(true)}
+                />
+              </div>
             )}
 
             <PokerHouseRecords />
@@ -904,19 +891,34 @@ export default function PokerLobbyPage() {
                                     Watch
                                   </Link>
                                   {isConnected && (
-                                    <button
-                                      type="button"
-                                      onClick={() => {
-                                        const bbChips = BigInt(t.bigBlind);
-                                        const { maxChips } = getCashBuyInBoundsChips(bbChips);
-                                        setBuyIn(maxChips.toString());
-                                        setJoinModal({ tableId: t.id, hasPin: t.hasPin, bigBlindChips: t.bigBlind });
-                                        setJoinPin('');
-                                      }}
-                                      className={btnPrimary}
-                                    >
-                                      Sit
-                                    </button>
+                                    onboarding.currentStep < 4 ? (
+                                      <button
+                                        type="button"
+                                        onClick={() => setShowOnboardingWizard(true)}
+                                        className={btnPrimary}
+                                        style={{
+                                          background: 'linear-gradient(135deg, #f59e0b, #ef4444)',
+                                          boxShadow: '0 6px 20px -6px rgba(245,158,11,0.5)',
+                                        }}
+                                        title="You need chips to sit — we'll walk you through it"
+                                      >
+                                        Get chips →
+                                      </button>
+                                    ) : (
+                                      <button
+                                        type="button"
+                                        onClick={() => {
+                                          const bbChips = BigInt(t.bigBlind);
+                                          const { maxChips } = getCashBuyInBoundsChips(bbChips);
+                                          setBuyIn(maxChips.toString());
+                                          setJoinModal({ tableId: t.id, hasPin: t.hasPin, bigBlindChips: t.bigBlind });
+                                          setJoinPin('');
+                                        }}
+                                        className={btnPrimary}
+                                      >
+                                        Sit
+                                      </button>
+                                    )
                                   )}
                                 </div>
                                 <div className="flex items-center justify-end gap-2">
@@ -1246,6 +1248,7 @@ export default function PokerLobbyPage() {
         isOpen={showDepositModal}
         onClose={() => setShowDepositModal(false)}
         balanceLabel="Poker Balance"
+        defaultTab={walletDefaultTab}
       />
       <PokerChipExchangeModal
         isOpen={showChipExchange}
@@ -1257,10 +1260,22 @@ export default function PokerLobbyPage() {
         isOpen={showInsufficientChips}
         onClose={() => setShowInsufficientChips(false)}
         title="Not Enough Poker Chips"
-        message="Your poker chip balance isn't enough for this buy-in. Open the chip exchange to convert MORBIUS into chips, or top up your MORBIUS balance first."
+        message="Your poker chip balance isn't enough for this buy-in. Walk through deposit and chip exchange in a guided flow, or open the exchange directly."
         required={(() => { try { return `${formatChips(BigInt(parseChipInput(buyIn)))} chips`; } catch { return undefined; } })()}
         balance={chipBalance != null ? `${formatChips(BigInt(chipBalance))} chips` : undefined}
-        actionLabel="Open Chip Exchange"
+        actionLabel="Walk me through it"
+        onOpenExchange={() => setShowOnboardingWizard(true)}
+      />
+
+      <PokerOnboardingWizard
+        isOpen={showOnboardingWizard}
+        onClose={() => setShowOnboardingWizard(false)}
+        step={onboarding.currentStep}
+        isConnected={isConnected}
+        walletMorbiusWei={onboarding.walletMorbiusWei}
+        playBalanceWei={onboarding.playBalanceBn}
+        chipsBn={onboarding.chipsBn}
+        onOpenDeposit={() => setShowDepositModal(true)}
         onOpenExchange={() => setShowChipExchange(true)}
       />
     </>
