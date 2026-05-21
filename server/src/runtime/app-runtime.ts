@@ -1,6 +1,7 @@
 import type { Express } from 'express';
 import type { Server as HttpServer } from 'http';
 import { registerMoneyRoutes } from '../routes/money.routes';
+import { registerTelegramRoutes } from '../routes/telegram.routes';
 import { MoneyDatabaseAdapter } from '../services/money-database.adapter';
 import { MoneyService } from '../services/money.service';
 import { RuntimeWorkers, startRuntimeWorkers } from '../workers/runtime-workers';
@@ -31,6 +32,9 @@ export async function initializeAppRuntime({
   await moneyService.verifySettlementSigner();
   await moneyService.reconcileExpiredPendingWithdrawals('startup');
   registerMoneyRoutes({ app, moneyService });
+  // Telegram notification routes (inbound webhook + wallet-link flow).
+  // Self-contained and degrades gracefully when TELEGRAM_BOT_TOKEN is unset.
+  registerTelegramRoutes({ app, pool: runtime.dbService.getPool() });
   const runtimeWorkers = startRuntimeWorkers({
     moneyService,
     chainAnalytics: runtime.chainAnalytics,

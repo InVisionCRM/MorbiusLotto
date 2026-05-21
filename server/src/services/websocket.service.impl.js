@@ -1189,6 +1189,18 @@ class WebSocketService {
                 return this.sendError(ws, 'Poker not available or wallet required', message.requestId);
             }
             if (!(0, cosmetics_catalog_1.isAdminWallet)(ws.playerAddress)) {
+                const rawAdmins = process.env.ADMIN_WALLETS ?? process.env.NEXT_PUBLIC_ADMIN_WALLETS ?? '';
+                const parsedAdmins = rawAdmins.split(',').map(a => a.trim().toLowerCase()).filter(Boolean);
+                logger_1.logger.warn('poker_create_table denied: not an admin', {
+                    wsPlayerAddress: ws.playerAddress,
+                    wsPlayerAddressLower: ws.playerAddress?.toLowerCase?.(),
+                    isAuthenticated: ws.isAuthenticated,
+                    connectionId: ws.connectionId,
+                    adminWalletsEnvSource: process.env.ADMIN_WALLETS ? 'ADMIN_WALLETS' : (process.env.NEXT_PUBLIC_ADMIN_WALLETS ? 'NEXT_PUBLIC_ADMIN_WALLETS' : 'NONE'),
+                    parsedAdminCount: parsedAdmins.length,
+                    parsedAdmins,
+                    matches: parsedAdmins.includes(ws.playerAddress?.toLowerCase?.() ?? ''),
+                });
                 return this.sendError(ws, 'Only admins can create poker tables', message.requestId);
             }
             const payload = message.payload;
@@ -1666,12 +1678,21 @@ class WebSocketService {
                 return this.sendError(ws, 'prizeDistributionType required', message.requestId);
             if (!p.config)
                 return this.sendError(ws, 'config required', message.requestId);
-            if (p.scheduledStartAt == null || p.scheduledStartAt === '') {
-                return this.sendError(ws, 'scheduledStartAt is required', message.requestId);
+            // Sit & Go ('fill') tournaments have no clock — they start when the
+            // table fills, so scheduledStartAt is only required for 'time' mode.
+            const startMode = (p.config && p.config.startMode === 'fill') ? 'fill' : 'time';
+            let scheduledStartAt;
+            if (startMode === 'fill') {
+                scheduledStartAt = undefined;
             }
-            const scheduledStartAt = new Date(p.scheduledStartAt);
-            if (isNaN(scheduledStartAt.getTime())) {
-                return this.sendError(ws, 'Invalid scheduledStartAt date', message.requestId);
+            else {
+                if (p.scheduledStartAt == null || p.scheduledStartAt === '') {
+                    return this.sendError(ws, 'scheduledStartAt is required', message.requestId);
+                }
+                scheduledStartAt = new Date(p.scheduledStartAt);
+                if (isNaN(scheduledStartAt.getTime())) {
+                    return this.sendError(ws, 'Invalid scheduledStartAt date', message.requestId);
+                }
             }
             const buyInAmount = BigInt(String(p.buyInAmount));
             let guaranteedPrizePool = undefined;

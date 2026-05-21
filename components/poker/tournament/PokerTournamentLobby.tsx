@@ -8,6 +8,7 @@ import {
   usePokerTournament,
   type PokerTournamentSummary,
   type PokerBlindIncreaseMode,
+  type PokerStartMode,
   type CreatePokerTournamentParams,
   type ReclaimableCustomTokenTournament,
   type ClaimableCustomTokenTournament,
@@ -183,8 +184,23 @@ function useElapsedSince(startIso: string): string {
 }
 
 /** Column 2: only green + mono; same 1s tick behavior as legacy lobby timers. */
-function TournamentTimeColumn({ scheduledStartAt }: { scheduledStartAt: string | null }) {
+function TournamentTimeColumn({
+  scheduledStartAt,
+  startMode,
+}: {
+  scheduledStartAt: string | null;
+  startMode?: PokerStartMode;
+}) {
+  // A Sit & Go has no scheduled time until it fills. Once it fills, it has a
+  // scheduled_start_at (the 60s countdown), so the countdown cell takes over.
   if (!scheduledStartAt) {
+    if (startMode === 'fill') {
+      return (
+        <span className="text-sm tabular-nums text-cyan-300/90 whitespace-nowrap">
+          Sit &amp; Go · when full
+        </span>
+      );
+    }
     return <span className="text-sm tabular-nums text-slate-500">—</span>;
   }
   const target = new Date(scheduledStartAt).getTime();
@@ -432,10 +448,10 @@ export function PokerTournamentLobby({
     try {
       const ok = await leaveTournamentRegistration(tournamentId);
       if (ok) {
-        toast.success('You left the tournament. Any on-chain buy-in refund is handled by the server.');
+        toast.success('You unregistered from the tournament. Any buy-in has been refunded.');
         await refreshTournaments();
       } else {
-        toast.error('Could not leave registration.');
+        toast.error('Could not unregister.');
       }
     } finally {
       setLeavingRegId(null);
@@ -766,7 +782,7 @@ export function PokerTournamentLobby({
                         </div>
                       </td>
                       <td className={`${TD} whitespace-nowrap`}>
-                        <TournamentTimeColumn scheduledStartAt={t.scheduledStartAt} />
+                        <TournamentTimeColumn scheduledStartAt={t.scheduledStartAt} startMode={t.startMode} />
                       </td>
                       <td className={TD}>
                         <div className="font-medium tabular-nums text-slate-100">{formatBuyInCell(t)}</div>
@@ -833,10 +849,13 @@ export function PokerTournamentLobby({
                               Joined
                             </span>
                           )}
+                          {/* Unregister — available for every buy-in type while in
+                              registration, but hidden once a Sit & Go has filled and
+                              locked into its starting countdown (scheduledStartAt set). */}
                           {t.isRegistered &&
                             !isActive &&
                             t.status === 'registration' &&
-                            isCustomTokenBuyIn(t) && (
+                            !(t.startMode === 'fill' && !!t.scheduledStartAt) && (
                               <button
                                 type="button"
                                 onClick={() => void handleLeaveRegistration(t.tournamentId)}

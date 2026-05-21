@@ -2,6 +2,7 @@ import { Pool } from 'pg';
 import { logger } from '../utils/logger';
 import { TournamentService } from './tournament.service';
 import type { PokerTournamentService } from './poker-tournament.service';
+import { tickTournamentStartTelegramNotifications } from './telegram-notifications.service';
 
 export interface PendingScheduledEvent {
   id: string;
@@ -80,6 +81,15 @@ export class FreerollSchedulerService {
       } catch (err) {
         logger.error('FreerollSchedulerService: poker by_time tick error: %s', err);
       }
+    }
+
+    // Telegram "starting soon" notifications for poker tournaments approaching
+    // their scheduled start. Fully best-effort and self-disabling when Telegram
+    // is not configured — wrapped here so it can never break the poll loop.
+    try {
+      await tickTournamentStartTelegramNotifications(this.pool);
+    } catch (err) {
+      logger.error('FreerollSchedulerService: telegram notification tick error: %s', err);
     }
   }
 

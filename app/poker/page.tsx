@@ -432,6 +432,15 @@ export default function PokerLobbyPage() {
         return Number.isFinite(n) && n > 0 ? Math.floor(n).toString() : '0';
       })();
       const pinCode = createModal.pinEnabled ? createModal.pinCode : undefined;
+      // TEMP DIAG: dump current wallet vs WS connection state right before create attempt
+      console.log('[poker-create-table:diag]', {
+        wagmiAddress: address,
+        wagmiAddressLower: address?.toLowerCase?.(),
+        wsClientPlayerAddress: (wsClient as unknown as { playerAddress?: string })?.playerAddress,
+        wsConnected: wsClient.isConnected?.(),
+        skipWsAuthEnv: process.env.NEXT_PUBLIC_SKIP_WS_AUTH,
+        adminWalletsEnv: process.env.NEXT_PUBLIC_ADMIN_WALLETS,
+      });
       const { tableId } = await wsClient.pokerCreateTable(sbChips, bbChips, createModal.maxSeats, pinCode);
       const createdPin = pinCode || '';
       setCreateModal(null);
