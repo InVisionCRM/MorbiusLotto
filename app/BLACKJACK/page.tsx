@@ -36,6 +36,7 @@ import { useBlackjackServerSync } from '@/hooks/use-blackjack-server-sync';
 import { useBlackjackCompletionOrchestrator } from '@/hooks/use-blackjack-completion-orchestrator';
 import { BLACKJACK_ADDRESS, MORBIUS_TOKEN_ADDRESS } from '@/lib/contracts';
 import { getApiUrlOptional, getWebSocketUrlOptional } from '@/lib/api-urls';
+import { apiFetch } from '@/lib/api-auth';
 import { generateHexClientSeed } from '@/lib/generate-client-seed';
 import { loadStoredClientSeed, saveStoredClientSeed } from '@/lib/provably-fair-client-seed-storage';
 import { usePendingWithdrawal } from '@/hooks/use-pending-withdrawal';
@@ -2383,10 +2384,19 @@ export default function BlackjackPage() {
             displayName: profileDisplayName ?? '',
             profileImageUrl,
             onSave: async (displayName, profileImageUrl, bio, xHandle, tgHandle) => {
-              if (!wsClient) return;
-              const res = await wsClient.setDisplayName(displayName, profileImageUrl, undefined, bio, xHandle, tgHandle);
-              setProfileDisplayName(res.displayName);
-              setProfileImageUrl(res.profileImageUrl);
+              if (wsClient?.isConnected()) {
+                const res = await wsClient.setDisplayName(displayName, profileImageUrl, undefined, bio, xHandle, tgHandle);
+                setProfileDisplayName(res.displayName);
+                setProfileImageUrl(res.profileImageUrl);
+              } else {
+                if (!address) throw new Error('Connect your wallet to save your profile.');
+                await apiFetch('/api/player/profile', {
+                  method: 'POST',
+                  body: JSON.stringify({ displayName, profileImageUrl, bio, xHandle, tgHandle }),
+                });
+                setProfileDisplayName(displayName);
+                setProfileImageUrl(profileImageUrl);
+              }
               if (address) {
                 queryClient.invalidateQueries({ queryKey: ['playerProfile', address] });
               }
@@ -2701,10 +2711,22 @@ export default function BlackjackPage() {
             displayName: profileDisplayName ?? '',
             profileImageUrl,
             onSave: async (displayName, profileImageUrl, bio, xHandle, tgHandle) => {
-              if (!wsClient) return;
-              const res = await wsClient.setDisplayName(displayName, profileImageUrl, undefined, bio, xHandle, tgHandle);
-              setProfileDisplayName(res.displayName);
-              setProfileImageUrl(res.profileImageUrl);
+              if (wsClient?.isConnected()) {
+                const res = await wsClient.setDisplayName(displayName, profileImageUrl, undefined, bio, xHandle, tgHandle);
+                setProfileDisplayName(res.displayName);
+                setProfileImageUrl(res.profileImageUrl);
+              } else {
+                if (!address) throw new Error('Connect your wallet to save your profile.');
+                await apiFetch('/api/player/profile', {
+                  method: 'POST',
+                  body: JSON.stringify({ displayName, profileImageUrl, bio, xHandle, tgHandle }),
+                });
+                setProfileDisplayName(displayName);
+                setProfileImageUrl(profileImageUrl);
+              }
+              if (address) {
+                queryClient.invalidateQueries({ queryKey: ['playerProfile', address] });
+              }
             },
           })
         }

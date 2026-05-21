@@ -14,27 +14,35 @@ export async function GET(
   try {
     const res = await proxyJson(request, `/api/player/${address}/profile`, {
       method: 'GET',
-      next: { revalidate: 60 }, // Cache for 60 seconds
+      cache: 'no-store',
+      next: { revalidate: 0 },
     });
 
     if (!res.ok) {
       return NextResponse.json(
-        { displayName: null, profileImageUrl: null },
-        { status: 200 }
+        { displayName: null, profileImageUrl: null, avatarConfig: null, bio: null, xHandle: null, tgHandle: null, profileDisplayMode: 'avatar' },
+        { status: 200, headers: { 'Cache-Control': 'no-store' } }
       );
     }
 
     const data = await res.json();
-    return NextResponse.json({
-      displayName: data.displayName ?? null,
-      profileImageUrl: data.profileImageUrl ?? null,
-      avatarConfig: data.avatarConfig ?? null,
-    });
+    return NextResponse.json(
+      {
+        displayName: data.displayName ?? null,
+        profileImageUrl: data.profileImageUrl ?? null,
+        avatarConfig: data.avatarConfig ?? null,
+        bio: data.bio ?? null,
+        xHandle: data.xHandle ?? null,
+        tgHandle: data.tgHandle ?? null,
+        profileDisplayMode: data.profileDisplayMode ?? 'avatar',
+      },
+      { headers: { 'Cache-Control': 'no-store' } }
+    );
   } catch (error) {
     console.error('Error fetching player profile:', error);
     return NextResponse.json(
-      { displayName: null, profileImageUrl: null },
-      { status: 200 }
+      { displayName: null, profileImageUrl: null, avatarConfig: null, bio: null, xHandle: null, tgHandle: null, profileDisplayMode: 'avatar' },
+      { status: 200, headers: { 'Cache-Control': 'no-store' } }
     );
   }
 }
