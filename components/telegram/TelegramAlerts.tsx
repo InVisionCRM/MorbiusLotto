@@ -176,7 +176,7 @@ export function TelegramAlerts({
         <DialogHeader>
           <DialogTitle>Link your Telegram</DialogTitle>
           <DialogDescription className="text-white/60">
-            Send this 6-character code to the MORBlotto bot. This window updates
+            Send this 6-character code to the MORBIUS bot. This window updates
             itself the moment you&apos;re connected.
           </DialogDescription>
         </DialogHeader>
@@ -213,7 +213,7 @@ export function TelegramAlerts({
               </>
             ) : (
               <p className="rounded-lg border border-amber-500/25 bg-amber-500/10 px-3 py-2 text-xs text-amber-200/90 leading-relaxed">
-                Open the MORBlotto bot in Telegram and send it:{' '}
+                Open the MORBIUS bot in Telegram and send it:{' '}
                 <span className="font-mono">/link {linkCode.code}</span>
               </p>
             )}

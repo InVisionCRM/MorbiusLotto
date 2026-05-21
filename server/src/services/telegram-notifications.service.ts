@@ -194,7 +194,7 @@ function buildMessage(
   const seats = maxPlayers ? `${registered}/${maxPlayers}` : `${registered}`;
   return {
     text:
-      `🎰 Your MORBlotto poker tournament is about to start!\n\n` +
+      `🎰 Your MORBIUS poker tournament is about to start!\n\n` +
       `"${name}"\n` +
       `Players registered: ${seats}\n\n` +
       `Tap below to grab your seat before the cards fly.`,
