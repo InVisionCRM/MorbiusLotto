@@ -724,7 +724,7 @@ export default function GlobalMainNav({
   const effectiveProfileImageUrl = profileImageUrl ?? profileImageUrlFromHook;
 
   const handleInternalSaveProfile = useCallback(async (name: string, img: string | null, bio: string | null, x: string | null, tg: string | null) => {
-    if (!address) return;
+    if (!address) throw new Error('Connect your wallet to save your profile.');
     // SIWE-gated. apiFetch sends the session cookie and triggers the sign-in
     // popup on 401, then retries. address dropped from body.
     await apiFetch('/api/player/profile', {
