@@ -5,6 +5,37 @@ Each entry records what changed, why, and the verification outcome.
 
 ---
 
+## 2026-05-21 — Telegram Mini App, Phase 2 (Stats + Wallet screens)
+
+**What & why:** Turns the two "Soon" tiles on the Mini App hub into working
+screens, so players can check their poker stats and balances inside Telegram.
+Per product decision, the actual MORBIUS ↔ chip swap stays on morbius.io behind
+the site's wallet auth — the Mini App shows balances and deep-links out for the
+swap itself (no real-value movement happens inside Telegram).
+
+### Changed
+
+- `app/tg/page.tsx` — added a lightweight in-page view router
+  (`hub` / `stats` / `wallet`) with back navigation. The hub's Stats and Wallet
+  tiles are now buttons; Profile stays "Soon" (Phase 3).
+  - **Stats screen** — reads the public `GET /api/poker/player/:address/stats`
+    with the linked wallet from the verified session. Cash / Tournaments / All
+    scope toggle. Shows hands played, win rate, net profit/loss (color-coded),
+    streaks, biggest pot, and the poker HUD (VPIP, PFR, 3-bet, WTSD, W$SD,
+    aggression), plus a play-style label. Loading / error / no-hands states.
+  - **Wallet screen** — MORBIUS + chip balances and a "Swap on morbius.io"
+    button that deep-links to `/poker`. No new money-movement code.
+
+### Verification outcome
+
+- File transpiles clean (`ts.transpileModule`, no syntax errors).
+- Lint-reviewed by hand (the fresh clone has no `node_modules` and the sandbox
+  can't install) — no unescaped JSX entities, no empty functions, no unused
+  imports, hook dependency arrays complete.
+- **Not yet done:** live test in Telegram — needs deploy.
+
+---
+
 ## 2026-05-21 — Rename "MORBlotto" → "MORBIUS" in user-facing UI strings
 
 **What & why:** The site's real name is MORBIUS. The earlier rename only covered
