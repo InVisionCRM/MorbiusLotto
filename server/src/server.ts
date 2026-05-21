@@ -387,7 +387,7 @@ async function initializeServices() {
     // Telegram notification routes (inbound webhook + wallet-link flow).
     // Registered here in the live server.ts path. Degrades gracefully when
     // TELEGRAM_BOT_TOKEN is unset.
-    registerTelegramRoutes({ app, pool: dbService.getPool() });
+    registerTelegramRoutes({ app, pool: dbService.getPool(), dbService });
 
     // Public config (whitelisted keys only; used for ad creatives, etc.)
     const PUBLIC_CONFIG_KEYS = ['ad_creative_url', 'ad_creative_hero_url', 'ad_creative_loading_url'];

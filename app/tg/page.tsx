@@ -26,6 +26,7 @@ import {
   IconChevronRight,
   IconExternalLink,
 } from '@tabler/icons-react';
+import MiniAppProfileEditor from '@/components/telegram/MiniAppProfileEditor';
 
 // ---------------------------------------------------------------------------
 
@@ -64,7 +65,7 @@ interface PokerStats {
   aggression_factor: number | null;
 }
 
-type View = 'hub' | 'stats' | 'wallet';
+type View = 'hub' | 'stats' | 'wallet' | 'profile';
 type StatScope = 'cash' | 'tournament' | 'all';
 type LoadState = 'loading' | 'no-telegram' | 'error' | 'ready';
 type FetchState = 'idle' | 'loading' | 'error' | 'ready';
@@ -171,6 +172,7 @@ export default function TelegramMiniAppPage() {
   const [loadState, setLoadState] = useState<LoadState>('loading');
   const [session, setSession] = useState<MiniAppSession | null>(null);
   const [errorMsg, setErrorMsg] = useState('');
+  const [initData, setInitData] = useState('');
 
   const [view, setView] = useState<View>('hub');
 
@@ -188,6 +190,7 @@ export default function TelegramMiniAppPage() {
         setLoadState('no-telegram');
         return;
       }
+      setInitData(webApp.initData);
       try {
         webApp.ready();
         webApp.expand();
@@ -341,7 +344,7 @@ export default function TelegramMiniAppPage() {
                   icon: <IconUser size={18} aria-hidden />,
                   title: 'Profile & avatar',
                   sub: 'Edit your look and name',
-                  target: null as View | null,
+                  target: 'profile' as View | null,
                 },
                 {
                   key: 'stats',
@@ -566,6 +569,19 @@ export default function TelegramMiniAppPage() {
             </button>
           </>
         )}
+
+        {/* ---- PROFILE ---- */}
+        {loadState === 'ready' &&
+          session &&
+          session.linked &&
+          view === 'profile' &&
+          session.walletAddress && (
+            <MiniAppProfileEditor
+              walletAddress={session.walletAddress}
+              initData={initData}
+              onBack={() => setView('hub')}
+            />
+          )}
       </div>
     </div>
   );

@@ -5,6 +5,47 @@ Each entry records what changed, why, and the verification outcome.
 
 ---
 
+## 2026-05-21 — Telegram Mini App, Phase 3 (Profile + avatar editor)
+
+**What & why:** The last "Soon" tile on the Mini App hub is now live. Players
+can edit their avatar, display name, bio and X / Telegram handles from inside
+Telegram, using the same `CharacterCreator` editor the website uses.
+
+### Added
+
+- `components/telegram/MiniAppProfileEditor.tsx` — the Profile screen. Loads the
+  player's profile from the public `GET /api/player/:address/profile`, embeds
+  `CharacterCreator` (compact) for the avatar + display name, adds bio and
+  X / Telegram handle fields plus a Randomize button, and saves with
+  saving / saved / error states.
+- `POST /api/telegram/miniapp/profile` (`telegram.routes.ts`) — a
+  Telegram-`initData`-authenticated profile save. Verifies the `initData`,
+  resolves the linked wallet, and writes avatar / name / bio / handles through
+  `dbService.setDisplayName`. Field handling mirrors the website's
+  `POST /api/player/profile` (a blank value leaves the stored value untouched).
+  No funds are touched.
+
+### Changed
+
+- `server/src/server.ts` — passes `dbService` into `registerTelegramRoutes`.
+- `server/src/routes/telegram.routes.ts` — `RegisterTelegramRoutesOptions` now
+  carries `dbService`.
+- `app/tg/page.tsx` — added the `profile` view; the hub's Profile tile opens it;
+  the Mini App now stores `initData` so the profile save can authenticate.
+
+### Verification outcome
+
+- All four changed files transpile clean (`ts.transpileModule`, no syntax
+  errors).
+- Lint-reviewed by hand (the fresh clone has no `node_modules`): no unescaped
+  JSX entities, no unused imports, hook dependency arrays complete, form labels
+  associated with their inputs.
+- **Not yet done:** live test in Telegram — needs deploy. `CharacterCreator`
+  already runs on the public home page without a connected wallet, so it is
+  expected to work in the Telegram context.
+
+---
+
 ## 2026-05-21 — Telegram Mini App, Phase 2 (Stats + Wallet screens)
 
 **What & why:** Turns the two "Soon" tiles on the Mini App hub into working
