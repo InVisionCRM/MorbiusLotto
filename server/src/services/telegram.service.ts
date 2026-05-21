@@ -62,7 +62,10 @@ export function getPublicAppUrl(): string | null {
 
 export interface TelegramButton {
   text: string;
-  url: string;
+  /** Regular URL button. Ignored when `webAppUrl` is set. */
+  url?: string;
+  /** Mini App button — opens the URL as a Telegram Web App (private chats only). */
+  webAppUrl?: string;
 }
 
 export interface SendMessageOpts {
@@ -100,7 +103,11 @@ export async function sendTelegramMessage(
     if (opts.parseMode) body.parse_mode = opts.parseMode;
     if (opts.buttons && opts.buttons.length > 0) {
       body.reply_markup = {
-        inline_keyboard: opts.buttons.map((b) => [{ text: b.text, url: b.url }]),
+        inline_keyboard: opts.buttons.map((b) => [
+          b.webAppUrl
+            ? { text: b.text, web_app: { url: b.webAppUrl } }
+            : { text: b.text, url: b.url },
+        ]),
       };
     }
 
@@ -155,7 +162,11 @@ export async function editTelegramMessage(
     if (opts.parseMode) body.parse_mode = opts.parseMode;
     if (opts.buttons && opts.buttons.length > 0) {
       body.reply_markup = {
-        inline_keyboard: opts.buttons.map((b) => [{ text: b.text, url: b.url }]),
+        inline_keyboard: opts.buttons.map((b) => [
+          b.webAppUrl
+            ? { text: b.text, web_app: { url: b.webAppUrl } }
+            : { text: b.text, url: b.url },
+        ]),
       };
     }
     const res = await fetch(`${TELEGRAM_API_BASE}/bot${token}/editMessageText`, {
@@ -222,6 +233,75 @@ export async function setTelegramWebhook(
       ok?: boolean;
       description?: string;
     };
+    if (!res.ok || !json?.ok) {
+      return { ok: false, error: json?.description || `HTTP ${res.status}` };
+    }
+    return { ok: true };
+  } catch (err) {
+    return { ok: false, error: (err as Error)?.message ?? 'unknown error' };
+  }
+}
+
+export interface TelegramCommand {
+  /** Lowercase command name, no leading slash (e.g. "balance"). */
+  command: string;
+  /** Short description shown in Telegram's "/" command menu. */
+  description: string;
+}
+
+/**
+ * Register the bot's command list so Telegram shows them in the "/" menu.
+ * One-time setup (re-run after changing the list). Best-effort, never throws.
+ */
+export async function setTelegramCommands(
+  commands: TelegramCommand[],
+): Promise<{ ok: boolean; error?: string }> {
+  const token = getBotToken();
+  if (!token) {
+    warnMissingTokenOnce('setTelegramCommands');
+    return { ok: false, error: 'telegram_not_configured' };
+  }
+  try {
+    const res = await fetch(`${TELEGRAM_API_BASE}/bot${token}/setMyCommands`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ commands }),
+    });
+    const json = (await res.json().catch(() => ({}))) as { ok?: boolean; description?: string };
+    if (!res.ok || !json?.ok) {
+      return { ok: false, error: json?.description || `HTTP ${res.status}` };
+    }
+    return { ok: true };
+  } catch (err) {
+    return { ok: false, error: (err as Error)?.message ?? 'unknown error' };
+  }
+}
+
+/**
+ * Set the bot's chat menu button to launch a Mini App. `url` must be HTTPS.
+ * Applies globally (the default button for every user). Best-effort, never throws.
+ */
+export async function setTelegramMenuButton(
+  url: string,
+  text = 'Open MORBIUS',
+): Promise<{ ok: boolean; error?: string }> {
+  const token = getBotToken();
+  if (!token) {
+    warnMissingTokenOnce('setTelegramMenuButton');
+    return { ok: false, error: 'telegram_not_configured' };
+  }
+  if (!/^https:\/\//i.test(url)) {
+    return { ok: false, error: 'menu button url must be https' };
+  }
+  try {
+    const res = await fetch(`${TELEGRAM_API_BASE}/bot${token}/setChatMenuButton`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        menu_button: { type: 'web_app', text, web_app: { url } },
+      }),
+    });
+    const json = (await res.json().catch(() => ({}))) as { ok?: boolean; description?: string };
     if (!res.ok || !json?.ok) {
       return { ok: false, error: json?.description || `HTTP ${res.status}` };
     }
