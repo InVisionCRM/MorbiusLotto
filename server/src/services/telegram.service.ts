@@ -81,7 +81,7 @@ export async function sendTelegramMessage(
   chatId: number,
   text: string,
   opts: SendMessageOpts = {},
-): Promise<{ ok: boolean; error?: string }> {
+): Promise<{ ok: boolean; error?: string; messageId?: number }> {
   const token = getBotToken();
   if (!token) {
     warnMissingTokenOnce('sendTelegramMessage');
@@ -112,18 +112,81 @@ export async function sendTelegramMessage(
     const json = (await res.json().catch(() => ({}))) as {
       ok?: boolean;
       description?: string;
+      result?: { message_id?: number };
     };
     if (!res.ok || !json?.ok) {
       const error = json?.description || `HTTP ${res.status}`;
       logger.warn('[telegram] sendMessage failed', { chatId, error });
       return { ok: false, error };
     }
-    return { ok: true };
+    return { ok: true, messageId: json.result?.message_id };
   } catch (err) {
     const error = (err as Error)?.message ?? 'unknown error';
     logger.warn('[telegram] sendMessage threw', { chatId, error });
     return { ok: false, error };
   }
+}
+
+/**
+ * Edit an existing message's text — used to keep the group "Rail" tournament
+ * card current as seats fill / the tournament goes live. Best-effort, never throws.
+ */
+export async function editTelegramMessage(
+  chatId: number,
+  messageId: number,
+  text: string,
+  opts: SendMessageOpts = {},
+): Promise<{ ok: boolean; error?: string }> {
+  const token = getBotToken();
+  if (!token) {
+    warnMissingTokenOnce('editTelegramMessage');
+    return { ok: false, error: 'telegram_not_configured' };
+  }
+  if (!Number.isFinite(chatId) || !Number.isFinite(messageId)) {
+    return { ok: false, error: 'invalid_ids' };
+  }
+  try {
+    const body: Record<string, unknown> = {
+      chat_id: chatId,
+      message_id: messageId,
+      text,
+      disable_web_page_preview: opts.disableWebPagePreview ?? true,
+    };
+    if (opts.parseMode) body.parse_mode = opts.parseMode;
+    if (opts.buttons && opts.buttons.length > 0) {
+      body.reply_markup = {
+        inline_keyboard: opts.buttons.map((b) => [{ text: b.text, url: b.url }]),
+      };
+    }
+    const res = await fetch(`${TELEGRAM_API_BASE}/bot${token}/editMessageText`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    });
+    const json = (await res.json().catch(() => ({}))) as { ok?: boolean; description?: string };
+    if (!res.ok || !json?.ok) {
+      // "message is not modified" just means nothing changed — treat as success.
+      if (json?.description && /not modified/i.test(json.description)) {
+        return { ok: true };
+      }
+      return { ok: false, error: json?.description || `HTTP ${res.status}` };
+    }
+    return { ok: true };
+  } catch (err) {
+    return { ok: false, error: (err as Error)?.message ?? 'unknown error' };
+  }
+}
+
+/**
+ * Numeric chat id of the Telegram group the public "Rail" feed posts to. Read
+ * from TELEGRAM_GROUP_CHAT_ID; null when unset (Rail posts become silent no-ops).
+ * Group ids are negative — the bot's /chatid command prints it.
+ */
+export function getTelegramGroupChatId(): number | null {
+  const raw = (process.env.TELEGRAM_GROUP_CHAT_ID || '').trim();
+  if (!raw) return null;
+  const n = Number(raw);
+  return Number.isFinite(n) && n !== 0 ? n : null;
 }
 
 /**

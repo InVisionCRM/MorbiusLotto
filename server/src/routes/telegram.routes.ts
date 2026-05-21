@@ -154,6 +154,20 @@ export function registerTelegramRoutes({ app, pool }: RegisterTelegramRoutesOpti
         return res.json({ ok: true });
       }
 
+      // /chatid — utility for wiring up the group activity feed. Returns the
+      // current chat's id (negative for groups) so an admin can set
+      // TELEGRAM_GROUP_CHAT_ID. Works in DMs and groups alike.
+      if (command === '/chatid') {
+        await sendTelegramMessage(
+          chatId,
+          `This chat's ID is:\n\n<code>${chatId}</code>\n\n` +
+            'To make this group the MORBlotto activity feed, set ' +
+            'TELEGRAM_GROUP_CHAT_ID to that value in the server environment.',
+          { parseMode: 'HTML' },
+        );
+        return res.json({ ok: true });
+      }
+
       // /help and everything else.
       await sendTelegramMessage(
         chatId,
