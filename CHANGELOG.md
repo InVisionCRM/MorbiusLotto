@@ -5,6 +5,56 @@ Each entry records what changed, why, and the verification outcome.
 
 ---
 
+## 2026-05-21 — Rename "MORBlotto" → "MORBIUS" in user-facing UI strings
+
+**What & why:** The site's real name is MORBIUS. The earlier rename only covered
+Telegram text. This pass finishes the job for every string a player can actually
+see in the web app. Re-applied in the fresh `morbius.io` clone after the old
+working copy's git metadata got tangled.
+
+### Changed
+
+- `app/poker/tournaments/create/page.tsx` — browser tab title
+  ("Create Tournament · MORBIUS Poker").
+- `app/poker/tournaments/create-mtt/page.tsx` — browser tab title
+  ("Create MTT · MORBIUS Poker").
+- `contexts/siwe-context.tsx` — the wallet sign-in message a player approves
+  ("Sign in to MORBIUS…").
+- `components/BLACKJACK/Tournament/TournamentBrowser.tsx` — the "Join … on
+  MORBIUS!" tournament share text.
+- `components/marketing/TableShowcaseDisplay.tsx` — the displayed URL in the
+  marketing mockup (now `morbius.io/blackjack/…`).
+- `components/home/games-section.tsx` — "MORBIUS Originals" image alt text.
+- `.gitignore` — added `.claude/worktrees/` so local session worktrees are
+  never committed or scanned.
+
+### Deliberately NOT changed (would break things or is invisible)
+
+- EIP-712 auth domain `name: 'MORBlotto Blackjack'` in `lib/websocket-client.ts`
+  and `server/src/services/websocket.service.impl.js` — changing a signing
+  domain invalidates every wallet session/signature. Internal crypto ID, not
+  shown to users.
+- `localStorage` keys prefixed `morblotto_…` (break reminders, pending deposits,
+  first-visit flag, avatar randomize pins, poker rep token, provably-fair client
+  seeds) — renaming them silently wipes saved player data. Storage keys, not UI.
+- CSS `@keyframes` names (`morblotto-onboard-flash`, `morblotto-rank-sparkle`)
+  and code comments / internal docs (README, CLAUDE.md, audit/) — never visible
+  to players.
+
+### Verification outcome
+
+- Six targeted string edits; no code identifiers touched. Confirmed each match
+  by reading its surrounding lines before editing.
+- `git status` confirmed working in the fresh clone (the old working copy's
+  worktree metadata was corrupt — see notes below).
+- **Deploy note:** this and all Telegram work (The Rail, Mini App) live on
+  branch `poker-bust-out-spectator-modal`. `origin/main` (what Railway/Vercel
+  deploy) is still at PR #58 — it has none of it. Players will keep seeing
+  "MORBlotto" and getting no group notifications until this branch is
+  PR-merged to `main`.
+
+---
+
 ## 2026-05-21 — Telegram Mini App, Phase 1 (foundation + home hub)
 
 **What & why:** First slice of the MORBIUS Telegram Mini App — an account hub

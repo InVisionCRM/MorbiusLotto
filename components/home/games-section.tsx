@@ -92,7 +92,7 @@ const CATEGORIES: Category[] = [
     kicker: 'Built in-house',
     tagline: 'Provably-fair house games — drop a ball, pick numbers, or chase the jackpot.',
     image: '/Games-Section/Plinko-GS.png',
-    imageAlt: 'MORBlotto Originals',
+    imageAlt: 'MORBIUS Originals',
     games: [
       {
         key: 'plinko',
