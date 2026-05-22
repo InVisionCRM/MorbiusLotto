@@ -25,8 +25,10 @@ import {
   IconArrowLeft,
   IconChevronRight,
   IconExternalLink,
+  IconCards,
 } from '@tabler/icons-react';
 import MiniAppProfileEditor from '@/components/telegram/MiniAppProfileEditor';
+import MiniAppVideoPoker from '@/components/telegram/MiniAppVideoPoker';
 
 // ---------------------------------------------------------------------------
 
@@ -65,7 +67,7 @@ interface PokerStats {
   aggression_factor: number | null;
 }
 
-type View = 'hub' | 'stats' | 'wallet' | 'profile';
+type View = 'hub' | 'stats' | 'wallet' | 'profile' | 'videopoker';
 type StatScope = 'cash' | 'tournament' | 'all';
 type LoadState = 'loading' | 'no-telegram' | 'error' | 'ready';
 type FetchState = 'idle' | 'loading' | 'error' | 'ready';
@@ -360,6 +362,13 @@ export default function TelegramMiniAppPage() {
                   sub: 'Move MORBIUS to chips and back',
                   target: 'wallet' as View | null,
                 },
+                {
+                  key: 'arcade',
+                  icon: <IconCards size={18} aria-hidden />,
+                  title: 'MORBIUS Arcade',
+                  sub: 'Video Poker — Jacks or Better',
+                  target: 'videopoker' as View | null,
+                },
               ].map((tile) => (
                 <button
                   key={tile.key}
@@ -582,6 +591,15 @@ export default function TelegramMiniAppPage() {
               onBack={() => setView('hub')}
             />
           )}
+
+        {/* ---- ARCADE: VIDEO POKER ---- */}
+        {loadState === 'ready' && session && session.linked && view === 'videopoker' && (
+          <MiniAppVideoPoker
+            initData={initData}
+            initialChipBalance={session.chipBalance ?? '0'}
+            onBack={() => setView('hub')}
+          />
+        )}
       </div>
     </div>
   );

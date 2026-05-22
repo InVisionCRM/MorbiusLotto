@@ -14,7 +14,9 @@ export type PokerChipLedgerReason =
   | 'tournament_prize'
   | 'rake'
   | 'creator_fee'
-  | 'platform_fee';
+  | 'platform_fee'
+  | 'video_poker_bet'
+  | 'video_poker_payout';
 
 const DEFAULT_PLATFORM_FEE_WALLET = '0x41682815b05fe6b54a6c0f8813bb99423ee0309d';
 

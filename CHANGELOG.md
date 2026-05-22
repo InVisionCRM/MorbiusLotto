@@ -5,6 +5,88 @@ Each entry records what changed, why, and the verification outcome.
 
 ---
 
+## 2026-05-21 — Avatar editor: compact mode fits without scrolling
+
+**What & why:** In the Mini App profile screen the avatar preview sat inside the
+scrollable area, so changing an option pushed the avatar off-screen — you had to
+scroll down to pick, then back up to see the result. This pins the preview and
+tightens compact mode so the whole editor stays on one screen.
+
+### Changed
+
+- `components/avatar/AvatarControls.tsx` — in compact mode the avatar preview is
+  now pinned above the scroll area, so it stays visible while the option cards
+  scroll. The compact preview, cycle arrows, category pills and option cards are
+  all smaller and tighter. Every change is gated to the `compact` prop, so the
+  full-size website editor is untouched.
+- `components/avatar/CharacterCreator.tsx` — added a pencil icon and a "Tap to
+  set your name" placeholder so the display-name field reads as obviously
+  editable. Compact padding and margins tightened.
+
+### Verification outcome
+
+- Both components transpile clean (`ts.transpileModule`).
+- **Not yet done:** live check on a phone — needs deploy. The fix is structural
+  (the preview can no longer scroll out of view) so it is low-risk.
+
+---
+
+## 2026-05-21 — MORBIUS Arcade: Video Poker (Jacks or Better)
+
+**What & why:** The first game of the MORBIUS Arcade — a provably-fair Jacks or
+Better video poker game playable inside the Telegram Mini App. Single-player,
+instant, on-brand. It reuses the platform's existing provably-fair deck shuffle
+and poker-chip systems rather than inventing new ones.
+
+### Added — backend
+
+- `server/src/services/video-poker.ts` — the Jacks or Better rules: hand
+  categories, the 9/6 paytable (one tunable constant sets the house edge),
+  payout math, and the hold/draw logic. The 5-card hand strength itself is
+  evaluated by the existing `poker-hand-eval` `bestHand()`.
+- `server/src/__tests__/video-poker.test.ts` — unit tests for every paytable
+  category and the draw logic.
+- `server/migrations/125_video_poker.sql` — the `video_poker_hands` table; one
+  row per hand, storing the committed deck so every hand stays verifiable.
+- `server/src/routes/video-poker.routes.ts` — four endpoints: `GET /paytable`
+  (public), `POST /deal` and `POST /draw` (Telegram-`initData` authed), and
+  `GET /verify/:handId` (public). The deck is committed at deal; chip moves run
+  inside DB transactions; the draw is row-locked and status-checked so a hand
+  can never pay out twice.
+
+### Changed — backend
+
+- `poker-chip-wallet.ts` — added `video_poker_bet` / `video_poker_payout`
+  chip-ledger reasons.
+- `server.ts` — registers the video poker routes.
+
+### Added — frontend
+
+- `components/telegram/MiniAppVideoPoker.tsx` — the polished game screen:
+  emerald felt table, 3D card flips, an animated staggered deal, holds that
+  lift and glow, a draw animation, a gold win celebration (particle burst +
+  banner), and synthesized sound with a mute toggle. Wired to the deal/draw
+  endpoints, with a verify-endpoint fallback that recovers the outcome if a
+  draw reply is lost.
+
+### Changed — frontend
+
+- `app/tg/page.tsx` — added a "MORBIUS Arcade" tile to the hub that opens
+  Video Poker.
+
+### Verification outcome
+
+- The rules engine was verified by transpiling the real code and running 25
+  logic checks — every hand category, every payout, the draw, and the input
+  guards — all passed. (Jest's dev dependency is absent from the fresh clone,
+  so jest itself could not run here; the test file ships for CI.)
+- All eight changed/new code files transpile clean (`ts.transpileModule`).
+- **Action item:** when this deploys, run the migration once —
+  `node server/run-migration.js migrations/125_video_poker.sql`.
+- **Not yet done:** live test in Telegram — needs deploy.
+
+---
+
 ## 2026-05-21 — Telegram bot: menu button, command menu & new commands
 
 **What & why:** Makes the bot a real front door to MORBIUS. Adds a persistent
