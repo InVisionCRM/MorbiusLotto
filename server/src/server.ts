@@ -11,6 +11,7 @@ import cookieParser from 'cookie-parser';
 import { AuthService } from './services/auth.service';
 import { registerAuthRoutes } from './routes/auth.routes';
 import { registerTelegramRoutes } from './routes/telegram.routes';
+import { registerVideoPokerRoutes } from './routes/video-poker.routes';
 import { requireAuth, requireSameAddress } from './middleware/require-auth';
 import { DatabaseService, type BlackjackSpWagerTierRow } from './services/database.service';
 import { ProvablyFairService } from './services/provably-fair.service';
@@ -388,6 +389,7 @@ async function initializeServices() {
     // Registered here in the live server.ts path. Degrades gracefully when
     // TELEGRAM_BOT_TOKEN is unset.
     registerTelegramRoutes({ app, pool: dbService.getPool(), dbService });
+    registerVideoPokerRoutes({ app, dbService });
 
     // Public config (whitelisted keys only; used for ad creatives, etc.)
     const PUBLIC_CONFIG_KEYS = ['ad_creative_url', 'ad_creative_hero_url', 'ad_creative_loading_url'];

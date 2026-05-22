@@ -4,7 +4,7 @@ import React, { useState, useEffect } from 'react';
 import type { AvatarConfig } from '@/lib/websocket-client';
 import { AVATAR_V1_DEFAULTS } from '@/lib/avatar-payload';
 import AvatarControls from './AvatarControls';
-import { Shuffle } from 'lucide-react';
+import { Shuffle, Pencil } from 'lucide-react';
 import { getUnlockedValuesPerField, type AvatarField } from '@/lib/cosmetics-catalog';
 import type { AvatarRandomizeFieldKey } from '@/lib/avatar-randomize-pins';
 
@@ -104,19 +104,26 @@ export default function CharacterCreator({ config: controlledConfig, onChange, i
     <div className="flex flex-col w-full min-h-0 flex-1">
       <div className={`flex flex-col flex-1 min-h-0 gap-3 ${compact ? 'p-2' : 'p-4 sm:p-5'}`}>
         <section
-          className="flex min-h-0 w-full flex-1 flex-col overflow-hidden rounded-2xl border border-gray-100 bg-gradient-to-b from-white to-slate-50 p-3.5 sm:p-4 shadow-xl"
+          className={`flex min-h-0 w-full flex-1 flex-col overflow-hidden rounded-2xl border border-gray-100 bg-gradient-to-b from-white to-slate-50 shadow-xl ${compact ? 'p-2.5' : 'p-3.5 sm:p-4'}`}
         >
-          <div className="mb-3 flex flex-col items-center text-center gap-2">
+          <div className={`flex flex-col items-center text-center gap-2 ${compact ? 'mb-2' : 'mb-3'}`}>
             <div className="min-w-0 w-full max-w-md px-1">
               {displayName !== undefined && onDisplayNameChange ? (
-                <input
-                  type="text"
-                  value={displayName}
-                  onChange={(e) => onDisplayNameChange(e.target.value)}
-                  placeholder="Your name"
-                  maxLength={32}
-                  className={`w-full bg-transparent border-b border-gray-300 text-slate-900 placeholder:text-slate-400 focus:outline-none focus:border-cyan-500 transition-colors text-center ${compact ? 'pb-1 text-sm font-semibold' : 'pb-2 text-xl sm:text-2xl font-semibold'}`}
-                />
+                <div className="relative">
+                  <input
+                    type="text"
+                    value={displayName}
+                    onChange={(e) => onDisplayNameChange(e.target.value)}
+                    placeholder="Tap to set your name"
+                    maxLength={32}
+                    className={`w-full bg-transparent border-b border-gray-300 text-slate-900 placeholder:text-slate-400 focus:outline-none focus:border-cyan-500 transition-colors text-center ${compact ? 'pb-1 pr-6 text-sm font-semibold' : 'pb-2 pr-7 text-xl sm:text-2xl font-semibold'}`}
+                  />
+                  <Pencil
+                    size={compact ? 12 : 15}
+                    aria-hidden
+                    className="pointer-events-none absolute right-1 top-1/2 -translate-y-1/2 text-cyan-500/70"
+                  />
+                </div>
               ) : (
                 <h1 className={`${compact ? 'text-sm' : 'text-xl sm:text-2xl'} font-semibold tracking-tight text-slate-900`}>
                   Player Profile

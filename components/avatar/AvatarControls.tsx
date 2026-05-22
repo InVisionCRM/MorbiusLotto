@@ -313,8 +313,8 @@ export default function AvatarControls({
   };
 
   const arrowClass = [
-    'absolute top-1/2 -translate-y-1/2 z-20',
-    'h-14 w-14 sm:h-16 sm:w-16 rounded-full border',
+    'absolute top-1/2 -translate-y-1/2 z-20 rounded-full border',
+    compact ? 'h-9 w-9' : 'h-14 w-14 sm:h-16 sm:w-16',
     'border-cyan-300/70 text-cyan-600',
     'bg-[radial-gradient(circle_at_30%_30%,rgba(255,255,255,0.95),rgba(209,250,254,0.9))]',
     'hover:text-cyan-700 hover:border-cyan-400/80 hover:bg-[radial-gradient(circle_at_30%_30%,rgba(255,255,255,1),rgba(186,230,253,0.95))]',
@@ -322,6 +322,44 @@ export default function AvatarControls({
     'shadow-[0_6px_18px_rgba(56,189,248,0.22)]',
     'backdrop-blur-sm',
   ].join(' ');
+
+  // The avatar preview. In compact mode it is rendered ABOVE the scroll area
+  // (pinned) so it stays visible while the player scrolls the option cards.
+  const avatarPreview = (
+    <div className={`relative rounded-2xl ${compact ? 'px-2 py-0.5' : 'p-3 sm:p-4'}`}>
+      <button
+        type="button"
+        onClick={() => cycleActive(-1)}
+        className={`${arrowClass} ${compact ? 'left-1' : 'left-3 sm:left-4'}`}
+        aria-label="Previous avatar option"
+      >
+        <ChevronLeft className="mx-auto" size={compact ? 18 : 28} />
+      </button>
+      <button
+        type="button"
+        onClick={() => cycleActive(1)}
+        className={`${arrowClass} ${compact ? 'right-1' : 'right-3 sm:right-4'}`}
+        aria-label="Next avatar option"
+      >
+        <ChevronRight className="mx-auto" size={compact ? 18 : 28} />
+      </button>
+
+      <div className="flex w-full items-center justify-center py-1">
+        <div className="relative">
+          <div className="absolute inset-8 rounded-full bg-cyan-200/50 blur-3xl" />
+          <AvatarView
+            config={config}
+            disableAmbientMotion
+            className={
+              compact
+                ? 'relative z-10 w-28 sm:w-32 aspect-[6/7]'
+                : 'relative z-10 w-44 sm:w-48 lg:w-[15rem] aspect-[6/7]'
+            }
+          />
+        </div>
+      </div>
+    </div>
+  );
 
   return (
     <div
@@ -367,40 +405,15 @@ export default function AvatarControls({
           </Tabs>
         </div>
 
+        {compact ? avatarPreview : null}
+
         <div
           className={`flex-1 touch-pan-y overflow-y-auto overscroll-y-contain custom-scrollbar ${compact ? 'p-2' : 'p-2.5'} space-y-2`}
         >
-          <div className="relative rounded-2xl p-3 sm:p-4">
-            <button
-              type="button"
-              onClick={() => cycleActive(-1)}
-              className={`${arrowClass} left-3 sm:left-4`}
-              aria-label="Previous avatar option"
-            >
-              <ChevronLeft className="mx-auto" size={28} />
-            </button>
-            <button
-              type="button"
-              onClick={() => cycleActive(1)}
-              className={`${arrowClass} right-3 sm:right-4`}
-              aria-label="Next avatar option"
-            >
-              <ChevronRight className="mx-auto" size={28} />
-            </button>
+          {compact ? null : avatarPreview}
 
-            <div className="flex w-full items-center justify-center py-1">
-              <div className="relative">
-                <div className="absolute inset-8 rounded-full bg-cyan-200/50 blur-3xl" />
-                <AvatarView
-                  config={config}
-                  disableAmbientMotion
-                  className={compact ? 'relative z-10 w-40 sm:w-44 aspect-[6/7]' : 'relative z-10 w-44 sm:w-48 lg:w-[15rem] aspect-[6/7]'}
-                />
-              </div>
-            </div>
-          </div>
+          <div className={`rounded-2xl ${compact ? 'p-1.5 space-y-2' : 'p-2.5 sm:p-3 space-y-3'}`}>
 
-          <div className="rounded-2xl p-2.5 sm:p-3 space-y-3">
             <div className="w-full space-y-2">
               <span className="text-[11px] font-semibold uppercase tracking-[0.16em] text-cyan-600">Category Item</span>
               <div className="flex gap-2 overflow-x-auto pb-1 scrollbar-hide">
@@ -411,7 +424,7 @@ export default function AvatarControls({
                       key={row.field}
                       type="button"
                       onClick={() => setActiveField(row.field)}
-                      className={`shrink-0 rounded-xl border px-3 py-2 text-sm font-medium transition-colors ${
+                      className={`shrink-0 rounded-xl border ${compact ? 'px-2.5 py-1.5 text-xs' : 'px-3 py-2 text-sm'} font-medium transition-colors ${
                         isActive
                           ? 'border-cyan-300 bg-cyan-50 text-cyan-800 shadow-[0_2px_10px_rgba(6,182,212,0.2)]'
                           : 'border-slate-200 bg-white text-slate-700 hover:border-cyan-200 hover:text-cyan-700'
@@ -487,7 +500,7 @@ export default function AvatarControls({
                           tryApplyOption(activeRow, option);
                         }}
                         style={colorCardStyle}
-                        className={`snap-center shrink-0 min-w-[148px] max-w-[180px] rounded-2xl border px-3 py-3 text-left transition-all ${
+                        className={`snap-center shrink-0 ${compact ? 'min-w-[122px] max-w-[150px] px-2.5 py-2' : 'min-w-[148px] max-w-[180px] px-3 py-3'} rounded-2xl border text-left transition-all ${
                           isColorCard
                             ? selected
                               ? 'border-cyan-200 shadow-[0_0_0_2px_rgba(34,211,238,0.55),0_0_24px_rgba(34,211,238,0.42),0_4px_16px_rgba(6,182,212,0.28)] ring-2 ring-cyan-300/60'
