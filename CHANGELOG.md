@@ -5,6 +5,92 @@ Each entry records what changed, why, and the verification outcome.
 
 ---
 
+## 2026-05-22 — Fix: Video Poker Mini App game would not open
+
+**What & why:** The MORBIUS Arcade Video Poker game never opened — it showed
+"Could not load the game" and the table never rendered. Root cause: the
+component (`components/telegram/MiniAppVideoPoker.tsx`) calls
+`/api/video-poker/paytable|deal|draw|verify` as same-origin paths, but — unlike
+every other proxied API namespace (`/api/cosmetics`, `/api/telegram`, etc.) —
+there was no Next.js route to receive them, and `next.config.ts` has no
+rewrites. Every request 404'd at the Next.js layer and never reached the
+Express backend, where the routes, game logic and auth were all already
+correct.
+
+### Added
+
+- `app/api/video-poker/[...path]/route.ts` *(new)* — a catch-all proxy that
+  forwards `GET`/`POST` `/api/video-poker/*` requests to the Express backend.
+  Modeled on the existing `app/api/cosmetics/[...path]/route.ts`; uses the
+  shared `proxyJson` helper. This single missing file was the whole bug.
+
+### Verification outcome
+
+- New route transpiles clean (`ts.transpileModule`).
+- Backend routes (`server/src/routes/video-poker.routes.ts`), game logic
+  (`server/src/services/video-poker.ts`) and the Telegram `initData` auth were
+  traced and confirmed already correct — no change needed there.
+- **Action still needed:** confirm migration `125_video_poker.sql` is applied
+  to the production database. The routing fix makes the game open and the
+  paytable load; if the `video_poker_hands` table is missing, the first Deal
+  will 500. Run `node server/run-migration.js migrations/125_video_poker.sql`
+  if it has not been applied.
+- **Not yet done:** live check inside Telegram — needs a deploy.
+
+---
+
+## 2026-05-22 — Telegram Mini App: full visual redesign to the Getting Started style
+
+**What & why:** The Mini App's hub, stats and link screens used a generic
+cyan-on-near-black theme that clashed with the Video Poker game's own look —
+effectively two design languages bolted into one app. This reskins every
+Mini App screen to match the site's Poker onboarding modal
+(`components/poker/PokerOnboardingChecklist.tsx`): navy gradient, cyan accents,
+the Mitr brutalist headings, cyan-to-blue glow buttons. It also removes the
+redundant Wallet screen — it only repeated balances already shown on the hub
+plus a deep-link — and moves Swap to a button on the hub.
+
+### Changed
+
+- `app/layout.tsx` — the Mitr font is now actually loaded (added to the Google
+  Fonts `<link>` alongside Montserrat). It was referenced across the codebase
+  and in `globals.css`'s `.mitr-*` classes but never loaded anywhere, so every
+  `Mitr` heading — including the live poker onboarding modal — was silently
+  falling back to a system font. This makes the intended headings real.
+- `app/tg/page.tsx` — full visual reskin of the Mini App shell:
+  - Navy gradient background, navy cards with cyan hairline borders, Mitr
+    headings/numbers, cyan-to-blue gradient buttons with the glow.
+  - Link screen rebuilt as a proper onboarding panel (kicker, brutalist
+    heading, segmented progress strip), echoing the poker modal.
+  - Hub: balances lead, with a "Swap MORBIUS ↔ chips" button beneath them;
+    tiles are Arcade, Stats, Profile, plus a "Poker Lobby" tile marked "Soon"
+    (that feature lands in a later phase).
+  - Removed the standalone Wallet screen and the `'wallet'` view entirely —
+    its only unique function, the swap deep-link, now lives on the hub.
+  - Stats screen restyled; metric values use the Mitr font.
+  - All data-fetching, session/SDK logic and view routing are unchanged — this
+    is a presentation-only change.
+- `components/telegram/MiniAppVideoPoker.tsx` — reskinned the Video Poker game:
+  the green-felt table is now a navy surface with a cyan glow; the paytable,
+  hold badges, bet steppers, win banner and win-burst particles are all cyan;
+  the Deal button uses the cyan-to-blue glow gradient. Game logic, sound and
+  animation timing are untouched.
+- `components/telegram/MiniAppProfileEditor.tsx` — reskinned the editor frame
+  (header, Randomize button, input fields, Save button) to match. The shared
+  `CharacterCreator` component is deliberately left alone so the website's
+  avatar editor is unaffected.
+
+### Verification outcome
+
+- All four changed files transpile clean via `ts.transpileModule`:
+  `app/layout.tsx`, `app/tg/page.tsx`, `MiniAppVideoPoker.tsx` and
+  `MiniAppProfileEditor.tsx`.
+- **Not yet done:** live check inside Telegram — needs a deploy / dev server.
+  The change is presentation-only (no game logic, data or routing touched), so
+  the risk is low.
+
+---
+
 ## 2026-05-21 — Avatar editor: compact mode fits without scrolling
 
 **What & why:** In the Mini App profile screen the avatar preview sat inside the

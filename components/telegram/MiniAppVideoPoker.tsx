@@ -61,29 +61,29 @@ function isRedSuit(suit: number): boolean {
 
 const VP_CSS = `
 .vp-table{position:relative;border-radius:20px;overflow:hidden;
- background:radial-gradient(ellipse 80% 55% at 50% 30%,#23624c 0%,#124236 42%,#081d18 78%,#040d0b 100%);
- border:1px solid rgba(245,207,107,0.16);}
-.vp-glass{background:linear-gradient(180deg,rgba(7,22,18,0.72),rgba(7,22,18,0.5));border:1px solid rgba(245,207,107,0.18);}
+ background:radial-gradient(ellipse 80% 72% at 50% 28%,rgba(6,182,212,0.17),transparent 62%),linear-gradient(180deg,#0c1c30,#081320);
+ border:1px solid rgba(6,182,212,0.30);box-shadow:inset 0 0 30px rgba(6,182,212,0.10);}
+.vp-glass{background:#0b1a2c;border:1px solid rgba(34,211,238,0.14);}
 .vp-pt{display:flex;justify-content:space-between;padding:3px 9px;font-size:11px;border-radius:6px;transition:all .2s;}
-.vp-pt .vp-nm{color:#cfe6dc;}
-.vp-pt .vp-mx{font-variant-numeric:tabular-nums;font-weight:700;color:#f5cf6b;}
-.vp-pt.vp-win{background:linear-gradient(90deg,#f5cf6b,#e7b13e);animation:vpPulse 1s ease-in-out infinite;}
-.vp-pt.vp-win .vp-nm,.vp-pt.vp-win .vp-mx{color:#3a2606;}
-@keyframes vpPulse{0%,100%{box-shadow:0 0 0 0 rgba(245,207,107,0);}50%{box-shadow:0 0 15px 2px rgba(245,207,107,0.6);}}
+.vp-pt .vp-nm{color:#94a3b8;}
+.vp-pt .vp-mx{font-variant-numeric:tabular-nums;font-weight:700;color:#22d3ee;}
+.vp-pt.vp-win{background:linear-gradient(90deg,#22d3ee,#0891b2);animation:vpPulse 1s ease-in-out infinite;}
+.vp-pt.vp-win .vp-nm,.vp-pt.vp-win .vp-mx{color:#04222a;}
+@keyframes vpPulse{0%,100%{box-shadow:0 0 0 0 rgba(34,211,238,0);}50%{box-shadow:0 0 15px 2px rgba(34,211,238,0.6);}}
 .vp-lifter{width:62px;height:88px;position:relative;transition:transform .22s cubic-bezier(.34,1.5,.6,1);}
-.vp-lifter.vp-held{transform:translateY(-14px);filter:drop-shadow(0 0 11px rgba(245,207,107,0.75));}
+.vp-lifter.vp-held{transform:translateY(-14px);filter:drop-shadow(0 0 11px rgba(34,211,238,0.8));}
 .vp-card{position:absolute;inset:0;transform-style:preserve-3d;transition:transform .44s cubic-bezier(.45,.05,.25,1);}
 .vp-card.vp-flipped{transform:rotateY(180deg);}
 .vp-cface{position:absolute;inset:0;backface-visibility:hidden;-webkit-backface-visibility:hidden;border-radius:8px;
  box-shadow:0 5px 11px rgba(0,0,0,0.55);}
-.vp-cback{background:radial-gradient(circle,rgba(56,224,232,0.16) 1px,transparent 1.6px) 0 0/9px 9px,linear-gradient(155deg,#163a52,#0a1626);
- border:1px solid rgba(56,224,232,0.3);display:flex;align-items:center;justify-content:center;}
-.vp-cback i{width:28px;height:28px;border:1.5px solid rgba(56,224,232,0.55);border-radius:5px;transform:rotate(45deg);
+.vp-cback{background:radial-gradient(circle,rgba(34,211,238,0.18) 1px,transparent 1.6px) 0 0/9px 9px,linear-gradient(155deg,#16324f,#0a1626);
+ border:1px solid rgba(34,211,238,0.35);display:flex;align-items:center;justify-content:center;}
+.vp-cback i{width:28px;height:28px;border:1.5px solid rgba(34,211,238,0.6);border-radius:5px;transform:rotate(45deg);
  display:flex;align-items:center;justify-content:center;}
-.vp-cback i::after{content:"";width:10px;height:10px;background:#38e0e8;border-radius:2px;}
-.vp-cfront{transform:rotateY(180deg);background:linear-gradient(162deg,#ffffff,#e9edf4);border:1px solid rgba(0,0,0,0.18);}
-.vp-cfront.vp-red{color:#d8284a;}
-.vp-cfront.vp-blk{color:#1c2230;}
+.vp-cback i::after{content:"";width:10px;height:10px;background:#22d3ee;border-radius:2px;}
+.vp-cfront{transform:rotateY(180deg);background:linear-gradient(162deg,#ffffff,#dde6f1);border:1px solid rgba(0,0,0,0.18);}
+.vp-cfront.vp-red{color:#e5384f;}
+.vp-cfront.vp-blk{color:#1b2436;}
 .vp-idx{position:absolute;display:flex;flex-direction:column;align-items:center;line-height:0.92;font-weight:800;}
 .vp-idx .vp-r{font-size:13px;}
 .vp-idx .vp-s{font-size:10px;}
@@ -91,22 +91,23 @@ const VP_CSS = `
 .vp-br{bottom:5px;right:6px;transform:rotate(180deg);}
 .vp-pip{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-size:32px;}
 .vp-hbadge{position:absolute;top:-11px;left:50%;transform:translateX(-50%) scale(0);transform-origin:bottom;
- background:linear-gradient(180deg,#f5cf6b,#e0a838);color:#3a2606;font-size:9px;font-weight:800;letter-spacing:0.08em;
+ background:linear-gradient(135deg,#22d3ee,#06b6d4);color:#04222a;font-size:9px;font-weight:800;letter-spacing:0.08em;
  padding:2px 8px;border-radius:5px;transition:transform .2s cubic-bezier(.34,1.6,.6,1);}
 .vp-lifter.vp-held .vp-hbadge{transform:translateX(-50%) scale(1);}
-.vp-deal-btn{width:100%;border:none;border-radius:13px;padding:14px;font-size:16px;font-weight:800;letter-spacing:0.03em;
- cursor:pointer;color:#04231f;background:linear-gradient(180deg,#4be3d6,#19b6c4);box-shadow:0 6px 16px rgba(25,182,196,0.4);
+.vp-deal-btn{width:100%;border:none;border-radius:13px;padding:14px;font-size:16px;font-weight:800;letter-spacing:0.04em;
+ cursor:pointer;color:#ffffff;background:linear-gradient(135deg,#0891b2,#2563eb);
+ box-shadow:0 8px 26px -8px rgba(6,182,212,0.55),0 0 0 1px rgba(34,211,238,0.20);
  transition:filter .15s,transform .1s;}
 .vp-deal-btn:not(:disabled):active{transform:scale(0.98);}
 .vp-deal-btn:disabled{opacity:0.45;cursor:default;box-shadow:none;}
-.vp-stp{width:32px;height:32px;border-radius:9px;border:1px solid rgba(245,207,107,0.3);background:rgba(7,22,18,0.6);
- color:#f5cf6b;font-size:18px;cursor:pointer;}
+.vp-stp{width:32px;height:32px;border-radius:9px;border:1px solid rgba(6,182,212,0.30);background:rgba(34,211,238,0.06);
+ color:#22d3ee;font-size:18px;cursor:pointer;}
 .vp-stp:disabled{opacity:0.3;cursor:default;}
 .vp-banner{position:absolute;left:50%;top:44%;transform:translate(-50%,-50%) scale(0.6);opacity:0;pointer-events:none;
  text-align:center;transition:transform .4s cubic-bezier(.34,1.55,.5,1),opacity .3s;z-index:6;}
 .vp-banner.vp-show{transform:translate(-50%,-50%) scale(1);opacity:1;}
-.vp-banner .vp-bt{font-size:20px;font-weight:800;color:#f5cf6b;text-shadow:0 2px 14px rgba(245,207,107,0.7);}
-.vp-banner .vp-bp{font-size:15px;font-weight:700;color:#eafff5;margin-top:2px;}
+.vp-banner .vp-bt{font-size:20px;font-weight:800;color:#22d3ee;text-shadow:0 2px 14px rgba(34,211,238,0.75);}
+.vp-banner .vp-bp{font-size:15px;font-weight:700;color:#eafbff;margin-top:2px;}
 .vp-fx{position:absolute;inset:0;pointer-events:none;z-index:7;}
 `;
 
@@ -253,7 +254,7 @@ export default function MiniAppVideoPoker({
         life: 1,
         rot: Math.random() * 6,
         vr: (Math.random() - 0.5) * 0.4,
-        c: Math.random() < 0.5 ? '#f5cf6b' : '#ffe9a8',
+        c: Math.random() < 0.5 ? '#22d3ee' : '#a5f3fc',
       });
     }
     const step = () => {
@@ -549,15 +550,15 @@ export default function MiniAppVideoPoker({
           type="button"
           onClick={onBack}
           aria-label="Back to hub"
-          className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-white/10 bg-white/[0.03] text-white/70 hover:text-white"
+          className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-cyan-500/30 bg-cyan-500/5 text-cyan-400"
         >
           <IconArrowLeft size={18} aria-hidden />
         </button>
-        <h1 className="text-base font-semibold">MORBIUS Arcade</h1>
+        <h1 className="mitr-bold text-xl text-white">MORBIUS Arcade</h1>
       </div>
 
       {phase === 'loading' && (
-        <p className="mt-10 text-center text-sm text-white/50">Loading the table…</p>
+        <p className="mt-10 text-center text-sm text-slate-500">Loading the table…</p>
       )}
 
       {phase === 'load-error' && (
@@ -566,7 +567,7 @@ export default function MiniAppVideoPoker({
           <button
             type="button"
             onClick={() => void loadPaytable()}
-            className="mt-3 rounded-lg border border-white/15 px-4 py-2 text-sm text-white/80"
+            className="mt-3 rounded-lg border border-cyan-500/30 px-4 py-2 text-sm text-cyan-400"
           >
             Try again
           </button>
@@ -580,21 +581,19 @@ export default function MiniAppVideoPoker({
           <div className="relative z-[2]">
             <div className="mb-3 flex items-center justify-between">
               <div>
-                <div className="text-[13px] font-extrabold tracking-[0.13em] text-[#f5cf6b]">
-                  VIDEO POKER
-                </div>
-                <div className="text-[9px] tracking-[0.28em] text-[#eafff5]/45">JACKS OR BETTER</div>
+                <div className="mitr-bold text-lg leading-none text-white">Video Poker</div>
+                <div className="mt-1 text-[9px] tracking-[0.28em] text-cyan-400">JACKS OR BETTER</div>
               </div>
               <div className="flex items-center gap-2">
                 <button
                   type="button"
                   onClick={toggleMute}
-                  className="rounded-lg border border-[#f5cf6b]/25 bg-[#071612]/60 px-2 py-1 text-[10px] font-bold text-[#f5cf6b]"
+                  className="rounded-lg border border-cyan-500/25 bg-[#081320]/70 px-2 py-1 text-[10px] font-bold text-cyan-400"
                 >
                   {muted ? '♪ off' : '♪ on'}
                 </button>
-                <div className="flex items-center gap-1.5 rounded-full border border-[#f5cf6b]/20 bg-[#071612]/60 px-2.5 py-1">
-                  <span className="inline-block h-2.5 w-2.5 rounded-full bg-[#f5cf6b]" />
+                <div className="flex items-center gap-1.5 rounded-full border border-cyan-500/25 bg-[#081320]/70 px-2.5 py-1">
+                  <span className="inline-block h-2.5 w-2.5 rounded-full bg-cyan-400" />
                   <span className="text-[13px] font-extrabold tabular-nums text-white">
                     {Math.round(chips).toLocaleString('en-US')}
                   </span>
@@ -664,7 +663,7 @@ export default function MiniAppVideoPoker({
               })}
             </div>
 
-            <div className="mb-3 min-h-[17px] text-center text-xs text-[#eafff5]/65">
+            <div className="mb-3 min-h-[17px] text-center text-xs text-slate-400">
               {errorMsg
                 ? errorMsg
                 : phase === 'idle'
@@ -681,7 +680,7 @@ export default function MiniAppVideoPoker({
             </div>
 
             <div className="mb-2.5 flex items-center gap-2.5">
-              <span className="flex-1 text-[11px] text-[#eafff5]/50">Bet</span>
+              <span className="flex-1 text-[11px] text-slate-500">Bet</span>
               <button
                 type="button"
                 className="vp-stp"
@@ -691,7 +690,7 @@ export default function MiniAppVideoPoker({
               >
                 &minus;
               </button>
-              <span className="min-w-[58px] text-center text-[15px] font-extrabold tabular-nums text-[#f5cf6b]">
+              <span className="min-w-[58px] text-center text-[15px] font-extrabold tabular-nums text-cyan-400">
                 {bet.toLocaleString('en-US')}
               </span>
               <button
@@ -727,7 +726,7 @@ export default function MiniAppVideoPoker({
         </div>
       )}
 
-      <p className="mt-3 text-center text-[11px] text-white/35">
+      <p className="mt-3 text-center text-[11px] text-slate-600">
         Provably fair · every hand verifiable at /api/video-poker/verify
       </p>
     </div>

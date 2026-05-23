@@ -105,7 +105,7 @@ export default function MiniAppProfileEditor({
   }, [initData, name, avatarConfig, bio, xHandle, tgHandle]);
 
   const fieldClass =
-    'w-full rounded-xl border border-white/10 bg-white/[0.04] px-3 py-2 text-sm text-white placeholder:text-white/30 focus:border-cyan-500/40 focus:outline-none';
+    'w-full rounded-xl border border-cyan-500/15 bg-[#0b1a2c] px-3 py-2 text-sm text-white placeholder:text-slate-600 focus:border-cyan-500/50 focus:outline-none';
 
   return (
     <div>
@@ -114,15 +114,15 @@ export default function MiniAppProfileEditor({
           type="button"
           onClick={onBack}
           aria-label="Back to hub"
-          className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-white/10 bg-white/[0.03] text-white/70 hover:text-white"
+          className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-cyan-500/30 bg-cyan-500/5 text-cyan-400"
         >
           <IconArrowLeft size={18} aria-hidden />
         </button>
-        <h1 className="text-base font-semibold">Profile</h1>
+        <h1 className="mitr-bold text-xl text-white">Profile</h1>
       </div>
 
       {loadState === 'loading' && (
-        <p className="mt-10 text-center text-sm text-white/50">Loading your profile…</p>
+        <p className="mt-10 text-center text-sm text-slate-500">Loading your profile…</p>
       )}
 
       {loadState === 'error' && (
@@ -137,7 +137,7 @@ export default function MiniAppProfileEditor({
             <button
               type="button"
               onClick={() => setAvatarConfig(randomizeConfig())}
-              className="inline-flex items-center gap-1.5 rounded-lg border border-violet-400/40 bg-violet-500/15 px-3 py-1.5 text-xs font-medium text-violet-200"
+              className="inline-flex items-center gap-1.5 rounded-lg border border-cyan-500/30 bg-cyan-500/10 px-3 py-1.5 text-xs font-medium text-cyan-400"
             >
               <IconArrowsShuffle size={14} aria-hidden />
               Randomize
@@ -156,7 +156,7 @@ export default function MiniAppProfileEditor({
 
           <div className="mt-4 flex flex-col gap-3">
             <div>
-              <label htmlFor="tg-bio" className="mb-1 block text-xs text-white/50">
+              <label htmlFor="tg-bio" className="mb-1 block text-xs text-slate-500">
                 Bio
               </label>
               <textarea
@@ -170,7 +170,7 @@ export default function MiniAppProfileEditor({
               />
             </div>
             <div>
-              <label htmlFor="tg-x" className="mb-1 block text-xs text-white/50">
+              <label htmlFor="tg-x" className="mb-1 block text-xs text-slate-500">
                 X handle
               </label>
               <input
@@ -184,7 +184,7 @@ export default function MiniAppProfileEditor({
               />
             </div>
             <div>
-              <label htmlFor="tg-tg" className="mb-1 block text-xs text-white/50">
+              <label htmlFor="tg-tg" className="mb-1 block text-xs text-slate-500">
                 Telegram handle
               </label>
               <input
@@ -204,6 +204,7 @@ export default function MiniAppProfileEditor({
             onClick={save}
             disabled={saveState === 'saving'}
             className="mt-4 flex w-full items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-cyan-600 to-blue-600 px-4 py-3 text-sm font-semibold text-white disabled:opacity-60"
+            style={{ boxShadow: '0 8px 26px -8px rgba(6,182,212,0.55), 0 0 0 1px rgba(34,211,238,0.20)' }}
           >
             <IconDeviceFloppy size={16} aria-hidden />
             {saveState === 'saving' ? 'Saving…' : saveState === 'saved' ? 'Saved' : 'Save profile'}
@@ -218,7 +219,7 @@ export default function MiniAppProfileEditor({
           <button
             type="button"
             onClick={onBack}
-            className="mt-3 w-full rounded-xl border border-white/15 px-4 py-3 text-sm font-medium text-white/80"
+            className="mt-3 w-full rounded-xl border border-cyan-500/20 px-4 py-3 text-sm font-medium text-slate-300"
           >
             Back to hub
           </button>
