@@ -1,0 +1,565 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>MORBIUS Mini App — Getting Started Style — Full Map</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Mitr:wght@400;500;600;700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
+<style>
+/* ============================================================
+   MORBIUS Mini App — "GETTING STARTED" STYLE — full map
+   Matched to components/poker/PokerOnboardingChecklist.tsx.
+   Seven screens. Wallet screen cut (swap moved to hub),
+   Poker Lobby + stripped Create Tournament added.
+   Non-functional mockup.
+   ============================================================ */
+:root{
+  --bg0:#050a14; --bg1:#0c1929;
+  --card:#0b1a2c; --card-hi:#0f2238;
+  --cyan:#06b6d4; --cyan-br:#22d3ee; --cyan-dk:#0891b2; --blue:#2563eb;
+  --line:rgba(34,211,238,0.13); --line-hi:rgba(6,182,212,0.30);
+  --dim:#94a3b8; --dimmer:#64748b; --faint:#475569;
+  --grad:linear-gradient(135deg,#0891b2,#2563eb);
+  --glow:0 8px 26px -8px rgba(6,182,212,0.55),0 0 0 1px rgba(34,211,238,0.20);
+  --mitr:'Mitr',sans-serif;
+}
+*{box-sizing:border-box;margin:0;padding:0;}
+body{background:#04070e;color:#e7ecf3;font-family:'Inter',-apple-system,sans-serif;
+  -webkit-font-smoothing:antialiased;padding:48px 22px 66px;overflow-x:hidden;}
+.bg-glow{position:fixed;top:-260px;left:50%;transform:translateX(-50%);
+  width:1100px;height:660px;pointer-events:none;z-index:0;
+  background:radial-gradient(ellipse,rgba(6,182,212,0.08),transparent 66%);}
+
+/* ---- page header ---- */
+.head{position:relative;z-index:1;text-align:center;max-width:780px;margin:0 auto 44px;}
+.head .kick{font-size:11.5px;letter-spacing:0.3em;text-transform:uppercase;
+  color:var(--cyan-br);font-weight:700;margin-bottom:14px;}
+.head h1{font-family:var(--mitr);font-weight:700;font-size:34px;line-height:1.02;
+  letter-spacing:-0.02em;color:#fff;}
+.head h1 em{color:var(--cyan);font-style:italic;}
+.head p{color:#8b94a3;font-size:15px;line-height:1.65;margin-top:14px;}
+
+/* ---- rail ---- */
+.rail{position:relative;z-index:1;display:flex;gap:30px;justify-content:center;
+  flex-wrap:wrap;max-width:1044px;margin:0 auto;}
+.col{width:318px;}
+.col-top{display:flex;align-items:baseline;gap:9px;margin-bottom:15px;}
+.col-num{font-family:var(--mitr);font-weight:700;font-size:15px;color:var(--cyan);}
+.col-name{font-weight:600;font-size:15px;color:#eef2f7;}
+.col-tag{font-size:12px;color:#5a6473;margin-left:auto;}
+.col.new .col-name::after{content:"NEW";font-family:'Inter';font-size:8.5px;font-weight:700;
+  letter-spacing:0.1em;color:#04222a;background:var(--cyan-br);padding:2px 6px;
+  border-radius:5px;margin-left:8px;vertical-align:2px;}
+.caption{margin-top:16px;color:#828b99;font-size:12.5px;line-height:1.65;}
+.foot{position:relative;z-index:1;text-align:center;color:#566072;
+  font-size:12.5px;margin-top:50px;line-height:1.75;}
+code{background:rgba(34,211,238,0.08);color:var(--cyan-br);padding:1px 6px;
+  border-radius:5px;font-size:11.5px;}
+
+/* ============================================================ PHONE */
+.phone{width:318px;border-radius:44px;padding:9px;
+  background:linear-gradient(160deg,#1c2330,#0c1016);
+  box-shadow:0 34px 70px -24px rgba(0,0,0,0.9),
+    0 0 90px -26px rgba(6,182,212,0.30),inset 0 1px 0 rgba(255,255,255,0.06);}
+.screen{border-radius:35px;overflow:hidden;
+  background:linear-gradient(165deg,#0c1c30 0%,#050a14 72%);}
+.status{display:flex;align-items:center;justify-content:space-between;
+  padding:11px 22px 5px;font-size:12px;font-weight:600;color:var(--dimmer);}
+.status .sig{display:flex;align-items:flex-end;gap:3px;}
+.status .sig i{width:3px;border-radius:1px;display:block;background:currentColor;}
+.status .sig i:nth-child(1){height:4px;opacity:.5;}
+.status .sig i:nth-child(2){height:6px;opacity:.68;}
+.status .sig i:nth-child(3){height:8px;opacity:.84;}
+.status .sig i:nth-child(4){height:10px;}
+.batt{width:22px;height:11px;border-radius:3px;border:1.4px solid currentColor;
+  position:relative;margin-left:5px;opacity:.9;}
+.batt::before{content:"";position:absolute;inset:1.6px;width:62%;border-radius:1px;background:currentColor;}
+.batt::after{content:"";position:absolute;right:-3.4px;top:3px;width:2px;height:5px;
+  border-radius:0 1px 1px 0;background:currentColor;}
+
+/* ============================================================ SHARED */
+.app{padding:16px 15px 18px;min-height:558px;}
+.kick{font-size:10px;font-weight:700;letter-spacing:0.28em;text-transform:uppercase;
+  color:var(--cyan-br);}
+.cy{color:var(--cyan);font-style:italic;}
+.scr-head{display:flex;align-items:center;gap:11px;margin-bottom:16px;}
+.back{width:35px;height:35px;border-radius:11px;flex:none;display:flex;
+  align-items:center;justify-content:center;background:rgba(34,211,238,0.06);
+  border:1px solid var(--line-hi);color:var(--cyan-br);}
+.back svg{width:18px;height:18px;}
+.scr-title{font-family:var(--mitr);font-weight:700;font-size:21px;color:#fff;
+  letter-spacing:-0.02em;flex:1;}
+svg{display:block;}
+
+.btn-grad{width:100%;border:none;border-radius:12px;padding:14px;background:var(--grad);
+  color:#fff;font-family:'Inter',sans-serif;font-size:14.5px;font-weight:700;
+  letter-spacing:0.02em;box-shadow:var(--glow);
+  display:flex;align-items:center;justify-content:center;gap:8px;}
+.btn-grad svg{width:16px;height:16px;}
+.btn-ghost{width:100%;border:1px solid var(--line-hi);background:rgba(34,211,238,0.04);
+  border-radius:12px;padding:13px;color:var(--cyan-br);font-family:'Inter',sans-serif;
+  font-size:13.5px;font-weight:600;display:flex;align-items:center;justify-content:center;gap:7px;}
+.btn-ghost svg{width:15px;height:15px;}
+.pill{margin-left:auto;display:flex;align-items:center;gap:6px;border:1px solid var(--line-hi);
+  background:rgba(34,211,238,0.05);border-radius:9px;padding:7px 11px;font-size:11.5px;
+  font-weight:600;color:var(--cyan-br);}
+.pill svg{width:13px;height:13px;}
+
+/* ============================================================ 0 · ONBOARDING */
+.onb{position:relative;background:linear-gradient(135deg,#0c1929,#050a14);
+  border:1px solid rgba(6,182,212,0.25);border-radius:20px;
+  padding:22px 18px 20px;overflow:hidden;margin-top:6px;}
+.onb::before{content:"";position:absolute;inset-inline:0;top:0;height:1px;
+  background:linear-gradient(90deg,transparent,rgba(34,211,238,0.55),transparent);}
+.onb-glow{position:absolute;inset:0;pointer-events:none;
+  background:radial-gradient(circle at 92% 16%,rgba(6,182,212,0.22),transparent 56%);}
+.onb-watermark{position:absolute;top:-22px;right:-6px;font-family:var(--mitr);
+  font-weight:700;font-size:128px;line-height:1;color:rgba(34,211,238,0.07);
+  letter-spacing:-0.05em;pointer-events:none;}
+.onb-in{position:relative;}
+.onb-h{font-family:var(--mitr);font-weight:700;font-size:31px;line-height:0.98;
+  letter-spacing:-0.025em;color:#fff;margin:11px 0 0;}
+.onb-sub{font-size:13px;line-height:1.6;color:var(--dim);margin-top:12px;max-width:240px;}
+.steps{display:flex;gap:6px;margin-top:20px;}
+.sbar{height:6px;flex:1;border-radius:999px;background:rgba(148,163,184,0.15);}
+.sbar.done{background:var(--cyan);}
+.sbar.active{background:linear-gradient(90deg,var(--cyan) 52%,rgba(6,182,212,0.22) 52%);}
+.stags{display:flex;gap:6px;margin-top:9px;}
+.stags span{flex:1;font-size:9.5px;font-weight:700;text-transform:uppercase;
+  letter-spacing:0.1em;color:var(--faint);}
+.stags span.done{color:var(--cyan);}
+.stags span.active{color:#fff;}
+.onb-cta{margin-top:20px;}
+.onb-note{text-align:center;font-size:11px;color:var(--dimmer);margin-top:14px;line-height:1.5;}
+
+/* ============================================================ 1 · HUB */
+.hub-hero{display:flex;align-items:center;gap:13px;margin-bottom:18px;}
+.av-ring{width:54px;height:54px;border-radius:50%;flex:none;padding:2px;
+  background:linear-gradient(135deg,var(--cyan-br),var(--blue));}
+.av-init{width:100%;height:100%;border-radius:50%;background:#0a1a2b;display:flex;
+  align-items:center;justify-content:center;font-family:var(--mitr);font-weight:700;
+  font-size:21px;color:var(--cyan-br);}
+.hub-name{font-family:var(--mitr);font-weight:700;font-size:22px;color:#fff;
+  letter-spacing:-0.02em;margin-top:3px;}
+.hub-handle{font-size:12px;color:var(--dimmer);margin-top:2px;}
+.balances{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:10px;}
+.bal{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:12px 13px;}
+.bal-l{font-size:9.5px;font-weight:700;letter-spacing:0.14em;text-transform:uppercase;color:var(--dimmer);}
+.bal-v{font-family:var(--mitr);font-weight:700;font-size:22px;margin-top:5px;color:#fff;letter-spacing:-0.02em;}
+.bal.cy .bal-v{color:var(--cyan-br);}
+.swap-btn{margin-bottom:14px;padding:11px;font-size:12.5px;}
+.tiles{display:flex;flex-direction:column;gap:9px;}
+.tile{display:flex;align-items:center;gap:12px;background:var(--card);
+  border:1px solid var(--line);border-radius:14px;padding:12px;}
+.tile.feat{border-color:var(--line-hi);background:var(--card-hi);}
+.tile-ic{width:40px;height:40px;border-radius:11px;flex:none;display:flex;
+  align-items:center;justify-content:center;background:rgba(6,182,212,0.10);
+  border:1px solid var(--line-hi);color:var(--cyan-br);}
+.tile-ic svg{width:20px;height:20px;}
+.tile-tx{flex:1;min-width:0;}
+.tile-t{font-size:14px;font-weight:600;color:#eef2f7;}
+.tile-s{font-size:11.5px;color:var(--dimmer);margin-top:1px;}
+.tile-ch{color:var(--dimmer);}
+.tile-ch svg{width:18px;height:18px;}
+.tile .play{font-size:9px;font-weight:700;letter-spacing:0.1em;color:#04222a;
+  background:var(--cyan-br);padding:3px 7px;border-radius:6px;}
+
+/* ============================================================ POKER LOBBY */
+.scope{display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-bottom:13px;
+  background:var(--card);border:1px solid var(--line);border-radius:12px;padding:4px;}
+.scope.three{grid-template-columns:1fr 1fr 1fr;}
+.seg{text-align:center;padding:7px 4px;font-size:11.5px;font-weight:600;
+  border-radius:8px;color:var(--dimmer);}
+.seg.active{background:var(--grad);color:#fff;box-shadow:var(--glow);}
+.lob-list{display:flex;flex-direction:column;gap:9px;}
+.tourney{background:var(--card);border:1px solid var(--line);border-radius:13px;padding:12px 13px;}
+.tourney.live{border-color:var(--line-hi);}
+.t-top{display:flex;align-items:center;gap:8px;}
+.t-name{flex:1;font-size:13.5px;font-weight:600;color:#eef2f7;}
+.t-badge{font-size:8px;font-weight:700;letter-spacing:0.1em;text-transform:uppercase;
+  padding:3px 7px;border-radius:5px;border:1px solid var(--line-hi);color:var(--cyan-br);}
+.t-badge.live{background:var(--cyan-br);color:#04222a;border-color:transparent;}
+.t-meta{display:flex;flex-wrap:wrap;gap:10px;margin-top:9px;}
+.tm{display:flex;align-items:center;gap:4px;font-size:10.5px;color:var(--dim);}
+.tm svg{width:12px;height:12px;color:rgba(34,211,238,0.55);}
+.lob-foot{font-size:9.5px;color:var(--faint);text-align:center;margin-top:12px;}
+
+/* ============================================================ CREATE TOURNAMENT */
+.cr-step{margin-bottom:7px;}
+.tpl-grid{display:grid;grid-template-columns:1fr 1fr;gap:9px;margin-bottom:14px;}
+.tpl{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:11px;}
+.tpl.sel{border-color:var(--cyan);background:var(--card-hi);
+  box-shadow:0 0 0 1px var(--cyan),0 6px 20px -10px rgba(6,182,212,0.5);}
+.tpl-ic{width:30px;height:30px;border-radius:9px;display:flex;align-items:center;
+  justify-content:center;background:rgba(6,182,212,0.10);border:1px solid var(--line-hi);
+  color:var(--cyan-br);margin-bottom:8px;}
+.tpl-ic svg{width:16px;height:16px;}
+.tpl-name{font-size:12.5px;font-weight:600;color:#eef2f7;}
+.tpl-sub{font-size:10px;color:var(--dimmer);margin-top:1px;}
+.field{margin-bottom:11px;}
+.field label{display:block;font-size:10px;font-weight:700;letter-spacing:0.1em;
+  text-transform:uppercase;color:var(--dimmer);margin-bottom:5px;}
+.inp{background:rgba(34,211,238,0.04);border:1px solid var(--line);border-radius:11px;
+  padding:11px 13px;font-size:13.5px;color:#eef2f7;display:flex;align-items:center;justify-content:space-between;}
+.inp .ico{color:var(--cyan-br);display:flex;}
+.inp .ico svg{width:15px;height:15px;}
+.preset{background:rgba(34,211,238,0.04);border:1px solid var(--line);
+  border-radius:12px;padding:11px 13px;margin:3px 0 15px;}
+.preset-l{font-size:9.5px;font-weight:700;letter-spacing:0.13em;text-transform:uppercase;
+  color:var(--cyan-br);}
+.pchips{display:flex;flex-wrap:wrap;gap:6px;margin-top:9px;}
+.pchip{font-size:10px;color:var(--dim);background:rgba(34,211,238,0.06);
+  border:1px solid var(--line);border-radius:6px;padding:4px 9px;}
+.cr-foot{text-align:center;font-size:9.5px;color:var(--faint);margin-top:11px;}
+
+/* ============================================================ STATS */
+.style-row{display:flex;justify-content:space-between;align-items:center;background:var(--card);
+  border:1px solid var(--line);border-radius:12px;padding:11px 14px;margin-bottom:12px;}
+.style-row span{font-size:12px;color:var(--dimmer);}
+.style-row b{font-family:var(--mitr);font-weight:700;font-size:15px;color:var(--cyan-br);}
+.metrics{display:grid;grid-template-columns:1fr 1fr;gap:10px;}
+.metric{background:var(--card);border:1px solid var(--line);border-radius:13px;padding:12px 13px;}
+.metric-l{font-size:9.5px;font-weight:700;letter-spacing:0.12em;text-transform:uppercase;color:var(--dimmer);}
+.metric-v{font-family:var(--mitr);font-weight:700;font-size:23px;color:#fff;margin-top:4px;
+  letter-spacing:-0.02em;font-variant-numeric:tabular-nums;}
+.metric-v.pos{color:var(--cyan-br);}
+.hud-h{margin:16px 0 9px;}
+.hud{display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;}
+.mini{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:9px 4px;text-align:center;}
+.mini-l{font-size:9px;font-weight:700;letter-spacing:0.08em;text-transform:uppercase;color:var(--dimmer);}
+.mini-v{font-family:var(--mitr);font-weight:700;font-size:15px;color:#fff;margin-top:3px;
+  font-variant-numeric:tabular-nums;}
+
+/* ============================================================ VIDEO POKER */
+.vp-top{display:flex;align-items:center;gap:10px;margin-bottom:14px;}
+.vp-spacer{flex:1;}
+.chip{display:flex;align-items:center;gap:7px;padding:6px 12px;border-radius:999px;
+  background:rgba(34,211,238,0.06);border:1px solid var(--line-hi);color:var(--cyan-br);
+  font-size:13px;font-weight:700;font-variant-numeric:tabular-nums;}
+.chip .coin{width:9px;height:9px;border-radius:50%;flex:none;
+  background:linear-gradient(135deg,var(--cyan-br),var(--blue));}
+.vp-title{margin-bottom:13px;}
+.vp-title .kick{display:block;margin-bottom:5px;}
+.vp-h{font-family:var(--mitr);font-weight:700;font-size:30px;letter-spacing:-0.03em;
+  line-height:1;color:#fff;}
+.paytable{background:var(--card);border:1px solid var(--line);border-radius:14px;
+  padding:6px 4px;margin-bottom:13px;}
+.pt-row{display:flex;justify-content:space-between;padding:2.6px 12px;font-size:10.5px;border-radius:7px;}
+.pt-name{color:var(--dim);}
+.pt-mult{color:var(--cyan-br);font-weight:700;font-variant-numeric:tabular-nums;}
+.pt-row.active{background:rgba(6,182,212,0.12);}
+.pt-row.active .pt-name{color:#fff;}
+.table{position:relative;border-radius:18px;padding:28px 10px 16px;margin-bottom:13px;
+  background:radial-gradient(ellipse 80% 72% at 50% 30%,rgba(6,182,212,0.17),transparent 62%),
+    linear-gradient(180deg,#0c1c30,#081320);
+  border:1px solid var(--line-hi);box-shadow:inset 0 0 30px rgba(6,182,212,0.10);overflow:hidden;}
+.table::before{content:"";position:absolute;inset-inline:0;top:0;height:1px;
+  background:linear-gradient(90deg,transparent,rgba(34,211,238,0.5),transparent);}
+.cards{display:flex;justify-content:center;gap:6px;}
+.card{width:48px;height:68px;border-radius:7px;flex:none;position:relative;
+  background:linear-gradient(165deg,#ffffff,#dde6f1);box-shadow:0 5px 13px rgba(0,0,0,0.55);}
+.card.held{transform:translateY(-12px);box-shadow:0 0 0 2px var(--cyan-br),0 0 22px rgba(34,211,238,0.7);}
+.card[data-c="red"]{color:#e5384f;}
+.card[data-c="blk"]{color:#1b2436;}
+.corner{position:absolute;display:flex;flex-direction:column;align-items:center;line-height:0.9;}
+.corner b{font-size:13px;font-weight:800;}
+.corner i{font-size:10px;font-style:normal;margin-top:-1px;}
+.corner.tl{top:5px;left:5px;}
+.corner.br{bottom:5px;right:5px;transform:rotate(180deg);}
+.pip{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-size:29px;}
+.hold-badge{position:absolute;top:-13px;left:50%;transform:translateX(-50%);font-size:8px;
+  font-weight:700;letter-spacing:0.13em;padding:2.5px 8px;border-radius:5px;
+  background:linear-gradient(135deg,var(--cyan-br),var(--cyan));color:#04222a;}
+.table-status{position:relative;text-align:center;font-size:11px;color:var(--cyan-br);margin-top:16px;}
+.bet{display:flex;align-items:center;gap:11px;margin-bottom:11px;}
+.bet-l{flex:1;font-size:11px;color:var(--dimmer);}
+.step{width:34px;height:34px;border-radius:10px;flex:none;display:flex;align-items:center;
+  justify-content:center;font-size:18px;background:rgba(34,211,238,0.06);
+  border:1px solid var(--line-hi);color:var(--cyan-br);}
+.bet-amt{min-width:56px;text-align:center;font-family:var(--mitr);font-weight:700;
+  font-size:17px;color:#fff;font-variant-numeric:tabular-nums;}
+.deal{font-size:16px;letter-spacing:0.06em;}
+.vp-foot{text-align:center;font-size:9px;color:var(--faint);margin-top:11px;}
+
+/* ============================================================ PROFILE */
+.avatar-box{position:relative;background:radial-gradient(ellipse 78% 80% at 50% 32%,
+  rgba(6,182,212,0.16),transparent 70%),linear-gradient(180deg,#0c1c30,#081320);
+  border:1px solid var(--line-hi);border-radius:17px;padding:16px 14px 14px;
+  text-align:center;margin-bottom:13px;overflow:hidden;}
+.avatar-box::before{content:"";position:absolute;inset-inline:0;top:0;height:1px;
+  background:linear-gradient(90deg,transparent,rgba(34,211,238,0.5),transparent);}
+.avatar-box svg{display:block;margin:0 auto;position:relative;}
+.inp.ta{min-height:46px;display:block;}
+.opt-row{display:flex;align-items:center;gap:10px;margin-bottom:9px;background:var(--card);
+  border:1px solid var(--line);border-radius:11px;padding:9px 12px;}
+.opt-row .ol{flex:1;font-size:12px;color:var(--dim);}
+.swatches{display:flex;gap:7px;}
+.sw{width:18px;height:18px;border-radius:50%;}
+.sw.sel{box-shadow:0 0 0 2px #081320,0 0 0 3.6px var(--cyan-br);}
+
+@media(max-width:560px){body{padding:32px 13px;}}
+</style>
+</head>
+<body>
+<div class="bg-glow"></div>
+
+<div class="head">
+  <div class="kick">MORBIUS Mini App · Getting Started style</div>
+  <h1>The full app, <em>mapped out</em></h1>
+  <p>Every screen in your poker-modal style — now including the new Poker Lobby and a stripped-down tournament creator. The redundant wallet screen is gone; Swap moved onto the hub. Look it over and tell me what to change.</p>
+</div>
+
+<div class="rail" id="rail"></div>
+
+<div class="foot">
+  Static mockup — non-functional, look only.<br/>
+  <code>Mitr</code> is loaded properly here; on your live site it isn't, so the real modal shows a fallback font. Building this fixes that too.
+</div>
+
+<script>
+/* ---------- inline icons ---------- */
+function s(p){return '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" '
+  +'stroke-width="2" stroke-linecap="round" stroke-linejoin="round">'+p+'</svg>';}
+var IC={
+  back:s('<path d="M5 12h14"/><path d="M5 12l6 6"/><path d="M5 12l6-6"/>'),
+  arrow:s('<path d="M5 12h14"/><path d="M13 5l7 7-7 7"/>'),
+  chev:s('<path d="M9 6l6 6-6 6"/>'),
+  user:s('<circle cx="12" cy="8" r="3.6"/><path d="M5.5 20a6.5 6.5 0 0 1 13 0"/>'),
+  chart:s('<path d="M4 19V11"/><path d="M10 19V5"/><path d="M16 19v-6"/><path d="M3.2 19h17.6"/>'),
+  swap:s('<path d="M4 9h13l-3.5-3.5"/><path d="M20 15H7l3.5 3.5"/>'),
+  diamond:s('<path d="M12 3l8 9-8 9-8-9z"/>'),
+  ext:s('<path d="M13 5h6v6"/><path d="M19 5l-9 9"/><path d="M18 14v4a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4"/>'),
+  refresh:s('<path d="M20 11a8 8 0 1 0-2.3 5.7"/><path d="M20 4v6h-6"/>'),
+  save:s('<path d="M6 4h10l4 4v12H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2z"/><path d="M9 4v5h6"/><circle cx="12" cy="14" r="2.6"/>'),
+  trophy:s('<path d="M7 4h10v5a5 5 0 0 1-10 0z"/><path d="M7 6H4v1a3 3 0 0 0 3 3"/><path d="M17 6h3v1a3 3 0 0 1-3 3"/><path d="M9.5 20h5"/><path d="M12 14v6"/>'),
+  users:s('<circle cx="9" cy="8" r="3.2"/><path d="M3.5 19a5.5 5.5 0 0 1 11 0"/><path d="M16.4 5.7a3.2 3.2 0 0 1 0 6"/><path d="M15.6 13.7a5.5 5.5 0 0 1 4.9 5.3"/>'),
+  clock:s('<circle cx="12" cy="12" r="8.5"/><path d="M12 7.5V12l3 2.2"/>'),
+  coin:s('<circle cx="12" cy="12" r="8.5"/><circle cx="12" cy="12" r="3.4"/>'),
+  plus:s('<path d="M12 5v14M5 12h14"/>'),
+  bolt:s('<path d="M13 3L4 14h7l-1 7 9-11h-7z"/>'),
+  layers:s('<path d="M12 4l8 4-8 4-8-4z"/><path d="M4 12l8 4 8-4"/><path d="M4 16l8 4 8-4"/>'),
+  gift:s('<rect x="4" y="9" width="16" height="11" rx="1.6"/><path d="M4 13h16"/><path d="M12 9v11"/><path d="M12 9C9 9 7.5 6.5 9 5s3.5 1.5 3 4z"/><path d="M12 9c3 0 4.5-2.5 3-4s-3.5 1.5-3 4z"/>'),
+  target:s('<circle cx="12" cy="12" r="8.5"/><circle cx="12" cy="12" r="4.4"/><circle cx="12" cy="12" r="0.7"/>')
+};
+
+/* ---------- video poker pieces ---------- */
+function card(r,su,c,h){
+  return '<div class="card'+(h?' held':'')+'" data-c="'+c+'">'
+   +'<span class="corner tl"><b>'+r+'</b><i>'+su+'</i></span>'
+   +'<span class="pip">'+su+'</span>'
+   +'<span class="corner br"><b>'+r+'</b><i>'+su+'</i></span>'
+   +(h?'<span class="hold-badge">HOLD</span>':'')+'</div>';
+}
+var HAND=card('J','♥','red',1)+card('J','♠','blk',1)+card('A','♦','red',0)
+  +card('8','♣','blk',0)+card('3','♥','red',0);
+var PT=[['Royal Flush','250x'],['Straight Flush','50x'],['Four of a Kind','25x'],
+  ['Full House','9x'],['Flush','6x'],['Straight','4x'],['Three of a Kind','3x'],
+  ['Two Pair','2x'],['Jacks or Better','1x',1]];
+var ptRows=PT.map(function(r){return '<div class="pt-row'+(r[2]?' active':'')+'">'
+  +'<span class="pt-name">'+r[0]+'</span><span class="pt-mult">'+r[1]+'</span></div>';}).join('');
+
+/* ---------- avatar ---------- */
+var AVATAR='<svg viewBox="0 0 160 170" width="126" height="134">'
+ +'<path d="M26 170 Q33 122 80 117 Q127 122 134 170 Z" fill="#0e1d30"/>'
+ +'<path d="M64 123 L80 152 L96 123 L88 117 L72 117 Z" fill="#dfe7f1"/>'
+ +'<path d="M64 123 L80 152 L61 134 Z" fill="#070d16"/>'
+ +'<path d="M96 123 L80 152 L99 134 Z" fill="#070d16"/>'
+ +'<path d="M80 126 L69 119 L69 132 Z" fill="#22d3ee"/>'
+ +'<path d="M80 126 L91 119 L91 132 Z" fill="#22d3ee"/>'
+ +'<circle cx="80" cy="126" r="3.6" fill="#0891b2"/>'
+ +'<rect x="71" y="103" width="18" height="22" rx="7" fill="#e2c6a6"/>'
+ +'<circle cx="46" cy="77" r="7" fill="#ecd5b8"/><circle cx="114" cy="77" r="7" fill="#ecd5b8"/>'
+ +'<ellipse cx="80" cy="74" rx="34" ry="38" fill="#ecd5b8"/>'
+ +'<path d="M45 65 Q43 29 80 27 Q117 29 115 65 Q104 44 80 47 Q69 48 63 57 Q57 50 45 65 Z" fill="#241f29"/>'
+ +'<path d="M59 67 Q67 62 75 67" stroke="#241f29" stroke-width="3" fill="none" stroke-linecap="round"/>'
+ +'<path d="M85 67 Q93 62 101 67" stroke="#241f29" stroke-width="3" fill="none" stroke-linecap="round"/>'
+ +'<ellipse cx="68" cy="77" rx="5" ry="6" fill="#2a2230"/>'
+ +'<ellipse cx="92" cy="77" rx="5" ry="6" fill="#2a2230"/>'
+ +'<circle cx="69.6" cy="75" r="1.7" fill="#fff"/><circle cx="93.6" cy="75" r="1.7" fill="#fff"/>'
+ +'<path d="M80 81 L77 91 Q80 93 83 91" stroke="#cda982" stroke-width="2.4" fill="none" stroke-linecap="round"/>'
+ +'<path d="M71 99 Q80 107 89 99" stroke="#b9785f" stroke-width="3" fill="none" stroke-linecap="round"/>'
+ +'</svg>';
+
+var STATUS='<div class="status"><span>9:41</span>'
+ +'<span class="sig"><i></i><i></i><i></i><i></i><span class="batt"></span></span></div>';
+
+/* ============================================================ SCREENS */
+function onboarding(){
+  return '<div class="app">'
+   +'<div class="onb"><div class="onb-glow"></div><div class="onb-watermark">1</div>'
+   +'<div class="onb-in">'
+   +'<div class="kick">Getting started</div>'
+   +'<div class="onb-h">Link up to your <span class="cy">first hand</span></div>'
+   +'<div class="onb-sub">Connect your MORBIUS wallet to Telegram to unlock your hub — '
+   +'balances, the lobby, stats and the arcade.</div>'
+   +'<div class="steps"><div class="sbar done"></div>'
+   +'<div class="sbar active"></div><div class="sbar"></div></div>'
+   +'<div class="stags"><span class="done">Connect</span>'
+   +'<span class="active">Link</span><span>Play</span></div>'
+   +'<div class="onb-cta"><button class="btn-grad">Link on morbius.io'+IC.arrow+'</button></div>'
+   +'<div class="onb-note">On the site: connect wallet → Settings → Link Telegram.</div>'
+   +'</div></div></div>';
+}
+
+function hub(){
+  var tiles=[
+    [IC.trophy,'Poker Lobby','Tournaments &amp; cash tables',1,'chev'],
+    [IC.diamond,'MORBIUS Arcade','Video Poker — Jacks or Better',0,'play'],
+    [IC.chart,'Your stats','Hands, wins, profit &amp; loss',0,'chev'],
+    [IC.user,'Profile &amp; avatar','Edit your look and name',0,'chev']
+  ].map(function(t){
+    var right=t[4]==='play'?'<span class="play">PLAY</span>'
+      :'<div class="tile-ch">'+IC.chev+'</div>';
+    return '<div class="tile'+(t[3]?' feat':'')+'"><div class="tile-ic">'+t[0]+'</div>'
+     +'<div class="tile-tx"><div class="tile-t">'+t[1]+'</div>'
+     +'<div class="tile-s">'+t[2]+'</div></div>'+right+'</div>';
+  }).join('');
+  return '<div class="app">'
+   +'<div class="hub-hero"><div class="av-ring"><div class="av-init">V</div></div>'
+   +'<div><div class="kick">Morbius hub</div>'
+   +'<div class="hub-name">Vesper</div>'
+   +'<div class="hub-handle">@vesper · wallet linked</div></div></div>'
+   +'<div class="balances">'
+   +'<div class="bal cy"><div class="bal-l">MORBIUS</div><div class="bal-v">1,284,500</div></div>'
+   +'<div class="bal"><div class="bal-l">Poker chips</div><div class="bal-v">12,450</div></div>'
+   +'</div>'
+   +'<button class="btn-ghost swap-btn">'+IC.swap+'Swap MORBIUS ↔ chips</button>'
+   +'<div class="tiles">'+tiles+'</div>'
+   +'<button class="btn-ghost" style="margin-top:14px">'+IC.ext+'Open morbius.io</button></div>';
+}
+
+function lobby(){
+  var T=[
+    ['Friday Night Turbo',['Registering',0],[[IC.coin,'1,000 chips'],[IC.users,'24/100'],[IC.clock,'8:00 PM']]],
+    ['Sunday Mega Freeroll',['Registering',0],[[IC.gift,'Free entry'],[IC.users,'156 in'],[IC.trophy,'50K pool']]],
+    ['Hyper Bounty',['Live',1],[[IC.target,'Bounty'],[IC.users,'12 left'],[IC.coin,'2,500']]]
+  ].map(function(t){
+    var meta=t[2].map(function(m){
+      return '<span class="tm">'+m[0]+m[1]+'</span>';}).join('');
+    return '<div class="tourney'+(t[1][1]?' live':'')+'">'
+     +'<div class="t-top"><span class="t-name">'+t[0]+'</span>'
+     +'<span class="t-badge'+(t[1][1]?' live':'')+'">'+t[1][0]+'</span></div>'
+     +'<div class="t-meta">'+meta+'</div></div>';
+  }).join('');
+  return '<div class="app">'
+   +'<div class="scr-head"><div class="back">'+IC.back+'</div>'
+   +'<div class="scr-title">Poker Lobby</div>'
+   +'<div class="pill">'+IC.plus+'Create</div></div>'
+   +'<div class="scope"><div class="seg active">Tournaments</div>'
+   +'<div class="seg">Cash tables</div></div>'
+   +'<div class="lob-list">'+T+'</div>'
+   +'<div class="lob-foot">Tap a tournament to register · live since your last visit</div></div>';
+}
+
+function createTournament(){
+  var tpls=[
+    [IC.bolt,'Turbo','Fast 8-min blinds',1],
+    [IC.layers,'Deep Stack','Slow, big stacks',0],
+    [IC.gift,'Freeroll','Free to enter',0],
+    [IC.target,'Bounty','Knockout prizes',0]
+  ].map(function(t){
+    return '<div class="tpl'+(t[3]?' sel':'')+'"><div class="tpl-ic">'+t[0]+'</div>'
+     +'<div class="tpl-name">'+t[1]+'</div><div class="tpl-sub">'+t[2]+'</div></div>';
+  }).join('');
+  var presets=['8-min levels','5,000 stack','6-max','Top 12% paid','5% creator fee']
+    .map(function(p){return '<span class="pchip">'+p+'</span>';}).join('');
+  return '<div class="app">'
+   +'<div class="scr-head"><div class="back">'+IC.back+'</div>'
+   +'<div class="scr-title">New tournament</div></div>'
+   +'<div class="kick cr-step">1 · Pick a template</div>'
+   +'<div class="tpl-grid">'+tpls+'</div>'
+   +'<div class="kick cr-step">2 · The details</div>'
+   +'<div class="field"><label>Tournament name</label>'
+   +'<div class="inp">Friday Night Turbo</div></div>'
+   +'<div class="field"><label>Starts</label>'
+   +'<div class="inp">Today · 8:00 PM<span class="ico">'+IC.clock+'</span></div></div>'
+   +'<div class="field"><label>Buy-in</label>'
+   +'<div class="inp">1,000 chips<span class="ico">'+IC.coin+'</span></div></div>'
+   +'<div class="preset"><div class="preset-l">Turbo template sets</div>'
+   +'<div class="pchips">'+presets+'</div></div>'
+   +'<button class="btn-grad">'+IC.trophy+'Create tournament</button>'
+   +'<div class="cr-foot">Chip-funded · runs entirely in MORBIUS · no wallet needed</div></div>';
+}
+
+function poker(){
+  return '<div class="app">'
+   +'<div class="vp-top"><div class="back">'+IC.back+'</div><div class="vp-spacer"></div>'
+   +'<div class="chip"><span class="coin"></span>12,450</div></div>'
+   +'<div class="vp-title"><span class="kick">Morbius Arcade · Jacks or Better</span>'
+   +'<div class="vp-h">Video <span class="cy">Poker</span></div></div>'
+   +'<div class="paytable">'+ptRows+'</div>'
+   +'<div class="table"><div class="cards">'+HAND+'</div>'
+   +'<div class="table-status">Pair of Jacks held · tap Draw</div></div>'
+   +'<div class="bet"><span class="bet-l">Bet</span>'
+   +'<div class="step">&minus;</div><span class="bet-amt">100</span><div class="step">+</div></div>'
+   +'<button class="btn-grad deal">DRAW'+IC.arrow+'</button>'
+   +'<div class="vp-foot">Provably fair · every hand verifiable</div></div>';
+}
+
+function stats(){
+  var m=[['Hands played','2,847'],['Win rate','18.3%'],
+    ['Net P / L','+42,150','pos'],['Best streak','9'],
+    ['Hands won','521'],['Biggest pot','8,400']].map(function(x){
+    return '<div class="metric"><div class="metric-l">'+x[0]+'</div>'
+     +'<div class="metric-v'+(x[2]?' '+x[2]:'')+'">'+x[1]+'</div></div>';}).join('');
+  var hud=[['VPIP','24%'],['PFR','19%'],['3-Bet','7%'],['WTSD','28%'],
+    ['W$SD','54%'],['Aggr.','2.8']].map(function(x){
+    return '<div class="mini"><div class="mini-l">'+x[0]+'</div>'
+     +'<div class="mini-v">'+x[1]+'</div></div>';}).join('');
+  return '<div class="app">'
+   +'<div class="scr-head"><div class="back">'+IC.back+'</div>'
+   +'<div class="scr-title">Your stats</div></div>'
+   +'<div class="scope three"><div class="seg active">Cash</div>'
+   +'<div class="seg">Tourneys</div><div class="seg">All</div></div>'
+   +'<div class="style-row"><span>Play style</span><b>Shark</b></div>'
+   +'<div class="metrics">'+m+'</div>'
+   +'<div class="kick hud-h">Poker HUD</div><div class="hud">'+hud+'</div>'
+   +'<button class="btn-ghost" style="margin-top:16px">'+IC.ext+'Full stats on morbius.io</button></div>';
+}
+
+function profile(){
+  var skin=['#f0dcc4','#e2c6a6','#c89b73','#9b6e4c','#6f4a30'];
+  var hair=['#241f29','#5a3826','#caa24a','#8a3b3b','#3a3f4a'];
+  var eyes=['#3a6b4a','#3a557e','#6b4a2e','#5a3a6b','#2a2230'];
+  function row(label,colors,sel){
+    var sw=colors.map(function(c,i){
+      return '<span class="sw'+(i===sel?' sel':'')+'" style="background:'+c+'"></span>';
+    }).join('');
+    return '<div class="opt-row"><span class="ol">'+label+'</span>'
+     +'<div class="swatches">'+sw+'</div></div>';
+  }
+  return '<div class="app">'
+   +'<div class="scr-head"><div class="back">'+IC.back+'</div>'
+   +'<div class="scr-title">Profile</div>'
+   +'<div class="pill">'+IC.refresh+'Randomize</div></div>'
+   +'<div class="avatar-box">'+AVATAR+'</div>'
+   +'<div class="field"><label>Display name</label><div class="inp">Vesper</div></div>'
+   +row('Skin tone',skin,1)+row('Hair',hair,2)+row('Eyes',eyes,0)
+   +'<div class="field"><label>Bio</label>'
+   +'<div class="inp ta">Chasing royal flushes since ’24.</div></div>'
+   +'<div class="field"><label>X handle</label><div class="inp">vesper</div></div>'
+   +'<button class="btn-grad">'+IC.save+'Save profile</button></div>';
+}
+
+/* ============================================================ RENDER */
+var SCREENS=[
+  ['0','Link wallet','onboarding',onboarding,0,'Your modal turned into the entry screen — steps strip and all.'],
+  ['1','Hub','home',hub,0,'Balances, a quick Swap button, four sections. Wallet screen gone.'],
+  ['2','Poker Lobby','tournaments',lobby,1,'Browse tournaments and cash tables in Telegram. Tap Create to start one.'],
+  ['3','Create Tournament','stripped creator',createTournament,1,'Pick a template, name it, set a time. No wallet, no contracts.'],
+  ['4','Video Poker','the arcade',poker,0,'No green felt — a navy table with a cyan glow, unified at last.'],
+  ['5','Your stats','analytics',stats,0,'Segmented tabs, big Mitr stat numbers, full poker HUD.'],
+  ['6','Profile','avatar editor',profile,0,'Avatar preview, look pickers and socials in the same skin.']
+];
+document.getElementById('rail').innerHTML=SCREENS.map(function(x){
+  return '<div class="col'+(x[4]?' new':'')+'"><div class="col-top">'
+   +'<span class="col-num">'+x[0]+'</span>'
+   +'<span class="col-name">'+x[1]+'</span><span class="col-tag">'+x[2]+'</span></div>'
+   +'<div class="phone"><div class="screen">'+STATUS+x[3]()+'</div></div>'
+   +'<div class="caption">'+x[5]+'</div></div>';
+}).join('');
+</script>
+</body>
+</html>
