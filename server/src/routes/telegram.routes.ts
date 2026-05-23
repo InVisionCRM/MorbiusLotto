@@ -39,11 +39,19 @@ import {
 } from '../services/telegram.service';
 import { getPokerChipBalance } from '../services/poker-chip-wallet';
 import type { DatabaseService } from '../services/database.service';
+import type { PokerGameService } from '../services/poker-game.service';
+import type {
+  PokerTournamentService,
+  CreatePokerTournamentParams,
+} from '../services/poker-tournament.service';
 
 interface RegisterTelegramRoutesOptions {
   app: Express;
   pool: Pool;
   dbService: DatabaseService;
+  /** Poker services — used by the read-only Mini App lobby feed. */
+  pokerGameService: PokerGameService;
+  pokerTournamentService: PokerTournamentService;
 }
 
 /** Validate + normalize an EVM wallet address to lowercase. Returns null if bad. */
@@ -68,7 +76,13 @@ async function getLinkedWallet(pool: Pool, chatId: number): Promise<string | nul
   return r.rows.length > 0 ? String(r.rows[0].wallet_address) : null;
 }
 
-export function registerTelegramRoutes({ app, pool, dbService }: RegisterTelegramRoutesOptions): void {
+export function registerTelegramRoutes({
+  app,
+  pool,
+  dbService,
+  pokerGameService,
+  pokerTournamentService,
+}: RegisterTelegramRoutesOptions): void {
   // -------------------------------------------------------------------------
   // POST /api/telegram/webhook — inbound updates from Telegram.
   // -------------------------------------------------------------------------
@@ -622,6 +636,127 @@ export function registerTelegramRoutes({ app, pool, dbService }: RegisterTelegra
     } catch (err) {
       logger.error('[telegram] miniapp profile save failed', { error: (err as Error).message });
       return res.status(500).json({ ok: false, error: 'Could not save your profile.' });
+    }
+  });
+
+  // -------------------------------------------------------------------------
+  // GET /api/telegram/miniapp/lobby — public, read-only poker lobby feed for
+  // the Mini App: open / running tournaments + open cash tables. No auth —
+  // this exposes only the same data as the unauthenticated WS lobby messages.
+  // -------------------------------------------------------------------------
+  app.get('/api/telegram/miniapp/lobby', async (_req: Request, res: Response) => {
+    try {
+      const [allTournaments, tables] = await Promise.all([
+        pokerTournamentService.listPokerTournaments(),
+        pokerGameService.listTables(),
+      ]);
+      // Browse view: hide finished / cancelled events and private tournaments.
+      const tournaments = allTournaments.filter(
+        (t) => !t.isPrivate && t.status !== 'completed' && t.status !== 'cancelled',
+      );
+      return res.json({ ok: true, tournaments, tables });
+    } catch (err) {
+      logger.error('[telegram] miniapp lobby failed', { error: (err as Error).message });
+      return res.status(500).json({ ok: false, error: 'Could not load the lobby.' });
+    }
+  });
+
+  // -------------------------------------------------------------------------
+  // POST /api/telegram/miniapp/tournament/create — create a chip-based poker
+  // tournament from the Mini App. Auth is the signed Telegram `initData`; the
+  // creator is the wallet linked to that account. Only the chip / chip-freeroll
+  // funding path is allowed — custom-token and platform-promo sources are never
+  // forwarded, so no wallet signature or on-chain step is ever required.
+  // -------------------------------------------------------------------------
+  app.post('/api/telegram/miniapp/tournament/create', async (req: Request, res: Response) => {
+    const body = (req.body ?? {}) as Record<string, unknown>;
+    const initData = typeof body.initData === 'string' ? body.initData : '';
+    const tgUser = verifyTelegramInitData(initData);
+    if (!tgUser) {
+      return res.status(401).json({ ok: false, error: 'Invalid or expired Telegram session.' });
+    }
+    try {
+      const wallet = await getLinkedWallet(pool, tgUser.id);
+      if (!wallet) {
+        return res
+          .status(403)
+          .json({ ok: false, error: 'No wallet is linked to this Telegram account.' });
+      }
+
+      const name = typeof body.name === 'string' ? body.name.trim() : '';
+      if (name.length < 3) {
+        return res
+          .status(400)
+          .json({ ok: false, error: 'Give the tournament a name of at least 3 characters.' });
+      }
+
+      const scheduledStartAt = new Date(
+        typeof body.scheduledStartAt === 'string' ? body.scheduledStartAt : '',
+      );
+      if (Number.isNaN(scheduledStartAt.getTime()) || scheduledStartAt.getTime() <= Date.now()) {
+        return res.status(400).json({ ok: false, error: 'Pick a start time in the future.' });
+      }
+
+      if (!body.config || typeof body.config !== 'object') {
+        return res.status(400).json({ ok: false, error: 'Missing tournament settings.' });
+      }
+
+      let buyInAmount: bigint;
+      try {
+        buyInAmount = BigInt(String(body.buyInAmount ?? '0').split('.')[0] || '0');
+      } catch {
+        return res.status(400).json({ ok: false, error: 'Invalid buy-in amount.' });
+      }
+
+      // Freerolls need a guaranteed pool (debited from the creator's chips);
+      // buy-in tournaments must not carry one.
+      let guaranteedPrizePool: bigint | undefined;
+      if (buyInAmount === 0n) {
+        try {
+          guaranteedPrizePool = BigInt(String(body.guaranteedPrizePool ?? '0').split('.')[0] || '0');
+        } catch {
+          return res.status(400).json({ ok: false, error: 'Invalid guaranteed prize pool.' });
+        }
+        if (guaranteedPrizePool <= 0n) {
+          return res
+            .status(400)
+            .json({ ok: false, error: 'A freeroll needs a guaranteed prize pool above zero.' });
+        }
+      }
+
+      // Funding source is always the implicit 'creator' (chip) path — the
+      // custom-token and platform-promo sources are deliberately never set.
+      const params: CreatePokerTournamentParams = {
+        creatorAddress: wallet,
+        name,
+        buyInAmount,
+        ...(guaranteedPrizePool != null ? { guaranteedPrizePool } : {}),
+        prizeDistributionType: 'custom',
+        prizePercentages: Array.isArray(body.prizePercentages)
+          ? (body.prizePercentages as number[])
+          : [],
+        config: body.config as CreatePokerTournamentParams['config'],
+        isPrivate: body.isPrivate === true,
+        pinCode: typeof body.pinCode === 'string' ? body.pinCode : null,
+        scheduledStartAt,
+        ...(typeof body.creatorFeePercent === 'number'
+          ? { creatorFeePercent: body.creatorFeePercent }
+          : {}),
+      };
+
+      const result = await pokerTournamentService.createPokerTournament(params);
+      return res.json({
+        ok: true,
+        tournamentId: result.tournamentId,
+        pinCode: result.pinCode,
+      });
+    } catch (err) {
+      // createPokerTournament throws Error for validation + business failures
+      // (bad config, insufficient chips for a freeroll, …) — surface the
+      // message so the player can fix it.
+      const message = (err as Error).message || 'Could not create the tournament.';
+      logger.error('[telegram] miniapp tournament create failed', { error: message });
+      return res.status(400).json({ ok: false, error: message });
     }
   });
 

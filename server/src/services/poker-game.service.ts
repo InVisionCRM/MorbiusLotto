@@ -20,6 +20,11 @@ import {
 } from '../lib/poker-cash-buy-in';
 import { decidePokerBotAction } from '../lib/poker-bot-ai';
 import { getServerPokerBotAddressSet } from '../lib/poker-server-bot-addresses';
+import {
+  railCashPlayerJoined,
+  railCashTableCreated,
+  railCashBigPot,
+} from './telegram-rail.service';
 import { logger } from '../utils/logger';
 import crypto from 'crypto';
 
@@ -975,7 +980,13 @@ export class PokerGameService {
        RETURNING id`,
       [String(smallBlindChips), String(bigBlindChips), maxSeats, pinCode ?? null, normalizedCreator]
     );
-    return r.rows[0].id;
+    const tableId = r.rows[0].id as string;
+    // The Rail: announce a player-created cash table to the group feed.
+    // Boot-seeded house tables (no creator) are skipped.
+    if (normalizedCreator) {
+      void railCashTableCreated(pool, tableId);
+    }
+    return tableId;
   }
 
   async deleteTable(tableId: string): Promise<boolean> {
@@ -1128,6 +1139,13 @@ export class PokerGameService {
     }
 
     logger.info('Poker join', { tableId, playerAddress: normalized, buyInChips: buyInChips.toString(), position });
+
+    // The Rail: announce the cash-table join to the Telegram group feed.
+    // Fire-and-forget and best-effort; server bots are skipped so they don't
+    // flood the feed, and railCashPlayerJoined rate-limits repeat joins itself.
+    if (!getServerPokerBotAddressSet().has(normalized)) {
+      void railCashPlayerJoined(this.getPool(), tableId, normalized);
+    }
 
     // Auto-start if 2+ players ready
     const pool = this.getPool();
@@ -2696,6 +2714,14 @@ export class PokerGameService {
     }
 
     await pool.query('UPDATE poker_tables SET status = $2 WHERE id = $1', [tableId, 'waiting']);
+
+    // The Rail: surface a big cash-game pot to the group feed. railCashBigPot
+    // applies the 100x-big-blind threshold itself; tournament tables excluded.
+    if (!isTournament) {
+      let totalPotChips = 0n;
+      for (const ch of winnerChips.values()) totalPotChips += ch;
+      void railCashBigPot(pool, tableId, totalPotChips, resultWinners);
+    }
 
     // Stash the just-completed hand number so `scheduleNextHandAfterShowdown`
     // can fire the tournament post-hand callback (eliminations + blind
