@@ -18,6 +18,21 @@ export interface DexscreenerTokenInfo {
   logoUrl: string | null;
   socials: DexscreenerSocials;
   websites: string[];
+  priceUsd: number | null;
+  priceNative: number | null;
+  quoteSymbol: string | null;
+  priceChangeH24: number | null;
+  liquidityUsd: number | null;
+  volumeH24: number | null;
+  fdv: number | null;
+  marketCap: number | null;
+  pairCreatedAtMs: number | null;
+}
+
+function toNumberOrNull(v: unknown): number | null {
+  if (v == null) return null;
+  const n = typeof v === 'string' ? parseFloat(v) : Number(v);
+  return Number.isFinite(n) ? n : null;
 }
 
 const ETH_ADDR_RE = /^0x[a-fA-F0-9]{40}$/;
@@ -72,5 +87,17 @@ export async function fetchDexScreenerTokenInfo(
     logoUrl: typeof info.imageUrl === 'string' ? info.imageUrl : null,
     socials,
     websites,
+    priceUsd: toNumberOrNull(pair?.priceUsd),
+    priceNative: toNumberOrNull(pair?.priceNative),
+    quoteSymbol: (() => {
+      const s = String(pair?.quoteToken?.symbol ?? '').trim();
+      return s || null;
+    })(),
+    priceChangeH24: toNumberOrNull(pair?.priceChange?.h24),
+    liquidityUsd: toNumberOrNull(pair?.liquidity?.usd),
+    volumeH24: toNumberOrNull(pair?.volume?.h24),
+    fdv: toNumberOrNull(pair?.fdv),
+    marketCap: toNumberOrNull(pair?.marketCap),
+    pairCreatedAtMs: toNumberOrNull(pair?.pairCreatedAt),
   };
 }

@@ -62,6 +62,64 @@ function formatTimeRemaining(sponsoredUntil: string | null | undefined): string 
   return s === 0 ? `${m}m` : `${m}m ${s}s`;
 }
 
+function formatUsdPrice(n: number | null): string | null {
+  if (n == null || !Number.isFinite(n)) return null;
+  if (n >= 1) return `$${n.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 4 })}`;
+  if (n >= 0.01) return `$${n.toFixed(4)}`;
+  if (n <= 0) return '$0';
+  const magnitude = Math.floor(Math.log10(n));
+  const decimals = Math.min(12, Math.max(4, 2 - magnitude));
+  return `$${n.toFixed(decimals)}`;
+}
+
+function formatNativePrice(n: number | null, symbol: string | null): string | null {
+  if (n == null || !Number.isFinite(n) || !symbol) return null;
+  if (n >= 1) return `${n.toLocaleString('en-US', { maximumFractionDigits: 4 })} ${symbol}`;
+  if (n >= 0.0001) return `${n.toFixed(6)} ${symbol}`;
+  if (n <= 0) return `0 ${symbol}`;
+  const magnitude = Math.floor(Math.log10(n));
+  const decimals = Math.min(12, Math.max(6, 2 - magnitude));
+  return `${n.toFixed(decimals)} ${symbol}`;
+}
+
+function formatCompactUsd(n: number | null): string | null {
+  if (n == null || !Number.isFinite(n)) return null;
+  if (n >= 1_000_000_000) return `$${(n / 1_000_000_000).toFixed(2)}B`;
+  if (n >= 1_000_000) return `$${(n / 1_000_000).toFixed(2)}M`;
+  if (n >= 1_000) return `$${(n / 1_000).toFixed(1)}K`;
+  return `$${Math.round(n).toLocaleString('en-US')}`;
+}
+
+function formatPairAge(createdAtMs: number | null): string | null {
+  if (createdAtMs == null || !Number.isFinite(createdAtMs)) return null;
+  const diffMs = Date.now() - createdAtMs;
+  if (diffMs < 0) return null;
+  const days = diffMs / 86_400_000;
+  if (days < 1) {
+    const hours = Math.floor(diffMs / 3_600_000);
+    return hours <= 0 ? '<1h' : `${hours}h`;
+  }
+  if (days < 30) return `${Math.floor(days)}d`;
+  const months = days / 30;
+  if (months < 12) return `${Math.floor(months)}mo`;
+  const years = months / 12;
+  return years < 10 ? `${years.toFixed(1)}y` : `${Math.floor(years)}y`;
+}
+
+async function fetchHoldersCount(address: string, signal?: AbortSignal): Promise<number | null> {
+  try {
+    const res = await fetch(`https://api.scan.pulsechain.com/api/v2/tokens/${address}`, { signal });
+    if (!res.ok) return null;
+    const data: { holders_count?: string | number; holders?: string | number } = await res.json();
+    const raw = data.holders_count ?? data.holders;
+    if (raw == null) return null;
+    const n = typeof raw === 'string' ? parseInt(raw, 10) : Number(raw);
+    return Number.isFinite(n) ? n : null;
+  } catch {
+    return null;
+  }
+}
+
 /** One toast per sponsorship window even if multiple `SponsoredTokenMarquee` instances mount. */
 const sponsorNoticeShownKeys = new Set<string>();
 
@@ -74,6 +132,7 @@ export function SponsoredTokenMarquee({
   density = 'default',
 }: SponsoredTokenMarqueeProps) {
   const [info, setInfo] = useState<DexscreenerTokenInfo | null>(null);
+  const [holders, setHolders] = useState<number | null>(null);
   const [tick, setTick] = useState(0);
 
   const targetAddress = (sponsor?.address ?? MORBIUS_TOKEN_ADDRESS).toLowerCase();
@@ -83,6 +142,7 @@ export function SponsoredTokenMarquee({
 
   useEffect(() => {
     const ac = new AbortController();
+    setHolders(null);
     void fetchDexScreenerTokenInfo(targetAddress, ac.signal)
       .then((d) => {
         if (!ac.signal.aborted) setInfo(d);
@@ -90,6 +150,9 @@ export function SponsoredTokenMarquee({
       .catch(() => {
         /* fall through to fallback chips */
       });
+    void fetchHoldersCount(targetAddress, ac.signal).then((h) => {
+      if (!ac.signal.aborted) setHolders(h);
+    });
     return () => ac.abort();
   }, [targetAddress]);
 
@@ -175,6 +238,76 @@ export function SponsoredTokenMarquee({
     key: 'ticker',
     content: <span className="text-white/55">${tokenSymbol}</span>,
   });
+
+  // Market data (DexScreener + PulseScan) — only emit a chip when the value resolved.
+  const priceUsdText = formatUsdPrice(info?.priceUsd ?? null);
+  if (priceUsdText) {
+    chips.push({
+      key: 'price-usd',
+      content: <span className="text-white/75 tabular-nums">{priceUsdText}</span>,
+    });
+  }
+
+  const priceNativeText = formatNativePrice(info?.priceNative ?? null, info?.quoteSymbol ?? null);
+  if (priceNativeText) {
+    chips.push({
+      key: 'price-native',
+      content: <span className="text-white/55 tabular-nums">{priceNativeText}</span>,
+    });
+  }
+
+  const change = info?.priceChangeH24 ?? null;
+  if (change != null && Number.isFinite(change)) {
+    const sign = change >= 0 ? '+' : '';
+    const color = change >= 0 ? 'text-emerald-400' : 'text-rose-400';
+    chips.push({
+      key: 'change-24h',
+      content: (
+        <span className={`tabular-nums ${color}`}>
+          {sign}
+          {change.toFixed(2)}%{' '}
+          <span className="text-white/40">24h</span>
+        </span>
+      ),
+    });
+  }
+
+  const mcapValue = info?.marketCap ?? info?.fdv ?? null;
+  const mcapLabel = info?.marketCap != null ? 'Mcap' : info?.fdv != null ? 'FDV' : null;
+  const mcapText = formatCompactUsd(mcapValue);
+  if (mcapText && mcapLabel) {
+    chips.push({
+      key: 'mcap',
+      content: (
+        <span className="text-white/65 tabular-nums">
+          <span className="text-white/40">{mcapLabel}</span> {mcapText}
+        </span>
+      ),
+    });
+  }
+
+  if (holders != null) {
+    chips.push({
+      key: 'holders',
+      content: (
+        <span className="text-white/65 tabular-nums">
+          {holders.toLocaleString('en-US')} <span className="text-white/40">holders</span>
+        </span>
+      ),
+    });
+  }
+
+  const ageText = formatPairAge(info?.pairCreatedAtMs ?? null);
+  if (ageText) {
+    chips.push({
+      key: 'age',
+      content: (
+        <span className="text-white/65 tabular-nums">
+          <span className="text-white/40">Age</span> {ageText}
+        </span>
+      ),
+    });
+  }
 
   // Sponsorship message + click-here CTA
   if (isSponsored && timeRemaining && priceMorbiusChips) {

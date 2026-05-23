@@ -504,18 +504,6 @@ export function PokerTableLogoSponsorModal({
                               }`}
                               aria-pressed={selected?.address === t.address}
                             >
-                              <div className="aspect-square w-full flex items-center justify-center">
-                                {t.logoUrl ? (
-                                  <img
-                                    src={t.logoUrl}
-                                    alt=""
-                                    className="w-full h-full object-contain"
-                                    draggable={false}
-                                  />
-                                ) : (
-                                  <div className="w-full h-full bg-gray-200 rounded-full" />
-                                )}
-                              </div>
                               <span className="text-[11px] font-semibold text-gray-700 truncate max-w-full">
                                 {t.symbol}
                               </span>
