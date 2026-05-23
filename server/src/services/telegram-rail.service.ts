@@ -486,3 +486,199 @@ export async function dmPlayersBusted(
     }
   });
 }
+
+// ---------------------------------------------------------------------------
+// Cash games — exported, fire-and-forget
+// ---------------------------------------------------------------------------
+
+/**
+ * Per (table + wallet) cooldown so a player who sits, stands and re-sits does
+ * not spam the Rail with join lines. In-memory: a restart simply forgets
+ * recent joins, which at worst re-announces one join.
+ */
+const CASH_JOIN_COOLDOWN_MS = 10 * 60 * 1000;
+const cashJoinSeen = new Map<string, number>();
+
+/** Big-pot threshold: a pot worth at least this many big blinds is announced. */
+const BIG_POT_BLIND_MULTIPLE = 100n;
+
+interface CashCardRow {
+  smallBlind: number;
+  bigBlind: number;
+  maxSeats: number;
+  status: string;
+  seated: number;
+  groupMessageId: number | null;
+  biggestPot: number;
+}
+
+/** Load a cash table's state + its Rail card row (group message + biggest pot). */
+async function loadCashCard(pool: Pool, tableId: string): Promise<CashCardRow | null> {
+  const r = await pool.query(
+    `SELECT t.small_blind, t.big_blind, t.max_seats, t.status,
+            COUNT(s.id) FILTER (WHERE s.player_address IS NOT NULL) AS seated,
+            c.group_message_id, c.biggest_pot
+       FROM poker_tables t
+       LEFT JOIN poker_seats s ON s.table_id = t.id
+       LEFT JOIN telegram_cash_table_cards c ON c.table_id = t.id
+      WHERE t.id = $1
+      GROUP BY t.id, t.small_blind, t.big_blind, t.max_seats, t.status,
+               c.group_message_id, c.biggest_pot`,
+    [tableId],
+  );
+  const row = r.rows[0];
+  if (!row) return null;
+  return {
+    smallBlind: Number(row.small_blind ?? 0) || 0,
+    bigBlind: Number(row.big_blind ?? 0) || 0,
+    maxSeats: Number(row.max_seats ?? 0) || 0,
+    status: String(row.status ?? 'waiting'),
+    seated: Number(row.seated ?? 0),
+    groupMessageId: row.group_message_id != null ? Number(row.group_message_id) : null,
+    biggestPot: Number(row.biggest_pot ?? 0) || 0,
+  };
+}
+
+/** Build the live cash-table card (Telegram HTML). */
+function buildCashCard(
+  tableId: string,
+  c: CashCardRow,
+): { text: string; buttons: TelegramButton[] } {
+  const stakes = `${c.smallBlind.toLocaleString('en-US')} / ${c.bigBlind.toLocaleString('en-US')}`;
+  const lines: string[] = [
+    `🃏 <b>${esc(stakes)} Cash Table</b>`,
+    `<i>No-Limit Hold'em · ${c.seated >= 2 ? '♠️ in play' : 'waiting for players'}</i>`,
+    '',
+    `🪑 Seats: ${seatBar(c.seated, c.maxSeats)}  ${c.seated}/${c.maxSeats}`,
+  ];
+  if (c.biggestPot > 0) {
+    lines.push(`💰 Biggest pot: <b>${c.biggestPot.toLocaleString('en-US')}</b> MORBIUS`);
+  }
+  return {
+    text: lines.join('\n'),
+    buttons: [{ text: '🎲 Take a seat', url: `${appUrl()}/poker/${tableId}` }],
+  };
+}
+
+/** Edit the stored group card for a cash table in place. */
+async function editCashCard(
+  pool: Pool,
+  tableId: string,
+  text: string,
+  buttons?: TelegramButton[],
+): Promise<void> {
+  const groupId = getTelegramGroupChatId();
+  if (groupId == null) return;
+  const r = await pool.query(
+    'SELECT group_message_id FROM telegram_cash_table_cards WHERE table_id = $1',
+    [tableId],
+  );
+  const messageId = r.rows[0]?.group_message_id;
+  if (messageId == null) return;
+  await editTelegramMessage(groupId, Number(messageId), text, { parseMode: 'HTML', buttons });
+}
+
+/** A cash table was created — post its card to the Rail + a "new table" line. */
+export async function railCashTableCreated(pool: Pool, tableId: string): Promise<void> {
+  await safely('cashTableCreated', async () => {
+    const existing = await pool.query(
+      'SELECT 1 FROM telegram_cash_table_cards WHERE table_id = $1',
+      [tableId],
+    );
+    if (existing.rows.length > 0) return; // card already posted
+    const c = await loadCashCard(pool, tableId);
+    if (!c) return;
+    const card = buildCashCard(tableId, c);
+    const messageId = await postToGroup(card.text, card.buttons);
+    if (messageId == null) return;
+    await pool.query(
+      `INSERT INTO telegram_cash_table_cards (table_id, group_message_id)
+       VALUES ($1, $2) ON CONFLICT (table_id) DO NOTHING`,
+      [tableId, messageId],
+    );
+    const stakes = `${c.smallBlind.toLocaleString('en-US')}/${c.bigBlind.toLocaleString('en-US')}`;
+    await postToGroup(`🆕 New cash table open — <b>${esc(stakes)}</b> No-Limit Hold'em.`);
+  });
+}
+
+/** A player sat down — refresh the live card + (rate-limited) post a join line. */
+export async function railCashPlayerJoined(
+  pool: Pool,
+  tableId: string,
+  playerAddress: string,
+): Promise<void> {
+  await safely('cashPlayerJoined', async () => {
+    if (getTelegramGroupChatId() == null) return; // group feed not configured
+    const c = await loadCashCard(pool, tableId);
+    if (!c) return;
+
+    // Refresh the live card on every join (silent, cheap).
+    if (c.groupMessageId != null) {
+      const card = buildCashCard(tableId, c);
+      await editCashCard(pool, tableId, card.text, card.buttons);
+    }
+
+    // Activity line — cooldown so sit / stand / re-sit can't spam the feed.
+    const key = `${tableId}:${playerAddress.toLowerCase()}`;
+    const now = Date.now();
+    const last = cashJoinSeen.get(key);
+    if (last != null && now - last < CASH_JOIN_COOLDOWN_MS) return;
+    cashJoinSeen.set(key, now);
+    if (cashJoinSeen.size > 500) {
+      for (const [k, ts] of cashJoinSeen) {
+        if (now - ts >= CASH_JOIN_COOLDOWN_MS) cashJoinSeen.delete(k);
+      }
+    }
+
+    const stakes = `${c.smallBlind.toLocaleString('en-US')}/${c.bigBlind.toLocaleString('en-US')}`;
+    await postToGroup(
+      `🪙 <b>${esc(shortWallet(playerAddress))}</b> sat down at the ` +
+        `<b>${esc(stakes)}</b> cash table — ${c.seated}/${c.maxSeats} seated`,
+    );
+  });
+}
+
+/** A big cash-game pot was won — refresh the card + post a highlight line. */
+export async function railCashBigPot(
+  pool: Pool,
+  tableId: string,
+  potChips: bigint,
+  winners: Array<{ address: string }>,
+): Promise<void> {
+  await safely('cashBigPot', async () => {
+    if (getTelegramGroupChatId() == null) return;
+    const c = await loadCashCard(pool, tableId);
+    if (!c || c.bigBlind <= 0) return;
+    // Only "big for the stakes" — at least 100x the big blind.
+    if (potChips < BIG_POT_BLIND_MULTIPLE * BigInt(c.bigBlind)) return;
+
+    const potNum = Number(potChips);
+
+    // Track the biggest pot on the card row and refresh it.
+    if (c.groupMessageId != null) {
+      const upd = await pool.query(
+        `UPDATE telegram_cash_table_cards
+            SET biggest_pot = GREATEST(biggest_pot, $2::BIGINT)
+          WHERE table_id = $1
+          RETURNING biggest_pot`,
+        [tableId, potChips.toString()],
+      );
+      const biggest = Number(upd.rows[0]?.biggest_pot ?? c.biggestPot) || c.biggestPot;
+      const card = buildCashCard(tableId, { ...c, biggestPot: biggest });
+      await editCashCard(pool, tableId, card.text, card.buttons);
+    }
+
+    const stakes = `${c.smallBlind.toLocaleString('en-US')}/${c.bigBlind.toLocaleString('en-US')}`;
+    const winnerLabel =
+      winners.length > 1
+        ? `<b>${esc(shortWallet(winners[0].address))}</b> +${winners.length - 1}`
+        : winners.length === 1
+          ? `<b>${esc(shortWallet(winners[0].address))}</b>`
+          : 'A player';
+    await postToGroup(
+      `💰 ${winnerLabel} won a <b>${potNum.toLocaleString('en-US')}</b>-chip pot ` +
+        `at the ${esc(stakes)} cash table!`,
+      [{ text: '🎲 Take a seat', url: `${appUrl()}/poker/${tableId}` }],
+    );
+  });
+}

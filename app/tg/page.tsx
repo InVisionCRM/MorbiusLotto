@@ -30,9 +30,22 @@ import {
   IconExternalLink,
   IconCards,
   IconTrophy,
+  IconClock,
+  IconEye,
+  IconLock,
+  IconBolt,
+  IconGift,
+  IconPlus,
+  IconCheck,
 } from '@tabler/icons-react';
 import MiniAppProfileEditor from '@/components/telegram/MiniAppProfileEditor';
 import MiniAppVideoPoker from '@/components/telegram/MiniAppVideoPoker';
+import {
+  MTT_TEMPLATES,
+  type MttTemplate,
+} from '@/components/poker/tournament/mtt-creator/mtt-templates';
+import { buildPrizePercents } from '@/lib/poker-tournament-prize-presets';
+import { POKER_TOURNAMENT_DEFAULT_CONFIG } from '@/hooks/use-poker-tournament';
 
 // ---------------------------------------------------------------------------
 
@@ -71,7 +84,7 @@ interface PokerStats {
   aggression_factor: number | null;
 }
 
-type View = 'hub' | 'stats' | 'profile' | 'videopoker';
+type View = 'hub' | 'stats' | 'profile' | 'videopoker' | 'lobby' | 'createTournament';
 type StatScope = 'cash' | 'tournament' | 'all';
 type LoadState = 'loading' | 'no-telegram' | 'error' | 'ready';
 type FetchState = 'idle' | 'loading' | 'error' | 'ready';
@@ -179,6 +192,215 @@ function MiniStat({ label, value }: { label: string; value: string }) {
 
 // ---------------------------------------------------------------------------
 
+// --- poker lobby -----------------------------------------------------------
+
+/** Subset of the backend's PokerTournamentSummary the lobby card renders. */
+interface LobbyTournament {
+  tournamentId: string;
+  name: string;
+  status: string;
+  buyInAmount: string;
+  registeredCount: number;
+  maxPlayers: number;
+  startMode: string;
+  scheduledStartAt: string | null;
+}
+
+/** Subset of the backend's PokerTableSummary the lobby card renders. */
+interface LobbyTable {
+  id: string;
+  smallBlind: string;
+  bigBlind: string;
+  maxSeats: number;
+  seatedCount: number;
+  emptySeats: number;
+  hasPin: boolean;
+}
+
+interface LobbyData {
+  tournaments: LobbyTournament[];
+  tables: LobbyTable[];
+}
+
+/** True when a tournament has no buy-in (a freeroll). */
+function isFreeBuyIn(raw: string): boolean {
+  try {
+    return BigInt(String(raw ?? '0').split('.')[0] || '0') === 0n;
+  } catch {
+    return false;
+  }
+}
+
+/** Lobby card state: open for registration, closed/full, or in play. */
+function tournamentState(t: LobbyTournament): 'open' | 'full' | 'live' {
+  if (t.status === 'active') return 'live';
+  if (t.status === 'registration' && t.registeredCount < t.maxPlayers) return 'open';
+  return 'full';
+}
+
+/** Human start label — a day + time for scheduled events, fill-based text otherwise. */
+function startLabel(t: LobbyTournament): string {
+  if (t.startMode === 'fill') return 'Starts when full';
+  if (t.scheduledStartAt) {
+    const d = new Date(t.scheduledStartAt);
+    if (!Number.isNaN(d.getTime())) {
+      const now = new Date();
+      const tomorrow = new Date(now);
+      tomorrow.setDate(now.getDate() + 1);
+      const day =
+        d.toDateString() === now.toDateString()
+          ? 'Today'
+          : d.toDateString() === tomorrow.toDateString()
+            ? 'Tomorrow'
+            : d.toLocaleDateString('en-US', { weekday: 'short' });
+      const time = d.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
+      return `${day} · ${time}`;
+    }
+  }
+  return 'Scheduled';
+}
+
+/** Assemble the create-tournament request body from a template + user inputs.
+ *  Mirrors the website wizard's buildCreateParams — chip funding path only. */
+function buildTournamentBody(tpl: MttTemplate, name: string, scheduledStartAtIso: string) {
+  const isFreeroll = tpl.buyInMode === 'freeroll';
+  const config = {
+    ...POKER_TOURNAMENT_DEFAULT_CONFIG,
+    startingStack: tpl.startingStack,
+    minPlayers: 2,
+    maxPlayers: tpl.maxPlayers,
+    blindIncreaseMode: tpl.blindMode,
+    ...(tpl.blindMode === 'by_time'
+      ? { blindIntervalMinutes: tpl.blindIntervalMinutes }
+      : {}),
+    seatsPerTable: tpl.seatsPerTable,
+  };
+  return {
+    name,
+    buyInAmount: isFreeroll ? '0' : tpl.buyInChips,
+    ...(isFreeroll ? { guaranteedPrizePool: tpl.guaranteedPool } : {}),
+    prizeDistributionType: 'custom',
+    prizePercentages: buildPrizePercents(tpl.prizePresetId, Math.min(10, tpl.maxPlayers)),
+    config,
+    isPrivate: false,
+    scheduledStartAt: scheduledStartAtIso,
+    creatorFeePercent: isFreeroll ? 0 : tpl.creatorFeePercent,
+  };
+}
+
+/** Icon for a template card, keyed by template id. */
+function templateIcon(id: string) {
+  if (id === 'turbo_mtt') return <IconBolt size={18} aria-hidden />;
+  if (id === 'freeroll_friday') return <IconGift size={18} aria-hidden />;
+  return <IconTrophy size={18} aria-hidden />;
+}
+
+function LobbyTournamentCard({ t, onOpen }: { t: LobbyTournament; onOpen: () => void }) {
+  const state = tournamentState(t);
+  const isLive = state === 'live';
+  const free = isFreeBuyIn(t.buyInAmount);
+  return (
+    <div
+      className={`rounded-2xl border bg-[#0b1a2c] p-3 ${
+        isLive ? 'border-cyan-500/30' : 'border-cyan-500/15'
+      }`}
+    >
+      <div className="text-sm font-semibold text-white">{t.name}</div>
+      <div className="mt-2 flex items-center justify-between gap-2">
+        <span className="flex items-center gap-1.5 rounded-md border border-cyan-500/20 bg-cyan-500/10 px-2 py-1 text-[10px] font-medium text-cyan-300">
+          {isLive ? (
+            <span className="h-1.5 w-1.5 rounded-full bg-cyan-400" aria-hidden />
+          ) : (
+            <IconClock size={11} aria-hidden />
+          )}
+          {isLive ? 'In play' : startLabel(t)}
+        </span>
+        {state === 'open' ? (
+          <button
+            type="button"
+            onClick={onOpen}
+            className="rounded-lg px-3 py-1.5 text-[11px] font-bold text-white"
+            style={{ background: GRAD_BTN, boxShadow: GLOW_BTN }}
+          >
+            Register now
+          </button>
+        ) : isLive ? (
+          <button
+            type="button"
+            onClick={onOpen}
+            className="flex items-center gap-1.5 rounded-lg border border-cyan-500/30 bg-cyan-500/5 px-3 py-1.5 text-[11px] font-bold text-cyan-400"
+          >
+            <IconEye size={12} aria-hidden />
+            Watch
+          </button>
+        ) : (
+          <span className="rounded-lg border border-slate-500/25 px-3 py-1.5 text-[11px] font-bold text-slate-500">
+            Registration closed
+          </span>
+        )}
+      </div>
+      <div className="mt-2.5 flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px] text-slate-400">
+        {free ? (
+          <span
+            className="rounded-md border border-emerald-400/40 bg-emerald-400/10 px-2 py-0.5 text-[10px] font-bold text-emerald-400"
+            style={{ boxShadow: '0 0 10px rgba(52,211,153,0.3)' }}
+          >
+            Free entry
+          </span>
+        ) : (
+          <span>{formatChips(t.buyInAmount)} buy-in</span>
+        )}
+        <span>
+          {t.registeredCount} / {t.maxPlayers} players
+        </span>
+      </div>
+    </div>
+  );
+}
+
+function LobbyCashCard({ c, onOpen }: { c: LobbyTable; onOpen: () => void }) {
+  const open = c.emptySeats > 0;
+  return (
+    <div className="rounded-2xl border border-cyan-500/15 bg-[#0b1a2c] p-3">
+      <div className="flex items-center justify-between gap-2">
+        <div>
+          <div className="mitr-bold text-base text-cyan-400">
+            {c.smallBlind} / {c.bigBlind}
+          </div>
+          <div className="text-[10px] text-slate-500">No-Limit Hold&apos;em</div>
+        </div>
+        {open ? (
+          <button
+            type="button"
+            onClick={onOpen}
+            className="rounded-lg px-3 py-1.5 text-[11px] font-bold text-white"
+            style={{ background: GRAD_BTN, boxShadow: GLOW_BTN }}
+          >
+            Play now
+          </button>
+        ) : (
+          <span className="rounded-lg border border-slate-500/25 px-3 py-1.5 text-[11px] font-bold text-slate-500">
+            Table full
+          </span>
+        )}
+      </div>
+      <div className="mt-2.5 flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px] text-slate-400">
+        <span>
+          {c.seatedCount} / {c.maxSeats} seated
+        </span>
+        {c.hasPin && (
+          <span className="flex items-center gap-1">
+            <IconLock size={11} aria-hidden />
+            Private
+          </span>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+
 export default function TelegramMiniAppPage() {
   const [loadState, setLoadState] = useState<LoadState>('loading');
   const [session, setSession] = useState<MiniAppSession | null>(null);
@@ -191,6 +413,19 @@ export default function TelegramMiniAppPage() {
   const [scope, setScope] = useState<StatScope>('cash');
   const [stats, setStats] = useState<PokerStats | null>(null);
   const [statsState, setStatsState] = useState<FetchState>('idle');
+
+  // Poker Lobby screen state
+  const [lobby, setLobby] = useState<LobbyData | null>(null);
+  const [lobbyState, setLobbyState] = useState<FetchState>('idle');
+
+  // Create Tournament screen state
+  const [tplId, setTplId] = useState<string>(MTT_TEMPLATES[0].id);
+  const [tName, setTName] = useState('');
+  const [tWhen, setTWhen] = useState('');
+  const [createState, setCreateState] = useState<'idle' | 'creating' | 'created' | 'error'>(
+    'idle',
+  );
+  const [createError, setCreateError] = useState('');
 
   useEffect(() => {
     let cancelled = false;
@@ -261,9 +496,77 @@ export default function TelegramMiniAppPage() {
     };
   }, [view, scope, session?.walletAddress]);
 
+  // Fetch the poker lobby (tournaments + cash tables) when the Lobby is open.
+  useEffect(() => {
+    if (view !== 'lobby') return;
+    let cancelled = false;
+    setLobbyState('loading');
+    (async () => {
+      try {
+        const res = await fetch('/api/telegram/miniapp/lobby');
+        const data = await res.json();
+        if (cancelled) return;
+        if (!res.ok || !data?.ok) {
+          setLobbyState('error');
+          return;
+        }
+        setLobby({
+          tournaments: Array.isArray(data.tournaments) ? data.tournaments : [],
+          tables: Array.isArray(data.tables) ? data.tables : [],
+        });
+        setLobbyState('ready');
+      } catch {
+        if (!cancelled) setLobbyState('error');
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [view]);
+
   const openSite = useCallback((path = '') => {
     window.open(`https://morbius.io${path}`, '_blank', 'noopener');
   }, []);
+
+  // Create a tournament from the picked template + name + start time.
+  const submitCreateTournament = useCallback(async () => {
+    const tpl = MTT_TEMPLATES.find((x) => x.id === tplId);
+    if (!tpl) return;
+    const name = tName.trim();
+    if (name.length < 3) {
+      setCreateError('Give the tournament a name of at least 3 characters.');
+      setCreateState('error');
+      return;
+    }
+    const when = new Date(tWhen);
+    if (!tWhen || Number.isNaN(when.getTime()) || when.getTime() <= Date.now()) {
+      setCreateError('Pick a start date and time in the future.');
+      setCreateState('error');
+      return;
+    }
+    setCreateState('creating');
+    setCreateError('');
+    try {
+      const res = await fetch('/api/telegram/miniapp/tournament/create', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          initData,
+          ...buildTournamentBody(tpl, name, when.toISOString()),
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok || !data?.ok) {
+        setCreateError(data?.error || 'Could not create the tournament.');
+        setCreateState('error');
+        return;
+      }
+      setCreateState('created');
+    } catch {
+      setCreateError('Could not reach MORBIUS. Check your connection and try again.');
+      setCreateState('error');
+    }
+  }, [tplId, tName, tWhen, initData]);
 
   const pnl = formatSignedChips(stats?.profit_loss);
 
@@ -436,7 +739,7 @@ export default function TelegramMiniAppPage() {
                     icon: <IconTrophy size={20} aria-hidden />,
                     title: 'Poker Lobby',
                     sub: 'Tournaments & cash tables',
-                    target: null,
+                    target: 'lobby',
                     featured: true,
                   },
                   {
@@ -638,6 +941,206 @@ export default function TelegramMiniAppPage() {
             initialChipBalance={session.chipBalance ?? '0'}
             onBack={() => setView('hub')}
           />
+        )}
+
+        {/* ---- POKER LOBBY ---- */}
+        {loadState === 'ready' && session && session.linked && view === 'lobby' && (
+          <>
+            <div className="mb-4 flex items-center gap-2">
+              <button
+                type="button"
+                onClick={() => setView('hub')}
+                aria-label="Back to hub"
+                className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-cyan-500/30 bg-cyan-500/5 text-cyan-400"
+              >
+                <IconArrowLeft size={18} aria-hidden />
+              </button>
+              <h1 className="mitr-bold text-xl text-white">Poker Lobby</h1>
+            </div>
+
+            <button
+              type="button"
+              onClick={() => {
+                setCreateState('idle');
+                setCreateError('');
+                setView('createTournament');
+              }}
+              className="mb-3 flex w-full items-center justify-center gap-2 rounded-xl px-4 py-2.5 text-[13px] font-bold text-white"
+              style={{ background: GRAD_BTN, boxShadow: GLOW_BTN }}
+            >
+              <IconPlus size={16} aria-hidden />
+              Create a tournament
+            </button>
+
+            {lobbyState === 'loading' && (
+              <p className="mt-10 text-center text-sm text-slate-500">Loading the lobby…</p>
+            )}
+
+            {lobbyState === 'error' && (
+              <div className="mt-8 rounded-2xl border border-red-500/25 bg-red-500/10 p-4 text-center">
+                <p className="text-sm text-red-200/90">Could not load the lobby. Try again.</p>
+              </div>
+            )}
+
+            {lobbyState === 'ready' && lobby && (
+              <>
+                <div className="mb-2 text-[10px] font-bold uppercase tracking-[0.16em] text-cyan-400">
+                  Tournaments
+                </div>
+                {lobby.tournaments.length === 0 ? (
+                  <p className="rounded-2xl border border-cyan-500/15 bg-[#0b1a2c] p-4 text-center text-sm text-slate-500">
+                    No tournaments running right now.
+                  </p>
+                ) : (
+                  <div className="flex flex-col gap-2.5">
+                    {lobby.tournaments.map((t) => (
+                      <LobbyTournamentCard
+                        key={t.tournamentId}
+                        t={t}
+                        onOpen={() => openSite('/poker')}
+                      />
+                    ))}
+                  </div>
+                )}
+
+                <div className="mt-5 mb-2 text-[10px] font-bold uppercase tracking-[0.16em] text-cyan-400">
+                  Cash tables
+                </div>
+                {lobby.tables.length === 0 ? (
+                  <p className="rounded-2xl border border-cyan-500/15 bg-[#0b1a2c] p-4 text-center text-sm text-slate-500">
+                    No cash tables open right now.
+                  </p>
+                ) : (
+                  <div className="flex flex-col gap-2.5">
+                    {lobby.tables.map((c) => (
+                      <LobbyCashCard key={c.id} c={c} onOpen={() => openSite('/poker')} />
+                    ))}
+                  </div>
+                )}
+
+                <button
+                  type="button"
+                  onClick={() => openSite('/poker')}
+                  className="mt-5 flex w-full items-center justify-center gap-2 rounded-xl border border-cyan-500/20 px-4 py-3 text-sm font-medium text-slate-300"
+                >
+                  Open the full lobby on morbius.io
+                  <IconExternalLink size={15} aria-hidden />
+                </button>
+              </>
+            )}
+          </>
+        )}
+
+        {/* ---- CREATE TOURNAMENT ---- */}
+        {loadState === 'ready' && session && session.linked && view === 'createTournament' && (
+          <>
+            <div className="mb-4 flex items-center gap-2">
+              <button
+                type="button"
+                onClick={() => setView('lobby')}
+                aria-label="Back to lobby"
+                className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-cyan-500/30 bg-cyan-500/5 text-cyan-400"
+              >
+                <IconArrowLeft size={18} aria-hidden />
+              </button>
+              <h1 className="mitr-bold text-xl text-white">New Tournament</h1>
+            </div>
+
+            {createState === 'created' ? (
+              <div className="mt-8 rounded-2xl border border-cyan-500/30 bg-[#0b1a2c] p-6 text-center">
+                <div className="mitr-bold text-2xl text-cyan-400">Tournament created</div>
+                <p className="mt-2 text-sm leading-relaxed text-slate-400">
+                  It&apos;s live in the lobby now — players can register straight away.
+                </p>
+                <button
+                  type="button"
+                  onClick={() => setView('lobby')}
+                  className="mt-5 w-full rounded-xl px-4 py-3 text-sm font-bold text-white"
+                  style={{ background: GRAD_BTN, boxShadow: GLOW_BTN }}
+                >
+                  Back to the lobby
+                </button>
+              </div>
+            ) : (
+              <>
+                <div className="mb-2 text-[10px] font-bold uppercase tracking-[0.16em] text-cyan-400">
+                  1 · Pick a format
+                </div>
+                <div className="flex flex-col gap-2.5">
+                  {MTT_TEMPLATES.map((tpl) => {
+                    const selected = tpl.id === tplId;
+                    return (
+                      <button
+                        key={tpl.id}
+                        type="button"
+                        onClick={() => setTplId(tpl.id)}
+                        className={`flex items-center gap-3 rounded-2xl border p-3 text-left ${
+                          selected
+                            ? 'border-cyan-500 bg-[#0f2238]'
+                            : 'border-cyan-500/15 bg-[#0b1a2c]'
+                        }`}
+                      >
+                        <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-cyan-500/30 bg-cyan-500/10 text-cyan-400">
+                          {templateIcon(tpl.id)}
+                        </div>
+                        <div className="min-w-0 flex-1">
+                          <div className="text-sm font-semibold text-white">{tpl.label}</div>
+                          <div className="text-[11px] text-slate-500">{tpl.tagline}</div>
+                        </div>
+                        {selected && (
+                          <IconCheck size={16} className="shrink-0 text-cyan-400" aria-hidden />
+                        )}
+                      </button>
+                    );
+                  })}
+                </div>
+
+                <div className="mt-5 mb-2 text-[10px] font-bold uppercase tracking-[0.16em] text-cyan-400">
+                  2 · The details
+                </div>
+                <label htmlFor="tg-tourney-name" className="mb-1 block text-xs text-slate-500">
+                  Tournament name
+                </label>
+                <input
+                  id="tg-tourney-name"
+                  type="text"
+                  value={tName}
+                  onChange={(e) => setTName(e.target.value)}
+                  maxLength={48}
+                  placeholder="Friday Night Showdown"
+                  className="w-full rounded-xl border border-cyan-500/15 bg-[#0b1a2c] px-3 py-2.5 text-sm text-white placeholder:text-slate-600 focus:border-cyan-500/50 focus:outline-none"
+                />
+                <label htmlFor="tg-tourney-when" className="mt-3 mb-1 block text-xs text-slate-500">
+                  Starts at
+                </label>
+                <input
+                  id="tg-tourney-when"
+                  type="datetime-local"
+                  value={tWhen}
+                  onChange={(e) => setTWhen(e.target.value)}
+                  style={{ colorScheme: 'dark' }}
+                  className="w-full rounded-xl border border-cyan-500/15 bg-[#0b1a2c] px-3 py-2.5 text-sm text-white focus:border-cyan-500/50 focus:outline-none"
+                />
+
+                {createState === 'error' && (
+                  <p className="mt-3 text-xs text-red-300/90">{createError}</p>
+                )}
+
+                <button
+                  type="button"
+                  disabled={createState === 'creating'}
+                  onClick={submitCreateTournament}
+                  className="mt-5 w-full rounded-xl px-4 py-3.5 text-sm font-bold text-white disabled:opacity-60"
+                  style={{ background: GRAD_BTN, boxShadow: GLOW_BTN }}
+                >
+                  {createState === 'creating' ? 'Creating…' : 'Create tournament'}
+                </button>
+                <p className="mt-3 text-center text-[11px] text-slate-600">
+                  Chip tournament · runs entirely in MORBIUS · no wallet needed
+                </p>
+              </>
+            )}
+          </>
         )}
       </div>
     </div>

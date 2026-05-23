@@ -5,6 +5,186 @@ Each entry records what changed, why, and the verification outcome.
 
 ---
 
+## 2026-05-22 — Cash games: live table cards on the Telegram Rail
+
+**What & why:** Extends the cash-game Rail beyond join lines. Each cash table
+now gets a single editable "card" in the group — like the tournament cards —
+that updates in place as players join and big pots are won, plus a short
+activity line for each event so the feed still visibly moves.
+
+### Added
+
+- `server/migrations/126_telegram_cash_table_cards.sql` *(new)* — one row per
+  cash table: the group message id of its card and the biggest pot seen.
+  Mirrors `telegram_tournament_cards` (124). **Must be applied before the
+  feature works** — `node server/run-migration.js migrations/126_telegram_cash_table_cards.sql`.
+
+### Changed
+
+- `server/src/services/telegram-rail.service.ts` — added the cash-table card
+  system: `railCashTableCreated` (posts the card + a "new table" line; skips
+  boot-seeded house tables), `railCashPlayerJoined` (now also edits the live
+  card on every join, with the join line still cooldown-gated), and
+  `railCashBigPot` (announces pots of at least 100x the big blind and tracks
+  the table's biggest pot on the card). New `buildCashCard` / `editCashCard` /
+  `loadCashCard` helpers.
+- `server/src/services/poker-game.service.ts` — `createTable` fires
+  `railCashTableCreated` for player-created tables; `persistShowdown` fires
+  `railCashBigPot` after every cash hand (the 100x threshold is applied inside
+  the Rail function).
+
+### Verification outcome
+
+- Both service files transpile clean (`ts.transpileModule`).
+- **Not yet done:** migration 126 must be run, and a live check (a created
+  table, joins, and a 100x-big-blind pot) with `TELEGRAM_GROUP_CHAT_ID` set.
+- Known minor: an admin-deleted table leaves its card at its last state (no
+  "closed" edit) — a rare admin action; an easy follow-up if wanted.
+
+---
+
+## 2026-05-22 — Cash games: join announcements on the Telegram Rail
+
+**What & why:** The Telegram group "Rail" announced poker tournament activity
+(starts, joins, results) but nothing for cash games. This posts to the group
+when a player sits down at a cash table, so it stays a live activity hub.
+
+### Changed
+
+- `server/src/services/telegram-rail.service.ts` — added `railCashPlayerJoined`:
+  a fire-and-forget group post ("X sat down at the 5/10 cash table — 3/6
+  seated", with a "Take a seat" button). It carries a per-(table + wallet)
+  in-memory cooldown (10 minutes) so a player who sits, stands and re-sits
+  cannot flood the feed — the existing Rail had no throttling on joins at all.
+- `server/src/services/poker-game.service.ts` — `_joinTable` now fires
+  `railCashPlayerJoined` after a successful join. Server bots are skipped (via
+  `getServerPokerBotAddressSet`) so automated seats never hit the feed.
+
+### Verification outcome
+
+- Both files transpile clean (`ts.transpileModule`).
+- **Not yet done:** live check — needs a real cash-table join with
+  `TELEGRAM_GROUP_CHAT_ID` configured.
+
+---
+
+## 2026-05-22 — Create Tournament: Mini App screen
+
+**What & why:** Second half of the Mini App Create Tournament feature — the
+screen players use. With the backend "door" already in place, a player can now
+spin up a poker tournament from inside Telegram.
+
+### Changed
+
+- `app/tg/page.tsx` — added the `'createTournament'` view: a three-card format
+  picker fed by the real `MTT_TEMPLATES` (Sunday Major, Turbo MTT, Freeroll
+  Friday), a name field and a `datetime-local` start-time picker. On submit it
+  assembles the create-params exactly as the website wizard does — reusing
+  `POKER_TOURNAMENT_DEFAULT_CONFIG` and `buildPrizePercents` — POSTs to
+  `/api/telegram/miniapp/tournament/create`, and shows a success or error
+  state. A "Create a tournament" button on the lobby screen opens it.
+
+### Verification outcome
+
+- `app/tg/page.tsx` transpiles clean (`ts.transpileModule`). Param assembly
+  mirrors the verified website `buildCreateParams`.
+- **Watch:** importing `POKER_TOURNAMENT_DEFAULT_CONFIG` from a hooks file may
+  add bundle weight to the Mini App — review on the next optimization pass.
+- **Not yet done:** live check — the template picker, the datetime input and a
+  real create round-trip need an on-device pass.
+
+---
+
+## 2026-05-22 — Create Tournament: Mini App backend endpoint (the login door)
+
+**What & why:** First half of the Mini App Create Tournament feature. Poker
+tournament creation is normally gated behind a WebSocket EIP-712 wallet
+signature, which the Mini App can't produce (no browser wallet). This adds a
+REST endpoint that trusts the verified Telegram `initData` instead — the "login
+door." Chip-based tournament creation is a pure database operation, so no
+signature or contract is ever needed.
+
+### Changed
+
+- `server/src/routes/telegram.routes.ts` — added
+  `POST /api/telegram/miniapp/tournament/create`. It verifies the `initData`,
+  resolves the linked wallet as the creator, builds a chip-only
+  `CreatePokerTournamentParams`, and calls the existing
+  `pokerTournamentService.createPokerTournament()`. The custom-token and
+  platform-promo funding sources are deliberately never forwarded, so the Mini
+  App can only ever create the signature-free chip / chip-freeroll kind.
+  Validation failures (short name, past start time, bad config, insufficient
+  chips for a freeroll) are surfaced to the player.
+
+### Verification outcome
+
+- Transpiles clean (`ts.transpileModule`); written against the verified
+  `createPokerTournament` signature and `CreatePokerTournamentParams` type.
+- **Not yet done:** the Create Tournament screen that calls this endpoint, and
+  a live check.
+
+---
+
+## 2026-05-22 — Poker Lobby: Mini App screen + hub tile live
+
+**What & why:** Second half of the Telegram Mini App Poker Lobby — the screen
+that reads the lobby endpoint, plus the hub tile that opens it. Players can now
+browse running tournaments and open cash tables from inside Telegram.
+
+### Changed
+
+- `app/tg/page.tsx` — added the `'lobby'` view: a back header, a Tournaments
+  section and a Cash tables section rendering cards in the Getting Started
+  style. Tournament cards show a start chip (a day + time for scheduled events,
+  "Starts when full" for fill-based, a pulsing "In play" for live) and one
+  action — Register now, Registration closed, or Watch. Cash cards lead with the
+  stakes and a Play now / Table full button. Free-entry tournaments get a
+  glowing green chip. v1 is browse-only — every action deep-links to morbius.io.
+  The hub's "Poker Lobby" tile flipped from a disabled "Soon" tile to a live one.
+  Added a fetch effect for `GET /api/telegram/miniapp/lobby` and two card
+  components plus their data-mapping helpers.
+
+### Verification outcome
+
+- `app/tg/page.tsx` transpiles clean (`ts.transpileModule`).
+- **Not yet done:** live check inside Telegram. The screen, its empty / loading
+  / error states and the data mapping have only been transpile-verified —
+  needs an on-device pass.
+
+---
+
+## 2026-05-22 — Poker Lobby: Mini App backend feed endpoint
+
+**What & why:** First half of the Telegram Mini App Poker Lobby. The Mini App
+is a plain `fetch` client and can't use the WebSocket `poker_tournament_list` /
+`poker_list_tables` messages, so it needs a REST endpoint serving the same
+data. The lobby screen (built next) will read this.
+
+### Changed
+
+- `server/src/routes/telegram.routes.ts` — added `GET /api/telegram/miniapp/lobby`,
+  returning `{ ok, tournaments, tables }`. It calls the existing
+  `pokerTournamentService.listPokerTournaments()` and
+  `pokerGameService.listTables()` — no SQL was rewritten. Tournaments are
+  filtered for the browse view (finished, cancelled and private events hidden).
+  It is a public read with no auth — it exposes only what the unauthenticated
+  WebSocket lobby messages already do. `RegisterTelegramRoutesOptions` gained
+  the two poker services.
+- `server/src/server.ts` — passes `pokerGameService` and
+  `pokerTournamentService` (both already in scope) into `registerTelegramRoutes`.
+
+### Verification outcome
+
+- Both files transpile clean (`ts.transpileModule`). The new code was written
+  against the actual `PokerTournamentSummary` / `PokerTableSummary` interfaces
+  and the verified `listPokerTournaments` / `listTables` signatures.
+- No new Next.js proxy needed — `/api/telegram/*` already routes through
+  `app/api/telegram/[...path]/route.ts`.
+- **Not yet done:** the Mini App lobby screen that consumes this endpoint, and
+  a live check.
+
+---
+
 ## 2026-05-22 — Fix: Video Poker Mini App game would not open
 
 **What & why:** The MORBIUS Arcade Video Poker game never opened — it showed
