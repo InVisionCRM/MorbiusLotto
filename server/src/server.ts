@@ -15,6 +15,7 @@ import { registerVideoPokerRoutes } from './routes/video-poker.routes';
 import { registerArcadeLimboRoutes } from './routes/arcade-limbo.routes';
 import { registerArcadeMinesRoutes } from './routes/arcade-mines.routes';
 import { registerArcadeHiLoRoutes } from './routes/arcade-hilo.routes';
+import { registerArcadeDiceRoutes } from './routes/arcade-dice.routes';
 import { registerMarqueeRoutes } from './routes/marquee.routes';
 import { requireAuth, requireSameAddress } from './middleware/require-auth';
 import { DatabaseService, type BlackjackSpWagerTierRow } from './services/database.service';
@@ -403,6 +404,7 @@ async function initializeServices() {
     registerArcadeLimboRoutes({ app, dbService });
     registerArcadeMinesRoutes({ app, dbService });
     registerArcadeHiLoRoutes({ app, dbService });
+    registerArcadeDiceRoutes({ app, dbService });
     registerMarqueeRoutes({ app, dbService });
 
     // Public config (whitelisted keys only; used for ad creatives, etc.)
