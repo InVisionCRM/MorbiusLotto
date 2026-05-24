@@ -12,6 +12,10 @@ import { AuthService } from './services/auth.service';
 import { registerAuthRoutes } from './routes/auth.routes';
 import { registerTelegramRoutes } from './routes/telegram.routes';
 import { registerVideoPokerRoutes } from './routes/video-poker.routes';
+import { registerArcadeLimboRoutes } from './routes/arcade-limbo.routes';
+import { registerArcadeMinesRoutes } from './routes/arcade-mines.routes';
+import { registerArcadeHiLoRoutes } from './routes/arcade-hilo.routes';
+import { registerMarqueeRoutes } from './routes/marquee.routes';
 import { requireAuth, requireSameAddress } from './middleware/require-auth';
 import { DatabaseService, type BlackjackSpWagerTierRow } from './services/database.service';
 import { ProvablyFairService } from './services/provably-fair.service';
@@ -396,6 +400,10 @@ async function initializeServices() {
       pokerTournamentService,
     });
     registerVideoPokerRoutes({ app, dbService });
+    registerArcadeLimboRoutes({ app, dbService });
+    registerArcadeMinesRoutes({ app, dbService });
+    registerArcadeHiLoRoutes({ app, dbService });
+    registerMarqueeRoutes({ app, dbService });
 
     // Public config (whitelisted keys only; used for ad creatives, etc.)
     const PUBLIC_CONFIG_KEYS = ['ad_creative_url', 'ad_creative_hero_url', 'ad_creative_loading_url'];
