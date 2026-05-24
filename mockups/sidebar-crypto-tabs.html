@@ -1,0 +1,841 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Poker sidebar — tabs at top, full panel</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    background: rgb(2 6 23);
+    color: white;
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    padding: 40px 24px 80px;
+    min-height: 100vh;
+  }
+
+  header { text-align: center; margin-bottom: 36px; }
+  header h1 { font-size: 28px; font-weight: 700; letter-spacing: -0.02em; }
+  header .crumb {
+    display: inline-block;
+    margin-bottom: 10px;
+    font-size: 11px;
+    letter-spacing: 0.22em;
+    color: rgba(125,211,252,0.85);
+    text-transform: uppercase;
+    border: 1px solid rgba(125,211,252,0.3);
+    padding: 4px 10px;
+    border-radius: 999px;
+  }
+  header p {
+    margin-top: 10px;
+    color: rgba(255,255,255,0.55);
+    font-size: 14px;
+    max-width: 760px;
+    margin-left: auto; margin-right: auto;
+    line-height: 1.55;
+  }
+
+  .section-title {
+    text-align: center;
+    margin: 48px auto 18px;
+    color: rgba(255,255,255,0.7);
+    font-size: 13px;
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+  }
+
+  /* Full app frame */
+  .frame {
+    display: flex;
+    width: 100%;
+    max-width: 1100px;
+    height: 560px;
+    margin: 0 auto;
+    border-radius: 16px;
+    overflow: hidden;
+    background: #0a0d14;
+    box-shadow: 0 16px 40px rgba(0,0,0,0.55);
+    position: relative;
+  }
+
+  .table-area {
+    flex: 1;
+    position: relative;
+    background: radial-gradient(ellipse 80% 60% at 50% 55%, #2a5f3a 0%, #1a3e25 55%, #0b1f14 100%);
+    overflow: hidden;
+  }
+  .table-area::before {
+    content: ""; position: absolute; inset: 0;
+    background-image:
+      radial-gradient(circle at 30% 20%, rgba(255,255,255,0.04), transparent 40%),
+      radial-gradient(circle at 70% 80%, rgba(0,0,0,0.18), transparent 50%);
+    pointer-events: none;
+  }
+  .table-rail {
+    position: absolute; inset: 14px;
+    border-radius: 22px;
+    border: 1px solid rgba(255,255,255,0.06);
+    pointer-events: none;
+  }
+  .pcard {
+    position: absolute;
+    width: 38px; height: 53px;
+    border-radius: 4px;
+    background: white;
+    box-shadow: 0 3px 8px rgba(0,0,0,0.45);
+    display: flex; flex-direction: column; justify-content: space-between;
+    padding: 4px 5px;
+    font-family: 'Georgia', serif;
+    font-weight: 700; font-size: 10px;
+    z-index: 5;
+    transform: translate(-50%, -50%);
+  }
+  .pcard.red { color: #c92a2a; }
+  .pcard.black { color: #1a1a1a; }
+  .pcard .pip { font-size: 16px; align-self: center; }
+  .pcard.back {
+    background: linear-gradient(135deg, #1e40af, #1e3a8a);
+    border: 1.5px solid rgba(255,255,255,0.4);
+  }
+  .pcard.back::before {
+    content: ""; position: absolute; inset: 4px;
+    border: 1px solid rgba(255,255,255,0.25);
+    border-radius: 2px;
+    background-image: repeating-linear-gradient(45deg, rgba(255,255,255,0.05) 0 3px, transparent 3px 6px);
+  }
+  .pcard.hole-a { transform: translate(-50%, -50%) rotate(-12deg); width: 44px; height: 62px; }
+  .pcard.hole-b { transform: translate(-50%, -50%) rotate(12deg); width: 44px; height: 62px; }
+  .pot-chip {
+    position: absolute; top: 36%; left: 50%; transform: translate(-50%, -50%);
+    background: rgba(0,0,0,0.5);
+    border: 1px solid rgba(255,255,255,0.12);
+    color: rgba(255,255,255,0.7);
+    font-size: 10px; padding: 3px 10px;
+    border-radius: 999px;
+    z-index: 4;
+  }
+  .your-turn {
+    position: absolute;
+    left: 50%; bottom: 12%; transform: translateX(-50%);
+    background: linear-gradient(135deg, #facc15, #f59e0b);
+    color: #1a1a1a;
+    font-weight: 700;
+    font-size: 11px;
+    padding: 5px 14px;
+    border-radius: 999px;
+    box-shadow: 0 0 18px rgba(250,204,21,0.5);
+    z-index: 30;
+    animation: pulseYellow 1.4s ease-in-out infinite;
+  }
+  @keyframes pulseYellow {
+    0%, 100% { transform: translateX(-50%) scale(1); }
+    50% { transform: translateX(-50%) scale(1.05); }
+  }
+
+  /* Sidebar */
+  .sidebar {
+    width: 320px;
+    flex-shrink: 0;
+    background: rgba(6,8,12,0.94);
+    border-left: 1px solid rgba(255,255,255,0.05);
+    display: flex;
+    flex-direction: column;
+    color: white;
+    overflow: hidden;
+  }
+
+  /* Tab strip — at the TOP of the sidebar so click+read happen together */
+  .tabs {
+    display: flex;
+    background: rgba(0,0,0,0.3);
+    border-bottom: 1px solid rgba(56,189,248,0.18);
+  }
+  .tab {
+    flex: 1;
+    padding: 10px 4px;
+    text-align: center;
+    font-size: 10.5px;
+    font-weight: 600;
+    letter-spacing: 0.04em;
+    color: rgba(255,255,255,0.5);
+    cursor: pointer;
+    position: relative;
+    transition: color 0.15s;
+  }
+  .tab.active { color: #7dd3fc; }
+  .tab.active::after {
+    content: ""; position: absolute;
+    bottom: -1px; left: 16%; right: 16%;
+    height: 2px;
+    background: linear-gradient(90deg, #38bdf8, #0ea5e9);
+    border-radius: 2px;
+  }
+
+  /* Content area below tabs */
+  .panel { flex: 1; overflow-y: auto; padding: 12px; display: flex; flex-direction: column; gap: 10px; min-height: 0; }
+  .panel.no-pad { padding: 0; }
+
+  /* Chat input — only renders on Activity tab */
+  .chat-input {
+    padding: 8px 10px;
+    border-top: 1px solid rgba(255,255,255,0.06);
+    display: flex; gap: 6px;
+    background: rgba(255,255,255,0.02);
+  }
+  .chat-input input {
+    flex: 1;
+    background: rgba(255,255,255,0.04);
+    border: 1px solid rgba(255,255,255,0.08);
+    color: white; font-size: 12px;
+    padding: 6px 10px; border-radius: 6px;
+    outline: none;
+  }
+  .chat-input .send {
+    background: linear-gradient(135deg, #0ea5e9, #38bdf8);
+    color: #050810;
+    border: none; font-weight: 700;
+    font-size: 11px; padding: 0 12px;
+    border-radius: 6px; cursor: pointer;
+  }
+
+  /* Activity feed */
+  .feed { flex: 1; overflow-y: auto; padding: 10px 12px; display: flex; flex-direction: column; gap: 6px; min-height: 0; }
+  .feed-entry { font-size: 11.5px; line-height: 1.4; color: rgba(255,255,255,0.75); padding: 4px 0; }
+  .feed-entry .who { color: #7dd3fc; font-weight: 600; }
+  .feed-entry .amt { color: #4ade80; font-weight: 700; font-variant-numeric: tabular-nums; }
+  .feed-entry .fold { color: rgba(255,255,255,0.4); }
+  .feed-entry.street {
+    font-size: 10px; letter-spacing: 0.18em; text-transform: uppercase;
+    color: rgba(125,211,252,0.7);
+    border-top: 1px solid rgba(255,255,255,0.05);
+    margin-top: 6px; padding-top: 8px;
+  }
+  .feed-entry.chat {
+    background: rgba(56,189,248,0.06);
+    border-left: 2px solid #38bdf8;
+    padding: 5px 8px;
+    border-radius: 4px;
+  }
+
+  /* ─── SPONSOR TAB ───────────────────── */
+  .sp-card {
+    position: relative;
+    background: radial-gradient(ellipse at 30% 50%, #0c1426 0%, #050810 80%);
+    border: 1px solid rgba(56,189,248,0.4);
+    border-radius: 10px;
+    padding: 12px;
+    box-shadow: 0 0 16px rgba(56,189,248,0.2);
+    overflow: hidden;
+  }
+  .sp-card::before {
+    content: ""; position: absolute; inset: 6px; pointer-events: none;
+    background:
+      linear-gradient(#fff,#fff) top left / 12px 1px no-repeat,
+      linear-gradient(#fff,#fff) top left / 1px 12px no-repeat,
+      linear-gradient(#fff,#fff) top right / 12px 1px no-repeat,
+      linear-gradient(#fff,#fff) top right / 1px 12px no-repeat,
+      linear-gradient(#fff,#fff) bottom left / 12px 1px no-repeat,
+      linear-gradient(#fff,#fff) bottom left / 1px 12px no-repeat,
+      linear-gradient(#fff,#fff) bottom right / 12px 1px no-repeat,
+      linear-gradient(#fff,#fff) bottom right / 1px 12px no-repeat;
+    opacity: 0.4;
+  }
+  .sp-head {
+    display: flex; align-items: center; gap: 10px;
+    padding: 4px 0 10px;
+  }
+  .sp-core {
+    position: relative;
+    width: 48px; height: 48px;
+    display: flex; align-items: center; justify-content: center;
+    flex-shrink: 0;
+  }
+  .sp-core::before, .sp-core::after {
+    content: ""; position: absolute; inset: 0;
+    border-radius: 50%; border: 2px solid #38bdf8;
+    animation: pulse 2.4s ease-out infinite; opacity: 0;
+  }
+  .sp-core::after { animation-delay: 1.2s; }
+  @keyframes pulse {
+    0% { transform: scale(0.55); opacity: 0.75; }
+    100% { transform: scale(1.5); opacity: 0; }
+  }
+  .sp-logo {
+    position: relative; z-index: 1;
+    width: 34px; height: 34px;
+    border-radius: 50%;
+    background: linear-gradient(135deg, #facc15, #a16207);
+    display: flex; align-items: center; justify-content: center;
+    font-weight: 900; font-size: 17px; color: #050810;
+    box-shadow: 0 0 12px rgba(56,189,248,0.4);
+  }
+  .sp-id { display: flex; flex-direction: column; line-height: 1.2; min-width: 0; }
+  .sp-name { font-size: 15px; font-weight: 800; white-space: nowrap; }
+  .sp-ticker { font-size: 9px; color: rgba(255,255,255,0.5); letter-spacing: 0.2em; margin-top: 2px; }
+  .sp-timer {
+    margin-left: auto;
+    font-size: 9px;
+    background: rgba(125,211,252,0.1);
+    border: 1px solid rgba(125,211,252,0.3);
+    color: #7dd3fc;
+    padding: 3px 8px;
+    border-radius: 999px;
+    font-variant-numeric: tabular-nums;
+  }
+
+  .sp-chart {
+    position: relative;
+    height: 80px;
+    background: linear-gradient(180deg, rgba(56,189,248,0.04), transparent);
+    border: 1px solid rgba(56,189,248,0.15);
+    border-radius: 6px;
+    overflow: hidden;
+    margin-bottom: 8px;
+  }
+  .sp-chart svg { display: block; width: 100%; height: 100%; }
+  .sp-chart .label {
+    position: absolute; top: 4px; left: 8px;
+    font-size: 8px; letter-spacing: 0.14em;
+    color: rgba(125,211,252,0.7);
+    text-transform: uppercase;
+  }
+  .sp-chart .delta {
+    position: absolute; top: 4px; right: 8px;
+    font-size: 11px; color: #4ade80; font-weight: 700;
+    font-variant-numeric: tabular-nums;
+  }
+  .sp-chart .price {
+    position: absolute; left: 8px; bottom: 5px;
+    font-size: 14px; font-weight: 800; color: white;
+    font-variant-numeric: tabular-nums;
+    text-shadow: 0 1px 4px rgba(0,0,0,0.8);
+  }
+
+  .sp-stats {
+    display: grid; grid-template-columns: 1fr 1fr;
+    gap: 5px;
+    font-size: 10px;
+    margin-bottom: 10px;
+  }
+  .sp-stat {
+    background: rgba(56,189,248,0.06);
+    border: 1px solid rgba(56,189,248,0.18);
+    border-radius: 4px;
+    padding: 5px 7px;
+    display: flex; justify-content: space-between; align-items: baseline;
+  }
+  .sp-stat .lbl { color: #7dd3fc; font-size: 8px; letter-spacing: 0.14em; text-transform: uppercase; }
+  .sp-stat .val { font-weight: 700; font-variant-numeric: tabular-nums; }
+
+  .btn {
+    width: 100%;
+    border: 1px solid;
+    border-radius: 6px;
+    padding: 9px 10px;
+    font-weight: 700;
+    font-size: 11px;
+    cursor: pointer;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    font-family: inherit;
+    transition: all 0.15s;
+  }
+  .btn.primary {
+    background: linear-gradient(135deg, #0ea5e9, #38bdf8);
+    border-color: #38bdf8;
+    color: #050810;
+    box-shadow: 0 0 12px rgba(56,189,248,0.4);
+  }
+  .btn.ghost {
+    background: rgba(5,8,16,0.6);
+    border-color: rgba(125,211,252,0.4);
+    color: #7dd3fc;
+  }
+  .btn.ghost:hover {
+    border-color: #7dd3fc;
+    background: rgba(56,189,248,0.14);
+    color: white;
+  }
+
+  .sp-actions { display: flex; flex-direction: column; gap: 6px; }
+  .sp-link {
+    text-align: center;
+    font-size: 10px;
+    color: rgba(125,211,252,0.7);
+    margin-top: 8px;
+    cursor: pointer;
+    text-decoration: underline;
+    text-underline-offset: 2px;
+  }
+
+  /* ─── STATS / WALLET / SETTINGS — reused from previous mock ─── */
+  .st-head {
+    display: flex; align-items: center; gap: 10px;
+    padding-bottom: 8px;
+    border-bottom: 1px solid rgba(255,255,255,0.06);
+  }
+  .st-avatar {
+    width: 38px; height: 38px;
+    border-radius: 50%;
+    background: linear-gradient(135deg, #f97316, #ef4444);
+    display: flex; align-items: center; justify-content: center;
+    font-weight: 900; font-size: 17px; color: white;
+    flex-shrink: 0;
+  }
+  .st-name { font-size: 14px; font-weight: 700; line-height: 1.2; }
+  .st-addr { font-size: 10px; color: rgba(255,255,255,0.45); font-family: 'SF Mono', Menlo, monospace; margin-top: 2px; }
+  .st-grid { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 5px; }
+  .st-cell {
+    background: rgba(56,189,248,0.06);
+    border: 1px solid rgba(56,189,248,0.18);
+    border-radius: 5px;
+    padding: 7px 8px;
+  }
+  .st-cell .lbl { color: #7dd3fc; font-size: 7.5px; letter-spacing: 0.16em; text-transform: uppercase; }
+  .st-cell .val { font-size: 13px; font-weight: 800; font-variant-numeric: tabular-nums; margin-top: 2px; }
+  .st-cell .val.up { color: #4ade80; }
+  .st-chart {
+    background: rgba(56,189,248,0.04);
+    border: 1px solid rgba(56,189,248,0.15);
+    border-radius: 5px;
+    padding: 8px;
+    height: 80px;
+    position: relative;
+  }
+  .st-chart .label { position: absolute; top: 6px; left: 8px; font-size: 8.5px; letter-spacing: 0.14em; color: #7dd3fc; text-transform: uppercase; }
+  .st-chart .delta { position: absolute; top: 6px; right: 8px; font-size: 11px; color: #4ade80; font-weight: 700; }
+  .st-list { display: flex; flex-direction: column; gap: 4px; font-size: 11px; }
+  .st-list .row {
+    display: flex; justify-content: space-between;
+    padding: 6px 9px;
+    background: rgba(255,255,255,0.025);
+    border-radius: 4px;
+  }
+  .st-list .row .k { color: rgba(255,255,255,0.55); }
+  .st-list .row .v { font-weight: 700; font-variant-numeric: tabular-nums; }
+
+  .wl-bal {
+    background: linear-gradient(135deg, rgba(56,189,248,0.12), rgba(14,165,233,0.06));
+    border: 1px solid rgba(56,189,248,0.3);
+    border-radius: 8px;
+    padding: 14px;
+    text-align: center;
+  }
+  .wl-bal .lbl { font-size: 9px; letter-spacing: 0.2em; color: #7dd3fc; text-transform: uppercase; margin-bottom: 6px; }
+  .wl-bal .amt {
+    font-size: 24px; font-weight: 800; font-variant-numeric: tabular-nums;
+    color: white; line-height: 1;
+  }
+  .wl-bal .ticker { font-size: 12px; color: rgba(125,211,252,0.85); font-weight: 600; margin-left: 4px; }
+  .wl-bal .usd { margin-top: 6px; font-size: 12px; color: rgba(255,255,255,0.5); font-variant-numeric: tabular-nums; }
+  .wl-actions { display: grid; grid-template-columns: 1fr 1fr; gap: 5px; }
+  .wl-list { display: flex; flex-direction: column; gap: 4px; }
+  .wl-list .lbl-section { font-size: 9px; letter-spacing: 0.16em; color: rgba(125,211,252,0.65); text-transform: uppercase; margin-top: 6px; margin-bottom: 2px; }
+  .wl-tx {
+    display: flex; align-items: center; gap: 8px;
+    padding: 7px 9px;
+    background: rgba(255,255,255,0.025);
+    border-radius: 5px;
+    font-size: 11.5px;
+  }
+  .wl-tx .icon {
+    width: 26px; height: 26px;
+    border-radius: 50%; flex-shrink: 0;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 12px;
+  }
+  .wl-tx .icon.win { background: rgba(74,222,128,0.12); color: #4ade80; }
+  .wl-tx .icon.buy { background: rgba(56,189,248,0.12); color: #7dd3fc; }
+  .wl-tx .icon.sponsor { background: rgba(249,115,22,0.12); color: #fb923c; }
+  .wl-tx .icon.tip { background: rgba(168,85,247,0.12); color: #c084fc; }
+  .wl-tx .text { flex: 1; min-width: 0; }
+  .wl-tx .desc { color: rgba(255,255,255,0.85); line-height: 1.2; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .wl-tx .when { font-size: 9.5px; color: rgba(255,255,255,0.4); margin-top: 1px; }
+  .wl-tx .delta { font-weight: 700; font-variant-numeric: tabular-nums; flex-shrink: 0; font-size: 11.5px; }
+  .wl-tx .delta.up { color: #4ade80; }
+  .wl-tx .delta.down { color: #f87171; }
+  .wl-tx .delta.burn { color: #fb923c; }
+  .wl-link {
+    text-align: center; font-size: 10px;
+    color: rgba(125,211,252,0.7);
+    cursor: pointer;
+    text-decoration: underline;
+    text-underline-offset: 2px;
+    margin-top: 4px;
+  }
+
+  .set-list { display: flex; flex-direction: column; gap: 4px; }
+  .set-section { font-size: 9px; letter-spacing: 0.16em; color: rgba(125,211,252,0.65); text-transform: uppercase; margin-top: 8px; margin-bottom: 2px; }
+  .set-row {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 9px 11px;
+    background: rgba(255,255,255,0.025);
+    border-radius: 6px;
+    font-size: 12px;
+  }
+  .set-row .lbl { color: rgba(255,255,255,0.85); }
+  .toggle {
+    width: 32px; height: 18px;
+    border-radius: 999px;
+    background: rgba(255,255,255,0.1);
+    position: relative; cursor: pointer;
+    transition: background 0.15s; flex-shrink: 0;
+  }
+  .toggle::after {
+    content: ""; position: absolute;
+    top: 2px; left: 2px;
+    width: 14px; height: 14px;
+    border-radius: 50%;
+    background: white;
+    transition: transform 0.15s;
+  }
+  .toggle.on { background: rgba(56,189,248,0.6); }
+  .toggle.on::after { transform: translateX(14px); }
+  .set-link {
+    background: rgba(56,189,248,0.06);
+    border: 1px solid rgba(56,189,248,0.2);
+    border-radius: 5px;
+    padding: 8px 11px;
+    color: #7dd3fc;
+    font-size: 11.5px;
+    cursor: pointer;
+    display: flex; justify-content: space-between; align-items: center;
+  }
+  .set-link::after { content: "→"; opacity: 0.6; }
+
+  .alt-row {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 16px;
+    max-width: 1300px;
+    margin: 0 auto;
+  }
+  @media (max-width: 1100px) {
+    .alt-row { grid-template-columns: repeat(2, 1fr); }
+  }
+  @media (max-width: 600px) {
+    .alt-row { grid-template-columns: 1fr; }
+  }
+  .alt-card {
+    background: rgba(6,8,12,0.94);
+    border: 1px solid rgba(255,255,255,0.06);
+    border-radius: 12px;
+    overflow: hidden;
+    box-shadow: 0 8px 24px rgba(0,0,0,0.4);
+    display: flex; flex-direction: column;
+    height: 520px;
+  }
+  .alt-card .alt-head {
+    padding: 8px 12px;
+    border-bottom: 1px solid rgba(255,255,255,0.06);
+    font-size: 11px;
+    color: rgba(255,255,255,0.6);
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+  }
+  .alt-card .alt-head .pill {
+    display: inline-block; margin-right: 8px;
+    background: rgba(125,211,252,0.1);
+    border: 1px solid rgba(125,211,252,0.3);
+    color: #7dd3fc;
+    padding: 2px 6px;
+    border-radius: 4px;
+    font-size: 9px; font-weight: 700;
+  }
+
+  .note {
+    margin: 24px auto 0;
+    max-width: 760px;
+    color: rgba(255,255,255,0.6);
+    font-size: 13px;
+    line-height: 1.55;
+  }
+  .note strong { color: rgba(255,255,255,0.92); }
+  .note ul { margin-top: 6px; padding-left: 18px; }
+  .note li { margin-bottom: 3px; }
+  .note code {
+    font-family: 'SF Mono', Menlo, monospace;
+    font-size: 11.5px;
+    background: rgba(56,189,248,0.08);
+    padding: 1px 5px;
+    border-radius: 3px;
+    color: #7dd3fc;
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <span class="crumb">Option A · revisited</span>
+  <h1>Tabs at the top · one panel fills the rest</h1>
+  <p>
+    Click and read in the same vertical region. Five tabs at the very top of the sidebar.
+    The yellow "Your turn" pulse on the table handles urgency — you don't need the activity feed
+    visible to know it's your move.
+  </p>
+</header>
+
+<!-- ════════════ MAIN STAGE — Sponsor tab active ════════════ -->
+<div class="section-title">Main stage · Sponsor tab open</div>
+<div class="frame">
+  <div class="table-area">
+    <div class="table-rail"></div>
+    <div class="pcard back" style="left:25%;top:8%"></div>
+    <div class="pcard back" style="left:50%;top:8%"></div>
+    <div class="pcard back" style="left:75%;top:8%"></div>
+    <div class="pcard back" style="left:10%;top:50%"></div>
+    <div class="pcard back" style="left:90%;top:50%"></div>
+    <div class="pcard red"   style="left:32%;top:46%"><div>A</div><div class="pip">♥</div><div></div></div>
+    <div class="pcard black" style="left:42%;top:46%"><div>K</div><div class="pip">♣</div><div></div></div>
+    <div class="pcard red"   style="left:52%;top:46%"><div>7</div><div class="pip">♦</div><div></div></div>
+    <div class="pcard black" style="left:62%;top:46%"><div>2</div><div class="pip">♠</div><div></div></div>
+    <div class="pcard red hole-a"   style="left:46%;top:88%"><div>Q</div><div class="pip">♥</div><div></div></div>
+    <div class="pcard black hole-b" style="left:55%;top:88%"><div>Q</div><div class="pip">♠</div><div></div></div>
+    <div class="pot-chip">POT · 24,500</div>
+    <div class="your-turn">⚡ Your turn — 18s</div>
+  </div>
+
+  <div class="sidebar">
+    <div class="tabs">
+      <div class="tab">Activity</div>
+      <div class="tab active">Sponsor</div>
+      <div class="tab">Stats</div>
+      <div class="tab">Wallet</div>
+      <div class="tab">Settings</div>
+    </div>
+    <div class="panel">
+      <div class="sp-card">
+        <div class="sp-head">
+          <div class="sp-core"><div class="sp-logo">D</div></div>
+          <div class="sp-id">
+            <span class="sp-name">DOGEPLS</span>
+            <span class="sp-ticker">$DOGEPLS</span>
+          </div>
+          <span class="sp-timer">9:42 left</span>
+        </div>
+
+        <div class="sp-chart">
+          <svg viewBox="0 0 200 80" preserveAspectRatio="none">
+            <defs>
+              <linearGradient id="spA" x1="0" y1="0" x2="0" y2="1">
+                <stop offset="0%" stop-color="#38bdf8" stop-opacity="0.45"/>
+                <stop offset="100%" stop-color="#38bdf8" stop-opacity="0"/>
+              </linearGradient>
+            </defs>
+            <path d="M0 65 L16 60 L32 64 L48 55 L64 50 L80 52 L96 44 L112 40 L128 42 L144 32 L160 26 L176 28 L200 14 L200 80 L0 80 Z" fill="url(#spA)"/>
+            <path d="M0 65 L16 60 L32 64 L48 55 L64 50 L80 52 L96 44 L112 40 L128 42 L144 32 L160 26 L176 28 L200 14" fill="none" stroke="#22d3ee" stroke-width="1.5"/>
+            <circle cx="200" cy="14" r="2" fill="#a3e635"/>
+          </svg>
+          <div class="label">24H</div>
+          <div class="delta">+18.2%</div>
+          <div class="price">$0.00041</div>
+        </div>
+
+        <div class="sp-stats">
+          <div class="sp-stat"><span class="lbl">Mcap</span><span class="val">$2.1M</span></div>
+          <div class="sp-stat"><span class="lbl">Liq</span><span class="val">$92K</span></div>
+          <div class="sp-stat"><span class="lbl">Hodl</span><span class="val">3,118</span></div>
+          <div class="sp-stat"><span class="lbl">Age</span><span class="val">5mo</span></div>
+        </div>
+
+        <div class="sp-actions">
+          <button class="btn primary">Trump for 250,000 MORBIUS</button>
+          <button class="btn ghost">Promote your token</button>
+        </div>
+        <div class="sp-link">View $DOGEPLS chart ↗</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="note" style="text-align:center;">
+  Tab strip sits right above the content — clicking <strong>Sponsor</strong> and reading the panel happen
+  in the same vertical region. Action UI (Fold / Call / Raise) lives on the table at the bottom and is unaffected by tab selection.
+</div>
+
+<!-- ════════════ OTHER FOUR TABS ════════════ -->
+<div class="section-title">Other four tabs · same sidebar, different tab active</div>
+<div class="alt-row">
+
+  <!-- ACTIVITY -->
+  <div class="alt-card">
+    <div class="alt-head"><span class="pill">Default</span>Activity</div>
+    <div class="tabs">
+      <div class="tab active">Activity</div>
+      <div class="tab">Sponsor</div>
+      <div class="tab">Stats</div>
+      <div class="tab">Wallet</div>
+      <div class="tab">Settings</div>
+    </div>
+    <div class="feed">
+      <div class="feed-entry street">— Flop</div>
+      <div class="feed-entry"><span class="who">Pittbull</span> raised to <span class="amt">800</span></div>
+      <div class="feed-entry"><span class="who">Midas</span> <span class="fold">folded</span></div>
+      <div class="feed-entry chat"><span class="who">Pittbull:</span> good luck</div>
+      <div class="feed-entry"><span class="who">MVS</span> called <span class="amt">800</span></div>
+      <div class="feed-entry"><span class="who">You</span> 3-bet to <span class="amt">2,400</span></div>
+      <div class="feed-entry street">— Turn</div>
+      <div class="feed-entry"><span class="who">Pittbull</span> bet <span class="amt">3,200</span></div>
+      <div class="feed-entry"><span class="who">You</span> called <span class="amt">3,200</span></div>
+    </div>
+    <div class="chat-input">
+      <input placeholder="Send a message..." />
+      <button class="send">Send</button>
+    </div>
+  </div>
+
+  <!-- STATS -->
+  <div class="alt-card">
+    <div class="alt-head"><span class="pill">Tab</span>Stats</div>
+    <div class="tabs">
+      <div class="tab">Activity</div>
+      <div class="tab">Sponsor</div>
+      <div class="tab active">Stats</div>
+      <div class="tab">Wallet</div>
+      <div class="tab">Settings</div>
+    </div>
+    <div class="panel">
+      <div class="st-head">
+        <div class="st-avatar">K</div>
+        <div>
+          <div class="st-name">Kyle</div>
+          <div class="st-addr">0x8f6d…5f2e</div>
+        </div>
+      </div>
+      <div class="st-grid">
+        <div class="st-cell"><div class="lbl">Hands</div><div class="val">1,247</div></div>
+        <div class="st-cell"><div class="lbl">Win%</div><div class="val up">52.4%</div></div>
+        <div class="st-cell"><div class="lbl">P/L</div><div class="val up">+12.4K</div></div>
+        <div class="st-cell"><div class="lbl">VPIP</div><div class="val">24.3%</div></div>
+        <div class="st-cell"><div class="lbl">PFR</div><div class="val">18.1%</div></div>
+        <div class="st-cell"><div class="lbl">AGG</div><div class="val">2.8</div></div>
+      </div>
+      <div class="st-chart">
+        <div class="label">Last 30 days</div>
+        <div class="delta">+12.4K</div>
+        <svg viewBox="0 0 200 60" preserveAspectRatio="none">
+          <defs>
+            <linearGradient id="stB" x1="0" y1="0" x2="0" y2="1">
+              <stop offset="0%" stop-color="#38bdf8" stop-opacity="0.45"/>
+              <stop offset="100%" stop-color="#38bdf8" stop-opacity="0"/>
+            </linearGradient>
+          </defs>
+          <path d="M0 50 L20 46 L40 42 L60 44 L80 38 L100 40 L120 34 L140 28 L160 30 L180 22 L200 18 L200 60 L0 60 Z" fill="url(#stB)"/>
+          <path d="M0 50 L20 46 L40 42 L60 44 L80 38 L100 40 L120 34 L140 28 L160 30 L180 22 L200 18" fill="none" stroke="#38bdf8" stroke-width="1.5"/>
+        </svg>
+      </div>
+      <div class="st-list">
+        <div class="row"><span class="k">Biggest pot</span><span class="v">24,500</span></div>
+        <div class="row"><span class="k">Showdown win</span><span class="v">48.1%</span></div>
+        <div class="row"><span class="k">Best finish</span><span class="v">3rd / 38</span></div>
+        <div class="row"><span class="k">Hours played</span><span class="v">87.4</span></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- WALLET -->
+  <div class="alt-card">
+    <div class="alt-head"><span class="pill">Tab</span>Wallet</div>
+    <div class="tabs">
+      <div class="tab">Activity</div>
+      <div class="tab">Sponsor</div>
+      <div class="tab">Stats</div>
+      <div class="tab active">Wallet</div>
+      <div class="tab">Settings</div>
+    </div>
+    <div class="panel">
+      <div class="wl-bal">
+        <div class="lbl">MORBIUS Balance</div>
+        <div class="amt">2,150,500<span class="ticker">MORB</span></div>
+        <div class="usd">≈ $456.32 USD</div>
+      </div>
+      <div class="wl-actions">
+        <button class="btn primary">Buy Chips</button>
+        <button class="btn ghost">Cash Out</button>
+      </div>
+      <div class="wl-list">
+        <div class="lbl-section">Recent</div>
+        <div class="wl-tx">
+          <div class="icon win">▲</div>
+          <div class="text">
+            <div class="desc">Won pot · Hand #12847</div>
+            <div class="when">2m ago</div>
+          </div>
+          <div class="delta up">+12,500</div>
+        </div>
+        <div class="wl-tx">
+          <div class="icon sponsor">🔥</div>
+          <div class="text">
+            <div class="desc">Sponsored High Stakes</div>
+            <div class="when">14m ago</div>
+          </div>
+          <div class="delta burn">−175,000</div>
+        </div>
+        <div class="wl-tx">
+          <div class="icon buy">⇩</div>
+          <div class="text">
+            <div class="desc">Bought in · Sat Freeroll</div>
+            <div class="when">1h ago</div>
+          </div>
+          <div class="delta down">−100,000</div>
+        </div>
+        <div class="wl-tx">
+          <div class="icon tip">★</div>
+          <div class="text">
+            <div class="desc">Tipped dealer</div>
+            <div class="when">3h ago</div>
+          </div>
+          <div class="delta down">−500</div>
+        </div>
+      </div>
+      <div class="wl-link">View all transactions ↗</div>
+    </div>
+  </div>
+
+  <!-- SETTINGS -->
+  <div class="alt-card">
+    <div class="alt-head"><span class="pill">Tab</span>Settings</div>
+    <div class="tabs">
+      <div class="tab">Activity</div>
+      <div class="tab">Sponsor</div>
+      <div class="tab">Stats</div>
+      <div class="tab">Wallet</div>
+      <div class="tab active">Settings</div>
+    </div>
+    <div class="panel">
+      <div class="set-list">
+        <div class="set-section">Game</div>
+        <div class="set-row"><span class="lbl">Sounds</span><div class="toggle on"></div></div>
+        <div class="set-row"><span class="lbl">Auto-rebuy</span><div class="toggle"></div></div>
+        <div class="set-row"><span class="lbl">Confirm bets</span><div class="toggle on"></div></div>
+
+        <div class="set-section">Display</div>
+        <div class="set-row"><span class="lbl">Show equity</span><div class="toggle on"></div></div>
+        <div class="set-row"><span class="lbl">Hand-strength tints</span><div class="toggle"></div></div>
+
+        <div class="set-section">Personal</div>
+        <div class="set-link">Edit QuickChat phrases</div>
+        <div class="set-link">Table appearance</div>
+        <div class="set-link">How to play</div>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<div class="note" style="margin-top:40px;">
+  <strong>How it works:</strong>
+  <ul>
+    <li>Five tabs always visible at the top of the sidebar. Whatever you click is what fills the rest of the panel — nothing else to look at.</li>
+    <li><strong>Activity</strong> is the default tab on session open (preserves current behaviour). Chat input only appears on this tab.</li>
+    <li><strong>Sponsor</strong> tab is the same Pulse Beacon design as the intermission ad, but persistent — players and spectators interact with the sponsor mechanic here instead of in a modal.</li>
+    <li><strong>Action UI is unaffected.</strong> The Fold / Call / Raise buttons live on the table itself (<code>PokerActions.tsx</code>), not in the sidebar. You can sit on Stats forever and still act the moment the table prompts you.</li>
+    <li><strong>Urgency cue</strong> is the table's existing yellow "Your turn" pulse — already there, already loud. The sidebar doesn't need its own attention badge.</li>
+  </ul>
+  Confirm and I'll add this to <code>FUTURE_FEATURES.md</code> under a new <strong>Poker Sidebar</strong> umbrella.
+</div>
+
+</body>
+</html>

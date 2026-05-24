@@ -16,7 +16,13 @@ export type PokerChipLedgerReason =
   | 'creator_fee'
   | 'platform_fee'
   | 'video_poker_bet'
-  | 'video_poker_payout';
+  | 'video_poker_payout'
+  | 'arcade_limbo_bet'
+  | 'arcade_limbo_payout'
+  | 'arcade_mines_bet'
+  | 'arcade_mines_payout'
+  | 'arcade_hilo_bet'
+  | 'arcade_hilo_payout';
 
 const DEFAULT_PLATFORM_FEE_WALLET = '0x41682815b05fe6b54a6c0f8813bb99423ee0309d';
 

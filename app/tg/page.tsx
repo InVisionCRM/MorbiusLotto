@@ -34,12 +34,23 @@ import {
   IconEye,
   IconLock,
   IconBolt,
+  IconBomb,
+  IconArrowsUpDown,
   IconGift,
   IconPlus,
   IconCheck,
+  IconBell,
+  IconSettings,
+  IconLogout,
+  IconCrown,
+  IconShieldCheck,
+  IconHistory,
 } from '@tabler/icons-react';
 import MiniAppProfileEditor from '@/components/telegram/MiniAppProfileEditor';
 import MiniAppVideoPoker from '@/components/telegram/MiniAppVideoPoker';
+import MiniAppLimbo from '@/components/telegram/MiniAppLimbo';
+import MiniAppMines from '@/components/telegram/MiniAppMines';
+import MiniAppHiLo from '@/components/telegram/MiniAppHiLo';
 import {
   MTT_TEMPLATES,
   type MttTemplate,
@@ -49,11 +60,27 @@ import { POKER_TOURNAMENT_DEFAULT_CONFIG } from '@/hooks/use-poker-tournament';
 
 // ---------------------------------------------------------------------------
 
+interface TgHapticFeedback {
+  impactOccurred: (style: 'light' | 'medium' | 'heavy' | 'rigid' | 'soft') => void;
+  notificationOccurred: (type: 'error' | 'success' | 'warning') => void;
+  selectionChanged: () => void;
+}
+
+interface TgBackButton {
+  show: () => void;
+  hide: () => void;
+  onClick: (cb: () => void) => void;
+  offClick: (cb: () => void) => void;
+}
+
 interface TgWebApp {
   initData: string;
   ready: () => void;
   expand: () => void;
   colorScheme?: string;
+  HapticFeedback?: TgHapticFeedback;
+  BackButton?: TgBackButton;
+  openLink?: (url: string, options?: { try_instant_view?: boolean }) => void;
 }
 
 interface MiniAppSession {
@@ -65,6 +92,7 @@ interface MiniAppSession {
   displayName?: string | null;
   morbiusBalanceWei?: string;
   chipBalance?: string;
+  notificationsEnabled?: boolean;
 }
 
 /** Subset of GET /api/poker/player/:address/stats we render in the Mini App. */
@@ -84,8 +112,21 @@ interface PokerStats {
   aggression_factor: number | null;
 }
 
-type View = 'hub' | 'stats' | 'profile' | 'videopoker' | 'lobby' | 'createTournament';
+type View =
+  | 'hub'
+  | 'stats'
+  | 'profile'
+  | 'videopoker'
+  | 'limbo'
+  | 'mines'
+  | 'hilo'
+  | 'lobby'
+  | 'createTournament'
+  | 'leaderboard'
+  | 'myhands'
+  | 'settings';
 type StatScope = 'cash' | 'tournament' | 'all';
+type LbCategory = 'net_chips' | 'biggest_pot' | 'hands_played';
 type LoadState = 'loading' | 'no-telegram' | 'error' | 'ready';
 type FetchState = 'idle' | 'loading' | 'error' | 'ready';
 
@@ -181,6 +222,62 @@ function MetricCard({ label, value, accent }: { label: string; value: string; ac
   );
 }
 
+function LeaderboardRow({
+  entry,
+  category,
+  isMe,
+}: {
+  entry: LeaderboardEntry;
+  category: LbCategory;
+  isMe: boolean;
+}) {
+  const accent = rankAccent(entry.rank);
+  const v = leaderboardValue(entry, category);
+  const valueColor =
+    category === 'hands_played'
+      ? 'text-white'
+      : v.positive
+        ? 'text-cyan-400'
+        : 'text-red-400';
+  return (
+    <div
+      className={`flex items-center gap-3 rounded-2xl border px-3 py-2.5 ${
+        isMe ? 'border-cyan-500/50 bg-[#0f2238]' : 'border-cyan-500/15 bg-[#0b1a2c]'
+      }`}
+      style={isMe ? { boxShadow: '0 0 0 1px rgba(34,211,238,0.18)' } : undefined}
+    >
+      <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border border-cyan-500/20 bg-[#091627]">
+        {accent ? (
+          <IconCrown size={16} className={accent.color} aria-hidden />
+        ) : (
+          <span className="mitr-bold text-xs text-slate-400 tabular-nums">
+            {entry.rank}
+          </span>
+        )}
+      </div>
+      <div className="min-w-0 flex-1">
+        <div className="flex items-center gap-1.5 truncate">
+          <span className="truncate text-sm font-semibold text-white">
+            {entryLabel(entry)}
+          </span>
+          {isMe && (
+            <span className="rounded-md border border-cyan-500/40 px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wide text-cyan-300">
+              You
+            </span>
+          )}
+        </div>
+        <div className="truncate text-[10px] text-slate-500">
+          {entry.hands_played.toLocaleString('en-US')} hands ·{' '}
+          {entry.hands_won.toLocaleString('en-US')} won
+        </div>
+      </div>
+      <div className={`mitr-bold shrink-0 text-base tabular-nums ${valueColor}`}>
+        {v.text}
+      </div>
+    </div>
+  );
+}
+
 function MiniStat({ label, value }: { label: string; value: string }) {
   return (
     <div className="rounded-xl border border-cyan-500/15 bg-[#0b1a2c] px-2 py-2 text-center">
@@ -192,6 +289,108 @@ function MiniStat({ label, value }: { label: string; value: string }) {
 
 // ---------------------------------------------------------------------------
 
+// --- leaderboard -----------------------------------------------------------
+
+/** Subset of GET /api/poker/top-players we render. Matches PokerTopPlayerRow. */
+interface LeaderboardEntry {
+  rank: number;
+  address: string;
+  display_name: string | null;
+  profile_image_url: string | null;
+  net_chips: string;
+  biggest_pot: string;
+  hands_played: number;
+  hands_won: number;
+}
+
+interface LeaderboardData {
+  category: LbCategory;
+  rows: LeaderboardEntry[];
+  requester: LeaderboardEntry | null;
+}
+
+/** Pull the headline value for an entry given the active leaderboard category. */
+function leaderboardValue(e: LeaderboardEntry, cat: LbCategory): {
+  text: string;
+  positive: boolean;
+} {
+  if (cat === 'hands_played') {
+    return { text: e.hands_played.toLocaleString('en-US'), positive: true };
+  }
+  const raw = cat === 'net_chips' ? e.net_chips : e.biggest_pot;
+  return formatSignedChips(raw);
+}
+
+/** Short on-screen label for a leaderboard row's identity. */
+function entryLabel(e: LeaderboardEntry): string {
+  if (e.display_name && e.display_name.trim().length > 0) return e.display_name;
+  if (e.address && e.address.length >= 10) {
+    return `${e.address.slice(0, 6)}…${e.address.slice(-4)}`;
+  }
+  return 'Anonymous';
+}
+
+/** Crown / medal accent for top-3 ranks; null otherwise. */
+function rankAccent(rank: number): { color: string; label: string } | null {
+  if (rank === 1) return { color: 'text-amber-300', label: '1st' };
+  if (rank === 2) return { color: 'text-slate-300', label: '2nd' };
+  if (rank === 3) return { color: 'text-orange-300', label: '3rd' };
+  return null;
+}
+
+// --- my hands --------------------------------------------------------------
+
+/** One row from POST /api/telegram/miniapp/my-hands — a completed hand the
+ *  linked player participated in. `verifiable=false` means the server seed
+ *  hasn't been revealed (the player folded pre-showdown and no other path
+ *  forced reveal); the verify page handles that case gracefully. */
+interface MyHand {
+  handId: string;
+  handNumber: number;
+  potAmount: string;
+  completedAt: string | null;
+  tournamentId: string | null;
+  verifiable: boolean;
+  won: boolean;
+  wonAmount: string;
+  contributed: string;
+  netAmount: string;
+  folded: boolean;
+  foldedStreet: string | null;
+  sawShowdown: boolean;
+  handName: string | null;
+}
+
+/** A short label for the hand's outcome: "Won", "Folded turn", "Lost", … */
+function handOutcomeLabel(h: MyHand): string {
+  if (h.won) return 'Won';
+  if (h.folded) {
+    if (h.foldedStreet === 'preflop') return 'Folded preflop';
+    if (h.foldedStreet === 'flop') return 'Folded flop';
+    if (h.foldedStreet === 'turn') return 'Folded turn';
+    if (h.foldedStreet === 'river') return 'Folded river';
+    return 'Folded';
+  }
+  if (h.sawShowdown) return 'Lost at showdown';
+  return 'Lost';
+}
+
+/** "5m ago" / "2h ago" / "3d ago" / fallback to a short date. */
+function timeAgo(iso: string | null, nowMs: number): string {
+  if (!iso) return '';
+  const t = new Date(iso).getTime();
+  if (Number.isNaN(t)) return '';
+  const diff = Math.max(0, nowMs - t);
+  const mins = Math.floor(diff / 60_000);
+  if (mins < 1) return 'just now';
+  if (mins < 60) return `${mins}m ago`;
+  const hrs = Math.floor(mins / 60);
+  if (hrs < 24) return `${hrs}h ago`;
+  const days = Math.floor(hrs / 24);
+  if (days < 7) return `${days}d ago`;
+  return new Date(t).toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+}
+
 // --- poker lobby -----------------------------------------------------------
 
 /** Subset of the backend's PokerTournamentSummary the lobby card renders. */
@@ -200,6 +399,7 @@ interface LobbyTournament {
   name: string;
   status: string;
   buyInAmount: string;
+  prizePool: string;
   registeredCount: number;
   maxPlayers: number;
   startMode: string;
@@ -222,6 +422,32 @@ interface LobbyData {
   tables: LobbyTable[];
 }
 
+/** Derived counters rendered on the hub's "Live now" pulse card. */
+interface LiveActivity {
+  liveTournaments: number;
+  openTournaments: number;
+  seatedPlayers: number;
+  openCashTables: number;
+}
+
+function deriveLiveActivity(data: LobbyData): LiveActivity {
+  let liveTournaments = 0;
+  let openTournaments = 0;
+  for (const t of data.tournaments) {
+    if (t.status === 'active') liveTournaments += 1;
+    else if (t.status === 'registration' && t.registeredCount < t.maxPlayers) {
+      openTournaments += 1;
+    }
+  }
+  let seatedPlayers = 0;
+  let openCashTables = 0;
+  for (const c of data.tables) {
+    seatedPlayers += c.seatedCount || 0;
+    if (c.emptySeats > 0) openCashTables += 1;
+  }
+  return { liveTournaments, openTournaments, seatedPlayers, openCashTables };
+}
+
 /** True when a tournament has no buy-in (a freeroll). */
 function isFreeBuyIn(raw: string): boolean {
   try {
@@ -238,13 +464,23 @@ function tournamentState(t: LobbyTournament): 'open' | 'full' | 'live' {
   return 'full';
 }
 
-/** Human start label — a day + time for scheduled events, fill-based text otherwise. */
-function startLabel(t: LobbyTournament): string {
+/** Human start label. Within an hour we show a live "Starts in 14m" countdown;
+ *  further out we fall back to "Today · 7:30 PM" / weekday + time. */
+function startLabel(t: LobbyTournament, nowMs: number): string {
   if (t.startMode === 'fill') return 'Starts when full';
   if (t.scheduledStartAt) {
     const d = new Date(t.scheduledStartAt);
-    if (!Number.isNaN(d.getTime())) {
-      const now = new Date();
+    const ts = d.getTime();
+    if (!Number.isNaN(ts)) {
+      const diffMs = ts - nowMs;
+      if (diffMs > 0 && diffMs <= 60 * 60_000) {
+        const mins = Math.max(1, Math.round(diffMs / 60_000));
+        return `Starts in ${mins}m`;
+      }
+      if (diffMs <= 0 && diffMs > -10 * 60_000) {
+        return 'Starting now';
+      }
+      const now = new Date(nowMs);
       const tomorrow = new Date(now);
       tomorrow.setDate(now.getDate() + 1);
       const day =
@@ -258,6 +494,15 @@ function startLabel(t: LobbyTournament): string {
     }
   }
   return 'Scheduled';
+}
+
+/** True when the countdown should pulse (within 5 minutes of start). */
+function startLabelIsImminent(t: LobbyTournament, nowMs: number): boolean {
+  if (t.startMode === 'fill' || !t.scheduledStartAt) return false;
+  const ts = new Date(t.scheduledStartAt).getTime();
+  if (Number.isNaN(ts)) return false;
+  const diffMs = ts - nowMs;
+  return diffMs > -10 * 60_000 && diffMs <= 5 * 60_000;
 }
 
 /** Assemble the create-tournament request body from a template + user inputs.
@@ -295,25 +540,53 @@ function templateIcon(id: string) {
   return <IconTrophy size={18} aria-hidden />;
 }
 
-function LobbyTournamentCard({ t, onOpen }: { t: LobbyTournament; onOpen: () => void }) {
+function LobbyTournamentCard({
+  t,
+  nowMs,
+  onOpen,
+}: {
+  t: LobbyTournament;
+  nowMs: number;
+  onOpen: () => void;
+}) {
   const state = tournamentState(t);
   const isLive = state === 'live';
   const free = isFreeBuyIn(t.buyInAmount);
+  const imminent = !isLive && startLabelIsImminent(t, nowMs);
+  const prize = (() => {
+    try {
+      return BigInt(String(t.prizePool ?? '0').split('.')[0] || '0');
+    } catch {
+      return 0n;
+    }
+  })();
   return (
     <div
       className={`rounded-2xl border bg-[#0b1a2c] p-3 ${
-        isLive ? 'border-cyan-500/30' : 'border-cyan-500/15'
+        isLive || imminent ? 'border-cyan-500/30' : 'border-cyan-500/15'
       }`}
+      style={imminent ? { boxShadow: '0 0 0 1px rgba(34,211,238,0.18)' } : undefined}
     >
       <div className="text-sm font-semibold text-white">{t.name}</div>
       <div className="mt-2 flex items-center justify-between gap-2">
-        <span className="flex items-center gap-1.5 rounded-md border border-cyan-500/20 bg-cyan-500/10 px-2 py-1 text-[10px] font-medium text-cyan-300">
+        <span
+          className={`flex items-center gap-1.5 rounded-md border px-2 py-1 text-[10px] font-medium ${
+            imminent
+              ? 'border-cyan-400/50 bg-cyan-500/20 text-cyan-200'
+              : 'border-cyan-500/20 bg-cyan-500/10 text-cyan-300'
+          }`}
+        >
           {isLive ? (
             <span className="h-1.5 w-1.5 rounded-full bg-cyan-400" aria-hidden />
+          ) : imminent ? (
+            <span className="relative flex h-1.5 w-1.5" aria-hidden>
+              <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-cyan-400 opacity-70" />
+              <span className="relative inline-flex h-1.5 w-1.5 rounded-full bg-cyan-400" />
+            </span>
           ) : (
             <IconClock size={11} aria-hidden />
           )}
-          {isLive ? 'In play' : startLabel(t)}
+          {isLive ? 'In play' : startLabel(t, nowMs)}
         </span>
         {state === 'open' ? (
           <button
@@ -353,6 +626,11 @@ function LobbyTournamentCard({ t, onOpen }: { t: LobbyTournament; onOpen: () => 
         <span>
           {t.registeredCount} / {t.maxPlayers} players
         </span>
+        {prize > 0n && (
+          <span className="text-cyan-300">
+            <span className="mitr-bold tabular-nums">{prize.toLocaleString('en-US')}</span> pool
+          </span>
+        )}
       </div>
     </div>
   );
@@ -406,8 +684,33 @@ export default function TelegramMiniAppPage() {
   const [session, setSession] = useState<MiniAppSession | null>(null);
   const [errorMsg, setErrorMsg] = useState('');
   const [initData, setInitData] = useState('');
+  const [webApp, setWebApp] = useState<TgWebApp | null>(null);
 
   const [view, setView] = useState<View>('hub');
+
+  // Settings screen state
+  const [notifBusy, setNotifBusy] = useState(false);
+  const [notifError, setNotifError] = useState('');
+  const [unlinkArmed, setUnlinkArmed] = useState(false);
+  const [unlinkBusy, setUnlinkBusy] = useState(false);
+
+  // Fire Telegram's native haptic feedback when running inside the app. No-op
+  // outside of Telegram so the page still works in a normal browser.
+  const haptic = useCallback(
+    (kind: 'tap' | 'success' | 'warn' | 'error' = 'tap') => {
+      const hf = webApp?.HapticFeedback;
+      if (!hf) return;
+      try {
+        if (kind === 'tap') hf.impactOccurred('light');
+        else if (kind === 'success') hf.notificationOccurred('success');
+        else if (kind === 'warn') hf.notificationOccurred('warning');
+        else hf.notificationOccurred('error');
+      } catch {
+        /* haptics are best-effort */
+      }
+    },
+    [webApp],
+  );
 
   // Stats screen state
   const [scope, setScope] = useState<StatScope>('cash');
@@ -417,6 +720,29 @@ export default function TelegramMiniAppPage() {
   // Poker Lobby screen state
   const [lobby, setLobby] = useState<LobbyData | null>(null);
   const [lobbyState, setLobbyState] = useState<FetchState>('idle');
+
+  // Leaderboard screen state
+  const [lbCategory, setLbCategory] = useState<LbCategory>('net_chips');
+  const [leaderboard, setLeaderboard] = useState<LeaderboardData | null>(null);
+  const [lbState, setLbState] = useState<FetchState>('idle');
+
+  // My Hands screen state — the player's last completed poker hands.
+  const [myHands, setMyHands] = useState<MyHand[] | null>(null);
+  const [myHandsState, setMyHandsState] = useState<FetchState>('idle');
+
+  // Hub "Live now" pulse card — same lobby endpoint, polled lightly.
+  const [activity, setActivity] = useState<LiveActivity | null>(null);
+
+  // Ticks every 30s while the Lobby or My Hands view is visible so cards can
+  // render a live "Starts in X" countdown / "5m ago" without each row owning
+  // its own timer.
+  const [nowMs, setNowMs] = useState(() => Date.now());
+  useEffect(() => {
+    if (view !== 'lobby' && view !== 'myhands') return;
+    setNowMs(Date.now());
+    const id = window.setInterval(() => setNowMs(Date.now()), 30_000);
+    return () => window.clearInterval(id);
+  }, [view]);
 
   // Create Tournament screen state
   const [tplId, setTplId] = useState<string>(MTT_TEMPLATES[0].id);
@@ -437,6 +763,7 @@ export default function TelegramMiniAppPage() {
         return;
       }
       setInitData(webApp.initData);
+      setWebApp(webApp);
       try {
         webApp.ready();
         webApp.expand();
@@ -524,9 +851,201 @@ export default function TelegramMiniAppPage() {
     };
   }, [view]);
 
+  // Fetch the leaderboard (top players) when the Leaderboard view is open.
+  useEffect(() => {
+    if (view !== 'leaderboard') return;
+    let cancelled = false;
+    setLbState('loading');
+    (async () => {
+      try {
+        const qs = new URLSearchParams({ category: lbCategory, limit: '25' });
+        if (session?.walletAddress) qs.set('address', session.walletAddress);
+        const res = await fetch(`/api/poker/top-players?${qs.toString()}`);
+        const data = await res.json();
+        if (cancelled) return;
+        if (!res.ok) {
+          setLbState('error');
+          return;
+        }
+        setLeaderboard({
+          category: (data?.category as LbCategory) ?? lbCategory,
+          rows: Array.isArray(data?.rows) ? (data.rows as LeaderboardEntry[]) : [],
+          requester: (data?.requester as LeaderboardEntry | null) ?? null,
+        });
+        setLbState('ready');
+      } catch {
+        if (!cancelled) setLbState('error');
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [view, lbCategory, session?.walletAddress]);
+
+  // Fetch the player's recent poker hands when the My Hands view is open.
+  useEffect(() => {
+    if (view !== 'myhands') return;
+    if (!initData) return;
+    let cancelled = false;
+    setMyHandsState('loading');
+    (async () => {
+      try {
+        const res = await fetch('/api/telegram/miniapp/my-hands', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ initData }),
+        });
+        const data = await res.json();
+        if (cancelled) return;
+        if (!res.ok || !data?.ok) {
+          setMyHandsState('error');
+          return;
+        }
+        setMyHands(Array.isArray(data.hands) ? (data.hands as MyHand[]) : []);
+        setMyHandsState('ready');
+      } catch {
+        if (!cancelled) setMyHandsState('error');
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [view, initData]);
+
+  // Poll the lobby endpoint while the hub is visible so the "Live now" card
+  // reflects current activity. 30s cadence — light enough to be a non-issue
+  // and slow enough to feel ambient rather than chatty.
+  useEffect(() => {
+    if (view !== 'hub' || !session?.linked) return;
+    let cancelled = false;
+    const tick = async () => {
+      try {
+        const res = await fetch('/api/telegram/miniapp/lobby');
+        const data = await res.json();
+        if (cancelled || !res.ok || !data?.ok) return;
+        setActivity(
+          deriveLiveActivity({
+            tournaments: Array.isArray(data.tournaments) ? data.tournaments : [],
+            tables: Array.isArray(data.tables) ? data.tables : [],
+          }),
+        );
+      } catch {
+        /* best-effort — the card just falls back to its idle/empty state */
+      }
+    };
+    tick();
+    const id = window.setInterval(tick, 30_000);
+    return () => {
+      cancelled = true;
+      window.clearInterval(id);
+    };
+  }, [view, session?.linked]);
+
   const openSite = useCallback((path = '') => {
     window.open(`https://morbius.io${path}`, '_blank', 'noopener');
   }, []);
+
+  // Open the public hand verifier. Inside Telegram we use openLink so it
+  // appears in the in-app browser without leaving the Mini App; outside
+  // Telegram we fall back to a normal new-tab open.
+  const openVerify = useCallback(
+    (handId: string) => {
+      const url = `https://morbius.io/tg/verify/${encodeURIComponent(handId)}`;
+      if (webApp?.openLink) {
+        try {
+          webApp.openLink(url);
+          return;
+        } catch {
+          /* fall through to window.open */
+        }
+      }
+      window.open(url, '_blank', 'noopener');
+    },
+    [webApp],
+  );
+
+  // Wire Telegram's native BackButton to the current view. On the hub it
+  // disappears; on any sub-view it pops back to the previous screen (lobby
+  // → createTournament has its own parent, everything else returns to the hub).
+  useEffect(() => {
+    const bb = webApp?.BackButton;
+    if (!bb) return;
+    if (view === 'hub') {
+      bb.hide();
+      return;
+    }
+    const goBack = () => {
+      haptic('tap');
+      if (view === 'createTournament') setView('lobby');
+      else setView('hub');
+    };
+    bb.onClick(goBack);
+    bb.show();
+    return () => {
+      bb.offClick(goBack);
+      bb.hide();
+    };
+  }, [view, webApp, haptic]);
+
+  // Toggle the notifications switch on the Settings screen.
+  const submitNotificationToggle = useCallback(
+    async (next: boolean) => {
+      setNotifBusy(true);
+      setNotifError('');
+      try {
+        const res = await fetch('/api/telegram/miniapp/preferences', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ initData, notificationsEnabled: next }),
+        });
+        const data = await res.json();
+        if (!res.ok || !data?.ok) {
+          haptic('error');
+          setNotifError(data?.error || 'Could not update your preferences.');
+          return;
+        }
+        haptic('success');
+        setSession((prev) =>
+          prev ? { ...prev, notificationsEnabled: data.notificationsEnabled === true } : prev,
+        );
+      } catch {
+        haptic('error');
+        setNotifError('Could not reach MORBIUS. Check your connection and try again.');
+      } finally {
+        setNotifBusy(false);
+      }
+    },
+    [initData, haptic],
+  );
+
+  // Unlink the Telegram chat from its linked wallet, then return to the
+  // onboarding (link wallet) view.
+  const submitUnlink = useCallback(async () => {
+    setUnlinkBusy(true);
+    try {
+      const res = await fetch('/api/telegram/miniapp/unlink', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ initData }),
+      });
+      const data = await res.json();
+      if (!res.ok || !data?.ok) {
+        haptic('error');
+        setNotifError(data?.error || 'Could not unlink your account.');
+        setUnlinkBusy(false);
+        return;
+      }
+      haptic('success');
+      setUnlinkArmed(false);
+      setSession((prev) => (prev ? { ...prev, linked: false } : prev));
+      setView('hub');
+    } catch {
+      haptic('error');
+      setNotifError('Could not reach MORBIUS. Check your connection and try again.');
+    } finally {
+      setUnlinkBusy(false);
+    }
+  }, [initData, haptic]);
 
   // Create a tournament from the picked template + name + start time.
   const submitCreateTournament = useCallback(async () => {
@@ -722,6 +1241,66 @@ export default function TelegramMiniAppPage() {
               </div>
             </div>
 
+            {activity &&
+              (activity.liveTournaments > 0 ||
+                activity.seatedPlayers > 0 ||
+                activity.openTournaments > 0) && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    haptic('tap');
+                    setView('lobby');
+                  }}
+                  aria-label="Open the poker lobby"
+                  className="mb-3 flex w-full items-center gap-3 rounded-2xl border border-cyan-500/30 bg-[#0f2238] px-3 py-2.5 text-left"
+                  style={{ boxShadow: '0 0 0 1px rgba(34,211,238,0.08)' }}
+                >
+                  <span className="relative flex h-2.5 w-2.5 shrink-0" aria-hidden>
+                    <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-cyan-400 opacity-70" />
+                    <span className="relative inline-flex h-2.5 w-2.5 rounded-full bg-cyan-400" />
+                  </span>
+                  <div className="min-w-0 flex-1">
+                    <div className="text-[10px] font-bold uppercase tracking-[0.16em] text-cyan-400">
+                      Live now
+                    </div>
+                    <div className="truncate text-[12px] text-slate-300">
+                      {activity.liveTournaments > 0 ? (
+                        <>
+                          <span className="mitr-bold text-white">
+                            {activity.liveTournaments}
+                          </span>{' '}
+                          tournament{activity.liveTournaments === 1 ? '' : 's'} in play
+                        </>
+                      ) : activity.openTournaments > 0 ? (
+                        <>
+                          <span className="mitr-bold text-white">
+                            {activity.openTournaments}
+                          </span>{' '}
+                          tournament{activity.openTournaments === 1 ? '' : 's'} open
+                        </>
+                      ) : (
+                        <>
+                          <span className="mitr-bold text-white">
+                            {activity.openCashTables}
+                          </span>{' '}
+                          cash table{activity.openCashTables === 1 ? '' : 's'} open
+                        </>
+                      )}
+                      {activity.seatedPlayers > 0 && (
+                        <>
+                          {' · '}
+                          <span className="mitr-bold text-white">
+                            {activity.seatedPlayers}
+                          </span>{' '}
+                          seated
+                        </>
+                      )}
+                    </div>
+                  </div>
+                  <IconChevronRight size={16} className="shrink-0 text-cyan-400" aria-hidden />
+                </button>
+              )}
+
             <button
               type="button"
               onClick={() => openSite('/poker')}
@@ -751,6 +1330,30 @@ export default function TelegramMiniAppPage() {
                     featured: false,
                   },
                   {
+                    key: 'limbo',
+                    icon: <IconBolt size={20} aria-hidden />,
+                    title: 'Limbo',
+                    sub: 'Pick a target · roll higher to win',
+                    target: 'limbo',
+                    featured: false,
+                  },
+                  {
+                    key: 'mines',
+                    icon: <IconBomb size={20} aria-hidden />,
+                    title: 'Mines',
+                    sub: 'Reveal gems · dodge bombs',
+                    target: 'mines',
+                    featured: false,
+                  },
+                  {
+                    key: 'hilo',
+                    icon: <IconArrowsUpDown size={20} aria-hidden />,
+                    title: 'Hi-Lo',
+                    sub: 'Higher or lower · chain your multiplier',
+                    target: 'hilo',
+                    featured: false,
+                  },
+                  {
                     key: 'stats',
                     icon: <IconChartBar size={20} aria-hidden />,
                     title: 'Your stats',
@@ -759,11 +1362,38 @@ export default function TelegramMiniAppPage() {
                     featured: false,
                   },
                   {
+                    key: 'leaderboard',
+                    icon: <IconCrown size={20} aria-hidden />,
+                    title: 'Leaderboard',
+                    sub: 'Top MORBIUS poker players',
+                    target: 'leaderboard',
+                    featured: false,
+                  },
+                  {
+                    key: 'myhands',
+                    icon: <IconHistory size={20} aria-hidden />,
+                    title: 'My recent hands',
+                    sub: 'Replay & verify your last 20',
+                    target: 'myhands',
+                    featured: false,
+                  },
+                  {
                     key: 'profile',
                     icon: <IconUser size={20} aria-hidden />,
                     title: 'Profile & avatar',
                     sub: 'Edit your look and name',
                     target: 'profile',
+                    featured: false,
+                  },
+                  {
+                    key: 'settings',
+                    icon: <IconSettings size={20} aria-hidden />,
+                    title: 'Settings',
+                    sub:
+                      session.notificationsEnabled === false
+                        ? 'Notifications off'
+                        : 'Notifications & account',
+                    target: 'settings',
                     featured: false,
                   },
                 ] as {
@@ -779,7 +1409,10 @@ export default function TelegramMiniAppPage() {
                   key={tile.key}
                   type="button"
                   onClick={() => {
-                    if (tile.target) setView(tile.target);
+                    if (tile.target) {
+                      haptic('tap');
+                      setView(tile.target);
+                    }
                   }}
                   disabled={!tile.target}
                   className={`flex w-full items-center gap-3 rounded-2xl border px-3 py-3 text-left transition-colors ${
@@ -943,6 +1576,33 @@ export default function TelegramMiniAppPage() {
           />
         )}
 
+        {/* ---- ARCADE: LIMBO ---- */}
+        {loadState === 'ready' && session && session.linked && view === 'limbo' && (
+          <MiniAppLimbo
+            initData={initData}
+            initialChipBalance={session.chipBalance ?? '0'}
+            onBack={() => setView('hub')}
+          />
+        )}
+
+        {/* ---- ARCADE: MINES ---- */}
+        {loadState === 'ready' && session && session.linked && view === 'mines' && (
+          <MiniAppMines
+            initData={initData}
+            initialChipBalance={session.chipBalance ?? '0'}
+            onBack={() => setView('hub')}
+          />
+        )}
+
+        {/* ---- ARCADE: HI-LO ---- */}
+        {loadState === 'ready' && session && session.linked && view === 'hilo' && (
+          <MiniAppHiLo
+            initData={initData}
+            initialChipBalance={session.chipBalance ?? '0'}
+            onBack={() => setView('hub')}
+          />
+        )}
+
         {/* ---- POKER LOBBY ---- */}
         {loadState === 'ready' && session && session.linked && view === 'lobby' && (
           <>
@@ -997,7 +1657,8 @@ export default function TelegramMiniAppPage() {
                       <LobbyTournamentCard
                         key={t.tournamentId}
                         t={t}
-                        onOpen={() => openSite('/poker')}
+                        nowMs={nowMs}
+                        onOpen={() => openSite('/poker?tab=tournaments')}
                       />
                     ))}
                   </div>
@@ -1013,7 +1674,11 @@ export default function TelegramMiniAppPage() {
                 ) : (
                   <div className="flex flex-col gap-2.5">
                     {lobby.tables.map((c) => (
-                      <LobbyCashCard key={c.id} c={c} onOpen={() => openSite('/poker')} />
+                      <LobbyCashCard
+                        key={c.id}
+                        c={c}
+                        onOpen={() => openSite(`/poker/${c.id}?join=1`)}
+                      />
                     ))}
                   </div>
                 )}
@@ -1140,6 +1805,385 @@ export default function TelegramMiniAppPage() {
                 </p>
               </>
             )}
+          </>
+        )}
+
+        {/* ---- LEADERBOARD ---- */}
+        {loadState === 'ready' && session && session.linked && view === 'leaderboard' && (
+          <>
+            <div className="mb-4 flex items-center gap-2">
+              <button
+                type="button"
+                onClick={() => {
+                  haptic('tap');
+                  setView('hub');
+                }}
+                aria-label="Back to hub"
+                className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-cyan-500/30 bg-cyan-500/5 text-cyan-400"
+              >
+                <IconArrowLeft size={18} aria-hidden />
+              </button>
+              <h1 className="mitr-bold text-xl text-white">Leaderboard</h1>
+            </div>
+
+            <div className="mb-4 grid grid-cols-3 gap-1.5 rounded-xl border border-cyan-500/15 bg-[#0b1a2c] p-1">
+              {(
+                [
+                  ['net_chips', 'Net chips'],
+                  ['biggest_pot', 'Biggest pot'],
+                  ['hands_played', 'Hands'],
+                ] as [LbCategory, string][]
+              ).map(([key, label]) => (
+                <button
+                  key={key}
+                  type="button"
+                  onClick={() => {
+                    haptic('tap');
+                    setLbCategory(key);
+                  }}
+                  className={`rounded-lg px-2 py-2 text-[11px] font-semibold transition-colors ${
+                    lbCategory === key ? 'text-white' : 'text-slate-500'
+                  }`}
+                  style={
+                    lbCategory === key ? { background: GRAD_BTN, boxShadow: GLOW_BTN } : undefined
+                  }
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
+
+            {lbState === 'loading' && (
+              <p className="mt-10 text-center text-sm text-slate-500">
+                Loading the leaderboard…
+              </p>
+            )}
+
+            {lbState === 'error' && (
+              <div className="mt-8 rounded-2xl border border-red-500/25 bg-red-500/10 p-4 text-center">
+                <p className="text-sm text-red-200/90">
+                  Could not load the leaderboard. Try again.
+                </p>
+              </div>
+            )}
+
+            {lbState === 'ready' && leaderboard && leaderboard.rows.length === 0 && (
+              <div className="mt-8 rounded-2xl border border-cyan-500/15 bg-[#0b1a2c] p-6 text-center">
+                <p className="text-sm text-slate-400">
+                  Nobody has finished any hands yet. Sit down at a table and the
+                  leaderboard will start filling up.
+                </p>
+              </div>
+            )}
+
+            {lbState === 'ready' && leaderboard && leaderboard.rows.length > 0 && (
+              <>
+                <div className="flex flex-col gap-2">
+                  {leaderboard.rows.map((entry) => (
+                    <LeaderboardRow
+                      key={entry.address}
+                      entry={entry}
+                      category={leaderboard.category}
+                      isMe={
+                        !!session.walletAddress &&
+                        entry.address.toLowerCase() ===
+                          session.walletAddress.toLowerCase()
+                      }
+                    />
+                  ))}
+                </div>
+
+                {leaderboard.requester && (
+                  <>
+                    <div className="mt-5 mb-2 text-[10px] font-bold uppercase tracking-[0.16em] text-cyan-400">
+                      Your rank
+                    </div>
+                    <LeaderboardRow
+                      entry={leaderboard.requester}
+                      category={leaderboard.category}
+                      isMe
+                    />
+                  </>
+                )}
+
+                <button
+                  type="button"
+                  onClick={() => openSite('/poker')}
+                  className="mt-5 flex w-full items-center justify-center gap-2 rounded-xl border border-cyan-500/20 px-4 py-3 text-sm font-medium text-slate-300"
+                >
+                  Full leaderboard on morbius.io
+                  <IconExternalLink size={15} aria-hidden />
+                </button>
+              </>
+            )}
+          </>
+        )}
+
+        {/* ---- MY HANDS ---- */}
+        {loadState === 'ready' && session && session.linked && view === 'myhands' && (
+          <>
+            <div className="mb-4 flex items-center gap-2">
+              <button
+                type="button"
+                onClick={() => {
+                  haptic('tap');
+                  setView('hub');
+                }}
+                aria-label="Back to hub"
+                className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-cyan-500/30 bg-cyan-500/5 text-cyan-400"
+              >
+                <IconArrowLeft size={18} aria-hidden />
+              </button>
+              <h1 className="mitr-bold text-xl text-white">My recent hands</h1>
+            </div>
+
+            {myHandsState === 'loading' && (
+              <p className="mt-10 text-center text-sm text-slate-500">Loading your hands…</p>
+            )}
+
+            {myHandsState === 'error' && (
+              <div className="mt-8 rounded-2xl border border-red-500/25 bg-red-500/10 p-4 text-center">
+                <p className="text-sm text-red-200/90">
+                  Could not load your hand history. Try again.
+                </p>
+              </div>
+            )}
+
+            {myHandsState === 'ready' && myHands && myHands.length === 0 && (
+              <div className="mt-8 rounded-2xl border border-cyan-500/15 bg-[#0b1a2c] p-6 text-center">
+                <p className="text-sm text-slate-400">
+                  No completed hands yet. Sit down at a table and your last 20 will show
+                  up here — tap any row to verify the deal was provably fair.
+                </p>
+              </div>
+            )}
+
+            {myHandsState === 'ready' && myHands && myHands.length > 0 && (
+              <>
+                <p className="mb-3 text-[11px] leading-relaxed text-slate-500">
+                  Tap any hand to open the provably-fair verifier — every shuffle is
+                  committed before the deal and revealed at showdown.
+                </p>
+                <div className="flex flex-col gap-2">
+                  {myHands.map((h) => {
+                    const net = formatSignedChips(h.netAmount);
+                    const isWin = h.won;
+                    return (
+                      <button
+                        key={h.handId}
+                        type="button"
+                        onClick={() => {
+                          haptic('tap');
+                          openVerify(h.handId);
+                        }}
+                        className={`flex w-full items-center gap-3 rounded-2xl border px-3 py-2.5 text-left transition-colors ${
+                          isWin
+                            ? 'border-cyan-500/30 bg-[#0f2238]'
+                            : 'border-cyan-500/15 bg-[#0b1a2c]'
+                        }`}
+                      >
+                        <div
+                          className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border ${
+                            isWin
+                              ? 'border-cyan-400/40 bg-cyan-500/15 text-cyan-300'
+                              : h.folded
+                                ? 'border-slate-500/30 bg-slate-500/10 text-slate-400'
+                                : 'border-red-400/30 bg-red-500/10 text-red-300'
+                          }`}
+                        >
+                          <IconCards size={18} aria-hidden />
+                        </div>
+                        <div className="min-w-0 flex-1">
+                          <div className="flex items-center gap-1.5 truncate text-sm font-semibold text-white">
+                            <span className="truncate">{handOutcomeLabel(h)}</span>
+                            {h.handName && (
+                              <span className="truncate text-[11px] font-normal text-cyan-300">
+                                · {h.handName}
+                              </span>
+                            )}
+                          </div>
+                          <div className="mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-[11px] text-slate-500">
+                            <span>{formatChips(h.potAmount)} pot</span>
+                            <span aria-hidden>·</span>
+                            <span>{timeAgo(h.completedAt, nowMs)}</span>
+                            {h.tournamentId && (
+                              <>
+                                <span aria-hidden>·</span>
+                                <span className="text-cyan-400/80">MTT</span>
+                              </>
+                            )}
+                          </div>
+                        </div>
+                        <div className="flex shrink-0 flex-col items-end gap-1">
+                          <span
+                            className={`mitr-bold text-sm tabular-nums ${
+                              net.positive && h.netAmount !== '0'
+                                ? 'text-cyan-400'
+                                : h.netAmount === '0'
+                                  ? 'text-slate-400'
+                                  : 'text-red-400'
+                            }`}
+                          >
+                            {h.netAmount === '0' ? '0' : net.text}
+                          </span>
+                          {h.verifiable ? (
+                            <span className="flex items-center gap-1 text-[9px] font-bold uppercase tracking-wide text-cyan-300/80">
+                              <IconShieldCheck size={11} aria-hidden />
+                              Verify
+                            </span>
+                          ) : (
+                            <span className="text-[9px] font-bold uppercase tracking-wide text-slate-500">
+                              Pending
+                            </span>
+                          )}
+                        </div>
+                      </button>
+                    );
+                  })}
+                </div>
+
+                <button
+                  type="button"
+                  onClick={() => openSite('/poker')}
+                  className="mt-5 flex w-full items-center justify-center gap-2 rounded-xl border border-cyan-500/20 px-4 py-3 text-sm font-medium text-slate-300"
+                >
+                  Full history on morbius.io
+                  <IconExternalLink size={15} aria-hidden />
+                </button>
+              </>
+            )}
+          </>
+        )}
+
+        {/* ---- SETTINGS ---- */}
+        {loadState === 'ready' && session && session.linked && view === 'settings' && (
+          <>
+            <div className="mb-4 flex items-center gap-2">
+              <button
+                type="button"
+                onClick={() => {
+                  haptic('tap');
+                  setView('hub');
+                }}
+                aria-label="Back to hub"
+                className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-cyan-500/30 bg-cyan-500/5 text-cyan-400"
+              >
+                <IconArrowLeft size={18} aria-hidden />
+              </button>
+              <h1 className="mitr-bold text-xl text-white">Settings</h1>
+            </div>
+
+            <div className="mb-3 text-[10px] font-bold uppercase tracking-[0.16em] text-cyan-400">
+              Notifications
+            </div>
+            <div className="rounded-2xl border border-cyan-500/15 bg-[#0b1a2c] p-3">
+              <div className="flex items-center gap-3">
+                <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-cyan-500/30 bg-cyan-500/10 text-cyan-400">
+                  <IconBell size={20} aria-hidden />
+                </div>
+                <div className="min-w-0 flex-1">
+                  <div className="text-sm font-semibold text-white">Tournament pings</div>
+                  <div className="text-xs text-slate-500">
+                    Heads-up when your MORBIUS poker tournaments are about to start.
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  role="switch"
+                  aria-checked={session.notificationsEnabled === true}
+                  aria-label="Toggle tournament notifications"
+                  disabled={notifBusy}
+                  onClick={() => submitNotificationToggle(session.notificationsEnabled !== true)}
+                  className={`relative h-7 w-12 shrink-0 rounded-full border transition-colors disabled:opacity-60 ${
+                    session.notificationsEnabled
+                      ? 'border-cyan-400/50 bg-cyan-500/40'
+                      : 'border-slate-600/50 bg-slate-700/40'
+                  }`}
+                  style={
+                    session.notificationsEnabled
+                      ? { boxShadow: '0 0 10px rgba(34,211,238,0.35)' }
+                      : undefined
+                  }
+                >
+                  <span
+                    className={`absolute top-0.5 h-5 w-5 rounded-full bg-white shadow transition-transform ${
+                      session.notificationsEnabled ? 'translate-x-6' : 'translate-x-0.5'
+                    }`}
+                    aria-hidden
+                  />
+                </button>
+              </div>
+              {notifError && <p className="mt-3 text-xs text-red-300/90">{notifError}</p>}
+            </div>
+
+            <div className="mt-5 mb-3 text-[10px] font-bold uppercase tracking-[0.16em] text-cyan-400">
+              Linked account
+            </div>
+            <div className="rounded-2xl border border-cyan-500/15 bg-[#0b1a2c] p-3">
+              <div className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1">
+                <span className="text-xs text-slate-500">Telegram</span>
+                <span className="text-sm font-semibold text-white">
+                  {session.telegramUsername
+                    ? `@${session.telegramUsername}`
+                    : session.telegramName || 'Linked'}
+                </span>
+              </div>
+              {session.walletAddress && (
+                <div className="mt-2 flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1">
+                  <span className="text-xs text-slate-500">Wallet</span>
+                  <span className="font-mono text-xs text-slate-300">
+                    {`${session.walletAddress.slice(0, 6)}…${session.walletAddress.slice(-4)}`}
+                  </span>
+                </div>
+              )}
+            </div>
+
+            {!unlinkArmed ? (
+              <button
+                type="button"
+                onClick={() => {
+                  haptic('warn');
+                  setNotifError('');
+                  setUnlinkArmed(true);
+                }}
+                className="mt-4 flex w-full items-center justify-center gap-2 rounded-xl border border-red-500/30 bg-red-500/5 px-4 py-3 text-sm font-semibold text-red-300"
+              >
+                <IconLogout size={16} aria-hidden />
+                Unlink this Telegram account
+              </button>
+            ) : (
+              <div className="mt-4 rounded-2xl border border-red-500/30 bg-red-500/10 p-4">
+                <p className="text-sm text-red-100">
+                  Unlink {session.telegramUsername ? `@${session.telegramUsername}` : 'this chat'}{' '}
+                  from your wallet? You will stop getting notifications until you link again.
+                </p>
+                <div className="mt-3 flex gap-2">
+                  <button
+                    type="button"
+                    disabled={unlinkBusy}
+                    onClick={() => {
+                      haptic('tap');
+                      setUnlinkArmed(false);
+                    }}
+                    className="flex-1 rounded-xl border border-cyan-500/30 bg-cyan-500/5 px-3 py-2.5 text-sm font-semibold text-cyan-300 disabled:opacity-60"
+                  >
+                    Keep linked
+                  </button>
+                  <button
+                    type="button"
+                    disabled={unlinkBusy}
+                    onClick={submitUnlink}
+                    className="flex-1 rounded-xl border border-red-500/40 bg-red-500/20 px-3 py-2.5 text-sm font-bold text-red-100 disabled:opacity-60"
+                  >
+                    {unlinkBusy ? 'Unlinking…' : 'Unlink'}
+                  </button>
+                </div>
+              </div>
+            )}
+
+            <p className="mt-4 text-center text-[11px] text-slate-600">
+              Notifications and linking are also managed at morbius.io → Settings.
+            </p>
           </>
         )}
       </div>

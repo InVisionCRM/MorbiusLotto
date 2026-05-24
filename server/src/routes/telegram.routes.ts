@@ -297,6 +297,71 @@ export function registerTelegramRoutes({
         return res.json({ ok: true });
       }
 
+      if (command === '/top') {
+        const base = getPublicAppUrl() || 'https://morbius.io';
+        // /top [chips|pot|hands] — default chips. Aliases keep it human.
+        const rawArg = (arg || '').toLowerCase();
+        const category: 'net_chips' | 'biggest_pot' | 'hands_played' =
+          rawArg === 'pot' || rawArg === 'biggest' || rawArg === 'biggest_pot'
+            ? 'biggest_pot'
+            : rawArg === 'hands' || rawArg === 'played' || rawArg === 'hands_played'
+              ? 'hands_played'
+              : 'net_chips';
+        try {
+          const top = await dbService.getPokerTopPlayers(category, 10, null);
+          if (top.rows.length === 0) {
+            await sendTelegramMessage(
+              chatId,
+              'No completed poker hands yet — the leaderboard is empty.',
+              { buttons: [{ text: 'Open MORBIUS', webAppUrl: `${base}/tg` }] },
+            );
+            return res.json({ ok: true });
+          }
+          const heading =
+            category === 'biggest_pot'
+              ? '🏆 Top players · biggest pot won'
+              : category === 'hands_played'
+                ? '🏆 Top players · hands played'
+                : '🏆 Top players · net chips';
+          const formatValue = (r: typeof top.rows[number]): string => {
+            if (category === 'hands_played') {
+              return `${r.hands_played.toLocaleString('en-US')} hands`;
+            }
+            const raw = category === 'net_chips' ? r.net_chips : r.biggest_pot;
+            let n: bigint;
+            try {
+              n = BigInt(String(raw || '0').split('.')[0] || '0');
+            } catch {
+              n = 0n;
+            }
+            const sign = category === 'net_chips' ? (n >= 0n ? '+' : '-') : '';
+            const abs = (n < 0n ? -n : n).toLocaleString('en-US');
+            return `${sign}${abs} chips`;
+          };
+          const nameFor = (r: typeof top.rows[number]): string => {
+            if (r.display_name && r.display_name.trim().length > 0) return r.display_name;
+            const a = r.address || '';
+            return a.length >= 10 ? `${a.slice(0, 6)}…${a.slice(-4)}` : 'anon';
+          };
+          const lines = top.rows.map(
+            (r) => `${r.rank}. ${nameFor(r)} — ${formatValue(r)}`,
+          );
+          await sendTelegramMessage(
+            chatId,
+            `${heading}\n\n${lines.join('\n')}\n\n` +
+              'Tip: send /top pot or /top hands for other categories.',
+            { buttons: [{ text: 'Open MORBIUS', webAppUrl: `${base}/tg` }] },
+          );
+        } catch (err) {
+          logger.error('[telegram] /top failed', { error: (err as Error).message });
+          await sendTelegramMessage(
+            chatId,
+            '⚠️ Could not load the leaderboard. Try again shortly.',
+          );
+        }
+        return res.json({ ok: true });
+      }
+
       if (command === '/lobby') {
         const base = getPublicAppUrl() || 'https://morbius.io';
         try {
@@ -334,6 +399,83 @@ export function registerTelegramRoutes({
         return res.json({ ok: true });
       }
 
+      if (command === '/recent' || command === '/lasthand') {
+        if (chatType !== 'private') {
+          await sendTelegramMessage(
+            chatId,
+            'Send /recent to me in a direct message — I will not post your hand history in a group.',
+          );
+          return res.json({ ok: true });
+        }
+        const wallet = await getLinkedWallet(pool, chatId);
+        if (!wallet) {
+          await sendTelegramMessage(
+            chatId,
+            'No wallet is linked yet. Get a code on the website (Settings → Notifications) ' +
+              'and send:  /link YOURCODE',
+          );
+          return res.json({ ok: true });
+        }
+        const base = getPublicAppUrl() || 'https://morbius.io';
+        try {
+          const hands = await dbService.getPokerPlayerHands(wallet, 5, 0);
+          if (hands.length === 0) {
+            await sendTelegramMessage(
+              chatId,
+              "You haven't completed any poker hands yet. Jump into a table and try one.",
+              { buttons: [{ text: 'Open the poker lobby', webAppUrl: `${base}/tg` }] },
+            );
+            return res.json({ ok: true });
+          }
+          const formatChips = (raw: string): string => {
+            let n: bigint;
+            try {
+              n = BigInt(String(raw || '0').split('.')[0] || '0');
+            } catch {
+              n = 0n;
+            }
+            return n.toLocaleString('en-US');
+          };
+          const lines = hands.map((h, i) => {
+            const contributed = BigInt(String(h.myContributed || '0').split('.')[0] || '0');
+            const won = BigInt(String(h.myWon || '0').split('.')[0] || '0');
+            const net = won - contributed;
+            const sign = net >= 0n ? '+' : '-';
+            const absNet = (net < 0n ? -net : net).toLocaleString('en-US');
+            const label =
+              h.resultType === 'win'
+                ? '🟢 WIN '
+                : h.resultType === 'fold'
+                  ? '⚪ FOLD'
+                  : '🔴 LOSS';
+            // Short hand id (first 8 chars of UUID) — enough to look up in the verify page.
+            const shortId = h.id.slice(0, 8);
+            return (
+              `${i + 1}. ${label} · ${sign}${absNet} chips · pot ${formatChips(h.pot_amount)}\n` +
+              `   id: ${shortId}…  (hand #${h.hand_number})`
+            );
+          });
+          // Link the most-recent hand directly; older ones are reachable by id on the verify page.
+          const latestVerifyUrl = `${base}/poker/verify?handId=${encodeURIComponent(hands[0].id)}`;
+          await sendTelegramMessage(
+            chatId,
+            `♣️ Your last ${hands.length} poker hand${hands.length === 1 ? '' : 's'}\n\n` +
+              `${lines.join('\n\n')}\n\n` +
+              'Tap below to verify the most-recent shuffle. ' +
+              'For older hands, paste the id at ' +
+              `${base.replace(/^https?:\/\//, '')}/poker/verify.`,
+            { buttons: [{ text: 'Verify latest hand', url: latestVerifyUrl }] },
+          );
+        } catch (err) {
+          logger.error('[telegram] /recent failed', { error: (err as Error).message });
+          await sendTelegramMessage(
+            chatId,
+            '⚠️ Could not load your recent hands. Try again shortly.',
+          );
+        }
+        return res.json({ ok: true });
+      }
+
       // /help and everything else.
       await sendTelegramMessage(
         chatId,
@@ -341,7 +483,9 @@ export function registerTelegramRoutes({
           '/app — open the MORBIUS app (hub, stats, wallet, profile)\n' +
           '/balance — your MORBIUS + poker chip balance\n' +
           '/stats — your poker stats\n' +
+          '/recent — your last 5 poker hands (with verify link)\n' +
           '/lobby — tournaments open right now\n' +
+          '/top [chips|pot|hands] — top players leaderboard\n' +
           '/link <code> — connect your wallet (code from the website: Settings → Notifications)\n' +
           '/unlink — disconnect and stop notifications\n' +
           '/chatid — show the chat ID (for group setup)\n' +
@@ -505,6 +649,7 @@ export function registerTelegramRoutes({
       { command: 'balance', description: 'Your MORBIUS + poker chip balance' },
       { command: 'stats', description: 'Your poker stats' },
       { command: 'lobby', description: 'Tournaments open right now' },
+      { command: 'top', description: 'Top players leaderboard' },
       { command: 'link', description: 'Connect your wallet' },
       { command: 'unlink', description: 'Stop notifications' },
       { command: 'chatid', description: 'Show the chat ID (group setup)' },
@@ -547,12 +692,16 @@ export function registerTelegramRoutes({
         });
       }
       const wallet = String(linkRow.rows[0].wallet_address);
-      const [balRow, chips, nameRow] = await Promise.all([
+      const [balRow, chips, nameRow, prefsRow] = await Promise.all([
         pool.query('SELECT balance FROM players WHERE LOWER(wallet_address) = LOWER($1)', [wallet]),
         getPokerChipBalance(pool, wallet),
         pool.query(
           'SELECT display_name FROM chat_display_names WHERE LOWER(wallet_address) = LOWER($1)',
           [wallet],
+        ),
+        pool.query(
+          'SELECT notifications_enabled FROM telegram_links WHERE telegram_chat_id = $1',
+          [tgUser.id],
         ),
       ]);
       return res.json({
@@ -564,6 +713,7 @@ export function registerTelegramRoutes({
         displayName: nameRow.rows[0]?.display_name ?? null,
         morbiusBalanceWei: balRow.rows[0]?.balance != null ? String(balRow.rows[0].balance) : '0',
         chipBalance: chips.toString(),
+        notificationsEnabled: prefsRow.rows[0]?.notifications_enabled === true,
       });
     } catch (err) {
       logger.error('[telegram] miniapp session failed', { error: (err as Error).message });
@@ -658,6 +808,83 @@ export function registerTelegramRoutes({
     } catch (err) {
       logger.error('[telegram] miniapp lobby failed', { error: (err as Error).message });
       return res.status(500).json({ ok: false, error: 'Could not load the lobby.' });
+    }
+  });
+
+  // -------------------------------------------------------------------------
+  // POST /api/telegram/miniapp/my-hands — the linked player's last completed
+  // poker hands, newest first, with enough detail to render a compact history
+  // row and a tap-through to /tg/verify/:handId. Auth is the signed
+  // Telegram `initData`; we only ever read rows for that linked wallet.
+  // -------------------------------------------------------------------------
+  app.post('/api/telegram/miniapp/my-hands', async (req: Request, res: Response) => {
+    const initData = typeof req.body?.initData === 'string' ? req.body.initData : '';
+    const tgUser = verifyTelegramInitData(initData);
+    if (!tgUser) {
+      return res.status(401).json({ ok: false, error: 'Invalid or expired Telegram session.' });
+    }
+    try {
+      const wallet = await getLinkedWallet(pool, tgUser.id);
+      if (!wallet) {
+        return res
+          .status(403)
+          .json({ ok: false, error: 'No wallet is linked to this Telegram account.' });
+      }
+      // 20 most recent completed hands. server_seed being set means showdown
+      // has revealed the seed, which is the only state the verifier can use.
+      const r = await pool.query(
+        `SELECT
+           h.id              AS hand_id,
+           h.hand_number     AS hand_number,
+           h.pot_amount      AS pot_amount,
+           h.completed_at    AS completed_at,
+           h.tournament_id   AS tournament_id,
+           h.server_seed     AS server_seed,
+           hp.won            AS won,
+           hp.won_amount     AS won_amount,
+           hp.contributed    AS contributed,
+           hp.folded         AS folded,
+           hp.folded_street  AS folded_street,
+           hp.saw_showdown   AS saw_showdown,
+           hp.hand_name      AS hand_name
+         FROM poker_hand_players hp
+         JOIN poker_hands h ON h.id = hp.hand_id
+         WHERE LOWER(hp.player_address) = LOWER($1)
+           AND h.completed_at IS NOT NULL
+         ORDER BY h.completed_at DESC
+         LIMIT 20`,
+        [wallet],
+      );
+      const hands = r.rows.map((row) => {
+        const won = String(row.won_amount ?? '0');
+        const paid = String(row.contributed ?? '0');
+        let net = '0';
+        try {
+          net = (BigInt(won) - BigInt(paid)).toString();
+        } catch {
+          /* keep '0' */
+        }
+        return {
+          handId: String(row.hand_id),
+          handNumber: Number(row.hand_number),
+          potAmount: String(row.pot_amount ?? '0'),
+          completedAt: row.completed_at ? new Date(row.completed_at).toISOString() : null,
+          tournamentId: row.tournament_id ? String(row.tournament_id) : null,
+          verifiable: typeof row.server_seed === 'string' && row.server_seed.length > 0,
+          won: row.won === true,
+          wonAmount: won,
+          contributed: paid,
+          netAmount: net,
+          folded: row.folded === true,
+          foldedStreet: row.folded_street ? String(row.folded_street) : null,
+          sawShowdown: row.saw_showdown === true,
+          handName: row.hand_name ? String(row.hand_name) : null,
+        };
+      });
+      return res.json({ ok: true, hands });
+    } catch (err) {
+      logger.error('[telegram] miniapp my-hands failed', { error: (err as Error).message });
+      return res.status(500).json({ ok: false, error: 'Could not load your hand history.' });
     }
   });
 
@@ -757,6 +984,68 @@ export function registerTelegramRoutes({
       const message = (err as Error).message || 'Could not create the tournament.';
       logger.error('[telegram] miniapp tournament create failed', { error: message });
       return res.status(400).json({ ok: false, error: message });
+    }
+  });
+
+  // -------------------------------------------------------------------------
+  // POST /api/telegram/miniapp/preferences — toggle notifications from inside
+  // the Mini App. Auth is the signed Telegram `initData`; the wallet is whichever
+  // one is currently linked to the Telegram chat.
+  // -------------------------------------------------------------------------
+  app.post('/api/telegram/miniapp/preferences', async (req: Request, res: Response) => {
+    const initData = typeof req.body?.initData === 'string' ? req.body.initData : '';
+    const tgUser = verifyTelegramInitData(initData);
+    if (!tgUser) {
+      return res.status(401).json({ ok: false, error: 'Invalid or expired Telegram session.' });
+    }
+    if (typeof req.body?.notificationsEnabled !== 'boolean') {
+      return res
+        .status(400)
+        .json({ ok: false, error: 'notificationsEnabled (boolean) is required.' });
+    }
+    try {
+      const upd = await pool.query(
+        `UPDATE telegram_links SET notifications_enabled = $2
+         WHERE telegram_chat_id = $1 RETURNING notifications_enabled`,
+        [tgUser.id, req.body.notificationsEnabled as boolean],
+      );
+      if (upd.rows.length === 0) {
+        return res
+          .status(403)
+          .json({ ok: false, error: 'No wallet is linked to this Telegram account.' });
+      }
+      return res.json({
+        ok: true,
+        notificationsEnabled: upd.rows[0].notifications_enabled === true,
+      });
+    } catch (err) {
+      logger.error('[telegram] miniapp preferences update failed', {
+        error: (err as Error).message,
+      });
+      return res
+        .status(500)
+        .json({ ok: false, error: 'Could not update notification preferences.' });
+    }
+  });
+
+  // -------------------------------------------------------------------------
+  // POST /api/telegram/miniapp/unlink — disconnect this Telegram chat from its
+  // linked wallet. Auth is the signed Telegram `initData`; we only ever delete
+  // the row whose `telegram_chat_id` matches the verified user, so a Mini App
+  // session can't unlink anyone else.
+  // -------------------------------------------------------------------------
+  app.post('/api/telegram/miniapp/unlink', async (req: Request, res: Response) => {
+    const initData = typeof req.body?.initData === 'string' ? req.body.initData : '';
+    const tgUser = verifyTelegramInitData(initData);
+    if (!tgUser) {
+      return res.status(401).json({ ok: false, error: 'Invalid or expired Telegram session.' });
+    }
+    try {
+      await pool.query('DELETE FROM telegram_links WHERE telegram_chat_id = $1', [tgUser.id]);
+      return res.json({ ok: true });
+    } catch (err) {
+      logger.error('[telegram] miniapp unlink failed', { error: (err as Error).message });
+      return res.status(500).json({ ok: false, error: 'Could not unlink your account.' });
     }
   });
 

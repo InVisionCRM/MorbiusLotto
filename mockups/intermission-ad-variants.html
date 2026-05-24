@@ -1,0 +1,433 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Poker Intermission Ad — 5:1 banner</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    background: rgb(2 6 23);
+    color: white;
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    padding: 40px 24px 80px;
+    min-height: 100vh;
+  }
+
+  header { text-align: center; margin-bottom: 36px; }
+  header h1 { font-size: 28px; font-weight: 700; letter-spacing: -0.02em; }
+  header .crumb {
+    display: inline-block;
+    margin-bottom: 10px;
+    font-size: 11px;
+    letter-spacing: 0.22em;
+    color: rgba(125,211,252,0.85);
+    text-transform: uppercase;
+    border: 1px solid rgba(125,211,252,0.3);
+    padding: 4px 10px;
+    border-radius: 999px;
+  }
+  header p {
+    margin-top: 10px;
+    color: rgba(255,255,255,0.55);
+    font-size: 14px;
+    max-width: 740px;
+    margin-left: auto; margin-right: auto;
+    line-height: 1.55;
+  }
+
+  .stages { display: flex; flex-direction: column; gap: 36px; align-items: center; }
+
+  /* ─── Mock poker table ──────────────────── */
+  .stage {
+    position: relative;
+    width: 720px; max-width: 100%;
+    aspect-ratio: 7 / 5;
+    border-radius: 36px;
+    overflow: hidden;
+    background: radial-gradient(ellipse 85% 70% at 50% 55%, #2a5f3a 0%, #1a3e25 55%, #0b1f14 100%);
+    box-shadow: inset 0 0 80px rgba(0,0,0,0.55), 0 16px 40px rgba(0,0,0,0.55);
+    isolation: isolate;
+  }
+  .stage::before {
+    content: ""; position: absolute; inset: 0;
+    background-image:
+      radial-gradient(circle at 30% 20%, rgba(255,255,255,0.04), transparent 40%),
+      radial-gradient(circle at 70% 80%, rgba(0,0,0,0.18), transparent 50%);
+    pointer-events: none;
+  }
+  .stage-rail {
+    position: absolute; inset: 14px;
+    border-radius: 28px;
+    border: 1px solid rgba(255,255,255,0.06);
+    pointer-events: none;
+  }
+
+  /* Cards */
+  .pcard {
+    position: absolute;
+    width: 6%;
+    aspect-ratio: 5 / 7;
+    border-radius: 4px;
+    background: white;
+    box-shadow: 0 3px 8px rgba(0,0,0,0.45);
+    display: flex; flex-direction: column; justify-content: space-between;
+    padding: 4px 5px;
+    font-family: 'Georgia', serif;
+    font-weight: 700; font-size: 10px;
+    z-index: 25;
+    transform: translate(-50%, -50%);
+  }
+  .pcard.red { color: #c92a2a; }
+  .pcard.black { color: #1a1a1a; }
+  .pcard .pip { font-size: 16px; align-self: center; }
+  .pcard.back {
+    background: linear-gradient(135deg, #1e40af, #1e3a8a);
+    border: 1.5px solid rgba(255,255,255,0.4);
+  }
+  .pcard.back::before {
+    content: ""; position: absolute; inset: 4px;
+    border: 1px solid rgba(255,255,255,0.25);
+    border-radius: 2px;
+    background-image: repeating-linear-gradient(45deg, rgba(255,255,255,0.05) 0 3px, transparent 3px 6px);
+  }
+  .pcard.hole-a, .pcard.hole-b { width: 7%; z-index: 26; }
+  .pcard.hole-a { transform: translate(-50%, -50%) rotate(-12deg); }
+  .pcard.hole-b { transform: translate(-50%, -50%) rotate(12deg); }
+
+  .pot-chip {
+    position: absolute;
+    top: 36%; left: 50%; transform: translate(-50%, -50%);
+    background: rgba(0,0,0,0.5);
+    border: 1px solid rgba(255,255,255,0.12);
+    color: rgba(255,255,255,0.7);
+    font-size: 11px; padding: 4px 12px;
+    border-radius: 999px;
+    letter-spacing: 0.06em;
+    z-index: 23;
+  }
+  .intermission {
+    position: absolute;
+    top: 14px; left: 50%; transform: translateX(-50%);
+    display: flex; align-items: center; gap: 8px;
+    background: rgba(0,0,0,0.55);
+    border: 1px solid rgba(125,211,252,0.25);
+    border-radius: 999px;
+    padding: 4px 14px; font-size: 11px;
+    color: rgba(125,211,252,0.9);
+    z-index: 30;
+  }
+  .intermission .dot { width: 6px; height: 6px; border-radius: 50%; background: #38bdf8; box-shadow: 0 0 6px #38bdf8; }
+
+  /* ─── 5:1 BANNER AD ────────────────────── */
+  .banner {
+    position: absolute;
+    width: 74%;     /* 533 / 720 */
+    aspect-ratio: 5 / 1;
+    left: 50%;
+    top: 24%;       /* upper safe zone — between top-rim cards (~6%) and community (~51%) */
+    transform: translate(-50%, -50%);
+    z-index: 22;
+    border-radius: 12px;
+    overflow: hidden;
+    background: radial-gradient(ellipse at 20% 50%, #0c1426 0%, #050810 80%);
+    border: 1px solid rgba(56,189,248,0.4);
+    box-shadow: 0 0 24px rgba(56,189,248,0.25), 0 10px 24px rgba(0,0,0,0.5);
+    color: white;
+  }
+  .banner::before {
+    content: ""; position: absolute; inset: 5px; pointer-events: none;
+    background:
+      linear-gradient(#fff,#fff) top left / 10px 1px no-repeat,
+      linear-gradient(#fff,#fff) top left / 1px 10px no-repeat,
+      linear-gradient(#fff,#fff) top right / 10px 1px no-repeat,
+      linear-gradient(#fff,#fff) top right / 1px 10px no-repeat,
+      linear-gradient(#fff,#fff) bottom left / 10px 1px no-repeat,
+      linear-gradient(#fff,#fff) bottom left / 1px 10px no-repeat,
+      linear-gradient(#fff,#fff) bottom right / 10px 1px no-repeat,
+      linear-gradient(#fff,#fff) bottom right / 1px 10px no-repeat;
+    opacity: 0.45;
+  }
+  .b-tag {
+    position: absolute; top: 8px; left: 50%; transform: translateX(-50%);
+    font-size: 8px; letter-spacing: 0.32em; color: #38bdf8;
+    text-transform: uppercase;
+    background: rgba(5,8,16,0.85); padding: 0 6px;
+    z-index: 2;
+  }
+  .b-timer {
+    position: absolute; top: 8px; right: 12px;
+    font-size: 9px; color: rgba(125,211,252,0.85);
+    font-variant-numeric: tabular-nums; letter-spacing: 0.06em;
+    background: rgba(5,8,16,0.85); padding: 0 4px;
+    z-index: 2;
+  }
+
+  /* Banner main row */
+  .b-row {
+    position: absolute;
+    top: 20px; bottom: 8px; left: 12px; right: 12px;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+  }
+  .b-divider { width: 1px; align-self: stretch; background: rgba(56,189,248,0.18); margin: 4px 0; }
+
+  /* identity (logo + name) */
+  .b-ident { display: flex; align-items: center; gap: 8px; min-width: 0; }
+  .b-core {
+    position: relative;
+    width: 38px; height: 38px;
+    display: flex; align-items: center; justify-content: center;
+    flex-shrink: 0;
+  }
+  .b-core::before, .b-core::after {
+    content: ""; position: absolute; inset: 0;
+    border-radius: 50%; border: 2px solid #38bdf8;
+    animation: pulse 2.4s ease-out infinite; opacity: 0;
+  }
+  .b-core::after { animation-delay: 1.2s; }
+  @keyframes pulse {
+    0% { transform: scale(0.55); opacity: 0.75; }
+    100% { transform: scale(1.5); opacity: 0; }
+  }
+  .b-logo {
+    position: relative; z-index: 1;
+    width: 26px; height: 26px;
+    border-radius: 50%;
+    background: linear-gradient(135deg, #fbbf24, #f97316);
+    display: flex; align-items: center; justify-content: center;
+    font-weight: 900; font-size: 14px; color: #050810;
+    box-shadow: 0 0 12px rgba(56,189,248,0.5);
+  }
+  .b-namewrap { display: flex; flex-direction: column; line-height: 1.1; min-width: 0; }
+  .b-name { font-size: 12px; font-weight: 800; letter-spacing: 0.01em; white-space: nowrap; }
+  .b-ticker { font-size: 7px; color: rgba(255,255,255,0.5); letter-spacing: 0.18em; margin-top: 1px; }
+
+  /* price block */
+  .b-price-block { display: flex; flex-direction: column; line-height: 1.1; min-width: 80px; }
+  .b-price { font-size: 14px; font-weight: 800; font-variant-numeric: tabular-nums; }
+  .b-change { font-size: 10px; font-weight: 700; margin-top: 1px; font-variant-numeric: tabular-nums; }
+  .b-change.up { color: #4ade80; }
+  .b-change.down { color: #f87171; }
+
+  /* mini sparkline */
+  .b-spark {
+    flex: 1; min-width: 80px;
+    height: 36px;
+    background: linear-gradient(180deg, rgba(56,189,248,0.04), transparent);
+    border: 1px solid rgba(56,189,248,0.15);
+    border-radius: 4px;
+    overflow: hidden;
+    position: relative;
+  }
+  .b-spark svg { display: block; width: 100%; height: 100%; }
+
+  /* stats — 2x2 grid */
+  .b-stats {
+    display: grid;
+    grid-template-columns: auto auto;
+    gap: 2px 10px;
+    line-height: 1.1;
+    font-size: 9px;
+  }
+  .b-stat { display: flex; gap: 4px; align-items: baseline; white-space: nowrap; }
+  .b-stat .lbl { color: #7dd3fc; font-size: 7px; letter-spacing: 0.12em; text-transform: uppercase; }
+  .b-stat .val { font-weight: 700; font-variant-numeric: tabular-nums; }
+
+  /* buttons */
+  .b-actions { display: flex; gap: 6px; flex-shrink: 0; }
+  .b-btn {
+    font-weight: 700;
+    border-radius: 6px;
+    cursor: pointer;
+    text-transform: uppercase;
+    border: 1px solid; background: transparent;
+    color: inherit; font-family: inherit;
+    font-size: 9px;
+    padding: 5px 9px;
+    letter-spacing: 0.05em;
+    white-space: nowrap;
+  }
+  .b-btn.primary {
+    background: linear-gradient(135deg, #0ea5e9, #38bdf8);
+    border-color: #38bdf8;
+    color: #050810;
+    box-shadow: 0 0 10px rgba(56,189,248,0.4);
+  }
+  .b-btn.primary:hover { filter: brightness(1.1); }
+  .b-btn.ghost {
+    border-color: rgba(125,211,252,0.4);
+    color: #7dd3fc;
+    background: rgba(5,8,16,0.6);
+  }
+  .b-btn.ghost:hover { border-color: #7dd3fc; background: rgba(56,189,248,0.14); color: white; }
+
+  /* countdown bar */
+  .b-bar {
+    position: absolute; bottom: 0; left: 0; right: 0;
+    height: 3px;
+    background: rgba(56,189,248,0.15);
+    overflow: hidden;
+  }
+  .b-bar::before {
+    content: ""; position: absolute; inset: 0;
+    background: linear-gradient(90deg, #38bdf8, #0ea5e9, #38bdf8);
+    transform-origin: left;
+    animation: countdown 15s linear forwards;
+    box-shadow: 0 0 8px #38bdf8;
+  }
+  @keyframes countdown { 0% { transform: scaleX(1); } 100% { transform: scaleX(0); } }
+
+  /* description block */
+  .meta {
+    margin-top: 20px;
+    max-width: 720px;
+    color: rgba(255,255,255,0.55);
+    font-size: 13px;
+    line-height: 1.6;
+  }
+  .meta strong { color: rgba(255,255,255,0.9); }
+  .meta ul { margin-top: 8px; padding-left: 18px; }
+  .meta li { margin-bottom: 3px; }
+  .meta code {
+    font-family: 'SF Mono', Menlo, monospace;
+    font-size: 12px;
+    background: rgba(56,189,248,0.08);
+    padding: 1px 6px;
+    border-radius: 4px;
+    color: #7dd3fc;
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <span class="crumb">Pulse Beacon · 5:1 banner</span>
+  <h1>Intermission Ad — Wide banner</h1>
+  <p>
+    Slots cleanly into the horizontal dead-zone above the community cards.
+    No cards covered at any seat count. Identity + price + sparkline + 4 stats + 2 buttons fit in one row.
+  </p>
+</header>
+
+<div class="stages">
+
+  <div>
+    <div class="stage">
+      <div class="stage-rail"></div>
+      <div class="intermission"><span class="dot"></span>Intermission · 12s</div>
+
+      <!-- Banner positioned ABOVE community cards, BELOW top-rim opponents -->
+      <div class="banner">
+        <span class="b-tag">▾ Active Sponsor ▾</span>
+        <span class="b-timer">12s</span>
+
+        <div class="b-row">
+          <div class="b-ident">
+            <div class="b-core"><div class="b-logo">M</div></div>
+            <div class="b-namewrap">
+              <span class="b-name">Morbius</span>
+              <span class="b-ticker">$MORBIUS</span>
+            </div>
+          </div>
+
+          <div class="b-divider"></div>
+
+          <div class="b-price-block">
+            <span class="b-price">$0.000234</span>
+            <span class="b-change up">+12.4% 24h</span>
+          </div>
+
+          <div class="b-divider"></div>
+
+          <div class="b-spark" aria-hidden>
+            <svg viewBox="0 0 200 36" preserveAspectRatio="none">
+              <defs>
+                <linearGradient id="sArea" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="0%" stop-color="#38bdf8" stop-opacity="0.5"/>
+                  <stop offset="100%" stop-color="#38bdf8" stop-opacity="0"/>
+                </linearGradient>
+                <linearGradient id="sLine" x1="0" y1="0" x2="1" y2="0">
+                  <stop offset="0%" stop-color="#22d3ee"/>
+                  <stop offset="100%" stop-color="#a3e635"/>
+                </linearGradient>
+              </defs>
+              <path d="M 0 28 L 12 25 L 24 27 L 36 22 L 48 20 L 60 21 L 72 23 L 84 24 L 96 18 L 108 15 L 120 16 L 132 17 L 144 13 L 156 14 L 168 9 L 180 7 L 192 9 L 200 5 L 200 36 L 0 36 Z" fill="url(#sArea)"/>
+              <path d="M 0 28 L 12 25 L 24 27 L 36 22 L 48 20 L 60 21 L 72 23 L 84 24 L 96 18 L 108 15 L 120 16 L 132 17 L 144 13 L 156 14 L 168 9 L 180 7 L 192 9 L 200 5" fill="none" stroke="url(#sLine)" stroke-width="1.4" stroke-linejoin="round" stroke-linecap="round"/>
+              <circle cx="200" cy="5" r="1.8" fill="#a3e635"/>
+              <circle cx="200" cy="5" r="1" fill="white"/>
+            </svg>
+          </div>
+
+          <div class="b-divider"></div>
+
+          <div class="b-stats">
+            <div class="b-stat"><span class="lbl">Mcap</span><span class="val">$4.2M</span></div>
+            <div class="b-stat"><span class="lbl">Liq</span><span class="val">$215K</span></div>
+            <div class="b-stat"><span class="lbl">Hodl</span><span class="val">8,431</span></div>
+            <div class="b-stat"><span class="lbl">Age</span><span class="val">8mo</span></div>
+          </div>
+
+          <div class="b-divider"></div>
+
+          <div class="b-actions">
+            <button class="b-btn ghost">Chart ↗</button>
+            <button class="b-btn primary">Become Sponsor</button>
+          </div>
+        </div>
+
+        <div class="b-bar"></div>
+      </div>
+
+      <!-- Cards rendered AFTER the banner, with higher z-index (they're at z=25/26, banner at z=22) -->
+      <!-- Top-rim opponents -->
+      <div class="pcard back" style="left:30%;top:6%;"></div>
+      <div class="pcard back" style="left:50%;top:6%;"></div>
+      <div class="pcard back" style="left:68%;top:6%;"></div>
+      <!-- Side opponents -->
+      <div class="pcard back" style="left:10%;top:55%;"></div>
+      <div class="pcard back" style="left:88%;top:55%;"></div>
+      <!-- Lower-corner opponents -->
+      <div class="pcard back" style="left:18%;top:81%;"></div>
+      <div class="pcard back" style="left:68%;top:80%;"></div>
+
+      <!-- Community cards -->
+      <div class="pcard red"   style="left:38%;top:51%;"><div>A</div><div class="pip">♥</div><div></div></div>
+      <div class="pcard black" style="left:44%;top:51%;"><div>K</div><div class="pip">♣</div><div></div></div>
+      <div class="pcard red"   style="left:50%;top:51%;"><div>7</div><div class="pip">♦</div><div></div></div>
+      <div class="pcard black" style="left:56%;top:51%;"><div>2</div><div class="pip">♠</div><div></div></div>
+      <div class="pcard red"   style="left:62%;top:51%;"><div>9</div><div class="pip">♥</div><div></div></div>
+
+      <!-- Hero hole cards -->
+      <div class="pcard red hole-a"   style="left:46%;top:89%;"><div>Q</div><div class="pip">♥</div><div></div></div>
+      <div class="pcard black hole-b" style="left:54%;top:89%;"><div>Q</div><div class="pip">♠</div><div></div></div>
+
+      <div class="pot-chip">POT · 24,500</div>
+    </div>
+
+    <div class="meta">
+      <strong>Placement:</strong>
+      <ul>
+        <li>5:1 aspect, ~74% of table width, anchored at <code>top: 24%</code>.</li>
+        <li>Lives in the strip between the top-rim opponent seats (~6%) and the community cards (~51%) — no card lands here at any seat count.</li>
+        <li>Belt-and-suspenders: banner gets <code>z-index: 22</code>, below the community cards (<code>z-index 25/29</code>) and hole cards (<code>26+</code>), so even if a player added an extra card animation in this zone later, cards would still render in front.</li>
+      </ul>
+      <strong>What's inside, left-to-right:</strong>
+      <ul>
+        <li><strong>Identity</strong> — pulse beacon (smaller now, 38px) + name + ticker stacked.</li>
+        <li><strong>Price</strong> — large price + 24h change inline.</li>
+        <li><strong>Sparkline</strong> — 24h GeckoTerminal OHLC, flex-grows to fill remaining width on wider tables.</li>
+        <li><strong>Stats</strong> — Mcap · Liq · Hodl · Age in a 2×2 grid (FDV/Vol can swap in if you'd rather).</li>
+        <li><strong>Actions</strong> — Chart (ghost) + Become Sponsor (primary).</li>
+      </ul>
+      <strong>Animations kept:</strong> pulse rings around the beacon (2.4s loop) and the cyan countdown bar sweeping right→left across the 15-second window at the very bottom edge.
+      <div style="margin-top:12px;">Confirm and I'll build <code>PokerIntermissionAd.tsx</code> using live <code>fetchDexScreenerTokenInfo</code> + <code>fetchHoldersCount</code> + GeckoTerminal OHLC, wired to whatever event fires the 15s intermission tick.</div>
+    </div>
+  </div>
+
+</div>
+
+</body>
+</html>

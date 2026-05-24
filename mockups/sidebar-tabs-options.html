@@ -1,0 +1,807 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Poker sidebar — three options for inline stats/settings</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    background: rgb(2 6 23);
+    color: white;
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    padding: 40px 24px 80px;
+    min-height: 100vh;
+  }
+
+  header { text-align: center; margin-bottom: 36px; }
+  header h1 { font-size: 28px; font-weight: 700; letter-spacing: -0.02em; }
+  header .crumb {
+    display: inline-block;
+    margin-bottom: 10px;
+    font-size: 11px;
+    letter-spacing: 0.22em;
+    color: rgba(125,211,252,0.85);
+    text-transform: uppercase;
+    border: 1px solid rgba(125,211,252,0.3);
+    padding: 4px 10px;
+    border-radius: 999px;
+  }
+  header p {
+    margin-top: 10px;
+    color: rgba(255,255,255,0.55);
+    font-size: 14px;
+    max-width: 760px;
+    margin-left: auto; margin-right: auto;
+    line-height: 1.55;
+  }
+
+  .options { display: flex; flex-direction: column; gap: 56px; align-items: center; }
+
+  .option {
+    width: 100%;
+    max-width: 1100px;
+  }
+  .option-head { text-align: center; margin-bottom: 16px; }
+  .option-head .tag {
+    display: inline-block;
+    font-size: 10px;
+    letter-spacing: 0.22em;
+    color: #7dd3fc;
+    text-transform: uppercase;
+    border: 1px solid rgba(125,211,252,0.3);
+    padding: 3px 10px;
+    border-radius: 999px;
+    margin-bottom: 8px;
+  }
+  .option-head h2 {
+    font-size: 20px;
+    font-weight: 700;
+    letter-spacing: -0.01em;
+  }
+  .option-head .sub {
+    margin-top: 6px;
+    color: rgba(255,255,255,0.6);
+    font-size: 13px;
+  }
+
+  /* The fake "app frame" — table area + right sidebar */
+  .frame {
+    display: flex;
+    width: 100%;
+    height: 520px;
+    border-radius: 16px;
+    overflow: hidden;
+    background: #0a0d14;
+    box-shadow: 0 16px 40px rgba(0,0,0,0.55);
+    position: relative;
+  }
+
+  /* ─── Mock poker table on the left ───── */
+  .table-area {
+    flex: 1;
+    position: relative;
+    background:
+      radial-gradient(ellipse 80% 60% at 50% 55%, #2a5f3a 0%, #1a3e25 55%, #0b1f14 100%);
+    overflow: hidden;
+  }
+  .table-area::before {
+    content: ""; position: absolute; inset: 0;
+    background-image:
+      radial-gradient(circle at 30% 20%, rgba(255,255,255,0.04), transparent 40%),
+      radial-gradient(circle at 70% 80%, rgba(0,0,0,0.18), transparent 50%);
+    pointer-events: none;
+  }
+  .table-rail {
+    position: absolute; inset: 14px;
+    border-radius: 22px;
+    border: 1px solid rgba(255,255,255,0.06);
+    pointer-events: none;
+  }
+  .table-area .pcard {
+    position: absolute;
+    width: 38px; height: 53px;
+    border-radius: 4px;
+    background: white;
+    box-shadow: 0 3px 8px rgba(0,0,0,0.45);
+    display: flex; flex-direction: column; justify-content: space-between;
+    padding: 4px 5px;
+    font-family: 'Georgia', serif;
+    font-weight: 700; font-size: 10px;
+    z-index: 5;
+    transform: translate(-50%, -50%);
+  }
+  .table-area .pcard.red { color: #c92a2a; }
+  .table-area .pcard.black { color: #1a1a1a; }
+  .table-area .pcard .pip { font-size: 16px; align-self: center; }
+  .table-area .pcard.back {
+    background: linear-gradient(135deg, #1e40af, #1e3a8a);
+    border: 1.5px solid rgba(255,255,255,0.4);
+  }
+  .table-area .pcard.back::before {
+    content: ""; position: absolute; inset: 4px;
+    border: 1px solid rgba(255,255,255,0.25);
+    border-radius: 2px;
+    background-image: repeating-linear-gradient(45deg, rgba(255,255,255,0.05) 0 3px, transparent 3px 6px);
+  }
+  .table-area .pcard.hole-a { transform: translate(-50%, -50%) rotate(-12deg); width: 44px; height: 62px; }
+  .table-area .pcard.hole-b { transform: translate(-50%, -50%) rotate(12deg); width: 44px; height: 62px; }
+  .pot-chip {
+    position: absolute; top: 36%; left: 50%; transform: translate(-50%, -50%);
+    background: rgba(0,0,0,0.5);
+    border: 1px solid rgba(255,255,255,0.12);
+    color: rgba(255,255,255,0.7);
+    font-size: 10px; padding: 3px 10px;
+    border-radius: 999px;
+    z-index: 4;
+  }
+  .your-turn {
+    position: absolute;
+    left: 50%; bottom: 12%; transform: translateX(-50%);
+    background: linear-gradient(135deg, #facc15, #f59e0b);
+    color: #1a1a1a;
+    font-weight: 700;
+    font-size: 11px;
+    padding: 5px 14px;
+    border-radius: 999px;
+    box-shadow: 0 0 18px rgba(250,204,21,0.5);
+    z-index: 30;
+    animation: pulseYellow 1.4s ease-in-out infinite;
+  }
+  @keyframes pulseYellow {
+    0%, 100% { transform: translateX(-50%) scale(1); }
+    50% { transform: translateX(-50%) scale(1.05); }
+  }
+
+  /* ─── Sidebar shell (right side) ────── */
+  .sidebar {
+    width: 320px;
+    flex-shrink: 0;
+    background: rgba(6,8,12,0.94);
+    border-left: 1px solid rgba(255,255,255,0.05);
+    display: flex;
+    flex-direction: column;
+    color: white;
+    overflow: hidden;
+  }
+  .sidebar-head {
+    display: flex; align-items: center;
+    padding: 10px 12px;
+    border-bottom: 1px solid rgba(255,255,255,0.06);
+    font-size: 12px;
+    font-weight: 600;
+    color: rgba(255,255,255,0.85);
+    letter-spacing: 0.02em;
+  }
+  .sidebar-head .dot {
+    width: 6px; height: 6px; border-radius: 50%;
+    background: #4ade80;
+    box-shadow: 0 0 6px #4ade80;
+    margin-right: 8px;
+  }
+  .sidebar-head .spacer { flex: 1; }
+  .sidebar-head .collapse { color: rgba(255,255,255,0.4); font-size: 16px; }
+
+  /* Tab strip */
+  .tabs {
+    display: flex;
+    background: rgba(255,255,255,0.025);
+    border-bottom: 1px solid rgba(255,255,255,0.06);
+  }
+  .tab {
+    flex: 1;
+    padding: 8px 6px;
+    text-align: center;
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 0.04em;
+    color: rgba(255,255,255,0.5);
+    cursor: pointer;
+    position: relative;
+    transition: color 0.15s;
+  }
+  .tab.active {
+    color: #7dd3fc;
+  }
+  .tab.active::after {
+    content: ""; position: absolute;
+    bottom: -1px; left: 12px; right: 12px;
+    height: 2px;
+    background: linear-gradient(90deg, #38bdf8, #0ea5e9);
+    border-radius: 2px;
+  }
+  .tab .badge {
+    position: absolute;
+    top: 5px; right: 6px;
+    background: #ef4444;
+    color: white;
+    font-size: 8px;
+    font-weight: 700;
+    padding: 1px 4px;
+    border-radius: 999px;
+    min-width: 14px;
+    text-align: center;
+    box-shadow: 0 0 6px rgba(239,68,68,0.6);
+    animation: badgePulse 1.4s ease-in-out infinite;
+  }
+  @keyframes badgePulse {
+    0%, 100% { transform: scale(1); }
+    50% { transform: scale(1.15); }
+  }
+
+  /* Activity feed entries */
+  .feed { flex: 1; overflow-y: auto; padding: 10px 12px; display: flex; flex-direction: column; gap: 6px; }
+  .feed-entry {
+    font-size: 11.5px;
+    line-height: 1.4;
+    color: rgba(255,255,255,0.75);
+    padding: 4px 0;
+  }
+  .feed-entry .who { color: #7dd3fc; font-weight: 600; }
+  .feed-entry .amt { color: #4ade80; font-weight: 700; font-variant-numeric: tabular-nums; }
+  .feed-entry .fold { color: rgba(255,255,255,0.4); }
+  .feed-entry.street {
+    font-size: 10px;
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+    color: rgba(125,211,252,0.7);
+    border-top: 1px solid rgba(255,255,255,0.05);
+    margin-top: 6px;
+    padding-top: 8px;
+  }
+  .feed-entry.chat {
+    background: rgba(56,189,248,0.06);
+    border-left: 2px solid #38bdf8;
+    padding: 5px 8px;
+    border-radius: 4px;
+  }
+
+  /* Chat input */
+  .chat-input {
+    padding: 8px 10px;
+    border-top: 1px solid rgba(255,255,255,0.06);
+    display: flex;
+    gap: 6px;
+    background: rgba(255,255,255,0.02);
+  }
+  .chat-input input {
+    flex: 1;
+    background: rgba(255,255,255,0.04);
+    border: 1px solid rgba(255,255,255,0.08);
+    color: white;
+    font-size: 12px;
+    padding: 6px 10px;
+    border-radius: 6px;
+    outline: none;
+  }
+  .chat-input .send {
+    background: linear-gradient(135deg, #0ea5e9, #38bdf8);
+    color: #050810;
+    border: none;
+    font-weight: 700;
+    font-size: 11px;
+    padding: 0 12px;
+    border-radius: 6px;
+    cursor: pointer;
+  }
+
+  /* ─── Player Stats inline panel ──────── */
+  .stats-panel {
+    flex: 1;
+    padding: 12px;
+    overflow-y: auto;
+    display: flex; flex-direction: column; gap: 12px;
+  }
+  .stats-head {
+    display: flex; align-items: center; gap: 10px;
+    padding-bottom: 10px;
+    border-bottom: 1px solid rgba(255,255,255,0.06);
+  }
+  .stats-avatar {
+    width: 38px; height: 38px;
+    border-radius: 50%;
+    background: linear-gradient(135deg, #f97316, #ef4444);
+    display: flex; align-items: center; justify-content: center;
+    font-weight: 900; font-size: 18px; color: white;
+    flex-shrink: 0;
+  }
+  .stats-name { font-size: 14px; font-weight: 700; line-height: 1.2; }
+  .stats-addr { font-size: 10px; color: rgba(255,255,255,0.45); font-family: 'SF Mono', Menlo, monospace; margin-top: 2px; }
+
+  .stats-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr 1fr;
+    gap: 6px;
+  }
+  .stats-cell {
+    background: rgba(56,189,248,0.06);
+    border: 1px solid rgba(56,189,248,0.18);
+    border-radius: 6px;
+    padding: 8px 8px 6px;
+  }
+  .stats-cell .lbl {
+    color: #7dd3fc;
+    font-size: 8px;
+    letter-spacing: 0.16em;
+    text-transform: uppercase;
+  }
+  .stats-cell .val {
+    font-size: 14px;
+    font-weight: 800;
+    font-variant-numeric: tabular-nums;
+    margin-top: 3px;
+  }
+  .stats-cell .val.up { color: #4ade80; }
+  .stats-cell .val.down { color: #f87171; }
+  .stats-cell .sub { font-size: 9px; color: rgba(255,255,255,0.4); margin-top: 1px; }
+
+  .stats-chart {
+    background: rgba(56,189,248,0.04);
+    border: 1px solid rgba(56,189,248,0.15);
+    border-radius: 6px;
+    padding: 10px;
+    height: 90px;
+    position: relative;
+  }
+  .stats-chart .label {
+    position: absolute; top: 6px; left: 10px;
+    font-size: 9px;
+    letter-spacing: 0.14em;
+    color: #7dd3fc;
+    text-transform: uppercase;
+  }
+  .stats-chart .delta {
+    position: absolute; top: 6px; right: 10px;
+    font-size: 11px;
+    font-weight: 700;
+    color: #4ade80;
+    font-variant-numeric: tabular-nums;
+  }
+  .stats-chart svg { display: block; width: 100%; height: 100%; }
+
+  .stats-list {
+    display: flex; flex-direction: column;
+    gap: 4px;
+    font-size: 11px;
+  }
+  .stats-list .row {
+    display: flex; justify-content: space-between;
+    padding: 5px 8px;
+    background: rgba(255,255,255,0.025);
+    border-radius: 4px;
+  }
+  .stats-list .row .k { color: rgba(255,255,255,0.55); }
+  .stats-list .row .v { font-weight: 700; font-variant-numeric: tabular-nums; }
+
+  /* ─── Split sidebar (Option B) ───────── */
+  .split-top { flex: 1.1; display: flex; flex-direction: column; min-height: 0; }
+  .split-divider { height: 1px; background: rgba(255,255,255,0.06); }
+  .split-bottom { flex: 1; display: flex; flex-direction: column; min-height: 0; }
+
+  /* ─── Floating window (Option C) ────── */
+  .floater {
+    position: absolute;
+    width: 280px;
+    height: 380px;
+    border-radius: 12px;
+    overflow: hidden;
+    background: rgba(6,8,12,0.96);
+    border: 1px solid rgba(56,189,248,0.35);
+    box-shadow:
+      0 0 20px rgba(56,189,248,0.2),
+      0 16px 40px rgba(0,0,0,0.6);
+    display: flex; flex-direction: column;
+    backdrop-filter: blur(12px);
+    z-index: 50;
+  }
+  .floater.one { left: 26px; top: 32px; }
+  .floater.two {
+    left: 290px; top: 100px;
+    width: 240px; height: 280px;
+  }
+  .floater .chrome {
+    display: flex; align-items: center;
+    padding: 8px 10px;
+    background: rgba(56,189,248,0.08);
+    border-bottom: 1px solid rgba(56,189,248,0.18);
+    cursor: grab;
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 0.04em;
+    color: rgba(255,255,255,0.9);
+  }
+  .floater .grip {
+    color: rgba(125,211,252,0.6);
+    margin-right: 8px;
+    letter-spacing: -1px;
+    font-family: 'SF Mono', Menlo, monospace;
+    font-size: 14px;
+    line-height: 1;
+  }
+  .floater .chrome .spacer { flex: 1; }
+  .floater .chrome .ctrl {
+    width: 18px; height: 18px;
+    border-radius: 4px;
+    background: rgba(255,255,255,0.04);
+    border: 1px solid rgba(255,255,255,0.08);
+    color: rgba(255,255,255,0.5);
+    display: flex; align-items: center; justify-content: center;
+    font-size: 10px;
+    margin-left: 4px;
+    cursor: pointer;
+  }
+  .floater .chrome .ctrl.danger { color: #f87171; }
+  .floater .body { flex: 1; overflow-y: auto; padding: 12px; display: flex; flex-direction: column; gap: 10px; }
+  .floater.two .body { padding: 10px; }
+
+  /* Settings panel content */
+  .settings-list { display: flex; flex-direction: column; gap: 4px; }
+  .settings-row {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 8px 10px;
+    background: rgba(255,255,255,0.025);
+    border-radius: 6px;
+    font-size: 12px;
+  }
+  .settings-row .lbl { color: rgba(255,255,255,0.8); }
+  .toggle {
+    width: 32px; height: 18px;
+    border-radius: 999px;
+    background: rgba(255,255,255,0.1);
+    position: relative;
+    cursor: pointer;
+    transition: background 0.15s;
+  }
+  .toggle::after {
+    content: ""; position: absolute;
+    top: 2px; left: 2px;
+    width: 14px; height: 14px;
+    border-radius: 50%;
+    background: white;
+    transition: transform 0.15s;
+  }
+  .toggle.on { background: rgba(56,189,248,0.6); }
+  .toggle.on::after { transform: translateX(14px); }
+
+  /* annotation under each option */
+  .note {
+    margin: 18px auto 0;
+    max-width: 760px;
+    color: rgba(255,255,255,0.6);
+    font-size: 13px;
+    line-height: 1.55;
+  }
+  .note strong { color: rgba(255,255,255,0.92); }
+  .note ul { margin-top: 6px; padding-left: 18px; }
+  .note li { margin-bottom: 3px; }
+  .note code {
+    font-family: 'SF Mono', Menlo, monospace;
+    font-size: 11.5px;
+    background: rgba(56,189,248,0.08);
+    padding: 1px 5px;
+    border-radius: 3px;
+    color: #7dd3fc;
+  }
+
+  /* Card content samples — shared bits */
+  .seat-label {
+    position: absolute;
+    background: rgba(0,0,0,0.55);
+    border: 1px solid rgba(255,255,255,0.08);
+    color: rgba(255,255,255,0.75);
+    font-size: 9px;
+    padding: 3px 8px;
+    border-radius: 999px;
+    transform: translate(-50%, -50%);
+    z-index: 6;
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <span class="crumb">Sidebar redesign · 3 options</span>
+  <h1>Show stats without breaking the hand</h1>
+  <p>
+    All three keep the player able to act the moment it's their turn — no modal in the way.
+    Each one has a real tradeoff. Pick the one that fits the room you want to leave for chat and the activity feed.
+  </p>
+</header>
+
+<div class="options">
+
+  <!-- ════════════════════════════════════════════════════════════════ -->
+  <!-- OPTION A — Tabs replace activity feed                              -->
+  <!-- ════════════════════════════════════════════════════════════════ -->
+  <div class="option">
+    <div class="option-head">
+      <span class="tag">Option A</span>
+      <h2>Tabs replace the activity feed</h2>
+      <div class="sub">Stats tab is open — Activity tab badges to grab attention when your turn comes.</div>
+    </div>
+
+    <div class="frame">
+      <div class="table-area">
+        <div class="table-rail"></div>
+        <!-- some opponent backs -->
+        <div class="pcard back" style="left:25%;top:8%"></div>
+        <div class="pcard back" style="left:50%;top:8%"></div>
+        <div class="pcard back" style="left:75%;top:8%"></div>
+        <div class="pcard back" style="left:10%;top:50%"></div>
+        <div class="pcard back" style="left:90%;top:50%"></div>
+        <!-- community cards -->
+        <div class="pcard red"   style="left:32%;top:46%"><div>A</div><div class="pip">♥</div><div></div></div>
+        <div class="pcard black" style="left:42%;top:46%"><div>K</div><div class="pip">♣</div><div></div></div>
+        <div class="pcard red"   style="left:52%;top:46%"><div>7</div><div class="pip">♦</div><div></div></div>
+        <div class="pcard black" style="left:62%;top:46%"><div>2</div><div class="pip">♠</div><div></div></div>
+        <!-- hero hole -->
+        <div class="pcard red hole-a"   style="left:46%;top:88%"><div>Q</div><div class="pip">♥</div><div></div></div>
+        <div class="pcard black hole-b" style="left:55%;top:88%"><div>Q</div><div class="pip">♠</div><div></div></div>
+
+        <div class="pot-chip">POT · 24,500</div>
+        <div class="your-turn">⚡ Your turn — 18s</div>
+      </div>
+
+      <div class="sidebar">
+        <div class="sidebar-head"><span class="dot"></span>Activity sidebar<span class="spacer"></span><span class="collapse">»</span></div>
+        <div class="tabs">
+          <div class="tab">Activity <span class="badge">!</span></div>
+          <div class="tab active">Stats</div>
+          <div class="tab">Settings</div>
+          <div class="tab">Help</div>
+        </div>
+        <div class="stats-panel">
+          <div class="stats-head">
+            <div class="stats-avatar">K</div>
+            <div>
+              <div class="stats-name">Kyle</div>
+              <div class="stats-addr">0x8f6d…5f2e</div>
+            </div>
+          </div>
+          <div class="stats-grid">
+            <div class="stats-cell"><div class="lbl">Hands</div><div class="val">1,247</div></div>
+            <div class="stats-cell"><div class="lbl">Win Rate</div><div class="val up">52.4%</div></div>
+            <div class="stats-cell"><div class="lbl">P/L</div><div class="val up">+12.4K</div></div>
+            <div class="stats-cell"><div class="lbl">VPIP</div><div class="val">24.3%</div></div>
+            <div class="stats-cell"><div class="lbl">PFR</div><div class="val">18.1%</div></div>
+            <div class="stats-cell"><div class="lbl">AGG</div><div class="val">2.8</div></div>
+          </div>
+          <div class="stats-chart">
+            <div class="label">Last 30 days</div>
+            <div class="delta">+12.4K</div>
+            <svg viewBox="0 0 200 80" preserveAspectRatio="none">
+              <defs>
+                <linearGradient id="aArea" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="0%" stop-color="#38bdf8" stop-opacity="0.45"/>
+                  <stop offset="100%" stop-color="#38bdf8" stop-opacity="0"/>
+                </linearGradient>
+              </defs>
+              <path d="M0 65 L20 60 L40 55 L60 58 L80 50 L100 52 L120 45 L140 38 L160 40 L180 32 L200 25 L200 80 L0 80 Z" fill="url(#aArea)"/>
+              <path d="M0 65 L20 60 L40 55 L60 58 L80 50 L100 52 L120 45 L140 38 L160 40 L180 32 L200 25" fill="none" stroke="#38bdf8" stroke-width="1.5" stroke-linejoin="round"/>
+            </svg>
+          </div>
+          <div class="stats-list">
+            <div class="row"><span class="k">Biggest pot</span><span class="v">24,500</span></div>
+            <div class="row"><span class="k">Showdown win</span><span class="v">48.1%</span></div>
+            <div class="row"><span class="k">Best tournament</span><span class="v">3rd / 38</span></div>
+            <div class="row"><span class="k">Hours played</span><span class="v">87.4</span></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="note">
+      <strong>Pros:</strong> Cleanest tabbed UX. Stats tab gets the full sidebar height — chart, stat grid, and a detail list all fit.
+      <br/><strong>Cons:</strong> Activity feed is hidden while another tab is active. The red pulsing badge on the Activity tab partly mitigates that, plus we can auto-switch back to Activity the instant the server prompts you to act (so the action UI is anchored next to a visible feed).
+      <br/><strong>Effort:</strong> ≈4–6 hrs. New <code>tab</code> state in the sidebar, four panels extracted from existing modals.
+    </div>
+  </div>
+
+  <!-- ════════════════════════════════════════════════════════════════ -->
+  <!-- OPTION B — Split sidebar                                            -->
+  <!-- ════════════════════════════════════════════════════════════════ -->
+  <div class="option">
+    <div class="option-head">
+      <span class="tag">Option B</span>
+      <h2>Split sidebar — activity always visible</h2>
+      <div class="sub">Top half stays the live feed + chat. Bottom half is a tabbed panel for stats/settings/help.</div>
+    </div>
+
+    <div class="frame">
+      <div class="table-area">
+        <div class="table-rail"></div>
+        <div class="pcard back" style="left:25%;top:8%"></div>
+        <div class="pcard back" style="left:50%;top:8%"></div>
+        <div class="pcard back" style="left:75%;top:8%"></div>
+        <div class="pcard back" style="left:10%;top:50%"></div>
+        <div class="pcard back" style="left:90%;top:50%"></div>
+        <div class="pcard red"   style="left:32%;top:46%"><div>A</div><div class="pip">♥</div><div></div></div>
+        <div class="pcard black" style="left:42%;top:46%"><div>K</div><div class="pip">♣</div><div></div></div>
+        <div class="pcard red"   style="left:52%;top:46%"><div>7</div><div class="pip">♦</div><div></div></div>
+        <div class="pcard black" style="left:62%;top:46%"><div>2</div><div class="pip">♠</div><div></div></div>
+        <div class="pcard red hole-a"   style="left:46%;top:88%"><div>Q</div><div class="pip">♥</div><div></div></div>
+        <div class="pcard black hole-b" style="left:55%;top:88%"><div>Q</div><div class="pip">♠</div><div></div></div>
+        <div class="pot-chip">POT · 24,500</div>
+        <div class="your-turn">⚡ Your turn — 18s</div>
+      </div>
+
+      <div class="sidebar">
+        <div class="sidebar-head"><span class="dot"></span>Activity sidebar<span class="spacer"></span><span class="collapse">»</span></div>
+
+        <div class="split-top">
+          <div class="feed">
+            <div class="feed-entry street">— Flop</div>
+            <div class="feed-entry"><span class="who">Pittbull</span> raised to <span class="amt">800</span></div>
+            <div class="feed-entry"><span class="who">Midas</span> <span class="fold">folded</span></div>
+            <div class="feed-entry chat"><span class="who">Pittbull:</span> good luck</div>
+            <div class="feed-entry"><span class="who">MVS</span> called <span class="amt">800</span></div>
+            <div class="feed-entry"><span class="who">You</span> 3-bet to <span class="amt">2,400</span></div>
+            <div class="feed-entry street">— Turn</div>
+            <div class="feed-entry"><span class="who">Pittbull</span> bet <span class="amt">3,200</span></div>
+          </div>
+          <div class="chat-input">
+            <input placeholder="Send a message..." />
+            <button class="send">Send</button>
+          </div>
+        </div>
+
+        <div class="split-divider"></div>
+
+        <div class="split-bottom">
+          <div class="tabs">
+            <div class="tab active">Stats</div>
+            <div class="tab">Settings</div>
+            <div class="tab">Help</div>
+          </div>
+          <div class="stats-panel" style="padding:10px;gap:8px;">
+            <div class="stats-grid">
+              <div class="stats-cell"><div class="lbl">Hands</div><div class="val">1,247</div></div>
+              <div class="stats-cell"><div class="lbl">Win %</div><div class="val up">52.4%</div></div>
+              <div class="stats-cell"><div class="lbl">P/L</div><div class="val up">+12.4K</div></div>
+            </div>
+            <div class="stats-list" style="font-size:10.5px;">
+              <div class="row"><span class="k">VPIP / PFR</span><span class="v">24.3% / 18.1%</span></div>
+              <div class="row"><span class="k">AGG factor</span><span class="v">2.8</span></div>
+              <div class="row"><span class="k">Showdown win</span><span class="v">48.1%</span></div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="note">
+      <strong>Pros:</strong> You never lose sight of the feed. No "did I miss my turn" anxiety, no auto-switch logic. Most "trader station" feel.
+      <br/><strong>Cons:</strong> Both panels share the vertical space, so stats and feed are each ~half height. On short laptop screens (≤720px) it gets tight. The bottom panel can collapse down to just the tab strip when not needed, restoring full feed height.
+      <br/><strong>Effort:</strong> ≈6–8 hrs. Two scrollable regions, the divider, and the same panel extractions as A.
+    </div>
+  </div>
+
+  <!-- ════════════════════════════════════════════════════════════════ -->
+  <!-- OPTION C — Floating draggable windows                              -->
+  <!-- ════════════════════════════════════════════════════════════════ -->
+  <div class="option">
+    <div class="option-head">
+      <span class="tag">Option C</span>
+      <h2>Floating draggable mini-windows</h2>
+      <div class="sub">TradingView-style. Park stats and settings wherever you want. Multiple open at once.</div>
+    </div>
+
+    <div class="frame">
+      <div class="table-area">
+        <div class="table-rail"></div>
+        <div class="pcard back" style="left:25%;top:8%"></div>
+        <div class="pcard back" style="left:50%;top:8%"></div>
+        <div class="pcard back" style="left:75%;top:8%"></div>
+        <div class="pcard back" style="left:10%;top:50%"></div>
+        <div class="pcard back" style="left:90%;top:50%"></div>
+        <div class="pcard red"   style="left:32%;top:46%"><div>A</div><div class="pip">♥</div><div></div></div>
+        <div class="pcard black" style="left:42%;top:46%"><div>K</div><div class="pip">♣</div><div></div></div>
+        <div class="pcard red"   style="left:52%;top:46%"><div>7</div><div class="pip">♦</div><div></div></div>
+        <div class="pcard black" style="left:62%;top:46%"><div>2</div><div class="pip">♠</div><div></div></div>
+        <div class="pcard red hole-a"   style="left:46%;top:88%"><div>Q</div><div class="pip">♥</div><div></div></div>
+        <div class="pcard black hole-b" style="left:55%;top:88%"><div>Q</div><div class="pip">♠</div><div></div></div>
+        <div class="pot-chip">POT · 24,500</div>
+        <div class="your-turn">⚡ Your turn — 18s</div>
+
+        <!-- Floating Stats window -->
+        <div class="floater one">
+          <div class="chrome">
+            <span class="grip">⋮⋮</span>
+            <span>Player Stats</span>
+            <span class="spacer"></span>
+            <div class="ctrl" title="Pin">📌</div>
+            <div class="ctrl" title="Minimize">–</div>
+            <div class="ctrl danger" title="Close">×</div>
+          </div>
+          <div class="body">
+            <div class="stats-head" style="border:none;padding:0;">
+              <div class="stats-avatar">K</div>
+              <div>
+                <div class="stats-name">Kyle</div>
+                <div class="stats-addr">0x8f6d…5f2e</div>
+              </div>
+            </div>
+            <div class="stats-grid">
+              <div class="stats-cell"><div class="lbl">Hands</div><div class="val">1,247</div></div>
+              <div class="stats-cell"><div class="lbl">Win Rate</div><div class="val up">52.4%</div></div>
+              <div class="stats-cell"><div class="lbl">P/L</div><div class="val up">+12.4K</div></div>
+              <div class="stats-cell"><div class="lbl">VPIP</div><div class="val">24.3%</div></div>
+              <div class="stats-cell"><div class="lbl">PFR</div><div class="val">18.1%</div></div>
+              <div class="stats-cell"><div class="lbl">AGG</div><div class="val">2.8</div></div>
+            </div>
+            <div class="stats-chart">
+              <div class="label">Last 30 days</div>
+              <div class="delta">+12.4K</div>
+              <svg viewBox="0 0 200 80" preserveAspectRatio="none">
+                <defs>
+                  <linearGradient id="cArea" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="0%" stop-color="#38bdf8" stop-opacity="0.45"/>
+                    <stop offset="100%" stop-color="#38bdf8" stop-opacity="0"/>
+                  </linearGradient>
+                </defs>
+                <path d="M0 65 L20 60 L40 55 L60 58 L80 50 L100 52 L120 45 L140 38 L160 40 L180 32 L200 25 L200 80 L0 80 Z" fill="url(#cArea)"/>
+                <path d="M0 65 L20 60 L40 55 L60 58 L80 50 L100 52 L120 45 L140 38 L160 40 L180 32 L200 25" fill="none" stroke="#38bdf8" stroke-width="1.5" stroke-linejoin="round"/>
+              </svg>
+            </div>
+          </div>
+        </div>
+
+        <!-- Floating Settings window — shows you can have multiple at once -->
+        <div class="floater two">
+          <div class="chrome">
+            <span class="grip">⋮⋮</span>
+            <span>Settings</span>
+            <span class="spacer"></span>
+            <div class="ctrl" title="Pin">📌</div>
+            <div class="ctrl" title="Minimize">–</div>
+            <div class="ctrl danger" title="Close">×</div>
+          </div>
+          <div class="body">
+            <div class="settings-list">
+              <div class="settings-row"><span class="lbl">Sounds</span><div class="toggle on"></div></div>
+              <div class="settings-row"><span class="lbl">Auto-rebuy</span><div class="toggle"></div></div>
+              <div class="settings-row"><span class="lbl">Show equity</span><div class="toggle on"></div></div>
+              <div class="settings-row"><span class="lbl">Hand-strength tints</span><div class="toggle"></div></div>
+              <div class="settings-row"><span class="lbl">Confirm bets</span><div class="toggle on"></div></div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="sidebar">
+        <div class="sidebar-head"><span class="dot"></span>Activity<span class="spacer"></span><span class="collapse">»</span></div>
+        <div class="feed">
+          <div class="feed-entry street">— Flop</div>
+          <div class="feed-entry"><span class="who">Pittbull</span> raised to <span class="amt">800</span></div>
+          <div class="feed-entry"><span class="who">Midas</span> <span class="fold">folded</span></div>
+          <div class="feed-entry chat"><span class="who">Pittbull:</span> good luck</div>
+          <div class="feed-entry"><span class="who">MVS</span> called <span class="amt">800</span></div>
+          <div class="feed-entry"><span class="who">You</span> 3-bet to <span class="amt">2,400</span></div>
+          <div class="feed-entry street">— Turn</div>
+          <div class="feed-entry"><span class="who">Pittbull</span> bet <span class="amt">3,200</span></div>
+        </div>
+        <div class="chat-input">
+          <input placeholder="Send a message..." />
+          <button class="send">Send</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="note">
+      <strong>Pros:</strong> Most powerful — open Stats and Settings simultaneously, drag either out of the way of the cards, pin/persist position across sessions. The activity sidebar stays clean and focused on chat/actions.
+      <br/><strong>Cons:</strong> Drag-resize-collapse-persist logic adds real complexity. Mobile-hostile (no point dragging on a 5-inch screen — would need a fallback mode that pins them in place, defeating most of the upside). Visual chrome competes with the table for attention.
+      <br/><strong>Effort:</strong> ≈2 days. Drag-and-drop library (<code>react-rnd</code> or hand-rolled), z-index + position persistence in <code>localStorage</code>, mobile fallback path.
+      <br/><strong>When to pick this:</strong> if you imagine future panels — equity calculator, hand replayer, mini-chart, voice-control HUD — that benefit from being arrangeable. If it's just Stats + Settings, B is plenty.
+    </div>
+  </div>
+
+</div>
+
+<div class="note" style="text-align:center; max-width:760px; margin: 56px auto 0;">
+  My pick is <strong>B</strong> for the first iteration — best UX-to-effort ratio and the easiest to evolve into C later if you want it.
+  <br/>Tell me your pick and I'll spec it in <code>FUTURE_FEATURES.md</code> under a new <strong>Poker Sidebar</strong> umbrella.
+</div>
+
+</body>
+</html>
