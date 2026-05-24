@@ -1049,6 +1049,144 @@ export function registerTelegramRoutes({
     }
   });
 
+  // -------------------------------------------------------------------------
+  // GET /api/telegram/miniapp/recent-wins — public, read-only feed of the
+  // last few notable wins from the MORBIUS Arcade games (Video Poker, Limbo,
+  // Mines, Hi-Lo). Used as a social "live wins" rail on the Mini App hub so
+  // players see the arcade is alive even when they're not playing. No auth,
+  // no PII — wallets are short-handed and a display name is attached only
+  // when one is set.
+  //
+  // Each game's table is filtered down to its "notable" subset before the
+  // union so the rail stays high-signal:
+  //   • video_poker_hands — flush-or-better paying categories
+  //   • arcade_limbo_rounds — result multiplier ≥ 2.00x
+  //   • arcade_mines_rounds — cash-outs at ≥ 2.00x
+  //   • arcade_hilo_rounds — cash-outs at ≥ 2.00x
+  // Only resolved/finalized rows within the last 24h are eligible.
+  // -------------------------------------------------------------------------
+  app.get('/api/telegram/miniapp/recent-wins', async (_req: Request, res: Response) => {
+    try {
+      const sql = `
+        WITH vp AS (
+          SELECT
+            'video_poker'::text                AS game,
+            v.id                               AS round_id,
+            v.wallet_address,
+            v.payout::text                     AS payout,
+            v.bet::text                        AS bet,
+            v.result_category                  AS detail,
+            NULL::numeric                      AS multiplier,
+            v.resolved_at                      AS resolved_at
+          FROM video_poker_hands v
+          WHERE v.status = 'resolved'
+            AND v.payout IS NOT NULL
+            AND v.payout > 0
+            AND v.resolved_at > now() - interval '24 hours'
+            AND v.result_category IN (
+              'royal_flush','straight_flush','four_of_a_kind','full_house','flush'
+            )
+          ORDER BY v.resolved_at DESC
+          LIMIT 25
+        ),
+        lb AS (
+          SELECT
+            'limbo'::text                      AS game,
+            l.id::text                         AS round_id,
+            l.wallet_address,
+            l.payout::text                     AS payout,
+            l.bet::text                        AS bet,
+            NULL::text                         AS detail,
+            (l.result_x100::numeric / 100)     AS multiplier,
+            l.created_at                       AS resolved_at
+          FROM arcade_limbo_rounds l
+          WHERE l.won = TRUE
+            AND l.payout > 0
+            AND l.result_x100 >= 200
+            AND l.created_at > now() - interval '24 hours'
+          ORDER BY l.created_at DESC
+          LIMIT 25
+        ),
+        mn AS (
+          SELECT
+            'mines'::text                      AS game,
+            m.id::text                         AS round_id,
+            m.wallet_address,
+            m.payout::text                     AS payout,
+            m.bet::text                        AS bet,
+            NULL::text                         AS detail,
+            (m.multiplier_x100::numeric / 100) AS multiplier,
+            m.created_at                       AS resolved_at
+          FROM arcade_mines_rounds m
+          WHERE m.status = 'cashed_out'
+            AND m.payout > 0
+            AND m.multiplier_x100 >= 200
+            AND m.created_at > now() - interval '24 hours'
+          ORDER BY m.created_at DESC
+          LIMIT 25
+        ),
+        hl AS (
+          SELECT
+            'hilo'::text                       AS game,
+            h.id::text                         AS round_id,
+            h.wallet_address,
+            h.payout::text                     AS payout,
+            h.bet::text                        AS bet,
+            NULL::text                         AS detail,
+            (h.multiplier_x100::numeric / 100) AS multiplier,
+            h.created_at                       AS resolved_at
+          FROM arcade_hilo_rounds h
+          WHERE h.status = 'cashed_out'
+            AND h.payout > 0
+            AND h.multiplier_x100 >= 200
+            AND h.created_at > now() - interval '24 hours'
+          ORDER BY h.created_at DESC
+          LIMIT 25
+        ),
+        wins AS (
+          SELECT * FROM vp
+          UNION ALL SELECT * FROM lb
+          UNION ALL SELECT * FROM mn
+          UNION ALL SELECT * FROM hl
+        )
+        SELECT
+          w.game,
+          w.round_id,
+          w.wallet_address,
+          w.payout,
+          w.bet,
+          w.detail,
+          w.multiplier,
+          w.resolved_at,
+          dn.display_name
+        FROM wins w
+        LEFT JOIN chat_display_names dn
+          ON LOWER(dn.wallet_address) = LOWER(w.wallet_address)
+        ORDER BY w.resolved_at DESC
+        LIMIT 20;
+      `;
+      const r = await dbService.getPool().query(sql);
+      const wins = r.rows.map((row) => ({
+        game: row.game as 'video_poker' | 'limbo' | 'mines' | 'hilo',
+        roundId: String(row.round_id),
+        walletShort: shortWallet(String(row.wallet_address)),
+        displayName: row.display_name ? String(row.display_name) : null,
+        payout: String(row.payout),
+        bet: String(row.bet),
+        detail: row.detail ? String(row.detail) : null,
+        multiplier: row.multiplier != null ? Number(row.multiplier) : null,
+        resolvedAt:
+          row.resolved_at instanceof Date
+            ? row.resolved_at.toISOString()
+            : String(row.resolved_at),
+      }));
+      return res.json({ ok: true, wins });
+    } catch (err) {
+      logger.error('[telegram] miniapp recent-wins failed', { error: (err as Error).message });
+      return res.status(500).json({ ok: false, error: 'Could not load recent wins.' });
+    }
+  });
+
   logger.info('[telegram] routes registered');
 }
 

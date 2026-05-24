@@ -51,6 +51,7 @@ import MiniAppVideoPoker from '@/components/telegram/MiniAppVideoPoker';
 import MiniAppLimbo from '@/components/telegram/MiniAppLimbo';
 import MiniAppMines from '@/components/telegram/MiniAppMines';
 import MiniAppHiLo from '@/components/telegram/MiniAppHiLo';
+import MiniAppRecentWins from '@/components/telegram/MiniAppRecentWins';
 import {
   MTT_TEMPLATES,
   type MttTemplate,
@@ -116,6 +117,7 @@ type View =
   | 'hub'
   | 'stats'
   | 'profile'
+  | 'arcade'
   | 'videopoker'
   | 'limbo'
   | 'mines'
@@ -977,6 +979,8 @@ export default function TelegramMiniAppPage() {
     const goBack = () => {
       haptic('tap');
       if (view === 'createTournament') setView('lobby');
+      else if (view === 'videopoker' || view === 'limbo' || view === 'mines' || view === 'hilo')
+        setView('arcade');
       else setView('hub');
     };
     bb.onClick(goBack);
@@ -1310,7 +1314,9 @@ export default function TelegramMiniAppPage() {
               Swap MORBIUS ↔ chips
             </button>
 
-            <div className="flex flex-col gap-2.5">
+            <MiniAppRecentWins />
+
+            <div className="mt-4 flex flex-col gap-2.5">
               {(
                 [
                   {
@@ -1325,32 +1331,8 @@ export default function TelegramMiniAppPage() {
                     key: 'arcade',
                     icon: <IconCards size={20} aria-hidden />,
                     title: 'MORBIUS Arcade',
-                    sub: 'Video Poker — Jacks or Better',
-                    target: 'videopoker',
-                    featured: false,
-                  },
-                  {
-                    key: 'limbo',
-                    icon: <IconBolt size={20} aria-hidden />,
-                    title: 'Limbo',
-                    sub: 'Pick a target · roll higher to win',
-                    target: 'limbo',
-                    featured: false,
-                  },
-                  {
-                    key: 'mines',
-                    icon: <IconBomb size={20} aria-hidden />,
-                    title: 'Mines',
-                    sub: 'Reveal gems · dodge bombs',
-                    target: 'mines',
-                    featured: false,
-                  },
-                  {
-                    key: 'hilo',
-                    icon: <IconArrowsUpDown size={20} aria-hidden />,
-                    title: 'Hi-Lo',
-                    sub: 'Higher or lower · chain your multiplier',
-                    target: 'hilo',
+                    sub: 'Video Poker · Limbo · Mines · Hi-Lo',
+                    target: 'arcade',
                     featured: false,
                   },
                   {
@@ -1567,12 +1549,85 @@ export default function TelegramMiniAppPage() {
             />
           )}
 
+        {/* ---- ARCADE MENU ---- */}
+        {loadState === 'ready' && session && session.linked && view === 'arcade' && (
+          <>
+            <div className="mb-4 flex items-center gap-2">
+              <button
+                type="button"
+                onClick={() => setView('hub')}
+                aria-label="Back to hub"
+                className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-cyan-500/30 bg-cyan-500/5 text-cyan-400"
+              >
+                <IconArrowLeft size={18} aria-hidden />
+              </button>
+              <h1 className="mitr-bold text-xl text-white">MORBIUS Arcade</h1>
+            </div>
+
+            <p className="mb-4 text-xs leading-relaxed text-slate-500">
+              Quick, single-player chip games. Provably fair — every round&apos;s
+              seed is committed before the first reveal.
+            </p>
+
+            <div className="flex flex-col gap-2.5">
+              {(
+                [
+                  {
+                    key: 'videopoker',
+                    icon: <IconCards size={20} aria-hidden />,
+                    title: 'Video Poker',
+                    sub: 'Jacks or Better · 9/6 paytable',
+                    target: 'videopoker' as View,
+                  },
+                  {
+                    key: 'limbo',
+                    icon: <IconBolt size={20} aria-hidden />,
+                    title: 'Limbo',
+                    sub: 'Pick a target · roll higher to win',
+                    target: 'limbo' as View,
+                  },
+                  {
+                    key: 'mines',
+                    icon: <IconBomb size={20} aria-hidden />,
+                    title: 'Mines',
+                    sub: 'Reveal gems · dodge bombs',
+                    target: 'mines' as View,
+                  },
+                  {
+                    key: 'hilo',
+                    icon: <IconArrowsUpDown size={20} aria-hidden />,
+                    title: 'Hi-Lo',
+                    sub: 'Higher or lower · chain your multiplier',
+                    target: 'hilo' as View,
+                  },
+                ]
+              ).map((tile) => (
+                <button
+                  key={tile.key}
+                  type="button"
+                  onClick={() => setView(tile.target)}
+                  className="flex w-full items-center gap-3 rounded-2xl border border-cyan-500/15 bg-[#0b1a2c] px-3 py-3 text-left transition-colors hover:border-cyan-500/40"
+                >
+                  <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-cyan-500/30 bg-cyan-500/10 text-cyan-400">
+                    {tile.icon}
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <div className="text-sm font-semibold text-white">{tile.title}</div>
+                    <div className="text-xs text-slate-500">{tile.sub}</div>
+                  </div>
+                  <IconChevronRight size={18} className="shrink-0 text-slate-500" aria-hidden />
+                </button>
+              ))}
+            </div>
+          </>
+        )}
+
         {/* ---- ARCADE: VIDEO POKER ---- */}
         {loadState === 'ready' && session && session.linked && view === 'videopoker' && (
           <MiniAppVideoPoker
             initData={initData}
             initialChipBalance={session.chipBalance ?? '0'}
-            onBack={() => setView('hub')}
+            onBack={() => setView('arcade')}
           />
         )}
 
@@ -1581,7 +1636,7 @@ export default function TelegramMiniAppPage() {
           <MiniAppLimbo
             initData={initData}
             initialChipBalance={session.chipBalance ?? '0'}
-            onBack={() => setView('hub')}
+            onBack={() => setView('arcade')}
           />
         )}
 
@@ -1590,7 +1645,7 @@ export default function TelegramMiniAppPage() {
           <MiniAppMines
             initData={initData}
             initialChipBalance={session.chipBalance ?? '0'}
-            onBack={() => setView('hub')}
+            onBack={() => setView('arcade')}
           />
         )}
 
@@ -1599,7 +1654,7 @@ export default function TelegramMiniAppPage() {
           <MiniAppHiLo
             initData={initData}
             initialChipBalance={session.chipBalance ?? '0'}
-            onBack={() => setView('hub')}
+            onBack={() => setView('arcade')}
           />
         )}
 
