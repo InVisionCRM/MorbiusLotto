@@ -1,0 +1,370 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Sponsor marquee — 2-state toggle</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    background: rgb(2 6 23);
+    color: white;
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    padding: 40px 24px 80px;
+    min-height: 100vh;
+  }
+
+  header { text-align: center; margin-bottom: 36px; }
+  header h1 { font-size: 28px; font-weight: 700; letter-spacing: -0.02em; }
+  header .crumb {
+    display: inline-block;
+    margin-bottom: 10px;
+    font-size: 11px;
+    letter-spacing: 0.22em;
+    color: rgba(125,211,252,0.85);
+    text-transform: uppercase;
+    border: 1px solid rgba(125,211,252,0.3);
+    padding: 4px 10px;
+    border-radius: 999px;
+  }
+  header p {
+    margin-top: 10px;
+    color: rgba(255,255,255,0.55);
+    font-size: 14px;
+    max-width: 760px;
+    margin-left: auto; margin-right: auto;
+    line-height: 1.55;
+  }
+
+  /* Mini poker-action-strip background so the marquee feels in-context */
+  .strip-frame {
+    width: 100%;
+    max-width: 980px;
+    margin: 0 auto;
+    background: linear-gradient(180deg, #1a3e25, #0b1f14);
+    padding: 24px 20px;
+    border-radius: 12px;
+    box-shadow: 0 10px 28px rgba(0,0,0,0.5);
+  }
+  .strip-frame .ctx-label {
+    color: rgba(255,255,255,0.4);
+    font-size: 10px;
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+    margin-bottom: 10px;
+  }
+
+  /* ─── The marquee shell ─────────────── */
+  .marquee {
+    display: flex;
+    align-items: stretch;
+    width: 100%;
+    background: rgba(5,8,16,0.85);
+    border: 1px solid rgba(255,255,255,0.06);
+    border-radius: 999px;
+    overflow: hidden;
+    height: 32px;
+  }
+
+  /* Scrolling region */
+  .scroll {
+    flex: 1;
+    min-width: 0;
+    position: relative;
+    overflow: hidden;
+    -webkit-mask-image: linear-gradient(to right, transparent, black 6%, black 94%, transparent);
+            mask-image: linear-gradient(to right, transparent, black 6%, black 94%, transparent);
+  }
+  .scroll-inner {
+    display: flex;
+    width: max-content;
+    align-items: center;
+    height: 100%;
+    padding: 0 16px;
+    gap: 14px;
+    font-size: 12px;
+    color: rgba(255,255,255,0.85);
+    white-space: nowrap;
+    animation: poker-marquee 40s linear infinite;
+  }
+  @keyframes poker-marquee {
+    0%   { transform: translateX(0); }
+    100% { transform: translateX(-50%); }
+  }
+  .dot { color: rgba(255,255,255,0.18); }
+
+  /* State 1 chip styling (sponsor info) */
+  .s1-identity {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    font-weight: 700;
+    color: rgba(255,255,255,0.92);
+  }
+  .s1-logo {
+    width: 18px; height: 18px;
+    border-radius: 50%;
+    background: linear-gradient(135deg, #fbbf24, #f97316);
+    display: inline-flex; align-items: center; justify-content: center;
+    font-weight: 900; font-size: 10px; color: #050810;
+  }
+  .s1-ticker { color: rgba(255,255,255,0.55); }
+  .s1-price { color: white; font-weight: 700; font-variant-numeric: tabular-nums; }
+  .s1-change { color: #4ade80; font-weight: 700; font-variant-numeric: tabular-nums; }
+  .s1-meta { color: rgba(255,255,255,0.6); }
+  .s1-cta { color: #7dd3fc; font-weight: 600; text-decoration: underline; text-underline-offset: 2px; cursor: pointer; }
+
+  /* State 2 — stock ticker tape */
+  .s2-row {
+    display: inline-flex;
+    align-items: baseline;
+    gap: 4px;
+    font-variant-numeric: tabular-nums;
+  }
+  .s2-tk { color: white; font-weight: 700; }
+  .s2-px { color: rgba(255,255,255,0.85); font-weight: 600; }
+  .s2-ch { font-weight: 700; }
+  .s2-ch.up { color: #4ade80; }
+  .s2-ch.down { color: #f87171; }
+
+  /* ─── Toggle (right edge) ──────────── */
+  .toggle-wrap {
+    display: flex;
+    align-items: center;
+    padding: 3px;
+    background: rgba(255,255,255,0.04);
+    border-left: 1px solid rgba(255,255,255,0.08);
+    flex-shrink: 0;
+    gap: 2px;
+  }
+  .toggle-btn {
+    width: 26px;
+    height: 26px;
+    border-radius: 999px;
+    background: transparent;
+    border: none;
+    color: rgba(255,255,255,0.45);
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    transition: all 0.15s;
+  }
+  .toggle-btn:hover { color: rgba(255,255,255,0.8); }
+  .toggle-btn.active {
+    background: rgba(56,189,248,0.18);
+    color: #7dd3fc;
+    box-shadow: inset 0 0 0 1px rgba(125,211,252,0.4);
+  }
+  .toggle-btn svg { width: 14px; height: 14px; }
+
+  /* State frame layout */
+  .state {
+    margin-bottom: 26px;
+  }
+  .state .label {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    color: rgba(255,255,255,0.55);
+    font-size: 11px;
+    letter-spacing: 0.06em;
+    margin-bottom: 8px;
+  }
+  .state .label .pill {
+    background: rgba(125,211,252,0.1);
+    border: 1px solid rgba(125,211,252,0.3);
+    color: #7dd3fc;
+    padding: 2px 8px;
+    border-radius: 4px;
+    font-size: 9px;
+    font-weight: 700;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+  }
+
+  .note {
+    margin: 24px auto 0;
+    max-width: 760px;
+    color: rgba(255,255,255,0.6);
+    font-size: 13px;
+    line-height: 1.55;
+  }
+  .note strong { color: rgba(255,255,255,0.92); }
+  .note ul { margin-top: 6px; padding-left: 18px; }
+  .note li { margin-bottom: 3px; }
+  .note code {
+    font-family: 'SF Mono', Menlo, monospace;
+    font-size: 11.5px;
+    background: rgba(56,189,248,0.08);
+    padding: 1px 5px;
+    border-radius: 3px;
+    color: #7dd3fc;
+  }
+
+  .legend {
+    margin: 36px auto 12px;
+    max-width: 600px;
+    display: flex;
+    gap: 18px;
+    justify-content: center;
+    align-items: center;
+    color: rgba(255,255,255,0.55);
+    font-size: 12px;
+  }
+  .legend .group { display: flex; align-items: center; gap: 6px; }
+  .legend .icn {
+    width: 18px; height: 18px;
+    border-radius: 999px;
+    background: rgba(56,189,248,0.18);
+    color: #7dd3fc;
+    display: inline-flex; align-items: center; justify-content: center;
+  }
+  .legend .icn svg { width: 10px; height: 10px; }
+</style>
+</head>
+<body>
+
+<header>
+  <span class="crumb">Sponsor marquee · 2-state toggle</span>
+  <h1>Tap the toggle to flip between sponsor card and live ticker tape</h1>
+  <p>
+    Far-right pill in the marquee holds two icons. The active one is cyan-filled. Player's choice persists
+    across sessions via <code>localStorage</code>; default is whatever already shows today (sponsor view).
+  </p>
+</header>
+
+<div class="legend">
+  <div class="group"><span class="icn"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 11l18-5v12L3 14v-3z"/><path d="M11.6 16.8a3 3 0 1 1-5.8-1.6"/></svg></span>Sponsor view</div>
+  <div class="group"><span class="icn"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3v18h18"/><path d="M7 14l4-4 4 4 6-6"/></svg></span>Market view</div>
+</div>
+
+<!-- ════════════ STATE 1 — Sponsor view ════════════ -->
+<div class="state">
+  <div class="strip-frame">
+    <div class="ctx-label">Poker action panel — bottom marquee</div>
+    <div class="label"><span class="pill">State 1</span>Sponsor view active (default)</div>
+
+    <div class="marquee">
+      <div class="scroll">
+        <div class="scroll-inner">
+          <span class="s1-identity"><span class="s1-logo">M</span>Morbius</span>
+          <span class="s1-ticker">$MORBIUS</span>
+          <span class="dot">·</span>
+          <span class="s1-price">$0.000234</span>
+          <span class="s1-change">+12.4% 24h</span>
+          <span class="dot">·</span>
+          <span class="s1-meta">Mcap $4.2M</span>
+          <span class="dot">·</span>
+          <span class="s1-meta">Liq $215K</span>
+          <span class="dot">·</span>
+          <span class="s1-meta">8,431 holders</span>
+          <span class="dot">·</span>
+          <span class="s1-meta">Age 8mo</span>
+          <span class="dot">·</span>
+          <span class="s1-cta">↗ Twitter</span>
+          <span class="dot">·</span>
+          <span class="s1-cta">↗ scan.morbius.io</span>
+          <span class="dot">·</span>
+          <span style="color:rgba(255,255,255,0.6)">Promote your token here for <span style="color:white;font-weight:700">175K MORBIUS</span></span>
+          <span class="s1-cta">Click here</span>
+          <!-- duplicate for seamless loop -->
+          <span class="dot">·</span>
+          <span class="s1-identity"><span class="s1-logo">M</span>Morbius</span>
+          <span class="s1-ticker">$MORBIUS</span>
+          <span class="dot">·</span>
+          <span class="s1-price">$0.000234</span>
+          <span class="s1-change">+12.4% 24h</span>
+          <span class="dot">·</span>
+          <span class="s1-meta">Mcap $4.2M</span>
+          <span class="dot">·</span>
+          <span class="s1-meta">Liq $215K</span>
+          <span class="dot">·</span>
+          <span class="s1-meta">8,431 holders</span>
+        </div>
+      </div>
+      <div class="toggle-wrap">
+        <button class="toggle-btn active" aria-label="Sponsor view" aria-pressed="true" title="Sponsor view">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 11l18-5v12L3 14v-3z"/><path d="M11.6 16.8a3 3 0 1 1-5.8-1.6"/></svg>
+        </button>
+        <button class="toggle-btn" aria-label="Market view" aria-pressed="false" title="Market view">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3v18h18"/><path d="M7 14l4-4 4 4 6-6"/></svg>
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ════════════ STATE 2 — Ticker tape ════════════ -->
+<div class="state">
+  <div class="strip-frame">
+    <div class="ctx-label">Same marquee · toggle flipped</div>
+    <div class="label"><span class="pill">State 2</span>Market view active — all enabled blackjack tokens</div>
+
+    <div class="marquee">
+      <div class="scroll">
+        <div class="scroll-inner">
+          <span class="s2-row"><span class="s2-tk">$MORBIUS</span><span class="s2-px">$0.000234</span><span class="s2-ch up">+12.4%</span></span>
+          <span class="dot">·</span>
+          <span class="s2-row"><span class="s2-tk">$DOGEPLS</span><span class="s2-px">$0.00041</span><span class="s2-ch up">+18.2%</span></span>
+          <span class="dot">·</span>
+          <span class="s2-row"><span class="s2-tk">$PEPEPLS</span><span class="s2-px">$0.00029</span><span class="s2-ch down">−3.1%</span></span>
+          <span class="dot">·</span>
+          <span class="s2-row"><span class="s2-tk">$SHIBPLS</span><span class="s2-px">$0.000018</span><span class="s2-ch up">+5.4%</span></span>
+          <span class="dot">·</span>
+          <span class="s2-row"><span class="s2-tk">$HEX</span><span class="s2-px">$0.00481</span><span class="s2-ch up">+2.1%</span></span>
+          <span class="dot">·</span>
+          <span class="s2-row"><span class="s2-tk">$PLSX</span><span class="s2-px">$0.000022</span><span class="s2-ch up">+3.7%</span></span>
+          <span class="dot">·</span>
+          <span class="s2-row"><span class="s2-tk">$INC</span><span class="s2-px">$1.42</span><span class="s2-ch down">−1.4%</span></span>
+          <span class="dot">·</span>
+          <span class="s2-row"><span class="s2-tk">$WPLS</span><span class="s2-px">$0.00003</span><span class="s2-ch down">−0.8%</span></span>
+          <span class="dot">·</span>
+          <span class="s2-row"><span class="s2-tk">$BRIDGE</span><span class="s2-px">$0.00012</span><span class="s2-ch up">+9.1%</span></span>
+          <span class="dot">·</span>
+          <span class="s2-row"><span class="s2-tk">$LOAN</span><span class="s2-px">$0.00007</span><span class="s2-ch up">+4.8%</span></span>
+          <span class="dot">·</span>
+          <span class="s2-row"><span class="s2-tk">$POLY</span><span class="s2-px">$0.00098</span><span class="s2-ch down">−2.3%</span></span>
+          <span class="dot">·</span>
+          <span class="s2-row"><span class="s2-tk">$CST</span><span class="s2-px">$0.00045</span><span class="s2-ch up">+7.1%</span></span>
+          <!-- duplicate for seamless loop -->
+          <span class="dot">·</span>
+          <span class="s2-row"><span class="s2-tk">$MORBIUS</span><span class="s2-px">$0.000234</span><span class="s2-ch up">+12.4%</span></span>
+          <span class="dot">·</span>
+          <span class="s2-row"><span class="s2-tk">$DOGEPLS</span><span class="s2-px">$0.00041</span><span class="s2-ch up">+18.2%</span></span>
+          <span class="dot">·</span>
+          <span class="s2-row"><span class="s2-tk">$PEPEPLS</span><span class="s2-px">$0.00029</span><span class="s2-ch down">−3.1%</span></span>
+        </div>
+      </div>
+      <div class="toggle-wrap">
+        <button class="toggle-btn" aria-label="Sponsor view" aria-pressed="false" title="Sponsor view">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 11l18-5v12L3 14v-3z"/><path d="M11.6 16.8a3 3 0 1 1-5.8-1.6"/></svg>
+        </button>
+        <button class="toggle-btn active" aria-label="Market view" aria-pressed="true" title="Market view">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3v18h18"/><path d="M7 14l4-4 4 4 6-6"/></svg>
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="note">
+  <strong>How state 2 gets its data:</strong>
+  <ul>
+    <li>Fetch <code>/api/blackjack/tables?enabledOnly=true</code> once on marquee mount. Returns ~25 rows from the <code>blackjack_tables</code> table — same endpoint the Featured tab in the sponsor modal already uses, so no new API.</li>
+    <li>Filter out rows where <code>ticker</code> or <code>token_contract_address</code> is <code>NULL</code> (user noted some entries don't have tickers). Result: the subset that can show real market data.</li>
+    <li>For each remaining token, call <code>fetchDexScreenerTokenInfo(address)</code> in parallel (<code>Promise.allSettled</code> so one slow/missing token doesn't block the rest). Use the existing helper from <code>lib/dexscreener-token-info.ts</code>; <code>priceUsd</code> + <code>priceChangeH24</code> are already parsed there. Cache the result in module state and refresh on a ~60s interval.</li>
+    <li>Render the ticker tape using the same <code>animate-poker-marquee</code> CSS already in the project; just swap the children when the toggle flips.</li>
+  </ul>
+  <strong>Toggle behaviour:</strong>
+  <ul>
+    <li>Two icon buttons in a pill at the far right of the marquee — separated from the scrolling content by a thin border so they're never hidden by the mask gradient.</li>
+    <li>Active button gets cyan fill + outline. Clicking the inactive one switches state, persists the choice to <code>localStorage</code> under a key like <code>pokerMarqueeMode</code> so it survives page reloads.</li>
+    <li>Defaults to <em>sponsor</em> view on first visit (preserves current behaviour). Players who prefer market view get it sticky after one tap.</li>
+  </ul>
+  Confirm and I'll add this to <code>FUTURE_FEATURES.md</code> as a new sub-feature under the <strong>Poker Table Sponsorship</strong> umbrella (since it's an extension of the existing marquee).
+</div>
+
+</body>
+</html>
