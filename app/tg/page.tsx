@@ -36,6 +36,7 @@ import {
   IconBolt,
   IconBomb,
   IconArrowsUpDown,
+  IconDice5,
   IconGift,
   IconPlus,
   IconCheck,
@@ -51,6 +52,7 @@ import MiniAppVideoPoker from '@/components/telegram/MiniAppVideoPoker';
 import MiniAppLimbo from '@/components/telegram/MiniAppLimbo';
 import MiniAppMines from '@/components/telegram/MiniAppMines';
 import MiniAppHiLo from '@/components/telegram/MiniAppHiLo';
+import MiniAppDice from '@/components/telegram/MiniAppDice';
 import MiniAppRecentWins from '@/components/telegram/MiniAppRecentWins';
 import {
   MTT_TEMPLATES,
@@ -122,6 +124,7 @@ type View =
   | 'limbo'
   | 'mines'
   | 'hilo'
+  | 'dice'
   | 'lobby'
   | 'createTournament'
   | 'leaderboard'
@@ -979,7 +982,13 @@ export default function TelegramMiniAppPage() {
     const goBack = () => {
       haptic('tap');
       if (view === 'createTournament') setView('lobby');
-      else if (view === 'videopoker' || view === 'limbo' || view === 'mines' || view === 'hilo')
+      else if (
+        view === 'videopoker' ||
+        view === 'limbo' ||
+        view === 'mines' ||
+        view === 'hilo' ||
+        view === 'dice'
+      )
         setView('arcade');
       else setView('hub');
     };
@@ -1331,7 +1340,7 @@ export default function TelegramMiniAppPage() {
                     key: 'arcade',
                     icon: <IconCards size={20} aria-hidden />,
                     title: 'MORBIUS Arcade',
-                    sub: 'Video Poker · Limbo · Mines · Hi-Lo',
+                    sub: 'Video Poker · Limbo · Mines · Hi-Lo · Dice',
                     target: 'arcade',
                     featured: false,
                   },
@@ -1600,6 +1609,13 @@ export default function TelegramMiniAppPage() {
                     sub: 'Higher or lower · chain your multiplier',
                     target: 'hilo' as View,
                   },
+                  {
+                    key: 'dice',
+                    icon: <IconDice5 size={20} aria-hidden />,
+                    title: 'Dice',
+                    sub: 'Roll under your target · instant payout',
+                    target: 'dice' as View,
+                  },
                 ]
               ).map((tile) => (
                 <button
@@ -1652,6 +1668,15 @@ export default function TelegramMiniAppPage() {
         {/* ---- ARCADE: HI-LO ---- */}
         {loadState === 'ready' && session && session.linked && view === 'hilo' && (
           <MiniAppHiLo
+            initData={initData}
+            initialChipBalance={session.chipBalance ?? '0'}
+            onBack={() => setView('arcade')}
+          />
+        )}
+
+        {/* ---- ARCADE: DICE ---- */}
+        {loadState === 'ready' && session && session.linked && view === 'dice' && (
+          <MiniAppDice
             initData={initData}
             initialChipBalance={session.chipBalance ?? '0'}
             onBack={() => setView('arcade')}
