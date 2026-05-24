@@ -1,12 +1,13 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
-import { Globe, Send, Twitter, ExternalLink, X } from 'lucide-react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
+import { Globe, Send, Twitter, ExternalLink, X, Megaphone, BarChart3 } from 'lucide-react';
 import {
   buildScanMorbiusLink,
   fetchDexScreenerTokenInfo,
   type DexscreenerTokenInfo,
 } from '@/lib/dexscreener-token-info';
+import { getApiUrlOptional } from '@/lib/api-urls';
 
 const MORBIUS_TOKEN_ADDRESS = '0xB7d4eB5fDfE3d4d3B5C16a44A49948c6EC77c6F1';
 const MORBIUS_FALLBACK_LOGO = '/morbius/MorbiusLogo-2.svg';
@@ -123,6 +124,94 @@ async function fetchHoldersCount(address: string, signal?: AbortSignal): Promise
 /** One toast per sponsorship window even if multiple `SponsoredTokenMarquee` instances mount. */
 const sponsorNoticeShownKeys = new Set<string>();
 
+// ─── Market-view (toggle state 2) data layer ────────────────────────────────
+// Shared module-level cache so multiple marquee instances don't refetch.
+
+interface MarketTokenRow {
+  address: string;
+  ticker: string;
+  name: string;
+  sortOrder: number;
+}
+
+interface MarketPrice {
+  priceUsd: number | null;
+  priceChangeH24: number | null;
+}
+
+const MARKET_TOKENS_TTL_MS = 60_000;
+const MARKET_PRICE_TTL_MS = 60_000;
+
+let marketTokensCache: { tokens: MarketTokenRow[]; fetchedAt: number } | null = null;
+const marketPriceCache = new Map<string, { value: MarketPrice; fetchedAt: number }>();
+
+async function fetchMarqueeTokens(signal?: AbortSignal): Promise<MarketTokenRow[]> {
+  const now = Date.now();
+  if (marketTokensCache && now - marketTokensCache.fetchedAt < MARKET_TOKENS_TTL_MS) {
+    return marketTokensCache.tokens;
+  }
+  const api = getApiUrlOptional();
+  const url = api ? `${api.replace(/\/$/, '')}/api/marquee/tokens` : '/api/marquee/tokens';
+  try {
+    const r = await fetch(url, { signal });
+    if (!r.ok) return marketTokensCache?.tokens ?? [];
+    const j = (await r.json()) as MarketTokenRow[];
+    marketTokensCache = { tokens: j, fetchedAt: now };
+    return j;
+  } catch {
+    return marketTokensCache?.tokens ?? [];
+  }
+}
+
+async function fetchMarketPriceForToken(
+  address: string,
+  signal?: AbortSignal,
+): Promise<MarketPrice | null> {
+  const now = Date.now();
+  const cached = marketPriceCache.get(address);
+  if (cached && now - cached.fetchedAt < MARKET_PRICE_TTL_MS) return cached.value;
+  try {
+    const info = await fetchDexScreenerTokenInfo(address, signal);
+    if (!info) return cached?.value ?? null;
+    const value: MarketPrice = {
+      priceUsd: info.priceUsd,
+      priceChangeH24: info.priceChangeH24,
+    };
+    marketPriceCache.set(address, { value, fetchedAt: now });
+    return value;
+  } catch {
+    return cached?.value ?? null;
+  }
+}
+
+type MarketRow = MarketTokenRow & MarketPrice;
+
+async function fetchMarketSnapshot(signal?: AbortSignal): Promise<MarketRow[]> {
+  const tokens = await fetchMarqueeTokens(signal);
+  const settled = await Promise.allSettled(
+    tokens.map(async (t) => {
+      const px = await fetchMarketPriceForToken(t.address, signal);
+      return { ...t, priceUsd: px?.priceUsd ?? null, priceChangeH24: px?.priceChangeH24 ?? null };
+    }),
+  );
+  return settled
+    .map((s) => (s.status === 'fulfilled' ? s.value : null))
+    .filter((x): x is MarketRow => x !== null);
+}
+
+const MARQUEE_MODE_STORAGE_KEY = 'pokerMarqueeMode';
+type MarqueeMode = 'sponsor' | 'market';
+
+function readStoredMode(): MarqueeMode {
+  if (typeof window === 'undefined') return 'sponsor';
+  try {
+    const v = window.localStorage.getItem(MARQUEE_MODE_STORAGE_KEY);
+    return v === 'market' ? 'market' : 'sponsor';
+  } catch {
+    return 'sponsor';
+  }
+}
+
 export function SponsoredTokenMarquee({
   sponsor,
   sponsoredUntil,
@@ -134,6 +223,43 @@ export function SponsoredTokenMarquee({
   const [info, setInfo] = useState<DexscreenerTokenInfo | null>(null);
   const [holders, setHolders] = useState<number | null>(null);
   const [tick, setTick] = useState(0);
+  const [mode, setMode] = useState<MarqueeMode>('sponsor');
+  const [marketRows, setMarketRows] = useState<MarketRow[]>([]);
+
+  // Hydrate the persisted mode after mount (avoids SSR/client mismatch).
+  useEffect(() => {
+    setMode(readStoredMode());
+  }, []);
+
+  const toggleMode = useCallback((next: MarqueeMode) => {
+    setMode(next);
+    if (typeof window !== 'undefined') {
+      try {
+        window.localStorage.setItem(MARQUEE_MODE_STORAGE_KEY, next);
+      } catch {
+        /* ignore quota errors */
+      }
+    }
+  }, []);
+
+  // Market data — only fetch while market mode is active. Refresh every 60s.
+  useEffect(() => {
+    if (mode !== 'market') return;
+    const ac = new AbortController();
+    let cancelled = false;
+    const load = () => {
+      void fetchMarketSnapshot(ac.signal).then((rows) => {
+        if (!cancelled && !ac.signal.aborted) setMarketRows(rows);
+      });
+    };
+    load();
+    const id = setInterval(load, MARKET_PRICE_TTL_MS);
+    return () => {
+      cancelled = true;
+      ac.abort();
+      clearInterval(id);
+    };
+  }, [mode]);
 
   const targetAddress = (sponsor?.address ?? MORBIUS_TOKEN_ADDRESS).toLowerCase();
   const fallbackName = sponsor?.name ?? 'Morbius';
@@ -220,7 +346,7 @@ export function SponsoredTokenMarquee({
     return Math.max(1, Math.ceil(ms / 60_000));
   }, [sponsoredUntil, tick]);
 
-  const chips: Chip[] = [];
+  let chips: Chip[] = [];
 
   // Logo + name (bold) — sole inline logo in the strip
   chips.push({
@@ -421,6 +547,39 @@ export function SponsoredTokenMarquee({
     });
   }
 
+  // Market mode overrides the sponsor chips with a stock-ticker tape.
+  if (mode === 'market') {
+    if (marketRows.length === 0) {
+      chips = [
+        {
+          key: 'market-loading',
+          content: <span className="text-white/45">Loading market…</span>,
+        },
+      ];
+    } else {
+      chips = marketRows.map((r) => {
+        const priceText = formatUsdPrice(r.priceUsd);
+        const change = r.priceChangeH24;
+        const hasChange = change != null && Number.isFinite(change);
+        const changeColor = hasChange && (change as number) >= 0 ? 'text-emerald-400' : 'text-rose-400';
+        const changeText = hasChange
+          ? `${(change as number) >= 0 ? '+' : ''}${(change as number).toFixed(2)}%`
+          : null;
+        return {
+          key: `mkt-${r.address}`,
+          content: (
+            <span className="inline-flex items-baseline gap-1.5">
+              <span className="font-semibold text-white/90">${r.ticker}</span>
+              {priceText && <span className="tabular-nums text-white/70">{priceText}</span>}
+              {changeText && <span className={`tabular-nums ${changeColor}`}>{changeText}</span>}
+            </span>
+          ),
+          href: buildScanMorbiusLink(r.address),
+        };
+      });
+    }
+  }
+
   // Duplicate items so the CSS marquee loops seamlessly.
   const looped = [...chips, ...chips];
   const textCls = tight ? 'text-[9px]' : compact ? 'text-[10px]' : 'text-[11px] md:text-[12px]';
@@ -462,51 +621,95 @@ export function SponsoredTokenMarquee({
           </div>
         </div>
       )}
-      <div
-        className="relative min-w-0 flex-1 overflow-hidden [mask-image:linear-gradient(to_right,transparent,black_8%,black_92%,transparent)]"
-        data-testid="sponsored-token-marquee"
-      >
+      <div className="relative flex min-w-0 flex-1 items-stretch">
         <div
-          className={`font-jost flex w-max items-center whitespace-nowrap ${tight ? 'leading-none' : 'leading-tight'} tabular-nums ${textCls} animate-poker-marquee`}
+          className="relative min-w-0 flex-1 overflow-hidden [mask-image:linear-gradient(to_right,transparent,black_8%,black_92%,transparent)]"
+          data-testid="sponsored-token-marquee"
         >
-        {looped.map((c, i) => {
-          const inner = c.content;
-          let node: React.ReactNode;
-          if (c.href) {
-            node = (
-              <a
-                href={c.href}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="hover:underline"
-                onClick={(e) => e.stopPropagation()}
-              >
-                {inner}
-              </a>
+          <div
+            className={`font-jost flex w-max items-center whitespace-nowrap ${tight ? 'leading-none' : 'leading-tight'} tabular-nums ${textCls} animate-poker-marquee`}
+          >
+          {looped.map((c, i) => {
+            const inner = c.content;
+            let node: React.ReactNode;
+            if (c.href) {
+              node = (
+                <a
+                  href={c.href}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="hover:underline"
+                  onClick={(e) => e.stopPropagation()}
+                >
+                  {inner}
+                </a>
+              );
+            } else if (c.onClick) {
+              node = (
+                <button
+                  type="button"
+                  className="text-left hover:opacity-90"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    c.onClick?.();
+                  }}
+                >
+                  {inner}
+                </button>
+              );
+            } else {
+              node = inner;
+            }
+            return (
+              <span key={`${c.key}-${i}`} className="inline-flex items-center">
+                {node}
+                {i < looped.length - 1 && <span className={`${dotCls} text-white/15`}>·</span>}
+              </span>
             );
-          } else if (c.onClick) {
-            node = (
-              <button
-                type="button"
-                className="text-left hover:opacity-90"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  c.onClick?.();
-                }}
-              >
-                {inner}
-              </button>
-            );
-          } else {
-            node = inner;
-          }
-          return (
-            <span key={`${c.key}-${i}`} className="inline-flex items-center">
-              {node}
-              {i < looped.length - 1 && <span className={`${dotCls} text-white/15`}>·</span>}
-            </span>
-          );
-        })}
+          })}
+          </div>
+        </div>
+
+        {/* Toggle pill: sponsor view ⇄ market view */}
+        <div
+          className="ml-1 flex shrink-0 items-center gap-0.5 self-center rounded-full border border-white/10 bg-white/5 p-0.5"
+          role="group"
+          aria-label="Marquee view"
+        >
+          <button
+            type="button"
+            onClick={(e) => {
+              e.stopPropagation();
+              toggleMode('sponsor');
+            }}
+            aria-label="Sponsor view"
+            aria-pressed={mode === 'sponsor'}
+            title="Sponsor view"
+            className={`flex h-5 w-5 items-center justify-center rounded-full transition-colors ${
+              mode === 'sponsor'
+                ? 'bg-cyan-500/20 text-cyan-300 ring-1 ring-cyan-400/50'
+                : 'text-white/40 hover:text-white/70'
+            }`}
+          >
+            <Megaphone size={tight ? 9 : 11} />
+          </button>
+          <button
+            type="button"
+            onClick={(e) => {
+              e.stopPropagation();
+              toggleMode('market');
+            }}
+            aria-label="Market view"
+            aria-pressed={mode === 'market'}
+            title="Market view"
+            className={`flex h-5 w-5 items-center justify-center rounded-full transition-colors ${
+              mode === 'market'
+                ? 'bg-cyan-500/20 text-cyan-300 ring-1 ring-cyan-400/50'
+                : 'text-white/40 hover:text-white/70'
+            }`}
+          >
+            <BarChart3 size={tight ? 9 : 11} />
+          </button>
         </div>
       </div>
     </>
