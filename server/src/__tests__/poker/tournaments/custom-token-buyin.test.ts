@@ -101,6 +101,55 @@ describe('custom_token_buyin — createPokerTournament', () => {
     expect(t.id).toBe(tournamentId);
   });
 
+  it('exposes prize_token_* through poker_tournament_registrations for lobby list', async () => {
+    const buyWei = 10_000_000_000_000n; // 100k HEX @ 8 decimals
+    const { tournamentId } = await pokerTournamentService.createPokerTournament({
+      creatorAddress: PLAYER_1,
+      name: 'Lobby view token columns',
+      buyInAmount: buyWei,
+      guaranteedPrizePoolSource: 'custom_token_buyin',
+      customTokenBuyIn: {
+        tokenAddress: SAMPLE_PRC20,
+        decimals: 8,
+        symbol: 'HEX',
+        name: 'HEX',
+      },
+      prizeDistributionType: 'winner_takes_all',
+      config: {
+        startingStack: 5000,
+        minPlayers: 2,
+        maxPlayers: 10,
+        blindSchedule: [{ level: 1, smallBlind: 25, bigBlind: 50, handsPerLevel: 10 }],
+      },
+      scheduledStartAt: pokerTestScheduledStart(),
+    });
+    createdTournamentIds.push(tournamentId);
+
+    const viewRow = await testPool.query(
+      `SELECT prize_token_address, prize_token_decimals, prize_token_symbol, prize_token_name,
+              is_private, creator_fee_percent, table_count
+       FROM poker_tournament_registrations WHERE tournament_id = $1`,
+      [tournamentId],
+    );
+    expect(viewRow.rows).toHaveLength(1);
+    const v = viewRow.rows[0];
+    expect(String(v.prize_token_address).toLowerCase()).toBe(SAMPLE_PRC20.toLowerCase());
+    expect(Number(v.prize_token_decimals)).toBe(8);
+    expect(v.prize_token_symbol).toBe('HEX');
+    expect(v.prize_token_name).toBe('HEX');
+    expect(v.is_private).toBe(false);
+    expect(Number(v.creator_fee_percent)).toBe(2);
+    expect(Number(v.table_count)).toBe(0);
+
+    const listed = await pokerTournamentService.listPokerTournaments(PLAYER_1);
+    const summary = listed.find((t) => t.tournamentId === tournamentId);
+    expect(summary).toBeDefined();
+    expect(summary!.prizeTokenAddress?.toLowerCase()).toBe(SAMPLE_PRC20.toLowerCase());
+    expect(summary!.prizeTokenDecimals).toBe(8);
+    expect(summary!.prizeTokenSymbol).toBe('HEX');
+    expect(summary!.buyInAmount).toBe(buyWei.toString());
+  });
+
   it('rejects custom_token_buyin without customTokenBuyIn', async () => {
     await expect(
       pokerTournamentService.createPokerTournament({
