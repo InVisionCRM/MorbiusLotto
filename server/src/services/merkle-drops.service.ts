@@ -2,7 +2,7 @@
  * MerkleDropsService
  *
  * Off-chain epoch management for MORBIUS holder reward drops:
- *   1. Snapshot MORBIUS holders from PulseChain API
+ *   1. Snapshot MORBIUS holders (Moralis if configured, else on-chain RPC)
  *   2. Filter excluded addresses (blocklist) and dust wallets
  *   3. Calculate proportional rewards
  *   4. Generate Merkle tree (OZ-compatible double-hash, sorted leaves)
@@ -25,10 +25,15 @@ import {
   getEpochClaimedAmount,
   revokeEpochOnChain,
 } from '../utils/merkle-claim';
-
-const MORBIUS_TOKEN_ADDRESS = '0xB7d4eB5fDfE3d4d3B5C16a44A49948c6EC77c6F1';
-const PULSECHAIN_API = 'https://api.scan.pulsechain.com/api/v2';
-const HOLDERS_PAGE_SIZE = 50;
+import {
+  fetchMorbiusHoldersFromChain,
+  MORBIUS_DEPLOY_BLOCK,
+} from '../utils/morbius-holders-rpc';
+import {
+  fetchMorbiusHoldersFromMoralis,
+  isMoralisHoldersConfigured,
+} from '../utils/morbius-holders-moralis';
+import { getPublicClient } from '../utils/chain-client';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Types
@@ -208,7 +213,7 @@ export class MerkleDropsService {
   // ──────────────────────────────────────────────────────────
 
   /**
-   * Fetch all MORBIUS holders from PulseChain API, filter blocklist + dust,
+   * Snapshot MORBIUS holders from chain RPC, filter blocklist + dust,
    * and store results in merkle_snapshots.
    */
   async takeSnapshot(epochId: number, blockNumber?: number): Promise<void> {
@@ -226,25 +231,10 @@ export class MerkleDropsService {
     );
     const blocklist = new Set(blockedRows.map((r) => r.address.toLowerCase()));
 
-    logger.info(`[MerkleDrops] Snapshot epoch #${epoch.epoch_number}: fetching holders...`);
+    logger.info(`[MerkleDrops] Snapshot epoch #${epoch.epoch_number}: fetching holders from chain RPC...`);
 
-    const rawHolders = await this.fetchAllHolders();
-    logger.info(`[MerkleDrops] Total holders from API: ${rawHolders.length}`);
-
-    // Deduplicate — PulseChain API can return the same address across pages.
-    // Keep the highest balance if duplicated.
-    const holderMap = new Map<string, bigint>();
-    for (const { address, balance } of rawHolders) {
-      const key = address.toLowerCase();
-      const existing = holderMap.get(key);
-      if (existing === undefined || balance > existing) {
-        holderMap.set(key, balance);
-      }
-    }
-    const holders = Array.from(holderMap, ([address, balance]) => ({ address, balance }));
-    if (holders.length !== rawHolders.length) {
-      logger.info(`[MerkleDrops] Deduplicated: ${rawHolders.length} → ${holders.length} unique holders`);
-    }
+    const { holders, snapshotBlock } = await this.fetchAllHolders(blockNumber);
+    logger.info(`[MerkleDrops] Total non-zero holders from chain: ${holders.length}`);
 
     // Filter
     const eligible = holders.filter(({ address, balance }) => {
@@ -253,18 +243,10 @@ export class MerkleDropsService {
     });
     logger.info(`[MerkleDrops] Eligible after filtering: ${eligible.length}`);
 
-    // Determine snapshot block
-    let snapshotBlock = blockNumber ?? null;
-    if (!snapshotBlock) {
-      try {
-        const resp = await fetch(`${PULSECHAIN_API}/blocks?type=block&page_size=1`);
-        if (resp.ok) {
-          const data = await resp.json() as { items?: Array<{ height: number }> };
-          snapshotBlock = data.items?.[0]?.height ?? null;
-        }
-      } catch {
-        // non-critical; leave null
-      }
+    if (eligible.length === 0) {
+      throw new Error(
+        `[MerkleDrops] Snapshot produced 0 eligible holders at block ${snapshotBlock} — aborting`,
+      );
     }
 
     // Persist in a transaction (delete old snapshots for this epoch first)
@@ -1278,53 +1260,34 @@ export class MerkleDropsService {
   }
 
   // ──────────────────────────────────────────────────────────
-  // PulseChain API — holder fetch
+  // Holder fetch: Moralis (fast) → RPC fallback (always works on Railway)
   // ──────────────────────────────────────────────────────────
 
-  private async fetchAllHolders(): Promise<Array<{ address: string; balance: bigint }>> {
-    const holders: Array<{ address: string; balance: bigint }> = [];
-    let nextPage: string | null =
-      `${PULSECHAIN_API}/tokens/${MORBIUS_TOKEN_ADDRESS}/holders?page_size=${HOLDERS_PAGE_SIZE}`;
-
-    while (nextPage) {
-      let resp: Response;
+  private async fetchAllHolders(blockNumber?: number): Promise<{
+    holders: Array<{ address: string; balance: bigint }>;
+    snapshotBlock: number;
+  }> {
+    // Moralis serves current balances only — use RPC when a historical block is requested.
+    if (isMoralisHoldersConfigured() && blockNumber === undefined) {
       try {
-        resp = await fetch(nextPage);
+        logger.info('[MerkleDrops] Fetching holders via Moralis...');
+        const holders = await fetchMorbiusHoldersFromMoralis();
+        const chainBlock = await getPublicClient().getBlockNumber();
+        return { holders, snapshotBlock: Number(chainBlock) };
       } catch (err) {
-        logger.error('[MerkleDrops] PulseChain API fetch error', err);
-        break;
+        logger.warn('[MerkleDrops] Moralis fetch failed — falling back to chain RPC', err);
       }
-
-      if (!resp.ok) {
-        logger.error(`[MerkleDrops] PulseChain API returned ${resp.status} for ${nextPage}`);
-        break;
-      }
-
-      const data = await resp.json() as {
-        items?: Array<{ address: { hash: string }; value: string }>;
-        next_page_params?: Record<string, string> | null;
-      };
-
-      for (const item of data.items ?? []) {
-        const addr = item.address?.hash?.toLowerCase();
-        const balance = BigInt(item.value ?? '0');
-        if (addr) holders.push({ address: addr, balance });
-      }
-
-      // Build next page URL from params (PulseChain blockscout pagination)
-      if (data.next_page_params && Object.keys(data.next_page_params).length > 0) {
-        const params = new URLSearchParams(
-          Object.entries(data.next_page_params).map(([k, v]) => [k, String(v)] as [string, string]),
-        );
-        nextPage = `${PULSECHAIN_API}/tokens/${MORBIUS_TOKEN_ADDRESS}/holders?page_size=${HOLDERS_PAGE_SIZE}&${params}`;
-      } else {
-        nextPage = null;
-      }
-
-      // Small delay to be respectful to the public API
-      await new Promise((r) => setTimeout(r, 150));
     }
 
-    return holders;
+    logger.info('[MerkleDrops] Fetching holders via chain RPC...');
+    const { holders, blockNumber: chainBlock } = await fetchMorbiusHoldersFromChain({
+      fromBlock: MORBIUS_DEPLOY_BLOCK,
+      atBlock: blockNumber !== undefined ? BigInt(blockNumber) : undefined,
+    });
+
+    return {
+      holders,
+      snapshotBlock: blockNumber ?? Number(chainBlock),
+    };
   }
 }
