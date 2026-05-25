@@ -4392,6 +4392,19 @@ async function initializeServices() {
       }
     });
 
+    app.get('/api/admin/merkle/epoch/:epochId/claims', async (req, res) => {
+      try {
+        const epochId = parseInt(req.params.epochId, 10);
+        const page = Math.max(1, parseInt(String(req.query.page || 1), 10));
+        const pageSize = Math.min(200, Math.max(1, parseInt(String(req.query.pageSize || 50), 10)));
+        const data = await merkleDropsService!.getEpochClaimsPage(epochId, page, pageSize);
+        sendJson(res, data);
+      } catch (error) {
+        logger.error('Error fetching epoch claims:', error);
+        res.status(500).json({ error: 'Internal server error' });
+      }
+    });
+
     // Blocklist CRUD
     app.get('/api/admin/merkle/blocklist', async (req, res) => {
       try {
@@ -4481,6 +4494,15 @@ async function initializeServices() {
         sendJson(res, await merkleDropsService!.reclaimStaleSnapshots());
       } catch (error) {
         logger.error('Error executing merkle reclaim:', error);
+        res.status(500).json({ error: String(error) });
+      }
+    });
+
+    app.post('/api/admin/merkle/revoke-superseded', async (_req, res) => {
+      try {
+        sendJson(res, await merkleDropsService!.revokeAllSupersededOnChainRoots());
+      } catch (error) {
+        logger.error('Error revoking superseded merkle epochs:', error);
         res.status(500).json({ error: String(error) });
       }
     });
@@ -4740,6 +4762,15 @@ async function initializeServices() {
         sendJson(res, await merkleDropsLPService!.reclaimStaleSnapshots());
       } catch (error) {
         logger.error('Error executing LP reclaim:', error);
+        res.status(500).json({ error: String(error) });
+      }
+    });
+
+    app.post('/api/admin/merkle-lp/revoke-superseded', async (_req, res) => {
+      try {
+        sendJson(res, await merkleDropsLPService!.revokeAllSupersededOnChainRoots());
+      } catch (error) {
+        logger.error('Error revoking superseded LP merkle epochs:', error);
         res.status(500).json({ error: String(error) });
       }
     });

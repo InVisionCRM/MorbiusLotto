@@ -1,1 +1,0 @@
-{"version":3,"file":"app-setup.d.ts","sourceRoot":"","sources":["../../src/bootstrap/app-setup.ts"],"names":[],"mappings":"AAAA,OAAO,KAAK,EAAE,OAAO,EAAE,MAAM,SAAS,CAAC;AAOvC,OAAO,MAAM,MAAM,QAAQ,CAAC;AAO5B,wBAAgB,uBAAuB,CAAC,GAAG,EAAE,OAAO,GAAG,IAAI,CA+D1D;AAED,wBAAgB,kBAAkB,kBA4BjC;AAED,wBAAgB,kBAAkB,CAAC,GAAG,EAAE,OAAO,EAAE,WAAW,EAAE,MAAM,GAAG,SAAS,GAAG,IAAI,CAetF"}

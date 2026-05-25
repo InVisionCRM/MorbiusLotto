@@ -12,6 +12,7 @@
 import { Pool } from 'pg';
 import { ethers } from 'ethers';
 import { logger } from '../utils/logger';
+import { loadLpSnapshotBlocklist } from './merkle-snapshot-blocklist';
 import {
   isMerkleKeeperConfigured,
   isMerkleOwnerConfigured,
@@ -23,6 +24,7 @@ import {
   calcMorbiusEquivalent,
   getLatestBlock,
   getEpochClaimedAmount,
+  getEpochRootOnChain,
   revokeEpochOnChain,
 } from '../utils/merkle-claim-lp';
 
@@ -239,11 +241,8 @@ export class MerkleDropsLPService {
     const epoch = await this.getEpoch(epochId);
     if (!epoch) throw new Error(`LP Epoch ${epochId} not found`);
 
-    // Load blocklist from DB (includes ALL_DEPLOYMENTS.MD rows from migration 053)
-    const { rows: blockedRows } = await this.pool.query<{ address: string }>(
-      'SELECT address FROM merkle_lp_blocklist',
-    );
-    const blocklist = new Set(blockedRows.map((r) => r.address.toLowerCase()));
+    const blocklist = await loadLpSnapshotBlocklist(this.pool);
+    logger.info(`[MerkleLP] Snapshot blocklist size: ${blocklist.size}`);
 
     // Load active pairs
     const { rows: pairs } = await this.pool.query<LPPair>(
@@ -533,6 +532,100 @@ export class MerkleDropsLPService {
       [epochId],
     );
     logger.info(`[MerkleLP] Epoch #${epoch.epoch_number} published`);
+
+    const settings = await this.getSettings();
+    if (settings['auto_revoke_prior_epochs_on_publish'] !== 'false') {
+      try {
+        const out = await this.revokeSupersededOnChainRoots(epoch.epoch_number);
+        const revoked = out.results.filter((r) => r.revoked).length;
+        if (revoked > 0) {
+          logger.info(
+            `[MerkleLP] Auto-revoked ${revoked} prior on-chain root(s) after publishing #${epoch.epoch_number}`,
+          );
+        }
+      } catch (err) {
+        logger.error('[MerkleLP] Auto-revoke prior epochs failed after publish', err);
+      }
+    }
+  }
+
+  async revokeSupersededOnChainRoots(latestEpochNumber: number): Promise<{
+    latestEpochNumber: number;
+    results: Array<{
+      epochNumber: number;
+      revoked: boolean;
+      skipped?: string;
+      txHash?: string;
+      error?: string;
+    }>;
+  }> {
+    if (!isMerkleOwnerConfigured()) {
+      throw new Error('MERKLE_OWNER_PRIVATE_KEY not configured — required for revokeEpoch (onlyOwner)');
+    }
+
+    const ZERO_ROOT = '0x0000000000000000000000000000000000000000000000000000000000000000';
+    const { rows } = await this.pool.query<{ epoch_number: number }>(
+      `SELECT epoch_number FROM merkle_lp_epochs
+       WHERE status = 'published' AND epoch_number < $1
+       ORDER BY epoch_number ASC`,
+      [latestEpochNumber],
+    );
+
+    const results: Array<{
+      epochNumber: number;
+      revoked: boolean;
+      skipped?: string;
+      txHash?: string;
+      error?: string;
+    }> = [];
+
+    for (const row of rows) {
+      const epochNumber = row.epoch_number;
+      try {
+        const root = await getEpochRootOnChain(epochNumber);
+        if (root === ZERO_ROOT) {
+          results.push({ epochNumber, revoked: false, skipped: 'root already cleared' });
+          continue;
+        }
+
+        const claimed = await getEpochClaimedAmount(epochNumber);
+        if (claimed > 0n) {
+          results.push({
+            epochNumber,
+            revoked: false,
+            skipped: `has on-chain claims (${ethers.formatEther(claimed)} MORBIUS)`,
+          });
+          continue;
+        }
+
+        const tx = await revokeEpochOnChain(epochNumber);
+        if (tx.success) {
+          results.push({ epochNumber, revoked: true, txHash: tx.txHash });
+          logger.info(`[MerkleLP] Revoked superseded on-chain root for epoch #${epochNumber}`);
+        } else {
+          results.push({ epochNumber, revoked: false, error: tx.error });
+        }
+      } catch (err) {
+        results.push({
+          epochNumber,
+          revoked: false,
+          error: err instanceof Error ? err.message : String(err),
+        });
+      }
+    }
+
+    return { latestEpochNumber, results };
+  }
+
+  async revokeAllSupersededOnChainRoots() {
+    const { rows } = await this.pool.query<{ max: number | null }>(
+      "SELECT MAX(epoch_number) AS max FROM merkle_lp_epochs WHERE status = 'published'",
+    );
+    const latest = rows[0]?.max;
+    if (latest == null) {
+      return { latestEpochNumber: 0, results: [] as Array<{ epochNumber: number; revoked: boolean; skipped?: string; txHash?: string; error?: string }> };
+    }
+    return this.revokeSupersededOnChainRoots(latest);
   }
 
   async revokeEpoch(epochId: number): Promise<void> {

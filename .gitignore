@@ -29,10 +29,16 @@ node_modules
 /contracts/cache
 /contracts/artifacts
 /contracts/.env
-/docs
+
+# server — generated / runtime (build from server/src in deploy)
+server/dist/
+server/logs/
 
 # server uploads (admin table images/videos)
 server/uploads/
+
+# local design mockups & scratch docs (not shipped)
+/docs
 
 # misc
 .DS_Store
@@ -66,8 +72,6 @@ yarn-error.log*
 next-env.d.ts
 .env*.local
 
-/docs
-
 # Serwist (generated service worker)
 public/sw*
 public/swe-worker*
@@ -77,3 +81,6 @@ public/swe-worker*
 
 # claude code (session worktrees — local scratch, never commit)
 .claude/worktrees/
+
+# internal audit notes (local reference only)
+/audit

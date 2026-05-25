@@ -25,7 +25,7 @@ export const SNAPSHOT_EXCLUSION_CONTRACTS: string[] = [
   // Deployer 1 (ALL_DEPLOYMENTS.MD)
   '0x1f38de556ad6f039d710211025ee941ce3c546f1',
   '0xec29f41ba9380e34b71d0aeb53bd637ba5258a93',
-  '0xfe8d58174d26cc2c60103120cbceb8f75dfdcadac',
+  '0xfe8d58174d26cc2c60103120cbceb8f75dfdcdac',
   '0x3807f417617e53d4c5c7d7a825a5ce4d105a75d2',
   '0xa6585d334bb737d64ece7abca5acc087dd46e99e',
   '0x611001519cf458d1bf35ebc2b990bd8226df3e08',
@@ -104,6 +104,18 @@ export const SNAPSHOT_EXCLUSION_CONTRACTS: string[] = [
   TOURNAMENT_PRIZE_ESCROW_ADDRESS.toLowerCase(),
   MORBIUS_TOURNAMENT_ADDRESS.toLowerCase(),
   MORBIUS_HOLDER_DISTRIBUTOR_ADDRESS.toLowerCase(),
+  // Current live contracts + ops (also seeded in merkle_blocklist migration 135)
+  '0xb7d4eb5fdfe3d4d3b5c16a44a49948c6ec77c6f1',
+  '0x4ea9064c08dc8b48e4537a0371261ab42e66ebd8',
+  '0x5e51ecfa38c4254dd100e565620ac6e511723d27',
+  '0xf3e44a91847ed037c63a7dbe4eba0b51367477a7',
+  '0x41682815b05fe6b54a6c0f8813bb99423ee0309d',
+  '0x70444750eedf1b2c9b777cbf096a5919a14895e5',
+  '0x2775dd8242c4f589536113475b7c80f42ab4a70a',
+  '0x4704c7d7eef0968d8343e8574bc2865e612d84ed',
+  '0x62cb20cd01f5af1f951b0ec6bbd499143aff906c',
+  '0x73c35b2e4a640fdb253c04ec86aeda49bb50c72b',
+  '0xe9b03e16f5c7d38b37b4f79ca250b714afb6755c',
 ].filter(Boolean);
 
 /** Deduplicated set for fast lookup */

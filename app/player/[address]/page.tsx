@@ -2,15 +2,16 @@ import { isAddress, getAddress } from 'viem'
 import PlayerProfilePageClient from './PlayerProfilePageClient'
 
 type PlayerProfilePageProps = {
-  params: {
+  params: Promise<{
     address: string
-  }
+  }>
 }
 
-export default function PlayerProfilePage({ params }: PlayerProfilePageProps) {
-  const raw = params?.address
+export default async function PlayerProfilePage({ params }: PlayerProfilePageProps) {
+  const { address: raw } = await params
+  const trimmed = raw?.trim()
   const normalizedAddress =
-    raw && raw.trim() && isAddress(raw.trim()) ? getAddress(raw.trim()) : null
+    trimmed && isAddress(trimmed, { strict: false }) ? getAddress(trimmed) : null
 
   return <PlayerProfilePageClient normalizedAddress={normalizedAddress} />
 }

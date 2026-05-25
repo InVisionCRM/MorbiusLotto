@@ -68,6 +68,22 @@ interface SnapshotRow {
   merkle_proof: string[] | null;
 }
 
+interface ClaimRow {
+  wallet_address: string;
+  reward_amount: string;
+  claimed_at: string;
+}
+
+type EpochDetailTab = 'overview' | 'funding' | 'holders' | 'claims' | 'onchain';
+
+const EPOCH_DETAIL_TABS: { id: EpochDetailTab; label: string }[] = [
+  { id: 'overview', label: 'Overview' },
+  { id: 'funding', label: 'Funding' },
+  { id: 'holders', label: 'Holders' },
+  { id: 'claims', label: 'Claims' },
+  { id: 'onchain', label: 'On-chain' },
+];
+
 interface MerkleSettings {
   schedule_type: 'manual' | 'weekly' | 'biweekly' | 'monthly' | 'interval_minutes' | 'interval_hours';
   schedule_day: string;      // 0-6 for weekly/biweekly, 1-28 for monthly
@@ -147,6 +163,7 @@ const STATUS_LABELS: Record<EpochRecord['status'], { label: string; color: strin
 };
 
 const MERKLE_ADDR = MERKLE_CLAIM_MORBIUS_ADDRESS as `0x${string}`;
+const MERKLE_LP_ADDR = MERKLE_CLAIM_LP_ADDRESS as `0x${string}`;
 const TOKEN_ADDR  = MORBIUS_TOKEN_ADDRESS as `0x${string}`;
 const MAX_UINT256 = BigInt('0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff');
 
@@ -599,6 +616,206 @@ function StandaloneDepositButton({ adminAddr }: { adminAddr: `0x${string}` }) {
   );
 }
 
+function StandaloneLPTransferButton({ adminAddr }: { adminAddr: `0x${string}` }) {
+  const publicClient = usePublicClient();
+  const { writeContractAsync } = useWriteContract();
+  const getGas = useGasParams();
+
+  const [amountInput, setAmountInput] = useState('');
+  const [step, setStep] = useState<'idle' | 'approve' | 'transfer' | 'done'>('idle');
+  const [waiting, setWaiting] = useState(false);
+  const [txHash, setTxHash] = useState<string | null>(null);
+  const [msg, setMsg] = useState('');
+
+  const parsedWei = (() => {
+    const n = parseFloat(amountInput);
+    if (!amountInput || isNaN(n) || n <= 0) return 0n;
+    return BigInt(Math.round(n * 1e9)) * BigInt(1e9);
+  })();
+
+  const { data: allowance, refetch: refetchAllowance } = useReadContract({
+    address: TOKEN_ADDR,
+    abi: ERC20_ABI,
+    functionName: 'allowance',
+    args: [adminAddr, MERKLE_LP_ADDR],
+    query: { enabled: parsedWei > 0n && Boolean(MERKLE_LP_ADDR) },
+  });
+  const currentAllowance = (allowance as bigint | undefined) ?? 0n;
+
+  const waitForTx = async (hash: `0x${string}`, then: () => void) => {
+    setTxHash(hash);
+    setWaiting(true);
+    try {
+      await publicClient!.waitForTransactionReceipt({ hash, timeout: 90_000 });
+      then();
+    } catch {
+      setMsg('Confirmation timed out — check PulseScan to confirm.');
+      then();
+    } finally {
+      setWaiting(false);
+      setTxHash(null);
+    }
+  };
+
+  const reset = () => { setStep('idle'); setMsg(''); setTxHash(null); };
+
+  const handleBegin = () => {
+    if (parsedWei === 0n) { setMsg('Enter a valid MORBIUS amount'); return; }
+    setMsg('');
+    setStep(currentAllowance >= parsedWei ? 'transfer' : 'approve');
+  };
+
+  const handleApprove = async () => {
+    setMsg('');
+    try {
+      const hash = await writeContractAsync({
+        address: TOKEN_ADDR,
+        abi: ERC20_ABI,
+        functionName: 'approve',
+        args: [MERKLE_LP_ADDR, MAX_UINT256],
+        ...getGas(),
+        chain: pulsechain,
+        account: adminAddr,
+      });
+      await waitForTx(hash, () => {
+        refetchAllowance();
+        setStep('transfer');
+        setMsg('✓ Approved');
+      });
+    } catch (e: any) {
+      setMsg(e?.shortMessage || e?.message || 'Approval failed');
+    }
+  };
+
+  const handleTransfer = async () => {
+    setMsg('');
+    try {
+      const hash = await writeContractAsync({
+        address: TOKEN_ADDR,
+        abi: ERC20_ABI,
+        functionName: 'transfer',
+        args: [MERKLE_LP_ADDR, parsedWei],
+        ...getGas(),
+        chain: pulsechain,
+        account: adminAddr,
+      });
+      await waitForTx(hash, () => {
+        setStep('done');
+        setMsg(`✓ Sent ${fmtMorbius(parsedWei.toString())} MORBIUS to LP claim contract`);
+        setAmountInput('');
+      });
+    } catch (e: any) {
+      setMsg(e?.shortMessage || e?.message || 'Transfer failed');
+    }
+  };
+
+  return (
+    <div className="space-y-2">
+      <p className="text-[10px] uppercase tracking-wider text-slate-500 font-semibold">Approve + transfer to contract</p>
+      <div className="flex items-center gap-2 flex-wrap">
+        <input
+          type="number"
+          min="0"
+          step="any"
+          placeholder="Amount in MORBIUS"
+          value={amountInput}
+          onChange={(e) => { setAmountInput(e.target.value); reset(); }}
+          disabled={waiting}
+          className="h-8 w-48 rounded bg-slate-800 border border-slate-600 text-white text-xs px-2 focus:outline-none focus:border-blue-500 disabled:opacity-50"
+        />
+        {step === 'idle' && (
+          <Button size="sm" onClick={handleBegin} disabled={parsedWei === 0n || waiting} className="h-8 bg-blue-700 hover:bg-blue-600 text-white text-xs">
+            <Coins className="w-3 h-3 mr-1" />
+            Send MORBIUS
+          </Button>
+        )}
+        {step === 'approve' && (
+          <Button size="sm" onClick={handleApprove} disabled={waiting} className="h-8 bg-yellow-600 hover:bg-yellow-500 text-white text-xs">
+            {waiting ? <Loader2 className="w-3 h-3 mr-1 animate-spin" /> : <Wallet className="w-3 h-3 mr-1" />}
+            Step 1: Approve
+          </Button>
+        )}
+        {step === 'transfer' && (
+          <Button size="sm" onClick={handleTransfer} disabled={waiting} className="h-8 bg-blue-600 hover:bg-blue-500 text-white text-xs">
+            {waiting ? <Loader2 className="w-3 h-3 mr-1 animate-spin" /> : <Coins className="w-3 h-3 mr-1" />}
+            Step 2: Send {fmtMorbius(parsedWei.toString())}
+          </Button>
+        )}
+        {step === 'done' && (
+          <Button size="sm" onClick={reset} variant="outline" className="h-8 text-xs border-slate-600">Send another</Button>
+        )}
+        {txHash && (
+          <a href={`https://scan.pulsechain.com/tx/${txHash}`} target="_blank" rel="noopener noreferrer" className="text-[11px] text-slate-400 hover:text-white flex items-center gap-1">
+            Tx <ExternalLink className="w-3 h-3" />
+          </a>
+        )}
+      </div>
+      {msg && (
+        <p className={`text-xs px-3 py-1.5 rounded border ${msg.startsWith('✓') ? 'text-emerald-400 bg-emerald-950/20 border-emerald-500/20' : 'text-red-400 bg-red-950/20 border-red-500/20'}`}>{msg}</p>
+      )}
+    </div>
+  );
+}
+
+function EpochFundingPanel({
+  adminAddr,
+  holderBalanceWei,
+}: {
+  adminAddr: `0x${string}`;
+  holderBalanceWei: bigint;
+}) {
+  const { data: lpBalance } = useReadContract({
+    address: TOKEN_ADDR,
+    abi: ERC20_ABI,
+    functionName: 'balanceOf',
+    args: [MERKLE_LP_ADDR],
+    query: { enabled: Boolean(MERKLE_LP_ADDR) },
+  });
+  const lpBalanceWei = (lpBalance as bigint | undefined) ?? 0n;
+
+  return (
+    <div className="space-y-4">
+      <p className="text-xs text-slate-400">
+        Game fees arrive automatically. Use these controls to manually top up the vault before calculating a new epoch.
+      </p>
+      <div className="grid gap-4 sm:grid-cols-2">
+        <div className="rounded-lg border border-emerald-500/20 bg-slate-800/40 px-3 py-3 space-y-2">
+          <p className="text-[10px] uppercase tracking-wider text-emerald-400/90 font-semibold">Holder claims</p>
+          <a
+            href={`https://scan.pulsechain.com/address/${MERKLE_CLAIM_MORBIUS_ADDRESS}`}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="text-[11px] font-mono text-slate-200 hover:text-cyan-400 break-all flex items-center gap-1"
+          >
+            {MERKLE_CLAIM_MORBIUS_ADDRESS}
+            <ExternalLink className="w-3 h-3 shrink-0" />
+          </a>
+          <p className="text-[11px] text-slate-400">
+            Balance: <span className="font-mono text-cyan-400">{fmtMorbius(holderBalanceWei.toString())} MORBIUS</span>
+          </p>
+          <StandaloneDepositButton adminAddr={adminAddr} />
+        </div>
+        <div className="rounded-lg border border-blue-500/20 bg-slate-800/40 px-3 py-3 space-y-2">
+          <p className="text-[10px] uppercase tracking-wider text-blue-400/90 font-semibold">LP drops</p>
+          <a
+            href={`https://scan.pulsechain.com/address/${MERKLE_CLAIM_LP_ADDRESS}`}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="text-[11px] font-mono text-slate-200 hover:text-cyan-400 break-all flex items-center gap-1"
+          >
+            {MERKLE_CLAIM_LP_ADDRESS}
+            <ExternalLink className="w-3 h-3 shrink-0" />
+          </a>
+          <p className="text-[11px] text-slate-400">
+            Balance: <span className="font-mono text-blue-400">{fmtMorbius(lpBalanceWei.toString())} MORBIUS</span>
+          </p>
+          <StandaloneLPTransferButton adminAddr={adminAddr} />
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ─── Main Component ───────────────────────────────────────────────────────────
 
 export default function AdminMerkleDropsTab() {
@@ -675,21 +892,22 @@ export default function AdminMerkleDropsTab() {
   );
 
   const fetchHealth = useCallback(async () => {
-    if (!address) return;
     setHealthLoading(true);
     try {
       const [h, l] = await Promise.all([
-        fetch('/api/admin/merkle/health', { headers: adminHeaders() }).then(r => r.json()),
-        fetch('/api/admin/merkle-lp/health', { headers: adminHeaders() }).then(r => r.json()),
+        fetch('/api/admin/merkle/health').then(r => r.json()),
+        fetch('/api/admin/merkle-lp/health').then(r => r.json()),
       ]);
       setHolderHealth(h);
       setLpHealth(l);
     } catch { /* non-critical */ }
     finally { setHealthLoading(false); }
-  }, [address, adminHeaders]);
+  }, []);
 
   // ── Snapshot holder viewer (per-epoch, from DB) ─────────────────────────────
   const [snapshotData, setSnapshotData] = useState<Record<number, { rows: SnapshotRow[]; total: number; page: number; loading: boolean }>>({});
+  const [claimsData, setClaimsData] = useState<Record<number, { rows: ClaimRow[]; total: number; page: number; loading: boolean }>>({});
+  const [epochDetailTab, setEpochDetailTab] = useState<Record<number, EpochDetailTab>>({});
 
   const fetchSnapshotPage = useCallback(async (epochId: number, page = 1) => {
     setSnapshotData((prev) => ({
@@ -713,6 +931,35 @@ export default function AdminMerkleDropsTab() {
       }));
     }
   }, [adminHeaders]);
+
+  const fetchClaimsPage = useCallback(async (epochId: number, page = 1) => {
+    setClaimsData((prev) => ({
+      ...prev,
+      [epochId]: { rows: prev[epochId]?.rows ?? [], total: prev[epochId]?.total ?? 0, page, loading: true },
+    }));
+    try {
+      const res = await fetch(`/api/admin/merkle/epoch/${epochId}/claims?page=${page}&pageSize=50`, {
+        headers: adminHeaders(),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Failed to load claims');
+      setClaimsData((prev) => ({
+        ...prev,
+        [epochId]: { rows: data.rows ?? [], total: data.total ?? 0, page, loading: false },
+      }));
+    } catch {
+      setClaimsData((prev) => ({
+        ...prev,
+        [epochId]: { ...prev[epochId], loading: false },
+      }));
+    }
+  }, [adminHeaders]);
+
+  const setEpochTab = useCallback((epochId: number, tab: EpochDetailTab) => {
+    setEpochDetailTab((prev) => ({ ...prev, [epochId]: tab }));
+    if (tab === 'holders') fetchSnapshotPage(epochId, 1);
+    if (tab === 'claims') fetchClaimsPage(epochId, 1);
+  }, [fetchSnapshotPage, fetchClaimsPage]);
 
   // ── Fetch epochs ─────────────────────────────────────────────────────────
 
@@ -1156,6 +1403,8 @@ export default function AdminMerkleDropsTab() {
     ? formatEther(BigInt(settings.default_reward_wei))
     : null;
 
+  const latestPublishedEpochId = epochs.find((e) => e.status === 'published')?.id ?? null;
+
   return (
     <div className="space-y-4">
 
@@ -1243,51 +1492,6 @@ export default function AdminMerkleDropsTab() {
               </div>
             );
           })}
-        </CardContent>
-      </Card>
-
-      {/* ── Send MORBIUS: deposit addresses ── */}
-      <Card className="bg-slate-900/80 border-cyan-500/30">
-        <CardHeader className="pb-2 pt-4 px-4">
-          <CardTitle className="text-sm font-semibold text-slate-200 flex items-center gap-2">
-            <Wallet className="w-4 h-4 text-cyan-400" />
-            Send MORBIUS to be added to claims
-          </CardTitle>
-        </CardHeader>
-        <CardContent className="px-4 pb-4 space-y-3">
-          <p className="text-xs text-slate-400">
-            Send MORBIUS to these contract addresses. Tokens are distributed in the next epoch to holders (Morbius claims) or LP stakers (LP drops).
-          </p>
-          <div className="grid gap-3 sm:grid-cols-2">
-            <div className="rounded-lg border border-slate-700/50 bg-slate-800/40 px-3 py-2.5 space-y-1">
-              <p className="text-[10px] uppercase tracking-wider text-cyan-400/80 font-semibold">Morbius holder claims</p>
-              <a
-                href={`https://scan.pulsechain.com/address/${MERKLE_CLAIM_MORBIUS_ADDRESS}`}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="text-[11px] font-mono text-slate-200 hover:text-cyan-400 break-all flex items-center gap-1"
-              >
-                {MERKLE_CLAIM_MORBIUS_ADDRESS}
-                <ExternalLink className="w-3 h-3 shrink-0" />
-              </a>
-              <p className="text-[11px] text-slate-400 mt-1">
-                Contract balance: <span className="font-mono text-cyan-400">{fmtMorbius(holderContractBalanceWei.toString())} MORBIUS</span>
-              </p>
-              {address && <StandaloneDepositButton adminAddr={address as `0x${string}`} />}
-            </div>
-            <div className="rounded-lg border border-slate-700/50 bg-slate-800/40 px-3 py-2.5 space-y-1">
-              <p className="text-[10px] uppercase tracking-wider text-cyan-400/80 font-semibold">LP drops</p>
-              <a
-                href={`https://scan.pulsechain.com/address/${MERKLE_CLAIM_LP_ADDRESS}`}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="text-[11px] font-mono text-slate-200 hover:text-cyan-400 break-all flex items-center gap-1"
-              >
-                {MERKLE_CLAIM_LP_ADDRESS}
-                <ExternalLink className="w-3 h-3 shrink-0" />
-              </a>
-            </div>
-          </div>
         </CardContent>
       </Card>
 
@@ -1579,6 +1783,9 @@ export default function AdminMerkleDropsTab() {
                 const { label, color } = STATUS_LABELS[epoch.status];
                 const isExpanded = expandedId === epoch.id;
                 const isEpochBusy = busy[epoch.id] ?? false;
+                const activeTab = epochDetailTab[epoch.id] ?? 'overview';
+                const healthRow = holderHealth?.byEpoch.find((e) => e.epoch_number === epoch.epoch_number);
+                const claimedCount = claimsData[epoch.id]?.total ?? Number(healthRow?.claimed ?? 0);
 
                 return (
                   <div key={epoch.id} className="border border-slate-700/40 rounded-lg bg-slate-800/30 overflow-hidden">
@@ -1630,6 +1837,34 @@ export default function AdminMerkleDropsTab() {
                     {isExpanded && (
                       <div className="border-t border-slate-700/40 px-4 py-4 space-y-4">
 
+                        <div className="flex flex-wrap gap-1 border-b border-slate-700/50 pb-2">
+                          {EPOCH_DETAIL_TABS.map(({ id, label }) => (
+                            <button
+                              key={id}
+                              type="button"
+                              onClick={(e) => { e.stopPropagation(); setEpochTab(epoch.id, id); }}
+                              className={`px-3 py-1.5 text-[11px] font-semibold rounded-t border-b-2 -mb-[9px] transition-colors ${
+                                activeTab === id
+                                  ? 'text-cyan-400 border-cyan-400'
+                                  : 'text-slate-500 border-transparent hover:text-slate-300'
+                              }`}
+                            >
+                              {label}
+                              {id === 'claims' && claimedCount > 0 ? ` (${claimedCount})` : ''}
+                            </button>
+                          ))}
+                        </div>
+
+                        {actionMsg[epoch.id] && (
+                          <p className={`text-xs px-3 py-2 rounded border ${
+                            actionMsg[epoch.id].startsWith('✓')
+                              ? 'text-emerald-400 bg-emerald-950/30 border-emerald-500/20'
+                              : 'text-red-400 bg-red-950/30 border-red-500/20'
+                          }`}>{actionMsg[epoch.id]}</p>
+                        )}
+
+                        {activeTab === 'overview' && (
+                          <>
                         {/* Details */}
                         <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-xs">
                           {[
@@ -1665,11 +1900,12 @@ export default function AdminMerkleDropsTab() {
                                 <p className="text-[9px] text-slate-600 mt-0.5">sum of all leaves</p>
                               </div>
                             </div>
-                            {BigInt(epoch.total_reward_amount) > holderContractBalanceWei && (
+                            {latestPublishedEpochId === epoch.id
+                              && BigInt(epoch.total_reward_amount) > holderContractBalanceWei && (
                               <div className="rounded border border-amber-500/50 bg-amber-950/20 px-3 py-2 text-[11px] text-amber-200">
-                                <strong>Epoch total ({fmtMorbius(epoch.total_reward_amount)} MORBIUS)</strong> exceeds{' '}
+                                <strong>Live epoch total ({fmtMorbius(epoch.total_reward_amount)} MORBIUS)</strong> exceeds{' '}
                                 <strong>contract balance ({fmtMorbius(holderContractBalanceWei.toString())} MORBIUS)</strong>.
-                                Claims will fail for the shortfall. Deposit more MORBIUS to the contract or recalculate this epoch with a lower total.
+                                Use the <button type="button" className="underline text-amber-100" onClick={() => setEpochTab(epoch.id, 'funding')}>Funding</button> tab to deposit more.
                               </div>
                             )}
                           </>
@@ -1680,14 +1916,6 @@ export default function AdminMerkleDropsTab() {
                             <p className="text-[10px] text-slate-500 uppercase tracking-wider mb-0.5">Merkle Root</p>
                             <p className="text-[10px] text-orange-300 font-mono break-all">{epoch.merkle_root}</p>
                           </div>
-                        )}
-
-                        {actionMsg[epoch.id] && (
-                          <p className={`text-xs px-3 py-2 rounded border ${
-                            actionMsg[epoch.id].startsWith('✓')
-                              ? 'text-emerald-400 bg-emerald-950/30 border-emerald-500/20'
-                              : 'text-red-400 bg-red-950/30 border-red-500/20'
-                          }`}>{actionMsg[epoch.id]}</p>
                         )}
 
                         {/* ── Off-chain steps ── */}
@@ -1735,42 +1963,52 @@ export default function AdminMerkleDropsTab() {
                           )}
                         </div>
 
-                        {/* ── Snapshot Holder Viewer (from DB: holdings + claimable) ── */}
-                        {epoch.status !== 'pending' && (
-                          <div className="rounded-lg border border-slate-700/40 bg-slate-800/20 overflow-hidden">
-                            <div className="flex items-center justify-between px-3 py-2 border-b border-slate-700/30">
-                              <p className="text-[10px] uppercase tracking-wider text-slate-400 font-semibold flex items-center gap-1.5">
-                                <Users className="w-3.5 h-3.5 text-slate-500" />
-                                Eligible Holders ({epoch.total_holders})
-                              </p>
-                              <Button
-                                size="sm"
-                                variant="ghost"
-                                onClick={() => {
-                                  if (snapshotData[epoch.id]?.rows?.length && !snapshotData[epoch.id]?.loading) {
-                                    setSnapshotData((prev) => {
-                                      const next = { ...prev };
-                                      delete next[epoch.id];
-                                      return next;
-                                    });
-                                  } else {
-                                    fetchSnapshotPage(epoch.id, 1);
-                                  }
-                                }}
-                                disabled={snapshotData[epoch.id]?.loading}
-                                className="h-6 px-2 text-[10px] text-slate-400 hover:text-white"
-                              >
-                                {snapshotData[epoch.id]?.loading
-                                  ? <Loader2 className="w-3 h-3 animate-spin mr-1" />
-                                  : snapshotData[epoch.id]?.rows?.length
-                                    ? <XCircle className="w-3 h-3 mr-1" />
-                                    : <Users className="w-3 h-3 mr-1" />
-                                }
-                                {snapshotData[epoch.id]?.rows?.length ? 'Hide' : 'View Holders'}
-                              </Button>
+                        {epoch.status === 'published' && (
+                          <div className="rounded-lg border border-emerald-500/20 bg-emerald-950/10 p-3 space-y-3">
+                            <div className="flex items-center gap-2 text-emerald-400 text-xs font-semibold">
+                              <CheckCircle2 className="w-4 h-4 shrink-0" />
+                              Live — users can claim
                             </div>
+                            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-xs">
+                              <div>
+                                <p className="text-[10px] text-slate-500 uppercase tracking-wider">Published</p>
+                                <p className="text-slate-200 font-mono mt-0.5 text-[11px]">{fmtDate(epoch.published_at)}</p>
+                              </div>
+                              <div>
+                                <p className="text-[10px] text-slate-500 uppercase tracking-wider">Snapshot Taken</p>
+                                <p className="text-slate-200 font-mono mt-0.5 text-[11px]">{fmtDate(epoch.snapshot_at)}</p>
+                              </div>
+                              <div>
+                                <p className="text-[10px] text-slate-500 uppercase tracking-wider">Eligible Holders</p>
+                                <p className="text-white font-semibold mt-0.5">{epoch.total_holders.toLocaleString()}</p>
+                              </div>
+                              <div>
+                                <p className="text-[10px] text-slate-500 uppercase tracking-wider">Total Distributed</p>
+                                <p className="text-emerald-400 font-semibold font-mono mt-0.5">{fmtMorbius(epoch.total_reward_amount)} MORBIUS</p>
+                              </div>
+                            </div>
+                          </div>
+                        )}
+                          </>
+                        )}
 
-                            {snapshotData[epoch.id]?.rows?.length > 0 && (
+                        {activeTab === 'funding' && (
+                          address
+                            ? <EpochFundingPanel adminAddr={address as `0x${string}`} holderBalanceWei={holderContractBalanceWei} />
+                            : <p className="text-xs text-amber-400">Connect your admin wallet to deposit or send MORBIUS.</p>
+                        )}
+
+                        {activeTab === 'holders' && epoch.status !== 'pending' && (
+                          <div className="rounded-lg border border-slate-700/40 bg-slate-800/20 overflow-hidden">
+                            {snapshotData[epoch.id]?.loading && (
+                              <div className="flex items-center justify-center py-8 text-slate-500 text-xs">
+                                <Loader2 className="w-4 h-4 animate-spin mr-2" /> Loading holders…
+                              </div>
+                            )}
+                            {!snapshotData[epoch.id]?.loading && (snapshotData[epoch.id]?.rows?.length ?? 0) === 0 && (
+                              <p className="text-xs text-slate-500 py-6 text-center">No holder rows loaded.</p>
+                            )}
+                            {(snapshotData[epoch.id]?.rows?.length ?? 0) > 0 && (
                               <div className="overflow-x-auto max-h-80 overflow-y-auto">
                                 <table className="w-full text-[11px]">
                                   <thead className="sticky top-0 bg-slate-800">
@@ -1787,20 +2025,13 @@ export default function AdminMerkleDropsTab() {
                                       const pageOffset = (snapshotData[epoch.id].page - 1) * 50;
                                       const balance = Number(row.morbius_balance) / 1e18;
                                       const reward = Number(row.reward_amount) / 1e18;
-                                      const isBurnish = row.wallet_address.startsWith('0x000000000000000000000000000000000000');
                                       return (
-                                        <tr key={row.wallet_address} className={`border-b border-slate-800/50 hover:bg-slate-700/20 ${isBurnish ? 'bg-red-950/10' : ''}`}>
+                                        <tr key={row.wallet_address} className="border-b border-slate-800/50 hover:bg-slate-700/20">
                                           <td className="py-1.5 px-3 text-slate-600 font-mono">{pageOffset + idx + 1}</td>
                                           <td className="py-1.5 px-3">
-                                            <a
-                                              href={`https://scan.pulsechain.com/address/${row.wallet_address}`}
-                                              target="_blank"
-                                              rel="noopener noreferrer"
-                                              className={`font-mono hover:text-white transition-colors ${isBurnish ? 'text-red-400' : 'text-slate-300'}`}
-                                            >
+                                            <a href={`https://scan.pulsechain.com/address/${row.wallet_address}`} target="_blank" rel="noopener noreferrer" className="font-mono text-slate-300 hover:text-white">
                                               {row.wallet_address}
                                             </a>
-                                            {isBurnish && <span className="text-[9px] text-red-400 ml-1.5 border border-red-500/30 rounded px-1 py-0.5">burn/system</span>}
                                           </td>
                                           <td className="py-1.5 px-3 text-right font-mono text-slate-400">
                                             {balance >= 1000 ? `${(balance / 1000).toFixed(2)}K` : balance.toFixed(2)}
@@ -1809,41 +2040,21 @@ export default function AdminMerkleDropsTab() {
                                             {reward > 0 ? (reward >= 1000 ? `${(reward / 1000).toFixed(2)}K` : reward.toFixed(4)) : '—'}
                                           </td>
                                           <td className="py-1.5 px-3 text-center">
-                                            {row.merkle_proof
-                                              ? <CheckCircle2 className="w-3.5 h-3.5 text-emerald-500 mx-auto" />
-                                              : <span className="text-slate-600">—</span>
-                                            }
+                                            {row.merkle_proof ? <CheckCircle2 className="w-3.5 h-3.5 text-emerald-500 mx-auto" /> : '—'}
                                           </td>
                                         </tr>
                                       );
                                     })}
                                   </tbody>
                                 </table>
-
                                 {snapshotData[epoch.id].total > 50 && (
                                   <div className="flex items-center justify-between px-3 py-2 border-t border-slate-700/30 bg-slate-800/40">
                                     <span className="text-[10px] text-slate-500">
-                                      Showing {((snapshotData[epoch.id].page - 1) * 50) + 1}–{Math.min(snapshotData[epoch.id].page * 50, snapshotData[epoch.id].total)} of {snapshotData[epoch.id].total}
+                                      {((snapshotData[epoch.id].page - 1) * 50) + 1}–{Math.min(snapshotData[epoch.id].page * 50, snapshotData[epoch.id].total)} of {snapshotData[epoch.id].total}
                                     </span>
                                     <div className="flex gap-1">
-                                      <Button
-                                        size="sm"
-                                        variant="ghost"
-                                        disabled={snapshotData[epoch.id].page <= 1 || snapshotData[epoch.id].loading}
-                                        onClick={() => fetchSnapshotPage(epoch.id, snapshotData[epoch.id].page - 1)}
-                                        className="h-6 px-2 text-[10px] text-slate-400 hover:text-white"
-                                      >
-                                        Prev
-                                      </Button>
-                                      <Button
-                                        size="sm"
-                                        variant="ghost"
-                                        disabled={snapshotData[epoch.id].page * 50 >= snapshotData[epoch.id].total || snapshotData[epoch.id].loading}
-                                        onClick={() => fetchSnapshotPage(epoch.id, snapshotData[epoch.id].page + 1)}
-                                        className="h-6 px-2 text-[10px] text-slate-400 hover:text-white"
-                                      >
-                                        Next
-                                      </Button>
+                                      <Button size="sm" variant="ghost" disabled={snapshotData[epoch.id].page <= 1 || snapshotData[epoch.id].loading} onClick={() => fetchSnapshotPage(epoch.id, snapshotData[epoch.id].page - 1)} className="h-6 px-2 text-[10px]">Prev</Button>
+                                      <Button size="sm" variant="ghost" disabled={snapshotData[epoch.id].page * 50 >= snapshotData[epoch.id].total || snapshotData[epoch.id].loading} onClick={() => fetchSnapshotPage(epoch.id, snapshotData[epoch.id].page + 1)} className="h-6 px-2 text-[10px]">Next</Button>
                                     </div>
                                   </div>
                                 )}
@@ -1852,7 +2063,47 @@ export default function AdminMerkleDropsTab() {
                           </div>
                         )}
 
-                        {/* ── On-chain steps (finalized only) ── */}
+                        {activeTab === 'claims' && (
+                          <div className="rounded-lg border border-slate-700/40 bg-slate-800/20 overflow-hidden">
+                            {claimsData[epoch.id]?.loading && (
+                              <div className="flex items-center justify-center py-8 text-slate-500 text-xs">
+                                <Loader2 className="w-4 h-4 animate-spin mr-2" /> Loading claims…
+                              </div>
+                            )}
+                            {!claimsData[epoch.id]?.loading && (claimsData[epoch.id]?.total ?? 0) === 0 && (
+                              <p className="text-xs text-slate-500 py-6 text-center">No claims recorded for this epoch in the database.</p>
+                            )}
+                            {(claimsData[epoch.id]?.rows?.length ?? 0) > 0 && (
+                              <div className="overflow-x-auto max-h-80 overflow-y-auto">
+                                <table className="w-full text-[11px]">
+                                  <thead className="sticky top-0 bg-slate-800">
+                                    <tr className="border-b border-slate-700/50">
+                                      <th className="text-left text-slate-500 font-medium py-1.5 px-3">Wallet</th>
+                                      <th className="text-right text-slate-500 font-medium py-1.5 px-3">Amount</th>
+                                      <th className="text-left text-slate-500 font-medium py-1.5 px-3">Claimed at</th>
+                                    </tr>
+                                  </thead>
+                                  <tbody>
+                                    {claimsData[epoch.id].rows.map((row) => (
+                                      <tr key={`${row.wallet_address}-${row.claimed_at}`} className="border-b border-slate-800/50 hover:bg-slate-700/20">
+                                        <td className="py-1.5 px-3">
+                                          <a href={`https://scan.pulsechain.com/address/${row.wallet_address}`} target="_blank" rel="noopener noreferrer" className="font-mono text-cyan-400/90 hover:text-cyan-300 text-[10px]">
+                                            {row.wallet_address}
+                                          </a>
+                                        </td>
+                                        <td className="py-1.5 px-3 text-right font-mono text-emerald-400">{fmtMorbius(row.reward_amount)}</td>
+                                        <td className="py-1.5 px-3 text-slate-400">{fmtDate(row.claimed_at)}</td>
+                                      </tr>
+                                    ))}
+                                  </tbody>
+                                </table>
+                              </div>
+                            )}
+                          </div>
+                        )}
+
+                        {activeTab === 'onchain' && (
+                          <>
                         {epoch.status === 'finalized' && address && (
                           <div className="space-y-2">
                             <div className="rounded-lg border border-cyan-500/20 bg-cyan-950/10 p-3 space-y-2">
@@ -1896,62 +2147,31 @@ export default function AdminMerkleDropsTab() {
                         )}
 
                         {epoch.status === 'published' && (
-                          <div className="rounded-lg border border-emerald-500/20 bg-emerald-950/10 p-3 space-y-3">
-                            {/* Header */}
-                            <div className="flex items-center gap-2 text-emerald-400 text-xs font-semibold">
-                              <CheckCircle2 className="w-4 h-4 shrink-0" />
-                              Live — users can claim
-                            </div>
-
-                            {/* Stats grid */}
-                            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-xs">
-                              <div>
-                                <p className="text-[10px] text-slate-500 uppercase tracking-wider">Published</p>
-                                <p className="text-slate-200 font-mono mt-0.5 text-[11px]">{fmtDate(epoch.published_at)}</p>
-                              </div>
-                              <div>
-                                <p className="text-[10px] text-slate-500 uppercase tracking-wider">Snapshot Taken</p>
-                                <p className="text-slate-200 font-mono mt-0.5 text-[11px]">{fmtDate(epoch.snapshot_at)}</p>
-                              </div>
-                              <div>
-                                <p className="text-[10px] text-slate-500 uppercase tracking-wider">Eligible Holders</p>
-                                <p className="text-white font-semibold mt-0.5">{epoch.total_holders.toLocaleString()}</p>
-                              </div>
-                              <div>
-                                <p className="text-[10px] text-slate-500 uppercase tracking-wider">Total Distributed</p>
-                                <p className="text-emerald-400 font-semibold font-mono mt-0.5">{fmtMorbius(epoch.total_reward_amount)} MORBIUS</p>
-                                {Number(epoch.rollup_amount) > 0 && (
-                                  <p className="text-[9px] text-slate-500 mt-0.5">{fmtMorbius(epoch.new_reward_amount || '0')} new + {fmtMorbius(epoch.rollup_amount)} rollup</p>
-                                )}
-                              </div>
-                            </div>
-
-                            {/* Reward breakdown if rollup involved */}
-                            {Number(epoch.rollup_amount) > 0 && (
-                              <div className="flex items-center gap-4 text-[11px] text-slate-400 border-t border-emerald-500/10 pt-2">
-                                <span>New rewards: <span className="text-blue-300 font-mono">{fmtMorbius(epoch.new_reward_amount)} MORBIUS</span></span>
-                                <span className="text-slate-600">+</span>
-                                <span>Rolled up: <span className="text-amber-300 font-mono">{fmtMorbius(epoch.rollup_amount)} MORBIUS</span></span>
-                              </div>
-                            )}
-
-                            {/* Revoke — clears root on-chain so epoch can be re-done (only if no claims yet) */}
-                            <div className="border-t border-emerald-500/10 pt-2">
-                              <Button
-                                size="sm"
-                                onClick={() => handleRevokeEpoch(epoch)}
-                                disabled={isEpochBusy}
-                                className="h-7 text-[11px] bg-red-800 hover:bg-red-700 text-red-200"
-                              >
-                                {isEpochBusy
-                                  ? <Loader2 className="w-3 h-3 animate-spin mr-1" />
-                                  : <XCircle className="w-3 h-3 mr-1" />
-                                }
-                                Revoke Epoch On-Chain
-                              </Button>
-                              <p className="text-[10px] text-slate-600 mt-1">Clears the root on-chain. Only works if nobody has claimed yet. Owner only.</p>
-                            </div>
+                          <div className="rounded-lg border border-emerald-500/20 bg-emerald-950/10 p-3 space-y-2">
+                            <p className="text-xs text-emerald-400 font-semibold flex items-center gap-2">
+                              <CheckCircle2 className="w-4 h-4" /> Root is live on-chain
+                            </p>
+                            <Button
+                              size="sm"
+                              onClick={() => handleRevokeEpoch(epoch)}
+                              disabled={isEpochBusy || !address}
+                              className="h-7 text-[11px] bg-red-800 hover:bg-red-700 text-red-200"
+                            >
+                              {isEpochBusy ? <Loader2 className="w-3 h-3 animate-spin mr-1" /> : <XCircle className="w-3 h-3 mr-1" />}
+                              Revoke Epoch On-Chain
+                            </Button>
+                            <p className="text-[10px] text-slate-600">Only works if nobody has claimed yet (owner wallet).</p>
                           </div>
+                        )}
+
+                        {!address && (epoch.status === 'finalized' || epoch.status === 'published') && (
+                          <p className="text-xs text-amber-400">Connect your admin wallet for on-chain actions.</p>
+                        )}
+
+                        {epoch.status !== 'finalized' && epoch.status !== 'published' && (
+                          <p className="text-xs text-slate-500">Approve, deposit, and set root here after you finalize the Merkle tree.</p>
+                        )}
+                          </>
                         )}
                       </div>
                     )}
@@ -1986,10 +2206,10 @@ export default function AdminMerkleDropsTab() {
         <CardContent className="px-4 pb-4 space-y-3">
           <div className="rounded border border-emerald-500/20 bg-emerald-950/10 px-3 py-2.5 text-[11px] text-slate-300 space-y-2">
             <p className="font-medium text-emerald-400/90">
-              All {SNAPSHOT_EXCLUSION_SET.size} contract addresses from ALL_DEPLOYMENTS.MD are in the real exclusion list: they are stored in <code className="text-slate-500">merkle_blocklist</code> and <code className="text-slate-500">merkle_lp_blocklist</code> (migration 053). You will see them in the table below with reason &quot;ALL_DEPLOYMENTS.MD&quot;.
+              Snapshots exclude addresses in <code className="text-slate-500">merkle_blocklist</code>, all LP pair contracts, and the static protocol list below ({SNAPSHOT_EXCLUSION_SET.size} addresses). Migration 053 + 135 seed most contract rows; use the table to add more.
             </p>
             <p className="text-slate-400">
-              The list below is for <span className="text-slate-300">additional</span> exclusions (e.g. LP pairs, one-off addresses). Add LP pairs with the button, or type an address to block.
+              The table below is for <span className="text-slate-300">additional</span> exclusions (extra LP pairs, one-off wallets). LP pairs can also be bulk-added with the button below.
             </p>
             <details className="group mt-2">
               <summary className="cursor-pointer list-none flex items-center gap-1.5 text-slate-400 hover:text-slate-300 text-[10px] font-medium uppercase tracking-wider">

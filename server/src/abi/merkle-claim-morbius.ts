@@ -35,6 +35,13 @@ export const merkleClaimMorbiusAbi = [
     type: 'function',
   },
   {
+    inputs: [{ internalType: 'uint256', name: '', type: 'uint256' }],
+    name: 'epochRoots',
+    outputs: [{ internalType: 'bytes32', name: '', type: 'bytes32' }],
+    stateMutability: 'view',
+    type: 'function',
+  },
+  {
     inputs: [{ internalType: 'uint256', name: 'epochId', type: 'uint256' }],
     name: 'revokeEpoch',
     outputs: [],

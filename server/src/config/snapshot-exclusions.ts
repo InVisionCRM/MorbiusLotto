@@ -1,14 +1,12 @@
 /**
- * Snapshot exclusion list: all contract addresses from ALL_DEPLOYMENTS.MD.
- * Used by merkle-drops and merkle-lp-drops services when taking snapshots —
- * these addresses are always excluded in addition to the DB blocklist.
- * Keep in sync with ALL_DEPLOYMENTS.MD and lib/snapshot-exclusions.ts.
+ * Static holder/LP snapshot exclusions — protocol contracts, deployer wallets, etc.
+ * Snapshot code merges this with merkle_blocklist / merkle_lp_blocklist and merkle_lp_pairs.
+ * Keep in sync with lib/snapshot-exclusions.ts and ALL_DEPLOYMENTS.MD.
  */
 const ALL_DEPLOYMENTS_ADDRESSES: string[] = [
-  // Deployer 1 (ALL_DEPLOYMENTS.MD)
   '0x1f38de556ad6f039d710211025ee941ce3c546f1',
   '0xec29f41ba9380e34b71d0aeb53bd637ba5258a93',
-  '0xfe8d58174d26cc2c60103120cbceb8f75dfdcadac',
+  '0xfe8d58174d26cc2c60103120cbceb8f75dfdcdac',
   '0x3807f417617e53d4c5c7d7a825a5ce4d105a75d2',
   '0xa6585d334bb737d64ece7abca5acc087dd46e99e',
   '0x611001519cf458d1bf35ebc2b990bd8226df3e08',
@@ -52,7 +50,6 @@ const ALL_DEPLOYMENTS_ADDRESSES: string[] = [
   '0x95585d5bff78fbe90840e21c33c2192fe94babd0',
   '0x8b99b6169a9051cd79ad6552a2ec952500e17d6d',
   '0x3dad16d14987d7bf95e160783a6a375f00f8ae27',
-  // Deployer 2
   '0xbf48d5376cb30ff760afe3728aff3a308b019c5e',
   '0x25056d6159f6c7a7812d1b65aca2ca14e3e0f4c3',
   '0x636f246b6d484a0448d082f13a71627c2b40b870',
@@ -64,16 +61,39 @@ const ALL_DEPLOYMENTS_ADDRESSES: string[] = [
   '0x9fcd05776c20df2bfd46ed389908e447c66ed6f7',
   '0x99c646326f50d944fc9029467742be4e8f677552',
   '0x6a63cf27ece3ce050932780f6357bfa856060b7e',
-  // Deployer 3 (Keno-related)
   '0x540d0f140e7d292681f03aa48cc37db09154a9df',
   '0xbd5862ee636122aff32bee07e6e525bbae01738e',
   '0xbeaf87368efd09bb0e13896444fb4f0e68a67f6a',
   '0xb4707724b86a49333288eca9261ac5557e3875a1',
   '0xad038b0a28f3f5308b891b86085673679a0acd9d',
-  // Currently active (Other)
   '0x734a1460b4131f8cfe4950894be89d1a852c957a',
   '0xd66b4489fbff99a8d62f969203899840f2ec69c5',
 ];
 
-/** Set of addresses always excluded from Merkle (holder) and Merkle LP snapshots. */
-export const SNAPSHOT_EXCLUSION_SET = new Set(ALL_DEPLOYMENTS_ADDRESSES);
+/** Current live contracts + ops wallets (lib/contracts.ts). Lowercase. */
+const CURRENT_PROTOCOL_ADDRESSES: string[] = [
+  '0xb7d4eb5fdfe3d4d3b5c16a44a49948c6ec77c6f1',
+  '0x6ccecfd3165f4d911ba8d196eb5202cc80fef8a8',
+  '0x496fce9733e2102102f448c533b84c7a88856e8a',
+  '0xc2ae080de01108b5c9c0f2c5c86051cfd3d18c00',
+  '0x5e51ecfa38c4254dd100e565620ac6e511723d27',
+  '0x64dd1c933027d757212e43725c99bd4402211a1a',
+  '0x4ea9064c08dc8b48e4537a0371261ab42e66ebd8',
+  '0xf3e44a91847ed037c63a7dbe4eba0b51367477a7',
+  '0x0416947cd08fc3cd8923dd857c58472f337aa42b',
+  '0x742389696fb4c311cddd30d3ceae6697c7d238aa',
+  '0x81acd0aa872675678a25fbb154992a2bad4f6cef',
+  '0x41682815b05fe6b54a6c0f8813bb99423ee0309d',
+  '0x70444750eedf1b2c9b777cbf096a5919a14895e5',
+  '0x2775dd8242c4f589536113475b7c80f42ab4a70a',
+  '0x4704c7d7eef0968d8343e8574bc2865e612d84ed',
+  '0x62cb20cd01f5af1f951b0ec6bbd499143aff906c',
+  '0x73c35b2e4a640fdb253c04ec86aeda49bb50c72b',
+];
+
+export const STATIC_HOLDER_SNAPSHOT_EXCLUSIONS: string[] = [
+  ...ALL_DEPLOYMENTS_ADDRESSES,
+  ...CURRENT_PROTOCOL_ADDRESSES,
+].map((a) => a.toLowerCase());
+
+export const SNAPSHOT_EXCLUSION_SET = new Set(STATIC_HOLDER_SNAPSHOT_EXCLUSIONS);
