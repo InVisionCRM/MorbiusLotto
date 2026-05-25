@@ -56,6 +56,19 @@ export function registerMerkleAdminReadRoutes({
     }
   });
 
+  app.get('/api/admin/merkle/epoch/:epochId/claims', async (req, res) => {
+    try {
+      const epochId = parseInt(req.params.epochId, 10);
+      const page = Math.max(1, parseInt(String(req.query.page || 1), 10));
+      const pageSize = Math.min(200, Math.max(1, parseInt(String(req.query.pageSize || 50), 10)));
+      const data = await merkleDropsService.getEpochClaimsPage(epochId, page, pageSize);
+      sendJson(res, data);
+    } catch (error) {
+      logger.error('Error fetching epoch claims:', error);
+      res.status(500).json({ error: 'Internal server error' });
+    }
+  });
+
   app.get('/api/admin/merkle/blocklist', async (_req, res) => {
     try {
       const list = await merkleDropsService.listBlocklist();

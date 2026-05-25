@@ -166,6 +166,13 @@ export const MERKLE_CLAIM_LP_ADDRESS = (
     : '0x64Dd1c933027d757212E43725c99bD4402211A1A'
 ) as `0x${string}`
 
+// MorbiusBatchDisperse — owner-only batch ERC20 payouts (holder/LP reward airdrop after merkle rescue).
+export const MORBIUS_BATCH_DISPERSE_ADDRESS = (
+  typeof process !== 'undefined' && process.env.NEXT_PUBLIC_MORBIUS_BATCH_DISPERSE_ADDRESS
+    ? process.env.NEXT_PUBLIC_MORBIUS_BATCH_DISPERSE_ADDRESS
+    : '0x4Ea9064C08dC8B48e4537a0371261ab42E66eBD8'
+) as `0x${string}`
+
 // Contract deployment info
 export const LOTTERY_DEPLOY_BLOCK = 25329129
 export const KENO_DEPLOY_BLOCK = 25933639 // V2: Deployed Mar 2026 (fees on wager)

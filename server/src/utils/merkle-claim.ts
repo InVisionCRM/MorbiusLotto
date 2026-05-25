@@ -222,6 +222,17 @@ export async function getEpochClaimedAmount(epochNumber: number): Promise<bigint
   return result;
 }
 
+/** Read the on-chain Merkle root for an epoch (bytes32(0) if unset/revoked). */
+export async function getEpochRootOnChain(epochNumber: number): Promise<`0x${string}`> {
+  const publicClient = getPublicClient();
+  return (await publicClient.readContract({
+    address: MERKLE_CLAIM_ADDRESS,
+    abi: merkleClaimMorbiusAbi,
+    functionName: 'epochRoots',
+    args: [BigInt(epochNumber)],
+  })) as `0x${string}`;
+}
+
 /**
  * Revoke an epoch root on-chain. Only succeeds when no on-chain claims have
  * been made against this epoch yet (epochClaimedAmount[epochId] == 0).

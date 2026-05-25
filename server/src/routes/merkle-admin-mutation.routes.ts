@@ -142,6 +142,7 @@ export function registerMerkleAdminMutationRoutes({
         'reclaim_stale_enabled',
         'reclaim_stale_age_days',
         'reclaim_min_epochs_back',
+        'auto_revoke_prior_epochs_on_publish',
       ]);
       const patch: Record<string, string> = {};
       for (const [k, v] of Object.entries(req.body as Record<string, unknown>)) {
@@ -330,6 +331,17 @@ export function registerMerkleAdminMutationRoutes({
     }
   });
 
+  /** One-time (or manual) cleanup: revoke all on-chain roots except the latest published epoch. */
+  app.post('/api/admin/merkle/revoke-superseded', async (_req, res) => {
+    try {
+      const out = await merkleDropsService.revokeAllSupersededOnChainRoots();
+      sendJson(res, out);
+    } catch (error) {
+      logger.error('Error revoking superseded merkle epochs:', error);
+      res.status(500).json({ error: String(error) });
+    }
+  });
+
   app.get('/api/admin/merkle-lp/reclaim/preview', async (_req, res) => {
     try {
       sendJson(res, await merkleDropsLPService.previewReclaimStaleSnapshots());
@@ -345,6 +357,16 @@ export function registerMerkleAdminMutationRoutes({
       sendJson(res, out);
     } catch (error) {
       logger.error('Error executing LP reclaim:', error);
+      res.status(500).json({ error: String(error) });
+    }
+  });
+
+  app.post('/api/admin/merkle-lp/revoke-superseded', async (_req, res) => {
+    try {
+      const out = await merkleDropsLPService.revokeAllSupersededOnChainRoots();
+      sendJson(res, out);
+    } catch (error) {
+      logger.error('Error revoking superseded LP merkle epochs:', error);
       res.status(500).json({ error: String(error) });
     }
   });

@@ -23,6 +23,7 @@ import {
   getContractMorbiusBalance,
   checkHasClaimed,
   getEpochClaimedAmount,
+  getEpochRootOnChain,
   revokeEpochOnChain,
 } from '../utils/merkle-claim';
 import {
@@ -33,6 +34,7 @@ import {
   fetchMorbiusHoldersFromMoralis,
   isMoralisHoldersConfigured,
 } from '../utils/morbius-holders-moralis';
+import { loadHolderSnapshotBlocklist } from './merkle-snapshot-blocklist';
 import { getPublicClient } from '../utils/chain-client';
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -225,11 +227,9 @@ export class MerkleDropsService {
       Math.floor(Number(epoch.min_holding_threshold)) * 1e18,
     );
 
-    // Load blocklist from DB (includes ALL_DEPLOYMENTS.MD rows from migration 053)
-    const { rows: blockedRows } = await this.pool.query<{ address: string }>(
-      'SELECT address FROM merkle_blocklist',
-    );
-    const blocklist = new Set(blockedRows.map((r) => r.address.toLowerCase()));
+    // Load blocklist: DB rows + static protocol exclusions + all LP pair contracts
+    const blocklist = await loadHolderSnapshotBlocklist(this.pool);
+    logger.info(`[MerkleDrops] Snapshot blocklist size: ${blocklist.size}`);
 
     logger.info(`[MerkleDrops] Snapshot epoch #${epoch.epoch_number}: fetching holders from chain RPC...`);
 
@@ -267,7 +267,10 @@ export class MerkleDropsService {
       await client.query(
         `UPDATE merkle_epochs
          SET status = 'snapshot', total_holders = $1, total_balance = $2,
-             snapshot_block = $3, snapshot_at = NOW()
+             snapshot_block = $3, snapshot_at = NOW(),
+             merkle_root = NULL, calculated_at = NULL, finalized_at = NULL,
+             published_at = NULL, total_reward_amount = NULL, new_reward_amount = NULL,
+             rollup_amount = NULL
          WHERE id = $4`,
         [eligible.length, totalBalance, snapshotBlock, epochId],
       );
@@ -520,6 +523,107 @@ export class MerkleDropsService {
       [epochId],
     );
     logger.info(`[MerkleDrops] Epoch #${epoch.epoch_number} marked as published`);
+
+    const settings = await this.getSettings();
+    if (settings['auto_revoke_prior_epochs_on_publish'] !== 'false') {
+      try {
+        const out = await this.revokeSupersededOnChainRoots(epoch.epoch_number);
+        const revoked = out.results.filter((r) => r.revoked).length;
+        if (revoked > 0) {
+          logger.info(
+            `[MerkleDrops] Auto-revoked ${revoked} prior on-chain root(s) after publishing #${epoch.epoch_number}`,
+          );
+        }
+      } catch (err) {
+        logger.error('[MerkleDrops] Auto-revoke prior epochs failed after publish', err);
+      }
+    }
+  }
+
+  /**
+   * Clear stale on-chain Merkle roots for epochs older than `latestEpochNumber`.
+   * When a new epoch publishes with rollup, prior roots should be revoked so users
+   * cannot claim from superseded trees. Skips epochs with any on-chain claims
+   * (contract revert) or roots already cleared.
+   */
+  async revokeSupersededOnChainRoots(latestEpochNumber: number): Promise<{
+    latestEpochNumber: number;
+    results: Array<{
+      epochNumber: number;
+      revoked: boolean;
+      skipped?: string;
+      txHash?: string;
+      error?: string;
+    }>;
+  }> {
+    if (!isMerkleOwnerConfigured()) {
+      throw new Error('MERKLE_OWNER_PRIVATE_KEY not configured — required for revokeEpoch (onlyOwner)');
+    }
+
+    const ZERO_ROOT = '0x0000000000000000000000000000000000000000000000000000000000000000';
+    const { rows } = await this.pool.query<{ epoch_number: number }>(
+      `SELECT epoch_number FROM merkle_epochs
+       WHERE status = 'published' AND epoch_number < $1
+       ORDER BY epoch_number ASC`,
+      [latestEpochNumber],
+    );
+
+    const results: Array<{
+      epochNumber: number;
+      revoked: boolean;
+      skipped?: string;
+      txHash?: string;
+      error?: string;
+    }> = [];
+
+    for (const row of rows) {
+      const epochNumber = row.epoch_number;
+      try {
+        const root = await getEpochRootOnChain(epochNumber);
+        if (root === ZERO_ROOT) {
+          results.push({ epochNumber, revoked: false, skipped: 'root already cleared' });
+          continue;
+        }
+
+        const claimed = await getEpochClaimedAmount(epochNumber);
+        if (claimed > 0n) {
+          results.push({
+            epochNumber,
+            revoked: false,
+            skipped: `has on-chain claims (${ethers.formatEther(claimed)} MORBIUS)`,
+          });
+          continue;
+        }
+
+        const tx = await revokeEpochOnChain(epochNumber);
+        if (tx.success) {
+          results.push({ epochNumber, revoked: true, txHash: tx.txHash });
+          logger.info(`[MerkleDrops] Revoked superseded on-chain root for epoch #${epochNumber}`);
+        } else {
+          results.push({ epochNumber, revoked: false, error: tx.error });
+        }
+      } catch (err) {
+        results.push({
+          epochNumber,
+          revoked: false,
+          error: err instanceof Error ? err.message : String(err),
+        });
+      }
+    }
+
+    return { latestEpochNumber, results };
+  }
+
+  /** Revoke all on-chain roots except the latest published epoch (one-time backlog cleanup). */
+  async revokeAllSupersededOnChainRoots() {
+    const { rows } = await this.pool.query<{ max: number | null }>(
+      "SELECT MAX(epoch_number) AS max FROM merkle_epochs WHERE status = 'published'",
+    );
+    const latest = rows[0]?.max;
+    if (latest == null) {
+      return { latestEpochNumber: 0, results: [] as Array<{ epochNumber: number; revoked: boolean; skipped?: string; txHash?: string; error?: string }> };
+    }
+    return this.revokeSupersededOnChainRoots(latest);
   }
 
   /**
@@ -614,6 +718,28 @@ export class MerkleDropsService {
       ),
       this.pool.query<{ count: string }>(
         'SELECT COUNT(*) FROM merkle_snapshots WHERE epoch_id = $1',
+        [epochId],
+      ),
+    ]);
+    return { rows: data.rows, total: Number(count.rows[0].count) };
+  }
+
+  async getEpochClaimsPage(epochId: number, page = 1, pageSize = 50): Promise<{
+    rows: Array<{ wallet_address: string; reward_amount: string; claimed_at: string }>;
+    total: number;
+  }> {
+    const offset = (page - 1) * pageSize;
+    const [data, count] = await Promise.all([
+      this.pool.query<{ wallet_address: string; reward_amount: string; claimed_at: string }>(
+        `SELECT wallet_address, reward_amount, claimed_at
+         FROM merkle_snapshots
+         WHERE epoch_id = $1 AND claimed_at IS NOT NULL
+         ORDER BY claimed_at DESC
+         LIMIT $2 OFFSET $3`,
+        [epochId, pageSize, offset],
+      ),
+      this.pool.query<{ count: string }>(
+        'SELECT COUNT(*) FROM merkle_snapshots WHERE epoch_id = $1 AND claimed_at IS NOT NULL',
         [epochId],
       ),
     ]);
