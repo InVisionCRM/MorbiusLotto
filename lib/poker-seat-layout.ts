@@ -134,13 +134,13 @@ export const DEALER_BUTTON_RING: SeatAnchor[] = [
 export const CARD_ANCHOR_RING: SeatAnchor[] = [
   { fx: 0.50, fy: 0.80 },  // 0 — hero (unused for opponent cards; hero's cards live on avatar)
   { fx: 0.18, fy: 0.81 }, // 1 — S1
-  { fx: 0.10, fy: 0.55 },
-  { fx: 0.10, fy: 0.20 },
-  { fx: 0.30, fy: 0.06 },
-  { fx: 0.50, fy: 0.06 },  // 5 — top center
+  { fx: 0.11, fy: 0.55 },
+  { fx: 0.11, fy: 0.20 },
+  { fx: 0.31, fy: 0.06 },
+  { fx: 0.51, fy: 0.06 },  // 5 — top center
   { fx: 0.68, fy: 0.06 },
-  { fx: 0.88, fy: 0.20 },
-  { fx: 0.88, fy: 0.55 },
+  { fx: 0.87, fy: 0.20 },
+  { fx: 0.87, fy: 0.55 },
   { fx: 0.68, fy: 0.80 },
 ];
 
