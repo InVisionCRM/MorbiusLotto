@@ -4,39 +4,43 @@ import { createContext, useCallback, useContext, useEffect, useRef, useState } f
 import { useAccount, useSignMessage } from 'wagmi';
 import { SiweMessage } from 'siwe';
 import { setAuthFailureHandler } from '@/lib/api-auth';
+import { useMobileWalletHandoff } from '@/hooks/use-mobile-wallet-handoff';
+import { useWalletHandoffPhase } from '@/hooks/use-wallet-handoff-phase';
+import { WalletActionPrompt, type WalletActionPhase } from '@/components/auth/WalletActionPrompt';
 
-// Direct literal property access — Next.js inlines `process.env.NEXT_PUBLIC_*`
-// at build time ONLY when accessed by literal name. `getApiUrl()` in api-urls.ts
-// goes through a `process.env[name]` indirection that doesn't get inlined.
 const API_BASE = (process.env.NEXT_PUBLIC_API_URL ?? '').trim();
 
-interface SiweState {
-  /** Address of the wallet currently signed in via SIWE (checksummed). Null if not signed in. */
+/** SIWE domain must match server SIWE_EXPECTED_DOMAIN (defaults to morbius.io). */
+const SIWE_DOMAIN =
+  (process.env.NEXT_PUBLIC_SIWE_DOMAIN ?? 'morbius.io').trim() || 'morbius.io';
+
+export interface SiweState {
   address: `0x${string}` | null;
-  /** True if a server session is active for the currently-connected wallet. */
   isAuthenticated: boolean;
-  /** Sign-in in flight (wallet popup / network roundtrip). */
   isSigningIn: boolean;
-  /** Trigger an explicit SIWE sign-in flow. Returns the authed address on success. */
   signIn: () => Promise<`0x${string}`>;
-  /**
-   * Ensure the connected wallet has an active session, prompting a sign-in if not.
-   * Use this before any privileged API call from a UI handler.
-   */
   signInIfNeeded: () => Promise<`0x${string}`>;
-  /** Revoke the current session and clear the cookie. */
   signOut: () => Promise<void>;
 }
 
 const SiweContext = createContext<SiweState | null>(null);
 
-const apiBase = () => API_BASE;
+/** Same-origin in the browser so morb_session is first-party; direct API only on server. */
+function authUrl(path: string): string {
+  if (typeof window !== 'undefined') return path;
+  const base = API_BASE.replace(/\/$/, '');
+  return `${base}${path}`;
+}
 
 async function fetchJson(url: string, init?: RequestInit) {
   const res = await fetch(url, { credentials: 'include', ...init });
   if (!res.ok) {
     let detail = '';
-    try { detail = (await res.json()).error ?? ''; } catch { /* noop */ }
+    try {
+      detail = (await res.json()).error ?? '';
+    } catch {
+      /* noop */
+    }
     throw new Error(`${res.status} ${res.statusText}${detail ? `: ${detail}` : ''}`);
   }
   return res.json();
@@ -45,22 +49,20 @@ async function fetchJson(url: string, init?: RequestInit) {
 export function SiweProvider({ children }: { children: React.ReactNode }) {
   const { address: connectedAddress, chain } = useAccount();
   const { signMessageAsync } = useSignMessage();
+  const mobileHandoff = useMobileWalletHandoff();
   const [authedAddress, setAuthedAddress] = useState<`0x${string}` | null>(null);
   const [isSigningIn, setIsSigningIn] = useState(false);
+  const [walletPromptPhase, setWalletPromptPhase] = useState<WalletActionPhase>('open-wallet');
 
-  // Track an in-flight sign-in to dedupe concurrent calls (e.g. two UI buttons fired together).
   const signInPromiseRef = useRef<Promise<`0x${string}`> | null>(null);
+  const handoffActive = isSigningIn && mobileHandoff;
+  const visibilityPhase = useWalletHandoffPhase(handoffActive && walletPromptPhase !== 'finishing');
 
-  // On mount and whenever the connected wallet changes, check whether the
-  // server already has a session for this wallet (cookie is httpOnly so we
-  // can't read it; ask the server).
   useEffect(() => {
     let cancelled = false;
     (async () => {
-      const base = apiBase();
-      if (!base) return;
       try {
-        const me: { address?: string } = await fetchJson(`${base}/api/auth/me`);
+        const me: { address?: string } = await fetchJson(authUrl('/api/auth/me'));
         if (cancelled) return;
         const sessionAddrLower = me.address?.toLowerCase();
         const connectedAddrLower = connectedAddress?.toLowerCase();
@@ -68,73 +70,79 @@ export function SiweProvider({ children }: { children: React.ReactNode }) {
           setAuthedAddress(me.address as `0x${string}`);
           return;
         }
-        // Cookie is for a different wallet than the one currently connected.
-        // Clear it now — otherwise the WS upgrade keeps authenticating as the
-        // old wallet via the stale cookie, so server-side `ws.playerAddress`
-        // (and admin/per-wallet checks) stay pinned to the previous account
-        // even though the UI shows the new one. We require `connectedAddrLower`
-        // to be set so we don't nuke the session during a brief disconnect
-        // (e.g. opening MetaMask to switch accounts).
         if (sessionAddrLower && connectedAddrLower && sessionAddrLower !== connectedAddrLower) {
           try {
-            await fetch(`${base}/api/auth/logout`, { method: 'POST', credentials: 'include' });
+            await fetch(authUrl('/api/auth/logout'), { method: 'POST', credentials: 'include' });
             if (typeof window !== 'undefined') {
-              window.dispatchEvent(new CustomEvent('siwe:session-cleared', { detail: { reason: 'wallet-mismatch' } }));
+              window.dispatchEvent(
+                new CustomEvent('siwe:session-cleared', { detail: { reason: 'wallet-mismatch' } }),
+              );
             }
-          } catch { /* best-effort; next 401 will recover */ }
+          } catch {
+            /* best-effort */
+          }
         }
         if (!cancelled) setAuthedAddress(null);
       } catch {
         if (!cancelled) setAuthedAddress(null);
       }
     })();
-    return () => { cancelled = true; };
+    return () => {
+      cancelled = true;
+    };
   }, [connectedAddress]);
 
   const signIn = useCallback(async (): Promise<`0x${string}`> => {
     if (!connectedAddress) throw new Error('Connect a wallet first');
-    const base = apiBase();
-    if (!base) throw new Error('API URL not configured (NEXT_PUBLIC_API_URL)');
 
-    // Dedupe concurrent calls.
     if (signInPromiseRef.current) return signInPromiseRef.current;
 
     const run = (async () => {
       setIsSigningIn(true);
+      setWalletPromptPhase('open-wallet');
       try {
-        const { nonce } = await fetchJson(`${base}/api/auth/nonce`);
+        const { nonce } = await fetchJson(authUrl('/api/auth/nonce'));
 
         const message = new SiweMessage({
-          domain: window.location.host,
+          domain: SIWE_DOMAIN,
           address: connectedAddress,
-          // EIP-4361 requires ASCII-only in the statement. No em-dashes, smart quotes, etc.
           statement: 'Sign in to MORBIUS. This proves you own this wallet. No funds will move.',
           uri: window.location.origin,
           version: '1',
-          chainId: chain?.id ?? 369, // PulseChain
+          chainId: chain?.id ?? 369,
           nonce,
           issuedAt: new Date().toISOString(),
         }).prepareMessage();
 
+        if (mobileHandoff) setWalletPromptPhase('open-wallet');
         const signature = await signMessageAsync({ message });
 
-        const result: { address: `0x${string}` } = await fetchJson(`${base}/api/auth/verify`, {
+        if (mobileHandoff) setWalletPromptPhase('finishing');
+        const result: { address: `0x${string}` } = await fetchJson(authUrl('/api/auth/verify'), {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ message, signature }),
         });
 
+        // Confirm cookie actually persisted (guards mobile browsers that drop Set-Cookie).
+        const me: { address?: string } = await fetchJson(authUrl('/api/auth/me'));
+        if (me.address?.toLowerCase() !== result.address.toLowerCase()) {
+          setAuthedAddress(null);
+          throw new Error('Sign-in succeeded but session cookie was not saved. Try again.');
+        }
+
         setAuthedAddress(result.address);
         return result.address;
       } finally {
         setIsSigningIn(false);
+        setWalletPromptPhase('open-wallet');
         signInPromiseRef.current = null;
       }
     })();
 
     signInPromiseRef.current = run;
     return run;
-  }, [connectedAddress, chain?.id, signMessageAsync]);
+  }, [connectedAddress, chain?.id, signMessageAsync, mobileHandoff]);
 
   const signInIfNeeded = useCallback(async (): Promise<`0x${string}`> => {
     if (!connectedAddress) throw new Error('Connect a wallet first');
@@ -144,20 +152,20 @@ export function SiweProvider({ children }: { children: React.ReactNode }) {
     return signIn();
   }, [authedAddress, connectedAddress, signIn]);
 
-  // Register signInIfNeeded as the global 401 recovery handler so apiFetch
-  // can automatically prompt a sign-in popup when any authed route returns 401.
-  // Without this, callers would have to manually call signInIfNeeded before each
-  // authed request — easy to forget, fragile across the codebase.
+  // On 401 the server says there is no valid session — always re-sign, never short-circuit.
+  const forceSignIn = useCallback(async (): Promise<`0x${string}`> => {
+    setAuthedAddress(null);
+    return signIn();
+  }, [signIn]);
+
   useEffect(() => {
-    setAuthFailureHandler(signInIfNeeded);
+    setAuthFailureHandler(forceSignIn);
     return () => setAuthFailureHandler(null);
-  }, [signInIfNeeded]);
+  }, [forceSignIn]);
 
   const signOut = useCallback(async () => {
-    const base = apiBase();
-    if (!base) return;
     try {
-      await fetch(`${base}/api/auth/logout`, { method: 'POST', credentials: 'include' });
+      await fetch(authUrl('/api/auth/logout'), { method: 'POST', credentials: 'include' });
       if (typeof window !== 'undefined') {
         window.dispatchEvent(new CustomEvent('siwe:session-cleared', { detail: { reason: 'sign-out' } }));
       }
@@ -166,10 +174,14 @@ export function SiweProvider({ children }: { children: React.ReactNode }) {
     }
   }, []);
 
+  const promptPhase: WalletActionPhase =
+    walletPromptPhase === 'finishing' ? 'finishing' : visibilityPhase;
+
   const value: SiweState = {
     address: authedAddress,
     isAuthenticated:
-      !!authedAddress && !!connectedAddress &&
+      !!authedAddress &&
+      !!connectedAddress &&
       authedAddress.toLowerCase() === connectedAddress.toLowerCase(),
     isSigningIn,
     signIn,
@@ -177,18 +189,18 @@ export function SiweProvider({ children }: { children: React.ReactNode }) {
     signOut,
   };
 
-  return <SiweContext.Provider value={value}>{children}</SiweContext.Provider>;
+  return (
+    <SiweContext.Provider value={value}>
+      {children}
+      <WalletActionPrompt
+        visible={handoffActive}
+        phase={promptPhase}
+        variant="sign-in"
+      />
+    </SiweContext.Provider>
+  );
 }
 
-/**
- * Access the SIWE session state.
- *
- *   const { isAuthenticated, signInIfNeeded } = useSiwe();
- *   const handleWithdraw = async () => {
- *     await signInIfNeeded();              // prompts wallet sig if not signed in
- *     await apiFetch('/api/withdraw', { method: 'POST', body: JSON.stringify({ amount }) });
- *   };
- */
 export function useSiwe(): SiweState {
   const ctx = useContext(SiweContext);
   if (!ctx) throw new Error('useSiwe must be used inside <SiweProvider>');
