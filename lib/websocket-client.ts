@@ -342,6 +342,8 @@ export class BlackjackWebSocketClient {
   private signTypedData: SignTypedDataFn | null = null;
   /** Last `pokerChipBalance` from `auth_success` / `connection_established` (whole chips as decimal string). */
   private lastPokerChipBalance: string | null = null;
+  /** Guards siwe_required → reconnect loops when HTTP session exists but WS cookie is slow. */
+  private wsSiweReconnectAttempts = 0;
 
   private static detachWebSocketHandlers(ws: WebSocket): void {
     ws.onopen = null;
@@ -401,37 +403,38 @@ export class BlackjackWebSocketClient {
    * connection_established).
    */
   connect(): Promise<void> {
-    return new Promise((resolve, reject) => {
-      // Reset intentional close flag for new connection
-      this.intentionalClose = false;
+    this.intentionalClose = false;
 
-      if (this.ws?.readyState === WebSocket.OPEN) {
-        resolve();
-        return;
-      }
+    if (this.ws?.readyState === WebSocket.OPEN) {
+      return Promise.resolve();
+    }
 
-      // Replace or drop a prior socket (CONNECTING / half-open / CLOSING) so a second
-      // connect() cannot orphan a socket whose onclose would schedule duplicate reconnects.
-      if (this.ws) {
-        const stale = this.ws;
-        this.ws = null;
-        BlackjackWebSocketClient.detachWebSocketHandlers(stale);
-        try {
-          if (
-            stale.readyState === WebSocket.CONNECTING ||
-            stale.readyState === WebSocket.OPEN
-          ) {
-            stale.close();
-          }
-        } catch {
-          /* ignore */
+    if (this.ws) {
+      const stale = this.ws;
+      this.ws = null;
+      BlackjackWebSocketClient.detachWebSocketHandlers(stale);
+      try {
+        if (
+          stale.readyState === WebSocket.CONNECTING ||
+          stale.readyState === WebSocket.OPEN
+        ) {
+          stale.close();
         }
+      } catch {
+        /* ignore */
       }
+    }
 
-      const url = this.playerAddress
-        ? `${this.serverUrl}?address=${this.playerAddress}`
-        : this.serverUrl;
+    return import('./ws-session-bridge')
+      .then(({ buildWebSocketConnectUrl }) =>
+        buildWebSocketConnectUrl(this.serverUrl, this.playerAddress),
+      )
+      .then((url) => this.connectWithUrl(url));
+  }
 
+  /** Opens WebSocket at `url` (may include ?session= for cross-host Railway WS). */
+  private connectWithUrl(url: string): Promise<void> {
+    return new Promise((resolve, reject) => {
       const canSign = !!(this.signTypedData && this.playerAddress);
 
       const socket = new WebSocket(url);
@@ -456,19 +459,38 @@ export class BlackjackWebSocketClient {
           if (msg.type === 'siwe_required' && !settled) {
             settled = true;
             logger.info('WebSocket: server requested SIWE sign-in', { reason: msg.payload?.reason });
-            // Lazy-import to avoid pulling apiFetch into bundles that don't need it.
-            import('./api-auth')
-              .then(({ triggerSignIn }) => triggerSignIn())
-              .then(() => {
-                // Cookie is set. Reconnect; server will accept us via cookie auth.
+            void (async () => {
+              try {
+                const { probeSiweSession, triggerWsSignIn } = await import('./api-auth');
+                const hasSession = await probeSiweSession();
+
+                if (hasSession) {
+                  this.wsSiweReconnectAttempts += 1;
+                  if (this.wsSiweReconnectAttempts >= 3) {
+                    throw new Error(
+                      'You are signed in, but the game server cannot read your session. Refresh the page or try again in a moment.',
+                    );
+                  }
+                  logger.info('WebSocket: session present, reconnecting with ws-token bridge', {
+                    attempt: this.wsSiweReconnectAttempts,
+                  });
+                  await new Promise((r) => setTimeout(r, 400 * this.wsSiweReconnectAttempts));
+                  await this.connect();
+                  resolve();
+                  return;
+                }
+
+                this.wsSiweReconnectAttempts = 0;
+                await triggerWsSignIn();
                 logger.info('WebSocket: SIWE sign-in complete, reconnecting');
-                this.connect().catch((err) => logger.error('WS reconnect after SIWE failed', err));
+                await new Promise((r) => setTimeout(r, 200));
+                await this.connect();
                 resolve();
-              })
-              .catch((err) => {
+              } catch (err) {
                 logger.warn('WebSocket: SIWE sign-in declined or failed', err);
-                reject(new Error('SIWE sign-in required to connect'));
-              });
+                reject(err instanceof Error ? err : new Error('SIWE sign-in required to connect'));
+              }
+            })();
             return;
           }
 
@@ -512,6 +534,7 @@ export class BlackjackWebSocketClient {
 
           if (msg.type === WS_MESSAGE_TYPES.authSuccess && !settled) {
             settled = true;
+            this.wsSiweReconnectAttempts = 0;
             logger.info('WebSocket authenticated successfully via EIP-712');
             resolve();
             this.handleMessage(event.data as string);
@@ -521,6 +544,7 @@ export class BlackjackWebSocketClient {
           // Legacy servers that don't send auth_challenge send connection_established
           if (msg.type === WS_MESSAGE_TYPES.connectionEstablished && !settled) {
             settled = true;
+            this.wsSiweReconnectAttempts = 0;
             logger.info('WebSocket connected (legacy server, no auth challenge)');
             resolve();
             this.handleMessage(event.data as string);

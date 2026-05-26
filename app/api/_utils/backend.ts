@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { rewriteSessionSetCookie, rewriteSessionSetCookies } from '@/lib/rewrite-session-cookie';
 
 export function getBackendUrl(): string {
   const url =
@@ -39,10 +40,10 @@ export async function proxyJson(request: NextRequest, targetPath: string, init?:
     const outHeaders = new Headers();
     const setCookies = response.headers.getSetCookie?.() ?? [];
     if (setCookies.length > 0) {
-      for (const cookie of setCookies) outHeaders.append('set-cookie', cookie);
+      for (const cookie of rewriteSessionSetCookies(setCookies)) outHeaders.append('set-cookie', cookie);
     } else {
       const single = response.headers.get('set-cookie');
-      if (single) outHeaders.append('set-cookie', single);
+      if (single) outHeaders.append('set-cookie', rewriteSessionSetCookie(single));
     }
 
     const text = await response.text();

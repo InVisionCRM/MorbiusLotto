@@ -16,6 +16,7 @@ interface Options {
  *   POST /api/auth/verify   { message, signature } -> { address, expiresAt }   (Set-Cookie)
  *   POST /api/auth/logout                          -> { ok: true }             (clears cookie)
  *   GET  /api/auth/me                              -> { address } | 401
+ *   GET  /api/auth/ws-token                        -> { token } | 401  (for cross-host WS)
  *
  * The frontend builds a SIWE message client-side with the nonce returned here,
  * has the wallet sign it, and POSTs the pair back to /verify.
@@ -108,5 +109,18 @@ export function registerAuthRoutes({ app, authService }: Options): void {
     const session = await authService.lookupSession(token);
     if (!session) return res.status(401).json({ error: 'session invalid or expired' });
     return sendJson(res, { address: session.walletAddress, expiresAt: session.expiresAt });
+  });
+
+  /**
+   * Return the active session token for cross-origin WebSocket upgrades when
+   * morb_session cannot be sent (frontend on morbius.io, WS on Railway, etc.).
+   * Caller must already hold a valid httpOnly cookie; use only over HTTPS/WSS.
+   */
+  app.get('/api/auth/ws-token', async (req, res) => {
+    const token = (req as typeof req & { cookies?: Record<string, string> }).cookies?.[SESSION_COOKIE_NAME];
+    if (!token) return res.status(401).json({ error: 'no session' });
+    const session = await authService.lookupSession(token);
+    if (!session) return res.status(401).json({ error: 'session invalid or expired' });
+    return sendJson(res, { token });
   });
 }

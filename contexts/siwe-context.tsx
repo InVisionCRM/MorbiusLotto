@@ -3,7 +3,7 @@
 import { createContext, useCallback, useContext, useEffect, useRef, useState } from 'react';
 import { useAccount, useSignMessage } from 'wagmi';
 import { SiweMessage } from 'siwe';
-import { setAuthFailureHandler } from '@/lib/api-auth';
+import { setAuthFailureHandler, setWsAuthHandler } from '@/lib/api-auth';
 import { useMobileWalletHandoff } from '@/hooks/use-mobile-wallet-handoff';
 import { useWalletHandoffPhase } from '@/hooks/use-wallet-handoff-phase';
 import { WalletActionPrompt, type WalletActionPhase } from '@/components/auth/WalletActionPrompt';
@@ -152,6 +152,20 @@ export function SiweProvider({ children }: { children: React.ReactNode }) {
     return signIn();
   }, [authedAddress, connectedAddress, signIn]);
 
+  const ensureSiweSession = useCallback(async (): Promise<`0x${string}`> => {
+    if (!connectedAddress) throw new Error('Connect a wallet first');
+    try {
+      const me: { address?: string } = await fetchJson(authUrl('/api/auth/me'));
+      if (me.address?.toLowerCase() === connectedAddress.toLowerCase()) {
+        setAuthedAddress(me.address as `0x${string}`);
+        return me.address as `0x${string}`;
+      }
+    } catch {
+      /* no session yet */
+    }
+    return signIn();
+  }, [connectedAddress, signIn]);
+
   // On 401 the server says there is no valid session — always re-sign, never short-circuit.
   const forceSignIn = useCallback(async (): Promise<`0x${string}`> => {
     setAuthedAddress(null);
@@ -160,8 +174,12 @@ export function SiweProvider({ children }: { children: React.ReactNode }) {
 
   useEffect(() => {
     setAuthFailureHandler(forceSignIn);
-    return () => setAuthFailureHandler(null);
-  }, [forceSignIn]);
+    setWsAuthHandler(ensureSiweSession);
+    return () => {
+      setAuthFailureHandler(null);
+      setWsAuthHandler(null);
+    };
+  }, [forceSignIn, ensureSiweSession]);
 
   const signOut = useCallback(async () => {
     try {

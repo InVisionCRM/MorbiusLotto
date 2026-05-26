@@ -23,24 +23,37 @@ function resolveApiUrl(path: string): string {
  * call `signInIfNeeded()` before each authed request.
  */
 let authFailureHandler: (() => Promise<unknown>) | null = null;
+/** Prefer ensure-session (no wallet popup if /api/auth/me already OK). Used by WebSocket. */
+let wsAuthHandler: (() => Promise<unknown>) | null = null;
 
 export function setAuthFailureHandler(handler: (() => Promise<unknown>) | null): void {
   authFailureHandler = handler;
 }
 
-/**
- * Invoke the registered SIWE sign-in handler (typically `signInIfNeeded`
- * from <SiweProvider>). Use this from non-React code (e.g. the WebSocket
- * client) when it needs to trigger a sign-in popup outside of an apiFetch
- * 401 retry — for example, when the WS server sends `siwe_required`.
- *
- * Throws if no handler is registered (the SiweProvider hasn't mounted yet).
- */
-export async function triggerSignIn(): Promise<unknown> {
-  if (!authFailureHandler) {
-    throw new Error('SIWE handler not registered — SiweProvider must mount before triggerSignIn is called');
+export function setWsAuthHandler(handler: (() => Promise<unknown>) | null): void {
+  wsAuthHandler = handler;
+}
+
+/** True when the browser already has a valid morb_session (same-origin proxy). */
+export async function probeSiweSession(): Promise<boolean> {
+  if (typeof window === 'undefined') return false;
+  try {
+    const res = await fetch('/api/auth/me', { credentials: 'include' });
+    return res.ok;
+  } catch {
+    return false;
   }
-  return authFailureHandler();
+}
+
+/**
+ * WebSocket SIWE recovery: reuse an existing session when possible; only open
+ * the wallet when /api/auth/me is missing. Avoids sign-in loops when HTTP auth
+ * succeeded but the first WS reconnect raced the cookie.
+ */
+export async function triggerWsSignIn(): Promise<unknown> {
+  if (wsAuthHandler) return wsAuthHandler();
+  if (authFailureHandler) return authFailureHandler();
+  throw new Error('SIWE handler not registered — SiweProvider must mount before triggerWsSignIn is called');
 }
 
 /**

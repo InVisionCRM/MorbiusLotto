@@ -322,7 +322,9 @@ class WebSocketService {
         // SIWE cookie session token, if present. Set by /api/auth/verify on the
         // backend host; browser includes it automatically on the WS upgrade
         // request when SameSite=None + Secure (prod) — see auth.routes.ts.
-        const sessionToken = parseSessionCookie(request.headers.cookie || '');
+        const sessionFromQuery = url.searchParams.get('session');
+        const sessionToken = parseSessionCookie(request.headers.cookie || '')
+            || (typeof sessionFromQuery === 'string' && sessionFromQuery.length > 0 ? sessionFromQuery : null);
         // IMPORTANT: attach handlers immediately. If we await DB calls before registering
         // ws.on('message'), early client requests (like get_balance right after connect)
         // can be dropped and will timeout client-side.
