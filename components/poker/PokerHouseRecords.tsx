@@ -3,12 +3,28 @@
 import React, { useEffect, useState } from 'react';
 import { Trophy } from 'lucide-react';
 
+const PANEL_BG = 'linear-gradient(155deg, #0c1929 0%, #0a0f1a 50%, #0d1117 100%)';
+
 type Records = {
   hands_dealt: number;
   largest_pot: { amount: string; hand_id: string | null };
   tournaments_played: number;
   total_rake: string;
 };
+
+function normalizeRecords(raw: unknown): Records | null {
+  if (!raw || typeof raw !== 'object' || 'error' in raw) return null;
+  const r = raw as Partial<Records>;
+  return {
+    hands_dealt: Number(r.hands_dealt ?? 0),
+    largest_pot: {
+      amount: String(r.largest_pot?.amount ?? '0'),
+      hand_id: r.largest_pot?.hand_id ?? null,
+    },
+    tournaments_played: Number(r.tournaments_played ?? 0),
+    total_rake: String(r.total_rake ?? '0'),
+  };
+}
 
 function formatCount(n: number): string {
   if (!Number.isFinite(n) || n <= 0) return '0';
@@ -31,7 +47,6 @@ function formatCompactChips(value: string): string {
 
 export function PokerHouseRecords() {
   const [data, setData] = useState<Records | null>(null);
-  const [errored, setErrored] = useState(false);
 
   useEffect(() => {
     let alive = true;
@@ -43,78 +58,56 @@ export function PokerHouseRecords() {
         }
         return r.json();
       })
-      .then((d: Records) => {
-        if (alive) setData(d);
+      .then((d: unknown) => {
+        if (alive) setData(normalizeRecords(d));
       })
       .catch((err) => {
         console.error('[PokerHouseRecords] fetch failed:', err);
-        if (alive) setErrored(true);
       });
     return () => {
       alive = false;
     };
   }, []);
 
-  // Don't silently hide on error — render the panel with placeholder dashes so
-  // the section is still visible and the user (and we) can see something went
-  // wrong. Detail is in the browser console.
-
   const tiles = [
     {
-      label: 'Hands Dealt',
+      label: 'Hands dealt',
       value: data ? formatCount(data.hands_dealt) : '—',
-      accent: false,
     },
     {
-      label: 'Largest Pot',
-      value: data ? formatCompactChips(data.largest_pot.amount) : '—',
-      accent: true,
-      verifyHandId: data?.largest_pot.hand_id ?? null,
+      label: 'Largest pot',
+      value: data ? formatCompactChips(data.largest_pot?.amount ?? '0') : '—',
+      highlight: true,
+      verifyHandId: data?.largest_pot?.hand_id ?? null,
     },
     {
-      label: 'Tournaments Played',
+      label: 'Tournaments played',
       value: data ? formatCount(data.tournaments_played) : '—',
-      accent: false,
     },
     {
-      label: 'Total Rake',
+      label: 'Total rake',
       value: data ? formatCompactChips(data.total_rake) : '—',
-      accent: false,
     },
   ];
 
   return (
     <section
-      className="relative mb-6 sm:mb-8 rounded-2xl sm:rounded-3xl overflow-hidden border-2 border-white/25"
-      style={{
-        background: 'linear-gradient(325deg, rgba(20, 20, 20, 0.8), rgba(40, 40, 40, 0.6))',
-        boxShadow:
-          'inset 0 3px 6px rgba(0, 0, 0, 0.8), inset 0 -3px 6px rgba(255, 255, 255, 0.1), 0 1px 3px rgba(0, 0, 0, 0.5), 0 0 50px rgba(34, 211, 238, 0.06)',
-      }}
+      className="relative mb-6 sm:mb-8 rounded-2xl overflow-hidden border-2 border-cyan-500/30 shadow-lg shadow-cyan-500/5"
+      style={{ background: PANEL_BG }}
     >
-      <div
-        aria-hidden
-        className="absolute inset-0 pointer-events-none bg-[radial-gradient(ellipse_90%_80%_at_50%_0%,rgba(34,211,238,0.15),transparent_55%)]"
-      />
-      <div
-        aria-hidden
-        className="absolute inset-0 pointer-events-none bg-[radial-gradient(circle_at_100%_50%,rgba(34,211,238,0.08),transparent_50%)]"
-      />
-      <div className="relative h-1 bg-gradient-to-r from-transparent via-cyan-400/50 to-transparent" aria-hidden />
-      <div className="relative px-4 py-5 sm:px-8 sm:py-6">
-        <div className="flex items-center gap-3 mb-4 sm:mb-5">
-          <div
-            className="shrink-0 w-10 h-10 sm:w-12 sm:h-12 rounded-2xl flex items-center justify-center border border-white/30"
-            style={{
-              background: 'linear-gradient(145deg, rgb(16, 26, 35), rgb(35, 36, 41))',
-              boxShadow: 'inset 0 3px 6px rgba(0,0,0,0.8), 0 0 20px rgba(34,211,238,0.12)',
-            }}
-          >
-            <Trophy className="w-5 h-5 sm:w-6 sm:h-6 text-cyan-300" aria-hidden />
+      <div className="absolute inset-x-0 top-0 h-1 bg-gradient-to-r from-transparent via-cyan-400/60 to-transparent" aria-hidden />
+
+      <div className="relative px-5 sm:px-8 py-6 sm:py-7">
+        <div className="flex items-start gap-3 mb-5">
+          <div className="shrink-0 w-10 h-10 rounded-xl flex items-center justify-center bg-slate-900/60 border border-white/[0.06]">
+            <Trophy className="w-5 h-5 text-cyan-300" aria-hidden />
           </div>
           <div className="min-w-0">
-            <h2 className="text-base sm:text-lg font-black tracking-tight text-white">House Records</h2>
-            <p className="text-xs text-slate-500 mt-0.5">All-time · provably fair</p>
+            <div className="text-[10px] uppercase tracking-[0.2em] text-cyan-400/80 font-bold">
+              All-time stats
+            </div>
+            <h2 className="mt-1 text-lg font-bold text-white">House records</h2>
+            <p className="text-xs text-slate-500 mt-0.5">Provably fair · platform-wide</p>
           </div>
         </div>
 
@@ -122,23 +115,16 @@ export function PokerHouseRecords() {
           {tiles.map((t) => (
             <div
               key={t.label}
-              className="rounded-xl px-4 py-3 border border-white/[0.06]"
-              style={{
-                background: 'linear-gradient(145deg, rgba(0,0,0,0.35), rgba(30,30,30,0.25))',
-                boxShadow: 'inset 0 2px 4px rgba(0,0,0,0.5)',
-                ...(t.accent ? { borderColor: 'rgba(250,204,21,0.30)' } : {}),
-              }}
+              className={`rounded-xl bg-slate-900/60 border px-4 py-3.5 text-center ${
+                t.highlight ? 'border-emerald-400/20' : 'border-white/[0.06]'
+              }`}
             >
-              <div
-                className={`text-[10px] uppercase tracking-[0.2em] font-bold ${
-                  t.accent ? 'text-amber-300/90' : 'text-slate-500'
-                }`}
-              >
+              <div className="text-[10px] uppercase tracking-[0.16em] font-bold text-slate-400">
                 {t.label}
               </div>
               <div
-                className={`mt-1 text-xl sm:text-2xl font-black tabular-nums leading-none ${
-                  t.accent ? 'text-amber-200' : 'text-white'
+                className={`mt-2 font-mono text-xl sm:text-2xl font-bold tabular-nums leading-none ${
+                  t.highlight ? 'text-emerald-300' : 'text-white'
                 }`}
               >
                 {t.value}
@@ -146,7 +132,7 @@ export function PokerHouseRecords() {
               {t.verifyHandId && (
                 <a
                   href={`/poker/verify?handId=${t.verifyHandId}`}
-                  className="inline-block mt-1 text-[10px] text-cyan-300 hover:text-cyan-200 underline underline-offset-2"
+                  className="inline-block mt-2 text-[10px] text-cyan-300 hover:text-cyan-200 underline underline-offset-2"
                 >
                   verify hand →
                 </a>

@@ -10,6 +10,7 @@ import { useAccount } from 'wagmi';
 import { apiFetch } from '@/lib/api-auth';
 import { useProfile } from '@/hooks/use-player-profile';
 import { usePlayerServerBalance } from '@/hooks/use-player-server-balance';
+import { usePokerChipBalance } from '@/hooks/use-poker-chip-balance';
 import { useTokenBalance } from '@/hooks/use-token';
 import { WalletMenu } from '@/components/shared/WalletMenu';
 import { MorbiusBurnedDisplay } from '@/components/shared/MorbiusBurnedDisplay';
@@ -62,6 +63,7 @@ import {
   IconUsers,
   IconTicket,
   IconLayoutGrid,
+  IconCards,
 } from '@tabler/icons-react';
 
 // Lazy-load modals — only pulled into the bundle when first opened
@@ -85,7 +87,7 @@ const PATH_TO_PAGE: Record<string, NavPage> = {
   '/blackjack-multi': 'blackjackMulti',
 };
 
-type OtherGameIcon = 'blackjack' | 'plinko' | 'users' | 'ticket' | 'grid';
+type OtherGameIcon = 'blackjack' | 'plinko' | 'users' | 'ticket' | 'grid' | 'cards';
 
 type OtherGameNavItem =
   | { label: string; href: string; icon: OtherGameIcon }
@@ -99,6 +101,7 @@ const OTHER_GAMES: readonly OtherGameNavItem[] = [
   { label: 'Plinko', href: '/PLINKO', icon: 'plinko' },
   { label: 'Blackjack', href: '/BLACKJACK', icon: 'blackjack' },
   { label: 'Multiplayer BJ', href: '/blackjack-multi', icon: 'users' },
+  { label: 'Poker', href: '/poker', icon: 'cards' },
   { label: 'Lottery', href: '/lottery', icon: 'ticket' },
   { label: 'Keno', href: '/keno', icon: 'grid' },
 ];
@@ -236,6 +239,7 @@ const OTHER_GAME_ICONS: Record<OtherGameIcon, React.ReactNode> = {
   users: <IconUsers size={20} className="text-white shrink-0" aria-hidden />,
   ticket: <IconTicket size={20} className="text-white shrink-0" aria-hidden />,
   grid: <IconLayoutGrid size={20} className="text-white shrink-0" aria-hidden />,
+  cards: <IconCards size={20} className="text-white shrink-0" aria-hidden />,
 };
 
 const otherGameIcon = (g: OtherGameNavItem) => OTHER_GAME_ICONS[g.icon];
@@ -316,6 +320,8 @@ type NavContentProps = Pick<
   onOpenInstallAppHelp?: () => void;
   /** MORBIUS ERC-20 balance in the connected wallet (wei). */
   inWalletMorbiusWei: bigint;
+  /** Poker chip balance (chip-count string). */
+  chipBalance?: string | null;
   walletConnected: boolean;
   pokerLobbyTab?: 'cash' | 'tournaments' | 'history';
   onPokerLobbyTabChange?: (tab: 'cash' | 'tournaments' | 'history') => void;
@@ -362,6 +368,7 @@ const NavContent = React.memo(function NavContent(props: NavContentProps) {
     onOpenInstallAppHelp,
     reserveBalance,
     inWalletMorbiusWei,
+    chipBalance,
     walletConnected,
     pokerLobbyTab = 'tournaments',
     onPokerLobbyTabChange,
@@ -425,6 +432,7 @@ const NavContent = React.memo(function NavContent(props: NavContentProps) {
           variant="sidebar"
           reserve={reserveBalance}
           inWallet={walletConnected ? inWalletMorbiusWei : undefined}
+          chipBalance={walletConnected ? chipBalance : undefined}
         />
       </div>
 
@@ -698,6 +706,7 @@ export default function GlobalMainNav({
   const { data: serverReserveBalance } = usePlayerServerBalance(
     reserveBalance === undefined ? address : undefined,
   );
+  const { data: pokerChipBalance } = usePokerChipBalance(address);
   const effectiveReserveBalance =
     reserveBalance !== undefined
       ? reserveBalance
@@ -826,6 +835,7 @@ export default function GlobalMainNav({
           variant="mobile-bar"
           reserve={effectiveReserveBalance}
           inWallet={address ? inWalletMorbiusWei : undefined}
+          chipBalance={address ? pokerChipBalance : undefined}
         />
         <WalletMenu
           onOpenDepositModal={handleOpenGameWallet}
@@ -849,6 +859,7 @@ export default function GlobalMainNav({
       effectiveReserveBalance,
       address,
       inWalletMorbiusWei,
+      pokerChipBalance,
     ],
   );
 
@@ -859,9 +870,10 @@ export default function GlobalMainNav({
         variant="mobile-drawer"
         reserve={effectiveReserveBalance}
         inWallet={address ? inWalletMorbiusWei : undefined}
+        chipBalance={address ? pokerChipBalance : undefined}
       />
     );
-  }, [effectiveReserveBalance, address, inWalletMorbiusWei]);
+  }, [effectiveReserveBalance, address, inWalletMorbiusWei, pokerChipBalance]);
 
   return (
     <Sidebar
@@ -911,6 +923,7 @@ export default function GlobalMainNav({
             onOpenInstallAppHelp={handleOpenInstallAppHelp}
             reserveBalance={effectiveReserveBalance}
             inWalletMorbiusWei={inWalletMorbiusWei}
+            chipBalance={pokerChipBalance}
             walletConnected={Boolean(address)}
             pokerLobbyTab={pokerLobbyTab}
             onPokerLobbyTabChange={onPokerLobbyTabChange}

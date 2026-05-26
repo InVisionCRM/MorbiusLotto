@@ -2,17 +2,41 @@
 
 import React, { useMemo, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { ArrowRight, ArrowDownCircle, ArrowUpCircle, ArrowRightLeft, Crown, Trophy, Medal, PencilLine, Plus } from 'lucide-react';
+import Link from 'next/link';
+import { ArrowRight, ArrowDownCircle, ArrowUpCircle, Crown, Trophy, Medal, PencilLine, Plus, Coins, BarChart3, LayoutDashboard } from 'lucide-react';
 import { AvatarView } from '@/components/avatar';
 import { useProfile } from '@/hooks/use-player-profile';
-import { usePokerPlayerStats, usePokerPlayerHands, type PokerPlayerStats } from '@/hooks/use-poker-stats';
+import { usePokerPlayerStats, type PokerPlayerStats } from '@/hooks/use-poker-stats';
 import { useTokenBalance } from '@/hooks/use-token';
-import { PokerStreakChart } from './PokerStreakChart';
 import { PokerChipLedgerModal } from './PokerChipLedgerModal';
 import { PokerRepTokenModal } from './PokerRepTokenModal';
 import { useRepToken, type PokerRepToken } from '@/hooks/use-poker-rep-token';
 import { formatChips } from '@/lib/format-poker-chips';
 import { formatMorbiusFloor } from '@/lib/format-morbius-display';
+
+const MORBIUS_LOGO = '/morbius/MorbiusLogo-2.svg';
+const PANEL_BG = 'linear-gradient(155deg, #0c1929 0%, #0a0f1a 50%, #0d1117 100%)';
+const PRIMARY_BTN_STYLE = {
+  background: 'linear-gradient(135deg, #0891b2, #2563eb)',
+  boxShadow: '0 8px 32px rgba(6, 182, 212, 0.25), 0 0 0 1px rgba(34, 211, 238, 0.2)',
+} as const;
+/** Matches the giant step counter in PokerOnboardingChecklist — scaled per card width. */
+const MITR_BALANCE_NUMBER_BASE = {
+  fontFamily: '"Mitr", sans-serif',
+  fontWeight: 700,
+  lineHeight: 0.85,
+  letterSpacing: '0.04em',
+} as const;
+const MITR_CHIPS_NUMBER_STYLE = {
+  ...MITR_BALANCE_NUMBER_BASE,
+  fontSize: 'clamp(40px, 11vw, 100px)',
+} as const;
+const MITR_WALLET_NUMBER_STYLE = {
+  ...MITR_BALANCE_NUMBER_BASE,
+  fontSize: 'clamp(32px, 8vw, 84px)',
+} as const;
+const TOP_ACTION_BTN_CLASS =
+  'inline-flex items-center justify-center gap-2 sm:gap-2.5 w-full sm:w-auto sm:min-w-[180px] px-4 sm:px-6 py-3 sm:py-3.5 rounded-xl text-sm sm:text-base font-semibold border border-white/[0.08] bg-slate-900/40 text-slate-200 hover:border-cyan-500/30 hover:text-white hover:bg-white/[0.04] transition-colors';
 
 export interface PokerYourStatsPanelProps {
   address: string | null;
@@ -85,10 +109,6 @@ export function PokerYourStatsPanel({
   const [repModalOpen, setRepModalOpen] = useState(false);
 
   const { data: stats } = usePokerPlayerStats(address, 'all');
-  // Pull the player's full lifetime hand history so the chart plots the
-  // entire P/L journey, not just a recent tail. Server caps at 25k, which
-  // safely covers the high-volume players the project has today.
-  const { data: hands } = usePokerPlayerHands(address, 25_000);
   const { data: rankRow } = usePokerPlayerRank(address);
   const { profileDisplayName, avatarConfig } = useProfile();
   const { token: repToken, setToken: setRepToken } = useRepToken(address);
@@ -101,7 +121,7 @@ export function PokerYourStatsPanel({
   );
 
   const morbiusPlayDisplay = useMemo(
-    () => (morbiusBalanceWei != null ? formatMorbiusFloor(morbiusBalanceWei) : '—'),
+    () => (morbiusBalanceWei != null ? formatMorbiusFloor(morbiusBalanceWei) : '0'),
     [morbiusBalanceWei],
   );
   const walletMorbiusDisplay = useMemo(
@@ -109,24 +129,13 @@ export function PokerYourStatsPanel({
     [walletMorbiusWei],
   );
   const chipsDisplay = useMemo(
-    () => (chipBalance != null ? formatChips(chipBalance) : '—'),
+    () => (chipBalance != null ? formatChips(chipBalance) : '0'),
     [chipBalance],
   );
 
   const archetype = useMemo(() => archetypeFor(stats ?? undefined), [stats]);
 
   const totalHands = stats?.total_hands ?? 0;
-
-  const profitLossBn = useMemo(() => {
-    try { return BigInt(stats?.profit_loss ?? '0'); } catch { return 0n; }
-  }, [stats?.profit_loss]);
-
-  const profitPerHandBn = useMemo(() => {
-    if (totalHands === 0) return null;
-    return profitLossBn / BigInt(totalHands);
-  }, [profitLossBn, totalHands]);
-
-  const handsList = hands ?? [];
 
   if (!address) {
     // Don't render at all when wallet is disconnected — the lobby already shows a connect CTA up top.
@@ -145,159 +154,123 @@ export function PokerYourStatsPanel({
   return (
     <>
       <section
-        className="relative rounded-2xl overflow-hidden border border-cyan-500/25"
-        style={{ background: 'linear-gradient(135deg, #0c1929 0%, #050a14 100%)' }}
+        className="relative rounded-2xl overflow-hidden border-2 border-cyan-500/30 shadow-lg shadow-cyan-500/5"
+        style={{ background: PANEL_BG }}
       >
-        <div
-          className="absolute inset-x-0 top-0 h-px"
-          style={{ background: 'linear-gradient(90deg, transparent, rgba(34,211,238,0.55), transparent)' }}
-          aria-hidden
-        />
+        <div className="absolute inset-x-0 top-0 h-1 bg-gradient-to-r from-transparent via-cyan-400/60 to-transparent" aria-hidden />
 
-        <div className="relative px-5 sm:px-8 py-6 sm:py-7">
-          {/* ── Title row · YOUR POKER FACE + big rank ── */}
-          <div className="flex items-start justify-between mb-6 sm:mb-7 gap-4">
-            <div className="flex items-center gap-2.5 pt-1 min-w-0">
-              <div className="w-1 h-7 rounded-full bg-gradient-to-b from-cyan-400 to-purple-500 shrink-0" aria-hidden />
-              <div className="min-w-0">
-                <div className="text-[10px] font-mono tracking-[0.35em] uppercase text-cyan-400 font-bold">YOUR POKER FACE</div>
-                <div
-                  className="font-medium text-white text-[15px] mt-0.5 truncate"
-                  style={{ fontFamily: 'Mitr, sans-serif', letterSpacing: '-0.01em' }}
-                >
-                  {displayName}
-                  <span className="text-slate-500 mx-1.5">·</span>
-                  <span>{archetype.emoji} {archetype.name}</span>
-                  <span className="italic text-cyan-400 ml-1">{archetype.modifier}</span>
-                </div>
-              </div>
-            </div>
-            <RankHeader rank={rankRow?.rank} totalHands={totalHands} />
+        <div className="relative px-4 py-5 sm:px-8 sm:py-8">
+          <div className="grid grid-cols-2 sm:flex sm:flex-wrap sm:items-center sm:justify-end gap-2 sm:gap-4 mb-4 sm:mb-6">
+            <button type="button" onClick={onOpenAllStats} className={TOP_ACTION_BTN_CLASS}>
+              <BarChart3 size={18} aria-hidden />
+              My Stats
+            </button>
+            <Link href="/creators" className={TOP_ACTION_BTN_CLASS}>
+              <LayoutDashboard size={18} aria-hidden />
+              Creator Dashboard
+            </Link>
           </div>
 
-          {/* ── Body · avatar + stats | chart ── */}
-          <div className="grid grid-cols-1 lg:grid-cols-[240px_1fr] gap-6 lg:gap-8 items-stretch">
-            {/* LEFT · avatar + stat grid */}
-            <div className="space-y-4">
-              <div className="relative">
-                <div
-                  className="rounded-2xl p-3 relative overflow-hidden aspect-square"
-                  style={{
-                    background:
-                      'radial-gradient(circle at 30% 20%, rgba(34,211,238,0.20), transparent 55%), radial-gradient(circle at 70% 80%, rgba(168,85,247,0.16), transparent 55%), linear-gradient(160deg, #0b1a2e, #050a14)',
-                    boxShadow: '0 0 24px -2px rgba(34,211,238,0.45), 0 0 0 1px rgba(34,211,238,0.35) inset',
-                  }}
-                >
-                  {avatarConfig ? (
-                    <AvatarView config={avatarConfig} className="w-full h-full" />
-                  ) : (
-                    <div className="w-full h-full flex items-center justify-center" aria-hidden>
-                      <span style={{ fontSize: 72 }}>{archetype.emoji}</span>
-                    </div>
-                  )}
+          {/* ── Body · profile sidebar | wallet hero cards ── */}
+          <div className="grid grid-cols-1 lg:grid-cols-[minmax(200px,220px)_minmax(0,1fr)] gap-4 lg:gap-6 lg:items-stretch">
+            {/* LEFT · profile card */}
+            <div className="relative rounded-xl bg-slate-900/60 border border-white/[0.06] w-full lg:max-w-none flex flex-col overflow-hidden">
+              <div className="px-4 sm:px-5 pt-4 sm:pt-5 flex flex-col flex-1 min-h-0">
+                <div className="relative">
+                  <div className="rounded-xl p-2 relative aspect-square border border-cyan-500/25 bg-[#050a12]">
+                    {avatarConfig ? (
+                      <AvatarView config={avatarConfig} className="w-full h-full rounded-lg overflow-hidden" />
+                    ) : (
+                      <div className="w-full h-full flex items-center justify-center overflow-hidden rounded-lg" aria-hidden>
+                        <span style={{ fontSize: 64 }}>{archetype.emoji}</span>
+                      </div>
+                    )}
+                  </div>
+                  <RepBadge token={repToken} onClick={() => setRepModalOpen(true)} />
+
+                  <button
+                    type="button"
+                    onClick={handleCustomizeAvatar}
+                    className="absolute left-[28%] -translate-x-1/2 -bottom-3 inline-flex items-center gap-1 px-3 py-1 rounded-lg text-[10px] font-bold uppercase tracking-wider text-white whitespace-nowrap hover:scale-105 transition-transform z-20"
+                    style={{
+                      background: 'linear-gradient(135deg, #0891b2, #2563eb)',
+                      boxShadow: '0 8px 22px -6px rgba(6,182,212,0.65), 0 0 0 1px rgba(34,211,238,0.25)',
+                    }}
+                  >
+                    <PencilLine size={10} strokeWidth={2.5} />
+                    Customize
+                  </button>
                 </div>
 
-                {/* REP badge · linked PulseChain token (or empty placeholder) */}
-                <RepBadge token={repToken} onClick={() => setRepModalOpen(true)} />
+                <div className="mt-6 text-base font-bold text-white truncate text-center w-full">
+                  {displayName}
+                </div>
+                <div className="mt-1 text-sm text-slate-300 text-center w-full">
+                  {archetype.emoji} {archetype.name}
+                  <span className="italic text-cyan-300/90 ml-1">{archetype.modifier}</span>
+                </div>
 
-                {/* Customize avatar button · overhangs the bottom-left */}
-                <button
-                  type="button"
-                  onClick={handleCustomizeAvatar}
-                  className="absolute left-[28%] -translate-x-1/2 -bottom-4 inline-flex items-center gap-1.5 px-4 py-2 rounded-xl text-[11px] font-bold uppercase tracking-wider text-white whitespace-nowrap hover:scale-105 transition-transform"
-                  style={{
-                    background: 'linear-gradient(135deg, #0891b2, #2563eb)',
-                    boxShadow: '0 8px 22px -6px rgba(6,182,212,0.65), 0 0 0 1px rgba(34,211,238,0.25)',
-                  }}
-                >
-                  <PencilLine size={12} strokeWidth={2.5} />
-                  Customize
-                </button>
+                <div className="flex items-center justify-center py-4 sm:py-6 w-full lg:flex-1 lg:min-h-0">
+                  <RankProfileDisplay rank={rankRow?.rank} totalHands={totalHands} />
+                </div>
               </div>
 
-              {/* Balances · MORBIUS play · in-wallet MORBIUS · poker chips */}
-              <div className="grid grid-cols-3 gap-2 pt-4">
-                <BalanceCell label="MORBIUS" value={morbiusPlayDisplay} unit="play" accent="cyan" />
-                <BalanceCell label="In-wallet" value={walletMorbiusDisplay} unit="MORBIUS" />
-                <BalanceCell label="Poker chips" value={chipsDisplay} unit="chips" accent="emerald" />
-              </div>
-
-              {/* Wallet actions */}
-              <div className="grid grid-cols-2 gap-2 mt-3">
-                <button
-                  type="button"
-                  onClick={onDeposit}
-                  className="inline-flex items-center justify-center gap-1.5 px-3 py-2.5 rounded-xl text-[12px] font-bold text-white transition-transform hover:scale-[1.02]"
-                  style={{
-                    background: 'linear-gradient(135deg, #0891b2, #2563eb)',
-                    boxShadow: '0 6px 16px -6px rgba(6,182,212,0.5), 0 0 0 1px rgba(34,211,238,0.18)',
-                  }}
-                >
-                  <ArrowDownCircle size={13} strokeWidth={2.5} />
-                  Deposit
-                </button>
-                <button
-                  type="button"
-                  onClick={onWithdraw}
-                  className="inline-flex items-center justify-center gap-1.5 px-3 py-2.5 rounded-xl text-[12px] font-bold text-slate-200 border border-white/[0.15] hover:border-cyan-400/40 hover:text-white transition-colors"
-                >
-                  <ArrowUpCircle size={13} strokeWidth={2.5} />
-                  Withdraw
-                </button>
-              </div>
-
-              {/* Exchange — secondary, full-width */}
               <button
                 type="button"
-                onClick={onOpenExchange}
-                className="mt-2 inline-flex items-center justify-center gap-1.5 w-full px-3 py-2 rounded-lg text-[11px] font-semibold text-cyan-300 border border-cyan-500/25 hover:border-cyan-400/55 hover:text-cyan-200 hover:bg-cyan-500/[0.06] transition-colors"
+                onClick={() => setLedgerModalOpen(true)}
+                className="inline-flex w-full min-h-[64px] sm:min-h-[96px] items-center justify-center gap-2 sm:gap-3 rounded-none border-0 border-t border-white/[0.08] text-sm sm:text-lg font-bold text-slate-200 hover:bg-white/[0.04] hover:text-white transition-colors"
               >
-                <ArrowRightLeft size={12} strokeWidth={2.5} />
-                Open chip exchange
+                View all transactions <ArrowRight size={18} strokeWidth={2.5} className="sm:w-5 sm:h-5" />
               </button>
             </div>
 
-            {/* RIGHT · profit/loss chart */}
-            <div className="min-w-0">
-              <PokerStreakChart
-                hands={handsList}
-                lifetimeNetChips={profitLossBn}
-                showdownWinRate={stats?.showdown_win_rate ?? null}
-                profitPerHand={profitPerHandBn}
-                bbPer100={stats?.bb_per_100 ?? null}
-              />
+            {/* RIGHT · wallet stack — tall centered cards */}
+            <div className="min-w-0 flex flex-col gap-4 h-full">
+              <div className="rounded-xl bg-slate-900/60 border border-white/[0.06] px-3 py-5 sm:px-4 sm:py-8 flex flex-col items-center justify-center text-center min-h-[112px] sm:min-h-[168px]">
+                <div className="inline-flex items-center gap-1.5 text-xs text-slate-400 mb-3">
+                  <Coins size={14} className="text-cyan-300" />
+                  <span className="uppercase tracking-[0.16em] font-bold">Poker chips</span>
+                </div>
+                <div
+                  className="text-emerald-300 tabular-nums"
+                  style={MITR_CHIPS_NUMBER_STYLE}
+                  title={chipsDisplay}
+                >
+                  {chipsDisplay}
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3 sm:gap-4 flex-1 min-h-0">
+                <WalletBalanceCard
+                  label="Deposited morbius"
+                  value={morbiusPlayDisplay}
+                  unit="play"
+                  actionLabel="Deposit"
+                  actionIcon={ArrowDownCircle}
+                  onAction={onDeposit}
+                />
+                <WalletBalanceCard
+                  label="In-wallet"
+                  value={walletMorbiusDisplay}
+                  unit="MORBIUS"
+                  actionLabel="Withdraw"
+                  actionIcon={ArrowUpCircle}
+                  onAction={onWithdraw}
+                />
+              </div>
+
+              <button
+                type="button"
+                onClick={onOpenExchange}
+                className="inline-flex items-center justify-center gap-2 w-full min-h-[56px] sm:min-h-[88px] rounded-xl text-sm sm:text-base font-bold text-white transition-all hover:scale-[1.01]"
+                style={PRIMARY_BTN_STYLE}
+              >
+                <Coins size={18} aria-hidden />
+                Open chip exchange
+              </button>
             </div>
           </div>
-
-          {/* ── Action buttons · all stats + all transactions ── */}
-          <div className="mt-6 sm:mt-7 grid grid-cols-1 sm:grid-cols-2 gap-3">
-            <button
-              type="button"
-              onClick={onOpenAllStats}
-              className="inline-flex items-center justify-center gap-2 px-5 py-3 rounded-xl text-[13px] font-bold text-white transition-transform hover:scale-[1.01]"
-              style={{
-                background: 'linear-gradient(135deg, #0891b2, #2563eb)',
-                boxShadow: '0 6px 18px -6px rgba(6,182,212,0.55), 0 0 0 1px rgba(34,211,238,0.18)',
-              }}
-            >
-              View all stats <ArrowRight size={14} />
-            </button>
-            <button
-              type="button"
-              onClick={() => setLedgerModalOpen(true)}
-              className="inline-flex items-center justify-center gap-2 px-5 py-3 rounded-xl text-[13px] font-bold border border-white/[0.15] text-slate-200 hover:border-cyan-400/40 hover:text-white transition-colors"
-            >
-              View all transactions <ArrowRight size={14} />
-            </button>
-          </div>
         </div>
-
-        <style jsx>{`
-          @keyframes morblotto-rank-sparkle {
-            0%, 100% { opacity: 0.25; transform: scale(0.85) rotate(0deg); }
-            50% { opacity: 1; transform: scale(1.15) rotate(20deg); }
-          }
-        `}</style>
       </section>
 
       <PokerChipLedgerModal
@@ -317,95 +290,58 @@ export function PokerYourStatsPanel({
   );
 }
 
-/** Big rank treatment — clean white number for #4+, medal styling for #1/#2/#3. */
-function RankHeader({ rank, totalHands }: { rank: number | null | undefined; totalHands: number }) {
+/** Global rank block — shown below the player archetype in the profile sidebar. */
+function RankProfileDisplay({ rank, totalHands }: { rank: number | null | undefined; totalHands: number }) {
+  const labelClass = 'text-[10px] uppercase tracking-[0.2em] font-bold text-center text-slate-500';
+
   if (totalHands === 0 || rank == null) {
     return (
-      <div className="text-right shrink-0">
-        <div className="text-[9px] font-mono uppercase tracking-[0.3em] text-slate-500 font-bold">Global rank</div>
-        <div
-          className="leading-[0.9] mt-1.5 text-slate-500 tabular-nums"
-          style={{ fontFamily: 'Mitr, sans-serif', fontWeight: 700, fontSize: 44, letterSpacing: '-0.04em' }}
-        >
-          —
-        </div>
+      <div className="text-center w-full">
+        <div className={labelClass}>Global rank</div>
+        <div className="mt-2 text-slate-500 font-mono tabular-nums text-3xl font-bold">—</div>
       </div>
     );
   }
   if (rank === 1) {
     return (
-      <div className="text-right shrink-0 relative">
-        <div className="text-[9px] font-mono uppercase tracking-[0.3em] text-amber-300/80 font-bold flex items-center justify-end gap-1.5">
+      <div className="text-center w-full">
+        <div className={`${labelClass} text-amber-300/90 flex items-center justify-center gap-1.5`}>
           <Crown size={11} strokeWidth={2.5} /> Champion
         </div>
-        <div
-          className="leading-[0.9] mt-1.5 text-amber-200 tabular-nums"
-          style={{
-            fontFamily: 'Mitr, sans-serif',
-            fontWeight: 700,
-            fontSize: 52,
-            letterSpacing: '-0.04em',
-            textShadow: '0 0 18px rgba(251,191,36,0.55)',
-          }}
-        >
-          #1
-        </div>
+        <div className="mt-2 text-amber-200 font-mono tabular-nums text-3xl font-bold">#1</div>
       </div>
     );
   }
   if (rank === 2) {
     return (
-      <div className="text-right shrink-0">
-        <div className="text-[9px] font-mono uppercase tracking-[0.3em] text-slate-300/90 font-bold flex items-center justify-end gap-1.5">
+      <div className="text-center w-full">
+        <div className={`${labelClass} text-slate-300 flex items-center justify-center gap-1.5`}>
           <Medal size={11} strokeWidth={2.5} /> Runner-up
         </div>
-        <div
-          className="leading-[0.9] mt-1.5 text-slate-100 tabular-nums"
-          style={{
-            fontFamily: 'Mitr, sans-serif',
-            fontWeight: 700,
-            fontSize: 52,
-            letterSpacing: '-0.04em',
-            textShadow: '0 0 14px rgba(226,232,240,0.40)',
-          }}
-        >
-          #2
-        </div>
+        <div className="mt-2 text-slate-100 font-mono tabular-nums text-3xl font-bold">#2</div>
       </div>
     );
   }
   if (rank === 3) {
     return (
-      <div className="text-right shrink-0">
-        <div className="text-[9px] font-mono uppercase tracking-[0.3em] text-orange-300/90 font-bold flex items-center justify-end gap-1.5">
+      <div className="text-center w-full">
+        <div className={`${labelClass} text-orange-300/90 flex items-center justify-center gap-1.5`}>
           <Trophy size={11} strokeWidth={2.5} /> Third
         </div>
-        <div
-          className="leading-[0.9] mt-1.5 text-orange-200 tabular-nums"
-          style={{
-            fontFamily: 'Mitr, sans-serif',
-            fontWeight: 700,
-            fontSize: 52,
-            letterSpacing: '-0.04em',
-            textShadow: '0 0 14px rgba(251,146,60,0.45)',
-          }}
-        >
-          #3
-        </div>
+        <div className="mt-2 text-orange-200 font-mono tabular-nums text-3xl font-bold">#3</div>
       </div>
     );
   }
   return (
-    <div className="text-right shrink-0">
-      <div className="text-[9px] font-mono uppercase tracking-[0.3em] text-slate-500 font-bold">Global rank</div>
-      <div
-        className="leading-[0.9] mt-1.5 text-white tabular-nums"
-        style={{ fontFamily: 'Mitr, sans-serif', fontWeight: 700, fontSize: 52, letterSpacing: '-0.04em' }}
-      >
-        #{rank}
-      </div>
+    <div className="text-center w-full">
+      <div className={labelClass}>Global rank</div>
+      <div className="mt-2 text-white font-mono tabular-nums text-3xl font-bold">#{rank}</div>
     </div>
   );
+}
+
+function MorbiusBadge({ size = 16 }: { size?: number }) {
+  return <img src={MORBIUS_LOGO} alt="" className="inline-block object-contain opacity-90" style={{ width: size, height: size }} />;
 }
 
 /**
@@ -427,12 +363,7 @@ function RepBadge({
       <button
         type="button"
         onClick={onClick}
-        className="absolute -bottom-3 -right-3 w-14 h-14 rounded-full flex items-center justify-center overflow-hidden transition-transform hover:scale-110 z-10"
-        style={{
-          background: 'radial-gradient(circle at 30% 30%, rgba(8,145,178,0.18), rgba(15,23,42,0.97))',
-          border: '2px solid rgba(34,211,238,0.55)',
-          boxShadow: '0 0 18px rgba(6,182,212,0.45), 0 0 0 3px #050a14',
-        }}
+        className="absolute -bottom-3 -right-3 w-12 h-12 rounded-full flex items-center justify-center overflow-hidden transition-transform hover:scale-105 z-10 bg-slate-900/90 border border-cyan-500/30 hover:border-cyan-400/50"
         aria-label={`Rep token: ${token.symbol}. Click to change.`}
         title={`${token.symbol} · ${token.name}`}
       >
@@ -450,10 +381,7 @@ function RepBadge({
           />
         ) : null}
         {!token.logoUrl && (
-          <span
-            className="font-bold text-cyan-200 leading-none"
-            style={{ fontFamily: 'Mitr, sans-serif', fontSize: 20, letterSpacing: '-0.04em' }}
-          >
+          <span className="font-bold text-cyan-200 leading-none text-lg">
             {symbolInitial}
           </span>
         )}
@@ -465,58 +393,58 @@ function RepBadge({
     <button
       type="button"
       onClick={onClick}
-      className="absolute -bottom-3 -right-3 w-14 h-14 rounded-full flex flex-col items-center justify-center transition-transform hover:scale-110 group z-10"
-      style={{
-        background: 'radial-gradient(circle at 30% 30%, rgba(8,145,178,0.35), rgba(15,23,42,0.97))',
-        border: '2px solid rgba(34,211,238,0.55)',
-        boxShadow: '0 0 18px rgba(6,182,212,0.45), 0 0 0 3px #050a14',
-      }}
+      className="absolute -bottom-3 -right-3 w-12 h-12 rounded-full flex flex-col items-center justify-center transition-transform hover:scale-105 group z-10 bg-slate-900/90 border border-cyan-500/30 hover:border-cyan-400/50"
       aria-label="Link a PulseChain token as your rep"
       title="Link a PulseChain token as your rep"
     >
-      <span className="font-mono text-[8px] tracking-[0.25em] font-bold text-cyan-300 leading-none">REP</span>
-      <Plus size={14} strokeWidth={3} className="text-cyan-300 mt-1 transition-transform group-hover:rotate-90" aria-hidden />
+      <span className="font-mono text-[8px] tracking-[0.2em] font-bold text-cyan-300 leading-none">REP</span>
+      <Plus size={12} strokeWidth={3} className="text-cyan-300 mt-0.5 transition-transform group-hover:rotate-90" aria-hidden />
     </button>
   );
 }
 
-function BalanceCell({
+function WalletBalanceCard({
   label,
   value,
   unit,
-  accent = 'neutral',
+  actionLabel,
+  actionIcon: ActionIcon,
+  onAction,
 }: {
   label: string;
   value: string;
   unit: string;
-  accent?: 'cyan' | 'emerald' | 'neutral';
+  actionLabel: string;
+  actionIcon: React.ComponentType<{ size?: number; strokeWidth?: number }>;
+  onAction: () => void;
 }) {
-  const valueClass =
-    accent === 'cyan' ? 'text-cyan-200'
-      : accent === 'emerald' ? 'text-emerald-200'
-        : 'text-white';
-  const borderClass =
-    accent === 'cyan' ? 'border-cyan-500/25'
-      : accent === 'emerald' ? 'border-emerald-500/25'
-        : 'border-white/[0.08]';
   return (
-    <div
-      className={`rounded-lg px-2.5 py-2 border ${borderClass}`}
-      style={{ background: 'rgba(0,0,0,0.25)' }}
-    >
-      <div className="text-[8px] uppercase tracking-[0.2em] text-slate-500 font-mono font-bold truncate">
-        {label}
+    <div className="rounded-xl bg-slate-900/60 border border-white/[0.06] overflow-hidden flex flex-col min-h-[200px] sm:min-h-[260px] h-full">
+      <div className="flex-1 flex flex-col items-center justify-center text-center min-w-0 px-2 sm:px-4 pt-4 sm:pt-5 pb-3 sm:pb-4 w-full">
+        <div className="text-xs text-slate-400 uppercase tracking-[0.12em] font-bold w-full">
+          {label}
+        </div>
+        <div
+          className="mt-3 inline-flex items-center justify-center gap-2.5 text-white tabular-nums w-full min-w-0"
+          style={MITR_WALLET_NUMBER_STYLE}
+          title={`${value} ${unit}`}
+        >
+          <MorbiusBadge size={24} />
+          <span className="truncate">{value}</span>
+        </div>
+        <div className="mt-2 text-[11px] uppercase tracking-[0.12em] text-slate-500 font-bold">
+          {unit}
+        </div>
       </div>
-      <div
-        className={`mt-1 tabular-nums leading-none truncate ${valueClass}`}
-        style={{ fontFamily: 'Mitr, sans-serif', fontWeight: 700, fontSize: 18, letterSpacing: '-0.02em' }}
-        title={value}
+      <button
+        type="button"
+        onClick={onAction}
+        className="inline-flex items-center justify-center gap-2 w-full py-4 sm:py-6 rounded-none text-xs sm:text-sm font-bold text-white transition-all hover:opacity-95"
+        style={PRIMARY_BTN_STYLE}
       >
-        {value}
-      </div>
-      <div className="mt-1 text-[8px] uppercase tracking-[0.18em] text-slate-500 font-mono truncate">
-        {unit}
-      </div>
+        <ActionIcon size={16} strokeWidth={2.5} />
+        {actionLabel}
+      </button>
     </div>
   );
 }
