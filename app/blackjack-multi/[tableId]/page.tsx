@@ -864,14 +864,15 @@ export default function BlackjackMultiTablePage() {
     setSystemChatMessages(prev => [...prev, {
       id: 'welcome',
       type: 'welcome',
-      text: `Welcome to <b>Morbius.IO</b> — PulseChain's Premier Gaming Platform! 🎲<br/><br/>` +
-        `<b>Quick Tips:</b><br/>` +
-        `• Tap your avatar to open the player menu (sounds, expressions, settings, leave)<br/>` +
-        `• Right-click or long-press your avatar for QuickChat<br/>` +
-        `• Min bet: <b>${minBet}</b> · Max bet: <b>${maxBet}</b> MORBIUS<br/><br/>` +
-        `<b>Socials:</b><br/>` +
-        `• X: <a href="https://x.com/MorbiusIO" target="_blank" rel="noopener" class="underline text-cyan-400">x.com/MorbiusIO</a><br/>` +
-        `• Telegram: <a href="https://t.me/MorbiusIO" target="_blank" rel="noopener" class="underline text-cyan-400">t.me/MorbiusIO</a>`,
+      text:
+        `Welcome to Morbius.IO — PulseChain's Premier Gaming Platform! 🎲\n\n` +
+        `Quick Tips:\n` +
+        `• Tap your avatar to open the player menu (sounds, expressions, settings, leave)\n` +
+        `• Right-click or long-press your avatar for QuickChat\n` +
+        `• Min bet: ${minBet} · Max bet: ${maxBet} MORBIUS\n\n` +
+        `Socials:\n` +
+        `• X: https://x.com/MorbiusIO\n` +
+        `• Telegram: https://t.me/MorbiusIO`,
       timestamp: Date.now(),
     }]);
   }, [wsConnected, state]);
@@ -1230,7 +1231,7 @@ export default function BlackjackMultiTablePage() {
 
           {/* ── Play area ── */}
           {/* DEALER — centered on 800×450 canvas (half-width − translate centers the hand) */}
-          <div style={{ position: 'absolute', left: 400, top: 20, transform: 'translateX(-50%)' }}>
+          <div style={{ position: 'absolute', left: 400, top: 50, transform: 'translateX(-50%)' }}>
             <BlackjackMultiDealerArea
               tableViewState={tableViewState}
               visibleDealerCards={visibleDealerCards}
