@@ -33,6 +33,9 @@ import { ReportModal } from '@/components/shared/ReportModal';
 import { toast } from 'sonner';
 import type { BlackjackWebSocketClient, PokerTableState } from '@/lib/websocket-client';
 import { HOW_TO_DEPOSIT_VIDEO_URL, HOW_TO_WITHDRAW_VIDEO_URL } from '@/lib/how-to-video-urls';
+import { WalletActionPrompt, type WalletActionVariant } from '@/components/auth/WalletActionPrompt';
+import { useMobileWalletHandoff } from '@/hooks/use-mobile-wallet-handoff';
+import { useWalletHandoffPhase } from '@/hooks/use-wallet-handoff-phase';
 import { formatChips, parseChipInput } from '@/lib/format-poker-chips';
 
 // ── Logos ──────────────────────────────────────────────────────────────────
@@ -1059,6 +1062,20 @@ export function GameWalletModal({
   const isLegacyWithdrawLoading = withdrawTx.isPending;
   const controlsDisabled = isDepositLoading || isPreparingWithdraw || isLegacyWithdrawLoading || externalWithdrawLock;
 
+  const mobileHandoff = useMobileWalletHandoff();
+  const waitingForWalletSignature =
+    isOpen &&
+    (depositPhase === 'confirming' || isApproving || isLegacyWithdrawLoading);
+  const walletHandoffVariant: WalletActionVariant = isApproving ? 'approval' : 'transaction';
+  const walletHandoffTitle = isApproving
+    ? 'Approve MORBIUS'
+    : isLegacyWithdrawLoading
+      ? 'Confirm withdrawal'
+      : depositMethod === 'pls'
+        ? 'Deposit with PLS'
+        : 'Deposit MORBIUS';
+  const walletHandoffPhase = useWalletHandoffPhase(Boolean(mobileHandoff && waitingForWalletSignature));
+
   useEffect(() => {
     if (isOpen && tab === 'reup' && !showReupTab) setTab('deposit');
   }, [isOpen, tab, showReupTab]);
@@ -1686,6 +1703,13 @@ export function GameWalletModal({
         isOpen={reportOpen}
         onClose={() => setReportOpen(false)}
         balance={displayBalance ?? undefined}
+      />
+
+      <WalletActionPrompt
+        visible={Boolean(mobileHandoff && waitingForWalletSignature)}
+        phase={walletHandoffPhase}
+        variant={walletHandoffVariant}
+        title={walletHandoffTitle}
       />
     </>
   );
