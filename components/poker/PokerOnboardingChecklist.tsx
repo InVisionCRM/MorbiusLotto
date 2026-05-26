@@ -130,7 +130,7 @@ export function PokerOnboardingChecklist({
           </button>
 
           {/* Content */}
-          <div className="relative grid items-center gap-6 px-6 py-7 sm:gap-8 sm:px-9 sm:py-8 lg:grid-cols-[1fr_auto]">
+          <div className="relative grid items-center gap-5 px-4 py-5 sm:gap-8 sm:px-9 sm:py-8 lg:grid-cols-[1fr_auto]">
             {/* Left column */}
             <div className="min-w-0">
               <div
@@ -203,15 +203,15 @@ export function PokerOnboardingChecklist({
               </div>
             </div>
 
-            {/* Right column — giant number + CTA */}
-            <div className="flex flex-row items-end gap-5 lg:flex-col lg:items-end lg:gap-5">
-              <div className="text-right">
+            {/* Steps left + CTA — number left, big button right (stacks on lg sidebar) */}
+            <div className="flex w-full flex-row items-end justify-evenly gap-4 lg:flex-col lg:items-end lg:justify-start lg:gap-5">
+              <div className="text-center lg:text-right">
                 <div
-                  className="text-white tabular-nums"
+                  className="text-white tabular-nums text-center lg:text-right"
                   style={{
                     fontFamily: '"Mitr", sans-serif',
                     fontWeight: 700,
-                    fontSize: 'clamp(80px, 14vw, 140px)',
+                    fontSize: 'clamp(56px, 16vw, 140px)',
                     lineHeight: 0.85,
                     letterSpacing: '-0.05em',
                   }}
@@ -219,7 +219,7 @@ export function PokerOnboardingChecklist({
                   {remaining}
                 </div>
                 <div
-                  className="mt-1 text-[11px] font-bold uppercase text-cyan-400"
+                  className="mt-1 text-[11px] font-bold uppercase text-cyan-400 text-center lg:text-right"
                   style={{ letterSpacing: '0.2em' }}
                 >
                   {remainingNoun}
@@ -229,7 +229,7 @@ export function PokerOnboardingChecklist({
               <button
                 type="button"
                 onClick={onResume}
-                className="rounded-xl px-6 py-3.5 text-sm font-bold text-white transition-transform hover:scale-[1.02] sm:text-[15px] lg:w-full"
+                className="min-h-[56px] shrink-0 rounded-xl px-5 py-4 text-sm font-bold text-white transition-transform hover:scale-[1.02] sm:px-6 sm:py-3.5 sm:text-[15px] lg:w-full"
                 style={{
                   background: 'linear-gradient(135deg, #0891b2, #2563eb)',
                   boxShadow:

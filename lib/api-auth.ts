@@ -4,9 +4,17 @@
 // bundle, so we read the var directly here.
 const API_BASE = (process.env.NEXT_PUBLIC_API_URL ?? '').trim();
 
+/** Browser: same-origin proxy keeps morb_session first-party (critical on mobile WC). */
+function resolveApiUrl(path: string): string {
+  if (path.startsWith('http')) return path;
+  if (typeof window !== 'undefined') return path;
+  if (!API_BASE) return path;
+  return `${API_BASE.replace(/\/$/, '')}${path}`;
+}
+
 /**
  * Optional callback invoked when a request returns 401. Set by SiweProvider
- * via `setAuthFailureHandler(signInIfNeeded)`. When present, apiFetch will
+ * via `setAuthFailureHandler(forceSignIn)`. When present, apiFetch will
  * call this once on a 401, await it (typically a wallet popup), then retry
  * the request a single time. If the retry also 401s, the original error
  * surfaces to the caller.
@@ -50,10 +58,10 @@ export async function triggerSignIn(): Promise<unknown> {
  * not 2xx (after the optional retry).
  */
 export async function apiFetch(path: string, init: RequestInit = {}): Promise<Response> {
-  if (!API_BASE) {
+  if (!API_BASE && typeof window === 'undefined') {
     throw new Error('Missing NEXT_PUBLIC_API_URL. Add it in Vercel (frontend) Settings → Environment Variables, then trigger a fresh build (the value is baked in at build time).');
   }
-  const url = path.startsWith('http') ? path : `${API_BASE}${path}`;
+  const url = resolveApiUrl(path);
 
   const headers = new Headers(init.headers);
   if (init.body && !headers.has('Content-Type') && typeof init.body === 'string') {
@@ -68,10 +76,11 @@ export async function apiFetch(path: string, init: RequestInit = {}): Promise<Re
   if (res.status === 401 && authFailureHandler) {
     try {
       await authFailureHandler();
-    } catch {
-      // User dismissed the wallet popup or wallet errored — fall through with the original 401.
+      res = await doFetch();
+    } catch (signInErr) {
+      // Surface verify / wallet errors instead of a generic auth required on the retried 401.
+      if (signInErr instanceof Error && signInErr.message) throw signInErr;
     }
-    res = await doFetch();
   }
 
   if (!res.ok) {

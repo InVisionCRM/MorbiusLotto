@@ -37,11 +37,15 @@ export function registerAuthRoutes({ app, authService }: Options): void {
    */
   const cookieAttrs = (req: import('express').Request) => {
     const isSecure = req.secure || isProd;
+    const domain =
+      process.env.SESSION_COOKIE_DOMAIN?.trim() ||
+      (isProd ? '.morbius.io' : undefined);
     return {
       httpOnly: true as const,
       secure: isSecure,
       sameSite: (isSecure ? 'none' : 'lax') as 'none' | 'lax',
       path: '/' as const,
+      ...(domain ? { domain } : {}),
     };
   };
 

@@ -566,6 +566,8 @@ export class BlackjackMultiGameService {
     const seedParts = sortedBetting.map((s) =>
       String(s.client_seed ?? 'default').slice(0, 255),
     );
+    // Must fit blackjack_multi_rounds.client_seed (VARCHAR(255); see migration 137).
+    // Two 32-char hex seeds + ':' = 65 chars — was failing at VARCHAR(64) with 2+ bettors.
     const joined = seedParts.join(':');
     const clientSeed = joined.length > 0 ? joined.slice(0, 255) : 'default';
     const deck = this.pfService.fisherYatesShuffle(serverSeed, clientSeed, roundNumber);

@@ -1,6 +1,7 @@
 'use client'
 
 import Image from 'next/image';
+import { formatChips } from '@/lib/format-poker-chips';
 
 const WEI_PER_MORBIUS = BigInt('1000000000000000000');
 
@@ -11,11 +12,13 @@ export function formatWholeMorbius(wei: bigint): string {
 interface NavBalanceDisplayProps {
   reserve?: bigint;
   inWallet?: bigint;
+  /** Poker chip balance (chip-count string). Shown under In-wallet when wallet is connected. */
+  chipBalance?: string | null;
   /** 'sidebar' = desktop sidebar header; 'mobile-bar' = top mobile strip; 'mobile-drawer' = open drawer header */
   variant: 'sidebar' | 'mobile-bar' | 'mobile-drawer';
 }
 
-export function NavBalanceDisplay({ reserve, inWallet, variant }: NavBalanceDisplayProps) {
+export function NavBalanceDisplay({ reserve, inWallet, chipBalance, variant }: NavBalanceDisplayProps) {
   if (reserve === undefined && inWallet === undefined) return null;
 
   if (variant === 'mobile-bar') {
@@ -37,6 +40,12 @@ export function NavBalanceDisplay({ reserve, inWallet, variant }: NavBalanceDisp
           <span className="text-[9px]">
             <span className="text-white/55">In-wallet </span>
             <span className="font-semibold tabular-nums text-white/95">{formatWholeMorbius(inWallet)}</span>
+          </span>
+        )}
+        {chipBalance != null && (
+          <span className="text-[9px]">
+            <span className="text-white/55">Chips </span>
+            <span className="font-semibold tabular-nums text-emerald-300/95">{formatChips(chipBalance)}</span>
           </span>
         )}
       </div>
@@ -62,6 +71,12 @@ export function NavBalanceDisplay({ reserve, inWallet, variant }: NavBalanceDisp
               <span className="text-white text-xs font-semibold tabular-nums">{formatWholeMorbius(inWallet)}</span>
               <Image src="/morbius/MorbiusLogo (3).png" alt="MORBIUS" width={12} height={12} className="object-contain opacity-80" />
             </div>
+            {chipBalance != null && (
+              <div className="space-y-0.5 pt-1">
+                <div className="text-[9px] text-white/55 uppercase tracking-wide">Chip balance</div>
+                <span className="text-emerald-300 text-xs font-semibold tabular-nums">{formatChips(chipBalance)}</span>
+              </div>
+            )}
           </div>
         )}
       </div>
@@ -87,6 +102,12 @@ export function NavBalanceDisplay({ reserve, inWallet, variant }: NavBalanceDisp
             <span className="text-white text-sm font-semibold tabular-nums truncate">{formatWholeMorbius(inWallet)}</span>
             <Image src="/morbius/MorbiusLogo (3).png" alt="MORBIUS" width={14} height={14} className="object-contain opacity-80 shrink-0" />
           </div>
+          {chipBalance != null && (
+            <div className="space-y-1 pt-1.5">
+              <div className="text-[10px] text-white/55 uppercase tracking-wide leading-none">Chip balance</div>
+              <span className="text-emerald-300 text-sm font-semibold tabular-nums truncate">{formatChips(chipBalance)}</span>
+            </div>
+          )}
         </div>
       )}
     </div>

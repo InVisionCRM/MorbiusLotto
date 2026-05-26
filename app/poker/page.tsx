@@ -31,6 +31,7 @@ import { PokerHowToPlayModal } from '@/components/poker/PokerHowToPlayModal';
 import { PokerStatsModal } from '@/components/poker/PokerStatsModal';
 import { PokerHouseRecords } from '@/components/poker/PokerHouseRecords';
 import { PokerTopPlayers } from '@/components/poker/PokerTopPlayers';
+import { PokerHeroCreatePickerModal } from '@/components/poker/PokerHeroCreatePickerModal';
 import GlobalMainNav from '@/components/shared/GlobalMainNav';
 import { PokerTournamentLobby } from '@/components/poker/tournament/PokerTournamentLobby';
 import { TelegramAlerts } from '@/components/telegram/TelegramAlerts';
@@ -156,6 +157,8 @@ export default function PokerLobbyPage() {
   const [showChipExchange, setShowChipExchange] = useState(false);
   const [showInsufficientChips, setShowInsufficientChips] = useState(false);
   const [showOnboardingWizard, setShowOnboardingWizard] = useState(false);
+  const [showCreatePicker, setShowCreatePicker] = useState(false);
+  const lobbyRef = useRef<HTMLDivElement>(null);
 
   const onboarding = usePokerOnboarding({
     address: address as `0x${string}` | undefined,
@@ -206,6 +209,13 @@ export default function PokerLobbyPage() {
     },
     [router],
   );
+
+  const scrollToLobby = useCallback(() => {
+    setLobbyTab('cash');
+    requestAnimationFrame(() => {
+      lobbyRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    });
+  }, [setLobbyTab]);
 
   useEffect(() => {
     if (activeTab !== 'tournaments') setTournamentCreateModalOpen(false);
@@ -495,21 +505,20 @@ export default function PokerLobbyPage() {
         onPokerLobbyTabChange={setLobbyTab}
       >
         <div
-          className="relative min-h-screen h-full w-full flex flex-col text-white"
+          className="relative min-h-screen h-full w-full flex flex-col text-white max-md:[background-attachment:scroll] md:[background-attachment:fixed]"
           style={{
             backgroundImage:
               "linear-gradient(to bottom, rgba(8,12,20,0.88), rgba(2,6,17,0.92) 50%, rgba(8,12,20,0.94)), url('/morbius/Morbius_Poker.png')",
             backgroundSize: 'cover',
             backgroundPosition: 'center top',
             backgroundRepeat: 'no-repeat',
-            backgroundAttachment: 'fixed',
           }}
         >
           <div className="absolute inset-0 h-full min-h-screen w-full bg-[radial-gradient(ellipse_80%_60%_at_50%_0%,rgba(34,211,238,0.10),transparent_70%)] pointer-events-none" />
-          <div className="relative flex-1 w-full max-w-7xl mx-auto px-3 py-4 sm:px-6 sm:py-8">
+          <div className="relative flex flex-1 flex-col w-full max-w-7xl mx-auto px-3 py-4 sm:px-6 sm:py-8">
             {/* ── Hero Section ── */}
             <div
-              className="relative mb-6 flex min-h-[17rem] w-full flex-col overflow-hidden rounded-3xl border border-white/25 sm:mb-8 sm:min-h-[20rem] md:min-h-[22rem]"
+              className="relative mb-4 flex min-h-0 w-full flex-col overflow-hidden rounded-2xl border border-white/25 sm:mb-8 sm:min-h-[20rem] sm:rounded-3xl md:min-h-[22rem]"
               style={{
                 background: POKER_HERO_CARD_GRADIENT,
                 boxShadow: '0 0 80px rgba(34,211,238,0.07), 0 2px 40px rgba(0,0,0,0.5), inset 0 1px 0 rgba(34,211,238,0.1)',
@@ -542,16 +551,59 @@ export default function PokerLobbyPage() {
 
               <div className="relative flex min-h-0 w-full flex-1 flex-col self-stretch overflow-hidden">
                 <div
-                  className="relative z-10 box-border flex min-h-full w-full flex-1 flex-col px-5 py-10 text-center text-slate-200 sm:px-10 sm:py-12"
-                  style={{
-                    background: POKER_HERO_CARD_GRADIENT,
-                    justifyContent: 'center',
-                    alignItems: 'center',
-                  }}
+                  className="relative z-10 box-border flex min-h-full w-full flex-1 flex-col items-center justify-center px-4 py-8 text-center text-slate-200 sm:px-10 sm:py-12"
+                  style={{ background: POKER_HERO_CARD_GRADIENT }}
                 >
+                  <div className="hidden sm:flex absolute top-4 right-4 sm:top-6 sm:right-6 z-20 flex-wrap items-center justify-end gap-2">
+                    <button
+                      type="button"
+                      onClick={() => setShowHowToPlay(true)}
+                      className="flex items-center gap-2 px-4 py-2.5 rounded-xl text-slate-400 text-sm font-medium hover:text-white transition-all"
+                      style={{
+                        background: 'rgba(30,41,59,0.5)',
+                        border: '1px solid rgba(51,65,85,0.5)',
+                        boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.03)',
+                      }}
+                    >
+                      <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}><circle cx="12" cy="12" r="10" /><path d="M12 16v-4M12 8h.01" /></svg>
+                      How to Play
+                    </button>
+                    <a
+                      href="#faq"
+                      className="flex items-center gap-2 px-4 py-2.5 rounded-xl text-slate-400 text-sm font-medium hover:text-white transition-all"
+                      style={{
+                        background: 'rgba(30,41,59,0.5)',
+                        border: '1px solid rgba(51,65,85,0.5)',
+                        boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.03)',
+                      }}
+                    >
+                      <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}>
+                        <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
+                      </svg>
+                      FAQ
+                    </a>
+                    <button
+                      type="button"
+                      onClick={() => setShowHowToPlay(true)}
+                      className="flex items-center gap-2 px-4 py-2.5 rounded-xl text-slate-400 text-sm font-medium hover:text-white transition-all"
+                      style={{
+                        background: 'rgba(30,41,59,0.5)',
+                        border: '1px solid rgba(51,65,85,0.5)',
+                        boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.03)',
+                      }}
+                    >
+                      <svg className="w-4 h-4 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}>
+                        <path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20" />
+                        <path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z" />
+                        <path d="M8 7h8M8 11h6" />
+                      </svg>
+                      Tutorial
+                    </button>
+                  </div>
+
                   {/* Live badge */}
                   <div
-                    className="inline-flex items-center gap-2.5 px-5 py-2 rounded-full mb-6 sm:mb-8"
+                    className="inline-flex items-center gap-2.5 px-4 py-1.5 sm:px-5 sm:py-2 rounded-full mb-4 sm:mb-8"
                     style={{
                       background: 'rgba(34,211,238,0.06)',
                       border: '1px solid rgba(34,211,238,0.15)',
@@ -569,7 +621,7 @@ export default function PokerLobbyPage() {
 
                   {/* Main title */}
                   <h1
-                    className="text-5xl sm:text-6xl md:text-7xl font-black tracking-[-3px] leading-[1] mb-8 sm:mb-10"
+                    className="text-4xl sm:text-6xl md:text-7xl font-black tracking-[-2px] sm:tracking-[-3px] leading-[1] mb-5 sm:mb-10"
                     style={{
                       background: 'linear-gradient(180deg, #ffffff 0%, #e2e8f0 40%, #64748b 100%)',
                       WebkitBackgroundClip: 'text',
@@ -580,107 +632,63 @@ export default function PokerLobbyPage() {
                     Texas Hold&apos;em
                   </h1>
 
-                  {/* CTA buttons */}
-                  <div className="flex justify-center gap-3 flex-wrap">
-                    {isConnected && (
-                      <button
-                        type="button"
-                        onClick={() => setCreateModal({ smallBlind: '10', bigBlind: '20', maxSeats: 10, pinCode: '', pinEnabled: false })}
-                        className="flex items-center gap-2 px-7 py-3.5 rounded-2xl text-white text-sm font-bold hover:-translate-y-0.5 transition-all"
-                        style={{
-                          background: 'linear-gradient(135deg, #06b6d4, #3b82f6)',
-                          boxShadow: '0 4px 24px rgba(6,182,212,0.3), 0 1px 2px rgba(0,0,0,0.2), inset 0 1px 0 rgba(255,255,255,0.15)',
-                        }}
-                      >
-                        <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.5}><path d="M12 5v14M5 12h14" /></svg>
-                        Create Cash Game
-                      </button>
-                    )}
+                  {/* CREATE + PLAY */}
+                  <div className="flex w-full max-w-xs sm:max-w-sm mx-auto gap-3">
                     <button
                       type="button"
-                      onClick={() => {
-                        setLobbyTab('tournaments');
-                        setTournamentCreateModalOpen(true);
-                      }}
-                      className="flex items-center gap-2 px-6 py-3.5 rounded-2xl text-sm font-bold text-black transition-all hover:brightness-105 active:scale-[0.99]"
+                      onClick={() => setShowCreatePicker(true)}
+                      className="flex flex-1 items-center justify-center px-6 py-3.5 sm:py-4 rounded-2xl text-sm sm:text-base font-black tracking-[0.12em] text-white hover:-translate-y-0.5 transition-all"
                       style={{
-                        background: 'linear-gradient(180deg, #eab308, #ca8a04)',
-                        boxShadow: '0 2px 12px rgba(234, 179, 8, 0.25)',
+                        background: 'linear-gradient(135deg, #06b6d4, #3b82f6)',
+                        boxShadow: '0 4px 24px rgba(6,182,212,0.35), 0 1px 2px rgba(0,0,0,0.2), inset 0 1px 0 rgba(255,255,255,0.15)',
                       }}
                     >
-                      Create Tournament
+                      CREATE
                     </button>
                     <button
                       type="button"
-                      onClick={() => router.push('/poker/tournaments/create-mtt')}
-                      className="relative flex items-center gap-2 px-6 py-3.5 rounded-2xl text-sm font-bold text-white transition-all hover:brightness-110 active:scale-[0.99]"
+                      onClick={scrollToLobby}
+                      className="flex flex-1 items-center justify-center px-6 py-3.5 sm:py-4 rounded-2xl text-sm sm:text-base font-black tracking-[0.12em] text-white hover:-translate-y-0.5 transition-all"
                       style={{
-                        background: 'linear-gradient(135deg, #0891b2, #2563eb)',
-                        boxShadow: '0 2px 12px rgba(6, 182, 212, 0.3), 0 0 0 1px rgba(34,211,238,0.2)',
+                        background: 'linear-gradient(135deg, #a855f7, #6366f1)',
+                        boxShadow: '0 4px 24px rgba(168,85,247,0.35), 0 1px 2px rgba(0,0,0,0.2), inset 0 1px 0 rgba(255,255,255,0.12)',
                       }}
                     >
-                      Create MTT
-                      <span
-                        className="rounded-full bg-cyan-300/20 px-1.5 py-0.5 text-[9px] font-bold uppercase text-cyan-100"
-                        style={{ letterSpacing: '0.15em' }}
-                      >
-                        new
-                      </span>
+                      PLAY
                     </button>
-                    {address && (
-                      <button
-                        type="button"
-                        onClick={() => setShowStatsModal(true)}
-                        className="flex items-center gap-2 px-6 py-3.5 rounded-2xl text-slate-400 text-sm font-medium hover:text-white transition-all"
-                        style={{
-                          background: 'rgba(30,41,59,0.5)',
-                          border: '1px solid rgba(51,65,85,0.5)',
-                          boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.03)',
-                        }}
-                      >
-                        <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}><path d="M3 3v18h18" /><path d="M7 15l4-4 4 4 5-5" /></svg>
-                        My Stats
-                      </button>
-                    )}
-                    <Link
-                      href="/creators"
-                      className="flex items-center gap-2 px-6 py-3.5 rounded-2xl text-slate-400 text-sm font-medium hover:text-white transition-all"
-                      style={{
-                        background: 'rgba(30,41,59,0.5)',
-                        border: '1px solid rgba(51,65,85,0.5)',
-                        boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.03)',
-                      }}
-                    >
-                      Creator Dashboard
-                    </Link>
+                  </div>
+
+                  <div className="mt-4 flex sm:hidden w-full max-w-sm mx-auto gap-2">
                     <button
                       type="button"
                       onClick={() => setShowHowToPlay(true)}
-                      className="flex items-center gap-2 px-6 py-3.5 rounded-2xl text-slate-400 text-sm font-medium hover:text-white transition-all"
+                      className="flex flex-1 items-center justify-center gap-1.5 px-2 py-2 rounded-xl text-slate-400 text-xs font-medium hover:text-white transition-all"
                       style={{
                         background: 'rgba(30,41,59,0.5)',
                         border: '1px solid rgba(51,65,85,0.5)',
-                        boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.03)',
                       }}
                     >
-                      <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}><circle cx="12" cy="12" r="10" /><path d="M12 16v-4M12 8h.01" /></svg>
                       How to Play
                     </button>
-                    <button
-                      type="button"
-                      onClick={() => setShowHowToPlay(true)}
-                      className="flex items-center gap-2 px-6 py-3.5 rounded-2xl text-slate-400 text-sm font-medium hover:text-white transition-all"
+                    <a
+                      href="#faq"
+                      className="flex flex-1 items-center justify-center gap-1.5 px-2 py-2 rounded-xl text-slate-400 text-xs font-medium hover:text-white transition-all"
                       style={{
                         background: 'rgba(30,41,59,0.5)',
                         border: '1px solid rgba(51,65,85,0.5)',
-                        boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.03)',
                       }}
                     >
-                      <svg className="w-4 h-4 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}>
-                        <path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20" />
-                        <path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z" />
-                        <path d="M8 7h8M8 11h6" />
-                      </svg>
+                      FAQ
+                    </a>
+                    <button
+                      type="button"
+                      onClick={() => setShowHowToPlay(true)}
+                      className="flex flex-1 items-center justify-center gap-1.5 px-2 py-2 rounded-xl text-slate-400 text-xs font-medium hover:text-white transition-all"
+                      style={{
+                        background: 'rgba(30,41,59,0.5)',
+                        border: '1px solid rgba(51,65,85,0.5)',
+                      }}
+                    >
                       Tutorial
                     </button>
                   </div>
@@ -688,7 +696,7 @@ export default function PokerLobbyPage() {
               </div>
             </div>
 
-            <div className="mb-4 sm:mb-6">
+            <div className="mb-4 sm:mb-6 order-2 lg:order-none">
               <PokerOnboardingChecklist
                 step={onboarding.currentStep}
                 isConnected={isConnected}
@@ -699,7 +707,7 @@ export default function PokerLobbyPage() {
             </div>
 
             {isConnected && address && (
-              <div className="mb-6 sm:mb-8">
+              <div className="mb-6 sm:mb-8 order-4 lg:order-none">
                 <PokerYourStatsPanel
                   address={address.toLowerCase()}
                   onOpenAllStats={() => setShowStatsModal(true)}
@@ -712,17 +720,16 @@ export default function PokerLobbyPage() {
               </div>
             )}
 
-            <PokerHouseRecords />
-
-            {/* Tab bar */}
+            {/* Tab bar + lobby — above stats on mobile so tables are reachable sooner */}
+            <div id="poker-lobby" ref={lobbyRef} className="order-3 lg:order-none flex flex-col scroll-mt-20">
             <div
-              className="flex items-center gap-1 px-5 sm:px-10 py-3.5 sm:py-4 mb-6 sm:mb-8 rounded-2xl border border-white/25"
+              className="flex items-center gap-1 overflow-x-auto px-3 sm:px-10 py-3 sm:py-4 mb-4 sm:mb-8 rounded-2xl border border-white/25 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
               style={{ background: 'linear-gradient(180deg, rgba(0,0,0,0.35), rgba(0,0,0,0.2))' }}
             >
                 <button
                   type="button"
                   onClick={() => setLobbyTab('tournaments')}
-                  className={`relative px-5 py-2.5 rounded-xl text-xs sm:text-sm font-semibold transition-all ${
+                  className={`relative shrink-0 px-3 sm:px-5 py-2.5 rounded-xl text-xs sm:text-sm font-semibold transition-all ${
                     activeTab === 'tournaments'
                       ? 'bg-cyan-500/[0.12] text-cyan-400'
                       : 'text-white hover:text-white/85'
@@ -733,7 +740,7 @@ export default function PokerLobbyPage() {
                 <button
                   type="button"
                   onClick={() => setLobbyTab('cash')}
-                  className={`px-5 py-2.5 rounded-xl text-xs sm:text-sm font-semibold transition-all ${
+                  className={`shrink-0 px-3 sm:px-5 py-2.5 rounded-xl text-xs sm:text-sm font-semibold transition-all ${
                     activeTab === 'cash'
                       ? 'bg-cyan-500/[0.12] text-cyan-400'
                       : 'text-white hover:text-white/85'
@@ -747,7 +754,7 @@ export default function PokerLobbyPage() {
                 <button
                   type="button"
                   onClick={() => setLobbyTab('history')}
-                  className={`relative px-5 py-2.5 rounded-xl text-xs sm:text-sm font-semibold transition-all ${
+                  className={`relative shrink-0 px-3 sm:px-5 py-2.5 rounded-xl text-xs sm:text-sm font-semibold transition-all ${
                     activeTab === 'history'
                       ? 'bg-cyan-500/[0.12] text-cyan-400'
                       : 'text-white hover:text-white/85'
@@ -806,8 +813,95 @@ export default function PokerLobbyPage() {
               </p>
             )}
             {activeTab === 'cash' && !loading && tables.length > 0 && (
+              <>
+              <div className="md:hidden space-y-3">
+                {tables.map((t) => {
+                  const isPlaying = t.status === 'playing';
+                  const hasPlayers = t.seatedCount > 0;
+                  const tableStatusLabel = isPlaying
+                    ? 'In progress'
+                    : hasPlayers
+                      ? 'Live'
+                      : 'Waiting for players';
+                  const openSeats = t.maxSeats - t.seatedCount;
+                  const btnSecondary =
+                    'inline-flex h-10 flex-1 items-center justify-center rounded-lg border border-slate-500/55 bg-black/30 text-sm font-semibold text-slate-200 hover:border-white/35 hover:bg-white/[0.04] transition-colors';
+                  const btnPrimary =
+                    'inline-flex h-10 flex-1 items-center justify-center rounded-lg bg-gradient-to-r from-cyan-600 to-cyan-500 text-sm font-semibold text-white shadow-sm hover:opacity-95 transition-opacity';
+                  return (
+                    <div
+                      key={t.id}
+                      className="rounded-xl border border-white/10 bg-black/25 p-4 space-y-3"
+                    >
+                      <div className="flex items-start justify-between gap-3">
+                        <div>
+                          <div className="font-bold text-slate-100 tabular-nums">
+                            {formatChips(t.smallBlind)} / {formatChips(t.bigBlind)}
+                          </div>
+                          <div className="text-xs text-slate-500 mt-0.5">No-limit Hold&apos;em</div>
+                        </div>
+                        <div className="text-right">
+                          <div className="text-sm font-medium text-slate-200">{tableStatusLabel}</div>
+                          {t.hasPin ? (
+                            <div className="mt-1 flex items-center justify-end gap-1 text-xs text-amber-400/90">
+                              <Lock className="w-3 h-3 shrink-0" aria-hidden />
+                              Private
+                            </div>
+                          ) : null}
+                        </div>
+                      </div>
+                      <div className="grid grid-cols-2 gap-2 text-xs text-slate-400">
+                        <div>
+                          <span className="text-slate-500">Seats </span>
+                          <span className="text-slate-200 font-semibold tabular-nums">
+                            {t.seatedCount}/{t.maxSeats}
+                          </span>
+                          <span className="text-slate-500"> · {openSeats} open</span>
+                        </div>
+                        <div className="text-right truncate" title={t.creatorAddress ?? undefined}>
+                          <span className="text-slate-500">Creator </span>
+                          <span className="font-mono text-slate-300">{shortenHexAddress(t.creatorAddress)}</span>
+                        </div>
+                      </div>
+                      <div className="flex gap-2">
+                        <Link href={`/poker/${t.id}`} className={btnSecondary}>
+                          Watch
+                        </Link>
+                        {isConnected && (
+                          onboarding.currentStep < 4 ? (
+                            <button
+                              type="button"
+                              onClick={() => setShowOnboardingWizard(true)}
+                              className={btnPrimary}
+                              style={{
+                                background: 'linear-gradient(135deg, #f59e0b, #ef4444)',
+                              }}
+                            >
+                              Get chips →
+                            </button>
+                          ) : (
+                            <button
+                              type="button"
+                              onClick={() => {
+                                const bbChips = BigInt(t.bigBlind);
+                                const { maxChips } = getCashBuyInBoundsChips(bbChips);
+                                setBuyIn(maxChips.toString());
+                                setJoinModal({ tableId: t.id, hasPin: t.hasPin, bigBlindChips: t.bigBlind });
+                                setJoinPin('');
+                              }}
+                              className={btnPrimary}
+                            >
+                              Sit
+                            </button>
+                          )
+                        )}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
               <div
-                className="surface-splash-panel overflow-x-auto lg:overflow-x-visible border-2 !border-[rgba(255,255,255,0.1)]"
+                className="hidden md:block surface-splash-panel overflow-x-auto lg:overflow-x-visible border-2 !border-[rgba(255,255,255,0.1)]"
               >
                 <div className="surface-splash-panel-glow" aria-hidden />
                 <div className="relative z-10 min-w-0">
@@ -997,11 +1091,20 @@ export default function PokerLobbyPage() {
                 </table>
                 </div>
               </div>
+              </>
             )}
 
-            <PokerTopPlayers myAddress={address ?? null} />
+            </div>
 
-            <div className="mt-6">
+            <div className="order-5 lg:order-none mt-6 sm:mt-8">
+              <PokerHouseRecords />
+            </div>
+
+            <div className="order-6 lg:order-none">
+            <PokerTopPlayers myAddress={address ?? null} />
+            </div>
+
+            <div id="faq" className="order-7 lg:order-none mt-6 scroll-mt-24">
               <GameFAQ
                 game="poker"
                 addresses={[
@@ -1123,6 +1226,19 @@ export default function PokerLobbyPage() {
         )}
 
           <PokerHowToPlayModal isOpen={showHowToPlay} onClose={() => setShowHowToPlay(false)} />
+          <PokerHeroCreatePickerModal
+            isOpen={showCreatePicker}
+            onClose={() => setShowCreatePicker(false)}
+            isConnected={isConnected}
+            onCreateCash={() =>
+              setCreateModal({ smallBlind: '10', bigBlind: '20', maxSeats: 10, pinCode: '', pinEnabled: false })
+            }
+            onCreateTournament={() => {
+              setLobbyTab('tournaments');
+              setTournamentCreateModalOpen(true);
+            }}
+            onCreateMtt={() => router.push('/poker/tournaments/create-mtt')}
+          />
           <PokerStatsModal
             isOpen={showStatsModal}
             onClose={() => setShowStatsModal(false)}

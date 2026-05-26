@@ -1,0 +1,757 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Poker Face Layout Options — MORBIUS.IO</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@500;700&family=Outfit:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
+  <style>
+    :root {
+      --bg: #030712;
+      --panel-a: rgba(20, 20, 20, 0.92);
+      --panel-b: rgba(40, 40, 40, 0.55);
+      --cyan: rgba(34, 211, 238, 0.35);
+      --cyan-solid: #22d3ee;
+      --cyan-dim: rgba(34, 211, 238, 0.18);
+      --emerald: #34d399;
+      --text: #f8fafc;
+      --muted: #94a3b8;
+      --inset: inset 0 3px 6px rgba(0, 0, 0, 0.8), inset 0 -3px 6px rgba(255, 255, 255, 0.08), 0 1px 3px rgba(0, 0, 0, 0.5);
+      --border: 1px inset rgba(60, 60, 60, 0.5);
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: 'Outfit', system-ui, sans-serif;
+      background:
+        radial-gradient(circle at 20% 10%, rgba(34, 211, 238, 0.08), transparent 40%),
+        radial-gradient(circle at 80% 90%, rgba(168, 85, 247, 0.06), transparent 45%),
+        var(--bg);
+      color: var(--text);
+      min-height: 100vh;
+      padding: 2rem 1.25rem 4rem;
+    }
+
+    .page-header {
+      max-width: 1200px;
+      margin: 0 auto 2.5rem;
+      text-align: center;
+    }
+
+    .page-header h1 {
+      font-size: clamp(1.5rem, 3vw, 2rem);
+      font-weight: 800;
+      letter-spacing: -0.03em;
+    }
+
+    .page-header p {
+      margin-top: 0.75rem;
+      color: var(--muted);
+      max-width: 640px;
+      margin-inline: auto;
+      line-height: 1.55;
+      font-size: 0.95rem;
+    }
+
+    .options {
+      max-width: 1200px;
+      margin: 0 auto;
+      display: flex;
+      flex-direction: column;
+      gap: 3.5rem;
+    }
+
+    .option-block {
+      scroll-margin-top: 1rem;
+    }
+
+    .option-label {
+      display: flex;
+      align-items: center;
+      gap: 0.75rem;
+      margin-bottom: 1rem;
+    }
+
+    .option-label .badge {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 0.65rem;
+      font-weight: 700;
+      letter-spacing: 0.2em;
+      text-transform: uppercase;
+      padding: 0.35rem 0.65rem;
+      border-radius: 999px;
+      background: linear-gradient(135deg, rgba(8, 145, 178, 0.35), rgba(37, 99, 235, 0.25));
+      border: 1px solid rgba(34, 211, 238, 0.35);
+      color: var(--cyan-solid);
+    }
+
+    .option-label h2 {
+      font-size: 1.15rem;
+      font-weight: 700;
+      letter-spacing: -0.02em;
+    }
+
+    .option-label span.desc {
+      color: var(--muted);
+      font-size: 0.85rem;
+      font-weight: 500;
+    }
+
+    /* Shared panel shell */
+    .poker-face {
+      border-radius: 1.25rem;
+      overflow: hidden;
+      border: 1px solid rgba(34, 211, 238, 0.25);
+      background: linear-gradient(135deg, #0c1929 0%, #050a14 100%);
+      box-shadow: 0 24px 60px -20px rgba(0, 0, 0, 0.75);
+      position: relative;
+    }
+
+    .poker-face::before {
+      content: '';
+      position: absolute;
+      inset: 0 0 auto 0;
+      height: 1px;
+      background: linear-gradient(90deg, transparent, rgba(34, 211, 238, 0.55), transparent);
+    }
+
+    .inner { padding: 1.5rem 1.75rem 1.75rem; }
+
+    .title-row {
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      gap: 1rem;
+      margin-bottom: 1.5rem;
+    }
+
+    .title-left {
+      display: flex;
+      gap: 0.65rem;
+      min-width: 0;
+    }
+
+    .accent-bar {
+      width: 4px;
+      border-radius: 999px;
+      background: linear-gradient(to bottom, #22d3ee, #a855f7);
+      flex-shrink: 0;
+      height: 1.75rem;
+      margin-top: 0.15rem;
+    }
+
+    .eyebrow {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 0.62rem;
+      letter-spacing: 0.35em;
+      text-transform: uppercase;
+      color: var(--cyan-solid);
+      font-weight: 700;
+    }
+
+    .identity {
+      margin-top: 0.25rem;
+      font-size: 0.95rem;
+      font-weight: 600;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .identity .dot { color: #64748b; margin: 0 0.35rem; }
+    .identity .mod { color: var(--cyan-solid); font-style: italic; font-weight: 500; margin-left: 0.35rem; }
+
+    .rank {
+      text-align: right;
+      flex-shrink: 0;
+    }
+
+    .rank-label {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 0.58rem;
+      letter-spacing: 0.3em;
+      text-transform: uppercase;
+      color: #64748b;
+      font-weight: 700;
+    }
+
+    .rank-num {
+      font-size: 2.75rem;
+      font-weight: 800;
+      line-height: 0.9;
+      margin-top: 0.35rem;
+      letter-spacing: -0.04em;
+    }
+
+    .avatar-wrap {
+      position: relative;
+      border-radius: 1rem;
+      aspect-ratio: 1;
+      overflow: hidden;
+      background:
+        radial-gradient(circle at 30% 20%, rgba(34, 211, 238, 0.2), transparent 55%),
+        radial-gradient(circle at 70% 80%, rgba(168, 85, 247, 0.16), transparent 55%),
+        linear-gradient(160deg, #0b1a2e, #050a14);
+      box-shadow: 0 0 24px -2px rgba(34, 211, 238, 0.45), inset 0 0 0 1px rgba(34, 211, 238, 0.35);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 3.5rem;
+    }
+
+    .rep-badge {
+      position: absolute;
+      bottom: -0.5rem;
+      right: -0.5rem;
+      width: 2.75rem;
+      height: 2.75rem;
+      border-radius: 999px;
+      border: 2px solid rgba(34, 211, 238, 0.55);
+      background: radial-gradient(circle at 30% 30%, rgba(8, 145, 178, 0.35), rgba(15, 23, 42, 0.97));
+      box-shadow: 0 0 18px rgba(6, 182, 212, 0.45), 0 0 0 3px #050a14;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 0.5rem;
+      letter-spacing: 0.2em;
+      color: #67e8f9;
+      font-weight: 700;
+    }
+
+    .customize-btn {
+      position: absolute;
+      left: 28%;
+      bottom: -1rem;
+      transform: translateX(-50%);
+      padding: 0.45rem 1rem;
+      border-radius: 0.75rem;
+      border: none;
+      font-size: 0.68rem;
+      font-weight: 800;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      color: white;
+      cursor: pointer;
+      background: linear-gradient(135deg, #0891b2, #2563eb);
+      box-shadow: 0 8px 22px -6px rgba(6, 182, 212, 0.65);
+      white-space: nowrap;
+    }
+
+    .balance-card {
+      border-radius: 1rem;
+      padding: 1.1rem 1.25rem;
+      background: linear-gradient(325deg, var(--panel-a), var(--panel-b));
+      box-shadow: var(--inset);
+      border: var(--border);
+      min-width: 0;
+    }
+
+    .balance-card .label {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 0.62rem;
+      letter-spacing: 0.22em;
+      text-transform: uppercase;
+      color: #64748b;
+      font-weight: 700;
+    }
+
+    .balance-card .value {
+      margin-top: 0.5rem;
+      font-size: clamp(1.75rem, 4vw, 2.35rem);
+      font-weight: 800;
+      letter-spacing: -0.03em;
+      line-height: 1;
+      tabular-nums: true;
+      font-variant-numeric: tabular-nums;
+    }
+
+    .balance-card .unit {
+      margin-top: 0.45rem;
+      font-size: 0.72rem;
+      color: #64748b;
+      text-transform: uppercase;
+      letter-spacing: 0.15em;
+      font-weight: 600;
+    }
+
+    .balance-card.cyan { border-color: rgba(34, 211, 238, 0.3); }
+    .balance-card.cyan .value { color: #a5f3fc; }
+    .balance-card.emerald { border-color: rgba(52, 211, 153, 0.35); background: linear-gradient(325deg, rgba(6, 78, 59, 0.45), rgba(20, 20, 20, 0.85)); }
+    .balance-card.emerald .value { color: #6ee7b7; font-size: clamp(2rem, 5vw, 2.75rem); }
+
+    .btn-primary {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 0.4rem;
+      padding: 0.7rem 1rem;
+      border-radius: 0.85rem;
+      border: none;
+      font-size: 0.78rem;
+      font-weight: 800;
+      color: white;
+      cursor: pointer;
+      background: linear-gradient(135deg, #0891b2, #2563eb);
+      box-shadow: 0 6px 16px -6px rgba(6, 182, 212, 0.5);
+    }
+
+    .btn-secondary {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 0.4rem;
+      padding: 0.7rem 1rem;
+      border-radius: 0.85rem;
+      border: 1px solid rgba(255, 255, 255, 0.15);
+      background: transparent;
+      font-size: 0.78rem;
+      font-weight: 700;
+      color: #e2e8f0;
+      cursor: pointer;
+    }
+
+    .btn-exchange {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 1rem;
+      width: 100%;
+      padding: 1rem 1.25rem;
+      border-radius: 1rem;
+      border: 1px solid rgba(34, 211, 238, 0.3);
+      background: linear-gradient(135deg, rgba(8, 145, 178, 0.12), rgba(37, 99, 235, 0.08));
+      color: #a5f3fc;
+      cursor: pointer;
+      text-align: left;
+    }
+
+    .btn-exchange strong { display: block; font-size: 0.95rem; color: white; margin-bottom: 0.2rem; }
+    .btn-exchange span { font-size: 0.78rem; color: #94a3b8; }
+
+    .footer-actions {
+      margin-top: 1.5rem;
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 0.75rem;
+    }
+
+    .footer-actions button {
+      padding: 0.85rem 1rem;
+      border-radius: 0.85rem;
+      font-size: 0.8rem;
+      font-weight: 800;
+      cursor: pointer;
+    }
+
+    .footer-actions .outline {
+      border: 1px solid rgba(255, 255, 255, 0.15);
+      background: transparent;
+      color: #e2e8f0;
+    }
+
+    /* ── OPTION A: Wallet-first grid ── */
+    .layout-a .body {
+      display: grid;
+      grid-template-columns: 140px 1fr;
+      gap: 1.25rem;
+      align-items: start;
+    }
+
+    .layout-a .wallet-grid {
+      display: grid;
+      grid-template-columns: repeat(2, 1fr);
+      gap: 0.75rem;
+    }
+
+    .layout-a .wallet-grid .balance-card.emerald {
+      grid-column: 1 / -1;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 1rem;
+      padding: 1.35rem 1.5rem;
+    }
+
+    .layout-a .wallet-grid .balance-card.emerald .chip-side { text-align: right; }
+    .layout-a .actions-row {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 0.65rem;
+      margin-top: 0.75rem;
+    }
+
+    .layout-a .exchange-wrap { margin-top: 0.75rem; }
+
+    /* ── OPTION B: Hero chips stack ── */
+    .layout-b .hero-chips {
+      margin-bottom: 1rem;
+      padding: 1.5rem 1.75rem;
+      border-radius: 1.1rem;
+      border: 1px solid rgba(52, 211, 153, 0.4);
+      background:
+        radial-gradient(circle at 85% 20%, rgba(52, 211, 153, 0.15), transparent 45%),
+        linear-gradient(325deg, rgba(6, 78, 59, 0.5), rgba(20, 20, 20, 0.9));
+      box-shadow: var(--inset), 0 0 40px -10px rgba(52, 211, 153, 0.25);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 1rem;
+      flex-wrap: wrap;
+    }
+
+    .layout-b .hero-chips .value { font-size: clamp(2.5rem, 6vw, 3.25rem); font-weight: 800; color: #6ee7b7; letter-spacing: -0.04em; }
+    .layout-b .hero-chips .sub { font-size: 0.8rem; color: #94a3b8; margin-top: 0.35rem; }
+
+    .layout-b .mid-row {
+      display: grid;
+      grid-template-columns: 120px 1fr 1fr;
+      gap: 0.85rem;
+      align-items: stretch;
+    }
+
+    .layout-b .mid-row .avatar-col { position: relative; padding-bottom: 1rem; }
+
+    .layout-b .exchange-card {
+      margin-top: 0.85rem;
+      padding: 1.25rem;
+      border-radius: 1rem;
+      border: var(--border);
+      background: linear-gradient(325deg, var(--panel-a), var(--panel-b));
+      box-shadow: var(--inset);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 1rem;
+      flex-wrap: wrap;
+    }
+
+    .layout-b .exchange-card .left strong { font-size: 1rem; display: block; margin-bottom: 0.25rem; }
+    .layout-b .exchange-card .left p { font-size: 0.8rem; color: #94a3b8; max-width: 28rem; line-height: 1.45; }
+
+    .layout-b .wallet-actions-inline {
+      display: flex;
+      gap: 0.5rem;
+      flex-shrink: 0;
+    }
+
+    /* ── OPTION C: Three-column vault ── */
+    .layout-c .top-band {
+      display: flex;
+      align-items: center;
+      gap: 1rem;
+      margin-bottom: 1.25rem;
+      padding-bottom: 1.25rem;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+    }
+
+    .layout-c .top-band .avatar-wrap { width: 72px; height: 72px; font-size: 2rem; flex-shrink: 0; }
+    .layout-c .top-band .customize-btn { display: none; }
+    .layout-c .top-band .rep-badge { width: 2rem; height: 2rem; font-size: 0.4rem; bottom: -0.25rem; right: -0.25rem; }
+
+    .layout-c .vault {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 0.85rem;
+    }
+
+    .layout-c .vault .balance-card {
+      min-height: 148px;
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+    }
+
+    .layout-c .vault .balance-card .value { font-size: clamp(1.5rem, 3vw, 2rem); }
+
+    .layout-c .exchange-vault {
+      margin-top: 0.85rem;
+      grid-column: 1 / -1;
+      padding: 1.35rem 1.5rem;
+      border-radius: 1rem;
+      border: 1px solid rgba(34, 211, 238, 0.35);
+      background:
+        radial-gradient(circle at 50% 50%, rgba(34, 211, 238, 0.12), transparent 70%),
+        linear-gradient(325deg, var(--panel-a), var(--panel-b));
+      box-shadow: var(--inset);
+      display: grid;
+      grid-template-columns: 1fr auto;
+      gap: 1rem;
+      align-items: center;
+    }
+
+    .layout-c .exchange-vault h3 { font-size: 1.05rem; font-weight: 800; margin-bottom: 0.35rem; }
+    .layout-c .exchange-vault p { font-size: 0.8rem; color: #94a3b8; line-height: 1.45; }
+
+    .layout-c .cta-cluster {
+      display: flex;
+      flex-direction: column;
+      gap: 0.5rem;
+      min-width: 160px;
+    }
+
+    .layout-c .cta-cluster .btn-primary,
+    .layout-c .cta-cluster .btn-secondary { width: 100%; }
+
+    @media (max-width: 720px) {
+      .layout-a .body { grid-template-columns: 1fr; }
+      .layout-a .avatar-wrap { max-width: 120px; margin: 0 auto 1rem; }
+      .layout-b .mid-row { grid-template-columns: 1fr; }
+      .layout-b .mid-row .avatar-col { max-width: 120px; margin: 0 auto; }
+      .layout-c .vault { grid-template-columns: 1fr; }
+      .layout-c .exchange-vault { grid-template-columns: 1fr; }
+      .footer-actions { grid-template-columns: 1fr; }
+    }
+  </style>
+</head>
+<body>
+  <header class="page-header">
+    <h1>Your Poker Face — layout options</h1>
+    <p>Three mockups with the chart and stat row removed. Balances and chip exchange are the hero content. Sample data matches your current profile.</p>
+  </header>
+
+  <main class="options">
+
+    <!-- OPTION A -->
+    <section class="option-block" id="option-a">
+      <div class="option-label">
+        <span class="badge">Option A</span>
+        <div>
+          <h2>Wallet-first grid</h2>
+          <span class="desc">Compact avatar sidebar · chips as a full-width hero strip · deposit/withdraw tucked under</span>
+        </div>
+      </div>
+
+      <article class="poker-face layout-a">
+        <div class="inner">
+          <div class="title-row">
+            <div class="title-left">
+              <div class="accent-bar"></div>
+              <div>
+                <div class="eyebrow">Your poker face</div>
+                <div class="identity">Kyle<span class="dot">·</span>🐟 Fish <span class="mod">/ loose-passive</span></div>
+              </div>
+            </div>
+            <div class="rank">
+              <div class="rank-label">Global rank</div>
+              <div class="rank-num">#28</div>
+            </div>
+          </div>
+
+          <div class="body">
+            <div style="position:relative;padding-bottom:1.25rem;">
+              <div class="avatar-wrap">🎩</div>
+              <div class="rep-badge">REP +</div>
+              <button class="customize-btn">✎ Customize</button>
+            </div>
+
+            <div>
+              <div class="wallet-grid">
+                <div class="balance-card emerald">
+                  <div>
+                    <div class="label">Poker chips</div>
+                    <div class="value">1,019</div>
+                    <div class="unit">Ready to play</div>
+                  </div>
+                  <div class="chip-side">
+                    <div class="label" style="opacity:0">.</div>
+                    <div style="font-size:2.5rem;line-height:1;">🪙</div>
+                  </div>
+                </div>
+                <div class="balance-card cyan">
+                  <div class="label">Deposited morbius</div>
+                  <div class="value">64K</div>
+                  <div class="unit">Play balance</div>
+                </div>
+                <div class="balance-card">
+                  <div class="label">In-wallet</div>
+                  <div class="value">113K</div>
+                  <div class="unit">MORBIUS</div>
+                </div>
+              </div>
+
+              <div class="actions-row">
+                <button class="btn-primary">↓ Deposit</button>
+                <button class="btn-secondary">↑ Withdraw</button>
+              </div>
+
+              <div class="exchange-wrap">
+                <button class="btn-exchange">
+                  <div>
+                    <strong>Open chip exchange</strong>
+                    <span>Convert play MORBIUS ↔ poker chips</span>
+                  </div>
+                  <span style="font-size:1.25rem;">⇄</span>
+                </button>
+              </div>
+            </div>
+          </div>
+
+          <div class="footer-actions">
+            <button class="btn-primary">View all stats →</button>
+            <button class="outline">View all transactions →</button>
+          </div>
+        </div>
+      </article>
+    </section>
+
+    <!-- OPTION B -->
+    <section class="option-block" id="option-b">
+      <div class="option-label">
+        <span class="badge">Option B</span>
+        <div>
+          <h2>Hero chips banner</h2>
+          <span class="desc">Chips dominate the top · MORBIUS cards + avatar in a row · exchange as a descriptive panel</span>
+        </div>
+      </div>
+
+      <article class="poker-face layout-b">
+        <div class="inner">
+          <div class="title-row">
+            <div class="title-left">
+              <div class="accent-bar"></div>
+              <div>
+                <div class="eyebrow">Your poker face</div>
+                <div class="identity">Kyle<span class="dot">·</span>🐟 Fish <span class="mod">/ loose-passive</span></div>
+              </div>
+            </div>
+            <div class="rank">
+              <div class="rank-label">Global rank</div>
+              <div class="rank-num">#28</div>
+            </div>
+          </div>
+
+          <div class="hero-chips">
+            <div>
+              <div class="label" style="font-family:'JetBrains Mono',monospace;font-size:0.62rem;letter-spacing:0.22em;text-transform:uppercase;color:#6ee7b7;font-weight:700;">Your chip stack</div>
+              <div class="value">1,019</div>
+              <div class="sub">Poker chips · seat at any cash table or tournament</div>
+            </div>
+            <button class="btn-primary" style="padding:0.85rem 1.35rem;">⇄ Exchange chips</button>
+          </div>
+
+          <div class="mid-row">
+            <div class="avatar-col">
+              <div class="avatar-wrap">🎩</div>
+              <div class="rep-badge">REP +</div>
+              <button class="customize-btn">✎ Customize</button>
+            </div>
+            <div class="balance-card cyan">
+              <div class="label">Deposited morbius</div>
+              <div class="value">64K</div>
+              <div class="unit">Play balance on platform</div>
+            </div>
+            <div class="balance-card">
+              <div class="label">In-wallet morbius</div>
+              <div class="value">113K</div>
+              <div class="unit">In your connected wallet</div>
+            </div>
+          </div>
+
+          <div class="exchange-card">
+            <div class="left">
+              <strong>Fund your stack</strong>
+              <p>Deposit MORBIUS from your wallet, then exchange play balance into chips before joining a table.</p>
+            </div>
+            <div class="wallet-actions-inline">
+              <button class="btn-primary">↓ Deposit</button>
+              <button class="btn-secondary">↑ Withdraw</button>
+            </div>
+          </div>
+
+          <div class="footer-actions">
+            <button class="btn-primary">View all stats →</button>
+            <button class="outline">View all transactions →</button>
+          </div>
+        </div>
+      </article>
+    </section>
+
+    <!-- OPTION C -->
+    <section class="option-block" id="option-c">
+      <div class="option-label">
+        <span class="badge">Option C</span>
+        <div>
+          <h2>Three-column vault</h2>
+          <span class="desc">Equal-weight balance pillars · avatar in a slim header band · exchange + wallet CTAs grouped</span>
+        </div>
+      </div>
+
+      <article class="poker-face layout-c">
+        <div class="inner">
+          <div class="title-row" style="margin-bottom:0.75rem;">
+            <div class="title-left">
+              <div class="accent-bar"></div>
+              <div>
+                <div class="eyebrow">Your poker face</div>
+                <div class="identity">Kyle<span class="dot">·</span>🐟 Fish <span class="mod">/ loose-passive</span></div>
+              </div>
+            </div>
+            <div class="rank">
+              <div class="rank-label">Global rank</div>
+              <div class="rank-num">#28</div>
+            </div>
+          </div>
+
+          <div class="top-band">
+            <div style="position:relative;">
+              <div class="avatar-wrap">🎩</div>
+              <div class="rep-badge">REP</div>
+            </div>
+            <div style="flex:1;min-width:0;">
+              <div style="font-size:0.8rem;color:#94a3b8;line-height:1.5;">Your balances at a glance — deposit, exchange, and play without digging through stats.</div>
+              <button class="customize-btn" style="position:static;transform:none;margin-top:0.65rem;display:inline-block;">✎ Customize avatar</button>
+            </div>
+          </div>
+
+          <div class="vault">
+            <div class="balance-card emerald">
+              <div>
+                <div class="label">Poker chips</div>
+                <div class="value">1,019</div>
+              </div>
+              <div class="unit">At tables</div>
+            </div>
+            <div class="balance-card cyan">
+              <div>
+                <div class="label">Deposited</div>
+                <div class="value">64K</div>
+              </div>
+              <div class="unit">MORBIUS play</div>
+            </div>
+            <div class="balance-card">
+              <div>
+                <div class="label">In-wallet</div>
+                <div class="value">113K</div>
+              </div>
+              <div class="unit">MORBIUS</div>
+            </div>
+
+            <div class="exchange-vault">
+              <div>
+                <h3>Chip exchange</h3>
+                <p>Move MORBIUS from your play balance into chips — or cash chips back out before withdrawing.</p>
+              </div>
+              <div class="cta-cluster">
+                <button class="btn-primary">⇄ Open exchange</button>
+                <button class="btn-primary">↓ Deposit</button>
+                <button class="btn-secondary">↑ Withdraw</button>
+              </div>
+            </div>
+          </div>
+
+          <div class="footer-actions">
+            <button class="btn-primary">View all stats →</button>
+            <button class="outline">View all transactions →</button>
+          </div>
+        </div>
+      </article>
+    </section>
+
+  </main>
+</body>
+</html>
