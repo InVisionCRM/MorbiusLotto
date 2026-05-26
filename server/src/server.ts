@@ -1510,10 +1510,13 @@ async function initializeServices() {
       }
     });
 
-    app.post('/api/poker/chips/purchase', express.json(), requireAuth(authService), async (req, res) => {
+    app.post('/api/poker/chips/purchase', express.json(), async (req, res) => {
       try {
-        const { chips } = req.body ?? {};
-        const normalized = req.user!.address.toLowerCase();
+        const { address, chips } = req.body ?? {};
+        if (!address || !/^0x[a-fA-F0-9]{40}$/i.test(String(address))) {
+          return res.status(400).json({ error: 'address required (0x…42 hex)' });
+        }
+        const normalized = String(address).toLowerCase();
         let chipsBn: bigint;
         try {
           chipsBn = BigInt(String(chips ?? '0'));
@@ -1549,10 +1552,13 @@ async function initializeServices() {
       }
     });
 
-    app.post('/api/poker/chips/cashout', express.json(), requireAuth(authService), async (req, res) => {
+    app.post('/api/poker/chips/cashout', express.json(), async (req, res) => {
       try {
-        const { chips } = req.body ?? {};
-        const normalized = req.user!.address.toLowerCase();
+        const { address, chips } = req.body ?? {};
+        if (!address || !/^0x[a-fA-F0-9]{40}$/i.test(String(address))) {
+          return res.status(400).json({ error: 'address required (0x…42 hex)' });
+        }
+        const normalized = String(address).toLowerCase();
         let chipsBn: bigint;
         try {
           chipsBn = BigInt(String(chips ?? '0'));
