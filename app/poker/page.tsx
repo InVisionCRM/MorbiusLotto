@@ -32,6 +32,7 @@ import { PokerStatsModal } from '@/components/poker/PokerStatsModal';
 import { PokerHouseRecords } from '@/components/poker/PokerHouseRecords';
 import { PokerTopPlayers } from '@/components/poker/PokerTopPlayers';
 import { PokerHeroCreatePickerModal } from '@/components/poker/PokerHeroCreatePickerModal';
+import { PokerLobbyDesktopHeader } from '@/components/poker/PokerLobbyDesktopHeader';
 import GlobalMainNav from '@/components/shared/GlobalMainNav';
 import { PokerTournamentLobby } from '@/components/poker/tournament/PokerTournamentLobby';
 import { TelegramAlerts } from '@/components/telegram/TelegramAlerts';
@@ -216,6 +217,11 @@ export default function PokerLobbyPage() {
       lobbyRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
     });
   }, [setLobbyTab]);
+
+  const playersSeated = React.useMemo(
+    () => tables.reduce((sum, t) => sum + (t.seatedCount ?? 0), 0),
+    [tables],
+  );
 
   useEffect(() => {
     if (activeTab !== 'tournaments') setTournamentCreateModalOpen(false);
@@ -515,6 +521,22 @@ export default function PokerLobbyPage() {
           }}
         >
           <div className="absolute inset-0 h-full min-h-screen w-full bg-[radial-gradient(ellipse_80%_60%_at_50%_0%,rgba(34,211,238,0.10),transparent_70%)] pointer-events-none" />
+          <PokerLobbyDesktopHeader
+            liveTableCount={tables.length}
+            playersSeated={playersSeated}
+            isConnected={isConnected}
+            morbiusBalanceWei={balance}
+            chipBalance={chipBalance}
+            onDeposit={() => {
+              setWalletDefaultTab('deposit');
+              setShowDepositModal(true);
+            }}
+            onWithdraw={() => {
+              setWalletDefaultTab('withdraw');
+              setShowDepositModal(true);
+            }}
+            onOpenExchange={() => setShowChipExchange(true)}
+          />
           <div className="relative flex flex-1 flex-col w-full max-w-7xl mx-auto px-3 py-4 sm:px-6 sm:py-8">
             {/* ── Hero Section ── */}
             <div
@@ -601,9 +623,9 @@ export default function PokerLobbyPage() {
                     </button>
                   </div>
 
-                  {/* Live badge */}
+                  {/* Live badge — mobile / small screens; desktop uses PokerLobbyDesktopHeader */}
                   <div
-                    className="inline-flex items-center gap-2.5 px-4 py-1.5 sm:px-5 sm:py-2 rounded-full mb-4 sm:mb-8"
+                    className="inline-flex md:hidden items-center gap-2.5 px-4 py-1.5 sm:px-5 sm:py-2 rounded-full mb-4 sm:mb-8"
                     style={{
                       background: 'rgba(34,211,238,0.06)',
                       border: '1px solid rgba(34,211,238,0.15)',
