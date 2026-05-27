@@ -46,6 +46,7 @@ function resolveTestDatabaseUrl(): string {
 }
 
 // Test player addresses (valid 42-char Ethereum addresses)
+// Indices 0-2: reconstruction tests | 3-5: autofold tests | 6-8: AFK tests
 export const TEST_PLAYERS = [
   '0x000000000000000000000000000000000000dead',
   '0x000000000000000000000000000000000000beef',
@@ -53,6 +54,9 @@ export const TEST_PLAYERS = [
   '0x000000000000000000000000000000000000babe',
   '0x000000000000000000000000000000000000face',
   '0x000000000000000000000000000000000000fade',
+  '0x0000000000000000000000000000000000001111',
+  '0x0000000000000000000000000000000000002222',
+  '0x0000000000000000000000000000000000003333',
 ];
 
 // 10,000,000 MORBIUS (18 decimals) per test player — blackjack / on-chain balance

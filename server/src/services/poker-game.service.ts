@@ -221,6 +221,15 @@ function chevtekStreetToPoker(round: BettingRound | undefined, hasWinners: boole
 // Rake configuration (cash games only — tournaments use virtual chips)
 // ---------------------------------------------------------------------------
 const RAKE_PERCENT = 5; // 5% of each pot
+
+// Cash-game AFK auto-sit-out threshold: after this many consecutive timeouts
+// (auto-folds or auto-checks with no voluntary action between), the player is
+// flipped to `status = 'sitting_out'` and dealt out of future hands until they
+// click "I'm Back". In tournaments this counter still increments for UI/telemetry
+// purposes, but does NOT change seat eligibility — AFK tournament players
+// continue to be dealt in and post blinds until they bust out, since granting
+// them a chip-preservation refuge would be unfair to the rest of the field.
+const POKER_AFK_KICK_AFTER = 2;
 // Post-showdown pause before the next hand is dealt. Keep in sync with
 // `POKER_BETWEEN_HANDS_DELAY_MS` in `lib/poker-between-hands-delay.ts`.
 const SHOWDOWN_DELAY_MS = 15_000;
@@ -2064,6 +2073,12 @@ export class PokerGameService {
   // ---------------------------------------------------------------------------
 
   async setSitOut(tableId: string, playerAddress: string): Promise<PokerTableState> {
+    // Defense in depth: the client hides the Sit Out button in tournaments,
+    // but reject the RPC server-side too so a hand-crafted message can't be
+    // used to dodge blinds in a tournament.
+    if (await this.isTournamentTable(tableId)) {
+      throw new Error('Cannot sit out in a tournament');
+    }
     return this.withTableLock(tableId, async () => {
       const pool = this.getPool();
       const normalized = this.normalizeAddress(playerAddress);
@@ -2102,6 +2117,38 @@ export class PokerGameService {
       await this.broadcastState(tableId);
       return this.getTableState(tableId, normalized);
     });
+  }
+
+  // ---------------------------------------------------------------------------
+  // Disconnect tracking — extends the auto-fold clock from 60s → 90s when the
+  // player's WebSocket has dropped. See autoFoldTimedOutTurns and the
+  // ws.on('close') handler in websocket.service.impl.js.
+  // ---------------------------------------------------------------------------
+
+  /** Stamp disconnected_at on the player's seat. No-op if seat doesn't exist. */
+  async markSeatDisconnected(tableId: string, playerAddress: string): Promise<void> {
+    const pool = this.getPool();
+    const normalized = this.normalizeAddress(playerAddress);
+    await pool.query(
+      `UPDATE poker_seats
+       SET disconnected_at = NOW()
+       WHERE table_id = $1 AND LOWER(player_address) = LOWER($2)
+         AND disconnected_at IS NULL`,
+      [tableId, normalized]
+    );
+  }
+
+  /** Clear disconnected_at on the player's seat. Called on any reconnect signal. */
+  async markSeatConnected(tableId: string, playerAddress: string): Promise<void> {
+    const pool = this.getPool();
+    const normalized = this.normalizeAddress(playerAddress);
+    await pool.query(
+      `UPDATE poker_seats
+       SET disconnected_at = NULL
+       WHERE table_id = $1 AND LOWER(player_address) = LOWER($2)
+         AND disconnected_at IS NOT NULL`,
+      [tableId, normalized]
+    );
   }
 
   /** Kick players who have been sitting out for >= 15 minutes (cash games only). */
@@ -2154,9 +2201,18 @@ export class PokerGameService {
       throw new Error('Invalid blinds');
     }
 
+    // Sitting-out exclusion is CASH-ONLY. In tournaments, every seated player
+    // (including AFK / "sitting out") is dealt in and posts blinds each hand,
+    // bleeding out naturally — granting a chip-preservation refuge would be
+    // unfair to the rest of the field. The voluntary Sit Out button is also
+    // blocked server-side for tournament tables (see setSitOut below).
+    const isTournament = await this.isTournamentTable(tableId);
     const seatsResult = await pool.query(
-      `SELECT position, player_address, stack FROM poker_seats
-       WHERE table_id = $1 AND status != 'sitting_out' ORDER BY position`,
+      isTournament
+        ? `SELECT position, player_address, stack FROM poker_seats
+           WHERE table_id = $1 ORDER BY position`
+        : `SELECT position, player_address, stack FROM poker_seats
+           WHERE table_id = $1 AND status != 'sitting_out' ORDER BY position`,
       [tableId]
     );
     const withStack = seatsResult.rows.filter((r: any) => Number(r.stack ?? 0) > 0);
@@ -2485,9 +2541,13 @@ export class PokerGameService {
         throw new Error('Invalid action');
     }
 
-    // Reset AFK timeout counter (and un-sit if sitting_out) on voluntary action
+    // Reset AFK timeout counter (and un-sit if sitting_out) on voluntary action.
+    // Also clear disconnected_at — taking an action is irrefutable proof the
+    // player is back, so the extended 90-second clock for disconnected seats
+    // should revert to the normal 60-second one for their next turn.
     await pool.query(
-      `UPDATE poker_seats SET consecutive_timeouts = 0, status = 'active'
+      `UPDATE poker_seats
+       SET consecutive_timeouts = 0, status = 'active', disconnected_at = NULL
        WHERE table_id = $1 AND player_address = $2`,
       [tableId, normalized]
     );
@@ -3019,12 +3079,23 @@ export class PokerGameService {
 
   async autoFoldTimedOutTurns(): Promise<string[]> {
     const pool = this.getPool();
+    // The auto-fold clock is 60 seconds for a connected player. If the player's
+    // WebSocket has dropped (disconnected_at IS NOT NULL on their seat), the
+    // threshold extends to 90 seconds so a reconnecting player has room to
+    // resume play before being auto-folded. The flag is cleared on any
+    // reconnect signal (poker_get_state / poker_join_table / voluntary action).
     const timedOut = await pool.query(
       `SELECT h.id AS hand_id, h.table_id, h.acting_position
        FROM poker_hands h
+       JOIN poker_seats ps ON ps.table_id = h.table_id AND ps.position = h.acting_position
        WHERE h.completed_at IS NULL
          AND h.acting_position IS NOT NULL
-         AND h.turn_started_at < NOW() - INTERVAL '60 seconds'`
+         AND h.turn_started_at < NOW() - (
+           CASE WHEN ps.disconnected_at IS NOT NULL
+                THEN INTERVAL '90 seconds'
+                ELSE INTERVAL '60 seconds'
+           END
+         )`
     );
 
     const folded: string[] = [];
@@ -3063,6 +3134,43 @@ export class PokerGameService {
              VALUES ($1, $2, $3, $4, 0, $5)`,
             [row.hand_id, actingAddr, streetBefore, timeoutAction, nextOrder]
           );
+
+          // Increment AFK timeout counter for the player who just got auto-actioned.
+          // The counter is reset to 0 on any voluntary action (see PlayerAction
+          // handler) or on sit-back. In CASH games, hitting POKER_AFK_KICK_AFTER
+          // flips the player to sitting_out so we stop auto-folding them
+          // indefinitely; from there the 15-min kickStaleSitOuts sweep will
+          // return their stack. In TOURNAMENTS the counter still increments for
+          // UI/telemetry, but the status flip is suppressed — tournament AFK
+          // players keep getting dealt in and posting blinds until they bust.
+          const isTournament = await this.isTournamentTable(row.table_id);
+          const timeoutUp = await pool.query(
+            `UPDATE poker_seats
+             SET consecutive_timeouts = consecutive_timeouts + 1
+             WHERE table_id = $1 AND LOWER(player_address) = LOWER($2)
+             RETURNING consecutive_timeouts`,
+            [row.table_id, actingAddr]
+          );
+          const newTimeoutCount = Number(timeoutUp.rows[0]?.consecutive_timeouts ?? 0);
+          if (!isTournament && newTimeoutCount >= POKER_AFK_KICK_AFTER) {
+            await pool.query(
+              `UPDATE poker_seats
+               SET status = 'sitting_out', sit_out_since = NOW()
+               WHERE table_id = $1 AND LOWER(player_address) = LOWER($2)
+                 AND status != 'sitting_out'`,
+              [row.table_id, actingAddr]
+            );
+            this.notifyCallback?.(`poker:table:${row.table_id}`, 'poker_player_sitting_out', {
+              tableId: row.table_id,
+              playerAddress: actingAddr,
+              reason: 'afk_timeout',
+            });
+            logger.info('Auto sit-out after consecutive timeouts (cash)', {
+              tableId: row.table_id,
+              player: actingAddr,
+              timeouts: newTimeoutCount,
+            });
+          }
 
           if (!table.currentRound && table.winners) {
             const showdownDeferred = await this.completeShowdownWithOptionalRunout(
