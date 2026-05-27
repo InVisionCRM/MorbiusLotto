@@ -1,0 +1,223 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>MORBIUS Mini App — Poker Lobby</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Mitr:wght@400;500;600;700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
+<style>
+/* ============================================================
+   MORBIUS Mini App — POKER LOBBY (v1, browse-only)
+   One combined space. Every card: start info + one action button.
+   Non-functional mockup.
+   ============================================================ */
+:root{
+  --card:#0b1a2c;
+  --cyan:#06b6d4; --cyan-br:#22d3ee; --cyan-dk:#0891b2; --blue:#2563eb;
+  --green:#34d399;
+  --line:rgba(34,211,238,0.13); --line-hi:rgba(6,182,212,0.30);
+  --dim:#94a3b8; --dimmer:#64748b;
+  --grad:linear-gradient(135deg,#0891b2,#2563eb);
+  --mitr:'Mitr',sans-serif;
+}
+*{box-sizing:border-box;margin:0;padding:0;}
+body{background:#04070e;color:#e7ecf3;font-family:'Inter',-apple-system,sans-serif;
+  -webkit-font-smoothing:antialiased;padding:48px 22px 64px;overflow-x:hidden;}
+.bg-glow{position:fixed;top:-260px;left:50%;transform:translateX(-50%);
+  width:1000px;height:620px;pointer-events:none;z-index:0;
+  background:radial-gradient(ellipse,rgba(6,182,212,0.08),transparent 66%);}
+.head{position:relative;z-index:1;text-align:center;max-width:640px;margin:0 auto 40px;}
+.head .kick{font-size:11.5px;letter-spacing:0.3em;text-transform:uppercase;
+  color:var(--cyan-br);font-weight:700;margin-bottom:13px;}
+.head h1{font-family:var(--mitr);font-weight:700;font-size:32px;line-height:1.04;
+  letter-spacing:-0.02em;color:#fff;}
+.head h1 em{color:var(--cyan);font-style:italic;}
+.head p{color:#8b94a3;font-size:14.5px;line-height:1.6;margin-top:13px;}
+.rail{position:relative;z-index:1;display:flex;justify-content:center;}
+.col{width:318px;}
+.caption{margin-top:16px;color:#828b99;font-size:12.5px;line-height:1.6;text-align:center;}
+.foot{position:relative;z-index:1;text-align:center;color:#566072;
+  font-size:12.5px;margin-top:42px;line-height:1.7;}
+
+/* phone */
+.phone{width:318px;border-radius:44px;padding:9px;
+  background:linear-gradient(160deg,#1c2330,#0c1016);
+  box-shadow:0 34px 70px -24px rgba(0,0,0,0.9),
+    0 0 90px -26px rgba(6,182,212,0.30),inset 0 1px 0 rgba(255,255,255,0.06);}
+.screen{border-radius:35px;overflow:hidden;
+  background:linear-gradient(170deg,#0c1c30 0%,#050a14 60%);}
+.status{display:flex;align-items:center;justify-content:space-between;
+  padding:11px 22px 5px;font-size:12px;font-weight:600;color:var(--dimmer);}
+.status .sig{display:flex;align-items:flex-end;gap:3px;}
+.status .sig i{width:3px;border-radius:1px;display:block;background:currentColor;}
+.status .sig i:nth-child(1){height:4px;opacity:.5;}
+.status .sig i:nth-child(2){height:6px;opacity:.68;}
+.status .sig i:nth-child(3){height:8px;opacity:.84;}
+.status .sig i:nth-child(4){height:10px;}
+.batt{width:22px;height:11px;border-radius:3px;border:1.4px solid currentColor;
+  position:relative;margin-left:5px;opacity:.9;}
+.batt::before{content:"";position:absolute;inset:1.6px;width:62%;border-radius:1px;background:currentColor;}
+.batt::after{content:"";position:absolute;right:-3.4px;top:3px;width:2px;height:5px;
+  border-radius:0 1px 1px 0;background:currentColor;}
+
+/* app */
+.app{padding:16px 15px 18px;}
+.scr-head{display:flex;align-items:center;gap:11px;margin-bottom:6px;}
+.back{width:35px;height:35px;border-radius:11px;flex:none;display:flex;
+  align-items:center;justify-content:center;background:rgba(34,211,238,0.06);
+  border:1px solid var(--line-hi);color:var(--cyan-br);}
+.back svg{width:18px;height:18px;}
+.scr-title{font-family:var(--mitr);font-weight:700;font-size:21px;color:#fff;
+  letter-spacing:-0.02em;flex:1;}
+svg{display:block;}
+
+.section{display:flex;align-items:baseline;justify-content:space-between;margin:17px 2px 9px;}
+.section .sl{font-size:11px;font-weight:700;letter-spacing:0.16em;
+  text-transform:uppercase;color:var(--cyan-br);}
+.section .sc{font-size:10px;color:var(--dimmer);}
+
+.list{display:flex;flex-direction:column;gap:9px;}
+.card{background:var(--card);border:1px solid var(--line);border-radius:13px;padding:12px 13px;}
+.card.live{border-color:var(--line-hi);}
+.card-name{font-size:13.5px;font-weight:600;color:#eef2f7;margin-bottom:9px;line-height:1.3;}
+
+.action{display:flex;align-items:center;justify-content:space-between;gap:8px;}
+.stake{font-family:var(--mitr);font-weight:700;font-size:16px;color:var(--cyan-br);
+  letter-spacing:-0.01em;}
+.stake-sub{display:block;font-size:10px;color:var(--dimmer);margin-top:1px;}
+
+.start{display:flex;align-items:center;gap:4px;font-size:10px;font-weight:600;
+  color:var(--cyan-br);background:rgba(34,211,238,0.09);
+  border:1px solid var(--line);border-radius:6px;padding:4px 8px;flex:none;}
+.start svg{width:11px;height:11px;color:var(--cyan-br);}
+.start .dot{width:5px;height:5px;border-radius:50%;background:var(--cyan-br);
+  animation:pulse 1.4s ease-in-out infinite;}
+@keyframes pulse{0%,100%{opacity:1;}50%{opacity:0.25;}}
+
+.btn{font-size:10.5px;font-weight:700;letter-spacing:0.02em;padding:7px 12px;
+  border-radius:8px;white-space:nowrap;flex:none;display:flex;align-items:center;gap:5px;}
+.btn svg{width:12px;height:12px;}
+.btn.primary{background:var(--grad);color:#fff;box-shadow:0 4px 14px -5px rgba(6,182,212,0.65);}
+.btn.ghost{background:rgba(34,211,238,0.07);border:1px solid var(--line-hi);color:var(--cyan-br);}
+.btn.closed{background:rgba(148,163,184,0.06);border:1px solid rgba(148,163,184,0.24);color:var(--dimmer);}
+
+.meta{display:flex;flex-wrap:wrap;gap:8px;margin-top:9px;}
+.m{display:flex;align-items:center;gap:4px;font-size:10.5px;color:var(--dim);}
+.m svg{width:12px;height:12px;color:rgba(34,211,238,0.55);}
+.free{display:flex;align-items:center;gap:4px;font-size:10px;font-weight:700;
+  color:var(--green);background:rgba(52,211,153,0.10);
+  border:1px solid rgba(52,211,153,0.40);border-radius:6px;padding:3px 8px;
+  box-shadow:0 0 11px rgba(52,211,153,0.32);}
+.free svg{width:11px;height:11px;color:var(--green);}
+
+@media(max-width:560px){body{padding:32px 13px;}}
+</style>
+</head>
+<body>
+<div class="bg-glow"></div>
+
+<div class="head">
+  <div class="kick">Poker Lobby · v1 mockup</div>
+  <h1>See what's <em>running</em></h1>
+  <p>Tournaments and cash tables in one scroll. Every card shows when it starts and exactly what you can do — register, watch, or sit down. Browse-only for v1: actions open morbius.io.</p>
+</div>
+
+<div class="rail" id="rail"></div>
+
+<div class="foot">
+  Static mockup — non-functional, look only.<br/>
+  No "+ Create" button yet — creating a tournament needs the backend login door (a later project).
+</div>
+
+<script>
+function s(p){return '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" '
+  +'stroke-width="2" stroke-linecap="round" stroke-linejoin="round">'+p+'</svg>';}
+var IC={
+  back:s('<path d="M5 12h14"/><path d="M5 12l6 6"/><path d="M5 12l6-6"/>'),
+  coin:s('<circle cx="12" cy="12" r="8.5"/><circle cx="12" cy="12" r="3.4"/>'),
+  users:s('<circle cx="9" cy="8" r="3.2"/><path d="M3.5 19a5.5 5.5 0 0 1 11 0"/><path d="M16.4 5.7a3.2 3.2 0 0 1 0 6"/><path d="M15.6 13.7a5.5 5.5 0 0 1 4.9 5.3"/>'),
+  clock:s('<circle cx="12" cy="12" r="8.5"/><path d="M12 7.5V12l3 2.2"/>'),
+  trophy:s('<path d="M7 4h10v5a5 5 0 0 1-10 0z"/><path d="M7 6H4v1a3 3 0 0 0 3 3"/><path d="M17 6h3v1a3 3 0 0 1-3 3"/><path d="M9.5 20h5"/><path d="M12 14v6"/>'),
+  target:s('<circle cx="12" cy="12" r="8.5"/><circle cx="12" cy="12" r="4.4"/><circle cx="12" cy="12" r="0.7"/>'),
+  gift:s('<rect x="4" y="9" width="16" height="11" rx="1.6"/><path d="M4 13h16"/><path d="M12 9v11"/><path d="M12 9C9 9 7.5 6.5 9 5s3.5 1.5 3 4z"/><path d="M12 9c3 0 4.5-2.5 3-4s-3.5 1.5-3 4z"/>'),
+  lock:s('<rect x="5" y="11" width="14" height="9" rx="2"/><path d="M8 11V8a4 4 0 0 1 8 0v3"/>'),
+  bolt:s('<path d="M13 3L4 14h7l-1 7 9-11h-7z"/>'),
+  eye:s('<path d="M2 12s3.6-6.5 10-6.5S22 12 22 12s-3.6 6.5-10 6.5S2 12 2 12z"/><circle cx="12" cy="12" r="3"/>')
+};
+
+/* ---- data ----------------------------------------------------------
+   tournament: {name, state:'open'|'full'|'live', start, meta[]}
+     meta item = [icon,text] or [icon,text,'free']
+   cash: {stake, sub, state:'open'|'full', meta[]}
+   ------------------------------------------------------------------ */
+var TOURNEYS=[
+  {name:'Friday Night Turbo', state:'full', start:'Starting now',
+   meta:[[IC.bolt,'1,000 buy-in'],[IC.users,'9 / 9 full']]},
+  {name:'Sunday Mega Freeroll', state:'open', start:'Sun · 6:00 PM',
+   meta:[[IC.gift,'Free entry','free'],[IC.trophy,'50K pool']]},
+  {name:'Bounty Hunter', state:'live', start:'In play',
+   meta:[[IC.target,'Bounty'],[IC.users,'12 left'],[IC.coin,'2,500 buy-in']]},
+  {name:'Deepstack Daily', state:'open', start:'Today · 9:00 PM',
+   meta:[[IC.coin,'500 buy-in'],[IC.users,'7 / 18']]}
+];
+var CASH=[
+  {stake:'5 / 10', sub:"No-Limit Hold'em", state:'open',
+   meta:[[IC.users,'4 / 6 seated'],[IC.coin,'400 – 1K buy-in']]},
+  {stake:'25 / 50', sub:"No-Limit Hold'em", state:'full',
+   meta:[[IC.users,'6 / 6 seated'],[IC.coin,'2K – 5K buy-in']]},
+  {stake:'100 / 200', sub:"No-Limit Hold'em", state:'open',
+   meta:[[IC.users,'2 / 6 seated'],[IC.lock,'Private table']]}
+];
+
+function metaItem(m){
+  if(m[2]==='free') return '<span class="free">'+m[0]+m[1]+'</span>';
+  return '<span class="m">'+m[0]+m[1]+'</span>';
+}
+function tourneyCard(t){
+  var startChip = t.state==='live'
+    ? '<span class="start"><span class="dot"></span>'+t.start+'</span>'
+    : '<span class="start">'+IC.clock+t.start+'</span>';
+  var btn = t.state==='open'
+    ? '<span class="btn primary">Register now</span>'
+    : t.state==='live'
+      ? '<span class="btn ghost">'+IC.eye+'Watch</span>'
+      : '<span class="btn closed">Registration closed</span>';
+  return '<div class="card'+(t.state==='live'?' live':'')+'">'
+   +'<div class="card-name">'+t.name+'</div>'
+   +'<div class="action">'+startChip+btn+'</div>'
+   +'<div class="meta">'+t.meta.map(metaItem).join('')+'</div></div>';
+}
+function cashCard(c){
+  var btn = c.state==='open'
+    ? '<span class="btn primary">Play now</span>'
+    : '<span class="btn closed">Table full</span>';
+  return '<div class="card">'
+   +'<div class="action"><span><span class="stake">'+c.stake+'</span>'
+   +'<span class="stake-sub">'+c.sub+'</span></span>'+btn+'</div>'
+   +'<div class="meta">'+c.meta.map(metaItem).join('')+'</div></div>';
+}
+
+function lobby(){
+  return '<div class="app">'
+   +'<div class="scr-head"><div class="back">'+IC.back+'</div>'
+   +'<div class="scr-title">Poker Lobby</div></div>'
+   +'<div class="section"><span class="sl">Tournaments</span>'
+   +'<span class="sc">4 events</span></div>'
+   +'<div class="list">'+TOURNEYS.map(tourneyCard).join('')+'</div>'
+   +'<div class="section"><span class="sl">Cash tables</span>'
+   +'<span class="sc">3 tables</span></div>'
+   +'<div class="list">'+CASH.map(cashCard).join('')+'</div></div>';
+}
+
+var STATUS='<div class="status"><span>9:41</span>'
+ +'<span class="sig"><i></i><i></i><i></i><i></i><span class="batt"></span></span></div>';
+
+document.getElementById('rail').innerHTML=
+  '<div class="col"><div class="phone"><div class="screen">'+STATUS+lobby()+'</div></div>'
+  +'<div class="caption">Start time sits up top next to the action button — '
+  +'Register now, Registration closed (full or in play), Watch, or Play now.</div></div>';
+</script>
+</body>
+</html>

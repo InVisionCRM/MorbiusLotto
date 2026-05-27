@@ -1,0 +1,362 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>MORBIUS Mini App — Design Directions</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Space+Grotesk:wght@400;500;600;700&family=Chakra+Petch:wght@500;600;700&family=Playfair+Display:ital,wght@0,500;0,600;0,700;1,400;1,500&family=Jost:wght@400;500;600;700&display=swap" rel="stylesheet" />
+<style>
+/* ============================================================
+   MORBIUS Mini App — 3 look-and-feel directions
+   Non-functional mockups. Same screen (Video Poker), three skins.
+   Layout is identical across all three — only styling changes.
+   ============================================================ */
+
+*{box-sizing:border-box;margin:0;padding:0;}
+body{
+  background:#070709;color:#e9e9ef;
+  font-family:'Inter',-apple-system,sans-serif;
+  -webkit-font-smoothing:antialiased;
+  padding:48px 22px 64px;overflow-x:hidden;
+}
+.bg-glow{
+  position:fixed;top:-260px;left:50%;transform:translateX(-50%);
+  width:1000px;height:640px;pointer-events:none;z-index:0;
+  background:radial-gradient(ellipse,rgba(120,140,255,0.05),transparent 68%);
+}
+
+/* ---- page header ---- */
+.head{position:relative;z-index:1;text-align:center;max-width:760px;margin:0 auto 46px;}
+.head .kicker{
+  font-size:12px;letter-spacing:0.32em;text-transform:uppercase;
+  color:#6b6b7a;font-weight:600;margin-bottom:14px;
+}
+.head h1{
+  font-family:'Space Grotesk',sans-serif;font-weight:600;
+  font-size:32px;letter-spacing:-0.02em;line-height:1.2;color:#f4f4f8;
+}
+.head p{color:#8a8a98;font-size:15px;line-height:1.65;margin-top:14px;}
+
+/* ---- the 3-up rail ---- */
+.rail{
+  position:relative;z-index:1;
+  display:flex;gap:34px;justify-content:center;flex-wrap:wrap;
+  max-width:1080px;margin:0 auto;
+}
+.col{width:318px;}
+
+.col-top{display:flex;align-items:center;gap:11px;margin-bottom:18px;}
+.col-badge{
+  width:30px;height:30px;border-radius:9px;flex:none;
+  display:flex;align-items:center;justify-content:center;
+  font-family:'Space Grotesk',sans-serif;font-weight:700;font-size:14px;
+}
+.col-name{font-family:'Space Grotesk',sans-serif;font-weight:600;font-size:16px;color:#f0f0f4;}
+.col-tag{font-size:12px;color:#74747f;margin-top:1px;}
+
+.caption{margin-top:20px;color:#9696a2;font-size:13px;line-height:1.7;}
+.caption b{color:#dcdce2;font-weight:600;}
+
+.foot{
+  position:relative;z-index:1;text-align:center;
+  color:#5b5b66;font-size:12.5px;margin-top:50px;line-height:1.7;
+}
+
+/* ============================================================
+   PHONE FRAME (shared)
+   ============================================================ */
+.phone{
+  width:318px;border-radius:44px;padding:9px;
+  background:linear-gradient(160deg,#2a2a32,#121216);
+  box-shadow:0 34px 70px -24px rgba(0,0,0,0.85),
+             inset 0 1px 0 rgba(255,255,255,0.07);
+}
+.col[data-d="a"] .phone{box-shadow:0 34px 70px -24px rgba(0,0,0,0.85),0 0 80px -26px rgba(95,227,196,0.22),inset 0 1px 0 rgba(255,255,255,0.07);}
+.col[data-d="b"] .phone{box-shadow:0 34px 70px -24px rgba(0,0,0,0.85),0 0 90px -22px rgba(45,212,238,0.28),inset 0 1px 0 rgba(255,255,255,0.07);}
+.col[data-d="c"] .phone{box-shadow:0 34px 70px -24px rgba(0,0,0,0.85),0 0 80px -24px rgba(217,178,91,0.22),inset 0 1px 0 rgba(255,255,255,0.07);}
+
+.screen{border-radius:35px;overflow:hidden;position:relative;}
+
+/* OS status bar */
+.status{
+  display:flex;align-items:center;justify-content:space-between;
+  padding:11px 22px 5px;font-size:12px;font-weight:600;
+}
+.status .sig{display:flex;align-items:center;gap:3px;}
+.status .sig i{width:3px;border-radius:1px;display:block;background:currentColor;}
+.status .sig i:nth-child(1){height:4px;opacity:.55;}
+.status .sig i:nth-child(2){height:6px;opacity:.7;}
+.status .sig i:nth-child(3){height:8px;opacity:.85;}
+.status .sig i:nth-child(4){height:10px;}
+.batt{width:22px;height:11px;border-radius:3px;border:1.4px solid currentColor;position:relative;opacity:.9;}
+.batt::before{content:"";position:absolute;inset:1.6px;width:62%;border-radius:1px;background:currentColor;}
+.batt::after{content:"";position:absolute;right:-3.4px;top:3px;width:2px;height:5px;border-radius:0 1px 1px 0;background:currentColor;}
+
+/* ============================================================
+   APP — VIDEO POKER SCREEN (shared layout, themed per direction)
+   ============================================================ */
+.app{padding:14px 14px 17px;}
+
+.vp-head{display:flex;align-items:center;gap:10px;margin-bottom:15px;}
+.vp-back{
+  width:34px;height:34px;border-radius:11px;flex:none;
+  display:flex;align-items:center;justify-content:center;
+  font-size:20px;line-height:0;padding-bottom:3px;
+}
+.vp-head-title{font-size:14px;font-weight:600;letter-spacing:0.06em;flex:1;}
+.vp-head-title span{font-weight:400;}
+.vp-chips{
+  display:flex;align-items:center;gap:7px;
+  padding:6px 12px;border-radius:999px;
+  font-size:13px;font-weight:700;font-variant-numeric:tabular-nums;
+}
+.vp-chips .coin{width:9px;height:9px;border-radius:50%;display:block;flex:none;}
+
+.vp-title{text-align:center;margin-bottom:14px;}
+.vp-title-main{font-size:23px;font-weight:700;letter-spacing:0.01em;line-height:1;}
+.vp-title-sub{font-size:9.5px;letter-spacing:0.34em;text-transform:uppercase;margin-top:6px;}
+
+.vp-paytable{border-radius:14px;padding:6px 4px;margin-bottom:14px;}
+.vp-pt-row{
+  display:flex;justify-content:space-between;align-items:center;
+  padding:2.6px 12px;font-size:10.5px;border-radius:7px;
+}
+.vp-pt-row .pt-mult{font-weight:700;font-variant-numeric:tabular-nums;}
+
+.vp-felt{border-radius:19px;padding:28px 10px 16px;margin-bottom:14px;position:relative;}
+.vp-cards{display:flex;justify-content:center;gap:6px;}
+.card{
+  width:48px;height:68px;border-radius:7px;flex:none;position:relative;
+}
+.card.held{transform:translateY(-12px);}
+.corner{position:absolute;display:flex;flex-direction:column;align-items:center;line-height:0.92;}
+.corner b{font-size:13px;font-weight:800;}
+.corner i{font-size:10px;font-style:normal;margin-top:-1px;}
+.corner.tl{top:5px;left:5px;}
+.corner.br{bottom:5px;right:5px;transform:rotate(180deg);}
+.pip{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-size:29px;}
+.hold-badge{
+  position:absolute;top:-13px;left:50%;transform:translateX(-50%);
+  font-size:8px;font-weight:800;letter-spacing:0.12em;
+  padding:2.5px 8px;border-radius:5px;
+}
+.vp-status{text-align:center;font-size:11px;margin-top:16px;}
+
+.vp-bet{display:flex;align-items:center;gap:11px;margin-bottom:11px;}
+.vp-bet-label{flex:1;font-size:11px;}
+.vp-step{
+  width:34px;height:34px;border-radius:10px;flex:none;
+  display:flex;align-items:center;justify-content:center;
+  font-size:18px;line-height:0;padding-bottom:2px;
+}
+.vp-bet-amt{min-width:56px;text-align:center;font-size:16px;font-weight:800;font-variant-numeric:tabular-nums;}
+
+.vp-action{
+  width:100%;border:none;border-radius:14px;padding:15px;
+  font-size:16px;font-weight:800;letter-spacing:0.05em;
+  font-family:inherit;
+}
+.vp-foot{text-align:center;font-size:9px;margin-top:12px;letter-spacing:0.02em;}
+
+/* ============================================================
+   DIRECTION A — SLEEK DARK (fintech-grade)
+   ============================================================ */
+.dir-a{background:#101116;font-family:'Inter',sans-serif;}
+.status.s-a{background:#101116;color:#9498a4;}
+.col-badge.b-a{background:rgba(95,227,196,0.14);color:#5fe3c4;}
+.dir-a .vp-back{background:#1b1d24;border:1px solid #262932;color:#9aa0ad;}
+.dir-a .vp-head-title{color:#f3f4f7;font-family:'Space Grotesk',sans-serif;}
+.dir-a .vp-head-title span{color:#5b6472;}
+.dir-a .vp-chips{background:#1b1d24;border:1px solid #262932;color:#f3f4f7;}
+.dir-a .vp-chips .coin{background:#5fe3c4;}
+.dir-a .vp-title-main{color:#f3f4f7;font-family:'Space Grotesk',sans-serif;}
+.dir-a .vp-title-sub{color:#5b6472;}
+.dir-a .vp-paytable{background:#15161c;border:1px solid #23252e;}
+.dir-a .pt-name{color:#9aa0ad;}
+.dir-a .pt-mult{color:#cfd3da;}
+.dir-a .vp-pt-row.active{background:#16271f;}
+.dir-a .vp-pt-row.active .pt-name,.dir-a .vp-pt-row.active .pt-mult{color:#5fe3c4;}
+.dir-a .vp-felt{background:#15161c;border:1px solid #23252e;}
+.dir-a .card{background:linear-gradient(165deg,#fcfcfd,#eceef1);box-shadow:0 4px 11px rgba(0,0,0,0.45);}
+.dir-a .card[data-c="red"] .corner,.dir-a .card[data-c="red"] .pip{color:#e0364f;}
+.dir-a .card[data-c="blk"] .corner,.dir-a .card[data-c="blk"] .pip{color:#22252e;}
+.dir-a .card.held{box-shadow:0 0 0 2px #5fe3c4,0 9px 16px rgba(0,0,0,0.5);}
+.dir-a .hold-badge{background:#5fe3c4;color:#0a221d;}
+.dir-a .vp-status{color:#7a808d;}
+.dir-a .vp-bet-label{color:#7a808d;}
+.dir-a .vp-step{background:#1b1d24;border:1px solid #262932;color:#cfd3da;}
+.dir-a .vp-bet-amt{color:#f3f4f7;}
+.dir-a .vp-action{background:#5fe3c4;color:#0a221d;}
+.dir-a .vp-foot{color:#4c545f;}
+
+/* ============================================================
+   DIRECTION B — NEON CASINO GLAM
+   ============================================================ */
+.dir-b{background:#0b0a18;font-family:'Inter',sans-serif;}
+.status.s-b{background:#0b0a18;color:#8f8cc8;}
+.col-badge.b-b{background:rgba(45,212,238,0.16);color:#4fdcf0;}
+.dir-b .vp-back{background:rgba(45,212,238,0.08);border:1px solid rgba(45,212,238,0.32);color:#5ce0f0;}
+.dir-b .vp-head-title{color:#eef0ff;font-family:'Chakra Petch',sans-serif;}
+.dir-b .vp-head-title span{color:#7d7ac0;}
+.dir-b .vp-chips{background:rgba(240,56,142,0.12);border:1px solid rgba(240,56,142,0.42);color:#ffd6ea;box-shadow:0 0 16px rgba(240,56,142,0.22);}
+.dir-b .vp-chips .coin{background:#ff4fa3;box-shadow:0 0 9px #ff4fa3;}
+.dir-b .vp-title-main{color:#ffffff;font-family:'Chakra Petch',sans-serif;text-shadow:0 0 20px rgba(45,212,238,0.7);}
+.dir-b .vp-title-sub{color:#5ce0f0;}
+.dir-b .vp-paytable{background:rgba(20,18,46,0.72);border:1px solid rgba(124,108,255,0.3);}
+.dir-b .pt-name{color:#b9b6e8;}
+.dir-b .pt-mult{color:#5ce0f0;}
+.dir-b .vp-pt-row.active{background:linear-gradient(90deg,rgba(45,212,238,0.2),rgba(240,56,142,0.2));}
+.dir-b .vp-pt-row.active .pt-name,.dir-b .vp-pt-row.active .pt-mult{color:#ffffff;}
+.dir-b .vp-felt{background:radial-gradient(ellipse 78% 62% at 50% 34%,#1c2a5e 0%,#11102f 58%,#08071a 100%);border:1px solid rgba(45,212,238,0.32);box-shadow:inset 0 0 30px rgba(45,212,238,0.16);}
+.dir-b .card{background:linear-gradient(165deg,#ffffff,#dfe6f5);box-shadow:0 5px 15px rgba(0,0,0,0.6);}
+.dir-b .card[data-c="red"] .corner,.dir-b .card[data-c="red"] .pip{color:#ff2e6a;}
+.dir-b .card[data-c="blk"] .corner,.dir-b .card[data-c="blk"] .pip{color:#1b2030;}
+.dir-b .card.held{box-shadow:0 0 0 2px #2dd4ee,0 0 22px rgba(45,212,238,0.85);}
+.dir-b .hold-badge{background:#2dd4ee;color:#04222a;box-shadow:0 0 14px #2dd4ee;}
+.dir-b .vp-status{color:#9b98d8;}
+.dir-b .vp-bet-label{color:#7d7ac0;}
+.dir-b .vp-step{background:rgba(124,108,255,0.13);border:1px solid rgba(124,108,255,0.42);color:#c4bdff;}
+.dir-b .vp-bet-amt{color:#5ce0f0;}
+.dir-b .vp-action{background:linear-gradient(95deg,#2dd4ee,#7c6cff 54%,#f0388e);color:#ffffff;box-shadow:0 0 24px rgba(124,108,255,0.6),0 8px 20px rgba(240,56,142,0.4);}
+.dir-b .vp-foot{color:#56548a;}
+
+/* ============================================================
+   DIRECTION C — LUXE BLACK & GOLD
+   ============================================================ */
+.dir-c{background:#0c0b0a;font-family:'Jost',sans-serif;}
+.status.s-c{background:#0c0b0a;color:#9a8e6f;}
+.col-badge.b-c{background:rgba(217,178,91,0.16);color:#d9b25b;}
+.dir-c .vp-back{background:#181612;border:1px solid rgba(217,178,91,0.38);color:#d9b25b;}
+.dir-c .vp-head-title{color:#f2ead6;font-family:'Playfair Display',serif;font-weight:600;letter-spacing:0.08em;}
+.dir-c .vp-head-title span{color:#9a8048;font-style:italic;}
+.dir-c .vp-chips{background:#181612;border:1px solid rgba(217,178,91,0.42);color:#f0e4c4;}
+.dir-c .vp-chips .coin{background:linear-gradient(180deg,#f6e4ad,#caa24a);}
+.dir-c .vp-title-main{font-family:'Playfair Display',serif;font-weight:700;background:linear-gradient(180deg,#f7e6b0,#c89f47);-webkit-background-clip:text;background-clip:text;color:transparent;}
+.dir-c .vp-title-sub{color:#9a8048;}
+.dir-c .vp-paytable{background:#13110d;border:1px solid rgba(217,178,91,0.32);}
+.dir-c .pt-name{color:#bdae8c;}
+.dir-c .pt-mult{color:#d9b25b;}
+.dir-c .vp-pt-row.active{background:rgba(217,178,91,0.14);}
+.dir-c .vp-pt-row.active .pt-name{color:#f2ead6;}
+.dir-c .vp-pt-row.active .pt-mult{color:#f7e6b0;}
+.dir-c .vp-felt{background:radial-gradient(ellipse 82% 64% at 50% 32%,#165941 0%,#0e3c2c 50%,#072419 84%);border:1px solid rgba(217,178,91,0.5);box-shadow:inset 0 0 0 3px #0c0b0a,inset 0 1px 0 rgba(247,230,176,0.14);}
+.dir-c .card{background:linear-gradient(165deg,#fdfaf0,#efe6cf);box-shadow:0 5px 13px rgba(0,0,0,0.55);}
+.dir-c .card[data-c="red"] .corner,.dir-c .card[data-c="red"] .pip{color:#b0202f;}
+.dir-c .card[data-c="blk"] .corner,.dir-c .card[data-c="blk"] .pip{color:#2a2722;}
+.dir-c .card.held{box-shadow:0 0 0 2px #d9b25b,0 9px 18px rgba(0,0,0,0.6);}
+.dir-c .hold-badge{background:linear-gradient(180deg,#f7e6b0,#caa24a);color:#3a2c08;}
+.dir-c .vp-status{color:#bdae8c;}
+.dir-c .vp-bet-label{color:#9a8048;}
+.dir-c .vp-step{background:#181612;border:1px solid rgba(217,178,91,0.38);color:#d9b25b;}
+.dir-c .vp-bet-amt{color:#f7e6b0;}
+.dir-c .vp-action{background:linear-gradient(180deg,#f7e6b0,#d9b25b 54%,#b8923d);color:#3a2c08;box-shadow:0 6px 18px rgba(0,0,0,0.5);}
+.dir-c .vp-foot{color:#6b5e3e;}
+
+@media(max-width:560px){body{padding:32px 14px;}}
+</style>
+</head>
+<body>
+<div class="bg-glow"></div>
+
+<div class="head">
+  <div class="kicker">MORBIUS Mini App</div>
+  <h1>Three design directions</h1>
+  <p>The same screen — Video Poker — rendered three ways. The layout is identical in all three; only the styling changes. Pick the look that feels right and I'll build all four screens in it.</p>
+</div>
+
+<div class="rail" id="rail"></div>
+
+<div class="foot">
+  Static mockups for look-and-feel only — nothing here is clickable.<br/>
+  Next step: you pick a direction, I mock up all four screens in it, then we build it for real.
+</div>
+
+<script>
+/* ---- card builder --------------------------------------------------- */
+function card(rank, suit, color, held){
+  return '<div class="card'+(held?' held':'')+'" data-c="'+color+'">'
+    + '<span class="corner tl"><b>'+rank+'</b><i>'+suit+'</i></span>'
+    + '<span class="pip">'+suit+'</span>'
+    + '<span class="corner br"><b>'+rank+'</b><i>'+suit+'</i></span>'
+    + (held?'<span class="hold-badge">HOLD</span>':'')
+    + '</div>';
+}
+
+/* ---- sample hand: pair of Jacks held -------------------------------- */
+var HAND =
+  card('J','♥','red',true) +
+  card('J','♠','blk',true) +
+  card('A','♦','red',false) +
+  card('8','♣','blk',false) +
+  card('3','♥','red',false);
+
+/* ---- Jacks-or-Better paytable --------------------------------------- */
+var PAYTABLE = [
+  ['Royal Flush','250x'],['Straight Flush','50x'],['Four of a Kind','25x'],
+  ['Full House','9x'],['Flush','6x'],['Straight','4x'],
+  ['Three of a Kind','3x'],['Two Pair','2x'],['Jacks or Better','1x',true]
+];
+var ptRows = PAYTABLE.map(function(r){
+  return '<div class="vp-pt-row'+(r[2]?' active':'')+'">'
+    + '<span class="pt-name">'+r[0]+'</span><span class="pt-mult">'+r[1]+'</span></div>';
+}).join('');
+
+/* ---- one full phone screen ------------------------------------------ */
+function screen(dir){
+  return ''
+  + '<div class="screen">'
+  +   '<div class="status s-'+dir+'">'
+  +     '<span>9:41</span>'
+  +     '<span class="sig"><i></i><i></i><i></i><i></i>&nbsp;<span class="batt"></span></span>'
+  +   '</div>'
+  +   '<div class="app dir-'+dir+'">'
+  +     '<div class="vp-head">'
+  +       '<div class="vp-back">&#8249;</div>'
+  +       '<div class="vp-head-title">MORBIUS <span>Arcade</span></div>'
+  +       '<div class="vp-chips"><span class="coin"></span>12,450</div>'
+  +     '</div>'
+  +     '<div class="vp-title">'
+  +       '<div class="vp-title-main">Video Poker</div>'
+  +       '<div class="vp-title-sub">Jacks or Better</div>'
+  +     '</div>'
+  +     '<div class="vp-paytable">'+ptRows+'</div>'
+  +     '<div class="vp-felt"><div class="vp-cards">'+HAND+'</div>'
+  +       '<div class="vp-status">Pair of Jacks held · tap Draw</div>'
+  +     '</div>'
+  +     '<div class="vp-bet">'
+  +       '<span class="vp-bet-label">Bet</span>'
+  +       '<div class="vp-step">&minus;</div>'
+  +       '<span class="vp-bet-amt">100</span>'
+  +       '<div class="vp-step">+</div>'
+  +     '</div>'
+  +     '<button class="vp-action">Draw</button>'
+  +     '<div class="vp-foot">Provably fair · every hand verifiable</div>'
+  +   '</div>'
+  + '</div>';
+}
+
+/* ---- the 3 directions ----------------------------------------------- */
+var DIRS = [
+  {d:'a',letter:'A',name:'Sleek Dark',tag:'Fintech-grade',
+   cap:'Calm and premium. Matte charcoal, one cool mint accent, crisp type, hairline borders. Reads like a serious modern app — quietly expensive. <b>Best if you want trust and restraint.</b>'},
+  {d:'b',letter:'B',name:'Neon Casino Glam',tag:'High energy',
+   cap:'Loud and exciting. Glowing edges, electric cyan and magenta, punchy gradients. The crypto-casino look. <b>Best if you want it to feel like a party.</b>'},
+  {d:'c',letter:'C',name:'Luxe Black &amp; Gold',tag:'High roller',
+   cap:'Classic luxury. Deep black, real gold, a touch of emerald felt, elegant serif headers. <b>Best if you want it to feel expensive and timeless.</b>'}
+];
+
+document.getElementById('rail').innerHTML = DIRS.map(function(x){
+  return '<div class="col" data-d="'+x.d+'">'
+    + '<div class="col-top">'
+    +   '<div class="col-badge b-'+x.d+'">'+x.letter+'</div>'
+    +   '<div><div class="col-name">'+x.name+'</div><div class="col-tag">'+x.tag+'</div></div>'
+    + '</div>'
+    + '<div class="phone">'+screen(x.d)+'</div>'
+    + '<div class="caption">'+x.cap+'</div>'
+    + '</div>';
+}).join('');
+</script>
+</body>
+</html>

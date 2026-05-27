@@ -1,0 +1,452 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>MORBIUS Mini App — Luxe Black &amp; Gold — All Screens</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600&family=Playfair+Display:ital,wght@0,500;0,600;0,700;1,400;1,500&family=Jost:wght@400;500;600;700&display=swap" rel="stylesheet" />
+<style>
+/* ============================================================
+   MORBIUS Mini App — LUXE BLACK & GOLD
+   Full mockup: hub, video poker, stats, wallet/swap, profile.
+   Non-functional. One shared design system across all screens.
+   ============================================================ */
+:root{
+  --ink:#0c0b0a; --panel:#13110d; --panel-2:#191712;
+  --line:rgba(217,178,91,0.30); --line-soft:rgba(217,178,91,0.15);
+  --gold:#d9b25b; --gold-lt:#f7e6b0; --gold-dk:#b8923d;
+  --cream:#f2ead6; --dim:#bdae8c; --dimmer:#9a8048;
+  --green:#74c79e; --red:#cf7f7f;
+  --gold-grad:linear-gradient(180deg,#f7e6b0,#d9b25b 54%,#b8923d);
+}
+*{box-sizing:border-box;margin:0;padding:0;}
+body{
+  background:#070706;color:#e9e6dc;
+  font-family:'Jost',-apple-system,sans-serif;
+  -webkit-font-smoothing:antialiased;padding:48px 22px 66px;overflow-x:hidden;
+}
+.bg-glow{position:fixed;top:-280px;left:50%;transform:translateX(-50%);
+  width:1100px;height:680px;pointer-events:none;z-index:0;
+  background:radial-gradient(ellipse,rgba(217,178,91,0.06),transparent 68%);}
+
+/* ---- page header ---- */
+.head{position:relative;z-index:1;text-align:center;max-width:740px;margin:0 auto 46px;}
+.head .kicker{font-size:11.5px;letter-spacing:0.34em;text-transform:uppercase;
+  color:var(--gold);font-weight:600;margin-bottom:14px;}
+.head h1{font-family:'Playfair Display',serif;font-weight:600;font-size:33px;
+  letter-spacing:-0.01em;line-height:1.18;color:#f5f1e6;}
+.head p{color:#94908a;font-size:15px;line-height:1.65;margin-top:14px;}
+
+/* ---- 5-up rail ---- */
+.rail{position:relative;z-index:1;display:flex;gap:30px;justify-content:center;
+  flex-wrap:wrap;max-width:1042px;margin:0 auto;}
+.col{width:318px;}
+.col-top{display:flex;align-items:baseline;gap:9px;margin-bottom:15px;}
+.col-num{font-family:'Playfair Display',serif;font-weight:700;font-size:15px;color:var(--gold);}
+.col-name{font-family:'Space Grotesk',sans-serif;font-weight:600;font-size:15px;color:#efebe0;}
+.col-tag{font-size:12px;color:#6f6b64;margin-left:auto;}
+.caption{margin-top:16px;color:#8f8b84;font-size:12.5px;line-height:1.65;}
+.foot{position:relative;z-index:1;text-align:center;color:#5c594f;
+  font-size:12.5px;margin-top:50px;line-height:1.75;}
+
+/* ============================================================ PHONE */
+.phone{width:318px;border-radius:44px;padding:9px;
+  background:linear-gradient(160deg,#2a2820,#121110);
+  box-shadow:0 34px 70px -24px rgba(0,0,0,0.88),
+    0 0 80px -26px rgba(217,178,91,0.20),inset 0 1px 0 rgba(255,255,255,0.06);}
+.screen{border-radius:35px;overflow:hidden;background:var(--ink);}
+.status{display:flex;align-items:center;justify-content:space-between;
+  padding:11px 22px 5px;font-size:12px;font-weight:600;color:var(--dimmer);background:var(--ink);}
+.status .sig{display:flex;align-items:flex-end;gap:3px;}
+.status .sig i{width:3px;border-radius:1px;display:block;background:currentColor;}
+.status .sig i:nth-child(1){height:4px;opacity:.5;}
+.status .sig i:nth-child(2){height:6px;opacity:.68;}
+.status .sig i:nth-child(3){height:8px;opacity:.84;}
+.status .sig i:nth-child(4){height:10px;}
+.batt{width:22px;height:11px;border-radius:3px;border:1.4px solid currentColor;position:relative;
+  margin-left:5px;opacity:.9;}
+.batt::before{content:"";position:absolute;inset:1.6px;width:60%;border-radius:1px;background:currentColor;}
+.batt::after{content:"";position:absolute;right:-3.4px;top:3px;width:2px;height:5px;
+  border-radius:0 1px 1px 0;background:currentColor;}
+
+/* ============================================================ APP SHARED */
+.app{padding:15px 15px 18px;background:var(--ink);min-height:560px;}
+.scr-head{display:flex;align-items:center;gap:11px;margin-bottom:16px;}
+.back{width:35px;height:35px;border-radius:11px;flex:none;display:flex;
+  align-items:center;justify-content:center;background:var(--panel-2);
+  border:1px solid var(--line);color:var(--gold);}
+.back svg{width:18px;height:18px;}
+.scr-title{font-family:'Playfair Display',serif;font-weight:600;font-size:19px;
+  color:var(--cream);letter-spacing:0.01em;flex:1;}
+.icon{display:inline-flex;}
+.icon svg{display:block;}
+
+.btn-ghost{width:100%;margin-top:16px;border:1px solid var(--line);
+  background:transparent;border-radius:13px;padding:13px;color:var(--gold);
+  font-family:'Jost',sans-serif;font-size:14px;font-weight:600;letter-spacing:0.02em;
+  display:flex;align-items:center;justify-content:center;gap:7px;}
+.btn-ghost svg{width:15px;height:15px;}
+.btn-gold{width:100%;border:none;border-radius:13px;padding:14px;
+  background:var(--gold-grad);color:#3a2c08;font-family:'Jost',sans-serif;
+  font-size:15px;font-weight:700;letter-spacing:0.03em;
+  display:flex;align-items:center;justify-content:center;gap:8px;
+  box-shadow:0 6px 18px rgba(0,0,0,0.5);}
+.btn-gold svg{width:16px;height:16px;}
+
+/* ============================================================ HUB */
+.hub-brand{text-align:center;font-family:'Playfair Display',serif;font-weight:700;
+  font-size:21px;letter-spacing:0.22em;margin:4px 0 18px;
+  background:var(--gold-grad);-webkit-background-clip:text;background-clip:text;color:transparent;}
+.hub-brand .d{color:var(--dimmer);-webkit-text-fill-color:var(--dimmer);font-size:11px;
+  vertical-align:2px;margin:0 7px;}
+.hub-player{display:flex;align-items:center;gap:13px;margin-bottom:17px;}
+.avatar-ring{width:56px;height:56px;border-radius:50%;flex:none;padding:2px;
+  background:var(--gold-grad);}
+.avatar-init{width:100%;height:100%;border-radius:50%;background:#1c1913;
+  display:flex;align-items:center;justify-content:center;
+  font-family:'Playfair Display',serif;font-weight:600;font-size:21px;color:var(--gold-lt);}
+.hub-name{font-family:'Playfair Display',serif;font-weight:600;font-size:18px;color:var(--cream);}
+.hub-handle{font-size:12.5px;color:var(--dimmer);margin-top:1px;}
+
+.balances{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:14px;}
+.bal{background:var(--panel);border:1px solid var(--line-soft);border-radius:14px;padding:12px 13px;}
+.bal-label{font-size:10px;letter-spacing:0.16em;text-transform:uppercase;color:var(--dimmer);}
+.bal-val{font-size:21px;font-weight:600;color:var(--cream);margin-top:4px;
+  font-variant-numeric:tabular-nums;}
+.bal.accent .bal-val{background:var(--gold-grad);-webkit-background-clip:text;
+  background-clip:text;color:transparent;}
+
+.tiles{display:flex;flex-direction:column;gap:9px;}
+.tile{display:flex;align-items:center;gap:12px;background:var(--panel);
+  border:1px solid var(--line-soft);border-radius:14px;padding:12px 13px;}
+.tile-ic{width:40px;height:40px;border-radius:11px;flex:none;display:flex;
+  align-items:center;justify-content:center;background:rgba(217,178,91,0.10);
+  border:1px solid var(--line);color:var(--gold);}
+.tile-ic svg{width:20px;height:20px;}
+.tile-tx{flex:1;min-width:0;}
+.tile-t{font-size:14px;font-weight:600;color:var(--cream);}
+.tile-s{font-size:11.5px;color:var(--dimmer);margin-top:1px;}
+.tile-ch{color:var(--dimmer);display:flex;}
+.tile-ch svg{width:18px;height:18px;}
+
+/* ============================================================ VIDEO POKER */
+.vp-head{display:flex;align-items:center;gap:10px;margin-bottom:14px;}
+.vp-title-wrap{flex:1;}
+.vp-htitle{font-family:'Playfair Display',serif;font-weight:600;font-size:15px;
+  letter-spacing:0.06em;color:var(--cream);}
+.vp-htitle em{color:var(--dimmer);font-style:italic;font-weight:400;}
+.vp-chips{display:flex;align-items:center;gap:7px;padding:6px 12px;border-radius:999px;
+  background:var(--panel-2);border:1px solid var(--line);color:var(--gold-lt);
+  font-size:13px;font-weight:700;font-variant-numeric:tabular-nums;}
+.vp-chips .coin{width:9px;height:9px;border-radius:50%;flex:none;background:var(--gold-grad);}
+.vp-title{text-align:center;margin-bottom:13px;}
+.vp-tmain{font-family:'Playfair Display',serif;font-weight:700;font-size:25px;
+  background:var(--gold-grad);-webkit-background-clip:text;background-clip:text;color:transparent;}
+.vp-tsub{font-size:9.5px;letter-spacing:0.32em;text-transform:uppercase;
+  color:var(--dimmer);margin-top:5px;}
+.paytable{background:var(--panel);border:1px solid var(--line);border-radius:14px;
+  padding:6px 4px;margin-bottom:13px;}
+.pt-row{display:flex;justify-content:space-between;padding:2.6px 12px;
+  font-size:10.5px;border-radius:7px;}
+.pt-name{color:var(--dim);}
+.pt-mult{color:var(--gold);font-weight:600;font-variant-numeric:tabular-nums;}
+.pt-row.active{background:rgba(217,178,91,0.14);}
+.pt-row.active .pt-name{color:var(--cream);}
+.pt-row.active .pt-mult{color:var(--gold-lt);}
+.felt{border-radius:18px;padding:28px 10px 16px;margin-bottom:13px;
+  background:radial-gradient(ellipse 82% 64% at 50% 32%,#165941,#0e3c2c 50%,#072419 84%);
+  border:1px solid rgba(217,178,91,0.50);
+  box-shadow:inset 0 0 0 3px var(--ink),inset 0 1px 0 rgba(247,230,176,0.13);}
+.cards{display:flex;justify-content:center;gap:6px;}
+.card{width:48px;height:68px;border-radius:7px;flex:none;position:relative;
+  background:linear-gradient(165deg,#fdfaf0,#efe6cf);box-shadow:0 5px 13px rgba(0,0,0,0.55);}
+.card.held{transform:translateY(-12px);box-shadow:0 0 0 2px var(--gold),0 9px 18px rgba(0,0,0,0.6);}
+.card[data-c="red"]{color:#b0202f;}
+.card[data-c="blk"]{color:#2a2722;}
+.corner{position:absolute;display:flex;flex-direction:column;align-items:center;line-height:0.9;}
+.corner b{font-size:13px;font-weight:700;}
+.corner i{font-size:10px;font-style:normal;margin-top:-1px;}
+.corner.tl{top:5px;left:5px;}
+.corner.br{bottom:5px;right:5px;transform:rotate(180deg);}
+.pip{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-size:29px;}
+.hold-badge{position:absolute;top:-13px;left:50%;transform:translateX(-50%);
+  font-size:8px;font-weight:700;letter-spacing:0.13em;padding:2.5px 8px;border-radius:5px;
+  background:var(--gold-grad);color:#3a2c08;font-family:'Space Grotesk',sans-serif;}
+.felt-status{text-align:center;font-size:11px;color:var(--dim);margin-top:16px;}
+.bet{display:flex;align-items:center;gap:11px;margin-bottom:11px;}
+.bet-label{flex:1;font-size:11px;color:var(--dimmer);}
+.step{width:34px;height:34px;border-radius:10px;flex:none;display:flex;align-items:center;
+  justify-content:center;font-size:18px;background:var(--panel-2);
+  border:1px solid var(--line);color:var(--gold);}
+.bet-amt{min-width:56px;text-align:center;font-size:16px;font-weight:700;color:var(--gold-lt);
+  font-variant-numeric:tabular-nums;}
+.deal{width:100%;border:none;border-radius:14px;padding:15px;font-family:'Jost',sans-serif;
+  font-size:16px;font-weight:700;letter-spacing:0.06em;
+  background:var(--gold-grad);color:#3a2c08;box-shadow:0 6px 18px rgba(0,0,0,0.5);}
+.vp-foot{text-align:center;font-size:9px;color:#6b5e3e;margin-top:11px;}
+
+/* ============================================================ STATS */
+.scope{display:grid;grid-template-columns:1fr 1fr 1fr;gap:7px;margin-bottom:14px;
+  background:var(--panel);border:1px solid var(--line-soft);border-radius:12px;padding:4px;}
+.seg{text-align:center;padding:7px 4px;font-size:11.5px;font-weight:600;
+  border-radius:8px;color:var(--dimmer);}
+.seg.active{background:var(--gold-grad);color:#3a2c08;}
+.style-row{display:flex;justify-content:space-between;align-items:center;
+  background:var(--panel);border:1px solid var(--line-soft);border-radius:12px;
+  padding:11px 14px;margin-bottom:12px;}
+.style-row span{font-size:12px;color:var(--dimmer);}
+.style-row b{font-family:'Playfair Display',serif;font-weight:600;font-size:15px;color:var(--gold-lt);}
+.metrics{display:grid;grid-template-columns:1fr 1fr;gap:10px;}
+.metric{background:var(--panel);border:1px solid var(--line-soft);border-radius:13px;padding:12px 13px;}
+.metric-l{font-size:10px;letter-spacing:0.13em;text-transform:uppercase;color:var(--dimmer);}
+.metric-v{font-size:21px;font-weight:600;color:var(--cream);margin-top:4px;
+  font-variant-numeric:tabular-nums;}
+.metric-v.pos{color:var(--green);}
+.hud-h{font-family:'Space Grotesk',sans-serif;font-size:10.5px;letter-spacing:0.2em;
+  text-transform:uppercase;color:var(--dimmer);margin:16px 0 9px;}
+.hud{display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;}
+.mini{background:var(--panel);border:1px solid var(--line-soft);border-radius:10px;
+  padding:9px 4px;text-align:center;}
+.mini-l{font-size:9px;letter-spacing:0.1em;text-transform:uppercase;color:var(--dimmer);}
+.mini-v{font-size:14px;font-weight:600;color:var(--cream);margin-top:3px;
+  font-variant-numeric:tabular-nums;}
+
+/* ============================================================ WALLET */
+.wbal{background:var(--panel);border:1px solid var(--line-soft);border-radius:15px;
+  padding:15px 16px;margin-bottom:11px;}
+.wbal-l{font-size:11px;letter-spacing:0.13em;text-transform:uppercase;color:var(--dimmer);}
+.wbal-v{font-size:27px;font-weight:600;margin-top:5px;color:var(--cream);
+  font-variant-numeric:tabular-nums;}
+.wbal-v.gold{background:var(--gold-grad);-webkit-background-clip:text;
+  background-clip:text;color:transparent;}
+.wbal-s{font-size:11px;color:var(--dimmer);margin-top:3px;}
+.swap-card{background:var(--panel);border:1px solid var(--line);border-radius:15px;
+  padding:15px 16px;margin-top:4px;}
+.swap-h{display:flex;align-items:center;gap:8px;font-family:'Playfair Display',serif;
+  font-weight:600;font-size:15px;color:var(--cream);}
+.swap-h svg{width:17px;height:17px;color:var(--gold);}
+.swap-p{font-size:12px;line-height:1.6;color:var(--dim);margin:8px 0 13px;}
+
+/* ============================================================ PROFILE */
+.scr-head .rand{margin-left:auto;display:flex;align-items:center;gap:6px;
+  border:1px solid var(--line);border-radius:9px;padding:7px 11px;
+  font-size:11.5px;font-weight:600;color:var(--gold);}
+.scr-head .rand svg{width:13px;height:13px;}
+.avatar-box{background:radial-gradient(ellipse 80% 80% at 50% 34%,#1b2e26,#10130f 78%);
+  border:1px solid var(--line);border-radius:17px;padding:16px 14px 14px;
+  text-align:center;margin-bottom:13px;}
+.avatar-box svg{display:block;margin:0 auto;}
+.field{margin-bottom:11px;}
+.field label{display:block;font-size:10.5px;letter-spacing:0.1em;text-transform:uppercase;
+  color:var(--dimmer);margin-bottom:5px;}
+.inp{background:var(--panel-2);border:1px solid var(--line-soft);border-radius:11px;
+  padding:11px 13px;font-size:13.5px;color:var(--cream);}
+.inp.muted{color:var(--dim);}
+.inp.ta{min-height:46px;}
+.opt-row{display:flex;align-items:center;gap:10px;margin-bottom:9px;
+  background:var(--panel);border:1px solid var(--line-soft);border-radius:11px;padding:9px 12px;}
+.opt-row .ol{flex:1;font-size:12px;color:var(--dim);}
+.swatches{display:flex;gap:7px;}
+.sw{width:18px;height:18px;border-radius:50%;}
+.sw.sel{box-shadow:0 0 0 2px var(--ink),0 0 0 3.6px var(--gold);}
+
+@media(max-width:560px){body{padding:32px 13px;}}
+</style>
+</head>
+<body>
+<div class="bg-glow"></div>
+
+<div class="head">
+  <div class="kicker">MORBIUS Mini App · Luxe Black &amp; Gold</div>
+  <h1>The whole app, one design system</h1>
+  <p>All five screens rebuilt in the direction you picked. Same layouts as your current app — fully reskinned and tidied up. Look it over; once you sign off, I build it into your real code.</p>
+</div>
+
+<div class="rail" id="rail"></div>
+
+<div class="foot">
+  Static mockup — non-functional, look only. Nothing here is clickable.<br/>
+  Next: you approve (or send tweaks), then I implement it in <code>app/tg/page.tsx</code> and the Telegram components.
+</div>
+
+<script>
+/* ---------- inline icons (stroke, currentColor) ---------- */
+function svg(p){return '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" '
+  +'stroke-width="2" stroke-linecap="round" stroke-linejoin="round">'+p+'</svg>';}
+var IC={
+  back:svg('<path d="M5 12h14"/><path d="M5 12l6 6"/><path d="M5 12l6-6"/>'),
+  chev:svg('<path d="M9 6l6 6l-6 6"/>'),
+  user:svg('<circle cx="12" cy="8" r="3.6"/><path d="M5.5 20a6.5 6.5 0 0 1 13 0"/>'),
+  chart:svg('<path d="M4 19V11"/><path d="M10 19V5"/><path d="M16 19v-6"/><path d="M3.2 19h17.6"/>'),
+  swap:svg('<path d="M4 9h13l-3.5-3.5"/><path d="M20 15H7l3.5 3.5"/>'),
+  diamond:svg('<path d="M12 3l8 9-8 9-8-9z"/>'),
+  ext:svg('<path d="M13 5h6v6"/><path d="M19 5l-9 9"/><path d="M18 14v4a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4"/>'),
+  refresh:svg('<path d="M20 11a8 8 0 1 0-2.3 5.7"/><path d="M20 4v6h-6"/>'),
+  save:svg('<path d="M6 4h10l4 4v12H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2z"/><path d="M9 4v5h6"/><circle cx="12" cy="14" r="2.6"/>')
+};
+
+/* ---------- video poker pieces ---------- */
+function card(rank,suit,color,held){
+  return '<div class="card'+(held?' held':'')+'" data-c="'+color+'">'
+    +'<span class="corner tl"><b>'+rank+'</b><i>'+suit+'</i></span>'
+    +'<span class="pip">'+suit+'</span>'
+    +'<span class="corner br"><b>'+rank+'</b><i>'+suit+'</i></span>'
+    +(held?'<span class="hold-badge">HOLD</span>':'')+'</div>';
+}
+var HAND=card('J','♥','red',1)+card('J','♠','blk',1)+card('A','♦','red',0)
+  +card('8','♣','blk',0)+card('3','♥','red',0);
+var PT=[['Royal Flush','250x'],['Straight Flush','50x'],['Four of a Kind','25x'],
+  ['Full House','9x'],['Flush','6x'],['Straight','4x'],['Three of a Kind','3x'],
+  ['Two Pair','2x'],['Jacks or Better','1x',1]];
+var ptRows=PT.map(function(r){return '<div class="pt-row'+(r[2]?' active':'')+'">'
+  +'<span class="pt-name">'+r[0]+'</span><span class="pt-mult">'+r[1]+'</span></div>';}).join('');
+
+/* ---------- the avatar drawing ---------- */
+var AVATAR='<svg viewBox="0 0 160 170" width="128" height="136">'
+ +'<path d="M26 170 Q33 122 80 117 Q127 122 134 170 Z" fill="#1b1813"/>'
+ +'<path d="M64 123 L80 152 L96 123 L88 117 L72 117 Z" fill="#f4ecdb"/>'
+ +'<path d="M64 123 L80 152 L61 134 Z" fill="#0e0d0b"/>'
+ +'<path d="M96 123 L80 152 L99 134 Z" fill="#0e0d0b"/>'
+ +'<path d="M80 126 L69 119 L69 132 Z" fill="#d9b25b"/>'
+ +'<path d="M80 126 L91 119 L91 132 Z" fill="#d9b25b"/>'
+ +'<circle cx="80" cy="126" r="3.6" fill="#b8923d"/>'
+ +'<rect x="71" y="103" width="18" height="22" rx="7" fill="#e2c6a6"/>'
+ +'<circle cx="46" cy="77" r="7" fill="#ecd5b8"/><circle cx="114" cy="77" r="7" fill="#ecd5b8"/>'
+ +'<ellipse cx="80" cy="74" rx="34" ry="38" fill="#ecd5b8"/>'
+ +'<path d="M45 65 Q43 29 80 27 Q117 29 115 65 Q104 44 80 47 Q69 48 63 57 Q57 50 45 65 Z" fill="#241f29"/>'
+ +'<path d="M59 67 Q67 62 75 67" stroke="#241f29" stroke-width="3" fill="none" stroke-linecap="round"/>'
+ +'<path d="M85 67 Q93 62 101 67" stroke="#241f29" stroke-width="3" fill="none" stroke-linecap="round"/>'
+ +'<ellipse cx="68" cy="77" rx="5" ry="6" fill="#2a2230"/>'
+ +'<ellipse cx="92" cy="77" rx="5" ry="6" fill="#2a2230"/>'
+ +'<circle cx="69.6" cy="75" r="1.7" fill="#fff"/><circle cx="93.6" cy="75" r="1.7" fill="#fff"/>'
+ +'<path d="M80 81 L77 91 Q80 93 83 91" stroke="#cda982" stroke-width="2.4" fill="none" stroke-linecap="round"/>'
+ +'<path d="M71 99 Q80 107 89 99" stroke="#b9785f" stroke-width="3" fill="none" stroke-linecap="round"/>'
+ +'</svg>';
+
+/* ---------- status bar ---------- */
+var STATUS='<div class="status"><span>9:41</span>'
+  +'<span class="sig"><i></i><i></i><i></i><i></i><span class="batt"></span></span></div>';
+
+/* ============================================================ SCREENS */
+function hub(){
+  var tiles=[
+    [IC.user,'Profile &amp; avatar','Edit your look and name'],
+    [IC.chart,'Your stats','Hands, wins, profit &amp; loss'],
+    [IC.swap,'Wallet &amp; swap','Move MORBIUS to chips and back'],
+    [IC.diamond,'MORBIUS Arcade','Video Poker — Jacks or Better']
+  ].map(function(t){
+    return '<div class="tile"><div class="tile-ic">'+t[0]+'</div>'
+      +'<div class="tile-tx"><div class="tile-t">'+t[1]+'</div>'
+      +'<div class="tile-s">'+t[2]+'</div></div>'
+      +'<div class="tile-ch">'+IC.chev+'</div></div>';
+  }).join('');
+  return '<div class="app">'
+   +'<div class="hub-brand"><span class="d">◆</span>MORBIUS<span class="d">◆</span></div>'
+   +'<div class="hub-player"><div class="avatar-ring"><div class="avatar-init">V</div></div>'
+   +'<div><div class="hub-name">Vesper</div>'
+   +'<div class="hub-handle">@vesper · wallet linked</div></div></div>'
+   +'<div class="balances">'
+   +'<div class="bal accent"><div class="bal-label">MORBIUS</div><div class="bal-val">1,284,500</div></div>'
+   +'<div class="bal"><div class="bal-label">Poker chips</div><div class="bal-val">12,450</div></div>'
+   +'</div><div class="tiles">'+tiles+'</div>'
+   +'<button class="btn-ghost">'+IC.ext+'Open morbius.io</button></div>';
+}
+
+function poker(){
+  return '<div class="app">'
+   +'<div class="vp-head"><div class="back">'+IC.back+'</div>'
+   +'<div class="vp-title-wrap"><div class="vp-htitle">MORBIUS <em>Arcade</em></div></div>'
+   +'<div class="vp-chips"><span class="coin"></span>12,450</div></div>'
+   +'<div class="vp-title"><div class="vp-tmain">Video Poker</div>'
+   +'<div class="vp-tsub">Jacks or Better</div></div>'
+   +'<div class="paytable">'+ptRows+'</div>'
+   +'<div class="felt"><div class="cards">'+HAND+'</div>'
+   +'<div class="felt-status">Pair of Jacks held · tap Draw</div></div>'
+   +'<div class="bet"><span class="bet-label">Bet</span>'
+   +'<div class="step">&minus;</div><span class="bet-amt">100</span><div class="step">+</div></div>'
+   +'<button class="deal">DRAW</button>'
+   +'<div class="vp-foot">Provably fair · every hand verifiable</div></div>';
+}
+
+function stats(){
+  var m=[['Hands played','2,847'],['Win rate','18.3%'],
+    ['Net profit / loss','+42,150','pos'],['Best streak','9'],
+    ['Hands won','521'],['Biggest pot','8,400']].map(function(x){
+    return '<div class="metric"><div class="metric-l">'+x[0]+'</div>'
+      +'<div class="metric-v'+(x[2]?' '+x[2]:'')+'">'+x[1]+'</div></div>';}).join('');
+  var hud=[['VPIP','24%'],['PFR','19%'],['3-Bet','7%'],
+    ['WTSD','28%'],['W$SD','54%'],['Aggr.','2.8']].map(function(x){
+    return '<div class="mini"><div class="mini-l">'+x[0]+'</div>'
+      +'<div class="mini-v">'+x[1]+'</div></div>';}).join('');
+  return '<div class="app">'
+   +'<div class="scr-head"><div class="back">'+IC.back+'</div>'
+   +'<div class="scr-title">Your stats</div></div>'
+   +'<div class="scope"><div class="seg active">Cash</div>'
+   +'<div class="seg">Tournaments</div><div class="seg">All</div></div>'
+   +'<div class="style-row"><span>Play style</span><b>Shark</b></div>'
+   +'<div class="metrics">'+m+'</div>'
+   +'<div class="hud-h">Poker HUD</div><div class="hud">'+hud+'</div>'
+   +'<button class="btn-ghost">'+IC.ext+'Full stats on morbius.io</button></div>';
+}
+
+function wallet(){
+  return '<div class="app">'
+   +'<div class="scr-head"><div class="back">'+IC.back+'</div>'
+   +'<div class="scr-title">Wallet &amp; swap</div></div>'
+   +'<div class="wbal"><div class="wbal-l">MORBIUS balance</div>'
+   +'<div class="wbal-v gold">1,284,500</div>'
+   +'<div class="wbal-s">In-game play balance</div></div>'
+   +'<div class="wbal"><div class="wbal-l">Poker chips</div>'
+   +'<div class="wbal-v">12,450</div>'
+   +'<div class="wbal-s">Used at poker tables</div></div>'
+   +'<div class="swap-card"><div class="swap-h">'+IC.swap+'Swap MORBIUS ↔ chips</div>'
+   +'<div class="swap-p">Swapping moves real value, so it happens on the secure site '
+   +'with your wallet. Your balances here refresh next time you open the hub.</div>'
+   +'<button class="btn-gold">'+IC.ext+'Swap on morbius.io</button></div></div>';
+}
+
+function profile(){
+  var skin=['#f0dcc4','#e2c6a6','#c89b73','#9b6e4c','#6f4a30'];
+  var hair=['#241f29','#5a3826','#caa24a','#8a3b3b','#3a3f4a'];
+  var eyes=['#3a6b4a','#3a557e','#6b4a2e','#5a3a6b','#2a2230'];
+  function row(label,colors,sel){
+    var sw=colors.map(function(c,i){
+      return '<span class="sw'+(i===sel?' sel':'')+'" style="background:'+c+'"></span>';
+    }).join('');
+    return '<div class="opt-row"><span class="ol">'+label+'</span>'
+      +'<div class="swatches">'+sw+'</div></div>';
+  }
+  return '<div class="app">'
+   +'<div class="scr-head"><div class="back">'+IC.back+'</div>'
+   +'<div class="scr-title">Profile</div>'
+   +'<div class="rand">'+IC.refresh+'Randomize</div></div>'
+   +'<div class="avatar-box">'+AVATAR+'</div>'
+   +'<div class="field"><label>Display name</label><div class="inp">Vesper</div></div>'
+   +row('Skin tone',skin,1)+row('Hair',hair,2)+row('Eyes',eyes,0)
+   +'<div class="field"><label>Bio</label>'
+   +'<div class="inp ta">Chasing royal flushes since ’24.</div></div>'
+   +'<div class="field"><label>X handle</label><div class="inp">vesper</div></div>'
+   +'<div class="field"><label>Telegram handle</label><div class="inp">vesper</div></div>'
+   +'<button class="btn-gold">'+IC.save+'Save profile</button></div>';
+}
+
+/* ============================================================ RENDER */
+var SCREENS=[
+  ['1','Hub','home screen',hub,'The front door — balances and the four sections.'],
+  ['2','Video Poker','the game',poker,'Jacks or Better. Gold and emerald felt, held cards lift.'],
+  ['3','Your stats','poker analytics',stats,'Scope tabs, key metrics, full poker HUD.'],
+  ['4','Wallet &amp; Swap','balances',wallet,'Balances plus the secure swap hand-off to the site.'],
+  ['5','Profile','avatar editor',profile,'Avatar preview, name, look pickers and socials.']
+];
+document.getElementById('rail').innerHTML=SCREENS.map(function(s){
+  return '<div class="col">'
+   +'<div class="col-top"><span class="col-num">'+s[0]+'</span>'
+   +'<span class="col-name">'+s[1]+'</span><span class="col-tag">'+s[2]+'</span></div>'
+   +'<div class="phone"><div class="screen">'+STATUS+s[3]()+'</div></div>'
+   +'<div class="caption">'+s[4]+'</div></div>';
+}).join('');
+</script>
+</body>
+</html>
