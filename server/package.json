@@ -14,7 +14,9 @@
     "poker:bot": "ts-node src/scripts/poker-bot.ts",
     "test": "jest",
     "test:watch": "jest --watch",
-    "test:coverage": "jest --coverage"
+    "test:coverage": "jest --coverage",
+    "test:integration": "jest --runInBand --selectProjects integration",
+    "postinstall": "(cd node_modules/@chevtek/poker-engine && npm run build) || true"
   },
   "dependencies": {
     "@chevtek/poker-engine": "^1.1.2",

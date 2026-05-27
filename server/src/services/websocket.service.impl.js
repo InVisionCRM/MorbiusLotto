@@ -346,6 +346,15 @@ class WebSocketService {
                         logger_1.logger.error('BJMulti disconnect handler error', { tableId, error: err });
                     });
                 }
+                // Poker: stamp disconnected_at so the auto-fold clock extends
+                // from 60s → 90s for this seat, giving the player time to
+                // reconnect before being auto-folded.
+                if (ws.currentRoom?.startsWith('poker:table:') && ws.playerAddress && this.pokerGameService) {
+                    const tableId = ws.currentRoom.replace('poker:table:', '');
+                    this.pokerGameService.markSeatDisconnected(tableId, ws.playerAddress).catch(err => {
+                        logger_1.logger.error('Poker disconnect mark error', { tableId, error: err });
+                    });
+                }
                 if (ws.currentRoom) {
                     const set = this.roomToClients.get(ws.currentRoom);
                     if (set) {
@@ -1112,6 +1121,10 @@ class WebSocketService {
             }
             const pinCode = payload?.pinCode && typeof payload.pinCode === 'string' ? payload.pinCode : undefined;
             const state = await this.pokerGameService.joinTable(tableId, ws.playerAddress, buyInNorm, pinCode);
+            // Joining a seat is an explicit reconnect — clear any stale disconnect stamp.
+            this.pokerGameService.markSeatConnected(tableId, ws.playerAddress).catch(err => {
+                logger_1.logger.error('Poker reconnect mark error (join_table)', { tableId, error: err });
+            });
             const roomId = `poker:table:${tableId}`;
             if (ws.currentRoom && ws.connectionId) {
                 const prevSet = this.roomToClients.get(ws.currentRoom);
@@ -1261,6 +1274,11 @@ class WebSocketService {
             if (!tableId || typeof tableId !== 'string') {
                 return this.sendError(ws, 'tableId required', message.requestId);
             }
+            // Treat a state query as a passive "I'm here" signal — clears any
+            // disconnected_at stamp so the auto-fold clock reverts to 60s.
+            this.pokerGameService.markSeatConnected(tableId, ws.playerAddress).catch(err => {
+                logger_1.logger.error('Poker reconnect mark error (get_state)', { tableId, error: err });
+            });
             const state = await this.pokerGameService.getTableState(tableId, ws.playerAddress);
             this.sendMessage(ws, { type: 'poker_table_state', payload: state, requestId: message.requestId });
         }

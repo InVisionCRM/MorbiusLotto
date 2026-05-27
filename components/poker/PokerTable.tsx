@@ -644,8 +644,12 @@ export function PokerTable({ state, currentPlayerAddress, timeLeft, chatBubbleBy
       onOpenEditQuickChat,
       hideSeatAvatar: hideSeatAvatars,
       onLeaveTable: onLeave,
-      onSitOut,
-      onSitBack,
+      // Sit Out / I'm Back are CASH-ONLY. In tournaments there is no "sit out"
+      // refuge — AFK players keep being dealt in and posting blinds until they
+      // bust (server enforces this in the deal query + setSitOut guard).
+      // Suppressing the callback hides the corresponding radial items in PokerSeat.
+      onSitOut: state.tournamentId ? undefined : onSitOut,
+      onSitBack: state.tournamentId ? undefined : onSitBack,
       onRequestMobileActivity,
       includeActivityInPlayerRadial: hideSeatAvatars,
       playerTagOffset,
