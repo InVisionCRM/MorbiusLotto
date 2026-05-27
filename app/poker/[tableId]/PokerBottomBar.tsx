@@ -13,7 +13,9 @@ interface PokerBottomBarProps {
 
 const SHELL_SELECTOR = '[data-poker-shell]';
 
-/** Poker shell sets padding on the main row from this (measured bar height). Fullscreen overlay only. */
+/** Measured bar height (px). Consumed by fullscreen overlay padding AND mobile-landscape CSS
+ * (globals.css "Poker landscape" section pins the bar `position: fixed` and pads the shell row
+ * using this var so the table doesn't sit under the bar). */
 export const POKER_BOTTOM_RESERVE_VAR = '--poker-bottom-reserve';
 
 export function PokerBottomBar({
@@ -25,8 +27,12 @@ export function PokerBottomBar({
   const rootRef = useRef<HTMLDivElement>(null);
   const show = !!(renderedState && mySeat && actions);
 
-  // Reserve vertical space on the shell row only for fullscreen (absolute bar over the flex row).
-  // Windowed mode docks the bar in the center column in-flow — no shell reserve.
+  // Always measure the bar's height into a CSS var on the shell. Consumers:
+  //   • Fullscreen overlay: pads the main flex row by this amount (bar is absolute).
+  //   • Mobile-landscape (globals.css): bar becomes `position: fixed`; the same var pads
+  //     the shell row so the felt doesn't get clipped under the bar. The previous
+  //     hardcoded 80px reservation was far too small for the default mobile variant
+  //     (~150–180px tall), which caused the bar to overlay the middle of the table.
   useLayoutEffect(() => {
     const shell = document.querySelector(SHELL_SELECTOR) as HTMLElement | null;
     if (!shell) return;
@@ -35,7 +41,7 @@ export function PokerBottomBar({
       shell.style.setProperty(POKER_BOTTOM_RESERVE_VAR, `${Math.max(0, Math.round(px))}px`);
     };
 
-    if (!show || !fullscreen) {
+    if (!show) {
       applyReserve(0);
       return () => {
         shell.style.removeProperty(POKER_BOTTOM_RESERVE_VAR);
@@ -56,10 +62,12 @@ export function PokerBottomBar({
     const ro = new ResizeObserver(measure);
     ro.observe(el);
     window.addEventListener('resize', measure);
+    window.addEventListener('orientationchange', measure);
 
     return () => {
       ro.disconnect();
       window.removeEventListener('resize', measure);
+      window.removeEventListener('orientationchange', measure);
       shell.style.removeProperty(POKER_BOTTOM_RESERVE_VAR);
     };
   }, [show, fullscreen]);

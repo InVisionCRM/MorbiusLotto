@@ -971,7 +971,7 @@ body {
    ═══════════════════════════════════════════════════════════════════════════ */
 
 /* Landscape on short viewports (phones): compact header + bottom bar */
-@media (orientation: landscape) and (max-height: 500px) {
+@media (orientation: landscape) and (max-height: 600px) {
   /* Shrink header padding to reclaim vertical space */
   [data-poker-shell] [data-poker-header] {
     padding-top: 2px !important;
@@ -984,7 +984,6 @@ body {
      mode reports inconsistent 100dvh during orientation change, so anchor with
      fixed positioning instead of letting it float in the flex column. */
   [data-poker-shell] [data-poker-bottom] {
-    grid-template-columns: 1fr !important;
     position: fixed !important;
     bottom: 0 !important;
     left: 0 !important;
@@ -993,9 +992,11 @@ body {
     padding-bottom: env(safe-area-inset-bottom, 0px);
   }
   /* Reserve room above the fixed bar so the scaled table doesn't sit beneath it.
-     Targets the main flex-row that holds the sidebar + table column. */
+     `--poker-bottom-reserve` is the live measured bar height (set by
+     PokerBottomBar.tsx). The fallback is a generous default in case the var
+     hasn't been measured yet on first paint. */
   [data-poker-shell] > .flex.flex-row.flex-1 {
-    padding-bottom: 80px !important;
+    padding-bottom: var(--poker-bottom-reserve, 180px) !important;
   }
 
   /* Let the table container use the full available width in landscape */
