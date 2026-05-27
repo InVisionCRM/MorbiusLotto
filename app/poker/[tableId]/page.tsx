@@ -48,7 +48,10 @@ import type { PokerTournamentCompletedPayload } from '@/lib/poker-tournament-com
 import { PokerActivityFeed } from '@/components/poker/PokerActivityFeed';
 import { VoiceChatPanel } from '@/components/poker/VoiceChatPanel';
 import { PokerTableLogoSponsorModal } from '@/components/poker/PokerTableLogoSponsorModal';
+import { PokerMobileTopBar } from '@/components/poker/PokerMobileTopBar';
 import { Sidebar, SidebarBody } from '@/components/ui/sidebar';
+import { useIsMobileLandscape } from '@/hooks/use-is-mobile-landscape';
+import { usePokerTournamentSummary } from '@/hooks/use-poker-tournament-summary';
 import {
   applyPokerE2EMockAction,
   POKER_E2E_MOCK_ADDRESS,
@@ -226,6 +229,18 @@ export default function PokerTablePage() {
     tournamentHudState && effectivePlayerAddress
       ? { state: tournamentHudState, myAddress: effectivePlayerAddress }
       : null;
+
+  // ── Mobile landscape: gate desktop chrome and show slim top bar ──
+  // True when the viewport is a landscape phone (width > height && height ≤ 500px).
+  // CSS-only Tailwind `sm:` breakpoints can't distinguish a landscape phone
+  // (e.g. 844×390) from a real desktop, so we use a JS hook here to gate
+  // React-level rendering of the tournament HUD sidebar, the activity rail,
+  // and the alternate PokerMobileTopBar overlay.
+  const isMobileLandscape = useIsMobileLandscape();
+  const tournamentSummary = usePokerTournamentSummary(
+    tournamentHudState ?? null,
+    effectivePlayerAddress,
+  );
 
   useEffect(() => {
     if (!isE2EMock || typeof window === 'undefined') return;
@@ -876,7 +891,7 @@ export default function PokerTablePage() {
                 : undefined
             }
           >
-            {tournamentHUDProp && !isFullscreen && (
+            {tournamentHUDProp && !isFullscreen && !isMobileLandscape && (
               <Sidebar pinStorageKey="poker-table-tournament-hud-pinned">
                 <SidebarBody
                   className="!sticky !top-0 !h-full !py-0 !px-0 bg-[rgba(6,8,12,0.92)] border-r border-white/10"
@@ -890,6 +905,20 @@ export default function PokerTablePage() {
             )}
 
             <div className="flex min-h-0 min-w-0 flex-1 flex-col relative">
+              {/* Mobile-landscape: slim top bar replaces the hidden
+                  tournament HUD sidebar + promo banner + token-info row.
+                  Surfaces blinds · countdown · rank, plus hand-info and
+                  chat icons, plus a stack readout. */}
+              {isMobileLandscape && !isFullscreen && (
+                <PokerMobileTopBar
+                  blinds={tournamentSummary.blinds}
+                  levelCountdown={tournamentSummary.levelCountdown}
+                  rank={tournamentSummary.rank}
+                  playersLeft={tournamentSummary.playersLeft}
+                  stack={mySeat?.stack ? formatChips(mySeat.stack) : null}
+                  onChatClick={() => setActivityMobileOpenSerial((s) => s + 1)}
+                />
+              )}
               {/* AFK / "I'm Back" banner — own-player-only. Shows as soon as
                   the player has missed a turn (counter >= 1); upgrades to a
                   more urgent message at counter >= 2 (hard AFK / fast-fold).
@@ -965,7 +994,7 @@ export default function PokerTablePage() {
               />
             </div>
 
-            {pokerChatRoomId && !isFullscreen && (
+            {pokerChatRoomId && !isFullscreen && !isMobileLandscape && (
               <Sidebar
                 pinStorageKey="poker-table-activity-rail-pinned"
                 desktopRailSide="right"
@@ -989,6 +1018,31 @@ export default function PokerTablePage() {
                   />
                 </SidebarBody>
               </Sidebar>
+            )}
+
+            {/* Mobile-landscape: mount PokerActivityFeed in a hidden host
+                so only its `createPortal(mobileDrawerChrome, document.body)`
+                escape-hatch surfaces. The visible "right rail" UI of the
+                feed has no place on a 390px-tall landscape phone and would
+                otherwise paint inline in document flow. The portaled drawer
+                opens via the top-bar 💬 button bumping
+                `activityMobileOpenSerial`. */}
+            {pokerChatRoomId && !isFullscreen && isMobileLandscape && (
+              <div aria-hidden className="hidden">
+                <PokerActivityFeed
+                  layout="right-rail"
+                  wsClient={wsClient}
+                  wsConnected={wsConnected}
+                  roomId={pokerChatRoomId}
+                  tableId={tableId}
+                  state={renderedState}
+                  mobileOpenRequestSerial={activityMobileOpenSerial}
+                  quickChatPhrases={quickChatPhrases}
+                  onQuickChatPhrase={onPhraseReaction}
+                  onOpenEditQuickChat={() => setShowEditQuickChatModal(true)}
+                  quickChatEligible={mySeatIndex >= 0}
+                />
+              </div>
             )}
           </div>
         </div>
