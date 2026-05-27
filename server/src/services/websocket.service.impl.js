@@ -139,7 +139,11 @@ class WebSocketService {
         this.chatRateLimitCleanupInterval = setInterval(() => {
             this.cleanupChatRateLimitMap();
         }, CHAT_PER_ADDRESS_CLEANUP_MS);
-        // Auto-fold timed-out poker turns (30s timer enforcement)
+        // Auto-fold timed-out poker turns.
+        // The 2s sweep cadence matters for the hard-AFK fast-fold path: once a
+        // player has missed two turns in a row, their per-turn budget drops to
+        // ~5s server-side. A 5s sweep would push the real-world wait closer to
+        // 10s, so we sweep every 2s and keep the worst-case ~7s.
         // broadcastState is handled internally by PokerGameService via setBroadcastCallback
         if (this.pokerGameService) {
             this.pokerAutoFoldInterval = setInterval(async () => {
@@ -160,7 +164,7 @@ class WebSocketService {
                 catch (err) {
                     logger_1.logger.error('Poker post-hand recovery sweep error', err);
                 }
-            }, 5000);
+            }, 2000);
             // In-process tournament bot actions (POKER_BOT_ADDRESSES on game server; no WS child required)
             this.pokerServerBotInterval = setInterval(async () => {
                 try {
@@ -2103,6 +2107,57 @@ class WebSocketService {
         catch (error) {
             logger_1.logger.error('Error issuing voice token:', error);
             this.sendError(ws, error.message || 'Failed to issue voice token', message.requestId);
+        }
+    }
+    async handlePokerSitOut(ws, message) {
+        try {
+            if (!this.pokerGameService || !ws.playerAddress) {
+                return this.sendError(ws, 'Poker not available or wallet required', message.requestId);
+            }
+            const { tableId } = message.payload ?? {};
+            if (!tableId || typeof tableId !== 'string') {
+                return this.sendError(ws, 'tableId required', message.requestId);
+            }
+            const state = await this.pokerGameService.setSitOut(tableId, ws.playerAddress);
+            this.sendMessage(ws, { type: 'poker_table_state', payload: state, requestId: message.requestId });
+        }
+        catch (error) {
+            logger_1.logger.error('Error setting sit out:', error);
+            this.sendError(ws, error.message || 'Failed to sit out', message.requestId);
+        }
+    }
+    async handlePokerSitBack(ws, message) {
+        try {
+            if (!this.pokerGameService || !ws.playerAddress) {
+                return this.sendError(ws, 'Poker not available or wallet required', message.requestId);
+            }
+            const { tableId } = message.payload ?? {};
+            if (!tableId || typeof tableId !== 'string') {
+                return this.sendError(ws, 'tableId required', message.requestId);
+            }
+            const state = await this.pokerGameService.setSitBack(tableId, ws.playerAddress);
+            this.sendMessage(ws, { type: 'poker_table_state', payload: state, requestId: message.requestId });
+        }
+        catch (error) {
+            logger_1.logger.error('Error setting sit back:', error);
+            this.sendError(ws, error.message || 'Failed to sit back', message.requestId);
+        }
+    }
+    async handlePokerImBack(ws, message) {
+        try {
+            if (!this.pokerGameService || !ws.playerAddress) {
+                return this.sendError(ws, 'Poker not available or wallet required', message.requestId);
+            }
+            const { tableId } = message.payload ?? {};
+            if (!tableId || typeof tableId !== 'string') {
+                return this.sendError(ws, 'tableId required', message.requestId);
+            }
+            const state = await this.pokerGameService.clearAfkStatus(tableId, ws.playerAddress);
+            this.sendMessage(ws, { type: 'poker_table_state', payload: state, requestId: message.requestId });
+        }
+        catch (error) {
+            logger_1.logger.error('Error clearing AFK status:', error);
+            this.sendError(ws, error.message || 'Failed to clear AFK status', message.requestId);
         }
     }
     // Get connection count

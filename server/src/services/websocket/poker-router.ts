@@ -12,6 +12,7 @@ export const POKER_MESSAGE_HANDLER_MAP: Record<string, string> = {
   poker_avatar_emotion: 'handlePokerAvatarEmotion',
   poker_sit_out: 'handlePokerSitOut',
   poker_sit_back: 'handlePokerSitBack',
+  poker_im_back: 'handlePokerImBack',
   poker_tournament_list: 'handlePokerTournamentList',
   poker_tournament_list_reclaimable: 'handlePokerTournamentListReclaimable',
   poker_tournament_list_claimable: 'handlePokerTournamentListClaimable',

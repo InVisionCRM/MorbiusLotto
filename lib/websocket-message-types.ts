@@ -52,6 +52,7 @@ export const WS_MESSAGE_TYPES = {
   pokerAvatarEmotion: 'poker_avatar_emotion',
   pokerSitOut: 'poker_sit_out',
   pokerSitBack: 'poker_sit_back',
+  pokerImBack: 'poker_im_back',
   pokerVoiceToken: 'poker_voice_token',
 
   // Poker tournaments
@@ -143,6 +144,7 @@ export const WS_POKER_MESSAGES = [
   WS_MESSAGE_TYPES.pokerAvatarEmotion,
   WS_MESSAGE_TYPES.pokerSitOut,
   WS_MESSAGE_TYPES.pokerSitBack,
+  WS_MESSAGE_TYPES.pokerImBack,
   WS_MESSAGE_TYPES.pokerVoiceToken,
   WS_MESSAGE_TYPES.pokerTournamentCreate,
   WS_MESSAGE_TYPES.pokerTournamentJoin,
