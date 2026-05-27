@@ -116,8 +116,8 @@ export class ProvablyFairService {
     const pfResult = this.generateProvablyFairRandom(seeds, 0, 1);
     const shouldHit = pfResult.result === 1;
 
-    // Standard blackjack dealer rules: hit on soft 17
-    if (dealerTotal < 17 || (dealerTotal === 17 && hasAce)) {
+    // Dealer stands on all 17s (S17)
+    if (dealerTotal < 17) {
       return 'hit';
     }
 

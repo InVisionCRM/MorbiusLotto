@@ -1430,9 +1430,10 @@ export class BlackjackMultiGameService {
     const round = roundResult.rows[0];
     const dealerCards: number[] = round.dealer_cards;
 
+    // Dealer stands on all 17s (S17)
     while (true) {
       const dh = this.pfService.calculateHandTotalV2(dealerCards);
-      if (dh.total >= 17 && !(dh.total === 17 && dh.hasAce)) break;
+      if (dh.total >= 17) break;
       const draw = this.drawCard(deck, dp); dp = draw.dp;
       dealerCards.push(draw.card);
     }
