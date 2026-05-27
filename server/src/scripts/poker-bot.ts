@@ -62,18 +62,18 @@ const MAX_BOTS = 10;
 const BOT_ADDRESSES = getPokerBotWalletAddressList({ server: false });
 
 const BOT_DISPLAY_NAMES = [
-  'Jupiter',
-  'Juno',
-  'Neptune',
-  'Minerva',
-  'Apollo',
-  'Diana',
-  'Mars',
-  'Venus',
-  'Vulcan',
-  'Mercury',
-  'Ceres',
-  'Bacchus',
+  'Brunson',
+  'Hellmuth',
+  'Negreanu',
+  'Ivey',
+  'Ungar',
+  'Moss',
+  'Chan',
+  'Dwan',
+  'Seidel',
+  'Antonius',
+  'Esfandiari',
+  'Selbst',
 ];
 
 function botDisplayNameFor(address: string): string {
