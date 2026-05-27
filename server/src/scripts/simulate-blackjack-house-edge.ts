@@ -5,7 +5,7 @@
  * - ProvablyFairService.fisherYatesShuffle(serverSeed, clientSeed, nonce) for deck
  * - ProvablyFairService.calculateHandTotalV2 / isNaturalBlackjackV2 for totals and BJ
  * - Same deal order as server: player, dealer, player, dealer (deck indices 0,1,2,3)
- * - Dealer hits soft 17; blackjack pays 3:2; win 1:1, push return stake
+ * - Dealer stands on all 17s (S17); blackjack pays 3:2; win 1:1, push return stake
  *
  * Player strategy: basic strategy hit/stand only (no split/double). So house
  * edge will be higher than full basic strategy (~0.5%); expect ~3–4% with
@@ -85,11 +85,11 @@ function runOneHand(deck: number[], position: { current: number }): { payout: nu
     }
   }
 
-  // Dealer turn (hit soft 17)
+  // Dealer turn (stand on all 17s, S17)
   const dealerHand = [...dealerCards];
   while (true) {
     const d = pf.calculateHandTotalV2(dealerHand);
-    if (d.total >= 17 && !(d.total === 17 && d.hasAce)) break;
+    if (d.total >= 17) break;
     dealerHand.push(deck[position.current++]);
   }
 

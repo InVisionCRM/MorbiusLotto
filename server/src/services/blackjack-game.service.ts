@@ -908,11 +908,11 @@ export class BlackjackGameService {
 
     // If all player hands are already bust, skip dealer turn entirely.
     if (!allHandsBust) {
-      // Dealer hits on soft 17
+      // Dealer stands on all 17s (S17)
       while (true) {
         const dealerHand = this.pfService.calculateHandTotalV2(dealerCards);
 
-        if (dealerHand.total >= 17 && !(dealerHand.total === 17 && dealerHand.hasAce)) {
+        if (dealerHand.total >= 17) {
           dealerActions.push({ type: 'stand', timestamp: Date.now() });
           break;
         }
