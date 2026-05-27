@@ -61,6 +61,28 @@ const MAX_BOTS = 10;
 
 const BOT_ADDRESSES = getPokerBotWalletAddressList({ server: false });
 
+const BOT_DISPLAY_NAMES = [
+  'Jupiter',
+  'Juno',
+  'Neptune',
+  'Minerva',
+  'Apollo',
+  'Diana',
+  'Mars',
+  'Venus',
+  'Vulcan',
+  'Mercury',
+  'Ceres',
+  'Bacchus',
+];
+
+function botDisplayNameFor(address: string): string {
+  const normalized = address.toLowerCase();
+  const idx = BOT_ADDRESSES.indexOf(normalized);
+  if (idx >= 0 && idx < BOT_DISPLAY_NAMES.length) return BOT_DISPLAY_NAMES[idx];
+  return `Bot ${normalized.slice(2, 6)}${normalized.slice(-2)}`.toUpperCase();
+}
+
 const POKER_CASH_MIN_BUY_IN_BB = 40;
 const POKER_CASH_MAX_BUY_IN_BB = 100;
 const DEFAULT_BUY_IN_BB = 80;
@@ -337,17 +359,17 @@ async function ensureBotChipBalances(addresses: string[], minChips: bigint): Pro
         [normalized, minChips.toString()],
       );
 
-      const fallbackDisplayName = `Bot ${normalized.slice(2, 6)}${normalized.slice(-2)}`.toUpperCase();
+      const botName = botDisplayNameFor(normalized);
       const avatarConfig = randomPlaceholderConfig(new Set());
       await pool.query(
         `INSERT INTO chat_display_names (wallet_address, display_name, profile_image_url, avatar_config, bio, x_handle, tg_handle)
          VALUES ($1, $2, NULL, $3::jsonb, NULL, NULL, NULL)
          ON CONFLICT (wallet_address)
          DO UPDATE SET
-           display_name = COALESCE(chat_display_names.display_name, EXCLUDED.display_name),
+           display_name = EXCLUDED.display_name,
            avatar_config = COALESCE(chat_display_names.avatar_config, EXCLUDED.avatar_config),
            updated_at = NOW()`,
-        [normalized, fallbackDisplayName, JSON.stringify(avatarConfig)],
+        [normalized, botName, JSON.stringify(avatarConfig)],
       );
 
       console.log(`[Bot] Ensured poker chips >= ${minChips.toString()} for ${normalized}`);
