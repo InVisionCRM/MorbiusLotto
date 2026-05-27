@@ -53,6 +53,7 @@ import MiniAppLimbo from '@/components/telegram/MiniAppLimbo';
 import MiniAppMines from '@/components/telegram/MiniAppMines';
 import MiniAppHiLo from '@/components/telegram/MiniAppHiLo';
 import MiniAppDice from '@/components/telegram/MiniAppDice';
+import MiniAppBaccarat from '@/components/telegram/MiniAppBaccarat';
 import MiniAppRecentWins from '@/components/telegram/MiniAppRecentWins';
 import {
   MTT_TEMPLATES,
@@ -125,6 +126,7 @@ type View =
   | 'mines'
   | 'hilo'
   | 'dice'
+  | 'baccarat'
   | 'lobby'
   | 'createTournament'
   | 'leaderboard'
@@ -987,7 +989,8 @@ export default function TelegramMiniAppPage() {
         view === 'limbo' ||
         view === 'mines' ||
         view === 'hilo' ||
-        view === 'dice'
+        view === 'dice' ||
+        view === 'baccarat'
       )
         setView('arcade');
       else setView('hub');
@@ -1616,6 +1619,13 @@ export default function TelegramMiniAppPage() {
                     sub: 'Roll under your target · instant payout',
                     target: 'dice' as View,
                   },
+                  {
+                    key: 'baccarat',
+                    icon: <IconCards size={20} aria-hidden />,
+                    title: 'Baccarat',
+                    sub: 'Punto Banco · Player, Banker, or Tie',
+                    target: 'baccarat' as View,
+                  },
                 ]
               ).map((tile) => (
                 <button
@@ -1677,6 +1687,15 @@ export default function TelegramMiniAppPage() {
         {/* ---- ARCADE: DICE ---- */}
         {loadState === 'ready' && session && session.linked && view === 'dice' && (
           <MiniAppDice
+            initData={initData}
+            initialChipBalance={session.chipBalance ?? '0'}
+            onBack={() => setView('arcade')}
+          />
+        )}
+
+        {/* ---- ARCADE: BACCARAT ---- */}
+        {loadState === 'ready' && session && session.linked && view === 'baccarat' && (
+          <MiniAppBaccarat
             initData={initData}
             initialChipBalance={session.chipBalance ?? '0'}
             onBack={() => setView('arcade')}
