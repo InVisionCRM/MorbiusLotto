@@ -602,6 +602,16 @@ export default function PokerTablePage() {
     }
   }, [wsClient, tableId, setState]);
 
+  const handleImBack = useCallback(async () => {
+    if (!wsClient) return;
+    try {
+      const next = await wsClient.pokerImBack(tableId);
+      setState(next);
+    } catch (err) {
+      toast.error((err as Error).message || 'Failed to clear AFK status');
+    }
+  }, [wsClient, tableId, setState]);
+
   const handleShowCards = useCallback(async () => {
     if (!wsClient || !hand?.handId) return;
     try {
@@ -880,6 +890,34 @@ export default function PokerTablePage() {
             )}
 
             <div className="flex min-h-0 min-w-0 flex-1 flex-col relative">
+              {/* AFK / "I'm Back" banner — own-player-only. Shows as soon as
+                  the player has missed a turn (counter >= 1); upgrades to a
+                  more urgent message at counter >= 2 (hard AFK / fast-fold).
+                  Click I'M BACK to clear flags and (in cash) sit back in. */}
+              {mySeat && (mySeat.consecutiveTimeouts ?? 0) >= 1 && (
+                <div className="pointer-events-auto absolute left-1/2 top-3 z-30 -translate-x-1/2">
+                  <div
+                    className={`flex items-center gap-3 rounded-full px-3 py-1.5 text-xs font-semibold shadow-lg ${
+                      (mySeat.consecutiveTimeouts ?? 0) >= 2
+                        ? 'bg-red-600/95 text-white border border-red-300/50'
+                        : 'bg-amber-500/95 text-white border border-amber-200/50'
+                    }`}
+                  >
+                    <span className="leading-tight">
+                      {(mySeat.consecutiveTimeouts ?? 0) >= 2
+                        ? "You're AFK — hands are auto-folding fast."
+                        : 'You missed a turn. Still there?'}
+                    </span>
+                    <button
+                      type="button"
+                      onClick={handleImBack}
+                      className="rounded-full bg-white/95 px-2.5 py-1 text-[11px] font-bold uppercase tracking-wide text-slate-900 hover:bg-white"
+                    >
+                      I'm Back
+                    </button>
+                  </div>
+                </div>
+              )}
               <PokerTableView
                 tableId={tableId}
                 tableScale={tableScale}

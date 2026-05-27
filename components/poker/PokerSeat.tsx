@@ -992,6 +992,35 @@ export function PokerSeat({ seat, index, holeCards, isCurrentPlayer, showCardBac
             }
             return avatarCard;
           })()}
+
+          {/* AFK badge — soft warning at 1 missed turn, hard AFK at 2+.
+              Visible to the whole table so opponents see why this seat is
+              folding fast. Positioned above the avatar so it isn't clipped
+              by the avatar's overflow-hidden circle. */}
+          {(() => {
+            const ct = seat.consecutiveTimeouts ?? 0;
+            if (ct < 1) return null;
+            const hard = ct >= 2;
+            return (
+              <div
+                className="pointer-events-none absolute left-1/2 -translate-x-1/2 z-20"
+                style={{ top: -10 }}
+              >
+                <div
+                  className="rounded-full px-1.5 py-[2px] text-[9px] font-bold leading-none tracking-wide uppercase shadow-md"
+                  style={{
+                    background: hard ? 'rgba(220,38,38,0.95)' : 'rgba(245,158,11,0.95)',
+                    color: '#fff',
+                    border: hard ? '1px solid rgba(255,200,200,0.45)' : '1px solid rgba(255,230,180,0.45)',
+                    textShadow: '0 1px 1px rgba(0,0,0,0.4)',
+                  }}
+                  title={hard ? 'AFK — folding quickly' : '1 turn missed'}
+                >
+                  {hard ? 'AFK' : 'Idle'}
+                </div>
+              </div>
+            );
+          })()}
         </div>
       ) : (
         <div className="relative flex flex-col items-center flex-shrink-0 gap-0.5" style={{ zIndex: 1 }} />

@@ -230,6 +230,14 @@ const RAKE_PERCENT = 5; // 5% of each pot
 // continue to be dealt in and post blinds until they bust out, since granting
 // them a chip-preservation refuge would be unfair to the rest of the field.
 const POKER_AFK_KICK_AFTER = 2;
+// Hard-AFK fast-fold clock (seconds). Once a player's consecutive_timeouts
+// reaches POKER_AFK_KICK_AFTER, the auto-fold sweep stops waiting the normal
+// 60s/90s for their turn — it cuts them down to this much shorter window so
+// the rest of the table isn't held hostage. In tournaments this is what
+// actually drives the bleed-out (the player is still dealt and still posts
+// blinds, but each acting turn folds within ~5s instead of 60s). Cleared by
+// any voluntary action OR by clicking "I'm Back".
+const POKER_AFK_FAST_FOLD_SECONDS = 5;
 // Post-showdown pause before the next hand is dealt. Keep in sync with
 // `POKER_BETWEEN_HANDS_DELAY_MS` in `lib/poker-between-hands-delay.ts`.
 const SHOWDOWN_DELAY_MS = 15_000;
@@ -2120,6 +2128,40 @@ export class PokerGameService {
   }
 
   // ---------------------------------------------------------------------------
+  // clearAfkStatus — "I'm Back" button
+  // ---------------------------------------------------------------------------
+  //
+  // Resets the AFK flags on the player's seat in one shot:
+  //   - consecutive_timeouts = 0  (lifts hard-AFK fast-fold mode)
+  //   - disconnected_at = NULL    (lifts DC clock extension)
+  //   - status: if cash and they were sitting_out via AFK kick, flip back to
+  //     'active' so they get dealt back in. (Tournaments never set sitting_out
+  //     via AFK, so the status update is a no-op there.)
+  //
+  // Idempotent — safe to call any number of times.
+
+  async clearAfkStatus(tableId: string, playerAddress: string): Promise<PokerTableState> {
+    return this.withTableLock(tableId, async () => {
+      const pool = this.getPool();
+      const normalized = this.normalizeAddress(playerAddress);
+      const result = await pool.query(
+        `UPDATE poker_seats
+         SET consecutive_timeouts = 0,
+             disconnected_at = NULL,
+             status = CASE WHEN status = 'sitting_out' THEN 'active' ELSE status END,
+             sit_out_since = CASE WHEN status = 'sitting_out' THEN NULL ELSE sit_out_since END
+         WHERE table_id = $1 AND LOWER(player_address) = LOWER($2)
+         RETURNING player_address`,
+        [tableId, normalized]
+      );
+      if (result.rows.length === 0) throw new Error('Seat not found');
+      logger.info('Player cleared AFK status (I\'m Back)', { tableId, player: normalized });
+      await this.broadcastState(tableId);
+      return this.getTableState(tableId, normalized);
+    });
+  }
+
+  // ---------------------------------------------------------------------------
   // Disconnect tracking — extends the auto-fold clock from 60s → 90s when the
   // player's WebSocket has dropped. See autoFoldTimedOutTurns and the
   // ws.on('close') handler in websocket.service.impl.js.
@@ -3079,11 +3121,18 @@ export class PokerGameService {
 
   async autoFoldTimedOutTurns(): Promise<string[]> {
     const pool = this.getPool();
-    // The auto-fold clock is 60 seconds for a connected player. If the player's
-    // WebSocket has dropped (disconnected_at IS NOT NULL on their seat), the
-    // threshold extends to 90 seconds so a reconnecting player has room to
-    // resume play before being auto-folded. The flag is cleared on any
-    // reconnect signal (poker_get_state / poker_join_table / voluntary action).
+    // Auto-fold clock has three tiers:
+    //   - Hard AFK (consecutive_timeouts >= POKER_AFK_KICK_AFTER): ~5s. Once a
+    //     player has missed two turns in a row, we stop letting them stall the
+    //     table. In tournaments this is what drives the bleed-out — they keep
+    //     being dealt and keep posting blinds, but each turn folds in 5s.
+    //     Hard-AFK wins over the disconnect extension; once you've proven you
+    //     aren't paying attention, the DC grace is moot.
+    //   - Disconnected (disconnected_at IS NOT NULL): 90s. Browser closed,
+    //     network dropped, etc. Extra room to reconnect.
+    //   - Connected & engaged: 60s. Normal clock.
+    // The hard-AFK counter is cleared on any voluntary action OR on poker_im_back.
+    // The disconnect flag is cleared on any reconnect signal.
     const timedOut = await pool.query(
       `SELECT h.id AS hand_id, h.table_id, h.acting_position
        FROM poker_hands h
@@ -3091,11 +3140,13 @@ export class PokerGameService {
        WHERE h.completed_at IS NULL
          AND h.acting_position IS NOT NULL
          AND h.turn_started_at < NOW() - (
-           CASE WHEN ps.disconnected_at IS NOT NULL
-                THEN INTERVAL '90 seconds'
-                ELSE INTERVAL '60 seconds'
+           CASE
+             WHEN ps.consecutive_timeouts >= $1 THEN ($2 || ' seconds')::INTERVAL
+             WHEN ps.disconnected_at IS NOT NULL THEN INTERVAL '90 seconds'
+             ELSE INTERVAL '60 seconds'
            END
-         )`
+         )`,
+      [POKER_AFK_KICK_AFTER, String(POKER_AFK_FAST_FOLD_SECONDS)]
     );
 
     const folded: string[] = [];

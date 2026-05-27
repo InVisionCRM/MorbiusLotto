@@ -1001,6 +1001,15 @@ export class BlackjackWebSocketClient {
     return this.sendRequest(WS_MESSAGE_TYPES.pokerSitBack, { tableId });
   }
 
+  /**
+   * "I'm Back" — clears AFK flags after a player has missed turns. Resets
+   * consecutive_timeouts to 0 and (in cash games) flips an AFK-kicked
+   * sitting_out seat back to active. Auth required.
+   */
+  async pokerImBack(tableId: string): Promise<PokerTableState> {
+    return this.sendRequest(WS_MESSAGE_TYPES.pokerImBack, { tableId });
+  }
+
   /** Get current table state (e.g. after reconnect). Auth required. */
   async pokerGetState(tableId: string): Promise<PokerTableState> {
     return this.sendRequest(WS_MESSAGE_TYPES.pokerGetState, { tableId });
