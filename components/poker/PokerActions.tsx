@@ -539,12 +539,20 @@ export function PokerActions({
   }
 
   // ── Mobile-landscape compact bar ──────────────────────────────────────────
-  // On landscape phones (≤500px tall) we render a single thin row:
-  //   [AUTO•] [Fold] [Check or Call] [Raise → bet sheet]
+  // On landscape phones (≤600px tall) we render a thin VERTICAL strip pinned
+  // to the right edge of the screen (PokerBottomBar puts this wrapper in a
+  // fixed right column). The column stacks:
+  //   [AUTO•]
+  //   [Fold]
+  //   [Check or Call]
+  //   [Raise → bet sheet]
   // Bet sizing lives in the PokerBetSheet (no inline slider / presets / ± steppers).
   // Pre-actions live in the PokerPreActionSheet (no permanent checkbox column).
   // The promo banner is intentionally not rendered here — it's chrome that
   // belongs in the menu / between hands on mobile.
+  // Why a right-side strip: a horizontal bar at the bottom eats ~1/4 of the
+  // viewport in landscape, squishing the felt. A ~96px right column instead
+  // gives the table the full landscape height with only a sliver of width loss.
   if (isMobileLandscape) {
     const showCallButton = isFacingBet;
     const verb: 'Bet' | 'Raise' = isFacingBet ? 'Raise' : 'Bet';
@@ -560,17 +568,18 @@ export function PokerActions({
     return (
       <div
         data-testid="poker-actions"
-        className="w-full select-none"
+        className="h-full w-full select-none"
         style={{ borderTop: 'none', position: 'relative', zIndex: 30 }}
         role="group"
         aria-label="Poker actions"
       >
         <div
-          className="flex w-full items-stretch gap-1.5 px-2 py-1.5"
+          className="flex h-full w-full flex-col items-stretch gap-1.5 px-1.5 py-2"
           style={{
-            paddingLeft: 'max(0.5rem, env(safe-area-inset-left, 0px))',
-            paddingRight: 'max(0.5rem, env(safe-area-inset-right, 0px))',
-            paddingBottom: 'max(0.375rem, env(safe-area-inset-bottom, 0.375rem))',
+            paddingLeft: 'max(0.375rem, env(safe-area-inset-left, 0px))',
+            paddingRight: 'max(0.375rem, env(safe-area-inset-right, 0px))',
+            paddingTop: 'max(0.5rem, env(safe-area-inset-top, 0px))',
+            paddingBottom: 'max(0.5rem, env(safe-area-inset-bottom, 0.5rem))',
           }}
         >
           {/* AUTO pre-action toggle */}
@@ -581,7 +590,7 @@ export function PokerActions({
             aria-label="Auto action settings"
             aria-pressed={preAction != null}
             className={[
-              'relative flex h-10 w-11 shrink-0 flex-col items-center justify-center gap-0.5 rounded-md border text-[8px] font-bold leading-none tracking-wider transition-colors',
+              'relative flex h-10 w-full shrink-0 flex-col items-center justify-center gap-0.5 rounded-md border text-[9px] font-bold leading-none tracking-wider transition-colors',
               preAction
                 ? 'border-teal-400 bg-teal-400/15 text-teal-300'
                 : 'border-white/15 bg-white/[0.06] text-white/60 hover:bg-white/10',
@@ -603,7 +612,7 @@ export function PokerActions({
             type="button"
             onClick={handleFoldWithSound}
             disabled={!canAct}
-            className={`flex-1 min-h-[2.5rem] rounded-md text-sm font-extrabold tracking-wide transition-all active:scale-[0.97] ${foldBtnClass}`}
+            className={`w-full flex-1 min-h-[2.25rem] rounded-md text-sm font-extrabold tracking-wide transition-all active:scale-[0.97] ${foldBtnClass}`}
             style={{ ...foldBtnStyleCommit, ...dimCommitWhenNotActing }}
           >
             Fold
@@ -616,7 +625,7 @@ export function PokerActions({
               type="button"
               onClick={handleCallWithSound}
               disabled={!canAct || !isFacingBet}
-              className={`flex-[1.2] min-h-[2.5rem] rounded-md text-sm font-extrabold tracking-wide transition-all active:scale-[0.97] ${checkBtnClass}`}
+              className={`w-full flex-1 min-h-[2.25rem] rounded-md text-sm font-extrabold tracking-wide transition-all active:scale-[0.97] ${checkBtnClass}`}
               style={{ ...callBtnStyleCommit, ...dimCommitWhenNotActing }}
             >
               <span className="flex flex-col items-center justify-center gap-0.5 leading-none">
@@ -632,7 +641,7 @@ export function PokerActions({
               type="button"
               onClick={handleCheckWithSound}
               disabled={!canAct || !canCheck}
-              className={`flex-[1.2] min-h-[2.5rem] rounded-md text-sm font-extrabold tracking-wide transition-all active:scale-[0.97] ${checkBtnClass}`}
+              className={`w-full flex-1 min-h-[2.25rem] rounded-md text-sm font-extrabold tracking-wide transition-all active:scale-[0.97] ${checkBtnClass}`}
               style={{ ...checkBtnStyleCommit, ...dimCommitWhenNotActing }}
             >
               Check
@@ -649,13 +658,13 @@ export function PokerActions({
             }}
             disabled={!canAct || stackAmt === 0n}
             aria-label={`${verb} — choose amount`}
-            className={`flex-[1.4] min-h-[2.5rem] rounded-md text-sm font-extrabold tracking-wide transition-all active:scale-[0.97] ${primaryBtnClass}`}
+            className={`w-full flex-1 min-h-[2.25rem] rounded-md text-sm font-extrabold tracking-wide transition-all active:scale-[0.97] ${primaryBtnClass}`}
             style={{ ...primaryBtnStyle, ...dimCommitWhenNotActing }}
           >
             <span className="flex flex-col items-center justify-center gap-0.5 leading-none">
               <span>{verb}</span>
               <span className="text-[10px] font-semibold opacity-85 tabular-nums">
-                ▲ to {customAmount}
+                ▲ {customAmount}
               </span>
             </span>
           </button>

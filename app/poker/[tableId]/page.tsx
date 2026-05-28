@@ -28,7 +28,7 @@ import { PokerHeaderBar } from './PokerHeaderBar';
 import { PokerTableView } from './PokerTableView';
 import { PokerPopups } from './PokerPopups';
 import { PokerPanels } from './PokerPanels';
-import { PokerBottomBar, POKER_BOTTOM_RESERVE_VAR } from './PokerBottomBar';
+import { PokerBottomBar, POKER_BOTTOM_RESERVE_VAR, POKER_SIDE_STRIP_W } from './PokerBottomBar';
 import { usePokerConnection } from './PokerConnection';
 import {
   usePokerActionsLogic,
@@ -888,6 +888,8 @@ export default function PokerTablePage() {
             style={
               isFullscreen
                 ? { paddingBottom: `var(${POKER_BOTTOM_RESERVE_VAR}, 0px)` }
+                : isMobileLandscape
+                ? { paddingRight: POKER_SIDE_STRIP_W }
                 : undefined
             }
           >
@@ -988,6 +990,7 @@ export default function PokerTablePage() {
 
               <PokerBottomBar
                 fullscreen={isFullscreen}
+                mobileLandscape={isMobileLandscape && !isFullscreen}
                 renderedState={renderedState}
                 mySeat={mySeat}
                 actions={sharedActions}

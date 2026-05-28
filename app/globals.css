@@ -970,7 +970,10 @@ body {
    All landscape adaptations are purely visual via these CSS overrides.
    ═══════════════════════════════════════════════════════════════════════════ */
 
-/* Landscape on short viewports (phones): compact header + bottom bar */
+/* Landscape on short viewports (phones): compact header + right-side action strip.
+   The strip itself is positioned by React (see PokerBottomBar `mobileLandscape`
+   branch); page.tsx pads the shell's main flex row with `padding-right` so the
+   felt doesn't sit under it. This file only handles header polish + width cap. */
 @media (orientation: landscape) and (max-height: 600px) {
   /* Shrink header padding to reclaim vertical space */
   [data-poker-shell] [data-poker-header] {
@@ -978,25 +981,6 @@ body {
     padding-bottom: 2px !important;
     gap: 0.25rem;
     font-size: 0.8em;
-  }
-
-  /* Bottom bar: pin to viewport bottom in landscape mobile. iOS PWA standalone
-     mode reports inconsistent 100dvh during orientation change, so anchor with
-     fixed positioning instead of letting it float in the flex column. */
-  [data-poker-shell] [data-poker-bottom] {
-    position: fixed !important;
-    bottom: 0 !important;
-    left: 0 !important;
-    right: 0 !important;
-    z-index: 40 !important;
-    padding-bottom: env(safe-area-inset-bottom, 0px);
-  }
-  /* Reserve room above the fixed bar so the scaled table doesn't sit beneath it.
-     `--poker-bottom-reserve` is the live measured bar height (set by
-     PokerBottomBar.tsx). The fallback is a generous default in case the var
-     hasn't been measured yet on first paint. */
-  [data-poker-shell] > .flex.flex-row.flex-1 {
-    padding-bottom: var(--poker-bottom-reserve, 180px) !important;
   }
 
   /* Let the table container use the full available width in landscape */
