@@ -115,6 +115,13 @@ const CATEGORIES: Category[] = [
         tagline: '6-of-55 draws. Jackpot rolls until somebody hits.',
         image: '/morbius/Morbius_Lottery.png',
       },
+      {
+        key: 'monte',
+        href: '/monte',
+        title: 'Monte',
+        tagline: 'Find the diamond. No MORBIUS — just for streaks.',
+        image: '/Games-Section/More-To-Come_GS.png',
+      },
     ],
   },
 ]
