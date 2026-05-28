@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { useAccount, useReadContract, useWriteContract, useWaitForTransactionReceipt, useChainId, useSwitchChain } from 'wagmi';
 import { formatEther } from 'viem';
 import GlobalMainNav from '@/components/shared/GlobalMainNav';
@@ -9,6 +9,7 @@ import { morbiusHolderDistributorAbi } from '@/abi/morbius-holder-distributor';
 import { pulsechain } from '@/lib/chains';
 import { toast } from 'sonner';
 import { useGasParams } from '@/lib/tx-gas';
+import { MonteWaitOverlay } from '@/components/Monte/MonteWaitOverlay';
 
 const DISTRIBUTOR_ADDRESS = MORBIUS_HOLDER_DISTRIBUTOR_ADDRESS as `0x${string}`;
 
@@ -44,6 +45,9 @@ export default function ClaimFeesPage() {
   const hasClaimable = earnedBigInt > 0n;
   const isBusy = isPending || isConfirming;
 
+  const [actionLabel, setActionLabel] = useState<string | null>(null);
+  const [overlayDismissed, setOverlayDismissed] = useState(false);
+
   useEffect(() => {
     if (isSuccess) {
       refetchEarned();
@@ -71,6 +75,8 @@ export default function ClaimFeesPage() {
   };
 
   const handleUpdatePool = () => {
+    setActionLabel('Updating reward pool');
+    setOverlayDismissed(false);
     ensureChain().then(() => {
       writeContract({
         address: DISTRIBUTOR_ADDRESS,
@@ -86,6 +92,8 @@ export default function ClaimFeesPage() {
       toast.error('Nothing to claim');
       return;
     }
+    setActionLabel(`Claiming ${formatTwoDecimals(earnedBigInt)} MORBIUS`);
+    setOverlayDismissed(false);
     ensureChain().then(() => {
       writeContract({
         address: DISTRIBUTOR_ADDRESS,
@@ -170,6 +178,14 @@ export default function ClaimFeesPage() {
         </div>
         </div>
       </div>
+
+      <MonteWaitOverlay
+        open={isBusy && !overlayDismissed}
+        txHash={txHash}
+        title="Transaction in progress"
+        subtitle={actionLabel ?? undefined}
+        onClose={() => setOverlayDismissed(true)}
+      />
     </GlobalMainNav>
   );
 }
