@@ -206,6 +206,33 @@ function cardToInt(card: Card): number {
   return suitIdx * 13 + rankIdx;
 }
 
+/**
+ * Patch a chevtek `Table` instance to fix a fold-out pot-award bug.
+ *
+ * Chevtek's `gatherBets` filters folded players out of `pot.eligiblePlayers`
+ * only on the multi-bettor path (Table.js:346). On fold-out paths the
+ * showdown→gatherBets call hits the early-return branch (≤1 bettor with
+ * uncalled bet), and that filter never runs — so prior streets' pots still
+ * list the folder as eligible. Pokersolver then evaluates the folder's
+ * hand alongside the survivor's in `pot.winners = findWinners(eligibles)`
+ * and may award the pot to the folder.
+ *
+ * We wrap `gatherBets` so the filter always runs, regardless of which
+ * branch chevtek took. Side effect: also fixes any non-fold-out paths
+ * that somehow skipped the filter.
+ */
+function applyEnginePatches(table: Table): void {
+  const origGatherBets = table.gatherBets.bind(table);
+  (table as any).gatherBets = function patchedGatherBets() {
+    origGatherBets();
+    for (const pot of this.pots) {
+      pot.eligiblePlayers = pot.eligiblePlayers.filter(
+        (p: any) => p && !p.folded && !p.left,
+      );
+    }
+  };
+}
+
 function chevtekStreetToPoker(round: BettingRound | undefined, hasWinners: boolean): PokerStreet {
   if (round === undefined && hasWinners) return 'showdown';
   switch (round) {
@@ -2220,6 +2247,7 @@ export class PokerGameService {
 
     // Build or reset the in-memory Table (chevtek uses integer "chips", not wei)
     const table = new Table(0, sb, bb);
+    applyEnginePatches(table);
     // autoMoveDealer=true: chevtek will advance dealer each hand. We need to
     // prime the dealer position so the FIRST call to dealCards() moves correctly.
     // dealCards() calls moveDealer(dealerPosition + 1) when handNumber > 1.
@@ -2737,11 +2765,20 @@ export class PokerGameService {
       );
       const revealedSeed: string | null = pending.rows[0]?.server_seed ?? null;
 
+      // Refresh pot_amount from the engine's final gathered state. The
+      // per-action UPDATE earlier in the hand snapshots pot_amount *before*
+      // the final street's bets are gathered into chevtek's pots, so without
+      // this refresh the stored pot is short by the last round of
+      // contributions. Stack flow / `result.winners.amount` were always
+      // correct; this just keeps the recorded pot consistent for stats.
+      const finalPotChips = String(Math.max(0, Math.round(totalPotChips(table))));
+
       await client.query(
         `UPDATE poker_hands
          SET completed_at = NOW(), street = 'showdown', acting_position = NULL,
              community_cards = $2::JSONB, result = $3::JSONB, rake_amount = $4::NUMERIC,
-             server_seed = COALESCE($5, server_seed)
+             server_seed = COALESCE($5, server_seed),
+             pot_amount = $6::NUMERIC
          WHERE id = $1`,
         [
           handId,
@@ -2749,6 +2786,7 @@ export class PokerGameService {
           JSON.stringify({ winners: resultWinners }),
           totalRakeChips.toString(),
           revealedSeed,
+          finalPotChips,
         ],
       );
 
@@ -3323,6 +3361,7 @@ export class PokerGameService {
     );
 
     const table = new Table(0, sb, bb);
+    applyEnginePatches(table);
 
     if (activeHand.rows.length === 0) {
       // No active hand — just seat players
