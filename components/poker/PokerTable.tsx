@@ -30,6 +30,7 @@ import {
   POKER_BETWEEN_HANDS_DELAY_MS,
 } from '@/lib/poker-between-hands-delay';
 import { POKER_UI_CQW } from '@/lib/poker-table-cqw';
+import { useIsMobileLandscape } from '@/hooks/use-is-mobile-landscape';
 
 const MORBIUS_DEFAULT_FELT_LOGO = '/morbius/MorbiusLogo-2.svg';
 
@@ -171,9 +172,14 @@ export function PokerTable({ state, currentPlayerAddress, timeLeft, chatBubbleBy
   const lastConfettiHandRef = useRef<string | null>(null);
 
   const mySeatIndex = state.seats.findIndex(s => s.playerAddress === currentPlayerAddress);
-  // Feature flag retained for the seat-radial-only layout experiment. Kept off
-  // until the layout is reintroduced; refs at lines ~476/481/541 read it.
-  const hideSeatAvatars = false;
+  // On mobile-landscape we skip the procedural AvatarView per seat — at the
+  // ~34px seat tile size the rich SVG isn't readable and the render cost adds
+  // up across 9 seats. The seat falls back to the letter-glyph treatment
+  // (PokerSeat already supports this path via the same flag, originally added
+  // for the seat-radial-only layout experiment). Full AvatarView still renders
+  // in the opponent profile card and emote broadcasts.
+  const isMobileLandscape = useIsMobileLandscape();
+  const hideSeatAvatars = isMobileLandscape;
   const seatAnchors = useMemo(() => authoredSeatAnchors(state.seats.length), [state.seats.length]);
   const toDisplaySlot = (seatIdx: number) => (mySeatIndex >= 0 ? (seatIdx - mySeatIndex + state.seats.length) % state.seats.length : seatIdx);
 

@@ -3,7 +3,10 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { toChipInt, formatChips } from '@/lib/format-poker-chips';
 import { usePokerSounds } from '@/hooks/use-poker-sounds';
+import { useIsMobileLandscape } from '@/hooks/use-is-mobile-landscape';
 import { SponsoredTokenMarquee } from './SponsoredTokenMarquee';
+import { PokerBetSheet, type PokerBetSheetPreset } from './PokerBetSheet';
+import { PokerPreActionSheet } from './PokerPreActionSheet';
 
 type Amount = bigint;
 
@@ -111,6 +114,19 @@ export function PokerActions({
   const isFacingBet = callAmt > 0n;
 
   const [customAmount, setCustomAmount] = useState(() => formatAmount(minRaiseAmt));
+
+  // Mobile-landscape compact bar — separate render path from the desktop
+  // strip. Tailwind's `sm:` is width-only so landscape phones (e.g. 844×390)
+  // would otherwise hit the desktop branch and crowd the screen with the
+  // promo banner, preset row, slider, and pre-action column.
+  const isMobileLandscape = useIsMobileLandscape();
+  const [betSheetOpen, setBetSheetOpen] = useState(false);
+  const [preActionSheetOpen, setPreActionSheetOpen] = useState(false);
+
+  // Close the bet sheet automatically when the player's turn is over.
+  useEffect(() => {
+    if (!canAct) setBetSheetOpen(false);
+  }, [canAct]);
 
   // Reset sizing at hand/street boundaries only — not when `canAct` flips — so passive
   // prep survives until it is your turn. Do not add minRaiseAmt to deps: it moves mid-street.
@@ -518,6 +534,179 @@ export function PokerActions({
         </div>
         </div>
         </div>
+      </div>
+    );
+  }
+
+  // ── Mobile-landscape compact bar ──────────────────────────────────────────
+  // On landscape phones (≤500px tall) we render a single thin row:
+  //   [AUTO•] [Fold] [Check or Call] [Raise → bet sheet]
+  // Bet sizing lives in the PokerBetSheet (no inline slider / presets / ± steppers).
+  // Pre-actions live in the PokerPreActionSheet (no permanent checkbox column).
+  // The promo banner is intentionally not rendered here — it's chrome that
+  // belongs in the menu / between hands on mobile.
+  if (isMobileLandscape) {
+    const showCallButton = isFacingBet;
+    const verb: 'Bet' | 'Raise' = isFacingBet ? 'Raise' : 'Bet';
+    const presets: PokerBetSheetPreset[] = quickSizes.map((q) => ({
+      label: q.label,
+      value: q.value.toString(),
+    }));
+    const activePreset =
+      clamped == null
+        ? null
+        : presets.find((p) => p.value === clamped.toString())?.label ?? null;
+
+    return (
+      <div
+        data-testid="poker-actions"
+        className="w-full select-none"
+        style={{ borderTop: 'none', position: 'relative', zIndex: 30 }}
+        role="group"
+        aria-label="Poker actions"
+      >
+        <div
+          className="flex w-full items-stretch gap-1.5 px-2 py-1.5"
+          style={{
+            paddingLeft: 'max(0.5rem, env(safe-area-inset-left, 0px))',
+            paddingRight: 'max(0.5rem, env(safe-area-inset-right, 0px))',
+            paddingBottom: 'max(0.375rem, env(safe-area-inset-bottom, 0.375rem))',
+          }}
+        >
+          {/* AUTO pre-action toggle */}
+          <button
+            type="button"
+            data-testid="poker-pre-action-toggle"
+            onClick={() => setPreActionSheetOpen(true)}
+            aria-label="Auto action settings"
+            aria-pressed={preAction != null}
+            className={[
+              'relative flex h-10 w-11 shrink-0 flex-col items-center justify-center gap-0.5 rounded-md border text-[8px] font-bold leading-none tracking-wider transition-colors',
+              preAction
+                ? 'border-teal-400 bg-teal-400/15 text-teal-300'
+                : 'border-white/15 bg-white/[0.06] text-white/60 hover:bg-white/10',
+            ].join(' ')}
+          >
+            {preAction && (
+              <span
+                aria-hidden
+                className="absolute -top-1 -right-1 h-2.5 w-2.5 rounded-full bg-teal-400 ring-2 ring-[#07080d]"
+              />
+            )}
+            <span aria-hidden className="text-[14px] leading-none">⚙</span>
+            <span>AUTO</span>
+          </button>
+
+          {/* Fold */}
+          <button
+            data-testid="poker-action-fold"
+            type="button"
+            onClick={handleFoldWithSound}
+            disabled={!canAct}
+            className={`flex-1 min-h-[2.5rem] rounded-md text-sm font-extrabold tracking-wide transition-all active:scale-[0.97] ${foldBtnClass}`}
+            style={{ ...foldBtnStyleCommit, ...dimCommitWhenNotActing }}
+          >
+            Fold
+          </button>
+
+          {/* Check OR Call (never both) */}
+          {showCallButton ? (
+            <button
+              data-testid="poker-action-call"
+              type="button"
+              onClick={handleCallWithSound}
+              disabled={!canAct || !isFacingBet}
+              className={`flex-[1.2] min-h-[2.5rem] rounded-md text-sm font-extrabold tracking-wide transition-all active:scale-[0.97] ${checkBtnClass}`}
+              style={{ ...callBtnStyleCommit, ...dimCommitWhenNotActing }}
+            >
+              <span className="flex flex-col items-center justify-center gap-0.5 leading-none">
+                <span>Call</span>
+                <span className="text-[10px] font-semibold opacity-85 tabular-nums">
+                  {formatAmount(callAmt)}
+                </span>
+              </span>
+            </button>
+          ) : (
+            <button
+              data-testid="poker-action-check"
+              type="button"
+              onClick={handleCheckWithSound}
+              disabled={!canAct || !canCheck}
+              className={`flex-[1.2] min-h-[2.5rem] rounded-md text-sm font-extrabold tracking-wide transition-all active:scale-[0.97] ${checkBtnClass}`}
+              style={{ ...checkBtnStyleCommit, ...dimCommitWhenNotActing }}
+            >
+              Check
+            </button>
+          )}
+
+          {/* Raise / Bet — opens bet sheet */}
+          <button
+            data-testid="poker-action-primary"
+            type="button"
+            onClick={() => {
+              if (!canAct || stackAmt === 0n) return;
+              setBetSheetOpen(true);
+            }}
+            disabled={!canAct || stackAmt === 0n}
+            aria-label={`${verb} — choose amount`}
+            className={`flex-[1.4] min-h-[2.5rem] rounded-md text-sm font-extrabold tracking-wide transition-all active:scale-[0.97] ${primaryBtnClass}`}
+            style={{ ...primaryBtnStyle, ...dimCommitWhenNotActing }}
+          >
+            <span className="flex flex-col items-center justify-center gap-0.5 leading-none">
+              <span>{verb}</span>
+              <span className="text-[10px] font-semibold opacity-85 tabular-nums">
+                ▲ to {customAmount}
+              </span>
+            </span>
+          </button>
+        </div>
+
+        {/* Bet-size sheet (opens on Raise tap) */}
+        <PokerBetSheet
+          open={betSheetOpen}
+          onClose={() => setBetSheetOpen(false)}
+          verb={verb}
+          amount={customAmount}
+          amountChips={clamped != null ? toChipsNum(clamped) : minChips}
+          bigBlind={minChips /* min-raise is ~bb pre-flop; close enough for display */}
+          potChips={toChipsNum(potAmt)}
+          callChips={toChipsNum(callAmt)}
+          sliderMin={minChips}
+          sliderMax={Math.max(minChips, maxChips)}
+          sliderStep={stepChips}
+          sliderValueChips={
+            clamped != null ? toChipsNum(clamped) : minChips
+          }
+          onSliderChange={(chipsAbs) => {
+            const clampedChips = clampAmount(
+              BigInt(chipsAbs),
+              minRaiseAmt,
+              stackAmt,
+            );
+            setCustomAmount(formatAmount(clampedChips));
+          }}
+          presets={presets}
+          activePresetLabel={activePreset}
+          onPresetClick={(p) => {
+            const v = BigInt(p.value);
+            const clampedChips = clampAmount(v, minRaiseAmt, stackAmt);
+            setCustomAmount(formatAmount(clampedChips));
+          }}
+          onConfirm={() => {
+            handlePrimary();
+            setBetSheetOpen(false);
+          }}
+          canConfirm={canAct && hasValidAmount}
+        />
+
+        {/* Pre-action sheet (opens on AUTO toggle tap) */}
+        <PokerPreActionSheet
+          open={preActionSheetOpen}
+          onClose={() => setPreActionSheetOpen(false)}
+          value={preAction}
+          onChange={(next) => onPreActionChange(next)}
+          canCheck={canCheck}
+        />
       </div>
     );
   }
