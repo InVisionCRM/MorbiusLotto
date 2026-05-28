@@ -13,17 +13,21 @@ import { useEffect, useState } from 'react';
  * On a real phone this is unplayable. This hook flags those viewports so
  * components can swap to a simplified mobile layout.
  *
- * Defaults match the redesign spec:
+ * Defaults:
  *   - landscape: innerWidth > innerHeight
- *   - shortHeight: innerHeight <= 500
+ *   - shortHeight: innerHeight <= 600
  *
- * `maxHeight` can be overridden if a particular surface needs a different
- * cut-off (e.g. allow up to 600px for layouts that tolerate more vertical
- * room).
+ * The 600px threshold matches the `(orientation: landscape) and (max-height: 600px)`
+ * media query in globals.css; keeping these aligned ensures the React render path
+ * (compact bar) and the CSS layout (fixed positioning + table reservation) agree on
+ * which viewports are "mobile landscape". When they drift apart, taller landscape
+ * phones get the desktop bar pinned to the bottom edge, eating ~1/4 of the screen.
+ *
+ * `maxHeight` can be overridden if a particular surface needs a different cut-off.
  *
  * SSR-safe: returns `false` until mounted to avoid hydration mismatches.
  */
-export function useIsMobileLandscape(maxHeight = 500): boolean {
+export function useIsMobileLandscape(maxHeight = 600): boolean {
   const [isMobileLandscape, setIsMobileLandscape] = useState(false);
 
   useEffect(() => {

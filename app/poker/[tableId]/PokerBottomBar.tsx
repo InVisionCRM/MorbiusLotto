@@ -6,6 +6,10 @@ import type { PokerTableState } from '@/lib/websocket-client';
 
 interface PokerBottomBarProps {
   fullscreen?: boolean;
+  /** Mobile landscape: render the actions as a fixed RIGHT-SIDE vertical strip
+   * so the felt can use the full landscape height instead of being squished
+   * by a bottom bar. */
+  mobileLandscape?: boolean;
   renderedState: PokerTableState | null;
   mySeat: PokerTableState['seats'][number] | null;
   actions: React.ReactNode;
@@ -13,13 +17,19 @@ interface PokerBottomBarProps {
 
 const SHELL_SELECTOR = '[data-poker-shell]';
 
-/** Measured bar height (px). Consumed by fullscreen overlay padding AND mobile-landscape CSS
- * (globals.css "Poker landscape" section pins the bar `position: fixed` and pads the shell row
- * using this var so the table doesn't sit under the bar). */
+/** Measured bar height (px). Consumed by fullscreen overlay padding AND landscape CSS
+ * (legacy bottom-strip path). The mobile-landscape side-strip path uses
+ * `POKER_SIDE_STRIP_W` instead — the bar's height is the viewport height there. */
 export const POKER_BOTTOM_RESERVE_VAR = '--poker-bottom-reserve';
+
+/** Width of the mobile-landscape right-side action strip. Consumed by the strip itself,
+ * by `PokerMobileZoomLock` (subtracted from available width when scaling the table),
+ * and by the shell row's `padding-right` so the felt doesn't sit under the strip. */
+export const POKER_SIDE_STRIP_W = 96;
 
 export function PokerBottomBar({
   fullscreen = false,
+  mobileLandscape = false,
   renderedState,
   mySeat,
   actions,
@@ -27,12 +37,12 @@ export function PokerBottomBar({
   const rootRef = useRef<HTMLDivElement>(null);
   const show = !!(renderedState && mySeat && actions);
 
-  // Always measure the bar's height into a CSS var on the shell. Consumers:
+  // Measure the bar's height into a CSS var on the shell. Consumed by:
   //   • Fullscreen overlay: pads the main flex row by this amount (bar is absolute).
-  //   • Mobile-landscape (globals.css): bar becomes `position: fixed`; the same var pads
-  //     the shell row so the felt doesn't get clipped under the bar. The previous
-  //     hardcoded 80px reservation was far too small for the default mobile variant
-  //     (~150–180px tall), which caused the bar to overlay the middle of the table.
+  //   • Legacy landscape bottom-strip path (no longer used now that mobile-landscape
+  //     renders a side strip — see the mobileLandscape branch below).
+  // Side-strip mode skips this measurement: it's a viewport-tall fixed column, not
+  // a content-sized strip, and reservation is by fixed width (POKER_SIDE_STRIP_W).
   useLayoutEffect(() => {
     const shell = document.querySelector(SHELL_SELECTOR) as HTMLElement | null;
     if (!shell) return;
@@ -41,7 +51,7 @@ export function PokerBottomBar({
       shell.style.setProperty(POKER_BOTTOM_RESERVE_VAR, `${Math.max(0, Math.round(px))}px`);
     };
 
-    if (!show) {
+    if (!show || mobileLandscape) {
       applyReserve(0);
       return () => {
         shell.style.removeProperty(POKER_BOTTOM_RESERVE_VAR);
@@ -70,9 +80,32 @@ export function PokerBottomBar({
       window.removeEventListener('orientationchange', measure);
       shell.style.removeProperty(POKER_BOTTOM_RESERVE_VAR);
     };
-  }, [show, fullscreen]);
+  }, [show, fullscreen, mobileLandscape]);
 
   if (!show) return null;
+
+  // Mobile landscape: viewport-tall right-side column. Sits over the felt's right
+  // edge; the shell row reserves the matching `padding-right` so the felt scales
+  // into the remaining width (handled in page.tsx).
+  if (mobileLandscape) {
+    return (
+      <div
+        ref={rootRef}
+        data-poker-bottom
+        data-poker-bottom-side
+        className="pointer-events-auto fixed right-0 top-0 bottom-0 z-40"
+        style={{
+          width: POKER_SIDE_STRIP_W,
+          background: 'linear-gradient(to left, rgba(5,8,20,0.92), rgba(5,8,20,0.78))',
+          borderLeft: '1px solid rgba(255,255,255,0.08)',
+          backdropFilter: 'blur(12px)',
+          WebkitBackdropFilter: 'blur(12px)',
+        }}
+      >
+        {actions}
+      </div>
+    );
+  }
 
   if (fullscreen) {
     return (
