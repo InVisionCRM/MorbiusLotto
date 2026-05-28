@@ -11,6 +11,7 @@ import type { BlackjackWebSocketClient, PokerTableState } from '@/lib/websocket-
 import { POKER_FACTS } from '@/app/poker/poker-facts';
 import { POKER_RANK_SUIT_LABEL_COLORS } from '@/components/poker/CardDisplay';
 import { useSidebarOptional } from '@/components/ui/sidebar';
+import { useIsMobileLandscape } from '@/hooks/use-is-mobile-landscape';
 
 // ── Types ──────────────────────────────────────────────────────────────────
 
@@ -245,6 +246,12 @@ export function PokerActivityFeed({
 }: PokerActivityFeedProps) {
   const sidebarOpt = useSidebarOptional();
   const railOpen = layout === 'right-rail' ? Boolean(sidebarOpt?.open) : true;
+
+  // Landscape phones are ≥768px wide, which matches Tailwind's `md:` breakpoint,
+  // so the default `md:hidden` on the mobile drawer chrome hides it on those
+  // devices. We unlock the drawer when the viewport is landscape AND short
+  // (the same signal that swaps in the side-strip action panel).
+  const isMobileLandscape = useIsMobileLandscape();
 
   const { address: connectedAddress } = useAccount();
   const myAddr = useMemo(() => connectedAddress?.toLowerCase() ?? null, [connectedAddress]);
@@ -1329,7 +1336,7 @@ export function PokerActivityFeed({
   };
 
   const mobileDrawerChrome = (
-    <div className="md:hidden">
+    <div className={isMobileLandscape ? '' : 'md:hidden'}>
       <AnimatePresence>
         {!mobileOpen && (
           <motion.button
