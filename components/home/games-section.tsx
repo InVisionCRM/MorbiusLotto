@@ -8,7 +8,7 @@ import { Dialog, DialogContent, DialogTitle } from '@/components/ui/dialog'
 import { cn } from '@/lib/utils'
 import { homeSectionTitleClass, homeSectionTitleGradientClass } from '@/lib/home-section-typography'
 
-type CategoryKey = 'poker' | 'blackjack' | 'originals'
+type CategoryKey = 'poker' | 'blackjack' | 'originals' | 'monte'
 
 type SubGame = {
   key: string
@@ -27,6 +27,10 @@ type Category = {
   image: string
   imageAlt: string
   games: SubGame[]
+  /** If set, the tile links directly to this href instead of opening a sub-game modal. */
+  directHref?: string
+  /** CTA text shown on the tile. Defaults to "Choose mode". */
+  cta?: string
 }
 
 const CATEGORIES: Category[] = [
@@ -115,14 +119,18 @@ const CATEGORIES: Category[] = [
         tagline: '6-of-55 draws. Jackpot rolls until somebody hits.',
         image: '/morbius/Morbius_Lottery.png',
       },
-      {
-        key: 'monte',
-        href: '/monte',
-        title: 'Monte',
-        tagline: 'Find the diamond. No MORBIUS — just for streaks.',
-        image: '/Games-Section/More-To-Come_GS.png',
-      },
     ],
+  },
+  {
+    key: 'monte',
+    title: 'Monte',
+    kicker: 'Play while you wait',
+    tagline: 'Find the cyan diamond. No MORBIUS at stake — just chase a streak.',
+    image: '/Games-Section/More-To-Come_GS.png',
+    imageAlt: 'Monte',
+    games: [],
+    directHref: '/monte',
+    cta: 'Play now',
   },
 ]
 
@@ -149,16 +157,18 @@ export function GamesSection() {
                 className={cn(
                   featured
                     ? 'md:col-span-2 md:row-span-2 h-[320px] md:h-full'
+                    : category.directHref
+                    ? 'md:col-span-3 h-[160px] md:h-[170px]'
                     : 'h-[200px] md:h-[206px]',
                 )}
-                onOpen={() => setOpenKey(category.key)}
+                onOpen={category.directHref ? undefined : () => setOpenKey(category.key)}
               />
             )
           })}
         </div>
       </div>
 
-      {CATEGORIES.map((category) => (
+      {CATEGORIES.filter((c) => !c.directHref).map((category) => (
         <CategoryModal
           key={category.key}
           category={category}
@@ -179,21 +189,39 @@ function CategoryCard({
   category: Category
   featured?: boolean
   className?: string
-  onOpen: () => void
+  onOpen?: () => void
 }) {
+  const sharedClassName = cn(
+    'group relative overflow-hidden rounded-2xl border border-white/10 text-left transition-all duration-300 hover:-translate-y-1 hover:border-cyan-400/60 focus:outline-none focus-visible:ring-2 focus-visible:ring-cyan-400/70',
+    className,
+  )
+  const sharedStyle = { boxShadow: '0 14px 40px -22px rgba(6,182,212,0.25)' }
+  const inner = <CategoryCardInner category={category} featured={featured} />
+
+  if (category.directHref) {
+    return (
+      <Link href={category.directHref} className={cn(sharedClassName, 'block')} style={sharedStyle}>
+        {inner}
+      </Link>
+    )
+  }
+
   return (
     <button
       type="button"
       onClick={onOpen}
       aria-haspopup="dialog"
-      className={cn(
-        'group relative overflow-hidden rounded-2xl border border-white/10 text-left transition-all duration-300 hover:-translate-y-1 hover:border-cyan-400/60 focus:outline-none focus-visible:ring-2 focus-visible:ring-cyan-400/70',
-        className,
-      )}
-      style={{
-        boxShadow: '0 14px 40px -22px rgba(6,182,212,0.25)',
-      }}
+      className={sharedClassName}
+      style={sharedStyle}
     >
+      {inner}
+    </button>
+  )
+}
+
+function CategoryCardInner({ category, featured }: { category: Category; featured: boolean }) {
+  return (
+    <>
       <div className="absolute inset-0">
         <Image
           src={category.image}
@@ -257,11 +285,11 @@ function CategoryCard({
           )}
           style={{ letterSpacing: featured ? '0.25em' : '0.22em' }}
         >
-          Choose mode
+          {category.cta ?? 'Choose mode'}
           <ArrowRight size={featured ? 15 : 12} />
         </div>
       </div>
-    </button>
+    </>
   )
 }
 
