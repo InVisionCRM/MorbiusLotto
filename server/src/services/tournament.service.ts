@@ -3,6 +3,10 @@ import { formatEther } from 'viem';
 import { logger } from '../utils/logger';
 import { toBigIntSafe } from '../utils/safe-bigint';
 import { applyPokerChipDelta, getPlatformFeeWalletLower } from './poker-chip-wallet';
+import {
+  applyWheelSpinDelta,
+  getWheelRule,
+} from './wheel-spin-wallet';
 
 function formatWei(w: bigint): string {
   return Number(formatEther(w)).toLocaleString(undefined, { maximumFractionDigits: 2 });
@@ -2160,7 +2164,10 @@ export class TournamentService {
       );
       const finalEntryCount = parseInt(finalEntryCountResult.rows[0].c, 10);
 
-      if (tournament.status === 'registration' && finalEntryCount >= minPlayers) {
+      const tournamentJustActivated =
+        tournament.status === 'registration' && finalEntryCount >= minPlayers;
+
+      if (tournamentJustActivated) {
         await client.query(
           `UPDATE tournaments SET status = 'active', activated_at = NOW(), ends_at = NOW() + INTERVAL '24 hours' WHERE id = $1`,
           [tournamentId]
@@ -2172,6 +2179,47 @@ export class TournamentService {
           tournamentId,
           entryCount: finalEntryCount,
           minPlayers,
+        });
+      }
+
+      try {
+        const weiPerSpinStr = await getWheelRule(client, 'tournament_wei_per_spin');
+        const weiPerSpin = weiPerSpinStr ? BigInt(weiPerSpinStr) : 0n;
+        if (weiPerSpin > 0n) {
+          const buyInWei = this.toBigInt(tournament.buy_in_amount);
+          const spinsPerEntry = Number(buyInWei / weiPerSpin);
+          if (spinsPerEntry > 0) {
+            if (tournamentJustActivated) {
+              const allEntries = await client.query<{ player_address: string }>(
+                `SELECT player_address FROM tournament_entries WHERE tournament_id = $1`,
+                [tournamentId]
+              );
+              for (const e of allEntries.rows) {
+                await applyWheelSpinDelta(
+                  client,
+                  e.player_address,
+                  spinsPerEntry,
+                  'tournament_entry',
+                  { type: 'tournament_entry', id: `${tournamentId}:${e.player_address.toLowerCase()}` },
+                  { tournament_id: tournamentId, buy_in_wei: buyInWei.toString() },
+                );
+              }
+            } else if (tournament.status !== 'registration') {
+              await applyWheelSpinDelta(
+                client,
+                normalizedAddress,
+                spinsPerEntry,
+                'tournament_entry',
+                { type: 'tournament_entry', id: `${tournamentId}:${normalizedAddress.toLowerCase()}` },
+                { tournament_id: tournamentId, buy_in_wei: buyInWei.toString() },
+              );
+            }
+          }
+        }
+      } catch (e) {
+        logger.warn('wheel ledger update failed (tournament join)', {
+          tournamentId,
+          error: (e as Error).message,
         });
       }
 
@@ -2474,6 +2522,33 @@ export class TournamentService {
         }
       }
 
+      try {
+        const weiPerSpinStr = await getWheelRule(client, 'tournament_wei_per_spin');
+        const weiPerSpin = weiPerSpinStr ? BigInt(weiPerSpinStr) : 0n;
+        if (weiPerSpin > 0n) {
+          const buyInWei = this.toBigInt(tournament.buy_in_amount);
+          const spinsPerEntry = Number(buyInWei / weiPerSpin);
+          if (spinsPerEntry > 0) {
+            for (const entry of entries) {
+              await applyWheelSpinDelta(
+                client,
+                entry.player_address,
+                -spinsPerEntry,
+                'tournament_cancel_refund',
+                { type: 'tournament_entry', id: `${tournamentId}:${entry.player_address.toLowerCase()}:refund` },
+                { tournament_id: tournamentId, reason: 'insufficient_players' },
+                { clamp: true },
+              );
+            }
+          }
+        }
+      } catch (e) {
+        logger.warn('wheel ledger refund failed (insufficient players cancel)', {
+          tournamentId,
+          error: (e as Error).message,
+        });
+      }
+
       await client.query(
         `UPDATE tournaments SET status = 'cancelled', ended_at = NOW(), current_phase = 'completed' WHERE id = $1`,
         [tournamentId]
@@ -2715,6 +2790,33 @@ export class TournamentService {
             }
           }
         }
+      }
+
+      try {
+        const weiPerSpinStr = await getWheelRule(client, 'tournament_wei_per_spin');
+        const weiPerSpin = weiPerSpinStr ? BigInt(weiPerSpinStr) : 0n;
+        if (weiPerSpin > 0n) {
+          const buyInWei = this.toBigInt(tournament.buy_in_amount);
+          const spinsPerEntry = Number(buyInWei / weiPerSpin);
+          if (spinsPerEntry > 0) {
+            for (const entry of entries) {
+              await applyWheelSpinDelta(
+                client,
+                entry.player_address,
+                -spinsPerEntry,
+                'tournament_cancel_refund',
+                { type: 'tournament_entry', id: `${tournamentId}:${entry.player_address.toLowerCase()}:refund` },
+                { tournament_id: tournamentId, reason: 'manual_cancel' },
+                { clamp: true },
+              );
+            }
+          }
+        }
+      } catch (e) {
+        logger.warn('wheel ledger refund failed (manual cancel)', {
+          tournamentId,
+          error: (e as Error).message,
+        });
       }
 
       // Mark tournament as cancelled
