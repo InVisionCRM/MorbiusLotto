@@ -4,6 +4,11 @@ import { ProvablyFairService } from './provably-fair.service';
 import { CosmeticsService } from './cosmetics.service';
 import { randomPlaceholderConfig } from '../lib/cosmetics-catalog';
 import { logger } from '../utils/logger';
+import {
+  applyWheelWagerCredit,
+  recordDailyMilestone,
+  recordGameOutcome,
+} from './wheel-spin-wallet';
 import crypto from 'crypto';
 
 /** Kick from table after this many consecutive timeouts (betting window + in-round auto-stand). */
@@ -1553,6 +1558,34 @@ export class BlackjackMultiGameService {
             result: (h.result as any) ?? 'loss',
             payout: BigInt(h.payout || '0'),
             actions: h.actions ?? [],
+          });
+        }
+
+        try {
+          const totalWagered = hands.reduce(
+            (sum: bigint, h: any) => sum + BigInt(h.betAmount || '0'),
+            0n,
+          );
+          if (totalWagered > 0n && rs.player_address) {
+            await applyWheelWagerCredit(
+              client,
+              rs.player_address,
+              totalWagered,
+              'wager_volume_blackjack_multi',
+              { type: 'round_seat', id: rs.id },
+            );
+            await recordDailyMilestone(client, rs.player_address, 'first_blackjack_multi');
+            await recordGameOutcome(
+              client,
+              rs.player_address,
+              'blackjack_multi',
+              overallResult === 'win',
+            );
+          }
+        } catch (e) {
+          logger.warn('wheel ledger update failed (multi blackjack)', {
+            seatId: rs.id,
+            error: (e as Error).message,
           });
         }
       }

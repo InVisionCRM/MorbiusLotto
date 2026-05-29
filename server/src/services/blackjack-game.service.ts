@@ -3,6 +3,11 @@ import { DatabaseService, Game, GameHand } from './database.service';
 import { ProvablyFairService } from './provably-fair.service';
 import { TournamentService, TournamentState, TOURNAMENT_CONFIG } from './tournament.service';
 import { logger } from '../utils/logger';
+import {
+  applyWheelWagerCredit,
+  recordDailyMilestone,
+  recordGameOutcome,
+} from './wheel-spin-wallet';
 
 function formatWei(w: bigint): string {
   return Number(formatEther(w)).toLocaleString(undefined, { maximumFractionDigits: 2 });
@@ -990,6 +995,24 @@ export class BlackjackGameService {
       if (profit > 0n) {
         await this.dbService.updateSessionStats(game.session_id, 0n, profit - feeApplied, false);
       }
+    }
+
+    try {
+      const wheelWallet = await this.dbService.getPlayerAddressFromSession(game.session_id);
+      const pool = this.dbService.getPool();
+      if (game.total_bet_amount > 0n) {
+        await applyWheelWagerCredit(
+          pool,
+          wheelWallet,
+          game.total_bet_amount,
+          'wager_volume_blackjack',
+          { type: 'game', id: gameId },
+        );
+        await recordDailyMilestone(pool, wheelWallet, 'first_blackjack');
+        await recordGameOutcome(pool, wheelWallet, 'blackjack', overallResult === 'win');
+      }
+    } catch (e) {
+      logger.warn('wheel ledger update failed (sp blackjack)', { gameId, error: (e as Error).message });
     }
 
     const session = await this.dbService.getSessionById(game.session_id);

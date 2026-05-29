@@ -5,7 +5,7 @@ import { DatabaseService } from './database.service';
 import { ProvablyFairService } from './provably-fair.service';
 import { CosmeticsService } from './cosmetics.service';
 import { randomPlaceholderConfig } from '../lib/cosmetics-catalog';
-import { chipsToWei, getPokerRakeWallet, splitBigIntEqually, totalPotChips } from '../lib/poker-chip-scale';
+import { chipsToWei, getPokerRakeWallet, splitBigIntEqually, totalPotChips, POKER_CHIP_WEI } from '../lib/poker-chip-scale';
 import { computeTableLogoChangePriceMorbiusChips } from '../lib/poker-table-logo-pricing';
 // Sponsorship purchase length caps for trust-the-client token metadata.
 const SPONSOR_TOKEN_NAME_MAX = 128;
@@ -13,6 +13,11 @@ const SPONSOR_TOKEN_SYMBOL_MAX = 32;
 const SPONSOR_TOKEN_LOGO_URL_MAX = 1024;
 const ETH_ADDRESS_RE = /^0x[a-fA-F0-9]{40}$/;
 import { applyPokerChipDelta } from './poker-chip-wallet';
+import {
+  applyWheelWagerCredit,
+  recordDailyMilestone,
+  recordGameOutcome,
+} from './wheel-spin-wallet';
 import {
   getCashBuyInBoundsChips,
   POKER_CASH_MAX_BUY_IN_BB,
@@ -2846,7 +2851,7 @@ export class PokerGameService {
         rakedWinnerAmounts,
         rakeByAddr,
         resultWinners,
-      });
+      }, isTournament);
     } catch (err) {
       logger.error('populateHandPlayers failed', { handId, tableId, err });
     } finally {
@@ -2963,7 +2968,8 @@ export class PokerGameService {
       rakedWinnerAmounts: Map<string, bigint>;
       rakeByAddr: Map<string, bigint>;
       resultWinners: { address: string; amount: string; handName?: string }[];
-    }
+    },
+    isTournament: boolean = false,
   ): Promise<void> {
     const startingStacks = this.handStartingStacks.get(handId) ?? new Map<string, bigint>();
     const buttonPos = table.dealerPosition;
@@ -3150,6 +3156,29 @@ export class PokerGameService {
           c.river.bets, c.river.raises, c.river.calls, c.river.checks,
         ]
       );
+
+      if (!isTournament) {
+        try {
+          const wagerWei = agg.contributed * POKER_CHIP_WEI;
+          if (wagerWei > 0n) {
+            await applyWheelWagerCredit(
+              pool,
+              addr,
+              wagerWei,
+              'wager_volume_poker',
+              { type: 'hand_player', id: `${handId}:${addr}` },
+            );
+            await recordDailyMilestone(pool, addr, 'first_poker');
+            await recordGameOutcome(pool, addr, 'poker', won);
+          }
+        } catch (e) {
+          logger.warn('wheel ledger update failed (poker)', {
+            handId,
+            addr,
+            error: (e as Error).message,
+          });
+        }
+      }
     }
   }
 

@@ -18,6 +18,7 @@ import { registerArcadeHiLoRoutes } from './routes/arcade-hilo.routes';
 import { registerArcadeDiceRoutes } from './routes/arcade-dice.routes';
 import { registerArcadeBaccaratRoutes } from './routes/arcade-baccarat.routes';
 import { registerMarqueeRoutes } from './routes/marquee.routes';
+import { registerWheelRoutes } from './routes/wheel.routes';
 import { requireAuth, requireSameAddress } from './middleware/require-auth';
 import { DatabaseService, type BlackjackSpWagerTierRow } from './services/database.service';
 import { ProvablyFairService } from './services/provably-fair.service';
@@ -408,6 +409,7 @@ async function initializeServices() {
     registerArcadeDiceRoutes({ app, dbService });
     registerArcadeBaccaratRoutes({ app, dbService });
     registerMarqueeRoutes({ app, dbService });
+    registerWheelRoutes({ app, dbService, authService });
 
     // Public config (whitelisted keys only; used for ad creatives, etc.)
     const PUBLIC_CONFIG_KEYS = ['ad_creative_url', 'ad_creative_hero_url', 'ad_creative_loading_url'];
