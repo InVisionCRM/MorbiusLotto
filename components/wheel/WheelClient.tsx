@@ -4,10 +4,11 @@
  * Daily Wish wheel — pixel-faithful port of the Gemini "FREE MORBIUS" applet at
  * /Users/kyle/Downloads/daily-wish-casino-wheel/components/CasinoWheel.tsx,
  * adapted so the outcome comes from /api/wheel/spin (provably-fair, server seed
- * committed up-front) instead of Matter.js-random angular velocity. The wheel
- * physics → CSS rotation swap is the only mechanical change; every other layer
- * (under-lighting, glow halo, rim lights, dashed inner ring, gold pegs, hub,
- * pointer flapper, win modal with confetti, sound engine) is preserved.
+ * committed up-front) instead of Matter.js-random angular velocity. The Matter.js
+ * physics is replaced by a requestAnimationFrame spin (accelerate → cruise while
+ * the server settles → friction coast onto the winning segment); every other
+ * layer (under-lighting, glow halo, rim lights, dashed inner ring, gold pegs,
+ * hub, pointer flapper, win modal with confetti, sound engine) is preserved.
  *
  * Segments are HARDCODED here to match server migration 142, so the wheel
  * always renders even when the network is flaky. The server fetch in
@@ -40,6 +41,16 @@ class SoundEngine {
       const W = window as unknown as { AudioContext: typeof AudioContext; webkitAudioContext?: typeof AudioContext };
       this.ctx = new (W.AudioContext || W.webkitAudioContext!)();
     }
+  }
+  /**
+   * Create + unlock the AudioContext from inside a user gesture (the SPIN
+   * click). Browsers start the context `suspended` unless it's first touched in
+   * a gesture, which is why the tick/win/lose sounds were silent or erratic —
+   * they were all first triggered from setTimeout/rAF callbacks, never a click.
+   */
+  resume() {
+    this.init();
+    if (this.ctx && this.ctx.state === 'suspended') void this.ctx.resume();
   }
   playClick() {
     if (!this.enabled) return;
@@ -146,8 +157,16 @@ const THEME = {
   sparkles: ['text-pink-400', 'text-fuchsia-500', 'text-cyan-400'],
 };
 
-const SPIN_DURATION_MS = 5800;
-const SPIN_FULL_REVOLUTIONS = 8;
+// Spin animation timing. The wheel is driven imperatively (requestAnimationFrame
+// writing the transform) so it starts turning the instant SPIN is pressed —
+// no waiting on the network. It accelerates to a steady cruise, holds while the
+// server settles the outcome, then coasts to a stop under constant deceleration
+// (a friction model) that lands exactly on the winning segment.
+const SPIN_ACCEL_MS = 600;        // ramp from rest up to cruise speed on press
+const SPIN_CRUISE_DPS = 720;      // cruise angular velocity (deg/sec) = 2 rev/s
+const SPIN_MIN_PRESPIN_MS = 650;  // beat of cruise even if the server is instant (> ACCEL so v == cruise at release)
+const SPIN_MIN_SETTLE_DEG = 1080; // at least 3 full turns of deceleration before landing
+const TICK_MIN_GAP_MS = 28;       // throttle peg clicks so the fast part ratchets instead of buzzing
 
 interface SpinResult {
   spinId: string;
@@ -214,23 +233,42 @@ export default function WheelClient({ variant = 'page', onClose }: WheelClientPr
   const [spinsAvailable, setSpinsAvailable] = useState(0);
   const [pendingSpinId, setPendingSpinId] = useState<string | null>(null);
   const [isSpinning, setIsSpinning] = useState(false);
-  const [rotation, setRotation] = useState(0);
   const [lastResult, setLastResult] = useState<SpinResult | null>(null);
   const [showResult, setShowResult] = useState(false);
+  const [spinError, setSpinError] = useState<string | null>(null);
   const [ledger, setLedger] = useState<LedgerEntry[]>([]);
   const [showLedger, setShowLedger] = useState(false);
   const [showInfo, setShowInfo] = useState(false);
   const [soundEnabled, setSoundEnabled] = useState(true);
   const [mounted, setMounted] = useState(false);
 
-  const settleTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const tickAudioTimersRef = useRef<ReturnType<typeof setTimeout>[]>([]);
+  // The wheel is animated imperatively rather than through a CSS transition tied
+  // to React state, so it can start moving the instant SPIN is pressed and land
+  // precisely on the winning segment once the server responds — and so the peg
+  // clicks can be derived from the *actual* angle each frame instead of a
+  // pre-baked (and previously backwards) timer schedule.
+  const wheelRef = useRef<HTMLDivElement | null>(null);
+  const angleRef = useRef(0);            // live wheel angle in degrees, persists across spins
+  const rafRef = useRef<number | null>(null);
+  const lastTickAngleRef = useRef(0);    // angle at which the last peg click fired
+  const lastTickTimeRef = useRef(0);     // timestamp of last peg click (throttle window)
+
+  // Stable ref callback that re-applies the current angle whenever the wheel
+  // node (re)mounts. The Wrap component is recreated on every render, so React
+  // remounts this subtree — and a spin pushes a `wheel_balance` WS event that
+  // re-renders the launcher mid-spin. Restoring angleRef here keeps the wheel
+  // from snapping back to 0° on those remounts; the rAF loop overrides it next
+  // frame anyway. useCallback([]) keeps the identity stable so it only fires on
+  // real mount/unmount, not every render.
+  const attachWheel = useCallback((el: HTMLDivElement | null) => {
+    wheelRef.current = el;
+    if (el) el.style.transform = `rotate(${angleRef.current}deg)`;
+  }, []);
 
   useEffect(() => { setMounted(true); }, []);
 
   useEffect(() => () => {
-    if (settleTimerRef.current) clearTimeout(settleTimerRef.current);
-    tickAudioTimersRef.current.forEach((t) => clearTimeout(t));
+    if (rafRef.current != null) cancelAnimationFrame(rafRef.current);
   }, []);
 
   // Background sync of segments from server. Failure leaves FALLBACK_SEGMENTS
@@ -291,8 +329,127 @@ export default function WheelClient({ variant = 'page', onClose }: WheelClientPr
 
   const handleSpin = useCallback(async () => {
     if (isSpinning || !isConnected || spinsAvailable < 1) return;
+    sounds.resume();              // unlock audio inside the user gesture — required for any sound to play
+    setSpinError(null);
     setShowResult(false);
     setIsSpinning(true);
+
+    const segCount = Math.max(1, segments.length);
+    const segDeg = 360 / segCount;
+    const startAngle = angleRef.current;
+    lastTickAngleRef.current = startAngle;
+    lastTickTimeRef.current = 0;
+
+    // Per-spin animation state. `result` is filled in by the network branch
+    // below; the rAF loop watches for it and switches from cruise to the
+    // friction coast that lands on the winning segment.
+    const ctrl = {
+      startedAt: performance.now(),
+      phase: 'prespin' as 'prespin' | 'settle',
+      result: null as SpinResult | null,
+      settleFrom: 0,
+      settleDist: 0,
+      settleV0: 0,        // deg/sec at release (== cruise, so velocity is continuous)
+      settleDur: 0,       // ms, derived from distance + v0 (T = 2D/v0)
+      settleStartedAt: 0,
+    };
+
+    const writeAngle = (deg: number) => {
+      angleRef.current = deg;
+      const el = wheelRef.current;
+      if (el) el.style.transform = `rotate(${deg}deg)`;
+    };
+
+    // One click per peg that crosses the pointer, throttled so the fast part of
+    // the spin ratchets instead of buzzing. Because it's driven off the live
+    // angle, it speeds up and slows down exactly with the wheel — the sound now
+    // follows the motion instead of piling up at the end.
+    const maybeTick = (now: number) => {
+      const gap = angleRef.current - lastTickAngleRef.current;
+      if (gap < segDeg) return;
+      lastTickAngleRef.current += Math.floor(gap / segDeg) * segDeg;
+      if (now - lastTickTimeRef.current >= TICK_MIN_GAP_MS) {
+        lastTickTimeRef.current = now;
+        sounds.playClick();
+      }
+    };
+
+    const finishSpin = (result: SpinResult) => {
+      rafRef.current = null;
+      setLastResult(result);
+      setShowResult(true);
+      setSpinsAvailable(result.spinsAvailable ?? 0);
+      setPendingSpinId(null);
+      setIsSpinning(false);
+      if (BigInt(result.prizeWei) > 0n || result.freeSpins > 0) {
+        sounds.playWin();
+        confetti({ particleCount: 140, spread: 90, origin: { y: 0.6 } });
+      } else {
+        sounds.playLose();
+      }
+      if (showLedger) refreshLedger();
+    };
+
+    const cancelSpin = (message: string) => {
+      if (rafRef.current != null) { cancelAnimationFrame(rafRef.current); rafRef.current = null; }
+      setIsSpinning(false);
+      setPendingSpinId(null);
+      setSpinError(message);
+    };
+
+    // Release the wheel from cruise into a constant-deceleration coast that
+    // stops exactly on the winning segment. Distance is chosen as the smallest
+    // value ≥ SPIN_MIN_SETTLE_DEG that lands on target; duration follows from
+    // the friction model T = 2·D / v₀, giving a velocity-continuous handoff.
+    const beginSettle = (result: SpinResult) => {
+      const centerAngle = result.segmentIndex * segDeg + segDeg / 2;
+      const targetMod = (((360 - centerAngle) % 360) + 360) % 360;        // wheel angle that puts seg center under the top pointer
+      const from = angleRef.current;
+      const minEnd = from + SPIN_MIN_SETTLE_DEG;
+      const delta = (((targetMod - (minEnd % 360)) % 360) + 360) % 360;
+      ctrl.settleFrom = from;
+      ctrl.settleDist = SPIN_MIN_SETTLE_DEG + delta;
+      ctrl.settleV0 = SPIN_CRUISE_DPS;
+      ctrl.settleDur = (2 * ctrl.settleDist) / SPIN_CRUISE_DPS * 1000;
+      ctrl.settleStartedAt = performance.now();
+      ctrl.phase = 'settle';
+    };
+
+    const A = SPIN_ACCEL_MS / 1000;
+    const V = SPIN_CRUISE_DPS;
+
+    const frame = (now: number) => {
+      if (ctrl.phase === 'prespin') {
+        const elapsed = now - ctrl.startedAt;
+        const tSec = elapsed / 1000;
+        // accelerate from rest (0.5·a·t²) until cruise, then hold cruise
+        const advanced = tSec < A ? 0.5 * (V / A) * tSec * tSec : 0.5 * V * A + V * (tSec - A);
+        writeAngle(startAngle + advanced);
+        maybeTick(now);
+        if (ctrl.result && elapsed >= SPIN_MIN_PRESPIN_MS) beginSettle(ctrl.result);
+        rafRef.current = requestAnimationFrame(frame);
+        return;
+      }
+      // settle: x(t) = from + v₀·t − ½·decel·t², decel = v₀/T → stops smoothly at from+dist
+      const T = ctrl.settleDur / 1000;
+      const tSec = (now - ctrl.settleStartedAt) / 1000;
+      if (tSec >= T) {
+        writeAngle(ctrl.settleFrom + ctrl.settleDist);  // exact landing
+        maybeTick(now);
+        finishSpin(ctrl.result!);
+        return;
+      }
+      const decel = ctrl.settleV0 / T;
+      writeAngle(ctrl.settleFrom + ctrl.settleV0 * tSec - 0.5 * decel * tSec * tSec);
+      maybeTick(now);
+      rafRef.current = requestAnimationFrame(frame);
+    };
+
+    rafRef.current = requestAnimationFrame(frame);
+
+    // Fetch the provably-fair outcome in parallel with the spin-up animation.
+    const abort = new AbortController();
+    const timeout = setTimeout(() => abort.abort(), 15000);
     try {
       const spinId = await ensureCommit();
       const r = await fetch(`${apiBase()}/api/wheel/spin`, {
@@ -300,54 +457,26 @@ export default function WheelClient({ variant = 'page', onClose }: WheelClientPr
         credentials: 'include',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ spinId }),
+        signal: abort.signal,
       });
-      const d = await r.json();
+      const d = await r.json().catch(() => ({} as Record<string, unknown>));
       if (!r.ok) {
-        setIsSpinning(false);
-        setPendingSpinId(null);
+        const code = (d as { code?: string }).code;
+        const err = (d as { error?: string }).error;
+        cancelSpin(
+          code === 'NO_SPINS' ? 'You are out of spins — play a game to earn more.'
+            : code === 'NO_SESSION' || code === 'BAD_SESSION' ? 'Session expired — reconnect your wallet and try again.'
+            : `Spin failed${err ? `: ${err}` : ''}. Please try again.`,
+        );
         return;
       }
-
-      const n = Math.max(1, segments.length);
-      const segDeg = 360 / n;
-      const centerAngle = d.segmentIndex * segDeg + segDeg / 2;
-      const targetAngle = (360 - centerAngle + 360) % 360;
-      const base = Math.ceil(rotation / 360) * 360;
-      const finalRotation = base + SPIN_FULL_REVOLUTIONS * 360 + targetAngle;
-      setRotation(finalRotation);
-
-      // Schedule peg-click ticks across the spin (decelerating)
-      tickAudioTimersRef.current.forEach((t) => clearTimeout(t));
-      tickAudioTimersRef.current = [];
-      const totalDeg = finalRotation - rotation;
-      const pegs = Math.max(8, Math.round(totalDeg / segDeg));
-      for (let i = 0; i < pegs; i++) {
-        // ease-out distribution
-        const frac = 1 - Math.pow(1 - (i + 1) / pegs, 3);
-        const at = frac * SPIN_DURATION_MS;
-        tickAudioTimersRef.current.push(setTimeout(() => sounds.playClick(), at));
-      }
-
-      settleTimerRef.current = setTimeout(() => {
-        const result = d as SpinResult;
-        setLastResult(result);
-        setShowResult(true);
-        setSpinsAvailable(result.spinsAvailable ?? 0);
-        setPendingSpinId(null);
-        setIsSpinning(false);
-        if (BigInt(result.prizeWei) > 0n || result.freeSpins > 0) {
-          sounds.playWin();
-          confetti({ particleCount: 140, spread: 90, origin: { y: 0.6 } });
-        } else {
-          sounds.playLose();
-        }
-        if (showLedger) refreshLedger();
-      }, SPIN_DURATION_MS);
+      ctrl.result = d as SpinResult;   // rAF loop picks this up and coasts to rest
     } catch {
-      setIsSpinning(false);
-      setPendingSpinId(null);
+      cancelSpin('Could not reach the wheel — check your connection and try again.');
+    } finally {
+      clearTimeout(timeout);
     }
-  }, [isSpinning, isConnected, spinsAvailable, ensureCommit, segments.length, rotation, showLedger, refreshLedger]);
+  }, [isSpinning, isConnected, spinsAvailable, ensureCommit, segments, showLedger, refreshLedger]);
 
   // ──── SVG slice math, ported from the original ────
   const sliceElements = useMemo(() => {
@@ -612,6 +741,14 @@ export default function WheelClient({ variant = 'page', onClose }: WheelClientPr
           )}
         </div>
 
+        {/* Spin error — previously a failed /spin reset silently and the wheel just
+            sat there ("not spinning"); now the reason is surfaced. */}
+        {spinError && (
+          <div className="z-10 -mt-3 mb-5 px-4 py-2 rounded-xl bg-rose-950/70 border border-rose-500/40 text-xs sm:text-sm text-rose-200 max-w-sm text-center">
+            {spinError}
+          </div>
+        )}
+
         {/* Main wheel container */}
         <div className="relative w-full max-w-[310px] sm:max-w-[420px] md:max-w-[460px] aspect-square z-10 flex items-center justify-center">
           {/* Layer 0: deep 3D ambient shadow cast */}
@@ -691,13 +828,10 @@ export default function WheelClient({ variant = 'page', onClose }: WheelClientPr
             {/* Bulb rim */}
             <div className="absolute inset-0 rounded-full pointer-events-none z-20">{rimBulbs}</div>
 
-            {/* Wheel body — SVG slices, rotated by CSS */}
+            {/* Wheel body — SVG slices, rotated imperatively via attachWheel/wheelRef (see handleSpin) */}
             <div
+              ref={attachWheel}
               className="w-full h-full rounded-full overflow-hidden relative shadow-[inset_0_0_30px_rgba(0,0,0,0.9)] border-2 border-slate-800/80 will-change-transform"
-              style={{
-                transform: `rotate(${rotation}deg)`,
-                transition: isSpinning ? `transform ${SPIN_DURATION_MS}ms cubic-bezier(0.16, 1, 0.3, 1)` : 'none',
-              }}
             >
               <svg viewBox="0 0 400 400" className="w-full h-full block">
                 {sliceElements}
