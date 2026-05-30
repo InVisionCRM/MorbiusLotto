@@ -1219,7 +1219,38 @@ export function PokerSeat({ seat, index, holeCards, isCurrentPlayer, showCardBac
               {handName}
             </div>
           )}
-          {/* Action pill + winner badge now render over the top of the avatar (see above). */}
+          {/* Action / winner indicator.
+              Avatar mode: rendered as a pill over the avatar top (see above).
+              Compact mode (mobile landscape — avatars are hidden): no avatar to
+              anchor to, so render it inside the plate instead. The two are mutually
+              exclusive (global hideSeatAvatar), so the test IDs never collide. */}
+          {hideSeatAvatar && ((actionStyle && actionLabel) || isHandWinner) && (
+            <div className="relative h-[20px] overflow-hidden">
+              {isHandWinner ? (
+                <div
+                  data-testid={`poker-seat-winner-${index}`}
+                  className="h-[20px] flex items-center justify-center gap-1 font-bold leading-tight px-2"
+                  style={{
+                    background: 'linear-gradient(180deg, #fbbf24 0%, #b45309 100%)',
+                    color: '#1a1208',
+                    fontSize: POKER_UI_CQW.actionPillFont,
+                    letterSpacing: '0.04em',
+                  }}
+                >
+                  <Trophy size={10} strokeWidth={2.5} aria-hidden />
+                  <span>Winner</span>
+                </div>
+              ) : (
+                <div
+                  data-testid={`poker-seat-action-${index}`}
+                  className="h-[20px] text-center font-bold px-2 py-0.5 leading-tight break-words text-white"
+                  style={{ background: actionStyle!.bg, fontSize: POKER_UI_CQW.actionPillFont }}
+                >
+                  {actionLabel}
+                </div>
+              )}
+            </div>
+          )}
             </div>
           );
 
