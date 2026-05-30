@@ -21,7 +21,7 @@ import { ConnectButton } from '@rainbow-me/rainbowkit';
 import { formatEther } from 'viem';
 import { motion, AnimatePresence } from 'motion/react';
 import confetti from 'canvas-confetti';
-import { Sparkles, RefreshCw, Volume2, VolumeX, X } from 'lucide-react';
+import { Sparkles, RefreshCw, Volume2, VolumeX, X, Info } from 'lucide-react';
 import GlobalMainNav from '@/components/shared/GlobalMainNav';
 
 const apiBase = (): string => {
@@ -219,6 +219,7 @@ export default function WheelClient({ variant = 'page', onClose }: WheelClientPr
   const [showResult, setShowResult] = useState(false);
   const [ledger, setLedger] = useState<LedgerEntry[]>([]);
   const [showLedger, setShowLedger] = useState(false);
+  const [showInfo, setShowInfo] = useState(false);
   const [soundEnabled, setSoundEnabled] = useState(true);
   const [mounted, setMounted] = useState(false);
 
@@ -440,6 +441,26 @@ export default function WheelClient({ variant = 'page', onClose }: WheelClientPr
     [isSpinning],
   );
 
+  // Distinct prize tiers for the "How it works" panel — collapsed from the live
+  // segment table (duplicate slices summed) and sorted big-money first, so the
+  // breakdown always matches whatever the wheel can actually land on.
+  const prizeTiers = useMemo(() => {
+    const total = segments.reduce((sum, s) => sum + s.weight, 0) || 1;
+    const byValue = new Map<string, { value: string; label: string; prizeWei: string; freeSpins: number; weight: number; color: string }>();
+    for (const s of segments) {
+      const ex = byValue.get(s.value);
+      if (ex) ex.weight += s.weight;
+      else byValue.set(s.value, { value: s.value, label: s.label, prizeWei: s.prize_wei, freeSpins: s.free_spins, weight: s.weight, color: s.color });
+    }
+    return Array.from(byValue.values())
+      .map((t) => ({ ...t, chance: (t.weight / total) * 100 }))
+      .sort((a, b) => {
+        const av = BigInt(a.prizeWei), bv = BigInt(b.prizeWei);
+        if (av !== bv) return av > bv ? -1 : 1;
+        return b.freeSpins - a.freeSpins;
+      });
+  }, [segments]);
+
   // Outer wrapper switches between full-page (inside GlobalMainNav, /wheel route)
   // and modal overlay (floating launcher, opens over the current game).
   // Modal mode is intentionally chromeless — no container, no border. The wheel
@@ -574,6 +595,13 @@ export default function WheelClient({ variant = 'page', onClose }: WheelClientPr
               : <span className="text-slate-400">Connect to claim spins</span>}
           </div>
           {!isConnected && <ConnectButton showBalance={false} />}
+          <button
+            onClick={() => setShowInfo(true)}
+            className="inline-flex items-center gap-1.5 px-4 py-1.5 rounded-full bg-slate-900/40 backdrop-blur-md border border-slate-700/40 text-xs sm:text-sm text-slate-300 hover:text-white hover:border-amber-300/40 transition-colors"
+          >
+            <Info className="w-3.5 h-3.5 text-amber-300" />
+            How it works
+          </button>
           {isConnected && variant === 'page' && (
             <button
               onClick={() => { setShowLedger((s) => !s); if (!showLedger) refreshLedger(); }}
@@ -788,6 +816,93 @@ export default function WheelClient({ variant = 'page', onClose }: WheelClientPr
                   >
                     {lastResult.segment.value === 'NO_WIN' ? 'TRY AGAIN' : 'COLLECT LUXURY!'}
                   </button>
+                </div>
+              </motion.div>
+            </motion.div>
+          )}
+        </AnimatePresence>
+
+        {/* How it works — fun, friendly prize breakdown + how to earn spins */}
+        <AnimatePresence>
+          {showInfo && (
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              className="fixed inset-0 z-[120] flex items-end sm:items-center justify-center p-0 sm:p-4 bg-black/70 backdrop-blur-md"
+              onClick={() => setShowInfo(false)}
+            >
+              <motion.div
+                initial={{ scale: 0.92, y: 40, opacity: 0 }}
+                animate={{ scale: 1, y: 0, opacity: 1 }}
+                exit={{ scale: 0.92, y: 40, opacity: 0 }}
+                transition={{ type: 'spring', bounce: 0.32, duration: 0.5 }}
+                onClick={(e) => e.stopPropagation()}
+                className="relative w-full sm:max-w-md bg-slate-950/95 border border-amber-300/25 rounded-t-3xl sm:rounded-3xl p-6 max-h-[85vh] overflow-y-auto shadow-[0_0_60px_rgba(236,72,153,0.25)]"
+              >
+                <button
+                  onClick={() => setShowInfo(false)}
+                  className="absolute top-4 right-4 text-slate-400 hover:text-white"
+                  aria-label="Close"
+                >
+                  <X className="w-5 h-5" />
+                </button>
+
+                <div className="flex items-center gap-2 mb-1.5">
+                  <Sparkles className="w-5 h-5 text-amber-300" />
+                  <h3 className="text-lg font-black uppercase tracking-wide text-transparent bg-clip-text bg-gradient-to-r from-amber-300 via-pink-400 to-fuchsia-400">
+                    How it works
+                  </h3>
+                </div>
+                <p className="text-xs sm:text-sm text-slate-400 mb-5">
+                  Spin for a shot at <span className="text-amber-300 font-semibold">MORBIUS</span> prizes. Every spin is provably fair — the outcome is locked in before the wheel even turns.
+                </p>
+
+                <div className="text-[11px] font-bold uppercase tracking-widest text-slate-500 mb-2 flex items-center justify-between px-1">
+                  <span>Prize</span>
+                  <span>Chance</span>
+                </div>
+                <ul className="space-y-1.5 mb-5">
+                  {prizeTiers.map((t) => {
+                    const isWin = t.prizeWei !== '0' || t.freeSpins > 0;
+                    return (
+                      <li
+                        key={t.value}
+                        className={`flex items-center gap-2.5 rounded-xl px-3 py-2 border ${isWin ? 'bg-slate-900/60 border-slate-700/50' : 'bg-slate-900/20 border-slate-800/40'}`}
+                      >
+                        <span
+                          className="w-2.5 h-2.5 rounded-full shrink-0"
+                          style={{ backgroundColor: t.color, boxShadow: isWin ? `0 0 8px ${t.color}` : 'none' }}
+                          aria-hidden
+                        />
+                        <span className={`flex-1 min-w-0 truncate text-sm font-bold ${isWin ? 'text-slate-100' : 'text-slate-500'}`}>
+                          {t.label}
+                        </span>
+                        <span className="text-sm font-extrabold tabular-nums whitespace-nowrap text-right">
+                          {t.prizeWei !== '0' ? (
+                            <>
+                              <span className="text-emerald-300">{formatMorbius(t.prizeWei)}</span>
+                              <span className="text-[9px] font-semibold text-slate-500 ml-1">MORBIUS</span>
+                            </>
+                          ) : t.freeSpins > 0 ? (
+                            <span className="text-fuchsia-300">+{t.freeSpins} spin</span>
+                          ) : (
+                            <span className="text-slate-600">—</span>
+                          )}
+                        </span>
+                        <span className="w-12 text-right text-[11px] tabular-nums text-slate-500">
+                          {t.chance < 1 ? t.chance.toFixed(2) : t.chance.toFixed(1)}%
+                        </span>
+                      </li>
+                    );
+                  })}
+                </ul>
+
+                <div className="rounded-xl bg-gradient-to-br from-fuchsia-500/10 to-amber-400/10 border border-amber-300/20 p-3.5">
+                  <div className="text-[11px] font-bold uppercase tracking-widest text-amber-300 mb-1">Earning spins</div>
+                  <p className="text-xs sm:text-sm text-slate-300 leading-relaxed">
+                    Play <span className="text-amber-200 font-semibold">Blackjack</span>, <span className="text-amber-200 font-semibold">Blackjack Multi</span>, and <span className="text-amber-200 font-semibold">Poker</span>, or jump into a tournament — the more you play, the more you spin. Spins never expire.
+                  </p>
                 </div>
               </motion.div>
             </motion.div>
