@@ -1162,3 +1162,12 @@ body {
   60%  { transform: translateY(-2px)  scale(1.02); }
   100% { transform: translateY(0)     scale(1); }
 }
+
+@keyframes wheel-title-shimmer {
+  0%   { background-position: 0% 50%; }
+  100% { background-position: 220% 50%; }
+}
+@keyframes wheel-title-float {
+  0%, 100% { transform: translateY(0); }
+  50%      { transform: translateY(-7px); }
+}

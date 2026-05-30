@@ -442,30 +442,62 @@ export default function WheelClient({ variant = 'page', onClose }: WheelClientPr
 
   // Outer wrapper switches between full-page (inside GlobalMainNav, /wheel route)
   // and modal overlay (floating launcher, opens over the current game).
+  // Modal mode is intentionally chromeless — no container, no border. The wheel
+  // floats on a blurred backdrop with a soft radial halo for depth.
   const Wrap = ({ children }: { children: React.ReactNode }) => {
     if (variant === 'modal') {
       return (
         <div
-          className="fixed inset-0 z-[100] flex items-start sm:items-center justify-center bg-slate-950/85 backdrop-blur-md overflow-y-auto p-3 sm:p-6"
+          className="fixed inset-0 z-[100] flex items-center justify-center overflow-y-auto overflow-x-hidden"
           onClick={onClose}
           role="dialog"
           aria-modal="true"
+          style={{
+            background:
+              'radial-gradient(ellipse 80% 60% at 50% 45%, rgba(15,23,42,0.55) 0%, rgba(2,6,17,0.93) 70%)',
+            backdropFilter: 'blur(24px) saturate(1.3)',
+            WebkitBackdropFilter: 'blur(24px) saturate(1.3)',
+          }}
         >
+          {/* Stage halo — soft radial that paints depth behind the wheel */}
+          <div
+            className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[900px] h-[900px] max-w-[140vw] max-h-[140vw] pointer-events-none rounded-full"
+            style={{
+              background:
+                'radial-gradient(circle, rgba(236,72,153,0.22) 0%, rgba(124,58,237,0.14) 28%, rgba(6,182,212,0.06) 50%, transparent 72%)',
+            }}
+            aria-hidden
+          />
+
+          {/* Ground shadow — flat ellipse beneath the wheel that sells the levitation */}
+          <div
+            className="absolute left-1/2 -translate-x-1/2 pointer-events-none rounded-full"
+            style={{
+              top: 'calc(50% + 220px)',
+              width: '460px',
+              height: '60px',
+              background:
+                'radial-gradient(ellipse at center, rgba(0,0,0,0.65) 0%, rgba(0,0,0,0.35) 40%, transparent 75%)',
+              filter: 'blur(14px)',
+            }}
+            aria-hidden
+          />
+
+          {/* Viewport-anchored close X */}
+          <button
+            onClick={(e) => { e.stopPropagation(); onClose?.(); }}
+            className="fixed top-4 right-4 sm:top-6 sm:right-6 z-[101] p-2.5 rounded-full bg-slate-900/40 backdrop-blur-md border border-slate-700/40 text-slate-300 hover:text-white hover:bg-slate-800/70 active:scale-95 transition-all shadow-lg"
+            aria-label="Close wheel"
+          >
+            <X className="w-5 h-5" />
+          </button>
+
+          {/* Floating, chromeless content stack */}
           <div
             onClick={(e) => e.stopPropagation()}
-            className="relative w-full max-w-[640px] my-auto rounded-3xl border border-slate-800 bg-[#030712] shadow-[0_30px_80px_rgba(0,0,0,0.6)] overflow-hidden"
+            className="relative flex flex-col items-center justify-center w-full max-w-[560px] px-4 py-8 select-none"
           >
-            {/* Modal-only close X */}
-            <button
-              onClick={onClose}
-              className="absolute top-3 left-3 z-50 p-2 rounded-full bg-slate-900/80 border border-slate-800 text-slate-300 hover:text-white cursor-pointer active:scale-95 transition-all shadow-md"
-              aria-label="Close wheel"
-            >
-              <X className="w-5 h-5" />
-            </button>
-            <div className="relative flex flex-col items-center justify-center w-full overflow-hidden px-4 py-8 select-none">
-              {children}
-            </div>
+            {children}
           </div>
         </div>
       );
@@ -496,44 +528,59 @@ export default function WheelClient({ variant = 'page', onClose }: WheelClientPr
     <Wrap>
       {/* keep the original structure as one fragment of content */}
       <>
-        {/* Sound toggle */}
-        <button
-          onClick={toggleSound}
-          className="absolute top-4 right-4 z-50 p-3 rounded-full bg-slate-900/80 border border-slate-800 text-slate-300 hover:text-white cursor-pointer active:scale-95 transition-all shadow-md"
-          title={soundEnabled ? 'Mute sounds' : 'Unmute sounds'}
-        >
-          {soundEnabled ? <Volume2 className="w-5 h-5" /> : <VolumeX className="w-5 h-5" />}
-        </button>
+        {/* Sound toggle — page mode only; modal already has the viewport close X */}
+        {variant === 'page' && (
+          <button
+            onClick={toggleSound}
+            className="absolute top-4 right-4 z-50 p-3 rounded-full bg-slate-900/80 border border-slate-800 text-slate-300 hover:text-white cursor-pointer active:scale-95 transition-all shadow-md"
+            title={soundEnabled ? 'Mute sounds' : 'Unmute sounds'}
+          >
+            {soundEnabled ? <Volume2 className="w-5 h-5" /> : <VolumeX className="w-5 h-5" />}
+          </button>
+        )}
 
-        {/* Background magical glow orb */}
-        <div className={`absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[280px] sm:w-[450px] md:w-[600px] h-[280px] sm:h-[450px] md:h-[600px] bg-gradient-to-tr ${THEME.orb} rounded-full blur-[100px] sm:blur-[130px] opacity-25 pointer-events-none`} />
+        {/* Background magical glow orb — page mode only (modal has its own stage halo) */}
+        {variant === 'page' && (
+          <div className={`absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[280px] sm:w-[450px] md:w-[600px] h-[280px] sm:h-[450px] md:h-[600px] bg-gradient-to-tr ${THEME.orb} rounded-full blur-[100px] sm:blur-[130px] opacity-25 pointer-events-none`} />
+        )}
 
         {/* Decorative sparkles */}
-        <Sparkles className={`absolute top-[15%] right-[20%] ${THEME.sparkles[0]} animate-pulse w-8 h-8 blur-[0.5px]`} />
-        <Sparkles className={`absolute bottom-[20%] left-[15%] ${THEME.sparkles[1]} animate-pulse w-6 h-6 blur-[1px]`} />
+        <Sparkles className={`absolute top-[8%] right-[10%] ${THEME.sparkles[0]} animate-pulse w-8 h-8 blur-[0.5px]`} />
+        <Sparkles className={`absolute bottom-[15%] left-[10%] ${THEME.sparkles[1]} animate-pulse w-6 h-6 blur-[1px]`} />
 
-        {/* Header */}
+        {/* Animated shimmering title — floats and shifts gradient across the letters */}
         <h1
-          className={`relative text-4xl sm:text-5xl md:text-7xl font-black text-transparent bg-clip-text bg-gradient-to-tr ${THEME.titleText} tracking-wider mb-2 md:mb-4 z-10 text-center uppercase pointer-events-none`}
-          style={{ filter: `drop-shadow(0 0 25px ${THEME.titleShadow})` }}
+          className="relative font-black uppercase tracking-wider z-10 text-center pointer-events-none text-5xl sm:text-6xl md:text-7xl mb-3 md:mb-5"
+          style={{
+            backgroundImage:
+              'linear-gradient(110deg, #d946ef 0%, #ec4899 22%, #f59e0b 50%, #ec4899 78%, #d946ef 100%)',
+            backgroundSize: '220% 100%',
+            backgroundClip: 'text',
+            WebkitBackgroundClip: 'text',
+            color: 'transparent',
+            WebkitTextFillColor: 'transparent',
+            filter: 'drop-shadow(0 0 28px rgba(219, 39, 119, 0.55))',
+            animation: 'wheel-title-shimmer 5s linear infinite, wheel-title-float 3.4s ease-in-out infinite',
+          }}
         >
           Daily Wish
         </h1>
 
-        {/* Top status row */}
-        <div className="z-10 flex items-center gap-3 mb-6 md:mb-8">
-          <div className="px-4 py-2 rounded-full bg-slate-900/80 border border-slate-800 text-sm text-slate-300">
-            Spins: <span className="font-bold text-amber-300">{spinsAvailable}</span>
+        {/* Compact status row — single ghost pill */}
+        <div className="z-10 flex items-center gap-2 mb-6 md:mb-8">
+          <div className="px-4 py-1.5 rounded-full bg-slate-900/40 backdrop-blur-md border border-slate-700/40 text-xs sm:text-sm text-slate-300 shadow-sm">
+            {isConnected
+              ? <><span className="font-extrabold text-amber-300 tabular-nums">{spinsAvailable}</span> {spinsAvailable === 1 ? 'spin ready' : 'spins ready'}</>
+              : <span className="text-slate-400">Connect to claim spins</span>}
           </div>
-          {isConnected ? (
+          {!isConnected && <ConnectButton showBalance={false} />}
+          {isConnected && variant === 'page' && (
             <button
               onClick={() => { setShowLedger((s) => !s); if (!showLedger) refreshLedger(); }}
-              className="px-4 py-2 rounded-full bg-slate-900/80 border border-slate-800 text-sm text-slate-300 hover:text-white"
+              className="px-4 py-1.5 rounded-full bg-slate-900/40 backdrop-blur-md border border-slate-700/40 text-xs sm:text-sm text-slate-300 hover:text-white"
             >
               History
             </button>
-          ) : (
-            <ConnectButton showBalance={false} />
           )}
         </div>
 
@@ -651,10 +698,12 @@ export default function WheelClient({ variant = 'page', onClose }: WheelClientPr
           </div>
         </div>
 
-        {/* Footer hint */}
-        <p className="mt-10 text-center text-xs sm:text-sm text-slate-400 max-w-md z-10">
-          Earn spins by playing <span className="text-amber-300">Blackjack</span>, <span className="text-amber-300">Blackjack Multi</span>, and <span className="text-amber-300">Poker</span> — or by entering tournaments. Spins never expire.
-        </p>
+        {/* Footer hint — page mode only; modal stays chromeless */}
+        {variant === 'page' && (
+          <p className="mt-10 text-center text-xs sm:text-sm text-slate-400 max-w-md z-10">
+            Earn spins by playing <span className="text-amber-300">Blackjack</span>, <span className="text-amber-300">Blackjack Multi</span>, and <span className="text-amber-300">Poker</span> — or by entering tournaments. Spins never expire.
+          </p>
+        )}
 
         {/* Result dialog */}
         <AnimatePresence>
