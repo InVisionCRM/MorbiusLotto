@@ -4,7 +4,7 @@ import React, { useRef, useState, useEffect, useCallback, useMemo } from 'react'
 import { toBigIntSafe } from '@/lib/safe-bigint';
 import { formatChips } from '@/lib/format-poker-chips';
 import { BetChip, formatChipLabel } from '@/components/ui/BetChip';
-import { CardDisplay } from './CardDisplay';
+import { CardDisplay, formatPokerCardIndexLabel, POKER_RANK_SUIT_LABEL_COLORS, pokerCardSuitIndex } from './CardDisplay';
 import type { PokerSeatState as SeatState } from '@/lib/websocket-client';
 import { motion, AnimatePresence, useMotionValue, useSpring, useTransform } from 'framer-motion';
 import type { LucideIcon } from 'lucide-react';
@@ -183,8 +183,14 @@ function AnimatedStackValue({ value, baseColor }: { value: string; baseColor: st
 }
 
 const AVATAR_BOX_STYLE: React.CSSProperties = {
-  width: 'clamp(88px, 9.85cqw, 128px)',
-  height: 'clamp(88px, 9.85cqw, 128px)',
+  // Scales with the table (cqw) instead of a hard 128px cap. The table renders
+  // wider than the 1300px editor frame on big screens, and the name plate is
+  // positioned as a *fraction* of the table size — so a fixed-px avatar drifts
+  // away from its plate as the table grows. Keeping the avatar a constant
+  // fraction (9.85cqw ≈ 128px at the 1300px reference) makes the plate overlap
+  // the avatar's bottom consistently at every screen size.
+  width: 'clamp(96px, 9.85cqw, 188px)',
+  height: 'clamp(96px, 9.85cqw, 188px)',
 };
 
 const ROLE_CRESCENT_STYLE = {
@@ -839,7 +845,6 @@ export function PokerSeat({ seat, index, holeCards, isCurrentPlayer, showCardBac
                     isActing ? 'drop-shadow(0 0 6px rgba(34,211,238,0.95)) drop-shadow(0 0 14px rgba(56,189,248,0.65))' : '',
                   ].filter(Boolean).join(' ') || undefined,
                   borderRadius: 8,
-                  boxShadow: '0 0 0 1.5px rgba(251,191,36,0.8), 0 5px 12px rgba(0,0,0,0.55)',
                 }}
               >
                 <CardDisplay
@@ -847,6 +852,28 @@ export function PokerSeat({ seat, index, holeCards, isCurrentPlayer, showCardBac
                   isWinningCard={winningCardIndices?.includes(holeCards![ci])}
                   dealDelay={ci * 0.06}
                 />
+                {/* Big rank+suit tag off the top of the card — same labels/colors
+                    as the community-card row, sized up. Rotates with the card. */}
+                {holeCards![ci] != null && holeCards![ci] >= 0 && (
+                  <div
+                    className="font-jost pointer-events-none absolute left-1/2 -translate-x-1/2 font-black tabular-nums"
+                    style={{
+                      bottom: 'calc(100% + 4px)',
+                      fontSize: 'clamp(20px, 2.4cqw, 36px)',
+                      lineHeight: 1,
+                      color: POKER_RANK_SUIT_LABEL_COLORS[pokerCardSuitIndex(holeCards![ci]) ?? 0],
+                      background: 'rgba(8,11,17,0.92)',
+                      border: '1px solid rgba(255,255,255,0.16)',
+                      borderRadius: 8,
+                      padding: '2px 9px',
+                      whiteSpace: 'nowrap',
+                      boxShadow: '0 3px 8px rgba(0,0,0,0.6)',
+                    }}
+                    aria-hidden
+                  >
+                    {formatPokerCardIndexLabel(holeCards![ci])}
+                  </div>
+                )}
               </div>
             ))}
             {isActing && (
@@ -1198,7 +1225,6 @@ export function PokerSeat({ seat, index, holeCards, isCurrentPlayer, showCardBac
                 style={{ color: '#fbbf24', fontSize: POKER_UI_CQW.playerTagChips, whiteSpace: 'nowrap' }}
               >
                 <AnimatedStackValue value={String(seat.stack ?? '0')} baseColor="#fbbf24" />
-                <img src="/morbius/MorbiusLogo%20(3).png" alt="" aria-hidden className="shrink-0" style={{ height: '1em', width: 'auto', verticalAlign: 'middle' }} />
               </div>
             </div>
           </div>
