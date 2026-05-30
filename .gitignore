@@ -84,3 +84,6 @@ public/swe-worker*
 
 # internal audit notes (local reference only)
 /audit
+
+# poker anchor editor (/poker-layout) dev scratch save — never commit
+lib/poker-seat-anchors.saved.json
