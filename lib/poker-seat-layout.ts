@@ -13,7 +13,7 @@ export const POKER_POT_ANCHOR: SeatAnchor = { fx: 0.5, fy: 0.51 };
  * `ringIndexForDisplaySlot` maps each display slot to a subset of these indices so spacing stays even.
  */
 export const SEAT_ANCHOR_RING: SeatAnchor[] = [
-  { fx: 0.5, fy: 0.85 }, // 0 — hero
+  { fx: 0.5492, fy: 0.8495 }, // 0 — hero
   { fx: 0.25, fy: 0.85 },
   { fx: 0.05, fy: 0.64 },
   { fx: 0.05, fy: 0.29 },
@@ -48,7 +48,7 @@ export function authoredSeatAnchors(seatCount: number): SeatAnchor[] {
  * Tweak these independently from avatar seats, cards, and chip stacks.
  */
 export const PLAYER_TAG_ANCHOR_RING: SeatAnchor[] = [
-  { fx: 0.5, fy: 0.975 }, // 0 — hero
+  { fx: 0.4666, fy: 0.9464 }, // 0 — hero
   { fx: 0.25, fy: 0.98 },
   { fx: 0.045, fy: 0.76 },
   { fx: 0.05, fy: 0.41 },
@@ -115,16 +115,16 @@ export function betChipAnchorForDisplaySlot(seatCount: number, displaySlot: numb
  * Values match the former seat→tag lerp at t=0.22 so existing tables do not jump.
  */
 export const DEALER_BUTTON_RING: SeatAnchor[] = [
-  { fx: 0.445, fy: 0.735 }, // 0 — hero
-  { fx: 0.23, fy: 0.715 },
-  { fx: 0.115, fy: 0.67 },
-  { fx: 0.115, fy: 0.29 },
-  { fx: 0.265, fy: 0.315 },
+  { fx: 0.558, fy: 0.7037 }, // 0 — hero
+  { fx: 0.2497, fy: 0.6903 },
+  { fx: 0.0702, fy: 0.5265 },
+  { fx: 0.1077, fy: 0.4044 },
+  { fx: 0.2513, fy: 0.3125 },
   { fx: 0.445, fy: 0.235 },
-  { fx: 0.805, fy: 0.23 },
-  { fx: 0.88, fy: 0.295 },
-  { fx: 0.88, fy: 0.715 },
-  { fx: 0.795, fy: 0.75 },
+  { fx: 0.7506, fy: 0.3166 },
+  { fx: 0.8964, fy: 0.4082 },
+  { fx: 0.912, fy: 0.5205 },
+  { fx: 0.7479, fy: 0.6915 },
 ];
 
 /**
@@ -132,16 +132,16 @@ export const DEALER_BUTTON_RING: SeatAnchor[] = [
  * Tweak these freely to place opponent cards wherever looks right relative to each seat.
  */
 export const CARD_ANCHOR_RING: SeatAnchor[] = [
-  { fx: 0.5, fy: 0.905 }, // 0 — hero (now wired: positions the hero hand via heroCardOffset)
-  { fx: 0.325, fy: 0.795 },
-  { fx: 0.125, fy: 0.57 },
-  { fx: 0.12, fy: 0.39 },
-  { fx: 0.32, fy: 0.22 },
-  { fx: 0.565, fy: 0.235 }, // 5 — top center
-  { fx: 0.685, fy: 0.25 },
-  { fx: 0.88, fy: 0.395 },
-  { fx: 0.87, fy: 0.62 },
-  { fx: 0.675, fy: 0.77 },
+  { fx: 0.4669, fy: 0.83 }, // 0 — hero (wired: positions the hero hand via heroCardOffset)
+  { fx: 0.3315, fy: 0.8655 },
+  { fx: 0.13, fy: 0.6369 },
+  { fx: 0.1336, fy: 0.2975 },
+  { fx: 0.3356, fy: 0.1271 },
+  { fx: 0.5876, fy: 0.127 }, // 5 — top center
+  { fx: 0.829, fy: 0.127 },
+  { fx: 0.8656, fy: 0.3039 },
+  { fx: 0.8695, fy: 0.6394 },
+  { fx: 0.6711, fy: 0.8562 },
 ];
 
 /**
