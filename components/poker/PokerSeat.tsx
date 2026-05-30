@@ -1082,10 +1082,13 @@ export function PokerSeat({ seat, index, holeCards, isCurrentPlayer, showCardBac
                 // Desktop: anchor the name plate absolutely at PLAYER_TAG_ANCHOR_RING
                 // (seat center + authored offset = the tag anchor) so positions dragged
                 // in the /poker-layout editor land exactly. Mobile keeps the in-flow layout.
+                // zIndex 40 keeps the plate the TOP layer of the seat — above the avatar
+                // (z1) and the hero cards (z6) — so name + chips are never buried.
                 position: 'absolute',
                 left: '50%',
                 top: '50%',
                 transform: `translate(-50%, -50%)${playerTagOffset ? ` translate(${playerTagOffset.x}px, ${playerTagOffset.y}px)` : ''}`,
+                zIndex: 40,
               }
         }
       >
