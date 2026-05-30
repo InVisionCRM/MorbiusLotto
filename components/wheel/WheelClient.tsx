@@ -200,7 +200,14 @@ function reasonLabel(r: string): string {
   } as Record<string, string>)[r] ?? r;
 }
 
-export default function WheelClient() {
+export interface WheelClientProps {
+  /** 'page' (default) renders inside GlobalMainNav for the /wheel route. 'modal' overlays the current page from the floating launcher. */
+  variant?: 'page' | 'modal';
+  /** Called when the user dismisses a modal-mode wheel. Ignored in page mode. */
+  onClose?: () => void;
+}
+
+export default function WheelClient({ variant = 'page', onClose }: WheelClientProps = {}) {
   const { address, isConnected } = useAccount();
 
   const [segments, setSegments] = useState<Segment[]>(FALLBACK_SEGMENTS);
@@ -433,24 +440,62 @@ export default function WheelClient() {
     [isSpinning],
   );
 
-  if (!mounted) {
+  // Outer wrapper switches between full-page (inside GlobalMainNav, /wheel route)
+  // and modal overlay (floating launcher, opens over the current game).
+  const Wrap = ({ children }: { children: React.ReactNode }) => {
+    if (variant === 'modal') {
+      return (
+        <div
+          className="fixed inset-0 z-[100] flex items-start sm:items-center justify-center bg-slate-950/85 backdrop-blur-md overflow-y-auto p-3 sm:p-6"
+          onClick={onClose}
+          role="dialog"
+          aria-modal="true"
+        >
+          <div
+            onClick={(e) => e.stopPropagation()}
+            className="relative w-full max-w-[640px] my-auto rounded-3xl border border-slate-800 bg-[#030712] shadow-[0_30px_80px_rgba(0,0,0,0.6)] overflow-hidden"
+          >
+            {/* Modal-only close X */}
+            <button
+              onClick={onClose}
+              className="absolute top-3 left-3 z-50 p-2 rounded-full bg-slate-900/80 border border-slate-800 text-slate-300 hover:text-white cursor-pointer active:scale-95 transition-all shadow-md"
+              aria-label="Close wheel"
+            >
+              <X className="w-5 h-5" />
+            </button>
+            <div className="relative flex flex-col items-center justify-center w-full overflow-hidden px-4 py-8 select-none">
+              {children}
+            </div>
+          </div>
+        </div>
+      );
+    }
     return (
       <GlobalMainNav>
         <main className="relative flex flex-col items-center justify-center w-full min-h-[100dvh] overflow-hidden px-4 py-8 bg-[#030712] select-none">
-          <h1 className={`text-4xl sm:text-5xl md:text-7xl font-black text-transparent bg-clip-text bg-gradient-to-tr ${THEME.titleText} tracking-wider mb-6 md:mb-12 text-center uppercase opacity-50`}>
-            Daily Wish
-          </h1>
-          <div className="w-[310px] sm:w-[420px] md:w-[460px] aspect-square rounded-full border border-slate-800 bg-slate-950/40 flex items-center justify-center">
-            <div className="text-slate-500 text-xs font-bold uppercase tracking-widest animate-pulse">Loading game engine…</div>
-          </div>
+          {children}
         </main>
       </GlobalMainNav>
+    );
+  };
+
+  if (!mounted) {
+    return (
+      <Wrap>
+        <h1 className={`text-4xl sm:text-5xl md:text-7xl font-black text-transparent bg-clip-text bg-gradient-to-tr ${THEME.titleText} tracking-wider mb-6 md:mb-12 text-center uppercase opacity-50`}>
+          Daily Wish
+        </h1>
+        <div className="w-[310px] sm:w-[420px] md:w-[460px] aspect-square rounded-full border border-slate-800 bg-slate-950/40 flex items-center justify-center">
+          <div className="text-slate-500 text-xs font-bold uppercase tracking-widest animate-pulse">Loading game engine…</div>
+        </div>
+      </Wrap>
     );
   }
 
   return (
-    <GlobalMainNav>
-      <main className="relative flex flex-col items-center justify-center w-full min-h-[100dvh] overflow-hidden px-4 py-8 bg-[#030712] select-none">
+    <Wrap>
+      {/* keep the original structure as one fragment of content */}
+      <>
         {/* Sound toggle */}
         <button
           onClick={toggleSound}
@@ -733,7 +778,7 @@ export default function WheelClient() {
             </div>
           </div>
         )}
-      </main>
-    </GlobalMainNav>
+      </>
+    </Wrap>
   );
 }
