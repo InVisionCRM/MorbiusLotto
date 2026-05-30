@@ -406,6 +406,8 @@ export interface PokerSeatProps {
   playerTagOffset?: { x: number; y: number };
   /** During showdown, nudge visible cards toward table center. */
   showdownCardOffset?: { x: number; y: number };
+  /** Pixel offset from the avatar seat anchor to CARD_ANCHOR_RING[0] (hero). Positions the hero hand like opponent cards. */
+  heroCardOffset?: { x: number; y: number };
   /** Current best hand name (self: live-updating; opponents: showdown only). */
   handName?: string;
   /** Pixel offset from pot center to this seat's card origin — so cards deal from the middle of the table. */
@@ -421,7 +423,7 @@ function offsetTransform(offset?: { x: number; y: number }): string | undefined 
   return `translate(${offset.x}px, ${offset.y}px)`;
 }
 
-export function PokerSeat({ seat, index, holeCards, isCurrentPlayer, showCardBacks, winningCardIndices, isHandWinner = false, lastAction, callAmount, timeLeft, maxTime = 60, chatBubble, onReUpClick, onMenuClick, overlayPhrase: propsOverlayPhrase, overlayEmotion: propsOverlayEmotion, onPhraseReaction, onAnimationReaction, onOpponentClick, onOpponentRadialAction, quickChatPhrases: propsQuickChatPhrases, setQuickChatPhrases: propsSetQuickChatPhrases, onOpenEditQuickChat, hideSeatAvatar = false, onLeaveTable, onSitOut, onSitBack, onRequestMobileActivity, includeActivityInPlayerRadial = false, playerTagOffset, showdownCardOffset, handName, cardDealFromOffset, cardBackSrc }: PokerSeatProps) {
+export function PokerSeat({ seat, index, holeCards, isCurrentPlayer, showCardBacks, winningCardIndices, isHandWinner = false, lastAction, callAmount, timeLeft, maxTime = 60, chatBubble, onReUpClick, onMenuClick, overlayPhrase: propsOverlayPhrase, overlayEmotion: propsOverlayEmotion, onPhraseReaction, onAnimationReaction, onOpponentClick, onOpponentRadialAction, quickChatPhrases: propsQuickChatPhrases, setQuickChatPhrases: propsSetQuickChatPhrases, onOpenEditQuickChat, hideSeatAvatar = false, onLeaveTable, onSitOut, onSitBack, onRequestMobileActivity, includeActivityInPlayerRadial = false, playerTagOffset, showdownCardOffset, heroCardOffset, handName, cardDealFromOffset, cardBackSrc }: PokerSeatProps) {
   const empty = !seat.playerAddress;
   const showMyCards = !!(holeCards && holeCards.length > 0);
   const showBacks   = !!(showCardBacks && !showMyCards && !empty && !seat.folded);
@@ -798,61 +800,63 @@ export function PokerSeat({ seat, index, holeCards, isCurrentPlayer, showCardBac
           wrapper makes the hero cards unmount instantly on fold so the
           flyout is the only visible animation. */}
       {hasCards && showMyCards && isCurrentPlayer && (
-        <motion.div
+        <div
           data-testid={`poker-seat-cards-${index}`}
-          className="relative flex-shrink-0"
-          initial={false}
-          animate={{
-            x: showdownCardOffset?.x ?? 0,
-            y: showdownCardOffset?.y ?? 0,
-          }}
-          transition={{ type: 'spring', stiffness: 180, damping: 22 }}
+          className="pointer-events-none absolute"
           style={{
-            width: showMyCards ? POKER_UI_CQW.heroCardAreaW : POKER_UI_CQW.flyoutRowW,
-            height: showMyCards ? POKER_UI_CQW.heroCardAreaH : POKER_UI_CQW.flyoutRowH,
-            marginBottom: hideSeatAvatar ? -10 : -44,
-            marginLeft: POKER_UI_CQW.heroCardsLayoutShiftX,
-            zIndex: 0,
+            // Anchored to CARD_ANCHOR_RING[0] (hero) via heroCardOffset, the same
+            // offset-from-seat mechanism the name plate uses — so the hero hand is
+            // draggable in the layout editor exactly like opponent cards. Falls back
+            // to the seat center when no offset is provided.
+            left: '50%',
+            top: '50%',
+            transform: `translate(-50%, -50%) translate(${heroCardOffset?.x ?? 0}px, ${heroCardOffset?.y ?? 0}px)`,
+            zIndex: 6,
           }}
         >
-          {[0, 1].map((ci) => (
-            <div
-              key={ci}
-              className="absolute"
-              style={{
-                bottom: 0,
-                zIndex: ci,
-                ...(showMyCards
-                  ? { width: POKER_UI_CQW.heroCardInnerW, height: POKER_UI_CQW.heroCardInnerH, left: ci === 0 ? '0' : POKER_UI_CQW.heroCardInnerLeft }
-                  : { width: POKER_UI_CQW.peekCardInnerW, height: POKER_UI_CQW.peekCardInnerH, left: ci === 0 ? '0' : POKER_UI_CQW.peekCardInnerLeft }),
-                transform: `rotate(${ci === 0 ? -12 : 12}deg)`,
-                transformOrigin: 'bottom center',
-                filter: [
-                  isFolded ? 'grayscale(1) opacity(0.5)' : '',
-                  isActing ? 'drop-shadow(0 0 6px rgba(34,211,238,0.95)) drop-shadow(0 0 14px rgba(56,189,248,0.65))' : '',
-                ].filter(Boolean).join(' ') || undefined,
-                borderRadius: 8,
-              }}
-            >
-              {showMyCards
-                ? (
-                    <CardDisplay
-                      cardIndex={holeCards![ci]}
-                      isWinningCard={winningCardIndices?.includes(holeCards![ci])}
-                      dealDelay={ci * 0.06}
-                    />
-                  )
-                : <CardDisplay cardIndex={null} small faceDown dealDelay={ci * 0.06} cardBackSrc={cardBackSrc} />}
-            </div>
-          ))}
-          {isActing && (
-            <div
-              className="pointer-events-none absolute -inset-2 rounded-full blur-md opacity-40 animate-pulse"
-              style={{ background: 'radial-gradient(circle, var(--poker-accent-muted), transparent 70%)' }}
-              aria-hidden
-            />
-          )}
-        </motion.div>
+          <motion.div
+            initial={false}
+            animate={{
+              x: showdownCardOffset?.x ?? 0,
+              y: showdownCardOffset?.y ?? 0,
+            }}
+            transition={{ type: 'spring', stiffness: 180, damping: 22 }}
+            className="relative flex items-center justify-center"
+          >
+            {[0, 1].map((ci) => (
+              <div
+                key={ci}
+                className="relative"
+                style={{
+                  width: POKER_UI_CQW.heroCardInnerW,
+                  height: POKER_UI_CQW.heroCardInnerH,
+                  marginLeft: ci === 1 ? '-18px' : 0,
+                  transform: `rotate(${ci === 0 ? -11 : 11}deg)`,
+                  transformOrigin: 'bottom center',
+                  zIndex: ci,
+                  filter: [
+                    isFolded ? 'grayscale(1) opacity(0.5)' : '',
+                    isActing ? 'drop-shadow(0 0 6px rgba(34,211,238,0.95)) drop-shadow(0 0 14px rgba(56,189,248,0.65))' : '',
+                  ].filter(Boolean).join(' ') || undefined,
+                  borderRadius: 8,
+                }}
+              >
+                <CardDisplay
+                  cardIndex={holeCards![ci]}
+                  isWinningCard={winningCardIndices?.includes(holeCards![ci])}
+                  dealDelay={ci * 0.06}
+                />
+              </div>
+            ))}
+            {isActing && (
+              <div
+                className="pointer-events-none absolute -inset-2 rounded-full blur-md opacity-40 animate-pulse"
+                style={{ background: 'radial-gradient(circle, var(--poker-accent-muted), transparent 70%)' }}
+                aria-hidden
+              />
+            )}
+          </motion.div>
+        </div>
       )}
 
       {/* ── Avatar (desktop) or compact timer + roles (narrow) ── */}
@@ -1044,7 +1048,21 @@ export function PokerSeat({ seat, index, holeCards, isCurrentPlayer, showCardBac
       )}
 
       {/* ── Buttons + badge ── */}
-      <div style={{ position: 'relative', display: 'inline-block', transform: offsetTransform(playerTagOffset) }}>
+      <div
+        style={
+          hideSeatAvatar
+            ? { position: 'relative', display: 'inline-block', transform: offsetTransform(playerTagOffset) }
+            : {
+                // Desktop: anchor the name plate absolutely at PLAYER_TAG_ANCHOR_RING
+                // (seat center + authored offset = the tag anchor) so positions dragged
+                // in the /poker-layout editor land exactly. Mobile keeps the in-flow layout.
+                position: 'absolute',
+                left: '50%',
+                top: '50%',
+                transform: `translate(-50%, -50%)${playerTagOffset ? ` translate(${playerTagOffset.x}px, ${playerTagOffset.y}px)` : ''}`,
+              }
+        }
+      >
 
         {/* Backdrop to close all menus */}
         <AnimatePresence>

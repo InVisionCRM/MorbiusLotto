@@ -605,6 +605,16 @@ export function PokerTable({ state, currentPlayerAddress, timeLeft, chatBubbleBy
           y: (playerTagAnchor.fy - anchorFrac.fy) * dims.h,
         }
       : undefined;
+    // Hero hole cards live on the avatar in PokerSeat (not the opponent card map),
+    // so wire their CARD_ANCHOR_RING entry as an offset from the seat anchor — this
+    // makes the hero hand draggable in the layout editor like every other element.
+    const heroCardAnchor = cardAnchorForDisplaySlot(state.seats.length, displaySlot);
+    const heroCardOffset = anchorFrac
+      ? {
+          x: (heroCardAnchor.fx - anchorFrac.fx) * dims.w,
+          y: (heroCardAnchor.fy - anchorFrac.fy) * dims.h,
+        }
+      : undefined;
     let showdownCardOffset: { x: number; y: number } | undefined;
     if (seatShowdownCards && anchorFrac) {
       const deltaX = (POT_ANCHOR.fx - anchorFrac.fx) * dims.w;
@@ -660,6 +670,7 @@ export function PokerTable({ state, currentPlayerAddress, timeLeft, chatBubbleBy
       includeActivityInPlayerRadial: hideSeatAvatars,
       playerTagOffset,
       showdownCardOffset,
+      heroCardOffset,
       handName:
         idx === mySeatIndex && selfHandName
           ? selfHandName
