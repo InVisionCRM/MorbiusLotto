@@ -845,7 +845,6 @@ export function PokerSeat({ seat, index, holeCards, isCurrentPlayer, showCardBac
                     isActing ? 'drop-shadow(0 0 6px rgba(34,211,238,0.95)) drop-shadow(0 0 14px rgba(56,189,248,0.65))' : '',
                   ].filter(Boolean).join(' ') || undefined,
                   borderRadius: 8,
-                  boxShadow: '0 0 0 1.5px rgba(251,191,36,0.8), 0 5px 12px rgba(0,0,0,0.55)',
                 }}
               >
                 <CardDisplay
