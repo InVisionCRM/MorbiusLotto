@@ -13,16 +13,16 @@ export const POKER_POT_ANCHOR: SeatAnchor = { fx: 0.5, fy: 0.51 };
  * `ringIndexForDisplaySlot` maps each display slot to a subset of these indices so spacing stays even.
  */
 export const SEAT_ANCHOR_RING: SeatAnchor[] = [
-  { fx: 0.5, fy: 0.89 }, // 0 — bottom center (hero)
-  { fx: 0.25, fy: 0.89 }, // 1 — hero's left (next to act, clockwise)
-  { fx: 0.05, fy: 0.64 }, // 2 — S2
+  { fx: 0.5, fy: 0.85 }, // 0 — hero
+  { fx: 0.25, fy: 0.85 },
+  { fx: 0.05, fy: 0.64 },
   { fx: 0.05, fy: 0.29 },
-  { fx: 0.25, fy: 0.14 },
-  { fx: 0.45, fy: 0.14 }, // 5 — top center
-  { fx: 0.75, fy: 0.14 },
+  { fx: 0.25, fy: 0.125 },
+  { fx: 0.5, fy: 0.125 }, // 5 — top center
+  { fx: 0.75, fy: 0.125 },
   { fx: 0.95, fy: 0.29 },
   { fx: 0.95, fy: 0.64 },
-  { fx: 0.75, fy: 0.89 },
+  { fx: 0.75, fy: 0.85 },
 ];
 
 /** Map display slot → ring index `0..POKER_TABLE_MAX_SEATS-1`. At full **10** seats, slot === ring index. */
@@ -48,16 +48,16 @@ export function authoredSeatAnchors(seatCount: number): SeatAnchor[] {
  * Tweak these independently from avatar seats, cards, and chip stacks.
  */
 export const PLAYER_TAG_ANCHOR_RING: SeatAnchor[] = [
-  { fx: 0.45, fy: 0.85 },  // 0 — bottom center (hero)
-  { fx: 0.20, fy: 0.85 }, // 1 — S1
-  { fx: 0.10, fy: 0.60 },
-  { fx: 0.10, fy: 0.25 },
-  { fx: 0.30, fy: 0.10 },
-  { fx: 0.50, fy: 0.10 },  // 5 — top center
-  { fx: 0.70, fy: 0.10 },
-  { fx: 0.90, fy: 0.25 },
-  { fx: 0.90, fy: 0.60 },
-  { fx: 0.70, fy: 0.85 },
+  { fx: 0.5, fy: 0.975 }, // 0 — hero
+  { fx: 0.25, fy: 0.98 },
+  { fx: 0.045, fy: 0.76 },
+  { fx: 0.05, fy: 0.41 },
+  { fx: 0.25, fy: 0.245 },
+  { fx: 0.5, fy: 0.245 }, // 5 — top center
+  { fx: 0.75, fy: 0.245 },
+  { fx: 0.95, fy: 0.41 },
+  { fx: 0.95, fy: 0.76 },
+  { fx: 0.75, fy: 0.975 },
 ];
 
 /** Display-slot player tag anchors for `seatCount` (mirrors `authoredSeatAnchors`). */
@@ -80,16 +80,16 @@ export function playerTagAnchorForDisplaySlot(seatCount: number, displaySlot: nu
  * Initialized to match the former seat-co-located chip ring; change here without moving avatars.
  */
 export const BET_CHIP_ANCHOR_RING: SeatAnchor[] = [
-  { fx: 0.5, fy: 0.65 },
-  { fx: 0.25, fy: 0.65 },
-  { fx: 0.15, fy: 0.55 },
-  { fx: 0.15, fy: 0.30 },
-  { fx: 0.30, fy: 0.25 },
-  { fx: 0.50, fy: 0.23 },
-  { fx: 0.70, fy: 0.25 },
-  { fx: 0.82, fy: 0.30 },
-  { fx: 0.82, fy: 0.45 },
-  { fx: 0.70, fy: 0.65 },
+  { fx: 0.5, fy: 0.65 }, // 0 — hero
+  { fx: 0.305, fy: 0.65 },
+  { fx: 0.185, fy: 0.565 },
+  { fx: 0.19, fy: 0.39 },
+  { fx: 0.31, fy: 0.35 },
+  { fx: 0.5, fy: 0.32 },
+  { fx: 0.7, fy: 0.33 },
+  { fx: 0.82, fy: 0.4 },
+  { fx: 0.82, fy: 0.565 },
+  { fx: 0.7, fy: 0.65 },
 ];
 
 /** @deprecated Use {@link BET_CHIP_ANCHOR_RING}; kept for grep / external refs. */
@@ -115,16 +115,16 @@ export function betChipAnchorForDisplaySlot(seatCount: number, displaySlot: numb
  * Values match the former seat→tag lerp at t=0.22 so existing tables do not jump.
  */
 export const DEALER_BUTTON_RING: SeatAnchor[] = [
-  { fx: 0.40, fy: 0.80 },
-  { fx: 0.28, fy: 0.75 },
-  { fx: 0.17, fy: 0.50 },
-  { fx: 0.17, fy: 0.35 },
-  { fx: 0.25, fy: 0.20 },
-  { fx: 0.45, fy: 0.20 },
-  { fx: 0.65, fy: 0.20 },
-  { fx: 0.83, fy: 0.25 },
-  { fx: 0.83, fy: 0.60 },
-  { fx: 0.78, fy: 0.75 },
+  { fx: 0.445, fy: 0.735 }, // 0 — hero
+  { fx: 0.23, fy: 0.715 },
+  { fx: 0.115, fy: 0.67 },
+  { fx: 0.115, fy: 0.29 },
+  { fx: 0.265, fy: 0.315 },
+  { fx: 0.445, fy: 0.235 },
+  { fx: 0.805, fy: 0.23 },
+  { fx: 0.88, fy: 0.295 },
+  { fx: 0.88, fy: 0.715 },
+  { fx: 0.795, fy: 0.75 },
 ];
 
 /**
@@ -132,16 +132,16 @@ export const DEALER_BUTTON_RING: SeatAnchor[] = [
  * Tweak these freely to place opponent cards wherever looks right relative to each seat.
  */
 export const CARD_ANCHOR_RING: SeatAnchor[] = [
-  { fx: 0.50, fy: 0.80 },  // 0 — hero (unused for opponent cards; hero's cards live on avatar)
-  { fx: 0.18, fy: 0.81 }, // 1 — S1
-  { fx: 0.11, fy: 0.55 },
-  { fx: 0.11, fy: 0.20 },
-  { fx: 0.31, fy: 0.06 },
-  { fx: 0.51, fy: 0.06 },  // 5 — top center
-  { fx: 0.68, fy: 0.06 },
-  { fx: 0.87, fy: 0.20 },
-  { fx: 0.87, fy: 0.55 },
-  { fx: 0.68, fy: 0.80 },
+  { fx: 0.5, fy: 0.905 }, // 0 — hero (now wired: positions the hero hand via heroCardOffset)
+  { fx: 0.325, fy: 0.795 },
+  { fx: 0.125, fy: 0.57 },
+  { fx: 0.12, fy: 0.39 },
+  { fx: 0.32, fy: 0.22 },
+  { fx: 0.565, fy: 0.235 }, // 5 — top center
+  { fx: 0.685, fy: 0.25 },
+  { fx: 0.88, fy: 0.395 },
+  { fx: 0.87, fy: 0.62 },
+  { fx: 0.675, fy: 0.77 },
 ];
 
 /**
@@ -149,16 +149,16 @@ export const CARD_ANCHOR_RING: SeatAnchor[] = [
  * Tweak each vertex independently to place the winning stack cleanly per seat, mapped like C#/S#.
  */
 export const WINNING_POT_CHIP_ANCHOR_RING: SeatAnchor[] = [
-  { fx: 0.43, fy: 0.80 },
-  { fx: 0.28, fy: 0.75 },
-  { fx: 0.17, fy: 0.50 },
-  { fx: 0.17, fy: 0.35 },
-  { fx: 0.25, fy: 0.20 },
-  { fx: 0.45, fy: 0.20 },
-  { fx: 0.65, fy: 0.20 },
-  { fx: 0.83, fy: 0.25 },
-  { fx: 0.83, fy: 0.60 },
-  { fx: 0.78, fy: 0.75 },
+  { fx: 0.525, fy: 0.72 }, // 0 — hero
+  { fx: 0.27, fy: 0.725 },
+  { fx: 0.135, fy: 0.73 },
+  { fx: 0.09, fy: 0.45 },
+  { fx: 0.235, fy: 0.31 },
+  { fx: 0.45, fy: 0.2 }, // 5 — top center
+  { fx: 0.75, fy: 0.32 },
+  { fx: 0.905, fy: 0.475 },
+  { fx: 0.885, fy: 0.57 },
+  { fx: 0.745, fy: 0.715 },
 ];
 
 /** Display-slot anchors for winning pot chips (hero-centered), mirroring `authoredChipAnchors`. */
