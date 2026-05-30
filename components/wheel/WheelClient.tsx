@@ -696,7 +696,16 @@ export default function WheelClient({ variant = 'page', onClose }: WheelClientPr
               className="w-full h-full rounded-full overflow-hidden relative shadow-[inset_0_0_30px_rgba(0,0,0,0.9)] border-2 border-slate-800/80 will-change-transform"
               style={{
                 transform: `rotate(${rotation}deg)`,
-                transition: isSpinning ? `transform ${SPIN_DURATION_MS}ms cubic-bezier(0.16, 1, 0.3, 1)` : 'none',
+                // Keep the transition permanently armed. If it were gated on
+                // `isSpinning`, the same render commit that flips isSpinning→true
+                // can also apply the new `rotation` before the browser paints a
+                // frame with the transition in place — so there's nothing to
+                // interpolate *from* and the wheel snaps instantly. Over the
+                // 8 full revolutions baked into finalRotation that snap lands on
+                // the same visual angle, looking like the wheel never spun.
+                // Always-on transition removes the arming race entirely; the
+                // wheel is idle whenever `rotation` isn't changing anyway.
+                transition: `transform ${SPIN_DURATION_MS}ms cubic-bezier(0.16, 1, 0.3, 1)`,
               }}
             >
               <svg viewBox="0 0 400 400" className="w-full h-full block">
