@@ -183,8 +183,8 @@ function AnimatedStackValue({ value, baseColor }: { value: string; baseColor: st
 }
 
 const AVATAR_BOX_STYLE: React.CSSProperties = {
-  width: 'clamp(58px, 6.5cqw, 84px)',
-  height: 'clamp(58px, 6.5cqw, 84px)',
+  width: 'clamp(88px, 9.85cqw, 128px)',
+  height: 'clamp(88px, 9.85cqw, 128px)',
 };
 
 const ROLE_CRESCENT_STYLE = {
@@ -839,6 +839,7 @@ export function PokerSeat({ seat, index, holeCards, isCurrentPlayer, showCardBac
                     isActing ? 'drop-shadow(0 0 6px rgba(34,211,238,0.95)) drop-shadow(0 0 14px rgba(56,189,248,0.65))' : '',
                   ].filter(Boolean).join(' ') || undefined,
                   borderRadius: 8,
+                  boxShadow: '0 0 0 1.5px rgba(251,191,36,0.8), 0 5px 12px rgba(0,0,0,0.55)',
                 }}
               >
                 <CardDisplay
@@ -942,7 +943,7 @@ export function PokerSeat({ seat, index, holeCards, isCurrentPlayer, showCardBac
                     className="flex h-full w-full items-center justify-center font-bold"
                     style={{
                       color: isCurrentPlayer ? '#fde68a' : '#e2e8f0',
-                      fontSize: 32,
+                      fontSize: 46,
                       background: 'linear-gradient(135deg, rgba(30,30,50,1), rgba(10,10,20,1))',
                     }}
                   >
@@ -952,31 +953,18 @@ export function PokerSeat({ seat, index, holeCards, isCurrentPlayer, showCardBac
                 {isCurrentPlayer && (
                   <div className="pointer-events-none absolute inset-0 rounded-full bg-black/0 transition-colors hover:bg-black/20" />
                 )}
+                {/* Small/Big blind — colored inner ring inside the avatar rim
+                    (replaces the old bottom crescent). SB = blue, BB = gold. */}
                 {roleLabel && roleStyle && (
                   <div
-                    className="pointer-events-none absolute left-1/2 bottom-0 -translate-x-1/2 flex items-center justify-center"
+                    className="pointer-events-none absolute rounded-full"
                     style={{
-                      width: '92%',
-                      height: '28%',
-                      borderRadius: '9999px 9999px 42px 42px / 14px 14px 22px 22px',
-                      background: roleStyle.bg,
-                      borderTop: `1px solid ${roleStyle.rim}`,
-                      boxShadow:
-                        'inset 0 -3px 6px rgba(0,0,0,0.48), 0 2px 4px rgba(0,0,0,0.26)',
+                      inset: 3,
+                      border: `4px solid ${roleStyle.rim}`,
+                      boxShadow: `inset 0 0 8px ${roleStyle.rim}`,
                     }}
-                  >
-                    <span
-                      style={{
-                        color: roleStyle.text,
-                        fontSize: 11,
-                        fontWeight: 900,
-                        letterSpacing: '0.2px',
-                        lineHeight: 1,
-                      }}
-                    >
-                      {roleLabel}
-                    </span>
-                  </div>
+                    aria-label={roleLabel === 'BB' ? 'Big blind' : 'Small blind'}
+                  />
                 )}
               </div>
             );
@@ -997,6 +985,44 @@ export function PokerSeat({ seat, index, holeCards, isCurrentPlayer, showCardBac
             return avatarCard;
           })()}
 
+          {/* Last action / winner — pill tucked over the top ~5% of the avatar.
+              Sticky: shows the seat's most recent action until they act again.
+              Moved here from the name plate so the plate stays name + chips only. */}
+          {(isHandWinner || (actionStyle && actionLabel)) && (
+            <div className="pointer-events-none absolute left-1/2 -translate-x-1/2 z-30" style={{ top: -13 }}>
+              {isHandWinner ? (
+                <div
+                  data-testid={`poker-seat-winner-${index}`}
+                  className="flex items-center gap-1 rounded-full px-2.5 py-0.5 font-bold leading-none"
+                  style={{
+                    background: 'linear-gradient(180deg, #fbbf24 0%, #b45309 100%)',
+                    color: '#1a1208',
+                    fontSize: POKER_UI_CQW.actionPillFont,
+                    letterSpacing: '0.04em',
+                    whiteSpace: 'nowrap',
+                    boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.25), 0 2px 6px rgba(0,0,0,0.55)',
+                  }}
+                >
+                  <Trophy size={10} strokeWidth={2.5} aria-hidden />
+                  <span>Winner</span>
+                </div>
+              ) : (
+                <div
+                  data-testid={`poker-seat-action-${index}`}
+                  className="rounded-full px-2.5 py-0.5 font-bold leading-none text-white"
+                  style={{
+                    background: actionStyle!.bg,
+                    fontSize: POKER_UI_CQW.actionPillFont,
+                    whiteSpace: 'nowrap',
+                    boxShadow: '0 2px 6px rgba(0,0,0,0.55)',
+                  }}
+                >
+                  {actionLabel}
+                </div>
+              )}
+            </div>
+          )}
+
           {/* AFK badge — soft warning at 1 missed turn, hard AFK at 2+.
               Visible to the whole table so opponents see why this seat is
               folding fast. Positioned above the avatar so it isn't clipped
@@ -1008,7 +1034,7 @@ export function PokerSeat({ seat, index, holeCards, isCurrentPlayer, showCardBac
             return (
               <div
                 className="pointer-events-none absolute left-1/2 -translate-x-1/2 z-20"
-                style={{ top: -10 }}
+                style={{ top: -32 }}
               >
                 <div
                   className="rounded-full px-1.5 py-[2px] text-[9px] font-bold leading-none tracking-wide uppercase shadow-md"
@@ -1190,54 +1216,7 @@ export function PokerSeat({ seat, index, holeCards, isCurrentPlayer, showCardBac
               {handName}
             </div>
           )}
-          <div className="relative h-[22px] overflow-hidden">
-            <AnimatePresence mode="wait">
-              {actionStyle && actionLabel && (
-                <motion.div
-                  key={`${activeAction?.action}-${actionLabel}`}
-                  initial={{ opacity: 0, y: 4 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  exit={{ opacity: 0, y: -4 }}
-                  transition={{ duration: 0.15 }}
-                >
-                  <div
-                    data-testid={`poker-seat-action-${index}`}
-                    className="h-[22px] text-center font-bold px-2 py-1 leading-tight break-words"
-                    style={{ background: actionStyle.bg, color: '#fff', fontSize: POKER_UI_CQW.actionPillFont }}
-                  >
-                    {actionLabel}
-                  </div>
-                </motion.div>
-              )}
-            </AnimatePresence>
-            <AnimatePresence>
-              {isHandWinner && (
-                <motion.div
-                  key="winner-overlay"
-                  initial={{ opacity: 0, y: 4 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  exit={{ opacity: 0, y: -4 }}
-                  transition={{ duration: 0.15 }}
-                  className="absolute inset-0"
-                >
-                  <div
-                    data-testid={`poker-seat-winner-${index}`}
-                    className="h-[22px] flex items-center justify-center gap-1 font-bold leading-tight px-2"
-                    style={{
-                      background: 'linear-gradient(180deg, #fbbf24 0%, #b45309 100%)',
-                      color: '#1a1208',
-                      fontSize: POKER_UI_CQW.actionPillFont,
-                      boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.25), inset 0 -2px 4px rgba(0,0,0,0.4), 0 1px 3px rgba(0,0,0,0.5)',
-                      letterSpacing: '0.04em',
-                    }}
-                  >
-                    <Trophy size={11} strokeWidth={2.5} aria-hidden />
-                    <span>Winner</span>
-                  </div>
-                </motion.div>
-              )}
-            </AnimatePresence>
-          </div>
+          {/* Action pill + winner badge now render over the top of the avatar (see above). */}
             </div>
           );
 
