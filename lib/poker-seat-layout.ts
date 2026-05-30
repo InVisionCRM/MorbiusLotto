@@ -18,7 +18,7 @@ export const SEAT_ANCHOR_RING: SeatAnchor[] = [
   { fx: 0.05, fy: 0.64 },
   { fx: 0.05, fy: 0.29 },
   { fx: 0.25, fy: 0.125 },
-  { fx: 0.5, fy: 0.125 }, // 5 — top center
+  { fx: 0.4704, fy: 0.1255 }, // 5 — top center
   { fx: 0.75, fy: 0.125 },
   { fx: 0.95, fy: 0.29 },
   { fx: 0.95, fy: 0.64 },
@@ -48,12 +48,12 @@ export function authoredSeatAnchors(seatCount: number): SeatAnchor[] {
  * Tweak these independently from avatar seats, cards, and chip stacks.
  */
 export const PLAYER_TAG_ANCHOR_RING: SeatAnchor[] = [
-  { fx: 0.464, fy: 0.9399 }, // 0 — hero
+  { fx: 0.549, fy: 0.9642 }, // 0 — hero
   { fx: 0.25, fy: 0.98 },
   { fx: 0.045, fy: 0.76 },
   { fx: 0.05, fy: 0.41 },
   { fx: 0.25, fy: 0.245 },
-  { fx: 0.4997, fy: 0.222 }, // 5 — top center
+  { fx: 0.4691, fy: 0.2358 }, // 5 — top center
   { fx: 0.75, fy: 0.245 },
   { fx: 0.95, fy: 0.41 },
   { fx: 0.95, fy: 0.76 },
@@ -85,7 +85,7 @@ export const BET_CHIP_ANCHOR_RING: SeatAnchor[] = [
   { fx: 0.185, fy: 0.565 },
   { fx: 0.19, fy: 0.39 },
   { fx: 0.31, fy: 0.35 },
-  { fx: 0.5, fy: 0.32 },
+  { fx: 0.4694, fy: 0.3088 },
   { fx: 0.7, fy: 0.33 },
   { fx: 0.82, fy: 0.4 },
   { fx: 0.82, fy: 0.565 },
@@ -120,7 +120,7 @@ export const DEALER_BUTTON_RING: SeatAnchor[] = [
   { fx: 0.1244, fy: 0.5249 },
   { fx: 0.1077, fy: 0.4044 },
   { fx: 0.2521, fy: 0.3576 },
-  { fx: 0.4313, fy: 0.2505 },
+  { fx: 0.5317, fy: 0.2673 },
   { fx: 0.7517, fy: 0.3586 },
   { fx: 0.8493, fy: 0.4313 },
   { fx: 0.8522, fy: 0.5528 },
@@ -132,13 +132,13 @@ export const DEALER_BUTTON_RING: SeatAnchor[] = [
  * Tweak these freely to place opponent cards wherever looks right relative to each seat.
  */
 export const CARD_ANCHOR_RING: SeatAnchor[] = [
-  { fx: 0.4607, fy: 0.8307 }, // 0 — hero (wired: positions the hero hand via heroCardOffset)
+  { fx: 0.4649, fy: 0.8566 }, // 0 — hero (wired: positions the hero hand via heroCardOffset)
   { fx: 0.3315, fy: 0.8655 },
   { fx: 0.13, fy: 0.6369 },
   { fx: 0.1336, fy: 0.2975 },
-  { fx: 0.3356, fy: 0.1271 },
-  { fx: 0.5876, fy: 0.127 }, // 5 — top center
-  { fx: 0.829, fy: 0.127 },
+  { fx: 0.3329, fy: 0.1106 },
+  { fx: 0.5535, fy: 0.1099 }, // 5 — top center
+  { fx: 0.6703, fy: 0.1081 },
   { fx: 0.8656, fy: 0.3039 },
   { fx: 0.8695, fy: 0.6394 },
   { fx: 0.6711, fy: 0.8562 },
@@ -151,13 +151,13 @@ export const CARD_ANCHOR_RING: SeatAnchor[] = [
 export const WINNING_POT_CHIP_ANCHOR_RING: SeatAnchor[] = [
   { fx: 0.525, fy: 0.72 }, // 0 — hero
   { fx: 0.27, fy: 0.725 },
-  { fx: 0.135, fy: 0.73 },
-  { fx: 0.09, fy: 0.45 },
-  { fx: 0.235, fy: 0.31 },
-  { fx: 0.45, fy: 0.2 }, // 5 — top center
-  { fx: 0.75, fy: 0.32 },
-  { fx: 0.905, fy: 0.475 },
-  { fx: 0.885, fy: 0.57 },
+  { fx: 0.1103, fy: 0.7356 },
+  { fx: 0.1047, fy: 0.2181 },
+  { fx: 0.2092, fy: 0.2131 },
+  { fx: 0.4247, fy: 0.2051 }, // 5 — top center
+  { fx: 0.8018, fy: 0.1981 },
+  { fx: 0.9045, fy: 0.218 },
+  { fx: 0.9084, fy: 0.5613 },
   { fx: 0.745, fy: 0.715 },
 ];
 
