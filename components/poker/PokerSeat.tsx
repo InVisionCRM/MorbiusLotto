@@ -183,8 +183,14 @@ function AnimatedStackValue({ value, baseColor }: { value: string; baseColor: st
 }
 
 const AVATAR_BOX_STYLE: React.CSSProperties = {
-  width: 'clamp(88px, 9.85cqw, 128px)',
-  height: 'clamp(88px, 9.85cqw, 128px)',
+  // Scales with the table (cqw) instead of a hard 128px cap. The table renders
+  // wider than the 1300px editor frame on big screens, and the name plate is
+  // positioned as a *fraction* of the table size — so a fixed-px avatar drifts
+  // away from its plate as the table grows. Keeping the avatar a constant
+  // fraction (9.85cqw ≈ 128px at the 1300px reference) makes the plate overlap
+  // the avatar's bottom consistently at every screen size.
+  width: 'clamp(96px, 9.85cqw, 188px)',
+  height: 'clamp(96px, 9.85cqw, 188px)',
 };
 
 const ROLE_CRESCENT_STYLE = {
@@ -1198,7 +1204,6 @@ export function PokerSeat({ seat, index, holeCards, isCurrentPlayer, showCardBac
                 style={{ color: '#fbbf24', fontSize: POKER_UI_CQW.playerTagChips, whiteSpace: 'nowrap' }}
               >
                 <AnimatedStackValue value={String(seat.stack ?? '0')} baseColor="#fbbf24" />
-                <img src="/morbius/MorbiusLogo%20(3).png" alt="" aria-hidden className="shrink-0" style={{ height: '1em', width: 'auto', verticalAlign: 'middle' }} />
               </div>
             </div>
           </div>
