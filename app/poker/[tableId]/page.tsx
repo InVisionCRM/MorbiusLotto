@@ -40,6 +40,7 @@ import { usePokerMobileZoomLock } from './PokerMobileZoomLock';
 import { usePokerTurnClock } from './PokerTurnClock';
 import { usePokerTableSounds } from './PokerSounds';
 import { usePokerTableTournamentHud } from '@/hooks/use-poker-tournament';
+import { useTurnTitleFlash } from '@/hooks/use-turn-title-flash';
 import { TournamentBlindIncreaseOverlay } from '@/components/poker/tournament/TournamentBlindIncreaseOverlay';
 import { PokerTournamentHUD } from '@/components/poker/tournament/PokerTournamentHUD';
 import { PokerTournamentResultsModal } from '@/components/poker/tournament/PokerTournamentResultsModal';
@@ -312,6 +313,10 @@ export default function PokerTablePage() {
     applyE2EMockAction,
     setOptimisticOverlay,
   });
+
+  // Flash the tab title ("⏰ YOUR TURN" ↔ "Morbius Poker") while it's the
+  // player's turn and the tab is backgrounded. Stops on focus or when they act.
+  useTurnTitleFlash(!!canAct);
 
   const handleLeaveClick = useCallback(() => {
     setShowExitConfirm(false);
