@@ -4,7 +4,7 @@ import React, { useRef, useState, useEffect, useCallback, useMemo } from 'react'
 import { toBigIntSafe } from '@/lib/safe-bigint';
 import { formatChips } from '@/lib/format-poker-chips';
 import { BetChip, formatChipLabel } from '@/components/ui/BetChip';
-import { CardDisplay } from './CardDisplay';
+import { CardDisplay, formatPokerCardIndexLabel, POKER_RANK_SUIT_LABEL_COLORS, pokerCardSuitIndex } from './CardDisplay';
 import type { PokerSeatState as SeatState } from '@/lib/websocket-client';
 import { motion, AnimatePresence, useMotionValue, useSpring, useTransform } from 'framer-motion';
 import type { LucideIcon } from 'lucide-react';
@@ -852,6 +852,28 @@ export function PokerSeat({ seat, index, holeCards, isCurrentPlayer, showCardBac
                   isWinningCard={winningCardIndices?.includes(holeCards![ci])}
                   dealDelay={ci * 0.06}
                 />
+                {/* Big rank+suit tag off the top of the card — same labels/colors
+                    as the community-card row, sized up. Rotates with the card. */}
+                {holeCards![ci] != null && holeCards![ci] >= 0 && (
+                  <div
+                    className="font-jost pointer-events-none absolute left-1/2 -translate-x-1/2 font-black tabular-nums"
+                    style={{
+                      bottom: 'calc(100% + 4px)',
+                      fontSize: 'clamp(20px, 2.4cqw, 36px)',
+                      lineHeight: 1,
+                      color: POKER_RANK_SUIT_LABEL_COLORS[pokerCardSuitIndex(holeCards![ci]) ?? 0],
+                      background: 'rgba(8,11,17,0.92)',
+                      border: '1px solid rgba(255,255,255,0.16)',
+                      borderRadius: 8,
+                      padding: '2px 9px',
+                      whiteSpace: 'nowrap',
+                      boxShadow: '0 3px 8px rgba(0,0,0,0.6)',
+                    }}
+                    aria-hidden
+                  >
+                    {formatPokerCardIndexLabel(holeCards![ci])}
+                  </div>
+                )}
               </div>
             ))}
             {isActing && (
