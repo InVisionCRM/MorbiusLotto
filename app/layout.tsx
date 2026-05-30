@@ -8,7 +8,6 @@ import { BreakReminderWrapper } from "@/components/ResponsibleGaming";
 import { ChatSidebar } from "@/components/chat/ChatSidebar";
 import { GameLockOverlay } from "@/components/shared/GameLockOverlay";
 import { ServiceWorkerRegistration } from "@/components/shared/ServiceWorkerRegistration";
-import WheelLauncher from "@/components/wheel/WheelLauncher";
 
 // Use system fonts instead of Google Fonts to avoid build issues
 const geistSans = {
@@ -116,7 +115,9 @@ export default function RootLayout({
             <Toaster position="top-right" theme="dark" richColors />
             <BreakReminderWrapper />
             <ChatSidebar />
-            <WheelLauncher />
+            {/* Daily Wish launcher hidden until the feature is production-ready.
+                Restore `<WheelLauncher />` here + its import above to re-enable.
+                The /wheel route still works by direct URL for testing. */}
             <Analytics />
           </Providers>
         </div>
