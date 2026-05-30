@@ -1,6 +1,31 @@
 import type { Pool, PoolClient } from 'pg';
 import { logger } from '../utils/logger';
 
+// ---------------------------------------------------------------------------
+// Balance-change listener — server.ts wires this to wsService.broadcastToPlayer
+// so the floating wheel launcher in the browser ticks up the moment a spin is
+// granted/spent. Kept as a simple function pointer to avoid coupling this
+// pure-data service to the WebSocket service. Listener errors are swallowed
+// so a flaky WS connection cannot corrupt ledger writes.
+// ---------------------------------------------------------------------------
+export interface WheelBalanceChangeEvent {
+  wallet: string;            // lowercase 0x address
+  spinsAvailable: number;    // new balance
+  delta: number;             // signed change (+grant, -spend)
+  reason: WheelSpinReason | WheelWagerReason;
+  ref?: WheelRef;
+}
+let balanceChangeListener: ((e: WheelBalanceChangeEvent) => void) | null = null;
+export function setWheelBalanceListener(fn: ((e: WheelBalanceChangeEvent) => void) | null): void {
+  balanceChangeListener = fn;
+}
+function emitBalanceChange(e: WheelBalanceChangeEvent): void {
+  if (!balanceChangeListener) return;
+  try { balanceChangeListener(e); } catch (err) {
+    logger.warn('wheel balance listener threw', { error: (err as Error).message });
+  }
+}
+
 export type WheelSpinReason =
   | 'wager_volume_blackjack'
   | 'wager_volume_blackjack_multi'
@@ -191,6 +216,7 @@ export async function applyWheelSpinDelta(
       [addr, after, earnedInc, usedInc],
     );
 
+    emitBalanceChange({ wallet: addr, spinsAvailable: after, delta: effectiveDelta, reason, ref });
     return { balance_after: after, applied: true, delta_applied: effectiveDelta };
   });
 }
@@ -284,6 +310,7 @@ export async function applyWheelWagerCredit(
         spins_granted: spinsGranted,
         balance_after: after,
       });
+      emitBalanceChange({ wallet: addr, spinsAvailable: after, delta: spinsGranted, reason, ref });
     }
 
     return { spins_granted: spinsGranted, balance_after: after, applied: true };

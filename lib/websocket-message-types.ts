@@ -189,4 +189,5 @@ export const WS_KNOWN_EVENT_TYPES = new Set<string>([
   'bj_multi_tip_notification',
   'bj_multi_quick_reaction',
   'bj_multi_avatar_emotion',
+  'wheel_balance',
 ]);

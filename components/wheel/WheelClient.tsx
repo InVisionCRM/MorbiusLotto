@@ -21,7 +21,7 @@ import { ConnectButton } from '@rainbow-me/rainbowkit';
 import { formatEther } from 'viem';
 import { motion, AnimatePresence } from 'motion/react';
 import confetti from 'canvas-confetti';
-import { Sparkles, RefreshCw, Volume2, VolumeX, X } from 'lucide-react';
+import { Sparkles, RefreshCw, Volume2, VolumeX, X, Info } from 'lucide-react';
 import GlobalMainNav from '@/components/shared/GlobalMainNav';
 
 const apiBase = (): string => {
@@ -200,7 +200,14 @@ function reasonLabel(r: string): string {
   } as Record<string, string>)[r] ?? r;
 }
 
-export default function WheelClient() {
+export interface WheelClientProps {
+  /** 'page' (default) renders inside GlobalMainNav for the /wheel route. 'modal' overlays the current page from the floating launcher. */
+  variant?: 'page' | 'modal';
+  /** Called when the user dismisses a modal-mode wheel. Ignored in page mode. */
+  onClose?: () => void;
+}
+
+export default function WheelClient({ variant = 'page', onClose }: WheelClientProps = {}) {
   const { address, isConnected } = useAccount();
 
   const [segments, setSegments] = useState<Segment[]>(FALLBACK_SEGMENTS);
@@ -212,6 +219,7 @@ export default function WheelClient() {
   const [showResult, setShowResult] = useState(false);
   const [ledger, setLedger] = useState<LedgerEntry[]>([]);
   const [showLedger, setShowLedger] = useState(false);
+  const [showInfo, setShowInfo] = useState(false);
   const [soundEnabled, setSoundEnabled] = useState(true);
   const [mounted, setMounted] = useState(false);
 
@@ -433,62 +441,174 @@ export default function WheelClient() {
     [isSpinning],
   );
 
-  if (!mounted) {
+  // Distinct prize tiers for the "How it works" panel — collapsed from the live
+  // segment table (duplicate slices summed) and sorted big-money first, so the
+  // breakdown always matches whatever the wheel can actually land on.
+  const prizeTiers = useMemo(() => {
+    const total = segments.reduce((sum, s) => sum + s.weight, 0) || 1;
+    const byValue = new Map<string, { value: string; label: string; prizeWei: string; freeSpins: number; weight: number; color: string }>();
+    for (const s of segments) {
+      const ex = byValue.get(s.value);
+      if (ex) ex.weight += s.weight;
+      else byValue.set(s.value, { value: s.value, label: s.label, prizeWei: s.prize_wei, freeSpins: s.free_spins, weight: s.weight, color: s.color });
+    }
+    return Array.from(byValue.values())
+      .map((t) => ({ ...t, chance: (t.weight / total) * 100 }))
+      .sort((a, b) => {
+        const av = BigInt(a.prizeWei), bv = BigInt(b.prizeWei);
+        if (av !== bv) return av > bv ? -1 : 1;
+        return b.freeSpins - a.freeSpins;
+      });
+  }, [segments]);
+
+  // Outer wrapper switches between full-page (inside GlobalMainNav, /wheel route)
+  // and modal overlay (floating launcher, opens over the current game).
+  // Modal mode is intentionally chromeless — no container, no border. The wheel
+  // floats on a blurred backdrop with a soft radial halo for depth.
+  const Wrap = ({ children }: { children: React.ReactNode }) => {
+    if (variant === 'modal') {
+      return (
+        <div
+          className="fixed inset-0 z-[100] flex items-center justify-center overflow-y-auto overflow-x-hidden"
+          onClick={onClose}
+          role="dialog"
+          aria-modal="true"
+          style={{
+            background:
+              'radial-gradient(ellipse 80% 60% at 50% 45%, rgba(15,23,42,0.55) 0%, rgba(2,6,17,0.93) 70%)',
+            backdropFilter: 'blur(24px) saturate(1.3)',
+            WebkitBackdropFilter: 'blur(24px) saturate(1.3)',
+          }}
+        >
+          {/* Stage halo — soft radial that paints depth behind the wheel */}
+          <div
+            className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[900px] h-[900px] max-w-[140vw] max-h-[140vw] pointer-events-none rounded-full"
+            style={{
+              background:
+                'radial-gradient(circle, rgba(236,72,153,0.22) 0%, rgba(124,58,237,0.14) 28%, rgba(6,182,212,0.06) 50%, transparent 72%)',
+            }}
+            aria-hidden
+          />
+
+          {/* Ground shadow — flat ellipse beneath the wheel that sells the levitation */}
+          <div
+            className="absolute left-1/2 -translate-x-1/2 pointer-events-none rounded-full"
+            style={{
+              top: 'calc(50% + 220px)',
+              width: '460px',
+              height: '60px',
+              background:
+                'radial-gradient(ellipse at center, rgba(0,0,0,0.65) 0%, rgba(0,0,0,0.35) 40%, transparent 75%)',
+              filter: 'blur(14px)',
+            }}
+            aria-hidden
+          />
+
+          {/* Viewport-anchored close X */}
+          <button
+            onClick={(e) => { e.stopPropagation(); onClose?.(); }}
+            className="fixed top-4 right-4 sm:top-6 sm:right-6 z-[101] p-2.5 rounded-full bg-slate-900/40 backdrop-blur-md border border-slate-700/40 text-slate-300 hover:text-white hover:bg-slate-800/70 active:scale-95 transition-all shadow-lg"
+            aria-label="Close wheel"
+          >
+            <X className="w-5 h-5" />
+          </button>
+
+          {/* Floating, chromeless content stack */}
+          <div
+            onClick={(e) => e.stopPropagation()}
+            className="relative flex flex-col items-center justify-center w-full max-w-[560px] px-4 py-8 select-none"
+          >
+            {children}
+          </div>
+        </div>
+      );
+    }
     return (
       <GlobalMainNav>
         <main className="relative flex flex-col items-center justify-center w-full min-h-[100dvh] overflow-hidden px-4 py-8 bg-[#030712] select-none">
-          <h1 className={`text-4xl sm:text-5xl md:text-7xl font-black text-transparent bg-clip-text bg-gradient-to-tr ${THEME.titleText} tracking-wider mb-6 md:mb-12 text-center uppercase opacity-50`}>
-            Daily Wish
-          </h1>
-          <div className="w-[310px] sm:w-[420px] md:w-[460px] aspect-square rounded-full border border-slate-800 bg-slate-950/40 flex items-center justify-center">
-            <div className="text-slate-500 text-xs font-bold uppercase tracking-widest animate-pulse">Loading game engine…</div>
-          </div>
+          {children}
         </main>
       </GlobalMainNav>
+    );
+  };
+
+  if (!mounted) {
+    return (
+      <Wrap>
+        <h1 className={`text-4xl sm:text-5xl md:text-7xl font-black text-transparent bg-clip-text bg-gradient-to-tr ${THEME.titleText} tracking-wider mb-6 md:mb-12 text-center uppercase opacity-50`}>
+          Daily Wish
+        </h1>
+        <div className="w-[310px] sm:w-[420px] md:w-[460px] aspect-square rounded-full border border-slate-800 bg-slate-950/40 flex items-center justify-center">
+          <div className="text-slate-500 text-xs font-bold uppercase tracking-widest animate-pulse">Loading game engine…</div>
+        </div>
+      </Wrap>
     );
   }
 
   return (
-    <GlobalMainNav>
-      <main className="relative flex flex-col items-center justify-center w-full min-h-[100dvh] overflow-hidden px-4 py-8 bg-[#030712] select-none">
-        {/* Sound toggle */}
-        <button
-          onClick={toggleSound}
-          className="absolute top-4 right-4 z-50 p-3 rounded-full bg-slate-900/80 border border-slate-800 text-slate-300 hover:text-white cursor-pointer active:scale-95 transition-all shadow-md"
-          title={soundEnabled ? 'Mute sounds' : 'Unmute sounds'}
-        >
-          {soundEnabled ? <Volume2 className="w-5 h-5" /> : <VolumeX className="w-5 h-5" />}
-        </button>
+    <Wrap>
+      {/* keep the original structure as one fragment of content */}
+      <>
+        {/* Sound toggle — page mode only; modal already has the viewport close X */}
+        {variant === 'page' && (
+          <button
+            onClick={toggleSound}
+            className="absolute top-4 right-4 z-50 p-3 rounded-full bg-slate-900/80 border border-slate-800 text-slate-300 hover:text-white cursor-pointer active:scale-95 transition-all shadow-md"
+            title={soundEnabled ? 'Mute sounds' : 'Unmute sounds'}
+          >
+            {soundEnabled ? <Volume2 className="w-5 h-5" /> : <VolumeX className="w-5 h-5" />}
+          </button>
+        )}
 
-        {/* Background magical glow orb */}
-        <div className={`absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[280px] sm:w-[450px] md:w-[600px] h-[280px] sm:h-[450px] md:h-[600px] bg-gradient-to-tr ${THEME.orb} rounded-full blur-[100px] sm:blur-[130px] opacity-25 pointer-events-none`} />
+        {/* Background magical glow orb — page mode only (modal has its own stage halo) */}
+        {variant === 'page' && (
+          <div className={`absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[280px] sm:w-[450px] md:w-[600px] h-[280px] sm:h-[450px] md:h-[600px] bg-gradient-to-tr ${THEME.orb} rounded-full blur-[100px] sm:blur-[130px] opacity-25 pointer-events-none`} />
+        )}
 
         {/* Decorative sparkles */}
-        <Sparkles className={`absolute top-[15%] right-[20%] ${THEME.sparkles[0]} animate-pulse w-8 h-8 blur-[0.5px]`} />
-        <Sparkles className={`absolute bottom-[20%] left-[15%] ${THEME.sparkles[1]} animate-pulse w-6 h-6 blur-[1px]`} />
+        <Sparkles className={`absolute top-[8%] right-[10%] ${THEME.sparkles[0]} animate-pulse w-8 h-8 blur-[0.5px]`} />
+        <Sparkles className={`absolute bottom-[15%] left-[10%] ${THEME.sparkles[1]} animate-pulse w-6 h-6 blur-[1px]`} />
 
-        {/* Header */}
+        {/* Animated shimmering title — floats and shifts gradient across the letters */}
         <h1
-          className={`relative text-4xl sm:text-5xl md:text-7xl font-black text-transparent bg-clip-text bg-gradient-to-tr ${THEME.titleText} tracking-wider mb-2 md:mb-4 z-10 text-center uppercase pointer-events-none`}
-          style={{ filter: `drop-shadow(0 0 25px ${THEME.titleShadow})` }}
+          className="relative font-black uppercase tracking-wider z-10 text-center pointer-events-none text-5xl sm:text-6xl md:text-7xl mb-3 md:mb-5"
+          style={{
+            backgroundImage:
+              'linear-gradient(110deg, #d946ef 0%, #ec4899 22%, #f59e0b 50%, #ec4899 78%, #d946ef 100%)',
+            backgroundSize: '220% 100%',
+            backgroundClip: 'text',
+            WebkitBackgroundClip: 'text',
+            color: 'transparent',
+            WebkitTextFillColor: 'transparent',
+            filter: 'drop-shadow(0 0 28px rgba(219, 39, 119, 0.55))',
+            animation: 'wheel-title-shimmer 5s linear infinite, wheel-title-float 3.4s ease-in-out infinite',
+          }}
         >
           Daily Wish
         </h1>
 
-        {/* Top status row */}
-        <div className="z-10 flex items-center gap-3 mb-6 md:mb-8">
-          <div className="px-4 py-2 rounded-full bg-slate-900/80 border border-slate-800 text-sm text-slate-300">
-            Spins: <span className="font-bold text-amber-300">{spinsAvailable}</span>
+        {/* Compact status row — single ghost pill */}
+        <div className="z-10 flex items-center gap-2 mb-6 md:mb-8">
+          <div className="px-4 py-1.5 rounded-full bg-slate-900/40 backdrop-blur-md border border-slate-700/40 text-xs sm:text-sm text-slate-300 shadow-sm">
+            {isConnected
+              ? <><span className="font-extrabold text-amber-300 tabular-nums">{spinsAvailable}</span> {spinsAvailable === 1 ? 'spin ready' : 'spins ready'}</>
+              : <span className="text-slate-400">Connect to claim spins</span>}
           </div>
-          {isConnected ? (
+          {!isConnected && <ConnectButton showBalance={false} />}
+          <button
+            onClick={() => setShowInfo(true)}
+            className="inline-flex items-center gap-1.5 px-4 py-1.5 rounded-full bg-slate-900/40 backdrop-blur-md border border-slate-700/40 text-xs sm:text-sm text-slate-300 hover:text-white hover:border-amber-300/40 transition-colors"
+          >
+            <Info className="w-3.5 h-3.5 text-amber-300" />
+            How it works
+          </button>
+          {isConnected && variant === 'page' && (
             <button
               onClick={() => { setShowLedger((s) => !s); if (!showLedger) refreshLedger(); }}
-              className="px-4 py-2 rounded-full bg-slate-900/80 border border-slate-800 text-sm text-slate-300 hover:text-white"
+              className="px-4 py-1.5 rounded-full bg-slate-900/40 backdrop-blur-md border border-slate-700/40 text-xs sm:text-sm text-slate-300 hover:text-white"
             >
               History
             </button>
-          ) : (
-            <ConnectButton showBalance={false} />
           )}
         </div>
 
@@ -606,10 +726,12 @@ export default function WheelClient() {
           </div>
         </div>
 
-        {/* Footer hint */}
-        <p className="mt-10 text-center text-xs sm:text-sm text-slate-400 max-w-md z-10">
-          Earn spins by playing <span className="text-amber-300">Blackjack</span>, <span className="text-amber-300">Blackjack Multi</span>, and <span className="text-amber-300">Poker</span> — or by entering tournaments. Spins never expire.
-        </p>
+        {/* Footer hint — page mode only; modal stays chromeless */}
+        {variant === 'page' && (
+          <p className="mt-10 text-center text-xs sm:text-sm text-slate-400 max-w-md z-10">
+            Earn spins by playing <span className="text-amber-300">Blackjack</span>, <span className="text-amber-300">Blackjack Multi</span>, and <span className="text-amber-300">Poker</span> — or by entering tournaments. Spins never expire.
+          </p>
+        )}
 
         {/* Result dialog */}
         <AnimatePresence>
@@ -700,6 +822,93 @@ export default function WheelClient() {
           )}
         </AnimatePresence>
 
+        {/* How it works — fun, friendly prize breakdown + how to earn spins */}
+        <AnimatePresence>
+          {showInfo && (
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              className="fixed inset-0 z-[120] flex items-end sm:items-center justify-center p-0 sm:p-4 bg-black/70 backdrop-blur-md"
+              onClick={() => setShowInfo(false)}
+            >
+              <motion.div
+                initial={{ scale: 0.92, y: 40, opacity: 0 }}
+                animate={{ scale: 1, y: 0, opacity: 1 }}
+                exit={{ scale: 0.92, y: 40, opacity: 0 }}
+                transition={{ type: 'spring', bounce: 0.32, duration: 0.5 }}
+                onClick={(e) => e.stopPropagation()}
+                className="relative w-full sm:max-w-md bg-slate-950/95 border border-amber-300/25 rounded-t-3xl sm:rounded-3xl p-6 max-h-[85vh] overflow-y-auto shadow-[0_0_60px_rgba(236,72,153,0.25)]"
+              >
+                <button
+                  onClick={() => setShowInfo(false)}
+                  className="absolute top-4 right-4 text-slate-400 hover:text-white"
+                  aria-label="Close"
+                >
+                  <X className="w-5 h-5" />
+                </button>
+
+                <div className="flex items-center gap-2 mb-1.5">
+                  <Sparkles className="w-5 h-5 text-amber-300" />
+                  <h3 className="text-lg font-black uppercase tracking-wide text-transparent bg-clip-text bg-gradient-to-r from-amber-300 via-pink-400 to-fuchsia-400">
+                    How it works
+                  </h3>
+                </div>
+                <p className="text-xs sm:text-sm text-slate-400 mb-5">
+                  Spin for a shot at <span className="text-amber-300 font-semibold">MORBIUS</span> prizes. Every spin is provably fair — the outcome is locked in before the wheel even turns.
+                </p>
+
+                <div className="text-[11px] font-bold uppercase tracking-widest text-slate-500 mb-2 flex items-center justify-between px-1">
+                  <span>Prize</span>
+                  <span>Chance</span>
+                </div>
+                <ul className="space-y-1.5 mb-5">
+                  {prizeTiers.map((t) => {
+                    const isWin = t.prizeWei !== '0' || t.freeSpins > 0;
+                    return (
+                      <li
+                        key={t.value}
+                        className={`flex items-center gap-2.5 rounded-xl px-3 py-2 border ${isWin ? 'bg-slate-900/60 border-slate-700/50' : 'bg-slate-900/20 border-slate-800/40'}`}
+                      >
+                        <span
+                          className="w-2.5 h-2.5 rounded-full shrink-0"
+                          style={{ backgroundColor: t.color, boxShadow: isWin ? `0 0 8px ${t.color}` : 'none' }}
+                          aria-hidden
+                        />
+                        <span className={`flex-1 min-w-0 truncate text-sm font-bold ${isWin ? 'text-slate-100' : 'text-slate-500'}`}>
+                          {t.label}
+                        </span>
+                        <span className="text-sm font-extrabold tabular-nums whitespace-nowrap text-right">
+                          {t.prizeWei !== '0' ? (
+                            <>
+                              <span className="text-emerald-300">{formatMorbius(t.prizeWei)}</span>
+                              <span className="text-[9px] font-semibold text-slate-500 ml-1">MORBIUS</span>
+                            </>
+                          ) : t.freeSpins > 0 ? (
+                            <span className="text-fuchsia-300">+{t.freeSpins} spin</span>
+                          ) : (
+                            <span className="text-slate-600">—</span>
+                          )}
+                        </span>
+                        <span className="w-12 text-right text-[11px] tabular-nums text-slate-500">
+                          {t.chance < 1 ? t.chance.toFixed(2) : t.chance.toFixed(1)}%
+                        </span>
+                      </li>
+                    );
+                  })}
+                </ul>
+
+                <div className="rounded-xl bg-gradient-to-br from-fuchsia-500/10 to-amber-400/10 border border-amber-300/20 p-3.5">
+                  <div className="text-[11px] font-bold uppercase tracking-widest text-amber-300 mb-1">Earning spins</div>
+                  <p className="text-xs sm:text-sm text-slate-300 leading-relaxed">
+                    Play <span className="text-amber-200 font-semibold">Blackjack</span>, <span className="text-amber-200 font-semibold">Blackjack Multi</span>, and <span className="text-amber-200 font-semibold">Poker</span>, or jump into a tournament — the more you play, the more you spin. Spins never expire.
+                  </p>
+                </div>
+              </motion.div>
+            </motion.div>
+          )}
+        </AnimatePresence>
+
         {/* Ledger drawer */}
         {showLedger && (
           <div className="fixed inset-0 z-40 flex items-end sm:items-center justify-center bg-slate-950/70 backdrop-blur-sm px-4">
@@ -733,7 +942,7 @@ export default function WheelClient() {
             </div>
           </div>
         )}
-      </main>
-    </GlobalMainNav>
+      </>
+    </Wrap>
   );
 }

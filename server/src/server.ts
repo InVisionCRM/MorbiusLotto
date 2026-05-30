@@ -19,6 +19,7 @@ import { registerArcadeDiceRoutes } from './routes/arcade-dice.routes';
 import { registerArcadeBaccaratRoutes } from './routes/arcade-baccarat.routes';
 import { registerMarqueeRoutes } from './routes/marquee.routes';
 import { registerWheelRoutes } from './routes/wheel.routes';
+import { setWheelBalanceListener } from './services/wheel-spin-wallet';
 import { requireAuth, requireSameAddress } from './middleware/require-auth';
 import { DatabaseService, type BlackjackSpWagerTierRow } from './services/database.service';
 import { ProvablyFairService } from './services/provably-fair.service';
@@ -356,6 +357,21 @@ async function initializeServices() {
 
     // Wire BJ multi broadcast callback
     bjMultiService.setBroadcastCallback((tableId) => wsService.broadcastBJMultiTableState(tableId));
+
+    // Wire wheel-spin balance changes → wallet-targeted WS event so the
+    // floating wheel launcher in the browser updates instantly when a spin
+    // is earned (from a settled bet) or spent (from /api/wheel/spin).
+    setWheelBalanceListener((e) => {
+      wsService.broadcastToPlayer(e.wallet, {
+        type: 'wheel_balance',
+        payload: {
+          spinsAvailable: e.spinsAvailable,
+          delta: e.delta,
+          reason: e.reason,
+          ref: e.ref ?? null,
+        },
+      });
+    });
 
     // Freeroll scheduler (polls pending scheduled events: start, end; also ticks poker by_time blind advances)
     freerollScheduler = new FreerollSchedulerService(dbService.getPool(), tournamentService);
