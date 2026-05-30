@@ -48,12 +48,12 @@ export function authoredSeatAnchors(seatCount: number): SeatAnchor[] {
  * Tweak these independently from avatar seats, cards, and chip stacks.
  */
 export const PLAYER_TAG_ANCHOR_RING: SeatAnchor[] = [
-  { fx: 0.4666, fy: 0.9464 }, // 0 — hero
+  { fx: 0.464, fy: 0.9399 }, // 0 — hero
   { fx: 0.25, fy: 0.98 },
   { fx: 0.045, fy: 0.76 },
   { fx: 0.05, fy: 0.41 },
   { fx: 0.25, fy: 0.245 },
-  { fx: 0.5, fy: 0.245 }, // 5 — top center
+  { fx: 0.4997, fy: 0.222 }, // 5 — top center
   { fx: 0.75, fy: 0.245 },
   { fx: 0.95, fy: 0.41 },
   { fx: 0.95, fy: 0.76 },
@@ -115,16 +115,16 @@ export function betChipAnchorForDisplaySlot(seatCount: number, displaySlot: numb
  * Values match the former seat→tag lerp at t=0.22 so existing tables do not jump.
  */
 export const DEALER_BUTTON_RING: SeatAnchor[] = [
-  { fx: 0.558, fy: 0.7037 }, // 0 — hero
-  { fx: 0.2497, fy: 0.6903 },
-  { fx: 0.0702, fy: 0.5265 },
+  { fx: 0.6006, fy: 0.7555 }, // 0 — hero
+  { fx: 0.2117, fy: 0.7387 },
+  { fx: 0.1244, fy: 0.5249 },
   { fx: 0.1077, fy: 0.4044 },
-  { fx: 0.2513, fy: 0.3125 },
-  { fx: 0.445, fy: 0.235 },
-  { fx: 0.7506, fy: 0.3166 },
-  { fx: 0.8964, fy: 0.4082 },
-  { fx: 0.912, fy: 0.5205 },
-  { fx: 0.7479, fy: 0.6915 },
+  { fx: 0.2521, fy: 0.3576 },
+  { fx: 0.4313, fy: 0.2505 },
+  { fx: 0.7517, fy: 0.3586 },
+  { fx: 0.8493, fy: 0.4313 },
+  { fx: 0.8522, fy: 0.5528 },
+  { fx: 0.802, fy: 0.7542 },
 ];
 
 /**
@@ -132,7 +132,7 @@ export const DEALER_BUTTON_RING: SeatAnchor[] = [
  * Tweak these freely to place opponent cards wherever looks right relative to each seat.
  */
 export const CARD_ANCHOR_RING: SeatAnchor[] = [
-  { fx: 0.4669, fy: 0.83 }, // 0 — hero (wired: positions the hero hand via heroCardOffset)
+  { fx: 0.4607, fy: 0.8307 }, // 0 — hero (wired: positions the hero hand via heroCardOffset)
   { fx: 0.3315, fy: 0.8655 },
   { fx: 0.13, fy: 0.6369 },
   { fx: 0.1336, fy: 0.2975 },
