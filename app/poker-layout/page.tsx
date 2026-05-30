@@ -1,96 +1,128 @@
 'use client';
 
+/**
+ * Poker anchor editor — drag every seat element where you want it, per seat.
+ *
+ * Everything the table positions is a list of {fx,fy} fractions in
+ * lib/poker-seat-layout.ts (one entry per seat, indexed by the 10-vertex ring).
+ * This page renders a draggable handle for each one over a 1300×570 reference
+ * felt, autosaves to localStorage, can Save a scratch JSON to the repo (dev),
+ * and exports the rings as ready-to-paste TypeScript.
+ *
+ * Replaces the old read-only "layout mock table" reference page.
+ */
+
 import Link from 'next/link';
-import { useEffect, useRef, useState } from 'react';
-import { PokerTable } from '@/components/poker/PokerTable';
-import { PokerThemeProvider } from '@/components/poker/PokerThemeContext';
-import { PokerTableEffectProvider } from '@/hooks/use-poker-table-effect';
-import { POKER_TABLE_REF_H, POKER_TABLE_REF_W } from '@/app/poker/[tableId]/PokerMobileZoomLock';
-import type { PokerTableState } from '@/lib/websocket-client';
-import { DEFAULT_POKER_THEME, getPokerThemeVars } from '@/lib/poker-themes';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import {
+  SEAT_ANCHOR_RING,
+  PLAYER_TAG_ANCHOR_RING,
+  BET_CHIP_ANCHOR_RING,
+  DEALER_BUTTON_RING,
+  CARD_ANCHOR_RING,
+  WINNING_POT_CHIP_ANCHOR_RING,
+  POKER_POT_ANCHOR,
+  type SeatAnchor,
+} from '@/lib/poker-seat-layout';
+import { POKER_TABLE_REF_W, POKER_TABLE_REF_H } from '@/app/poker/[tableId]/PokerMobileZoomLock';
 
-const BLACK_AVATAR_DATA_URI =
-  'data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 84 84"><rect width="84" height="84" fill="black"/></svg>';
+const W = POKER_TABLE_REF_W; // 1300
+const H = POKER_TABLE_REF_H; // 570
+const STORAGE_KEY = 'poker-anchor-editor-v1';
+const SEAT_COUNT = 10;
 
-const MOCK_PLAYERS = [
-  { name: 'You', stack: '12450', bet: '1200' },
-  { name: 'Vega', stack: '8800', bet: '600' },
-  { name: 'Nyx', stack: '16200', bet: '1200' },
-  { name: 'Hex', stack: '5400', bet: '0' },
-  { name: 'Mako', stack: '21300', bet: '2400' },
-  { name: 'Rook', stack: '9700', bet: '0' },
-  { name: 'Lux', stack: '15250', bet: '1200' },
-  { name: 'Echo', stack: '6800', bet: '600' },
-  { name: 'Ash', stack: '11100', bet: '0' },
-  { name: 'Zero', stack: '19000', bet: '3600' },
+type LayerKey = 'seat' | 'tag' | 'bet' | 'dealer' | 'card' | 'winner';
+type Rings = Record<LayerKey, SeatAnchor[]>;
+
+const LAYER_META: { key: LayerKey; label: string; color: string; tsName: string }[] = [
+  { key: 'seat', label: 'Avatar (seat)', color: '#22d3ee', tsName: 'SEAT_ANCHOR_RING' },
+  { key: 'tag', label: 'Name plate', color: '#f59e0b', tsName: 'PLAYER_TAG_ANCHOR_RING' },
+  { key: 'bet', label: 'Bet chips', color: '#a3e635', tsName: 'BET_CHIP_ANCHOR_RING' },
+  { key: 'dealer', label: 'Dealer coin', color: '#fcd34d', tsName: 'DEALER_BUTTON_RING' },
+  { key: 'card', label: 'Cards', color: '#60a5fa', tsName: 'CARD_ANCHOR_RING' },
+  { key: 'winner', label: 'Winner chip', color: '#fb7185', tsName: 'WINNING_POT_CHIP_ANCHOR_RING' },
 ];
 
-function mockAddress(index: number): string {
-  return `0x${String(index + 1).padStart(40, '0')}`;
+const clone = (ring: ReadonlyArray<SeatAnchor>): SeatAnchor[] => ring.map((a) => ({ fx: a.fx, fy: a.fy }));
+
+function defaultRings(): Rings {
+  return {
+    seat: clone(SEAT_ANCHOR_RING),
+    tag: clone(PLAYER_TAG_ANCHOR_RING),
+    bet: clone(BET_CHIP_ANCHOR_RING),
+    dealer: DEALER_BUTTON_RING.map((a) => ({ fx: a.fx, fy: a.fy })),
+    card: clone(CARD_ANCHOR_RING),
+    winner: clone(WINNING_POT_CHIP_ANCHOR_RING),
+  };
 }
 
-const MOCK_TABLE_STATE: PokerTableState = {
-  tableId: 'layout-reference',
-  smallBlind: '300',
-  bigBlind: '600',
-  maxSeats: 10,
-  status: 'active',
-  seats: MOCK_PLAYERS.map((player, index) => ({
-    position: index,
-    playerAddress: mockAddress(index),
-    stack: player.stack,
-    status: 'playing',
-    isDealer: index === 3,
-    isSmallBlind: index === 1,
-    isBigBlind: index === 2,
-    isActing: index === 0,
-    folded: false,
-    currentBet: player.bet,
-    displayName: player.name,
-    profileImageUrl: BLACK_AVATAR_DATA_URI,
-    avatarConfig: null,
-    profileDisplayMode: 'photo',
-  })),
-  currentHand: {
-    handId: 'layout-hand',
-    street: 'river',
-    communityCards: [9, 22, 35, 48, 3],
-    pot: '13200',
-    actingPosition: 0,
-    lastAction: { position: 0, action: 'raise', amount: '1200' },
-    recentActions: [
-      { order: 1, street: 'preflop', position: 1, action: 'small_blind', amount: '300' },
-      { order: 2, street: 'preflop', position: 2, action: 'big_blind', amount: '600' },
-      { order: 3, street: 'river', position: 0, action: 'raise', amount: '1200' },
-    ],
-    streetActions: {
-      0: { action: 'raise', amount: '1200' },
-    },
-    minRaise: '1800',
-    toCall: '0',
-    turnStartedAt: '2026-04-29T00:00:00.000Z',
-  },
-  myHoleCards: [50, 37],
-  tableLogo: null,
-  tableLogoOpacity: 0.12,
-  tableLogoSponsoredUntil: null,
-  tableLogoSponsorAddress: null,
-  tableLogoIsDefault: true,
-};
+const r3 = (n: number) => Number(n.toFixed(4));
 
-function PokerLayoutMockTable() {
-  const panelRef = useRef<HTMLDivElement>(null);
-  const [scale, setScale] = useState(1);
+function ringsToTs(rings: Rings): string {
+  const block = (name: string, ring: SeatAnchor[]) =>
+    `export const ${name}: SeatAnchor[] = [\n` +
+    ring.map((a, i) => `  { fx: ${r3(a.fx)}, fy: ${r3(a.fy)} },${i === 0 ? ' // 0 — hero' : ''}`).join('\n') +
+    `\n];`;
+  return LAYER_META.map((l) => block(l.tsName, rings[l.key])).join('\n\n');
+}
 
+const MOCK = [
+  { n: 'You', s: '12,450' },
+  { n: 'Vega', s: '8,800' },
+  { n: 'Nyx', s: '16,200' },
+  { n: 'Hex', s: '5,400' },
+  { n: 'Mako', s: '21,300' },
+  { n: 'Rook', s: '9,700' },
+  { n: 'Lux', s: '15,250' },
+  { n: 'Echo', s: '6,800' },
+  { n: 'Ash', s: '11,100' },
+  { n: 'Zero', s: '19,000' },
+];
+
+export default function PokerAnchorEditorPage() {
+  const [rings, setRings] = useState<Rings>(defaultRings);
+  const [activeLayer, setActiveLayer] = useState<LayerKey>('seat');
+  const [visible, setVisible] = useState<Record<LayerKey, boolean>>({
+    seat: true, tag: true, bet: true, dealer: true, card: true, winner: false,
+  });
+  const [snap, setSnap] = useState(false);
+  const [snapStep, setSnapStep] = useState(0.005);
+  const [selected, setSelected] = useState<{ layer: LayerKey; idx: number } | null>(null);
+  const [scale, setScale] = useState(0.7);
+  const [saveMsg, setSaveMsg] = useState('');
+  const [showTs, setShowTs] = useState(false);
+
+  const wrapRef = useRef<HTMLDivElement>(null);
+  const layerRef = useRef<HTMLDivElement>(null);
+  const dragRef = useRef<{ layer: LayerKey; idx: number } | null>(null);
+
+  // ── load saved (localStorage first, then dev scratch file) ──
   useEffect(() => {
-    const el = panelRef.current;
+    let applied = false;
+    try {
+      const raw = localStorage.getItem(STORAGE_KEY);
+      if (raw) { setRings(JSON.parse(raw)); applied = true; }
+    } catch { /* ignore */ }
+    if (!applied) {
+      fetch('/api/poker-layout-anchors')
+        .then((r) => (r.ok ? r.json() : null))
+        .then((j) => { if (j && j.seat) setRings(j); })
+        .catch(() => {});
+    }
+  }, []);
+
+  // ── autosave to localStorage ──
+  useEffect(() => {
+    try { localStorage.setItem(STORAGE_KEY, JSON.stringify(rings)); } catch { /* ignore */ }
+  }, [rings]);
+
+  // ── responsive scale to fit width ──
+  useEffect(() => {
+    const el = wrapRef.current;
     if (!el) return;
     const update = () => {
-      const w = el.clientWidth;
-      const h = el.clientHeight;
-      if (w <= 0 || h <= 0) return;
-      const s = Math.min(w / POKER_TABLE_REF_W, h / POKER_TABLE_REF_H, 1);
-      setScale(Math.max(0.35, s));
+      const avail = el.clientWidth - 4;
+      setScale(Math.max(0.4, Math.min(avail / W, 1)));
     };
     update();
     const ro = new ResizeObserver(update);
@@ -98,83 +130,303 @@ function PokerLayoutMockTable() {
     return () => ro.disconnect();
   }, []);
 
+  const setAnchor = useCallback((layer: LayerKey, idx: number, fx: number, fy: number) => {
+    const snapVal = (v: number) => (snap ? Math.round(v / snapStep) * snapStep : v);
+    const cfx = Math.min(1, Math.max(0, snapVal(fx)));
+    const cfy = Math.min(1, Math.max(0, snapVal(fy)));
+    setRings((prev) => {
+      const next = { ...prev, [layer]: prev[layer].map((a) => ({ ...a })) };
+      next[layer][idx] = { fx: r3(cfx), fy: r3(cfy) };
+      return next;
+    });
+  }, [snap, snapStep]);
+
+  const pointerToFrac = useCallback((clientX: number, clientY: number) => {
+    const rect = layerRef.current?.getBoundingClientRect();
+    if (!rect) return null;
+    return { fx: (clientX - rect.left) / rect.width, fy: (clientY - rect.top) / rect.height };
+  }, []);
+
+  const onLayerPointerMove = useCallback((e: React.PointerEvent) => {
+    const d = dragRef.current;
+    if (!d) return;
+    const f = pointerToFrac(e.clientX, e.clientY);
+    if (f) setAnchor(d.layer, d.idx, f.fx, f.fy);
+  }, [pointerToFrac, setAnchor]);
+
+  useEffect(() => {
+    const up = () => { dragRef.current = null; };
+    window.addEventListener('pointerup', up);
+    return () => window.removeEventListener('pointerup', up);
+  }, []);
+
+  // ── keyboard nudge for the selected token ──
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (!selected) return;
+      const step = e.shiftKey ? 0.02 : 0.002;
+      let dx = 0, dy = 0;
+      if (e.key === 'ArrowLeft') dx = -step;
+      else if (e.key === 'ArrowRight') dx = step;
+      else if (e.key === 'ArrowUp') dy = -step;
+      else if (e.key === 'ArrowDown') dy = step;
+      else return;
+      e.preventDefault();
+      const cur = rings[selected.layer][selected.idx];
+      setAnchor(selected.layer, selected.idx, cur.fx + dx, cur.fy + dy);
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [selected, rings, setAnchor]);
+
+  const startDrag = (layer: LayerKey, idx: number) => (e: React.PointerEvent) => {
+    e.stopPropagation();
+    dragRef.current = { layer, idx };
+    setSelected({ layer, idx });
+    setActiveLayer(layer);
+  };
+
+  const tsExport = useMemo(() => ringsToTs(rings), [rings]);
+
+  const saveToRepo = async () => {
+    setSaveMsg('Saving…');
+    try {
+      const res = await fetch('/api/poker-layout-anchors', { method: 'POST', body: JSON.stringify(rings) });
+      const j = await res.json();
+      setSaveMsg(res.ok ? `Saved → ${j.file}` : `Error: ${j.error}`);
+    } catch (err) {
+      setSaveMsg(`Error: ${(err as Error).message}`);
+    }
+    setTimeout(() => setSaveMsg(''), 4000);
+  };
+
+  const copyTs = async () => {
+    try { await navigator.clipboard.writeText(tsExport); setSaveMsg('Copied TypeScript to clipboard'); }
+    catch { setShowTs(true); setSaveMsg('Clipboard blocked — showing text to copy'); }
+    setTimeout(() => setSaveMsg(''), 4000);
+  };
+
+  const dealerSeat = 3, sbSeat = 1, bbSeat = 2, actingSeat = 0; // mock state for context
+
   return (
-    <div
-      ref={panelRef}
-      className="relative mx-auto flex w-full max-w-[min(100%,1400px)] items-center justify-center overflow-visible rounded-xl border border-cyan-500/15 bg-black/20"
-      style={{
-        height: 'min(88dvh, 720px)',
-        minHeight: 320,
-      }}
-    >
-      {/* Same pattern as mobile `PokerTableView`: inner ref size so ResizeObserver / cqw match production. */}
-      <div
-        style={{
-          position: 'relative',
-          width: POKER_TABLE_REF_W * scale,
-          height: POKER_TABLE_REF_H * scale,
-          flexShrink: 0,
-        }}
-      >
-        <div
-          style={{
-            position: 'absolute',
-            top: 0,
-            left: 0,
-            width: POKER_TABLE_REF_W,
-            height: POKER_TABLE_REF_H,
-            transform: `scale(${scale})`,
-            transformOrigin: 'top left',
-          }}
-        >
-          <PokerTable
-            state={MOCK_TABLE_STATE}
-            currentPlayerAddress={mockAddress(0)}
-            timeLeft={42}
-            showDealerAnchorGuides
-          />
+    <div className="min-h-screen bg-[#0a0c12] p-4 text-slate-100 md:p-6">
+      <div className="mx-auto flex max-w-[1640px] flex-col gap-4 lg:flex-row">
+        {/* ── Canvas ── */}
+        <div className="flex-1">
+          <header className="mb-3 flex items-end justify-between">
+            <div>
+              <p className="text-[11px] uppercase tracking-[0.2em] text-cyan-400/80">Dev tool</p>
+              <h1 className="text-xl font-semibold md:text-2xl">Poker anchor editor</h1>
+              <p className="mt-1 max-w-2xl text-xs text-slate-400">
+                Drag any handle to move that element for that seat. Seat 0 is the hero (bottom center). Autosaves as you go.
+                Arrow keys nudge the selected handle (Shift = bigger steps).
+              </p>
+            </div>
+            <Link href="/poker" className="text-sm text-cyan-400 hover:underline">Back to poker</Link>
+          </header>
+
+          <div ref={wrapRef} className="rounded-xl border border-cyan-500/15 bg-black/30 p-1">
+            <div style={{ width: W * scale, height: H * scale, position: 'relative', margin: '0 auto' }}>
+              <div
+                ref={layerRef}
+                onPointerMove={onLayerPointerMove}
+                style={{
+                  position: 'absolute', top: 0, left: 0, width: W, height: H,
+                  transform: `scale(${scale})`, transformOrigin: 'top left',
+                  touchAction: 'none', userSelect: 'none',
+                }}
+              >
+                {/* felt reference (mirrors PokerTable proportions) */}
+                <div style={{ position: 'absolute', left: '3%', top: '5%', width: '94%', height: '88%', borderRadius: 9999, background: '#07090f', boxShadow: '0 0 0 10px #241a10' }} />
+                <div style={{ position: 'absolute', left: '6%', top: '12%', width: '88%', height: '74%', borderRadius: 9999, background: 'radial-gradient(80% 82% at 50% 38%, #1d7a4c, #125c38 46%, #0a3a22 100%)', boxShadow: 'inset 0 8px 40px rgba(0,0,0,.5), inset 0 0 0 2px rgba(212,175,55,.2)' }} />
+                {/* community + pot reference */}
+                <div style={{ position: 'absolute', left: '50%', top: '40%', transform: 'translate(-50%,-50%)', display: 'flex', gap: 6 }}>
+                  {[0, 1, 2, 3, 4].map((i) => (
+                    <div key={i} style={{ width: 38, height: 54, borderRadius: 5, background: 'rgba(255,255,255,.10)', border: '1px dashed rgba(255,255,255,.25)' }} />
+                  ))}
+                </div>
+                <div style={{ position: 'absolute', left: `${POKER_POT_ANCHOR.fx * 100}%`, top: `${POKER_POT_ANCHOR.fy * 100}%`, transform: 'translate(-50%,-50%)', color: '#ffe9a8', fontSize: 13, fontWeight: 700, background: 'rgba(0,0,0,.45)', padding: '3px 12px', borderRadius: 999, border: '1px solid rgba(212,175,55,.4)' }}>POT</div>
+
+                {/* tokens, drawn per layer */}
+                {LAYER_META.map((l) =>
+                  visible[l.key]
+                    ? rings[l.key].map((a, idx) => (
+                        <Token
+                          key={`${l.key}-${idx}`}
+                          layer={l.key}
+                          color={l.color}
+                          idx={idx}
+                          a={a}
+                          active={activeLayer === l.key}
+                          selected={selected?.layer === l.key && selected?.idx === idx}
+                          name={MOCK[idx]?.n ?? `S${idx}`}
+                          stack={MOCK[idx]?.s ?? '0'}
+                          isDealer={l.key === 'dealer' && idx === dealerSeat}
+                          blind={idx === sbSeat ? 'SB' : idx === bbSeat ? 'BB' : null}
+                          acting={idx === actingSeat}
+                          onPointerDown={startDrag(l.key, idx)}
+                        />
+                      ))
+                    : null,
+                )}
+              </div>
+            </div>
+          </div>
+          <p className="mt-2 text-[11px] text-slate-500">
+            Editing the 10-vertex rings directly (seat index = ring index at a full table). Smaller tables subsample these via <code className="text-slate-400">ringIndexForDisplaySlot</code>.
+          </p>
         </div>
+
+        {/* ── Controls ── */}
+        <aside className="w-full shrink-0 space-y-4 lg:w-[300px]">
+          <Panel title="Layers — click to edit, eye to show/hide">
+            {LAYER_META.map((l) => (
+              <div key={l.key} className="flex items-center gap-2 py-0.5">
+                <button
+                  onClick={() => setVisible((v) => ({ ...v, [l.key]: !v[l.key] }))}
+                  className="w-6 text-center text-sm"
+                  title="Show / hide"
+                >{visible[l.key] ? '👁' : '–'}</button>
+                <button
+                  onClick={() => { setActiveLayer(l.key); setVisible((v) => ({ ...v, [l.key]: true })); }}
+                  className={`flex flex-1 items-center gap-2 rounded-md px-2 py-1.5 text-left text-sm transition ${activeLayer === l.key ? 'bg-white/10 font-semibold' : 'hover:bg-white/5'}`}
+                >
+                  <span style={{ width: 11, height: 11, borderRadius: 3, background: l.color, display: 'inline-block' }} />
+                  {l.label}
+                </button>
+              </div>
+            ))}
+          </Panel>
+
+          <Panel title="Selected handle">
+            {selected ? (
+              <div className="space-y-1 text-sm">
+                <div className="text-slate-300">
+                  Seat <b>{selected.idx}</b>{selected.idx === 0 ? ' (hero)' : ''} · {LAYER_META.find((l) => l.key === selected.layer)?.label}
+                </div>
+                <div className="font-mono text-xs text-cyan-300">
+                  fx {rings[selected.layer][selected.idx].fx.toFixed(3)} · fy {rings[selected.layer][selected.idx].fy.toFixed(3)}
+                </div>
+                <div className="text-[11px] text-slate-500">Arrow keys nudge · Shift = ×10</div>
+              </div>
+            ) : (
+              <p className="text-xs text-slate-500">Click a handle to select it.</p>
+            )}
+          </Panel>
+
+          <Panel title="Snap">
+            <label className="flex items-center gap-2 text-sm">
+              <input type="checkbox" checked={snap} onChange={(e) => setSnap(e.target.checked)} />
+              Snap to grid
+            </label>
+            {snap && (
+              <label className="mt-2 flex items-center gap-2 text-xs text-slate-400">
+                step
+                <input type="number" value={snapStep} step={0.005} min={0.001} max={0.05}
+                  onChange={(e) => setSnapStep(Number(e.target.value) || 0.005)}
+                  className="w-20 rounded bg-black/40 px-2 py-1 text-slate-100" />
+              </label>
+            )}
+          </Panel>
+
+          <Panel title="Save / export">
+            <div className="space-y-2">
+              <button onClick={saveToRepo} className="w-full rounded-md bg-cyan-500/90 px-3 py-2 text-sm font-semibold text-black hover:bg-cyan-400">Save to repo (dev)</button>
+              <button onClick={copyTs} className="w-full rounded-md bg-white/10 px-3 py-2 text-sm font-medium hover:bg-white/15">Copy as TypeScript</button>
+              <button onClick={() => setShowTs((s) => !s)} className="w-full rounded-md bg-white/5 px-3 py-2 text-xs hover:bg-white/10">{showTs ? 'Hide' : 'Show'} TS</button>
+              <button onClick={() => { if (confirm('Reset all anchors to the values in source?')) setRings(defaultRings()); }} className="w-full rounded-md bg-red-500/15 px-3 py-2 text-xs text-red-300 hover:bg-red-500/25">Reset to source defaults</button>
+              {saveMsg && <p className="text-[11px] text-emerald-300">{saveMsg}</p>}
+            </div>
+          </Panel>
+
+          {showTs && (
+            <Panel title="Paste into lib/poker-seat-layout.ts">
+              <textarea readOnly value={tsExport} className="h-64 w-full rounded bg-black/50 p-2 font-mono text-[10px] leading-snug text-slate-200" />
+            </Panel>
+          )}
+        </aside>
       </div>
     </div>
   );
 }
 
-export default function PokerLayoutReferencePage() {
+function Panel({ title, children }: { title: string; children: React.ReactNode }) {
   return (
-    <div
-      className="min-h-screen p-4 text-slate-100 md:p-8"
-      style={{ background: 'linear-gradient(325deg, rgba(20, 20, 20, 0.95), rgba(40, 40, 40, 0.9))' }}
-    >
-      <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_50%_30%,rgba(34,211,238,0.12),transparent_55%)]" />
+    <section className="rounded-xl border border-white/10 bg-white/[0.03] p-3">
+      <h2 className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-400">{title}</h2>
+      {children}
+    </section>
+  );
+}
 
-      <div className="relative mx-auto flex max-w-[1300px] flex-col gap-5">
-        <header className="flex flex-col gap-3 border-b border-cyan-500/20 pb-4 md:flex-row md:items-end md:justify-between">
-          <div className="space-y-2">
-            <p className="text-xs uppercase tracking-widest text-cyan-400/80">Reference</p>
-            <h1 className="text-2xl font-semibold tracking-tight md:text-3xl">Poker layout mock table</h1>
-            <p className="max-w-3xl text-sm text-slate-400">
-              One production-shaped table using the live rail, card, chip, dealer, and tag styling. Faint{' '}
-              <span className="text-amber-200/90">d0–d9</span> markers show every dealer-button anchor; the gold disc is the
-              real dealer seat. Edit anchors in{' '}
-              <code className="text-cyan-300/90">lib/poker-seat-layout.ts</code> and reload to compare placement.
-            </p>
-          </div>
-          <Link
-            href="/poker"
-            className="text-sm text-cyan-400 underline-offset-4 hover:text-cyan-300 hover:underline"
-          >
-            Back to poker
-          </Link>
-        </header>
+function Token({
+  layer, color, idx, a, active, selected, name, stack, isDealer, blind, acting, onPointerDown,
+}: {
+  layer: LayerKey; color: string; idx: number; a: SeatAnchor;
+  active: boolean; selected: boolean; name: string; stack: string;
+  isDealer: boolean; blind: 'SB' | 'BB' | null; acting: boolean;
+  onPointerDown: (e: React.PointerEvent) => void;
+}) {
+  const common: React.CSSProperties = {
+    position: 'absolute',
+    left: `${a.fx * 100}%`,
+    top: `${a.fy * 100}%`,
+    transform: 'translate(-50%,-50%)',
+    pointerEvents: active ? 'auto' : 'none',
+    opacity: active ? 1 : 0.4,
+    cursor: 'grab',
+    zIndex: selected ? 40 : active ? 30 : 10,
+    outline: selected ? '2px solid #fff' : 'none',
+    outlineOffset: 2,
+  };
+  const ringHi = active ? `0 0 0 2px ${color}` : 'none';
 
-        <PokerThemeProvider themeId={DEFAULT_POKER_THEME}>
-          <div style={getPokerThemeVars(DEFAULT_POKER_THEME)}>
-            <PokerTableEffectProvider>
-              <PokerLayoutMockTable />
-            </PokerTableEffectProvider>
-          </div>
-        </PokerThemeProvider>
+  let body: React.ReactNode = null;
+  if (layer === 'seat') {
+    body = (
+      <div style={{ width: 128, height: 128, borderRadius: '50%', background: 'radial-gradient(circle at 35% 30%, #2b3344, #141a24)', border: `3px solid ${acting ? '#22d3ee' : 'rgba(255,255,255,.25)'}`, boxShadow: ringHi, display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#cbd5e1', fontWeight: 800, fontSize: 30, position: 'relative' }}>
+        {name.slice(0, 2).toUpperCase()}
+        {blind && <div style={{ position: 'absolute', inset: 5, borderRadius: '50%', border: `5px solid ${blind === 'SB' ? '#3b82f6' : '#f59e0b'}` }} />}
       </div>
+    );
+  } else if (layer === 'tag') {
+    body = (
+      <div style={{ background: 'rgba(8,11,17,.95)', border: `1px solid ${color}`, borderRadius: 8, padding: '4px 11px', textAlign: 'center', boxShadow: ringHi, minWidth: 96 }}>
+        <div style={{ fontSize: 13, fontWeight: 800, color: '#e8edf5', lineHeight: 1.1 }}>{name}</div>
+        <div style={{ fontSize: 12, fontWeight: 800, color: '#fbbf24', lineHeight: 1.1 }}>{stack}</div>
+      </div>
+    );
+  } else if (layer === 'bet') {
+    body = (
+      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', boxShadow: ringHi, borderRadius: 999 }}>
+        <div style={{ width: 36, height: 36, borderRadius: '50%', background: 'radial-gradient(circle at 35% 30%, #d9f99d, #65a30d)', border: '2px dashed rgba(255,255,255,.7)' }} />
+      </div>
+    );
+  } else if (layer === 'dealer') {
+    body = (
+      <div style={{ width: 30, height: 30, borderRadius: '50%', background: isDealer ? 'radial-gradient(circle at 35% 30%, #fffaf0, #d4af37)' : 'rgba(252,211,77,.35)', border: '1.5px solid #8a6a1f', color: '#1a1408', fontFamily: 'serif', fontWeight: 900, fontSize: 13, display: 'flex', alignItems: 'center', justifyContent: 'center', boxShadow: ringHi }}>D</div>
+    );
+  } else if (layer === 'card') {
+    body = (
+      <div style={{ display: 'flex', boxShadow: ringHi, borderRadius: 6 }}>
+        <div style={{ width: 32, height: 46, borderRadius: 5, background: 'repeating-linear-gradient(45deg,#1b3a8a,#1b3a8a 4px,#16307a 4px,#16307a 8px)', border: '1.5px solid #2a4ba0', transform: 'rotate(-9deg)' }} />
+        <div style={{ width: 32, height: 46, borderRadius: 5, background: 'repeating-linear-gradient(45deg,#1b3a8a,#1b3a8a 4px,#16307a 4px,#16307a 8px)', border: '1.5px solid #2a4ba0', transform: 'rotate(9deg)', marginLeft: -8 }} />
+      </div>
+    );
+  } else {
+    body = (
+      <div style={{ width: 42, height: 30, borderRadius: '50% / 40%', background: 'radial-gradient(circle at 35% 30%, #fda4af, #be123c)', border: '2px solid rgba(255,255,255,.6)', boxShadow: ringHi }} />
+    );
+  }
+
+  return (
+    <div style={common} onPointerDown={onPointerDown}>
+      {body}
+      {active && (
+        <div style={{ position: 'absolute', top: -16, left: '50%', transform: 'translateX(-50%)', fontSize: 10, fontWeight: 800, color, background: 'rgba(0,0,0,.7)', padding: '0 5px', borderRadius: 4, whiteSpace: 'nowrap' }}>
+          {idx}
+        </div>
+      )}
     </div>
   );
 }
