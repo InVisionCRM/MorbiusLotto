@@ -1123,3 +1123,35 @@ body {
 .morb-poker-header-turn-pulse {
   animation: morb-poker-header-turn-pulse 1.6s ease-in-out infinite;
 }
+
+/* Daily Wish wheel — ported from the Gemini CasinoWheel original */
+@keyframes wheel-underwheel-spin {
+  0%   { transform: translate(-50%, -50%) rotate(0deg); }
+  100% { transform: translate(-50%, -50%) rotate(360deg); }
+}
+@keyframes wheel-underwheel-spin-fast {
+  0%   { transform: translate(-50%, -50%) rotate(0deg) scale(1.05); }
+  100% { transform: translate(-50%, -50%) rotate(360deg) scale(1.15); }
+}
+@keyframes wheel-ambient-pulse-slow {
+  0%   { opacity: 0.25; filter: blur(28px); }
+  50%  { opacity: 0.45; filter: blur(42px); }
+  100% { opacity: 0.25; filter: blur(28px); }
+}
+@keyframes wheel-ambient-pulse-fast {
+  0%   { opacity: 0.35; filter: blur(24px); transform: translate(-50%, -50%) scale(1.02); }
+  100% { opacity: 0.55; filter: blur(36px); transform: translate(-50%, -50%) scale(1.15); }
+}
+@keyframes wheel-floor-cast-idle {
+  0%   { transform: translateX(-50%) rotateX(72deg) scale(0.95); opacity: 0.15; filter: blur(12px); }
+  100% { transform: translateX(-50%) rotateX(72deg) scale(1.08); opacity: 0.25; filter: blur(18px); }
+}
+@keyframes wheel-floor-cast-spinning {
+  0%   { transform: translateX(-50%) rotateX(72deg) scale(1.05); opacity: 0.3; filter: blur(14px); }
+  100% { transform: translateX(-50%) rotateX(72deg) scale(1.22); opacity: 0.45; filter: blur(22px); }
+}
+@keyframes wheel-ring-shimmer {
+  0%   { box-shadow: 0 0 15px rgba(255,255,255,0.05), inset 0 0 15px rgba(255,255,255,0.02); border-color: rgba(255,255,255,0.05); }
+  50%  { box-shadow: 0 0 25px rgba(255,255,255,0.12), inset 0 0 25px rgba(255,255,255,0.06); border-color: rgba(255,255,255,0.15); }
+  100% { box-shadow: 0 0 15px rgba(255,255,255,0.05), inset 0 0 15px rgba(255,255,255,0.02); border-color: rgba(255,255,255,0.05); }
+}
