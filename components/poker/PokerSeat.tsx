@@ -871,7 +871,7 @@ export function PokerSeat({ seat, index, holeCards, isCurrentPlayer, showCardBac
                   width: POKER_UI_CQW.heroCardInnerW,
                   height: POKER_UI_CQW.heroCardInnerH,
                   marginLeft: ci === 1 ? '-18px' : 0,
-                  transform: `rotate(${ci === 0 ? -11 : 11}deg)`,
+                  transform: `rotate(${ci === 0 ? -6 : 6}deg)`,
                   transformOrigin: 'bottom center',
                   zIndex: ci,
                   filter: [
@@ -890,18 +890,19 @@ export function PokerSeat({ seat, index, holeCards, isCurrentPlayer, showCardBac
                     as the community-card row, sized up. Rotates with the card. */}
                 {holeCards![ci] != null && holeCards![ci] >= 0 && (
                   <div
-                    className="font-jost pointer-events-none absolute left-1/2 -translate-x-1/2 font-black tabular-nums"
+                    className="font-jost pointer-events-none absolute font-black tabular-nums"
                     style={{
-                      bottom: 'calc(100% + 4px)',
-                      fontSize: 'clamp(20px, 2.4cqw, 36px)',
+                      top: -2,
+                      left: 2,
+                      fontSize: 'clamp(9px, 1.2cqw, 15px)',
                       lineHeight: 1,
                       color: POKER_RANK_SUIT_LABEL_COLORS[pokerCardSuitIndex(holeCards![ci]) ?? 0],
                       background: 'rgba(8,11,17,0.92)',
                       border: '1px solid rgba(255,255,255,0.16)',
-                      borderRadius: 8,
-                      padding: '2px 9px',
+                      borderRadius: 5,
+                      padding: '1px 4px',
                       whiteSpace: 'nowrap',
-                      boxShadow: '0 3px 8px rgba(0,0,0,0.6)',
+                      boxShadow: '0 2px 5px rgba(0,0,0,0.5)',
                     }}
                     aria-hidden
                   >
