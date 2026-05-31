@@ -1,104 +1,87 @@
 /**
- * arcade-crash.ts — MORBIUS Arcade: Crash.
+ * arcade-crash.ts — MORBIUS Arcade: Crash (stateful real-time version).
  *
- * Classic provably-fair crash game:
- *   • A multiplier starts at 1.00× and climbs until it "crashes".
- *   • The player optionally sets an auto-cashout target T (e.g. 2.00×).
- *   • The server rolls r ∈ [0,1) and derives:
- *       crashX100 = max(100, floor((1 - houseEdge) / r × 100))
- *   • If crashX100 >= autoX100 → player wins at T; else bust.
+ * The multiplier starts at 1.00× the moment a round begins and grows
+ * exponentially until it crashes. The player watches the live counter and
+ * hits "Cash Out" at any moment — the server computes the multiplier from
+ * elapsed wall-clock time when the cashout request arrives.
  *
- * Distribution: P(crash ≥ x) = (1 − houseEdge) / x  →  99% RTP.
- * Low multipliers are common; large ones are geometrically rare.
- * At r < houseEdge the formula gives crashX100 = 100 (1.00×), which busts
- * all targets — this is the 1% where the house edge lives.
+ * Growth formula (shared between server and client, must stay in sync):
+ *   multiplierX100(ms) = max(100, floor(100 × exp(k × ms / 1000)))
+ *   k = ln(2) / 3  ≈ 0.2310  →  doubles every 3 seconds
  *
- * Multipliers are stored ×100 (integers) so all win decisions are exact
- * integer comparisons — no float rounding anywhere in the wallet path.
+ * Representative milestones:
+ *   0s → 1.00×    3s → 2.00×    6s → 4.00×
+ *   9s → 8.00×   12s → 16.0×   20s → ~102×
+ *
+ * Crash-point distribution (provably fair):
+ *   crashX100 = max(100, floor((1 − houseEdge) / r × 100))
+ *   r ∈ (0,1) from HMAC-SHA256 byte stream.
+ *   P(crash ≥ x) = (1 − houseEdge) / x  →  99% RTP at every cashout target.
+ *
+ * The server commits sha256(serverSeed) at /start and reveals the plain seed
+ * at finalize so anyone can recompute the crash point independently. The
+ * crash point stays hidden (in crash_x100 column) until status != 'active'.
  */
 
+/** House edge in basis points (100 = 1%). */
 export const CRASH_HOUSE_EDGE_BP = 100;
 
 export const CRASH_MIN_BET = 10;
 export const CRASH_MAX_BET = 2000;
 
-/** Auto-cashout bounds ×100. 1.01× is the minimum sensible target. */
+/** Auto-cashout bounds ×100. Below 1.01× there is no meaningful gain. */
 export const CRASH_MIN_CASHOUT_X100 = 101;
-export const CRASH_MAX_CASHOUT_X100 = 10_000; // 100.00×
-
-/** Display/verify cap — keeps the number readable on extreme rolls. */
-export const CRASH_RESULT_CAP_X100 = 100_000_000; // 1,000,000.00×
+export const CRASH_MAX_CASHOUT_X100 = 1_000_000; // 10,000×
 
 /**
- * Derive the round's crash-point multiplier ×100 from the provably-fair float.
- *
- * Formula: crashX100 = max(100, floor((1 − houseEdge) / r × 100))
- *
- * When r → 0: crash → ∞ (rare mega-multiplier).
- * When r → 1: crash → 1× (common, bust most targets).
- * r < houseEdge: formula yields < 1×, clamped to 1.00× (always busts).
+ * Growth constant k for the multiplier curve.
+ * multiplierX100(ms) = floor(100 × exp(k × ms / 1000))
+ * k = ln(2)/3 → doubles every 3 seconds.
+ * Keep this value identical on the server and in MiniAppCrash.tsx.
+ */
+export const CRASH_GROWTH_K = Math.LN2 / 3; // ≈ 0.23105
+
+/**
+ * Provably-fair crash point from a float r ∈ (0,1).
+ * crashX100 = max(100, floor((1 − houseEdge) / r × 100))
  */
 export function crashPointFromFloat(r: number): number {
-  if (!Number.isFinite(r) || r < 0) throw new Error('Crash float must be in [0,1)');
+  if (!Number.isFinite(r) || r <= 0) throw new Error('Crash float must be in (0,1)');
   const safe = Math.max(r, 1e-12);
   const houseFactor = 1 - CRASH_HOUSE_EDGE_BP / 10_000;
   const raw = houseFactor / safe;
-  const x100 = Math.max(100, Math.floor(raw * 100));
-  return Math.min(CRASH_RESULT_CAP_X100, x100);
-}
-
-export interface CrashResult {
-  /** Provably-fair crash point ×100. */
-  crashX100: number;
-  /** Multiplier the player locked in, ×100. Equals autoX100 on win, crashX100 on bust. */
-  cashoutX100: number | null;
-  won: boolean;
-  /** Total chips returned (0 on bust). */
-  payout: number;
+  return Math.max(100, Math.floor(raw * 100));
 }
 
 /**
- * Resolve a single Crash round.
- *
- * @param autoX100 Player's auto-cashout ×100, or null to skip (instant bust).
- * @param bet      Bet in chips.
- * @param r        Provably-fair float ∈ [0, 1).
+ * Multiplier ×100 at a given elapsed time.
+ * This is the canonical formula — the same one used in MiniAppCrash.tsx.
  */
-export function resolveCrash(
-  autoX100: number | null,
-  bet: number,
-  r: number,
-): CrashResult {
+export function multiplierX100AtMs(elapsedMs: number): number {
+  if (elapsedMs <= 0) return 100;
+  return Math.max(100, Math.floor(100 * Math.exp(CRASH_GROWTH_K * elapsedMs / 1000)));
+}
+
+/**
+ * Minimum elapsed ms before the counter reaches targetX100.
+ * Used to cap the round server-side and for display hints.
+ */
+export function msToReachX100(targetX100: number): number {
+  if (targetX100 <= 100) return 0;
+  return Math.ceil((Math.log(targetX100 / 100) / CRASH_GROWTH_K) * 1000);
+}
+
+/**
+ * Payout in chips for a cash-out at multiplierX100.
+ * bet × multiplierX100 / 100, floored to whole chips.
+ */
+export function crashPayout(bet: number, multiplierX100: number): number {
   if (!Number.isInteger(bet) || bet < CRASH_MIN_BET || bet > CRASH_MAX_BET) {
     throw new Error('Crash bet out of range');
   }
-  if (
-    autoX100 !== null &&
-    (!Number.isInteger(autoX100) ||
-      autoX100 < CRASH_MIN_CASHOUT_X100 ||
-      autoX100 > CRASH_MAX_CASHOUT_X100)
-  ) {
-    throw new Error('Crash auto-cashout out of range');
+  if (!Number.isInteger(multiplierX100) || multiplierX100 < 100) {
+    throw new Error('Crash multiplier out of range');
   }
-
-  const crashX100 = crashPointFromFloat(r);
-
-  if (autoX100 === null || crashX100 < autoX100) {
-    // Bust: player had no target, or crash happened before the target.
-    return {
-      crashX100,
-      cashoutX100: null,
-      won: false,
-      payout: 0,
-    };
-  }
-
-  // Win: crash cleared the target.
-  const payout = Math.floor((bet * autoX100) / 100);
-  return {
-    crashX100,
-    cashoutX100: autoX100,
-    won: true,
-    payout,
-  };
+  return Math.floor((bet * multiplierX100) / 100);
 }
