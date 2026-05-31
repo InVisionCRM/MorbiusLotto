@@ -136,6 +136,8 @@ export type BlackjackMultiSeatProps = {
   onLeaveSeat?: () => void;
   onToggleSoundPanel?: () => void;
   onSendChatMessage?: (msg: string) => void;
+  /** Directed-emote reaction broadcast to the table (shows on any seat, incl. mine when targeted). */
+  broadcastEmotion?: Emotion;
   /** Round clear: match single-player card fly-out */
   cardsExiting?: boolean;
   /** Key `${position}-${handIndex}` → card indices that just arrived (deal-in) */
@@ -163,6 +165,7 @@ export function BlackjackMultiSeat({
   onLeaveSeat,
   onToggleSoundPanel,
   onSendChatMessage,
+  broadcastEmotion,
   cardsExiting = false,
   newPlayerCardByHandKey,
 }: BlackjackMultiSeatProps) {
@@ -208,7 +211,9 @@ export function BlackjackMultiSeat({
   const hasMenuOpen = quickChatPickerOpen || playerRadialOpen;
   const activeEmotion: Emotion = (isMe && hasMenuOpen)
     ? 'neutral'
-    : (isMe ? (localEmotion ?? (phase === 'completed' ? resultEmotion : 'neutral')) : (phase === 'completed' ? resultEmotion : 'neutral'));
+    : isMe
+      ? (localEmotion ?? broadcastEmotion ?? (phase === 'completed' ? resultEmotion : 'neutral'))
+      : (broadcastEmotion ?? (phase === 'completed' ? resultEmotion : 'neutral'));
 
   useEffect(() => { setPlayerRadialOpen(false); setPlayerRadialPage('main'); setQuickChatPickerOpen(false); }, [phase]);
 

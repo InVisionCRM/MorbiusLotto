@@ -3,6 +3,7 @@
 import { AnimatePresence } from 'framer-motion';
 import type React from 'react';
 import type { BlackjackWebSocketClient, PokerTableState } from '@/lib/websocket-client';
+import type { PokerDirectedEmoteKind } from '@/lib/poker-directed-emotes';
 import { PokerDepositModal } from '@/components/poker/PokerDepositModal';
 import { PokerStatsModal } from '@/components/poker/PokerStatsModal';
 import { PokerSoundsSettingsModal } from '@/components/poker/PokerSoundsSettingsModal';
@@ -53,6 +54,8 @@ interface PokerPopupsProps {
   opponentProfileAddress: string | null;
   setOpponentProfileAddress: React.Dispatch<React.SetStateAction<string | null>>;
   setStatsModalAddress: React.Dispatch<React.SetStateAction<string | null>>;
+  /** Throw a directed emote at a seat (from the opponent profile card). Undefined when not seated. */
+  onSendDirectedEmote?: (toSeatIndex: number, kind: PokerDirectedEmoteKind) => void;
 
   showAvatarModal: boolean;
   setShowAvatarModal: React.Dispatch<React.SetStateAction<boolean>>;
@@ -96,6 +99,7 @@ export function PokerPopups({
   opponentProfileAddress,
   setOpponentProfileAddress,
   setStatsModalAddress,
+  onSendDirectedEmote,
   showAvatarModal,
   setShowAvatarModal,
   onAvatarSaved,
@@ -223,6 +227,7 @@ export function PokerPopups({
         {opponentProfileAddress &&
           (() => {
             const seat = renderedState?.seats.find((s) => s.playerAddress === opponentProfileAddress);
+            const targetSeatIndex = renderedState?.seats.findIndex((s) => s.playerAddress === opponentProfileAddress) ?? -1;
             return (
               <PokerOpponentProfileCard
                 key={opponentProfileAddress}
@@ -234,6 +239,14 @@ export function PokerPopups({
                   setStatsModalAddress(addr);
                   setShowStatsModal(true);
                 }}
+                onSendEmote={
+                  onSendDirectedEmote && targetSeatIndex >= 0
+                    ? (kind) => {
+                        onSendDirectedEmote(targetSeatIndex, kind);
+                        setOpponentProfileAddress(null); // close so the bubble flight is visible
+                      }
+                    : undefined
+                }
               />
             );
           })()}

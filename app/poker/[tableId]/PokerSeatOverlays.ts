@@ -4,6 +4,19 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { MutableRefObject } from 'react';
 import type { BlackjackWebSocketClient, ChatMessagePayload, PokerTableState } from '@/lib/websocket-client';
 import type { Emotion } from '@/components/avatar';
+import {
+  POKER_DIRECTED_EMOTES,
+  POKER_DIRECTED_EMOTE_FLY_MS,
+  isPokerDirectedEmoteKind,
+  type PokerDirectedEmoteKind,
+} from '@/lib/poker-directed-emotes';
+
+export interface DirectedEmoteFlight {
+  id: string;
+  fromSeatIndex: number;
+  toSeatIndex: number;
+  kind: PokerDirectedEmoteKind;
+}
 
 const CHAT_BUBBLE_DURATION_MS = 5000;
 const QUICK_REACTION_DURATION_MS = 2000;
@@ -32,10 +45,12 @@ export function usePokerSeatOverlays({
   >([]);
   const [reactionBySeatIndex, setReactionBySeatIndex] = useState<Record<number, string>>({});
   const [broadcastEmotionBySeatIndex, setBroadcastEmotionBySeatIndex] = useState<Record<number, Emotion>>({});
+  const [directedEmotes, setDirectedEmotes] = useState<DirectedEmoteFlight[]>([]);
 
   const bubbleTimeoutsRef = useRef<Map<string, ReturnType<typeof setTimeout>>>(new Map());
   const reactionTimeoutsRef = useRef<Map<number, ReturnType<typeof setTimeout>>>(new Map());
   const emotionTimeoutsRef = useRef<Map<number, ReturnType<typeof setTimeout>>>(new Map());
+  const directedTimeoutsRef = useRef<Set<ReturnType<typeof setTimeout>>>(new Set());
 
   useEffect(() => {
     const client = clientRef.current;
@@ -120,15 +135,52 @@ export function usePokerSeatOverlays({
       emotionTimeoutsRef.current.set(payload.seatIndex, t);
     };
 
+    // Pulse a seat's avatar emotion (auto-clears) — shared by directed-emote sender/target reactions.
+    const pulse = (seatIndex: number, emotion: Emotion) => {
+      setBroadcastEmotionBySeatIndex((prev) => ({ ...prev, [seatIndex]: emotion }));
+      if (emotionTimeoutsRef.current.has(seatIndex)) clearTimeout(emotionTimeoutsRef.current.get(seatIndex)!);
+      const duration = emotion === 'wink' ? AVATAR_EMOTION_WINK_MS : AVATAR_EMOTION_DURATION_MS;
+      const t = setTimeout(() => {
+        setBroadcastEmotionBySeatIndex((prev) => {
+          const next = { ...prev };
+          delete next[seatIndex];
+          return next;
+        });
+        emotionTimeoutsRef.current.delete(seatIndex);
+      }, duration);
+      emotionTimeoutsRef.current.set(seatIndex, t);
+    };
+
+    const onDirectedEmote = (payload: { tableId?: string; fromSeatIndex?: number; toSeatIndex?: number; kind?: string }) => {
+      if (payload.tableId !== tableId) return;
+      const { fromSeatIndex, toSeatIndex, kind } = payload;
+      if (typeof fromSeatIndex !== 'number' || typeof toSeatIndex !== 'number' || !isPokerDirectedEmoteKind(kind)) return;
+      const def = POKER_DIRECTED_EMOTES[kind];
+      const id = `de-${Date.now()}-${fromSeatIndex}-${toSeatIndex}-${Math.random().toString(36).slice(2, 7)}`;
+      setDirectedEmotes((prev) => [...prev, { id, fromSeatIndex, toSeatIndex, kind }]);
+      pulse(fromSeatIndex, def.sender); // sender reacts as they throw it
+      const landT = setTimeout(() => pulse(toSeatIndex, def.target), Math.round(POKER_DIRECTED_EMOTE_FLY_MS * 0.82)); // target reacts on landing
+      directedTimeoutsRef.current.add(landT);
+      const removeT = setTimeout(() => {
+        setDirectedEmotes((prev) => prev.filter((d) => d.id !== id));
+        directedTimeoutsRef.current.delete(removeT);
+      }, POKER_DIRECTED_EMOTE_FLY_MS + 250);
+      directedTimeoutsRef.current.add(removeT);
+    };
+
     client.on('poker_quick_reaction', onQuickReaction);
     client.on('poker_avatar_emotion', onAvatarEmotion);
+    client.on('poker_directed_emote', onDirectedEmote);
     return () => {
       client.off('poker_quick_reaction', onQuickReaction);
       client.off('poker_avatar_emotion', onAvatarEmotion);
+      client.off('poker_directed_emote', onDirectedEmote);
       reactionTimeoutsRef.current.forEach((t) => clearTimeout(t));
       reactionTimeoutsRef.current.clear();
       emotionTimeoutsRef.current.forEach((t) => clearTimeout(t));
       emotionTimeoutsRef.current.clear();
+      directedTimeoutsRef.current.forEach((t) => clearTimeout(t));
+      directedTimeoutsRef.current.clear();
     };
   }, [clientRef, tableId]);
 
@@ -161,6 +213,18 @@ export function usePokerSeatOverlays({
     [clientRef, tableId, mySeatIndex],
   );
 
+  const onSendDirectedEmote = useCallback(
+    (toSeatIndex: number, kind: PokerDirectedEmoteKind) => {
+      const client = clientRef.current;
+      if (!client?.isConnected() || !tableId || mySeatIndex < 0) return;
+      if (toSeatIndex < 0 || toSeatIndex === mySeatIndex) return;
+      // Rely on the server echo (broadcast includes the sender) so every client renders the
+      // same flight at the same time — no optimistic local copy to dedupe.
+      client.sendPokerDirectedEmote(tableId, toSeatIndex, kind);
+    },
+    [clientRef, tableId, mySeatIndex],
+  );
+
   const chatBubbleBySeatIndex = useMemo(() => {
     if (!state) return undefined;
     const now = Date.now();
@@ -180,7 +244,9 @@ export function usePokerSeatOverlays({
     chatBubbleBySeatIndex,
     reactionBySeatIndex,
     broadcastEmotionBySeatIndex,
+    directedEmotes,
     onPhraseReaction,
     onAnimationReaction,
+    onSendDirectedEmote,
   };
 }

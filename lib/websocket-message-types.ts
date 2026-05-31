@@ -50,6 +50,7 @@ export const WS_MESSAGE_TYPES = {
   pokerPurchaseTableLogo: 'poker_purchase_table_logo',
   pokerQuickReaction: 'poker_quick_reaction',
   pokerAvatarEmotion: 'poker_avatar_emotion',
+  pokerDirectedEmote: 'poker_directed_emote',
   pokerSitOut: 'poker_sit_out',
   pokerSitBack: 'poker_sit_back',
   pokerImBack: 'poker_im_back',
@@ -142,6 +143,7 @@ export const WS_POKER_MESSAGES = [
   WS_MESSAGE_TYPES.pokerPurchaseTableLogo,
   WS_MESSAGE_TYPES.pokerQuickReaction,
   WS_MESSAGE_TYPES.pokerAvatarEmotion,
+  WS_MESSAGE_TYPES.pokerDirectedEmote,
   WS_MESSAGE_TYPES.pokerSitOut,
   WS_MESSAGE_TYPES.pokerSitBack,
   WS_MESSAGE_TYPES.pokerImBack,
@@ -165,6 +167,7 @@ export const WS_BJ_MULTI_MESSAGES = [
   'bj_multi_tip_dealer',
   'bj_multi_quick_reaction',
   'bj_multi_avatar_emotion',
+  'bj_multi_directed_emote',
 ] as const;
 
 export const WS_KNOWN_EVENT_TYPES = new Set<string>([
@@ -178,6 +181,7 @@ export const WS_KNOWN_EVENT_TYPES = new Set<string>([
   WS_MESSAGE_TYPES.pokerTableList,
   WS_MESSAGE_TYPES.pokerQuickReaction,
   WS_MESSAGE_TYPES.pokerAvatarEmotion,
+  WS_MESSAGE_TYPES.pokerDirectedEmote,
   'poker_tournament_started',
   'poker_tournament_state',
   'poker_tournament_blind_level_up',
@@ -189,5 +193,6 @@ export const WS_KNOWN_EVENT_TYPES = new Set<string>([
   'bj_multi_tip_notification',
   'bj_multi_quick_reaction',
   'bj_multi_avatar_emotion',
+  'bj_multi_directed_emote',
   'wheel_balance',
 ]);

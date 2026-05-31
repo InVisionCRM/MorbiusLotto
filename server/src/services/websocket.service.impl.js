@@ -1362,6 +1362,46 @@ class WebSocketService {
             this.sendError(ws, error.message || 'Failed to send avatar emotion', message.requestId);
         }
     }
+    // Directed (player → player) emote kinds. Keep in sync with lib/poker-directed-emotes.ts.
+    static POKER_DIRECTED_EMOTE_KINDS = new Set([
+        'haha', 'love', 'gg', 'nice', 'boo', 'fire', 'dance', 'money',
+    ]);
+    async handlePokerDirectedEmote(ws, message) {
+        try {
+            if (!this.pokerGameService || !ws.playerAddress) {
+                return this.sendError(ws, 'Poker not available or wallet required', message.requestId);
+            }
+            const payload = message.payload;
+            const { tableId, toSeatIndex, kind } = payload ?? {};
+            if (!tableId || typeof tableId !== 'string') {
+                return this.sendError(ws, 'tableId required', message.requestId);
+            }
+            const k = typeof kind === 'string' ? kind.toLowerCase().trim() : '';
+            if (!WebSocketService.POKER_DIRECTED_EMOTE_KINDS.has(k)) {
+                return this.sendError(ws, 'Invalid emote', message.requestId);
+            }
+            if (!Number.isInteger(toSeatIndex) || toSeatIndex < 0) {
+                return this.sendError(ws, 'toSeatIndex required', message.requestId);
+            }
+            const state = await this.pokerGameService.getTableState(tableId, null);
+            const fromSeatIndex = state.seats.findIndex((s) => s.playerAddress && s.playerAddress.toLowerCase() === ws.playerAddress.toLowerCase());
+            if (fromSeatIndex < 0) {
+                return this.sendError(ws, 'Not seated at this table', message.requestId);
+            }
+            if (toSeatIndex >= state.seats.length || toSeatIndex === fromSeatIndex || !state.seats[toSeatIndex]?.playerAddress) {
+                return this.sendError(ws, 'Invalid target seat', message.requestId);
+            }
+            const roomId = `poker:table:${tableId}`;
+            this.broadcastToRoom(roomId, {
+                type: 'poker_directed_emote',
+                payload: { tableId, fromSeatIndex, toSeatIndex, kind: k },
+            });
+        }
+        catch (error) {
+            logger_1.logger.error('Error handling poker directed emote:', error);
+            this.sendError(ws, error.message || 'Failed to send directed emote', message.requestId);
+        }
+    }
     async handlePokerCreateTable(ws, message) {
         try {
             if (!this.pokerGameService || !ws.playerAddress) {
@@ -3813,6 +3853,37 @@ class WebSocketService {
         }
         catch (error) {
             logger_1.logger.error('BJ multi avatar emotion error:', error);
+        }
+    }
+    // Directed (player → player) emote. Kinds reuse POKER_DIRECTED_EMOTE_KINDS (game-agnostic).
+    async handleBJMultiDirectedEmote(ws, message) {
+        try {
+            if (!this.bjMultiService || !ws.playerAddress)
+                return this.sendError(ws, 'BJ multi not available or wallet required', message.requestId);
+            const { tableId, toAddress, kind } = (message.payload ?? {});
+            if (!tableId || typeof tableId !== 'string')
+                return this.sendError(ws, 'tableId required', message.requestId);
+            const k = typeof kind === 'string' ? kind.toLowerCase().trim() : '';
+            if (!WebSocketService.POKER_DIRECTED_EMOTE_KINDS.has(k))
+                return this.sendError(ws, 'Invalid emote', message.requestId);
+            const target = typeof toAddress === 'string' ? toAddress.toLowerCase() : '';
+            const from = ws.playerAddress.toLowerCase();
+            if (!target || target === from)
+                return this.sendError(ws, 'Invalid target', message.requestId);
+            const state = await this.bjMultiService.getTableState(tableId);
+            const seats = state?.seats ?? [];
+            const seated = (addr) => seats.some((s) => s.playerAddress && s.playerAddress.toLowerCase() === addr);
+            if (!seated(from))
+                return this.sendError(ws, 'Not seated at this table', message.requestId);
+            if (!seated(target))
+                return this.sendError(ws, 'Target not seated', message.requestId);
+            this.broadcastToRoom(`blackjack:table:${tableId}`, {
+                type: 'bj_multi_directed_emote',
+                payload: { tableId, fromAddress: ws.playerAddress, toAddress, kind: k },
+            });
+        }
+        catch (error) {
+            logger_1.logger.error('BJ multi directed emote error:', error);
         }
     }
 }

@@ -10,6 +10,7 @@ export const POKER_MESSAGE_HANDLER_MAP: Record<string, string> = {
   poker_purchase_table_logo: 'handlePokerPurchaseTableLogo',
   poker_quick_reaction: 'handlePokerQuickReaction',
   poker_avatar_emotion: 'handlePokerAvatarEmotion',
+  poker_directed_emote: 'handlePokerDirectedEmote',
   poker_sit_out: 'handlePokerSitOut',
   poker_sit_back: 'handlePokerSitBack',
   poker_im_back: 'handlePokerImBack',
