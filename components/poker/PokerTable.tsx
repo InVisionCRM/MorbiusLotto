@@ -22,6 +22,7 @@ import {
   ringIndexForDisplaySlot,
   winningPotChipAnchorForDisplaySlot,
 } from '@/lib/poker-seat-layout';
+import { POKER_DIRECTED_EMOTES, POKER_DIRECTED_EMOTE_FLY_MS, type PokerDirectedEmoteKind } from '@/lib/poker-directed-emotes';
 import confetti from 'canvas-confetti';
 import { FloatingTableLogo } from './FloatingTableLogo';
 import { PokerRailActingHighlight } from './PokerRailActingHighlight';
@@ -135,6 +136,8 @@ export interface PokerTableProps {
   reactionBySeatIndex?: Record<number, string>;
   /** Per-seat avatar emotion broadcast to table (so all players see the same animation). */
   broadcastEmotionBySeatIndex?: Record<number, import('@/components/avatar').Emotion>;
+  /** In-flight directed emotes (player → player); each animates a bubble from sender's seat to the target. */
+  directedEmotes?: Array<{ id: string; fromSeatIndex: number; toSeatIndex: number; kind: PokerDirectedEmoteKind }>;
   /** Called when current player selects a QuickChat phrase (broadcast to table). */
   onPhraseReaction?: (phrase: string) => void;
   /** Called when current player selects an avatar emotion (broadcast to table). */
@@ -173,7 +176,7 @@ export interface PokerTableProps {
   showDealerAnchorGuides?: boolean;
 }
 
-export function PokerTable({ state, currentPlayerAddress, timeLeft, chatBubbleBySeatIndex, onReUpClick, onMenuClick, reactionBySeatIndex, broadcastEmotionBySeatIndex, onPhraseReaction, onAnimationReaction, onOpponentClick, onOpponentRadialAction, quickChatPhrases, setQuickChatPhrases, onOpenEditQuickChat, onLeave, onRequestMobileActivity, onSitOut, onSitBack, onShowCards, onMuckCards, tutorialTargets, dataTutorialTargetPot, showDealerAnchorGuides = false }: PokerTableProps) {
+export function PokerTable({ state, currentPlayerAddress, timeLeft, chatBubbleBySeatIndex, onReUpClick, onMenuClick, reactionBySeatIndex, broadcastEmotionBySeatIndex, directedEmotes, onPhraseReaction, onAnimationReaction, onOpponentClick, onOpponentRadialAction, quickChatPhrases, setQuickChatPhrases, onOpenEditQuickChat, onLeave, onRequestMobileActivity, onSitOut, onSitBack, onShowCards, onMuckCards, tutorialTargets, dataTutorialTargetPot, showDealerAnchorGuides = false }: PokerTableProps) {
   const tableRef = useRef<HTMLDivElement>(null);
   const [dims, setDims] = useState({ w: 640, h: 500 });
   const { effect: tableEffect, feltGradient, railStyle } = usePokerTableEffect();
@@ -1283,6 +1286,59 @@ export function PokerTable({ state, currentPlayerAddress, timeLeft, chatBubbleBy
           onMuck={onMuckCards}
         />
       )}
+
+      {/* Directed emotes — bubble pops above the sender, then arcs across to the target's seat. */}
+      {dims.w > 0 && directedEmotes?.map((de) => {
+        const fromSlot = toDisplaySlot(de.fromSeatIndex);
+        const toSlot = toDisplaySlot(de.toSeatIndex);
+        const fromA = seatAnchors[fromSlot];
+        const toA = seatAnchors[toSlot];
+        const def = POKER_DIRECTED_EMOTES[de.kind];
+        if (!fromA || !toA || !def) return null;
+        const raise = dims.h * 0.05;
+        const fromX = fromA.fx * dims.w;
+        const fromY = fromA.fy * dims.h - raise;
+        const dx = toA.fx * dims.w - fromX;
+        const dy = (toA.fy * dims.h - raise) - fromY;
+        const apexY = Math.min(0, dy) - dims.h * 0.08; // arc up and over both seats
+        return (
+          <div
+            key={de.id}
+            className="absolute pointer-events-none"
+            style={{ left: fromX, top: fromY, transform: 'translate(-50%, -50%)', zIndex: 42 }}
+          >
+            <motion.div
+              initial={{ x: 0, y: 0, scale: 0.2, opacity: 0 }}
+              animate={{
+                x: [0, 0, dx * 0.5, dx, dx],
+                y: [0, 0, apexY, dy, dy],
+                scale: [0.2, 1.08, 1, 1.18, 0.55],
+                opacity: [0, 1, 1, 1, 0],
+              }}
+              transition={{ duration: POKER_DIRECTED_EMOTE_FLY_MS / 1000, times: [0, 0.14, 0.5, 0.88, 1], ease: 'easeInOut' }}
+            >
+              <div
+                className="relative flex items-center gap-1 font-jost font-extrabold"
+                style={{
+                  padding: '5px 10px', borderRadius: 13, whiteSpace: 'nowrap',
+                  background: 'linear-gradient(180deg, #ffffff, #efe7ff)', color: '#241247',
+                  boxShadow: '0 8px 22px rgba(0,0,0,0.55), 0 0 0 1px rgba(168,85,247,0.45)',
+                  fontSize: 12, letterSpacing: '0.3px',
+                }}
+              >
+                <span style={{ fontSize: 19, lineHeight: 1 }}>{def.glyph}</span>
+                {def.label ? <span>{def.label}</span> : null}
+                <span
+                  style={{
+                    position: 'absolute', left: 14, bottom: -4, width: 9, height: 9,
+                    background: '#efe7ff', transform: 'rotate(45deg)', boxShadow: '1px 1px 0 rgba(168,85,247,0.25)',
+                  }}
+                />
+              </div>
+            </motion.div>
+          </div>
+        );
+      })}
 
     </div>
   );

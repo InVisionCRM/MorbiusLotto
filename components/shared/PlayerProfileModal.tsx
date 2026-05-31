@@ -12,6 +12,7 @@ import {
   PlayerProfileDashboard,
   type PlayerProfileGame,
 } from '@/components/shared/PlayerProfileDashboard'
+import { POKER_DIRECTED_EMOTES, POKER_DIRECTED_EMOTE_KINDS, type PokerDirectedEmoteKind } from '@/lib/poker-directed-emotes'
 
 export type { PlayerProfileGame }
 
@@ -39,9 +40,11 @@ interface PlayerProfileModalProps {
   game?: PlayerProfileGame
   /** Stack above high-z chrome (e.g. chat drawer z-[9002]); passed to Dialog overlay + content. */
   modalZIndex?: string
+  /** When provided (in-game opponent), shows a "throw an emote" row that fires the chosen kind. */
+  onSendEmote?: (kind: PokerDirectedEmoteKind) => void
 }
 
-export function PlayerProfileModal({ isOpen, onClose, address, game = 'all', modalZIndex }: PlayerProfileModalProps) {
+export function PlayerProfileModal({ isOpen, onClose, address, game = 'all', modalZIndex, onSendEmote }: PlayerProfileModalProps) {
   const [copiedLabel, setCopiedLabel] = useState(false)
 
   const { address: myAddress } = useAccount()
@@ -155,6 +158,26 @@ export function PlayerProfileModal({ isOpen, onClose, address, game = 'all', mod
               </div>
             )}
           </div>
+
+          {onSendEmote && !isOwnProfile && (
+            <div className="rounded-xl border border-cyan-500/25 bg-slate-900/50 p-3 mb-3">
+              <div className="text-white/60 text-xs uppercase tracking-wide mb-2">Throw an emote</div>
+              <div className="flex flex-wrap gap-2">
+                {POKER_DIRECTED_EMOTE_KINDS.map((kind) => (
+                  <button
+                    key={kind}
+                    type="button"
+                    title={kind}
+                    onClick={() => onSendEmote(kind)}
+                    className="flex items-center justify-center rounded-lg bg-white/5 border border-white/10 hover:bg-white/10 hover:border-cyan-400/40 transition-all active:scale-90"
+                    style={{ width: 40, height: 40, fontSize: 20, lineHeight: 1 }}
+                  >
+                    {POKER_DIRECTED_EMOTES[kind].glyph}
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
 
           <PlayerProfileDashboard
             address={address}

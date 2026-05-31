@@ -34,6 +34,7 @@ import type { BlackjackMultiRealTimeBetChartRef } from '@/components/BLACKJACK/B
 import { PlayerStatsDashboard } from '@/components/BLACKJACK/PlayerStatsDashboard';
 import { TableTokenProfileCard } from '@/components/BLACKJACK/TableTokenProfileCard';
 import { PlayerProfileModal } from '@/components/shared/PlayerProfileModal';
+import { useBlackjackMultiEmotes } from './useBlackjackMultiEmotes';
 import { BLACKJACK_ADDRESS, MORBIUS_TOKEN_ADDRESS } from '@/lib/contracts';
 import Image from 'next/image';
 import { BLACKJACK_IMAGE_BACKGROUNDS, SOUNDS_BETTING_OPEN, SOUNDS_BETTING_CLOSED, SOUNDS_DEALER_PHRASE, SOUNDS_PLAYER_WINS, SOUNDS_PLAYER_BLACKJACK, SOUNDS_DEALER_WINS, SOUNDS_DEALER_BLACKJACK, SOUNDS_TIP, SOUND_PUSH, pickRandom } from '@/app/BLACKJACK/constants';
@@ -926,6 +927,11 @@ export default function BlackjackMultiTablePage() {
   ) ?? null;
   const myPosition = mySeat?.position ?? null;
   const isMyTurn = mySeat !== null && state?.phase === 'playing' && state?.actingSeatPosition === myPosition;
+  const { directedEmotes, broadcastEmotionByAddress, onSendDirectedEmote } = useBlackjackMultiEmotes(
+    wsClient,
+    tableId,
+    address ?? null,
+  );
   const activeHand: BJMultiHandObj | null = mySeat ? mySeat.hands[mySeat.activeHandIndex] ?? null : null;
   const hasBet = mySeat ? BigInt(mySeat.pendingBet) > 0n : false;
   const seatsByPosition = useMemo(() => {
@@ -1260,6 +1266,8 @@ export default function BlackjackMultiTablePage() {
             onSendChatMessage={myPosition !== null ? sendChatMessage : undefined}
             cardsExiting={multiCardsExiting}
             newPlayerCardByHandKey={newPlayerCardByHandKey}
+            broadcastEmotionByAddress={broadcastEmotionByAddress}
+            directedEmotes={directedEmotes}
           />
 
         </div>
@@ -1530,6 +1538,14 @@ export default function BlackjackMultiTablePage() {
         onClose={() => setSelectedProfileAddress(null)}
         address={selectedProfileAddress}
         game="blackjack"
+        onSendEmote={
+          myPosition !== null && selectedProfileAddress && selectedProfileAddress.toLowerCase() !== address?.toLowerCase()
+            ? (kind) => {
+                onSendDirectedEmote(selectedProfileAddress, kind);
+                setSelectedProfileAddress(null); // close so the bubble flight is visible
+              }
+            : undefined
+        }
       />
 
       {pendingSeatPos !== null && (

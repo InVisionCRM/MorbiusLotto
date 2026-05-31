@@ -4,6 +4,7 @@ import type React from 'react';
 import type { PokerTableState } from '@/lib/websocket-client';
 import { PokerTable } from '@/components/poker/PokerTable';
 import type { Emotion } from '@/components/avatar';
+import type { DirectedEmoteFlight } from './PokerSeatOverlays';
 import { POKER_TABLE_REF_W, POKER_TABLE_REF_H } from './PokerMobileZoomLock';
 
 interface PokerTableViewProps {
@@ -20,6 +21,7 @@ interface PokerTableViewProps {
   chatBubbleBySeatIndex: Record<number, string> | undefined;
   reactionBySeatIndex: Record<number, string>;
   broadcastEmotionBySeatIndex: Record<number, Emotion>;
+  directedEmotes: DirectedEmoteFlight[];
   mySeatIndex: number;
   onPhraseReaction: (phrase: string) => void;
   onAnimationReaction: (emotion: Emotion) => void;
@@ -77,6 +79,7 @@ export function PokerTableView({
   chatBubbleBySeatIndex,
   reactionBySeatIndex,
   broadcastEmotionBySeatIndex,
+  directedEmotes,
   mySeatIndex,
   onPhraseReaction,
   onAnimationReaction,
@@ -203,6 +206,7 @@ export function PokerTableView({
           chatBubbleBySeatIndex={chatBubbleBySeatIndex}
           reactionBySeatIndex={reactionBySeatIndex}
           broadcastEmotionBySeatIndex={broadcastEmotionBySeatIndex}
+          directedEmotes={directedEmotes}
           onPhraseReaction={mySeatIndex >= 0 ? onPhraseReaction : undefined}
           onAnimationReaction={mySeatIndex >= 0 ? onAnimationReaction : undefined}
           onReUpClick={canReup ? openReupModal : undefined}

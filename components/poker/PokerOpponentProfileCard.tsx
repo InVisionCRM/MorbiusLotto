@@ -11,6 +11,11 @@ import { useProfileForAddress } from '@/hooks/use-player-profile';
 import { useAccount } from 'wagmi';
 import { AvatarView } from '@/components/avatar';
 import type { AvatarPayload } from '@/lib/websocket-client';
+import {
+  POKER_DIRECTED_EMOTES,
+  POKER_DIRECTED_EMOTE_KINDS,
+  type PokerDirectedEmoteKind,
+} from '@/lib/poker-directed-emotes';
 
 export interface PokerOpponentProfileCardProps {
   address: string;
@@ -18,6 +23,8 @@ export interface PokerOpponentProfileCardProps {
   avatarConfig?: AvatarPayload | null;
   onClose: () => void;
   onViewFullProfile: (address: string) => void;
+  /** When provided (I'm seated and this is another player), shows the "throw an emote" row. */
+  onSendEmote?: (kind: PokerDirectedEmoteKind) => void;
 }
 
 export function PokerOpponentProfileCard({
@@ -26,6 +33,7 @@ export function PokerOpponentProfileCard({
   avatarConfig,
   onClose,
   onViewFullProfile,
+  onSendEmote,
 }: PokerOpponentProfileCardProps) {
   const { address: myAddress } = useAccount();
   const myAddr = myAddress?.toLowerCase() ?? null;
@@ -210,6 +218,29 @@ export function PokerOpponentProfileCard({
                   )}
                 </div>
               )}
+            </div>
+          )}
+
+          {/* Throw a directed emote at this player */}
+          {onSendEmote && (
+            <div className="px-4 py-3" style={{ borderBottom: '1px solid rgba(255,255,255,0.07)' }}>
+              <div style={{ color: 'rgba(148,163,184,0.8)', fontSize: 11, marginBottom: 7, textTransform: 'uppercase', letterSpacing: 0.6 }}>
+                Throw an emote
+              </div>
+              <div className="flex flex-wrap gap-1.5">
+                {POKER_DIRECTED_EMOTE_KINDS.map((kind) => (
+                  <button
+                    key={kind}
+                    type="button"
+                    title={kind}
+                    onClick={() => onSendEmote(kind)}
+                    className="flex items-center justify-center rounded-lg transition-all hover:brightness-125 active:scale-90"
+                    style={{ width: 34, height: 34, fontSize: 18, lineHeight: 1, background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.1)' }}
+                  >
+                    {POKER_DIRECTED_EMOTES[kind].glyph}
+                  </button>
+                ))}
+              </div>
             </div>
           )}
 

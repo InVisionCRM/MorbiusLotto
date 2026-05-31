@@ -67,6 +67,7 @@ export const WS_POKER_MESSAGES = [
   'poker_purchase_table_logo',
   'poker_quick_reaction',
   'poker_avatar_emotion',
+  'poker_directed_emote',
   'poker_sit_out',
   'poker_sit_back',
   'poker_im_back',
@@ -93,6 +94,7 @@ export const WS_BJ_MULTI_MESSAGES = [
   'bj_multi_tip_dealer',
   'bj_multi_quick_reaction',
   'bj_multi_avatar_emotion',
+  'bj_multi_directed_emote',
 ] as const;
 
 export const ALL_WS_MESSAGE_TYPES = [

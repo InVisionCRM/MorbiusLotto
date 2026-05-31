@@ -10,4 +10,5 @@ export const BJ_MULTI_MESSAGE_HANDLER_MAP: Record<string, string> = {
   bj_multi_tip_dealer: 'handleBJMultiTipDealer',
   bj_multi_quick_reaction: 'handleBJMultiQuickReaction',
   bj_multi_avatar_emotion: 'handleBJMultiAvatarEmotion',
+  bj_multi_directed_emote: 'handleBJMultiDirectedEmote',
 };

@@ -398,8 +398,10 @@ export default function PokerTablePage() {
     chatBubbleBySeatIndex,
     reactionBySeatIndex,
     broadcastEmotionBySeatIndex,
+    directedEmotes,
     onPhraseReaction,
     onAnimationReaction,
+    onSendDirectedEmote,
   } = usePokerSeatOverlays({
     clientRef,
     pokerChatRoomId,
@@ -967,6 +969,7 @@ export default function PokerTablePage() {
                 chatBubbleBySeatIndex={chatBubbleBySeatIndex}
                 reactionBySeatIndex={reactionBySeatIndex}
                 broadcastEmotionBySeatIndex={broadcastEmotionBySeatIndex}
+                directedEmotes={directedEmotes}
                 mySeatIndex={mySeatIndex}
                 onPhraseReaction={onPhraseReaction}
                 onAnimationReaction={onAnimationReaction}
@@ -1100,6 +1103,7 @@ export default function PokerTablePage() {
           opponentProfileAddress={opponentProfileAddress}
           setOpponentProfileAddress={setOpponentProfileAddress}
           setStatsModalAddress={setStatsModalAddress}
+          onSendDirectedEmote={mySeatIndex >= 0 ? onSendDirectedEmote : undefined}
           showAvatarModal={showAvatarModal}
           setShowAvatarModal={setShowAvatarModal}
           onAvatarSaved={() => {

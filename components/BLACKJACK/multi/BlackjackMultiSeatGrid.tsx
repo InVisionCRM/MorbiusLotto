@@ -1,7 +1,10 @@
 'use client';
 
+import { motion } from 'framer-motion';
 import type { BJMultiSeatState } from '@/lib/websocket-client';
+import type { Emotion } from '@/components/avatar';
 import { BlackjackMultiSeat } from '@/components/BLACKJACK/multi/BlackjackMultiSeat';
+import { POKER_DIRECTED_EMOTES, POKER_DIRECTED_EMOTE_FLY_MS, type PokerDirectedEmoteKind } from '@/lib/poker-directed-emotes';
 
 // ── Canvas coordinate system ─────────────────────────────────────────────────
 // All coordinates are in the logical 800×450 canvas space.
@@ -38,6 +41,10 @@ type BlackjackMultiSeatGridProps = {
   onSendChatMessage?: (msg: string) => void;
   cardsExiting?: boolean;
   newPlayerCardByHandKey?: Record<string, Set<number>>;
+  /** Per-player-address avatar emotion broadcast to the table (directed-emote reactions). */
+  broadcastEmotionByAddress?: Record<string, Emotion>;
+  /** In-flight directed emotes; each animates a bubble from the sender's seat to the target's. */
+  directedEmotes?: Array<{ id: string; fromAddress: string; toAddress: string; kind: PokerDirectedEmoteKind }>;
 };
 
 export function BlackjackMultiSeatGrid({
@@ -59,6 +66,8 @@ export function BlackjackMultiSeatGrid({
   onSendChatMessage,
   cardsExiting = false,
   newPlayerCardByHandKey,
+  broadcastEmotionByAddress,
+  directedEmotes,
 }: BlackjackMultiSeatGridProps) {
   return (
     <div className="absolute inset-0" style={{ pointerEvents: 'none' }}>
@@ -102,9 +111,61 @@ export function BlackjackMultiSeatGrid({
               onLeaveSeat={isMe ? onLeaveSeat : undefined}
               onToggleSoundPanel={isMe ? onToggleSoundPanel : undefined}
               onSendChatMessage={isMe ? onSendChatMessage : undefined}
+              broadcastEmotion={seat?.playerAddress ? broadcastEmotionByAddress?.[seat.playerAddress.toLowerCase()] : undefined}
               cardsExiting={cardsExiting}
               newPlayerCardByHandKey={newPlayerCardByHandKey}
             />
+          </div>
+        );
+      })}
+
+      {/* Directed emotes — bubble pops above the sender, then arcs across to the target's seat. */}
+      {directedEmotes?.map((de) => {
+        const fromPos = seats.findIndex((s) => s?.playerAddress?.toLowerCase() === de.fromAddress.toLowerCase());
+        const toPos = seats.findIndex((s) => s?.playerAddress?.toLowerCase() === de.toAddress.toLowerCase());
+        const def = POKER_DIRECTED_EMOTES[de.kind];
+        if (fromPos < 0 || toPos < 0 || !def) return null;
+        const RAISE = 175; // logical px above the name-tag floor → roughly above the head
+        const fromX = SEATS[fromPos].cx;
+        const fromY = SEATS[fromPos].floorY - RAISE;
+        const dx = SEATS[toPos].cx - fromX;
+        const dy = (SEATS[toPos].floorY - RAISE) - fromY;
+        const apexY = Math.min(0, dy) - 70; // arc up and over
+        return (
+          <div
+            key={de.id}
+            className="absolute"
+            style={{ left: fromX, top: fromY, transform: 'translate(-50%, -50%)', zIndex: 50, pointerEvents: 'none' }}
+          >
+            <motion.div
+              initial={{ x: 0, y: 0, scale: 0.2, opacity: 0 }}
+              animate={{
+                x: [0, 0, dx * 0.5, dx, dx],
+                y: [0, 0, apexY, dy, dy],
+                scale: [0.2, 1.08, 1, 1.18, 0.55],
+                opacity: [0, 1, 1, 1, 0],
+              }}
+              transition={{ duration: POKER_DIRECTED_EMOTE_FLY_MS / 1000, times: [0, 0.14, 0.5, 0.88, 1], ease: 'easeInOut' }}
+            >
+              <div
+                style={{
+                  position: 'relative', display: 'flex', alignItems: 'center', gap: 5,
+                  padding: '6px 12px', borderRadius: 14, whiteSpace: 'nowrap', fontWeight: 800,
+                  background: 'linear-gradient(180deg, #ffffff, #e7f5ff)', color: '#0b3a52',
+                  boxShadow: '0 10px 26px rgba(0,0,0,0.55), 0 0 0 1px rgba(56,189,248,0.5)',
+                  fontSize: 14, letterSpacing: '0.3px',
+                }}
+              >
+                <span style={{ fontSize: 22, lineHeight: 1 }}>{def.glyph}</span>
+                {def.label ? <span>{def.label}</span> : null}
+                <span
+                  style={{
+                    position: 'absolute', left: 16, bottom: -4, width: 9, height: 9,
+                    background: '#e7f5ff', transform: 'rotate(45deg)', boxShadow: '1px 1px 0 rgba(56,189,248,0.3)',
+                  }}
+                />
+              </div>
+            </motion.div>
           </div>
         );
       })}

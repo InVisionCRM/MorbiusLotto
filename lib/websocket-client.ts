@@ -1049,6 +1049,25 @@ export class BlackjackWebSocketClient {
     this.send({ type: WS_MESSAGE_TYPES.pokerAvatarEmotion, payload: { tableId, emotion } });
   }
 
+  /**
+   * Throw a directed emote AT another seated player. Server validates the sender is
+   * seated and derives `fromSeatIndex`, then broadcasts to the table:
+   * { tableId, fromSeatIndex, toSeatIndex, kind }. `kind` is a key of POKER_DIRECTED_EMOTES.
+   * Receive via on('poker_directed_emote', handler).
+   */
+  sendPokerDirectedEmote(tableId: string, toSeatIndex: number, kind: string): void {
+    this.send({ type: WS_MESSAGE_TYPES.pokerDirectedEmote, payload: { tableId, toSeatIndex, kind } });
+  }
+
+  /**
+   * Blackjack-multi directed emote: throw an emote AT another seated player (by wallet address).
+   * Server validates both are seated, then broadcasts { tableId, fromAddress, toAddress, kind }.
+   * Receive via on('bj_multi_directed_emote', handler).
+   */
+  sendBJMultiDirectedEmote(tableId: string, toAddress: string, kind: string): void {
+    this.send({ type: 'bj_multi_directed_emote', payload: { tableId, toAddress, kind } });
+  }
+
   // === Chat API (main + per-game rooms) ===
 
   /**
