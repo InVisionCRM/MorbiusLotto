@@ -92,7 +92,8 @@ export declare class WebSocketService {
     private handleChatMessage;
     private sendMessage;
     private sendError;
-    private broadcastToPlayer;
+    /** Wallet-targeted broadcast (e.g. wheel-balance updates) — called from server.ts wiring. */
+    broadcastToPlayer(playerAddress: string, message: WebSocketMessage): void;
     private broadcastToAll;
     broadcastToRoom(roomId: string, message: WebSocketMessage): void;
     /** Called by admin API when a message is soft-deleted; notifies all clients in the room. */
