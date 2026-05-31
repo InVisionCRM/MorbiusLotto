@@ -378,8 +378,14 @@ export function RadialMenuFloating({
     const rect = el.getBoundingClientRect();
     const cx = rect.left + rect.width / 2;
     const cy = rect.top + rect.height / 2;
-    setCoords({ left: cx, top: cy - Math.min(48, rect.height * 0.35) });
-  }, [anchorRef]);
+    // Keep the whole ring on-screen: at edge/top seats, shift it inward instead of
+    // letting half of it open off the side of the table.
+    const half = size / 2;
+    const m = 8;
+    const left = Math.max(half + m, Math.min(window.innerWidth - half - m, cx));
+    const top = Math.max(half + m, Math.min(window.innerHeight - half - m, cy - Math.min(48, rect.height * 0.35)));
+    setCoords({ left, top });
+  }, [anchorRef, size]);
 
   React.useLayoutEffect(() => {
     if (!open) {

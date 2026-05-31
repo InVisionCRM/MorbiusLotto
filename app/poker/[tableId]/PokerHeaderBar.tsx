@@ -273,7 +273,7 @@ export function PokerHeaderBar({
   return (
     <div
       data-poker-header
-      className="grid flex-shrink-0 grid-cols-[auto_1fr_auto] items-center gap-2 px-2 relative z-50 font-russo-one"
+      className="grid flex-shrink-0 grid-cols-[auto_1fr_auto] items-center gap-2 px-2 relative z-20 font-russo-one"
       style={{
         background:
           'linear-gradient(to bottom, rgba(6,8,12,0.6), rgba(6,8,12,0.32))',
