@@ -137,10 +137,11 @@ export function renderEyesLayer({
   return (
     <g>
       <motion.g animate={emotion} variants={eyebrowLeftVariants} style={{ transformOrigin: avatarMotionOrigin(17, 19) }}>
-        <rect x="14" y="18" width="6" height="2" rx={0.7} fill={eyebrowFill} />
+        {/* Soft arched brow (laid-back). Was a heavy flat bar that read as stern/"evil". */}
+        <path d="M13.9 18.7 Q17 17.05 20.2 18.4" fill="none" stroke={eyebrowFill} strokeWidth={1.5} strokeLinecap="round" />
       </motion.g>
       <motion.g animate={emotion} variants={eyebrowRightVariants} style={{ transformOrigin: avatarMotionOrigin(31, 19) }}>
-        <rect x="28" y="18" width="6" height="2" rx={0.7} fill={eyebrowFill} />
+        <path d="M27.8 18.4 Q31 17.05 34.1 18.7" fill="none" stroke={eyebrowFill} strokeWidth={1.5} strokeLinecap="round" />
       </motion.g>
       <motion.g
         animate={{ scaleY: [1, 1, 0.1, 1] }}
