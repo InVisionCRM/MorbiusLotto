@@ -138,6 +138,8 @@ export interface PokerTableProps {
   broadcastEmotionBySeatIndex?: Record<number, import('@/components/avatar').Emotion>;
   /** In-flight directed emotes (player → player); each animates a bubble from sender's seat to the target. */
   directedEmotes?: Array<{ id: string; fromSeatIndex: number; toSeatIndex: number; kind: PokerDirectedEmoteKind }>;
+  /** Throw a directed emote at a seat (opponent quick-emote ring). Provided only when the current player is seated. */
+  onSendDirectedEmote?: (toSeatIndex: number, kind: PokerDirectedEmoteKind) => void;
   /** Called when current player selects a QuickChat phrase (broadcast to table). */
   onPhraseReaction?: (phrase: string) => void;
   /** Called when current player selects an avatar emotion (broadcast to table). */
@@ -176,7 +178,7 @@ export interface PokerTableProps {
   showDealerAnchorGuides?: boolean;
 }
 
-export function PokerTable({ state, currentPlayerAddress, timeLeft, chatBubbleBySeatIndex, onReUpClick, onMenuClick, reactionBySeatIndex, broadcastEmotionBySeatIndex, directedEmotes, onPhraseReaction, onAnimationReaction, onOpponentClick, onOpponentRadialAction, quickChatPhrases, setQuickChatPhrases, onOpenEditQuickChat, onLeave, onRequestMobileActivity, onSitOut, onSitBack, onShowCards, onMuckCards, tutorialTargets, dataTutorialTargetPot, showDealerAnchorGuides = false }: PokerTableProps) {
+export function PokerTable({ state, currentPlayerAddress, timeLeft, chatBubbleBySeatIndex, onReUpClick, onMenuClick, reactionBySeatIndex, broadcastEmotionBySeatIndex, directedEmotes, onSendDirectedEmote, onPhraseReaction, onAnimationReaction, onOpponentClick, onOpponentRadialAction, quickChatPhrases, setQuickChatPhrases, onOpenEditQuickChat, onLeave, onRequestMobileActivity, onSitOut, onSitBack, onShowCards, onMuckCards, tutorialTargets, dataTutorialTargetPot, showDealerAnchorGuides = false }: PokerTableProps) {
   const tableRef = useRef<HTMLDivElement>(null);
   const [dims, setDims] = useState({ w: 640, h: 500 });
   const { effect: tableEffect, feltGradient, railStyle } = usePokerTableEffect();
@@ -730,6 +732,7 @@ export function PokerTable({ state, currentPlayerAddress, timeLeft, chatBubbleBy
       onAnimationReaction: onAnimationReaction,
       onOpponentClick: onOpponentClick,
       onOpponentRadialAction: onOpponentRadialAction,
+      onSendDirectedEmote: onSendDirectedEmote,
       quickChatPhrases,
       setQuickChatPhrases,
       onOpenEditQuickChat,
