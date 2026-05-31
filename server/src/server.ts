@@ -17,6 +17,7 @@ import { registerArcadeMinesRoutes } from './routes/arcade-mines.routes';
 import { registerArcadeHiLoRoutes } from './routes/arcade-hilo.routes';
 import { registerArcadeDiceRoutes } from './routes/arcade-dice.routes';
 import { registerArcadeBaccaratRoutes } from './routes/arcade-baccarat.routes';
+import { registerArcadeCrashRoutes } from './routes/arcade-crash.routes';
 import { registerMarqueeRoutes } from './routes/marquee.routes';
 import { registerWheelRoutes } from './routes/wheel.routes';
 import { setWheelBalanceListener } from './services/wheel-spin-wallet';
@@ -424,6 +425,7 @@ async function initializeServices() {
     registerArcadeHiLoRoutes({ app, dbService });
     registerArcadeDiceRoutes({ app, dbService });
     registerArcadeBaccaratRoutes({ app, dbService });
+    registerArcadeCrashRoutes({ app, dbService });
     registerMarqueeRoutes({ app, dbService });
     registerWheelRoutes({ app, dbService, authService });
 
