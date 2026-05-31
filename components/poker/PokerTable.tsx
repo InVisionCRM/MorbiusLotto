@@ -7,6 +7,7 @@ import { PokerSeat, PokerChipStack } from './PokerSeat';
 import { PokerBoard } from './PokerBoard';
 import { ProvablyFairBadge } from './ProvablyFairBadge';
 import { CardDisplay } from './CardDisplay';
+import { ChipDisc } from '@/components/ui/BetChip';
 import type { PokerTableState as TableState } from '@/lib/websocket-client';
 import { BackgroundBeams, type BeamColorPalette } from '@/components/ui/background-beams';
 import { usePokerTableEffect } from '@/hooks/use-poker-table-effect';
@@ -52,6 +53,70 @@ const SHOWDOWN_CARD_PULL_MAX_PX = 70;
 const SHOWDOWN_INITIAL_DELAY_MS = 600;
 const CHIP_FLY_DURATION_MS = 700;
 const POT_STAGGER_MS = 380;
+
+// ── Showdown chip burst ─────────────────────────────────────────────────────
+// Each pot erupts into a spray of individual chips that funnel to the winner
+// and pile into a stack (no fade). Counts + jitter are derived deterministically
+// (no Math.random) so renders stay stable / SSR-safe.
+const BURST_DENOM_CYCLE = [10000, 500, 100, 2500, 50000, 25]; // black·green·red·blue·purple·white — a rich mixed pile
+
+/** Stable pseudo-random in [0,1) from an integer seed. */
+function seededUnit(seed: number): number {
+  const x = Math.sin(seed * 12.9898) * 43758.5453;
+  return x - Math.floor(x);
+}
+
+interface BurstChip {
+  key: string;
+  denom: number;
+  fromX: number; fromY: number;
+  peakX: number; peakY: number;
+  slotX: number; slotY: number;
+  rot: number;
+  delaySec: number;
+}
+
+/** Expand one pot→winner flight into N chips that erupt from the pot and stack at the winner. */
+function buildPotBurst(
+  flight: { key: string; amount: string; fx: number; fy: number; delaySec: number },
+  potFx: number,
+  potFy: number,
+  dims: { w: number; h: number },
+  chipW: number,
+): BurstChip[] {
+  let amtNum = 0;
+  try {
+    const b = toBigIntSafe(flight.amount);
+    amtNum = b <= BigInt(Number.MAX_SAFE_INTEGER) ? Number(b) : Number.MAX_SAFE_INTEGER;
+  } catch { /* noop */ }
+  // More chips for bigger pots, capped so a whale's pile stays sane.
+  const n = Math.max(6, Math.min(12, Math.round(Math.log10(amtNum + 10) * 3)));
+  const potX = potFx * dims.w;
+  const potY = potFy * dims.h;
+  const winX = flight.fx * dims.w;
+  const winY = flight.fy * dims.h;
+  const step = Math.max(3, chipW * 0.2);
+  const baseY = winY + ((n - 1) * step) / 2; // center the pile on the authored anchor
+  const seedBase = Array.from(flight.key).reduce((a, ch) => a + ch.charCodeAt(0), 0);
+  const out: BurstChip[] = [];
+  for (let i = 0; i < n; i++) {
+    const u1 = seededUnit(seedBase + i * 2 + 1);
+    const u2 = seededUnit(seedBase + i * 2 + 2);
+    out.push({
+      key: `${flight.key}-${i}`,
+      denom: BURST_DENOM_CYCLE[i % BURST_DENOM_CYCLE.length],
+      fromX: potX,
+      fromY: potY,
+      peakX: potX + (u1 - 0.5) * chipW * 4.2,     // erupt outward
+      peakY: potY - chipW * 1.6 - u2 * chipW * 1.8, // and upward
+      slotX: winX,
+      slotY: baseY - i * step,                     // pile builds upward
+      rot: (u1 - 0.5) * 540,
+      delaySec: flight.delaySec + i * 0.028,       // streamed, not all at once
+    });
+  }
+  return out;
+}
 
 // Seat base geometry: `lib/poker-seat-layout.ts` (SEAT_ANCHOR_RING + authoredSeatAnchors).
 
@@ -272,6 +337,14 @@ export function PokerTable({ state, currentPlayerAddress, timeLeft, chatBubbleBy
     }
     return out;
   }, [isShowdownWithWinners, showdownPots, state.seats, mySeatIndex]);
+
+  // Chip diameter for the burst, scaled to the table (≈ the bet-chip size).
+  const burstChipW = Math.max(24, Math.min(46, Math.round(dims.w * 0.028)));
+  // Expand each pot→winner flight into its spray of individual chips.
+  const perPotBurstChips = useMemo(
+    () => perPotChipFlights.flatMap((t) => buildPotBurst(t, POT_ANCHOR.fx, POT_ANCHOR.fy, dims, burstChipW)),
+    [perPotChipFlights, dims, burstChipW],
+  );
 
   // Drain the source pots as chips arrive at the seats. Each pot reaches
   // zero one fly-duration after its launch delay.
@@ -871,43 +944,40 @@ export function PokerTable({ state, currentPlayerAddress, timeLeft, chatBubbleBy
         )}
       </AnimatePresence>
 
-      {/* Per-pot chip flow at showdown — each pot pays its winners in
-          sequence, source pot drains in lockstep via `displayedPots`. */}
+      {/* Per-pot chip BURST at showdown — each pot erupts into a spray of
+          individual chips that funnel to the winner and pile into a stack (no
+          fade). Source pots drain in lockstep via `displayedPots`. */}
       <AnimatePresence>
         {showFinalShowdownVisuals &&
-          perPotChipFlights.map((t) => (
+          perPotBurstChips.map((c) => (
             <motion.div
-              key={`chips-to-winner-${hand!.handId}-${t.key}`}
+              key={`burst-${hand!.handId}-${c.key}`}
               className="absolute z-[35] pointer-events-none"
-              style={{ transform: 'translate(-50%, -50%)' }}
-              initial={{
-                left: `${POT_ANCHOR.fx * 100}%`,
-                top: `${POT_ANCHOR.fy * 100}%`,
-                scale: 0.9,
-                opacity: 0,
-              }}
+              // Center the disc on its left/top point via x/y (real transforms
+              // that compose with the animated scale/rotate → spin-in-place).
+              initial={{ left: c.fromX, top: c.fromY, x: '-50%', y: '-50%', opacity: 0, scale: 0.7, rotate: 0 }}
               animate={{
-                left: `${t.fx * 100}%`,
-                top: `${t.fy * 100}%`,
-                scale: [0.9, 1.18, 1.0],
-                opacity: [0, 1, 1],
+                left: [c.fromX, c.peakX, c.slotX, c.slotX],
+                top: [c.fromY, c.peakY, c.slotY - burstChipW * 0.5, c.slotY],
+                opacity: [0, 1, 1, 1],
+                scale: [0.7, 1.05, 1.06, 1],
+                rotate: [0, c.rot * 0.6, c.rot, c.rot],
               }}
-              exit={{ opacity: 0, scale: 0.7 }}
+              exit={{ opacity: 0, scale: 0.6 }}
               transition={{
-                left: { type: 'spring', stiffness: 80, damping: 18, delay: t.delaySec },
-                top: { type: 'spring', stiffness: 80, damping: 18, delay: t.delaySec },
-                scale: { duration: CHIP_FLY_DURATION_MS / 1000, ease: 'easeOut', delay: t.delaySec },
-                opacity: { duration: CHIP_FLY_DURATION_MS / 1000, ease: 'easeOut', delay: t.delaySec },
+                duration: CHIP_FLY_DURATION_MS / 1000 + 0.1,
+                delay: c.delaySec,
+                times: [0, 0.42, 0.9, 1],
+                ease: [0.25, 0.55, 0.35, 1],
               }}
             >
-              <PokerChipStack weiAmount={t.amount} />
+              <ChipDisc amount={c.denom} width={burstChipW} />
             </motion.div>
           ))}
       </AnimatePresence>
 
-      {/* Splash burst — radial pulse that fires the instant chips arrive
-          at a winner seat. Gives the payout a satisfying "thud" of impact
-          and visually anchors which seat just got paid. */}
+      {/* Impact ring — a crisp gold ring that snaps out the instant chips land
+          at a winner seat. Replaces the old soft blurred glow blob. */}
       <AnimatePresence>
         {showFinalShowdownVisuals &&
           perPotChipFlights.map((t) => {
@@ -920,17 +990,16 @@ export function PokerTable({ state, currentPlayerAddress, timeLeft, chatBubbleBy
                   left: `${t.fx * 100}%`,
                   top: `${t.fy * 100}%`,
                   transform: 'translate(-50%, -50%)',
-                  width: 'clamp(56px, 8cqw, 96px)',
-                  height: 'clamp(56px, 8cqw, 96px)',
+                  width: 'clamp(44px, 6cqw, 80px)',
+                  height: 'clamp(44px, 6cqw, 80px)',
                   borderRadius: '9999px',
-                  background:
-                    'radial-gradient(circle, rgba(253,224,71,0.85) 0%, rgba(251,191,36,0.45) 30%, rgba(251,191,36,0.0) 65%)',
-                  filter: 'blur(1.5px)',
+                  border: '2px solid rgba(253,224,71,0.9)',
+                  boxShadow: '0 0 16px rgba(253,224,71,0.65)',
                 }}
-                initial={{ opacity: 0, scale: 0.35 }}
-                animate={{ opacity: [0, 1, 0], scale: [0.35, 2.6, 3.2] }}
+                initial={{ opacity: 0, scale: 0.4 }}
+                animate={{ opacity: [0, 0.95, 0], scale: [0.4, 1.5, 2.1] }}
                 exit={{ opacity: 0 }}
-                transition={{ delay: arrivalDelaySec, duration: 0.85, ease: 'easeOut', times: [0, 0.32, 1] }}
+                transition={{ delay: arrivalDelaySec, duration: 0.5, ease: 'easeOut', times: [0, 0.3, 1] }}
                 aria-hidden
               />
             );
