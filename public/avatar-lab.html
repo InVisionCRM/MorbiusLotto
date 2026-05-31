@@ -246,7 +246,6 @@
       <div class="toggles">
         <label class="tg"><input type="checkbox" id="tgIdle" checked> living idle</label>
         <label class="tg"><input type="checkbox" id="tgTrack" checked> eye tracking</label>
-        <label class="tg"><input type="checkbox" id="tgHair" checked> hair physics</label>
       </div>
       <div class="legend">
         <b>Move your mouse</b> over the circle — eyes track you. Leave it alone ~18s and it dozes off.
@@ -596,15 +595,9 @@ function Avatar(host,{simple=false,seed=0}={}){
     const alive = idleOn && !E.asleep;
     if(alive){ S.headRot.t += E.look.x*1.7; S.headX.t += E.look.x*0.45; S.headY.t += E.look.y*0.3; }
 
-    // secondary motion: hair/earrings chase head with their soft springs (lag → sway)
-    S.hairRot.t = S.headRot.v*0.92;
-    S.hairX.t   = S.headX.v*0.7;
-    S.hairY.t   = S.headY.v*0.6;
+    // NO hair physics — hair stays rigid with the head (applied directly in render).
+    // Earrings still swing (jewelry, not hair).
     S.earRot.t  = -S.headRot.v*1.6 + S.headX.v*5;  // pendulum opposite head
-    // cowlick: extra-springy, reacts opposite head + idle wobble
-    S.cowRot.t  = -S.headRot.v*1.5 + (alive?Math.sin(t*2.1+ph)*3.5:0);
-
-    if(host._hair===false){ S.hairRot.t=S.headRot.v; S.hairX.t=S.headX.v; S.hairY.t=S.headY.v; S.earRot.t=0; }
 
     // step springs
     for(const key in S) stepSpring(S[key],dt);
@@ -617,12 +610,12 @@ function Avatar(host,{simple=false,seed=0}={}){
     setTransform(P.body,{x:S.bodyX.v,y:S.bodyY.v,rot:S.bodyRot.v,sx:S.bodySx.v,sy:S.bodySy.v,px:24,py:50});
     // head + hair share neck pivot (24,40) so hair stays glued while lagging
     setTransform(P.head,{x:S.headX.v,y:S.headY.v,rot:S.headRot.v,px:24,py:40});
-    setTransform(P.hairBack,{x:S.hairX.v,y:S.hairY.v,rot:S.hairRot.v,px:24,py:40});
-    setTransform(P.hairFront,{x:S.hairX.v,y:S.hairY.v,rot:S.hairRot.v,px:24,py:40});
-    setTransform(P.cowlick,{rot:S.cowRot.v,px:24,py:12});
-    const fr=alive?1:0;
-    setTransform(P.fringeL,{rot:Math.sin(t*1.3+ph)*2.2*fr - S.headRot.v*0.3,px:12,py:21});
-    setTransform(P.fringeR,{rot:Math.sin(t*1.3+ph+1.6)*-2.2*fr - S.headRot.v*0.3,px:36,py:21});
+    // hair rigid: moves exactly with the head; cowlick + fringe static (no physics)
+    setTransform(P.hairBack,{x:S.headX.v,y:S.headY.v,rot:S.headRot.v,px:24,py:40});
+    setTransform(P.hairFront,{x:S.headX.v,y:S.headY.v,rot:S.headRot.v,px:24,py:40});
+    setTransform(P.cowlick,{rot:0,px:24,py:12});
+    setTransform(P.fringeL,{rot:0,px:12,py:21});
+    setTransform(P.fringeR,{rot:0,px:36,py:21});
     setTransform(P.earringL,{rot:S.earRot.v,px:11,py:29});
     setTransform(P.earringR,{rot:S.earRot.v,px:37,py:29});
     // brows
@@ -1267,7 +1260,6 @@ function applyBounce(){
 // toggles
 document.getElementById('tgIdle').onchange=e=>hero.host._idle=e.target.checked;
 document.getElementById('tgTrack').onchange=e=>{hero.host._track=e.target.checked;if(!e.target.checked)hero.stopTrack();};
-document.getElementById('tgHair').onchange=e=>hero.host._hair=e.target.checked;
 
 // mouse tracking over the ring
 ring.addEventListener('pointermove',e=>{
@@ -1475,7 +1467,7 @@ setTimeout(()=>CLIPS.lookAround(hero),400);
 setTimeout(()=>CLIPS.happy(hero),1400);
 // browsers restore <input> values across reloads — sync TUNE/labels/toggles to whatever the controls show
 [sp,en,bo].forEach(s=>s.dispatchEvent(new Event('input')));
-['tgIdle','tgTrack','tgHair'].forEach(id=>document.getElementById(id).dispatchEvent(new Event('change')));
+['tgIdle','tgTrack'].forEach(id=>document.getElementById(id).dispatchEvent(new Event('change')));
 
 setMood('chill');        // start laid-back
 scheduleIdleGesture();   // it'll start doing things on its own
