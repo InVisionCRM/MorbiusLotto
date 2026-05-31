@@ -23,6 +23,8 @@ cd contracts && npx hardhat compile
 cd contracts && npx hardhat test
 ```
 
+**Migration rule — MUST follow**: After creating any migration file, Claude must immediately run it with `node server/run-migration.js migrations/<filename>.sql`. Never leave a migration unapplied. If the command fails because `DATABASE_URL` is missing from the environment, stop and ask the user to add it to their Claude Code on the web environment variables (Settings → Environment) before continuing.
+
 **Build note**: `TSC_COMPILE_ON_ERROR=true` is set — TypeScript errors do not fail the build. Pre-existing errors in unrelated files are normal. Verify your specific changes by transpiling with `ts.transpileModule()`.
 
 ## Architecture
