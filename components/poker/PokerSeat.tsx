@@ -446,12 +446,15 @@ export function PokerSeat({ seat, index, holeCards, isCurrentPlayer, showCardBac
   const voiceLevel = voicePresence?.audioLevel ?? 0;
   const voiceActive = !!voicePresence && (voicePresence.isSpeaking || voicePresence.isDominantSpeaker || voiceLevel > 0.12);
 
+  // Auto-react to game events (no clicks needed): the showdown winner celebrates,
+  // shovers glare, folders deflate. Mirrors blackjack's result-driven reactions.
   const avatarEmotion: Emotion = useMemo(() => {
-    if (!lastAction) return 'neutral';
-    const a = lastAction.action?.toLowerCase();
+    if (isHandWinner) return 'happy';
+    const a = lastAction?.action?.toLowerCase();
     if (a === 'all-in' || a === 'allin') return 'angry';
+    if (a === 'fold') return 'sad';
     return 'neutral';
-  }, [lastAction]);
+  }, [lastAction, isHandWinner]);
 
   const badgeRef = useRef<HTMLDivElement>(null);
 

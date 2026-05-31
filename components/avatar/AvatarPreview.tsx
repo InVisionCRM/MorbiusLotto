@@ -253,7 +253,7 @@ export default function AvatarPreview({
   // ── emotion variants ───────────────────────────────────────────────────────
 
   const eyeVariants = {
-    neutral: { scaleY: 1, y: 0 }, happy: { scaleY: 0.3, y: 0 }, sad: { scaleY: 0.8, y: 1 },
+    neutral: { scaleY: 0.94, y: 0 }, happy: { scaleY: 0.3, y: 0 }, sad: { scaleY: 0.8, y: 1 },
     angry: { scaleY: 0.7, y: 0 }, surprised: { scaleY: 1.3, y: -1 }, wink: { scaleY: 1, y: 0 },
     dance: { scaleY: 1 }, flex: { scaleY: 0.8 }, jump: { scaleY: 1.1 }, spin: { scaleY: 1 },
     think: { scaleY: 0.9, y: -1 }, love: { scale: 1.2 }, money: { scaleY: 0.8 },
@@ -267,7 +267,7 @@ export default function AvatarPreview({
   };
 
   const rightEyeVariants = {
-    neutral: { scaleY: 1, y: 0 }, happy: { scaleY: 0.3, y: 0 }, sad: { scaleY: 0.8, y: 1 },
+    neutral: { scaleY: 0.94, y: 0 }, happy: { scaleY: 0.3, y: 0 }, sad: { scaleY: 0.8, y: 1 },
     angry: { scaleY: 0.7, y: 0 }, surprised: { scaleY: 1.3, y: -1 }, wink: { scaleY: 0.1, y: 0 },
     dance: { scaleY: 1 }, flex: { scaleY: 0.8 }, jump: { scaleY: 1.1 }, spin: { scaleY: 1 },
     think: { scaleY: 1.1, y: 1 }, love: { scale: 1.2 }, money: { scaleY: 0.8 },
