@@ -89,14 +89,13 @@ function buildPotBurst(
     const b = toBigIntSafe(flight.amount);
     amtNum = b <= BigInt(Number.MAX_SAFE_INTEGER) ? Number(b) : Number.MAX_SAFE_INTEGER;
   } catch { /* noop */ }
-  // More chips for bigger pots, capped so a whale's pile stays sane.
-  const n = Math.max(6, Math.min(12, Math.round(Math.log10(amtNum + 10) * 3)));
+  // More chips for bigger pots, capped so a whale's pile stays a tidy stack.
+  const n = Math.max(5, Math.min(9, Math.round(Math.log10(amtNum + 10) * 2.4)));
   const potX = potFx * dims.w;
   const potY = potFy * dims.h;
   const winX = flight.fx * dims.w;
   const winY = flight.fy * dims.h;
-  const step = Math.max(3, chipW * 0.2);
-  const baseY = winY + ((n - 1) * step) / 2; // center the pile on the authored anchor
+  const step = Math.max(3, chipW * 0.22);
   const seedBase = Array.from(flight.key).reduce((a, ch) => a + ch.charCodeAt(0), 0);
   const out: BurstChip[] = [];
   for (let i = 0; i < n; i++) {
@@ -107,12 +106,12 @@ function buildPotBurst(
       denom: BURST_DENOM_CYCLE[i % BURST_DENOM_CYCLE.length],
       fromX: potX,
       fromY: potY,
-      peakX: potX + (u1 - 0.5) * chipW * 4.2,     // erupt outward
-      peakY: potY - chipW * 1.6 - u2 * chipW * 1.8, // and upward
+      peakX: potX + (u1 - 0.5) * chipW * 2.2,       // tight fountain (was a chaotic wide spray)
+      peakY: potY - chipW * (1.0 + u2 * 1.1),       // pop upward
       slotX: winX,
-      slotY: baseY - i * step,                     // pile builds upward
-      rot: (u1 - 0.5) * 540,
-      delaySec: flight.delaySec + i * 0.028,       // streamed, not all at once
+      slotY: winY - i * step,                       // base sits on the anchor, builds straight up
+      rot: (u1 - 0.5) * 220,                        // gentle in-flight tumble
+      delaySec: flight.delaySec + i * 0.05,         // streamed in, one after another
     });
   }
   return out;
@@ -961,7 +960,7 @@ export function PokerTable({ state, currentPlayerAddress, timeLeft, chatBubbleBy
                 top: [c.fromY, c.peakY, c.slotY - burstChipW * 0.5, c.slotY],
                 opacity: [0, 1, 1, 1],
                 scale: [0.7, 1.05, 1.06, 1],
-                rotate: [0, c.rot * 0.6, c.rot, c.rot],
+                rotate: [0, c.rot, 0, 0], // tumble in flight, settle FLAT (was resting at a random angle → wonky)
               }}
               exit={{ opacity: 0, scale: 0.6 }}
               transition={{
