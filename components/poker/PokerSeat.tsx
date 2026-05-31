@@ -10,6 +10,12 @@ import { motion, AnimatePresence, useMotionValue, useSpring, useTransform } from
 import type { LucideIcon } from 'lucide-react';
 import {
   ArrowLeft,
+  Coins,
+  Handshake,
+  Heart,
+  Laugh,
+  ThumbsDown,
+  ThumbsUp,
   Flame,
   Frown,
   Gift,
@@ -30,6 +36,7 @@ import {
 } from 'lucide-react';
 import { AvatarView, type Emotion } from '@/components/avatar';
 import { RadialMenu, RadialMenuFloating, type RadialMenuItem } from '@/components/ui/radial-menu';
+import { POKER_DIRECTED_EMOTE_KINDS, type PokerDirectedEmoteKind } from '@/lib/poker-directed-emotes';
 import { useQuickChatPhrases } from '@/hooks/useQuickChatPhrases';
 import { EditQuickChatModal } from '@/components/poker/EditQuickChatModal';
 import { usePokerVoicePresenceForAddress } from './voice-presence';
@@ -307,6 +314,15 @@ const OPPONENT_RADIAL_ITEMS: RadialMenuItem[] = [
   { id: 'gift', label: 'Gift', icon: Gift },
 ];
 
+// Quick emote ring shown when you tap a *seated* opponent — throws a directed emote at them.
+const EMOTE_RADIAL_ICONS: Record<PokerDirectedEmoteKind, LucideIcon> = {
+  haha: Laugh, love: Heart, gg: Handshake, nice: ThumbsUp, boo: ThumbsDown, fire: Flame, dance: Music2, money: Coins,
+};
+const OPPONENT_EMOTE_RADIAL_ITEMS: RadialMenuItem[] = [
+  ...POKER_DIRECTED_EMOTE_KINDS.map((k): RadialMenuItem => ({ id: `emote:${k}`, label: k, icon: EMOTE_RADIAL_ICONS[k] })),
+  { id: 'profile', label: 'Profile', icon: UserCircle },
+];
+
 function VoiceAvatarCue({
   active,
   audioLevel,
@@ -392,6 +408,8 @@ export interface PokerSeatProps {
   onOpponentClick?: (address: string) => void;
   /** Right-click radial on opponent: profile, follow/unfollow, gift (wired in table page). */
   onOpponentRadialAction?: (action: 'profile' | 'follow' | 'gift', address: string) => void;
+  /** Throw a directed emote at this seat (opponent quick-emote ring). Provided only when I'm seated. */
+  onSendDirectedEmote?: (toSeatIndex: number, kind: PokerDirectedEmoteKind) => void;
   /** When provided with setQuickChatPhrases and onOpenEditQuickChat, QuickChat uses this state and Edit QuickChat is opened by parent (e.g. header Settings). */
   quickChatPhrases?: string[];
   setQuickChatPhrases?: (phrases: string[]) => void;
@@ -429,7 +447,7 @@ function offsetTransform(offset?: { x: number; y: number }): string | undefined 
   return `translate(${offset.x}px, ${offset.y}px)`;
 }
 
-export function PokerSeat({ seat, index, holeCards, isCurrentPlayer, showCardBacks, winningCardIndices, isHandWinner = false, lastAction, callAmount, timeLeft, maxTime = 60, chatBubble, onReUpClick, onMenuClick, overlayPhrase: propsOverlayPhrase, overlayEmotion: propsOverlayEmotion, onPhraseReaction, onAnimationReaction, onOpponentClick, onOpponentRadialAction, quickChatPhrases: propsQuickChatPhrases, setQuickChatPhrases: propsSetQuickChatPhrases, onOpenEditQuickChat, hideSeatAvatar = false, onLeaveTable, onSitOut, onSitBack, onRequestMobileActivity, includeActivityInPlayerRadial = false, playerTagOffset, showdownCardOffset, heroCardOffset, handName, cardDealFromOffset, cardBackSrc }: PokerSeatProps) {
+export function PokerSeat({ seat, index, holeCards, isCurrentPlayer, showCardBacks, winningCardIndices, isHandWinner = false, lastAction, callAmount, timeLeft, maxTime = 60, chatBubble, onReUpClick, onMenuClick, overlayPhrase: propsOverlayPhrase, overlayEmotion: propsOverlayEmotion, onPhraseReaction, onAnimationReaction, onOpponentClick, onOpponentRadialAction, onSendDirectedEmote, quickChatPhrases: propsQuickChatPhrases, setQuickChatPhrases: propsSetQuickChatPhrases, onOpenEditQuickChat, hideSeatAvatar = false, onLeaveTable, onSitOut, onSitBack, onRequestMobileActivity, includeActivityInPlayerRadial = false, playerTagOffset, showdownCardOffset, heroCardOffset, handName, cardDealFromOffset, cardBackSrc }: PokerSeatProps) {
   const empty = !seat.playerAddress;
   const showMyCards = !!(holeCards && holeCards.length > 0);
   const showBacks   = !!(showCardBacks && !showMyCards && !empty && !seat.folded);
@@ -465,6 +483,7 @@ export function PokerSeat({ seat, index, holeCards, isCurrentPlayer, showCardBac
 
   /** Player action radial (click avatar): main menu vs expression submenu. */
   const [playerRadialOpen, setPlayerRadialOpen] = useState(false);
+  const [opponentRadialOpen, setOpponentRadialOpen] = useState(false);
   const [playerRadialPage, setPlayerRadialPage] = useState<'main' | 'expressions'>('main');
   const [localEmotion, setLocalEmotion] = useState<Emotion | null>(null);
   const [isFoldCryActive, setIsFoldCryActive] = useState(false);
@@ -554,6 +573,18 @@ export function PokerSeat({ seat, index, holeCards, isCurrentPlayer, showCardBac
       }
     },
     [onOpponentRadialAction, seat.playerAddress],
+  );
+
+  // Opponent quick-emote ring (tap a seated opponent): throw a directed emote, or jump to profile.
+  const handleOpponentEmoteSelect = useCallback(
+    (item: RadialMenuItem) => {
+      setOpponentRadialOpen(false);
+      const addr = seat.playerAddress;
+      const id = String(item.id);
+      if (id === 'profile') { if (addr) onOpponentClick?.(addr); return; }
+      if (id.startsWith('emote:')) onSendDirectedEmote?.(index, id.slice(6) as PokerDirectedEmoteKind);
+    },
+    [seat.playerAddress, onOpponentClick, onSendDirectedEmote, index],
   );
 
   useEffect(() => {
@@ -925,18 +956,22 @@ export function PokerSeat({ seat, index, holeCards, isCurrentPlayer, showCardBac
                           setPlayerRadialOpen(true);
                         }
                       : undefined
-                    : onOpponentClick && seat.playerAddress
-                      ? () => onOpponentClick(seat.playerAddress!)
-                      : undefined
+                    : onSendDirectedEmote && seat.playerAddress
+                      ? () => setOpponentRadialOpen(true)
+                      : onOpponentClick && seat.playerAddress
+                        ? () => onOpponentClick(seat.playerAddress!)
+                        : undefined
                 }
                 title={
                   isCurrentPlayer
                     ? 'Tap for player menu'
-                    : onOpponentClick && seat.playerAddress
-                      ? onOpponentRadialAction
-                        ? 'Tap: profile · Right-click: actions'
-                        : 'View profile'
-                      : undefined
+                    : onSendDirectedEmote && seat.playerAddress
+                      ? 'Tap: send emote · Right-click: profile'
+                      : onOpponentClick && seat.playerAddress
+                        ? onOpponentRadialAction
+                          ? 'Tap: profile · Right-click: actions'
+                          : 'View profile'
+                        : undefined
                 }
               >
                 <VoiceAvatarCue
@@ -1100,6 +1135,20 @@ export function PokerSeat({ seat, index, holeCards, isCurrentPlayer, showCardBac
           iconSize={playerRadialPage === 'expressions' ? 13 : 16}
           bandWidth={playerRadialPage === 'expressions' ? 38 : 44}
           showLabels
+        />
+      )}
+
+      {!isCurrentPlayer && onSendDirectedEmote && seat.playerAddress && (
+        <RadialMenuFloating
+          open={opponentRadialOpen}
+          onOpenChange={setOpponentRadialOpen}
+          anchorRef={avatarRef}
+          menuItems={OPPONENT_EMOTE_RADIAL_ITEMS}
+          onSelect={handleOpponentEmoteSelect}
+          size={240}
+          iconSize={18}
+          bandWidth={44}
+          showLabels={false}
         />
       )}
 
