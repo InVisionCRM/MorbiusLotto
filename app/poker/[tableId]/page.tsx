@@ -399,6 +399,7 @@ export default function PokerTablePage() {
     reactionBySeatIndex,
     broadcastEmotionBySeatIndex,
     directedEmotes,
+    stuckArrowsBySeatIndex,
     onPhraseReaction,
     onAnimationReaction,
     onSendDirectedEmote,
@@ -970,6 +971,7 @@ export default function PokerTablePage() {
                 reactionBySeatIndex={reactionBySeatIndex}
                 broadcastEmotionBySeatIndex={broadcastEmotionBySeatIndex}
                 directedEmotes={directedEmotes}
+                stuckArrowsBySeatIndex={stuckArrowsBySeatIndex}
                 onSendDirectedEmote={mySeatIndex >= 0 ? onSendDirectedEmote : undefined}
                 mySeatIndex={mySeatIndex}
                 onPhraseReaction={onPhraseReaction}

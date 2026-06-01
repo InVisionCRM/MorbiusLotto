@@ -7,6 +7,9 @@ import type { Emotion } from '@/components/avatar';
 import {
   POKER_DIRECTED_EMOTES,
   POKER_DIRECTED_EMOTE_FLY_MS,
+  POKER_PROJECTILE_FLY_MS,
+  POKER_PROJECTILE_TOTAL_MS,
+  POKER_MAX_STUCK_ARROWS,
   isPokerDirectedEmoteKind,
   type PokerDirectedEmoteKind,
 } from '@/lib/poker-directed-emotes';
@@ -16,6 +19,12 @@ export interface DirectedEmoteFlight {
   fromSeatIndex: number;
   toSeatIndex: number;
   kind: PokerDirectedEmoteKind;
+}
+
+/** An arrow stuck in a target seat's circle border. `fromSeatIndex` gives its incoming angle. */
+export interface StuckArrow {
+  id: string;
+  fromSeatIndex: number;
 }
 
 const CHAT_BUBBLE_DURATION_MS = 5000;
@@ -46,6 +55,7 @@ export function usePokerSeatOverlays({
   const [reactionBySeatIndex, setReactionBySeatIndex] = useState<Record<number, string>>({});
   const [broadcastEmotionBySeatIndex, setBroadcastEmotionBySeatIndex] = useState<Record<number, Emotion>>({});
   const [directedEmotes, setDirectedEmotes] = useState<DirectedEmoteFlight[]>([]);
+  const [stuckArrowsBySeatIndex, setStuckArrowsBySeatIndex] = useState<Record<number, StuckArrow[]>>({});
 
   const bubbleTimeoutsRef = useRef<Map<string, ReturnType<typeof setTimeout>>>(new Map());
   const reactionTimeoutsRef = useRef<Map<number, ReturnType<typeof setTimeout>>>(new Map());
@@ -159,7 +169,34 @@ export function usePokerSeatOverlays({
       const id = `de-${Date.now()}-${fromSeatIndex}-${toSeatIndex}-${Math.random().toString(36).slice(2, 7)}`;
       setDirectedEmotes((prev) => [...prev, { id, fromSeatIndex, toSeatIndex, kind }]);
       pulse(fromSeatIndex, def.sender); // sender reacts as they throw it
-      const landT = setTimeout(() => pulse(toSeatIndex, def.target), Math.round(POKER_DIRECTED_EMOTE_FLY_MS * 0.82)); // target reacts on landing
+
+      // ── Projectiles: fast straight flight; arrow sticks (persists), snowball shatters (transient) ──
+      if (def.projectile) {
+        const landT = setTimeout(() => {
+          pulse(toSeatIndex, def.target); // target flinches on impact
+          if (def.projectile === 'arrow') {
+            // hand the flight off to a persistent stuck arrow on the target's border
+            setStuckArrowsBySeatIndex((prev) => {
+              const list = [...(prev[toSeatIndex] ?? []), { id, fromSeatIndex }];
+              if (list.length > POKER_MAX_STUCK_ARROWS) list.splice(0, list.length - POKER_MAX_STUCK_ARROWS);
+              return { ...prev, [toSeatIndex]: list };
+            });
+            setDirectedEmotes((prev) => prev.filter((d) => d.id !== id));
+          }
+        }, POKER_PROJECTILE_FLY_MS);
+        directedTimeoutsRef.current.add(landT);
+        if (def.projectile === 'snowball') {
+          const removeT = setTimeout(() => {
+            setDirectedEmotes((prev) => prev.filter((d) => d.id !== id));
+            directedTimeoutsRef.current.delete(removeT);
+          }, POKER_PROJECTILE_TOTAL_MS);
+          directedTimeoutsRef.current.add(removeT);
+        }
+        return;
+      }
+
+      // ── Emotes: bubble arcs over, target reacts on landing ──
+      const landT = setTimeout(() => pulse(toSeatIndex, def.target), Math.round(POKER_DIRECTED_EMOTE_FLY_MS * 0.82));
       directedTimeoutsRef.current.add(landT);
       const removeT = setTimeout(() => {
         setDirectedEmotes((prev) => prev.filter((d) => d.id !== id));
@@ -183,6 +220,11 @@ export function usePokerSeatOverlays({
       directedTimeoutsRef.current.clear();
     };
   }, [clientRef, tableId]);
+
+  // Stuck arrows are per-hand — clear the pincushion when a new hand starts.
+  useEffect(() => {
+    setStuckArrowsBySeatIndex({});
+  }, [state?.currentHand?.handId]);
 
   const onPhraseReaction = useCallback(
     (phrase: string) => {
@@ -245,6 +287,7 @@ export function usePokerSeatOverlays({
     reactionBySeatIndex,
     broadcastEmotionBySeatIndex,
     directedEmotes,
+    stuckArrowsBySeatIndex,
     onPhraseReaction,
     onAnimationReaction,
     onSendDirectedEmote,

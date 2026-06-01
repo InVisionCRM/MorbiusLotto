@@ -16,9 +16,15 @@ export interface PokerDirectedEmote {
   label: string;
   sender: Emotion;
   target: Emotion;
+  /**
+   * When set, this "emote" is a physical projectile rendered specially instead of a chat
+   * bubble: `arrow` flies to the target and STICKS in its circle border (arrows accumulate
+   * into a pincushion, cleared each hand); `snowball` flies and SHATTERS against the border.
+   */
+  projectile?: 'arrow' | 'snowball';
 }
 
-export const POKER_DIRECTED_EMOTES = {
+const POKER_DIRECTED_EMOTES_DEF = {
   haha:  { glyph: '😂', label: 'HAHA', sender: 'happy', target: 'angry' },
   love:  { glyph: '❤️', label: '',     sender: 'love',  target: 'love' },
   gg:    { glyph: '🤝', label: 'GG',   sender: 'nod',   target: 'happy' },
@@ -27,9 +33,14 @@ export const POKER_DIRECTED_EMOTES = {
   fire:  { glyph: '🔥', label: '',     sender: 'cool',  target: 'shock' },
   dance: { glyph: '🕺', label: '',     sender: 'dance', target: 'happy' },
   money: { glyph: '🤑', label: '',     sender: 'money', target: 'surprised' },
+  arrow:    { glyph: '🏹', label: '', sender: 'angry', target: 'shock',     projectile: 'arrow' },
+  snowball: { glyph: '❄️', label: '', sender: 'happy', target: 'surprised', projectile: 'snowball' },
 } satisfies Record<string, PokerDirectedEmote>;
 
-export type PokerDirectedEmoteKind = keyof typeof POKER_DIRECTED_EMOTES;
+export type PokerDirectedEmoteKind = keyof typeof POKER_DIRECTED_EMOTES_DEF;
+
+/** Widened to `PokerDirectedEmote` so the optional `projectile` field is accessible on any entry. */
+export const POKER_DIRECTED_EMOTES: Record<PokerDirectedEmoteKind, PokerDirectedEmote> = POKER_DIRECTED_EMOTES_DEF;
 
 export const POKER_DIRECTED_EMOTE_KINDS = Object.keys(POKER_DIRECTED_EMOTES) as PokerDirectedEmoteKind[];
 
@@ -43,3 +54,10 @@ export function isPokerDirectedEmoteKind(v: unknown): v is PokerDirectedEmoteKin
  * this so the bubble and its DOM node disappear together.
  */
 export const POKER_DIRECTED_EMOTE_FLY_MS = 1600;
+
+/** Projectile travel time (arrow/snowball fly straight, fast). Target reacts on landing. */
+export const POKER_PROJECTILE_FLY_MS = 460;
+/** Total lifetime of a snowball flight (travel + shatter); arrows hand off to a stuck arrow at FLY_MS. */
+export const POKER_PROJECTILE_TOTAL_MS = 1100;
+/** Max arrows stuck on one player before the oldest drops off. */
+export const POKER_MAX_STUCK_ARROWS = 10;

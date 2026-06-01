@@ -11,6 +11,8 @@ import type { LucideIcon } from 'lucide-react';
 import {
   ArrowLeft,
   Coins,
+  Crosshair,
+  Snowflake,
   Handshake,
   Heart,
   Laugh,
@@ -317,6 +319,7 @@ const OPPONENT_RADIAL_ITEMS: RadialMenuItem[] = [
 // Quick emote ring shown when you tap a *seated* opponent — throws a directed emote at them.
 const EMOTE_RADIAL_ICONS: Record<PokerDirectedEmoteKind, LucideIcon> = {
   haha: Laugh, love: Heart, gg: Handshake, nice: ThumbsUp, boo: ThumbsDown, fire: Flame, dance: Music2, money: Coins,
+  arrow: Crosshair, snowball: Snowflake,
 };
 const OPPONENT_EMOTE_RADIAL_ITEMS: RadialMenuItem[] = [
   ...POKER_DIRECTED_EMOTE_KINDS.map((k): RadialMenuItem => ({ id: `emote:${k}`, label: k, icon: EMOTE_RADIAL_ICONS[k] })),
