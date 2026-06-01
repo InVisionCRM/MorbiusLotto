@@ -20,6 +20,7 @@ import {
   clampCreatorFeePercent,
 } from '@/lib/tournament-types';
 import { detectPermitSupport, signErc20Permit } from '@/lib/erc20-permit';
+import { useWalletAction } from '@/contexts/wallet-action-context';
 
 export type EscrowBuyInJoinStep =
   | 'idle'
@@ -58,6 +59,7 @@ export function EscrowBuyInJoinPanel({
   const publicClient = usePublicClient();
   const { data: walletClient } = useWalletClient();
   const { writeContractAsync } = useWriteContract();
+  const { run: runWalletAction } = useWalletAction();
   const [step, setStep] = useState<EscrowBuyInJoinStep>('idle');
   const [err, setErr] = useState<string | null>(null);
   const [logoUrl, setLogoUrl] = useState<string | null>(null);
@@ -146,12 +148,16 @@ export function EscrowBuyInJoinPanel({
           `Need ${wrapShortfall.toString()} more PLS to wrap, but wallet only has ${nativeBalance.toString()}.`,
         );
       }
-      const hash = await writeContractAsync({
-        address: WPLS_TOKEN_ADDRESS as `0x${string}`,
-        abi: WPLS_DEPOSIT_ABI,
-        functionName: 'deposit',
-        value: wrapShortfall,
-      });
+      const hash = await runWalletAction(
+        () =>
+          writeContractAsync({
+            address: WPLS_TOKEN_ADDRESS as `0x${string}`,
+            abi: WPLS_DEPOSIT_ABI,
+            functionName: 'deposit',
+            value: wrapShortfall,
+          }),
+        { variant: 'transaction', title: 'Wrap PLS' },
+      );
       await publicClient.waitForTransactionReceipt({ hash });
       setStep('wrapped');
       setWrapShortfall(0n);
@@ -159,7 +165,7 @@ export function EscrowBuyInJoinPanel({
       setStep('failed');
       setErr((e as Error).message ?? 'Wrap PLS failed');
     }
-  }, [address, publicClient, wrapShortfall, writeContractAsync]);
+  }, [address, publicClient, wrapShortfall, writeContractAsync, runWalletAction]);
 
   const runApproveAndDeposit = useCallback(async () => {
     if (!address || !publicClient) {
@@ -181,20 +187,28 @@ export function EscrowBuyInJoinPanel({
     if (permitSupported === true && walletClient && escrowIsV6) {
       setStep('depositing'); // skip the 'approving' step in the tracker since there's no separate approve
       try {
-        const { v, r, s, deadline } = await signErc20Permit({
-          publicClient,
-          walletClient,
-          token: tokenAddress,
-          owner: address,
-          spender: escrow,
-          value: buyInWei,
-        });
-        const depositHash = await writeContractAsync({
-          address: escrow,
-          abi: tournamentPrizeEscrowV6Abi,
-          functionName: 'addToPrizePoolWithPermit',
-          args: [bytes32, tokenAddress, buyInWei, deadline, v, r, s],
-        });
+        const { v, r, s, deadline } = await runWalletAction(
+          () =>
+            signErc20Permit({
+              publicClient,
+              walletClient,
+              token: tokenAddress,
+              owner: address,
+              spender: escrow,
+              value: buyInWei,
+            }),
+          { variant: 'approval', title: 'Tournament buy-in' },
+        );
+        const depositHash = await runWalletAction(
+          () =>
+            writeContractAsync({
+              address: escrow,
+              abi: tournamentPrizeEscrowV6Abi,
+              functionName: 'addToPrizePoolWithPermit',
+              args: [bytes32, tokenAddress, buyInWei, deadline, v, r, s],
+            }),
+          { variant: 'transaction', title: 'Tournament buy-in' },
+        );
         await publicClient.waitForTransactionReceipt({ hash: depositHash });
         setStep('done');
         await onSuccess(depositHash);
@@ -222,21 +236,29 @@ export function EscrowBuyInJoinPanel({
         args: [address, escrow],
       });
       if (allowance < buyInWei) {
-        const approveHash = await writeContractAsync({
-          address: tokenAddress,
-          abi: erc20Abi,
-          functionName: 'approve',
-          args: [escrow, buyInWei],
-        });
+        const approveHash = await runWalletAction(
+          () =>
+            writeContractAsync({
+              address: tokenAddress,
+              abi: erc20Abi,
+              functionName: 'approve',
+              args: [escrow, buyInWei],
+            }),
+          { variant: 'approval', title: 'Tournament buy-in' },
+        );
         await publicClient.waitForTransactionReceipt({ hash: approveHash });
       }
       setStep('depositing');
-      const depositHash = await writeContractAsync({
-        address: escrow,
-        abi: tournamentPrizeEscrowV6Abi,
-        functionName: 'addToPrizePool',
-        args: [bytes32, tokenAddress, buyInWei],
-      });
+      const depositHash = await runWalletAction(
+        () =>
+          writeContractAsync({
+            address: escrow,
+            abi: tournamentPrizeEscrowV6Abi,
+            functionName: 'addToPrizePool',
+            args: [bytes32, tokenAddress, buyInWei],
+          }),
+        { variant: 'transaction', title: 'Tournament buy-in' },
+      );
       await publicClient.waitForTransactionReceipt({ hash: depositHash });
       setStep('done');
       await onSuccess(depositHash);
@@ -244,7 +266,7 @@ export function EscrowBuyInJoinPanel({
       setStep('failed');
       setErr((e as Error).message ?? 'Transaction failed');
     }
-  }, [address, publicClient, walletClient, permitSupported, tokenAddress, buyInWei, tournamentId, writeContractAsync, onSuccess]);
+  }, [address, publicClient, walletClient, permitSupported, tokenAddress, buyInWei, tournamentId, writeContractAsync, onSuccess, runWalletAction]);
 
   const busy = step === 'wrapping' || step === 'approving' || step === 'depositing';
   const symbolForBadge = (tokenSymbol ?? '?').slice(0, 4).toUpperCase();

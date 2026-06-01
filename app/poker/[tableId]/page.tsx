@@ -14,6 +14,7 @@ import { PokerActions } from '@/components/poker/PokerActions';
 import { PokerTableEffectProvider } from '@/hooks/use-poker-table-effect';
 import { useQuickChatPhrases } from '@/hooks/useQuickChatPhrases';
 import { useProfileWs } from '@/contexts/profile-ws-context';
+import { useWalletAction } from '@/contexts/wallet-action-context';
 import { isAdminWallet } from '@/lib/admin';
 import { useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
@@ -66,6 +67,20 @@ export default function PokerTablePage() {
   const tableId = typeof params.tableId === 'string' ? params.tableId : '';
   const { address } = useAccount();
   const { signTypedDataAsync } = useSignTypedData();
+  const { run: runWalletAction } = useWalletAction();
+  // The poker socket authenticates with a typed-data signature on connect AND on
+  // every reconnect (see PokerConnection). On mobile WalletConnect that request
+  // is sent to the wallet app over the relay but the browser can't foreground it,
+  // so it used to look like "nothing happened". Wrapping it surfaces the
+  // "open your wallet app" overlay so the player knows to switch and approve.
+  const guardedSignTypedData = useCallback(
+    (args: Parameters<typeof signTypedDataAsync>[0]) =>
+      runWalletAction(() => signTypedDataAsync(args), {
+        variant: 'sign-in',
+        title: 'Take your seat',
+      }),
+    [runWalletAction, signTypedDataAsync],
+  );
   const joinFromLobby = searchParams.get('join') === '1';
   const buyInParam = searchParams.get('buyIn');
   const pinParam = searchParams.get('pin');
@@ -118,7 +133,7 @@ export default function PokerTablePage() {
   } = usePokerConnection({
     tableId,
     normalizedAddress,
-    signTypedDataAsync,
+    signTypedDataAsync: guardedSignTypedData,
     isE2EMock,
     joinFromLobby,
     buyInParam,

@@ -4,9 +4,7 @@ import { createContext, useCallback, useContext, useEffect, useRef, useState } f
 import { useAccount, useSignMessage } from 'wagmi';
 import { SiweMessage } from 'siwe';
 import { setAuthFailureHandler, setWsAuthHandler } from '@/lib/api-auth';
-import { useMobileWalletHandoff } from '@/hooks/use-mobile-wallet-handoff';
-import { useWalletHandoffPhase } from '@/hooks/use-wallet-handoff-phase';
-import { WalletActionPrompt, type WalletActionPhase } from '@/components/auth/WalletActionPrompt';
+import { useWalletAction } from '@/contexts/wallet-action-context';
 
 const API_BASE = (process.env.NEXT_PUBLIC_API_URL ?? '').trim();
 
@@ -49,14 +47,11 @@ async function fetchJson(url: string, init?: RequestInit) {
 export function SiweProvider({ children }: { children: React.ReactNode }) {
   const { address: connectedAddress, chain } = useAccount();
   const { signMessageAsync } = useSignMessage();
-  const mobileHandoff = useMobileWalletHandoff();
+  const walletAction = useWalletAction();
   const [authedAddress, setAuthedAddress] = useState<`0x${string}` | null>(null);
   const [isSigningIn, setIsSigningIn] = useState(false);
-  const [walletPromptPhase, setWalletPromptPhase] = useState<WalletActionPhase>('open-wallet');
 
   const signInPromiseRef = useRef<Promise<`0x${string}`> | null>(null);
-  const handoffActive = isSigningIn && mobileHandoff;
-  const visibilityPhase = useWalletHandoffPhase(handoffActive && walletPromptPhase !== 'finishing');
 
   useEffect(() => {
     let cancelled = false;
@@ -99,7 +94,7 @@ export function SiweProvider({ children }: { children: React.ReactNode }) {
 
     const run = (async () => {
       setIsSigningIn(true);
-      setWalletPromptPhase('open-wallet');
+      walletAction.begin({ variant: 'sign-in' });
       try {
         const { nonce } = await fetchJson(authUrl('/api/auth/nonce'));
 
@@ -114,10 +109,9 @@ export function SiweProvider({ children }: { children: React.ReactNode }) {
           issuedAt: new Date().toISOString(),
         }).prepareMessage();
 
-        if (mobileHandoff) setWalletPromptPhase('open-wallet');
         const signature = await signMessageAsync({ message });
 
-        if (mobileHandoff) setWalletPromptPhase('finishing');
+        walletAction.markFinishing();
         const result: { address: `0x${string}` } = await fetchJson(authUrl('/api/auth/verify'), {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -135,14 +129,14 @@ export function SiweProvider({ children }: { children: React.ReactNode }) {
         return result.address;
       } finally {
         setIsSigningIn(false);
-        setWalletPromptPhase('open-wallet');
+        walletAction.end();
         signInPromiseRef.current = null;
       }
     })();
 
     signInPromiseRef.current = run;
     return run;
-  }, [connectedAddress, chain?.id, signMessageAsync, mobileHandoff]);
+  }, [connectedAddress, chain?.id, signMessageAsync, walletAction]);
 
   const signInIfNeeded = useCallback(async (): Promise<`0x${string}`> => {
     if (!connectedAddress) throw new Error('Connect a wallet first');
@@ -192,9 +186,6 @@ export function SiweProvider({ children }: { children: React.ReactNode }) {
     }
   }, []);
 
-  const promptPhase: WalletActionPhase =
-    walletPromptPhase === 'finishing' ? 'finishing' : visibilityPhase;
-
   const value: SiweState = {
     address: authedAddress,
     isAuthenticated:
@@ -207,16 +198,7 @@ export function SiweProvider({ children }: { children: React.ReactNode }) {
     signOut,
   };
 
-  return (
-    <SiweContext.Provider value={value}>
-      {children}
-      <WalletActionPrompt
-        visible={handoffActive}
-        phase={promptPhase}
-        variant="sign-in"
-      />
-    </SiweContext.Provider>
-  );
+  return <SiweContext.Provider value={value}>{children}</SiweContext.Provider>;
 }
 
 export function useSiwe(): SiweState {

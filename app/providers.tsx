@@ -13,6 +13,7 @@ import { ProfileWsProvider } from '@/contexts/profile-ws-context'
 import { PwaInstallPromptProvider } from '@/contexts/pwa-install-prompt-context'
 import { InstallAppHelpDialogProvider } from '@/contexts/install-app-help-dialog-context'
 import { SiweProvider } from '@/contexts/siwe-context'
+import { WalletActionProvider } from '@/contexts/wallet-action-context'
 
 export function Providers({ children }: { children: React.ReactNode }) {
   // Create QueryClient once per provider instance to prevent cache resets
@@ -52,15 +53,17 @@ export function Providers({ children }: { children: React.ReactNode }) {
             coolMode={true}
             showRecentTransactions={true}
           >
-            <SiweProvider>
-              <ProfileSettingsModalProvider>
-                <ProfileWsProvider>
-                  <PwaInstallPromptProvider>
-                    <InstallAppHelpDialogProvider>{children}</InstallAppHelpDialogProvider>
-                  </PwaInstallPromptProvider>
-                </ProfileWsProvider>
-              </ProfileSettingsModalProvider>
-            </SiweProvider>
+            <WalletActionProvider>
+              <SiweProvider>
+                <ProfileSettingsModalProvider>
+                  <ProfileWsProvider>
+                    <PwaInstallPromptProvider>
+                      <InstallAppHelpDialogProvider>{children}</InstallAppHelpDialogProvider>
+                    </PwaInstallPromptProvider>
+                  </ProfileWsProvider>
+                </ProfileSettingsModalProvider>
+              </SiweProvider>
+            </WalletActionProvider>
           </RainbowKitProvider>
         </QueryClientProvider>
       </WagmiProvider>
