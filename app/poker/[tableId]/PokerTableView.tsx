@@ -4,7 +4,7 @@ import type React from 'react';
 import type { PokerTableState } from '@/lib/websocket-client';
 import { PokerTable } from '@/components/poker/PokerTable';
 import type { Emotion } from '@/components/avatar';
-import type { DirectedEmoteFlight } from './PokerSeatOverlays';
+import type { DirectedEmoteFlight, StuckArrow } from './PokerSeatOverlays';
 import type { PokerDirectedEmoteKind } from '@/lib/poker-directed-emotes';
 import { POKER_TABLE_REF_W, POKER_TABLE_REF_H } from './PokerMobileZoomLock';
 
@@ -23,6 +23,7 @@ interface PokerTableViewProps {
   reactionBySeatIndex: Record<number, string>;
   broadcastEmotionBySeatIndex: Record<number, Emotion>;
   directedEmotes: DirectedEmoteFlight[];
+  stuckArrowsBySeatIndex: Record<number, StuckArrow[]>;
   onSendDirectedEmote?: (toSeatIndex: number, kind: PokerDirectedEmoteKind) => void;
   mySeatIndex: number;
   onPhraseReaction: (phrase: string) => void;
@@ -82,6 +83,7 @@ export function PokerTableView({
   reactionBySeatIndex,
   broadcastEmotionBySeatIndex,
   directedEmotes,
+  stuckArrowsBySeatIndex,
   onSendDirectedEmote,
   mySeatIndex,
   onPhraseReaction,
@@ -210,6 +212,7 @@ export function PokerTableView({
           reactionBySeatIndex={reactionBySeatIndex}
           broadcastEmotionBySeatIndex={broadcastEmotionBySeatIndex}
           directedEmotes={directedEmotes}
+          stuckArrowsBySeatIndex={stuckArrowsBySeatIndex}
           onSendDirectedEmote={onSendDirectedEmote}
           onPhraseReaction={mySeatIndex >= 0 ? onPhraseReaction : undefined}
           onAnimationReaction={mySeatIndex >= 0 ? onAnimationReaction : undefined}

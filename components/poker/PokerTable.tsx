@@ -22,7 +22,7 @@ import {
   ringIndexForDisplaySlot,
   winningPotChipAnchorForDisplaySlot,
 } from '@/lib/poker-seat-layout';
-import { POKER_DIRECTED_EMOTES, POKER_DIRECTED_EMOTE_FLY_MS, type PokerDirectedEmoteKind } from '@/lib/poker-directed-emotes';
+import { POKER_DIRECTED_EMOTES, POKER_DIRECTED_EMOTE_FLY_MS, POKER_PROJECTILE_FLY_MS, POKER_PROJECTILE_TOTAL_MS, type PokerDirectedEmoteKind } from '@/lib/poker-directed-emotes';
 import confetti from 'canvas-confetti';
 import { FloatingTableLogo } from './FloatingTableLogo';
 import { PokerRailActingHighlight } from './PokerRailActingHighlight';
@@ -120,6 +120,18 @@ function buildPotBurst(
 
 // Seat base geometry: `lib/poker-seat-layout.ts` (SEAT_ANCHOR_RING + authoredSeatAnchors).
 
+/** Small arrow graphic (points right; rotated by the wrapper). Reused for flight + stuck arrows. */
+function PokerProjectileArrow({ len }: { len: number }) {
+  return (
+    <svg width={len} height={len * 0.3} viewBox="0 0 40 12" style={{ display: 'block', overflow: 'visible' }} aria-hidden>
+      <line x1="3" y1="6" x2="31" y2="6" stroke="#6b4a2a" strokeWidth="2" strokeLinecap="round" />
+      <polygon points="29,1.5 40,6 29,10.5" fill="#cbd5e1" stroke="#64748b" strokeWidth="0.5" />
+      <polygon points="0.5,1 7,6 0.5,11" fill="#eef2f7" />
+      <polygon points="4,1 10,6 4,11" fill="#9aa7b8" />
+    </svg>
+  );
+}
+
 export interface PokerTableProps {
   state: TableState;
   currentPlayerAddress: string | null;
@@ -138,6 +150,8 @@ export interface PokerTableProps {
   broadcastEmotionBySeatIndex?: Record<number, import('@/components/avatar').Emotion>;
   /** In-flight directed emotes (player → player); each animates a bubble from sender's seat to the target. */
   directedEmotes?: Array<{ id: string; fromSeatIndex: number; toSeatIndex: number; kind: PokerDirectedEmoteKind }>;
+  /** Arrows stuck in each target seat's circle border (key = target seat index); cleared per hand. */
+  stuckArrowsBySeatIndex?: Record<number, Array<{ id: string; fromSeatIndex: number }>>;
   /** Throw a directed emote at a seat (opponent quick-emote ring). Provided only when the current player is seated. */
   onSendDirectedEmote?: (toSeatIndex: number, kind: PokerDirectedEmoteKind) => void;
   /** Called when current player selects a QuickChat phrase (broadcast to table). */
@@ -178,7 +192,7 @@ export interface PokerTableProps {
   showDealerAnchorGuides?: boolean;
 }
 
-export function PokerTable({ state, currentPlayerAddress, timeLeft, chatBubbleBySeatIndex, onReUpClick, onMenuClick, reactionBySeatIndex, broadcastEmotionBySeatIndex, directedEmotes, onSendDirectedEmote, onPhraseReaction, onAnimationReaction, onOpponentClick, onOpponentRadialAction, quickChatPhrases, setQuickChatPhrases, onOpenEditQuickChat, onLeave, onRequestMobileActivity, onSitOut, onSitBack, onShowCards, onMuckCards, tutorialTargets, dataTutorialTargetPot, showDealerAnchorGuides = false }: PokerTableProps) {
+export function PokerTable({ state, currentPlayerAddress, timeLeft, chatBubbleBySeatIndex, onReUpClick, onMenuClick, reactionBySeatIndex, broadcastEmotionBySeatIndex, directedEmotes, stuckArrowsBySeatIndex, onSendDirectedEmote, onPhraseReaction, onAnimationReaction, onOpponentClick, onOpponentRadialAction, quickChatPhrases, setQuickChatPhrases, onOpenEditQuickChat, onLeave, onRequestMobileActivity, onSitOut, onSitBack, onShowCards, onMuckCards, tutorialTargets, dataTutorialTargetPot, showDealerAnchorGuides = false }: PokerTableProps) {
   const tableRef = useRef<HTMLDivElement>(null);
   const [dims, setDims] = useState({ w: 640, h: 500 });
   const { effect: tableEffect, feltGradient, railStyle } = usePokerTableEffect();
@@ -1290,57 +1304,105 @@ export function PokerTable({ state, currentPlayerAddress, timeLeft, chatBubbleBy
         />
       )}
 
-      {/* Directed emotes — bubble pops above the sender, then arcs across to the target's seat. */}
+      {/* Directed emotes (bubbles) + projectiles (arrows stick, snowballs shatter). */}
       {dims.w > 0 && directedEmotes?.map((de) => {
-        const fromSlot = toDisplaySlot(de.fromSeatIndex);
-        const toSlot = toDisplaySlot(de.toSeatIndex);
-        const fromA = seatAnchors[fromSlot];
-        const toA = seatAnchors[toSlot];
+        const fromA = seatAnchors[toDisplaySlot(de.fromSeatIndex)];
+        const toA = seatAnchors[toDisplaySlot(de.toSeatIndex)];
         const def = POKER_DIRECTED_EMOTES[de.kind];
         if (!fromA || !toA || !def) return null;
+
+        // ── Projectiles: straight, tip-first flight (geometry mirrors the lab prototype) ──
+        if (def.projectile) {
+          const R = dims.w * 0.05; // ≈ seat avatar radius
+          const fromCx = fromA.fx * dims.w, fromCy = fromA.fy * dims.h;
+          const toCx = toA.fx * dims.w, toCy = toA.fy * dims.h;
+          const vx = toCx - fromCx, vy = toCy - fromCy, dd = Math.hypot(vx, vy) || 1;
+          const ux = vx / dd, uy = vy / dd;
+          const launchX = fromCx + ux * R, launchY = fromCy + uy * R;
+          const impactX = toCx - ux * R * 0.92, impactY = toCy - uy * R * 0.92;
+          const ang = (Math.atan2(uy, ux) * 180) / Math.PI;
+          const dxp = impactX - launchX, dyp = impactY - launchY;
+          const arrowLen = Math.max(18, dims.w * 0.05);
+          if (def.projectile === 'arrow') {
+            return (
+              <div key={de.id} className="absolute pointer-events-none" style={{ left: launchX, top: launchY, transform: 'translate(-50%, -50%)', zIndex: 43 }}>
+                <motion.div initial={{ x: 0, y: 0, rotate: ang }} animate={{ x: dxp, y: dyp, rotate: ang }}
+                  transition={{ duration: POKER_PROJECTILE_FLY_MS / 1000, ease: [0.4, 0.85, 0.5, 1] }}>
+                  <PokerProjectileArrow len={arrowLen} />
+                </motion.div>
+              </div>
+            );
+          }
+          // snowball — flies in, then shatters into chunks that scatter + fall
+          const ballSz = Math.max(8, dims.w * 0.032);
+          const fragSz = Math.max(2, dims.w * 0.008);
+          const fly = POKER_PROJECTILE_FLY_MS / POKER_PROJECTILE_TOTAL_MS;
+          return (
+            <div key={de.id} className="absolute pointer-events-none" style={{ left: launchX, top: launchY, transform: 'translate(-50%, -50%)', zIndex: 43 }}>
+              <motion.div
+                initial={{ x: 0, y: 0, scale: 0.7, opacity: 1 }}
+                animate={{ x: [0, dxp, dxp, dxp], y: [0, dyp, dyp, dyp], scale: [0.7, 1, 1.35, 0], opacity: [1, 1, 1, 0] }}
+                transition={{ duration: POKER_PROJECTILE_TOTAL_MS / 1000, times: [0, fly, fly + 0.1, 1], ease: 'easeOut' }}
+                style={{ width: ballSz, height: ballSz, borderRadius: '50%', background: 'radial-gradient(circle at 35% 30%, #ffffff, #d6ecff 70%, #aacdf0)', boxShadow: '0 0 6px rgba(200,230,255,0.85)' }}
+              />
+              {Array.from({ length: 7 }).map((_, i) => {
+                const a = (i / 7) * Math.PI * 2, sp = dims.w * 0.028;
+                const fxF = dxp + Math.cos(a) * sp, fyF = dyp + Math.sin(a) * sp + dims.w * 0.02;
+                return (
+                  <motion.div key={i} className="absolute" style={{ left: 0, top: 0, width: fragSz, height: fragSz, borderRadius: '50%', background: '#eaf4ff' }}
+                    initial={{ x: dxp, y: dyp, opacity: 0, scale: 1 }}
+                    animate={{ x: [dxp, fxF], y: [dyp, fyF], opacity: [0, 1, 0], scale: [1, 0.3] }}
+                    transition={{ duration: 0.5, delay: POKER_PROJECTILE_FLY_MS / 1000, ease: 'easeOut' }}
+                  />
+                );
+              })}
+            </div>
+          );
+        }
+
+        // ── Emote bubble: arcs over the felt, target reacts on landing ──
         const raise = dims.h * 0.05;
         const fromX = fromA.fx * dims.w;
         const fromY = fromA.fy * dims.h - raise;
         const dx = toA.fx * dims.w - fromX;
         const dy = (toA.fy * dims.h - raise) - fromY;
-        const apexY = Math.min(0, dy) - dims.h * 0.08; // arc up and over both seats
+        const apexY = Math.min(0, dy) - dims.h * 0.08;
         return (
-          <div
-            key={de.id}
-            className="absolute pointer-events-none"
-            style={{ left: fromX, top: fromY, transform: 'translate(-50%, -50%)', zIndex: 42 }}
-          >
+          <div key={de.id} className="absolute pointer-events-none" style={{ left: fromX, top: fromY, transform: 'translate(-50%, -50%)', zIndex: 42 }}>
             <motion.div
               initial={{ x: 0, y: 0, scale: 0.2, opacity: 0 }}
-              animate={{
-                x: [0, 0, dx * 0.5, dx, dx],
-                y: [0, 0, apexY, dy, dy],
-                scale: [0.2, 1.08, 1, 1.18, 0.55],
-                opacity: [0, 1, 1, 1, 0],
-              }}
+              animate={{ x: [0, 0, dx * 0.5, dx, dx], y: [0, 0, apexY, dy, dy], scale: [0.2, 1.08, 1, 1.18, 0.55], opacity: [0, 1, 1, 1, 0] }}
               transition={{ duration: POKER_DIRECTED_EMOTE_FLY_MS / 1000, times: [0, 0.14, 0.5, 0.88, 1], ease: 'easeInOut' }}
             >
-              <div
-                className="relative flex items-center gap-1 font-jost font-extrabold"
-                style={{
-                  padding: '5px 10px', borderRadius: 13, whiteSpace: 'nowrap',
-                  background: 'linear-gradient(180deg, #ffffff, #efe7ff)', color: '#241247',
-                  boxShadow: '0 8px 22px rgba(0,0,0,0.55), 0 0 0 1px rgba(168,85,247,0.45)',
-                  fontSize: 12, letterSpacing: '0.3px',
-                }}
-              >
+              <div className="relative flex items-center gap-1 font-jost font-extrabold" style={{ padding: '5px 10px', borderRadius: 13, whiteSpace: 'nowrap', background: 'linear-gradient(180deg, #ffffff, #efe7ff)', color: '#241247', boxShadow: '0 8px 22px rgba(0,0,0,0.55), 0 0 0 1px rgba(168,85,247,0.45)', fontSize: 12, letterSpacing: '0.3px' }}>
                 <span style={{ fontSize: 19, lineHeight: 1 }}>{def.glyph}</span>
                 {def.label ? <span>{def.label}</span> : null}
-                <span
-                  style={{
-                    position: 'absolute', left: 14, bottom: -4, width: 9, height: 9,
-                    background: '#efe7ff', transform: 'rotate(45deg)', boxShadow: '1px 1px 0 rgba(168,85,247,0.25)',
-                  }}
-                />
+                <span style={{ position: 'absolute', left: 14, bottom: -4, width: 9, height: 9, background: '#efe7ff', transform: 'rotate(45deg)', boxShadow: '1px 1px 0 rgba(168,85,247,0.25)' }} />
               </div>
             </motion.div>
           </div>
         );
+      })}
+
+      {/* Stuck arrows — persistent pincushion around each target's circle (cleared per hand). */}
+      {dims.w > 0 && stuckArrowsBySeatIndex && Object.entries(stuckArrowsBySeatIndex).flatMap(([seatStr, arrows]) => {
+        const toA = seatAnchors[toDisplaySlot(Number(seatStr))];
+        if (!toA || !arrows?.length) return [];
+        const toCx = toA.fx * dims.w, toCy = toA.fy * dims.h, R = dims.w * 0.05;
+        const arrowLen = Math.max(18, dims.w * 0.05);
+        return arrows.map((arr) => {
+          const fromA = seatAnchors[toDisplaySlot(arr.fromSeatIndex)];
+          if (!fromA) return null;
+          const vx = toCx - fromA.fx * dims.w, vy = toCy - fromA.fy * dims.h, dd = Math.hypot(vx, vy) || 1;
+          const ux = vx / dd, uy = vy / dd;
+          const px = toCx - ux * R * 0.92, py = toCy - uy * R * 0.92;
+          const ang = (Math.atan2(uy, ux) * 180) / Math.PI;
+          return (
+            <div key={arr.id} className="absolute pointer-events-none" style={{ left: px, top: py, transform: `translate(-50%, -50%) rotate(${ang}deg)`, zIndex: 41 }}>
+              <PokerProjectileArrow len={arrowLen} />
+            </div>
+          );
+        });
       })}
 
     </div>
