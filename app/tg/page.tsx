@@ -47,6 +47,7 @@ import {
   IconShieldCheck,
   IconHistory,
   IconRocket,
+  IconCircleDot,
 } from '@tabler/icons-react';
 import MiniAppProfileEditor from '@/components/telegram/MiniAppProfileEditor';
 import MiniAppVideoPoker from '@/components/telegram/MiniAppVideoPoker';
@@ -56,6 +57,7 @@ import MiniAppHiLo from '@/components/telegram/MiniAppHiLo';
 import MiniAppDice from '@/components/telegram/MiniAppDice';
 import MiniAppBaccarat from '@/components/telegram/MiniAppBaccarat';
 import MiniAppCrash from '@/components/telegram/MiniAppCrash';
+import MiniAppRoulette from '@/components/telegram/MiniAppRoulette';
 import MiniAppRecentWins from '@/components/telegram/MiniAppRecentWins';
 import {
   MTT_TEMPLATES,
@@ -130,6 +132,7 @@ type View =
   | 'dice'
   | 'baccarat'
   | 'crash'
+  | 'roulette'
   | 'lobby'
   | 'createTournament'
   | 'leaderboard'
@@ -994,7 +997,8 @@ export default function TelegramMiniAppPage() {
         view === 'hilo' ||
         view === 'dice' ||
         view === 'baccarat' ||
-        view === 'crash'
+        view === 'crash' ||
+        view === 'roulette'
       )
         setView('arcade');
       else setView('hub');
@@ -1637,6 +1641,13 @@ export default function TelegramMiniAppPage() {
                     sub: 'Set a target · cash out before it crashes',
                     target: 'crash' as View,
                   },
+                  {
+                    key: 'roulette',
+                    icon: <IconCircleDot size={20} aria-hidden />,
+                    title: 'Roulette',
+                    sub: 'European · rolodex strip · 35:1 straight up',
+                    target: 'roulette' as View,
+                  },
                 ]
               ).map((tile) => (
                 <button
@@ -1716,6 +1727,15 @@ export default function TelegramMiniAppPage() {
         {/* ---- ARCADE: CRASH ---- */}
         {loadState === 'ready' && session && session.linked && view === 'crash' && (
           <MiniAppCrash
+            initData={initData}
+            initialChipBalance={session.chipBalance ?? '0'}
+            onBack={() => setView('arcade')}
+          />
+        )}
+
+        {/* ---- ARCADE: ROULETTE ---- */}
+        {loadState === 'ready' && session && session.linked && view === 'roulette' && (
+          <MiniAppRoulette
             initData={initData}
             initialChipBalance={session.chipBalance ?? '0'}
             onBack={() => setView('arcade')}

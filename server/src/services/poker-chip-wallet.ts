@@ -28,7 +28,9 @@ export type PokerChipLedgerReason =
   | 'arcade_baccarat_bet'
   | 'arcade_baccarat_payout'
   | 'arcade_crash_bet'
-  | 'arcade_crash_payout';
+  | 'arcade_crash_payout'
+  | 'arcade_roulette_bet'
+  | 'arcade_roulette_payout';
 
 const DEFAULT_PLATFORM_FEE_WALLET = '0x41682815b05fe6b54a6c0f8813bb99423ee0309d';
 
