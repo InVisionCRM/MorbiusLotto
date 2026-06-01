@@ -1379,6 +1379,8 @@ const EMOTES=[
   {id:'cheers',g:'🍻', txt:'',     from:'happy',     to:'excited'},
   {id:'fire',  g:'🔥', txt:'',     from:'cool',      to:'wow'},
   {id:'nice',  g:'🎯', txt:'',     from:'determined',to:'sweatItOut'},
+  {id:'arrow', g:'🏹', txt:'',     from:'determined',to:'shock',  proj:'arrow'},
+  {id:'snowball', g:'❄️', txt:'',  from:'taunt',     to:'shiver', proj:'snowball'},
 ];
 let activeEmote=EMOTES[0], emoteSender=null;
 const emoteBar=document.getElementById('emoteBar'), emoteHint=document.getElementById('emoteHint');
@@ -1396,7 +1398,7 @@ seats.forEach((s,i)=>{
   s.mini.onclick=()=>{
     if(emoteSender==null){emoteSender=i;s.mini.classList.add('sel');updateEmoteHint();}
     else if(emoteSender===i){s.mini.classList.remove('sel');emoteSender=null;updateEmoteHint();}
-    else{const from=emoteSender;seats[from].mini.classList.remove('sel');emoteSender=null;updateEmoteHint();sendEmote(from,i,activeEmote);}
+    else{const from=emoteSender;seats[from].mini.classList.remove('sel');emoteSender=null;updateEmoteHint(); if(activeEmote.proj){sendProjectile(from,i,activeEmote.proj,activeEmote);} else {sendEmote(from,i,activeEmote);} }
   };
 });
 function emoteAnchor(mini){const r=mini.getBoundingClientRect();return {x:r.left+r.width/2, y:r.top+r.height*0.14};}
@@ -1437,6 +1439,106 @@ function emoteBurst(x,y,glyph){
   }
 }
 updateEmoteHint();
+
+/* ── PROJECTILES: arrows that stick in the circle border (pincushion) + snowballs that shatter ── */
+function seatCenter(mini){ const r=mini.getBoundingClientRect(); return { x:r.left+r.width/2, y:r.top+r.height/2, r:r.width/2 }; }
+
+// Arrow SVG points RIGHT (tip at x=40); transform-origin at the tip so rotation pivots there.
+function arrowEl(){
+  const d=document.createElement('div');
+  d.style.cssText='position:fixed;left:0;top:0;z-index:62;pointer-events:none;width:40px;height:12px;transform-origin:100% 50%';
+  d.innerHTML='<svg width="40" height="12" viewBox="0 0 40 12">'
+    +'<line x1="3" y1="6" x2="31" y2="6" stroke="#6b4a2a" stroke-width="2" stroke-linecap="round"/>'
+    +'<polygon points="29,1.5 40,6 29,10.5" fill="#cbd5e1" stroke="#64748b" stroke-width="0.5"/>'
+    +'<polygon points="0.5,1 7,6 0.5,11" fill="#eef2f7"/>'
+    +'<polygon points="4,1 10,6 4,11" fill="#9aa7b8"/>'
+    +'</svg>';
+  return d;
+}
+function snowballEl(){
+  const d=document.createElement('div');
+  d.style.cssText='position:fixed;left:0;top:0;z-index:62;pointer-events:none;width:15px;height:15px;border-radius:50%;'
+    +'background:radial-gradient(circle at 35% 30%, #ffffff, #d6ecff 70%, #aacdf0);box-shadow:0 0 7px rgba(200,230,255,0.85)';
+  return d;
+}
+
+const allArrows=[];
+function stickArrow(toIdx, impact, angleDeg){
+  const seat=seats[toIdx]; if(!seat._arrows) seat._arrows=[];
+  const el=arrowEl(); el.style.zIndex='58'; document.body.appendChild(el);
+  const T=`translate(${impact.x}px,${impact.y}px) translate(-100%,-50%) rotate(${angleDeg}deg)`;
+  el.style.transform=T;
+  el.animate([
+    { transform:`translate(${impact.x}px,${impact.y}px) translate(-100%,-50%) rotate(${angleDeg-8}deg)` },
+    { transform:`translate(${impact.x}px,${impact.y}px) translate(-100%,-50%) rotate(${angleDeg+4}deg)` },
+    { transform:T },
+  ],{ duration:260, easing:'ease-out' });
+  seat._arrows.push(el); allArrows.push(el);
+  while(seat._arrows.length>10){ seat._arrows.shift().remove(); } // cap the pincushion
+}
+function clearArrows(){ allArrows.forEach(a=>a.remove()); allArrows.length=0; seats.forEach(s=>{ s._arrows=[]; }); }
+
+function snowballSplat(impact, angleDeg){
+  const ux=Math.cos(angleDeg*Math.PI/180), uy=Math.sin(angleDeg*Math.PI/180);
+  const splat=document.createElement('div');
+  splat.style.cssText='position:fixed;left:0;top:0;z-index:59;pointer-events:none;width:22px;height:18px;border-radius:48% 52% 55% 45%;'
+    +'background:radial-gradient(circle, rgba(255,255,255,0.95), rgba(214,236,255,0.6) 60%, transparent 75%)';
+  document.body.appendChild(splat);
+  splat.animate([
+    { transform:`translate(${impact.x}px,${impact.y}px) translate(-50%,-50%) scale(.4)`, opacity:0.95 },
+    { transform:`translate(${impact.x}px,${impact.y}px) translate(-50%,-50%) scale(1.15)`, opacity:0.8, offset:.3 },
+    { transform:`translate(${impact.x}px,${impact.y}px) translate(-50%,-50%) scale(1.25)`, opacity:0 },
+  ],{ duration:1100/TUNE.speed, easing:'ease-out', fill:'forwards' }).onfinish=()=>splat.remove();
+  // shatter: chunks fly back off the rim + fall
+  const back=Math.atan2(-uy,-ux);
+  for(let i=0;i<12;i++){
+    const sz=2+Math.random()*4;
+    const f=document.createElement('div');
+    f.style.cssText=`position:fixed;left:0;top:0;z-index:60;pointer-events:none;width:${sz}px;height:${sz}px;border-radius:50%;background:#eaf4ff;box-shadow:0 0 3px rgba(200,230,255,0.7)`;
+    document.body.appendChild(f);
+    const ang=back+(Math.random()-0.5)*2.4, spd=18+Math.random()*46;
+    const fx=impact.x+Math.cos(ang)*spd, fy=impact.y+Math.sin(ang)*spd+(18+Math.random()*48);
+    f.animate([
+      { transform:`translate(${impact.x}px,${impact.y}px) translate(-50%,-50%) scale(1)`, opacity:1 },
+      { transform:`translate(${fx}px,${fy}px) translate(-50%,-50%) scale(.3)`, opacity:0 },
+    ],{ duration:(650+Math.random()*350)/TUNE.speed, easing:'cubic-bezier(.2,.6,.4,1)', fill:'forwards' }).onfinish=()=>f.remove();
+  }
+}
+
+function sendProjectile(fromIdx,toIdx,kind,emote){
+  const from=seats[fromIdx], to=seats[toIdx];
+  if(emote.from && CLIPS[emote.from]) CLIPS[emote.from](from.av); // shooter's gesture
+  const A=seatCenter(from.mini), B=seatCenter(to.mini);
+  const dx=B.x-A.x, dy=B.y-A.y, dist=Math.hypot(dx,dy)||1;
+  const ux=dx/dist, uy=dy/dist;
+  const launch={ x:A.x+ux*A.r*0.7, y:A.y+uy*A.r*0.7 };
+  const impact={ x:B.x-ux*B.r*0.95, y:B.y-uy*B.r*0.95 }; // just inside the target's rim, shooter-facing side
+  const angleDeg=Math.atan2(uy,ux)*180/Math.PI;
+  const dur=600/TUNE.speed;
+  const onLand=()=>{ if(emote.to&&CLIPS[emote.to])CLIPS[emote.to](to.av); to.mini.classList.add('act'); setTimeout(()=>to.mini.classList.remove('act'),500/TUNE.speed); };
+  if(kind==='arrow'){
+    const fly=arrowEl(); document.body.appendChild(fly);
+    fly.animate([
+      { transform:`translate(${launch.x}px,${launch.y}px) translate(-100%,-50%) rotate(${angleDeg}deg)` },
+      { transform:`translate(${impact.x}px,${impact.y}px) translate(-100%,-50%) rotate(${angleDeg}deg)` },
+    ],{ duration:dur, easing:'cubic-bezier(.4,.85,.5,1)', fill:'forwards' }).onfinish=()=>{ fly.remove(); stickArrow(toIdx,impact,angleDeg); onLand(); };
+  } else {
+    const ball=snowballEl(); document.body.appendChild(ball);
+    ball.animate([
+      { transform:`translate(${launch.x}px,${launch.y}px) translate(-50%,-50%) scale(.7) rotate(0deg)` },
+      { transform:`translate(${impact.x}px,${impact.y}px) translate(-50%,-50%) scale(1.05) rotate(220deg)` },
+    ],{ duration:dur, easing:'cubic-bezier(.35,.7,.6,1)', fill:'forwards' }).onfinish=()=>{ ball.remove(); snowballSplat(impact,angleDeg); onLand(); };
+  }
+}
+
+// "Clear arrows" control next to Deal
+(() => {
+  const row=document.querySelector('.deal-row');
+  if(!row) return;
+  const cb=document.createElement('button');
+  cb.className='btn ghost'; cb.textContent='Clear 🏹'; cb.onclick=clearArrows;
+  row.appendChild(cb);
+})();
 
 /* ════════════════════════════════════════════════════════════════════════
    9 · keyboard shortcuts
