@@ -41,7 +41,10 @@ const COLUMN_3 = [3, 6, 9, 12, 15, 18, 21, 24, 27, 30, 33, 36];
 
 const CHIP_VALUES = [5, 25, 100, 500];
 const CARD_W = 44; // px — width of one rolodex card
-const STRIP_COPIES = 5; // duplicate wheel N times for seamless scroll
+const CARD_GAP = 4; // px — flex gap between cards
+const CARD_STRIDE = CARD_W + CARD_GAP; // px — distance from one card to the next
+const STRIP_COPIES = 9; // duplicate wheel N times so a spin never runs off the strip
+const SPIN_LAPS = 4; // full wheel rotations travelled during a spin
 
 function pocketColor(n: number): 'green' | 'red' | 'black' {
   if (n === 0) return 'green';
@@ -91,19 +94,6 @@ interface MiniAppRouletteProps {
 // Felt layout helpers
 // ---------------------------------------------------------------------------
 
-// The felt grid: row 0 = top (3,6,9…36), row 1 = mid (2,5,8…35), row 2 = bot (1,4,7…34)
-function feltGrid(): number[][] {
-  const rows: number[][] = [[], [], []];
-  for (let col = 0; col < 12; col++) {
-    rows[0].push(3 + col * 3); // top row
-    rows[1].push(2 + col * 3); // middle row
-    rows[2].push(1 + col * 3); // bottom row
-  }
-  return rows;
-}
-
-const FELT_ROWS = feltGrid();
-
 // Serialise a bet zone to a stable key for the bets map
 function betKey(type: RouletteBetType, numbers?: number[]): string {
   if (!numbers) return type;
@@ -126,10 +116,8 @@ function wheelIndexOf(pocket: number): number {
   return WHEEL_ORDER.indexOf(pocket);
 }
 
-// Total extended strip width in card units
+// Total number of cards in the extended (repeated) strip
 const TOTAL_CARDS = WHEEL_ORDER.length * STRIP_COPIES;
-// Center of the strip is at the middle copy
-const CENTER_START = Math.floor(STRIP_COPIES / 2) * WHEEL_ORDER.length;
 
 // ---------------------------------------------------------------------------
 // Component
@@ -181,10 +169,10 @@ export default function MiniAppRoulette({
       if (spinningRef.current) return;
       const dt = now - last;
       last = now;
-      idleOffsetRef.current -= (dt / 1000) * CARD_W * 0.4; // 0.4 cards/s
-      // Loop back when we've scrolled one full wheel length
-      const loopWidth = WHEEL_ORDER.length * CARD_W;
-      if (Math.abs(idleOffsetRef.current) >= loopWidth) {
+      idleOffsetRef.current -= (dt / 1000) * CARD_STRIDE * 0.4; // 0.4 cards/s
+      // Loop back seamlessly after scrolling one full wheel length
+      const loopWidth = WHEEL_ORDER.length * CARD_STRIDE;
+      if (idleOffsetRef.current <= -loopWidth) {
         idleOffsetRef.current += loopWidth;
       }
       if (stripRef.current) {
@@ -246,18 +234,30 @@ export default function MiniAppRoulette({
     if (!strip) { onDone(); return; }
 
     const wheelIdx = wheelIndexOf(resultPocket);
-    // Target: center copy of the strip, offset by wheel position, minus half visible strip
-    // Center card should land at horizontal center of the visible window (3 cards from left)
-    const targetCardIndex = CENTER_START + wheelIdx;
-    const containerCenter = 3 * CARD_W; // 3 cards from left edge = center of 7-card window
-    const targetOffset = -(targetCardIndex * CARD_W) + containerCenter;
+    // Center the result card under the marker using the *measured* window width.
+    const containerW = strip.parentElement?.clientWidth || 320;
+    const containerCenter = containerW / 2 - CARD_W / 2; // landing card's left edge so it sits dead-centre
+    const loopWidth = WHEEL_ORDER.length * CARD_STRIDE;
+    const halfWin = Math.ceil(containerW / CARD_STRIDE / 2) + 1;
 
-    // Add several full wheel rotations for spin drama
-    const extraLaps = 5;
-    const totalDistance = targetOffset - idleOffsetRef.current - extraLaps * WHEEL_ORDER.length * CARD_W;
-
-    const duration = 4500; // ms
     const startOffset = idleOffsetRef.current;
+
+    // Land ~SPIN_LAPS laps to the left of where we are now, then snap to the
+    // nearest copy of the result pocket so it ends up dead-centre.
+    const approxOffset = startOffset - SPIN_LAPS * loopWidth;
+    const approxIdx = (containerCenter - approxOffset) / CARD_STRIDE;
+    let landingIdx =
+      Math.round((approxIdx - wheelIdx) / WHEEL_ORDER.length) * WHEEL_ORDER.length + wheelIdx;
+    // Keep the landing card inside the filled part of the strip (no black edges).
+    const maxIdx = TOTAL_CARDS - 1 - halfWin;
+    const minIdx = halfWin;
+    while (landingIdx > maxIdx) landingIdx -= WHEEL_ORDER.length;
+    while (landingIdx < minIdx) landingIdx += WHEEL_ORDER.length;
+
+    const finalOffset = -(landingIdx * CARD_STRIDE) + containerCenter;
+    const totalDistance = finalOffset - startOffset;
+
+    const duration = 4200; // ms
     const startTime = performance.now();
 
     function easeOut(t: number): number {
@@ -267,13 +267,18 @@ export default function MiniAppRoulette({
     function frame(now: number) {
       const elapsed = now - startTime;
       const t = Math.min(elapsed / duration, 1);
-      const eased = easeOut(t);
-      const current = startOffset + totalDistance * eased;
-      idleOffsetRef.current = current;
+      const current = startOffset + totalDistance * easeOut(t);
       strip.style.transform = `translateX(${current}px)`;
       if (t < 1) {
+        idleOffsetRef.current = current;
         requestAnimationFrame(frame);
       } else {
+        // Normalise into [-loopWidth, 0]. The strip is periodic, so this shows
+        // the same number while keeping idle drift and the next spin on-screen.
+        let norm = finalOffset % loopWidth;
+        if (norm > 0) norm -= loopWidth;
+        idleOffsetRef.current = norm;
+        strip.style.transform = `translateX(${norm}px)`;
         spinningRef.current = false;
         onDone();
       }
@@ -347,35 +352,6 @@ export default function MiniAppRoulette({
     );
   }
 
-  function OuterBetZone({
-    label,
-    type,
-    numbers,
-    className = '',
-  }: {
-    label: string;
-    type: RouletteBetType;
-    numbers?: number[];
-    className?: string;
-  }) {
-    const amt = betAmount(type, numbers);
-    const highlight = phase === 'result' && lastResult && bets.size === 0 && amt === 0
-      ? false
-      : false; // After spin, bets are cleared — we show result highlight elsewhere
-    return (
-      <button
-        type="button"
-        className={`rl-outer-zone ${className}`}
-        onClick={() => placeBet(type, numbers)}
-        disabled={phase === 'spinning'}
-      >
-        <span className="rl-zone-label">{label}</span>
-        {amt > 0 && <BetChip amount={amt} />}
-        {highlight && <span className="rl-win-glow" />}
-      </button>
-    );
-  }
-
   // ---------------------------------------------------------------------------
   // Rolodex strip
   // ---------------------------------------------------------------------------
@@ -414,42 +390,30 @@ export default function MiniAppRoulette({
         .rl-balance strong{color:#22d3ee;}
 
         /* Rolodex strip */
-        .rl-strip-wrap{position:relative;height:68px;overflow:hidden;background:#070f1c;border-top:1px solid rgba(34,211,238,.12);border-bottom:1px solid rgba(34,211,238,.12);}
-        .rl-strip-inner{display:flex;position:absolute;left:0;top:0;bottom:0;align-items:center;will-change:transform;}
-        .rl-card{width:${CARD_W}px;height:52px;flex-shrink:0;display:flex;align-items:center;justify-content:center;border-radius:8px;margin:0 2px;font-family:Mitr,sans-serif;font-weight:700;font-size:1rem;transition:none;opacity:.55;}
-        .rl-card-center{opacity:1;transform:scale(1.15);box-shadow:0 0 14px 3px rgba(34,211,238,.45);border:2px solid #22d3ee;}
-        .rl-card-near{opacity:.8;transform:scale(1.05);}
-        .rl-strip-caret{position:absolute;top:0;left:50%;transform:translateX(-50%);width:0;height:0;border-left:7px solid transparent;border-right:7px solid transparent;border-top:9px solid #22d3ee;}
-        .rl-strip-caret-bot{position:absolute;bottom:0;left:50%;transform:translateX(-50%);width:0;height:0;border-left:7px solid transparent;border-right:7px solid transparent;border-bottom:9px solid #22d3ee;}
-        .rl-strip-line{position:absolute;top:0;bottom:0;left:50%;width:2px;background:rgba(34,211,238,.25);pointer-events:none;}
+        .rl-strip-wrap{position:relative;height:68px;overflow:hidden;background:#070f1c;border-top:1px solid rgba(34,211,238,.12);border-bottom:1px solid rgba(34,211,238,.12);-webkit-mask-image:linear-gradient(90deg,transparent,#000 12%,#000 88%,transparent);mask-image:linear-gradient(90deg,transparent,#000 12%,#000 88%,transparent);}
+        .rl-strip-inner{display:flex;gap:${CARD_GAP}px;position:absolute;left:0;top:0;bottom:0;align-items:center;will-change:transform;}
+        .rl-card{width:${CARD_W}px;height:52px;flex-shrink:0;display:flex;align-items:center;justify-content:center;border-radius:8px;font-family:Mitr,sans-serif;font-weight:700;font-size:1rem;}
+        .rl-strip-center-box{position:absolute;top:5px;bottom:5px;left:50%;width:${CARD_W + 8}px;transform:translateX(-50%);border:2px solid #22d3ee;border-radius:10px;box-shadow:0 0 16px 2px rgba(34,211,238,.45),inset 0 0 10px rgba(34,211,238,.15);pointer-events:none;z-index:3;}
+        .rl-strip-caret{position:absolute;top:0;left:50%;transform:translateX(-50%);width:0;height:0;border-left:7px solid transparent;border-right:7px solid transparent;border-top:9px solid #22d3ee;z-index:4;}
+        .rl-strip-caret-bot{position:absolute;bottom:0;left:50%;transform:translateX(-50%);width:0;height:0;border-left:7px solid transparent;border-right:7px solid transparent;border-bottom:9px solid #22d3ee;z-index:4;}
 
-        /* Felt table */
-        .rl-felt{padding:8px 10px 4px;flex:1;}
-        .rl-felt-inner{border:1px solid rgba(34,211,238,.2);border-radius:12px;overflow:hidden;background:#0b3d1a;}
+        /* Felt table — vertical (mobile-first, fills available height) */
+        .rl-felt{padding:8px 10px 6px;flex:1;min-height:0;display:flex;flex-direction:column;gap:6px;}
+        .rl-board{flex:1;min-height:0;display:grid;grid-template-columns:repeat(3,1fr) 30px;grid-template-rows:38px repeat(12,minmax(24px,1fr)) 30px;gap:3px;padding:5px;background:#0b3d1a;border:1px solid rgba(34,211,238,.2);border-radius:12px;}
+        .rl-cell{display:flex;align-items:center;justify-content:center;position:relative;border:none;border-radius:6px;color:#fff;font-family:Mitr,sans-serif;font-weight:700;font-size:.85rem;cursor:pointer;min-height:0;min-width:0;padding:0;}
+        .rl-cell:disabled{cursor:default;}
+        .rl-cell.rl-winning{box-shadow:inset 0 0 0 2px #fbbf24,0 0 10px 2px rgba(251,191,36,.6);z-index:1;}
+        .rl-zero-v{background:#16a34a;font-size:1rem;}
+        .rl-num-v{font-size:.95rem;}
+        .rl-dozen-v{background:#093016;color:#86efac;writing-mode:vertical-rl;font-size:.72rem;letter-spacing:.05em;}
+        .rl-col-v{background:#093016;color:#86efac;font-size:.72rem;}
 
-        .rl-grid{display:grid;grid-template-columns:28px 1fr 28px;gap:1px;background:rgba(34,211,238,.1);}
-        .rl-zero{background:#16a34a;display:flex;align-items:center;justify-content:center;font-family:Mitr,sans-serif;font-weight:700;font-size:.85rem;cursor:pointer;position:relative;grid-row:1/4;}
-        .rl-zero.rl-winning{box-shadow:inset 0 0 0 2px #fbbf24,0 0 12px 3px rgba(251,191,36,.5);}
-        .rl-numbers-grid{display:grid;grid-template-rows:repeat(3,1fr);gap:1px;}
-        .rl-num-row{display:grid;grid-template-columns:repeat(12,1fr);gap:1px;}
-        .rl-num{display:flex;align-items:center;justify-content:center;font-size:.65rem;font-family:Mitr,sans-serif;font-weight:700;cursor:pointer;position:relative;aspect-ratio:1;min-height:22px;}
-        .rl-num.rl-winning{box-shadow:inset 0 0 0 2px #fbbf24,0 0 8px 2px rgba(251,191,36,.6);z-index:1;}
-        .rl-col-bets{display:grid;grid-template-rows:repeat(3,1fr);gap:1px;}
-        .rl-col-btn{background:#0b3d1a;display:flex;align-items:center;justify-content:center;font-size:.6rem;color:#86efac;cursor:pointer;font-weight:700;position:relative;}
-
-        .rl-dozens{display:grid;grid-template-columns:28px 1fr 28px;gap:1px;background:rgba(34,211,238,.1);}
-        .rl-dozen-spacer{background:#070f1c;}
-        .rl-dozens-inner{display:grid;grid-template-columns:repeat(3,1fr);gap:1px;}
-        .rl-dozen-btn{background:#0b3d1a;display:flex;align-items:center;justify-content:center;font-size:.65rem;color:#86efac;font-weight:700;cursor:pointer;padding:5px 0;position:relative;}
-
-        .rl-evens{display:grid;grid-template-columns:repeat(6,1fr);gap:1px;background:rgba(34,211,238,.1);}
-        .rl-even-btn{padding:5px 0;display:flex;align-items:center;justify-content:center;font-size:.6rem;font-weight:700;cursor:pointer;position:relative;}
+        .rl-evens-v{display:grid;grid-template-columns:repeat(3,1fr);gap:3px;}
+        .rl-even-v{display:flex;align-items:center;justify-content:center;position:relative;border:none;border-radius:6px;font-family:Mitr,sans-serif;font-weight:700;font-size:.74rem;padding:9px 0;cursor:pointer;}
+        .rl-even-v:disabled{cursor:default;}
 
         /* Bet chip badge */
         .rl-chip{position:absolute;top:1px;right:1px;background:#22d3ee;color:#050a14;border-radius:4px;font-size:.48rem;font-weight:900;padding:0 2px;min-width:12px;text-align:center;line-height:13px;pointer-events:none;z-index:2;}
-        .rl-zone-label{pointer-events:none;text-align:center;}
-        .rl-outer-zone{display:flex;align-items:center;justify-content:center;position:relative;background:#0b3d1a;border:none;color:#86efac;font-weight:700;font-size:.65rem;cursor:pointer;padding:5px 0;width:100%;}
-        .rl-outer-zone:disabled{cursor:default;opacity:.7;}
 
         /* Bottom controls */
         .rl-controls{padding:10px 12px 8px;display:flex;flex-direction:column;gap:8px;}
@@ -492,14 +456,14 @@ export default function MiniAppRoulette({
 
         {/* Rolodex strip */}
         <div className="rl-strip-wrap">
-          <div className="rl-strip-line" />
+          <div className="rl-strip-center-box" />
           <div className="rl-strip-caret" />
           <div className="rl-strip-caret-bot" />
           <div className="rl-strip-inner" ref={stripRef}>
             {stripPockets.map((pocket, i) => {
               const bg = pocketBg(pocket);
-              // During result phase, highlight the center card (the one that landed)
-              // The offset determines which card is center — we just style all uniformly for performance
+              // Cards are styled uniformly; the fixed .rl-strip-center-box overlay
+              // frames whichever card the strip lands under (the result pocket).
               return (
                 <div
                   key={i}
@@ -544,119 +508,104 @@ export default function MiniAppRoulette({
           </div>
         )}
 
-        {/* European felt table */}
+        {/* European felt — vertical layout, fills available height */}
         <div className="rl-felt">
-          <div className="rl-felt-inner">
-            {/* Main grid: zero | numbers | column bets */}
-            <div className="rl-grid">
-              {/* Zero */}
+          <div className="rl-board">
+            {/* Zero — full-width top bar */}
+            <button
+              type="button"
+              className={`rl-cell rl-zero-v${isWinningNumber(0) ? ' rl-winning' : ''}`}
+              style={{ gridColumn: '1 / -1', gridRow: 1 }}
+              onClick={() => placeBet('straight', [0])}
+              disabled={phase === 'spinning'}
+            >
+              0
+              <BetChip amount={betAmount('straight', [0])} />
+            </button>
+
+            {/* Numbers 1–36 — 12 rows × 3 columns */}
+            {Array.from({ length: 36 }, (_, i) => i + 1).map((n) => {
+              const col = (n - 1) % 3;
+              const row = Math.floor((n - 1) / 3);
+              return (
+                <button
+                  key={n}
+                  type="button"
+                  className={`rl-cell rl-num-v${isWinningNumber(n) ? ' rl-winning' : ''}`}
+                  style={{ gridColumn: col + 1, gridRow: row + 2, background: pocketBg(n) }}
+                  onClick={() => placeBet('straight', [n])}
+                  disabled={phase === 'spinning'}
+                >
+                  {n}
+                  <BetChip amount={betAmount('straight', [n])} />
+                </button>
+              );
+            })}
+
+            {/* Dozen bets — right rail, each spanning four number rows */}
+            {([
+              ['1st 12', DOZEN_1, 2],
+              ['2nd 12', DOZEN_2, 6],
+              ['3rd 12', DOZEN_3, 10],
+            ] as [string, number[], number][]).map(([label, nums, startRow]) => (
               <button
+                key={label}
                 type="button"
-                className={`rl-zero${isWinningNumber(0) ? ' rl-winning' : ''}`}
-                onClick={() => placeBet('straight', [0])}
+                className="rl-cell rl-dozen-v"
+                style={{ gridColumn: 4, gridRow: `${startRow} / ${startRow + 4}` }}
+                onClick={() => placeBet('dozen', nums)}
                 disabled={phase === 'spinning'}
               >
-                0
-                <BetChip amount={betAmount('straight', [0])} />
+                {label}
+                <BetChip amount={betAmount('dozen', nums)} />
               </button>
+            ))}
 
-              {/* Number grid — 3 rows */}
-              <div className="rl-numbers-grid">
-                {FELT_ROWS.map((row, ri) => (
-                  <div key={ri} className="rl-num-row">
-                    {row.map((n) => (
-                      <button
-                        key={n}
-                        type="button"
-                        className={`rl-num${isWinningNumber(n) ? ' rl-winning' : ''}`}
-                        style={{ background: pocketBg(n), color: '#fff' }}
-                        onClick={() => placeBet('straight', [n])}
-                        disabled={phase === 'spinning'}
-                      >
-                        {n}
-                        <BetChip amount={betAmount('straight', [n])} />
-                      </button>
-                    ))}
-                  </div>
-                ))}
-              </div>
+            {/* Column 2:1 bets — bottom of each number column */}
+            {([COLUMN_1, COLUMN_2, COLUMN_3] as number[][]).map((nums, ci) => (
+              <button
+                key={ci}
+                type="button"
+                className="rl-cell rl-col-v"
+                style={{ gridColumn: ci + 1, gridRow: 14 }}
+                onClick={() => placeBet('column', nums)}
+                disabled={phase === 'spinning'}
+              >
+                2:1
+                <BetChip amount={betAmount('column', nums)} />
+              </button>
+            ))}
+          </div>
 
-              {/* Column 2:1 bets */}
-              <div className="rl-col-bets">
-                {([
-                  ['3rd', 'column', COLUMN_3],
-                  ['2nd', 'column', COLUMN_2],
-                  ['1st', 'column', COLUMN_1],
-                ] as const).map(([label, type, nums]) => (
-                  <button
-                    key={label}
-                    type="button"
-                    className="rl-col-btn"
-                    onClick={() => placeBet(type as RouletteBetType, nums as number[])}
-                    disabled={phase === 'spinning'}
-                    style={{ position: 'relative' }}
-                  >
-                    <span style={{ fontSize: '.55rem' }}>{label}<br />2:1</span>
-                    <BetChip amount={betAmount(type as RouletteBetType, nums as number[])} />
-                  </button>
-                ))}
-              </div>
-            </div>
-
-            {/* Dozen bets */}
-            <div className="rl-dozens">
-              <div className="rl-dozen-spacer" />
-              <div className="rl-dozens-inner">
-                {([
-                  ['1st 12', 'dozen', DOZEN_1],
-                  ['2nd 12', 'dozen', DOZEN_2],
-                  ['3rd 12', 'dozen', DOZEN_3],
-                ] as const).map(([label, type, nums]) => (
-                  <button
-                    key={label}
-                    type="button"
-                    className="rl-dozen-btn"
-                    onClick={() => placeBet(type as RouletteBetType, nums as number[])}
-                    disabled={phase === 'spinning'}
-                  >
-                    {label}
-                    <BetChip amount={betAmount(type as RouletteBetType, nums as number[])} />
-                  </button>
-                ))}
-              </div>
-              <div className="rl-dozen-spacer" />
-            </div>
-
-            {/* Even-money bets */}
-            <div className="rl-evens">
-              {([
-                ['1-18', 'low'],
-                ['EVEN', 'even'],
-                ['RED', 'red'],
-                ['BLACK', 'black'],
-                ['ODD', 'odd'],
-                ['19-36', 'high'],
-              ] as [string, RouletteBetType][]).map(([label, type]) => {
-                const isRed = type === 'red';
-                const isBlack = type === 'black';
-                return (
-                  <button
-                    key={type}
-                    type="button"
-                    className="rl-even-btn"
-                    style={{
-                      background: isRed ? '#dc2626' : isBlack ? '#1e293b' : '#0b3d1a',
-                      color: isRed || isBlack ? '#fff' : '#86efac',
-                    }}
-                    onClick={() => placeBet(type)}
-                    disabled={phase === 'spinning'}
-                  >
-                    {label}
-                    <BetChip amount={betAmount(type)} />
-                  </button>
-                );
-              })}
-            </div>
+          {/* Even-money bets */}
+          <div className="rl-evens-v">
+            {([
+              ['1-18', 'low'],
+              ['EVEN', 'even'],
+              ['RED', 'red'],
+              ['BLACK', 'black'],
+              ['ODD', 'odd'],
+              ['19-36', 'high'],
+            ] as [string, RouletteBetType][]).map(([label, type]) => {
+              const isRed = type === 'red';
+              const isBlack = type === 'black';
+              return (
+                <button
+                  key={type}
+                  type="button"
+                  className="rl-even-v"
+                  style={{
+                    background: isRed ? '#dc2626' : isBlack ? '#1e293b' : '#0b3d1a',
+                    color: isRed || isBlack ? '#fff' : '#86efac',
+                  }}
+                  onClick={() => placeBet(type)}
+                  disabled={phase === 'spinning'}
+                >
+                  {label}
+                  <BetChip amount={betAmount(type)} />
+                </button>
+              );
+            })}
           </div>
         </div>
 
