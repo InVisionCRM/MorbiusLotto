@@ -13,6 +13,8 @@ interface PokerBottomBarProps {
   /** Mobile portrait: off-turn, show a Live Action bar (acting player · timer · last action)
    * instead of the idle betting area. On your turn, the betting controls render as normal. */
   portrait?: boolean;
+  /** Portrait: open the chat/activity drawer (bumps activityMobileOpenSerial). */
+  onChat?: () => void;
   renderedState: PokerTableState | null;
   mySeat: PokerTableState['seats'][number] | null;
   actions: React.ReactNode;
@@ -21,7 +23,7 @@ interface PokerBottomBarProps {
 const POKER_TURN_SECONDS = 30;
 
 /** Off-turn portrait dock: who's acting, a draining timer, and the latest action. */
-function PortraitLiveBar({ state }: { state: PokerTableState | null }) {
+function PortraitLiveBar({ state, onChat }: { state: PokerTableState | null; onChat?: () => void }) {
   const hand = state?.currentHand ?? null;
   const actingPos = hand?.actingPosition ?? null;
   const acting = actingPos != null ? state?.seats?.[actingPos] ?? null : null;
@@ -83,6 +85,19 @@ function PortraitLiveBar({ state }: { state: PokerTableState | null }) {
           {Math.ceil(remaining)}s
         </div>
       )}
+      {onChat && (
+        <button
+          type="button"
+          onClick={onChat}
+          aria-label="Open chat"
+          className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-full"
+          style={{ background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.1)' }}
+        >
+          <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,0.72)" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round">
+            <path d="M20 13.5a2 2 0 0 1-2 2H9l-4 3v-3.2A2 2 0 0 1 4 13.5v-7a2 2 0 0 1 2-2h12a2 2 0 0 1 2 2z" />
+          </svg>
+        </button>
+      )}
     </div>
   );
 }
@@ -103,6 +118,7 @@ export function PokerBottomBar({
   fullscreen = false,
   mobileLandscape = false,
   portrait = false,
+  onChat,
   renderedState,
   mySeat,
   actions,
@@ -222,7 +238,7 @@ export function PokerBottomBar({
       }}
     >
       <div className="w-full max-sm:px-0 max-sm:pt-0 max-sm:pb-0 sm:px-3 sm:pt-1.5 sm:pb-[max(6px,env(safe-area-inset-bottom,0px))]">
-        {portraitOffTurn ? <PortraitLiveBar state={renderedState} /> : actions}
+        {portraitOffTurn ? <PortraitLiveBar state={renderedState} onChat={onChat} /> : actions}
       </div>
     </div>
   );

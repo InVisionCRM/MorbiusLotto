@@ -989,6 +989,7 @@ export default function PokerTablePage() {
                 fullscreen={isFullscreen}
                 mobileLandscape={isMobileLandscape && !isFullscreen}
                 portrait={isPortraitMobile}
+                onChat={() => setActivityMobileOpenSerial((s) => s + 1)}
                 renderedState={renderedState}
                 mySeat={mySeat}
                 actions={sharedActions}
@@ -1021,14 +1022,13 @@ export default function PokerTablePage() {
               </Sidebar>
             )}
 
-            {/* Mobile-landscape: mount PokerActivityFeed in a hidden host
-                so only its `createPortal(mobileDrawerChrome, document.body)`
-                escape-hatch surfaces. The visible "right rail" UI of the
-                feed has no place on a 390px-tall landscape phone and would
-                otherwise paint inline in document flow. The portaled drawer
-                opens via the top-bar 💬 button bumping
-                `activityMobileOpenSerial`. */}
-            {pokerChatRoomId && !isFullscreen && isMobileLandscape && (
+            {/* Mobile (landscape OR portrait): mount PokerActivityFeed in a hidden
+                host so only its `createPortal(mobileDrawerChrome, document.body)`
+                escape-hatch surfaces. The visible "right rail" UI has no place on a
+                phone and would otherwise paint inline. The portaled drawer opens via
+                a 💬 button bumping `activityMobileOpenSerial` (portrait: the dock's
+                Live Action bar; landscape: the top bar). */}
+            {pokerChatRoomId && !isFullscreen && (isMobileLandscape || isPortraitMobile) && (
               <div aria-hidden className="hidden">
                 <PokerActivityFeed
                   layout="right-rail"
