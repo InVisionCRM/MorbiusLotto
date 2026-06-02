@@ -34,9 +34,11 @@ const POKER_DIRECTED_EMOTES_DEF = {
   fire:  { glyph: '🔥', label: '',     sender: 'cool',  target: 'shock' },
   dance: { glyph: '🕺', label: '',     sender: 'dance', target: 'happy' },
   money: { glyph: '🤑', label: '',     sender: 'money', target: 'surprised' },
-  arrow:    { glyph: '🏹', label: '', sender: 'angry', target: 'shock',     projectile: 'arrow' },
+  // Projectile reactions must NOT use infinite-shake emotions (shock = 10Hz buzz, angry = 3Hz buzz)
+  // — the head-knock recoil + comic burst + SFX carry the impact. Keep these calm/one-shot.
+  arrow:    { glyph: '🏹', label: '', sender: 'cool',  target: 'surprised', projectile: 'arrow' },
   snowball: { glyph: '❄️', label: '', sender: 'happy', target: 'surprised', projectile: 'snowball' },
-  tomato:   { glyph: '🍅', label: '', sender: 'angry', target: 'shock',     projectile: 'tomato' },
+  tomato:   { glyph: '🍅', label: '', sender: 'cool',  target: 'surprised', projectile: 'tomato' },
 } satisfies Record<string, PokerDirectedEmote>;
 
 export type PokerDirectedEmoteKind = keyof typeof POKER_DIRECTED_EMOTES_DEF;
