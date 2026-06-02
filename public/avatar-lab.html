@@ -208,6 +208,48 @@
   .legend b{color:var(--muted)}
   .footer-note{margin-top:26px;color:var(--dim);font-size:11.5px;text-align:center;line-height:1.7}
   .kbd{border:1px solid var(--line);border-bottom-width:2px;border-radius:6px;padding:1px 6px;font-size:11px;color:var(--muted)}
+
+  /* ── Winner's circle (spotlight + pelt/praise) ── */
+  .wc-stage{position:relative;width:100%;height:300px;border-radius:14px;overflow:hidden;margin-bottom:12px;border:1px solid var(--line);
+    background:
+      radial-gradient(240px 170px at 50% 30%, rgba(251,191,36,.10), transparent 70%),
+      radial-gradient(circle at 50% 128%, rgba(99,102,241,.30), transparent 60%),
+      linear-gradient(180deg,#1b1136,#0c0720);
+    box-shadow:inset 0 -28px 60px -30px #000, inset 0 1px 0 rgba(255,255,255,.04);transition:box-shadow .35s ease}
+  .wc-stage.flash{box-shadow:inset 0 -28px 60px -30px #000, 0 0 0 1px rgba(251,191,36,.7) inset, 0 0 50px -6px rgba(251,191,36,.55)}
+  .wc-stage.danger{box-shadow:inset 0 -28px 60px -30px #000, 0 0 0 1px rgba(251,93,93,.7) inset, 0 0 50px -8px rgba(251,93,93,.5)}
+  .wc-spotlight{position:absolute;left:50%;top:-30px;width:320px;height:320px;transform:translateX(-50%);z-index:0;pointer-events:none;
+    background:radial-gradient(closest-side, rgba(251,191,36,.20), transparent 70%);opacity:0;transition:opacity .45s ease}
+  .wc-stage.live .wc-spotlight{opacity:1}
+  .wc-floor{position:absolute;left:50%;bottom:58px;width:150px;height:26px;transform:translateX(-50%);z-index:1;opacity:0;
+    background:radial-gradient(closest-side,rgba(0,0,0,.5),transparent 75%);border-radius:50%;filter:blur(1px)}
+  .wc-spot{position:absolute;left:50%;bottom:62px;width:150px;height:172px;transform:translateX(-50%);z-index:3;opacity:0;pointer-events:none;
+    filter:drop-shadow(0 12px 18px rgba(0,0,0,.55))}
+  .wc-spot svg{width:130%;height:130%;position:absolute;left:50%;bottom:-6%;transform:translateX(-50%);display:block}
+  .wc-board{position:absolute;left:50%;bottom:40px;transform:translateX(-50%);display:flex;gap:6px;z-index:4}
+  .wc-card{width:32px;height:44px;border-radius:5px;background:linear-gradient(180deg,#fff,#f0eaff);
+    box-shadow:0 4px 10px -4px rgba(0,0,0,.6), inset 0 0 0 1px rgba(0,0,0,.08);
+    display:flex;flex-direction:column;align-items:center;justify-content:center;font-weight:800;font-size:13px;line-height:1.05;opacity:0}
+  .wc-card .s{font-size:11px}
+  .wc-card.red{color:#d6275a}.wc-card.blk{color:#241247}
+  .wc-banner{position:absolute;left:50%;top:10px;transform:translateX(-50%);text-align:center;z-index:5;opacity:0;transition:opacity .35s ease}
+  .wc-stage.live .wc-banner{opacity:1}
+  .wc-banner .nm{font-weight:850;font-size:17px;letter-spacing:.4px;color:#fff;text-shadow:0 2px 10px rgba(0,0,0,.6)}
+  .wc-banner .amt{font-weight:800;font-size:13.5px;color:var(--gold);margin-top:1px;text-shadow:0 1px 7px rgba(0,0,0,.85)}
+  .wc-banner .hand{font-size:10.5px;color:var(--muted);margin-top:1px;letter-spacing:.6px;text-transform:uppercase;text-shadow:0 1px 6px rgba(0,0,0,.85)}
+  .wc-count{position:absolute;left:0;bottom:0;width:100%;z-index:5;padding:0 12px 8px}
+  .wc-count .lbl{font-size:11px;color:var(--dim);text-align:center;margin-bottom:4px}
+  .wc-count .bar{height:5px;border-radius:5px;background:rgba(255,255,255,.08);overflow:hidden}
+  .wc-count .fill{height:100%;width:100%;border-radius:5px;background:linear-gradient(90deg,var(--violet),var(--gold))}
+  .wc-react{display:flex;gap:10px;flex-wrap:wrap;justify-content:center;margin:2px 0 6px;transition:.2s}
+  .wc-react.dim{opacity:.4;filter:grayscale(.45);pointer-events:none}
+  .wc-react .grp{display:flex;gap:6px;align-items:center;padding:5px 9px;border:1px solid var(--line);border-radius:12px;background:rgba(255,255,255,.02)}
+  .wc-react .grp .gl{font-size:10px;letter-spacing:1px;text-transform:uppercase;color:var(--dim);margin-right:3px;font-weight:700}
+  .wc-rx{cursor:pointer;font-size:17px;width:36px;height:36px;border-radius:10px;display:grid;place-items:center;
+    border:1px solid var(--line);background:rgba(255,255,255,.02);transition:.14s;user-select:none}
+  .wc-rx:hover{transform:translateY(-2px)}
+  .wc-rx.salute:hover{border-color:var(--green);box-shadow:0 8px 18px -10px rgba(52,211,153,.85)}
+  .wc-rx.sabotage:hover{border-color:var(--red);box-shadow:0 8px 18px -10px rgba(251,93,93,.85)}
 </style>
 </head>
 <body>
@@ -289,6 +331,28 @@
           <button class="btn" id="dealBtn">Deal a hand ▶</button>
           <button class="btn ghost" id="autoDealBtn">Auto-deal: off</button>
           <span class="s" style="color:var(--dim);font-size:11.5px">Each seat reacts to its own result — win, bust, fold, bad beat.</span>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="section-title">Winner's circle <span class="tag">15s spotlight</span></div>
+        <div class="wc-stage" id="wcStage">
+          <div class="wc-spotlight"></div>
+          <div class="wc-floor" id="wcFloor"></div>
+          <div class="wc-board" id="wcBoard"></div>
+          <div class="wc-spot" id="wcSpot"></div>
+          <div class="wc-banner" id="wcBanner"></div>
+          <div class="wc-count">
+            <div class="lbl" id="wcLbl">Waiting for the next winner…</div>
+            <div class="bar"><div class="fill" id="wcFill"></div></div>
+          </div>
+        </div>
+        <div class="wc-react dim" id="wcReact"></div>
+        <div class="deal-row">
+          <button class="btn" id="wcRun">Run winner's circle ▶</button>
+          <button class="btn ghost" id="wcRoyal">👑 Royal flush</button>
+          <button class="btn ghost" id="wcHeckle">Auto-heckle: off</button>
+          <span class="s" style="color:var(--dim);font-size:11.5px">Winner rises to center for the 15s wait — losers <b style="color:var(--green)">salute</b> or <b style="color:var(--red)">sabotage</b>.</span>
         </div>
       </div>
     </div>
@@ -692,6 +756,12 @@ function Avatar(host,{simple=false,seed=0}={}){
   const api={P,M,S,E,t:()=>t, setPose, setBaseMood, resetMood, setMouth, setEyeSymbol, poke,
     setLook:(x,y)=>{E.track=true;E.lookT.x=x;E.lookT.y=y;}, stopTrack:()=>{E.track=false;},
     aura:(op,color)=>{if(color)host.style.setProperty('--c-aura',color);S.auraOp.t=op;},
+    // one-shot velocity kick on the head springs → a single jolt that overshoots & settles
+    // (used when a projectile lands: head recoils away from the thrower). dir is in viewBox units.
+    impulse:({x=0,y=0,rot=0,bodyk=0.35}={})=>{
+      S.headX.vel+=x; S.headY.vel+=y; S.headRot.vel+=rot;
+      S.bodyX.vel+=x*bodyk; S.bodyRot.vel+=rot*bodyk;
+    },
     fx:(...a)=>spawnFX(P.fx,...a), tick, host, get asleep(){return E.asleep;},
     onSettle:(fn)=>{onSettle=fn;}, simple,
   };
@@ -1251,7 +1321,7 @@ bo.oninput=()=>{TUNE.bounce=bo.value/100;bov.textContent=bo.value+'%';applyBounc
 function applyBounce(){
   // lower zeta on the "springy" channels as bounce rises
   const z=lerp(.95,.38,TUNE.bounce);
-  [hero,...seats.map(s=>s.av)].forEach(a=>{
+  [hero,...seats.map(s=>s.av),...(winnerAv?[winnerAv]:[])].forEach(a=>{
     ['rootRot','rootY','rootSy','bodySy','headRot','mouthSx','mouthSy'].forEach(k=>a.S[k].zeta=z);
     a.S.hairRot.zeta=lerp(.7,.3,TUNE.bounce);a.S.earRot.zeta=lerp(.55,.22,TUNE.bounce);
   });
@@ -1339,7 +1409,7 @@ NAMES.forEach((nm,i)=>{
   av.setBaseMood({eyes:{sy:.9}});   // laid-back resting look
   seats.push({av,mini,el:seat,name:nm});
 });
-function dealHand(){
+function dealHand(circle){
   // everyone reacts to deal, then resolve
   seats.forEach(s=>{s.mini.classList.remove('act');CLIPS.reveal(s.av);});
   const winner=(Math.random()*seats.length)|0;
@@ -1355,14 +1425,16 @@ function dealHand(){
         else CLIPS.sad(s.av);
       }
     });
+    // showdown over → winner rises into the center spotlight for the between-hands wait
+    if(circle) setTimeout(()=>runWinnerCircle(winner,{big:bigWin}), 280/TUNE.speed);
   },1700/TUNE.speed);
 }
-document.getElementById('dealBtn').onclick=dealHand;
+document.getElementById('dealBtn').onclick=()=>dealHand(true);
 let autoDeal=false,autoDealTimer=null;
 const autoDealBtn=document.getElementById('autoDealBtn');
 autoDealBtn.onclick=()=>{
   autoDeal=!autoDeal;autoDealBtn.textContent='Auto-deal: '+(autoDeal?'on':'off');
-  clearInterval(autoDealTimer);if(autoDeal){dealHand();autoDealTimer=setInterval(dealHand,5200/TUNE.speed);}
+  clearInterval(autoDealTimer);if(autoDeal){dealHand(false);autoDealTimer=setInterval(()=>dealHand(false),5200/TUNE.speed);}
 };
 
 /* ── DIRECTED EMOTES ──────────────────────────────────────────────────────
@@ -1462,9 +1534,8 @@ function snowballEl(){
   return d;
 }
 
-const allArrows=[];
-function stickArrow(toIdx, impact, angleDeg){
-  const seat=seats[toIdx]; if(!seat._arrows) seat._arrows=[];
+const allArrows=[], winnerArrows=[];
+function stickArrowInto(bucket, impact, angleDeg, cap=10){
   const el=arrowEl(); el.style.zIndex='58'; document.body.appendChild(el);
   const T=`translate(${impact.x}px,${impact.y}px) translate(-100%,-50%) rotate(${angleDeg}deg)`;
   el.style.transform=T;
@@ -1473,28 +1544,50 @@ function stickArrow(toIdx, impact, angleDeg){
     { transform:`translate(${impact.x}px,${impact.y}px) translate(-100%,-50%) rotate(${angleDeg+4}deg)` },
     { transform:T },
   ],{ duration:260, easing:'ease-out' });
-  seat._arrows.push(el); allArrows.push(el);
-  while(seat._arrows.length>10){ seat._arrows.shift().remove(); } // cap the pincushion
+  bucket.push(el); allArrows.push(el);
+  while(bucket.length>cap){ bucket.shift().remove(); } // cap the pincushion
+  return el;
 }
-function clearArrows(){ allArrows.forEach(a=>a.remove()); allArrows.length=0; seats.forEach(s=>{ s._arrows=[]; }); }
+function stickArrow(toIdx, impact, angleDeg){ const seat=seats[toIdx]; if(!seat._arrows)seat._arrows=[]; stickArrowInto(seat._arrows, impact, angleDeg); }
+function clearArrows(){ allArrows.forEach(a=>a.remove()); allArrows.length=0; winnerArrows.length=0; seats.forEach(s=>{ s._arrows=[]; }); }
 
-function snowballSplat(impact, angleDeg){
+const SPLAT_PALETTES={
+  snow:  { core:'rgba(255,255,255,0.95), rgba(214,236,255,0.6) 60%, transparent 75%', chunk:'#eaf4ff', glow:'rgba(200,230,255,0.7)' },
+  tomato:{ core:'rgba(235,70,70,0.95), rgba(150,15,15,0.6) 60%, transparent 78%',      chunk:'#e23b3b', glow:'rgba(220,70,70,0.6)' },
+  egg:   { core:'rgba(255,250,225,0.97), rgba(255,205,80,0.7) 55%, transparent 80%',   chunk:'#ffd86a', glow:'rgba(255,215,110,0.7)' },
+};
+// projectile body for lobbed throws (snowball / tomato / egg)
+function lobEl(kind){
+  if(kind==='snowball') return snowballEl();
+  const d=document.createElement('div');
+  const fill = kind==='tomato'
+    ? 'radial-gradient(circle at 35% 30%, #ff7a7a, #d61f1f 70%, #9e1414)'
+    : 'radial-gradient(circle at 35% 30%, #fffaf0, #ffe08a 70%, #f4c14e)';
+  const glow = kind==='tomato' ? 'rgba(220,40,40,0.6)' : 'rgba(255,210,110,0.6)';
+  const sz   = kind==='tomato' ? 16 : 14;
+  const radius = kind==='egg' ? '50% 50% 50% 50% / 60% 60% 40% 40%' : '50%';
+  d.style.cssText=`position:fixed;left:0;top:0;z-index:62;pointer-events:none;width:${sz}px;height:${sz}px;border-radius:${radius};background:${fill};box-shadow:0 0 7px ${glow}`;
+  return d;
+}
+// generic impact splat — oval smear + chunks that fly back off the rim and fall (palette tints it)
+function splat(impact, angleDeg, pal){
+  pal = pal || SPLAT_PALETTES.snow;
   const ux=Math.cos(angleDeg*Math.PI/180), uy=Math.sin(angleDeg*Math.PI/180);
-  const splat=document.createElement('div');
-  splat.style.cssText='position:fixed;left:0;top:0;z-index:59;pointer-events:none;width:22px;height:18px;border-radius:48% 52% 55% 45%;'
-    +'background:radial-gradient(circle, rgba(255,255,255,0.95), rgba(214,236,255,0.6) 60%, transparent 75%)';
-  document.body.appendChild(splat);
-  splat.animate([
+  const blob=document.createElement('div');
+  blob.style.cssText='position:fixed;left:0;top:0;z-index:59;pointer-events:none;width:22px;height:18px;border-radius:48% 52% 55% 45%;'
+    +`background:radial-gradient(circle, ${pal.core})`;
+  document.body.appendChild(blob);
+  blob.animate([
     { transform:`translate(${impact.x}px,${impact.y}px) translate(-50%,-50%) scale(.4)`, opacity:0.95 },
     { transform:`translate(${impact.x}px,${impact.y}px) translate(-50%,-50%) scale(1.15)`, opacity:0.8, offset:.3 },
     { transform:`translate(${impact.x}px,${impact.y}px) translate(-50%,-50%) scale(1.25)`, opacity:0 },
-  ],{ duration:1100/TUNE.speed, easing:'ease-out', fill:'forwards' }).onfinish=()=>splat.remove();
+  ],{ duration:1100/TUNE.speed, easing:'ease-out', fill:'forwards' }).onfinish=()=>blob.remove();
   // shatter: chunks fly back off the rim + fall
   const back=Math.atan2(-uy,-ux);
   for(let i=0;i<12;i++){
     const sz=2+Math.random()*4;
     const f=document.createElement('div');
-    f.style.cssText=`position:fixed;left:0;top:0;z-index:60;pointer-events:none;width:${sz}px;height:${sz}px;border-radius:50%;background:#eaf4ff;box-shadow:0 0 3px rgba(200,230,255,0.7)`;
+    f.style.cssText=`position:fixed;left:0;top:0;z-index:60;pointer-events:none;width:${sz}px;height:${sz}px;border-radius:50%;background:${pal.chunk};box-shadow:0 0 3px ${pal.glow}`;
     document.body.appendChild(f);
     const ang=back+(Math.random()-0.5)*2.4, spd=18+Math.random()*46;
     const fx=impact.x+Math.cos(ang)*spd, fy=impact.y+Math.sin(ang)*spd+(18+Math.random()*48);
@@ -1504,31 +1597,42 @@ function snowballSplat(impact, angleDeg){
     ],{ duration:(650+Math.random()*350)/TUNE.speed, easing:'cubic-bezier(.2,.6,.4,1)', fill:'forwards' }).onfinish=()=>f.remove();
   }
 }
+function snowballSplat(impact, angleDeg){ splat(impact, angleDeg, SPLAT_PALETTES.snow); }
 
+// geometry: launch just outside the shooter's rim, impact just inside the target's rim (shooter-facing side)
+function projGeom(A,B){
+  const dx=B.x-A.x, dy=B.y-A.y, dist=Math.hypot(dx,dy)||1, ux=dx/dist, uy=dy/dist;
+  return { ux,uy, angleDeg:Math.atan2(uy,ux)*180/Math.PI,
+    launch:{ x:A.x+ux*A.r*0.7, y:A.y+uy*A.r*0.7 },
+    impact:{ x:B.x-ux*B.r*0.95, y:B.y-uy*B.r*0.95 } };
+}
+// fly an arrow A→B; it sticks into `bucket` on impact, then onLand(impact,angle)
+function flyArrow(A,B,bucket,onLand){
+  const {launch,impact,angleDeg}=projGeom(A,B);
+  SFX.whoosh();
+  const fly=arrowEl(); document.body.appendChild(fly);
+  fly.animate([
+    { transform:`translate(${launch.x}px,${launch.y}px) translate(-100%,-50%) rotate(${angleDeg}deg)` },
+    { transform:`translate(${impact.x}px,${impact.y}px) translate(-100%,-50%) rotate(${angleDeg}deg)` },
+  ],{ duration:460/TUNE.speed, easing:'linear', fill:'forwards' }).onfinish=()=>{ fly.remove(); stickArrowInto(bucket,impact,angleDeg); onLand&&onLand(impact,angleDeg); };
+}
+// fly a lobbed projectile (snowball/tomato/egg) A→B; it splats with `pal` on impact, then onLand(impact,angle)
+function flyLob(A,B,node,pal,onLand){
+  const {launch,impact,angleDeg}=projGeom(A,B);
+  SFX.whoosh();
+  document.body.appendChild(node);
+  node.animate([   // motion-smear: stretched along travel, lands ON the final frame (no hover) — splat() sells the squash
+    { transform:`translate(${launch.x}px,${launch.y}px) translate(-50%,-50%) rotate(${angleDeg}deg) scale(1.5,.72)`, opacity:.95 },
+    { transform:`translate(${impact.x}px,${impact.y}px) translate(-50%,-50%) rotate(${angleDeg}deg) scale(1.6,.66)`, opacity:1 },
+  ],{ duration:560/TUNE.speed, easing:'ease-in', fill:'forwards' }).onfinish=()=>{ node.remove(); splat(impact,angleDeg,pal); onLand&&onLand(impact,angleDeg); };
+}
 function sendProjectile(fromIdx,toIdx,kind,emote){
   const from=seats[fromIdx], to=seats[toIdx];
   if(emote.from && CLIPS[emote.from]) CLIPS[emote.from](from.av); // shooter's gesture
-  const A=seatCenter(from.mini), B=seatCenter(to.mini);
-  const dx=B.x-A.x, dy=B.y-A.y, dist=Math.hypot(dx,dy)||1;
-  const ux=dx/dist, uy=dy/dist;
-  const launch={ x:A.x+ux*A.r*0.7, y:A.y+uy*A.r*0.7 };
-  const impact={ x:B.x-ux*B.r*0.95, y:B.y-uy*B.r*0.95 }; // just inside the target's rim, shooter-facing side
-  const angleDeg=Math.atan2(uy,ux)*180/Math.PI;
-  const dur=600/TUNE.speed;
-  const onLand=()=>{ if(emote.to&&CLIPS[emote.to])CLIPS[emote.to](to.av); to.mini.classList.add('act'); setTimeout(()=>to.mini.classList.remove('act'),500/TUNE.speed); };
-  if(kind==='arrow'){
-    const fly=arrowEl(); document.body.appendChild(fly);
-    fly.animate([
-      { transform:`translate(${launch.x}px,${launch.y}px) translate(-100%,-50%) rotate(${angleDeg}deg)` },
-      { transform:`translate(${impact.x}px,${impact.y}px) translate(-100%,-50%) rotate(${angleDeg}deg)` },
-    ],{ duration:dur, easing:'cubic-bezier(.4,.85,.5,1)', fill:'forwards' }).onfinish=()=>{ fly.remove(); stickArrow(toIdx,impact,angleDeg); onLand(); };
-  } else {
-    const ball=snowballEl(); document.body.appendChild(ball);
-    ball.animate([
-      { transform:`translate(${launch.x}px,${launch.y}px) translate(-50%,-50%) scale(.7) rotate(0deg)` },
-      { transform:`translate(${impact.x}px,${impact.y}px) translate(-50%,-50%) scale(1.05) rotate(220deg)` },
-    ],{ duration:dur, easing:'cubic-bezier(.35,.7,.6,1)', fill:'forwards' }).onfinish=()=>{ ball.remove(); snowballSplat(impact,angleDeg); onLand(); };
-  }
+  if(!to._arrows) to._arrows=[];
+  const onLand=()=>{ hitSound(kind); if(emote.to&&CLIPS[emote.to])CLIPS[emote.to](to.av); to.mini.classList.add('act'); setTimeout(()=>to.mini.classList.remove('act'),500/TUNE.speed); };
+  if(kind==='arrow') flyArrow(seatCenter(from.mini), seatCenter(to.mini), to._arrows, onLand);
+  else flyLob(seatCenter(from.mini), seatCenter(to.mini), snowballEl(), SPLAT_PALETTES.snow, onLand);
 }
 
 // "Clear arrows" control next to Deal
@@ -1539,6 +1643,278 @@ function sendProjectile(fromIdx,toIdx,kind,emote){
   cb.className='btn ghost'; cb.textContent='Clear 🏹'; cb.onclick=clearArrows;
   row.appendChild(cb);
 })();
+
+/* ════════════════════════════════════════════════════════════════════════
+   8.5 · WINNER'S CIRCLE — the winner rises BIG into the center spotlight for
+   the 15s between-hands wait, plays a celebration clip, and everyone else can
+   salute 👏 or sabotage 🍅 the winner (reusing the projectile rig).
+   Maps to poker: hand.winners[] (name / amount / hand rank) + the intermission
+   (POKER_BETWEEN_HANDS_DELAY_MS). In prod the big avatar mounts over the board
+   and pelts ride the same WS "directed emote" event as seat→seat throws.
+   ════════════════════════════════════════════════════════════════════════ */
+const WINNER_CIRCLE_MS=15000;   // real between-hands wait — the Speed slider shortens it for testing
+const wcStage=document.getElementById('wcStage');
+const wcSpot=document.getElementById('wcSpot');
+const wcFloor=document.getElementById('wcFloor');
+const wcBoard=document.getElementById('wcBoard');
+const wcBanner=document.getElementById('wcBanner');
+const wcReactEl=document.getElementById('wcReact');
+const wcFill=document.getElementById('wcFill');
+const wcLbl=document.getElementById('wcLbl');
+
+// persistent big avatar living on the center stage (re-skinned to whoever wins)
+let winnerAv=Avatar(wcSpot,{seed:9});
+winnerAv.host._idle=true; winnerAv.host._allowSleep=false; winnerAv.host._track=false; winnerAv.host._hair=true;
+winnerAv.setBaseMood({eyes:{sy:.9}});
+applyChar(wcSpot,CHARS[0]);
+
+let wcActive=false, wcWinnerIdx=-1, wcEndTimer=null, wcCountIv=null, wcHeckleTimer=null, wcAutoHeckle=false;
+
+// flavour community board
+const WC_SUITS=[['♠','blk'],['♥','red'],['♦','red'],['♣','blk']];
+const WC_RANKS=['A','K','Q','J','10','9','8','7','6','5','4','3','2'];
+function renderBoard(){
+  wcBoard.innerHTML='';
+  for(let i=0;i<5;i++){
+    const su=pick(WC_SUITS), r=pick(WC_RANKS);
+    const c=document.createElement('div'); c.className='wc-card '+su[1];
+    c.innerHTML=`<span>${r}</span><span class="s">${su[0]}</span>`;
+    wcBoard.appendChild(c);
+    c.animate([{opacity:0,transform:'translateY(10px) rotateY(45deg)'},{opacity:1,transform:'translateY(0) rotateY(0)'}],
+      {duration:300/TUNE.speed,delay:i*70/TUNE.speed,easing:'cubic-bezier(.2,.8,.3,1.1)',fill:'forwards'});
+  }
+}
+
+// reaction palette — salute (winner warms up) vs sabotage (winner flinches)
+const WINNER_REACTIONS=[
+  {id:'clap',  g:'👏', type:'salute',  from:'happy',     win:'happy'},
+  {id:'gg',    g:'🤝', txt:'GG', type:'salute', from:'nod', win:'nod'},
+  {id:'cheers',g:'🍻', type:'salute',  from:'happy',     win:'excited'},
+  {id:'love',  g:'❤️', type:'salute',  from:'blowKiss',  win:'love'},
+  {id:'rose',  g:'🌹', type:'salute',  from:'blowKiss',  win:'shy'},
+  {id:'tomato',g:'🍅', type:'sabotage',from:'taunt',     proj:'lob', kind:'tomato',  pow:'SPLAT', powColor:'#ef4444'},
+  {id:'egg',   g:'🥚', type:'sabotage',from:'smug',      proj:'lob', kind:'egg',     pow:'SPLORT',powColor:'#f59e0b'},
+  {id:'snow',  g:'❄️', type:'sabotage',from:'taunt',     proj:'lob', kind:'snowball',pow:'WHAP',  powColor:'#38bdf8'},
+  {id:'arrow', g:'🏹', type:'sabotage',from:'determined',proj:'arrow',               pow:'THWP',  powColor:'#94a3b8'},
+  {id:'boo',   g:'👎', txt:'BOO', type:'sabotage', from:'smug', win:'angry'},
+];
+(function buildReactBar(){
+  const mk=(label,type)=>{
+    const grp=document.createElement('div'); grp.className='grp';
+    grp.innerHTML=`<span class="gl">${label}</span>`;
+    WINNER_REACTIONS.filter(r=>r.type===type).forEach(r=>{
+      const b=document.createElement('div'); b.className='wc-rx '+type; b.textContent=r.g; b.title=r.id;
+      b.onclick=()=>peltWinner(r);
+      grp.appendChild(b);
+    });
+    return grp;
+  };
+  wcReactEl.appendChild(mk('Salute','salute'));
+  wcReactEl.appendChild(mk('Sabotage','sabotage'));
+})();
+
+// target point on the big avatar (headFrac: 0=top .. 1=bottom of the box)
+function winnerTarget(headFrac){
+  const r=wcSpot.getBoundingClientRect();
+  return { x:r.left+r.width/2, y:r.top+r.height*(headFrac==null?0.42:headFrac), r:r.width/2*0.9 };
+}
+function flashWc(cls){ wcStage.classList.add(cls); setTimeout(()=>wcStage.classList.remove(cls), 380/TUNE.speed); }
+
+// a salute/heckle glyph that arcs from a seat up to the winner and bursts on landing
+function flyGlyph(A,B,glyph,txt,onLand){
+  const bub=document.createElement('div'); bub.className='emote-bubble';
+  bub.innerHTML=`<span class="g">${glyph}</span>${txt?`<span>${txt}</span>`:''}<span class="tail"></span>`;
+  document.body.appendChild(bub);
+  const dur=950/TUNE.speed, C='translate(-50%,-50%)';
+  bub.animate([
+    {transform:`translate(${A.x}px,${A.y}px) ${C} scale(.3)`,opacity:0,offset:0},
+    {transform:`translate(${A.x}px,${A.y-8}px) ${C} scale(1.1)`,opacity:1,offset:.18},
+    {transform:`translate(${(A.x+B.x)/2}px,${Math.min(A.y,B.y)-44}px) ${C} scale(1.05) rotate(-6deg)`,opacity:1,offset:.62},
+    {transform:`translate(${B.x}px,${B.y}px) ${C} scale(1.22)`,opacity:1,offset:.92},
+    {transform:`translate(${B.x}px,${B.y}px) ${C} scale(.5)`,opacity:0,offset:1},
+  ],{duration:dur,easing:'cubic-bezier(.45,.05,.3,1)',fill:'forwards'}).onfinish=()=>bub.remove();
+  setTimeout(()=>{ emoteBurst(B.x,B.y,glyph); onLand&&onLand(); }, dur*0.9);
+}
+
+// comic impact burst ("POW / SPLAT / THWP") at the point of contact
+function powFx(x,y,text,color){
+  const d=document.createElement('div');
+  const rot=(((x+y)|0)%21)-10;                       // slight tilt, varies by impact point
+  const sz=78, fs = text.length>=6?13 : text.length>=5?15 : 18;
+  d.style.cssText='position:fixed;left:0;top:0;z-index:63;pointer-events:none;'
+    +`width:${sz}px;height:${sz}px;display:grid;place-items:center;text-align:center;`
+    +`font-weight:900;font-size:${fs}px;letter-spacing:.5px;color:#fff;`
+    +'-webkit-text-stroke:0.6px rgba(0,0,0,.45);text-shadow:0 2px 0 rgba(0,0,0,.3);'
+    +`background:radial-gradient(circle at 50% 38%, rgba(255,255,255,.45), transparent 60%), ${color};`
+    +'filter:drop-shadow(0 3px 4px rgba(0,0,0,.45));'
+    +'clip-path:polygon(50% 0%,58% 20%,79% 9%,71% 30%,95% 25%,79% 43%,100% 50%,79% 57%,95% 75%,71% 70%,79% 91%,58% 80%,50% 100%,42% 80%,21% 91%,29% 70%,5% 75%,21% 57%,0% 50%,21% 43%,5% 25%,29% 30%,21% 9%,42% 20%)';
+  d.textContent=text;
+  document.body.appendChild(d);
+  d.animate([
+    {transform:`translate(${x}px,${y}px) translate(-50%,-50%) scale(.2) rotate(${rot-14}deg)`,opacity:0,offset:0},
+    {transform:`translate(${x}px,${y}px) translate(-50%,-50%) scale(1.2) rotate(${rot}deg)`,opacity:1,offset:.26},
+    {transform:`translate(${x}px,${y}px) translate(-50%,-50%) scale(1) rotate(${rot}deg)`,opacity:1,offset:.58},
+    {transform:`translate(${x}px,${y}px) translate(-50%,-50%) scale(1.08) rotate(${rot}deg)`,opacity:0,offset:1},
+  ],{duration:600/TUNE.speed,easing:'cubic-bezier(.2,.85,.3,1)',fill:'forwards'}).onfinish=()=>d.remove();
+}
+
+/* ── JUICE: procedural sound + hitstop + screen-shake + impact flash ───────────
+   "Cool → sick" is layered feedback peaking on one frame of contact. */
+// procedural Web Audio (no asset files) — lazily started on first user click
+const SFX = (() => {
+  let ctx=null, master=null, noiseBuf=null;
+  function ensure(){
+    try{
+      if(!ctx){
+        ctx = new (window.AudioContext||window.webkitAudioContext)();
+        master = ctx.createGain(); master.gain.value=0.45; master.connect(ctx.destination);
+        const n=(ctx.sampleRate*0.5)|0; noiseBuf=ctx.createBuffer(1,n,ctx.sampleRate);
+        const d=noiseBuf.getChannelData(0); for(let i=0;i<n;i++) d[i]=Math.random()*2-1;
+      }
+      if(ctx.state==='suspended') ctx.resume();
+    }catch(e){ ctx=null; }
+    return ctx;
+  }
+  const nsrc=()=>{ const s=ctx.createBufferSource(); s.buffer=noiseBuf; s.loop=true; return s; };
+  const env=(g,t0,pk,a,d)=>{ g.setValueAtTime(0.0001,t0); g.exponentialRampToValueAtTime(pk,t0+a); g.exponentialRampToValueAtTime(0.0001,t0+a+d); };
+  const tone=(f,t0,dur,type,pk,to)=>{ const o=ctx.createOscillator(); o.type=type||'sine'; o.frequency.setValueAtTime(f,t0); if(to)o.frequency.exponentialRampToValueAtTime(to,t0+dur); const g=ctx.createGain(); env(g.gain,t0,pk||0.4,0.004,dur); o.connect(g).connect(master); o.start(t0); o.stop(t0+dur+0.06); };
+  const nburst=(t0,dur,pk,ft,f0,q,fto)=>{ const s=nsrc(); const bp=ctx.createBiquadFilter(); bp.type=ft||'lowpass'; bp.frequency.setValueAtTime(f0,t0); if(fto)bp.frequency.exponentialRampToValueAtTime(fto,t0+dur); if(q)bp.Q.value=q; const g=ctx.createGain(); env(g.gain,t0,pk,0.003,dur); s.connect(bp).connect(g).connect(master); s.start(t0); s.stop(t0+dur+0.06); };
+  return {
+    whoosh(){ if(!ensure())return; const t=ctx.currentTime; nburst(t,0.16,0.16,'bandpass',900,1.4,1900); },     // throw
+    splat(){  if(!ensure())return; const t=ctx.currentTime; nburst(t,0.12,0.50,'lowpass',1100,0,260); tone(170,t,0.10,'sine',0.26,60); }, // tomato/egg
+    whap(){   if(!ensure())return; const t=ctx.currentTime; nburst(t,0.09,0.42,'lowpass',1700,0,600); tone(230,t,0.07,'sine',0.20,120); }, // snowball
+    thunk(){  if(!ensure())return; const t=ctx.currentTime; nburst(t,0.04,0.40,'highpass',2600,0); tone(135,t,0.13,'triangle',0.38,55); },  // arrow
+    thump(){  if(!ensure())return; const t=ctx.currentTime; tone(90,t,0.16,'sine',0.70,38); },                  // sub-bass body hit (the knock)
+    salute(){ if(!ensure())return; const t=ctx.currentTime; tone(520,t,0.10,'triangle',0.16,800); },            // friendly blip
+  };
+})();
+function hitSound(kind){ if(kind==='arrow') SFX.thunk(); else if(kind==='snowball') SFX.whap(); else SFX.splat(); }
+
+// hitstop: the loop freezes every rig while now < hitstopUntil → a held beat before the knock
+let hitstopUntil = 0;
+const HITSTOP_MS = 45;   // fixed real-time freeze — NOT scaled by TUNE.speed, so it never balloons into "lag" in slow-mo
+function hitstop(ms){ hitstopUntil = performance.now() + ms; }
+
+// directional, decaying screen-shake of the whole stage (camera, not the avatar)
+function shakeStage(ux, uy, mag=11){
+  if(!wcStage) return;
+  const N=7, frames=[{transform:'translate(0,0)'}];
+  for(let i=1;i<N;i++){
+    const d=1-i/N, sgn=i%2?1:-0.7;
+    const jx=ux*mag*d*sgn + (Math.random()*2-1)*mag*d*0.5;
+    const jy=uy*mag*d*sgn + (Math.random()*2-1)*mag*d*0.5;
+    frames.push({transform:`translate(${jx.toFixed(1)}px,${jy.toFixed(1)}px)`});
+  }
+  frames.push({transform:'translate(0,0)'});
+  wcStage.animate(frames, {duration:300/TUNE.speed, easing:'ease-out'});
+}
+
+// quick bright pop at the point of contact
+function impactFlash(impact, color){
+  const f=document.createElement('div');
+  f.style.cssText='position:fixed;left:0;top:0;z-index:64;pointer-events:none;width:64px;height:64px;border-radius:50%;'
+    +`background:radial-gradient(circle, #fff, ${color||'#fff'} 38%, transparent 70%);mix-blend-mode:screen`;
+  document.body.appendChild(f);
+  f.animate([
+    {transform:`translate(${impact.x}px,${impact.y}px) translate(-50%,-50%) scale(.3)`, opacity:1},
+    {transform:`translate(${impact.x}px,${impact.y}px) translate(-50%,-50%) scale(1.7)`, opacity:0},
+  ],{duration:170/TUNE.speed, easing:'ease-out', fill:'forwards'}).onfinish=()=>f.remove();
+}
+
+function peltWinner(rx){
+  if(!wcActive) return;
+  // thrower = a random seat that isn't the winner
+  const pool=seats.map((_,i)=>i).filter(i=>i!==wcWinnerIdx);
+  const fromIdx=pick(pool.length?pool:seats.map((_,i)=>i));
+  if(rx.from && CLIPS[rx.from]) CLIPS[rx.from](seats[fromIdx].av);
+  const A=seatCenter(seats[fromIdx].mini);
+  const react=(impact, angleDeg)=>{
+    if(rx.proj && impact){                                  // physical hit → full juice: flash → hitstop → BAM
+      const rad=((angleDeg||0)*Math.PI)/180, ux=Math.cos(rad), uy=Math.sin(rad);
+      impactFlash(impact, rx.powColor);                     // bright pop at contact
+      powFx(impact.x, impact.y, rx.pow||'POW', rx.powColor||'#fbbf24');
+      hitSound(rx.kind || rx.proj);                         // wet splat / thwack / thunk
+      hitstop(HITSTOP_MS);                                  // crisp fixed ~45ms impact freeze (no slow-mo lag)
+      setTimeout(()=>{                                      // …then the knock lands, straight out of the freeze
+        winnerAv.impulse({ x:ux*185, y:uy*130, rot:ux*380, bodyk:.5 });  // head KNOCKS away from the hit, then settles (heavily-damped springs → large kick)
+        SFX.thump();                                        // sub-bass body hit
+        shakeStage(ux, uy);                                 // directional screen-shake
+        flashWc('danger');
+        winnerAv.setPose({ eyes:{sy:.4}, browL:{y:1.5,rot:-8}, browR:{y:1.5,rot:8}, mouth:'flat', mouthSx:.9 }, 560);  // brief natural flinch
+      }, HITSTOP_MS);
+    } else {                                                // salute / vocal taunt → gentle
+      flashWc(rx.type==='sabotage'?'danger':'flash');
+      if(rx.win&&CLIPS[rx.win]) CLIPS[rx.win](winnerAv);
+      if(rx.type!=='sabotage') SFX.salute();
+    }
+  };
+  if(rx.proj==='arrow')    flyArrow(A, winnerTarget(0.40), winnerArrows, react);
+  else if(rx.proj==='lob') flyLob(A, winnerTarget(0.44), lobEl(rx.kind), SPLAT_PALETTES[rx.kind==='tomato'?'tomato':rx.kind==='egg'?'egg':'snow'], react);
+  else                     flyGlyph(A, winnerTarget(0.26), rx.g, rx.txt, react);
+}
+
+function startCountdown(ms){
+  clearInterval(wcCountIv);
+  wcFill.style.transition='none'; wcFill.style.width='100%'; void wcFill.offsetWidth;
+  wcFill.style.transition=`width ${ms}ms linear`; wcFill.style.width='0%';
+  const end=performance.now()+ms;
+  wcCountIv=setInterval(()=>{
+    const left=Math.max(0,Math.ceil((end-performance.now())/1000));
+    wcLbl.textContent=`Next hand in ${left}s`;
+    if(left<=0) clearInterval(wcCountIv);
+  },200);
+}
+function scheduleHeckle(){
+  clearTimeout(wcHeckleTimer);
+  if(!wcActive||!wcAutoHeckle) return;
+  wcHeckleTimer=setTimeout(()=>{ if(wcActive){ peltWinner(pick(WINNER_REACTIONS)); scheduleHeckle(); } }, rand(900,2000)/TUNE.speed);
+}
+
+function runWinnerCircle(winnerIdx,{royal=false,big=false}={}){
+  clearTimeout(wcEndTimer); clearInterval(wcCountIv); clearTimeout(wcHeckleTimer);
+  winnerArrows.forEach(a=>a.remove()); winnerArrows.length=0;
+  wcActive=true; wcWinnerIdx=winnerIdx;
+  const name = winnerIdx<0?'You':seats[winnerIdx].name;
+  applyChar(wcSpot, CHARS[(winnerIdx<0?0:winnerIdx)%CHARS.length]);
+  winnerAv.resetMood();
+  const amt = (rand(2,40)|0)*1000 + (rand(0,9)|0)*100;
+  const hand = royal?'Royal Flush' : big?pick(['Four of a Kind','Full House','Flush']) : pick(['Two Pair','Trips','Straight','Top Pair']);
+  wcBanner.innerHTML=`<div class="nm">${name} wins</div><div class="amt">${amt.toLocaleString()} MORBIUS</div><div class="hand">${hand}</div>`;
+  renderBoard();
+  // entrance
+  wcStage.classList.add('live');
+  wcFloor.animate([{opacity:0},{opacity:1}],{duration:300/TUNE.speed,fill:'forwards'});
+  wcSpot.animate([{opacity:0,transform:'translateX(-50%) translateY(46px) scale(.55)'},{opacity:1,transform:'translateX(-50%) translateY(0) scale(1)'}],
+    {duration:560/TUNE.speed,easing:'cubic-bezier(.2,.85,.3,1.3)',fill:'forwards'});
+  // celebration
+  const clip = royal?'royalFlush' : big?'jackpot' : pick(['win','fistPump']);
+  flashWc('flash');
+  setTimeout(()=>CLIPS[clip](winnerAv), 380/TUNE.speed);
+  // open the floor to the table
+  wcReactEl.classList.remove('dim');
+  const ms=WINNER_CIRCLE_MS/TUNE.speed;
+  startCountdown(ms);
+  if(wcAutoHeckle) scheduleHeckle();
+  wcEndTimer=setTimeout(endWinnerCircle, ms);
+}
+function endWinnerCircle(){
+  if(!wcActive) return;
+  wcActive=false; wcWinnerIdx=-1;
+  clearInterval(wcCountIv); clearTimeout(wcHeckleTimer);
+  wcReactEl.classList.add('dim');
+  wcStage.classList.remove('live');
+  wcSpot.animate([{opacity:1,transform:'translateX(-50%) translateY(0) scale(1)'},{opacity:0,transform:'translateX(-50%) translateY(26px) scale(.7)'}],
+    {duration:380/TUNE.speed,easing:'ease-in',fill:'forwards'});
+  wcFloor.animate([{opacity:1},{opacity:0}],{duration:300/TUNE.speed,fill:'forwards'});
+  setTimeout(()=>{ winnerArrows.forEach(a=>a.remove()); winnerArrows.length=0; },420/TUNE.speed);
+  wcLbl.textContent='Waiting for the next winner…';
+  wcFill.style.transition='none'; wcFill.style.width='100%';
+}
+
+document.getElementById('wcRun').onclick=()=>runWinnerCircle((Math.random()*seats.length)|0,{big:Math.random()<0.4});
+document.getElementById('wcRoyal').onclick=()=>runWinnerCircle((Math.random()*seats.length)|0,{royal:true});
+const wcHeckleBtn=document.getElementById('wcHeckle');
+wcHeckleBtn.onclick=()=>{ wcAutoHeckle=!wcAutoHeckle; wcHeckleBtn.textContent='Auto-heckle: '+(wcAutoHeckle?'on':'off'); if(wcActive&&wcAutoHeckle)scheduleHeckle(); };
 
 /* ════════════════════════════════════════════════════════════════════════
    9 · keyboard shortcuts
@@ -1556,8 +1932,10 @@ applyBounce();
 let last=performance.now();
 function loop(now){
   let dt=(now-last)/1000;last=now;dt=clamp(dt,0,1/20); // clamp big gaps
+  if(now < hitstopUntil) dt=0;                          // hitstop: freeze the rigs for the impact beat
   hero.tick(dt);
   for(const s of seats)s.av.tick(dt);
+  if(winnerAv) winnerAv.tick(dt);
   // sleepy z's for hero
   if(hero.asleep && Math.random()<0.01)hero.fx('zzz',{count:1});
   requestAnimationFrame(loop);
