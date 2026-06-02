@@ -222,7 +222,10 @@ export default function PokerAnchorEditorPage() {
                 Arrow keys nudge the selected handle (Shift = bigger steps).
               </p>
             </div>
-            <Link href="/poker" className="text-sm text-cyan-400 hover:underline">Back to poker</Link>
+            <div className="flex flex-col items-end gap-1">
+              <Link href="/poker-layout/portrait" className="whitespace-nowrap text-sm font-semibold text-cyan-400 hover:underline">Portrait editor →</Link>
+              <Link href="/poker" className="text-sm text-cyan-400 hover:underline">Back to poker</Link>
+            </div>
           </header>
 
           <div ref={wrapRef} className="rounded-xl border border-cyan-500/15 bg-black/30 p-1">

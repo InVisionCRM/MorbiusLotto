@@ -78,10 +78,10 @@ export function authoredSeatAnchors(seatCount: number, variant: LayoutVariant = 
  * each seat's (tunable) anchor + a directional offset — matching the mockup's relative model.
  * Tuning a seat in the editor moves everything attached to it. (Default variant keeps its own rings.)
  */
-type PortraitAnchorKind = 'tag' | 'bet' | 'card' | 'dealer' | 'winpot';
-function portraitAnchorFor(seatCount: number, displaySlot: number, kind: PortraitAnchorKind): SeatAnchor {
-  const seats = portraitSeatAnchors(seatCount);
-  const s = seats[displaySlot] ?? POKER_POT_ANCHOR;
+export type PortraitAnchorKind = 'tag' | 'bet' | 'card' | 'dealer' | 'winpot';
+
+/** Pure: derive an attached element's anchor from a (possibly tuned) seat anchor. Shared by PokerTable + the editor. */
+export function portraitDeriveAnchor(s: SeatAnchor, kind: PortraitAnchorKind): SeatAnchor {
   switch (kind) {
     case 'tag':    return { fx: s.fx, fy: Math.min(0.99, s.fy + 0.058) };          // nameplate just below avatar
     case 'bet':    return { fx: s.fx, fy: Math.max(0.01, s.fy - 0.05) };           // bet chip straddles top of avatar
@@ -91,7 +91,13 @@ function portraitAnchorFor(seatCount: number, displaySlot: number, kind: Portrai
       const dx = 0.5 - s.fx, dy = 0.5 - s.fy, len = Math.hypot(dx, dy) || 1, d = 0.062;
       return { fx: s.fx + (dx / len) * d, fy: s.fy + (dy / len) * d };
     }
+    default:       return { fx: s.fx, fy: s.fy };
   }
+}
+
+function portraitAnchorFor(seatCount: number, displaySlot: number, kind: PortraitAnchorKind): SeatAnchor {
+  const seats = portraitSeatAnchors(seatCount);
+  return portraitDeriveAnchor(seats[displaySlot] ?? POKER_POT_ANCHOR, kind);
 }
 
 /**
