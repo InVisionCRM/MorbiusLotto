@@ -1019,11 +1019,11 @@ body {
   gap: 0.25rem;
   font-size: 0.82em;
 }
-[data-poker-shell][data-poker-portrait] [data-poker-header] [data-poker-header-secondary] {
-  display: none !important;
-}
+/* Hide BOTH the inline secondary buttons and the old ··· menu in portrait — the
+   PokerPortraitDrawer (☰ top-right) replaces them with the lab's refined menu. */
+[data-poker-shell][data-poker-portrait] [data-poker-header] [data-poker-header-secondary],
 [data-poker-shell][data-poker-portrait] [data-poker-header] [data-poker-header-mobile-menu] {
-  display: block !important;
+  display: none !important;
 }
 
 /* Portrait blocker rotation hint animation */

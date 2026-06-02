@@ -48,6 +48,7 @@ import { PokerTournamentResultsModal } from '@/components/poker/tournament/Poker
 import { PokerBustOutModal } from '@/components/poker/tournament/PokerBustOutModal';
 import type { PokerTournamentCompletedPayload } from '@/lib/poker-tournament-completed';
 import { PokerActivityFeed } from '@/components/poker/PokerActivityFeed';
+import { PokerPortraitDrawer } from '@/components/poker/PokerPortraitDrawer';
 import { VoiceChatPanel } from '@/components/poker/VoiceChatPanel';
 import { PokerTableLogoSponsorModal } from '@/components/poker/PokerTableLogoSponsorModal';
 import { PokerMobileTopBar } from '@/components/poker/PokerMobileTopBar';
@@ -853,6 +854,26 @@ export default function PokerTablePage() {
               />
             }
           />}
+
+          {/* Portrait hamburger drawer (faithful lab port) — replaces the desktop ··· menu on mobile. */}
+          {isPortraitMobile && (
+            <PokerPortraitDrawer
+              tableLabel="Table"
+              seated={!!mySeat}
+              sittingOut={mySeat?.status === 'sitting_out'}
+              canReup={canReup}
+              onAvatarProfile={mySeat ? () => setShowAvatarModal(true) : undefined}
+              onAddChips={openReupModal}
+              onChat={() => setActivityMobileOpenSerial((s) => s + 1)}
+              onSitOut={mySeat ? handleSitOut : undefined}
+              onSitBack={mySeat ? handleSitBack : undefined}
+              onSounds={() => setShowSoundsModal(true)}
+              onTableSettings={() => setShowTableSettingsModal(true)}
+              onMyStats={() => setShowMyStats(true)}
+              onHowToPlay={() => setShowHowToPlay(true)}
+              onLeave={mySeat ? handleLeaveClick : handleExitClick}
+            />
+          )}
 
           {/* Disconnected banner */}
           {disconnected && (
