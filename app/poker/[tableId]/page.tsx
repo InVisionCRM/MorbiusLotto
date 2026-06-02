@@ -787,6 +787,7 @@ export default function PokerTablePage() {
             works well today. See globals.css "Poker landscape" section. */}
         <div
           data-poker-shell
+          data-poker-portrait={isPortraitMobile ? 'true' : undefined}
           className={`flex flex-col relative ${cyberpunk ? 'font-mono uppercase' : ''}`}
           style={{
             ...themeVars as React.CSSProperties,

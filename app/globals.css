@@ -1005,6 +1005,27 @@ body {
   }
 }
 
+/* ─────────────────────────────────────────────────────────────────────────
+   Portrait-first mobile layout (new). Gated on the `data-poker-portrait`
+   attribute (set by page.tsx only when usePokerMobileZoomLock reports
+   isPortraitMobile), so it never affects desktop or landscape.
+   Mirrors the landscape header treatment: a slim header with the compact ···
+   menu (How to Play / Settings / Sounds / Stats / Leave) so Leave is always
+   reachable on a phone — the original problem this rebuild fixes.
+   ───────────────────────────────────────────────────────────────────────── */
+[data-poker-shell][data-poker-portrait] [data-poker-header] {
+  padding-top: 4px !important;
+  padding-bottom: 4px !important;
+  gap: 0.25rem;
+  font-size: 0.82em;
+}
+[data-poker-shell][data-poker-portrait] [data-poker-header] [data-poker-header-secondary] {
+  display: none !important;
+}
+[data-poker-shell][data-poker-portrait] [data-poker-header] [data-poker-header-mobile-menu] {
+  display: block !important;
+}
+
 /* Portrait blocker rotation hint animation */
 @keyframes poker-rotate-hint {
   0%, 100% { transform: rotate(0deg); }
