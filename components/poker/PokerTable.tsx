@@ -975,6 +975,7 @@ export function PokerTable({ state, currentPlayerAddress, timeLeft, chatBubbleBy
         {hand ? (
           <>
             <PokerBoard
+              twoRow={layoutVariant === 'portrait'}
               communityCards={
                 isShowdownWithWinners
                   ? hand.communityCards.slice(0, revealedCommunityCount)
