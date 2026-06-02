@@ -1365,7 +1365,7 @@ class WebSocketService {
     // Directed (player → player) emote kinds. Keep in sync with lib/poker-directed-emotes.ts.
     static POKER_DIRECTED_EMOTE_KINDS = new Set([
         'haha', 'love', 'gg', 'nice', 'boo', 'fire', 'dance', 'money',
-        'arrow', 'snowball', // projectiles (lib/poker-directed-emotes.ts)
+        'arrow', 'snowball', 'tomato', // projectiles (lib/poker-directed-emotes.ts)
     ]);
     async handlePokerDirectedEmote(ws, message) {
         try {

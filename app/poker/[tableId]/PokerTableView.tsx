@@ -24,6 +24,7 @@ interface PokerTableViewProps {
   broadcastEmotionBySeatIndex: Record<number, Emotion>;
   directedEmotes: DirectedEmoteFlight[];
   stuckArrowsBySeatIndex: Record<number, StuckArrow[]>;
+  hitBySeatIndex: Record<number, { key: number; fromSeatIndex: number; kind: PokerDirectedEmoteKind }>;
   onSendDirectedEmote?: (toSeatIndex: number, kind: PokerDirectedEmoteKind) => void;
   mySeatIndex: number;
   onPhraseReaction: (phrase: string) => void;
@@ -84,6 +85,7 @@ export function PokerTableView({
   broadcastEmotionBySeatIndex,
   directedEmotes,
   stuckArrowsBySeatIndex,
+  hitBySeatIndex,
   onSendDirectedEmote,
   mySeatIndex,
   onPhraseReaction,
@@ -213,6 +215,7 @@ export function PokerTableView({
           broadcastEmotionBySeatIndex={broadcastEmotionBySeatIndex}
           directedEmotes={directedEmotes}
           stuckArrowsBySeatIndex={stuckArrowsBySeatIndex}
+          hitBySeatIndex={hitBySeatIndex}
           onSendDirectedEmote={onSendDirectedEmote}
           onPhraseReaction={mySeatIndex >= 0 ? onPhraseReaction : undefined}
           onAnimationReaction={mySeatIndex >= 0 ? onAnimationReaction : undefined}

@@ -3,6 +3,7 @@
 import React, { useRef, useState, useEffect, useMemo } from 'react';
 import { toBigIntSafe } from '@/lib/safe-bigint';
 import { motion, AnimatePresence } from 'framer-motion';
+import { pokerSfx, pokerHitSound } from '@/lib/poker-sfx';
 import { PokerSeat, PokerChipStack } from './PokerSeat';
 import { PokerBoard } from './PokerBoard';
 import { ProvablyFairBadge } from './ProvablyFairBadge';
@@ -132,6 +133,13 @@ function PokerProjectileArrow({ len }: { len: number }) {
   );
 }
 
+/** Comic impact-burst onomatopoeia + color per projectile kind (lab → prod). */
+const PROJECTILE_BURST: Record<string, { text: string; color: string }> = {
+  arrow:    { text: 'THWP',  color: '#94a3b8' },
+  snowball: { text: 'WHAP',  color: '#38bdf8' },
+  tomato:   { text: 'SPLAT', color: '#ef4444' },
+};
+
 export interface PokerTableProps {
   state: TableState;
   currentPlayerAddress: string | null;
@@ -152,6 +160,8 @@ export interface PokerTableProps {
   directedEmotes?: Array<{ id: string; fromSeatIndex: number; toSeatIndex: number; kind: PokerDirectedEmoteKind }>;
   /** Arrows stuck in each target seat's circle border (key = target seat index); cleared per hand. */
   stuckArrowsBySeatIndex?: Record<number, Array<{ id: string; fromSeatIndex: number }>>;
+  /** Per-seat projectile-hit signal (key = target seat); bumping `key` fires a directional avatar knock-back. */
+  hitBySeatIndex?: Record<number, { key: number; fromSeatIndex: number; kind: PokerDirectedEmoteKind }>;
   /** Throw a directed emote at a seat (opponent quick-emote ring). Provided only when the current player is seated. */
   onSendDirectedEmote?: (toSeatIndex: number, kind: PokerDirectedEmoteKind) => void;
   /** Called when current player selects a QuickChat phrase (broadcast to table). */
@@ -192,9 +202,13 @@ export interface PokerTableProps {
   showDealerAnchorGuides?: boolean;
 }
 
-export function PokerTable({ state, currentPlayerAddress, timeLeft, chatBubbleBySeatIndex, onReUpClick, onMenuClick, reactionBySeatIndex, broadcastEmotionBySeatIndex, directedEmotes, stuckArrowsBySeatIndex, onSendDirectedEmote, onPhraseReaction, onAnimationReaction, onOpponentClick, onOpponentRadialAction, quickChatPhrases, setQuickChatPhrases, onOpenEditQuickChat, onLeave, onRequestMobileActivity, onSitOut, onSitBack, onShowCards, onMuckCards, tutorialTargets, dataTutorialTargetPot, showDealerAnchorGuides = false }: PokerTableProps) {
+export function PokerTable({ state, currentPlayerAddress, timeLeft, chatBubbleBySeatIndex, onReUpClick, onMenuClick, reactionBySeatIndex, broadcastEmotionBySeatIndex, directedEmotes, stuckArrowsBySeatIndex, hitBySeatIndex, onSendDirectedEmote, onPhraseReaction, onAnimationReaction, onOpponentClick, onOpponentRadialAction, quickChatPhrases, setQuickChatPhrases, onOpenEditQuickChat, onLeave, onRequestMobileActivity, onSitOut, onSitBack, onShowCards, onMuckCards, tutorialTargets, dataTutorialTargetPot, showDealerAnchorGuides = false }: PokerTableProps) {
   const tableRef = useRef<HTMLDivElement>(null);
   const [dims, setDims] = useState({ w: 640, h: 500 });
+  // Projectile-hit "juice": transient comic bursts/flashes spawned at the impact point.
+  const [impactFx, setImpactFx] = useState<Array<{ id: string; x: number; y: number; kind: string }>>([]);
+  const seenHitKeysRef = useRef<Record<number, number>>({});
+  const seenThrowIdsRef = useRef<Set<string>>(new Set());
   const { effect: tableEffect, feltGradient, railStyle } = usePokerTableEffect();
 
   useEffect(() => {
@@ -289,6 +303,49 @@ export function PokerTable({ state, currentPlayerAddress, timeLeft, chatBubbleBy
     actingPosition != null &&
     actingRingIndex != null;
   const isShowdownWithWinners = hand?.street === 'showdown' && hand?.winners?.length;
+
+  // ── Projectile "juice" ─────────────────────────────────────────────────────
+  // Whoosh the moment a projectile is thrown (first time we see its flight).
+  useEffect(() => {
+    if (!directedEmotes) return;
+    for (const de of directedEmotes) {
+      if (seenThrowIdsRef.current.has(de.id)) continue;
+      seenThrowIdsRef.current.add(de.id);
+      if (POKER_DIRECTED_EMOTES[de.kind]?.projectile) pokerSfx.whoosh();
+    }
+    const live = new Set(directedEmotes.map((d) => d.id));
+    for (const id of Array.from(seenThrowIdsRef.current)) if (!live.has(id)) seenThrowIdsRef.current.delete(id);
+  }, [directedEmotes]);
+
+  // On projectile landing: contact sound + sub-bass, a subtle directional table shake, and a comic burst/flash.
+  useEffect(() => {
+    if (!hitBySeatIndex || dims.w <= 0) return;
+    for (const [seatStr, info] of Object.entries(hitBySeatIndex)) {
+      const seat = Number(seatStr);
+      if (seenHitKeysRef.current[seat] === info.key) continue;
+      seenHitKeysRef.current[seat] = info.key;
+      const toA = seatAnchors[toDisplaySlot(seat)];
+      if (!toA) continue;
+      const fromA = seatAnchors[toDisplaySlot(info.fromSeatIndex)];
+      const R = dims.w * 0.05;
+      let ix = toA.fx * dims.w, iy = toA.fy * dims.h, ux = 0, uy = -1;
+      if (fromA) {
+        const vx = (toA.fx - fromA.fx) * dims.w, vy = (toA.fy - fromA.fy) * dims.h;
+        const dd = Math.hypot(vx, vy) || 1; ux = vx / dd; uy = vy / dd;
+        ix = toA.fx * dims.w - ux * R * 0.92; iy = toA.fy * dims.h - uy * R * 0.92;
+      }
+      pokerHitSound(info.kind);
+      pokerSfx.thump();
+      const root = tableRef.current;
+      if (root) {
+        const mag = 6; const frames: Keyframe[] = [];
+        for (let i = 1; i < 6; i++) { const d = 1 - i / 6, s = i % 2 ? 1 : -0.6; frames.push({ transform: `translate(${(ux * mag * d * s).toFixed(1)}px, ${(uy * mag * d * s).toFixed(1)}px)` }); }
+        frames.push({ transform: 'translate(0px, 0px)' });
+        try { root.animate(frames, { duration: 260, easing: 'ease-out' }); } catch { /* WAAPI unsupported */ }
+      }
+      setImpactFx((prev) => [...prev, { id: `fx-${seat}-${info.key}`, x: ix, y: iy, kind: info.kind }]);
+    }
+  }, [hitBySeatIndex, dims.w, dims.h]);
 
   // ── Per-pot payout choreography ────────────────────────────────────────
   // Each pot pays in sequence: main pot → side pot 1 → side pot 2 → ...
@@ -742,6 +799,18 @@ export function PokerTable({ state, currentPlayerAddress, timeLeft, chatBubbleBy
       onMenuClick,
       overlayPhrase: reactionBySeatIndex?.[idx] ?? null,
       overlayEmotion: broadcastEmotionBySeatIndex?.[idx] ?? null,
+      // Directional knock-back when a projectile lands here — derive on-screen travel dir from seat anchors.
+      hit: (() => {
+        const hitInfo = hitBySeatIndex?.[idx];
+        if (!hitInfo) return undefined;
+        const toA = getRenderedSeatAnchor(toDisplaySlot(idx), idx);
+        const fromA = getRenderedSeatAnchor(toDisplaySlot(hitInfo.fromSeatIndex), hitInfo.fromSeatIndex);
+        if (!toA || !fromA) return { key: hitInfo.key, dirX: 0, dirY: -1 };
+        const hdx = (toA.fx - fromA.fx) * dims.w;
+        const hdy = (toA.fy - fromA.fy) * dims.h;
+        const hmag = Math.hypot(hdx, hdy) || 1;
+        return { key: hitInfo.key, dirX: hdx / hmag, dirY: hdy / hmag };
+      })(),
       onPhraseReaction: onPhraseReaction,
       onAnimationReaction: onAnimationReaction,
       onOpponentClick: onOpponentClick,
@@ -1333,23 +1402,29 @@ export function PokerTable({ state, currentPlayerAddress, timeLeft, chatBubbleBy
               </div>
             );
           }
-          // snowball — flies in, then shatters into chunks that scatter + fall
+          // snowball / tomato — flies in, then shatters/splats into chunks that scatter + fall
           const ballSz = Math.max(8, dims.w * 0.032);
           const fragSz = Math.max(2, dims.w * 0.008);
           const fly = POKER_PROJECTILE_FLY_MS / POKER_PROJECTILE_TOTAL_MS;
+          const isTomato = def.projectile === 'tomato';
+          const ballBg = isTomato
+            ? 'radial-gradient(circle at 35% 30%, #ff7a7a, #d61f1f 70%, #9e1414)'
+            : 'radial-gradient(circle at 35% 30%, #ffffff, #d6ecff 70%, #aacdf0)';
+          const ballGlow = isTomato ? '0 0 6px rgba(220,40,40,0.6)' : '0 0 6px rgba(200,230,255,0.85)';
+          const fragBg = isTomato ? '#e23b3b' : '#eaf4ff';
           return (
             <div key={de.id} className="absolute pointer-events-none" style={{ left: launchX, top: launchY, transform: 'translate(-50%, -50%)', zIndex: 43 }}>
               <motion.div
                 initial={{ x: 0, y: 0, scale: 0.7, opacity: 1 }}
                 animate={{ x: [0, dxp, dxp, dxp], y: [0, dyp, dyp, dyp], scale: [0.7, 1, 1.35, 0], opacity: [1, 1, 1, 0] }}
                 transition={{ duration: POKER_PROJECTILE_TOTAL_MS / 1000, times: [0, fly, fly + 0.1, 1], ease: 'easeOut' }}
-                style={{ width: ballSz, height: ballSz, borderRadius: '50%', background: 'radial-gradient(circle at 35% 30%, #ffffff, #d6ecff 70%, #aacdf0)', boxShadow: '0 0 6px rgba(200,230,255,0.85)' }}
+                style={{ width: ballSz, height: ballSz, borderRadius: '50%', background: ballBg, boxShadow: ballGlow }}
               />
               {Array.from({ length: 7 }).map((_, i) => {
                 const a = (i / 7) * Math.PI * 2, sp = dims.w * 0.028;
                 const fxF = dxp + Math.cos(a) * sp, fyF = dyp + Math.sin(a) * sp + dims.w * 0.02;
                 return (
-                  <motion.div key={i} className="absolute" style={{ left: 0, top: 0, width: fragSz, height: fragSz, borderRadius: '50%', background: '#eaf4ff' }}
+                  <motion.div key={i} className="absolute" style={{ left: 0, top: 0, width: fragSz, height: fragSz, borderRadius: '50%', background: fragBg }}
                     initial={{ x: dxp, y: dyp, opacity: 0, scale: 1 }}
                     animate={{ x: [dxp, fxF], y: [dyp, fyF], opacity: [0, 1, 0], scale: [1, 0.3] }}
                     transition={{ duration: 0.5, delay: POKER_PROJECTILE_FLY_MS / 1000, ease: 'easeOut' }}
@@ -1403,6 +1478,31 @@ export function PokerTable({ state, currentPlayerAddress, timeLeft, chatBubbleBy
             </div>
           );
         });
+      })}
+
+      {/* Projectile-hit comic bursts + flashes (spawned at impact by the hit effect). */}
+      {dims.w > 0 && impactFx.map((fx) => {
+        const b = PROJECTILE_BURST[fx.kind] ?? { text: 'POW', color: '#fbbf24' };
+        const sz = Math.max(54, dims.w * 0.1);
+        return (
+          <div key={fx.id} className="absolute pointer-events-none" style={{ left: fx.x, top: fx.y, width: sz, height: sz, transform: 'translate(-50%, -50%)', zIndex: 46 }}>
+            <motion.div
+              initial={{ scale: 0.3, opacity: 1 }}
+              animate={{ scale: 1.7, opacity: 0 }}
+              transition={{ duration: 0.18, ease: 'easeOut' }}
+              style={{ position: 'absolute', left: 0, top: 0, width: sz, height: sz, borderRadius: '50%', background: `radial-gradient(circle, #fff, ${b.color} 38%, transparent 70%)`, mixBlendMode: 'screen' }}
+            />
+            <motion.div
+              initial={{ scale: 0.2, rotate: -10, opacity: 0 }}
+              animate={{ scale: [0.2, 1.2, 1, 1.08], rotate: -8, opacity: [0, 1, 1, 0] }}
+              transition={{ duration: 0.6, times: [0, 0.26, 0.58, 1], ease: 'easeOut' }}
+              onAnimationComplete={() => setImpactFx((prev) => prev.filter((f) => f.id !== fx.id))}
+              style={{ position: 'absolute', left: 0, top: 0, width: sz, height: sz, display: 'grid', placeItems: 'center', textAlign: 'center', fontWeight: 900, fontSize: Math.max(11, sz * 0.22), letterSpacing: '0.3px', color: '#fff', WebkitTextStroke: '0.6px rgba(0,0,0,0.45)', textShadow: '0 2px 0 rgba(0,0,0,0.3)', filter: 'drop-shadow(0 3px 4px rgba(0,0,0,0.45))', background: `radial-gradient(circle at 50% 38%, rgba(255,255,255,0.45), transparent 60%), ${b.color}`, clipPath: 'polygon(50% 0%,58% 20%,79% 9%,71% 30%,95% 25%,79% 43%,100% 50%,79% 57%,95% 75%,71% 70%,79% 91%,58% 80%,50% 100%,42% 80%,21% 91%,29% 70%,5% 75%,21% 57%,0% 50%,21% 43%,5% 25%,29% 30%,21% 9%,42% 20%)' }}
+            >
+              {b.text}
+            </motion.div>
+          </div>
+        );
       })}
 
     </div>

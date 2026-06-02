@@ -325,3 +325,80 @@ The sidebar is already collapsible on mobile. Same 5-tab control renders inside 
 - **Sponsor tab on non-seated users (Mini App)** — the [open-sponsorship feature](#open-sponsorship-to-non-seated-users-telegram-mini-app--web) above can render the exact same Sponsor tab panel in the Mini App. One component, two mount points.
 - **Wallet tab on small balances** — if the player has 0 MORBIUS, default to a "Buy chips" empty state rather than a giant `0` number.
 - **Voice Commands** — currently a header button. Worth promoting to a tab if voice gets more features, otherwise leave it in the header where it is.
+
+---
+
+## Avatar Player Interaction
+
+Builds on the avatar system ([`components/avatar/AvatarPreview.tsx`](components/avatar/AvatarPreview.tsx)) and the player-to-player projectile feature (sticking arrows / shattering snowballs) already shipped to poker. The **winner's circle** (the winning avatar rises big into the table center during the 15s between-hands wait, with a name/amount/hand-rank banner), **salute / sabotage pelting** (other players throw 👏❤️🌹 or 🍅🥚❄️🏹 at the winner), and the hit **"juice"** layer (hitstop freeze-frame, directional screen-shake, impact flash, comic burst, procedural Web Audio SFX, spring head-knock recoil) are all prototyped in [`public/avatar-lab.html`](public/avatar-lab.html) (section "WINNER'S CIRCLE") but **not yet ported into the real [`PokerTable.tsx`](components/poker/PokerTable.tsx)**. The Power / Knockout system below is the parked extension that turns pelting from flavor into a game.
+
+### Power system & Knockouts
+
+**Status:** designed, not implemented. Parked 2026-06-01. Foundation (winner's circle + pelting + juice) prototyped in [`public/avatar-lab.html`](public/avatar-lab.html).
+
+#### Concept
+
+A **Power** stat that grows as a player wins. Weak throws are always available and harmless — the target just laughs it off. But a high-power player can **charge** a throw hard enough to **knock out** the target: their avatar is replaced by **Z's trailing up the circle** for a few seconds. The loop: win → power → humble someone. The more you've been winning, the harder you hit (and, optionally, the harder you are to knock down). It makes the winner's circle a real "king of the hill" — the session's hot players can knock the current champ off his throne, and KO'ing someone becomes the ultimate flex because it has to be *earned* by winning.
+
+#### Decisions locked (2026-06-01 design convo)
+
+- **KO is cosmetic only** — it never blocks betting, turns, chips, or timers; it only changes how the avatar *looks*. This is logically required by the signature gag (below): a KO'd player must still be able to play and win a hand.
+- **Anytime scope** — throws and KOs can happen any time at the table, not just during the winner's circle. This is what enables the best moment: crack a player right before showdown so they **win the pot while unconscious**.
+- **KO is a persistent per-player state** (a `koUntil` timer), rendered *everywhere the avatar is drawn* — the seat circle AND the winner's-circle center.
+
+Defaults chosen but not yet confirmed (all easy to flip): **spend-to-throw** power model, and **power doubles as armor** (KO'ing a big winner takes more power).
+
+#### The signature gag
+
+KO'd player wins the hand → the winner's circle "rises to center" as **just Z's trailing up an empty spotlight**, banner reading `Vex wins 14,200 😴`. The champ snores through his own coronation. Because throws are anytime, this can be *played* on purpose (KO the about-to-win player at the river).
+
+#### The Power meter
+
+- 0–100 per player, **server-tracked** from real winnings (must be server-authoritative — provably-fair ethos; never trust client power).
+- **Fills from winning** — scaled by pot size / hand rank; a royal flush dumps a big chunk.
+- **Decays slowly** over time (and/or on losses) so it reflects *current heat*, not a forever-bank you can hoard a nuke in.
+- **Spent on throws:** tap = weak (≈free, always available → laugh-off tier); hold-to-charge = drains the meter, delivered force ∝ power committed, up to a KO.
+- High power = a visible **aura / "on fire" glow** telegraphing the threat before they even throw.
+
+#### Impact ladder (force delivered → reaction)
+
+| Tier | Force | Reaction |
+|---|---|---|
+| **Glance** | low | Target laughs / shrugs it off, small puff, tiny knock |
+| **Knock** | med | Head-knock recoil + flinch + comic burst (the current prototype hit) |
+| **Stagger** | high | Big knock, avatar reels & wobbles, dizzy stars circling, longer hitstop, heavier SFX |
+| **Knockout** | max | Long freeze-frame → avatar launched/spun → giant "K.O." title + deep boom → avatar vanishes, **Z's trail up the empty circle** for the KO duration → wake with a startled/groggy pop |
+
+#### KO state details
+
+- Cosmetic + persistent; swaps the avatar for Z's at the seat *and* the center spotlight.
+- Duration scales with overkill (~3–6s), capped sensibly (e.g. by the between-hands window).
+- While KO'd the player is **invulnerable** — extra hits bounce off / add a snore (no infinite pile-on).
+- Wake = startled pop (existing `wake()`), possibly mid-spotlight → a groggy "huh? I won?" celebration.
+- A pincushioned-and-snoring champion (stuck arrows + Z's on the same avatar) is free extra comedy.
+
+#### Reuses (already in the lab rig / shipped systems)
+
+- `aura()` + the `onFire` clip → the power aura / heater glow.
+- `sleep()` + the `zzz` particle FX + `wake()` → the KO state and the wake-up.
+- `dizzy` (stars) → the stagger daze; `laugh` → the glance reaction.
+- `hitstop` / `shakeStage` / `impactFlash` / `powFx` / `SFX` / `impulse` (all in avatar-lab.html) → the impact ladder, scaled by force.
+- The shipped seat→seat projectile system (`sendPokerDirectedEmote` / [`lib/poker-directed-emotes.ts`](lib/poker-directed-emotes.ts)) → anytime throws at any seat.
+- The WS `poker_directed_emote` pattern → carry the throw's `{power/tier}` and broadcast the resulting KO state to all clients in lockstep.
+
+#### Implementation pointers when ready
+
+- **Server:** track per-player power (table- or session-scoped) updated on pot award in [`server/src/services/poker-game.service.ts`](server/src/services/poker-game.service.ts); validate throws against the thrower's power; broadcast KO state. Power and KO are server-authoritative.
+- **Client:** KO as a per-seat state checked by both the seat renderer ([`components/poker/PokerSeat.tsx`](components/poker/PokerSeat.tsx)) and the winner's-circle center — each swaps the avatar render for the Z's layer when `koUntil > now`.
+- **Charge UX:** tap vs. hold-to-charge with a power bar; the projectile visual scales with committed power (a glowing boulder-snowball at max).
+
+#### Open questions
+
+- **Power model** — spend-to-throw (resource, "save for the KO") vs. passive heat (always-on status) vs. hybrid (passive tier + a chargeable super)?
+- **Defense** — does power double as armor (winners are hard to KO), or is it pure offense?
+- **Decay** — rate? does losing a hand drain power, or only time?
+- **KO at your own showdown** — sleep through the celebration, or auto-wake to celebrate?
+- **Anti-grief** — cooldown on KO throws? per-target KO-immunity window? how to keep a table from turning toxic (cosmetic-only already removes the money risk)?
+- **Economy** — throws purely free (power is the only cost), or any MORBIUS cost/reward attached?
+- **Naming** — "Power" vs. Heat / Momentum / Clout / Swagger.
+- **Persistence scope** — does power reset per table/session, or carry across? Tournament behavior?
