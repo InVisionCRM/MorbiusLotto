@@ -5,6 +5,7 @@ import { toBigIntSafe } from '@/lib/safe-bigint';
 import { motion, AnimatePresence } from 'framer-motion';
 import { pokerSfx, pokerHitSound } from '@/lib/poker-sfx';
 import { PokerSeat, PokerChipStack } from './PokerSeat';
+import { PokerPortraitSeat } from './PokerPortraitSeat';
 import { PokerBoard } from './PokerBoard';
 import { ProvablyFairBadge } from './ProvablyFairBadge';
 import { CardDisplay } from './CardDisplay';
@@ -1368,7 +1369,24 @@ export function PokerTable({ state, currentPlayerAddress, timeLeft, chatBubbleBy
             }}
             {...(tutorialTargets ? { 'data-tutorial-target': `seat-${displaySlot}` } : {})}
           >
-            <PokerSeat {...seatProps(idx)} />
+            {layoutVariant === 'portrait'
+              ? (() => {
+                  const sp = seatProps(idx);
+                  return (
+                    <PokerPortraitSeat
+                      seat={sp.seat}
+                      index={sp.index}
+                      holeCards={sp.holeCards}
+                      isCurrentPlayer={sp.isCurrentPlayer}
+                      showCardBacks={sp.showCardBacks}
+                      isHandWinner={sp.isHandWinner}
+                      handName={sp.handName}
+                      cardBackSrc={sp.cardBackSrc}
+                      inwardRight={rendered.fx < 0.5}
+                    />
+                  );
+                })()
+              : <PokerSeat {...seatProps(idx)} />}
           </div>
         );
       })}
