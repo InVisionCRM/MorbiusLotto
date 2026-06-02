@@ -21,6 +21,93 @@ interface PokerBottomBarProps {
 }
 
 const POKER_TURN_SECONDS = 30;
+const POKER_ACTION_VERB: Record<string, string> = {
+  fold: 'folds', check: 'checks', call: 'calls', bet: 'bets', raise: 'raises to', blind: 'posts',
+};
+
+/** Off-turn dock carousel — Live Action ⇄ Replay (this hand). Swipeable with page dots,
+ * collapsible to a slim strip (sticky), mirroring the lab dock. Chat stays on the 💬/drawer. */
+function PortraitDockCarousel({ state, onChat }: { state: PokerTableState | null; onChat?: () => void }) {
+  const [collapsed, setCollapsed] = useState(false);
+  const [page, setPage] = useState(0);
+  const pagesRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    try { setCollapsed(localStorage.getItem('poker.portraitDockCollapsed') === '1'); } catch { /* ignore */ }
+  }, []);
+  const toggleCollapsed = () => {
+    setCollapsed((c) => {
+      const next = !c;
+      try { localStorage.setItem('poker.portraitDockCollapsed', next ? '1' : '0'); } catch { /* ignore */ }
+      return next;
+    });
+  };
+  const onScroll = () => {
+    const el = pagesRef.current;
+    if (!el || !el.clientWidth) return;
+    setPage(Math.round(el.scrollLeft / el.clientWidth));
+  };
+
+  if (collapsed) {
+    // Slim strip — tap to expand. Shows the Live bar at minimal height.
+    return (
+      <div className="relative">
+        <button type="button" onClick={toggleCollapsed} aria-label="Expand dock" className="w-full">
+          <PortraitLiveBar state={state} onChat={onChat} />
+        </button>
+        <span className="pointer-events-none absolute right-2 top-1 text-[10px] text-white/40">▴</span>
+      </div>
+    );
+  }
+
+  const hand = state?.currentHand ?? null;
+  const actions = hand?.recentActions ?? [];
+  const seatName = (pos: number) => state?.seats?.[pos]?.displayName || `Seat ${pos + 1}`;
+
+  return (
+    <div className="relative" style={{ height: 128 }}>
+      <div className="absolute right-2 top-1 z-10 flex items-center gap-2">
+        <div className="flex items-center gap-1">
+          {[0, 1].map((i) => (
+            <span key={i} className="rounded-full transition-all" style={{ width: page === i ? 14 : 5, height: 5, background: page === i ? '#22d3ee' : 'rgba(255,255,255,0.25)' }} />
+          ))}
+        </div>
+        <button type="button" onClick={toggleCollapsed} aria-label="Collapse dock" className="text-[11px] text-white/45">▾</button>
+      </div>
+      <div
+        ref={pagesRef}
+        onScroll={onScroll}
+        className="flex h-full w-full snap-x snap-mandatory overflow-x-auto"
+        style={{ scrollbarWidth: 'none' }}
+      >
+        {/* Page 0 — Live */}
+        <div className="h-full w-full flex-[0_0_100%] snap-start">
+          <PortraitLiveBar state={state} onChat={onChat} />
+        </div>
+        {/* Page 1 — Replay (this hand's action history) */}
+        <div className="h-full w-full flex-[0_0_100%] snap-start overflow-hidden px-3 pt-2">
+          <div className="mb-1 flex items-center justify-between text-[11px]">
+            <span className="font-semibold uppercase tracking-wide text-white/55">This hand</span>
+            <span className="capitalize text-white/45">{hand?.street ?? '—'}</span>
+          </div>
+          <div className="flex flex-col gap-0.5 overflow-y-auto pr-1" style={{ maxHeight: 86, scrollbarWidth: 'none' }}>
+            {actions.length === 0 ? (
+              <span className="text-[12px] text-white/40">No actions yet this hand.</span>
+            ) : (
+              actions.map((a, i) => (
+                <div key={i} className="flex items-center gap-1.5 text-[12px] text-white/75">
+                  <span className="truncate font-semibold">{seatName(a.position)}</span>
+                  <span className="text-white/50">{POKER_ACTION_VERB[a.action] ?? a.action}</span>
+                  {a.amount && a.amount !== '0' && <span style={{ color: '#fde68a' }}>{Number(a.amount).toLocaleString()}</span>}
+                </div>
+              ))
+            )}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
 
 /** Off-turn portrait dock: who's acting, a draining timer, and the latest action. */
 function PortraitLiveBar({ state, onChat }: { state: PokerTableState | null; onChat?: () => void }) {
@@ -238,7 +325,7 @@ export function PokerBottomBar({
       }}
     >
       <div className="w-full max-sm:px-0 max-sm:pt-0 max-sm:pb-0 sm:px-3 sm:pt-1.5 sm:pb-[max(6px,env(safe-area-inset-bottom,0px))]">
-        {portraitOffTurn ? <PortraitLiveBar state={renderedState} onChat={onChat} /> : actions}
+        {portraitOffTurn ? <PortraitDockCarousel state={renderedState} onChat={onChat} /> : actions}
       </div>
     </div>
   );
