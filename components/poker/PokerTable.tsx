@@ -336,13 +336,8 @@ export function PokerTable({ state, currentPlayerAddress, timeLeft, chatBubbleBy
       }
       pokerHitSound(info.kind);
       pokerSfx.thump();
-      const root = tableRef.current;
-      if (root) {
-        const mag = 6; const frames: Keyframe[] = [];
-        for (let i = 1; i < 6; i++) { const d = 1 - i / 6, s = i % 2 ? 1 : -0.6; frames.push({ transform: `translate(${(ux * mag * d * s).toFixed(1)}px, ${(uy * mag * d * s).toFixed(1)}px)` }); }
-        frames.push({ transform: 'translate(0px, 0px)' });
-        try { root.animate(frames, { duration: 260, easing: 'ease-out' }); } catch { /* WAAPI unsupported */ }
-      }
+      // NOTE: no whole-table screen-shake — it rattled every player on every hit (unbearable).
+      // The struck avatar's head-knock recoil + the comic burst + SFX carry the impact instead.
       setImpactFx((prev) => [...prev, { id: `fx-${seat}-${info.key}`, x: ix, y: iy, kind: info.kind }]);
     }
   }, [hitBySeatIndex, dims.w, dims.h]);
