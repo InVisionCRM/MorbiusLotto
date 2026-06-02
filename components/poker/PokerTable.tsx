@@ -7,6 +7,7 @@ import { pokerSfx, pokerHitSound } from '@/lib/poker-sfx';
 import { PokerSeat, PokerChipStack } from './PokerSeat';
 import { PokerPortraitSeat } from './PokerPortraitSeat';
 import { PokerPortraitTurnLight } from './PokerPortraitTurnLight';
+import { PokerPortraitHero } from './PokerPortraitHero';
 import { PokerBoard } from './PokerBoard';
 import { ProvablyFairBadge } from './ProvablyFairBadge';
 import { CardDisplay } from './CardDisplay';
@@ -868,6 +869,13 @@ export function PokerTable({ state, currentPlayerAddress, timeLeft, chatBubbleBy
           isHero={actingPosition != null && actingPosition === mySeatIndex && mySeatIndex >= 0}
         />
       )}
+      {layoutVariant === 'portrait' && mySeatIndex >= 0 && (
+        <PokerPortraitHero
+          seat={state.seats[mySeatIndex]}
+          holeCards={state.myHoleCards}
+          isActing={actingPosition === mySeatIndex}
+        />
+      )}
 
       {/* CSS poker table — padding-based rings so every ring is equal pixel thickness all around */}
       <div
@@ -1352,6 +1360,8 @@ export function PokerTable({ state, currentPlayerAddress, timeLeft, chatBubbleBy
 
       {/* Seats */}
       {state.seats.map((_, idx) => {
+        // Portrait: the hero is NOT a ring seat — it's the dedicated centered PokerPortraitHero overlay below.
+        if (layoutVariant === 'portrait' && idx === mySeatIndex) return null;
         const displaySlot = mySeatIndex >= 0
           ? (idx - mySeatIndex + state.seats.length) % state.seats.length
           : idx;
