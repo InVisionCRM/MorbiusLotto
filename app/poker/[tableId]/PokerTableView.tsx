@@ -7,11 +7,14 @@ import type { Emotion } from '@/components/avatar';
 import type { DirectedEmoteFlight, StuckArrow } from './PokerSeatOverlays';
 import type { PokerDirectedEmoteKind } from '@/lib/poker-directed-emotes';
 import { POKER_TABLE_REF_W, POKER_TABLE_REF_H } from './PokerMobileZoomLock';
+import type { LayoutVariant } from '@/lib/poker-seat-layout';
 
 interface PokerTableViewProps {
   tableId: string;
   /** Scale factor from usePokerMobileZoomLock. 1.0 on desktop, <1 on mobile landscape. */
   tableScale?: number;
+  /** 'portrait' renders the mobile vertical-oval layout (fills the column, tall). */
+  layoutVariant?: LayoutVariant;
   fullscreen?: boolean;
   onToggleFullscreen?: () => void;
   renderedState: PokerTableState | null;
@@ -73,6 +76,7 @@ const POKER_MAIN_PANEL_STYLE: React.CSSProperties = {
 export function PokerTableView({
   tableId,
   tableScale = 1,
+  layoutVariant = 'default',
   fullscreen = false,
   onToggleFullscreen,
   renderedState,
@@ -182,7 +186,7 @@ export function PokerTableView({
         )}
 
       {/* ── Fullscreen toggle button (top-right corner of table, desktop only) ── */}
-      {!isMobileScale && onToggleFullscreen && (
+      {!isMobileScale && layoutVariant !== 'portrait' && onToggleFullscreen && (
         <button
           onClick={onToggleFullscreen}
           aria-label={fullscreen ? 'Exit fullscreen' : 'Enter fullscreen'}
@@ -206,6 +210,7 @@ export function PokerTableView({
       {renderedState ? (
         <PokerTable
           state={renderedState}
+          layoutVariant={layoutVariant}
           currentPlayerAddress={effectivePlayerAddress}
           onLeave={handleLeaveClick}
           onRequestMobileActivity={() => setActivityMobileOpenSerial((n) => n + 1)}
@@ -285,6 +290,20 @@ export function PokerTableView({
             {tableContent}
           </div>
         </div>
+      </div>
+    );
+  }
+
+  if (layoutVariant === 'portrait') {
+    // Mobile portrait: the table fills the column between the slim header and the dock
+    // (tall, vertical-oval). PokerTable's ResizeObserver reads this box, so the portrait
+    // anchor fractions lay out within it.
+    return (
+      <div
+        className="relative w-full"
+        style={{ flex: '1 1 0', minHeight: 0, overflow: 'hidden', display: showDashboard || showMyStats ? 'none' : undefined }}
+      >
+        {tableContent}
       </div>
     );
   }
