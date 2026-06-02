@@ -779,6 +779,7 @@ export function PokerTable({ state, currentPlayerAddress, timeLeft, chatBubbleBy
     return {
       seat,
       index: idx,
+      layoutVariant,
       holeCards:
         seat.folded
           ? undefined
