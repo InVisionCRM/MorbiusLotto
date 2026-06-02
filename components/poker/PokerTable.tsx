@@ -6,6 +6,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { pokerSfx, pokerHitSound } from '@/lib/poker-sfx';
 import { PokerSeat, PokerChipStack } from './PokerSeat';
 import { PokerPortraitSeat } from './PokerPortraitSeat';
+import { PokerPortraitTurnLight } from './PokerPortraitTurnLight';
 import { PokerBoard } from './PokerBoard';
 import { ProvablyFairBadge } from './ProvablyFairBadge';
 import { CardDisplay } from './CardDisplay';
@@ -860,6 +861,13 @@ export function PokerTable({ state, currentPlayerAddress, timeLeft, chatBubbleBy
       style={{ overflow: 'visible', containerType: 'inline-size' }}
       {...(tutorialTargets ? { 'data-tutorial-target': 'table' } : {})}
     >
+      {layoutVariant === 'portrait' && (
+        <PokerPortraitTurnLight
+          fx={actingDisplaySlot != null ? (seatAnchors[actingDisplaySlot]?.fx ?? null) : null}
+          fy={actingDisplaySlot != null ? (seatAnchors[actingDisplaySlot]?.fy ?? null) : null}
+          isHero={actingPosition != null && actingPosition === mySeatIndex && mySeatIndex >= 0}
+        />
+      )}
 
       {/* CSS poker table — padding-based rings so every ring is equal pixel thickness all around */}
       <div
