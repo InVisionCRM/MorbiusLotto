@@ -22,6 +22,7 @@ import {
   playerTagAnchorForDisplaySlot,
   ringIndexForDisplaySlot,
   winningPotChipAnchorForDisplaySlot,
+  type LayoutVariant,
 } from '@/lib/poker-seat-layout';
 import { POKER_DIRECTED_EMOTES, POKER_DIRECTED_EMOTE_FLY_MS, POKER_PROJECTILE_FLY_MS, POKER_PROJECTILE_TOTAL_MS, type PokerDirectedEmoteKind } from '@/lib/poker-directed-emotes';
 import confetti from 'canvas-confetti';
@@ -200,9 +201,11 @@ export interface PokerTableProps {
    * only on the active dealer seat.
    */
   showDealerAnchorGuides?: boolean;
+  /** Layout variant: 'default' (desktop rings) or 'portrait' (mobile vertical-oval, mockup-tuned). */
+  layoutVariant?: LayoutVariant;
 }
 
-export function PokerTable({ state, currentPlayerAddress, timeLeft, chatBubbleBySeatIndex, onReUpClick, onMenuClick, reactionBySeatIndex, broadcastEmotionBySeatIndex, directedEmotes, stuckArrowsBySeatIndex, hitBySeatIndex, onSendDirectedEmote, onPhraseReaction, onAnimationReaction, onOpponentClick, onOpponentRadialAction, quickChatPhrases, setQuickChatPhrases, onOpenEditQuickChat, onLeave, onRequestMobileActivity, onSitOut, onSitBack, onShowCards, onMuckCards, tutorialTargets, dataTutorialTargetPot, showDealerAnchorGuides = false }: PokerTableProps) {
+export function PokerTable({ state, currentPlayerAddress, timeLeft, chatBubbleBySeatIndex, onReUpClick, onMenuClick, reactionBySeatIndex, broadcastEmotionBySeatIndex, directedEmotes, stuckArrowsBySeatIndex, hitBySeatIndex, onSendDirectedEmote, onPhraseReaction, onAnimationReaction, onOpponentClick, onOpponentRadialAction, quickChatPhrases, setQuickChatPhrases, onOpenEditQuickChat, onLeave, onRequestMobileActivity, onSitOut, onSitBack, onShowCards, onMuckCards, tutorialTargets, dataTutorialTargetPot, showDealerAnchorGuides = false, layoutVariant = 'default' }: PokerTableProps) {
   const tableRef = useRef<HTMLDivElement>(null);
   const [dims, setDims] = useState({ w: 640, h: 500 });
   // Projectile-hit "juice": transient comic bursts/flashes spawned at the impact point.
@@ -277,7 +280,7 @@ export function PokerTable({ state, currentPlayerAddress, timeLeft, chatBubbleBy
   // in the opponent profile card and emote broadcasts.
   const isMobileLandscape = useIsMobileLandscape();
   const hideSeatAvatars = isMobileLandscape;
-  const seatAnchors = useMemo(() => authoredSeatAnchors(state.seats.length), [state.seats.length]);
+  const seatAnchors = useMemo(() => authoredSeatAnchors(state.seats.length, layoutVariant), [state.seats.length, layoutVariant]);
   const toDisplaySlot = (seatIdx: number) => (mySeatIndex >= 0 ? (seatIdx - mySeatIndex + state.seats.length) % state.seats.length : seatIdx);
 
   const getRenderedSeatAnchor = (displaySlot: number, _serverPos: number) => {
@@ -395,7 +398,7 @@ export function PokerTable({ state, currentPlayerAddress, timeLeft, chatBubbleBy
           mySeatIndex >= 0
             ? (seatIdx - mySeatIndex + state.seats.length) % state.seats.length
             : seatIdx;
-        const { fx, fy } = winningPotChipAnchorForDisplaySlot(state.seats.length, displaySlot);
+        const { fx, fy } = winningPotChipAnchorForDisplaySlot(state.seats.length, displaySlot, layoutVariant);
         out.push({
           key: `pot${pi}-${addrs[wi]}`,
           amount: share.toString(),
@@ -625,7 +628,7 @@ export function PokerTable({ state, currentPlayerAddress, timeLeft, chatBubbleBy
           : displaySlot;
       const seat = state.seats[actualIdx];
       if (toBigIntSafe(seat.currentBet ?? 0) > 0n) {
-        const { fx, fy } = betChipAnchorForDisplaySlot(state.seats.length, displaySlot);
+        const { fx, fy } = betChipAnchorForDisplaySlot(state.seats.length, displaySlot, layoutVariant);
         nextBets[actualIdx] = { amount: seat.currentBet ?? '0', fx, fy };
       }
     }
@@ -660,7 +663,7 @@ export function PokerTable({ state, currentPlayerAddress, timeLeft, chatBubbleBy
         const serverPos = state.seats[idx]?.position ?? idx;
         const from = idx === mySeatIndex
           ? getRenderedSeatAnchor(displaySlot, serverPos)
-          : cardAnchorForDisplaySlot(state.seats.length, displaySlot);
+          : cardAnchorForDisplaySlot(state.seats.length, displaySlot, layoutVariant);
         const visual = lastKnownCardVisualRef.current[idx] ?? { showBacks: true };
         if (from) {
           const id = `${hand.handId}-fold-${idx}-${Date.now()}`;
@@ -741,7 +744,7 @@ export function PokerTable({ state, currentPlayerAddress, timeLeft, chatBubbleBy
     const displaySlot = toDisplaySlot(idx);
     const serverPos = seat.position ?? idx;
     const anchorFrac = getRenderedSeatAnchor(displaySlot, serverPos);
-    const playerTagAnchor = playerTagAnchorForDisplaySlot(state.seats.length, displaySlot);
+    const playerTagAnchor = playerTagAnchorForDisplaySlot(state.seats.length, displaySlot, layoutVariant);
     const playerTagOffset = anchorFrac
       ? {
           x: (playerTagAnchor.fx - anchorFrac.fx) * dims.w,
@@ -751,7 +754,7 @@ export function PokerTable({ state, currentPlayerAddress, timeLeft, chatBubbleBy
     // Hero hole cards live on the avatar in PokerSeat (not the opponent card map),
     // so wire their CARD_ANCHOR_RING entry as an offset from the seat anchor — this
     // makes the hero hand draggable in the layout editor like every other element.
-    const heroCardAnchor = cardAnchorForDisplaySlot(state.seats.length, displaySlot);
+    const heroCardAnchor = cardAnchorForDisplaySlot(state.seats.length, displaySlot, layoutVariant);
     const heroCardOffset = anchorFrac
       ? {
           x: (heroCardAnchor.fx - anchorFrac.fx) * dims.w,
@@ -1101,7 +1104,7 @@ export function PokerTable({ state, currentPlayerAddress, timeLeft, chatBubbleBy
           const hasBet = toBigIntSafe(seat.currentBet ?? 0) > 0n;
           if (!hasBet) return null;
 
-          const { fx: cfx, fy: cfy } = betChipAnchorForDisplaySlot(state.seats.length, displaySlot);
+          const { fx: cfx, fy: cfy } = betChipAnchorForDisplaySlot(state.seats.length, displaySlot, layoutVariant);
 
           return (
             <motion.div
@@ -1229,7 +1232,7 @@ export function PokerTable({ state, currentPlayerAddress, timeLeft, chatBubbleBy
         const showBacks = inHand && !showdownCards;
         if (!showBacks && !showdownCards?.length) return null;
         const displaySlot = toDisplaySlot(idx);
-        const { fx, fy } = cardAnchorForDisplaySlot(state.seats.length, displaySlot);
+        const { fx, fy } = cardAnchorForDisplaySlot(state.seats.length, displaySlot, layoutVariant);
         const faceDown = !showdownCards?.length;
         const seatLowerForZ = seat.playerAddress.toLowerCase();
         const isWinnerHoleCards =
@@ -1281,7 +1284,7 @@ export function PokerTable({ state, currentPlayerAddress, timeLeft, chatBubbleBy
       {/* Optional: one faint marker per display-slot dealer anchor (layout tuning). */}
       {showDealerAnchorGuides &&
         Array.from({ length: state.seats.length }, (_, displaySlot) => {
-          const { fx, fy } = dealerButtonAnchorForDisplaySlot(state.seats.length, displaySlot);
+          const { fx, fy } = dealerButtonAnchorForDisplaySlot(state.seats.length, displaySlot, layoutVariant);
           return (
             <div
               key={`dealer-anchor-guide-${displaySlot}`}
@@ -1323,7 +1326,7 @@ export function PokerTable({ state, currentPlayerAddress, timeLeft, chatBubbleBy
           mySeatIndex >= 0
             ? (dealerIdx - mySeatIndex + state.seats.length) % state.seats.length
             : dealerIdx;
-        const { fx, fy } = dealerButtonAnchorForDisplaySlot(state.seats.length, displaySlot);
+        const { fx, fy } = dealerButtonAnchorForDisplaySlot(state.seats.length, displaySlot, layoutVariant);
         return <DealerButton fx={fx} fy={fy} />;
       })()}
 

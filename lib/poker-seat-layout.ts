@@ -33,14 +33,65 @@ export function ringIndexForDisplaySlot(displaySlot: number, seatCount: number):
   return Math.max(0, Math.min(POKER_TABLE_MAX_SEATS - 1, idx));
 }
 
+export type LayoutVariant = 'default' | 'portrait';
+
+/**
+ * Portrait (mobile, vertical-oval) seat anchors — authored PER seat count from the
+ * `public/poker-mobile-lab.html` mockup (each count is hand-tuned, not derived from one ring).
+ * Index 0 is the hero (bottom); 1..n-1 are opponents counter-clockwise from the hero.
+ */
+export const PORTRAIT_SEAT_ANCHORS: Record<number, SeatAnchor[]> = {
+  2:  [ { fx: 0.5, fy: 0.9 }, { fx: 0.5, fy: 0.12 } ],
+  3:  [ { fx: 0.5, fy: 0.9 }, { fx: 0.18, fy: 0.3 }, { fx: 0.82, fy: 0.3 } ],
+  4:  [ { fx: 0.5, fy: 0.9 }, { fx: 0.13, fy: 0.47 }, { fx: 0.5, fy: 0.13 }, { fx: 0.87, fy: 0.47 } ],
+  5:  [ { fx: 0.5, fy: 0.9 }, { fx: 0.14, fy: 0.58 }, { fx: 0.28, fy: 0.2 }, { fx: 0.72, fy: 0.2 }, { fx: 0.86, fy: 0.58 } ],
+  6:  [ { fx: 0.5, fy: 0.9 }, { fx: 0.16, fy: 0.549 }, { fx: 0.16, fy: 0.211 }, { fx: 0.5, fy: 0.107 }, { fx: 0.84, fy: 0.211 }, { fx: 0.84, fy: 0.549 } ],
+  9:  [ { fx: 0.5, fy: 0.9 }, { fx: 0.192, fy: 0.704 }, { fx: 0.161, fy: 0.498 }, { fx: 0.192, fy: 0.296 }, { fx: 0.341, fy: 0.109 }, { fx: 0.659, fy: 0.109 }, { fx: 0.839, fy: 0.296 }, { fx: 0.873, fy: 0.498 }, { fx: 0.839, fy: 0.704 } ],
+  10: [ { fx: 0.5, fy: 0.9 }, { fx: 0.186, fy: 0.751 }, { fx: 0.101, fy: 0.544 }, { fx: 0.101, fy: 0.339 }, { fx: 0.259, fy: 0.145 }, { fx: 0.5, fy: 0.1 }, { fx: 0.741, fy: 0.145 }, { fx: 0.87, fy: 0.339 }, { fx: 0.87, fy: 0.544 }, { fx: 0.814, fy: 0.751 } ],
+};
+
+/** Portrait seat anchors for any `seatCount` — exact authored table, else evenly sample the 10-max ring. */
+function portraitSeatAnchors(seatCount: number): SeatAnchor[] {
+  const exact = PORTRAIT_SEAT_ANCHORS[seatCount];
+  if (exact) return exact.map((a) => ({ fx: a.fx, fy: a.fy }));
+  const ring = PORTRAIT_SEAT_ANCHORS[POKER_TABLE_MAX_SEATS];
+  return Array.from({ length: seatCount }, (_, slot) => {
+    if (slot === 0) return { fx: ring[0].fx, fy: ring[0].fy };
+    const ri = Math.max(1, Math.min(ring.length - 1, Math.round((slot * (ring.length - 1)) / (seatCount - 1))));
+    return { fx: ring[ri].fx, fy: ring[ri].fy };
+  });
+}
+
 /** Display-slot anchors for `seatCount` players (same logic as `PokerTable`). */
-export function authoredSeatAnchors(seatCount: number): SeatAnchor[] {
+export function authoredSeatAnchors(seatCount: number, variant: LayoutVariant = 'default'): SeatAnchor[] {
   if (seatCount <= 0) return [];
+  if (variant === 'portrait') return portraitSeatAnchors(seatCount);
   return Array.from({ length: seatCount }, (_, displaySlot) => {
     const ri = ringIndexForDisplaySlot(displaySlot, seatCount);
     const a = SEAT_ANCHOR_RING[ri];
     return { fx: a.fx, fy: a.fy };
   });
+}
+
+/**
+ * In the portrait variant, the nameplate / bet chip / dealer button / cards are DERIVED from
+ * each seat's (tunable) anchor + a directional offset — matching the mockup's relative model.
+ * Tuning a seat in the editor moves everything attached to it. (Default variant keeps its own rings.)
+ */
+type PortraitAnchorKind = 'tag' | 'bet' | 'card' | 'dealer' | 'winpot';
+function portraitAnchorFor(seatCount: number, displaySlot: number, kind: PortraitAnchorKind): SeatAnchor {
+  const seats = portraitSeatAnchors(seatCount);
+  const s = seats[displaySlot] ?? POKER_POT_ANCHOR;
+  switch (kind) {
+    case 'tag':    return { fx: s.fx, fy: Math.min(0.99, s.fy + 0.058) };          // nameplate just below avatar
+    case 'bet':    return { fx: s.fx, fy: Math.max(0.01, s.fy - 0.05) };           // bet chip straddles top of avatar
+    case 'card':   return { fx: s.fx, fy: s.fy };                                  // cards positioned relative in PokerSeat
+    case 'winpot': return { fx: s.fx + (0.5 - s.fx) * 0.18, fy: s.fy + (0.5 - s.fy) * 0.18 };
+    case 'dealer': {                                                               // hug avatar on the INWARD side (toward center)
+      const dx = 0.5 - s.fx, dy = 0.5 - s.fy, len = Math.hypot(dx, dy) || 1, d = 0.062;
+      return { fx: s.fx + (dx / len) * d, fy: s.fy + (dy / len) * d };
+    }
+  }
 }
 
 /**
@@ -70,7 +121,8 @@ export function authoredPlayerTagAnchors(seatCount: number): SeatAnchor[] {
   });
 }
 
-export function playerTagAnchorForDisplaySlot(seatCount: number, displaySlot: number): SeatAnchor {
+export function playerTagAnchorForDisplaySlot(seatCount: number, displaySlot: number, variant: LayoutVariant = 'default'): SeatAnchor {
+  if (variant === 'portrait') return portraitAnchorFor(seatCount, displaySlot, 'tag');
   const tags = authoredPlayerTagAnchors(seatCount);
   return tags[displaySlot] ?? { ...POKER_POT_ANCHOR };
 }
@@ -105,7 +157,8 @@ export function authoredChipAnchors(seatCount: number): SeatAnchor[] {
   });
 }
 
-export function betChipAnchorForDisplaySlot(seatCount: number, displaySlot: number): SeatAnchor {
+export function betChipAnchorForDisplaySlot(seatCount: number, displaySlot: number, variant: LayoutVariant = 'default'): SeatAnchor {
+  if (variant === 'portrait') return portraitAnchorFor(seatCount, displaySlot, 'bet');
   const chips = authoredChipAnchors(seatCount);
   return chips[displaySlot] ?? { ...POKER_POT_ANCHOR };
 }
@@ -171,7 +224,8 @@ export function authoredWinningPotChipAnchors(seatCount: number): SeatAnchor[] {
   });
 }
 
-export function winningPotChipAnchorForDisplaySlot(seatCount: number, displaySlot: number): SeatAnchor {
+export function winningPotChipAnchorForDisplaySlot(seatCount: number, displaySlot: number, variant: LayoutVariant = 'default'): SeatAnchor {
+  if (variant === 'portrait') return portraitAnchorFor(seatCount, displaySlot, 'winpot');
   const list = authoredWinningPotChipAnchors(seatCount);
   return list[displaySlot] ?? { ...POKER_POT_ANCHOR };
 }
@@ -185,7 +239,8 @@ export function authoredCardAnchors(seatCount: number): SeatAnchor[] {
   });
 }
 
-export function cardAnchorForDisplaySlot(seatCount: number, displaySlot: number): SeatAnchor {
+export function cardAnchorForDisplaySlot(seatCount: number, displaySlot: number, variant: LayoutVariant = 'default'): SeatAnchor {
+  if (variant === 'portrait') return portraitAnchorFor(seatCount, displaySlot, 'card');
   const cards = authoredCardAnchors(seatCount);
   return cards[displaySlot] ?? { ...POKER_POT_ANCHOR };
 }
@@ -208,7 +263,11 @@ export function authoredDealerButtonAnchors(seatCount: number): DealerButtonAnch
   });
 }
 
-export function dealerButtonAnchorForDisplaySlot(seatCount: number, displaySlot: number): DealerButtonAnchor {
+export function dealerButtonAnchorForDisplaySlot(seatCount: number, displaySlot: number, variant: LayoutVariant = 'default'): DealerButtonAnchor {
+  if (variant === 'portrait') {
+    const a = portraitAnchorFor(seatCount, displaySlot, 'dealer');
+    return { x: a.fx, fx: a.fx, fy: a.fy };
+  }
   const list = authoredDealerButtonAnchors(seatCount);
   return list[displaySlot] ?? { x: POKER_POT_ANCHOR.fx, ...POKER_POT_ANCHOR };
 }
