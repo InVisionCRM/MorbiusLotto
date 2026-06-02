@@ -1,6 +1,6 @@
 'use client';
 
-import { useLayoutEffect, useRef } from 'react';
+import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import type React from 'react';
 import type { PokerTableState } from '@/lib/websocket-client';
 
@@ -10,9 +10,81 @@ interface PokerBottomBarProps {
    * so the felt can use the full landscape height instead of being squished
    * by a bottom bar. */
   mobileLandscape?: boolean;
+  /** Mobile portrait: off-turn, show a Live Action bar (acting player · timer · last action)
+   * instead of the idle betting area. On your turn, the betting controls render as normal. */
+  portrait?: boolean;
   renderedState: PokerTableState | null;
   mySeat: PokerTableState['seats'][number] | null;
   actions: React.ReactNode;
+}
+
+const POKER_TURN_SECONDS = 30;
+
+/** Off-turn portrait dock: who's acting, a draining timer, and the latest action. */
+function PortraitLiveBar({ state }: { state: PokerTableState | null }) {
+  const hand = state?.currentHand ?? null;
+  const actingPos = hand?.actingPosition ?? null;
+  const acting = actingPos != null ? state?.seats?.[actingPos] ?? null : null;
+  const name =
+    acting?.displayName ||
+    (acting?.playerAddress ? `${acting.playerAddress.slice(0, 6)}…` : null);
+
+  const turnStartedAt = hand?.turnStartedAt ?? null;
+  const [now, setNow] = useState(0);
+  useEffect(() => {
+    if (!turnStartedAt) { setNow(0); return; }
+    setNow(Date.now());
+    const id = setInterval(() => setNow(Date.now()), 250);
+    return () => clearInterval(id);
+  }, [turnStartedAt]);
+
+  let pct = 0;
+  let remaining = 0;
+  if (turnStartedAt && now > 0) {
+    const elapsed = (now - new Date(turnStartedAt).getTime()) / 1000;
+    remaining = Math.max(0, POKER_TURN_SECONDS - elapsed);
+    pct = Math.max(0, Math.min(1, remaining / POKER_TURN_SECONDS));
+  }
+
+  const la = hand?.recentActions?.length
+    ? hand.recentActions[hand.recentActions.length - 1]
+    : hand?.lastAction ?? null;
+  const laName = la ? state?.seats?.[la.position]?.displayName : null;
+  const amt = la && la.amount && la.amount !== '0' ? ` ${Number(la.amount).toLocaleString()}` : '';
+  const laText = la ? `${laName ?? 'Player'} ${la.action}${amt}` : 'Hand in progress';
+  const urgent = remaining > 0 && remaining <= 6;
+
+  return (
+    <div className="flex items-center gap-3 px-3 py-2.5" style={{ minHeight: 58 }}>
+      <div
+        className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-full text-sm font-bold"
+        style={{ background: 'rgba(34,211,238,0.14)', color: '#67e8f9', border: '1px solid rgba(34,211,238,0.3)' }}
+      >
+        {(name?.[0] ?? '·').toUpperCase()}
+      </div>
+      <div className="min-w-0 flex-1">
+        <div className="flex items-center gap-1.5 text-[13px] font-semibold text-white">
+          <span className="truncate">{name ?? 'Waiting for players'}</span>
+          {name && <span className="text-[11px] font-medium text-cyan-400">acting…</span>}
+        </div>
+        <div className="mt-1 h-1 w-full overflow-hidden rounded-full bg-white/10">
+          <div
+            className="h-full rounded-full transition-[width] duration-200"
+            style={{ width: `${pct * 100}%`, background: urgent ? '#f87171' : '#22d3ee' }}
+          />
+        </div>
+        <div className="mt-1 truncate text-[11px] text-white/55">{laText}</div>
+      </div>
+      {turnStartedAt && (
+        <div
+          className="flex-shrink-0 text-[12px] font-semibold tabular-nums"
+          style={{ color: urgent ? '#f87171' : 'rgba(255,255,255,0.7)' }}
+        >
+          {Math.ceil(remaining)}s
+        </div>
+      )}
+    </div>
+  );
 }
 
 const SHELL_SELECTOR = '[data-poker-shell]';
@@ -30,12 +102,17 @@ export const POKER_SIDE_STRIP_W = 96;
 export function PokerBottomBar({
   fullscreen = false,
   mobileLandscape = false,
+  portrait = false,
   renderedState,
   mySeat,
   actions,
 }: PokerBottomBarProps) {
   const rootRef = useRef<HTMLDivElement>(null);
   const show = !!(renderedState && mySeat && actions);
+  // Portrait off-turn: swap the idle betting area for the Live Action bar.
+  const actingPos = renderedState?.currentHand?.actingPosition ?? null;
+  const myTurn = actingPos != null && mySeat != null && actingPos === (mySeat.position ?? -1);
+  const portraitOffTurn = portrait && !myTurn;
 
   // Measure the bar's height into a CSS var on the shell. Consumed by:
   //   • Fullscreen overlay: pads the main flex row by this amount (bar is absolute).
@@ -145,7 +222,7 @@ export function PokerBottomBar({
       }}
     >
       <div className="w-full max-sm:px-0 max-sm:pt-0 max-sm:pb-0 sm:px-3 sm:pt-1.5 sm:pb-[max(6px,env(safe-area-inset-bottom,0px))]">
-        {actions}
+        {portraitOffTurn ? <PortraitLiveBar state={renderedState} /> : actions}
       </div>
     </div>
   );

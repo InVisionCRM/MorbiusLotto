@@ -987,6 +987,7 @@ export default function PokerTablePage() {
               <PokerBottomBar
                 fullscreen={isFullscreen}
                 mobileLandscape={isMobileLandscape && !isFullscreen}
+                portrait={isPortraitMobile}
                 renderedState={renderedState}
                 mySeat={mySeat}
                 actions={sharedActions}
