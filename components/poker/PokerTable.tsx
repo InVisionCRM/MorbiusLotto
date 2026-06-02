@@ -213,6 +213,15 @@ export function PokerTable({ state, currentPlayerAddress, timeLeft, chatBubbleBy
   const seenHitKeysRef = useRef<Record<number, number>>({});
   const seenThrowIdsRef = useRef<Set<string>>(new Set());
   const { effect: tableEffect, feltGradient, railStyle } = usePokerTableEffect();
+  // Portrait reproduces the lab felt: clean cyan vertical-oval capsule + a thin dark rail
+  // (instead of the desktop themed/ornate rails). Gated so desktop is untouched.
+  const isPortraitTable = layoutVariant === 'portrait';
+  const feltBg = isPortraitTable
+    ? 'radial-gradient(120% 90% at 50% 38%, #0f7387, #0a505e 64%, #062f38)'
+    : feltGradient;
+  const rail = isPortraitTable
+    ? { outerRing: '#241a10', outerGlow: 'none', cushion: '#0a0d12', innerRing: '#1c1410', innerGlow: 'none' }
+    : railStyle;
 
   useEffect(() => {
     const el = tableRef.current;
@@ -866,25 +875,25 @@ export function PokerTable({ state, currentPlayerAddress, timeLeft, chatBubbleBy
         {/* Outer trim — 8px ring */}
         <div style={{
           flex: 1, borderRadius: '9999px', display: 'flex', padding: '8px',
-          background: railStyle.outerRing,
-          boxShadow: railStyle.outerGlow,
+          background: rail.outerRing,
+          boxShadow: rail.outerGlow,
         }}>
           {/* Dark cushion — 20px ring */}
           <div style={{
-            flex: 1, borderRadius: '9999px', display: 'flex', padding: '20px',
-            background: railStyle.cushion,
+            flex: 1, borderRadius: '9999px', display: 'flex', padding: isPortraitTable ? '12px' : '20px',
+            background: rail.cushion,
             boxShadow: 'inset 0 4px 16px rgba(0,0,0,0.85), inset 0 -2px 8px rgba(0,0,0,0.6)',
           }}>
             {/* Inner trim — 6px ring */}
             <div style={{
               flex: 1, borderRadius: '9999px', display: 'flex', padding: '6px',
-              background: railStyle.innerRing,
-              boxShadow: railStyle.innerGlow,
+              background: rail.innerRing,
+              boxShadow: rail.innerGlow,
             }}>
-              {/* Felt surface — color from user preference */}
+              {/* Felt surface — cyan capsule in portrait (lab), themed gradient on desktop */}
               <div style={{
                 flex: 1, borderRadius: '9999px', position: 'relative', overflow: 'hidden',
-                background: feltGradient,
+                background: feltBg,
                 boxShadow: 'inset 0 8px 40px rgba(0,0,0,0.55), inset 0 -4px 20px rgba(0,0,0,0.4)',
                 outline: '1px dashed rgba(255,255,255,0.08)',
                 outlineOffset: '-10px',
