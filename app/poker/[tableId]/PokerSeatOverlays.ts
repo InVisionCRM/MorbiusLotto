@@ -56,6 +56,8 @@ export function usePokerSeatOverlays({
   const [broadcastEmotionBySeatIndex, setBroadcastEmotionBySeatIndex] = useState<Record<number, Emotion>>({});
   const [directedEmotes, setDirectedEmotes] = useState<DirectedEmoteFlight[]>([]);
   const [stuckArrowsBySeatIndex, setStuckArrowsBySeatIndex] = useState<Record<number, StuckArrow[]>>({});
+  // Bumped when a projectile lands on a seat → drives the avatar's directional knock-back recoil.
+  const [hitBySeatIndex, setHitBySeatIndex] = useState<Record<number, { key: number; fromSeatIndex: number; kind: PokerDirectedEmoteKind }>>({});
 
   const bubbleTimeoutsRef = useRef<Map<string, ReturnType<typeof setTimeout>>>(new Map());
   const reactionTimeoutsRef = useRef<Map<number, ReturnType<typeof setTimeout>>>(new Map());
@@ -174,6 +176,8 @@ export function usePokerSeatOverlays({
       if (def.projectile) {
         const landT = setTimeout(() => {
           pulse(toSeatIndex, def.target); // target flinches on impact
+          // knock-back recoil — head whips away from the thrower (direction derived from seat anchors in PokerTable)
+          setHitBySeatIndex((prev) => ({ ...prev, [toSeatIndex]: { key: (prev[toSeatIndex]?.key ?? 0) + 1, fromSeatIndex, kind } }));
           if (def.projectile === 'arrow') {
             // hand the flight off to a persistent stuck arrow on the target's border
             setStuckArrowsBySeatIndex((prev) => {
@@ -288,6 +292,7 @@ export function usePokerSeatOverlays({
     broadcastEmotionBySeatIndex,
     directedEmotes,
     stuckArrowsBySeatIndex,
+    hitBySeatIndex,
     onPhraseReaction,
     onAnimationReaction,
     onSendDirectedEmote,

@@ -10,6 +10,7 @@ import { motion, AnimatePresence, useMotionValue, useSpring, useTransform } from
 import type { LucideIcon } from 'lucide-react';
 import {
   ArrowLeft,
+  Cherry,
   Coins,
   Crosshair,
   Snowflake,
@@ -319,7 +320,7 @@ const OPPONENT_RADIAL_ITEMS: RadialMenuItem[] = [
 // Quick emote ring shown when you tap a *seated* opponent — throws a directed emote at them.
 const EMOTE_RADIAL_ICONS: Record<PokerDirectedEmoteKind, LucideIcon> = {
   haha: Laugh, love: Heart, gg: Handshake, nice: ThumbsUp, boo: ThumbsDown, fire: Flame, dance: Music2, money: Coins,
-  arrow: Crosshair, snowball: Snowflake,
+  arrow: Crosshair, snowball: Snowflake, tomato: Cherry,
 };
 const OPPONENT_EMOTE_RADIAL_ITEMS: RadialMenuItem[] = [
   ...POKER_DIRECTED_EMOTE_KINDS.map((k): RadialMenuItem => ({ id: `emote:${k}`, label: k, icon: EMOTE_RADIAL_ICONS[k] })),
@@ -404,6 +405,8 @@ export interface PokerSeatProps {
   overlayPhrase?: string | null;
   /** Avatar emotion broadcast from server (visible to all players). */
   overlayEmotion?: Emotion | null;
+  /** Projectile-hit knock-back signal (bump `key` to fire; dir = on-screen travel vector). */
+  hit?: { key: number; dirX: number; dirY: number; power?: number };
   onPhraseReaction?: (phrase: string) => void;
   /** Called when current player selects an avatar emotion (broadcast to table). */
   onAnimationReaction?: (emotion: Emotion) => void;
@@ -450,7 +453,7 @@ function offsetTransform(offset?: { x: number; y: number }): string | undefined 
   return `translate(${offset.x}px, ${offset.y}px)`;
 }
 
-export function PokerSeat({ seat, index, holeCards, isCurrentPlayer, showCardBacks, winningCardIndices, isHandWinner = false, lastAction, callAmount, timeLeft, maxTime = 60, chatBubble, onReUpClick, onMenuClick, overlayPhrase: propsOverlayPhrase, overlayEmotion: propsOverlayEmotion, onPhraseReaction, onAnimationReaction, onOpponentClick, onOpponentRadialAction, onSendDirectedEmote, quickChatPhrases: propsQuickChatPhrases, setQuickChatPhrases: propsSetQuickChatPhrases, onOpenEditQuickChat, hideSeatAvatar = false, onLeaveTable, onSitOut, onSitBack, onRequestMobileActivity, includeActivityInPlayerRadial = false, playerTagOffset, showdownCardOffset, heroCardOffset, handName, cardDealFromOffset, cardBackSrc }: PokerSeatProps) {
+export function PokerSeat({ seat, index, holeCards, isCurrentPlayer, showCardBacks, winningCardIndices, isHandWinner = false, lastAction, callAmount, timeLeft, maxTime = 60, chatBubble, onReUpClick, onMenuClick, overlayPhrase: propsOverlayPhrase, overlayEmotion: propsOverlayEmotion, hit, onPhraseReaction, onAnimationReaction, onOpponentClick, onOpponentRadialAction, onSendDirectedEmote, quickChatPhrases: propsQuickChatPhrases, setQuickChatPhrases: propsSetQuickChatPhrases, onOpenEditQuickChat, hideSeatAvatar = false, onLeaveTable, onSitOut, onSitBack, onRequestMobileActivity, includeActivityInPlayerRadial = false, playerTagOffset, showdownCardOffset, heroCardOffset, handName, cardDealFromOffset, cardBackSrc }: PokerSeatProps) {
   const empty = !seat.playerAddress;
   const showMyCards = !!(holeCards && holeCards.length > 0);
   const showBacks   = !!(showCardBacks && !showMyCards && !empty && !seat.folded);
@@ -994,6 +997,7 @@ export function PokerSeat({ seat, index, holeCards, isCurrentPlayer, showCardBac
                   <AvatarView
                     config={seat.avatarConfig}
                     emotion={activeEmotion}
+                    hit={hit}
                     compact
                     trackMouse={isCurrentPlayer && !mouseIdle}
                     forceAsleep={seat.status === 'sitting_out'}

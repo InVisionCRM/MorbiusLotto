@@ -19,9 +19,10 @@ export interface PokerDirectedEmote {
   /**
    * When set, this "emote" is a physical projectile rendered specially instead of a chat
    * bubble: `arrow` flies to the target and STICKS in its circle border (arrows accumulate
-   * into a pincushion, cleared each hand); `snowball` flies and SHATTERS against the border.
+   * into a pincushion, cleared each hand); `snowball` flies and SHATTERS against the border;
+   * `tomato` flies and SPLATS (red). All projectiles knock the target's head back on impact.
    */
-  projectile?: 'arrow' | 'snowball';
+  projectile?: 'arrow' | 'snowball' | 'tomato';
 }
 
 const POKER_DIRECTED_EMOTES_DEF = {
@@ -35,6 +36,7 @@ const POKER_DIRECTED_EMOTES_DEF = {
   money: { glyph: '🤑', label: '',     sender: 'money', target: 'surprised' },
   arrow:    { glyph: '🏹', label: '', sender: 'angry', target: 'shock',     projectile: 'arrow' },
   snowball: { glyph: '❄️', label: '', sender: 'happy', target: 'surprised', projectile: 'snowball' },
+  tomato:   { glyph: '🍅', label: '', sender: 'angry', target: 'shock',     projectile: 'tomato' },
 } satisfies Record<string, PokerDirectedEmote>;
 
 export type PokerDirectedEmoteKind = keyof typeof POKER_DIRECTED_EMOTES_DEF;

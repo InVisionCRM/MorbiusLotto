@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect, useRef, useId } from 'react';
 import type { AvatarConfig } from '@/lib/websocket-client';
-import { motion, useMotionValue, useSpring } from 'framer-motion';
+import { motion, useMotionValue, useSpring, useAnimationControls } from 'framer-motion';
 import {
   resolveColorValue,
   angleToSvgCoords,
@@ -65,6 +65,7 @@ export default function AvatarPreview({
   hideBaseMouth = false,
   hideBaseNose = false,
   hideBaseHair = false,
+  hit,
   className,
 }: {
   config: AvatarConfig;
@@ -85,6 +86,8 @@ export default function AvatarPreview({
   hideBaseNose?: boolean;
   /** Hide default procedural hair (for placement/edit previews). */
   hideBaseHair?: boolean;
+  /** Transient projectile knock-back. Bump `key` to fire; dir = projectile's on-screen travel unit-vector; power scales the knock. */
+  hit?: { key: number; dirX: number; dirY: number; power?: number };
   className?: string;
 }) {
   const [idleEmotion, setIdleEmotion] = useState<Emotion | null>(null);
@@ -96,6 +99,23 @@ export default function AvatarPreview({
 
   const mouseX = useSpring(useMotionValue(0), { damping: 20, stiffness: 150 });
   const mouseY = useSpring(useMotionValue(0), { damping: 20, stiffness: 150 });
+
+  // Transient projectile knock-back: whole-body whip toward the hit (head swings most), then settle.
+  const recoilControls = useAnimationControls();
+  const lastHitKey = useRef(0);
+  useEffect(() => {
+    const k = hit?.key ?? 0;
+    if (k === 0 || k === lastHitKey.current) return;
+    lastHitKey.current = k;
+    const dx = hit?.dirX ?? 0;
+    const dy = hit?.dirY ?? 0;
+    const p = Math.max(0.25, Math.min(1.6, hit?.power ?? 1));
+    recoilControls.start({
+      x: [0, dx * 3.6 * p, dx * -0.6 * p, 0],
+      y: [0, dy * 2.4 * p, dy * -0.4 * p, 0],
+      rotate: [0, dx * 9 * p, dx * -2 * p, 0],
+    }, { duration: 0.5, times: [0, 0.18, 0.45, 1], ease: 'easeOut' });
+  }, [hit?.key, hit?.dirX, hit?.dirY, hit?.power, recoilControls]);
 
   const emotion = (isAsleep || forceAsleep) ? 'sleepy' : (idleEmotion || propEmotion);
 
@@ -542,6 +562,8 @@ export default function AvatarPreview({
             )
         )}
 
+        {/* Projectile knock-back recoil — whips toward the hit then settles (no-op until `hit` fires) */}
+        <motion.g animate={recoilControls} initial={false} style={{ transformOrigin: avatarMotionOrigin(24, 50) }}>
         {/* Breathing idle animation wrapper */}
         <motion.g
           animate={
@@ -664,6 +686,7 @@ export default function AvatarPreview({
               />
             </motion.g>
           </motion.g>
+        </motion.g>
         </motion.g>
 
         {/* Overlay — voxel-painted layer on top of everything, no animation */}

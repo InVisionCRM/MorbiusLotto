@@ -23,6 +23,8 @@ type AvatarViewProps = {
   hideBaseNose?: boolean;
   /** Hide default procedural hair (for placement/edit previews). */
   hideBaseHair?: boolean;
+  /** Transient projectile knock-back. Bump `key` to fire; dir = projectile's on-screen travel unit-vector. */
+  hit?: { key: number; dirX: number; dirY: number; power?: number };
   className?: string;
 };
 
@@ -39,6 +41,7 @@ export default function AvatarView({
   hideBaseMouth = false,
   hideBaseNose = false,
   hideBaseHair = false,
+  hit,
   className,
 }: AvatarViewProps) {
   const parsed = parseAvatarPayload(rawConfig);
@@ -59,6 +62,7 @@ export default function AvatarView({
       hideBaseMouth={hideBaseMouth}
       hideBaseNose={hideBaseNose}
       hideBaseHair={hideBaseHair}
+      hit={hit}
       className={className}
     />
   );
