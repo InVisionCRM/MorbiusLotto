@@ -5,6 +5,7 @@ import { toBigIntSafe } from '@/lib/safe-bigint';
 import { formatChips } from '@/lib/format-poker-chips';
 import { BetChip, formatChipLabel } from '@/components/ui/BetChip';
 import { CardDisplay, formatPokerCardIndexLabel, POKER_RANK_SUIT_LABEL_COLORS, pokerCardSuitIndex } from './CardDisplay';
+import type { LayoutVariant } from '@/lib/poker-seat-layout';
 import type { PokerSeatState as SeatState } from '@/lib/websocket-client';
 import { motion, AnimatePresence, useMotionValue, useSpring, useTransform } from 'framer-motion';
 import type { LucideIcon } from 'lucide-react';
@@ -444,6 +445,8 @@ export interface PokerSeatProps {
   cardDealFromOffset?: { dx: number; dy: number };
   /** Face-down hole card art (table sponsor / default); matches floating felt logo when set by parent. */
   cardBackSrc?: string | null;
+  /** Layout variant — 'portrait' enables mobile-tuned seat sizing (e.g. larger hero hole cards). */
+  layoutVariant?: LayoutVariant;
 }
 
 const CHAT_BUBBLE_MAX_LENGTH = 80;
@@ -453,8 +456,9 @@ function offsetTransform(offset?: { x: number; y: number }): string | undefined 
   return `translate(${offset.x}px, ${offset.y}px)`;
 }
 
-export function PokerSeat({ seat, index, holeCards, isCurrentPlayer, showCardBacks, winningCardIndices, isHandWinner = false, lastAction, callAmount, timeLeft, maxTime = 60, chatBubble, onReUpClick, onMenuClick, overlayPhrase: propsOverlayPhrase, overlayEmotion: propsOverlayEmotion, hit, onPhraseReaction, onAnimationReaction, onOpponentClick, onOpponentRadialAction, onSendDirectedEmote, quickChatPhrases: propsQuickChatPhrases, setQuickChatPhrases: propsSetQuickChatPhrases, onOpenEditQuickChat, hideSeatAvatar = false, onLeaveTable, onSitOut, onSitBack, onRequestMobileActivity, includeActivityInPlayerRadial = false, playerTagOffset, showdownCardOffset, heroCardOffset, handName, cardDealFromOffset, cardBackSrc }: PokerSeatProps) {
+export function PokerSeat({ seat, index, holeCards, isCurrentPlayer, showCardBacks, winningCardIndices, isHandWinner = false, lastAction, callAmount, timeLeft, maxTime = 60, chatBubble, onReUpClick, onMenuClick, overlayPhrase: propsOverlayPhrase, overlayEmotion: propsOverlayEmotion, hit, onPhraseReaction, onAnimationReaction, onOpponentClick, onOpponentRadialAction, onSendDirectedEmote, quickChatPhrases: propsQuickChatPhrases, setQuickChatPhrases: propsSetQuickChatPhrases, onOpenEditQuickChat, hideSeatAvatar = false, onLeaveTable, onSitOut, onSitBack, onRequestMobileActivity, includeActivityInPlayerRadial = false, playerTagOffset, showdownCardOffset, heroCardOffset, handName, cardDealFromOffset, cardBackSrc, layoutVariant = 'default' }: PokerSeatProps) {
   const empty = !seat.playerAddress;
+  const isPortrait = layoutVariant === 'portrait';
   const showMyCards = !!(holeCards && holeCards.length > 0);
   const showBacks   = !!(showCardBacks && !showMyCards && !empty && !seat.folded);
   const hasCards    = showMyCards || showBacks;
@@ -874,9 +878,9 @@ export function PokerSeat({ seat, index, holeCards, isCurrentPlayer, showCardBac
                 key={ci}
                 className="relative"
                 style={{
-                  width: POKER_UI_CQW.heroCardInnerW,
-                  height: POKER_UI_CQW.heroCardInnerH,
-                  marginLeft: ci === 1 ? '-18px' : 0,
+                  width: isPortrait ? 'clamp(74px, 21vw, 104px)' : POKER_UI_CQW.heroCardInnerW,
+                  height: isPortrait ? 'clamp(95px, 27vw, 134px)' : POKER_UI_CQW.heroCardInnerH,
+                  marginLeft: ci === 1 ? (isPortrait ? '-26px' : '-18px') : 0,
                   transform: `rotate(${ci === 0 ? -6 : 6}deg)`,
                   transformOrigin: 'bottom center',
                   zIndex: ci,

@@ -48,6 +48,7 @@ import { PokerTournamentResultsModal } from '@/components/poker/tournament/Poker
 import { PokerBustOutModal } from '@/components/poker/tournament/PokerBustOutModal';
 import type { PokerTournamentCompletedPayload } from '@/lib/poker-tournament-completed';
 import { PokerActivityFeed } from '@/components/poker/PokerActivityFeed';
+import { PokerPortraitDrawer } from '@/components/poker/PokerPortraitDrawer';
 import { VoiceChatPanel } from '@/components/poker/VoiceChatPanel';
 import { PokerTableLogoSponsorModal } from '@/components/poker/PokerTableLogoSponsorModal';
 import { PokerMobileTopBar } from '@/components/poker/PokerMobileTopBar';
@@ -559,7 +560,7 @@ export default function PokerTablePage() {
       callAmount={callAmount}
       pot={hand?.pot ?? '0'}
       betSizingResetKey={hand ? `${hand.handId}:${hand.street}` : ''}
-      variant={isFullscreen ? 'floating' : 'default'}
+      variant={isFullscreen ? 'floating' : isPortraitMobile ? 'portrait' : 'default'}
       lastActionLine={lastActionLine}
       sponsoredToken={sponsoredToken}
       sponsoredUntil={renderedState.tableLogoSponsoredUntil ?? null}
@@ -777,41 +778,8 @@ export default function PokerTablePage() {
           />
         )}
 
-        {/* Portrait blocker: shown on mobile when holding phone upright */}
-        {isPortraitMobile && (
-          <div
-            style={{
-              position: 'fixed',
-              inset: 0,
-              zIndex: 9999,
-              background: 'rgb(2 6 23)',
-              display: 'flex',
-              flexDirection: 'column',
-              alignItems: 'center',
-              justifyContent: 'center',
-              gap: '1.25rem',
-              color: 'var(--poker-text, #e2e8f0)',
-            }}
-          >
-            <svg
-              xmlns="http://www.w3.org/2000/svg"
-              width="56"
-              height="56"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="1.5"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              style={{ opacity: 0.7, animation: 'poker-rotate-hint 2s ease-in-out infinite' }}
-            >
-              <rect x="5" y="2" width="14" height="20" rx="2" />
-              <path d="M12 18h.01" />
-            </svg>
-            <p style={{ fontSize: '1.1rem', fontWeight: 600, margin: 0 }}>Rotate your device</p>
-            <p style={{ fontSize: '0.85rem', opacity: 0.55, margin: 0 }}>Poker requires landscape orientation</p>
-          </div>
-        )}
+        {/* Mobile portrait now renders the new portrait-first layout (no rotate wall).
+            isPortraitMobile drives layoutVariant on PokerTableView + hides desktop rails. */}
 
         {/* LANDSCAPE NOTE: Landscape mobile support is layered via CSS only
             (@media orientation: landscape rules in globals.css). Do NOT restructure
@@ -820,6 +788,7 @@ export default function PokerTablePage() {
             works well today. See globals.css "Poker landscape" section. */}
         <div
           data-poker-shell
+          data-poker-portrait={isPortraitMobile ? 'true' : undefined}
           className={`flex flex-col relative ${cyberpunk ? 'font-mono uppercase' : ''}`}
           style={{
             ...themeVars as React.CSSProperties,
@@ -886,6 +855,26 @@ export default function PokerTablePage() {
             }
           />}
 
+          {/* Portrait hamburger drawer (faithful lab port) — replaces the desktop ··· menu on mobile. */}
+          {isPortraitMobile && (
+            <PokerPortraitDrawer
+              tableLabel="Table"
+              seated={!!mySeat}
+              sittingOut={mySeat?.status === 'sitting_out'}
+              canReup={canReup}
+              onAvatarProfile={mySeat ? () => setShowAvatarModal(true) : undefined}
+              onAddChips={openReupModal}
+              onChat={() => setActivityMobileOpenSerial((s) => s + 1)}
+              onSitOut={mySeat ? handleSitOut : undefined}
+              onSitBack={mySeat ? handleSitBack : undefined}
+              onSounds={() => setShowSoundsModal(true)}
+              onTableSettings={() => setShowTableSettingsModal(true)}
+              onMyStats={() => setShowMyStats(true)}
+              onHowToPlay={() => setShowHowToPlay(true)}
+              onLeave={mySeat ? handleLeaveClick : handleExitClick}
+            />
+          )}
+
           {/* Disconnected banner */}
           {disconnected && (
             <div
@@ -917,7 +906,7 @@ export default function PokerTablePage() {
                 : undefined
             }
           >
-            {tournamentHUDProp && !isFullscreen && !isMobileLandscape && (
+            {tournamentHUDProp && !isFullscreen && !isMobileLandscape && !isPortraitMobile && (
               <Sidebar pinStorageKey="poker-table-tournament-hud-pinned">
                 <SidebarBody
                   className="!sticky !top-0 !h-full !py-0 !px-0 bg-[rgba(6,8,12,0.92)] border-r border-white/10"
@@ -976,6 +965,7 @@ export default function PokerTablePage() {
               <PokerTableView
                 tableId={tableId}
                 tableScale={tableScale}
+                layoutVariant={isPortraitMobile ? 'portrait' : 'default'}
                 fullscreen={isFullscreen}
                 onToggleFullscreen={() => setIsFullscreen(f => !f)}
                 renderedState={renderedState}
@@ -1019,13 +1009,22 @@ export default function PokerTablePage() {
               <PokerBottomBar
                 fullscreen={isFullscreen}
                 mobileLandscape={isMobileLandscape && !isFullscreen}
+                portrait={isPortraitMobile}
+                tournament={{
+                  blinds: tournamentSummary.blinds,
+                  levelCountdown: tournamentSummary.levelCountdown,
+                  rank: tournamentSummary.rank,
+                  playersLeft: tournamentSummary.playersLeft,
+                }}
+                quickChatPhrases={quickChatPhrases}
+                onPhraseReaction={onPhraseReaction}
                 renderedState={renderedState}
                 mySeat={mySeat}
                 actions={sharedActions}
               />
             </div>
 
-            {pokerChatRoomId && !isFullscreen && !isMobileLandscape && (
+            {pokerChatRoomId && !isFullscreen && !isMobileLandscape && !isPortraitMobile && (
               <Sidebar
                 pinStorageKey="poker-table-activity-rail-pinned"
                 desktopRailSide="right"
@@ -1051,14 +1050,13 @@ export default function PokerTablePage() {
               </Sidebar>
             )}
 
-            {/* Mobile-landscape: mount PokerActivityFeed in a hidden host
-                so only its `createPortal(mobileDrawerChrome, document.body)`
-                escape-hatch surfaces. The visible "right rail" UI of the
-                feed has no place on a 390px-tall landscape phone and would
-                otherwise paint inline in document flow. The portaled drawer
-                opens via the top-bar 💬 button bumping
-                `activityMobileOpenSerial`. */}
-            {pokerChatRoomId && !isFullscreen && isMobileLandscape && (
+            {/* Mobile (landscape OR portrait): mount PokerActivityFeed in a hidden
+                host so only its `createPortal(mobileDrawerChrome, document.body)`
+                escape-hatch surfaces. The visible "right rail" UI has no place on a
+                phone and would otherwise paint inline. The portaled drawer opens via
+                a 💬 button bumping `activityMobileOpenSerial` (portrait: the dock's
+                Live Action bar; landscape: the top bar). */}
+            {pokerChatRoomId && !isFullscreen && (isMobileLandscape || isPortraitMobile) && (
               <div aria-hidden className="hidden">
                 <PokerActivityFeed
                   layout="right-rail"

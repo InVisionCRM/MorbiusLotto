@@ -2,6 +2,17 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
+## ⚠️ Prototypes ARE the spec — reproduce them faithfully (READ FIRST)
+
+When the user has built a prototype/mockup together with Claude (e.g. `public/poker-mobile-lab.html`, `public/avatar-lab.html`, any `public/*-lab.html`), **that prototype is the approved design and the source of truth for the port.** It represents real, often day-long, user work. When implementing it in the app:
+
+- **Reproduce the prototype faithfully** — its layout, components, visuals, interactions, and feel. Build *that* design, not an approximation of it.
+- **Do NOT substitute or repurpose existing app components as a shortcut**, and do NOT "just reposition the old UI." Bolting new coordinates onto the existing components instead of building the prototype's design **discards the user's work and is unacceptable.**
+- **Faithfulness to the agreed design outranks saving effort, code, or tokens.** Never choose the quickest/cheapest implementation path when it diverges from what was designed. If the faithful port is large, do it in batches — surface the scope honestly; never silently shortcut it.
+- If you genuinely cannot verify the result (no local render available), **say so up front and get the user's eyes early** — do not quietly ship a divergent shortcut and present it as the port.
+
+This rule exists because a faithful port (the poker mobile lab) was skipped in favor of a reuse-the-old-UI shortcut. It cost the user a day of design work and their trust. It must never happen again. Being genuinely helpful — delivering what was actually designed and asked for — always comes before minimizing tokens or effort.
+
 ## Commands
 
 ```bash

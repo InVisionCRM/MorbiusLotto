@@ -54,8 +54,8 @@ export interface PokerActionsProps {
   onCall: () => void;
   onBet: (amount: string) => void;
   onRaise: (amount: string) => void;
-  /** When "floating", renders the fullscreen horizontal strip layout */
-  variant?: 'default' | 'floating';
+  /** "floating" = fullscreen horizontal strip; "portrait" = mobile compact bottom bar (lab dock). */
+  variant?: 'default' | 'floating' | 'portrait';
   /** Legacy: last-action recap line. Replaced by the always-on sponsored-token marquee. */
   lastActionLine?: string | null;
   /**
@@ -534,6 +534,102 @@ export function PokerActions({
         </div>
         </div>
         </div>
+      </div>
+    );
+  }
+
+  // ── Portrait compact bar (mobile dock) ────────────────────────────────────
+  // Same compact controls as the mobile-landscape strip — AUTO / Fold / Check-or-Call /
+  // Raise with bet sizing in PokerBetSheet and pre-actions in PokerPreActionSheet — but
+  // laid out HORIZONTALLY for the portrait bottom dock. No dense inline slider/steppers.
+  if (variant === 'portrait') {
+    const showCallButton = isFacingBet;
+    const verb: 'Bet' | 'Raise' = isFacingBet ? 'Raise' : 'Bet';
+    const presets: PokerBetSheetPreset[] = quickSizes.map((q) => ({ label: q.label, value: q.value.toString() }));
+    const activePreset =
+      clamped == null ? null : presets.find((p) => p.value === clamped.toString())?.label ?? null;
+    const btn = 'flex-1 min-h-[52px] rounded-lg text-sm font-extrabold tracking-wide transition-all active:scale-[0.97]';
+    return (
+      <div data-testid="poker-actions" className="w-full select-none" style={{ position: 'relative', zIndex: 30 }} role="group" aria-label="Poker actions">
+        <div className="flex w-full items-stretch gap-2 px-2 pt-1" style={{ paddingBottom: 'max(8px, env(safe-area-inset-bottom, 0px))' }}>
+          {/* AUTO pre-action toggle → sheet */}
+          <button
+            type="button"
+            data-testid="poker-pre-action-toggle"
+            onClick={() => setPreActionSheetOpen(true)}
+            aria-label="Auto action settings"
+            aria-pressed={preAction != null}
+            className={[
+              'relative flex w-12 shrink-0 flex-col items-center justify-center gap-0.5 rounded-lg border text-[9px] font-bold leading-none tracking-wider transition-colors',
+              preAction ? 'border-teal-400 bg-teal-400/15 text-teal-300' : 'border-white/15 bg-white/[0.06] text-white/60 hover:bg-white/10',
+            ].join(' ')}
+            style={{ minHeight: 52 }}
+          >
+            {preAction && <span aria-hidden className="absolute -top-1 -right-1 h-2.5 w-2.5 rounded-full bg-teal-400 ring-2 ring-[#07080d]" />}
+            <span aria-hidden className="text-[15px] leading-none">⚙</span>
+            <span>AUTO</span>
+          </button>
+
+          {/* Fold */}
+          <button data-testid="poker-action-fold" type="button" onClick={handleFoldWithSound} disabled={!canAct} className={`${btn} ${foldBtnClass}`} style={{ ...foldBtnStyleCommit, ...dimCommitWhenNotActing }}>Fold</button>
+
+          {/* Check OR Call */}
+          {showCallButton ? (
+            <button data-testid="poker-action-call" type="button" onClick={handleCallWithSound} disabled={!canAct || !isFacingBet} className={`${btn} ${checkBtnClass}`} style={{ ...callBtnStyleCommit, ...dimCommitWhenNotActing }}>
+              <span className="flex flex-col items-center justify-center gap-0.5 leading-none"><span>Call</span><span className="text-[10px] font-semibold opacity-85 tabular-nums">{formatAmount(callAmt)}</span></span>
+            </button>
+          ) : (
+            <button data-testid="poker-action-check" type="button" onClick={handleCheckWithSound} disabled={!canAct || !canCheck} className={`${btn} ${checkBtnClass}`} style={{ ...checkBtnStyleCommit, ...dimCommitWhenNotActing }}>Check</button>
+          )}
+
+          {/* Raise / Bet → bet sheet */}
+          <button
+            data-testid="poker-action-primary"
+            type="button"
+            onClick={() => { if (!canAct || stackAmt === 0n) return; setBetSheetOpen(true); }}
+            disabled={!canAct || stackAmt === 0n}
+            aria-label={`${verb} — choose amount`}
+            className={`${btn} ${primaryBtnClass}`}
+            style={{ flex: '1.3 1 0%', ...primaryBtnStyle, ...dimCommitWhenNotActing }}
+          >
+            <span className="flex flex-col items-center justify-center gap-0.5 leading-none"><span>{verb}</span><span className="text-[10px] font-semibold opacity-85 tabular-nums">▲ {customAmount}</span></span>
+          </button>
+        </div>
+
+        <PokerBetSheet
+          open={betSheetOpen}
+          onClose={() => setBetSheetOpen(false)}
+          verb={verb}
+          amount={customAmount}
+          amountChips={clamped != null ? toChipsNum(clamped) : minChips}
+          bigBlind={minChips}
+          potChips={toChipsNum(potAmt)}
+          callChips={toChipsNum(callAmt)}
+          sliderMin={minChips}
+          sliderMax={Math.max(minChips, maxChips)}
+          sliderStep={stepChips}
+          sliderValueChips={clamped != null ? toChipsNum(clamped) : minChips}
+          onSliderChange={(chipsAbs) => {
+            const clampedChips = clampAmount(BigInt(chipsAbs), minRaiseAmt, stackAmt);
+            setCustomAmount(formatAmount(clampedChips));
+          }}
+          presets={presets}
+          activePresetLabel={activePreset}
+          onPresetClick={(p) => {
+            const v = BigInt(p.value);
+            const clampedChips = clampAmount(v, minRaiseAmt, stackAmt);
+            setCustomAmount(formatAmount(clampedChips));
+          }}
+          onConfirm={() => { handlePrimary(); setBetSheetOpen(false); }}
+          canConfirm={canAct && hasValidAmount}
+        />
+        <PokerPreActionSheet
+          open={preActionSheetOpen}
+          onClose={() => setPreActionSheetOpen(false)}
+          value={preAction}
+          onChange={(next) => onPreActionChange(next)}
+          canCheck={canCheck}
+        />
       </div>
     );
   }

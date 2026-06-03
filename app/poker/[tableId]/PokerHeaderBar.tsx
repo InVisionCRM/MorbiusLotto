@@ -831,6 +831,7 @@ export function PokerHeaderBar({
         <div className="hidden sm:block w-px h-4 mx-1" style={{ background: 'rgba(255,255,255,0.08)' }} aria-hidden />
         <button
           type="button"
+          data-poker-header-leave
           onClick={showExitToLobby ? onExitClick : onLeaveClick}
           className="h-9 w-9 flex items-center justify-center rounded-sm transition-colors active:scale-[0.97]"
           style={{

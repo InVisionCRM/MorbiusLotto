@@ -27,6 +27,8 @@ export interface PokerBoardProps {
   betweenHandsNextHandAtIso?: string | null;
   /** During showdown staging: skip Shockwave Slam so board cards do not replay deal-in. */
   suppressCommunityEntryMotion?: boolean;
+  /** Portrait/mobile: stack the board as flop (3) over turn+river (2) to save width. */
+  twoRow?: boolean;
 }
 
 function BetweenHandsProgressBar({ nextHandAtIso }: { nextHandAtIso: string }) {
@@ -190,6 +192,7 @@ export function PokerBoard({
   dataTutorialTargetPot,
   betweenHandsNextHandAtIso,
   suppressCommunityEntryMotion = false,
+  twoRow = false,
 }: PokerBoardProps) {
   const potNum = useMemo(() => parsePotChips(pot), [pot]);
   // Filter out zero-amount pots so an empty trailing pot doesn't render an
@@ -250,8 +253,8 @@ export function PokerBoard({
         )}
       </AnimatePresence>
 
-      <div className="flex gap-2 sm:gap-3" data-testid="poker-community-cards">
-        {[0, 1, 2, 3, 4].map((i) => {
+      {(() => {
+        const renderCard = (i: number) => {
           const idx = communityCards[i];
           const suitIdx = idx != null ? pokerCardSuitIndex(idx) : null;
           const labelColor =
@@ -281,8 +284,19 @@ export function PokerBoard({
               )}
             </div>
           );
-        })}
-      </div>
+        };
+        // Portrait: flop (3) over turn+river (2) to save horizontal space.
+        return twoRow ? (
+          <div className="flex flex-col items-center gap-1.5" data-testid="poker-community-cards">
+            <div className="flex gap-2 sm:gap-3">{[0, 1, 2].map(renderCard)}</div>
+            <div className="flex gap-2 sm:gap-3">{[3, 4].map(renderCard)}</div>
+          </div>
+        ) : (
+          <div className="flex gap-2 sm:gap-3" data-testid="poker-community-cards">
+            {[0, 1, 2, 3, 4].map(renderCard)}
+          </div>
+        );
+      })()}
       {betweenHandsNextHandAtIso ? (
         <BetweenHandsProgressBar nextHandAtIso={betweenHandsNextHandAtIso} />
       ) : null}

@@ -1005,6 +1005,98 @@ body {
   }
 }
 
+/* ─────────────────────────────────────────────────────────────────────────
+   Portrait-first mobile layout (new). Gated on the `data-poker-portrait`
+   attribute (set by page.tsx only when usePokerMobileZoomLock reports
+   isPortraitMobile), so it never affects desktop or landscape.
+   Mirrors the landscape header treatment: a slim header with the compact ···
+   menu (How to Play / Settings / Sounds / Stats / Leave) so Leave is always
+   reachable on a phone — the original problem this rebuild fixes.
+   ───────────────────────────────────────────────────────────────────────── */
+[data-poker-shell][data-poker-portrait] [data-poker-header] {
+  padding-top: 4px !important;
+  padding-bottom: 4px !important;
+  gap: 0.25rem;
+  font-size: 0.82em;
+}
+/* Hide BOTH the inline secondary buttons and the old ··· menu in portrait — the
+   PokerPortraitDrawer (☰ top-right) replaces them with the lab's refined menu. */
+[data-poker-shell][data-poker-portrait] [data-poker-header] [data-poker-header-secondary],
+[data-poker-shell][data-poker-portrait] [data-poker-header] [data-poker-header-mobile-menu],
+[data-poker-shell][data-poker-portrait] [data-poker-header] [data-poker-header-leave] {
+  display: none !important;
+}
+
+/* ── Portrait seat (PokerPortraitSeat) — faithful reproduction of the poker-mobile-lab seat. ── */
+.pps { display: flex; flex-direction: column; align-items: center; gap: 3px; width: 78px; position: relative; }
+.pps-empty { width: clamp(40px,12vw,54px); height: clamp(40px,12vw,54px); border-radius: 50%; border: 2px dashed rgba(255,255,255,0.18); display: grid; place-items: center; text-align: center; color: rgba(255,255,255,0.4); font-size: 8.5px; font-weight: 800; line-height: 1.15; text-transform: uppercase; letter-spacing: 0.04em; }
+.pps-ava-wrap { position: relative; width: clamp(40px,12vw,54px); height: clamp(40px,12vw,54px); }
+.pps-ava { width: 100%; height: 100%; border-radius: 50%; overflow: hidden; display: grid; place-items: center; font-weight: 800; color: #fff; font-size: clamp(15px,4vw,20px); position: relative; z-index: 1; background: radial-gradient(circle at 50% 30%, #3a4456, #1a2130); }
+.pps.acting .pps-ava { box-shadow: 0 0 0 2px var(--cyan,#22d3ee), 0 0 16px rgba(34,211,238,0.5); }
+.pps.winner .pps-ava { box-shadow: 0 0 0 2px rgba(255,255,255,0.92), 0 0 18px rgba(255,255,255,0.32); }
+.pps.sitting_out .pps-ava { filter: grayscale(0.85) brightness(0.9); }
+.pps.folded { opacity: 0.5; }
+.pps-name { display: flex; flex-direction: column; align-items: center; background: rgba(6,10,20,0.82); border: 1px solid rgba(255,255,255,0.1); border-radius: 8px; padding: 2px 8px; min-width: 58px; position: relative; z-index: 4; }
+.pps.acting .pps-name { border-color: var(--cyan,#22d3ee); }
+.pps-nm { font-size: 10px; font-weight: 700; max-width: 70px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.pps-st { font-size: 10px; font-weight: 700; color: #fde68a; font-variant-numeric: tabular-nums; }
+.pps-tag { margin-top: 1px; font-size: 8px; font-weight: 800; letter-spacing: 0.05em; text-transform: uppercase; color: rgba(255,255,255,0.6); }
+.pps-tag.win { color: #f8fafc; background: rgba(255,255,255,0.16); border: 1px solid rgba(255,255,255,0.3); border-radius: 5px; padding: 0 5px; }
+.pps-bet { position: absolute; left: 50%; top: 0; transform: translate(-50%,-50%); display: flex; align-items: center; gap: 4px; padding: 2px 7px 2px 5px; background: rgba(0,0,0,0.6); border: 1px solid rgba(255,255,255,0.14); border-radius: 999px; font-size: 10px; font-weight: 700; font-variant-numeric: tabular-nums; white-space: nowrap; z-index: 4; box-shadow: 0 2px 5px rgba(0,0,0,0.45); color: #fde68a; }
+.pps-chip { width: 12px; height: 12px; border-radius: 50%; background: radial-gradient(circle at 35% 30%, #fca5a5, #b91c1c); box-shadow: 0 0 0 2px #7f1d1d inset; }
+.pps-win { position: absolute; top: -6px; right: -6px; font-size: 15px; z-index: 5; filter: drop-shadow(0 1px 2px rgba(0,0,0,0.6)); }
+/* Opponent cards — two clean, separated cards tucked TIGHT on the inward side of the
+   avatar (toward table center). Small backs during play; grow into the face-up reveal at
+   showdown. No fan, no overlap, no rotation — just two neat cards that scale up. */
+.pps-cards { position: absolute; top: 50%; transform: translateY(-50%); display: flex; gap: 2px; }
+.pps-cards.peek-right { left: 60%; }
+.pps-cards.peek-left  { right: 60%; }
+.pps-cards > * { height: auto; aspect-ratio: 691 / 1056; display: block; border-radius: 2.5px; flex: 0 0 auto; }
+/* play — small card backs, tucked behind the avatar */
+.pps-cards.tuck { z-index: 0; }
+.pps-cards.tuck > * { width: clamp(15px,4vw,20px); }
+.pps-cardback { width: 100%; background: repeating-linear-gradient(45deg,#1b3a8a,#1b3a8a 4px,#16307a 4px,#16307a 8px); border: 1.5px solid #2a4ba0; }
+/* showdown — same two cards, grown and face-up, in front of the avatar */
+.pps-cards.reveal { z-index: 3; }
+.pps-cards.reveal > * { width: clamp(25px,6.8vw,33px); }
+.pps-cards.reveal .pps-cardimg { filter: drop-shadow(0 2px 5px rgba(0,0,0,0.55)); }
+/* Hero hand — large, fanned, rising behind the dock. */
+.pps-hero-cards { position: absolute; left: 50%; top: 40%; transform: translate(-50%,-50%); display: flex; align-items: flex-end; z-index: 6; pointer-events: none; }
+.pps-herocard { width: clamp(58px,17vw,82px); height: auto; display: block; filter: drop-shadow(0 4px 11px rgba(0,0,0,0.6)); border-radius: 5px; }
+.pps-herocard:first-child { transform: rotate(-9deg); margin-right: -30px; z-index: 1; }
+.pps-herocard:last-child { transform: rotate(6deg); z-index: 2; }
+
+/* ── Ambient turn-light (PokerPortraitTurnLight) — soft cyan flare from the active player's edge. ── */
+.ptl { position: absolute; inset: 0; pointer-events: none; overflow: hidden; z-index: 2; }
+.ptl-flare { position: absolute; width: 72%; height: 48%; transform: translate(-50%,-50%); border-radius: 50%; opacity: 0; mix-blend-mode: screen;
+  background: radial-gradient(ellipse 60% 70% at 50% 50%, rgba(150,245,255,0.5) 0%, rgba(34,211,238,0.3) 22%, rgba(34,211,238,0.13) 46%, rgba(34,211,238,0.04) 66%, transparent 78%);
+  filter: blur(20px);
+  transition: left 0.5s cubic-bezier(0.4,0,0.2,1), top 0.5s cubic-bezier(0.4,0,0.2,1), opacity 0.45s ease;
+  will-change: left, top; }
+.ptl-flare.hero { width: 124%; height: 40%; }
+
+/* ── Portrait hero (PokerPortraitHero) — centered bottom cluster, big cards rising from the dock. ── */
+.pph { position: absolute; inset: 0; z-index: 22; pointer-events: none; }
+.pph-cards { position: absolute; left: 50%; top: 94.4%; transform: translate(-50%,-50%); display: flex; align-items: flex-end; }
+.pph-card { width: clamp(72px, 23vw, 110px); height: auto; display: block; filter: drop-shadow(0 4px 12px rgba(0,0,0,0.6)); border-radius: 6px; }
+.pph-card:first-child { transform: rotate(-11deg); margin-right: -50px; z-index: 1; }
+.pph-card:last-child { transform: rotate(4deg); z-index: 2; }
+.pph-info { position: absolute; left: 50%; top: 94.4%; transform: translate(-50%,-50%); z-index: 23; display: flex; align-items: center; gap: 8px; padding: 4px 12px 4px 4px; border-radius: 999px; background: rgba(6,10,20,0.78); border: 1px solid rgba(255,255,255,0.1); }
+.pph.acting .pph-info { box-shadow: 0 0 0 2px var(--cyan,#22d3ee), 0 4px 14px rgba(0,0,0,0.5); border-color: var(--cyan,#22d3ee); }
+.pph-ava { width: 38px; height: 38px; border-radius: 50%; overflow: hidden; display: grid; place-items: center; font-weight: 800; color: #fff; background: radial-gradient(circle at 50% 30%, #2dd4bf, #0d9488 54%, #0a6b62); flex-shrink: 0; }
+.pph-meta { display: flex; flex-direction: column; line-height: 1.15; }
+.pph-nm { font-size: 11px; font-weight: 700; color: #e6ebf2; }
+.pph-st { font-size: 14px; font-weight: 800; color: #fde68a; font-variant-numeric: tabular-nums; }
+/* Folded: shrink the hand and tuck it to the right (above the dock), desaturated + dimmed,
+   but still visible so the player can see what they folded. The You/stack pill stays put. */
+.pph.folded .pph-cards { left: auto; right: 6%; top: 82%; transform: translateY(-50%) scale(0.52); transform-origin: center right; }
+.pph.folded .pph-card { filter: grayscale(1) brightness(0.6); opacity: 0.5; }
+.ptl-flare.on { opacity: 1; animation: ptl-pulse 3.8s ease-in-out infinite; }
+@keyframes ptl-pulse {
+  0%, 100% { transform: translate(-50%,-50%) scale(0.97) rotate(-4deg); }
+  50%      { transform: translate(-50%,-50%) scale(1.06) rotate(5deg); }
+}
+
 /* Portrait blocker rotation hint animation */
 @keyframes poker-rotate-hint {
   0%, 100% { transform: rotate(0deg); }

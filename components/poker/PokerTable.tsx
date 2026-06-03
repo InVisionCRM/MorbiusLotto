@@ -5,6 +5,9 @@ import { toBigIntSafe } from '@/lib/safe-bigint';
 import { motion, AnimatePresence } from 'framer-motion';
 import { pokerSfx, pokerHitSound } from '@/lib/poker-sfx';
 import { PokerSeat, PokerChipStack } from './PokerSeat';
+import { PokerPortraitSeat } from './PokerPortraitSeat';
+import { PokerPortraitTurnLight } from './PokerPortraitTurnLight';
+import { PokerPortraitHero } from './PokerPortraitHero';
 import { PokerBoard } from './PokerBoard';
 import { ProvablyFairBadge } from './ProvablyFairBadge';
 import { CardDisplay } from './CardDisplay';
@@ -22,6 +25,7 @@ import {
   playerTagAnchorForDisplaySlot,
   ringIndexForDisplaySlot,
   winningPotChipAnchorForDisplaySlot,
+  type LayoutVariant,
 } from '@/lib/poker-seat-layout';
 import { POKER_DIRECTED_EMOTES, POKER_DIRECTED_EMOTE_FLY_MS, POKER_PROJECTILE_FLY_MS, POKER_PROJECTILE_TOTAL_MS, type PokerDirectedEmoteKind } from '@/lib/poker-directed-emotes';
 import confetti from 'canvas-confetti';
@@ -200,9 +204,11 @@ export interface PokerTableProps {
    * only on the active dealer seat.
    */
   showDealerAnchorGuides?: boolean;
+  /** Layout variant: 'default' (desktop rings) or 'portrait' (mobile vertical-oval, mockup-tuned). */
+  layoutVariant?: LayoutVariant;
 }
 
-export function PokerTable({ state, currentPlayerAddress, timeLeft, chatBubbleBySeatIndex, onReUpClick, onMenuClick, reactionBySeatIndex, broadcastEmotionBySeatIndex, directedEmotes, stuckArrowsBySeatIndex, hitBySeatIndex, onSendDirectedEmote, onPhraseReaction, onAnimationReaction, onOpponentClick, onOpponentRadialAction, quickChatPhrases, setQuickChatPhrases, onOpenEditQuickChat, onLeave, onRequestMobileActivity, onSitOut, onSitBack, onShowCards, onMuckCards, tutorialTargets, dataTutorialTargetPot, showDealerAnchorGuides = false }: PokerTableProps) {
+export function PokerTable({ state, currentPlayerAddress, timeLeft, chatBubbleBySeatIndex, onReUpClick, onMenuClick, reactionBySeatIndex, broadcastEmotionBySeatIndex, directedEmotes, stuckArrowsBySeatIndex, hitBySeatIndex, onSendDirectedEmote, onPhraseReaction, onAnimationReaction, onOpponentClick, onOpponentRadialAction, quickChatPhrases, setQuickChatPhrases, onOpenEditQuickChat, onLeave, onRequestMobileActivity, onSitOut, onSitBack, onShowCards, onMuckCards, tutorialTargets, dataTutorialTargetPot, showDealerAnchorGuides = false, layoutVariant = 'default' }: PokerTableProps) {
   const tableRef = useRef<HTMLDivElement>(null);
   const [dims, setDims] = useState({ w: 640, h: 500 });
   // Projectile-hit "juice": transient comic bursts/flashes spawned at the impact point.
@@ -210,6 +216,15 @@ export function PokerTable({ state, currentPlayerAddress, timeLeft, chatBubbleBy
   const seenHitKeysRef = useRef<Record<number, number>>({});
   const seenThrowIdsRef = useRef<Set<string>>(new Set());
   const { effect: tableEffect, feltGradient, railStyle } = usePokerTableEffect();
+  // Portrait reproduces the lab felt: clean cyan vertical-oval capsule + a thin dark rail
+  // (instead of the desktop themed/ornate rails). Gated so desktop is untouched.
+  const isPortraitTable = layoutVariant === 'portrait';
+  const feltBg = isPortraitTable
+    ? 'radial-gradient(120% 90% at 50% 38%, #0f7387, #0a505e 64%, #062f38)'
+    : feltGradient;
+  const rail = isPortraitTable
+    ? { outerRing: '#241a10', outerGlow: 'none', cushion: '#0a0d12', innerRing: '#1c1410', innerGlow: 'none' }
+    : railStyle;
 
   useEffect(() => {
     const el = tableRef.current;
@@ -277,7 +292,7 @@ export function PokerTable({ state, currentPlayerAddress, timeLeft, chatBubbleBy
   // in the opponent profile card and emote broadcasts.
   const isMobileLandscape = useIsMobileLandscape();
   const hideSeatAvatars = isMobileLandscape;
-  const seatAnchors = useMemo(() => authoredSeatAnchors(state.seats.length), [state.seats.length]);
+  const seatAnchors = useMemo(() => authoredSeatAnchors(state.seats.length, layoutVariant), [state.seats.length, layoutVariant]);
   const toDisplaySlot = (seatIdx: number) => (mySeatIndex >= 0 ? (seatIdx - mySeatIndex + state.seats.length) % state.seats.length : seatIdx);
 
   const getRenderedSeatAnchor = (displaySlot: number, _serverPos: number) => {
@@ -395,7 +410,7 @@ export function PokerTable({ state, currentPlayerAddress, timeLeft, chatBubbleBy
           mySeatIndex >= 0
             ? (seatIdx - mySeatIndex + state.seats.length) % state.seats.length
             : seatIdx;
-        const { fx, fy } = winningPotChipAnchorForDisplaySlot(state.seats.length, displaySlot);
+        const { fx, fy } = winningPotChipAnchorForDisplaySlot(state.seats.length, displaySlot, layoutVariant);
         out.push({
           key: `pot${pi}-${addrs[wi]}`,
           amount: share.toString(),
@@ -625,7 +640,7 @@ export function PokerTable({ state, currentPlayerAddress, timeLeft, chatBubbleBy
           : displaySlot;
       const seat = state.seats[actualIdx];
       if (toBigIntSafe(seat.currentBet ?? 0) > 0n) {
-        const { fx, fy } = betChipAnchorForDisplaySlot(state.seats.length, displaySlot);
+        const { fx, fy } = betChipAnchorForDisplaySlot(state.seats.length, displaySlot, layoutVariant);
         nextBets[actualIdx] = { amount: seat.currentBet ?? '0', fx, fy };
       }
     }
@@ -660,7 +675,7 @@ export function PokerTable({ state, currentPlayerAddress, timeLeft, chatBubbleBy
         const serverPos = state.seats[idx]?.position ?? idx;
         const from = idx === mySeatIndex
           ? getRenderedSeatAnchor(displaySlot, serverPos)
-          : cardAnchorForDisplaySlot(state.seats.length, displaySlot);
+          : cardAnchorForDisplaySlot(state.seats.length, displaySlot, layoutVariant);
         const visual = lastKnownCardVisualRef.current[idx] ?? { showBacks: true };
         if (from) {
           const id = `${hand.handId}-fold-${idx}-${Date.now()}`;
@@ -741,7 +756,7 @@ export function PokerTable({ state, currentPlayerAddress, timeLeft, chatBubbleBy
     const displaySlot = toDisplaySlot(idx);
     const serverPos = seat.position ?? idx;
     const anchorFrac = getRenderedSeatAnchor(displaySlot, serverPos);
-    const playerTagAnchor = playerTagAnchorForDisplaySlot(state.seats.length, displaySlot);
+    const playerTagAnchor = playerTagAnchorForDisplaySlot(state.seats.length, displaySlot, layoutVariant);
     const playerTagOffset = anchorFrac
       ? {
           x: (playerTagAnchor.fx - anchorFrac.fx) * dims.w,
@@ -751,7 +766,7 @@ export function PokerTable({ state, currentPlayerAddress, timeLeft, chatBubbleBy
     // Hero hole cards live on the avatar in PokerSeat (not the opponent card map),
     // so wire their CARD_ANCHOR_RING entry as an offset from the seat anchor — this
     // makes the hero hand draggable in the layout editor like every other element.
-    const heroCardAnchor = cardAnchorForDisplaySlot(state.seats.length, displaySlot);
+    const heroCardAnchor = cardAnchorForDisplaySlot(state.seats.length, displaySlot, layoutVariant);
     const heroCardOffset = anchorFrac
       ? {
           x: (heroCardAnchor.fx - anchorFrac.fx) * dims.w,
@@ -776,6 +791,7 @@ export function PokerTable({ state, currentPlayerAddress, timeLeft, chatBubbleBy
     return {
       seat,
       index: idx,
+      layoutVariant,
       holeCards:
         seat.folded
           ? undefined
@@ -846,6 +862,20 @@ export function PokerTable({ state, currentPlayerAddress, timeLeft, chatBubbleBy
       style={{ overflow: 'visible', containerType: 'inline-size' }}
       {...(tutorialTargets ? { 'data-tutorial-target': 'table' } : {})}
     >
+      {layoutVariant === 'portrait' && (
+        <PokerPortraitTurnLight
+          fx={actingDisplaySlot != null ? (seatAnchors[actingDisplaySlot]?.fx ?? null) : null}
+          fy={actingDisplaySlot != null ? (seatAnchors[actingDisplaySlot]?.fy ?? null) : null}
+          isHero={actingPosition != null && actingPosition === mySeatIndex && mySeatIndex >= 0}
+        />
+      )}
+      {layoutVariant === 'portrait' && mySeatIndex >= 0 && (
+        <PokerPortraitHero
+          seat={state.seats[mySeatIndex]}
+          holeCards={state.myHoleCards}
+          isActing={actingPosition === mySeatIndex}
+        />
+      )}
 
       {/* CSS poker table — padding-based rings so every ring is equal pixel thickness all around */}
       <div
@@ -862,25 +892,25 @@ export function PokerTable({ state, currentPlayerAddress, timeLeft, chatBubbleBy
         {/* Outer trim — 8px ring */}
         <div style={{
           flex: 1, borderRadius: '9999px', display: 'flex', padding: '8px',
-          background: railStyle.outerRing,
-          boxShadow: railStyle.outerGlow,
+          background: rail.outerRing,
+          boxShadow: rail.outerGlow,
         }}>
           {/* Dark cushion — 20px ring */}
           <div style={{
-            flex: 1, borderRadius: '9999px', display: 'flex', padding: '20px',
-            background: railStyle.cushion,
+            flex: 1, borderRadius: '9999px', display: 'flex', padding: isPortraitTable ? '12px' : '20px',
+            background: rail.cushion,
             boxShadow: 'inset 0 4px 16px rgba(0,0,0,0.85), inset 0 -2px 8px rgba(0,0,0,0.6)',
           }}>
             {/* Inner trim — 6px ring */}
             <div style={{
               flex: 1, borderRadius: '9999px', display: 'flex', padding: '6px',
-              background: railStyle.innerRing,
-              boxShadow: railStyle.innerGlow,
+              background: rail.innerRing,
+              boxShadow: rail.innerGlow,
             }}>
-              {/* Felt surface — color from user preference */}
+              {/* Felt surface — cyan capsule in portrait (lab), themed gradient on desktop */}
               <div style={{
                 flex: 1, borderRadius: '9999px', position: 'relative', overflow: 'hidden',
-                background: feltGradient,
+                background: feltBg,
                 boxShadow: 'inset 0 8px 40px rgba(0,0,0,0.55), inset 0 -4px 20px rgba(0,0,0,0.4)',
                 outline: '1px dashed rgba(255,255,255,0.08)',
                 outlineOffset: '-10px',
@@ -972,6 +1002,7 @@ export function PokerTable({ state, currentPlayerAddress, timeLeft, chatBubbleBy
         {hand ? (
           <>
             <PokerBoard
+              twoRow={layoutVariant === 'portrait'}
               communityCards={
                 isShowdownWithWinners
                   ? hand.communityCards.slice(0, revealedCommunityCount)
@@ -1099,9 +1130,10 @@ export function PokerTable({ state, currentPlayerAddress, timeLeft, chatBubbleBy
             : displaySlot;
           const seat = state.seats[actualIdx];
           const hasBet = toBigIntSafe(seat.currentBet ?? 0) > 0n;
-          if (!hasBet) return null;
+          // Portrait shows the bet as a pill over the avatar (PokerPortraitSeat .pps-bet) — skip the redundant chip stack.
+          if (!hasBet || layoutVariant === 'portrait') return null;
 
-          const { fx: cfx, fy: cfy } = betChipAnchorForDisplaySlot(state.seats.length, displaySlot);
+          const { fx: cfx, fy: cfy } = betChipAnchorForDisplaySlot(state.seats.length, displaySlot, layoutVariant);
 
           return (
             <motion.div
@@ -1229,7 +1261,7 @@ export function PokerTable({ state, currentPlayerAddress, timeLeft, chatBubbleBy
         const showBacks = inHand && !showdownCards;
         if (!showBacks && !showdownCards?.length) return null;
         const displaySlot = toDisplaySlot(idx);
-        const { fx, fy } = cardAnchorForDisplaySlot(state.seats.length, displaySlot);
+        const { fx, fy } = cardAnchorForDisplaySlot(state.seats.length, displaySlot, layoutVariant);
         const faceDown = !showdownCards?.length;
         const seatLowerForZ = seat.playerAddress.toLowerCase();
         const isWinnerHoleCards =
@@ -1281,7 +1313,7 @@ export function PokerTable({ state, currentPlayerAddress, timeLeft, chatBubbleBy
       {/* Optional: one faint marker per display-slot dealer anchor (layout tuning). */}
       {showDealerAnchorGuides &&
         Array.from({ length: state.seats.length }, (_, displaySlot) => {
-          const { fx, fy } = dealerButtonAnchorForDisplaySlot(state.seats.length, displaySlot);
+          const { fx, fy } = dealerButtonAnchorForDisplaySlot(state.seats.length, displaySlot, layoutVariant);
           return (
             <div
               key={`dealer-anchor-guide-${displaySlot}`}
@@ -1323,12 +1355,14 @@ export function PokerTable({ state, currentPlayerAddress, timeLeft, chatBubbleBy
           mySeatIndex >= 0
             ? (dealerIdx - mySeatIndex + state.seats.length) % state.seats.length
             : dealerIdx;
-        const { fx, fy } = dealerButtonAnchorForDisplaySlot(state.seats.length, displaySlot);
+        const { fx, fy } = dealerButtonAnchorForDisplaySlot(state.seats.length, displaySlot, layoutVariant);
         return <DealerButton fx={fx} fy={fy} />;
       })()}
 
       {/* Seats */}
       {state.seats.map((_, idx) => {
+        // Portrait: the hero is NOT a ring seat — it's the dedicated centered PokerPortraitHero overlay below.
+        if (layoutVariant === 'portrait' && idx === mySeatIndex) return null;
         const displaySlot = mySeatIndex >= 0
           ? (idx - mySeatIndex + state.seats.length) % state.seats.length
           : idx;
@@ -1354,7 +1388,24 @@ export function PokerTable({ state, currentPlayerAddress, timeLeft, chatBubbleBy
             }}
             {...(tutorialTargets ? { 'data-tutorial-target': `seat-${displaySlot}` } : {})}
           >
-            <PokerSeat {...seatProps(idx)} />
+            {layoutVariant === 'portrait'
+              ? (() => {
+                  const sp = seatProps(idx);
+                  return (
+                    <PokerPortraitSeat
+                      seat={sp.seat}
+                      index={sp.index}
+                      holeCards={sp.holeCards}
+                      isCurrentPlayer={sp.isCurrentPlayer}
+                      showCardBacks={sp.showCardBacks}
+                      isHandWinner={sp.isHandWinner}
+                      handName={sp.handName}
+                      cardBackSrc={sp.cardBackSrc}
+                      inwardRight={rendered.fx < 0.5}
+                    />
+                  );
+                })()
+              : <PokerSeat {...seatProps(idx)} />}
           </div>
         );
       })}
