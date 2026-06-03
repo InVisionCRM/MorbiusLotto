@@ -24,8 +24,9 @@ export function PokerPortraitHero({ seat, holeCards, isActing }: PokerPortraitHe
   if (!seat) return null;
   const cards = (holeCards ?? []).slice(0, 2);
   const stack = formatChips(seat.stack ?? '0');
+  const folded = !!seat.folded;
   return (
-    <div className={`pph${isActing ? ' acting' : ''}`} aria-hidden>
+    <div className={`pph${isActing && !folded ? ' acting' : ''}${folded ? ' folded' : ''}`} aria-hidden>
       {cards.length > 0 && (
         <div className="pph-cards">
           {cards.map((c, i) => <img key={i} className="pph-card" src={cardSrc(c)} alt="" />)}
