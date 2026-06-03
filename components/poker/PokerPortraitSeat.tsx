@@ -3,9 +3,9 @@
 /**
  * Portrait seat — faithful reproduction of the poker-mobile-lab seat, wired to real data.
  * Uses the real AvatarView + the real card art (/BlackJack/Cards/PNG), arranged exactly like
- * the lab: avatar with acting/winner/sitting-out treatment, bet chip centered on the avatar's
- * top edge, nameplate below (gold stack), opponent cards tucked behind the avatar (peeking the
- * inward side) during play and fanned centered-over-avatar at showdown, hero hand large.
+ * the lab: avatar with acting/winner/sitting-out treatment, bet pill centered on the avatar's
+ * top edge, nameplate below (gold stack). Opponent cards are two clean, separated cards tucked
+ * tight on the inward side — small backs during play, grown face-up at showdown, hero hand large.
  * Styling lives in globals.css under `.pps*`. Rendered by PokerTable when layoutVariant==='portrait'.
  */
 
@@ -90,7 +90,7 @@ export function PokerPortraitSeat({
           </div>
         )}
         {showReveal && (
-          <div className="pps-cards reveal">
+          <div className={`pps-cards reveal ${inwardRight ? 'peek-right' : 'peek-left'}`}>
             {cards.map((c, ci) => <img key={ci} className="pps-cardimg" src={cardSrc(c)} alt="" />)}
           </div>
         )}

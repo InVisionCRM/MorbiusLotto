@@ -1045,23 +1045,21 @@ body {
 .pps-bet { position: absolute; left: 50%; top: 0; transform: translate(-50%,-50%); display: flex; align-items: center; gap: 4px; padding: 2px 7px 2px 5px; background: rgba(0,0,0,0.6); border: 1px solid rgba(255,255,255,0.14); border-radius: 999px; font-size: 10px; font-weight: 700; font-variant-numeric: tabular-nums; white-space: nowrap; z-index: 4; box-shadow: 0 2px 5px rgba(0,0,0,0.45); color: #fde68a; }
 .pps-chip { width: 12px; height: 12px; border-radius: 50%; background: radial-gradient(circle at 35% 30%, #fca5a5, #b91c1c); box-shadow: 0 0 0 2px #7f1d1d inset; }
 .pps-win { position: absolute; top: -6px; right: -6px; font-size: 15px; z-index: 5; filter: drop-shadow(0 1px 2px rgba(0,0,0,0.6)); }
-/* Opponent cards — tucked behind the avatar (peeking inward) during play. */
-.pps-cards { position: absolute; display: flex; }
-.pps-cards.tuck { top: 60%; transform: translateY(-50%); z-index: 0; }
-.pps-cards.tuck.peek-right { left: 44%; }
-.pps-cards.tuck.peek-left { right: 44%; }
-.pps-cards.tuck > * { width: clamp(22px,6vw,30px); height: auto; aspect-ratio: 691 / 1056; transform-origin: bottom center; display: block; border-radius: 3px; }
-.pps-cards.tuck > *:last-child { margin-left: -13px; }
-.pps-cards.tuck.peek-right > *:first-child { transform: rotate(-13deg); }
-.pps-cards.tuck.peek-right > *:last-child { transform: rotate(-3deg); }
-.pps-cards.tuck.peek-left > *:first-child { transform: rotate(3deg); }
-.pps-cards.tuck.peek-left > *:last-child { transform: rotate(13deg); }
-.pps-cardback { background: repeating-linear-gradient(45deg,#1b3a8a,#1b3a8a 4px,#16307a 4px,#16307a 8px); border: 1.5px solid #2a4ba0; }
-/* Opponent cards — revealed face-up, fanned, centered OVER the avatar at showdown. */
-.pps-cards.reveal { top: 46%; left: 50%; transform: translate(-50%,-50%); z-index: 3; align-items: flex-end; }
-.pps-cards.reveal .pps-cardimg { width: clamp(38px,10.5vw,50px); height: auto; display: block; filter: drop-shadow(0 3px 7px rgba(0,0,0,0.6)); border-radius: 4px; }
-.pps-cards.reveal .pps-cardimg:first-child { transform: rotate(-9deg); margin-right: -20px; z-index: 1; }
-.pps-cards.reveal .pps-cardimg:last-child { transform: rotate(9deg); z-index: 2; }
+/* Opponent cards — two clean, separated cards tucked TIGHT on the inward side of the
+   avatar (toward table center). Small backs during play; grow into the face-up reveal at
+   showdown. No fan, no overlap, no rotation — just two neat cards that scale up. */
+.pps-cards { position: absolute; top: 50%; transform: translateY(-50%); display: flex; gap: 2px; }
+.pps-cards.peek-right { left: 60%; }
+.pps-cards.peek-left  { right: 60%; }
+.pps-cards > * { height: auto; aspect-ratio: 691 / 1056; display: block; border-radius: 2.5px; flex: 0 0 auto; }
+/* play — small card backs, tucked behind the avatar */
+.pps-cards.tuck { z-index: 0; }
+.pps-cards.tuck > * { width: clamp(15px,4vw,20px); }
+.pps-cardback { width: 100%; background: repeating-linear-gradient(45deg,#1b3a8a,#1b3a8a 4px,#16307a 4px,#16307a 8px); border: 1.5px solid #2a4ba0; }
+/* showdown — same two cards, grown and face-up, in front of the avatar */
+.pps-cards.reveal { z-index: 3; }
+.pps-cards.reveal > * { width: clamp(25px,6.8vw,33px); }
+.pps-cards.reveal .pps-cardimg { filter: drop-shadow(0 2px 5px rgba(0,0,0,0.55)); }
 /* Hero hand — large, fanned, rising behind the dock. */
 .pps-hero-cards { position: absolute; left: 50%; top: 40%; transform: translate(-50%,-50%); display: flex; align-items: flex-end; z-index: 6; pointer-events: none; }
 .pps-herocard { width: clamp(58px,17vw,82px); height: auto; display: block; filter: drop-shadow(0 4px 11px rgba(0,0,0,0.6)); border-radius: 5px; }
