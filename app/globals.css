@@ -1022,7 +1022,8 @@ body {
 /* Hide BOTH the inline secondary buttons and the old ··· menu in portrait — the
    PokerPortraitDrawer (☰ top-right) replaces them with the lab's refined menu. */
 [data-poker-shell][data-poker-portrait] [data-poker-header] [data-poker-header-secondary],
-[data-poker-shell][data-poker-portrait] [data-poker-header] [data-poker-header-mobile-menu] {
+[data-poker-shell][data-poker-portrait] [data-poker-header] [data-poker-header-mobile-menu],
+[data-poker-shell][data-poker-portrait] [data-poker-header] [data-poker-header-leave] {
   display: none !important;
 }
 
