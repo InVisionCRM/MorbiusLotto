@@ -1130,7 +1130,8 @@ export function PokerTable({ state, currentPlayerAddress, timeLeft, chatBubbleBy
             : displaySlot;
           const seat = state.seats[actualIdx];
           const hasBet = toBigIntSafe(seat.currentBet ?? 0) > 0n;
-          if (!hasBet) return null;
+          // Portrait shows the bet as a pill over the avatar (PokerPortraitSeat .pps-bet) — skip the redundant chip stack.
+          if (!hasBet || layoutVariant === 'portrait') return null;
 
           const { fx: cfx, fy: cfy } = betChipAnchorForDisplaySlot(state.seats.length, displaySlot, layoutVariant);
 
