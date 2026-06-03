@@ -560,7 +560,7 @@ export default function PokerTablePage() {
       callAmount={callAmount}
       pot={hand?.pot ?? '0'}
       betSizingResetKey={hand ? `${hand.handId}:${hand.street}` : ''}
-      variant={isFullscreen ? 'floating' : 'default'}
+      variant={isFullscreen ? 'floating' : isPortraitMobile ? 'portrait' : 'default'}
       lastActionLine={lastActionLine}
       sponsoredToken={sponsoredToken}
       sponsoredUntil={renderedState.tableLogoSponsoredUntil ?? null}
