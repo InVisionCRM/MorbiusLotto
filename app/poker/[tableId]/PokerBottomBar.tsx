@@ -3,6 +3,15 @@
 import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import type React from 'react';
 import type { PokerTableState } from '@/lib/websocket-client';
+import { formatChips } from '@/lib/format-poker-chips';
+import { toBigIntSafe } from '@/lib/safe-bigint';
+
+interface PortraitDockTournament {
+  blinds?: string | null;
+  levelCountdown?: string | null;
+  rank?: number | string | null;
+  playersLeft?: number | null;
+}
 
 interface PokerBottomBarProps {
   fullscreen?: boolean;
@@ -13,21 +22,40 @@ interface PokerBottomBarProps {
   /** Mobile portrait: off-turn, show a Live Action bar (acting player · timer · last action)
    * instead of the idle betting area. On your turn, the betting controls render as normal. */
   portrait?: boolean;
-  /** Portrait: open the chat/activity drawer (bumps activityMobileOpenSerial). */
-  onChat?: () => void;
+  /** Portrait off-turn dock Info panel — tournament/level summary. */
+  tournament?: PortraitDockTournament | null;
+  /** Portrait off-turn dock Quick-Chat panel. */
+  quickChatPhrases?: string[];
+  onPhraseReaction?: (phrase: string) => void;
   renderedState: PokerTableState | null;
   mySeat: PokerTableState['seats'][number] | null;
   actions: React.ReactNode;
 }
 
 const POKER_TURN_SECONDS = 30;
-const POKER_ACTION_VERB: Record<string, string> = {
-  fold: 'folds', check: 'checks', call: 'calls', bet: 'bets', raise: 'raises to', blind: 'posts',
-};
 
-/** Off-turn dock carousel — Live Action ⇄ Replay (this hand). Swipeable with page dots,
- * collapsible to a slim strip (sticky), mirroring the lab dock. Chat stays on the 💬/drawer. */
-function PortraitDockCarousel({ state, onChat }: { state: PokerTableState | null; onChat?: () => void }) {
+function DockStat({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="flex flex-1 flex-col items-center rounded-md bg-white/[0.05] py-1">
+      <span className="text-[8.5px] font-semibold uppercase tracking-wide text-white/40">{label}</span>
+      <span className="text-[13px] font-bold tabular-nums text-white/90">{value}</span>
+    </div>
+  );
+}
+
+/** Off-turn dock carousel — Live · Info/Stats · Quick-Chat. Swipeable with page dots,
+ * collapsible to a slim Live strip (sticky). Full chat lives in the drawer, not here. */
+function PortraitDockCarousel({
+  state,
+  tournament,
+  quickChatPhrases,
+  onPhraseReaction,
+}: {
+  state: PokerTableState | null;
+  tournament?: PortraitDockTournament | null;
+  quickChatPhrases?: string[];
+  onPhraseReaction?: (phrase: string) => void;
+}) {
   const [collapsed, setCollapsed] = useState(false);
   const [page, setPage] = useState(0);
   const pagesRef = useRef<HTMLDivElement>(null);
@@ -49,26 +77,33 @@ function PortraitDockCarousel({ state, onChat }: { state: PokerTableState | null
   };
 
   if (collapsed) {
-    // Slim strip — tap to expand. Shows the Live bar at minimal height.
     return (
       <div className="relative">
         <button type="button" onClick={toggleCollapsed} aria-label="Expand dock" className="w-full">
-          <PortraitLiveBar state={state} onChat={onChat} />
+          <PortraitLiveBar state={state} />
         </button>
         <span className="pointer-events-none absolute right-2 top-1 text-[10px] text-white/40">▴</span>
       </div>
     );
   }
 
-  const hand = state?.currentHand ?? null;
-  const actions = hand?.recentActions ?? [];
-  const seatName = (pos: number) => state?.seats?.[pos]?.displayName || `Seat ${pos + 1}`;
+  const ranked = (state?.seats ?? [])
+    .filter((s) => s.playerAddress)
+    .slice()
+    .sort((a, b) => {
+      const x = toBigIntSafe(a.stack ?? '0');
+      const y = toBigIntSafe(b.stack ?? '0');
+      return x < y ? 1 : x > y ? -1 : 0;
+    })
+    .slice(0, 6);
+  const phrases = quickChatPhrases ?? [];
+  const PAGES = 3;
 
   return (
-    <div className="relative" style={{ height: 128 }}>
+    <div className="relative" style={{ height: 134 }}>
       <div className="absolute right-2 top-1 z-10 flex items-center gap-2">
         <div className="flex items-center gap-1">
-          {[0, 1].map((i) => (
+          {Array.from({ length: PAGES }, (_, i) => (
             <span key={i} className="rounded-full transition-all" style={{ width: page === i ? 14 : 5, height: 5, background: page === i ? '#22d3ee' : 'rgba(255,255,255,0.25)' }} />
           ))}
         </div>
@@ -82,27 +117,52 @@ function PortraitDockCarousel({ state, onChat }: { state: PokerTableState | null
       >
         {/* Page 0 — Live */}
         <div className="h-full w-full flex-[0_0_100%] snap-start">
-          <PortraitLiveBar state={state} onChat={onChat} />
+          <PortraitLiveBar state={state} />
         </div>
-        {/* Page 1 — Replay (this hand's action history) */}
-        <div className="h-full w-full flex-[0_0_100%] snap-start overflow-hidden px-3 pt-2">
-          <div className="mb-1 flex items-center justify-between text-[11px]">
-            <span className="font-semibold uppercase tracking-wide text-white/55">This hand</span>
-            <span className="capitalize text-white/45">{hand?.street ?? '—'}</span>
+
+        {/* Page 1 — Info / Stats: tournament summary + chip leaderboard */}
+        <div className="flex h-full w-full flex-[0_0_100%] snap-start flex-col overflow-hidden px-3 pt-2.5">
+          <div className="mb-1.5 flex items-stretch gap-1.5">
+            <DockStat label="Blinds" value={tournament?.blinds || '—'} />
+            <DockStat label="Players" value={tournament?.playersLeft != null ? String(tournament.playersLeft) : '—'} />
+            <DockStat label="Rank" value={tournament?.rank != null ? `#${tournament.rank}` : '—'} />
+            <DockStat label="Next lvl" value={tournament?.levelCountdown || '—'} />
           </div>
-          <div className="flex flex-col gap-0.5 overflow-y-auto pr-1" style={{ maxHeight: 86, scrollbarWidth: 'none' }}>
-            {actions.length === 0 ? (
-              <span className="text-[12px] text-white/40">No actions yet this hand.</span>
+          <div className="mb-0.5 text-[9px] font-semibold uppercase tracking-wide text-white/40">Chip leaderboard</div>
+          <div className="flex flex-col gap-0.5 overflow-y-auto pr-1" style={{ maxHeight: 62, scrollbarWidth: 'none' }}>
+            {ranked.length === 0 ? (
+              <span className="text-[12px] text-white/40">No players yet.</span>
             ) : (
-              actions.map((a, i) => (
-                <div key={i} className="flex items-center gap-1.5 text-[12px] text-white/75">
-                  <span className="truncate font-semibold">{seatName(a.position)}</span>
-                  <span className="text-white/50">{POKER_ACTION_VERB[a.action] ?? a.action}</span>
-                  {a.amount && a.amount !== '0' && <span style={{ color: '#fde68a' }}>{Number(a.amount).toLocaleString()}</span>}
+              ranked.map((s, i) => (
+                <div key={i} className="flex items-center gap-2 text-[12px]">
+                  <span className="w-3.5 text-right text-white/40">{i + 1}</span>
+                  <span className="flex-1 truncate text-white/80">{s.displayName || `${s.playerAddress?.slice(0, 6)}…`}</span>
+                  <span className="tabular-nums" style={{ color: '#fde68a' }}>{formatChips(s.stack ?? '0')}</span>
                 </div>
               ))
             )}
           </div>
+        </div>
+
+        {/* Page 2 — Quick chat (buttons only, no message feed) */}
+        <div className="flex h-full w-full flex-[0_0_100%] snap-start flex-col overflow-hidden px-3 pt-2.5">
+          <div className="mb-1 text-[9px] font-semibold uppercase tracking-wide text-white/40">Quick chat</div>
+          {phrases.length && onPhraseReaction ? (
+            <div className="grid grid-cols-2 gap-1.5 overflow-y-auto pr-1" style={{ maxHeight: 92, scrollbarWidth: 'none' }}>
+              {phrases.map((p, i) => (
+                <button
+                  key={i}
+                  type="button"
+                  onClick={() => onPhraseReaction(p)}
+                  className="truncate rounded-md border border-white/10 bg-white/[0.06] px-2 py-1.5 text-[12px] font-medium text-white/85 active:bg-white/15"
+                >
+                  {p}
+                </button>
+              ))}
+            </div>
+          ) : (
+            <span className="text-[12px] text-white/40">Quick chat unavailable.</span>
+          )}
         </div>
       </div>
     </div>
@@ -205,7 +265,9 @@ export function PokerBottomBar({
   fullscreen = false,
   mobileLandscape = false,
   portrait = false,
-  onChat,
+  tournament,
+  quickChatPhrases,
+  onPhraseReaction,
   renderedState,
   mySeat,
   actions,
@@ -325,7 +387,14 @@ export function PokerBottomBar({
       }}
     >
       <div className="w-full max-sm:px-0 max-sm:pt-0 max-sm:pb-0 sm:px-3 sm:pt-1.5 sm:pb-[max(6px,env(safe-area-inset-bottom,0px))]">
-        {portraitOffTurn ? <PortraitDockCarousel state={renderedState} onChat={onChat} /> : actions}
+        {portraitOffTurn ? (
+          <PortraitDockCarousel
+            state={renderedState}
+            tournament={tournament}
+            quickChatPhrases={quickChatPhrases}
+            onPhraseReaction={onPhraseReaction}
+          />
+        ) : actions}
       </div>
     </div>
   );

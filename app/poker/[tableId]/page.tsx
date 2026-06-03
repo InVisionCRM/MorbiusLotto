@@ -1010,7 +1010,14 @@ export default function PokerTablePage() {
                 fullscreen={isFullscreen}
                 mobileLandscape={isMobileLandscape && !isFullscreen}
                 portrait={isPortraitMobile}
-                onChat={() => setActivityMobileOpenSerial((s) => s + 1)}
+                tournament={{
+                  blinds: tournamentSummary.blinds,
+                  levelCountdown: tournamentSummary.levelCountdown,
+                  rank: tournamentSummary.rank,
+                  playersLeft: tournamentSummary.playersLeft,
+                }}
+                quickChatPhrases={quickChatPhrases}
+                onPhraseReaction={onPhraseReaction}
                 renderedState={renderedState}
                 mySeat={mySeat}
                 actions={sharedActions}
