@@ -9,11 +9,37 @@
  * Styling lives in globals.css under `.pps*`. Rendered by PokerTable when layoutVariant==='portrait'.
  */
 
+import { memo, type ComponentProps } from 'react';
 import { AvatarView } from '@/components/avatar';
 import { formatChips } from '@/lib/format-poker-chips';
 import type { PokerTableState } from '@/lib/websocket-client';
 
 type Seat = PokerTableState['seats'][number];
+
+/**
+ * Memoized avatar — the heavy animated AvatarPreview (idle/eye-roam timers, ~700 lines) must
+ * NOT re-render on every WS state tick. A seat's avatar only changes when the occupant or their
+ * sit-out state changes, so we key on `configKey` (player address) + `sittingOut` and ignore the
+ * per-tick-fresh `config` object reference. Stops ~10 avatar re-renders per server update.
+ */
+const PortraitSeatAvatar = memo(
+  function PortraitSeatAvatar({
+    config,
+    sittingOut,
+    fallbackChar,
+  }: {
+    config: ComponentProps<typeof AvatarView>['config'];
+    configKey?: string | null;
+    sittingOut: boolean;
+    fallbackChar: string;
+  }) {
+    return config
+      ? <AvatarView config={config} compact forceAsleep={sittingOut} className="w-full h-full" />
+      : <span>{fallbackChar}</span>;
+  },
+  (a, b) =>
+    a.configKey === b.configKey && a.sittingOut === b.sittingOut && a.fallbackChar === b.fallbackChar,
+);
 
 const RANKS = ['2', '3', '4', '5', '6', '7', '8', '9', '10', 'J', 'Q', 'K', 'A'];
 const SUITS = ['C', 'D', 'H', 'S'];
@@ -33,6 +59,8 @@ export interface PokerPortraitSeatProps {
   /** Cards tuck/peek to the right (left-wall seats) when true, else left. From the seat anchor's fx. */
   inwardRight?: boolean;
   cardBackSrc?: string | null;
+  /** Quick-chat reaction or chat message to float over the seat (transient). */
+  bubble?: string | null;
 }
 
 function CardBack({ src }: { src?: string | null }) {
@@ -48,6 +76,7 @@ export function PokerPortraitSeat({
   handName,
   inwardRight = true,
   cardBackSrc,
+  bubble,
 }: PokerPortraitSeatProps) {
   if (!seat.playerAddress) {
     return (
@@ -96,13 +125,17 @@ export function PokerPortraitSeat({
         )}
 
         <div className="pps-ava">
-          {seat.avatarConfig
-            ? <AvatarView config={seat.avatarConfig} compact forceAsleep={sittingOut} className="w-full h-full" />
-            : <span>{name.slice(0, 1).toUpperCase()}</span>}
+          <PortraitSeatAvatar
+            config={seat.avatarConfig}
+            configKey={seat.playerAddress}
+            sittingOut={sittingOut}
+            fallbackChar={name.slice(0, 1).toUpperCase()}
+          />
         </div>
 
         {isHandWinner && <div className="pps-win">🏆</div>}
         {bet && <div className="pps-bet"><span className="pps-chip" />{bet}</div>}
+        {bubble && <div className="pps-bubble">{bubble}</div>}
       </div>
 
       <div className="pps-name">

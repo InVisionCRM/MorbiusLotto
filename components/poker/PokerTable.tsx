@@ -874,6 +874,7 @@ export function PokerTable({ state, currentPlayerAddress, timeLeft, chatBubbleBy
           seat={state.seats[mySeatIndex]}
           holeCards={state.myHoleCards}
           isActing={actingPosition === mySeatIndex}
+          bubble={reactionBySeatIndex?.[mySeatIndex] ?? chatBubbleBySeatIndex?.[mySeatIndex] ?? null}
         />
       )}
 
@@ -1402,6 +1403,7 @@ export function PokerTable({ state, currentPlayerAddress, timeLeft, chatBubbleBy
                       handName={sp.handName}
                       cardBackSrc={sp.cardBackSrc}
                       inwardRight={rendered.fx < 0.5}
+                      bubble={sp.overlayPhrase ?? sp.chatBubble ?? null}
                     />
                   );
                 })()

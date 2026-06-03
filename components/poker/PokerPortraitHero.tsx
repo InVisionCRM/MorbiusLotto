@@ -6,6 +6,7 @@
  * "You" avatar + gold stack overlapping their base. Acting = cyan glow. Real avatar + card art.
  */
 
+import { memo, type ComponentProps } from 'react';
 import { AvatarView } from '@/components/avatar';
 import { formatChips } from '@/lib/format-poker-chips';
 import type { PokerTableState } from '@/lib/websocket-client';
@@ -14,19 +15,30 @@ const RANKS = ['2', '3', '4', '5', '6', '7', '8', '9', '10', 'J', 'Q', 'K', 'A']
 const SUITS = ['C', 'D', 'H', 'S'];
 const cardSrc = (i: number) => `/BlackJack/Cards/PNG/${RANKS[i % 13]}${SUITS[Math.floor(i / 13)]}.png`;
 
+/** Memoized hero avatar — don't re-render the heavy AvatarPreview on every WS tick (see PokerPortraitSeat). */
+const HeroAvatar = memo(
+  function HeroAvatar({ config }: { config: ComponentProps<typeof AvatarView>['config']; configKey?: string | null }) {
+    return config ? <AvatarView config={config} compact className="w-full h-full" /> : <span>Y</span>;
+  },
+  (a, b) => a.configKey === b.configKey,
+);
+
 export interface PokerPortraitHeroProps {
   seat: PokerTableState['seats'][number] | null;
   holeCards?: number[] | null;
   isActing?: boolean;
+  /** Quick-chat reaction or chat message to float over the hero (transient). */
+  bubble?: string | null;
 }
 
-export function PokerPortraitHero({ seat, holeCards, isActing }: PokerPortraitHeroProps) {
+export function PokerPortraitHero({ seat, holeCards, isActing, bubble }: PokerPortraitHeroProps) {
   if (!seat) return null;
   const cards = (holeCards ?? []).slice(0, 2);
   const stack = formatChips(seat.stack ?? '0');
   const folded = !!seat.folded;
   return (
     <div className={`pph${isActing && !folded ? ' acting' : ''}${folded ? ' folded' : ''}`} aria-hidden>
+      {bubble && <div className="pph-bubble">{bubble}</div>}
       {cards.length > 0 && (
         <div className="pph-cards">
           {cards.map((c, i) => <img key={i} className="pph-card" src={cardSrc(c)} alt="" />)}
@@ -34,9 +46,7 @@ export function PokerPortraitHero({ seat, holeCards, isActing }: PokerPortraitHe
       )}
       <div className="pph-info">
         <div className="pph-ava">
-          {seat.avatarConfig
-            ? <AvatarView config={seat.avatarConfig} compact className="w-full h-full" />
-            : <span>Y</span>}
+          <HeroAvatar config={seat.avatarConfig} configKey={seat.playerAddress} />
         </div>
         <div className="pph-meta">
           <span className="pph-nm">You</span>

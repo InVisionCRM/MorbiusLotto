@@ -43,8 +43,14 @@ function DockStat({ label, value }: { label: string; value: string }) {
   );
 }
 
-/** Off-turn dock carousel — Live · Info/Stats · Quick-Chat. Swipeable with page dots,
- * collapsible to a slim Live strip (sticky). Full chat lives in the drawer, not here. */
+function cap(s?: string | null) {
+  return s ? s.charAt(0).toUpperCase() + s.slice(1) : '—';
+}
+
+/** Off-turn dock carousel — Live · Info/Stats · Quick-Chat. Swipeable with page dots.
+ * A grip handle expands the dock to a tall sheet (more rows); a corner chevron collapses
+ * it to a slim Live strip. Stats read live table state so they populate on cash tables too.
+ * Full chat lives in the drawer, not here. */
 function PortraitDockCarousel({
   state,
   tournament,
@@ -57,6 +63,7 @@ function PortraitDockCarousel({
   onPhraseReaction?: (phrase: string) => void;
 }) {
   const [collapsed, setCollapsed] = useState(false);
+  const [expanded, setExpanded] = useState(false);
   const [page, setPage] = useState(0);
   const pagesRef = useRef<HTMLDivElement>(null);
 
@@ -87,6 +94,16 @@ function PortraitDockCarousel({
     );
   }
 
+  // ── Live table stats (work on cash tables too — not just tournaments) ──
+  const hand = state?.currentHand ?? null;
+  const seated = (state?.seats ?? []).filter((s) => s.playerAddress).length;
+  const totalSeats = state?.seats?.length ?? 0;
+  const blinds = state?.smallBlind != null && state?.bigBlind != null
+    ? `${formatChips(state.smallBlind)}/${formatChips(state.bigBlind)}`
+    : (tournament?.blinds || '—');
+  const potStr = hand?.pot ? formatChips(hand.pot) : '—';
+  const isTournament = tournament?.rank != null || tournament?.playersLeft != null;
+
   const ranked = (state?.seats ?? [])
     .filter((s) => s.playerAddress)
     .slice()
@@ -95,12 +112,23 @@ function PortraitDockCarousel({
       const y = toBigIntSafe(b.stack ?? '0');
       return x < y ? 1 : x > y ? -1 : 0;
     })
-    .slice(0, 6);
+    .slice(0, expanded ? 12 : 6);
+  const recent = (hand?.recentActions ?? []).slice(-(expanded ? 8 : 4)).reverse();
   const phrases = quickChatPhrases ?? [];
   const PAGES = 3;
 
   return (
-    <div className="relative" style={{ height: 134 }}>
+    <div className="relative" style={{ height: expanded ? 'min(56vh, 440px)' : 134, transition: 'height 0.2s ease' }}>
+      {/* Grip — tap to expand / shrink the dock */}
+      <button
+        type="button"
+        onClick={() => setExpanded((e) => !e)}
+        aria-label={expanded ? 'Shrink dock' : 'Expand dock'}
+        className="absolute left-1/2 top-0 z-10 -translate-x-1/2 px-8 py-1.5"
+      >
+        <span className="block h-1 w-9 rounded-full bg-white/25" />
+      </button>
+      {/* Page dots + collapse-to-slim */}
       <div className="absolute right-2 top-1 z-10 flex items-center gap-2">
         <div className="flex items-center gap-1">
           {Array.from({ length: PAGES }, (_, i) => (
@@ -115,26 +143,47 @@ function PortraitDockCarousel({
         className="flex h-full w-full snap-x snap-mandatory overflow-x-auto"
         style={{ scrollbarWidth: 'none' }}
       >
-        {/* Page 0 — Live */}
-        <div className="h-full w-full flex-[0_0_100%] snap-start">
+        {/* Page 0 — Live: who's acting + timer, then a recent-action feed to fill the panel */}
+        <div className="flex h-full w-full flex-[0_0_100%] snap-start flex-col pt-4">
           <PortraitLiveBar state={state} />
+          {recent.length > 0 && (
+            <div className="min-h-0 flex-1 overflow-y-auto px-3 pb-1" style={{ scrollbarWidth: 'none' }}>
+              <div className="mb-0.5 text-[9px] font-semibold uppercase tracking-wide text-white/35">Recent</div>
+              {recent.map((a, i) => {
+                const nm = state?.seats?.[a.position]?.displayName || `Seat ${a.position + 1}`;
+                const amt = a.amount && a.amount !== '0' ? ` ${Number(a.amount).toLocaleString()}` : '';
+                return (
+                  <div key={i} className="flex items-center justify-between py-0.5 text-[11.5px]">
+                    <span className="truncate text-white/65">{nm}</span>
+                    <span className="text-white/40">{a.action}{amt}</span>
+                  </div>
+                );
+              })}
+            </div>
+          )}
         </div>
 
-        {/* Page 1 — Info / Stats: tournament summary + chip leaderboard */}
-        <div className="flex h-full w-full flex-[0_0_100%] snap-start flex-col overflow-hidden px-3 pt-2.5">
+        {/* Page 1 — Info / Stats: live game stats + chip leaderboard (+ tournament info) */}
+        <div className="flex h-full w-full flex-[0_0_100%] snap-start flex-col overflow-hidden px-3 pt-6">
           <div className="mb-1.5 flex items-stretch gap-1.5">
-            <DockStat label="Blinds" value={tournament?.blinds || '—'} />
-            <DockStat label="Players" value={tournament?.playersLeft != null ? String(tournament.playersLeft) : '—'} />
-            <DockStat label="Rank" value={tournament?.rank != null ? `#${tournament.rank}` : '—'} />
-            <DockStat label="Next lvl" value={tournament?.levelCountdown || '—'} />
+            <DockStat label="Blinds" value={blinds} />
+            <DockStat label="Pot" value={potStr} />
+            <DockStat label="Players" value={totalSeats ? `${seated}/${totalSeats}` : '—'} />
+            <DockStat label={isTournament ? 'Rank' : 'Street'} value={isTournament ? (tournament?.rank != null ? `#${tournament.rank}` : '—') : cap(hand?.street)} />
           </div>
+          {isTournament && (
+            <div className="mb-1 flex items-center justify-between text-[11px] text-white/50">
+              <span>Players left: {tournament?.playersLeft ?? '—'}</span>
+              <span>Next level: {tournament?.levelCountdown || '—'}</span>
+            </div>
+          )}
           <div className="mb-0.5 text-[9px] font-semibold uppercase tracking-wide text-white/40">Chip leaderboard</div>
-          <div className="flex flex-col gap-0.5 overflow-y-auto pr-1" style={{ maxHeight: 62, scrollbarWidth: 'none' }}>
+          <div className="flex min-h-0 flex-1 flex-col gap-0.5 overflow-y-auto pr-1" style={{ scrollbarWidth: 'none' }}>
             {ranked.length === 0 ? (
               <span className="text-[12px] text-white/40">No players yet.</span>
             ) : (
               ranked.map((s, i) => (
-                <div key={i} className="flex items-center gap-2 text-[12px]">
+                <div key={i} className="flex items-center gap-2 py-0.5 text-[12px]">
                   <span className="w-3.5 text-right text-white/40">{i + 1}</span>
                   <span className="flex-1 truncate text-white/80">{s.displayName || `${s.playerAddress?.slice(0, 6)}…`}</span>
                   <span className="tabular-nums" style={{ color: '#fde68a' }}>{formatChips(s.stack ?? '0')}</span>
@@ -145,16 +194,16 @@ function PortraitDockCarousel({
         </div>
 
         {/* Page 2 — Quick chat (buttons only, no message feed) */}
-        <div className="flex h-full w-full flex-[0_0_100%] snap-start flex-col overflow-hidden px-3 pt-2.5">
+        <div className="flex h-full w-full flex-[0_0_100%] snap-start flex-col overflow-hidden px-3 pt-6">
           <div className="mb-1 text-[9px] font-semibold uppercase tracking-wide text-white/40">Quick chat</div>
           {phrases.length && onPhraseReaction ? (
-            <div className="grid grid-cols-2 gap-1.5 overflow-y-auto pr-1" style={{ maxHeight: 92, scrollbarWidth: 'none' }}>
+            <div className="grid min-h-0 flex-1 grid-cols-2 content-start gap-1.5 overflow-y-auto pr-1" style={{ scrollbarWidth: 'none' }}>
               {phrases.map((p, i) => (
                 <button
                   key={i}
                   type="button"
                   onClick={() => onPhraseReaction(p)}
-                  className="truncate rounded-md border border-white/10 bg-white/[0.06] px-2 py-1.5 text-[12px] font-medium text-white/85 active:bg-white/15"
+                  className="truncate rounded-md border border-white/10 bg-white/[0.06] px-2 py-2 text-[12px] font-medium text-white/85 active:bg-white/15"
                 >
                   {p}
                 </button>
@@ -183,7 +232,7 @@ function PortraitLiveBar({ state, onChat }: { state: PokerTableState | null; onC
   useEffect(() => {
     if (!turnStartedAt) { setNow(0); return; }
     setNow(Date.now());
-    const id = setInterval(() => setNow(Date.now()), 250);
+    const id = setInterval(() => setNow(Date.now()), 500);
     return () => clearInterval(id);
   }, [turnStartedAt]);
 
