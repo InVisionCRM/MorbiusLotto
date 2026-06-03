@@ -18,15 +18,18 @@ export interface PokerPortraitHeroProps {
   seat: PokerTableState['seats'][number] | null;
   holeCards?: number[] | null;
   isActing?: boolean;
+  /** Quick-chat reaction or chat message to float over the hero (transient). */
+  bubble?: string | null;
 }
 
-export function PokerPortraitHero({ seat, holeCards, isActing }: PokerPortraitHeroProps) {
+export function PokerPortraitHero({ seat, holeCards, isActing, bubble }: PokerPortraitHeroProps) {
   if (!seat) return null;
   const cards = (holeCards ?? []).slice(0, 2);
   const stack = formatChips(seat.stack ?? '0');
   const folded = !!seat.folded;
   return (
     <div className={`pph${isActing && !folded ? ' acting' : ''}${folded ? ' folded' : ''}`} aria-hidden>
+      {bubble && <div className="pph-bubble">{bubble}</div>}
       {cards.length > 0 && (
         <div className="pph-cards">
           {cards.map((c, i) => <img key={i} className="pph-card" src={cardSrc(c)} alt="" />)}

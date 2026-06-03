@@ -33,6 +33,8 @@ export interface PokerPortraitSeatProps {
   /** Cards tuck/peek to the right (left-wall seats) when true, else left. From the seat anchor's fx. */
   inwardRight?: boolean;
   cardBackSrc?: string | null;
+  /** Quick-chat reaction or chat message to float over the seat (transient). */
+  bubble?: string | null;
 }
 
 function CardBack({ src }: { src?: string | null }) {
@@ -48,6 +50,7 @@ export function PokerPortraitSeat({
   handName,
   inwardRight = true,
   cardBackSrc,
+  bubble,
 }: PokerPortraitSeatProps) {
   if (!seat.playerAddress) {
     return (
@@ -103,6 +106,7 @@ export function PokerPortraitSeat({
 
         {isHandWinner && <div className="pps-win">🏆</div>}
         {bet && <div className="pps-bet"><span className="pps-chip" />{bet}</div>}
+        {bubble && <div className="pps-bubble">{bubble}</div>}
       </div>
 
       <div className="pps-name">
