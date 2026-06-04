@@ -30,6 +30,8 @@ import { PokerTableView } from './PokerTableView';
 import { PokerPopups } from './PokerPopups';
 import { PokerPanels } from './PokerPanels';
 import { PokerBottomBar, POKER_BOTTOM_RESERVE_VAR, POKER_SIDE_STRIP_W } from './PokerBottomBar';
+import { usePokerPlayerHands, usePokerHandVerify } from '@/hooks/use-poker-stats';
+import { buildReplaySteps, resultLabel, type ReplayHandSummary } from '@/lib/poker-replay';
 import { usePokerConnection } from './PokerConnection';
 import {
   usePokerActionsLogic,
@@ -149,6 +151,31 @@ export default function PokerTablePage() {
     if (!state || !optimisticOverlay) return state;
     return applyPokerOptimisticOverlay(state, optimisticOverlay);
   }, [testStateOverride, state, optimisticOverlay]);
+
+  // ── Off-turn dock Replay: this table's past hands + the picked hand's full log (winner + all showdown) ──
+  const [replayHandId, setReplayHandId] = useState<string | null>(null);
+  const { data: myPokerHands } = usePokerPlayerHands(effectivePlayerAddress, 40);
+  const replayNameForAddr = useCallback(
+    (addr: string) => {
+      const a = addr.toLowerCase();
+      const seat = renderedState?.seats?.find((s) => s.playerAddress?.toLowerCase() === a);
+      return seat?.displayName || `${addr.slice(0, 6)}…`;
+    },
+    [renderedState],
+  );
+  const replayHands = useMemo<ReplayHandSummary[]>(
+    () =>
+      (myPokerHands ?? [])
+        .filter((h) => h.table_id === tableId)
+        .slice(0, 20)
+        .map((h) => ({ handId: h.id, handNumber: h.hand_number, label: resultLabel(h.result, replayNameForAddr) })),
+    [myPokerHands, tableId, replayNameForAddr],
+  );
+  const { data: replayVerify, isLoading: replayLoading } = usePokerHandVerify(replayHandId);
+  const replaySteps = useMemo(
+    () => (replayVerify ? buildReplaySteps(replayVerify, replayNameForAddr, effectivePlayerAddress) : null),
+    [replayVerify, replayNameForAddr, effectivePlayerAddress],
+  );
 
   const handleTournamentCompleted = useCallback(
     (payload: PokerTournamentCompletedPayload) => {
@@ -1018,6 +1045,10 @@ export default function PokerTablePage() {
                 }}
                 quickChatPhrases={quickChatPhrases}
                 onPhraseReaction={onPhraseReaction}
+                preAction={queuedPreAction}
+                onPreActionChange={setQueuedPreAction}
+                onOpenActivity={() => setActivityMobileOpenSerial((s) => s + 1)}
+                replay={{ hands: replayHands, activeHandId: replayHandId, steps: replaySteps, loading: replayLoading, onPick: setReplayHandId }}
                 renderedState={renderedState}
                 mySeat={mySeat}
                 actions={sharedActions}
