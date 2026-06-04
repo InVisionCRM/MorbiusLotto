@@ -988,15 +988,38 @@ export default function PokerTablePage() {
               seated={!!mySeat}
               sittingOut={mySeat?.status === 'sitting_out'}
               canReup={canReup}
+              isAdmin={isAdmin}
+              showBranding={Boolean(effectivePlayerAddress && wsConnected && mySeat)}
               onAvatarProfile={mySeat ? () => setShowAvatarModal(true) : undefined}
               onAddChips={openReupModal}
               onChat={() => setActivityMobileOpenSerial((s) => s + 1)}
               onSitOut={mySeat ? handleSitOut : undefined}
               onSitBack={mySeat ? handleSitBack : undefined}
+              onSponsorLogo={() => setLogoSponsorOpen(true)}
+              onTipDealer={onTipDealer}
+              tipAmountLabel="2,000"
+              tipAnimating={tipAnimating}
               onSounds={() => setShowSoundsModal(true)}
               onTableSettings={() => setShowTableSettingsModal(true)}
-              onMyStats={() => setShowMyStats(true)}
+              onEditQuickChat={() => setShowEditQuickChatModal(true)}
+              autoRebuy={autoRebuy}
+              onToggleAutoRebuy={mySeat ? () => setAutoRebuy((v) => !v) : undefined}
+              voice={{
+                listening: speech.listening,
+                supported: speech.supported,
+                onToggle: () => {
+                  if (speechEnabled) setSpeechEnabled(false);
+                  else setVoiceSplashOpen(true);
+                },
+              }}
               onHowToPlay={() => setShowHowToPlay(true)}
+              onPlayerStats={normalizedAddress ? () => { setStatsModalAddress(normalizedAddress); setShowStatsModal(true); } : undefined}
+              onTableStats={() => setShowMyStats(true)}
+              onDashboard={isAdmin ? () => setShowDashboard(true) : undefined}
+              adminBotsBusy={adminBotsBusy}
+              adminBotMax={adminBotMax}
+              onStartBots={onAdminStartBots}
+              onStopBots={onAdminStopBots}
               onLeave={mySeat ? handleLeaveClick : handleExitClick}
             />
           )}
