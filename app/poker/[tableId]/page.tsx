@@ -617,7 +617,9 @@ export default function PokerTablePage() {
   const [settingsMenuOpen, setSettingsMenuOpen] = useState(false);
   const [statsMenuOpen, setStatsMenuOpen] = useState(false);
   const [quickChatPhrases, setQuickChatPhrases] = useQuickChatPhrases();
-  const timeLeft = usePokerTurnClock(hand);
+  // Match the client countdown to the server's clock: tournament action timer (creator-chosen)
+  // or 60s for cash games / when unset.
+  const timeLeft = usePokerTurnClock(hand, tournamentHudState?.actionTimerSeconds ?? 60);
   const { playClick } = usePokerTableSounds({
     canAct,
     hand,

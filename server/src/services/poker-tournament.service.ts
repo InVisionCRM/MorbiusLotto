@@ -81,6 +81,11 @@ export interface PokerTournamentConfig {
    * consolidates them as players bust.
    */
   seatsPerTable?: number;
+  /**
+   * Late registration: minutes after `activated_at` during which new players can still buy in
+   * and be seated at a live table. Absent / 0 disables late registration.
+   */
+  lateRegMinutes?: number;
 }
 
 export const DEFAULT_BLIND_SCHEDULE: BlindLevel[] = [
@@ -216,6 +221,10 @@ export interface PokerTournamentSummary {
   blindIntervalMinutes?: BlindIntervalMinutes;
   /** `time` = classic scheduled start; `fill` = Sit & Go (starts when the table fills). */
   startMode: PokerStartMode;
+  /** Creator-configured late-registration window in minutes (0 / absent = disabled). */
+  lateRegMinutes?: number;
+  /** True when the tournament is `active`, late reg is enabled, and the window has not elapsed. */
+  lateRegOpen?: boolean;
 }
 
 /** Where the initial guaranteed pool is debited when buy-in is 0; `custom_token_buyin` is buy-in paid in PRC-20 via escrow. */
@@ -288,7 +297,18 @@ export interface CreatePokerTournamentParams {
   scheduledStartAt?: Date;
   /** Creator's chosen fee percent (0–15 integer). Clamped server-side; default 2. */
   creatorFeePercent?: number;
+  /**
+   * Per-turn action clock in seconds. Clamped to [`ACTION_TIMER_SECONDS_MIN`,
+   * `ACTION_TIMER_SECONDS_MAX`]; when unset, stays NULL and the auto-fold sweep uses 60s.
+   */
+  actionTimerSeconds?: number;
 }
+
+/** Inclusive bounds for the per-turn action clock (seconds). */
+export const ACTION_TIMER_SECONDS_MIN = 10;
+export const ACTION_TIMER_SECONDS_MAX = 120;
+/** Inclusive bounds for the late-registration window (minutes). 0 disables it. */
+export const LATE_REG_MINUTES_MAX = 120;
 
 /**
  * Validates creator prize % per finishing rank (index 0 = 1st place …).
@@ -577,6 +597,11 @@ export class PokerTournamentService {
       startMode,
       ...(blindIncreaseMode === 'by_time' && interval ? { blindIntervalMinutes: interval } : {}),
       ...(seatsPerTable != null ? { seatsPerTable } : {}),
+      ...((() => {
+        const raw = Number(obj.lateRegMinutes ?? obj.late_reg_minutes);
+        const v = Number.isFinite(raw) ? Math.max(0, Math.min(LATE_REG_MINUTES_MAX, Math.round(raw))) : 0;
+        return v > 0 ? { lateRegMinutes: v } : {};
+      })()),
     };
   }
 
@@ -866,16 +891,31 @@ export class PokerTournamentService {
       blindIncreaseMode === 'by_time'
         ? this.normalizeBlindIntervalMinutes(config.blindIntervalMinutes) ?? undefined
         : undefined;
+    // Late registration window (minutes). Clamp to [0, LATE_REG_MINUTES_MAX]; 0 = disabled.
+    const rawLateReg = Number(config.lateRegMinutes);
+    const lateRegMinutes = Number.isFinite(rawLateReg)
+      ? Math.max(0, Math.min(LATE_REG_MINUTES_MAX, Math.round(rawLateReg)))
+      : 0;
     const configForDb: PokerTournamentConfig = {
       ...config,
       blindIncreaseMode,
       startMode,
       ...(blindIntervalMinutes ? { blindIntervalMinutes } : {}),
+      ...(lateRegMinutes > 0 ? { lateRegMinutes } : {}),
     };
     // Strip a stale interval if mode isn't by_time so it doesn't accidentally persist.
     if (blindIncreaseMode !== 'by_time') {
       delete (configForDb as Partial<PokerTournamentConfig>).blindIntervalMinutes;
     }
+    if (lateRegMinutes <= 0) {
+      delete (configForDb as Partial<PokerTournamentConfig>).lateRegMinutes;
+    }
+
+    // Per-turn action clock (seconds). NULL when unset → auto-fold sweep falls back to 60s.
+    const rawActionTimer = Number(params.actionTimerSeconds);
+    const actionTimerSeconds = Number.isFinite(rawActionTimer)
+      ? Math.max(ACTION_TIMER_SECONDS_MIN, Math.min(ACTION_TIMER_SECONDS_MAX, Math.round(rawActionTimer)))
+      : null;
 
     const prizePercentages =
       params.prizeDistributionType === 'custom'
@@ -926,7 +966,7 @@ export class PokerTournamentService {
         creator_fee_percent, platform_fee_percent, status,
         game_type, poker_config, scheduled_start_at,
         prize_token_address, prize_token_decimals, prize_token_symbol, prize_token_name,
-        escrow_tx_hash, escrow_tournament_id_bytes32
+        escrow_tx_hash, escrow_tournament_id_bytes32, action_timer_seconds
       ) VALUES (
         COALESCE($17::UUID, gen_random_uuid()),
         $1, $2, $3::NUMERIC, $4, 999, $5,
@@ -935,7 +975,7 @@ export class PokerTournamentService {
         $24, 3, 'registration',
         'poker', $15::JSONB, $16,
         $18, $19, $20, $21,
-        $22, $23
+        $22, $23, $25
       ) RETURNING id`,
         [
           params.name.trim(),
@@ -962,6 +1002,7 @@ export class PokerTournamentService {
           escrowVerified?.txHash ?? null,
           escrowVerified?.bytes32Id ?? customBuyInRow?.bytes32Id ?? null,
           creatorFeePercent,
+          actionTimerSeconds,
         ]
       );
 
@@ -1083,6 +1124,8 @@ export class PokerTournamentService {
     let committedEntryId: string | null = null;
     let committedShouldAutoStart = false;
     let committedFillCountdown = false;
+    /** Set when a late-registration join seats the player at a live table — drives the return tableId. */
+    let committedLateRegTableId: string | null = null;
 
     /** When join fails after an escrow deposit was verified (e.g. tournament full). */
     let refundEscrowAfterRollback: {
@@ -1150,11 +1193,46 @@ export class PokerTournamentService {
         return { entryId, autoStarted: !!tableId, tableId };
       }
 
-      if (tournament.status !== 'registration') {
+      const config = this.parsePokerConfig(tournament.poker_config);
+
+      // Late registration: a still-`active` tournament accepts new buy-ins for
+      // `lateRegMinutes` after activation, as long as a live table has an open
+      // physical seat (freed by an earlier bust-out). The new entrant is seated
+      // mid-tournament and dealt in on the next hand.
+      let isLateReg = false;
+      let lateRegTableId: string | null = null;
+      if (tournament.status === 'registration') {
+        // normal path
+      } else if (tournament.status === 'active') {
+        const lateRegMinutes = config.lateRegMinutes ?? 0;
+        if (lateRegMinutes <= 0) {
+          throw new Error('Registration for this tournament is closed');
+        }
+        const activatedAt = tournament.activated_at ? new Date(tournament.activated_at).getTime() : null;
+        if (activatedAt == null || Date.now() > activatedAt + lateRegMinutes * 60_000) {
+          throw new Error('Late registration has closed for this tournament');
+        }
+        // Pick the live table with the most room (non-final tables first), lowest
+        // seated count → keeps MTT tables balanced; SNG just uses its one table.
+        const seatTarget = await client.query(
+          `SELECT pt.id, pt.max_seats, COUNT(ps.position) AS seated
+             FROM poker_tables pt
+             LEFT JOIN poker_seats ps ON ps.table_id = pt.id
+            WHERE pt.tournament_id = $1
+            GROUP BY pt.id, pt.max_seats, pt.is_final_table, pt.table_seq
+           HAVING COUNT(ps.position) < pt.max_seats
+            ORDER BY pt.is_final_table ASC, COUNT(ps.position) ASC, pt.table_seq NULLS LAST
+            LIMIT 1`,
+          [tournamentId],
+        );
+        if (seatTarget.rows.length === 0) {
+          throw new Error('Late registration is open but every table is currently full');
+        }
+        isLateReg = true;
+        lateRegTableId = String(seatTarget.rows[0].id);
+      } else {
         throw new Error(`Tournament is not open for registration (status: ${tournament.status})`);
       }
-
-      const config = this.parsePokerConfig(tournament.poker_config);
 
       // Private tournament PIN check (new registration)
       if (tournament.is_private && pinCode !== tournament.pin_code) {
@@ -1174,7 +1252,9 @@ export class PokerTournamentService {
         : '';
       const isEscrowBuyIn = buyIn > 0n && prizeTokRaw.startsWith('0x');
 
-      if (registered >= config.maxPlayers) {
+      // Registration-phase fullness is the field cap; late reg uses live seat
+      // availability (already verified above) so busted-out seats can be refilled.
+      if (!isLateReg && registered >= config.maxPlayers) {
         const txh = joinEscrowTxHash?.trim();
         if (isEscrowBuyIn && txh && /^0x[a-fA-F0-9]{64}$/.test(txh)) {
           refundEscrowAfterRollback = {
@@ -1242,6 +1322,29 @@ export class PokerTournamentService {
       );
       const entryId = entryRow.rows[0].id;
 
+      // Late registration: seat the entrant at the chosen live table now (same
+      // transaction as the buy-in debit + entry, so it's atomic). startHand reads
+      // poker_seats fresh each hand, so they're dealt in on the next hand.
+      if (isLateReg && lateRegTableId) {
+        const posRows = await client.query(
+          `SELECT position FROM poker_seats WHERE table_id = $1`,
+          [lateRegTableId],
+        );
+        const used = new Set<number>(posRows.rows.map((r: { position: number }) => Number(r.position)));
+        let seatPosition = 0;
+        while (used.has(seatPosition)) seatPosition++;
+        await client.query(
+          `INSERT INTO poker_seats (table_id, position, player_address, stack, status)
+           VALUES ($1, $2, $3, $4::NUMERIC, 'active')`,
+          [lateRegTableId, seatPosition, normalized, String(config.startingStack)],
+        );
+        await client.query(
+          `INSERT INTO poker_tournament_seats (tournament_id, entry_id, table_id, player_address)
+           VALUES ($1, $2, $3, $4) ON CONFLICT (tournament_id, player_address) DO NOTHING`,
+          [tournamentId, entryId, lateRegTableId, normalized],
+        );
+      }
+
       const newRegistered = registered + 1;
       // Fill-based Sit & Go: when the final seat is taken, lock in a 60-second
       // countdown instead of dealing instantly. That gives walked-away players
@@ -1285,6 +1388,7 @@ export class PokerTournamentService {
       // Fill countdown activates later via the scheduler, never inline here.
       committedShouldAutoStart = false;
       committedFillCountdown = shouldStartFillCountdown;
+      committedLateRegTableId = isLateReg ? lateRegTableId : null;
     } catch (err) {
       try {
         await client.query('ROLLBACK');
@@ -1328,6 +1432,34 @@ export class PokerTournamentService {
       } else {
         void railPlayerJoined(this.pool, tournamentId, normalized);
       }
+    }
+
+    // Late registration: the player is already seated at a live table — return it
+    // so the client lands them straight on the table (autoStarted = true).
+    if (committedLateRegTableId && committedEntryId) {
+      // Active tables pick the new seat up on their next hand (startHand reads
+      // poker_seats fresh). Only nudge a *truly idle* table (status 'waiting', no
+      // hand in flight) so the entrant is dealt in promptly without racing the
+      // scheduled next-hand on a table that is mid-rotation.
+      try {
+        const idle = await this.pool.query(
+          `SELECT 1 FROM poker_tables pt
+            WHERE pt.id = $1 AND pt.status = 'waiting'
+              AND NOT EXISTS (SELECT 1 FROM poker_hands ph WHERE ph.table_id = pt.id AND ph.completed_at IS NULL)
+            LIMIT 1`,
+          [committedLateRegTableId],
+        );
+        if (idle.rows.length > 0) {
+          await this.pokerGameService.startHand(committedLateRegTableId);
+        }
+      } catch (err) {
+        logger.warn('Late-reg idle-table nudge failed', {
+          tournamentId,
+          tableId: committedLateRegTableId,
+          err,
+        });
+      }
+      return { entryId: committedEntryId, autoStarted: true, tableId: committedLateRegTableId };
     }
 
     // Release pool slot before activation: `activateTournament` runs many queries and must not overlap
@@ -3049,9 +3181,11 @@ export class PokerTournamentService {
             WHERE pkt.tournament_id = r.tournament_id
               AND LOWER(ps.player_address) = $1::text
             LIMIT 1
-         ) ELSE NULL END AS my_table_id
+         ) ELSE NULL END AS my_table_id,
+         tt.activated_at AS activated_at
        FROM poker_tournament_registrations r
        LEFT JOIN poker_tables pt ON pt.id = r.table_id
+       LEFT JOIN tournaments tt ON tt.id = r.tournament_id
        ORDER BY r.created_at DESC
        LIMIT $2`,
       [normalized, LOBBY_MAX_ROWS]
@@ -3067,6 +3201,14 @@ export class PokerTournamentService {
       const bigBlind =
         bbTable != null && Number.isFinite(bbTable) && bbTable > 0 ? bbTable : level0.bigBlind;
       const blindIncreaseMode = this.getBlindIncreaseMode(config);
+      // Late registration: open while the tournament is active and the configured
+      // window (minutes after activated_at) has not yet elapsed.
+      const lateRegMinutes = config.lateRegMinutes ?? 0;
+      let lateRegOpen = false;
+      if (r.status === 'active' && lateRegMinutes > 0 && r.activated_at) {
+        const activatedMs = new Date(r.activated_at).getTime();
+        lateRegOpen = Number.isFinite(activatedMs) && Date.now() < activatedMs + lateRegMinutes * 60_000;
+      }
       return {
         tournamentId:          r.tournament_id,
         name:                  r.name,
@@ -3099,6 +3241,8 @@ export class PokerTournamentService {
         // Exposed to clients so the buy-in panel + lobby can show "X% to creator, Y% to winners".
         // Migration 120 caps the column to 0–15; old rows default to 2 via DB default + JS fallback.
         creatorFeePercent:     r.creator_fee_percent != null ? Number(r.creator_fee_percent) : 2,
+        ...(lateRegMinutes > 0 ? { lateRegMinutes } : {}),
+        lateRegOpen,
       };
     });
   }
@@ -3329,6 +3473,9 @@ export class PokerTournamentService {
           ? { blindIntervalMinutes: config.blindIntervalMinutes }
           : {}),
         seatsPerTable,
+        ...(config.lateRegMinutes && config.lateRegMinutes > 0
+          ? { lateRegMinutes: config.lateRegMinutes }
+          : {}),
       },
       actionTimerSeconds: t.action_timer_seconds != null ? Number(t.action_timer_seconds) : null,
       prizeSplitPercentages,

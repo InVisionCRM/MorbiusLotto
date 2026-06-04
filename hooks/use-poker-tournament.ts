@@ -57,6 +57,11 @@ export interface PokerTournamentConfig {
    * `ceil(playerCount / seatsPerTable)` tables and consolidates as players bust.
    */
   seatsPerTable?: number;
+  /**
+   * Late registration: minutes after activation during which new players can still buy in
+   * and be seated at a live table. Absent / 0 = registration closes at start.
+   */
+  lateRegMinutes?: number;
 }
 
 /** Server snapshot of one poker_tables row for the tournament. */
@@ -167,6 +172,10 @@ export interface PokerTournamentSummary {
   creatorFeePercent?: number;
   /** `time` = scheduled start; `fill` = Sit & Go. Absent on pre-Sit-&-Go servers. */
   startMode?: PokerStartMode;
+  /** Creator-configured late-registration window in minutes (0 / absent = disabled). */
+  lateRegMinutes?: number;
+  /** True when the tournament is active and still inside its late-registration window. */
+  lateRegOpen?: boolean;
 }
 
 /**
@@ -228,6 +237,11 @@ export interface CreatePokerTournamentParams {
   scheduledStartAt?: string;
   /** Creator's chosen fee percent (0–15 integer). Server clamps + defaults to 2 if missing. */
   creatorFeePercent?: number;
+  /**
+   * Per-turn action clock in seconds (auto check/fold watchdog). Server clamps to a sane range
+   * and defaults to 60 when unset. Persisted to `tournaments.action_timer_seconds`.
+   */
+  actionTimerSeconds?: number;
 }
 
 export const DEFAULT_BLIND_SCHEDULE: BlindLevel[] = [

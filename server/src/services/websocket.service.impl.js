@@ -1979,6 +1979,8 @@ class WebSocketService {
                 scheduledStartAt,
                 // Creator-chosen fee 0–15; the service clamps + defaults to 2 if missing/invalid.
                 creatorFeePercent: p.creatorFeePercent,
+                // Per-turn action clock (seconds); the service clamps + leaves NULL (→60s) if missing.
+                actionTimerSeconds: p.actionTimerSeconds,
             });
             this.sendMessage(ws, { type: 'poker_tournament_created', payload: result, requestId: message.requestId });
         }

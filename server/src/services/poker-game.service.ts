@@ -3200,17 +3200,24 @@ export class PokerGameService {
     //   - Connected & engaged: 60s. Normal clock.
     // The hard-AFK counter is cleared on any voluntary action OR on poker_im_back.
     // The disconnect flag is cleared on any reconnect signal.
+    // The "connected & engaged" base clock is the tournament's per-turn action
+    // timer (tournaments.action_timer_seconds, creator-chosen). Cash tables and
+    // tournaments that never set one have tournament_id/column NULL → COALESCE to
+    // 60s, identical to the legacy behavior. Disconnected players get +30s of grace
+    // on top of whatever the base clock is (60→90 by default).
     const timedOut = await pool.query(
       `SELECT h.id AS hand_id, h.table_id, h.acting_position
        FROM poker_hands h
        JOIN poker_seats ps ON ps.table_id = h.table_id AND ps.position = h.acting_position
+       LEFT JOIN tournaments tr ON tr.id = h.tournament_id
        WHERE h.completed_at IS NULL
          AND h.acting_position IS NOT NULL
          AND h.turn_started_at < NOW() - (
            CASE
              WHEN ps.consecutive_timeouts >= $1 THEN ($2 || ' seconds')::INTERVAL
-             WHEN ps.disconnected_at IS NOT NULL THEN INTERVAL '90 seconds'
-             ELSE INTERVAL '60 seconds'
+             WHEN ps.disconnected_at IS NOT NULL
+               THEN ((COALESCE(tr.action_timer_seconds, 60) + 30) || ' seconds')::INTERVAL
+             ELSE (COALESCE(tr.action_timer_seconds, 60) || ' seconds')::INTERVAL
            END
          )`,
       [POKER_AFK_KICK_AFTER, String(POKER_AFK_FAST_FOLD_SECONDS)]

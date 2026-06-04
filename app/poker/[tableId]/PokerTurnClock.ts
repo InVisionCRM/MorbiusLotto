@@ -3,8 +3,18 @@
 import { useEffect, useRef, useState } from 'react';
 import type { PokerCurrentHand } from '@/lib/websocket-client';
 
-export function usePokerTurnClock(hand: PokerCurrentHand | null | undefined) {
-  const [timeLeft, setTimeLeft] = useState<number>(60);
+/**
+ * Per-turn countdown. `totalSeconds` should match the server's clock for this table —
+ * the tournament's `actionTimerSeconds` (creator-chosen), or 60 for cash games / when unset.
+ * Keeping these in sync means the on-screen countdown hits 0 exactly when the server
+ * auto-checks/folds, instead of the old hardcoded 60s that drifted on faster clocks.
+ */
+export function usePokerTurnClock(
+  hand: PokerCurrentHand | null | undefined,
+  totalSeconds: number = 60,
+) {
+  const total = Number.isFinite(totalSeconds) && totalSeconds > 0 ? Math.round(totalSeconds) : 60;
+  const [timeLeft, setTimeLeft] = useState<number>(total);
   const timerHandIdRef = useRef<string | null>(null);
   const timerPositionRef = useRef<number | null>(null);
 
@@ -19,9 +29,9 @@ export function usePokerTurnClock(hand: PokerCurrentHand | null | undefined) {
       timerPositionRef.current = actingPosition;
       if (turnStartedAt && actingPosition != null) {
         const elapsed = (Date.now() - new Date(turnStartedAt).getTime()) / 1000;
-        setTimeLeft(Math.max(0, Math.round(60 - elapsed)));
+        setTimeLeft(Math.max(0, Math.round(total - elapsed)));
       } else {
-        setTimeLeft(60);
+        setTimeLeft(total);
       }
     }
 
@@ -29,12 +39,12 @@ export function usePokerTurnClock(hand: PokerCurrentHand | null | undefined) {
 
     const interval = setInterval(() => {
       const elapsed = (Date.now() - new Date(turnStartedAt).getTime()) / 1000;
-      const remaining = Math.max(0, Math.round(60 - elapsed));
+      const remaining = Math.max(0, Math.round(total - elapsed));
       setTimeLeft(remaining);
     }, 500);
 
     return () => clearInterval(interval);
-  }, [hand?.turnStartedAt, hand?.actingPosition, hand?.handId]);
+  }, [hand?.turnStartedAt, hand?.actingPosition, hand?.handId, total]);
 
   return timeLeft;
 }

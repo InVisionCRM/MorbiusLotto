@@ -99,6 +99,80 @@ const STARTING_STACK_PRESETS = [
   { value: '10000', label: '10,000' },
 ] as const;
 
+/**
+ * Starting (level-1) small blind options. The whole blind ladder is scaled
+ * proportionally from the chosen small blind — big blind is always 2× small.
+ */
+const STARTING_SMALL_BLIND_PRESETS = [
+  { value: 10, label: '10 / 20' },
+  { value: 25, label: '25 / 50' },
+  { value: 50, label: '50 / 100' },
+  { value: 100, label: '100 / 200' },
+] as const;
+const STARTING_SMALL_BLIND_VALUES: readonly number[] = STARTING_SMALL_BLIND_PRESETS.map((p) => p.value);
+
+/** Per-turn action clock (auto check/fold watchdog). Server enforces these in the auto-fold sweep. */
+const ACTION_CLOCK_PRESETS = [
+  { value: 15, label: '15s', sub: 'Hyper' },
+  { value: 30, label: '30s', sub: 'Fast' },
+  { value: 45, label: '45s', sub: 'Standard' },
+  { value: 60, label: '60s', sub: 'Relaxed' },
+  { value: 90, label: '90s', sub: 'Slow' },
+] as const;
+const ACTION_CLOCK_VALUES: readonly number[] = ACTION_CLOCK_PRESETS.map((p) => p.value);
+
+/** How quickly blinds climb. Drives the timed interval (by_time) and hands-per-level (by_hand). */
+type BlindSpeed = 'turbo' | 'regular' | 'slow';
+const BLIND_SPEED_OPTIONS: ReadonlyArray<{
+  id: BlindSpeed;
+  title: string;
+  sub: string;
+  byTimeMinutes: BlindIntervalMinutes;
+  handsMultiplier: number;
+}> = [
+  { id: 'turbo', title: 'Turbo', sub: 'Blinds climb fast', byTimeMinutes: 5, handsMultiplier: 0.5 },
+  { id: 'regular', title: 'Regular', sub: 'Balanced pace', byTimeMinutes: 15, handsMultiplier: 1 },
+  { id: 'slow', title: 'Slow', sub: 'Deep, patient play', byTimeMinutes: 30, handsMultiplier: 2 },
+];
+function blindSpeedMeta(id: BlindSpeed) {
+  return BLIND_SPEED_OPTIONS.find((o) => o.id === id) ?? BLIND_SPEED_OPTIONS[1];
+}
+
+/** Late-registration window options (minutes a player can still buy in after start). 0 = off. */
+const LATE_REG_PRESETS = [
+  { value: 0, label: 'Off' },
+  { value: 10, label: '10 min' },
+  { value: 20, label: '20 min' },
+  { value: 30, label: '30 min' },
+  { value: 45, label: '45 min' },
+] as const;
+const LATE_REG_VALUES: readonly number[] = LATE_REG_PRESETS.map((p) => p.value);
+
+/**
+ * Scale the default 20-level blind ladder from a chosen starting small blind, and
+ * stretch/compress hands-per-level by the blind-speed multiplier. Big blind = 2× small,
+ * preserving the default ladder's 1:2 ratio at every level.
+ */
+function buildScaledBlindSchedule(
+  startingSmallBlind: number,
+  handsMultiplier: number,
+): Array<{ level: number; smallBlind: number; bigBlind: number; handsPerLevel: number }> {
+  const base = POKER_TOURNAMENT_DEFAULT_CONFIG.blindSchedule;
+  const factor = startingSmallBlind / base[0].smallBlind;
+  return base.map((row) => {
+    const sb = Math.max(1, Math.round((row.smallBlind * factor) / 5) * 5 || Math.round(row.smallBlind * factor));
+    return {
+      level: row.level,
+      smallBlind: sb,
+      bigBlind: sb * 2,
+      handsPerLevel:
+        row.handsPerLevel >= 900
+          ? row.handsPerLevel
+          : Math.max(1, Math.round(row.handsPerLevel * handsMultiplier)),
+    };
+  });
+}
+
 const BLIND_INCREASE_MODE_OPTIONS: ReadonlyArray<{
   id: PokerBlindIncreaseMode;
   title: string;
@@ -1123,6 +1197,14 @@ export function PokerTournamentCreator({ creatorAddress, onClose, onCreate, vari
   const [scheduleError, setScheduleError] = useState<string | null>(null);
   const [blindIncreaseMode, setBlindIncreaseMode] = useState<PokerBlindIncreaseMode>('knockout');
   const [blindIntervalMinutes, setBlindIntervalMinutes] = useState<BlindIntervalMinutes>(15);
+  /** Level-1 small blind; scales the whole ladder. Big blind = 2× this. */
+  const [startingSmallBlind, setStartingSmallBlind] = useState<number>(25);
+  /** Per-turn action clock in seconds (auto check/fold watchdog). */
+  const [actionClockSeconds, setActionClockSeconds] = useState<number>(30);
+  /** Turbo / Regular / Slow — how fast blinds climb. */
+  const [blindSpeed, setBlindSpeed] = useState<BlindSpeed>('regular');
+  /** Minutes players can still buy in after the tournament starts (0 = off). */
+  const [lateRegMinutes, setLateRegMinutes] = useState<number>(0);
   const [prizePresetId, setPrizePresetId] = useState<PokerPrizePresetId>('podium_classic');
   const [created, setCreated] = useState<{ tournamentId: string; pinCode?: string | null } | null>(null);
   const [postCreateShareOpen, setPostCreateShareOpen] = useState(false);
@@ -1288,8 +1370,12 @@ export function PokerTournamentCreator({ creatorAddress, onClose, onCreate, vari
     };
   }, [isFreeroll, prizeSource, selectedToken, customTokenAmountWei, guaranteedPool, buyIn, prizeSlotCount, buyInPrizeSource, buyInTokenWei]);
 
-  const level1Blinds = POKER_TOURNAMENT_DEFAULT_CONFIG.blindSchedule[0];
-  const blindScheduleLadder = POKER_TOURNAMENT_DEFAULT_CONFIG.blindSchedule;
+  // Live preview of the scaled ladder — reflects the chosen starting blind + speed.
+  const blindScheduleLadder = useMemo(
+    () => buildScaledBlindSchedule(startingSmallBlind, blindSpeedMeta(blindSpeed).handsMultiplier),
+    [startingSmallBlind, blindSpeed],
+  );
+  const level1Blinds = blindScheduleLadder[0];
   const startingStackPreview = Math.max(
     100,
     parseInt(startingStack, 10) || Number(STARTING_STACK_PRESETS[STARTING_STACK_PRESETS.length - 1].value),
@@ -1417,11 +1503,19 @@ export function PokerTournamentCreator({ creatorAddress, onClose, onCreate, vari
           // MTT: maxPlayers may exceed 10 (the field cap), while prize slots stay at prizeSlotCount (≤10).
           // SNG: maxPlayers === prizeSlotCount, same as legacy.
           maxPlayers: effectiveMaxPlayers,
+          // Ladder scaled from the chosen starting blind + speed (big = 2× small).
+          blindSchedule: buildScaledBlindSchedule(
+            startingSmallBlind,
+            blindSpeedMeta(blindSpeed).handsMultiplier,
+          ),
           blindIncreaseMode,
           startMode,
           ...(blindIncreaseMode === 'by_time' ? { blindIntervalMinutes } : {}),
           ...(tournamentFormat === 'mtt' ? { seatsPerTable } : {}),
+          ...(lateRegMinutes > 0 ? { lateRegMinutes } : {}),
         },
+        // Per-turn action clock — server enforces this in the auto-fold sweep.
+        actionTimerSeconds: ACTION_CLOCK_VALUES.includes(actionClockSeconds) ? actionClockSeconds : 30,
         isPrivate,
         ...(pinForCreate ? { pinCode: pinForCreate } : {}),
         ...(scheduledStartAt ? { scheduledStartAt } : {}),
@@ -2620,10 +2714,127 @@ export function PokerTournamentCreator({ creatorAddress, onClose, onCreate, vari
                   </div>
                 )}
               </div>
+
+              {/* Late registration — keep buy-in open for a window after the start. */}
+              <div className="mx-auto flex w-full max-w-md flex-col items-center">
+                <label className={`${labelClass} w-full text-center`}>Late registration</label>
+                <div className="grid w-full grid-cols-3 gap-2 sm:grid-cols-5">
+                  {LATE_REG_PRESETS.map((opt) => (
+                    <button
+                      key={opt.value}
+                      type="button"
+                      role="radio"
+                      aria-checked={lateRegMinutes === opt.value}
+                      onClick={() => setLateRegMinutes(opt.value)}
+                      className={`rounded-lg border px-2 py-2 text-center text-xs font-semibold tabular-nums transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-cyan-500/45 ${
+                        lateRegMinutes === opt.value
+                          ? 'border-cyan-500/50 bg-cyan-600/25 text-white'
+                          : 'border-white/10 bg-black/30 text-white/65 hover:border-white/20 hover:text-white/90'
+                      }`}
+                    >
+                      {opt.label}
+                    </button>
+                  ))}
+                </div>
+                <p className="mt-1.5 max-w-lg text-center text-[11px] leading-relaxed text-white/45">
+                  {lateRegMinutes > 0
+                    ? `Players can still buy in for ${lateRegMinutes} minutes after the tournament starts; late entrants are seated at a live table with a full starting stack.`
+                    : 'Off — registration closes the moment the tournament starts.'}
+                </p>
+              </div>
+
               <PokerTournamentTabFaqPanel idPrefix="schedule" entries={POKER_CREATOR_SCHEDULE_FAQ} />
             </TabsContent>
 
             <TabsContent value="rules" className="mt-4 space-y-5 outline-none">
+              {/* Starting blinds — scales the whole ladder. */}
+              <div className="mx-auto flex w-full max-w-2xl flex-col items-center">
+                <label className={`${labelClass} w-full text-center`}>Starting blinds (small / big)</label>
+                <div className="grid w-full grid-cols-2 gap-2 sm:grid-cols-4">
+                  {STARTING_SMALL_BLIND_PRESETS.map((opt) => (
+                    <button
+                      key={opt.value}
+                      type="button"
+                      role="radio"
+                      aria-checked={startingSmallBlind === opt.value}
+                      onClick={() => setStartingSmallBlind(opt.value)}
+                      className={`rounded-lg border px-2 py-2.5 text-center text-xs font-semibold tabular-nums transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-cyan-500/45 ${
+                        startingSmallBlind === opt.value
+                          ? 'border-cyan-500/50 bg-cyan-600/25 text-white'
+                          : 'border-white/10 bg-black/30 text-white/65 hover:border-white/20 hover:text-white/90'
+                      }`}
+                    >
+                      {opt.label}
+                    </button>
+                  ))}
+                </div>
+                <p className="mt-1.5 max-w-lg text-center text-[11px] leading-relaxed text-white/45">
+                  Sets level 1. Every later level scales up from here; the big blind is always twice the small blind.
+                </p>
+              </div>
+
+              {/* Blind speed — how fast the ladder climbs. */}
+              <div className="mx-auto flex w-full max-w-2xl flex-col items-center">
+                <label className={`${labelClass} w-full text-center`}>Blind speed</label>
+                <div className="grid w-full grid-cols-3 gap-2" role="radiogroup" aria-label="Blind speed">
+                  {BLIND_SPEED_OPTIONS.map((opt) => (
+                    <button
+                      key={opt.id}
+                      type="button"
+                      role="radio"
+                      aria-checked={blindSpeed === opt.id}
+                      onClick={() => {
+                        setBlindSpeed(opt.id);
+                        // Timed mode follows the speed preset's interval (still fine-tunable below).
+                        if (blindIncreaseMode === 'by_time') setBlindIntervalMinutes(opt.byTimeMinutes);
+                      }}
+                      className={`flex flex-col items-center rounded-lg border px-2 py-2.5 text-center transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-cyan-500/45 ${
+                        blindSpeed === opt.id
+                          ? 'border-cyan-500/50 bg-cyan-600/25 text-white'
+                          : 'border-white/10 bg-black/30 text-white/65 hover:border-white/20 hover:text-white/90'
+                      }`}
+                    >
+                      <span className="text-xs font-semibold text-white">{opt.title}</span>
+                      <span className="mt-0.5 text-[10px] leading-snug text-white/55">{opt.sub}</span>
+                    </button>
+                  ))}
+                </div>
+                <p className="mt-1.5 max-w-lg text-center text-[11px] leading-relaxed text-white/45">
+                  {blindIncreaseMode === 'by_time'
+                    ? `Timed mode: ${blindSpeedMeta(blindSpeed).byTimeMinutes} minutes per level (adjust below).`
+                    : blindIncreaseMode === 'by_hand'
+                      ? 'Hand mode: stretches or compresses how many hands each level lasts.'
+                      : 'Knockout mode advances on bust-outs, so speed mainly affects how many hands each level would otherwise last.'}
+                </p>
+              </div>
+
+              {/* Action clock — per-turn timer. */}
+              <div className="mx-auto flex w-full max-w-2xl flex-col items-center">
+                <label className={`${labelClass} w-full text-center`}>Action clock (per turn)</label>
+                <div className="grid w-full grid-cols-3 gap-2 sm:grid-cols-5">
+                  {ACTION_CLOCK_PRESETS.map((opt) => (
+                    <button
+                      key={opt.value}
+                      type="button"
+                      role="radio"
+                      aria-checked={actionClockSeconds === opt.value}
+                      onClick={() => setActionClockSeconds(opt.value)}
+                      className={`flex flex-col items-center rounded-lg border px-2 py-2 text-center transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-cyan-500/45 ${
+                        actionClockSeconds === opt.value
+                          ? 'border-cyan-500/50 bg-cyan-600/25 text-white'
+                          : 'border-white/10 bg-black/30 text-white/65 hover:border-white/20 hover:text-white/90'
+                      }`}
+                    >
+                      <span className="text-xs font-semibold tabular-nums text-white">{opt.label}</span>
+                      <span className="mt-0.5 text-[10px] leading-snug text-white/55">{opt.sub}</span>
+                    </button>
+                  ))}
+                </div>
+                <p className="mt-1.5 max-w-lg text-center text-[11px] leading-relaxed text-white/45">
+                  How long each player has to act before the table auto-checks or auto-folds for them.
+                </p>
+              </div>
+
               <div className="flex flex-col items-center">
                 <label className={`${labelClass} w-full text-center`}>How blinds increase</label>
                 <div
@@ -3005,7 +3216,12 @@ export function PokerTournamentCreator({ creatorAddress, onClose, onCreate, vari
               prizeRow,
               { label: 'Starting stack', value: `${startingStackPreview.toLocaleString()} chips`, accent: 'green' },
               { label: 'Opening blinds', value: `${level1Blinds.smallBlind} / ${level1Blinds.bigBlind}`, accent: 'cyan' },
+              { label: 'Blind speed', value: blindSpeedMeta(blindSpeed).title, accent: 'white' },
+              { label: 'Action clock', value: `${actionClockSeconds}s per turn`, accent: 'cyan' },
               { label: 'Players', value: `${minPlayers}–${maxPlayers}`, accent: 'white' },
+              ...(lateRegMinutes > 0
+                ? [{ label: 'Late reg', value: `${lateRegMinutes} min`, accent: 'white' as const }]
+                : []),
               { label: 'Prize preset', value: prizePresetLabel, accent: 'cyan' },
               { label: 'Split preview', value: topSplit || '—', accent: 'white' },
               // Surface the creator fee here so it's visible BEFORE publish — the value the user sees here is
