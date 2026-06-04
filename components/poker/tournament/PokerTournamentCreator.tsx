@@ -55,7 +55,7 @@ import { Prc20TokenPicker, type SelectedPrc20Token } from '@/components/shared/P
 import { getWplsShortfall, WPLS_DEPOSIT_ABI } from '@/lib/ensure-wpls-balance';
 import { useTokenPriceUsd } from '@/hooks/use-token-price-usd';
 import { formatUnits, parseUnits } from 'viem';
-import { useConnectModal } from '@rainbow-me/rainbowkit';
+import { useAppKit } from '@reown/appkit/react';
 import { useWriteContract, usePublicClient, useAccount } from 'wagmi';
 import { ERC20_ABI } from '@/abi/erc20';
 import { tournamentPrizeEscrowV6Abi } from '@/abi/tournament-prize-escrow-v6';
@@ -1113,7 +1113,7 @@ export function PokerTournamentCreator({ creatorAddress, onClose, onCreate, vari
   const { writeContractAsync } = useWriteContract();
   const publicClient = usePublicClient();
   const { address: connectedAddress } = useAccount();
-  const { openConnectModal } = useConnectModal();
+  const { open: openConnectModal } = useAppKit();
   const [activeTab, setActiveTab] = useState('type');
   const initialSchedule = useMemo(() => defaultScheduledFields(), []);
   // 'time' = classic scheduled start; 'fill' = Sit & Go (starts when the table fills).

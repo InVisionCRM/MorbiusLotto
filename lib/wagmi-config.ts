@@ -1,24 +1,15 @@
-import { connectorsForWallets } from '@rainbow-me/rainbowkit'
-import { createConfig, http, fallback } from 'wagmi'
-import { pulsechain } from './chains'
-import {
-  coinbaseWallet,
-  trustWallet,
-  rabbyWallet,
-  okxWallet,
-  metaMaskWallet,
-  walletConnectWallet,
-  injectedWallet,
-  rainbowWallet,
-} from '@rainbow-me/rainbowkit/wallets'
+import { WagmiAdapter } from '@reown/appkit-adapter-wagmi'
+import { pulsechain } from '@reown/appkit/networks'
+import type { AppKitNetwork } from '@reown/appkit/networks'
+import { http, fallback } from 'wagmi'
 
-const injectedWalletRenamed = () => ({
-  ...injectedWallet(),
-  name: 'Injected',
-})
-
-const walletConnectProjectId =
+// WalletConnect / Reown: projectId is public. Allowlist app origins in Reown Cloud
+// (https://cloud.reown.com) → project → App domains: production, preview hosts, http://localhost:3000.
+export const walletConnectProjectId =
   process.env.NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID ?? '88a763ec5a64c568fcce729fbe4b87a8'
+
+/** Networks AppKit + wagmi operate on. PulseChain (chainId 369). */
+export const networks: [AppKitNetwork, ...AppKitNetwork[]] = [pulsechain]
 
 /** Must match the live site origin or WalletConnect warns (metadata.url vs window.location). */
 function walletConnectAppUrl(): string {
@@ -36,45 +27,36 @@ function walletConnectAppUrl(): string {
   }
 }
 
-// WalletConnect / Reown: projectId is public. Allowlist app origins in Reown Cloud
-// (https://cloud.reown.com) → project → App domains: production, preview hosts, http://localhost:3000.
-const connectors = connectorsForWallets(
-  [
-    {
-      groupName: 'Popular',
-      wallets: [
-        metaMaskWallet,
-        coinbaseWallet,
-        trustWallet,
-        rabbyWallet,
-        okxWallet,
-        injectedWalletRenamed,
-        walletConnectWallet,
-        rainbowWallet,
-      ],
-    },
-  ],
-  {
-    appName: 'Morbius',
-    appUrl: walletConnectAppUrl(),
-    projectId: walletConnectProjectId,
-    walletConnectParameters: {
-      qrModalOptions: {
-        enableExplorer: true,
-      },
-    },
-  }
-)
+export const appMetadata = {
+  name: 'Morbius',
+  description: 'MORBlotto — Web3 casino on PulseChain',
+  url: walletConnectAppUrl(),
+  icons: ['https://morbius.io/icons/web-app-manifest-512x512.png'],
+}
 
-export const config = createConfig({
-  connectors,
-  chains: [pulsechain],
+/**
+ * Reown AppKit wagmi adapter — replaces the previous RainbowKit
+ * `connectorsForWallets` setup. The adapter builds the wagmi config (default
+ * injected / EIP-6963 + WalletConnect + Coinbase connectors); AppKit renders
+ * the connect modal. `createAppKit()` is called once in app/providers.tsx.
+ *
+ * IMPORTANT: Do NOT configure featuredWalletIds (here OR in the Reown Cloud
+ * dashboard). AppKit's all-wallets list fails to attach its pagination
+ * IntersectionObserver when featured wallets exist at first render
+ * (createPaginationObserver runs before the `#local-paginator` element is
+ * rendered), which permanently strands the wallet list after the first page.
+ * No featured wallets → the list lazy-loads correctly on scroll.
+ */
+export const wagmiAdapter = new WagmiAdapter({
+  projectId: walletConnectProjectId,
+  networks,
+  ssr: true,
   transports: {
     [pulsechain.id]: fallback([
       http('https://rpc.pulsechain.com'),
       http('https://rpc-pulsechain.g4mm4.io'),
     ]),
   },
-  ssr: true,
-  multiInjectedProviderDiscovery: false,
 })
+
+export const config = wagmiAdapter.wagmiConfig

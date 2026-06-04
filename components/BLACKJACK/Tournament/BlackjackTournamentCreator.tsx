@@ -3,7 +3,7 @@
 import React, { useState, useMemo, useRef, useCallback, useEffect } from 'react';
 import { formatEther, parseEther, parseUnits } from 'viem';
 import { pulsechain } from 'viem/chains';
-import { useConnectModal } from '@rainbow-me/rainbowkit';
+import { useAppKit } from '@reown/appkit/react';
 import { useAccount, useWriteContract, usePublicClient } from 'wagmi';
 import {
   Dialog,
@@ -110,7 +110,7 @@ export function BlackjackTournamentCreator({
   }, []);
 
   const { address } = useAccount();
-  const { openConnectModal } = useConnectModal();
+  const { open: openConnectModal } = useAppKit();
   const { writeContractAsync } = useWriteContract();
   const publicClient = usePublicClient();
   const getGas = useGasParams();

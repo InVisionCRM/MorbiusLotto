@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState, useEffect, useCallback, useRef } from 'react';
-import { useConnectModal } from '@rainbow-me/rainbowkit';
+import { useAppKit } from '@reown/appkit/react';
 import { useAccount } from 'wagmi';
 import type { AvatarConfig } from '@/lib/websocket-client';
 import type { BlackjackWebSocketClient } from '@/lib/websocket-client';
@@ -56,7 +56,7 @@ async function fileToDownscaledDataUrl(file: File): Promise<string> {
 export function ProfileAvatarModal({ open, onClose, wsClient: wsClientProp, onSave }: ProfileAvatarModalProps) {
   const profileWs = useProfileWs();
   const wsClient = wsClientProp ?? profileWs?.wsClient ?? null;
-  const { openConnectModal } = useConnectModal();
+  const { open: openConnectModal } = useAppKit();
   const { address } = useAccount();
 
   const [displayName, setDisplayName] = useState('');
