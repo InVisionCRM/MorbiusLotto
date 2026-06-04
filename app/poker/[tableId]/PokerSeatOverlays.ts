@@ -189,7 +189,9 @@ export function usePokerSeatOverlays({
           }
         }, POKER_PROJECTILE_FLY_MS);
         directedTimeoutsRef.current.add(landT);
-        if (def.projectile === 'snowball') {
+        if (def.projectile !== 'arrow') {
+          // arrow hands off to a persistent stuck arrow (removed at impact above);
+          // every other projectile (snowball, tomato, slap) is transient — clear it after the flight
           const removeT = setTimeout(() => {
             setDirectedEmotes((prev) => prev.filter((d) => d.id !== id));
             directedTimeoutsRef.current.delete(removeT);

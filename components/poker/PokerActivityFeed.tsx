@@ -1369,7 +1369,7 @@ export function PokerActivityFeed({
       <AnimatePresence>
         {mobileOpen && (
           <motion.div
-            className="fixed inset-0 z-[38] bg-black/40"
+            className="fixed inset-0 z-[48] bg-black/40"
             aria-hidden
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
@@ -1383,7 +1383,7 @@ export function PokerActivityFeed({
       <AnimatePresence>
         {mobileOpen && (
           <motion.div
-            className="fixed left-0 top-0 bottom-0 z-[39] flex flex-col overflow-hidden"
+            className="fixed left-0 top-0 bottom-0 z-[49] flex flex-col overflow-hidden"
             style={{
               width: 260,
               background: 'rgba(6,8,12,0.97)',

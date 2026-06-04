@@ -10,6 +10,7 @@ import {
   buildLiveSteps, replayStateAt, deriveMini, cardFace, streetTag,
   type ReplayStep, type ReplayHandSummary,
 } from '@/lib/poker-replay';
+import type { DockStatsData, DockTableInfo } from '@/lib/poker-session-stats';
 
 interface PortraitDockTournament {
   blinds?: string | null;
@@ -40,6 +41,8 @@ interface PokerBottomBarProps {
   onPreActionChange?: (v: PreActionOption) => void;
   onOpenActivity?: () => void;
   replay?: ReplayProps;
+  stats?: DockStatsData;
+  tableInfo?: DockTableInfo;
   renderedState: PokerTableState | null;
   mySeat: PokerTableState['seats'][number] | null;
   actions: React.ReactNode;
@@ -74,6 +77,50 @@ function useTurnTimer(turnStartedAt: string | null) {
   const elapsed = (now - new Date(turnStartedAt).getTime()) / 1000;
   const remaining = Math.max(0, POKER_TURN_SECONDS - elapsed);
   return { pct: Math.max(0, Math.min(1, remaining / POKER_TURN_SECONDS)), remaining, active: true };
+}
+
+/** The player's turn countdown rendered as the dock's draining TOP BORDER (cyan → red when urgent).
+ *  Owns its own 4×/s ticker so only this thin strip re-renders, not the whole dock. */
+function DockTurnTimerBorder({ turnStartedAt }: { turnStartedAt: string | null }) {
+  const { pct, remaining, active } = useTurnTimer(turnStartedAt);
+  if (!active) return null;
+  const urgent = remaining <= 6;
+  return (
+    <div className="pointer-events-none absolute inset-x-0 top-0 z-30 h-[3px] overflow-hidden">
+      <div
+        className="h-full"
+        style={{
+          width: `${pct * 100}%`,
+          background: urgent ? 'linear-gradient(90deg,#f87171,#dc2626)' : 'linear-gradient(90deg,#22d3ee,#0891b2)',
+          boxShadow: urgent ? '0 0 8px rgba(248,113,113,0.85)' : '0 0 8px rgba(34,211,238,0.75)',
+          transition: 'width 0.25s linear',
+        }}
+      />
+    </div>
+  );
+}
+
+/** "It's Your Turn" ↔ "Click To Play" pill that overhangs the dock's top edge (50/50), softly
+ *  glowing + breathing (CSS `.poker-turn-pill`). Tapping it reveals the betting controls. */
+function YourTurnPill({ onClick }: { onClick: () => void }) {
+  const [alt, setAlt] = useState(false);
+  useEffect(() => {
+    const id = setInterval(() => setAlt((a) => !a), 1700);
+    return () => clearInterval(id);
+  }, []);
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      aria-label="It's your turn — tap to open the betting controls"
+      className="poker-turn-pill absolute left-1/2 top-0 z-40"
+    >
+      <span className="relative block text-center" style={{ minWidth: 104 }}>
+        <span className="block transition-opacity duration-300" style={{ opacity: alt ? 0 : 1 }}>It&apos;s Your Turn</span>
+        <span className="absolute inset-0 block transition-opacity duration-300" style={{ opacity: alt ? 1 : 0 }}>Click To Play</span>
+      </span>
+    </button>
+  );
 }
 
 function ActorAvatar({ name, pct, urgent, active }: { name: string | null; pct: number; urgent: boolean; active: boolean }) {
@@ -504,22 +551,27 @@ function ReplayPage({
   );
 }
 
+// Keep the resting dock uncluttered — surface at most 6 quick-chat phrases as a tidy 2×3
+// grid (no scroll). The complete list stays one tap away under "Full chat".
+const DOCK_QUICK_CHAT_MAX = 6;
+
 /** PAGE 2 — Quick chat. Full history opens the activity drawer. */
 function ChatPage({ phrases, onPhrase, onFull }: { phrases?: string[]; onPhrase?: (p: string) => void; onFull?: () => void }) {
+  const dockPhrases = (phrases ?? []).slice(0, DOCK_QUICK_CHAT_MAX);
   return (
     <div className="flex h-full flex-col gap-2 px-3 pt-0.5">
       <div className="flex items-center gap-2">
         <span className="text-[10px] font-extrabold uppercase tracking-wider" style={{ color: '#bbf7d0' }}>Quick chat</span>
         {onFull && <button type="button" onClick={onFull} className="ml-auto rounded-md border border-white/15 bg-white/[0.06] px-2 py-1 text-[10px] font-semibold text-white/80">▸ Full chat</button>}
       </div>
-      {phrases && phrases.length > 0 && onPhrase ? (
-        <div className="grid min-h-0 flex-1 grid-cols-3 content-start gap-1.5 overflow-y-auto" style={{ scrollbarWidth: 'none' }}>
-          {phrases.map((p, i) => (
+      {dockPhrases.length > 0 && onPhrase ? (
+        <div className="grid min-h-0 flex-1 grid-cols-3 grid-rows-2 gap-1.5">
+          {dockPhrases.map((p, i) => (
             <button
               key={i}
               type="button"
               onClick={() => onPhrase(p)}
-              className="truncate rounded-md border border-white/10 bg-white/[0.06] px-1.5 py-2 text-[12px] font-medium text-white/85 active:bg-emerald-500/20"
+              className="flex items-center justify-center truncate rounded-lg border border-white/10 bg-white/[0.06] px-2 text-[12px] font-medium text-white/85 active:bg-emerald-500/20"
             >
               {p}
             </button>
@@ -527,6 +579,124 @@ function ChatPage({ phrases, onPhrase, onFull }: { phrases?: string[]; onPhrase?
         </div>
       ) : (
         <span className="text-[12px] text-white/40">Quick chat unavailable.</span>
+      )}
+    </div>
+  );
+}
+
+// ── PAGES 3 & 4 — My Stats (session/table) + Table info (cash/tournament) ──────────────────────
+const signedChips = (wei: string): string => {
+  const b = toBigIntSafe(wei);
+  const neg = b < 0n;
+  return `${neg ? '−' : '+'}${formatChips((neg ? -b : b).toString())}`;
+};
+const signedColor = (wei: string): string => (toBigIntSafe(wei) < 0n ? '#f87171' : '#4ade80');
+
+/** Compact stat cell shared by the Stats + Table pages. */
+function StatTile({ label, value, sub, accent }: { label: string; value: React.ReactNode; sub?: string; accent?: string }) {
+  return (
+    <div className="flex flex-col justify-center overflow-hidden rounded-lg border border-white/10 bg-white/[0.04] px-2 py-1">
+      <span className="truncate text-[8px] font-bold uppercase tracking-wider text-white/45">{label}</span>
+      <span className="truncate text-[13px] font-bold leading-tight tabular-nums" style={{ color: accent ?? '#e6ebf2' }}>{value}</span>
+      {sub != null && <span className="truncate text-[8px] font-medium text-white/40">{sub}</span>}
+    </div>
+  );
+}
+
+function DockEmpty({ children }: { children: React.ReactNode }) {
+  return <div className="flex flex-1 items-center justify-center text-[11.5px] text-white/40">{children}</div>;
+}
+
+/** PAGE 3 — My Stats. Session = this sitting (client-derived); Table = lifetime at this table. */
+function StatsPage({ stats }: { stats?: DockStatsData }) {
+  const [view, setView] = useState<'session' | 'table'>('session');
+  const s = stats?.session ?? null;
+  const t = stats?.table ?? null;
+  return (
+    <div className="flex h-full flex-col gap-1.5 px-3 pt-0.5">
+      <div className="flex items-center gap-2">
+        <span className="text-[10px] font-extrabold uppercase tracking-wider" style={{ color: '#a5f3fc' }}>My Stats</span>
+        <div className="ml-auto flex rounded-md border border-white/12 p-0.5" style={{ background: 'rgba(255,255,255,0.04)' }}>
+          {(['session', 'table'] as const).map((v) => (
+            <button
+              key={v}
+              type="button"
+              onClick={() => setView(v)}
+              className="rounded px-2 py-0.5 text-[10px] font-bold capitalize"
+              style={view === v ? { background: 'rgba(34,211,238,0.16)', color: '#a5f3fc' } : { color: 'rgba(255,255,255,0.55)' }}
+            >
+              {v}
+            </button>
+          ))}
+        </div>
+      </div>
+      {view === 'session' ? (
+        s && s.hands > 0 ? (
+          <div className="grid min-h-0 flex-1 grid-cols-3 grid-rows-2 gap-1.5">
+            <StatTile label="Hands" value={s.hands} />
+            <StatTile label="Win %" value={`${Math.round((s.won / s.hands) * 100)}%`} sub={`${s.won}W · ${s.hands - s.won}L`} />
+            <StatTile label="Net" value={signedChips(s.netChips)} accent={signedColor(s.netChips)} />
+            <StatTile label="Biggest Pot" value={formatChips(s.biggestPotChips)} accent="#fde68a" />
+            <StatTile label="Won" value={s.won} />
+            <StatTile label="Folded" value={`${Math.round((s.folded / s.hands) * 100)}%`} sub={`${s.folded} hands`} />
+          </div>
+        ) : (
+          <DockEmpty>No hands played this session yet.</DockEmpty>
+        )
+      ) : t && t.hands > 0 ? (
+        <div className="grid min-h-0 flex-1 grid-cols-3 grid-rows-2 gap-1.5">
+          <StatTile label="Hands" value={t.hands} />
+          <StatTile label="Win Rate" value={`${Math.round(t.winRatePct)}%`} />
+          <StatTile label="Net P / L" value={signedChips(t.profitLossChips)} accent={signedColor(t.profitLossChips)} />
+          <StatTile label="Biggest Pot" value={formatChips(t.biggestPotChips)} accent="#fde68a" />
+          <StatTile label="VPIP" value={`${t.vpipPct.toFixed(0)}%`} />
+          <StatTile label="PFR" value={`${t.pfrPct.toFixed(0)}%`} />
+        </div>
+      ) : (
+        <DockEmpty>{stats?.loadingTable ? 'Loading table stats…' : 'No table stats yet.'}</DockEmpty>
+      )}
+    </div>
+  );
+}
+
+/** PAGE 4 — Table info. Cash → blinds/buy-in/seats/pot. Tournament → level/prize/rank/stack. */
+function TableInfoPage({ info }: { info?: DockTableInfo }) {
+  if (!info) return <div className="flex h-full items-center px-3 text-[12px] text-white/40">Table info unavailable.</div>;
+  const badge = (
+    <span
+      className="rounded px-1.5 py-0.5 text-[8.5px] font-extrabold uppercase tracking-wider text-white/70"
+      style={{ background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.14)' }}
+    >
+      {info.kind === 'cash' ? 'Cash Game' : 'Tournament'}
+    </span>
+  );
+  return (
+    <div className="flex h-full flex-col gap-1.5 px-3 pt-0.5">
+      <div className="flex items-center gap-2">
+        <span className="text-[10px] font-extrabold uppercase tracking-wider" style={{ color: '#a5f3fc' }}>Table</span>
+        {badge}
+        {info.kind === 'cash'
+          ? info.sponsor && <span className="ml-auto truncate text-[9px] text-white/40">★ {info.sponsor}</span>
+          : <span className="ml-auto truncate text-[9px] text-white/45">{info.name}</span>}
+      </div>
+      {info.kind === 'cash' ? (
+        <div className="grid min-h-0 flex-1 grid-cols-3 grid-rows-2 gap-1.5">
+          <StatTile label="Small Blind" value={info.smallBlind} />
+          <StatTile label="Big Blind" value={info.bigBlind} />
+          <StatTile label="Seats" value={info.seatsLabel} />
+          <StatTile label="Min Buy-in" value={info.minBuyIn} />
+          <StatTile label="Max Buy-in" value={info.maxBuyIn} />
+          <StatTile label="Pot" value={formatChips(info.potChips)} accent="#fde68a" />
+        </div>
+      ) : (
+        <div className="grid min-h-0 flex-1 grid-cols-3 grid-rows-2 gap-1.5">
+          <StatTile label="Level" value={info.level} sub={info.blinds ?? undefined} />
+          <StatTile label="Next Level" value={info.nextLevel ?? '—'} />
+          <StatTile label="Prize Pool" value={info.prizePool} accent="#fde68a" />
+          <StatTile label="Rank" value={info.rank != null ? `#${info.rank}` : '—'} />
+          <StatTile label="Players" value={info.playersLeft ?? '—'} />
+          <StatTile label="Your Stack" value={info.myStackBB ?? '—'} />
+        </div>
       )}
     </div>
   );
@@ -621,11 +791,11 @@ function FullReplaySheet({
   );
 }
 
-const DOCK_PAGES = 3;
+const DOCK_PAGES = 5;
 
-/** Off-turn dock — collapsed (slim strip) · carousel (Live · Replay · Chat). Full sheets overlay. */
+/** Off-turn dock — collapsed (slim strip) · carousel (Live · Replay · Chat · Stats · Table). Full sheets overlay. */
 function PortraitOffTurnDock({
-  state, quickChatPhrases, onPhraseReaction, preAction, onPreActionChange, onOpenActivity, replay,
+  state, quickChatPhrases, onPhraseReaction, preAction, onPreActionChange, onOpenActivity, replay, stats, tableInfo,
 }: {
   state: PokerTableState | null;
   quickChatPhrases?: string[];
@@ -634,6 +804,8 @@ function PortraitOffTurnDock({
   onPreActionChange?: (v: PreActionOption) => void;
   onOpenActivity?: () => void;
   replay?: ReplayProps;
+  stats?: DockStatsData;
+  tableInfo?: DockTableInfo;
 }) {
   const [collapsed, setCollapsed] = useState(false);
   const [page, setPage] = useState(0);
@@ -745,6 +917,12 @@ function PortraitOffTurnDock({
         <div className="h-full w-full flex-[0_0_100%] snap-start">
           <ChatPage phrases={quickChatPhrases} onPhrase={onPhraseReaction} onFull={onOpenActivity} />
         </div>
+        <div className="h-full w-full flex-[0_0_100%] snap-start">
+          <StatsPage stats={stats} />
+        </div>
+        <div className="h-full w-full flex-[0_0_100%] snap-start">
+          <TableInfoPage info={tableInfo} />
+        </div>
       </div>
 
       {fullReplay && (
@@ -774,6 +952,8 @@ export function PokerBottomBar({
   onPreActionChange,
   onOpenActivity,
   replay,
+  stats,
+  tableInfo,
   renderedState,
   mySeat,
   actions,
@@ -782,7 +962,16 @@ export function PokerBottomBar({
   const show = !!(renderedState && mySeat && actions);
   const actingPos = renderedState?.currentHand?.actingPosition ?? null;
   const myTurn = actingPos != null && mySeat != null && actingPos === (mySeat.position ?? -1);
-  const portraitOffTurn = portrait && !myTurn;
+
+  // Portrait turn-gate: when the player's turn arrives the dock STAYS exactly as it is and a
+  // breathing "It's Your Turn / Click To Play" pill overhangs its top edge. The betting controls
+  // only replace the dock once the player taps the pill. Re-arm (hide controls, re-show the pill)
+  // on every fresh turn and whenever the turn ends.
+  const turnStartedAt = renderedState?.currentHand?.turnStartedAt ?? null;
+  const [betPanelOpen, setBetPanelOpen] = useState(false);
+  useEffect(() => { setBetPanelOpen(false); }, [myTurn, turnStartedAt]);
+  // Portrait, player's turn, controls not yet revealed → dock + pill. Once revealed → betting panel.
+  const portraitDockVisible = portrait && !(myTurn && betPanelOpen);
 
   useLayoutEffect(() => {
     const shell = document.querySelector(SHELL_SELECTOR) as HTMLElement | null;
@@ -881,8 +1070,15 @@ export function PokerBottomBar({
           <feDisplacementMap in="SourceGraphic" in2="ns" scale="26" xChannelSelector="R" yChannelSelector="G" />
         </filter>
       </svg>
+      {/* Player's-turn dock chrome (portrait): the turn countdown drains across the dock's TOP
+          BORDER, and a breathing "It's Your Turn / Click To Play" pill overhangs the top-center
+          until tapped. Both sit on the dock root so they straddle its top edge. */}
+      {portrait && myTurn && <DockTurnTimerBorder turnStartedAt={turnStartedAt} />}
+      {portrait && myTurn && !betPanelOpen && (
+        <YourTurnPill onClick={() => setBetPanelOpen(true)} />
+      )}
       <div className="w-full max-sm:px-0 max-sm:pt-0 max-sm:pb-0 sm:px-3 sm:pt-1.5 sm:pb-[max(6px,env(safe-area-inset-bottom,0px))]">
-        {portraitOffTurn ? (
+        {portraitDockVisible ? (
           <PortraitOffTurnDock
             state={renderedState}
             quickChatPhrases={quickChatPhrases}
@@ -891,6 +1087,8 @@ export function PokerBottomBar({
             onPreActionChange={onPreActionChange}
             onOpenActivity={onOpenActivity}
             replay={replay}
+            stats={stats}
+            tableInfo={tableInfo}
           />
         ) : actions}
       </div>

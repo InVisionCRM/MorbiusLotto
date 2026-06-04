@@ -89,14 +89,16 @@ function buildPotBurst(
   potFy: number,
   dims: { w: number; h: number },
   chipW: number,
+  maxChips: number = 9,
 ): BurstChip[] {
   let amtNum = 0;
   try {
     const b = toBigIntSafe(flight.amount);
     amtNum = b <= BigInt(Number.MAX_SAFE_INTEGER) ? Number(b) : Number.MAX_SAFE_INTEGER;
   } catch { /* noop */ }
-  // More chips for bigger pots, capped so a whale's pile stays a tidy stack.
-  const n = Math.max(5, Math.min(9, Math.round(Math.log10(amtNum + 10) * 2.4)));
+  // More chips for bigger pots, capped so a whale's pile stays a tidy stack (and fewer
+  // simultaneous nodes on mobile portrait, where `maxChips` is lowered for smoother payouts).
+  const n = Math.max(Math.min(5, maxChips), Math.min(maxChips, Math.round(Math.log10(amtNum + 10) * 2.4)));
   const potX = potFx * dims.w;
   const potY = potFy * dims.h;
   const winX = flight.fx * dims.w;
@@ -428,8 +430,8 @@ export function PokerTable({ state, currentPlayerAddress, timeLeft, chatBubbleBy
   const burstChipW = Math.max(24, Math.min(46, Math.round(dims.w * 0.028)));
   // Expand each pot→winner flight into its spray of individual chips.
   const perPotBurstChips = useMemo(
-    () => perPotChipFlights.flatMap((t) => buildPotBurst(t, POT_ANCHOR.fx, POT_ANCHOR.fy, dims, burstChipW)),
-    [perPotChipFlights, dims, burstChipW],
+    () => perPotChipFlights.flatMap((t) => buildPotBurst(t, POT_ANCHOR.fx, POT_ANCHOR.fy, dims, burstChipW, isPortraitTable ? 6 : 9)),
+    [perPotChipFlights, dims, burstChipW, isPortraitTable],
   );
 
   // Drain the source pots as chips arrive at the seats. Each pot reaches
@@ -1069,12 +1071,15 @@ export function PokerTable({ state, currentPlayerAddress, timeLeft, chatBubbleBy
             <motion.div
               key={`burst-${hand!.handId}-${c.key}`}
               className="absolute z-[35] pointer-events-none"
-              // Center the disc on its left/top point via x/y (real transforms
-              // that compose with the animated scale/rotate → spin-in-place).
-              initial={{ left: c.fromX, top: c.fromY, x: '-50%', y: '-50%', opacity: 0, scale: 0.7, rotate: 0 }}
+              // GPU transforms only: a STATIC left/top anchor + animated x/y/scale/rotate
+              // (no per-frame left/top layout thrash). transformTemplate keeps the disc
+              // centered on its anchor point and composes with the animated scale/rotate.
+              style={{ left: c.fromX, top: c.fromY, willChange: 'transform' }}
+              transformTemplate={(_, generated) => `translate(-50%, -50%) ${generated}`}
+              initial={{ x: 0, y: 0, opacity: 0, scale: 0.7, rotate: 0 }}
               animate={{
-                left: [c.fromX, c.peakX, c.slotX, c.slotX],
-                top: [c.fromY, c.peakY, c.slotY - burstChipW * 0.5, c.slotY],
+                x: [0, c.peakX - c.fromX, c.slotX - c.fromX, c.slotX - c.fromX],
+                y: [0, c.peakY - c.fromY, c.slotY - burstChipW * 0.5 - c.fromY, c.slotY - c.fromY],
                 opacity: [0, 1, 1, 1],
                 scale: [0.7, 1.05, 1.06, 1],
                 rotate: [0, c.rot, 0, 0], // tumble in flight, settle FLAT (was resting at a random angle → wonky)
@@ -1166,58 +1171,63 @@ export function PokerTable({ state, currentPlayerAddress, timeLeft, chatBubbleBy
           useEffect; AnimatePresence sweep removes them after the cleanup
           timer fires. Replaces the previous "bets vanish in place" look. */}
       <AnimatePresence>
-        {gatheringBets.map((g) => (
+        {gatheringBets.map((g) => {
+          // GPU transforms only: STATIC left/top anchor + animated x/y (px deltas to the pot,
+          // spring) instead of springing left/top, which thrashes layout every street-end.
+          const dxp = (POT_ANCHOR.fx - g.fx) * dims.w;
+          const dyp = (POT_ANCHOR.fy - g.fy) * dims.h;
+          return (
           <motion.div
             key={g.key}
             className="absolute pointer-events-none"
             style={{
-              transform: 'translate(-50%, -50%)',
-              zIndex: 30,
-            }}
-            initial={{
               left: `${g.fx * 100}%`,
               top: `${g.fy * 100}%`,
-              scale: 1,
-              opacity: 1,
+              zIndex: 30,
+              willChange: 'transform',
             }}
+            transformTemplate={(_, generated) => `translate(-50%, -50%) ${generated}`}
+            initial={{ x: 0, y: 0, scale: 1, opacity: 1 }}
             animate={{
-              left: `${POT_ANCHOR.fx * 100}%`,
-              top: `${POT_ANCHOR.fy * 100}%`,
+              x: dxp,
+              y: dyp,
               // Slight mid-flight bulge then settle — "scooped into the pot".
               scale: [1, 1.08, 0.85],
               opacity: [1, 1, 0],
             }}
             exit={{ opacity: 0 }}
             transition={{
-              left: { type: 'spring', stiffness: 90, damping: 20 },
-              top: { type: 'spring', stiffness: 90, damping: 20 },
+              x: { type: 'spring', stiffness: 90, damping: 20 },
+              y: { type: 'spring', stiffness: 90, damping: 20 },
               scale: { duration: 0.7, ease: 'easeIn', times: [0, 0.55, 1] },
               opacity: { duration: 0.7, ease: 'easeIn', times: [0, 0.7, 1] },
             }}
           >
             <PokerChipStack weiAmount={g.amount} />
           </motion.div>
-        ))}
+          );
+        })}
       </AnimatePresence>
 
       {/* Folded cards: fly from seat to center, then vanish */}
       <AnimatePresence>
-        {foldFlyouts.map((flyout) => (
+        {foldFlyouts.map((flyout) => {
+          // GPU transforms only: STATIC left/top anchor + animated x/y (px deltas toward the
+          // pot) instead of animating left/top, which thrashes layout every frame on mobile.
+          const dxp = (POT_ANCHOR.fx - flyout.from.fx) * dims.w;
+          const dyp = (POT_ANCHOR.fy - flyout.from.fy) * dims.h;
+          return (
           <motion.div
             key={flyout.id}
             className="absolute z-40 pointer-events-none"
             style={{
               left: `${flyout.from.fx * 100}%`,
               top: `${flyout.from.fy * 100}%`,
-              transform: 'translate(-50%, -50%)',
+              willChange: 'transform',
             }}
-            initial={{ opacity: 1, scale: 1 }}
-            animate={{
-              left: `${POT_ANCHOR.fx * 100}%`,
-              top: `${POT_ANCHOR.fy * 100}%`,
-              opacity: 0,
-              scale: 0.78,
-            }}
+            transformTemplate={(_, generated) => `translate(-50%, -50%) ${generated}`}
+            initial={{ x: 0, y: 0, opacity: 1, scale: 1 }}
+            animate={{ x: dxp, y: dyp, opacity: 0, scale: 0.78 }}
             exit={{ opacity: 0 }}
             transition={{ duration: 0.55, ease: 'easeInOut' }}
           >
@@ -1248,7 +1258,8 @@ export function PokerTable({ state, currentPlayerAddress, timeLeft, chatBubbleBy
               ))}
             </div>
           </motion.div>
-        ))}
+          );
+        })}
       </AnimatePresence>
 
       {/* Opponent hole cards — positioned by `CARD_ANCHOR_RING` so they can be moved independently of seats. */}
@@ -1460,13 +1471,17 @@ export function PokerTable({ state, currentPlayerAddress, timeLeft, chatBubbleBy
             );
           }
           if (def.projectile === 'slap') {
-            // open hand flies in, winding up, and knocks the target's head on landing
+            // open hand flies in, winding up, knocks the target's head on landing, then
+            // immediately snaps away — pops + fades out over a short beat right at impact so the
+            // hand never lingers on the avatar (the directed-emote entry is cleared in PokerSeatOverlays).
+            const slapFadeMs = 150;
+            const slapTotalMs = POKER_PROJECTILE_FLY_MS + slapFadeMs;
             return (
               <div key={de.id} className="absolute pointer-events-none" style={{ left: launchX, top: launchY, transform: 'translate(-50%, -50%)', zIndex: 43 }}>
                 <motion.div
-                  initial={{ x: 0, y: 0, rotate: ang - 24, scale: 0.7 }}
-                  animate={{ x: dxp, y: dyp, rotate: [ang - 24, ang + 28, ang + 6], scale: 1.05 }}
-                  transition={{ duration: POKER_PROJECTILE_FLY_MS / 1000, ease: [0.3, 0.8, 0.5, 1] }}
+                  initial={{ x: 0, y: 0, rotate: ang - 24, scale: 0.7, opacity: 1 }}
+                  animate={{ x: [0, dxp, dxp], y: [0, dyp, dyp], rotate: [ang - 24, ang + 28, ang + 14], scale: [0.7, 1.05, 1.45], opacity: [1, 1, 0] }}
+                  transition={{ duration: slapTotalMs / 1000, times: [0, POKER_PROJECTILE_FLY_MS / slapTotalMs, 1], ease: [0.3, 0.8, 0.5, 1] }}
                   style={{ fontSize: Math.max(22, dims.w * 0.075), lineHeight: 1, filter: 'drop-shadow(0 2px 5px rgba(0,0,0,0.55))' }}
                 >
                   {def.glyph}

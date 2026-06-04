@@ -1075,11 +1075,13 @@ body {
 
 /* ── Ambient turn-light (PokerPortraitTurnLight) — soft cyan flare from the active player's edge. ── */
 .ptl { position: absolute; inset: 0; pointer-events: none; overflow: hidden; z-index: 2; }
-.ptl-flare { position: absolute; width: 72%; height: 48%; transform: translate(-50%,-50%); border-radius: 50%; opacity: 0; mix-blend-mode: screen;
-  background: radial-gradient(ellipse 60% 70% at 50% 50%, rgba(150,245,255,0.5) 0%, rgba(34,211,238,0.3) 22%, rgba(34,211,238,0.13) 46%, rgba(34,211,238,0.04) 66%, transparent 78%);
+.ptl-flare { position: absolute; width: 62%; height: 40%; transform: translate(-50%,-50%); border-radius: 50%; opacity: 0; mix-blend-mode: screen;
+  background: radial-gradient(ellipse 60% 70% at 50% 50%, rgba(150,245,255,0.5) 0%, rgba(34,211,238,0.3) 20%, rgba(34,211,238,0.12) 42%, rgba(34,211,238,0.035) 60%, transparent 72%);
   filter: blur(14px);
-  transition: left 0.5s cubic-bezier(0.4,0,0.2,1), top 0.5s cubic-bezier(0.4,0,0.2,1), opacity 0.45s ease; }
-.ptl-flare.hero { width: 124%; height: 40%; }
+  /* left/top are driven per-frame by PokerPortraitTurnLight's perimeter rAF tween (so the flare
+     hugs the screen edges and never cuts across the table) — only opacity transitions here. */
+  transition: opacity 0.45s ease; }
+.ptl-flare.hero { width: 108%; height: 34%; }
 
 /* ── Portrait hero (PokerPortraitHero) — centered bottom cluster, big cards rising from the dock. ── */
 .pph { position: absolute; inset: 0; z-index: 22; pointer-events: none; }
@@ -1121,8 +1123,9 @@ body {
 }
 @keyframes pps-bubble-in { from { opacity: 0; } to { opacity: 1; } }
 /* Static glow (no infinite pulse): a continuously-repainting blurred mix-blend:screen layer
-   tanks mobile GPUs. The flare still bleeds from the acting player's edge and slides on turn
-   change via the left/top transition — that movement reads as "alive" without per-frame repaint. */
+   tanks mobile GPUs. The flare only repaints during the brief turn-change slide, which
+   PokerPortraitTurnLight tweens along the screen PERIMETER (edges + corners, never across the
+   felt) — that movement reads as "alive" without any continuous per-frame repaint. */
 .ptl-flare.on { opacity: 1; }
 
 /* ── "Liquid glass" dock (Apple-style): a frosted, vivid, magnified-looking backdrop with a
@@ -1146,6 +1149,43 @@ body {
     -webkit-backdrop-filter: url(#poker-liquid-glass) blur(7px) saturate(185%) brightness(1.06);
     backdrop-filter: url(#poker-liquid-glass) blur(7px) saturate(185%) brightness(1.06);
   }
+}
+
+/* ── "It's Your Turn" dock pill — dark glass chip with a single cyan accent that softly glows
+   and breathes, overhanging the dock's top edge 50/50. The transform owns the centering +
+   overhang so the breathe keyframes don't fight a Tailwind translate. ── */
+@keyframes pokerTurnPillBreathe {
+  0%, 100% {
+    transform: translate(-50%, -50%) scale(1);
+    box-shadow: 0 0 0 1px rgba(34, 211, 238, 0.28), 0 0 12px 1px rgba(34, 211, 238, 0.30), 0 6px 16px rgba(0, 0, 0, 0.55);
+  }
+  50% {
+    transform: translate(-50%, -50%) scale(1.04);
+    box-shadow: 0 0 0 1px rgba(34, 211, 238, 0.55), 0 0 22px 5px rgba(34, 211, 238, 0.55), 0 6px 16px rgba(0, 0, 0, 0.55);
+  }
+}
+.poker-turn-pill {
+  padding: 7px 18px;
+  border-radius: 9999px;
+  font-size: 12px;
+  font-weight: 800;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  line-height: 1;
+  color: #a5f3fc;
+  white-space: nowrap;
+  background: rgba(8, 12, 20, 0.92);
+  border: 1px solid rgba(34, 211, 238, 0.6);
+  -webkit-backdrop-filter: blur(6px);
+  backdrop-filter: blur(6px);
+  transform: translate(-50%, -50%);
+  transform-origin: center;
+  will-change: transform, box-shadow;
+  animation: pokerTurnPillBreathe 2.4s ease-in-out infinite;
+}
+.poker-turn-pill:active { filter: brightness(1.15); }
+@media (prefers-reduced-motion: reduce) {
+  .poker-turn-pill { animation: none; }
 }
 
 /* Portrait blocker rotation hint animation */
