@@ -126,7 +126,7 @@ export function PokerPortraitDrawer(props: PokerPortraitDrawerProps) {
       className="font-russo-one rounded-full px-2 py-[3px] text-[10px] tracking-wide"
       style={
         on
-          ? { background: 'rgba(56,189,176,0.18)', color: '#7fe6d6', border: '1px solid rgba(56,189,176,0.4)' }
+          ? { background: 'rgba(255,255,255,0.16)', color: '#ffffff', border: '1px solid rgba(255,255,255,0.45)' }
           : { background: 'rgba(255,255,255,0.06)', color: 'rgba(255,255,255,0.45)', border: '1px solid rgba(255,255,255,0.12)' }
       }
     >
@@ -261,7 +261,7 @@ export function PokerPortraitDrawer(props: PokerPortraitDrawerProps) {
                   props.onStartBots?.(n);
                 }}
                 className="font-russo-one flex-1 rounded-md px-2 py-1.5 text-[11px] uppercase tracking-wide disabled:opacity-50"
-                style={{ background: 'rgba(56,189,176,0.16)', color: '#7fe6d6', border: '1px solid rgba(56,189,176,0.36)' }}
+                style={{ background: 'rgba(255,255,255,0.14)', color: '#ffffff', border: '1px solid rgba(255,255,255,0.4)' }}
               >
                 {props.adminBotsBusy ? 'Starting…' : 'Start'}
               </button>

@@ -50,16 +50,54 @@ export const PORTRAIT_SEAT_ANCHORS: Record<number, SeatAnchor[]> = {
   10: [ { fx: 0.5, fy: 0.9 }, { fx: 0.186, fy: 0.751 }, { fx: 0.101, fy: 0.544 }, { fx: 0.101, fy: 0.339 }, { fx: 0.225, fy: 0.155 }, { fx: 0.5, fy: 0.125 }, { fx: 0.775, fy: 0.155 }, { fx: 0.87, fy: 0.339 }, { fx: 0.87, fy: 0.544 }, { fx: 0.814, fy: 0.751 } ], // top-3 (idx 4-6) spread + lowered so inward cards/dealer don't collide at full table
 };
 
+/**
+ * Mobile-portrait fine-tuning nudges (requested tweaks; applied on top of the hand-authored
+ * anchors so the authored table stays pristine and this is trivially adjustable / removable):
+ *   - lift the top-center seat(s) up a touch
+ *   - push the left-most / right-most seats closer to the screen edges
+ *   - raise the hero's dealer button (see `PORTRAIT_HERO_DEALER_RAISE`)
+ * Values are fractions of the table box (≈ tall portrait table height in px ÷ ~0.0017).
+ */
+const PORTRAIT_TOP_SEAT_RAISE = 0.03;     // ~top seat up
+const PORTRAIT_OUTSIDE_EDGE_PUSH = 0.018; // ~outside seats 5–10px toward the edge
+const PORTRAIT_HERO_DEALER_RAISE = 0.034; // ~hero dealer chip up ~20px
+
+/** Apply the portrait nudges to a seat-anchor list. Hero (slot 0) is left untouched. */
+function applyPortraitSeatNudges(anchors: SeatAnchor[]): SeatAnchor[] {
+  if (anchors.length <= 1) return anchors;
+  const opp = anchors.slice(1);
+  const minFx = Math.min(...opp.map((a) => a.fx));
+  const maxFx = Math.max(...opp.map((a) => a.fx));
+  const minFy = Math.min(...opp.map((a) => a.fy));
+  const hasOutsideSeats = maxFx - minFx > 0.1; // distinct left/right seats exist (not heads-up)
+  return anchors.map((a, i) => {
+    if (i === 0) return { fx: a.fx, fy: a.fy }; // hero seat stays put
+    let fx = a.fx;
+    let fy = a.fy;
+    // Top-center seat(s): the highest opponent seat(s) clustered near center → lift up.
+    if (a.fy <= minFy + 0.001 && Math.abs(a.fx - 0.5) < 0.2) {
+      fy = Math.max(0.02, fy - PORTRAIT_TOP_SEAT_RAISE);
+    }
+    // Outside seats: the left-most / right-most → nudge toward the screen edge.
+    if (hasOutsideSeats) {
+      if (a.fx <= minFx + 0.001) fx = Math.max(0.035, fx - PORTRAIT_OUTSIDE_EDGE_PUSH);
+      else if (a.fx >= maxFx - 0.001) fx = Math.min(0.965, fx + PORTRAIT_OUTSIDE_EDGE_PUSH);
+    }
+    return { fx, fy };
+  });
+}
+
 /** Portrait seat anchors for any `seatCount` — exact authored table, else evenly sample the 10-max ring. */
 function portraitSeatAnchors(seatCount: number): SeatAnchor[] {
   const exact = PORTRAIT_SEAT_ANCHORS[seatCount];
-  if (exact) return exact.map((a) => ({ fx: a.fx, fy: a.fy }));
+  if (exact) return applyPortraitSeatNudges(exact.map((a) => ({ fx: a.fx, fy: a.fy })));
   const ring = PORTRAIT_SEAT_ANCHORS[POKER_TABLE_MAX_SEATS];
-  return Array.from({ length: seatCount }, (_, slot) => {
+  const sampled = Array.from({ length: seatCount }, (_, slot) => {
     if (slot === 0) return { fx: ring[0].fx, fy: ring[0].fy };
     const ri = Math.max(1, Math.min(ring.length - 1, Math.round((slot * (ring.length - 1)) / (seatCount - 1))));
     return { fx: ring[ri].fx, fy: ring[ri].fy };
   });
+  return applyPortraitSeatNudges(sampled);
 }
 
 /** Display-slot anchors for `seatCount` players (same logic as `PokerTable`). */
@@ -272,7 +310,9 @@ export function authoredDealerButtonAnchors(seatCount: number): DealerButtonAnch
 export function dealerButtonAnchorForDisplaySlot(seatCount: number, displaySlot: number, variant: LayoutVariant = 'default'): DealerButtonAnchor {
   if (variant === 'portrait') {
     const a = portraitAnchorFor(seatCount, displaySlot, 'dealer');
-    return { x: a.fx, fx: a.fx, fy: a.fy };
+    // Hero's dealer chip sits a little higher than the derived inward offset.
+    const fy = displaySlot === 0 ? Math.max(0.02, a.fy - PORTRAIT_HERO_DEALER_RAISE) : a.fy;
+    return { x: a.fx, fx: a.fx, fy };
   }
   const list = authoredDealerButtonAnchors(seatCount);
   return list[displaySlot] ?? { x: POKER_POT_ANCHOR.fx, ...POKER_POT_ANCHOR };
