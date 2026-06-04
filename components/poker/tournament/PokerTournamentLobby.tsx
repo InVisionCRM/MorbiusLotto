@@ -23,15 +23,14 @@ import { tournamentIdToBytes32 } from '@/lib/tournament-id-bytes32';
 import type { BlackjackWebSocketClient } from '@/lib/websocket-client';
 import { isAdminWallet } from '@/lib/admin';
 import { PokerTournamentCreator } from './PokerTournamentCreator';
-import { PokerTournamentRegistrantsModal } from './PokerTournamentRegistrantsModal';
-import { PokerTournamentRulesModal } from './PokerTournamentRulesModal';
+import { PokerTournamentInfoModal } from './PokerTournamentInfoModal';
 import { MyPokerTournamentsModal } from './MyPokerTournamentsModal';
 import { PokerTournamentShareModal } from './PokerTournamentShareModal';
 import { derivePokerShareSnapshotFromSummary } from '@/lib/poker-share-snapshot';
 import { ConfirmActionCard } from '@/components/shared/ConfirmActionCard';
 import { InsufficientBalanceDialog } from '@/components/shared/InsufficientBalanceDialog';
 import { EscrowBuyInJoinPanel } from './EscrowBuyInJoinPanel';
-import { Lock } from 'lucide-react';
+import { Lock, Info } from 'lucide-react';
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -305,8 +304,7 @@ export function PokerTournamentLobby({
   onCreateModalOpenChange: setShowCreate,
 }: PokerTournamentLobbyProps) {
   const queryClient = useQueryClient();
-  const [registrantsModal, setRegistrantsModal] = useState<{ tournamentId: string; name: string } | null>(null);
-  const [rulesModal, setRulesModal] = useState<{ tournamentId: string; name: string } | null>(null);
+  const [infoModalTournament, setInfoModalTournament] = useState<PokerTournamentSummary | null>(null);
   const [shareModalT, setShareModalT] = useState<PokerTournamentSummary | null>(null);
   const [joinError, setJoinError] = useState<string | null>(null);
   const [insufficientChipsInfo, setInsufficientChipsInfo] = useState<{ required?: string } | null>(null);
@@ -747,6 +745,9 @@ export function PokerTournamentLobby({
                 const isActive = t.status === 'active';
                 const isPrivate = t.isPrivate === true;
                 const canJoin = !t.isRegistered && !isActive && !isFull && !!myAddress;
+                // Late registration: an active tournament still inside its late-reg window
+                // accepts new buy-ins; the player is seated mid-tournament.
+                const canJoinLate = isActive && t.lateRegOpen === true && !t.isRegistered && !!myAddress;
                 // MTT: prefer the caller's actual seat table over the lowest-seq table so
                 // refreshing the lobby and clicking back into an active MTT lands the player
                 // on THEIR table, not table 1.
@@ -773,22 +774,12 @@ export function PokerTournamentLobby({
                         <div className="mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-0.5">
                           <button
                             type="button"
-                            onClick={() => setRulesModal({ tournamentId: t.tournamentId, name: t.name })}
-                            className="text-xs font-semibold text-cyan-400/90 hover:text-cyan-300"
+                            onClick={() => setInfoModalTournament(t)}
+                            className="inline-flex items-center gap-1 text-xs font-semibold text-cyan-400/90 hover:text-cyan-300"
                           >
-                            Rules
+                            <Info className="w-3.5 h-3.5 shrink-0" aria-hidden />
+                            INFO
                           </button>
-                          {t.registeredCount > 0 ? (
-                            <button
-                              type="button"
-                              onClick={() => setRegistrantsModal({ tournamentId: t.tournamentId, name: t.name })}
-                              className="text-xs font-semibold text-slate-400 hover:text-slate-200"
-                            >
-                              Roster
-                            </button>
-                          ) : (
-                            <span className="text-xs text-slate-600">Roster</span>
-                          )}
                         </div>
                       </td>
                       <td className={`${TD} whitespace-nowrap`}>
@@ -815,6 +806,11 @@ export function PokerTournamentLobby({
                               Private
                             </span>
                           )}
+                          {t.lateRegOpen === true && (
+                            <span className="inline-flex items-center gap-1 rounded-full border border-cyan-500/35 bg-cyan-500/10 px-2 py-0.5 text-[10px] font-semibold text-cyan-200/90">
+                              Late reg open
+                            </span>
+                          )}
                         </div>
                       </td>
                       <td className={`${TD} text-right`}>
@@ -839,6 +835,17 @@ export function PokerTournamentLobby({
                               title="Generate a share image for this tournament"
                             >
                               Share
+                            </button>
+                          )}
+                          {canJoinLate && (
+                            <button
+                              type="button"
+                              onClick={() => beginJoin(t)}
+                              disabled={joiningId != null}
+                              className={actionBtnPrimary}
+                              title="Buy in now and take an open seat at a live table"
+                            >
+                              Join (late)
                             </button>
                           )}
                           {canJoin && (
@@ -973,23 +980,13 @@ export function PokerTournamentLobby({
         />
       )}
 
-      <PokerTournamentRegistrantsModal
-        open={registrantsModal != null}
-        onClose={() => setRegistrantsModal(null)}
+      <PokerTournamentInfoModal
+        open={infoModalTournament != null}
+        onClose={() => setInfoModalTournament(null)}
         wsClient={wsClient}
-        tournamentId={registrantsModal?.tournamentId ?? null}
-        tournamentName={registrantsModal?.name ?? null}
+        tournament={infoModalTournament}
+        entryLabel={infoModalTournament ? formatBuyInCell(infoModalTournament) : undefined}
         myAddress={myAddress}
-      />
-
-      <PokerTournamentRulesModal
-        open={rulesModal != null}
-        onOpenChange={(o) => {
-          if (!o) setRulesModal(null);
-        }}
-        wsClient={wsClient}
-        tournamentId={rulesModal?.tournamentId ?? ''}
-        tournamentName={rulesModal?.name ?? ''}
       />
 
       {joinFlow?.phase === 'pin' && (
