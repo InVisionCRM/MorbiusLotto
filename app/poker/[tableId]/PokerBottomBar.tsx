@@ -91,8 +91,8 @@ function DockTurnTimerBorder({ turnStartedAt }: { turnStartedAt: string | null }
         className="h-full"
         style={{
           width: `${pct * 100}%`,
-          background: urgent ? 'linear-gradient(90deg,#f87171,#dc2626)' : 'linear-gradient(90deg,#22d3ee,#0891b2)',
-          boxShadow: urgent ? '0 0 8px rgba(248,113,113,0.85)' : '0 0 8px rgba(34,211,238,0.75)',
+          background: urgent ? 'linear-gradient(90deg,#f87171,#dc2626)' : 'linear-gradient(90deg,rgba(255,255,255,0.9),rgba(255,255,255,0.55))',
+          boxShadow: urgent ? '0 0 8px rgba(248,113,113,0.85)' : '0 0 8px rgba(255,255,255,0.45)',
           transition: 'width 0.25s linear',
         }}
       />
@@ -133,7 +133,7 @@ function ActorAvatar({ name, pct, urgent, active }: { name: string | null; pct: 
         {active && (
           <circle
             cx="22" cy="22" r={R} fill="none"
-            stroke={urgent ? '#f87171' : '#22d3ee'} strokeWidth="2.5" strokeLinecap="round"
+            stroke={urgent ? '#f87171' : 'rgba(255,255,255,0.85)'} strokeWidth="2.5" strokeLinecap="round"
             strokeDasharray={C} strokeDashoffset={C * (1 - pct)}
             style={{ transition: 'stroke-dashoffset 0.25s linear' }}
           />
@@ -144,7 +144,7 @@ function ActorAvatar({ name, pct, urgent, active }: { name: string | null; pct: 
         style={{
           background: 'radial-gradient(circle at 50% 30%, #2a3344, #141a24)',
           color: '#dbe7f3',
-          boxShadow: active && !urgent ? '0 0 10px rgba(34,211,238,0.35)' : undefined,
+          boxShadow: active && !urgent ? '0 0 10px rgba(255,255,255,0.25)' : undefined,
         }}
       >
         {(name?.[0] ?? '·').toUpperCase()}
@@ -185,14 +185,14 @@ function AutoControl({ preAction, onChange }: { preAction?: PreActionOption; onC
         onClick={() => setOpen((o) => !o)}
         className="relative flex h-[30px] items-center gap-1.5 rounded-lg px-2.5 text-[12px] font-semibold"
         style={{
-          background: armed ? 'rgba(34,211,238,0.14)' : 'rgba(255,255,255,0.06)',
-          border: `1px solid ${armed ? '#22d3ee' : 'rgba(255,255,255,0.16)'}`,
-          color: armed ? '#a5f3fc' : 'rgba(255,255,255,0.82)',
+          background: armed ? 'rgba(255,255,255,0.14)' : 'rgba(255,255,255,0.06)',
+          border: `1px solid ${armed ? 'rgba(255,255,255,0.55)' : 'rgba(255,255,255,0.16)'}`,
+          color: armed ? '#ffffff' : 'rgba(255,255,255,0.82)',
         }}
       >
         <span aria-hidden>⚙</span>
         <span className="max-w-[84px] truncate">{armed ? armedLabel : 'Auto'}</span>
-        {armed && <span className="absolute -right-1 -top-1 h-2.5 w-2.5 rounded-full" style={{ background: '#22d3ee', boxShadow: '0 0 6px rgba(34,211,238,0.7)' }} />}
+        {armed && <span className="absolute -right-1 -top-1 h-2.5 w-2.5 rounded-full" style={{ background: 'rgba(255,255,255,0.9)', boxShadow: '0 0 6px rgba(255,255,255,0.6)' }} />}
       </button>
       {open && (
         <>
@@ -210,12 +210,12 @@ function AutoControl({ preAction, onChange }: { preAction?: PreActionOption; onC
                   type="button"
                   onClick={() => { onChange(on ? null : p.v); setOpen(false); }}
                   className="flex w-full items-center justify-between px-3 py-2.5 text-[13px] active:bg-white/10"
-                  style={{ color: on ? '#a5f3fc' : 'rgba(255,255,255,0.85)' }}
+                  style={{ color: on ? '#ffffff' : 'rgba(255,255,255,0.85)' }}
                 >
                   {p.label}
                   <span
                     className="flex h-4 w-4 items-center justify-center rounded text-[10px] font-bold"
-                    style={{ border: `1.5px solid ${on ? '#22d3ee' : 'rgba(255,255,255,0.3)'}`, background: on ? '#22d3ee' : 'transparent', color: '#06121a' }}
+                    style={{ border: `1.5px solid ${on ? 'rgba(255,255,255,0.85)' : 'rgba(255,255,255,0.3)'}`, background: on ? 'rgba(255,255,255,0.9)' : 'transparent', color: '#06121a' }}
                   >
                     {on ? '✓' : ''}
                   </span>
@@ -286,13 +286,13 @@ function LiveActionPanel({
   if (slim) {
     return (
       <div className="flex items-center gap-2 px-3 py-2" style={{ minHeight: 40 }}>
-        <div className="flex h-6 w-6 flex-shrink-0 items-center justify-center rounded-full text-[11px] font-bold" style={{ background: 'rgba(34,211,238,0.14)', color: '#67e8f9', border: '1px solid rgba(34,211,238,0.3)' }}>
+        <div className="flex h-6 w-6 flex-shrink-0 items-center justify-center rounded-full text-[11px] font-bold" style={{ background: 'rgba(255,255,255,0.1)', color: 'rgba(255,255,255,0.9)', border: '1px solid rgba(255,255,255,0.2)' }}>
           {(name?.[0] ?? '·').toUpperCase()}
         </div>
         <span className="max-w-[88px] flex-shrink-0 truncate text-[11px] font-bold text-white">{name ?? 'Live'}</span>
         {active && (
           <span className="h-1 w-8 flex-shrink-0 overflow-hidden rounded-full bg-white/15">
-            <span className="block h-full" style={{ width: `${pct * 100}%`, background: urgent ? '#f87171' : '#22d3ee' }} />
+            <span className="block h-full" style={{ width: `${pct * 100}%`, background: urgent ? '#f87171' : 'rgba(255,255,255,0.8)' }} />
           </span>
         )}
         {active && <span className="flex-shrink-0 text-[10px] font-bold tabular-nums" style={{ color: urgent ? '#f87171' : '#9aa3b2' }}>{Math.ceil(remaining)}s</span>}
@@ -309,7 +309,7 @@ function LiveActionPanel({
         <div className="min-w-0 flex-1">
           <div className="flex items-center gap-1.5 text-[13.5px] font-bold text-white">
             <span className="truncate">{name ?? 'Waiting for players'}</span>
-            {name && <span className="text-[10.5px] font-semibold text-cyan-400">acting…</span>}
+            {name && <span className="text-[10.5px] font-semibold text-white/55">acting…</span>}
           </div>
           <div className="mt-0.5 truncate text-[11px] text-white/55">
             {acting ? (
@@ -331,10 +331,10 @@ function LiveActionPanel({
           <span className="h-[7px] min-w-0 flex-1 overflow-hidden rounded-full bg-white/10">
             <span
               className="block h-full rounded-full"
-              style={{ width: `${(active ? pct : 0) * 100}%`, background: urgent ? 'linear-gradient(90deg,#f87171,#dc2626)' : 'linear-gradient(90deg,#22d3ee,#0891b2)', transition: 'width 0.25s linear' }}
+              style={{ width: `${(active ? pct : 0) * 100}%`, background: urgent ? 'linear-gradient(90deg,#f87171,#dc2626)' : 'linear-gradient(90deg,rgba(255,255,255,0.85),rgba(255,255,255,0.5))', transition: 'width 0.25s linear' }}
             />
           </span>
-          <span className="flex-shrink-0 text-right text-[12px] font-bold tabular-nums" style={{ color: urgent ? '#f87171' : '#22d3ee', minWidth: 28 }}>
+          <span className="flex-shrink-0 text-right text-[12px] font-bold tabular-nums" style={{ color: urgent ? '#f87171' : 'rgba(255,255,255,0.85)', minWidth: 28 }}>
             {active ? `${Math.ceil(remaining)}s` : '—'}
           </span>
         </div>
@@ -379,7 +379,7 @@ function Scrubber({
         className="relative min-w-0 flex-1 cursor-pointer overflow-hidden rounded"
         style={{ height: tall ? 28 : 20, background: 'rgba(0,0,0,0.32)', touchAction: 'none' }}
       >
-        <div className="absolute inset-y-0 left-0" style={{ width: `${pct}%`, background: 'linear-gradient(90deg, rgba(34,211,238,0.35), rgba(34,211,238,0.7))' }} />
+        <div className="absolute inset-y-0 left-0" style={{ width: `${pct}%`, background: 'linear-gradient(90deg, rgba(255,255,255,0.22), rgba(255,255,255,0.5))' }} />
         <div className="absolute inset-0 flex">
           {['PRE', 'FLOP', 'TURN', 'RIVER'].map((m, i) => (
             <div key={m} className="flex flex-1 items-center justify-center text-[8px] font-extrabold tracking-wider text-white/55" style={{ borderRight: i < 3 ? '1px solid rgba(255,255,255,0.08)' : 'none' }}>{m}</div>
@@ -507,8 +507,8 @@ function ReplayReadout({ steps, pos }: { steps: ReplayStep[]; pos: number }) {
 /** Hand picker — "This hand" (live) + past hands, newest first. Horizontal scroll. */
 function HandPicker({ hands, activeHandId, onPick, large = false }: { hands: ReplayHandSummary[]; activeHandId: string | null; onPick: (id: string | null) => void; large?: boolean }) {
   const chip = (active: boolean) =>
-    `flex-shrink-0 rounded-md border px-2.5 py-1 ${large ? 'text-[11.5px]' : 'text-[10px]'} font-semibold whitespace-nowrap ${active ? 'border-cyan-400 text-cyan-200' : 'border-white/12 text-white/70'}`;
-  const bg = (active: boolean) => (active ? 'rgba(34,211,238,0.14)' : 'rgba(255,255,255,0.05)');
+    `flex-shrink-0 rounded-md border px-2.5 py-1 ${large ? 'text-[11.5px]' : 'text-[10px]'} font-semibold whitespace-nowrap ${active ? 'border-white/40 text-white' : 'border-white/12 text-white/70'}`;
+  const bg = (active: boolean) => (active ? 'rgba(255,255,255,0.12)' : 'rgba(255,255,255,0.05)');
   return (
     <div className="flex gap-1.5 overflow-x-auto" style={{ scrollbarWidth: 'none' }}>
       <button type="button" onClick={() => onPick(null)} className={chip(activeHandId == null)} style={{ background: bg(activeHandId == null) }}>This hand</button>
@@ -533,7 +533,7 @@ function ReplayPage({
     <div className="flex h-full flex-col justify-center gap-1.5 px-3">
       <div className="flex items-center gap-2">
         <span className="text-[10px] font-extrabold uppercase tracking-wider text-white/55">Replay</span>
-        {!isLive && <button type="button" onClick={onLatest} className="text-[10px] font-semibold text-cyan-300">⤓ End</button>}
+        {!isLive && <button type="button" onClick={onLatest} className="text-[10px] font-semibold text-white/70">⤓ End</button>}
         <button type="button" onClick={onFull} className="ml-auto rounded-md border border-white/15 bg-white/[0.06] px-2 py-1 text-[10px] font-semibold text-white/80">▸ Full</button>
       </div>
       <HandPicker hands={hands} activeHandId={activeHandId} onPick={onPick} />
@@ -561,7 +561,7 @@ function ChatPage({ phrases, onPhrase, onFull }: { phrases?: string[]; onPhrase?
   return (
     <div className="flex h-full flex-col gap-2 px-3 pt-0.5">
       <div className="flex items-center gap-2">
-        <span className="text-[10px] font-extrabold uppercase tracking-wider" style={{ color: '#bbf7d0' }}>Quick chat</span>
+        <span className="text-[10px] font-extrabold uppercase tracking-wider text-white/70">Quick chat</span>
         {onFull && <button type="button" onClick={onFull} className="ml-auto rounded-md border border-white/15 bg-white/[0.06] px-2 py-1 text-[10px] font-semibold text-white/80">▸ Full chat</button>}
       </div>
       {dockPhrases.length > 0 && onPhrase ? (
@@ -571,7 +571,7 @@ function ChatPage({ phrases, onPhrase, onFull }: { phrases?: string[]; onPhrase?
               key={i}
               type="button"
               onClick={() => onPhrase(p)}
-              className="flex items-center justify-center truncate rounded-lg border border-white/10 bg-white/[0.06] px-2 text-[12px] font-medium text-white/85 active:bg-emerald-500/20"
+              className="flex items-center justify-center truncate rounded-lg border border-white/10 bg-white/[0.06] px-2 text-[12px] font-medium text-white/85 active:bg-white/15"
             >
               {p}
             </button>
@@ -607,43 +607,16 @@ function DockEmpty({ children }: { children: React.ReactNode }) {
   return <div className="flex flex-1 items-center justify-center text-[11.5px] text-white/40">{children}</div>;
 }
 
-/** PAGE 3 — My Stats. Session = this sitting (client-derived); Table = lifetime at this table. */
+/** PAGE 3 — My Stats. Lifetime at this table (the per-sitting "Session" view was removed). */
 function StatsPage({ stats }: { stats?: DockStatsData }) {
-  const [view, setView] = useState<'session' | 'table'>('session');
-  const s = stats?.session ?? null;
   const t = stats?.table ?? null;
   return (
     <div className="flex h-full flex-col gap-1.5 px-3 pt-0.5">
       <div className="flex items-center gap-2">
-        <span className="text-[10px] font-extrabold uppercase tracking-wider" style={{ color: '#a5f3fc' }}>My Stats</span>
-        <div className="ml-auto flex rounded-md border border-white/12 p-0.5" style={{ background: 'rgba(255,255,255,0.04)' }}>
-          {(['session', 'table'] as const).map((v) => (
-            <button
-              key={v}
-              type="button"
-              onClick={() => setView(v)}
-              className="rounded px-2 py-0.5 text-[10px] font-bold capitalize"
-              style={view === v ? { background: 'rgba(34,211,238,0.16)', color: '#a5f3fc' } : { color: 'rgba(255,255,255,0.55)' }}
-            >
-              {v}
-            </button>
-          ))}
-        </div>
+        <span className="text-[10px] font-extrabold uppercase tracking-wider text-white/70">My Stats</span>
+        <span className="ml-auto text-[9px] font-semibold uppercase tracking-wider text-white/35">At this table</span>
       </div>
-      {view === 'session' ? (
-        s && s.hands > 0 ? (
-          <div className="grid min-h-0 flex-1 grid-cols-3 grid-rows-2 gap-1.5">
-            <StatTile label="Hands" value={s.hands} />
-            <StatTile label="Win %" value={`${Math.round((s.won / s.hands) * 100)}%`} sub={`${s.won}W · ${s.hands - s.won}L`} />
-            <StatTile label="Net" value={signedChips(s.netChips)} accent={signedColor(s.netChips)} />
-            <StatTile label="Biggest Pot" value={formatChips(s.biggestPotChips)} accent="#fde68a" />
-            <StatTile label="Won" value={s.won} />
-            <StatTile label="Folded" value={`${Math.round((s.folded / s.hands) * 100)}%`} sub={`${s.folded} hands`} />
-          </div>
-        ) : (
-          <DockEmpty>No hands played this session yet.</DockEmpty>
-        )
-      ) : t && t.hands > 0 ? (
+      {t && t.hands > 0 ? (
         <div className="grid min-h-0 flex-1 grid-cols-3 grid-rows-2 gap-1.5">
           <StatTile label="Hands" value={t.hands} />
           <StatTile label="Win Rate" value={`${Math.round(t.winRatePct)}%`} />
@@ -673,7 +646,7 @@ function TableInfoPage({ info }: { info?: DockTableInfo }) {
   return (
     <div className="flex h-full flex-col gap-1.5 px-3 pt-0.5">
       <div className="flex items-center gap-2">
-        <span className="text-[10px] font-extrabold uppercase tracking-wider" style={{ color: '#a5f3fc' }}>Table</span>
+        <span className="text-[10px] font-extrabold uppercase tracking-wider text-white/70">Table</span>
         {badge}
         {info.kind === 'cash'
           ? info.sponsor && <span className="ml-auto truncate text-[9px] text-white/40">★ {info.sponsor}</span>
@@ -892,7 +865,7 @@ function PortraitOffTurnDock({
             aria-label={`Page ${i + 1}`}
             onClick={() => goPage(i)}
             className="rounded-full transition-all"
-            style={{ width: page === i ? 16 : 5, height: 5, background: page === i ? '#22d3ee' : 'rgba(255,255,255,0.25)' }}
+            style={{ width: page === i ? 16 : 5, height: 5, background: page === i ? 'rgba(255,255,255,0.9)' : 'rgba(255,255,255,0.25)' }}
           />
         ))}
       </div>
