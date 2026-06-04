@@ -1178,6 +1178,7 @@ export default function PokerTablePage() {
                 renderedState={renderedState}
                 mySeat={mySeat}
                 actions={sharedActions}
+                actionTimerSeconds={tournamentHudState?.actionTimerSeconds ?? null}
               />
             </div>
 
