@@ -1,6 +1,7 @@
 'use client'
 
 import { createAppKit } from '@reown/appkit/react'
+import { pulsechain } from '@reown/appkit/networks'
 import { WagmiProvider } from 'wagmi'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { config, wagmiAdapter, networks, walletConnectProjectId, appMetadata } from '@/lib/wagmi-config'
@@ -23,6 +24,11 @@ import '@/lib/appkit-preload-wallets'
 createAppKit({
   adapters: [wagmiAdapter],
   networks,
+  // PulseChain is the app's operating chain even though we declare more
+  // networks (those exist only to widen the wallet-explorer list — see
+  // lib/wagmi-config.ts). This pins the active chain and prompts wallets to
+  // switch to PulseChain on connect.
+  defaultNetwork: pulsechain,
   projectId: walletConnectProjectId,
   metadata: appMetadata,
   themeMode: 'dark',

@@ -1,5 +1,16 @@
 import { WagmiAdapter } from '@reown/appkit-adapter-wagmi'
-import { pulsechain } from '@reown/appkit/networks'
+import {
+  pulsechain,
+  mainnet,
+  bsc,
+  polygon,
+  base,
+  arbitrum,
+  optimism,
+  avalanche,
+  gnosis,
+  fantom,
+} from '@reown/appkit/networks'
 import type { AppKitNetwork } from '@reown/appkit/networks'
 import { http, fallback } from 'wagmi'
 
@@ -8,8 +19,32 @@ import { http, fallback } from 'wagmi'
 export const walletConnectProjectId =
   process.env.NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID ?? '88a763ec5a64c568fcce729fbe4b87a8'
 
-/** Networks AppKit + wagmi operate on. PulseChain (chainId 369). */
-export const networks: [AppKitNetwork, ...AppKitNetwork[]] = [pulsechain]
+/**
+ * Networks declared to AppKit. PulseChain (369) is the app's actual operating
+ * chain — all contracts live there and `defaultNetwork: pulsechain` in
+ * createAppKit pins reads/writes to it. The other chains are declared ONLY so
+ * Reown's wallet-explorer API returns wallets that work on them: the API treats
+ * `chains=` as a union (wallet supports ANY of these → eligible), so declaring
+ * one chain caps the modal at ~88 wallets, while declaring the popular EVM
+ * chains opens it up to ~500+. This matches what reference sites like
+ * app.provex.com do (their bundle declares the same ~10 chains).
+ *
+ * Adding networks doesn't change what the app does — contract hooks pass
+ * `chainId: 369` explicitly and `defaultNetwork: pulsechain` prompts wallets to
+ * switch to PulseChain on connect.
+ */
+export const networks: [AppKitNetwork, ...AppKitNetwork[]] = [
+  pulsechain, // 369 — the app's operating chain
+  mainnet, // 1
+  bsc, // 56
+  polygon, // 137
+  base, // 8453
+  arbitrum, // 42161
+  optimism, // 10
+  avalanche, // 43114
+  gnosis, // 100
+  fantom, // 250
+]
 
 /** Must match the live site origin or WalletConnect warns (metadata.url vs window.location). */
 function walletConnectAppUrl(): string {
