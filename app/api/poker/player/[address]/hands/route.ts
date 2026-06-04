@@ -30,7 +30,9 @@ export async function GET(
       `${backendUrl}/api/poker/player/${address}/hands?limit=${limit}&offset=${offset}`,
       {
         headers: { 'Content-Type': 'application/json' },
-        next: { revalidate: 30 },
+        // Short ISR window so the in-session Replay hand picker surfaces freshly-completed
+        // hands within a few seconds (the client also invalidates this query on each new hand).
+        next: { revalidate: 10 },
       }
     );
 

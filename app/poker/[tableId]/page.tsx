@@ -30,8 +30,10 @@ import { PokerTableView } from './PokerTableView';
 import { PokerPopups } from './PokerPopups';
 import { PokerPanels } from './PokerPanels';
 import { PokerBottomBar, POKER_BOTTOM_RESERVE_VAR, POKER_SIDE_STRIP_W } from './PokerBottomBar';
-import { usePokerPlayerHands, usePokerHandVerify } from '@/hooks/use-poker-stats';
+import { usePokerPlayerHands, usePokerHandVerify, usePokerPlayerTableStats } from '@/hooks/use-poker-stats';
 import { buildReplaySteps, resultLabel, type ReplayHandSummary } from '@/lib/poker-replay';
+import { computeSessionStats, type DockStatsData, type DockTableStats, type DockTableInfo } from '@/lib/poker-session-stats';
+import { toBigIntSafe } from '@/lib/safe-bigint';
 import { usePokerConnection } from './PokerConnection';
 import {
   usePokerActionsLogic,
@@ -176,6 +178,19 @@ export default function PokerTablePage() {
     () => (replayVerify ? buildReplaySteps(replayVerify, replayNameForAddr, effectivePlayerAddress) : null),
     [replayVerify, replayNameForAddr, effectivePlayerAddress],
   );
+  // The player-hands list backing the Replay picker is fetched once and would otherwise go
+  // stale during a session, so the picker only ever shows the hand(s) that existed at mount.
+  // Each time a NEW hand begins the previous one is completed + queryable, so refresh the list
+  // then — the side-scroll picker grows live as the session plays out.
+  const prevReplayHandIdRef = useRef<string | null>(null);
+  useEffect(() => {
+    const hid = renderedState?.currentHand?.handId ?? null;
+    const prev = prevReplayHandIdRef.current;
+    prevReplayHandIdRef.current = hid;
+    if (hid && prev && hid !== prev && effectivePlayerAddress) {
+      queryClient.invalidateQueries({ queryKey: ['pokerPlayerHands', effectivePlayerAddress] });
+    }
+  }, [renderedState?.currentHand?.handId, effectivePlayerAddress, queryClient]);
 
   const handleTournamentCompleted = useCallback(
     (payload: PokerTournamentCompletedPayload) => {
@@ -360,6 +375,90 @@ export default function PokerTablePage() {
   // Flash the tab title ("⏰ YOUR TURN" ↔ "Morbius Poker") while it's the
   // player's turn and the tab is backgrounded. Stops on focus or when they act.
   useTurnTitleFlash(!!canAct);
+
+  // ── Off-turn dock: My Stats (session + this-table) + Table info (cash/tournament) ──
+  // Session = this sitting, derived client-side from the recent hand list (already fetched for the
+  // Replay picker), scoped by tournament when in one so it survives table moves. Table = server.
+  const [dockSessionStart] = useState(() => new Date().toISOString());
+  const { data: tableStatsRaw, isLoading: tableStatsLoading } = usePokerPlayerTableStats(
+    tableId,
+    effectivePlayerAddress,
+  );
+  const dockStats = useMemo<DockStatsData>(() => {
+    const session = computeSessionStats(
+      myPokerHands,
+      { tournamentId: resolvedTournamentId ?? null, tableId },
+      dockSessionStart,
+    );
+    const table: DockTableStats | null = tableStatsRaw
+      ? {
+          hands: tableStatsRaw.total_hands,
+          winRatePct: tableStatsRaw.win_rate,
+          profitLossChips: tableStatsRaw.profit_loss,
+          biggestPotChips: tableStatsRaw.biggest_pot_won,
+          vpipPct: tableStatsRaw.vpip_pct,
+          pfrPct: tableStatsRaw.pfr_pct,
+        }
+      : null;
+    return { session, table, loadingTable: tableStatsLoading };
+  }, [myPokerHands, resolvedTournamentId, tableId, dockSessionStart, tableStatsRaw, tableStatsLoading]);
+
+  const dockTableInfo = useMemo<DockTableInfo | undefined>(() => {
+    if (!renderedState) return undefined;
+    // Tournament — level/blinds/prize/rank/stack from the tournament HUD + summary.
+    if (resolvedTournamentId && tournamentHudState) {
+      const t = tournamentHudState;
+      let prizePool: string;
+      const sym = t.prizeTokenSymbol;
+      const dec = t.prizeTokenDecimals;
+      if (t.prizeTokenAddress && dec != null) {
+        try {
+          const whole = toBigIntSafe(t.prizePool) / 10n ** BigInt(dec);
+          prizePool = `${whole.toLocaleString()}${sym ? ` ${sym}` : ''}`;
+        } catch {
+          prizePool = `${t.prizePool}${sym ? ` ${sym}` : ''}`;
+        }
+      } else {
+        prizePool = formatChips(t.prizePool);
+      }
+      const bb = Math.round(t.bigBlind || 0);
+      const myStackBB =
+        mySeat?.stack && bb > 0 ? `${(toBigIntSafe(mySeat.stack) / BigInt(bb)).toLocaleString()} BB` : null;
+      return {
+        kind: 'tournament',
+        name: t.name,
+        level: t.blindLevel,
+        blinds: tournamentSummary.blinds,
+        nextLevel: tournamentSummary.levelCountdown,
+        rank: tournamentSummary.rank,
+        playersLeft: tournamentSummary.playersLeft,
+        prizePool,
+        myStackBB,
+      };
+    }
+    // Cash — blinds, buy-in range (40–100 BB), seats, live pot, sponsor token.
+    const bbChips = toBigIntSafe(renderedState.bigBlind);
+    const occupied = renderedState.seats.filter((s) => !!s.playerAddress).length;
+    return {
+      kind: 'cash',
+      smallBlind: formatChips(renderedState.smallBlind ?? '0'),
+      bigBlind: formatChips(renderedState.bigBlind ?? '0'),
+      minBuyIn: formatChips((bbChips * BigInt(POKER_CASH_MIN_BUY_IN_BB)).toString()),
+      maxBuyIn: formatChips((bbChips * BigInt(POKER_CASH_MAX_BUY_IN_BB)).toString()),
+      seatsLabel: `${occupied} / ${renderedState.maxSeats}`,
+      potChips: renderedState.currentHand?.pot ?? '0',
+      sponsor: renderedState.tableLogoTokenSymbol ?? null,
+    };
+  }, [
+    renderedState,
+    resolvedTournamentId,
+    tournamentHudState,
+    tournamentSummary.blinds,
+    tournamentSummary.levelCountdown,
+    tournamentSummary.rank,
+    tournamentSummary.playersLeft,
+    mySeat?.stack,
+  ]);
 
   const handleLeaveClick = useCallback(() => {
     setShowExitConfirm(false);
@@ -1049,6 +1148,8 @@ export default function PokerTablePage() {
                 onPreActionChange={setQueuedPreAction}
                 onOpenActivity={() => setActivityMobileOpenSerial((s) => s + 1)}
                 replay={{ hands: replayHands, activeHandId: replayHandId, steps: replaySteps, loading: replayLoading, onPick: setReplayHandId }}
+                stats={dockStats}
+                tableInfo={dockTableInfo}
                 renderedState={renderedState}
                 mySeat={mySeat}
                 actions={sharedActions}
