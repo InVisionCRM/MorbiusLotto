@@ -1,10 +1,9 @@
 'use client'
 
-import '@rainbow-me/rainbowkit/styles.css'
-import { RainbowKitProvider, darkTheme } from '@rainbow-me/rainbowkit'
+import { createAppKit } from '@reown/appkit/react'
 import { WagmiProvider } from 'wagmi'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { config } from '@/lib/wagmi-config'
+import { config, wagmiAdapter, networks, walletConnectProjectId, appMetadata } from '@/lib/wagmi-config'
 import { useState } from 'react'
 import { GameLockProvider } from '@/contexts/game-lock-context'
 import { LocaleProvider } from '@/contexts/locale-context'
@@ -14,6 +13,31 @@ import { PwaInstallPromptProvider } from '@/contexts/pwa-install-prompt-context'
 import { InstallAppHelpDialogProvider } from '@/contexts/install-app-help-dialog-context'
 import { SiweProvider } from '@/contexts/siwe-context'
 import { WalletActionProvider } from '@/contexts/wallet-action-context'
+
+// Initialize Reown AppKit once, at module load (this file is 'use client').
+// Registers the <appkit-*> web components and wires the connect modal to the
+// wagmi adapter. Replaces RainbowKitProvider.
+createAppKit({
+  adapters: [wagmiAdapter],
+  networks,
+  projectId: walletConnectProjectId,
+  metadata: appMetadata,
+  themeMode: 'dark',
+  themeVariables: {
+    '--w3m-accent': '#06b6d4', // cyan — single accent, matches app chrome
+    '--w3m-border-radius-master': '2px',
+  },
+  // Wallet-only modal (no email / social / on-ramp / swaps), matching prior UX.
+  features: {
+    analytics: true,
+    email: false,
+    socials: false,
+    onramp: false,
+    swaps: false,
+    send: false,
+  },
+  // Intentionally NO featuredWalletIds — see lib/wagmi-config.ts for why.
+})
 
 export function Providers({ children }: { children: React.ReactNode }) {
   // Create QueryClient once per provider instance to prevent cache resets
@@ -41,30 +65,17 @@ export function Providers({ children }: { children: React.ReactNode }) {
       <LocaleProvider>
       <WagmiProvider config={config}>
         <QueryClientProvider client={queryClient}>
-          <RainbowKitProvider
-            theme={darkTheme({
-              accentColor: '#8B5CF6', // Purple accent to match your theme
-              accentColorForeground: 'white',
-              borderRadius: 'medium',
-              fontStack: 'system',
-              overlayBlur: 'small',
-            })}
-            modalSize="wide"
-            coolMode={true}
-            showRecentTransactions={true}
-          >
-            <WalletActionProvider>
-              <SiweProvider>
-                <ProfileSettingsModalProvider>
-                  <ProfileWsProvider>
-                    <PwaInstallPromptProvider>
-                      <InstallAppHelpDialogProvider>{children}</InstallAppHelpDialogProvider>
-                    </PwaInstallPromptProvider>
-                  </ProfileWsProvider>
-                </ProfileSettingsModalProvider>
-              </SiweProvider>
-            </WalletActionProvider>
-          </RainbowKitProvider>
+          <WalletActionProvider>
+            <SiweProvider>
+              <ProfileSettingsModalProvider>
+                <ProfileWsProvider>
+                  <PwaInstallPromptProvider>
+                    <InstallAppHelpDialogProvider>{children}</InstallAppHelpDialogProvider>
+                  </PwaInstallPromptProvider>
+                </ProfileWsProvider>
+              </ProfileSettingsModalProvider>
+            </SiweProvider>
+          </WalletActionProvider>
         </QueryClientProvider>
       </WagmiProvider>
       </LocaleProvider>

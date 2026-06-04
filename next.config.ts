@@ -42,7 +42,7 @@ const nextConfig: NextConfig = {
     "pino",
     "winston",
   ],
-  transpilePackages: ['@rainbow-me/rainbowkit', 'wagmi', 'viem'],
+  transpilePackages: ['@reown/appkit', '@reown/appkit-adapter-wagmi', 'wagmi', 'viem'],
   webpack: (config, { isServer }) => {
     // Some wallet/provider SDKs include optional node/react-native deps that
     // are not needed for the web bundle but can confuse webpack resolution.

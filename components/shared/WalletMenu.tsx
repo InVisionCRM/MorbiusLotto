@@ -1,7 +1,7 @@
 'use client'
 
 import React, { useState, useRef, useEffect, useCallback, lazy, Suspense } from 'react'
-import { ConnectButton } from '@rainbow-me/rainbowkit'
+import { useAppKit } from '@reown/appkit/react'
 import { useAccount, useDisconnect } from 'wagmi'
 import { useProfile } from '@/hooks/use-player-profile'
 import Image from 'next/image'
@@ -65,6 +65,7 @@ export function WalletMenu({
 }: WalletMenuProps) {
   const { address, isConnected } = useAccount()
   const { disconnect } = useDisconnect()
+  const { open } = useAppKit()
   const { profileDisplayName: profileDisplayNameFromHook, profileImageUrl: profileImageUrlFromHook, avatarConfig } = useProfile()
   const effectiveProfileDisplayName = profileDisplayName ?? profileDisplayNameFromHook
   const effectiveProfileImageUrl = profileImageUrl ?? profileImageUrlFromHook
@@ -281,31 +282,27 @@ export function WalletMenu({
           )}
         </>
       ) : (
-        <ConnectButton.Custom>
-          {({ openConnectModal }) => (
-            <button
-              onClick={openConnectModal}
-              className={
-                variant === 'sidebar'
-                  ? 'sidebar-item flex items-center w-full rounded-lg px-2 py-2 text-white/70 text-sm font-medium transition-colors hover:bg-white/5 hover:text-white'
-                  : 'flex items-center gap-2 px-3 py-1 rounded-sm text-white/50 text-sm font-bold transition-all hover:scale-105 active:scale-95'
-              }
-              style={variant !== 'sidebar' ? { background: 'linear-gradient(145deg,rgba(28, 28, 45, 0),rgba(0, 0, 0, 0))' } : undefined}
-            >
-              <IconWallet size={20} className="text-cyan-400 shrink-0" aria-hidden />
-              {variant === 'sidebar' ? (
-                <span className="sidebar-label text-cyan-400">
-                  Connect
-                </span>
-              ) : (
-                <>
-                  <span className="text-cyan-400">Connect</span>
-                  <IconChevronDown size={12} className="text-cyan-400" />
-                </>
-              )}
-            </button>
+        <button
+          onClick={() => open()}
+          className={
+            variant === 'sidebar'
+              ? 'sidebar-item flex items-center w-full rounded-lg px-2 py-2 text-white/70 text-sm font-medium transition-colors hover:bg-white/5 hover:text-white'
+              : 'flex items-center gap-2 px-3 py-1 rounded-sm text-white/50 text-sm font-bold transition-all hover:scale-105 active:scale-95'
+          }
+          style={variant !== 'sidebar' ? { background: 'linear-gradient(145deg,rgba(28, 28, 45, 0),rgba(0, 0, 0, 0))' } : undefined}
+        >
+          <IconWallet size={20} className="text-cyan-400 shrink-0" aria-hidden />
+          {variant === 'sidebar' ? (
+            <span className="sidebar-label text-cyan-400">
+              Connect
+            </span>
+          ) : (
+            <>
+              <span className="text-cyan-400">Connect</span>
+              <IconChevronDown size={12} className="text-cyan-400" />
+            </>
           )}
-        </ConnectButton.Custom>
+        </button>
       )}
       </div>
       <Suspense fallback={null}>

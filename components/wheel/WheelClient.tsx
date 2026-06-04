@@ -18,7 +18,7 @@
 
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useAccount } from 'wagmi';
-import { ConnectButton } from '@rainbow-me/rainbowkit';
+import { AppKitButton } from '@reown/appkit/react';
 import { formatEther } from 'viem';
 import { motion, AnimatePresence } from 'motion/react';
 import confetti from 'canvas-confetti';
@@ -723,7 +723,7 @@ export default function WheelClient({ variant = 'page', onClose }: WheelClientPr
               ? <><span className="font-extrabold text-amber-300 tabular-nums">{spinsAvailable}</span> {spinsAvailable === 1 ? 'spin ready' : 'spins ready'}</>
               : <span className="text-slate-400">Connect to claim spins</span>}
           </div>
-          {!isConnected && <ConnectButton showBalance={false} />}
+          {!isConnected && <AppKitButton balance="hide" />}
           <button
             onClick={() => setShowInfo(true)}
             className="inline-flex items-center gap-1.5 px-4 py-1.5 rounded-full bg-slate-900/40 backdrop-blur-md border border-slate-700/40 text-xs sm:text-sm text-slate-300 hover:text-white hover:border-amber-300/40 transition-colors"
