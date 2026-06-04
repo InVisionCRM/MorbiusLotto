@@ -1045,17 +1045,24 @@ body {
 .pps-bet { position: absolute; left: 50%; top: 0; transform: translate(-50%,-50%); display: flex; align-items: center; gap: 4px; padding: 2px 7px 2px 5px; background: rgba(0,0,0,0.6); border: 1px solid rgba(255,255,255,0.14); border-radius: 999px; font-size: 10px; font-weight: 700; font-variant-numeric: tabular-nums; white-space: nowrap; z-index: 4; box-shadow: 0 2px 5px rgba(0,0,0,0.45); color: #fde68a; }
 .pps-chip { width: 12px; height: 12px; border-radius: 50%; background: radial-gradient(circle at 35% 30%, #fca5a5, #b91c1c); box-shadow: 0 0 0 2px #7f1d1d inset; }
 .pps-win { position: absolute; top: -6px; right: -6px; font-size: 15px; z-index: 5; filter: drop-shadow(0 1px 2px rgba(0,0,0,0.6)); }
+/* Dealer button — sits beside the NAMEPLATE on the inward side (toward the pot), clear of the
+   opponent cards (which hug the avatar). Anchored to .pps-name (position:relative). */
+.pps-dealer { position: absolute; width: 18px; height: 18px; border-radius: 50%; background: #f8fafc; color: #111; font-size: 10px; font-weight: 900; display: grid; place-items: center; box-shadow: 0 1px 3px rgba(0,0,0,0.55); z-index: 6; }
+.pps-dealer.in-right { left: 100%;  top: 50%; transform: translate(4px,-50%); }
+.pps-dealer.in-left  { right: 100%; top: 50%; transform: translate(-4px,-50%); }
 /* Opponent cards — two clean, separated cards tucked TIGHT on the inward side of the
    avatar (toward table center). Small backs during play; grow into the face-up reveal at
    showdown. No fan, no overlap, no rotation — just two neat cards that scale up. */
 .pps-cards { position: absolute; top: 50%; transform: translateY(-50%); display: flex; gap: 2px; }
-.pps-cards.peek-right { left: 84%; }
-.pps-cards.peek-left  { right: 84%; }
+/* Sit just off the avatar's inward edge (toward table center) so both small cards read clearly. */
+.pps-cards.peek-right { left: 74%; }
+.pps-cards.peek-left  { right: 74%; }
 .pps-cards > * { height: auto; aspect-ratio: 691 / 1056; display: block; border-radius: 2.5px; flex: 0 0 auto; }
 /* play — two small card backs sitting ON the felt just inward of the avatar (visible, not hidden) */
 .pps-cards.tuck { z-index: 2; }
-.pps-cards.tuck > * { width: clamp(15px,4vw,20px); }
-.pps-cardback { width: 100%; background: repeating-linear-gradient(45deg,#1b3a8a,#1b3a8a 4px,#16307a 4px,#16307a 8px); border: 1.5px solid #2a4ba0; }
+.pps-cards.tuck > * { width: clamp(17px,4.6vw,23px); }
+.pps-cardback { position: relative; overflow: hidden; background: #0f172a; border: 1px solid rgba(255,255,255,0.12); box-shadow: inset 0 1px 0 rgba(255,255,255,0.12), inset 0 -1px 0 rgba(0,0,0,0.18); }
+.pps-cardback-img { display: block; width: 100%; height: 100%; object-fit: cover; }
 /* showdown — same two cards, grown and face-up, in front of the avatar */
 .pps-cards.reveal { z-index: 3; }
 .pps-cards.reveal > * { width: clamp(25px,6.8vw,33px); }
@@ -1117,6 +1124,29 @@ body {
    tanks mobile GPUs. The flare still bleeds from the acting player's edge and slides on turn
    change via the left/top transition — that movement reads as "alive" without per-frame repaint. */
 .ptl-flare.on { opacity: 1; }
+
+/* ── "Liquid glass" dock (Apple-style): a frosted, vivid, magnified-looking backdrop with a
+   specular glass rim. BASE (works everywhere incl. iOS WebKit) = blur + saturate frost + rim.
+   The @supports block adds SVG-displacement REFRACTION/distortion at the surface where
+   `backdrop-filter: url()` is supported (Chromium / Android wallets). iOS WebKit ignores url()
+   filters on backdrops, so it keeps the frosted base — no broken look. ── */
+.poker-dock-glass {
+  background: linear-gradient(to top, rgba(10,14,24,0.44) 0%, rgba(10,14,24,0.12) 68%, transparent 100%);
+  -webkit-backdrop-filter: blur(16px) saturate(185%) brightness(1.06);
+  backdrop-filter: blur(16px) saturate(185%) brightness(1.06);
+  border-top: 1px solid rgba(255,255,255,0.20);
+  box-shadow:
+    inset 0 1px 0 rgba(255,255,255,0.34),
+    inset 0 -1px 0 rgba(0,0,0,0.28),
+    inset 0 0 22px rgba(255,255,255,0.05),
+    0 -10px 30px rgba(0,0,0,0.40);
+}
+@supports (backdrop-filter: url(#x)) or (-webkit-backdrop-filter: url(#x)) {
+  .poker-dock-glass {
+    -webkit-backdrop-filter: url(#poker-liquid-glass) blur(7px) saturate(185%) brightness(1.06);
+    backdrop-filter: url(#poker-liquid-glass) blur(7px) saturate(185%) brightness(1.06);
+  }
+}
 
 /* Portrait blocker rotation hint animation */
 @keyframes poker-rotate-hint {

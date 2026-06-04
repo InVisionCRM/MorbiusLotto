@@ -22,7 +22,7 @@ export interface PokerDirectedEmote {
    * into a pincushion, cleared each hand); `snowball` flies and SHATTERS against the border;
    * `tomato` flies and SPLATS (red). All projectiles knock the target's head back on impact.
    */
-  projectile?: 'arrow' | 'snowball' | 'tomato';
+  projectile?: 'arrow' | 'snowball' | 'tomato' | 'slap';
 }
 
 const POKER_DIRECTED_EMOTES_DEF = {
@@ -39,6 +39,8 @@ const POKER_DIRECTED_EMOTES_DEF = {
   arrow:    { glyph: '🏹', label: '', sender: 'cool',  target: 'surprised', projectile: 'arrow' },
   snowball: { glyph: '❄️', label: '', sender: 'happy', target: 'surprised', projectile: 'snowball' },
   tomato:   { glyph: '🍅', label: '', sender: 'cool',  target: 'surprised', projectile: 'tomato' },
+  // Open-hand slap: the ✋ flies over and "slaps" the target (head-knock + smack SFX on landing).
+  slap:     { glyph: '✋', label: 'SLAP', sender: 'cool', target: 'surprised', projectile: 'slap' },
 } satisfies Record<string, PokerDirectedEmote>;
 
 export type PokerDirectedEmoteKind = keyof typeof POKER_DIRECTED_EMOTES_DEF;
@@ -47,6 +49,12 @@ export type PokerDirectedEmoteKind = keyof typeof POKER_DIRECTED_EMOTES_DEF;
 export const POKER_DIRECTED_EMOTES: Record<PokerDirectedEmoteKind, PokerDirectedEmote> = POKER_DIRECTED_EMOTES_DEF;
 
 export const POKER_DIRECTED_EMOTE_KINDS = Object.keys(POKER_DIRECTED_EMOTES) as PokerDirectedEmoteKind[];
+
+/**
+ * Reduced set shown in the mobile/portrait tap-to-throw ring (the full desktop set is too many
+ * wedges for a thumb). Keeps the three throwables + the most-used emotes.
+ */
+export const POKER_MOBILE_EMOTE_KINDS: PokerDirectedEmoteKind[] = ['haha', 'fire', 'love', 'slap', 'arrow', 'snowball', 'tomato'];
 
 export function isPokerDirectedEmoteKind(v: unknown): v is PokerDirectedEmoteKind {
   return typeof v === 'string' && v in POKER_DIRECTED_EMOTES;

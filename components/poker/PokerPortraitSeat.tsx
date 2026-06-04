@@ -9,9 +9,11 @@
  * Styling lives in globals.css under `.pps*`. Rendered by PokerTable when layoutVariant==='portrait'.
  */
 
-import { memo, type ComponentProps } from 'react';
+import { memo, useMemo, useRef, useState, type ComponentProps, type RefObject } from 'react';
 import { AvatarView } from '@/components/avatar';
 import { formatChips } from '@/lib/format-poker-chips';
+import { RadialMenuFloating, type RadialMenuItem } from '@/components/ui/radial-menu';
+import { POKER_DIRECTED_EMOTES, POKER_MOBILE_EMOTE_KINDS, type PokerDirectedEmoteKind } from '@/lib/poker-directed-emotes';
 import type { PokerTableState } from '@/lib/websocket-client';
 
 type Seat = PokerTableState['seats'][number];
@@ -58,13 +60,26 @@ export interface PokerPortraitSeatProps {
   handName?: string;
   /** Cards tuck/peek to the right (left-wall seats) when true, else left. From the seat anchor's fx. */
   inwardRight?: boolean;
+  /** This seat holds the dealer button. Opponents only — the hero is the bottom cluster. */
+  isDealer?: boolean;
+  /** Which side the dealer disc sits beside the nameplate (inward, toward the pot). */
+  dealerDir?: 'left' | 'right';
   cardBackSrc?: string | null;
   /** Quick-chat reaction or chat message to float over the seat (transient). */
   bubble?: string | null;
+  /** Tap the avatar → open the throw/emote ring; selecting fires this with the chosen kind. */
+  onSendEmote?: (kind: PokerDirectedEmoteKind) => void;
 }
 
+/** Card back = same treatment as desktop CardDisplay: a dark card with the table/sponsor
+ *  logo (cardBackSrc) covering it. Falls back to the Pulse ball texture, exactly like desktop. */
 function CardBack({ src }: { src?: string | null }) {
-  return src ? <img className="pps-cardimg" src={src} alt="" /> : <div className="pps-cardback" />;
+  const faceDownSrc = src || '/Pulse Branding/Logo/ball.png';
+  return (
+    <div className="pps-cardback">
+      <img className="pps-cardback-img" src={faceDownSrc} alt="" draggable={false} />
+    </div>
+  );
 }
 
 export function PokerPortraitSeat({
@@ -75,9 +90,30 @@ export function PokerPortraitSeat({
   isHandWinner = false,
   handName,
   inwardRight = true,
+  isDealer = false,
+  dealerDir = 'right',
   cardBackSrc,
   bubble,
+  onSendEmote,
 }: PokerPortraitSeatProps) {
+  const avaWrapRef = useRef<HTMLDivElement>(null);
+  const [emoteOpen, setEmoteOpen] = useState(false);
+  // The radial fires onSelect from both the wedge button AND its background path; dedupe so one
+  // tap sends exactly one throw (otherwise a single tap spams 2–8 directed emotes).
+  const sendingRef = useRef(false);
+  const emoteItems = useMemo<RadialMenuItem[]>(
+    () => POKER_MOBILE_EMOTE_KINDS.map((k) => ({ id: k, label: POKER_DIRECTED_EMOTES[k].label, glyph: POKER_DIRECTED_EMOTES[k].glyph })),
+    [],
+  );
+  const canEmote = !!onSendEmote && !!seat.playerAddress && !isCurrentPlayer;
+  const handleEmoteSelect = (item: RadialMenuItem) => {
+    if (sendingRef.current) return;
+    sendingRef.current = true;
+    onSendEmote?.(item.id as PokerDirectedEmoteKind);
+    setEmoteOpen(false);
+    setTimeout(() => { sendingRef.current = false; }, 350);
+  };
+
   if (!seat.playerAddress) {
     return (
       <div className="pps-empty"><span>Open<br />seat</span></div>
@@ -111,7 +147,12 @@ export function PokerPortraitSeat({
         </div>
       )}
 
-      <div className="pps-ava-wrap">
+      <div
+        className="pps-ava-wrap"
+        ref={avaWrapRef}
+        onClick={canEmote ? () => setEmoteOpen(true) : undefined}
+        style={canEmote ? { cursor: 'pointer' } : undefined}
+      >
         {showTuck && (
           <div className={`pps-cards tuck ${inwardRight ? 'peek-right' : 'peek-left'}`}>
             <CardBack src={cardBackSrc} />
@@ -141,9 +182,26 @@ export function PokerPortraitSeat({
       <div className="pps-name">
         <span className="pps-nm">{name}</span>
         <span className="pps-st">{stack}</span>
+        {isDealer && <div className={`pps-dealer in-${dealerDir}`}>D</div>}
       </div>
       {isHandWinner && handName ? <div className="pps-tag win">{handName}</div>
         : sittingOut ? <div className="pps-tag">Sitting out</div> : null}
+
+      {canEmote && (
+        <RadialMenuFloating
+          open={emoteOpen}
+          onOpenChange={setEmoteOpen}
+          anchorRef={avaWrapRef as RefObject<HTMLElement | null>}
+          menuItems={emoteItems}
+          onSelect={handleEmoteSelect}
+          bare
+          sliceHex="#3f4654"
+          showLabels={false}
+          bandWidth={34}
+          outerGap={4}
+          iconSize={20}
+        />
+      )}
     </div>
   );
 }

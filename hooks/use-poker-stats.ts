@@ -1,6 +1,7 @@
 'use client';
 
 import { useQuery } from '@tanstack/react-query';
+import type { VerifyHand } from '@/lib/poker-replay';
 
 export interface PokerHandListEntry {
   id: string;
@@ -229,5 +230,46 @@ export function usePokerHandDetail(handId: string | null, playerAddress: string 
       };
     },
     enabled: !!handId && !!playerAddress,
+  });
+}
+
+/**
+ * Full replay payload for a completed hand from the PUBLIC provably-fair verify endpoint —
+ * every dealt-in player's hole cards, the board, the action log, and the winners. Drives the
+ * off-turn dock Replay (winner + all showdown). Completed hands are immutable, so cache forever.
+ */
+export function usePokerHandVerify(handId: string | null) {
+  return useQuery<VerifyHand | null>({
+    queryKey: ['pokerHandVerify', handId],
+    queryFn: async () => {
+      if (!handId) return null;
+      const res = await fetch(`/api/poker/verify/${handId}`);
+      if (!res.ok) return null;
+      const d = await res.json();
+      return {
+        handId: d.handId,
+        handNumber: Number(d.handNumber ?? 0),
+        communityCards: Array.isArray(d.communityCards) ? d.communityCards : [],
+        players: Array.isArray(d.players)
+          ? d.players.map((p: any) => ({
+              address: String(p.address ?? ''),
+              seatPosition: p.seatPosition != null ? Number(p.seatPosition) : null,
+              holeCards: Array.isArray(p.holeCards) ? p.holeCards : [],
+            }))
+          : [],
+        actions: Array.isArray(d.actions)
+          ? d.actions.map((a: any) => ({
+              order: Number(a.order ?? 0),
+              street: String(a.street ?? 'preflop'),
+              address: String(a.address ?? ''),
+              action: String(a.action ?? ''),
+              amount: String(a.amount ?? '0'),
+            }))
+          : [],
+        result: d.result ?? null,
+      };
+    },
+    enabled: !!handId,
+    staleTime: Infinity,
   });
 }

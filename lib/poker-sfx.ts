@@ -79,11 +79,14 @@ export const pokerSfx = {
   thunk()  { if (!ensure() || !ctx) return; const t = ctx.currentTime; noiseBurst(t, 0.04, 0.4, 'highpass', 2600, 0); tone(135, t, 0.13, 'triangle', 0.38, 55); },
   /** sub-bass body hit (the knock) */
   thump()  { if (!ensure() || !ctx) return; const t = ctx.currentTime; tone(90, t, 0.16, 'sine', 0.7, 38); },
+  /** open-hand slap — a sharp skin "crack" plus a little low body */
+  smack()  { if (!ensure() || !ctx) return; const t = ctx.currentTime; noiseBurst(t, 0.05, 0.6, 'bandpass', 2400, 0.8, 1100); tone(165, t, 0.07, 'sine', 0.32, 70); },
 };
 
 /** Pick the contact sound for a projectile kind. */
 export function pokerHitSound(kind: string) {
   if (kind === 'arrow') pokerSfx.thunk();
   else if (kind === 'snowball') pokerSfx.whap();
+  else if (kind === 'slap') pokerSfx.smack();
   else pokerSfx.splat(); // tomato (and any future lobbed projectile)
 }

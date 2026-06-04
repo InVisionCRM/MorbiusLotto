@@ -10,7 +10,10 @@ import { cn } from '@/lib/utils';
 export type RadialMenuItem = {
   id: string | number;
   label: string;
-  icon: LucideIcon;
+  /** Lucide icon (desktop menus). Optional when a `glyph` emoji is provided instead. */
+  icon?: LucideIcon;
+  /** Real emoji rendered in the wedge instead of a Lucide icon (mobile emote/throwable ring). */
+  glyph?: string;
 };
 
 type RadialMenuProps = {
@@ -26,6 +29,7 @@ type RadialMenuProps = {
   onSelect?: (item: RadialMenuItem) => void;
   onOpenChange?: (open: boolean) => void;
   modal?: boolean;
+  sliceHex?: string;
 };
 
 type Point = { x: number; y: number };
@@ -74,9 +78,22 @@ const SLICE_HEX: Record<string, string> = {
 /** Unknown ids (e.g. emotion names) — same yellow family as Moves */
 const DEFAULT_SLICE_HEX = '#eab308';
 
-function sliceColorsForItem(id: string | number) {
+function sliceColorsForItem(id: string | number, override?: string) {
   const key = String(id);
-  const hex = SLICE_HEX[key] ?? DEFAULT_SLICE_HEX;
+  const hex = override ?? SLICE_HEX[key] ?? DEFAULT_SLICE_HEX;
+  // `override` (e.g. a uniform dark grey for the mobile emote ring) reads as a solid wheel,
+  // so use heavier fills than the translucent per-id desktop slices.
+  if (override) {
+    return {
+      hex,
+      outer: withAlpha(hex, 0.7),
+      outerActive: withAlpha(hex, 0.92),
+      inner: withAlpha(hex, 0.55),
+      innerActive: withAlpha(hex, 0.78),
+      stroke: withAlpha(hex, 0.95),
+      innerStroke: withAlpha(hex, 0.55),
+    };
+  }
   return {
     hex,
     outer: withAlpha(hex, 0.55),
@@ -150,12 +167,22 @@ function RadialSliceIconLabel({
   const Icon = item.icon;
   return (
     <>
-      <Icon
-        className={cn('shrink-0 text-white', isActive && 'scale-105')}
-        style={{ height: iconSize, width: iconSize }}
-        strokeWidth={2.35}
-      />
-      {showLabels && (
+      {item.glyph ? (
+        <span
+          className={cn('shrink-0 select-none leading-none', isActive && 'scale-110')}
+          style={{ fontSize: iconSize + 6 }}
+          aria-hidden
+        >
+          {item.glyph}
+        </span>
+      ) : Icon ? (
+        <Icon
+          className={cn('shrink-0 text-white', isActive && 'scale-105')}
+          style={{ height: iconSize, width: iconSize }}
+          strokeWidth={2.35}
+        />
+      ) : null}
+      {showLabels && item.label && (
         <span className="max-w-[68px] truncate text-center text-[11px] font-extrabold leading-snug text-white">
           {item.label}
         </span>
@@ -180,6 +207,8 @@ type WedgeBaseProps = {
   children: React.ReactNode;
   /** Fires when user clicks the colored ring (paths), not the HTML label island. */
   onWedgeBackgroundSelect?: () => void;
+  /** Uniform wedge color override (e.g. dark grey for the mobile emote ring). */
+  sliceHex?: string;
 };
 
 function RadialWedgeGraphics({
@@ -197,12 +226,13 @@ function RadialWedgeGraphics({
   setActiveIndex,
   children,
   onWedgeBackgroundSelect,
+  sliceHex,
 }: WedgeBaseProps) {
   const slice = 360 / menuItems.length;
   const midDeg = START_ANGLE + slice * index;
   const { x: iconX, y: iconY } = polarToCartesian(iconRingRadius, midDeg);
   const isActive = activeIndex === index;
-  const c = sliceColorsForItem(item.id);
+  const c = sliceColorsForItem(item.id, sliceHex);
 
   return (
     <motion.g
@@ -249,6 +279,7 @@ export function RadialMenu({
   onSelect,
   onOpenChange,
   modal = false,
+  sliceHex,
 }: RadialMenuProps) {
   const radius = size / 2;
   const outerRingOuterRadius = radius;
@@ -307,6 +338,7 @@ export function RadialMenu({
                   iconSize={iconSize}
                   activeIndex={activeIndex}
                   setActiveIndex={setActiveIndex}
+                  sliceHex={sliceHex}
                   onWedgeBackgroundSelect={() => itemRefs.current[index]?.click()}
                 >
                   <ContextMenu.Item
@@ -345,6 +377,10 @@ export type RadialMenuFloatingProps = {
   outerGap?: number;
   outerRingWidth?: number;
   showLabels?: boolean;
+  sliceHex?: string;
+  /** Minimal mode: ring hugs the anchor (inner hole = anchor radius), no backdrop blur, no base
+   *  disc, no centre fill — the anchored element (avatar) stays visible in the middle. */
+  bare?: boolean;
 };
 
 export function RadialMenuFloating({
@@ -360,15 +396,10 @@ export function RadialMenuFloating({
   outerGap = 8,
   outerRingWidth = 12,
   showLabels = true,
+  sliceHex,
+  bare = false,
 }: RadialMenuFloatingProps) {
-  const [coords, setCoords] = React.useState<{ left: number; top: number } | null>(null);
-  const radius = size / 2;
-  const outerRingOuterRadius = radius;
-  const outerRingInnerRadius = outerRingOuterRadius - outerRingWidth;
-  const wedgeOuterRadius = outerRingInnerRadius - outerGap;
-  const wedgeInnerRadius = wedgeOuterRadius - bandWidth;
-  const iconRingRadius = (wedgeOuterRadius + wedgeInnerRadius) / 2;
-  const centerRadius = Math.max(wedgeInnerRadius - innerGap, 0);
+  const [coords, setCoords] = React.useState<{ left: number; top: number; r: number } | null>(null);
   const [activeIndex, setActiveIndex] = React.useState<number | null>(null);
   const labelBox = showLabels ? Math.max(iconSize * 3.5, 82) : Math.max(iconSize * 2.5, 52);
 
@@ -378,14 +409,18 @@ export function RadialMenuFloating({
     const rect = el.getBoundingClientRect();
     const cx = rect.left + rect.width / 2;
     const cy = rect.top + rect.height / 2;
-    // Keep the whole ring on-screen: at edge/top seats, shift it inward instead of
-    // letting half of it open off the side of the table.
-    const half = size / 2;
+    const r = Math.min(rect.width, rect.height) / 2;
+    // Keep the whole ring on-screen: at edge/top seats, shift it inward instead of letting half
+    // of it open off the side of the table. `bare` hugs the anchor (inner hole = anchor radius),
+    // so its outer radius is anchor + band, not size/2.
+    const half = bare ? r + 2 + bandWidth + outerGap : size / 2;
     const m = 8;
     const left = Math.max(half + m, Math.min(window.innerWidth - half - m, cx));
-    const top = Math.max(half + m, Math.min(window.innerHeight - half - m, cy - Math.min(48, rect.height * 0.35)));
-    setCoords({ left, top });
-  }, [anchorRef, size]);
+    const top = bare
+      ? Math.max(half + m, Math.min(window.innerHeight - half - m, cy))
+      : Math.max(half + m, Math.min(window.innerHeight - half - m, cy - Math.min(48, rect.height * 0.35)));
+    setCoords({ left, top, r });
+  }, [anchorRef, size, bare, bandWidth, outerGap]);
 
   React.useLayoutEffect(() => {
     if (!open) {
@@ -416,12 +451,24 @@ export function RadialMenuFloating({
     return null;
   }
 
+  // Geometry: `bare` fits the inner hole to the measured anchor (ring hugs the avatar); the default
+  // path is unchanged (size-based) so the desktop radial is untouched.
+  const wedgeInnerRadius = bare ? coords.r + 2 : size / 2 - outerRingWidth - outerGap - bandWidth;
+  const wedgeOuterRadius = wedgeInnerRadius + bandWidth;
+  const radius = bare ? wedgeOuterRadius + outerGap : size / 2;
+  const dim = radius * 2;
+  const outerRingOuterRadius = radius;
+  const outerRingInnerRadius = radius - outerRingWidth;
+  const iconRingRadius = (wedgeOuterRadius + wedgeInnerRadius) / 2;
+  const centerRadius = bare ? Math.max(wedgeInnerRadius, 0) : Math.max(wedgeInnerRadius - innerGap, 0);
+
   return createPortal(
     <>
       <button
         type="button"
         aria-label="Close menu"
-        className="fixed inset-0 z-[108] cursor-default bg-black/15 backdrop-blur-md"
+        className={bare ? 'fixed inset-0 z-[108] cursor-default' : 'fixed inset-0 z-[108] cursor-default bg-black/15 backdrop-blur-md'}
+        style={bare ? { background: 'rgba(2,6,12,0.22)' } : undefined}
         onClick={() => onOpenChange(false)}
       />
       <div
@@ -430,18 +477,20 @@ export function RadialMenuFloating({
           left: coords.left,
           top: coords.top,
           transform: 'translate(-50%, -50%)',
-          width: size,
-          height: size,
+          width: dim,
+          height: dim,
         }}
       >
         <div className="pointer-events-auto relative size-full" role="menu" onClick={(e) => e.stopPropagation()}>
-          <motion.div
-            className="absolute inset-0 rounded-full bg-black/20 shadow-[0_8px_40px_rgba(0,0,0,0.5),inset_0_1px_0_rgba(255,255,255,0.06)] backdrop-blur-md"
-            initial={{ opacity: 0, scale: 0.82 }}
-            animate={{ opacity: 1, scale: 1 }}
-            transition={menuTransition}
-          />
-          <svg className="absolute inset-0 size-full" viewBox={`${-radius} ${-radius} ${radius * 2} ${radius * 2}`}>
+          {!bare && (
+            <motion.div
+              className="absolute inset-0 rounded-full bg-black/20 shadow-[0_8px_40px_rgba(0,0,0,0.5),inset_0_1px_0_rgba(255,255,255,0.06)] backdrop-blur-md"
+              initial={{ opacity: 0, scale: 0.82 }}
+              animate={{ opacity: 1, scale: 1 }}
+              transition={menuTransition}
+            />
+          )}
+          <svg className="absolute inset-0 size-full" viewBox={`${-radius} ${-radius} ${dim} ${dim}`}>
             {menuItems.map((item, index) => (
               <RadialWedgeGraphics
                 key={String(item.id)}
@@ -457,6 +506,7 @@ export function RadialMenuFloating({
                   iconSize={iconSize}
                   activeIndex={activeIndex}
                   setActiveIndex={setActiveIndex}
+                  sliceHex={sliceHex}
                   onWedgeBackgroundSelect={() => onSelect(item)}
                 >
                 <button
@@ -470,8 +520,8 @@ export function RadialMenuFloating({
                 </button>
               </RadialWedgeGraphics>
             ))}
-            <circle cx={0} cy={0} r={centerRadius} className="fill-black/25 stroke-white/15 stroke-1" />
-            <circle cx={0} cy={0} r={3} className="fill-none stroke-white/35" />
+            {!bare && <circle cx={0} cy={0} r={centerRadius} className="fill-black/25 stroke-white/15 stroke-1" />}
+            {!bare && <circle cx={0} cy={0} r={3} className="fill-none stroke-white/35" />}
           </svg>
         </div>
       </div>

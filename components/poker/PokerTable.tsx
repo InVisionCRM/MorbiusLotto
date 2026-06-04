@@ -142,6 +142,7 @@ const PROJECTILE_BURST: Record<string, { text: string; color: string }> = {
   arrow:    { text: 'THWP',  color: '#94a3b8' },
   snowball: { text: 'WHAP',  color: '#38bdf8' },
   tomato:   { text: 'SPLAT', color: '#ef4444' },
+  slap:     { text: 'SLAP',  color: '#f59e0b' },
 };
 
 export interface PokerTableProps {
@@ -1352,6 +1353,9 @@ export function PokerTable({ state, currentPlayerAddress, timeLeft, chatBubbleBy
       {(() => {
         const dealerIdx = state.seats.findIndex((s) => s.isDealer);
         if (dealerIdx < 0) return null;
+        // Portrait: an OPPONENT dealer is drawn inside their seat (PokerPortraitSeat .pps-dealer),
+        // hugging the avatar like the lab. Only the hero-dealer case keeps the table-level disc.
+        if (layoutVariant === 'portrait' && dealerIdx !== mySeatIndex) return null;
         const displaySlot =
           mySeatIndex >= 0
             ? (dealerIdx - mySeatIndex + state.seats.length) % state.seats.length
@@ -1392,6 +1396,8 @@ export function PokerTable({ state, currentPlayerAddress, timeLeft, chatBubbleBy
             {layoutVariant === 'portrait'
               ? (() => {
                   const sp = seatProps(idx);
+                  // Dealer disc sits beside the nameplate on the inward side (toward the pot), clear of the cards.
+                  const dealerDir = rendered.fx < 0.5 ? 'right' : 'left';
                   return (
                     <PokerPortraitSeat
                       seat={sp.seat}
@@ -1403,7 +1409,10 @@ export function PokerTable({ state, currentPlayerAddress, timeLeft, chatBubbleBy
                       handName={sp.handName}
                       cardBackSrc={sp.cardBackSrc}
                       inwardRight={rendered.fx < 0.5}
+                      isDealer={!!seat?.isDealer}
+                      dealerDir={dealerDir}
                       bubble={sp.overlayPhrase ?? sp.chatBubble ?? null}
+                      onSendEmote={onSendDirectedEmote ? (kind) => onSendDirectedEmote(idx, kind) : undefined}
                     />
                   );
                 })()
@@ -1446,6 +1455,21 @@ export function PokerTable({ state, currentPlayerAddress, timeLeft, chatBubbleBy
                 <motion.div initial={{ x: 0, y: 0, rotate: ang }} animate={{ x: dxp, y: dyp, rotate: ang }}
                   transition={{ duration: POKER_PROJECTILE_FLY_MS / 1000, ease: [0.4, 0.85, 0.5, 1] }}>
                   <PokerProjectileArrow len={arrowLen} />
+                </motion.div>
+              </div>
+            );
+          }
+          if (def.projectile === 'slap') {
+            // open hand flies in, winding up, and knocks the target's head on landing
+            return (
+              <div key={de.id} className="absolute pointer-events-none" style={{ left: launchX, top: launchY, transform: 'translate(-50%, -50%)', zIndex: 43 }}>
+                <motion.div
+                  initial={{ x: 0, y: 0, rotate: ang - 24, scale: 0.7 }}
+                  animate={{ x: dxp, y: dyp, rotate: [ang - 24, ang + 28, ang + 6], scale: 1.05 }}
+                  transition={{ duration: POKER_PROJECTILE_FLY_MS / 1000, ease: [0.3, 0.8, 0.5, 1] }}
+                  style={{ fontSize: Math.max(22, dims.w * 0.075), lineHeight: 1, filter: 'drop-shadow(0 2px 5px rgba(0,0,0,0.55))' }}
+                >
+                  {def.glyph}
                 </motion.div>
               </div>
             );

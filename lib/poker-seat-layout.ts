@@ -47,7 +47,7 @@ export const PORTRAIT_SEAT_ANCHORS: Record<number, SeatAnchor[]> = {
   5:  [ { fx: 0.5, fy: 0.9 }, { fx: 0.14, fy: 0.58 }, { fx: 0.28, fy: 0.2 }, { fx: 0.72, fy: 0.2 }, { fx: 0.86, fy: 0.58 } ],
   6:  [ { fx: 0.5, fy: 0.9 }, { fx: 0.16, fy: 0.549 }, { fx: 0.16, fy: 0.211 }, { fx: 0.5, fy: 0.107 }, { fx: 0.84, fy: 0.211 }, { fx: 0.84, fy: 0.549 } ],
   9:  [ { fx: 0.5, fy: 0.9 }, { fx: 0.192, fy: 0.704 }, { fx: 0.161, fy: 0.498 }, { fx: 0.192, fy: 0.296 }, { fx: 0.341, fy: 0.109 }, { fx: 0.659, fy: 0.109 }, { fx: 0.839, fy: 0.296 }, { fx: 0.873, fy: 0.498 }, { fx: 0.839, fy: 0.704 } ],
-  10: [ { fx: 0.5, fy: 0.9 }, { fx: 0.186, fy: 0.751 }, { fx: 0.101, fy: 0.544 }, { fx: 0.101, fy: 0.339 }, { fx: 0.259, fy: 0.145 }, { fx: 0.5, fy: 0.1 }, { fx: 0.741, fy: 0.145 }, { fx: 0.87, fy: 0.339 }, { fx: 0.87, fy: 0.544 }, { fx: 0.814, fy: 0.751 } ],
+  10: [ { fx: 0.5, fy: 0.9 }, { fx: 0.186, fy: 0.751 }, { fx: 0.101, fy: 0.544 }, { fx: 0.101, fy: 0.339 }, { fx: 0.225, fy: 0.155 }, { fx: 0.5, fy: 0.125 }, { fx: 0.775, fy: 0.155 }, { fx: 0.87, fy: 0.339 }, { fx: 0.87, fy: 0.544 }, { fx: 0.814, fy: 0.751 } ], // top-3 (idx 4-6) spread + lowered so inward cards/dealer don't collide at full table
 };
 
 /** Portrait seat anchors for any `seatCount` — exact authored table, else evenly sample the 10-max ring. */
