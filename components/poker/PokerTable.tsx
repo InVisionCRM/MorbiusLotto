@@ -1262,8 +1262,12 @@ export function PokerTable({ state, currentPlayerAddress, timeLeft, chatBubbleBy
         })}
       </AnimatePresence>
 
-      {/* Opponent hole cards — positioned by `CARD_ANCHOR_RING` so they can be moved independently of seats. */}
+      {/* Opponent hole cards — positioned by `CARD_ANCHOR_RING` so they can be moved independently of seats.
+          Portrait draws opponent backs + showdown reveal inside PokerPortraitSeat (small, tucked next to the
+          avatar), so these desktop ring-anchored cards would double them up — larger, behind the avatar. Skip
+          the whole block in portrait. */}
       {state.seats.map((seat, idx) => {
+        if (layoutVariant === 'portrait') return null;
         if (idx === mySeatIndex) return null;
         if (!seat.playerAddress || seat.folded) return null;
         const inHand = !!hand;
