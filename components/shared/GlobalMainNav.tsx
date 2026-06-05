@@ -155,8 +155,8 @@ export interface GlobalMainNavProps {
   onThemeModalOpenChange?: (open: boolean) => void;
   onTournamentLobby?: () => void;
   /** Poker lobby (`/poker`): which tab is selected in the main content area. */
-  pokerLobbyTab?: 'cash' | 'tournaments' | 'history';
-  onPokerLobbyTabChange?: (tab: 'cash' | 'tournaments' | 'history') => void;
+  pokerLobbyTab?: 'all' | 'cash' | 'tournaments' | 'history';
+  onPokerLobbyTabChange?: (tab: 'all' | 'cash' | 'tournaments' | 'history') => void;
   musicTrackName?: string;
   isMusicPlaying?: boolean;
   onToggleMusic?: () => void;
@@ -250,7 +250,8 @@ type NavIconName =
   | 'fa-home' | 'fa-play' | 'fa-pause' | 'fa-forward' | 'fa-chart-line' | 'fa-chart-bar' | 'fa-chart-pie'
   | 'fa-palette' | 'fa-question-circle' | 'fa-exchange-alt' | 'fa-trophy' | 'fa-user-edit' | 'fa-user-circle'
   | 'fa-gift' | 'fa-download' | 'fa-shield-alt' | 'fa-shield' | 'fa-bullhorn' | 'fa-flag' | 'fa-search'
-  | 'fa-gamepad' | 'fa-cog' | 'fa-tint' | 'fa-image' | 'fa-sign-out-alt' | 'fa-volume-up' | 'fa-volume-mute';
+  | 'fa-gamepad' | 'fa-cog' | 'fa-tint' | 'fa-image' | 'fa-sign-out-alt' | 'fa-volume-up' | 'fa-volume-mute'
+  | 'fa-grid';
 
 const NAV_ICON_MAP: Record<NavIconName, React.ComponentType<{ size?: number; className?: string; 'aria-hidden'?: boolean }>> = {
   'fa-home': IconHome,
@@ -280,6 +281,7 @@ const NAV_ICON_MAP: Record<NavIconName, React.ComponentType<{ size?: number; cla
   'fa-sign-out-alt': IconLogout,
   'fa-volume-up': IconVolume,
   'fa-volume-mute': IconVolumeOff,
+  'fa-grid': IconLayoutGrid,
 };
 
 /** Renders a Tabler icon sized for the sidebar. `active` swaps white → cyan. */
@@ -323,8 +325,8 @@ type NavContentProps = Pick<
   /** Poker chip balance (chip-count string). */
   chipBalance?: string | null;
   walletConnected: boolean;
-  pokerLobbyTab?: 'cash' | 'tournaments' | 'history';
-  onPokerLobbyTabChange?: (tab: 'cash' | 'tournaments' | 'history') => void;
+  pokerLobbyTab?: 'all' | 'cash' | 'tournaments' | 'history';
+  onPokerLobbyTabChange?: (tab: 'all' | 'cash' | 'tournaments' | 'history') => void;
 };
 
 const NavContent = React.memo(function NavContent(props: NavContentProps) {
@@ -476,6 +478,13 @@ const NavContent = React.memo(function NavContent(props: NavContentProps) {
         {page === 'poker' && onPokerLobbyTabChange && (
           <>
             <SectionLabel label="Lobby" />
+            <SidebarButton
+              label="All"
+              icon={<NavIcon icon="fa-grid" active={pokerLobbyTab === 'all'} />}
+              onClick={() => onPokerLobbyTabChange('all')}
+              active={pokerLobbyTab === 'all'}
+              className={`rounded-lg px-2 py-2 transition-colors ${btnClass(pokerLobbyTab === 'all')}`}
+            />
             <SidebarButton
               label="Tournaments"
               icon={<NavIcon icon="fa-trophy" active={pokerLobbyTab === 'tournaments'} />}

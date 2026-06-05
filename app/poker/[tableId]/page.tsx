@@ -31,6 +31,7 @@ import { PokerPopups } from './PokerPopups';
 import { PokerPanels } from './PokerPanels';
 import { PokerBottomBar, POKER_BOTTOM_RESERVE_VAR, POKER_SIDE_STRIP_W } from './PokerBottomBar';
 import { PokerShowdownDock } from '@/components/poker/PokerShowdownDock';
+import { PokerSpectatorDock } from './PokerSpectatorDock';
 import { usePokerPlayerHands, usePokerHandVerify, usePokerPlayerTableStats } from '@/hooks/use-poker-stats';
 import { buildReplaySteps, resultLabel, type ReplayHandSummary } from '@/lib/poker-replay';
 import { computeSessionStats, type DockStatsData, type DockTableStats, type DockTableInfo } from '@/lib/poker-session-stats';
@@ -1196,6 +1197,21 @@ export default function PokerTablePage() {
                 <PokerShowdownDock
                   hand={renderedState.currentHand}
                   seats={renderedState.seats}
+                  myAddress={normalizedAddress}
+                />
+              )}
+
+              {/* Spectator dock (portrait): a non-seated viewer of a tournament gets a read-only
+                  dock — level/blinds/players/prize + live standings — since PokerBottomBar (which
+                  needs a seat + betting actions) renders nothing for them. Yields to the showdown
+                  dock while a showdown is on screen. */}
+              {isPortraitMobile && !mySeat && !showdownActive && resolvedTournamentId && tournamentHudState && (
+                <PokerSpectatorDock
+                  state={tournamentHudState}
+                  blinds={tournamentSummary.blinds}
+                  levelCountdown={tournamentSummary.levelCountdown}
+                  playersLeft={tournamentSummary.playersLeft}
+                  prizePoolLabel={dockTableInfo?.kind === 'tournament' ? dockTableInfo.prizePool : ''}
                   myAddress={normalizedAddress}
                 />
               )}
