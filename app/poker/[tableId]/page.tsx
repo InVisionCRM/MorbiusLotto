@@ -1179,6 +1179,7 @@ export default function PokerTablePage() {
                 renderedState={renderedState}
                 mySeat={mySeat}
                 actions={sharedActions}
+                actionTimerSeconds={tournamentHudState?.actionTimerSeconds ?? null}
               />
 
               {/* Spectator dock (portrait): a non-seated viewer of a tournament gets a read-only

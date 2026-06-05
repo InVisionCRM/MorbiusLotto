@@ -6,7 +6,6 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { pokerSfx, pokerHitSound } from '@/lib/poker-sfx';
 import { PokerSeat, PokerChipStack } from './PokerSeat';
 import { PokerPortraitSeat } from './PokerPortraitSeat';
-import { PokerPortraitTurnLight } from './PokerPortraitTurnLight';
 import { PokerPortraitHero } from './PokerPortraitHero';
 import { PokerBoard } from './PokerBoard';
 import { ProvablyFairBadge } from './ProvablyFairBadge';
@@ -865,13 +864,6 @@ export function PokerTable({ state, currentPlayerAddress, timeLeft, chatBubbleBy
       style={{ overflow: 'visible', containerType: 'inline-size' }}
       {...(tutorialTargets ? { 'data-tutorial-target': 'table' } : {})}
     >
-      {layoutVariant === 'portrait' && (
-        <PokerPortraitTurnLight
-          fx={actingDisplaySlot != null ? (seatAnchors[actingDisplaySlot]?.fx ?? null) : null}
-          fy={actingDisplaySlot != null ? (seatAnchors[actingDisplaySlot]?.fy ?? null) : null}
-          isHero={actingPosition != null && actingPosition === mySeatIndex && mySeatIndex >= 0}
-        />
-      )}
       {layoutVariant === 'portrait' && mySeatIndex >= 0 && (
         <PokerPortraitHero
           seat={state.seats[mySeatIndex]}

@@ -1134,7 +1134,8 @@ body {
    `backdrop-filter: url()` is supported (Chromium / Android wallets). iOS WebKit ignores url()
    filters on backdrops, so it keeps the frosted base — no broken look. ── */
 .poker-dock-glass {
-  background: linear-gradient(to top, rgba(10,14,24,0.44) 0%, rgba(10,14,24,0.12) 68%, transparent 100%);
+  /* Neutral grey dock surface (was navy). Colored progress accents sit on top of this. */
+  background: linear-gradient(to top, rgba(42,44,50,0.72) 0%, rgba(42,44,50,0.34) 68%, transparent 100%);
   -webkit-backdrop-filter: blur(16px) saturate(185%) brightness(1.06);
   backdrop-filter: blur(16px) saturate(185%) brightness(1.06);
   border-top: 1px solid rgba(255,255,255,0.20);
