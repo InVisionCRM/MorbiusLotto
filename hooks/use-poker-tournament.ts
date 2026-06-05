@@ -909,7 +909,14 @@ export function usePokerTableTournamentHud({
       // MTT: only accept the payload if it's for this client's current table — the same
       // tournament has multiple tables, but the HUD is per-table.
       const matchesMine = payload.myTableId === tableId || payload.tableId === tableId;
-      if (matchesMine) setState(payload);
+      if (matchesMine) {
+        // actionTimerSeconds is a fixed tournament setting — preserve it if a live
+        // state broadcast happens to omit it, so the turn clock stays correct.
+        setState((prev) => ({
+          ...payload,
+          actionTimerSeconds: payload.actionTimerSeconds ?? prev?.actionTimerSeconds ?? null,
+        }));
+      }
     };
 
     const onPlayerMoved = (payload: {

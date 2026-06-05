@@ -1189,6 +1189,7 @@ export default function PokerTablePage() {
                 mySeat={mySeat}
                 actions={sharedActions}
                 suppressed={isPortraitMobile && showdownActive}
+                actionTimerSeconds={tournamentHudState?.actionTimerSeconds ?? null}
               />
 
               {/* Showdown dock (portrait): replaces the bottom dock during a real showdown so
