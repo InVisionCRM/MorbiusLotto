@@ -115,6 +115,13 @@ export interface PokerCurrentHand {
   /** At showdown: all players' revealed hole cards keyed by address */
   showdownHands?: Record<string, number[]>;
   /**
+   * At showdown: total chips each dealt-in player committed to the pot this hand
+   * (bets + raises + calls + blinds), keyed by lowercase address. Drives the
+   * per-player "loss" shown in the showdown dock (losers lose their whole
+   * contribution; winner net = amount − contribution). Set only at real showdown.
+   */
+  committedByAddress?: Record<string, string>;
+  /**
    * At showdown: true when at least two dealt-in players did not fold (real showdown).
    * False on fold-out wins — clients must not expose uncalled winners' hole cards.
    */
@@ -1862,6 +1869,25 @@ export class PokerGameService {
             showdownHands[this.normalizeAddress(row.player_address)] = cards;
           }
           currentHand.showdownHands = showdownHands;
+
+          // Per-player total contribution this hand → drives the showdown dock's
+          // "loss" figure. Showdown-gated so it never runs on the hot state path.
+          try {
+            const committedResult = await pool.query(
+              `SELECT player_address, SUM(amount)::text AS committed
+                 FROM poker_hand_actions
+                WHERE hand_id = $1 AND action IN ('bet','raise','call','blind')
+                GROUP BY player_address`,
+              [handId]
+            );
+            const committedByAddress: Record<string, string> = {};
+            for (const row of committedResult.rows) {
+              committedByAddress[this.normalizeAddress(row.player_address)] = String(row.committed ?? '0');
+            }
+            currentHand.committedByAddress = committedByAddress;
+          } catch {
+            // best-effort — the dock falls back to no loss figure if this is missing
+          }
         } else {
           // Fold-out win: surface the Show/Muck offer (if still open) and any
           // already-revealed hole cards. handId-scoped so a stale entry from a

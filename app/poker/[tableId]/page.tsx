@@ -30,6 +30,7 @@ import { PokerTableView } from './PokerTableView';
 import { PokerPopups } from './PokerPopups';
 import { PokerPanels } from './PokerPanels';
 import { PokerBottomBar, POKER_BOTTOM_RESERVE_VAR, POKER_SIDE_STRIP_W } from './PokerBottomBar';
+import { PokerShowdownDock } from '@/components/poker/PokerShowdownDock';
 import { PokerSpectatorDock } from './PokerSpectatorDock';
 import { usePokerPlayerHands, usePokerHandVerify, usePokerPlayerTableStats } from '@/hooks/use-poker-stats';
 import { buildReplaySteps, resultLabel, type ReplayHandSummary } from '@/lib/poker-replay';
@@ -154,6 +155,14 @@ export default function PokerTablePage() {
     if (!state || !optimisticOverlay) return state;
     return applyPokerOptimisticOverlay(state, optimisticOverlay);
   }, [testStateOverride, state, optimisticOverlay]);
+
+  // Real showdown in progress (≥2 revealed hands + a result) → drives the showdown dock.
+  const showdownActive = useMemo(() => {
+    const h = renderedState?.currentHand;
+    if (!h || h.handWentToShowdown !== true) return false;
+    if (!h.winners || h.winners.length === 0) return false;
+    return Object.keys(h.showdownHands ?? {}).length >= 2;
+  }, [renderedState?.currentHand]);
 
   // ── Off-turn dock Replay: this table's past hands + the picked hand's full log (winner + all showdown) ──
   const [replayHandId, setReplayHandId] = useState<string | null>(null);
@@ -1179,13 +1188,25 @@ export default function PokerTablePage() {
                 renderedState={renderedState}
                 mySeat={mySeat}
                 actions={sharedActions}
+                suppressed={isPortraitMobile && showdownActive}
                 actionTimerSeconds={tournamentHudState?.actionTimerSeconds ?? null}
               />
 
+              {/* Showdown dock (portrait): replaces the bottom dock during a real showdown so
+                  mobile players get a clean lineup of every revealed hand. */}
+              {isPortraitMobile && showdownActive && renderedState?.currentHand && (
+                <PokerShowdownDock
+                  hand={renderedState.currentHand}
+                  seats={renderedState.seats}
+                  myAddress={normalizedAddress}
+                />
+              )}
+
               {/* Spectator dock (portrait): a non-seated viewer of a tournament gets a read-only
                   dock — level/blinds/players/prize + live standings — since PokerBottomBar (which
-                  needs a seat + betting actions) renders nothing for them. */}
-              {isPortraitMobile && !mySeat && resolvedTournamentId && tournamentHudState && (
+                  needs a seat + betting actions) renders nothing for them. Yields to the showdown
+                  dock while a showdown is on screen. */}
+              {isPortraitMobile && !mySeat && !showdownActive && resolvedTournamentId && tournamentHudState && (
                 <PokerSpectatorDock
                   state={tournamentHudState}
                   blinds={tournamentSummary.blinds}

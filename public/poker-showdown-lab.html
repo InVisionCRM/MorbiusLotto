@@ -1,0 +1,409 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1" />
+<title>Poker Showdown Dock — lab</title>
+<style>
+  :root {
+    --felt: radial-gradient(120% 90% at 50% 18%, #0f3a44, #0a2730 58%, #061a20);
+    --dock-bg: linear-gradient(to top, rgba(42,44,50,0.92) 0%, rgba(34,36,42,0.86) 70%, rgba(30,32,38,0.4) 100%);
+    --gold: #fcd34d;
+    --cyan: #22d3ee;
+    --emerald: #34d399;
+    --card-w: 34px; /* set by JS per player count */
+  }
+  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  html, body { margin: 0; height: 100%; }
+  body {
+    font-family: "Poppins", "Inter", system-ui, sans-serif;
+    background: #0b0e14;
+    color: #e6ebf2;
+    display: flex; flex-direction: column; align-items: center; gap: 14px;
+    padding: 18px 10px 40px;
+    min-height: 100%;
+  }
+  .controls {
+    display: flex; flex-wrap: wrap; gap: 8px; align-items: center; justify-content: center;
+    font-size: 12px; max-width: 420px;
+  }
+  .controls .grp { display: inline-flex; gap: 4px; background: rgba(255,255,255,0.05); border:1px solid rgba(255,255,255,0.1); border-radius: 10px; padding: 4px; }
+  .controls button {
+    font: inherit; font-size: 12px; font-weight: 700; color: #cbd5e1;
+    background: transparent; border: 0; border-radius: 7px; padding: 6px 11px; cursor: pointer;
+  }
+  .controls button.on { background: rgba(34,211,238,0.18); color: #a5f3fc; }
+  .controls .replay { background: linear-gradient(135deg,#0891b2,#2563eb); color:#fff; border-radius:9px; padding:7px 14px; }
+  .hint { font-size: 11px; color: #7b8696; max-width: 420px; text-align: center; line-height: 1.5; }
+
+  /* phone frame */
+  .phone {
+    width: 390px; max-width: 96vw; height: 720px; max-height: 76vh;
+    border-radius: 30px; overflow: hidden; position: relative;
+    background: var(--felt);
+    box-shadow: 0 30px 80px -20px rgba(0,0,0,0.8), inset 0 0 0 1px rgba(255,255,255,0.06);
+  }
+
+  /* board context up top */
+  .board {
+    position: absolute; top: 54px; left: 0; right: 0;
+    display: flex; flex-direction: column; align-items: center; gap: 10px;
+  }
+  .board .potline { font-size: 12px; color: rgba(255,255,255,0.55); font-weight: 700; letter-spacing: .04em; }
+  .board .potline b { color: var(--gold); }
+  .board-cards { display: flex; gap: 5px; }
+  .felt-label { position:absolute; top:20px; width:100%; text-align:center; font-size:11px; letter-spacing:.28em; text-transform:uppercase; color:rgba(255,255,255,0.3); font-weight:800; }
+
+  /* a playing card */
+  .card {
+    width: var(--card-w); aspect-ratio: 5/7; border-radius: calc(var(--card-w) * 0.16);
+    background: #f7f7f2; color: #14181d;
+    display: flex; flex-direction: column; justify-content: space-between;
+    padding: calc(var(--card-w) * 0.1); position: relative;
+    box-shadow: 0 2px 5px rgba(0,0,0,0.5);
+    font-weight: 800; line-height: 1;
+  }
+  .card .r { font-size: calc(var(--card-w) * 0.42); }
+  .card .s { font-size: calc(var(--card-w) * 0.42); align-self: flex-end; }
+  .card.red { color: #c0392b; }
+  .board-cards .card { --card-w: 38px; }
+  .board-cards .card.dim { opacity: .9; }
+
+  /* ── the showdown dock — HARD-CAPPED at 1/3 of the table height so it never reaches
+        the community cards sitting mid-table. Tight, single-row, no wasted space. ── */
+  .dock {
+    position: absolute; left: 0; right: 0; bottom: 0;
+    max-height: 33%;            /* ≤ 1/3 of the phone/table */
+    display: flex; flex-direction: column;
+    background: var(--dock-bg);
+    backdrop-filter: blur(14px);
+    border-top: 1px solid rgba(255,255,255,0.14);
+    box-shadow: 0 -12px 30px rgba(0,0,0,0.45);
+    padding: 7px 8px calc(8px + env(safe-area-inset-bottom,0px));
+    animation: dockUp .38s cubic-bezier(.2,.8,.2,1) both;
+  }
+  @keyframes dockUp { from { transform: translateY(105%); } to { transform: translateY(0); } }
+
+  .dock-head { display:flex; align-items:center; margin-bottom: 6px; padding: 0 2px; flex: 0 0 auto; }
+  .dock-head .title { font-size: 9.5px; font-weight: 800; letter-spacing: .18em; text-transform: uppercase; color: rgba(255,255,255,0.5); display:flex; align-items:center; gap:6px; flex:1 1 0; }
+  .dock-head .spacer { flex:1 1 0; }
+  .dock-head .expandc { flex:0 0 auto; font-size:10px; font-weight:700; letter-spacing:.04em; color:rgba(255,255,255,0.7); }
+  .dock-head .title .dot { width:6px; height:6px; border-radius:50%; background: var(--gold); box-shadow: 0 0 7px var(--gold); animation: pulse 1.6s ease-in-out infinite; }
+  @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:.4} }
+  .dock-head .next { font-size: 9.5px; color: rgba(255,255,255,0.4); }
+  .dock-head .next b { color: rgba(255,255,255,0.78); font-variant-numeric: tabular-nums; }
+
+  /* lineup row — ALWAYS one row; each player shares width equally and its cards/avatar
+     auto-scale to the space (container-query units) so it stays clean from 2 to 6 players. */
+  .lineup { display: flex; gap: 8px; justify-content: center; align-items: stretch; flex: 1 1 auto; min-height: 0; }
+
+  .player {
+    flex: 1 1 0; min-width: 0; max-width: 98px; container-type: inline-size;
+    display: flex; flex-direction: column; align-items: center; gap: 5px;
+    padding: 9px 6px 8px; border-radius: 12px;
+    background: rgba(255,255,255,0.035); border: 1px solid rgba(255,255,255,0.07);
+    position: relative;
+    opacity: 0; transform: translateY(6px) scale(.97);
+    animation: popIn .36s cubic-bezier(.2,.8,.2,1) forwards;
+  }
+  @keyframes popIn { to { opacity:1; transform: none; } }
+
+  .player.winner {
+    background: linear-gradient(180deg, rgba(252,211,77,0.16), rgba(252,211,77,0.05));
+    border-color: rgba(252,211,77,0.55);
+    box-shadow: 0 0 0 1px rgba(252,211,77,0.3), 0 0 22px -4px rgba(252,211,77,0.55);
+  }
+  .player.loser { opacity: 0; }
+  .player.loser.dealt { animation: popInDim .4s cubic-bezier(.2,.8,.2,1) forwards; }
+  @keyframes popInDim { to { opacity: .82; transform: none; } }
+
+  .crown { position:absolute; top:-7px; left:50%; transform:translateX(-50%); font-size: 12px; filter: drop-shadow(0 1px 2px rgba(0,0,0,.6)); animation: bob 2.4s ease-in-out infinite; z-index:2; }
+  @keyframes bob { 0%,100%{ transform: translateX(-50%) translateY(0) } 50%{ transform: translateX(-50%) translateY(-2px) } }
+
+  /* avatar is a small badge overlapping the top of the cards — saves a whole row */
+  .avatar {
+    width: min(27px, 36cqw); aspect-ratio: 1; border-radius: 50%;
+    display: grid; place-items: center; font-size: min(15px, 22cqw); font-weight: 800; color: #fff;
+    box-shadow: inset 0 1px 0 rgba(255,255,255,0.25), 0 1px 3px rgba(0,0,0,0.6);
+    position: relative; z-index: 1; margin-bottom: -8px;
+  }
+  .winner .avatar { box-shadow: 0 0 0 1.5px var(--gold), 0 0 10px rgba(252,211,77,0.55); }
+
+  .hole { display: flex; gap: 3cqw; justify-content: center; width: 100%; }
+  /* hole cards auto-size to the player column (2 cards ≈ 90cqw + gap) */
+  .hole .card { width: 44cqw; border-radius: 6cqw; padding: 4cqw; }
+  .hole .card .r, .hole .card .s { font-size: 17cqw; }
+  .hole .card { transform: rotateY(90deg); animation: flip .4s cubic-bezier(.3,.7,.3,1) forwards; }
+  .card.lose { filter: grayscale(.55) brightness(.82); }
+  @keyframes flip { to { transform: rotateY(0); } }
+
+  .name { font-size: 9.5px; font-weight: 700; max-width: 100%; overflow:hidden; text-overflow: ellipsis; white-space: nowrap; margin-top: 1px; }
+  .winner .name { color: var(--gold); }
+
+  /* hand rank + amount/chips share ONE tight line */
+  .meta { display:flex; align-items:baseline; gap:4px; max-width:100%; line-height:1.1; }
+  .handname { font-size: 8px; font-weight: 800; letter-spacing: .02em; text-transform: uppercase; color: rgba(255,255,255,0.5); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .winner .handname { color: rgba(252,211,77,0.85); }
+  .stack { font-size: 9.5px; font-weight: 800; font-variant-numeric: tabular-nums; white-space:nowrap; }
+  .win-amt { color: var(--gold); }
+  .win-amt::before { content: "+"; }
+  .loss { color: #f08a8a; opacity: .9; }
+  .loss::before { content: "−"; }
+
+  /* ── FULL MODE — board + every hand, scrollable sheet ── */
+  /* `display:flex` below would otherwise beat the [hidden] attribute, so force it off. */
+  .fullsheet[hidden], .fs-scrim[hidden] { display: none !important; }
+  .fs-scrim { position:absolute; inset:0; background:rgba(0,0,0,0.5); z-index:45; animation: fade .25s both; }
+  @keyframes fade { from{opacity:0} to{opacity:1} }
+  .fullsheet {
+    position:absolute; left:0; right:0; bottom:0; z-index:46;
+    max-height: 84%; display:flex; flex-direction:column;
+    background: linear-gradient(to top, rgba(38,40,46,0.98), rgba(30,32,38,0.97));
+    backdrop-filter: blur(16px);
+    border-top:1px solid rgba(255,255,255,0.16); border-radius:18px 18px 0 0;
+    box-shadow: 0 -16px 40px rgba(0,0,0,0.55);
+    padding: 9px 12px calc(12px + env(safe-area-inset-bottom,0px));
+    animation: dockUp .4s cubic-bezier(.2,.8,.2,1) both;
+  }
+  .fullsheet::before { content:""; position:absolute; top:6px; left:50%; transform:translateX(-50%); width:34px; height:4px; border-radius:3px; background:rgba(255,255,255,0.2); }
+  .fs-head { display:flex; align-items:center; gap:8px; margin:8px 0 4px; }
+  .fs-head .title { font-size:10px; font-weight:800; letter-spacing:.18em; text-transform:uppercase; color:rgba(255,255,255,0.55); display:flex; align-items:center; gap:6px; }
+  .fs-head .title .dot { width:6px; height:6px; border-radius:50%; background:var(--gold); box-shadow:0 0 7px var(--gold); }
+  .fs-head .potbig { margin-left:auto; font-size:12px; font-weight:700; color:rgba(255,255,255,0.6); }
+  .fs-head .potbig b { color: var(--gold); font-variant-numeric:tabular-nums; }
+  .fs-close { width:26px; height:26px; border-radius:8px; border:1px solid rgba(255,255,255,0.14); background:rgba(255,255,255,0.06); color:rgba(255,255,255,0.7); font-size:13px; cursor:pointer; }
+  .fs-cap { font-size:9px; font-weight:800; letter-spacing:.16em; text-transform:uppercase; color:rgba(255,255,255,0.4); }
+  .fs-boardwrap { display:flex; flex-direction:column; align-items:center; gap:7px; padding:10px 0 12px; }
+  .fs-board { display:flex; gap:5px; }
+  .fs-board .card { --card-w: 46px; transform: rotateY(90deg); animation: flip .42s cubic-bezier(.3,.7,.3,1) forwards; }
+  .fs-cap2 { margin: 2px 0 7px 2px; }
+  .fs-list { display:flex; flex-direction:column; gap:7px; overflow-y:auto; min-height:0; scrollbar-width:none; }
+  .fs-row {
+    display:flex; align-items:center; gap:10px; padding:8px 10px; border-radius:12px;
+    background: rgba(255,255,255,0.04); border:1px solid rgba(255,255,255,0.07);
+    opacity:0; transform: translateX(10px); animation: rowIn .34s cubic-bezier(.2,.8,.2,1) forwards;
+  }
+  @keyframes rowIn { to { opacity:1; transform:none; } }
+  .fs-row.winner { background: linear-gradient(90deg, rgba(252,211,77,0.16), rgba(252,211,77,0.04)); border-color: rgba(252,211,77,0.5); box-shadow: 0 0 18px -6px rgba(252,211,77,0.5); }
+  .fs-av { width:34px; height:34px; border-radius:50%; display:grid; place-items:center; font-size:17px; flex:0 0 auto; box-shadow: inset 0 1px 0 rgba(255,255,255,0.25), 0 1px 3px rgba(0,0,0,0.5); position:relative; }
+  .fs-row.winner .fs-av { box-shadow: 0 0 0 2px var(--gold), 0 0 12px rgba(252,211,77,0.5); }
+  .fs-av .crown { position:absolute; top:-10px; left:50%; transform:translateX(-50%); font-size:12px; }
+  .fs-id { min-width:0; flex: 1 1 auto; display:flex; flex-direction:column; gap:2px; }
+  .fs-name { font-size:12.5px; font-weight:700; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .fs-row.winner .fs-name { color: var(--gold); }
+  .fs-hand { font-size:9.5px; font-weight:800; letter-spacing:.03em; text-transform:uppercase; color:rgba(255,255,255,0.45); }
+  .fs-row.winner .fs-hand { color: rgba(252,211,77,0.8); }
+  .fs-cards { display:flex; gap:3px; flex:0 0 auto; }
+  .fs-cards .card { --card-w: 27px; }
+  .fs-cards .card.lose { filter: grayscale(.5) brightness(.85); }
+  .fs-amt { flex:0 0 auto; font-size:12.5px; font-weight:800; font-variant-numeric:tabular-nums; min-width:62px; text-align:right; }
+
+  .legend { margin-top: 12px; font-size: 11px; color:#7b8696; max-width:420px; text-align:center; line-height:1.5; }
+  .legend b { color:#cbd5e1; }
+</style>
+</head>
+<body>
+  <div class="controls">
+    <div class="grp" id="countGrp">
+      <button data-n="2">2</button>
+      <button data-n="3">3</button>
+      <button data-n="4">4</button>
+      <button data-n="5" class="on">5</button>
+      <button data-n="6">6</button>
+    </div>
+    <div class="grp" id="modeGrp">
+      <button data-m="compact" class="on">Compact</button>
+      <button data-m="full">Full</button>
+    </div>
+    <button class="replay" id="replay">↻ Replay</button>
+  </div>
+  <div class="hint">Compact = the ≤⅓ glance dock. Full = expanded sheet with the board + every hand. Tap the compact dock to expand; tap outside to collapse.</div>
+
+  <div class="phone">
+    <div class="felt-label">Showdown</div>
+    <div style="position:absolute;left:0;right:0;bottom:33%;border-top:1px dashed rgba(255,255,255,0.22);z-index:5;pointer-events:none">
+      <span style="position:absolute;right:6px;top:-13px;font-size:9px;letter-spacing:.1em;color:rgba(255,255,255,0.35);font-weight:800">⅓ MAX</span>
+    </div>
+    <div class="board">
+      <div class="potline">POT <b>148,000</b></div>
+      <div class="board-cards" id="board"></div>
+    </div>
+
+    <div class="dock" id="dock" title="Tap to expand">
+      <div class="dock-head">
+        <span class="title"><span class="dot"></span> Showdown</span>
+        <span class="expandc">Tap to expand</span>
+        <span class="spacer"></span>
+      </div>
+      <div class="lineup" id="lineup"></div>
+    </div>
+
+    <!-- FULL MODE — board + every hand, scrollable -->
+    <div class="fs-scrim" id="fsScrim" hidden></div>
+    <div class="fullsheet" id="full" hidden>
+      <div class="fs-head">
+        <span class="title"><span class="dot"></span> Showdown</span>
+        <span class="potbig">POT <b>148,000</b></span>
+        <button class="fs-close" id="fsClose" aria-label="Collapse">✕</button>
+      </div>
+      <div class="fs-boardwrap">
+        <span class="fs-cap">Board</span>
+        <div class="fs-board" id="fsBoard"></div>
+      </div>
+      <div class="fs-cap fs-cap2">Showdown · best to worst</div>
+      <div class="fs-list" id="fsList"></div>
+    </div>
+  </div>
+
+  <div class="legend">
+    Winner row glows gold with a crown + hand name + amount won. Folded/losing hands deal in dimmed.
+    Card size + avatar scale with player count. Everything animates in on showdown (dock slides up, avatars pop, cards flip).
+  </div>
+
+<script>
+  const SUITS = [['♠',0],['♥',1],['♦',1],['♣',0]]; // [glyph, isRed]
+  const RANKS = ['A','K','Q','J','10','9','8','7','6','5','4','3','2'];
+  function card(rank, suitIdx) {
+    const [s, red] = SUITS[suitIdx];
+    return { rank, s, red };
+  }
+  const AV_COLORS = ['#3f6e8c','#b8553f','#5b8c5a','#9c6b3f','#8a6d9e','#a14d5c'];
+
+  // demo data — 6 players; we slice to the chosen count
+  const PLAYERS = [
+    { name:'Kyle',     av:'🦈', cards:[card('A',0),card('A',2)], hand:'Pair of Aces',   loss:'18,600', win:false },
+    { name:'Sara',     av:'🐍', cards:[card('K',1),card('Q',2)],  hand:'Two Pair',       loss:'22,000', win:false },
+    { name:'Morbius',  av:'🧛', cards:[card('10',0),card('10',3)], hand:'Full House',    win:true, amt:'148,000' },
+    { name:'jdog',     av:'🐉', cards:[card('7',1),card('8',1)],  hand:'Flush',          loss:'31,400', win:false },
+    { name:'0xF3…9a',  av:'🤖', cards:[card('5',0),card('2',3)],  hand:'High Card',      loss:'9,800',  win:false },
+    { name:'whale',    av:'🐳', cards:[card('J',1),card('J',2)],  hand:'Pair of Jacks',  loss:'12,300', win:false },
+  ];
+  const BOARD = [card('10',1), card('J',0), card('Q',3), card('10',2), card('3',1)];
+
+  const CARD_W = { 2:54, 3:48, 4:42, 5:36, 6:31 }; // px, shrinks with count
+  let count = Math.min(6, Math.max(2, +(new URLSearchParams(location.search).get('n')) || 5));
+
+  function renderBoard() {
+    const b = document.getElementById('board');
+    b.innerHTML = '';
+    BOARD.forEach(c => b.appendChild(cardEl(c, false)));
+  }
+  function cardEl(c, lose) {
+    const el = document.createElement('div');
+    el.className = 'card' + (c.red ? ' red':'') + (lose ? ' lose':'');
+    el.innerHTML = `<span class="r">${c.rank}</span><span class="s">${c.s}</span>`;
+    return el;
+  }
+
+  function render() {
+    document.documentElement.style.setProperty('--card-w', CARD_W[count] + 'px');
+    const lu = document.getElementById('lineup');
+    lu.innerHTML = '';
+    const players = PLAYERS.slice(0, count);
+    // ensure exactly one winner in the visible slice
+    const hasWinner = players.some(p => p.win);
+    players.forEach((p, i) => {
+      const isWin = p.win || (!hasWinner && i === 2 % count);
+      const el = document.createElement('div');
+      el.className = 'player ' + (isWin ? 'winner' : 'loser');
+      el.style.animationDelay = (0.12 + i*0.07) + 's';
+      const avBg = `radial-gradient(circle at 50% 30%, ${AV_COLORS[i]} , color-mix(in srgb, ${AV_COLORS[i]} 70%, #000))`;
+      const value = isWin
+        ? '<span class="win-amt">' + (p.amt || '148,000') + '</span>'
+        : '<span class="loss">' + (p.loss || '0') + '</span>';
+      el.innerHTML = `
+        ${isWin ? '<div class="crown">👑</div>' : ''}
+        <div class="avatar" style="background:${avBg}">${p.av}</div>
+        <div class="hole"></div>
+        <div class="name">${p.name}</div>
+        <div class="meta"><span class="handname">${p.hand}</span><span class="stack">${value}</span></div>
+      `;
+      const hole = el.querySelector('.hole');
+      p.cards.forEach((c, ci) => {
+        const ce = cardEl(c, !isWin);
+        ce.style.animationDelay = (0.3 + i*0.07 + ci*0.09) + 's';
+        hole.appendChild(ce);
+      });
+      lu.appendChild(el);
+      if (!isWin) requestAnimationFrame(()=> el.classList.add('dealt'));
+    });
+  }
+
+  let mode = (new URLSearchParams(location.search).get('mode') === 'full') ? 'full' : 'compact';
+
+  function renderFull() {
+    const players = PLAYERS.slice(0, count);
+    const hasWinner = players.some(p => p.win);
+    const ordered = [...players].sort((a,b) => (b.win?1:0) - (a.win?1:0)); // winner first
+    const fb = document.getElementById('fsBoard'); fb.innerHTML = '';
+    BOARD.forEach((c,i) => { const ce = cardEl(c,false); ce.style.animationDelay = (0.12 + i*0.08)+'s'; fb.appendChild(ce); });
+    const list = document.getElementById('fsList'); list.innerHTML = '';
+    ordered.forEach((p, i) => {
+      const orig = players.indexOf(p);
+      const isWin = p.win || (!hasWinner && orig === 2 % count);
+      const row = document.createElement('div');
+      row.className = 'fs-row ' + (isWin ? 'winner' : '');
+      row.style.animationDelay = (0.22 + i*0.08) + 's';
+      const avBg = `radial-gradient(circle at 50% 30%, ${AV_COLORS[orig]}, color-mix(in srgb, ${AV_COLORS[orig]} 70%, #000))`;
+      const amt = isWin
+        ? '<span class="fs-amt win-amt">' + (p.amt || '148,000') + '</span>'
+        : '<span class="fs-amt loss">' + (p.loss || '0') + '</span>';
+      row.innerHTML = `
+        <div class="fs-av" style="background:${avBg}">${isWin ? '<span class="crown">👑</span>' : ''}${p.av}</div>
+        <div class="fs-id"><span class="fs-name">${p.name}</span><span class="fs-hand">${p.hand}</span></div>
+        <div class="fs-cards"></div>
+        ${amt}
+      `;
+      const cw = row.querySelector('.fs-cards');
+      p.cards.forEach(c => cw.appendChild(cardEl(c, !isWin)));
+      list.appendChild(row);
+    });
+  }
+
+  function setMode(m) {
+    mode = m;
+    [...document.querySelectorAll('#modeGrp button')].forEach(x => x.classList.toggle('on', x.dataset.m === m));
+    const full = document.getElementById('full'), scrim = document.getElementById('fsScrim');
+    if (m === 'full') {
+      full.hidden = false; scrim.hidden = false; renderFull();
+      full.style.animation = 'none'; void full.offsetWidth; full.style.animation = '';
+    } else {
+      full.hidden = true; scrim.hidden = true;
+    }
+  }
+
+  function startCountdown() {
+    const cd = document.getElementById('cd');
+    if (!cd) return;
+    let t = 4; cd.textContent = t+'s';
+    clearInterval(window._cdi);
+    window._cdi = setInterval(() => { t = t>1 ? t-1 : 5; cd.textContent = t+'s'; }, 1000);
+  }
+
+  function replay() {
+    if (mode === 'full') { renderFull(); const f = document.getElementById('full'); f.style.animation='none'; void f.offsetWidth; f.style.animation=''; }
+    else { const d = document.getElementById('dock'); d.style.animation='none'; void d.offsetWidth; d.style.animation=''; render(); }
+    startCountdown();
+  }
+
+  document.getElementById('countGrp').addEventListener('click', e => {
+    const b = e.target.closest('button'); if(!b) return;
+    count = +b.dataset.n;
+    [...document.querySelectorAll('#countGrp button')].forEach(x => x.classList.toggle('on', x===b));
+    render(); if (mode === 'full') renderFull();
+  });
+  document.getElementById('modeGrp').addEventListener('click', e => {
+    const b = e.target.closest('button'); if(!b) return; setMode(b.dataset.m);
+  });
+  document.getElementById('replay').addEventListener('click', replay);
+  document.getElementById('dock').addEventListener('click', () => setMode('full'));
+  document.getElementById('fsClose').addEventListener('click', () => setMode('compact'));
+  document.getElementById('fsScrim').addEventListener('click', () => setMode('compact'));
+
+  renderBoard();
+  render();
+  setMode(mode);
+  startCountdown();
+</script>
+</body>
+</html>

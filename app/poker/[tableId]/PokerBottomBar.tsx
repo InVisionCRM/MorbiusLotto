@@ -46,6 +46,8 @@ interface PokerBottomBarProps {
   renderedState: PokerTableState | null;
   mySeat: PokerTableState['seats'][number] | null;
   actions: React.ReactNode;
+  /** Hide the dock entirely (e.g. the showdown dock takes over during a showdown). */
+  suppressed?: boolean;
   /** Server turn clock for this table — tournament action timer, or null/60 for cash. */
   actionTimerSeconds?: number | null;
 }
@@ -940,10 +942,11 @@ export function PokerBottomBar({
   renderedState,
   mySeat,
   actions,
+  suppressed = false,
   actionTimerSeconds,
 }: PokerBottomBarProps) {
   const rootRef = useRef<HTMLDivElement>(null);
-  const show = !!(renderedState && mySeat && actions);
+  const show = !suppressed && !!(renderedState && mySeat && actions);
   const actingPos = renderedState?.currentHand?.actingPosition ?? null;
   const myTurn = actingPos != null && mySeat != null && actingPos === (mySeat.position ?? -1);
   // Match the dock countdown to the server clock: tournament action timer, else 60 for cash.
