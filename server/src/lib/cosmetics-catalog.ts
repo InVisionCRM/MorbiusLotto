@@ -54,6 +54,11 @@ export const FREE_VALUES: Record<AvatarField, Set<string>> = {
   hairStyle: new Set([
     'Bald', 'Short', 'Buzz', 'Long Straight', 'Long Wavy',
     'Curly', 'Afro', 'Bob', 'Ponytail',
+    'Soft', 'Side Part', 'Slick Back', 'Crew', 'Undercut', 'Pompadour', 'High Top', 'Spiky', 'Fade', 'Mullet',
+    'Dreadlocks V1', 'Dreadlocks V2', 'Dreadlocks V3', 'Dreadlocks V4', 'Dreadlocks V5',
+    'Dreadlocks V6', 'Dreadlocks V7', 'Dreadlocks V8', 'Dreadlocks V9', 'Dreadlocks V10',
+    'Locks V1', 'Locks V2', 'Locks V3', 'Locks V4', 'Locks V5',
+    'Locks V6', 'Locks V7', 'Locks V8', 'Locks V9', 'Locks V10',
   ]),
   hairColor: new Set([
     '#090806', '#2C222B', '#71635A', '#B7A69E',
@@ -61,11 +66,11 @@ export const FREE_VALUES: Record<AvatarField, Set<string>> = {
   ]),
   accessoryColor: new Set(['#111111', '#333333', 'rgba(0,0,0,0.85)']),
   // All free — no paid variants
-  eyeShape:  new Set(['Round', 'Almond', 'Narrow', 'Wide']),
+  eyeShape:  new Set(['Round', 'Round XL', 'Almond', 'Narrow', 'Wide']),
   eyeColor:  new Set(['#634e34', '#2e536f', '#3d671d', '#1c7847', '#497665', '#000000', '#5c4033', '#8a9a5b', '#4682b4', '#8B5CF6', '#F43F5E']),
   faceShape: new Set(['Square', 'Round']),
   noseShape: new Set(['Small']),
-  lipShape:  new Set(['Thin', 'Smile']),
+  lipShape:  new Set(['Thin', 'Smile', 'Neutral', 'Soft Smile', 'Grin', 'Sly Smirk', 'Pout', 'Frown']),
   accessory: new Set(['None', 'Glasses', 'Sunglasses']),
   hat: new Set(['None', 'Cap', 'Beanie']),
   hatColor: new Set(['#000000', '#ffffff', '#3f3f46', '#3b82f6', '#ef4444']),

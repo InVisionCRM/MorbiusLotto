@@ -474,12 +474,12 @@ export function PokerSeat({ seat, index, holeCards, isCurrentPlayer, showCardBac
   const voiceLevel = voicePresence?.audioLevel ?? 0;
   const voiceActive = !!voicePresence && (voicePresence.isSpeaking || voicePresence.isDominantSpeaker || voiceLevel > 0.12);
 
-  // Auto-react to game events (no clicks needed): the showdown winner celebrates,
-  // shovers glare, folders deflate. Mirrors blackjack's result-driven reactions.
+  // Auto-react to game events (no clicks needed): the showdown winner flashes $-eyes,
+  // shovers go cool (poker face), folders deflate. Mirrors blackjack's result-driven reactions.
   const avatarEmotion: Emotion = useMemo(() => {
-    if (isHandWinner) return 'happy';
+    if (isHandWinner) return 'money';                    // won the pot → $-symbol eyes (cha-ching)
     const a = lastAction?.action?.toLowerCase();
-    if (a === 'all-in' || a === 'allin') return 'angry';
+    if (a === 'all-in' || a === 'allin') return 'cool';  // shove → steely poker face
     if (a === 'fold') return 'sad';
     return 'neutral';
   }, [lastAction, isHandWinner]);

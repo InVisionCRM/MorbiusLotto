@@ -182,23 +182,54 @@ export const PICKER_HAIR_STYLES: string[] = [
   'Bald',
   'Short',
   'Buzz',
+  'Soft',
+  'Side Part',
+  'Slick Back',
+  'Crew',
+  'Undercut',
+  'Pompadour',
+  'High Top',
   'Long Straight',
   'Long Wavy',
   'Ponytail',
   'Curly',
   'Bob',
   'Mohawk',
-  'Dreadlocks',
+  'Spiky',
+  'Fade',
+  'Mullet',
   'Afro',
   'Pigtails',
   'Messy',
+  'Dreadlocks',
   'Dreads Fade',
+  'Dreadlocks V1',
+  'Dreadlocks V2',
+  'Dreadlocks V3',
+  'Dreadlocks V4',
+  'Dreadlocks V5',
+  'Dreadlocks V6',
+  'Dreadlocks V7',
+  'Dreadlocks V8',
+  'Dreadlocks V9',
+  'Dreadlocks V10',
+  'Locks V1',
+  'Locks V2',
+  'Locks V3',
+  'Locks V4',
+  'Locks V5',
+  'Locks V6',
+  'Locks V7',
+  'Locks V8',
+  'Locks V9',
+  'Locks V10',
 ];
 
 export const PICKER_FACE_SHAPES: string[] = ['Square', 'Round'];
 
 export const PICKER_EYE_SHAPES: string[] = [
   'Round',
+  'Round XL',
   'Almond',
   'Narrow',
   'Wide',
@@ -207,7 +238,16 @@ export const PICKER_EYE_SHAPES: string[] = [
   'Eye V4',
 ];
 
-export const PICKER_LIP_SHAPES: string[] = ['Thin', 'Smile'];
+export const PICKER_LIP_SHAPES: string[] = [
+  'Thin',
+  'Smile',
+  'Neutral',
+  'Soft Smile',
+  'Grin',
+  'Sly Smirk',
+  'Pout',
+  'Frown',
+];
 
 export const PICKER_ACCESSORIES: string[] = [
   'None',

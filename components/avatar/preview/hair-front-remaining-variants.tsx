@@ -20,6 +20,27 @@ export function renderHairFrontRemainingVariants(
   );
 
   switch (hairStyle) {
+    case 'Soft':
+      // Soft round-head cap + cowlick + side fringes (ported from avatar-lab.html hairFront).
+      return (
+        <g fill={H}>
+          <path d="M23 12 Q21.4 6.5 25 5.6 Q27.6 6.4 25.6 9.4 Q27.4 8.2 26.2 12 Z" />
+          <path d="M11.5 22 Q10 12 24 11 Q38 12 36.5 22 Q33 16 24 15.8 Q15 16 11.5 22 Z" />
+          <path d="M12 21 Q10.5 27 12 31 Q13.4 27 13.2 21 Z" />
+          <path d="M36 21 Q37.5 27 36 31 Q34.6 27 34.8 21 Z" />
+          <path d="M24 15.8 Q30 16 33.5 19 Q31 16.4 24 16.2 Q17 16.4 14.5 19 Q18 16 24 15.8Z" fill={hHi(0.12, 0.16)} />
+        </g>
+      );
+    case 'Side Part':
+      // Soft cap with an off-centre part sweeping across the forehead.
+      return (
+        <g fill={H}>
+          <path d="M10.6 22 Q10 12 24 11 Q39 12 37.6 21 Q34 15.6 26 15.4 L18 16.2 Q13 17 10.6 22 Z" />
+          <path d="M27 11.6 Q18.5 12.6 13 18.5 Q19 14.6 27 14.7 Z" />
+          <path d="M27 11.9 Q20 13 14.6 18.4" fill="none" stroke={hLo(0.3, 0.16)} strokeWidth={0.4} strokeLinecap="round" />
+          <path d="M24 15.7 Q30 16 33.6 19 Q31 16.4 24 16.2 Z" fill={hHi(0.12, 0.15)} />
+        </g>
+      );
     case 'Afro':
       return null;
     case 'Mullet':
