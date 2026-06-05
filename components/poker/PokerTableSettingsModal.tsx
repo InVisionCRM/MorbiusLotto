@@ -9,6 +9,7 @@ import {
   type TableEffectId,
 } from '@/hooks/use-poker-table-effect';
 import type { BlackjackWebSocketClient } from '@/lib/websocket-client';
+import { usePokerRpsChallenges } from '@/hooks/use-poker-rps-challenges';
 
 type Props = {
   isOpen: boolean;
@@ -27,6 +28,7 @@ type Props = {
 
 export function PokerTableSettingsModal({ isOpen, onClose, isAdmin, currentLogo, currentLogoOpacity, wsClient, tableId }: Props) {
   const { effect, setEffect, feltColor, setFeltColor, railColor, setRailColor } = usePokerTableEffect();
+  const rpsChallenges = usePokerRpsChallenges();
 
   // Admin logo state — seeded from server state
   const [logoFiles, setLogoFiles] = useState<string[]>([]);
@@ -188,6 +190,35 @@ export function PokerTableSettingsModal({ isOpen, onClose, isAdmin, currentLogo,
                 </button>
               ))}
             </div>
+          </div>
+
+          {/* Mini-games — accept RPS challenges from other players (just-for-fun). */}
+          <div>
+            <div className="text-[10px] font-bold uppercase tracking-wider text-white/35 mb-1.5">Mini-games</div>
+            <button
+              type="button"
+              onClick={() => rpsChallenges.setEnabled(!rpsChallenges.enabled)}
+              role="switch"
+              aria-checked={rpsChallenges.enabled}
+              className="w-full flex items-center justify-between px-2.5 py-2 rounded-lg border transition-all"
+              style={{
+                background: rpsChallenges.enabled ? 'rgba(34,211,238,0.08)' : 'rgba(255,255,255,0.03)',
+                borderColor: rpsChallenges.enabled ? 'rgba(34,211,238,0.35)' : 'rgba(255,255,255,0.06)',
+              }}
+            >
+              <span className="text-[11px] font-bold" style={{ color: rpsChallenges.enabled ? 'rgba(34,211,238,0.9)' : 'rgba(255,255,255,0.55)' }}>
+                Accept Rock-Paper-Scissors challenges
+              </span>
+              <span
+                className="relative w-8 h-[18px] rounded-full shrink-0 transition-all"
+                style={{ background: rpsChallenges.enabled ? 'rgba(34,211,238,0.5)' : 'rgba(255,255,255,0.12)' }}
+              >
+                <span
+                  className="absolute top-[2px] w-[14px] h-[14px] rounded-full bg-white transition-all"
+                  style={{ left: rpsChallenges.enabled ? '16px' : '2px' }}
+                />
+              </span>
+            </button>
           </div>
 
           {/* ── Admin: Table Graphics ────────────────────────────────── */}

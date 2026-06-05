@@ -31,6 +31,7 @@ import { PokerPopups } from './PokerPopups';
 import { PokerPanels } from './PokerPanels';
 import { PokerBottomBar, POKER_BOTTOM_RESERVE_VAR, POKER_SIDE_STRIP_W } from './PokerBottomBar';
 import { PokerShowdownDock } from '@/components/poker/PokerShowdownDock';
+import { PokerRpsDock } from '@/components/poker/PokerRpsDock';
 import { PokerSpectatorDock } from './PokerSpectatorDock';
 import { usePokerPlayerHands, usePokerHandVerify, usePokerPlayerTableStats } from '@/hooks/use-poker-stats';
 import { buildReplaySteps, resultLabel, type ReplayHandSummary } from '@/lib/poker-replay';
@@ -43,6 +44,8 @@ import {
   type PokerOptimisticOverlay,
 } from './PokerActionsLogic';
 import { usePokerSeatOverlays } from './PokerSeatOverlays';
+import { usePokerRps } from './use-poker-rps';
+import { usePokerRpsChallenges } from '@/hooks/use-poker-rps-challenges';
 import { usePokerMobileZoomLock } from './PokerMobileZoomLock';
 import { usePokerTurnClock } from './PokerTurnClock';
 import { usePokerTableSounds } from './PokerSounds';
@@ -563,6 +566,17 @@ export default function PokerTablePage() {
     normalizedAddress,
     state,
     mySeatIndex,
+  });
+
+  // RPS table mini-game (just-for-fun): challenge folded opponents from the avatar wheel.
+  const rpsChallenges = usePokerRpsChallenges();
+  const rps = usePokerRps({
+    clientRef,
+    tableId,
+    normalizedAddress,
+    state,
+    mySeatIndex,
+    challengesEnabled: rpsChallenges.enabled,
   });
 
   const onOpponentRadialAction = useCallback(
@@ -1141,6 +1155,8 @@ export default function PokerTablePage() {
                 stuckArrowsBySeatIndex={stuckArrowsBySeatIndex}
                 hitBySeatIndex={hitBySeatIndex}
                 onSendDirectedEmote={mySeatIndex >= 0 ? onSendDirectedEmote : undefined}
+                onChallengeRps={mySeatIndex >= 0 ? rps.onChallengeRps : undefined}
+                rpsRevealFlights={rps.revealFlights}
                 mySeatIndex={mySeatIndex}
                 onPhraseReaction={onPhraseReaction}
                 onAnimationReaction={onAnimationReaction}
@@ -1199,6 +1215,16 @@ export default function PokerTablePage() {
                   hand={renderedState.currentHand}
                   seats={renderedState.seats}
                   myAddress={normalizedAddress}
+                />
+              )}
+
+              {/* RPS mini-game dock — floating controls + scoreboard for the two duelists (just-for-fun). */}
+              {rps.match && (
+                <PokerRpsDock
+                  match={rps.match}
+                  onPick={rps.pick}
+                  onPlayAgain={rps.playAgain}
+                  onClose={rps.leaveMatch}
                 />
               )}
 
