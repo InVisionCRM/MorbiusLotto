@@ -29,6 +29,10 @@ interface PokerTableViewProps {
   stuckArrowsBySeatIndex: Record<number, StuckArrow[]>;
   hitBySeatIndex: Record<number, { key: number; fromSeatIndex: number; kind: PokerDirectedEmoteKind }>;
   onSendDirectedEmote?: (toSeatIndex: number, kind: PokerDirectedEmoteKind) => void;
+  /** Challenge a folded opponent (by seat) to RPS. Provided only when current player is seated. */
+  onChallengeRps?: (toSeatIndex: number) => void;
+  /** Active RPS reveal tosses (emoji fling up over each seat). */
+  rpsRevealFlights?: { id: string; seatIndex: number; choice: 'rock' | 'paper' | 'scissors' }[];
   mySeatIndex: number;
   onPhraseReaction: (phrase: string) => void;
   onAnimationReaction: (emotion: Emotion) => void;
@@ -91,6 +95,8 @@ export function PokerTableView({
   stuckArrowsBySeatIndex,
   hitBySeatIndex,
   onSendDirectedEmote,
+  onChallengeRps,
+  rpsRevealFlights,
   mySeatIndex,
   onPhraseReaction,
   onAnimationReaction,
@@ -222,6 +228,8 @@ export function PokerTableView({
           stuckArrowsBySeatIndex={stuckArrowsBySeatIndex}
           hitBySeatIndex={hitBySeatIndex}
           onSendDirectedEmote={onSendDirectedEmote}
+          onChallengeRps={onChallengeRps}
+          rpsRevealFlights={rpsRevealFlights}
           onPhraseReaction={mySeatIndex >= 0 ? onPhraseReaction : undefined}
           onAnimationReaction={mySeatIndex >= 0 ? onAnimationReaction : undefined}
           onReUpClick={canReup ? openReupModal : undefined}

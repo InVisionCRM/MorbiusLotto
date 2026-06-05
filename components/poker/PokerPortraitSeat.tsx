@@ -69,6 +69,8 @@ export interface PokerPortraitSeatProps {
   bubble?: string | null;
   /** Tap the avatar → open the throw/emote ring; selecting fires this with the chosen kind. */
   onSendEmote?: (kind: PokerDirectedEmoteKind) => void;
+  /** Challenge this seat to Rock-Paper-Scissors (adds a Games wedge to the ring). Provided only when I'm seated. */
+  onChallengeRps?: () => void;
 }
 
 /** Card back = same treatment as desktop CardDisplay: a dark card with the table/sponsor
@@ -95,21 +97,26 @@ export function PokerPortraitSeat({
   cardBackSrc,
   bubble,
   onSendEmote,
+  onChallengeRps,
 }: PokerPortraitSeatProps) {
   const avaWrapRef = useRef<HTMLDivElement>(null);
   const [emoteOpen, setEmoteOpen] = useState(false);
   // The radial fires onSelect from both the wedge button AND its background path; dedupe so one
   // tap sends exactly one throw (otherwise a single tap spams 2–8 directed emotes).
   const sendingRef = useRef(false);
-  const emoteItems = useMemo<RadialMenuItem[]>(
-    () => POKER_MOBILE_EMOTE_KINDS.map((k) => ({ id: k, label: POKER_DIRECTED_EMOTES[k].label, glyph: POKER_DIRECTED_EMOTES[k].glyph })),
-    [],
-  );
   const canEmote = !!onSendEmote && !!seat.playerAddress && !isCurrentPlayer;
+  const canChallenge = !!onChallengeRps && !!seat.playerAddress && !isCurrentPlayer;
+  const canOpenWheel = canEmote || canChallenge;
+  const emoteItems = useMemo<RadialMenuItem[]>(() => {
+    const items: RadialMenuItem[] = POKER_MOBILE_EMOTE_KINDS.map((k) => ({ id: k, label: POKER_DIRECTED_EMOTES[k].label, glyph: POKER_DIRECTED_EMOTES[k].glyph }));
+    if (canChallenge) items.push({ id: 'rps', label: 'RPS', glyph: '🎮' });
+    return items;
+  }, [canChallenge]);
   const handleEmoteSelect = (item: RadialMenuItem) => {
     if (sendingRef.current) return;
     sendingRef.current = true;
-    onSendEmote?.(item.id as PokerDirectedEmoteKind);
+    if (item.id === 'rps') onChallengeRps?.();
+    else onSendEmote?.(item.id as PokerDirectedEmoteKind);
     setEmoteOpen(false);
     setTimeout(() => { sendingRef.current = false; }, 350);
   };
@@ -150,8 +157,8 @@ export function PokerPortraitSeat({
       <div
         className="pps-ava-wrap"
         ref={avaWrapRef}
-        onClick={canEmote ? () => setEmoteOpen(true) : undefined}
-        style={canEmote ? { cursor: 'pointer' } : undefined}
+        onClick={canOpenWheel ? () => setEmoteOpen(true) : undefined}
+        style={canOpenWheel ? { cursor: 'pointer' } : undefined}
       >
         {showTuck && (
           <div className={`pps-cards tuck ${inwardRight ? 'peek-right' : 'peek-left'}`}>
@@ -187,7 +194,7 @@ export function PokerPortraitSeat({
       {isHandWinner && handName ? <div className="pps-tag win">{handName}</div>
         : sittingOut ? <div className="pps-tag">Sitting out</div> : null}
 
-      {canEmote && (
+      {canOpenWheel && (
         <RadialMenuFloating
           open={emoteOpen}
           onOpenChange={setEmoteOpen}

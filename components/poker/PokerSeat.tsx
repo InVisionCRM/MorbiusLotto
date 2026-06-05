@@ -22,7 +22,9 @@ import {
   ThumbsUp,
   Flame,
   Frown,
+  Gamepad2,
   Gift,
+  Hand,
   LayoutList,
   LogOut,
   MessageCircle,
@@ -40,7 +42,7 @@ import {
 } from 'lucide-react';
 import { AvatarView, type Emotion } from '@/components/avatar';
 import { RadialMenu, RadialMenuFloating, type RadialMenuItem } from '@/components/ui/radial-menu';
-import { POKER_DIRECTED_EMOTE_KINDS, type PokerDirectedEmoteKind } from '@/lib/poker-directed-emotes';
+import { POKER_DIRECTED_EMOTE_KINDS, POKER_DIRECTED_EMOTES, type PokerDirectedEmoteKind } from '@/lib/poker-directed-emotes';
 import { useQuickChatPhrases } from '@/hooks/useQuickChatPhrases';
 import { EditQuickChatModal } from '@/components/poker/EditQuickChatModal';
 import { usePokerVoicePresenceForAddress } from './voice-presence';
@@ -321,11 +323,24 @@ const OPPONENT_RADIAL_ITEMS: RadialMenuItem[] = [
 // Quick emote ring shown when you tap a *seated* opponent — throws a directed emote at them.
 const EMOTE_RADIAL_ICONS: Record<PokerDirectedEmoteKind, LucideIcon> = {
   haha: Laugh, love: Heart, gg: Handshake, nice: ThumbsUp, boo: ThumbsDown, fire: Flame, dance: Music2, money: Coins,
-  arrow: Crosshair, snowball: Snowflake, tomato: Cherry,
+  arrow: Crosshair, snowball: Snowflake, tomato: Cherry, slap: Hand,
 };
-const OPPONENT_EMOTE_RADIAL_ITEMS: RadialMenuItem[] = [
-  ...POKER_DIRECTED_EMOTE_KINDS.map((k): RadialMenuItem => ({ id: `emote:${k}`, label: k, icon: EMOTE_RADIAL_ICONS[k] })),
-  { id: 'profile', label: 'Profile', icon: UserCircle },
+
+// Categorized opponent wheel: reactions vs throwables split by the `projectile` flag.
+const POKER_EMOTE_KINDS = POKER_DIRECTED_EMOTE_KINDS.filter((k) => !POKER_DIRECTED_EMOTES[k].projectile);
+const POKER_THROW_KINDS = POKER_DIRECTED_EMOTE_KINDS.filter((k) => POKER_DIRECTED_EMOTES[k].projectile);
+const OPPONENT_BACK_ITEM: RadialMenuItem = { id: '_back', label: 'Back', icon: ArrowLeft };
+const OPPONENT_EMOTE_RING_ITEMS: RadialMenuItem[] = [
+  OPPONENT_BACK_ITEM,
+  ...POKER_EMOTE_KINDS.map((k): RadialMenuItem => ({ id: `emote:${k}`, label: POKER_DIRECTED_EMOTES[k].label || k, icon: EMOTE_RADIAL_ICONS[k] })),
+];
+const OPPONENT_THROW_RING_ITEMS: RadialMenuItem[] = [
+  OPPONENT_BACK_ITEM,
+  ...POKER_THROW_KINDS.map((k): RadialMenuItem => ({ id: `emote:${k}`, label: POKER_DIRECTED_EMOTES[k].label || k, icon: EMOTE_RADIAL_ICONS[k] })),
+];
+const OPPONENT_GAME_RING_ITEMS: RadialMenuItem[] = [
+  OPPONENT_BACK_ITEM,
+  { id: 'rps', label: 'Rock Paper', icon: Gamepad2 },
 ];
 
 function VoiceAvatarCue({
@@ -417,6 +432,8 @@ export interface PokerSeatProps {
   onOpponentRadialAction?: (action: 'profile' | 'follow' | 'gift', address: string) => void;
   /** Throw a directed emote at this seat (opponent quick-emote ring). Provided only when I'm seated. */
   onSendDirectedEmote?: (toSeatIndex: number, kind: PokerDirectedEmoteKind) => void;
+  /** Challenge this seat to a Rock-Paper-Scissors mini-game (opponent wheel → Games). Provided only when I'm seated. */
+  onChallengeRps?: (toSeatIndex: number) => void;
   /** When provided with setQuickChatPhrases and onOpenEditQuickChat, QuickChat uses this state and Edit QuickChat is opened by parent (e.g. header Settings). */
   quickChatPhrases?: string[];
   setQuickChatPhrases?: (phrases: string[]) => void;
@@ -456,7 +473,7 @@ function offsetTransform(offset?: { x: number; y: number }): string | undefined 
   return `translate(${offset.x}px, ${offset.y}px)`;
 }
 
-export function PokerSeat({ seat, index, holeCards, isCurrentPlayer, showCardBacks, winningCardIndices, isHandWinner = false, lastAction, callAmount, timeLeft, maxTime = 60, chatBubble, onReUpClick, onMenuClick, overlayPhrase: propsOverlayPhrase, overlayEmotion: propsOverlayEmotion, hit, onPhraseReaction, onAnimationReaction, onOpponentClick, onOpponentRadialAction, onSendDirectedEmote, quickChatPhrases: propsQuickChatPhrases, setQuickChatPhrases: propsSetQuickChatPhrases, onOpenEditQuickChat, hideSeatAvatar = false, onLeaveTable, onSitOut, onSitBack, onRequestMobileActivity, includeActivityInPlayerRadial = false, playerTagOffset, showdownCardOffset, heroCardOffset, handName, cardDealFromOffset, cardBackSrc, layoutVariant = 'default' }: PokerSeatProps) {
+export function PokerSeat({ seat, index, holeCards, isCurrentPlayer, showCardBacks, winningCardIndices, isHandWinner = false, lastAction, callAmount, timeLeft, maxTime = 60, chatBubble, onReUpClick, onMenuClick, overlayPhrase: propsOverlayPhrase, overlayEmotion: propsOverlayEmotion, hit, onPhraseReaction, onAnimationReaction, onOpponentClick, onOpponentRadialAction, onSendDirectedEmote, onChallengeRps, quickChatPhrases: propsQuickChatPhrases, setQuickChatPhrases: propsSetQuickChatPhrases, onOpenEditQuickChat, hideSeatAvatar = false, onLeaveTable, onSitOut, onSitBack, onRequestMobileActivity, includeActivityInPlayerRadial = false, playerTagOffset, showdownCardOffset, heroCardOffset, handName, cardDealFromOffset, cardBackSrc, layoutVariant = 'default' }: PokerSeatProps) {
   const empty = !seat.playerAddress;
   const isPortrait = layoutVariant === 'portrait';
   const showMyCards = !!(holeCards && holeCards.length > 0);
@@ -474,12 +491,12 @@ export function PokerSeat({ seat, index, holeCards, isCurrentPlayer, showCardBac
   const voiceLevel = voicePresence?.audioLevel ?? 0;
   const voiceActive = !!voicePresence && (voicePresence.isSpeaking || voicePresence.isDominantSpeaker || voiceLevel > 0.12);
 
-  // Auto-react to game events (no clicks needed): the showdown winner celebrates,
-  // shovers glare, folders deflate. Mirrors blackjack's result-driven reactions.
+  // Auto-react to game events (no clicks needed): the showdown winner flashes $-eyes,
+  // shovers go cool (poker face), folders deflate. Mirrors blackjack's result-driven reactions.
   const avatarEmotion: Emotion = useMemo(() => {
-    if (isHandWinner) return 'happy';
+    if (isHandWinner) return 'money';                    // won the pot → $-symbol eyes (cha-ching)
     const a = lastAction?.action?.toLowerCase();
-    if (a === 'all-in' || a === 'allin') return 'angry';
+    if (a === 'all-in' || a === 'allin') return 'cool';  // shove → steely poker face
     if (a === 'fold') return 'sad';
     return 'neutral';
   }, [lastAction, isHandWinner]);
@@ -494,6 +511,7 @@ export function PokerSeat({ seat, index, holeCards, isCurrentPlayer, showCardBac
   /** Player action radial (click avatar): main menu vs expression submenu. */
   const [playerRadialOpen, setPlayerRadialOpen] = useState(false);
   const [opponentRadialOpen, setOpponentRadialOpen] = useState(false);
+  const [opponentRadialPage, setOpponentRadialPage] = useState<'main' | 'emotes' | 'throw' | 'games' | 'player'>('main');
   const [playerRadialPage, setPlayerRadialPage] = useState<'main' | 'expressions'>('main');
   const [localEmotion, setLocalEmotion] = useState<Emotion | null>(null);
   const [isFoldCryActive, setIsFoldCryActive] = useState(false);
@@ -573,6 +591,37 @@ export function PokerSeat({ seat, index, holeCards, isCurrentPlayer, showCardBac
     onRequestMobileActivity,
   ]);
 
+  const opponentMainMenuItems = useMemo((): RadialMenuItem[] => {
+    const items: RadialMenuItem[] = [];
+    if (onSendDirectedEmote) {
+      items.push({ id: 'cat:emotes', label: 'Emotes', icon: Smile });
+      items.push({ id: 'cat:throw', label: 'Throw', icon: Crosshair });
+    }
+    if (onChallengeRps) items.push({ id: 'cat:games', label: 'Games', icon: Gamepad2 });
+    if (onOpponentClick || onOpponentRadialAction) items.push({ id: 'cat:player', label: 'Player', icon: UserCircle });
+    return items;
+  }, [onSendDirectedEmote, onChallengeRps, onOpponentClick, onOpponentRadialAction]);
+
+  const opponentPlayerRingItems = useMemo((): RadialMenuItem[] => {
+    const items: RadialMenuItem[] = [OPPONENT_BACK_ITEM];
+    if (onOpponentClick) items.push({ id: 'profile', label: 'Profile', icon: UserCircle });
+    if (onOpponentRadialAction) {
+      items.push({ id: 'follow', label: 'Follow', icon: UserPlus });
+      items.push({ id: 'gift', label: 'Gift', icon: Gift });
+    }
+    return items;
+  }, [onOpponentClick, onOpponentRadialAction]);
+
+  const opponentMenuItems = useMemo((): RadialMenuItem[] => {
+    switch (opponentRadialPage) {
+      case 'emotes': return OPPONENT_EMOTE_RING_ITEMS;
+      case 'throw': return OPPONENT_THROW_RING_ITEMS;
+      case 'games': return OPPONENT_GAME_RING_ITEMS;
+      case 'player': return opponentPlayerRingItems;
+      default: return opponentMainMenuItems;
+    }
+  }, [opponentRadialPage, opponentMainMenuItems, opponentPlayerRingItems]);
+
   const handleOpponentRadialSelect = useCallback(
     (item: RadialMenuItem) => {
       const addr = seat.playerAddress;
@@ -585,16 +634,25 @@ export function PokerSeat({ seat, index, holeCards, isCurrentPlayer, showCardBac
     [onOpponentRadialAction, seat.playerAddress],
   );
 
-  // Opponent quick-emote ring (tap a seated opponent): throw a directed emote, or jump to profile.
+  // Opponent wheel: navigate categories (emotes / throw / games / player) or fire the leaf action.
   const handleOpponentEmoteSelect = useCallback(
     (item: RadialMenuItem) => {
-      setOpponentRadialOpen(false);
-      const addr = seat.playerAddress;
       const id = String(item.id);
+      const addr = seat.playerAddress;
+      if (id === '_back') { setOpponentRadialPage('main'); return; }
+      if (id === 'cat:emotes') { setOpponentRadialPage('emotes'); return; }
+      if (id === 'cat:throw') { setOpponentRadialPage('throw'); return; }
+      if (id === 'cat:games') { setOpponentRadialPage('games'); return; }
+      if (id === 'cat:player') { setOpponentRadialPage('player'); return; }
+      // Leaf actions close the wheel.
+      setOpponentRadialOpen(false);
+      setOpponentRadialPage('main');
+      if (id.startsWith('emote:')) { onSendDirectedEmote?.(index, id.slice(6) as PokerDirectedEmoteKind); return; }
+      if (id === 'rps') { onChallengeRps?.(index); return; }
       if (id === 'profile') { if (addr) onOpponentClick?.(addr); return; }
-      if (id.startsWith('emote:')) onSendDirectedEmote?.(index, id.slice(6) as PokerDirectedEmoteKind);
+      if ((id === 'follow' || id === 'gift') && addr) { onOpponentRadialAction?.(id, addr); return; }
     },
-    [seat.playerAddress, onOpponentClick, onSendDirectedEmote, index],
+    [seat.playerAddress, onOpponentClick, onOpponentRadialAction, onSendDirectedEmote, onChallengeRps, index],
   );
 
   useEffect(() => {
@@ -968,7 +1026,10 @@ export function PokerSeat({ seat, index, holeCards, isCurrentPlayer, showCardBac
                         }
                       : undefined
                     : onSendDirectedEmote && seat.playerAddress
-                      ? () => setOpponentRadialOpen(true)
+                      ? () => {
+                          setOpponentRadialPage('main');
+                          setOpponentRadialOpen(true);
+                        }
                       : onOpponentClick && seat.playerAddress
                         ? () => onOpponentClick(seat.playerAddress!)
                         : undefined
@@ -1153,14 +1214,17 @@ export function PokerSeat({ seat, index, holeCards, isCurrentPlayer, showCardBac
       {!isCurrentPlayer && onSendDirectedEmote && seat.playerAddress && (
         <RadialMenuFloating
           open={opponentRadialOpen}
-          onOpenChange={setOpponentRadialOpen}
+          onOpenChange={(o) => {
+            setOpponentRadialOpen(o);
+            if (!o) setOpponentRadialPage('main');
+          }}
           anchorRef={avatarRef}
-          menuItems={OPPONENT_EMOTE_RADIAL_ITEMS}
+          menuItems={opponentMenuItems}
           onSelect={handleOpponentEmoteSelect}
-          size={240}
-          iconSize={18}
+          size={opponentRadialPage === 'emotes' || opponentRadialPage === 'throw' ? 240 : 250}
+          iconSize={opponentRadialPage === 'emotes' || opponentRadialPage === 'throw' ? 18 : 16}
           bandWidth={44}
-          showLabels={false}
+          showLabels={opponentRadialPage !== 'emotes' && opponentRadialPage !== 'throw'}
         />
       )}
 

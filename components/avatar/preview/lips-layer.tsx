@@ -47,6 +47,31 @@ export function renderLipsLayer(lipShape: AvatarConfig['lipShape'], emotion: Emo
           <rect x="27.51" y="33.42" width="0.44" height="0.34" rx={0.1} fill="rgba(0,0,0,0.11)" />
         </g>
       );
+    // ── Lab-style resting mouths (ported from avatar-lab.html) ──
+    case 'Neutral':
+      return <path d="M20 32.3 Q24 31.55 28 32.3" fill="none" stroke="#8c5048" strokeWidth="1.1" strokeLinecap="round" />;
+    case 'Soft Smile':
+      return <path d="M19.5 31.6 Q24 36.2 28.5 31.6" fill="none" stroke="#8c5048" strokeWidth="1.2" strokeLinecap="round" />;
+    case 'Grin':
+      return (
+        <g>
+          <path d="M18.6 31 Q24 38 29.4 31 Z" fill="#5a1126" />
+          <path d="M19.4 31.4 Q24 33 28.6 31.4 L28.6 32.4 Q24 33.8 19.4 32.4 Z" fill="#ffffff" />
+          <path d="M22 35.6 Q24 37.2 26 35.6 Q24 36.4 22 35.6 Z" fill="#c2575b" />
+        </g>
+      );
+    case 'Sly Smirk':
+      return <path d="M20 32.8 Q24 33.2 28.4 30.8" fill="none" stroke="#8c5048" strokeWidth="1.2" strokeLinecap="round" />;
+    case 'Pout':
+      return (
+        <g>
+          <ellipse cx="24" cy="32.8" rx="1.65" ry="2.05" fill="#5a1126" />
+          <ellipse cx="24" cy="31.95" rx="1.5" ry="0.72" fill="#8c5048" />
+          <ellipse cx="24" cy="33.7" rx="1.2" ry="0.66" fill="#75413a" />
+        </g>
+      );
+    case 'Frown':
+      return <path d="M20 33.6 Q24 30 28 33.6" fill="none" stroke="#8c5048" strokeWidth="1.2" strokeLinecap="round" />;
     default:
       return (
         <g>

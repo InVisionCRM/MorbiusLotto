@@ -18,6 +18,11 @@ export function renderHairFrontLayer(
     case 'Spiky':
     case 'Fade':
     case 'Mohawk':
+    case 'Slick Back':
+    case 'Crew':
+    case 'Undercut':
+    case 'Pompadour':
+    case 'High Top':
       return renderHairFrontShortVariants(hairStyle, hairFill, skinFill, hHi, hLo);
     case 'Dreadlocks':
     case 'Dreadlocks V1':

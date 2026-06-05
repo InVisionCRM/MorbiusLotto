@@ -8,13 +8,9 @@ export function renderFaceShapeLayer(
 ) {
   switch (faceShape) {
     case 'Round':
-      /* Forehead lift vs legacy (+3u total): hair sits above skin; outer band tracks inner. */
-      return (
-        <g fill={fillColor}>
-          <rect x="14" y="13" width="20" height="23" rx={1.1} />
-          <rect x="12" y="15" width="24" height="19" rx={0.9} />
-        </g>
-      );
+      /* True round head (matches avatar-lab.html silhouette). Footprint kept ~x12–36 / y13–37 so the
+         existing hair, ears and feature offsets still align — hair front paints over the crown as before. */
+      return <ellipse cx="24" cy="25" rx="12" ry="11.7" fill={fillColor} />;
     case 'Oval':
       return (
         <g fill={fillColor}>
