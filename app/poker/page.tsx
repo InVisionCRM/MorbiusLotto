@@ -179,7 +179,7 @@ export default function PokerLobbyPage() {
   const [tablePlayers, setTablePlayers] = useState<{ tableId: string; seats: PokerSeatState[] } | null>(null);
   const [tablePlayersLoading, setTablePlayersLoading] = useState(false);
   const [removingTableId, setRemovingTableId] = useState<string | null>(null);
-  const [activeTab, setActiveTab] = useState<'cash' | 'tournaments' | 'history'>('tournaments');
+  const [activeTab, setActiveTab] = useState<'all' | 'cash' | 'tournaments' | 'history'>('all');
   const [tournamentCreateModalOpen, setTournamentCreateModalOpen] = useState(false);
   const [wsClient, setWsClient] = useState<BlackjackWebSocketClient | null>(null);
 
@@ -191,16 +191,20 @@ export default function PokerLobbyPage() {
       setActiveTab('cash');
     } else if (t === 'tournaments') {
       setActiveTab('tournaments');
+    } else if (t === 'all') {
+      setActiveTab('all');
     } else {
-      setActiveTab('tournaments');
-      router.replace('/poker?tab=tournaments', { scroll: false });
+      setActiveTab('all');
+      router.replace('/poker?tab=all', { scroll: false });
     }
   }, [searchParams, router]);
 
   const setLobbyTab = useCallback(
-    (tab: 'cash' | 'tournaments' | 'history') => {
+    (tab: 'all' | 'cash' | 'tournaments' | 'history') => {
       setActiveTab(tab);
-      if (tab === 'tournaments') {
+      if (tab === 'all') {
+        router.replace('/poker?tab=all', { scroll: false });
+      } else if (tab === 'tournaments') {
         router.replace('/poker?tab=tournaments', { scroll: false });
       } else if (tab === 'history') {
         router.replace('/poker?tab=history', { scroll: false });
@@ -750,6 +754,17 @@ export default function PokerLobbyPage() {
             >
                 <button
                   type="button"
+                  onClick={() => setLobbyTab('all')}
+                  className={`relative shrink-0 px-3 sm:px-5 py-2.5 rounded-xl text-xs sm:text-sm font-semibold transition-all ${
+                    activeTab === 'all'
+                      ? 'bg-cyan-500/[0.12] text-cyan-400'
+                      : 'text-white hover:text-white/85'
+                  }`}
+                >
+                  All
+                </button>
+                <button
+                  type="button"
                   onClick={() => setLobbyTab('tournaments')}
                   className={`relative shrink-0 px-3 sm:px-5 py-2.5 rounded-xl text-xs sm:text-sm font-semibold transition-all ${
                     activeTab === 'tournaments'
@@ -785,7 +800,10 @@ export default function PokerLobbyPage() {
                   History
                 </button>
             </div>
-            {activeTab === 'tournaments' && (
+            {activeTab === 'all' && (
+              <h2 className="mb-2 px-1 text-sm font-bold uppercase tracking-[0.16em] text-cyan-300/80">Tournaments</h2>
+            )}
+            {(activeTab === 'tournaments' || activeTab === 'all') && (
               <div className="surface-splash-panel !border-white/10 overflow-hidden">
                 <div className="surface-splash-panel-glow" aria-hidden />
                 <div
@@ -828,13 +846,16 @@ export default function PokerLobbyPage() {
               </div>
             )}
 
-            {activeTab === 'cash' && error && <p className="text-red-400 mb-4">{error}</p>}
-            {activeTab === 'cash' && !loading && tables.length === 0 && !error && (
+            {activeTab === 'all' && (
+              <h2 className="mb-2 mt-6 px-1 text-sm font-bold uppercase tracking-[0.16em] text-cyan-300/80">Cash Games</h2>
+            )}
+            {(activeTab === 'cash' || activeTab === 'all') && error && <p className="text-red-400 mb-4">{error}</p>}
+            {(activeTab === 'cash' || activeTab === 'all') && !loading && tables.length === 0 && !error && (
               <p className="text-slate-400">
                 No tables available. {isConnected ? 'Click "Create table" above to start one.' : 'Connect your wallet to create a table.'}
               </p>
             )}
-            {activeTab === 'cash' && !loading && tables.length > 0 && (
+            {(activeTab === 'cash' || activeTab === 'all') && !loading && tables.length > 0 && (
               <>
               <div className="md:hidden space-y-3">
                 {tables.map((t) => {
