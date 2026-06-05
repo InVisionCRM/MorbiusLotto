@@ -174,6 +174,11 @@ export interface PokerCurrentHand {
   /** At showdown: all players' revealed hole cards keyed by lowercase address */
   showdownHands?: Record<string, number[]>;
   /**
+   * At showdown: total chips each dealt-in player committed to the pot this hand,
+   * keyed by lowercase address. Drives the showdown dock's per-player "loss".
+   */
+  committedByAddress?: Record<string, string>;
+  /**
    * At showdown: true when at least two dealt-in players did not fold (real showdown).
    * False on fold-out wins — uncalled winners' hole cards are not public.
    */

@@ -46,6 +46,8 @@ interface PokerBottomBarProps {
   renderedState: PokerTableState | null;
   mySeat: PokerTableState['seats'][number] | null;
   actions: React.ReactNode;
+  /** Hide the dock entirely (e.g. the showdown dock takes over during a showdown). */
+  suppressed?: boolean;
 }
 
 const POKER_TURN_SECONDS = 30;
@@ -930,9 +932,10 @@ export function PokerBottomBar({
   renderedState,
   mySeat,
   actions,
+  suppressed = false,
 }: PokerBottomBarProps) {
   const rootRef = useRef<HTMLDivElement>(null);
-  const show = !!(renderedState && mySeat && actions);
+  const show = !suppressed && !!(renderedState && mySeat && actions);
   const actingPos = renderedState?.currentHand?.actingPosition ?? null;
   const myTurn = actingPos != null && mySeat != null && actingPos === (mySeat.position ?? -1);
 
