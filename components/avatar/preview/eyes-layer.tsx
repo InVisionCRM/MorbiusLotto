@@ -78,6 +78,22 @@ export function renderEyesLayer({
 
   const renderEye = (x: number) => {
     const isRightEye = x === 28;
+    // Symbol eyes (ported from avatar-lab `setEyeSymbol`): enrich expressive emotes with a glyph in place of the iris.
+    const SYMBOL_EYES: Record<string, { ch: string; fill: string; size: number }> = {
+      love: { ch: '♥', fill: '#ff3b6b', size: 4.4 },
+      money: { ch: '$', fill: '#19c37d', size: 4 },
+      ghost: { ch: '✕', fill: '#4a3a52', size: 3.8 },
+      jackpot: { ch: '★', fill: '#fbbf24', size: 4.4 },
+    };
+    const sym = SYMBOL_EYES[emotion as string];
+    if (sym) {
+      return (
+        <g>
+          <rect x={x} y="21.6" width="6.2" height="4.4" rx={2.1} fill="#fffdf7" />
+          <text x={x + 3.1} y="24.2" fontSize={sym.size} textAnchor="middle" dominantBaseline="central" fontWeight={700} fill={sym.fill}>{sym.ch}</text>
+        </g>
+      );
+    }
     const isWinking = emotion === 'wink' && isRightEye;
     if (isWinking || emotion === 'sleepy' || emotion === 'cool' || emotion === 'ninja') {
       return <rect x={x} y="22" width="6" height="2" fill="rgba(0,0,0,0.6)" />;
@@ -129,6 +145,22 @@ export function renderEyesLayer({
         return <g><rect x={x} y="22" width="4" height="4" rx={0.7} fill="#fffef8" /><rect x={x + 2} y="24" width="2" height="2" rx={0.4} fill="#fffef8" />{pupilGroup(x + 1, 23, 2, 2)}</g>;
       case 'Eye V4':
         return <g><rect x={x} y="22" width="6" height="4" rx={0.7} fill="#fffef8" />{pupilGroup(x + 3, 23, 2, 2)}</g>;
+      case 'Round XL': {
+        // Big round glossy eye ported from avatar-lab.html: rounded-rect white + circular iris/pupil/catchlight.
+        // Iris is wrapped in eyeTrackStyle so it follows the cursor exactly like pupilGroup does.
+        const cx = x + 3.1;
+        return (
+          <g>
+            <rect x={x} y="21.6" width="6.2" height="4.4" rx={2.1} fill="#fffdf7" />
+            <rect x={x} y="21.6" width="6.2" height="1.4" rx={0.9} fill="rgba(0,0,0,0.08)" />
+            <motion.g style={eyeTrackStyle}>
+              <circle cx={cx} cy={24} r={1.7} fill={eyeColor} />
+              <circle cx={cx} cy={24} r={0.85} fill="#10061f" />
+              <circle cx={cx - 0.6} cy={23.4} r={0.5} fill="rgba(255,255,255,0.9)" />
+            </motion.g>
+          </g>
+        );
+      }
       default:
         return null;
     }

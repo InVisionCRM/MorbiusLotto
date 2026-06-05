@@ -27,6 +27,10 @@ import {
   type LayoutVariant,
 } from '@/lib/poker-seat-layout';
 import { POKER_DIRECTED_EMOTES, POKER_DIRECTED_EMOTE_FLY_MS, POKER_PROJECTILE_FLY_MS, POKER_PROJECTILE_TOTAL_MS, type PokerDirectedEmoteKind } from '@/lib/poker-directed-emotes';
+import { RPS_EMOJI, RPS_REVEAL_FLY_MS, type RpsChoice } from '@/lib/poker-rps';
+
+/** A single RPS emoji toss over a seat at reveal (see use-poker-rps). */
+interface RpsRevealFlightView { id: string; seatIndex: number; choice: RpsChoice }
 import confetti from 'canvas-confetti';
 import { FloatingTableLogo } from './FloatingTableLogo';
 import { PokerRailActingHighlight } from './PokerRailActingHighlight';
@@ -170,6 +174,10 @@ export interface PokerTableProps {
   hitBySeatIndex?: Record<number, { key: number; fromSeatIndex: number; kind: PokerDirectedEmoteKind }>;
   /** Throw a directed emote at a seat (opponent quick-emote ring). Provided only when the current player is seated. */
   onSendDirectedEmote?: (toSeatIndex: number, kind: PokerDirectedEmoteKind) => void;
+  /** Challenge a folded opponent to Rock-Paper-Scissors (avatar wheel → Games). Provided only when the current player is seated + eligible. */
+  onChallengeRps?: (toSeatIndex: number) => void;
+  /** Active RPS reveal tosses — each flings its emoji up over the seat (mirrors the emote toss). */
+  rpsRevealFlights?: RpsRevealFlightView[];
   /** Called when current player selects a QuickChat phrase (broadcast to table). */
   onPhraseReaction?: (phrase: string) => void;
   /** Called when current player selects an avatar emotion (broadcast to table). */
@@ -210,7 +218,7 @@ export interface PokerTableProps {
   layoutVariant?: LayoutVariant;
 }
 
-export function PokerTable({ state, currentPlayerAddress, timeLeft, chatBubbleBySeatIndex, onReUpClick, onMenuClick, reactionBySeatIndex, broadcastEmotionBySeatIndex, directedEmotes, stuckArrowsBySeatIndex, hitBySeatIndex, onSendDirectedEmote, onPhraseReaction, onAnimationReaction, onOpponentClick, onOpponentRadialAction, quickChatPhrases, setQuickChatPhrases, onOpenEditQuickChat, onLeave, onRequestMobileActivity, onSitOut, onSitBack, onShowCards, onMuckCards, tutorialTargets, dataTutorialTargetPot, showDealerAnchorGuides = false, layoutVariant = 'default' }: PokerTableProps) {
+export function PokerTable({ state, currentPlayerAddress, timeLeft, chatBubbleBySeatIndex, onReUpClick, onMenuClick, reactionBySeatIndex, broadcastEmotionBySeatIndex, directedEmotes, stuckArrowsBySeatIndex, hitBySeatIndex, onSendDirectedEmote, onChallengeRps, rpsRevealFlights, onPhraseReaction, onAnimationReaction, onOpponentClick, onOpponentRadialAction, quickChatPhrases, setQuickChatPhrases, onOpenEditQuickChat, onLeave, onRequestMobileActivity, onSitOut, onSitBack, onShowCards, onMuckCards, tutorialTargets, dataTutorialTargetPot, showDealerAnchorGuides = false, layoutVariant = 'default' }: PokerTableProps) {
   const tableRef = useRef<HTMLDivElement>(null);
   const [dims, setDims] = useState({ w: 640, h: 500 });
   // Projectile-hit "juice": transient comic bursts/flashes spawned at the impact point.
@@ -829,6 +837,7 @@ export function PokerTable({ state, currentPlayerAddress, timeLeft, chatBubbleBy
       onOpponentClick: onOpponentClick,
       onOpponentRadialAction: onOpponentRadialAction,
       onSendDirectedEmote: onSendDirectedEmote,
+      onChallengeRps: onChallengeRps,
       quickChatPhrases,
       setQuickChatPhrases,
       onOpenEditQuickChat,
@@ -1420,6 +1429,7 @@ export function PokerTable({ state, currentPlayerAddress, timeLeft, chatBubbleBy
                       dealerDir={dealerDir}
                       bubble={sp.overlayPhrase ?? sp.chatBubble ?? null}
                       onSendEmote={onSendDirectedEmote ? (kind) => onSendDirectedEmote(idx, kind) : undefined}
+                      onChallengeRps={onChallengeRps ? () => onChallengeRps(idx) : undefined}
                     />
                   );
                 })()
@@ -1537,6 +1547,27 @@ export function PokerTable({ state, currentPlayerAddress, timeLeft, chatBubbleBy
                 {def.label ? <span>{def.label}</span> : null}
                 <span style={{ position: 'absolute', left: 14, bottom: -4, width: 9, height: 9, background: '#efe7ff', transform: 'rotate(45deg)', boxShadow: '1px 1px 0 rgba(168,85,247,0.25)' }} />
               </div>
+            </motion.div>
+          </div>
+        );
+      })}
+
+      {/* RPS reveal — each player's pick flings straight up over their seat at the same moment. */}
+      {dims.w > 0 && rpsRevealFlights?.map((flight) => {
+        const a = seatAnchors[toDisplaySlot(flight.seatIndex)];
+        if (!a) return null;
+        const x = a.fx * dims.w;
+        const y = a.fy * dims.h;
+        const rise = dims.h * 0.16;
+        return (
+          <div key={flight.id} className="absolute pointer-events-none" style={{ left: x, top: y, transform: 'translate(-50%, -50%)', zIndex: 42 }}>
+            <motion.div
+              initial={{ y: 0, scale: 0.3, opacity: 0 }}
+              animate={{ y: [0, -rise * 0.5, -rise, -rise], scale: [0.3, 1.25, 1.1, 0.8], opacity: [0, 1, 1, 0] }}
+              transition={{ duration: RPS_REVEAL_FLY_MS / 1000, times: [0, 0.28, 0.7, 1], ease: 'easeOut' }}
+              style={{ fontSize: Math.max(26, dims.w * 0.085), lineHeight: 1, filter: 'drop-shadow(0 3px 7px rgba(0,0,0,0.6))' }}
+            >
+              {RPS_EMOJI[flight.choice]}
             </motion.div>
           </div>
         );

@@ -25,6 +25,7 @@ const poker_router_1 = require("./websocket/poker-router");
 const bj_multi_router_1 = require("./websocket/bj-multi-router");
 const poker_chip_wallet_1 = require("./poker-chip-wallet");
 const stream_voice_service_1 = require("./stream-voice.service");
+const poker_rps_1 = require("./poker-rps");
 // EIP-712 domain and types for WebSocket authentication
 const AUTH_EIP712_DOMAIN = {
     name: 'MORBlotto Blackjack',
@@ -81,6 +82,10 @@ const CHAT_DISPLAY_NAME_MIN_LEN = 3;
 const CHAT_DISPLAY_NAME_MAX_LEN = 32;
 // Rate limit for create_game (1 game per second per connection)
 const CREATE_GAME_COOLDOWN_MS = 1000;
+// RPS table mini-game timers/limits (just-for-fun; no stakes). See poker-rps.ts.
+const RPS_CHALLENGE_TIMEOUT_MS = 20_000; // auto-decline an unanswered challenge
+const RPS_PICK_TIMEOUT_MS = 15_000;      // cancel a round if a second pick never lands
+const RPS_CHALLENGE_COOLDOWN_MS = 4_000; // per-connection min gap between challenges
 // Default bet limits (in MORBIUS, 18 decimals) when admin config is missing
 const DEFAULT_BET_LIMITS = {
     MIN_BET: BigInt('1000000000000000000'), // 1 MORBIUS
@@ -109,6 +114,9 @@ class WebSocketService {
     // Per-action rate limiting for BJ multi: address -> timestamp array (5 actions per 3s window)
     bjMultiActionTimestamps = new Map();
     betLimitsCache = null;
+    // RPS table mini-game (ephemeral, just-for-fun). See poker-rps.ts + RPS_MINIGAME_PLAN.md.
+    rpsRegistry = new poker_rps_1.RpsRegistry();
+    rpsTimers = new Map(); // matchId -> { challenge?: Timeout, pick?: Timeout }
     constructor(server, gameService, dbService, tournamentService, pokerGameService, bjMultiService, authService) {
         this.gameService = gameService;
         this.dbService = dbService;
@@ -358,6 +366,10 @@ class WebSocketService {
                     this.pokerGameService.markSeatDisconnected(tableId, ws.playerAddress).catch(err => {
                         logger_1.logger.error('Poker disconnect mark error', { tableId, error: err });
                     });
+                }
+                // RPS: tear down any live duel so the peer's dock closes.
+                if (ws.playerAddress) {
+                    this.endRpsMatchForAddress(ws.playerAddress, 'peer_left');
                 }
                 if (ws.currentRoom) {
                     const set = this.roomToClients.get(ws.currentRoom);
@@ -1162,6 +1174,8 @@ class WebSocketService {
                 return this.sendError(ws, 'tableId required', message.requestId);
             }
             const state = await this.pokerGameService.leaveTable(tableId, ws.playerAddress);
+            // Standing up ends any live RPS duel (folded resets, dock must close).
+            this.endRpsMatchForAddress(ws.playerAddress, 'peer_left');
             const roomId = `poker:table:${tableId}`;
             if (ws.connectionId) {
                 const set = this.roomToClients.get(roomId);
@@ -1401,6 +1415,281 @@ class WebSocketService {
         catch (error) {
             logger_1.logger.error('Error handling poker directed emote:', error);
             this.sendError(ws, error.message || 'Failed to send directed emote', message.requestId);
+        }
+    }
+    // ---------------------------------------------------------------------------
+    // RPS table mini-game (just-for-fun, never for stakes; ephemeral). The flow
+    // mirrors handlePokerDirectedEmote (sender-seated check, target occupied,
+    // not self) and adds an out-of-hand gate + per-connection rate limit. Match
+    // state + the resolver live in poker-rps.ts; timers/broadcasts live here.
+    // ---------------------------------------------------------------------------
+    /** Locate a seat and decide whether that player is out of the live hand. */
+    rpsEligibility(state, address) {
+        const addr = address.toLowerCase();
+        const seatIndex = state.seats.findIndex((s) => s.playerAddress && s.playerAddress.toLowerCase() === addr);
+        if (seatIndex < 0) {
+            return { seated: false, seatIndex: -1, seat: null, eligible: false };
+        }
+        const seat = state.seats[seatIndex];
+        // Out of the hand when there is no live hand (idle / between hands /
+        // already at showdown) or this seat has folded.
+        const noLiveHand = !state.currentHand || state.currentHand.street === 'showdown';
+        const eligible = noLiveHand || !!seat.folded;
+        return { seated: true, seatIndex, seat, eligible };
+    }
+    /** Send a message to every open connection for one wallet (case-insensitive). */
+    sendToPlayerAddress(address, message) {
+        const target = address.toLowerCase();
+        this.wss.clients.forEach((client) => {
+            if (client.playerAddress && client.playerAddress.toLowerCase() === target && client.readyState === ws_1.WebSocket.OPEN) {
+                this.sendMessage(client, message);
+            }
+        });
+    }
+    /** Deliver to both duelists (not the rail). */
+    sendRpsToBoth(match, message) {
+        this.sendToPlayerAddress(match.a.address, message);
+        this.sendToPlayerAddress(match.b.address, message);
+    }
+    clearRpsTimers(matchId) {
+        const t = this.rpsTimers.get(matchId);
+        if (!t) return;
+        if (t.challenge) clearTimeout(t.challenge);
+        if (t.pick) clearTimeout(t.pick);
+        this.rpsTimers.delete(matchId);
+    }
+    clearRpsPickTimer(matchId) {
+        const t = this.rpsTimers.get(matchId);
+        if (t && t.pick) {
+            clearTimeout(t.pick);
+            t.pick = undefined;
+        }
+    }
+    /** End whatever match an address is in (disconnect / stand up) and notify the peer. */
+    endRpsMatchForAddress(address, reason) {
+        const matchId = this.rpsRegistry.getMatchIdByAddress(address);
+        if (!matchId) return;
+        const match = this.rpsRegistry.leave(matchId);
+        this.clearRpsTimers(matchId);
+        if (match) {
+            this.sendRpsToBoth(match, { type: 'poker_rps_ended', payload: { matchId, reason } });
+        }
+    }
+    async handlePokerRpsChallenge(ws, message) {
+        try {
+            if (!this.pokerGameService || !ws.playerAddress) {
+                return this.sendError(ws, 'Poker not available or wallet required', message.requestId);
+            }
+            const payload = message.payload;
+            const { tableId, toSeatIndex } = payload ?? {};
+            if (!tableId || typeof tableId !== 'string') {
+                return this.sendError(ws, 'tableId required', message.requestId);
+            }
+            if (!Number.isInteger(toSeatIndex) || toSeatIndex < 0) {
+                return this.sendError(ws, 'toSeatIndex required', message.requestId);
+            }
+            const now = Date.now();
+            if (ws.lastRpsChallengeAt != null && now - ws.lastRpsChallengeAt < RPS_CHALLENGE_COOLDOWN_MS) {
+                return this.sendError(ws, 'Slow down', message.requestId);
+            }
+            const state = await this.pokerGameService.getTableState(tableId, null);
+            const from = this.rpsEligibility(state, ws.playerAddress);
+            if (!from.seated) {
+                return this.sendError(ws, 'Not seated at this table', message.requestId);
+            }
+            if (toSeatIndex >= state.seats.length || toSeatIndex === from.seatIndex || !state.seats[toSeatIndex]?.playerAddress) {
+                return this.sendError(ws, 'Invalid target seat', message.requestId);
+            }
+            const targetAddress = state.seats[toSeatIndex].playerAddress;
+            const to = this.rpsEligibility(state, targetAddress);
+            // Both players must be out of the live hand (never disrupt live poker).
+            if (!from.eligible || !to.eligible) {
+                return this.sendToPlayerAddress(ws.playerAddress, {
+                    type: 'poker_rps_declined',
+                    payload: { matchId: null, reason: 'in_hand' },
+                });
+            }
+            const matchId = (0, uuid_1.v4)();
+            const created = this.rpsRegistry.create({
+                id: matchId,
+                tableId,
+                a: { address: ws.playerAddress, seatIndex: from.seatIndex },
+                b: { address: targetAddress, seatIndex: toSeatIndex },
+            });
+            if (!created.ok) {
+                if (created.error === 'busy') {
+                    return this.sendToPlayerAddress(ws.playerAddress, {
+                        type: 'poker_rps_declined',
+                        payload: { matchId: null, reason: 'busy' },
+                    });
+                }
+                // challenger_busy / self — caller already in a match or self-target.
+                return this.sendError(ws, 'Cannot start match', message.requestId);
+            }
+            ws.lastRpsChallengeAt = now;
+            const fromName = from.seat?.displayName || null;
+            // Notify the target only; they get an Accept / Deny prompt.
+            this.sendToPlayerAddress(targetAddress, {
+                type: 'poker_rps_challenge',
+                payload: { matchId, tableId, fromSeatIndex: from.seatIndex, toSeatIndex, fromName },
+            });
+            const timers = { challenge: undefined, pick: undefined };
+            timers.challenge = setTimeout(() => {
+                const match = this.rpsRegistry.get(matchId);
+                if (!match || match.status !== 'pending') return;
+                this.rpsRegistry.leave(matchId);
+                this.clearRpsTimers(matchId);
+                this.sendToPlayerAddress(match.a.address, {
+                    type: 'poker_rps_declined',
+                    payload: { matchId, reason: 'timeout' },
+                });
+            }, RPS_CHALLENGE_TIMEOUT_MS);
+            this.rpsTimers.set(matchId, timers);
+        }
+        catch (error) {
+            logger_1.logger.error('Error handling poker rps challenge:', error);
+            this.sendError(ws, error.message || 'Failed to send challenge', message.requestId);
+        }
+    }
+    async handlePokerRpsRespond(ws, message) {
+        try {
+            if (!this.pokerGameService || !ws.playerAddress) {
+                return this.sendError(ws, 'Poker not available or wallet required', message.requestId);
+            }
+            const payload = message.payload;
+            const { matchId, accept, reason } = payload ?? {};
+            if (!matchId || typeof matchId !== 'string') {
+                return this.sendError(ws, 'matchId required', message.requestId);
+            }
+            const result = this.rpsRegistry.respond(matchId, ws.playerAddress, !!accept);
+            if (!result.ok) {
+                // Stale / already-resolved challenge — nothing to do.
+                return;
+            }
+            const match = result.match;
+            const t = this.rpsTimers.get(matchId);
+            if (t && t.challenge) {
+                clearTimeout(t.challenge);
+                t.challenge = undefined;
+            }
+            if (!accept) {
+                this.clearRpsTimers(matchId);
+                // Only 'challenges_off' is honored from the client; anything else is a plain decline.
+                const declineReason = reason === 'challenges_off' ? 'challenges_off' : 'declined';
+                return this.sendToPlayerAddress(match.a.address, {
+                    type: 'poker_rps_declined',
+                    payload: { matchId, reason: declineReason },
+                });
+            }
+            // Both docks open the RPS panel.
+            this.sendRpsToBoth(match, {
+                type: 'poker_rps_started',
+                payload: {
+                    matchId,
+                    tableId: match.tableId,
+                    aSeatIndex: match.a.seatIndex,
+                    bSeatIndex: match.b.seatIndex,
+                    scoreA: match.scoreA,
+                    scoreB: match.scoreB,
+                },
+            });
+        }
+        catch (error) {
+            logger_1.logger.error('Error handling poker rps respond:', error);
+            this.sendError(ws, error.message || 'Failed to respond to challenge', message.requestId);
+        }
+    }
+    async handlePokerRpsPick(ws, message) {
+        try {
+            if (!this.pokerGameService || !ws.playerAddress) {
+                return this.sendError(ws, 'Poker not available or wallet required', message.requestId);
+            }
+            const payload = message.payload;
+            const { matchId, choice } = payload ?? {};
+            if (!matchId || typeof matchId !== 'string') {
+                return this.sendError(ws, 'matchId required', message.requestId);
+            }
+            if (!(0, poker_rps_1.isRpsChoice)(choice)) {
+                return this.sendError(ws, 'Invalid choice', message.requestId);
+            }
+            const result = this.rpsRegistry.pick(matchId, ws.playerAddress, choice);
+            if (!result.ok) {
+                // not_active / already_picked / not_in_match — ignore quietly.
+                return;
+            }
+            const match = result.match;
+            if (!result.both) {
+                // Ack only — the actual choice is never leaked until both are in.
+                const pickerSeatIndex = ws.playerAddress.toLowerCase() === match.a.address ? match.a.seatIndex : match.b.seatIndex;
+                this.sendRpsToBoth(match, {
+                    type: 'poker_rps_picked',
+                    payload: { matchId, seatIndex: pickerSeatIndex },
+                });
+                // Arm the one-sided-pick timeout once a round's first pick lands.
+                const timers = this.rpsTimers.get(matchId) ?? {};
+                if (!timers.pick) {
+                    timers.pick = setTimeout(() => {
+                        if (!this.rpsRegistry.hasPartialPick(matchId)) return;
+                        const m = this.rpsRegistry.cancelRound(matchId);
+                        this.clearRpsPickTimer(matchId);
+                        if (m) {
+                            this.sendRpsToBoth(m, {
+                                type: 'poker_rps_round_cancelled',
+                                payload: { matchId, reason: 'pick_timeout' },
+                            });
+                        }
+                    }, RPS_PICK_TIMEOUT_MS);
+                    this.rpsTimers.set(matchId, timers);
+                }
+                return;
+            }
+            // Both picks in — reveal simultaneously to the whole table room (spectacle).
+            this.clearRpsPickTimer(matchId);
+            const reveal = result.reveal;
+            const roomId = `poker:table:${match.tableId}`;
+            this.broadcastToRoom(roomId, {
+                type: 'poker_rps_reveal',
+                payload: {
+                    matchId,
+                    aSeatIndex: match.a.seatIndex,
+                    aChoice: reveal.aChoice,
+                    bSeatIndex: match.b.seatIndex,
+                    bChoice: reveal.bChoice,
+                    winnerSeatIndex: reveal.winnerSeatIndex,
+                    scoreA: reveal.scoreA,
+                    scoreB: reveal.scoreB,
+                },
+            });
+        }
+        catch (error) {
+            logger_1.logger.error('Error handling poker rps pick:', error);
+            this.sendError(ws, error.message || 'Failed to submit pick', message.requestId);
+        }
+    }
+    async handlePokerRpsLeave(ws, message) {
+        try {
+            if (!ws.playerAddress) {
+                return this.sendError(ws, 'Wallet required', message.requestId);
+            }
+            const payload = message.payload;
+            const { matchId } = payload ?? {};
+            if (!matchId || typeof matchId !== 'string') {
+                return this.sendError(ws, 'matchId required', message.requestId);
+            }
+            const match = this.rpsRegistry.get(matchId);
+            if (!match) return;
+            const addr = ws.playerAddress.toLowerCase();
+            if (addr !== match.a.address && addr !== match.b.address) {
+                // Not a participant — ignore.
+                return;
+            }
+            this.rpsRegistry.leave(matchId);
+            this.clearRpsTimers(matchId);
+            this.sendRpsToBoth(match, { type: 'poker_rps_ended', payload: { matchId, reason: 'left' } });
+        }
+        catch (error) {
+            logger_1.logger.error('Error handling poker rps leave:', error);
+            this.sendError(ws, error.message || 'Failed to leave match', message.requestId);
         }
     }
     async handlePokerCreateTable(ws, message) {

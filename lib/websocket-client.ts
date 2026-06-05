@@ -1064,6 +1064,32 @@ export class BlackjackWebSocketClient {
     this.send({ type: WS_MESSAGE_TYPES.pokerDirectedEmote, payload: { tableId, toSeatIndex, kind } });
   }
 
+  // === RPS table mini-game (just-for-fun, no stakes) ===
+  // Server validates eligibility (both players out of the hand) + rate-limits.
+  // Outbound events: poker_rps_challenge (target), poker_rps_declined,
+  // poker_rps_started, poker_rps_picked, poker_rps_reveal,
+  // poker_rps_round_cancelled, poker_rps_ended. Subscribe via on(...).
+
+  /** Challenge a folded opponent (by seat) to Rock-Paper-Scissors. */
+  sendRpsChallenge(tableId: string, toSeatIndex: number): void {
+    this.send({ type: WS_MESSAGE_TYPES.pokerRpsChallenge, payload: { tableId, toSeatIndex } });
+  }
+
+  /** Accept or deny a pending RPS challenge. `reason` ('challenges_off') refines the decline toast. */
+  sendRpsRespond(matchId: string, accept: boolean, reason?: 'challenges_off'): void {
+    this.send({ type: WS_MESSAGE_TYPES.pokerRpsRespond, payload: { matchId, accept, reason } });
+  }
+
+  /** Lock this player's pick for the current round (hidden until both are in). */
+  sendRpsPick(matchId: string, choice: 'rock' | 'paper' | 'scissors'): void {
+    this.send({ type: WS_MESSAGE_TYPES.pokerRpsPick, payload: { matchId, choice } });
+  }
+
+  /** Leave / close an RPS match (ends it for both players). */
+  sendRpsLeave(matchId: string): void {
+    this.send({ type: WS_MESSAGE_TYPES.pokerRpsLeave, payload: { matchId } });
+  }
+
   /**
    * Blackjack-multi directed emote: throw an emote AT another seated player (by wallet address).
    * Server validates both are seated, then broadcasts { tableId, fromAddress, toAddress, kind }.

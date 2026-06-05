@@ -11,6 +11,15 @@ export function renderHairBackRemainingVariants(
 ) {
   const H = hairFill;
   switch (hairStyle) {
+    case 'Soft':
+    case 'Side Part':
+      // Shared rounded back mass behind the head for the soft round-head styles.
+      return (
+        <g fill={H}>
+          <path d="M10.5 24 Q9 11 24 10 Q39 11 37.5 24 Q31 14.5 24 14.2 Q17 14.5 10.5 24 Z" />
+          {hairSideShade(10.5, 12, 27, 12)}
+        </g>
+      );
     case 'Afro': {
       /*
        * Single mass only (no hair-front layer): face + ears paint on top of the center; outline is the dome itself.

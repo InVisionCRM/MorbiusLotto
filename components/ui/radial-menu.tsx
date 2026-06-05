@@ -72,6 +72,11 @@ const SLICE_HEX: Record<string, string> = {
   theme: '#a855f7',
   edit_quickchat: '#3b82f6',
   sounds: '#14b8a6',
+  'cat:emotes': '#eab308',
+  'cat:throw': '#f97316',
+  'cat:games': '#a855f7',
+  'cat:player': '#3b82f6',
+  rps: '#a855f7',
   _back: '#64748b',
 };
 
