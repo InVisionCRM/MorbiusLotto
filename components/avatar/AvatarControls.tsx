@@ -510,6 +510,16 @@ export default function AvatarControls({
                               : 'border-slate-200 bg-white text-slate-800 hover:border-cyan-200 hover:shadow-[0_2px_10px_rgba(2,132,199,0.12)]'
                         }`}
                       >
+                        {option.previewKind === 'avatar' ? (
+                          <div className="mb-1.5 flex justify-center">
+                            <AvatarView
+                              config={{ ...config, ...(option.previewPatch ?? {}) }}
+                              compact
+                              disableAmbientMotion
+                              className={`${compact ? 'w-12' : 'w-14'} aspect-[6/7] pointer-events-none select-none`}
+                            />
+                          </div>
+                        ) : null}
                         <div className="flex items-center justify-between gap-2">
                           <span
                             className={`line-clamp-2 text-sm font-semibold leading-tight ${
