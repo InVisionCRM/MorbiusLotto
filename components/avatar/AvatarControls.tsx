@@ -457,26 +457,10 @@ export default function AvatarControls({
               </div>
 
               <div className="relative">
-                <button
-                  type="button"
-                  onClick={() => optionsScrollRef.current?.scrollBy({ left: -180, behavior: 'smooth' })}
-                  className="absolute left-1 top-1/2 z-10 -translate-y-1/2 inline-flex h-7 w-7 items-center justify-center rounded-full border border-slate-200 bg-white/95 text-slate-500 shadow-sm hover:border-cyan-200 hover:text-cyan-700"
-                  aria-label="Scroll options left"
-                >
-                  <ChevronLeft size={14} />
-                </button>
-                <button
-                  type="button"
-                  onClick={() => optionsScrollRef.current?.scrollBy({ left: 180, behavior: 'smooth' })}
-                  className="absolute right-1 top-1/2 z-10 -translate-y-1/2 inline-flex h-7 w-7 items-center justify-center rounded-full border border-slate-200 bg-white/95 text-slate-500 shadow-sm hover:border-cyan-200 hover:text-cyan-700"
-                  aria-label="Scroll options right"
-                >
-                  <ChevronRight size={14} />
-                </button>
-
+                {/* Thumbnail grid: every option visible at once (no horizontal cycling). */}
                 <div
                   ref={optionsScrollRef}
-                  className="flex touch-pan-x gap-2 overflow-x-auto px-10 py-1.5 scrollbar-hide snap-x snap-mandatory"
+                  className={`grid ${compact ? 'grid-cols-3' : 'grid-cols-3 sm:grid-cols-4'} gap-2 py-1.5 pr-1 max-h-[48vh] overflow-y-auto overscroll-y-contain custom-scrollbar`}
                 >
                   {activeRow?.options.map((option) => {
                     const selected = option.value === currentValue;
@@ -500,7 +484,7 @@ export default function AvatarControls({
                           tryApplyOption(activeRow, option);
                         }}
                         style={colorCardStyle}
-                        className={`snap-center shrink-0 ${compact ? 'min-w-[122px] max-w-[150px] px-2.5 py-2' : 'min-w-[148px] max-w-[180px] px-3 py-3'} rounded-2xl border text-left transition-all ${
+                        className={`w-full ${compact ? 'px-2 py-2' : 'px-2.5 py-3'} rounded-2xl border text-left transition-all ${
                           isColorCard
                             ? selected
                               ? 'border-cyan-200 shadow-[0_0_0_2px_rgba(34,211,238,0.55),0_0_24px_rgba(34,211,238,0.42),0_4px_16px_rgba(6,182,212,0.28)] ring-2 ring-cyan-300/60'
