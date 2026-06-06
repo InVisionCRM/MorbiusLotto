@@ -31,6 +31,8 @@ import { RPS_EMOJI, RPS_REVEAL_FLY_MS, type RpsChoice } from '@/lib/poker-rps';
 
 /** A single RPS emoji toss over a seat at reveal (see use-poker-rps). */
 interface RpsRevealFlightView { id: string; seatIndex: number; choice: RpsChoice }
+/** A spectator badge for a duel between two other seats (see use-poker-rps). */
+interface RpsSpectatorBadgeView { matchId: string; aSeatIndex: number; bSeatIndex: number; scoreA: number; scoreB: number; flashWinnerSeatIndex: number | null; flashKey: number }
 import confetti from 'canvas-confetti';
 import { FloatingTableLogo } from './FloatingTableLogo';
 import { PokerRailActingHighlight } from './PokerRailActingHighlight';
@@ -178,6 +180,8 @@ export interface PokerTableProps {
   onChallengeRps?: (toSeatIndex: number) => void;
   /** Active RPS reveal tosses — each flings its emoji up over the seat (mirrors the emote toss). */
   rpsRevealFlights?: RpsRevealFlightView[];
+  /** Duels I'm watching — a small badge over the two seats with the running score + winner flash. */
+  rpsSpectatorBadges?: RpsSpectatorBadgeView[];
   /** Called when current player selects a QuickChat phrase (broadcast to table). */
   onPhraseReaction?: (phrase: string) => void;
   /** Called when current player selects an avatar emotion (broadcast to table). */
@@ -218,7 +222,7 @@ export interface PokerTableProps {
   layoutVariant?: LayoutVariant;
 }
 
-export function PokerTable({ state, currentPlayerAddress, timeLeft, chatBubbleBySeatIndex, onReUpClick, onMenuClick, reactionBySeatIndex, broadcastEmotionBySeatIndex, directedEmotes, stuckArrowsBySeatIndex, hitBySeatIndex, onSendDirectedEmote, onChallengeRps, rpsRevealFlights, onPhraseReaction, onAnimationReaction, onOpponentClick, onOpponentRadialAction, quickChatPhrases, setQuickChatPhrases, onOpenEditQuickChat, onLeave, onRequestMobileActivity, onSitOut, onSitBack, onShowCards, onMuckCards, tutorialTargets, dataTutorialTargetPot, showDealerAnchorGuides = false, layoutVariant = 'default' }: PokerTableProps) {
+export function PokerTable({ state, currentPlayerAddress, timeLeft, chatBubbleBySeatIndex, onReUpClick, onMenuClick, reactionBySeatIndex, broadcastEmotionBySeatIndex, directedEmotes, stuckArrowsBySeatIndex, hitBySeatIndex, onSendDirectedEmote, onChallengeRps, rpsRevealFlights, rpsSpectatorBadges, onPhraseReaction, onAnimationReaction, onOpponentClick, onOpponentRadialAction, quickChatPhrases, setQuickChatPhrases, onOpenEditQuickChat, onLeave, onRequestMobileActivity, onSitOut, onSitBack, onShowCards, onMuckCards, tutorialTargets, dataTutorialTargetPot, showDealerAnchorGuides = false, layoutVariant = 'default' }: PokerTableProps) {
   const tableRef = useRef<HTMLDivElement>(null);
   const [dims, setDims] = useState({ w: 640, h: 500 });
   // Projectile-hit "juice": transient comic bursts/flashes spawned at the impact point.
@@ -1571,6 +1575,54 @@ export function PokerTable({ state, currentPlayerAddress, timeLeft, chatBubbleBy
             </motion.div>
           </div>
         );
+      })}
+
+      {/* RPS spectator badges — for the rail: a small "dueling" pill over each of the
+          two seats with the running win count; the winner's pill flashes on reveal. */}
+      {dims.w > 0 && rpsSpectatorBadges?.flatMap((badge) => {
+        const pillSize = Math.max(11, dims.w * 0.026);
+        const lift = dims.w * 0.078;
+        return ([
+          { seatIndex: badge.aSeatIndex, score: badge.scoreA },
+          { seatIndex: badge.bSeatIndex, score: badge.scoreB },
+        ]).map(({ seatIndex, score }) => {
+          const an = seatAnchors[toDisplaySlot(seatIndex)];
+          if (!an) return null;
+          const x = an.fx * dims.w;
+          const y = an.fy * dims.h;
+          const won = badge.flashWinnerSeatIndex === seatIndex;
+          return (
+            <div
+              key={`${badge.matchId}-${seatIndex}`}
+              className="absolute pointer-events-none"
+              style={{ left: x, top: y, transform: `translate(-50%, calc(-50% - ${lift}px))`, zIndex: 43 }}
+            >
+              <motion.div
+                key={`${badge.matchId}-${seatIndex}-${badge.flashKey}`}
+                initial={{ scale: 1 }}
+                animate={won ? { scale: [1, 1.22, 1] } : { scale: 1 }}
+                transition={{ duration: 0.5, ease: 'easeOut' }}
+                style={{
+                  display: 'flex', alignItems: 'center', gap: pillSize * 0.34,
+                  padding: `${pillSize * 0.22}px ${pillSize * 0.5}px`,
+                  borderRadius: 999, lineHeight: 1, whiteSpace: 'nowrap',
+                  fontSize: pillSize, fontWeight: 800, letterSpacing: '0.04em',
+                  color: won ? '#5fd38a' : 'rgba(255,255,255,0.82)',
+                  background: 'linear-gradient(to top, rgba(34,36,42,0.94), rgba(46,48,54,0.92))',
+                  border: `1px solid ${won ? 'rgba(95,211,138,0.7)' : 'rgba(34,211,238,0.45)'}`,
+                  boxShadow: won
+                    ? '0 2px 10px rgba(0,0,0,0.5), 0 0 12px -2px rgba(95,211,138,0.7)'
+                    : '0 2px 10px rgba(0,0,0,0.5)',
+                  backdropFilter: 'blur(6px)', WebkitBackdropFilter: 'blur(6px)',
+                }}
+              >
+                <span style={{ width: pillSize * 0.4, height: pillSize * 0.4, borderRadius: '50%', background: won ? '#5fd38a' : '#22d3ee', boxShadow: `0 0 6px ${won ? '#5fd38a' : '#22d3ee'}` }} />
+                <span style={{ opacity: 0.7, fontSize: pillSize * 0.82 }}>RPS</span>
+                <span style={{ fontVariantNumeric: 'tabular-nums' }}>{score}</span>
+              </motion.div>
+            </div>
+          );
+        });
       })}
 
       {/* Stuck arrows — persistent pincushion around each target's circle (cleared per hand). */}

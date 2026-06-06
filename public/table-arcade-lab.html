@@ -1,0 +1,655 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover" />
+<title>Table Arcade — Animation Lab</title>
+<style>
+  :root {
+    --bg: #14161b;
+    --panel: #1f2229;
+    --panel2: #262a32;
+    --line: rgba(255,255,255,0.10);
+    --text: #e6ebf2;
+    --muted: rgba(255,255,255,0.55);
+    --cyan: #22d3ee;
+    --green: #5fd38a;
+    --red: #f08a8a;
+    --gold: #f3c969;
+    --felt: #1d3b34;
+  }
+  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  html, body { margin: 0; height: 100%; background: radial-gradient(ellipse at 50% 0%, #1b1e25, #101216 70%); color: var(--text);
+    font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; overflow: hidden; }
+  body { display: flex; flex-direction: column; user-select: none; -webkit-user-select: none; touch-action: manipulation; }
+
+  /* ---- top bar ---- */
+  header { display: flex; align-items: center; gap: 10px; padding: 9px 12px; border-bottom: 1px solid var(--line);
+    background: linear-gradient(to bottom, #1b1e24, #15171c); flex-wrap: wrap; flex: 0 0 auto; }
+  .brand { font-size: 11px; font-weight: 800; letter-spacing: .18em; text-transform: uppercase; color: var(--muted); margin-right: 4px; }
+  .brand b { color: var(--cyan); }
+  .games { display: flex; gap: 6px; flex-wrap: wrap; }
+  .gbtn { display: inline-flex; align-items: center; gap: 6px; padding: 7px 12px; border-radius: 10px; cursor: pointer;
+    font-size: 12px; font-weight: 800; letter-spacing: .02em; color: var(--text);
+    background: var(--panel2); border: 1px solid var(--line); transition: transform .14s cubic-bezier(.2,.8,.2,1), background .14s ease, border-color .14s ease, box-shadow .14s ease; }
+  .gbtn:hover { background: #2d323b; transform: translateY(-1px); }
+  .gbtn.active { background: rgba(34,211,238,0.16); border-color: rgba(34,211,238,0.55); color: var(--cyan); box-shadow: 0 0 0 1px rgba(34,211,238,0.3), 0 0 18px -6px rgba(34,211,238,0.8); }
+  .gbtn .e { font-size: 15px; }
+  .spacer { flex: 1 1 auto; }
+  .ctl { display: inline-flex; align-items: center; gap: 6px; font-size: 11px; color: var(--muted); font-weight: 700; }
+  .ctl select { background: var(--panel2); color: var(--text); border: 1px solid var(--line); border-radius: 8px; padding: 4px 7px; font-weight: 700; font-size: 12px; accent-color: var(--cyan); }
+  .linkish { font-size: 11px; font-weight: 800; color: var(--cyan); cursor: pointer; background: none; border: none; letter-spacing: .04em; }
+
+  /* ---- main stage ---- */
+  main { flex: 1 1 auto; position: relative; overflow: hidden; }
+  #stage { position: absolute; inset: 0; display: grid; place-items: center; padding: 10px 8px 168px; will-change: transform; }
+  #table { position: relative; width: min(94vw, calc((100dvh - 300px) * 1.55)); aspect-ratio: 16 / 10; }
+
+  .felt { position: absolute; inset: 6% 4%; border-radius: 50%;
+    background:
+      radial-gradient(ellipse at 50% 34%, rgba(255,255,255,0.06), transparent 45%),
+      radial-gradient(ellipse at 50% 42%, #2c5a4f, var(--felt) 56%, #142b26 100%);
+    box-shadow: inset 0 0 0 7px rgba(0,0,0,0.38), inset 0 0 70px rgba(0,0,0,0.6), inset 0 6px 22px rgba(255,255,255,0.05), 0 30px 70px rgba(0,0,0,0.65);
+    border: 2px solid rgba(0,0,0,0.55); }
+  .felt::before { content: ""; position: absolute; inset: 0; border-radius: 50%; box-shadow: inset 0 -18px 40px rgba(0,0,0,0.45); }
+  .felt::after { content: ""; position: absolute; inset: 7%; border-radius: 50%; border: 1px dashed rgba(255,255,255,0.08); }
+  .rail-label { position: absolute; top: 50%; left: 50%; transform: translate(-50%,-50%); text-align: center;
+    font-size: 12px; letter-spacing: .34em; text-transform: uppercase; color: rgba(255,255,255,0.12); font-weight: 800; pointer-events: none; }
+
+  /* seats */
+  .seat { position: absolute; transform: translate(-50%,-50%); display: flex; flex-direction: column; align-items: center; gap: 4px;
+    transition: opacity .45s ease, filter .45s ease; z-index: 5; }
+  .ava-wrap { position: relative; animation: idleFloat 3.4s ease-in-out infinite; }
+  @keyframes idleFloat { 0%,100% { transform: translateY(0); } 50% { transform: translateY(-2px); } }
+  .ava { width: 56px; height: 56px; border-radius: 50%; display: grid; place-items: center; font-size: 27px; position: relative;
+    background: radial-gradient(circle at 50% 30%, #3d434f, #23272f 75%); border: 2px solid rgba(255,255,255,0.18);
+    box-shadow: 0 7px 18px rgba(0,0,0,0.55), inset 0 1px 1px rgba(255,255,255,0.12); }
+  .seat.you .ava { border-color: rgba(34,211,238,0.75); box-shadow: 0 0 0 1px rgba(34,211,238,0.45), 0 7px 20px rgba(0,0,0,0.6), 0 0 18px -4px rgba(34,211,238,0.6); }
+  .seat .nm { font-size: 10px; font-weight: 800; color: var(--muted); max-width: 74px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .seat.you .nm { color: var(--cyan); }
+  .seat.out { opacity: .3; filter: grayscale(1) brightness(.65); }
+  .seat.out .ava-wrap { animation: none; }
+  .seat .holdring { position: absolute; inset: -5px; border-radius: 50%; border: 2px solid transparent; }
+  .seat.holder .holdring { border-color: rgba(240,138,138,0.95); animation: holderPulse .6s ease-in-out infinite; }
+  @keyframes holderPulse { 0%,100% { box-shadow: 0 0 0 0 rgba(240,138,138,0.55);} 50% { box-shadow: 0 0 0 9px rgba(240,138,138,0);} }
+  .seat.winner { z-index: 9; }
+  .seat.winner .ava { border-color: var(--gold); box-shadow: 0 0 0 2px rgba(243,201,105,0.6), 0 0 30px rgba(243,201,105,0.6); animation: winPop .6s cubic-bezier(.2,1.4,.4,1) both; }
+  @keyframes winPop { 0% { transform: scale(1);} 40% { transform: scale(1.28);} 100% { transform: scale(1.12);} }
+  .seat .crown { position: absolute; top: -22px; left: 50%; transform: translateX(-50%); font-size: 20px; opacity: 0; }
+  .seat.winner .crown { opacity: 1; animation: crownDrop .5s cubic-bezier(.2,1.5,.4,1) both; }
+  @keyframes crownDrop { from { transform: translate(-50%,-12px) scale(.4); opacity: 0; } to { transform: translate(-50%,0) scale(1); opacity: 1; } }
+
+  /* flying token (bomb) */
+  .flyer { position: absolute; transform: translate(-50%,-50%); font-size: 31px; pointer-events: none; z-index: 30;
+    filter: drop-shadow(0 5px 9px rgba(0,0,0,0.6)); }
+  .flyer .spark { position: absolute; top: -8px; left: 60%; font-size: 14px; animation: sparkFlick .18s steps(2) infinite; }
+  @keyframes sparkFlick { 0% { opacity: 1; transform: scale(1) rotate(0); } 100% { opacity: .6; transform: scale(1.3) rotate(20deg); } }
+  .flyer.held { animation: bombTense 1s ease-in-out infinite; }
+  @keyframes bombTense { 0%,100% { transform: translate(-50%,-50%) scale(1); } 50% { transform: translate(-50%,-50%) scale(1.12); } }
+  .smoke { position: absolute; transform: translate(-50%,-50%); pointer-events: none; z-index: 29; font-size: 16px; opacity: .5; }
+  .boom { position: absolute; transform: translate(-50%,-50%); pointer-events: none; z-index: 32; font-size: 44px; }
+
+  /* center arena overlay */
+  .arena { position: absolute; left: 50%; top: 50%; transform: translate(-50%,-50%); width: 82%; max-width: 760px;
+    z-index: 22; pointer-events: none; animation: arenaIn .32s cubic-bezier(.2,.9,.3,1) both; }
+  @keyframes arenaIn { from { opacity: 0; transform: translate(-50%,-50%) scale(.92); } to { opacity: 1; transform: translate(-50%,-50%) scale(1); } }
+  .arena.out { animation: arenaOut .2s ease both; }
+  @keyframes arenaOut { to { opacity: 0; transform: translate(-50%,-50%) scale(.96); } }
+
+  /* tug */
+  .tug-wrap { position: relative; height: 160px; }
+  .tug-rope { position: absolute; top: 50%; left: 7%; right: 7%; height: 7px; transform: translateY(-50%);
+    background: repeating-linear-gradient(90deg, #c79a63 0 9px, #9a7748 9px 18px); border-radius: 4px;
+    box-shadow: 0 3px 7px rgba(0,0,0,0.55), inset 0 1px 0 rgba(255,255,255,0.25); }
+  .tug-zone { position: absolute; top: 50%; transform: translate(-50%,-50%); width: 3px; height: 74px; border-radius: 3px; background: rgba(255,255,255,0.16); }
+  .tug-zone.l { left: 22%; background: linear-gradient(rgba(34,211,238,0.1), rgba(34,211,238,0.5), rgba(34,211,238,0.1)); }
+  .tug-zone.r { left: 78%; background: linear-gradient(rgba(240,138,138,0.1), rgba(240,138,138,0.5), rgba(240,138,138,0.1)); }
+  .tug-zone .flag { position: absolute; top: -16px; left: 50%; transform: translateX(-50%); font-size: 13px; }
+  .tug-knot { position: absolute; top: 50%; transform: translate(-50%,-50%); width: 16px; height: 34px; border-radius: 5px;
+    background: linear-gradient(#fff, #d33 40%, #911); box-shadow: 0 0 16px rgba(240,80,80,0.7), 0 3px 8px rgba(0,0,0,0.6); z-index: 3; }
+  .tug-side { position: absolute; top: 50%; transform: translate(-50%,-50%); display: flex; align-items: center; gap: 4px; z-index: 2; }
+  .tug-ava { width: 54px; height: 54px; border-radius: 50%; display: grid; place-items: center; font-size: 27px;
+    background: radial-gradient(circle at 50% 30%, #3d434f, #23272f 75%); border: 2px solid rgba(255,255,255,0.2); box-shadow: 0 6px 16px rgba(0,0,0,0.55); }
+  .tug-ava.you { border-color: rgba(34,211,238,0.75); }
+  .tug-strain { animation: strain .09s linear infinite; }
+  @keyframes strain { 0%,100% { } 50% { filter: brightness(1.08); } }
+
+  /* sprint */
+  .lane { position: relative; height: 44px; margin: 7px 0; border-radius: 12px;
+    background: linear-gradient(to right, rgba(0,0,0,0.28), rgba(0,0,0,0.16)); border: 1px solid var(--line); overflow: hidden; }
+  .lane .finish { content: ""; position: absolute; right: 7px; top: 0; bottom: 0; width: 6px;
+    background-image: linear-gradient(45deg, #fff 25%, transparent 25%), linear-gradient(-45deg, #fff 25%, transparent 25%);
+    background-size: 6px 6px; opacity: .5; }
+  .lane .runner { position: absolute; top: 50%; transform: translate(-50%,-50%); width: 36px; height: 36px; border-radius: 50%;
+    display: grid; place-items: center; font-size: 19px; background: radial-gradient(circle at 50% 30%, #3d434f, #23272f 75%);
+    border: 2px solid rgba(255,255,255,0.2); box-shadow: 0 4px 10px rgba(0,0,0,0.5); z-index: 2; will-change: left, transform; }
+  .lane .runner.you { border-color: rgba(34,211,238,0.75); }
+  .lane .trail { position: absolute; top: 50%; height: 3px; transform: translateY(-50%); left: 6px; border-radius: 3px;
+    background: linear-gradient(to right, transparent, rgba(34,211,238,0.0)); width: 0; }
+  .lane .ltag { position: absolute; left: 9px; top: 50%; transform: translateY(-50%); font-size: 10px; font-weight: 800; color: var(--muted); z-index: 1; pointer-events: none; }
+
+  /* quickdraw */
+  .qd { text-align: center; }
+  .qd-signal { font-size: clamp(40px, 9vw, 66px); font-weight: 900; letter-spacing: .04em; line-height: 1; transition: color .12s ease; }
+  .qd-signal.go { animation: goPop .3s cubic-bezier(.2,1.5,.4,1) both; }
+  @keyframes goPop { 0% { transform: scale(.6); } 60% { transform: scale(1.25); } 100% { transform: scale(1); } }
+  .qd-row { display: flex; justify-content: center; flex-wrap: wrap; gap: 20px; margin-top: 20px; }
+  .qd-guy { display: flex; flex-direction: column; align-items: center; gap: 5px; transition: transform .18s cubic-bezier(.2,1.4,.4,1); }
+  .qd-ava { width: 52px; height: 52px; border-radius: 50%; display: grid; place-items: center; font-size: 26px;
+    background: radial-gradient(circle at 50% 30%, #3d434f, #23272f 75%); border: 2px solid rgba(255,255,255,0.2); box-shadow: 0 6px 14px rgba(0,0,0,0.5); }
+  .qd-ava.you { border-color: rgba(34,211,238,0.75); }
+  .qd-guy.win .qd-ava { border-color: var(--gold); box-shadow: 0 0 24px rgba(243,201,105,0.6); }
+  .qd-guy.dq { opacity: .4; filter: grayscale(1); }
+  .qd-rt { font-size: 11px; font-weight: 800; color: var(--muted); min-height: 14px; }
+
+  /* ---- dock (controls + status) ---- */
+  .dock { position: absolute; left: 50%; bottom: calc(14px + env(safe-area-inset-bottom,0)); transform: translateX(-50%);
+    width: min(430px, calc(100vw - 20px)); z-index: 40; display: flex; flex-direction: column; gap: 9px; padding: 11px 13px 13px;
+    border-radius: 18px; background: linear-gradient(to top, rgba(28,31,38,0.97), rgba(40,44,52,0.95));
+    border: 1px solid rgba(255,255,255,0.12); box-shadow: 0 16px 44px rgba(0,0,0,0.6); -webkit-backdrop-filter: blur(13px); backdrop-filter: blur(13px); }
+  .dock .title { font-size: 9.5px; font-weight: 800; letter-spacing: .16em; text-transform: uppercase; color: var(--muted); display: flex; align-items: center; gap: 6px; }
+  .dock .title .dot { width: 6px; height: 6px; border-radius: 50%; background: var(--cyan); box-shadow: 0 0 8px var(--cyan); }
+  .status { text-align: center; font-size: 13px; font-weight: 700; min-height: 18px; color: var(--text); }
+  .status .sub { display: block; font-size: 11px; color: var(--muted); font-weight: 600; margin-top: 2px; }
+  .mash { position: relative; width: 100%; min-height: 64px; padding: 18px 0; border-radius: 14px; border: none; cursor: pointer;
+    font-size: 18px; font-weight: 900; letter-spacing: .06em; overflow: hidden; touch-action: none; user-select: none;
+    color: #06222a; background: linear-gradient(to bottom, #34e9ff, #14b3d2); box-shadow: 0 6px 0 #0e8aa3, 0 12px 20px rgba(0,0,0,0.45);
+    transition: transform .05s ease, box-shadow .05s ease, filter .1s ease; }
+  .mash:active { transform: translateY(5px); box-shadow: 0 1px 0 #0e8aa3, 0 5px 10px rgba(0,0,0,0.45); }
+  .mash:disabled { opacity: .4; cursor: default; box-shadow: 0 6px 0 #0e8aa3; }
+  .mash.mashing { filter: brightness(1.08) saturate(1.1); box-shadow: 0 6px 0 #0e8aa3, 0 0 26px -2px rgba(52,233,255,0.7); }
+  .mash.warn { background: linear-gradient(to bottom, #ffd23f, #e6a700); box-shadow: 0 6px 0 #a87c00, 0 12px 20px rgba(0,0,0,0.45); color: #2a1f00; }
+  .mash.warn.mashing { box-shadow: 0 6px 0 #a87c00, 0 0 26px -2px rgba(255,210,63,0.7); }
+  .mash.danger { background: linear-gradient(to bottom, #ff6b6b, #d23c3c); box-shadow: 0 6px 0 #9c2626, 0 12px 20px rgba(0,0,0,0.45); color: #2a0606; }
+  .mash.danger.mashing { box-shadow: 0 6px 0 #9c2626, 0 0 26px -2px rgba(255,107,107,0.7); }
+  .ripple { position: absolute; border-radius: 50%; background: rgba(255,255,255,0.5); transform: translate(-50%,-50%) scale(0); pointer-events: none; animation: rip .42s ease-out forwards; }
+  @keyframes rip { to { transform: translate(-50%,-50%) scale(7); opacity: 0; } }
+  .row { display: flex; gap: 8px; }
+  .btn { flex: 1 1 0; padding: 11px 0; border-radius: 11px; font-size: 12px; font-weight: 800; cursor: pointer;
+    background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.12); color: rgba(255,255,255,0.78); transition: background .14s ease; }
+  .btn:hover { background: rgba(255,255,255,0.11); }
+  .btn.primary { background: rgba(34,211,238,0.16); border-color: rgba(34,211,238,0.5); color: var(--cyan); }
+  .hint { text-align: center; font-size: 10px; color: rgba(255,255,255,0.4); }
+
+  /* result banner */
+  .banner { position: absolute; left: 50%; top: 30%; transform: translate(-50%,-50%); z-index: 46; text-align: center;
+    pointer-events: none; opacity: 0; }
+  .banner.show { opacity: 1; animation: bannerIn .5s cubic-bezier(.16,1.2,.3,1) both; }
+  .banner .big { font-size: clamp(30px, 8vw, 46px); font-weight: 900; letter-spacing: .02em; }
+  .banner .who { font-size: 15px; font-weight: 800; color: var(--muted); margin-top: 4px; }
+  .banner.win .big { color: var(--green); text-shadow: 0 0 30px rgba(95,211,138,0.55); }
+  .banner.lose .big { color: var(--red); }
+  @keyframes bannerIn { 0% { opacity: 0; transform: translate(-50%,-30%) scale(.6); } 60% { opacity: 1; transform: translate(-50%,-52%) scale(1.06); } 100% { transform: translate(-50%,-50%) scale(1); } }
+
+  /* countdown + screen flash */
+  #countdown { position: absolute; inset: 0; z-index: 48; display: grid; place-items: center; pointer-events: none; }
+  #countdown .num { font-size: clamp(80px, 22vw, 180px); font-weight: 900; color: #fff; text-shadow: 0 0 40px rgba(34,211,238,0.6), 0 8px 30px rgba(0,0,0,0.6); }
+  .cdpop { animation: cdpop .9s cubic-bezier(.2,.9,.3,1) both; }
+  @keyframes cdpop { 0% { opacity: 0; transform: scale(2.2); } 25% { opacity: 1; transform: scale(1); } 80% { opacity: 1; transform: scale(1); } 100% { opacity: 0; transform: scale(.7); } }
+  .cdgo { color: var(--green) !important; animation: cdgo .7s ease both; }
+  @keyframes cdgo { 0% { opacity: 0; transform: scale(.5); } 30% { opacity: 1; transform: scale(1.15); } 100% { opacity: 0; transform: scale(1.4); } }
+  #flash { position: absolute; inset: 0; z-index: 47; pointer-events: none; opacity: 0; background: #fff; }
+  #fx { position: absolute; inset: 0; z-index: 44; pointer-events: none; }
+
+  /* tuning drawer */
+  .tuner { position: absolute; top: 0; right: 0; width: 250px; max-height: 100%; overflow: auto; z-index: 55;
+    background: var(--panel); border-left: 1px solid var(--line); padding: 12px; transform: translateX(100%); transition: transform .22s cubic-bezier(.2,.8,.2,1); }
+  .tuner.open { transform: translateX(0); }
+  .tuner h3 { margin: 0 0 8px; font-size: 11px; letter-spacing: .14em; text-transform: uppercase; color: var(--muted); }
+  .tline { margin: 9px 0; }
+  .tline label { display: flex; justify-content: space-between; font-size: 11px; color: var(--muted); font-weight: 700; margin-bottom: 3px; }
+  .tline label b { color: var(--cyan); font-variant-numeric: tabular-nums; }
+  .tline input[type=range] { width: 100%; accent-color: var(--cyan); }
+  .tnote { font-size: 10px; color: rgba(255,255,255,0.35); line-height: 1.5; margin-top: 10px; }
+
+  /* mobile */
+  @media (max-width: 640px) {
+    header { gap: 6px; padding: 7px 8px; }
+    .brand { display: none; }
+    .gbtn { padding: 6px 9px; font-size: 11px; }
+    .dock { width: calc(100vw - 14px); padding: 10px 11px 12px; }
+    .mash { min-height: 68px; font-size: 19px; }
+    .arena { width: 92%; }
+    .tug-side .nm, .qd-rt { font-size: 10px; }
+  }
+</style>
+</head>
+<body>
+<header>
+  <span class="brand"><b>Table</b> Arcade · Lab</span>
+  <div class="games">
+    <button class="gbtn active" data-game="potato"><span class="e">💣</span> Hot Potato</button>
+    <button class="gbtn" data-game="sprint"><span class="e">🏃</span> Mash Sprint</button>
+    <button class="gbtn" data-game="tug"><span class="e">🪢</span> Tug-of-War</button>
+    <button class="gbtn" data-game="quickdraw"><span class="e">⚡</span> Quick Draw</button>
+  </div>
+  <span class="spacer"></span>
+  <label class="ctl">Players
+    <select id="playerCount">
+      <option>2</option><option>3</option><option>4</option><option selected>5</option><option>6</option><option>7</option><option>8</option>
+    </select>
+  </label>
+  <button class="linkish" id="tuneBtn">⚙ Tune</button>
+</header>
+
+<main>
+  <canvas id="fx"></canvas>
+  <div id="stage">
+    <div id="table">
+      <div class="felt"><div class="rail-label">MORBlotto</div></div>
+    </div>
+  </div>
+
+  <div id="flash"></div>
+  <div id="countdown"></div>
+
+  <div class="banner" id="banner"><div class="big" id="bannerBig"></div><div class="who" id="bannerWho"></div></div>
+
+  <div class="dock">
+    <div class="title"><span class="dot"></span> <span id="dockTitle">Hot Potato</span></div>
+    <div class="status" id="status">Tap “Start round”.</div>
+    <button class="mash" id="mash" disabled>MASH</button>
+    <div class="row">
+      <button class="btn primary" id="startBtn">Start round</button>
+      <button class="btn" id="againBtn" style="display:none">Play again</button>
+    </div>
+    <div class="hint" id="hint">Tip: tap as fast as you can! (or hammer SPACE)</div>
+  </div>
+
+  <div class="tuner" id="tuner">
+    <h3>Feel tuning</h3>
+    <div id="tunerBody"></div>
+    <div class="tnote">These map 1:1 to the server engine constants in <code>table-arcade.ts</code>. Dial in the feel here; the values you land on get copied into the engine.</div>
+  </div>
+</main>
+
+<script>
+/* =========================================================================
+ * Table Arcade — animation lab
+ * Single-file, no deps. Proves the *feel* of the four games so we tune the
+ * motion before porting into the real poker table. The human controls seat 0
+ * ("You"); the rest are bots that mash / react / pass at human-ish rates so
+ * each animation is demonstrable solo. Bot rates + the difficulty slider are
+ * lab-only; the real games are human-vs-human.
+ * ========================================================================= */
+const FACES = ['🦊','🐼','🐯','🦁','🐸','🐵','🐧','🐶','🐰','🐮','🦉','🐲'];
+const NAMES = ['You','Vex','Mira','Dao','Pip','Koa','Zane','Nyx','Ria','Bex'];
+
+const PARAMS = {
+  tugPull:        { label:'Tug pull / tap',       min:0.6, max:3,   step:0.1, value:1.4 },
+  sprintStep:     { label:'Sprint step / tap',    min:0.8, max:5,   step:0.1, value:2.2 },
+  maxTapsTick:    { label:'Max taps / 100ms',     min:2,   max:8,   step:1,   value:4 },
+  potatoFuseMin:  { label:'Potato fuse min (s)',  min:2,   max:8,   step:0.5, value:3.5 },
+  potatoFuseMax:  { label:'Potato fuse max (s)',  min:4,   max:14,  step:0.5, value:8 },
+  qdArmMin:       { label:'Draw wait min (s)',    min:0.8, max:4,   step:0.1, value:1.5 },
+  qdArmMax:       { label:'Draw wait max (s)',    min:2,   max:7,   step:0.1, value:4 },
+  countdown:      { label:'Countdown (s)',        min:0,   max:5,   step:1,   value:3 },
+  botSkill:       { label:'Bot difficulty',       min:0,   max:1,   step:0.05,value:0.35 },
+};
+const P = k => PARAMS[k].value;
+const rand = (a,b) => a + Math.random()*(b-a);
+const clamp = (v,a,b) => v<a?a:v>b?b:v;
+const now = () => performance.now();
+
+const tableEl = document.getElementById('table');
+const stageEl = document.getElementById('stage');
+const statusEl = document.getElementById('status');
+const mashEl = document.getElementById('mash');
+const startBtn = document.getElementById('startBtn');
+const againBtn = document.getElementById('againBtn');
+const hintEl = document.getElementById('hint');
+const dockTitle = document.getElementById('dockTitle');
+const banner = document.getElementById('banner');
+const bannerBig = document.getElementById('bannerBig');
+const bannerWho = document.getElementById('bannerWho');
+const flashEl = document.getElementById('flash');
+const countdownEl = document.getElementById('countdown');
+const fxCanvas = document.getElementById('fx');
+const fxCtx = fxCanvas.getContext('2d');
+
+let players = [], seatPos = [], current = 'potato', game = null;
+let raf = 0, lastT = 0, shakeAmt = 0;
+let fxParticles = [];
+
+const GAME_TITLES = { potato:'Hot Potato', sprint:'Mash Sprint', tug:'Tug-of-War', quickdraw:'Quick Draw' };
+
+// ---- players + layout ----
+function buildPlayers(n){
+  const order = [...Array(FACES.length).keys()];
+  for(let i=order.length-1;i>0;i--){ const j=(Math.random()*(i+1))|0; [order[i],order[j]]=[order[j],order[i]]; }
+  players = Array.from({length:n}, (_,i)=>({
+    id:i, isYou:i===0,
+    name: i===0 ? 'You' : (NAMES[(i % (NAMES.length-1))+1] || ('P'+i)),
+    face: i===0 ? '😎' : FACES[order[i % order.length]],
+  }));
+}
+function layoutSeats(){
+  const W = tableEl.clientWidth, H = tableEl.clientHeight;
+  const cx = W/2, cy = H/2, rx = W*0.46, ry = H*0.46;
+  seatPos = players.map((_,i)=>{
+    const ang = Math.PI/2 + (i/players.length)*Math.PI*2;
+    return { x: cx + Math.cos(ang)*rx, y: cy + Math.sin(ang)*ry };
+  });
+}
+function renderSeats(){
+  tableEl.querySelectorAll('.seat,.flyer,.boom,.smoke,.arena').forEach(e=>e.remove());
+  players.forEach((p,i)=>{
+    const s = document.createElement('div');
+    s.className = 'seat' + (p.isYou?' you':'');
+    s.id = 'seat'+i;
+    s.style.left = seatPos[i].x+'px'; s.style.top = seatPos[i].y+'px';
+    s.innerHTML = `<div class="ava-wrap"><div class="ava"><div class="holdring"></div>${p.face}</div><div class="crown">👑</div></div><div class="nm">${p.name}</div>`;
+    tableEl.appendChild(s);
+  });
+}
+const seatEl = i => document.getElementById('seat'+i);
+
+// ---- shared UI helpers ----
+function setStatus(main, sub){ statusEl.innerHTML = main + (sub?`<span class="sub">${sub}</span>`:''); }
+function setMash(label, on, cls){ mashEl.textContent = label; mashEl.disabled = !on; mashEl.className = 'mash'+(cls?(' '+cls):''); }
+function endControls(){ startBtn.style.display='none'; againBtn.style.display=''; setMash('MASH', false); }
+function startControls(){ startBtn.style.display=''; againBtn.style.display='none'; }
+function hideBanner(){ banner.className = 'banner'; }
+function showBanner(kind, big, who){ banner.className = 'banner show '+kind; bannerBig.textContent = big; bannerWho.textContent = who||''; }
+
+// ---- juice: flash, shake, haptics, confetti ----
+function flash(color='rgba(255,255,255,0.55)'){ flashEl.style.background = color; flashEl.style.opacity = '0.9';
+  flashEl.animate([{opacity:0.9},{opacity:0}],{duration:260,easing:'ease-out'}); setTimeout(()=>flashEl.style.opacity='0',260); }
+function shake(amt){ shakeAmt = Math.max(shakeAmt, amt); }
+function haptic(ms){ if(navigator.vibrate) { try{ navigator.vibrate(ms); }catch(e){} } }
+function confettiBurst(cx, cy, palette, count=90){
+  for(let i=0;i<count;i++){
+    const a = rand(0, Math.PI*2), sp = rand(2, 9);
+    fxParticles.push({ x:cx, y:cy, vx:Math.cos(a)*sp, vy:Math.sin(a)*sp - rand(2,6),
+      rot:rand(0,6), vr:rand(-0.3,0.3), size:rand(5,11), color:palette[(Math.random()*palette.length)|0], life:1 });
+  }
+}
+function sizeFx(){ fxCanvas.width = fxCanvas.clientWidth; fxCanvas.height = fxCanvas.clientHeight; }
+function updateFx(dt){
+  if(fxParticles.length){
+    const g = 0.22*(dt/16);
+    fxCtx.clearRect(0,0,fxCanvas.width,fxCanvas.height);
+    for(const p of fxParticles){
+      p.vy += g; p.x += p.vx*(dt/16); p.y += p.vy*(dt/16); p.rot += p.vr; p.life -= 0.006*(dt/16);
+      fxCtx.save(); fxCtx.translate(p.x,p.y); fxCtx.rotate(p.rot); fxCtx.globalAlpha = Math.max(0,p.life);
+      fxCtx.fillStyle = p.color; fxCtx.fillRect(-p.size/2,-p.size/2,p.size,p.size*0.6); fxCtx.restore();
+    }
+    fxParticles = fxParticles.filter(p=>p.life>0 && p.y < fxCanvas.height+30);
+    if(!fxParticles.length) fxCtx.clearRect(0,0,fxCanvas.width,fxCanvas.height);
+  }
+  if(shakeAmt>0.2){ stageEl.style.transform = `translate(${rand(-shakeAmt,shakeAmt)}px,${rand(-shakeAmt,shakeAmt)}px)`; shakeAmt *= Math.pow(0.86, dt/16); }
+  else if(shakeAmt!==0){ shakeAmt=0; stageEl.style.transform=''; }
+}
+/** Celebrate a winner: confetti from their position + flash. `won` = local "You" won. */
+function celebrate(won, atX, atY){
+  const main = document.querySelector('main');
+  const mx = atX != null ? atX : main.clientWidth/2, my = atY != null ? atY : main.clientHeight*0.4;
+  confettiBurst(mx, my, won ? ['#22d3ee','#5fd38a','#f3c969','#ffffff'] : ['#8a93a3','#aab3c2','#6b7280','#cfd6e0'], won?110:55);
+  flash(won ? 'rgba(95,211,138,0.32)' : 'rgba(255,255,255,0.14)');
+  haptic(won ? [0,40,40,80] : 30);
+}
+/** Crown + pop the winning seat (potato / quickdraw on-felt). */
+function crownSeat(i){ const s=seatEl(i); if(!s) return; s.classList.add('winner'); }
+/** Convert a table-local point to main-canvas coords for confetti origin. */
+function seatFxPoint(i){ const r=tableEl.getBoundingClientRect(), m=document.querySelector('main').getBoundingClientRect();
+  return { x: r.left - m.left + seatPos[i].x, y: r.top - m.top + seatPos[i].y }; }
+
+// ============================ HOT POTATO =================================
+function PotatoGame(){
+  let holder=0, alive=[], fuseEnd=0, fly=null, botPlan=0, over=false, started=false, smokeT=0;
+  const bomb = document.createElement('div'); bomb.className='flyer'; bomb.innerHTML='💣<span class="spark">✨</span>';
+  function placeBombAt(i){ bomb.style.left=seatPos[i].x+'px'; bomb.style.top=(seatPos[i].y-46)+'px'; }
+  function start(){
+    over=false; started=true; alive=players.map((_,i)=>i); holder=(Math.random()*players.length)|0;
+    fuseEnd=now()+rand(P('potatoFuseMin'),P('potatoFuseMax'))*1000; botPlan=0;
+    players.forEach((_,i)=>seatEl(i).classList.remove('out','winner'));
+    tableEl.appendChild(bomb); bomb.classList.add('held'); placeBombAt(holder); markHolder();
+    setStatus('🔥 Pass it before it blows!','You can only pass while you’re holding it.'); refreshControls();
+  }
+  function markHolder(){ players.forEach((_,i)=> seatEl(i)?.classList.toggle('holder', i===holder && alive.includes(i))); }
+  function refreshControls(){ const youHold = holder===0 && alive.includes(0) && !fly && !over;
+    setMash(youHold ? 'PASS! 💣' : 'PASS', youHold, 'danger'); }
+  function nextAlive(from){ const ord=players.map((_,i)=>i), idx=ord.indexOf(from);
+    for(let k=1;k<=ord.length;k++){ const c=ord[(idx+k)%ord.length]; if(alive.includes(c)) return c; } return from; }
+  function pass(){ if(fly||over) return; const to=nextAlive(holder); if(to===holder) return;
+    fly={from:holder, to, t:0, dur:330}; holder=to; bomb.classList.remove('held'); markHolder(); refreshControls(); haptic(12); }
+  function puff(x,y){ const s=document.createElement('div'); s.className='smoke'; s.textContent='💨'; s.style.left=x+'px'; s.style.top=y+'px';
+    tableEl.appendChild(s); s.animate([{opacity:.5,transform:'translate(-50%,-50%) scale(.6)'},{opacity:0,transform:'translate(-50%,-90%) scale(1.4)'}],{duration:500,easing:'ease-out'}).onfinish=()=>s.remove(); }
+  function explode(i){
+    const b=document.createElement('div'); b.className='boom'; b.textContent='💥';
+    b.style.left=seatPos[i].x+'px'; b.style.top=(seatPos[i].y-12)+'px'; tableEl.appendChild(b);
+    b.animate([{transform:'translate(-50%,-50%) scale(.4)',opacity:1},{transform:'translate(-50%,-50%) scale(2)',opacity:0}],{duration:560,easing:'ease-out'}).onfinish=()=>b.remove();
+    const s=seatEl(i); s.classList.add('out'); s.classList.remove('holder');
+    const av=s.querySelector('.ava'); if(av){ av.textContent='💀'; }
+    shake(10); flash('rgba(255,140,90,0.25)'); haptic(60);
+  }
+  function update(dt){
+    if(!started||over) return;
+    if(fly){ fly.t += dt/fly.dur; const t=clamp(fly.t,0,1);
+      const a=seatPos[fly.from], c=seatPos[fly.to], mx=(a.x+c.x)/2, my=Math.min(a.y,c.y)-90;
+      const x=(1-t)*(1-t)*a.x+2*(1-t)*t*mx+t*t*c.x, y=(1-t)*(1-t)*(a.y-46)+2*(1-t)*t*my+t*t*(c.y-46);
+      bomb.style.left=x+'px'; bomb.style.top=y+'px'; bomb.style.transform=`translate(-50%,-50%) rotate(${t*430}deg)`;
+      smokeT+=dt; if(smokeT>55){ smokeT=0; puff(x,y); }
+      if(fly.t>=1){ fly=null; bomb.style.transform='translate(-50%,-50%)'; bomb.classList.add('held'); placeBombAt(holder); refreshControls(); if(holder!==0) scheduleBot(); }
+      return;
+    }
+    if(holder!==0 && alive.includes(holder)){ if(botPlan===0) scheduleBot(); else if(now()>=botPlan){ botPlan=0; pass(); } }
+    if(now()>=fuseEnd){
+      explode(holder); alive=alive.filter(s=>s!==holder);
+      if(alive.length<=1){ finish(alive[0]); return; }
+      holder=nextAlive(holder); placeBombAt(holder); markHolder(); refreshControls();
+      fuseEnd=now()+rand(P('potatoFuseMin'),P('potatoFuseMax'))*1000; if(holder!==0) scheduleBot();
+    }
+  }
+  function scheduleBot(){ botPlan = now()+ rand(300,700) + (1-P('botSkill'))*700; }
+  function finish(winner){ over=true; bomb.remove(); markHolder(); endControls();
+    const won=winner===0; if(winner!=null){ crownSeat(winner); const pt=seatFxPoint(winner); celebrate(won, pt.x, pt.y); }
+    showBanner(won?'win':'lose', won?'🏆 You survived!':'💥 Out!', won?'':`${players[winner]?.name||'Seat '+winner} survived`);
+    setStatus(won?'You’re the last one standing.':`${players[winner]?.name||'Seat '+winner} wins.`,''); }
+  function onMash(){ if(holder===0 && !fly && !over && alive.includes(0)) pass(); }
+  function stop(){ bomb.remove(); tableEl.querySelectorAll('.boom,.smoke').forEach(e=>e.remove());
+    players.forEach((_,i)=>{ const s=seatEl(i); if(s){ s.classList.remove('holder','out','winner'); const av=s.querySelector('.ava'); if(av) av.textContent=players[i].face; } }); }
+  return { start, update, onMash, stop };
+}
+
+// ============================ MASH SPRINT ===============================
+function SprintGame(){
+  let prog=[], over=false, started=false, botRate=[], laneW=0;
+  function start(){
+    over=false; started=true; prog=players.map(()=>0);
+    botRate=players.map((_,i)=> i===0?0: rand(0.6,1.0)*(0.03+P('botSkill')*0.12));
+    buildArena(); setStatus('🏁 Mash to the finish!','Tap as fast as you can!'); setMash('MASH! 🏃', true);
+  }
+  function buildArena(){
+    const a=document.createElement('div'); a.className='arena'; a.id='sprintArena';
+    a.innerHTML = players.map((p,i)=>`<div class="lane"><span class="ltag">${p.name}</span><div class="finish"></div><div class="runner${p.isYou?' you':''}" id="run${i}">${p.face}</div></div>`).join('');
+    tableEl.appendChild(a);
+    requestAnimationFrame(()=>{ const r=document.getElementById('run0'); laneW=r?r.parentElement.clientWidth:300; players.forEach((_,i)=>placeRunner(i)); });
+  }
+  function placeRunner(i){ const r=document.getElementById('run'+i); if(!r) return;
+    const x = 24 + (laneW-50)*(prog[i]/100);
+    r.style.left=x+'px'; r.style.transform=`translate(-50%,-50%) rotate(${Math.sin(now()/70+i)*7}deg) scaleX(${1+(botRate[i]||(i===0?0.06:0))*2})`; }
+  function update(dt){
+    if(over||!started) return; let win=-1;
+    players.forEach((_,i)=>{ if(i!==0 && Math.random() < botRate[i]*(dt/16)) prog[i]=clamp(prog[i]+P('sprintStep'),0,100);
+      placeRunner(i); if(prog[i]>=100 && win<0) win=i; });
+    if(win>=0) finish(win);
+  }
+  function onMash(){ if(!over&&started){ prog[0]=clamp(prog[0]+P('sprintStep'),0,100); placeRunner(0); } }
+  function finish(w){ over=true; endControls(); const won=w===0;
+    const r=document.getElementById('run'+w); if(r){ r.style.zIndex=5; r.animate([{transform:r.style.transform},{transform:'translate(-50%,-50%) scale(1.4)'}],{duration:400,easing:'cubic-bezier(.2,1.4,.4,1)',fill:'forwards'}); }
+    const m=document.querySelector('main'); celebrate(won, m.clientWidth*0.78, m.clientHeight*0.45);
+    showBanner(won?'win':'lose', won?'🏆 1st place!':'🏁 Finished', won?'':`${players[w].name} took it`);
+    setStatus(won?'You won the sprint!':`${players[w].name} crossed first.`,''); }
+  function stop(){ document.getElementById('sprintArena')?.remove(); }
+  return { start, update, onMash, stop };
+}
+
+// ============================ TUG OF WAR ===============================
+function TugGame(){
+  let rope=0, over=false, started=false, botRate=0, jerk=0;
+  function start(){
+    over=false; started=true; rope=0; botRate=rand(0.6,1.0)*(0.03+P('botSkill')*0.12);
+    buildArena(); setStatus('🪢 Pull it past the line!','Tap fast — drag the knot to your side.'); setMash('PULL! 💪', true);
+    players.forEach((_,i)=>seatEl(i)?.style.setProperty('opacity', i<2?'1':'0.22'));
+  }
+  function buildArena(){
+    const a=document.createElement('div'); a.className='arena'; a.id='tugArena';
+    a.innerHTML = `<div class="tug-wrap">
+      <div class="tug-rope"></div>
+      <div class="tug-zone l"><span class="flag">🟦</span></div><div class="tug-zone r"><span class="flag">🟥</span></div>
+      <div class="tug-side" id="tugL" style="left:8%"><div class="tug-ava you">${players[0].face}</div></div>
+      <div class="tug-side" id="tugR" style="left:92%"><div class="tug-ava">${players[1]?.face||'🐯'}</div></div>
+      <div class="tug-knot" id="tugKnot" style="left:50%"></div></div>`;
+    tableEl.appendChild(a); render();
+  }
+  function render(){
+    const knot=document.getElementById('tugKnot'); if(!knot) return;
+    knot.style.left = (50 + rope*0.28 + jerk)+'%';
+    document.getElementById('tugL').style.left = clamp(8 + (rope<0?-rope*0.06:0),6,20)+'%';
+    document.getElementById('tugR').style.left = clamp(92 - (rope>0?rope*0.06:0),80,94)+'%';
+    const yav=document.querySelector('#tugL .tug-ava'), oav=document.querySelector('#tugR .tug-ava');
+    if(yav) yav.style.transform=`scale(${1+Math.max(0,-rope)*0.0018}) rotate(-7deg)`;
+    if(oav) oav.style.transform=`scale(${1+Math.max(0,rope)*0.0018}) rotate(7deg)`;
+  }
+  function update(dt){
+    if(over||!started) return; jerk *= Math.pow(0.8, dt/16);
+    if(Math.random() < botRate*(dt/16)){ rope=clamp(rope+P('tugPull'),-100,100); jerk=clamp(jerk+0.6,-2.5,2.5); }
+    render(); if(rope<=-100) finish(0); else if(rope>=100) finish(1);
+  }
+  function onMash(){ if(!over&&started){ rope=clamp(rope-P('tugPull'),-100,100); jerk=clamp(jerk-0.7,-2.5,2.5); render(); } }
+  function finish(side){ over=true; endControls(); const won=side===0;
+    const m=document.querySelector('main'); celebrate(won, m.clientWidth*0.5, m.clientHeight*0.42); shake(6);
+    const loser=document.querySelector(won?'#tugL .tug-ava':'#tugR .tug-ava'); // pulled toward winner
+    const winEl=document.querySelector(won?'#tugR .tug-ava':'#tugL .tug-ava');
+    if(loser) loser.animate([{transform:loser.style.transform},{transform:`translateX(${won?160:-160}px) rotate(${won?50:-50}deg)`,opacity:0.25}],{duration:520,easing:'ease-in',fill:'forwards'});
+    if(winEl) winEl.animate([{transform:winEl.style.transform},{transform:'scale(1.2)'}],{duration:300,fill:'forwards'});
+    showBanner(won?'win':'lose', won?'🏆 You won!':'💪 Pulled over', won?'':`${players[1]?.name||'Rival'} won`);
+    setStatus(won?'You dragged them over the line!':`${players[1]?.name||'Rival'} out-pulled you.`,''); }
+  function stop(){ document.getElementById('tugArena')?.remove(); players.forEach((_,i)=>seatEl(i)?.style.removeProperty('opacity')); }
+  return { start, update, onMash, stop };
+}
+
+// ============================ QUICK DRAW ===============================
+function QuickDrawGame(){
+  let phase='idle', goAt=0, over=false, botTimes=[], winner=null;
+  function start(){
+    over=false; phase='set'; winner=null;
+    goAt=now()+rand(P('qdArmMin'),P('qdArmMax'))*1000;
+    botTimes=players.map((_,i)=> i===0?Infinity: rand(0.7,1.3)*(1100 - P('botSkill')*700));
+    buildArena(); setStatus('Wait for it…','Tap the instant it says GO. Too soon = out.'); setMash('WAIT…', true, 'warn');
+  }
+  function buildArena(){
+    const a=document.createElement('div'); a.className='arena'; a.id='qdArena';
+    a.innerHTML = `<div class="qd"><div class="qd-signal" id="qdSig" style="color:var(--muted)">✋ READY</div>
+      <div class="qd-row">${players.map((p,i)=>`<div class="qd-guy" id="qg${i}"><div class="qd-ava${p.isYou?' you':''}">${p.face}</div><div class="qd-rt" id="qrt${i}">${p.name}</div></div>`).join('')}</div></div>`;
+    tableEl.appendChild(a);
+  }
+  function go(){ phase='go'; const s=document.getElementById('qdSig'); if(s){ s.textContent='⚡ GO!'; s.style.color='var(--green)'; s.classList.add('go'); }
+    flash('rgba(95,211,138,0.22)'); setMash('TAP! ⚡', true); }
+  function update(dt){
+    if(over) return;
+    if(phase==='set' && now()>=goAt){ go(); players.forEach((_,i)=>{ if(i!==0) botTimes[i]=goAt+botTimes[i]; }); }
+    if(phase==='go') players.forEach((_,i)=>{ if(i!==0 && winner===null && now()>=botTimes[i]) resolve(i, now()-goAt); });
+  }
+  function youTap(){
+    if(over) return;
+    if(phase==='set'){ const g=document.getElementById('qg0'); g?.classList.add('dq'); const rt=document.getElementById('qrt0'); if(rt) rt.textContent='🚫 too soon';
+      phase='dqYou'; setStatus('🚫 Too soon — you’re out.','Bots finish the draw.'); setMash('OUT', false); haptic(80); return; }
+    if(phase==='go' && winner===null) resolve(0, now()-goAt);
+  }
+  function resolve(i, rt){
+    if(winner!==null) return; winner=i; over=true;
+    const el=document.getElementById('qrt'+i); if(el) el.textContent=(rt/1000).toFixed(3)+'s';
+    document.getElementById('qg'+i)?.classList.add('win');
+    document.getElementById('qg'+i)?.style.setProperty('transform','translateY(-12px) scale(1.14)');
+    endControls(); const won=i===0;
+    const m=document.querySelector('main'); celebrate(won, m.clientWidth*0.5, m.clientHeight*0.4);
+    showBanner(won?'win':'lose', won?'⚡ Fastest!':'Drawn', won?`${(rt/1000).toFixed(3)}s`:`${players[i].name} · ${(rt/1000).toFixed(3)}s`);
+    setStatus(won?`You drew in ${(rt/1000).toFixed(3)}s!`:`${players[i].name} was faster.`,'');
+  }
+  function onMash(){ youTap(); }
+  function stop(){ document.getElementById('qdArena')?.remove(); }
+  return { start, update, onMash, stop };
+}
+
+const FACTORIES = { potato:PotatoGame, sprint:SprintGame, tug:TugGame, quickdraw:QuickDrawGame };
+
+// ---- main loop ----
+function loop(t){ const dt = Math.min(50, t-(lastT||t)); lastT=t;
+  if(game&&game.update) game.update(dt);
+  updateFx(dt);
+  raf=requestAnimationFrame(loop);
+}
+
+// ---- round control ----
+function newRound(){
+  hideBanner(); startControls();
+  if(game&&game.stop) game.stop();
+  game = FACTORIES[current]();
+  setStatus('Ready.', current==='quickdraw'?'Reaction test — wait for GO.':'Mash the button when it starts.');
+  setMash('MASH', false);
+}
+function startRound(){ hideBanner(); startBtn.style.display='none';
+  if(P('countdown')>0) runCountdown(()=>game.start()); else game.start();
+}
+function runCountdown(done){
+  let n=Math.round(P('countdown')); setMash('…', false); startBtn.disabled=true; statusEl.textContent='';
+  const tick=()=>{
+    if(n<=0){ countdownEl.innerHTML='<div class="num cdgo">GO!</div>'; setTimeout(()=>{ countdownEl.innerHTML=''; },650);
+      startBtn.disabled=false; done(); return; }
+    countdownEl.innerHTML=`<div class="num cdpop">${n}</div>`; haptic(15); n--; setTimeout(tick, 900);
+  };
+  tick();
+}
+
+function rebuild(){
+  const n = parseInt(document.getElementById('playerCount').value,10);
+  buildPlayers(n); layoutSeats(); renderSeats(); newRound();
+}
+
+// ---- input: ONE tap per press. No autofire / hold-to-repeat — mashing speed is
+//      the whole game. The server rate cap only exists to neutralise autoclicker
+//      macros, never to tap for you.
+let glowT=0;
+function tapPulse(){ mashEl.classList.add('mashing'); clearTimeout(glowT); glowT=setTimeout(()=>mashEl.classList.remove('mashing'),120); }
+function fireTap(){ if(!game||mashEl.disabled) return; game.onMash(); tapPulse();
+  const r=document.createElement('span'); r.className='ripple'; r.style.left='50%'; r.style.top='50%'; r.style.width=r.style.height='40px'; mashEl.appendChild(r); setTimeout(()=>r.remove(),420); }
+
+document.querySelectorAll('.gbtn').forEach(b=> b.addEventListener('click', ()=>{
+  document.querySelectorAll('.gbtn').forEach(x=>x.classList.remove('active'));
+  b.classList.add('active'); current=b.dataset.game; dockTitle.textContent=GAME_TITLES[current];
+  hintEl.textContent = current==='quickdraw' ? 'Tip: tap the moment it says GO.' : 'Tip: tap as fast as you can! (or hammer SPACE)';
+  newRound();
+}));
+document.getElementById('playerCount').addEventListener('change', rebuild);
+startBtn.addEventListener('click', startRound);
+againBtn.addEventListener('click', newRound);
+mashEl.addEventListener('pointerdown', e=>{ e.preventDefault(); if(mashEl.disabled) return; haptic(8); fireTap(); });
+mashEl.addEventListener('contextmenu', e=>e.preventDefault());
+document.addEventListener('keydown', e=>{
+  if(e.code!=='Space' && e.code!=='Enter') return;
+  e.preventDefault();
+  if(e.code==='Space' && e.repeat) return;                       // ignore OS key-repeat — no held-key autofire
+  if(!mashEl.disabled) fireTap();                                // mid-round → a tap
+  else if(startBtn.style.display!=='none') startRound();         // ready → start the round
+  else if(againBtn.style.display!=='none') newRound();           // result → play again
+});
+
+// tuner
+const tuner=document.getElementById('tuner'), tunerBody=document.getElementById('tunerBody');
+document.getElementById('tuneBtn').addEventListener('click', ()=> tuner.classList.toggle('open'));
+Object.entries(PARAMS).forEach(([k,p])=>{
+  const row=document.createElement('div'); row.className='tline';
+  row.innerHTML=`<label>${p.label} <b id="v_${k}">${p.value}</b></label><input type="range" id="r_${k}" min="${p.min}" max="${p.max}" step="${p.step}" value="${p.value}">`;
+  tunerBody.appendChild(row);
+  row.querySelector('input').addEventListener('input', e=>{ p.value=parseFloat(e.target.value); document.getElementById('v_'+k).textContent=p.value; });
+});
+
+function onResize(){ sizeFx(); layoutSeats(); players.forEach((_,i)=>{ const s=seatEl(i); if(s){ s.style.left=seatPos[i].x+'px'; s.style.top=seatPos[i].y+'px'; } }); }
+window.addEventListener('resize', onResize);
+sizeFx(); rebuild();
+raf=requestAnimationFrame(loop);
+</script>
+</body>
+</html>
