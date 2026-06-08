@@ -43,6 +43,23 @@ export interface RpsRevealFlight {
   choice: RpsChoice;
 }
 
+/**
+ * A spectator-facing badge for a duel I'm watching (not playing). The rail sees a
+ * small "these two are dueling" marker over each seat with the running score; the
+ * emoji toss + winner flash play at each reveal. Consumed by PokerTable.
+ */
+export interface RpsSpectatorBadge {
+  matchId: string;
+  aSeatIndex: number;
+  bSeatIndex: number;
+  scoreA: number;
+  scoreB: number;
+  /** Most recent round's winning seat (brief flash), or null (no reveal yet / draw). */
+  flashWinnerSeatIndex: number | null;
+  /** Bumps each reveal so the UI can retrigger the flash animation. */
+  flashKey: number;
+}
+
 interface UsePokerRpsArgs {
   clientRef: MutableRefObject<BlackjackWebSocketClient | null>;
   tableId: string;
@@ -73,6 +90,8 @@ export function usePokerRps({
   const [incoming, setIncoming] = useState<RpsIncoming | null>(null);
   const [match, setMatch] = useState<RpsMatchView | null>(null);
   const [revealFlights, setRevealFlights] = useState<RpsRevealFlight[]>([]);
+  // Duels I'm watching (not playing) — drives the rail's seat badges + tosses.
+  const [spectatorBadges, setSpectatorBadges] = useState<RpsSpectatorBadge[]>([]);
 
   // Listeners are bound once per table; read live values via refs to avoid re-subscribing.
   const challengesEnabledRef = useRef(challengesEnabled);
@@ -80,6 +99,8 @@ export function usePokerRps({
   const mySeatIndexRef = useRef(mySeatIndex);
   const matchRef = useRef<RpsMatchView | null>(match);
   const revealTimeoutsRef = useRef<Set<ReturnType<typeof setTimeout>>>(new Set());
+  // `${matchId}:${round}` we've already animated — makes reveal handling idempotent.
+  const seenRevealsRef = useRef<Set<string>>(new Set());
 
   useEffect(() => { challengesEnabledRef.current = challengesEnabled; }, [challengesEnabled]);
   useEffect(() => { stateRef.current = state; }, [state]);
@@ -148,25 +169,39 @@ export function usePokerRps({
       }
     };
 
-    const onReveal = (payload: { matchId?: string; aSeatIndex?: number; aChoice?: string; bSeatIndex?: number; bChoice?: string; winnerSeatIndex?: number | null; scoreA?: number; scoreB?: number }) => {
-      const { aSeatIndex, aChoice, bSeatIndex, bChoice, winnerSeatIndex, scoreA = 0, scoreB = 0 } = payload;
-      if (typeof aSeatIndex !== 'number' || typeof bSeatIndex !== 'number' || !isRpsChoice(aChoice) || !isRpsChoice(bChoice)) return;
-
-      // Toss both emoji up over their seats simultaneously (spectators included).
-      const stamp = Date.now();
+    // Toss both picks' emoji up over their seats simultaneously. Deterministic ids
+    // (matchId+round) so a reveal that arrives twice doesn't double-animate.
+    const tossFlights = (matchId: string, round: number, aSeatIndex: number, aChoice: RpsChoice, bSeatIndex: number, bChoice: RpsChoice) => {
       const flights: RpsRevealFlight[] = [
-        { id: `rps-${stamp}-${aSeatIndex}`, seatIndex: aSeatIndex, choice: aChoice },
-        { id: `rps-${stamp}-${bSeatIndex}`, seatIndex: bSeatIndex, choice: bChoice },
+        { id: `rps-${matchId}-${round}-${aSeatIndex}`, seatIndex: aSeatIndex, choice: aChoice },
+        { id: `rps-${matchId}-${round}-${bSeatIndex}`, seatIndex: bSeatIndex, choice: bChoice },
       ];
-      setRevealFlights((prev) => [...prev, ...flights]);
+      setRevealFlights((prev) => {
+        const have = new Set(prev.map((f) => f.id));
+        const add = flights.filter((f) => !have.has(f.id));
+        return add.length ? [...prev, ...add] : prev;
+      });
       const clearT = setTimeout(() => {
         setRevealFlights((prev) => prev.filter((f) => f.id !== flights[0].id && f.id !== flights[1].id));
         revealTimeoutsRef.current.delete(clearT);
       }, RPS_REVEAL_FLY_MS + 200);
       revealTimeoutsRef.current.add(clearT);
+    };
+
+    // Reveal for a match I'm IN (server delivers by address, so it always lands —
+    // this is what un-sticks the challenger's dock from "waiting").
+    const onReveal = (payload: { matchId?: string; aSeatIndex?: number; aChoice?: string; bSeatIndex?: number; bChoice?: string; winnerSeatIndex?: number | null; scoreA?: number; scoreB?: number; round?: number }) => {
+      const { matchId, aSeatIndex, aChoice, bSeatIndex, bChoice, winnerSeatIndex, scoreA = 0, scoreB = 0, round = 0 } = payload;
+      if (!matchId || typeof aSeatIndex !== 'number' || typeof bSeatIndex !== 'number' || !isRpsChoice(aChoice) || !isRpsChoice(bChoice)) return;
+
+      const key = `${matchId}:${round}`;
+      if (!seenRevealsRef.current.has(key)) {
+        seenRevealsRef.current.add(key);
+        tossFlights(matchId, round, aSeatIndex, aChoice, bSeatIndex, bChoice);
+      }
 
       const m = matchRef.current;
-      if (!m || payload.matchId !== m.matchId) return; // only participants score the dock
+      if (!m || matchId !== m.matchId) return; // only participants score the dock
       const iAmA = m.mySeatIndex === aSeatIndex;
       const myChoice = iAmA ? aChoice : bChoice;
       const oppChoice = iAmA ? bChoice : aChoice;
@@ -181,6 +216,41 @@ export function usePokerRps({
         phase: 'result',
         result: { myChoice, oppChoice, outcome },
       } : prev));
+    };
+
+    // Spectator channel: a duel between two OTHER seats. Drives the rail's badge +
+    // the toss/outcome. Ignored if I'm one of the duelists (my dock handles me).
+    const onSpectator = (payload: { matchId?: string; phase?: string; aSeatIndex?: number; bSeatIndex?: number; scoreA?: number; scoreB?: number; reveal?: { aChoice?: string; bChoice?: string; winnerSeatIndex?: number | null; round?: number } | null }) => {
+      const { matchId, phase, aSeatIndex, bSeatIndex, scoreA = 0, scoreB = 0, reveal } = payload;
+      if (!matchId || typeof aSeatIndex !== 'number' || typeof bSeatIndex !== 'number') return;
+      const me = mySeatIndexRef.current;
+      if (me === aSeatIndex || me === bSeatIndex) return;
+      if (phase === 'ended') {
+        setSpectatorBadges((prev) => prev.filter((b) => b.matchId !== matchId));
+        return;
+      }
+      let winnerSeat: number | null = null;
+      let didReveal = false;
+      if (reveal && isRpsChoice(reveal.aChoice) && isRpsChoice(reveal.bChoice)) {
+        didReveal = true;
+        winnerSeat = typeof reveal.winnerSeatIndex === 'number' ? reveal.winnerSeatIndex : null;
+        const round = typeof reveal.round === 'number' ? reveal.round : 0;
+        const key = `${matchId}:${round}`;
+        if (!seenRevealsRef.current.has(key)) {
+          seenRevealsRef.current.add(key);
+          tossFlights(matchId, round, aSeatIndex, reveal.aChoice, bSeatIndex, reveal.bChoice);
+        }
+      }
+      setSpectatorBadges((prev) => {
+        const existing = prev.find((b) => b.matchId === matchId);
+        const next: RpsSpectatorBadge = {
+          matchId, aSeatIndex, bSeatIndex, scoreA, scoreB,
+          flashWinnerSeatIndex: didReveal ? winnerSeat : (existing?.flashWinnerSeatIndex ?? null),
+          flashKey: (existing?.flashKey ?? 0) + (didReveal ? 1 : 0),
+        };
+        if (existing) return prev.map((b) => (b.matchId === matchId ? next : b));
+        return [...prev, next];
+      });
     };
 
     const onRoundCancelled = (payload: { matchId?: string; reason?: string }) => {
@@ -202,6 +272,7 @@ export function usePokerRps({
     client.on('poker_rps_started', onStarted);
     client.on('poker_rps_picked', onPicked);
     client.on('poker_rps_reveal', onReveal);
+    client.on('poker_rps_spectator', onSpectator);
     client.on('poker_rps_round_cancelled', onRoundCancelled);
     client.on('poker_rps_ended', onEnded);
     return () => {
@@ -210,10 +281,13 @@ export function usePokerRps({
       client.off('poker_rps_started', onStarted);
       client.off('poker_rps_picked', onPicked);
       client.off('poker_rps_reveal', onReveal);
+      client.off('poker_rps_spectator', onSpectator);
       client.off('poker_rps_round_cancelled', onRoundCancelled);
       client.off('poker_rps_ended', onEnded);
       revealTimeoutsRef.current.forEach((t) => clearTimeout(t));
       revealTimeoutsRef.current.clear();
+      seenRevealsRef.current.clear();
+      setSpectatorBadges([]);
     };
   }, [clientRef, tableId, seatName]);
 
@@ -300,6 +374,7 @@ export function usePokerRps({
     incoming,
     match,
     revealFlights,
+    spectatorBadges,
     onChallengeRps,
     acceptChallenge,
     denyChallenge,

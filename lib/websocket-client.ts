@@ -1090,6 +1090,27 @@ export class BlackjackWebSocketClient {
     this.send({ type: WS_MESSAGE_TYPES.pokerRpsLeave, payload: { matchId } });
   }
 
+  // ---- Table Arcade mini-games ----
+  /** Open an arcade game. Tug needs a target seat (1v1 duel); the rest open a whole-table lobby. */
+  sendArcadeInvite(tableId: string, gameType: 'tug' | 'quickdraw' | 'sprint' | 'potato', toSeatIndex?: number): void {
+    this.send({ type: WS_MESSAGE_TYPES.arcadeInvite, payload: { tableId, gameType, toSeatIndex } });
+  }
+
+  /** Accept/deny a duel challenge, or join/decline a table lobby. */
+  sendArcadeRespond(matchId: string, accept: boolean): void {
+    this.send({ type: WS_MESSAGE_TYPES.arcadeRespond, payload: { matchId, accept } });
+  }
+
+  /** Send a single tap intent (mash / draw / pass). The server is authoritative. */
+  sendArcadeInput(matchId: string): void {
+    this.send({ type: WS_MESSAGE_TYPES.arcadeInput, payload: { matchId } });
+  }
+
+  /** Leave / close an arcade match. */
+  sendArcadeLeave(matchId: string): void {
+    this.send({ type: WS_MESSAGE_TYPES.arcadeLeave, payload: { matchId } });
+  }
+
   /**
    * Blackjack-multi directed emote: throw an emote AT another seated player (by wallet address).
    * Server validates both are seated, then broadcasts { tableId, fromAddress, toAddress, kind }.

@@ -33,6 +33,8 @@ interface PokerTableViewProps {
   onChallengeRps?: (toSeatIndex: number) => void;
   /** Active RPS reveal tosses (emoji fling up over each seat). */
   rpsRevealFlights?: { id: string; seatIndex: number; choice: 'rock' | 'paper' | 'scissors' }[];
+  /** Duels I'm watching — the rail's seat badges (running score + winner flash). */
+  rpsSpectatorBadges?: { matchId: string; aSeatIndex: number; bSeatIndex: number; scoreA: number; scoreB: number; flashWinnerSeatIndex: number | null; flashKey: number }[];
   mySeatIndex: number;
   onPhraseReaction: (phrase: string) => void;
   onAnimationReaction: (emotion: Emotion) => void;
@@ -97,6 +99,7 @@ export function PokerTableView({
   onSendDirectedEmote,
   onChallengeRps,
   rpsRevealFlights,
+  rpsSpectatorBadges,
   mySeatIndex,
   onPhraseReaction,
   onAnimationReaction,
@@ -230,6 +233,7 @@ export function PokerTableView({
           onSendDirectedEmote={onSendDirectedEmote}
           onChallengeRps={onChallengeRps}
           rpsRevealFlights={rpsRevealFlights}
+          rpsSpectatorBadges={rpsSpectatorBadges}
           onPhraseReaction={mySeatIndex >= 0 ? onPhraseReaction : undefined}
           onAnimationReaction={mySeatIndex >= 0 ? onAnimationReaction : undefined}
           onReUpClick={canReup ? openReupModal : undefined}

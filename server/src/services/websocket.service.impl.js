@@ -26,6 +26,7 @@ const bj_multi_router_1 = require("./websocket/bj-multi-router");
 const poker_chip_wallet_1 = require("./poker-chip-wallet");
 const stream_voice_service_1 = require("./stream-voice.service");
 const poker_rps_1 = require("./poker-rps");
+const table_arcade_1 = require("./table-arcade");
 // EIP-712 domain and types for WebSocket authentication
 const AUTH_EIP712_DOMAIN = {
     name: 'MORBlotto Blackjack',
@@ -86,6 +87,11 @@ const CREATE_GAME_COOLDOWN_MS = 1000;
 const RPS_CHALLENGE_TIMEOUT_MS = 20_000; // auto-decline an unanswered challenge
 const RPS_PICK_TIMEOUT_MS = 15_000;      // cancel a round if a second pick never lands
 const RPS_CHALLENGE_COOLDOWN_MS = 4_000; // per-connection min gap between challenges
+const ARCADE_TICK_MS = 100;              // server-authoritative tick + state broadcast cadence
+const ARCADE_INVITE_TIMEOUT_MS = 20_000; // auto-decline an unanswered duel challenge
+const ARCADE_LOBBY_FILL_MS = 12_000;     // table lobby waits this long for joiners, then auto-starts (>=2)
+const ARCADE_CHALLENGE_COOLDOWN_MS = 4_000;
+const ARCADE_GAME_TYPES = new Set(['tug', 'quickdraw', 'sprint', 'potato']);
 // Default bet limits (in MORBIUS, 18 decimals) when admin config is missing
 const DEFAULT_BET_LIMITS = {
     MIN_BET: BigInt('1000000000000000000'), // 1 MORBIUS
@@ -117,6 +123,8 @@ class WebSocketService {
     // RPS table mini-game (ephemeral, just-for-fun). See poker-rps.ts + RPS_MINIGAME_PLAN.md.
     rpsRegistry = new poker_rps_1.RpsRegistry();
     rpsTimers = new Map(); // matchId -> { challenge?: Timeout, pick?: Timeout }
+    arcadeRegistry = new table_arcade_1.ArcadeRegistry();
+    arcadeTimers = new Map(); // matchId -> { invite?: Timeout, fill?: Timeout, loop?: Interval }
     constructor(server, gameService, dbService, tournamentService, pokerGameService, bjMultiService, authService) {
         this.gameService = gameService;
         this.dbService = dbService;
@@ -370,6 +378,7 @@ class WebSocketService {
                 // RPS: tear down any live duel so the peer's dock closes.
                 if (ws.playerAddress) {
                     this.endRpsMatchForAddress(ws.playerAddress, 'peer_left');
+                    this.endArcadeForAddress(ws.playerAddress, 'left');
                 }
                 if (ws.currentRoom) {
                     const set = this.roomToClients.get(ws.currentRoom);
@@ -1174,8 +1183,9 @@ class WebSocketService {
                 return this.sendError(ws, 'tableId required', message.requestId);
             }
             const state = await this.pokerGameService.leaveTable(tableId, ws.playerAddress);
-            // Standing up ends any live RPS duel (folded resets, dock must close).
+            // Standing up ends any live RPS duel / arcade game (seat is leaving).
             this.endRpsMatchForAddress(ws.playerAddress, 'peer_left');
+            this.endArcadeForAddress(ws.playerAddress, 'left');
             const roomId = `poker:table:${tableId}`;
             if (ws.connectionId) {
                 const set = this.roomToClients.get(roomId);
@@ -1451,6 +1461,29 @@ class WebSocketService {
         this.sendToPlayerAddress(match.a.address, message);
         this.sendToPlayerAddress(match.b.address, message);
     }
+    /**
+     * Broadcast a spectator-facing snapshot of a match to the whole table room so
+     * the rail can show a small "these two are dueling" badge + the reveal toss.
+     * Participants ignore this on the client (they're driven by their own dock
+     * events), so there's no duplication. Seat names are resolved client-side from
+     * the spectator's own table state, so no DB lookup is needed here.
+     * `phase` is 'active' (badge visible) or 'ended' (badge cleared); `reveal` is
+     * present only on the frame a round resolves.
+     */
+    broadcastRpsSpectator(match, phase, reveal) {
+        this.broadcastToRoom(`poker:table:${match.tableId}`, {
+            type: 'poker_rps_spectator',
+            payload: {
+                matchId: match.id,
+                phase,
+                aSeatIndex: match.a.seatIndex,
+                bSeatIndex: match.b.seatIndex,
+                scoreA: match.scoreA,
+                scoreB: match.scoreB,
+                reveal: reveal ?? null,
+            },
+        });
+    }
     clearRpsTimers(matchId) {
         const t = this.rpsTimers.get(matchId);
         if (!t) return;
@@ -1473,6 +1506,7 @@ class WebSocketService {
         this.clearRpsTimers(matchId);
         if (match) {
             this.sendRpsToBoth(match, { type: 'poker_rps_ended', payload: { matchId, reason } });
+            this.broadcastRpsSpectator(match, 'ended', null);
         }
     }
     async handlePokerRpsChallenge(ws, message) {
@@ -1593,6 +1627,8 @@ class WebSocketService {
                     scoreB: match.scoreB,
                 },
             });
+            // Let the rail show a "these two are dueling" badge over the seats.
+            this.broadcastRpsSpectator(match, 'active', null);
         }
         catch (error) {
             logger_1.logger.error('Error handling poker rps respond:', error);
@@ -1643,11 +1679,13 @@ class WebSocketService {
                 }
                 return;
             }
-            // Both picks in — reveal simultaneously to the whole table room (spectacle).
+            // Both picks in — resolve the round.
             this.clearRpsPickTimer(matchId);
             const reveal = result.reveal;
-            const roomId = `poker:table:${match.tableId}`;
-            this.broadcastToRoom(roomId, {
+            // Deliver the reveal to both duelists by ADDRESS (not room membership) so
+            // the challenger's dock always advances past "waiting" — a room broadcast
+            // could silently miss a participant whose connection isn't in the room set.
+            this.sendRpsToBoth(match, {
                 type: 'poker_rps_reveal',
                 payload: {
                     matchId,
@@ -1658,7 +1696,15 @@ class WebSocketService {
                     winnerSeatIndex: reveal.winnerSeatIndex,
                     scoreA: reveal.scoreA,
                     scoreB: reveal.scoreB,
+                    round: match.round,
                 },
+            });
+            // The rail sees the toss + outcome via the spectator channel.
+            this.broadcastRpsSpectator(match, 'active', {
+                aChoice: reveal.aChoice,
+                bChoice: reveal.bChoice,
+                winnerSeatIndex: reveal.winnerSeatIndex,
+                round: match.round,
             });
         }
         catch (error) {
@@ -1686,10 +1732,231 @@ class WebSocketService {
             this.rpsRegistry.leave(matchId);
             this.clearRpsTimers(matchId);
             this.sendRpsToBoth(match, { type: 'poker_rps_ended', payload: { matchId, reason: 'left' } });
+            this.broadcastRpsSpectator(match, 'ended', null);
         }
         catch (error) {
             logger_1.logger.error('Error handling poker rps leave:', error);
             this.sendError(ws, error.message || 'Failed to leave match', message.requestId);
+        }
+    }
+    // ===================== Table Arcade mini-games =========================
+    // Shared real-time engine (see table-arcade.ts). The server is the judge:
+    // clients only send `tap` intents; a ~10Hz tick loop applies them with a rate
+    // cap and broadcasts authoritative state to the room. Bragging-rights only.
+    arcadeRoom(match) { return `poker:table:${match.tableId}`; }
+    /** Broadcast an authoritative state frame to the whole table room. */
+    broadcastArcadeState(match) {
+        this.broadcastToRoom(this.arcadeRoom(match), { type: 'arcade_state', payload: this.arcadeRegistry.serialize(match) });
+    }
+    /** Terminal frame: room broadcast + address-guaranteed to each duelist (RPS lesson). */
+    broadcastArcadeEnded(match) {
+        const payload = this.arcadeRegistry.serialize(match);
+        this.broadcastToRoom(this.arcadeRoom(match), { type: 'arcade_ended', payload });
+        for (const p of match.players) this.sendToPlayerAddress(p.address, { type: 'arcade_ended', payload });
+    }
+    /** Lobby roster update so the host + invitees see who's in. */
+    broadcastArcadeLobby(match) {
+        this.broadcastToRoom(this.arcadeRoom(match), {
+            type: 'arcade_lobby',
+            payload: { matchId: match.id, tableId: match.tableId, gameType: match.gameType, mode: match.mode,
+                players: match.players.map((p) => ({ seatIndex: p.seatIndex, team: p.team ?? null })), status: match.status },
+        });
+    }
+    clearArcadeTimers(matchId) {
+        const t = this.arcadeTimers.get(matchId);
+        if (!t) return;
+        if (t.invite) clearTimeout(t.invite);
+        if (t.fill) clearTimeout(t.fill);
+        if (t.loop) clearInterval(t.loop);
+        this.arcadeTimers.delete(matchId);
+    }
+    /** Remove + announce a finished match. Idempotent (no-op once removed). */
+    finalizeArcade(matchId) {
+        const match = this.arcadeRegistry.get(matchId);
+        if (!match) return;
+        this.broadcastArcadeEnded(match);
+        this.clearArcadeTimers(matchId);
+        this.arcadeRegistry.leave(matchId);
+    }
+    /** Begin the 3·2·1 countdown and start the authoritative tick loop. */
+    beginArcade(matchId) {
+        const m = this.arcadeRegistry.beginCountdown(matchId, Date.now());
+        if (!m) { this.finalizeArcade(matchId); return false; }
+        const t = this.arcadeTimers.get(matchId) ?? {};
+        if (t.invite) { clearTimeout(t.invite); t.invite = undefined; }
+        if (t.fill) { clearTimeout(t.fill); t.fill = undefined; }
+        this.broadcastToRoom(this.arcadeRoom(m), {
+            type: 'arcade_countdown',
+            payload: { matchId, tableId: m.tableId, gameType: m.gameType, mode: m.mode,
+                players: m.players.map((p) => ({ seatIndex: p.seatIndex, team: p.team ?? null })),
+                startsInMs: table_arcade_1.ARCADE_COUNTDOWN_MS },
+        });
+        t.loop = setInterval(() => {
+            const r = this.arcadeRegistry.tick(matchId, Date.now());
+            if (!r.ok) { this.clearArcadeTimers(matchId); return; }
+            if (r.ended) { this.finalizeArcade(matchId); return; }
+            if (r.match.status === 'active') this.broadcastArcadeState(r.match);
+        }, ARCADE_TICK_MS);
+        this.arcadeTimers.set(matchId, t);
+        return true;
+    }
+    /** End whatever arcade match an address is in (disconnect / stand up). */
+    endArcadeForAddress(address, reason) {
+        const matchId = this.arcadeRegistry.getMatchIdByAddress(address);
+        if (!matchId) return;
+        const match = this.arcadeRegistry.get(matchId);
+        if (match) match.endedReason = reason;
+        this.finalizeArcade(matchId);
+    }
+    async handleArcadeInvite(ws, message) {
+        try {
+            if (!this.pokerGameService || !ws.playerAddress) {
+                return this.sendError(ws, 'Poker not available or wallet required', message.requestId);
+            }
+            const payload = message.payload ?? {};
+            const { tableId, gameType, toSeatIndex } = payload;
+            if (!tableId || typeof tableId !== 'string') return this.sendError(ws, 'tableId required', message.requestId);
+            if (!ARCADE_GAME_TYPES.has(gameType)) return this.sendError(ws, 'Invalid game', message.requestId);
+            const nowMs = Date.now();
+            if (ws.lastArcadeInviteAt != null && nowMs - ws.lastArcadeInviteAt < ARCADE_CHALLENGE_COOLDOWN_MS) {
+                return this.sendError(ws, 'Slow down', message.requestId);
+            }
+            const state = await this.pokerGameService.getTableState(tableId, null);
+            const from = this.rpsEligibility(state, ws.playerAddress);
+            if (!from.seated) return this.sendError(ws, 'Not seated at this table', message.requestId);
+            if (!from.eligible) {
+                return this.sendToPlayerAddress(ws.playerAddress, { type: 'arcade_declined', payload: { matchId: null, reason: 'in_hand' } });
+            }
+            const matchId = (0, uuid_1.v4)();
+            const fromName = from.seat?.displayName || null;
+            // Tug is a 1v1 duel (needs a target); the rest open a whole-table lobby.
+            if (gameType === 'tug') {
+                if (!Number.isInteger(toSeatIndex) || toSeatIndex < 0 || toSeatIndex >= state.seats.length
+                    || toSeatIndex === from.seatIndex || !state.seats[toSeatIndex]?.playerAddress) {
+                    return this.sendError(ws, 'Pick an opponent', message.requestId);
+                }
+                const targetAddress = state.seats[toSeatIndex].playerAddress;
+                const to = this.rpsEligibility(state, targetAddress);
+                if (!to.eligible) {
+                    return this.sendToPlayerAddress(ws.playerAddress, { type: 'arcade_declined', payload: { matchId: null, reason: 'in_hand' } });
+                }
+                const created = this.arcadeRegistry.create({ id: matchId, tableId, gameType, mode: 'duel', players: [
+                    { address: ws.playerAddress, seatIndex: from.seatIndex, team: 'left' },
+                    { address: targetAddress, seatIndex: toSeatIndex, team: 'right' },
+                ] });
+                if (!created.ok) {
+                    return this.sendToPlayerAddress(ws.playerAddress, { type: 'arcade_declined', payload: { matchId: null, reason: created.error === 'busy' ? 'busy' : 'error' } });
+                }
+                ws.lastArcadeInviteAt = nowMs;
+                this.sendToPlayerAddress(targetAddress, {
+                    type: 'arcade_invite',
+                    payload: { matchId, tableId, gameType, mode: 'duel', fromSeatIndex: from.seatIndex, toSeatIndex, fromName },
+                });
+                const timers = {};
+                timers.invite = setTimeout(() => {
+                    const m = this.arcadeRegistry.get(matchId);
+                    if (!m || m.status !== 'pending') return;
+                    this.arcadeRegistry.leave(matchId);
+                    this.clearArcadeTimers(matchId);
+                    this.sendToPlayerAddress(m.players[0].address, { type: 'arcade_declined', payload: { matchId, reason: 'timeout' } });
+                }, ARCADE_INVITE_TIMEOUT_MS);
+                this.arcadeTimers.set(matchId, timers);
+                return;
+            }
+            // Table lobby: host opens, all other eligible seated players are invited.
+            const created = this.arcadeRegistry.create({ id: matchId, tableId, gameType, mode: 'table', players: [
+                { address: ws.playerAddress, seatIndex: from.seatIndex },
+            ] });
+            if (!created.ok) {
+                return this.sendToPlayerAddress(ws.playerAddress, { type: 'arcade_declined', payload: { matchId: null, reason: created.error === 'busy' ? 'busy' : 'error' } });
+            }
+            ws.lastArcadeInviteAt = nowMs;
+            for (let i = 0; i < state.seats.length; i++) {
+                const seat = state.seats[i];
+                if (!seat?.playerAddress || i === from.seatIndex) continue;
+                if (!this.rpsEligibility(state, seat.playerAddress).eligible) continue;
+                this.sendToPlayerAddress(seat.playerAddress, {
+                    type: 'arcade_invite',
+                    payload: { matchId, tableId, gameType, mode: 'table', fromSeatIndex: from.seatIndex, fromName },
+                });
+            }
+            this.broadcastArcadeLobby(created.match);
+            const timers = {};
+            timers.fill = setTimeout(() => {
+                const m = this.arcadeRegistry.get(matchId);
+                if (!m || m.status !== 'pending') return;
+                if (m.players.length >= 2) this.beginArcade(matchId);
+                else this.finalizeArcade(matchId); // nobody joined
+            }, ARCADE_LOBBY_FILL_MS);
+            this.arcadeTimers.set(matchId, timers);
+        }
+        catch (error) {
+            logger_1.logger.error('Error handling arcade invite:', error);
+            this.sendError(ws, error.message || 'Failed to start game', message.requestId);
+        }
+    }
+    async handleArcadeRespond(ws, message) {
+        try {
+            if (!this.pokerGameService || !ws.playerAddress) {
+                return this.sendError(ws, 'Poker not available or wallet required', message.requestId);
+            }
+            const { matchId, accept } = message.payload ?? {};
+            if (!matchId || typeof matchId !== 'string') return this.sendError(ws, 'matchId required', message.requestId);
+            const match = this.arcadeRegistry.get(matchId);
+            if (!match || match.status !== 'pending') return; // stale / already started
+            const addr = ws.playerAddress.toLowerCase();
+            if (match.mode === 'duel') {
+                // Only the challenged player (players[1]) may respond.
+                if (addr !== match.players[1].address) return;
+                if (!accept) {
+                    const host = match.players[0].address;
+                    this.arcadeRegistry.leave(matchId);
+                    this.clearArcadeTimers(matchId);
+                    return this.sendToPlayerAddress(host, { type: 'arcade_declined', payload: { matchId, reason: 'declined' } });
+                }
+                return void this.beginArcade(matchId);
+            }
+            // Table lobby join.
+            if (!accept) return; // declines simply don't join
+            if (this.arcadeRegistry.hasActiveForAddress(addr)) return; // already in a game
+            const state = await this.pokerGameService.getTableState(match.tableId, null);
+            const elig = this.rpsEligibility(state, ws.playerAddress);
+            if (!elig.seated || !elig.eligible) return;
+            const added = this.arcadeRegistry.addPlayer(matchId, ws.playerAddress, elig.seatIndex);
+            if (added.ok) this.broadcastArcadeLobby(added.match);
+        }
+        catch (error) {
+            logger_1.logger.error('Error handling arcade respond:', error);
+        }
+    }
+    async handleArcadeInput(ws, message) {
+        try {
+            if (!ws.playerAddress) return;
+            const { matchId } = message.payload ?? {};
+            if (!matchId || typeof matchId !== 'string') return;
+            const r = this.arcadeRegistry.applyInput(matchId, ws.playerAddress, Date.now());
+            // Quick Draw / Hot Potato resolve at input time; the tick loop won't see an
+            // already-ended match, so finalize here.
+            if (r.ok && r.ended) this.finalizeArcade(matchId);
+        }
+        catch (error) {
+            logger_1.logger.error('Error handling arcade input:', error);
+        }
+    }
+    async handleArcadeLeave(ws, message) {
+        try {
+            if (!ws.playerAddress) return;
+            const { matchId } = message.payload ?? {};
+            if (!matchId || typeof matchId !== 'string') return;
+            const match = this.arcadeRegistry.get(matchId);
+            if (!match) return;
+            const addr = ws.playerAddress.toLowerCase();
+            if (!match.players.some((p) => p.address === addr)) return; // not a participant
+            match.endedReason = 'left';
+            this.finalizeArcade(matchId);
+        }
+        catch (error) {
+            logger_1.logger.error('Error handling arcade leave:', error);
         }
     }
     async handlePokerCreateTable(ws, message) {

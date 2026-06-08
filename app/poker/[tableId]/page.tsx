@@ -1157,6 +1157,7 @@ export default function PokerTablePage() {
                 onSendDirectedEmote={mySeatIndex >= 0 ? onSendDirectedEmote : undefined}
                 onChallengeRps={mySeatIndex >= 0 ? rps.onChallengeRps : undefined}
                 rpsRevealFlights={rps.revealFlights}
+                rpsSpectatorBadges={rps.spectatorBadges}
                 mySeatIndex={mySeatIndex}
                 onPhraseReaction={onPhraseReaction}
                 onAnimationReaction={onAnimationReaction}
