@@ -55,10 +55,7 @@ export const FREE_VALUES: Record<AvatarField, Set<string>> = {
     'Bald', 'Short', 'Buzz', 'Long Straight', 'Long Wavy',
     'Curly', 'Afro', 'Bob', 'Ponytail',
     'Soft', 'Side Part', 'Slick Back', 'Crew', 'Undercut', 'Pompadour', 'High Top', 'Spiky', 'Fade', 'Mullet',
-    'Dreadlocks V1', 'Dreadlocks V2', 'Dreadlocks V3', 'Dreadlocks V4', 'Dreadlocks V5',
-    'Dreadlocks V6', 'Dreadlocks V7', 'Dreadlocks V8', 'Dreadlocks V9', 'Dreadlocks V10',
-    'Locks V1', 'Locks V2', 'Locks V3', 'Locks V4', 'Locks V5',
-    'Locks V6', 'Locks V7', 'Locks V8', 'Locks V9', 'Locks V10',
+    'Dreadlocks V3', 'Dreadlocks V6', 'Dreadlocks V10', 'Locks V1', 'Locks V5',
   ]),
   hairColor: new Set([
     '#090806', '#2C222B', '#71635A', '#B7A69E',

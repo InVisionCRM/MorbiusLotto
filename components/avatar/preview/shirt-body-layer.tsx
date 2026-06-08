@@ -6,6 +6,9 @@ type ShirtBodyLayerProps = {
   shirtFill: string;
 };
 
+/** Shared shouldered torso silhouette (matches the polished Default body). */
+const TORSO_PATH = 'M 8 56 L 8 40.35 Q 8.85 38.95 10.85 38.62 Q 12.9 38.45 14.5 38.55 L 19.5 39.95 L 20.2 40.35 Q 24 41.15 27.8 40.35 L 28.5 39.95 L 33.5 38.55 Q 35.1 38.45 37.15 38.62 Q 39.15 38.95 40 40.35 L 40 56 Q 24 55.4 8 56 Z';
+
 export function ShirtBodyLayer({ shirtStyle, shirtFill }: ShirtBodyLayerProps) {
   const c = shirtFill;
   const style = shirtStyle || 'Default';
@@ -357,6 +360,136 @@ export function ShirtBodyLayer({ shirtStyle, shirtFill }: ShirtBodyLayerProps) {
         <rect x="26" y="40" width="4" height="6" fill="#ffd700" opacity="0.5" />
         <rect x="8" y="40" width="2" height="16" fill="rgba(255,215,0,0.3)" />
         <rect x="22" y="42" width="4" height="4" fill="#00bcd4" />
+      </g>
+    );
+    case 'Black Tie': return (
+      <g>
+        <path d={TORSO_PATH} fill="#15151c" />
+        <path d="M12 39 L21 41.5 L20.4 49 L13.6 45 Z" fill="#24242e" />
+        <path d="M36 39 L27 41.5 L27.6 49 L34.4 45 Z" fill="#24242e" />
+        <path d="M20.6 41 L27.4 41 L26 53 L24 54 L22 53 Z" fill="#f2efe6" />
+        <path d="M21 41 L24 42.6 L21 44 Z" fill="#0a0a10" />
+        <path d="M27 41 L24 42.6 L27 44 Z" fill="#0a0a10" />
+        <rect x="23.3" y="41.6" width="1.4" height="1.7" rx="0.3" fill="#000000" />
+        <rect x="23.6" y="47" width="0.9" height="0.9" rx="0.3" fill="#0a0a10" />
+        <rect x="23.6" y="50" width="0.9" height="0.9" rx="0.3" fill="#0a0a10" />
+        <rect x="13.6" y="45.4" width="2.4" height="1.4" fill="#f2efe6" />
+      </g>
+    );
+    case 'Pinstripe Suit': return (
+      <g>
+        <path d={TORSO_PATH} fill="#20222e" />
+        <rect x="11" y="40" width="0.5" height="16" fill="rgba(255,255,255,0.16)" />
+        <rect x="15" y="40" width="0.5" height="16" fill="rgba(255,255,255,0.16)" />
+        <rect x="19" y="40" width="0.5" height="16" fill="rgba(255,255,255,0.16)" />
+        <rect x="29" y="40" width="0.5" height="16" fill="rgba(255,255,255,0.16)" />
+        <rect x="33" y="40" width="0.5" height="16" fill="rgba(255,255,255,0.16)" />
+        <rect x="37" y="40" width="0.5" height="16" fill="rgba(255,255,255,0.16)" />
+        <path d="M11.5 39 L21 42 L20.2 50 L13 45.5 Z" fill="#2a2c3a" />
+        <path d="M36.5 39 L27 42 L27.8 50 L35 45.5 Z" fill="#2a2c3a" />
+        <path d="M20.8 41.5 L27.2 41.5 L26 53 L24 53.8 L22 53 Z" fill="#15151c" />
+        <rect x="23" y="42" width="2" height="11.5" fill="#a83040" />
+        <rect x="22.7" y="42" width="2.6" height="1.8" rx="0.4" fill="#bf3a4a" />
+        <path d="M13 45.6 L16 45 L14.8 47.2 Z" fill="#a83040" />
+      </g>
+    );
+    case 'High Roller': return (
+      <g>
+        <path d={TORSO_PATH} fill="#a9803f" />
+        <path d="M19.5 40.2 L28.5 40.2 L27 56 L21 56 Z" fill="#14141a" />
+        <path d="M12 39 L20 41.5 L18.8 48 L13 44 Z" fill="#b88f4e" />
+        <path d="M36 39 L28 41.5 L29.2 48 L35 44 Z" fill="#b88f4e" />
+        <path d="M20.8 43 Q24 46.4 27.2 43" fill="none" stroke="#f0c24a" strokeWidth="1" strokeLinecap="round" />
+        <path d="M20.2 45 Q24 49 27.8 45" fill="none" stroke="#e6b53e" strokeWidth="0.8" strokeLinecap="round" />
+        <circle cx="24" cy="49" r="1.3" fill="#f7d35a" />
+        <circle cx="24" cy="49" r="0.6" fill="#b8860b" />
+        <circle cx="23.3" cy="43.5" r="0.45" fill="rgba(255,255,255,0.85)" />
+        <circle cx="24" cy="47.6" r="0.45" fill="rgba(255,255,255,0.85)" />
+      </g>
+    );
+    case 'Smoking Jacket': return (
+      <g>
+        <path d={TORSO_PATH} fill="#4a1226" />
+        <rect x="14" y="41" width="1" height="14" fill="rgba(255,255,255,0.05)" />
+        <rect x="19" y="41" width="1" height="14" fill="rgba(255,255,255,0.05)" />
+        <rect x="29" y="41" width="1" height="14" fill="rgba(255,255,255,0.05)" />
+        <rect x="34" y="41" width="1" height="14" fill="rgba(255,255,255,0.05)" />
+        <path d="M13 45 Q14 39 20 40.6 L24 42.2 L28 40.6 Q34 39 35 45 L33 45.6 Q28 41.8 24 43.2 Q20 41.8 15 45.6 Z" fill="#6a2038" />
+        <path d="M22.4 42.6 L24 49 L25.6 42.6 Z" fill="#1a0a12" />
+        <rect x="9" y="50.5" width="30" height="2" fill="#33091a" />
+        <rect x="22.5" y="50.3" width="3" height="2.4" rx="0.4" fill="#5a1830" />
+        <rect x="23.4" y="52.7" width="0.5" height="2.3" fill="#5a1830" />
+        <rect x="24.6" y="52.7" width="0.5" height="2.3" fill="#5a1830" />
+      </g>
+    );
+    case 'Royal': return (
+      <g>
+        <path d={TORSO_PATH} fill="#3a1d6e" />
+        <rect x="14" y="42" width="1" height="14" fill="rgba(255,255,255,0.06)" />
+        <rect x="20" y="42" width="1" height="14" fill="rgba(255,255,255,0.06)" />
+        <rect x="28" y="42" width="1" height="14" fill="rgba(255,255,255,0.06)" />
+        <rect x="34" y="42" width="1" height="14" fill="rgba(255,255,255,0.06)" />
+        <path d="M10.5 38.6 Q24 42 37.5 38.6 L36.5 43.6 Q24 46.4 11.5 43.6 Z" fill="#f0ece2" />
+        <rect x="13" y="40.4" width="0.9" height="1.1" rx="0.3" fill="rgba(60,50,40,0.5)" />
+        <rect x="16" y="40.4" width="0.9" height="1.1" rx="0.3" fill="rgba(60,50,40,0.5)" />
+        <rect x="19" y="40.4" width="0.9" height="1.1" rx="0.3" fill="rgba(60,50,40,0.5)" />
+        <rect x="29" y="40.4" width="0.9" height="1.1" rx="0.3" fill="rgba(60,50,40,0.5)" />
+        <rect x="32" y="40.4" width="0.9" height="1.1" rx="0.3" fill="rgba(60,50,40,0.5)" />
+        <rect x="35" y="40.4" width="0.9" height="1.1" rx="0.3" fill="rgba(60,50,40,0.5)" />
+        <circle cx="24" cy="42.5" r="1.5" fill="#f0c24a" />
+        <circle cx="24" cy="42.5" r="0.7" fill="#b8860b" />
+        <circle cx="23.5" cy="42" r="0.45" fill="rgba(255,255,255,0.85)" />
+      </g>
+    );
+    case 'Iced Out': return (
+      <g>
+        <path d={TORSO_PATH} fill="#14141b" />
+        <path d="M12 39 L20.5 41.4 L20 47 L13 44 Z" fill="#1c1c26" />
+        <path d="M36 39 L27.5 41.4 L28 47 L35 44 Z" fill="#1c1c26" />
+        <rect x="18" y="44" width="1.3" height="1.3" rx="0.2" fill="#bff0ff" transform="rotate(45 18.65 44.65)" />
+        <rect x="20.5" y="44" width="1.3" height="1.3" rx="0.2" fill="#bff0ff" transform="rotate(45 21.15 44.65)" />
+        <rect x="23" y="44" width="1.3" height="1.3" rx="0.2" fill="#bff0ff" transform="rotate(45 23.65 44.65)" />
+        <rect x="25.5" y="44" width="1.3" height="1.3" rx="0.2" fill="#bff0ff" transform="rotate(45 26.15 44.65)" />
+        <rect x="28" y="44" width="1.3" height="1.3" rx="0.2" fill="#bff0ff" transform="rotate(45 28.65 44.65)" />
+        <rect x="22.8" y="48" width="2.4" height="2.4" rx="0.3" fill="#cfefff" transform="rotate(45 24 49.2)" />
+        <rect x="23.4" y="48.6" width="1.2" height="1.2" fill="#ffffff" transform="rotate(45 24 49.2)" />
+        <circle cx="19" cy="44.3" r="0.45" fill="rgba(255,255,255,0.85)" />
+        <circle cx="24" cy="44" r="0.45" fill="rgba(255,255,255,0.85)" />
+        <circle cx="29" cy="44.3" r="0.45" fill="rgba(255,255,255,0.85)" />
+      </g>
+    );
+    case 'Dealer': return (
+      <g>
+        <path d={TORSO_PATH} fill="#f1eee6" />
+        <path d="M11 40 L21 42.4 L21 56 L11 56 Z" fill="#16161d" />
+        <path d="M37 40 L27 42.4 L27 56 L37 56 Z" fill="#16161d" />
+        <path d="M21 41 L24 42.6 L21 44 Z" fill="#0a0a10" />
+        <path d="M27 41 L24 42.6 L27 44 Z" fill="#0a0a10" />
+        <rect x="23.3" y="41.6" width="1.4" height="1.7" rx="0.3" fill="#000000" />
+        <rect x="23.6" y="46" width="0.8" height="0.8" rx="0.3" fill="#ffffff" />
+        <rect x="23.6" y="49" width="0.8" height="0.8" rx="0.3" fill="#ffffff" />
+        <rect x="9.4" y="44" width="1.6" height="3.2" rx="0.4" fill="#b03040" />
+      </g>
+    );
+    case 'Tech Mogul': return (
+      <g>
+        <path d={TORSO_PATH} fill="#34343e" />
+        <rect x="20" y="33" width="8" height="8" rx="2.4" fill="#17171c" />
+        <path d="M20.6 40.5 L20.6 56 L27.4 56 L27.4 40.5 Z" fill="#1b1b20" />
+        <path d="M12 39.2 L20.5 41.4 L20.5 56 L11 56 Z" fill="#3a3a45" />
+        <path d="M36 39.2 L27.5 41.4 L27.5 56 L37 56 Z" fill="#3a3a45" />
+      </g>
+    );
+    case 'Bomber': return (
+      <g>
+        <path d={TORSO_PATH} fill="#2a3128" />
+        <path d="M11 39 Q24 41.6 37 39 L37 41 Q24 43.8 11 41 Z" fill="#1c2118" />
+        <path d="M22 41 L21 44 L23.6 44 Z" fill="#e0742a" />
+        <rect x="23.6" y="41" width="0.8" height="14" fill="#0d0d0d" />
+        <rect x="23.2" y="41" width="1.6" height="1.6" rx="0.3" fill="#9a9a9a" />
+        <rect x="8" y="53.4" width="32" height="2.6" fill="#1c2118" />
+        <circle cx="14.5" cy="46.5" r="1.7" fill="#b03030" />
+        <circle cx="14.5" cy="46.5" r="1.7" fill="none" stroke="#e0c060" strokeWidth="0.3" />
       </g>
     );
     default: return (

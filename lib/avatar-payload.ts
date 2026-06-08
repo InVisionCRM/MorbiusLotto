@@ -89,7 +89,7 @@ export function isLegacyV2AvatarJson(raw: unknown): boolean {
 const REMOVED_EYE_SHAPES = new Set(['Eye V2', 'Eye V5', 'Eye V6', 'Eye V7', 'Eye V8', 'Eye V9', 'Eye V10']);
 
 /** Hair styles removed from the picker — no SVG path in `AvatarPreview`; map to a supported style. */
-const REMOVED_HAIR_STYLES = new Set(['Braids']);
+const REMOVED_HAIR_STYLES = new Set(['Braids', 'Dreadlocks V1', 'Dreadlocks V2', 'Dreadlocks V4', 'Dreadlocks V5', 'Dreadlocks V7', 'Dreadlocks V8', 'Dreadlocks V9', 'Locks V2', 'Locks V3', 'Locks V4', 'Locks V6', 'Locks V7', 'Locks V8', 'Locks V9', 'Locks V10']);
 
 /** Accessories removed from the picker — map stored JSON to a supported option. */
 const REMOVED_ACCESSORY_MAP: Record<string, string> = {
