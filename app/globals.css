@@ -1389,43 +1389,6 @@ body {
 }
 .keno-cell-flash { animation: keno-cell-flash 0.4s ease-out both; }
 
-/* ── Deep-Sea Neon theme (page-scoped via .arcade2-scope) ──
-   bg #050E16 · accent #22D3EE · wins #F59E0B
-   Display: Chakra Petch (var(--font-arc-display), set by next/font on the page)
-   Numerals: JetBrains Mono (var(--font-arc-mono)) */
-.arcade2-scope .arc-display {
-  font-family: var(--font-arc-display), 'Chakra Petch', sans-serif;
-  letter-spacing: 0.02em;
-}
-.arcade2-scope .arc-mono {
-  font-family: var(--font-arc-mono), ui-monospace, 'JetBrains Mono', monospace;
-}
-
-/* Glass panel sitting in the abyss: faint cyan edge + top highlight. */
-.arc-panel {
-  background:
-    linear-gradient(rgba(255, 255, 255, 0.03), rgba(255, 255, 255, 0) 18%),
-    rgba(8, 20, 31, 0.78);
-  border: 1px solid rgba(34, 211, 238, 0.12);
-  box-shadow: 0 18px 40px -24px rgba(0, 0, 0, 0.9);
-}
-
-/* Win banner: surfaces over the board once the draw settles on a paying hit. */
-@keyframes arc-banner-in {
-  0%   { transform: scale(0.7); opacity: 0; }
-  55%  { transform: scale(1.06); opacity: 1; }
-  100% { transform: scale(1); opacity: 1; }
-}
-.arc-banner-in { animation: arc-banner-in 0.38s cubic-bezier(0.34, 1.56, 0.64, 1) both; }
-
-/* Idle tile lift on hover — kept in CSS so all 40 tiles share one rule. */
-.keno-tile {
-  transition: transform 0.15s ease, background-color 0.15s ease,
-    border-color 0.15s ease, box-shadow 0.15s ease, color 0.15s ease;
-}
-.keno-tile:not(:disabled):hover { transform: translateY(-2px); }
-
 @media (prefers-reduced-motion: reduce) {
-  .keno-pop, .keno-hit-glow, .keno-dot, .keno-cell-flash, .arc-banner-in { animation: none; }
-  .keno-tile, .keno-tile:not(:disabled):hover { transition: none; transform: none; }
+  .keno-pop, .keno-hit-glow, .keno-dot, .keno-cell-flash { animation: none; }
 }

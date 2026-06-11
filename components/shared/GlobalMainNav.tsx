@@ -81,7 +81,6 @@ export type NavPage = 'blackjack' | 'plinko' | 'lottery' | 'keno' | 'home' | 'po
 const PATH_TO_PAGE: Record<string, NavPage> = {
   '/BLACKJACK': 'blackjack',
   '/PLINKO': 'plinko',
-  '/plinko2': 'plinko',
   '/lottery': 'lottery',
   '/keno': 'keno',
   '/keno2': 'keno',
@@ -100,7 +99,7 @@ function isOtherGameLinked(g: OtherGameNavItem): g is Extract<OtherGameNavItem, 
 }
 
 const OTHER_GAMES: readonly OtherGameNavItem[] = [
-  { label: 'Plinko', href: '/plinko2', icon: 'plinko' },
+  { label: 'Plinko', href: '/PLINKO', icon: 'plinko' },
   { label: 'Blackjack', href: '/BLACKJACK', icon: 'blackjack' },
   { label: 'Multiplayer BJ', href: '/blackjack-multi', icon: 'users' },
   { label: 'Poker', href: '/poker', icon: 'cards' },

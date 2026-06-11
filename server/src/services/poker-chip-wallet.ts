@@ -32,9 +32,7 @@ export type PokerChipLedgerReason =
   | 'arcade_roulette_bet'
   | 'arcade_roulette_payout'
   | 'keno_bet'
-  | 'keno_payout'
-  | 'plinko_bet'
-  | 'plinko_payout';
+  | 'keno_payout';
 
 const DEFAULT_PLATFORM_FEE_WALLET = '0x41682815b05fe6b54a6c0f8813bb99423ee0309d';
 

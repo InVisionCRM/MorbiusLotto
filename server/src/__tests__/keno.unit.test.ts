@@ -17,7 +17,6 @@ import {
   KENO_RISKS,
   KENO_DRAW_COUNT,
   KENO_TOTAL_TILES,
-  KENO_MAX_BET,
   type KenoRisk,
 } from '../services/keno';
 
@@ -98,8 +97,7 @@ describe('resolveKeno', () => {
 
   it('rejects out-of-range bets', () => {
     expect(() => resolveKeno([1], [1], 'classic', 0)).toThrow();
-    expect(() => resolveKeno([1], [1], 'classic', KENO_MAX_BET + 1)).toThrow();
-    expect(() => resolveKeno([1], [2], 'classic', KENO_MAX_BET)).not.toThrow();
+    expect(() => resolveKeno([1], [1], 'classic', 10_001)).toThrow();
   });
 });
 
