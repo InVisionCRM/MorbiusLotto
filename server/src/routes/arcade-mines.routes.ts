@@ -30,6 +30,7 @@ import type { Express, Request, Response } from 'express';
 import type { PoolClient } from 'pg';
 import { logger } from '../utils/logger';
 import { verifyTelegramInitData } from '../services/telegram.service';
+import { SESSION_COOKIE_NAME } from '../middleware/require-auth';
 import { applyPokerChipDelta } from '../services/poker-chip-wallet';
 import { ProvablyFairService } from '../services/provably-fair.service';
 import {
@@ -45,10 +46,12 @@ import {
   minesPayout,
 } from '../services/arcade-mines';
 import type { DatabaseService } from '../services/database.service';
+import type { AuthService } from '../services/auth.service';
 
 interface RegisterArcadeMinesRoutesOptions {
   app: Express;
   dbService: DatabaseService;
+  authService: AuthService;
 }
 
 const pf = new ProvablyFairService();
@@ -87,8 +90,25 @@ async function lockRound(client: PoolClient, roundId: string) {
 export function registerArcadeMinesRoutes({
   app,
   dbService,
+  authService,
 }: RegisterArcadeMinesRoutesOptions): void {
   const pool = dbService.getPool();
+
+  const AUTH_ERROR = 'No session — sign in on the web, or open from Telegram with a linked wallet.';
+
+  /**
+   * Caller's wallet: Telegram `initData` (Mini App) or the SIWE morb_session
+   * cookie (web /mines2). Telegram wins when both are present so the Mini App
+   * keeps working unchanged inside a browser that also has a web session.
+   */
+  async function resolveWallet(req: Request): Promise<string | null> {
+    const tgWallet = await walletFromInitData(dbService, req.body?.initData);
+    if (tgWallet) return tgWallet;
+    const token = (req as Request & { cookies?: Record<string, string> }).cookies?.[SESSION_COOKIE_NAME];
+    if (!token) return null;
+    const session = await authService.lookupSession(token);
+    return session ? session.walletAddress : null;
+  }
 
   // -------------------------------------------------------------------------
   // GET /api/arcade/mines/info — public bounds + per-bombs multiplier ladders.
@@ -114,15 +134,60 @@ export function registerArcadeMinesRoutes({
   });
 
   // -------------------------------------------------------------------------
+  // POST /api/arcade/mines/state — return the wallet's active round (if any).
+  // Used by the client on mount so a partly-played round survives a page
+  // refresh — without this, the one-active-round-per-wallet index would lock
+  // the wallet out of Mines with no way to recover the roundId. Mirrors
+  // /api/arcade/hilo/state.
+  // -------------------------------------------------------------------------
+  app.post('/api/arcade/mines/state', async (req: Request, res: Response) => {
+    try {
+      const wallet = await resolveWallet(req);
+      if (!wallet) {
+        return res.status(401).json({ ok: false, error: AUTH_ERROR });
+      }
+      const r = await pool.query(
+        `SELECT id, bet, bombs, picks, multiplier_x100, server_seed_hash,
+                client_seed, nonce, house_edge_bp
+           FROM arcade_mines_rounds
+          WHERE wallet_address = $1 AND status = 'active'
+          ORDER BY created_at DESC
+          LIMIT 1`,
+        [wallet.toLowerCase()],
+      );
+      if (r.rows.length === 0) {
+        return res.json({ ok: true, active: null });
+      }
+      const row = r.rows[0];
+      return res.json({
+        ok: true,
+        active: {
+          roundId: row.id,
+          bet: Number(row.bet),
+          bombs: Number(row.bombs),
+          picks: Array.isArray(row.picks) ? row.picks : [],
+          multiplierX100: Number(row.multiplier_x100),
+          serverSeedHash: row.server_seed_hash,
+          clientSeed: row.client_seed,
+          nonce: Number(row.nonce),
+          houseEdgeBp: Number(row.house_edge_bp),
+          ladder: minesMultiplierLadder(Number(row.bombs)),
+        },
+      });
+    } catch (err) {
+      logger.error('[arcade-mines] state failed', { error: (err as Error)?.message });
+      return res.status(500).json({ ok: false, error: 'Could not load round state.' });
+    }
+  });
+
+  // -------------------------------------------------------------------------
   // POST /api/arcade/mines/start — debit the bet, seed the round, return id.
   // -------------------------------------------------------------------------
   app.post('/api/arcade/mines/start', async (req: Request, res: Response) => {
     try {
-      const wallet = await walletFromInitData(dbService, req.body?.initData);
+      const wallet = await resolveWallet(req);
       if (!wallet) {
-        return res
-          .status(401)
-          .json({ ok: false, error: 'Invalid Telegram session, or no wallet linked.' });
+        return res.status(401).json({ ok: false, error: AUTH_ERROR });
       }
 
       const bet = Math.floor(Number(req.body?.bet));
@@ -230,11 +295,9 @@ export function registerArcadeMinesRoutes({
   // -------------------------------------------------------------------------
   app.post('/api/arcade/mines/pick', async (req: Request, res: Response) => {
     try {
-      const wallet = await walletFromInitData(dbService, req.body?.initData);
+      const wallet = await resolveWallet(req);
       if (!wallet) {
-        return res
-          .status(401)
-          .json({ ok: false, error: 'Invalid Telegram session, or no wallet linked.' });
+        return res.status(401).json({ ok: false, error: AUTH_ERROR });
       }
       const roundId = String(req.body?.roundId ?? '');
       const cell = req.body?.cell;
@@ -337,11 +400,9 @@ export function registerArcadeMinesRoutes({
   // -------------------------------------------------------------------------
   app.post('/api/arcade/mines/cashout', async (req: Request, res: Response) => {
     try {
-      const wallet = await walletFromInitData(dbService, req.body?.initData);
+      const wallet = await resolveWallet(req);
       if (!wallet) {
-        return res
-          .status(401)
-          .json({ ok: false, error: 'Invalid Telegram session, or no wallet linked.' });
+        return res.status(401).json({ ok: false, error: AUTH_ERROR });
       }
       const roundId = String(req.body?.roundId ?? '');
       if (!roundId) {
@@ -415,6 +476,51 @@ export function registerArcadeMinesRoutes({
     } catch (err) {
       logger.error('[arcade-mines] cashout failed', { error: (err as Error)?.message });
       return res.status(500).json({ ok: false, error: 'Could not cash out the round.' });
+    }
+  });
+
+  // -------------------------------------------------------------------------
+  // GET /api/arcade/mines/history — caller's recent finalized rounds for the
+  // web history panel. Cookie-auth only in practice (GET has no body, so
+  // resolveWallet falls through to the SIWE session); the Mini App doesn't
+  // render a history list.
+  // -------------------------------------------------------------------------
+  app.get('/api/arcade/mines/history', async (req: Request, res: Response) => {
+    try {
+      const wallet = await resolveWallet(req);
+      if (!wallet) {
+        return res.status(401).json({ ok: false, error: AUTH_ERROR });
+      }
+      const limit = Math.max(1, Math.min(100, parseInt(String(req.query.limit ?? '25'), 10) || 25));
+      const r = await pool.query(
+        `SELECT id, bet, bombs, picks, multiplier_x100, payout, status, created_at
+           FROM arcade_mines_rounds
+          WHERE wallet_address = $1 AND status <> 'active'
+          ORDER BY created_at DESC
+          LIMIT $2`,
+        [wallet.toLowerCase(), limit],
+      );
+      return res.json({
+        ok: true,
+        rounds: r.rows.map((row) => {
+          const picks: number[] = Array.isArray(row.picks) ? row.picks : [];
+          // On a bust the picks tail includes the bomb cell — don't count it as a gem.
+          const gems = row.status === 'busted' ? Math.max(0, picks.length - 1) : picks.length;
+          return {
+            roundId: row.id,
+            bet: Number(row.bet),
+            bombs: Number(row.bombs),
+            gems,
+            multiplierX100: Number(row.multiplier_x100),
+            payout: Number(row.payout),
+            status: row.status as 'busted' | 'cashed_out',
+            createdAt: row.created_at,
+          };
+        }),
+      });
+    } catch (err) {
+      logger.error('[arcade-mines] history failed', { error: (err as Error)?.message });
+      return res.status(500).json({ ok: false, error: 'Could not load history.' });
     }
   });
 

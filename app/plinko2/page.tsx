@@ -1,42 +1,43 @@
 'use client'
 
 /**
- * /keno2 — server-side Stake-style Keno (off-chain chips, provably fair).
+ * /plinko2 — server-side Plinko (off-chain chips, provably fair).
  *
- * Distinct from the on-chain /keno game: 40 tiles, pick 1–10, the server draws
- * 10, four risk modes, settled in chips via /api/keno/*. Built alongside the
- * on-chain page so it can be promoted to /keno in the nav whenever you're ready.
+ * Distinct from the on-chain /PLINKO game: same 16-row board and physics
+ * canvas, but the bucket is decided by /api/plinko/play (HMAC path draw,
+ * committed server seed) and settled in chips. Built alongside the on-chain
+ * page so it can be promoted in the nav whenever you're ready.
  *
- * Theme: "Deep-Sea Neon" — abyss #050E16, cyan #22D3EE accents, amber wins.
- * Chakra Petch carries the display type, JetBrains Mono carries every numeral;
- * both are exposed as CSS vars consumed by the .arcade2-scope rules in globals.css.
+ * Theme: "Deep-Sea Neon" — the shared arcade2-scope system from keno2
+ * (abyss #050E16, cyan #22D3EE accents, amber wins, Chakra Petch display,
+ * JetBrains Mono numerals).
  */
 
 import { Chakra_Petch, JetBrains_Mono } from 'next/font/google'
 import GlobalMainNav from '@/components/shared/GlobalMainNav'
 import Footer from '@/components/PLINKO/Footer'
-import { StakeKenoGame } from '@/components/StakeKeno/StakeKenoGame'
+import { StakePlinkoGame } from '@/components/StakePlinko/StakePlinkoGame'
 
-const kenoDisplay = Chakra_Petch({
+const arcDisplay = Chakra_Petch({
   subsets: ['latin'],
   weight: ['500', '600', '700'],
   variable: '--font-arc-display',
 })
 
-const kenoMono = JetBrains_Mono({
+const arcMono = JetBrains_Mono({
   subsets: ['latin'],
   weight: ['400', '500', '600', '700'],
   variable: '--font-arc-mono',
 })
 
-export default function Keno2Page() {
+export default function Plinko2Page() {
   return (
     <GlobalMainNav>
       <div
-        className={`arcade2-scope relative min-h-screen h-full w-full flex flex-col text-slate-200 ${kenoDisplay.variable} ${kenoMono.variable}`}
+        className={`arcade2-scope relative min-h-screen h-full w-full flex flex-col text-slate-200 ${arcDisplay.variable} ${arcMono.variable}`}
         style={{
           backgroundImage:
-            "linear-gradient(to bottom, rgba(5,14,22,0.92), rgba(2,6,11,0.96) 55%, rgba(5,14,22,0.98)), url('/morbius/Morbius_Keno.png')",
+            "linear-gradient(to bottom, rgba(5,14,22,0.92), rgba(2,6,11,0.96) 55%, rgba(5,14,22,0.98)), url('/morbius/Morbius_Plinko.png')",
           backgroundColor: '#050E16',
           backgroundSize: 'cover',
           backgroundPosition: 'center top',
@@ -52,16 +53,16 @@ export default function Keno2Page() {
           <main className="w-full max-w-full overflow-x-hidden pb-16 pt-2">
             <header className="mb-6 text-center">
               <h1 className="arc-display text-3xl font-bold uppercase tracking-[0.08em] text-white sm:text-4xl">
-                Keno
+                Plinko
                 <span className="ml-2 align-middle text-cyan-400 drop-shadow-[0_0_12px_rgba(34,211,238,0.65)]">
-                  ▮▮
+                  ●
                 </span>
               </h1>
               <p className="mt-1.5 text-sm text-slate-400">
-                Pick up to 10 · we draw 10 · provably fair · played in chips
+                16 rows · three risk levels · provably fair · played in chips
               </p>
             </header>
-            <StakeKenoGame />
+            <StakePlinkoGame />
           </main>
         </div>
         <Footer />

@@ -314,6 +314,30 @@ export class ProvablyFairService {
   }
 
   /**
+   * Draw a 16-step Plinko path (server-side chips Plinko) — provably fair.
+   * Each step is one peg decision: 0 = left, 1 = right. The ball's bucket is
+   * the count of rights, which makes the bucket distribution exactly binomial
+   * C(16,k)/2^16 — the same distribution the physics board and the on-chain
+   * contract's weighted thresholds model. Uses the shared HMAC byte stream
+   * (message = `${clientSeed}:${nonce}:${roundIndex}`), 4 bytes per step in
+   * cursor order, step = float < 0.5 ? 0 : 1. Consumes 16 × 4 = 64 bytes.
+   * Verification: given serverSeed, clientSeed, nonce — recompute with this
+   * exact algorithm and compare the 16 steps.
+   */
+  drawPlinkoPath(serverSeed: string, clientSeed: string, nonce: number): number[] {
+    const STEPS = 16;
+    const path: number[] = [];
+    let cursor = 0;
+    for (let i = 0; i < STEPS; i++) {
+      const bytes = this.hmacByteStream(serverSeed, clientSeed, nonce, cursor);
+      cursor += 4;
+      const float = this.bytesToFloat(bytes);
+      path.push(float < 0.5 ? 0 : 1);
+    }
+    return path;
+  }
+
+  /**
    * Fisher-Yates shuffle of a 52-card deck using cursor-based HMAC byte stream.
    * One nonce per game. Returns array of card indices 0-51.
    * Consumes 51 * 4 = 204 bytes (~7 HMAC rounds).

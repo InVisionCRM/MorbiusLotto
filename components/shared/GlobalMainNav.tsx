@@ -64,6 +64,7 @@ import {
   IconTicket,
   IconLayoutGrid,
   IconCards,
+  IconBomb,
 } from '@tabler/icons-react';
 
 // Lazy-load modals — only pulled into the bundle when first opened
@@ -76,19 +77,21 @@ const ReportModal = lazy(() => import('@/components/shared/ReportModal').then(m 
 const ProfileAvatarModal = lazy(() => import('@/components/shared/ProfileAvatarModal').then(m => ({ default: m.ProfileAvatarModal })));
 const ProfileSettingsModal = lazy(() => import('@/components/shared/ProfileSettingsModal'));
 
-export type NavPage = 'blackjack' | 'plinko' | 'lottery' | 'keno' | 'home' | 'poker' | 'blackjackMulti';
+export type NavPage = 'blackjack' | 'plinko' | 'lottery' | 'keno' | 'mines' | 'home' | 'poker' | 'blackjackMulti';
 
 const PATH_TO_PAGE: Record<string, NavPage> = {
   '/BLACKJACK': 'blackjack',
   '/PLINKO': 'plinko',
+  '/plinko2': 'plinko',
   '/lottery': 'lottery',
   '/keno': 'keno',
   '/keno2': 'keno',
+  '/mines2': 'mines',
   '/poker': 'poker',
   '/blackjack-multi': 'blackjackMulti',
 };
 
-type OtherGameIcon = 'blackjack' | 'plinko' | 'users' | 'ticket' | 'grid' | 'cards';
+type OtherGameIcon = 'blackjack' | 'plinko' | 'users' | 'ticket' | 'grid' | 'cards' | 'mine';
 
 type OtherGameNavItem =
   | { label: string; href: string; icon: OtherGameIcon }
@@ -99,12 +102,13 @@ function isOtherGameLinked(g: OtherGameNavItem): g is Extract<OtherGameNavItem, 
 }
 
 const OTHER_GAMES: readonly OtherGameNavItem[] = [
-  { label: 'Plinko', href: '/PLINKO', icon: 'plinko' },
+  { label: 'Plinko', href: '/plinko2', icon: 'plinko' },
   { label: 'Blackjack', href: '/BLACKJACK', icon: 'blackjack' },
   { label: 'Multiplayer BJ', href: '/blackjack-multi', icon: 'users' },
   { label: 'Poker', href: '/poker', icon: 'cards' },
   { label: 'Lottery', href: '/lottery', icon: 'ticket' },
   { label: 'Keno', href: '/keno2', icon: 'grid' },
+  { label: 'Mines', href: '/mines2', icon: 'mine' },
 ];
 
 
@@ -241,6 +245,7 @@ const OTHER_GAME_ICONS: Record<OtherGameIcon, React.ReactNode> = {
   ticket: <IconTicket size={20} className="text-white shrink-0" aria-hidden />,
   grid: <IconLayoutGrid size={20} className="text-white shrink-0" aria-hidden />,
   cards: <IconCards size={20} className="text-white shrink-0" aria-hidden />,
+  mine: <IconBomb size={20} className="text-white shrink-0" aria-hidden />,
 };
 
 const otherGameIcon = (g: OtherGameNavItem) => OTHER_GAME_ICONS[g.icon];
