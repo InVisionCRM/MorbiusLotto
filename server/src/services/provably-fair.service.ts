@@ -284,6 +284,36 @@ export class ProvablyFairService {
   }
 
   /**
+   * Draw 10 distinct Keno numbers in [1, 40] (Stake-style Keno) — provably fair.
+   * Partial Fisher-Yates over a pool of 40 slots (values 1–40) using the same
+   * HMAC-SHA256 byte stream as the 6-of-55 lottery and the blackjack deck
+   * (message = `${clientSeed}:${nonce}:${roundIndex}`), then takes the first 10
+   * shuffled slots. Returned in DRAW ORDER (not sorted) so a reveal animation can
+   * replay them; Keno scoring is order-independent. Runs the standard partial
+   * Fisher-Yates optimisation: 10 swaps fix the top 10 slots (a uniform sample of
+   * 10 from 40), consuming 10 × 4 = 40 bytes of the HMAC stream.
+   * Verification: given serverSeed, clientSeed, nonce — recompute with this exact
+   * algorithm and compare the 10 numbers.
+   */
+  drawKenoNumbers(serverSeed: string, clientSeed: string, nonce: number): number[] {
+    const MIN = 1;
+    const MAX = 40;
+    const DRAW = 10;
+    const pool = Array.from({ length: MAX }, (_, i) => i + MIN);
+    let cursor = 0;
+    // Only need the top DRAW slots settled — shuffle from the high end down to
+    // index (MAX - DRAW), each swap fixing one final position.
+    for (let i = pool.length - 1; i >= MAX - DRAW; i--) {
+      const bytes = this.hmacByteStream(serverSeed, clientSeed, nonce, cursor);
+      cursor += 4;
+      const float = this.bytesToFloat(bytes);
+      const j = Math.floor(float * (i + 1));
+      [pool[i], pool[j]] = [pool[j], pool[i]];
+    }
+    return pool.slice(MAX - DRAW);
+  }
+
+  /**
    * Fisher-Yates shuffle of a 52-card deck using cursor-based HMAC byte stream.
    * One nonce per game. Returns array of card indices 0-51.
    * Consumes 51 * 4 = 204 bytes (~7 HMAC rounds).
