@@ -1862,10 +1862,12 @@ export class PokerGameService {
           const showdownHands: Record<string, number[]> = {};
           for (const row of allHoleResult.rows) {
             const cards = Array.isArray(row.cards) ? row.cards : JSON.parse(row.cards ?? '[]');
-            // Exclude players who folded before the all-in — they shouldn't have
-            // their cards exposed during the runout. (At final showdown we keep
-            // the existing behavior of exposing all dealt-in hole cards.)
-            if (isMidRunout && foldedSet.has(this.normalizeAddress(row.player_address))) continue;
+            // Folded hands stay mucked — only players actually IN the showdown
+            // (called/all-in through the end) ever have their cards exposed.
+            // This applies mid-runout AND at final showdown; the old behavior of
+            // dumping every dealt-in hand at showdown leaked folded hole cards
+            // to the table (showdown dock, seat reveals).
+            if (foldedSet.has(this.normalizeAddress(row.player_address))) continue;
             showdownHands[this.normalizeAddress(row.player_address)] = cards;
           }
           currentHand.showdownHands = showdownHands;

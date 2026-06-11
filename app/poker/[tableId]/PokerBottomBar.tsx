@@ -725,12 +725,14 @@ function FeedRow({ step, active, dim, onClick }: { step: ReplayStep; active: boo
   );
 }
 
-/** Full Replay bottom sheet — hand picker + scrubber + full play-by-play (deals, showdown, winner). */
+/** Full Replay bottom sheet — hand picker + scrubber + full play-by-play (deals, showdown, winner).
+ *  `desktop` centers the sheet and caps its width so the same component serves both surfaces. */
 function FullReplaySheet({
-  steps, hands, activeHandId, loading, pos, playing, onSeek, onTogglePlay, onPick, onClose,
+  steps, hands, activeHandId, loading, pos, playing, onSeek, onTogglePlay, onPick, onClose, desktop = false,
 }: {
   steps: ReplayStep[]; hands: ReplayHandSummary[]; activeHandId: string | null; loading: boolean;
   pos: number; playing: boolean; onSeek: (i: number) => void; onTogglePlay: () => void; onPick: (id: string | null) => void; onClose: () => void;
+  desktop?: boolean;
 }) {
   const feedRef = useRef<HTMLDivElement>(null);
   useEffect(() => {
@@ -743,8 +745,15 @@ function FullReplaySheet({
     <>
       <div className="fixed inset-0 z-[59]" style={{ background: 'rgba(0,0,0,0.55)' }} onClick={onClose} />
       <div
-        className="fixed inset-x-0 bottom-0 z-[60] flex flex-col rounded-t-2xl px-4 pt-3"
-        style={{ background: '#0a0c14', borderTop: '1px solid rgba(255,255,255,0.12)', maxHeight: '88vh', paddingBottom: 'calc(20px + env(safe-area-inset-bottom,0px))', boxShadow: '0 -10px 40px rgba(0,0,0,0.6)' }}
+        className={`fixed inset-x-0 bottom-0 z-[60] flex flex-col rounded-t-2xl px-4 pt-3${desktop ? ' mx-auto w-[min(760px,94vw)] rounded-2xl' : ''}`}
+        style={{
+          background: '#0a0c14',
+          borderTop: '1px solid rgba(255,255,255,0.12)',
+          maxHeight: '88vh',
+          paddingBottom: 'calc(20px + env(safe-area-inset-bottom,0px))',
+          boxShadow: '0 -10px 40px rgba(0,0,0,0.6)',
+          ...(desktop ? { bottom: 24, border: '1px solid rgba(255,255,255,0.12)' } : {}),
+        }}
       >
         <div className="mx-auto mb-3 h-1 w-10 rounded-full bg-white/25" />
         <div className="mb-2 flex items-center">
@@ -771,6 +780,76 @@ function FullReplaySheet({
           </>
         )}
       </div>
+    </>
+  );
+}
+
+/**
+ * Desktop replay — the same hand picker / scrubber / play-by-play sheet the mobile
+ * dock has, launched from a small pill overhanging the desktop action bar. Owns the
+ * identical playback state machine as PortraitOffTurnDock (kept separate so the
+ * proven portrait dock stays untouched); all heavy UI is shared via FullReplaySheet.
+ */
+function DesktopReplayDock({ state, replay }: { state: PokerTableState | null; replay: ReplayProps }) {
+  const [open, setOpen] = useState(false);
+  const [scrub, setScrub] = useState<number | null>(null);
+  const [playing, setPlaying] = useState(false);
+
+  const hands = replay.hands;
+  const activeHandId = replay.activeHandId;
+  const isLiveHand = activeHandId == null;
+  const loading = !isLiveHand && replay.loading;
+
+  // Live hand → steps from recentActions; past hand → steps from the verify-built payload.
+  const liveSteps = useMemo(
+    () => buildLiveSteps(
+      (state?.currentHand?.recentActions ?? []) as RAction[],
+      (pos: number) => state?.seats?.[pos]?.displayName || `Seat ${pos + 1}`,
+    ),
+    [state?.currentHand?.recentActions, state?.seats],
+  );
+  const steps: ReplayStep[] = isLiveHand ? liveSteps : (replay.steps ?? []);
+  const livePos = Math.max(0, steps.length - 1);
+  const isEnd = scrub == null;
+  const pos = Math.min(isEnd ? livePos : scrub, livePos);
+
+  // Reset the playhead when the selected hand changes.
+  useEffect(() => { setScrub(null); setPlaying(false); }, [activeHandId]);
+
+  const onSeek = (i: number) => { setPlaying(false); setScrub(Math.max(0, Math.min(livePos, i))); };
+  const onPick = (id: string | null) => { setPlaying(false); setScrub(null); replay.onPick(id); };
+  const onTogglePlay = () => { if (isEnd) setScrub(0); setPlaying((p) => !p); };
+  useEffect(() => {
+    if (!playing) return;
+    const id = setInterval(() => {
+      setScrub((s) => {
+        const cur = s == null ? livePos : s;
+        if (cur >= livePos) { setPlaying(false); return livePos; }
+        return cur + 1;
+      });
+    }, 850);
+    return () => clearInterval(id);
+  }, [playing, livePos]);
+
+  return (
+    <>
+      <button
+        type="button"
+        onClick={() => setOpen(true)}
+        aria-label="Open hand replay"
+        className="absolute right-4 -top-3.5 z-30 rounded-full border border-white/15 px-2.5 py-1 text-[10px] font-semibold text-white/75 transition-colors hover:border-cyan-400/50 hover:text-cyan-200"
+        style={{ background: '#0a0c14', boxShadow: '0 4px 14px rgba(0,0,0,0.45)' }}
+      >
+        ▸ Replay
+      </button>
+      {open && (
+        <FullReplaySheet
+          desktop
+          steps={steps} hands={hands} activeHandId={activeHandId} loading={loading}
+          pos={pos} playing={playing}
+          onSeek={onSeek} onTogglePlay={onTogglePlay} onPick={onPick} onClose={() => setOpen(false)}
+        />
+      )}
     </>
   );
 }
@@ -1080,7 +1159,12 @@ export function PokerBottomBar({
             tableInfo={tableInfo}
             totalSeconds={turnTotalSeconds}
           />
-        ) : actions}
+        ) : (
+          <>
+            {replay && <DesktopReplayDock state={renderedState} replay={replay} />}
+            {actions}
+          </>
+        )}
       </div>
     </div>
   );
