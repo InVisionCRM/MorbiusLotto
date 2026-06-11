@@ -102,6 +102,13 @@ function GridMap({ bombsGrid, picks }: { bombsGrid: number[]; picks: number[] })
   )
 }
 
+/** 16 random bytes → 32-char hex, generated locally with WebCrypto. */
+function randomClientSeed(): string {
+  const bytes = new Uint8Array(16)
+  crypto.getRandomValues(bytes)
+  return Array.from(bytes, (b) => b.toString(16).padStart(2, '0')).join('')
+}
+
 export function MinesFairnessModal({
   open,
   onClose,
@@ -160,12 +167,22 @@ export function MinesFairnessModal({
               Mixed into the bomb grid of every round you start. Change it any time — the
               next round uses the new value.
             </p>
-            <Input
-              value={clientSeed}
-              onChange={(e) => onClientSeedChange(e.target.value.slice(0, 128))}
-              placeholder="Leave blank for a random seed each round"
-              className="arc-mono border-cyan-950 bg-[#081420] text-xs"
-            />
+            <div className="flex gap-2">
+              <Input
+                value={clientSeed}
+                onChange={(e) => onClientSeedChange(e.target.value.slice(0, 128))}
+                placeholder="Leave blank for a random seed each round"
+                className="arc-mono border-cyan-950 bg-[#081420] text-xs"
+              />
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => onClientSeedChange(randomClientSeed())}
+                className="shrink-0 border-cyan-950 bg-transparent text-cyan-300 hover:bg-cyan-500/10"
+              >
+                New seed
+              </Button>
+            </div>
           </section>
 
           {/* Verify */}
