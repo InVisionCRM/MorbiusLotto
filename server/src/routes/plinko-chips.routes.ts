@@ -1,0 +1,281 @@
+/**
+ * plinko-chips.routes.ts — Server-side Plinko (chips, provably fair).
+ *
+ * Endpoints (main web app, wallet-session auth via requireAuth):
+ *   GET  /api/plinko/info          — public: rows / buckets / bet bounds / risks
+ *   GET  /api/plinko/multipliers   — public: full ×100 tables for every risk
+ *   POST /api/plinko/play          — auth:   one ball — charge, draw path, settle in one txn
+ *   GET  /api/plinko/history       — auth:   caller's recent balls
+ *   GET  /api/plinko/verify/:id    — public: published seeds + recipe to re-derive the path
+ *
+ * NOTE: the legacy on-chain reads live at /api/plinko/player/:address/* —
+ * these paths are chosen not to collide with them.
+ *
+ * Settlement model mirrors keno.routes.ts: the whole ball (bet debit, draw,
+ * payout credit, row insert) runs in a single DB transaction through the
+ * shared player_poker_chips wallet (ledger reasons plinko_bet/plinko_payout).
+ * Stake-style rapid fire is just this endpoint called once per ball — each
+ * ball is independently seeded, settled and verifiable.
+ */
+
+import crypto from 'crypto';
+import type { Express, Request, Response } from 'express';
+import type { DatabaseService } from '../services/database.service';
+import type { AuthService } from '../services/auth.service';
+import { requireAuth } from '../middleware/require-auth';
+import { logger } from '../utils/logger';
+import { applyPokerChipDelta } from '../services/poker-chip-wallet';
+import { ProvablyFairService } from '../services/provably-fair.service';
+import {
+  resolvePlinko,
+  isPlinkoRisk,
+  PLINKO_MULTIPLIERS_X100,
+  PLINKO_RISKS,
+  PLINKO_ROWS,
+  PLINKO_BUCKETS,
+  PLINKO_MIN_BET,
+  PLINKO_MAX_BET,
+} from '../services/plinko-chips';
+
+interface RegisterPlinkoChipRoutesOptions {
+  app: Express;
+  dbService: DatabaseService;
+  authService: AuthService;
+}
+
+const pf = new ProvablyFairService();
+
+/** The verifier recipe string, published on every /verify response. */
+const PLINKO_RECIPE =
+  'path = ProvablyFairService.drawPlinkoPath(serverSeed, clientSeed, nonce): ' +
+  '16 steps, 4 HMAC-SHA256 stream bytes each (message = `${clientSeed}:${nonce}:${roundIndex}`), ' +
+  'step = float < 0.5 ? 0 (left) : 1 (right). bucket = sum(path). ' +
+  'payout = floor(bet × multiplierX100(risk, bucket) / 100).';
+
+export function registerPlinkoChipRoutes({
+  app,
+  dbService,
+  authService,
+}: RegisterPlinkoChipRoutesOptions): void {
+  const pool = dbService.getPool();
+
+  // ---------------------------------------------------------------------------
+  // GET /api/plinko/info — public bounds so the UI renders exactly what the
+  // server enforces.
+  // ---------------------------------------------------------------------------
+  app.get('/api/plinko/info', (_req: Request, res: Response) => {
+    res.json({
+      ok: true,
+      rows: PLINKO_ROWS,
+      buckets: PLINKO_BUCKETS,
+      minBet: PLINKO_MIN_BET,
+      maxBet: PLINKO_MAX_BET,
+      risks: PLINKO_RISKS,
+    });
+  });
+
+  // ---------------------------------------------------------------------------
+  // GET /api/plinko/multipliers — public. Full ×100 tables for all risks.
+  // ---------------------------------------------------------------------------
+  app.get('/api/plinko/multipliers', (_req: Request, res: Response) => {
+    res.json({ ok: true, multipliersX100: PLINKO_MULTIPLIERS_X100 });
+  });
+
+  // ---------------------------------------------------------------------------
+  // POST /api/plinko/play — auth. One ball: charge, draw the path, settle in
+  // one txn. Body: { risk: 'low'|'medium'|'high', bet: number, clientSeed?: string }
+  // ---------------------------------------------------------------------------
+  app.post('/api/plinko/play', requireAuth(authService), async (req: Request, res: Response) => {
+    const addr = req.user!.address.toLowerCase();
+    try {
+      const risk = req.body?.risk;
+      if (!isPlinkoRisk(risk)) {
+        return res.status(400).json({ ok: false, error: 'risk must be low, medium or high' });
+      }
+
+      const bet = Math.floor(Number(req.body?.bet));
+      if (!Number.isFinite(bet) || bet < PLINKO_MIN_BET || bet > PLINKO_MAX_BET) {
+        return res.status(400).json({
+          ok: false,
+          error: `bet must be between ${PLINKO_MIN_BET} and ${PLINKO_MAX_BET} chips`,
+        });
+      }
+
+      // --- provably-fair draw (fresh server seed per ball, like Keno/Dice) ---
+      const serverSeed = pf.generateServerSeed();
+      const serverSeedHash = pf.createServerSeedHash(serverSeed);
+      const clientSeed =
+        typeof req.body?.clientSeed === 'string' && req.body.clientSeed.trim()
+          ? req.body.clientSeed.trim().slice(0, 128)
+          : crypto.randomBytes(16).toString('hex');
+      const nonce = 0;
+
+      const path = pf.drawPlinkoPath(serverSeed, clientSeed, nonce);
+      const result = resolvePlinko(risk, bet, path);
+
+      // --- atomic settle ---
+      const roundId = crypto.randomUUID();
+      let chipBalance = 0n;
+      await dbService.withTransaction(async (client) => {
+        chipBalance = await applyPokerChipDelta(
+          client,
+          addr,
+          BigInt(-bet),
+          'plinko_bet',
+          { type: 'plinko_round', id: roundId },
+        );
+        if (result.payout > 0) {
+          chipBalance = await applyPokerChipDelta(
+            client,
+            addr,
+            BigInt(result.payout),
+            'plinko_payout',
+            { type: 'plinko_round', id: roundId },
+          );
+        }
+        await client.query(
+          `INSERT INTO plinko_rounds
+             (id, wallet_address, bet, risk, path, bucket, multiplier_x100,
+              payout, server_seed, server_seed_hash, client_seed, nonce)
+           VALUES ($1, $2, $3, $4, $5::jsonb, $6, $7, $8, $9, $10, $11, $12)`,
+          [
+            roundId,
+            addr,
+            bet,
+            risk,
+            JSON.stringify(path),
+            result.bucket,
+            result.multiplierX100,
+            result.payout,
+            serverSeed,
+            serverSeedHash,
+            clientSeed,
+            nonce,
+          ],
+        );
+      });
+
+      return res.json({
+        ok: true,
+        roundId,
+        risk,
+        bet,
+        path,
+        bucket: result.bucket,
+        multiplierX100: result.multiplierX100,
+        payout: result.payout,
+        won: result.payout > bet,
+        serverSeedHash,
+        serverSeed,
+        clientSeed,
+        nonce,
+        chipBalance: chipBalance.toString(),
+      });
+    } catch (err) {
+      const msg = (err as Error)?.message ?? '';
+      if (/insufficient/i.test(msg)) {
+        return res
+          .status(402)
+          .json({ ok: false, error: 'Not enough chips for that bet.', code: 'NO_CHIPS' });
+      }
+      logger.error('[plinko-chips] play failed', { addr, error: msg });
+      return res.status(500).json({ ok: false, error: 'Could not play the ball.' });
+    }
+  });
+
+  // ---------------------------------------------------------------------------
+  // GET /api/plinko/history — auth. Recent balls for the player's history panel.
+  // ---------------------------------------------------------------------------
+  app.get('/api/plinko/history', requireAuth(authService), async (req: Request, res: Response) => {
+    const addr = req.user!.address.toLowerCase();
+    const limit = Math.max(1, Math.min(100, parseInt(String(req.query.limit ?? '25'), 10) || 25));
+    try {
+      const r = await pool.query(
+        `SELECT id, bet, risk, path, bucket, multiplier_x100, payout,
+                server_seed_hash, created_at
+           FROM plinko_rounds
+          WHERE wallet_address = $1
+          ORDER BY created_at DESC
+          LIMIT $2`,
+        [addr, limit],
+      );
+      res.json({
+        ok: true,
+        rounds: r.rows.map((row) => ({
+          roundId: row.id,
+          bet: Number(row.bet),
+          risk: row.risk,
+          path: row.path,
+          bucket: row.bucket,
+          multiplierX100: Number(row.multiplier_x100),
+          payout: Number(row.payout),
+          serverSeedHash: row.server_seed_hash,
+          createdAt: row.created_at,
+        })),
+      });
+    } catch (e) {
+      logger.error('plinko-chips.history failed', { addr, error: (e as Error).message });
+      res.status(500).json({ error: 'internal error' });
+    }
+  });
+
+  // ---------------------------------------------------------------------------
+  // GET /api/plinko/verify/:id — public. Published seeds + recipe and an
+  // independent re-derivation so anyone can confirm the path and payout.
+  // ---------------------------------------------------------------------------
+  app.get('/api/plinko/verify/:id', async (req: Request, res: Response) => {
+    try {
+      const r = await pool.query(
+        `SELECT id, wallet_address, bet, risk, path, bucket, multiplier_x100,
+                payout, server_seed, server_seed_hash, client_seed, nonce, created_at
+           FROM plinko_rounds WHERE id = $1`,
+        [req.params.id],
+      );
+      if (r.rows.length === 0) {
+        return res.status(404).json({ ok: false, error: 'Round not found.' });
+      }
+      const row = r.rows[0];
+
+      const recomputedPath = pf.drawPlinkoPath(row.server_seed, row.client_seed, Number(row.nonce));
+      const recomputed = resolvePlinko(row.risk, Number(row.bet), recomputedPath);
+      const hashMatches = pf.createServerSeedHash(row.server_seed) === row.server_seed_hash;
+      const pathMatches = JSON.stringify(recomputedPath) === JSON.stringify(row.path);
+      const payoutMatches =
+        recomputed.bucket === row.bucket &&
+        recomputed.multiplierX100 === Number(row.multiplier_x100) &&
+        recomputed.payout === Number(row.payout);
+
+      return res.json({
+        ok: true,
+        roundId: row.id,
+        wallet: row.wallet_address,
+        bet: Number(row.bet),
+        risk: row.risk,
+        path: row.path,
+        bucket: row.bucket,
+        multiplierX100: Number(row.multiplier_x100),
+        payout: Number(row.payout),
+        serverSeed: row.server_seed,
+        serverSeedHash: row.server_seed_hash,
+        clientSeed: row.client_seed,
+        nonce: Number(row.nonce),
+        createdAt: row.created_at,
+        verification: {
+          hashMatches,
+          pathMatches,
+          payoutMatches,
+          recomputedPath,
+          recomputedBucket: recomputed.bucket,
+          recomputedMultiplierX100: recomputed.multiplierX100,
+          recomputedPayout: recomputed.payout,
+        },
+        recipe: PLINKO_RECIPE,
+      });
+    } catch (e) {
+      logger.error('plinko-chips.verify failed', { id: req.params.id, error: (e as Error).message });
+      res.status(500).json({ ok: false, error: 'Could not load the round.' });
+    }
+  });
+
+  logger.info('[plinko-chips] routes registered');
+}
