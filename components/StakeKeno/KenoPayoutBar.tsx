@@ -35,7 +35,7 @@ export function KenoPayoutBar({
 }: KenoPayoutBarProps) {
   if (loadFailed) {
     return (
-      <div className="keno-panel rounded-xl px-4 py-5 text-center text-sm text-slate-400">
+      <div className="arc-panel rounded-xl px-4 py-5 text-center text-sm text-slate-400">
         Couldn&apos;t load the payout table.{' '}
         <button
           type="button"
@@ -50,7 +50,7 @@ export function KenoPayoutBar({
 
   if (picksCount === 0) {
     return (
-      <div className="keno-panel rounded-xl px-4 py-5 text-center text-sm text-slate-500">
+      <div className="arc-panel rounded-xl px-4 py-5 text-center text-sm text-slate-500">
         Pick 1–10 tiles to see the payout table.
       </div>
     )
@@ -85,7 +85,7 @@ export function KenoPayoutBar({
           >
             <span
               className={[
-                'keno-mono text-xs font-semibold tabular-nums sm:text-sm',
+                'arc-mono text-xs font-semibold tabular-nums sm:text-sm',
                 resultPaid ? 'text-amber-300' : pays ? 'text-cyan-200' : 'text-slate-600',
               ].join(' ')}
             >

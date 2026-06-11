@@ -312,11 +312,11 @@ export function StakeKenoGame() {
     <div className="mx-auto w-full max-w-5xl">
       <div className="grid gap-4 lg:grid-cols-[320px_1fr]">
         {/* ───────── Controls rail ───────── */}
-        <Card className="keno-panel order-2 h-fit space-y-4 border-0 p-4 lg:order-1 lg:sticky lg:top-20">
+        <Card className="arc-panel order-2 h-fit space-y-4 border-0 p-4 lg:order-1 lg:sticky lg:top-20">
           <div className="flex items-center justify-between gap-2">
             <span className="text-xs uppercase tracking-wide text-slate-500">Balance</span>
             <div className="flex items-center gap-2">
-              <span className="keno-mono text-sm tabular-nums text-amber-300">
+              <span className="arc-mono text-sm tabular-nums text-amber-300">
                 {balance != null ? `${formatChips(balance)} chips` : '—'}
               </span>
               <button
@@ -345,7 +345,7 @@ export function StakeKenoGame() {
                 disabled={busy}
                 onChange={(e) => setBet(Math.max(0, Math.floor(Number(e.target.value) || 0)))}
                 onBlur={() => setBet((b) => clampBet(b))}
-                className="keno-mono border-cyan-950 bg-[#081420] tabular-nums"
+                className="arc-mono border-cyan-950 bg-[#081420] tabular-nums"
               />
               <Button
                 type="button"
@@ -425,13 +425,13 @@ export function StakeKenoGame() {
           </div>
 
           <div className="flex items-center justify-between text-xs text-slate-500">
-            <span className="keno-mono tabular-nums">
+            <span className="arc-mono tabular-nums">
               {picksCount}/{KENO_MAX_PICKS} selected
             </span>
             {picksCount > 0 && (
               <span>
                 max{' '}
-                <span className="keno-mono text-cyan-300">
+                <span className="arc-mono text-cyan-300">
                   {formatMultiplier(maxMultiplierX100)}
                 </span>
               </span>
@@ -442,7 +442,7 @@ export function StakeKenoGame() {
             type="button"
             disabled={busy || picksCount === 0}
             onClick={placeBet}
-            className="keno-display h-12 w-full bg-cyan-500 text-base font-bold uppercase tracking-widest text-[#03121B] shadow-[0_0_24px_-6px_rgba(34,211,238,0.8)] hover:bg-cyan-400 disabled:opacity-50"
+            className="arc-display h-12 w-full bg-cyan-500 text-base font-bold uppercase tracking-widest text-[#03121B] shadow-[0_0_24px_-6px_rgba(34,211,238,0.8)] hover:bg-cyan-400 disabled:opacity-50"
           >
             {phase === 'betting' ? 'Placing…' : phase === 'revealing' ? 'Drawing…' : 'Bet'}
           </Button>
@@ -474,7 +474,7 @@ export function StakeKenoGame() {
               >
                 {result.hits} hit{result.hits === 1 ? '' : 's'} ·{' '}
                 {result.payout > 0 ? (
-                  <span className="keno-mono text-amber-300">
+                  <span className="arc-mono text-amber-300">
                     +{profit.toLocaleString()} chips ({formatMultiplier(result.multiplierX100)})
                   </span>
                 ) : (
@@ -495,7 +495,7 @@ export function StakeKenoGame() {
 
         {/* ───────── Board + payouts ───────── */}
         <div className="order-1 space-y-4 lg:order-2">
-          <Card className="keno-panel relative border-0 p-3 sm:p-4">
+          <Card className="arc-panel relative border-0 p-3 sm:p-4">
             <KenoBoard
               selected={selected}
               drawn={revealed}
@@ -505,11 +505,11 @@ export function StakeKenoGame() {
             />
             {showWinBanner && (
               <div className="pointer-events-none absolute inset-0 flex items-center justify-center">
-                <div className="keno-banner-in keno-panel rounded-2xl border border-amber-400/40 px-8 py-5 text-center shadow-[0_0_60px_-12px_rgba(245,158,11,0.55)]">
-                  <div className="keno-display text-3xl font-bold text-amber-300 sm:text-4xl">
+                <div className="arc-banner-in arc-panel rounded-2xl border border-amber-400/40 px-8 py-5 text-center shadow-[0_0_60px_-12px_rgba(245,158,11,0.55)]">
+                  <div className="arc-display text-3xl font-bold text-amber-300 sm:text-4xl">
                     {formatMultiplier(result.multiplierX100)}
                   </div>
-                  <div className="keno-mono mt-1 text-sm tabular-nums text-amber-200/90">
+                  <div className="arc-mono mt-1 text-sm tabular-nums text-amber-200/90">
                     +{profit.toLocaleString()} chips
                   </div>
                 </div>

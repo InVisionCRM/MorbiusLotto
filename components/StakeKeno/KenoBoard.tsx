@@ -70,7 +70,7 @@ export function KenoBoard({ selected, drawn, settled, disabled, onToggle }: Keno
             onClick={() => onToggle(n)}
             aria-pressed={isSelected}
             className={[
-              'keno-tile keno-mono relative aspect-square rounded-lg font-semibold tabular-nums',
+              'keno-tile arc-mono relative aspect-square rounded-lg font-semibold tabular-nums',
               'text-sm sm:text-base',
               'disabled:cursor-not-allowed select-none',
               'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-400/80',

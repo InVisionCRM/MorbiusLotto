@@ -1389,20 +1389,20 @@ body {
 }
 .keno-cell-flash { animation: keno-cell-flash 0.4s ease-out both; }
 
-/* ── Deep-Sea Neon theme (page-scoped via .keno2-scope) ──
+/* ── Deep-Sea Neon theme (page-scoped via .arcade2-scope) ──
    bg #050E16 · accent #22D3EE · wins #F59E0B
-   Display: Chakra Petch (var(--font-keno-display), set by next/font on the page)
-   Numerals: JetBrains Mono (var(--font-keno-mono)) */
-.keno2-scope .keno-display {
-  font-family: var(--font-keno-display), 'Chakra Petch', sans-serif;
+   Display: Chakra Petch (var(--font-arc-display), set by next/font on the page)
+   Numerals: JetBrains Mono (var(--font-arc-mono)) */
+.arcade2-scope .arc-display {
+  font-family: var(--font-arc-display), 'Chakra Petch', sans-serif;
   letter-spacing: 0.02em;
 }
-.keno2-scope .keno-mono {
-  font-family: var(--font-keno-mono), ui-monospace, 'JetBrains Mono', monospace;
+.arcade2-scope .arc-mono {
+  font-family: var(--font-arc-mono), ui-monospace, 'JetBrains Mono', monospace;
 }
 
 /* Glass panel sitting in the abyss: faint cyan edge + top highlight. */
-.keno-panel {
+.arc-panel {
   background:
     linear-gradient(rgba(255, 255, 255, 0.03), rgba(255, 255, 255, 0) 18%),
     rgba(8, 20, 31, 0.78);
@@ -1411,12 +1411,12 @@ body {
 }
 
 /* Win banner: surfaces over the board once the draw settles on a paying hit. */
-@keyframes keno-banner-in {
+@keyframes arc-banner-in {
   0%   { transform: scale(0.7); opacity: 0; }
   55%  { transform: scale(1.06); opacity: 1; }
   100% { transform: scale(1); opacity: 1; }
 }
-.keno-banner-in { animation: keno-banner-in 0.38s cubic-bezier(0.34, 1.56, 0.64, 1) both; }
+.arc-banner-in { animation: arc-banner-in 0.38s cubic-bezier(0.34, 1.56, 0.64, 1) both; }
 
 /* Idle tile lift on hover — kept in CSS so all 40 tiles share one rule. */
 .keno-tile {
@@ -1426,6 +1426,6 @@ body {
 .keno-tile:not(:disabled):hover { transform: translateY(-2px); }
 
 @media (prefers-reduced-motion: reduce) {
-  .keno-pop, .keno-hit-glow, .keno-dot, .keno-cell-flash, .keno-banner-in { animation: none; }
+  .keno-pop, .keno-hit-glow, .keno-dot, .keno-cell-flash, .arc-banner-in { animation: none; }
   .keno-tile, .keno-tile:not(:disabled):hover { transition: none; transform: none; }
 }

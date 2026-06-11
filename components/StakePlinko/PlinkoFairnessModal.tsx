@@ -1,16 +1,16 @@
 'use client'
 
 /**
- * KenoFairnessModal — provably-fair panel.
+ * PlinkoFairnessModal — provably-fair panel for chips Plinko.
  *
  * Two jobs:
- *   1. Let the player set their own client seed (used for the next round's draw).
- *   2. Verify any past round by id — fetches /api/keno/verify/:id, re-derives the
- *      10 drawn numbers from the published seeds, and shows whether the server's
- *      committed hash, draw, and payout all reconcile.
+ *   1. Let the player set their own client seed (used for the next ball's path).
+ *   2. Verify any past ball by id — fetches /api/plinko/verify/:id, re-derives
+ *      the 16 left/right steps from the published seeds, and shows whether the
+ *      server's committed hash, path, and payout all reconcile.
  *
- * `requestVerifyId` lets callers (the "Verify last round" link, history rows)
- * open the modal already pointed at a round — it auto-runs once per change.
+ * `requestVerifyId` lets callers (history rows, the controls-rail link) open
+ * the modal already pointed at a round — it auto-runs once per change.
  */
 
 import { useEffect, useState } from 'react'
@@ -22,9 +22,9 @@ import {
 } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
 import { Button } from '@/components/ui/button'
-import { verifyKeno, formatMultiplier, type KenoVerifyResult } from '@/lib/keno-client'
+import { verifyPlinko, formatMultiplier, type PlinkoVerifyResult } from '@/lib/plinko-client'
 
-interface KenoFairnessModalProps {
+interface PlinkoFairnessModalProps {
   open: boolean
   onClose: () => void
   clientSeed: string
@@ -53,15 +53,36 @@ function Check({ ok, label }: { ok: boolean; label: string }) {
   )
 }
 
-export function KenoFairnessModal({
+/** The 16 steps as compact L/R pips, ending at the bucket. */
+function PathPips({ path, bucket }: { path: number[]; bucket: number }) {
+  return (
+    <div className="flex flex-wrap items-center gap-1">
+      {path.map((step, i) => (
+        <span
+          key={i}
+          className={`arc-mono inline-flex h-5 w-5 items-center justify-center rounded text-[10px] font-semibold ${
+            step === 1
+              ? 'bg-cyan-500/15 text-cyan-300 ring-1 ring-cyan-500/40'
+              : 'bg-[#081420] text-slate-500 ring-1 ring-cyan-950'
+          }`}
+        >
+          {step === 1 ? 'R' : 'L'}
+        </span>
+      ))}
+      <span className="arc-mono ml-1 text-xs text-amber-300">→ bucket {bucket}</span>
+    </div>
+  )
+}
+
+export function PlinkoFairnessModal({
   open,
   onClose,
   clientSeed,
   onClientSeedChange,
   requestVerifyId,
-}: KenoFairnessModalProps) {
+}: PlinkoFairnessModalProps) {
   const [verifyId, setVerifyId] = useState('')
-  const [result, setResult] = useState<KenoVerifyResult | null>(null)
+  const [result, setResult] = useState<PlinkoVerifyResult | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
 
@@ -72,7 +93,7 @@ export function KenoFairnessModal({
     setError(null)
     setResult(null)
     try {
-      setResult(await verifyKeno(trimmed))
+      setResult(await verifyPlinko(trimmed))
     } catch {
       setError('No round found with that ID.')
     } finally {
@@ -80,7 +101,7 @@ export function KenoFairnessModal({
     }
   }
 
-  // Auto-verify when opened pointed at a specific round (last round / history row).
+  // Auto-verify when opened pointed at a specific ball (history row / last ball).
   useEffect(() => {
     if (open && requestVerifyId) {
       setVerifyId(requestVerifyId)
@@ -102,22 +123,24 @@ export function KenoFairnessModal({
           <section className="space-y-2">
             <h3 className="text-sm font-semibold text-slate-200">Your client seed</h3>
             <p className="text-xs text-slate-500">
-              Mixed into every draw. Change it any time — the next round uses the new value.
+              Mixed into every ball&apos;s path. Change it any time — the next ball uses the
+              new value.
             </p>
             <Input
               value={clientSeed}
               onChange={(e) => onClientSeedChange(e.target.value.slice(0, 128))}
-              placeholder="Leave blank for a random seed each round"
+              placeholder="Leave blank for a random seed each ball"
               className="arc-mono border-cyan-950 bg-[#081420] text-xs"
             />
           </section>
 
           {/* Verify */}
           <section className="space-y-2">
-            <h3 className="text-sm font-semibold text-slate-200">Verify a round</h3>
+            <h3 className="text-sm font-semibold text-slate-200">Verify a ball</h3>
             <p className="text-xs text-slate-500">
-              Each round commits a hashed server seed up front and reveals it after. We
-              re-derive the draw from the published seeds so you can confirm nothing moved.
+              Each ball commits a hashed server seed up front and reveals it after. We
+              re-derive the 16 left/right steps from the published seeds so you can confirm
+              nothing moved.
             </p>
             <div className="flex gap-2">
               <Input
@@ -142,9 +165,10 @@ export function KenoFairnessModal({
             <section className="arc-panel space-y-3 rounded-lg p-3">
               <div className="space-y-1.5">
                 <Check ok={result.verification.hashMatches} label="Server seed matches its committed hash" />
-                <Check ok={result.verification.drawMatches} label="Drawn numbers re-derive exactly" />
-                <Check ok={result.verification.payoutMatches} label="Hits & payout reconcile" />
+                <Check ok={result.verification.pathMatches} label="Path re-derives exactly" />
+                <Check ok={result.verification.payoutMatches} label="Bucket & payout reconcile" />
               </div>
+              <PathPips path={result.path} bucket={result.bucket} />
               <div className="grid grid-cols-1 gap-2">
                 <Field label="Server seed" value={result.serverSeed} />
                 <Field label="Server seed hash" value={result.serverSeedHash} />
@@ -153,10 +177,7 @@ export function KenoFairnessModal({
               </div>
               <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-slate-400">
                 <span>
-                  Drawn: <span className="arc-mono text-slate-200">{result.drawn.join(', ')}</span>
-                </span>
-                <span>
-                  Hits: <span className="arc-mono text-slate-200">{result.hits}</span>
+                  Bet: <span className="arc-mono text-slate-200">{result.bet.toLocaleString()}</span>
                 </span>
                 <span>
                   Payout:{' '}
