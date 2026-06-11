@@ -23,7 +23,10 @@ export const KENO_MIN_PICKS = 1;
 export const KENO_MAX_PICKS = 10;
 
 export const KENO_MIN_BET = 1;
-export const KENO_MAX_BET = 10_000;
+// Capped so the worst-case single-round liability (max bet × 1000× top
+// multiplier = 1M chips) stays survivable for the house bankroll. Raise
+// deliberately once the chip economy proves out — never by accident.
+export const KENO_MAX_BET = 1_000;
 
 export type KenoRisk = 'classic' | 'low' | 'medium' | 'high';
 export const KENO_RISKS: readonly KenoRisk[] = ['classic', 'low', 'medium', 'high'] as const;

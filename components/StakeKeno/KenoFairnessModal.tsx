@@ -9,10 +9,11 @@
  *      10 drawn numbers from the published seeds, and shows whether the server's
  *      committed hash, draw, and payout all reconcile.
  *
- * The last played round's seeds are passed in so "Verify last round" is one tap.
+ * `requestVerifyId` lets callers (the "Verify last round" link, history rows)
+ * open the modal already pointed at a round — it auto-runs once per change.
  */
 
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import {
   Dialog,
   DialogContent,
@@ -28,14 +29,15 @@ interface KenoFairnessModalProps {
   onClose: () => void
   clientSeed: string
   onClientSeedChange: (seed: string) => void
-  lastRoundId: string | null
+  /** When set (and the modal is open), the id is filled in and verified immediately. */
+  requestVerifyId: string | null
 }
 
 function Field({ label, value }: { label: string; value: string }) {
   return (
     <div className="min-w-0">
       <div className="text-[11px] uppercase tracking-wide text-slate-500">{label}</div>
-      <div className="break-all rounded-md bg-slate-900/70 px-2 py-1 font-mono text-xs text-slate-300">
+      <div className="keno-mono break-all rounded-md bg-[#081420] px-2 py-1 text-xs text-slate-300">
         {value}
       </div>
     </div>
@@ -56,7 +58,7 @@ export function KenoFairnessModal({
   onClose,
   clientSeed,
   onClientSeedChange,
-  lastRoundId,
+  requestVerifyId,
 }: KenoFairnessModalProps) {
   const [verifyId, setVerifyId] = useState('')
   const [result, setResult] = useState<KenoVerifyResult | null>(null)
@@ -78,11 +80,21 @@ export function KenoFairnessModal({
     }
   }
 
+  // Auto-verify when opened pointed at a specific round (last round / history row).
+  useEffect(() => {
+    if (open && requestVerifyId) {
+      setVerifyId(requestVerifyId)
+      void runVerify(requestVerifyId)
+    }
+  }, [open, requestVerifyId])
+
   return (
     <Dialog open={open} onOpenChange={(o) => !o && onClose()}>
-      <DialogContent className="max-w-lg border-slate-800 bg-slate-950 text-slate-200">
+      <DialogContent className="keno2-scope max-h-[85vh] max-w-lg overflow-y-auto border-cyan-950 bg-[#050E16] text-slate-200">
         <DialogHeader>
-          <DialogTitle>Provably Fair</DialogTitle>
+          <DialogTitle className="keno-display uppercase tracking-wider">
+            Provably Fair
+          </DialogTitle>
         </DialogHeader>
 
         <div className="space-y-5">
@@ -96,7 +108,7 @@ export function KenoFairnessModal({
               value={clientSeed}
               onChange={(e) => onClientSeedChange(e.target.value.slice(0, 128))}
               placeholder="Leave blank for a random seed each round"
-              className="border-slate-700 bg-slate-900 font-mono text-xs"
+              className="keno-mono border-cyan-950 bg-[#081420] text-xs"
             />
           </section>
 
@@ -112,34 +124,22 @@ export function KenoFairnessModal({
                 value={verifyId}
                 onChange={(e) => setVerifyId(e.target.value)}
                 placeholder="Round ID"
-                className="border-slate-700 bg-slate-900 font-mono text-xs"
+                className="keno-mono border-cyan-950 bg-[#081420] text-xs"
               />
               <Button
                 onClick={() => runVerify(verifyId)}
                 disabled={loading}
                 className="shrink-0 bg-cyan-600 hover:bg-cyan-500"
               >
-                Verify
+                {loading ? 'Checking…' : 'Verify'}
               </Button>
             </div>
-            {lastRoundId && (
-              <button
-                type="button"
-                onClick={() => {
-                  setVerifyId(lastRoundId)
-                  void runVerify(lastRoundId)
-                }}
-                className="text-xs text-cyan-400 hover:underline"
-              >
-                Verify last round
-              </button>
-            )}
           </section>
 
           {error && <p className="text-sm text-red-400">{error}</p>}
 
           {result && (
-            <section className="space-y-3 rounded-lg border border-slate-800 bg-slate-900/40 p-3">
+            <section className="keno-panel space-y-3 rounded-lg p-3">
               <div className="space-y-1.5">
                 <Check ok={result.verification.hashMatches} label="Server seed matches its committed hash" />
                 <Check ok={result.verification.drawMatches} label="Drawn numbers re-derive exactly" />
@@ -152,9 +152,17 @@ export function KenoFairnessModal({
                 <Field label="Nonce" value={String(result.nonce)} />
               </div>
               <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-slate-400">
-                <span>Drawn: <span className="font-mono text-slate-200">{result.drawn.join(', ')}</span></span>
-                <span>Hits: <span className="text-slate-200">{result.hits}</span></span>
-                <span>Payout: <span className="text-amber-300">{result.payout} chips</span> ({formatMultiplier(result.multiplierX100)})</span>
+                <span>
+                  Drawn: <span className="keno-mono text-slate-200">{result.drawn.join(', ')}</span>
+                </span>
+                <span>
+                  Hits: <span className="keno-mono text-slate-200">{result.hits}</span>
+                </span>
+                <span>
+                  Payout:{' '}
+                  <span className="keno-mono text-amber-300">{result.payout.toLocaleString()} chips</span>{' '}
+                  ({formatMultiplier(result.multiplierX100)})
+                </span>
               </div>
             </section>
           )}
