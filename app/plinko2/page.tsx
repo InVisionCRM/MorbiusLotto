@@ -21,13 +21,13 @@ import { StakePlinkoGame } from '@/components/StakePlinko/StakePlinkoGame'
 const arcDisplay = Chakra_Petch({
   subsets: ['latin'],
   weight: ['500', '600', '700'],
-  variable: '--font-keno-display',
+  variable: '--font-arc-display',
 })
 
 const arcMono = JetBrains_Mono({
   subsets: ['latin'],
   weight: ['400', '500', '600', '700'],
-  variable: '--font-keno-mono',
+  variable: '--font-arc-mono',
 })
 
 export default function Plinko2Page() {
