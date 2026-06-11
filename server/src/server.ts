@@ -20,6 +20,7 @@ import { registerArcadeBaccaratRoutes } from './routes/arcade-baccarat.routes';
 import { registerArcadeCrashRoutes } from './routes/arcade-crash.routes';
 import { registerArcadeRouletteRoutes } from './routes/arcade-roulette.routes';
 import { registerMarqueeRoutes } from './routes/marquee.routes';
+import { registerKenoRoutes } from './routes/keno.routes';
 import { registerWheelRoutes } from './routes/wheel.routes';
 import { setWheelBalanceListener } from './services/wheel-spin-wallet';
 import { requireAuth, requireSameAddress } from './middleware/require-auth';
@@ -429,6 +430,7 @@ async function initializeServices() {
     registerArcadeCrashRoutes({ app, dbService });
     registerArcadeRouletteRoutes({ app, dbService });
     registerMarqueeRoutes({ app, dbService });
+    registerKenoRoutes({ app, dbService, authService });
     registerWheelRoutes({ app, dbService, authService });
 
     // Public config (whitelisted keys only; used for ad creatives, etc.)

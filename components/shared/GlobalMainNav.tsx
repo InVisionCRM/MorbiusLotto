@@ -83,6 +83,7 @@ const PATH_TO_PAGE: Record<string, NavPage> = {
   '/PLINKO': 'plinko',
   '/lottery': 'lottery',
   '/keno': 'keno',
+  '/keno2': 'keno',
   '/poker': 'poker',
   '/blackjack-multi': 'blackjackMulti',
 };
@@ -103,7 +104,7 @@ const OTHER_GAMES: readonly OtherGameNavItem[] = [
   { label: 'Multiplayer BJ', href: '/blackjack-multi', icon: 'users' },
   { label: 'Poker', href: '/poker', icon: 'cards' },
   { label: 'Lottery', href: '/lottery', icon: 'ticket' },
-  { label: 'Keno', href: '/keno', icon: 'grid' },
+  { label: 'Keno', href: '/keno2', icon: 'grid' },
 ];
 
 
