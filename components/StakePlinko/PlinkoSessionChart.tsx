@@ -31,6 +31,8 @@ export interface PlinkoSessionPoint {
 
 interface PlinkoSessionChartProps {
   points: PlinkoSessionPoint[]
+  /** Skip the panel chrome + header — used inside FloatingPanel, which supplies both. */
+  bare?: boolean
 }
 
 function StatTile({ label, value, accent }: { label: string; value: string; accent?: string }) {
@@ -44,7 +46,7 @@ function StatTile({ label, value, accent }: { label: string; value: string; acce
   )
 }
 
-export function PlinkoSessionChart({ points }: PlinkoSessionChartProps) {
+export function PlinkoSessionChart({ points, bare = false }: PlinkoSessionChartProps) {
   const data = useMemo(() => {
     let cum = 0
     return points.map((p) => {
@@ -78,15 +80,8 @@ export function PlinkoSessionChart({ points }: PlinkoSessionChartProps) {
 
   const positive = stats.net >= 0
 
-  return (
-    <section aria-label="Session profit chart" className="arc-panel rounded-xl p-3 sm:p-4">
-      <div className="mb-2 flex items-baseline justify-between">
-        <h2 className="arc-display text-sm font-semibold uppercase tracking-wider text-slate-300">
-          Session
-        </h2>
-        <span className="text-[11px] text-slate-500">resets on reload</span>
-      </div>
-
+  const body = (
+    <>
       <div className="mb-3 grid grid-cols-4 gap-1.5">
         <StatTile label="Balls" value={stats.balls.toLocaleString()} />
         <StatTile label="Wagered" value={stats.wagered.toLocaleString()} />
@@ -148,6 +143,26 @@ export function PlinkoSessionChart({ points }: PlinkoSessionChartProps) {
           </ResponsiveContainer>
         </div>
       )}
+    </>
+  )
+
+  if (bare) {
+    return (
+      <div aria-label="Session profit chart" className="px-1 pb-1">
+        {body}
+      </div>
+    )
+  }
+
+  return (
+    <section aria-label="Session profit chart" className="arc-panel rounded-xl p-3 sm:p-4">
+      <div className="mb-2 flex items-baseline justify-between">
+        <h2 className="arc-display text-sm font-semibold uppercase tracking-wider text-slate-300">
+          Session
+        </h2>
+        <span className="text-[11px] text-slate-500">resets on reload</span>
+      </div>
+      {body}
     </section>
   )
 }

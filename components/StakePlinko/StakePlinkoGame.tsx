@@ -44,6 +44,7 @@ import PlinkoGame from '@/components/PLINKO/PlinkoGame'
 import type { RiskLevel } from '@/app/PLINKO/types'
 import { PlinkoInfoTabs } from './PlinkoInfoTabs'
 import { PlinkoSessionChart, type PlinkoSessionPoint } from './PlinkoSessionChart'
+import { FloatingPanel } from './FloatingPanel'
 import { PlinkoFairnessModal } from './PlinkoFairnessModal'
 import {
   fetchPlinkoInfo,
@@ -557,10 +558,19 @@ export function StakePlinkoGame() {
         </div>
       </div>
 
-      {/* ───────── Session chart + info tabs (chart/tabs forked from /PLINKO) ───────── */}
-      <div className="mt-4 grid gap-4 lg:grid-cols-2">
-        <PlinkoSessionChart points={session} />
+      {/* ───────── Session chart + info tabs (chart/tabs forked from /PLINKO) ─────────
+          The chart is inline on mobile; on desktop it becomes a draggable floating
+          widget (FloatingPanel) so it can live wherever the player parks it. */}
+      <div className="mt-4 space-y-4">
+        <div className="lg:hidden">
+          <PlinkoSessionChart points={session} />
+        </div>
         <PlinkoInfoTabs history={history} historyLoading={historyLoading} onVerify={openVerify} />
+      </div>
+      <div className="hidden lg:block">
+        <FloatingPanel title="Session" storageKey="plinko2.sessionChart.pos">
+          <PlinkoSessionChart points={session} bare />
+        </FloatingPanel>
       </div>
 
       <PlinkoFairnessModal
