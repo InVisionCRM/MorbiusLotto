@@ -37,9 +37,8 @@ import { AnimatePresence, motion } from 'framer-motion'
 import { useStakingHistory } from '@/hooks/use-staking-history'
 import { useLPStakingHistory } from '@/hooks/use-lp-staking-history'
 import { Table, TableHeader, TableBody, TableHead, TableRow, TableCell } from '@/components/ui/table'
-import { MerkleClaimsPanel } from '@/components/staking/MerkleClaimsPanel'
-import { MerkleClaimsLPPanel } from '@/components/staking/MerkleClaimsLPPanel'
-import { useMerkleClaims } from '@/hooks/use-merkle-claims'
+import { HolderChipCreditsPanel } from '@/components/staking/HolderChipCreditsPanel'
+import { useHolderChipRewards } from '@/hooks/use-holder-chip-rewards'
 import { getApiUrlOptional } from '@/lib/api-urls'
 import { HOW_TO_CLAIM_VIDEO_URL } from '@/lib/how-to-video-urls'
 import { useGasParams } from '@/lib/tx-gas'
@@ -484,15 +483,18 @@ export default function ClaimPage() {
   const plpWalletBal = (plpBalRaw ?? 0n) as bigint
   const lpBusy = lpAction !== null
 
-  // ── Merkle Holder Rewards reads ─────────────────────────────────────
-
+  // ── Holder chip rewards reads ───────────────────────────────────────
+  // Vault balance is the MORBIUS sitting in MerkleClaimMorbius (1.25% fee accrual)
+  // — it will be rescued + credited as chips on the next epoch finalize.
   const { data: merkleContractBalance } = useReadContract({
     address: MORBIUS_ADDR,
     abi: ERC20_ABI,
     functionName: 'balanceOf',
     args: [MERKLE_CLAIM_ADDR],
   })
-  const { totalClaimable: merkleClaimable, claimableEpochs } = useMerkleClaims()
+  const { data: chipRewardData } = useHolderChipRewards(address)
+  const lifetimeChipsStr = chipRewardData.morbius.lifetimeChips
+  const lifetimeChipsN = Number(lifetimeChipsStr) || 0
 
   const holderRewardPool = (merkleContractBalance ?? 0n) as bigint
 
@@ -884,7 +886,7 @@ export default function ClaimPage() {
                         />
                         <span className="text-[10px] uppercase tracking-wider text-white/70 font-poppins font-semibold">Holder Rewards</span>
                       </div>
-                      <button onClick={() => setActiveTab('claims')} className="text-[10px] text-cyan-500 hover:text-purple-500 font-poppins transition-colors">Claim →</button>
+                      <button onClick={() => setActiveTab('claims')} className="text-[10px] text-cyan-500 hover:text-purple-500 font-poppins transition-colors">View →</button>
                     </div>
                     <div className="grid grid-cols-3 gap-2">
                       {[
@@ -892,7 +894,7 @@ export default function ClaimPage() {
                         { label: 'Total Distributed', value: fmt(totalDistributed), sub: toUsd(totalDistributed) != null ? fmtUsd(toUsd(totalDistributed)) : 'all-time', color: 'text-white' },
                         { label: 'Eligible Holders', value: latestEpochHolders.toLocaleString(), sub: 'latest snapshot', color: 'text-white' },
                         { label: 'Reward Drops', value: rewardDrops.toLocaleString(), sub: lastDropDate !== '—' ? `last: ${lastDropDate}` : null, color: 'text-white' },
-                        { label: 'Your Claimable', value: address ? fmtDec(merkleClaimable) : '—', sub: address && toUsd(merkleClaimable) != null ? fmtUsd(toUsd(merkleClaimable)) : (address ? 'MORBIUS' : 'connect wallet'), color: 'text-cyan-400' },
+                        { label: 'Your Chips Earned', value: address ? lifetimeChipsN.toLocaleString() : '—', sub: address ? `lifetime · ${chipRewardData.morbius.epochs} epochs` : 'connect wallet', color: 'text-cyan-400' },
                         { label: 'Next Drop', value: nextDropAt ? new Date(nextDropAt).toLocaleDateString(undefined, { month: 'short', day: 'numeric' }) : '—', sub: nextDropAt ? new Date(nextDropAt).toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' }) : null, color: 'text-white' },
                       ].map((s) => (
                         <div key={s.label} className="rounded-lg bg-slate-800/20 border border-emerald-500/10 px-3 py-2 text-center">
@@ -994,8 +996,8 @@ export default function ClaimPage() {
                     </AnimatePresence>
                   </div>
 
-                  <MerkleClaimsLPPanel />
-                  <p className="text-center text-white/20 text-[10px] font-poppins pt-1">Provide liquidity on any supported MORBIUS pair · Hold LP tokens · Claim MORBIUS drops</p>
+                  <HolderChipCreditsPanel cohort="lp" />
+                  <p className="text-center text-white/20 text-[10px] font-poppins pt-1">Provide liquidity on any supported MORBIUS pair · Hold LP tokens · Earn chips every epoch</p>
                 </motion.div>
               )}
 
@@ -1011,7 +1013,7 @@ export default function ClaimPage() {
                     <FileText className="w-4 h-4" />
                     How to claim — watch video
                   </button>
-                  <MerkleClaimsPanel />
+                  <HolderChipCreditsPanel cohort="morbius" />
                 </motion.div>
               )}
 

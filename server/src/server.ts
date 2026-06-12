@@ -41,6 +41,9 @@ import { ChainAnalyticsService } from './services/chain-analytics.service';
 import { InstantLotteryService } from './services/instant-lottery.service';
 import { MerkleDropsService } from './services/merkle-drops.service';
 import { MerkleDropsLPService } from './services/merkle-lp-drops.service';
+import { HolderChipRewardsService } from './services/holder-chip-rewards.service';
+import { registerHolderRewardsAdminRoutes } from './routes/holder-rewards-admin.routes';
+import { registerHolderRewardsPublicRoutes } from './routes/holder-rewards-public.routes';
 import { CosmeticsService } from './services/cosmetics.service';
 import { isAdminWallet } from './lib/cosmetics-catalog';
 import { resolveDisplayNameForProfileUpsert } from './lib/resolve-profile-display-name';
@@ -397,18 +400,16 @@ async function initializeServices() {
     // Instant lottery (provably-fair server-side play, MORBIUS only)
     const instantLotteryService = new InstantLotteryService(dbService, pfService);
 
-    // Merkle drops service (MORBIUS holder epoch rewards)
+    // Legacy: Merkle drops services kept instantiated for read endpoints + historical
+    // ops scripts that still import them, but the crons are PERMANENTLY DISABLED —
+    // chip-only rewards (HolderChipRewardsService) replace this runtime.
     merkleDropsService = new MerkleDropsService(dbService.getPool());
-    if (process.env.MERKLE_DROP_CRON_ENABLED === 'true') {
-      merkleDropsService.startCron();
-    }
-
-    // Merkle LP drops service (LP token holder epoch rewards)
     merkleDropsLPService = new MerkleDropsLPService(dbService.getPool());
     const cosmeticsService = new CosmeticsService(dbService.getPool());
-    if (process.env.MERKLE_LP_DROP_CRON_ENABLED === 'true') {
-      merkleDropsLPService.startCron();
-    }
+
+    // Chip-only holder + LP rewards service (replaces merkle drops at runtime —
+    // 1.25% MORBIUS holders + 1.5% LP holders credited as chips, not on-chain claims)
+    const holderChipRewardsService = new HolderChipRewardsService(dbService.getPool());
 
     // API routes
 
@@ -434,6 +435,8 @@ async function initializeServices() {
     registerKenoRoutes({ app, dbService, authService });
     registerPlinkoChipRoutes({ app, dbService, authService });
     registerWheelRoutes({ app, dbService, authService });
+    registerHolderRewardsAdminRoutes({ app, holderChipRewardsService });
+    registerHolderRewardsPublicRoutes({ app, holderChipRewardsService });
 
     // Public config (whitelisted keys only; used for ad creatives, etc.)
     const PUBLIC_CONFIG_KEYS = ['ad_creative_url', 'ad_creative_hero_url', 'ad_creative_loading_url'];

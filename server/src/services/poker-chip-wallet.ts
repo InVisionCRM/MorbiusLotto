@@ -34,7 +34,9 @@ export type PokerChipLedgerReason =
   | 'keno_bet'
   | 'keno_payout'
   | 'plinko_bet'
-  | 'plinko_payout';
+  | 'plinko_payout'
+  | 'holder_reward'     // MORBIUS holder epoch credit (1.25% slice → chips)
+  | 'lp_holder_reward'; // LP holder epoch credit (1.5% slice → chips)
 
 const DEFAULT_PLATFORM_FEE_WALLET = '0x41682815b05fe6b54a6c0f8813bb99423ee0309d';
 
