@@ -15,6 +15,7 @@ import crypto from 'crypto';
 import type { Express, Request, Response } from 'express';
 import { logger } from '../utils/logger';
 import { verifyTelegramInitData } from '../services/telegram.service';
+import { SESSION_COOKIE_NAME } from '../middleware/require-auth';
 import { applyPokerChipDelta } from '../services/poker-chip-wallet';
 import { ProvablyFairService } from '../services/provably-fair.service';
 import {
@@ -27,10 +28,12 @@ import {
   DICE_MAX_TARGET_X100,
 } from '../services/arcade-dice';
 import type { DatabaseService } from '../services/database.service';
+import type { AuthService } from '../services/auth.service';
 
 interface RegisterArcadeDiceRoutesOptions {
   app: Express;
   dbService: DatabaseService;
+  authService: AuthService;
 }
 
 const pf = new ProvablyFairService();
@@ -52,8 +55,25 @@ async function walletFromInitData(
 export function registerArcadeDiceRoutes({
   app,
   dbService,
+  authService,
 }: RegisterArcadeDiceRoutesOptions): void {
   const pool = dbService.getPool();
+
+  const AUTH_ERROR = 'No session — sign in on the web, or open from Telegram with a linked wallet.';
+
+  /**
+   * Caller's wallet: Telegram `initData` (Mini App) or the SIWE morb_session
+   * cookie (web /dice2). Telegram wins when both are present so the Mini App
+   * keeps working unchanged inside a browser that also has a web session.
+   */
+  async function resolveWallet(req: Request): Promise<string | null> {
+    const tgWallet = await walletFromInitData(dbService, req.body?.initData);
+    if (tgWallet) return tgWallet;
+    const token = (req as Request & { cookies?: Record<string, string> }).cookies?.[SESSION_COOKIE_NAME];
+    if (!token) return null;
+    const session = await authService.lookupSession(token);
+    return session ? session.walletAddress : null;
+  }
 
   // -------------------------------------------------------------------------
   // GET /api/arcade/dice/info — public bounds + house edge so the UI always
@@ -75,11 +95,9 @@ export function registerArcadeDiceRoutes({
   // -------------------------------------------------------------------------
   app.post('/api/arcade/dice/play', async (req: Request, res: Response) => {
     try {
-      const wallet = await walletFromInitData(dbService, req.body?.initData);
+      const wallet = await resolveWallet(req);
       if (!wallet) {
-        return res
-          .status(401)
-          .json({ ok: false, error: 'Invalid Telegram session, or no wallet linked.' });
+        return res.status(401).json({ ok: false, error: AUTH_ERROR });
       }
 
       const bet = Math.floor(Number(req.body?.bet));
@@ -179,6 +197,111 @@ export function registerArcadeDiceRoutes({
       }
       logger.error('[arcade-dice] play failed', { error: msg });
       return res.status(500).json({ ok: false, error: 'Could not play the round.' });
+    }
+  });
+
+  // -------------------------------------------------------------------------
+  // GET /api/arcade/dice/history — caller's recent rounds (cookie auth in
+  // practice; GET has no body, so resolveWallet falls through to SIWE).
+  // -------------------------------------------------------------------------
+  app.get('/api/arcade/dice/history', async (req: Request, res: Response) => {
+    try {
+      const wallet = await resolveWallet(req);
+      if (!wallet) {
+        return res.status(401).json({ ok: false, error: AUTH_ERROR });
+      }
+      const limit = Math.max(1, Math.min(100, parseInt(String(req.query.limit ?? '25'), 10) || 25));
+      const r = await pool.query(
+        `SELECT id, bet, target_x100, roll_x100, multiplier_x100, won, payout, created_at
+           FROM arcade_dice_rounds
+          WHERE wallet_address = $1
+          ORDER BY created_at DESC
+          LIMIT $2`,
+        [wallet.toLowerCase(), limit],
+      );
+      return res.json({
+        ok: true,
+        rounds: r.rows.map((row) => ({
+          roundId: row.id,
+          bet: Number(row.bet),
+          targetX100: Number(row.target_x100),
+          rollX100: Number(row.roll_x100),
+          multiplierX100: Number(row.multiplier_x100),
+          won: !!row.won,
+          payout: Number(row.payout),
+          createdAt: row.created_at,
+        })),
+      });
+    } catch (err) {
+      logger.error('[arcade-dice] history failed', { error: (err as Error)?.message });
+      return res.status(500).json({ ok: false, error: 'Could not load history.' });
+    }
+  });
+
+  // -------------------------------------------------------------------------
+  // GET /api/arcade/dice/recent — public. Latest rolls across all players.
+  // -------------------------------------------------------------------------
+  app.get('/api/arcade/dice/recent', async (req: Request, res: Response) => {
+    const limit = Math.max(1, Math.min(50, parseInt(String(req.query.limit ?? '25'), 10) || 25));
+    try {
+      const r = await pool.query(
+        `SELECT id, wallet_address, bet, target_x100, roll_x100, multiplier_x100, won, payout, created_at
+           FROM arcade_dice_rounds
+          ORDER BY created_at DESC
+          LIMIT $1`,
+        [limit],
+      );
+      return res.json({
+        ok: true,
+        rounds: r.rows.map((row) => ({
+          roundId: row.id,
+          wallet: row.wallet_address,
+          bet: Number(row.bet),
+          targetX100: Number(row.target_x100),
+          rollX100: Number(row.roll_x100),
+          multiplierX100: Number(row.multiplier_x100),
+          won: !!row.won,
+          payout: Number(row.payout),
+          createdAt: row.created_at,
+        })),
+      });
+    } catch (err) {
+      logger.error('[arcade-dice] recent failed', { error: (err as Error)?.message });
+      return res.status(500).json({ ok: false, error: 'internal error' });
+    }
+  });
+
+  // -------------------------------------------------------------------------
+  // GET /api/arcade/dice/leaderboard — public. All-time top players by net.
+  // -------------------------------------------------------------------------
+  app.get('/api/arcade/dice/leaderboard', async (req: Request, res: Response) => {
+    const limit = Math.max(1, Math.min(25, parseInt(String(req.query.limit ?? '10'), 10) || 10));
+    try {
+      const r = await pool.query(
+        `SELECT wallet_address,
+                COUNT(*)::int AS rolls,
+                SUM(bet)::text AS wagered,
+                SUM(payout)::text AS won,
+                (SUM(payout) - SUM(bet))::text AS net
+           FROM arcade_dice_rounds
+          GROUP BY wallet_address
+          ORDER BY SUM(payout) - SUM(bet) DESC
+          LIMIT $1`,
+        [limit],
+      );
+      return res.json({
+        ok: true,
+        players: r.rows.map((row) => ({
+          wallet: row.wallet_address,
+          rolls: Number(row.rolls),
+          wagered: String(row.wagered ?? '0'),
+          won: String(row.won ?? '0'),
+          net: String(row.net ?? '0'),
+        })),
+      });
+    } catch (err) {
+      logger.error('[arcade-dice] leaderboard failed', { error: (err as Error)?.message });
+      return res.status(500).json({ ok: false, error: 'internal error' });
     }
   });
 

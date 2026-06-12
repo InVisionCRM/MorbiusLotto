@@ -1,27 +1,17 @@
 'use client'
 
 /**
- * StakePlinkoGame — the interactive client for server-side chips Plinko.
+ * StakeLimboGame — the interactive client for chips Limbo (/limbo2).
  *
- * The board itself is the existing PlinkoGame canvas (Matter.js physics,
- * pegs, buckets, sounds — untouched). This component replaces the on-chain
- * transaction flow with /api/plinko/play: the server decides the bucket
- * provably fairly; the canvas replays a deterministic drop into that bucket
- * via its seed-database mechanism, exactly like contract mode always has.
+ * Limbo: pick a target multiplier; the server draws a result multiplier
+ * provably fairly and settles in one transaction. Win when result ≥ target,
+ * paid bet × target.
  *
- * Stake-style firing model:
- *   • Manual — every click is one independent bet, fired immediately. Balls
- *     fly concurrently (they don't collide with each other); a soft in-flight
- *     cap keeps a stuck network from queueing unbounded bets.
- *   • Auto — repeats single bets at a fixed cadence for a chosen count.
- *     Stops on any error (including running out of chips) or on Stop.
- *
- * Wiring notes (same conventions as StakeKenoGame):
- *   • Bet bounds come from /api/plinko/info; local fallbacks cover the window.
- *   • Balance reads use the public chips endpoint (no sign-in popup on load),
- *     then every play response keeps it authoritative.
- *   • History loads only after probeSiweSession() confirms a session and is
- *     prepended live as balls settle.
+ * Firing model is StakePlinkoGame's: every click is one independent bet
+ * (results are instant), requests pipeline up to MAX_IN_FLIGHT, and Auto
+ * repeats at a fixed cadence WITHOUT serializing on the network round-trip.
+ * Balance, history, session chart and the info tabs follow the same arcade2
+ * conventions as plinko2/dice2/mines2.
  */
 
 import { useCallback, useEffect, useRef, useState } from 'react'
@@ -29,83 +19,56 @@ import { useAccount } from 'wagmi'
 import { Card } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select'
 import { usePokerChipBalance } from '@/hooks/use-poker-chip-balance'
 import { formatChips } from '@/lib/format-poker-chips'
 import { PokerChipExchangeModal } from '@/components/poker/PokerChipExchangeModal'
 import { probeSiweSession } from '@/lib/api-auth'
-import PlinkoGame from '@/components/PLINKO/PlinkoGame'
-import type { RiskLevel } from '@/app/PLINKO/types'
-import { PlinkoInfoTabs } from './PlinkoInfoTabs'
 import { SessionChart, type SessionPoint } from '@/components/arcade2/SessionChart'
 import { FloatingPanel } from '@/components/arcade2/FloatingPanel'
-import { PlinkoFairnessModal } from './PlinkoFairnessModal'
+import { LimboInfoTabs } from './LimboInfoTabs'
+import { LimboFairnessModal } from './LimboFairnessModal'
 import {
-  fetchPlinkoInfo,
-  fetchPlinkoMultipliers,
-  fetchPlinkoHistory,
-  playPlinko,
+  fetchLimboInfo,
+  fetchLimboHistory,
+  playLimbo,
   formatMultiplier,
-  PLINKO_RISKS,
-  PLINKO_RISK_LABELS,
-  PLINKO_RISK_TO_BOARD,
-  type PlinkoMultipliers,
-  type PlinkoRisk,
-  type PlinkoHistoryRound,
-} from '@/lib/plinko-client'
+  limboWinChancePct,
+  type LimboInfo,
+  type LimboPlayResult,
+  type LimboHistoryRound,
+} from '@/lib/limbo-client'
 
 const HISTORY_LIMIT = 25
 const MAX_IN_FLIGHT = 8
 const AUTO_INTERVAL_MS = 250
 const AUTO_COUNTS = [10, 25, 50, 100] as const
 const RECENT_LIMIT = 10
+const TARGET_PRESETS_X100 = [200, 500, 1000, 10000] as const
 
-/** "402 Payment Required: Not enough chips." → "Not enough chips." */
+/** "400 Bad Request: Not enough chips." → "Not enough chips." */
 function serverDetail(msg: string): string | null {
   const m = msg.match(/^\d{3} [^:]*: (.+)$/)
   return m ? m[1] : null
 }
 
-interface BoardDrop {
-  id: number
-  risk: RiskLevel
-  contractResult: {
-    /** Picks the deterministic replay seed inside PlinkoGame (BigInt-safe int). */
-    seed: number
-    bucket: number
-    /** Decimal multiplier — PlinkoGame uses it for the win/lose landing sound. */
-    multiplier: number
-    multiplierX100: number
-    bet: number
-    payout: number
-    roundId: string
-  }
-}
-
-interface RecentChip {
+interface RecentRound {
   key: number
-  multiplierX100: number
-  profit: number
+  resultX100: number
+  won: boolean
 }
 
-export function StakePlinkoGame() {
+export function StakeLimboGame() {
   const { address } = useAccount()
 
-  const [multipliers, setMultipliers] = useState<PlinkoMultipliers | null>(null)
-  const [bounds, setBounds] = useState({ minBet: 1, maxBet: 1_000 })
+  const [info, setInfo] = useState<LimboInfo | null>(null)
+  const [infoFailed, setInfoFailed] = useState(false)
 
-  const [risk, setRisk] = useState<PlinkoRisk>('low')
   const [bet, setBet] = useState<number>(10)
+  const [targetX100, setTargetX100] = useState<number>(200)
   const [clientSeed, setClientSeed] = useState('')
 
-  const [lastDrop, setLastDrop] = useState<BoardDrop | null>(null)
-  const [recent, setRecent] = useState<RecentChip[]>([])
+  const [lastRound, setLastRound] = useState<LimboPlayResult | null>(null)
+  const [recent, setRecent] = useState<RecentRound[]>([])
   const [session, setSession] = useState<SessionPoint[]>([])
   const [error, setError] = useState<string | null>(null)
   const [noChips, setNoChips] = useState(false)
@@ -118,11 +81,10 @@ export function StakePlinkoGame() {
   const [verifyTarget, setVerifyTarget] = useState<string | null>(null)
   const [exchangeOpen, setExchangeOpen] = useState(false)
 
-  const [history, setHistory] = useState<PlinkoHistoryRound[]>([])
+  const [history, setHistory] = useState<LimboHistoryRound[]>([])
   const [historyLoading, setHistoryLoading] = useState(false)
 
-  const dropSeq = useRef(0)
-  const chipSeq = useRef(0)
+  const roundSeq = useRef(0)
   const inFlight = useRef(0)
   const autoLeftRef = useRef<number | null>(null)
   const autoTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
@@ -144,24 +106,25 @@ export function StakePlinkoGame() {
     }
   }, [chainBalance, address])
 
-  // Tables + bounds (public) on mount.
+  const loadInfo = useCallback(() => {
+    setInfoFailed(false)
+    fetchLimboInfo()
+      .then((i) => {
+        setInfo(i)
+        setBet((b) => Math.min(i.maxBet, Math.max(i.minBet, b)))
+        setTargetX100((t) => Math.min(i.maxTargetX100, Math.max(i.minTargetX100, t)))
+      })
+      .catch(() => setInfoFailed(true))
+  }, [])
+
   useEffect(() => {
     mounted.current = true
-    fetchPlinkoMultipliers().then(setMultipliers).catch(() => setMultipliers(null))
-    fetchPlinkoInfo()
-      .then((info) => {
-        if (Number.isFinite(info.minBet) && Number.isFinite(info.maxBet)) {
-          setBounds({ minBet: info.minBet, maxBet: info.maxBet })
-        }
-      })
-      .catch(() => {
-        /* keep defaults — server still enforces */
-      })
+    loadInfo()
     return () => {
       mounted.current = false
       if (autoTimer.current) clearTimeout(autoTimer.current)
     }
-  }, [])
+  }, [loadInfo])
 
   // History: only fetch once a session provably exists (never pop a sign-in on load).
   useEffect(() => {
@@ -172,7 +135,7 @@ export function StakePlinkoGame() {
     }
     setHistoryLoading(true)
     probeSiweSession()
-      .then((ok) => (ok ? fetchPlinkoHistory(HISTORY_LIMIT) : []))
+      .then((ok) => (ok ? fetchLimboHistory(HISTORY_LIMIT) : []))
       .then((rounds) => {
         if (!cancelled) setHistory(rounds)
       })
@@ -187,10 +150,23 @@ export function StakePlinkoGame() {
     }
   }, [address])
 
+  const minBet = info?.minBet ?? 1
+  const maxBet = info?.maxBet ?? 1_000
+  const minTargetX100 = info?.minTargetX100 ?? 101
+  const maxTargetX100 = info?.maxTargetX100 ?? 100_000
+  const houseEdgeBp = info?.houseEdgeBp ?? 0
+
   const clampBet = useCallback(
-    (n: number) => Math.min(bounds.maxBet, Math.max(bounds.minBet, Math.floor(n || 0))),
-    [bounds],
+    (n: number) => Math.min(maxBet, Math.max(minBet, Math.floor(n || 0))),
+    [minBet, maxBet],
   )
+  const clampTarget = useCallback(
+    (n: number) => Math.min(maxTargetX100, Math.max(minTargetX100, Math.floor(n || 0))),
+    [minTargetX100, maxTargetX100],
+  )
+
+  const chancePct = limboWinChancePct(targetX100, houseEdgeBp)
+  const winPayout = Math.floor((clampBet(bet) * targetX100) / 100)
 
   const stopAuto = useCallback(() => {
     autoLeftRef.current = null
@@ -201,73 +177,67 @@ export function StakePlinkoGame() {
     }
   }, [])
 
-  /** Fire one independent bet. Returns false when the loop should stop. */
-  const dropBall = useCallback(async (): Promise<boolean> => {
-    if (inFlight.current >= MAX_IN_FLIGHT) return true
+  /** Fire one independent round. Returns false when the loop should stop. */
+  const playOnce = useCallback(async (): Promise<boolean> => {
+    if (inFlight.current >= MAX_IN_FLIGHT || !info) return true
     const stake = clampBet(bet)
+    const target = clampTarget(targetX100)
     setBet(stake)
+    setTargetX100(target)
     setError(null)
     setNoChips(false)
     inFlight.current += 1
     try {
-      const res = await playPlinko({
-        risk,
+      const res = await playLimbo({
         bet: stake,
+        targetX100: target,
         clientSeed: clientSeed.trim() || undefined,
       })
       if (!mounted.current) return false
+      const profit = res.payout - res.bet
       setBalance(BigInt(res.chipBalance))
+      setLastRound(res)
+      setRecent((prev) =>
+        [{ key: ++roundSeq.current, resultX100: res.resultX100, won: res.won }, ...prev].slice(
+          0,
+          RECENT_LIMIT,
+        ),
+      )
+      setSession((prev) => [...prev, { drop: prev.length + 1, bet: res.bet, profit }])
       setHistory((prev) =>
         [
           {
             roundId: res.roundId,
             bet: res.bet,
-            risk: res.risk,
-            path: res.path,
-            bucket: res.bucket,
-            multiplierX100: res.multiplierX100,
+            targetX100: res.targetX100,
+            resultX100: res.resultX100,
+            won: res.won,
             payout: res.payout,
-            serverSeedHash: res.serverSeedHash,
             createdAt: new Date().toISOString(),
           },
           ...prev,
         ].slice(0, HISTORY_LIMIT),
       )
-      setLastDrop({
-        id: ++dropSeq.current,
-        risk: PLINKO_RISK_TO_BOARD[res.risk],
-        contractResult: {
-          seed: parseInt(res.serverSeedHash.slice(0, 12), 16),
-          bucket: res.bucket,
-          multiplier: res.multiplierX100 / 100,
-          multiplierX100: res.multiplierX100,
-          bet: res.bet,
-          payout: res.payout,
-          roundId: res.roundId,
-        },
-      })
       return true
     } catch (e) {
       if (!mounted.current) return false
       const msg = (e as Error)?.message ?? ''
-      if (/NO_CHIPS|Not enough chips|402/i.test(msg)) {
+      if (/Not enough chips|insufficient|402/i.test(msg)) {
         setError('Not enough chips for that bet.')
         setNoChips(true)
-      } else if (/401|auth/i.test(msg)) {
+      } else if (/401|auth|No session/i.test(msg)) {
         setError('Connect your wallet to play.')
       } else {
-        setError(serverDetail(msg) ?? 'Could not drop the ball. Try again.')
+        setError(serverDetail(msg) ?? 'Could not play the round. Try again.')
       }
       return false
     } finally {
       inFlight.current -= 1
     }
-  }, [bet, risk, clientSeed, clampBet])
+  }, [info, bet, targetX100, clientSeed, clampBet, clampTarget])
 
-  // Fixed-cadence scheduler: fire each ball WITHOUT awaiting the server
-  // round-trip (the old loop serialized RTT + interval, ~1.5s/ball). Balls
-  // pipeline concurrently up to MAX_IN_FLIGHT; a saturated pipe holds the
-  // beat without consuming a ball; any error stops the run.
+  // Fixed-cadence auto loop — fire each round WITHOUT awaiting the round-trip
+  // (same scheduler as plinko2/dice2). Errors stop the run.
   const autoTick = useCallback(() => {
     const left = autoLeftRef.current
     if (left == null || left <= 0 || !mounted.current) {
@@ -277,7 +247,7 @@ export function StakePlinkoGame() {
     if (inFlight.current < MAX_IN_FLIGHT) {
       autoLeftRef.current = left - 1
       setAutoLeft(left - 1)
-      void dropBall().then((ok) => {
+      void playOnce().then((ok) => {
         if (!ok) stopAuto()
       })
     }
@@ -286,7 +256,7 @@ export function StakePlinkoGame() {
     } else {
       stopAuto()
     }
-  }, [dropBall, stopAuto])
+  }, [playOnce, stopAuto])
 
   const startAuto = useCallback(() => {
     if (autoLeftRef.current != null) return
@@ -295,34 +265,12 @@ export function StakePlinkoGame() {
     autoTick()
   }, [autoCount, autoTick])
 
-  /** Lands feed the recent-results strip + session chart (server data rode along on the ball). */
-  const handleScore = useCallback(
-    (_multiplier: number, _bucketIndex: number, contractData?: BoardDrop['contractResult'] & { risk?: RiskLevel }) => {
-      if (!contractData || typeof contractData.multiplierX100 !== 'number') return
-      const profit = contractData.payout - contractData.bet
-      setRecent((prev) =>
-        [
-          {
-            key: ++chipSeq.current,
-            multiplierX100: contractData.multiplierX100,
-            profit,
-          },
-          ...prev,
-        ].slice(0, RECENT_LIMIT),
-      )
-      setSession((prev) => [...prev, { drop: prev.length + 1, bet: contractData.bet, profit }])
-    },
-    [],
-  )
-
-  const openVerify = useCallback((roundId: string | null) => {
-    setVerifyTarget(roundId)
+  const openVerify = useCallback((id: string | null) => {
+    setVerifyTarget(id)
     setFairnessOpen(true)
   }, [])
 
   const autoRunning = autoLeft != null
-  const maxWinX100 = multipliers?.[risk]?.[0] ?? 0
-  const boardRisk = PLINKO_RISK_TO_BOARD[risk]
 
   return (
     <div className="mx-auto w-full max-w-6xl">
@@ -368,16 +316,16 @@ export function StakePlinkoGame() {
 
           <div className="space-y-1.5">
             <label className="text-xs uppercase tracking-wide text-slate-500">
-              Bet per ball{' '}
+              Bet per round{' '}
               <span className="normal-case text-slate-600">
-                ({bounds.minBet.toLocaleString()}–{bounds.maxBet.toLocaleString()})
+                ({minBet.toLocaleString()}–{maxBet.toLocaleString()})
               </span>
             </label>
             <div className="flex gap-2">
               <Input
                 type="number"
-                min={bounds.minBet}
-                max={bounds.maxBet}
+                min={minBet}
+                max={maxBet}
                 value={bet}
                 disabled={autoRunning}
                 onChange={(e) => setBet(Math.max(0, Math.floor(Number(e.target.value) || 0)))}
@@ -406,7 +354,7 @@ export function StakePlinkoGame() {
                 type="button"
                 variant="outline"
                 disabled={autoRunning}
-                onClick={() => setBet(bounds.maxBet)}
+                onClick={() => setBet(maxBet)}
                 className="border-cyan-950 bg-transparent px-2.5 text-xs hover:bg-cyan-500/10"
               >
                 Max
@@ -415,31 +363,48 @@ export function StakePlinkoGame() {
           </div>
 
           <div className="space-y-1.5">
-            <label className="text-xs uppercase tracking-wide text-slate-500">Risk</label>
-            <Select
-              value={risk}
-              onValueChange={(v) => {
-                if (autoRunning) return
-                setRisk(v as PlinkoRisk)
-              }}
+            <label className="text-xs uppercase tracking-wide text-slate-500">
+              Target multiplier{' '}
+              <span className="normal-case text-slate-600">
+                ({formatMultiplier(minTargetX100)}–{formatMultiplier(maxTargetX100)})
+              </span>
+            </label>
+            <Input
+              type="number"
+              step="0.01"
+              min={minTargetX100 / 100}
+              max={maxTargetX100 / 100}
+              value={(targetX100 / 100).toString()}
               disabled={autoRunning}
-            >
-              <SelectTrigger className="border-cyan-950 bg-[#081420]">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                {PLINKO_RISKS.map((r) => (
-                  <SelectItem key={r} value={r}>
-                    {PLINKO_RISK_LABELS[r]}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+              onChange={(e) =>
+                setTargetX100(Math.max(0, Math.round((Number(e.target.value) || 0) * 100)))
+              }
+              onBlur={() => setTargetX100((t) => clampTarget(t))}
+              className="arc-mono border-cyan-950 bg-[#081420] tabular-nums"
+            />
+            <div className="flex gap-1.5">
+              {TARGET_PRESETS_X100.map((t) => (
+                <button
+                  key={t}
+                  type="button"
+                  disabled={autoRunning}
+                  onClick={() => setTargetX100(clampTarget(t))}
+                  className={[
+                    'arc-mono flex-1 rounded-md py-1 text-xs tabular-nums transition-colors',
+                    targetX100 === t
+                      ? 'bg-cyan-500/15 text-cyan-300 ring-1 ring-cyan-500/50'
+                      : 'text-slate-500 ring-1 ring-cyan-950 hover:text-slate-300',
+                  ].join(' ')}
+                >
+                  {formatMultiplier(t)}
+                </button>
+              ))}
+            </div>
           </div>
 
           {mode === 'auto' && (
             <div className="space-y-1.5">
-              <label className="text-xs uppercase tracking-wide text-slate-500">Number of balls</label>
+              <label className="text-xs uppercase tracking-wide text-slate-500">Number of rounds</label>
               <div className="grid grid-cols-4 gap-2">
                 {AUTO_COUNTS.map((n) => (
                   <button
@@ -461,27 +426,14 @@ export function StakePlinkoGame() {
             </div>
           )}
 
-          <div className="flex items-center justify-between text-xs text-slate-500">
-            <span>
-              max win{' '}
-              <span className="arc-mono text-cyan-300">
-                {maxWinX100 > 0
-                  ? `${Math.floor((clampBet(bet) * maxWinX100) / 100).toLocaleString()} chips`
-                  : '—'}
-              </span>
-            </span>
-            {maxWinX100 > 0 && (
-              <span className="arc-mono text-slate-600">{formatMultiplier(maxWinX100)} top</span>
-            )}
-          </div>
-
           {mode === 'manual' ? (
             <Button
               type="button"
-              onClick={() => void dropBall()}
-              className="arc-display h-12 w-full bg-cyan-500 text-base font-bold uppercase tracking-widest text-[#03121B] shadow-[0_0_24px_-6px_rgba(34,211,238,0.8)] hover:bg-cyan-400"
+              disabled={!info}
+              onClick={() => void playOnce()}
+              className="arc-display h-12 w-full bg-cyan-500 text-base font-bold uppercase tracking-widest text-[#03121B] shadow-[0_0_24px_-6px_rgba(34,211,238,0.8)] hover:bg-cyan-400 disabled:opacity-50"
             >
-              Drop ball
+              Bet
             </Button>
           ) : autoRunning ? (
             <Button
@@ -494,11 +446,25 @@ export function StakePlinkoGame() {
           ) : (
             <Button
               type="button"
+              disabled={!info}
               onClick={startAuto}
-              className="arc-display h-12 w-full bg-cyan-500 text-base font-bold uppercase tracking-widest text-[#03121B] shadow-[0_0_24px_-6px_rgba(34,211,238,0.8)] hover:bg-cyan-400"
+              className="arc-display h-12 w-full bg-cyan-500 text-base font-bold uppercase tracking-widest text-[#03121B] shadow-[0_0_24px_-6px_rgba(34,211,238,0.8)] hover:bg-cyan-400 disabled:opacity-50"
             >
               Start auto ({autoCount})
             </Button>
+          )}
+
+          {infoFailed && (
+            <p className="text-center text-sm text-slate-400">
+              Couldn&apos;t load the game config.{' '}
+              <button
+                type="button"
+                onClick={loadInfo}
+                className="font-semibold text-cyan-400 underline-offset-2 hover:underline"
+              >
+                Retry
+              </button>
+            </p>
           )}
 
           {error && (
@@ -521,24 +487,73 @@ export function StakePlinkoGame() {
             onClick={() => openVerify(history[0]?.roundId ?? null)}
             className="w-full text-center text-xs text-slate-500 transition-colors hover:text-cyan-400"
           >
-            Provably Fair{history.length > 0 ? ' · verify last ball' : ''}
+            Provably Fair{history.length > 0 ? ' · verify last round' : ''}
           </button>
         </Card>
 
-        {/* ───────── Board ───────── */}
+        {/* ───────── Result display ───────── */}
         <div className="order-1 space-y-3 lg:order-2">
-          <Card className="arc-panel relative h-[420px] border-0 p-2 sm:h-[540px] sm:p-3 xl:h-[620px]">
-            <PlinkoGame
-              onScore={handleScore}
-              lastDrop={lastDrop}
-              selectedRiskLevel={boardRisk}
-            />
+          <Card className="arc-panel border-0 p-4 sm:p-6">
+            <div className="flex min-h-[160px] items-center justify-center sm:min-h-[220px]" aria-live="polite">
+              {lastRound ? (
+                <div key={lastRound.roundId} className="arc-banner-in text-center">
+                  <div
+                    className={[
+                      'arc-display text-6xl font-bold tabular-nums sm:text-7xl',
+                      lastRound.won
+                        ? 'text-cyan-300 drop-shadow-[0_0_22px_rgba(34,211,238,0.6)]'
+                        : 'text-rose-400 drop-shadow-[0_0_16px_rgba(244,63,94,0.45)]',
+                    ].join(' ')}
+                  >
+                    {formatMultiplier(lastRound.resultX100)}
+                  </div>
+                  <div className="arc-mono mt-2 text-sm tabular-nums">
+                    {lastRound.won ? (
+                      <span className="text-amber-300">
+                        +{(lastRound.payout - lastRound.bet).toLocaleString()} chips at{' '}
+                        {formatMultiplier(lastRound.targetX100)}
+                      </span>
+                    ) : (
+                      <span className="text-slate-500">
+                        needed {formatMultiplier(lastRound.targetX100)} or higher
+                      </span>
+                    )}
+                  </div>
+                </div>
+              ) : (
+                <span className="arc-display text-2xl uppercase tracking-widest text-slate-600">
+                  Clear {formatMultiplier(targetX100)} to win
+                </span>
+              )}
+            </div>
+
+            {/* Live odds strip */}
+            <div className="mt-2 grid grid-cols-3 divide-x divide-cyan-950/60 rounded-xl bg-[#081420]/70 px-2 py-3 text-center ring-1 ring-cyan-950/70">
+              <div>
+                <div className="text-[11px] uppercase tracking-wide text-slate-500">Win chance</div>
+                <div className="arc-mono text-sm font-semibold tabular-nums text-slate-300 sm:text-base">
+                  {chancePct.toFixed(2)}%
+                </div>
+              </div>
+              <div>
+                <div className="text-[11px] uppercase tracking-wide text-slate-500">Target</div>
+                <div className="arc-mono text-sm font-semibold tabular-nums text-cyan-300 sm:text-base">
+                  {formatMultiplier(targetX100)}
+                </div>
+              </div>
+              <div>
+                <div className="text-[11px] uppercase tracking-wide text-slate-500">Win pays</div>
+                <div className="arc-mono text-sm font-semibold tabular-nums text-amber-300 sm:text-base">
+                  {winPayout.toLocaleString()}
+                </div>
+              </div>
+            </div>
           </Card>
 
-          {/* Recent results strip — newest first, amber when the ball profited. */}
+          {/* Recent results strip — newest first. */}
           <div
             aria-live="polite"
-            aria-label="Recent results"
+            aria-label="Recent rounds"
             className="flex min-h-[2rem] flex-wrap items-center gap-1.5"
           >
             {recent.map((c) => (
@@ -546,34 +561,32 @@ export function StakePlinkoGame() {
                 key={c.key}
                 className={[
                   'arc-banner-in arc-mono rounded-md px-2 py-1 text-xs font-semibold tabular-nums ring-1',
-                  c.profit > 0
-                    ? 'bg-amber-500/15 text-amber-300 ring-amber-500/40'
-                    : 'bg-[#081420] text-slate-500 ring-cyan-950',
+                  c.won
+                    ? 'bg-cyan-500/15 text-cyan-300 ring-cyan-500/40'
+                    : 'bg-[#081420] text-rose-400/80 ring-cyan-950',
                 ].join(' ')}
               >
-                {formatMultiplier(c.multiplierX100)}
+                {formatMultiplier(c.resultX100)}
               </span>
             ))}
           </div>
         </div>
       </div>
 
-      {/* ───────── Session chart + info tabs (chart/tabs forked from /PLINKO) ─────────
-          The chart is inline on mobile; on desktop it becomes a draggable floating
-          widget (FloatingPanel) so it can live wherever the player parks it. */}
+      {/* ───────── Session chart + info tabs ───────── */}
       <div className="mt-4 space-y-4">
         <div className="lg:hidden">
-          <SessionChart points={session} unitLabel="Balls" />
+          <SessionChart points={session} unitLabel="Rounds" />
         </div>
-        <PlinkoInfoTabs history={history} historyLoading={historyLoading} onVerify={openVerify} />
+        <LimboInfoTabs history={history} historyLoading={historyLoading} onVerify={openVerify} />
       </div>
       <div className="hidden lg:block">
-        <FloatingPanel title="Session" storageKey="plinko2.sessionChart.pos">
-          <SessionChart points={session} unitLabel="Balls" bare />
+        <FloatingPanel title="Session" storageKey="limbo2.sessionChart.pos">
+          <SessionChart points={session} unitLabel="Rounds" bare />
         </FloatingPanel>
       </div>
 
-      <PlinkoFairnessModal
+      <LimboFairnessModal
         open={fairnessOpen}
         onClose={() => {
           setFairnessOpen(false)

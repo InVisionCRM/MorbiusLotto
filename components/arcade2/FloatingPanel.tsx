@@ -1,15 +1,15 @@
 'use client'
 
 /**
- * FloatingPanel — a draggable, collapsible floating card for /plinko2's
- * session chart (desktop only; the parent renders children inline on mobile).
+ * FloatingPanel — shared arcade2 draggable, collapsible floating card
+ * (desktop only; parents render the same content inline on mobile).
  *
  * Plain pointer events — no drag library:
  *   • Drag by the header (buttons excluded), with pointer capture so fast
  *     drags don't escape the handle.
  *   • Position clamps to the viewport on drag AND on window resize.
- *   • {x, y, open} persists to localStorage so the panel stays where the
- *     player left it across visits.
+ *   • {x, y, open} persists to localStorage (per `storageKey`) so each panel
+ *     stays where the player left it across visits.
  *
  * z-index sits below the dialogs (z-50) so modals always win.
  */

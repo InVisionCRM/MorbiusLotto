@@ -1,13 +1,13 @@
 'use client'
 
 /**
- * PlinkoSessionChart — fork of the on-chain page's RealTimeBetChart for
- * /plinko2, restyled into the Deep-Sea Neon (arcade2) system.
+ * SessionChart — shared arcade2 session P/L widget (plinko2 / dice2 / limbo2).
  *
- * Same idea as the original: a per-session cumulative P/L area chart with a
- * stats strip (balls, wagered, net, ROI). Points arrive when balls LAND (the
- * parent pushes from PlinkoGame's onScore), so the curve moves with the board,
- * not with the network. Session-scoped: resets on page load, no fetches.
+ * Fork of the on-chain /PLINKO page's RealTimeBetChart, restyled into the
+ * Deep-Sea Neon system and made game-agnostic: callers push one point per
+ * settled bet ({ drop, bet, profit }) and the chart renders the cumulative
+ * curve plus a stats strip (count, wagered, net, ROI). Session-scoped —
+ * resets on page load, no fetches.
  */
 
 import { useMemo } from 'react'
@@ -21,16 +21,18 @@ import {
   ResponsiveContainer,
 } from 'recharts'
 
-export interface PlinkoSessionPoint {
-  /** 1-based landing order. */
+export interface SessionPoint {
+  /** 1-based settle order. */
   drop: number
   bet: number
-  /** payout − bet for this ball. */
+  /** payout − bet for this round. */
   profit: number
 }
 
-interface PlinkoSessionChartProps {
-  points: PlinkoSessionPoint[]
+interface SessionChartProps {
+  points: SessionPoint[]
+  /** Label for the count tile, e.g. "Balls" / "Rolls" / "Rounds". */
+  unitLabel: string
   /** Skip the panel chrome + header — used inside FloatingPanel, which supplies both. */
   bare?: boolean
 }
@@ -46,7 +48,7 @@ function StatTile({ label, value, accent }: { label: string; value: string; acce
   )
 }
 
-export function PlinkoSessionChart({ points, bare = false }: PlinkoSessionChartProps) {
+export function SessionChart({ points, unitLabel, bare = false }: SessionChartProps) {
   const data = useMemo(() => {
     let cum = 0
     return points.map((p) => {
@@ -63,7 +65,7 @@ export function PlinkoSessionChart({ points, bare = false }: PlinkoSessionChartP
       net += p.profit
     }
     const roi = wagered > 0 ? (net / wagered) * 100 : 0
-    return { balls: points.length, wagered, net, roi }
+    return { count: points.length, wagered, net, roi }
   }, [points])
 
   const domain = useMemo<[number, number]>(() => {
@@ -83,7 +85,7 @@ export function PlinkoSessionChart({ points, bare = false }: PlinkoSessionChartP
   const body = (
     <>
       <div className="mb-3 grid grid-cols-4 gap-1.5">
-        <StatTile label="Balls" value={stats.balls.toLocaleString()} />
+        <StatTile label={unitLabel} value={stats.count.toLocaleString()} />
         <StatTile label="Wagered" value={stats.wagered.toLocaleString()} />
         <StatTile
           label="Net P/L"
@@ -99,14 +101,14 @@ export function PlinkoSessionChart({ points, bare = false }: PlinkoSessionChartP
 
       {data.length === 0 ? (
         <div className="flex h-40 items-center justify-center text-sm text-slate-500">
-          The P/L curve appears after your first ball lands.
+          The P/L curve appears after your first bet settles.
         </div>
       ) : (
         <div className="h-40 w-full sm:h-48">
           <ResponsiveContainer width="100%" height="100%">
             <AreaChart data={data} margin={{ top: 8, right: 8, left: 0, bottom: 0 }}>
               <defs>
-                <linearGradient id="plinkoSessionFill" x1="0" y1="0" x2="0" y2="1">
+                <linearGradient id="arc2SessionFill" x1="0" y1="0" x2="0" y2="1">
                   <stop offset="0%" stopColor="#22D3EE" stopOpacity={0.45} />
                   <stop offset="100%" stopColor="#22D3EE" stopOpacity={0.03} />
                 </linearGradient>
@@ -135,7 +137,7 @@ export function PlinkoSessionChart({ points, bare = false }: PlinkoSessionChartP
                 dataKey="cumulative"
                 stroke="#22D3EE"
                 strokeWidth={2}
-                fill="url(#plinkoSessionFill)"
+                fill="url(#arc2SessionFill)"
                 isAnimationActive={false}
                 dot={false}
               />

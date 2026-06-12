@@ -423,10 +423,10 @@ async function initializeServices() {
       pokerTournamentService,
     });
     registerVideoPokerRoutes({ app, dbService });
-    registerArcadeLimboRoutes({ app, dbService });
+    registerArcadeLimboRoutes({ app, dbService, authService });
     registerArcadeMinesRoutes({ app, dbService, authService });
     registerArcadeHiLoRoutes({ app, dbService });
-    registerArcadeDiceRoutes({ app, dbService });
+    registerArcadeDiceRoutes({ app, dbService, authService });
     registerArcadeBaccaratRoutes({ app, dbService });
     registerArcadeCrashRoutes({ app, dbService });
     registerArcadeRouletteRoutes({ app, dbService });
