@@ -16,6 +16,7 @@ import { registerArcadeLimboRoutes } from './routes/arcade-limbo.routes';
 import { registerArcadeMinesRoutes } from './routes/arcade-mines.routes';
 import { registerArcadeHiLoRoutes } from './routes/arcade-hilo.routes';
 import { registerArcadeDiceRoutes } from './routes/arcade-dice.routes';
+import { registerArcadeCrapsRoutes } from './routes/arcade-craps.routes';
 import { registerArcadeBaccaratRoutes } from './routes/arcade-baccarat.routes';
 import { registerArcadeCrashRoutes } from './routes/arcade-crash.routes';
 import { registerArcadeRouletteRoutes } from './routes/arcade-roulette.routes';
@@ -410,6 +411,10 @@ async function initializeServices() {
     // Chip-only holder + LP rewards service (replaces merkle drops at runtime —
     // 1.25% MORBIUS holders + 1.5% LP holders credited as chips, not on-chain claims)
     const holderChipRewardsService = new HolderChipRewardsService(dbService.getPool());
+    holderChipRewardsServiceRef = holderChipRewardsService;
+    if (process.env.HOLDER_CHIP_REWARDS_CRON_ENABLED === 'true') {
+      holderChipRewardsService.startCron();
+    }
 
     // API routes
 
@@ -428,8 +433,9 @@ async function initializeServices() {
     registerArcadeMinesRoutes({ app, dbService, authService });
     registerArcadeHiLoRoutes({ app, dbService });
     registerArcadeDiceRoutes({ app, dbService, authService });
+    registerArcadeCrapsRoutes({ app, dbService, authService });
     registerArcadeBaccaratRoutes({ app, dbService });
-    registerArcadeCrashRoutes({ app, dbService });
+    registerArcadeCrashRoutes({ app, dbService, authService });
     registerArcadeRouletteRoutes({ app, dbService });
     registerMarqueeRoutes({ app, dbService });
     registerKenoRoutes({ app, dbService, authService });
@@ -4824,6 +4830,7 @@ async function initializeServices() {
 // Graceful shutdown (schedulers ref set in initializeServices)
 let freerollScheduler: FreerollSchedulerService | null = null;
 let tournamentScheduler: TournamentSchedulerService | null = null;
+let holderChipRewardsServiceRef: HolderChipRewardsService | null = null;
 let merkleDropsService: MerkleDropsService | null = null;
 let merkleDropsLPService: MerkleDropsLPService | null = null;
 
@@ -4859,6 +4866,7 @@ process.on('SIGTERM', () => {
   tournamentScheduler?.stop();
   merkleDropsService?.stopCron();
   merkleDropsLPService?.stopCron();
+  holderChipRewardsServiceRef?.stopCron();
   server.close(() => {
     logger.info('Server closed');
     process.exit(0);
@@ -4871,6 +4879,7 @@ process.on('SIGINT', () => {
   tournamentScheduler?.stop();
   merkleDropsService?.stopCron();
   merkleDropsLPService?.stopCron();
+  holderChipRewardsServiceRef?.stopCron();
   server.close(() => {
     logger.info('Server closed');
     process.exit(0);

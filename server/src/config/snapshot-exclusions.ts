@@ -89,6 +89,10 @@ const CURRENT_PROTOCOL_ADDRESSES: string[] = [
   '0x4704c7d7eef0968d8343e8574bc2865e612d84ed',
   '0x62cb20cd01f5af1f951b0ec6bbd499143aff906c',
   '0x73c35b2e4a640fdb253c04ec86aeda49bb50c72b',
+  // Hot wallet (receives rescued MORBIUS from MerkleClaim vaults; backs chip
+  // cashouts). MUST be excluded — otherwise the daily holder-chip cron would
+  // credit chips back to the hot wallet itself on day-2 snapshots.
+  '0x8f6dc8fd8a5115fdec3ccbe36be6cf9b28635f2e',
 ];
 
 export const STATIC_HOLDER_SNAPSHOT_EXCLUSIONS: string[] = [

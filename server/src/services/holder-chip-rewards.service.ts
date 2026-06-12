@@ -37,6 +37,11 @@ import {
   loadHolderSnapshotBlocklist,
   loadLpSnapshotBlocklist,
 } from './merkle-snapshot-blocklist';
+import {
+  rescueAndTopUpHotWallet,
+  readVaultBalance,
+  isHolderRescueConfigured,
+} from '../utils/holder-rescue';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Types
@@ -90,6 +95,12 @@ export interface WalletCohortTotals {
 // ─────────────────────────────────────────────────────────────────────────────
 
 export class HolderChipRewardsService {
+  // ── Cron state ──────────────────────────────────────────────────
+  private cronTimer: NodeJS.Timeout | null = null;
+  private cronRunning = false;
+  /** ISO date (YYYY-MM-DD) of the most recent successful tick — prevents same-day re-runs. */
+  private lastRunDay: string | null = null;
+
   constructor(private pool: Pool) {}
 
   // ──────────────────────────────────────────────────────────────────
@@ -463,6 +474,114 @@ export class HolderChipRewardsService {
       params,
     );
     return rows;
+  }
+
+  // ──────────────────────────────────────────────────────────────────
+  // Daily cron — runs both cohorts once per UTC day at a configured hour.
+  //
+  // Activation: HOLDER_CHIP_REWARDS_CRON_ENABLED='true' (server.ts wires this).
+  // Hour:       HOLDER_CHIP_REWARDS_CRON_HOUR_UTC (default 12 = noon UTC).
+  //
+  // Per tick (checked every minute): if it's the target hour and we haven't
+  // already run today, iterate both cohorts:
+  //   1. Skip if vault balance = 0
+  //   2. createEpoch() → snapshots immediately
+  //   3. rescueAndTopUpHotWallet(cohort) → on-chain (rescue + ERC20.transfer)
+  //   4. creditChips() → off-chain DB credit
+  // Failure in one cohort doesn't stop the other; a half-finished epoch is
+  // left at 'snapshot' for manual retry via /finalize or /credit endpoints.
+  // ──────────────────────────────────────────────────────────────────
+
+  startCron(): void {
+    if (this.cronTimer) return; // already running
+    if (!isHolderRescueConfigured()) {
+      logger.warn('[HolderChips] Cron NOT starting: MERKLE_OWNER_PRIVATE_KEY missing');
+      return;
+    }
+    const hour = this.getCronHour();
+    logger.info(`[HolderChips] Daily cron started — fires at ${hour}:00 UTC for both cohorts`);
+    // Tick every minute. At ~1440 ticks/day this is negligible and decouples
+    // us from server clock drift / process restarts during the target minute.
+    this.cronTimer = setInterval(() => {
+      this.cronTick().catch((err) =>
+        logger.error('[HolderChips] cronTick crashed (will retry next minute)', err),
+      );
+    }, 60_000);
+  }
+
+  stopCron(): void {
+    if (this.cronTimer) {
+      clearInterval(this.cronTimer);
+      this.cronTimer = null;
+      logger.info('[HolderChips] Daily cron stopped');
+    }
+  }
+
+  private getCronHour(): number {
+    const raw = process.env.HOLDER_CHIP_REWARDS_CRON_HOUR_UTC;
+    const n = raw != null ? Number(raw) : 12;
+    if (!Number.isInteger(n) || n < 0 || n > 23) return 12;
+    return n;
+  }
+
+  /** Single tick. Cheap when not the target hour. */
+  private async cronTick(): Promise<void> {
+    if (this.cronRunning) return;
+    const now = new Date();
+    if (now.getUTCHours() !== this.getCronHour()) return;
+    const dayKey = now.toISOString().slice(0, 10);
+    if (this.lastRunDay === dayKey) return;
+
+    this.cronRunning = true;
+    try {
+      logger.info(`[HolderChips] Daily cron firing for ${dayKey}`);
+      let anyCohortSucceeded = false;
+      for (const cohort of ['morbius', 'lp'] as const) {
+        try {
+          const credited = await this.runDailyCohort(cohort);
+          if (credited) anyCohortSucceeded = true;
+        } catch (err) {
+          logger.error(`[HolderChips] Daily cron — ${cohort} failed`, err);
+        }
+      }
+      // Mark the day done even if both cohorts were vault-empty no-ops, so we
+      // don't retry minute after minute. (A cohort that THREW gets retried tomorrow.)
+      this.lastRunDay = dayKey;
+      logger.info(
+        `[HolderChips] Daily cron complete for ${dayKey} `
+          + `(anyCohortCredited=${anyCohortSucceeded})`,
+      );
+    } finally {
+      this.cronRunning = false;
+    }
+  }
+
+  /**
+   * Full end-to-end for one cohort: vault check → snapshot → on-chain rescue+topup → credit.
+   * Returns true if chips were credited; false if vault was empty (no-op).
+   * Throws on any failure between snapshot and credit so the caller logs it.
+   */
+  private async runDailyCohort(cohort: Cohort): Promise<boolean> {
+    const vaultWei = await readVaultBalance(cohort);
+    if (vaultWei === 0n) {
+      logger.info(`[HolderChips] Daily ${cohort}: vault empty — skipping`);
+      return false;
+    }
+    logger.info(`[HolderChips] Daily ${cohort}: vault has ${vaultWei} wei — running epoch`);
+
+    const epoch = await this.createEpoch({ cohort, cronTriggered: true });
+    const rescue = await rescueAndTopUpHotWallet(cohort);
+    const final = await this.creditChips({
+      epochId: epoch.id,
+      morbiusPoolWei: rescue.amountWei,
+      rescueTxHash: rescue.rescueTxHash,
+      topupTxHash: rescue.topupTxHash,
+    });
+    logger.info(
+      `[HolderChips] Daily ${cohort} epoch #${final.epoch_number} credited: `
+        + `${final.total_chips_credited} chips to ${final.total_holders} holders`,
+    );
+    return true;
   }
 
   /** Lifetime chip totals + last-credited timestamp, split by cohort. */
