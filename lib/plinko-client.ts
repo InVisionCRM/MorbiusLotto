@@ -142,3 +142,36 @@ export async function verifyPlinko(roundId: string): Promise<PlinkoVerifyResult>
   if (!r.ok) throw new Error('Round not found');
   return (await r.json()) as PlinkoVerifyResult;
 }
+
+/** One ball from any player — feeds the info tabs' public "Recent" panel. */
+export interface PlinkoRecentBall {
+  roundId: string;
+  wallet: string;
+  bet: number;
+  risk: PlinkoRisk;
+  bucket: number;
+  multiplierX100: number;
+  payout: number;
+  createdAt: string;
+}
+
+export async function fetchPlinkoRecent(limit = 25): Promise<PlinkoRecentBall[]> {
+  const r = await fetch(`${apiBase()}/api/plinko/recent?limit=${limit}`);
+  const j = await r.json();
+  return (j.rounds ?? []) as PlinkoRecentBall[];
+}
+
+/** All-time leaderboard row (wagered/won/net are chip-integer strings). */
+export interface PlinkoLeaderboardEntry {
+  wallet: string;
+  balls: number;
+  wagered: string;
+  won: string;
+  net: string;
+}
+
+export async function fetchPlinkoLeaderboard(limit = 10): Promise<PlinkoLeaderboardEntry[]> {
+  const r = await fetch(`${apiBase()}/api/plinko/leaderboard?limit=${limit}`);
+  const j = await r.json();
+  return (j.players ?? []) as PlinkoLeaderboardEntry[];
+}

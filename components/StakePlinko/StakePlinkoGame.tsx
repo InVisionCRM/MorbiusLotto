@@ -42,7 +42,8 @@ import { PokerChipExchangeModal } from '@/components/poker/PokerChipExchangeModa
 import { probeSiweSession } from '@/lib/api-auth'
 import PlinkoGame from '@/components/PLINKO/PlinkoGame'
 import type { RiskLevel } from '@/app/PLINKO/types'
-import { PlinkoHistory } from './PlinkoHistory'
+import { PlinkoInfoTabs } from './PlinkoInfoTabs'
+import { PlinkoSessionChart, type PlinkoSessionPoint } from './PlinkoSessionChart'
 import { PlinkoFairnessModal } from './PlinkoFairnessModal'
 import {
   fetchPlinkoInfo,
@@ -60,7 +61,7 @@ import {
 
 const HISTORY_LIMIT = 25
 const MAX_IN_FLIGHT = 8
-const AUTO_INTERVAL_MS = 450
+const AUTO_INTERVAL_MS = 250
 const AUTO_COUNTS = [10, 25, 50, 100] as const
 const RECENT_LIMIT = 10
 
@@ -104,6 +105,7 @@ export function StakePlinkoGame() {
 
   const [lastDrop, setLastDrop] = useState<BoardDrop | null>(null)
   const [recent, setRecent] = useState<RecentChip[]>([])
+  const [session, setSession] = useState<PlinkoSessionPoint[]>([])
   const [error, setError] = useState<string | null>(null)
   const [noChips, setNoChips] = useState(false)
 
@@ -261,43 +263,53 @@ export function StakePlinkoGame() {
     }
   }, [bet, risk, clientSeed, clampBet])
 
-  const autoTick = useCallback(async () => {
+  // Fixed-cadence scheduler: fire each ball WITHOUT awaiting the server
+  // round-trip (the old loop serialized RTT + interval, ~1.5s/ball). Balls
+  // pipeline concurrently up to MAX_IN_FLIGHT; a saturated pipe holds the
+  // beat without consuming a ball; any error stops the run.
+  const autoTick = useCallback(() => {
     const left = autoLeftRef.current
     if (left == null || left <= 0 || !mounted.current) {
       stopAuto()
       return
     }
-    autoLeftRef.current = left - 1
-    setAutoLeft(left - 1)
-    const ok = await dropBall()
-    if (!ok || autoLeftRef.current == null || autoLeftRef.current <= 0) {
-      stopAuto()
-      return
+    if (inFlight.current < MAX_IN_FLIGHT) {
+      autoLeftRef.current = left - 1
+      setAutoLeft(left - 1)
+      void dropBall().then((ok) => {
+        if (!ok) stopAuto()
+      })
     }
-    autoTimer.current = setTimeout(() => void autoTick(), AUTO_INTERVAL_MS)
+    if (autoLeftRef.current != null && autoLeftRef.current > 0) {
+      autoTimer.current = setTimeout(autoTick, AUTO_INTERVAL_MS)
+    } else {
+      stopAuto()
+    }
   }, [dropBall, stopAuto])
 
   const startAuto = useCallback(() => {
     if (autoLeftRef.current != null) return
     autoLeftRef.current = autoCount
     setAutoLeft(autoCount)
-    void autoTick()
+    autoTick()
   }, [autoCount, autoTick])
 
-  /** Lands feed the recent-results strip (server data rode along on the ball). */
+  /** Lands feed the recent-results strip + session chart (server data rode along on the ball). */
   const handleScore = useCallback(
     (_multiplier: number, _bucketIndex: number, contractData?: BoardDrop['contractResult'] & { risk?: RiskLevel }) => {
       if (!contractData || typeof contractData.multiplierX100 !== 'number') return
+      const profit = contractData.payout - contractData.bet
       setRecent((prev) =>
         [
           {
             key: ++chipSeq.current,
             multiplierX100: contractData.multiplierX100,
-            profit: contractData.payout - contractData.bet,
+            profit,
           },
           ...prev,
         ].slice(0, RECENT_LIMIT),
       )
+      setSession((prev) => [...prev, { drop: prev.length + 1, bet: contractData.bet, profit }])
     },
     [],
   )
@@ -545,12 +557,11 @@ export function StakePlinkoGame() {
         </div>
       </div>
 
-      {/* ───────── History ───────── */}
-      {address && (
-        <div className="mt-4">
-          <PlinkoHistory rounds={history} loading={historyLoading} onVerify={openVerify} />
-        </div>
-      )}
+      {/* ───────── Session chart + info tabs (chart/tabs forked from /PLINKO) ───────── */}
+      <div className="mt-4 grid gap-4 lg:grid-cols-2">
+        <PlinkoSessionChart points={session} />
+        <PlinkoInfoTabs history={history} historyLoading={historyLoading} onVerify={openVerify} />
+      </div>
 
       <PlinkoFairnessModal
         open={fairnessOpen}

@@ -34,15 +34,10 @@ function timeLabel(iso: string): string {
 }
 
 export function PlinkoHistory({ rounds, loading, onVerify }: PlinkoHistoryProps) {
+  // Rendered inside PlinkoInfoTabs' "My balls" tab — the tab supplies the
+  // panel chrome and label, so this is just the list.
   return (
-    <section aria-label="Recent balls" className="arc-panel rounded-xl p-3 sm:p-4">
-      <div className="mb-2 flex items-baseline justify-between">
-        <h2 className="arc-display text-sm font-semibold uppercase tracking-wider text-slate-300">
-          Recent balls
-        </h2>
-        <span className="text-[11px] text-slate-500">last {rounds.length || '—'}</span>
-      </div>
-
+    <section aria-label="Recent balls">
       {loading && rounds.length === 0 ? (
         <p className="py-4 text-center text-sm text-slate-500">Loading…</p>
       ) : rounds.length === 0 ? (

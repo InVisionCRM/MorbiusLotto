@@ -220,6 +220,73 @@ export function registerPlinkoChipRoutes({
   });
 
   // ---------------------------------------------------------------------------
+  // GET /api/plinko/recent — public. Latest balls across all players for the
+  // /plinko2 info tabs. Raw wallet addresses; the client shortens for display.
+  // ---------------------------------------------------------------------------
+  app.get('/api/plinko/recent', async (req: Request, res: Response) => {
+    const limit = Math.max(1, Math.min(50, parseInt(String(req.query.limit ?? '25'), 10) || 25));
+    try {
+      const r = await pool.query(
+        `SELECT id, wallet_address, bet, risk, bucket, multiplier_x100, payout, created_at
+           FROM plinko_rounds
+          ORDER BY created_at DESC
+          LIMIT $1`,
+        [limit],
+      );
+      res.json({
+        ok: true,
+        rounds: r.rows.map((row) => ({
+          roundId: row.id,
+          wallet: row.wallet_address,
+          bet: Number(row.bet),
+          risk: row.risk,
+          bucket: Number(row.bucket),
+          multiplierX100: Number(row.multiplier_x100),
+          payout: Number(row.payout),
+          createdAt: row.created_at,
+        })),
+      });
+    } catch (e) {
+      logger.error('[plinko-chips] recent failed', { error: (e as Error).message });
+      res.status(500).json({ ok: false, error: 'internal error' });
+    }
+  });
+
+  // ---------------------------------------------------------------------------
+  // GET /api/plinko/leaderboard — public. All-time top players by net chips.
+  // ---------------------------------------------------------------------------
+  app.get('/api/plinko/leaderboard', async (req: Request, res: Response) => {
+    const limit = Math.max(1, Math.min(25, parseInt(String(req.query.limit ?? '10'), 10) || 10));
+    try {
+      const r = await pool.query(
+        `SELECT wallet_address,
+                COUNT(*)::int AS balls,
+                SUM(bet)::text AS wagered,
+                SUM(payout)::text AS won,
+                (SUM(payout) - SUM(bet))::text AS net
+           FROM plinko_rounds
+          GROUP BY wallet_address
+          ORDER BY SUM(payout) - SUM(bet) DESC
+          LIMIT $1`,
+        [limit],
+      );
+      res.json({
+        ok: true,
+        players: r.rows.map((row) => ({
+          wallet: row.wallet_address,
+          balls: Number(row.balls),
+          wagered: String(row.wagered ?? '0'),
+          won: String(row.won ?? '0'),
+          net: String(row.net ?? '0'),
+        })),
+      });
+    } catch (e) {
+      logger.error('[plinko-chips] leaderboard failed', { error: (e as Error).message });
+      res.status(500).json({ ok: false, error: 'internal error' });
+    }
+  });
+
+  // ---------------------------------------------------------------------------
   // GET /api/plinko/verify/:id — public. Published seeds + recipe and an
   // independent re-derivation so anyone can confirm the path and payout.
   // ---------------------------------------------------------------------------
