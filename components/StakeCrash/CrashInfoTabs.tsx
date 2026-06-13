@@ -18,6 +18,8 @@ import {
   type CrashLeaderboardEntry,
   type CrashHistoryRound,
 } from '@/lib/crash-client';
+import { ArcadeFAQ } from '@/components/arcade2/ArcadeFAQ';
+import { crashFaqs } from './crashFaqs';
 
 interface CrashInfoTabsProps {
   history: CrashHistoryRound[];
@@ -91,7 +93,7 @@ export function CrashInfoTabs({ history, historyLoading, onVerify, refreshKey }:
       className="rounded-xl border border-white/5 bg-[#0a0c14] p-3 sm:p-4"
     >
       <Tabs defaultValue="recent">
-        <TabsList className="grid h-auto w-full grid-cols-4 gap-1 rounded-lg bg-[#10121a] p-1 ring-1 ring-white/5">
+        <TabsList className="grid h-auto w-full grid-cols-5 gap-1 rounded-lg bg-[#10121a] p-1 ring-1 ring-white/5">
           <TabsTrigger value="recent" className={TRIGGER_CLASS}>
             Recent
           </TabsTrigger>
@@ -103,6 +105,9 @@ export function CrashInfoTabs({ history, historyLoading, onVerify, refreshKey }:
           </TabsTrigger>
           <TabsTrigger value="how" className={TRIGGER_CLASS}>
             How to play
+          </TabsTrigger>
+          <TabsTrigger value="faq" className={TRIGGER_CLASS}>
+            FAQ
           </TabsTrigger>
         </TabsList>
 
@@ -269,6 +274,10 @@ export function CrashInfoTabs({ history, historyLoading, onVerify, refreshKey }:
               independently re-derived in your browser from the Verify button.
             </p>
           </div>
+        </TabsContent>
+
+        <TabsContent value="faq" className="mt-2 focus-visible:outline-none">
+          <ArcadeFAQ items={crashFaqs} accent="#00ffa3" />
         </TabsContent>
       </Tabs>
     </section>

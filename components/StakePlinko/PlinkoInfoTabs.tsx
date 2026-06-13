@@ -17,6 +17,8 @@
 import { useEffect, useState, type ReactNode } from 'react'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { PlinkoHistory } from './PlinkoHistory'
+import { ArcadeFAQ } from '@/components/arcade2/ArcadeFAQ'
+import { plinkoFaqs } from './plinkoFaqs'
 import {
   fetchPlinkoRecent,
   fetchPlinkoLeaderboard,
@@ -80,10 +82,11 @@ export function PlinkoInfoTabs({ history, historyLoading, onVerify }: PlinkoInfo
   return (
     <section aria-label="Plinko information" className="arc-panel rounded-xl p-3 sm:p-4">
       <Tabs defaultValue="recent">
-        <TabsList className="grid h-auto w-full grid-cols-3 gap-1 rounded-lg bg-[#081420]/70 p-1 ring-1 ring-cyan-950/70">
+        <TabsList className="grid h-auto w-full grid-cols-4 gap-1 rounded-lg bg-[#081420]/70 p-1 ring-1 ring-cyan-950/70">
           <TabsTrigger value="recent" className={TRIGGER_CLASS}>Recent</TabsTrigger>
           <TabsTrigger value="leaderboard" className={TRIGGER_CLASS}>Leaderboard</TabsTrigger>
           <TabsTrigger value="mine" className={TRIGGER_CLASS}>My balls</TabsTrigger>
+          <TabsTrigger value="faq" className={TRIGGER_CLASS}>FAQ</TabsTrigger>
         </TabsList>
 
         {/* ── Recent (all players) ── */}
@@ -181,6 +184,10 @@ export function PlinkoInfoTabs({ history, historyLoading, onVerify }: PlinkoInfo
         {/* ── My balls (caller's history, live-prepended by the game) ── */}
         <TabsContent value="mine" className="mt-3 focus-visible:outline-none">
           <PlinkoHistory rounds={history} loading={historyLoading} onVerify={onVerify} />
+        </TabsContent>
+
+        <TabsContent value="faq" className="mt-2 focus-visible:outline-none">
+          <ArcadeFAQ items={plinkoFaqs} accent="#22D3EE" />
         </TabsContent>
       </Tabs>
     </section>

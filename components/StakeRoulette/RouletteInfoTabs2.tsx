@@ -7,6 +7,8 @@
 
 import { useEffect, useState, type ReactNode } from 'react';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { ArcadeFAQ } from '@/components/arcade2/ArcadeFAQ';
+import { rouletteFaqs } from './rouletteFaqs';
 import {
   fetchRoulette2Recent,
   fetchRoulette2Leaderboard,
@@ -105,7 +107,7 @@ export function RouletteInfoTabs2({
       className="rounded-xl bg-[#07271A] p-3 ring-1 ring-inset ring-[#0E3B28] sm:p-4"
     >
       <Tabs defaultValue="recent">
-        <TabsList className="grid h-auto w-full grid-cols-4 gap-1 rounded-lg bg-[#0A2018] p-1 ring-1 ring-[#0E3B28]">
+        <TabsList className="grid h-auto w-full grid-cols-5 gap-1 rounded-lg bg-[#0A2018] p-1 ring-1 ring-[#0E3B28]">
           <TabsTrigger value="recent" className={TRIGGER_CLASS}>
             Recent
           </TabsTrigger>
@@ -117,6 +119,9 @@ export function RouletteInfoTabs2({
           </TabsTrigger>
           <TabsTrigger value="payouts" className={TRIGGER_CLASS}>
             Payouts
+          </TabsTrigger>
+          <TabsTrigger value="faq" className={TRIGGER_CLASS}>
+            FAQ
           </TabsTrigger>
         </TabsList>
 
@@ -262,6 +267,10 @@ export function RouletteInfoTabs2({
               re-derived in your browser from the Verify button.
             </p>
           </div>
+        </TabsContent>
+
+        <TabsContent value="faq" className="mt-2 focus-visible:outline-none">
+          <ArcadeFAQ items={rouletteFaqs} accent="#34D399" />
         </TabsContent>
       </Tabs>
     </section>

@@ -26,6 +26,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useAccount } from 'wagmi'
+import { Volume2, VolumeX } from 'lucide-react'
 import { Card } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -40,10 +41,12 @@ import { usePokerChipBalance } from '@/hooks/use-poker-chip-balance'
 import { formatChips } from '@/lib/format-poker-chips'
 import { PokerChipExchangeModal } from '@/components/poker/PokerChipExchangeModal'
 import { probeSiweSession } from '@/lib/api-auth'
+import { kenoAudio } from './keno-audio'
 import { KenoBoard } from './KenoBoard'
 import { KenoPayoutBar } from './KenoPayoutBar'
 import { KenoFairnessModal } from './KenoFairnessModal'
-import { KenoHistory } from './KenoHistory'
+import { KenoRulesModal } from './KenoRulesModal'
+import { KenoInfoTabs } from './KenoInfoTabs'
 import {
   fetchKenoInfo,
   fetchKenoMultipliers,
@@ -98,8 +101,10 @@ export function StakeKenoGame() {
   const [phase, setPhase] = useState<'idle' | 'betting' | 'revealing'>('idle')
   const [error, setError] = useState<string | null>(null)
   const [noChips, setNoChips] = useState(false)
+  const [muted, setMuted] = useState(false)
 
   const [fairnessOpen, setFairnessOpen] = useState(false)
+  const [rulesOpen, setRulesOpen] = useState(false)
   const [verifyTarget, setVerifyTarget] = useState<string | null>(null)
   const [exchangeOpen, setExchangeOpen] = useState(false)
 
@@ -198,6 +203,7 @@ export function StakeKenoGame() {
   const toggleTile = useCallback(
     (n: number) => {
       if (busy) return
+      kenoAudio.init()
       setError(null)
       setNoChips(false)
       // Tapping after a resolved round starts a fresh selection.
@@ -208,6 +214,7 @@ export function StakeKenoGame() {
           next.delete(n)
         } else if (next.size < KENO_MAX_PICKS) {
           next.add(n)
+          kenoAudio.playPick()
         }
         return next
       })
@@ -234,6 +241,7 @@ export function StakeKenoGame() {
 
   const placeBet = useCallback(async () => {
     if (busy || picksCount === 0) return
+    kenoAudio.init()
     const stake = clampBet(bet)
     setBet(stake)
     setError(null)
@@ -278,9 +286,12 @@ export function StakeKenoGame() {
             next.add(n)
             return next
           })
+          kenoAudio.playDraw()
           if (i === res.drawn.length - 1) {
             setResultHits(res.hits)
             setPhase('idle')
+            if (res.payout > 0) kenoAudio.playWin()
+            else kenoAudio.playLose()
           }
         }, REVEAL_STEP_MS * (i + 1))
         revealTimers.current.push(t)
@@ -304,6 +315,12 @@ export function StakeKenoGame() {
     setFairnessOpen(true)
   }, [])
 
+  const toggleMute = () => {
+    kenoAudio.init()
+    kenoAudio.setMute(!muted)
+    setMuted(!muted)
+  }
+
   const profit = result ? result.payout - result.bet : 0
   const settled = resultHits !== null
   const showWinBanner = settled && result !== null && result.payout > 0
@@ -325,6 +342,14 @@ export function StakeKenoGame() {
                 className="rounded border border-cyan-500/30 bg-cyan-500/10 px-2 py-0.5 text-[11px] font-semibold text-cyan-300 transition-colors hover:bg-cyan-500/20"
               >
                 Buy
+              </button>
+              <button
+                type="button"
+                onClick={toggleMute}
+                className="rounded p-1 text-slate-500 transition-colors hover:text-slate-200"
+                title={muted ? 'Unmute' : 'Mute'}
+              >
+                {muted ? <VolumeX size={15} /> : <Volume2 size={15} />}
               </button>
             </div>
           </div>
@@ -484,13 +509,15 @@ export function StakeKenoGame() {
             )}
           </div>
 
-          <button
-            type="button"
-            onClick={() => openVerify(result?.roundId ?? null)}
-            className="w-full text-center text-xs text-slate-500 transition-colors hover:text-cyan-400"
-          >
-            Provably Fair{result ? ' · verify last round' : ''}
-          </button>
+          <div className="flex items-center justify-center gap-3 text-xs text-slate-500">
+            <button type="button" onClick={() => setRulesOpen(true)} className="transition-colors hover:text-cyan-400">
+              Rules
+            </button>
+            <span className="opacity-40">·</span>
+            <button type="button" onClick={() => openVerify(result?.roundId ?? null)} className="transition-colors hover:text-cyan-400">
+              Provably Fair{result ? ' · verify last round' : ''}
+            </button>
+          </div>
         </Card>
 
         {/* ───────── Board + payouts ───────── */}
@@ -530,10 +557,11 @@ export function StakeKenoGame() {
       {/* ───────── History ───────── */}
       {address && (
         <div className="mt-4">
-          <KenoHistory rounds={history} loading={historyLoading} onVerify={openVerify} />
+          <KenoInfoTabs rounds={history} loading={historyLoading} onVerify={openVerify} />
         </div>
       )}
 
+      <KenoRulesModal open={rulesOpen} onOpenChange={setRulesOpen} />
       <KenoFairnessModal
         open={fairnessOpen}
         onClose={() => {

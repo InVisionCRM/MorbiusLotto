@@ -24,6 +24,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useAccount } from 'wagmi'
+import { Volume2, VolumeX } from 'lucide-react'
 import { Card } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -32,8 +33,10 @@ import { formatChips } from '@/lib/format-poker-chips'
 import { PokerChipExchangeModal } from '@/components/poker/PokerChipExchangeModal'
 import { probeSiweSession } from '@/lib/api-auth'
 import { MinesBoard, type MinesCellState } from './MinesBoard'
-import { MinesHistory } from './MinesHistory'
+import { MinesInfoTabs } from './MinesInfoTabs'
 import { MinesFairnessModal } from './MinesFairnessModal'
+import { MinesRulesModal } from './MinesRulesModal'
+import { minesAudio } from './mines-audio'
 import {
   fetchMinesInfo,
   fetchMinesState,
@@ -84,8 +87,10 @@ export function StakeMinesGame() {
 
   const [error, setError] = useState<string | null>(null)
   const [noChips, setNoChips] = useState(false)
+  const [muted, setMuted] = useState(false)
 
   const [fairnessOpen, setFairnessOpen] = useState(false)
+  const [rulesOpen, setRulesOpen] = useState(false)
   const [verifyTarget, setVerifyTarget] = useState<string | null>(null)
   const [exchangeOpen, setExchangeOpen] = useState(false)
 
@@ -223,6 +228,7 @@ export function StakeMinesGame() {
     setNoChips(false)
     setCashedPayout(null)
     setPhase('starting')
+    minesAudio.init()
     try {
       const res = await startMines({
         bet: stake,
@@ -263,6 +269,7 @@ export function StakeMinesGame() {
       setError(null)
       setPendingCell(cell)
       setPhase('picking')
+      minesAudio.playTick()
       try {
         const res = await pickMines(roundId, cell)
         if (res.safe) {
@@ -272,6 +279,7 @@ export function StakeMinesGame() {
             return next
           })
           setMultiplierX100(res.multiplierX100)
+          minesAudio.playSafe(res.picks.length)
           setPhase('active')
         } else {
           // Bust: show the hit mine hot, the rest dimmed.
@@ -280,6 +288,7 @@ export function StakeMinesGame() {
             for (const b of res.bombs) next[b] = b === cell ? 'bomb' : 'bomb-other'
             return next
           })
+          minesAudio.playBust()
           setPhase('busted')
           setLastFinalizedId(roundId)
           setHistory((prev) =>
@@ -327,6 +336,7 @@ export function StakeMinesGame() {
       setMultiplierX100(res.multiplierX100)
       setCashedPayout(res.payout)
       setBalance(BigInt(res.chipBalance))
+      minesAudio.playCashout()
       setPhase('cashed')
       setLastFinalizedId(roundId)
       setHistory((prev) =>
@@ -360,6 +370,12 @@ export function StakeMinesGame() {
     setFairnessOpen(true)
   }, [])
 
+  const toggleMute = () => {
+    minesAudio.init()
+    minesAudio.setMute(!muted)
+    setMuted(!muted)
+  }
+
   const profit = cashedPayout !== null ? cashedPayout - roundBet : 0
   const showWinBanner = phase === 'cashed' && cashedPayout !== null && cashedPayout > 0
 
@@ -380,6 +396,14 @@ export function StakeMinesGame() {
                 className="rounded border border-cyan-500/30 bg-cyan-500/10 px-2 py-0.5 text-[11px] font-semibold text-cyan-300 transition-colors hover:bg-cyan-500/20"
               >
                 Buy
+              </button>
+              <button
+                type="button"
+                onClick={toggleMute}
+                className="rounded p-1 text-slate-500 transition-colors hover:text-slate-200"
+                title={muted ? 'Unmute' : 'Mute'}
+              >
+                {muted ? <VolumeX size={15} /> : <Volume2 size={15} />}
               </button>
             </div>
           </div>
@@ -542,13 +566,15 @@ export function StakeMinesGame() {
             )}
           </div>
 
-          <button
-            type="button"
-            onClick={() => openVerify(lastFinalizedId)}
-            className="w-full text-center text-xs text-slate-500 transition-colors hover:text-cyan-400"
-          >
-            Provably Fair{lastFinalizedId ? ' · verify last round' : ''}
-          </button>
+          <div className="flex items-center justify-center gap-3 text-xs text-slate-500">
+            <button type="button" onClick={() => setRulesOpen(true)} className="transition-colors hover:text-cyan-400">
+              Rules
+            </button>
+            <span className="opacity-40">·</span>
+            <button type="button" onClick={() => openVerify(lastFinalizedId)} className="transition-colors hover:text-cyan-400">
+              Provably Fair{lastFinalizedId ? ' · verify last round' : ''}
+            </button>
+          </div>
         </Card>
 
         {/* ───────── Board + ladder strip ───────── */}
@@ -608,10 +634,11 @@ export function StakeMinesGame() {
       {/* ───────── History ───────── */}
       {address && (
         <div className="mt-4">
-          <MinesHistory rounds={history} loading={historyLoading} onVerify={openVerify} />
+          <MinesInfoTabs rounds={history} loading={historyLoading} onVerify={openVerify} />
         </div>
       )}
 
+      <MinesRulesModal open={rulesOpen} onOpenChange={setRulesOpen} />
       <MinesFairnessModal
         open={fairnessOpen}
         onClose={() => {

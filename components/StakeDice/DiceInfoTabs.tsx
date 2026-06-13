@@ -10,6 +10,8 @@
 import { useEffect, useState, type ReactNode } from 'react'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { DiceHistory } from './DiceHistory'
+import { ArcadeFAQ } from '@/components/arcade2/ArcadeFAQ'
+import { diceFaqs } from './diceFaqs'
 import {
   fetchDiceRecent,
   fetchDiceLeaderboard,
@@ -66,10 +68,11 @@ export function DiceInfoTabs({ history, historyLoading, onVerify }: DiceInfoTabs
   return (
     <section aria-label="Dice information" className="arc-panel rounded-xl p-3 sm:p-4">
       <Tabs defaultValue="recent">
-        <TabsList className="grid h-auto w-full grid-cols-3 gap-1 rounded-lg bg-[#081420]/70 p-1 ring-1 ring-cyan-950/70">
+        <TabsList className="grid h-auto w-full grid-cols-4 gap-1 rounded-lg bg-[#081420]/70 p-1 ring-1 ring-cyan-950/70">
           <TabsTrigger value="recent" className={TRIGGER_CLASS}>Recent</TabsTrigger>
           <TabsTrigger value="leaderboard" className={TRIGGER_CLASS}>Leaderboard</TabsTrigger>
           <TabsTrigger value="mine" className={TRIGGER_CLASS}>My rolls</TabsTrigger>
+          <TabsTrigger value="faq" className={TRIGGER_CLASS}>FAQ</TabsTrigger>
         </TabsList>
 
         <TabsContent value="recent" className="mt-3 focus-visible:outline-none">
@@ -159,6 +162,10 @@ export function DiceInfoTabs({ history, historyLoading, onVerify }: DiceInfoTabs
 
         <TabsContent value="mine" className="mt-3 focus-visible:outline-none">
           <DiceHistory rounds={history} loading={historyLoading} onVerify={onVerify} />
+        </TabsContent>
+
+        <TabsContent value="faq" className="mt-2 focus-visible:outline-none">
+          <ArcadeFAQ items={diceFaqs} accent="#22D3EE" />
         </TabsContent>
       </Tabs>
     </section>
