@@ -1,0 +1,99 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="UTF-8"/><title>Poker burst fix</title>
+<style>
+  body{margin:0;background:#05070c;color:#fff;font-family:-apple-system,system-ui,sans-serif;padding:20px;}
+  .bar{display:flex;gap:12px;align-items:center;margin-bottom:14px;}
+  button{padding:7px 16px;border-radius:8px;background:#fbbf24;color:#211800;font-weight:700;border:none;cursor:pointer;}
+  .felt{position:relative;width:920px;height:520px;border-radius:200px;border:9px solid #2b1c10;overflow:hidden;
+    background:radial-gradient(130% 130% at 50% 16%,#15784e 0%,#0d5234 42%,#06321f 100%);box-shadow:inset 0 0 70px rgba(0,0,0,.6);}
+  .pot{position:absolute;transform:translate(-50%,-50%);color:#fde047;font-weight:800;font-size:13px;letter-spacing:.1em;text-shadow:0 1px 4px #000;}
+  .av{position:absolute;transform:translate(-50%,-50%);width:84px;height:84px;border-radius:50%;
+    background:conic-gradient(from 200deg,#6d28d9,#db2777,#f59e0b,#6d28d9);border:3px solid #fbbf24;
+    box-shadow:0 0 0 2px #fbbf24,0 0 30px rgba(251,191,36,.5);display:flex;align-items:center;justify-content:center;font-weight:900;font-size:30px;}
+  .plate{position:absolute;transform:translateX(-50%);background:rgba(7,12,18,.85);border:1px solid rgba(255,255,255,.12);border-radius:8px;padding:3px 12px;text-align:center;font-size:12px;}
+  .plate b{color:#fbbf24;}
+  .fly{position:absolute;will-change:transform,left,top;z-index:35;pointer-events:none;}
+</style></head>
+<body>
+<div class="bar"><h1 style="font-size:16px;margin:0">Burst → stack — FIXED (settles flat, calm fountain)</h1><button id="replay">▶ Replay</button></div>
+<div class="felt" id="felt"></div>
+
+<script>
+// ── mirror BetChip.tsx chip system ──
+function hexToRgb(h){h=h.replace('#','');const v=h.length===3?h.split('').map(c=>c+c).join(''):h;const n=parseInt(v,16);return{r:(n>>16)&255,g:(n>>8)&255,b:n&255};}
+function mix(a,b,t){const x=hexToRgb(a),y=hexToRgb(b);const c=(p,q)=>Math.round(p+(q-p)*t);return`rgb(${c(x.r,y.r)}, ${c(x.g,y.g)}, ${c(x.b,y.b)})`;}
+const lighten=(h,a)=>mix(h,'#ffffff',a),darken=(h,a)=>mix(h,'#000000',a);
+const TIERS=[[25,'#eef2f7','#9aa7b4'],[100,'#ef4444','#7f1d1d'],[500,'#22c55e','#14532d'],[2500,'#3b82f6','#1e3a8a'],[10000,'#1f2937','#0b1220'],[100000,'#8b5cf6','#4c1d95']];
+function tier(a){a=Math.abs(a);for(const[m,c,e]of TIERS)if(a<=m)return{c,e};return{c:'#f59e0b',e:'#92400e'};}
+function chipDisc(amount,width){
+  const t=tier(amount),h=Math.round(width*0.34),stripe=Math.max(4,Math.round(width*0.1));
+  const el=document.createElement('div');el.style.cssText=`width:${width}px;height:${h}px;position:relative`;
+  const band=document.createElement('div');
+  band.style.cssText=`position:absolute;inset:0;border-radius:50%;background:repeating-linear-gradient(90deg,${t.e} 0 ${stripe}px,${lighten(t.e,.34)} ${stripe}px ${stripe*2}px);box-shadow:inset 0 -3px 4px rgba(0,0,0,.5),inset 0 2px 2px rgba(255,255,255,.18),0 1px 1px rgba(0,0,0,.4)`;
+  const face=document.createElement('div');
+  face.style.cssText=`position:absolute;left:6%;right:6%;top:${-Math.round(h*0.42)}px;height:${Math.round(h*0.92)}px;border-radius:50%;background:radial-gradient(ellipse at 50% 34%,${lighten(t.c,.30)} 0%,${t.c} 55%,${darken(t.c,.32)} 100%);border:1.5px dashed ${lighten(t.c,.34)};box-shadow:0 -2px 3px rgba(0,0,0,.3),inset 0 1px 2px rgba(255,255,255,.25)`;
+  el.append(band,face);return el;
+}
+
+// ── FIXED burst geometry (settle FLAT, calm fountain, base-at-anchor stack) ──
+const POT={fx:0.5,fy:0.5};
+const DENOMS=[10000,500,100,2500,50000,25];
+function seeded(s){const x=Math.sin(s*12.9898)*43758.5453;return x-Math.floor(x);}
+function buildBurst(flight,dims,chipW){
+  let amt=0;try{amt=Number(BigInt(flight.amount));}catch{}
+  const n=Math.max(5,Math.min(9,Math.round(Math.log10(amt+10)*2.4)));
+  const potX=POT.fx*dims.w,potY=POT.fy*dims.h,winX=flight.fx*dims.w,winY=flight.fy*dims.h;
+  const step=Math.max(3,chipW*0.22);
+  const seed=Array.from(flight.key).reduce((a,c)=>a+c.charCodeAt(0),0);
+  const out=[];
+  for(let i=0;i<n;i++){
+    const u1=seeded(seed+i*2+1),u2=seeded(seed+i*2+2);
+    out.push({
+      denom:DENOMS[i%DENOMS.length],
+      fromX:potX,fromY:potY,
+      peakX:potX+(u1-0.5)*chipW*2.2,
+      peakY:potY-chipW*(1.0+u2*1.1),
+      slotX:winX,slotY:winY-i*step,            // base sits at the anchor, builds straight up
+      rot:(u1-0.5)*220,                        // gentle tumble in flight
+      delay:flight.delaySec+i*0.05,
+    });
+  }
+  return out;
+}
+
+const felt=document.getElementById('felt');
+const DIMS={w:920,h:520};
+const chipW=Math.max(24,Math.min(46,Math.round(DIMS.w*0.028)));
+// winner: avatar on the right, chips land just to its lower-left (like the real anchor)
+const AVATAR={fx:0.72,fy:0.56};
+const FLIGHT={key:'potA',amount:'23308',fx:0.6,fy:0.66,delaySec:0.25};
+
+function layout(){
+  felt.querySelectorAll('.pot,.av,.plate,.fly').forEach(n=>n.remove());
+  const pot=document.createElement('div');pot.className='pot';pot.textContent='POT 23,308';
+  pot.style.left=POT.fx*100+'%';pot.style.top=(POT.fy-0.08)*100+'%';felt.append(pot);
+  const av=document.createElement('div');av.className='av';av.textContent='N';
+  av.style.left=AVATAR.fx*100+'%';av.style.top=AVATAR.fy*100+'%';felt.append(av);
+  const plate=document.createElement('div');plate.className='plate';plate.innerHTML='NEGREANU<br><b>23,308</b>';
+  plate.style.left=AVATAR.fx*100+'%';plate.style.top=(AVATAR.fy+0.16)*100+'%';felt.append(plate);
+}
+
+function play(){
+  layout();
+  const chips=buildBurst(FLIGHT,DIMS,chipW);
+  chips.forEach(c=>{
+    const wrap=document.createElement('div');wrap.className='fly';
+    wrap.style.left=c.fromX+'px';wrap.style.top=c.fromY+'px';
+    wrap.append(chipDisc(c.denom,chipW));felt.append(wrap);
+    wrap.animate([
+      {left:c.fromX+'px',top:c.fromY+'px',opacity:0,transform:'translate(-50%,-50%) scale(0.7) rotate(0deg)',offset:0},
+      {left:c.peakX+'px',top:c.peakY+'px',opacity:1,transform:`translate(-50%,-50%) scale(1.05) rotate(${c.rot}deg)`,offset:0.42},
+      {left:c.slotX+'px',top:(c.slotY-chipW*0.5)+'px',opacity:1,transform:'translate(-50%,-50%) scale(1.06) rotate(0deg)',offset:0.9},
+      {left:c.slotX+'px',top:c.slotY+'px',opacity:1,transform:'translate(-50%,-50%) scale(1) rotate(0deg)',offset:1},
+    ],{duration:800,delay:c.delay*1000,easing:'cubic-bezier(.25,.55,.35,1)',fill:'forwards'});
+  });
+}
+document.getElementById('replay').onclick=play;
+play();
+</script>
+</body></html>

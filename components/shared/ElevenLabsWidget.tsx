@@ -81,9 +81,8 @@ export function ElevenLabsWidget() {
       detail.config.clientTools = {
         // — Games —
         open_blackjack: () => { routerRef.current.push('/BLACKJACK'); return 'Navigating to Blackjack.' },
-        open_plinko: () => { routerRef.current.push('/PLINKO'); return 'Navigating to Plinko.' },
+        open_plinko: () => { routerRef.current.push('/plinko2'); return 'Navigating to Plinko.' },
         open_keno: () => { routerRef.current.push('/keno'); return 'Navigating to Keno.' },
-        open_lottery: () => { routerRef.current.push('/lottery'); return 'Navigating to Lottery.' },
         open_poker: () => { routerRef.current.push('/poker'); return 'Navigating to Poker.' },
         open_multiplayer_blackjack: () => { routerRef.current.push('/blackjack-multi'); return 'Navigating to Multiplayer Blackjack.' },
         open_morbit: () => { routerRef.current.push('/Morb-It'); return 'Navigating to Morb-It.' },

@@ -26,6 +26,7 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { useAccount } from 'wagmi'
+import { Volume2, VolumeX } from 'lucide-react'
 import { Card } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -46,6 +47,8 @@ import { PlinkoInfoTabs } from './PlinkoInfoTabs'
 import { SessionChart, type SessionPoint } from '@/components/arcade2/SessionChart'
 import { FloatingPanel } from '@/components/arcade2/FloatingPanel'
 import { PlinkoFairnessModal } from './PlinkoFairnessModal'
+import { PlinkoRulesModal } from './PlinkoRulesModal'
+import { plinkoAudio } from './plinko-audio'
 import {
   fetchPlinkoInfo,
   fetchPlinkoMultipliers,
@@ -115,8 +118,10 @@ export function StakePlinkoGame() {
   const [autoLeft, setAutoLeft] = useState<number | null>(null)
 
   const [fairnessOpen, setFairnessOpen] = useState(false)
+  const [rulesOpen, setRulesOpen] = useState(false)
   const [verifyTarget, setVerifyTarget] = useState<string | null>(null)
   const [exchangeOpen, setExchangeOpen] = useState(false)
+  const [muted, setMuted] = useState(false)
 
   const [history, setHistory] = useState<PlinkoHistoryRound[]>([])
   const [historyLoading, setHistoryLoading] = useState(false)
@@ -204,6 +209,7 @@ export function StakePlinkoGame() {
   /** Fire one independent bet. Returns false when the loop should stop. */
   const dropBall = useCallback(async (): Promise<boolean> => {
     if (inFlight.current >= MAX_IN_FLIGHT) return true
+    plinkoAudio.init()
     const stake = clampBet(bet)
     setBet(stake)
     setError(null)
@@ -246,6 +252,7 @@ export function StakePlinkoGame() {
           roundId: res.roundId,
         },
       })
+      plinkoAudio.playDrop()
       return true
     } catch (e) {
       if (!mounted.current) return false
@@ -300,6 +307,7 @@ export function StakePlinkoGame() {
     (_multiplier: number, _bucketIndex: number, contractData?: BoardDrop['contractResult'] & { risk?: RiskLevel }) => {
       if (!contractData || typeof contractData.multiplierX100 !== 'number') return
       const profit = contractData.payout - contractData.bet
+      plinkoAudio.playLand(profit > 0)
       setRecent((prev) =>
         [
           {
@@ -319,6 +327,12 @@ export function StakePlinkoGame() {
     setVerifyTarget(roundId)
     setFairnessOpen(true)
   }, [])
+
+  const toggleMute = () => {
+    plinkoAudio.init()
+    plinkoAudio.setMute(!muted)
+    setMuted(!muted)
+  }
 
   const autoRunning = autoLeft != null
   const maxWinX100 = multipliers?.[risk]?.[0] ?? 0
@@ -341,6 +355,14 @@ export function StakePlinkoGame() {
                 className="rounded border border-cyan-500/30 bg-cyan-500/10 px-2 py-0.5 text-[11px] font-semibold text-cyan-300 transition-colors hover:bg-cyan-500/20"
               >
                 Buy
+              </button>
+              <button
+                type="button"
+                onClick={toggleMute}
+                className="rounded p-1 text-slate-500 transition-colors hover:text-slate-200"
+                title={muted ? 'Unmute' : 'Mute'}
+              >
+                {muted ? <VolumeX size={15} /> : <Volume2 size={15} />}
               </button>
             </div>
           </div>
@@ -516,13 +538,15 @@ export function StakePlinkoGame() {
             </div>
           )}
 
-          <button
-            type="button"
-            onClick={() => openVerify(history[0]?.roundId ?? null)}
-            className="w-full text-center text-xs text-slate-500 transition-colors hover:text-cyan-400"
-          >
-            Provably Fair{history.length > 0 ? ' · verify last ball' : ''}
-          </button>
+          <div className="flex items-center justify-center gap-3 text-xs text-slate-500">
+            <button type="button" onClick={() => setRulesOpen(true)} className="transition-colors hover:text-cyan-400">
+              Rules
+            </button>
+            <span className="opacity-40">·</span>
+            <button type="button" onClick={() => openVerify(history[0]?.roundId ?? null)} className="transition-colors hover:text-cyan-400">
+              Provably Fair{history.length > 0 ? ' · verify last ball' : ''}
+            </button>
+          </div>
         </Card>
 
         {/* ───────── Board ───────── */}
@@ -573,6 +597,7 @@ export function StakePlinkoGame() {
         </FloatingPanel>
       </div>
 
+      <PlinkoRulesModal open={rulesOpen} onOpenChange={setRulesOpen} />
       <PlinkoFairnessModal
         open={fairnessOpen}
         onClose={() => {

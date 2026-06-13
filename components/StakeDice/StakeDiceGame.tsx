@@ -16,6 +16,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useAccount } from 'wagmi'
+import { Volume2, VolumeX } from 'lucide-react'
 import { Card } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -27,6 +28,8 @@ import { SessionChart, type SessionPoint } from '@/components/arcade2/SessionCha
 import { FloatingPanel } from '@/components/arcade2/FloatingPanel'
 import { DiceInfoTabs } from './DiceInfoTabs'
 import { DiceFairnessModal } from './DiceFairnessModal'
+import { DiceRulesModal } from './DiceRulesModal'
+import { diceAudio } from './dice-audio'
 import {
   fetchDiceInfo,
   fetchDiceHistory,
@@ -80,8 +83,10 @@ export function StakeDiceGame() {
   const [autoLeft, setAutoLeft] = useState<number | null>(null)
 
   const [fairnessOpen, setFairnessOpen] = useState(false)
+  const [rulesOpen, setRulesOpen] = useState(false)
   const [verifyTarget, setVerifyTarget] = useState<string | null>(null)
   const [exchangeOpen, setExchangeOpen] = useState(false)
+  const [muted, setMuted] = useState(false)
 
   const [history, setHistory] = useState<DiceHistoryRound[]>([])
   const [historyLoading, setHistoryLoading] = useState(false)
@@ -193,6 +198,8 @@ export function StakeDiceGame() {
     setError(null)
     setNoChips(false)
     inFlight.current += 1
+    diceAudio.init()
+    diceAudio.playRoll()
     try {
       const res = await playDice({
         bet: stake,
@@ -201,6 +208,8 @@ export function StakeDiceGame() {
       })
       if (!mounted.current) return false
       const profit = res.payout - res.bet
+      if (profit > 0) diceAudio.playWin()
+      else diceAudio.playLose()
       setBalance(BigInt(res.chipBalance))
       setLastRoll(res)
       setRecent((prev) =>
@@ -277,6 +286,14 @@ export function StakeDiceGame() {
     setFairnessOpen(true)
   }, [])
 
+  const toggleMute = useCallback(() => {
+    diceAudio.init()
+    setMuted((m) => {
+      diceAudio.setMute(!m)
+      return !m
+    })
+  }, [])
+
   const autoRunning = autoLeft != null
 
   return (
@@ -296,6 +313,14 @@ export function StakeDiceGame() {
                 className="rounded border border-cyan-500/30 bg-cyan-500/10 px-2 py-0.5 text-[11px] font-semibold text-cyan-300 transition-colors hover:bg-cyan-500/20"
               >
                 Buy
+              </button>
+              <button
+                type="button"
+                onClick={toggleMute}
+                aria-label={muted ? 'Unmute sound' : 'Mute sound'}
+                className="rounded border border-cyan-950 bg-transparent p-1 text-slate-500 transition-colors hover:text-cyan-300"
+              >
+                {muted ? <VolumeX className="h-4 w-4" /> : <Volume2 className="h-4 w-4" />}
               </button>
             </div>
           </div>
@@ -449,13 +474,15 @@ export function StakeDiceGame() {
             </div>
           )}
 
-          <button
-            type="button"
-            onClick={() => openVerify(history[0]?.roundId ?? null)}
-            className="w-full text-center text-xs text-slate-500 transition-colors hover:text-cyan-400"
-          >
-            Provably Fair{history.length > 0 ? ' · verify last roll' : ''}
-          </button>
+          <div className="flex items-center justify-center gap-3 text-xs text-slate-500">
+            <button type="button" onClick={() => setRulesOpen(true)} className="transition-colors hover:text-cyan-400">
+              Rules
+            </button>
+            <span className="opacity-40">·</span>
+            <button type="button" onClick={() => openVerify(history[0]?.roundId ?? null)} className="transition-colors hover:text-cyan-400">
+              Provably Fair{history.length > 0 ? ' · verify last roll' : ''}
+            </button>
+          </div>
         </Card>
 
         {/* ───────── Roll display + target ───────── */}
@@ -610,6 +637,7 @@ export function StakeDiceGame() {
         </FloatingPanel>
       </div>
 
+      <DiceRulesModal open={rulesOpen} onOpenChange={setRulesOpen} />
       <DiceFairnessModal
         open={fairnessOpen}
         onClose={() => {

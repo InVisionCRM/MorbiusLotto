@@ -19,6 +19,7 @@ interface CrashBettingPanelProps {
   isCollapsed?: boolean;
   info: CrashInfo | null;
   onOpenFairness: () => void;
+  onOpenRules: () => void;
   onOpenExchange: () => void;
 }
 
@@ -26,6 +27,7 @@ export default function CrashBettingPanel({
   isCollapsed = false,
   info,
   onOpenFairness,
+  onOpenRules,
   onOpenExchange,
 }: CrashBettingPanelProps) {
   const {
@@ -287,12 +289,15 @@ export default function CrashBettingPanel({
             </div>
           )}
 
-          <button
-            onClick={onOpenFairness}
-            className="mt-3 w-full text-center text-[11px] uppercase tracking-[1px] text-[#848ca1] hover:text-[#00ffa3] transition-colors"
-          >
-            Provably Fair
-          </button>
+          <div className="mt-3 flex items-center justify-center gap-3 text-[11px] uppercase tracking-[1px] text-[#848ca1]">
+            <button onClick={onOpenRules} className="hover:text-[#00ffa3] transition-colors">
+              Rules
+            </button>
+            <span className="opacity-40">·</span>
+            <button onClick={onOpenFairness} className="hover:text-[#00ffa3] transition-colors">
+              Provably Fair
+            </button>
+          </div>
         </div>
       </div>
     </div>

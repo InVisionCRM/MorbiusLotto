@@ -32,6 +32,7 @@ import CrashBettingPanel from './CrashBettingPanel';
 import CrashHistoryStrip from './CrashHistoryStrip';
 import CrashHUD from './CrashHUD';
 import { CrashFairnessModal } from './CrashFairnessModal';
+import { CrashRulesModal } from './CrashRulesModal';
 import { CrashInfoTabs } from './CrashInfoTabs';
 import { usePokerChipBalance } from '@/hooks/use-poker-chip-balance';
 import { PokerChipExchangeModal } from '@/components/poker/PokerChipExchangeModal';
@@ -74,6 +75,7 @@ export function StakeCrashGame() {
   const [info, setInfo] = useState<CrashInfo | null>(null);
   const [clientSeed, setClientSeed] = useState('');
   const [fairnessOpen, setFairnessOpen] = useState(false);
+  const [rulesOpen, setRulesOpen] = useState(false);
   const [verifyTarget, setVerifyTarget] = useState<string | null>(null);
   const [exchangeOpen, setExchangeOpen] = useState(false);
   const [history, setHistoryRows] = useState<CrashHistoryRound[]>([]);
@@ -242,6 +244,7 @@ export function StakeCrashGame() {
               isCollapsed={isDrawerCollapsed}
               info={info}
               onOpenFairness={() => openVerify(history[0]?.roundId ?? null)}
+              onOpenRules={() => setRulesOpen(true)}
               onOpenExchange={() => setExchangeOpen(true)}
             />
           </Panel>
@@ -260,6 +263,7 @@ export function StakeCrashGame() {
         </div>
       </div>
 
+      <CrashRulesModal open={rulesOpen} onOpenChange={setRulesOpen} />
       <CrashFairnessModal
         open={fairnessOpen}
         onClose={() => {

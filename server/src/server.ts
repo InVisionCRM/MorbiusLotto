@@ -15,6 +15,7 @@ import { registerVideoPokerRoutes } from './routes/video-poker.routes';
 import { registerArcadeLimboRoutes } from './routes/arcade-limbo.routes';
 import { registerArcadeMinesRoutes } from './routes/arcade-mines.routes';
 import { registerArcadeHiLoRoutes } from './routes/arcade-hilo.routes';
+import { registerArcadeTowersRoutes } from './routes/arcade-towers.routes';
 import { registerArcadeDiceRoutes } from './routes/arcade-dice.routes';
 import { registerArcadeCrapsRoutes } from './routes/arcade-craps.routes';
 import { registerArcadeBaccaratRoutes } from './routes/arcade-baccarat.routes';
@@ -428,13 +429,14 @@ async function initializeServices() {
       pokerGameService,
       pokerTournamentService,
     });
-    registerVideoPokerRoutes({ app, dbService });
+    registerVideoPokerRoutes({ app, dbService, authService });
     registerArcadeLimboRoutes({ app, dbService, authService });
     registerArcadeMinesRoutes({ app, dbService, authService });
-    registerArcadeHiLoRoutes({ app, dbService });
+    registerArcadeTowersRoutes({ app, dbService, authService });
+    registerArcadeHiLoRoutes({ app, dbService, authService });
     registerArcadeDiceRoutes({ app, dbService, authService });
     registerArcadeCrapsRoutes({ app, dbService, authService });
-    registerArcadeBaccaratRoutes({ app, dbService });
+    registerArcadeBaccaratRoutes({ app, dbService, authService });
     registerArcadeCrashRoutes({ app, dbService, authService });
     registerArcadeRouletteRoutes({ app, dbService, authService });
     registerMarqueeRoutes({ app, dbService });

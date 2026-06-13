@@ -1437,7 +1437,68 @@ body {
 }
 .mine-shake { animation: mine-shake 0.5s cubic-bezier(0.36, 0.07, 0.19, 0.97) both; }
 
+/* ── Baccarat (/baccarat): cards fly in from the shoe (top-right), then a
+   3D flip reveals the face. Outer .bacc-deal-in slides; inner .bacc-flip-inner
+   rotates rotateY 180→0 between two backface-hidden faces. ── */
+@keyframes bacc-deal-in {
+  0%   { transform: translate(140px, -130px) rotate(12deg); opacity: 0; }
+  55%  { opacity: 1; }
+  100% { transform: translate(0, 0) rotate(0deg); opacity: 1; }
+}
+.bacc-deal-in { animation: bacc-deal-in 0.3s cubic-bezier(0.22, 1, 0.36, 1) both; }
+
+.bacc-flip { perspective: 620px; }
+@keyframes bacc-flip {
+  0%   { transform: rotateY(180deg); }
+  100% { transform: rotateY(0deg); }
+}
+.bacc-flip-inner {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  transform-style: preserve-3d;
+  animation: bacc-flip 0.32s ease-out 0.22s both;
+}
+.bacc-face {
+  position: absolute;
+  inset: 0;
+  backface-visibility: hidden;
+  -webkit-backface-visibility: hidden;
+}
+.bacc-face-back { transform: rotateY(180deg); }
+
+/* Hand-total badge pulses each time a new card lands on that side. */
+@keyframes bacc-total-pop {
+  0%   { transform: scale(1); }
+  45%  { transform: scale(1.22); }
+  100% { transform: scale(1); }
+}
+.bacc-total-pop { animation: bacc-total-pop 0.3s ease-out both; }
+
+/* ── Hi-Lo (/hilo): each fresh card swings in around the Y axis as it's
+   dealt off the deck. Keyed per card so the animation replays per reveal. ── */
+@keyframes hilo-flip-in {
+  0%   { transform: perspective(900px) rotateY(-92deg); opacity: 0.35; }
+  60%  { transform: perspective(900px) rotateY(10deg); opacity: 1; }
+  100% { transform: perspective(900px) rotateY(0deg); opacity: 1; }
+}
+.hilo-flip-in {
+  animation: hilo-flip-in 0.45s cubic-bezier(0.3, 0.9, 0.4, 1) both;
+  transform-style: preserve-3d;
+  backface-visibility: hidden;
+  -webkit-backface-visibility: hidden;
+}
+
+/* Hi-Lo: the losing reveal flashes the card red once, settling to an ember. */
+@keyframes hilo-bust-flash {
+  0%   { box-shadow: 0 0 0 0 rgba(244, 63, 94, 0); }
+  30%  { box-shadow: 0 0 56px 10px rgba(244, 63, 94, 0.7); }
+  100% { box-shadow: 0 0 18px 2px rgba(244, 63, 94, 0.35); }
+}
+.hilo-bust-flash { animation: hilo-bust-flash 0.7s ease-out both; }
+
 @media (prefers-reduced-motion: reduce) {
-  .keno-pop, .keno-hit-glow, .keno-dot, .keno-cell-flash, .arc-banner-in, .mine-shake { animation: none; }
+  .keno-pop, .keno-hit-glow, .keno-dot, .keno-cell-flash, .arc-banner-in, .mine-shake,
+  .bacc-deal-in, .bacc-flip-inner, .bacc-total-pop, .hilo-flip-in, .hilo-bust-flash { animation: none; }
   .keno-tile, .keno-tile:not(:disabled):hover { transition: none; transform: none; }
 }

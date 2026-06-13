@@ -1,23 +1,28 @@
 /**
  * arcade-hilo.routes.ts — MORBIUS Arcade: Hi-Lo (card higher/lower).
  *
- * Endpoints for the Telegram Mini App:
+ * Endpoints for the Telegram Mini App and the web client (/hilo):
  *   GET  /api/arcade/hilo/info        — public: bet bounds + house edge + caps
  *   POST /api/arcade/hilo/state       — return the wallet's active round (if any)
  *   POST /api/arcade/hilo/start       — debit bet, seed the round, deal base card
  *   POST /api/arcade/hilo/pick        — reveal next card; win bumps multiplier,
  *                                       lose finalizes 'busted'
  *   POST /api/arcade/hilo/cashout     — bank the current multiplier as a payout
+ *   GET  /api/arcade/hilo/history     — caller's settled rounds (web panel)
+ *   GET  /api/arcade/hilo/recent      — public: latest settled rounds, all players
+ *   GET  /api/arcade/hilo/leaderboard — public: all-time top players by net
  *   GET  /api/arcade/hilo/verify/:id  — public: re-derivable card recipe
  *
  * Stateful flow mirrors Mines: /start INSERTs status='active' and debits the
  * bet; /pick UPDATEs cards + multiplier or finalizes 'busted'; /cashout pays
  * out and finalizes 'cashed_out'. The server seed is only revealed when the
- * round is finalized — that's what makes the round verifiable.
+ * round is finalized — that's what makes the round verifiable (and why
+ * /verify must NEVER publish it mid-round: the seed derives future cards).
  *
- * Auth on /state, /start, /pick, /cashout is the signed Telegram `initData`.
- * Wallet locks are taken via SELECT … FOR UPDATE on the round row so a
- * double-tap can't double-spend or double-pay. The
+ * Auth on /state, /start, /pick, /cashout and /history is the signed Telegram
+ * `initData` (Mini App) or the SIWE morb_session cookie (web /hilo) — see
+ * `resolveWallet`. Wallet locks are taken via SELECT … FOR UPDATE on the
+ * round row so a double-tap can't double-spend or double-pay. The
  * `uniq_arcade_hilo_active_per_wallet` partial unique index also guarantees
  * one active round per wallet at the DB level — defence-in-depth against a
  * flurry of /start clicks.
@@ -28,6 +33,7 @@ import type { Express, Request, Response } from 'express';
 import type { PoolClient } from 'pg';
 import { logger } from '../utils/logger';
 import { verifyTelegramInitData } from '../services/telegram.service';
+import { SESSION_COOKIE_NAME } from '../middleware/require-auth';
 import { applyPokerChipDelta } from '../services/poker-chip-wallet';
 import { ProvablyFairService } from '../services/provably-fair.service';
 import {
@@ -43,10 +49,12 @@ import {
   type HiLoDirection,
 } from '../services/arcade-hilo';
 import type { DatabaseService } from '../services/database.service';
+import type { AuthService } from '../services/auth.service';
 
 interface RegisterArcadeHiLoRoutesOptions {
   app: Express;
   dbService: DatabaseService;
+  authService: AuthService;
 }
 
 const pf = new ProvablyFairService();
@@ -88,8 +96,25 @@ function cardJson(index: number) {
 export function registerArcadeHiLoRoutes({
   app,
   dbService,
+  authService,
 }: RegisterArcadeHiLoRoutesOptions): void {
   const pool = dbService.getPool();
+
+  const AUTH_ERROR = 'No session — sign in on the web, or open from Telegram with a linked wallet.';
+
+  /**
+   * Caller's wallet: Telegram `initData` (Mini App) or the SIWE morb_session
+   * cookie (web /hilo). Telegram wins when both are present so the Mini App
+   * keeps working unchanged inside a browser that also has a web session.
+   */
+  async function resolveWallet(req: Request): Promise<string | null> {
+    const tgWallet = await walletFromInitData(dbService, req.body?.initData);
+    if (tgWallet) return tgWallet;
+    const token = (req as Request & { cookies?: Record<string, string> }).cookies?.[SESSION_COOKIE_NAME];
+    if (!token) return null;
+    const session = await authService.lookupSession(token);
+    return session ? session.walletAddress : null;
+  }
 
   // -------------------------------------------------------------------------
   // GET /api/arcade/hilo/info — public bounds + house edge so the UI always
@@ -112,11 +137,9 @@ export function registerArcadeHiLoRoutes({
   // -------------------------------------------------------------------------
   app.post('/api/arcade/hilo/state', async (req: Request, res: Response) => {
     try {
-      const wallet = await walletFromInitData(dbService, req.body?.initData);
+      const wallet = await resolveWallet(req);
       if (!wallet) {
-        return res
-          .status(401)
-          .json({ ok: false, error: 'Invalid Telegram session, or no wallet linked.' });
+        return res.status(401).json({ ok: false, error: AUTH_ERROR });
       }
       const r = await pool.query(
         `SELECT id, bet, cards, picks, multiplier_x100, server_seed_hash, client_seed,
@@ -159,11 +182,9 @@ export function registerArcadeHiLoRoutes({
   // -------------------------------------------------------------------------
   app.post('/api/arcade/hilo/start', async (req: Request, res: Response) => {
     try {
-      const wallet = await walletFromInitData(dbService, req.body?.initData);
+      const wallet = await resolveWallet(req);
       if (!wallet) {
-        return res
-          .status(401)
-          .json({ ok: false, error: 'Invalid Telegram session, or no wallet linked.' });
+        return res.status(401).json({ ok: false, error: AUTH_ERROR });
       }
 
       const bet = Math.floor(Number(req.body?.bet));
@@ -263,11 +284,9 @@ export function registerArcadeHiLoRoutes({
   // -------------------------------------------------------------------------
   app.post('/api/arcade/hilo/pick', async (req: Request, res: Response) => {
     try {
-      const wallet = await walletFromInitData(dbService, req.body?.initData);
+      const wallet = await resolveWallet(req);
       if (!wallet) {
-        return res
-          .status(401)
-          .json({ ok: false, error: 'Invalid Telegram session, or no wallet linked.' });
+        return res.status(401).json({ ok: false, error: AUTH_ERROR });
       }
       const roundId = String(req.body?.roundId ?? '');
       const direction = req.body?.direction;
@@ -412,11 +431,9 @@ export function registerArcadeHiLoRoutes({
   // -------------------------------------------------------------------------
   app.post('/api/arcade/hilo/cashout', async (req: Request, res: Response) => {
     try {
-      const wallet = await walletFromInitData(dbService, req.body?.initData);
+      const wallet = await resolveWallet(req);
       if (!wallet) {
-        return res
-          .status(401)
-          .json({ ok: false, error: 'Invalid Telegram session, or no wallet linked.' });
+        return res.status(401).json({ ok: false, error: AUTH_ERROR });
       }
       const roundId = String(req.body?.roundId ?? '');
       if (!roundId) {
@@ -490,6 +507,126 @@ export function registerArcadeHiLoRoutes({
     } catch (err) {
       logger.error('[arcade-hilo] cashout failed', { error: (err as Error)?.message });
       return res.status(500).json({ ok: false, error: 'Could not cash out the round.' });
+    }
+  });
+
+  // -------------------------------------------------------------------------
+  // GET /api/arcade/hilo/history — caller's recent settled rounds for the web
+  // history panel. Cookie-auth only in practice (GET has no body, so
+  // resolveWallet falls through to the SIWE session); the Mini App doesn't
+  // render a history list. Active rounds are excluded — they resume via /state.
+  // -------------------------------------------------------------------------
+  app.get('/api/arcade/hilo/history', async (req: Request, res: Response) => {
+    try {
+      const wallet = await resolveWallet(req);
+      if (!wallet) {
+        return res.status(401).json({ ok: false, error: AUTH_ERROR });
+      }
+      const limit = Math.max(1, Math.min(100, parseInt(String(req.query.limit ?? '25'), 10) || 25));
+      const r = await pool.query(
+        `SELECT id, bet, cards, picks, multiplier_x100, payout, status, created_at
+           FROM arcade_hilo_rounds
+          WHERE wallet_address = $1 AND status <> 'active'
+          ORDER BY created_at DESC
+          LIMIT $2`,
+        [wallet.toLowerCase(), limit],
+      );
+      return res.json({
+        ok: true,
+        rounds: r.rows.map((row) => {
+          const picks = Array.isArray(row.picks) ? (row.picks as HiLoDirection[]) : [];
+          // On a bust the picks tail is the losing guess — don't count it as a win.
+          const wins = row.status === 'busted' ? Math.max(0, picks.length - 1) : picks.length;
+          return {
+            roundId: row.id,
+            bet: Number(row.bet),
+            picks: picks.length,
+            wins,
+            multiplierX100: Number(row.multiplier_x100),
+            payout: Number(row.payout),
+            status: row.status as 'busted' | 'cashed_out',
+            createdAt: row.created_at,
+          };
+        }),
+      });
+    } catch (err) {
+      logger.error('[arcade-hilo] history failed', { error: (err as Error)?.message });
+      return res.status(500).json({ ok: false, error: 'Could not load history.' });
+    }
+  });
+
+  // -------------------------------------------------------------------------
+  // GET /api/arcade/hilo/recent — public. Latest settled rounds, all players.
+  // -------------------------------------------------------------------------
+  app.get('/api/arcade/hilo/recent', async (req: Request, res: Response) => {
+    const limit = Math.max(1, Math.min(50, parseInt(String(req.query.limit ?? '25'), 10) || 25));
+    try {
+      const r = await pool.query(
+        `SELECT id, wallet_address, bet, picks, multiplier_x100, payout, status, created_at
+           FROM arcade_hilo_rounds
+          WHERE status <> 'active'
+          ORDER BY created_at DESC
+          LIMIT $1`,
+        [limit],
+      );
+      return res.json({
+        ok: true,
+        rounds: r.rows.map((row) => {
+          const picks = Array.isArray(row.picks) ? (row.picks as HiLoDirection[]) : [];
+          const wins = row.status === 'busted' ? Math.max(0, picks.length - 1) : picks.length;
+          return {
+            roundId: row.id,
+            wallet: row.wallet_address,
+            bet: Number(row.bet),
+            picks: picks.length,
+            wins,
+            multiplierX100: Number(row.multiplier_x100),
+            payout: Number(row.payout),
+            status: row.status as 'busted' | 'cashed_out',
+            createdAt: row.created_at,
+          };
+        }),
+      });
+    } catch (err) {
+      logger.error('[arcade-hilo] recent failed', { error: (err as Error)?.message });
+      return res.status(500).json({ ok: false, error: 'internal error' });
+    }
+  });
+
+  // -------------------------------------------------------------------------
+  // GET /api/arcade/hilo/leaderboard — public. All-time top players by net
+  // chips across settled rounds (active rounds are still in flight — their
+  // debited bet would read as a loss until the round finalizes).
+  // -------------------------------------------------------------------------
+  app.get('/api/arcade/hilo/leaderboard', async (req: Request, res: Response) => {
+    const limit = Math.max(1, Math.min(25, parseInt(String(req.query.limit ?? '10'), 10) || 10));
+    try {
+      const r = await pool.query(
+        `SELECT wallet_address,
+                COUNT(*)::int AS rounds,
+                SUM(bet)::text AS wagered,
+                SUM(payout)::text AS won,
+                (SUM(payout) - SUM(bet))::text AS net
+           FROM arcade_hilo_rounds
+          WHERE status <> 'active'
+          GROUP BY wallet_address
+          ORDER BY SUM(payout) - SUM(bet) DESC
+          LIMIT $1`,
+        [limit],
+      );
+      return res.json({
+        ok: true,
+        players: r.rows.map((row) => ({
+          wallet: row.wallet_address,
+          rounds: Number(row.rounds),
+          wagered: String(row.wagered ?? '0'),
+          won: String(row.won ?? '0'),
+          net: String(row.net ?? '0'),
+        })),
+      });
+    } catch (err) {
+      logger.error('[arcade-hilo] leaderboard failed', { error: (err as Error)?.message });
+      return res.status(500).json({ ok: false, error: 'internal error' });
     }
   });
 

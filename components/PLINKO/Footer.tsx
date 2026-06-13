@@ -36,11 +36,6 @@ export default function Footer() {
               <h3 className="text-cyan-400 font-bold text-xs mb-2 md:mb-1">More From Morbius.io!</h3>
               <ul className="space-y-1 md:space-y-0.5 text-center md:text-left">
                 <li>
-                  <a href="/lottery" className="text-white/90 hover:text-cyan-500 transition-colors text-xs">
-                    Lottery
-                  </a>
-                </li>
-                <li>
                   <a href="/keno" className="text-white/90 hover:text-cyan-500 transition-colors text-xs">
                     KENO
                   </a>

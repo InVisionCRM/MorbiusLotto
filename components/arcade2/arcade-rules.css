@@ -1,0 +1,40 @@
+/* ── Arcade rules-modal animations ────────────────────────────────────────────
+   Motion only (colours come from the per-game theme via inline styles), so these
+   keyframes are palette-agnostic and shared by every game's rules modal. All
+   names are prefixed `arules-` to avoid collisions with the global sheet. */
+
+@keyframes arules-fade { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
+@keyframes arules-pop  { 0% { opacity: 0; transform: scale(0.3); } 100% { opacity: 1; transform: scale(1); } }
+@keyframes arules-pulse { 0%, 100% { opacity: 0.6; transform: scale(1); } 50% { opacity: 1; transform: scale(1.06); } }
+@keyframes arules-glow { 0%, 100% { opacity: 0.4; } 50% { opacity: 0.9; } }
+@keyframes arules-sweep { 0% { left: 4%; } 50% { left: 60%; } 100% { left: 4%; } }
+@keyframes arules-drop {
+  0%   { offset-distance: 0%; opacity: 0; }
+  8%   { opacity: 1; }
+  92%  { opacity: 1; }
+  100% { offset-distance: 100%; opacity: 1; }
+}
+@keyframes arules-fall { 0% { top: -8%; opacity: 0; } 10% { opacity: 1; } 100% { top: 86%; opacity: 1; } }
+@keyframes arules-rise { 0% { transform: scaleY(0.06); } 100% { transform: scaleY(1); } }
+@keyframes arules-spin { to { transform: rotate(360deg); } }
+@keyframes arules-dash { to { stroke-dashoffset: 0; } }
+
+.arules-step  { opacity: 0; animation: arules-fade 0.5s ease forwards; }
+.arules-pop   { opacity: 0; animation: arules-pop 0.45s cubic-bezier(0.34, 1.56, 0.64, 1) forwards; }
+.arules-pulse { animation: arules-pulse 1.8s ease-in-out infinite; }
+.arules-glow  { animation: arules-glow 2.4s ease-in-out infinite; }
+.arules-sweep { animation: arules-sweep 2.6s ease-in-out infinite; }
+.arules-fall  { animation: arules-fall 2.2s ease-in infinite; }
+.arules-rise  { transform-origin: bottom; animation: arules-rise 0.7s cubic-bezier(0.34, 1.4, 0.64, 1) forwards; }
+.arules-spin  { animation: arules-spin 9s linear infinite; transform-origin: center; }
+.arules-dash  { stroke-dasharray: 340; stroke-dashoffset: 340; animation: arules-dash 2s ease forwards; }
+
+@media (prefers-reduced-motion: reduce) {
+  .arules-step, .arules-pop, .arules-pulse, .arules-glow, .arules-sweep,
+  .arules-fall, .arules-rise, .arules-spin, .arules-dash {
+    animation: none !important;
+    opacity: 1 !important;
+    transform: none !important;
+    stroke-dashoffset: 0 !important;
+  }
+}

@@ -100,7 +100,7 @@ const CATEGORIES: Category[] = [
     games: [
       {
         key: 'plinko',
-        href: '/PLINKO',
+        href: '/plinko2',
         title: 'Plinko',
         tagline: 'Pick risk + rows. Drop. Watch physics decide.',
         image: '/Games-Section/Plinko-GS.png',
@@ -111,13 +111,6 @@ const CATEGORIES: Category[] = [
         title: 'Keno',
         tagline: 'Mark your numbers. Twenty draws settle it instantly.',
         image: '/Games-Section/KENO-GS.png',
-      },
-      {
-        key: 'lottery',
-        href: '/lottery',
-        title: 'Lottery',
-        tagline: '6-of-55 draws. Jackpot rolls until somebody hits.',
-        image: '/morbius/Morbius_Lottery.png',
       },
       {
         key: 'crash',

@@ -29,6 +29,7 @@ import { FloatingPanel } from '@/components/arcade2/FloatingPanel';
 import RouletteWheel2, { WHEEL_SPIN_MS } from './RouletteWheel2';
 import RouletteBoard2, { zoneKey } from './RouletteBoard2';
 import { RouletteFairnessModal2 } from './RouletteFairnessModal2';
+import { RouletteRulesModal } from './RouletteRulesModal';
 import { RouletteInfoTabs2 } from './RouletteInfoTabs2';
 import { roulette2Audio } from './roulette2-audio';
 import {
@@ -90,6 +91,7 @@ export function StakeRouletteGame() {
 
   const [clientSeed, setClientSeed] = useState('');
   const [fairnessOpen, setFairnessOpen] = useState(false);
+  const [rulesOpen, setRulesOpen] = useState(false);
   const [verifyTarget, setVerifyTarget] = useState<string | null>(null);
   const [exchangeOpen, setExchangeOpen] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -449,13 +451,15 @@ export function StakeRouletteGame() {
             </div>
           )}
 
-          <button
-            type="button"
-            onClick={() => openVerify(history[0]?.spinId ?? null)}
-            className="w-full text-center text-xs text-[#5E8273] transition-colors hover:text-[#6EE7B7]"
-          >
-            Provably Fair{history.length > 0 ? ' · verify last spin' : ''}
-          </button>
+          <div className="flex items-center justify-center gap-3 text-xs text-[#5E8273]">
+            <button type="button" onClick={() => setRulesOpen(true)} className="transition-colors hover:text-[#6EE7B7]">
+              Rules
+            </button>
+            <span className="opacity-40">·</span>
+            <button type="button" onClick={() => openVerify(history[0]?.spinId ?? null)} className="transition-colors hover:text-[#6EE7B7]">
+              Provably Fair{history.length > 0 ? ' · verify last spin' : ''}
+            </button>
+          </div>
         </Card>
 
         {/* ───────── Wheel + felt ───────── */}
@@ -583,6 +587,7 @@ export function StakeRouletteGame() {
         </FloatingPanel>
       </div>
 
+      <RouletteRulesModal open={rulesOpen} onOpenChange={setRulesOpen} />
       <RouletteFairnessModal2
         open={fairnessOpen}
         onClose={() => {

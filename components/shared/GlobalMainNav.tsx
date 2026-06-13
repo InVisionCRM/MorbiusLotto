@@ -83,7 +83,7 @@ const ProfileSettingsModal = lazy(() => import('@/components/shared/ProfileSetti
 
 export type NavPage =
   | 'blackjack' | 'plinko' | 'lottery' | 'keno' | 'mines' | 'dice' | 'limbo' | 'home' | 'poker' | 'blackjackMulti'
-  | 'crash' | 'roulette2' | 'craps';
+  | 'crash' | 'roulette2' | 'craps' | 'baccarat' | 'hilo' | 'towers' | 'videoPoker';
 
 const PATH_TO_PAGE: Record<string, NavPage> = {
   '/BLACKJACK': 'blackjack',
@@ -100,11 +100,15 @@ const PATH_TO_PAGE: Record<string, NavPage> = {
   '/poker': 'poker',
   '/blackjack-multi': 'blackjackMulti',
   '/craps': 'craps',
+  '/baccarat': 'baccarat',
+  '/hilo': 'hilo',
+  '/towers': 'towers',
+  '/video-poker': 'videoPoker',
 };
 
 type OtherGameIcon =
   | 'blackjack' | 'plinko' | 'users' | 'ticket' | 'grid' | 'cards' | 'mine' | 'dice' | 'limbo'
-  | 'crash' | 'roulette' | 'craps';
+  | 'crash' | 'roulette' | 'craps' | 'baccarat' | 'hilo' | 'towers' | 'videopoker';
 
 type OtherGameNavItem =
   | { label: string; href: string; icon: OtherGameIcon }
@@ -119,11 +123,14 @@ const OTHER_GAMES: readonly OtherGameNavItem[] = [
   { label: 'Blackjack', href: '/BLACKJACK', icon: 'blackjack' },
   { label: 'Multiplayer BJ', href: '/blackjack-multi', icon: 'users' },
   { label: 'Poker', href: '/poker', icon: 'cards' },
-  { label: 'Lottery', href: '/lottery', icon: 'ticket' },
+  { label: 'Video Poker', href: '/video-poker', icon: 'videopoker' },
   { label: 'Keno', href: '/keno2', icon: 'grid' },
   { label: 'Mines', href: '/mines2', icon: 'mine' },
+  { label: 'Towers', href: '/towers', icon: 'towers' },
   { label: 'Dice', href: '/dice2', icon: 'dice' },
   { label: 'Craps', href: '/craps', icon: 'craps' },
+  { label: 'Baccarat', href: '/baccarat', icon: 'baccarat' },
+  { label: 'Hi-Lo', href: '/hilo', icon: 'hilo' },
   { label: 'Limbo', href: '/limbo2', icon: 'limbo' },
   { label: 'Crash', href: '/crash', icon: 'crash' },
   { label: 'Roulette', href: '/roulette2', icon: 'roulette' },
@@ -269,6 +276,30 @@ const OTHER_GAME_ICONS: Record<OtherGameIcon, React.ReactNode> = {
   crash: <IconRocket size={20} className="text-white shrink-0" aria-hidden />,
   roulette: <IconLifebuoy size={20} className="text-white shrink-0" aria-hidden />,
   craps: <IconDice size={20} className="text-white shrink-0" aria-hidden />,
+  baccarat: (
+    <svg viewBox="0 0 24 24" width={20} height={20} className="text-white shrink-0" fill="currentColor" aria-hidden="true">
+      <path d="M12 3 L20 12 L12 21 L4 12 Z" />
+    </svg>
+  ),
+  hilo: (
+    <svg viewBox="0 0 24 24" width={20} height={20} className="text-white shrink-0" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <path d="M8 10 L12 6 L16 10" />
+      <path d="M8 14 L12 18 L16 14" />
+    </svg>
+  ),
+  towers: (
+    <svg viewBox="0 0 24 24" width={20} height={20} className="text-white shrink-0" fill="none" stroke="currentColor" strokeWidth={2} strokeLinejoin="round" aria-hidden="true">
+      <rect x="5.5" y="14" width="13" height="6" rx="1" />
+      <rect x="7" y="8.5" width="10" height="5.5" rx="1" />
+      <rect x="8.5" y="3.5" width="7" height="5" rx="1" />
+    </svg>
+  ),
+  videopoker: (
+    <svg viewBox="0 0 24 24" width={20} height={20} className="text-white shrink-0" aria-hidden="true">
+      <rect x="6" y="3" width="12" height="18" rx="2" fill="none" stroke="currentColor" strokeWidth={2} />
+      <path d="M12 8 L15 12 L12 16 L9 12 Z" fill="currentColor" />
+    </svg>
+  ),
 };
 
 const otherGameIcon = (g: OtherGameNavItem) => OTHER_GAME_ICONS[g.icon];
@@ -554,7 +585,7 @@ const NavContent = React.memo(function NavContent(props: NavContentProps) {
               ) : onShowPlinkoHistory ? (
                 <SidebarButton label="My History" icon={<NavIcon icon="fa-chart-bar" />} onClick={onShowPlinkoHistory} className={NAV_ITEM_CLASS} />
               ) : (
-                <SidebarLink link={{ label: 'My History', href: '/PLINKO', icon: <NavIcon icon="fa-chart-bar" /> }} className={NAV_ITEM_CLASS} />
+                <SidebarLink link={{ label: 'My History', href: '/plinko2', icon: <NavIcon icon="fa-chart-bar" /> }} className={NAV_ITEM_CLASS} />
               )}
               {onOpenSwap && <SidebarButton label="Buy Morbius" icon={<NavIcon icon="fa-exchange-alt" />} onClick={onOpenSwap} className={NAV_ITEM_CLASS} />}
             </>

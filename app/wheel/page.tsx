@@ -1,10 +1,16 @@
-import WheelClient from '@/components/wheel/WheelClient';
+/**
+ * /wheel — retired. The daily wish wheel has been disabled (its floating
+ * launcher is already removed in app/layout.tsx). This route now renders only a
+ * notice.
+ */
 
-export const metadata = {
-  title: 'Daily Wish Wheel — MORBIUS Casino',
-  description: 'Spin the daily wish wheel for free MORBIUS prizes. Earn spins by playing blackjack, blackjack multi, poker, and tournaments.',
-};
+import { RetiredGameNotice } from '@/components/shared/RetiredGameNotice';
 
-export default function WheelPage() {
-  return <WheelClient />;
+export default function WheelRetiredPage() {
+  return (
+    <RetiredGameNotice
+      title="The Wheel has been retired"
+      message="The daily wish wheel is no longer available. There's plenty more to play back in the lobby."
+    />
+  );
 }

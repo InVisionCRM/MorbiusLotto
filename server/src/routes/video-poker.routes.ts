@@ -18,6 +18,7 @@ import crypto from 'crypto';
 import type { Express, Request, Response } from 'express';
 import { logger } from '../utils/logger';
 import { verifyTelegramInitData } from '../services/telegram.service';
+import { SESSION_COOKIE_NAME } from '../middleware/require-auth';
 import { getPokerChipBalance, applyPokerChipDelta } from '../services/poker-chip-wallet';
 import { ProvablyFairService } from '../services/provably-fair.service';
 import {
@@ -29,10 +30,12 @@ import {
   type VideoPokerResult,
 } from '../services/video-poker';
 import type { DatabaseService } from '../services/database.service';
+import type { AuthService } from '../services/auth.service';
 
 interface RegisterVideoPokerRoutesOptions {
   app: Express;
   dbService: DatabaseService;
+  authService: AuthService;
 }
 
 const MIN_BET = 10;
@@ -61,8 +64,28 @@ async function walletFromInitData(
   return r.rows.length > 0 ? String(r.rows[0].wallet_address) : null;
 }
 
-export function registerVideoPokerRoutes({ app, dbService }: RegisterVideoPokerRoutesOptions): void {
+export function registerVideoPokerRoutes({
+  app,
+  dbService,
+  authService,
+}: RegisterVideoPokerRoutesOptions): void {
   const pool = dbService.getPool();
+
+  const AUTH_ERROR = 'No session — sign in on the web, or open from Telegram with a linked wallet.';
+
+  /**
+   * Caller's wallet: Telegram `initData` (Mini App) or the SIWE morb_session
+   * cookie (web /video-poker). Telegram wins when both are present so the Mini
+   * App keeps working unchanged inside a browser that also has a web session.
+   */
+  async function resolveWallet(req: Request): Promise<string | null> {
+    const tgWallet = await walletFromInitData(dbService, req.body?.initData);
+    if (tgWallet) return tgWallet;
+    const token = (req as Request & { cookies?: Record<string, string> }).cookies?.[SESSION_COOKIE_NAME];
+    if (!token) return null;
+    const session = await authService.lookupSession(token);
+    return session ? session.walletAddress : null;
+  }
 
   // -------------------------------------------------------------------------
   // GET /api/video-poker/paytable — public. Bet limits + the live paytable so
@@ -84,11 +107,9 @@ export function registerVideoPokerRoutes({ app, dbService }: RegisterVideoPokerR
   // -------------------------------------------------------------------------
   app.post('/api/video-poker/deal', async (req: Request, res: Response) => {
     try {
-      const wallet = await walletFromInitData(dbService, req.body?.initData);
+      const wallet = await resolveWallet(req);
       if (!wallet) {
-        return res
-          .status(401)
-          .json({ ok: false, error: 'Invalid Telegram session, or no wallet linked.' });
+        return res.status(401).json({ ok: false, error: AUTH_ERROR });
       }
 
       const bet = Math.floor(Number(req.body?.bet));
@@ -158,11 +179,9 @@ export function registerVideoPokerRoutes({ app, dbService }: RegisterVideoPokerR
   // -------------------------------------------------------------------------
   app.post('/api/video-poker/draw', async (req: Request, res: Response) => {
     try {
-      const wallet = await walletFromInitData(dbService, req.body?.initData);
+      const wallet = await resolveWallet(req);
       if (!wallet) {
-        return res
-          .status(401)
-          .json({ ok: false, error: 'Invalid Telegram session, or no wallet linked.' });
+        return res.status(401).json({ ok: false, error: AUTH_ERROR });
       }
       const handId = typeof req.body?.handId === 'string' ? req.body.handId : '';
       const rawHolds = req.body?.holds;

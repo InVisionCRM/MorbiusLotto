@@ -16,6 +16,7 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { useAccount } from 'wagmi'
+import { Volume2, VolumeX } from 'lucide-react'
 import { Card } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -27,6 +28,8 @@ import { SessionChart, type SessionPoint } from '@/components/arcade2/SessionCha
 import { FloatingPanel } from '@/components/arcade2/FloatingPanel'
 import { LimboInfoTabs } from './LimboInfoTabs'
 import { LimboFairnessModal } from './LimboFairnessModal'
+import { LimboRulesModal } from './LimboRulesModal'
+import { limboAudio } from './limbo-audio'
 import {
   fetchLimboInfo,
   fetchLimboHistory,
@@ -77,7 +80,10 @@ export function StakeLimboGame() {
   const [autoCount, setAutoCount] = useState<number>(25)
   const [autoLeft, setAutoLeft] = useState<number | null>(null)
 
+  const [muted, setMuted] = useState(false)
+
   const [fairnessOpen, setFairnessOpen] = useState(false)
+  const [rulesOpen, setRulesOpen] = useState(false)
   const [verifyTarget, setVerifyTarget] = useState<string | null>(null)
   const [exchangeOpen, setExchangeOpen] = useState(false)
 
@@ -187,6 +193,8 @@ export function StakeLimboGame() {
     setError(null)
     setNoChips(false)
     inFlight.current += 1
+    limboAudio.init()
+    limboAudio.playLaunch()
     try {
       const res = await playLimbo({
         bet: stake,
@@ -196,6 +204,8 @@ export function StakeLimboGame() {
       if (!mounted.current) return false
       const profit = res.payout - res.bet
       setBalance(BigInt(res.chipBalance))
+      if (res.won) limboAudio.playWin()
+      else limboAudio.playLose()
       setLastRound(res)
       setRecent((prev) =>
         [{ key: ++roundSeq.current, resultX100: res.resultX100, won: res.won }, ...prev].slice(
@@ -270,6 +280,12 @@ export function StakeLimboGame() {
     setFairnessOpen(true)
   }, [])
 
+  const toggleMute = () => {
+    limboAudio.init()
+    limboAudio.setMute(!muted)
+    setMuted(!muted)
+  }
+
   const autoRunning = autoLeft != null
 
   return (
@@ -289,6 +305,14 @@ export function StakeLimboGame() {
                 className="rounded border border-cyan-500/30 bg-cyan-500/10 px-2 py-0.5 text-[11px] font-semibold text-cyan-300 transition-colors hover:bg-cyan-500/20"
               >
                 Buy
+              </button>
+              <button
+                type="button"
+                onClick={toggleMute}
+                className="rounded p-1 text-slate-500 transition-colors hover:text-slate-200"
+                title={muted ? 'Unmute' : 'Mute'}
+              >
+                {muted ? <VolumeX size={15} /> : <Volume2 size={15} />}
               </button>
             </div>
           </div>
@@ -482,13 +506,15 @@ export function StakeLimboGame() {
             </div>
           )}
 
-          <button
-            type="button"
-            onClick={() => openVerify(history[0]?.roundId ?? null)}
-            className="w-full text-center text-xs text-slate-500 transition-colors hover:text-cyan-400"
-          >
-            Provably Fair{history.length > 0 ? ' · verify last round' : ''}
-          </button>
+          <div className="flex items-center justify-center gap-3 text-xs text-slate-500">
+            <button type="button" onClick={() => setRulesOpen(true)} className="transition-colors hover:text-cyan-400">
+              Rules
+            </button>
+            <span className="opacity-40">·</span>
+            <button type="button" onClick={() => openVerify(history[0]?.roundId ?? null)} className="transition-colors hover:text-cyan-400">
+              Provably Fair{history.length > 0 ? ' · verify last round' : ''}
+            </button>
+          </div>
         </Card>
 
         {/* ───────── Result display ───────── */}
@@ -586,6 +612,7 @@ export function StakeLimboGame() {
         </FloatingPanel>
       </div>
 
+      <LimboRulesModal open={rulesOpen} onOpenChange={setRulesOpen} />
       <LimboFairnessModal
         open={fairnessOpen}
         onClose={() => {

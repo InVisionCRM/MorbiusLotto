@@ -52,7 +52,7 @@ export function Footer() {
               <Link href="/keno" className="text-white/90 hover:text-cyan-500/80 transition-colors">
                 Keno
               </Link>
-              <Link href="/PLINKO" className="text-white/90 hover:text-cyan-500/80 transition-colors">
+              <Link href="/plinko2" className="text-white/90 hover:text-cyan-500/80 transition-colors">
                 Plinko
               </Link>
               <Link href="/BLACKJACK" className="text-white/90 hover:text-cyan-500/80 transition-colors">
