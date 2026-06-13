@@ -1,15 +1,14 @@
 'use client';
 
-// Provably-fair panel for craps. Mirrors PlinkoFairnessModal:
-//   1. Set your own client seed (used for the NEXT session — Plinko changes it
-//      between balls; craps switches sessions because the seed is bound for
-//      the whole session's nonce sequence).
-//   2. Verify any session by ID — fetches /api/arcade/craps/verify/:id, and
+// Provably-fair panel for craps — Deep-Sea Neon (arcade2) styling to match keno2.
+//   1. Set your own client seed (used for the NEXT session — craps switches
+//      sessions because the seed is bound for the whole session's nonce run).
+//   2. Verify any session by ID — fetches /api/arcade/craps/verify/:id and
 //      renders ✓/✗ for hash-matches-commitment and rolls-re-derive-exactly,
 //      plus the per-roll re-derived dice.
 //
-// The header pill in app/craps/page.tsx opens this modal already pointed at
-// the current session via `requestVerifyId`.
+// The hash pill in app/craps/page.tsx opens this modal already pointed at the
+// current session via `requestVerifyId`.
 
 import { useEffect, useState } from 'react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
@@ -36,8 +35,8 @@ interface Props {
 function Field({ label, value }: { label: string; value: string }) {
   return (
     <div className="min-w-0">
-      <div className="text-[9px] uppercase tracking-[0.22em] text-[#d4af37]/70 mb-1">{label}</div>
-      <div className="font-mono break-all rounded-md bg-black/30 border border-[#d4af37]/15 px-2 py-1 text-[11px] text-[#f4e8c1]">
+      <div className="text-[11px] uppercase tracking-wide text-slate-500 mb-1">{label}</div>
+      <div className="arc-mono break-all rounded-md bg-[#081420] border border-cyan-950 px-2 py-1 text-[11px] text-slate-300">
         {value}
       </div>
     </div>
@@ -47,8 +46,8 @@ function Field({ label, value }: { label: string; value: string }) {
 function Check({ ok, label }: { ok: boolean; label: string }) {
   return (
     <div className="flex items-center gap-2 text-sm">
-      <span className={ok ? 'text-emerald-300 font-black' : 'text-red-300 font-black'}>{ok ? '✓' : '✗'}</span>
-      <span className="text-[#f4e8c1]/90">{label}</span>
+      <span className={ok ? 'text-cyan-400 font-bold' : 'text-red-400 font-bold'}>{ok ? '✓' : '✗'}</span>
+      <span className="text-slate-300">{label}</span>
     </div>
   );
 }
@@ -57,9 +56,9 @@ function Check({ ok, label }: { ok: boolean; label: string }) {
 function DiePip({ n, accent }: { n: number; accent: boolean }) {
   return (
     <span
-      className={`inline-flex h-6 w-6 items-center justify-center rounded font-mono text-xs font-black tabular-nums ${
-        accent ? 'bg-[#d4af37]/15 text-[#d4af37] ring-1 ring-[#d4af37]/40'
-               : 'bg-black/30 text-[#f4e8c1]/70 ring-1 ring-[#d4af37]/10'
+      className={`arc-mono inline-flex h-6 w-6 items-center justify-center rounded text-xs font-bold tabular-nums ${
+        accent ? 'bg-cyan-500/15 text-cyan-300 ring-1 ring-cyan-500/40'
+               : 'bg-[#081420] text-slate-400 ring-1 ring-cyan-950'
       }`}
     >
       {n}
@@ -128,14 +127,11 @@ export function CrapsVerifyModal({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent
-        className="bg-[#0a2e22]/95 border-2 border-[#d4af37]/40 text-[#f4e8c1] max-w-xl max-h-[85vh] overflow-y-auto"
-        style={{ fontFamily: 'var(--font-cinzel), Cinzel, serif' }}
-      >
+      <DialogContent className="arcade2-scope max-w-xl max-h-[85vh] overflow-y-auto border-cyan-950 bg-[#050E16] text-slate-200">
         <DialogHeader>
-          <DialogTitle className="text-2xl font-black text-[#d4af37] tracking-[0.12em] flex items-center gap-2">
-            <IconShieldCheck size={22} className="text-[#d4af37]" />
-            PROVABLY FAIR
+          <DialogTitle className="arc-display text-xl uppercase tracking-wider text-white flex items-center gap-2">
+            <IconShieldCheck size={20} className="text-cyan-400" />
+            Provably fair
           </DialogTitle>
         </DialogHeader>
 
@@ -143,24 +139,24 @@ export function CrapsVerifyModal({
 
           {/* Client seed */}
           <section className="space-y-2">
-            <h3 className="text-sm font-semibold text-[#f4e8c1]">Your client seed</h3>
-            <p className="text-xs text-[#f4e8c1]/60 leading-relaxed">
-              Mixed into every roll&apos;s derivation. Change it any time —
-              applying a new seed closes the current session (refunding any
-              open bets) and opens a fresh one bound to your new value.
+            <h3 className="text-sm font-semibold text-slate-200">Your client seed</h3>
+            <p className="text-xs text-slate-500 leading-relaxed">
+              Mixed into every roll&apos;s derivation. Change it any time — applying a
+              new seed closes the current session (refunding any open bets) and
+              opens a fresh one bound to your new value.
             </p>
             <div className="flex gap-2">
               <Input
                 value={draftClientSeed}
                 onChange={(e) => setDraftClientSeed(e.target.value.slice(0, 128))}
                 placeholder="Leave blank for a server-generated random seed"
-                className="font-mono text-xs bg-black/30 border-[#d4af37]/25 text-[#f4e8c1]"
+                className="arc-mono text-xs border-cyan-950 bg-[#081420] text-slate-200"
               />
               <Button
                 type="button"
                 variant="outline"
                 onClick={() => setDraftClientSeed(randomClientSeed())}
-                className="shrink-0 border-[#d4af37]/40 bg-transparent text-[#d4af37] hover:bg-[#d4af37]/10"
+                className="shrink-0 border-cyan-950 bg-transparent text-cyan-300 hover:bg-cyan-500/10"
               >
                 New seed
               </Button>
@@ -169,7 +165,7 @@ export function CrapsVerifyModal({
               <Button
                 onClick={handleApplySeed}
                 disabled={savingSeed || !draftClientSeed.trim() || (commitment != null && draftClientSeed.trim() === commitment.clientSeed)}
-                className="bg-[#d4af37] hover:bg-[#e6c358] text-[#0b3d2e] font-black uppercase tracking-[0.18em] text-xs border-0"
+                className="bg-cyan-500 hover:bg-cyan-400 text-[#03121B] font-bold uppercase tracking-[0.16em] text-xs"
               >
                 {savingSeed ? 'Applying…' : 'Apply (new session)'}
               </Button>
@@ -177,34 +173,34 @@ export function CrapsVerifyModal({
           </section>
 
           {/* Verify */}
-          <section className="space-y-2 border-t border-[#d4af37]/20 pt-4">
-            <h3 className="text-sm font-semibold text-[#f4e8c1]">Verify a session</h3>
-            <p className="text-xs text-[#f4e8c1]/60 leading-relaxed">
+          <section className="space-y-2 border-t border-cyan-950 pt-4">
+            <h3 className="text-sm font-semibold text-slate-200">Verify a session</h3>
+            <p className="text-xs text-slate-500 leading-relaxed">
               Each session commits a hashed server seed up front and reveals it
-              once you rotate or close. We re-derive every roll from the
-              published seeds so you can confirm nothing moved.
+              once you rotate or close. We re-derive every roll from the published
+              seeds so you can confirm nothing moved.
             </p>
             <div className="flex gap-2">
               <Input
                 value={verifyId}
                 onChange={(e) => setVerifyId(e.target.value)}
                 placeholder="Session ID"
-                className="font-mono text-xs bg-black/30 border-[#d4af37]/25 text-[#f4e8c1]"
+                className="arc-mono text-xs border-cyan-950 bg-[#081420] text-slate-200"
               />
               <Button
                 onClick={() => runVerify(verifyId)}
                 disabled={loading}
-                className="shrink-0 bg-[#d4af37] hover:bg-[#e6c358] text-[#0b3d2e] font-black uppercase tracking-[0.18em] text-xs border-0"
+                className="shrink-0 bg-cyan-500 hover:bg-cyan-400 text-[#03121B] font-bold uppercase tracking-[0.16em] text-xs"
               >
                 {loading ? 'Checking…' : 'Verify'}
               </Button>
             </div>
           </section>
 
-          {error && <p className="text-sm text-red-300">{error}</p>}
+          {error && <p className="text-sm text-red-400">{error}</p>}
 
           {result && (
-            <section className="space-y-3 rounded-lg bg-black/25 border border-[#d4af37]/25 p-3">
+            <section className="arc-panel space-y-3 rounded-lg p-3">
               {result.verification.seedRevealed ? (
                 <div className="space-y-1.5">
                   <Check ok={result.verification.hashMatches} label="Server seed matches its committed hash" />
@@ -212,14 +208,14 @@ export function CrapsVerifyModal({
                 </div>
               ) : (
                 <p className="text-xs text-amber-200/90 leading-relaxed">
-                  Server seed is still hidden — this session is active. Rotate
-                  the seed (or close the session) to unlock full verification.
+                  Server seed is still hidden — this session is active. Rotate the
+                  seed (or close the session) to unlock full verification.
                 </p>
               )}
 
               {result.verification.seedRevealed && result.rolls.length > 0 && (
-                <div className="space-y-1.5 border-t border-[#d4af37]/20 pt-3">
-                  <div className="text-[9px] uppercase tracking-[0.22em] text-[#d4af37]/70 mb-1">
+                <div className="space-y-1.5 border-t border-cyan-950 pt-3">
+                  <div className="text-[9px] uppercase tracking-[0.22em] text-slate-500 mb-1">
                     Persisted vs. re-derived rolls
                   </div>
                   <div className="grid grid-cols-1 gap-1 max-h-44 overflow-y-auto pr-1">
@@ -228,17 +224,17 @@ export function CrapsVerifyModal({
                       const matches = recomputed && recomputed.die1 === r.die1 && recomputed.die2 === r.die2;
                       return (
                         <div key={r.nonce} className="flex items-center gap-3 text-xs">
-                          <span className="text-[#d4af37]/60 font-mono w-12 tabular-nums shrink-0">n{r.nonce}</span>
+                          <span className="arc-mono text-slate-500 w-12 tabular-nums shrink-0">n{r.nonce}</span>
                           <div className="flex items-center gap-1">
                             <DiePip n={r.die1} accent={false} />
                             <DiePip n={r.die2} accent={false} />
                           </div>
-                          <span className="text-[#d4af37]/40">→</span>
+                          <span className="text-slate-600">→</span>
                           <div className="flex items-center gap-1">
                             <DiePip n={recomputed?.die1 ?? 0} accent />
                             <DiePip n={recomputed?.die2 ?? 0} accent />
                           </div>
-                          <span className={matches ? 'text-emerald-300 ml-1 font-black' : 'text-red-300 ml-1 font-black'}>
+                          <span className={matches ? 'text-cyan-400 ml-1 font-bold' : 'text-red-400 ml-1 font-bold'}>
                             {matches ? '✓' : '✗'}
                           </span>
                         </div>
@@ -248,7 +244,7 @@ export function CrapsVerifyModal({
                 </div>
               )}
 
-              <div className="grid grid-cols-1 gap-2 border-t border-[#d4af37]/20 pt-3">
+              <div className="grid grid-cols-1 gap-2 border-t border-cyan-950 pt-3">
                 <Field label="Server seed hash" value={result.serverSeedHash} />
                 {result.serverSeedRevealed && (
                   <Field label="Server seed (revealed)" value={result.serverSeedRevealed} />
@@ -257,9 +253,9 @@ export function CrapsVerifyModal({
                 <Field label="Total rolls" value={String(result.rolls.length)} />
               </div>
 
-              <div className="border-t border-[#d4af37]/20 pt-3">
-                <div className="text-[9px] uppercase tracking-[0.22em] text-[#d4af37]/70 mb-2">Calculation</div>
-                <code className="block text-[11px] text-[#f4e8c1]/85 leading-relaxed font-mono whitespace-pre-wrap">
+              <div className="border-t border-cyan-950 pt-3">
+                <div className="text-[9px] uppercase tracking-[0.22em] text-slate-500 mb-2">Calculation</div>
+                <code className="arc-mono block text-[11px] text-slate-300 leading-relaxed whitespace-pre-wrap">
 {`die1 = floor(bytesToFloat(hmacByteStream(serverSeed, clientSeed, nonce, 0)) * 6) + 1
 die2 = floor(bytesToFloat(hmacByteStream(serverSeed, clientSeed, nonce, 4)) * 6) + 1
 commitment = SHA-256(serverSeed)`}

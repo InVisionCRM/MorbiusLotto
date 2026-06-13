@@ -68,6 +68,9 @@ export interface BetChipProps {
   label: string;
   /** Numeric amount used to pick chip color (ether value, not wei). Falls back to blue chip if 0. */
   amount?: number;
+  /** Explicit colour tier override — bypasses amount-based tiering (craps uses
+   *  this for per-denomination chip colours). */
+  tier?: ChipTier;
   /**
    * @deprecated Legacy image override. When set (blackjack tables), renders the
    * Morbius PNG instead of the CSS chip so their look/layout is untouched.
@@ -99,6 +102,7 @@ export interface BetChipProps {
 export function BetChip({
   label,
   amount = 0,
+  tier: tierProp,
   chipSrc,
   size = 48,
   className = '',
@@ -107,10 +111,11 @@ export function BetChip({
   const cssSize = typeof size === 'number' ? `${size}px` : size;
   const labelFont = typeof size === 'number' ? Math.max(7, Math.min(12, Math.round(size * 0.24))) : 10;
 
-  // Only the CSS chip when we have a real amount and no legacy override; this
-  // keeps every existing image caller (blackjack) on the exact same PNG.
-  const useCss = !chipSrc && amount > 0;
-  const tier = chipTier(amount);
+  // Only the CSS chip when we have a real amount (or an explicit tier) and no
+  // legacy override; this keeps every existing image caller (blackjack) on the
+  // exact same PNG.
+  const useCss = !chipSrc && (amount > 0 || tierProp != null);
+  const tier = tierProp ?? chipTier(amount);
 
   const labelSpan = (
     <span

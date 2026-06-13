@@ -48,8 +48,6 @@ export interface CrapsRollOutcome {
   betsAfter: CrapsBets;
 }
 
-export const CRAPS_INITIAL_BANKROLL = 5000;
-
 // ── Provably-fair dice derivation ───────────────────────────────────────────
 // Both dice for a single throw share the same nonce but come from different
 // cursors of the HMAC byte stream — cursor 0 for die1, cursor 4 for die2.

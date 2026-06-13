@@ -45,8 +45,12 @@ export interface CrapsEngine {
   isInitializing: boolean;
   /** Last server error message; null when healthy. */
   error: string | null;
+  /** Imperatively clear the last error (e.g. after the banner auto-dismisses). */
+  clearError: () => void;
   /** True when wallet isn't connected yet. */
   needsWallet: boolean;
+  /** True when we have a live session ready to take bets. */
+  sessionReady: boolean;
 }
 
 interface CreateSessionResp {
@@ -162,16 +166,81 @@ export function useCrapsEngine(): CrapsEngine {
     }
   }, []);
 
-  // Boot: create a session as soon as wallet is connected.
+  // Resume an in-progress session if one exists (so a reload doesn't strand
+  // already-debited bets); otherwise open a fresh one. Boot-only — resetGame /
+  // setClientSeedAndRestart still create deliberately new sessions.
+  const resumeOrCreate = useCallback(async () => {
+    if (creatingRef.current) return;
+    creatingRef.current = true;
+    setIsInitializing(true);
+    let adopted = false;
+    try {
+      const res = await fetch('/api/arcade/craps/active-session', { credentials: 'include' });
+      const data = (await res.json()) as {
+        ok: boolean;
+        session: null | {
+          sessionId: string;
+          serverSeedHash: string;
+          clientSeed: string;
+          nonce: number;
+          phase: Phase;
+          point: number | null;
+          chipBalance: string;
+          bets: Record<string, number>;
+          rollHistory: number[];
+        };
+      };
+      if (data?.ok && data.session) {
+        const s = data.session;
+        setSessionId(s.sessionId);
+        setCommitment({
+          sessionId: s.sessionId,
+          serverSeedHash: s.serverSeedHash,
+          clientSeed: s.clientSeed,
+          nonce: s.nonce,
+        });
+        setChipBalance(s.chipBalance);
+        setBets(s.bets ?? {});
+        setPhase(s.phase);
+        setPoint(s.point);
+        setRollHistory(s.rollHistory ?? []);
+        setLastResult(null);
+        setError(null);
+        adopted = true;
+      }
+    } catch {
+      // Network / parse issue — fall through to create a fresh session below.
+    } finally {
+      setIsInitializing(false);
+      creatingRef.current = false;
+    }
+    if (!adopted) await createSession();
+  }, [createSession]);
+
+  // Boot: resume or create a session as soon as the wallet is connected.
   useEffect(() => {
     if (!isConnected || !address) return;
     if (createdForAddrRef.current === address) return;
     createdForAddrRef.current = address;
-    void createSession();
-  }, [address, isConnected, createSession]);
+    void resumeOrCreate();
+  }, [address, isConnected, resumeOrCreate]);
 
   const placeBet = useCallback((type: BetType, amount: number) => {
-    if (!sessionId || isRolling) return;
+    // Friendly visible reasons for every early-return path so a silent click
+    // never leaves the player wondering why nothing happened.
+    if (isRolling) {
+      setError('Wait for the dice to settle.');
+      return;
+    }
+    if (!sessionId) {
+      setError(
+        isInitializing
+          ? 'Connecting to the table — try again in a moment.'
+          : 'Not connected — sign in with your wallet.',
+      );
+      return;
+    }
+    setError(null);
     void (async () => {
       try {
         const r = await postJSON<BetResp>(`/api/arcade/craps/session/${sessionId}/bet`, { type, amount });
@@ -181,7 +250,7 @@ export function useCrapsEngine(): CrapsEngine {
         setError((e as Error).message);
       }
     })();
-  }, [sessionId, isRolling]);
+  }, [sessionId, isRolling, isInitializing]);
 
   const clearBets = useCallback(() => {
     if (!sessionId || isRolling) return;
@@ -315,6 +384,8 @@ export function useCrapsEngine(): CrapsEngine {
     placeBet, clearBets, rollDice, resetGame, rotateSeed,
     setClientSeedAndRestart,
     commitment, isInitializing, error,
+    clearError: () => setError(null),
     needsWallet: !isConnected || !address,
+    sessionReady: Boolean(sessionId),
   };
 }

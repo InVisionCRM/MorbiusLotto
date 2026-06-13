@@ -1,7 +1,10 @@
-/* ── Craps — Emerald Royale aesthetic + 3D dice ───────────────────────────────
+/* ── Craps — Deep-Sea Neon (arcade2) + 3D dice ────────────────────────────────
    Scoped to .craps-root so body styles can't leak into the rest of morbius.io.
-   Tailwind classes still work freely; this file owns the things Tailwind can't:
-   the felt texture, the dice 3D transforms, and the Cinzel display font. */
+   The page chrome now lives in the shared .arcade2-scope system (abyss #050E16,
+   cyan #22D3EE, Chakra Petch + JetBrains Mono) to match /keno2. This file owns
+   only what Tailwind can't: the dice 3D transforms. Ivory faces with a cyan edge
+   read cleanly against the abyss. (Legacy emerald/Cinzel rules are kept inert —
+   nothing renders with .craps-page / .craps-display anymore.) */
 
 .craps-root {
   --emerald: #0b3d2e;
@@ -64,9 +67,9 @@
     radial-gradient(circle at 30% 28%, #fffaf0 0%, #f7ecc8 60%, #d9c79a 100%);
   border-radius: 10px;
   box-shadow:
-    inset 0 0 0 1px rgba(212, 175, 55, 0.35),
+    inset 0 0 0 1px rgba(34, 211, 238, 0.35),
     inset 0 -3px 6px rgba(0, 0, 0, 0.12),
-    0 2px 6px rgba(0, 0, 0, 0.35);
+    0 2px 6px rgba(0, 0, 0, 0.4);
 }
 
 .craps-root .die-face > div {

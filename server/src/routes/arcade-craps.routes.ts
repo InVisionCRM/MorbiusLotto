@@ -175,6 +175,54 @@ export function registerArcadeCrapsRoutes({
     }
   });
 
+  // ─── GET /api/arcade/craps/active-session — resume the live session ──────────
+  // The client calls this on page load BEFORE creating a session: a reload must
+  // not abandon an in-progress shooter, because bets are debited at placement
+  // time and an orphaned 'active' session never refunds them. Returns the latest
+  // active session for the authed wallet, or null so the client creates a fresh
+  // one. (Distinct path from /session/:id so it can't be swallowed by that route.)
+  app.get('/api/arcade/craps/active-session', async (req: Request, res: Response) => {
+    try {
+      const wallet = await resolveWallet(req);
+      if (!wallet) return res.status(401).json({ ok: false, error: AUTH_ERROR });
+
+      const sess = await pool.query(
+        `SELECT id, server_seed_hash, client_seed, nonce_counter, phase, point, bets
+           FROM arcade_craps_sessions
+          WHERE wallet_address = $1 AND status = 'active'
+          ORDER BY created_at DESC
+          LIMIT 1`,
+        [wallet.toLowerCase()],
+      );
+      if (sess.rows.length === 0) return res.json({ ok: true, session: null });
+      const s = sess.rows[0];
+
+      const rolls = await pool.query<{ sum: number }>(
+        `SELECT sum FROM arcade_craps_rolls WHERE session_id = $1 ORDER BY nonce DESC LIMIT 10`,
+        [s.id],
+      );
+      const chipBalance = await getPokerChipBalance(pool, wallet);
+
+      return res.json({
+        ok: true,
+        session: {
+          sessionId: s.id,
+          serverSeedHash: s.server_seed_hash,
+          clientSeed: s.client_seed,
+          nonce: Number(s.nonce_counter),
+          phase: s.phase as CrapsPhase,
+          point: s.point === null ? null : Number(s.point),
+          chipBalance: chipBalance.toString(),
+          bets: s.bets as CrapsBets,
+          rollHistory: rolls.rows.map((r: { sum: number }) => Number(r.sum)),
+        },
+      });
+    } catch (err) {
+      logger.error('[arcade-craps] active-session failed', { error: (err as Error)?.message });
+      return res.status(500).json({ ok: false, error: 'Could not load the session.' });
+    }
+  });
+
   // ─── GET /api/arcade/craps/session/:id — snapshot ───────────────────────
   app.get('/api/arcade/craps/session/:id', async (req: Request, res: Response) => {
     try {

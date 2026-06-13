@@ -25,7 +25,6 @@ export interface RollResult {
 }
 
 export interface CrapsState {
-  bankroll: number;
   bets: Record<string, number>;
   phase: Phase;
   point: number | null;
@@ -34,9 +33,6 @@ export interface CrapsState {
   lastResult: RollResult | null;
   rollHistory: number[];
 }
-
-/** Starter bankroll for the offline lab. Phase 2 replaces this with a real source. */
-export const INITIAL_BANKROLL = 5000;
 
 /** Chip denominations rendered on the rail. */
 export const CRAPS_CHIP_LADDER = [1, 5, 25, 100, 1000] as const;

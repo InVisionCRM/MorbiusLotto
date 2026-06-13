@@ -2,6 +2,7 @@
 
 // First-time-player walkthrough — fixed-position card above the table.
 // Branches on lastResult.sum to explain natural / craps / point outcomes.
+// Deep-Sea Neon (arcade2) styling to match keno2.
 
 import { TutorialStep } from '@/hooks/use-craps-tutorial';
 import { RollResult } from '@/lib/craps-types';
@@ -24,20 +25,20 @@ export function CrapsTutorialOverlay({ step, advance, stop, lastResult, point }:
 
   switch (step) {
     case 'WELCOME':
-      title = 'Welcome to the Craps Table';
+      title = 'Welcome to the craps table';
       content = 'This walkthrough teaches the basics — placing chips and rolling the dice. Three minutes, then you\'re in.';
       showNext = true;
       break;
     case 'PASS_BET_PROMPT':
-      title = 'The Pass Line';
+      title = 'The pass line';
       content = 'The heart of craps is the Pass Line. Drop a chip on PASS LINE at the bottom of the felt.';
       break;
     case 'COME_OUT_ROLL_PROMPT':
-      title = 'The Come Out Roll';
+      title = 'The come out roll';
       content = 'Your first roll is the Come Out.\n\n7 or 11 — instant win on Pass.\n2, 3, or 12 — Pass loses.\nAnything else — that number becomes the Point.\n\nHit ROLL DICE when ready.';
       break;
     case 'COME_OUT_RESULT_EXPLAIN':
-      title = 'Roll Result';
+      title = 'Roll result';
       if (!lastResult) break;
       if (lastResult.sum === 7 || lastResult.sum === 11)
         content = `You rolled ${lastResult.sum} — a Natural. Pass Line wins. Next roll is another Come Out.`;
@@ -48,20 +49,20 @@ export function CrapsTutorialOverlay({ step, advance, stop, lastResult, point }:
       showNext = true;
       break;
     case 'POINT_EXPLAIN':
-      title = 'The Point Phase';
+      title = 'The point phase';
       content = `Goal: roll ${point} again BEFORE rolling a 7.\n\nHit ${point} — Pass Line wins.\nHit 7 — seven-out, Pass loses, table clears.\nAnything else — keep rolling.`;
       showNext = true;
       break;
     case 'PLACE_BET_PROMPT':
-      title = 'Place Bets';
+      title = 'Place bets';
       content = 'While you chase the Point, you can bet specific numbers will hit. Drop a chip on any Place box (4, 5, 6, 8, 9, 10).';
       break;
     case 'POINT_ROLL_PROMPT':
-      title = 'Roll for the Point';
+      title = 'Roll for the point';
       content = `Time to throw. You want your Place bets to hit, and eventually ${point} before a 7.\n\nHit ROLL DICE.`;
       break;
     case 'POINT_ROLL_RESULT':
-      title = 'Roll Result';
+      title = 'Roll result';
       if (!lastResult) break;
       if (lastResult.sum === point)
         content = `You hit your Point (${point}). Pass Line wins. Back to Come Out.`;
@@ -73,7 +74,7 @@ export function CrapsTutorialOverlay({ step, advance, stop, lastResult, point }:
       nextLabel = 'Finish';
       break;
     case 'FINISHED':
-      title = 'You\'re Set';
+      title = 'You\'re set';
       content = 'That\'s the core flow. Explore Field bets, Any 7, Any Craps on your own. Good luck.';
       showNext = true;
       nextLabel = 'Play';
@@ -82,31 +83,31 @@ export function CrapsTutorialOverlay({ step, advance, stop, lastResult, point }:
 
   return (
     <div className="fixed top-24 left-1/2 -translate-x-1/2 w-11/12 max-w-md pointer-events-auto z-[99999]">
-      <div className="bg-[#0a2e22]/95 backdrop-blur-md border-2 border-[#d4af37] rounded-3xl p-6 shadow-[0_20px_50px_rgba(0,0,0,0.8)] relative">
-        <h2 className="text-2xl font-black tracking-tight text-[#d4af37] mb-4 drop-shadow-md craps-display">
+      <div className="bg-[#050E16]/95 backdrop-blur-md border border-cyan-500/50 rounded-3xl p-6 shadow-[0_20px_50px_rgba(0,0,0,0.8)] relative">
+        <h2 className="arc-display text-2xl font-bold tracking-tight text-cyan-300 mb-4 drop-shadow-[0_0_12px_rgba(34,211,238,0.4)]">
           {title}
         </h2>
-        <p className="text-sm font-medium text-[#f4e8c1]/90 whitespace-pre-wrap leading-relaxed">
+        <p className="text-sm text-slate-300 whitespace-pre-wrap leading-relaxed">
           {content}
         </p>
 
-        <div className="mt-6 flex justify-between items-center gap-4 border-t border-[#d4af37]/25 pt-4">
+        <div className="mt-6 flex justify-between items-center gap-4 border-t border-cyan-950 pt-4">
           <button
             onClick={stop}
-            className="text-xs font-bold text-[#f4e8c1]/40 uppercase tracking-widest hover:text-[#f4e8c1] transition-colors bg-transparent border-0 cursor-pointer"
+            className="text-xs font-semibold text-slate-500 uppercase tracking-widest hover:text-slate-200 transition-colors bg-transparent border-0 cursor-pointer"
           >
             Skip
           </button>
           {showNext ? (
             <button
               onClick={advance}
-              className="px-6 py-2.5 bg-[#d4af37] hover:bg-[#e6c358] text-[#0b3d2e] font-black uppercase text-xs tracking-widest rounded-xl shadow-lg transition-all hover:scale-105 active:scale-95 cursor-pointer border-0 craps-display"
+              className="arc-display px-6 py-2.5 bg-cyan-500 hover:bg-cyan-400 text-[#03121B] font-bold uppercase text-xs tracking-widest rounded-xl shadow-[0_0_22px_-6px_rgba(34,211,238,0.8)] transition-all hover:scale-105 active:scale-95 cursor-pointer border-0"
             >
               {nextLabel}
             </button>
           ) : (
-            <div className="text-xs font-bold text-[#d4af37] animate-pulse uppercase tracking-widest flex items-center gap-2">
-              <div className="w-2 h-2 rounded-full bg-[#d4af37]" />
+            <div className="text-xs font-semibold text-cyan-300 animate-pulse uppercase tracking-widest flex items-center gap-2">
+              <div className="w-2 h-2 rounded-full bg-cyan-400" />
               Waiting for action…
             </div>
           )}

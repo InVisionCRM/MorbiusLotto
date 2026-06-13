@@ -1,25 +1,47 @@
 'use client';
 
-// Craps — page composition. Provably-fair dice (server-derived), bankroll =
-// the player's poker chip balance (debited/credited via applyPokerChipDelta
-// on the server). All API traffic flows through /api/arcade/craps/* which
-// proxies to the Express backend, carrying the SIWE cookie.
+// Craps — Deep-Sea Neon (arcade2) composition, matched to /keno2.
+// Abyss #050E16 shell, cyan #22D3EE accents, amber wins, Chakra Petch display +
+// JetBrains Mono numerals, controls-rail-left / game-area-right layout.
+//
+// Provably-fair dice (server-derived); bankroll = the player's poker chip
+// balance (debited/credited via applyPokerChipDelta on the server). All API
+// traffic flows through /api/arcade/craps/* which proxies to the Express
+// backend, carrying the SIWE cookie.
 
 import { useEffect, useState } from 'react';
 import confetti from 'canvas-confetti';
 import { useAccount } from 'wagmi';
-import { Coins, RotateCw, BookOpen, ScrollText, ShieldCheck } from 'lucide-react';
+import { Chakra_Petch, JetBrains_Mono } from 'next/font/google';
+import { Coins, RotateCw, BookOpen, GraduationCap, ScrollText, ShieldCheck, AlertTriangle, X, Dices } from 'lucide-react';
 import GlobalMainNav from '@/components/shared/GlobalMainNav';
+import Footer from '@/components/PLINKO/Footer';
+import { Card } from '@/components/ui/card';
+import { Button } from '@/components/ui/button';
+import { cn } from '@/lib/utils';
 import { useCrapsEngine } from '@/hooks/use-craps-engine';
 import { useCrapsTutorial } from '@/hooks/use-craps-tutorial';
 import { usePokerChipBalance } from '@/hooks/use-poker-chip-balance';
+import { PokerChipExchangeModal } from '@/components/poker/PokerChipExchangeModal';
 import { CrapsTable } from '@/components/craps/CrapsTable';
 import { CrapsDice } from '@/components/craps/CrapsDice';
 import { CrapsChipRail } from '@/components/craps/CrapsChipRail';
 import { CrapsTutorialOverlay } from '@/components/craps/CrapsTutorialOverlay';
 import { CrapsHistoryModal } from '@/components/craps/CrapsHistoryModal';
 import { CrapsVerifyModal } from '@/components/craps/CrapsVerifyModal';
+import { CrapsRulesModal } from '@/components/craps/CrapsRulesModal';
 import { CRAPS_CHIP_LADDER } from '@/lib/craps-types';
+
+const arcDisplay = Chakra_Petch({
+  subsets: ['latin'],
+  weight: ['500', '600', '700'],
+  variable: '--font-arc-display',
+});
+const arcMono = JetBrains_Mono({
+  subsets: ['latin'],
+  weight: ['400', '500', '600', '700'],
+  variable: '--font-arc-mono',
+});
 
 export default function CrapsPage() {
   const engine = useCrapsEngine();
@@ -31,35 +53,30 @@ export default function CrapsPage() {
     engine.lastResult,
   );
   const { address } = useAccount();
-  // Authoritative chip balance — same hook plinko/poker/blackjack use, with
-  // 15s React Query staleTime so the header reflects the real wallet balance
-  // even if a session response somehow misses chipBalance.
-  const liveChipBalance = usePokerChipBalance(address);
+  // Authoritative chip balance — same hook plinko/poker/blackjack/keno use.
+  const { data: liveChipData, refetch: refetchBalance } = usePokerChipBalance(address);
   const [activeChip, setActiveChip] = useState<number>(CRAPS_CHIP_LADDER[1]);
   const [showWin, setShowWin] = useState(false);
   const [historyOpen, setHistoryOpen] = useState(false);
   const [verifyOpen, setVerifyOpen] = useState(false);
+  const [rulesOpen, setRulesOpen] = useState(false);
+  const [exchangeOpen, setExchangeOpen] = useState(false);
 
-  // Use the engine's snapshot for instant updates after a bet / roll / clear,
-  // but fall back to the auto-refreshing canonical query if the engine value
-  // is missing for any reason. This is what made the header collapse to a
-  // blank "CHIPS" when the engine had an empty string.
+  // Prefer the engine snapshot for instant updates after a bet / roll / clear,
+  // falling back to the auto-refreshing canonical query so the header never
+  // collapses to a blank when the engine value is briefly empty.
   const displayedChipBalance =
     engine.chipBalance && engine.chipBalance !== '0'
       ? engine.chipBalance
-      : (liveChipBalance.data ?? engine.chipBalance ?? '0');
+      : (liveChipData ?? engine.chipBalance ?? '0');
 
-  // BigInt-safe thousands-formatter for chip balance (string from server).
-  // Always returns a visible value — defaults to '0' on empty / undefined / NaN
-  // input so the header never collapses to a blank where the number should be.
+  // BigInt-safe thousands formatter; always returns a visible value.
   const formatChips = (s: string | null | undefined) => {
     if (s == null || s === '') return '0';
     try { return BigInt(s).toLocaleString(); } catch { return '0'; }
   };
 
-  // Confetti + win splash on a net-positive result. Guard on positive wins
-  // explicitly — comparing to `lost` was unsafe (any non-numeric `lost`
-  // collapsed the comparison and fired a "+0" splash).
+  // Confetti + win splash on a net-positive result.
   useEffect(() => {
     if (!engine.lastResult) return;
     if (!(engine.lastResult.wins > 0)) return;
@@ -68,234 +85,293 @@ export default function CrapsPage() {
       particleCount: Math.min(120 + engine.lastResult.wins * 1.5, 400),
       spread: 120,
       origin: { y: 0.6 },
-      colors: ['#d4af37', '#f4e8c1', '#0b3d2e', '#e6c358'],
+      colors: ['#22D3EE', '#F59E0B', '#67E8F9', '#0E7490'],
     });
     setShowWin(true);
     const t = setTimeout(() => setShowWin(false), 2000);
     return () => clearTimeout(t);
   }, [engine.lastResult]);
 
+  // Auto-dismiss errors after 5s so a stale message doesn't haunt the UI.
+  useEffect(() => {
+    if (!engine.error) return;
+    const t = setTimeout(() => engine.clearError(), 5000);
+    return () => clearTimeout(t);
+  }, [engine.error, engine.clearError]);
+
   const totalBet = Object.values(engine.bets).reduce((a, b) => a + b, 0);
+  const sum = engine.dice[0] + engine.dice[1];
 
   return (
-    <div className="flex flex-col min-h-screen w-full relative overflow-hidden">
-      <GlobalMainNav>
-      <div className="craps-root craps-page font-sans selection:bg-[#d4af37]/30 relative flex flex-col flex-1">
+    <GlobalMainNav>
+      <div
+        className={`arcade2-scope craps-root relative min-h-screen h-full w-full flex flex-col text-slate-200 ${arcDisplay.variable} ${arcMono.variable}`}
+        style={{
+          backgroundImage:
+            'linear-gradient(to bottom, rgba(5,14,22,0.92), rgba(2,6,11,0.96) 55%, rgba(5,14,22,0.98))',
+          backgroundColor: '#050E16',
+          backgroundSize: 'cover',
+          backgroundPosition: 'center top',
+          backgroundRepeat: 'no-repeat',
+          backgroundAttachment: 'fixed',
+        }}
+      >
+        {/* Abyss lighting: a cold cyan shaft from above, vignette below. */}
+        <div className="pointer-events-none absolute inset-0 h-full min-h-screen w-full bg-[radial-gradient(ellipse_75%_55%_at_50%_-5%,rgba(34,211,238,0.13),transparent_70%)]" />
+        <div className="pointer-events-none absolute inset-0 h-full min-h-screen w-full bg-[radial-gradient(ellipse_120%_60%_at_50%_115%,rgba(0,0,0,0.55),transparent_60%)]" />
 
-      <CrapsTutorialOverlay
-        step={tutorial.step}
-        advance={tutorial.advance}
-        stop={tutorial.stop}
-        lastResult={engine.lastResult}
-        point={engine.point}
-      />
+        <CrapsTutorialOverlay
+          step={tutorial.step}
+          advance={tutorial.advance}
+          stop={tutorial.stop}
+          lastResult={engine.lastResult}
+          point={engine.point}
+        />
 
-      {/* Felt grain overlay */}
-      <div className="absolute inset-0 felt-texture opacity-60 pointer-events-none" />
-
-      {/* Wallet-required scrim */}
-      {engine.needsWallet && (
-        <div className="absolute inset-0 z-40 bg-black/60 backdrop-blur-sm flex items-center justify-center pointer-events-none">
-          <div className="text-center px-8 py-6 border border-[#d4af37]/40 rounded-2xl bg-[#0a2e22]/85 max-w-sm">
-            <p className="text-[#d4af37] craps-display text-lg tracking-[0.18em] font-black mb-2">CONNECT WALLET</p>
-            <p className="text-[#f4e8c1]/80 text-sm">Sign in to play craps with your chip balance.</p>
+        {/* Wallet-required prompt (non-blocking; the rail still shows state). */}
+        {engine.needsWallet && (
+          <div className="absolute inset-0 z-40 flex items-center justify-center pointer-events-none">
+            <div className="text-center px-8 py-6 border border-cyan-500/30 rounded-2xl bg-[#050E16]/85 backdrop-blur-sm max-w-sm">
+              <p className="arc-display text-lg tracking-[0.18em] font-bold text-cyan-300 mb-2">CONNECT WALLET</p>
+              <p className="text-slate-400 text-sm">Sign in to play craps with your chip balance.</p>
+            </div>
           </div>
-        </div>
-      )}
+        )}
 
-      {/* History modal */}
-      <CrapsHistoryModal open={historyOpen} onOpenChange={setHistoryOpen} />
-
-      {/* Provably-fair verify modal — pre-loads with the current session ID
-          so the player can see the verification ✓/✗ in one click. */}
-      <CrapsVerifyModal
-        open={verifyOpen}
-        onOpenChange={setVerifyOpen}
-        commitment={engine.commitment}
-        requestVerifyId={verifyOpen ? engine.commitment?.sessionId ?? null : null}
-        onSetClientSeed={engine.setClientSeedAndRestart}
-      />
-
-      {/* Status bar */}
-      <header className="relative z-10 h-16 flex items-center justify-between px-4 sm:px-8 bg-black/30 backdrop-blur-sm border-b border-[#d4af37]/25">
-        <div className="flex gap-4 sm:gap-8 items-center">
-          <h1 className="craps-display text-xl font-black tracking-[0.18em] text-[#d4af37] hidden md:block">
-            MORBIUS<span className="text-[#f4e8c1]/70">.IO</span>
-            <span className="text-[#f4e8c1]/35 mx-3">·</span>
-            <span className="text-[#f4e8c1]/80">CRAPS</span>
-          </h1>
-          <nav className="flex gap-5 text-[10px] font-bold tracking-[0.25em] uppercase text-[#f4e8c1]/50 craps-display">
-            <span className="text-[#d4af37] border-b border-[#d4af37] pb-1 cursor-pointer">Table</span>
-            <button
-              onClick={() => { engine.resetGame(); tutorial.start(); }}
-              className="cursor-pointer hover:text-[#f4e8c1] transition-colors bg-transparent border-0 p-0 flex items-center gap-1.5"
-            >
-              <BookOpen className="w-3 h-3" />
-              Tutorial
-            </button>
-            <button
-              onClick={() => setHistoryOpen(true)}
-              className="cursor-pointer hover:text-[#f4e8c1] transition-colors bg-transparent border-0 p-0 flex items-center gap-1.5"
-            >
-              <ScrollText className="w-3 h-3" />
-              History
-            </button>
-            <button
-              onClick={() => setVerifyOpen(true)}
-              className="cursor-pointer hover:text-[#f4e8c1] transition-colors bg-transparent border-0 p-0 flex items-center gap-1.5"
-              title="Provably fair — view commitment + verify rolls"
-            >
-              <ShieldCheck className="w-3 h-3" />
-              Verify
-            </button>
-          </nav>
-          {/* Compact commitment-hash pill — visible proof the dice were
-              committed before this session's first roll. */}
-          {engine.commitment && (
-            <button
-              onClick={() => setVerifyOpen(true)}
-              className="hidden lg:flex items-center gap-1.5 px-2.5 py-1 rounded-full border border-[#d4af37]/40 bg-black/30 text-[9px] font-mono text-[#d4af37]/90 hover:bg-[#d4af37]/10 hover:text-[#d4af37] transition-colors cursor-pointer"
-              title={`Server seed hash: ${engine.commitment.serverSeedHash}`}
-            >
-              <ShieldCheck className="w-3 h-3" />
-              <span className="tracking-widest">
-                {engine.commitment.serverSeedHash.slice(0, 8)}…{engine.commitment.serverSeedHash.slice(-6)}
-              </span>
-              <span className="text-[#d4af37]/50">·</span>
-              <span className="tabular-nums">n{engine.commitment.nonce}</span>
-            </button>
-          )}
-        </div>
-
-        <div className="flex gap-4 sm:gap-8 items-center">
-          <div className="flex flex-col">
-            <span className="text-[9px] uppercase tracking-[0.3em] text-[#d4af37]/70 mb-1 craps-display">Chip Balance</span>
-            <span className="text-xl craps-display font-black tracking-tight text-[#d4af37] flex items-center gap-2">
-              <Coins className="w-4 h-4 text-[#d4af37]/70" />
-              {formatChips(displayedChipBalance)}
-              <span className="text-[10px] text-[#f4e8c1]/50 ml-1 tracking-widest">CHIPS</span>
-            </span>
-          </div>
-          <div className="hidden sm:flex flex-col border-l border-[#d4af37]/25 pl-6">
-            <span className="text-[9px] uppercase tracking-[0.3em] text-[#d4af37]/70 mb-1 craps-display">Phase</span>
-            <span className="text-sm font-bold tracking-[0.2em] text-[#f4e8c1] flex items-center gap-2 craps-display">
-              {engine.phase === 'COME_OUT' ? 'COME OUT' : 'POINT'}
-              {engine.point && (
-                <span className="bg-[#d4af37] text-[#0b3d2e] text-xs px-2 py-0.5 rounded font-black">
-                  {engine.point}
-                </span>
-              )}
-            </span>
-          </div>
-        </div>
-
-        <div className="text-right hidden lg:flex flex-col">
-          <span className="text-[9px] uppercase tracking-[0.3em] text-[#d4af37]/70 mb-1 craps-display">Roll History</span>
-          <div className="flex gap-1 text-xs font-mono">
-            {engine.rollHistory.map((r, i) => (
-              <span
-                key={i}
-                className={[
-                  'flex items-center justify-center w-6 h-6 rounded font-black',
-                  r === 7
-                    ? 'bg-red-700/80 text-[#f4e8c1]'
-                    : [4, 5, 6, 8, 9, 10].includes(r)
-                      ? 'bg-[#d4af37] text-[#0b3d2e]'
-                      : 'bg-[#f4e8c1]/10 text-[#f4e8c1]/60',
-                  i === 0 ? 'ring-1 ring-[#d4af37]/60 scale-110' : 'opacity-80',
-                ].join(' ')}
+        {/* Live error banner — placeBet / clearBets / rollDice failures land here. */}
+        {engine.error && (
+          <div className="fixed top-20 left-1/2 -translate-x-1/2 z-[60] max-w-md w-[90%] pointer-events-auto">
+            <div className="flex items-start gap-3 bg-rose-950/90 backdrop-blur-md border border-rose-500/50 rounded-xl px-4 py-3 shadow-[0_10px_40px_rgba(0,0,0,0.6)]">
+              <AlertTriangle className="w-4 h-4 text-rose-300 shrink-0 mt-0.5" />
+              <p className="flex-1 text-sm text-rose-100 leading-snug">{engine.error}</p>
+              <button
+                onClick={() => engine.clearError()}
+                className="text-rose-200/70 hover:text-rose-100 bg-transparent border-0 cursor-pointer p-0 shrink-0"
+                aria-label="Dismiss"
               >
-                {r}
-              </span>
-            ))}
-          </div>
-        </div>
-      </header>
-
-      {/* Main */}
-      <main className="relative z-0 flex-1 flex flex-col xl:flex-row gap-4 p-4">
-        {showWin && engine.lastResult && (
-          <div className="absolute inset-0 z-50 pointer-events-none flex items-center justify-center">
-            <div className="bg-[#0b3d2e]/40 backdrop-blur-sm border-4 border-[#d4af37] px-12 py-8 rounded-[3rem] shadow-[0_0_100px_rgba(212,175,55,0.4)] animate-bounce">
-              <span className="block text-4xl sm:text-6xl md:text-8xl font-black text-[#d4af37] drop-shadow-[0_5px_10px_rgba(0,0,0,0.8)] craps-display">
-                +{engine.lastResult.wins.toLocaleString()}
-              </span>
-              <span className="block text-center text-xs tracking-[0.4em] text-[#f4e8c1]/70 mt-2 craps-display">CHIPS</span>
+                <X className="w-4 h-4" />
+              </button>
             </div>
           </div>
         )}
 
-        {engine.lastResult?.isSevenOut && (
-          <div className="absolute inset-0 z-50 pointer-events-none flex items-center justify-center">
-            <div className="bg-red-950/85 backdrop-blur-md px-24 py-12 rounded-[2rem] border-8 border-black animate-pulse shadow-2xl">
-              <span className="block text-6xl md:text-9xl font-black text-red-500 drop-shadow-[0_4px_4px_rgba(0,0,0,1)] uppercase tracking-[0.2em] craps-display">
-                7 OUT
-              </span>
-            </div>
-          </div>
-        )}
-
-        <section className="flex-1 relative bg-gradient-to-b from-[#144d3a] to-[#062018] rounded-[40px] border-4 border-[#1e5c3e] shadow-[inset_0_0_60px_rgba(0,0,0,0.7)] flex flex-col p-4 sm:p-6 overflow-hidden">
-          <div className="absolute inset-3 rounded-[34px] border border-[#d4af37]/25 pointer-events-none" />
-          <CrapsTable
-            bets={engine.bets}
-            point={engine.point}
-            phase={engine.phase}
-            activeChip={activeChip}
-            placeBet={engine.placeBet}
-            isRolling={engine.isRolling}
-          />
-        </section>
-
-        <aside className="w-full xl:w-64 flex flex-col gap-4 shrink-0 mt-4 xl:mt-0">
-          <div className="flex-1 bg-black/25 border border-[#d4af37]/25 rounded-2xl flex flex-col items-center justify-center p-6 min-h-[260px]">
-            <p className="text-[10px] uppercase font-bold text-[#d4af37]/70 mb-2 tracking-[0.3em] craps-display">Dice Outcome</p>
-            <div className="w-full flex items-center justify-center relative z-20 scale-[0.7] sm:scale-[0.8] md:scale-90 mb-4 h-32 md:h-48 overflow-visible">
-              <CrapsDice val1={engine.dice[0]} val2={engine.dice[1]} isRolling={engine.isRolling} />
-            </div>
-            {engine.lastResult && !engine.isRolling && (
-              <p className="text-4xl font-black text-[#d4af37] craps-display tracking-tight">
-                {engine.dice[0] + engine.dice[1]}
+        <div className="relative flex-1 w-full max-w-7xl mx-auto px-3 py-4 sm:px-6 sm:py-6">
+          <main className="w-full max-w-full overflow-x-hidden pb-16 pt-1">
+            <header className="mb-5 text-center">
+              <h1 className="arc-display text-3xl font-bold uppercase tracking-[0.08em] text-white sm:text-4xl flex items-center justify-center gap-3">
+                Craps
+                <Dices className="w-7 h-7 text-cyan-400 drop-shadow-[0_0_12px_rgba(34,211,238,0.65)]" />
+              </h1>
+              <p className="mt-1.5 text-sm text-slate-400">
+                Pass line · place · field · props · provably fair · played in chips
               </p>
-            )}
-          </div>
+            </header>
 
-          <button
-            onClick={engine.rollDice}
-            disabled={engine.isRolling || engine.needsWallet || engine.isInitializing}
-            className="h-20 bg-[#d4af37] hover:bg-[#e6c358] disabled:opacity-50 text-[#0b3d2e] rounded-2xl font-black text-2xl craps-display tracking-[0.18em] shadow-[0_8px_24px_rgba(212,175,55,0.35)] active:scale-95 transition-all w-full flex items-center justify-center gap-2 cursor-pointer border-0 disabled:cursor-not-allowed"
-          >
-            {engine.isRolling ? <RotateCw className="w-5 h-5 animate-spin" /> : null}
-            {engine.isRolling ? 'ROLLING' : 'ROLL DICE'}
-          </button>
-        </aside>
-      </main>
+            <div className="mx-auto w-full max-w-6xl">
+              <div className="grid gap-4 lg:grid-cols-[320px_1fr]">
 
-      {/* Footer / chip rail */}
-      <footer className="relative z-10 h-auto md:h-28 bg-black/40 backdrop-blur-sm border-t border-[#d4af37]/25 flex flex-col md:flex-row items-center px-4 md:px-10 gap-6 py-4 md:py-0">
-        <div className="flex gap-3">
-          <button
-            onClick={engine.clearBets}
-            disabled={engine.isRolling || Object.keys(engine.bets).length === 0}
-            className="px-6 py-2 border border-[#d4af37]/40 rounded-lg text-xs font-bold uppercase tracking-[0.2em] text-[#f4e8c1] hover:bg-[#d4af37]/10 disabled:opacity-40 transition-colors bg-transparent cursor-pointer craps-display"
-          >
-            Clear Bets
-          </button>
+                {/* ───────── Controls rail ───────── */}
+                <Card className="arc-panel order-2 h-fit space-y-4 border-0 p-4 lg:order-1 lg:sticky lg:top-20">
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="text-xs uppercase tracking-wide text-slate-500">Balance</span>
+                    <div className="flex items-center gap-2">
+                      <span className="arc-mono text-sm tabular-nums text-amber-300 flex items-center gap-1">
+                        <Coins className="w-3.5 h-3.5 text-amber-300/70" />
+                        {formatChips(displayedChipBalance)}
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() => setExchangeOpen(true)}
+                        className="rounded border border-cyan-500/30 bg-cyan-500/10 px-2 py-0.5 text-[11px] font-semibold text-cyan-300 transition-colors hover:bg-cyan-500/20"
+                      >
+                        Buy
+                      </button>
+                    </div>
+                  </div>
+
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="text-xs uppercase tracking-wide text-slate-500">Phase</span>
+                    <span className="arc-display text-sm font-semibold tracking-[0.15em] text-slate-200 flex items-center gap-2">
+                      {engine.phase === 'COME_OUT' ? 'COME OUT' : 'POINT'}
+                      {engine.point && (
+                        <span className="bg-cyan-500 text-[#04121b] text-xs px-2 py-0.5 rounded arc-mono font-bold">
+                          {engine.point}
+                        </span>
+                      )}
+                    </span>
+                  </div>
+
+                  <div className="h-px bg-cyan-950/70" />
+
+                  <div className="space-y-2">
+                    <label className="text-xs uppercase tracking-wide text-slate-500">Chip</label>
+                    <CrapsChipRail activeChip={activeChip} onSelect={setActiveChip} />
+                  </div>
+
+                  <div className="flex items-center justify-between text-xs">
+                    <span className="uppercase tracking-wide text-slate-500">Bet total</span>
+                    <span className="arc-mono tabular-nums text-cyan-300">
+                      {totalBet.toLocaleString()} chips
+                    </span>
+                  </div>
+
+                  <Button
+                    type="button"
+                    variant="outline"
+                    disabled={engine.isRolling || Object.keys(engine.bets).length === 0}
+                    onClick={engine.clearBets}
+                    className="w-full border-cyan-950 bg-transparent hover:bg-cyan-500/10 disabled:opacity-40"
+                  >
+                    Clear bets
+                  </Button>
+
+                  <Button
+                    type="button"
+                    disabled={engine.isRolling || engine.needsWallet || engine.isInitializing}
+                    onClick={engine.rollDice}
+                    className="arc-display h-12 w-full bg-cyan-500 text-base font-bold uppercase tracking-widest text-[#03121B] shadow-[0_0_24px_-6px_rgba(34,211,238,0.8)] hover:bg-cyan-400 disabled:opacity-50 flex items-center justify-center gap-2"
+                  >
+                    {engine.isRolling ? <RotateCw className="w-4 h-4 animate-spin" /> : null}
+                    {engine.isRolling ? 'Rolling…' : 'Roll dice'}
+                  </Button>
+
+                  <div className="grid grid-cols-2 gap-x-3 gap-y-2 pt-1 text-xs">
+                    <button
+                      onClick={() => setRulesOpen(true)}
+                      className="text-slate-500 hover:text-cyan-400 transition-colors flex items-center gap-1.5 bg-transparent border-0 p-0 cursor-pointer"
+                    >
+                      <BookOpen className="w-3 h-3" /> Rules
+                    </button>
+                    <button
+                      onClick={() => setVerifyOpen(true)}
+                      className="text-slate-500 hover:text-cyan-400 transition-colors flex items-center gap-1.5 bg-transparent border-0 p-0 cursor-pointer"
+                    >
+                      <ShieldCheck className="w-3 h-3" /> Verify
+                    </button>
+                    <button
+                      onClick={() => setHistoryOpen(true)}
+                      className="text-slate-500 hover:text-cyan-400 transition-colors flex items-center gap-1.5 bg-transparent border-0 p-0 cursor-pointer"
+                    >
+                      <ScrollText className="w-3 h-3" /> History
+                    </button>
+                    <button
+                      onClick={() => { engine.resetGame(); tutorial.start(); }}
+                      className="text-slate-500 hover:text-cyan-400 transition-colors flex items-center gap-1.5 bg-transparent border-0 p-0 cursor-pointer"
+                    >
+                      <GraduationCap className="w-3 h-3" /> Tutorial
+                    </button>
+                  </div>
+
+                  {engine.commitment && (
+                    <button
+                      onClick={() => setVerifyOpen(true)}
+                      className="w-full text-center arc-mono text-[10px] text-slate-600 hover:text-cyan-400 transition-colors bg-transparent border-0 p-0 cursor-pointer truncate"
+                      title={`Server seed hash: ${engine.commitment.serverSeedHash}`}
+                    >
+                      {engine.commitment.serverSeedHash.slice(0, 8)}…{engine.commitment.serverSeedHash.slice(-6)} · n{engine.commitment.nonce}
+                    </button>
+                  )}
+                </Card>
+
+                {/* ───────── Game area ───────── */}
+                <div className="order-1 space-y-4 lg:order-2">
+                  {/* Shooter — dice + roll history */}
+                  <Card className="arc-panel border-0 p-3 sm:p-4">
+                    <div className="flex items-center justify-between mb-1">
+                      <span className="text-[10px] uppercase tracking-[0.25em] text-slate-500 arc-display">Shooter</span>
+                      <div className="flex gap-1">
+                        {engine.rollHistory.map((r, i) => (
+                          <span
+                            key={i}
+                            className={cn(
+                              'arc-mono flex items-center justify-center w-6 h-6 rounded text-xs font-bold',
+                              r === 7
+                                ? 'bg-rose-600/80 text-white'
+                                : [4, 5, 6, 8, 9, 10].includes(r)
+                                  ? 'bg-cyan-500 text-[#04121b]'
+                                  : 'bg-cyan-500/10 text-slate-400',
+                              i === 0 ? 'ring-1 ring-cyan-300/60 scale-105' : 'opacity-80',
+                            )}
+                          >
+                            {r}
+                          </span>
+                        ))}
+                      </div>
+                    </div>
+                    <div className="flex items-center justify-center min-h-[120px] relative">
+                      <div className="scale-[0.8] sm:scale-90">
+                        <CrapsDice val1={engine.dice[0]} val2={engine.dice[1]} isRolling={engine.isRolling} />
+                      </div>
+                      {engine.lastResult && !engine.isRolling && (
+                        <div className="absolute right-2 top-1/2 -translate-y-1/2 text-right">
+                          <span className="block arc-mono text-3xl font-bold text-cyan-300 leading-none">{sum}</span>
+                          {engine.lastResult.wins > 0 ? (
+                            <span className="arc-mono text-xs text-amber-300">+{engine.lastResult.wins.toLocaleString()}</span>
+                          ) : engine.lastResult.isSevenOut ? (
+                            <span className="arc-display text-xs text-rose-400 tracking-widest">7 OUT</span>
+                          ) : null}
+                        </div>
+                      )}
+                    </div>
+                  </Card>
+
+                  {/* Felt */}
+                  <Card className="arc-panel relative border-0 p-3 sm:p-4">
+                    <CrapsTable
+                      bets={engine.bets}
+                      point={engine.point}
+                      phase={engine.phase}
+                      activeChip={activeChip}
+                      placeBet={engine.placeBet}
+                      isRolling={engine.isRolling}
+                    />
+
+                    {showWin && engine.lastResult && (
+                      <div className="pointer-events-none absolute inset-0 flex items-center justify-center">
+                        <div className="arc-banner-in rounded-2xl border border-amber-400/40 bg-[#050E16]/70 px-10 py-6 text-center shadow-[0_0_60px_-12px_rgba(245,158,11,0.55)]">
+                          <span className="block arc-display text-4xl sm:text-6xl font-bold text-amber-300">
+                            +{engine.lastResult.wins.toLocaleString()}
+                          </span>
+                          <span className="block text-center text-[10px] tracking-[0.4em] text-amber-200/80 mt-1 arc-display">CHIPS</span>
+                        </div>
+                      </div>
+                    )}
+
+                    {engine.lastResult?.isSevenOut && !showWin && (
+                      <div className="pointer-events-none absolute inset-0 flex items-center justify-center">
+                        <div className="arc-banner-in rounded-2xl border border-rose-500/40 bg-[#050E16]/75 px-12 py-6 shadow-[0_0_60px_-12px_rgba(244,63,94,0.6)]">
+                          <span className="block arc-display text-5xl md:text-7xl font-bold text-rose-500 uppercase tracking-[0.2em]">
+                            7 Out
+                          </span>
+                        </div>
+                      </div>
+                    )}
+                  </Card>
+                </div>
+              </div>
+            </div>
+          </main>
         </div>
 
-        <CrapsChipRail activeChip={activeChip} onSelect={setActiveChip} />
+        <Footer />
 
-        <div className="w-auto md:w-52 text-center md:text-right">
-          <p className="text-[10px] uppercase font-bold text-[#d4af37]/70 tracking-[0.3em] craps-display">Bet Total</p>
-          <p className="text-xl md:text-2xl font-black text-[#d4af37] craps-display tracking-tight">
-            {totalBet.toLocaleString()}
-            <span className="text-[10px] text-[#f4e8c1]/50 ml-1.5 tracking-widest">CHIPS</span>
-          </p>
-        </div>
-      </footer>
-
+        {/* Modals */}
+        <CrapsHistoryModal open={historyOpen} onOpenChange={setHistoryOpen} />
+        <CrapsVerifyModal
+          open={verifyOpen}
+          onOpenChange={setVerifyOpen}
+          commitment={engine.commitment}
+          requestVerifyId={verifyOpen ? engine.commitment?.sessionId ?? null : null}
+          onSetClientSeed={engine.setClientSeedAndRestart}
+        />
+        <CrapsRulesModal open={rulesOpen} onOpenChange={setRulesOpen} />
+        <PokerChipExchangeModal
+          isOpen={exchangeOpen}
+          onClose={() => setExchangeOpen(false)}
+          walletAddress={address ?? null}
+          onExchangeComplete={() => void refetchBalance?.()}
+        />
       </div>
-      </GlobalMainNav>
-    </div>
+    </GlobalMainNav>
   );
 }
