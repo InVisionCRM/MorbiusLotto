@@ -436,7 +436,7 @@ async function initializeServices() {
     registerArcadeCrapsRoutes({ app, dbService, authService });
     registerArcadeBaccaratRoutes({ app, dbService });
     registerArcadeCrashRoutes({ app, dbService, authService });
-    registerArcadeRouletteRoutes({ app, dbService });
+    registerArcadeRouletteRoutes({ app, dbService, authService });
     registerMarqueeRoutes({ app, dbService });
     registerKenoRoutes({ app, dbService, authService });
     registerPlinkoChipRoutes({ app, dbService, authService });

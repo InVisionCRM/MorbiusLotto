@@ -15,6 +15,7 @@ import crypto from 'crypto';
 import type { Express, Request, Response } from 'express';
 import { logger } from '../utils/logger';
 import { verifyTelegramInitData } from '../services/telegram.service';
+import { SESSION_COOKIE_NAME } from '../middleware/require-auth';
 import { applyPokerChipDelta } from '../services/poker-chip-wallet';
 import { ProvablyFairService } from '../services/provably-fair.service';
 import {
@@ -30,10 +31,12 @@ import {
   type RouletteBet,
 } from '../services/arcade-roulette';
 import type { DatabaseService } from '../services/database.service';
+import type { AuthService } from '../services/auth.service';
 
 interface RegisterArcadeRouletteRoutesOptions {
   app: Express;
   dbService: DatabaseService;
+  authService: AuthService;
 }
 
 const pf = new ProvablyFairService();
@@ -68,8 +71,21 @@ function sanitizeBets(raw: unknown): RouletteBet[] {
 export function registerArcadeRouletteRoutes({
   app,
   dbService,
+  authService,
 }: RegisterArcadeRouletteRoutesOptions): void {
   const pool = dbService.getPool();
+
+  const AUTH_ERROR = 'No session — sign in on the web, or open from Telegram with a linked wallet.';
+
+  /** Caller's wallet: Telegram initData (Mini App) or the SIWE morb_session cookie (web /roulette2). */
+  async function resolveWallet(req: Request): Promise<string | null> {
+    const tgWallet = await walletFromInitData(dbService, req.body?.initData);
+    if (tgWallet) return tgWallet;
+    const token = (req as Request & { cookies?: Record<string, string> }).cookies?.[SESSION_COOKIE_NAME];
+    if (!token) return null;
+    const session = await authService.lookupSession(token);
+    return session ? session.walletAddress : null;
+  }
 
   // -------------------------------------------------------------------------
   // GET /api/arcade/roulette/info
@@ -99,9 +115,9 @@ export function registerArcadeRouletteRoutes({
   // -------------------------------------------------------------------------
   app.post('/api/arcade/roulette/spin', async (req: Request, res: Response) => {
     try {
-      const wallet = await walletFromInitData(dbService, req.body?.initData);
+      const wallet = await resolveWallet(req);
       if (!wallet) {
-        return res.status(401).json({ ok: false, error: 'Invalid Telegram session, or no wallet linked.' });
+        return res.status(401).json({ ok: false, error: AUTH_ERROR });
       }
 
       const bets = sanitizeBets(req.body?.bets);
@@ -183,6 +199,105 @@ export function registerArcadeRouletteRoutes({
       }
       logger.error('[arcade-roulette] spin failed', { error: msg });
       return res.status(500).json({ ok: false, error: 'Could not complete the spin.' });
+    }
+  });
+
+  // -------------------------------------------------------------------------
+  // GET /api/arcade/roulette/history — caller's recent spins.
+  // -------------------------------------------------------------------------
+  app.get('/api/arcade/roulette/history', async (req: Request, res: Response) => {
+    try {
+      const wallet = await resolveWallet(req);
+      if (!wallet) {
+        return res.status(401).json({ ok: false, error: AUTH_ERROR });
+      }
+      const limit = Math.max(1, Math.min(100, parseInt(String(req.query.limit ?? '25'), 10) || 25));
+      const r = await pool.query(
+        `SELECT id, bets, total_bet, result, total_payout, created_at
+           FROM arcade_roulette_spins
+          WHERE wallet_address = $1
+          ORDER BY created_at DESC
+          LIMIT $2`,
+        [wallet.toLowerCase(), limit],
+      );
+      return res.json({
+        ok: true,
+        spins: r.rows.map((row) => ({
+          spinId: row.id,
+          bets: row.bets,
+          totalBet: Number(row.total_bet),
+          result: Number(row.result),
+          totalPayout: Number(row.total_payout),
+          createdAt: row.created_at,
+        })),
+      });
+    } catch (err) {
+      logger.error('[arcade-roulette] history failed', { error: (err as Error)?.message });
+      return res.status(500).json({ ok: false, error: 'Could not load history.' });
+    }
+  });
+
+  // -------------------------------------------------------------------------
+  // GET /api/arcade/roulette/recent — public. Latest spins across all players.
+  // -------------------------------------------------------------------------
+  app.get('/api/arcade/roulette/recent', async (req: Request, res: Response) => {
+    const limit = Math.max(1, Math.min(50, parseInt(String(req.query.limit ?? '25'), 10) || 25));
+    try {
+      const r = await pool.query(
+        `SELECT id, wallet_address, total_bet, result, total_payout, created_at
+           FROM arcade_roulette_spins
+          ORDER BY created_at DESC
+          LIMIT $1`,
+        [limit],
+      );
+      return res.json({
+        ok: true,
+        spins: r.rows.map((row) => ({
+          spinId: row.id,
+          wallet: row.wallet_address,
+          totalBet: Number(row.total_bet),
+          result: Number(row.result),
+          totalPayout: Number(row.total_payout),
+          createdAt: row.created_at,
+        })),
+      });
+    } catch (err) {
+      logger.error('[arcade-roulette] recent failed', { error: (err as Error)?.message });
+      return res.status(500).json({ ok: false, error: 'internal error' });
+    }
+  });
+
+  // -------------------------------------------------------------------------
+  // GET /api/arcade/roulette/leaderboard — public. All-time top players by net.
+  // -------------------------------------------------------------------------
+  app.get('/api/arcade/roulette/leaderboard', async (req: Request, res: Response) => {
+    const limit = Math.max(1, Math.min(25, parseInt(String(req.query.limit ?? '10'), 10) || 10));
+    try {
+      const r = await pool.query(
+        `SELECT wallet_address,
+                COUNT(*)::int AS spins,
+                SUM(total_bet)::text AS wagered,
+                SUM(total_payout)::text AS won,
+                (SUM(total_payout) - SUM(total_bet))::text AS net
+           FROM arcade_roulette_spins
+          GROUP BY wallet_address
+          ORDER BY SUM(total_payout) - SUM(total_bet) DESC
+          LIMIT $1`,
+        [limit],
+      );
+      return res.json({
+        ok: true,
+        players: r.rows.map((row) => ({
+          wallet: row.wallet_address,
+          spins: Number(row.spins),
+          wagered: String(row.wagered ?? '0'),
+          won: String(row.won ?? '0'),
+          net: String(row.net ?? '0'),
+        })),
+      });
+    } catch (err) {
+      logger.error('[arcade-roulette] leaderboard failed', { error: (err as Error)?.message });
+      return res.status(500).json({ ok: false, error: 'internal error' });
     }
   });
 

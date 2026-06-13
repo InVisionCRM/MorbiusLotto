@@ -69,10 +69,6 @@ import {
   IconTrendingUp,
   IconRocket,
   IconLifebuoy,
-  IconArrowsUpDown,
-  IconPlayCard,
-  IconStairsUp,
-  IconCoin,
 } from '@tabler/icons-react';
 
 // Lazy-load modals — only pulled into the bundle when first opened
@@ -87,7 +83,7 @@ const ProfileSettingsModal = lazy(() => import('@/components/shared/ProfileSetti
 
 export type NavPage =
   | 'blackjack' | 'plinko' | 'lottery' | 'keno' | 'mines' | 'dice' | 'limbo' | 'home' | 'poker' | 'blackjackMulti'
-  | 'crash' | 'roulette2' | 'hilo' | 'baccarat' | 'towers' | 'coinflip' | 'craps';
+  | 'crash' | 'roulette2' | 'craps';
 
 const PATH_TO_PAGE: Record<string, NavPage> = {
   '/BLACKJACK': 'blackjack',
@@ -101,10 +97,6 @@ const PATH_TO_PAGE: Record<string, NavPage> = {
   '/limbo2': 'limbo',
   '/crash': 'crash',
   '/roulette2': 'roulette2',
-  '/hilo': 'hilo',
-  '/baccarat': 'baccarat',
-  '/towers': 'towers',
-  '/coinflip': 'coinflip',
   '/poker': 'poker',
   '/blackjack-multi': 'blackjackMulti',
   '/craps': 'craps',
@@ -112,7 +104,7 @@ const PATH_TO_PAGE: Record<string, NavPage> = {
 
 type OtherGameIcon =
   | 'blackjack' | 'plinko' | 'users' | 'ticket' | 'grid' | 'cards' | 'mine' | 'dice' | 'limbo'
-  | 'crash' | 'roulette' | 'hilo' | 'baccarat' | 'towers' | 'coinflip' | 'craps';
+  | 'crash' | 'roulette' | 'craps';
 
 type OtherGameNavItem =
   | { label: string; href: string; icon: OtherGameIcon }
@@ -135,10 +127,6 @@ const OTHER_GAMES: readonly OtherGameNavItem[] = [
   { label: 'Limbo', href: '/limbo2', icon: 'limbo' },
   { label: 'Crash', href: '/crash', icon: 'crash' },
   { label: 'Roulette', href: '/roulette2', icon: 'roulette' },
-  { label: 'Hi-Lo', href: '/hilo', icon: 'hilo' },
-  { label: 'Baccarat', href: '/baccarat', icon: 'baccarat' },
-  { label: 'Towers', href: '/towers', icon: 'towers' },
-  { label: 'Coin Flip', href: '/coinflip', icon: 'coinflip' },
 ];
 
 
@@ -280,10 +268,6 @@ const OTHER_GAME_ICONS: Record<OtherGameIcon, React.ReactNode> = {
   limbo: <IconTrendingUp size={20} className="text-white shrink-0" aria-hidden />,
   crash: <IconRocket size={20} className="text-white shrink-0" aria-hidden />,
   roulette: <IconLifebuoy size={20} className="text-white shrink-0" aria-hidden />,
-  hilo: <IconArrowsUpDown size={20} className="text-white shrink-0" aria-hidden />,
-  baccarat: <IconPlayCard size={20} className="text-white shrink-0" aria-hidden />,
-  towers: <IconStairsUp size={20} className="text-white shrink-0" aria-hidden />,
-  coinflip: <IconCoin size={20} className="text-white shrink-0" aria-hidden />,
   craps: <IconDice size={20} className="text-white shrink-0" aria-hidden />,
 };
 
