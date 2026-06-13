@@ -1,0 +1,89 @@
+/* ── Craps — Emerald Royale aesthetic + 3D dice ───────────────────────────────
+   Scoped to .craps-root so body styles can't leak into the rest of morbius.io.
+   Tailwind classes still work freely; this file owns the things Tailwind can't:
+   the felt texture, the dice 3D transforms, and the Cinzel display font. */
+
+.craps-root {
+  --emerald: #0b3d2e;
+  --emerald-deep: #062018;
+  --gold: #d4af37;
+  --gold-bright: #e6c358;
+  --cream: #f4e8c1;
+}
+
+/* Cinzel comes from next/font/google in app/craps/layout.tsx — exposed as
+   --font-cinzel. Apply it where the felt typography sells the high-roller feel. */
+.craps-root .craps-display,
+.craps-root .craps-display * {
+  font-family: var(--font-cinzel), 'Cinzel', 'Trajan Pro', Georgia, serif;
+  letter-spacing: 0.04em;
+}
+
+/* Felt body. Radial vignette + faint stitched texture. Height is dictated by
+   the parent (the outer min-h-screen wrapper + GlobalMainNav content area) —
+   we just `flex-1` ourselves into whatever room is left. */
+.craps-root.craps-page {
+  background:
+    radial-gradient(ellipse at 50% 40%, #144d3a 0%, var(--emerald) 50%, var(--emerald-deep) 100%);
+  color: var(--cream);
+}
+
+.craps-root .felt-texture {
+  background-image:
+    radial-gradient(circle at 2px 2px, rgba(212, 175, 55, 0.06) 1px, transparent 0);
+  background-size: 18px 18px;
+}
+
+/* ── 3D dice ──────────────────────────────────────────────────────────────────
+   Ivory faces with charcoal pips — the high-end casino feel that pairs with the
+   green/gold palette. Each die is a 6-face cube; face index N is rotated into
+   place inside the cube with translateZ(30px). */
+
+.craps-root .dice-container {
+  perspective: 800px;
+}
+
+.craps-root .die-body {
+  width: 60px;
+  height: 60px;
+  position: relative;
+  transform-style: preserve-3d;
+  display: inline-block;
+}
+
+.craps-root .die-face {
+  position: absolute;
+  width: 60px;
+  height: 60px;
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  grid-template-rows: repeat(3, 1fr);
+  padding: 8px;
+  box-sizing: border-box;
+  background:
+    radial-gradient(circle at 30% 28%, #fffaf0 0%, #f7ecc8 60%, #d9c79a 100%);
+  border-radius: 10px;
+  box-shadow:
+    inset 0 0 0 1px rgba(212, 175, 55, 0.35),
+    inset 0 -3px 6px rgba(0, 0, 0, 0.12),
+    0 2px 6px rgba(0, 0, 0, 0.35);
+}
+
+.craps-root .die-face > div {
+  width: 12px;
+  height: 12px;
+  margin: auto;
+  border-radius: 50%;
+}
+
+.craps-root .die-face > div.dot {
+  background: radial-gradient(circle at 30% 30%, #4a352a 0%, #1a0c08 100%);
+  box-shadow: inset 0 1px 1px rgba(255, 255, 255, 0.15);
+}
+
+.craps-root .die-face-1 { transform: rotateY(0deg)   translateZ(30px); }
+.craps-root .die-face-2 { transform: rotateY(90deg)  translateZ(30px); }
+.craps-root .die-face-3 { transform: rotateX(90deg)  translateZ(30px); }
+.craps-root .die-face-4 { transform: rotateX(-90deg) translateZ(30px); }
+.craps-root .die-face-5 { transform: rotateY(-90deg) translateZ(30px); }
+.craps-root .die-face-6 { transform: rotateY(180deg) translateZ(30px); }

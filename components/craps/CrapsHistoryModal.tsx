@@ -1,0 +1,208 @@
+'use client';
+
+// Per-player craps history modal — sortable rolls table + headline stats
+// (rolls, net P&L, biggest win, points hit, seven-outs). Mirrors the spirit
+// of PlinkoHistoryModal: shadcn Dialog, stats card row, table with sort.
+
+import { useMemo, useState } from 'react';
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { Button } from '@/components/ui/button';
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from '@/components/ui/table';
+import {
+  IconArrowsSort,
+  IconSortAscending,
+  IconSortDescending,
+  IconExternalLink,
+  IconRefresh,
+} from '@tabler/icons-react';
+import { useCrapsHistory, type CrapsHistoryRoll } from '@/hooks/use-craps-history';
+
+interface Props {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+}
+
+type SortField = 'createdAt' | 'sum' | 'wins' | 'losses';
+type SortDir = 'asc' | 'desc';
+
+const fmt = (b: bigint) => b.toLocaleString();
+const formatDate = (iso: string) => new Date(iso).toLocaleString();
+
+export function CrapsHistoryModal({ open, onOpenChange }: Props) {
+  const { rolls, stats, isLoading, refetch, enabled } = useCrapsHistory(200);
+  const [sortField, setSortField] = useState<SortField>('createdAt');
+  const [sortDir, setSortDir] = useState<SortDir>('desc');
+
+  const sorted = useMemo(() => {
+    const arr = [...rolls];
+    arr.sort((a, b) => {
+      const dir = sortDir === 'asc' ? 1 : -1;
+      switch (sortField) {
+        case 'sum':
+          return (a.sum - b.sum) * dir;
+        case 'wins':
+          return (BigInt(a.wins) > BigInt(b.wins) ? 1 : -1) * dir;
+        case 'losses':
+          return (BigInt(a.losses) > BigInt(b.losses) ? 1 : -1) * dir;
+        case 'createdAt':
+        default:
+          return (new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime()) * dir;
+      }
+    });
+    return arr;
+  }, [rolls, sortField, sortDir]);
+
+  const onSort = (f: SortField) => {
+    if (sortField === f) setSortDir((d) => (d === 'asc' ? 'desc' : 'asc'));
+    else { setSortField(f); setSortDir('desc'); }
+  };
+
+  const SortIcon = ({ field }: { field: SortField }) => {
+    if (sortField !== field) return <IconArrowsSort size={11} className="text-[#f4e8c1]/30 ml-1 inline" />;
+    return sortDir === 'asc'
+      ? <IconSortAscending size={11} className="text-[#d4af37] ml-1 inline" />
+      : <IconSortDescending size={11} className="text-[#d4af37] ml-1 inline" />;
+  };
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent
+        className="bg-[#0a2e22]/95 border-2 border-[#d4af37]/40 text-[#f4e8c1] max-w-4xl"
+        style={{ fontFamily: 'var(--font-cinzel), Cinzel, serif' }}
+      >
+        <DialogHeader>
+          <DialogTitle className="text-2xl font-black text-[#d4af37] tracking-[0.12em] flex items-center justify-between">
+            <span>CRAPS HISTORY</span>
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => void refetch()}
+              className="text-[#f4e8c1]/70 hover:text-[#d4af37] hover:bg-[#d4af37]/10"
+            >
+              <IconRefresh size={14} className="mr-1" />
+              Refresh
+            </Button>
+          </DialogTitle>
+        </DialogHeader>
+
+        {!enabled && (
+          <div className="py-12 text-center text-[#f4e8c1]/70">
+            Connect your wallet to see your roll history.
+          </div>
+        )}
+
+        {enabled && (
+          <>
+            {/* Stats row */}
+            {stats && (
+              <div className="grid grid-cols-2 md:grid-cols-5 gap-3 mb-4">
+                <StatCard label="Rolls" value={stats.rolls.toLocaleString()} />
+                <StatCard
+                  label="Net P&amp;L"
+                  value={`${stats.net >= 0n ? '+' : ''}${fmt(stats.net)}`}
+                  accent={stats.net > 0n ? 'win' : stats.net < 0n ? 'loss' : undefined}
+                />
+                <StatCard label="Biggest Win" value={fmt(stats.biggestWin)} />
+                <StatCard label="Points Hit" value={stats.pointsMade.toLocaleString()} />
+                <StatCard label="Seven Outs" value={stats.sevenOuts.toLocaleString()} accent="loss" />
+              </div>
+            )}
+
+            {/* Table */}
+            <div className="border border-[#d4af37]/25 rounded-lg overflow-hidden max-h-[420px] overflow-y-auto">
+              <Table>
+                <TableHeader>
+                  <TableRow className="bg-black/30 border-b border-[#d4af37]/25 hover:bg-black/30">
+                    <TableHead onClick={() => onSort('createdAt')} className="cursor-pointer text-[#d4af37]/80 text-[10px] uppercase tracking-[0.18em]">
+                      When <SortIcon field="createdAt" />
+                    </TableHead>
+                    <TableHead className="text-[#d4af37]/80 text-[10px] uppercase tracking-[0.18em]">Dice</TableHead>
+                    <TableHead onClick={() => onSort('sum')} className="cursor-pointer text-[#d4af37]/80 text-[10px] uppercase tracking-[0.18em]">
+                      Sum <SortIcon field="sum" />
+                    </TableHead>
+                    <TableHead className="text-[#d4af37]/80 text-[10px] uppercase tracking-[0.18em]">Phase</TableHead>
+                    <TableHead onClick={() => onSort('wins')} className="cursor-pointer text-[#d4af37]/80 text-[10px] uppercase tracking-[0.18em] text-right">
+                      Won <SortIcon field="wins" />
+                    </TableHead>
+                    <TableHead onClick={() => onSort('losses')} className="cursor-pointer text-[#d4af37]/80 text-[10px] uppercase tracking-[0.18em] text-right">
+                      Lost <SortIcon field="losses" />
+                    </TableHead>
+                    <TableHead className="text-[#d4af37]/80 text-[10px] uppercase tracking-[0.18em] text-right">Net</TableHead>
+                    <TableHead className="text-[#d4af37]/80 text-[10px] uppercase tracking-[0.18em] text-right">Verify</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {isLoading && (
+                    <TableRow><TableCell colSpan={8} className="text-center text-[#f4e8c1]/50 py-8">Loading…</TableCell></TableRow>
+                  )}
+                  {!isLoading && sorted.length === 0 && (
+                    <TableRow><TableCell colSpan={8} className="text-center text-[#f4e8c1]/50 py-8">No rolls yet — place a bet and throw the dice.</TableCell></TableRow>
+                  )}
+                  {!isLoading && sorted.map((r) => <Row key={r.rollId} roll={r} />)}
+                </TableBody>
+              </Table>
+            </div>
+          </>
+        )}
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+function StatCard({ label, value, accent }: { label: string; value: string; accent?: 'win' | 'loss' }) {
+  const color = accent === 'win' ? '#86efac' : accent === 'loss' ? '#fca5a5' : '#d4af37';
+  return (
+    <div className="bg-black/30 border border-[#d4af37]/20 rounded-lg p-3">
+      <div className="text-[9px] uppercase tracking-[0.22em] text-[#d4af37]/70 mb-1">{label}</div>
+      <div className="text-lg font-black tracking-tight" style={{ color }}>{value}</div>
+    </div>
+  );
+}
+
+function Row({ roll }: { roll: CrapsHistoryRoll }) {
+  const wins = BigInt(roll.wins);
+  const losses = BigInt(roll.losses);
+  const net = wins - losses;
+  const flag = roll.isSevenOut ? '7-OUT' : roll.isPoint ? 'POINT HIT' : null;
+
+  return (
+    <TableRow className="border-b border-[#d4af37]/10 hover:bg-[#d4af37]/5">
+      <TableCell className="text-xs text-[#f4e8c1]/80 whitespace-nowrap">{formatDate(roll.createdAt)}</TableCell>
+      <TableCell className="text-sm font-mono text-[#f4e8c1]">{roll.die1} + {roll.die2}</TableCell>
+      <TableCell className="text-sm font-black text-[#d4af37]">{roll.sum}</TableCell>
+      <TableCell className="text-xs">
+        <span className="text-[#f4e8c1]/70">{roll.phaseBefore === 'COME_OUT' ? 'Come Out' : `Point ${roll.pointBefore ?? '—'}`}</span>
+        {flag && (
+          <span className={`ml-2 px-1.5 py-0.5 rounded text-[9px] font-black tracking-widest ${
+            roll.isSevenOut ? 'bg-red-700/40 text-red-200' : 'bg-emerald-600/40 text-emerald-200'
+          }`}>
+            {flag}
+          </span>
+        )}
+      </TableCell>
+      <TableCell className="text-right text-sm font-mono text-emerald-300">{wins > 0n ? `+${fmt(wins)}` : '—'}</TableCell>
+      <TableCell className="text-right text-sm font-mono text-red-300">{losses > 0n ? `−${fmt(losses)}` : '—'}</TableCell>
+      <TableCell className={`text-right text-sm font-mono font-black ${net > 0n ? 'text-emerald-300' : net < 0n ? 'text-red-300' : 'text-[#f4e8c1]/50'}`}>
+        {net === 0n ? '0' : `${net > 0n ? '+' : ''}${fmt(net)}`}
+      </TableCell>
+      <TableCell className="text-right">
+        <a
+          href={`/api/arcade/craps/verify/${roll.sessionId}`}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="inline-flex items-center text-[#d4af37]/70 hover:text-[#d4af37] text-xs"
+          title="Open verification record"
+        >
+          <IconExternalLink size={12} />
+        </a>
+      </TableCell>
+    </TableRow>
+  );
+}

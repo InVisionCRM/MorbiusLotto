@@ -55,6 +55,12 @@ export function ledgerDisplay(entry: PokerChipLedgerEntry): LedgerDisplay {
       return { direction, label: 'Creator fee', meta: refType ?? 'Table host' };
     case 'platform_fee':
       return { direction, label: 'Platform fee', meta: refType ?? 'Platform' };
+    case 'arcade_craps_bet':
+      return { direction, label: 'Craps bet', meta: refId ? `Session ${shortRef(refId)}` : 'Craps' };
+    case 'arcade_craps_payout':
+      return { direction, label: 'Craps payout', meta: refId ? `Session ${shortRef(refId)}` : 'Craps' };
+    case 'arcade_craps_refund':
+      return { direction, label: 'Craps refund', meta: refId ? `Session ${shortRef(refId)}` : 'Craps' };
     default:
       return {
         direction,
