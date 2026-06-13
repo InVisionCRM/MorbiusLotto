@@ -119,6 +119,22 @@ const CATEGORIES: Category[] = [
         tagline: '6-of-55 draws. Jackpot rolls until somebody hits.',
         image: '/morbius/Morbius_Lottery.png',
       },
+      {
+        key: 'crash',
+        href: '/crash',
+        title: 'Crash',
+        tagline: 'Ride the rocket. Cash out before it blows.',
+        image: '/Games-Section/Crash-GS.png',
+        badge: 'New',
+      },
+      {
+        key: 'roulette',
+        href: '/roulette2',
+        title: 'Roulette',
+        tagline: 'European single zero. Place your chips, spin the wheel.',
+        image: '/Games-Section/Roulette-GS.png',
+        badge: 'New',
+      },
     ],
   },
   {
