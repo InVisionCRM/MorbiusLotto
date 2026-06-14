@@ -125,7 +125,10 @@ export function VideoPokerCard({
         onClick={onToggle}
         aria-pressed={held}
         aria-label={card != null ? `${vpRankLabel(card)}${vpSuitGlyph(card)} — ${held ? 'held' : 'tap to hold'}` : 'card'}
-        className="transition-transform hover:-translate-y-1 focus:outline-none focus-visible:-translate-y-1"
+        className={[
+          'focus:outline-none',
+          held ? 'vp-held-lift' : 'transition-transform hover:-translate-y-1 focus-visible:-translate-y-1',
+        ].join(' ')}
       >
         {body}
       </button>

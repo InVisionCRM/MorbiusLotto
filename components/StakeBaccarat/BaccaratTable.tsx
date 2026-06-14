@@ -168,8 +168,10 @@ export function BaccaratTable({
 
   const sideClass = (won: boolean) =>
     [
-      'flex flex-col items-center gap-2 rounded-xl px-2 py-3 transition-shadow sm:px-4',
-      won ? 'bg-white/[0.025] ring-1 ring-cyan-500/20' : '',
+      'flex flex-col items-center gap-2 rounded-xl px-2 py-3 transition-all duration-500 sm:px-4',
+      won
+        ? 'bg-white/[0.045] ring-1 ring-cyan-400/40 shadow-[0_0_28px_-8px_rgba(34,211,238,0.55),inset_0_1px_0_rgba(255,255,255,0.07)]'
+        : '',
     ].join(' ')
 
   return (

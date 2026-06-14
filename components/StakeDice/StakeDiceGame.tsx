@@ -535,9 +535,12 @@ export function StakeDiceGame() {
               />
               {lastRoll && (
                 <div
+                  key={lastRoll.roundId}
                   className={[
-                    'absolute top-1/2 h-3.5 w-3.5 -translate-x-1/2 -translate-y-1/2 rounded-full ring-2',
-                    lastRoll.won ? 'bg-cyan-300 ring-cyan-500/60' : 'bg-rose-400 ring-rose-500/60',
+                    'arc-banner-in absolute top-1/2 h-4 w-4 -translate-x-1/2 -translate-y-1/2 rounded-full ring-2',
+                    lastRoll.won
+                      ? 'bg-cyan-300 ring-cyan-400 shadow-[0_0_10px_2px_rgba(34,211,238,0.8)]'
+                      : 'bg-rose-400 ring-rose-500/60 shadow-[0_0_8px_1px_rgba(244,63,94,0.6)]',
                   ].join(' ')}
                   style={{ left: `${lastRoll.rollX100 / 100}%` }}
                   aria-hidden

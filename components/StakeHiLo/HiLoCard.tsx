@@ -46,7 +46,7 @@ export function HiLoCard({
     'relative shrink-0 select-none',
     FRAME[size],
     flip ? 'hilo-flip-in' : '',
-    busted ? 'hilo-bust-flash' : '',
+    busted ? 'hilo-bust-flash' : flip && !busted && card && size === 'lg' ? 'hilo-win-glow' : '',
     dimmed ? 'opacity-50' : '',
     className,
   ]

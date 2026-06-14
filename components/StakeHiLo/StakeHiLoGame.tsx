@@ -361,10 +361,12 @@ export function StakeHiLoGame() {
         disabled={!canPick || impossible || phase === 'picking'}
         onClick={() => void doPick(direction)}
         className={[
-          'group flex flex-1 flex-col items-center gap-1 rounded-xl border py-4 transition-all disabled:cursor-not-allowed disabled:opacity-40',
+          'group flex flex-1 flex-col items-center gap-1 rounded-xl border py-4',
+          'transition-all duration-100 disabled:cursor-not-allowed disabled:opacity-40',
+          'active:scale-[0.96] active:brightness-90',
           hi
-            ? 'border-cyan-500/40 hover:border-cyan-400 hover:bg-cyan-500/10'
-            : 'border-amber-500/40 hover:border-amber-400 hover:bg-amber-500/10',
+            ? 'border-cyan-500/40 hover:border-cyan-400 hover:bg-cyan-500/10 hover:shadow-[0_0_18px_-6px_rgba(34,211,238,0.5)]'
+            : 'border-amber-500/40 hover:border-amber-400 hover:bg-amber-500/10 hover:shadow-[0_0_18px_-6px_rgba(245,158,11,0.45)]',
         ].join(' ')}
       >
         <span

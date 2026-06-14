@@ -57,7 +57,7 @@ export function KenoBoard({ selected, drawn, settled, disabled, onToggle }: Keno
           // pickPending (lit) until settled, then pickMiss (dim).
           cls = isPickMiss
             ? 'bg-[#0A1622]/40 text-slate-600 border border-slate-800/60'
-            : 'bg-cyan-500/15 text-cyan-200 border border-cyan-400/70 shadow-[0_0_16px_-4px] shadow-cyan-500/60'
+            : 'keno-selected-breathe bg-cyan-500/15 text-cyan-200 border border-cyan-400/70'
         } else if (drawing && settled) {
           cls = 'bg-[#0A1622]/40 text-slate-600 border border-slate-800/50'
         }

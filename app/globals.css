@@ -1359,19 +1359,26 @@ body {
 /* ───────── Keno (server-side / Stake-style) ───────── */
 /* Hit tile: a bouncy pop as each of your matched numbers is revealed. */
 @keyframes keno-pop {
-  0%   { transform: scale(0.5); }
-  55%  { transform: scale(1.22); }
-  78%  { transform: scale(0.94); }
-  100% { transform: scale(1); }
+  0%   { transform: scale(0.45); filter: brightness(2.5); }
+  50%  { transform: scale(1.28); filter: brightness(1.3); }
+  72%  { transform: scale(0.93); filter: brightness(1); }
+  88%  { transform: scale(1.04); }
+  100% { transform: scale(1); filter: brightness(1); }
 }
-.keno-pop { animation: keno-pop 0.42s cubic-bezier(0.34, 1.56, 0.64, 1) both; }
+.keno-pop { animation: keno-pop 0.46s cubic-bezier(0.34, 1.56, 0.64, 1) both; }
 
-/* Persistent soft glow on a hit after it has popped. */
+/* Persistent pulse glow on a hit after it has popped. */
 @keyframes keno-hit-glow {
-  0%, 100% { box-shadow: 0 0 16px -3px rgba(34, 211, 238, 0.55); }
-  50%      { box-shadow: 0 0 24px 1px rgba(34, 211, 238, 0.85); }
+  0%, 100% {
+    box-shadow: 0 0 12px -2px rgba(34, 211, 238, 0.5),
+                inset 0 0 8px -3px rgba(34, 211, 238, 0.2);
+  }
+  50% {
+    box-shadow: 0 0 28px 2px rgba(34, 211, 238, 0.9),
+                inset 0 0 14px -2px rgba(34, 211, 238, 0.4);
+  }
 }
-.keno-hit-glow { animation: keno-hit-glow 1.2s ease-in-out infinite; }
+.keno-hit-glow { animation: keno-hit-glow 1.1s ease-in-out infinite; }
 
 /* Drawn-but-not-picked: a marker dot scales into the tile centre. */
 @keyframes keno-dot-in {
@@ -1401,29 +1408,52 @@ body {
   font-family: var(--font-arc-mono), ui-monospace, 'JetBrains Mono', monospace;
 }
 
-/* Glass panel sitting in the abyss: faint cyan edge + top highlight. */
+/* Glass panel sitting in the abyss: layered shadows for real depth. */
 .arc-panel {
   background:
-    linear-gradient(rgba(255, 255, 255, 0.03), rgba(255, 255, 255, 0) 18%),
-    rgba(8, 20, 31, 0.78);
-  border: 1px solid rgba(34, 211, 238, 0.12);
-  box-shadow: 0 18px 40px -24px rgba(0, 0, 0, 0.9);
+    linear-gradient(rgba(255, 255, 255, 0.04), rgba(255, 255, 255, 0) 22%),
+    rgba(8, 20, 31, 0.84);
+  border: 1px solid rgba(34, 211, 238, 0.15);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.055),
+    inset 0 0 0 0.5px rgba(34, 211, 238, 0.07),
+    0 2px 8px -4px rgba(0, 0, 0, 0.7),
+    0 20px 48px -20px rgba(0, 0, 0, 0.95),
+    0 0 0 0.5px rgba(0, 0, 0, 0.35);
 }
 
-/* Win banner: surfaces over the board once the draw settles on a paying hit. */
+/* Win banner: slides up from below + scale pop for drama. */
 @keyframes arc-banner-in {
-  0%   { transform: scale(0.7); opacity: 0; }
-  55%  { transform: scale(1.06); opacity: 1; }
-  100% { transform: scale(1); opacity: 1; }
+  0%   { transform: translateY(10px) scale(0.72); opacity: 0; filter: blur(1px); }
+  60%  { transform: translateY(-3px) scale(1.06); opacity: 1; filter: blur(0); }
+  100% { transform: translateY(0) scale(1); opacity: 1; filter: blur(0); }
 }
-.arc-banner-in { animation: arc-banner-in 0.38s cubic-bezier(0.34, 1.56, 0.64, 1) both; }
+.arc-banner-in { animation: arc-banner-in 0.44s cubic-bezier(0.34, 1.56, 0.64, 1) both; }
+
+/* Primary CTA buttons: micro-lift on hover, satisfying press on active. */
+button.arc-display:not(:disabled) {
+  transition: transform 0.12s ease, filter 0.12s ease, box-shadow 0.12s ease;
+}
+button.arc-display:not(:disabled):hover  { transform: translateY(-1px); filter: brightness(1.07); }
+button.arc-display:not(:disabled):active { transform: translateY(1px) scale(0.975); filter: brightness(0.92); }
 
 /* Idle tile lift on hover — kept in CSS so all 40 tiles share one rule. */
 .keno-tile {
-  transition: transform 0.15s ease, background-color 0.15s ease,
-    border-color 0.15s ease, box-shadow 0.15s ease, color 0.15s ease;
+  transition: transform 0.14s ease, background-color 0.14s ease,
+    border-color 0.14s ease, box-shadow 0.14s ease, color 0.14s ease;
 }
-.keno-tile:not(:disabled):hover { transform: translateY(-2px); }
+.keno-tile:not(:disabled):hover {
+  transform: translateY(-3px);
+  box-shadow: 0 4px 12px -4px rgba(34, 211, 238, 0.25);
+}
+.keno-tile:not(:disabled):active { transform: translateY(0) scale(0.95); }
+
+/* Keno: selected-pending tiles breathe while waiting for the draw to settle. */
+@keyframes keno-selected-breathe {
+  0%, 100% { opacity: 1; box-shadow: 0 0 16px -4px rgba(34, 211, 238, 0.6); }
+  50%       { opacity: 0.88; box-shadow: 0 0 24px -2px rgba(34, 211, 238, 0.85); }
+}
+.keno-selected-breathe { animation: keno-selected-breathe 1.5s ease-in-out infinite; }
 
 /* Mines: the hit bomb rattles its cell once on reveal. */
 @keyframes mine-shake {
@@ -1436,6 +1466,48 @@ body {
   90% { transform: translate(1px, 0) rotate(0); }
 }
 .mine-shake { animation: mine-shake 0.5s cubic-bezier(0.36, 0.07, 0.19, 0.97) both; }
+
+/* Mines: gem reveal sparkle — twin ring expansion burst on safe-cell pop. */
+@keyframes gem-sparkle {
+  0%   { box-shadow: 0 0 0 0 rgba(34,211,238,0.85), 0 0 18px -4px rgba(34,211,238,0.5); }
+  50%  { box-shadow: 0 0 0 10px rgba(34,211,238,0), 0 0 36px 2px rgba(34,211,238,0.85); }
+  100% { box-shadow: 0 0 0 0 rgba(34,211,238,0), 0 0 18px -4px rgba(34,211,238,0.55); }
+}
+.gem-sparkle { animation: gem-sparkle 0.65s cubic-bezier(0.22, 1.2, 0.5, 1) both; }
+
+/* Towers: floor safely climbed — outward cyan ring burst. */
+@keyframes tower-safe-glow {
+  0%   { box-shadow: 0 0 0 0 rgba(34,211,238,0.9); }
+  55%  { box-shadow: 0 0 0 10px rgba(34,211,238,0), 0 0 26px 4px rgba(34,211,238,0.55); }
+  100% { box-shadow: 0 0 0 0 rgba(34,211,238,0), 0 0 0 0 rgba(34,211,238,0); }
+}
+.tower-safe-glow { animation: tower-safe-glow 0.6s cubic-bezier(0.22, 1.2, 0.5, 1) both; }
+
+/* Towers: the tile whose bomb was stepped on — rose flash into a lingering glow. */
+@keyframes tower-bust-flash {
+  0%   { box-shadow: 0 0 0 0 rgba(244,63,94,0.9); }
+  40%  { box-shadow: 0 0 0 10px rgba(244,63,94,0), 0 0 32px 6px rgba(244,63,94,0.8); }
+  100% { box-shadow: 0 0 14px 2px rgba(244,63,94,0.4); }
+}
+.tower-bust-flash { animation: tower-bust-flash 0.7s ease-out both; }
+
+/* Hi-Lo: a clean non-bust reveal gets a brief cyan glow to mark the safe pick. */
+@keyframes hilo-win-glow {
+  0%   { box-shadow: 0 14px 36px -14px rgba(0,0,0,0.85), 0 0 0 0 rgba(34,211,238,0); }
+  40%  { box-shadow: 0 14px 36px -14px rgba(0,0,0,0.85), 0 0 28px 4px rgba(34,211,238,0.65); }
+  100% { box-shadow: 0 14px 36px -14px rgba(0,0,0,0.85), 0 0 0 0 rgba(34,211,238,0); }
+}
+.hilo-win-glow { animation: hilo-win-glow 0.75s ease-out both; }
+
+/* Video Poker: held card lifts and glows cyan — pure CSS, no JS needed. */
+.vp-held-lift {
+  transform: translateY(-7px);
+  transition: transform 0.2s cubic-bezier(0.34, 1.56, 0.64, 1),
+              box-shadow 0.2s ease,
+              filter 0.2s ease;
+  box-shadow: 0 10px 24px -8px rgba(34, 211, 238, 0.55);
+  filter: brightness(1.04);
+}
 
 /* ── Baccarat (/baccarat): cards fly in from the shoe (top-right), then a
    3D flip reveals the face. Outer .bacc-deal-in slides; inner .bacc-flip-inner
@@ -1570,6 +1642,11 @@ body {
 @media (prefers-reduced-motion: reduce) {
   .keno-pop, .keno-hit-glow, .keno-dot, .keno-cell-flash, .arc-banner-in, .mine-shake,
   .bacc-deal-in, .bacc-flip-inner, .bacc-total-pop, .hilo-flip-in, .hilo-bust-flash,
-  .vp-card-deal, .vp-draw-flip-wrap, .vp-win-pulse { animation: none; }
+  .vp-card-deal, .vp-draw-flip-wrap, .vp-win-pulse,
+  .gem-sparkle, .tower-safe-glow, .tower-bust-flash, .hilo-win-glow,
+  .keno-selected-breathe { animation: none; }
   .keno-tile, .keno-tile:not(:disabled):hover { transition: none; transform: none; }
+  button.arc-display:not(:disabled):hover,
+  button.arc-display:not(:disabled):active { transform: none; filter: none; }
+  .vp-held-lift { transform: none; box-shadow: none; filter: none; transition: none; }
 }
