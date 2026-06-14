@@ -81,6 +81,9 @@ export function StakeVideoPokerGame() {
   const [error, setError] = useState<string | null>(null);
   const [noChips, setNoChips] = useState(false);
   const [muted, setMuted] = useState(false);
+  // Incrementing keys force card remounts so deal/draw animations replay each hand.
+  const [dealKey, setDealKey] = useState(0);
+  const [drawKey, setDrawKey] = useState(0);
 
   const { data: chainBalance, refetch: refetchBalance } = usePokerChipBalance(address ?? null);
   const [balance, setBalance] = useState<bigint | null>(null);
@@ -152,6 +155,7 @@ export function StakeVideoPokerGame() {
       setHandId(r.handId);
       setDealtHand(r.dealtHand);
       setActiveBet(r.bet);
+      setDealKey((k) => k + 1);
       videoPokerAudio.playDeal();
       try {
         setBalance(BigInt(r.chipBalance.split('.')[0] || '0'));
@@ -179,6 +183,10 @@ export function StakeVideoPokerGame() {
     setPhase('drawing');
     setError(null);
     videoPokerAudio.playDraw();
+    // Staggered per-card flip sounds (one per non-held card).
+    holds.forEach((held, i) => {
+      if (!held) videoPokerAudio.playCardFlip(i * 80);
+    });
     try {
       const r = await drawVideoPoker({ handId, holds });
       setFinalHand(r.finalHand);
@@ -194,6 +202,7 @@ export function StakeVideoPokerGame() {
       } catch {
         /* keep last known */
       }
+      setDrawKey((k) => k + 1);
       setPhase('result');
       setSession((prev) => [...prev, { drop: prev.length + 1, bet: activeBet, profit: r.payout - activeBet }]);
       setHands((prev) =>
@@ -363,18 +372,32 @@ export function StakeVideoPokerGame() {
         <div className="order-1 space-y-4 lg:order-2">
           <Card className="relative flex flex-col items-center gap-5 border-0 bg-[#07131F] p-5 ring-1 ring-inset ring-cyan-950/70 sm:p-7">
             <div className="flex items-end justify-center gap-2 sm:gap-3">
-              {Array.from({ length: 5 }).map((_, i) => (
-                <div key={i} className="flex flex-col items-center gap-1.5">
-                  <VideoPokerCard
-                    card={showPlaceholders ? null : showHand[i] ?? null}
-                    held={(phase === 'held' || phase === 'result') && holds[i]}
-                    win={win}
-                    flip={phase === 'result' && !holds[i]}
-                    onToggle={() => toggleHold(i)}
-                    disabled={phase !== 'held'}
-                  />
-                </div>
-              ))}
+              {Array.from({ length: 5 }).map((_, i) => {
+                const isDrawCard = phase === 'result' && !holds[i];
+                const cardKey = isDrawCard
+                  ? `draw-${drawKey}-${i}`
+                  : `deal-${dealKey}-${i}`;
+                return (
+                  <div key={i} className="flex flex-col items-center gap-1.5">
+                    <VideoPokerCard
+                      key={cardKey}
+                      card={showPlaceholders ? null : showHand[i] ?? null}
+                      held={(phase === 'held' || phase === 'result') && holds[i]}
+                      win={win}
+                      flipMode={
+                        isDrawCard
+                          ? 'draw'
+                          : phase === 'held' && !showPlaceholders
+                            ? 'deal'
+                            : null
+                      }
+                      flipDelay={i * 75}
+                      onToggle={() => toggleHold(i)}
+                      disabled={phase !== 'held'}
+                    />
+                  </div>
+                );
+              })}
             </div>
 
             <div className="min-h-[3.5rem] text-center" aria-live="polite">
@@ -408,6 +431,19 @@ export function StakeVideoPokerGame() {
                   Place a bet · deal to play
                 </p>
               ) : null}
+            </div>
+
+            {/* Mobile-only primary action — visible directly below the cards so players
+                don't have to scroll to the control rail on small screens. */}
+            <div className="w-full lg:hidden">
+              <Button
+                type="button"
+                disabled={(phase === 'idle' && !info) || phase === 'dealing' || phase === 'drawing'}
+                onClick={onPrimary}
+                className="arc-display h-12 w-full bg-cyan-500 text-base font-bold uppercase tracking-widest text-[#03121B] shadow-[0_0_24px_-6px_rgba(34,211,238,0.85)] hover:bg-cyan-400 disabled:opacity-50"
+              >
+                {primaryLabel}
+              </Button>
             </div>
           </Card>
         </div>

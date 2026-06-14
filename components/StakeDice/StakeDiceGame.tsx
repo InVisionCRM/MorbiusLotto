@@ -535,9 +535,12 @@ export function StakeDiceGame() {
               />
               {lastRoll && (
                 <div
+                  key={lastRoll.roundId}
                   className={[
-                    'absolute top-1/2 h-3.5 w-3.5 -translate-x-1/2 -translate-y-1/2 rounded-full ring-2',
-                    lastRoll.won ? 'bg-cyan-300 ring-cyan-500/60' : 'bg-rose-400 ring-rose-500/60',
+                    'arc-banner-in absolute top-1/2 h-4 w-4 -translate-x-1/2 -translate-y-1/2 rounded-full ring-2',
+                    lastRoll.won
+                      ? 'bg-cyan-300 ring-cyan-400 shadow-[0_0_10px_2px_rgba(34,211,238,0.8)]'
+                      : 'bg-rose-400 ring-rose-500/60 shadow-[0_0_8px_1px_rgba(244,63,94,0.6)]',
                   ].join(' ')}
                   style={{ left: `${lastRoll.rollX100 / 100}%` }}
                   aria-hidden
@@ -620,6 +623,38 @@ export function StakeDiceGame() {
                 {formatX100(c.rollX100)}
               </span>
             ))}
+          </div>
+
+          {/* Mobile-only roll button — visible directly below the roll display
+              so players on small screens don't need to scroll to the control rail. */}
+          <div className="lg:hidden">
+            {mode === 'manual' ? (
+              <Button
+                type="button"
+                disabled={!info}
+                onClick={() => void rollOnce()}
+                className="arc-display h-12 w-full bg-cyan-500 text-base font-bold uppercase tracking-widest text-[#03121B] shadow-[0_0_24px_-6px_rgba(34,211,238,0.8)] hover:bg-cyan-400 disabled:opacity-50"
+              >
+                Roll
+              </Button>
+            ) : autoRunning ? (
+              <Button
+                type="button"
+                onClick={stopAuto}
+                className="arc-display h-12 w-full bg-rose-500 text-base font-bold uppercase tracking-widest text-[#1B0308] hover:bg-rose-400"
+              >
+                Stop · {autoLeft} left
+              </Button>
+            ) : (
+              <Button
+                type="button"
+                disabled={!info}
+                onClick={startAuto}
+                className="arc-display h-12 w-full bg-cyan-500 text-base font-bold uppercase tracking-widest text-[#03121B] shadow-[0_0_24px_-6px_rgba(34,211,238,0.8)] hover:bg-cyan-400 disabled:opacity-50"
+              >
+                Start auto ({autoCount})
+              </Button>
+            )}
           </div>
         </div>
       </div>

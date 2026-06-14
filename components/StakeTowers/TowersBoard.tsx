@@ -80,13 +80,13 @@ export function TowersBoard({
 
                 if (revealed) {
                   if (bustHit) {
-                    cls = 'border-rose-500 bg-rose-500/25 text-rose-300';
+                    cls = 'tower-bust-flash border-rose-500 bg-rose-500/25 text-rose-300';
                     content = <Bomb size={18} />;
                   } else if (isBomb) {
                     cls = 'border-rose-500/40 bg-rose-500/10 text-rose-400/70';
                     content = <Bomb size={18} />;
                   } else if (isPicked) {
-                    cls = 'border-cyan-400/70 bg-cyan-500/15 text-cyan-300';
+                    cls = 'tower-safe-glow border-cyan-400/70 bg-cyan-500/15 text-cyan-300';
                     content = <Diamond size={18} />;
                   }
                 } else if (isDone) {

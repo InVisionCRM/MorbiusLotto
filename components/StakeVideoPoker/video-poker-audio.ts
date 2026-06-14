@@ -1,8 +1,7 @@
 /**
  * video-poker-audio.ts — procedural sounds for /video-poker (Web Audio, no
- * files). A quick riffle on the deal, a soft click when a card is held, a snap
- * on the draw, a rising chime on a paying hand and a low thud on a bust. Same
- * synth conventions as roulette2-audio.ts / towers-audio.ts.
+ * files). Staggered deal riffle, per-card draw-flip whoosh, hold click, win
+ * chime, and bust thud. Same synth conventions as the other arcade audio modules.
  */
 
 class VideoPokerAudio {
@@ -48,30 +47,72 @@ class VideoPokerAudio {
     osc.stop(this.ctx.currentTime + duration);
   }
 
-  /** Card riffle — five quick ticks climbing in pitch as the hand fans out. */
+  /** Five staggered card-deal swooshes that build in pitch as the hand fans out. */
   playDeal() {
     for (let i = 0; i < 5; i++) {
-      setTimeout(() => this.tone(1500 + i * 180, 'square', 0.03, 0.08), i * 70);
+      setTimeout(() => {
+        this.tone(700 + i * 100, 'sine', 0.11, 0.14, 1500 + i * 90);
+        setTimeout(() => this.tone(2100 + i * 55, 'triangle', 0.03, 0.07), 55);
+      }, i * 75);
     }
   }
 
   /** Soft click when a card is toggled to HOLD. */
   playHold() {
-    this.tone(2200, 'triangle', 0.05, 0.2);
-    this.tone(1500, 'sine', 0.07, 0.12);
+    this.tone(2400, 'triangle', 0.04, 0.18);
+    this.tone(1600, 'sine', 0.06, 0.1);
   }
 
-  /** Draw snap — the discards flip to their replacements. */
+  /** Draw snap — fires once before the per-card flip sounds kick in. */
   playDraw() {
-    this.tone(2600, 'square', 0.03, 0.09);
-    setTimeout(() => this.tone(900, 'sine', 0.09, 0.12, 520), 60);
+    this.tone(2800, 'square', 0.025, 0.07);
+    setTimeout(() => this.tone(950, 'sine', 0.08, 0.1, 540), 50);
   }
 
-  /** Paying hand — ascending major triad. */
+  /**
+   * Per-card flip whoosh for the draw phase — call once per replaced card,
+   * passing the stagger delay so callers control timing.
+   */
+  playCardFlip(delayMs = 0) {
+    if (!this.ctx || !this.master || this.muted) return;
+    setTimeout(() => {
+      if (!this.ctx || !this.master || this.muted) return;
+      if (this.ctx.state === 'suspended') this.ctx.resume();
+
+      // Upward frequency sweep (the "whoosh")
+      const sweep = this.ctx.createOscillator();
+      const sweepGain = this.ctx.createGain();
+      sweep.type = 'sine';
+      sweep.frequency.setValueAtTime(420, this.ctx.currentTime);
+      sweep.frequency.exponentialRampToValueAtTime(1900, this.ctx.currentTime + 0.14);
+      sweepGain.gain.setValueAtTime(0.16, this.ctx.currentTime);
+      sweepGain.gain.exponentialRampToValueAtTime(0.01, this.ctx.currentTime + 0.22);
+      sweep.connect(sweepGain);
+      sweepGain.connect(this.master);
+      sweep.start();
+      sweep.stop(this.ctx.currentTime + 0.22);
+
+      // Sharp felt-impact thwack at card-land
+      const click = this.ctx.createOscillator();
+      const clickGain = this.ctx.createGain();
+      click.type = 'triangle';
+      click.frequency.setValueAtTime(820, this.ctx.currentTime + 0.11);
+      clickGain.gain.setValueAtTime(0, this.ctx.currentTime);
+      clickGain.gain.setValueAtTime(0.13, this.ctx.currentTime + 0.11);
+      clickGain.gain.exponentialRampToValueAtTime(0.01, this.ctx.currentTime + 0.18);
+      click.connect(clickGain);
+      clickGain.connect(this.master);
+      click.start();
+      click.stop(this.ctx.currentTime + 0.22);
+    }, delayMs);
+  }
+
+  /** Paying hand — ascending major triad with a richer shimmer. */
   playWin() {
-    this.tone(1046.5, 'sine', 0.12, 0.35);
-    setTimeout(() => this.tone(1318.51, 'sine', 0.12, 0.35), 110);
-    setTimeout(() => this.tone(1567.98, 'sine', 0.35, 0.4), 220);
+    this.tone(1046.5, 'sine', 0.14, 0.38);
+    setTimeout(() => this.tone(1318.51, 'sine', 0.14, 0.38), 110);
+    setTimeout(() => this.tone(1567.98, 'sine', 0.38, 0.44), 220);
+    setTimeout(() => this.tone(2093, 'triangle', 0.18, 0.2), 360);
   }
 
   /** No win — low felt thud. */

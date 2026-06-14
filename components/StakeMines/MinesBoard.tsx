@@ -41,7 +41,7 @@ export function MinesBoard({ cells, pendingCell, interactive, onPick }: MinesBoa
 
         let cls = ''
         if (state === 'gem') {
-          cls = 'bg-cyan-500/15 ring-1 ring-cyan-400/70 shadow-[0_0_18px_-4px_rgba(34,211,238,0.6)]'
+          cls = 'gem-sparkle bg-cyan-500/15 ring-1 ring-cyan-400/70 shadow-[0_0_18px_-4px_rgba(34,211,238,0.6)]'
         } else if (state === 'bomb') {
           cls = 'mine-shake bg-rose-500/15 ring-1 ring-rose-400/70 shadow-[0_0_18px_-4px_rgba(244,63,94,0.6)]'
         } else if (state === 'bomb-other') {
@@ -50,8 +50,10 @@ export function MinesBoard({ cells, pendingCell, interactive, onPick }: MinesBoa
           cls = 'animate-pulse bg-[#0B2230] ring-1 ring-cyan-400/80'
         } else {
           cls = [
-            'bg-[#0B2230] ring-1 ring-cyan-950',
-            tappable ? 'hover:ring-cyan-500/60 hover:bg-[#0D2A3C]' : 'opacity-80',
+            'bg-[#0B2230] ring-1 ring-cyan-950 transition-all duration-150',
+            tappable
+              ? 'hover:ring-cyan-500/60 hover:bg-[#0D2A3C] hover:shadow-[inset_0_2px_6px_rgba(0,0,0,0.55),0_0_10px_-4px_rgba(34,211,238,0.2)] active:scale-[0.93] active:shadow-[inset_0_3px_8px_rgba(0,0,0,0.7)]'
+              : 'opacity-80',
           ].join(' ')
         }
 
@@ -71,7 +73,7 @@ export function MinesBoard({ cells, pendingCell, interactive, onPick }: MinesBoa
             ].join(' ')}
           >
             {state === 'gem' && (
-              <IconDiamond size={26} className="keno-pop text-cyan-300" aria-hidden />
+              <IconDiamond size={26} className="keno-pop text-cyan-300 drop-shadow-[0_0_6px_rgba(34,211,238,0.9)]" aria-hidden />
             )}
             {state === 'bomb' && (
               <IconBomb size={26} className="text-rose-300" aria-hidden />

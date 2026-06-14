@@ -579,6 +579,36 @@ export function StakePlinkoGame() {
               </span>
             ))}
           </div>
+
+          {/* Mobile-only drop-ball button — visible directly below the board so
+              players on small screens don't have to scroll to the control rail. */}
+          <div className="lg:hidden">
+            {mode === 'manual' ? (
+              <Button
+                type="button"
+                onClick={() => void dropBall()}
+                className="arc-display h-12 w-full bg-cyan-500 text-base font-bold uppercase tracking-widest text-[#03121B] shadow-[0_0_24px_-6px_rgba(34,211,238,0.8)] hover:bg-cyan-400"
+              >
+                Drop ball
+              </Button>
+            ) : autoRunning ? (
+              <Button
+                type="button"
+                onClick={stopAuto}
+                className="arc-display h-12 w-full bg-rose-500 text-base font-bold uppercase tracking-widest text-[#1B0308] hover:bg-rose-400"
+              >
+                Stop · {autoLeft} left
+              </Button>
+            ) : (
+              <Button
+                type="button"
+                onClick={startAuto}
+                className="arc-display h-12 w-full bg-cyan-500 text-base font-bold uppercase tracking-widest text-[#03121B] shadow-[0_0_24px_-6px_rgba(34,211,238,0.8)] hover:bg-cyan-400"
+              >
+                Start auto ({autoCount})
+              </Button>
+            )}
+          </div>
         </div>
       </div>
 
