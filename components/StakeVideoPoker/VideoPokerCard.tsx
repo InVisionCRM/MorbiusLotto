@@ -43,7 +43,7 @@ export function VideoPokerCard({
   if (flipMode === 'draw') {
     return (
       <div className={`${sizeClasses} rounded-lg vp-flip-perspective`}>
-        <div className="vp-draw-flip-wrap rounded-lg" style={delayStyle}>
+        <div className="vp-draw-flip-wrap" style={delayStyle}>
           {/* Back face — shown first while card rotates */}
           <div className="vp-card-face rounded-lg bg-gradient-to-br from-[#0B2533] to-[#081420] ring-1 ring-cyan-500/30">
             <div className="flex h-full w-full items-center justify-center text-3xl text-cyan-400/40 sm:text-4xl">♠</div>

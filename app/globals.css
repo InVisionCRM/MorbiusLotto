@@ -1601,10 +1601,10 @@ button.arc-display:not(:disabled):active { transform: translateY(1px) scale(0.97
 @keyframes vp-draw-flip {
   0%   { transform: rotateY(0deg) scaleX(1); }
   42%  { transform: rotateY(75deg) scaleX(0.82); }
-  50%  { transform: rotateY(90deg) scaleX(0.78); filter: brightness(2.2); }
+  50%  { transform: rotateY(90deg) scaleX(0.78); }
   58%  { transform: rotateY(105deg) scaleX(0.82); }
   85%  { transform: rotateY(186deg) scaleX(1.04); }
-  100% { transform: rotateY(180deg) scaleX(1); filter: brightness(1); }
+  100% { transform: rotateY(180deg) scaleX(1); }
 }
 /* Perspective container — needed for preserve-3d depth. */
 .vp-flip-perspective {
