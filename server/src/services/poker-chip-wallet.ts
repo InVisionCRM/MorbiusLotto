@@ -25,6 +25,8 @@ export type PokerChipLedgerReason =
   | 'arcade_hilo_payout'
   | 'arcade_dice_bet'
   | 'arcade_dice_payout'
+  | 'arcade_dicex2_bet'
+  | 'arcade_dicex2_payout'
   | 'arcade_craps_bet'
   | 'arcade_craps_payout'
   | 'arcade_craps_refund'

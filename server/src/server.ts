@@ -18,6 +18,7 @@ import { registerArcadeHiLoRoutes } from './routes/arcade-hilo.routes';
 import { registerArcadeTowersRoutes } from './routes/arcade-towers.routes';
 import { registerArcadeChickenRoutes } from './routes/arcade-chicken.routes';
 import { registerArcadeDiceRoutes } from './routes/arcade-dice.routes';
+import { registerArcadeDiceX2Routes } from './routes/arcade-dicex2.routes';
 import { registerArcadeCrapsRoutes } from './routes/arcade-craps.routes';
 import { registerArcadeBaccaratRoutes } from './routes/arcade-baccarat.routes';
 import { registerArcadeCrashRoutes } from './routes/arcade-crash.routes';
@@ -437,6 +438,7 @@ async function initializeServices() {
     registerArcadeChickenRoutes({ app, dbService, authService });
     registerArcadeHiLoRoutes({ app, dbService, authService });
     registerArcadeDiceRoutes({ app, dbService, authService });
+    registerArcadeDiceX2Routes({ app, dbService, authService });
     registerArcadeCrapsRoutes({ app, dbService, authService });
     registerArcadeBaccaratRoutes({ app, dbService, authService });
     registerArcadeCrashRoutes({ app, dbService, authService });
