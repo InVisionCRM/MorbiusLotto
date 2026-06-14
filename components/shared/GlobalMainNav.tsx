@@ -82,7 +82,7 @@ const ProfileAvatarModal = lazy(() => import('@/components/shared/ProfileAvatarM
 const ProfileSettingsModal = lazy(() => import('@/components/shared/ProfileSettingsModal'));
 
 export type NavPage =
-  | 'blackjack' | 'plinko' | 'lottery' | 'keno' | 'mines' | 'dice' | 'limbo' | 'home' | 'poker' | 'blackjackMulti'
+  | 'blackjack' | 'plinko' | 'lottery' | 'keno' | 'mines' | 'dice' | 'diceX2' | 'limbo' | 'home' | 'poker' | 'blackjackMulti'
   | 'crash' | 'roulette2' | 'craps' | 'baccarat' | 'hilo' | 'towers' | 'chicken' | 'videoPoker';
 
 const PATH_TO_PAGE: Record<string, NavPage> = {
@@ -94,6 +94,7 @@ const PATH_TO_PAGE: Record<string, NavPage> = {
   '/keno2': 'keno',
   '/mines2': 'mines',
   '/dice2': 'dice',
+  '/dicex2': 'diceX2',
   '/limbo2': 'limbo',
   '/crash': 'crash',
   '/roulette2': 'roulette2',
@@ -130,6 +131,7 @@ const OTHER_GAMES: readonly OtherGameNavItem[] = [
   { label: 'Towers', href: '/towers', icon: 'towers' },
   { label: 'Chicken', href: '/chicken', icon: 'chicken' },
   { label: 'Dice', href: '/dice2', icon: 'dice' },
+  { label: 'Dice x2', href: '/dicex2', icon: 'dice' },
   { label: 'Craps', href: '/craps', icon: 'craps' },
   { label: 'Baccarat', href: '/baccarat', icon: 'baccarat' },
   { label: 'Hi-Lo', href: '/hilo', icon: 'hilo' },
