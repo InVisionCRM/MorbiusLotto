@@ -1,0 +1,241 @@
+/* ── Chicken (/chicken) — Deep-Sea Neon road ──────────────────────────────────
+   Scoped to .chicken-board so body styles can't leak into the rest of morbius.io.
+   The page chrome lives in the shared .arcade2-scope system (abyss #050E16,
+   cyan #22D3EE, JetBrains Mono numerals). This file owns only what Tailwind
+   can't: the scrolling lane road, the chicken's hop/splat transforms, and the
+   crossing-traffic cars. ── */
+
+.chicken-board {
+  --cb-lane-w: clamp(72px, 20vw, 104px);
+  position: relative;
+}
+
+.cb-road {
+  position: relative;
+  height: clamp(220px, 46vw, 300px);
+  overflow: hidden;
+  border-radius: 14px;
+  background: linear-gradient(180deg, #071521, #040d15);
+  box-shadow: inset 0 0 0 1px rgba(34, 211, 238, 0.1);
+}
+.cb-road::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(
+    ellipse 55% 42% at var(--cb-chick-x, 22%) 55%,
+    rgba(34, 211, 238, 0.12),
+    transparent 60%
+  );
+  pointer-events: none;
+  z-index: 4;
+}
+
+.cb-track {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 0;
+  display: flex;
+  transition: transform 0.34s cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.cb-lane {
+  position: relative;
+  width: var(--cb-lane-w);
+  flex: none;
+  height: 100%;
+  border-right: 2px dashed rgba(34, 211, 238, 0.14);
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+}
+.cb-lane.curb {
+  width: calc(var(--cb-lane-w) * 0.7);
+  background: repeating-linear-gradient(
+    45deg,
+    rgba(34, 211, 238, 0.06),
+    rgba(34, 211, 238, 0.06) 8px,
+    transparent 8px,
+    transparent 16px
+  );
+  border-right: 2px solid rgba(34, 211, 238, 0.25);
+}
+.cb-lane.finish {
+  width: calc(var(--cb-lane-w) * 0.8);
+  background: repeating-linear-gradient(
+    45deg,
+    rgba(245, 158, 11, 0.1),
+    rgba(245, 158, 11, 0.1) 9px,
+    transparent 9px,
+    transparent 18px
+  );
+  border-right: 0;
+}
+.cb-lane.cleared {
+  background: linear-gradient(180deg, rgba(34, 211, 238, 0.06), transparent);
+}
+.cb-lane.next {
+  cursor: pointer;
+}
+.cb-lane.next::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(ellipse 70% 30% at 50% 0, rgba(34, 211, 238, 0.14), transparent 70%);
+  pointer-events: none;
+}
+
+.cb-mult {
+  margin-top: 12px;
+  font-family: var(--font-arc-mono, monospace);
+  font-weight: 600;
+  font-size: 12.5px;
+  color: #94a3b8;
+  background: rgba(2, 8, 13, 0.7);
+  border: 1px solid rgba(34, 211, 238, 0.12);
+  border-radius: 999px;
+  padding: 3px 9px;
+  transition: 0.2s;
+  white-space: nowrap;
+}
+.cb-lane.next .cb-mult {
+  color: #22d3ee;
+  border-color: rgba(34, 211, 238, 0.5);
+  box-shadow: 0 0 14px -2px rgba(34, 211, 238, 0.6);
+}
+.cb-lane.cleared .cb-mult {
+  color: #fff;
+  border-color: rgba(34, 211, 238, 0.4);
+  background: rgba(34, 211, 238, 0.12);
+}
+.cb-tick {
+  position: absolute;
+  bottom: 14px;
+  color: #22d3ee;
+  font-size: 13px;
+}
+
+.cb-chicken {
+  position: absolute;
+  bottom: 14px;
+  left: 0;
+  width: clamp(38px, 11vw, 52px);
+  z-index: 6;
+  transform: translateX(0);
+  transition: transform 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+  will-change: transform;
+}
+.cb-chicken.hop {
+  animation: cb-hop 0.3s ease;
+}
+@keyframes cb-hop {
+  0% {
+    transform: translateX(var(--cb-cx, 0)) translateY(0);
+  }
+  45% {
+    transform: translateX(calc(var(--cb-cx, 0) + var(--cb-lane-w) * 0.5)) translateY(-26px);
+  }
+  100% {
+    transform: translateX(var(--cb-cxn, 0)) translateY(0);
+  }
+}
+.cb-chicken.splat {
+  animation: cb-splat 0.5s cubic-bezier(0.36, 0.07, 0.19, 0.97) both;
+}
+@keyframes cb-splat {
+  0%,
+  100% {
+    transform: translateX(var(--cb-cxn, 0));
+  }
+  20% {
+    transform: translateX(var(--cb-cxn, 0)) translate(-3px, 2px) rotate(-8deg);
+  }
+  50% {
+    transform: translateX(var(--cb-cxn, 0)) translate(4px, 1px) rotate(10deg) scale(0.92);
+  }
+  80% {
+    transform: translateX(var(--cb-cxn, 0)) translate(-2px, 3px) rotate(-5deg) scale(0.9);
+  }
+}
+
+.cb-car {
+  position: absolute;
+  top: -72px;
+  left: 50%;
+  width: calc(var(--cb-lane-w) * 0.6);
+  transform: translateX(-50%);
+  z-index: 5;
+  filter: drop-shadow(0 6px 10px rgba(0, 0, 0, 0.5));
+}
+.cb-car.parked {
+  top: calc(100% - 40px);
+  opacity: 0.5;
+}
+.cb-car.zoom {
+  animation: cb-carzoom 0.42s cubic-bezier(0.55, 0.06, 0.9, 0.3) forwards;
+}
+@keyframes cb-carzoom {
+  0% {
+    top: -72px;
+    opacity: 0.2;
+  }
+  55% {
+    opacity: 1;
+  }
+  100% {
+    top: calc(100% - 38px);
+    opacity: 1;
+  }
+}
+.cb-car.ambient {
+  animation: cb-ambient linear infinite;
+}
+@keyframes cb-ambient {
+  0% {
+    top: -72px;
+    opacity: 0;
+  }
+  10% {
+    opacity: 0.75;
+  }
+  90% {
+    opacity: 0.75;
+  }
+  100% {
+    top: 112%;
+    opacity: 0;
+  }
+}
+
+.cb-feather {
+  position: absolute;
+  z-index: 7;
+  font-size: 13px;
+  pointer-events: none;
+  animation: cb-feather 0.7s ease-out forwards;
+}
+@keyframes cb-feather {
+  0% {
+    opacity: 1;
+    transform: translate(0, 0) rotate(0);
+  }
+  100% {
+    opacity: 0;
+    transform: translate(var(--fx), var(--fy)) rotate(var(--fr));
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .cb-track,
+  .cb-chicken {
+    transition: none;
+  }
+  .cb-chicken.hop,
+  .cb-chicken.splat,
+  .cb-car.zoom,
+  .cb-car.ambient,
+  .cb-feather {
+    animation: none;
+  }
+}

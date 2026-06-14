@@ -83,7 +83,7 @@ const ProfileSettingsModal = lazy(() => import('@/components/shared/ProfileSetti
 
 export type NavPage =
   | 'blackjack' | 'plinko' | 'lottery' | 'keno' | 'mines' | 'dice' | 'limbo' | 'home' | 'poker' | 'blackjackMulti'
-  | 'crash' | 'roulette2' | 'craps' | 'baccarat' | 'hilo' | 'towers' | 'videoPoker';
+  | 'crash' | 'roulette2' | 'craps' | 'baccarat' | 'hilo' | 'towers' | 'chicken' | 'videoPoker';
 
 const PATH_TO_PAGE: Record<string, NavPage> = {
   '/BLACKJACK': 'blackjack',
@@ -103,12 +103,13 @@ const PATH_TO_PAGE: Record<string, NavPage> = {
   '/baccarat': 'baccarat',
   '/hilo': 'hilo',
   '/towers': 'towers',
+  '/chicken': 'chicken',
   '/video-poker': 'videoPoker',
 };
 
 type OtherGameIcon =
   | 'blackjack' | 'plinko' | 'users' | 'ticket' | 'grid' | 'cards' | 'mine' | 'dice' | 'limbo'
-  | 'crash' | 'roulette' | 'craps' | 'baccarat' | 'hilo' | 'towers' | 'videopoker';
+  | 'crash' | 'roulette' | 'craps' | 'baccarat' | 'hilo' | 'towers' | 'chicken' | 'videopoker';
 
 type OtherGameNavItem =
   | { label: string; href: string; icon: OtherGameIcon }
@@ -127,6 +128,7 @@ const OTHER_GAMES: readonly OtherGameNavItem[] = [
   { label: 'Keno', href: '/keno2', icon: 'grid' },
   { label: 'Mines', href: '/mines2', icon: 'mine' },
   { label: 'Towers', href: '/towers', icon: 'towers' },
+  { label: 'Chicken', href: '/chicken', icon: 'chicken' },
   { label: 'Dice', href: '/dice2', icon: 'dice' },
   { label: 'Craps', href: '/craps', icon: 'craps' },
   { label: 'Baccarat', href: '/baccarat', icon: 'baccarat' },
@@ -292,6 +294,15 @@ const OTHER_GAME_ICONS: Record<OtherGameIcon, React.ReactNode> = {
       <rect x="5.5" y="14" width="13" height="6" rx="1" />
       <rect x="7" y="8.5" width="10" height="5.5" rx="1" />
       <rect x="8.5" y="3.5" width="7" height="5" rx="1" />
+    </svg>
+  ),
+  chicken: (
+    <svg viewBox="0 0 24 24" width={20} height={20} className="text-white shrink-0" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <circle cx="12" cy="13" r="6.5" />
+      <path d="M12 6.5V4" />
+      <path d="M18.5 13l2.5-.6" />
+      <path d="M9.5 19.5 9 21.5M14.5 19.5l.5 2" />
+      <circle cx="14.5" cy="11.5" r="0.8" fill="currentColor" stroke="none" />
     </svg>
   ),
   videopoker: (

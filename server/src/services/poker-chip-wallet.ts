@@ -36,6 +36,8 @@ export type PokerChipLedgerReason =
   | 'arcade_roulette_payout'
   | 'arcade_towers_bet'
   | 'arcade_towers_payout'
+  | 'arcade_chicken_bet'
+  | 'arcade_chicken_payout'
   | 'keno_bet'
   | 'keno_payout'
   | 'plinko_bet'

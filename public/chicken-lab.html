@@ -1,0 +1,680 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+<title>Chicken — Deep-Sea Neon lab</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Chakra+Petch:wght@500;600;700&family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet" />
+<style>
+/* ── Chicken — Deep-Sea Neon (arcade2) prototype ───────────────────────────
+   Mirrors the shared arcade2-scope system: abyss #050E16, cyan #22D3EE,
+   amber wins #F59E0B, rose losses, Chakra Petch display + JetBrains Mono
+   numerals, .arc-panel glass. Fairness modal / history / FAQ reproduce the
+   real TowersFairnessModal + MinesHistory + MinesInfoTabs + arcadeCommonFaqs.
+   Self-contained client-side demo (illustrative RNG); the real build derives
+   every lane from the server provably-fair HMAC pipeline. */
+:root{
+  --abyss:#050E16; --cyan:#22D3EE; --cyan-soft:rgba(34,211,238,0.12); --cyan-edge:rgba(34,211,238,0.35);
+  --win:#F59E0B; --loss:#FB7185;
+  --ink:#E2E8F0; --slate-300:#CBD5E1; --slate-400:#94A3B8; --slate-500:#64748B;
+  --panel:rgba(8,20,31,0.78); --field:#081420;
+  --lane-w:clamp(78px,21vw,110px);
+  --font-disp:'Chakra Petch',system-ui,sans-serif;
+  --font-mono:'JetBrains Mono',ui-monospace,monospace;
+}
+*{box-sizing:border-box}
+html,body{margin:0;padding:0}
+body{
+  min-height:100svh;background-color:var(--abyss);
+  background-image:linear-gradient(to bottom,rgba(5,14,22,0.92),rgba(2,7,11,0.96) 55%,rgba(5,14,22,0.98));
+  color:var(--ink);font-family:var(--font-disp);-webkit-font-smoothing:antialiased;overflow-x:hidden;
+}
+.bg-light,.bg-vignette{position:fixed;inset:0;pointer-events:none;z-index:0}
+.bg-light{background:radial-gradient(ellipse 75% 55% at 50% -5%,rgba(34,211,238,0.13),transparent 70%)}
+.bg-vignette{background:radial-gradient(ellipse 120% 60% at 50% 115%,rgba(0,0,0,0.55),transparent 60%)}
+.mono{font-family:var(--font-mono);font-variant-numeric:tabular-nums}
+.disp{font-family:var(--font-disp)}
+
+.wrap{position:relative;z-index:1;max-width:1000px;margin:0 auto;padding:18px 14px 64px}
+@media(min-width:700px){.wrap{padding:30px 22px 80px}}
+
+header{text-align:center;margin-bottom:16px}
+h1.title{margin:0;font-weight:700;text-transform:uppercase;letter-spacing:0.08em;color:#fff;font-size:clamp(28px,7vw,42px);line-height:1}
+h1.title .glyph{margin-left:.35rem;color:var(--cyan);filter:drop-shadow(0 0 12px rgba(34,211,238,0.65));vertical-align:middle}
+.tagline{margin:.55rem 0 0;font-size:clamp(11px,2.6vw,13.5px);color:var(--slate-500);letter-spacing:.01em}
+
+.topbar{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:14px}
+.topbar .right{display:flex;gap:8px}
+.balance{display:flex;align-items:center;gap:9px;background:rgba(8,20,31,0.7);border:1px solid var(--cyan-soft);border-radius:12px;padding:8px 13px}
+.coin{width:18px;height:18px;border-radius:50%;background:radial-gradient(circle at 35% 30%,#7be9fb,#22D3EE 55%,#0e7490);box-shadow:0 0 10px rgba(34,211,238,.5);flex:none}
+.balance .amt{font-family:var(--font-mono);font-weight:700;font-size:16px;color:#fff}
+.balance .cur{font-size:10px;letter-spacing:.12em;color:var(--cyan);text-transform:uppercase}
+.pill-btn{display:inline-flex;align-items:center;gap:7px;height:40px;padding:0 13px;border-radius:11px;border:1px solid var(--cyan-soft);background:rgba(8,20,31,0.7);color:var(--slate-400);cursor:pointer;transition:.15s;font-family:var(--font-disp);font-size:12px;letter-spacing:.06em;text-transform:uppercase}
+.pill-btn:hover{color:var(--cyan);border-color:var(--cyan-edge)}
+.pill-btn .dot{width:7px;height:7px;border-radius:50%;background:var(--cyan);box-shadow:0 0 8px var(--cyan)}
+.icon-btn{width:40px;height:40px;display:grid;place-items:center;border-radius:11px;border:1px solid var(--cyan-soft);background:rgba(8,20,31,0.7);color:var(--slate-400);cursor:pointer;transition:.15s;font-size:15px}
+.icon-btn:hover{color:var(--cyan);border-color:var(--cyan-edge)}
+
+.game-grid{display:flex;flex-direction:column;gap:14px}
+.board{order:-1}
+@media(min-width:900px){.game-grid{display:grid;grid-template-columns:332px 1fr;align-items:start;gap:18px}.board{order:0}}
+
+.panel{background:linear-gradient(rgba(255,255,255,0.03),rgba(255,255,255,0) 18%),var(--panel);border:1px solid var(--cyan-soft);border-radius:16px;box-shadow:0 18px 40px -24px rgba(0,0,0,0.9);padding:16px}
+.panel + .panel{margin-top:14px}
+.panel-label{font-size:11px;text-transform:uppercase;letter-spacing:.16em;color:var(--slate-500);margin:0 0 10px}
+
+.diff-row{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
+.diff{border:1px solid var(--cyan-soft);background:rgba(6,16,25,.6);border-radius:12px;padding:11px 6px 9px;text-align:center;cursor:pointer;transition:.15s;color:var(--slate-400)}
+.diff:hover{border-color:var(--cyan-edge)}
+.diff .d-name{font-weight:600;font-size:13px;letter-spacing:.04em;text-transform:uppercase}
+.diff .d-meta{font-family:var(--font-mono);font-size:10.5px;color:var(--slate-500);margin-top:3px}
+.diff.active{border-color:var(--cyan);background:linear-gradient(rgba(34,211,238,.14),rgba(34,211,238,.04));color:#fff;box-shadow:0 0 18px -4px rgba(34,211,238,.5)}
+.diff.active .d-meta{color:var(--cyan)}
+.diff[aria-disabled=true]{opacity:.45;pointer-events:none}
+
+.bet-input-row{display:flex;align-items:stretch;gap:8px;margin-bottom:10px}
+.bet-field{flex:1;display:flex;align-items:center;gap:8px;background:rgba(2,8,13,.7);border:1px solid var(--cyan-soft);border-radius:12px;padding:0 12px}
+.bet-field input{flex:1;width:100%;background:none;border:0;outline:none;color:#fff;font-family:var(--font-mono);font-weight:700;font-size:17px;padding:12px 0}
+.mini-btn{width:42px;border:1px solid var(--cyan-soft);background:rgba(8,20,31,.7);color:var(--slate-400);border-radius:11px;font-family:var(--font-mono);font-weight:700;cursor:pointer;transition:.15s;font-size:14px}
+.mini-btn:hover{color:var(--cyan);border-color:var(--cyan-edge)}
+.chips{display:grid;grid-template-columns:repeat(4,1fr);gap:7px}
+.chip{border:1px solid var(--cyan-soft);background:rgba(6,16,25,.6);color:var(--slate-400);border-radius:10px;padding:9px 4px;font-family:var(--font-mono);font-weight:600;font-size:12.5px;cursor:pointer;transition:.15s}
+.chip:hover{color:var(--cyan);border-color:var(--cyan-edge)}
+.minmax{display:flex;justify-content:space-between;font-family:var(--font-mono);font-size:10.5px;color:var(--slate-500);margin-top:9px}
+
+.board-shell{background:linear-gradient(rgba(255,255,255,0.025),rgba(255,255,255,0) 16%),rgba(6,16,25,.72);border:1px solid var(--cyan-soft);border-radius:18px;overflow:hidden;box-shadow:0 24px 50px -30px rgba(0,0,0,.95)}
+.hud{display:flex;gap:1px;background:var(--cyan-soft)}
+.hud .cell{flex:1;background:rgba(4,12,19,.85);padding:11px 12px;text-align:center}
+.hud .k{font-size:9.5px;letter-spacing:.16em;text-transform:uppercase;color:var(--slate-500)}
+.hud .v{font-family:var(--font-mono);font-weight:700;font-size:clamp(17px,4.5vw,23px);color:#fff;margin-top:3px}
+.hud .v.mult{color:var(--win);text-shadow:0 0 16px rgba(245,158,11,.5)}
+.hud .v.mult.idle{color:var(--slate-400);text-shadow:none}
+
+.road{position:relative;height:clamp(220px,46vw,300px);overflow:hidden;background:linear-gradient(180deg,#071521,#040d15)}
+.road::before{content:"";position:absolute;inset:0;background:radial-gradient(ellipse 55% 42% at var(--chick-x,22%) 55%,rgba(34,211,238,.12),transparent 60%);pointer-events:none;z-index:4}
+.track{position:absolute;top:0;bottom:0;left:0;display:flex;transition:transform .34s cubic-bezier(.22,1,.36,1)}
+.lane{position:relative;width:var(--lane-w);flex:none;height:100%;border-right:2px dashed rgba(34,211,238,.14);display:flex;align-items:flex-start;justify-content:center}
+.lane.curb{width:calc(var(--lane-w)*.7);background:repeating-linear-gradient(45deg,rgba(34,211,238,.06),rgba(34,211,238,.06) 8px,transparent 8px,transparent 16px);border-right:2px solid rgba(34,211,238,.25)}
+.lane.finish{background:repeating-linear-gradient(45deg,rgba(245,158,11,.10),rgba(245,158,11,.10) 9px,transparent 9px,transparent 18px);border-right:0}
+.lane .mult{margin-top:12px;font-family:var(--font-mono);font-weight:600;font-size:12.5px;color:var(--slate-400);background:rgba(2,8,13,.7);border:1px solid var(--cyan-soft);border-radius:999px;padding:3px 9px;transition:.2s}
+.lane.next .mult{color:var(--cyan);border-color:var(--cyan-edge);box-shadow:0 0 14px -2px rgba(34,211,238,.6)}
+.lane.cleared{background:linear-gradient(180deg,rgba(34,211,238,.06),transparent)}
+.lane.cleared .mult{color:#fff;border-color:rgba(34,211,238,.4);background:rgba(34,211,238,.12)}
+.lane .tick{position:absolute;bottom:14px;color:var(--cyan);font-size:13px;opacity:0;transition:.2s}
+.lane.cleared .tick{opacity:1}
+
+.chicken{position:absolute;bottom:14px;left:0;width:clamp(40px,11vw,54px);z-index:6;transform:translateX(0);transition:transform .3s cubic-bezier(.34,1.56,.64,1);will-change:transform}
+.chicken.hop{animation:hop .3s ease}
+@keyframes hop{0%{transform:translateX(var(--cx,0)) translateY(0)}45%{transform:translateX(calc(var(--cx,0) + var(--lane-w)*.5)) translateY(-26px)}100%{transform:translateX(var(--cxn,0)) translateY(0)}}
+.chicken.splat{animation:splat .5s cubic-bezier(.36,.07,.19,.97) both}
+@keyframes splat{0%,100%{transform:translateX(var(--cxn,0))}20%{transform:translateX(var(--cxn,0)) translate(-3px,2px) rotate(-8deg)}50%{transform:translateX(var(--cxn,0)) translate(4px,1px) rotate(10deg) scale(.92)}80%{transform:translateX(var(--cxn,0)) translate(-2px,3px) rotate(-5deg) scale(.9)}}
+
+.car{position:absolute;top:-70px;left:50%;width:calc(var(--lane-w)*.62);transform:translateX(-50%);z-index:5;filter:drop-shadow(0 6px 10px rgba(0,0,0,.5))}
+.car.zoom{animation:carzoom .42s cubic-bezier(.55,.06,.9,.3) forwards}
+@keyframes carzoom{0%{top:-70px;opacity:.2}55%{opacity:1}100%{top:calc(100% - 40px);opacity:1}}
+.car.ambient{animation:ambient linear infinite}
+@keyframes ambient{0%{top:-70px;opacity:0}10%{opacity:.8}90%{opacity:.8}100%{top:110%;opacity:0}}
+.feather{position:absolute;z-index:7;font-size:13px;pointer-events:none;animation:feather .7s ease-out forwards}
+@keyframes feather{0%{opacity:1;transform:translate(0,0) rotate(0)}100%{opacity:0;transform:translate(var(--fx),var(--fy)) rotate(var(--fr))}}
+
+.actions{display:grid;grid-template-columns:1fr;gap:10px;margin-top:14px}
+.actions.two{grid-template-columns:1fr 1fr}
+.btn{border:0;border-radius:14px;padding:16px 18px;font-family:var(--font-disp);font-weight:700;font-size:16px;letter-spacing:.05em;text-transform:uppercase;cursor:pointer;transition:.15s;color:#04141b}
+.btn:active{transform:scale(.985)}
+.btn-go,.btn-step{background:linear-gradient(180deg,#3ee0f5,#22D3EE 60%,#0fb6d4);box-shadow:0 0 24px -6px rgba(34,211,238,.68),inset 0 1px 0 rgba(255,255,255,.4)}
+.btn-cash{background:linear-gradient(180deg,#fbd36b,#F59E0B 60%,#d97f06);color:#2a1602;box-shadow:0 0 24px -5px rgba(245,158,11,.7),inset 0 1px 0 rgba(255,255,255,.4)}
+.btn:disabled{opacity:.4;cursor:not-allowed;filter:saturate(.4)}
+.cash-sub{display:block;font-family:var(--font-mono);font-size:11px;font-weight:600;letter-spacing:0;margin-top:2px;opacity:.85}
+
+.banner-host{position:absolute;inset:0;display:grid;place-items:center;z-index:8;pointer-events:none}
+.banner{display:none;text-align:center;padding:18px 30px;border-radius:18px}
+.banner.show{display:block}
+.banner.win{background:radial-gradient(ellipse at center,rgba(245,158,11,.22),rgba(4,12,19,.55));border:1px solid rgba(245,158,11,.5);box-shadow:0 0 50px -8px rgba(245,158,11,.55)}
+.banner.loss{background:radial-gradient(ellipse at center,rgba(251,113,133,.18),rgba(4,12,19,.6));border:1px solid rgba(251,113,133,.45)}
+.banner .b-k{font-size:12px;letter-spacing:.22em;text-transform:uppercase;color:var(--slate-400)}
+.banner.win .b-k{color:var(--win)}.banner.loss .b-k{color:var(--loss)}
+.banner .b-v{font-family:var(--font-mono);font-weight:700;font-size:clamp(26px,8vw,40px);color:#fff;margin-top:4px}
+.arc-banner-in{animation:arc-banner-in .4s cubic-bezier(.34,1.56,.64,1) both}
+@keyframes arc-banner-in{0%{transform:scale(.7);opacity:0}55%{transform:scale(1.06);opacity:1}100%{transform:scale(1);opacity:1}}
+
+/* Info section: tabs (My rounds / FAQ) — mirrors MinesInfoTabs */
+.info{margin-top:16px}
+.tabs-list{display:grid;grid-template-columns:1fr 1fr;gap:4px;background:rgba(8,20,31,.7);border:1px solid rgba(34,211,238,.12);border-radius:10px;padding:4px}
+.tab-btn{font-family:var(--font-disp);font-weight:600;font-size:12px;text-transform:uppercase;letter-spacing:.14em;color:var(--slate-500);background:none;border:0;border-radius:7px;padding:9px 6px;cursor:pointer;transition:.15s}
+.tab-btn:hover{color:var(--slate-300)}
+.tab-btn.active{background:rgba(34,211,238,.15);color:var(--cyan);box-shadow:inset 0 0 0 1px rgba(34,211,238,.5)}
+.tab-panel{display:none;margin-top:12px}
+.tab-panel.active{display:block}
+
+/* History — mirrors MinesHistory */
+.hist-head{display:flex;align-items:baseline;justify-content:space-between;margin-bottom:6px}
+.hist-head h2{font-family:var(--font-disp);font-weight:600;font-size:14px;text-transform:uppercase;letter-spacing:.08em;color:var(--slate-300);margin:0}
+.hist-head .count{font-size:11px;color:var(--slate-500)}
+.hist-empty{padding:18px 0;text-align:center;font-size:13px;color:var(--slate-500)}
+.hist-list{list-style:none;margin:0;padding:0}
+.hist-row{display:flex;flex-wrap:wrap;align-items:center;gap:6px 12px;padding:9px 0;border-top:1px solid rgba(34,211,238,.08);font-size:13px}
+.hist-row:first-child{border-top:0}
+.hist-row .t{font-family:var(--font-mono);width:46px;flex:none;color:var(--slate-500)}
+.hist-row .badge{flex:none;font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:.04em;padding:2px 7px;border-radius:5px;color:var(--cyan);background:rgba(34,211,238,.1);box-shadow:inset 0 0 0 1px rgba(34,211,238,.3)}
+.hist-row .m{font-family:var(--font-mono);color:var(--slate-400);flex:none}
+.hist-row .x{font-family:var(--font-mono);flex:none}
+.hist-row .x.win{color:var(--cyan)}.hist-row .x.bust{color:var(--loss);font-weight:600;text-transform:uppercase;font-family:var(--font-disp);font-size:11px;letter-spacing:.06em}
+.hist-row .p{font-family:var(--font-mono);font-weight:600;margin-left:auto;flex:none}
+.hist-row .p.up{color:var(--win)}.hist-row .p.flat{color:var(--slate-500)}
+.hist-row .verify{flex:none;font-size:11px;color:var(--slate-500);background:none;border:0;border-radius:5px;padding:3px 7px;cursor:pointer;transition:.15s}
+.hist-row .verify:hover{color:var(--cyan);background:rgba(34,211,238,.1)}
+
+/* FAQ accordion — mirrors ArcadeFAQ / GameFAQ */
+.faq-item{border-top:1px solid rgba(34,211,238,.1)}
+.faq-item:first-child{border-top:0}
+.faq-q{width:100%;text-align:left;background:none;border:0;color:#E8EEF5;font-family:var(--font-disp);font-size:14px;font-weight:500;padding:13px 28px 13px 0;cursor:pointer;position:relative;transition:.15s}
+.faq-q:hover{color:var(--cyan)}
+.faq-q::after{content:"⌄";position:absolute;right:4px;top:12px;color:var(--slate-500);transition:transform .2s}
+.faq-item.open .faq-q::after{transform:rotate(180deg);color:var(--cyan)}
+.faq-a{display:none;padding:0 4px 14px;color:#AFC0CF;font-size:13.5px;line-height:1.65}
+.faq-item.open .faq-a{display:block}
+.faq-a p{margin:0 0 9px}.faq-a p:last-child{margin-bottom:0}
+.faq-a a{color:var(--cyan);text-decoration:underline;text-underline-offset:2px;word-break:break-all}
+.faq-a ul{margin:6px 0;padding-left:18px}.faq-a li{margin:4px 0}
+.faq-a .siwe{font-family:var(--font-mono);font-size:11px;line-height:1.6;background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.08);border-radius:8px;padding:10px;color:var(--slate-400);margin:8px 0}
+.faq-a .siwe .a{color:var(--cyan)}.faq-a .siwe .s{color:var(--slate-300)}
+.hl{color:var(--cyan)}
+
+/* Modal — mirrors TowersFairnessModal (Dialog) */
+.overlay{position:fixed;inset:0;z-index:50;display:none;align-items:center;justify-content:center;padding:16px;background:rgba(2,6,10,.72);backdrop-filter:blur(3px)}
+.overlay.open{display:flex}
+.modal{width:100%;max-width:520px;max-height:85vh;overflow-y:auto;background:#050E16;border:1px solid #0e3a47;border-radius:16px;box-shadow:0 30px 80px -20px rgba(0,0,0,.9);padding:20px}
+.modal-head{display:flex;align-items:center;justify-content:space-between;margin-bottom:16px}
+.modal-head h2{font-family:var(--font-disp);font-weight:600;text-transform:uppercase;letter-spacing:.12em;color:var(--cyan);font-size:16px;margin:0}
+.modal-x{background:none;border:0;color:var(--slate-500);font-size:20px;cursor:pointer;line-height:1}
+.modal-x:hover{color:var(--cyan)}
+.m-sec{margin-bottom:18px}
+.m-sec h3{font-size:13.5px;font-weight:600;color:var(--slate-300);margin:0 0 4px}
+.m-sec p.note{font-size:12px;color:var(--slate-500);margin:0 0 9px;line-height:1.5}
+.m-input-row{display:flex;gap:8px}
+.m-input{flex:1;min-width:0;background:var(--field);border:1px solid #0e3a47;border-radius:9px;color:#cbd5e1;font-family:var(--font-mono);font-size:12px;padding:9px 11px;outline:none}
+.m-input:focus{border-color:var(--cyan-edge)}
+.m-btn{flex:none;border-radius:9px;padding:9px 14px;font-family:var(--font-disp);font-size:13px;cursor:pointer;border:1px solid transparent;transition:.15s}
+.m-btn.outline{background:transparent;border-color:#0e3a47;color:var(--cyan)}
+.m-btn.outline:hover{background:rgba(34,211,238,.1)}
+.m-btn.solid{background:#0891b2;color:#fff}
+.m-btn.solid:hover{background:#22D3EE;color:#03121B}
+.m-result{border:1px solid #0e3a47;background:rgba(7,19,31,.7);border-radius:12px;padding:13px;margin-top:6px}
+.m-check{display:flex;align-items:center;gap:9px;font-size:13px;color:var(--slate-300);margin-bottom:6px}
+.m-check .ck{font-weight:700}.m-check .ck.ok{color:var(--cyan)}.m-check .ck.no{color:var(--loss)}
+.m-meta{display:flex;flex-wrap:wrap;gap:3px 16px;font-size:12px;color:var(--slate-500);margin:10px 0}
+.m-meta .mv{font-family:var(--font-mono);color:var(--slate-300)}
+.m-meta .mv.rose{color:var(--loss)}.m-meta .mv.cyan{color:var(--cyan)}
+.m-fields{display:grid;gap:8px;margin-top:6px}
+.m-field .fl{font-size:11px;text-transform:uppercase;letter-spacing:.04em;color:var(--slate-500)}
+.m-field .fv{word-break:break-all;border-radius:7px;background:var(--field);padding:5px 9px;font-family:var(--font-mono);font-size:11.5px;color:var(--slate-300);margin-top:2px}
+.m-foot{display:flex;flex-wrap:wrap;gap:3px 16px;font-size:12px;color:var(--slate-500);margin-top:10px}
+.m-foot .fv{font-family:var(--font-mono)}.m-foot .fv.amber{color:var(--win)}.m-foot .fv.cyan{color:var(--cyan)}.m-foot .fv.rose{color:var(--loss)}.m-foot .fv.b{color:#e2e8f0;font-weight:700}
+.m-maplabel{font-size:11px;color:var(--slate-500);margin:10px 0 4px;text-transform:uppercase;letter-spacing:.06em}
+.m-map{display:flex;flex-wrap:wrap;gap:3px;margin-bottom:4px}
+.m-cell{width:22px;height:22px;border-radius:5px;display:flex;align-items:center;justify-content:center;font-size:11px;font-family:var(--font-mono);background:var(--field);color:#334155;box-shadow:inset 0 0 0 1px rgba(34,211,238,.12)}
+.m-cell.safe{background:rgba(34,211,238,.14);color:var(--cyan);box-shadow:inset 0 0 0 1px rgba(34,211,238,.4)}
+.m-cell.bump{background:rgba(251,113,133,.12);color:var(--loss);box-shadow:inset 0 0 0 1px rgba(251,113,133,.5)}
+.m-cell.hit{background:rgba(251,113,133,.32);color:#fecdd3;box-shadow:inset 0 0 0 1px rgba(251,113,133,.85)}
+.m-cell.sealed{color:#2a3a4a}
+
+.lab-note{margin-top:22px;text-align:center;font-size:11px;color:var(--slate-500);font-family:var(--font-mono);line-height:1.6}
+.lab-note b{color:var(--slate-400);font-weight:600}
+</style>
+</head>
+<body>
+<div class="bg-light"></div>
+<div class="bg-vignette"></div>
+
+<div class="wrap">
+  <header>
+    <h1 class="title">Chicken<span class="glyph">🐔</span></h1>
+    <p class="tagline">cross the lanes · bank before the bumper · cash out anytime · provably fair · played in chips</p>
+  </header>
+
+  <div class="topbar">
+    <div class="balance"><span class="coin"></span><span class="amt" id="balance">25,000</span><span class="cur">MORBIUS</span></div>
+    <div class="right">
+      <button class="pill-btn" id="fairBtn"><span class="dot"></span>Provably fair</button>
+      <button class="icon-btn" id="soundBtn" title="Sound" aria-label="Toggle sound">♪</button>
+    </div>
+  </div>
+
+  <div class="game-grid">
+    <section>
+      <div class="panel">
+        <p class="panel-label">Difficulty</p>
+        <div class="diff-row" id="diffRow">
+          <button class="diff active" data-diff="easy"><div class="d-name">Easy</div><div class="d-meta">9% · ×6.5</div></button>
+          <button class="diff" data-diff="medium"><div class="d-name">Med</div><div class="d-meta">17% · ×16</div></button>
+          <button class="diff" data-diff="hard"><div class="d-name">Hard</div><div class="d-meta">30% · ×35</div></button>
+        </div>
+      </div>
+      <div class="panel">
+        <p class="panel-label">Bet amount</p>
+        <div class="bet-input-row">
+          <div class="bet-field"><span class="coin"></span><input id="betInput" class="mono" inputmode="numeric" value="500" /></div>
+          <button class="mini-btn" data-bet="half">½</button>
+          <button class="mini-btn" data-bet="double">2×</button>
+        </div>
+        <div class="chips">
+          <button class="chip" data-add="100">+100</button>
+          <button class="chip" data-add="500">+500</button>
+          <button class="chip" data-add="1000">+1k</button>
+          <button class="chip" data-set="max">Max</button>
+        </div>
+        <div class="minmax"><span>Min 100</span><span>Max 100,000</span></div>
+      </div>
+    </section>
+
+    <section class="board">
+      <div class="board-shell">
+        <div class="hud">
+          <div class="cell"><div class="k">Multiplier</div><div class="v mult idle" id="hudMult">1.00×</div></div>
+          <div class="cell"><div class="k">Lane</div><div class="v" id="hudLane">0 / 20</div></div>
+          <div class="cell"><div class="k">Cash out</div><div class="v" id="hudPayout">—</div></div>
+        </div>
+        <div class="road" id="road">
+          <div class="track" id="track"></div>
+          <div class="chicken" id="chicken">
+            <svg viewBox="0 0 64 64" fill="none" xmlns="http://www.w3.org/2000/svg">
+              <ellipse cx="32" cy="58" rx="15" ry="4" fill="rgba(0,0,0,.35)"/>
+              <path d="M30 8c4 0 5 3 4 6 3-1 6 1 5 4 7 1 12 8 12 17 0 11-9 19-21 19s-21-7-21-18c0-8 4-14 10-16-1-3 2-6 5-5-1-4 1-7 5-7z" fill="#F8FAFC"/>
+              <path d="M22 20c-2-3-1-7 2-8 1 3 0 6-2 8z" fill="#EF4444"/>
+              <circle cx="38" cy="30" r="3" fill="#0B1220"/>
+              <path d="M44 32l9-2-9 5z" fill="#F59E0B"/>
+              <path d="M16 40c-4 1-7 4-7 4 3 1 6 0 8-2z" fill="#22D3EE" opacity=".9"/>
+              <path d="M26 56l-2 6M34 56l0 6M40 55l3 6" stroke="#F59E0B" stroke-width="2.4" stroke-linecap="round"/>
+            </svg>
+          </div>
+          <div class="banner-host"><div class="banner" id="banner"><div class="b-k" id="bannerK"></div><div class="b-v" id="bannerV"></div></div></div>
+        </div>
+      </div>
+      <div class="actions" id="actions"><button class="btn btn-go" id="goBtn">Place bet &amp; cross</button></div>
+    </section>
+  </div>
+
+  <!-- Info: My rounds / FAQ (mirrors MinesInfoTabs) -->
+  <section class="info panel" aria-label="Chicken information">
+    <div class="tabs-list">
+      <button class="tab-btn active" data-tab="rounds">My rounds</button>
+      <button class="tab-btn" data-tab="faq">FAQ</button>
+    </div>
+    <div class="tab-panel active" id="tab-rounds">
+      <div class="hist-head"><h2>Recent rounds</h2><span class="count" id="histCount">last —</span></div>
+      <div id="histBody"></div>
+    </div>
+    <div class="tab-panel" id="tab-faq"><div id="faqBody"></div></div>
+  </section>
+
+  <p class="lab-note">
+    <b>Prototype</b> — Deep-Sea Neon style, single-player on the arcade2 pattern (like Towers / Mines).<br/>
+    Outcomes here use an in-page seeded RNG for feel; the real build derives every lane from the
+    server <b>provably-fair HMAC</b> pipeline (<span class="mono">/api/arcade/chicken/*</span>). Currency: <b>MORBIUS</b> chips.
+  </p>
+</div>
+
+<!-- Fairness modal -->
+<div class="overlay" id="overlay">
+  <div class="modal" role="dialog" aria-modal="true" aria-label="Provably fair">
+    <div class="modal-head"><h2>Provably Fair</h2><button class="modal-x" id="modalX" aria-label="Close">✕</button></div>
+    <div class="m-sec">
+      <h3>Your client seed</h3>
+      <p class="note">Mixed into every crossing. Change it any time — the next round uses the new value.</p>
+      <div class="m-input-row">
+        <input class="m-input" id="clientSeedInput" placeholder="Leave blank for a random seed each round" />
+        <button class="m-btn outline" id="newSeedBtn">New seed</button>
+      </div>
+    </div>
+    <div class="m-sec">
+      <h3>Verify a round</h3>
+      <p class="note">Every lane is sealed from a server seed committed (hashed) before your bet — the seed is revealed once the round settles.</p>
+      <div class="m-input-row">
+        <input class="m-input" id="verifyIdInput" placeholder="Round ID" />
+        <button class="m-btn solid" id="verifyBtn">Verify</button>
+      </div>
+    </div>
+    <div id="verifyOut"></div>
+  </div>
+</div>
+
+<script>
+"use strict";
+(function(){
+  var EDGE=0.02;
+  var DIFFS={ easy:{label:'Easy',p:0.91,lanes:20}, medium:{label:'Medium',p:0.83,lanes:15}, hard:{label:'Hard',p:0.70,lanes:10} };
+  var MIN_BET=100, MAX_BET=100000;
+
+  var S={ balance:25000, diff:'easy', bet:500, phase:'idle', step:0, ladder:[], alive:[true],
+    serverSeed:'', clientSeed:'', clientSeedPref:'', nonce:0, serverHash:'', roundId:'',
+    sound:true, busy:false, history:[] };
+
+  var $=function(id){return document.getElementById(id);};
+  var track=$('track'),road=$('road'),chicken=$('chicken'),balanceEl=$('balance'),betInput=$('betInput'),
+      hudMult=$('hudMult'),hudLane=$('hudLane'),hudPayout=$('hudPayout'),actions=$('actions'),
+      banner=$('banner'),bannerK=$('bannerK'),bannerV=$('bannerV'),soundBtn=$('soundBtn'),
+      overlay=$('overlay'),histBody=$('histBody'),histCount=$('histCount'),faqBody=$('faqBody');
+
+  function fmt(n){return Math.round(n).toLocaleString('en-US');}
+  function multStr(x){return (x/100).toFixed(2)+'×';}
+  function rndHex(len){var s='';for(var i=0;i<len;i++)s+=Math.floor(Math.random()*16).toString(16);return s;}
+  function shortId(){return rndHex(8).toUpperCase();}
+  function truncate(h){return h&&h.length>22?h.slice(0,10)+'…'+h.slice(-8):h;}
+
+  function xmur3(str){var h=1779033703^str.length;for(var i=0;i<str.length;i++){h=Math.imul(h^str.charCodeAt(i),3432918353);h=h<<13|h>>>19;}return function(){h=Math.imul(h^h>>>16,2246822507);h=Math.imul(h^h>>>13,3266489909);return (h^=h>>>16)>>>0;};}
+  function mulberry32(a){return function(){a|=0;a=a+0x6D2B79F5|0;var t=Math.imul(a^a>>>15,1|a);t=t+Math.imul(t^t>>>7,61|t)^t;return ((t^t>>>14)>>>0)/4294967296;};}
+  function deriveAlive(serverSeed,clientSeed,nonce,p,lanes){
+    var rng=mulberry32(xmur3(serverSeed+':'+clientSeed+':'+nonce)());
+    var a=[true]; for(var i=1;i<=lanes;i++){ a[i]=rng()<p; } return a;
+  }
+  function buildLadder(p,lanes){var arr=[100];for(var i=1;i<=lanes;i++){arr[i]=Math.max(101,Math.round((1-EDGE)*Math.pow(1/p,i)*100));}return arr;}
+  async function sha256Hex(msg){try{var b=await crypto.subtle.digest('SHA-256',new TextEncoder().encode(msg));return Array.from(new Uint8Array(b)).map(function(x){return x.toString(16).padStart(2,'0');}).join('');}catch(e){return 'sha256-unavailable';}}
+
+  var actx=null;
+  function tone(f,d,t,g){if(!S.sound)return;try{actx=actx||new (window.AudioContext||window.webkitAudioContext)();var o=actx.createOscillator(),gn=actx.createGain();o.type=t||'sine';o.frequency.value=f;gn.gain.value=g||0.05;o.connect(gn);gn.connect(actx.destination);var n=actx.currentTime;o.start(n);gn.gain.exponentialRampToValueAtTime(0.0001,n+(d||0.12));o.stop(n+(d||0.12));}catch(e){}}
+  function sHop(){tone(520,0.09,'triangle',0.05);}
+  function sCash(){tone(660,0.12,'sine',0.06);setTimeout(function(){tone(880,0.16,'sine',0.06);},90);}
+  function sHit(){tone(150,0.3,'sawtooth',0.07);}
+
+  function renderRoad(){
+    var cfg=DIFFS[S.diff],html='<div class="lane curb"></div>';
+    for(var i=1;i<=cfg.lanes;i++){
+      var cls='lane';
+      if(i<=S.step)cls+=' cleared';
+      else if(i===S.step+1&&S.phase==='active')cls+=' next';
+      html+='<div class="'+cls+'" data-lane="'+i+'"><span class="mult">'+multStr(S.ladder[i])+'</span><span class="tick">✓</span></div>';
+    }
+    html+='<div class="lane finish"></div>';
+    track.innerHTML=html;
+    positionChicken(false);
+    spawnAmbient();
+  }
+
+  function laneEl(i){return i===0?track.querySelector('.lane.curb'):track.querySelector('.lane[data-lane="'+i+'"]');}
+  function positionChicken(animate){
+    var el=laneEl(S.step); if(!el)return;
+    var centerInTrack=el.offsetLeft+el.offsetWidth/2;
+    var viewport=road.clientWidth;
+    var maxScroll=Math.max(0,track.scrollWidth-viewport);
+    var scroll=Math.min(Math.max(0,centerInTrack-viewport*0.30),maxScroll);
+    track.style.transform='translateX('+(-scroll)+'px)';
+    var centerOnScreen=centerInTrack-scroll;
+    var cx=centerOnScreen-chicken.offsetWidth/2;
+    chicken.style.setProperty('--cxn',cx+'px');
+    if(!animate)chicken.style.transform='translateX('+cx+'px)';
+    road.style.setProperty('--chick-x',(centerOnScreen/viewport*100)+'%');
+  }
+
+  function spawnAmbient(){
+    track.querySelectorAll('.lane[data-lane]').forEach(function(ln){
+      var i=+ln.getAttribute('data-lane');
+      if(i>S.step+1&&Math.random()<0.3){var c=carSVG(true);c.style.animationDuration=(2.6+Math.random()*2.2)+'s';c.style.animationDelay=(Math.random()*2)+'s';ln.appendChild(c);}
+    });
+  }
+  function carSVG(ambient){
+    var d=document.createElement('div');d.className='car'+(ambient?' ambient':'');
+    var c=ambient?'#1e6b78':'#22D3EE';
+    d.innerHTML='<svg viewBox="0 0 44 70" xmlns="http://www.w3.org/2000/svg"><rect x="6" y="6" width="32" height="58" rx="9" fill="#0a1a24" stroke="'+c+'" stroke-width="2"/><rect x="11" y="12" width="22" height="13" rx="4" fill="'+c+'" opacity="'+(ambient?'.5':'.85')+'"/><rect x="11" y="42" width="22" height="12" rx="4" fill="'+c+'" opacity="'+(ambient?'.35':'.6')+'"/><circle cx="13" cy="62" r="3" fill="#fde68a"/><circle cx="31" cy="62" r="3" fill="#fde68a"/></svg>';
+    return d;
+  }
+
+  function syncHud(){
+    var cfg=DIFFS[S.diff],m=S.ladder[S.step]||100;
+    hudMult.textContent=multStr(m);hudMult.classList.toggle('idle',S.step===0);
+    hudLane.textContent=S.step+' / '+cfg.lanes;
+    hudPayout.textContent=(S.phase==='active'&&S.step>0)?fmt(S.bet*m/100):'—';
+    balanceEl.textContent=fmt(S.balance);
+  }
+  function renderActions(){
+    if(S.phase==='idle'||S.phase==='settled'){
+      actions.className='actions';
+      actions.innerHTML='<button class="btn btn-go" id="goBtn">'+(S.phase==='settled'?'Play again':'Place bet &amp; cross')+'</button>';
+      $('goBtn').addEventListener('click',startRound);
+    }else{
+      actions.className='actions two';
+      var m=S.ladder[S.step]||100,can=S.step>0;
+      actions.innerHTML='<button class="btn btn-step" id="stepBtn">Step ▸</button><button class="btn btn-cash" id="cashBtn"'+(can?'':' disabled')+'>Cash out<span class="cash-sub">'+(can?fmt(S.bet*m/100)+' MORBIUS':'take 1 step first')+'</span></button>';
+      $('stepBtn').addEventListener('click',stepForward);
+      $('cashBtn').addEventListener('click',cashOut);
+    }
+  }
+  function setControls(on){
+    document.querySelectorAll('#diffRow .diff').forEach(function(b){b.setAttribute('aria-disabled',on?'false':'true');});
+    betInput.disabled=!on;
+    document.querySelectorAll('.chip,.mini-btn').forEach(function(b){b.style.pointerEvents=on?'auto':'none';b.style.opacity=on?'1':'.5';});
+  }
+
+  async function startRound(){
+    if(S.busy)return;
+    var bet=clampBet(parseInt(betInput.value,10)||0);
+    if(bet>S.balance){flashInput();return;}
+    betInput.value=bet;S.busy=true;
+    var cfg=DIFFS[S.diff];
+    S.bet=bet;S.balance-=bet;S.step=0;S.phase='active';
+    S.ladder=buildLadder(cfg.p,cfg.lanes);
+    S.serverSeed=rndHex(64);
+    S.clientSeed=(S.clientSeedPref||'').trim()||rndHex(20);
+    S.nonce+=1;S.roundId=shortId();
+    S.alive=deriveAlive(S.serverSeed,S.clientSeed,S.nonce,cfg.p,cfg.lanes);
+    S.serverHash=await sha256Hex(S.serverSeed);
+    hideBanner();setControls(false);renderRoad();syncHud();renderActions();
+    S.busy=false;
+  }
+
+  function stepForward(){
+    if(S.phase!=='active'||S.busy)return;
+    S.busy=true;
+    var cfg=DIFFS[S.diff],target=S.step+1;
+    chicken.style.setProperty('--cx',chicken.style.getPropertyValue('--cxn')||'0px');
+    sHop();
+    if(S.alive[target]){
+      S.step=target;positionChicken(true);chicken.classList.add('hop');
+      setTimeout(function(){chicken.classList.remove('hop');renderRoad();syncHud();
+        if(S.step===cfg.lanes){settle(true,true);}else{renderActions();}S.busy=false;},300);
+    }else{
+      S.step=target;positionChicken(true);chicken.classList.add('hop');
+      setTimeout(function(){
+        chicken.classList.remove('hop');
+        var lane=track.querySelector('.lane[data-lane="'+target+'"]');
+        if(lane){var car=carSVG(false);lane.appendChild(car);requestAnimationFrame(function(){car.classList.add('zoom');});}
+        sHit();
+        setTimeout(function(){chicken.classList.add('splat');feathers();},220);
+        setTimeout(function(){settle(false,false);S.busy=false;},620);
+      },300);
+    }
+  }
+  function cashOut(){if(S.phase!=='active'||S.step<1||S.busy)return;settle(true,false);}
+
+  function settle(win,full){
+    S.phase='settled';
+    var m=S.ladder[S.step]||100, payout=win?Math.round(S.bet*m/100):0;
+    if(win){S.balance+=payout;sCash();showBanner('win',full?'Crossed!':'Cashed out','+'+fmt(payout)+' MORBIUS');}
+    else{showBanner('loss','Splat — caught by the bumper','−'+fmt(S.bet)+' MORBIUS');}
+    S.history.unshift({ id:S.roundId, at:new Date().toISOString(), diff:S.diff, p:DIFFS[S.diff].p,
+      lanesTotal:DIFFS[S.diff].lanes, bet:S.bet, step:S.step, won:win, multX100:win?m:0, payout:payout,
+      serverSeed:S.serverSeed, serverHash:S.serverHash, clientSeed:S.clientSeed, nonce:S.nonce });
+    if(S.history.length>15)S.history.pop();
+    setControls(true);syncHud();renderActions();renderHistory();
+  }
+
+  function feathers(){
+    var rr=road.getBoundingClientRect(),cr=chicken.getBoundingClientRect();
+    for(var i=0;i<7;i++){var f=document.createElement('div');f.className='feather';f.textContent='🪶';
+      f.style.left=(cr.left-rr.left+cr.width/2)+'px';f.style.top=(cr.top-rr.top)+'px';
+      f.style.setProperty('--fx',(Math.random()*120-60)+'px');f.style.setProperty('--fy',(-40-Math.random()*60)+'px');
+      f.style.setProperty('--fr',(Math.random()*360-180)+'deg');road.appendChild(f);
+      setTimeout((function(el){return function(){el.remove();};})(f),720);}
+  }
+  function showBanner(k,a,b){banner.className='banner show '+k+' arc-banner-in';bannerK.textContent=a;bannerV.textContent=b;}
+  function hideBanner(){banner.className='banner';}
+
+  function clampBet(v){if(isNaN(v)||v<MIN_BET)v=MIN_BET;if(v>MAX_BET)v=MAX_BET;return v;}
+  function flashInput(){betInput.style.color='#FB7185';setTimeout(function(){betInput.style.color='#fff';},400);}
+
+  // History
+  function timeLabel(iso){var d=new Date(iso);return isNaN(d.getTime())?'—':d.toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'});}
+  function renderHistory(){
+    histCount.textContent='last '+(S.history.length||'—');
+    if(S.history.length===0){histBody.innerHTML='<p class="hist-empty">No crossings yet — pick a difficulty and step onto the road.</p>';return;}
+    var rows=S.history.map(function(r){
+      var profit=r.payout-r.bet;
+      var xcell=r.won?'<span class="x win">'+multStr(r.multX100)+'</span>':'<span class="x bust">splat</span>';
+      var pcell='<span class="p '+(profit>0?'up':'flat')+'">'+(profit>0?'+'+fmt(profit):fmt(profit))+'</span>';
+      return '<li class="hist-row"><span class="t">'+timeLabel(r.at)+'</span>'
+        +'<span class="badge">'+DIFFS[r.diff].label+'</span>'
+        +'<span class="m">bet '+fmt(r.bet)+'</span>'
+        +'<span class="m">'+r.step+' lane'+(r.step===1?'':'s')+'</span>'
+        +xcell+pcell
+        +'<button class="verify" data-id="'+r.id+'">Verify</button></li>';
+    }).join('');
+    histBody.innerHTML='<ul class="hist-list">'+rows+'</ul>';
+    histBody.querySelectorAll('.verify').forEach(function(b){b.addEventListener('click',function(){openFairness(b.getAttribute('data-id'));});});
+  }
+
+  // Fairness modal — mirrors the arcade2 dialogs (Dice/Mines/Towers/Crash):
+  // client seed · verify-by-id · local checks · seed/hash/nonce/recipe fields ·
+  // an outcome map (cf. Mines' grid) · sealed "active round" view (cf. Mines).
+  function recipeStr(p){return 'HMAC_SHA256(serverSeed, `${clientSeed}:${nonce}:lane`) → first byte → lane unsafe when byte/255 ≥ p ('+Number(p).toFixed(2)+')';}
+  function ckHtml(ok,label){return '<div class="m-check"><span class="ck '+(ok?'ok':'no')+'">'+(ok?'✓':'✗')+'</span><span>'+label+'</span></div>';}
+  function fieldHtml(l,v){return '<div class="m-field"><div class="fl">'+l+'</div><div class="fv">'+v+'</div></div>';}
+  function laneMapHtml(r,revealed,reAlive){
+    var cells='';
+    for(var i=1;i<=r.lanesTotal;i++){
+      var extra='',g='';
+      if(!revealed){ if(i<=r.step){extra='safe';g='✓';} else {extra='sealed';g=i;} }
+      else {
+        var bump=!reAlive[i];
+        if(bump && !r.won && i===r.step){extra='hit';g='✸';}
+        else if(bump){extra='bump';g='✸';}
+        else if(i<=r.step){extra='safe';g='✓';}
+        else {extra='sealed';g=i;}
+      }
+      cells+='<span class="m-cell '+extra+'" title="Lane '+i+'">'+g+'</span>';
+    }
+    return '<div class="m-map">'+cells+'</div>';
+  }
+  function findRound(id){
+    id=String(id||'').trim();
+    if(S.phase==='active' && id===S.roundId){
+      return { id:S.roundId, active:true, diff:S.diff, p:DIFFS[S.diff].p, lanesTotal:DIFFS[S.diff].lanes,
+        bet:S.bet, step:S.step, won:false, multX100:S.ladder[S.step]||100, payout:0,
+        serverSeed:'', serverHash:S.serverHash, clientSeed:S.clientSeed, nonce:S.nonce };
+    }
+    return S.history.filter(function(x){return x.id===id;})[0]||null;
+  }
+  function openFairness(id){
+    overlay.classList.add('open');
+    $('clientSeedInput').value=S.clientSeedPref;
+    var target=id||(S.phase==='active'?S.roundId:(S.history[0]&&S.history[0].id));
+    if(target){$('verifyIdInput').value=target;runVerify(target);}
+    else{$('verifyOut').innerHTML='<p class="note">Play a round, then verify it here — or paste any round ID.</p>';}
+  }
+  function closeFairness(){overlay.classList.remove('open');}
+  async function runVerify(id){
+    var out=$('verifyOut'),r=findRound(id);
+    if(!r){out.innerHTML='<p class="note" style="color:var(--loss)">No round found with that ID.</p>';return;}
+    out.innerHTML='<p class="note">Checking…</p>';
+    var L=r.lanesTotal;
+    if(r.active){
+      out.innerHTML='<div class="m-result">'
+        +'<p class="note">This round is still active — the server seed and bumper lanes stay sealed until it ends. Only the commitment hash is published for now.</p>'
+        +'<div class="m-maplabel">Your crossing</div>'+laneMapHtml(r,false,null)
+        +'<div class="m-meta"><span>Difficulty: <span class="mv" style="text-transform:capitalize">'+r.diff+'</span></span>'
+          +'<span>Lanes crossed: <span class="mv">'+r.step+' / '+L+'</span></span>'
+          +'<span>Bet: <span class="mv">'+fmt(r.bet)+'</span></span></div>'
+        +'<div class="m-fields">'+fieldHtml('Server seed hash (committed)',r.serverHash)
+          +fieldHtml('Server seed (revealed)','— sealed until the round ends —')
+          +fieldHtml('Client seed',r.clientSeed)+fieldHtml('Nonce',String(r.nonce))
+          +fieldHtml('Recipe',recipeStr(r.p))+'</div>'
+        +'</div>';
+      return;
+    }
+    var hashOk=(await sha256Hex(r.serverSeed))===r.serverHash;
+    var reAlive=deriveAlive(r.serverSeed,r.clientSeed,r.nonce,r.p,L);
+    var carLanes=[];for(var i=1;i<=L;i++){if(!reAlive[i])carLanes.push(i);}
+    var outcomeOk;
+    if(r.won){ outcomeOk=true; for(var a=1;a<=r.step;a++){if(!reAlive[a])outcomeOk=false;} }
+    else { outcomeOk=!reAlive[r.step]; for(var b=1;b<r.step;b++){if(!reAlive[b])outcomeOk=false;} }
+    var expected=r.won?Math.floor(r.bet*r.multX100/100):0,payoutOk=expected===r.payout;
+    out.innerHTML='<div class="m-result">'
+      +ckHtml(hashOk,'Server seed matches its committed hash (checked locally)')
+      +ckHtml(outcomeOk,'Revealed traffic matches the recorded outcome (checked locally)')
+      +ckHtml(payoutOk,'Payout reconciles with floor(bet × multiplier)')
+      +'<div class="m-maplabel">Outcome map</div>'+laneMapHtml(r,true,reAlive)
+      +'<div class="m-meta"><span>Difficulty: <span class="mv" style="text-transform:capitalize">'+r.diff+'</span></span>'
+        +'<span>Lanes crossed: <span class="mv">'+r.step+' / '+L+'</span></span>'
+        +'<span>Bumper lanes: <span class="mv rose">['+carLanes.join(', ')+']</span></span></div>'
+      +'<div class="m-fields">'+fieldHtml('Server seed hash (committed)',r.serverHash)+fieldHtml('Server seed (revealed)',r.serverSeed)
+        +fieldHtml('Client seed',r.clientSeed)+fieldHtml('Nonce',String(r.nonce))+fieldHtml('Recipe',recipeStr(r.p))+'</div>'
+      +'<div class="m-foot"><span>Bet: <span class="fv">'+fmt(r.bet)+'</span></span>'
+        +'<span>Result: <span class="fv b">'+(r.won?'Win':'Splat')+'</span></span>'
+        +'<span>Multiplier: <span class="fv cyan">'+(r.won?multStr(r.multX100):'—')+'</span></span>'
+        +'<span>Returned: <span class="fv '+(r.payout>0?'amber':'rose')+'">'+fmt(r.payout)+' chips</span></span></div>'
+      +'</div>';
+  }
+
+  // FAQ (chicken-specific + shared arcadeCommonFaqs)
+  var A='var(--cyan)';
+  var FAQS=[
+    {q:'Is Chicken really fair?',a:'<p>Yes — and you can prove it yourself, no trust required. Before you bet, the server picks a secret <span class="hl">server seed</span> and shows you only its SHA-256 hash. That hash is a public commitment: the server can’t swap the seed afterward without the hash no longer matching.</p><p>Each outcome is then derived by HMAC-SHA256 from that server seed, <span class="hl">your own client seed</span>, and a per-bet nonce — so you influence every result and no one can predict or steer it. The lane the bumper is waiting in is fixed by that byte stream when the round starts and sealed behind the hash — stepping into a lane just looks one up.</p><p>Rotate the seed (or close the session) and the plaintext server seed is revealed. Hit <span class="hl">Verify</span> and anyone can re-derive every round and confirm that <span class="mono">SHA-256(serverSeed)</span> equals the hash you were shown up front. If one byte had been changed, it wouldn’t.</p>'},
+    {q:'Can the road change after I start?',a:'<p>No. The moment you bet, the bumper lanes are placed and <span class="hl">sealed behind the commitment hash</span>. You choose how far to walk, but the traffic can’t shift under you.</p>'},
+    {q:'What if I refresh mid-round?',a:'<p>Your active round <span class="hl">resumes</span> — the server keeps one open round per wallet, so a reload picks up exactly where you left off, with your lane and multiplier intact.</p>'},
+    {q:'How does the multiplier grow?',a:'<p>Each lane you clear raises your return based on how risky the crossing is. A higher difficulty means a bigger chance of a bumper per lane, so every successful step jumps the multiplier more — Hard climbs fastest, Easy the gentlest.</p>'},
+    {q:'Can I get clipped on my very first step?',a:'<p>Yes — if the first lane hides a bumper, the round ends. You can only cash out once you’ve safely crossed at least one lane.</p>'},
+    {q:'How do I get chips?',a:'<p>Chips are the play credits used at every table. Tap <span class="hl">Buy</span> next to your balance to open the chip cage and swap MORBIUS for chips at a fixed <span class="hl">1 chip = 1 MORBIUS</span>.</p><p>Chips live as an off-chain balance, so buying is instant and gasless, and there’s <span class="hl">no fee</span> on the swap. You can cash chips back out to MORBIUS any time at the same 1:1.</p>'},
+    {q:'How do I get MORBIUS?',a:'<p>MORBIUS is the project’s token on <span class="hl">PulseChain</span> (chain ID 369). You buy it on <span class="hl">PulseX</span>, the main PulseChain DEX, by swapping PLS or WPLS for MORBIUS — then deposit it to your play balance and convert to chips.</p><p class="mono" style="font-size:11px">Contract: <a href="https://scan.pulsechain.com/token/0xB7d4eB5fDfE3d4d3B5C16a44A49948c6EC77c6F1" target="_blank" rel="noopener noreferrer">0xB7d4eB5fDfE3d4d3B5C16a44A49948c6EC77c6F1</a></p><p>Always confirm the contract address before swapping — never trust a ticker alone.</p>'},
+    {q:'Chips vs. MORBIUS — what’s the difference?',a:'<p><span class="hl">MORBIUS</span> is the real, on-chain token in your wallet — it has market value and can be traded. <span class="hl">Chips</span> are off-chain 1:1 credits you actually play with at the tables: faster, gasless, and settled instantly.</p><p>You move freely between them at 1:1, and you only ever wager in chips.</p>'},
+    {q:'Why do I have to sign a message in my wallet?',a:'<p>It’s a <span class="hl">Sign-In with Ethereum</span> (SIWE) signature — an off-chain message, not a transaction. It costs no gas, moves no funds, and grants no token approvals. It only proves you control your address so we can open a login session for you.</p><div class="siwe"><div class="s">morbius.io wants you to sign in with your Ethereum account:</div><div class="a">0xYour…Wallet</div><div style="margin:6px 0" class="s">Sign in to MORBIUS. This proves you own this wallet. No funds will move.</div><div>URI: https://morbius.io</div><div>Version: 1</div><div>Chain ID: 369</div><div>Nonce: a1b2c3…</div></div><p>It’s domain-bound (a look-alike site can’t phish it), replay-proof (the one-time nonce expires), and never exposes your private key or touches your funds. A signature is not a transaction.</p>'},
+    {q:'Can signing in or playing drain my wallet?',a:'<p>No. Signing in is an off-chain message — it can’t spend, move, or approve anything on-chain. We never ask for a token approval to play.</p><p>Your chips are an off-chain balance, so the only thing you can ever lose is the <span class="hl">chips you choose to bet</span>. Your MORBIUS and the rest of your wallet are untouched.</p>'},
+    {q:'What are the fees?',a:'<p>These chip games take <span class="hl">no per-bet or per-payout fee</span>. Instead each game keeps a small built-in house edge in its odds — for example crash and dice return about 99% over time (a ~1% edge). Buying and cashing chips is free, 1:1.</p><p style="color:var(--slate-500)">(The on-chain games and poker differ — poker takes a rake, and on-chain payouts carry a 5% token fee.)</p>'},
+    {q:'Which network do I need?',a:'<p><span class="hl">PulseChain</span> — chain ID <span class="hl">369</span>. Add it to your wallet and make sure you’re connected to it; MORBIUS and your balances live there. Most wallets will offer to switch networks for you.</p>'},
+    {q:'Why was I signed out, or asked to sign again?',a:'<p>Your session lasts about <span class="hl">7 days</span>, and every sign-in nonce is single-use. When the session expires — or you clear cookies, or switch wallet/account — you’ll sign a fresh message. It’s still gasless and free.</p>'}
+  ];
+  function renderFaq(){
+    faqBody.innerHTML=FAQS.map(function(f,i){return '<div class="faq-item" data-i="'+i+'"><button class="faq-q">'+f.q+'</button><div class="faq-a">'+f.a+'</div></div>';}).join('');
+    faqBody.querySelectorAll('.faq-item').forEach(function(it){it.querySelector('.faq-q').addEventListener('click',function(){it.classList.toggle('open');});});
+  }
+
+  // Wire controls
+  document.querySelectorAll('#diffRow .diff').forEach(function(b){b.addEventListener('click',function(){
+    if(S.phase==='active')return;
+    document.querySelectorAll('#diffRow .diff').forEach(function(x){x.classList.remove('active');});
+    b.classList.add('active');S.diff=b.getAttribute('data-diff');
+    S.step=0;S.phase='idle';S.ladder=buildLadder(DIFFS[S.diff].p,DIFFS[S.diff].lanes);
+    hideBanner();renderRoad();syncHud();renderActions();
+  });});
+  document.querySelectorAll('.chip').forEach(function(c){c.addEventListener('click',function(){
+    if(S.phase==='active')return;
+    if(c.getAttribute('data-set')==='max'){betInput.value=Math.min(MAX_BET,S.balance);}
+    else{betInput.value=clampBet((parseInt(betInput.value,10)||0)+parseInt(c.getAttribute('data-add'),10));}
+  });});
+  document.querySelectorAll('.mini-btn').forEach(function(b){b.addEventListener('click',function(){
+    if(S.phase==='active')return;var v=parseInt(betInput.value,10)||MIN_BET;
+    betInput.value=clampBet(b.getAttribute('data-bet')==='half'?Math.floor(v/2):v*2);
+  });});
+  betInput.addEventListener('change',function(){betInput.value=clampBet(parseInt(betInput.value,10)||0);});
+  soundBtn.addEventListener('click',function(){S.sound=!S.sound;soundBtn.style.color=S.sound?'':'#475569';soundBtn.textContent=S.sound?'♪':'✕';if(S.sound)tone(700,0.1,'sine',0.05);});
+  window.addEventListener('resize',function(){positionChicken(false);});
+
+  $('fairBtn').addEventListener('click',function(){openFairness(null);});
+  $('modalX').addEventListener('click',closeFairness);
+  overlay.addEventListener('click',function(e){if(e.target===overlay)closeFairness();});
+  window.addEventListener('keydown',function(e){if(e.key==='Escape')closeFairness();});
+  $('newSeedBtn').addEventListener('click',function(){S.clientSeedPref=rndHex(16);$('clientSeedInput').value=S.clientSeedPref;});
+  $('clientSeedInput').addEventListener('input',function(e){S.clientSeedPref=e.target.value.slice(0,128);});
+  $('verifyBtn').addEventListener('click',function(){runVerify($('verifyIdInput').value);});
+  document.querySelectorAll('.tab-btn').forEach(function(t){t.addEventListener('click',function(){
+    document.querySelectorAll('.tab-btn').forEach(function(x){x.classList.remove('active');});
+    document.querySelectorAll('.tab-panel').forEach(function(x){x.classList.remove('active');});
+    t.classList.add('active');$('tab-'+t.getAttribute('data-tab')).classList.add('active');
+  });});
+
+  // Init
+  S.ladder=buildLadder(DIFFS[S.diff].p,DIFFS[S.diff].lanes);
+  renderRoad();syncHud();renderActions();renderHistory();renderFaq();
+})();
+</script>
+</body>
+</html>
