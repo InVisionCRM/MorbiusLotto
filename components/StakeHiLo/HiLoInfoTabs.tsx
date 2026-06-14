@@ -19,6 +19,8 @@ import {
   type HiLoLeaderboardEntry,
   type HiLoHistoryRound,
 } from '@/lib/hilo-client';
+import { ArcadeOddsTab } from '@/components/arcade2/ArcadeOddsTab';
+import { hiloOdds } from './hiloOdds';
 
 interface HiLoInfoTabsProps {
   history: HiLoHistoryRound[];
@@ -98,10 +100,11 @@ export function HiLoInfoTabs({ history, historyLoading, onVerify, info }: HiLoIn
   return (
     <section aria-label="Hi-Lo information" className="arc-panel rounded-xl p-3 sm:p-4">
       <Tabs defaultValue="recent">
-        <TabsList className="grid h-auto w-full grid-cols-4 gap-1 rounded-lg bg-[#081420]/70 p-1 ring-1 ring-cyan-950/70">
+        <TabsList className="grid h-auto w-full grid-cols-5 gap-1 rounded-lg bg-[#081420]/70 p-1 ring-1 ring-cyan-950/70">
           <TabsTrigger value="recent" className={TRIGGER_CLASS}>Recent</TabsTrigger>
           <TabsTrigger value="leaderboard" className={TRIGGER_CLASS}>Leaderboard</TabsTrigger>
           <TabsTrigger value="mine" className={TRIGGER_CLASS}>My rounds</TabsTrigger>
+          <TabsTrigger value="odds" className={TRIGGER_CLASS}>Odds</TabsTrigger>
           <TabsTrigger value="rules" className={TRIGGER_CLASS}>Rules</TabsTrigger>
         </TabsList>
 
@@ -204,6 +207,10 @@ export function HiLoInfoTabs({ history, historyLoading, onVerify, info }: HiLoIn
               })}
             </ul>
           )}
+        </TabsContent>
+
+        <TabsContent value="odds" className="mt-3 focus-visible:outline-none">
+          <ArcadeOddsTab odds={hiloOdds} />
         </TabsContent>
 
         <TabsContent value="rules" className="mt-3 focus-visible:outline-none">

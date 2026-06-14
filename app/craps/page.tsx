@@ -13,7 +13,7 @@ import { useEffect, useState } from 'react';
 import confetti from 'canvas-confetti';
 import { useAccount } from 'wagmi';
 import { Chakra_Petch, JetBrains_Mono } from 'next/font/google';
-import { Coins, RotateCw, BookOpen, GraduationCap, ScrollText, ShieldCheck, AlertTriangle, X, Dices } from 'lucide-react';
+import { Coins, RotateCw, BookOpen, GraduationCap, ScrollText, ShieldCheck, AlertTriangle, X, Dices, Percent } from 'lucide-react';
 import GlobalMainNav from '@/components/shared/GlobalMainNav';
 import Footer from '@/components/PLINKO/Footer';
 import { Card } from '@/components/ui/card';
@@ -30,6 +30,7 @@ import { CrapsTutorialOverlay } from '@/components/craps/CrapsTutorialOverlay';
 import { CrapsHistoryModal } from '@/components/craps/CrapsHistoryModal';
 import { CrapsVerifyModal } from '@/components/craps/CrapsVerifyModal';
 import { CrapsRulesModal } from '@/components/craps/CrapsRulesModal';
+import { CrapsOddsModal } from '@/components/craps/CrapsOddsModal';
 import { CRAPS_CHIP_LADDER } from '@/lib/craps-types';
 
 const arcDisplay = Chakra_Petch({
@@ -60,6 +61,7 @@ export default function CrapsPage() {
   const [historyOpen, setHistoryOpen] = useState(false);
   const [verifyOpen, setVerifyOpen] = useState(false);
   const [rulesOpen, setRulesOpen] = useState(false);
+  const [oddsOpen, setOddsOpen] = useState(false);
   const [exchangeOpen, setExchangeOpen] = useState(false);
 
   // Prefer the engine snapshot for instant updates after a bet / roll / clear,
@@ -243,6 +245,12 @@ export default function CrapsPage() {
                       <BookOpen className="w-3 h-3" /> Rules
                     </button>
                     <button
+                      onClick={() => setOddsOpen(true)}
+                      className="text-slate-500 hover:text-cyan-400 transition-colors flex items-center gap-1.5 bg-transparent border-0 p-0 cursor-pointer"
+                    >
+                      <Percent className="w-3 h-3" /> Odds
+                    </button>
+                    <button
                       onClick={() => setVerifyOpen(true)}
                       className="text-slate-500 hover:text-cyan-400 transition-colors flex items-center gap-1.5 bg-transparent border-0 p-0 cursor-pointer"
                     >
@@ -365,6 +373,7 @@ export default function CrapsPage() {
           onSetClientSeed={engine.setClientSeedAndRestart}
         />
         <CrapsRulesModal open={rulesOpen} onOpenChange={setRulesOpen} />
+        <CrapsOddsModal open={oddsOpen} onOpenChange={setOddsOpen} />
         <PokerChipExchangeModal
           isOpen={exchangeOpen}
           onClose={() => setExchangeOpen(false)}

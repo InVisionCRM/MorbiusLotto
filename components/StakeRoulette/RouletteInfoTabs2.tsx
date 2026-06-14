@@ -8,7 +8,9 @@
 import { useEffect, useState, type ReactNode } from 'react';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { ArcadeFAQ } from '@/components/arcade2/ArcadeFAQ';
+import { ArcadeOddsTab } from '@/components/arcade2/ArcadeOddsTab';
 import { rouletteFaqs } from './rouletteFaqs';
+import { rouletteOdds } from './rouletteOdds';
 import {
   fetchRoulette2Recent,
   fetchRoulette2Leaderboard,
@@ -56,16 +58,6 @@ function PocketBadge({ n }: { n: number }) {
 function Empty({ children }: { children: ReactNode }) {
   return <p className="py-6 text-center text-sm text-[#5E8273]">{children}</p>;
 }
-
-const PAYOUT_ROWS: Array<[string, string, string]> = [
-  ['Straight (one number)', '35:1', '36×'],
-  ['Split (two numbers)', '17:1', '18×'],
-  ['Street (row of three)', '11:1', '12×'],
-  ['Corner (four numbers)', '8:1', '9×'],
-  ['Six line (two rows)', '5:1', '6×'],
-  ['Dozen / Column', '2:1', '3×'],
-  ['Red / Black / Even / Odd / 1–18 / 19–36', '1:1', '2×'],
-];
 
 export function RouletteInfoTabs2({
   history,
@@ -117,8 +109,8 @@ export function RouletteInfoTabs2({
           <TabsTrigger value="mine" className={TRIGGER_CLASS}>
             My spins
           </TabsTrigger>
-          <TabsTrigger value="payouts" className={TRIGGER_CLASS}>
-            Payouts
+          <TabsTrigger value="odds" className={TRIGGER_CLASS}>
+            Odds
           </TabsTrigger>
           <TabsTrigger value="faq" className={TRIGGER_CLASS}>
             FAQ
@@ -247,26 +239,8 @@ export function RouletteInfoTabs2({
           )}
         </TabsContent>
 
-        <TabsContent value="payouts" className="mt-3 focus-visible:outline-none">
-          <div className="space-y-3 px-1 py-2 text-sm leading-relaxed text-slate-300">
-            <ul className="divide-y divide-[#0E3B28] rounded-lg bg-[#0A2018] px-3 ring-1 ring-[#0E3B28]">
-              {PAYOUT_ROWS.map(([label, odds, gross]) => (
-                <li key={label} className="flex items-center justify-between gap-3 py-2 text-xs sm:text-sm">
-                  <span className="text-slate-300">{label}</span>
-                  <span className="shrink-0 font-mono text-[#5E8273]">
-                    {odds} <span className="text-[#6EE7B7]">({gross} returned)</span>
-                  </span>
-                </li>
-              ))}
-            </ul>
-            <p>
-              European single-zero rules: one green <span className="font-mono text-[#6EE7B7]">0</span>,
-              pockets 0–36, house edge 2.70% on every bet. Zero loses all outside bets — only a
-              straight bet on 0 covers it. Place up to 20 zones per spin; the winning pocket is
-              drawn from the committed server seed the moment you spin and every payout can be
-              re-derived in your browser from the Verify button.
-            </p>
-          </div>
+        <TabsContent value="odds" className="mt-3 focus-visible:outline-none">
+          <ArcadeOddsTab odds={rouletteOdds} accent="#34D399" />
         </TabsContent>
 
         <TabsContent value="faq" className="mt-2 focus-visible:outline-none">

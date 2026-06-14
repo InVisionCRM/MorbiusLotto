@@ -11,7 +11,9 @@ import { useEffect, useState, type ReactNode } from 'react'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { LimboHistory } from './LimboHistory'
 import { ArcadeFAQ } from '@/components/arcade2/ArcadeFAQ'
+import { ArcadeOddsTab } from '@/components/arcade2/ArcadeOddsTab'
 import { limboFaqs } from './limboFaqs'
+import { limboOdds } from './limboOdds'
 import {
   fetchLimboRecent,
   fetchLimboLeaderboard,
@@ -68,10 +70,11 @@ export function LimboInfoTabs({ history, historyLoading, onVerify }: LimboInfoTa
   return (
     <section aria-label="Limbo information" className="arc-panel rounded-xl p-3 sm:p-4">
       <Tabs defaultValue="recent">
-        <TabsList className="grid h-auto w-full grid-cols-4 gap-1 rounded-lg bg-[#081420]/70 p-1 ring-1 ring-cyan-950/70">
+        <TabsList className="grid h-auto w-full grid-cols-5 gap-1 rounded-lg bg-[#081420]/70 p-1 ring-1 ring-cyan-950/70">
           <TabsTrigger value="recent" className={TRIGGER_CLASS}>Recent</TabsTrigger>
           <TabsTrigger value="leaderboard" className={TRIGGER_CLASS}>Leaderboard</TabsTrigger>
           <TabsTrigger value="mine" className={TRIGGER_CLASS}>My rounds</TabsTrigger>
+          <TabsTrigger value="odds" className={TRIGGER_CLASS}>Odds</TabsTrigger>
           <TabsTrigger value="faq" className={TRIGGER_CLASS}>FAQ</TabsTrigger>
         </TabsList>
 
@@ -162,6 +165,10 @@ export function LimboInfoTabs({ history, historyLoading, onVerify }: LimboInfoTa
 
         <TabsContent value="mine" className="mt-3 focus-visible:outline-none">
           <LimboHistory rounds={history} loading={historyLoading} onVerify={onVerify} />
+        </TabsContent>
+
+        <TabsContent value="odds" className="mt-3 focus-visible:outline-none">
+          <ArcadeOddsTab odds={limboOdds} />
         </TabsContent>
 
         <TabsContent value="faq" className="mt-2 focus-visible:outline-none">

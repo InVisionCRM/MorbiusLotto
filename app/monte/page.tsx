@@ -20,6 +20,14 @@ export default function MontePage() {
             <MonteGame variant="embedded" />
           </div>
 
+          <div className="mt-6 w-full max-w-sm rounded-md border border-cyan-400/15 bg-zinc-950/60 px-4 py-3 text-center font-mono">
+            <div className="text-[10px] tracking-[0.3em] text-zinc-500">THE ODDS</div>
+            <div className="mt-1 text-2xl font-bold text-cyan-400">1 in 3</div>
+            <div className="mt-1 text-[11px] leading-relaxed text-zinc-500">
+              33.3% base chance to find the diamond — track the shuffle to beat it. Nothing is wagered.
+            </div>
+          </div>
+
           <p className="mt-6 text-[10px] text-zinc-600 tracking-widest font-mono">
             JUST FOR FUN · NO MORBIUS WAGERED
           </p>
