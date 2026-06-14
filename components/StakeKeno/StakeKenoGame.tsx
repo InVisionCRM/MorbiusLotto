@@ -551,6 +551,19 @@ export function StakeKenoGame() {
             picksCount={picksCount}
             resultHits={resultHits}
           />
+
+          {/* Mobile-only bet button — sits below the board so players on small
+              screens see the action without scrolling to the control rail. */}
+          <div className="lg:hidden">
+            <Button
+              type="button"
+              disabled={busy || picksCount === 0}
+              onClick={placeBet}
+              className="arc-display h-12 w-full bg-cyan-500 text-base font-bold uppercase tracking-widest text-[#03121B] shadow-[0_0_24px_-6px_rgba(34,211,238,0.8)] hover:bg-cyan-400 disabled:opacity-50"
+            >
+              {phase === 'betting' ? 'Placing…' : phase === 'revealing' ? 'Drawing…' : 'Bet'}
+            </Button>
+          </div>
         </div>
       </div>
 

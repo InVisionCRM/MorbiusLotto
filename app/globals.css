@@ -1497,8 +1497,79 @@ body {
 }
 .hilo-bust-flash { animation: hilo-bust-flash 0.7s ease-out both; }
 
+/* ── Video Poker (/video-poker) enhanced card animations ── */
+
+/* Deal: card arcs in from above-left, landing with a felt-impact bounce. */
+@keyframes vp-card-deal {
+  0% {
+    transform: perspective(900px) translateY(-100px) rotateX(32deg) rotateZ(-7deg) scale(0.68);
+    opacity: 0;
+    filter: brightness(2.8);
+  }
+  55% {
+    transform: perspective(900px) translateY(7px) rotateX(-5deg) rotateZ(1.5deg) scale(1.05);
+    opacity: 1;
+    filter: brightness(1.1);
+  }
+  78% {
+    transform: perspective(900px) translateY(-3px) rotateX(1.5deg) rotateZ(-0.5deg) scale(1.01);
+  }
+  100% {
+    transform: perspective(900px) translateY(0) rotateX(0) rotateZ(0) scale(1);
+    opacity: 1;
+    filter: brightness(1);
+  }
+}
+.vp-card-deal {
+  animation: vp-card-deal 0.52s cubic-bezier(0.22, 1.18, 0.36, 1) both;
+  transform-origin: top center;
+}
+
+/* Draw reveal: true 3D back→front casino-style flip. */
+@keyframes vp-draw-flip {
+  0%   { transform: rotateY(0deg) scaleX(1); }
+  42%  { transform: rotateY(75deg) scaleX(0.82); }
+  50%  { transform: rotateY(90deg) scaleX(0.78); filter: brightness(2.2); }
+  58%  { transform: rotateY(105deg) scaleX(0.82); }
+  85%  { transform: rotateY(186deg) scaleX(1.04); }
+  100% { transform: rotateY(180deg) scaleX(1); filter: brightness(1); }
+}
+/* Perspective container — needed for preserve-3d depth. */
+.vp-flip-perspective {
+  perspective: 1100px;
+  perspective-origin: 50% 40%;
+}
+/* Rotating wrapper that holds both card faces. */
+.vp-draw-flip-wrap {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  transform-style: preserve-3d;
+  animation: vp-draw-flip 0.54s cubic-bezier(0.28, 0.95, 0.42, 1) both;
+}
+/* Shared face layout: fills the wrapper, hidden when facing away. */
+.vp-card-face {
+  position: absolute;
+  inset: 0;
+  backface-visibility: hidden;
+  -webkit-backface-visibility: hidden;
+  border-radius: inherit;
+}
+/* Front face starts rotated 180° away — becomes visible once wrapper flips. */
+.vp-card-face--front {
+  transform: rotateY(180deg);
+}
+
+/* Win-card continuous glow pulse on paying hands. */
+@keyframes vp-win-pulse {
+  0%, 100% { box-shadow: 0 0 18px -4px rgba(34, 211, 238, 0.55); }
+  50%       { box-shadow: 0 0 30px 2px rgba(34, 211, 238, 0.9); }
+}
+.vp-win-pulse { animation: vp-win-pulse 1.3s ease-in-out infinite; }
+
 @media (prefers-reduced-motion: reduce) {
   .keno-pop, .keno-hit-glow, .keno-dot, .keno-cell-flash, .arc-banner-in, .mine-shake,
-  .bacc-deal-in, .bacc-flip-inner, .bacc-total-pop, .hilo-flip-in, .hilo-bust-flash { animation: none; }
+  .bacc-deal-in, .bacc-flip-inner, .bacc-total-pop, .hilo-flip-in, .hilo-bust-flash,
+  .vp-card-deal, .vp-draw-flip-wrap, .vp-win-pulse { animation: none; }
   .keno-tile, .keno-tile:not(:disabled):hover { transition: none; transform: none; }
 }

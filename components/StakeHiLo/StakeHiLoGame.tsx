@@ -581,6 +581,30 @@ export function StakeHiLoGame() {
               </div>
             )}
           </Card>
+
+          {/* Mobile-only deal / cash-out button — visible below the stage card so
+              players on small screens don't need to scroll to the control rail. */}
+          <div className="lg:hidden">
+            {betting ? (
+              <Button
+                type="button"
+                disabled={phase === 'starting' || !info}
+                onClick={() => void startRound()}
+                className="arc-display h-12 w-full bg-cyan-500 text-base font-bold uppercase tracking-widest text-[#03121B] shadow-[0_0_24px_-6px_rgba(34,211,238,0.85)] hover:bg-cyan-400 disabled:opacity-50"
+              >
+                {phase === 'starting' ? 'Dealing…' : 'Deal'}
+              </Button>
+            ) : (
+              <Button
+                type="button"
+                disabled={!canCash || phase === 'cashing'}
+                onClick={() => void doCashout()}
+                className="arc-display h-12 w-full bg-amber-400 text-base font-bold uppercase tracking-widest text-[#1A1206] shadow-[0_0_24px_-6px_rgba(245,158,11,0.85)] hover:bg-amber-300 disabled:opacity-50"
+              >
+                {phase === 'cashing' ? 'Cashing…' : `Cash out ${cashoutValue.toLocaleString()}`}
+              </Button>
+            )}
+          </div>
         </div>
       </div>
 

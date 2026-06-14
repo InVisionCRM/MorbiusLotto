@@ -600,6 +600,34 @@ export function StakeMinesGame() {
             )}
           </Card>
 
+          {/* Mobile-only bet / cash-out button — visible directly below the board
+              so players on small screens don't need to scroll to the control rail. */}
+          <div className="lg:hidden">
+            {canStart ? (
+              <Button
+                type="button"
+                disabled={phase === 'starting' || !info}
+                onClick={onStart}
+                className="arc-display h-12 w-full bg-cyan-500 text-base font-bold uppercase tracking-widest text-[#03121B] shadow-[0_0_24px_-6px_rgba(34,211,238,0.8)] hover:bg-cyan-400 disabled:opacity-50"
+              >
+                {phase === 'starting' ? 'Starting…' : 'Bet'}
+              </Button>
+            ) : (
+              <Button
+                type="button"
+                disabled={phase !== 'active' || gems === 0}
+                onClick={onCashout}
+                className="arc-display h-12 w-full bg-amber-400 text-base font-bold uppercase tracking-widest text-[#1B1203] shadow-[0_0_24px_-6px_rgba(245,158,11,0.8)] hover:bg-amber-300 disabled:opacity-50"
+              >
+                {phase === 'cashing'
+                  ? 'Cashing out…'
+                  : gems === 0
+                    ? 'Pick a cell to begin'
+                    : `Cash out ${cashoutValue.toLocaleString()}`}
+              </Button>
+            )}
+          </div>
+
           <div className="arc-panel grid grid-cols-3 divide-x divide-cyan-950/60 rounded-xl px-2 py-3 text-center">
             <div>
               <div className="text-[11px] uppercase tracking-wide text-slate-500">

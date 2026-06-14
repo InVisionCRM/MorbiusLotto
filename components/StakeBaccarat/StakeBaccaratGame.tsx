@@ -580,6 +580,19 @@ export function StakeBaccaratGame() {
           </div>
 
           <BaccaratRoads entries={roadEntries} />
+
+          {/* Mobile-only deal button — visible below the table so players on
+              small screens don't need to scroll to the control rail. */}
+          <div className="lg:hidden">
+            <Button
+              type="button"
+              disabled={dealing || totalBet === 0 || !info}
+              onClick={() => void deal()}
+              className="arc-display h-12 w-full bg-cyan-500 text-base font-bold uppercase tracking-widest text-[#03121B] shadow-[0_0_24px_-6px_rgba(34,211,238,0.85)] hover:bg-cyan-400 disabled:opacity-50"
+            >
+              {dealing ? 'Dealing…' : 'Deal'}
+            </Button>
+          </div>
         </div>
       </div>
 
