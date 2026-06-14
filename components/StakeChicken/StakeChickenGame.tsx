@@ -465,14 +465,27 @@ export function StakeChickenGame() {
               {phase === 'starting' ? 'Sealing…' : 'Deal'}
             </Button>
           ) : (
-            <Button
-              type="button"
-              disabled={!canCash || phase === 'cashing'}
-              onClick={() => void doCashout()}
-              className="arc-display h-12 w-full bg-amber-400 text-base font-bold uppercase tracking-widest text-[#1A1206] shadow-[0_0_24px_-6px_rgba(245,158,11,0.85)] hover:bg-amber-300 disabled:opacity-50"
-            >
-              {phase === 'cashing' ? 'Cashing…' : `Cash out ${cashoutValue.toLocaleString()}`}
-            </Button>
+            <div className="grid grid-cols-2 gap-2.5">
+              <Button
+                type="button"
+                disabled={phase !== 'active'}
+                onClick={() => void doStep()}
+                className="arc-display h-14 w-full bg-cyan-500 text-base font-bold uppercase tracking-widest text-[#03121B] shadow-[0_0_24px_-6px_rgba(34,211,238,0.85)] hover:bg-cyan-400 disabled:opacity-50"
+              >
+                {phase === 'stepping' ? 'Crossing…' : 'Step ▸'}
+              </Button>
+              <Button
+                type="button"
+                disabled={!canCash || phase === 'cashing'}
+                onClick={() => void doCashout()}
+                className="arc-display flex h-14 w-full flex-col items-center justify-center gap-0 bg-amber-400 text-base font-bold uppercase tracking-widest text-[#1A1206] shadow-[0_0_24px_-6px_rgba(245,158,11,0.85)] hover:bg-amber-300 disabled:opacity-50"
+              >
+                <span>{phase === 'cashing' ? 'Cashing…' : 'Cash out'}</span>
+                <span className="arc-mono text-[11px] font-semibold normal-case tracking-normal opacity-85">
+                  {canCash ? `${cashoutValue.toLocaleString()} chips` : 'take 1 step first'}
+                </span>
+              </Button>
+            </div>
           )}
 
           {error && (
@@ -535,7 +548,7 @@ export function StakeChickenGame() {
                 </div>
               ) : phase === 'active' || phase === 'stepping' ? (
                 <p className="arc-mono text-xs text-slate-500">
-                  Lane {currentLane + 1} of {lanesTotal} · {lanesRemaining} to the curb · tap the next lane to cross
+                  Lane {currentLane + 1} of {lanesTotal} · {lanesRemaining} to the curb · Step ▸ to cross, cash out anytime
                 </p>
               ) : (
                 <p className="arc-display text-sm uppercase tracking-[0.3em] text-slate-600">
