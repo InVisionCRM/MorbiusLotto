@@ -31,8 +31,8 @@ interface RouletteFairnessModal2Props {
 function Field({ label, value }: { label: string; value: string }) {
   return (
     <div className="min-w-0">
-      <div className="text-[11px] uppercase tracking-wide text-[#5E8273]">{label}</div>
-      <div className="break-all rounded-md bg-[#0A2018] px-2 py-1 font-mono text-xs text-slate-300">
+      <div className="text-[11px] uppercase tracking-wide text-slate-500">{label}</div>
+      <div className="break-all rounded-md bg-[#081420] px-2 py-1 font-mono text-xs text-slate-300">
         {value}
       </div>
     </div>
@@ -42,7 +42,7 @@ function Field({ label, value }: { label: string; value: string }) {
 function Check({ ok, label }: { ok: boolean; label: string }) {
   return (
     <div className="flex items-center gap-2 text-sm">
-      <span className={ok ? 'text-[#34D399]' : 'text-rose-400'}>{ok ? '✓' : '✗'}</span>
+      <span className={ok ? 'text-cyan-400' : 'text-rose-400'}>{ok ? '✓' : '✗'}</span>
       <span className="text-slate-300">{label}</span>
     </div>
   );
@@ -128,9 +128,9 @@ export function RouletteFairnessModal2({
 
   return (
     <Dialog open={open} onOpenChange={(o) => !o && onClose()}>
-      <DialogContent className="max-h-[85vh] max-w-lg overflow-y-auto border-[#0E3B28] bg-[#04130D] text-slate-200">
+      <DialogContent className="max-h-[85vh] max-w-lg overflow-y-auto border-cyan-950 bg-[#050E16] text-slate-200">
         <DialogHeader>
-          <DialogTitle className="uppercase tracking-wider text-[#34D399]">
+          <DialogTitle className="uppercase tracking-wider text-cyan-300">
             Provably Fair
           </DialogTitle>
         </DialogHeader>
@@ -138,7 +138,7 @@ export function RouletteFairnessModal2({
         <div className="space-y-5">
           <section className="space-y-2">
             <h3 className="text-sm font-semibold text-slate-200">Your client seed</h3>
-            <p className="text-xs text-[#5E8273]">
+            <p className="text-xs text-slate-500">
               Mixed into every spin. Change it any time — the next spin uses the new value.
             </p>
             <div className="flex gap-2">
@@ -146,13 +146,13 @@ export function RouletteFairnessModal2({
                 value={clientSeed}
                 onChange={(e) => onClientSeedChange(e.target.value.slice(0, 128))}
                 placeholder="Leave blank for a random seed each spin"
-                className="border-[#0E3B28] bg-[#0A2018] font-mono text-xs"
+                className="border-cyan-950 bg-[#081420] font-mono text-xs"
               />
               <Button
                 type="button"
                 variant="outline"
                 onClick={() => onClientSeedChange(randomClientSeed())}
-                className="shrink-0 border-[#0E3B28] bg-transparent text-[#34D399] hover:bg-[#34D399]/10"
+                className="shrink-0 border-cyan-950 bg-transparent text-cyan-400 hover:bg-cyan-500/10"
               >
                 New seed
               </Button>
@@ -161,7 +161,7 @@ export function RouletteFairnessModal2({
 
           <section className="space-y-2">
             <h3 className="text-sm font-semibold text-slate-200">Verify a spin</h3>
-            <p className="text-xs text-[#5E8273]">
+            <p className="text-xs text-slate-500">
               The pocket is derived from a server seed committed (hashed) before your bets were
               accepted — verify it was never moved.
             </p>
@@ -170,12 +170,12 @@ export function RouletteFairnessModal2({
                 value={verifyId}
                 onChange={(e) => setVerifyId(e.target.value)}
                 placeholder="Spin ID"
-                className="border-[#0E3B28] bg-[#0A2018] font-mono text-xs"
+                className="border-cyan-950 bg-[#081420] font-mono text-xs"
               />
               <Button
                 onClick={() => runVerify(verifyId)}
                 disabled={loading}
-                className="shrink-0 bg-[#059669] text-white hover:bg-[#34D399] hover:text-[#03150D]"
+                className="shrink-0 bg-cyan-600 text-white hover:bg-cyan-500 hover:text-[#03121B]"
               >
                 {loading ? 'Checking…' : 'Verify'}
               </Button>
@@ -185,7 +185,7 @@ export function RouletteFairnessModal2({
           {error && <p className="text-sm text-rose-400">{error}</p>}
 
           {result && (
-            <section className="space-y-3 rounded-lg border border-[#0E3B28] bg-[#07271A]/60 p-3">
+            <section className="space-y-3 rounded-lg border border-cyan-950 bg-[#081420]/60 p-3">
               <div className="space-y-1.5">
                 {hashMatches !== null && (
                   <Check ok={hashMatches} label="Server seed matches its committed hash (checked locally)" />
@@ -206,13 +206,13 @@ export function RouletteFairnessModal2({
                 <Field label="Recipe" value={result.recipe} />
               </div>
 
-              <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-[#5E8273]">
+              <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-slate-500">
                 <span>
                   Pocket:{' '}
                   <span
                     className={`font-mono font-bold ${
                       pocketColor(result.result) === 'green'
-                        ? 'text-[#34D399]'
+                        ? 'text-[#4ADE80]'
                         : pocketColor(result.result) === 'red'
                           ? 'text-red-400'
                           : 'text-zinc-300'

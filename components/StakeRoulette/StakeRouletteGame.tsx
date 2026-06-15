@@ -3,8 +3,8 @@
 /**
  * StakeRouletteGame — the interactive client for chips Roulette (/roulette2).
  *
- * Midnight Emerald (user-approved direction): #04130D base, #34D399 emerald
- * accent, gold #FBBF24 wins, classic red/black pockets, Chakra Petch +
+ * Deep-Sea Neon (shared arcade2 theme): #050E16 abyss base, #22D3EE cyan
+ * accent, gold #FBBF24 wins, classic red/black/green pockets, Chakra Petch +
  * JetBrains Mono via the arcade2 font variables.
  *
  * Layout: 300px control rail (balance, chip value, total, SPIN, undo/clear/
@@ -305,7 +305,7 @@ export function StakeRouletteGame() {
         particleCount: 110,
         spread: 75,
         origin: { y: 0.5 },
-        colors: ['#34D399', '#FBBF24', '#ffffff'],
+        colors: ['#22D3EE', '#FBBF24', '#ffffff'],
       });
     }
   }, [bets]);
@@ -337,9 +337,9 @@ export function StakeRouletteGame() {
     <div className="mx-auto w-full max-w-7xl">
       <div className="grid gap-4 lg:grid-cols-[300px_1fr]">
         {/* ───────── Control rail ───────── */}
-        <Card className="order-2 h-fit space-y-4 border-0 bg-[#07271A] p-4 ring-1 ring-inset ring-[#0E3B28] lg:order-1 lg:sticky lg:top-20">
+        <Card className="arc-panel order-2 h-fit space-y-4 border-0 p-4 lg:order-1 lg:sticky lg:top-20">
           <div className="flex items-center justify-between gap-2">
-            <span className="text-xs uppercase tracking-wide text-[#5E8273]">Balance</span>
+            <span className="text-xs uppercase tracking-wide text-slate-500">Balance</span>
             <div className="flex items-center gap-2">
               <span className="arc-mono text-sm tabular-nums text-[#FBBF24]">
                 {balance != null ? `${formatChips(balance)} chips` : '—'}
@@ -347,14 +347,14 @@ export function StakeRouletteGame() {
               <button
                 type="button"
                 onClick={() => setExchangeOpen(true)}
-                className="rounded border border-[#34D399]/30 bg-[#34D399]/10 px-2 py-0.5 text-[11px] font-semibold text-[#6EE7B7] transition-colors hover:bg-[#34D399]/20"
+                className="rounded border border-cyan-500/30 bg-cyan-500/10 px-2 py-0.5 text-[11px] font-semibold text-cyan-300 transition-colors hover:bg-cyan-500/20"
               >
                 Buy
               </button>
               <button
                 type="button"
                 onClick={toggleMute}
-                className="rounded p-1 text-[#5E8273] transition-colors hover:text-slate-200"
+                className="rounded p-1 text-slate-500 transition-colors hover:text-cyan-300"
                 title={muted ? 'Unmute' : 'Mute'}
               >
                 {muted ? <VolumeX size={15} /> : <Volume2 size={15} />}
@@ -363,7 +363,7 @@ export function StakeRouletteGame() {
           </div>
 
           <div className="space-y-1.5">
-            <span className="text-xs uppercase tracking-wide text-[#5E8273]">Chip value</span>
+            <span className="text-xs uppercase tracking-wide text-slate-500">Chip value</span>
             <div className="flex items-center gap-2.5">
               {CHIP_VALUES.map((v) => (
                 <button
@@ -372,7 +372,7 @@ export function StakeRouletteGame() {
                   disabled={spinning}
                   onClick={() => setChipValue(v)}
                   className={`flex h-11 w-11 items-center justify-center rounded-full border-[3px] border-dashed border-white/85 font-mono text-xs font-bold text-white transition-transform hover:scale-105 ${CHIP_STYLE[v]} ${
-                    chipValue === v ? 'outline outline-2 outline-offset-2 outline-[#34D399]' : ''
+                    chipValue === v ? 'outline outline-2 outline-offset-2 outline-cyan-400' : ''
                   }`}
                   style={{ boxShadow: '0 3px 8px rgba(0,0,0,.5), inset 0 0 0 4px rgba(0,0,0,.25)' }}
                 >
@@ -382,15 +382,15 @@ export function StakeRouletteGame() {
             </div>
           </div>
 
-          <div className="space-y-1 border-t border-[#0E3B28] pt-3">
+          <div className="space-y-1 border-t border-cyan-950 pt-3">
             <div className="flex items-center justify-between text-sm">
-              <span className="text-xs uppercase tracking-wide text-[#5E8273]">Total bet</span>
+              <span className="text-xs uppercase tracking-wide text-slate-500">Total bet</span>
               <span className="arc-mono tabular-nums text-slate-200">
                 {totalBet.toLocaleString()} chips
               </span>
             </div>
             <div className="flex items-center justify-between text-sm">
-              <span className="text-xs uppercase tracking-wide text-[#5E8273]">Zones</span>
+              <span className="text-xs uppercase tracking-wide text-slate-500">Zones</span>
               <span className="arc-mono tabular-nums text-slate-200">
                 {zoneCount} / {maxZones}
               </span>
@@ -401,7 +401,7 @@ export function StakeRouletteGame() {
             type="button"
             disabled={spinning || zoneCount === 0 || !info}
             onClick={() => void spin()}
-            className="arc-display h-12 w-full bg-[#34D399] text-base font-bold uppercase tracking-widest text-[#03150D] shadow-[0_0_24px_-6px_rgba(52,211,153,0.8)] hover:bg-[#6EE7B7] disabled:opacity-50"
+            className="arc-display h-12 w-full bg-cyan-500 text-base font-bold uppercase tracking-widest text-[#03121B] shadow-[0_0_24px_-6px_rgba(34,211,238,0.8)] hover:bg-cyan-400 disabled:opacity-50"
           >
             {spinning ? 'Spinning…' : 'Spin'}
           </Button>
@@ -412,7 +412,7 @@ export function StakeRouletteGame() {
               variant="outline"
               disabled={spinning || undoStack.length === 0}
               onClick={undo}
-              className="border-[#0E3B28] bg-transparent text-xs uppercase text-[#5E8273] hover:bg-[#34D399]/10 hover:text-slate-200"
+              className="border-cyan-950 bg-transparent text-xs uppercase text-slate-500 hover:bg-cyan-500/10 hover:text-slate-200"
             >
               Undo
             </Button>
@@ -421,7 +421,7 @@ export function StakeRouletteGame() {
               variant="outline"
               disabled={spinning || zoneCount === 0}
               onClick={clearBets}
-              className="border-[#0E3B28] bg-transparent text-xs uppercase text-[#5E8273] hover:bg-[#34D399]/10 hover:text-slate-200"
+              className="border-cyan-950 bg-transparent text-xs uppercase text-slate-500 hover:bg-cyan-500/10 hover:text-slate-200"
             >
               Clear
             </Button>
@@ -430,7 +430,7 @@ export function StakeRouletteGame() {
               variant="outline"
               disabled={spinning || !lastBets}
               onClick={rebet}
-              className="border-[#0E3B28] bg-transparent text-xs uppercase text-[#5E8273] hover:bg-[#34D399]/10 hover:text-slate-200"
+              className="border-cyan-950 bg-transparent text-xs uppercase text-slate-500 hover:bg-cyan-500/10 hover:text-slate-200"
             >
               Rebet
             </Button>
@@ -443,7 +443,7 @@ export function StakeRouletteGame() {
                 <button
                   type="button"
                   onClick={() => setExchangeOpen(true)}
-                  className="text-sm font-semibold text-[#6EE7B7] underline-offset-2 hover:underline"
+                  className="text-sm font-semibold text-cyan-300 underline-offset-2 hover:underline"
                 >
                   Buy chips →
                 </button>
@@ -451,12 +451,12 @@ export function StakeRouletteGame() {
             </div>
           )}
 
-          <div className="flex items-center justify-center gap-3 text-xs text-[#5E8273]">
-            <button type="button" onClick={() => setRulesOpen(true)} className="transition-colors hover:text-[#6EE7B7]">
+          <div className="flex items-center justify-center gap-3 text-xs text-slate-500">
+            <button type="button" onClick={() => setRulesOpen(true)} className="transition-colors hover:text-cyan-400">
               Rules
             </button>
             <span className="opacity-40">·</span>
-            <button type="button" onClick={() => openVerify(history[0]?.spinId ?? null)} className="transition-colors hover:text-[#6EE7B7]">
+            <button type="button" onClick={() => openVerify(history[0]?.spinId ?? null)} className="transition-colors hover:text-cyan-400">
               Provably Fair{history.length > 0 ? ' · verify last spin' : ''}
             </button>
           </div>
@@ -464,7 +464,7 @@ export function StakeRouletteGame() {
 
         {/* ───────── Wheel + felt ───────── */}
         <div className="order-1 space-y-3 lg:order-2">
-          <Card className="relative border-0 bg-[#07271A] p-4 ring-1 ring-inset ring-[#0E3B28] sm:p-5">
+          <Card className="arc-panel relative border-0 p-4 sm:p-5">
             <div className="flex flex-col items-center gap-4 sm:flex-row sm:items-center">
               <div className="w-[190px] shrink-0 sm:w-[220px]">
                 <RouletteWheel2
@@ -476,12 +476,12 @@ export function StakeRouletteGame() {
               </div>
               <div className="min-w-0 flex-1 space-y-3">
                 <div>
-                  <div className="text-[11px] uppercase tracking-wide text-[#5E8273]">
+                  <div className="text-[11px] uppercase tracking-wide text-slate-500">
                     Recent numbers
                   </div>
                   <div className="mt-1.5 flex flex-wrap gap-1.5" aria-live="polite">
                     {recentNumbers.length === 0 ? (
-                      <span className="text-xs text-[#5E8273]">No spins yet</span>
+                      <span className="text-xs text-slate-500">No spins yet</span>
                     ) : (
                       recentNumbers.map((n, i) => {
                         const c = pocketColor(n);
@@ -493,7 +493,7 @@ export function StakeRouletteGame() {
                                 ? 'bg-[#15803D]'
                                 : c === 'red'
                                   ? 'bg-[#B91C1C]'
-                                  : 'bg-[#27272A] ring-1 ring-inset ring-[#1B4434]'
+                                  : 'bg-[#27272A] ring-1 ring-inset ring-cyan-950'
                             }`}
                           >
                             {n}
@@ -505,19 +505,19 @@ export function StakeRouletteGame() {
                 </div>
                 <div className="flex gap-6">
                   <div>
-                    <div className="text-[10px] uppercase tracking-wide text-[#5E8273]">Hot</div>
-                    <div className="arc-mono text-base font-semibold text-[#6EE7B7]">
+                    <div className="text-[10px] uppercase tracking-wide text-slate-500">Hot</div>
+                    <div className="arc-mono text-base font-semibold text-cyan-300">
                       {hot.length ? hot.join(' · ') : '—'}
                     </div>
                   </div>
                   <div>
-                    <div className="text-[10px] uppercase tracking-wide text-[#5E8273]">Cold</div>
+                    <div className="text-[10px] uppercase tracking-wide text-slate-500">Cold</div>
                     <div className="arc-mono text-base font-semibold text-slate-400">
                       {cold.length ? cold.join(' · ') : '—'}
                     </div>
                   </div>
                   <div>
-                    <div className="text-[10px] uppercase tracking-wide text-[#5E8273]">
+                    <div className="text-[10px] uppercase tracking-wide text-slate-500">
                       Last win
                     </div>
                     <div className="arc-mono text-base font-semibold text-[#FBBF24]">
@@ -532,12 +532,12 @@ export function StakeRouletteGame() {
             {banner && (
               <div
                 key={banner.key}
-                className="arc-banner-in pointer-events-none absolute inset-x-0 top-3 z-40 mx-auto w-fit rounded-xl bg-[#04130D]/95 px-5 py-2.5 text-center ring-1 ring-[#0E3B28] shadow-[0_8px_40px_rgba(0,0,0,0.6)]"
+                className="arc-banner-in pointer-events-none absolute inset-x-0 top-3 z-40 mx-auto w-fit rounded-xl bg-[#050E16]/95 px-5 py-2.5 text-center ring-1 ring-cyan-950 shadow-[0_8px_40px_rgba(0,0,0,0.6)]"
               >
                 <span
                   className={`arc-display mr-3 text-2xl font-bold ${
                     pocketColor(banner.result) === 'green'
-                      ? 'text-[#34D399]'
+                      ? 'text-[#4ADE80]'
                       : pocketColor(banner.result) === 'red'
                         ? 'text-red-400'
                         : 'text-zinc-200'
@@ -557,7 +557,7 @@ export function StakeRouletteGame() {
             )}
           </Card>
 
-          <Card className="border-0 bg-[#07271A] p-3 ring-1 ring-inset ring-[#0E3B28] sm:p-4">
+          <Card className="arc-panel border-0 p-3 sm:p-4">
             <RouletteBoard2
               amounts={Object.fromEntries(Object.entries(bets).map(([k, b]) => [k, b.amount]))}
               disabled={spinning}
