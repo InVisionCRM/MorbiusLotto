@@ -152,7 +152,17 @@ export function ChickenRoad({
     const timers: number[] = [];
     if (animate && chick) {
       chick.classList.add('hop');
-      timers.push(window.setTimeout(() => chick.classList.remove('hop'), 300));
+      timers.push(
+        window.setTimeout(() => {
+          // Commit the resting transform to the lane the hop landed on. The
+          // cb-hop keyframe has fill-mode: none, so once it ends the chicken
+          // reverts to its inline transform — which position() only writes when
+          // NOT animating. Without this it snaps back to its pre-hop spot, one
+          // lane behind. Set it before removing `hop` so it's a single paint.
+          chick.style.transform = `translateX(${chick.style.getPropertyValue('--cb-cxn') || '0px'})`;
+          chick.classList.remove('hop');
+        }, 300),
+      );
       if (freshBust) {
         timers.push(
           window.setTimeout(() => {
