@@ -12,7 +12,7 @@ const SPONSOR_TOKEN_NAME_MAX = 128;
 const SPONSOR_TOKEN_SYMBOL_MAX = 32;
 const SPONSOR_TOKEN_LOGO_URL_MAX = 1024;
 const ETH_ADDRESS_RE = /^0x[a-fA-F0-9]{40}$/;
-import { applyPokerChipDelta } from './poker-chip-wallet';
+import { applyPokerChipDelta, ensurePokerChips } from './poker-chip-wallet';
 import {
   applyWheelWagerCredit,
   recordDailyMilestone,
@@ -1162,6 +1162,9 @@ export class PokerGameService {
       );
       if (Number(seatCount.rows[0].c) >= maxSeats) throw new Error('Table is full');
 
+      // Auto-convert: top up any chip shortfall straight from the MORBIUS balance before the buy-in
+      // debit, so players never have to "buy chips" as a separate step. Atomic within this tx.
+      await ensurePokerChips(client, normalized, buyInChips, 'cash_join_auto_purchase', { type: 'poker_table', id: tableId });
       await applyPokerChipDelta(client, normalized, -buyInChips, 'cash_join', { type: 'poker_table', id: tableId });
 
       const positions = await client.query(
@@ -1422,6 +1425,8 @@ export class PokerGameService {
         throw new Error(`Stack cannot exceed ${POKER_CASH_MAX_BUY_IN_BB} big blinds after a re-up.`);
       }
 
+      // Auto-convert: pull any chip shortfall from the MORBIUS balance before the re-up debit.
+      await ensurePokerChips(client, playerAddress, addChips, 'cash_reup_auto_purchase', { type: 'poker_table', id: tableId });
       await applyPokerChipDelta(client, playerAddress, -addChips, 'cash_reup', { type: 'poker_table', id: tableId });
 
       await client.query(

@@ -5,7 +5,7 @@ import { createPortal } from 'react-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { X, Loader2, ArrowDownCircle, ArrowUpCircle, RefreshCw, Check, Flag } from 'lucide-react';
 import { CopyButton } from '@/components/ui/copy-button';
-import { useAccount, usePublicClient } from 'wagmi';
+import { useAccount, usePublicClient, useReadContract } from 'wagmi';
 import { parseEther, formatEther, WaitForTransactionReceiptTimeoutError } from 'viem';
 import {
   useBlackjackContract,
@@ -25,6 +25,8 @@ import {
   BLACKJACK_LEGACY_ADDRESS_4,
   BLACKJACK_LEGACY_ADDRESS_5,
   MORBIUS_TOKEN_ADDRESS,
+  PULSEX_V1_ROUTER_ADDRESS,
+  WPLS_TOKEN_ADDRESS,
 } from '@/lib/contracts';
 import { getBlackjackServerUrlOptional } from '@/lib/api-urls';
 import { apiFetch } from '@/lib/api-auth';
@@ -179,6 +181,22 @@ export interface GameWalletModalProps {
 const DEPOSIT_CONFIRMATIONS_REQUIRED = 3;
 /** Default viem receipt wait is 3 minutes — too short for congested mempools; match long wallet pending windows. */
 const DEPOSIT_RECEIPT_WAIT_MS = 48 * 60 * 60 * 1000; // 48h
+/** One-tap deposit presets (whole MORBIUS). Input is always MORBIUS-denominated for both PLS and MORBIUS methods. */
+const DEPOSIT_PRESET_AMOUNTS = [10_000, 50_000, 100_000, 500_000] as const;
+/** Fraction of the PLS balance to spend when "MAX" is tapped on the PLS tab — leaves ~2% behind for gas (PLS is the native gas token) and minor spot-price drift. */
+const PLS_MAX_BUDGET_BPS = 9800n; // 98.00%
+const PULSEX_GET_AMOUNTS_OUT_ABI = [
+  {
+    name: 'getAmountsOut',
+    type: 'function',
+    stateMutability: 'view',
+    inputs: [
+      { name: 'amountIn', type: 'uint256' },
+      { name: 'path', type: 'address[]' },
+    ],
+    outputs: [{ name: 'amounts', type: 'uint256[]' }],
+  },
+] as const;
 const PENDING_BJ_DEPOSIT_KEY = 'morblotto_bj_pending_deposit_v1';
 
 type PendingDepositStorage = {
@@ -313,6 +331,8 @@ export function GameWalletModal({
 
   const [isReupPending, setIsReupPending] = useState(false);
   const [showApprovalModal, setShowApprovalModal] = useState(false);
+  /** True briefly after a MORBIUS approval confirms, so the deposit CTA can pulse "Deposit now". */
+  const [justApproved, setJustApproved] = useState(false);
 
   // ── Legacy withdrawals ─────────────────────────────────────────────────
   const [legacyWithdrawAmounts, setLegacyWithdrawAmounts] = useState<Record<string, string>>({});
@@ -335,6 +355,24 @@ export function GameWalletModal({
     morbiusCost: depositAmount ? parseEther(depositAmount) : 0n,
     enabled: tab === 'deposit' && depositMethod === 'pls' && depositAmount !== '',
   });
+
+  // Reverse quote for the PLS-tab "MAX": how much MORBIUS the user's PLS balance can buy,
+  // leaving ~2% behind for gas + spot-price drift. Reactive read; MAX just applies the result.
+  const plsBudgetForMax = plsBalance ? (plsBalance * PLS_MAX_BUDGET_BPS) / 10000n : 0n;
+  const { data: maxMorbiusOutAmounts } = useReadContract({
+    address: PULSEX_V1_ROUTER_ADDRESS as `0x${string}`,
+    abi: PULSEX_GET_AMOUNTS_OUT_ABI,
+    functionName: 'getAmountsOut',
+    args: [plsBudgetForMax, [WPLS_TOKEN_ADDRESS as `0x${string}`, MORBIUS_TOKEN_ADDRESS as `0x${string}`]],
+    query: {
+      enabled: tab === 'deposit' && depositMethod === 'pls' && plsBudgetForMax > 0n,
+      refetchInterval: 15000,
+    },
+  });
+  const maxMorbiusFromPls =
+    Array.isArray(maxMorbiusOutAmounts) && maxMorbiusOutAmounts.length > 1
+      ? (maxMorbiusOutAmounts[maxMorbiusOutAmounts.length - 1] as bigint)
+      : 0n;
 
   const requiredMorbiusAmount =
     depositAmount && depositMethod === 'morbius' ? parseEther(depositAmount) : 0n;
@@ -434,6 +472,7 @@ export function GameWalletModal({
       setDepositTxHash(null);
       setDepositNotifyAmountWei(null);
       setHowToVideo(null);
+      setJustApproved(false);
     } else {
       setTab(defaultTab);
       if (isSelfManaged) fetchBalance();
@@ -446,10 +485,16 @@ export function GameWalletModal({
   // ── Approval success ───────────────────────────────────────────────────
   useEffect(() => {
     if (isApprovalSuccess) {
-      toast.success('Approval successful — you can now deposit MORBIUS');
+      toast.success('Approval successful — tap Deposit to finish');
       setShowApprovalModal(false);
+      setJustApproved(true);
     }
   }, [isApprovalSuccess]);
+
+  // Clear the "Deposit now" emphasis whenever the user switches deposit method.
+  useEffect(() => {
+    setJustApproved(false);
+  }, [depositMethod]);
 
   // Resume a submitted deposit after mempool delay / tab close (tx hash persisted in sessionStorage).
   useEffect(() => {
@@ -740,6 +785,7 @@ export function GameWalletModal({
     if (!depositAmount || !publicClient) return;
     if (needsApproval) { setShowApprovalModal(true); return; }
     const amountWei = parseEther(depositAmount);
+    setJustApproved(false);
     setDepositError(null);
     setDepositPhase('confirming');
     const toastId = toast.loading('Confirm in wallet...', {
@@ -997,15 +1043,18 @@ export function GameWalletModal({
       .catch(() => {});
   }, [isOpen, showReupTab, tab, address, serverUrl]);
 
-  const maxReupChipsNum = (() => {
-    try {
-      const b = BigInt(pokerChipBalanceStr || '0');
-      if (b > BigInt(Number.MAX_SAFE_INTEGER)) return Number.MAX_SAFE_INTEGER;
-      return Number(b);
-    } catch {
-      return 0;
-    }
+  // Re-up can pull from the MORBIUS balance too (the server auto-converts on demand), so the
+  // spendable ceiling is the poker chip wallet + MORBIUS balance (1 chip = 1 MORBIUS).
+  const totalReupChips: bigint = (() => {
+    let chips = 0n;
+    try { chips = BigInt(pokerChipBalanceStr || '0'); } catch { chips = 0n; }
+    const morbiusChips = displayBalance != null ? displayBalance / 1000000000000000000n : 0n;
+    return chips + morbiusChips;
   })();
+  const maxReupChipsNum =
+    totalReupChips > BigInt(Number.MAX_SAFE_INTEGER)
+      ? Number.MAX_SAFE_INTEGER
+      : Number(totalReupChips);
 
   const handleReup = async () => {
     if (!wsClient || !tableId || !reupAmount) return;
@@ -1022,8 +1071,8 @@ export function GameWalletModal({
       return;
     }
     const walletChips = BigInt(pokerChipBalanceStr || '0');
-    if (amountChips > walletChips) {
-      toast.error('Insufficient poker chips — buy chips from your MORBIUS balance first');
+    if (amountChips > totalReupChips) {
+      toast.error('Not enough MORBIUS to cover this re-up');
       return;
     }
     setIsReupPending(true);
@@ -1059,6 +1108,14 @@ export function GameWalletModal({
         : 0;
 
   const isDepositLoading = depositTx.isPending || depositMORBIISTx.isPending;
+  // After a fresh approval, the MORBIUS deposit needs a second tap — make that CTA obvious.
+  const showDepositNow =
+    justApproved &&
+    depositMethod === 'morbius' &&
+    !needsApproval &&
+    !isApproving &&
+    !isDepositLoading &&
+    depositPhase === 'idle';
   const isLegacyWithdrawLoading = withdrawTx.isPending;
   const controlsDisabled = isDepositLoading || isPreparingWithdraw || isLegacyWithdrawLoading || externalWithdrawLock;
 
@@ -1298,15 +1355,39 @@ export function GameWalletModal({
                             onClick={() =>
                               setDepositAmount(
                                 depositMethod === 'pls'
-                                  ? maxDepositPLS.toString()
+                                  ? Math.floor(Number(formatEther(maxMorbiusFromPls))).toString()
                                   : maxDepositMORBIUS.toString()
                               )
                             }
-                            disabled={controlsDisabled}
-                            className="px-4 bg-gray-100 text-gray-700 text-sm font-medium rounded-xl hover:bg-gray-200 transition-colors"
+                            disabled={
+                              controlsDisabled ||
+                              (depositMethod === 'pls' && maxMorbiusFromPls === 0n)
+                            }
+                            className="px-4 bg-gray-100 text-gray-700 text-sm font-medium rounded-xl hover:bg-gray-200 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                           >
                             MAX
                           </button>
+                        </div>
+                        {/* One-tap presets — fill the amount, then a single signature deposits. */}
+                        <div className="grid grid-cols-4 gap-2 pt-1">
+                          {DEPOSIT_PRESET_AMOUNTS.map((preset) => {
+                            const isActive = depositAmount === preset.toString();
+                            return (
+                              <button
+                                key={preset}
+                                type="button"
+                                onClick={() => setDepositAmount(preset.toString())}
+                                disabled={controlsDisabled}
+                                className={`py-2 text-xs font-semibold rounded-xl transition-colors disabled:opacity-50 disabled:cursor-not-allowed ${
+                                  isActive
+                                    ? 'bg-black text-white'
+                                    : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                                }`}
+                              >
+                                {preset >= 1000 ? `${preset / 1000}K` : preset}
+                              </button>
+                            );
+                          })}
                         </div>
                       </div>
 
@@ -1330,7 +1411,7 @@ export function GameWalletModal({
                               : depositPhase === 'success'
                                 ? 'bg-green-600 text-white cursor-default'
                                 : 'bg-black text-white hover:bg-gray-800 disabled:opacity-50'
-                          }`}
+                          }${showDepositNow ? ' ring-2 ring-cyan-400 ring-offset-2 animate-pulse' : ''}`}
                         >
                           {depositPhase === 'confirming' && (
                             <><Loader2 className="w-4 h-4 mr-2 animate-spin" />Confirm in wallet...</>
@@ -1355,6 +1436,8 @@ export function GameWalletModal({
                                 <><Loader2 className="w-4 h-4 mr-2 animate-spin" />Approving...</>
                               ) : depositMethod === 'morbius' && needsApproval ? (
                                 'Approve MORBIUS'
+                              ) : showDepositNow ? (
+                                'Deposit now'
                               ) : (
                                 <>Deposit <span className="ml-1"><TokenLabel symbol={depositMethod === 'pls' ? 'PLS' : 'MORBIUS'} /></span></>
                               )}
@@ -1453,9 +1536,9 @@ export function GameWalletModal({
                     <div className="space-y-4">
                       <div className="bg-gray-50 rounded-2xl p-4 space-y-1 text-sm">
                         <div className="flex justify-between">
-                          <span className="text-gray-500">Poker chip wallet</span>
+                          <span className="text-gray-500">Available</span>
                           <span className="font-semibold text-gray-900">
-                            {formatChips(pokerChipBalanceStr)} chips
+                            {formatChips(totalReupChips)} chips
                           </span>
                         </div>
                         {currentStack != null && (
@@ -1469,7 +1552,7 @@ export function GameWalletModal({
                       <div className="space-y-2">
                         <div className="flex justify-between items-center px-1">
                           <label className="text-sm font-medium text-gray-700">Add to stack (whole chips)</label>
-                          <span className="text-xs text-gray-500">Max: {formatChips(pokerChipBalanceStr)}</span>
+                          <span className="text-xs text-gray-500">Max: {formatChips(totalReupChips)}</span>
                         </div>
                         <div className="flex gap-2">
                           <input
@@ -1484,7 +1567,7 @@ export function GameWalletModal({
                             className="flex-1 w-full bg-white border border-gray-200 rounded-xl px-4 py-3 text-lg focus:outline-none focus:ring-2 focus:ring-black/5 transition-all"
                           />
                           <button
-                            onClick={() => setReupAmount(pokerChipBalanceStr || '0')}
+                            onClick={() => setReupAmount(totalReupChips.toString())}
                             disabled={isReupPending}
                             className="px-4 bg-gray-100 text-gray-700 text-sm font-medium rounded-xl hover:bg-gray-200 transition-colors"
                           >
