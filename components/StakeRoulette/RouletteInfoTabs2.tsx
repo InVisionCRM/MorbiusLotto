@@ -1,7 +1,7 @@
 'use client';
 
 /**
- * RouletteInfoTabs2 — info tabs below /roulette2 (Midnight Emerald):
+ * RouletteInfoTabs2 — info tabs below /roulette2 (Deep-Sea Neon):
  * Recent · Leaderboard · My spins (verify links) · Payouts & rules.
  */
 
@@ -28,9 +28,9 @@ interface RouletteInfoTabs2Props {
 }
 
 const TRIGGER_CLASS =
-  'rounded-md px-2 py-1.5 text-xs font-bold uppercase tracking-widest text-[#5E8273] ' +
-  'transition-colors hover:text-slate-200 data-[state=active]:bg-[#34D399]/10 ' +
-  'data-[state=active]:text-[#6EE7B7] data-[state=active]:ring-1 data-[state=active]:ring-[#34D399]/50';
+  'rounded-md px-2 py-1.5 text-xs font-bold uppercase tracking-widest text-slate-500 ' +
+  'transition-colors hover:text-slate-300 data-[state=active]:bg-cyan-500/15 ' +
+  'data-[state=active]:text-cyan-300 data-[state=active]:ring-1 data-[state=active]:ring-cyan-500/50';
 
 function shortAddr(a: string): string {
   return a.length > 12 ? `${a.slice(0, 6)}…${a.slice(-4)}` : a;
@@ -56,7 +56,7 @@ function PocketBadge({ n }: { n: number }) {
 }
 
 function Empty({ children }: { children: ReactNode }) {
-  return <p className="py-6 text-center text-sm text-[#5E8273]">{children}</p>;
+  return <p className="py-6 text-center text-sm text-slate-500">{children}</p>;
 }
 
 export function RouletteInfoTabs2({
@@ -96,10 +96,10 @@ export function RouletteInfoTabs2({
   return (
     <section
       aria-label="Roulette information"
-      className="rounded-xl bg-[#07271A] p-3 ring-1 ring-inset ring-[#0E3B28] sm:p-4"
+      className="arc-panel rounded-xl p-3 sm:p-4"
     >
       <Tabs defaultValue="recent">
-        <TabsList className="grid h-auto w-full grid-cols-5 gap-1 rounded-lg bg-[#0A2018] p-1 ring-1 ring-[#0E3B28]">
+        <TabsList className="grid h-auto w-full grid-cols-5 gap-1 rounded-lg bg-[#081420]/70 p-1 ring-1 ring-cyan-950/70">
           <TabsTrigger value="recent" className={TRIGGER_CLASS}>
             Recent
           </TabsTrigger>
@@ -123,7 +123,7 @@ export function RouletteInfoTabs2({
           ) : recent.length === 0 ? (
             <Empty>No spins yet — the felt is fresh.</Empty>
           ) : (
-            <ul className="divide-y divide-[#0E3B28]">
+            <ul className="divide-y divide-cyan-950/60">
               {recent.map((r) => {
                 const net = r.totalPayout - r.totalBet;
                 return (
@@ -131,19 +131,19 @@ export function RouletteInfoTabs2({
                     key={r.spinId}
                     className="flex flex-wrap items-center gap-x-3 gap-y-1 py-2 text-xs sm:text-sm"
                   >
-                    <span className="w-12 shrink-0 font-mono tabular-nums text-[#5E8273]">
+                    <span className="w-12 shrink-0 font-mono tabular-nums text-slate-500">
                       {timeLabel(r.createdAt)}
                     </span>
                     <span className="shrink-0 font-mono tabular-nums text-slate-400">
                       {shortAddr(r.wallet)}
                     </span>
                     <PocketBadge n={r.result} />
-                    <span className="shrink-0 font-mono tabular-nums text-[#5E8273]">
+                    <span className="shrink-0 font-mono tabular-nums text-slate-500">
                       bet {r.totalBet.toLocaleString()}
                     </span>
                     <span
                       className={`ml-auto shrink-0 font-mono font-semibold tabular-nums ${
-                        net > 0 ? 'text-[#FBBF24]' : 'text-[#5E8273]'
+                        net > 0 ? 'text-[#FBBF24]' : 'text-slate-500'
                       }`}
                     >
                       {net > 0 ? `+${net.toLocaleString()}` : net.toLocaleString()}
@@ -161,7 +161,7 @@ export function RouletteInfoTabs2({
           ) : leaders.length === 0 ? (
             <Empty>No players on the board yet.</Empty>
           ) : (
-            <ul className="divide-y divide-[#0E3B28]">
+            <ul className="divide-y divide-cyan-950/60">
               {leaders.map((p, i) => {
                 const net = Number(p.net);
                 return (
@@ -171,7 +171,7 @@ export function RouletteInfoTabs2({
                   >
                     <span
                       className={`w-7 shrink-0 text-center font-mono font-bold tabular-nums ${
-                        i === 0 ? 'text-[#FBBF24]' : i < 3 ? 'text-[#6EE7B7]' : 'text-[#5E8273]'
+                        i === 0 ? 'text-[#FBBF24]' : i < 3 ? 'text-cyan-300' : 'text-slate-500'
                       }`}
                     >
                       {i + 1}
@@ -179,12 +179,12 @@ export function RouletteInfoTabs2({
                     <span className="shrink-0 font-mono tabular-nums text-slate-300">
                       {shortAddr(p.wallet)}
                     </span>
-                    <span className="shrink-0 font-mono tabular-nums text-[#5E8273]">
+                    <span className="shrink-0 font-mono tabular-nums text-slate-500">
                       {p.spins.toLocaleString()} spin{p.spins === 1 ? '' : 's'}
                     </span>
                     <span
                       className={`ml-auto shrink-0 font-mono font-semibold tabular-nums ${
-                        net > 0 ? 'text-[#FBBF24]' : 'text-[#5E8273]'
+                        net > 0 ? 'text-[#FBBF24]' : 'text-slate-500'
                       }`}
                     >
                       {net > 0 ? `+${net.toLocaleString()}` : net.toLocaleString()}
@@ -202,7 +202,7 @@ export function RouletteInfoTabs2({
           ) : history.length === 0 ? (
             <Empty>No spins yet. Connect your wallet and place a bet.</Empty>
           ) : (
-            <ul className="divide-y divide-[#0E3B28]">
+            <ul className="divide-y divide-cyan-950/60">
               {history.map((r) => {
                 const net = r.totalPayout - r.totalBet;
                 return (
@@ -210,7 +210,7 @@ export function RouletteInfoTabs2({
                     key={r.spinId}
                     className="flex flex-wrap items-center gap-x-3 gap-y-1 py-2 text-xs sm:text-sm"
                   >
-                    <span className="w-12 shrink-0 font-mono tabular-nums text-[#5E8273]">
+                    <span className="w-12 shrink-0 font-mono tabular-nums text-slate-500">
                       {timeLabel(r.createdAt)}
                     </span>
                     <PocketBadge n={r.result} />
@@ -228,7 +228,7 @@ export function RouletteInfoTabs2({
                     <button
                       type="button"
                       onClick={() => onVerify(r.spinId)}
-                      className="shrink-0 rounded border border-[#0E3B28] px-2 py-0.5 text-[10px] uppercase tracking-wide text-[#5E8273] transition-colors hover:border-[#34D399]/50 hover:text-[#6EE7B7]"
+                      className="shrink-0 rounded border border-cyan-950 px-2 py-0.5 text-[10px] uppercase tracking-wide text-slate-500 transition-colors hover:border-cyan-500/50 hover:text-cyan-300"
                     >
                       Verify
                     </button>
@@ -240,11 +240,11 @@ export function RouletteInfoTabs2({
         </TabsContent>
 
         <TabsContent value="odds" className="mt-3 focus-visible:outline-none">
-          <ArcadeOddsTab odds={rouletteOdds} accent="#34D399" />
+          <ArcadeOddsTab odds={rouletteOdds} accent="#22D3EE" />
         </TabsContent>
 
         <TabsContent value="faq" className="mt-2 focus-visible:outline-none">
-          <ArcadeFAQ items={rouletteFaqs} accent="#34D399" />
+          <ArcadeFAQ items={rouletteFaqs} accent="#22D3EE" />
         </TabsContent>
       </Tabs>
     </section>

@@ -1,7 +1,7 @@
 import type { FaqItem } from '@/components/arcade2/ArcadeFAQ';
 import { provablyFairFaq, commonFaqs } from '@/components/arcade2/arcadeCommonFaqs';
 
-const ACCENT = '#34D399';
+const ACCENT = '#22D3EE';
 
 export const rouletteFaqs: FaqItem[] = [
   provablyFairFaq(

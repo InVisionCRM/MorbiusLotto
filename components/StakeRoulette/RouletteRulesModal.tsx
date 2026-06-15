@@ -1,6 +1,6 @@
 'use client';
 
-import { ArcadeRulesModal, EMERALD } from '@/components/arcade2/ArcadeRulesModal';
+import { ArcadeRulesModal, DEEP_SEA } from '@/components/arcade2/ArcadeRulesModal';
 import { Disc3 } from 'lucide-react';
 
 interface Props { open: boolean; onOpenChange: (o: boolean) => void; }
@@ -14,14 +14,14 @@ function RouletteGraphic() {
             className="arules-spin absolute inset-0 rounded-full"
             style={{
               background: 'repeating-conic-gradient(#B91C1C 0 30deg, #27272A 30deg 60deg)',
-              boxShadow: 'inset 0 0 0 3px rgba(52,211,153,0.4), 0 0 22px -6px rgba(52,211,153,0.6)',
+              boxShadow: 'inset 0 0 0 3px rgba(34,211,238,0.4), 0 0 22px -6px rgba(34,211,238,0.6)',
             }}
           />
           <div
             className="arules-spin absolute inset-0 rounded-full"
             style={{ background: 'conic-gradient(#15803D 0 13deg, transparent 13deg 360deg)' }}
           />
-          <div className="absolute rounded-full" style={{ inset: '34%', background: '#04130D', border: '1px solid rgba(52,211,153,0.4)' }} />
+          <div className="absolute rounded-full" style={{ inset: '34%', background: '#050E16', border: '1px solid rgba(34,211,238,0.4)' }} />
           <div className="absolute w-2 h-2 rounded-full" style={{ top: '5px', left: 'calc(50% - 4px)', background: '#fff', boxShadow: '0 0 6px #fff' }} />
           <div
             className="absolute"
@@ -29,7 +29,7 @@ function RouletteGraphic() {
           />
         </div>
       </div>
-      <div className="text-center arc-mono text-[11px] mt-1" style={{ color: '#9fc7b5' }}>European · single zero · 37 pockets</div>
+      <div className="text-center arc-mono text-[11px] mt-1" style={{ color: '#94a3b8' }}>European · single zero · 37 pockets</div>
     </div>
   );
 }
@@ -39,14 +39,14 @@ export function RouletteRulesModal({ open, onOpenChange }: Props) {
     <ArcadeRulesModal
       open={open}
       onOpenChange={onOpenChange}
-      theme={EMERALD}
+      theme={DEEP_SEA}
       game="Roulette"
-      icon={<Disc3 className="w-5 h-5" style={{ color: '#34D399' }} />}
+      icon={<Disc3 className="w-5 h-5" style={{ color: '#22D3EE' }} />}
       intro={<>Stack chips anywhere on the felt, spin the single-zero wheel, and get paid by how tightly you bet — one number pays the most, red/black the least.</>}
       steps={[
-        <>Pick a <span style={{ color: '#34D399' }}>chip</span> value (5 / 25 / 100 / 500).</>,
+        <>Pick a <span style={{ color: '#22D3EE' }}>chip</span> value (5 / 25 / 100 / 500).</>,
         <>Click felt zones to place bets (Undo, Clear and Rebet help).</>,
-        <>Hit <span style={{ color: '#34D399' }}>Spin</span> — wins pay to your balance the instant the ball settles.</>,
+        <>Hit <span style={{ color: '#22D3EE' }}>Spin</span> — wins pay to your balance the instant the ball settles.</>,
       ]}
       graphic={<RouletteGraphic />}
       graphicLabel="The wheel"
