@@ -53,7 +53,7 @@ export default function VideoPokerPage() {
                 </span>
               </h1>
               <p className="mt-1.5 text-sm text-slate-500">
-                jacks or better · hold &amp; draw · provably fair · played in chips
+                jacks or better · hold &amp; draw · provably fair · played in MORBIUS
               </p>
             </header>
             <StakeVideoPokerGame />

@@ -1,0 +1,239 @@
+/* ── Firewalk (/firewalk) — Deep-Sea Neon coals crossing ──────────────────────
+   Scoped to .firewalk-board so body styles can't leak into the rest of
+   morbius.io. The page chrome lives in the shared .arcade2-scope system (abyss
+   #050E16, cyan #22D3EE, JetBrains Mono numerals). This file owns only what
+   Tailwind can't express cleanly: the scrolling row of stones over the coals,
+   the heat glow + rising embers, the walker's hop/fall transforms, and the
+   crumbling-stone animation. Faithful port of public/firewalk-lab.html. ── */
+
+.firewalk-board {
+  --fw-stone-w: clamp(58px, 15vw, 76px);
+  position: relative;
+}
+
+.fw-road {
+  position: relative;
+  height: clamp(230px, 48vw, 300px);
+  overflow: hidden;
+  border-radius: 14px;
+  background: linear-gradient(180deg, #1a0d06 0%, #0a0c12 45%, #06121b 100%);
+  box-shadow: inset 0 0 0 1px rgba(34, 211, 238, 0.1);
+}
+
+/* Heat haze welling up from the coals. */
+.fw-heat {
+  position: absolute;
+  left: -10%;
+  right: -10%;
+  bottom: -30px;
+  height: 55%;
+  background: radial-gradient(
+    ellipse 60% 100% at 50% 100%,
+    rgba(245, 158, 11, 0.4),
+    rgba(251, 113, 133, 0.12) 45%,
+    transparent 72%
+  );
+  filter: blur(2px);
+  animation: fw-heat 2.4s ease-in-out infinite;
+  z-index: 1;
+  pointer-events: none;
+}
+@keyframes fw-heat {
+  0%,
+  100% {
+    opacity: 0.7;
+    transform: translateY(0);
+  }
+  50% {
+    opacity: 1;
+    transform: translateY(-4px);
+  }
+}
+
+/* The glowing bed of coals along the bottom. */
+.fw-coalbar {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 26px;
+  background: repeating-linear-gradient(
+    90deg,
+    rgba(245, 158, 11, 0.5) 0 6px,
+    rgba(120, 40, 10, 0.6) 6px 14px
+  );
+  box-shadow: 0 0 24px rgba(245, 158, 11, 0.5);
+  z-index: 2;
+}
+
+.fw-embers {
+  position: absolute;
+  inset: 0;
+  z-index: 3;
+  pointer-events: none;
+  overflow: hidden;
+}
+.fw-ember {
+  position: absolute;
+  bottom: 8px;
+  width: 4px;
+  height: 4px;
+  border-radius: 50%;
+  background: #fb923c;
+  box-shadow: 0 0 8px #fb923c;
+  opacity: 0;
+  animation: fw-ember linear infinite;
+}
+@keyframes fw-ember {
+  0% {
+    transform: translateY(0) scale(1);
+    opacity: 0;
+  }
+  12% {
+    opacity: 0.95;
+  }
+  100% {
+    transform: translateY(-180px) scale(0.3);
+    opacity: 0;
+  }
+}
+
+.fw-track {
+  position: absolute;
+  top: 42%;
+  left: 0;
+  display: flex;
+  gap: 10px;
+  padding-left: 30px;
+  transition: transform 0.34s cubic-bezier(0.22, 1, 0.36, 1);
+  z-index: 4;
+}
+
+.fw-stone {
+  position: relative;
+  width: var(--fw-stone-w);
+  flex: none;
+  height: 62px;
+  border-radius: 12px 12px 10px 10px;
+  background: linear-gradient(180deg, #3a4654, #222b36);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.12), 0 10px 14px -8px rgba(0, 0, 0, 0.8),
+    0 0 0 1px rgba(34, 211, 238, 0.08);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: 0.2s;
+}
+.fw-stone .fw-mv {
+  font-family: var(--font-arc-mono, monospace);
+  font-weight: 600;
+  font-size: 12.5px;
+  color: #94a3b8;
+  white-space: nowrap;
+}
+.fw-stone.start {
+  background: linear-gradient(180deg, #2a3340, #1a212b);
+  width: 46px;
+}
+.fw-stone.safe {
+  background: linear-gradient(180deg, #46566a, #2b3644);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.15), 0 10px 14px -8px rgba(0, 0, 0, 0.8),
+    0 0 0 1px rgba(34, 211, 238, 0.3);
+}
+.fw-stone.safe .fw-mv {
+  color: #fff;
+}
+.fw-stone.next {
+  cursor: pointer;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.12), 0 0 0 2px #22d3ee,
+    0 0 18px -3px #22d3ee;
+}
+.fw-stone.next .fw-mv {
+  color: #22d3ee;
+}
+/* The stones in the staged leap beyond the immediate next one. */
+.fw-stone.leap {
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.12), 0 0 0 1.5px rgba(34, 211, 238, 0.55),
+    0 0 14px -4px rgba(34, 211, 238, 0.7);
+}
+.fw-stone.leap .fw-mv {
+  color: #7be9fb;
+}
+.fw-stone.gone {
+  background: linear-gradient(180deg, rgba(120, 40, 10, 0.5), rgba(60, 15, 5, 0.4));
+  box-shadow: inset 0 0 0 1px rgba(245, 158, 11, 0.4);
+  animation: fw-crumble 0.5s ease forwards;
+}
+@keyframes fw-crumble {
+  0% {
+    transform: translateY(0) rotate(0);
+  }
+  100% {
+    transform: translateY(60px) rotate(12deg);
+    opacity: 0;
+  }
+}
+
+.fw-walker {
+  position: absolute;
+  top: calc(42% - 30px);
+  left: 0;
+  width: 34px;
+  height: 46px;
+  z-index: 6;
+  transition: transform 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+  will-change: transform;
+}
+.fw-walker.hop {
+  animation: fw-whop 0.3s ease;
+}
+@keyframes fw-whop {
+  0% {
+    transform: translate(var(--fw-wx, 0), 0);
+  }
+  45% {
+    transform: translate(calc(var(--fw-wx, 0) + 18px), -30px);
+  }
+  100% {
+    transform: translate(var(--fw-wxn, 0), 0);
+  }
+}
+.fw-walker.fall {
+  animation: fw-wfall 0.6s ease-in forwards;
+}
+@keyframes fw-wfall {
+  0% {
+    transform: translate(var(--fw-wxn, 0), 0) rotate(0);
+    opacity: 1;
+  }
+  100% {
+    transform: translate(var(--fw-wxn, 0), 120px) rotate(60deg);
+    opacity: 0;
+  }
+}
+
+.fw-feltmid {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 8px;
+  text-align: center;
+  font-size: 12.5px;
+  color: #cbd5e1;
+  z-index: 5;
+  text-shadow: 0 1px 4px #000;
+  pointer-events: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .fw-track,
+  .fw-walker {
+    transition: none;
+  }
+  .fw-heat,
+  .fw-ember,
+  .fw-walker.hop,
+  .fw-walker.fall,
+  .fw-stone.gone {
+    animation: none;
+  }
+}

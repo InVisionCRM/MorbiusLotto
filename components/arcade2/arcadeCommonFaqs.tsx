@@ -1,5 +1,5 @@
 // Shared FAQ content used across every arcade game. The site-wide answers
-// (chips, MORBIUS, wallet sign-in, fees) are identical everywhere; the
+// (MORBIUS, wallet sign-in, fees) are identical everywhere; the
 // provably-fair entry is parameterised per game. `accent` tints highlighted
 // terms so each entry matches its game's palette.
 
@@ -42,16 +42,17 @@ export function commonFaqs(accent: string): FaqItem[] {
   const hl = (text: ReactNode) => <span style={{ color: accent }}>{text}</span>;
   return [
     {
-      q: 'How do I get chips?',
+      q: 'How do I fund my balance to play?',
       a: (
         <>
           <p>
-            Chips are the play credits used at every table. Tap {hl('Buy')} next to your balance to open
-            the chip cage and swap MORBIUS for chips at a fixed {hl('1 chip = 1 MORBIUS')}.
+            {hl('MORBIUS')} is the currency you play with. Open the {hl('Deposit')} menu, send MORBIUS
+            (or PLS) from your wallet, and your balance is ready to play instantly — one signature, no
+            on-chain swap.
           </p>
           <p>
-            Chips live as an off-chain balance, so buying is instant and gasless, and there&apos;s{' '}
-            {hl('no fee')} on the swap. You can cash chips back out to MORBIUS any time at the same 1:1.
+            Your play balance is held off-chain, so deposits are instant and gasless, with{' '}
+            {hl('no fee')} to fund or cash out. {hl('Withdraw')} MORBIUS back to your wallet any time.
           </p>
         </>
       ),
@@ -63,7 +64,7 @@ export function commonFaqs(accent: string): FaqItem[] {
           <p>
             MORBIUS is the project&apos;s token on {hl('PulseChain')} (chain&nbsp;ID 369). You buy it on{' '}
             {hl('PulseX')}, the main PulseChain DEX, by swapping PLS or WPLS for MORBIUS — then deposit it
-            to your play balance and convert to chips.
+            to your play balance and you&apos;re ready to play.
           </p>
           <p className="arc-mono text-[11px]">
             Contract:{' '}
@@ -72,19 +73,6 @@ export function commonFaqs(accent: string): FaqItem[] {
             </a>
           </p>
           <p>Always confirm the contract address before swapping — never trust a ticker alone.</p>
-        </>
-      ),
-    },
-    {
-      q: 'Chips vs. MORBIUS — what’s the difference?',
-      a: (
-        <>
-          <p>
-            {hl('MORBIUS')} is the real, on-chain token in your wallet — it has market value and can be
-            traded. {hl('Chips')} are off-chain 1:1 credits you actually play with at the tables: faster,
-            gasless, and settled instantly.
-          </p>
-          <p>You move freely between them at 1:1, and you only ever wager in chips.</p>
         </>
       ),
     },
@@ -137,8 +125,8 @@ export function commonFaqs(accent: string): FaqItem[] {
             We never ask for a token approval to play.
           </p>
           <p>
-            Your chips are an off-chain balance, so the only thing you can ever lose is the {hl('chips you choose to bet')}.
-            Your MORBIUS and the rest of your wallet are untouched.
+            Your play balance is held off-chain, so the only thing you can ever lose is the {hl('MORBIUS you choose to bet')}.
+            The rest of your wallet is untouched.
           </p>
         </>
       ),
@@ -148,9 +136,9 @@ export function commonFaqs(accent: string): FaqItem[] {
       a: (
         <>
           <p>
-            These chip games take {hl('no per-bet or per-payout fee')}. Instead each game keeps a small
+            These games take {hl('no per-bet or per-payout fee')}. Instead each game keeps a small
             built-in house edge in its odds — for example crash and dice return about 99% over time (a ~1%
-            edge). Buying and cashing chips is free, 1:1.
+            edge). Depositing and withdrawing MORBIUS is free.
           </p>
           <p className="text-slate-500">
             (The on-chain games and poker differ — poker takes a rake, and on-chain payouts carry a 5% token fee.)

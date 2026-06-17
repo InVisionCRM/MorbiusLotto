@@ -8,9 +8,20 @@ import {
   recordDailyMilestone,
   recordGameOutcome,
 } from './wheel-spin-wallet';
+import { POKER_CHIP_WEI } from '../lib/poker-chip-scale';
 
 function formatWei(w: bigint): string {
   return Number(formatEther(w)).toLocaleString(undefined, { maximumFractionDigits: 2 });
+}
+
+/**
+ * 3:2 natural-blackjack payout, floored to whole MORBIUS (chips are integers).
+ * Returns total return in wei incl. stake. e.g. bet 5 → floor(5 * 2.5) = 12 (the half-chip rounds to the house).
+ */
+function blackjackPayoutWei(betWei: bigint): bigint {
+  const WEI = 10n ** 18n;
+  const chips = betWei / WEI; // bet is a whole number of MORBIUS
+  return ((chips * 5n) / 2n) * WEI;
 }
 
 /**
@@ -179,30 +190,21 @@ export class BlackjackGameService {
     return { feePercent, feeWallet };
   }
 
-  /** Apply fee on profit (if configured); credit player (payout - fee) and fee wallet (fee). Returns fee amount applied. */
+  /**
+   * Credit the gross payout to the player's chip balance. Chips carry NO per-payout fee —
+   * the house edge lives in the blackjack rules (3:2 / dealer-stands-17), matching the arcade chip model.
+   * Returns 0 (kept for caller compatibility: session-stat math subtracts the fee, now always 0).
+   */
   private async creditPayoutWithFee(
     playerAddress: string,
-    totalStake: bigint,
+    _totalStake: bigint,
     grossPayout: bigint
   ): Promise<bigint> {
     if (grossPayout <= 0n) return 0n;
-    const { feePercent, feeWallet } = await this.getBlackjackFeeConfig();
-    const profit = grossPayout > totalStake ? grossPayout - totalStake : 0n;
-    if (feePercent > 0 && feeWallet && profit > 0n) {
-      const feeAmount = (profit * BigInt(feePercent)) / 100n;
-      const playerGets = grossPayout - feeAmount;
-      await this.dbService.addPlayerBalance(playerAddress, playerGets);
-      await this.dbService.addBalanceToAddress(feeWallet, feeAmount);
-      logger.debug('Blackjack payout with fee', {
-        playerAddress,
-        grossPayout: grossPayout.toString(),
-        feePercent,
-        feeAmount: feeAmount.toString(),
-        playerGets: playerGets.toString(),
-      });
-      return feeAmount;
-    }
-    await this.dbService.addPlayerBalance(playerAddress, grossPayout);
+    await this.dbService.creditChipsForWei(playerAddress, grossPayout, 'blackjack_payout', {
+      type: 'blackjack_game',
+      id: null,
+    });
     return 0n;
   }
 
@@ -245,6 +247,12 @@ export class BlackjackGameService {
       const clientSeed = request.clientSeedCommitment || 'default';
       const perfectPairsBet = request.perfectPairsBetAmount ?? 0n;
       const totalStake = request.betAmount + perfectPairsBet;
+
+      // Chips are whole integers (1 chip = 1 MORBIUS); reject sub-chip bets so the wei→chip
+      // debit and payout can't diverge via independent truncation.
+      if (request.betAmount % POKER_CHIP_WEI !== 0n || perfectPairsBet % POKER_CHIP_WEI !== 0n) {
+        throw new Error('Bet must be a whole number of MORBIUS');
+      }
 
       // Generate per-game nonce
       const gameNumber = session.game_count + 1;
@@ -320,8 +328,8 @@ export class BlackjackGameService {
         status = 'completed';
         result = 'blackjack';
         initialHand.result = 'blackjack';
-        // 3:2 payout for natural blackjack: 2.5x total (bet + 1.5x winnings)
-        initialHand.payout = (request.betAmount * 5n) / 2n;
+        // 3:2 payout for natural blackjack: 2.5x total (bet + 1.5x winnings), floored to whole chips
+        initialHand.payout = blackjackPayoutWei(request.betAmount);
       } else if (dealerBlackjack) {
         status = 'completed';
         result = 'loss';
@@ -330,8 +338,11 @@ export class BlackjackGameService {
       }
 
       // Game-domain balance authority remains here (Phase 7 reviews full authority concentration).
-      // Deduct total stake (main + Perfect Pairs) from off-chain balance.
-      await this.dbService.deductPlayerBalance(request.playerAddress, totalStake);
+      // Deduct total stake (main + Perfect Pairs) from the chip ledger (1 chip = 1 MORBIUS).
+      await this.dbService.debitChipsForWei(request.playerAddress, totalStake, 'blackjack_bet', {
+        type: 'blackjack_game',
+        id: null,
+      });
       logger.debug('Deducted stake from balance', {
         playerAddress: request.playerAddress,
         totalStake: totalStake.toString(),
@@ -662,13 +673,16 @@ export class BlackjackGameService {
       }
       await this.tournamentService.updateChips(tournamentEntryId, tournamentState.chips - betAmountChips);
     } else {
-      // Regular game: validate and deduct from MORBIUS balance
+      // Regular game: validate and deduct from the chip ledger (1 chip = 1 MORBIUS)
       const playerAddress = await this.dbService.getPlayerAddressFromSession(game.session_id);
-      const currentBalance = await this.dbService.getPlayerBalance(playerAddress);
+      const currentBalance = await this.dbService.getChipBalanceAsWei(playerAddress);
       if (currentBalance < handToSplit.betAmount) {
         throw new Error(`Insufficient balance to split. Need ${formatWei(handToSplit.betAmount)}, have ${formatWei(currentBalance)}`);
       }
-      await this.dbService.deductPlayerBalance(playerAddress, handToSplit.betAmount);
+      await this.dbService.debitChipsForWei(playerAddress, handToSplit.betAmount, 'blackjack_bet', {
+        type: 'blackjack_game',
+        id: game.id,
+      });
       await this.dbService.updateSessionStats(game.session_id, handToSplit.betAmount, 0n, false);
     }
 
@@ -817,7 +831,7 @@ export class BlackjackGameService {
 
       const originalBet = currentHand.betAmount;
       const playerAddress = await this.dbService.getPlayerAddressFromSession(game.session_id);
-      const currentBalance = await this.dbService.getPlayerBalance(playerAddress);
+      const currentBalance = await this.dbService.getChipBalanceAsWei(playerAddress);
       if (currentBalance < originalBet) {
         throw new Error(`Insufficient balance to double down. Need ${formatWei(originalBet)}, have ${formatWei(currentBalance)}`);
       }
@@ -843,7 +857,10 @@ export class BlackjackGameService {
 
       const totalBetAmount = game.total_bet_amount + originalBet;
 
-      await this.dbService.deductPlayerBalance(playerAddress, originalBet);
+      await this.dbService.debitChipsForWei(playerAddress, originalBet, 'blackjack_bet', {
+        type: 'blackjack_game',
+        id: gameId,
+      });
       await this.dbService.updateSessionStats(game.session_id, originalBet, 0n, false);
 
       await this.dbService.updateGame(gameId, { total_bet_amount: totalBetAmount, rng_counter: deckPosition });
@@ -938,7 +955,7 @@ export class BlackjackGameService {
 
     for (const hand of playerHands) {
       if (hand.result === 'blackjack' && hand.isBlackjack) {
-        hand.payout = (hand.betAmount * 5n) / 2n;
+        hand.payout = blackjackPayoutWei(hand.betAmount);
       } else if (hand.isBust) {
         hand.result = 'loss';
         hand.payout = 0n;

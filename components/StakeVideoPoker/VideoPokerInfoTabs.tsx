@@ -97,7 +97,7 @@ export function VideoPokerInfoTabs({ info, hands, onVerify, currentCategory }: V
                 );
               })}
               <li className="px-2 pt-2 text-[11px] text-slate-500">
-                Pays per 1 staked, {info.minBet.toLocaleString()}–{info.maxBet.toLocaleString()} chips. 9/6 Jacks or
+                Pays per 1 staked, {info.minBet.toLocaleString()}–{info.maxBet.toLocaleString()} MORBIUS. 9/6 Jacks or
                 Better — ~99.5% return at optimal play.
               </li>
             </ul>

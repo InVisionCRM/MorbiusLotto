@@ -225,7 +225,7 @@ export function TowersInfoTabs({ history, historyLoading, onVerify, info }: Towe
             </ul>
             <p>
               Fewer tiles means worse odds per floor but a far steeper ladder. Bet{' '}
-              {minBet.toLocaleString()}–{maxBet.toLocaleString()} chips. Every bomb is sealed from a
+              {minBet.toLocaleString()}–{maxBet.toLocaleString()} MORBIUS. Every bomb is sealed from a
               server seed committed (hashed) before your bet — re-derive any finished round from its
               Verify button.
             </p>

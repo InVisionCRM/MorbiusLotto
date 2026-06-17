@@ -70,7 +70,7 @@ export function PlinkoRulesModal({ open, onOpenChange }: Props) {
         { label: 'High risk', sub: 'edges only', pays: 'rare big' },
       ]}
       payoutsLabel="Risk levels"
-      footer={<>Higher risk thins the middle and fattens the edge multipliers. The exact table comes from the server and every drop can be re-derived — open Verify to check. Played in chips.</>}
+      footer={<>Higher risk thins the middle and fattens the edge multipliers. The exact table comes from the server and every drop can be re-derived — open Verify to check. Played in MORBIUS.</>}
     />
   );
 }

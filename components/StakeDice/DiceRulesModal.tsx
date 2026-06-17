@@ -53,7 +53,7 @@ export function DiceRulesModal({ open, onOpenChange }: Props) {
         { label: 'Under 2', sub: 'win 2%', pays: '≈49×' },
       ]}
       payoutsLabel="Target → payout"
-      footer={<>Payout ≈ 99 ÷ win-chance%, so the house keeps a small edge each roll. Every roll re-derives from a committed server seed + your client seed — open Verify to check. Played in chips.</>}
+      footer={<>Payout ≈ 99 ÷ win-chance%, so the house keeps a small edge each roll. Every roll re-derives from a committed server seed + your client seed — open Verify to check. Played in MORBIUS.</>}
     />
   );
 }

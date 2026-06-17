@@ -253,7 +253,7 @@ export function MinesFairnessModal({
                   Result:{' '}
                   {result.status === 'cashed_out' ? (
                     <span className="arc-mono text-amber-300">
-                      {result.payout.toLocaleString()} chips ({formatMultiplier(result.multiplierX100)})
+                      {result.payout.toLocaleString()} MORBIUS ({formatMultiplier(result.multiplierX100)})
                     </span>
                   ) : (
                     <span className="arc-mono text-rose-400">{result.status}</span>

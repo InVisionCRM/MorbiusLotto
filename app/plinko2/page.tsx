@@ -59,7 +59,7 @@ export default function Plinko2Page() {
                 </span>
               </h1>
               <p className="mt-1.5 text-sm text-slate-400">
-                16 rows · three risk levels · provably fair · played in chips
+                16 rows · three risk levels · provably fair · played in MORBIUS
               </p>
             </header>
             <StakePlinkoGame />

@@ -2101,21 +2101,22 @@ export class PokerGameService {
     if (priceChips > BigInt(Number.MAX_SAFE_INTEGER)) {
       throw new Error('Price overflow');
     }
-    const wei = chipsToWei(Number(priceChips));
-
     // table_logo column kept for back-compat (NOT NULL on some history rows); store the
     // address so legacy reads have something stable. New renderers use the token columns.
     const legacyLogoValue = tokenAddress;
 
     await this.dbService.withTransaction(async (client: any) => {
-      const deduct = await client.query(
-        `UPDATE players SET balance = balance - $2::NUMERIC
-         WHERE LOWER(wallet_address) = LOWER($1) AND balance >= $2::NUMERIC
-         RETURNING balance`,
-        [normalized, wei.toString()]
-      );
-      if (deduct.rows.length === 0) {
-        throw new Error('Insufficient MORBIUS balance for table logo sponsorship');
+      // Charge the sponsorship price from the chip ledger (1 chip = 1 MORBIUS).
+      try {
+        await applyPokerChipDelta(client, normalized, -priceChips, 'platform_fee', {
+          type: 'table_logo',
+          id: tableId,
+        });
+      } catch (e) {
+        if (e instanceof Error && /Insufficient poker chips/.test(e.message)) {
+          throw new Error('Insufficient MORBIUS balance for table logo sponsorship');
+        }
+        throw e;
       }
       await client.query(
         `UPDATE poker_tables SET

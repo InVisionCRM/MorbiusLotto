@@ -242,7 +242,7 @@ export function BaccaratFairnessModal({
                 <span>
                   Returned:{' '}
                   <span className={`font-mono ${result.totalPayout > 0 ? 'text-amber-300' : 'text-rose-400'}`}>
-                    {result.totalPayout.toLocaleString()} chips
+                    {result.totalPayout.toLocaleString()} MORBIUS
                   </span>
                 </span>
               </div>

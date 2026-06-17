@@ -225,7 +225,7 @@ export function HiLoInfoTabs({ history, historyLoading, onVerify, info }: HiLoIn
             <ul className="list-disc space-y-1 pl-4 text-xs text-slate-400 sm:text-sm">
               <li>The shorter the odds, the smaller the bump — and vice-versa.</li>
               <li>Cash out any time after your first correct call to bank floor(bet × multiplier).</li>
-              <li>Up to {maxPicks} picks per round; bet {minBet.toLocaleString()}–{maxBet.toLocaleString()} chips.</li>
+              <li>Up to {maxPicks} picks per round; bet {minBet.toLocaleString()}–{maxBet.toLocaleString()} MORBIUS.</li>
               <li>Lower is impossible from an Ace; higher-or-same is always available.</li>
             </ul>
             <p>

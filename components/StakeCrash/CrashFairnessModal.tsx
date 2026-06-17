@@ -257,7 +257,7 @@ export function CrashFairnessModal({
                   Payout:{' '}
                   {result.won ? (
                     <span className="font-mono text-[#00ffa3]">
-                      {result.payout.toLocaleString()} chips
+                      {result.payout.toLocaleString()} MORBIUS
                     </span>
                   ) : (
                     <span className="font-mono text-[#ff3e3e]">lost</span>

@@ -9,11 +9,18 @@ import {
   recordDailyMilestone,
   recordGameOutcome,
 } from './wheel-spin-wallet';
+import { applyPokerChipDelta } from './poker-chip-wallet';
+import { POKER_CHIP_WEI } from '../lib/poker-chip-scale';
 import crypto from 'crypto';
 
 /** Kick from table after this many consecutive timeouts (betting window + in-round auto-stand). */
 const BJ_MULTI_AFK_KICK_AFTER = 3;
 const BJ_MULTI_BETTING_RESTART_GRACE_MS = 3000;
+
+/** 3:2 blackjack payout floored to whole chips (1 chip = 1 MORBIUS); the half-chip on odd bets rounds to the house. */
+function bjMultiPayoutWhole(betWei: bigint): bigint {
+  return ((betWei / POKER_CHIP_WEI) * 5n / 2n) * POKER_CHIP_WEI;
+}
 
 // ---------------------------------------------------------------------------
 // Shared per-key mutex (copied from blackjack-game.service.ts pattern)
@@ -209,10 +216,10 @@ export class BlackjackMultiGameService {
         for (const seat of seats.rows) {
           const pending = BigInt(seat.pending_bet || '0');
           if (pending > 0n) {
-            await client.query(
-              `UPDATE players SET balance = balance + $2::NUMERIC WHERE LOWER(wallet_address) = LOWER($1)`,
-              [seat.player_address, pending.toString()],
-            );
+            await applyPokerChipDelta(client, seat.player_address, pending / POKER_CHIP_WEI, 'blackjack_refund', {
+              type: 'blackjack_multi',
+              id: null,
+            });
           }
         }
 
@@ -227,10 +234,10 @@ export class BlackjackMultiGameService {
         for (const rs of unsettledBets.rows) {
           const betAmount = BigInt(rs.bet_amount || '0');
           if (betAmount > 0n) {
-            await client.query(
-              `UPDATE players SET balance = balance + $2::NUMERIC WHERE LOWER(wallet_address) = LOWER($1)`,
-              [rs.player_address, betAmount.toString()],
-            );
+            await applyPokerChipDelta(client, rs.player_address, betAmount / POKER_CHIP_WEI, 'blackjack_refund', {
+              type: 'blackjack_multi',
+              id: null,
+            });
           }
         }
 
@@ -253,17 +260,21 @@ export class BlackjackMultiGameService {
     if (amount <= 0n) throw new Error('Tip amount must be positive');
     const maxTip = BigInt('5000000000000000000000'); // 5000 MORBIUS max tip
     if (amount > maxTip) throw new Error('Tip amount too large');
+    if (amount % POKER_CHIP_WEI !== 0n) throw new Error('Tip must be a whole number of MORBIUS');
 
     const normalized = playerAddress.toLowerCase();
-    const balance = await this.dbService.getPlayerBalance(normalized);
+    const balance = await this.dbService.getChipBalanceAsWei(normalized);
     if (balance < amount) throw new Error('Insufficient balance to tip');
 
     const deployerWallet = (process.env.NEXT_PUBLIC_BLACKJACK_DEPLOYER_WALLET || process.env.BLACKJACK_DEPLOYER_WALLET || '').toLowerCase();
     if (!deployerWallet) throw new Error('Deployer wallet not configured');
 
-    // Game-domain balance authority remains in bj-multi service in current architecture.
-    await this.dbService.deductPlayerBalance(normalized, amount);
-    await this.dbService.addPlayerBalance(deployerWallet, amount);
+    // Move the tip in chips (1 chip = 1 MORBIUS), player → deployer, atomically.
+    const tipChips = amount / POKER_CHIP_WEI;
+    await this.dbService.withTransaction(async (client) => {
+      await applyPokerChipDelta(client, normalized, -tipChips, 'blackjack_tip', { type: 'blackjack_tip', id: null });
+      await applyPokerChipDelta(client, deployerWallet, tipChips, 'blackjack_tip', { type: 'blackjack_tip', id: null });
+    });
     this.audit(tableId, 'tip_dealer', null, normalized, { amount: amount.toString(), recipient: deployerWallet });
 
     return { success: true };
@@ -378,10 +389,10 @@ export class BlackjackMultiGameService {
       const pendingBet = BigInt(seat.pending_bet || '0');
       await this.dbService.withTransaction(async (client) => {
         if (pendingBet > 0n) {
-          await client.query(
-            `UPDATE players SET balance = balance + $2::NUMERIC WHERE LOWER(wallet_address) = LOWER($1)`,
-            [normalized, pendingBet.toString()],
-          );
+          await applyPokerChipDelta(client, normalized, pendingBet / POKER_CHIP_WEI, 'blackjack_refund', {
+            type: 'blackjack_multi',
+            id: null,
+          });
         }
         await client.query(
           `DELETE FROM blackjack_multi_seats WHERE table_id = $1 AND LOWER(player_address) = LOWER($2)`,
@@ -425,6 +436,8 @@ export class BlackjackMultiGameService {
       const maxBet = BigInt(table.max_bet);
       if (betAmount < minBet) throw new Error(`Minimum bet is ${minBet}`);
       if (betAmount > maxBet) throw new Error(`Maximum bet is ${maxBet}`);
+      // Chips are whole integers (1 chip = 1 MORBIUS); reject sub-chip bets to avoid wei→chip truncation gaps.
+      if (betAmount % POKER_CHIP_WEI !== 0n) throw new Error('Bet must be a whole number of MORBIUS');
 
       // Validate seat exists
       const seatResult = await this.pool.query(
@@ -442,28 +455,25 @@ export class BlackjackMultiGameService {
       // Atomic: refund previous pending bet, deduct new bet, update seat — all in one transaction
       const prevPending = BigInt(seat.pending_bet || '0');
       await this.dbService.withTransaction(async (client) => {
-        // Lock player row to serialize concurrent balance changes
-        const playerLock = await client.query(
-          `SELECT balance FROM players WHERE LOWER(wallet_address) = LOWER($1) FOR UPDATE`,
-          [normalized],
-        );
-        if (playerLock.rows.length === 0) throw new Error('Player not found');
-
-        const currentBalance = BigInt(playerLock.rows[0].balance || '0');
-        // Net change: refund old pending, deduct new bet
+        // Net change vs. the previously-staged bet, on the chip ledger (1 chip = 1 MORBIUS).
+        // applyPokerChipDelta takes its own FOR UPDATE row lock + overdraft guard.
         const netDeduction = betAmount - prevPending;
         if (netDeduction > 0n) {
-          if (currentBalance < netDeduction) throw new Error('Insufficient balance');
-          await client.query(
-            `UPDATE players SET balance = balance - $2::NUMERIC WHERE LOWER(wallet_address) = LOWER($1)`,
-            [normalized, netDeduction.toString()],
-          );
+          try {
+            await applyPokerChipDelta(client, normalized, -(netDeduction / POKER_CHIP_WEI), 'blackjack_bet', {
+              type: 'blackjack_multi',
+              id: null,
+            });
+          } catch (e) {
+            if (e instanceof Error && /Insufficient poker chips/.test(e.message)) throw new Error('Insufficient balance');
+            throw e;
+          }
         } else if (netDeduction < 0n) {
           // New bet is smaller — refund the difference
-          await client.query(
-            `UPDATE players SET balance = balance + $2::NUMERIC WHERE LOWER(wallet_address) = LOWER($1)`,
-            [normalized, (-netDeduction).toString()],
-          );
+          await applyPokerChipDelta(client, normalized, (-netDeduction) / POKER_CHIP_WEI, 'blackjack_refund', {
+            type: 'blackjack_multi',
+            id: null,
+          });
         }
         // else netDeduction === 0 — same amount, no balance change needed
 
@@ -1228,9 +1238,9 @@ export class BlackjackMultiGameService {
     } else if (action === 'double_down') {
       if (hand.cards.length !== 2) throw new Error('Can only double down on first two cards');
       const bet = BigInt(hand.betAmount);
-      const balance = await this.dbService.getPlayerBalance(playerAddress);
+      const balance = await this.dbService.getChipBalanceAsWei(playerAddress);
       if (balance < bet) throw new Error('Insufficient balance to double down');
-      await this.dbService.deductPlayerBalance(playerAddress, bet);
+      await this.dbService.debitChipsForWei(playerAddress, bet, 'blackjack_bet', { type: 'blackjack_multi', id: round.id });
 
       hand.betAmount = (bet * 2n).toString();
       const draw = this.drawCard(deck, dp); dp = draw.dp;
@@ -1293,9 +1303,9 @@ export class BlackjackMultiGameService {
     if (!this.canSplit(hand.cards)) throw new Error('Cannot split this hand');
 
     const bet = BigInt(hand.betAmount);
-    const balance = await this.dbService.getPlayerBalance(playerAddress);
+    const balance = await this.dbService.getChipBalanceAsWei(playerAddress);
     if (balance < bet) throw new Error('Insufficient balance to split');
-    await this.dbService.deductPlayerBalance(playerAddress, bet);
+    await this.dbService.debitChipsForWei(playerAddress, bet, 'blackjack_bet', { type: 'blackjack_multi', id: round.id });
 
     let dp = await this.computeDeckPositionAsync(round.id, round.dealer_cards);
 
@@ -1361,10 +1371,10 @@ export class BlackjackMultiGameService {
 
     await this.dbService.withTransaction(async (client) => {
       if (refund > 0n) {
-        await client.query(
-          `UPDATE players SET balance = balance + $2::NUMERIC WHERE LOWER(wallet_address) = LOWER($1)`,
-          [norm, refund.toString()],
-        );
+        await applyPokerChipDelta(client, norm, refund / POKER_CHIP_WEI, 'blackjack_refund', {
+          type: 'blackjack_multi',
+          id: roundId,
+        });
       }
       await client.query(`DELETE FROM blackjack_multi_round_seats WHERE id = $1`, [rs.id]);
       await client.query(
@@ -1499,9 +1509,9 @@ export class BlackjackMultiGameService {
               hand.payout = hand.betAmount; // return stake
             } else {
               hand.result = 'blackjack';
-              // 3:2 blackjack payout: bet * 5 / 2, rounded up to avoid truncation
+              // 3:2 blackjack payout floored to whole chips (1 chip = 1 MORBIUS)
               const bjBet = BigInt(hand.betAmount);
-              hand.payout = ((bjBet * 5n + 1n) / 2n).toString();
+              hand.payout = bjMultiPayoutWhole(bjBet).toString();
             }
           } else if (hand.isBust) {
             hand.result = 'loss';
@@ -1535,12 +1545,12 @@ export class BlackjackMultiGameService {
           [JSON.stringify(hands), overallResult, totalPayout.toString(), rs.id],
         );
 
-        // Credit payout
+        // Credit payout to the chip ledger (1 chip = 1 MORBIUS)
         if (totalPayout > 0n) {
-          await client.query(
-            `UPDATE players SET balance = balance + $2::NUMERIC WHERE LOWER(wallet_address) = LOWER($1)`,
-            [rs.player_address, totalPayout.toString()],
-          );
+          await applyPokerChipDelta(client, rs.player_address, totalPayout / POKER_CHIP_WEI, 'blackjack_payout', {
+            type: 'blackjack_multi',
+            id: roundId,
+          });
         }
 
         // Fan out settled hands into game_hands so history/verification use one table

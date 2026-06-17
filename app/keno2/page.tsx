@@ -58,7 +58,7 @@ export default function Keno2Page() {
                 </span>
               </h1>
               <p className="mt-1.5 text-sm text-slate-400">
-                Pick up to 10 · we draw 10 · provably fair · played in chips
+                Pick up to 10 · we draw 10 · provably fair · played in MORBIUS
               </p>
             </header>
             <StakeKenoGame />

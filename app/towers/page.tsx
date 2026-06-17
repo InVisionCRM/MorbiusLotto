@@ -52,7 +52,7 @@ export default function TowersPage() {
                 </span>
               </h1>
               <p className="mt-1.5 text-sm text-slate-500">
-                climb the tower · one safe tile per floor · cash out anytime · provably fair · played in chips
+                climb the tower · one safe tile per floor · cash out anytime · provably fair · played in MORBIUS
               </p>
             </header>
             <StakeTowersGame />

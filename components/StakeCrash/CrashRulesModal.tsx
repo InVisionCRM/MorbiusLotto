@@ -42,7 +42,7 @@ export function CrashRulesModal({ open, onOpenChange }: Props) {
         { label: 'Auto-cashout', sub: 'fires for you', pays: 'on' },
       ]}
       payoutsLabel="The numbers"
-      footer={<>The crash point is <span className="arc-mono">0.99 / r</span> from a committed server seed, your client seed and a nonce — 99% returns to players over time. Auto-cashout also protects you if you disconnect mid-flight. Every round can be re-derived from Verify. Played in chips.</>}
+      footer={<>The crash point is <span className="arc-mono">0.99 / r</span> from a committed server seed, your client seed and a nonce — 99% returns to players over time. Auto-cashout also protects you if you disconnect mid-flight. Every round can be re-derived from Verify. Played in MORBIUS.</>}
     />
   );
 }

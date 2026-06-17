@@ -52,7 +52,7 @@ export default function BaccaratPage() {
                 </span>
               </h1>
               <p className="mt-1.5 text-sm text-slate-500">
-                player vs banker · no decisions after the deal · provably fair · played in chips
+                player vs banker · no decisions after the deal · provably fair · played in MORBIUS
               </p>
             </header>
             <StakeBaccaratGame />

@@ -273,7 +273,7 @@ export function BaccaratInfoTabs({ history, historyLoading, onVerify, info }: Ba
               <span className="arc-mono text-slate-200">2–9 = face</span>,{' '}
               <span className="arc-mono text-slate-200">10/J/Q/K = 0</span>; a hand counts the sum
               mod 10, so nine is the best total. Bet {minBet.toLocaleString()}–
-              {maxBet.toLocaleString()} chips per zone, any combination of zones per hand.
+              {maxBet.toLocaleString()} MORBIUS per zone, any combination of zones per hand.
             </p>
 
             <div className="rounded-lg bg-[#081420]/70 p-3 ring-1 ring-cyan-950/70">

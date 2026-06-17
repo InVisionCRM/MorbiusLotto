@@ -71,7 +71,7 @@ export function MinesRulesModal({ open, onOpenChange }: Props) {
         { label: '24 bombs', sub: 'one safe cell', pays: '≈24×' },
       ]}
       payoutsLabel="Risk — bomb count"
-      footer={<>The multiplier ladder steepens with more bombs. The board is sealed behind a committed hash before you play, so it can&apos;t shift mid-round — open Verify to re-derive it. Played in chips.</>}
+      footer={<>The multiplier ladder steepens with more bombs. The board is sealed behind a committed hash before you play, so it can&apos;t shift mid-round — open Verify to re-derive it. Played in MORBIUS.</>}
     />
   );
 }

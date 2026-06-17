@@ -1,7 +1,7 @@
 "use client";
 
 import { cn } from "@/lib/utils";
-import React, { useEffect, useState } from "react";
+import React from "react";
 
 export type QuoteCardItem = {
   quote: string;
@@ -18,7 +18,26 @@ export type ImageCardItem = {
   href?: string;
 };
 
-export const InfiniteMovingCards = ({
+export type WinCardItem = {
+  /** Stable id for React keys. */
+  id?: string;
+  /** Game name, e.g. "Plinko". */
+  game: string;
+  /** Preformatted win amount, e.g. "12,500 MORBIUS". */
+  amount: string;
+  /** Player label, e.g. "0x12…ab". */
+  player: string;
+  /** Optional relative time, e.g. "2m ago". */
+  timeAgo?: string;
+  /** Optional thumbnail node (e.g. game art). Falls back to `accent`. */
+  art?: React.ReactNode;
+  /** Optional accent color used when no art is provided. */
+  accent?: string;
+  /** Optional link target. */
+  href?: string;
+};
+
+export const InfiniteMovingCards = React.memo(function InfiniteMovingCards({
   items,
   variant = "quote",
   direction = "left",
@@ -26,90 +45,83 @@ export const InfiniteMovingCards = ({
   pauseOnHover = true,
   className,
 }: {
-  items: QuoteCardItem[] | ImageCardItem[];
-  variant?: "quote" | "image";
+  items: QuoteCardItem[] | ImageCardItem[] | WinCardItem[];
+  variant?: "quote" | "image" | "win";
   direction?: "left" | "right";
   speed?: "fast" | "normal" | "slow";
   pauseOnHover?: boolean;
   className?: string;
-}) => {
-  const containerRef = React.useRef<HTMLDivElement>(null);
-  const scrollerRef = React.useRef<HTMLUListElement>(null);
+}) {
+  const duration = speed === "fast" ? "20s" : speed === "normal" ? "40s" : "80s";
+  const animDirection = direction === "left" ? "forwards" : "reverse";
+  // Render the list twice so the -50% translate loops seamlessly — no runtime
+  // DOM cloning (which broke when the parent re-rendered).
+  const list = [...items, ...items];
 
-  useEffect(() => {
-    addAnimation();
-  }, []);
-  const [start, setStart] = useState(false);
-  function addAnimation() {
-    if (containerRef.current && scrollerRef.current) {
-      const scrollerContent = Array.from(scrollerRef.current.children);
-
-      scrollerContent.forEach((item) => {
-        const duplicatedItem = item.cloneNode(true);
-        if (scrollerRef.current) {
-          scrollerRef.current.appendChild(duplicatedItem);
-        }
-      });
-
-      getDirection();
-      getSpeed();
-      setStart(true);
-    }
-  }
-  const getDirection = () => {
-    if (containerRef.current) {
-      if (direction === "left") {
-        containerRef.current.style.setProperty(
-          "--animation-direction",
-          "forwards",
-        );
-      } else {
-        containerRef.current.style.setProperty(
-          "--animation-direction",
-          "reverse",
-        );
-      }
-    }
-  };
-  const getSpeed = () => {
-    if (containerRef.current) {
-      if (speed === "fast") {
-        containerRef.current.style.setProperty("--animation-duration", "20s");
-      } else if (speed === "normal") {
-        containerRef.current.style.setProperty("--animation-duration", "40s");
-      } else {
-        containerRef.current.style.setProperty("--animation-duration", "80s");
-      }
-    }
-  };
   return (
     <div
-      ref={containerRef}
       className={cn(
         "scroller relative z-20 max-w-7xl overflow-hidden [mask-image:linear-gradient(to_right,transparent,white_20%,white_80%,transparent)]",
         className,
       )}
+      style={
+        {
+          "--animation-duration": duration,
+          "--animation-direction": animDirection,
+        } as React.CSSProperties
+      }
     >
       <ul
-        ref={scrollerRef}
         className={cn(
-          "flex w-max min-w-full shrink-0 flex-nowrap gap-4 py-4 md:gap-6 md:py-6",
-          start && "animate-scroll",
+          "flex w-max min-w-full shrink-0 flex-nowrap gap-4 py-4 md:gap-6 md:py-6 animate-scroll",
           pauseOnHover && "hover:[animation-play-state:paused]",
         )}
       >
-        {items.map((item, idx) => (
+        {list.map((item, idx) => (
           <li
             className={cn(
-              "relative shrink-0 rounded-xl border overflow-hidden flex flex-col",
-              "h-[200px] sm:h-[240px] md:h-[280px] lg:h-[320px]",
-              variant === "quote"
-                ? "min-w-[200px] max-w-[320px] md:min-w-[280px] md:max-w-[420px] w-auto px-3 py-2 md:px-6 md:py-4 border-zinc-200 bg-[linear-gradient(180deg,#fafafa,#f5f5f5)] dark:border-zinc-700 dark:bg-[linear-gradient(180deg,#27272a,#18181b)]"
-                : "min-w-[200px] max-w-[320px] md:min-w-[280px] md:max-w-[400px] w-auto border-cyan-500/20 bg-[linear-gradient(180deg,rgba(15,23,42,0.95),rgba(15,23,42,0.85))] dark:border-cyan-500/20",
+              "relative shrink-0 rounded-xl border overflow-hidden",
+              variant === "win"
+                ? "h-[72px] min-w-[210px] w-auto border-white/10 bg-[linear-gradient(180deg,rgba(17,24,39,0.95),rgba(11,16,26,0.92))]"
+                : "flex flex-col h-[200px] sm:h-[240px] md:h-[280px] lg:h-[320px]",
+              variant === "quote" &&
+                "min-w-[200px] max-w-[320px] md:min-w-[280px] md:max-w-[420px] w-auto px-3 py-2 md:px-6 md:py-4 border-zinc-200 bg-[linear-gradient(180deg,#fafafa,#f5f5f5)] dark:border-zinc-700 dark:bg-[linear-gradient(180deg,#27272a,#18181b)]",
+              variant === "image" &&
+                "min-w-[200px] max-w-[320px] md:min-w-[280px] md:max-w-[400px] w-auto border-cyan-500/20 bg-[linear-gradient(180deg,rgba(15,23,42,0.95),rgba(15,23,42,0.85))] dark:border-cyan-500/20",
             )}
-            key={variant === "image" ? (item as ImageCardItem).name + idx : (item as QuoteCardItem).name + idx}
+            key={idx}
           >
-            {variant === "image" ? (
+            {variant === "win" ? (
+              (() => {
+                const w = item as WinCardItem;
+                const content = (
+                  <div className="flex h-full items-center gap-3 px-3">
+                    <div className="relative h-11 w-11 shrink-0 overflow-hidden rounded-lg border border-white/10 bg-black/40">
+                      {w.art ?? (w.accent ? <div className="h-full w-full" style={{ background: w.accent }} /> : null)}
+                    </div>
+                    <div className="flex min-w-0 flex-col leading-tight">
+                      <span className="truncate text-[10px] font-bold uppercase tracking-wider text-slate-400">
+                        {w.game}
+                      </span>
+                      <span className="truncate text-[14px] font-extrabold tabular-nums text-amber-300">
+                        {w.amount}
+                      </span>
+                      <span className="truncate text-[10px] text-slate-500">
+                        {w.player}
+                        {w.timeAgo ? ` · ${w.timeAgo}` : ""}
+                      </span>
+                    </div>
+                  </div>
+                );
+                return w.href ? (
+                  <a href={w.href} className="block h-full w-full transition-colors hover:bg-white/[0.03]">
+                    {content}
+                  </a>
+                ) : (
+                  content
+                );
+              })()
+            ) : variant === "image" ? (
               (() => {
                 const imageItem = item as ImageCardItem;
                 const content = (
@@ -117,7 +129,6 @@ export const InfiniteMovingCards = ({
                     {imageItem.src ? (
                       <>
                         <div className="relative w-full h-[120px] sm:h-[150px] md:h-[180px] lg:h-[220px] bg-black/30 shrink-0 overflow-hidden">
-                          { }
                           <img
                             src={imageItem.src}
                             alt={imageItem.name}
@@ -148,7 +159,9 @@ export const InfiniteMovingCards = ({
                   <a href={imageItem.href} className="block h-full w-full hover:bg-white/[0.03] transition-colors">
                     {content}
                   </a>
-                ) : content;
+                ) : (
+                  content
+                );
               })()
             ) : (
               <blockquote className="flex flex-col h-full min-h-0 overflow-hidden">
@@ -176,4 +189,4 @@ export const InfiniteMovingCards = ({
       </ul>
     </div>
   );
-};
+});

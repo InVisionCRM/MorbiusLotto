@@ -29,7 +29,7 @@ export const rouletteFaqs: FaqItem[] = [
   },
   {
     q: 'Is there a max bet per spin?',
-    a: <>Yes — up to 20 placed zones and 5,000 chips total across the felt per spin.</>,
+    a: <>Yes — up to 20 placed zones and 5,000 MORBIUS total across the felt per spin.</>,
   },
   {
     q: 'Can I rebet my last layout?',

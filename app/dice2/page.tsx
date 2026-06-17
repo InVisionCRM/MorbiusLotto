@@ -53,7 +53,7 @@ export default function Dice2Page() {
                 </span>
               </h1>
               <p className="mt-1.5 text-sm text-slate-400">
-                pick a target · roll under it to win · provably fair · played in chips
+                pick a target · roll under it to win · provably fair · played in MORBIUS
               </p>
             </header>
             <StakeDiceGame />

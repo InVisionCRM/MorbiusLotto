@@ -42,7 +42,7 @@ export function RouletteRulesModal({ open, onOpenChange }: Props) {
       theme={DEEP_SEA}
       game="Roulette"
       icon={<Disc3 className="w-5 h-5" style={{ color: '#22D3EE' }} />}
-      intro={<>Stack chips anywhere on the felt, spin the single-zero wheel, and get paid by how tightly you bet — one number pays the most, red/black the least.</>}
+      intro={<>Stack MORBIUS anywhere on the felt, spin the single-zero wheel, and get paid by how tightly you bet — one number pays the most, red/black the least.</>}
       steps={[
         <>Pick a <span style={{ color: '#22D3EE' }}>chip</span> value (5 / 25 / 100 / 500).</>,
         <>Click felt zones to place bets (Undo, Clear and Rebet help).</>,
@@ -59,7 +59,7 @@ export function RouletteRulesModal({ open, onOpenChange }: Props) {
         { label: 'Red · even · 1–18', sub: 'even money', pays: '1 : 1' },
       ]}
       payoutsLabel="Bets & payouts"
-      footer={<>European single-zero wheel — house edge 2.70%. A spun <span className="arc-mono">0</span> loses the even-money, dozen and column bets. The pocket is provably fair: re-derive any spin from Verify. Played in chips.</>}
+      footer={<>European single-zero wheel — house edge 2.70%. A spun <span className="arc-mono">0</span> loses the even-money, dozen and column bets. The pocket is provably fair: re-derive any spin from Verify. Played in MORBIUS.</>}
     />
   );
 }

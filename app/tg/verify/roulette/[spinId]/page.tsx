@@ -188,13 +188,13 @@ export default function VerifyRoulettePage() {
                     {pcol.toUpperCase()} · {data.result === 0 ? 'ZERO' : data.result % 2 === 0 ? 'EVEN' : 'ODD'}
                   </div>
                   <div style={{ fontSize: 12, color: net >= 0 ? '#4ade80' : '#f87171', marginTop: 2 }}>
-                    {net >= 0 ? `+${net.toLocaleString('en-US')}` : net.toLocaleString('en-US')} chips (payout {data.totalPayout.toLocaleString('en-US')})
+                    {net >= 0 ? `+${net.toLocaleString('en-US')}` : net.toLocaleString('en-US')} MORBIUS (payout {data.totalPayout.toLocaleString('en-US')})
                   </div>
                 </div>
               </div>
               <Field label="Spin ID" value={data.spinId} />
               <Field label="Created at" value={new Date(data.createdAt).toLocaleString()} mono={false} />
-              <Field label="Total bet" value={`${data.totalBet.toLocaleString('en-US')} chips`} mono={false} />
+              <Field label="Total bet" value={`${data.totalBet.toLocaleString('en-US')} MORBIUS`} mono={false} />
             </div>
 
             {/* Bets breakdown */}

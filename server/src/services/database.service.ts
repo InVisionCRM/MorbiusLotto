@@ -1,8 +1,20 @@
-import { Pool } from 'pg';
+import { Pool, PoolClient } from 'pg';
 import { formatEther } from 'viem';
 import type { MoneyDatabasePort } from './money-database.port';
 import { logger } from '../utils/logger';
 import { toBigIntSafe } from '../utils/safe-bigint';
+import {
+  applyPokerChipDelta,
+  getPokerChipBalance,
+  type PokerChipLedgerReason,
+  type PokerChipRef,
+} from './poker-chip-wallet';
+import { POKER_CHIP_WEI } from '../lib/poker-chip-scale';
+import {
+  classifyReason,
+  reasonsForGame,
+  type ActivityKind,
+} from './activity-taxonomy';
 
 function formatWei(wei: bigint | string | number): string {
   try {
@@ -469,6 +481,93 @@ export class DatabaseService implements MoneyDatabaseQueries {
     );
   }
 
+  /**
+   * Credit `amountWei` of MORBIUS to a wallet as whole chips, keeping any sub-1-MORBIUS
+   * remainder as dust in players.balance (so no funds are ever lost or rounded up).
+   * Lands the wei in players.balance, then sweeps every whole MORBIUS into the chip ledger.
+   * Must run inside an open client transaction. Returns the number of chips credited.
+   */
+  async sweepWeiToChipsTx(
+    client: PoolClient,
+    walletAddress: string,
+    amountWei: bigint,
+    reason: PokerChipLedgerReason,
+    ref?: PokerChipRef,
+  ): Promise<bigint> {
+    const norm = this.normalizeAddress(walletAddress);
+    await client.query(
+      `INSERT INTO players (wallet_address, balance) VALUES ($1, $2::NUMERIC)
+       ON CONFLICT (wallet_address) DO UPDATE SET balance = players.balance + $2::NUMERIC, last_seen = NOW()`,
+      [norm, amountWei.toString()],
+    );
+    const row = await client.query(
+      `SELECT balance::text AS balance FROM players WHERE LOWER(wallet_address) = LOWER($1) FOR UPDATE`,
+      [norm],
+    );
+    const balanceWei = BigInt(row.rows[0]?.balance ?? '0');
+    const chips = balanceWei / POKER_CHIP_WEI; // floor; remainder stays as dust
+    if (chips <= 0n) return 0n;
+    await applyPokerChipDelta(client, norm, chips, reason, ref);
+    await client.query(
+      `UPDATE players SET balance = balance - $2::NUMERIC WHERE LOWER(wallet_address) = LOWER($1)`,
+      [norm, (chips * POKER_CHIP_WEI).toString()],
+    );
+    return chips;
+  }
+
+  /** Transactional wrapper around sweepWeiToChipsTx for non-transactional callers. */
+  async creditMorbiusWeiAsChips(
+    walletAddress: string,
+    amountWei: bigint,
+    reason: PokerChipLedgerReason,
+    ref?: PokerChipRef,
+  ): Promise<bigint> {
+    if (amountWei <= 0n) return 0n;
+    return this.withTransaction((client) => this.sweepWeiToChipsTx(client, walletAddress, amountWei, reason, ref));
+  }
+
+  /** Player's chip balance expressed in MORBIUS wei (1 chip = 10^18 wei), for wei-based callers (blackjack, balance display). */
+  async getChipBalanceAsWei(walletAddress: string): Promise<bigint> {
+    const chips = await getPokerChipBalance(this.pool, walletAddress);
+    return chips * POKER_CHIP_WEI;
+  }
+
+  /** Debit a wallet's chip ledger by `amountWei` worth of whole chips (1 chip = 1 MORBIUS). Throws 'Insufficient balance' if short. */
+  async debitChipsForWei(
+    walletAddress: string,
+    amountWei: bigint,
+    reason: PokerChipLedgerReason,
+    ref?: PokerChipRef,
+  ): Promise<void> {
+    const chips = amountWei / POKER_CHIP_WEI; // bets are whole MORBIUS
+    if (chips <= 0n) return;
+    await this.withTransaction(async (client) => {
+      try {
+        await applyPokerChipDelta(client, walletAddress, -chips, reason, ref);
+      } catch (e) {
+        if (e instanceof Error && /Insufficient poker chips/.test(e.message)) {
+          const have = await getPokerChipBalance(client, walletAddress);
+          throw new Error(`Insufficient balance: have ${have.toString()} MORBIUS, need ${chips.toString()}`);
+        }
+        throw e;
+      }
+    });
+  }
+
+  /** Credit a wallet's chip ledger by `amountWei` worth of whole chips (floored; exact, dust untouched). */
+  async creditChipsForWei(
+    walletAddress: string,
+    amountWei: bigint,
+    reason: PokerChipLedgerReason,
+    ref?: PokerChipRef,
+  ): Promise<void> {
+    const chips = amountWei / POKER_CHIP_WEI; // floor
+    if (chips <= 0n) return;
+    await this.withTransaction(async (client) => {
+      await applyPokerChipDelta(client, walletAddress, chips, reason, ref);
+    });
+  }
+
   // ============================================
   // Pending Withdrawal Methods
   // ============================================
@@ -512,22 +611,21 @@ export class DatabaseService implements MoneyDatabaseQueries {
   ): Promise<bigint> {
     const normalizedAddress = this.normalizeAddress(walletAddress);
     return this.withTransaction(async (client) => {
-      // Deduct balance (fails if insufficient)
-      const deductResult = await client.query(
-        `UPDATE players SET balance = balance - $2::NUMERIC
-         WHERE LOWER(wallet_address) = LOWER($1) AND balance >= $2::NUMERIC
-         RETURNING balance`,
-        [normalizedAddress, amount.toString()],
-      );
-      if (deductResult.rows.length === 0) {
-        const current = await client.query(
-          `SELECT balance FROM players WHERE LOWER(wallet_address) = LOWER($1)`,
-          [normalizedAddress],
-        );
-        const have = current.rows[0]?.balance ?? '0';
-        throw new Error(`Insufficient balance: have ${formatWei(have)}, need ${formatWei(amount)}`);
+      // Deduct chips (fails if insufficient). Legacy signature-withdrawal path.
+      const chipsToDebit = amount / POKER_CHIP_WEI; // whole MORBIUS only
+      try {
+        await applyPokerChipDelta(client, normalizedAddress, -chipsToDebit, 'withdrawal', {
+          type: 'pending_withdrawal',
+          id: null,
+        });
+      } catch (e) {
+        if (e instanceof Error && /Insufficient poker chips/.test(e.message)) {
+          const have = await getPokerChipBalance(client, normalizedAddress);
+          throw new Error(`Insufficient balance: have ${have.toString()} MORBIUS, need ${chipsToDebit.toString()}`);
+        }
+        throw e;
       }
-      const remainingBalance = BigInt(deductResult.rows[0].balance || '0');
+      const remainingBalance = await getPokerChipBalance(client, normalizedAddress);
 
       // Create pending withdrawal record (expires_at = on-chain signature deadline)
       await client.query(
@@ -590,28 +688,28 @@ export class DatabaseService implements MoneyDatabaseQueries {
     feeWei: bigint,
   ): Promise<string> {
     const normalizedAddress = this.normalizeAddress(walletAddress);
+    const chipsToDebit = amountWei / POKER_CHIP_WEI; // whole MORBIUS only (route floors the amount)
     return this.withTransaction(async (client) => {
-      const deductResult = await client.query(
-        `UPDATE players SET balance = balance - $2::NUMERIC
-         WHERE LOWER(wallet_address) = LOWER($1) AND balance >= $2::NUMERIC
-         RETURNING id`,
-        [normalizedAddress, amountWei.toString()],
-      );
-      if (deductResult.rows.length === 0) {
-        const cur = await client.query(
-          `SELECT balance FROM players WHERE LOWER(wallet_address) = LOWER($1)`,
-          [normalizedAddress],
-        );
-        const have = cur.rows[0]?.balance ?? '0';
-        throw new Error(`Insufficient balance: have ${formatWei(have)}, need ${formatWei(amountWei)}`);
-      }
       const insertResult = await client.query(
         `INSERT INTO hot_withdrawal_jobs (wallet_address, amount_wei, net_to_user_wei, fee_wei, status)
          VALUES ($1, $2::NUMERIC, $3::NUMERIC, $4::NUMERIC, 'queued')
          RETURNING id`,
         [normalizedAddress, amountWei.toString(), netToUserWei.toString(), feeWei.toString()],
       );
-      return insertResult.rows[0].id;
+      const jobId = insertResult.rows[0].id;
+      try {
+        await applyPokerChipDelta(client, normalizedAddress, -chipsToDebit, 'withdrawal', {
+          type: 'hot_withdrawal_job',
+          id: jobId,
+        });
+      } catch (e) {
+        if (e instanceof Error && /Insufficient poker chips/.test(e.message)) {
+          const have = await getPokerChipBalance(client, normalizedAddress);
+          throw new Error(`Insufficient balance: have ${have.toString()} MORBIUS, need ${chipsToDebit.toString()}`);
+        }
+        throw e;
+      }
+      return jobId;
     });
   }
 
@@ -723,13 +821,12 @@ export class DatabaseService implements MoneyDatabaseQueries {
     return result.rows;
   }
 
-  /** Refund balance for a failed hot withdrawal job. */
+  /** Refund chips for a failed hot withdrawal job (reverses the chip debit taken at enqueue). */
   async refundHotWithdrawalJob(walletAddress: string, amountWei: bigint): Promise<void> {
-    const normalizedAddress = this.normalizeAddress(walletAddress);
-    await this.pool.query(
-      `UPDATE players SET balance = balance + $2::NUMERIC WHERE LOWER(wallet_address) = LOWER($1)`,
-      [normalizedAddress, amountWei.toString()],
-    );
+    await this.creditMorbiusWeiAsChips(walletAddress, amountWei, 'withdrawal', {
+      type: 'withdrawal_refund',
+      id: null,
+    });
   }
 
   // ============================================
@@ -830,14 +927,11 @@ export class DatabaseService implements MoneyDatabaseQueries {
       }
       const { wallet_address, amount_wei, tx_hash, block_number } = row.rows[0];
       const normWallet = this.normalizeAddress(wallet_address);
-      await client.query(
-        `INSERT INTO players (wallet_address, balance)
-         VALUES ($1, $2::NUMERIC)
-         ON CONFLICT (wallet_address) DO UPDATE SET
-           balance = players.balance + $2::NUMERIC,
-           last_seen = NOW()`,
-        [normWallet, amount_wei],
-      );
+      // Auto-convert the deposited MORBIUS to chips (whole MORBIUS → chips, dust kept in players.balance).
+      await this.sweepWeiToChipsTx(client, normWallet, BigInt(amount_wei), 'deposit', {
+        type: 'pending_deposit',
+        id: jobId,
+      });
       await client.query(
         `INSERT INTO player_deposits (wallet_address, amount, tx_hash, block_number)
          VALUES ($1, $2::NUMERIC, $3, $4)
@@ -1137,7 +1231,10 @@ export class DatabaseService implements MoneyDatabaseQueries {
     `;
     const result = await this.pool.query(query);
     for (const row of result.rows) {
-      await this.addPlayerBalance(row.wallet_address, BigInt(row.amount));
+      await this.creditMorbiusWeiAsChips(row.wallet_address, BigInt(row.amount), 'withdrawal', {
+        type: 'withdrawal_refund',
+        id: null,
+      });
     }
     return result.rows.length;
   }
@@ -1217,10 +1314,10 @@ export class DatabaseService implements MoneyDatabaseQueries {
         [normalizedAddress, nonce.toString()],
       );
       if (result.rows.length > 0) {
-        await client.query(
-          `UPDATE players SET balance = balance + $2::NUMERIC WHERE LOWER(wallet_address) = LOWER($1)`,
-          [normalizedAddress, amount.toString()],
-        );
+        await this.sweepWeiToChipsTx(client, normalizedAddress, amount, 'withdrawal', {
+          type: 'withdrawal_refund',
+          id: null,
+        });
       }
     });
   }
@@ -1236,7 +1333,10 @@ export class DatabaseService implements MoneyDatabaseQueries {
     `;
     const result = await this.pool.query(query, [normalizedAddress]);
     for (const row of result.rows) {
-      await this.addPlayerBalance(normalizedAddress, BigInt(row.amount));
+      await this.creditMorbiusWeiAsChips(normalizedAddress, BigInt(row.amount), 'withdrawal', {
+        type: 'withdrawal_refund',
+        id: null,
+      });
     }
     return result.rows.length;
   }
@@ -3479,6 +3579,649 @@ export class DatabaseService implements MoneyDatabaseQueries {
       total,
       limit,
       offset,
+    };
+  }
+
+  /**
+   * Unified sitewide activity feed for a player.
+   *
+   * UNIONs the three DB-retained history sources, all in this same Postgres:
+   *   1. `poker_chip_ledger` — every chip game (poker, keno2, plinko-chips, all
+   *      arcade), deposits/withdrawals and holder rewards (whole chips → ×1e18 wei).
+   *   2. Blackjack — `games`/`game_hands` (single) + `blackjack_multi_round_seats`
+   *      (multiplayer); one net row per completed game (already wei). NOT in the
+   *      chip ledger, so no double-count.
+   *   3. Lottery 6-of-55 — `instant_lottery_plays` (wei), indexed from on-chain
+   *      InstantLotteryResult events.
+   *
+   * All amounts are normalized to WEI (1 MORBIUS = 1e18 wei = 1 chip) so the client
+   * formats one unit with formatEther. Each row is enriched with the activity
+   * taxonomy ({gameKey, gameLabel, kind}). Legacy on-chain Plinko/Keno are read live
+   * from chain elsewhere and are intentionally NOT part of this DB feed.
+   *
+   * Optional filters (pushed into SQL):
+   *   - game:    single gameKey (e.g. 'dragon_tiger', 'poker', 'blackjack', 'lottery')
+   *   - outcome: 'win' (amount > 0) | 'loss' (amount < 0)
+   *
+   * Returns the page plus the filtered total so the UI can paginate.
+   */
+  async getPlayerActivity(
+    address: string,
+    options: {
+      limit?: number;
+      offset?: number;
+      game?: string;
+      outcome?: 'win' | 'loss';
+    } = {}
+  ): Promise<{
+    entries: Array<{
+      id: string;
+      source: 'ledger' | 'blackjack' | 'lottery';
+      amount: string; // signed net effect on the player, in wei
+      balance: string | null; // running chip balance in wei (ledger rows only)
+      wager: string | null; // gross stake in wei (game rows only)
+      payout: string | null; // gross payout in wei (game rows only)
+      reason: string;
+      gameKey: string;
+      gameLabel: string;
+      kind: ActivityKind;
+      refType: string | null;
+      refId: string | null;
+      refName: string | null;
+      createdAt: string;
+    }>;
+    total: number;
+    limit: number;
+    offset: number;
+  }> {
+    const normalized = this.normalizeAddress(address);
+    // Cap high enough to return a player's full retained history in one call so the
+    // client can merge it with on-chain (chain-read) plays into a single feed.
+    const limit = Math.min(Math.max(options.limit ?? 25, 1), 25000);
+    const offset = Math.max(options.offset ?? 0, 0);
+
+    // $1 is the lowercased wallet address, shared by every UNION arm.
+    const params: unknown[] = [normalized];
+
+    // Poker (cash + tournaments + rake) is excluded from the flat Activity feed — it
+    // has its own session/tournament tab (see getPlayerPokerHistory). $2 is the set of
+    // poker reasons to drop from the ledger arm.
+    const pokerReasons = [...reasonsForGame('poker'), ...reasonsForGame('poker_tournament')];
+    params.push(pokerReasons);
+    const pokerExclusionParam = `$${params.length}`;
+
+    const filters: string[] = [];
+
+    // Game filter → concrete reason-set (covers ledger reasons + synthetic
+    // blackjack_*/lottery_* + arcade reasons). Empty set ⇒ nothing matches.
+    if (options.game) {
+      const reasonSet = reasonsForGame(options.game);
+      if (reasonSet.length === 0) {
+        return { entries: [], total: 0, limit, offset };
+      }
+      params.push(reasonSet);
+      filters.push(`reason = ANY($${params.length}::text[])`);
+    }
+    // Outcome filter by net sign (uniform across ledger + game rows).
+    if (options.outcome === 'win') filters.push('amount_wei > 0');
+    else if (options.outcome === 'loss') filters.push('amount_wei < 0');
+
+    const whereClause = filters.length > 0 ? `WHERE ${filters.join(' AND ')}` : '';
+
+    params.push(limit, offset);
+    const limitParam = `$${params.length - 1}`;
+    const offsetParam = `$${params.length}`;
+
+    const query = `
+      WITH unified AS (
+        -- 1a. Chip-ledger ROUNDS: pair the bet + payout (+ refund) rows that share a
+        --     ref_id — arcade games, keno, plinko-chips, video poker — into one
+        --     wager→payout→net round (Stake-style one-row-per-bet). The games pass a
+        --     per-round UUID as ref_id, so (ref_type, ref_id) identifies the round.
+        SELECT
+          ('round:' || l.ref_type || ':' || l.ref_id::text)   AS row_id,
+          'ledger'::text                                      AS source,
+          MIN(l.created_at)                                   AS created_at,
+          (array_agg(l.reason ORDER BY l.created_at ASC))[1]  AS reason,
+          (SUM(l.delta) * 1000000000000000000::numeric)       AS amount_wei,
+          ((array_agg(l.balance_after ORDER BY l.created_at DESC))[1]
+            * 1000000000000000000::numeric)                   AS balance_wei,
+          (SUM(CASE WHEN l.delta < 0 THEN -l.delta ELSE 0 END)
+            * 1000000000000000000::numeric)                   AS wager_wei,
+          (SUM(CASE WHEN l.delta > 0 THEN l.delta ELSE 0 END)
+            * 1000000000000000000::numeric)                   AS payout_wei,
+          l.ref_type                                          AS ref_type,
+          l.ref_id::text                                      AS ref_id,
+          NULL::text                                          AS ref_name
+        FROM poker_chip_ledger l
+        WHERE l.wallet_address = $1
+          AND l.reason <> ALL(${pokerExclusionParam}::text[])
+          AND l.reason ~ '_(bet|payout|refund)$'
+          AND l.ref_id IS NOT NULL
+        GROUP BY l.ref_type, l.ref_id
+
+        UNION ALL
+
+        -- 1b. Chip-ledger SINGLES: deposits, withdrawals, purchases, cashouts, rewards,
+        --     migration, fees (and any unpaired bet/payout lacking a ref_id) — one row each.
+        SELECT
+          l.id::text                                       AS row_id,
+          'ledger'::text                                   AS source,
+          l.created_at                                     AS created_at,
+          l.reason                                         AS reason,
+          (l.delta * 1000000000000000000::numeric)         AS amount_wei,
+          (l.balance_after * 1000000000000000000::numeric) AS balance_wei,
+          NULL::numeric                                    AS wager_wei,
+          NULL::numeric                                    AS payout_wei,
+          l.ref_type                                       AS ref_type,
+          l.ref_id::text                                   AS ref_id,
+          NULL::text                                       AS ref_name
+        FROM poker_chip_ledger l
+        WHERE l.wallet_address = $1
+          AND l.reason <> ALL(${pokerExclusionParam}::text[])
+          AND NOT (l.reason ~ '_(bet|payout|refund)$' AND l.ref_id IS NOT NULL)
+
+        UNION ALL
+
+        -- 2. Blackjack (single + multiplayer), one net row per completed game
+        SELECT
+          bj.id                                            AS row_id,
+          'blackjack'::text                                AS source,
+          bj.created_at                                    AS created_at,
+          CASE
+            WHEN (bj.payout - bj.bet) > 0 THEN 'blackjack_win'
+            WHEN (bj.payout - bj.bet) < 0 THEN 'blackjack_loss'
+            ELSE 'blackjack_push'
+          END                                              AS reason,
+          (bj.payout - bj.bet)                             AS amount_wei,
+          NULL::numeric                                    AS balance_wei,
+          bj.bet                                           AS wager_wei,
+          bj.payout                                        AS payout_wei,
+          NULL::text                                       AS ref_type,
+          NULL::text                                       AS ref_id,
+          NULL::text                                       AS ref_name
+        FROM (
+          SELECT
+            g.id::text       AS id,
+            g.created_at     AS created_at,
+            CASE WHEN COALESCE(g.total_bet_amount, 0) = 0
+                 THEN COALESCE(gh.bet_sum, 0) * 1000000000000000000::numeric
+                 ELSE g.total_bet_amount END AS bet,
+            CASE WHEN COALESCE(g.total_payout, 0) = 0
+                 THEN COALESCE(gh.payout_sum, 0) * 1000000000000000000::numeric
+                 ELSE g.total_payout END AS payout
+          FROM games g
+          JOIN game_sessions gs ON g.session_id = gs.id
+          JOIN players p ON gs.player_id = p.id
+          LEFT JOIN (
+            SELECT game_id, SUM(bet_amount) AS bet_sum, SUM(payout) AS payout_sum
+            FROM game_hands GROUP BY game_id
+          ) gh ON gh.game_id = g.id
+          WHERE LOWER(p.wallet_address) = $1
+            AND g.result IS NOT NULL AND g.result <> 'ongoing'
+
+          UNION ALL
+
+          SELECT s.id::text, r.created_at, s.bet_amount AS bet, s.payout AS payout
+          FROM blackjack_multi_round_seats s
+          JOIN blackjack_multi_rounds r ON s.round_id = r.id
+          WHERE LOWER(s.player_address) = $1
+            AND s.result IS NOT NULL AND r.status = 'completed'
+        ) bj
+
+        UNION ALL
+
+        -- 3. Lottery 6-of-55 (one row per play)
+        SELECT
+          ilp.id::text                                     AS row_id,
+          'lottery'::text                                  AS source,
+          ilp.created_at                                   AS created_at,
+          CASE WHEN ilp.net_payout > ilp.wager THEN 'lottery_win' ELSE 'lottery_loss' END AS reason,
+          (ilp.net_payout - ilp.wager)                     AS amount_wei,
+          NULL::numeric                                    AS balance_wei,
+          ilp.wager                                        AS wager_wei,
+          ilp.net_payout                                   AS payout_wei,
+          NULL::text                                       AS ref_type,
+          NULL::text                                       AS ref_id,
+          NULL::text                                       AS ref_name
+        FROM instant_lottery_plays ilp
+        WHERE LOWER(ilp.wallet_address) = $1
+      )
+      SELECT
+        row_id,
+        source,
+        created_at AT TIME ZONE 'UTC' AS created_at,
+        reason,
+        amount_wei::text  AS amount_wei,
+        balance_wei::text AS balance_wei,
+        wager_wei::text   AS wager_wei,
+        payout_wei::text  AS payout_wei,
+        ref_type,
+        ref_id,
+        ref_name,
+        COUNT(*) OVER()   AS total
+      FROM unified
+      ${whereClause}
+      ORDER BY created_at DESC
+      LIMIT ${limitParam} OFFSET ${offsetParam}
+    `;
+
+    const result = await this.pool.query(query, params);
+    const total = result.rows.length > 0 ? Number(result.rows[0].total) : 0;
+    return {
+      entries: result.rows.map((r: any) => {
+        const reason = String(r.reason);
+        const cls = classifyReason(reason);
+        const amount = String(r.amount_wei ?? '0');
+        const wager = r.wager_wei != null ? String(r.wager_wei) : null;
+        // Paired ledger rounds (arcade/keno/plinko/video poker) carry a wager; their
+        // outcome is the net sign, not the raw bet/payout reason kind.
+        let kind = cls.kind;
+        if (r.source === 'ledger' && wager != null) {
+          let n = 0n;
+          try {
+            n = BigInt(amount);
+          } catch {
+            n = 0n;
+          }
+          kind = n > 0n ? 'win' : n < 0n ? 'loss' : 'push';
+        }
+        return {
+          id: String(r.row_id),
+          source: r.source as 'ledger' | 'blackjack' | 'lottery',
+          amount,
+          balance: r.balance_wei != null ? String(r.balance_wei) : null,
+          wager,
+          payout: r.payout_wei != null ? String(r.payout_wei) : null,
+          reason,
+          gameKey: cls.gameKey,
+          gameLabel: cls.gameLabel,
+          kind,
+          refType: r.ref_type ?? null,
+          refId: r.ref_id ?? null,
+          refName: r.ref_name ?? null,
+          createdAt: r.created_at ? new Date(r.created_at).toISOString() : '',
+        };
+      }),
+      total,
+      limit,
+      offset,
+    };
+  }
+
+  /**
+   * Poker-room-style history: cash-game sessions + tournament entries.
+   *
+   * Poker doesn't fit the flat per-bet Activity feed (one hand has many bets), so it
+   * gets its own session/tournament view, the way poker rooms (PokerStars/GG) present
+   * history.
+   *
+   * Cash sessions are reconstructed from the chip ledger: a `cash_join` opens a
+   * sit-down at a table (ref_id = poker_tables.id), `cash_reup` rows are rebuys, and
+   * the next `cash_leave`/`cash_admin_return` for that table closes it. A player can't
+   * hold two seats at one table at once (unique (table_id, player) seat), so per table
+   * there is at most one open session at a time and sequencing by time is unambiguous.
+   *
+   * Tournament buy-in / prize / net are derived from the ledger (whole chips, the one
+   * unit everything settled in) rather than tournament_entries.total_buy_in, whose unit
+   * the chip migration never normalized. tournament_create_guarantee (creator funding)
+   * is excluded so a creator's net reflects play, not the prize they seeded.
+   *
+   * All amounts are returned in WEI (poker whole chips → ×1e18) so the client formats
+   * one unit with formatEther.
+   */
+  async getPlayerPokerHistory(address: string): Promise<{
+    cashSessions: Array<{
+      id: string;
+      tableId: string;
+      stakes: string | null;
+      buyIn: string;
+      rebuys: string;
+      rebuyCount: number;
+      cashOut: string | null;
+      net: string | null;
+      startedAt: string;
+      endedAt: string | null;
+      ongoing: boolean;
+    }>;
+    tournaments: Array<{
+      tournamentId: string;
+      name: string;
+      status: string;
+      buyIn: string;
+      prizeWon: string;
+      net: string;
+      finalRank: number | null;
+      rebuyCount: number;
+      handsPlayed: number;
+      boughtInAt: string;
+      finishedAt: string | null;
+    }>;
+  }> {
+    const normalized = this.normalizeAddress(address);
+    const CHIP_WEI = 1000000000000000000n;
+    const toWei = (chips: bigint) => (chips * CHIP_WEI).toString();
+
+    // ---- Cash sessions: reconstruct from the ledger ----
+    const cashRows = await this.pool.query<{
+      delta: string;
+      reason: string;
+      ref_id: string;
+      created_at: Date;
+    }>(
+      `SELECT delta::text AS delta, reason, ref_id::text AS ref_id,
+              created_at AT TIME ZONE 'UTC' AS created_at
+       FROM poker_chip_ledger
+       WHERE wallet_address = $1
+         AND ref_type = 'poker_table'
+         AND reason IN ('cash_join','cash_reup','cash_leave','cash_admin_return')
+       ORDER BY created_at ASC`,
+      [normalized],
+    );
+
+    // Stakes ("smallBlind / bigBlind", whole chips) for the tables involved.
+    const tableIds = [...new Set(cashRows.rows.map((r) => r.ref_id).filter(Boolean))];
+    const stakesByTable = new Map<string, string>();
+    if (tableIds.length > 0) {
+      const tbl = await this.pool.query<{ id: string; small_blind: string; big_blind: string }>(
+        `SELECT id::text AS id, small_blind::text AS small_blind, big_blind::text AS big_blind
+         FROM poker_tables WHERE id = ANY($1::uuid[])`,
+        [tableIds],
+      );
+      for (const t of tbl.rows) {
+        stakesByTable.set(t.id, `${t.small_blind} / ${t.big_blind}`);
+      }
+    }
+
+    type OpenSession = {
+      tableId: string;
+      buyIn: bigint;
+      rebuys: bigint;
+      rebuyCount: number;
+      startedAt: Date;
+    };
+    const open = new Map<string, OpenSession>();
+    const cashSessions: Array<{
+      id: string;
+      tableId: string;
+      stakes: string | null;
+      buyIn: string;
+      rebuys: string;
+      rebuyCount: number;
+      cashOut: string | null;
+      net: string | null;
+      startedAt: string;
+      endedAt: string | null;
+      ongoing: boolean;
+    }> = [];
+
+    const closeSession = (s: OpenSession, cashOutChips: bigint | null, endedAt: Date | null, ongoing: boolean) => {
+      const net = cashOutChips != null ? cashOutChips - s.buyIn - s.rebuys : null;
+      cashSessions.push({
+        id: `${s.tableId}:${s.startedAt.toISOString()}`,
+        tableId: s.tableId,
+        stakes: stakesByTable.get(s.tableId) ?? null,
+        buyIn: toWei(s.buyIn),
+        rebuys: toWei(s.rebuys),
+        rebuyCount: s.rebuyCount,
+        cashOut: cashOutChips != null ? toWei(cashOutChips) : null,
+        net: net != null ? toWei(net) : null,
+        startedAt: s.startedAt.toISOString(),
+        endedAt: endedAt ? endedAt.toISOString() : null,
+        ongoing,
+      });
+    };
+
+    for (const row of cashRows.rows) {
+      const tableId = row.ref_id;
+      const delta = BigInt(row.delta);
+      const when = new Date(row.created_at);
+      if (row.reason === 'cash_join') {
+        const existing = open.get(tableId);
+        if (existing) closeSession(existing, null, null, true); // unmatched prior sit
+        open.set(tableId, { tableId, buyIn: -delta, rebuys: 0n, rebuyCount: 0, startedAt: when });
+      } else if (row.reason === 'cash_reup') {
+        const s = open.get(tableId);
+        if (s) {
+          s.rebuys += -delta;
+          s.rebuyCount += 1;
+        } else {
+          open.set(tableId, { tableId, buyIn: -delta, rebuys: 0n, rebuyCount: 0, startedAt: when });
+        }
+      } else {
+        // cash_leave / cash_admin_return → close the open session for this table
+        const s = open.get(tableId);
+        if (s) {
+          closeSession(s, delta, when, false);
+          open.delete(tableId);
+        }
+      }
+    }
+    for (const s of open.values()) closeSession(s, null, null, true); // still seated
+
+    cashSessions.sort((a, b) => (a.startedAt < b.startedAt ? 1 : a.startedAt > b.startedAt ? -1 : 0));
+
+    // ---- Tournaments (buy-in / prize / net from the ledger) ----
+    const tourRows = await this.pool.query(
+      `SELECT
+         t.id::text AS tournament_id, t.name, t.status,
+         te.final_rank, te.rebuy_count, te.hands_played,
+         te.bought_in_at AT TIME ZONE 'UTC' AS bought_in_at,
+         te.finished_at  AT TIME ZONE 'UTC' AS finished_at,
+         COALESCE(led.buyin, 0)::text AS buyin_chips,
+         COALESCE(led.prize, 0)::text AS prize_chips
+       FROM tournament_entries te
+       JOIN tournaments t ON t.id = te.tournament_id
+       LEFT JOIN (
+         SELECT ref_id,
+           SUM(CASE WHEN reason = 'tournament_buyin' THEN -delta ELSE 0 END) AS buyin,
+           SUM(CASE WHEN reason = 'tournament_prize' THEN delta ELSE 0 END) AS prize
+         FROM poker_chip_ledger
+         WHERE wallet_address = $1 AND ref_type = 'tournament'
+         GROUP BY ref_id
+       ) led ON led.ref_id = t.id
+       WHERE LOWER(te.player_address) = $1 AND t.game_type = 'poker'
+       ORDER BY te.bought_in_at DESC`,
+      [normalized],
+    );
+    const tournaments = tourRows.rows.map((r: any) => {
+      const buyIn = BigInt(r.buyin_chips ?? '0');
+      const prize = BigInt(r.prize_chips ?? '0');
+      return {
+        tournamentId: String(r.tournament_id),
+        name: String(r.name ?? 'Tournament'),
+        status: String(r.status ?? ''),
+        buyIn: toWei(buyIn),
+        prizeWon: toWei(prize),
+        net: toWei(prize - buyIn),
+        finalRank: r.final_rank != null ? Number(r.final_rank) : null,
+        rebuyCount: Number(r.rebuy_count ?? 0),
+        handsPlayed: Number(r.hands_played ?? 0),
+        boughtInAt: r.bought_in_at ? new Date(r.bought_in_at).toISOString() : '',
+        finishedAt: r.finished_at ? new Date(r.finished_at).toISOString() : null,
+      };
+    });
+
+    return { cashSessions, tournaments };
+  }
+
+  /**
+   * Aggregate "All Stats" summary for the player dashboard. Computed from the same
+   * unified sources as the Activity feed (getPlayerActivity = chip rounds incl. all
+   * arcade + blackjack + lottery) PLUS poker (getPlayerPokerHistory), so totals are
+   * complete and consistent across the dashboard. Current chip balance included.
+   *
+   * All money fields are WEI strings (format with formatEther for MORBIUS).
+   */
+  async getPlayerStatsSummary(address: string): Promise<{
+    balance: string;
+    totalWagered: string;
+    totalWon: string;
+    net: string;
+    games: number;
+    wins: number;
+    winRate: number;
+    roi: number;
+    currentStreak: number;
+    bestStreak: number;
+    biggestWin: { amount: string; gameKey: string; gameLabel: string } | null;
+    favoriteGame: { gameKey: string; gameLabel: string; games: number } | null;
+    perGame: Array<{ gameKey: string; gameLabel: string; games: number; net: string; winRate: number }>;
+    series: Array<{ date: string; totalInvested: number; totalWon: number }>;
+  }> {
+    const normalized = this.normalizeAddress(address);
+    const CHIP_WEI = 1000000000000000000n;
+
+    const balanceChips = await getPokerChipBalance(this.pool, normalized);
+    const balance = (balanceChips * CHIP_WEI).toString();
+
+    // Unified game rows (paired arcade/keno/plinko rounds + blackjack + lottery).
+    // Game rows are exactly those carrying a wager; ledger singles (deposits / rewards
+    // / withdrawals) have no wager and are excluded from gameplay stats.
+    const activity = await this.getPlayerActivity(normalized, { limit: 25000, offset: 0 });
+    const gameRows = activity.entries.filter((e) => e.wager != null);
+
+    let totalWagered = 0n;
+    let totalWon = 0n;
+    let net = 0n;
+    let games = 0;
+    let wins = 0;
+    let biggest: { amount: string; gameKey: string; gameLabel: string } | null = null;
+    const perGame = new Map<string, { gameKey: string; gameLabel: string; games: number; net: bigint; wins: number }>();
+
+    for (const r of gameRows) {
+      const w = BigInt(r.wager ?? '0');
+      const p = BigInt(r.payout ?? '0');
+      const a = BigInt(r.amount ?? '0');
+      totalWagered += w;
+      totalWon += p;
+      net += a;
+      games += 1;
+      if (a > 0n) wins += 1;
+      const g = perGame.get(r.gameKey) ?? { gameKey: r.gameKey, gameLabel: r.gameLabel, games: 0, net: 0n, wins: 0 };
+      g.games += 1;
+      g.net += a;
+      if (a > 0n) g.wins += 1;
+      perGame.set(r.gameKey, g);
+      if (biggest === null || a > BigInt(biggest.amount)) {
+        biggest = { amount: a.toString(), gameKey: r.gameKey, gameLabel: r.gameLabel };
+      }
+    }
+
+    // Win streak over instant games, oldest → newest (current = ending at most recent).
+    const chrono = [...gameRows].sort((x, y) => (x.createdAt < y.createdAt ? -1 : x.createdAt > y.createdAt ? 1 : 0));
+    let currentStreak = 0;
+    let bestStreak = 0;
+    for (const r of chrono) {
+      if (BigInt(r.amount ?? '0') > 0n) {
+        currentStreak += 1;
+        if (currentStreak > bestStreak) bestStreak = currentStreak;
+      } else {
+        currentStreak = 0;
+      }
+    }
+
+    // Poker (cash sessions + tournaments) folded into the totals + per-game.
+    const poker = await this.getPlayerPokerHistory(normalized);
+    let pkWagered = 0n;
+    let pkWon = 0n;
+    let pkNet = 0n;
+    let pkGames = 0;
+    let pkWins = 0;
+    for (const s of poker.cashSessions) {
+      if (s.net == null || s.cashOut == null) continue; // skip ongoing sits
+      pkWagered += BigInt(s.buyIn) + BigInt(s.rebuys);
+      pkWon += BigInt(s.cashOut);
+      pkNet += BigInt(s.net);
+      pkGames += 1;
+      if (BigInt(s.net) > 0n) pkWins += 1;
+    }
+    for (const t of poker.tournaments) {
+      pkWagered += BigInt(t.buyIn);
+      pkWon += BigInt(t.prizeWon);
+      pkNet += BigInt(t.net);
+      pkGames += 1;
+      if (BigInt(t.net) > 0n) pkWins += 1;
+    }
+    if (pkGames > 0) {
+      totalWagered += pkWagered;
+      totalWon += pkWon;
+      net += pkNet;
+      games += pkGames;
+      wins += pkWins;
+      perGame.set('poker', { gameKey: 'poker', gameLabel: 'Poker', games: pkGames, net: pkNet, wins: pkWins });
+    }
+
+    let favorite: { gameKey: string; gameLabel: string; games: number } | null = null;
+    for (const g of perGame.values()) {
+      if (favorite === null || g.games > favorite.games) {
+        favorite = { gameKey: g.gameKey, gameLabel: g.gameLabel, games: g.games };
+      }
+    }
+
+    const winRate = games > 0 ? Math.round((wins / games) * 1000) / 10 : 0;
+    const roi = totalWagered > 0n ? Number((net * 10000n) / totalWagered) / 100 : 0;
+
+    // Cumulative wagered-vs-won time series for the dashboard chart — same complete
+    // (arcade-inclusive) sources as the totals, so the chart and tiles agree.
+    const events: Array<{ t: number; w: bigint; p: bigint }> = [];
+    for (const r of gameRows) {
+      events.push({ t: new Date(r.createdAt).getTime(), w: BigInt(r.wager ?? '0'), p: BigInt(r.payout ?? '0') });
+    }
+    for (const s of poker.cashSessions) {
+      if (s.cashOut == null) continue;
+      events.push({ t: new Date(s.startedAt).getTime(), w: BigInt(s.buyIn) + BigInt(s.rebuys), p: BigInt(s.cashOut) });
+    }
+    for (const t of poker.tournaments) {
+      events.push({ t: new Date(t.boughtInAt).getTime(), w: BigInt(t.buyIn), p: BigInt(t.prizeWon) });
+    }
+    events.sort((a, b) => a.t - b.t);
+    const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+    const byDay = new Map<string, { label: string; w: bigint; p: bigint }>();
+    for (const e of events) {
+      if (!Number.isFinite(e.t)) continue;
+      const d = new Date(e.t);
+      const key = `${d.getUTCFullYear()}-${d.getUTCMonth()}-${d.getUTCDate()}`;
+      const cur = byDay.get(key) ?? { label: `${MONTHS[d.getUTCMonth()]} ${d.getUTCDate()}`, w: 0n, p: 0n };
+      cur.w += e.w;
+      cur.p += e.p;
+      byDay.set(key, cur);
+    }
+    let cumW = 0n;
+    let cumP = 0n;
+    const series = [...byDay.values()].map((day) => {
+      cumW += day.w;
+      cumP += day.p;
+      return {
+        date: day.label,
+        totalInvested: Number(cumW / CHIP_WEI),
+        totalWon: Number(cumP / CHIP_WEI),
+      };
+    });
+
+    return {
+      balance,
+      totalWagered: totalWagered.toString(),
+      totalWon: totalWon.toString(),
+      net: net.toString(),
+      games,
+      wins,
+      winRate,
+      roi,
+      currentStreak,
+      bestStreak,
+      biggestWin: biggest,
+      favoriteGame: favorite,
+      perGame: [...perGame.values()]
+        .sort((x, y) => (x.net < y.net ? 1 : x.net > y.net ? -1 : 0))
+        .map((g) => ({
+          gameKey: g.gameKey,
+          gameLabel: g.gameLabel,
+          games: g.games,
+          net: g.net.toString(),
+          winRate: g.games > 0 ? Math.round((g.wins / g.games) * 1000) / 10 : 0,
+        })),
+      series,
     };
   }
 

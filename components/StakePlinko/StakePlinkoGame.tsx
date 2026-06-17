@@ -39,7 +39,7 @@ import {
 } from '@/components/ui/select'
 import { usePokerChipBalance } from '@/hooks/use-poker-chip-balance'
 import { formatChips } from '@/lib/format-poker-chips'
-import { PokerChipExchangeModal } from '@/components/poker/PokerChipExchangeModal'
+import { GameWalletModal } from '@/components/shared/GameWalletModal'
 import { probeSiweSession } from '@/lib/api-auth'
 import PlinkoGame from '@/components/PLINKO/PlinkoGame'
 import type { RiskLevel } from '@/app/PLINKO/types'
@@ -258,7 +258,7 @@ export function StakePlinkoGame() {
       if (!mounted.current) return false
       const msg = (e as Error)?.message ?? ''
       if (/NO_CHIPS|Not enough chips|402/i.test(msg)) {
-        setError('Not enough chips for that bet.')
+        setError('Not enough MORBIUS for that bet.')
         setNoChips(true)
       } else if (/401|auth/i.test(msg)) {
         setError('Connect your wallet to play.')
@@ -347,7 +347,7 @@ export function StakePlinkoGame() {
             <span className="text-xs uppercase tracking-wide text-slate-500">Balance</span>
             <div className="flex items-center gap-2">
               <span className="arc-mono text-sm tabular-nums text-amber-300">
-                {balance != null ? `${formatChips(balance)} chips` : '—'}
+                {balance != null ? `${formatChips(balance)} MORBIUS` : '—'}
               </span>
               <button
                 type="button"
@@ -488,7 +488,7 @@ export function StakePlinkoGame() {
               max win{' '}
               <span className="arc-mono text-cyan-300">
                 {maxWinX100 > 0
-                  ? `${Math.floor((clampBet(bet) * maxWinX100) / 100).toLocaleString()} chips`
+                  ? `${Math.floor((clampBet(bet) * maxWinX100) / 100).toLocaleString()} MORBIUS`
                   : '—'}
               </span>
             </span>
@@ -532,7 +532,7 @@ export function StakePlinkoGame() {
                   onClick={() => setExchangeOpen(true)}
                   className="text-sm font-semibold text-cyan-400 underline-offset-2 hover:underline"
                 >
-                  Buy chips →
+                  Deposit MORBIUS
                 </button>
               )}
             </div>
@@ -639,11 +639,12 @@ export function StakePlinkoGame() {
         requestVerifyId={verifyTarget}
       />
 
-      <PokerChipExchangeModal
+      <GameWalletModal
         isOpen={exchangeOpen}
         onClose={() => setExchangeOpen(false)}
-        walletAddress={address ?? null}
-        onExchangeComplete={() => void refetchBalance()}
+        defaultTab="deposit"
+        balanceLabel="MORBIUS"
+        onBalanceSync={async () => { await refetchBalance(); }}
       />
     </div>
   )

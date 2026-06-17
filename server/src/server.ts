@@ -19,6 +19,15 @@ import { registerArcadeTowersRoutes } from './routes/arcade-towers.routes';
 import { registerArcadeChickenRoutes } from './routes/arcade-chicken.routes';
 import { registerArcadeDiceRoutes } from './routes/arcade-dice.routes';
 import { registerArcadeDiceX2Routes } from './routes/arcade-dicex2.routes';
+import { registerArcadeDragonTigerRoutes } from './routes/arcade-dragon-tiger.routes';
+import { registerArcadeAndarBaharRoutes } from './routes/arcade-andar-bahar.routes';
+import { registerArcadePachinkoRoutes } from './routes/arcade-pachinko.routes';
+import { registerArcadeCascadeRoutes } from './routes/arcade-cascade.routes';
+import { registerArcadeFirewalkRoutes } from './routes/arcade-firewalk.routes';
+import { registerArcadeHeistRoutes } from './routes/arcade-heist.routes';
+import { registerArcadeThreeCardPokerRoutes } from './routes/arcade-three-card-poker.routes';
+import { registerArcadeGreedDiceRoutes } from './routes/arcade-greed-dice.routes';
+import { registerArcadeCipherRoutes } from './routes/arcade-cipher.routes';
 import { registerArcadeCrapsRoutes } from './routes/arcade-craps.routes';
 import { registerArcadeBaccaratRoutes } from './routes/arcade-baccarat.routes';
 import { registerArcadeCrashRoutes } from './routes/arcade-crash.routes';
@@ -439,6 +448,15 @@ async function initializeServices() {
     registerArcadeHiLoRoutes({ app, dbService, authService });
     registerArcadeDiceRoutes({ app, dbService, authService });
     registerArcadeDiceX2Routes({ app, dbService, authService });
+    registerArcadeDragonTigerRoutes({ app, dbService, authService });
+    registerArcadeAndarBaharRoutes({ app, dbService, authService });
+    registerArcadePachinkoRoutes({ app, dbService, authService });
+    registerArcadeCascadeRoutes({ app, dbService, authService });
+    registerArcadeFirewalkRoutes({ app, dbService, authService });
+    registerArcadeHeistRoutes({ app, dbService, authService });
+    registerArcadeThreeCardPokerRoutes({ app, dbService, authService });
+    registerArcadeGreedDiceRoutes({ app, dbService, authService });
+    registerArcadeCipherRoutes({ app, dbService, authService });
     registerArcadeCrapsRoutes({ app, dbService, authService });
     registerArcadeBaccaratRoutes({ app, dbService, authService });
     registerArcadeCrashRoutes({ app, dbService, authService });
@@ -1298,6 +1316,63 @@ async function initializeServices() {
       }
     });
 
+    // Unified sitewide activity feed. UNIONs the DB-retained history sources —
+    // poker_chip_ledger (all chip games + deposits/rewards) + blackjack + lottery —
+    // enriched with the activity taxonomy ({gameKey, gameLabel, kind}). Legacy
+    // on-chain Plinko/Keno are read from chain elsewhere. Optional ?game= and
+    // ?outcome=win|loss filters.
+    app.get('/api/players/:address/activity', async (req, res) => {
+      try {
+        const { address } = req.params;
+        if (!address || !/^0x[a-fA-F0-9]{40}$/.test(address)) {
+          return res.status(400).json({ error: 'Invalid address' });
+        }
+        const limit = Math.min(Math.max(parseInt(req.query.limit as string) || 25, 1), 25000);
+        const offset = Math.max(parseInt(req.query.offset as string) || 0, 0);
+        const game = req.query.game ? String(req.query.game) : undefined;
+        const rawOutcome = String(req.query.outcome ?? '');
+        const outcome = rawOutcome === 'win' || rawOutcome === 'loss' ? rawOutcome : undefined;
+        const data = await dbService.getPlayerActivity(address, { limit, offset, game, outcome });
+        sendJson(res, data);
+      } catch (error) {
+        logger.error('Error fetching player activity:', error);
+        res.status(500).json({ error: 'Internal server error' });
+      }
+    });
+
+    // Poker-room-style history: cash-game sessions + poker tournament entries.
+    // Poker is presented separately from the flat Activity feed (sessions/tournaments,
+    // not per-bet rows), matching how poker rooms show history.
+    app.get('/api/poker/player/:address/history', async (req, res) => {
+      try {
+        const { address } = req.params;
+        if (!address || !/^0x[a-fA-F0-9]{40}$/.test(address)) {
+          return res.status(400).json({ error: 'Invalid address' });
+        }
+        const data = await dbService.getPlayerPokerHistory(address);
+        sendJson(res, data);
+      } catch (error) {
+        logger.error('Error fetching poker history:', error);
+        res.status(500).json({ error: 'Internal server error' });
+      }
+    });
+
+    // Aggregate "All Stats" summary (balance, totals, win rate, ROI, biggest win,
+    // favorite game, streaks, per-game breakdown) for the player dashboard.
+    app.get('/api/players/:address/stats-summary', async (req, res) => {
+      try {
+        const { address } = req.params;
+        if (!address || !/^0x[a-fA-F0-9]{40}$/.test(address)) {
+          return res.status(400).json({ error: 'Invalid address' });
+        }
+        const data = await dbService.getPlayerStatsSummary(address);
+        sendJson(res, data);
+      } catch (error) {
+        logger.error('Error fetching player stats summary:', error);
+        res.status(500).json({ error: 'Internal server error' });
+      }
+    });
+
     const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
     app.get('/api/poker/table/:tableId/dashboard', async (req, res) => {
@@ -1553,84 +1628,16 @@ async function initializeServices() {
       }
     });
 
-    app.post('/api/poker/chips/purchase', express.json(), async (req, res) => {
-      try {
-        const { address, chips } = req.body ?? {};
-        if (!address || !/^0x[a-fA-F0-9]{40}$/i.test(String(address))) {
-          return res.status(400).json({ error: 'address required (0x…42 hex)' });
-        }
-        const normalized = String(address).toLowerCase();
-        let chipsBn: bigint;
-        try {
-          chipsBn = BigInt(String(chips ?? '0'));
-        } catch {
-          return res.status(400).json({ error: 'chips must be an integer string' });
-        }
-        if (chipsBn <= 0n) return res.status(400).json({ error: 'chips must be positive' });
-        if (chipsBn > BigInt(Number.MAX_SAFE_INTEGER)) {
-          return res.status(400).json({ error: 'chips amount too large' });
-        }
-        const wei = chipsToWei(Number(chipsBn));
-        await dbService.withTransaction(async (client) => {
-          const deduct = await client.query(
-            `UPDATE players SET balance = balance - $2::NUMERIC
-             WHERE LOWER(wallet_address) = LOWER($1) AND balance >= $2::NUMERIC
-             RETURNING balance`,
-            [normalized, wei.toString()],
-          );
-          if (deduct.rows.length === 0) {
-            throw new Error('Insufficient MORBIUS balance for chip purchase (or player not found)');
-          }
-          await applyPokerChipDelta(client, normalized, chipsBn, 'purchase');
-        });
-        const newBal = await getPokerChipBalance(dbService.getPool(), normalized);
-        return res.status(200).json({ ok: true, chipsCredited: chipsBn.toString(), pokerChipBalance: newBal.toString() });
-      } catch (error: unknown) {
-        const msg = error instanceof Error ? error.message : 'Internal server error';
-        if (msg.includes('Insufficient') || msg.includes('must be')) {
-          return res.status(400).json({ error: msg });
-        }
-        logger.error('Poker chip purchase error:', error);
-        res.status(500).json({ error: 'Internal server error' });
-      }
+    // RETIRED: MORBIUS deposits now auto-convert to chips (see /api/deposit/notify → creditPendingDeposit).
+    // The manual "buy chips" step no longer exists. Kept as a 410 stub until all clients drop the call.
+    app.post('/api/poker/chips/purchase', express.json(), (_req, res) => {
+      return res.status(410).json({ error: 'Chip purchase retired — deposited MORBIUS auto-converts to chips.' });
     });
 
-    app.post('/api/poker/chips/cashout', express.json(), async (req, res) => {
-      try {
-        const { address, chips } = req.body ?? {};
-        if (!address || !/^0x[a-fA-F0-9]{40}$/i.test(String(address))) {
-          return res.status(400).json({ error: 'address required (0x…42 hex)' });
-        }
-        const normalized = String(address).toLowerCase();
-        let chipsBn: bigint;
-        try {
-          chipsBn = BigInt(String(chips ?? '0'));
-        } catch {
-          return res.status(400).json({ error: 'chips must be an integer string' });
-        }
-        if (chipsBn <= 0n) return res.status(400).json({ error: 'chips must be positive' });
-        if (chipsBn > BigInt(Number.MAX_SAFE_INTEGER)) {
-          return res.status(400).json({ error: 'chips amount too large' });
-        }
-        const wei = chipsToWei(Number(chipsBn));
-        await dbService.withTransaction(async (client) => {
-          await applyPokerChipDelta(client, normalized, -chipsBn, 'cashout');
-          await client.query(
-            `INSERT INTO players (wallet_address, balance) VALUES ($1, $2::NUMERIC)
-             ON CONFLICT (wallet_address) DO UPDATE SET balance = players.balance + $2::NUMERIC, last_seen = NOW()`,
-            [normalized, wei.toString()],
-          );
-        });
-        const newBal = await getPokerChipBalance(dbService.getPool(), normalized);
-        return res.status(200).json({ ok: true, morbiusCreditedWei: wei.toString(), pokerChipBalance: newBal.toString() });
-      } catch (error: unknown) {
-        const msg = error instanceof Error ? error.message : 'Internal server error';
-        if (msg.includes('Insufficient poker chips') || msg.includes('must be')) {
-          return res.status(400).json({ error: msg });
-        }
-        logger.error('Poker chip cashout error:', error);
-        res.status(500).json({ error: 'Internal server error' });
-      }
+    // RETIRED: withdrawals now debit chips directly and send MORBIUS on-chain (see /api/withdraw).
+    // The manual "cash out to MORBIUS balance" step no longer exists. Kept as a 410 stub.
+    app.post('/api/poker/chips/cashout', express.json(), (_req, res) => {
+      return res.status(410).json({ error: 'Chip cashout retired — withdraw MORBIUS directly; chips auto-convert.' });
     });
 
     app.get('/api/plinko/player/:address/drops', async (req, res) => {
@@ -3731,7 +3738,10 @@ async function initializeServices() {
         if (shortfall <= 0n) {
           return res.status(400).json({ error: 'No shortfall; correctAmountWei must be greater than already credited amount' });
         }
-        await dbService.addPlayerBalance(row.wallet_address, shortfall);
+        await dbService.creditMorbiusWeiAsChips(row.wallet_address, shortfall, 'deposit', {
+          type: 'deposit_shortfall',
+          id: null,
+        });
         logger.info('Deposit shortfall credited', {
           txHash,
           wallet: row.wallet_address,
@@ -4100,7 +4110,10 @@ async function initializeServices() {
           }
         }
 
-        const balance = await dbService.getPlayerBalance(normalizedAddress);
+        // Authoritative playable balance is the chip ledger now (1 chip = 1 MORBIUS).
+        // Return it scaled to wei so existing formatEther-based consumers keep working unchanged.
+        const chipBalance = await getPokerChipBalance(dbService.getPool(), normalizedAddress);
+        const balance = chipBalance * (10n ** 18n);
         return res.status(200).json({ balance: balance.toString() });
       } catch (error) {
         logger.error('Error fetching player balance:', error);
@@ -4115,7 +4128,9 @@ async function initializeServices() {
         const { amount } = req.body ?? {};
         const normalizedAddress = req.user!.address.toLowerCase();
 
-        const amountBigInt = amount != null ? BigInt(String(amount)) : 0n;
+        // Withdrawals are whole MORBIUS only (chips are integers); floor any sub-1-MORBIUS dust off.
+        const requestedWei = amount != null ? BigInt(String(amount)) : 0n;
+        const amountBigInt = (requestedWei / (10n ** 18n)) * (10n ** 18n);
         if (amountBigInt < MIN_WITHDRAWAL_WEI) {
           return res.status(400).json({ error: 'Amount required (min 1 MORBIUS)', minWei: MIN_WITHDRAWAL_WEI.toString() });
         }

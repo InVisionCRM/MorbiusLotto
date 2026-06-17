@@ -213,7 +213,7 @@ export function LimboFairnessModal({
                   Payout:{' '}
                   {result.won ? (
                     <span className="arc-mono text-amber-300">
-                      {result.payout.toLocaleString()} chips
+                      {result.payout.toLocaleString()} MORBIUS
                     </span>
                   ) : (
                     <span className="arc-mono text-rose-400">lost</span>

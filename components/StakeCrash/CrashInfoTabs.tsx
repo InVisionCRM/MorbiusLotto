@@ -219,7 +219,7 @@ export function CrashInfoTabs({ history, historyLoading, onVerify, refreshKey }:
                       {timeLabel(r.createdAt)}
                     </span>
                     <span className="shrink-0 font-mono tabular-nums text-slate-400">
-                      {r.bet.toLocaleString()} chips
+                      {r.bet.toLocaleString()} MORBIUS
                     </span>
                     <span
                       className={`shrink-0 font-mono font-semibold tabular-nums ${crashTone(r.crashX100)}`}

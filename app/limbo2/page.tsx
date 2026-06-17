@@ -53,7 +53,7 @@ export default function Limbo2Page() {
                 </span>
               </h1>
               <p className="mt-1.5 text-sm text-slate-400">
-                set a target multiplier · clear it to win · provably fair · played in chips
+                set a target multiplier · clear it to win · provably fair · played in MORBIUS
               </p>
             </header>
             <StakeLimboGame />

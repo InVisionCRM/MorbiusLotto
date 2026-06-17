@@ -441,7 +441,7 @@ export default function PokerLobbyPage() {
     }
     const buyInChipsStr = parseChipInput(buyIn);
     if (buyInChipsStr === '0') {
-      setError('Enter a buy-in in whole chips');
+      setError('Enter a buy-in in whole MORBIUS');
       return;
     }
     const bbChips = BigInt(joinModal.bigBlindChips);
@@ -455,7 +455,7 @@ export default function PokerLobbyPage() {
     }
     if (bi < minChips || bi > maxChips) {
       setError(
-        `Buy-in must be between ${POKER_CASH_MIN_BUY_IN_BB} and ${POKER_CASH_MAX_BUY_IN_BB} big blinds (${formatChips(minChips)}–${formatChips(maxChips)} chips).`
+        `Buy-in must be between ${POKER_CASH_MIN_BUY_IN_BB} and ${POKER_CASH_MAX_BUY_IN_BB} big blinds (${formatChips(minChips)}–${formatChips(maxChips)} MORBIUS).`
       );
       return;
     }
@@ -931,7 +931,7 @@ export default function PokerLobbyPage() {
                                 background: 'linear-gradient(135deg, #f59e0b, #ef4444)',
                               }}
                             >
-                              Get chips →
+                              Deposit MORBIUS
                             </button>
                           ) : (
                             <button
@@ -1048,9 +1048,9 @@ export default function PokerLobbyPage() {
                                           background: 'linear-gradient(135deg, #f59e0b, #ef4444)',
                                           boxShadow: '0 6px 20px -6px rgba(245,158,11,0.5)',
                                         }}
-                                        title="You need chips to sit — we'll walk you through it"
+                                        title="You need a MORBIUS balance to sit — we'll walk you through it"
                                       >
-                                        Get chips →
+                                        Deposit MORBIUS
                                       </button>
                                     ) : (
                                       <button
@@ -1222,7 +1222,7 @@ export default function PokerLobbyPage() {
                           {formatChips(getCashBuyInBoundsChips(BigInt(joinModal.bigBlindChips)).minChips)} –{' '}
                           {formatChips(getCashBuyInBoundsChips(BigInt(joinModal.bigBlindChips)).maxChips)}
                         </span>{' '}
-                        chips (off-chain).
+                        MORBIUS.
                       </>
                     ) : null}
                   </p>
@@ -1230,7 +1230,7 @@ export default function PokerLobbyPage() {
                     No in-table top-ups — leave and rejoin to change your stack.
                   </p>
                 </div>
-                <label className="block text-sm text-slate-400">Buy-in (whole chips)</label>
+                <label className="block text-sm text-slate-400">Buy-in (whole MORBIUS)</label>
                 <input
                   type="text"
                   value={buyIn}
@@ -1241,7 +1241,7 @@ export default function PokerLobbyPage() {
                 {joinBuyInOutOfRange && buyIn.trim() !== '' && (
                   <p className="text-amber-400/90 text-xs">
                     Enter between {formatChips(getCashBuyInBoundsChips(BigInt(joinModal.bigBlindChips)).minChips)} and{' '}
-                    {formatChips(getCashBuyInBoundsChips(BigInt(joinModal.bigBlindChips)).maxChips)} chips.
+                    {formatChips(getCashBuyInBoundsChips(BigInt(joinModal.bigBlindChips)).maxChips)} MORBIUS.
                   </p>
                 )}
                 <div className="flex gap-2">
@@ -1429,10 +1429,10 @@ export default function PokerLobbyPage() {
       <InsufficientBalanceDialog
         isOpen={showInsufficientChips}
         onClose={() => setShowInsufficientChips(false)}
-        title="Not Enough Poker Chips"
-        message="Your poker chip balance isn't enough for this buy-in. Walk through deposit and chip exchange in a guided flow, or open the exchange directly."
-        required={(() => { try { return `${formatChips(BigInt(parseChipInput(buyIn)))} chips`; } catch { return undefined; } })()}
-        balance={chipBalance != null ? `${formatChips(BigInt(chipBalance))} chips` : undefined}
+        title="Not Enough MORBIUS"
+        message="Your MORBIUS balance isn't enough for this buy-in. Walk through depositing MORBIUS in a guided flow, or open it directly."
+        required={(() => { try { return `${formatChips(BigInt(parseChipInput(buyIn)))} MORBIUS`; } catch { return undefined; } })()}
+        balance={chipBalance != null ? `${formatChips(BigInt(chipBalance))} MORBIUS` : undefined}
         actionLabel="Walk me through it"
         onOpenExchange={() => setShowOnboardingWizard(true)}
       />

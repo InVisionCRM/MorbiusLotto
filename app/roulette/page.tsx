@@ -9,7 +9,7 @@ export default function RouletteLegacyPage() {
   return (
     <RetiredGameNotice
       title="Roulette has a new home"
-      message="This table has closed. European single-zero Roulette continues in our upgraded room, played in chips."
+      message="This table has closed. European single-zero Roulette continues in our upgraded room, played in MORBIUS."
       primary={{ href: '/roulette2', label: 'Play Roulette' }}
     />
   );

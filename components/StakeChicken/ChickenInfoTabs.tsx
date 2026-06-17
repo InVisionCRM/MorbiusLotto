@@ -220,7 +220,7 @@ export function ChickenInfoTabs({ history, historyLoading, onVerify, info }: Chi
             </ul>
             <p>
               A higher bumper chance means worse odds per lane but a far steeper ladder. Bet{' '}
-              {minBet.toLocaleString()}–{maxBet.toLocaleString()} chips. Every bumper is sealed from a
+              {minBet.toLocaleString()}–{maxBet.toLocaleString()} MORBIUS. Every bumper is sealed from a
               server seed committed (hashed) before your bet — re-derive any finished round from its
               Verify button.
             </p>

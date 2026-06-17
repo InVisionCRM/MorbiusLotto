@@ -1257,7 +1257,7 @@ export default function TelegramMiniAppPage() {
               </div>
               <div className="rounded-2xl border border-cyan-500/15 bg-[#0b1a2c] p-3">
                 <div className="text-[9.5px] font-bold uppercase tracking-[0.14em] text-slate-500">
-                  Poker chips
+                  Play balance
                 </div>
                 <div className="mitr-bold mt-1 text-xl tabular-nums text-white">
                   {formatChips(session.chipBalance)}
@@ -1331,7 +1331,7 @@ export default function TelegramMiniAppPage() {
               className="mb-4 flex w-full items-center justify-center gap-2 rounded-xl border border-cyan-500/30 bg-cyan-500/5 px-4 py-2.5 text-[13px] font-semibold text-cyan-400"
             >
               <IconArrowsExchange size={16} aria-hidden />
-              Swap MORBIUS ↔ chips
+              Open poker on morbius.io
             </button>
 
             <MiniAppRecentWins />
@@ -1585,7 +1585,7 @@ export default function TelegramMiniAppPage() {
             </div>
 
             <p className="mb-4 text-xs leading-relaxed text-slate-500">
-              Quick, single-player chip games. Provably fair — every round&apos;s
+              Quick, single-player MORBIUS games. Provably fair — every round&apos;s
               seed is committed before the first reveal.
             </p>
 
@@ -1940,7 +1940,7 @@ export default function TelegramMiniAppPage() {
                   {createState === 'creating' ? 'Creating…' : 'Create tournament'}
                 </button>
                 <p className="mt-3 text-center text-[11px] text-slate-600">
-                  Chip tournament · runs entirely in MORBIUS · no wallet needed
+                  Tournament · runs entirely in MORBIUS · no wallet needed
                 </p>
               </>
             )}
@@ -1968,7 +1968,7 @@ export default function TelegramMiniAppPage() {
             <div className="mb-4 grid grid-cols-3 gap-1.5 rounded-xl border border-cyan-500/15 bg-[#0b1a2c] p-1">
               {(
                 [
-                  ['net_chips', 'Net chips'],
+                  ['net_chips', 'Net MORBIUS'],
                   ['biggest_pot', 'Biggest pot'],
                   ['hands_played', 'Hands'],
                 ] as [LbCategory, string][]
