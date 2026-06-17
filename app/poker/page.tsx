@@ -420,6 +420,17 @@ export default function PokerLobbyPage() {
     refreshLobbyBalances();
   }, [refreshLobbyBalances]);
 
+  // Total spendable in chips = poker chip wallet + MORBIUS balance (1 chip = 1 MORBIUS).
+  // The server auto-converts any shortfall from MORBIUS on join/re-up, so a sit-down is only
+  // blocked when this TOTAL can't cover the buy-in — not when the chip wallet alone is short.
+  const totalAvailableChips = (() => {
+    let chips = 0n;
+    try { chips = chipBalance != null ? BigInt(chipBalance) : 0n; } catch { chips = 0n; }
+    let morbiusChips = 0n;
+    try { morbiusChips = balance != null ? BigInt(balance) / 1000000000000000000n : 0n; } catch { morbiusChips = 0n; }
+    return chips + morbiusChips;
+  })();
+
   /** Navigate to table page with join params; table page will connect once and call pokerJoinTable. */
   const handleJoin = () => {
     if (!joinModal || !address) return;
@@ -1190,15 +1201,15 @@ export default function PokerLobbyPage() {
                     />
                   </div>
                 )}
-                {chipBalance != null && (() => {
+                {(chipBalance != null || balance != null) && (() => {
                   try {
-                    return BigInt(parseChipInput(buyIn)) > BigInt(chipBalance);
+                    return BigInt(parseChipInput(buyIn)) > totalAvailableChips;
                   } catch {
                     return false;
                   }
                 })() && (
                   <p className="text-amber-400 text-sm">
-                    Insufficient MORBIUS. <button type="button" onClick={() => setShowDepositModal(true)} className="underline hover:text-amber-300">Deposit MORBIUS</button>
+                    Not enough MORBIUS to cover this buy-in. <button type="button" onClick={() => setShowDepositModal(true)} className="underline hover:text-amber-300">Add MORBIUS</button>
                   </p>
                 )}
                 <div className="rounded-lg bg-slate-800/80 border border-white/20 px-3 py-2.5 space-y-1">
@@ -1244,8 +1255,8 @@ export default function PokerLobbyPage() {
                   <button
                     type="button"
                     onClick={() => {
-                      const insufficient = chipBalance != null && (() => {
-                        try { return BigInt(parseChipInput(buyIn)) > BigInt(chipBalance); }
+                      const insufficient = (chipBalance != null || balance != null) && (() => {
+                        try { return BigInt(parseChipInput(buyIn)) > totalAvailableChips; }
                         catch { return false; }
                       })();
                       if (insufficient) {

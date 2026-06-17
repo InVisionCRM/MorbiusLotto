@@ -1,9 +1,9 @@
 'use client';
 
 /**
- * RouletteWheel2 — canvas European wheel for /roulette2 (Midnight Emerald).
+ * RouletteWheel2 — canvas European wheel for /roulette2 (Deep-Sea Neon).
  *
- * Renders the 37-pocket ring in the true European order with an emerald rim
+ * Renders the 37-pocket ring in the true European order with a cyan rim
  * glow, idles with a slow drift, and on spin runs a ~4.4s deterministic
  * animation: the wheel eases out over four turns while the ball orbits
  * counter-rotating, decays inward with a two-bounce drop, and ALWAYS settles
@@ -20,12 +20,15 @@ const POCKETS = ROULETTE2_WHEEL_ORDER.length; // 37
 const SEG = (Math.PI * 2) / POCKETS;
 export const WHEEL_SPIN_MS = 4400;
 
-const COLOR_BG = '#07271A';
-const COLOR_RIM = '#0E3B28';
-const COLOR_ACCENT = '#34D399';
+const COLOR_BG = '#0B1A26';
+const COLOR_RIM = '#133A4A';
+const COLOR_ACCENT = '#22D3EE';
 const COLOR_RED = '#B91C1C';
 const COLOR_BLACK = '#18181B';
 const COLOR_GREEN = '#15803D';
+// Lighter green used for the green-pocket label in the hub (distinct from the
+// cyan chrome accent — green stays the game's own pocket colour).
+const COLOR_GREEN_TEXT = '#4ADE80';
 
 interface SpinPlan {
   startMs: number;
@@ -183,7 +186,7 @@ export default function RouletteWheel2({
       ctx.lineWidth = 2;
       ctx.strokeStyle = COLOR_ACCENT;
       ctx.shadowBlur = 18;
-      ctx.shadowColor = 'rgba(52,211,153,0.55)';
+      ctx.shadowColor = 'rgba(34,211,238,0.55)';
       ctx.stroke();
       ctx.shadowBlur = 0;
 
@@ -238,12 +241,12 @@ export default function RouletteWheel2({
       const hubN = lastResultRef.current;
       if (hubN != null) {
         const hc = pocketColor(hubN);
-        ctx.fillStyle = hc === 'green' ? COLOR_ACCENT : hc === 'red' ? '#F87171' : '#E2E8F0';
+        ctx.fillStyle = hc === 'green' ? COLOR_GREEN_TEXT : hc === 'red' ? '#F87171' : '#E2E8F0';
         ctx.font = `700 ${size * 0.13}px ui-monospace, monospace`;
         ctx.textAlign = 'center';
         ctx.textBaseline = 'middle';
         ctx.fillText(String(hubN), cx, cy - size * 0.015);
-        ctx.fillStyle = '#5E8273';
+        ctx.fillStyle = '#64748b';
         ctx.font = `600 ${size * 0.032}px ui-monospace, monospace`;
         ctx.fillText(
           hc === 'green' ? 'ZERO' : hc.toUpperCase(),
@@ -251,7 +254,7 @@ export default function RouletteWheel2({
           cy + size * 0.075,
         );
       } else {
-        ctx.fillStyle = '#5E8273';
+        ctx.fillStyle = '#64748b';
         ctx.font = `600 ${size * 0.045}px ui-monospace, monospace`;
         ctx.textAlign = 'center';
         ctx.textBaseline = 'middle';

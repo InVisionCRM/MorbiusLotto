@@ -58,11 +58,11 @@ interface UsePlsQuoteReturn {
   usingFallback: boolean
 }
 
-// Tax and slippage constants
-const TAX_MULTIPLIER = BigInt(15000) // 50% tax: 1.5x
-const TAX_DIVISOR = BigInt(10000)
-const SLIPPAGE_MULTIPLIER = BigInt(12000) // 20% buffer: 1.2x
-const SLIPPAGE_DIVISOR = BigInt(10000)
+// No markup is applied to the PLS quote. `Blackjack.deposit()` performs NO on-chain swap:
+// it credits getAmountsOut(msg.value) at the PulseX spot rate and forwards the PLS to treasury.
+// Because nothing is actually swapped, there is no slippage to tolerate and no amountOutMin that
+// can revert — sending exactly the getAmountsIn() quote credits ~the requested MORBIUS. MORBIUS
+// has no transfer tax, and none would apply on deposit anyway since no MORBIUS is moved here.
 
 export function usePlsQuote({
   morbiusCost,
@@ -179,11 +179,8 @@ export function usePlsQuote({
       }
     }
 
-    // Apply 50% tax (making PLS payments 50% more expensive)
-    const taxedAmount = (basePlsCost * TAX_MULTIPLIER) / TAX_DIVISOR
-
-    // Add 20% buffer for slippage and DEX fees
-    const totalPlsRequired = (taxedAmount * SLIPPAGE_MULTIPLIER) / SLIPPAGE_DIVISOR
+    // Send exactly the spot-rate quote — no tax/slippage markup (see note above).
+    const totalPlsRequired = basePlsCost
 
     if (usingFallback) {
       console.warn(`⚠️ PLS quote using fallback (${source}):`, {

@@ -1,12 +1,15 @@
 import type { Pool, PoolClient } from 'pg';
 import { logger } from '../utils/logger';
+import { POKER_CHIP_WEI } from '../lib/poker-chip-scale';
 
 export type PokerChipLedgerReason =
   | 'purchase'
   | 'cashout'
   | 'cash_join'
+  | 'cash_join_auto_purchase'
   | 'cash_leave'
   | 'cash_reup'
+  | 'cash_reup_auto_purchase'
   | 'cash_admin_return'
   | 'tournament_create_guarantee'
   | 'tournament_buyin'
@@ -145,4 +148,53 @@ export async function applyPokerChipDelta(
   );
   logger.debug('Poker chip delta', { wallet: addr, delta: delta.toString(), after: after.toString(), reason });
   return after;
+}
+
+/**
+ * Ensure the player's poker-chip wallet holds at least `requiredChips`, auto-topping-up any
+ * shortfall straight from their general MORBIUS `players.balance`. This removes the separate
+ * "buy chips first" step: a cash join / re-up converts MORBIUS → chips on demand.
+ *
+ * Must run inside the caller's open transaction (`client` already in BEGIN) so the top-up and
+ * the subsequent buy-in debit commit atomically. Existing chips are spent first; only the
+ * shortfall is pulled from MORBIUS. No-op (and no ledger row) when the wallet already covers it.
+ *
+ * Throws 'Insufficient MORBIUS balance' if the player cannot cover the shortfall.
+ */
+export async function ensurePokerChips(
+  client: PoolClient,
+  walletAddress: string,
+  requiredChips: bigint,
+  reason: PokerChipLedgerReason,
+  ref?: PokerChipRef,
+): Promise<void> {
+  if (requiredChips <= 0n) return;
+  const addr = normalizeAddr(walletAddress);
+  // Lock the chip row (creating it if missing) so the read → top-up decision is race-safe.
+  await client.query(
+    `INSERT INTO player_poker_chips (wallet_address, balance) VALUES ($1, 0)
+     ON CONFLICT (wallet_address) DO NOTHING`,
+    [addr],
+  );
+  const row = await client.query<{ balance: string }>(
+    `SELECT balance::text AS balance FROM player_poker_chips WHERE wallet_address = $1 FOR UPDATE`,
+    [addr],
+  );
+  const current = BigInt(row.rows[0]?.balance ?? '0');
+  if (current >= requiredChips) return;
+
+  const shortfallChips = requiredChips - current;
+  const shortfallWei = shortfallChips * POKER_CHIP_WEI;
+  // Debit the general MORBIUS balance for exactly the shortfall, guarded so it can never go negative.
+  const deduct = await client.query(
+    `UPDATE players SET balance = balance - $2::NUMERIC
+     WHERE LOWER(wallet_address) = LOWER($1) AND balance >= $2::NUMERIC
+     RETURNING balance`,
+    [addr, shortfallWei.toString()],
+  );
+  if (deduct.rows.length === 0) {
+    throw new Error('Insufficient MORBIUS balance');
+  }
+  // Credit the shortfall into the chip wallet (records an audit ledger row).
+  await applyPokerChipDelta(client, addr, shortfallChips, reason, ref);
 }

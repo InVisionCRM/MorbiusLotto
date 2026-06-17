@@ -1,8 +1,8 @@
 'use client';
 
 /**
- * RouletteBoard2 — the interactive betting felt for /roulette2 (Midnight
- * Emerald). Full European layout:
+ * RouletteBoard2 — the interactive betting felt for /roulette2 (Deep-Sea
+ * Neon). Full European layout:
  *
  *   • 0 + the 3×12 number grid + the three 2:1 column bets
  *   • dozens row + even-money row (1–18 / EVEN / RED / BLACK / ODD / 19–36)
@@ -119,7 +119,7 @@ export default function RouletteBoard2({
         onContextMenu={z.onContextMenu}
         onMouseEnter={z.onMouseEnter}
         onMouseLeave={z.onMouseLeave}
-        className={`absolute z-20 rounded-sm transition-colors hover:bg-[#34D399]/30 ${className}`}
+        className={`absolute z-20 rounded-sm transition-colors hover:bg-cyan-400/30 ${className}`}
       >
         {z.amount > 0 && <Chip amount={z.amount} />}
       </button>
@@ -131,8 +131,8 @@ export default function RouletteBoard2({
     const base =
       color === 'red'
         ? 'bg-[#B91C1C] text-red-100'
-        : 'bg-[#0A2018] text-[#86A99A] ring-1 ring-inset ring-[#1B4434]';
-    const hot = highlight.has(n) ? ' outline outline-2 outline-[#34D399] -outline-offset-1' : '';
+        : 'bg-[#081420] text-slate-400 ring-1 ring-inset ring-cyan-950';
+    const hot = highlight.has(n) ? ' outline outline-2 outline-[#22D3EE] -outline-offset-1' : '';
     const win =
       winningNumber === n
         ? ' animate-pulse outline outline-2 outline-[#FBBF24] -outline-offset-1 shadow-[0_0_18px_rgba(251,191,36,0.45)]'
@@ -141,7 +141,7 @@ export default function RouletteBoard2({
   }
 
   const outsideCell =
-    'relative flex items-center justify-center rounded-md bg-[#0A2018] ring-1 ring-inset ring-[#1B4434] text-[10px] sm:text-[11px] font-semibold uppercase tracking-wider text-[#86A99A] transition-colors hover:bg-[#10301F] disabled:cursor-default';
+    'relative flex items-center justify-center rounded-md bg-[#081420] ring-1 ring-inset ring-cyan-950 text-[10px] sm:text-[11px] font-semibold uppercase tracking-wider text-slate-400 transition-colors hover:bg-[#0d2230] disabled:cursor-default';
 
   // Number grid: visual rows top→bottom show n%3 == 0, 2, 1.
   const rows = [3, 2, 1].map((rem) =>
@@ -164,8 +164,8 @@ export default function RouletteBoard2({
           onContextMenu={zeroZone.onContextMenu}
           onMouseEnter={zeroZone.onMouseEnter}
           onMouseLeave={zeroZone.onMouseLeave}
-          className={`relative row-span-3 flex items-center justify-center rounded-md bg-[#34D399]/15 text-base font-bold text-[#6EE7B7] ring-1 ring-inset ring-[#34D399] transition-colors hover:bg-[#34D399]/25 ${
-            highlight.has(0) ? 'outline outline-2 outline-[#34D399] -outline-offset-1' : ''
+          className={`relative row-span-3 flex items-center justify-center rounded-md bg-[#15803D]/25 text-base font-bold text-[#4ADE80] ring-1 ring-inset ring-[#15803D] transition-colors hover:bg-[#15803D]/40 ${
+            highlight.has(0) ? 'outline outline-2 outline-[#22D3EE] -outline-offset-1' : ''
           } ${winningNumber === 0 ? 'animate-pulse outline outline-2 outline-[#FBBF24] -outline-offset-1' : ''}`}
           style={{ gridRow: '1 / span 3', gridColumn: 1 }}
         >
@@ -306,7 +306,7 @@ export default function RouletteBoard2({
             o.type === 'red'
               ? 'bg-[#B91C1C]/30 ring-[#B91C1C] text-red-200 hover:bg-[#B91C1C]/45'
               : o.type === 'black'
-                ? 'bg-[#18181B] ring-[#1B4434] text-zinc-300 hover:bg-[#27272A]'
+                ? 'bg-[#18181B] ring-cyan-950 text-zinc-300 hover:bg-[#27272A]'
                 : '';
           return (
             <button
@@ -327,7 +327,7 @@ export default function RouletteBoard2({
         })}
       </div>
 
-      <p className="mt-2 text-center text-[10px] uppercase tracking-wider text-[#5E8273]">
+      <p className="mt-2 text-center text-[10px] uppercase tracking-wider text-slate-500">
         click to bet · right-click to remove · edges &amp; corners place splits / streets / corners / lines
       </p>
     </div>
