@@ -44,16 +44,6 @@ function shortAddr(a: string): string {
   return `${a.slice(0, 4)}…${a.slice(-4)}`
 }
 
-function timeAgo(ts: number): string {
-  const s = Math.max(0, Math.floor((Date.now() - ts) / 1000))
-  if (s < 60) return `${s}s ago`
-  const m = Math.floor(s / 60)
-  if (m < 60) return `${m}m ago`
-  const h = Math.floor(m / 60)
-  if (h < 24) return `${h}h ago`
-  return `${Math.floor(h / 24)}d ago`
-}
-
 /**
  * Fallback shown when the real feed has no recent activity (new platform, quiet
  * period, or local dev where chain/analytics aren't reachable). Real wins from
@@ -76,32 +66,39 @@ export function RecentWins() {
   const { wins } = useLatestWins()
 
   // Stable ref across useLatestWins polling so the marquee isn't re-cloned/reset.
-  const items = useMemo<WinCardItem[]>(
-    () =>
-      wins && wins.length > 0
-        ? wins.slice(0, 16).map((w) => {
-            const meta = GAME_META[w.game]
-            return {
-              id: w.id,
-              game: meta?.label ?? w.game,
-              amount: `+${formatAmount(w.amount)}`,
-              player: shortAddr(w.address),
-              timeAgo: timeAgo(w.timestamp),
-              href: meta?.href,
-              art: <GameArt gameKey={w.game} />,
-            }
-          })
-        : FALLBACK_SEED.map((f) => ({
-            id: `fb-${f.key}`,
-            game: f.game,
-            amount: `+${f.amount} MORBIUS`,
-            player: f.player,
-            timeAgo: f.time,
-            href: f.href,
-            art: <GameArt gameKey={f.key} />,
-          })),
-    [wins],
-  )
+  const items = useMemo<WinCardItem[]>(() => {
+    if (wins && wins.length > 0) {
+      // Collapse consecutive wins from the same wallet so one hot player (e.g. plinko
+      // spam) can't fill the marquee with back-to-back cards.
+      const deduped: typeof wins = []
+      let lastAddr = ''
+      for (const w of wins) {
+        const addr = (w.address || '').toLowerCase()
+        if (addr && addr === lastAddr) continue
+        deduped.push(w)
+        lastAddr = addr
+      }
+      return deduped.slice(0, 16).map((w) => {
+        const meta = GAME_META[w.game]
+        return {
+          id: w.id,
+          game: meta?.label ?? w.game,
+          amount: `+${formatAmount(w.amount)}`,
+          player: w.username || shortAddr(w.address),
+          href: meta?.href,
+          art: <GameArt gameKey={w.game} />,
+        }
+      })
+    }
+    return FALLBACK_SEED.map((f) => ({
+      id: `fb-${f.key}`,
+      game: f.game,
+      amount: `+${f.amount} MORBIUS`,
+      player: f.player,
+      href: f.href,
+      art: <GameArt gameKey={f.key} />,
+    }))
+  }, [wins])
 
   return (
     <div className="mt-5">

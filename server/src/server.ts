@@ -1126,6 +1126,7 @@ async function initializeServices() {
         const wins = rows.map((r) => ({
           id: r.id,
           playerAddress: r.playerAddress,
+          username: r.username, // chat_display_names.display_name, or null
           game: r.reason.replace(/_payout$/, '').replace(/^arcade_/, '').replace(/_/g, '-'),
           amount: r.amount, // whole chips (1 chip = 1 MORBIUS)
           timestamp: r.timestamp,

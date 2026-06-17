@@ -2942,19 +2942,22 @@ export class DatabaseService implements MoneyDatabaseQueries {
    * Recent wins across ALL games: any `*_payout` credit in the unified chip ledger
    * (1 chip = 1 MORBIUS). New games appear automatically once they credit a payout.
    */
-  async getRecentChipWins(limit: number = 20): Promise<Array<{ id: string; playerAddress: string; reason: string; amount: string; timestamp: number }>> {
+  async getRecentChipWins(limit: number = 20): Promise<Array<{ id: string; playerAddress: string; username: string | null; reason: string; amount: string; timestamp: number }>> {
     const safeLimit = Math.min(Math.max(Number(limit) || 20, 1), 50);
     const result = await this.pool.query(
-      `SELECT id, wallet_address, reason, delta::text AS delta, created_at
-       FROM poker_chip_ledger
-       WHERE reason LIKE '%payout' AND delta > 0
-       ORDER BY created_at DESC
+      `SELECT l.id, l.wallet_address, l.reason, l.delta::text AS delta, l.created_at,
+              cd.display_name AS username
+       FROM poker_chip_ledger l
+       LEFT JOIN chat_display_names cd ON LOWER(cd.wallet_address) = l.wallet_address
+       WHERE l.reason LIKE '%payout' AND l.delta > 0
+       ORDER BY l.created_at DESC
        LIMIT $1`,
       [safeLimit],
     );
     return result.rows.map((r: any) => ({
       id: String(r.id),
       playerAddress: r.wallet_address ?? '',
+      username: r.username ?? null,
       reason: r.reason ?? '',
       amount: String(r.delta ?? '0'),
       timestamp: r.created_at instanceof Date ? r.created_at.getTime() : new Date(r.created_at).getTime(),
