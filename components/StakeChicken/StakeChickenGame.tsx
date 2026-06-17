@@ -575,7 +575,15 @@ export function StakeChickenGame() {
       </div>
       {/* Draggable mini session chart — open in a corner on mobile, full-size on desktop. */}
       <FloatingPanel title="Session" storageKey="chicken.sessionChart.pos">
-        <SessionChart points={session} unitLabel="Rounds" bare />
+        <SessionChart
+          points={session}
+          unitLabel="Rounds"
+          bare
+          allTimeLoader={async () => {
+            const rounds = await fetchChickenHistory(365);
+            return [...rounds].reverse().map((r, i) => ({ drop: i + 1, bet: r.bet, profit: r.payout - r.bet }));
+          }}
+        />
       </FloatingPanel>
 
       <ChickenFairnessModal

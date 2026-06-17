@@ -4,15 +4,15 @@
  * FloatingPanel — shared arcade2 draggable, collapsible floating card.
  *
  * Renders on both desktop and mobile (parents no longer need a separate inline
- * copy). On phones it shrinks to a "mini" width and defaults to the top-right
- * corner; on desktop it keeps the full 380px width near the bottom-right.
+ * copy). On phones it starts as a small collapsed pill in the top-right corner;
+ * tap to expand into a wider card (sized so the stat labels fit). On desktop it
+ * keeps the full 380px width near the bottom-right and starts open.
  *
  * Plain pointer events — no drag library:
- *   • Drag by the header (buttons excluded), with pointer capture so fast
- *     drags don't escape the handle. `touch-none` on the handle keeps a touch
- *     drag from scrolling the page underneath.
- *   • Position clamps to the viewport on drag AND on window resize, and stays
- *     clear of the fixed mobile action bar at the bottom.
+ *   • Drag by the header (buttons excluded), with pointer capture. `touch-none`
+ *     on the handle keeps a touch drag from scrolling the page underneath.
+ *   • Position clamps to the viewport on drag, resize, and expand/collapse, and
+ *     stays clear of the fixed mobile action bar at the bottom.
  *   • {x, y, open} persists to localStorage (per `storageKey`).
  *
  * z-index sits below the dialogs (z-50) so modals always win.
@@ -21,7 +21,8 @@
 import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react'
 
 const DESKTOP_W = 380
-const MOBILE_MAX_W = 184
+const MOBILE_MAX_W = 270
+const COLLAPSED_W = 148
 const MARGIN = 8
 
 interface PanelPos {
@@ -41,7 +42,7 @@ function isMobileViewport(): boolean {
   return typeof window !== 'undefined' && window.innerWidth < 1024
 }
 
-/** Mini on phones, full-size on desktop. */
+/** Open width: wide-but-fits on phones, full-size on desktop. */
 function computeWidth(): number {
   if (isMobileViewport()) return Math.min(window.innerWidth - MARGIN * 2, MOBILE_MAX_W)
   return DESKTOP_W
@@ -65,12 +66,12 @@ export function FloatingPanel({ title, storageKey, children }: FloatingPanelProp
   const rootRef = useRef<HTMLDivElement>(null)
   const dragRef = useRef<{ dx: number; dy: number } | null>(null)
   const [pos, setPos] = useState<PanelPos | null>(null)
-  const [width, setWidth] = useState<number>(DESKTOP_W)
+  const [openWidth, setOpenWidth] = useState<number>(DESKTOP_W)
 
-  // Mount: pick a width for this viewport, then restore the saved spot or pick a default corner.
+  // Mount: size for this viewport, then restore the saved spot or pick a default.
   useEffect(() => {
     const w = computeWidth()
-    setWidth(w)
+    setOpenWidth(w)
     let initial: PanelPos | null = null
     try {
       const raw = localStorage.getItem(storageKey)
@@ -80,10 +81,11 @@ export function FloatingPanel({ title, storageKey, children }: FloatingPanelProp
     }
     if (!initial || !Number.isFinite(initial.x) || !Number.isFinite(initial.y)) {
       initial = isMobileViewport()
-        ? { x: window.innerWidth - w - MARGIN, y: 76, open: true }
+        ? { x: window.innerWidth - COLLAPSED_W - MARGIN, y: 76, open: false }
         : { x: window.innerWidth - w - 24, y: Math.max(96, window.innerHeight - 420), open: true }
     }
-    const c = clampPos(initial.x, initial.y, rootRef.current?.offsetHeight ?? 200, w)
+    const effW = initial.open ? w : COLLAPSED_W
+    const c = clampPos(initial.x, initial.y, rootRef.current?.offsetHeight ?? 200, effW)
     setPos({ ...initial, ...c })
   }, [storageKey])
 
@@ -102,10 +104,11 @@ export function FloatingPanel({ title, storageKey, children }: FloatingPanelProp
   useEffect(() => {
     const onResize = () => {
       const w = computeWidth()
-      setWidth(w)
+      setOpenWidth(w)
       setPos((p) => {
         if (!p) return p
-        const c = clampPos(p.x, p.y, rootRef.current?.offsetHeight ?? 200, w)
+        const effW = p.open ? w : COLLAPSED_W
+        const c = clampPos(p.x, p.y, rootRef.current?.offsetHeight ?? 200, effW)
         const next = { ...p, ...c }
         persist(next)
         return next
@@ -118,7 +121,6 @@ export function FloatingPanel({ title, storageKey, children }: FloatingPanelProp
   const onPointerDown = useCallback(
     (e: React.PointerEvent<HTMLDivElement>) => {
       if (!pos) return
-      // Buttons inside the header (collapse) shouldn't start a drag.
       if ((e.target as HTMLElement).closest('button')) return
       dragRef.current = { dx: e.clientX - pos.x, dy: e.clientY - pos.y }
       e.currentTarget.setPointerCapture(e.pointerId)
@@ -132,11 +134,12 @@ export function FloatingPanel({ title, storageKey, children }: FloatingPanelProp
       if (!d) return
       setPos((p) => {
         if (!p) return p
-        const c = clampPos(e.clientX - d.dx, e.clientY - d.dy, rootRef.current?.offsetHeight ?? 200, width)
+        const effW = p.open ? openWidth : COLLAPSED_W
+        const c = clampPos(e.clientX - d.dx, e.clientY - d.dy, rootRef.current?.offsetHeight ?? 200, effW)
         return { ...p, ...c }
       })
     },
-    [width],
+    [openWidth],
   )
 
   const onPointerUp = useCallback(
@@ -155,19 +158,24 @@ export function FloatingPanel({ title, storageKey, children }: FloatingPanelProp
   const toggleOpen = useCallback(() => {
     setPos((p) => {
       if (!p) return p
-      const next = { ...p, open: !p.open }
+      const open = !p.open
+      const effW = open ? openWidth : COLLAPSED_W
+      const c = clampPos(p.x, p.y, rootRef.current?.offsetHeight ?? 200, effW)
+      const next = { ...p, ...c, open }
       persist(next)
       return next
     })
-  }, [persist])
+  }, [persist, openWidth])
 
   if (!pos) return null
+
+  const renderWidth = pos.open ? openWidth : COLLAPSED_W
 
   return (
     <div
       ref={rootRef}
       className="arcade2-scope fixed z-40"
-      style={{ left: pos.x, top: pos.y, width }}
+      style={{ left: pos.x, top: pos.y, width: renderWidth }}
     >
       <div className="arc-panel overflow-hidden rounded-xl shadow-[0_18px_50px_-18px_rgba(0,0,0,0.9)]">
         <div
@@ -177,7 +185,7 @@ export function FloatingPanel({ title, storageKey, children }: FloatingPanelProp
           className="flex touch-none cursor-grab select-none items-center gap-2 border-b border-cyan-950/70 bg-[#081420]/80 px-3 py-2 active:cursor-grabbing"
         >
           <span aria-hidden className="text-[10px] tracking-[0.2em] text-slate-600">⠿</span>
-          <span className="arc-display text-xs font-semibold uppercase tracking-wider text-slate-300">
+          <span className="arc-display truncate text-xs font-semibold uppercase tracking-wider text-slate-300">
             {title}
           </span>
           <button
