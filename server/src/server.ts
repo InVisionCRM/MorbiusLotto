@@ -1111,7 +1111,7 @@ async function initializeServices() {
       }
     });
 
-    // Public: recent Blackjack wins (for Latest Wins feed)
+    // Public: recent wins across ALL games (any *_payout credit in the chip ledger) for the Latest Wins feed
     app.get('/api/analytics/recent-wins', async (req, res) => {
       const limit = Math.min(parseInt(req.query.limit as string) || 20, 50);
       const cacheKey = getAnalyticsCacheKey('/api/analytics/recent-wins', { limit: String(limit) });
@@ -1120,7 +1120,16 @@ async function initializeServices() {
         return sendJson(res, cached);
       }
       try {
-        const wins = await dbService.getRecentGlobalWins(limit);
+        const rows = await dbService.getRecentChipWins(limit);
+        // reason -> game key (matches GameArt keys + lobby routes):
+        // arcade_chicken_payout -> chicken, video_poker_payout -> video-poker, blackjack_payout -> blackjack
+        const wins = rows.map((r) => ({
+          id: r.id,
+          playerAddress: r.playerAddress,
+          game: r.reason.replace(/_payout$/, '').replace(/^arcade_/, '').replace(/_/g, '-'),
+          amount: r.amount, // whole chips (1 chip = 1 MORBIUS)
+          timestamp: r.timestamp,
+        }));
         const payload = { wins };
         setCachedAnalytics(cacheKey, payload);
         sendJson(res, payload);
