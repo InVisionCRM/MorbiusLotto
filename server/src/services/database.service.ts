@@ -2938,6 +2938,29 @@ export class DatabaseService implements MoneyDatabaseQueries {
   }
 
   /** Recent Blackjack wins (for public latest-wins feed). Only win/blackjack results. */
+  /**
+   * Recent wins across ALL games: any `*_payout` credit in the unified chip ledger
+   * (1 chip = 1 MORBIUS). New games appear automatically once they credit a payout.
+   */
+  async getRecentChipWins(limit: number = 20): Promise<Array<{ id: string; playerAddress: string; reason: string; amount: string; timestamp: number }>> {
+    const safeLimit = Math.min(Math.max(Number(limit) || 20, 1), 50);
+    const result = await this.pool.query(
+      `SELECT id, wallet_address, reason, delta::text AS delta, created_at
+       FROM poker_chip_ledger
+       WHERE reason LIKE '%payout' AND delta > 0
+       ORDER BY created_at DESC
+       LIMIT $1`,
+      [safeLimit],
+    );
+    return result.rows.map((r: any) => ({
+      id: String(r.id),
+      playerAddress: r.wallet_address ?? '',
+      reason: r.reason ?? '',
+      amount: String(r.delta ?? '0'),
+      timestamp: r.created_at instanceof Date ? r.created_at.getTime() : new Date(r.created_at).getTime(),
+    }));
+  }
+
   async getRecentGlobalWins(limit: number = 20): Promise<Array<{ gameId: string; playerAddress: string; result: string; betAmount: string; payout: string; timestamp: number }>> {
     const query = `
       SELECT

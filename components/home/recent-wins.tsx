@@ -1,28 +1,42 @@
 'use client'
 
 import { useMemo } from 'react'
-import { formatEther } from 'viem'
-import { useLatestWins, type GameType } from '@/hooks/use-latest-wins'
+import { useLatestWins } from '@/hooks/use-latest-wins'
 import { InfiniteMovingCards, type WinCardItem } from '@/components/ui/infinite-moving-cards'
 import { GameArt } from './game-art'
 
-/** Map the on-chain win game label to a lobby game (art + route). */
-const GAME_META: Record<GameType, { key: string; href: string }> = {
-  Plinko: { key: 'plinko', href: '/plinko2' },
-  Blackjack: { key: 'blackjack', href: '/BLACKJACK' },
-  'Big Wheel': { key: 'wheel', href: '/wheel' },
-  Lottery: { key: 'lottery', href: '/lottery' },
-  Keno: { key: 'keno', href: '/keno2' },
+/** Map a game key (derived from the chip-ledger payout reason) to its display label + lobby route. */
+const GAME_META: Record<string, { label: string; href: string }> = {
+  blackjack: { label: 'Blackjack', href: '/BLACKJACK' },
+  'blackjack-multi': { label: 'Blackjack', href: '/blackjack-multi' },
+  plinko: { label: 'Plinko', href: '/plinko2' },
+  keno: { label: 'Keno', href: '/keno2' },
+  'video-poker': { label: 'Video Poker', href: '/video-poker' },
+  limbo: { label: 'Limbo', href: '/limbo2' },
+  mines: { label: 'Mines', href: '/mines2' },
+  hilo: { label: 'Hi-Lo', href: '/hilo' },
+  dice: { label: 'Dice', href: '/dice2' },
+  dicex2: { label: 'Dice x2', href: '/dicex2' },
+  craps: { label: 'Craps', href: '/craps' },
+  baccarat: { label: 'Baccarat', href: '/baccarat' },
+  crash: { label: 'Crash', href: '/crash' },
+  roulette: { label: 'Roulette', href: '/roulette2' },
+  towers: { label: 'Towers', href: '/towers' },
+  chicken: { label: 'Chicken', href: '/chicken' },
+  'dragon-tiger': { label: 'Dragon Tiger', href: '/dragon-tiger' },
+  'andar-bahar': { label: 'Andar Bahar', href: '/andar-bahar' },
+  pachinko: { label: 'Pachinko', href: '/pachinko' },
+  cascade: { label: 'Cascade', href: '/cascade' },
+  firewalk: { label: 'Firewalk', href: '/firewalk' },
+  heist: { label: 'Heist', href: '/heist' },
+  'three-card-poker': { label: 'Three Card Poker', href: '/three-card-poker' },
+  'greed-dice': { label: 'Greed Dice', href: '/greed-dice' },
+  cipher: { label: 'Cipher', href: '/cipher' },
 }
 
-function formatAmount(wei: bigint): string {
-  const n = Number(formatEther(wei))
-  if (!Number.isFinite(n)) return '0 MORBIUS'
-  const v =
-    n >= 1
-      ? n.toLocaleString(undefined, { maximumFractionDigits: 0 })
-      : n.toLocaleString(undefined, { maximumFractionDigits: 2 })
-  return `${v} MORBIUS`
+function formatAmount(chips: number): string {
+  if (!Number.isFinite(chips)) return '0 MORBIUS'
+  return `${Math.round(chips).toLocaleString(undefined, { maximumFractionDigits: 0 })} MORBIUS`
 }
 
 function shortAddr(a: string): string {
@@ -69,12 +83,12 @@ export function RecentWins() {
             const meta = GAME_META[w.game]
             return {
               id: w.id,
-              game: w.game,
+              game: meta?.label ?? w.game,
               amount: `+${formatAmount(w.amount)}`,
               player: shortAddr(w.address),
               timeAgo: timeAgo(w.timestamp),
               href: meta?.href,
-              art: meta ? <GameArt gameKey={meta.key} /> : undefined,
+              art: <GameArt gameKey={w.game} />,
             }
           })
         : FALLBACK_SEED.map((f) => ({
