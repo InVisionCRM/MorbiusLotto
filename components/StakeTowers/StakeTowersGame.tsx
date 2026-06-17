@@ -24,7 +24,7 @@ import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { usePokerChipBalance } from '@/hooks/use-poker-chip-balance';
 import { formatChips } from '@/lib/format-poker-chips';
-import { PokerChipExchangeModal } from '@/components/poker/PokerChipExchangeModal';
+import { GameWalletModal } from '@/components/shared/GameWalletModal';
 import { probeSiweSession } from '@/lib/api-auth';
 import { SessionChart, type SessionPoint } from '@/components/arcade2/SessionChart';
 import { FloatingPanel } from '@/components/arcade2/FloatingPanel';
@@ -178,7 +178,7 @@ export function StakeTowersGame() {
   const handleErr = useCallback((e: unknown) => {
     const msg = (e as Error)?.message ?? '';
     if (/Not enough chips|insufficient/i.test(msg)) {
-      setError('Not enough chips for that wager.');
+      setError('Not enough MORBIUS for that wager.');
       setNoChips(true);
     } else if (/401|No session|auth/i.test(msg)) {
       setError('Connect your wallet to play.');
@@ -222,7 +222,7 @@ export function StakeTowersGame() {
     if (!betting || !info) return;
     const stake = clampBet(bet);
     if (balance != null && BigInt(stake) > balance) {
-      setError('Not enough chips for that wager.');
+      setError('Not enough MORBIUS for that wager.');
       setNoChips(true);
       return;
     }
@@ -371,7 +371,7 @@ export function StakeTowersGame() {
             <span className="text-xs uppercase tracking-wide text-slate-500">Balance</span>
             <div className="flex items-center gap-2">
               <span className="arc-mono text-sm tabular-nums text-amber-300">
-                {balance != null ? `${formatChips(balance)} chips` : '—'}
+                {balance != null ? `${formatChips(balance)} MORBIUS` : '—'}
               </span>
               <button
                 type="button"
@@ -483,7 +483,7 @@ export function StakeTowersGame() {
               <p className="text-sm text-rose-400">{error}</p>
               {noChips && (
                 <button type="button" onClick={() => setExchangeOpen(true)} className="text-sm font-semibold text-cyan-300 underline-offset-2 hover:underline">
-                  Buy chips →
+                  Deposit MORBIUS
                 </button>
               )}
             </div>
@@ -522,12 +522,12 @@ export function StakeTowersGame() {
                         {currentFloor >= TOWERS_FLOORS ? 'Tower cleared' : 'Cashed out'} {formatMultiplier(result.multiplierX100)}
                       </div>
                       <div className="arc-mono mt-1 text-sm tabular-nums text-amber-300">
-                        +{(result.payout - (round?.bet ?? 0)).toLocaleString()} chips
+                        +{(result.payout - (round?.bet ?? 0)).toLocaleString()} MORBIUS
                       </div>
                     </>
                   ) : (
                     <div className="arc-display text-2xl font-bold uppercase tracking-[0.1em] text-rose-400 drop-shadow-[0_0_20px_rgba(244,63,94,0.5)] sm:text-3xl">
-                      Bust · −{(round?.bet ?? 0).toLocaleString()} chips
+                      Bust · −{(round?.bet ?? 0).toLocaleString()} MORBIUS
                     </div>
                   )}
                   <Button
@@ -605,11 +605,12 @@ export function StakeTowersGame() {
         requestVerifyId={verifyTarget}
       />
 
-      <PokerChipExchangeModal
+      <GameWalletModal
         isOpen={exchangeOpen}
         onClose={() => setExchangeOpen(false)}
-        walletAddress={address ?? null}
-        onExchangeComplete={() => void refetchBalance()}
+        defaultTab="deposit"
+        balanceLabel="MORBIUS"
+        onBalanceSync={async () => { await refetchBalance(); }}
       />
     </div>
   );

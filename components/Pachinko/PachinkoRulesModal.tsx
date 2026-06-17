@@ -86,7 +86,7 @@ export function PachinkoRulesModal({ open, onOpenChange }: Props) {
         { label: 'High risk', sub: 'big swings', pays: 'jackpot 30×' },
       ]}
       payoutsLabel="Risk → jackpot"
-      footer={<>Every risk level keeps the same ~96% long-run return — only the swings differ. Each drop re-derives from a committed server seed + your client seed — open Verify to check. Played in chips.</>}
+      footer={<>Every risk level keeps the same ~96% long-run return — only the swings differ. Each drop re-derives from a committed server seed + your client seed — open Verify to check. Played in MORBIUS.</>}
     />
   );
 }

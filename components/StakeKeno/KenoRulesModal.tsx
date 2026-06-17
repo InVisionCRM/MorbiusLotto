@@ -61,7 +61,7 @@ export function KenoRulesModal({ open, onOpenChange }: Props) {
         { label: 'High', sub: 'rare', pays: 'jackpots' },
       ]}
       payoutsLabel="Risk modes"
-      footer={<>Payout = bet × your paytable&apos;s value for that risk, pick-count and hit-count — more picks and higher risk push the top multipliers up (a 10-pick on High is the jackpot row). Provably fair. Played in chips.</>}
+      footer={<>Payout = bet × your paytable&apos;s value for that risk, pick-count and hit-count — more picks and higher risk push the top multipliers up (a 10-pick on High is the jackpot row). Provably fair. Played in MORBIUS.</>}
     />
   );
 }

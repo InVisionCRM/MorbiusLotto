@@ -56,7 +56,7 @@ export default function FirewalkPage() {
               </h1>
               <p className="mt-1.5 text-sm text-slate-500">
                 cross the coals · hop one stone or leap for more · cash before one crumbles · provably
-                fair · played in chips
+                fair · played in MORBIUS
               </p>
             </header>
             <FirewalkGame />

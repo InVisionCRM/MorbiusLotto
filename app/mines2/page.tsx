@@ -55,7 +55,7 @@ export default function Mines2Page() {
                 </span>
               </h1>
               <p className="mt-1.5 text-sm text-slate-400">
-                5×5 grid · 1–24 mines · cash out before the boom · played in chips
+                5×5 grid · 1–24 mines · cash out before the boom · played in MORBIUS
               </p>
             </header>
             <StakeMinesGame />

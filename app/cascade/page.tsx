@@ -57,7 +57,7 @@ export default function CascadePage() {
               </h1>
               <p className="mt-1.5 text-sm text-slate-400">
                 one drop · clusters pop and tumble · the combo climbs with every chain · provably
-                fair · played in chips
+                fair · played in MORBIUS
               </p>
             </header>
             <CascadeGame />

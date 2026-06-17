@@ -61,7 +61,7 @@ export function HeistVault({
       <div className="z-[2] flex items-center gap-2 font-[var(--font-arc-mono)] text-sm text-amber-200">
         <span className="text-[10px] uppercase tracking-[0.14em] text-slate-500">Loot</span>
         <span className="arc-mono tabular-nums">{loot.toLocaleString()}</span>
-        <span className="text-[10px] uppercase tracking-[0.14em] text-slate-500">chips</span>
+        <span className="text-[10px] uppercase tracking-[0.14em] text-slate-500">MORBIUS</span>
       </div>
 
       {/* Doors. */}

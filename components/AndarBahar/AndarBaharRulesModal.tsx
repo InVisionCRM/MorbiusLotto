@@ -77,7 +77,7 @@ export function AndarBaharRulesModal({ open, onOpenChange }: Props) {
         { label: 'Bahar', sub: 'even money', pays: '1:1' },
       ]}
       payoutsLabel="Payouts"
-      footer={<>Only the card rank matters; suits are ignored. Each round’s deck is shuffled from a committed server seed + your client seed — open Verify to re-derive the whole deal yourself. Played in chips.</>}
+      footer={<>Only the card rank matters; suits are ignored. Each round’s deck is shuffled from a committed server seed + your client seed — open Verify to re-derive the whole deal yourself. Played in MORBIUS.</>}
     />
   );
 }

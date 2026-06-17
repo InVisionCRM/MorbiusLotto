@@ -79,7 +79,7 @@ export function CascadeRulesModal({ open, onOpenChange }: Props) {
         { label: 'Longer chains', sub: 'each link climbs the combo', pays: 'top wins' },
       ]}
       payoutsLabel="Volatility → combo curve"
-      footer={<>Every gem — the opening board and all the refills — is drawn from a committed server seed + your client seed, so the whole cascade re-runs gem-for-gem in Verify. RTP ≈ 97% on every mode. Played in chips.</>}
+      footer={<>Every gem — the opening board and all the refills — is drawn from a committed server seed + your client seed, so the whole cascade re-runs gem-for-gem in Verify. RTP ≈ 97% on every mode. Played in MORBIUS.</>}
     />
   );
 }

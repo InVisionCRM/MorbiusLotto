@@ -221,7 +221,7 @@ export function HiLoFairnessModal({
                 <span>
                   Returned:{' '}
                   <span className={`font-mono ${result.payout > 0 ? 'text-amber-300' : 'text-rose-400'}`}>
-                    {result.payout.toLocaleString()} chips
+                    {result.payout.toLocaleString()} MORBIUS
                   </span>
                 </span>
               </div>

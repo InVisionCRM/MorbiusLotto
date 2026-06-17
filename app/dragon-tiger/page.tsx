@@ -53,7 +53,7 @@ export default function DragonTigerPage() {
                 </span>
               </h1>
               <p className="mt-1.5 text-sm text-slate-400">
-                one card each · higher rank wins · ace is low · provably fair · played in chips
+                one card each · higher rank wins · ace is low · provably fair · played in MORBIUS
               </p>
             </header>
             <DragonTigerGame />

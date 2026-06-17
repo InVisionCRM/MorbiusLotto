@@ -229,7 +229,7 @@ export function FirewalkInfoTabs({ history, historyLoading, onVerify, info }: Fi
             <p>
               Pace changes your variance, not the odds — every stone carries the same small edge, so
               leaping just bundles more risk into one move. Hotter coals mean worse odds per stone but
-              a far steeper ladder. Bet {minBet.toLocaleString()}–{maxBet.toLocaleString()} chips.
+              a far steeper ladder. Bet {minBet.toLocaleString()}–{maxBet.toLocaleString()} MORBIUS.
               Every stone is sealed from a server seed committed (hashed) before your bet — re-derive
               any finished round from its Verify button.
             </p>

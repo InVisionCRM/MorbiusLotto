@@ -8,6 +8,7 @@ import {
   recordDailyMilestone,
   recordGameOutcome,
 } from './wheel-spin-wallet';
+import { POKER_CHIP_WEI } from '../lib/poker-chip-scale';
 
 function formatWei(w: bigint): string {
   return Number(formatEther(w)).toLocaleString(undefined, { maximumFractionDigits: 2 });
@@ -246,6 +247,12 @@ export class BlackjackGameService {
       const clientSeed = request.clientSeedCommitment || 'default';
       const perfectPairsBet = request.perfectPairsBetAmount ?? 0n;
       const totalStake = request.betAmount + perfectPairsBet;
+
+      // Chips are whole integers (1 chip = 1 MORBIUS); reject sub-chip bets so the wei→chip
+      // debit and payout can't diverge via independent truncation.
+      if (request.betAmount % POKER_CHIP_WEI !== 0n || perfectPairsBet % POKER_CHIP_WEI !== 0n) {
+        throw new Error('Bet must be a whole number of MORBIUS');
+      }
 
       // Generate per-game nonce
       const gameNumber = session.game_count + 1;

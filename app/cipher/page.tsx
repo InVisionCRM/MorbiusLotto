@@ -52,7 +52,7 @@ export default function CipherPage() {
                 </span>
               </h1>
               <p className="mt-1.5 text-sm text-slate-500">
-                crack the sealed code · fewer guesses pay more · bank your progress anytime · provably fair · played in chips
+                crack the sealed code · fewer guesses pay more · bank your progress anytime · provably fair · played in MORBIUS
               </p>
             </header>
             <CipherGame />

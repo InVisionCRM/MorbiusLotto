@@ -66,7 +66,7 @@ export function DragonTigerRulesModal({ open, onOpenChange }: Props) {
         { label: 'On a tie', sub: 'Dragon / Tiger bets', pays: 'half back' },
       ]}
       payoutsLabel="Payouts"
-      footer={<>Ace is the lowest card; suits never matter. Each round’s deck is shuffled from a committed server seed + your client seed — open Verify to re-derive both cards yourself. Played in chips.</>}
+      footer={<>Ace is the lowest card; suits never matter. Each round’s deck is shuffled from a committed server seed + your client seed — open Verify to re-derive both cards yourself. Played in MORBIUS.</>}
     />
   );
 }

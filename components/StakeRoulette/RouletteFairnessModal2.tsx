@@ -229,7 +229,7 @@ export function RouletteFairnessModal2({
                   <span
                     className={`font-mono ${result.totalPayout > 0 ? 'text-[#FBBF24]' : 'text-rose-400'}`}
                   >
-                    {result.totalPayout.toLocaleString()} chips
+                    {result.totalPayout.toLocaleString()} MORBIUS
                   </span>
                 </span>
               </div>

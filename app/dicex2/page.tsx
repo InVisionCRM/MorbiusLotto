@@ -53,7 +53,7 @@ export default function DiceX2Page() {
                 </span>
               </h1>
               <p className="mt-1.5 text-sm text-slate-400">
-                set a band · roll inside it to win · provably fair · played in chips
+                set a band · roll inside it to win · provably fair · played in MORBIUS
               </p>
             </header>
             <StakeDiceX2Game />

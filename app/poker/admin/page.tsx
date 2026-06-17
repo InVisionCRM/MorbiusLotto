@@ -287,8 +287,8 @@ function TournamentsTab({ data, onRefresh }: { data: StatusData | null; onRefres
             </div>
           </div>
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-xs text-slate-400">
-            <div><span className="text-slate-600 block text-[10px] uppercase">Buy-in</span>{fmtChips(t.buy_in_amount)} chips</div>
-            <div><span className="text-slate-600 block text-[10px] uppercase">Prize Pool</span><span className="text-yellow-400">{fmtChips(t.prize_pool)} chips</span></div>
+            <div><span className="text-slate-600 block text-[10px] uppercase">Buy-in</span>{fmtChips(t.buy_in_amount)} MORBIUS</div>
+            <div><span className="text-slate-600 block text-[10px] uppercase">Prize Pool</span><span className="text-yellow-400">{fmtChips(t.prize_pool)} MORBIUS</span></div>
             <div><span className="text-slate-600 block text-[10px] uppercase">Players</span>{t.active_players} active / {t.total_entries} total ({t.min_players}–{t.max_players})</div>
             <div><span className="text-slate-600 block text-[10px] uppercase">Creator</span>{shortAddr(t.creator_address)}</div>
             {t.scheduled_start_at && (

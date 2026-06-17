@@ -52,7 +52,7 @@ export function LimboRulesModal({ open, onOpenChange }: Props) {
         { label: '100×', sub: 'win ~1%', pays: '100×' },
       ]}
       payoutsLabel="Target → win chance"
-      footer={<>Win chance falls as your target rises (≈ 99 ÷ target, minus a small house edge). Each result re-derives from a committed server seed + your client seed — open Verify to check. Played in chips.</>}
+      footer={<>Win chance falls as your target rises (≈ 99 ÷ target, minus a small house edge). Each result re-derives from a committed server seed + your client seed — open Verify to check. Played in MORBIUS.</>}
     />
   );
 }

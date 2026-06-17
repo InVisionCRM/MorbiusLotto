@@ -18,19 +18,19 @@ type QA = { q: string; a: React.ReactNode }
 const SIMPLE: QA[] = [
   {
     q: 'How do I deposit?',
-    a: 'Connect your wallet, then use the Deposit / Withdraw button. Deposit PLS or MORBIUS and it’s credited to your chip balance instantly — one signature, no on-chain swap. 1 chip = 1 MORBIUS.',
+    a: 'Connect your wallet, then use the Deposit / Withdraw button. Deposit PLS or MORBIUS and it lands in your MORBIUS balance instantly — one signature, no on-chain swap. It auto-converts in the background, so it’s ready to play right away.',
   },
   {
-    q: 'What is MORBIUS and what are “chips”?',
-    a: 'MORBIUS is the in-game currency. Your play balance is held as chips (1 chip = 1 MORBIUS) so gameplay is fast and gasless. Depositing converts MORBIUS to chips; withdrawing converts them back.',
+    q: 'What is MORBIUS?',
+    a: 'MORBIUS is the in-game currency you play with everywhere on the site. Deposit MORBIUS (or PLS) from the wallet menu and your balance is ready to play instantly — gameplay is fast and gasless, and you can withdraw to your wallet any time.',
   },
   {
     q: 'How do I withdraw?',
-    a: 'Open Deposit / Withdraw and switch to the Withdraw tab. Your chips convert back to MORBIUS and are sent to your connected wallet.',
+    a: 'Open Deposit / Withdraw and switch to the Withdraw tab. Your MORBIUS balance is sent straight to your connected wallet.',
   },
   {
     q: 'How do I play?',
-    a: 'Pick a game from the lobby, set your bet, and play — every game is played in chips. Wins are credited straight to your balance, no separate claim.',
+    a: 'Pick a game from the lobby, set your bet, and play — every game is played in MORBIUS. Wins are credited straight to your balance, no separate claim.',
   },
   {
     q: 'Are the games fair?',

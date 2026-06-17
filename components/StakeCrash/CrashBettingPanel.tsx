@@ -101,7 +101,7 @@ export default function CrashBettingPanel({
             {potentialWin.toLocaleString()}
           </div>
           <div className="text-[14px] xl:text-[16px] text-white/70 uppercase tracking-[2px]">
-            CHIPS
+            MORBIUS
           </div>
         </button>
       </div>
@@ -141,7 +141,7 @@ export default function CrashBettingPanel({
                   ({minBet.toLocaleString()}–{maxBet.toLocaleString()})
                 </span>
               </span>
-              <span className="text-[#00ffa3]">CHIPS</span>
+              <span className="text-[#00ffa3]">MORBIUS</span>
             </div>
             <div className="relative">
               <input
@@ -270,7 +270,7 @@ export default function CrashBettingPanel({
                 Cashed Out!
               </span>
               <span className="text-[24px] lg:text-[28px] drop-shadow-sm leading-none">
-                {winAmount?.toLocaleString()} <span className="text-[14px]">CHIPS</span>
+                {winAmount?.toLocaleString()} <span className="text-[14px]">MORBIUS</span>
               </span>
             </div>
           )}
@@ -283,7 +283,7 @@ export default function CrashBettingPanel({
                   onClick={onOpenExchange}
                   className="mt-1 text-[13px] font-semibold text-[#00ffa3] underline-offset-2 hover:underline"
                 >
-                  Buy chips →
+                  Deposit MORBIUS
                 </button>
               )}
             </div>

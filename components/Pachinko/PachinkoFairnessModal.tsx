@@ -236,7 +236,7 @@ export function PachinkoFairnessModal({
                 <span>
                   Returned:{' '}
                   <span className={`arc-mono ${result.payout >= result.bet ? 'text-amber-300' : 'text-rose-400'}`}>
-                    {result.payout.toLocaleString()} chips
+                    {result.payout.toLocaleString()} MORBIUS
                   </span>
                 </span>
               </div>

@@ -22,7 +22,7 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { usePokerChipBalance } from '@/hooks/use-poker-chip-balance'
 import { formatChips } from '@/lib/format-poker-chips'
-import { PokerChipExchangeModal } from '@/components/poker/PokerChipExchangeModal'
+import { GameWalletModal } from '@/components/shared/GameWalletModal'
 import { probeSiweSession } from '@/lib/api-auth'
 import { SessionChart, type SessionPoint } from '@/components/arcade2/SessionChart'
 import { FloatingPanel } from '@/components/arcade2/FloatingPanel'
@@ -233,7 +233,7 @@ export function StakeLimboGame() {
       if (!mounted.current) return false
       const msg = (e as Error)?.message ?? ''
       if (/Not enough chips|insufficient|402/i.test(msg)) {
-        setError('Not enough chips for that bet.')
+        setError('Not enough MORBIUS for that bet.')
         setNoChips(true)
       } else if (/401|auth|No session/i.test(msg)) {
         setError('Connect your wallet to play.')
@@ -297,7 +297,7 @@ export function StakeLimboGame() {
             <span className="text-xs uppercase tracking-wide text-slate-500">Balance</span>
             <div className="flex items-center gap-2">
               <span className="arc-mono text-sm tabular-nums text-amber-300">
-                {balance != null ? `${formatChips(balance)} chips` : '—'}
+                {balance != null ? `${formatChips(balance)} MORBIUS` : '—'}
               </span>
               <button
                 type="button"
@@ -500,7 +500,7 @@ export function StakeLimboGame() {
                   onClick={() => setExchangeOpen(true)}
                   className="text-sm font-semibold text-cyan-400 underline-offset-2 hover:underline"
                 >
-                  Buy chips →
+                  Deposit MORBIUS
                 </button>
               )}
             </div>
@@ -536,7 +536,7 @@ export function StakeLimboGame() {
                   <div className="arc-mono mt-2 text-sm tabular-nums">
                     {lastRound.won ? (
                       <span className="text-amber-300">
-                        +{(lastRound.payout - lastRound.bet).toLocaleString()} chips at{' '}
+                        +{(lastRound.payout - lastRound.bet).toLocaleString()} MORBIUS at{' '}
                         {formatMultiplier(lastRound.targetX100)}
                       </span>
                     ) : (
@@ -624,11 +624,12 @@ export function StakeLimboGame() {
         requestVerifyId={verifyTarget}
       />
 
-      <PokerChipExchangeModal
+      <GameWalletModal
         isOpen={exchangeOpen}
         onClose={() => setExchangeOpen(false)}
-        walletAddress={address ?? null}
-        onExchangeComplete={() => void refetchBalance()}
+        defaultTab="deposit"
+        balanceLabel="MORBIUS"
+        onBalanceSync={async () => { await refetchBalance(); }}
       />
     </div>
   )

@@ -4285,9 +4285,12 @@ class WebSocketService {
             if (!deployerWallet)
                 return this.sendError(ws, 'Deployer wallet not configured', message.requestId);
             const normalized = ws.playerAddress.toLowerCase();
-            // Generic tip remains a direct transfer in WS domain for now; tracked in money audit docs.
-            await this.dbService.deductPlayerBalance(normalized, tipAmount);
-            await this.dbService.addPlayerBalance(deployerWallet, tipAmount);
+            // Tip moves in chips (1 chip = 1 MORBIUS), player → deployer.
+            if (tipAmount % (10n ** 18n) !== 0n) {
+                return this.sendError(ws, 'Tip must be a whole number of MORBIUS', message.requestId);
+            }
+            await this.dbService.debitChipsForWei(normalized, tipAmount, 'blackjack_tip', { type: 'tip', id: null });
+            await this.dbService.creditChipsForWei(deployerWallet, tipAmount, 'blackjack_tip', { type: 'tip', id: null });
             // Log to audit table so admin can track tips
             const pool = this.dbService.getPool();
             await pool.query(`INSERT INTO blackjack_multi_audit_log (table_id, round_id, player_address, action_type, payload)

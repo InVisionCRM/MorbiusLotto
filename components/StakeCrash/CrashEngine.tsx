@@ -135,7 +135,7 @@ export default function CrashEngine({ clientSeed, onRoundSettled }: CrashEngineP
         sNow.disarmBet();
         sNow.setCountdown(false, 0);
         if (/Not enough chips|insufficient/i.test(msg)) {
-          sNow.setError('Not enough chips for that bet.', true);
+          sNow.setError('Not enough MORBIUS for that bet.', true);
         } else if (/401|No session|auth/i.test(msg)) {
           sNow.setError('Connect your wallet to play.');
         } else {

@@ -53,7 +53,7 @@ export default function AndarBaharPage() {
                 </span>
               </h1>
               <p className="mt-1.5 text-sm text-slate-400">
-                cut the joker · deal both sides · first to match wins · provably fair · played in chips
+                cut the joker · deal both sides · first to match wins · provably fair · played in MORBIUS
               </p>
             </header>
             <AndarBaharGame />

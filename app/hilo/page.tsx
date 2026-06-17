@@ -52,7 +52,7 @@ export default function HiLoPage() {
                 </span>
               </h1>
               <p className="mt-1.5 text-sm text-slate-500">
-                higher or lower · climb the ladder · cash out anytime · provably fair · played in chips
+                higher or lower · climb the ladder · cash out anytime · provably fair · played in MORBIUS
               </p>
             </header>
             <StakeHiLoGame />

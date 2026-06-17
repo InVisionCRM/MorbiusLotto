@@ -129,7 +129,7 @@ const KIND_META: Record<
   fee: { label: 'Fee', className: 'text-white/50', Icon: TrendingDown },
   deposit: { label: 'Deposit', className: 'text-emerald-400', Icon: ArrowDownCircle },
   withdrawal: { label: 'Withdrawal', className: 'text-orange-300', Icon: ArrowUpCircle },
-  buy: { label: 'Buy chips', className: 'text-emerald-400', Icon: ArrowDownCircle },
+  buy: { label: 'Deposit', className: 'text-emerald-400', Icon: ArrowDownCircle },
   sell: { label: 'Cash out', className: 'text-orange-300', Icon: ArrowUpCircle },
   reward: { label: 'Reward', className: 'text-cyan-300', Icon: ArrowDownCircle },
   adjustment: { label: 'Adjustment', className: 'text-white/50', Icon: RotateCcw },

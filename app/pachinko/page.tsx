@@ -53,7 +53,7 @@ export default function PachinkoPage() {
                 </span>
               </h1>
               <p className="mt-1.5 text-sm text-slate-400">
-                drop the ball · ride the pins · thread the center gate for the jackpot · provably fair · played in chips
+                drop the ball · ride the pins · thread the center gate for the jackpot · provably fair · played in MORBIUS
               </p>
             </header>
             <PachinkoGame />

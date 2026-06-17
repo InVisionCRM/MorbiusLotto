@@ -53,7 +53,7 @@ export default function GreedDicePage() {
                 </span>
               </h1>
               <p className="mt-1.5 text-sm text-slate-500">
-                roll · bank the scorers · push for more or lose it all to a farkle · provably fair · played in chips
+                roll · bank the scorers · push for more or lose it all to a farkle · provably fair · played in MORBIUS
               </p>
             </header>
             <GreedDiceGame />

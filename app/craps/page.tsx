@@ -22,7 +22,7 @@ import { cn } from '@/lib/utils';
 import { useCrapsEngine } from '@/hooks/use-craps-engine';
 import { useCrapsTutorial } from '@/hooks/use-craps-tutorial';
 import { usePokerChipBalance } from '@/hooks/use-poker-chip-balance';
-import { PokerChipExchangeModal } from '@/components/poker/PokerChipExchangeModal';
+import { GameWalletModal } from '@/components/shared/GameWalletModal';
 import { CrapsTable } from '@/components/craps/CrapsTable';
 import { CrapsDice } from '@/components/craps/CrapsDice';
 import { CrapsChipRail } from '@/components/craps/CrapsChipRail';
@@ -165,7 +165,7 @@ export default function CrapsPage() {
                 <Dices className="w-7 h-7 text-cyan-400 drop-shadow-[0_0_12px_rgba(34,211,238,0.65)]" />
               </h1>
               <p className="mt-1.5 text-sm text-slate-400">
-                Pass line · place · field · props · provably fair · played in chips
+                Pass line · place · field · props · provably fair · played in MORBIUS
               </p>
             </header>
 
@@ -213,7 +213,7 @@ export default function CrapsPage() {
                   <div className="flex items-center justify-between text-xs">
                     <span className="uppercase tracking-wide text-slate-500">Bet total</span>
                     <span className="arc-mono tabular-nums text-cyan-300">
-                      {totalBet.toLocaleString()} chips
+                      {totalBet.toLocaleString()} MORBIUS
                     </span>
                   </div>
 
@@ -374,11 +374,12 @@ export default function CrapsPage() {
         />
         <CrapsRulesModal open={rulesOpen} onOpenChange={setRulesOpen} />
         <CrapsOddsModal open={oddsOpen} onOpenChange={setOddsOpen} />
-        <PokerChipExchangeModal
+        <GameWalletModal
           isOpen={exchangeOpen}
           onClose={() => setExchangeOpen(false)}
-          walletAddress={address ?? null}
-          onExchangeComplete={() => void refetchBalance?.()}
+          defaultTab="deposit"
+          balanceLabel="MORBIUS"
+          onBalanceSync={async () => { await refetchBalance?.(); }}
         />
       </div>
     </GlobalMainNav>

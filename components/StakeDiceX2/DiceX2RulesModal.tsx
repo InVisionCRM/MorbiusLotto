@@ -57,7 +57,7 @@ export function DiceX2RulesModal({ open, onOpenChange }: Props) {
         { label: '75-wide band', sub: 'win 75%', pays: '≈1.32×' },
       ]}
       payoutsLabel="Band width → payout"
-      footer={<>Payout ≈ 99 ÷ win-chance%, so the house keeps a small edge each roll. Every roll re-derives from a committed server seed + your client seed — open Verify to check. Played in chips.</>}
+      footer={<>Payout ≈ 99 ÷ win-chance%, so the house keeps a small edge each roll. Every roll re-derives from a committed server seed + your client seed — open Verify to check. Played in MORBIUS.</>}
     />
   );
 }

@@ -35,7 +35,7 @@ import { CrashFairnessModal } from './CrashFairnessModal';
 import { CrashRulesModal } from './CrashRulesModal';
 import { CrashInfoTabs } from './CrashInfoTabs';
 import { usePokerChipBalance } from '@/hooks/use-poker-chip-balance';
-import { PokerChipExchangeModal } from '@/components/poker/PokerChipExchangeModal';
+import { GameWalletModal } from '@/components/shared/GameWalletModal';
 import { probeSiweSession } from '@/lib/api-auth';
 import {
   fetchCrashInfo,
@@ -275,11 +275,12 @@ export function StakeCrashGame() {
         requestVerifyId={verifyTarget}
       />
 
-      <PokerChipExchangeModal
+      <GameWalletModal
         isOpen={exchangeOpen}
         onClose={() => setExchangeOpen(false)}
-        walletAddress={address ?? null}
-        onExchangeComplete={() => void refetchBalance()}
+        defaultTab="deposit"
+        balanceLabel="MORBIUS"
+        onBalanceSync={async () => { await refetchBalance(); }}
       />
     </>
   );

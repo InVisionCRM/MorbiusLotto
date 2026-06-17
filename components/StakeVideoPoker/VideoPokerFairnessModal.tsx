@@ -227,7 +227,7 @@ export function VideoPokerFairnessModal({
                 <span>
                   Returned:{' '}
                   <span className={`font-mono ${(result.payout ?? 0) > 0 ? 'text-amber-300' : 'text-rose-400'}`}>
-                    {(result.payout ?? 0).toLocaleString()} chips
+                    {(result.payout ?? 0).toLocaleString()} MORBIUS
                   </span>
                 </span>
               </div>

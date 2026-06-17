@@ -232,7 +232,7 @@ export function HeistInfoTabs({ history, historyLoading, onVerify, info }: Heist
             </ul>
             <p>
               More alarm doors means worse odds per room but a far steeper ladder. Bet{' '}
-              {minBet.toLocaleString()}–{maxBet.toLocaleString()} chips. Every alarm is sealed from a
+              {minBet.toLocaleString()}–{maxBet.toLocaleString()} MORBIUS. Every alarm is sealed from a
               server seed committed (hashed) before your bet — re-derive any finished round from its
               Verify button.
             </p>

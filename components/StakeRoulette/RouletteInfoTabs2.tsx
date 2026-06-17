@@ -216,7 +216,7 @@ export function RouletteInfoTabs2({
                     <PocketBadge n={r.result} />
                     <span className="shrink-0 font-mono tabular-nums text-slate-400">
                       {r.bets.length} zone{r.bets.length === 1 ? '' : 's'} ·{' '}
-                      {r.totalBet.toLocaleString()} chips
+                      {r.totalBet.toLocaleString()} MORBIUS
                     </span>
                     <span
                       className={`ml-auto shrink-0 font-mono font-semibold tabular-nums ${

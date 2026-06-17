@@ -198,7 +198,7 @@ export function PlinkoFairnessModal({
                 </span>
                 <span>
                   Payout:{' '}
-                  <span className="arc-mono text-amber-300">{result.payout.toLocaleString()} chips</span>{' '}
+                  <span className="arc-mono text-amber-300">{result.payout.toLocaleString()} MORBIUS</span>{' '}
                   ({formatMultiplier(result.multiplierX100)})
                 </span>
               </div>

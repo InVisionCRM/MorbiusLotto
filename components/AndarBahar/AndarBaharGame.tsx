@@ -23,7 +23,7 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { usePokerChipBalance } from '@/hooks/use-poker-chip-balance'
 import { formatChips } from '@/lib/format-poker-chips'
-import { PokerChipExchangeModal } from '@/components/poker/PokerChipExchangeModal'
+import { GameWalletModal } from '@/components/shared/GameWalletModal'
 import { probeSiweSession } from '@/lib/api-auth'
 import { AndarBaharInfoTabs } from './AndarBaharInfoTabs'
 import { AndarBaharRulesModal } from './AndarBaharRulesModal'
@@ -358,7 +358,7 @@ export function AndarBaharGame() {
       if (!mounted.current) return 'stop'
       const msg = (e as Error)?.message ?? ''
       if (/Not enough chips|insufficient|402/i.test(msg)) {
-        setError('Not enough chips for that bet.')
+        setError('Not enough MORBIUS for that bet.')
         setNoChips(true)
       } else if (/401|auth|No session/i.test(msg)) {
         setError('Connect your wallet to play.')
@@ -767,7 +767,7 @@ export function AndarBaharGame() {
                   onClick={() => setExchangeOpen(true)}
                   className="text-sm font-semibold text-cyan-400 underline-offset-2 hover:underline"
                 >
-                  Buy chips →
+                  Deposit MORBIUS
                 </button>
               )}
             </div>
@@ -793,11 +793,12 @@ export function AndarBaharGame() {
         requestVerifyId={verifyTarget}
       />
 
-      <PokerChipExchangeModal
+      <GameWalletModal
         isOpen={exchangeOpen}
         onClose={() => setExchangeOpen(false)}
-        walletAddress={address ?? null}
-        onExchangeComplete={() => void refetchBalance()}
+        defaultTab="deposit"
+        balanceLabel="MORBIUS"
+        onBalanceSync={async () => { await refetchBalance(); }}
       />
     </div>
   )

@@ -53,7 +53,7 @@ export default function Roulette2Page() {
                 </span>
               </h1>
               <p className="mt-1.5 text-sm text-[#5E8273]">
-                european single zero · place your chips · provably fair · played in chips
+                european single zero · place your chips · provably fair · played in MORBIUS
               </p>
             </header>
             <StakeRouletteGame />

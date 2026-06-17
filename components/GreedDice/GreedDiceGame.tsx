@@ -27,7 +27,7 @@ import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { usePokerChipBalance } from '@/hooks/use-poker-chip-balance';
 import { formatChips } from '@/lib/format-poker-chips';
-import { PokerChipExchangeModal } from '@/components/poker/PokerChipExchangeModal';
+import { GameWalletModal } from '@/components/shared/GameWalletModal';
 import { probeSiweSession } from '@/lib/api-auth';
 import { SessionChart, type SessionPoint } from '@/components/arcade2/SessionChart';
 import { FloatingPanel } from '@/components/arcade2/FloatingPanel';
@@ -221,7 +221,7 @@ export function GreedDiceGame() {
   const handleErr = useCallback((e: unknown) => {
     const msg = (e as Error)?.message ?? '';
     if (/Not enough chips|insufficient/i.test(msg)) {
-      setError('Not enough chips for that wager.');
+      setError('Not enough MORBIUS for that wager.');
       setNoChips(true);
     } else if (/401|No session|auth/i.test(msg)) {
       setError('Connect your wallet to play.');
@@ -275,7 +275,7 @@ export function GreedDiceGame() {
     if (!betting || !info) return;
     const stake = clampBet(bet);
     if (balance != null && BigInt(stake) > balance) {
-      setError('Not enough chips for that wager.');
+      setError('Not enough MORBIUS for that wager.');
       setNoChips(true);
       return;
     }
@@ -444,7 +444,7 @@ export function GreedDiceGame() {
             <span className="text-xs uppercase tracking-wide text-slate-500">Balance</span>
             <div className="flex items-center gap-2">
               <span className="arc-mono text-sm tabular-nums text-amber-300">
-                {balance != null ? `${formatChips(balance)} chips` : '—'}
+                {balance != null ? `${formatChips(balance)} MORBIUS` : '—'}
               </span>
               <button
                 type="button"
@@ -563,7 +563,7 @@ export function GreedDiceGame() {
               >
                 <span>{phase === 'banking' ? 'Banking…' : 'Bank'}</span>
                 <span className="arc-mono text-[11px] font-semibold normal-case tracking-normal opacity-85">
-                  {canBank ? `${cashoutValue.toLocaleString()} chips` : '—'}
+                  {canBank ? `${cashoutValue.toLocaleString()} MORBIUS` : '—'}
                 </span>
               </Button>
             </div>
@@ -574,7 +574,7 @@ export function GreedDiceGame() {
               <p className="text-sm text-rose-400">{error}</p>
               {noChips && (
                 <button type="button" onClick={() => setExchangeOpen(true)} className="text-sm font-semibold text-cyan-300 underline-offset-2 hover:underline">
-                  Buy chips →
+                  Deposit MORBIUS
                 </button>
               )}
             </div>
@@ -718,11 +718,12 @@ export function GreedDiceGame() {
         requestVerifyId={verifyTarget}
       />
 
-      <PokerChipExchangeModal
+      <GameWalletModal
         isOpen={exchangeOpen}
         onClose={() => setExchangeOpen(false)}
-        walletAddress={address ?? null}
-        onExchangeComplete={() => void refetchBalance()}
+        defaultTab="deposit"
+        balanceLabel="MORBIUS"
+        onBalanceSync={async () => { await refetchBalance(); }}
       />
     </div>
   );

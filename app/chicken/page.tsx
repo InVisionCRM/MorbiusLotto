@@ -52,7 +52,7 @@ export default function ChickenPage() {
                 </span>
               </h1>
               <p className="mt-1.5 text-sm text-slate-500">
-                cross the lanes · bank before the bumper · cash out anytime · provably fair · played in chips
+                cross the lanes · bank before the bumper · cash out anytime · provably fair · played in MORBIUS
               </p>
             </header>
             <StakeChickenGame />

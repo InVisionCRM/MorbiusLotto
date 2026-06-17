@@ -247,7 +247,7 @@ export function CipherInfoTabs({ history, historyLoading, onVerify, info }: Ciph
             </ul>
             <p>
               Duplicates are allowed in the code. Bet {minBet.toLocaleString()}–{maxBet.toLocaleString()}{' '}
-              chips. Every code is sealed from a server seed committed (hashed) before your bet —
+              MORBIUS. Every code is sealed from a server seed committed (hashed) before your bet —
               re-derive any finished round from its Verify button.
             </p>
           </div>

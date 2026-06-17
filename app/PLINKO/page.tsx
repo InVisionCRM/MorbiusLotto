@@ -9,7 +9,7 @@ export default function PlinkoLegacyPage() {
   return (
     <RetiredGameNotice
       title="Plinko has a new home"
-      message="The classic Plinko board has been retired. The upgraded version lives on — same drop, smoother ride, played in chips."
+      message="The classic Plinko board has been retired. The upgraded version lives on — same drop, smoother ride, played in MORBIUS."
       primary={{ href: '/plinko2', label: 'Play Plinko' }}
     />
   );

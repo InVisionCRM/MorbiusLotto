@@ -193,7 +193,7 @@ export function PokerPopups({
             style={{ boxShadow: '0 4px 16px rgba(0, 0, 0, 0.6), inset 0 1px 0 rgba(255, 255, 255, 0.05)' }}
           >
             <p className="text-slate-200 text-sm mb-1">Leaving amount</p>
-            <p className="text-cyan-400 font-semibold tabular-nums text-lg mb-4">{fmtChips(mySeat.stack ?? '0')} chips</p>
+            <p className="text-cyan-400 font-semibold tabular-nums text-lg mb-4">{fmtChips(mySeat.stack ?? '0')} MORBIUS</p>
             <p className="text-slate-300 text-sm mb-5">Are you sure you want to leave?</p>
             <div className="flex gap-3 justify-end">
               <button

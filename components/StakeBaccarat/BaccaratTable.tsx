@@ -260,11 +260,11 @@ export function BaccaratTable({
             </div>
             <div className="arc-mono mt-1 text-sm tabular-nums">
               {banner.net > 0 ? (
-                <span className="text-amber-300">+{banner.net.toLocaleString()} chips</span>
+                <span className="text-amber-300">+{banner.net.toLocaleString()} MORBIUS</span>
               ) : banner.net === 0 ? (
                 <span className="text-slate-400">push — stake returned</span>
               ) : (
-                <span className="text-rose-400">{banner.net.toLocaleString()} chips</span>
+                <span className="text-rose-400">{banner.net.toLocaleString()} MORBIUS</span>
               )}
             </div>
           </div>

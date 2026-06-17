@@ -249,7 +249,7 @@ export function GreedDiceInfoTabs({ history, historyLoading, onVerify, info }: G
             <p>
               Fewer dice farkle more often (higher variance) but the scale is tuned per variant so the
               long-run return is the same across all three — and even optimal bank/push play sits just
-              under your stake. Bet {minBet.toLocaleString()}–{maxBet.toLocaleString()} chips. Every die
+              under your stake. Bet {minBet.toLocaleString()}–{maxBet.toLocaleString()} MORBIUS. Every die
               is sealed from a server seed committed (hashed) before your bet — re-derive any finished
               turn from its Verify button.
             </p>

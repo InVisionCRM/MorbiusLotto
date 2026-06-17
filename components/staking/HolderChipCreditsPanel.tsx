@@ -45,7 +45,7 @@ const THEME: Record<ChipRewardCohort, CohortTheme> = {
     eyebrow: 'Holder Rewards · auto-credit',
     feePill: '1.25% of payouts',
     bannerIcon: Coins,
-    bannerText: 'Chips land in your poker wallet automatically. No claim tx, no gas.',
+    bannerText: 'MORBIUS lands in your play balance automatically. No claim tx, no gas.',
     cardBg: 'bg-[#0a1410]/90',
     card: 'border-emerald-500/25',
     pulse: 'bg-emerald-400 shadow-[0_0_8px_rgba(16,185,129,1)]',
@@ -59,13 +59,13 @@ const THEME: Record<ChipRewardCohort, CohortTheme> = {
       'bg-gradient-to-r from-emerald-600 to-emerald-500 hover:from-emerald-500 hover:to-emerald-400 shadow-lg shadow-emerald-900/40',
     btnGhost: 'border-emerald-500/30 text-emerald-300 hover:bg-emerald-950/30',
     shimmer: 'via-emerald-500/10',
-    secondary: { label: 'Play with chips', icon: Spade, href: '/poker', external: false },
+    secondary: { label: 'Play with MORBIUS', icon: Spade, href: '/poker', external: false },
   },
   lp: {
     eyebrow: 'LP Claim · auto-credit',
     feePill: '1.5% of payouts',
     bannerIcon: Droplets,
-    bannerText: 'Hold MORBIUS LP — chips credit weighted by MORBIUS value inside your position.',
+    bannerText: 'Hold MORBIUS LP — your balance is credited, weighted by the MORBIUS value inside your position.',
     cardBg: 'bg-[#100a1a]/90',
     card: 'border-purple-500/25',
     pulse: 'bg-purple-400 shadow-[0_0_8px_rgba(168,85,247,1)]',
@@ -219,7 +219,7 @@ export function HolderChipCreditsPanel({ cohort }: HolderChipCreditsPanelProps) 
         <div className="grid grid-cols-3 gap-2.5 mb-3.5">
           <div className={`rounded-xl bg-black/30 border ${theme.tile} px-3.5 py-3`}>
             <div className="text-[9px] uppercase tracking-wider text-white/35 font-poppins font-semibold mb-1">
-              Lifetime chips
+              Lifetime MORBIUS
             </div>
             <div className={`text-[22px] font-bold leading-none font-poppins ${theme.accentValue}`}>
               {isLoading ? <Skeleton w={80} /> : fmtChips(cohortData.lifetimeChips)}
@@ -269,7 +269,7 @@ export function HolderChipCreditsPanel({ cohort }: HolderChipCreditsPanelProps) 
             className={`flex items-center justify-center gap-2 py-3 rounded-xl font-semibold text-sm text-white transition-all font-poppins ${theme.btnPrimary} disabled:opacity-40 disabled:cursor-not-allowed`}
           >
             <ArrowDownToLine className="w-4 h-4" />
-            Cash out chips
+            Cash out MORBIUS
           </button>
           <button
             onClick={onSecondary}
@@ -364,7 +364,7 @@ function HistoryTable({ rows, theme, isLoading, cohort }: HistoryTableProps) {
     <div className={`rounded-xl bg-black/25 border ${theme.historyBox} mb-3.5 overflow-hidden`}>
       <div className="grid grid-cols-[56px_1fr_88px_88px_60px] px-3.5 py-2 border-b border-white/5 text-[9px] uppercase tracking-wider text-white/30 font-poppins font-semibold">
         <span>Epoch</span><span>Date</span>
-        <span className="text-right">Chips</span>
+        <span className="text-right">MORBIUS</span>
         <span className="text-right">{basisLabel}</span>
         <span className="text-right">Share</span>
       </div>

@@ -320,7 +320,7 @@ export function DragonTigerFairnessModal({
                 <span>
                   Returned:{' '}
                   <span className={`arc-mono ${result.totalPayout > 0 ? 'text-amber-300' : 'text-rose-400'}`}>
-                    {result.totalPayout.toLocaleString()} chips
+                    {result.totalPayout.toLocaleString()} MORBIUS
                   </span>
                 </span>
               </div>

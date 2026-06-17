@@ -52,7 +52,7 @@ export default function ThreeCardPokerPage() {
                 </span>
               </h1>
               <p className="mt-1.5 text-sm text-slate-500">
-                three cards each · beat the dealer · pair plus pays on your hand alone · provably fair · played in chips
+                three cards each · beat the dealer · pair plus pays on your hand alone · provably fair · played in MORBIUS
               </p>
             </header>
             <ThreeCardPokerGame />

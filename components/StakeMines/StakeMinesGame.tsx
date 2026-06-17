@@ -30,7 +30,7 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { usePokerChipBalance } from '@/hooks/use-poker-chip-balance'
 import { formatChips } from '@/lib/format-poker-chips'
-import { PokerChipExchangeModal } from '@/components/poker/PokerChipExchangeModal'
+import { GameWalletModal } from '@/components/shared/GameWalletModal'
 import { probeSiweSession } from '@/lib/api-auth'
 import { MinesBoard, type MinesCellState } from './MinesBoard'
 import { MinesInfoTabs } from './MinesInfoTabs'
@@ -252,7 +252,7 @@ export function StakeMinesGame() {
       }
       setPhase('idle')
       if (/Not enough chips|insufficient/i.test(msg)) {
-        setError('Not enough chips for that bet.')
+        setError('Not enough MORBIUS for that bet.')
         setNoChips(true)
       } else if (/401|auth|No session/i.test(msg)) {
         setError('Connect your wallet to play.')
@@ -388,7 +388,7 @@ export function StakeMinesGame() {
             <span className="text-xs uppercase tracking-wide text-slate-500">Balance</span>
             <div className="flex items-center gap-2">
               <span className="arc-mono text-sm tabular-nums text-amber-300">
-                {balance != null ? `${formatChips(balance)} chips` : '—'}
+                {balance != null ? `${formatChips(balance)} MORBIUS` : '—'}
               </span>
               <button
                 type="button"
@@ -544,7 +544,7 @@ export function StakeMinesGame() {
                   onClick={() => setExchangeOpen(true)}
                   className="text-sm font-semibold text-cyan-400 underline-offset-2 hover:underline"
                 >
-                  Buy chips →
+                  Deposit MORBIUS
                 </button>
               )}
             </div>
@@ -560,7 +560,7 @@ export function StakeMinesGame() {
               <div className="rounded-lg bg-amber-500/10 px-3 py-2 text-center text-sm text-amber-200 ring-1 ring-amber-500/40">
                 Cashed out{' '}
                 <span className="arc-mono text-amber-300">
-                  +{profit.toLocaleString()} chips ({formatMultiplier(multiplierX100)})
+                  +{profit.toLocaleString()} MORBIUS ({formatMultiplier(multiplierX100)})
                 </span>
               </div>
             )}
@@ -593,7 +593,7 @@ export function StakeMinesGame() {
                     {formatMultiplier(multiplierX100)}
                   </div>
                   <div className="arc-mono mt-1 text-sm tabular-nums text-amber-200/90">
-                    +{profit.toLocaleString()} chips
+                    +{profit.toLocaleString()} MORBIUS
                   </div>
                 </div>
               </div>
@@ -678,11 +678,12 @@ export function StakeMinesGame() {
         requestVerifyId={verifyTarget}
       />
 
-      <PokerChipExchangeModal
+      <GameWalletModal
         isOpen={exchangeOpen}
         onClose={() => setExchangeOpen(false)}
-        walletAddress={address ?? null}
-        onExchangeComplete={() => void refetchBalance()}
+        defaultTab="deposit"
+        balanceLabel="MORBIUS"
+        onBalanceSync={async () => { await refetchBalance(); }}
       />
     </div>
   )

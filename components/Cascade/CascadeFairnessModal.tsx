@@ -257,10 +257,10 @@ export function CascadeFairnessModal({
                   Returned:{' '}
                   {result.won ? (
                     <span className="arc-mono text-amber-300">
-                      {result.payout.toLocaleString()} chips
+                      {result.payout.toLocaleString()} MORBIUS
                     </span>
                   ) : (
-                    <span className="arc-mono text-rose-400">0 chips</span>
+                    <span className="arc-mono text-rose-400">0 MORBIUS</span>
                   )}
                 </span>
               </div>

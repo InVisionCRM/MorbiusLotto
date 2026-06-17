@@ -60,22 +60,12 @@ export const andarBaharFaqs: FaqItem[] = [
     ),
   },
   {
-    q: 'How do I get chips?',
+    q: 'How do I fund my balance to play?',
     a: (
       <p>
-        Chips are the play credits used at every table. Tap {hl('Buy')} next to your balance to swap
-        MORBIUS for chips at a fixed {hl('1 chip = 1 MORBIUS')} — instant, gasless, and{' '}
-        {hl('no fee')}. Cash back out any time at the same 1:1.
-      </p>
-    ),
-  },
-  {
-    q: 'Chips vs. MORBIUS — what\'s the difference?',
-    a: (
-      <p>
-        {hl('MORBIUS')} is the real, on-chain token in your wallet. {hl('Chips')} are off-chain 1:1
-        credits you play with: faster, gasless, settled instantly. You move between them at 1:1 and
-        only ever wager in chips.
+        {hl('MORBIUS')} is the currency you play with. Open the {hl('Deposit')} menu and send MORBIUS
+        (or PLS) from your wallet — instant, gasless, and {hl('no fee')}, ready to play right away.
+        {hl('Withdraw')} back to your wallet any time.
       </p>
     ),
   },
@@ -83,8 +73,8 @@ export const andarBaharFaqs: FaqItem[] = [
     q: 'What are the fees?',
     a: (
       <p>
-        This chip game takes {hl('no per-bet or per-payout fee')} — it keeps a small built-in house
-        edge in its odds. Buying and cashing chips is free, 1:1.
+        This game takes {hl('no per-bet or per-payout fee')} — it keeps a small built-in house
+        edge in its odds. Depositing and withdrawing MORBIUS is free.
       </p>
     ),
   },

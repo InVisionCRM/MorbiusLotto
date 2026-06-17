@@ -116,7 +116,7 @@ export function CrapsRulesModal({ open, onOpenChange }: Props) {
         <p className="text-xs text-slate-500 leading-relaxed mt-3 border-t border-cyan-950 pt-3">
           Every roll is derived from a server seed committed before you play, mixed with your own
           client seed — open <span className="text-cyan-300">Verify</span> to re-derive any roll and
-          confirm nothing moved. Played entirely in chips.
+          confirm nothing moved. Played entirely in MORBIUS.
         </p>
       </DialogContent>
     </Dialog>

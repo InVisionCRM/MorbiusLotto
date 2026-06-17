@@ -309,7 +309,7 @@ export function GreedDiceFairnessModal({
                 <span>
                   Returned:{' '}
                   <span className={`arc-mono ${result.payout > 0 ? 'text-amber-300' : 'text-rose-400'}`}>
-                    {result.payout.toLocaleString()} chips
+                    {result.payout.toLocaleString()} MORBIUS
                   </span>
                 </span>
               </div>

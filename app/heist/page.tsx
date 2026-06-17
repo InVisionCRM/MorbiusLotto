@@ -53,7 +53,7 @@ export default function HeistPage() {
                 </span>
               </h1>
               <p className="mt-1.5 text-sm text-slate-500">
-                crack vault after vault · one trips the alarm · escape with the loot · provably fair · played in chips
+                crack vault after vault · one trips the alarm · escape with the loot · provably fair · played in MORBIUS
               </p>
             </header>
             <HeistGame />
