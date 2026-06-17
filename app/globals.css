@@ -1430,6 +1430,14 @@ body {
 }
 .arc-banner-in { animation: arc-banner-in 0.44s cubic-bezier(0.34, 1.56, 0.64, 1) both; }
 
+/* Greed Dice: each die drops in as a roll lands. */
+@keyframes greed-die-roll {
+  0%   { transform: translateY(-14px) rotate(-12deg); opacity: 0.4; }
+  60%  { transform: translateY(2px) rotate(6deg); }
+  100% { transform: translateY(0) rotate(0); opacity: 1; }
+}
+.greed-die-roll { animation: greed-die-roll 0.5s ease; }
+
 /* Primary CTA buttons: micro-lift on hover, satisfying press on active. */
 button.arc-display:not(:disabled) {
   transition: transform 0.12s ease, filter 0.12s ease, box-shadow 0.12s ease;
@@ -1644,6 +1652,7 @@ button.arc-display:not(:disabled):active { transform: translateY(1px) scale(0.97
   .bacc-deal-in, .bacc-flip-inner, .bacc-total-pop, .hilo-flip-in, .hilo-bust-flash,
   .vp-card-deal, .vp-draw-flip-wrap, .vp-win-pulse,
   .gem-sparkle, .tower-safe-glow, .tower-bust-flash, .hilo-win-glow,
+  .greed-die-roll,
   .keno-selected-breathe { animation: none; }
   .keno-tile, .keno-tile:not(:disabled):hover { transition: none; transform: none; }
   button.arc-display:not(:disabled):hover,

@@ -8,7 +8,6 @@ import { useAuth } from '@/hooks/use-auth'
 import { useProfile } from '@/hooks/use-player-profile'
 import { LoginModal } from '@/components/auth/LoginModal'
 import { PlayerProfileModal } from '@/components/shared/PlayerProfileModal'
-import { HeroSection } from '@/components/home/hero-section'
 import { GamesSection } from '@/components/home/games-section'
 import { PlatformStatsSection } from '@/components/home/platform-stats-section'
 import { PwaHomeInstallSplash } from '@/components/home/PwaHomeInstallSplash'
@@ -17,10 +16,6 @@ import { LoadingTip } from '@/components/shared/LoadingTip'
 
 const SocialsSection = dynamic(
   () => import('@/components/home/socials-section').then((m) => m.SocialsSection),
-  { loading: () => <LoadingTip variant="inline" /> }
-)
-const TokenomicsSection = dynamic(
-  () => import('@/components/home/tokenomics-section').then((m) => m.TokenomicsSection),
   { loading: () => <LoadingTip variant="inline" /> }
 )
 const BrandedTablesPitch = dynamic(
@@ -98,10 +93,8 @@ export default function HomePageClient() {
 
         <div className="relative z-[1] w-full flex flex-col items-center">
           <div className="relative z-10 w-full flex flex-col items-center">
-            <HeroSection showWelcome={!!address} welcomeName={welcomeName} />
-
-            <section className="w-full flex flex-col items-center pt-10 md:pt-16">
-              <GamesSection />
+            <section className="w-full flex flex-col items-center pt-2 md:pt-4">
+              <GamesSection welcomeName={welcomeName} />
             </section>
 
             <div className="flex w-full flex-col items-center gap-y-20 px-4 py-12 md:gap-y-28 md:py-20">
@@ -114,9 +107,6 @@ export default function HomePageClient() {
 
               <HomeSectionDivider />
               <SocialsSection />
-
-              <HomeSectionDivider />
-              <TokenomicsSection />
 
               <HomeSectionDivider />
               <AvatarShowcaseSection />

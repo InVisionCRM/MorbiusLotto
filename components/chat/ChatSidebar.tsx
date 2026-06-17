@@ -51,13 +51,7 @@ export function ChatSidebar() {
   const roomId = hasGameChat && activeTab === 'lobby' ? 'main' : pageRoomId;
   const title = hasGameChat && activeTab === 'lobby' ? 'Lobby Chat' : pageTitle;
 
-  // Open by default only on desktop home page
-  useEffect(() => {
-    const isHome = pathname === '/' || pathname === '';
-    const isDesktop = window.innerWidth >= 768;
-    if (isHome && isDesktop) setOpen(true);
-   
-  }, []);
+  // Chat panel starts closed everywhere; users open it from the collapsed tab.
 
   const closeSheet = useCallback(() => setOpen(false), []);
 

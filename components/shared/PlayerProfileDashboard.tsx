@@ -238,12 +238,7 @@ export function PlayerProfileDashboard({
           <RoulettePerformanceChart results={rouletteStats.results} />
         </div>
       ) : isAll ? (
-        <AllStatsDashboard
-          playerAddress={address}
-          serverBalanceAnchor={
-            allStatsBalanceFetched && typeof allStatsServerBalance === 'bigint' ? allStatsServerBalance : undefined
-          }
-        />
+        <AllStatsDashboard playerAddress={address} />
       ) : isPoker ? (
         <PokerPlayerDashboard playerAddress={address} />
       ) : isPlinko ? (

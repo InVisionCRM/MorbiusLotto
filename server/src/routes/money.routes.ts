@@ -27,7 +27,9 @@ export function registerMoneyRoutes({ app, moneyService }: RegisterMoneyRoutesOp
         return res.status(400).json({ error: 'Invalid wallet address' });
       }
 
-      const limit = Math.min(Math.max(parseInt(String(req.query.limit || 50), 10) || 50, 1), 200);
+      // Cap high enough to return a player's full deposit/withdrawal history in one
+      // call (the dashboard Transactions tab paginates client-side + exports CSV).
+      const limit = Math.min(Math.max(parseInt(String(req.query.limit || 50), 10) || 50, 1), 5000);
       const offset = Math.max(parseInt(String(req.query.offset || 0), 10) || 0, 0);
       const transactions = await moneyService.getPlayerTransactions(address, limit, offset);
       return res.status(200).json(transactions);

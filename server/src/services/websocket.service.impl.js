@@ -810,7 +810,7 @@ class WebSocketService {
             try {
                 // Balance pre-check remains a direct read here because create-game authority currently
                 // lives in game/WebSocket domains; mutation concentration is tracked separately.
-                const balance = await this.dbService.getPlayerBalance(ws.playerAddress);
+                const balance = await this.dbService.getChipBalanceAsWei(ws.playerAddress);
                 if (balance < totalStake) {
                     const fmt = (n) => Number((0, viem_1.formatEther)(n)).toLocaleString(undefined, { maximumFractionDigits: 2 });
                     return this.sendError(ws, `Insufficient balance. You have ${fmt(balance)}, but need ${fmt(totalStake)} (main + Perfect Pairs)`, message.requestId);
@@ -982,7 +982,7 @@ class WebSocketService {
             // the expiry cron from refunding it (which would duplicate funds).
             await this.resolvePendingWithdrawals(ws.playerAddress);
             // Read-only balance sync path (direct DB read) is intentionally preserved for WS contract parity.
-            const balance = await this.dbService.getPlayerBalance(ws.playerAddress);
+            const balance = await this.dbService.getChipBalanceAsWei(ws.playerAddress);
             logger_1.logger.debug('Balance synced', { playerAddress: ws.playerAddress, balance: balance.toString() });
             this.sendMessage(ws, {
                 type: 'balance_synced',
@@ -1008,7 +1008,7 @@ class WebSocketService {
             await this.resolvePendingWithdrawals(ws.playerAddress);
             // Deposit credits only through confirmed pending_deposits; DB is source of truth.
             // This WS read path intentionally remains direct during Phase 6.
-            const balance = await this.dbService.getPlayerBalance(ws.playerAddress);
+            const balance = await this.dbService.getChipBalanceAsWei(ws.playerAddress);
             this.sendMessage(ws, {
                 type: 'balance',
                 payload: {

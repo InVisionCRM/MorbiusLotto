@@ -134,6 +134,15 @@ const OTHER_GAMES: readonly OtherGameNavItem[] = [
   { label: 'Dice x2', href: '/dicex2', icon: 'dice' },
   { label: 'Craps', href: '/craps', icon: 'craps' },
   { label: 'Baccarat', href: '/baccarat', icon: 'baccarat' },
+  { label: 'Dragon Tiger', href: '/dragon-tiger', icon: 'baccarat' },
+  { label: 'Andar Bahar', href: '/andar-bahar', icon: 'baccarat' },
+  { label: 'Pachinko', href: '/pachinko', icon: 'plinko' },
+  { label: 'Cascade', href: '/cascade', icon: 'grid' },
+  { label: 'Firewalk', href: '/firewalk', icon: 'chicken' },
+  { label: 'Heist', href: '/heist', icon: 'mine' },
+  { label: 'Three Card Poker', href: '/three-card-poker', icon: 'cards' },
+  { label: 'Greed Dice', href: '/greed-dice', icon: 'dice' },
+  { label: 'Cipher', href: '/cipher', icon: 'grid' },
   { label: 'Hi-Lo', href: '/hilo', icon: 'hilo' },
   { label: 'Limbo', href: '/limbo2', icon: 'limbo' },
   { label: 'Crash', href: '/crash', icon: 'crash' },
@@ -404,6 +413,7 @@ type NavContentProps = Pick<
 
 const NavContent = React.memo(function NavContent(props: NavContentProps) {
   const { open } = useSidebar();
+  const { address: connectedAddress } = useAccount();
   const {
     page,
     onOpenDepositModal,
@@ -467,7 +477,6 @@ const NavContent = React.memo(function NavContent(props: NavContentProps) {
   const handleToggleSound = useCallback(() => onSoundChange?.(!soundEnabled), [onSoundChange, soundEnabled]);
   const handleOpenPlinkoProfile = useCallback(() => onOpenPlayerProfile?.('plinko'), [onOpenPlayerProfile]);
   const handleOpenKenoProfile = useCallback(() => onOpenPlayerProfile?.('keno'), [onOpenPlayerProfile]);
-  const handleOpenAllProfile = useCallback(() => onOpenPlayerProfile?.(), [onOpenPlayerProfile]);
   const handleOpenProfileOrModal = useCallback(() => {
     if (onOpenProfileSettings) onOpenProfileSettings();
     else onOpenProfileModal?.();
@@ -624,8 +633,8 @@ const NavContent = React.memo(function NavContent(props: NavContentProps) {
             </>
           )}
 
-          {page === 'home' && onOpenPlayerProfile && (
-            <SidebarButton label="Player Dashboard" icon={<NavIcon icon="fa-chart-pie" />} onClick={handleOpenAllProfile} className={NAV_ITEM_CLASS} />
+          {connectedAddress && (
+            <SidebarLink link={{ label: 'My Dashboard', href: `/player/${connectedAddress}`, icon: <NavIcon icon="fa-chart-pie" /> }} className={NAV_ITEM_CLASS} />
           )}
 
           <SidebarButton label="Profile" icon={<NavIcon icon="fa-user-edit" />} onClick={handleOpenProfileOrModal} className={NAV_ITEM_CLASS} />

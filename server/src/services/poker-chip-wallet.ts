@@ -40,10 +40,35 @@ export type PokerChipLedgerReason =
   | 'arcade_towers_payout'
   | 'arcade_chicken_bet'
   | 'arcade_chicken_payout'
+  | 'arcade_dragon_tiger_bet'
+  | 'arcade_dragon_tiger_payout'
+  | 'arcade_andar_bahar_bet'
+  | 'arcade_andar_bahar_payout'
+  | 'arcade_pachinko_bet'
+  | 'arcade_pachinko_payout'
+  | 'arcade_cascade_bet'
+  | 'arcade_cascade_payout'
+  | 'arcade_firewalk_bet'
+  | 'arcade_firewalk_payout'
+  | 'arcade_heist_bet'
+  | 'arcade_heist_payout'
+  | 'arcade_three_card_poker_bet'
+  | 'arcade_three_card_poker_payout'
+  | 'arcade_greed_dice_bet'
+  | 'arcade_greed_dice_payout'
+  | 'arcade_cipher_bet'
+  | 'arcade_cipher_payout'
   | 'keno_bet'
   | 'keno_payout'
   | 'plinko_bet'
   | 'plinko_payout'
+  | 'blackjack_bet'        // single + multiplayer blackjack wager
+  | 'blackjack_payout'     // blackjack win / push credit
+  | 'blackjack_refund'     // blackjack bet returned (cancel / leave / AFK kick)
+  | 'blackjack_tip'        // MP blackjack: tip routed to dealer/deployer
+  | 'deposit'              // on-chain MORBIUS deposit auto-converted to chips
+  | 'withdrawal'           // chips auto-converted back to on-chain MORBIUS
+  | 'migration'            // one-time players.balance (wei) → chip ledger move
   | 'holder_reward'     // MORBIUS holder epoch credit (1.25% slice → chips)
   | 'lp_holder_reward'; // LP holder epoch credit (1.5% slice → chips)
 
