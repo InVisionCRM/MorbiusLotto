@@ -339,7 +339,7 @@ export function StakePlinkoGame() {
   const boardRisk = PLINKO_RISK_TO_BOARD[risk]
 
   return (
-    <div className="mx-auto w-full max-w-6xl">
+    <div className="mx-auto w-full max-w-6xl pb-28 lg:pb-0">
       <div className="grid gap-4 lg:grid-cols-[320px_1fr]">
         {/* ───────── Controls rail ───────── */}
         <Card className="arc-panel order-2 h-fit space-y-4 border-0 p-4 lg:order-1 lg:sticky lg:top-20">
@@ -497,6 +497,9 @@ export function StakePlinkoGame() {
             )}
           </div>
 
+          {/* Action button: pinned to a fixed bottom bar on mobile (Drop ball / Start auto
+              always reachable without scrolling); back in the rail, in-flow, on desktop. */}
+          <div className="fixed inset-x-0 bottom-0 z-40 border-t border-cyan-950/70 bg-[#07131F]/95 p-3 backdrop-blur-sm lg:static lg:z-auto lg:border-0 lg:bg-transparent lg:p-0 lg:backdrop-blur-none">
           {mode === 'manual' ? (
             <Button
               type="button"
@@ -522,6 +525,7 @@ export function StakePlinkoGame() {
               Start auto ({autoCount})
             </Button>
           )}
+          </div>
 
           {error && (
             <div className="space-y-1.5 text-center">
@@ -580,52 +584,27 @@ export function StakePlinkoGame() {
             ))}
           </div>
 
-          {/* Mobile-only drop-ball button — visible directly below the board so
-              players on small screens don't have to scroll to the control rail. */}
-          <div className="lg:hidden">
-            {mode === 'manual' ? (
-              <Button
-                type="button"
-                onClick={() => void dropBall()}
-                className="arc-display h-12 w-full bg-cyan-500 text-base font-bold uppercase tracking-widest text-[#03121B] shadow-[0_0_24px_-6px_rgba(34,211,238,0.8)] hover:bg-cyan-400"
-              >
-                Drop ball
-              </Button>
-            ) : autoRunning ? (
-              <Button
-                type="button"
-                onClick={stopAuto}
-                className="arc-display h-12 w-full bg-rose-500 text-base font-bold uppercase tracking-widest text-[#1B0308] hover:bg-rose-400"
-              >
-                Stop · {autoLeft} left
-              </Button>
-            ) : (
-              <Button
-                type="button"
-                onClick={startAuto}
-                className="arc-display h-12 w-full bg-cyan-500 text-base font-bold uppercase tracking-widest text-[#03121B] shadow-[0_0_24px_-6px_rgba(34,211,238,0.8)] hover:bg-cyan-400"
-              >
-                Start auto ({autoCount})
-              </Button>
-            )}
-          </div>
         </div>
       </div>
 
       {/* ───────── Session chart + info tabs (chart/tabs forked from /PLINKO) ─────────
-          The chart is inline on mobile; on desktop it becomes a draggable floating
-          widget (FloatingPanel) so it can live wherever the player parks it. */}
+          The session chart is a draggable floating widget (FloatingPanel) on all
+          sizes so it can live wherever the player parks it. */}
       <div className="mt-4 space-y-4">
-        <div className="lg:hidden">
-          <SessionChart points={session} unitLabel="Balls" />
-        </div>
         <PlinkoInfoTabs history={history} historyLoading={historyLoading} onVerify={openVerify} />
       </div>
-      <div className="hidden lg:block">
-        <FloatingPanel title="Session" storageKey="plinko2.sessionChart.pos">
-          <SessionChart points={session} unitLabel="Balls" bare />
-        </FloatingPanel>
-      </div>
+      {/* Draggable mini session chart — open in a corner on mobile, full-size on desktop. */}
+      <FloatingPanel title="Session" storageKey="plinko2.sessionChart.pos">
+        <SessionChart
+          points={session}
+          unitLabel="Balls"
+          bare
+          allTimeLoader={async () => {
+            const rounds = await fetchPlinkoHistory(365);
+            return [...rounds].reverse().map((r, i) => ({ drop: i + 1, bet: r.bet, profit: r.payout - r.bet }));
+          }}
+        />
+      </FloatingPanel>
 
       <PlinkoRulesModal open={rulesOpen} onOpenChange={setRulesOpen} />
       <PlinkoFairnessModal

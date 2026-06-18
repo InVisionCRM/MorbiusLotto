@@ -436,7 +436,7 @@ export function GreedDiceGame() {
   }
 
   return (
-    <div className="mx-auto w-full max-w-7xl">
+    <div className="mx-auto w-full max-w-7xl pb-28 lg:pb-0">
       <div className="grid gap-4 lg:grid-cols-[300px_1fr]">
         {/* ───────── Control rail ───────── */}
         <Card className="order-2 h-fit space-y-4 border-0 bg-[#07131F] p-4 ring-1 ring-inset ring-cyan-950/70 lg:order-1 lg:sticky lg:top-20">
@@ -536,6 +536,9 @@ export function GreedDiceGame() {
             </div>
           )}
 
+          {/* Action buttons: pinned to a fixed bottom bar on mobile (Roll / Bank always
+              reachable without scrolling); back in the rail, in-flow, on desktop. */}
+          <div className="fixed inset-x-0 bottom-0 z-40 border-t border-cyan-950/70 bg-[#07131F]/95 p-3 backdrop-blur-sm lg:static lg:z-auto lg:border-0 lg:bg-transparent lg:p-0 lg:backdrop-blur-none">
           {showBetLayout ? (
             <Button
               type="button"
@@ -568,6 +571,7 @@ export function GreedDiceGame() {
               </Button>
             </div>
           )}
+          </div>
 
           {error && (
             <div className="space-y-1.5 text-center">
@@ -691,9 +695,6 @@ export function GreedDiceGame() {
 
       {/* ───────── Session chart + info tabs ───────── */}
       <div className="mt-4 space-y-4">
-        <div className="lg:hidden">
-          <SessionChart points={session} unitLabel="Rounds" />
-        </div>
         <GreedDiceInfoTabs
           history={history}
           historyLoading={historyLoading}
@@ -701,11 +702,18 @@ export function GreedDiceGame() {
           info={info}
         />
       </div>
-      <div className="hidden lg:block">
-        <FloatingPanel title="Session" storageKey="greedDice.sessionChart.pos">
-          <SessionChart points={session} unitLabel="Rounds" bare />
-        </FloatingPanel>
-      </div>
+      {/* Draggable mini session chart — open in a corner on mobile, full-size on desktop. */}
+      <FloatingPanel title="Session" storageKey="greedDice.sessionChart.pos">
+        <SessionChart
+          points={session}
+          unitLabel="Rounds"
+          bare
+          allTimeLoader={async () => {
+            const rounds = await fetchGreedDiceHistory(365);
+            return [...rounds].reverse().map((r, i) => ({ drop: i + 1, bet: r.bet, profit: r.payout - r.bet }));
+          }}
+        />
+      </FloatingPanel>
 
       <GreedDiceFairnessModal
         open={fairnessOpen}

@@ -361,7 +361,7 @@ export function ThreeCardPokerGame() {
   else feltMsg = '';
 
   return (
-    <div className="mx-auto w-full max-w-6xl">
+    <div className="mx-auto w-full max-w-6xl pb-28 lg:pb-0">
       <div className="grid gap-4 lg:grid-cols-[332px_1fr]">
         {/* ───────── Control rail ───────── */}
         <div className="order-2 space-y-3.5 lg:order-1 lg:sticky lg:top-20 lg:h-fit">
@@ -652,7 +652,9 @@ export function ThreeCardPokerGame() {
             </div>
           </Card>
 
-          {/* Actions */}
+          {/* Actions: pinned to a fixed bottom bar on mobile (deal / play / fold always
+              reachable without scrolling); back in-flow under the board on desktop. */}
+          <div className="fixed inset-x-0 bottom-0 z-40 border-t border-cyan-950/70 bg-[#07131F]/95 p-3 backdrop-blur-sm lg:static lg:z-auto lg:border-0 lg:bg-transparent lg:p-0 lg:backdrop-blur-none">
           {betting ? (
             <Button
               type="button"
@@ -691,25 +693,33 @@ export function ThreeCardPokerGame() {
               {phase === 'revealing' ? 'Revealing…' : 'Dealing…'}
             </Button>
           )}
+          </div>
         </div>
       </div>
 
       {/* ───────── Session chart + info tabs ───────── */}
       <div className="mt-4 space-y-4">
-        <div className="lg:hidden">
-          <SessionChart points={session} unitLabel="Hands" />
-        </div>
         <ThreeCardInfoTabs
           history={history}
           historyLoading={historyLoading}
           onVerify={(id) => openVerify(id)}
         />
       </div>
-      <div className="hidden lg:block">
-        <FloatingPanel title="Session" storageKey="threeCardPoker.sessionChart.pos">
-          <SessionChart points={session} unitLabel="Hands" bare />
-        </FloatingPanel>
-      </div>
+      {/* Draggable mini session chart — open in a corner on mobile, full-size on desktop. */}
+      <FloatingPanel title="Session" storageKey="threeCardPoker.sessionChart.pos">
+        <SessionChart
+          points={session}
+          unitLabel="Hands"
+          bare
+          allTimeLoader={async () => {
+            const rounds = await fetchThreeCardHistory(365);
+            return [...rounds].reverse().map((r, i) => {
+              const committed = r.ante + r.pairPlus + r.play;
+              return { drop: i + 1, bet: committed, profit: r.totalPayout - committed };
+            });
+          }}
+        />
+      </FloatingPanel>
 
       <ThreeCardFairnessModal
         open={fairnessOpen}

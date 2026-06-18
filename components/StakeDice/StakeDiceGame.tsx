@@ -297,7 +297,7 @@ export function StakeDiceGame() {
   const autoRunning = autoLeft != null
 
   return (
-    <div className="mx-auto w-full max-w-6xl">
+    <div className="mx-auto w-full max-w-6xl pb-28 lg:pb-0">
       <div className="grid gap-4 lg:grid-cols-[320px_1fr]">
         {/* ───────── Controls rail ───────── */}
         <Card className="arc-panel order-2 h-fit space-y-4 border-0 p-4 lg:order-1 lg:sticky lg:top-20">
@@ -418,6 +418,9 @@ export function StakeDiceGame() {
             </div>
           )}
 
+          {/* Action button: pinned to a fixed bottom bar on mobile (Roll/Start/Stop always
+              reachable without scrolling); back in the rail, in-flow, on desktop. */}
+          <div className="fixed inset-x-0 bottom-0 z-40 border-t border-cyan-950/70 bg-[#07131F]/95 p-3 backdrop-blur-sm lg:static lg:z-auto lg:border-0 lg:bg-transparent lg:p-0 lg:backdrop-blur-none">
           {mode === 'manual' ? (
             <Button
               type="button"
@@ -445,6 +448,7 @@ export function StakeDiceGame() {
               Start auto ({autoCount})
             </Button>
           )}
+          </div>
 
           {infoFailed && (
             <p className="text-center text-sm text-slate-400">
@@ -625,52 +629,25 @@ export function StakeDiceGame() {
             ))}
           </div>
 
-          {/* Mobile-only roll button — visible directly below the roll display
-              so players on small screens don't need to scroll to the control rail. */}
-          <div className="lg:hidden">
-            {mode === 'manual' ? (
-              <Button
-                type="button"
-                disabled={!info}
-                onClick={() => void rollOnce()}
-                className="arc-display h-12 w-full bg-cyan-500 text-base font-bold uppercase tracking-widest text-[#03121B] shadow-[0_0_24px_-6px_rgba(34,211,238,0.8)] hover:bg-cyan-400 disabled:opacity-50"
-              >
-                Roll
-              </Button>
-            ) : autoRunning ? (
-              <Button
-                type="button"
-                onClick={stopAuto}
-                className="arc-display h-12 w-full bg-rose-500 text-base font-bold uppercase tracking-widest text-[#1B0308] hover:bg-rose-400"
-              >
-                Stop · {autoLeft} left
-              </Button>
-            ) : (
-              <Button
-                type="button"
-                disabled={!info}
-                onClick={startAuto}
-                className="arc-display h-12 w-full bg-cyan-500 text-base font-bold uppercase tracking-widest text-[#03121B] shadow-[0_0_24px_-6px_rgba(34,211,238,0.8)] hover:bg-cyan-400 disabled:opacity-50"
-              >
-                Start auto ({autoCount})
-              </Button>
-            )}
-          </div>
         </div>
       </div>
 
       {/* ───────── Session chart + info tabs ───────── */}
       <div className="mt-4 space-y-4">
-        <div className="lg:hidden">
-          <SessionChart points={session} unitLabel="Rolls" />
-        </div>
         <DiceInfoTabs history={history} historyLoading={historyLoading} onVerify={openVerify} />
       </div>
-      <div className="hidden lg:block">
-        <FloatingPanel title="Session" storageKey="dice2.sessionChart.pos">
-          <SessionChart points={session} unitLabel="Rolls" bare />
-        </FloatingPanel>
-      </div>
+      {/* Draggable mini session chart — open in a corner on mobile, full-size on desktop. */}
+      <FloatingPanel title="Session" storageKey="dice2.sessionChart.pos">
+        <SessionChart
+          points={session}
+          unitLabel="Rolls"
+          bare
+          allTimeLoader={async () => {
+            const rounds = await fetchDiceHistory(365);
+            return [...rounds].reverse().map((r, i) => ({ drop: i + 1, bet: r.bet, profit: r.payout - r.bet }));
+          }}
+        />
+      </FloatingPanel>
 
       <DiceRulesModal open={rulesOpen} onOpenChange={setRulesOpen} />
       <DiceFairnessModal
