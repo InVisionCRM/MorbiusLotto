@@ -1478,8 +1478,8 @@ export function GameWalletModal({
 
                       {/* Free 3-card monte to pass the ~1-min on-chain + crediting wait. No stakes — local streak only. */}
                       {isDepositWaiting && (
-                        <div className="rounded-2xl bg-zinc-950 border border-cyan-400/20 p-4 shadow-inner">
-                          <MonteGame variant="embedded" />
+                        <div className="rounded-2xl bg-zinc-950 border border-cyan-400/20 p-3 shadow-inner">
+                          <MonteGame variant="embedded" dense />
                         </div>
                       )}
 
