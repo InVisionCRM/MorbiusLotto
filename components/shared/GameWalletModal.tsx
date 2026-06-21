@@ -40,6 +40,7 @@ import { WalletActionPrompt, type WalletActionVariant } from '@/components/auth/
 import { useMobileWalletHandoff } from '@/hooks/use-mobile-wallet-handoff';
 import { useWalletHandoffPhase } from '@/hooks/use-wallet-handoff-phase';
 import { formatChips, parseChipInput } from '@/lib/format-poker-chips';
+import { MonteGame } from '@/components/Monte/MonteGame';
 
 // ── Logos ──────────────────────────────────────────────────────────────────
 
@@ -332,6 +333,10 @@ export function GameWalletModal({
   const notifyInFlightRef = useRef(false);
   /** Counts consecutive failed `notify` attempts (5xx / network) so we can give up gracefully instead of looping forever. */
   const notifyAttemptsRef = useRef(0);
+  /** Chip balance snapshot taken at deposit initiation (before the tx) so the credit poll detects
+   * the increase reliably. Capturing it AFTER notify raced the now-near-instant server credit and
+   * caused false "taking longer than usual" timeouts on deposits that actually succeeded. */
+  const preDepositBalanceRef = useRef<bigint | null>(null);
 
   const [withdrawPhase, setWithdrawPhase] = useState<WithdrawPhase>('idle');
   const [withdrawError, setWithdrawError] = useState<string | null>(null);
@@ -484,6 +489,7 @@ export function GameWalletModal({
       setJustApproved(false);
       notifyInFlightRef.current = false;
       notifyAttemptsRef.current = 0;
+      preDepositBalanceRef.current = null;
     } else {
       setTab(defaultTab);
       if (isSelfManaged) fetchBalance();
@@ -626,7 +632,9 @@ export function GameWalletModal({
             setDepositBlockNumber(null);
             setDepositTxHash(null);
 
-            const initialBalance = (await fetchServerBalanceDirect()) ?? 0n;
+            // Baseline = the pre-deposit snapshot (captured before the tx). Falls back to a live
+            // read only for the resume-on-refresh path, which doesn't run the deposit handlers.
+            const initialBalance = preDepositBalanceRef.current ?? (await fetchServerBalanceDirect()) ?? 0n;
             const startedAt = Date.now();
             const CREDIT_TIMEOUT_MS = 60_000;
             const CREDIT_POLL_MS = 2_000;
@@ -788,6 +796,9 @@ export function GameWalletModal({
       });
       return;
     }
+    // Snapshot the balance now, before any credit can happen, so the post-confirmation poll
+    // detects the increase even though the server credit is near-instant.
+    preDepositBalanceRef.current = await fetchServerBalanceDirect();
     setDepositPhase('confirming');
     const toastId = toast.loading('Confirm in wallet...', {
       description: `Depositing ${depositAmount} MORBIUS worth of PLS`,
@@ -855,6 +866,8 @@ export function GameWalletModal({
       });
       return;
     }
+    // Snapshot the balance now, before any credit can happen — see handleDepositPLS.
+    preDepositBalanceRef.current = await fetchServerBalanceDirect();
     setDepositPhase('confirming');
     const toastId = toast.loading('Confirm in wallet...', {
       description: `Depositing ${depositAmount} MORBIUS`,
@@ -1186,6 +1199,8 @@ export function GameWalletModal({
     depositPhase === 'idle';
   const isLegacyWithdrawLoading = withdrawTx.isPending;
   const controlsDisabled = isDepositLoading || isPreparingWithdraw || isLegacyWithdrawLoading || externalWithdrawLock;
+  /** The ~1-minute on-chain + crediting wait — swap the amount form for a free Monte game to pass the time. */
+  const isDepositWaiting = depositPhase === 'confirming_on_chain' || depositPhase === 'crediting';
 
   const mobileHandoff = useMobileWalletHandoff();
   const waitingForWalletSignature =
@@ -1390,6 +1405,7 @@ export function GameWalletModal({
                         </button>
                       </div>
 
+                      {!isDepositWaiting && (
                       <div className="space-y-2">
                         <div className="flex justify-between items-center px-1">
                           <label className="text-sm font-medium text-gray-700">Amount</label>
@@ -1458,6 +1474,14 @@ export function GameWalletModal({
                           })}
                         </div>
                       </div>
+                      )}
+
+                      {/* Free 3-card monte to pass the ~1-min on-chain + crediting wait. No stakes — local streak only. */}
+                      {isDepositWaiting && (
+                        <div className="rounded-2xl bg-zinc-950 border border-cyan-400/20 p-4 shadow-inner">
+                          <MonteGame variant="embedded" />
+                        </div>
+                      )}
 
                       {address && !isAuthenticated ? (
                         // Explicit, user-initiated sign-in gate. Deposits need a SIWE session
