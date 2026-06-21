@@ -332,6 +332,10 @@ export function GameWalletModal({
   const notifyInFlightRef = useRef(false);
   /** Counts consecutive failed `notify` attempts (5xx / network) so we can give up gracefully instead of looping forever. */
   const notifyAttemptsRef = useRef(0);
+  /** Chip balance snapshot taken at deposit initiation (before the tx) so the credit poll detects
+   * the increase reliably. Capturing it AFTER notify raced the now-near-instant server credit and
+   * caused false "taking longer than usual" timeouts on deposits that actually succeeded. */
+  const preDepositBalanceRef = useRef<bigint | null>(null);
 
   const [withdrawPhase, setWithdrawPhase] = useState<WithdrawPhase>('idle');
   const [withdrawError, setWithdrawError] = useState<string | null>(null);
@@ -484,6 +488,7 @@ export function GameWalletModal({
       setJustApproved(false);
       notifyInFlightRef.current = false;
       notifyAttemptsRef.current = 0;
+      preDepositBalanceRef.current = null;
     } else {
       setTab(defaultTab);
       if (isSelfManaged) fetchBalance();
@@ -626,7 +631,9 @@ export function GameWalletModal({
             setDepositBlockNumber(null);
             setDepositTxHash(null);
 
-            const initialBalance = (await fetchServerBalanceDirect()) ?? 0n;
+            // Baseline = the pre-deposit snapshot (captured before the tx). Falls back to a live
+            // read only for the resume-on-refresh path, which doesn't run the deposit handlers.
+            const initialBalance = preDepositBalanceRef.current ?? (await fetchServerBalanceDirect()) ?? 0n;
             const startedAt = Date.now();
             const CREDIT_TIMEOUT_MS = 60_000;
             const CREDIT_POLL_MS = 2_000;
@@ -788,6 +795,9 @@ export function GameWalletModal({
       });
       return;
     }
+    // Snapshot the balance now, before any credit can happen, so the post-confirmation poll
+    // detects the increase even though the server credit is near-instant.
+    preDepositBalanceRef.current = await fetchServerBalanceDirect();
     setDepositPhase('confirming');
     const toastId = toast.loading('Confirm in wallet...', {
       description: `Depositing ${depositAmount} MORBIUS worth of PLS`,
@@ -855,6 +865,8 @@ export function GameWalletModal({
       });
       return;
     }
+    // Snapshot the balance now, before any credit can happen — see handleDepositPLS.
+    preDepositBalanceRef.current = await fetchServerBalanceDirect();
     setDepositPhase('confirming');
     const toastId = toast.loading('Confirm in wallet...', {
       description: `Depositing ${depositAmount} MORBIUS`,
