@@ -40,6 +40,7 @@ import { WalletActionPrompt, type WalletActionVariant } from '@/components/auth/
 import { useMobileWalletHandoff } from '@/hooks/use-mobile-wallet-handoff';
 import { useWalletHandoffPhase } from '@/hooks/use-wallet-handoff-phase';
 import { formatChips, parseChipInput } from '@/lib/format-poker-chips';
+import { MonteGame } from '@/components/Monte/MonteGame';
 
 // ── Logos ──────────────────────────────────────────────────────────────────
 
@@ -1198,6 +1199,8 @@ export function GameWalletModal({
     depositPhase === 'idle';
   const isLegacyWithdrawLoading = withdrawTx.isPending;
   const controlsDisabled = isDepositLoading || isPreparingWithdraw || isLegacyWithdrawLoading || externalWithdrawLock;
+  /** The ~1-minute on-chain + crediting wait — swap the amount form for a free Monte game to pass the time. */
+  const isDepositWaiting = depositPhase === 'confirming_on_chain' || depositPhase === 'crediting';
 
   const mobileHandoff = useMobileWalletHandoff();
   const waitingForWalletSignature =
@@ -1402,6 +1405,7 @@ export function GameWalletModal({
                         </button>
                       </div>
 
+                      {!isDepositWaiting && (
                       <div className="space-y-2">
                         <div className="flex justify-between items-center px-1">
                           <label className="text-sm font-medium text-gray-700">Amount</label>
@@ -1470,6 +1474,14 @@ export function GameWalletModal({
                           })}
                         </div>
                       </div>
+                      )}
+
+                      {/* Free 3-card monte to pass the ~1-min on-chain + crediting wait. No stakes — local streak only. */}
+                      {isDepositWaiting && (
+                        <div className="rounded-2xl bg-zinc-950 border border-cyan-400/20 p-4 shadow-inner">
+                          <MonteGame variant="embedded" />
+                        </div>
+                      )}
 
                       {address && !isAuthenticated ? (
                         // Explicit, user-initiated sign-in gate. Deposits need a SIWE session
