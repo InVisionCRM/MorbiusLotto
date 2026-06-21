@@ -18,6 +18,8 @@ export interface SiweState {
   isSigningIn: boolean;
   signIn: () => Promise<`0x${string}`>;
   signInIfNeeded: () => Promise<`0x${string}`>;
+  /** Verify a live session with the server first; only prompt a sign-in if none exists. */
+  ensureSiweSession: () => Promise<`0x${string}`>;
   signOut: () => Promise<void>;
 }
 
@@ -195,6 +197,7 @@ export function SiweProvider({ children }: { children: React.ReactNode }) {
     isSigningIn,
     signIn,
     signInIfNeeded,
+    ensureSiweSession,
     signOut,
   };
 
