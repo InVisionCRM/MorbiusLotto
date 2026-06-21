@@ -17,10 +17,13 @@ const SHUFFLE_COUNT = 15
 
 export interface MonteGameProps {
   variant?: 'standalone' | 'embedded'
+  /** Tighter card spread + smaller cards for narrow containers (e.g. the deposit modal) so the
+   * side cards don't clip. Leave off for roomy hosts like the full-screen MonteWaitOverlay. */
+  dense?: boolean
   className?: string
 }
 
-export function MonteGame({ variant = 'standalone', className }: MonteGameProps) {
+export function MonteGame({ variant = 'standalone', dense = false, className }: MonteGameProps) {
   const [gameState, setGameState] = useState<GameState>('idle')
   const [cards, setCards] = useState<Card[]>([
     { id: 0, isWinner: false },
@@ -101,7 +104,7 @@ export function MonteGame({ variant = 'standalone', className }: MonteGameProps)
 
   const getCardX = (slotIndex: number) => {
     const offset = slotIndex - 1
-    return offset * 110
+    return offset * (dense ? 84 : 110)
   }
 
   const isStandalone = variant === 'standalone'
@@ -172,7 +175,11 @@ export function MonteGame({ variant = 'standalone', className }: MonteGameProps)
                 key={card.id}
                 className={cn(
                   'absolute rounded-sm cursor-pointer flex items-center justify-center [transform-style:preserve-3d]',
-                  isStandalone ? 'w-24 h-36 md:w-28 md:h-40' : 'w-20 h-32 md:w-24 md:h-36',
+                  isStandalone
+                    ? 'w-24 h-36 md:w-28 md:h-40'
+                    : dense
+                    ? 'w-16 h-24 md:w-20 md:h-28'
+                    : 'w-20 h-32 md:w-24 md:h-36',
                   gameState === 'guessing' && 'hover:scale-105',
                 )}
                 animate={{
@@ -201,13 +208,13 @@ export function MonteGame({ variant = 'standalone', className }: MonteGameProps)
                 >
                   {card.isWinner ? (
                     <Diamond
-                      className={cn(isStandalone ? 'w-12 h-12 md:w-14 md:h-14' : 'w-10 h-10', 'text-cyan-400')}
+                      className={cn(isStandalone ? 'w-12 h-12 md:w-14 md:h-14' : dense ? 'w-8 h-8' : 'w-10 h-10', 'text-cyan-400')}
                       strokeWidth={1.5}
                       fill="currentColor"
                     />
                   ) : (
                     <X
-                      className={cn(isStandalone ? 'w-12 h-12 md:w-14 md:h-14' : 'w-10 h-10', 'text-zinc-200')}
+                      className={cn(isStandalone ? 'w-12 h-12 md:w-14 md:h-14' : dense ? 'w-8 h-8' : 'w-10 h-10', 'text-zinc-200')}
                       strokeWidth={1.5}
                     />
                   )}
