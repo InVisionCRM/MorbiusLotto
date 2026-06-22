@@ -431,7 +431,7 @@ export function DragonTigerGame() {
   ]
 
   return (
-    <div className="dt-scope mx-auto w-full max-w-6xl">
+    <div className="dt-scope mx-auto w-full max-w-6xl pb-28 lg:pb-0">
       <div className="grid gap-4 lg:grid-cols-[332px_1fr]">
         {/* ───────── Controls rail ───────── */}
         <Card className="arc-panel order-2 h-fit space-y-4 border-0 p-4 lg:order-1">
@@ -733,7 +733,9 @@ export function DragonTigerGame() {
             </div>
           </div>
 
-          {/* Deal / Auto button */}
+          {/* Deal / Auto button — pinned to a fixed bottom bar on mobile (always
+              reachable without scrolling); in-flow on desktop. */}
+          <div className="fixed inset-x-0 bottom-0 z-40 border-t border-cyan-950/70 bg-[#07131F]/95 p-3 backdrop-blur-sm lg:static lg:z-auto lg:border-0 lg:bg-transparent lg:p-0 lg:backdrop-blur-none">
           {mode === 'manual' ? (
             <Button
               type="button"
@@ -761,6 +763,7 @@ export function DragonTigerGame() {
               Start auto ({autoCount})
             </Button>
           )}
+          </div>
         </div>
       </div>
 

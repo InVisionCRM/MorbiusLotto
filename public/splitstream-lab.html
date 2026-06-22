@@ -1,0 +1,465 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+<title>Splitstream — Deep-Sea Neon lab</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Chakra+Petch:wght@500;600;700&family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet" />
+<style>
+/* ── Splitstream — Deep-Sea Neon (arcade2) prototype ───────────────────────
+   Plinko-family "drop & watch": a token tumbles down a branching river of
+   gates, multiplying along its path; some forks drain (bust). Mirrors the
+   shared arcade2-scope system (Plinko / Cascade / Cipher / etc.): abyss
+   #050E16, cyan chrome, amber wins, rose losses, Chakra Petch + JetBrains
+   Mono, .panel glass, provably-fair commit/verify, My-rounds / FAQ tabs.
+
+   Pure RNG: each row draws a segment multiplier and a drain check from a
+   seeded stream — the whole descent is a deterministic function of the seed
+   (the flowing animation is cosmetic), so it re-runs exactly in Verify. It
+   auto-resolves the full river (no cash-out): RTP is fixed by
+   ((1 - drain) × mean segment)^rows ≈ 96%. Currency: MORBIUS chips. */
+:root{
+  --abyss:#050E16; --cyan:#22D3EE; --cyan-soft:rgba(34,211,238,0.12); --cyan-edge:rgba(34,211,238,0.35);
+  --win:#F59E0B; --loss:#FB7185;
+  --ink:#E2E8F0; --slate-300:#CBD5E1; --slate-400:#94A3B8; --slate-500:#64748B;
+  --panel:rgba(8,20,31,0.78); --field:#081420;
+  --font-disp:'Chakra Petch',system-ui,sans-serif; --font-mono:'JetBrains Mono',ui-monospace,monospace;
+}
+*{box-sizing:border-box}
+html,body{margin:0;padding:0}
+body{min-height:100svh;background-color:var(--abyss);background-image:linear-gradient(to bottom,rgba(5,14,22,0.92),rgba(2,7,11,0.96) 55%,rgba(5,14,22,0.98));color:var(--ink);font-family:var(--font-disp);-webkit-font-smoothing:antialiased;overflow-x:hidden}
+.bg-light,.bg-vignette{position:fixed;inset:0;pointer-events:none;z-index:0}
+.bg-light{background:radial-gradient(ellipse 75% 55% at 50% -5%,rgba(34,211,238,0.13),transparent 70%)}
+.bg-vignette{background:radial-gradient(ellipse 120% 60% at 50% 115%,rgba(0,0,0,0.55),transparent 60%)}
+.mono{font-family:var(--font-mono);font-variant-numeric:tabular-nums}
+.wrap{position:relative;z-index:1;max-width:1000px;margin:0 auto;padding:18px 14px 64px}
+@media(min-width:700px){.wrap{padding:30px 22px 80px}}
+header{text-align:center;margin-bottom:16px}
+h1.title{margin:0;font-weight:700;text-transform:uppercase;letter-spacing:0.08em;color:#fff;font-size:clamp(26px,6.4vw,40px);line-height:1}
+h1.title .glyph{margin-left:.35rem;color:var(--cyan);filter:drop-shadow(0 0 12px rgba(34,211,238,0.65));vertical-align:middle}
+.tagline{margin:.55rem 0 0;font-size:clamp(11px,2.6vw,13.5px);color:var(--slate-500);letter-spacing:.01em}
+.topbar{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:14px}
+.topbar .right{display:flex;gap:8px}
+.balance{display:flex;align-items:center;gap:9px;background:rgba(8,20,31,0.7);border:1px solid var(--cyan-soft);border-radius:12px;padding:8px 13px}
+.coin{width:18px;height:18px;border-radius:50%;background:radial-gradient(circle at 35% 30%,#7be9fb,#22D3EE 55%,#0e7490);box-shadow:0 0 10px rgba(34,211,238,.5);flex:none}
+.balance .amt{font-family:var(--font-mono);font-weight:700;font-size:16px;color:#fff}
+.balance .cur{font-size:10px;letter-spacing:.12em;color:var(--cyan);text-transform:uppercase}
+.pill-btn{display:inline-flex;align-items:center;gap:7px;height:40px;padding:0 13px;border-radius:11px;border:1px solid var(--cyan-soft);background:rgba(8,20,31,0.7);color:var(--slate-400);cursor:pointer;transition:.15s;font-family:var(--font-disp);font-size:12px;letter-spacing:.06em;text-transform:uppercase}
+.pill-btn:hover{color:var(--cyan);border-color:var(--cyan-edge)}
+.pill-btn .dot{width:7px;height:7px;border-radius:50%;background:var(--cyan);box-shadow:0 0 8px var(--cyan)}
+.icon-btn{width:40px;height:40px;display:grid;place-items:center;border-radius:11px;border:1px solid var(--cyan-soft);background:rgba(8,20,31,0.7);color:var(--slate-400);cursor:pointer;transition:.15s;font-size:15px}
+.icon-btn:hover{color:var(--cyan);border-color:var(--cyan-edge)}
+.game-grid{display:flex;flex-direction:column;gap:14px}
+.board{order:-1}
+@media(min-width:900px){.game-grid{display:grid;grid-template-columns:332px 1fr;align-items:start;gap:18px}.board{order:0}}
+.panel{background:linear-gradient(rgba(255,255,255,0.03),rgba(255,255,255,0) 18%),var(--panel);border:1px solid var(--cyan-soft);border-radius:16px;box-shadow:0 18px 40px -24px rgba(0,0,0,0.9);padding:16px}
+.panel + .panel{margin-top:14px}
+.panel-label{font-size:11px;text-transform:uppercase;letter-spacing:.16em;color:var(--slate-500);margin:0 0 10px}
+.diff-row{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
+.diff{border:1px solid var(--cyan-soft);background:rgba(6,16,25,.6);border-radius:12px;padding:11px 6px 9px;text-align:center;cursor:pointer;transition:.15s;color:var(--slate-400)}
+.diff:hover{border-color:var(--cyan-edge)}
+.diff .d-name{font-weight:600;font-size:13px;letter-spacing:.04em;text-transform:uppercase}
+.diff .d-meta{font-family:var(--font-mono);font-size:10.5px;color:var(--slate-500);margin-top:3px}
+.diff.active{border-color:var(--cyan);background:linear-gradient(rgba(34,211,238,.14),rgba(34,211,238,.04));color:#fff;box-shadow:0 0 18px -4px rgba(34,211,238,.5)}
+.diff.active .d-meta{color:var(--cyan)}
+.diff[aria-disabled=true]{opacity:.45;pointer-events:none}
+.bet-input-row{display:flex;align-items:stretch;gap:8px;margin-bottom:10px}
+.bet-field{flex:1;display:flex;align-items:center;gap:8px;background:rgba(2,8,13,.7);border:1px solid var(--cyan-soft);border-radius:12px;padding:0 12px}
+.bet-field input{flex:1;width:100%;background:none;border:0;outline:none;color:#fff;font-family:var(--font-mono);font-weight:700;font-size:17px;padding:12px 0}
+.mini-btn{width:42px;border:1px solid var(--cyan-soft);background:rgba(8,20,31,.7);color:var(--slate-400);border-radius:11px;font-family:var(--font-mono);font-weight:700;cursor:pointer;transition:.15s;font-size:14px}
+.mini-btn:hover{color:var(--cyan);border-color:var(--cyan-edge)}
+.chips{display:grid;grid-template-columns:repeat(4,1fr);gap:7px}
+.chip{border:1px solid var(--cyan-soft);background:rgba(6,16,25,.6);color:var(--slate-400);border-radius:10px;padding:9px 4px;font-family:var(--font-mono);font-weight:600;font-size:12.5px;cursor:pointer;transition:.15s}
+.chip:hover{color:var(--cyan);border-color:var(--cyan-edge)}
+.minmax{display:flex;justify-content:space-between;font-family:var(--font-mono);font-size:10.5px;color:var(--slate-500);margin-top:9px}
+.how{font-size:12px;color:var(--slate-400);line-height:1.6;margin:0}.how b{color:var(--cyan);font-weight:600}
+.board-shell{background:linear-gradient(rgba(255,255,255,0.025),rgba(255,255,255,0) 16%),rgba(6,16,25,.72);border:1px solid var(--cyan-soft);border-radius:18px;overflow:hidden;box-shadow:0 24px 50px -30px rgba(0,0,0,.95)}
+.hud{display:flex;gap:1px;background:var(--cyan-soft)}
+.hud .cell{flex:1;background:rgba(4,12,19,.85);padding:11px 12px;text-align:center}
+.hud .k{font-size:9.5px;letter-spacing:.16em;text-transform:uppercase;color:var(--slate-500)}
+.hud .v{font-family:var(--font-mono);font-weight:700;font-size:clamp(15px,3.8vw,21px);color:#fff;margin-top:3px}
+.hud .v.mult{color:var(--win)}.hud .v.mult.idle{color:var(--slate-400)}.hud .v.dep{color:var(--cyan)}
+.felt{position:relative;min-height:clamp(300px,58vw,380px);padding:16px 14px;background:radial-gradient(ellipse 70% 70% at 50% 30%,rgba(34,211,238,.06),transparent 70%)}
+.river{display:flex;flex-direction:column;align-items:center;gap:7px}
+.rrow{display:flex;align-items:center;justify-content:center;gap:10px;width:100%;opacity:.25;transition:opacity .2s}
+.rrow.shown{opacity:1}
+.rnode{font-family:var(--font-mono);font-size:13px;font-weight:600;padding:6px 12px;border-radius:9px;background:rgba(2,8,13,.6);border:1px solid var(--cyan-soft);color:var(--slate-300);min-width:64px;text-align:center}
+.rnode.on{border-color:transparent;background:linear-gradient(rgba(34,211,238,.18),rgba(34,211,238,.05));color:#fff;box-shadow:0 0 16px -4px var(--cyan)}
+.rnode.drain{background:rgba(251,113,133,.14);border-color:rgba(251,113,133,.5);color:#fecdd3}
+.ralt{font-family:var(--font-mono);font-size:11px;color:var(--slate-500);opacity:.6;min-width:48px;text-align:center}
+.rrow.left{flex-direction:row}.rrow.right{flex-direction:row-reverse}
+.felt-mid{position:absolute;left:0;right:0;bottom:10px;text-align:center;font-size:13px;color:var(--slate-400)}
+.banner-host{position:absolute;inset:0;display:grid;place-items:center;z-index:8;pointer-events:none}
+.banner{display:none;text-align:center;padding:16px 28px;border-radius:18px}
+.banner.show{display:block}
+.banner.win{background:radial-gradient(ellipse at center,rgba(245,158,11,.22),rgba(4,12,19,.6));border:1px solid rgba(245,158,11,.5);box-shadow:0 0 50px -8px rgba(245,158,11,.55)}
+.banner.loss{background:radial-gradient(ellipse at center,rgba(251,113,133,.16),rgba(4,12,19,.65));border:1px solid rgba(251,113,133,.4)}
+.banner .b-k{font-size:12px;letter-spacing:.22em;text-transform:uppercase;color:var(--slate-400)}
+.banner.win .b-k{color:var(--win)}.banner.loss .b-k{color:var(--loss)}
+.banner .b-v{font-family:var(--font-mono);font-weight:700;font-size:clamp(24px,7vw,38px);color:#fff;margin-top:4px}
+.arc-banner-in{animation:arc-banner-in .4s cubic-bezier(.34,1.56,.64,1) both}
+@keyframes arc-banner-in{0%{transform:scale(.7);opacity:0}55%{transform:scale(1.06);opacity:1}100%{transform:scale(1);opacity:1}}
+.actions{display:grid;grid-template-columns:1fr;gap:10px;margin-top:14px}
+.btn{border:0;border-radius:14px;padding:16px 18px;font-family:var(--font-disp);font-weight:700;font-size:16px;letter-spacing:.05em;text-transform:uppercase;cursor:pointer;transition:.15s;color:#04141b}
+.btn:active{transform:scale(.985)}
+.btn-go{background:linear-gradient(180deg,#3ee0f5,#22D3EE 60%,#0fb6d4);box-shadow:0 0 24px -6px rgba(34,211,238,.68),inset 0 1px 0 rgba(255,255,255,.4)}
+.btn:disabled{opacity:.5;cursor:not-allowed;filter:saturate(.5)}
+.info{margin-top:16px}
+.tabs-list{display:grid;grid-template-columns:1fr 1fr;gap:4px;background:rgba(8,20,31,.7);border:1px solid rgba(34,211,238,.12);border-radius:10px;padding:4px}
+.tab-btn{font-family:var(--font-disp);font-weight:600;font-size:12px;text-transform:uppercase;letter-spacing:.14em;color:var(--slate-500);background:none;border:0;border-radius:7px;padding:9px 6px;cursor:pointer;transition:.15s}
+.tab-btn:hover{color:var(--slate-300)}.tab-btn.active{background:rgba(34,211,238,.15);color:var(--cyan);box-shadow:inset 0 0 0 1px rgba(34,211,238,.5)}
+.tab-panel{display:none;margin-top:12px}.tab-panel.active{display:block}
+.hist-head{display:flex;align-items:baseline;justify-content:space-between;margin-bottom:6px}
+.hist-head h2{font-family:var(--font-disp);font-weight:600;font-size:14px;text-transform:uppercase;letter-spacing:.08em;color:var(--slate-300);margin:0}
+.hist-head .count{font-size:11px;color:var(--slate-500)}
+.hist-empty{padding:18px 0;text-align:center;font-size:13px;color:var(--slate-500)}
+.hist-list{list-style:none;margin:0;padding:0}
+.hist-row{display:flex;flex-wrap:wrap;align-items:center;gap:6px 12px;padding:9px 0;border-top:1px solid rgba(34,211,238,.08);font-size:13px}
+.hist-row:first-child{border-top:0}
+.hist-row .t{font-family:var(--font-mono);width:46px;flex:none;color:var(--slate-500)}
+.hist-row .badge{flex:none;font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:.04em;padding:2px 7px;border-radius:5px;color:var(--cyan);background:rgba(34,211,238,.1);box-shadow:inset 0 0 0 1px rgba(34,211,238,.3)}
+.hist-row .m{font-family:var(--font-mono);color:var(--slate-400);flex:none}
+.hist-row .x{font-family:var(--font-mono);flex:none}.hist-row .x.win{color:var(--cyan)}.hist-row .x.bust{color:var(--loss);font-weight:600}
+.hist-row .p{font-family:var(--font-mono);font-weight:600;margin-left:auto;flex:none}
+.hist-row .p.up{color:var(--win)}.hist-row .p.flat{color:var(--slate-500)}
+.hist-row .verify{flex:none;font-size:11px;color:var(--slate-500);background:none;border:0;border-radius:5px;padding:3px 7px;cursor:pointer;transition:.15s}
+.hist-row .verify:hover{color:var(--cyan);background:rgba(34,211,238,.1)}
+.faq-item{border-top:1px solid rgba(34,211,238,.1)}.faq-item:first-child{border-top:0}
+.faq-q{width:100%;text-align:left;background:none;border:0;color:#E8EEF5;font-family:var(--font-disp);font-size:14px;font-weight:500;padding:13px 28px 13px 0;cursor:pointer;position:relative;transition:.15s}
+.faq-q:hover{color:var(--cyan)}.faq-q::after{content:"⌄";position:absolute;right:4px;top:12px;color:var(--slate-500);transition:transform .2s}
+.faq-item.open .faq-q::after{transform:rotate(180deg);color:var(--cyan)}
+.faq-a{display:none;padding:0 4px 14px;color:#AFC0CF;font-size:13.5px;line-height:1.65}.faq-item.open .faq-a{display:block}
+.faq-a p{margin:0 0 9px}.faq-a p:last-child{margin-bottom:0}
+.faq-a a{color:var(--cyan);text-decoration:underline;text-underline-offset:2px;word-break:break-all}
+.faq-a .siwe{font-family:var(--font-mono);font-size:11px;line-height:1.6;background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.08);border-radius:8px;padding:10px;color:var(--slate-400);margin:8px 0}
+.faq-a .siwe .a{color:var(--cyan)}.faq-a .siwe .s{color:var(--slate-300)}.hl{color:var(--cyan)}
+.overlay{position:fixed;inset:0;z-index:50;display:none;align-items:center;justify-content:center;padding:16px;background:rgba(2,6,10,.72);backdrop-filter:blur(3px)}
+.overlay.open{display:flex}
+.modal{width:100%;max-width:520px;max-height:85vh;overflow-y:auto;background:#050E16;border:1px solid #0e3a47;border-radius:16px;box-shadow:0 30px 80px -20px rgba(0,0,0,.9);padding:20px}
+.modal-head{display:flex;align-items:center;justify-content:space-between;margin-bottom:16px}
+.modal-head h2{font-family:var(--font-disp);font-weight:600;text-transform:uppercase;letter-spacing:.12em;color:var(--cyan);font-size:16px;margin:0}
+.modal-x{background:none;border:0;color:var(--slate-500);font-size:20px;cursor:pointer;line-height:1}.modal-x:hover{color:var(--cyan)}
+.m-sec{margin-bottom:18px}.m-sec h3{font-size:13.5px;font-weight:600;color:var(--slate-300);margin:0 0 4px}
+.m-sec p.note{font-size:12px;color:var(--slate-500);margin:0 0 9px;line-height:1.5}
+.m-input-row{display:flex;gap:8px}
+.m-input{flex:1;min-width:0;background:var(--field);border:1px solid #0e3a47;border-radius:9px;color:#cbd5e1;font-family:var(--font-mono);font-size:12px;padding:9px 11px;outline:none}
+.m-input:focus{border-color:var(--cyan-edge)}
+.m-btn{flex:none;border-radius:9px;padding:9px 14px;font-family:var(--font-disp);font-size:13px;cursor:pointer;border:1px solid transparent;transition:.15s}
+.m-btn.outline{background:transparent;border-color:#0e3a47;color:var(--cyan)}.m-btn.outline:hover{background:rgba(34,211,238,.1)}
+.m-btn.solid{background:#0891b2;color:#fff}.m-btn.solid:hover{background:#22D3EE;color:#03121B}
+.m-result{border:1px solid #0e3a47;background:rgba(7,19,31,.7);border-radius:12px;padding:13px;margin-top:6px}
+.m-check{display:flex;align-items:center;gap:9px;font-size:13px;color:var(--slate-300);margin-bottom:6px}
+.m-check .ck{font-weight:700}.m-check .ck.ok{color:var(--cyan)}.m-check .ck.no{color:var(--loss)}
+.m-maplabel{font-size:11px;color:var(--slate-500);margin:10px 0 4px;text-transform:uppercase;letter-spacing:.06em}
+.m-path{display:flex;flex-wrap:wrap;gap:4px;margin:4px 0}
+.m-seg{font-family:var(--font-mono);font-size:11px;padding:2px 7px;border-radius:5px;background:var(--field);color:var(--slate-300);box-shadow:inset 0 0 0 1px rgba(34,211,238,.15)}
+.m-seg.drain{color:var(--loss);box-shadow:inset 0 0 0 1px rgba(251,113,133,.5)}
+.m-fields{display:grid;gap:8px;margin-top:8px}
+.m-field .fl{font-size:11px;text-transform:uppercase;letter-spacing:.04em;color:var(--slate-500)}
+.m-field .fv{word-break:break-all;border-radius:7px;background:var(--field);padding:5px 9px;font-family:var(--font-mono);font-size:11.5px;color:var(--slate-300);margin-top:2px}
+.m-foot{display:flex;flex-wrap:wrap;gap:3px 16px;font-size:12px;color:var(--slate-500);margin-top:10px}
+.m-foot .fv{font-family:var(--font-mono)}.m-foot .fv.amber{color:var(--win)}.m-foot .fv.cyan{color:var(--cyan)}.m-foot .fv.rose{color:var(--loss)}
+.lab-note{margin-top:22px;text-align:center;font-size:11px;color:var(--slate-500);font-family:var(--font-mono);line-height:1.6}.lab-note b{color:var(--slate-400);font-weight:600}
+</style>
+</head>
+<body>
+<div class="bg-light"></div>
+<div class="bg-vignette"></div>
+<div class="wrap">
+  <header>
+    <h1 class="title">Splitstream<span class="glyph">⤳</span></h1>
+    <p class="tagline">drop the token · ride the branching river · the multiplier builds until it drains · provably fair · played in chips</p>
+  </header>
+  <div class="topbar">
+    <div class="balance"><span class="coin"></span><span class="amt" id="balance">25,000</span><span class="cur">MORBIUS</span></div>
+    <div class="right">
+      <button class="pill-btn" id="fairBtn"><span class="dot"></span>Provably fair</button>
+      <button class="icon-btn" id="soundBtn" title="Sound" aria-label="Toggle sound">♪</button>
+    </div>
+  </div>
+
+  <div class="game-grid">
+    <section>
+      <div class="panel">
+        <p class="panel-label">Current</p>
+        <div class="diff-row" id="diffRow">
+          <button class="diff active" data-diff="calm"><div class="d-name">Calm</div><div class="d-meta">5% drains</div></button>
+          <button class="diff" data-diff="standard"><div class="d-name">Std</div><div class="d-meta">10% drains</div></button>
+          <button class="diff" data-diff="wild"><div class="d-name">Wild</div><div class="d-meta">18% drains</div></button>
+        </div>
+      </div>
+      <div class="panel">
+        <p class="panel-label">Bet amount</p>
+        <div class="bet-input-row">
+          <div class="bet-field"><span class="coin"></span><input id="betInput" class="mono" inputmode="numeric" value="500" /></div>
+          <button class="mini-btn" data-bet="half">½</button>
+          <button class="mini-btn" data-bet="double">2×</button>
+        </div>
+        <div class="chips">
+          <button class="chip" data-add="100">+100</button>
+          <button class="chip" data-add="500">+500</button>
+          <button class="chip" data-add="1000">+1k</button>
+          <button class="chip" data-set="max">Max</button>
+        </div>
+        <div class="minmax"><span>Min 100</span><span>Max 100,000</span></div>
+      </div>
+      <div class="panel">
+        <p class="panel-label">How it pays</p>
+        <p class="how">The token flows down <b>8 gates</b>. Each gate multiplies your running total by its value — but a gate can <b>drain</b> (the river falls away) and you lose. Survive all eight and you keep the full multiplier. No cash-out: it's a <b>watch-it-flow</b> drop. Wilder currents drain more often but pay far bigger.</p>
+      </div>
+    </section>
+
+    <section class="board">
+      <div class="board-shell">
+        <div class="hud">
+          <div class="cell"><div class="k">Multiplier</div><div class="v mult idle" id="hudMult">1.00×</div></div>
+          <div class="cell"><div class="k">Depth</div><div class="v dep" id="hudDepth">0 / 8</div></div>
+          <div class="cell"><div class="k">Payout</div><div class="v" id="hudPay">—</div></div>
+        </div>
+        <div class="felt">
+          <div class="river" id="river"></div>
+          <div class="felt-mid" id="feltMid">Pick a current and drop in</div>
+          <div class="banner-host"><div class="banner" id="banner"><div class="b-k" id="bannerK"></div><div class="b-v" id="bannerV"></div></div></div>
+        </div>
+      </div>
+      <div class="actions" id="actions"><button class="btn btn-go" id="goBtn">Place bet &amp; drop</button></div>
+    </section>
+  </div>
+
+  <section class="info panel" aria-label="Splitstream information">
+    <div class="tabs-list">
+      <button class="tab-btn active" data-tab="rounds">My rounds</button>
+      <button class="tab-btn" data-tab="faq">FAQ</button>
+    </div>
+    <div class="tab-panel active" id="tab-rounds">
+      <div class="hist-head"><h2>Recent rounds</h2><span class="count" id="histCount">last —</span></div>
+      <div id="histBody"></div>
+    </div>
+    <div class="tab-panel" id="tab-faq"><div id="faqBody"></div></div>
+  </section>
+
+  <p class="lab-note">
+    <b>Prototype</b> — Deep-Sea Neon style, single-player on the arcade2 pattern (Plinko-family).<br/>
+    Each gate is drawn from an in-page seeded RNG for feel; the real build derives the stream from the server
+    <b>provably-fair HMAC</b> pipeline (<span class="mono">/api/arcade/splitstream/*</span>). The descent is a deterministic function of the seed, so it re-runs exactly in Verify. RTP fixed by the drain rate × segment table. Currency: <b>MORBIUS</b> chips.
+  </p>
+</div>
+
+<div class="overlay" id="overlay">
+  <div class="modal" role="dialog" aria-modal="true" aria-label="Provably fair">
+    <div class="modal-head"><h2>Provably Fair</h2><button class="modal-x" id="modalX" aria-label="Close">✕</button></div>
+    <div class="m-sec"><h3>Your client seed</h3><p class="note">Mixed into every drop. Change it any time — the next round uses the new value.</p>
+      <div class="m-input-row"><input class="m-input" id="clientSeedInput" placeholder="Leave blank for a random seed each round" /><button class="m-btn outline" id="newSeedBtn">New seed</button></div></div>
+    <div class="m-sec"><h3>Verify a round</h3><p class="note">Every gate is drawn from a server seed committed (hashed) before your bet — revealed once the round settles, and the whole descent re-derives.</p>
+      <div class="m-input-row"><input class="m-input" id="verifyIdInput" placeholder="Round ID" /><button class="m-btn solid" id="verifyBtn">Verify</button></div></div>
+    <div id="verifyOut"></div>
+  </div>
+</div>
+
+<script>
+"use strict";
+(function(){
+  var MIN_BET=100, MAX_BET=100000;
+  var DIFFS={
+    calm:{label:'Calm',rows:8,drain:0.05,seg:[100,103,106,110]},
+    standard:{label:'Standard',rows:8,drain:0.10,seg:[100,106,113,123]},
+    wild:{label:'Wild',rows:8,drain:0.18,seg:[100,110,125,150]}
+  };
+  var S={ balance:25000, diff:'calm', bet:500, phase:'idle', result:null,
+    serverSeed:'', clientSeed:'', clientSeedPref:'', nonce:0, serverHash:'', roundId:'',
+    sound:true, busy:false, history:[] };
+
+  var $=function(id){return document.getElementById(id);};
+  var balanceEl=$('balance'),betInput=$('betInput'),actions=$('actions'),river=$('river'),feltMid=$('feltMid'),
+      hudMult=$('hudMult'),hudDepth=$('hudDepth'),hudPay=$('hudPay'),banner=$('banner'),bannerK=$('bannerK'),bannerV=$('bannerV'),
+      soundBtn=$('soundBtn'),overlay=$('overlay'),histBody=$('histBody'),histCount=$('histCount'),faqBody=$('faqBody');
+
+  function cfg(){return DIFFS[S.diff];}
+  function fmt(n){return Math.round(n).toLocaleString('en-US');}
+  function multStr(x){return (x/100).toFixed(2)+'×';}
+  function rndHex(len){var s='';for(var i=0;i<len;i++)s+=Math.floor(Math.random()*16).toString(16);return s;}
+  function shortId(){return rndHex(8).toUpperCase();}
+  function xmur3(str){var h=1779033703^str.length;for(var i=0;i<str.length;i++){h=Math.imul(h^str.charCodeAt(i),3432918353);h=h<<13|h>>>19;}return function(){h=Math.imul(h^h>>>16,2246822507);h=Math.imul(h^h>>>13,3266489909);return (h^=h>>>16)>>>0;};}
+  function mulberry32(a){return function(){a|=0;a=a+0x6D2B79F5|0;var t=Math.imul(a^a>>>15,1|a);t=t+Math.imul(t^t>>>7,61|t)^t;return ((t^t>>>14)>>>0)/4294967296;};}
+  function makeRng(seedStr){return mulberry32(xmur3(seedStr)());}
+  async function sha256Hex(msg){try{var b=await crypto.subtle.digest('SHA-256',new TextEncoder().encode(msg));return Array.from(new Uint8Array(b)).map(function(x){return x.toString(16).padStart(2,'0');}).join('');}catch(e){return 'sha256-unavailable';}}
+
+  // deterministic descent: per row → seg(1) other(1) drain(1) side(1)
+  function resolveRiver(rng,d){
+    var mult=100, steps=[], busted=false;
+    for(var r=0;r<d.rows;r++){
+      var seg=d.seg[Math.floor(rng()*d.seg.length)];
+      var other=d.seg[Math.floor(rng()*d.seg.length)];
+      var drain=rng()<d.drain;
+      var side=rng()<0.5?0:1;
+      if(drain){steps.push({drain:true,side:side,other:other});busted=true;break;}
+      mult=Math.round(mult*seg/100);
+      steps.push({drain:false,seg:seg,side:side,other:other,running:mult});
+    }
+    return {totalX100:busted?0:mult, steps:steps, busted:busted, rows:d.rows};
+  }
+
+  var actx=null;
+  function tone(f,d,t,g){if(!S.sound)return;try{actx=actx||new (window.AudioContext||window.webkitAudioContext)();var o=actx.createOscillator(),gn=actx.createGain();o.type=t||'sine';o.frequency.value=f;gn.gain.value=g||0.05;o.connect(gn);gn.connect(actx.destination);var n=actx.currentTime;o.start(n);gn.gain.exponentialRampToValueAtTime(0.0001,n+(d||0.12));o.stop(n+(d||0.12));}catch(e){}}
+  function sFlow(i){tone(380+Math.min(i,8)*40,0.08,'sine',0.04);}
+  function sWin(){tone(660,0.12,'sine',0.06);setTimeout(function(){tone(990,0.16,'sine',0.06);},100);}
+  function sDrain(){tone(150,0.32,'sawtooth',0.07);}
+
+  function renderRiverSkeleton(){
+    var d=cfg(),html='';
+    for(var r=0;r<d.rows;r++){html+='<div class="rrow" data-r="'+r+'"><span class="rnode">· · ·</span></div>';}
+    river.innerHTML=html;
+  }
+  function syncHud(mult,depth){
+    hudMult.textContent=multStr(mult);hudMult.classList.toggle('idle',mult===100);
+    hudDepth.textContent=depth+' / '+cfg().rows;
+  }
+  function setPay(v){hudPay.textContent=(v===null||v===undefined)?'—':fmt(v);}
+
+  function renderActions(){
+    actions.innerHTML='<button class="btn btn-go" id="goBtn"'+(S.busy?' disabled':'')+'>'+(S.phase==='settled'?'Drop again':'Place bet &amp; drop')+'</button>';
+    $('goBtn').addEventListener('click',startRound);
+  }
+  function setControls(on){
+    document.querySelectorAll('#diffRow .diff').forEach(function(b){b.setAttribute('aria-disabled',on?'false':'true');});
+    betInput.disabled=!on;document.querySelectorAll('.chip,.mini-btn').forEach(function(b){b.style.pointerEvents=on?'auto':'none';b.style.opacity=on?'1':'.5';});
+  }
+
+  async function startRound(){
+    if(S.busy)return;
+    var bet=clampBet(parseInt(betInput.value,10)||0);
+    if(bet>S.balance){flashInput();return;}
+    betInput.value=bet;S.busy=true;S.phase='active';
+    S.bet=bet;S.balance-=bet;balanceEl.textContent=fmt(S.balance);
+    S.serverSeed=rndHex(64);S.clientSeed=(S.clientSeedPref||'').trim()||rndHex(20);S.nonce+=1;S.roundId=shortId();
+    S.serverHash=await sha256Hex(S.serverSeed);
+    S.result=resolveRiver(makeRng(S.serverSeed+':'+S.clientSeed+':'+S.nonce),cfg());
+    hideBanner();setControls(false);renderActions();renderRiverSkeleton();syncHud(100,0);setPay(null);
+    feltMid.textContent='The current carries the token…';
+    animate();
+  }
+
+  function animate(){
+    var steps=S.result.steps,i=0,rows=document.querySelectorAll('#river .rrow');
+    function tick(){
+      if(i>=steps.length){settle();return;}
+      var st=steps[i],row=rows[i];
+      row.className='rrow shown '+(st.side?'right':'left');
+      if(st.drain){
+        row.innerHTML='<span class="rnode drain">drain ✕</span><span class="ralt">'+multStr(st.other)+'</span>';
+        sDrain();syncHud(0,i);setTimeout(settle,420);return;
+      }
+      row.innerHTML='<span class="rnode on">'+multStr(st.seg)+'</span><span class="ralt">'+multStr(st.other)+'</span>';
+      sFlow(i);syncHud(st.running,i+1);
+      i++;setTimeout(tick,250);
+    }
+    tick();
+  }
+
+  function settle(){
+    S.phase='settled';
+    var totalX100=S.result.totalX100, payout=Math.floor(S.bet*totalX100/100), win=payout>0;
+    if(win)S.balance+=payout;balanceEl.textContent=fmt(S.balance);
+    setPay(payout);
+    var depth=S.result.busted?(S.result.steps.length):cfg().rows;
+    if(win){sWin();showBanner('win','Reached the mouth · '+multStr(totalX100),'+'+fmt(payout-S.bet)+' MORBIUS');feltMid.innerHTML='Survived all '+cfg().rows+' gates for <span class="hl">'+multStr(totalX100)+'</span>.';}
+    else{sDrain();showBanner('loss','Drained at gate '+depth,'−'+fmt(S.bet)+' MORBIUS');feltMid.innerHTML='The river drained at gate <span class="hl">'+depth+'</span>.';}
+    S.history.unshift({ id:S.roundId, at:new Date().toISOString(), diff:S.diff, bet:S.bet, totalX100:totalX100,
+      payout:payout, busted:S.result.busted, depth:depth,
+      steps:S.result.steps.map(function(s){return {drain:!!s.drain,seg:s.seg||0,other:s.other};}),
+      serverSeed:S.serverSeed, serverHash:S.serverHash, clientSeed:S.clientSeed, nonce:S.nonce });
+    if(S.history.length>15)S.history.pop();
+    S.busy=false;setControls(true);renderActions();renderHistory();
+  }
+
+  function showBanner(k,a,b){banner.className='banner show '+k+' arc-banner-in';bannerK.textContent=a;bannerV.textContent=b;}
+  function hideBanner(){banner.className='banner';}
+  function clampBet(v){if(isNaN(v)||v<MIN_BET)v=MIN_BET;if(v>MAX_BET)v=MAX_BET;return v;}
+  function flashInput(){betInput.style.color='#FB7185';setTimeout(function(){betInput.style.color='#fff';},400);}
+
+  function timeLabel(iso){var d=new Date(iso);return isNaN(d.getTime())?'—':d.toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'});}
+  function renderHistory(){
+    histCount.textContent='last '+(S.history.length||'—');
+    if(!S.history.length){histBody.innerHTML='<p class="hist-empty">No drops yet — pick a current and drop in.</p>';return;}
+    histBody.innerHTML='<ul class="hist-list">'+S.history.map(function(r){
+      var win=r.payout>0,profit=r.payout-r.bet;
+      var xcell=win?'<span class="x win">'+multStr(r.totalX100)+'</span>':'<span class="x bust">drained</span>';
+      var pcell='<span class="p '+(profit>0?'up':'flat')+'">'+(profit>0?'+'+fmt(profit):fmt(profit))+'</span>';
+      return '<li class="hist-row"><span class="t">'+timeLabel(r.at)+'</span><span class="badge">'+DIFFS[r.diff].label+'</span>'
+        +'<span class="m">bet '+fmt(r.bet)+'</span><span class="m">gate '+r.depth+'/'+DIFFS[r.diff].rows+'</span>'+xcell+pcell
+        +'<button class="verify" data-id="'+r.id+'">Verify</button></li>';
+    }).join('')+'</ul>';
+    histBody.querySelectorAll('.verify').forEach(function(b){b.addEventListener('click',function(){openFairness(b.getAttribute('data-id'));});});
+  }
+
+  function recipeStr(){return 'HMAC_SHA256(serverSeed, `${clientSeed}:${nonce}`) → per gate: segment multiplier + drain check';}
+  function ckHtml(ok,label){return '<div class="m-check"><span class="ck '+(ok?'ok':'no')+'">'+(ok?'✓':'✗')+'</span><span>'+label+'</span></div>';}
+  function fieldHtml(l,v){return '<div class="m-field"><div class="fl">'+l+'</div><div class="fv">'+v+'</div></div>';}
+  function pathHtml(steps){return '<div class="m-path">'+steps.map(function(s,i){return s.drain?'<span class="m-seg drain">g'+(i+1)+' drain</span>':'<span class="m-seg">g'+(i+1)+' '+multStr(s.seg)+'</span>';}).join('')+'</div>';}
+  function findRound(id){id=String(id||'').trim();return S.history.filter(function(x){return x.id===id;})[0]||null;}
+  function openFairness(id){overlay.classList.add('open');$('clientSeedInput').value=S.clientSeedPref;
+    var target=id||(S.history[0]&&S.history[0].id);
+    if(target){$('verifyIdInput').value=target;runVerify(target);}else{$('verifyOut').innerHTML='<p class="note">Play a round, then verify it here — or paste any round ID.</p>';}}
+  function closeFairness(){overlay.classList.remove('open');}
+  async function runVerify(id){
+    var out=$('verifyOut'),r=findRound(id);
+    if(!r){out.innerHTML='<p class="note" style="color:var(--loss)">No round found with that ID.</p>';return;}
+    out.innerHTML='<p class="note">Checking…</p>';
+    var hashOk=(await sha256Hex(r.serverSeed))===r.serverHash;
+    var re=resolveRiver(makeRng(r.serverSeed+':'+r.clientSeed+':'+r.nonce),DIFFS[r.diff]);
+    var totalOk=re.totalX100===r.totalX100;
+    var pathOk=re.steps.length===r.steps.length && re.steps.every(function(s,i){return (!!s.drain)===r.steps[i].drain && (s.drain||s.seg===r.steps[i].seg);});
+    var expected=Math.floor(r.bet*r.totalX100/100),payoutOk=expected===r.payout;
+    out.innerHTML='<div class="m-result">'
+      +ckHtml(hashOk,'Server seed matches its committed hash (checked locally)')
+      +ckHtml(totalOk&&pathOk,'The descent re-runs from the seed gate-for-gate')
+      +ckHtml(payoutOk,'Payout reconciles with floor(bet × multiplier)')
+      +'<div class="m-maplabel">The descent (re-derived)</div>'+pathHtml(r.steps)
+      +'<div class="m-fields">'+fieldHtml('Server seed hash (committed)',r.serverHash)+fieldHtml('Server seed (revealed)',r.serverSeed)
+        +fieldHtml('Client seed',r.clientSeed)+fieldHtml('Nonce',String(r.nonce))+fieldHtml('Recipe',recipeStr())+'</div>'
+      +'<div class="m-foot"><span>Bet: <span class="fv">'+fmt(r.bet)+'</span></span>'
+        +'<span>Multiplier: <span class="fv cyan">'+multStr(r.totalX100)+'</span></span>'
+        +'<span>Returned: <span class="fv '+(r.payout>0?'amber':'rose')+'">'+fmt(r.payout)+' chips</span></span></div>'
+      +'</div>';
+  }
+
+  var FAQS=[
+    {q:'How does Splitstream pay out?',a:'<p>You drop a token into the river and it flows down <span class="hl">eight gates</span>. Each gate it passes multiplies your running total by that gate\'s value. But any gate can <span class="hl">drain</span> — the river falls away and the round is lost. Make it through all eight and you win the full accumulated multiplier.</p><p>There\'s no cash-out: it\'s a watch-it-flow drop, like Plinko. You just pick how wild the current is.</p>'},
+    {q:'Is it really fair — and reproducible?',a:'<p>Yes. Before your bet the server commits to a secret <span class="hl">server seed</span> (you see only its SHA-256 hash). Every gate\'s multiplier and drain check is drawn from a stream derived by HMAC from that seed, <span class="hl">your client seed</span>, and a nonce.</p><p>The whole descent is a <span class="hl">deterministic function of that stream</span> — the flowing animation is just visualization. Hit <span class="hl">Verify</span> and anyone can replay it gate-for-gate and confirm the multiplier and the commitment hash.</p>'},
+    {q:'What do the currents change?',a:'<p>Volatility. <span class="hl">Calm</span> rarely drains (5% a gate) and grows gently; <span class="hl">Wild</span> drains often (18% a gate) but its gates multiply much harder, so it busts a lot and occasionally pays huge. The long-run return is tuned to be the same across all three.</p>'},
+    {q:'Why no cash-out button?',a:'<p>Because pulling out early would always beat the house — each gate carries a small edge, so stopping sooner means a higher return. Auto-resolving the full river keeps the math honest and the game a pure drop, not a press-your-luck ladder (we already have those in Towers and Chicken).</p>'},
+    {q:'How do I get chips?',a:'<p>Chips are the play credits used at every table. Tap <span class="hl">Buy</span> next to your balance to swap MORBIUS for chips at a fixed <span class="hl">1 chip = 1 MORBIUS</span> — instant, gasless, and <span class="hl">no fee</span>. Cash back out any time at the same 1:1.</p>'},
+    {q:'How do I get MORBIUS?',a:'<p>MORBIUS is the project\'s token on <span class="hl">PulseChain</span> (chain ID 369). Buy it on <span class="hl">PulseX</span> by swapping PLS or WPLS for MORBIUS, then deposit and convert to chips.</p><p class="mono" style="font-size:11px">Contract: <a href="https://scan.pulsechain.com/token/0xB7d4eB5fDfE3d4d3B5C16a44A49948c6EC77c6F1" target="_blank" rel="noopener noreferrer">0xB7d4eB5fDfE3d4d3B5C16a44A49948c6EC77c6F1</a></p><p>Always confirm the contract address before swapping — never trust a ticker alone.</p>'},
+    {q:'Chips vs. MORBIUS — what\'s the difference?',a:'<p><span class="hl">MORBIUS</span> is the real, on-chain token in your wallet. <span class="hl">Chips</span> are off-chain 1:1 credits you play with: faster, gasless, settled instantly. You move between them at 1:1 and only ever wager in chips.</p>'},
+    {q:'Why do I have to sign a message in my wallet?',a:'<p>It\'s a <span class="hl">Sign-In with Ethereum</span> (SIWE) signature — an off-chain message, not a transaction. No gas, no funds moved, no approvals. It only proves you control your address.</p><div class="siwe"><div class="s">morbius.io wants you to sign in with your Ethereum account:</div><div class="a">0xYour…Wallet</div><div style="margin:6px 0" class="s">Sign in to MORBIUS. This proves you own this wallet. No funds will move.</div><div>Chain ID: 369</div><div>Nonce: a1b2c3…</div></div><p>It\'s domain-bound and replay-proof, and never exposes your private key.</p>'},
+    {q:'What are the fees?',a:'<p>These chip games take <span class="hl">no per-bet or per-payout fee</span> — each keeps a small built-in house edge in its odds. Buying and cashing chips is free, 1:1.</p>'}
+  ];
+  function renderFaq(){faqBody.innerHTML=FAQS.map(function(f){return '<div class="faq-item"><button class="faq-q">'+f.q+'</button><div class="faq-a">'+f.a+'</div></div>';}).join('');
+    faqBody.querySelectorAll('.faq-item').forEach(function(it){it.querySelector('.faq-q').addEventListener('click',function(){it.classList.toggle('open');});});}
+
+  document.querySelectorAll('#diffRow .diff').forEach(function(b){b.addEventListener('click',function(){
+    if(S.phase==='active')return;document.querySelectorAll('#diffRow .diff').forEach(function(x){x.classList.remove('active');});
+    b.classList.add('active');S.diff=b.getAttribute('data-diff');S.phase='idle';hideBanner();renderRiverSkeleton();syncHud(100,0);setPay(null);renderActions();});});
+  document.querySelectorAll('.chip').forEach(function(c){c.addEventListener('click',function(){if(S.phase==='active')return;
+    if(c.getAttribute('data-set')==='max'){betInput.value=Math.min(MAX_BET,S.balance);}else{betInput.value=clampBet((parseInt(betInput.value,10)||0)+parseInt(c.getAttribute('data-add'),10));}});});
+  document.querySelectorAll('.mini-btn').forEach(function(b){b.addEventListener('click',function(){if(S.phase==='active')return;var v=parseInt(betInput.value,10)||MIN_BET;betInput.value=clampBet(b.getAttribute('data-bet')==='half'?Math.floor(v/2):v*2);});});
+  betInput.addEventListener('change',function(){betInput.value=clampBet(parseInt(betInput.value,10)||0);});
+  soundBtn.addEventListener('click',function(){S.sound=!S.sound;soundBtn.style.color=S.sound?'':'#475569';soundBtn.textContent=S.sound?'♪':'✕';if(S.sound)tone(700,0.1,'sine',0.05);});
+  $('fairBtn').addEventListener('click',function(){openFairness(null);});
+  $('modalX').addEventListener('click',closeFairness);
+  overlay.addEventListener('click',function(e){if(e.target===overlay)closeFairness();});
+  window.addEventListener('keydown',function(e){if(e.key==='Escape')closeFairness();});
+  $('newSeedBtn').addEventListener('click',function(){S.clientSeedPref=rndHex(16);$('clientSeedInput').value=S.clientSeedPref;});
+  $('clientSeedInput').addEventListener('input',function(e){S.clientSeedPref=e.target.value.slice(0,128);});
+  $('verifyBtn').addEventListener('click',function(){runVerify($('verifyIdInput').value);});
+  document.querySelectorAll('.tab-btn').forEach(function(t){t.addEventListener('click',function(){
+    document.querySelectorAll('.tab-btn').forEach(function(x){x.classList.remove('active');});document.querySelectorAll('.tab-panel').forEach(function(x){x.classList.remove('active');});
+    t.classList.add('active');$('tab-'+t.getAttribute('data-tab')).classList.add('active');});});
+
+  renderRiverSkeleton();syncHud(100,0);setPay(null);renderActions();renderHistory();renderFaq();
+})();
+</script>
+</body>
+</html>

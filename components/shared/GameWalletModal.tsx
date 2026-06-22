@@ -30,6 +30,7 @@ import {
 } from '@/lib/contracts';
 import { getBlackjackServerUrlOptional } from '@/lib/api-urls';
 import { apiFetch } from '@/lib/api-auth';
+import { useSiwe } from '@/contexts/siwe-context';
 import { CustomApprovalModal } from '@/components/BLACKJACK/CustomApprovalModal';
 import { ReportModal } from '@/components/shared/ReportModal';
 import { toast } from 'sonner';
@@ -39,6 +40,7 @@ import { WalletActionPrompt, type WalletActionVariant } from '@/components/auth/
 import { useMobileWalletHandoff } from '@/hooks/use-mobile-wallet-handoff';
 import { useWalletHandoffPhase } from '@/hooks/use-wallet-handoff-phase';
 import { formatChips, parseChipInput } from '@/lib/format-poker-chips';
+import { MonteGame } from '@/components/Monte/MonteGame';
 
 // ── Logos ──────────────────────────────────────────────────────────────────
 
@@ -179,6 +181,9 @@ export interface GameWalletModalProps {
 // ── Component ──────────────────────────────────────────────────────────────
 
 const DEPOSIT_CONFIRMATIONS_REQUIRED = 3;
+/** Cap retries of the post-confirmation `notify` call so a flaky RPC / 5xx can't spin the
+ * "3/3 confirmations" toast forever. ~2s poll interval × this = how long we keep trying. */
+const DEPOSIT_NOTIFY_MAX_ATTEMPTS = 15;
 /** Default viem receipt wait is 3 minutes — too short for congested mempools; match long wallet pending windows. */
 const DEPOSIT_RECEIPT_WAIT_MS = 48 * 60 * 60 * 1000; // 48h
 /** One-tap deposit presets (whole MORBIUS). Input is always MORBIUS-denominated for both PLS and MORBIUS methods. */
@@ -263,6 +268,7 @@ export function GameWalletModal({
   const { address } = useAccount();
   const publicClient = usePublicClient();
   const serverUrl = getBlackjackServerUrlOptional();
+  const { isAuthenticated, isSigningIn, signIn, ensureSiweSession } = useSiwe();
 
   // ── Self-managed balance (used when externalBalance is not provided) ─────
   const [internalBalance, setInternalBalance] = useState<bigint | null>(null);
@@ -323,6 +329,14 @@ export function GameWalletModal({
   const depositToastIdRef = useRef<string | number | null>(null);
   /** Bumps when deposit resume effect cleans up so in-flight async from Strict Mode / re-open does not apply stale state. */
   const resumeDepositGenRef = useRef(0);
+  /** Guards against the 2s confirmation poll firing overlapping `notify` POSTs while one is in flight. */
+  const notifyInFlightRef = useRef(false);
+  /** Counts consecutive failed `notify` attempts (5xx / network) so we can give up gracefully instead of looping forever. */
+  const notifyAttemptsRef = useRef(0);
+  /** Chip balance snapshot taken at deposit initiation (before the tx) so the credit poll detects
+   * the increase reliably. Capturing it AFTER notify raced the now-near-instant server credit and
+   * caused false "taking longer than usual" timeouts on deposits that actually succeeded. */
+  const preDepositBalanceRef = useRef<bigint | null>(null);
 
   const [withdrawPhase, setWithdrawPhase] = useState<WithdrawPhase>('idle');
   const [withdrawError, setWithdrawError] = useState<string | null>(null);
@@ -473,6 +487,9 @@ export function GameWalletModal({
       setDepositNotifyAmountWei(null);
       setHowToVideo(null);
       setJustApproved(false);
+      notifyInFlightRef.current = false;
+      notifyAttemptsRef.current = 0;
+      preDepositBalanceRef.current = null;
     } else {
       setTab(defaultTab);
       if (isSelfManaged) fetchBalance();
@@ -563,6 +580,10 @@ export function GameWalletModal({
       depositNotifyAmountWei == null
     ) return;
 
+    // Fresh confirmation cycle for this deposit — reset the notify retry/in-flight guards.
+    notifyInFlightRef.current = false;
+    notifyAttemptsRef.current = 0;
+
     let cancelled = false;
     const poll = async () => {
       if (cancelled) return;
@@ -578,7 +599,17 @@ export function GameWalletModal({
           });
         }
         if (confirmations >= DEPOSIT_CONFIRMATIONS_REQUIRED) {
-          const notifyResult = await notifyDeposit(depositTxHash, depositNotifyAmountWei);
+          // The 2s interval must not stack overlapping notify POSTs (a server-side notify
+          // does on-chain RPC lookups and can take >2s). Only one in flight at a time.
+          if (notifyInFlightRef.current) return;
+          notifyInFlightRef.current = true;
+          let notifyResult: { ok: true } | { ok: false; status: number; message: string } | null = null;
+          try {
+            notifyResult = await notifyDeposit(depositTxHash, depositNotifyAmountWei);
+          } finally {
+            notifyInFlightRef.current = false;
+          }
+          if (cancelled || !notifyResult) return;
           if (notifyResult.ok) {
             clearPendingDepositStorage();
 
@@ -601,7 +632,9 @@ export function GameWalletModal({
             setDepositBlockNumber(null);
             setDepositTxHash(null);
 
-            const initialBalance = (await fetchServerBalanceDirect()) ?? 0n;
+            // Baseline = the pre-deposit snapshot (captured before the tx). Falls back to a live
+            // read only for the resume-on-refresh path, which doesn't run the deposit handlers.
+            const initialBalance = preDepositBalanceRef.current ?? (await fetchServerBalanceDirect()) ?? 0n;
             const startedAt = Date.now();
             const CREDIT_TIMEOUT_MS = 60_000;
             const CREDIT_POLL_MS = 2_000;
@@ -651,6 +684,8 @@ export function GameWalletModal({
             return;
           } else if (notifyResult.ok === false) {
             const { status, message } = notifyResult;
+            // 4xx = the server rejected this deposit (bad/duplicate/unverifiable tx). It will
+            // never succeed on retry — surface it and stop.
             if (status >= 400 && status < 500) {
               if (depositToastIdRef.current != null) {
                 toast.error('Could not record deposit', {
@@ -661,6 +696,22 @@ export function GameWalletModal({
               }
               setDepositPhase('error');
               setDepositError(message);
+              return;
+            }
+            // 5xx / network / unknown — transient. Retry on the next poll tick, but bound it
+            // so a persistent failure ends in a clear message instead of an eternal "3/3"
+            // spinner. The tx is safely on-chain; reopening Deposit re-runs notify.
+            notifyAttemptsRef.current += 1;
+            if (notifyAttemptsRef.current >= DEPOSIT_NOTIFY_MAX_ATTEMPTS) {
+              if (depositToastIdRef.current != null) {
+                toast.message('Deposit confirmed on-chain', {
+                  id: depositToastIdRef.current,
+                  description:
+                    'We couldn’t record it just now. It will be credited automatically once our server catches up — or reopen Deposit to retry.',
+                  duration: 10000,
+                });
+              }
+              setDepositPhase('idle');
               return;
             }
             return;
@@ -732,6 +783,22 @@ export function GameWalletModal({
   const handleDepositPLS = async () => {
     if (!depositAmount || !plsEquivalent || !publicClient) return;
     setDepositError(null);
+    // Establish the SIWE session BEFORE paying. The post-confirmation `notify` call is the
+    // first authenticated request in this flow; without a live session it 401s and pops a
+    // surprise sign-in popup after the user has already deposited (the "stuck on the 3rd
+    // confirmation" bug). This is a no-op popup-wise when a session already exists.
+    try {
+      await ensureSiweSession();
+    } catch (e: any) {
+      const isCancel = e?.message?.includes('rejected') || e?.message?.includes('denied');
+      toast.error(isCancel ? 'Sign-in cancelled' : 'Sign-in required to deposit', {
+        description: isCancel ? undefined : (e instanceof Error ? e.message : undefined),
+      });
+      return;
+    }
+    // Snapshot the balance now, before any credit can happen, so the post-confirmation poll
+    // detects the increase even though the server credit is near-instant.
+    preDepositBalanceRef.current = await fetchServerBalanceDirect();
     setDepositPhase('confirming');
     const toastId = toast.loading('Confirm in wallet...', {
       description: `Depositing ${depositAmount} MORBIUS worth of PLS`,
@@ -787,6 +854,20 @@ export function GameWalletModal({
     const amountWei = parseEther(depositAmount);
     setJustApproved(false);
     setDepositError(null);
+    // Establish the SIWE session BEFORE paying — see handleDepositPLS for the rationale.
+    // Otherwise the post-confirmation `notify` call surprises the user with a sign-in popup
+    // after they've already deposited, and the confirmation poll can hang on it.
+    try {
+      await ensureSiweSession();
+    } catch (e: any) {
+      const isCancel = e?.message?.includes('rejected') || e?.message?.includes('denied');
+      toast.error(isCancel ? 'Sign-in cancelled' : 'Sign-in required to deposit', {
+        description: isCancel ? undefined : (e instanceof Error ? e.message : undefined),
+      });
+      return;
+    }
+    // Snapshot the balance now, before any credit can happen — see handleDepositPLS.
+    preDepositBalanceRef.current = await fetchServerBalanceDirect();
     setDepositPhase('confirming');
     const toastId = toast.loading('Confirm in wallet...', {
       description: `Depositing ${depositAmount} MORBIUS`,
@@ -1118,6 +1199,8 @@ export function GameWalletModal({
     depositPhase === 'idle';
   const isLegacyWithdrawLoading = withdrawTx.isPending;
   const controlsDisabled = isDepositLoading || isPreparingWithdraw || isLegacyWithdrawLoading || externalWithdrawLock;
+  /** The ~1-minute on-chain + crediting wait — swap the amount form for a free Monte game to pass the time. */
+  const isDepositWaiting = depositPhase === 'confirming_on_chain' || depositPhase === 'crediting';
 
   const mobileHandoff = useMobileWalletHandoff();
   const waitingForWalletSignature =
@@ -1322,6 +1405,7 @@ export function GameWalletModal({
                         </button>
                       </div>
 
+                      {!isDepositWaiting && (
                       <div className="space-y-2">
                         <div className="flex justify-between items-center px-1">
                           <label className="text-sm font-medium text-gray-700">Amount</label>
@@ -1390,7 +1474,46 @@ export function GameWalletModal({
                           })}
                         </div>
                       </div>
+                      )}
 
+                      {/* Free 3-card monte to pass the ~1-min on-chain + crediting wait. No stakes — local streak only. */}
+                      {isDepositWaiting && (
+                        <div className="rounded-2xl bg-zinc-950 border border-cyan-400/20 p-3 shadow-inner">
+                          <MonteGame variant="embedded" dense />
+                        </div>
+                      )}
+
+                      {address && !isAuthenticated ? (
+                        // Explicit, user-initiated sign-in gate. Deposits need a SIWE session
+                        // for the post-confirmation /api/deposit/notify call; signing in here —
+                        // up front, on the user's own tap — avoids a surprise wallet popup
+                        // appearing after they've already paid (which they might dismiss).
+                        <div className="space-y-1.5">
+                          <button
+                            type="button"
+                            onClick={() =>
+                              void signIn().catch((e: any) => {
+                                const isCancel =
+                                  e?.message?.includes('rejected') || e?.message?.includes('denied');
+                                toast.error(isCancel ? 'Sign-in cancelled' : 'Sign-in failed', {
+                                  description: isCancel ? undefined : (e instanceof Error ? e.message : undefined),
+                                });
+                              })
+                            }
+                            disabled={controlsDisabled || isSigningIn}
+                            className="w-full py-4 text-sm font-medium rounded-xl flex items-center justify-center transition-colors bg-black text-white hover:bg-gray-800 disabled:opacity-50 disabled:cursor-not-allowed"
+                          >
+                            {isSigningIn ? (
+                              <><Loader2 className="w-4 h-4 mr-2 animate-spin" />Check your wallet…</>
+                            ) : (
+                              'Sign in to deposit'
+                            )}
+                          </button>
+                          <p className="text-xs text-center text-gray-500">
+                            One-time signature to prove you own this wallet. No funds move.
+                          </p>
+                        </div>
+                      ) : (
                       <div className="space-y-1.5">
                         <button
                           onClick={depositMethod === 'pls' ? handleDepositPLS : handleDepositMORBIUS}
@@ -1456,6 +1579,7 @@ export function GameWalletModal({
                           </p>
                         )}
                       </div>
+                      )}
                       <p className="text-[10px] text-gray-400 text-center mt-3">
                         Withdrawals capped at 1,000,000 <TokenLabel symbol="MORBIUS" size="sm" />/day.
                       </p>

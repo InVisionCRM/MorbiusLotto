@@ -3,6 +3,7 @@
 import { createContext, useCallback, useContext, useEffect, useRef, useState } from 'react';
 import { useAccount, useSignMessage } from 'wagmi';
 import { SiweMessage } from 'siwe';
+import { getAddress, isAddress } from 'viem';
 import { setAuthFailureHandler, setWsAuthHandler } from '@/lib/api-auth';
 import { useWalletAction } from '@/contexts/wallet-action-context';
 
@@ -18,6 +19,8 @@ export interface SiweState {
   isSigningIn: boolean;
   signIn: () => Promise<`0x${string}`>;
   signInIfNeeded: () => Promise<`0x${string}`>;
+  /** Verify a live session with the server first; only prompt a sign-in if none exists. */
+  ensureSiweSession: () => Promise<`0x${string}`>;
   signOut: () => Promise<void>;
 }
 
@@ -89,6 +92,14 @@ export function SiweProvider({ children }: { children: React.ReactNode }) {
 
   const signIn = useCallback(async (): Promise<`0x${string}`> => {
     if (!connectedAddress) throw new Error('Connect a wallet first');
+    // siwe 3.x validates line 2 (the address) against EIP-55 and throws
+    // "line 2: invalid (EIP-55) address" if it isn't checksummed. Some connectors
+    // (notably mobile WalletConnect / in-app wallet browsers) hand back a lowercase
+    // address, so re-checksum here before building the message.
+    if (!isAddress(connectedAddress)) {
+      throw new Error('Connected wallet address is not a valid EVM address');
+    }
+    const checksummedAddress = getAddress(connectedAddress);
 
     if (signInPromiseRef.current) return signInPromiseRef.current;
 
@@ -100,7 +111,7 @@ export function SiweProvider({ children }: { children: React.ReactNode }) {
 
         const message = new SiweMessage({
           domain: SIWE_DOMAIN,
-          address: connectedAddress,
+          address: checksummedAddress,
           statement: 'Sign in to MORBIUS. This proves you own this wallet. No funds will move.',
           uri: window.location.origin,
           version: '1',
@@ -195,6 +206,7 @@ export function SiweProvider({ children }: { children: React.ReactNode }) {
     isSigningIn,
     signIn,
     signInIfNeeded,
+    ensureSiweSession,
     signOut,
   };
 
