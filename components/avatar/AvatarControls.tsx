@@ -97,43 +97,6 @@ function labelForColor(field: AvatarField, value: string, index: number) {
   return `${COLOR_LABEL_PREFIX[field] ?? 'Color'} ${index + 1}`;
 }
 
-function parseCssColor(value: string): { r: number; g: number; b: number } | null {
-  const trimmed = value.trim().toLowerCase();
-  if (trimmed.startsWith('#')) {
-    const hex = trimmed.slice(1);
-    if (hex.length === 3) {
-      const r = Number.parseInt(`${hex[0]}${hex[0]}`, 16);
-      const g = Number.parseInt(`${hex[1]}${hex[1]}`, 16);
-      const b = Number.parseInt(`${hex[2]}${hex[2]}`, 16);
-      if (Number.isNaN(r) || Number.isNaN(g) || Number.isNaN(b)) return null;
-      return { r, g, b };
-    }
-    if (hex.length === 6) {
-      const r = Number.parseInt(hex.slice(0, 2), 16);
-      const g = Number.parseInt(hex.slice(2, 4), 16);
-      const b = Number.parseInt(hex.slice(4, 6), 16);
-      if (Number.isNaN(r) || Number.isNaN(g) || Number.isNaN(b)) return null;
-      return { r, g, b };
-    }
-    return null;
-  }
-
-  const rgbaMatch = trimmed.match(/^rgba?\(\s*(\d+)\s*,\s*(\d+)\s*,\s*(\d+)/);
-  if (!rgbaMatch) return null;
-  const r = Number.parseInt(rgbaMatch[1] ?? '', 10);
-  const g = Number.parseInt(rgbaMatch[2] ?? '', 10);
-  const b = Number.parseInt(rgbaMatch[3] ?? '', 10);
-  if (Number.isNaN(r) || Number.isNaN(g) || Number.isNaN(b)) return null;
-  return { r, g, b };
-}
-
-function isDarkCssColor(value: string): boolean {
-  const rgb = parseCssColor(value);
-  if (!rgb) return false;
-  const luminance = (0.2126 * rgb.r + 0.7152 * rgb.g + 0.0722 * rgb.b) / 255;
-  return luminance < 0.58;
-}
-
 function buildOptionSet(
   field: AvatarField,
   values: readonly string[],
@@ -147,15 +110,29 @@ function buildOptionSet(
   }));
 }
 
-function buildCustomFeatureOptions(category: 'mouth' | 'nose' | 'hair'): PickerOption[] {
+function buildCustomFeatureOptions(
+  category: 'mouth' | 'nose' | 'hair',
+  field: EditorField,
+): PickerOption[] {
   const ids = Object.keys(AVATAR_FEATURE_REGISTRY[category]).sort((a, b) => a.localeCompare(b));
-  return [{ value: '', label: 'None' }, ...ids.map((id) => ({ value: id, label: id }))];
+  const make = (value: string, label: string): PickerOption => ({
+    value,
+    label,
+    previewKind: 'avatar',
+    previewPatch: { [field]: value } as Partial<AvatarConfig>,
+  });
+  return [make('', 'None'), ...ids.map((id) => make(id, id))];
 }
 
 function buildBackgroundOptions(
   bgItems: Array<{ displayName: string; unlocks: Array<{ field: string; value: string }> }>,
 ) {
-  const options: PickerOption[] = [{ value: '', label: 'None' }];
+  const options: PickerOption[] = [{
+    value: '',
+    label: 'None',
+    previewKind: 'background',
+    previewPatch: { backgroundImage: '' } as Partial<AvatarConfig>,
+  }];
   bgItems.forEach((bgItem) => {
     const value = bgItem.unlocks.find((unlock) => unlock.field === 'backgroundImage')?.value ?? '';
     if (!value) return;
@@ -163,6 +140,7 @@ function buildBackgroundOptions(
       value,
       label: bgItem.displayName,
       previewKind: 'background',
+      previewPatch: { backgroundImage: value } as Partial<AvatarConfig>,
     });
   });
   return options;
@@ -254,9 +232,9 @@ export default function AvatarControls({
     icon: <Paintbrush className="w-4 h-4 shrink-0" />,
     rows: [
       { label: 'Lips', field: 'lipShape', options: buildOptionSet('lipShape', PICKER_LIP_SHAPES, 'avatar') },
-      { label: 'Custom Mouth SVG', field: 'customMouthFeatureId', options: buildCustomFeatureOptions('mouth'), canPin: false },
-      { label: 'Custom Nose SVG', field: 'customNoseFeatureId', options: buildCustomFeatureOptions('nose'), canPin: false },
-      { label: 'Custom Hair SVG', field: 'customHairFeatureId', options: buildCustomFeatureOptions('hair'), canPin: false },
+      { label: 'Custom Mouth SVG', field: 'customMouthFeatureId', options: buildCustomFeatureOptions('mouth', 'customMouthFeatureId'), canPin: false },
+      { label: 'Custom Nose SVG', field: 'customNoseFeatureId', options: buildCustomFeatureOptions('nose', 'customNoseFeatureId'), canPin: false },
+      { label: 'Custom Hair SVG', field: 'customHairFeatureId', options: buildCustomFeatureOptions('hair', 'customHairFeatureId'), canPin: false },
       { label: 'Makeup', field: 'makeup', options: buildOptionSet('makeup', PICKER_MAKEUPS, 'avatar') },
       { label: 'Facial Hair', field: 'facialHair', options: buildOptionSet('facialHair', PICKER_FACIAL_HAIRS, 'avatar') },
       { label: 'Mouth Accessory', field: 'mouthAccessory', options: buildOptionSet('mouthAccessory', PICKER_MOUTH_ACCESSORIES, 'avatar') },
@@ -314,7 +292,7 @@ export default function AvatarControls({
 
   const arrowClass = [
     'absolute top-1/2 -translate-y-1/2 z-20 rounded-full border',
-    compact ? 'h-9 w-9' : 'h-14 w-14 sm:h-16 sm:w-16',
+    compact ? 'h-8 w-8' : 'h-14 w-14 sm:h-16 sm:w-16',
     'border-cyan-300/70 text-cyan-600',
     'bg-[radial-gradient(circle_at_30%_30%,rgba(255,255,255,0.95),rgba(209,250,254,0.9))]',
     'hover:text-cyan-700 hover:border-cyan-400/80 hover:bg-[radial-gradient(circle_at_30%_30%,rgba(255,255,255,1),rgba(186,230,253,0.95))]',
@@ -344,15 +322,15 @@ export default function AvatarControls({
         <ChevronRight className="mx-auto" size={compact ? 18 : 28} />
       </button>
 
-      <div className="flex w-full items-center justify-center py-1">
+      <div className={`flex w-full items-center justify-center ${compact ? 'py-0.5' : 'py-1'}`}>
         <div className="relative">
-          <div className="absolute inset-8 rounded-full bg-cyan-200/50 blur-3xl" />
+          <div className={`absolute rounded-full bg-cyan-200/45 ${compact ? 'inset-5 blur-2xl' : 'inset-8 blur-3xl'}`} />
           <AvatarView
             config={config}
             disableAmbientMotion
             className={
               compact
-                ? 'relative z-10 w-28 sm:w-32 aspect-[6/7]'
+                ? 'relative z-10 !w-36 aspect-[6/7]'
                 : 'relative z-10 w-44 sm:w-48 lg:w-[15rem] aspect-[6/7]'
             }
           />
@@ -415,7 +393,9 @@ export default function AvatarControls({
           <div className={`rounded-2xl ${compact ? 'p-1.5 space-y-2' : 'p-2.5 sm:p-3 space-y-3'}`}>
 
             <div className="w-full space-y-2">
-              <span className="text-[11px] font-semibold uppercase tracking-[0.16em] text-cyan-600">Category Item</span>
+              {!compact && (
+                <span className="text-[11px] font-semibold uppercase tracking-[0.16em] text-cyan-600">Category Item</span>
+              )}
               <div className="flex gap-2 overflow-x-auto pb-1 scrollbar-hide">
                 {activeGroup.rows.map((row) => {
                   const isActive = activeRow?.field === row.field;
@@ -438,34 +418,43 @@ export default function AvatarControls({
             </div>
 
             <div className="w-full space-y-2">
-              <div className="flex items-center justify-between gap-2">
-                <span className="text-[11px] font-semibold uppercase tracking-[0.16em] text-cyan-600">Selection</span>
-                {onToggleRandomPin && activeRow && activeRow.canPin !== false && randomizableFieldSet.has(activeRow.field) ? (
-                  <button
-                    type="button"
-                    onClick={() => onToggleRandomPin(activeRow.field as AvatarRandomizeFieldKey)}
-                    className={`inline-flex items-center gap-1 rounded-md px-1.5 py-0.5 text-[10px] leading-none transition-colors ${
-                      pinnedRandomFields?.has(activeRow.field)
-                        ? 'bg-cyan-100 text-cyan-700'
-                        : 'text-slate-500 hover:text-slate-700'
-                    }`}
-                  >
-                    <Pin size={10} />
-                    {pinnedRandomFields?.has(activeRow.field) ? 'Pinned' : 'Pin Item'}
-                  </button>
-                ) : null}
-              </div>
+              {(() => {
+                const showPin = Boolean(
+                  onToggleRandomPin && activeRow && activeRow.canPin !== false && randomizableFieldSet.has(activeRow.field),
+                );
+                if (compact && !showPin) return null;
+                return (
+                  <div className="flex items-center justify-between gap-2">
+                    {!compact && (
+                      <span className="text-[11px] font-semibold uppercase tracking-[0.16em] text-cyan-600">Selection</span>
+                    )}
+                    {showPin && activeRow ? (
+                      <button
+                        type="button"
+                        onClick={() => onToggleRandomPin!(activeRow.field as AvatarRandomizeFieldKey)}
+                        className={`ml-auto inline-flex items-center gap-1 rounded-md px-1.5 py-0.5 text-[10px] leading-none transition-colors ${
+                          pinnedRandomFields?.has(activeRow.field)
+                            ? 'bg-cyan-100 text-cyan-700'
+                            : 'text-slate-500 hover:text-slate-700'
+                        }`}
+                      >
+                        <Pin size={10} />
+                        {pinnedRandomFields?.has(activeRow.field) ? 'Pinned' : 'Pin Item'}
+                      </button>
+                    ) : null}
+                  </div>
+                );
+              })()}
 
               <div className="relative">
                 {/* Thumbnail grid: every option visible at once (no horizontal cycling). */}
                 <div
                   ref={optionsScrollRef}
-                  className={`grid ${compact ? 'grid-cols-3' : 'grid-cols-3 sm:grid-cols-4'} gap-2 py-1.5 pr-1 max-h-[48vh] overflow-y-auto overscroll-y-contain custom-scrollbar`}
+                  className={`grid ${compact ? 'grid-cols-5' : 'grid-cols-5 sm:grid-cols-6'} gap-1.5 py-1.5 pr-1 max-h-[52vh] overflow-y-auto overscroll-y-contain custom-scrollbar`}
                 >
                   {activeRow?.options.map((option) => {
                     const selected = option.value === currentValue;
                     const isColorCard = option.previewKind === 'color' && option.value.trim().length > 0;
-                    const darkColorCard = isColorCard ? isDarkCssColor(option.value) : false;
                     const isPatternColor = isColorCard && PATTERN_RE.test(option.value.trim());
                     const colorCardStyle = isColorCard
                       ? (
@@ -474,60 +463,40 @@ export default function AvatarControls({
                             : { background: option.value }
                         )
                       : undefined;
+                    const hasAvatarPreview =
+                      option.previewKind === 'avatar' || option.previewKind === 'background';
                     return (
                       <button
                         key={option.value || '__empty__'}
                         type="button"
+                        title={option.label}
+                        aria-label={option.label}
                         data-selected={selected ? 'true' : 'false'}
                         onClick={() => {
                           if (!activeRow) return;
                           tryApplyOption(activeRow, option);
                         }}
-                        style={colorCardStyle}
-                        className={`w-full ${compact ? 'px-2 py-2' : 'px-2.5 py-3'} rounded-2xl border text-left transition-all ${
-                          isColorCard
-                            ? selected
-                              ? 'border-cyan-200 shadow-[0_0_0_2px_rgba(34,211,238,0.55),0_0_24px_rgba(34,211,238,0.42),0_4px_16px_rgba(6,182,212,0.28)] ring-2 ring-cyan-300/60'
-                              : 'border-white/35 shadow-[0_3px_10px_rgba(2,6,23,0.28)] hover:border-cyan-200/70'
-                            : selected
-                              ? 'border-cyan-300 bg-cyan-50 text-cyan-900 shadow-[0_4px_14px_rgba(6,182,212,0.22)]'
-                              : 'border-slate-200 bg-white text-slate-800 hover:border-cyan-200 hover:shadow-[0_2px_10px_rgba(2,132,199,0.12)]'
+                        style={isColorCard ? colorCardStyle : undefined}
+                        className={`relative mx-auto flex aspect-square w-full max-w-[58px] items-center justify-center overflow-hidden rounded-full border transition-all ${
+                          selected
+                            ? 'border-cyan-200 ring-2 ring-cyan-300/70 shadow-[0_0_0_2px_rgba(34,211,238,0.55),0_0_22px_rgba(34,211,238,0.40)]'
+                            : isColorCard
+                              ? 'border-white/40 shadow-[0_2px_8px_rgba(2,6,23,0.22)] hover:border-cyan-200/70'
+                              : 'border-slate-200 bg-slate-50 hover:border-cyan-200 hover:shadow-[0_2px_12px_rgba(2,132,199,0.16)]'
                         }`}
                       >
-                        {option.previewKind === 'avatar' ? (
-                          <div className="mb-1.5 flex justify-center">
-                            <AvatarView
-                              config={{ ...config, ...(option.previewPatch ?? {}) }}
-                              compact
-                              disableAmbientMotion
-                              className={`${compact ? 'w-12' : 'w-14'} aspect-[6/7] pointer-events-none select-none`}
-                            />
-                          </div>
-                        ) : null}
-                        <div className="flex items-center justify-between gap-2">
-                          <span
-                            className={`line-clamp-2 text-sm font-semibold leading-tight ${
-                              isColorCard
-                                ? darkColorCard
-                                  ? 'text-white'
-                                  : 'text-slate-900'
-                                : ''
-                            }`}
-                          >
+                        {hasAvatarPreview ? (
+                          <AvatarView
+                            config={{ ...config, ...(option.previewPatch ?? {}) }}
+                            compact
+                            disableAmbientMotion
+                            className="!h-full !w-auto pointer-events-none select-none"
+                          />
+                        ) : isColorCard ? null : (
+                          <span className="px-1 text-center text-[10px] font-semibold leading-tight text-slate-600 line-clamp-3">
                             {option.label}
                           </span>
-                        </div>
-                        <p
-                          className={`mt-1 text-[11px] leading-none ${
-                            isColorCard
-                              ? darkColorCard
-                                ? 'text-white/85'
-                                : 'text-slate-800/80'
-                              : 'text-slate-500'
-                          }`}
-                        >
-                          {selected ? 'Selected' : 'Tap to apply'}
-                        </p>
+                        )}
                       </button>
                     );
                   })}
