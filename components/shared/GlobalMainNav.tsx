@@ -44,6 +44,7 @@ import {
   IconQuestionMark,
   IconArrowsExchange,
   IconTrophy,
+  IconCrown,
   IconUserEdit,
   IconUserCircle,
   IconGift,
@@ -331,7 +332,7 @@ const NAV_ITEM_CLASS = 'text-white hover:bg-white/5 rounded-lg px-2 py-2 transit
 type NavIconName =
   | 'fa-home' | 'fa-play' | 'fa-pause' | 'fa-forward' | 'fa-chart-line' | 'fa-chart-bar' | 'fa-chart-pie'
   | 'fa-palette' | 'fa-question-circle' | 'fa-exchange-alt' | 'fa-trophy' | 'fa-user-edit' | 'fa-user-circle'
-  | 'fa-gift' | 'fa-download' | 'fa-shield-alt' | 'fa-shield' | 'fa-bullhorn' | 'fa-flag' | 'fa-search'
+  | 'fa-gift' | 'fa-crown' | 'fa-download' | 'fa-shield-alt' | 'fa-shield' | 'fa-bullhorn' | 'fa-flag' | 'fa-search'
   | 'fa-gamepad' | 'fa-cog' | 'fa-tint' | 'fa-image' | 'fa-sign-out-alt' | 'fa-volume-up' | 'fa-volume-mute'
   | 'fa-grid';
 
@@ -350,6 +351,7 @@ const NAV_ICON_MAP: Record<NavIconName, React.ComponentType<{ size?: number; cla
   'fa-user-edit': IconUserEdit,
   'fa-user-circle': IconUserCircle,
   'fa-gift': IconGift,
+  'fa-crown': IconCrown,
   'fa-download': IconDownload,
   'fa-shield-alt': IconShield,
   'fa-shield': IconShield,
@@ -639,6 +641,7 @@ const NavContent = React.memo(function NavContent(props: NavContentProps) {
 
           <SidebarButton label="Profile" icon={<NavIcon icon="fa-user-edit" />} onClick={handleOpenProfileOrModal} className={NAV_ITEM_CLASS} />
           <SidebarButton label="Avatar" icon={<NavIcon icon="fa-user-circle" />} onClick={handleOpenProfileModal} className={NAV_ITEM_CLASS} />
+          <SidebarLink link={{ label: 'VIP Club', href: '/vip', icon: <NavIcon icon="fa-crown" /> }} className={NAV_ITEM_CLASS} />
           <SidebarLink link={{ label: 'Claim Morbius', href: '/claim', icon: <NavIcon icon="fa-gift" /> }} className={NAV_ITEM_CLASS} />
         </div>
 
