@@ -56,13 +56,14 @@ export function VipTierBadge({
   const imgSrc = level > 0 ? VIP_BADGE_IMAGES[level] : undefined
 
   if (imgSrc && !imgFailed) {
+    // Illustrated art is a square, circular medallion — render square.
     return (
       <img
         src={imgSrc}
         alt={label}
         title={label}
         width={px}
-        height={h}
+        height={px}
         className={cn('inline-block shrink-0 select-none object-contain', className)}
         onError={() => setImgFailed(true)}
         draggable={false}
