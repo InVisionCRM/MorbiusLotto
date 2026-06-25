@@ -6,7 +6,7 @@ import { toast } from 'sonner'
 import { motion } from 'framer-motion'
 import { Crown, Gift, Sparkles, Loader2, Coins, CalendarDays, Wallet, Percent } from 'lucide-react'
 import GlobalMainNav from '@/components/shared/GlobalMainNav'
-import { DottedGlowBackground } from '@/components/ui/dotted-glow-background'
+import { useSiwe } from '@/contexts/siwe-context'
 import { useVipStatus, type VipTier } from '@/hooks/use-vip-status'
 
 /** Whole-chip decimal string → grouped display (chips are 1:1 MORBIUS). */
@@ -75,7 +75,8 @@ function StatChip({
 
 export default function VipPage() {
   const { address, isConnected } = useAccount()
-  const { tiers, status, loading, claiming, claim } = useVipStatus(address)
+  const { signIn } = useSiwe()
+  const { tiers, status, loading, claiming, error, authRequired, claim, refresh } = useVipStatus(address)
 
   const claimable = useMemo(() => {
     if (!status) return 0n
@@ -112,12 +113,40 @@ export default function VipPage() {
   return (
     <GlobalMainNav>
       <div className="relative min-h-screen w-full overflow-hidden">
-        <DottedGlowBackground className="absolute inset-0 -z-10" />
-        {/* tier-tinted ambient glow */}
+        {/* ── Background: midnight aurora (deep gradient + soft orbs + grid + vignette) ── */}
+        <div className="pointer-events-none absolute inset-0 -z-10 bg-[#070a12]" />
         <div
-          className="pointer-events-none absolute -top-40 left-1/2 -z-10 h-96 w-[42rem] -translate-x-1/2 rounded-full opacity-25 blur-3xl"
-          style={{ background: accent }}
+          className="pointer-events-none absolute inset-0 -z-10"
+          style={{
+            backgroundImage:
+              'radial-gradient(70% 50% at 50% -8%, rgba(245,197,66,0.12), transparent 60%),' +
+              'radial-gradient(45% 45% at 12% 18%, rgba(124,92,255,0.14), transparent 60%),' +
+              `radial-gradient(50% 45% at 88% 80%, ${accent}26, transparent 62%)`,
+          }}
         />
+        {/* faint grid */}
+        <div
+          className="pointer-events-none absolute inset-0 -z-10 opacity-[0.06]"
+          style={{
+            backgroundImage:
+              'linear-gradient(rgba(255,255,255,0.6) 1px, transparent 1px),' +
+              'linear-gradient(90deg, rgba(255,255,255,0.6) 1px, transparent 1px)',
+            backgroundSize: '44px 44px',
+            maskImage: 'radial-gradient(ellipse 80% 60% at 50% 0%, black, transparent 75%)',
+            WebkitMaskImage: 'radial-gradient(ellipse 80% 60% at 50% 0%, black, transparent 75%)',
+          }}
+        />
+        {/* slow-drifting accent orbs */}
+        <div
+          className="pointer-events-none absolute -left-24 top-32 -z-10 h-80 w-80 animate-pulse rounded-full blur-[120px]"
+          style={{ background: 'rgba(245,197,66,0.10)', animationDuration: '7s' }}
+        />
+        <div
+          className="pointer-events-none absolute -right-20 bottom-10 -z-10 h-80 w-80 animate-pulse rounded-full blur-[120px]"
+          style={{ background: `${accent}1f`, animationDuration: '9s' }}
+        />
+        {/* bottom vignette */}
+        <div className="pointer-events-none absolute inset-0 -z-10 bg-[linear-gradient(to_bottom,transparent_55%,rgba(0,0,0,0.55))]" />
 
         <div className="mx-auto max-w-5xl px-4 py-8 sm:py-12">
           {/* Header */}
@@ -140,9 +169,34 @@ export default function VipPage() {
               <Loader2 className="h-6 w-6 animate-spin text-white/50" />
             </div>
           ) : !status ? (
-            <div className="rounded-2xl border border-white/10 bg-white/5 p-10 text-center text-white/60">
-              Sign in with your wallet to view your VIP status.
-            </div>
+            authRequired ? (
+              <div className="flex flex-col items-center gap-4 rounded-2xl border border-white/10 bg-white/5 p-10 text-center">
+                <p className="text-white/60">Sign in with your wallet to view your VIP status.</p>
+                <button
+                  onClick={() => {
+                    void signIn().then(refresh).catch(() => undefined)
+                  }}
+                  className="rounded-xl bg-cyan-500 px-5 py-2.5 font-semibold text-slate-950 transition hover:bg-cyan-400"
+                >
+                  Sign in
+                </button>
+              </div>
+            ) : (
+              <div className="flex flex-col items-center gap-3 rounded-2xl border border-amber-500/20 bg-amber-500/5 p-10 text-center">
+                <p className="font-medium text-white/80">VIP rewards aren’t available right now.</p>
+                <p className="max-w-md text-xs text-white/45">
+                  The rewards service didn’t respond. This usually means it’s still being set up — please
+                  check back shortly.
+                </p>
+                {error && <p className="text-[11px] text-white/30">{error}</p>}
+                <button
+                  onClick={() => void refresh()}
+                  className="mt-1 rounded-xl border border-white/15 px-4 py-2 text-sm text-white/70 transition hover:bg-white/5"
+                >
+                  Try again
+                </button>
+              </div>
+            )
           ) : (
             <>
               {/* HERO — tier identity + progress + claim, all in one panel */}
