@@ -6,12 +6,22 @@ import { SiweMessage } from 'siwe';
 import { getAddress, isAddress } from 'viem';
 import { setAuthFailureHandler, setWsAuthHandler } from '@/lib/api-auth';
 import { useWalletAction } from '@/contexts/wallet-action-context';
+import { SignInGate } from '@/components/auth/SignInGate';
 
 const API_BASE = (process.env.NEXT_PUBLIC_API_URL ?? '').trim();
 
 /** SIWE domain must match server SIWE_EXPECTED_DOMAIN (defaults to morbius.io). */
 const SIWE_DOMAIN =
   (process.env.NEXT_PUBLIC_SIWE_DOMAIN ?? 'morbius.io').trim() || 'morbius.io';
+
+/**
+ * How long a pre-fetched nonce is treated as usable. The server nonce TTL is
+ * ~10 min; we refresh well inside that so a warmed nonce is never stale at sign
+ * time. A warm nonce is what lets signMessageAsync run as the FIRST awaited
+ * wallet call inside the user's tap — required for mobile WalletConnect to
+ * foreground/deep-link the wallet app (see CLAUDE.md: never sign after an await).
+ */
+const NONCE_FRESH_MS = 8 * 60_000;
 
 export interface SiweState {
   address: `0x${string}` | null;
@@ -56,6 +66,43 @@ export function SiweProvider({ children }: { children: React.ReactNode }) {
 
   const signInPromiseRef = useRef<Promise<`0x${string}`> | null>(null);
 
+  // ── Pre-fetched single-use nonce (kept warm so signing needs no preceding await) ──
+  const nonceRef = useRef<{ value: string; ts: number } | null>(null);
+  const noncePrefetchRef = useRef<Promise<string> | null>(null);
+
+  // ── Mobile "tap to sign in" gate state (only used on WalletConnect handoff) ──
+  const [gateOpen, setGateOpen] = useState(false);
+  const [gateError, setGateError] = useState<string | null>(null);
+  const gatePromiseRef = useRef<Promise<`0x${string}`> | null>(null);
+  const gateResolveRef = useRef<((addr: `0x${string}`) => void) | null>(null);
+  const gateRejectRef = useRef<((err: Error) => void) | null>(null);
+
+  /** Fetch a nonce ahead of time (deduped). Returns the cached one if still fresh. */
+  const prefetchNonce = useCallback(async (force = false): Promise<string> => {
+    if (typeof window === 'undefined') return '';
+    const cached = nonceRef.current;
+    if (!force && cached && Date.now() - cached.ts < NONCE_FRESH_MS) return cached.value;
+    if (noncePrefetchRef.current) return noncePrefetchRef.current;
+    const p = (async () => {
+      try {
+        const { nonce } = await fetchJson(authUrl('/api/auth/nonce'));
+        nonceRef.current = { value: nonce, ts: Date.now() };
+        return nonce as string;
+      } finally {
+        noncePrefetchRef.current = null;
+      }
+    })();
+    noncePrefetchRef.current = p;
+    return p;
+  }, []);
+
+  /** Synchronously take a fresh pre-fetched nonce, or null. Never awaits. */
+  const takeWarmNonce = useCallback((): string | null => {
+    const cached = nonceRef.current;
+    if (cached && Date.now() - cached.ts < NONCE_FRESH_MS) return cached.value;
+    return null;
+  }, []);
+
   useEffect(() => {
     let cancelled = false;
     (async () => {
@@ -81,14 +128,18 @@ export function SiweProvider({ children }: { children: React.ReactNode }) {
           }
         }
         if (!cancelled) setAuthedAddress(null);
+        // Connected but no valid session → warm a nonce so the next sign-in tap
+        // can reach signMessageAsync with the user gesture intact (mobile).
+        if (!cancelled && connectedAddrLower) void prefetchNonce();
       } catch {
         if (!cancelled) setAuthedAddress(null);
+        if (!cancelled && connectedAddress) void prefetchNonce();
       }
     })();
     return () => {
       cancelled = true;
     };
-  }, [connectedAddress]);
+  }, [connectedAddress, prefetchNonce]);
 
   const signIn = useCallback(async (): Promise<`0x${string}`> => {
     if (!connectedAddress) throw new Error('Connect a wallet first');
@@ -107,7 +158,12 @@ export function SiweProvider({ children }: { children: React.ReactNode }) {
       setIsSigningIn(true);
       walletAction.begin({ variant: 'sign-in' });
       try {
-        const { nonce } = await fetchJson(authUrl('/api/auth/nonce'));
+        // Prefer a pre-fetched nonce so signMessageAsync is the FIRST awaited
+        // wallet call inside the tap. Only fall back to an inline fetch when no
+        // warm nonce exists (desktop, or a first tap that raced the prefetch).
+        let nonce = takeWarmNonce();
+        if (!nonce) nonce = await prefetchNonce(true);
+        nonceRef.current = null; // single-use — consumed by this sign-in
 
         const message = new SiweMessage({
           domain: SIWE_DOMAIN,
@@ -138,6 +194,10 @@ export function SiweProvider({ children }: { children: React.ReactNode }) {
 
         setAuthedAddress(result.address);
         return result.address;
+      } catch (err) {
+        // Warm a fresh nonce so an immediate retry is still gesture-safe.
+        if (connectedAddress) void prefetchNonce(true);
+        throw err;
       } finally {
         setIsSigningIn(false);
         walletAction.end();
@@ -147,7 +207,7 @@ export function SiweProvider({ children }: { children: React.ReactNode }) {
 
     signInPromiseRef.current = run;
     return run;
-  }, [connectedAddress, chain?.id, signMessageAsync, walletAction]);
+  }, [connectedAddress, chain?.id, signMessageAsync, walletAction, takeWarmNonce, prefetchNonce]);
 
   const signInIfNeeded = useCallback(async (): Promise<`0x${string}`> => {
     if (!connectedAddress) throw new Error('Connect a wallet first');
@@ -171,20 +231,68 @@ export function SiweProvider({ children }: { children: React.ReactNode }) {
     return signIn();
   }, [connectedAddress, signIn]);
 
-  // On 401 the server says there is no valid session — always re-sign, never short-circuit.
-  const forceSignIn = useCallback(async (): Promise<`0x${string}`> => {
+  // ── Mobile sign-in gate plumbing ──────────────────────────────────────────
+  // On WalletConnect handoff a wallet signature can only foreground the wallet
+  // app from a fresh user gesture. A background 401 has no gesture, so instead
+  // of signing off-gesture (which silently fails — the "0.05s flash") we show a
+  // one-tap "Sign in to play" prompt and sign from THAT tap.
+  const closeGate = useCallback(() => {
+    setGateOpen(false);
+    setGateError(null);
+    gatePromiseRef.current = null;
+    gateResolveRef.current = null;
+    gateRejectRef.current = null;
+  }, []);
+
+  const gateSignIn = useCallback(async () => {
+    setGateError(null);
+    try {
+      const addr = await signIn();
+      const resolve = gateResolveRef.current;
+      closeGate();
+      resolve?.(addr);
+    } catch (err) {
+      // Keep the gate open so the user can retry; surface a friendly reason.
+      const msg = err instanceof Error ? err.message : 'Sign-in failed';
+      setGateError(/reject|denied|cancel/i.test(msg) ? 'Signature was rejected. Try again.' : msg);
+    }
+  }, [signIn, closeGate]);
+
+  const gateCancel = useCallback(() => {
+    const reject = gateRejectRef.current;
+    closeGate();
+    reject?.(new Error('Sign-in cancelled'));
+  }, [closeGate]);
+
+  /**
+   * Auth-failure handler registered with apiFetch. Desktop / injected wallets
+   * sign immediately (no gesture needed). Mobile WalletConnect opens the gate
+   * and resolves once the user taps Sign in.
+   */
+  const requestSignIn = useCallback(async (): Promise<`0x${string}`> => {
+    if (!connectedAddress) throw new Error('Connect a wallet first');
     setAuthedAddress(null);
-    return signIn();
-  }, [signIn]);
+    if (!walletAction.mobileHandoff) return signIn();
+    if (gatePromiseRef.current) return gatePromiseRef.current;
+    void prefetchNonce(); // warm the nonce while the user reads the prompt
+    setGateError(null);
+    setGateOpen(true);
+    const p = new Promise<`0x${string}`>((resolve, reject) => {
+      gateResolveRef.current = resolve;
+      gateRejectRef.current = reject;
+    });
+    gatePromiseRef.current = p;
+    return p;
+  }, [connectedAddress, walletAction.mobileHandoff, signIn, prefetchNonce]);
 
   useEffect(() => {
-    setAuthFailureHandler(forceSignIn);
+    setAuthFailureHandler(requestSignIn);
     setWsAuthHandler(ensureSiweSession);
     return () => {
       setAuthFailureHandler(null);
       setWsAuthHandler(null);
     };
-  }, [forceSignIn, ensureSiweSession]);
+  }, [requestSignIn, ensureSiweSession]);
 
   const signOut = useCallback(async () => {
     try {
@@ -194,8 +302,9 @@ export function SiweProvider({ children }: { children: React.ReactNode }) {
       }
     } finally {
       setAuthedAddress(null);
+      if (connectedAddress) void prefetchNonce(true);
     }
-  }, []);
+  }, [connectedAddress, prefetchNonce]);
 
   const value: SiweState = {
     address: authedAddress,
@@ -210,7 +319,18 @@ export function SiweProvider({ children }: { children: React.ReactNode }) {
     signOut,
   };
 
-  return <SiweContext.Provider value={value}>{children}</SiweContext.Provider>;
+  return (
+    <SiweContext.Provider value={value}>
+      {children}
+      <SignInGate
+        open={gateOpen}
+        busy={isSigningIn}
+        error={gateError}
+        onSignIn={gateSignIn}
+        onCancel={gateCancel}
+      />
+    </SiweContext.Provider>
+  );
 }
 
 export function useSiwe(): SiweState {

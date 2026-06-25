@@ -129,6 +129,10 @@ export function StakePlinkoGame() {
   const dropSeq = useRef(0)
   const chipSeq = useRef(0)
   const inFlight = useRef(0)
+  // Balls released onto the board (server-settled) but not yet landed in a
+  // bucket. Their balance change is held back until the land so the displayed
+  // balance doesn't jump the moment the ball drops (keeps the anticipation).
+  const airborne = useRef(0)
   const autoLeftRef = useRef<number | null>(null)
   const autoTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
   const mounted = useRef(true)
@@ -139,10 +143,15 @@ export function StakePlinkoGame() {
   const [balance, setBalance] = useState<bigint | null>(null)
   useEffect(() => {
     if (chainBalance != null) {
-      try {
-        setBalance(BigInt(chainBalance.split('.')[0] || '0'))
-      } catch {
-        /* keep last known */
+      // Don't overwrite the on-screen balance while balls are mid-flight or
+      // airborne — it must stay frozen until each ball lands (the land applies
+      // the net delta). Reconcile to the authoritative read only when idle.
+      if (inFlight.current === 0 && airborne.current === 0) {
+        try {
+          setBalance(BigInt(chainBalance.split('.')[0] || '0'))
+        } catch {
+          /* keep last known */
+        }
       }
     } else if (!address) {
       setBalance(null)
@@ -222,7 +231,9 @@ export function StakePlinkoGame() {
         clientSeed: clientSeed.trim() || undefined,
       })
       if (!mounted.current) return false
-      setBalance(BigInt(res.chipBalance))
+      // NB: the balance is deliberately NOT updated here. The bet is already
+      // settled server-side, but on screen we hold the change until the ball
+      // lands (handleScore) so the balance moves with the result, not the drop.
       setHistory((prev) =>
         [
           {
@@ -252,6 +263,8 @@ export function StakePlinkoGame() {
           roundId: res.roundId,
         },
       })
+      // Ball is now on the board; its balance change is applied when it lands.
+      airborne.current += 1
       plinkoAudio.playDrop()
       return true
     } catch (e) {
@@ -307,6 +320,11 @@ export function StakePlinkoGame() {
     (_multiplier: number, _bucketIndex: number, contractData?: BoardDrop['contractResult'] & { risk?: RiskLevel }) => {
       if (!contractData || typeof contractData.multiplierX100 !== 'number') return
       const profit = contractData.payout - contractData.bet
+      // Apply this ball's net balance change now that it has landed. Using the
+      // per-ball delta (not the absolute settled balance) keeps the running
+      // total correct even when several balls are airborne and land out of order.
+      airborne.current = Math.max(0, airborne.current - 1)
+      setBalance((prev) => (prev != null ? prev + BigInt(contractData.payout) - BigInt(contractData.bet) : prev))
       plinkoAudio.playLand(profit > 0)
       setRecent((prev) =>
         [

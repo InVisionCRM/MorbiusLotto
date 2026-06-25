@@ -57,6 +57,8 @@ import { MerkleDropsLPService } from './services/merkle-lp-drops.service';
 import { HolderChipRewardsService } from './services/holder-chip-rewards.service';
 import { registerHolderRewardsAdminRoutes } from './routes/holder-rewards-admin.routes';
 import { registerHolderRewardsPublicRoutes } from './routes/holder-rewards-public.routes';
+import { VipService } from './services/vip.service';
+import { registerVipRoutes } from './routes/vip.routes';
 import { CosmeticsService } from './services/cosmetics.service';
 import { isAdminWallet } from './lib/cosmetics-catalog';
 import { resolveDisplayNameForProfileUpsert } from './lib/resolve-profile-display-name';
@@ -428,6 +430,9 @@ async function initializeServices() {
       holderChipRewardsService.startCron();
     }
 
+    // VIP loyalty / rewards: wager-based tiers + rakeback, paid in off-chain chips.
+    const vipService = new VipService(dbService.getPool());
+
     // API routes
 
     // Telegram notification routes (inbound webhook + wallet-link flow).
@@ -467,6 +472,7 @@ async function initializeServices() {
     registerWheelRoutes({ app, dbService, authService });
     registerHolderRewardsAdminRoutes({ app, holderChipRewardsService });
     registerHolderRewardsPublicRoutes({ app, holderChipRewardsService });
+    registerVipRoutes({ app, vipService, authService });
 
     // Public config (whitelisted keys only; used for ad creatives, etc.)
     const PUBLIC_CONFIG_KEYS = ['ad_creative_url', 'ad_creative_hero_url', 'ad_creative_loading_url'];

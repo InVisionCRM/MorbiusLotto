@@ -73,7 +73,9 @@ export type PokerChipLedgerReason =
   | 'withdrawal'           // chips auto-converted back to on-chain MORBIUS
   | 'migration'            // one-time players.balance (wei) → chip ledger move
   | 'holder_reward'     // MORBIUS holder epoch credit (1.25% slice → chips)
-  | 'lp_holder_reward'; // LP holder epoch credit (1.5% slice → chips)
+  | 'lp_holder_reward'  // LP holder epoch credit (1.5% slice → chips)
+  | 'vip_rakeback'      // VIP loyalty: % of wager turnover returned since last claim
+  | 'vip_tier_bonus';   // VIP loyalty: one-time chip bonus on reaching a new tier
 
 const DEFAULT_PLATFORM_FEE_WALLET = '0x41682815b05fe6b54a6c0f8813bb99423ee0309d';
 
