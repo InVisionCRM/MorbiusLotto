@@ -9,6 +9,7 @@ import { toast } from 'sonner';
 import PlayingCard from '@/components/BLACKJACK/PlayingCard';
 import { BetChip, formatChipLabel } from '@/components/ui/BetChip';
 import { AvatarView, type Emotion } from '@/components/avatar';
+import { VipAvatarBadge } from '@/components/vip/VipTierBadge';
 import { RadialMenuFloating, type RadialMenuItem } from '@/components/ui/radial-menu';
 import { useQuickChatPhrases } from '@/hooks/useQuickChatPhrases';
 import { EditQuickChatModal } from '@/components/poker/EditQuickChatModal';
@@ -563,6 +564,7 @@ export function BlackjackMultiSeat({
                     </div>
                   )}
                 </div>
+                {seat?.playerAddress && <VipAvatarBadge address={seat.playerAddress} />}
               </div>
 
               {/* Radial menu (my seat only) */}

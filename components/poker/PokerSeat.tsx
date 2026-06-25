@@ -7,6 +7,7 @@ import { BetChip, formatChipLabel } from '@/components/ui/BetChip';
 import { CardDisplay, formatPokerCardIndexLabel, POKER_RANK_SUIT_LABEL_COLORS, pokerCardSuitIndex } from './CardDisplay';
 import type { LayoutVariant } from '@/lib/poker-seat-layout';
 import type { PokerSeatState as SeatState } from '@/lib/websocket-client';
+import { VipAvatarBadge } from '@/components/vip/VipTierBadge';
 import { motion, AnimatePresence, useMotionValue, useSpring, useTransform } from 'framer-motion';
 import type { LucideIcon } from 'lucide-react';
 import {
@@ -1122,6 +1123,9 @@ export function PokerSeat({ seat, index, holeCards, isCurrentPlayer, showCardBac
             }
             return avatarCard;
           })()}
+
+          {/* VIP tier badge — gem pinned to the avatar's bottom-right. Hidden for Unranked. */}
+          {seat.playerAddress && <VipAvatarBadge address={seat.playerAddress} size="sm" />}
 
           {/* Last action / winner — pill tucked over the top ~5% of the avatar.
               Sticky: shows the seat's most recent action until they act again.

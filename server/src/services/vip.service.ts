@@ -35,6 +35,16 @@ export interface VipTier {
   color: string;
 }
 
+/** Minimal, PUBLIC view of a wallet's tier — safe to expose for badges/leaderboards. */
+export interface VipPublicTier {
+  address: string;
+  tierLevel: number;
+  tierName: string;
+  color: string;
+  rakebackBps: number;
+  lifetimeWagerChips: string;
+}
+
 export interface VipStatus {
   address: string;
   /** Wager turnover in whole chips, as decimal strings. */
@@ -130,6 +140,70 @@ export class VipService {
       else break;
     }
     return current;
+  }
+
+  // ──────────────────────────────────────────────────────────────────
+  // Public tier lookups (no auth, no state mutation) — power avatar badges,
+  // leaderboards, profiles. Tier is derived purely from lifetime wager.
+  // ──────────────────────────────────────────────────────────────────
+
+  /** A single wallet's current tier. */
+  async getTierForAddress(walletAddress: string): Promise<VipPublicTier> {
+    const addr = normalizeAddr(walletAddress);
+    const tiers = await this.getTiers();
+    const lifetime = await this.wagerSince(this.pool, addr, null);
+    const tier = this.tierForWager(tiers, lifetime);
+    return {
+      address: addr,
+      tierLevel: tier.tierLevel,
+      tierName: tier.tierName,
+      color: tier.color,
+      rakebackBps: tier.rakebackBps,
+      lifetimeWagerChips: lifetime.toString(),
+    };
+  }
+
+  /** Tiers for many wallets in one query (e.g. every seat at a table). */
+  async getTiersForAddresses(addresses: string[]): Promise<VipPublicTier[]> {
+    const addrs = Array.from(
+      new Set(
+        addresses
+          .map((a) => {
+            try {
+              return normalizeAddr(a);
+            } catch {
+              return null;
+            }
+          })
+          .filter((a): a is string => a !== null),
+      ),
+    );
+    if (addrs.length === 0) return [];
+    const tiers = await this.getTiers();
+    const { rows } = await this.pool.query<{ wallet_address: string; wagered: string }>(
+      `SELECT wallet_address, COALESCE(-SUM(delta), 0)::text AS wagered
+       FROM poker_chip_ledger
+       WHERE wallet_address = ANY($1) AND ${BET_REASON_PREDICATE}
+       GROUP BY wallet_address`,
+      [addrs],
+    );
+    const wagerByAddr = new Map<string, bigint>();
+    for (const r of rows) {
+      const v = BigInt(r.wagered ?? '0');
+      wagerByAddr.set(r.wallet_address, v > 0n ? v : 0n);
+    }
+    return addrs.map((addr) => {
+      const lifetime = wagerByAddr.get(addr) ?? 0n;
+      const tier = this.tierForWager(tiers, lifetime);
+      return {
+        address: addr,
+        tierLevel: tier.tierLevel,
+        tierName: tier.tierName,
+        color: tier.color,
+        rakebackBps: tier.rakebackBps,
+        lifetimeWagerChips: lifetime.toString(),
+      };
+    });
   }
 
   // ──────────────────────────────────────────────────────────────────
