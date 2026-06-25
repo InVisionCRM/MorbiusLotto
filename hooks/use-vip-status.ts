@@ -47,6 +47,10 @@ export function useVipStatus(address?: string) {
   const [loading, setLoading] = useState(true)
   const [claiming, setClaiming] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  // Distinguish "you need to sign in" (401) from "the VIP service errored"
+  // (404/500 — e.g. backend not deployed or migration not run) so the UI can
+  // show an honest message instead of telling a signed-in user to sign in.
+  const [authRequired, setAuthRequired] = useState(false)
 
   const loadConfig = useCallback(async () => {
     try {
@@ -63,18 +67,31 @@ export function useVipStatus(address?: string) {
   const loadStatus = useCallback(async () => {
     if (!address) {
       setStatus(null)
+      setAuthRequired(false)
       return
     }
+    setError(null)
     try {
       const res = await fetch(`/api/vip/${address}/status`, { credentials: 'include' })
       if (res.status === 401) {
-        // Not signed in — tier ladder still renders, just no personal data.
+        // Genuinely not signed in — tier ladder still renders, just no personal data.
         setStatus(null)
+        setAuthRequired(true)
         return
       }
-      if (!res.ok) throw new Error(`status ${res.status}`)
+      setAuthRequired(false)
+      if (!res.ok) {
+        let detail = ''
+        try {
+          detail = (await res.json())?.error ?? ''
+        } catch {
+          /* non-JSON error body */
+        }
+        throw new Error(`VIP status unavailable (${res.status}${detail ? `: ${detail}` : ''})`)
+      }
       setStatus((await res.json()) as VipStatus)
     } catch (e) {
+      setStatus(null)
       setError((e as Error).message)
     }
   }, [address])
@@ -112,5 +129,5 @@ export function useVipStatus(address?: string) {
     }
   }, [address, loadStatus])
 
-  return { tiers, status, loading, claiming, error, claim, refresh: loadStatus }
+  return { tiers, status, loading, claiming, error, authRequired, claim, refresh: loadStatus }
 }
