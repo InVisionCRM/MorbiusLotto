@@ -106,12 +106,20 @@ export function VipClubSection() {
             ))}
           </ul>
 
-          <Link
-            href="/vip"
-            className="mt-7 inline-flex items-center gap-2 rounded-xl bg-yellow-400 px-5 py-2.5 text-[13px] font-bold text-[#1a1208] shadow-[0_10px_30px_-10px_rgba(245,197,66,0.7)] transition-colors hover:bg-yellow-300"
-          >
-            Explore the VIP Club <ArrowRight size={15} />
-          </Link>
+          <div className="mt-7 flex flex-wrap items-center gap-3">
+            <Link
+              href="/vip"
+              className="inline-flex items-center gap-2 rounded-xl bg-yellow-400 px-5 py-2.5 text-[13px] font-bold text-[#1a1208] shadow-[0_10px_30px_-10px_rgba(245,197,66,0.7)] transition-colors hover:bg-yellow-300"
+            >
+              Explore the VIP Club <ArrowRight size={15} />
+            </Link>
+            <Link
+              href="/vip/guide"
+              className="inline-flex items-center gap-2 rounded-xl border border-white/15 bg-white/[0.03] px-4 py-2.5 text-[13px] font-bold text-slate-200 transition-colors hover:border-yellow-400/50 hover:text-white"
+            >
+              How it works
+            </Link>
+          </div>
         </motion.div>
 
         {/* Tier ladder preview */}
