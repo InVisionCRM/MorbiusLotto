@@ -14,10 +14,12 @@ function resolveApiUrl(path: string): string {
 
 /**
  * Optional callback invoked when a request returns 401. Set by SiweProvider
- * via `setAuthFailureHandler(forceSignIn)`. When present, apiFetch will
- * call this once on a 401, await it (typically a wallet popup), then retry
- * the request a single time. If the retry also 401s, the original error
- * surfaces to the caller.
+ * via `setAuthFailureHandler(requestSignIn)`. When present, apiFetch will
+ * call this once on a 401, await it, then retry the request a single time.
+ * On desktop the handler signs immediately; on mobile WalletConnect it opens a
+ * one-tap "Sign in to play" gate (so the wallet deep-link fires from a real
+ * user gesture) and resolves once signed in. If the retry also 401s, the
+ * original error surfaces to the caller.
  *
  * This lets every call site stay one line — they don't have to manually
  * call `signInIfNeeded()` before each authed request.
