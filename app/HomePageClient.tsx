@@ -30,6 +30,10 @@ const AvatarShowcaseSection = dynamic(
   () => import('@/components/home/avatar-showcase-section').then((m) => m.AvatarShowcaseSection),
   { loading: () => <LoadingTip variant="inline" /> }
 )
+const VipClubSection = dynamic(
+  () => import('@/components/home/vip-club-section').then((m) => m.VipClubSection),
+  { loading: () => <LoadingTip variant="inline" /> }
+)
 const Footer = dynamic(() => import('@/components/PLINKO/Footer'), {
   loading: () => <LoadingTip variant="inline" />,
 })
@@ -104,6 +108,9 @@ export default function HomePageClient() {
               <HomeSectionDivider />
               <TableShowcaseDisplay />
               <BrandedTablesPitch />
+
+              <HomeSectionDivider />
+              <VipClubSection />
 
               <HomeSectionDivider />
               <SocialsSection />

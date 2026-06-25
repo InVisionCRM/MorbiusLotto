@@ -4,10 +4,11 @@ import { useMemo } from 'react'
 import { useAccount } from 'wagmi'
 import { toast } from 'sonner'
 import { motion } from 'framer-motion'
-import { Crown, Gift, Sparkles, Loader2, Coins, CalendarDays, Wallet, Percent } from 'lucide-react'
+import { Crown, Gift, Sparkles, Loader2, Coins, CalendarDays, Wallet, Percent, TrendingUp } from 'lucide-react'
 import GlobalMainNav from '@/components/shared/GlobalMainNav'
 import { useSiwe } from '@/contexts/siwe-context'
 import { useVipStatus, type VipTier } from '@/hooks/use-vip-status'
+import { VipTierBadge } from '@/components/vip/VipTierBadge'
 
 /** Whole-chip decimal string → grouped display (chips are 1:1 MORBIUS). */
 function fmtChips(v: string | number | undefined): string {
@@ -30,23 +31,6 @@ function fmtCompact(v: string | number | undefined): string {
   }
   if (n < 1000) return n.toLocaleString('en-US')
   return Intl.NumberFormat('en-US', { notation: 'compact', maximumFractionDigits: 1 }).format(n)
-}
-
-function TierMedallion({ tier, size = 'md' }: { tier: VipTier; size?: 'sm' | 'md' | 'lg' }) {
-  const box = size === 'lg' ? 'h-16 w-16' : size === 'sm' ? 'h-9 w-9' : 'h-11 w-11'
-  const icon = size === 'lg' ? 'h-8 w-8' : size === 'sm' ? 'h-4 w-4' : 'h-5 w-5'
-  return (
-    <div
-      className={`${box} relative flex items-center justify-center rounded-2xl`}
-      style={{
-        background: `linear-gradient(145deg, ${tier.color}33, ${tier.color}0a)`,
-        boxShadow: `inset 0 0 0 1.5px ${tier.color}80, 0 8px 24px -8px ${tier.color}80`,
-      }}
-      title={tier.tierName}
-    >
-      <Crown className={icon} style={{ color: tier.color }} />
-    </div>
-  )
 }
 
 function StatChip({
@@ -213,7 +197,7 @@ export default function VipPage() {
                   {/* Left: identity + progress */}
                   <div className="min-w-0 flex-1">
                     <div className="flex items-center gap-4">
-                      <TierMedallion tier={status.currentTier} size="lg" />
+                      <VipTierBadge tier={status.currentTier} size="lg" />
                       <div>
                         <div className="text-[11px] uppercase tracking-widest text-white/40">Your tier</div>
                         <div className="text-2xl font-extrabold text-white sm:text-3xl">
@@ -350,7 +334,7 @@ export default function VipPage() {
                     background: isCurrent ? `${t.color}12` : 'rgba(255,255,255,0.02)',
                   }}
                 >
-                  <TierMedallion tier={t} size="sm" />
+                  <VipTierBadge tier={t} size="md" />
                   <div className="min-w-0 flex-1">
                     <div className="flex items-center gap-2">
                       <span className="font-semibold text-white">{t.tierName}</span>
@@ -385,21 +369,50 @@ export default function VipPage() {
             })}
           </div>
 
-          {/* HOW IT WORKS — three concise steps, no wall of text */}
-          <div className="mt-8 grid gap-3 sm:grid-cols-3">
-            {[
-              { icon: <Coins className="h-4 w-4" />, t: 'Wager', d: 'Every bet across all games counts toward your tier.' },
-              { icon: <Percent className="h-4 w-4" />, t: 'Earn', d: 'Rakeback accrues on turnover at your tier rate.' },
-              { icon: <Sparkles className="h-4 w-4" />, t: 'Claim', d: 'Cash out rakeback + tier bonuses to chips anytime.' },
-            ].map((s) => (
-              <div key={s.t} className="rounded-xl border border-white/10 bg-white/[0.03] p-4">
-                <div className="flex items-center gap-2 text-white" style={{ color: accent }}>
-                  {s.icon}
-                  <span className="text-sm font-semibold text-white">{s.t}</span>
+          {/* HOW IT WORKS — full explainer */}
+          <div className="mt-12">
+            <h2 className="text-lg font-bold text-white">How the VIP Club works</h2>
+            <p className="mt-1.5 max-w-2xl text-sm leading-relaxed text-white/55">
+              The more you play, the more you earn back. Every bet across every MORBIUS game builds your
+              lifetime wagered total — that single number sets your tier and your rewards. Everything pays out
+              in MORBIUS chips (1 chip = 1 MORBIUS).
+            </p>
+            <div className="mt-5 grid gap-3 sm:grid-cols-2">
+              {[
+                {
+                  icon: <TrendingUp className="h-4 w-4" />,
+                  t: 'Climb the tiers',
+                  d: "Every wager on any game counts toward your lifetime total. Cross a tier's threshold and you rank up for good — tiers never expire or decay.",
+                },
+                {
+                  icon: <Percent className="h-4 w-4" />,
+                  t: 'Earn rakeback on every bet',
+                  d: 'From Bronze upward, a slice of every wager comes back to you as rakeback. The higher your tier, the higher the rate — and it accrues automatically while you play, win or lose.',
+                },
+                {
+                  icon: <Gift className="h-4 w-4" />,
+                  t: 'Unlock level-up bonuses',
+                  d: 'Each new tier you reach pays a one-time MORBIUS bonus on top of your rakeback — the bigger the tier, the bigger the bonus.',
+                },
+                {
+                  icon: <Sparkles className="h-4 w-4" />,
+                  t: 'Claim whenever you want',
+                  d: 'Rakeback and bonuses build up in your VIP balance and pay out instantly to chips the moment you claim. No minimum, no lockup.',
+                },
+              ].map((s) => (
+                <div key={s.t} className="rounded-2xl border border-white/10 bg-white/[0.03] p-4">
+                  <div className="flex items-center gap-2">
+                    <span style={{ color: accent }}>{s.icon}</span>
+                    <span className="text-sm font-semibold text-white">{s.t}</span>
+                  </div>
+                  <p className="mt-1.5 text-[13px] leading-relaxed text-white/55">{s.d}</p>
                 </div>
-                <p className="mt-1.5 text-xs leading-relaxed text-white/50">{s.d}</p>
-              </div>
-            ))}
+              ))}
+            </div>
+            <p className="mt-4 text-xs leading-relaxed text-white/35">
+              Your tier badge shows next to your avatar at the tables, so everyone can see your status. Rakeback
+              rates and tier thresholds are shown in the tier ladder above and can change over time.
+            </p>
           </div>
         </div>
       </div>

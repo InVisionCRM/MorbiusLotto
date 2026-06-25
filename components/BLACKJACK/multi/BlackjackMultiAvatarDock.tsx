@@ -7,6 +7,7 @@ import { AnimatePresence, motion } from 'framer-motion';
 import { toast } from 'sonner';
 import type { BJMultiSeatState, AvatarConfig } from '@/lib/websocket-client';
 import { AvatarView } from '@/components/avatar';
+import { VipAvatarBadge } from '@/components/vip/VipTierBadge';
 import type { Emotion } from '@/components/avatar';
 import { RadialMenuFloating, type RadialMenuItem } from '@/components/ui/radial-menu';
 import { useQuickChatPhrases } from '@/hooks/useQuickChatPhrases';
@@ -368,6 +369,7 @@ export function BlackjackMultiAvatarDock({
                     </div>
                   )}
                 </div>
+                {seat?.playerAddress && <VipAvatarBadge address={seat.playerAddress} />}
               </div>
               <span className="mt-0.5 max-w-[52px] truncate text-center text-[8px] font-semibold leading-tight text-white/70">
                 {seat?.displayName?.slice(0, 8) ?? (seat?.playerAddress ? `${seat.playerAddress.slice(0, 4)}…` : '')}

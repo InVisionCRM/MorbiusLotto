@@ -36,6 +36,32 @@ export function registerVipRoutes({ app, vipService, authService }: RegisterVipR
     }
   });
 
+  // GET /api/vip/tiers?addresses=a,b,c — public batch tier lookup (e.g. a table's seats).
+  app.get('/api/vip/tiers', async (req: Request, res: Response) => {
+    try {
+      const raw = String(req.query.addresses ?? '').trim();
+      const addresses = raw
+        ? raw.split(',').map((a) => a.trim()).filter(Boolean).slice(0, 50)
+        : [];
+      const tiers = await vipService.getTiersForAddresses(addresses);
+      sendJson(res, { tiers });
+    } catch (error) {
+      logger.error('[VIP] batch tiers failed', error);
+      res.status(500).json({ error: 'Internal server error' });
+    }
+  });
+
+  // GET /api/vip/tier/:address — public: one wallet's current tier (avatar badges, profiles).
+  app.get('/api/vip/tier/:address', async (req: Request, res: Response) => {
+    try {
+      const tier = await vipService.getTierForAddress(req.params.address);
+      sendJson(res, tier);
+    } catch (error) {
+      logger.error('[VIP] tier lookup failed', error);
+      res.status(400).json({ error: 'Invalid address' });
+    }
+  });
+
   // GET /api/vip/:address/status — personal status (owning wallet only).
   app.get(
     '/api/vip/:address/status',
