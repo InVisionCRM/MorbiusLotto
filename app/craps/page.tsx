@@ -107,7 +107,7 @@ export default function CrapsPage() {
   return (
     <GlobalMainNav>
       <div
-        className={`arcade2-scope craps-root relative min-h-screen h-full w-full flex flex-col text-slate-200 ${arcDisplay.variable} ${arcMono.variable}`}
+        className={`arcade2-scope craps-root relative min-h-screen h-full w-full flex flex-col text-slate-200 pb-28 lg:pb-0 ${arcDisplay.variable} ${arcMono.variable}`}
         style={{
           backgroundImage:
             'linear-gradient(to bottom, rgba(5,14,22,0.92), rgba(2,6,11,0.96) 55%, rgba(5,14,22,0.98))',
@@ -217,6 +217,11 @@ export default function CrapsPage() {
                     </span>
                   </div>
 
+                  {/* Clear bets + Roll dice — pinned to a fixed bottom bar on mobile
+                      (the primary roll CTA stays reachable without scrolling); in-flow
+                      in the rail on desktop. The chip rail + on-felt bet areas remain
+                      in flow above. */}
+                  <div className="fixed inset-x-0 bottom-0 z-40 flex flex-col gap-3 border-t border-cyan-950/70 bg-[#07131F]/95 p-3 backdrop-blur-sm lg:static lg:z-auto lg:border-0 lg:bg-transparent lg:p-0 lg:backdrop-blur-none">
                   <Button
                     type="button"
                     variant="outline"
@@ -236,6 +241,7 @@ export default function CrapsPage() {
                     {engine.isRolling ? <RotateCw className="w-4 h-4 animate-spin" /> : null}
                     {engine.isRolling ? 'Rolling…' : 'Roll dice'}
                   </Button>
+                  </div>
 
                   <div className="grid grid-cols-2 gap-x-3 gap-y-2 pt-1 text-xs">
                     <button

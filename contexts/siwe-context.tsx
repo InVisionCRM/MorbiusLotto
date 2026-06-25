@@ -3,7 +3,7 @@
 import { createContext, useCallback, useContext, useEffect, useRef, useState } from 'react';
 import { useAccount, useSignMessage } from 'wagmi';
 import { SiweMessage } from 'siwe';
-import { getAddress } from 'viem';
+import { getAddress, isAddress } from 'viem';
 import { setAuthFailureHandler, setWsAuthHandler } from '@/lib/api-auth';
 import { useWalletAction } from '@/contexts/wallet-action-context';
 import { SignInGate } from '@/components/auth/SignInGate';
@@ -143,6 +143,14 @@ export function SiweProvider({ children }: { children: React.ReactNode }) {
 
   const signIn = useCallback(async (): Promise<`0x${string}`> => {
     if (!connectedAddress) throw new Error('Connect a wallet first');
+    // siwe 3.x validates line 2 (the address) against EIP-55 and throws
+    // "line 2: invalid (EIP-55) address" if it isn't checksummed. Some connectors
+    // (notably mobile WalletConnect / in-app wallet browsers) hand back a lowercase
+    // address, so re-checksum here before building the message.
+    if (!isAddress(connectedAddress)) {
+      throw new Error('Connected wallet address is not a valid EVM address');
+    }
+    const checksummedAddress = getAddress(connectedAddress);
 
     if (signInPromiseRef.current) return signInPromiseRef.current;
 
@@ -159,10 +167,7 @@ export function SiweProvider({ children }: { children: React.ReactNode }) {
 
         const message = new SiweMessage({
           domain: SIWE_DOMAIN,
-          // siwe requires an EIP-55 checksummed address; some mobile wallets
-          // hand back a lowercase address, which makes new SiweMessage() throw
-          // "invalid EIP-55 address" before the wallet ever opens.
-          address: getAddress(connectedAddress),
+          address: checksummedAddress,
           statement: 'Sign in to MORBIUS. This proves you own this wallet. No funds will move.',
           uri: window.location.origin,
           version: '1',

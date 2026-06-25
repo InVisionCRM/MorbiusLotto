@@ -1,0 +1,654 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+<title>Cascade — Deep-Sea Neon lab</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Chakra+Petch:wght@500;600;700&family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet" />
+<style>
+/* ── Cascade — Deep-Sea Neon (arcade2) prototype ───────────────────────────
+   Chain-reaction / cluster-pays single-player house game. Mirrors the shared
+   arcade2-scope system used by Chicken / Mines / Cipher: abyss #050E16, cyan
+   #22D3EE chrome, amber #F59E0B wins, rose losses, Chakra Petch display +
+   JetBrains Mono numerals, .panel glass, provably-fair commit/verify, the
+   My-rounds / FAQ tab strip and fairness modal.
+
+   Mechanic: one drop ignites a seeded grid. Any cluster of >= N matching gems
+   pays and pops; gems above tumble down, new seeded gems refill from the top,
+   and the chain repeats — each successive tumble raises a combo multiplier
+   that scales its wins. No decisions after the drop; the whole cascade is a
+   deterministic function of the seed, so it animates live AND re-runs exactly
+   in the verifier. Volatility (Calm / Standard / Frenzy) reshapes the combo
+   curve + paytable at the same target RTP.
+
+   Self-contained client-side demo (illustrative seeded RNG). The real build
+   derives every gem from the server provably-fair HMAC stream and tunes the
+   weights / paytable to the target RTP. Currency: MORBIUS chips. */
+:root{
+  --abyss:#050E16; --cyan:#22D3EE; --cyan-soft:rgba(34,211,238,0.12); --cyan-edge:rgba(34,211,238,0.35);
+  --win:#F59E0B; --loss:#FB7185;
+  --ink:#E2E8F0; --slate-300:#CBD5E1; --slate-400:#94A3B8; --slate-500:#64748B;
+  --panel:rgba(8,20,31,0.78); --field:#081420;
+  --font-disp:'Chakra Petch',system-ui,sans-serif;
+  --font-mono:'JetBrains Mono',ui-monospace,monospace;
+}
+*{box-sizing:border-box}
+html,body{margin:0;padding:0}
+body{
+  min-height:100svh;background-color:var(--abyss);
+  background-image:linear-gradient(to bottom,rgba(5,14,22,0.92),rgba(2,7,11,0.96) 55%,rgba(5,14,22,0.98));
+  color:var(--ink);font-family:var(--font-disp);-webkit-font-smoothing:antialiased;overflow-x:hidden;
+}
+.bg-light,.bg-vignette{position:fixed;inset:0;pointer-events:none;z-index:0}
+.bg-light{background:radial-gradient(ellipse 75% 55% at 50% -5%,rgba(34,211,238,0.13),transparent 70%)}
+.bg-vignette{background:radial-gradient(ellipse 120% 60% at 50% 115%,rgba(0,0,0,0.55),transparent 60%)}
+.mono{font-family:var(--font-mono);font-variant-numeric:tabular-nums}
+
+.wrap{position:relative;z-index:1;max-width:1000px;margin:0 auto;padding:18px 14px 64px}
+@media(min-width:700px){.wrap{padding:30px 22px 80px}}
+
+header{text-align:center;margin-bottom:16px}
+h1.title{margin:0;font-weight:700;text-transform:uppercase;letter-spacing:0.08em;color:#fff;font-size:clamp(28px,7vw,42px);line-height:1}
+h1.title .glyph{margin-left:.35rem;color:var(--cyan);filter:drop-shadow(0 0 12px rgba(34,211,238,0.65));vertical-align:middle}
+.tagline{margin:.55rem 0 0;font-size:clamp(11px,2.6vw,13.5px);color:var(--slate-500);letter-spacing:.01em}
+
+.topbar{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:14px}
+.topbar .right{display:flex;gap:8px}
+.balance{display:flex;align-items:center;gap:9px;background:rgba(8,20,31,0.7);border:1px solid var(--cyan-soft);border-radius:12px;padding:8px 13px}
+.coin{width:18px;height:18px;border-radius:50%;background:radial-gradient(circle at 35% 30%,#7be9fb,#22D3EE 55%,#0e7490);box-shadow:0 0 10px rgba(34,211,238,.5);flex:none}
+.balance .amt{font-family:var(--font-mono);font-weight:700;font-size:16px;color:#fff}
+.balance .cur{font-size:10px;letter-spacing:.12em;color:var(--cyan);text-transform:uppercase}
+.pill-btn{display:inline-flex;align-items:center;gap:7px;height:40px;padding:0 13px;border-radius:11px;border:1px solid var(--cyan-soft);background:rgba(8,20,31,0.7);color:var(--slate-400);cursor:pointer;transition:.15s;font-family:var(--font-disp);font-size:12px;letter-spacing:.06em;text-transform:uppercase}
+.pill-btn:hover{color:var(--cyan);border-color:var(--cyan-edge)}
+.pill-btn .dot{width:7px;height:7px;border-radius:50%;background:var(--cyan);box-shadow:0 0 8px var(--cyan)}
+.icon-btn{width:40px;height:40px;display:grid;place-items:center;border-radius:11px;border:1px solid var(--cyan-soft);background:rgba(8,20,31,0.7);color:var(--slate-400);cursor:pointer;transition:.15s;font-size:15px}
+.icon-btn:hover{color:var(--cyan);border-color:var(--cyan-edge)}
+
+.game-grid{display:flex;flex-direction:column;gap:14px}
+.board{order:-1}
+@media(min-width:900px){.game-grid{display:grid;grid-template-columns:332px 1fr;align-items:start;gap:18px}.board{order:0}}
+
+.panel{background:linear-gradient(rgba(255,255,255,0.03),rgba(255,255,255,0) 18%),var(--panel);border:1px solid var(--cyan-soft);border-radius:16px;box-shadow:0 18px 40px -24px rgba(0,0,0,0.9);padding:16px}
+.panel + .panel{margin-top:14px}
+.panel-label{font-size:11px;text-transform:uppercase;letter-spacing:.16em;color:var(--slate-500);margin:0 0 10px}
+
+.diff-row{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
+.diff{border:1px solid var(--cyan-soft);background:rgba(6,16,25,.6);border-radius:12px;padding:11px 6px 9px;text-align:center;cursor:pointer;transition:.15s;color:var(--slate-400)}
+.diff:hover{border-color:var(--cyan-edge)}
+.diff .d-name{font-weight:600;font-size:13px;letter-spacing:.04em;text-transform:uppercase}
+.diff .d-meta{font-family:var(--font-mono);font-size:10.5px;color:var(--slate-500);margin-top:3px}
+.diff.active{border-color:var(--cyan);background:linear-gradient(rgba(34,211,238,.14),rgba(34,211,238,.04));color:#fff;box-shadow:0 0 18px -4px rgba(34,211,238,.5)}
+.diff.active .d-meta{color:var(--cyan)}
+.diff[aria-disabled=true]{opacity:.45;pointer-events:none}
+
+.bet-input-row{display:flex;align-items:stretch;gap:8px;margin-bottom:10px}
+.bet-field{flex:1;display:flex;align-items:center;gap:8px;background:rgba(2,8,13,.7);border:1px solid var(--cyan-soft);border-radius:12px;padding:0 12px}
+.bet-field input{flex:1;width:100%;background:none;border:0;outline:none;color:#fff;font-family:var(--font-mono);font-weight:700;font-size:17px;padding:12px 0}
+.mini-btn{width:42px;border:1px solid var(--cyan-soft);background:rgba(8,20,31,.7);color:var(--slate-400);border-radius:11px;font-family:var(--font-mono);font-weight:700;cursor:pointer;transition:.15s;font-size:14px}
+.mini-btn:hover{color:var(--cyan);border-color:var(--cyan-edge)}
+.chips{display:grid;grid-template-columns:repeat(4,1fr);gap:7px}
+.chip{border:1px solid var(--cyan-soft);background:rgba(6,16,25,.6);color:var(--slate-400);border-radius:10px;padding:9px 4px;font-family:var(--font-mono);font-weight:600;font-size:12.5px;cursor:pointer;transition:.15s}
+.chip:hover{color:var(--cyan);border-color:var(--cyan-edge)}
+.minmax{display:flex;justify-content:space-between;font-family:var(--font-mono);font-size:10.5px;color:var(--slate-500);margin-top:9px}
+
+.pay{display:flex;flex-direction:column;gap:7px}
+.pay-row{display:flex;align-items:center;gap:9px;font-size:12px;color:var(--slate-400)}
+.pay-gem{width:24px;height:24px;border-radius:6px;display:grid;place-items:center;font-size:13px;flex:none;background:rgba(2,8,13,.5);box-shadow:inset 0 0 0 1px rgba(34,211,238,.1)}
+.pay-row .pv{font-family:var(--font-mono);margin-left:auto;color:var(--slate-300)}
+
+.board-shell{background:linear-gradient(rgba(255,255,255,0.025),rgba(255,255,255,0) 16%),rgba(6,16,25,.72);border:1px solid var(--cyan-soft);border-radius:18px;overflow:hidden;box-shadow:0 24px 50px -30px rgba(0,0,0,.95)}
+.hud{display:flex;gap:1px;background:var(--cyan-soft)}
+.hud .cell{flex:1;background:rgba(4,12,19,.85);padding:11px 12px;text-align:center}
+.hud .k{font-size:9.5px;letter-spacing:.16em;text-transform:uppercase;color:var(--slate-500)}
+.hud .v{font-family:var(--font-mono);font-weight:700;font-size:clamp(17px,4.5vw,23px);color:#fff;margin-top:3px}
+.hud .v.mult{color:var(--win)}
+.hud .v.mult.idle{color:var(--slate-400)}
+.hud .v.combo{color:var(--cyan)}
+
+.arena{position:relative;background:linear-gradient(180deg,#071521,#040d15);padding:8px}
+.cas-grid{display:grid;grid-template-columns:repeat(6,1fr);gap:6px}
+.tile{aspect-ratio:1;border-radius:10px;display:grid;place-items:center;font-size:clamp(15px,4.2vw,23px);font-weight:700;background:rgba(2,8,13,.5);box-shadow:inset 0 0 0 1px rgba(34,211,238,.08)}
+.tile.win{box-shadow:inset 0 0 0 2px currentColor,0 0 16px -3px currentColor}
+.tile.pop{animation:caspop .3s cubic-bezier(.5,-0.2,.7,.2) forwards}
+@keyframes caspop{0%{transform:scale(1)}38%{transform:scale(1.16)}100%{transform:scale(.2);opacity:0}}
+.tile.drop{animation:casdrop .26s ease}
+@keyframes casdrop{0%{transform:translateY(-22%);opacity:.2}100%{transform:translateY(0);opacity:1}}
+
+.actions{display:grid;grid-template-columns:1fr;gap:10px;margin-top:14px}
+.btn{border:0;border-radius:14px;padding:16px 18px;font-family:var(--font-disp);font-weight:700;font-size:16px;letter-spacing:.05em;text-transform:uppercase;cursor:pointer;transition:.15s;color:#04141b}
+.btn:active{transform:scale(.985)}
+.btn-go{background:linear-gradient(180deg,#3ee0f5,#22D3EE 60%,#0fb6d4);box-shadow:0 0 24px -6px rgba(34,211,238,.68),inset 0 1px 0 rgba(255,255,255,.4)}
+.btn:disabled{opacity:.5;cursor:not-allowed;filter:saturate(.5)}
+
+.banner-host{position:absolute;inset:0;display:grid;place-items:center;z-index:8;pointer-events:none}
+.banner{display:none;text-align:center;padding:18px 30px;border-radius:18px}
+.banner.show{display:block}
+.banner.win{background:radial-gradient(ellipse at center,rgba(245,158,11,.22),rgba(4,12,19,.55));border:1px solid rgba(245,158,11,.5);box-shadow:0 0 50px -8px rgba(245,158,11,.55)}
+.banner.loss{background:radial-gradient(ellipse at center,rgba(251,113,133,.16),rgba(4,12,19,.6));border:1px solid rgba(251,113,133,.4)}
+.banner .b-k{font-size:12px;letter-spacing:.22em;text-transform:uppercase;color:var(--slate-400)}
+.banner.win .b-k{color:var(--win)}.banner.loss .b-k{color:var(--loss)}
+.banner .b-v{font-family:var(--font-mono);font-weight:700;font-size:clamp(26px,8vw,40px);color:#fff;margin-top:4px}
+.arc-banner-in{animation:arc-banner-in .4s cubic-bezier(.34,1.56,.64,1) both}
+@keyframes arc-banner-in{0%{transform:scale(.7);opacity:0}55%{transform:scale(1.06);opacity:1}100%{transform:scale(1);opacity:1}}
+
+.info{margin-top:16px}
+.tabs-list{display:grid;grid-template-columns:1fr 1fr;gap:4px;background:rgba(8,20,31,.7);border:1px solid rgba(34,211,238,.12);border-radius:10px;padding:4px}
+.tab-btn{font-family:var(--font-disp);font-weight:600;font-size:12px;text-transform:uppercase;letter-spacing:.14em;color:var(--slate-500);background:none;border:0;border-radius:7px;padding:9px 6px;cursor:pointer;transition:.15s}
+.tab-btn:hover{color:var(--slate-300)}
+.tab-btn.active{background:rgba(34,211,238,.15);color:var(--cyan);box-shadow:inset 0 0 0 1px rgba(34,211,238,.5)}
+.tab-panel{display:none;margin-top:12px}
+.tab-panel.active{display:block}
+
+.hist-head{display:flex;align-items:baseline;justify-content:space-between;margin-bottom:6px}
+.hist-head h2{font-family:var(--font-disp);font-weight:600;font-size:14px;text-transform:uppercase;letter-spacing:.08em;color:var(--slate-300);margin:0}
+.hist-head .count{font-size:11px;color:var(--slate-500)}
+.hist-empty{padding:18px 0;text-align:center;font-size:13px;color:var(--slate-500)}
+.hist-list{list-style:none;margin:0;padding:0}
+.hist-row{display:flex;flex-wrap:wrap;align-items:center;gap:6px 12px;padding:9px 0;border-top:1px solid rgba(34,211,238,.08);font-size:13px}
+.hist-row:first-child{border-top:0}
+.hist-row .t{font-family:var(--font-mono);width:46px;flex:none;color:var(--slate-500)}
+.hist-row .badge{flex:none;font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:.04em;padding:2px 7px;border-radius:5px;color:var(--cyan);background:rgba(34,211,238,.1);box-shadow:inset 0 0 0 1px rgba(34,211,238,.3)}
+.hist-row .m{font-family:var(--font-mono);color:var(--slate-400);flex:none}
+.hist-row .x{font-family:var(--font-mono);flex:none}
+.hist-row .x.win{color:var(--cyan)}.hist-row .x.bust{color:var(--loss);font-weight:600;text-transform:uppercase;font-family:var(--font-disp);font-size:11px;letter-spacing:.06em}
+.hist-row .p{font-family:var(--font-mono);font-weight:600;margin-left:auto;flex:none}
+.hist-row .p.up{color:var(--win)}.hist-row .p.flat{color:var(--slate-500)}
+.hist-row .verify{flex:none;font-size:11px;color:var(--slate-500);background:none;border:0;border-radius:5px;padding:3px 7px;cursor:pointer;transition:.15s}
+.hist-row .verify:hover{color:var(--cyan);background:rgba(34,211,238,.1)}
+
+.faq-item{border-top:1px solid rgba(34,211,238,.1)}
+.faq-item:first-child{border-top:0}
+.faq-q{width:100%;text-align:left;background:none;border:0;color:#E8EEF5;font-family:var(--font-disp);font-size:14px;font-weight:500;padding:13px 28px 13px 0;cursor:pointer;position:relative;transition:.15s}
+.faq-q:hover{color:var(--cyan)}
+.faq-q::after{content:"⌄";position:absolute;right:4px;top:12px;color:var(--slate-500);transition:transform .2s}
+.faq-item.open .faq-q::after{transform:rotate(180deg);color:var(--cyan)}
+.faq-a{display:none;padding:0 4px 14px;color:#AFC0CF;font-size:13.5px;line-height:1.65}
+.faq-item.open .faq-a{display:block}
+.faq-a p{margin:0 0 9px}.faq-a p:last-child{margin-bottom:0}
+.faq-a a{color:var(--cyan);text-decoration:underline;text-underline-offset:2px;word-break:break-all}
+.faq-a .siwe{font-family:var(--font-mono);font-size:11px;line-height:1.6;background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.08);border-radius:8px;padding:10px;color:var(--slate-400);margin:8px 0}
+.faq-a .siwe .a{color:var(--cyan)}.faq-a .siwe .s{color:var(--slate-300)}
+.hl{color:var(--cyan)}
+
+.overlay{position:fixed;inset:0;z-index:50;display:none;align-items:center;justify-content:center;padding:16px;background:rgba(2,6,10,.72);backdrop-filter:blur(3px)}
+.overlay.open{display:flex}
+.modal{width:100%;max-width:520px;max-height:85vh;overflow-y:auto;background:#050E16;border:1px solid #0e3a47;border-radius:16px;box-shadow:0 30px 80px -20px rgba(0,0,0,.9);padding:20px}
+.modal-head{display:flex;align-items:center;justify-content:space-between;margin-bottom:16px}
+.modal-head h2{font-family:var(--font-disp);font-weight:600;text-transform:uppercase;letter-spacing:.12em;color:var(--cyan);font-size:16px;margin:0}
+.modal-x{background:none;border:0;color:var(--slate-500);font-size:20px;cursor:pointer;line-height:1}
+.modal-x:hover{color:var(--cyan)}
+.m-sec{margin-bottom:18px}
+.m-sec h3{font-size:13.5px;font-weight:600;color:var(--slate-300);margin:0 0 4px}
+.m-sec p.note{font-size:12px;color:var(--slate-500);margin:0 0 9px;line-height:1.5}
+.m-input-row{display:flex;gap:8px}
+.m-input{flex:1;min-width:0;background:var(--field);border:1px solid #0e3a47;border-radius:9px;color:#cbd5e1;font-family:var(--font-mono);font-size:12px;padding:9px 11px;outline:none}
+.m-input:focus{border-color:var(--cyan-edge)}
+.m-btn{flex:none;border-radius:9px;padding:9px 14px;font-family:var(--font-disp);font-size:13px;cursor:pointer;border:1px solid transparent;transition:.15s}
+.m-btn.outline{background:transparent;border-color:#0e3a47;color:var(--cyan)}
+.m-btn.outline:hover{background:rgba(34,211,238,.1)}
+.m-btn.solid{background:#0891b2;color:#fff}
+.m-btn.solid:hover{background:#22D3EE;color:#03121B}
+.m-result{border:1px solid #0e3a47;background:rgba(7,19,31,.7);border-radius:12px;padding:13px;margin-top:6px}
+.m-check{display:flex;align-items:center;gap:9px;font-size:13px;color:var(--slate-300);margin-bottom:6px}
+.m-check .ck{font-weight:700}.m-check .ck.ok{color:var(--cyan)}.m-check .ck.no{color:var(--loss)}
+.m-meta{display:flex;flex-wrap:wrap;gap:3px 16px;font-size:12px;color:var(--slate-500);margin:10px 0}
+.m-meta .mv{font-family:var(--font-mono);color:var(--slate-300)}
+.m-meta .mv.cyan{color:var(--cyan)}
+.m-fields{display:grid;gap:8px;margin-top:6px}
+.m-field .fl{font-size:11px;text-transform:uppercase;letter-spacing:.04em;color:var(--slate-500)}
+.m-field .fv{word-break:break-all;border-radius:7px;background:var(--field);padding:5px 9px;font-family:var(--font-mono);font-size:11.5px;color:var(--slate-300);margin-top:2px}
+.m-foot{display:flex;flex-wrap:wrap;gap:3px 16px;font-size:12px;color:var(--slate-500);margin-top:10px}
+.m-foot .fv{font-family:var(--font-mono)}.m-foot .fv.amber{color:var(--win)}.m-foot .fv.cyan{color:var(--cyan)}.m-foot .fv.rose{color:var(--loss)}.m-foot .fv.b{color:#e2e8f0;font-weight:700}
+.m-maplabel{font-size:11px;color:var(--slate-500);margin:10px 0 4px;text-transform:uppercase;letter-spacing:.06em}
+.m-tumbles{display:flex;flex-direction:column;gap:4px;margin:4px 0 2px}
+.m-tr{display:flex;align-items:center;gap:8px;font-size:12px}
+.m-tr .tn{font-family:var(--font-mono);color:var(--slate-500);width:54px;flex:none}
+.m-tr .tc{font-family:var(--font-mono);color:var(--cyan);width:54px;flex:none}
+.m-tr .tw{font-family:var(--font-mono);color:var(--slate-300);margin-left:auto}
+
+.lab-note{margin-top:22px;text-align:center;font-size:11px;color:var(--slate-500);font-family:var(--font-mono);line-height:1.6}
+.lab-note b{color:var(--slate-400);font-weight:600}
+</style>
+</head>
+<body>
+<div class="bg-light"></div>
+<div class="bg-vignette"></div>
+
+<div class="wrap">
+  <header>
+    <h1 class="title">Cascade<span class="glyph">⬡</span></h1>
+    <p class="tagline">one drop · clusters pop and tumble · the combo climbs with every chain · provably fair · played in chips</p>
+  </header>
+
+  <div class="topbar">
+    <div class="balance"><span class="coin"></span><span class="amt" id="balance">25,000</span><span class="cur">MORBIUS</span></div>
+    <div class="right">
+      <button class="pill-btn" id="fairBtn"><span class="dot"></span>Provably fair</button>
+      <button class="icon-btn" id="soundBtn" title="Sound" aria-label="Toggle sound">♪</button>
+    </div>
+  </div>
+
+  <div class="game-grid">
+    <section>
+      <div class="panel">
+        <p class="panel-label">Volatility</p>
+        <div class="diff-row" id="diffRow">
+          <button class="diff active" data-diff="calm"><div class="d-name">Calm</div><div class="d-meta">×1 → ×5</div></button>
+          <button class="diff" data-diff="standard"><div class="d-name">Std</div><div class="d-meta">×1 → ×12</div></button>
+          <button class="diff" data-diff="frenzy"><div class="d-name">Frenzy</div><div class="d-meta">×1 → ×30</div></button>
+        </div>
+      </div>
+      <div class="panel">
+        <p class="panel-label">Bet amount</p>
+        <div class="bet-input-row">
+          <div class="bet-field"><span class="coin"></span><input id="betInput" class="mono" inputmode="numeric" value="500" /></div>
+          <button class="mini-btn" data-bet="half">½</button>
+          <button class="mini-btn" data-bet="double">2×</button>
+        </div>
+        <div class="chips">
+          <button class="chip" data-add="100">+100</button>
+          <button class="chip" data-add="500">+500</button>
+          <button class="chip" data-add="1000">+1k</button>
+          <button class="chip" data-set="max">Max</button>
+        </div>
+        <div class="minmax"><span>Min 100</span><span>Max 100,000</span></div>
+      </div>
+      <div class="panel">
+        <p class="panel-label">Gems — bigger clusters pay more</p>
+        <div class="pay" id="payList"></div>
+      </div>
+    </section>
+
+    <section class="board">
+      <div class="board-shell">
+        <div class="hud">
+          <div class="cell"><div class="k">Multiplier</div><div class="v mult idle" id="hudMult">0.00×</div></div>
+          <div class="cell"><div class="k">Combo</div><div class="v combo" id="hudCombo">×1</div></div>
+          <div class="cell"><div class="k">Win</div><div class="v" id="hudWin">—</div></div>
+        </div>
+        <div class="arena">
+          <div class="cas-grid" id="grid"></div>
+          <div class="banner-host"><div class="banner" id="banner"><div class="b-k" id="bannerK"></div><div class="b-v" id="bannerV"></div></div></div>
+        </div>
+      </div>
+      <div class="actions" id="actions"><button class="btn btn-go" id="goBtn">Place bet &amp; drop</button></div>
+    </section>
+  </div>
+
+  <section class="info panel" aria-label="Cascade information">
+    <div class="tabs-list">
+      <button class="tab-btn active" data-tab="rounds">My rounds</button>
+      <button class="tab-btn" data-tab="faq">FAQ</button>
+    </div>
+    <div class="tab-panel active" id="tab-rounds">
+      <div class="hist-head"><h2>Recent rounds</h2><span class="count" id="histCount">last —</span></div>
+      <div id="histBody"></div>
+    </div>
+    <div class="tab-panel" id="tab-faq"><div id="faqBody"></div></div>
+  </section>
+
+  <p class="lab-note">
+    <b>Prototype</b> — Deep-Sea Neon style, single-player on the arcade2 pattern (like Mines / Chicken / Cipher).<br/>
+    Every gem here is dealt by an in-page seeded RNG for feel; the real build derives the stream from the
+    server <b>provably-fair HMAC</b> pipeline (<span class="mono">/api/arcade/cascade/*</span>) and tunes the weights / paytable to
+    the target RTP. The whole cascade is a deterministic function of the seed, so it re-runs exactly in Verify. Currency: <b>MORBIUS</b> chips.
+  </p>
+</div>
+
+<div class="overlay" id="overlay">
+  <div class="modal" role="dialog" aria-modal="true" aria-label="Provably fair">
+    <div class="modal-head"><h2>Provably Fair</h2><button class="modal-x" id="modalX" aria-label="Close">✕</button></div>
+    <div class="m-sec">
+      <h3>Your client seed</h3>
+      <p class="note">Mixed into every drop. Change it any time — the next round uses the new value.</p>
+      <div class="m-input-row">
+        <input class="m-input" id="clientSeedInput" placeholder="Leave blank for a random seed each round" />
+        <button class="m-btn outline" id="newSeedBtn">New seed</button>
+      </div>
+    </div>
+    <div class="m-sec">
+      <h3>Verify a round</h3>
+      <p class="note">Every gem is drawn from a server seed committed (hashed) before your bet — the seed is revealed once the round settles, and the entire cascade re-derives from it.</p>
+      <div class="m-input-row">
+        <input class="m-input" id="verifyIdInput" placeholder="Round ID" />
+        <button class="m-btn solid" id="verifyBtn">Verify</button>
+      </div>
+    </div>
+    <div id="verifyOut"></div>
+  </div>
+</div>
+
+<script>
+"use strict";
+(function(){
+  var COLS=6, ROWS=6;
+  // gems: rarity ascending (0 common → 4 rare); colours are game tokens, not chrome
+  var GEMS=[
+    {g:'●',c:'#5E8CA8'},{g:'▲',c:'#48C39A'},{g:'◆',c:'#9B8CF0'},{g:'✦',c:'#E0913C'},{g:'⬢',c:'#E2658C'}
+  ];
+  // combo stored x100; pay (base cluster value, x bet x100) ascending by gem; payScale tunes RTP
+  var VOLS={
+    calm:{label:'Calm',threshold:4,weights:[32,26,20,14,8],combo:[100,150,200,300,400,500],pay:[9,16,28,52,105],sizeBonus:0.45,payScale:0.45},
+    standard:{label:'Standard',threshold:4,weights:[33,26,20,14,7],combo:[100,200,300,500,800,1200],pay:[7,13,24,46,98],sizeBonus:0.45,payScale:0.29},
+    frenzy:{label:'Frenzy',threshold:5,weights:[34,26,19,13,8],combo:[100,200,400,800,1600,3000],pay:[8,15,30,62,135],sizeBonus:0.5,payScale:0.766}
+  };
+  var MIN_BET=100, MAX_BET=100000;
+
+  var S={ balance:25000, diff:'calm', bet:500, phase:'idle', result:null,
+    serverSeed:'', clientSeed:'', clientSeedPref:'', nonce:0, serverHash:'', roundId:'',
+    sound:true, busy:false, history:[] };
+
+  var $=function(id){return document.getElementById(id);};
+  var balanceEl=$('balance'),betInput=$('betInput'),gridEl=$('grid'),actions=$('actions'),
+      hudMult=$('hudMult'),hudCombo=$('hudCombo'),hudWin=$('hudWin'),banner=$('banner'),
+      bannerK=$('bannerK'),bannerV=$('bannerV'),soundBtn=$('soundBtn'),overlay=$('overlay'),
+      histBody=$('histBody'),histCount=$('histCount'),faqBody=$('faqBody'),payList=$('payList');
+
+  function cfg(){return VOLS[S.diff];}
+  function fmt(n){return Math.round(n).toLocaleString('en-US');}
+  function multStr(x){return (x/100).toFixed(2)+'×';}
+  function rndHex(len){var s='';for(var i=0;i<len;i++)s+=Math.floor(Math.random()*16).toString(16);return s;}
+  function shortId(){return rndHex(8).toUpperCase();}
+
+  function xmur3(str){var h=1779033703^str.length;for(var i=0;i<str.length;i++){h=Math.imul(h^str.charCodeAt(i),3432918353);h=h<<13|h>>>19;}return function(){h=Math.imul(h^h>>>16,2246822507);h=Math.imul(h^h>>>13,3266489909);return (h^=h>>>16)>>>0;};}
+  function mulberry32(a){return function(){a|=0;a=a+0x6D2B79F5|0;var t=Math.imul(a^a>>>15,1|a);t=t+Math.imul(t^t>>>7,61|t)^t;return ((t^t>>>14)>>>0)/4294967296;};}
+  function makeRng(seedStr){return mulberry32(xmur3(seedStr)());}
+  async function sha256Hex(msg){try{var b=await crypto.subtle.digest('SHA-256',new TextEncoder().encode(msg));return Array.from(new Uint8Array(b)).map(function(x){return x.toString(16).padStart(2,'0');}).join('');}catch(e){return 'sha256-unavailable';}}
+
+  // ── deterministic cascade — a pure function of the rng stream ────────────────
+  function nextGem(rng,weights,total){var r=rng()*total,acc=0;for(var i=0;i<weights.length;i++){acc+=weights[i];if(r<acc)return i;}return weights.length-1;}
+  function clusterPayX100(sym,size,v){return Math.round(v.pay[sym]*(1+v.sizeBonus*(size-v.threshold))*v.payScale);}
+  function findClusters(grid,threshold){
+    var seen=[],r,c;for(r=0;r<ROWS;r++){seen.push(new Array(COLS).fill(false));}
+    var out=[];
+    for(r=0;r<ROWS;r++)for(c=0;c<COLS;c++){
+      if(seen[r][c]||grid[r][c]==null)continue;
+      var sym=grid[r][c],stack=[[r,c]],cells=[];seen[r][c]=true;
+      while(stack.length){var p=stack.pop();cells.push(p);var pr=p[0],pc=p[1];
+        var nb=[[pr-1,pc],[pr+1,pc],[pr,pc-1],[pr,pc+1]];
+        for(var k=0;k<4;k++){var nr=nb[k][0],nc=nb[k][1];
+          if(nr>=0&&nr<ROWS&&nc>=0&&nc<COLS&&!seen[nr][nc]&&grid[nr][nc]===sym){seen[nr][nc]=true;stack.push([nr,nc]);}}
+      }
+      if(cells.length>=threshold)out.push({sym:sym,cells:cells});
+    }
+    return out;
+  }
+  function cloneGrid(g){return g.map(function(row){return row.slice();});}
+  function resolveRound(rng,v){
+    var total=0,i;for(i=0;i<v.weights.length;i++)total+=v.weights[i];
+    var grid=[];for(var r=0;r<ROWS;r++){var row=[];for(var c=0;c<COLS;c++)row.push(nextGem(rng,v.weights,total));grid.push(row);}
+    var steps=[],totalX100=0,tumble=0;
+    while(true){
+      var clusters=findClusters(grid,v.threshold);
+      if(!clusters.length)break;
+      tumble++;
+      var combo=v.combo[Math.min(tumble-1,v.combo.length-1)];
+      var base=0;clusters.forEach(function(cl){base+=clusterPayX100(cl.sym,cl.cells.length,v);});
+      var tumbleWin=Math.round(base*combo/100);
+      totalX100+=tumbleWin;
+      steps.push({board:cloneGrid(grid),clusters:clusters.map(function(cl){return {sym:cl.sym,cells:cl.cells.slice()};}),
+        tumble:tumble,combo:combo,tumbleWin:tumbleWin,running:totalX100});
+      // clear winners
+      clusters.forEach(function(cl){cl.cells.forEach(function(p){grid[p[0]][p[1]]=null;});});
+      // gravity + refill per column
+      for(var col=0;col<COLS;col++){
+        var keep=[];for(var rr=ROWS-1;rr>=0;rr--){if(grid[rr][col]!=null)keep.push(grid[rr][col]);}
+        for(var rr2=ROWS-1,ki=0;rr2>=0;rr2--){
+          if(ki<keep.length){grid[rr2][col]=keep[ki++];}
+          else{grid[rr2][col]=nextGem(rng,v.weights,total);}
+        }
+      }
+    }
+    return {totalX100:totalX100,steps:steps,initial:steps.length?steps[0].board:cloneGrid(grid),finalBoard:grid,tumbles:tumble};
+  }
+
+  var actx=null;
+  function tone(f,d,t,g){if(!S.sound)return;try{actx=actx||new (window.AudioContext||window.webkitAudioContext)();var o=actx.createOscillator(),gn=actx.createGain();o.type=t||'sine';o.frequency.value=f;gn.gain.value=g||0.05;o.connect(gn);gn.connect(actx.destination);var n=actx.currentTime;o.start(n);gn.gain.exponentialRampToValueAtTime(0.0001,n+(d||0.12));o.stop(n+(d||0.12));}catch(e){}}
+  function sDrop(){tone(220,0.14,'sine',0.05);}
+  function sPop(t){tone(420+Math.min(t,7)*90,0.1,'triangle',0.05);}
+  function sWin(){tone(660,0.12,'sine',0.06);setTimeout(function(){tone(990,0.16,'sine',0.06);},100);}
+  function sNo(){tone(180,0.22,'sawtooth',0.05);}
+
+  // ── render ───────────────────────────────────────────────────────────────────
+  function tileHtml(sym,extra){
+    if(sym==null)return '<div class="tile"></div>';
+    var gm=GEMS[sym];
+    return '<div class="tile'+(extra||'')+'" style="color:'+gm.c+'">'+gm.g+'</div>';
+  }
+  function showBoard(board,winSet,popSet){
+    var html='';
+    for(var r=0;r<ROWS;r++)for(var c=0;c<COLS;c++){
+      var key=r+','+c,extra='';
+      if(popSet&&popSet.has(key))extra=' pop';
+      else if(winSet&&winSet.has(key))extra=' win';
+      html+=tileHtml(board[r][c],extra);
+    }
+    gridEl.innerHTML=html;
+  }
+  function emptyBoard(){var b=[];for(var r=0;r<ROWS;r++){var row=[];for(var c=0;c<COLS;c++)row.push(null);b.push(row);}return b;}
+
+  function renderPaytable(){
+    var v=cfg();
+    payList.innerHTML=GEMS.map(function(gm,i){
+      var minPay=clusterPayX100(i,v.threshold,v);
+      return '<div class="pay-row"><span class="pay-gem" style="color:'+gm.c+'">'+gm.g+'</span>'
+        +'<span>cluster of '+v.threshold+'+</span>'
+        +'<span class="pv">'+(minPay/100).toFixed(2)+'×+</span></div>';
+    }).join('');
+  }
+
+  function syncHud(mult,combo,win){
+    hudMult.textContent=multStr(mult||0);hudMult.classList.toggle('idle',!(mult>0));
+    hudCombo.textContent='×'+((combo||100)/100).toFixed(((combo||100)%100)?1:0).replace(/\.0$/,'');
+    hudWin.textContent=win>0?fmt(win):'—';
+    balanceEl.textContent=fmt(S.balance);
+  }
+  function renderActions(){
+    actions.innerHTML='<button class="btn btn-go" id="goBtn"'+(S.busy?' disabled':'')+'>'+(S.phase==='settled'?'Drop again':'Place bet &amp; drop')+'</button>';
+    $('goBtn').addEventListener('click',startRound);
+  }
+  function setControls(on){
+    document.querySelectorAll('#diffRow .diff').forEach(function(b){b.setAttribute('aria-disabled',on?'false':'true');});
+    betInput.disabled=!on;
+    document.querySelectorAll('.chip,.mini-btn').forEach(function(b){b.style.pointerEvents=on?'auto':'none';b.style.opacity=on?'1':'.5';});
+  }
+
+  async function startRound(){
+    if(S.busy)return;
+    var bet=clampBet(parseInt(betInput.value,10)||0);
+    if(bet>S.balance){flashInput();return;}
+    betInput.value=bet;S.busy=true;S.phase='active';
+    var v=cfg();
+    S.bet=bet;S.balance-=bet;
+    S.serverSeed=rndHex(64);
+    S.clientSeed=(S.clientSeedPref||'').trim()||rndHex(20);
+    S.nonce+=1;S.roundId=shortId();
+    S.serverHash=await sha256Hex(S.serverSeed);
+    S.result=resolveRound(makeRng(S.serverSeed+':'+S.clientSeed+':'+S.nonce),v);
+    hideBanner();setControls(false);renderActions();syncHud(0,100,0);
+    sDrop();
+    animate(S.result);
+  }
+
+  function animate(res){
+    var steps=res.steps,i=0;
+    if(!steps.length){showBoard(res.finalBoard,null,null);setTimeout(function(){settle();},260);return;}
+    function tick(){
+      if(i>=steps.length){showBoard(res.finalBoard,null,null);setTimeout(settle,260);return;}
+      var st=steps[i],winSet=new Set();
+      st.clusters.forEach(function(cl){cl.cells.forEach(function(p){winSet.add(p[0]+','+p[1]);});});
+      showBoard(st.board,winSet,null);
+      syncHud(st.running,st.combo,Math.round(S.bet*st.running/100));
+      sPop(i);
+      setTimeout(function(){
+        showBoard(st.board,null,winSet);          // pop winners
+        setTimeout(function(){
+          i++;
+          var nextBoard=i<steps.length?steps[i].board:res.finalBoard;
+          showBoard(nextBoard,null,null);
+          // drop-in flourish on the refilled top
+          gridEl.querySelectorAll('.tile').forEach(function(t,idx){if(nextBoard[Math.floor(idx/COLS)][idx%COLS]!=null&&Math.floor(idx/COLS)<2)t.classList.add('drop');});
+          setTimeout(tick,170);
+        },300);
+      },430);
+    }
+    tick();
+  }
+
+  function settle(){
+    S.phase='settled';
+    var v=cfg(),totalX100=S.result.totalX100,payout=Math.floor(S.bet*totalX100/100),win=payout>0;
+    if(win)S.balance+=payout;
+    syncHud(totalX100,S.result.steps.length?S.result.steps[S.result.steps.length-1].combo:100,payout);
+    if(win){sWin();showBanner('win',S.result.tumbles+'-chain · '+multStr(totalX100),'+'+fmt(payout)+' MORBIUS');}
+    else{sNo();showBanner('loss','No cluster ignited','−'+fmt(S.bet)+' MORBIUS');}
+    S.history.unshift({ id:S.roundId, at:new Date().toISOString(), diff:S.diff, bet:S.bet,
+      totalX100:totalX100, payout:payout, tumbles:S.result.tumbles,
+      tumbleLog:S.result.steps.map(function(s){return {tumble:s.tumble,combo:s.combo,win:s.tumbleWin};}),
+      serverSeed:S.serverSeed, serverHash:S.serverHash, clientSeed:S.clientSeed, nonce:S.nonce });
+    if(S.history.length>15)S.history.pop();
+    S.busy=false;setControls(true);renderActions();renderHistory();
+  }
+
+  function showBanner(k,a,b){banner.className='banner show '+k+' arc-banner-in';bannerK.textContent=a;bannerV.textContent=b;}
+  function hideBanner(){banner.className='banner';}
+  function clampBet(v){if(isNaN(v)||v<MIN_BET)v=MIN_BET;if(v>MAX_BET)v=MAX_BET;return v;}
+  function flashInput(){betInput.style.color='#FB7185';setTimeout(function(){betInput.style.color='#fff';},400);}
+
+  function timeLabel(iso){var d=new Date(iso);return isNaN(d.getTime())?'—':d.toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'});}
+  function renderHistory(){
+    histCount.textContent='last '+(S.history.length||'—');
+    if(S.history.length===0){histBody.innerHTML='<p class="hist-empty">No drops yet — pick a volatility and drop in.</p>';return;}
+    var rows=S.history.map(function(r){
+      var profit=r.payout-r.bet,win=r.payout>0;
+      var xcell=win?'<span class="x win">'+multStr(r.totalX100)+'</span>':'<span class="x bust">no win</span>';
+      var pcell='<span class="p '+(profit>0?'up':'flat')+'">'+(profit>0?'+'+fmt(profit):fmt(profit))+'</span>';
+      return '<li class="hist-row"><span class="t">'+timeLabel(r.at)+'</span>'
+        +'<span class="badge">'+VOLS[r.diff].label+'</span>'
+        +'<span class="m">bet '+fmt(r.bet)+'</span>'
+        +'<span class="m">'+r.tumbles+' chain'+(r.tumbles===1?'':'s')+'</span>'
+        +xcell+pcell
+        +'<button class="verify" data-id="'+r.id+'">Verify</button></li>';
+    }).join('');
+    histBody.innerHTML='<ul class="hist-list">'+rows+'</ul>';
+    histBody.querySelectorAll('.verify').forEach(function(b){b.addEventListener('click',function(){openFairness(b.getAttribute('data-id'));});});
+  }
+
+  function recipeStr(){return 'HMAC_SHA256(serverSeed, `${clientSeed}:${nonce}`) → gem stream → deterministic cluster-tumble cascade';}
+  function ckHtml(ok,label){return '<div class="m-check"><span class="ck '+(ok?'ok':'no')+'">'+(ok?'✓':'✗')+'</span><span>'+label+'</span></div>';}
+  function fieldHtml(l,v){return '<div class="m-field"><div class="fl">'+l+'</div><div class="fv">'+v+'</div></div>';}
+  function tumblesHtml(log){
+    if(!log.length)return '<p class="note">No clusters formed — the drop fizzled.</p>';
+    return '<div class="m-tumbles">'+log.map(function(t){
+      return '<div class="m-tr"><span class="tn">chain '+t.tumble+'</span><span class="tc">×'+(t.combo/100).toFixed((t.combo%100)?1:0).replace(/\.0$/,'')+'</span><span class="tw">'+multStr(t.win)+'</span></div>';
+    }).join('')+'</div>';
+  }
+  function findRound(id){
+    id=String(id||'').trim();
+    if(S.phase==='active' && id===S.roundId){
+      return { id:S.roundId, active:true, diff:S.diff, bet:S.bet, totalX100:0, payout:0, tumbles:0, tumbleLog:[],
+        serverSeed:'', serverHash:S.serverHash, clientSeed:S.clientSeed, nonce:S.nonce };
+    }
+    return S.history.filter(function(x){return x.id===id;})[0]||null;
+  }
+  function openFairness(id){
+    overlay.classList.add('open');
+    $('clientSeedInput').value=S.clientSeedPref;
+    var target=id||(S.phase==='active'?S.roundId:(S.history[0]&&S.history[0].id));
+    if(target){$('verifyIdInput').value=target;runVerify(target);}
+    else{$('verifyOut').innerHTML='<p class="note">Play a round, then verify it here — or paste any round ID.</p>';}
+  }
+  function closeFairness(){overlay.classList.remove('open');}
+  async function runVerify(id){
+    var out=$('verifyOut'),r=findRound(id);
+    if(!r){out.innerHTML='<p class="note" style="color:var(--loss)">No round found with that ID.</p>';return;}
+    out.innerHTML='<p class="note">Checking…</p>';
+    if(r.active){
+      out.innerHTML='<div class="m-result">'
+        +'<p class="note">This round is still resolving — the server seed stays sealed until it settles. Only the commitment hash is published for now.</p>'
+        +'<div class="m-fields">'+fieldHtml('Server seed hash (committed)',r.serverHash)
+          +fieldHtml('Server seed (revealed)','— sealed until the round ends —')
+          +fieldHtml('Client seed',r.clientSeed)+fieldHtml('Nonce',String(r.nonce))
+          +fieldHtml('Recipe',recipeStr())+'</div>'
+        +'</div>';
+      return;
+    }
+    var hashOk=(await sha256Hex(r.serverSeed))===r.serverHash;
+    var re=resolveRound(makeRng(r.serverSeed+':'+r.clientSeed+':'+r.nonce),VOLS[r.diff]);
+    var totalOk=re.totalX100===r.totalX100;
+    var tumbleOk=re.tumbles===r.tumbles;
+    var expected=Math.floor(r.bet*r.totalX100/100),payoutOk=expected===r.payout;
+    out.innerHTML='<div class="m-result">'
+      +ckHtml(hashOk,'Server seed matches its committed hash (checked locally)')
+      +ckHtml(totalOk,'Cascade re-runs from the seed to the same multiplier')
+      +ckHtml(tumbleOk,'Chain length re-derives identically')
+      +ckHtml(payoutOk,'Payout reconciles with floor(bet × multiplier)')
+      +'<div class="m-maplabel">Chain breakdown (re-derived)</div>'+tumblesHtml(r.tumbleLog)
+      +'<div class="m-meta"><span>Volatility: <span class="mv" style="text-transform:capitalize">'+r.diff+'</span></span>'
+        +'<span>Chains: <span class="mv cyan">'+r.tumbles+'</span></span>'
+        +'<span>Total: <span class="mv cyan">'+multStr(r.totalX100)+'</span></span></div>'
+      +'<div class="m-fields">'+fieldHtml('Server seed hash (committed)',r.serverHash)+fieldHtml('Server seed (revealed)',r.serverSeed)
+        +fieldHtml('Client seed',r.clientSeed)+fieldHtml('Nonce',String(r.nonce))+fieldHtml('Recipe',recipeStr())+'</div>'
+      +'<div class="m-foot"><span>Bet: <span class="fv">'+fmt(r.bet)+'</span></span>'
+        +'<span>Multiplier: <span class="fv cyan">'+multStr(r.totalX100)+'</span></span>'
+        +'<span>Returned: <span class="fv '+(r.payout>0?'amber':'rose')+'">'+fmt(r.payout)+' chips</span></span></div>'
+      +'</div>';
+  }
+
+  var FAQS=[
+    {q:'How does Cascade pay out?',a:'<p>One drop fills the grid with gems. Any <span class="hl">cluster</span> of enough connected matching gems pays and pops; the gems above tumble down and new ones fall in from the top. If that creates a fresh cluster, the chain continues — and every link in the chain raises a <span class="hl">combo multiplier</span> that scales its win. Your payout is the combined total of every tumble, times your bet.</p>'},
+    {q:'Is it really fair — and reproducible?',a:'<p>Yes, completely. Before you bet, the server commits to a secret <span class="hl">server seed</span> (you see only its SHA-256 hash). Every gem — the opening board and all the refills — is drawn from a stream derived by HMAC from that seed, <span class="hl">your client seed</span>, and a nonce.</p><p>Because the cascade is a <span class="hl">deterministic function of that stream</span> (no physics, no randomness mid-chain), the whole round re-runs exactly when the seed is revealed. Hit <span class="hl">Verify</span> and anyone can replay it gem-for-gem and confirm the multiplier and the commitment hash.</p>'},
+    {q:'Do I make any decisions during a drop?',a:'<p>No — once you drop, the cascade resolves on its own. Your choices are the <span class="hl">bet</span> and the <span class="hl">volatility</span>. It’s a watch-it-unfold game, not a press-your-luck ladder.</p>'},
+    {q:'What does volatility change?',a:'<p>It reshapes the combo curve and paytable while keeping the same long-run return. <span class="hl">Calm</span> pays small and often with a gentle combo; <span class="hl">Frenzy</span> needs bigger clusters and pays rarely, but its combo can rocket on a long chain. Standard sits between.</p>'},
+    {q:'How big can a chain get?',a:'<p>As long as each tumble keeps forming new clusters. Most drops settle in a tumble or two, but a lucky refill can keep the chain alive — and since the combo multiplier climbs every link, a long Frenzy chain is where the top wins come from.</p>'},
+    {q:'How do I get chips?',a:'<p>Chips are the play credits used at every table. Tap <span class="hl">Buy</span> next to your balance to open the chip cage and swap MORBIUS for chips at a fixed <span class="hl">1 chip = 1 MORBIUS</span>.</p><p>Chips live as an off-chain balance, so buying is instant and gasless, and there’s <span class="hl">no fee</span> on the swap. You can cash chips back out to MORBIUS any time at the same 1:1.</p>'},
+    {q:'How do I get MORBIUS?',a:'<p>MORBIUS is the project’s token on <span class="hl">PulseChain</span> (chain ID 369). You buy it on <span class="hl">PulseX</span>, the main PulseChain DEX, by swapping PLS or WPLS for MORBIUS — then deposit it to your play balance and convert to chips.</p><p class="mono" style="font-size:11px">Contract: <a href="https://scan.pulsechain.com/token/0xB7d4eB5fDfE3d4d3B5C16a44A49948c6EC77c6F1" target="_blank" rel="noopener noreferrer">0xB7d4eB5fDfE3d4d3B5C16a44A49948c6EC77c6F1</a></p><p>Always confirm the contract address before swapping — never trust a ticker alone.</p>'},
+    {q:'Chips vs. MORBIUS — what’s the difference?',a:'<p><span class="hl">MORBIUS</span> is the real, on-chain token in your wallet — it has market value and can be traded. <span class="hl">Chips</span> are off-chain 1:1 credits you actually play with at the tables: faster, gasless, and settled instantly.</p><p>You move freely between them at 1:1, and you only ever wager in chips.</p>'},
+    {q:'Why do I have to sign a message in my wallet?',a:'<p>It’s a <span class="hl">Sign-In with Ethereum</span> (SIWE) signature — an off-chain message, not a transaction. It costs no gas, moves no funds, and grants no token approvals. It only proves you control your address so we can open a login session for you.</p><div class="siwe"><div class="s">morbius.io wants you to sign in with your Ethereum account:</div><div class="a">0xYour…Wallet</div><div style="margin:6px 0" class="s">Sign in to MORBIUS. This proves you own this wallet. No funds will move.</div><div>URI: https://morbius.io</div><div>Version: 1</div><div>Chain ID: 369</div><div>Nonce: a1b2c3…</div></div><p>It’s domain-bound (a look-alike site can’t phish it), replay-proof (the one-time nonce expires), and never exposes your private key or touches your funds. A signature is not a transaction.</p>'},
+    {q:'Can signing in or playing drain my wallet?',a:'<p>No. Signing in is an off-chain message — it can’t spend, move, or approve anything on-chain. We never ask for a token approval to play.</p><p>Your chips are an off-chain balance, so the only thing you can ever lose is the <span class="hl">chips you choose to bet</span>. Your MORBIUS and the rest of your wallet are untouched.</p>'},
+    {q:'What are the fees?',a:'<p>These chip games take <span class="hl">no per-bet or per-payout fee</span>. Instead each game keeps a small built-in house edge in its odds — for example crash and dice return about 99% over time (a ~1% edge). Buying and cashing chips is free, 1:1.</p><p style="color:var(--slate-500)">(The on-chain games and poker differ — poker takes a rake, and on-chain payouts carry a 5% token fee.)</p>'},
+    {q:'Which network do I need?',a:'<p><span class="hl">PulseChain</span> — chain ID <span class="hl">369</span>. Add it to your wallet and make sure you’re connected to it; MORBIUS and your balances live there. Most wallets will offer to switch networks for you.</p>'}
+  ];
+  function renderFaq(){
+    faqBody.innerHTML=FAQS.map(function(f,i){return '<div class="faq-item" data-i="'+i+'"><button class="faq-q">'+f.q+'</button><div class="faq-a">'+f.a+'</div></div>';}).join('');
+    faqBody.querySelectorAll('.faq-item').forEach(function(it){it.querySelector('.faq-q').addEventListener('click',function(){it.classList.toggle('open');});});
+  }
+
+  document.querySelectorAll('#diffRow .diff').forEach(function(b){b.addEventListener('click',function(){
+    if(S.phase==='active')return;
+    document.querySelectorAll('#diffRow .diff').forEach(function(x){x.classList.remove('active');});
+    b.classList.add('active');S.diff=b.getAttribute('data-diff');
+    S.phase='idle';hideBanner();showBoard(emptyBoard(),null,null);renderPaytable();syncHud(0,100,0);renderActions();
+  });});
+  document.querySelectorAll('.chip').forEach(function(c){c.addEventListener('click',function(){
+    if(S.phase==='active')return;
+    if(c.getAttribute('data-set')==='max'){betInput.value=Math.min(MAX_BET,S.balance);}
+    else{betInput.value=clampBet((parseInt(betInput.value,10)||0)+parseInt(c.getAttribute('data-add'),10));}
+  });});
+  document.querySelectorAll('.mini-btn').forEach(function(b){b.addEventListener('click',function(){
+    if(S.phase==='active')return;var v=parseInt(betInput.value,10)||MIN_BET;
+    betInput.value=clampBet(b.getAttribute('data-bet')==='half'?Math.floor(v/2):v*2);
+  });});
+  betInput.addEventListener('change',function(){betInput.value=clampBet(parseInt(betInput.value,10)||0);});
+  soundBtn.addEventListener('click',function(){S.sound=!S.sound;soundBtn.style.color=S.sound?'':'#475569';soundBtn.textContent=S.sound?'♪':'✕';if(S.sound)tone(700,0.1,'sine',0.05);});
+
+  $('fairBtn').addEventListener('click',function(){openFairness(null);});
+  $('modalX').addEventListener('click',closeFairness);
+  overlay.addEventListener('click',function(e){if(e.target===overlay)closeFairness();});
+  window.addEventListener('keydown',function(e){if(e.key==='Escape')closeFairness();});
+  $('newSeedBtn').addEventListener('click',function(){S.clientSeedPref=rndHex(16);$('clientSeedInput').value=S.clientSeedPref;});
+  $('clientSeedInput').addEventListener('input',function(e){S.clientSeedPref=e.target.value.slice(0,128);});
+  $('verifyBtn').addEventListener('click',function(){runVerify($('verifyIdInput').value);});
+  document.querySelectorAll('.tab-btn').forEach(function(t){t.addEventListener('click',function(){
+    document.querySelectorAll('.tab-btn').forEach(function(x){x.classList.remove('active');});
+    document.querySelectorAll('.tab-panel').forEach(function(x){x.classList.remove('active');});
+    t.classList.add('active');$('tab-'+t.getAttribute('data-tab')).classList.add('active');
+  });});
+
+  showBoard(emptyBoard(),null,null);renderPaytable();syncHud(0,100,0);renderActions();renderHistory();renderFaq();
+})();
+</script>
+</body>
+</html>

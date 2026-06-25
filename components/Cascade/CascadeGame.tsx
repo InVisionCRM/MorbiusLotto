@@ -478,7 +478,7 @@ export function CascadeGame() {
   const winPreview = Math.floor((clampBet(bet) * hudMultX100) / 100)
 
   return (
-    <div className="mx-auto w-full max-w-6xl">
+    <div className="mx-auto w-full max-w-6xl pb-28 lg:pb-0">
       <div className="grid gap-4 lg:grid-cols-[332px_1fr]">
         {/* ───────── Controls rail ───────── */}
         <Card className="arc-panel order-2 h-fit space-y-4 border-0 p-4 lg:order-1 lg:sticky lg:top-20">
@@ -788,7 +788,9 @@ export function CascadeGame() {
             </div>
           </Card>
 
-          {/* Drop / Auto button */}
+          {/* Drop / Auto button — pinned to a fixed bottom bar on mobile (always
+              reachable without scrolling); back in the board column, in-flow, on desktop. */}
+          <div className="fixed inset-x-0 bottom-0 z-40 border-t border-cyan-950/70 bg-[#07131F]/95 p-3 backdrop-blur-sm lg:static lg:z-auto lg:border-0 lg:bg-transparent lg:p-0 lg:backdrop-blur-none">
           {mode === 'manual' ? (
             <Button
               type="button"
@@ -816,6 +818,7 @@ export function CascadeGame() {
               Start auto ({autoCount})
             </Button>
           )}
+          </div>
 
           {/* Win preview while idle */}
           {!busy && !settled && hudMultX100 === 0 && winPreview === 0 && (
@@ -828,16 +831,20 @@ export function CascadeGame() {
 
       {/* ───────── Session chart + info tabs ───────── */}
       <div className="mt-4 space-y-4">
-        <div className="lg:hidden">
-          <SessionChart points={session} unitLabel="Drops" />
-        </div>
         <CascadeInfoTabs history={history} historyLoading={historyLoading} onVerify={openVerify} />
       </div>
-      <div className="hidden lg:block">
-        <FloatingPanel title="Session" storageKey="cascade.sessionChart.pos">
-          <SessionChart points={session} unitLabel="Drops" bare />
-        </FloatingPanel>
-      </div>
+      {/* Draggable mini session chart — open in a corner on mobile, full-size on desktop. */}
+      <FloatingPanel title="Session" storageKey="cascade.sessionChart.pos">
+        <SessionChart
+          points={session}
+          unitLabel="Drops"
+          bare
+          allTimeLoader={async () => {
+            const rounds = await fetchCascadeHistory(365)
+            return [...rounds].reverse().map((r, i) => ({ drop: i + 1, bet: r.bet, profit: r.payout - r.bet }))
+          }}
+        />
+      </FloatingPanel>
 
       <CascadeRulesModal open={rulesOpen} onOpenChange={setRulesOpen} />
       <CascadeFairnessModal

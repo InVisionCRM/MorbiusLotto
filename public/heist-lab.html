@@ -1,0 +1,507 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+<title>Heist — Deep-Sea Neon lab</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Chakra+Petch:wght@500;600;700&family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet" />
+<style>
+/* ── Heist — Deep-Sea Neon (arcade2) prototype ─────────────────────────────
+   Push-your-luck pick-a-door (Mines family) as a vault-cracking heist: each
+   room, open one of several vaults — one trips the alarm (bust). Escape with
+   the loot any time. Mirrors the shared arcade2-scope system + an immersive
+   themed vault (spotlight, lasers, dial doors) within the cyan/amber palette.
+
+   Pure RNG: each room's alarm door(s) are fixed from a seeded stream behind the
+   commitment hash before you pick, so it re-runs in Verify. Per-room house edge
+   in the ladder (like Mines). Currency: MORBIUS chips. */
+:root{
+  --abyss:#050E16; --cyan:#22D3EE; --cyan-soft:rgba(34,211,238,0.12); --cyan-edge:rgba(34,211,238,0.35);
+  --win:#F59E0B; --loss:#FB7185;
+  --ink:#E2E8F0; --slate-300:#CBD5E1; --slate-400:#94A3B8; --slate-500:#64748B;
+  --panel:rgba(8,20,31,0.78); --field:#081420;
+  --font-disp:'Chakra Petch',system-ui,sans-serif; --font-mono:'JetBrains Mono',ui-monospace,monospace;
+}
+*{box-sizing:border-box}
+html,body{margin:0;padding:0}
+body{min-height:100svh;background-color:var(--abyss);background-image:linear-gradient(to bottom,rgba(5,14,22,0.92),rgba(2,7,11,0.96) 55%,rgba(5,14,22,0.98));color:var(--ink);font-family:var(--font-disp);-webkit-font-smoothing:antialiased;overflow-x:hidden}
+.bg-light,.bg-vignette{position:fixed;inset:0;pointer-events:none;z-index:0}
+.bg-light{background:radial-gradient(ellipse 75% 55% at 50% -5%,rgba(34,211,238,0.13),transparent 70%)}
+.bg-vignette{background:radial-gradient(ellipse 120% 60% at 50% 115%,rgba(0,0,0,0.55),transparent 60%)}
+.mono{font-family:var(--font-mono);font-variant-numeric:tabular-nums}
+.wrap{position:relative;z-index:1;max-width:1000px;margin:0 auto;padding:18px 14px 64px}
+@media(min-width:700px){.wrap{padding:30px 22px 80px}}
+header{text-align:center;margin-bottom:16px}
+h1.title{margin:0;font-weight:700;text-transform:uppercase;letter-spacing:0.08em;color:#fff;font-size:clamp(26px,6.4vw,40px);line-height:1}
+h1.title .glyph{margin-left:.35rem;color:var(--cyan);filter:drop-shadow(0 0 12px rgba(34,211,238,0.65));vertical-align:middle}
+.tagline{margin:.55rem 0 0;font-size:clamp(11px,2.6vw,13.5px);color:var(--slate-500);letter-spacing:.01em}
+.topbar{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:14px}
+.topbar .right{display:flex;gap:8px}
+.balance{display:flex;align-items:center;gap:9px;background:rgba(8,20,31,0.7);border:1px solid var(--cyan-soft);border-radius:12px;padding:8px 13px}
+.coin{width:18px;height:18px;border-radius:50%;background:radial-gradient(circle at 35% 30%,#7be9fb,#22D3EE 55%,#0e7490);box-shadow:0 0 10px rgba(34,211,238,.5);flex:none}
+.balance .amt{font-family:var(--font-mono);font-weight:700;font-size:16px;color:#fff}
+.balance .cur{font-size:10px;letter-spacing:.12em;color:var(--cyan);text-transform:uppercase}
+.pill-btn{display:inline-flex;align-items:center;gap:7px;height:40px;padding:0 13px;border-radius:11px;border:1px solid var(--cyan-soft);background:rgba(8,20,31,0.7);color:var(--slate-400);cursor:pointer;transition:.15s;font-family:var(--font-disp);font-size:12px;letter-spacing:.06em;text-transform:uppercase}
+.pill-btn:hover{color:var(--cyan);border-color:var(--cyan-edge)}
+.pill-btn .dot{width:7px;height:7px;border-radius:50%;background:var(--cyan);box-shadow:0 0 8px var(--cyan)}
+.icon-btn{width:40px;height:40px;display:grid;place-items:center;border-radius:11px;border:1px solid var(--cyan-soft);background:rgba(8,20,31,0.7);color:var(--slate-400);cursor:pointer;transition:.15s;font-size:15px}
+.icon-btn:hover{color:var(--cyan);border-color:var(--cyan-edge)}
+.game-grid{display:flex;flex-direction:column;gap:14px}
+.board{order:-1}
+@media(min-width:900px){.game-grid{display:grid;grid-template-columns:332px 1fr;align-items:start;gap:18px}.board{order:0}}
+.panel{background:linear-gradient(rgba(255,255,255,0.03),rgba(255,255,255,0) 18%),var(--panel);border:1px solid var(--cyan-soft);border-radius:16px;box-shadow:0 18px 40px -24px rgba(0,0,0,0.9);padding:16px}
+.panel + .panel{margin-top:14px}
+.panel-label{font-size:11px;text-transform:uppercase;letter-spacing:.16em;color:var(--slate-500);margin:0 0 10px}
+.diff-row{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
+.diff{border:1px solid var(--cyan-soft);background:rgba(6,16,25,.6);border-radius:12px;padding:11px 6px 9px;text-align:center;cursor:pointer;transition:.15s;color:var(--slate-400)}
+.diff:hover{border-color:var(--cyan-edge)}
+.diff .d-name{font-weight:600;font-size:13px;letter-spacing:.04em;text-transform:uppercase}
+.diff .d-meta{font-family:var(--font-mono);font-size:10.5px;color:var(--slate-500);margin-top:3px}
+.diff.active{border-color:var(--cyan);background:linear-gradient(rgba(34,211,238,.14),rgba(34,211,238,.04));color:#fff;box-shadow:0 0 18px -4px rgba(34,211,238,.5)}
+.diff.active .d-meta{color:var(--cyan)}
+.diff[aria-disabled=true]{opacity:.45;pointer-events:none}
+.bet-input-row{display:flex;align-items:stretch;gap:8px;margin-bottom:10px}
+.bet-field{flex:1;display:flex;align-items:center;gap:8px;background:rgba(2,8,13,.7);border:1px solid var(--cyan-soft);border-radius:12px;padding:0 12px}
+.bet-field input{flex:1;width:100%;background:none;border:0;outline:none;color:#fff;font-family:var(--font-mono);font-weight:700;font-size:17px;padding:12px 0}
+.mini-btn{width:42px;border:1px solid var(--cyan-soft);background:rgba(8,20,31,.7);color:var(--slate-400);border-radius:11px;font-family:var(--font-mono);font-weight:700;cursor:pointer;transition:.15s;font-size:14px}
+.mini-btn:hover{color:var(--cyan);border-color:var(--cyan-edge)}
+.chips{display:grid;grid-template-columns:repeat(4,1fr);gap:7px}
+.chip{border:1px solid var(--cyan-soft);background:rgba(6,16,25,.6);color:var(--slate-400);border-radius:10px;padding:9px 4px;font-family:var(--font-mono);font-weight:600;font-size:12.5px;cursor:pointer;transition:.15s}
+.chip:hover{color:var(--cyan);border-color:var(--cyan-edge)}
+.minmax{display:flex;justify-content:space-between;font-family:var(--font-mono);font-size:10.5px;color:var(--slate-500);margin-top:9px}
+.board-shell{background:linear-gradient(rgba(255,255,255,0.025),rgba(255,255,255,0) 16%),rgba(6,16,25,.72);border:1px solid var(--cyan-soft);border-radius:18px;overflow:hidden;box-shadow:0 24px 50px -30px rgba(0,0,0,.95)}
+.hud{display:flex;gap:1px;background:var(--cyan-soft)}
+.hud .cell{flex:1;background:rgba(4,12,19,.85);padding:11px 12px;text-align:center}
+.hud .k{font-size:9.5px;letter-spacing:.16em;text-transform:uppercase;color:var(--slate-500)}
+.hud .v{font-family:var(--font-mono);font-weight:700;font-size:clamp(15px,3.8vw,21px);color:#fff;margin-top:3px}
+.hud .v.mult{color:var(--win)}.hud .v.mult.idle{color:var(--slate-400)}.hud .v.dep{color:var(--cyan)}
+/* immersive vault */
+.vault{position:relative;min-height:clamp(280px,55vw,350px);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:14px;padding:22px 14px;background:radial-gradient(ellipse 60% 50% at 50% 0%,rgba(34,211,238,.10),transparent 60%),linear-gradient(180deg,#0a141d,#050c12)}
+.vault::before{content:"";position:absolute;inset:0;background:repeating-linear-gradient(0deg,transparent 0 38px,rgba(34,211,238,.05) 38px 39px);pointer-events:none}
+.vault .laser{position:absolute;left:0;right:0;height:1px;background:linear-gradient(90deg,transparent,rgba(251,113,133,.4),transparent);pointer-events:none;opacity:.5}
+.doors{display:flex;gap:clamp(10px,3vw,18px);justify-content:center;z-index:2}
+.door{width:clamp(74px,21vw,104px);aspect-ratio:4/5;border-radius:12px;background:linear-gradient(160deg,#2b3744,#161f29);box-shadow:inset 0 1px 0 rgba(255,255,255,.1),0 12px 22px -10px rgba(0,0,0,.85),0 0 0 1px rgba(34,211,238,.1);display:flex;align-items:center;justify-content:center;cursor:pointer;transition:transform .15s,box-shadow .2s;position:relative;overflow:hidden}
+.door:hover{transform:translateY(-3px);box-shadow:inset 0 1px 0 rgba(255,255,255,.12),0 16px 26px -10px rgba(0,0,0,.9),0 0 0 1px var(--cyan-edge)}
+.door .dial{width:46%;aspect-ratio:1;border-radius:50%;border:3px solid rgba(34,211,238,.35);position:relative;display:flex;align-items:center;justify-content:center}
+.door .dial::before{content:"";position:absolute;width:60%;height:3px;background:rgba(34,211,238,.5);border-radius:2px}
+.door .dial::after{content:"";position:absolute;height:60%;width:3px;background:rgba(34,211,238,.5);border-radius:2px}
+.door .knob{width:18%;aspect-ratio:1;border-radius:50%;background:rgba(34,211,238,.5);position:absolute}
+.door.busy{pointer-events:none}
+.door.safe{background:radial-gradient(circle at 50% 45%,rgba(245,158,11,.3),rgba(34,211,238,.12));box-shadow:0 0 26px -4px var(--win),0 0 0 2px var(--cyan)}
+.door.safe .vc{font-family:var(--font-mono);font-weight:700;color:#fbd36b;font-size:15px;text-shadow:0 0 10px rgba(245,158,11,.7)}
+.door.alarm{background:radial-gradient(circle at 50% 45%,rgba(251,113,133,.4),rgba(40,8,12,.6));box-shadow:0 0 30px -2px var(--loss),0 0 0 2px var(--loss);animation:strobe .18s steps(2) 4}
+.door.alarm .vc{color:#fecdd3;font-size:24px}
+@keyframes strobe{0%{filter:brightness(1)}100%{filter:brightness(1.8)}}
+.door .vc{position:relative;z-index:2}
+.door.dim{opacity:.4}
+.vault-mid{font-size:12.5px;color:var(--slate-300);text-align:center;z-index:2;min-height:18px;text-shadow:0 1px 4px #000}
+.loot{display:flex;align-items:center;gap:7px;font-family:var(--font-mono);font-size:13px;color:#fbd36b;z-index:2}
+.loot .lk{font-size:10px;letter-spacing:.14em;text-transform:uppercase;color:var(--slate-500);font-family:var(--font-disp)}
+.banner-host{position:absolute;inset:0;display:grid;place-items:center;z-index:9;pointer-events:none}
+.banner{display:none;text-align:center;padding:16px 28px;border-radius:18px}
+.banner.show{display:block}
+.banner.win{background:radial-gradient(ellipse at center,rgba(245,158,11,.24),rgba(4,12,19,.6));border:1px solid rgba(245,158,11,.5);box-shadow:0 0 50px -8px rgba(245,158,11,.55)}
+.banner.loss{background:radial-gradient(ellipse at center,rgba(251,113,133,.2),rgba(4,12,19,.65));border:1px solid rgba(251,113,133,.45)}
+.banner .b-k{font-size:12px;letter-spacing:.22em;text-transform:uppercase;color:var(--slate-400)}
+.banner.win .b-k{color:var(--win)}.banner.loss .b-k{color:var(--loss)}
+.banner .b-v{font-family:var(--font-mono);font-weight:700;font-size:clamp(24px,7vw,38px);color:#fff;margin-top:4px}
+.arc-banner-in{animation:arc-banner-in .4s cubic-bezier(.34,1.56,.64,1) both}
+@keyframes arc-banner-in{0%{transform:scale(.7);opacity:0}55%{transform:scale(1.06);opacity:1}100%{transform:scale(1);opacity:1}}
+.actions{display:grid;grid-template-columns:1fr;gap:10px;margin-top:14px}
+.btn{border:0;border-radius:14px;padding:16px 18px;font-family:var(--font-disp);font-weight:700;font-size:16px;letter-spacing:.05em;text-transform:uppercase;cursor:pointer;transition:.15s;color:#04141b}
+.btn:active{transform:scale(.985)}
+.btn-go{background:linear-gradient(180deg,#3ee0f5,#22D3EE 60%,#0fb6d4);box-shadow:0 0 24px -6px rgba(34,211,238,.68),inset 0 1px 0 rgba(255,255,255,.4)}
+.btn-cash{background:linear-gradient(180deg,#fbd36b,#F59E0B 60%,#d97f06);color:#2a1602;box-shadow:0 0 24px -5px rgba(245,158,11,.7),inset 0 1px 0 rgba(255,255,255,.4)}
+.btn:disabled{opacity:.45;cursor:not-allowed;filter:saturate(.4)}
+.cash-sub{display:block;font-family:var(--font-mono);font-size:11px;font-weight:600;letter-spacing:0;margin-top:2px;opacity:.85}
+.info{margin-top:16px}
+.tabs-list{display:grid;grid-template-columns:1fr 1fr;gap:4px;background:rgba(8,20,31,.7);border:1px solid rgba(34,211,238,.12);border-radius:10px;padding:4px}
+.tab-btn{font-family:var(--font-disp);font-weight:600;font-size:12px;text-transform:uppercase;letter-spacing:.14em;color:var(--slate-500);background:none;border:0;border-radius:7px;padding:9px 6px;cursor:pointer;transition:.15s}
+.tab-btn:hover{color:var(--slate-300)}.tab-btn.active{background:rgba(34,211,238,.15);color:var(--cyan);box-shadow:inset 0 0 0 1px rgba(34,211,238,.5)}
+.tab-panel{display:none;margin-top:12px}.tab-panel.active{display:block}
+.hist-head{display:flex;align-items:baseline;justify-content:space-between;margin-bottom:6px}
+.hist-head h2{font-family:var(--font-disp);font-weight:600;font-size:14px;text-transform:uppercase;letter-spacing:.08em;color:var(--slate-300);margin:0}
+.hist-head .count{font-size:11px;color:var(--slate-500)}
+.hist-empty{padding:18px 0;text-align:center;font-size:13px;color:var(--slate-500)}
+.hist-list{list-style:none;margin:0;padding:0}
+.hist-row{display:flex;flex-wrap:wrap;align-items:center;gap:6px 12px;padding:9px 0;border-top:1px solid rgba(34,211,238,.08);font-size:13px}
+.hist-row:first-child{border-top:0}
+.hist-row .t{font-family:var(--font-mono);width:46px;flex:none;color:var(--slate-500)}
+.hist-row .badge{flex:none;font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:.04em;padding:2px 7px;border-radius:5px;color:var(--cyan);background:rgba(34,211,238,.1);box-shadow:inset 0 0 0 1px rgba(34,211,238,.3)}
+.hist-row .m{font-family:var(--font-mono);color:var(--slate-400);flex:none}
+.hist-row .x{font-family:var(--font-mono);flex:none}.hist-row .x.win{color:var(--cyan)}.hist-row .x.bust{color:var(--loss);font-weight:600}
+.hist-row .p{font-family:var(--font-mono);font-weight:600;margin-left:auto;flex:none}
+.hist-row .p.up{color:var(--win)}.hist-row .p.flat{color:var(--slate-500)}
+.hist-row .verify{flex:none;font-size:11px;color:var(--slate-500);background:none;border:0;border-radius:5px;padding:3px 7px;cursor:pointer;transition:.15s}
+.hist-row .verify:hover{color:var(--cyan);background:rgba(34,211,238,.1)}
+.faq-item{border-top:1px solid rgba(34,211,238,.1)}.faq-item:first-child{border-top:0}
+.faq-q{width:100%;text-align:left;background:none;border:0;color:#E8EEF5;font-family:var(--font-disp);font-size:14px;font-weight:500;padding:13px 28px 13px 0;cursor:pointer;position:relative;transition:.15s}
+.faq-q:hover{color:var(--cyan)}.faq-q::after{content:"⌄";position:absolute;right:4px;top:12px;color:var(--slate-500);transition:transform .2s}
+.faq-item.open .faq-q::after{transform:rotate(180deg);color:var(--cyan)}
+.faq-a{display:none;padding:0 4px 14px;color:#AFC0CF;font-size:13.5px;line-height:1.65}.faq-item.open .faq-a{display:block}
+.faq-a p{margin:0 0 9px}.faq-a p:last-child{margin-bottom:0}
+.faq-a a{color:var(--cyan);text-decoration:underline;text-underline-offset:2px;word-break:break-all}
+.faq-a .siwe{font-family:var(--font-mono);font-size:11px;line-height:1.6;background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.08);border-radius:8px;padding:10px;color:var(--slate-400);margin:8px 0}
+.faq-a .siwe .a{color:var(--cyan)}.faq-a .siwe .s{color:var(--slate-300)}.hl{color:var(--cyan)}
+.overlay{position:fixed;inset:0;z-index:50;display:none;align-items:center;justify-content:center;padding:16px;background:rgba(2,6,10,.72);backdrop-filter:blur(3px)}
+.overlay.open{display:flex}
+.modal{width:100%;max-width:520px;max-height:85vh;overflow-y:auto;background:#050E16;border:1px solid #0e3a47;border-radius:16px;box-shadow:0 30px 80px -20px rgba(0,0,0,.9);padding:20px}
+.modal-head{display:flex;align-items:center;justify-content:space-between;margin-bottom:16px}
+.modal-head h2{font-family:var(--font-disp);font-weight:600;text-transform:uppercase;letter-spacing:.12em;color:var(--cyan);font-size:16px;margin:0}
+.modal-x{background:none;border:0;color:var(--slate-500);font-size:20px;cursor:pointer;line-height:1}.modal-x:hover{color:var(--cyan)}
+.m-sec{margin-bottom:18px}.m-sec h3{font-size:13.5px;font-weight:600;color:var(--slate-300);margin:0 0 4px}
+.m-sec p.note{font-size:12px;color:var(--slate-500);margin:0 0 9px;line-height:1.5}
+.m-input-row{display:flex;gap:8px}
+.m-input{flex:1;min-width:0;background:var(--field);border:1px solid #0e3a47;border-radius:9px;color:#cbd5e1;font-family:var(--font-mono);font-size:12px;padding:9px 11px;outline:none}
+.m-input:focus{border-color:var(--cyan-edge)}
+.m-btn{flex:none;border-radius:9px;padding:9px 14px;font-family:var(--font-disp);font-size:13px;cursor:pointer;border:1px solid transparent;transition:.15s}
+.m-btn.outline{background:transparent;border-color:#0e3a47;color:var(--cyan)}.m-btn.outline:hover{background:rgba(34,211,238,.1)}
+.m-btn.solid{background:#0891b2;color:#fff}.m-btn.solid:hover{background:#22D3EE;color:#03121B}
+.m-result{border:1px solid #0e3a47;background:rgba(7,19,31,.7);border-radius:12px;padding:13px;margin-top:6px}
+.m-check{display:flex;align-items:center;gap:9px;font-size:13px;color:var(--slate-300);margin-bottom:6px}
+.m-check .ck{font-weight:700}.m-check .ck.ok{color:var(--cyan)}.m-check .ck.no{color:var(--loss)}
+.m-maplabel{font-size:11px;color:var(--slate-500);margin:10px 0 4px;text-transform:uppercase;letter-spacing:.06em}
+.m-rooms{display:flex;flex-direction:column;gap:4px;margin:4px 0}
+.m-rm{display:flex;align-items:center;gap:6px;font-size:12px}
+.m-rm .rn{font-family:var(--font-mono);color:var(--slate-500);width:54px;flex:none}
+.m-rm .dd{width:20px;height:20px;border-radius:4px;display:flex;align-items:center;justify-content:center;font-size:10px;font-family:var(--font-mono);background:var(--field);color:#5f6b78;box-shadow:inset 0 0 0 1px rgba(34,211,238,.12)}
+.m-rm .dd.alarm{background:rgba(251,113,133,.16);color:var(--loss);box-shadow:inset 0 0 0 1px rgba(251,113,133,.5)}
+.m-rm .dd.picked{box-shadow:inset 0 0 0 2px var(--cyan)}
+.m-fields{display:grid;gap:8px;margin-top:8px}
+.m-field .fl{font-size:11px;text-transform:uppercase;letter-spacing:.04em;color:var(--slate-500)}
+.m-field .fv{word-break:break-all;border-radius:7px;background:var(--field);padding:5px 9px;font-family:var(--font-mono);font-size:11.5px;color:var(--slate-300);margin-top:2px}
+.m-foot{display:flex;flex-wrap:wrap;gap:3px 16px;font-size:12px;color:var(--slate-500);margin-top:10px}
+.m-foot .fv{font-family:var(--font-mono)}.m-foot .fv.amber{color:var(--win)}.m-foot .fv.cyan{color:var(--cyan)}.m-foot .fv.rose{color:var(--loss)}
+.lab-note{margin-top:22px;text-align:center;font-size:11px;color:var(--slate-500);font-family:var(--font-mono);line-height:1.6}.lab-note b{color:var(--slate-400);font-weight:600}
+</style>
+</head>
+<body>
+<div class="bg-light"></div>
+<div class="bg-vignette"></div>
+<div class="wrap">
+  <header>
+    <h1 class="title">Heist<span class="glyph">⌬</span></h1>
+    <p class="tagline">crack vault after vault · one trips the alarm · escape with the loot · provably fair · played in chips</p>
+  </header>
+  <div class="topbar">
+    <div class="balance"><span class="coin"></span><span class="amt" id="balance">25,000</span><span class="cur">MORBIUS</span></div>
+    <div class="right">
+      <button class="pill-btn" id="fairBtn"><span class="dot"></span>Provably fair</button>
+      <button class="icon-btn" id="soundBtn" title="Sound" aria-label="Toggle sound">♪</button>
+    </div>
+  </div>
+
+  <div class="game-grid">
+    <section>
+      <div class="panel">
+        <p class="panel-label">Job</p>
+        <div class="diff-row" id="diffRow">
+          <button class="diff active" data-diff="sneaky"><div class="d-name">Sneaky</div><div class="d-meta">4 doors · 1 alarm</div></button>
+          <button class="diff" data-diff="standard"><div class="d-name">Std</div><div class="d-meta">3 doors · 1 alarm</div></button>
+          <button class="diff" data-diff="daring"><div class="d-name">Daring</div><div class="d-meta">3 doors · 2 alarm</div></button>
+        </div>
+      </div>
+      <div class="panel">
+        <p class="panel-label">Bet amount</p>
+        <div class="bet-input-row">
+          <div class="bet-field"><span class="coin"></span><input id="betInput" class="mono" inputmode="numeric" value="500" /></div>
+          <button class="mini-btn" data-bet="half">½</button>
+          <button class="mini-btn" data-bet="double">2×</button>
+        </div>
+        <div class="chips">
+          <button class="chip" data-add="100">+100</button>
+          <button class="chip" data-add="500">+500</button>
+          <button class="chip" data-add="1000">+1k</button>
+          <button class="chip" data-set="max">Max</button>
+        </div>
+        <div class="minmax"><span>Min 100</span><span>Max 100,000</span></div>
+      </div>
+    </section>
+
+    <section class="board">
+      <div class="board-shell">
+        <div class="hud">
+          <div class="cell"><div class="k">Multiplier</div><div class="v mult idle" id="hudMult">1.00×</div></div>
+          <div class="cell"><div class="k">Room</div><div class="v dep" id="hudRoom">0 / 8</div></div>
+          <div class="cell"><div class="k">Escape with</div><div class="v" id="hudCash">—</div></div>
+        </div>
+        <div class="vault" id="vault">
+          <div class="laser" style="top:24%"></div><div class="laser" style="top:68%"></div>
+          <div class="loot"><span class="lk">Loot</span><span id="lootAmt">0</span><span class="lk">chips</span></div>
+          <div class="doors" id="doors"></div>
+          <div class="vault-mid" id="vaultMid">Pick a job and break in</div>
+          <div class="banner-host"><div class="banner" id="banner"><div class="b-k" id="bannerK"></div><div class="b-v" id="bannerV"></div></div></div>
+        </div>
+      </div>
+      <div class="actions" id="actions"><button class="btn btn-go" id="goBtn">Place bet &amp; break in</button></div>
+    </section>
+  </div>
+
+  <section class="info panel" aria-label="Heist information">
+    <div class="tabs-list">
+      <button class="tab-btn active" data-tab="rounds">My rounds</button>
+      <button class="tab-btn" data-tab="faq">FAQ</button>
+    </div>
+    <div class="tab-panel active" id="tab-rounds">
+      <div class="hist-head"><h2>Recent jobs</h2><span class="count" id="histCount">last —</span></div>
+      <div id="histBody"></div>
+    </div>
+    <div class="tab-panel" id="tab-faq"><div id="faqBody"></div></div>
+  </section>
+
+  <p class="lab-note">
+    <b>Prototype</b> — Deep-Sea Neon style, single-player on the arcade2 pattern (Mines family).<br/>
+    Each room's alarm door(s) are dealt by an in-page seeded RNG for feel; the real build derives them from the server
+    <b>provably-fair HMAC</b> pipeline (<span class="mono">/api/arcade/heist/*</span>) and the ladder carries a per-room house edge. Every job re-derives from the seed in Verify. Currency: <b>MORBIUS</b> chips.
+  </p>
+</div>
+
+<div class="overlay" id="overlay">
+  <div class="modal" role="dialog" aria-modal="true" aria-label="Provably fair">
+    <div class="modal-head"><h2>Provably Fair</h2><button class="modal-x" id="modalX" aria-label="Close">✕</button></div>
+    <div class="m-sec"><h3>Your client seed</h3><p class="note">Mixed into every job. Change it any time — the next round uses the new value.</p>
+      <div class="m-input-row"><input class="m-input" id="clientSeedInput" placeholder="Leave blank for a random seed each round" /><button class="m-btn outline" id="newSeedBtn">New seed</button></div></div>
+    <div class="m-sec"><h3>Verify a job</h3><p class="note">Each room's alarm door is sealed from a server seed committed (hashed) before your bet — revealed once the round settles.</p>
+      <div class="m-input-row"><input class="m-input" id="verifyIdInput" placeholder="Round ID" /><button class="m-btn solid" id="verifyBtn">Verify</button></div></div>
+    <div id="verifyOut"></div>
+  </div>
+</div>
+
+<script>
+"use strict";
+(function(){
+  var EDGE=0.02, MIN_BET=100, MAX_BET=100000;
+  var DIFFS={
+    sneaky:{label:'Sneaky',doors:4,bad:1,rooms:8},
+    standard:{label:'Standard',doors:3,bad:1,rooms:8},
+    daring:{label:'Daring',doors:3,bad:2,rooms:6}
+  };
+  var S={ balance:25000, diff:'sneaky', bet:500, phase:'idle', room:0, ladder:[], alarms:[], picks:[],
+    serverSeed:'', clientSeed:'', clientSeedPref:'', nonce:0, serverHash:'', roundId:'',
+    sound:true, busy:false, history:[] };
+
+  var $=function(id){return document.getElementById(id);};
+  var balanceEl=$('balance'),betInput=$('betInput'),actions=$('actions'),doorsEl=$('doors'),vaultMid=$('vaultMid'),lootAmt=$('lootAmt'),
+      hudMult=$('hudMult'),hudRoom=$('hudRoom'),hudCash=$('hudCash'),banner=$('banner'),bannerK=$('bannerK'),bannerV=$('bannerV'),
+      soundBtn=$('soundBtn'),overlay=$('overlay'),histBody=$('histBody'),histCount=$('histCount'),faqBody=$('faqBody'),vault=$('vault');
+
+  function cfg(){return DIFFS[S.diff];}
+  function fmt(n){return Math.round(n).toLocaleString('en-US');}
+  function multStr(x){return (x/100).toFixed(2)+'×';}
+  function rndHex(len){var s='';for(var i=0;i<len;i++)s+=Math.floor(Math.random()*16).toString(16);return s;}
+  function shortId(){return rndHex(8).toUpperCase();}
+  function xmur3(str){var h=1779033703^str.length;for(var i=0;i<str.length;i++){h=Math.imul(h^str.charCodeAt(i),3432918353);h=h<<13|h>>>19;}return function(){h=Math.imul(h^h>>>16,2246822507);h=Math.imul(h^h>>>13,3266489909);return (h^=h>>>16)>>>0;};}
+  function mulberry32(a){return function(){a|=0;a=a+0x6D2B79F5|0;var t=Math.imul(a^a>>>15,1|a);t=t+Math.imul(t^t>>>7,61|t)^t;return ((t^t>>>14)>>>0)/4294967296;};}
+  function deriveAlarms(serverSeed,clientSeed,nonce,d){
+    var rng=mulberry32(xmur3(serverSeed+':'+clientSeed+':'+nonce)());
+    var out=[];
+    for(var r=0;r<d.rooms;r++){
+      var idxs=[];for(var k=0;k<d.doors;k++)idxs.push(k);
+      // pick `bad` distinct doors via partial Fisher-Yates
+      for(var b=0;b<d.bad;b++){var j=b+Math.floor(rng()*(d.doors-b));var t=idxs[b];idxs[b]=idxs[j];idxs[j]=t;}
+      out.push(idxs.slice(0,d.bad).sort(function(a,b){return a-b;}));
+    }
+    return out;
+  }
+  function buildLadder(d){var g=d.doors/(d.doors-d.bad),arr=[100];for(var r=1;r<=d.rooms;r++)arr[r]=Math.max(101,Math.round((1-EDGE)*Math.pow(g,r)*100));return arr;}
+  async function sha256Hex(msg){try{var b=await crypto.subtle.digest('SHA-256',new TextEncoder().encode(msg));return Array.from(new Uint8Array(b)).map(function(x){return x.toString(16).padStart(2,'0');}).join('');}catch(e){return 'sha256-unavailable';}}
+
+  var actx=null;
+  function tone(f,d,t,g){if(!S.sound)return;try{actx=actx||new (window.AudioContext||window.webkitAudioContext)();var o=actx.createOscillator(),gn=actx.createGain();o.type=t||'sine';o.frequency.value=f;gn.gain.value=g||0.05;o.connect(gn);gn.connect(actx.destination);var n=actx.currentTime;o.start(n);gn.gain.exponentialRampToValueAtTime(0.0001,n+(d||0.12));o.stop(n+(d||0.12));}catch(e){}}
+  function sCrack(){tone(520,0.09,'square',0.05);}
+  function sLoot(){tone(700,0.1,'sine',0.05);setTimeout(function(){tone(950,0.12,'sine',0.05);},80);}
+  function sAlarm(){tone(880,0.12,'square',0.06);setTimeout(function(){tone(660,0.3,'sawtooth',0.07);},120);}
+  function sCash(){tone(660,0.12,'sine',0.06);setTimeout(function(){tone(990,0.16,'sine',0.06);},90);}
+
+  function doorSvg(){return '<span class="dial"></span><span class="knob" style="top:12%;left:50%;transform:translateX(-50%)"></span>';}
+  function renderDoors(){
+    var d=cfg(),html='';
+    for(var i=0;i<d.doors;i++){html+='<div class="door" data-i="'+i+'">'+doorSvg()+'</div>';}
+    doorsEl.innerHTML=html;
+    doorsEl.querySelectorAll('.door').forEach(function(el){el.addEventListener('click',function(){pickDoor(+el.getAttribute('data-i'));});});
+  }
+  function syncHud(){
+    var m=S.ladder[S.room]||100;
+    hudMult.textContent=multStr(m);hudMult.classList.toggle('idle',S.room===0);
+    hudRoom.textContent=S.room+' / '+cfg().rooms;
+    hudCash.textContent=(S.phase==='active'&&S.room>0)?fmt(S.bet*m/100):'—';
+    lootAmt.textContent=(S.phase==='active'&&S.room>0)?fmt(S.bet*m/100):(S.phase==='active'?fmt(S.bet):'0');
+    balanceEl.textContent=fmt(S.balance);
+  }
+  function renderActions(){
+    if(S.phase==='idle'||S.phase==='settled'){
+      actions.className='actions';
+      actions.innerHTML='<button class="btn btn-go" id="goBtn"'+(S.busy?' disabled':'')+'>'+(S.phase==='settled'?'Next job':'Place bet &amp; break in')+'</button>';
+      $('goBtn').addEventListener('click',startRound);
+    }else{
+      actions.className='actions';
+      var can=S.room>0,m=S.ladder[S.room]||100;
+      actions.innerHTML='<button class="btn btn-cash" id="cashBtn"'+(can&&!S.busy?'':' disabled')+'>Escape with the loot<span class="cash-sub">'+(can?fmt(S.bet*m/100)+' MORBIUS':'crack a vault first')+'</span></button>';
+      $('cashBtn').addEventListener('click',escape);
+    }
+  }
+  function setControls(on){document.querySelectorAll('#diffRow .diff').forEach(function(b){b.setAttribute('aria-disabled',on?'false':'true');});betInput.disabled=!on;document.querySelectorAll('.chip,.mini-btn').forEach(function(b){b.style.pointerEvents=on?'auto':'none';b.style.opacity=on?'1':'.5';});}
+
+  async function startRound(){
+    if(S.busy)return;
+    var bet=clampBet(parseInt(betInput.value,10)||0);
+    if(bet>S.balance){flashInput();return;}
+    betInput.value=bet;S.busy=true;
+    var d=cfg();
+    S.bet=bet;S.balance-=bet;S.room=0;S.phase='active';S.ladder=buildLadder(d);S.picks=[];
+    S.serverSeed=rndHex(64);S.clientSeed=(S.clientSeedPref||'').trim()||rndHex(20);S.nonce+=1;S.roundId=shortId();
+    S.alarms=deriveAlarms(S.serverSeed,S.clientSeed,S.nonce,d);
+    S.serverHash=await sha256Hex(S.serverSeed);
+    hideBanner();setControls(false);renderDoors();syncHud();renderActions();
+    vaultMid.innerHTML='Room 1 — pick a vault ('+d.doors+' doors, '+d.bad+' alarm'+(d.bad>1?'s':'')+')';
+    S.busy=false;
+  }
+
+  function pickDoor(i){
+    if(S.phase!=='active'||S.busy)return;
+    S.busy=true;
+    var d=cfg(),alarmSet=S.alarms[S.room],isAlarm=alarmSet.indexOf(i)>=0;
+    S.picks.push(i);
+    var doors=doorsEl.querySelectorAll('.door');
+    doors.forEach(function(el){el.classList.add('busy');});
+    if(isAlarm){
+      doors[i].classList.add('alarm');doors[i].innerHTML='<span class="vc">✕</span>';
+      alarmSet.forEach(function(a){if(a!==i){doors[a].classList.add('alarm');doors[a].innerHTML='<span class="vc">✕</span>';}});
+      vault.style.boxShadow='inset 0 0 60px -10px rgba(251,113,133,.6)';
+      sAlarm();
+      setTimeout(function(){vault.style.boxShadow='';settle(false);},700);
+      return;
+    }
+    var m=S.ladder[S.room+1]||100;
+    doors[i].classList.add('safe');doors[i].innerHTML='<span class="vc">+'+fmt(S.bet*m/100 - S.bet*(S.ladder[S.room]||100)/100)+'</span>';
+    doors.forEach(function(el,idx){if(idx!==i)el.classList.add('dim');});
+    sCrack();setTimeout(sLoot,120);
+    setTimeout(function(){
+      S.room++;syncHud();
+      if(S.room>=d.rooms){settle(true,true);return;}
+      S.busy=false;
+      renderDoors();renderActions();
+      vaultMid.innerHTML='Room '+(S.room+1)+' — '+multStr(S.ladder[S.room])+' banked, push on?';
+    },620);
+  }
+  function escape(){if(S.phase!=='active'||S.room<1||S.busy)return;settle(true,false);}
+
+  function settle(win,full){
+    S.phase='settled';
+    var m=S.ladder[S.room]||100, payout=win?Math.round(S.bet*m/100):0;
+    if(win){S.balance+=payout;sCash();showBanner('win',full?'Vault cleared!':'Clean getaway','+'+fmt(payout-S.bet)+' MORBIUS');vaultMid.textContent=full?'You emptied the whole vault.':'Escaped with '+multStr(m)+'.';}
+    else{showBanner('loss','Alarm tripped','−'+fmt(S.bet)+' MORBIUS');vaultMid.textContent='Caught in room '+(S.room+1)+'.';}
+    S.history.unshift({ id:S.roundId, at:new Date().toISOString(), diff:S.diff, doors:cfg().doors, bad:cfg().bad, roomsTotal:cfg().rooms,
+      bet:S.bet, room:S.room, won:win, multX100:win?m:0, payout:payout, picks:S.picks.slice(), alarms:S.alarms.map(function(a){return a.slice();}),
+      serverSeed:S.serverSeed, serverHash:S.serverHash, clientSeed:S.clientSeed, nonce:S.nonce });
+    if(S.history.length>15)S.history.pop();
+    S.busy=false;setControls(true);syncHud();renderActions();renderHistory();
+  }
+
+  function showBanner(k,a,b){banner.className='banner show '+k+' arc-banner-in';bannerK.textContent=a;bannerV.textContent=b;}
+  function hideBanner(){banner.className='banner';}
+  function clampBet(v){if(isNaN(v)||v<MIN_BET)v=MIN_BET;if(v>MAX_BET)v=MAX_BET;return v;}
+  function flashInput(){betInput.style.color='#FB7185';setTimeout(function(){betInput.style.color='#fff';},400);}
+
+  function timeLabel(iso){var d=new Date(iso);return isNaN(d.getTime())?'—':d.toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'});}
+  function renderHistory(){
+    histCount.textContent='last '+(S.history.length||'—');
+    if(!S.history.length){histBody.innerHTML='<p class="hist-empty">No jobs yet — pick a target and break in.</p>';return;}
+    histBody.innerHTML='<ul class="hist-list">'+S.history.map(function(r){
+      var profit=r.payout-r.bet;
+      var xcell=r.won?'<span class="x win">'+multStr(r.multX100)+'</span>':'<span class="x bust">caught</span>';
+      var pcell='<span class="p '+(profit>0?'up':'flat')+'">'+(profit>0?'+'+fmt(profit):fmt(profit))+'</span>';
+      return '<li class="hist-row"><span class="t">'+timeLabel(r.at)+'</span><span class="badge">'+DIFFS[r.diff].label+'</span>'
+        +'<span class="m">bet '+fmt(r.bet)+'</span><span class="m">room '+r.room+'/'+r.roomsTotal+'</span>'+xcell+pcell
+        +'<button class="verify" data-id="'+r.id+'">Verify</button></li>';
+    }).join('')+'</ul>';
+    histBody.querySelectorAll('.verify').forEach(function(b){b.addEventListener('click',function(){openFairness(b.getAttribute('data-id'));});});
+  }
+
+  function recipeStr(){return 'HMAC_SHA256(serverSeed, `${clientSeed}:${nonce}:room`) → alarm door(s) per room';}
+  function ckHtml(ok,label){return '<div class="m-check"><span class="ck '+(ok?'ok':'no')+'">'+(ok?'✓':'✗')+'</span><span>'+label+'</span></div>';}
+  function fieldHtml(l,v){return '<div class="m-field"><div class="fl">'+l+'</div><div class="fv">'+v+'</div></div>';}
+  function roomsHtml(r){
+    var rooms=Math.max(r.room+ (r.won?0:1), r.picks.length);
+    var h='<div class="m-rooms">';
+    for(var rm=0;rm<r.picks.length;rm++){
+      h+='<div class="m-rm"><span class="rn">room '+(rm+1)+'</span>';
+      for(var dd=0;dd<r.doors;dd++){
+        var isAlarm=r.alarms[rm].indexOf(dd)>=0, isPick=r.picks[rm]===dd;
+        h+='<span class="dd'+(isAlarm?' alarm':'')+(isPick?' picked':'')+'">'+(isAlarm?'✕':dd+1)+'</span>';
+      }
+      h+='</div>';
+    }
+    return h+'</div>';
+  }
+  function findRound(id){id=String(id||'').trim();return S.history.filter(function(x){return x.id===id;})[0]||null;}
+  function openFairness(id){overlay.classList.add('open');$('clientSeedInput').value=S.clientSeedPref;
+    var target=id||(S.history[0]&&S.history[0].id);
+    if(target){$('verifyIdInput').value=target;runVerify(target);}else{$('verifyOut').innerHTML='<p class="note">Play a round, then verify it here — or paste any round ID.</p>';}}
+  function closeFairness(){overlay.classList.remove('open');}
+  async function runVerify(id){
+    var out=$('verifyOut'),r=findRound(id);
+    if(!r){out.innerHTML='<p class="note" style="color:var(--loss)">No round found with that ID.</p>';return;}
+    out.innerHTML='<p class="note">Checking…</p>';
+    var hashOk=(await sha256Hex(r.serverSeed))===r.serverHash;
+    var d=DIFFS[r.diff];
+    var re=deriveAlarms(r.serverSeed,r.clientSeed,r.nonce,d);
+    var alarmOk=true;for(var i=0;i<r.picks.length;i++){if(re[i].join(',')!==r.alarms[i].join(','))alarmOk=false;}
+    var outcomeOk=true;for(var j=0;j<r.picks.length-1;j++){if(re[j].indexOf(r.picks[j])>=0)outcomeOk=false;}
+    if(!r.won){var last=r.picks.length-1;if(last>=0&&re[last].indexOf(r.picks[last])<0)outcomeOk=false;}
+    var expected=r.won?Math.floor(r.bet*r.multX100/100):0,payoutOk=expected===r.payout;
+    out.innerHTML='<div class="m-result">'
+      +ckHtml(hashOk,'Server seed matches its committed hash (checked locally)')
+      +ckHtml(alarmOk,'Every room’s alarm door re-derives from the seed')
+      +ckHtml(outcomeOk,'Your picks vs the alarms match the recorded outcome')
+      +ckHtml(payoutOk,'Payout reconciles with floor(bet × multiplier)')
+      +'<div class="m-maplabel">The job — ✕ = alarm, ringed = your pick</div>'+roomsHtml(r)
+      +'<div class="m-fields">'+fieldHtml('Server seed hash (committed)',r.serverHash)+fieldHtml('Server seed (revealed)',r.serverSeed)
+        +fieldHtml('Client seed',r.clientSeed)+fieldHtml('Nonce',String(r.nonce))+fieldHtml('Recipe',recipeStr())+'</div>'
+      +'<div class="m-foot"><span>Rooms cracked: <span class="fv cyan">'+r.room+' / '+r.roomsTotal+'</span></span>'
+        +'<span>Result: <span class="fv">'+(r.won?'Escaped':'Caught')+'</span></span>'
+        +'<span>Returned: <span class="fv '+(r.payout>0?'amber':'rose')+'">'+fmt(r.payout)+' chips</span></span></div>'
+      +'</div>';
+  }
+
+  var FAQS=[
+    {q:'How does Heist work?',a:'<p>Each room shows several vault doors — open one to crack it and raise your multiplier. But one (or more) is wired to the <span class="hl">alarm</span>: pick it and the job\'s over. After each successful crack you can keep going deeper for a bigger multiplier or <span class="hl">escape with the loot</span> to bank it.</p>'},
+    {q:'What do the jobs change?',a:'<p>The odds. <span class="hl">Sneaky</span> has four doors with one alarm (safer, gentler climb); <span class="hl">Daring</span> has three doors with two alarms (a 1-in-3 each room, but the multiplier rockets). Clear every room and you crack the whole vault for the top prize.</p>'},
+    {q:'Is it really fair?',a:'<p>Yes. Before your bet the server commits to a secret <span class="hl">server seed</span> (you see only its SHA-256 hash). Which door hides the alarm in every room is derived from that seed, <span class="hl">your client seed</span>, and a nonce — fixed before you pick, so it can\'t move to wherever you click. Hit <span class="hl">Verify</span> to re-derive every room and confirm the commitment hash.</p>'},
+    {q:'Does the alarm move after I choose?',a:'<p>Never. All the alarm doors for the whole job are sealed by the commitment hash the moment you break in. Your picks only reveal what was already there.</p>'},
+    {q:'How do I get chips?',a:'<p>Chips are the play credits used at every table. Tap <span class="hl">Buy</span> next to your balance to swap MORBIUS for chips at a fixed <span class="hl">1 chip = 1 MORBIUS</span> — instant, gasless, and <span class="hl">no fee</span>. Cash back out any time at the same 1:1.</p>'},
+    {q:'How do I get MORBIUS?',a:'<p>MORBIUS is the project\'s token on <span class="hl">PulseChain</span> (chain ID 369). Buy it on <span class="hl">PulseX</span> by swapping PLS or WPLS for MORBIUS, then deposit and convert to chips.</p><p class="mono" style="font-size:11px">Contract: <a href="https://scan.pulsechain.com/token/0xB7d4eB5fDfE3d4d3B5C16a44A49948c6EC77c6F1" target="_blank" rel="noopener noreferrer">0xB7d4eB5fDfE3d4d3B5C16a44A49948c6EC77c6F1</a></p><p>Always confirm the contract address before swapping — never trust a ticker alone.</p>'},
+    {q:'Chips vs. MORBIUS — what\'s the difference?',a:'<p><span class="hl">MORBIUS</span> is the real, on-chain token in your wallet. <span class="hl">Chips</span> are off-chain 1:1 credits you play with: faster, gasless, settled instantly. You move between them at 1:1 and only ever wager in chips.</p>'},
+    {q:'Why do I have to sign a message in my wallet?',a:'<p>It\'s a <span class="hl">Sign-In with Ethereum</span> (SIWE) signature — an off-chain message, not a transaction. No gas, no funds moved, no approvals. It only proves you control your address.</p><div class="siwe"><div class="s">morbius.io wants you to sign in with your Ethereum account:</div><div class="a">0xYour…Wallet</div><div style="margin:6px 0" class="s">Sign in to MORBIUS. This proves you own this wallet. No funds will move.</div><div>Chain ID: 369</div><div>Nonce: a1b2c3…</div></div><p>It\'s domain-bound and replay-proof, and never exposes your private key.</p>'},
+    {q:'What are the fees?',a:'<p>These chip games take <span class="hl">no per-bet or per-payout fee</span> — each keeps a small built-in house edge in its odds. Buying and cashing chips is free, 1:1.</p>'}
+  ];
+  function renderFaq(){faqBody.innerHTML=FAQS.map(function(f){return '<div class="faq-item"><button class="faq-q">'+f.q+'</button><div class="faq-a">'+f.a+'</div></div>';}).join('');
+    faqBody.querySelectorAll('.faq-item').forEach(function(it){it.querySelector('.faq-q').addEventListener('click',function(){it.classList.toggle('open');});});}
+
+  function freshBoard(){renderDoors();doorsEl.querySelectorAll('.door').forEach(function(el){el.classList.add('busy');});}
+  document.querySelectorAll('#diffRow .diff').forEach(function(b){b.addEventListener('click',function(){
+    if(S.phase==='active')return;document.querySelectorAll('#diffRow .diff').forEach(function(x){x.classList.remove('active');});
+    b.classList.add('active');S.diff=b.getAttribute('data-diff');S.room=0;S.phase='idle';S.ladder=buildLadder(cfg());hideBanner();freshBoard();vaultMid.textContent='Pick a job and break in';syncHud();renderActions();});});
+  document.querySelectorAll('.chip').forEach(function(c){c.addEventListener('click',function(){if(S.phase==='active')return;
+    if(c.getAttribute('data-set')==='max'){betInput.value=Math.min(MAX_BET,S.balance);}else{betInput.value=clampBet((parseInt(betInput.value,10)||0)+parseInt(c.getAttribute('data-add'),10));}});});
+  document.querySelectorAll('.mini-btn').forEach(function(b){b.addEventListener('click',function(){if(S.phase==='active')return;var v=parseInt(betInput.value,10)||MIN_BET;betInput.value=clampBet(b.getAttribute('data-bet')==='half'?Math.floor(v/2):v*2);});});
+  betInput.addEventListener('change',function(){betInput.value=clampBet(parseInt(betInput.value,10)||0);});
+  soundBtn.addEventListener('click',function(){S.sound=!S.sound;soundBtn.style.color=S.sound?'':'#475569';soundBtn.textContent=S.sound?'♪':'✕';if(S.sound)tone(700,0.1,'sine',0.05);});
+  $('fairBtn').addEventListener('click',function(){openFairness(null);});
+  $('modalX').addEventListener('click',closeFairness);
+  overlay.addEventListener('click',function(e){if(e.target===overlay)closeFairness();});
+  window.addEventListener('keydown',function(e){if(e.key==='Escape')closeFairness();});
+  $('newSeedBtn').addEventListener('click',function(){S.clientSeedPref=rndHex(16);$('clientSeedInput').value=S.clientSeedPref;});
+  $('clientSeedInput').addEventListener('input',function(e){S.clientSeedPref=e.target.value.slice(0,128);});
+  $('verifyBtn').addEventListener('click',function(){runVerify($('verifyIdInput').value);});
+  document.querySelectorAll('.tab-btn').forEach(function(t){t.addEventListener('click',function(){
+    document.querySelectorAll('.tab-btn').forEach(function(x){x.classList.remove('active');});document.querySelectorAll('.tab-panel').forEach(function(x){x.classList.remove('active');});
+    t.classList.add('active');$('tab-'+t.getAttribute('data-tab')).classList.add('active');});});
+
+  S.ladder=buildLadder(cfg());freshBoard();syncHud();renderActions();renderHistory();renderFaq();
+})();
+</script>
+</body>
+</html>

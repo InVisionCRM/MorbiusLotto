@@ -10,6 +10,8 @@ import { useEffect, useState, useCallback } from 'react'
 export interface WinEntry {
   id: string
   address: string
+  /** Player's display name (chat_display_names), or null to fall back to the short address. */
+  username: string | null
   /** Whole chips won (1 chip = 1 MORBIUS). */
   amount: number
   /** Game key — matches GameArt keys + lobby routes (e.g. 'chicken', 'video-poker', 'blackjack'). */
@@ -25,13 +27,14 @@ export function useLatestWins() {
 
   const fetchRecentWins = useCallback(async () => {
     try {
-      const res = await fetch(`/api/analytics/recent-wins?limit=20`, { cache: 'no-store' })
+      const res = await fetch(`/api/analytics/recent-wins?limit=40`, { cache: 'no-store' })
       if (res.ok) {
         const { wins: apiWins } = await res.json()
         const mapped: WinEntry[] = (apiWins || [])
           .map((w: any) => ({
             id: String(w.id ?? ''),
             address: w.playerAddress ?? '',
+            username: w.username ?? null,
             amount: Number(w.amount ?? 0),
             game: String(w.game ?? ''),
             timestamp: typeof w.timestamp === 'number' ? w.timestamp : Date.now(),

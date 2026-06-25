@@ -271,7 +271,7 @@ export function StakeVideoPokerGame() {
   };
 
   return (
-    <div className="mx-auto w-full max-w-7xl">
+    <div className="mx-auto w-full max-w-7xl pb-28 lg:pb-0">
       <div className="grid gap-4 lg:grid-cols-[300px_1fr]">
         {/* ───────── Control rail ───────── */}
         <Card className="order-2 h-fit space-y-4 border-0 bg-[#07131F] p-4 ring-1 ring-inset ring-cyan-950/70 lg:order-1 lg:sticky lg:top-20">
@@ -339,6 +339,9 @@ export function StakeVideoPokerGame() {
             </div>
           )}
 
+          {/* Primary action (Deal / Draw / New hand): pinned to a fixed bottom bar on
+              mobile (always reachable without scrolling); back in the rail, in-flow, on desktop. */}
+          <div className="fixed inset-x-0 bottom-0 z-40 border-t border-cyan-950/70 bg-[#07131F]/95 p-3 backdrop-blur-sm lg:static lg:z-auto lg:border-0 lg:bg-transparent lg:p-0 lg:backdrop-blur-none">
           <Button
             type="button"
             disabled={(phase === 'idle' && !info) || phase === 'dealing' || phase === 'drawing'}
@@ -347,6 +350,7 @@ export function StakeVideoPokerGame() {
           >
             {primaryLabel}
           </Button>
+          </div>
 
           {error && (
             <div className="space-y-1.5 text-center">
@@ -433,27 +437,12 @@ export function StakeVideoPokerGame() {
               ) : null}
             </div>
 
-            {/* Mobile-only primary action — visible directly below the cards so players
-                don't have to scroll to the control rail on small screens. */}
-            <div className="w-full lg:hidden">
-              <Button
-                type="button"
-                disabled={(phase === 'idle' && !info) || phase === 'dealing' || phase === 'drawing'}
-                onClick={onPrimary}
-                className="arc-display h-12 w-full bg-cyan-500 text-base font-bold uppercase tracking-widest text-[#03121B] shadow-[0_0_24px_-6px_rgba(34,211,238,0.85)] hover:bg-cyan-400 disabled:opacity-50"
-              >
-                {primaryLabel}
-              </Button>
-            </div>
           </Card>
         </div>
       </div>
 
       {/* ───────── Session chart + paytable / info ───────── */}
       <div className="mt-4 space-y-4">
-        <div className="lg:hidden">
-          <SessionChart points={session} unitLabel="Hands" />
-        </div>
         <VideoPokerInfoTabs
           info={info}
           hands={hands}
@@ -461,11 +450,12 @@ export function StakeVideoPokerGame() {
           currentCategory={phase === 'result' ? result?.category ?? null : null}
         />
       </div>
-      <div className="hidden lg:block">
-        <FloatingPanel title="Session" storageKey="videopoker.sessionChart.pos">
-          <SessionChart points={session} unitLabel="Hands" bare />
-        </FloatingPanel>
-      </div>
+      {/* Draggable mini session chart — open in a corner on mobile, full-size on desktop.
+          Session-only: the Video Poker backend keeps no per-hand history, so there is no
+          all-time data source to wire an allTimeLoader to. */}
+      <FloatingPanel title="Session" storageKey="videopoker.sessionChart.pos">
+        <SessionChart points={session} unitLabel="Hands" bare />
+      </FloatingPanel>
 
       <VideoPokerFairnessModal
         open={fairnessOpen}

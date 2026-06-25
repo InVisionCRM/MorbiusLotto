@@ -446,7 +446,7 @@ export function AndarBaharGame() {
   )
 
   return (
-    <div className="mx-auto w-full max-w-5xl">
+    <div className="mx-auto w-full max-w-5xl pb-28 lg:pb-0">
       {/* Top bar: balance + buy + sound + provably fair */}
       <div className="mb-3 flex items-center justify-between gap-2">
         <div className="flex items-center gap-2 rounded-xl bg-[#081420]/70 px-3 py-2 ring-1 ring-cyan-500/15">
@@ -720,7 +720,9 @@ export function AndarBaharGame() {
             </div>
           </div>
 
-          {/* Deal / Auto button */}
+          {/* Deal / Auto button — pinned to a fixed bottom bar on mobile (always
+              reachable without scrolling); in-flow on desktop. */}
+          <div className="fixed inset-x-0 bottom-0 z-40 border-t border-cyan-950/70 bg-[#07131F]/95 p-3 backdrop-blur-sm lg:static lg:z-auto lg:border-0 lg:bg-transparent lg:p-0 lg:backdrop-blur-none">
           {mode === 'manual' ? (
             <Button
               type="button"
@@ -748,6 +750,7 @@ export function AndarBaharGame() {
               Start auto ({autoCount})
             </Button>
           )}
+          </div>
 
           {infoFailed && (
             <p className="text-center text-sm text-slate-400">

@@ -380,7 +380,7 @@ export function StakeMinesGame() {
   const showWinBanner = phase === 'cashed' && cashedPayout !== null && cashedPayout > 0
 
   return (
-    <div className="mx-auto w-full max-w-5xl">
+    <div className="mx-auto w-full max-w-5xl pb-28 lg:pb-0">
       <div className="grid gap-4 lg:grid-cols-[320px_1fr]">
         {/* ───────── Controls rail ───────── */}
         <Card className="arc-panel order-2 h-fit space-y-4 border-0 p-4 lg:order-1 lg:sticky lg:top-20">
@@ -498,6 +498,9 @@ export function StakeMinesGame() {
             </div>
           </div>
 
+          {/* Action button: pinned to a fixed bottom bar on mobile (Bet / Cash out always
+              reachable without scrolling); back in the rail, in-flow, on desktop. */}
+          <div className="fixed inset-x-0 bottom-0 z-40 border-t border-cyan-950/70 bg-[#07131F]/95 p-3 backdrop-blur-sm lg:static lg:z-auto lg:border-0 lg:bg-transparent lg:p-0 lg:backdrop-blur-none">
           {canStart ? (
             <Button
               type="button"
@@ -521,6 +524,7 @@ export function StakeMinesGame() {
                   : `Cash out ${cashoutValue.toLocaleString()}`}
             </Button>
           )}
+          </div>
 
           {infoFailed && (
             <p className="text-center text-sm text-slate-400">
@@ -599,34 +603,6 @@ export function StakeMinesGame() {
               </div>
             )}
           </Card>
-
-          {/* Mobile-only bet / cash-out button — visible directly below the board
-              so players on small screens don't need to scroll to the control rail. */}
-          <div className="lg:hidden">
-            {canStart ? (
-              <Button
-                type="button"
-                disabled={phase === 'starting' || !info}
-                onClick={onStart}
-                className="arc-display h-12 w-full bg-cyan-500 text-base font-bold uppercase tracking-widest text-[#03121B] shadow-[0_0_24px_-6px_rgba(34,211,238,0.8)] hover:bg-cyan-400 disabled:opacity-50"
-              >
-                {phase === 'starting' ? 'Starting…' : 'Bet'}
-              </Button>
-            ) : (
-              <Button
-                type="button"
-                disabled={phase !== 'active' || gems === 0}
-                onClick={onCashout}
-                className="arc-display h-12 w-full bg-amber-400 text-base font-bold uppercase tracking-widest text-[#1B1203] shadow-[0_0_24px_-6px_rgba(245,158,11,0.8)] hover:bg-amber-300 disabled:opacity-50"
-              >
-                {phase === 'cashing'
-                  ? 'Cashing out…'
-                  : gems === 0
-                    ? 'Pick a cell to begin'
-                    : `Cash out ${cashoutValue.toLocaleString()}`}
-              </Button>
-            )}
-          </div>
 
           <div className="arc-panel grid grid-cols-3 divide-x divide-cyan-950/60 rounded-xl px-2 py-3 text-center">
             <div>

@@ -1,0 +1,323 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Player Dashboard — redesign lab</title>
+<style>
+  :root {
+    --bg: #07090c;
+    --panel-1: #101a23;
+    --panel-2: #1b1d24;
+    --panel-edge: rgba(120,140,160,0.10);
+    --line: rgba(255,255,255,0.07);
+    --text: #eef2f6;
+    --muted: rgba(238,242,246,0.55);
+    --faint: rgba(238,242,246,0.34);
+    --cyan: #22d3ee;
+    --cyan-dim: rgba(34,211,238,0.14);
+    --gold: #e8edf2;
+    --green: #34d399;
+    --red: #f87171;
+    --radius: 16px;
+    --font: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; background: var(--bg); color: var(--text); font-family: var(--font); -webkit-font-smoothing: antialiased; }
+  body {
+    background:
+      radial-gradient(1100px 520px at 12% -8%, rgba(34,211,238,0.06), transparent 60%),
+      radial-gradient(900px 480px at 110% 0%, rgba(120,140,160,0.05), transparent 55%),
+      var(--bg);
+    min-height: 100vh;
+    padding: 28px 18px 80px;
+  }
+  .wrap { max-width: 940px; margin: 0 auto; }
+  .num { font-variant-numeric: tabular-nums; font-feature-settings: "tnum" 1; }
+  .gold { color: var(--gold); }
+  .green { color: var(--green); }
+  .red { color: var(--red); }
+  .cy { color: var(--cyan); }
+
+  /* panel */
+  .panel {
+    background: linear-gradient(150deg, var(--panel-1), var(--panel-2));
+    border: 1px solid var(--panel-edge);
+    border-radius: var(--radius);
+    box-shadow: inset 0 1px 0 rgba(255,255,255,0.04), 0 10px 30px -18px rgba(0,0,0,0.9);
+  }
+
+  /* ---------- HERO ---------- */
+  .hero { padding: 20px; display: grid; grid-template-columns: auto 1fr auto; gap: 20px; align-items: center; }
+  .avatar {
+    width: 78px; height: 78px; border-radius: 20px; flex: none;
+    background: linear-gradient(160deg, #16323b, #0e1620);
+    border: 1px solid rgba(34,211,238,0.25);
+    display: grid; place-items: center; position: relative;
+    box-shadow: 0 0 0 4px rgba(34,211,238,0.05);
+  }
+  .avatar svg { width: 60px; height: 60px; }
+  .tier {
+    position: absolute; bottom: -8px; left: 50%; transform: translateX(-50%);
+    font-size: 9px; font-weight: 800; letter-spacing: .8px; text-transform: uppercase;
+    padding: 3px 8px; border-radius: 999px; white-space: nowrap;
+    background: rgba(34,211,238,0.12); color: var(--cyan); border: 1px solid rgba(34,211,238,0.30);
+  }
+  .id-name { display: flex; align-items: center; gap: 10px; }
+  .id-name h1 { font-size: 22px; margin: 0; font-weight: 800; letter-spacing: -0.2px; }
+  .verified { width: 16px; height: 16px; color: var(--cyan); }
+  .id-meta { margin-top: 6px; display: flex; flex-wrap: wrap; gap: 8px 14px; align-items: center; color: var(--muted); font-size: 12.5px; }
+  .addr {
+    font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 12px;
+    background: rgba(255,255,255,0.04); border: 1px solid var(--line); padding: 3px 8px; border-radius: 8px; color: rgba(238,242,246,0.8);
+    display: inline-flex; gap: 6px; align-items: center; cursor: pointer;
+  }
+  .addr svg { width: 12px; height: 12px; opacity: .6; }
+  .dot { width: 3px; height: 3px; border-radius: 50%; background: var(--faint); }
+  .hero-figure { text-align: right; }
+  .hero-figure .label { font-size: 11px; text-transform: uppercase; letter-spacing: 1px; color: var(--faint); display: inline-flex; gap: 6px; align-items: center; }
+  .hero-figure .label svg { width: 13px; height: 13px; opacity: .85; }
+  .hero-figure .big { font-size: 32px; font-weight: 800; line-height: 1.05; margin-top: 5px; }
+  .hero-figure .sub { font-size: 12px; color: var(--muted); margin-top: 3px; }
+  .hero-figure .sub2 { font-size: 12.5px; margin-top: 9px; padding-top: 9px; border-top: 1px solid var(--line); color: var(--muted); }
+  .deposit-btn {
+    margin-top: 11px; display: inline-flex; gap: 6px; align-items: center; cursor: pointer;
+    font-size: 12.5px; font-weight: 700; color: var(--cyan);
+    background: var(--cyan-dim); border: 1px solid rgba(34,211,238,0.28); padding: 6px 12px; border-radius: 9px;
+  }
+  .deposit-btn svg { width: 13px; height: 13px; }
+
+  /* hero marquee strip */
+  .marquee { display: grid; grid-template-columns: repeat(3, 1fr); border-top: 1px solid var(--line); }
+  .marquee .cell { padding: 14px 20px; border-right: 1px solid var(--line); }
+  .marquee .cell:last-child { border-right: none; }
+  .marquee .k { font-size: 11px; text-transform: uppercase; letter-spacing: .8px; color: var(--faint); }
+  .marquee .v { font-size: 18px; font-weight: 700; margin-top: 4px; }
+
+  /* tabs */
+  .tabs { display: flex; gap: 4px; margin: 18px 0 14px; border-bottom: 1px solid var(--line); }
+  .tab { padding: 10px 14px; font-weight: 600; font-size: 14px; color: var(--muted); display: flex; gap: 7px; align-items: center; cursor: pointer; border-bottom: 2px solid transparent; }
+  .tab svg { width: 15px; height: 15px; }
+  .tab.active { color: var(--cyan); border-bottom-color: var(--cyan); }
+
+  .section-title { font-size: 12px; text-transform: uppercase; letter-spacing: 1.4px; color: var(--faint); margin: 22px 2px 10px; font-weight: 700; }
+
+  /* stat grid */
+  .grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; }
+  .stat { padding: 15px; position: relative; overflow: hidden; }
+  .stat .top { display: flex; align-items: center; gap: 8px; color: var(--muted); font-size: 12px; }
+  .stat .top svg { width: 15px; height: 15px; opacity: .8; }
+  .stat .val { font-size: 21px; font-weight: 800; margin-top: 10px; letter-spacing: -0.3px; }
+  .stat .note { font-size: 11.5px; color: var(--faint); margin-top: 3px; }
+  .stat.wide { grid-column: span 2; }
+  .spark { position: absolute; right: 10px; bottom: 8px; width: 78px; height: 30px; opacity: .8; }
+
+  /* per game */
+  .breakdown { padding: 6px 4px 8px; }
+  table { width: 100%; border-collapse: collapse; }
+  th, td { text-align: right; padding: 11px 14px; font-size: 13.5px; white-space: nowrap; }
+  th { color: var(--faint); font-weight: 600; font-size: 11px; text-transform: uppercase; letter-spacing: .6px; border-bottom: 1px solid var(--line); }
+  td { border-bottom: 1px solid rgba(255,255,255,0.04); }
+  tr:last-child td { border-bottom: none; }
+  th.l, td.l { text-align: left; }
+  .game-cell { display: flex; align-items: center; gap: 10px; }
+  .game-ico { width: 26px; height: 26px; border-radius: 8px; display: grid; place-items: center; flex: none; font-size: 13px; }
+  .winbar { width: 64px; height: 6px; border-radius: 4px; background: rgba(255,255,255,0.08); overflow: hidden; display: inline-block; vertical-align: middle; }
+  .winbar > i { display: block; height: 100%; background: var(--cyan); border-radius: 4px; }
+
+  /* chart */
+  .chart-card { padding: 18px 18px 8px; }
+  .chart-head { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 8px; }
+  .chart-head .t { font-size: 15px; font-weight: 700; }
+  .legend { display: flex; gap: 16px; font-size: 12px; color: var(--muted); }
+  .legend i { display: inline-block; width: 9px; height: 9px; border-radius: 2px; margin-right: 6px; vertical-align: middle; }
+
+  .two-col { display: grid; grid-template-columns: 1.15fr 1fr; gap: 14px; align-items: start; }
+
+  @media (max-width: 760px) {
+    .hero { grid-template-columns: auto 1fr; }
+    .hero-figure { grid-column: 1 / -1; text-align: left; border-top: 1px solid var(--line); padding-top: 14px; }
+    .grid { grid-template-columns: repeat(2, 1fr); }
+    .two-col { grid-template-columns: 1fr; }
+    .stat.wide { grid-column: span 2; }
+  }
+  .note-banner { max-width: 940px; margin: 0 auto 16px; font-size: 12px; color: var(--faint); text-align: center; }
+</style>
+</head>
+<body>
+<div class="note-banner">⚙︎ Design lab — Player Dashboard header + All Stats redesign (dummy data)</div>
+<div class="wrap">
+
+  <!-- ============ HERO ============ -->
+  <div class="panel hero">
+    <div class="avatar">
+      <!-- simple on-brand morb avatar -->
+      <svg viewBox="0 0 48 48" xmlns="http://www.w3.org/2000/svg">
+        <circle cx="24" cy="24" r="22" fill="#13313b"/>
+        <circle cx="24" cy="26" r="16" fill="#1d6b7d"/>
+        <ellipse cx="18.5" cy="23" rx="4" ry="5" fill="#eef2f6"/>
+        <ellipse cx="29.5" cy="23" rx="4" ry="5" fill="#eef2f6"/>
+        <circle cx="19" cy="24" r="2" fill="#07090c"/>
+        <circle cx="30" cy="24" r="2" fill="#07090c"/>
+        <path d="M18 32 q6 4 12 0" stroke="#0a1418" stroke-width="2" fill="none" stroke-linecap="round"/>
+      </svg>
+    </div>
+
+    <div class="id">
+      <div class="id-name">
+        <h1>CipherWhale</h1>
+        <svg class="verified" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2l2.4 1.8 3 .1 1 2.8 2.4 1.7-.9 2.9.9 2.9-2.4 1.7-1 2.8-3 .1L12 22l-2.4-1.8-3-.1-1-2.8L3.2 15l.9-2.9L3.2 9.2l2.4-1.7 1-2.8 3-.1z"/><path d="M10.6 14.6l-2.2-2.2 1.3-1.3 1 1 3-3 1.3 1.3z" fill="#07090c"/></svg>
+      </div>
+      <div class="id-meta">
+        <span class="addr">0x7044…95e5
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="11" height="11" rx="2"/><path d="M5 15V5a2 2 0 0 1 2-2h10"/></svg>
+        </span>
+        <span class="dot"></span><span>Member since Apr 2026</span>
+        <span class="dot"></span><span><b class="cy">862</b> games</span>
+      </div>
+    </div>
+
+    <div class="hero-figure">
+      <div class="label">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><ellipse cx="12" cy="6" rx="8" ry="3"/><path d="M4 6v6c0 1.7 3.6 3 8 3s8-1.3 8-3V6M4 12v6c0 1.7 3.6 3 8 3s8-1.3 8-3v-6"/></svg>
+        Balance
+      </div>
+      <div class="big gold num">1,284,500</div>
+      <div class="sub">MORBIUS available to play</div>
+      <div class="sub2">All-time net <span class="red num">−534,224</span> · <span class="red num">−16.6% ROI</span></div>
+      <div class="deposit-btn">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 5v14M5 12h14"/></svg>
+        Deposit
+      </div>
+    </div>
+  </div>
+
+  <!-- hero marquee under the same visual block -->
+  <div class="panel marquee" style="margin-top:12px">
+    <div class="cell"><div class="k">Total wagered</div><div class="v gold num">3,222,952</div></div>
+    <div class="cell"><div class="k">Total won</div><div class="v gold num">2,688,729</div></div>
+    <div class="cell"><div class="k">Win rate</div><div class="v num">47.3%</div></div>
+  </div>
+
+  <!-- ============ TABS (context) ============ -->
+  <div class="tabs">
+    <div class="tab active"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 19V5M10 19V9M16 19v-6M22 19h-20"/></svg>All Stats</div>
+    <div class="tab"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 12h4l3 8 4-16 3 8h4"/></svg>Activity</div>
+    <div class="tab"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 3c-3 4-6 6-6 10a6 6 0 0 0 12 0c0-4-3-6-6-10z"/></svg>Poker</div>
+    <div class="tab"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="6" width="18" height="13" rx="2"/><path d="M3 10h18"/></svg>Transactions</div>
+  </div>
+
+  <!-- ============ HIGHLIGHT STATS ============ -->
+  <div class="section-title">Highlights</div>
+  <div class="grid">
+    <div class="panel stat">
+      <div class="top"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 17l6-6 4 4 8-8"/><path d="M21 7v6h-6"/></svg>ROI</div>
+      <div class="val red num">−16.6%</div>
+      <div class="note">return on amount wagered</div>
+    </div>
+    <div class="panel stat">
+      <div class="top"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M8 21h8M12 17v4M6 4h12v4a6 6 0 0 1-12 0zM6 6H4a2 2 0 0 0 0 4h2M18 6h2a2 2 0 0 1 0 4h-2"/></svg>Biggest win</div>
+      <div class="val gold num">18,000</div>
+      <div class="note">Roulette · 20× · May 4</div>
+    </div>
+    <div class="panel stat">
+      <div class="top"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2l3 7h7l-5.5 4 2 7L12 16l-6.5 4 2-7L2 9h7z"/></svg>Favorite game</div>
+      <div class="val">Plinko</div>
+      <div class="note">1,846 rounds played</div>
+    </div>
+    <div class="panel stat">
+      <div class="top"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M13 2L4 14h7l-1 8 9-12h-7z"/></svg>Win streak</div>
+      <div class="val num">3 <span style="font-size:12px;color:var(--faint);font-weight:600">now</span></div>
+      <div class="note">best streak · 11 wins</div>
+    </div>
+  </div>
+
+  <!-- ============ TOTALS (compact) ============ -->
+  <div class="section-title">Totals</div>
+  <div class="grid">
+    <div class="panel stat">
+      <div class="top"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 3v18h18"/><rect x="7" y="11" width="3" height="7"/><rect x="13" y="7" width="3" height="11"/></svg>Wagered</div>
+      <div class="val gold num">3,222,952</div>
+      <svg class="spark" viewBox="0 0 78 30" preserveAspectRatio="none"><polyline points="0,24 12,20 24,22 36,14 48,16 60,9 78,6" fill="none" stroke="var(--gold)" stroke-width="2" opacity=".7"/></svg>
+    </div>
+    <div class="panel stat">
+      <div class="top"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 17l6-6 4 4 8-8"/></svg>Won</div>
+      <div class="val gold num">2,688,729</div>
+      <svg class="spark" viewBox="0 0 78 30" preserveAspectRatio="none"><polyline points="0,22 12,23 24,18 36,20 48,12 60,15 78,10" fill="none" stroke="var(--gold)" stroke-width="2" opacity=".7"/></svg>
+    </div>
+    <div class="panel stat">
+      <div class="top"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 7l-10 10-4-4-6 6"/><path d="M16 7h6v6"/></svg>Net P&amp;L</div>
+      <div class="val red num">−534,224</div>
+      <div class="note">across 862 games</div>
+    </div>
+    <div class="panel stat">
+      <div class="top"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>Games</div>
+      <div class="val num">862</div>
+      <div class="note">avg bet · 3,740</div>
+    </div>
+  </div>
+
+  <!-- ============ CHART + PER-GAME ============ -->
+  <div class="two-col" style="margin-top:14px">
+    <div class="panel chart-card">
+      <div class="chart-head">
+        <div class="t">Performance</div>
+        <div class="legend"><span><i style="background:var(--gold)"></i>Wagered</span><span><i style="background:var(--cyan)"></i>Won</span></div>
+      </div>
+      <svg viewBox="0 0 420 180" width="100%" height="180" preserveAspectRatio="none">
+        <defs>
+          <linearGradient id="gW" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="var(--gold)" stop-opacity=".35"/><stop offset="1" stop-color="var(--gold)" stop-opacity="0"/></linearGradient>
+          <linearGradient id="gC" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="var(--cyan)" stop-opacity=".30"/><stop offset="1" stop-color="var(--cyan)" stop-opacity="0"/></linearGradient>
+        </defs>
+        <line x1="0" y1="45" x2="420" y2="45" stroke="rgba(255,255,255,0.05)"/>
+        <line x1="0" y1="90" x2="420" y2="90" stroke="rgba(255,255,255,0.05)"/>
+        <line x1="0" y1="135" x2="420" y2="135" stroke="rgba(255,255,255,0.05)"/>
+        <path d="M0,150 C60,140 90,120 140,110 C200,98 240,70 300,52 C350,38 390,30 420,22 L420,180 L0,180 Z" fill="url(#gW)"/>
+        <path d="M0,150 C60,140 90,120 140,110 C200,98 240,70 300,52 C350,38 390,30 420,22" fill="none" stroke="var(--gold)" stroke-width="2.5"/>
+        <path d="M0,158 C60,152 90,140 140,134 C200,126 240,108 300,96 C350,86 390,82 420,76 L420,180 L0,180 Z" fill="url(#gC)"/>
+        <path d="M0,158 C60,152 90,140 140,134 C200,126 240,108 300,96 C350,86 390,82 420,76" fill="none" stroke="var(--cyan)" stroke-width="2.5"/>
+      </svg>
+      <div style="display:flex;justify-content:space-between;color:var(--faint);font-size:11px;padding:4px 2px 10px">
+        <span>Mar</span><span>Apr</span><span>May</span><span>Jun</span>
+      </div>
+    </div>
+
+    <div class="panel breakdown">
+      <table class="num">
+        <thead>
+          <tr><th class="l">Game</th><th>Games</th><th>Net</th><th>Win&nbsp;%</th></tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td class="l"><div class="game-cell"><span class="game-ico" style="background:rgba(34,211,238,0.16);color:var(--cyan)">♠</span>Blackjack</div></td>
+            <td>721</td><td class="green">+41,200</td>
+            <td><span class="winbar"><i style="width:51%"></i></span></td>
+          </tr>
+          <tr>
+            <td class="l"><div class="game-cell"><span class="game-ico" style="background:rgba(255,255,255,0.07);color:rgba(238,242,246,0.72)">◆</span>Plinko</div></td>
+            <td>1,846</td><td class="red">−380,900</td>
+            <td><span class="winbar"><i style="width:44%"></i></span></td>
+          </tr>
+          <tr>
+            <td class="l"><div class="game-cell"><span class="game-ico" style="background:rgba(248,113,113,0.16);color:var(--red)">●</span>Roulette</div></td>
+            <td>215</td><td class="red">−96,500</td>
+            <td><span class="winbar"><i style="width:38%"></i></span></td>
+          </tr>
+          <tr>
+            <td class="l"><div class="game-cell"><span class="game-ico" style="background:rgba(52,211,153,0.16);color:var(--green)">♣</span>Poker</div></td>
+            <td>97</td><td class="green">+12,640</td>
+            <td><span class="winbar"><i style="width:55%"></i></span></td>
+          </tr>
+          <tr>
+            <td class="l"><div class="game-cell"><span class="game-ico" style="background:rgba(168,180,200,0.14);color:#aab4c8">✦</span>Lottery</div></td>
+            <td>8</td><td class="red">−110,000</td>
+            <td><span class="winbar"><i style="width:12%"></i></span></td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+</div>
+</body>
+</html>

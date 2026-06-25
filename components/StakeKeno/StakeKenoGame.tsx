@@ -326,7 +326,7 @@ export function StakeKenoGame() {
   const showWinBanner = settled && result !== null && result.payout > 0
 
   return (
-    <div className="mx-auto w-full max-w-5xl">
+    <div className="mx-auto w-full max-w-5xl pb-28 lg:pb-0">
       <div className="grid gap-4 lg:grid-cols-[320px_1fr]">
         {/* ───────── Controls rail ───────── */}
         <Card className="arc-panel order-2 h-fit space-y-4 border-0 p-4 lg:order-1 lg:sticky lg:top-20">
@@ -463,14 +463,18 @@ export function StakeKenoGame() {
             )}
           </div>
 
-          <Button
-            type="button"
-            disabled={busy || picksCount === 0}
-            onClick={placeBet}
-            className="arc-display h-12 w-full bg-cyan-500 text-base font-bold uppercase tracking-widest text-[#03121B] shadow-[0_0_24px_-6px_rgba(34,211,238,0.8)] hover:bg-cyan-400 disabled:opacity-50"
-          >
-            {phase === 'betting' ? 'Placing…' : phase === 'revealing' ? 'Drawing…' : 'Bet'}
-          </Button>
+          {/* Action button: pinned to a fixed bottom bar on mobile (Bet always reachable
+              without scrolling); back in the rail, in-flow, on desktop. */}
+          <div className="fixed inset-x-0 bottom-0 z-40 border-t border-cyan-950/70 bg-[#07131F]/95 p-3 backdrop-blur-sm lg:static lg:z-auto lg:border-0 lg:bg-transparent lg:p-0 lg:backdrop-blur-none">
+            <Button
+              type="button"
+              disabled={busy || picksCount === 0}
+              onClick={placeBet}
+              className="arc-display h-12 w-full bg-cyan-500 text-base font-bold uppercase tracking-widest text-[#03121B] shadow-[0_0_24px_-6px_rgba(34,211,238,0.8)] hover:bg-cyan-400 disabled:opacity-50"
+            >
+              {phase === 'betting' ? 'Placing…' : phase === 'revealing' ? 'Drawing…' : 'Bet'}
+            </Button>
+          </div>
 
           {error && (
             <div className="space-y-1.5 text-center">
@@ -551,19 +555,6 @@ export function StakeKenoGame() {
             picksCount={picksCount}
             resultHits={resultHits}
           />
-
-          {/* Mobile-only bet button — sits below the board so players on small
-              screens see the action without scrolling to the control rail. */}
-          <div className="lg:hidden">
-            <Button
-              type="button"
-              disabled={busy || picksCount === 0}
-              onClick={placeBet}
-              className="arc-display h-12 w-full bg-cyan-500 text-base font-bold uppercase tracking-widest text-[#03121B] shadow-[0_0_24px_-6px_rgba(34,211,238,0.8)] hover:bg-cyan-400 disabled:opacity-50"
-            >
-              {phase === 'betting' ? 'Placing…' : phase === 'revealing' ? 'Drawing…' : 'Bet'}
-            </Button>
-          </div>
         </div>
       </div>
 
