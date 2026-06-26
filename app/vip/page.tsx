@@ -2,6 +2,7 @@
 
 import { useMemo } from 'react'
 import { useAccount } from 'wagmi'
+import Link from 'next/link'
 import { toast } from 'sonner'
 import { motion } from 'framer-motion'
 import { Crown, Gift, Sparkles, Loader2, Coins, CalendarDays, Wallet, Percent, TrendingUp } from 'lucide-react'
@@ -134,14 +135,22 @@ export default function VipPage() {
 
         <div className="mx-auto max-w-5xl px-4 py-8 sm:py-12">
           {/* Header */}
-          <div className="mb-8 flex items-center gap-3">
-            <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-yellow-400/10 ring-1 ring-yellow-400/30">
-              <Crown className="h-6 w-6 text-yellow-400" />
+          <div className="mb-8 flex items-center justify-between gap-3">
+            <div className="flex items-center gap-3">
+              <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-yellow-400/10 ring-1 ring-yellow-400/30">
+                <Crown className="h-6 w-6 text-yellow-400" />
+              </div>
+              <div>
+                <h1 className="text-2xl font-bold text-white sm:text-3xl">VIP Club</h1>
+                <p className="text-sm text-white/55">Wager, level up, and claim rakeback in MORBIUS.</p>
+              </div>
             </div>
-            <div>
-              <h1 className="text-2xl font-bold text-white sm:text-3xl">VIP Club</h1>
-              <p className="text-sm text-white/55">Wager, level up, and claim rakeback in MORBIUS.</p>
-            </div>
+            <Link
+              href="/vip/guide"
+              className="hidden shrink-0 rounded-lg border border-white/15 px-3 py-1.5 text-xs font-semibold text-white/70 transition hover:border-white/30 hover:text-white sm:inline-block"
+            >
+              How it works →
+            </Link>
           </div>
 
           {!isConnected ? (
