@@ -39,17 +39,70 @@ function relTime(iso: string): string {
   return `${Math.floor(h / 24)}d ago`
 }
 
+function rtpPct(wagered: string, won: string): number | null {
+  try {
+    const w = BigInt(wagered)
+    if (w <= 0n) return null
+    return Number((BigInt(won) * 10000n) / w) / 100
+  } catch {
+    return null
+  }
+}
+function profitStr(wagered: string, won: string): string {
+  try {
+    return (BigInt(wagered) - BigInt(won)).toString()
+  } catch {
+    return '0'
+  }
+}
+function fmtSigned(s: string): string {
+  try {
+    const n = BigInt(s)
+    return (n > 0n ? '+' : '') + n.toLocaleString('en-US')
+  } catch {
+    return s
+  }
+}
+function profitColor(s: string): string {
+  try {
+    const n = BigInt(s)
+    return n > 0n ? 'text-emerald-300' : n < 0n ? 'text-rose-300' : 'text-white/60'
+  } catch {
+    return 'text-white/60'
+  }
+}
+
 const RESULT_STYLE: Record<GamePlay['result'], string> = {
   win: 'bg-emerald-500/15 text-emerald-300 ring-emerald-500/30',
   loss: 'bg-rose-500/15 text-rose-300 ring-rose-500/30',
   push: 'bg-white/10 text-white/55 ring-white/15',
 }
 
+function StatTile({ label, value, accent }: { label: string; value: string; accent?: string }) {
+  return (
+    <div className="rounded-xl border border-white/10 bg-white/[0.03] p-3.5">
+      <div className="text-[10px] uppercase tracking-wide text-white/35">{label}</div>
+      <div className="mt-1 text-base font-bold tabular-nums sm:text-lg" style={{ color: accent }}>
+        {value}
+      </div>
+    </div>
+  )
+}
+function CardRow({ label, value, valueClass }: { label: string; value: string; valueClass?: string }) {
+  return (
+    <div className="flex items-center justify-between">
+      <span className="text-white/40">{label}</span>
+      <span className={`font-semibold tabular-nums ${valueClass ?? 'text-white/85'}`}>{value}</span>
+    </div>
+  )
+}
+
 export default function GameActivityPage() {
   const { address } = useAccount()
   const isAdmin = isAdminWallet(address)
 
-  const { data: games, isLoading: gamesLoading } = useGameSummaries(isAdmin)
+  const { data: summary, isLoading: gamesLoading } = useGameSummaries(isAdmin)
+  const games = summary?.games
   const [selected, setSelected] = useState<string | null>(null)
 
   // Default to the busiest game once summaries load.
@@ -59,6 +112,31 @@ export default function GameActivityPage() {
 
   const { data: plays, isLoading: playsLoading } = useGamePlays(isAdmin ? selected : null)
   const selectedGame = useMemo(() => games?.find((g) => g.key === selected) ?? null, [games, selected])
+
+  // Platform-wide rollup.
+  const overall = useMemo(() => {
+    if (!games || games.length === 0) return null
+    let w = 0n
+    let won = 0n
+    let plays = 0
+    for (const g of games) {
+      try {
+        w += BigInt(g.wagered)
+        won += BigInt(g.won)
+      } catch {
+        /* skip */
+      }
+      plays += g.plays
+    }
+    return {
+      wagered: w.toString(),
+      won: won.toString(),
+      profit: (w - won).toString(),
+      rtp: w > 0n ? Number((won * 10000n) / w) / 100 : null,
+      plays,
+      players: summary?.totalPlayers ?? 0,
+    }
+  }, [games, summary])
 
   if (!isAdmin) {
     return (
@@ -81,10 +159,26 @@ export default function GameActivityPage() {
           <div className="mb-6">
             <h1 className="text-2xl font-bold text-white sm:text-3xl">Game Activity</h1>
             <p className="mt-1 text-sm text-white/50">
-              All-time wagered &amp; won per game, with the most recent 500 plays. Click a player to open their
-              dashboard.
+              All-time performance per game (RTP = won ÷ wagered; profit = the house take), with the most
+              recent 500 plays. Click a player to open their dashboard.
             </p>
           </div>
+
+          {/* Platform rollup */}
+          {overall && (
+            <div className="mb-6 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
+              <StatTile label="Total wagered" value={fmtAmt(overall.wagered)} />
+              <StatTile label="Total won" value={fmtAmt(overall.won)} accent="#fbbf24" />
+              <StatTile
+                label="House profit"
+                value={fmtSigned(overall.profit)}
+                accent={overall.profit.startsWith('-') ? '#fca5a5' : '#6ee7b7'}
+              />
+              <StatTile label="Overall RTP" value={overall.rtp != null ? `${overall.rtp.toFixed(2)}%` : '—'} />
+              <StatTile label="Total plays" value={overall.plays.toLocaleString()} />
+              <StatTile label="Unique players" value={overall.players.toLocaleString()} />
+            </div>
+          )}
 
           {/* Game cards */}
           {gamesLoading ? (
@@ -96,9 +190,18 @@ export default function GameActivityPage() {
               No game activity yet.
             </div>
           ) : (
-            <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
               {games.map((g) => {
                 const active = g.key === selected
+                const rtp = rtpPct(g.wagered, g.won)
+                const profit = profitStr(g.wagered, g.won)
+                const avgBet = (() => {
+                  try {
+                    return g.plays > 0 ? (BigInt(g.wagered) / BigInt(g.plays)).toString() : '0'
+                  } catch {
+                    return '0'
+                  }
+                })()
                 return (
                   <button
                     key={g.key}
@@ -113,17 +216,23 @@ export default function GameActivityPage() {
                   >
                     <div className="flex items-center justify-between">
                       <span className="font-semibold text-white">{g.label}</span>
-                      <span className="text-[11px] text-white/40">{g.plays.toLocaleString()} plays</span>
+                      <span
+                        className="rounded-full px-2 py-0.5 text-[11px] font-bold tabular-nums"
+                        style={{
+                          background: rtp != null && rtp > 100 ? 'rgba(244,63,94,0.15)' : 'rgba(110,231,183,0.12)',
+                          color: rtp != null && rtp > 100 ? '#fca5a5' : '#6ee7b7',
+                        }}
+                      >
+                        {rtp != null ? `${rtp.toFixed(2)}% RTP` : '—'}
+                      </span>
                     </div>
-                    <div className="mt-3 grid grid-cols-2 gap-2">
-                      <div>
-                        <div className="text-[10px] uppercase tracking-wide text-white/35">Wagered</div>
-                        <div className="text-sm font-bold tabular-nums text-white">{fmtAmt(g.wagered)}</div>
-                      </div>
-                      <div>
-                        <div className="text-[10px] uppercase tracking-wide text-white/35">Won</div>
-                        <div className="text-sm font-bold tabular-nums text-amber-300">{fmtAmt(g.won)}</div>
-                      </div>
+                    <div className="mt-3 space-y-1.5 text-xs">
+                      <CardRow label="Wagered" value={fmtAmt(g.wagered)} />
+                      <CardRow label="Won" value={fmtAmt(g.won)} valueClass="text-amber-300" />
+                      <CardRow label="House profit" value={fmtSigned(profit)} valueClass={profitColor(profit)} />
+                      <CardRow label="Plays" value={g.plays.toLocaleString()} />
+                      <CardRow label="Players" value={g.players.toLocaleString()} />
+                      <CardRow label="Avg bet" value={fmtAmt(avgBet)} />
                     </div>
                   </button>
                 )

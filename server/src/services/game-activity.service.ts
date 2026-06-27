@@ -33,6 +33,12 @@ export interface GameSummary {
   wagered: string;
   won: string;
   plays: number;
+  players: number;
+}
+
+export interface GameSummariesResult {
+  games: GameSummary[];
+  totalPlayers: number;
 }
 
 export interface GamePlay {
@@ -57,21 +63,31 @@ export class GameActivityService {
   // Summaries — all-time totals per game
   // ──────────────────────────────────────────────────────────────────
 
-  async getGameSummaries(): Promise<GameSummary[]> {
-    const byKey = new Map<string, { key: string; label: string; w: bigint; won: bigint; plays: number }>();
+  async getGameSummaries(): Promise<GameSummariesResult> {
+    const byKey = new Map<
+      string,
+      { key: string; label: string; w: bigint; won: bigint; plays: number; players: number }
+    >();
     const bump = (key: string, label: string) => {
       let g = byKey.get(key);
       if (!g) {
-        g = { key, label, w: 0n, won: 0n, plays: 0 };
+        g = { key, label, w: 0n, won: 0n, plays: 0, players: 0 };
         byKey.set(key, g);
       }
       return g;
     };
 
     // One grouped query over the ledger, folded into games by taxonomy.
+    // Each game has exactly one *_bet reason, so its bet-row distinct wallet
+    // count is its unique-player count.
     try {
-      const { rows } = await this.pool.query<{ reason: string; sum_delta: string; n: string }>(
-        `SELECT reason, COALESCE(SUM(delta),0)::text AS sum_delta, COUNT(*)::text AS n
+      const { rows } = await this.pool.query<{
+        reason: string; sum_delta: string; n: string; players: string;
+      }>(
+        `SELECT reason,
+                COALESCE(SUM(delta),0)::text AS sum_delta,
+                COUNT(*)::text AS n,
+                COUNT(DISTINCT wallet_address)::text AS players
          FROM poker_chip_ledger
          WHERE reason LIKE '%\\_bet' OR reason LIKE '%\\_payout'
          GROUP BY reason`,
@@ -84,6 +100,7 @@ export class GameActivityService {
         if (cls.kind === 'bet') {
           g.w += -sum; // bets are negative deltas
           g.plays += Number(r.n);
+          g.players += Number(r.players);
         } else if (cls.kind === 'payout') {
           g.won += sum;
         }
@@ -92,16 +109,31 @@ export class GameActivityService {
       logger.error('[activity] ledger summary failed', err);
     }
 
-    return [...byKey.values()]
+    // Platform-wide unique players (distinct across all games, not a sum).
+    let totalPlayers = 0;
+    try {
+      const { rows } = await this.pool.query<{ players: string }>(
+        `SELECT COUNT(DISTINCT wallet_address)::text AS players
+         FROM poker_chip_ledger WHERE reason LIKE '%\\_bet'`,
+      );
+      totalPlayers = Number(rows[0]?.players ?? '0');
+    } catch (err) {
+      logger.warn('[activity] total players query failed', (err as Error).message);
+    }
+
+    const games = [...byKey.values()]
       .map((g) => ({
         key: g.key,
         label: g.label,
         wagered: g.w.toString(),
         won: g.won.toString(),
         plays: g.plays,
+        players: g.players,
       }))
       .filter((g) => g.plays > 0)
       .sort((a, b) => (BigInt(b.wagered) > BigInt(a.wagered) ? 1 : -1));
+
+    return { games, totalPlayers };
   }
 
   // ──────────────────────────────────────────────────────────────────
