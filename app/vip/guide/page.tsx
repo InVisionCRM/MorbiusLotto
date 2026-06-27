@@ -13,15 +13,17 @@ interface GuideTier {
   rakebackBps: number
   minLifetimeWagerChips: string
   levelUpBonusChips: string
+  weeklyCashbackBps?: number
+  monthlyCashbackBps?: number
 }
 
 const FALLBACK_TIERS: GuideTier[] = [
-  { tierLevel: 1, tierName: 'Bronze', color: '#cd7f32', rakebackBps: 5, minLifetimeWagerChips: '10000', levelUpBonusChips: '10' },
-  { tierLevel: 2, tierName: 'Silver', color: '#c0c0c0', rakebackBps: 8, minLifetimeWagerChips: '100000', levelUpBonusChips: '50' },
-  { tierLevel: 3, tierName: 'Gold', color: '#f5c542', rakebackBps: 12, minLifetimeWagerChips: '500000', levelUpBonusChips: '250' },
-  { tierLevel: 4, tierName: 'Platinum', color: '#5fd0c5', rakebackBps: 16, minLifetimeWagerChips: '2500000', levelUpBonusChips: '1500' },
-  { tierLevel: 5, tierName: 'Diamond', color: '#5ea0ff', rakebackBps: 20, minLifetimeWagerChips: '10000000', levelUpBonusChips: '7500' },
-  { tierLevel: 6, tierName: 'Obsidian', color: '#7c5cff', rakebackBps: 25, minLifetimeWagerChips: '50000000', levelUpBonusChips: '50000' },
+  { tierLevel: 1, tierName: 'Bronze', color: '#cd7f32', rakebackBps: 5, minLifetimeWagerChips: '10000', levelUpBonusChips: '10', weeklyCashbackBps: 2, monthlyCashbackBps: 5 },
+  { tierLevel: 2, tierName: 'Silver', color: '#c0c0c0', rakebackBps: 8, minLifetimeWagerChips: '100000', levelUpBonusChips: '50', weeklyCashbackBps: 3, monthlyCashbackBps: 8 },
+  { tierLevel: 3, tierName: 'Gold', color: '#f5c542', rakebackBps: 12, minLifetimeWagerChips: '500000', levelUpBonusChips: '250', weeklyCashbackBps: 5, monthlyCashbackBps: 12 },
+  { tierLevel: 4, tierName: 'Platinum', color: '#5fd0c5', rakebackBps: 16, minLifetimeWagerChips: '2500000', levelUpBonusChips: '1500', weeklyCashbackBps: 7, monthlyCashbackBps: 16 },
+  { tierLevel: 5, tierName: 'Diamond', color: '#5ea0ff', rakebackBps: 20, minLifetimeWagerChips: '10000000', levelUpBonusChips: '7500', weeklyCashbackBps: 10, monthlyCashbackBps: 20 },
+  { tierLevel: 6, tierName: 'Obsidian', color: '#7c5cff', rakebackBps: 25, minLifetimeWagerChips: '50000000', levelUpBonusChips: '50000', weeklyCashbackBps: 12, monthlyCashbackBps: 25 },
 ]
 
 function fmtCompact(v: string): string {
@@ -60,6 +62,10 @@ const FAQ: { q: string; a: string }[] = [
     q: 'Does rakeback depend on whether I win or lose?',
     a: 'No. Rakeback is a percentage of the amount you wager (your turnover), not your net result — so you earn it on every bet either way.',
   },
+  {
+    q: 'How is cashback different from rakeback?',
+    a: "Rakeback accrues continuously on all your turnover and can be claimed anytime. Cashback is an extra reward paid on your rolling 7-day and 30-day wager — the weekly portion unlocks once a week and the monthly portion once a month, both paid in chips when you claim.",
+  },
 ]
 
 const STEPS = [
@@ -72,6 +78,11 @@ const STEPS = [
     icon: Percent,
     title: 'Earn rakeback on every bet',
     body: 'From Bronze upward, a share of each wager comes back to you as rakeback. Higher tiers earn a higher rate, and it accrues automatically as you play.',
+  },
+  {
+    icon: Coins,
+    title: 'Collect weekly & monthly cashback',
+    body: 'On top of rakeback, your tier pays extra cashback on your rolling 7-day and 30-day wager — once each week and once each month. Higher tiers earn richer rates.',
   },
   {
     icon: Gift,
@@ -164,6 +175,7 @@ export default function VipGuidePage() {
                   <th className="px-3 py-3 sm:px-4">Tier</th>
                   <th className="px-3 py-3 sm:px-4">Wager required</th>
                   <th className="px-3 py-3 sm:px-4">Rakeback</th>
+                  <th className="hidden px-3 py-3 sm:table-cell sm:px-4">Wk / Mo cashback</th>
                   <th className="hidden px-3 py-3 sm:table-cell sm:px-4">Level-up bonus</th>
                 </tr>
               </thead>
@@ -179,6 +191,11 @@ export default function VipGuidePage() {
                     <td className="px-3 py-3 text-white/70 sm:px-4">{fmtCompact(t.minLifetimeWagerChips)}</td>
                     <td className="px-3 py-3 font-semibold sm:px-4" style={{ color: t.color }}>
                       {(t.rakebackBps / 100).toFixed(2)}%
+                    </td>
+                    <td className="hidden px-3 py-3 text-white/70 sm:table-cell sm:px-4">
+                      {(t.weeklyCashbackBps ?? 0) + (t.monthlyCashbackBps ?? 0) > 0
+                        ? `${((t.weeklyCashbackBps ?? 0) / 100).toFixed(2)}% / ${((t.monthlyCashbackBps ?? 0) / 100).toFixed(2)}%`
+                        : '—'}
                     </td>
                     <td className="hidden px-3 py-3 text-white/70 sm:table-cell sm:px-4">
                       {BigInt(t.levelUpBonusChips || '0') > 0n ? `+${fmtCompact(t.levelUpBonusChips)} MORBIUS` : '—'}
@@ -202,6 +219,18 @@ export default function VipGuidePage() {
             total you bet), not on whether you win or lose — so every single bet earns you something. Your rate
             is set by your current tier and climbs as you rank up. Rakeback accrues continuously while you play
             and waits in your VIP balance until you claim it.
+          </p>
+
+          {/* Weekly & monthly cashback */}
+          <h2 className="mt-10 flex items-center gap-2 text-lg font-bold text-white">
+            <Coins className="h-5 w-5 text-yellow-300" /> Weekly &amp; monthly cashback
+          </h2>
+          <p className="mt-2 text-sm leading-relaxed text-white/60">
+            On top of rakeback, every ranked tier earns cashback on your recent turnover. The weekly cashback
+            is a percentage of everything you wagered in the last 7 days and can be claimed once a week; the
+            monthly cashback is a percentage of your last 30 days and can be claimed once a month. Both rates
+            scale with your tier and pay out in MORBIUS chips alongside your rakeback when you hit Claim — if a
+            cashback window hasn't elapsed yet, it simply waits until it's ready.
           </p>
 
           {/* Level-up bonuses */}

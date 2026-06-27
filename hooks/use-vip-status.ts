@@ -9,6 +9,8 @@ export interface VipTier {
   rakebackBps: number
   levelUpBonusChips: string
   color: string
+  weeklyCashbackBps: number
+  monthlyCashbackBps: number
 }
 
 export interface VipStatus {
@@ -22,6 +24,12 @@ export interface VipStatus {
   wagerToNextChips: string
   claimableRakebackChips: string
   pendingTierBonusChips: string
+  weeklyCashbackChips: string
+  monthlyCashbackChips: string
+  weeklyCashbackReady: boolean
+  monthlyCashbackReady: boolean
+  weeklyCashbackReadyAt: string | null
+  monthlyCashbackReadyAt: string | null
   lifetimeRakebackChips: string
   lifetimeBonusChips: string
   rakebackSince: string
@@ -31,6 +39,8 @@ export interface VipClaimResult {
   ok: boolean
   rakebackCredited: string
   bonusCredited: string
+  weeklyCredited: string
+  monthlyCredited: string
   totalCredited: string
   chipBalance: string
   newTier: VipTier

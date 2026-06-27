@@ -75,7 +75,9 @@ export type PokerChipLedgerReason =
   | 'holder_reward'     // MORBIUS holder epoch credit (1.25% slice → chips)
   | 'lp_holder_reward'  // LP holder epoch credit (1.5% slice → chips)
   | 'vip_rakeback'      // VIP loyalty: % of wager turnover returned since last claim
-  | 'vip_tier_bonus';   // VIP loyalty: one-time chip bonus on reaching a new tier
+  | 'vip_tier_bonus'    // VIP loyalty: one-time chip bonus on reaching a new tier
+  | 'vip_weekly_bonus'  // VIP loyalty: weekly cashback on rolling 7-day wager
+  | 'vip_monthly_bonus'; // VIP loyalty: monthly cashback on rolling 30-day wager
 
 const DEFAULT_PLATFORM_FEE_WALLET = '0x41682815b05fe6b54a6c0f8813bb99423ee0309d';
 

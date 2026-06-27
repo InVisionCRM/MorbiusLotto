@@ -66,7 +66,12 @@ export default function VipPage() {
   const claimable = useMemo(() => {
     if (!status) return 0n
     try {
-      return BigInt(status.claimableRakebackChips) + BigInt(status.pendingTierBonusChips)
+      return (
+        BigInt(status.claimableRakebackChips) +
+        BigInt(status.pendingTierBonusChips) +
+        BigInt(status.weeklyCashbackChips) +
+        BigInt(status.monthlyCashbackChips)
+      )
     } catch {
       return 0n
     }
@@ -262,10 +267,20 @@ export default function VipPage() {
                       </span>
                       <span className="text-xs text-white/40">MORBIUS</span>
                     </div>
-                    <div className="mt-2 flex gap-1.5 text-[11px]">
+                    <div className="mt-2 flex flex-wrap gap-1.5 text-[11px]">
                       <span className="rounded-md bg-white/5 px-2 py-1 text-white/60">
                         Rakeback {fmtCompact(status.claimableRakebackChips)}
                       </span>
+                      {BigInt(status.weeklyCashbackChips) > 0n && (
+                        <span className="rounded-md bg-white/5 px-2 py-1 text-white/60">
+                          Weekly {fmtCompact(status.weeklyCashbackChips)}
+                        </span>
+                      )}
+                      {BigInt(status.monthlyCashbackChips) > 0n && (
+                        <span className="rounded-md bg-white/5 px-2 py-1 text-white/60">
+                          Monthly {fmtCompact(status.monthlyCashbackChips)}
+                        </span>
+                      )}
                       {BigInt(status.pendingTierBonusChips) > 0n && (
                         <span
                           className="rounded-md px-2 py-1 font-medium"
@@ -369,6 +384,14 @@ export default function VipPage() {
                   </div>
                   <div className="hidden text-right sm:block">
                     <div className="text-sm font-semibold text-white/80">
+                      {(t.weeklyCashbackBps ?? 0) + (t.monthlyCashbackBps ?? 0) > 0
+                        ? `${(t.weeklyCashbackBps / 100).toFixed(2)} / ${(t.monthlyCashbackBps / 100).toFixed(2)}%`
+                        : '—'}
+                    </div>
+                    <div className="text-[11px] text-white/40">wk / mo cashback</div>
+                  </div>
+                  <div className="hidden text-right sm:block">
+                    <div className="text-sm font-semibold text-white/80">
                       {BigInt(t.levelUpBonusChips || '0') > 0n ? `+${fmtCompact(t.levelUpBonusChips)}` : '—'}
                     </div>
                     <div className="text-[11px] text-white/40">bonus</div>
@@ -397,6 +420,11 @@ export default function VipPage() {
                   icon: <Percent className="h-4 w-4" />,
                   t: 'Earn rakeback on every bet',
                   d: 'From Bronze upward, a slice of every wager comes back to you as rakeback. The higher your tier, the higher the rate — and it accrues automatically while you play, win or lose.',
+                },
+                {
+                  icon: <CalendarDays className="h-4 w-4" />,
+                  t: 'Collect weekly & monthly cashback',
+                  d: 'On top of rakeback, your tier pays extra cashback on your rolling 7-day and 30-day wager — claimable once each week and once each month. Higher tiers get richer rates.',
                 },
                 {
                   icon: <Gift className="h-4 w-4" />,
