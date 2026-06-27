@@ -59,6 +59,8 @@ import { registerHolderRewardsAdminRoutes } from './routes/holder-rewards-admin.
 import { registerHolderRewardsPublicRoutes } from './routes/holder-rewards-public.routes';
 import { VipService } from './services/vip.service';
 import { registerVipRoutes } from './routes/vip.routes';
+import { ReferralService } from './services/referral.service';
+import { registerReferralRoutes } from './routes/referral.routes';
 import { GameActivityService } from './services/game-activity.service';
 import { registerActivityRoutes } from './routes/activity.routes';
 import { CosmeticsService } from './services/cosmetics.service';
@@ -433,7 +435,10 @@ async function initializeServices() {
     }
 
     // VIP loyalty / rewards: wager-based tiers + rakeback, paid in off-chain chips.
-    const vipService = new VipService(dbService.getPool());
+    // ReferralService is wired into VipService so a referee's claim also pays
+    // their referrer their cut of the rakeback (house-funded) in the same txn.
+    const referralService = new ReferralService(dbService.getPool());
+    const vipService = new VipService(dbService.getPool(), referralService);
     const gameActivityService = new GameActivityService(dbService.getPool());
 
     // API routes
@@ -476,6 +481,7 @@ async function initializeServices() {
     registerHolderRewardsAdminRoutes({ app, holderChipRewardsService });
     registerHolderRewardsPublicRoutes({ app, holderChipRewardsService });
     registerVipRoutes({ app, vipService, authService });
+    registerReferralRoutes({ app, referralService, authService });
     registerActivityRoutes({ app, gameActivityService });
 
     // Public config (whitelisted keys only; used for ad creatives, etc.)
