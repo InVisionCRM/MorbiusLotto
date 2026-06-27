@@ -1,8 +1,7 @@
 'use client'
 
-import { Suspense, useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { useAccount } from 'wagmi'
-import { useSearchParams } from 'next/navigation'
 import Link from 'next/link'
 import { toast } from 'sonner'
 import { motion } from 'framer-motion'
@@ -51,20 +50,22 @@ function StatCard({
   )
 }
 
-function ReferralsPageInner() {
+export default function ReferralsPage() {
   const { address, isConnected } = useAccount()
   const { signIn } = useSiwe()
   const { config, summary, loading, binding, error, authRequired, bind, refresh } = useReferrals(address)
-  const searchParams = useSearchParams()
 
   const [codeInput, setCodeInput] = useState('')
   const [copied, setCopied] = useState(false)
 
-  // Prefill the redeem field from a ?ref=CODE share link.
+  // Prefill the redeem field from a ?ref=CODE share link. Read straight from
+  // the URL on the client (not next/navigation's useSearchParams) so the page
+  // needs no Suspense boundary and stays fully static-prerenderable.
   useEffect(() => {
-    const ref = searchParams.get('ref')
+    if (typeof window === 'undefined') return
+    const ref = new URLSearchParams(window.location.search).get('ref')
     if (ref) setCodeInput(ref.trim().toUpperCase())
-  }, [searchParams])
+  }, [])
 
   const shareLink = useMemo(() => {
     if (!summary?.code) return ''
@@ -375,13 +376,5 @@ function ReferralsPageInner() {
         </div>
       </div>
     </GlobalMainNav>
-  )
-}
-
-export default function ReferralsPage() {
-  return (
-    <Suspense fallback={null}>
-      <ReferralsPageInner />
-    </Suspense>
   )
 }

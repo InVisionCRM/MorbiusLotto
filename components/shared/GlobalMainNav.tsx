@@ -334,7 +334,7 @@ type NavIconName =
   | 'fa-palette' | 'fa-question-circle' | 'fa-exchange-alt' | 'fa-trophy' | 'fa-user-edit' | 'fa-user-circle'
   | 'fa-gift' | 'fa-crown' | 'fa-download' | 'fa-shield-alt' | 'fa-shield' | 'fa-bullhorn' | 'fa-flag' | 'fa-search'
   | 'fa-gamepad' | 'fa-cog' | 'fa-tint' | 'fa-image' | 'fa-sign-out-alt' | 'fa-volume-up' | 'fa-volume-mute'
-  | 'fa-grid';
+  | 'fa-grid' | 'fa-users';
 
 const NAV_ICON_MAP: Record<NavIconName, React.ComponentType<{ size?: number; className?: string; 'aria-hidden'?: boolean }>> = {
   'fa-home': IconHome,
@@ -366,11 +366,15 @@ const NAV_ICON_MAP: Record<NavIconName, React.ComponentType<{ size?: number; cla
   'fa-volume-up': IconVolume,
   'fa-volume-mute': IconVolumeOff,
   'fa-grid': IconLayoutGrid,
+  'fa-users': IconUsers,
 };
 
 /** Renders a Tabler icon sized for the sidebar. `active` swaps white → cyan. */
 function NavIcon({ icon, active = false }: { icon: NavIconName; active?: boolean }) {
   const Icon = NAV_ICON_MAP[icon];
+  // Guard against an unmapped icon name: rendering `undefined` here throws
+  // "Element type is invalid" and takes down every page that shows the nav.
+  if (!Icon) return null;
   return <Icon size={20} className={`shrink-0 ${active ? 'text-cyan-400' : 'text-white'}`} aria-hidden />;
 }
 
@@ -642,7 +646,7 @@ const NavContent = React.memo(function NavContent(props: NavContentProps) {
           <SidebarButton label="Profile" icon={<NavIcon icon="fa-user-edit" />} onClick={handleOpenProfileOrModal} className={NAV_ITEM_CLASS} />
           <SidebarButton label="Avatar" icon={<NavIcon icon="fa-user-circle" />} onClick={handleOpenProfileModal} className={NAV_ITEM_CLASS} />
           <SidebarLink link={{ label: 'VIP Club', href: '/vip', icon: <NavIcon icon="fa-crown" /> }} className={NAV_ITEM_CLASS} />
-          <SidebarLink link={{ label: 'Refer & Earn', href: '/referrals', icon: <NavIcon icon="fa-user-plus" /> }} className={NAV_ITEM_CLASS} />
+          <SidebarLink link={{ label: 'Refer & Earn', href: '/referrals', icon: <NavIcon icon="fa-users" /> }} className={NAV_ITEM_CLASS} />
           <SidebarLink link={{ label: 'Claim Morbius', href: '/claim', icon: <NavIcon icon="fa-gift" /> }} className={NAV_ITEM_CLASS} />
         </div>
 
