@@ -10,6 +10,13 @@ export type VipBadgeSize = 'xs' | 'sm' | 'md' | 'lg'
 const PX: Record<VipBadgeSize, number> = { xs: 20, sm: 30, md: 46, lg: 76 }
 const ROMAN = ['', 'I', 'II', 'III', 'IV', 'V', 'VI'] as const
 
+/**
+ * Minimum tier whose crest is shown over a player's avatar in games — kept to
+ * higher tiers so the in-game badge stays a status symbol. (1 Bronze … 3 Gold
+ * … 6 Obsidian.) The VIP page / guide still show every tier.
+ */
+const MIN_AVATAR_BADGE_TIER = 3
+
 /** Minimal tier shape this badge needs (works with VipTier and VipPublicTier). */
 export interface VipBadgeTier {
   tierName: string
@@ -166,7 +173,7 @@ export function VipAvatarBadge({
   className?: string
 }) {
   const { data: tier } = useVipTier(address)
-  if (!tier || tier.tierLevel <= 0) return null
+  if (!tier || tier.tierLevel < MIN_AVATAR_BADGE_TIER) return null
   return (
     <div className={cn('pointer-events-none absolute -bottom-1.5 -right-1.5 z-20 drop-shadow-[0_1px_2px_rgba(0,0,0,0.6)]', className)}>
       <VipTierBadge tier={tier} size={size} />

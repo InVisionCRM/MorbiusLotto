@@ -20,8 +20,8 @@ interface RegisterActivityRoutesOptions {
 export function registerActivityRoutes({ app, gameActivityService }: RegisterActivityRoutesOptions): void {
   app.get('/api/activity/games', async (_req: Request, res: Response) => {
     try {
-      const games = await gameActivityService.getGameSummaries();
-      sendJson(res, { games });
+      const result = await gameActivityService.getGameSummaries();
+      sendJson(res, result);
     } catch (error) {
       logger.error('[activity] games summary failed', error);
       res.status(500).json({ error: 'Internal server error' });

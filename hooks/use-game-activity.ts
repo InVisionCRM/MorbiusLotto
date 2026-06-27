@@ -8,6 +8,12 @@ export interface GameSummary {
   wagered: string
   won: string
   plays: number
+  players: number
+}
+
+export interface GameSummariesResult {
+  games: GameSummary[]
+  totalPlayers: number
 }
 
 export type PlayResult = 'win' | 'loss' | 'push'
@@ -22,15 +28,18 @@ export interface GamePlay {
   at: string
 }
 
-/** All games + all-time totals (wagered / won / plays), busiest first. */
+/** All games + all-time totals (wagered / won / plays / players), busiest first. */
 export function useGameSummaries(enabled = true) {
   return useQuery({
     queryKey: ['activity-games'],
-    queryFn: async (): Promise<GameSummary[]> => {
+    queryFn: async (): Promise<GameSummariesResult> => {
       const r = await fetch('/api/activity/games', { credentials: 'include' })
       if (!r.ok) throw new Error(`games ${r.status}`)
       const d = await r.json()
-      return Array.isArray(d?.games) ? d.games : []
+      return {
+        games: Array.isArray(d?.games) ? d.games : [],
+        totalPlayers: Number(d?.totalPlayers ?? 0),
+      }
     },
     enabled,
     staleTime: 30_000,

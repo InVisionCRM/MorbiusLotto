@@ -135,6 +135,7 @@ export function StakePlinkoGame() {
   const airborne = useRef(0)
   const autoLeftRef = useRef<number | null>(null)
   const autoTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const reconcileTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
   const mounted = useRef(true)
 
   // Balance: public read keyed by wallet address (no sign-in popup), then kept
@@ -158,6 +159,18 @@ export function StakePlinkoGame() {
     }
   }, [chainBalance, address])
 
+  // Self-heal safety net: a short while after the last drop, clear any leaked
+  // airborne count and pull the authoritative server balance. Guarantees the
+  // on-screen number can never get stuck if a ball's land event is missed or
+  // malformed (re-armed on every drop, cleared once everything settles).
+  const armReconcile = useCallback(() => {
+    if (reconcileTimer.current) clearTimeout(reconcileTimer.current)
+    reconcileTimer.current = setTimeout(() => {
+      airborne.current = 0
+      void refetchBalance()
+    }, 4000)
+  }, [refetchBalance])
+
   // Tables + bounds (public) on mount.
   useEffect(() => {
     mounted.current = true
@@ -174,6 +187,7 @@ export function StakePlinkoGame() {
     return () => {
       mounted.current = false
       if (autoTimer.current) clearTimeout(autoTimer.current)
+      if (reconcileTimer.current) clearTimeout(reconcileTimer.current)
     }
   }, [])
 
@@ -265,6 +279,7 @@ export function StakePlinkoGame() {
       })
       // Ball is now on the board; its balance change is applied when it lands.
       airborne.current += 1
+      armReconcile()
       plinkoAudio.playDrop()
       return true
     } catch (e) {
@@ -282,7 +297,7 @@ export function StakePlinkoGame() {
     } finally {
       inFlight.current -= 1
     }
-  }, [bet, risk, clientSeed, clampBet])
+  }, [bet, risk, clientSeed, clampBet, armReconcile])
 
   // Fixed-cadence scheduler: fire each ball WITHOUT awaiting the server
   // round-trip (the old loop serialized RTT + interval, ~1.5s/ball). Balls
@@ -318,13 +333,24 @@ export function StakePlinkoGame() {
   /** Lands feed the recent-results strip + session chart (server data rode along on the ball). */
   const handleScore = useCallback(
     (_multiplier: number, _bucketIndex: number, contractData?: BoardDrop['contractResult'] & { risk?: RiskLevel }) => {
-      if (!contractData || typeof contractData.multiplierX100 !== 'number') return
+      // Release this ball from the airborne count FIRST — even if its data is
+      // malformed — so one bad land can never freeze balance reconciliation.
+      airborne.current = Math.max(0, airborne.current - 1)
+      if (!contractData || typeof contractData.multiplierX100 !== 'number') {
+        if (airborne.current === 0 && inFlight.current === 0) void refetchBalance()
+        return
+      }
       const profit = contractData.payout - contractData.bet
       // Apply this ball's net balance change now that it has landed. Using the
       // per-ball delta (not the absolute settled balance) keeps the running
       // total correct even when several balls are airborne and land out of order.
-      airborne.current = Math.max(0, airborne.current - 1)
       setBalance((prev) => (prev != null ? prev + BigInt(contractData.payout) - BigInt(contractData.bet) : prev))
+      // Everything settled → snap to the authoritative server balance so any
+      // drift self-heals immediately instead of lingering on screen.
+      if (airborne.current === 0 && inFlight.current === 0) {
+        if (reconcileTimer.current) clearTimeout(reconcileTimer.current)
+        void refetchBalance()
+      }
       plinkoAudio.playLand(profit > 0)
       setRecent((prev) =>
         [
@@ -338,7 +364,7 @@ export function StakePlinkoGame() {
       )
       setSession((prev) => [...prev, { drop: prev.length + 1, bet: contractData.bet, profit }])
     },
-    [],
+    [refetchBalance],
   )
 
   const openVerify = useCallback((roundId: string | null) => {
