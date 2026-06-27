@@ -642,6 +642,7 @@ const NavContent = React.memo(function NavContent(props: NavContentProps) {
           <SidebarButton label="Profile" icon={<NavIcon icon="fa-user-edit" />} onClick={handleOpenProfileOrModal} className={NAV_ITEM_CLASS} />
           <SidebarButton label="Avatar" icon={<NavIcon icon="fa-user-circle" />} onClick={handleOpenProfileModal} className={NAV_ITEM_CLASS} />
           <SidebarLink link={{ label: 'VIP Club', href: '/vip', icon: <NavIcon icon="fa-crown" /> }} className={NAV_ITEM_CLASS} />
+          <SidebarLink link={{ label: 'Refer & Earn', href: '/referrals', icon: <NavIcon icon="fa-user-plus" /> }} className={NAV_ITEM_CLASS} />
           <SidebarLink link={{ label: 'Claim Morbius', href: '/claim', icon: <NavIcon icon="fa-gift" /> }} className={NAV_ITEM_CLASS} />
         </div>
 

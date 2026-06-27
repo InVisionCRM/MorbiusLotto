@@ -22,6 +22,7 @@
 import type { Pool, PoolClient } from 'pg';
 import { logger } from '../utils/logger';
 import { applyPokerChipDelta } from './poker-chip-wallet';
+import type { ReferralService } from './referral.service';
 
 /** SQL fragment matching every wager (debit) ledger reason: plinko_bet, keno_bet, arcade_*_bet, … */
 const BET_REASON_PREDICATE = `reason LIKE '%\\_bet'`;
@@ -115,7 +116,9 @@ export class VipService {
   private tierCacheAt = 0;
   private static readonly TIER_TTL_MS = 60_000;
 
-  constructor(private pool: Pool) {}
+  // referralService is optional so VipService can be constructed standalone
+  // (e.g. in tests); when present, a referee's claim also pays their referrer.
+  constructor(private pool: Pool, private referralService?: ReferralService) {}
 
   // ──────────────────────────────────────────────────────────────────
   // Tier ladder (cached 60s; runtime-tunable via vip_tier_config)
@@ -451,6 +454,15 @@ export class VipService {
           id: null,
         });
         credited = true;
+      }
+
+      // Pay this player's referrer their cut of the rakeback (house-funded, on
+      // top of the player's reward). Runs in the same txn so it commits — or
+      // rolls back — atomically with the claim. (A thrown error here poisons the
+      // pg transaction, so it must propagate to the outer ROLLBACK, not be
+      // swallowed; referral payout failures are DB-level and vanishingly rare.)
+      if (this.referralService && rakebackChips > 0n) {
+        await this.referralService.payReferralReward(client, addr, rakebackChips);
       }
 
       // Advance the rakeback cursor and the highest-paid tier; bump lifetime totals.
