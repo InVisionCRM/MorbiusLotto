@@ -685,6 +685,9 @@ const NavContent = React.memo(function NavContent(props: NavContentProps) {
           <SidebarLink link={{ label: 'Token Analyzer', href: 'https://scan.morbius.io', icon: <NavIcon icon="fa-search" /> }} className={NAV_ITEM_CLASS} target="_blank" rel="noopener noreferrer" />
           <SidebarLink link={{ label: 'Morb-It', href: '/Morb-It', icon: <NavIcon icon="fa-gamepad" /> }} className={NAV_ITEM_CLASS} />
           {isAdmin && (
+            <SidebarLink link={{ label: 'Game Activity', href: '/activity', icon: <NavIcon icon="fa-chart-bar" /> }} className={NAV_ITEM_CLASS} />
+          )}
+          {isAdmin && (
             <SidebarLink link={{ label: 'Admin', href: '/admin', icon: <NavIcon icon="fa-cog" /> }} className={NAV_ITEM_CLASS} />
           )}
         </div>

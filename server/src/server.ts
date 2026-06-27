@@ -59,6 +59,8 @@ import { registerHolderRewardsAdminRoutes } from './routes/holder-rewards-admin.
 import { registerHolderRewardsPublicRoutes } from './routes/holder-rewards-public.routes';
 import { VipService } from './services/vip.service';
 import { registerVipRoutes } from './routes/vip.routes';
+import { GameActivityService } from './services/game-activity.service';
+import { registerActivityRoutes } from './routes/activity.routes';
 import { CosmeticsService } from './services/cosmetics.service';
 import { isAdminWallet } from './lib/cosmetics-catalog';
 import { resolveDisplayNameForProfileUpsert } from './lib/resolve-profile-display-name';
@@ -432,6 +434,7 @@ async function initializeServices() {
 
     // VIP loyalty / rewards: wager-based tiers + rakeback, paid in off-chain chips.
     const vipService = new VipService(dbService.getPool());
+    const gameActivityService = new GameActivityService(dbService.getPool());
 
     // API routes
 
@@ -473,6 +476,7 @@ async function initializeServices() {
     registerHolderRewardsAdminRoutes({ app, holderChipRewardsService });
     registerHolderRewardsPublicRoutes({ app, holderChipRewardsService });
     registerVipRoutes({ app, vipService, authService });
+    registerActivityRoutes({ app, gameActivityService });
 
     // Public config (whitelisted keys only; used for ad creatives, etc.)
     const PUBLIC_CONFIG_KEYS = ['ad_creative_url', 'ad_creative_hero_url', 'ad_creative_loading_url'];
