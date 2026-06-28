@@ -109,7 +109,7 @@ export function RecentWins() {
         </span>
         <span className="text-[11px] font-bold uppercase tracking-[0.18em] text-slate-400">Recent wins</span>
       </div>
-      <InfiniteMovingCards items={items} variant="win" speed="slow" className="w-full" />
+      <InfiniteMovingCards items={items} variant="win" pixelsPerSecond={75} className="w-full" />
     </div>
   )
 }
