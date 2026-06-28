@@ -179,7 +179,8 @@
     var ball=document.createElement('div');
     ball.className='ball'+((anim==='zip'||anim==='cinema')?' trail':'');
     ball.style.width=size+'px'; ball.style.height=size+'px';
-    ball.style.marginLeft=(-size/2)+'px'; ball.style.marginTop=(-size/2)+'px';
+    // Centering is done purely via the translate(-50%,-50%) transform in the
+    // animations; no negative margin (that would double the offset).
     ball.style.fontSize=Math.round(size*0.42)+'px';
     ball.textContent=n;
     return {el:ball,size:size};
