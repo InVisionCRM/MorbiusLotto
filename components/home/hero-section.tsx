@@ -1,6 +1,8 @@
 'use client'
 
 import { useEffect, useRef, useState } from 'react'
+import Link from 'next/link'
+import { Crown, Users } from 'lucide-react'
 
 const HERO_VIDEO_SRC = '/morbius/Morbiusio_Building_Entrance_Pan_scrub.mp4'
 
@@ -183,6 +185,30 @@ export function HeroSection({ showWelcome = false, welcomeName = null }: HeroSec
               DONE RIGHT
             </span>
           </h1>
+        ) : null}
+
+        {showOverlay ? (
+          <div
+            className={`absolute left-4 top-[48%] z-20 flex flex-col gap-3 px-2 sm:left-8 sm:flex-row sm:px-0 ${
+              ctaReady ? 'hero-title-line-visible' : 'hero-title-line-hidden pointer-events-none'
+            }`}
+            style={{ transition: 'opacity 600ms ease, transform 600ms ease', transitionDelay: '760ms' }}
+          >
+            <Link
+              href="/vip"
+              className="group inline-flex items-center justify-center gap-2 rounded-xl bg-amber-400 px-6 py-3 text-sm font-bold uppercase tracking-wide text-black shadow-[0_8px_30px_-8px_rgba(245,197,66,0.7)] transition hover:bg-amber-300 sm:text-base"
+            >
+              <Crown className="h-5 w-5" />
+              Join the VIP Club
+            </Link>
+            <Link
+              href="/referrals"
+              className="group inline-flex items-center justify-center gap-2 rounded-xl bg-purple-600 px-6 py-3 text-sm font-bold uppercase tracking-wide text-white shadow-[0_8px_30px_-8px_rgba(124,92,255,0.7)] ring-1 ring-purple-400/40 transition hover:bg-purple-500 sm:text-base"
+            >
+              <Users className="h-5 w-5" />
+              Refer &amp; Earn
+            </Link>
+          </div>
         ) : null}
 
         <div

@@ -25,7 +25,7 @@ BEGIN;
 CREATE TABLE IF NOT EXISTS referral_config (
   id                   INT PRIMARY KEY DEFAULT 1,
   reward_bps           INT NOT NULL DEFAULT 1000,          -- referrer earns this bps of a referee's rakeback (1000 = 10%)
-  welcome_bonus_chips  NUMERIC(78, 0) NOT NULL DEFAULT 100, -- one-time chips credited to a referee on binding (0 disables)
+  welcome_bonus_chips  NUMERIC(78, 0) NOT NULL DEFAULT 1000, -- one-time chips credited to a referee on binding (0 disables)
   max_bind_wager_chips NUMERIC(78, 0) NOT NULL DEFAULT 5000, -- a referee may only bind while their lifetime wager is at/below this (anti-poach)
   enabled              BOOLEAN NOT NULL DEFAULT TRUE,
   created_at           TIMESTAMPTZ NOT NULL DEFAULT NOW(),

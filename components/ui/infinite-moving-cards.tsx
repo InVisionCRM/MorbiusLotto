@@ -1,7 +1,7 @@
 "use client";
 
 import { cn } from "@/lib/utils";
-import React from "react";
+import React, { useEffect, useRef, useState } from "react";
 
 export type QuoteCardItem = {
   quote: string;
@@ -42,6 +42,7 @@ export const InfiniteMovingCards = React.memo(function InfiniteMovingCards({
   variant = "quote",
   direction = "left",
   speed = "fast",
+  pixelsPerSecond,
   pauseOnHover = true,
   className,
 }: {
@@ -49,14 +50,46 @@ export const InfiniteMovingCards = React.memo(function InfiniteMovingCards({
   variant?: "quote" | "image" | "win";
   direction?: "left" | "right";
   speed?: "fast" | "normal" | "slow";
+  /**
+   * Constant-velocity mode: when set, the loop always moves at this many
+   * CSS px/second regardless of how many cards there are or the screen size,
+   * by measuring the row width and deriving the duration. Falls back to the
+   * fixed `speed` durations until the first measurement lands. This keeps the
+   * ticker feeling identical on mobile and desktop (the fixed-time `speed`
+   * mode crawls on long lists / narrow screens).
+   */
+  pixelsPerSecond?: number;
   pauseOnHover?: boolean;
   className?: string;
 }) {
-  const duration = speed === "fast" ? "20s" : speed === "normal" ? "40s" : "80s";
+  const fallbackDuration = speed === "fast" ? "20s" : speed === "normal" ? "40s" : "80s";
   const animDirection = direction === "left" ? "forwards" : "reverse";
   // Render the list twice so the -50% translate loops seamlessly — no runtime
   // DOM cloning (which broke when the parent re-rendered).
   const list = [...items, ...items];
+
+  // Constant-velocity timing: measure one copy's width (= half the doubled row)
+  // and set duration = width / pixelsPerSecond so px/sec stays fixed.
+  const rowRef = useRef<HTMLUListElement>(null);
+  const [measuredDuration, setMeasuredDuration] = useState<string | null>(null);
+  useEffect(() => {
+    if (!pixelsPerSecond || pixelsPerSecond <= 0) {
+      setMeasuredDuration(null);
+      return;
+    }
+    const el = rowRef.current;
+    if (!el) return;
+    const measure = () => {
+      const oneCopy = el.scrollWidth / 2;
+      if (oneCopy > 0) setMeasuredDuration(`${(oneCopy / pixelsPerSecond).toFixed(2)}s`);
+    };
+    measure();
+    const ro = new ResizeObserver(measure);
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, [pixelsPerSecond, list.length]);
+
+  const duration = measuredDuration ?? fallbackDuration;
 
   return (
     <div
@@ -72,6 +105,7 @@ export const InfiniteMovingCards = React.memo(function InfiniteMovingCards({
       }
     >
       <ul
+        ref={rowRef}
         className={cn(
           "flex w-max min-w-full shrink-0 flex-nowrap gap-4 py-4 md:gap-6 md:py-6 animate-scroll",
           pauseOnHover && "hover:[animation-play-state:paused]",
