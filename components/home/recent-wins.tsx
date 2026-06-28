@@ -78,7 +78,7 @@ export function RecentWins() {
         deduped.push(w)
         lastAddr = addr
       }
-      return deduped.slice(0, 16).map((w) => {
+      return deduped.slice(0, 24).map((w) => {
         const meta = GAME_META[w.game]
         return {
           id: w.id,

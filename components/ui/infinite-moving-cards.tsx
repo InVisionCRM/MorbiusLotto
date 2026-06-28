@@ -64,35 +64,57 @@ export const InfiniteMovingCards = React.memo(function InfiniteMovingCards({
 }) {
   const fallbackDuration = speed === "fast" ? "20s" : speed === "normal" ? "40s" : "80s";
   const animDirection = direction === "left" ? "forwards" : "reverse";
-  // Render the list twice so the -50% translate loops seamlessly — no runtime
-  // DOM cloning (which broke when the parent re-rendered).
-  const list = [...items, ...items];
 
-  // Constant-velocity timing: measure one copy's width (= half the doubled row)
-  // and set duration = width / pixelsPerSecond so px/sec stays fixed.
+  const containerRef = useRef<HTMLDivElement>(null);
   const rowRef = useRef<HTMLUListElement>(null);
+
+  // Constant-velocity + repeat-to-fill mode (used by the win ticker). When on,
+  // the items are repeated enough times that the row is always at least 2× the
+  // container width, so each -50% half fully covers the viewport — no empty gap
+  // and a seamless loop even with only one or two real cards. Duration is then
+  // derived from the measured width so the speed (px/sec) stays constant.
+  const fill = typeof pixelsPerSecond === "number" && pixelsPerSecond > 0;
+  const [copies, setCopies] = useState(2);
   const [measuredDuration, setMeasuredDuration] = useState<string | null>(null);
+
+  // Even, ≥2, capped so a tiny list can't explode the DOM.
+  const reps = fill ? Math.min(40, Math.max(2, copies - (copies % 2))) : 2;
+  const list = Array.from({ length: reps }, () => items).flat();
+
   useEffect(() => {
-    if (!pixelsPerSecond || pixelsPerSecond <= 0) {
+    if (!fill) {
       setMeasuredDuration(null);
       return;
     }
-    const el = rowRef.current;
-    if (!el) return;
+    const row = rowRef.current;
+    const container = containerRef.current;
+    if (!row || !container) return;
     const measure = () => {
-      const oneCopy = el.scrollWidth / 2;
-      if (oneCopy > 0) setMeasuredDuration(`${(oneCopy / pixelsPerSecond).toFixed(2)}s`);
+      const total = row.scrollWidth;
+      const oneSet = total / reps;
+      const containerW = container.clientWidth;
+      if (oneSet <= 0 || containerW <= 0) return;
+      // Repeat until the whole row is ≥ 2× the container (each half covers it).
+      let need = Math.min(40, Math.max(2, Math.ceil((containerW * 2) / oneSet)));
+      if (need % 2 === 1) need += 1;
+      if (need !== reps) {
+        setCopies(need); // re-measure after the re-render with the new count
+        return;
+      }
+      setMeasuredDuration(`${(total / 2 / pixelsPerSecond!).toFixed(2)}s`);
     };
     measure();
     const ro = new ResizeObserver(measure);
-    ro.observe(el);
+    ro.observe(container);
+    ro.observe(row);
     return () => ro.disconnect();
-  }, [pixelsPerSecond, list.length]);
+  }, [fill, pixelsPerSecond, reps, items.length]);
 
   const duration = measuredDuration ?? fallbackDuration;
 
   return (
     <div
+      ref={containerRef}
       className={cn(
         "scroller relative z-20 max-w-7xl overflow-hidden [mask-image:linear-gradient(to_right,transparent,white_20%,white_80%,transparent)]",
         className,

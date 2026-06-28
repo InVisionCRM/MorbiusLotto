@@ -1129,14 +1129,15 @@ async function initializeServices() {
 
     // Public: recent wins across ALL games (any *_payout credit in the chip ledger) for the Latest Wins feed
     app.get('/api/analytics/recent-wins', async (req, res) => {
-      const limit = Math.min(parseInt(req.query.limit as string) || 20, 50);
+      const limit = Math.min(parseInt(req.query.limit as string) || 40, 100);
       const cacheKey = getAnalyticsCacheKey('/api/analytics/recent-wins', { limit: String(limit) });
       const cached = getCachedAnalytics(cacheKey);
       if (cached != null) {
         return sendJson(res, cached);
       }
       try {
-        const rows = await dbService.getRecentChipWins(limit);
+        // Last 7 days across all chip-ledger games, so the ticker has a full row.
+        const rows = await dbService.getRecentChipWins(limit, 7);
         // reason -> game key (matches GameArt keys + lobby routes):
         // arcade_chicken_payout -> chicken, video_poker_payout -> video-poker, blackjack_payout -> blackjack
         const wins = rows.map((r) => ({
