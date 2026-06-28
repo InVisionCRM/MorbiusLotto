@@ -214,6 +214,17 @@
   }
 }
 
+/* "Recent wins" table — newly arrived rows fade in with a brief amber flash. */
+@keyframes recent-row-in {
+  0% { opacity: 0; transform: translateY(-6px); background-color: rgba(245, 197, 66, 0.18); }
+  60% { opacity: 1; transform: translateY(0); }
+  100% { background-color: rgba(245, 197, 66, 0); }
+}
+.recent-row-in { animation: recent-row-in 0.9s ease-out both; }
+@media (prefers-reduced-motion: reduce) {
+  .recent-row-in { animation: none; }
+}
+
 /* Infinite moving cards scroll animation (content is duplicated, so -50% loops) */
 @keyframes scroll {
   0% {
