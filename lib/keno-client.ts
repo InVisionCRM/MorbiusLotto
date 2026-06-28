@@ -116,6 +116,46 @@ export async function fetchKenoHistory(limit = 25): Promise<KenoHistoryRound[]> 
   return j.rounds ?? [];
 }
 
+/** A global Keno win (any player), for the "Recent wins" tab. */
+export interface KenoRecentWin {
+  roundId: string;
+  address: string;
+  username: string | null;
+  bet: number;
+  hits: number;
+  multiplierX100: number;
+  payout: number;
+  createdAt: string;
+}
+
+/** A drawn-number frequency entry for the hot-numbers strip. */
+export interface KenoHotNumber {
+  n: number;
+  count: number;
+}
+
+export interface KenoRecent {
+  wins: KenoRecentWin[];
+  hotNumbers: KenoHotNumber[];
+  roundsAnalyzed: number;
+}
+
+/** Public global feed: recent wins + hot numbers, derived from recent rounds. */
+export async function fetchKenoRecent(limit = 200): Promise<KenoRecent> {
+  try {
+    const r = await fetch(`${apiBase()}/api/keno/recent?limit=${limit}`, { cache: 'no-store' });
+    if (!r.ok) return { wins: [], hotNumbers: [], roundsAnalyzed: 0 };
+    const j = await r.json();
+    return {
+      wins: Array.isArray(j?.wins) ? j.wins : [],
+      hotNumbers: Array.isArray(j?.hotNumbers) ? j.hotNumbers : [],
+      roundsAnalyzed: Number(j?.roundsAnalyzed ?? 0),
+    };
+  } catch {
+    return { wins: [], hotNumbers: [], roundsAnalyzed: 0 };
+  }
+}
+
 export interface KenoVerifyResult {
   roundId: string;
   wallet: string;
