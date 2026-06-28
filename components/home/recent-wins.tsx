@@ -83,14 +83,13 @@ export function RecentWins() {
 
   const rows = useMemo<Row[]>(() => {
     if (wins && wins.length > 0) {
-      // Collapse consecutive wins from the same wallet so one hot player can't
-      // fill the table with back-to-back rows.
+      // Show every win, newest first (same player repeatedly is normal and
+      // expected in a live feed) — just guard against exact duplicate ids.
+      const seenIds = new Set<string>()
       const out: Row[] = []
-      let lastAddr = ''
       for (const w of wins) {
-        const addr = (w.address || '').toLowerCase()
-        if (addr && addr === lastAddr) continue
-        lastAddr = addr
+        if (w.id && seenIds.has(w.id)) continue
+        seenIds.add(w.id)
         const meta = GAME_META[w.game]
         out.push({
           id: w.id,
