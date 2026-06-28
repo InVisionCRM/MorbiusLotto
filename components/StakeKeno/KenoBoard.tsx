@@ -53,6 +53,7 @@ export function KenoBoard({ selected, drawn, settled, disabled, onToggle }: Keno
           extra = 'keno-pop keno-hit-glow'
         } else if (isDrawnOnly) {
           cls = 'bg-[#0A1622]/60 text-slate-500 border border-cyan-950/60'
+          extra = 'keno-land'
         } else if (isSelected) {
           // pickPending (lit) until settled, then pickMiss (dim).
           cls = isPickMiss
@@ -66,6 +67,7 @@ export function KenoBoard({ selected, drawn, settled, disabled, onToggle }: Keno
           <button
             key={n}
             type="button"
+            data-keno-n={n}
             disabled={disabled}
             onClick={() => onToggle(n)}
             aria-pressed={isSelected}

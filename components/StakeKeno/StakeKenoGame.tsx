@@ -43,10 +43,13 @@ import { GameWalletModal } from '@/components/shared/GameWalletModal'
 import { probeSiweSession } from '@/lib/api-auth'
 import { kenoAudio } from './keno-audio'
 import { KenoBoard } from './KenoBoard'
+import { KenoHotNumbers } from './KenoHotNumbers'
 import { KenoPayoutBar } from './KenoPayoutBar'
 import { KenoFairnessModal } from './KenoFairnessModal'
 import { KenoRulesModal } from './KenoRulesModal'
 import { KenoInfoTabs } from './KenoInfoTabs'
+import { playKenoDropReveal, type KenoRevealHandle } from './keno-ball-reveal'
+import { useKenoRecent } from '@/hooks/use-keno-recent'
 import {
   fetchKenoInfo,
   fetchKenoMultipliers,
@@ -63,7 +66,6 @@ import {
   type KenoHistoryRound,
 } from '@/lib/keno-client'
 
-const REVEAL_STEP_MS = 110
 const HISTORY_LIMIT = 25
 
 /** "402 Payment Required: Not enough chips." → "Not enough chips." */
@@ -112,12 +114,23 @@ export function StakeKenoGame() {
   const [historyLoading, setHistoryLoading] = useState(false)
 
   const revealTimers = useRef<ReturnType<typeof setTimeout>[]>([])
+  // Ball-draw reveal (real-keno "Drop" style): overlay stage + the live handle.
+  const boardWrapRef = useRef<HTMLDivElement | null>(null)
+  const stageRef = useRef<HTMLDivElement | null>(null)
+  const revealHandle = useRef<KenoRevealHandle | null>(null)
+  // Hold-until-reveal: balance freezes during the draw and only updates when the
+  // last ball lands. `holding` suppresses the background poll from clobbering it.
+  const holdingBalance = useRef(false)
+
+  // Global feed: recent wins (tab) + hot numbers (strip under the board).
+  const { recent, loading: recentLoading, refetch: refetchRecent } = useKenoRecent()
 
   // Balance: public read keyed by wallet address (no sign-in popup), then kept
   // fresh from authoritative play responses and exchange completions.
   const { data: chainBalance, refetch: refetchBalance } = usePokerChipBalance(address ?? null)
   const [balance, setBalance] = useState<bigint | null>(null)
   useEffect(() => {
+    if (holdingBalance.current) return // don't overwrite a held balance mid-reveal
     if (chainBalance != null) {
       try {
         setBalance(BigInt(chainBalance.split('.')[0] || '0'))
@@ -148,7 +161,10 @@ export function StakeKenoGame() {
       .catch(() => {
         /* keep defaults — server still enforces */
       })
-    return () => revealTimers.current.forEach(clearTimeout)
+    return () => {
+      revealTimers.current.forEach(clearTimeout)
+      revealHandle.current?.cancel()
+    }
   }, [loadMultipliers])
 
   // History: only fetch once a session provably exists (never pop a sign-in on load).
@@ -192,6 +208,9 @@ export function StakeKenoGame() {
   const clearReveal = useCallback(() => {
     revealTimers.current.forEach(clearTimeout)
     revealTimers.current = []
+    revealHandle.current?.cancel()
+    revealHandle.current = null
+    holdingBalance.current = false
   }, [])
 
   const resetRound = useCallback(() => {
@@ -255,7 +274,6 @@ export function StakeKenoGame() {
         clientSeed: clientSeed.trim() || undefined,
       })
       setResult(res)
-      setBalance(BigInt(res.chipBalance))
       setHistory((prev) =>
         [
           {
@@ -274,28 +292,50 @@ export function StakeKenoGame() {
         ].slice(0, HISTORY_LIMIT),
       )
 
-      // Cosmetic staged reveal of the drawn tiles.
+      // Real-keno ball draw: balls fall from board centre to their tiles one at
+      // a time. Hold-until-reveal — the balance only updates on the last landing.
+      clearReveal()
       setPhase('revealing')
       setRevealed(new Set())
       setResultHits(null)
-      clearReveal()
-      res.drawn.forEach((n, i) => {
-        const t = setTimeout(() => {
-          setRevealed((prev) => {
-            const next = new Set(prev ?? [])
-            next.add(n)
-            return next
-          })
-          kenoAudio.playDraw()
-          if (i === res.drawn.length - 1) {
-            setResultHits(res.hits)
-            setPhase('idle')
-            if (res.payout > 0) kenoAudio.playWin()
-            else kenoAudio.playLose()
-          }
-        }, REVEAL_STEP_MS * (i + 1))
-        revealTimers.current.push(t)
-      })
+      holdingBalance.current = true
+
+      const settle = () => {
+        holdingBalance.current = false
+        try {
+          setBalance(BigInt(res.chipBalance))
+        } catch {
+          /* keep last known */
+        }
+        setResultHits(res.hits)
+        setPhase('idle')
+        if (res.payout > 0) kenoAudio.playWin()
+        else kenoAudio.playLose()
+        void refetchRecent() // refresh hot numbers + recent-wins feed
+      }
+
+      const board = boardWrapRef.current
+      const stage = stageRef.current
+      if (board && stage) {
+        revealHandle.current = playKenoDropReveal({
+          board,
+          stage,
+          drawn: res.drawn,
+          onLand: (n) => {
+            setRevealed((prev) => {
+              const next = new Set(prev ?? [])
+              next.add(n)
+              return next
+            })
+            kenoAudio.playDraw()
+          },
+          onDone: settle,
+        })
+      } else {
+        // Refs not ready (shouldn't happen) — reveal instantly so play never stalls.
+        setRevealed(new Set(res.drawn))
+        settle()
+      }
     } catch (e) {
       setPhase('idle')
       const msg = (e as Error)?.message ?? ''
@@ -308,7 +348,7 @@ export function StakeKenoGame() {
         setError(serverDetail(msg) ?? 'Could not place the bet. Try again.')
       }
     }
-  }, [busy, picksCount, selected, risk, bet, clientSeed, clampBet, clearReveal])
+  }, [busy, picksCount, selected, risk, bet, clientSeed, clampBet, clearReveal, refetchRecent])
 
   const openVerify = useCallback((roundId: string | null) => {
     setVerifyTarget(roundId)
@@ -526,27 +566,39 @@ export function StakeKenoGame() {
 
         {/* ───────── Board + payouts ───────── */}
         <div className="order-1 space-y-4 lg:order-2">
-          <Card className="arc-panel relative border-0 p-3 sm:p-4">
-            <KenoBoard
-              selected={selected}
-              drawn={revealed}
-              settled={settled}
-              disabled={busy}
-              onToggle={toggleTile}
-            />
-            {showWinBanner && (
-              <div className="pointer-events-none absolute inset-0 flex items-center justify-center">
-                <div className="arc-banner-in arc-panel rounded-2xl border border-amber-400/40 px-8 py-5 text-center shadow-[0_0_60px_-12px_rgba(245,158,11,0.55)]">
-                  <div className="arc-display text-3xl font-bold text-amber-300 sm:text-4xl">
-                    {formatMultiplier(result.multiplierX100)}
-                  </div>
-                  <div className="arc-mono mt-1 text-sm tabular-nums text-amber-200/90">
-                    +{profit.toLocaleString()} MORBIUS
+          {/* Board + hot-numbers strip kept tight together (attached look). */}
+          <div className="space-y-1.5">
+            <Card className="arc-panel relative border-0 p-3 sm:p-4">
+              {/* Wrapper bounds the tile grid; the ball-draw overlay sits on top. */}
+              <div ref={boardWrapRef} className="relative">
+                <KenoBoard
+                  selected={selected}
+                  drawn={revealed}
+                  settled={settled}
+                  disabled={busy}
+                  onToggle={toggleTile}
+                />
+                <div
+                  ref={stageRef}
+                  aria-hidden
+                  className="pointer-events-none absolute inset-0 z-20 overflow-visible"
+                />
+              </div>
+              {showWinBanner && (
+                <div className="pointer-events-none absolute inset-0 z-30 flex items-center justify-center">
+                  <div className="arc-banner-in arc-panel rounded-2xl border border-amber-400/40 px-8 py-5 text-center shadow-[0_0_60px_-12px_rgba(245,158,11,0.55)]">
+                    <div className="arc-display text-3xl font-bold text-amber-300 sm:text-4xl">
+                      {formatMultiplier(result.multiplierX100)}
+                    </div>
+                    <div className="arc-mono mt-1 text-sm tabular-nums text-amber-200/90">
+                      +{profit.toLocaleString()} MORBIUS
+                    </div>
                   </div>
                 </div>
-              </div>
-            )}
-          </Card>
+              )}
+            </Card>
+            <KenoHotNumbers hot={recent.hotNumbers} />
+          </div>
           <KenoPayoutBar
             multipliers={multipliers}
             loadFailed={multipliersFailed}
@@ -561,7 +613,13 @@ export function StakeKenoGame() {
       {/* ───────── History ───────── */}
       {address && (
         <div className="mt-4">
-          <KenoInfoTabs rounds={history} loading={historyLoading} onVerify={openVerify} />
+          <KenoInfoTabs
+            rounds={history}
+            loading={historyLoading}
+            onVerify={openVerify}
+            recentWins={recent.wins}
+            recentLoading={recentLoading}
+          />
         </div>
       )}
 

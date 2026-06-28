@@ -244,6 +244,55 @@ export function registerKenoRoutes({ app, dbService, authService }: RegisterKeno
   });
 
   // ---------------------------------------------------------------------------
+  // GET /api/keno/recent — public global feed. From the most recent rounds it
+  // derives BOTH the recent *wins* (payout > 0, newest first) and the *hot
+  // numbers* (how often each tile has been drawn across those rounds). One query
+  // powers the "Recent wins" tab and the hot-numbers strip under the board.
+  // ---------------------------------------------------------------------------
+  app.get('/api/keno/recent', async (req: Request, res: Response) => {
+    // Analyse a wide window for hot numbers; surface a smaller slice of wins.
+    const sample = Math.max(40, Math.min(400, parseInt(String(req.query.limit ?? '200'), 10) || 200));
+    const MAX_WINS = 25;
+    try {
+      const r = await pool.query(
+        `SELECT kr.id, kr.wallet_address, kr.bet, kr.risk, kr.drawn, kr.hits,
+                kr.multiplier_x100, kr.payout, kr.created_at, cdn.display_name
+           FROM keno_rounds kr
+           LEFT JOIN chat_display_names cdn
+             ON LOWER(cdn.wallet_address) = LOWER(kr.wallet_address)
+          ORDER BY kr.created_at DESC
+          LIMIT $1`,
+        [sample],
+      );
+      const counts = new Map<number, number>();
+      const wins: Array<Record<string, unknown>> = [];
+      for (const row of r.rows) {
+        const drawn: number[] = Array.isArray(row.drawn) ? row.drawn : [];
+        for (const n of drawn) counts.set(n, (counts.get(n) ?? 0) + 1);
+        if (Number(row.payout) > 0 && wins.length < MAX_WINS) {
+          wins.push({
+            roundId: row.id,
+            address: row.wallet_address,
+            username: row.display_name ?? null,
+            bet: Number(row.bet),
+            hits: row.hits,
+            multiplierX100: Number(row.multiplier_x100),
+            payout: Number(row.payout),
+            createdAt: row.created_at,
+          });
+        }
+      }
+      const hotNumbers = Array.from(counts.entries())
+        .map(([n, count]) => ({ n, count }))
+        .sort((a, b) => b.count - a.count || a.n - b.n);
+      res.json({ ok: true, roundsAnalyzed: r.rows.length, hotNumbers, wins });
+    } catch (e) {
+      logger.error('keno.recent failed', { error: (e as Error).message });
+      res.status(500).json({ error: 'internal error' });
+    }
+  });
+
+  // ---------------------------------------------------------------------------
   // GET /api/keno/verify/:id — public. Returns the published seeds + the recipe
   // and an independent re-derivation so anyone can confirm the draw and payout.
   // ---------------------------------------------------------------------------
