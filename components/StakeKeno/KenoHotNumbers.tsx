@@ -19,12 +19,14 @@ export function KenoHotNumbers({ hot }: { hot: KenoHotNumber[] }) {
   return (
     <section
       aria-label="Hot numbers"
-      className="arc-panel flex items-center gap-2 rounded-xl px-2.5 py-1.5"
+      className="arc-panel flex w-full max-w-full items-center gap-2 overflow-hidden rounded-xl px-2.5 py-1.5"
     >
       <span className="flex shrink-0 items-center gap-1 text-[10px] font-semibold uppercase tracking-wider text-amber-300/90">
         <span aria-hidden>🔥</span> Hot
       </span>
-      <div className="flex flex-1 gap-1.5 overflow-x-auto [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden">
+      {/* min-w-0 lets this flex child shrink so it scrolls internally instead of
+          forcing the panel (and the page) wider than the screen on mobile. */}
+      <div className="flex min-w-0 flex-1 gap-1.5 overflow-x-auto [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden">
         {top.map((h) => {
           const intensity = Math.max(0, Math.min(1, h.count / max))
           const style: CSSProperties = {

@@ -27,7 +27,7 @@ export function useLatestWins() {
 
   const fetchRecentWins = useCallback(async () => {
     try {
-      const res = await fetch(`/api/analytics/recent-wins?limit=40`, { cache: 'no-store' })
+      const res = await fetch(`/api/analytics/recent-wins?limit=60`, { cache: 'no-store' })
       if (res.ok) {
         const { wins: apiWins } = await res.json()
         const mapped: WinEntry[] = (apiWins || [])

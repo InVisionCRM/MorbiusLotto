@@ -180,14 +180,16 @@ export function registerPlatformRoutes({
   });
 
   app.get('/api/analytics/recent-wins', async (req, res) => {
-    const limit = Math.min(parseInt(req.query.limit as string) || 20, 50);
+    const limit = Math.min(parseInt(req.query.limit as string) || 40, 100);
     const cacheKey = getAnalyticsCacheKey('/api/analytics/recent-wins', { limit: String(limit) });
     const cached = getCachedAnalytics(cacheKey);
     if (cached != null) {
       return sendJson(res, cached);
     }
     try {
-      const wins = await dbService.getRecentGlobalWins(limit);
+      // Multi-game wins from the chip ledger over the last 7 days, so the home
+      // ticker always has a full, varied row to scroll.
+      const wins = await dbService.getRecentChipWins(limit, 7);
       const payload = { wins };
       setCachedAnalytics(cacheKey, payload);
       sendJson(res, payload);

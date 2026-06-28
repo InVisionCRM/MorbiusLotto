@@ -565,7 +565,7 @@ export function StakeKenoGame() {
         </Card>
 
         {/* ───────── Board + payouts ───────── */}
-        <div className="order-1 space-y-4 lg:order-2">
+        <div className="order-1 min-w-0 space-y-4 lg:order-2">
           {/* Board + hot-numbers strip kept tight together (attached look). */}
           <div className="space-y-1.5">
             <Card className="arc-panel relative border-0 p-3 sm:p-4">
@@ -581,7 +581,7 @@ export function StakeKenoGame() {
                 <div
                   ref={stageRef}
                   aria-hidden
-                  className="pointer-events-none absolute inset-0 z-20 overflow-visible"
+                  className="pointer-events-none absolute inset-0 z-20 overflow-hidden"
                 />
               </div>
               {showWinBanner && (

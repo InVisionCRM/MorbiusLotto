@@ -2942,26 +2942,37 @@ export class DatabaseService implements MoneyDatabaseQueries {
    * Recent wins across ALL games: any `*_payout` credit in the unified chip ledger
    * (1 chip = 1 MORBIUS). New games appear automatically once they credit a payout.
    */
-  async getRecentChipWins(limit: number = 20): Promise<Array<{ id: string; playerAddress: string; username: string | null; reason: string; amount: string; timestamp: number }>> {
-    const safeLimit = Math.min(Math.max(Number(limit) || 20, 1), 50);
+  async getRecentChipWins(
+    limit: number = 40,
+    sinceDays: number = 7,
+  ): Promise<Array<{ id: string; playerAddress: string; username: string | null; reason: string; game: string; amount: string; timestamp: number }>> {
+    const safeLimit = Math.min(Math.max(Number(limit) || 40, 1), 100);
+    const days = Math.max(1, Number(sinceDays) || 7);
     const result = await this.pool.query(
       `SELECT l.id, l.wallet_address, l.reason, l.delta::text AS delta, l.created_at,
               cd.display_name AS username
        FROM poker_chip_ledger l
        LEFT JOIN chat_display_names cd ON LOWER(cd.wallet_address) = l.wallet_address
-       WHERE l.reason LIKE '%payout' AND l.delta > 0
+       WHERE l.reason LIKE '%payout'
+         AND l.delta > 0
+         AND l.created_at > NOW() - ($2 || ' days')::interval
        ORDER BY l.created_at DESC
        LIMIT $1`,
-      [safeLimit],
+      [safeLimit, String(days)],
     );
-    return result.rows.map((r: any) => ({
-      id: String(r.id),
-      playerAddress: r.wallet_address ?? '',
-      username: r.username ?? null,
-      reason: r.reason ?? '',
-      amount: String(r.delta ?? '0'),
-      timestamp: r.created_at instanceof Date ? r.created_at.getTime() : new Date(r.created_at).getTime(),
-    }));
+    return result.rows.map((r: any) => {
+      // GameArt / lobby keys are hyphenated (video-poker, dragon-tiger, …).
+      const game = classifyReason(String(r.reason ?? '')).gameKey.replace(/_/g, '-');
+      return {
+        id: String(r.id),
+        playerAddress: r.wallet_address ?? '',
+        username: r.username ?? null,
+        reason: r.reason ?? '',
+        game,
+        amount: String(r.delta ?? '0'),
+        timestamp: r.created_at instanceof Date ? r.created_at.getTime() : new Date(r.created_at).getTime(),
+      };
+    });
   }
 
   async getRecentGlobalWins(limit: number = 20): Promise<Array<{ gameId: string; playerAddress: string; result: string; betAmount: string; payout: string; timestamp: number }>> {
