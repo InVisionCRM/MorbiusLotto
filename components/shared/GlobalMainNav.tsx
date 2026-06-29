@@ -16,6 +16,7 @@ import { WalletMenu } from '@/components/shared/WalletMenu';
 import { MorbiusBurnedDisplay } from '@/components/shared/MorbiusBurnedDisplay';
 import { MorbiusPriceDisplay } from '@/components/shared/MorbiusPriceDisplay';
 import { NavBalanceDisplay } from '@/components/shared/NavBalanceDisplay';
+import { VipTierProgress } from '@/components/vip/VipTierProgress';
 import {
   Sidebar,
   SidebarBody,
@@ -539,6 +540,17 @@ const NavContent = React.memo(function NavContent(props: NavContentProps) {
           staticAvatarOnly
         />
       </div>
+
+      {/* VIP tier + progress (only when expanded and a wallet is connected) */}
+      {open && connectedAddress && (
+        <div className="shrink-0 px-1 pb-2">
+          <VipTierProgress
+            address={connectedAddress}
+            compact
+            className="rounded-xl border border-white/10 bg-white/[0.04] px-2.5 py-2 transition-colors hover:bg-white/[0.07]"
+          />
+        </div>
+      )}
 
       <nav className="flex-1 min-h-0 overflow-y-auto overflow-x-hidden py-2 space-y-0.5">
         <SidebarLink link={{ label: 'Home', href: '/', icon: <NavIcon icon="fa-home" /> }} className={NAV_ITEM_CLASS} />
