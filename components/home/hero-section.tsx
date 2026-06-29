@@ -2,7 +2,9 @@
 
 import { useEffect, useRef, useState } from 'react'
 import Link from 'next/link'
+import { useAccount } from 'wagmi'
 import { Crown, Users } from 'lucide-react'
+import { VipTierProgress } from '@/components/vip/VipTierProgress'
 
 const HERO_VIDEO_SRC = '/morbius/Morbiusio_Building_Entrance_Pan_scrub.mp4'
 
@@ -14,6 +16,7 @@ interface HeroSectionProps {
 }
 
 export function HeroSection({ showWelcome = false, welcomeName = null }: HeroSectionProps) {
+  const { address } = useAccount()
   const outerRef = useRef<HTMLDivElement | null>(null)
   const videoRef = useRef<HTMLVideoElement | null>(null)
   const rafRef = useRef<number | null>(null)
@@ -185,6 +188,20 @@ export function HeroSection({ showWelcome = false, welcomeName = null }: HeroSec
               DONE RIGHT
             </span>
           </h1>
+        ) : null}
+
+        {showOverlay && address ? (
+          <div
+            className={`absolute left-4 top-[62%] z-20 w-[min(90vw,340px)] px-2 sm:left-8 sm:px-0 ${
+              ctaReady ? 'hero-title-line-visible' : 'hero-title-line-hidden pointer-events-none'
+            }`}
+            style={{ transition: 'opacity 600ms ease, transform 600ms ease', transitionDelay: '900ms' }}
+          >
+            <VipTierProgress
+              address={address}
+              className="rounded-2xl border border-white/10 bg-black/45 px-3.5 py-2.5 backdrop-blur-sm"
+            />
+          </div>
         ) : null}
 
         {showOverlay ? (
