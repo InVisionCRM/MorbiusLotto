@@ -1,10 +1,11 @@
 'use client'
 
-import { useEffect, useMemo, useRef } from 'react'
+import { useEffect, useRef, useState } from 'react'
+import { AnimatePresence, motion } from 'framer-motion'
 import { useLatestWins } from '@/hooks/use-latest-wins'
 import { GameArt } from './game-art'
 
-/** Map a game key (derived from the chip-ledger payout reason) to its display label + lobby route. */
+/** Game key → label + lobby route (for display + the icon). */
 const GAME_META: Record<string, { label: string; href: string }> = {
   blackjack: { label: 'Blackjack', href: '/BLACKJACK' },
   'blackjack-multi': { label: 'Blackjack', href: '/blackjack-multi' },
@@ -33,27 +34,9 @@ const GAME_META: Record<string, { label: string; href: string }> = {
   cipher: { label: 'Cipher', href: '/cipher' },
 }
 
-const ROWS = 9
-
-function formatAmount(chips: number): string {
-  if (!Number.isFinite(chips)) return '0'
-  return Math.round(chips).toLocaleString('en-US', { maximumFractionDigits: 0 })
-}
-
-function shortAddr(a: string): string {
-  if (!a || a.length < 8) return a || 'Player'
-  return `${a.slice(0, 4)}…${a.slice(-4)}`
-}
-
-function relTime(ms: number): string {
-  const s = Math.max(0, Math.floor((Date.now() - ms) / 1000))
-  if (s < 60) return `${s}s`
-  const m = Math.floor(s / 60)
-  if (m < 60) return `${m}m`
-  const h = Math.floor(m / 60)
-  if (h < 24) return `${h}h`
-  return `${Math.floor(h / 24)}d`
-}
+const ROWS = 8
+const ROW_H = 48 // px
+const BIG_WIN = 20_000
 
 interface Row {
   id: string
@@ -62,112 +45,164 @@ interface Row {
   href?: string
   amount: number
   player: string
-  at: number
+  big: boolean
 }
+type DisplayRow = Row & { key: string }
 
-/** Static fallback when the live feed is empty (new platform / quiet period / local dev). */
-const FALLBACK: Row[] = [
-  { id: 'fb-plinko', gameKey: 'plinko', game: 'Plinko', href: '/plinko2', amount: 12500, player: '0xA1…1b2c', at: 0 },
-  { id: 'fb-keno', gameKey: 'keno', game: 'Keno', href: '/keno2', amount: 44000, player: '0xfe…feed', at: 0 },
-  { id: 'fb-blackjack', gameKey: 'blackjack', game: 'Blackjack', href: '/BLACKJACK', amount: 3400, player: '0x9f…99f8', at: 0 },
-  { id: 'fb-crash', gameKey: 'crash', game: 'Crash', href: '/crash', amount: 9800, player: '0xbe…ef00', at: 0 },
-  { id: 'fb-mines', gameKey: 'mines', game: 'Mines', href: '/mines2', amount: 5600, player: '0x77…cd12', at: 0 },
-  { id: 'fb-roulette', gameKey: 'roulette', game: 'Roulette', href: '/roulette2', amount: 7200, player: '0x12…ab34', at: 0 },
-  { id: 'fb-dice', gameKey: 'dice', game: 'Dice', href: '/dice2', amount: 2150, player: '0x33…7788', at: 0 },
-  { id: 'fb-towers', gameKey: 'towers', game: 'Towers', href: '/towers', amount: 6100, player: '0x55…9a0b', at: 0 },
-  { id: 'fb-chicken', gameKey: 'chicken', game: 'Chicken', href: '/chicken', amount: 1800, player: '0x21…ccaa', at: 0 },
-]
+function formatAmount(chips: number): string {
+  return Math.round(chips).toLocaleString('en-US', { maximumFractionDigits: 0 })
+}
+function shortAddr(a: string): string {
+  if (!a || a.length < 8) return a || 'Player'
+  return `${a.slice(0, 4)}…${a.slice(-4)}`
+}
+function prettify(key: string): string {
+  return key ? key.replace(/-/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase()) : 'Game'
+}
+function toRow(w: { id: string; game: string; amount: number; username: string | null; address: string }): Row {
+  const meta = GAME_META[w.game]
+  return {
+    id: w.id,
+    gameKey: w.game,
+    game: meta?.label ?? prettify(w.game),
+    href: meta?.href,
+    amount: w.amount,
+    player: w.username || shortAddr(w.address),
+    big: w.amount >= BIG_WIN,
+  }
+}
 
 export function RecentWins() {
   const { wins } = useLatestWins()
 
-  const rows = useMemo<Row[]>(() => {
-    if (wins && wins.length > 0) {
-      // Show every win, newest first (same player repeatedly is normal and
-      // expected in a live feed) — just guard against exact duplicate ids.
-      const seenIds = new Set<string>()
-      const out: Row[] = []
-      for (const w of wins) {
-        if (w.id && seenIds.has(w.id)) continue
-        seenIds.add(w.id)
-        const meta = GAME_META[w.game]
-        out.push({
-          id: w.id,
-          gameKey: w.game,
-          game: meta?.label ?? (w.game || 'Game'),
-          href: meta?.href,
-          amount: w.amount,
-          player: w.username || shortAddr(w.address),
-          at: w.timestamp,
-        })
-        if (out.length >= ROWS) break
+  const [display, setDisplay] = useState<DisplayRow[]>([])
+  const poolRef = useRef<Row[]>([]) // real wins, newest first (the time-window list)
+  const cursorRef = useRef(0) // rotation pointer into the pool
+  const seqRef = useRef(0) // makes display keys unique even when a win repeats
+  const seenRef = useRef<Set<string>>(new Set())
+
+  const withKey = (r: Row): DisplayRow => ({ ...r, key: `${r.id}#${seqRef.current++}` })
+
+  // Keep the pool in sync with the live feed; surface genuinely-new wins at the
+  // top immediately. (Honest: every row is a real win from the feed.)
+  useEffect(() => {
+    if (!wins) return
+    const rows = wins.filter((w) => w.amount > 0).map(toRow)
+    poolRef.current = rows
+
+    const newOnes = rows.filter((r) => r.id && !seenRef.current.has(r.id))
+    rows.forEach((r) => seenRef.current.add(r.id))
+
+    setDisplay((prev) => {
+      if (prev.length === 0) {
+        // First fill: newest N from the window.
+        cursorRef.current = Math.min(ROWS, rows.length)
+        return rows.slice(0, ROWS).map(withKey)
       }
-      return out
-    }
-    return FALLBACK.slice(0, ROWS)
+      if (newOnes.length === 0) return prev
+      // Pop new real wins on top, newest last-in-array first.
+      const incoming = newOnes.slice(0, ROWS).reverse().map(withKey).reverse()
+      return [...incoming, ...prev].slice(0, ROWS)
+    })
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [wins])
 
-  // Flash rows that are new since the last update (the "keeps updating" feel).
-  const seen = useRef<Set<string>>(new Set())
-  const firstRender = useRef(true)
-  const isNew = (id: string) => !firstRender.current && !seen.current.has(id)
+  // Rotate through the real time-window list so the feed keeps moving even
+  // between fresh wins. No fabricated rows — it cycles your real history.
   useEffect(() => {
-    rows.forEach((r) => seen.current.add(r.id))
-    firstRender.current = false
-  }, [rows])
+    let alive = true
+    let timer: ReturnType<typeof setTimeout>
+    const tick = () => {
+      if (!alive) return
+      const pool = poolRef.current
+      if (pool.length > 0) {
+        const item = pool[cursorRef.current % pool.length]
+        cursorRef.current = (cursorRef.current + 1) % pool.length
+        setDisplay((prev) => [withKey(item), ...prev].slice(0, ROWS))
+      }
+      timer = setTimeout(tick, 2600 + Math.random() * 1800)
+    }
+    timer = setTimeout(tick, 2600)
+    return () => {
+      alive = false
+      clearTimeout(timer)
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
+  const empty = display.length === 0
 
   return (
     <div className="mt-5">
-      <div className="mb-2 flex items-center gap-2 px-1">
-        <span className="relative flex h-2 w-2">
-          <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-amber-400/60" />
-          <span className="relative inline-flex h-2 w-2 rounded-full bg-amber-400" />
+      <div className="mb-2 flex items-center justify-between px-1">
+        <div className="flex items-center gap-2">
+          <span className="relative flex h-2 w-2">
+            <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400/70" />
+            <span className="relative inline-flex h-2 w-2 rounded-full bg-emerald-400" />
+          </span>
+          <span className="text-[11px] font-bold uppercase tracking-[0.18em] text-slate-300">Recent wins</span>
+        </div>
+        <span className="rounded-full border border-emerald-400/30 bg-emerald-400/10 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-emerald-300">
+          Live
         </span>
-        <span className="text-[11px] font-bold uppercase tracking-[0.18em] text-slate-400">Recent wins</span>
       </div>
 
-      <div className="overflow-hidden rounded-2xl border border-white/10 bg-[linear-gradient(180deg,rgba(17,24,39,0.9),rgba(11,16,26,0.92))]">
-        <table className="w-full text-sm">
-          <thead>
-            <tr className="border-b border-white/10 text-left text-[10px] uppercase tracking-wider text-slate-500">
-              <th className="px-3 py-2 font-semibold sm:px-4">Game</th>
-              <th className="px-3 py-2 font-semibold sm:px-4">Player</th>
-              <th className="hidden px-3 py-2 text-right font-semibold sm:table-cell sm:px-4">Time</th>
-              <th className="px-3 py-2 text-right font-semibold sm:px-4">Payout</th>
-            </tr>
-          </thead>
-          <tbody>
-            {rows.map((r) => (
-              <tr
-                key={r.id}
-                className={[
-                  'border-b border-white/5 transition-colors last:border-0 hover:bg-white/[0.03]',
-                  isNew(r.id) ? 'recent-row-in' : '',
-                ].join(' ')}
-              >
-                <td className="px-3 py-2 sm:px-4">
+      <div className="overflow-hidden rounded-2xl border border-white/10 bg-[linear-gradient(180deg,rgba(17,24,39,0.92),rgba(9,13,22,0.95))] shadow-[0_8px_40px_-12px_rgba(0,0,0,0.6)]">
+        <div className="grid grid-cols-[1.5fr_1fr_auto] items-center gap-2 border-b border-white/10 px-3 py-2 text-[10px] font-semibold uppercase tracking-wider text-slate-500 sm:px-4">
+          <span>Game</span>
+          <span>Player</span>
+          <span className="text-right">Payout</span>
+        </div>
+
+        <div className="relative" style={{ height: ROWS * ROW_H }}>
+          {empty ? (
+            <div className="flex h-full items-center justify-center px-4 text-center text-sm text-slate-500">
+              No wins yet — be the first.
+            </div>
+          ) : (
+            <AnimatePresence initial={false} mode="popLayout">
+              {display.map((r) => (
+                <motion.div
+                  key={r.key}
+                  layout
+                  initial={{ opacity: 0, y: -ROW_H * 0.7 }}
+                  animate={{ opacity: 1, y: 0, backgroundColor: ['rgba(16,185,129,0.16)', 'rgba(0,0,0,0)'] }}
+                  exit={{ opacity: 0 }}
+                  transition={{
+                    duration: 0.5,
+                    ease: [0.2, 0.8, 0.2, 1],
+                    backgroundColor: { duration: 1.1, ease: 'easeOut' },
+                  }}
+                  className="grid grid-cols-[1.5fr_1fr_auto] items-center gap-2 border-b border-white/[0.05] px-3 sm:px-4"
+                  style={{ height: ROW_H }}
+                >
                   <a
                     href={r.href ?? '#'}
-                    className="flex items-center gap-2.5"
-                    {...(r.href ? {} : { 'aria-disabled': true, onClick: (e) => e.preventDefault() })}
+                    className="flex min-w-0 items-center gap-2.5"
+                    {...(r.href ? {} : { 'aria-disabled': true, onClick: (e: React.MouseEvent) => e.preventDefault() })}
                   >
-                    <span className="relative h-7 w-7 shrink-0 overflow-hidden rounded-md border border-white/10 bg-black/40">
+                    <span className="relative h-8 w-8 shrink-0 overflow-hidden rounded-lg border border-white/10 bg-black/40 ring-1 ring-white/5">
                       <GameArt gameKey={r.gameKey} />
                     </span>
-                    <span className="truncate font-medium text-white/90 hover:text-white">{r.game}</span>
+                    <span className="truncate text-[13px] font-semibold text-white/90">{r.game}</span>
                   </a>
-                </td>
-                <td className="max-w-[8rem] truncate px-3 py-2 text-slate-400 sm:px-4">{r.player}</td>
-                <td className="hidden whitespace-nowrap px-3 py-2 text-right tabular-nums text-slate-500 sm:table-cell sm:px-4">
-                  {r.at ? `${relTime(r.at)} ago` : '—'}
-                </td>
-                <td className="whitespace-nowrap px-3 py-2 text-right font-bold tabular-nums text-amber-300 sm:px-4">
-                  +{formatAmount(r.amount)}
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
+                  <span className="truncate text-[13px] text-slate-400">{r.player}</span>
+                  <span
+                    className={[
+                      'flex items-center justify-end gap-1 whitespace-nowrap text-right text-[13px] font-bold tabular-nums',
+                      r.big ? 'text-amber-300 drop-shadow-[0_0_8px_rgba(245,197,66,0.45)]' : 'text-emerald-300',
+                    ].join(' ')}
+                  >
+                    <span aria-hidden className="text-[9px]">▲</span>
+                    {formatAmount(r.amount)}
+                    <span className="hidden text-[10px] font-medium text-slate-500 sm:inline">MORBIUS</span>
+                  </span>
+                </motion.div>
+              ))}
+            </AnimatePresence>
+          )}
+          <div className="pointer-events-none absolute inset-x-0 bottom-0 h-8 bg-gradient-to-t from-[#090d16] to-transparent" />
+        </div>
       </div>
     </div>
   )
