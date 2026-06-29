@@ -121,6 +121,9 @@ export function StakeKenoGame() {
   // Hold-until-reveal: balance freezes during the draw and only updates when the
   // last ball lands. `holding` suppresses the background poll from clobbering it.
   const holdingBalance = useRef(false)
+  // Autoplay: games remaining in the current batch + a cancel flag.
+  const [autoLeft, setAutoLeft] = useState(0)
+  const autoCancel = useRef(false)
 
   // Global feed: recent wins (tab) + hot numbers (strip under the board).
   const { recent, loading: recentLoading, refetch: refetchRecent } = useKenoRecent()
@@ -162,6 +165,7 @@ export function StakeKenoGame() {
         /* keep defaults — server still enforces */
       })
     return () => {
+      autoCancel.current = true
       revealTimers.current.forEach(clearTimeout)
       revealHandle.current?.cancel()
     }
@@ -192,7 +196,8 @@ export function StakeKenoGame() {
   }, [address])
 
   const picksCount = selected.size
-  const busy = phase !== 'idle'
+  const autoRunning = autoLeft > 0
+  const busy = phase !== 'idle' || autoRunning
 
   const clampBet = useCallback(
     (n: number) => Math.min(bounds.maxBet, Math.max(bounds.minBet, Math.floor(n || 0))),
@@ -258,97 +263,149 @@ export function StakeKenoGame() {
     setNoChips(false)
   }, [busy, clearReveal, resetRound])
 
-  const placeBet = useCallback(async () => {
-    if (busy || picksCount === 0) return
-    kenoAudio.init()
-    const stake = clampBet(bet)
-    setBet(stake)
-    setError(null)
-    setNoChips(false)
-    setPhase('betting')
-    try {
-      const res = await playKeno({
-        picks: [...selected],
-        risk,
-        bet: stake,
-        clientSeed: clientSeed.trim() || undefined,
-      })
-      setResult(res)
-      setHistory((prev) =>
-        [
-          {
-            roundId: res.roundId,
-            bet: res.bet,
-            risk: res.risk,
-            picks: res.picks,
-            drawn: res.drawn,
-            hits: res.hits,
-            multiplierX100: res.multiplierX100,
-            payout: res.payout,
-            serverSeedHash: res.serverSeedHash,
-            createdAt: new Date().toISOString(),
-          },
-          ...prev,
-        ].slice(0, HISTORY_LIMIT),
-      )
-
-      // Real-keno ball draw: balls fall from board centre to their tiles one at
-      // a time. Hold-until-reveal — the balance only updates on the last landing.
-      clearReveal()
-      setPhase('revealing')
-      setRevealed(new Set())
-      setResultHits(null)
-      holdingBalance.current = true
-
-      const settle = () => {
-        holdingBalance.current = false
-        try {
-          setBalance(BigInt(res.chipBalance))
-        } catch {
-          /* keep last known */
+  /**
+   * Play a single round. `fast` (used by autoplay) collapses the cinematic ball
+   * drop to an instant reveal + short pause so a batch of 10/25/50 doesn't take
+   * minutes. Resolves true on success, false on error (so autoplay can stop).
+   */
+  const runRound = useCallback(
+    (fast: boolean): Promise<boolean> =>
+      new Promise((resolve) => {
+        if (picksCount === 0) {
+          resolve(false)
+          return
         }
-        setResultHits(res.hits)
-        setPhase('idle')
-        if (res.payout > 0) kenoAudio.playWin()
-        else kenoAudio.playLose()
-        void refetchRecent() // refresh hot numbers + recent-wins feed
-      }
-
-      const board = boardWrapRef.current
-      const stage = stageRef.current
-      if (board && stage) {
-        revealHandle.current = playKenoDropReveal({
-          board,
-          stage,
-          drawn: res.drawn,
-          onLand: (n) => {
-            setRevealed((prev) => {
-              const next = new Set(prev ?? [])
-              next.add(n)
-              return next
+        kenoAudio.init()
+        const stake = clampBet(bet)
+        setBet(stake)
+        setError(null)
+        setNoChips(false)
+        setPhase('betting')
+        void (async () => {
+          let res: KenoPlayResult
+          try {
+            res = await playKeno({
+              picks: [...selected],
+              risk,
+              bet: stake,
+              clientSeed: clientSeed.trim() || undefined,
             })
-            kenoAudio.playDraw()
-          },
-          onDone: settle,
+          } catch (e) {
+            setPhase('idle')
+            const msg = (e as Error)?.message ?? ''
+            if (/NO_CHIPS|Not enough chips|402/i.test(msg)) {
+              setError('Not enough MORBIUS for that bet.')
+              setNoChips(true)
+            } else if (/401|auth/i.test(msg)) {
+              setError('Connect your wallet to play.')
+            } else {
+              setError(serverDetail(msg) ?? 'Could not place the bet. Try again.')
+            }
+            resolve(false)
+            return
+          }
+
+          setResult(res)
+          setHistory((prev) =>
+            [
+              {
+                roundId: res.roundId,
+                bet: res.bet,
+                risk: res.risk,
+                picks: res.picks,
+                drawn: res.drawn,
+                hits: res.hits,
+                multiplierX100: res.multiplierX100,
+                payout: res.payout,
+                serverSeedHash: res.serverSeedHash,
+                createdAt: new Date().toISOString(),
+              },
+              ...prev,
+            ].slice(0, HISTORY_LIMIT),
+          )
+
+          // Hold-until-reveal — balance only updates when the reveal finishes.
+          clearReveal()
+          setPhase('revealing')
+          setRevealed(new Set())
+          setResultHits(null)
+          holdingBalance.current = true
+
+          const settle = () => {
+            holdingBalance.current = false
+            try {
+              setBalance(BigInt(res.chipBalance))
+            } catch {
+              /* keep last known */
+            }
+            setResultHits(res.hits)
+            setPhase('idle')
+            if (res.payout > 0) kenoAudio.playWin()
+            else kenoAudio.playLose()
+            void refetchRecent() // refresh hot numbers + recent-wins feed
+            resolve(true)
+          }
+
+          const board = boardWrapRef.current
+          const stage = stageRef.current
+          if (board && stage) {
+            // Same real-keno ball drop for both — autoplay just runs it faster.
+            revealHandle.current = playKenoDropReveal({
+              board,
+              stage,
+              drawn: res.drawn,
+              fast,
+              onLand: (n) => {
+                setRevealed((prev) => {
+                  const next = new Set(prev ?? [])
+                  next.add(n)
+                  return next
+                })
+                kenoAudio.playDraw()
+              },
+              onDone: settle,
+            })
+          } else {
+            // Refs not ready — reveal instantly so play never stalls.
+            setRevealed(new Set(res.drawn))
+            const t = setTimeout(settle, fast ? 200 : 520)
+            revealTimers.current.push(t)
+          }
+        })()
+      }),
+    [picksCount, selected, risk, bet, clientSeed, clampBet, clearReveal, refetchRecent],
+  )
+
+  const placeBet = useCallback(async () => {
+    if (busy) return
+    await runRound(false)
+  }, [busy, runRound])
+
+  const stopAuto = useCallback(() => {
+    autoCancel.current = true
+  }, [])
+
+  const startAuto = useCallback(
+    async (count: number) => {
+      if (busy || autoLeft > 0 || picksCount === 0) return
+      kenoAudio.init()
+      autoCancel.current = false
+      for (let i = 0; i < count; i++) {
+        if (autoCancel.current) break
+        setAutoLeft(count - i)
+        const ok = await runRound(true)
+        if (!ok || autoCancel.current) break
+        // Brief beat between games (the reveal itself already paces things).
+        await new Promise<void>((r) => {
+          const t = setTimeout(() => r(), 300)
+          revealTimers.current.push(t)
         })
-      } else {
-        // Refs not ready (shouldn't happen) — reveal instantly so play never stalls.
-        setRevealed(new Set(res.drawn))
-        settle()
       }
-    } catch (e) {
-      setPhase('idle')
-      const msg = (e as Error)?.message ?? ''
-      if (/NO_CHIPS|Not enough chips|402/i.test(msg)) {
-        setError('Not enough MORBIUS for that bet.')
-        setNoChips(true)
-      } else if (/401|auth/i.test(msg)) {
-        setError('Connect your wallet to play.')
-      } else {
-        setError(serverDetail(msg) ?? 'Could not place the bet. Try again.')
-      }
-    }
-  }, [busy, picksCount, selected, risk, bet, clientSeed, clampBet, clearReveal, refetchRecent])
+      setAutoLeft(0)
+      autoCancel.current = false
+    },
+    [busy, autoLeft, picksCount, runRound],
+  )
 
   const openVerify = useCallback((roundId: string | null) => {
     setVerifyTarget(roundId)
@@ -503,6 +560,35 @@ export function StakeKenoGame() {
             )}
           </div>
 
+          {/* Autoplay: run a fixed batch of rounds back-to-back (fast reveal). */}
+          <div className="space-y-1.5">
+            <label className="text-xs uppercase tracking-wide text-slate-500">Autoplay</label>
+            {autoRunning ? (
+              <Button
+                type="button"
+                onClick={stopAuto}
+                className="h-10 w-full bg-rose-500/90 text-sm font-bold uppercase tracking-wider text-white hover:bg-rose-500"
+              >
+                Stop · {autoLeft} left
+              </Button>
+            ) : (
+              <div className="grid grid-cols-3 gap-2">
+                {[10, 25, 50].map((n) => (
+                  <Button
+                    key={n}
+                    type="button"
+                    variant="outline"
+                    disabled={busy || picksCount === 0}
+                    onClick={() => void startAuto(n)}
+                    className="border-cyan-950 bg-transparent font-semibold tabular-nums hover:bg-cyan-500/10"
+                  >
+                    {n}
+                  </Button>
+                ))}
+              </div>
+            )}
+          </div>
+
           {/* Action button: pinned to a fixed bottom bar on mobile (Bet always reachable
               without scrolling); back in the rail, in-flow, on desktop. */}
           <div className="fixed inset-x-0 bottom-0 z-40 border-t border-cyan-950/70 bg-[#07131F]/95 p-3 backdrop-blur-sm lg:static lg:z-auto lg:border-0 lg:bg-transparent lg:p-0 lg:backdrop-blur-none">
@@ -512,7 +598,13 @@ export function StakeKenoGame() {
               onClick={placeBet}
               className="arc-display h-12 w-full bg-cyan-500 text-base font-bold uppercase tracking-widest text-[#03121B] shadow-[0_0_24px_-6px_rgba(34,211,238,0.8)] hover:bg-cyan-400 disabled:opacity-50"
             >
-              {phase === 'betting' ? 'Placing…' : phase === 'revealing' ? 'Drawing…' : 'Bet'}
+              {autoRunning
+                ? `Auto-playing · ${autoLeft}`
+                : phase === 'betting'
+                  ? 'Placing…'
+                  : phase === 'revealing'
+                    ? 'Drawing…'
+                    : 'Bet'}
             </Button>
           </div>
 

@@ -27,10 +27,15 @@ interface KenoRevealArgs {
   onLand?: (n: number) => void
   /** Called once every ball has landed. */
   onDone?: () => void
+  /** Fast pacing for autoplay — same drop animation, much quicker per ball. */
+  fast?: boolean
 }
 
-// "Slow" preset (ms): pop-in, hold at centre, fall, gap before next ball.
-const T = { pop: 170, hold: 230, travel: 520, gap: 130 }
+// Per-ball timing (ms): pop-in, hold at centre, fall, gap before next ball.
+const TIMING = {
+  normal: { pop: 170, hold: 230, travel: 520, gap: 130 }, // manual "Slow"
+  fast: { pop: 60, hold: 30, travel: 190, gap: 30 }, // autoplay — same motion, sped up
+}
 
 function prefersReducedMotion(): boolean {
   return typeof window !== 'undefined' && window.matchMedia
@@ -38,9 +43,10 @@ function prefersReducedMotion(): boolean {
     : false
 }
 
-export function playKenoDropReveal({ board, stage, drawn, onLand, onDone }: KenoRevealArgs): KenoRevealHandle {
+export function playKenoDropReveal({ board, stage, drawn, onLand, onDone, fast }: KenoRevealArgs): KenoRevealHandle {
   let killed = false
   const timers: ReturnType<typeof setTimeout>[] = []
+  const T = fast ? TIMING.fast : TIMING.normal
 
   function finish() {
     if (!killed) onDone?.()
