@@ -415,12 +415,25 @@ section.zone{padding:44px 34px 8px}
 .jackpot .jp-unit{font-size:11px; letter-spacing:.3em; color:var(--gold); font-weight:800; margin-bottom:18px}
 .jackpot p.how{font-size:12px; color:var(--text2); max-width:560px; margin:0 auto; line-height:1.7}
 .jackpot p.how b{color:var(--text)}
-.jackpot .meter{max-width:420px; margin:20px auto 0}
-.jackpot .meter .bar{height:8px; border-radius:99px; background:rgba(255,255,255,.07); overflow:hidden; border:1px solid rgba(251,191,36,.2)}
-.jackpot .meter .bar i{display:block; height:100%; width:38%;
-  background:linear-gradient(90deg,#f59e0b,#fde68a); border-radius:99px; box-shadow:0 0 16px rgba(251,191,36,.7);
-  animation:vipGlow 2s ease-in-out infinite}
-.jackpot .meter .lbl{display:flex; justify-content:space-between; font-size:9px; letter-spacing:.12em; color:var(--muted); font-weight:700; margin-top:7px}
+.jp-count{display:flex; gap:10px; justify-content:center; margin:8px 0 20px; position:relative; z-index:1}
+.jp-count .cb{min-width:62px; padding:10px 8px 8px; border-radius:12px; background:rgba(0,0,0,.45); border:1px solid rgba(251,191,36,.25); box-shadow:inset 0 2px 8px rgba(0,0,0,.5)}
+.jp-count .cb b{display:block; font-size:23px; font-weight:800; color:#fde68a; font-variant-numeric:tabular-nums; line-height:1.1}
+.jp-count .cb span{font-size:8px; letter-spacing:.18em; color:var(--muted); font-weight:800}
+.jp-you{max-width:440px; margin:0 auto 20px; padding:13px 18px; border-radius:14px;
+  background:rgba(251,191,36,.07); border:1px solid rgba(251,191,36,.25); text-align:left; position:relative; z-index:1}
+.jp-you .t{display:flex; justify-content:space-between; font-size:11px; font-weight:800; letter-spacing:.06em; margin-bottom:8px}
+.jp-you .t b{color:var(--gold); font-size:15px}
+.jp-you .bar{height:6px; border-radius:99px; background:rgba(255,255,255,.08); overflow:hidden}
+.jp-you .bar i{display:block; height:100%; width:68%; border-radius:99px;
+  background:linear-gradient(90deg,#f59e0b,#fde68a); box-shadow:0 0 12px rgba(251,191,36,.6); animation:vipGlow 2.2s ease-in-out infinite}
+.jp-you .sub{font-size:10px; color:var(--text2); margin-top:7px; line-height:1.5}
+.jp-wlbl{font-size:9px; letter-spacing:.22em; color:var(--muted); font-weight:800; margin-bottom:12px}
+.jp-winners{display:flex; gap:18px; justify-content:center; flex-wrap:wrap; margin-bottom:20px; position:relative; z-index:1}
+.jp-winners .w{display:flex; flex-direction:column; align-items:center; gap:3px; font-size:9.5px; color:var(--text2)}
+.jp-winners .w .av{width:46px; height:46px; border-radius:50%; display:grid; place-items:center;
+  font-family:var(--display); font-size:16px; color:#0b0e16; border:2px solid rgba(255,255,255,.18); margin-bottom:3px}
+.jp-winners .w.first .av{border-color:var(--gold); box-shadow:0 0 20px rgba(251,191,36,.75); animation:vipGlow 2s ease-in-out infinite}
+.jp-winners .w b{color:var(--gold); font-size:10.5px}
 
 /* ============================================================
    VIP STRIP
@@ -1352,17 +1365,37 @@ body[data-mode="player"] .only-visitor{display:none!important}
     </div>
   </section>
 
-  <!-- ═══ JACKPOT — designed now, wired later ═══ -->
+  <!-- ═══ THE WEEKLY DROP — raffle jackpot (designed now, wired later; spec: WEEKLY_DROP_SPEC.md) ═══ -->
   <section class="jackpot">
-    <div class="soon">⚡ LIGHTING SOON</div>
-    <h2>THE MORBIUS <span>JACKPOT</span></h2>
-    <div class="jp-num" id="jpNum">142,608</div>
-    <div class="jp-unit">MORBIUS · GROWING WITH EVERY BET</div>
-    <p class="how">A small slice of <b>every bet, on every game</b> feeds the pot. It must hit before it reaches the ceiling — and <b>any bet can trigger it</b>. No tickets, no opt-in. Just play.</p>
-    <div class="meter">
-      <div class="bar"><i></i></div>
-      <div class="lbl"><span>SEEDED</span><span>MUST HIT BY 1,000,000</span></div>
+    <div class="soon">🎟 LIGHTING SOON</div>
+    <h2>THE WEEKLY <span>DROP</span></h2>
+    <div class="jp-num" id="jpNum">26,412</div>
+    <div class="jp-unit">MORBIUS · TOP 3 WIN EVERY SUNDAY · 8PM</div>
+
+    <div class="jp-count" id="jpCount">
+      <div class="cb"><b id="cdD">0</b><span>DAYS</span></div>
+      <div class="cb"><b id="cdH">00</b><span>HOURS</span></div>
+      <div class="cb"><b id="cdM">00</b><span>MIN</span></div>
+      <div class="cb"><b id="cdS">00</b><span>SEC</span></div>
     </div>
+
+    <div class="jp-you only-player">
+      <div class="t"><span>🎟 YOUR ENTRIES</span><b>14</b></div>
+      <div class="bar"><i></i></div>
+      <div class="sub"><b style="color:var(--gold)">320 MORBIUS</b> wagered to your next entry · +1 free entry for signing in today ✓</div>
+    </div>
+    <div class="jp-you only-visitor" style="text-align:center">
+      <div class="sub" style="margin:0">Every <b style="color:var(--gold)">1,000 MORBIUS</b> you play is a ticket — plus one free entry every day just for signing in. Connect to start earning.</div>
+    </div>
+
+    <div class="jp-wlbl">LAST WEEK'S TOP 3</div>
+    <div class="jp-winners">
+      <div class="w first"><div class="av" style="background:radial-gradient(circle at 32% 28%,#fde68a,#f59e0b)">M</div><span>MorbKing</span><b>15,000</b></div>
+      <div class="w"><div class="av" style="background:radial-gradient(circle at 32% 28%,#a5f3fc,#0891b2)">P</div><span>pTIGER</span><b>6,250</b></div>
+      <div class="w"><div class="av" style="background:radial-gradient(circle at 32% 28%,#c4b5fd,#7c3aed)">L</div><span>LuckyPLS</span><b>3,750</b></div>
+    </div>
+
+    <p class="how"><b>0.5% of every bet on every game</b> feeds the pot — guaranteed <b>25,000 MORBIUS minimum</b> each week. Entries reset every draw, winners are paid straight to their balance, and every draw is <b>commit-reveal verifiable</b>. Winners wear the aura for a week.</p>
   </section>
 
   <!-- ═══ VIP ═══ -->
@@ -1440,7 +1473,7 @@ function setMode(m){
     '<b class="c">👑 RANK UP</b> pTIGER hit GOLD — 12% rakeback',
     '<b class="o">🎁 RAKEBACK</b> 84,300 MORBIUS paid back to players',
     '<b class="c">🃏 TABLES</b> Blackjack #4 · 3 seats open now',
-    '<b class="g">🎰 JACKPOT</b> pot at 142,608 and climbing',
+    '<b class="g">🎟 WEEKLY DROP</b> pot at 26,412 · top 3 win Sunday 8PM',
   ];
   const seq = items.map(i=>`<span class="tk">${i}</span><span class="tk"><span class="dot"></span></span>`).join('');
   document.getElementById('tickerTrack').innerHTML = seq + seq; /* duplicate for seamless loop */
@@ -1467,11 +1500,34 @@ function setMode(m){
   setInterval(()=>{ value += 3 + Math.floor(Math.random()*22); render(); }, 2600);
 })();
 
-/* ── jackpot preview number ──────────────────── */
+/* ── weekly drop: pot preview + countdown to Sunday 8PM ── */
 (function(){
   const el = document.getElementById('jpNum');
-  let v = 142608;
-  setInterval(()=>{ v += 1 + Math.floor(Math.random()*9); el.textContent = v.toLocaleString('en-US'); }, 1400);
+  let v = 26412;
+  setInterval(()=>{ v += 1 + Math.floor(Math.random()*6); el.textContent = v.toLocaleString('en-US'); }, 2200);
+
+  function nextDrop(){
+    const n = new Date();
+    const d = new Date(n);
+    d.setDate(n.getDate() + ((7 - n.getDay()) % 7));
+    d.setHours(20,0,0,0);
+    if(d <= n) d.setDate(d.getDate() + 7);
+    return d;
+  }
+  const dd=document.getElementById('cdD'), hh=document.getElementById('cdH'),
+        mm=document.getElementById('cdM'), ss=document.getElementById('cdS');
+  function tick(){
+    let ms = nextDrop() - new Date();
+    const day = Math.floor(ms/86400000); ms -= day*86400000;
+    const hr  = Math.floor(ms/3600000);  ms -= hr*3600000;
+    const mi  = Math.floor(ms/60000);    ms -= mi*60000;
+    const se  = Math.floor(ms/1000);
+    dd.textContent = day;
+    hh.textContent = String(hr).padStart(2,'0');
+    mm.textContent = String(mi).padStart(2,'0');
+    ss.textContent = String(se).padStart(2,'0');
+  }
+  tick(); setInterval(tick, 1000);
 })();
 
 /* ── visitor proof count-up ──────────────────── */
