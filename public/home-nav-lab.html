@@ -1,0 +1,1221 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<title>MORBIUS — Home &amp; Nav Redesign Lab</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700;800&family=Bowlby+One+SC&family=Bungee&family=Titan+One&family=Lilita+One&family=Monoton&display=swap" rel="stylesheet">
+<style>
+/* ============================================================
+   MORBIUS HOME + NAV LAB — "Your Seat Is Waiting"
+   Skeleton: personalized composition engine (C)
+   Cards: unified 3D scene art direction (batch 1 of scenes)
+   Nav: smart sidebar (desktop) + chip-rail dock (mobile)
+   Motion: SHOWTIME — but every live element is powered by
+   personal or cumulative data, never crowd-dependent.
+   ============================================================ */
+:root{
+  --bg0:#04050a; --bg1:#090c14; --bg2:#0d1120;
+  --panel:rgba(255,255,255,.028); --panel2:rgba(255,255,255,.05);
+  --line:rgba(148,163,184,.10); --line2:rgba(148,163,184,.18);
+  --cyan:#22d3ee; --cyan-dim:rgba(34,211,238,.14);
+  --gold:#fbbf24; --gold-hot:#f59e0b; --gold-dim:rgba(251,191,36,.12);
+  --emerald:#34d399; --rose:#fb7185; --violet:#a78bfa;
+  --text:#e6edf6; --text2:#94a3b8; --muted:#5b6b82;
+  --font:'Poppins',sans-serif; --display:'Bowlby One SC',cursive;
+  --dock-h:74px;
+}
+*{margin:0;padding:0;box-sizing:border-box}
+html{scroll-behavior:smooth}
+body{
+  font-family:var(--font); background:var(--bg0); color:var(--text);
+  overflow-x:hidden; -webkit-font-smoothing:antialiased;
+}
+::selection{background:rgba(34,211,238,.3)}
+a{color:inherit;text-decoration:none}
+button{font-family:inherit;cursor:pointer;border:none;background:none;color:inherit}
+
+/* ---------- lab toolbar ---------- */
+.lab-bar{
+  position:fixed; top:10px; right:10px; z-index:300;
+  display:flex; gap:6px; align-items:center;
+  background:rgba(6,8,14,.85); border:1px solid var(--line2);
+  border-radius:999px; padding:5px 6px; backdrop-filter:blur(12px);
+  box-shadow:0 8px 30px rgba(0,0,0,.6);
+}
+.lab-bar .tag{font-size:9px; letter-spacing:.14em; color:var(--muted); padding:0 6px; font-weight:700}
+.lab-bar button{
+  font-size:11px; font-weight:600; padding:6px 13px; border-radius:999px;
+  color:var(--text2); transition:all .2s;
+}
+.lab-bar button.on{background:var(--cyan); color:#04121a; box-shadow:0 0 18px rgba(34,211,238,.5)}
+
+/* ---------- layout ---------- */
+.app{display:flex; min-height:100vh}
+.main{flex:1; min-width:0; position:relative}
+
+/* ============================================================
+   SMART SIDEBAR (desktop)
+   ============================================================ */
+.sidebar{
+  width:252px; flex-shrink:0; position:sticky; top:0; height:100vh;
+  background:linear-gradient(180deg,var(--bg1),var(--bg0));
+  border-right:1px solid var(--line);
+  display:flex; flex-direction:column; z-index:40;
+}
+.sb-scroll{flex:1; overflow-y:auto; padding:0 12px 16px; scrollbar-width:thin; scrollbar-color:rgba(148,163,184,.2) transparent}
+.sb-brand{display:flex; align-items:center; gap:10px; padding:18px 16px 14px}
+.sb-logo{
+  width:34px;height:34px;border-radius:10px; display:grid;place-items:center;
+  background:radial-gradient(circle at 30% 25%,#3ee6ff,#0891b2 60%,#064e63);
+  font-family:var(--display); font-size:17px; color:#03141c;
+  box-shadow:0 0 22px rgba(34,211,238,.45), inset 0 1px 0 rgba(255,255,255,.4);
+}
+.sb-brand b{font-family:var(--display); font-weight:400; font-size:15px; letter-spacing:.04em}
+.sb-brand b i{color:var(--cyan); font-style:normal}
+
+/* balance module */
+.sb-balance{
+  margin:2px 4px 10px; border-radius:14px; padding:12px 14px;
+  background:linear-gradient(135deg, rgba(34,211,238,.09), rgba(167,139,250,.05));
+  border:1px solid rgba(34,211,238,.18); position:relative; overflow:hidden;
+}
+.sb-balance::after{content:''; position:absolute; inset:0;
+  background:linear-gradient(105deg,transparent 40%,rgba(255,255,255,.06) 50%,transparent 60%);
+  animation:sheen 4.5s linear infinite}
+@keyframes sheen{0%{transform:translateX(-100%)}100%{transform:translateX(100%)}}
+.sb-balance .lbl{font-size:9px; letter-spacing:.16em; color:var(--text2); font-weight:700}
+.sb-balance .amt{font-size:19px; font-weight:800; margin:3px 0 8px}
+.sb-balance .amt span{font-size:10px; color:var(--cyan); font-weight:700; letter-spacing:.08em}
+.sb-balance .row{display:flex; gap:6px; position:relative; z-index:1}
+.sb-balance .row button{
+  flex:1; font-size:10.5px; font-weight:700; padding:7px 0; border-radius:8px; letter-spacing:.04em;
+}
+.btn-gold{background:linear-gradient(180deg,#fcd34d,#f59e0b); color:#3b2503; box-shadow:0 2px 12px rgba(245,158,11,.35)}
+.btn-ghost{background:rgba(255,255,255,.06); color:var(--text2); border:1px solid var(--line2)!important}
+
+/* vip mini */
+.sb-vip{margin:0 4px 14px; padding:10px 14px; border-radius:12px; background:var(--panel); border:1px solid var(--line)}
+.sb-vip .t{display:flex; justify-content:space-between; font-size:10px; font-weight:700; margin-bottom:6px}
+.sb-vip .t .cur{color:#cbd5e1; letter-spacing:.1em}
+.sb-vip .t .next{color:var(--gold)}
+.sb-vip .bar{height:5px; border-radius:99px; background:rgba(255,255,255,.07); overflow:hidden}
+.sb-vip .bar i{display:block; height:100%; width:72%; border-radius:99px;
+  background:linear-gradient(90deg,#94a3b8,var(--gold)); box-shadow:0 0 10px rgba(251,191,36,.6);
+  animation:vipGlow 2.6s ease-in-out infinite}
+@keyframes vipGlow{50%{filter:brightness(1.35)}}
+.sb-vip .sub{font-size:9.5px; color:var(--muted); margin-top:5px}
+.sb-vip .sub b{color:var(--gold)}
+
+/* nav groups */
+.sb-h{font-size:9px; letter-spacing:.18em; color:var(--muted); font-weight:700; padding:12px 10px 6px; display:flex; align-items:center; gap:6px}
+.sb-h::after{content:''; flex:1; height:1px; background:var(--line)}
+.sb-link{
+  display:flex; align-items:center; gap:10px; padding:8px 10px; border-radius:9px;
+  font-size:12.5px; font-weight:500; color:#b7c3d4; transition:all .15s; position:relative;
+}
+.sb-link:hover{background:rgba(255,255,255,.05); color:#fff}
+.sb-link.active{background:var(--cyan-dim); color:var(--cyan)}
+.sb-link .ic{width:17px; text-align:center; font-size:13px; opacity:.9}
+.sb-link .live{
+  margin-left:auto; display:flex; align-items:center; gap:4px;
+  font-size:9px; font-weight:700; color:var(--emerald);
+}
+.sb-link .live::before{content:''; width:5px;height:5px;border-radius:50%;background:var(--emerald);
+  box-shadow:0 0 8px var(--emerald); animation:pulse 1.6s infinite}
+@keyframes pulse{50%{opacity:.35}}
+.sb-link .cnt{margin-left:auto; font-size:9.5px; color:var(--muted); background:rgba(255,255,255,.05); padding:1px 7px; border-radius:99px}
+.sb-link .hot{margin-left:auto; font-size:8.5px; font-weight:800; color:var(--gold); letter-spacing:.08em}
+details.sb-group summary{list-style:none; cursor:pointer}
+details.sb-group summary::-webkit-details-marker{display:none}
+details.sb-group summary .sb-h .chev{transition:transform .2s; margin-left:auto; color:var(--muted); font-size:9px}
+details.sb-group summary .sb-h::after{display:none}
+details.sb-group[open] summary .chev{transform:rotate(90deg)}
+.sb-foot{border-top:1px solid var(--line); padding:10px 16px; font-size:10px; color:var(--muted); display:flex; flex-direction:column; gap:5px}
+.sb-foot .r{display:flex; justify-content:space-between}
+.sb-foot .r b{color:var(--text2); font-weight:600}
+.sb-foot .r .burn{color:#fb923c}
+.sb-foot .r .up{color:var(--emerald)}
+
+/* ============================================================
+   TICKER TAPE — cumulative + highlight events (never crowd-dependent)
+   ============================================================ */
+.ticker{
+  position:relative; overflow:hidden; border-bottom:1px solid var(--line);
+  background:rgba(255,255,255,.015); height:36px; display:flex; align-items:center;
+}
+.ticker::before,.ticker::after{content:''; position:absolute; top:0; bottom:0; width:70px; z-index:2; pointer-events:none}
+.ticker::before{left:0; background:linear-gradient(90deg,var(--bg0),transparent)}
+.ticker::after{right:0; background:linear-gradient(-90deg,var(--bg0),transparent)}
+.ticker-track{display:flex; gap:38px; white-space:nowrap; animation:tick 46s linear infinite; padding-left:20px}
+@keyframes tick{to{transform:translateX(-50%)}}
+.tk{display:inline-flex; align-items:center; gap:7px; font-size:10.5px; color:var(--text2); font-weight:500}
+.tk b{color:var(--text); font-weight:700}
+.tk .g{color:var(--gold)} .tk .c{color:var(--cyan)} .tk .e{color:var(--emerald)} .tk .o{color:#fb923c}
+.tk .dot{width:4px;height:4px;border-radius:50%;background:var(--muted);opacity:.5}
+
+/* ============================================================
+   HERO — personalized dashboard (player) / cinematic pitch (visitor)
+   ============================================================ */
+.hero{position:relative; padding:34px 34px 30px; overflow:hidden}
+#heroCanvas{position:absolute; inset:0; width:100%; height:100%; pointer-events:none; opacity:.85}
+.hero-inner{position:relative; z-index:2}
+.hero::before{content:''; position:absolute; inset:0;
+  background:
+    radial-gradient(900px 420px at 12% -10%, rgba(34,211,238,.13), transparent 60%),
+    radial-gradient(700px 380px at 88% 10%, rgba(251,191,36,.08), transparent 55%),
+    radial-gradient(600px 500px at 50% 120%, rgba(167,139,250,.07), transparent 60%);
+}
+
+/* --- player hero --- */
+.hp-grid{display:grid; grid-template-columns:1fr 330px; gap:26px; align-items:start}
+.hp-greet{display:flex; align-items:center; gap:18px; margin-bottom:16px}
+.avatar-wrap{position:relative; width:86px; height:86px; flex-shrink:0}
+.avatar-ring{position:absolute; inset:-4px; border-radius:50%;
+  background:conic-gradient(var(--gold) 0 72%, rgba(255,255,255,.08) 72% 100%);
+  -webkit-mask:radial-gradient(circle, transparent 62%, #000 64%); mask:radial-gradient(circle, transparent 62%, #000 64%);
+  animation:ringSpin 14s linear infinite}
+@keyframes ringSpin{to{transform:rotate(360deg)}}
+.avatar-face{position:absolute; inset:2px; border-radius:50%; overflow:hidden;
+  background:radial-gradient(circle at 35% 30%, #1a2436, #0b0f1c); border:1px solid var(--line2);
+  display:grid; place-items:center}
+.hp-greet h1{font-size:clamp(20px,2.6vw,28px); font-weight:800; line-height:1.15}
+.hp-greet h1 .nm{background:linear-gradient(90deg,var(--cyan),#7dd3fc); -webkit-background-clip:text; background-clip:text; color:transparent}
+.hp-greet .vipline{font-size:12px; color:var(--text2); margin-top:5px}
+.hp-greet .vipline b{color:var(--gold); font-weight:700}
+.hp-greet .vipline .tier{
+  display:inline-block; font-size:9px; font-weight:800; letter-spacing:.12em; vertical-align:1px;
+  padding:2px 8px; margin-right:8px; border-radius:99px; color:#cbd5e1;
+  background:linear-gradient(180deg,rgba(148,163,184,.25),rgba(148,163,184,.1)); border:1px solid rgba(148,163,184,.35);
+}
+
+/* away digest */
+.digest{display:flex; flex-wrap:wrap; gap:8px; margin:14px 0 18px}
+.digest .d{
+  display:inline-flex; align-items:center; gap:8px; font-size:11px; color:var(--text2);
+  background:var(--panel2); border:1px solid var(--line); padding:7px 13px; border-radius:99px;
+  animation:digestIn .5s both;
+}
+.digest .d:nth-child(2){animation-delay:.12s}.digest .d:nth-child(3){animation-delay:.24s}.digest .d:nth-child(4){animation-delay:.36s}
+@keyframes digestIn{from{opacity:0; transform:translateY(8px)}to{opacity:1; transform:none}}
+.digest .d b{color:var(--text); font-weight:600}
+.digest .d .k{font-size:8.5px; font-weight:800; letter-spacing:.12em; color:var(--cyan)}
+
+/* resume card */
+.resume{
+  display:flex; align-items:center; gap:16px; border-radius:16px; padding:14px 18px;
+  background:linear-gradient(120deg, rgba(34,211,238,.10), rgba(255,255,255,.02) 55%);
+  border:1px solid rgba(34,211,238,.25); position:relative; overflow:hidden; max-width:560px;
+  transition:transform .2s, box-shadow .2s; cursor:pointer;
+}
+.resume:hover{transform:translateY(-2px); box-shadow:0 14px 40px rgba(34,211,238,.15)}
+.resume .mini{width:84px; height:60px; border-radius:10px; flex-shrink:0; overflow:hidden;
+  background:radial-gradient(circle at 50% 0%, #143024, #0a1812); border:1px solid rgba(52,211,153,.25);
+  display:grid; place-items:center}
+.resume .tt{font-size:9px; letter-spacing:.16em; color:var(--cyan); font-weight:800}
+.resume h3{font-size:15px; font-weight:700; margin:3px 0 2px}
+.resume p{font-size:11px; color:var(--text2)}
+.resume .go{margin-left:auto; width:40px; height:40px; border-radius:50%; flex-shrink:0;
+  background:var(--cyan); color:#04121a; display:grid; place-items:center; font-size:16px; font-weight:800;
+  box-shadow:0 0 18px rgba(34,211,238,.5)}
+
+/* balance chip column */
+.hp-side{display:flex; flex-direction:column; gap:14px}
+.chip3d{
+  position:relative; border-radius:20px; padding:22px 22px 18px;
+  background:linear-gradient(160deg,#101625,#0a0e1a); border:1px solid var(--line2);
+  overflow:hidden;
+}
+.chip3d::before{content:''; position:absolute; inset:0;
+  background:radial-gradient(300px 160px at 80% -20%, rgba(251,191,36,.15), transparent 60%)}
+.chip-coin{
+  width:74px; height:74px; border-radius:50%; margin-bottom:12px; position:relative;
+  background:
+    radial-gradient(circle at 32% 28%, #fde68a, #f59e0b 55%, #92580a);
+  box-shadow:0 10px 26px rgba(245,158,11,.35), inset 0 2px 3px rgba(255,255,255,.5), inset 0 -3px 5px rgba(0,0,0,.35);
+  animation:coinFloat 4s ease-in-out infinite; display:grid; place-items:center;
+}
+.chip-coin::before{content:''; position:absolute; inset:7px; border-radius:50%;
+  border:2px dashed rgba(120,60,0,.5)}
+.chip-coin b{font-family:var(--display); font-size:26px; color:#5b3403; text-shadow:0 1px 0 rgba(255,255,255,.35)}
+@keyframes coinFloat{50%{transform:translateY(-7px) rotate(3deg)}}
+.chip3d .lbl{font-size:9px; letter-spacing:.16em; color:var(--text2); font-weight:700}
+.chip3d .amt{font-size:26px; font-weight:800; margin:2px 0 3px}
+.chip3d .amt span{font-size:11px; color:var(--gold); letter-spacing:.06em}
+.chip3d .usd{font-size:11px; color:var(--muted); margin-bottom:14px}
+.chip3d .acts{display:flex; gap:8px; position:relative}
+.chip3d .acts button{flex:1; padding:10px 0; border-radius:10px; font-size:11.5px; font-weight:700; letter-spacing:.03em}
+
+/* --- visitor hero --- */
+.hv{text-align:left; max-width:960px}
+.hv .kick{font-size:10px; letter-spacing:.28em; color:var(--cyan); font-weight:800; margin-bottom:14px; display:flex; align-items:center; gap:10px}
+.hv .kick::before{content:''; width:26px; height:1px; background:var(--cyan)}
+.hv h1{
+  font-family:var(--display); font-weight:400; font-size:clamp(30px,4.6vw,58px);
+  line-height:1.04; letter-spacing:.01em; margin-bottom:16px;
+}
+.hv h1 .l2{display:block; background:linear-gradient(90deg,#fde68a,var(--gold-hot)); -webkit-background-clip:text; background-clip:text; color:transparent;
+  filter:drop-shadow(0 0 24px rgba(251,191,36,.25))}
+.hv p.sub{font-size:14px; color:var(--text2); max-width:520px; line-height:1.65; margin-bottom:22px}
+.hv p.sub b{color:var(--text)}
+.hv .ctas{display:flex; gap:12px; align-items:center; margin-bottom:30px}
+.cta-main{
+  font-family:var(--display); font-size:15px; letter-spacing:.05em; color:#3b2503;
+  background:linear-gradient(180deg,#fde68a,#f59e0b); padding:15px 34px; border-radius:14px;
+  box-shadow:0 6px 30px rgba(245,158,11,.4), inset 0 1px 0 rgba(255,255,255,.6);
+  transition:transform .15s; position:relative; overflow:hidden;
+}
+.cta-main:hover{transform:translateY(-2px) scale(1.02)}
+.cta-sec{font-size:12px; font-weight:600; color:var(--text2); padding:14px 20px; border-radius:12px; border:1px solid var(--line2); transition:all .2s}
+.cta-sec:hover{color:var(--cyan); border-color:rgba(34,211,238,.4)}
+.hv .proof{display:flex; gap:34px; flex-wrap:wrap}
+.hv .proof .p .n{font-size:22px; font-weight:800; font-variant-numeric:tabular-nums}
+.hv .proof .p .n.c{color:var(--cyan)} .hv .proof .p .n.o{color:#fb923c} .hv .proof .p .n.g{color:var(--gold)}
+.hv .proof .p .l{font-size:9.5px; letter-spacing:.14em; color:var(--muted); font-weight:700; margin-top:2px}
+
+/* ============================================================
+   FURNACE STRIP — cumulative odometers, always rolling
+   ============================================================ */
+.furnace{
+  margin:0 34px; border-radius:18px; border:1px solid rgba(251,146,60,.18);
+  background:linear-gradient(100deg, rgba(251,146,60,.07), rgba(255,255,255,.015) 45%);
+  padding:18px 26px; display:flex; align-items:center; gap:30px; flex-wrap:wrap; position:relative; overflow:hidden;
+}
+.furnace::before{content:''; position:absolute; left:-30px; top:-40px; width:180px; height:180px;
+  background:radial-gradient(circle, rgba(251,146,60,.22), transparent 70%); animation:flick 3s ease-in-out infinite}
+@keyframes flick{50%{opacity:.5; transform:scale(1.15)}}
+.furn-title{display:flex; align-items:center; gap:12px}
+.furn-title .fl{font-size:26px; animation:flameBob 1.8s ease-in-out infinite}
+@keyframes flameBob{50%{transform:translateY(-3px) scale(1.08)}}
+.furn-title .tt b{font-family:var(--display); font-weight:400; font-size:14px; letter-spacing:.06em; color:#fdba74; display:block}
+.furn-title .tt span{font-size:9.5px; color:var(--muted); letter-spacing:.1em; font-weight:600}
+.odometer{display:flex; align-items:baseline; gap:2px}
+.odometer .dg{
+  width:26px; height:38px; border-radius:6px; overflow:hidden; position:relative;
+  background:rgba(0,0,0,.45); border:1px solid rgba(251,146,60,.25);
+  box-shadow:inset 0 2px 6px rgba(0,0,0,.6);
+}
+.odometer .dg .col{position:absolute; left:0; right:0; top:0; transition:transform .8s cubic-bezier(.2,.8,.2,1); text-align:center}
+.odometer .dg .col span{display:block; height:38px; line-height:38px; font-size:19px; font-weight:800; color:#fdba74; font-variant-numeric:tabular-nums}
+.odometer .sep{font-size:19px; font-weight:800; color:rgba(253,186,116,.4); margin:0 1px}
+.odometer .unit{font-size:9px; letter-spacing:.14em; color:var(--muted); font-weight:800; margin-left:8px}
+.furn-stats{display:flex; gap:26px; margin-left:auto; flex-wrap:wrap}
+.furn-stats .s .n{font-size:15px; font-weight:800; font-variant-numeric:tabular-nums}
+.furn-stats .s .l{font-size:8.5px; letter-spacing:.14em; color:var(--muted); font-weight:700; margin-top:1px}
+.furn-stats .up{color:var(--emerald)} .furn-stats .cy{color:var(--cyan)} .furn-stats .gd{color:var(--gold)}
+
+/* ============================================================
+   SECTIONS
+   ============================================================ */
+section.zone{padding:44px 34px 8px}
+.zone-head{display:flex; align-items:baseline; gap:16px; margin-bottom:20px; flex-wrap:wrap}
+.zone-head h2{font-family:var(--display); font-weight:400; font-size:clamp(18px,2.2vw,26px); letter-spacing:.03em}
+.zone-head h2 em{font-style:normal; color:var(--cyan)}
+.zone-head .sub{font-size:11px; color:var(--muted)}
+.zone-head .pills{margin-left:auto; display:flex; gap:6px; flex-wrap:wrap}
+.pill{font-size:10.5px; font-weight:600; padding:6px 14px; border-radius:99px; color:var(--text2); border:1px solid var(--line); transition:all .2s}
+.pill:hover{color:#fff}
+.pill.on{background:var(--cyan-dim); border-color:rgba(34,211,238,.4); color:var(--cyan)}
+
+/* --- TONIGHT'S TABLE (deterministic daily spotlight) --- */
+.spot-grid{display:grid; grid-template-columns:1.6fr 1fr 1fr; gap:16px}
+.scene-card{
+  position:relative; border-radius:18px; overflow:hidden; cursor:pointer;
+  background:linear-gradient(165deg,#0e1526,#080b14 70%);
+  border:1px solid var(--line2); transition:transform .25s, box-shadow .25s, border-color .25s;
+  display:flex; flex-direction:column;
+}
+.scene-card:hover{transform:translateY(-5px); border-color:rgba(34,211,238,.45); box-shadow:0 22px 60px rgba(3,10,20,.8), 0 0 30px rgba(34,211,238,.12)}
+.scene-card .stage{
+  position:relative; padding:8px 10px 0; flex:1; min-height:150px;
+  display:grid; place-items:center; perspective:700px; overflow:hidden;
+}
+.scene-card .stage::before{content:''; position:absolute; inset:auto 8% -34% 8%; height:70%;
+  background:radial-gradient(ellipse at 50% 0%, var(--glow, rgba(34,211,238,.22)), transparent 65%)}
+.scene-card .stage svg{width:min(84%,300px); height:auto; transform:rotateX(9deg);
+  filter:drop-shadow(0 18px 22px rgba(0,0,0,.55)); animation:sceneFloat 5s ease-in-out infinite}
+@keyframes sceneFloat{50%{transform:rotateX(9deg) translateY(-6px)}}
+.scene-card .meta{padding:13px 16px 15px; border-top:1px solid var(--line); background:rgba(0,0,0,.25)}
+.scene-card .meta .name{font-size:16px; letter-spacing:.03em}
+.scene-card .meta .row{display:flex; align-items:center; gap:10px; margin-top:5px; font-size:10px; color:var(--muted)}
+.scene-card .meta .row .st{color:var(--text2); font-weight:600}
+.scene-card .meta .row .st b{color:var(--gold); font-weight:700}
+.scene-card .badge{
+  position:absolute; top:12px; left:12px; z-index:3; font-size:8.5px; font-weight:800; letter-spacing:.14em;
+  padding:4px 10px; border-radius:99px; backdrop-filter:blur(6px);
+}
+.badge.feat{background:rgba(251,191,36,.15); color:var(--gold); border:1px solid rgba(251,191,36,.4); animation:pulse 2.2s infinite}
+.badge.hot{background:rgba(251,113,133,.14); color:var(--rose); border:1px solid rgba(251,113,133,.35)}
+.badge.new{background:rgba(52,211,153,.14); color:var(--emerald); border:1px solid rgba(52,211,153,.35)}
+.scene-card.big .stage{min-height:240px}
+.scene-card.big .stage svg{width:min(70%,380px)}
+.scene-card.big .meta .name{font-size:20px}
+/* marquee bulb frame for the featured card */
+.scene-card.big{border-color:rgba(251,191,36,.35)}
+.scene-card.big::after{content:''; position:absolute; inset:0; border-radius:18px; pointer-events:none;
+  background-image:radial-gradient(circle 2.5px, rgba(253,230,138,.9) 45%, transparent 55%);
+  background-size:26px 26px; background-position:6px 6px;
+  -webkit-mask:linear-gradient(#000,#000) content-box, linear-gradient(#000,#000);
+  -webkit-mask-composite:xor; mask-composite:exclude; padding:9px;
+  animation:bulbs 1.2s steps(2) infinite; opacity:.5}
+@keyframes bulbs{50%{background-position:19px 6px}}
+
+/* game name display fonts */
+.f-titan{font-family:'Titan One',cursive} .f-bowlby{font-family:'Bowlby One SC',cursive}
+.f-bungee{font-family:'Bungee',cursive} .f-lilita{font-family:'Lilita One',cursive}
+.f-monoton{font-family:'Monoton',cursive}
+
+/* --- THE FLOOR grid --- */
+.floor-grid{display:grid; grid-template-columns:repeat(auto-fill,minmax(196px,1fr)); gap:14px}
+.floor-grid .scene-card .stage{min-height:126px}
+/* monogram tiles (scenes pending) */
+.mono-tile{
+  border-radius:16px; border:1px solid var(--line); background:linear-gradient(165deg,var(--panel2),transparent);
+  padding:18px 16px 14px; cursor:pointer; transition:all .2s; position:relative; overflow:hidden; min-height:126px;
+  display:flex; flex-direction:column; justify-content:flex-end;
+}
+.mono-tile::before{content:attr(data-letter); position:absolute; top:-14px; right:2px;
+  font-family:var(--display); font-size:84px; line-height:1; color:hsla(var(--h),85%,60%,.14);
+  transition:all .3s}
+.mono-tile:hover{transform:translateY(-4px); border-color:hsla(var(--h),85%,60%,.4)}
+.mono-tile:hover::before{color:hsla(var(--h),85%,60%,.3); transform:scale(1.1) rotate(-4deg)}
+.mono-tile .nm{font-size:13px; font-weight:700}
+.mono-tile .cat{font-size:9px; letter-spacing:.12em; color:var(--muted); font-weight:700; margin-top:2px}
+
+/* ============================================================
+   JACKPOT MODULE — "lighting soon"
+   ============================================================ */
+.jackpot{
+  margin:44px 34px 0; border-radius:22px; position:relative; overflow:hidden; text-align:center;
+  padding:44px 30px 40px; border:1px solid rgba(251,191,36,.3);
+  background:
+    radial-gradient(700px 300px at 50% -60%, rgba(251,191,36,.16), transparent 65%),
+    linear-gradient(180deg,#0e0d16,#080810);
+}
+.jackpot::before{content:''; position:absolute; inset:0; pointer-events:none;
+  background-image:radial-gradient(circle 3px, rgba(253,230,138,.85) 40%, transparent 60%);
+  background-size:34px 34px; background-position:10px 10px;
+  -webkit-mask:linear-gradient(#000,#000) content-box, linear-gradient(#000,#000);
+  -webkit-mask-composite:xor; mask-composite:exclude; padding:12px;
+  animation:bulbs 1.1s steps(2) infinite; opacity:.65}
+.jackpot .soon{
+  display:inline-block; font-size:9px; font-weight:800; letter-spacing:.22em; color:var(--gold);
+  border:1px solid rgba(251,191,36,.45); padding:5px 14px; border-radius:99px; margin-bottom:16px;
+  background:rgba(251,191,36,.07);
+}
+.jackpot h2{font-family:var(--display); font-weight:400; font-size:clamp(22px,3vw,34px); letter-spacing:.04em; margin-bottom:6px}
+.jackpot h2 span{color:var(--gold)}
+.jackpot .jp-num{
+  font-family:var(--display); font-weight:400; font-size:clamp(38px,6.5vw,72px); line-height:1.1;
+  background:linear-gradient(180deg,#fff7d6,#fbbf24 55%,#b45309); -webkit-background-clip:text; background-clip:text; color:transparent;
+  filter:drop-shadow(0 0 34px rgba(251,191,36,.35)); font-variant-numeric:tabular-nums; margin:8px 0 4px;
+}
+.jackpot .jp-unit{font-size:11px; letter-spacing:.3em; color:var(--gold); font-weight:800; margin-bottom:18px}
+.jackpot p.how{font-size:12px; color:var(--text2); max-width:560px; margin:0 auto; line-height:1.7}
+.jackpot p.how b{color:var(--text)}
+.jackpot .meter{max-width:420px; margin:20px auto 0}
+.jackpot .meter .bar{height:8px; border-radius:99px; background:rgba(255,255,255,.07); overflow:hidden; border:1px solid rgba(251,191,36,.2)}
+.jackpot .meter .bar i{display:block; height:100%; width:38%;
+  background:linear-gradient(90deg,#f59e0b,#fde68a); border-radius:99px; box-shadow:0 0 16px rgba(251,191,36,.7);
+  animation:vipGlow 2s ease-in-out infinite}
+.jackpot .meter .lbl{display:flex; justify-content:space-between; font-size:9px; letter-spacing:.12em; color:var(--muted); font-weight:700; margin-top:7px}
+
+/* ============================================================
+   VIP STRIP
+   ============================================================ */
+.vip-strip{display:grid; grid-template-columns:repeat(6,1fr); gap:12px}
+.vip-card{
+  border-radius:16px; border:1px solid var(--line); background:var(--panel);
+  padding:18px 10px 14px; text-align:center; transition:all .25s; position:relative; overflow:hidden;
+}
+.vip-card:hover{transform:translateY(-4px)}
+.vip-card .medal{width:44px; height:44px; border-radius:50%; margin:0 auto 10px; display:grid; place-items:center;
+  font-family:var(--display); font-size:16px; color:#0b0e16;
+  background:radial-gradient(circle at 32% 28%, hsla(var(--h),80%,80%,1), hsla(var(--h),75%,50%,1) 60%, hsla(var(--h),70%,30%,1));
+  box-shadow:0 4px 16px hsla(var(--h),80%,55%,.35), inset 0 1px 1px rgba(255,255,255,.5)}
+.vip-card .nm{font-size:11px; font-weight:800; letter-spacing:.1em}
+.vip-card .rb{font-size:17px; font-weight:800; color:hsl(var(--h),85%,68%); margin-top:3px}
+.vip-card .rl{font-size:8.5px; letter-spacing:.12em; color:var(--muted); font-weight:700}
+.vip-card.you{border-color:rgba(251,191,36,.5); background:linear-gradient(180deg,rgba(251,191,36,.08),transparent)}
+.vip-card.you::after{content:'YOU ARE HERE'; position:absolute; top:8px; left:50%; transform:translateX(-50%);
+  font-size:7.5px; font-weight:800; letter-spacing:.14em; color:var(--gold)}
+
+/* ============================================================
+   FOOTER
+   ============================================================ */
+.foot{margin-top:52px; border-top:1px solid var(--line); padding:30px 34px calc(30px + var(--dock-h)); display:flex; gap:30px; flex-wrap:wrap; align-items:center}
+.foot .brand{font-family:var(--display); font-size:15px}
+.foot .brand i{color:var(--cyan); font-style:normal}
+.foot .links{display:flex; gap:20px; font-size:11px; color:var(--text2); flex-wrap:wrap}
+.foot .links a:hover{color:var(--cyan)}
+.foot .fair{margin-left:auto; font-size:10px; color:var(--muted); display:flex; align-items:center; gap:7px}
+.foot .fair::before{content:''; width:7px; height:7px; border-radius:50%; background:var(--emerald); box-shadow:0 0 8px var(--emerald)}
+
+/* ============================================================
+   MOBILE — top mini bar + CHIP-RAIL DOCK
+   ============================================================ */
+.mob-bar{display:none}
+.dock{display:none}
+.sheet-veil{position:fixed; inset:0; background:rgba(2,4,8,.65); backdrop-filter:blur(4px); z-index:190; opacity:0; pointer-events:none; transition:opacity .25s}
+.sheet{
+  position:fixed; left:0; right:0; bottom:0; z-index:200; transform:translateY(110%);
+  transition:transform .32s cubic-bezier(.2,.9,.25,1);
+  background:linear-gradient(180deg,#101625,#0a0e18); border-radius:22px 22px 0 0;
+  border-top:1px solid var(--line2); padding:14px 22px calc(20px + env(safe-area-inset-bottom,0));
+}
+body.sheet-open .sheet{transform:none}
+body.sheet-open .sheet-veil{opacity:1; pointer-events:auto}
+.sheet .grab{width:40px; height:4px; border-radius:99px; background:rgba(255,255,255,.15); margin:0 auto 16px}
+.sheet h3{font-size:15px; font-weight:800; margin-bottom:2px}
+.sheet .sub{font-size:11px; color:var(--muted); margin-bottom:16px}
+.sheet .opts{display:grid; grid-template-columns:1fr 1fr; gap:10px}
+.sheet .opts button{
+  padding:16px 12px; border-radius:14px; border:1px solid var(--line2); background:var(--panel2);
+  font-size:12px; font-weight:700; display:flex; flex-direction:column; gap:4px; align-items:flex-start;
+}
+.sheet .opts button small{font-size:9.5px; color:var(--muted); font-weight:500}
+.sheet .opts button.gold{background:linear-gradient(160deg,rgba(251,191,36,.16),transparent); border-color:rgba(251,191,36,.4)}
+
+@media (max-width:1023px){
+  .sidebar{display:none}
+  .mob-bar{
+    display:flex; position:sticky; top:0; z-index:100; align-items:center; gap:10px;
+    padding:10px 14px; background:rgba(5,6,12,.85); backdrop-filter:blur(14px); border-bottom:1px solid var(--line);
+  }
+  .mob-bar .sb-logo{width:30px;height:30px;font-size:14px;border-radius:8px}
+  .mob-bar .mtitle{font-family:var(--display); font-size:13px}
+  .mob-bar .mtitle i{color:var(--cyan); font-style:normal}
+  .mob-bar .mav{margin-left:auto; width:32px; height:32px; border-radius:50%; overflow:hidden; border:2px solid rgba(251,191,36,.6)}
+  .hero{padding:24px 18px}
+  .hp-grid{grid-template-columns:1fr}
+  .furnace{margin:0 18px; padding:16px 18px; gap:18px}
+  section.zone{padding:36px 18px 8px}
+  .jackpot{margin:38px 18px 0}
+  .spot-grid{grid-template-columns:1fr 1fr}
+  .spot-grid .scene-card.big{grid-column:1/-1}
+  .vip-strip{grid-template-columns:repeat(3,1fr)}
+  .foot{padding-left:18px; padding-right:18px}
+  /* chip-rail dock */
+  .dock{
+    display:flex; position:fixed; left:0; right:0; bottom:0; z-index:150; height:var(--dock-h);
+    background:rgba(6,8,14,.92); backdrop-filter:blur(16px); border-top:1px solid var(--line2);
+    padding:0 6px env(safe-area-inset-bottom,0); align-items:stretch; justify-content:space-around;
+  }
+  .dock .di{
+    flex:1; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:3px;
+    font-size:9px; font-weight:700; letter-spacing:.06em; color:var(--muted); transition:color .2s; position:relative;
+  }
+  .dock .di .ic{font-size:19px; line-height:1}
+  .dock .di.on{color:var(--cyan)}
+  .dock .di.on::before{content:''; position:absolute; top:0; width:26px; height:3px; border-radius:0 0 4px 4px;
+    background:var(--cyan); box-shadow:0 2px 12px var(--cyan)}
+  .dock .di .bdg{position:absolute; top:9px; right:calc(50% - 20px); width:7px; height:7px; border-radius:50%;
+    background:var(--emerald); box-shadow:0 0 8px var(--emerald); animation:pulse 1.6s infinite}
+  /* the chip — center slot */
+  .dock .chip-slot{flex:1.25; position:relative}
+  .dock .chip-btn{
+    position:absolute; left:50%; top:-24px; transform:translateX(-50%);
+    width:62px; height:62px; border-radius:50%;
+    background:radial-gradient(circle at 32% 28%, #fde68a, #f59e0b 55%, #92580a);
+    box-shadow:0 8px 26px rgba(245,158,11,.5), inset 0 2px 3px rgba(255,255,255,.55), inset 0 -3px 5px rgba(0,0,0,.4);
+    display:grid; place-items:center; animation:coinFloat 4s ease-in-out infinite;
+  }
+  .dock .chip-btn::before{content:''; position:absolute; inset:6px; border-radius:50%; border:2px dashed rgba(120,60,0,.5)}
+  .dock .chip-btn b{font-family:var(--display); font-size:21px; color:#5b3403; text-shadow:0 1px 0 rgba(255,255,255,.35)}
+  .dock .chip-lbl{position:absolute; bottom:7px; left:0; right:0; text-align:center;
+    font-size:8.5px; font-weight:800; color:var(--gold); letter-spacing:.04em; font-variant-numeric:tabular-nums}
+}
+@media (max-width:560px){
+  .hv h1{font-size:29px}
+  .floor-grid{grid-template-columns:repeat(2,1fr)}
+  .spot-grid{grid-template-columns:1fr}
+  .furn-stats{margin-left:0}
+  .vip-strip{grid-template-columns:repeat(2,1fr)}
+}
+
+/* mode visibility */
+body[data-mode="visitor"] .only-player{display:none!important}
+body[data-mode="player"] .only-visitor{display:none!important}
+
+@media (prefers-reduced-motion:reduce){
+  *,*::before,*::after{animation-duration:.001s!important; transition-duration:.001s!important}
+}
+</style>
+</head>
+<body data-mode="player">
+
+<!-- ═══════════ LAB TOOLBAR ═══════════ -->
+<div class="lab-bar">
+  <span class="tag">VIEW AS</span>
+  <button id="modePlayer" class="on" onclick="setMode('player')">Player</button>
+  <button id="modeVisitor" onclick="setMode('visitor')">Visitor</button>
+</div>
+
+<div class="app">
+
+<!-- ═══════════ SMART SIDEBAR ═══════════ -->
+<aside class="sidebar">
+  <div class="sb-brand"><div class="sb-logo">M</div><b>MORBIUS<i>.IO</i></b></div>
+  <div class="sb-scroll">
+
+    <div class="sb-balance only-player">
+      <div class="lbl">PLAY BALANCE</div>
+      <div class="amt">128,400 <span>MORBIUS</span></div>
+      <div class="row">
+        <button class="btn-gold">Deposit</button>
+        <button class="btn-ghost">Withdraw</button>
+      </div>
+    </div>
+    <div class="sb-balance only-visitor">
+      <div class="lbl">WELCOME TO THE FLOOR</div>
+      <div class="amt" style="font-size:13px;font-weight:600;color:#b7c3d4">Connect to take a seat</div>
+      <div class="row"><button class="btn-gold">Connect Wallet</button></div>
+    </div>
+
+    <div class="sb-vip only-player">
+      <div class="t"><span class="cur">🥈 SILVER · 8%</span><span class="next">GOLD · 12%</span></div>
+      <div class="bar"><i></i></div>
+      <div class="sub"><b>2,450</b> MORBIUS wagered to rank up</div>
+    </div>
+
+    <div class="only-player">
+      <div class="sb-h">YOUR TABLE</div>
+      <a class="sb-link active"><span class="ic">🂡</span>Blackjack<span class="live">SEAT OPEN</span></a>
+      <a class="sb-link"><span class="ic">●</span>Plinko<span class="hot">▲ HOT</span></a>
+      <a class="sb-link"><span class="ic">♠</span>Poker<span class="cnt">2 tables</span></a>
+    </div>
+    <div class="only-visitor">
+      <div class="sb-h">START HERE</div>
+      <a class="sb-link"><span class="ic">🎓</span>How it works</a>
+      <a class="sb-link"><span class="ic">🪙</span>Get MORBIUS</a>
+      <a class="sb-link"><span class="ic">🛡</span>Provably fair</a>
+    </div>
+
+    <details class="sb-group" open>
+      <summary><div class="sb-h">ORIGINALS <span class="chev">▶</span></div></summary>
+      <a class="sb-link"><span class="ic">●</span>Plinko</a>
+      <a class="sb-link"><span class="ic">🚀</span>Crash<span class="hot">▲ HOT</span></a>
+      <a class="sb-link"><span class="ic">💎</span>Mines</a>
+      <a class="sb-link"><span class="ic">🗼</span>Towers</a>
+      <a class="sb-link"><span class="ic">∞</span>Limbo</a>
+      <a class="sb-link"><span class="ic">⚂</span>Dice</a>
+      <a class="sb-link"><span class="ic">🔢</span>Keno</a>
+      <a class="sb-link"><span class="ic">🐔</span>Chicken</a>
+      <a class="sb-link"><span class="ic">🌊</span>Cascade</a>
+      <a class="sb-link"><span class="ic">🔥</span>Firewalk</a>
+    </details>
+    <details class="sb-group" open>
+      <summary><div class="sb-h">CARDS &amp; TABLE <span class="chev">▶</span></div></summary>
+      <a class="sb-link"><span class="ic">🂡</span>Blackjack<span class="live">3</span></a>
+      <a class="sb-link"><span class="ic">♠</span>Poker<span class="live">2</span></a>
+      <a class="sb-link"><span class="ic">🎡</span>Roulette</a>
+      <a class="sb-link"><span class="ic">🀄</span>Baccarat</a>
+      <a class="sb-link"><span class="ic">🎲</span>Craps</a>
+      <a class="sb-link"><span class="ic">🐉</span>Dragon Tiger</a>
+      <a class="sb-link"><span class="ic">🃏</span>Three Card</a>
+      <a class="sb-link"><span class="ic">🖥</span>Video Poker</a>
+    </details>
+    <details class="sb-group">
+      <summary><div class="sb-h">MORE GAMES <span class="chev">▶</span></div></summary>
+      <a class="sb-link"><span class="ic">🎰</span>Lottery 6/55</a>
+      <a class="sb-link"><span class="ic">🎯</span>Andar Bahar</a>
+      <a class="sb-link"><span class="ic">🏮</span>Pachinko</a>
+      <a class="sb-link"><span class="ic">🏦</span>Heist</a>
+      <a class="sb-link"><span class="ic">🤑</span>Greed Dice</a>
+      <a class="sb-link"><span class="ic">🔐</span>Cipher</a>
+      <a class="sb-link"><span class="ic">↕</span>Hi-Lo</a>
+    </details>
+    <details class="sb-group" open>
+      <summary><div class="sb-h">MY STUFF <span class="chev">▶</span></div></summary>
+      <a class="sb-link"><span class="ic">📊</span>Dashboard</a>
+      <a class="sb-link"><span class="ic">🧑‍🎨</span>My Avatar</a>
+      <a class="sb-link"><span class="ic">👑</span>VIP Club</a>
+      <a class="sb-link"><span class="ic">🤝</span>Refer &amp; Earn</a>
+      <a class="sb-link"><span class="ic">🕘</span>History</a>
+    </details>
+  </div>
+  <div class="sb-foot">
+    <div class="r"><span>🔥 Burned</span><b class="burn" id="sbBurn">12,847,206</b></div>
+    <div class="r"><span>MORBIUS</span><b class="up">$0.00042 ▲</b></div>
+    <div class="r"><span>Swap · LP · Chart</span><b style="color:var(--cyan)">↗</b></div>
+  </div>
+</aside>
+
+<!-- ═══════════ MAIN ═══════════ -->
+<div class="main">
+
+  <!-- mobile top bar -->
+  <div class="mob-bar">
+    <div class="sb-logo">M</div><span class="mtitle">MORBIUS<i>.IO</i></span>
+    <div class="mav only-player"><svg viewBox="0 0 64 64" width="100%" height="100%"><circle cx="32" cy="32" r="32" fill="#16202f"/><circle cx="32" cy="26" r="12" fill="#e8b98a"/><rect x="18" y="40" width="28" height="18" rx="8" fill="#0f172a"/><rect x="20" y="20" width="24" height="6" rx="3" fill="#0b0e16"/><rect x="24" y="8" width="16" height="14" rx="2" fill="#0b0e16"/><rect x="24" y="23" width="7" height="4" rx="2" fill="#0ea5b7"/><rect x="33" y="23" width="7" height="4" rx="2" fill="#0ea5b7"/></svg></div>
+    <button class="btn-gold only-visitor" style="margin-left:auto;padding:7px 14px;border-radius:9px;font-size:10.5px;font-weight:800">Connect</button>
+  </div>
+
+  <!-- ticker: cumulative + highlight events, blended timeframes -->
+  <div class="ticker"><div class="ticker-track" id="tickerTrack"></div></div>
+
+  <!-- ═══ HERO · PLAYER ═══ -->
+  <header class="hero only-player">
+    <canvas id="heroCanvas"></canvas>
+    <div class="hero-inner hp-grid">
+      <div>
+        <div class="hp-greet">
+          <div class="avatar-wrap">
+            <div class="avatar-ring"></div>
+            <div class="avatar-face">
+              <svg viewBox="0 0 64 64" width="72" height="72"><circle cx="32" cy="30" r="14" fill="#e8b98a"/><rect x="14" y="44" width="36" height="22" rx="9" fill="#0f172a"/><path d="M26 46l6 7 6-7-6-2z" fill="#fff"/><rect x="29" y="52" width="6" height="9" rx="2" fill="#b91c1c"/><rect x="18" y="22" width="28" height="7" rx="3" fill="#0b0e16"/><rect x="22" y="6" width="20" height="18" rx="2" fill="#0b0e16"/><rect x="22" y="20" width="20" height="4" rx="2" fill="#1c2333"/><rect x="22" y="27" width="9" height="5" rx="2.5" fill="#0ea5b7"/><rect x="33" y="27" width="9" height="5" rx="2.5" fill="#0ea5b7"/><path d="M31 27h2v3h-2z" fill="#0b0e16"/><path d="M27 38q5 4 10 0" stroke="#8a5a2b" stroke-width="2" fill="none" stroke-linecap="round"/><rect x="36" y="36" width="10" height="3" rx="1.5" fill="#7c4a21" transform="rotate(12 36 36)"/></svg>
+            </div>
+          </div>
+          <div>
+            <h1><span id="greeting">Good evening</span>, <span class="nm">Det</span>.</h1>
+            <div class="vipline"><span class="tier">SILVER</span>You're <b>2,450 MORBIUS</b> from <b>GOLD</b> — that's 12% rakeback on every bet.</div>
+          </div>
+        </div>
+
+        <div class="digest">
+          <span class="d"><span class="k">WHILE YOU WERE AWAY</span></span>
+          <span class="d">🔥 <b>214,600</b> MORBIUS burned</span>
+          <span class="d">🏆 Weekly high: <b>48,200</b> on Plinko</span>
+          <span class="d">🎁 Rakeback ready: <b>1,120</b> — tap to claim</span>
+        </div>
+
+        <div class="resume">
+          <div class="mini">
+            <svg viewBox="0 0 80 56" width="70"><rect x="14" y="10" width="22" height="30" rx="3" fill="#f8fafc" transform="rotate(-8 25 25)"/><rect x="34" y="8" width="22" height="30" rx="3" fill="#f8fafc" transform="rotate(7 45 23)"/><text x="21" y="28" font-size="11" fill="#dc2626" font-weight="800" transform="rotate(-8 25 25)">A♥</text><text x="41" y="26" font-size="11" fill="#0f172a" font-weight="800" transform="rotate(7 45 23)">K♠</text><ellipse cx="63" cy="42" rx="9" ry="3.4" fill="#f59e0b"/><ellipse cx="63" cy="38.5" rx="9" ry="3.4" fill="#fbbf24"/></svg>
+          </div>
+          <div>
+            <div class="tt">PICK UP WHERE YOU LEFT OFF</div>
+            <h3>Blackjack — your seat is open</h3>
+            <p>Table #4 · 25–500 MORBIUS · you're up 3,200 lifetime here</p>
+          </div>
+          <div class="go">→</div>
+        </div>
+      </div>
+
+      <div class="hp-side">
+        <div class="chip3d">
+          <div class="chip-coin"><b>M</b></div>
+          <div class="lbl">PLAY BALANCE</div>
+          <div class="amt">128,400 <span>MORBIUS</span></div>
+          <div class="usd">≈ $53.93 · reserve synced 4s ago</div>
+          <div class="acts">
+            <button class="btn-gold">Deposit</button>
+            <button class="btn-ghost">Dashboard</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </header>
+
+  <!-- ═══ HERO · VISITOR ═══ -->
+  <header class="hero only-visitor">
+    <canvas id="heroCanvasV"></canvas>
+    <div class="hero-inner hv">
+      <div class="kick">ON-CHAIN CASINO · PULSECHAIN</div>
+      <h1>EVERY SHUFFLE PROVEN.<span class="l2">EVERY WIN ON-CHAIN.</span></h1>
+      <p class="sub">27 games where the deck is <b>cryptographically verifiable</b>, the house edge is public, and 5% of every payout is burned or paid back to <b>MORBIUS</b> holders. No trust required — check the math yourself.</p>
+      <div class="ctas">
+        <button class="cta-main">TAKE A SEAT</button>
+        <button class="cta-sec">Verify a shuffle ↗</button>
+      </div>
+      <div class="proof">
+        <div class="p"><div class="n c" data-count="3412086">0</div><div class="l">GAMES PLAYED</div></div>
+        <div class="p"><div class="n g" data-count="61240000">0</div><div class="l">MORBIUS WON</div></div>
+        <div class="p"><div class="n o" data-count="12847206">0</div><div class="l">MORBIUS BURNED</div></div>
+        <div class="p"><div class="n e" data-count="4216">0</div><div class="l">HOLDERS</div></div>
+      </div>
+    </div>
+  </header>
+
+  <!-- ═══ FURNACE — cumulative odometers ═══ -->
+  <section class="furnace">
+    <div class="furn-title">
+      <div class="fl">🔥</div>
+      <div class="tt"><b>THE FURNACE</b><span>MORBIUS BURNED · FOREVER</span></div>
+    </div>
+    <div class="odometer" id="burnOdo" aria-label="MORBIUS burned"></div>
+    <div class="furn-stats">
+      <div class="s"><div class="n gd">61.2M</div><div class="l">ALL-TIME WON</div></div>
+      <div class="s"><div class="n cy">8.4M</div><div class="l">PAID TO HOLDERS</div></div>
+      <div class="s"><div class="n up">$0.00042 ▲</div><div class="l">MORBIUS / USD</div></div>
+    </div>
+  </section>
+
+  <!-- ═══ TONIGHT'S TABLE — deterministic daily spotlight ═══ -->
+  <section class="zone">
+    <div class="zone-head">
+      <h2>TONIGHT'S <em>TABLE</em></h2>
+      <span class="sub">rotates daily — same for everyone, always fresh</span>
+    </div>
+    <div class="spot-grid">
+
+      <!-- featured: PLINKO -->
+      <div class="scene-card big" style="--glow:rgba(34,211,238,.25)">
+        <span class="badge feat">★ FEATURED TONIGHT</span>
+        <div class="stage">
+          <svg viewBox="0 0 240 170">
+            <defs>
+              <radialGradient id="pball" cx="35%" cy="30%"><stop offset="0%" stop-color="#a5f3fc"/><stop offset="100%" stop-color="#0891b2"/></radialGradient>
+              <linearGradient id="pslot" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="#f59e0b"/><stop offset="100%" stop-color="#92580a"/></linearGradient>
+            </defs>
+            <g fill="#334760">
+              <circle cx="120" cy="28" r="4"/>
+              <circle cx="100" cy="52" r="4"/><circle cx="140" cy="52" r="4"/>
+              <circle cx="80" cy="76" r="4"/><circle cx="120" cy="76" r="4"/><circle cx="160" cy="76" r="4"/>
+              <circle cx="60" cy="100" r="4"/><circle cx="100" cy="100" r="4"/><circle cx="140" cy="100" r="4"/><circle cx="180" cy="100" r="4"/>
+              <circle cx="40" cy="124" r="4"/><circle cx="80" cy="124" r="4"/><circle cx="120" cy="124" r="4"/><circle cx="160" cy="124" r="4"/><circle cx="200" cy="124" r="4"/>
+            </g>
+            <circle cx="140" cy="52" r="8" fill="url(#pball)" opacity=".25"/>
+            <circle cx="120" cy="76" r="8" fill="url(#pball)" opacity=".45"/>
+            <circle cx="100" cy="103" r="9" fill="url(#pball)">
+              <animate attributeName="cy" values="100;106;100" dur="1.6s" repeatCount="indefinite"/>
+            </circle>
+            <g>
+              <rect x="30" y="140" width="34" height="18" rx="4" fill="url(#pslot)" opacity=".55"/>
+              <rect x="70" y="140" width="34" height="18" rx="4" fill="url(#pslot)" opacity=".8"/>
+              <rect x="110" y="140" width="34" height="18" rx="4" fill="url(#pslot)"/>
+              <rect x="150" y="140" width="34" height="18" rx="4" fill="url(#pslot)" opacity=".8"/>
+              <rect x="190" y="140" width="26" height="18" rx="4" fill="url(#pslot)" opacity=".55"/>
+              <text x="127" y="153" font-size="10" font-weight="800" fill="#3b2503" text-anchor="middle">×1000</text>
+            </g>
+          </svg>
+        </div>
+        <div class="meta">
+          <div class="name f-titan">PLINKO</div>
+          <div class="row"><span class="st">Weekly high <b>48,200</b></span><span>·</span><span class="st">top slot ×1000</span></div>
+        </div>
+      </div>
+
+      <!-- runner-up: CRASH -->
+      <div class="scene-card" style="--glow:rgba(251,113,133,.22)">
+        <span class="badge hot">🔥 HOT STREAK</span>
+        <div class="stage">
+          <svg viewBox="0 0 200 140">
+            <defs><linearGradient id="crline" x1="0" y1="1" x2="1" y2="0"><stop offset="0%" stop-color="#22d3ee"/><stop offset="100%" stop-color="#fb7185"/></linearGradient></defs>
+            <path d="M14 122 Q90 116 128 74 T186 16" stroke="url(#crline)" stroke-width="4" fill="none" stroke-linecap="round"/>
+            <path d="M14 122 Q90 116 128 74 T186 16 L186 122 Z" fill="url(#crline)" opacity=".08"/>
+            <g transform="translate(178,22) rotate(38)">
+              <path d="M0 -14 L8 8 L0 4 L-8 8 Z" fill="#f8fafc"/>
+              <path d="M0 6 L3 16 L-3 16 Z" fill="#fb923c"><animate attributeName="opacity" values="1;.3;1" dur=".4s" repeatCount="indefinite"/></path>
+            </g>
+            <text x="26" y="34" font-size="24" font-weight="800" fill="#fb7185" font-family="'Bowlby One SC'">12.4×</text>
+          </svg>
+        </div>
+        <div class="meta">
+          <div class="name f-bungee" style="font-size:14px">CRASH</div>
+          <div class="row"><span class="st">Best today <b>×124</b></span></div>
+        </div>
+      </div>
+
+      <!-- runner-up: MINES -->
+      <div class="scene-card" style="--glow:rgba(52,211,153,.2)">
+        <div class="stage">
+          <svg viewBox="0 0 200 140">
+            <defs><linearGradient id="gem" x1="0" y1="0" x2="1" y2="1"><stop offset="0%" stop-color="#a7f3d0"/><stop offset="100%" stop-color="#059669"/></linearGradient></defs>
+            <g>
+              <rect x="28" y="18" width="40" height="40" rx="7" fill="#16202f"/>
+              <rect x="80" y="18" width="40" height="40" rx="7" fill="#16202f"/>
+              <rect x="132" y="18" width="40" height="40" rx="7" fill="#0d2b22"/>
+              <path d="M152 26 L164 38 L152 50 L140 38 Z" fill="url(#gem)"><animate attributeName="opacity" values="1;.6;1" dur="1.8s" repeatCount="indefinite"/></path>
+              <rect x="28" y="70" width="40" height="40" rx="7" fill="#0d2b22"/>
+              <path d="M48 78 L60 90 L48 102 L36 90 Z" fill="url(#gem)"/>
+              <rect x="80" y="70" width="40" height="40" rx="7" fill="#2b1216"/>
+              <circle cx="100" cy="90" r="11" fill="#1f2937"/><circle cx="100" cy="90" r="11" fill="#fb7185" opacity=".3"><animate attributeName="opacity" values=".3;.7;.3" dur="1.2s" repeatCount="indefinite"/></circle>
+              <path d="M100 76 v-7 M108 80l5-5" stroke="#fb7185" stroke-width="2.5" stroke-linecap="round"/>
+              <rect x="132" y="70" width="40" height="40" rx="7" fill="#16202f"/>
+            </g>
+          </svg>
+        </div>
+        <div class="meta">
+          <div class="name f-lilita" style="font-size:15px">MINES</div>
+          <div class="row"><span class="st">24 safe picks record</span></div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ═══ THE FLOOR — unified 3D scene cards ═══ -->
+  <section class="zone">
+    <div class="zone-head">
+      <h2>THE <em>FLOOR</em></h2>
+      <span class="sub">27 games · provably fair</span>
+      <div class="pills">
+        <button class="pill on" data-f="all">All</button>
+        <button class="pill" data-f="orig">Originals</button>
+        <button class="pill" data-f="cards">Cards</button>
+        <button class="pill" data-f="table">Table</button>
+        <button class="pill" data-f="lotto">Lottery</button>
+      </div>
+    </div>
+    <div class="floor-grid" id="floorGrid">
+
+      <!-- BLACKJACK -->
+      <div class="scene-card" data-cat="cards" style="--glow:rgba(251,191,36,.18)">
+        <span class="badge new">3 SEATS LIVE</span>
+        <div class="stage">
+          <svg viewBox="0 0 200 140">
+            <ellipse cx="100" cy="118" rx="86" ry="16" fill="#0c2a1e"/>
+            <rect x="52" y="26" width="42" height="58" rx="5" fill="#f8fafc" transform="rotate(-9 73 55)"/>
+            <rect x="102" y="24" width="42" height="58" rx="5" fill="#f8fafc" transform="rotate(8 123 53)"/>
+            <text x="62" y="52" font-size="19" font-weight="800" fill="#dc2626" transform="rotate(-9 73 55)">A♥</text>
+            <text x="112" y="48" font-size="19" font-weight="800" fill="#0f172a" transform="rotate(8 123 53)">J♠</text>
+            <ellipse cx="160" cy="108" rx="15" ry="5.5" fill="#b45309"/><ellipse cx="160" cy="103" rx="15" ry="5.5" fill="#f59e0b"/><ellipse cx="160" cy="98" rx="15" ry="5.5" fill="#fbbf24"/>
+            <ellipse cx="36" cy="110" rx="12" ry="4.5" fill="#155e75"/><ellipse cx="36" cy="105" rx="12" ry="4.5" fill="#22d3ee"/>
+          </svg>
+        </div>
+        <div class="meta"><div class="name f-titan" style="font-size:14px">BLACKJACK</div>
+        <div class="row"><span class="st">Single + multiplayer</span></div></div>
+      </div>
+
+      <!-- POKER -->
+      <div class="scene-card" data-cat="cards" style="--glow:rgba(167,139,250,.2)">
+        <span class="badge new">2 TABLES</span>
+        <div class="stage">
+          <svg viewBox="0 0 200 140">
+            <ellipse cx="100" cy="118" rx="86" ry="16" fill="#1e1533"/>
+            <g>
+              <rect x="34" y="34" width="34" height="48" rx="4" fill="#f8fafc" transform="rotate(-16 51 58)"/>
+              <rect x="64" y="28" width="34" height="48" rx="4" fill="#f8fafc" transform="rotate(-7 81 52)"/>
+              <rect x="96" y="26" width="34" height="48" rx="4" fill="#f8fafc"/>
+              <rect x="128" y="28" width="34" height="48" rx="4" fill="#f8fafc" transform="rotate(7 145 52)"/>
+              <text x="104" y="50" font-size="15" font-weight="800" fill="#dc2626">Q♦</text>
+              <text x="42" y="56" font-size="13" font-weight="800" fill="#0f172a" transform="rotate(-16 51 58)">A♣</text>
+            </g>
+            <ellipse cx="100" cy="106" rx="14" ry="5" fill="#7c3aed"/><ellipse cx="100" cy="101" rx="14" ry="5" fill="#a78bfa"/>
+          </svg>
+        </div>
+        <div class="meta"><div class="name f-bowlby" style="font-size:13px">POKER</div>
+        <div class="row"><span class="st">Hold'em · verify every shuffle</span></div></div>
+      </div>
+
+      <!-- KENO -->
+      <div class="scene-card" data-cat="orig" style="--glow:rgba(34,211,238,.2)">
+        <div class="stage">
+          <svg viewBox="0 0 200 140">
+            <defs><radialGradient id="ko" cx="35%" cy="30%"><stop offset="0%" stop-color="#a5f3fc"/><stop offset="100%" stop-color="#0e7490"/></radialGradient></defs>
+            <g font-size="13" font-weight="800" fill="#03242e" text-anchor="middle">
+              <circle cx="52" cy="46" r="17" fill="url(#ko)"/><text x="52" y="51">7</text>
+              <circle cx="100" cy="34" r="17" fill="url(#ko)"/><text x="100" y="39">23</text>
+              <circle cx="148" cy="48" r="17" fill="url(#ko)"/><text x="148" y="53">41</text>
+              <circle cx="72" cy="92" r="17" fill="url(#ko)"><animate attributeName="r" values="17;19;17" dur="2s" repeatCount="indefinite"/></circle><text x="72" y="97">55</text>
+              <circle cx="126" cy="94" r="17" fill="url(#ko)"/><text x="126" y="99">12</text>
+            </g>
+          </svg>
+        </div>
+        <div class="meta"><div class="name f-lilita" style="font-size:15px">KENO</div>
+        <div class="row"><span class="st">Pick 10 · ×100 top hit</span></div></div>
+      </div>
+
+      <!-- DICE -->
+      <div class="scene-card" data-cat="orig" style="--glow:rgba(251,191,36,.18)">
+        <div class="stage">
+          <svg viewBox="0 0 200 140">
+            <ellipse cx="100" cy="116" rx="76" ry="13" fill="#111827"/>
+            <g transform="rotate(-14 72 66)">
+              <rect x="46" y="40" width="52" height="52" rx="10" fill="#f8fafc"/>
+              <circle cx="60" cy="54" r="5" fill="#0f172a"/><circle cx="84" cy="54" r="5" fill="#0f172a"/><circle cx="60" cy="78" r="5" fill="#0f172a"/><circle cx="84" cy="78" r="5" fill="#0f172a"/><circle cx="72" cy="66" r="5" fill="#0f172a"/>
+            </g>
+            <g transform="rotate(11 132 62)">
+              <rect x="106" y="36" width="52" height="52" rx="10" fill="#fbbf24"/>
+              <circle cx="120" cy="50" r="5" fill="#3b2503"/><circle cx="144" cy="74" r="5" fill="#3b2503"/><circle cx="132" cy="62" r="5" fill="#3b2503"/>
+            </g>
+          </svg>
+        </div>
+        <div class="meta"><div class="name f-titan" style="font-size:14px">DICE</div>
+        <div class="row"><span class="st">98% RTP · instant</span></div></div>
+      </div>
+
+      <!-- ROULETTE -->
+      <div class="scene-card" data-cat="table" style="--glow:rgba(251,113,133,.18)">
+        <div class="stage">
+          <svg viewBox="0 0 200 140">
+            <g transform="translate(100,74)">
+              <circle r="54" fill="#1c2333"/>
+              <g><animateTransform attributeName="transform" type="rotate" from="0" to="360" dur="14s" repeatCount="indefinite"/>
+                <path d="M0 0 L0 -54 A54 54 0 0 1 38 -38 Z" fill="#b91c1c"/>
+                <path d="M0 0 L38 -38 A54 54 0 0 1 54 0 Z" fill="#111827"/>
+                <path d="M0 0 L54 0 A54 54 0 0 1 38 38 Z" fill="#b91c1c"/>
+                <path d="M0 0 L38 38 A54 54 0 0 1 0 54 Z" fill="#111827"/>
+                <path d="M0 0 L0 54 A54 54 0 0 1 -38 38 Z" fill="#b91c1c"/>
+                <path d="M0 0 L-38 38 A54 54 0 0 1 -54 0 Z" fill="#111827"/>
+                <path d="M0 0 L-54 0 A54 54 0 0 1 -38 -38 Z" fill="#b91c1c"/>
+                <path d="M0 0 L-38 -38 A54 54 0 0 1 0 -54 Z" fill="#15803d"/>
+              </g>
+              <circle r="20" fill="#0b0e16" stroke="#fbbf24" stroke-width="2"/>
+              <circle cx="0" cy="-38" r="5" fill="#f8fafc"><animateTransform attributeName="transform" type="rotate" from="360" to="0" dur="3.5s" repeatCount="indefinite"/></circle>
+            </g>
+          </svg>
+        </div>
+        <div class="meta"><div class="name f-bowlby" style="font-size:12px">ROULETTE</div>
+        <div class="row"><span class="st">European single-zero</span></div></div>
+      </div>
+
+      <!-- LOTTERY -->
+      <div class="scene-card" data-cat="lotto" style="--glow:rgba(251,191,36,.22)">
+        <div class="stage">
+          <svg viewBox="0 0 200 140">
+            <defs><radialGradient id="lb" cx="35%" cy="28%"><stop offset="0%" stop-color="#fde68a"/><stop offset="100%" stop-color="#b45309"/></radialGradient></defs>
+            <g font-size="12" font-weight="800" fill="#3b2503" text-anchor="middle">
+              <circle cx="38" cy="80" r="16" fill="url(#lb)"/><text x="38" y="85">6</text>
+              <circle cx="72" cy="64" r="16" fill="url(#lb)"/><text x="72" y="69">17</text>
+              <circle cx="106" cy="56" r="16" fill="url(#lb)"><animate attributeName="cy" values="56;50;56" dur="2.4s" repeatCount="indefinite"/></circle><text x="106" y="61">28</text>
+              <circle cx="140" cy="64" r="16" fill="url(#lb)"/><text x="140" y="69">39</text>
+              <circle cx="170" cy="80" r="16" fill="url(#lb)"/><text x="170" y="85">55</text>
+            </g>
+            <rect x="58" y="102" width="88" height="16" rx="8" fill="rgba(251,191,36,.12)" stroke="rgba(251,191,36,.4)"/>
+            <text x="102" y="114" font-size="9" font-weight="800" fill="#fbbf24" text-anchor="middle" letter-spacing="2">6 OF 55</text>
+          </svg>
+        </div>
+        <div class="meta"><div class="name f-monoton" style="font-size:12px">LOTTERY</div>
+        <div class="row"><span class="st">On-chain draw</span></div></div>
+      </div>
+
+      <!-- TOWERS -->
+      <div class="scene-card" data-cat="orig" style="--glow:rgba(167,139,250,.2)">
+        <div class="stage">
+          <svg viewBox="0 0 200 140">
+            <g>
+              <rect x="30" y="102" width="140" height="16" rx="4" fill="#1c2333"/>
+              <rect x="46" y="80" width="108" height="16" rx="4" fill="#242e45"/>
+              <rect x="62" y="58" width="76" height="16" rx="4" fill="#2d3a57"/>
+              <rect x="78" y="36" width="44" height="16" rx="4" fill="#374569"/>
+            </g>
+            <circle cx="100" cy="26" r="9" fill="#a78bfa"><animate attributeName="cy" values="26;20;26" dur="2s" repeatCount="indefinite"/></circle>
+            <circle cx="100" cy="26" r="15" fill="#a78bfa" opacity=".2"><animate attributeName="r" values="15;20;15" dur="2s" repeatCount="indefinite"/></circle>
+          </svg>
+        </div>
+        <div class="meta"><div class="name f-lilita" style="font-size:15px">TOWERS</div>
+        <div class="row"><span class="st">Climb · cash out any floor</span></div></div>
+      </div>
+
+      <!-- LIMBO -->
+      <div class="scene-card" data-cat="orig" style="--glow:rgba(52,211,153,.2)">
+        <div class="stage">
+          <svg viewBox="0 0 200 140">
+            <path d="M30 110 A76 76 0 0 1 170 110" stroke="#1f2937" stroke-width="10" fill="none" stroke-linecap="round"/>
+            <path d="M30 110 A76 76 0 0 1 128 46" stroke="#34d399" stroke-width="10" fill="none" stroke-linecap="round"><animate attributeName="stroke" values="#34d399;#6ee7b7;#34d399" dur="2s" repeatCount="indefinite"/></path>
+            <text x="100" y="102" font-size="30" font-weight="800" fill="#6ee7b7" text-anchor="middle" font-family="'Bowlby One SC'">2.87×</text>
+          </svg>
+        </div>
+        <div class="meta"><div class="name f-bungee" style="font-size:13px">LIMBO</div>
+        <div class="row"><span class="st">Target any multiplier</span></div></div>
+      </div>
+
+      <!-- BACCARAT -->
+      <div class="scene-card" data-cat="table" style="--glow:rgba(251,191,36,.16)">
+        <div class="stage">
+          <svg viewBox="0 0 200 140">
+            <ellipse cx="100" cy="118" rx="84" ry="14" fill="#241a10"/>
+            <rect x="34" y="34" width="38" height="54" rx="5" fill="#f8fafc" transform="rotate(-6 53 61)"/>
+            <rect x="128" y="34" width="38" height="54" rx="5" fill="#f8fafc" transform="rotate(6 147 61)"/>
+            <text x="44" y="62" font-size="15" font-weight="800" fill="#0f172a" transform="rotate(-6 53 61)">P</text>
+            <text x="138" y="60" font-size="15" font-weight="800" fill="#dc2626" transform="rotate(6 147 61)">B</text>
+            <text x="100" y="70" font-size="17" font-weight="800" fill="#fbbf24" text-anchor="middle">VS</text>
+          </svg>
+        </div>
+        <div class="meta"><div class="name f-bowlby" style="font-size:12px">BACCARAT</div>
+        <div class="row"><span class="st">Player · Banker · Tie</span></div></div>
+      </div>
+
+      <!-- monogram tiles — scenes in next batch -->
+      <div class="mono-tile" data-cat="cards" data-letter="V" style="--h:200"><div class="nm">Video Poker</div><div class="cat">CARDS</div></div>
+      <div class="mono-tile" data-cat="table" data-letter="C" style="--h:340"><div class="nm">Craps</div><div class="cat">TABLE</div></div>
+      <div class="mono-tile" data-cat="table" data-letter="D" style="--h:20"><div class="nm">Dragon Tiger</div><div class="cat">TABLE</div></div>
+      <div class="mono-tile" data-cat="table" data-letter="A" style="--h:280"><div class="nm">Andar Bahar</div><div class="cat">TABLE</div></div>
+      <div class="mono-tile" data-cat="orig" data-letter="P" style="--h:320"><div class="nm">Pachinko</div><div class="cat">ORIGINALS</div></div>
+      <div class="mono-tile" data-cat="orig" data-letter="C" style="--h:180"><div class="nm">Cascade</div><div class="cat">ORIGINALS</div></div>
+      <div class="mono-tile" data-cat="orig" data-letter="F" style="--h:12"><div class="nm">Firewalk</div><div class="cat">ORIGINALS</div></div>
+      <div class="mono-tile" data-cat="orig" data-letter="H" style="--h:260"><div class="nm">Heist</div><div class="cat">ORIGINALS</div></div>
+      <div class="mono-tile" data-cat="cards" data-letter="3" style="--h:150"><div class="nm">Three Card</div><div class="cat">CARDS</div></div>
+      <div class="mono-tile" data-cat="orig" data-letter="G" style="--h:48"><div class="nm">Greed Dice</div><div class="cat">ORIGINALS</div></div>
+      <div class="mono-tile" data-cat="orig" data-letter="C" style="--h:190"><div class="nm">Cipher</div><div class="cat">ORIGINALS</div></div>
+      <div class="mono-tile" data-cat="orig" data-letter="H" style="--h:100"><div class="nm">Hi-Lo</div><div class="cat">ORIGINALS</div></div>
+      <div class="mono-tile" data-cat="orig" data-letter="C" style="--h:35"><div class="nm">Chicken</div><div class="cat">ORIGINALS</div></div>
+    </div>
+  </section>
+
+  <!-- ═══ JACKPOT — designed now, wired later ═══ -->
+  <section class="jackpot">
+    <div class="soon">⚡ LIGHTING SOON</div>
+    <h2>THE MORBIUS <span>JACKPOT</span></h2>
+    <div class="jp-num" id="jpNum">142,608</div>
+    <div class="jp-unit">MORBIUS · GROWING WITH EVERY BET</div>
+    <p class="how">A slice of the platform fee feeds the pot on <b>every bet, on every game</b>. It must hit before it reaches the ceiling — and <b>any bet can trigger it</b>. No tickets, no opt-in. Just play.</p>
+    <div class="meter">
+      <div class="bar"><i></i></div>
+      <div class="lbl"><span>SEEDED</span><span>MUST HIT BY 1,000,000</span></div>
+    </div>
+  </section>
+
+  <!-- ═══ VIP ═══ -->
+  <section class="zone">
+    <div class="zone-head">
+      <h2>THE <em>LADDER</em></h2>
+      <span class="sub">rakeback on every single bet — win or lose</span>
+    </div>
+    <div class="vip-strip">
+      <div class="vip-card" style="--h:25"><div class="medal">B</div><div class="nm">BRONZE</div><div class="rb">5%</div><div class="rl">RAKEBACK</div></div>
+      <div class="vip-card you" style="--h:210"><div class="medal">S</div><div class="nm">SILVER</div><div class="rb">8%</div><div class="rl">RAKEBACK</div></div>
+      <div class="vip-card" style="--h:45"><div class="medal">G</div><div class="nm">GOLD</div><div class="rb">12%</div><div class="rl">RAKEBACK</div></div>
+      <div class="vip-card" style="--h:190"><div class="medal">P</div><div class="nm">PLATINUM</div><div class="rb">16%</div><div class="rl">RAKEBACK</div></div>
+      <div class="vip-card" style="--h:260"><div class="medal">D</div><div class="nm">DIAMOND</div><div class="rb">20%</div><div class="rl">RAKEBACK</div></div>
+      <div class="vip-card" style="--h:285"><div class="medal">O</div><div class="nm">OBSIDIAN</div><div class="rb">25%</div><div class="rl">RAKEBACK</div></div>
+    </div>
+  </section>
+
+  <footer class="foot">
+    <span class="brand">MORBIUS<i>.IO</i></span>
+    <div class="links"><a>Fairness</a><a>Docs</a><a>Brand kit</a><a>Responsible gaming</a><a>X</a><a>Telegram</a><a>Discord</a></div>
+    <span class="fair">Provably fair — verify any hand on-chain</span>
+  </footer>
+</div><!-- /main -->
+</div><!-- /app -->
+
+<!-- ═══════════ CHIP-RAIL DOCK (mobile) ═══════════ -->
+<nav class="dock">
+  <a class="di on"><span class="ic">🏠</span>HOME</a>
+  <a class="di"><span class="ic">🎮</span>GAMES<span class="bdg"></span></a>
+  <div class="chip-slot">
+    <button class="chip-btn" onclick="document.body.classList.add('sheet-open')"><b>M</b></button>
+    <div class="chip-lbl">128,400</div>
+  </div>
+  <a class="di"><span class="ic">🏆</span>WINS</a>
+  <a class="di"><span class="ic">🧑‍🎨</span>YOU</a>
+</nav>
+
+<!-- deposit sheet (chip tap) -->
+<div class="sheet-veil" onclick="document.body.classList.remove('sheet-open')"></div>
+<div class="sheet">
+  <div class="grab"></div>
+  <h3>Your chip · 128,400 MORBIUS</h3>
+  <div class="sub">≈ $53.93 · Silver tier · 1,120 rakeback claimable</div>
+  <div class="opts">
+    <button class="gold">💰 Deposit<small>Add MORBIUS to play balance</small></button>
+    <button>↗ Withdraw<small>Back to your wallet</small></button>
+    <button>🎁 Claim rakeback<small>1,120 MORBIUS ready</small></button>
+    <button>📊 Dashboard<small>Stats, history, profile</small></button>
+  </div>
+</div>
+
+<script>
+/* ── mode toggle ─────────────────────────────── */
+function setMode(m){
+  document.body.dataset.mode = m;
+  document.getElementById('modePlayer').classList.toggle('on', m==='player');
+  document.getElementById('modeVisitor').classList.toggle('on', m==='visitor');
+  if(m==='visitor') countUp();
+}
+
+/* ── time-aware greeting ─────────────────────── */
+(function(){
+  const h = new Date().getHours();
+  const g = h<5 ? 'Late night' : h<12 ? 'Good morning' : h<17 ? 'Good afternoon' : 'Good evening';
+  document.getElementById('greeting').textContent = g;
+})();
+
+/* ── ticker: cumulative + highlights, blended timeframes ── */
+(function(){
+  const items = [
+    '<b class="o">🔥 BURN</b> 12,400 MORBIUS burned this hour',
+    '<b class="g">🏆 WEEKLY HIGH</b> <b>48,200</b> on Plinko — MorbKing',
+    '<b class="c">⛓ VERIFIED</b> hand #88,412 shuffle proof published',
+    '<b class="e">▲ PRICE</b> MORBIUS $0.00042 · +6.2% 24h',
+    '<b class="g">💎 ALL-TIME</b> biggest Crash cashout <b>×124</b>',
+    '<b class="c">👑 RANK UP</b> pTIGER hit GOLD — 12% rakeback',
+    '<b class="o">🔥 FURNACE</b> 12,847,206 MORBIUS gone forever',
+    '<b class="g">🎰 JACKPOT</b> pot at 142,608 and climbing',
+  ];
+  const seq = items.map(i=>`<span class="tk">${i}</span><span class="tk"><span class="dot"></span></span>`).join('');
+  document.getElementById('tickerTrack').innerHTML = seq + seq; /* duplicate for seamless loop */
+})();
+
+/* ── furnace odometer ────────────────────────── */
+(function(){
+  const el = document.getElementById('burnOdo');
+  let value = 12847206;
+  function render(){
+    const str = value.toLocaleString('en-US');
+    el.innerHTML = '';
+    for(const ch of str){
+      if(ch===','){ el.insertAdjacentHTML('beforeend','<span class="sep">,</span>'); continue; }
+      const dg = document.createElement('span'); dg.className='dg';
+      const col = document.createElement('span'); col.className='col';
+      col.innerHTML = '0123456789'.split('').map(d=>`<span>${d}</span>`).join('');
+      dg.appendChild(col); el.appendChild(dg);
+      requestAnimationFrame(()=>{ col.style.transform = `translateY(${-38*parseInt(ch,10)}px)`; });
+    }
+    el.insertAdjacentHTML('beforeend','<span class="unit">MORBIUS</span>');
+  }
+  render();
+  setInterval(()=>{ value += 3 + Math.floor(Math.random()*22); render(); }, 2600);
+  /* sidebar mirror */
+  setInterval(()=>{ const s=document.getElementById('sbBurn'); if(s) s.textContent = value.toLocaleString('en-US'); }, 2600);
+})();
+
+/* ── jackpot preview number ──────────────────── */
+(function(){
+  const el = document.getElementById('jpNum');
+  let v = 142608;
+  setInterval(()=>{ v += 1 + Math.floor(Math.random()*9); el.textContent = v.toLocaleString('en-US'); }, 1400);
+})();
+
+/* ── visitor proof count-up ──────────────────── */
+let counted = false;
+function countUp(){
+  if(counted) return; counted = true;
+  document.querySelectorAll('.hv .proof .n').forEach(el=>{
+    const target = parseInt(el.dataset.count,10); const t0 = performance.now();
+    function step(t){
+      const p = Math.min((t-t0)/1600, 1); const eased = 1-Math.pow(1-p,3);
+      el.textContent = Math.floor(target*eased).toLocaleString('en-US');
+      if(p<1) requestAnimationFrame(step);
+    }
+    requestAnimationFrame(step);
+  });
+}
+
+/* ── floor filter pills ──────────────────────── */
+document.querySelectorAll('.pill').forEach(p=>{
+  p.addEventListener('click', ()=>{
+    document.querySelectorAll('.pill').forEach(x=>x.classList.remove('on'));
+    p.classList.add('on');
+    const f = p.dataset.f;
+    document.querySelectorAll('#floorGrid > [data-cat]').forEach(card=>{
+      card.style.display = (f==='all' || card.dataset.cat===f) ? '' : 'none';
+    });
+  });
+});
+
+/* ── hero ember particles (showtime, ambient — alive with zero users) ── */
+function embers(canvasId){
+  const cv = document.getElementById(canvasId); if(!cv) return;
+  const ctx = cv.getContext('2d');
+  let W,H, parts=[];
+  function size(){ const r = cv.parentElement.getBoundingClientRect(); W=cv.width=r.width; H=cv.height=r.height; }
+  size(); window.addEventListener('resize', size);
+  const COLORS = ['rgba(34,211,238,', 'rgba(251,191,36,', 'rgba(167,139,250,'];
+  for(let i=0;i<42;i++) parts.push({
+    x:Math.random(), y:Math.random(), r:.6+Math.random()*1.8,
+    vy:.08+Math.random()*.22, vx:(Math.random()-.5)*.06,
+    c:COLORS[i%3], a:.15+Math.random()*.4, ph:Math.random()*6.28
+  });
+  (function draw(t){
+    ctx.clearRect(0,0,W,H);
+    for(const p of parts){
+      p.y -= p.vy/100; p.x += p.vx/100;
+      if(p.y<-.05){ p.y=1.05; p.x=Math.random(); }
+      const tw = .6+.4*Math.sin(t/700+p.ph);
+      ctx.beginPath(); ctx.arc(p.x*W, p.y*H, p.r, 0, 6.28);
+      ctx.fillStyle = p.c + (p.a*tw) + ')'; ctx.fill();
+    }
+    requestAnimationFrame(draw);
+  })(0);
+}
+if(!matchMedia('(prefers-reduced-motion: reduce)').matches){
+  embers('heroCanvas'); embers('heroCanvasV');
+}
+</script>
+</body>
+</html>
