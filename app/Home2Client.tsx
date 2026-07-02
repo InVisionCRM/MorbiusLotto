@@ -112,6 +112,8 @@ export default function Home2Client() {
   // totalPayouts is wei-scale (MORBIUS = 18 decimals) — convert to whole MORBIUS
   const totalWon = totals ? Math.round(Number(totals.totalPayouts) / 1e18) : undefined
   const gamesPlayed = totals ? Number(totals.totalGamesPlayed) : undefined
+  // Weekly Drop: live data from GET /api/drop; null → keep the "lighting soon" defaults
+  const drop = weeklyDropQuery.data
   const topWin = useMemo(() => (wins.length ? wins.reduce((a, b) => (b.amount > a.amount ? b : a)) : null), [wins])
 
   const tickerItems = useMemo(() => {
@@ -127,9 +129,13 @@ export default function Home2Client() {
       items.push(`<b class="e">💸 WIN</b> <b>${w.amount.toLocaleString('en-US')}</b> on ${gameLabel(w.game)} — ${who}`)
     }
     items.push('<b class="c">👑 VIP</b> rakeback on losses — Bronze 5% to Obsidian 25%')
-    items.push('<b class="g">🎟 WEEKLY DROP</b> lighting soon · top 3 win every Sunday 8PM')
+    items.push(
+      drop?.draw
+        ? `<b class="g">🎟 WEEKLY DROP</b> pot at ${Number(drop.draw.potChips).toLocaleString('en-US')} · top 3 win Sunday 8PM`
+        : '<b class="g">🎟 WEEKLY DROP</b> lighting soon · top 3 win every Sunday 8PM'
+    )
     return items.length >= 4 ? items : undefined // fall back to defaults until data arrives
-  }, [wins, topWin])
+  }, [wins, topWin, drop])
 
   const digest = useMemo<HeroPlayerDigestItem[] | undefined>(() => {
     if (!topWin) return undefined
@@ -153,8 +159,6 @@ export default function Home2Client() {
       }
     : undefined
 
-  // Weekly Drop: live data from GET /api/drop; null → keep the "lighting soon" defaults
-  const drop = weeklyDropQuery.data
   const weeklyDrop = useMemo(() => {
     if (!drop?.draw) return null
     const you = drop.you
