@@ -632,6 +632,12 @@ export interface WeeklyDropProps {
   progress?: number;
   entriesSub?: React.ReactNode;
   winners?: WeeklyDropWinner[];
+  /** Pill text above the title (e.g. '🎟 DROP #12 · LIVE'). */
+  statusPill?: string;
+  /** When provided, count down to this instant instead of the computed next Sunday 8PM. */
+  countdownTo?: Date;
+  /** When true, the pot is real: skip the fake drip interval and just show `pot`. */
+  potLive?: boolean;
 }
 
 /* port of the lab's nextDrop() — next Sunday 20:00 */
@@ -655,25 +661,30 @@ export function WeeklyDrop({
     </>
   ),
   winners = DEFAULT_WINNERS,
+  statusPill = '🎟 LIGHTING SOON',
+  countdownTo,
+  potLive = false,
 }: WeeklyDropProps) {
   const [potVal, setPotVal] = useState(pot);
   useEffect(() => {
     setPotVal(pot);
   }, [pot]);
 
-  /* lab: v += 1 + floor(random()*6) every 2200ms */
+  /* lab: v += 1 + floor(random()*6) every 2200ms — disabled when the pot is live */
   useEffect(() => {
+    if (potLive) return;
     const id = setInterval(() => {
       setPotVal((v) => v + 1 + Math.floor(Math.random() * 6));
     }, 2200);
     return () => clearInterval(id);
-  }, []);
+  }, [potLive]);
 
-  /* live countdown to next Sunday 20:00 — port of the lab's tick() */
+  /* live countdown — to `countdownTo` when given, else next Sunday 20:00 (lab's tick()) */
+  const countdownMs = countdownTo?.getTime();
   const [cd, setCd] = useState({ d: '0', h: '00', m: '00', s: '00' });
   useEffect(() => {
     function tick() {
-      let ms = nextDrop().getTime() - Date.now();
+      let ms = Math.max(0, (countdownMs ?? nextDrop().getTime()) - Date.now());
       const day = Math.floor(ms / 86400000);
       ms -= day * 86400000;
       const hr = Math.floor(ms / 3600000);
@@ -691,11 +702,11 @@ export function WeeklyDrop({
     tick();
     const id = setInterval(tick, 1000);
     return () => clearInterval(id);
-  }, []);
+  }, [countdownMs]);
 
   return (
     <section className="jackpot">
-      <div className="soon">🎟 LIGHTING SOON</div>
+      <div className="soon">{statusPill}</div>
       <h2>
         THE WEEKLY <span>DROP</span>
       </h2>

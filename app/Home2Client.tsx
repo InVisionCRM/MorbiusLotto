@@ -18,6 +18,7 @@ import {
   VipLadder,
   HomeFooter,
   type HeroPlayerDigestItem,
+  type WeeklyDropWinner,
 } from '@/components/home2/sections'
 import { HomeSidebar, ChipDock, DepositSheet, MobileTopBar } from '@/components/home2/nav'
 import { formatWholeMorbius } from '@/components/shared/NavBalanceDisplay'
@@ -27,6 +28,7 @@ import { useVipTiers } from '@/hooks/use-vip-tiers'
 import { usePlayerServerBalance } from '@/hooks/use-player-server-balance'
 import { usePlatformAnalytics } from '@/hooks/use-platform-analytics'
 import { useLatestWins } from '@/hooks/use-latest-wins'
+import { useWeeklyDrop } from '@/hooks/use-weekly-drop'
 
 const GameWalletModal = dynamic(
   () => import('@/components/shared/GameWalletModal').then((m) => m.GameWalletModal),
@@ -45,6 +47,13 @@ const TIER_EMOJI: Record<string, string> = {
 function shortAddress(addr?: string): string {
   return addr ? `${addr.slice(0, 6)}…${addr.slice(-4)}` : ''
 }
+
+/* Rank 1/2/3 avatar gradients — same three as DEFAULT_WINNERS in sections.tsx */
+const DROP_WINNER_GRADIENTS = [
+  'radial-gradient(circle at 32% 28%,#fde68a,#f59e0b)',
+  'radial-gradient(circle at 32% 28%,#a5f3fc,#0891b2)',
+  'radial-gradient(circle at 32% 28%,#c4b5fd,#7c3aed)',
+]
 
 function gameLabel(key: string): string {
   return key
@@ -68,6 +77,7 @@ export default function Home2Client() {
   const balanceQuery = usePlayerServerBalance(address)
   const analytics = usePlatformAnalytics()
   const { wins } = useLatestWins()
+  const weeklyDropQuery = useWeeklyDrop(address)
 
   const balanceStr = balanceQuery.data != null ? formatWholeMorbius(balanceQuery.data) : '0'
   const displayName = profileDisplayName ?? shortAddress(address) ?? 'Player'
@@ -136,6 +146,39 @@ export default function Home2Client() {
       }
     : undefined
 
+  // Weekly Drop: live data from GET /api/drop; null → keep the "lighting soon" defaults
+  const drop = weeklyDropQuery.data
+  const weeklyDrop = useMemo(() => {
+    if (!drop?.draw) return null
+    const you = drop.you
+    const wagered = you ? Number(you.progressWagered) : 0
+    const target = you ? Number(you.progressTarget) : 0
+    const progress = target > 0 ? Math.min(100, Math.round((wagered / target) * 100)) : 0
+    const toNext = Math.max(0, target - wagered)
+    const winners: WeeklyDropWinner[] = drop.lastWinners.map((w) => {
+      const name = w.displayName ?? shortAddress(w.address)
+      return {
+        letter: (name[0] ?? '?').toUpperCase(),
+        name,
+        amount: Number(w.amountChips).toLocaleString('en-US'),
+        gradient: DROP_WINNER_GRADIENTS[Math.min(Math.max(w.rank, 1), 3) - 1],
+      }
+    })
+    return {
+      pot: Number(drop.draw.potChips),
+      statusPill: `🎟 DROP #${drop.draw.id} · LIVE`,
+      countdownTo: new Date(drop.draw.closesAt),
+      entries: you?.entries ?? 0,
+      progress,
+      entriesSub: (
+        <>
+          <b style={{ color: 'var(--gold)' }}>{toNext.toLocaleString('en-US')} MORBIUS</b> wagered to your next entry
+        </>
+      ),
+      winners,
+    }
+  }, [drop])
+
   const onConnect = () => open()
   const onDeposit = () => setWalletModalOpen(true)
   const onDashboard = () => {
@@ -190,7 +233,20 @@ export default function Home2Client() {
           />
           <TonightsTable />
           <TheFloor />
-          <WeeklyDrop entries={0} progress={0} entriesSub={<>The Weekly Drop is lighting soon — every 1,000 MORBIUS you play will be a ticket.</>} winners={[]} />
+          {weeklyDrop ? (
+            <WeeklyDrop
+              pot={weeklyDrop.pot}
+              potLive
+              statusPill={weeklyDrop.statusPill}
+              countdownTo={weeklyDrop.countdownTo}
+              entries={weeklyDrop.entries}
+              progress={weeklyDrop.progress}
+              entriesSub={weeklyDrop.entriesSub}
+              winners={weeklyDrop.winners}
+            />
+          ) : (
+            <WeeklyDrop entries={0} progress={0} entriesSub={<>The Weekly Drop is lighting soon — every 1,000 MORBIUS you play will be a ticket.</>} winners={[]} />
+          )}
           <VipLadder currentTier={mode === 'player' ? vip.tierName : ''} />
           <HomeFooter />
         </div>
