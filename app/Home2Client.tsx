@@ -184,6 +184,15 @@ export default function Home2Client() {
     return {
       pot: Number(drop.draw.potChips),
       statusPill: `🎟 DROP #${drop.draw.id} · LIVE`,
+      accruedNote: (() => {
+        const accrued = Number(drop.draw.accruedChips ?? 0)
+        const guaranteed = Number(drop.draw.guaranteedMin)
+        // Pot displays the guarantee until real accrual passes it — show the
+        // movement so the number never looks frozen
+        return accrued < guaranteed
+          ? `+${accrued.toLocaleString('en-US')} fed by bets this week — 25,000 minimum guaranteed`
+          : null
+      })(),
       countdownTo: new Date(drop.draw.closesAt),
       entries: you?.entries ?? 0,
       // Older backends omit totalEntrants — null hides the entrants line.
