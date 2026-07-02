@@ -31,6 +31,8 @@ import type { TableOption } from '@/hooks/use-blackjack-tables';
 import { useQueryClient } from '@tanstack/react-query';
 // Install console.error interceptor for bug reports (browser only, no-op on server)
 import '@/lib/error-log';
+// Scoped home2 reskin for the global nav (visual only) — see global-nav-theme.css
+import './global-nav-theme.css';
 import { useInstallAppHelpDialog } from '@/contexts/install-app-help-dialog-context';
 import {
   IconArrowLeft,
@@ -155,8 +157,8 @@ const OTHER_GAMES: readonly OtherGameNavItem[] = [
 /** Section header — uses CSS .sidebar-label for transition, no context needed */
 const SectionLabel = React.memo(function SectionLabel({ label }: { label: string }) {
   return (
-    <div className="px-2 py-1 overflow-hidden">
-      <span className="sidebar-label text-xs text-white uppercase tracking-wider">
+    <div className="gn2-h overflow-hidden">
+      <span className="sidebar-label">
         {label}
       </span>
     </div>
@@ -328,7 +330,7 @@ const OTHER_GAME_ICONS: Record<OtherGameIcon, React.ReactNode> = {
 
 const otherGameIcon = (g: OtherGameNavItem) => OTHER_GAME_ICONS[g.icon];
 
-const NAV_ITEM_CLASS = 'text-white hover:bg-white/5 rounded-lg px-2 py-2 transition-colors';
+const NAV_ITEM_CLASS = 'gn2-link text-slate-300 hover:text-white hover:bg-white/5 rounded-lg px-2 py-2 transition-colors';
 
 type NavIconName =
   | 'fa-home' | 'fa-play' | 'fa-pause' | 'fa-forward' | 'fa-chart-line' | 'fa-chart-bar' | 'fa-chart-pie'
@@ -467,7 +469,7 @@ const NavContent = React.memo(function NavContent(props: NavContentProps) {
   } = props;
 
   const btnClass = (active: boolean) =>
-    active ? 'bg-cyan-500/20 text-cyan-300' : 'text-white hover:bg-white/5';
+    active ? 'gn2-link bg-cyan-500/20 text-cyan-300' : 'gn2-link text-slate-300 hover:text-white hover:bg-white/5';
 
   const otherGamesFiltered = useMemo(
     () =>
@@ -512,19 +514,21 @@ const NavContent = React.memo(function NavContent(props: NavContentProps) {
       {/* Logo / Brand — md+ only; mobile uses drawer header in sidebar.tsx + mobileDrawerBrandingExtra for balance */}
       <div className="hidden md:block shrink-0 py-4">
         <Link href="/" className="sidebar-item flex items-center group/sidebar" aria-label="MORBIUS.IO Home">
-          <span className="w-9 h-9 rounded-lg flex items-center justify-center shrink-0 overflow-hidden">
-            <Image src="/morbius/MorbiusLogo (3).png" alt="" width={24} height={24} className="object-contain" />
-          </span>
-          <span className="sidebar-label text-base font-semibold text-white">
-            MORBIUS.IO
+          <span className="gn2-logo" aria-hidden>M</span>
+          <span className="sidebar-label gn2-brand-text">
+            MORBIUS<i>.IO</i>
           </span>
         </Link>
-        <NavBalanceDisplay
-          variant="sidebar"
-          reserve={reserveBalance}
-          inWallet={walletConnected ? inWalletMorbiusWei : undefined}
-          chipBalance={walletConnected ? chipBalance : undefined}
-        />
+        {(reserveBalance !== undefined || walletConnected) && (
+          <div className="gn2-balance">
+            <NavBalanceDisplay
+              variant="sidebar"
+              reserve={reserveBalance}
+              inWallet={walletConnected ? inWalletMorbiusWei : undefined}
+              chipBalance={walletConnected ? chipBalance : undefined}
+            />
+          </div>
+        )}
       </div>
 
       {/* Wallet */}
@@ -547,7 +551,7 @@ const NavContent = React.memo(function NavContent(props: NavContentProps) {
           <VipTierProgress
             address={connectedAddress}
             compact
-            className="rounded-xl border border-white/10 bg-white/[0.04] px-2.5 py-2 transition-colors hover:bg-white/[0.07]"
+            className="rounded-xl border border-[rgba(148,163,184,0.1)] bg-[rgba(255,255,255,0.028)] px-3 py-2.5 transition-colors hover:bg-white/[0.06]"
           />
         </div>
       )}
@@ -997,7 +1001,7 @@ export default function GlobalMainNav({
       disabled={sidebarDisabled || gameLocked}
     >
       <div className="flex flex-col md:flex-row min-h-screen w-full">
-        <SidebarBody className="shrink-0 surface-panel-sidebar global-main-nav-sidebar">
+        <SidebarBody className="shrink-0 surface-panel-sidebar global-main-nav-sidebar globalnav-h2">
           <NavContent
             page={page}
             onOpenDepositModal={handleOpenGameWallet}

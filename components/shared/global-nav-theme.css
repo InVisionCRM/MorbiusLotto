@@ -1,0 +1,118 @@
+/* ============================================================
+   GLOBAL MAIN NAV — home2 reskin
+   Pure VISUAL reskin of the real global navigation (the desktop rail
+   + mobile drawer rendered by components/shared/GlobalMainNav.tsx via
+   components/ui/sidebar.tsx) so game pages match the redesigned home
+   sidebar (components/home2/nav.tsx + app/home2.css).
+
+   EVERY selector here is scoped under `.globalnav-h2` (the wrapper class
+   added to <SidebarBody>) so nothing leaks to other components/pages.
+   Palette values mirror app/home2.css exactly. No behavior/structure change.
+   ============================================================ */
+
+/* ---- container: home2 sidebar gradient + hairline right border ----
+   Two classes (.globalnav-h2 + .global-main-nav-sidebar, both on the same
+   element) → specificity 0,2,0, so this wins over `.surface-panel-sidebar`
+   without touching that shared utility. */
+.globalnav-h2.global-main-nav-sidebar {
+  background: linear-gradient(180deg, #090c14, #04050a);
+  border: none;
+  border-right: 1px solid rgba(148, 163, 184, 0.10);
+  box-shadow: none;
+}
+
+/* thin scrollbar to match home2 .sb-scroll */
+.globalnav-h2 nav {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(148, 163, 184, 0.2) transparent;
+}
+.globalnav-h2 nav::-webkit-scrollbar {
+  width: 6px;
+}
+.globalnav-h2 nav::-webkit-scrollbar-thumb {
+  background: rgba(148, 163, 184, 0.2);
+  border-radius: 99px;
+}
+
+/* ---- brand: radial-cyan logo tile + MORBIUS.IO (cyan .IO) ---- */
+.globalnav-h2 .gn2-logo {
+  width: 34px;
+  height: 34px;
+  border-radius: 10px;
+  flex-shrink: 0;
+  display: grid;
+  place-items: center;
+  background: radial-gradient(circle at 30% 25%, #3ee6ff, #0891b2 60%, #064e63);
+  font-size: 17px;
+  line-height: 1;
+  font-weight: 800;
+  color: #03141c;
+  box-shadow: 0 0 22px rgba(34, 211, 238, 0.45), inset 0 1px 0 rgba(255, 255, 255, 0.4);
+}
+.globalnav-h2 .gn2-brand-text {
+  font-size: 15px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  color: #e6edf6;
+}
+.globalnav-h2 .gn2-brand-text i {
+  color: #22d3ee;
+  font-style: normal;
+}
+
+/* ---- balance module: gold/cyan-tinted card with animated sheen ----
+   Wraps the existing NavBalanceDisplay (read-only) — deposit/withdraw stay in
+   the untouched WalletMenu directly below. Hidden while the rail is collapsed. */
+.globalnav-h2 .gn2-balance {
+  position: relative;
+  overflow: hidden;
+  margin: 8px 4px 2px;
+  padding: 4px 2px 10px;
+  border-radius: 14px;
+  background: linear-gradient(135deg, rgba(34, 211, 238, 0.09), rgba(167, 139, 250, 0.05));
+  border: 1px solid rgba(34, 211, 238, 0.18);
+}
+.globalnav-h2 .gn2-balance::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background: linear-gradient(105deg, transparent 40%, rgba(255, 255, 255, 0.06) 50%, transparent 60%);
+  animation: gn2-sheen 4.5s linear infinite;
+}
+@keyframes gn2-sheen {
+  0% { transform: translateX(-100%); }
+  100% { transform: translateX(100%); }
+}
+.globalnav-h2[data-sidebar-open="false"] .gn2-balance { display: none; }
+
+/* ---- section headers → home2 .sb-h (muted, letter-spaced, trailing line) ---- */
+.globalnav-h2 .gn2-h {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 12px 10px 6px;
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: #5b6b82;
+}
+.globalnav-h2 .gn2-h .sidebar-label { color: inherit; }
+.globalnav-h2 .gn2-h::after {
+  content: '';
+  flex: 1;
+  height: 1px;
+  background: rgba(148, 163, 184, 0.10);
+}
+/* no trailing line while the rail is collapsed (label hidden) */
+.globalnav-h2[data-sidebar-open="false"] .gn2-h::after { display: none; }
+
+/* ---- nav links → home2 .sb-link sizing (12.5px, medium) ----
+   Colour (muted base, white hover, cyan active) is driven by the Tailwind
+   classes on the elements themselves; only the label sizing lives here so it
+   can't fight the brand/section-header font sizes. */
+.globalnav-h2 .gn2-link .sidebar-label {
+  font-size: 12.5px;
+  font-weight: 500;
+}
