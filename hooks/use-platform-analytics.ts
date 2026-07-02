@@ -30,6 +30,14 @@ export interface BigWheelChainStats {
   contractReserveBalance: bigint;
 }
 
+/** All-time biggest single win from the unified chip ledger (whole chips, 1 chip = 1 MORBIUS). */
+export interface BiggestWin {
+  amountChips: string;
+  game: string;
+  address: string;
+  username: string | null;
+}
+
 export interface PlatformAnalytics {
   blackjack: {
     total_players: number;
@@ -64,6 +72,8 @@ export interface PlatformAnalytics {
     totalVolume: string;
     totalPayouts: string;
   };
+  /** Null when there are no payout rows yet or the backend doesn't return it. */
+  biggestWin: BiggestWin | null;
 }
 
 const DEFAULT_BLACKJACK_ANALYTICS: PlatformAnalytics['blackjack'] = {
@@ -136,6 +146,15 @@ function parsePlatformResponse(data: any): PlatformAnalytics {
       totalVolume: String(data.combined?.totalVolume ?? 0),
       totalPayouts: String(data.combined?.totalPayouts ?? 0),
     },
+    biggestWin:
+      data.biggestWin && data.biggestWin.amountChips != null
+        ? {
+            amountChips: String(data.biggestWin.amountChips),
+            game: String(data.biggestWin.game ?? ''),
+            address: String(data.biggestWin.address ?? ''),
+            username: data.biggestWin.username != null ? String(data.biggestWin.username) : null,
+          }
+        : null,
   };
 }
 
@@ -147,6 +166,7 @@ function defaultPlatformAnalytics(): PlatformAnalytics {
     lottery: null,
     bigWheel: null,
     combined: { totalGamesPlayed: '0', totalVolume: '0', totalPayouts: '0' },
+    biggestWin: null,
   };
 }
 

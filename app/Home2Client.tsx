@@ -21,6 +21,8 @@ import {
   type WeeklyDropWinner,
 } from '@/components/home2/sections'
 import { HomeSidebar, ChipDock, DepositSheet, MobileTopBar } from '@/components/home2/nav'
+import { GameLauncherSheet } from '@/components/home2/game-launcher-sheet'
+import { DropSheet } from '@/components/home2/drop-sheet'
 import { PriceChartBg } from '@/components/home2/price-chart-bg'
 import { ChartModal } from '@/components/home2/chart-modal'
 import { EntrantsModal } from '@/components/home2/entrants-modal'
@@ -71,7 +73,8 @@ export default function Home2Client() {
   const { open } = useAppKit()
   const mode: 'player' | 'visitor' = isConnected ? 'player' : 'visitor'
 
-  const [sheetOpen, setSheetOpen] = useState(false)
+  /* dock bottom sheets — single state so only one is ever open at a time */
+  const [activeSheet, setActiveSheet] = useState<'deposit' | 'games' | 'drop' | null>(null)
   const [navOpen, setNavOpen] = useState(false)
   const [walletModalOpen, setWalletModalOpen] = useState(false)
   const [chartOpen, setChartOpen] = useState(false)
@@ -112,6 +115,9 @@ export default function Home2Client() {
   // totalPayouts is wei-scale (MORBIUS = 18 decimals) — convert to whole MORBIUS
   const totalWon = totals ? Math.round(Number(totals.totalPayouts) / 1e18) : undefined
   const gamesPlayed = totals ? Number(totals.totalGamesPlayed) : undefined
+  // All-time biggest single win (whole chips) from /api/analytics/platform;
+  // falls back to the recent-60 max until the backend ships the field
+  const allTimeBiggest = analytics.data?.biggestWin ? Number(analytics.data.biggestWin.amountChips) : undefined
   // Weekly Drop: live data from GET /api/drop; null → keep the "lighting soon" defaults
   const drop = weeklyDropQuery.data
   const topWin = useMemo(() => (wins.length ? wins.reduce((a, b) => (b.amount > a.amount ? b : a)) : null), [wins])
@@ -198,8 +204,24 @@ export default function Home2Client() {
     if (address) router.push(`/player/${address}`)
   }
 
+  const openSheet = (kind: 'deposit' | 'games' | 'drop') => {
+    setNavOpen(false)
+    setActiveSheet(kind)
+  }
+  const closeSheet = () => setActiveSheet(null)
+
+  // DROP badge on the dock: time until the live draw closes ('2d' / '5h'), null when no live draw
+  const dropBadge = useMemo(() => {
+    const t = weeklyDrop?.countdownTo?.getTime()
+    if (!t) return null
+    const ms = t - Date.now()
+    if (ms <= 0) return null
+    const days = Math.floor(ms / 86400000)
+    return days > 0 ? `${days}d` : `${Math.max(1, Math.floor(ms / 3600000))}h`
+  }, [weeklyDrop])
+
   return (
-    <div className={`home2${sheetOpen ? ' sheet-open' : ''}${navOpen ? ' nav-open' : ''}`} data-mode={mode}>
+    <div className={`home2${navOpen ? ' nav-open' : ''}`} data-mode={mode}>
       <SceneDefs />
       <div className="app">
         <HomeSidebar
@@ -237,7 +259,7 @@ export default function Home2Client() {
             <HeroVisitor
               gamesPlayed={gamesPlayed}
               morbiusWon={totalWon}
-              biggestWin={topWin?.amount}
+              biggestWin={allTimeBiggest ?? topWin?.amount}
               chartBg={<PriceChartBg />}
               onTakeSeat={onConnect}
             />
@@ -245,7 +267,7 @@ export default function Home2Client() {
           <VaultStrip
             value={totalWon}
             gamesPlayed={gamesPlayed != null ? gamesPlayed.toLocaleString('en-US') : undefined}
-            biggestWin={topWin ? topWin.amount.toLocaleString('en-US') : undefined}
+            biggestWin={(allTimeBiggest ?? topWin?.amount)?.toLocaleString('en-US')}
             onPriceClick={() => setChartOpen(true)}
           />
           <TonightsTable />
@@ -270,29 +292,44 @@ export default function Home2Client() {
       </div>
       <ChipDock
         balance={balanceStr}
-        onChipClick={() => setNavOpen(true)}
-        gamesHref="#floorGrid"
-        winsHref="#weeklyDrop"
-        youHref={address ? `/player/${address}` : '#'}
+        activeTab="home"
+        onChip={() => openSheet('deposit')}
+        onGames={() => openSheet('games')}
+        onDrop={() => openSheet('drop')}
+        onYou={() => {
+          setActiveSheet(null)
+          setNavOpen(true)
+        }}
+        dropBadge={dropBadge}
       />
       {navOpen && <div className="nav-veil" onClick={() => setNavOpen(false)} />}
       <DepositSheet
-        open={sheetOpen}
-        onClose={() => setSheetOpen(false)}
+        open={activeSheet === 'deposit'}
+        onClose={closeSheet}
         balance={balanceStr}
         subline={`${vip.tierName} tier · ${vip.rakeback} rakeback on losses`}
         onDeposit={() => {
-          setSheetOpen(false)
+          closeSheet()
           onDeposit()
         }}
         onWithdraw={() => {
-          setSheetOpen(false)
+          closeSheet()
           onDeposit()
         }}
         onDashboard={() => {
-          setSheetOpen(false)
+          closeSheet()
           onDashboard()
         }}
+      />
+      <GameLauncherSheet open={activeSheet === 'games'} onClose={closeSheet} />
+      <DropSheet
+        open={activeSheet === 'drop'}
+        onClose={closeSheet}
+        pot={weeklyDrop?.pot}
+        countdownTo={weeklyDrop?.countdownTo}
+        entries={mode === 'player' ? weeklyDrop?.entries ?? 0 : undefined}
+        totalEntrants={weeklyDrop?.totalEntrants ?? null}
+        statusPill={weeklyDrop?.statusPill}
       />
       <ChartModal open={chartOpen} onClose={() => setChartOpen(false)} />
       {walletModalOpen && <GameWalletModal isOpen={walletModalOpen} onClose={() => setWalletModalOpen(false)} />}
