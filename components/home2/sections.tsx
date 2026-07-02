@@ -205,7 +205,7 @@ export function HeroPlayer({
               </h1>
               <div className="vipline">
                 <span className="tier">{tierName}</span>You&apos;re <b>{wagerToNext} MORBIUS</b> from{' '}
-                <b>{nextTierName}</b> — that&apos;s {nextTierRakeback} rakeback on every bet.
+                <b>{nextTierName}</b> — that&apos;s {nextTierRakeback} back on every losing bet.
               </div>
             </div>
           </div>
@@ -324,8 +324,8 @@ export function HeroVisitor({
           PLAY. RANK UP.<span className="l2">GET PAID BACK.</span>
         </h1>
         <p className="sub">
-          Every bet earns <b>rakeback — win or lose</b>. Climb six VIP tiers from Bronze at 5% to Obsidian at{' '}
-          <b>25% back on every wager</b>. Build your avatar, take your seat, and make the house pay you.
+          Lose a bet, <b>get paid back</b>. Climb six VIP tiers from Bronze at 5% to Obsidian at{' '}
+          <b>25% back on every loss</b>. Build your avatar, take your seat, and make the house soften every hit.
         </p>
         <div className="ctas">
           <button className="cta-main" onClick={onTakeSeat}>
@@ -796,7 +796,7 @@ export function VipLadder({ currentTier = 'SILVER' }: { currentTier?: string }) 
         <h2>
           THE <em>LADDER</em>
         </h2>
-        <span className="sub">rakeback on every single bet — win or lose</span>
+        <span className="sub">rakeback on every losing bet — the house pays you back</span>
       </div>
       <div className="vip-strip">
         {VIP_TIERS.map((t) => (

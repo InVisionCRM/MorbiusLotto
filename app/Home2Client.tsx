@@ -103,7 +103,8 @@ export default function Home2Client() {
 
   // Live numbers: platform totals + recent-wins highlights
   const totals = analytics.data?.combined
-  const totalWon = totals ? Number(totals.totalPayouts) : undefined
+  // totalPayouts is wei-scale (MORBIUS = 18 decimals) — convert to whole MORBIUS
+  const totalWon = totals ? Math.round(Number(totals.totalPayouts) / 1e18) : undefined
   const gamesPlayed = totals ? Number(totals.totalGamesPlayed) : undefined
   const topWin = useMemo(() => (wins.length ? wins.reduce((a, b) => (b.amount > a.amount ? b : a)) : null), [wins])
 
@@ -119,7 +120,7 @@ export default function Home2Client() {
       const who = w.username ?? shortAddress(w.address)
       items.push(`<b class="e">💸 WIN</b> <b>${w.amount.toLocaleString('en-US')}</b> on ${gameLabel(w.game)} — ${who}`)
     }
-    items.push('<b class="c">👑 VIP</b> rakeback on every bet — Bronze 5% to Obsidian 25%')
+    items.push('<b class="c">👑 VIP</b> rakeback on losses — Bronze 5% to Obsidian 25%')
     items.push('<b class="g">🎟 WEEKLY DROP</b> lighting soon · top 3 win every Sunday 8PM')
     return items.length >= 4 ? items : undefined // fall back to defaults until data arrives
   }, [wins, topWin])
@@ -130,7 +131,7 @@ export default function Home2Client() {
     return [
       { html: `🏆 Recent high: <b>${topWin.amount.toLocaleString('en-US')}</b> on ${gameLabel(topWin.game)} — ${who}` },
       { html: `🎮 <b>${(gamesPlayed ?? 0).toLocaleString('en-US')}</b> games played all-time` },
-      { html: `👑 <b>${vip.rakeback}</b> rakeback on every bet at ${vip.tierName}` },
+      { html: `👑 <b>${vip.rakeback}</b> back on your losses at ${vip.tierName}` },
     ]
   }, [topWin, gamesPlayed, vip])
 
@@ -256,7 +257,7 @@ export default function Home2Client() {
         open={sheetOpen}
         onClose={() => setSheetOpen(false)}
         balance={balanceStr}
-        subline={`${vip.tierName} tier · ${vip.rakeback} rakeback on every bet`}
+        subline={`${vip.tierName} tier · ${vip.rakeback} rakeback on losses`}
         onDeposit={() => {
           setSheetOpen(false)
           onDeposit()
