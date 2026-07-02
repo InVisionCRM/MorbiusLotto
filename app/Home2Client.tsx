@@ -72,6 +72,7 @@ export default function Home2Client() {
   const mode: 'player' | 'visitor' = isConnected ? 'player' : 'visitor'
 
   const [sheetOpen, setSheetOpen] = useState(false)
+  const [navOpen, setNavOpen] = useState(false)
   const [walletModalOpen, setWalletModalOpen] = useState(false)
   const [chartOpen, setChartOpen] = useState(false)
   const [entrantsOpen, setEntrantsOpen] = useState(false)
@@ -194,7 +195,7 @@ export default function Home2Client() {
   }
 
   return (
-    <div className={`home2${sheetOpen ? ' sheet-open' : ''}`} data-mode={mode}>
+    <div className={`home2${sheetOpen ? ' sheet-open' : ''}${navOpen ? ' nav-open' : ''}`} data-mode={mode}>
       <SceneDefs />
       <div className="app">
         <HomeSidebar
@@ -263,7 +264,14 @@ export default function Home2Client() {
           <HomeFooter />
         </div>
       </div>
-      <ChipDock balance={balanceStr} onChipClick={() => setSheetOpen(true)} />
+      <ChipDock
+        balance={balanceStr}
+        onChipClick={() => setNavOpen(true)}
+        gamesHref="#floorGrid"
+        winsHref="#weeklyDrop"
+        youHref={address ? `/player/${address}` : '#'}
+      />
+      {navOpen && <div className="nav-veil" onClick={() => setNavOpen(false)} />}
       <DepositSheet
         open={sheetOpen}
         onClose={() => setSheetOpen(false)}

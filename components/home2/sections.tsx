@@ -744,7 +744,7 @@ export function WeeklyDrop({
   }, [countdownMs]);
 
   return (
-    <section className="jackpot">
+    <section className="jackpot" id="weeklyDrop">
       <div className="soon">{statusPill}</div>
       <h2>
         THE WEEKLY <span>DROP</span>

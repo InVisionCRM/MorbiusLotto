@@ -59,6 +59,7 @@
 .home2 .sb-balance::after{content:''; position:absolute; inset:0;
   background:linear-gradient(105deg,transparent 40%,rgba(255,255,255,.06) 50%,transparent 60%);
   animation:h2-sheen 4.5s linear infinite}
+@keyframes h2-navIn{from{transform:translateX(-100%)}to{transform:none}}
 @keyframes h2-sheen{0%{transform:translateX(-100%)}100%{transform:translateX(100%)}}
 .home2 .sb-balance .lbl{font-size:9px; letter-spacing:.16em; color:var(--text2); font-weight:700}
 .home2 .sb-balance .amt{font-size:19px; font-weight:800; margin:3px 0 8px}
@@ -474,8 +475,22 @@
 
 @media (max-width:1023px){
   .home2 .sidebar{display:none}
+  /* mobile nav drawer: the chip dock's center button opens the sidebar */
+  .home2.nav-open .sidebar{
+    display:flex; position:fixed; top:0; left:0; bottom:0; z-index:320;
+    width:min(300px, 84vw); height:100dvh;
+    padding-top:env(safe-area-inset-top, 0px);
+    box-shadow:24px 0 60px rgba(0,0,0,.6);
+    animation:h2-navIn .28s cubic-bezier(.2,.9,.25,1);
+  }
+  .home2 .nav-veil{display:none}
+  .home2.nav-open .nav-veil{
+    display:block; position:fixed; inset:0; z-index:310;
+    background:rgba(2,4,8,.65); backdrop-filter:blur(4px);
+  }
   .home2 .mob-bar{
     display:flex; position:sticky; top:0; z-index:100; align-items:center; gap:10px;
+    padding-top:calc(10px + env(safe-area-inset-top, 0px));
     padding:10px 14px; background:rgba(5,6,12,.85); backdrop-filter:blur(14px); border-bottom:1px solid var(--line);
   }
   .home2 .mob-bar .sb-logo{width:30px;height:30px;font-size:14px;border-radius:8px}
