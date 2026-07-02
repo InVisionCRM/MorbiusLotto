@@ -89,6 +89,21 @@ export const DROP_ENTRY_RATES: Record<string, bigint> = {
   // keno, plinko, arcade_mines, arcade_towers, arcade_chicken, arcade_pachinko,
   // arcade_cascade, arcade_firewalk, arcade_heist, arcade_greed_dice,
   // arcade_cipher, … (anything not listed uses DEFAULT_CHIPS_PER_ENTRY).
+  //
+  // Poker cash games are pot-based — there is no per-player `*_bet` ledger row
+  // to meter — so accrual keys off each player's RAKE share instead (wired in
+  // poker-game.service.ts hand settlement). Rake IS pure expected loss, so its
+  // rate is far below the turnover rates: 40 chips of rake ≈ the EV-loss behind
+  // one entry on the turnover games (dice 2,000 @ ~1% = 20; roulette 1,500 @
+  // ~2.7% = 40; keno 1,000 @ ~6% = 60).
+  poker_rake: 40n,
+  // Tournament buy-ins (poker chip tournaments via the 'tournament_buyin'
+  // ledger reason + legacy MORBIUS blackjack tournaments, wei → chips). ~3-5%
+  // of the buy-in is fee/rake → mid-edge, public base rate. Accrual is
+  // REVERSED (reverseWagerAccrual) when a buy-in is refunded (unregister /
+  // cancel) so register→refund loops can't farm tickets against the
+  // guaranteed pot.
+  tournament: 1000n,
 };
 
 /** Fallback rate for any game key not present in DROP_ENTRY_RATES. */
@@ -223,6 +238,8 @@ export interface CurrentDrop {
     progressWagered: string; // effective chips toward next entry (0..progressTarget-1)
     progressTarget: string;  // "1000" — public 1-entry-per-1000 scale
   } | null;
+  /** Players holding ≥ 1 entry in the open draw (drives "N players entered"). */
+  totalEntrants: number;
   lastWinners: Array<{
     rank: number;
     address: string;
@@ -382,6 +399,61 @@ export class WeeklyDropService {
     }
   }
 
+  /**
+   * Undo a prior accrual when a wager/buy-in is REFUNDED (e.g. tournament
+   * unregister, blackjack bet returned). Subtracts the refunded wager's
+   * effective chips from (entries × 1,000 + progress) and its 0.5% from the
+   * player's pot contribution, both clamped at 0 — so refund loops can't farm
+   * tickets, and a refund can never drive a row negative. Only touches the
+   * OPEN draw: if the draw already rolled over the reversal is a no-op there
+   * (clamped), an accepted edge. Same fail-safe contract as accrueFromWager:
+   * SAVEPOINT + swallow — never breaks the caller's settlement.
+   */
+  async reverseWagerAccrual(
+    client: PoolClient,
+    address: string,
+    wagerChips: bigint,
+    gameKey: string,
+  ): Promise<void> {
+    if (wagerChips <= 0n) return;
+    let addr: string;
+    try {
+      addr = normalizeAddr(address);
+    } catch {
+      return;
+    }
+    const chipsPerEntry = DROP_ENTRY_RATES[gameKey] ?? DEFAULT_CHIPS_PER_ENTRY;
+    const effectiveChips = (wagerChips * CHIPS_PER_ENTRY) / chipsPerEntry;
+    const potDelta = (wagerChips * DROP_POT_BPS) / 10000n;
+    if (effectiveChips <= 0n && potDelta <= 0n) return;
+
+    await client.query('SAVEPOINT weekly_drop_reversal');
+    try {
+      // NOTE: every SET expression reads the row's OLD values (SQL semantics),
+      // so entries/progress recompute from one shared "total effective" figure.
+      await client.query(
+        `UPDATE drop_entries de SET
+           entries         = FLOOR(GREATEST(de.entries * $4::NUMERIC + de.wager_progress - $2::NUMERIC, 0) / $4::NUMERIC)::INT,
+           wager_progress  = MOD(GREATEST(de.entries * $4::NUMERIC + de.wager_progress - $2::NUMERIC, 0), $4::NUMERIC),
+           pot_contributed = GREATEST(de.pot_contributed - $3::NUMERIC, 0),
+           updated_at      = NOW()
+         WHERE de.draw_id = (SELECT id FROM drop_draws WHERE status = 'open'
+                             ORDER BY closes_at ASC LIMIT 1)
+           AND de.player_address = $1`,
+        [addr, effectiveChips.toString(), potDelta.toString(), CHIPS_PER_ENTRY.toString()],
+      );
+      await client.query('RELEASE SAVEPOINT weekly_drop_reversal');
+    } catch (err) {
+      await client.query('ROLLBACK TO SAVEPOINT weekly_drop_reversal');
+      logger.error('[WeeklyDrop] refund reversal failed (settlement unaffected)', {
+        address: addr,
+        gameKey,
+        wagerChips: wagerChips.toString(),
+        error: (err as Error).message,
+      });
+    }
+  }
+
   // ──────────────────────────────────────────────────────────────────
   // Free daily entry
   // ──────────────────────────────────────────────────────────────────
@@ -453,11 +525,14 @@ export class WeeklyDropService {
       pot: string;
       guaranteed_min: string;
       status: string;
+      total_entrants: number;
     }>(
       `SELECT d.id, d.closes_at, d.guaranteed_min::TEXT AS guaranteed_min, d.status,
               (d.pot_chips + COALESCE(
                  (SELECT SUM(e.pot_contributed) FROM drop_entries e WHERE e.draw_id = d.id), 0
-               ))::TEXT AS pot
+               ))::TEXT AS pot,
+              (SELECT COUNT(*) FROM drop_entries e2
+                WHERE e2.draw_id = d.id AND e2.entries > 0)::INT AS total_entrants
        FROM drop_draws d
        WHERE d.status = 'open'
        ORDER BY d.closes_at ASC
@@ -523,6 +598,7 @@ export class WeeklyDropService {
         status: d.status,
       },
       you,
+      totalEntrants: Number(d.total_entrants ?? 0),
       lastWinners: last.rows.map((r) => ({
         rank: r.rank,
         address: r.player_address,
@@ -530,6 +606,58 @@ export class WeeklyDropService {
         amountChips: r.amount,
       })),
       commitment: last.rows[0]?.commitment ?? null,
+    };
+  }
+
+  /**
+   * Entrant list for GET /api/drop/entrants. Defaults to the OPEN draw when no
+   * drawId is given. Display names join chat_display_names (recent-wins style).
+   * Sorted entries DESC, then address ASC; capped at 500 rows (totals cover
+   * ALL entrants, not just the returned page). Null when no draw exists.
+   */
+  async getEntrants(drawId?: string): Promise<{
+    drawId: string;
+    totalEntrants: number;
+    totalEntries: number;
+    entrants: Array<{ address: string; displayName: string | null; entries: number }>;
+  } | null> {
+    let id = drawId;
+    if (id != null && !/^[0-9a-f-]{36}$/i.test(String(id))) return null;
+    if (!id) {
+      const open = await this.pool.query<{ id: string }>(
+        `SELECT id FROM drop_draws WHERE status = 'open' ORDER BY closes_at ASC LIMIT 1`,
+      );
+      if (open.rows.length === 0) return null;
+      id = open.rows[0].id;
+    }
+    const rows = await this.pool.query<{
+      player_address: string;
+      display_name: string | null;
+      entries: number;
+    }>(
+      `SELECT e.player_address, e.entries, cdn.display_name
+       FROM drop_entries e
+       LEFT JOIN chat_display_names cdn
+         ON LOWER(cdn.wallet_address) = LOWER(e.player_address)
+       WHERE e.draw_id = $1 AND e.entries > 0
+       ORDER BY e.entries DESC, e.player_address ASC
+       LIMIT 500`,
+      [id],
+    );
+    const totals = await this.pool.query<{ n: string; s: string }>(
+      `SELECT COUNT(*)::TEXT AS n, COALESCE(SUM(entries), 0)::TEXT AS s
+       FROM drop_entries WHERE draw_id = $1 AND entries > 0`,
+      [id],
+    );
+    return {
+      drawId: id,
+      totalEntrants: Number(totals.rows[0]?.n ?? '0'),
+      totalEntries: Number(totals.rows[0]?.s ?? '0'),
+      entrants: rows.rows.map((r) => ({
+        address: r.player_address,
+        displayName: r.display_name,
+        entries: r.entries,
+      })),
     };
   }
 

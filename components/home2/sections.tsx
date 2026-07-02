@@ -91,7 +91,7 @@ const DEFAULT_TICKER_ITEMS = [
   '<b class="c">👑 RANK UP</b> pTIGER hit GOLD — 12% rakeback',
   '<b class="o">🎁 RAKEBACK</b> 84,300 MORBIUS paid back to players',
   '<b class="c">🃏 TABLES</b> Blackjack #4 · 3 seats open now',
-  '<b class="g">🎟 WEEKLY DROP</b> pot at 26,412 · top 3 win Sunday 8PM',
+  '<b class="g">🎟 WEEKLY DROP</b> top 3 win every Sunday 8PM',
 ];
 
 export function HomeTicker({ items = DEFAULT_TICKER_ITEMS }: { items?: string[] }) {
@@ -424,13 +424,7 @@ export function VaultStrip({
     setVal(value);
   }, [value]);
 
-  /* lab: value += 3 + floor(random()*22) every 2600ms */
-  useEffect(() => {
-    const id = setInterval(() => {
-      setVal((v) => v + 3 + Math.floor(Math.random() * 22));
-    }, 2600);
-    return () => clearInterval(id);
-  }, []);
+  /* odometer rolls only when the real value changes (analytics refetch) */
 
   const str = val.toLocaleString('en-US');
 
@@ -667,6 +661,14 @@ export interface WeeklyDropProps {
   countdownTo?: Date;
   /** When true, the pot is real: skip the fake drip interval and just show `pot`. */
   potLive?: boolean;
+  /**
+   * Players holding ≥ 1 entry in the open draw. When set (backend live), a
+   * "N players entered · View entrants" line shows under the jp-you card in
+   * both player and visitor modes; omit to hide the line entirely.
+   */
+  totalEntrants?: number | null;
+  /** Opens the entrants modal (rendered by the page, e.g. Home2Client). */
+  onViewEntrants?: () => void;
 }
 
 /* port of the lab's nextDrop() — next Sunday 20:00 */
@@ -680,7 +682,7 @@ function nextDrop(): Date {
 }
 
 export function WeeklyDrop({
-  pot = 26412,
+  pot = 25000,
   entries = 14,
   progress = 68,
   entriesSub = (
@@ -693,6 +695,8 @@ export function WeeklyDrop({
   statusPill = '🎟 LIGHTING SOON',
   countdownTo,
   potLive = false,
+  totalEntrants = null,
+  onViewEntrants,
 }: WeeklyDropProps) {
   const [potVal, setPotVal] = useState(pot);
   useEffect(() => {
@@ -734,7 +738,7 @@ export function WeeklyDrop({
   }, [countdownMs]);
 
   return (
-    <section className="jackpot">
+    <section className="jackpot" id="weeklyDrop">
       <div className="soon">{statusPill}</div>
       <h2>
         THE WEEKLY <span>DROP</span>
@@ -779,6 +783,16 @@ export function WeeklyDrop({
           day just for signing in. Connect to start earning.
         </div>
       </div>
+
+      {/* live entrant count — hidden entirely when the backend/draw is absent */}
+      {totalEntrants != null && (
+        <div className="jp-entrants">
+          🎟 <b>{totalEntrants.toLocaleString('en-US')}</b> {totalEntrants === 1 ? 'player' : 'players'} entered ·{' '}
+          <button type="button" onClick={onViewEntrants}>
+            View entrants
+          </button>
+        </div>
+      )}
 
       {winners.length > 0 && (
         <>

@@ -59,6 +59,7 @@
 .home2 .sb-balance::after{content:''; position:absolute; inset:0;
   background:linear-gradient(105deg,transparent 40%,rgba(255,255,255,.06) 50%,transparent 60%);
   animation:h2-sheen 4.5s linear infinite}
+@keyframes h2-navIn{from{transform:translateX(-100%)}to{transform:none}}
 @keyframes h2-sheen{0%{transform:translateX(-100%)}100%{transform:translateX(100%)}}
 .home2 .sb-balance .lbl{font-size:9px; letter-spacing:.16em; color:var(--text2); font-weight:700}
 .home2 .sb-balance .amt{font-size:19px; font-weight:800; margin:3px 0 8px}
@@ -401,6 +402,13 @@
 .home2 .jp-you .bar i{display:block; height:100%; width:68%; border-radius:99px;
   background:linear-gradient(90deg,#f59e0b,#fde68a); box-shadow:0 0 12px rgba(251,191,36,.6); animation:h2-vipGlow 2.2s ease-in-out infinite}
 .home2 .jp-you .sub{font-size:10px; color:var(--text2); margin-top:7px; line-height:1.5}
+.home2 .jp-entrants{font-size:10.5px; color:var(--text2); margin:-10px auto 20px; position:relative; z-index:1}
+.home2 .jp-entrants b{color:var(--gold); font-variant-numeric:tabular-nums}
+.home2 .jp-entrants button{
+  background:none; border:0; padding:0; cursor:pointer; font:inherit; font-weight:800;
+  color:var(--gold); text-decoration:underline; text-underline-offset:3px;
+}
+.home2 .jp-entrants button:hover{color:#fde68a}
 .home2 .jp-wlbl{font-size:9px; letter-spacing:.22em; color:var(--muted); font-weight:800; margin-bottom:12px}
 .home2 .jp-winners{display:flex; gap:18px; justify-content:center; flex-wrap:wrap; margin-bottom:20px; position:relative; z-index:1}
 .home2 .jp-winners .w{display:flex; flex-direction:column; align-items:center; gap:3px; font-size:9.5px; color:var(--text2)}
@@ -467,8 +475,22 @@
 
 @media (max-width:1023px){
   .home2 .sidebar{display:none}
+  /* mobile nav drawer: the chip dock's center button opens the sidebar */
+  .home2.nav-open .sidebar{
+    display:flex; position:fixed; top:0; left:0; bottom:0; z-index:320;
+    width:min(300px, 84vw); height:100dvh;
+    padding-top:env(safe-area-inset-top, 0px);
+    box-shadow:24px 0 60px rgba(0,0,0,.6);
+    animation:h2-navIn .28s cubic-bezier(.2,.9,.25,1);
+  }
+  .home2 .nav-veil{display:none}
+  .home2.nav-open .nav-veil{
+    display:block; position:fixed; inset:0; z-index:310;
+    background:rgba(2,4,8,.65); backdrop-filter:blur(4px);
+  }
   .home2 .mob-bar{
     display:flex; position:sticky; top:0; z-index:100; align-items:center; gap:10px;
+    padding-top:calc(10px + env(safe-area-inset-top, 0px));
     padding:10px 14px; background:rgba(5,6,12,.85); backdrop-filter:blur(14px); border-bottom:1px solid var(--line);
   }
   .home2 .mob-bar .sb-logo{width:30px;height:30px;font-size:14px;border-radius:8px}
@@ -563,3 +585,58 @@
 }
 .home2 .home2-chart-modal .x:hover{color:var(--text); border-color:var(--line2)}
 .home2 .home2-chart-modal .panel iframe{flex:1; min-height:0; background:#0a0d16}
+
+/* ============================================================
+   ENTRANTS MODAL — who's in this week's Weekly Drop
+   (same overlay pattern as the chart modal above)
+   ============================================================ */
+.home2 .home2-entrants-modal{
+  position:fixed; inset:0; z-index:400;
+  display:flex; align-items:center; justify-content:center;
+  background:rgba(2,4,8,.75);
+  backdrop-filter:blur(6px); -webkit-backdrop-filter:blur(6px);
+}
+.home2 .home2-entrants-modal .panel{
+  width:min(460px,94vw); max-height:min(640px,86vh);
+  display:flex; flex-direction:column; overflow:hidden;
+  border-radius:16px; border:1px solid rgba(148,163,184,.18);
+  background:#0a0d16; box-shadow:0 30px 80px rgba(0,0,0,.6);
+}
+.home2 .home2-entrants-modal .head{
+  display:flex; align-items:center; gap:10px;
+  padding:12px 16px; border-bottom:1px solid var(--line);
+}
+.home2 .home2-entrants-modal .head b{font-family:var(--display); font-size:13px; letter-spacing:.04em}
+.home2 .home2-entrants-modal .head .count{
+  font-size:10.5px; font-weight:800; padding:3px 8px; border-radius:999px;
+  color:var(--gold); background:rgba(251,191,36,.12); font-variant-numeric:tabular-nums;
+  white-space:nowrap;
+}
+.home2 .home2-entrants-modal .x{
+  margin-left:auto; width:28px; height:28px; border-radius:8px; flex:none;
+  display:grid; place-items:center; font-size:13px;
+  color:var(--text2); background:var(--panel2); border:1px solid var(--line);
+}
+.home2 .home2-entrants-modal .x:hover{color:var(--text); border-color:var(--line2)}
+.home2 .home2-entrants-modal .body{flex:1; min-height:120px; overflow-y:auto; padding:6px 8px}
+.home2 .home2-entrants-modal .empty{padding:28px 16px; text-align:center; font-size:11.5px; color:var(--text2); line-height:1.6}
+.home2 .home2-entrants-modal .row{
+  display:flex; align-items:center; gap:10px; padding:8px 10px; border-radius:10px;
+}
+.home2 .home2-entrants-modal .row:hover{background:rgba(148,163,184,.06)}
+.home2 .home2-entrants-modal .row .rank{
+  width:30px; flex:none; font-size:10px; font-weight:800; color:var(--muted);
+  font-variant-numeric:tabular-nums;
+}
+/* mini version of the jackpot winner avatar circle */
+.home2 .home2-entrants-modal .row .av{
+  width:28px; height:28px; border-radius:50%; flex:none; display:grid; place-items:center;
+  font-family:var(--display); font-size:11px; color:#0b0e16; border:2px solid rgba(255,255,255,.18);
+}
+.home2 .home2-entrants-modal .row .name{
+  flex:1; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;
+  font-size:11.5px; font-weight:700; color:var(--text);
+}
+.home2 .home2-entrants-modal .row .tix{
+  flex:none; font-size:11px; font-weight:800; color:var(--gold); font-variant-numeric:tabular-nums;
+}

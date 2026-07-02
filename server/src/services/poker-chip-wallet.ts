@@ -115,6 +115,53 @@ export function setWeeklyDropWagerHook(hook: WeeklyDropWagerHook | null): void {
   weeklyDropWagerHook = hook;
 }
 
+/**
+ * Refund counterpart (WeeklyDropService.reverseWagerAccrual): when a wager or
+ * tournament buy-in is returned to the player, its Weekly Drop accrual is
+ * unwound so register→refund loops can't farm raffle tickets. Same signature
+ * and fail-safe contract as the wager hook.
+ */
+let weeklyDropRefundHook: WeeklyDropWagerHook | null = null;
+
+export function setWeeklyDropRefundHook(hook: WeeklyDropWagerHook | null): void {
+  weeklyDropRefundHook = hook;
+}
+
+/**
+ * Fail-safe invokers for settlement paths that DON'T produce a `*_bet` /
+ * `*_refund` chip-ledger row (poker cash rake in poker-game.service.ts, the
+ * legacy wei-balance MORBIUS tournaments in tournament.service.ts). `client`
+ * must be inside an open transaction; errors are logged and swallowed so the
+ * raffle can never break game settlement.
+ */
+export async function runWeeklyDropAccrual(
+  client: PoolClient,
+  walletAddress: string,
+  wagerChips: bigint,
+  gameKey: string,
+): Promise<void> {
+  if (!weeklyDropWagerHook || wagerChips <= 0n) return;
+  try {
+    await weeklyDropWagerHook(client, walletAddress.trim().toLowerCase(), wagerChips, gameKey);
+  } catch (err) {
+    logger.error('Weekly Drop accrual failed (ignored)', { gameKey, error: (err as Error)?.message });
+  }
+}
+
+export async function runWeeklyDropReversal(
+  client: PoolClient,
+  walletAddress: string,
+  wagerChips: bigint,
+  gameKey: string,
+): Promise<void> {
+  if (!weeklyDropRefundHook || wagerChips <= 0n) return;
+  try {
+    await weeklyDropRefundHook(client, walletAddress.trim().toLowerCase(), wagerChips, gameKey);
+  } catch (err) {
+    logger.error('Weekly Drop reversal failed (ignored)', { gameKey, error: (err as Error)?.message });
+  }
+}
+
 function normalizeAddr(addr: string): string {
   const a = addr.trim().toLowerCase();
   if (!/^0x[a-fA-F0-9]{40}$/.test(a)) throw new Error('Invalid wallet address');
@@ -182,11 +229,42 @@ export async function applyPokerChipDelta(
   // (`*_bet` debit) funds 0.5% of the pot + entry progress. Fail-safe by
   // design — the hook SAVEPOINTs its own work and errors never reach the
   // game settlement this delta belongs to.
-  if (weeklyDropWagerHook && delta < 0n && reason.endsWith('_bet')) {
-    try {
-      await weeklyDropWagerHook(client, addr, -delta, reason.slice(0, -'_bet'.length));
-    } catch (err) {
-      logger.error('Weekly Drop wager hook failed (ignored)', { reason, error: (err as Error)?.message });
+  if (delta < 0n && reason.endsWith('_bet')) {
+    await runWeeklyDropAccrual(client, addr, -delta, reason.slice(0, -'_bet'.length));
+  } else if (delta < 0n && reason === 'tournament_buyin') {
+    // Poker tournament buy-in — a real wager, but its reason doesn't carry the
+    // `_bet` suffix. Accrues under the shared 'tournament' game key (rate in
+    // DROP_ENTRY_RATES); the matching 'tournament_refund' credit below unwinds
+    // it, so unregister loops can't farm tickets.
+    await runWeeklyDropAccrual(client, addr, -delta, 'tournament');
+  } else if (delta > 0n && reason.endsWith('_refund')) {
+    // Bet / buy-in returned (blackjack_refund, arcade_craps_refund,
+    // tournament_refund) — un-accrue what the original debit accrued so
+    // refunds are raffle-neutral. Game key must mirror the accrual key.
+    if (reason === 'tournament_refund') {
+      // Freeroll guarantee returns reuse 'tournament_refund' but their debit
+      // was 'tournament_create_guarantee', which never accrued — only unwind
+      // when this wallet actually paid a chip buy-in for this tournament.
+      // Fail-safe: a lookup error just skips the reversal, never settlement.
+      try {
+        const boughtIn = refId
+          ? await client.query(
+              `SELECT 1 FROM poker_chip_ledger
+               WHERE wallet_address = $1 AND reason = 'tournament_buyin' AND ref_id = $2
+               LIMIT 1`,
+              [addr, refId],
+            )
+          : null;
+        if (boughtIn && boughtIn.rows.length > 0) {
+          await runWeeklyDropReversal(client, addr, delta, 'tournament');
+        }
+      } catch (err) {
+        logger.error('Weekly Drop tournament reversal lookup failed (ignored)', {
+          error: (err as Error)?.message,
+        });
+      }
+    } else {
+      await runWeeklyDropReversal(client, addr, delta, reason.slice(0, -'_refund'.length));
     }
   }
   logger.debug('Poker chip delta', { wallet: addr, delta: delta.toString(), after: after.toString(), reason });

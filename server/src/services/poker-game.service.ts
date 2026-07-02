@@ -12,7 +12,7 @@ const SPONSOR_TOKEN_NAME_MAX = 128;
 const SPONSOR_TOKEN_SYMBOL_MAX = 32;
 const SPONSOR_TOKEN_LOGO_URL_MAX = 1024;
 const ETH_ADDRESS_RE = /^0x[a-fA-F0-9]{40}$/;
-import { applyPokerChipDelta, ensurePokerChips } from './poker-chip-wallet';
+import { applyPokerChipDelta, ensurePokerChips, runWeeklyDropAccrual } from './poker-chip-wallet';
 import {
   applyWheelWagerCredit,
   recordDailyMilestone,
@@ -2800,6 +2800,17 @@ export class PokerGameService {
     if (totalRakeChips > 0n && !isTournament) {
       await this.dbService.withTransaction(async (c) => {
         await applyPokerChipDelta(c, rakeWallet, totalRakeChips, 'rake', { type: 'poker_hand', id: handId });
+        // Weekly Drop (WEEKLY_DROP_SPEC.md): poker cash wagers are pot-based —
+        // no per-player `*_bet` ledger row exists to trigger the settlement
+        // hook — so the raffle accrues on each player's RAKE share instead
+        // (the only per-player sunk cost the hand produces; rake is charged
+        // to pot winners, see rakeByAddr above). Rate: DROP_ENTRY_RATES
+        // 'poker_rake' — rake is pure expected loss, so ~40 chips of rake
+        // buys one entry, in line with other games' EV-loss per entry.
+        // runWeeklyDropAccrual is fail-safe: errors never break settlement.
+        for (const [addr, rakeChips] of rakeByAddr) {
+          if (rakeChips > 0n) await runWeeklyDropAccrual(c, addr, rakeChips, 'poker_rake');
+        }
       });
       logger.info('Poker rake collected (chips)', { handId, tableId, rakeChips: totalRakeChips.toString(), wallet: rakeWallet });
     }

@@ -23,6 +23,7 @@ import {
 import { HomeSidebar, ChipDock, DepositSheet, MobileTopBar } from '@/components/home2/nav'
 import { PriceChartBg } from '@/components/home2/price-chart-bg'
 import { ChartModal } from '@/components/home2/chart-modal'
+import { EntrantsModal } from '@/components/home2/entrants-modal'
 import { formatWholeMorbius } from '@/components/shared/NavBalanceDisplay'
 import { useProfile } from '@/hooks/use-player-profile'
 import { useVipTier } from '@/hooks/use-vip-tier'
@@ -71,8 +72,10 @@ export default function Home2Client() {
   const mode: 'player' | 'visitor' = isConnected ? 'player' : 'visitor'
 
   const [sheetOpen, setSheetOpen] = useState(false)
+  const [navOpen, setNavOpen] = useState(false)
   const [walletModalOpen, setWalletModalOpen] = useState(false)
   const [chartOpen, setChartOpen] = useState(false)
+  const [entrantsOpen, setEntrantsOpen] = useState(false)
 
   const { profileDisplayName } = useProfile()
   const vipTier = useVipTier(address)
@@ -109,6 +112,8 @@ export default function Home2Client() {
   // totalPayouts is wei-scale (MORBIUS = 18 decimals) — convert to whole MORBIUS
   const totalWon = totals ? Math.round(Number(totals.totalPayouts) / 1e18) : undefined
   const gamesPlayed = totals ? Number(totals.totalGamesPlayed) : undefined
+  // Weekly Drop: live data from GET /api/drop; null → keep the "lighting soon" defaults
+  const drop = weeklyDropQuery.data
   const topWin = useMemo(() => (wins.length ? wins.reduce((a, b) => (b.amount > a.amount ? b : a)) : null), [wins])
 
   const tickerItems = useMemo(() => {
@@ -124,9 +129,13 @@ export default function Home2Client() {
       items.push(`<b class="e">💸 WIN</b> <b>${w.amount.toLocaleString('en-US')}</b> on ${gameLabel(w.game)} — ${who}`)
     }
     items.push('<b class="c">👑 VIP</b> rakeback on losses — Bronze 5% to Obsidian 25%')
-    items.push('<b class="g">🎟 WEEKLY DROP</b> lighting soon · top 3 win every Sunday 8PM')
+    items.push(
+      drop?.draw
+        ? `<b class="g">🎟 WEEKLY DROP</b> pot at ${Number(drop.draw.potChips).toLocaleString('en-US')} · top 3 win Sunday 8PM`
+        : '<b class="g">🎟 WEEKLY DROP</b> lighting soon · top 3 win every Sunday 8PM'
+    )
     return items.length >= 4 ? items : undefined // fall back to defaults until data arrives
-  }, [wins, topWin])
+  }, [wins, topWin, drop])
 
   const digest = useMemo<HeroPlayerDigestItem[] | undefined>(() => {
     if (!topWin) return undefined
@@ -150,8 +159,6 @@ export default function Home2Client() {
       }
     : undefined
 
-  // Weekly Drop: live data from GET /api/drop; null → keep the "lighting soon" defaults
-  const drop = weeklyDropQuery.data
   const weeklyDrop = useMemo(() => {
     if (!drop?.draw) return null
     const you = drop.you
@@ -173,6 +180,8 @@ export default function Home2Client() {
       statusPill: `🎟 DROP #${drop.draw.id} · LIVE`,
       countdownTo: new Date(drop.draw.closesAt),
       entries: you?.entries ?? 0,
+      // Older backends omit totalEntrants — null hides the entrants line.
+      totalEntrants: drop.totalEntrants ?? null,
       progress,
       entriesSub: (
         <>
@@ -190,7 +199,7 @@ export default function Home2Client() {
   }
 
   return (
-    <div className={`home2${sheetOpen ? ' sheet-open' : ''}`} data-mode={mode}>
+    <div className={`home2${sheetOpen ? ' sheet-open' : ''}${navOpen ? ' nav-open' : ''}`} data-mode={mode}>
       <SceneDefs />
       <div className="app">
         <HomeSidebar
@@ -259,7 +268,14 @@ export default function Home2Client() {
           <HomeFooter />
         </div>
       </div>
-      <ChipDock balance={balanceStr} onChipClick={() => setSheetOpen(true)} />
+      <ChipDock
+        balance={balanceStr}
+        onChipClick={() => setNavOpen(true)}
+        gamesHref="#floorGrid"
+        winsHref="#weeklyDrop"
+        youHref={address ? `/player/${address}` : '#'}
+      />
+      {navOpen && <div className="nav-veil" onClick={() => setNavOpen(false)} />}
       <DepositSheet
         open={sheetOpen}
         onClose={() => setSheetOpen(false)}
