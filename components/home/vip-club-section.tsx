@@ -29,7 +29,7 @@ const FALLBACK_TIERS: PromoTier[] = [
 ]
 
 const BENEFITS = [
-  { icon: Percent, text: 'Rakeback on every bet — win or lose' },
+  { icon: Percent, text: 'Rakeback on your losses — the house pays you back' },
   { icon: Gift, text: 'One-time MORBIUS bonus each time you rank up' },
   { icon: Sparkles, text: 'Claim instantly to chips, anytime' },
   { icon: ShieldCheck, text: 'Your tier badge shows at the tables' },
@@ -68,7 +68,7 @@ export function VipClubSection() {
       <div className="mb-10 text-center">
         <h2 className={cn(homeSectionTitleClass, 'text-white')}>VIP Club</h2>
         <p className={homeSectionSubtitleClass}>
-          Every bet earns you back. Climb the tiers, unlock bonuses, and claim rakeback in MORBIUS.
+          The house pays you back. Climb the tiers, unlock bonuses, and claim rakeback on your losses in MORBIUS.
         </p>
       </div>
 
@@ -91,8 +91,8 @@ export function VipClubSection() {
 
           <h3 className="mt-4 text-2xl font-bold text-white sm:text-3xl">Get paid to play</h3>
           <p className="mt-2 max-w-md text-sm leading-relaxed text-slate-300/80">
-            Wagering on any MORBIUS game builds your lifetime total — that sets your tier and earns you a slice
-            of every bet back as rakeback. The higher you climb, the more you earn.
+            Wagering on any MORBIUS game builds your lifetime total — that sets your tier and your rakeback
+            rate: a slice of every net loss paid back to you. The higher you climb, the bigger the slice.
           </p>
 
           <ul className="mt-5 space-y-2.5">

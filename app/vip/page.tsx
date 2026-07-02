@@ -5,7 +5,7 @@ import { useAccount } from 'wagmi'
 import Link from 'next/link'
 import { toast } from 'sonner'
 import { motion } from 'framer-motion'
-import { Crown, Gift, Sparkles, Loader2, Coins, CalendarDays, Wallet, Percent, TrendingUp } from 'lucide-react'
+import { Crown, Gift, Sparkles, Loader2, Coins, Wallet, Percent, TrendingUp } from 'lucide-react'
 import GlobalMainNav from '@/components/shared/GlobalMainNav'
 import { useSiwe } from '@/contexts/siwe-context'
 import { useVipStatus, type VipTier } from '@/hooks/use-vip-status'
@@ -66,12 +66,7 @@ export default function VipPage() {
   const claimable = useMemo(() => {
     if (!status) return 0n
     try {
-      return (
-        BigInt(status.claimableRakebackChips) +
-        BigInt(status.pendingTierBonusChips) +
-        BigInt(status.weeklyCashbackChips) +
-        BigInt(status.monthlyCashbackChips)
-      )
+      return BigInt(status.claimableRakebackChips) + BigInt(status.pendingTierBonusChips)
     } catch {
       return 0n
     }
@@ -147,7 +142,7 @@ export default function VipPage() {
               </div>
               <div>
                 <h1 className="text-2xl font-bold text-white sm:text-3xl">VIP Club</h1>
-                <p className="text-sm text-white/55">Wager, level up, and claim rakeback in MORBIUS.</p>
+                <p className="text-sm text-white/55">Wager to climb the tiers — and get a cut of your losses back as rakeback in MORBIUS.</p>
               </div>
             </div>
             <Link
@@ -271,16 +266,6 @@ export default function VipPage() {
                       <span className="rounded-md bg-white/5 px-2 py-1 text-white/60">
                         Rakeback {fmtCompact(status.claimableRakebackChips)}
                       </span>
-                      {BigInt(status.weeklyCashbackChips) > 0n && (
-                        <span className="rounded-md bg-white/5 px-2 py-1 text-white/60">
-                          Weekly {fmtCompact(status.weeklyCashbackChips)}
-                        </span>
-                      )}
-                      {BigInt(status.monthlyCashbackChips) > 0n && (
-                        <span className="rounded-md bg-white/5 px-2 py-1 text-white/60">
-                          Monthly {fmtCompact(status.monthlyCashbackChips)}
-                        </span>
-                      )}
                       {BigInt(status.pendingTierBonusChips) > 0n && (
                         <span
                           className="rounded-md px-2 py-1 font-medium"
@@ -303,17 +288,17 @@ export default function VipPage() {
                 </div>
               </motion.div>
 
-              {/* STAT CHIPS — rolling context, not repeated from the hero */}
+              {/* STAT CHIPS — supporting context, not repeated from the hero */}
               <div className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-4">
                 <StatChip
-                  icon={<CalendarDays className="h-3.5 w-3.5" />}
-                  label="7-day volume"
-                  value={fmtChips(status.wager7dChips)}
+                  icon={<TrendingUp className="h-3.5 w-3.5" />}
+                  label="Lifetime wagered"
+                  value={fmtChips(status.lifetimeWagerChips)}
                 />
                 <StatChip
-                  icon={<CalendarDays className="h-3.5 w-3.5" />}
-                  label="30-day volume"
-                  value={fmtChips(status.wager30dChips)}
+                  icon={<Gift className="h-3.5 w-3.5" />}
+                  label="Claimable rakeback"
+                  value={fmtChips(status.claimableRakebackChips)}
                 />
                 <StatChip
                   icon={<Coins className="h-3.5 w-3.5" />}
@@ -384,14 +369,6 @@ export default function VipPage() {
                   </div>
                   <div className="hidden text-right sm:block">
                     <div className="text-sm font-semibold text-white/80">
-                      {(t.weeklyCashbackBps ?? 0) + (t.monthlyCashbackBps ?? 0) > 0
-                        ? `${(t.weeklyCashbackBps / 100).toFixed(2)} / ${(t.monthlyCashbackBps / 100).toFixed(2)}%`
-                        : '—'}
-                    </div>
-                    <div className="text-[11px] text-white/40">wk / mo cashback</div>
-                  </div>
-                  <div className="hidden text-right sm:block">
-                    <div className="text-sm font-semibold text-white/80">
                       {BigInt(t.levelUpBonusChips || '0') > 0n ? `+${fmtCompact(t.levelUpBonusChips)}` : '—'}
                     </div>
                     <div className="text-[11px] text-white/40">bonus</div>
@@ -405,9 +382,9 @@ export default function VipPage() {
           <div className="mt-12">
             <h2 className="text-lg font-bold text-white">How the VIP Club works</h2>
             <p className="mt-1.5 max-w-2xl text-sm leading-relaxed text-white/55">
-              The more you play, the more you earn back. Every bet across every MORBIUS game builds your
-              lifetime wagered total — that single number sets your tier and your rewards. Everything pays out
-              in MORBIUS chips (1 chip = 1 MORBIUS).
+              The more you play, the higher you climb. Every bet across every MORBIUS game builds your
+              lifetime wagered total — that single number sets your tier and your rakeback rate. Everything
+              pays out in MORBIUS chips (1 chip = 1 MORBIUS).
             </p>
             <div className="mt-5 grid gap-3 sm:grid-cols-2">
               {[
@@ -418,13 +395,8 @@ export default function VipPage() {
                 },
                 {
                   icon: <Percent className="h-4 w-4" />,
-                  t: 'Earn rakeback on every bet',
-                  d: 'From Bronze upward, a slice of every wager comes back to you as rakeback. The higher your tier, the higher the rate — and it accrues automatically while you play, win or lose.',
-                },
-                {
-                  icon: <CalendarDays className="h-4 w-4" />,
-                  t: 'Collect weekly & monthly cashback',
-                  d: 'On top of rakeback, your tier pays extra cashback on your rolling 7-day and 30-day wager — claimable once each week and once each month. Higher tiers get richer rates.',
+                  t: 'Get rakeback on your losses',
+                  d: 'From Bronze upward, a slice of every net loss comes back to you as rakeback — the higher your tier, the higher the rate. Win and you keep your winnings; lose and the house pays part of it back.',
                 },
                 {
                   icon: <Gift className="h-4 w-4" />,
