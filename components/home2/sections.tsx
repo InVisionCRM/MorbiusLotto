@@ -8,6 +8,7 @@
  */
 
 import React, { useEffect, useRef, useState } from 'react';
+import Link from 'next/link';
 import {
   PlinkoScene,
   CrashScene,
@@ -505,7 +506,7 @@ export function TonightsTable({ cards }: { cards?: React.ReactNode }) {
         {cards ?? (
           <>
             {/* featured: PLINKO */}
-            <div className="scene-card big" style={{ '--glow': 'rgba(34,211,238,.25)' } as React.CSSProperties}>
+            <Link href="/plinko2" className="scene-card big" style={{ '--glow': 'rgba(34,211,238,.25)' } as React.CSSProperties}>
               <span className="badge feat">★ FEATURED TONIGHT</span>
               <div className="stage">
                 <PlinkoScene />
@@ -520,10 +521,10 @@ export function TonightsTable({ cards }: { cards?: React.ReactNode }) {
                   <span className="st">top slot ×1000</span>
                 </div>
               </div>
-            </div>
+            </Link>
 
             {/* runner-up: CRASH */}
-            <div className="scene-card" style={{ '--glow': 'rgba(251,113,133,.22)' } as React.CSSProperties}>
+            <Link href="/crash" className="scene-card" style={{ '--glow': 'rgba(251,113,133,.22)' } as React.CSSProperties}>
               <span className="badge hot">🔥 HOT STREAK</span>
               <div className="stage">
                 <CrashScene />
@@ -538,10 +539,10 @@ export function TonightsTable({ cards }: { cards?: React.ReactNode }) {
                   </span>
                 </div>
               </div>
-            </div>
+            </Link>
 
             {/* runner-up: MINES */}
-            <div className="scene-card" style={{ '--glow': 'rgba(52,211,153,.2)' } as React.CSSProperties}>
+            <Link href="/mines2" className="scene-card" style={{ '--glow': 'rgba(52,211,153,.2)' } as React.CSSProperties}>
               <div className="stage">
                 <MinesScene />
               </div>
@@ -553,7 +554,7 @@ export function TonightsTable({ cards }: { cards?: React.ReactNode }) {
                   <span className="st">24 safe picks record</span>
                 </div>
               </div>
-            </div>
+            </Link>
           </>
         )}
       </div>
@@ -575,6 +576,7 @@ interface FloorGameEntry {
   badge?: string;
   badgeClass?: string;
   glow?: string;
+  href: string;
 }
 
 const FLOOR_FILTERS = [
@@ -616,7 +618,7 @@ export function TheFloor() {
             ...(visible ? {} : { display: 'none' }),
           };
           return (
-            <div key={g.key} className="scene-card" data-cat={g.cat} style={style}>
+            <Link key={g.key} href={g.href} className="scene-card" data-cat={g.cat} style={style}>
               {g.badge && <span className={`badge ${g.badgeClass ?? 'new'}`}>{g.badge}</span>}
               <div className="stage">
                 <g.Scene />
@@ -629,7 +631,7 @@ export function TheFloor() {
                   <span className="st">{g.blurb}</span>
                 </div>
               </div>
-            </div>
+            </Link>
           );
         })}
       </div>
