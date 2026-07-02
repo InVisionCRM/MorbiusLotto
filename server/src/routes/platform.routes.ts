@@ -140,7 +140,16 @@ export function registerPlatformRoutes({
       return sendJson(res, cached);
     }
     try {
-      const [blackjack, chain] = await Promise.all([dbService.getGlobalAnalytics(), chainAnalytics.getAllChainStats()]);
+      const [blackjack, chain, biggestWin] = await Promise.all([
+        dbService.getGlobalAnalytics(),
+        chainAnalytics.getAllChainStats(),
+        // All-time biggest single *_payout ledger win (whole chips). Non-fatal:
+        // the rest of the analytics payload should not 500 if this query fails.
+        dbService.getBiggestChipWin().catch((err) => {
+          logger.error('Error fetching biggest chip win:', err);
+          return null;
+        }),
+      ]);
       const bjGames = BigInt(blackjack.total_games_played);
       const bjVolume = blackjack.total_volume;
       const bjPayouts = blackjack.total_payouts;
@@ -161,7 +170,7 @@ export function registerPlatformRoutes({
         totalVolume: bjVolume + plinkoVolume + kenoVolume + lotteryVolume + bigWheelVolume,
         totalPayouts: bjPayouts + plinkoPayouts + kenoPayouts + lotteryPayouts + bigWheelPayouts,
       };
-      const payload = { blackjack, plinko: chain.plinko, keno: chain.keno, lottery: chain.lottery, bigWheel: chain.bigWheel, combined };
+      const payload = { blackjack, plinko: chain.plinko, keno: chain.keno, lottery: chain.lottery, bigWheel: chain.bigWheel, combined, biggestWin };
       setCachedAnalytics(cacheKey, payload);
       sendJson(res, payload);
     } catch (error) {

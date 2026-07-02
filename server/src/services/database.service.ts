@@ -2975,6 +2975,43 @@ export class DatabaseService implements MoneyDatabaseQueries {
     });
   }
 
+  /**
+   * All-time biggest single win: the MAX `*_payout` credit ever recorded in the
+   * unified chip ledger (whole chips, 1 chip = 1 MORBIUS). Same reason→game
+   * classification and display-name join as getRecentChipWins.
+   *
+   * NOTE on indexing: poker_chip_ledger only has indexes on
+   * (wallet_address, created_at DESC) and (ref_type, ref_id), so this
+   * ORDER BY delta DESC is a sequential scan. That is acceptable today because
+   * the result is served from the analytics response cache, but if the ledger
+   * grows large a partial index would be advisable, e.g.
+   *   CREATE INDEX idx_poker_chip_ledger_payout_delta
+   *     ON poker_chip_ledger (delta DESC) WHERE reason LIKE '%payout' AND delta > 0;
+   * (deliberately NOT added as a migration here).
+   */
+  async getBiggestChipWin(): Promise<{ amountChips: string; game: string; address: string; username: string | null } | null> {
+    const result = await this.pool.query(
+      `SELECT l.wallet_address, l.reason, l.delta::text AS delta,
+              cd.display_name AS username
+       FROM poker_chip_ledger l
+       LEFT JOIN chat_display_names cd ON LOWER(cd.wallet_address) = l.wallet_address
+       WHERE l.reason LIKE '%payout'
+         AND l.delta > 0
+       ORDER BY l.delta DESC
+       LIMIT 1`,
+    );
+    const row = result.rows[0];
+    if (!row) return null;
+    // GameArt / lobby keys are hyphenated (video-poker, dragon-tiger, …).
+    const game = classifyReason(String(row.reason ?? '')).gameKey.replace(/_/g, '-');
+    return {
+      amountChips: String(row.delta ?? '0'),
+      game,
+      address: row.wallet_address ?? '',
+      username: row.username ?? null,
+    };
+  }
+
   async getRecentGlobalWins(limit: number = 20): Promise<Array<{ gameId: string; playerAddress: string; result: string; betAmount: string; payout: string; timestamp: number }>> {
     const query = `
       SELECT
