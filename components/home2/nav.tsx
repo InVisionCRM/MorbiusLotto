@@ -16,6 +16,7 @@
 
 import Link from 'next/link';
 import React from 'react';
+import { IconHome, IconLayoutGrid, IconTicket, IconUserCircle } from '@tabler/icons-react';
 
 /* ------------------------------------------------------------------ */
 /* shared bits                                                          */
@@ -291,46 +292,75 @@ export function HomeSidebar({
 }
 
 /* ------------------------------------------------------------------ */
-/* ChipDock — mobile chip-rail dock                                     */
+/* ChipDock — mobile "Pit Rail" floating pill dock                      */
 /* ------------------------------------------------------------------ */
 
 export interface ChipDockProps {
   balance?: string;
-  onChipClick?: () => void;
-  homeHref?: string;
-  gamesHref?: string;
-  winsHref?: string;
-  youHref?: string;
+  /** Center gold chip — the money button (opens the DepositSheet). */
+  onChip?: () => void;
+  /** GAMES slot — opens the GameLauncherSheet. */
+  onGames?: () => void;
+  /** DROP slot — opens the DropSheet. */
+  onDrop?: () => void;
+  /** YOU slot — opens the nav drawer. */
+  onYou?: () => void;
+  /** e.g. '2d' — time until the Weekly Drop closes; null/undefined hides the badge. */
+  dropBadge?: string | null;
+  /** Player avatar node for the YOU slot; falls back to IconUserCircle. */
+  avatar?: React.ReactNode;
+  activeTab?: 'home' | 'games' | 'drop' | 'you' | string;
 }
 
 export function ChipDock({
   balance = '128,400',
-  onChipClick,
-  homeHref = '/',
-  gamesHref = '#',
-  winsHref = '#',
-  youHref = '#',
+  onChip,
+  onGames,
+  onDrop,
+  onYou,
+  dropBadge = null,
+  avatar,
+  activeTab = 'home',
 }: ChipDockProps) {
+  const cls = (tab: string) => `di${activeTab === tab ? ' on' : ''}`;
   return (
     <nav className="dock">
-      <Link className="di on" href={homeHref}>
-        <span className="ic">🏠</span>HOME
-      </Link>
-      <Link className="di" href={gamesHref}>
-        <span className="ic">🎮</span>GAMES<span className="bdg"></span>
-      </Link>
+      <button
+        type="button"
+        className={cls('home')}
+        onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })}
+      >
+        <span className="ic">
+          <IconHome size={22} stroke={1.8} />
+        </span>
+        <span className="lb">HOME</span>
+      </button>
+      <button type="button" className={cls('games')} onClick={onGames}>
+        <span className="ic">
+          <IconLayoutGrid size={22} stroke={1.8} />
+        </span>
+        <span className="lb">GAMES</span>
+        <span className="bdg"></span>
+      </button>
       <div className="chip-slot">
-        <button type="button" className="chip-btn" onClick={onChipClick}>
+        <button type="button" className="chip-btn" onClick={onChip}>
           <b>M</b>
         </button>
         <div className="chip-lbl">{balance}</div>
       </div>
-      <Link className="di" href={winsHref}>
-        <span className="ic">🏆</span>WINS
-      </Link>
-      <Link className="di" href={youHref}>
-        <span className="ic">🧑‍🎨</span>YOU
-      </Link>
+      <button type="button" className={cls('drop')} onClick={onDrop}>
+        <span className="ic">
+          <IconTicket size={22} stroke={1.8} />
+        </span>
+        <span className="lb">DROP</span>
+        {dropBadge ? <span className="bdg-txt">{dropBadge}</span> : null}
+      </button>
+      <button type="button" className={cls('you')} onClick={onYou}>
+        <span className="ic">
+          {avatar ? <span className="dock-av">{avatar}</span> : <IconUserCircle size={22} stroke={1.8} />}
+        </span>
+        <span className="lb">YOU</span>
+      </button>
     </nav>
   );
 }
@@ -351,12 +381,11 @@ export interface DepositSheetProps {
 }
 
 /**
- * IMPORTANT — open/close mechanics: in the lab, the sheet slides in when the
- * class `sheet-open` is toggled on <body> (`body.sheet-open .sheet{transform:none}`).
- * In the port that selector lives on the `.home2` wrapper instead, so the PARENT
- * is responsible for toggling `sheet-open` on the div.home2 wrapper (driven by
- * the same `open` prop it passes here). DepositSheet itself just renders the
- * veil + sheet divs; the `open` prop is only used for aria-hidden bookkeeping.
+ * Open/close mechanics: each sheet (deposit / game launcher / drop) toggles an
+ * `open` class on its OWN veil + panel (`.home2 .sheet.open{transform:none}`),
+ * so several sheets can coexist without a wrapper-level `.home2.sheet-open`
+ * class sliding them all up at once. The parent just drives the `open` prop
+ * and ensures only one sheet is open at a time.
  */
 export function DepositSheet({
   open,
@@ -370,8 +399,8 @@ export function DepositSheet({
 }: DepositSheetProps) {
   return (
     <>
-      <div className="sheet-veil" aria-hidden={!open} onClick={onClose}></div>
-      <div className="sheet" aria-hidden={!open}>
+      <div className={`sheet-veil${open ? ' open' : ''}`} aria-hidden={!open} onClick={onClose}></div>
+      <div className={`sheet${open ? ' open' : ''}`} aria-hidden={!open}>
         <div className="grab"></div>
         <h3>Your chip · {balance} MORBIUS</h3>
         <div className="sub">{subline}</div>
