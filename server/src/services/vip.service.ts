@@ -7,8 +7,13 @@
  *     summing the negative `*_bet` deltas in poker_chip_ledger (every house game
  *     already records these), so no separate volume table is maintained.
  *   - RAKEBACK accrues forward from player_vip_state.last_rakeback_claim_at at
- *     the current tier's rakeback_bps applied to wager turnover since that
- *     instant. Claiming credits chips and advances the cursor to NOW().
+ *     the current tier's rakeback_bps applied to the player's NET LOSS since
+ *     that instant — max(0, total bets − total payouts/refunds) over the
+ *     window — NOT to raw wager turnover. (Owner decision 2026-07-02: rakeback
+ *     is losses-only; tier progression stays wager-based.) Claiming credits
+ *     chips and advances the cursor to NOW(); the max(0, …) clamp means a
+ *     winning window simply accrues nothing — already-claimed rakeback is
+ *     never clawed back.
  *   - A one-time LEVEL-UP BONUS is granted for every tier crossed above
  *     player_vip_state.highest_tier_awarded.
  *
@@ -26,6 +31,20 @@ import type { ReferralService } from './referral.service';
 
 /** SQL fragment matching every wager (debit) ledger reason: plinko_bet, keno_bet, arcade_*_bet, … */
 const BET_REASON_PREDICATE = `reason LIKE '%\\_bet'`;
+
+/**
+ * SQL fragment matching every credit that offsets those `*_bet` debits when
+ * computing NET LOSS for rakeback (owner decision 2026-07-02: rakeback accrues
+ * on losses only, not wager volume):
+ *   - `*_payout`  — win/push credits for every house game (plinko_payout,
+ *     keno_payout, blackjack_payout, arcade_*_payout, video_poker_payout, …).
+ *   - `*_refund`  — a returned bet (blackjack_refund, arcade_craps_refund);
+ *     counted so a cancelled bet nets to 0 loss instead of farming rakeback.
+ *     `tournament_refund` is excluded: its debit is `tournament_buyin`, which
+ *     never matched BET_REASON_PREDICATE in the first place.
+ */
+const GAME_CREDIT_REASON_PREDICATE =
+  `(reason LIKE '%\\_payout' OR (reason LIKE '%\\_refund' AND reason <> 'tournament_refund'))`;
 
 export interface VipTier {
   tierLevel: number;
@@ -262,6 +281,39 @@ export class VipService {
     return v > 0n ? v : 0n;
   }
 
+  /**
+   * NET LOSS in the window: max(0, bets − payouts/refunds), the rakeback base
+   * per the 2026-07-02 owner decision (rakeback = rakeback_bps × net loss,
+   * losses only — a break-even or winning window accrues 0). Bets are negative
+   * deltas and credits positive, so -SUM(delta) over both reason sets is
+   * exactly bets − credits. Ledger rows are written at round settlement (the
+   * `*_payout` credit lands with — or immediately after — its `*_bet` debit),
+   * so at claim time the payout side of every settled bet is already visible.
+   * The clamp also guarantees a claim can never be negative / clawed back.
+   */
+  private async netLossSince(
+    db: Pool | PoolClient,
+    addr: string,
+    since: Date | null,
+  ): Promise<bigint> {
+    const params: unknown[] = [addr];
+    let sinceClause = '';
+    if (since) {
+      params.push(since.toISOString());
+      sinceClause = `AND created_at > $2`;
+    }
+    const { rows } = await db.query<{ net_loss: string }>(
+      `SELECT COALESCE(-SUM(delta), 0)::text AS net_loss
+       FROM poker_chip_ledger
+       WHERE wallet_address = $1
+         AND (${BET_REASON_PREDICATE} OR ${GAME_CREDIT_REASON_PREDICATE})
+         ${sinceClause}`,
+      params,
+    );
+    const v = BigInt(rows[0]?.net_loss ?? '0');
+    return v > 0n ? v : 0n;
+  }
+
   // ──────────────────────────────────────────────────────────────────
   // State row — lazily created (forward-looking rakeback cursor = NOW()).
   // ──────────────────────────────────────────────────────────────────
@@ -333,7 +385,8 @@ export class VipService {
     const lifetime = await this.wagerSince(this.pool, addr, null);
     const wager7d = await this.wagerSince(this.pool, addr, new Date(now - 7 * 86_400_000));
     const wager30d = await this.wagerSince(this.pool, addr, new Date(now - 30 * 86_400_000));
-    const wagerSinceClaim = await this.wagerSince(this.pool, addr, lastClaim);
+    // Rakeback base is NET LOSS since last claim, not wager (owner decision 2026-07-02).
+    const netLossSinceClaim = await this.netLossSince(this.pool, addr, lastClaim);
 
     const currentTier = this.tierForWager(tiers, lifetime);
     const nextTier = tiers.find((t) => t.tierLevel === currentTier.tierLevel + 1) ?? null;
@@ -349,8 +402,9 @@ export class VipService {
       progressPct = span > 0n ? Math.min(100, Math.max(0, Number((into * 10000n) / span) / 100)) : 0;
     }
 
-    // Rakeback uses the current tier's rate on turnover accrued since last claim.
-    const claimableRakeback = (wagerSinceClaim * BigInt(currentTier.rakebackBps)) / 10000n;
+    // Rakeback (2026-07-02 owner decision): current tier's rate × net loss
+    // (max(0, bets − payouts)) since last claim — losses only, never wager volume.
+    const claimableRakeback = (netLossSinceClaim * BigInt(currentTier.rakebackBps)) / 10000n;
     const pendingBonus = this.pendingBonus(tiers, state.highest_tier_awarded, currentTier.tierLevel);
 
     // Weekly/monthly cashback: tier bps × rolling-window wager, gated by cadence.
@@ -413,12 +467,15 @@ export class VipService {
 
       const now = Date.now();
       const lifetime = await this.wagerSince(client, addr, null);
-      const wagerSinceClaim = await this.wagerSince(client, addr, new Date(state.last_rakeback_claim_at));
+      // Rakeback base is NET LOSS since last claim (owner decision 2026-07-02:
+      // rakeback = bps × max(0, bets − payouts), losses only). Tier progression
+      // (`lifetime` above) intentionally stays wager-based.
+      const netLossSinceClaim = await this.netLossSince(client, addr, new Date(state.last_rakeback_claim_at));
       const wager7d = await this.wagerSince(client, addr, new Date(now - WEEK_MS));
       const wager30d = await this.wagerSince(client, addr, new Date(now - MONTH_MS));
       const currentTier = this.tierForWager(tiers, lifetime);
 
-      const rakebackChips = (wagerSinceClaim * BigInt(currentTier.rakebackBps)) / 10000n;
+      const rakebackChips = (netLossSinceClaim * BigInt(currentTier.rakebackBps)) / 10000n;
       const bonusChips = this.pendingBonus(tiers, state.highest_tier_awarded, currentTier.tierLevel);
       const weekly = this.cashbackFor(now, state.last_weekly_claim_at, WEEK_MS, currentTier.weeklyCashbackBps, wager7d);
       const monthly = this.cashbackFor(now, state.last_monthly_claim_at, MONTH_MS, currentTier.monthlyCashbackBps, wager30d);

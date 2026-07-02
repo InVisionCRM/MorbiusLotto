@@ -74,12 +74,13 @@ export type PokerChipLedgerReason =
   | 'migration'            // one-time players.balance (wei) → chip ledger move
   | 'holder_reward'     // MORBIUS holder epoch credit (1.25% slice → chips)
   | 'lp_holder_reward'  // LP holder epoch credit (1.5% slice → chips)
-  | 'vip_rakeback'      // VIP loyalty: % of wager turnover returned since last claim
+  | 'vip_rakeback'      // VIP loyalty: % of NET LOSS (bets − payouts) since last claim (owner decision 2026-07-02)
   | 'vip_tier_bonus'    // VIP loyalty: one-time chip bonus on reaching a new tier
   | 'vip_weekly_bonus'  // VIP loyalty: weekly cashback on rolling 7-day wager
   | 'vip_monthly_bonus' // VIP loyalty: monthly cashback on rolling 30-day wager
   | 'referral_welcome'  // referral: one-time welcome bonus credited to a referee on binding
-  | 'referral_reward';  // referral: % of a referee's rakeback credited to their referrer
+  | 'referral_reward'   // referral: % of a referee's rakeback credited to their referrer
+  | 'weekly_drop_prize'; // The Weekly Drop raffle prize (WEEKLY_DROP_SPEC.md) — auto-credit at draw
 
 const DEFAULT_PLATFORM_FEE_WALLET = '0x41682815b05fe6b54a6c0f8813bb99423ee0309d';
 
@@ -87,6 +88,31 @@ export function getPlatformFeeWalletLower(): string {
   const raw = process.env.PLATFORM_FEE_WALLET?.trim();
   if (raw && /^0x[a-fA-F0-9]{40}$/.test(raw)) return raw.toLowerCase();
   return DEFAULT_PLATFORM_FEE_WALLET;
+}
+
+/**
+ * The Weekly Drop settlement hook (WEEKLY_DROP_SPEC.md — "Settlement hook: on
+ * every settled bet, add 0.5% of wager to the open draw's pot and accrue entry
+ * progress at that game's rate").
+ *
+ * applyPokerChipDelta is the single choke point every game wager passes
+ * through (all `*_bet` debits land here — the same fact VipService relies on
+ * for wager volume), so the raffle accrues here. Registered from server.ts via
+ * setWeeklyDropWagerHook (a setter, mirroring setWheelBalanceListener, so this
+ * module never imports weekly-drop.service — no import cycle). The hook itself
+ * runs under a SAVEPOINT and never throws into game settlement.
+ */
+export type WeeklyDropWagerHook = (
+  client: PoolClient,
+  walletAddress: string,
+  wagerChips: bigint,
+  reason: string,
+) => Promise<void>;
+
+let weeklyDropWagerHook: WeeklyDropWagerHook | null = null;
+
+export function setWeeklyDropWagerHook(hook: WeeklyDropWagerHook | null): void {
+  weeklyDropWagerHook = hook;
 }
 
 function normalizeAddr(addr: string): string {
@@ -152,6 +178,17 @@ export async function applyPokerChipDelta(
      VALUES ($1, $2::NUMERIC, $3::NUMERIC, $4, $5, $6)`,
     [addr, delta.toString(), after.toString(), reason, ref?.type ?? null, refId],
   );
+  // Weekly Drop raffle accrual (WEEKLY_DROP_SPEC.md): every settled wager
+  // (`*_bet` debit) funds 0.5% of the pot + entry progress. Fail-safe by
+  // design — the hook SAVEPOINTs its own work and errors never reach the
+  // game settlement this delta belongs to.
+  if (weeklyDropWagerHook && delta < 0n && reason.endsWith('_bet')) {
+    try {
+      await weeklyDropWagerHook(client, addr, -delta, reason.slice(0, -'_bet'.length));
+    } catch (err) {
+      logger.error('Weekly Drop wager hook failed (ignored)', { reason, error: (err as Error)?.message });
+    }
+  }
   logger.debug('Poker chip delta', { wallet: addr, delta: delta.toString(), after: after.toString(), reason });
   return after;
 }

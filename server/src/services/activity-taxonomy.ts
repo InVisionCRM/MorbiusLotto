@@ -110,6 +110,9 @@ const EXPLICIT: Partial<Record<PokerChipLedgerReason, ActivityClassification>> =
   holder_reward: { gameKey: 'rewards', gameLabel: 'Holder Reward', kind: 'reward' },
   lp_holder_reward: { gameKey: 'rewards', gameLabel: 'LP Holder Reward', kind: 'reward' },
 
+  // The Weekly Drop raffle (WEEKLY_DROP_SPEC.md)
+  weekly_drop_prize: { gameKey: 'rewards', gameLabel: 'Weekly Drop Prize', kind: 'reward' },
+
   // One-time bookkeeping
   migration: { gameKey: 'system', gameLabel: 'Balance Migration', kind: 'adjustment' },
 };

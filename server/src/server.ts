@@ -48,7 +48,9 @@ import { WebSocketService } from './services/websocket.service';
 import { PokerGameService } from './services/poker-game.service';
 import { PokerTournamentService } from './services/poker-tournament.service';
 import { chipsToWei } from './lib/poker-chip-scale';
-import { applyPokerChipDelta, getPokerChipBalance } from './services/poker-chip-wallet';
+import { applyPokerChipDelta, getPokerChipBalance, setWeeklyDropWagerHook } from './services/poker-chip-wallet';
+import { WeeklyDropService } from './services/weekly-drop.service';
+import { registerDropRoutes } from './routes/drop.routes';
 import { BlackjackMultiGameService } from './services/blackjack-multi-game.service';
 import { ChainAnalyticsService } from './services/chain-analytics.service';
 import { InstantLotteryService } from './services/instant-lottery.service';
@@ -441,6 +443,16 @@ async function initializeServices() {
     const vipService = new VipService(dbService.getPool(), referralService);
     const gameActivityService = new GameActivityService(dbService.getPool());
 
+    // The Weekly Drop raffle (WEEKLY_DROP_SPEC.md): 0.5% of every settled bet
+    // funds a weekly pot, drawn Sunday 20:00 UTC. The wager hook plugs the
+    // accrual into applyPokerChipDelta (the single settlement choke point);
+    // start() ensures an open draw exists and polls for the due close.
+    const weeklyDropService = new WeeklyDropService(dbService.getPool());
+    setWeeklyDropWagerHook((client, addr, wagerChips, gameKey) =>
+      weeklyDropService.accrueFromWager(client, addr, wagerChips, gameKey),
+    );
+    weeklyDropService.start();
+
     // API routes
 
     // Telegram notification routes (inbound webhook + wallet-link flow).
@@ -482,6 +494,7 @@ async function initializeServices() {
     registerHolderRewardsPublicRoutes({ app, holderChipRewardsService });
     registerVipRoutes({ app, vipService, authService });
     registerReferralRoutes({ app, referralService, authService });
+    registerDropRoutes({ app, weeklyDropService, authService });
     registerActivityRoutes({ app, gameActivityService });
 
     // Public config (whitelisted keys only; used for ad creatives, etc.)
