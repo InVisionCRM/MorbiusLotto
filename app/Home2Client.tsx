@@ -21,6 +21,8 @@ import {
   type WeeklyDropWinner,
 } from '@/components/home2/sections'
 import { HomeSidebar, ChipDock, DepositSheet, MobileTopBar } from '@/components/home2/nav'
+import { PriceChartBg } from '@/components/home2/price-chart-bg'
+import { ChartModal } from '@/components/home2/chart-modal'
 import { formatWholeMorbius } from '@/components/shared/NavBalanceDisplay'
 import { useProfile } from '@/hooks/use-player-profile'
 import { useVipTier } from '@/hooks/use-vip-tier'
@@ -70,6 +72,7 @@ export default function Home2Client() {
 
   const [sheetOpen, setSheetOpen] = useState(false)
   const [walletModalOpen, setWalletModalOpen] = useState(false)
+  const [chartOpen, setChartOpen] = useState(false)
 
   const { profileDisplayName } = useProfile()
   const vipTier = useVipTier(address)
@@ -202,6 +205,7 @@ export default function Home2Client() {
           onConnect={onConnect}
           onDeposit={onDeposit}
           onWithdraw={onDeposit}
+          onChartClick={() => setChartOpen(true)}
         />
         <div className="main">
           <MobileTopBar mode={mode} onConnect={onConnect} />
@@ -216,6 +220,7 @@ export default function Home2Client() {
               resume={resume}
               balance={balanceStr}
               balanceUsd=""
+              chartBg={<PriceChartBg />}
               onDeposit={onDeposit}
               onDashboard={onDashboard}
             />
@@ -224,6 +229,7 @@ export default function Home2Client() {
               gamesPlayed={gamesPlayed}
               morbiusWon={totalWon}
               biggestWin={topWin?.amount}
+              chartBg={<PriceChartBg />}
               onTakeSeat={onConnect}
             />
           )}
@@ -231,6 +237,7 @@ export default function Home2Client() {
             value={totalWon}
             gamesPlayed={gamesPlayed != null ? gamesPlayed.toLocaleString('en-US') : undefined}
             biggestWin={topWin ? topWin.amount.toLocaleString('en-US') : undefined}
+            onPriceClick={() => setChartOpen(true)}
           />
           <TonightsTable />
           <TheFloor />
@@ -271,6 +278,7 @@ export default function Home2Client() {
           onDashboard()
         }}
       />
+      <ChartModal open={chartOpen} onClose={() => setChartOpen(false)} />
       {walletModalOpen && <GameWalletModal isOpen={walletModalOpen} onClose={() => setWalletModalOpen(false)} />}
     </div>
   )

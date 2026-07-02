@@ -123,6 +123,8 @@ export interface HomeSidebarProps {
   onConnect?: () => void;
   onDeposit?: () => void;
   onWithdraw?: () => void;
+  /** When provided, the "Swap · LP · Chart" footer row opens the chart modal. */
+  onChartClick?: () => void;
 }
 
 export function HomeSidebar({
@@ -138,6 +140,7 @@ export function HomeSidebar({
   onConnect,
   onDeposit,
   onWithdraw,
+  onChartClick,
 }: HomeSidebarProps) {
   return (
     <aside className="sidebar">
@@ -262,7 +265,23 @@ export function HomeSidebar({
           <span>MORBIUS</span>
           <b className="up">$0.00042 ▲</b>
         </div>
-        <div className="r">
+        <div
+          className="r"
+          onClick={onChartClick}
+          role={onChartClick ? 'button' : undefined}
+          tabIndex={onChartClick ? 0 : undefined}
+          onKeyDown={
+            onChartClick
+              ? (e) => {
+                  if (e.key === 'Enter' || e.key === ' ') {
+                    e.preventDefault();
+                    onChartClick();
+                  }
+                }
+              : undefined
+          }
+          style={onChartClick ? { cursor: 'pointer' } : undefined}
+        >
           <span>Swap · LP · Chart</span>
           <b style={{ color: 'var(--cyan)' }}>↗</b>
         </div>

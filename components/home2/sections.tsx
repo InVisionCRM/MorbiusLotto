@@ -153,6 +153,8 @@ export interface HeroPlayerProps {
   balance?: string;
   balanceUsd?: string;
   avatar?: React.ReactNode;
+  /** Optional ambient background layer (e.g. <PriceChartBg />) rendered behind .hero-inner. */
+  chartBg?: React.ReactNode;
   onDeposit?: () => void;
   onDashboard?: () => void;
 }
@@ -177,6 +179,7 @@ export function HeroPlayer({
   balance = '128,400',
   balanceUsd = '≈ $53.93 · reserve synced 4s ago',
   avatar = DEFAULT_AVATAR,
+  chartBg = null,
   onDeposit,
   onDashboard,
 }: HeroPlayerProps) {
@@ -192,6 +195,7 @@ export function HeroPlayer({
   return (
     <header className="hero only-player">
       <canvas id="heroCanvas" ref={canvasRef} />
+      {chartBg}
       <div className="hero-inner hp-grid">
         <div>
           <div className="hp-greet">
@@ -276,6 +280,8 @@ export interface HeroVisitorProps {
   morbiusWon?: number;
   biggestWin?: number;
   players?: number;
+  /** Optional ambient background layer (e.g. <PriceChartBg />) rendered behind .hero-inner. */
+  chartBg?: React.ReactNode;
   onTakeSeat?: () => void;
 }
 
@@ -284,6 +290,7 @@ export function HeroVisitor({
   morbiusWon = 61240000,
   biggestWin = 148200,
   players = 4216,
+  chartBg = null,
   onTakeSeat,
 }: HeroVisitorProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -318,6 +325,7 @@ export function HeroVisitor({
   return (
     <header className="hero only-visitor">
       <canvas id="heroCanvasV" ref={canvasRef} />
+      {chartBg}
       <div className="hero-inner hv">
         <div className="kick">THE MORBIUS CASINO · 26 GAMES</div>
         <h1>
@@ -396,6 +404,8 @@ export interface VaultStripProps {
   biggestWin?: string;
   price?: string;
   priceLabel?: string;
+  /** When provided, the price stat becomes clickable (opens the chart modal). */
+  onPriceClick?: () => void;
 }
 
 export function VaultStrip({
@@ -404,6 +414,7 @@ export function VaultStrip({
   biggestWin = '148,200',
   price = '$0.00042 ▲',
   priceLabel = 'MORBIUS / USD',
+  onPriceClick,
 }: VaultStripProps) {
   const [val, setVal] = useState(value);
 
@@ -453,7 +464,23 @@ export function VaultStrip({
           <div className="n gd">{biggestWin}</div>
           <div className="l">BIGGEST WIN</div>
         </div>
-        <div className="s">
+        <div
+          className="s"
+          onClick={onPriceClick}
+          role={onPriceClick ? 'button' : undefined}
+          tabIndex={onPriceClick ? 0 : undefined}
+          onKeyDown={
+            onPriceClick
+              ? (e) => {
+                  if (e.key === 'Enter' || e.key === ' ') {
+                    e.preventDefault();
+                    onPriceClick();
+                  }
+                }
+              : undefined
+          }
+          style={onPriceClick ? { cursor: 'pointer' } : undefined}
+        >
           <div className="n up">{price}</div>
           <div className="l">{priceLabel}</div>
         </div>
