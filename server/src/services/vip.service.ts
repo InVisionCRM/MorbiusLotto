@@ -53,10 +53,6 @@ export interface VipTier {
   rakebackBps: number;
   levelUpBonusChips: string;     // whole chips, as decimal string
   color: string;
-  /** Weekly cashback rate (bps of rolling 7-day wager), claimable once / 7 days. */
-  weeklyCashbackBps: number;
-  /** Monthly cashback rate (bps of rolling 30-day wager), claimable once / 30 days. */
-  monthlyCashbackBps: number;
 }
 
 /** Minimal, PUBLIC view of a wallet's tier — safe to expose for badges/leaderboards. */
@@ -71,10 +67,8 @@ export interface VipPublicTier {
 
 export interface VipStatus {
   address: string;
-  /** Wager turnover in whole chips, as decimal strings. */
+  /** Lifetime wager turnover in whole chips, as a decimal string (drives tier). */
   lifetimeWagerChips: string;
-  wager7dChips: string;
-  wager30dChips: string;
   /** Current tier and the next rung (null at the top of the ladder). */
   currentTier: VipTier;
   nextTier: VipTier | null;
@@ -85,15 +79,6 @@ export interface VipStatus {
   /** Claimable now (whole chips, decimal strings). */
   claimableRakebackChips: string;
   pendingTierBonusChips: string;
-  /** Weekly/monthly cashback claimable right now (0 until the cadence elapses). */
-  weeklyCashbackChips: string;
-  monthlyCashbackChips: string;
-  /** Whether the weekly/monthly cadence has elapsed (claimable this cycle). */
-  weeklyCashbackReady: boolean;
-  monthlyCashbackReady: boolean;
-  /** ISO timestamps when the next weekly/monthly cashback unlocks (null = ready now). */
-  weeklyCashbackReadyAt: string | null;
-  monthlyCashbackReadyAt: string | null;
   /** Lifetime claimed totals. */
   lifetimeRakebackChips: string;
   lifetimeBonusChips: string;
@@ -104,8 +89,6 @@ export interface VipStatus {
 export interface VipClaimResult {
   rakebackCredited: string;
   bonusCredited: string;
-  weeklyCredited: string;
-  monthlyCredited: string;
   totalCredited: string;
   chipBalance: string;
   newTier: VipTier;
@@ -117,12 +100,7 @@ interface VipStateRow {
   highest_tier_awarded: number;
   lifetime_rakeback_chips: string;
   lifetime_bonus_chips: string;
-  last_weekly_claim_at: string | null;
-  last_monthly_claim_at: string | null;
 }
-
-const WEEK_MS = 7 * 86_400_000;
-const MONTH_MS = 30 * 86_400_000;
 
 function normalizeAddr(addr: string): string {
   const a = addr.trim().toLowerCase();
@@ -155,12 +133,9 @@ export class VipService {
       rakeback_bps: number;
       level_up_bonus_chips: string;
       color: string;
-      weekly_cashback_bps: number;
-      monthly_cashback_bps: number;
     }>(
       `SELECT tier_level, tier_name, min_lifetime_wager_chips::text AS min_lifetime_wager_chips,
-              rakeback_bps, level_up_bonus_chips::text AS level_up_bonus_chips, color,
-              weekly_cashback_bps, monthly_cashback_bps
+              rakeback_bps, level_up_bonus_chips::text AS level_up_bonus_chips, color
        FROM vip_tier_config
        ORDER BY tier_level ASC`,
     );
@@ -171,8 +146,6 @@ export class VipService {
       rakebackBps: r.rakeback_bps,
       levelUpBonusChips: r.level_up_bonus_chips,
       color: r.color,
-      weeklyCashbackBps: r.weekly_cashback_bps ?? 0,
-      monthlyCashbackBps: r.monthly_cashback_bps ?? 0,
     }));
     this.tierCache = tiers;
     this.tierCacheAt = now;
@@ -329,35 +302,11 @@ export class VipService {
               last_rakeback_claim_at::text AS last_rakeback_claim_at,
               highest_tier_awarded,
               lifetime_rakeback_chips::text AS lifetime_rakeback_chips,
-              lifetime_bonus_chips::text AS lifetime_bonus_chips,
-              last_weekly_claim_at::text AS last_weekly_claim_at,
-              last_monthly_claim_at::text AS last_monthly_claim_at
+              lifetime_bonus_chips::text AS lifetime_bonus_chips
        FROM player_vip_state WHERE wallet_address = $1`,
       [addr],
     );
     return rows[0];
-  }
-
-  /**
-   * Cashback eligibility/amount for one cadence. Eligible when the cursor is
-   * null (never claimed) or the period has fully elapsed; the amount is the
-   * tier's bps applied to the rolling-window wager. Returns the ISO instant the
-   * next claim unlocks (null = ready now).
-   */
-  private cashbackFor(
-    nowMs: number,
-    lastClaimAt: string | null,
-    periodMs: number,
-    bps: number,
-    windowWager: bigint,
-  ): { ready: boolean; chips: bigint; readyAt: string | null } {
-    const last = lastClaimAt ? new Date(lastClaimAt).getTime() : null;
-    const ready = last === null || nowMs - last >= periodMs;
-    if (!ready) {
-      return { ready: false, chips: 0n, readyAt: new Date((last ?? nowMs) + periodMs).toISOString() };
-    }
-    const chips = bps > 0 ? (windowWager * BigInt(bps)) / 10000n : 0n;
-    return { ready: true, chips, readyAt: null };
   }
 
   /** Sum of level-up bonuses for tiers in (fromTierExclusive, toTierInclusive]. */
@@ -380,11 +329,8 @@ export class VipService {
     const tiers = await this.getTiers();
     const state = await this.ensureState(this.pool, addr);
 
-    const now = Date.now();
     const lastClaim = new Date(state.last_rakeback_claim_at);
     const lifetime = await this.wagerSince(this.pool, addr, null);
-    const wager7d = await this.wagerSince(this.pool, addr, new Date(now - 7 * 86_400_000));
-    const wager30d = await this.wagerSince(this.pool, addr, new Date(now - 30 * 86_400_000));
     // Rakeback base is NET LOSS since last claim, not wager (owner decision 2026-07-02).
     const netLossSinceClaim = await this.netLossSince(this.pool, addr, lastClaim);
 
@@ -407,27 +353,15 @@ export class VipService {
     const claimableRakeback = (netLossSinceClaim * BigInt(currentTier.rakebackBps)) / 10000n;
     const pendingBonus = this.pendingBonus(tiers, state.highest_tier_awarded, currentTier.tierLevel);
 
-    // Weekly/monthly cashback: tier bps × rolling-window wager, gated by cadence.
-    const weekly = this.cashbackFor(now, state.last_weekly_claim_at, WEEK_MS, currentTier.weeklyCashbackBps, wager7d);
-    const monthly = this.cashbackFor(now, state.last_monthly_claim_at, MONTH_MS, currentTier.monthlyCashbackBps, wager30d);
-
     return {
       address: addr,
       lifetimeWagerChips: lifetime.toString(),
-      wager7dChips: wager7d.toString(),
-      wager30dChips: wager30d.toString(),
       currentTier,
       nextTier,
       progressPct,
       wagerToNextChips: wagerToNext.toString(),
       claimableRakebackChips: claimableRakeback.toString(),
       pendingTierBonusChips: pendingBonus.toString(),
-      weeklyCashbackChips: weekly.chips.toString(),
-      monthlyCashbackChips: monthly.chips.toString(),
-      weeklyCashbackReady: weekly.ready,
-      monthlyCashbackReady: monthly.ready,
-      weeklyCashbackReadyAt: weekly.readyAt,
-      monthlyCashbackReadyAt: monthly.readyAt,
       lifetimeRakebackChips: state.lifetime_rakeback_chips,
       lifetimeBonusChips: state.lifetime_bonus_chips,
       rakebackSince: state.last_rakeback_claim_at,
@@ -457,30 +391,21 @@ export class VipService {
                 last_rakeback_claim_at::text AS last_rakeback_claim_at,
                 highest_tier_awarded,
                 lifetime_rakeback_chips::text AS lifetime_rakeback_chips,
-                lifetime_bonus_chips::text AS lifetime_bonus_chips,
-                last_weekly_claim_at::text AS last_weekly_claim_at,
-                last_monthly_claim_at::text AS last_monthly_claim_at
+                lifetime_bonus_chips::text AS lifetime_bonus_chips
          FROM player_vip_state WHERE wallet_address = $1 FOR UPDATE`,
         [addr],
       );
       const state = stateRows[0];
 
-      const now = Date.now();
       const lifetime = await this.wagerSince(client, addr, null);
       // Rakeback base is NET LOSS since last claim (owner decision 2026-07-02:
       // rakeback = bps × max(0, bets − payouts), losses only). Tier progression
       // (`lifetime` above) intentionally stays wager-based.
       const netLossSinceClaim = await this.netLossSince(client, addr, new Date(state.last_rakeback_claim_at));
-      const wager7d = await this.wagerSince(client, addr, new Date(now - WEEK_MS));
-      const wager30d = await this.wagerSince(client, addr, new Date(now - MONTH_MS));
       const currentTier = this.tierForWager(tiers, lifetime);
 
       const rakebackChips = (netLossSinceClaim * BigInt(currentTier.rakebackBps)) / 10000n;
       const bonusChips = this.pendingBonus(tiers, state.highest_tier_awarded, currentTier.tierLevel);
-      const weekly = this.cashbackFor(now, state.last_weekly_claim_at, WEEK_MS, currentTier.weeklyCashbackBps, wager7d);
-      const monthly = this.cashbackFor(now, state.last_monthly_claim_at, MONTH_MS, currentTier.monthlyCashbackBps, wager30d);
-      const weeklyChips = weekly.chips;
-      const monthlyChips = monthly.chips;
 
       let chipBalance = 0n;
       let credited = false;
@@ -498,20 +423,6 @@ export class VipService {
         });
         credited = true;
       }
-      if (weeklyChips > 0n) {
-        chipBalance = await applyPokerChipDelta(client, addr, weeklyChips, 'vip_weekly_bonus', {
-          type: 'vip_claim',
-          id: null,
-        });
-        credited = true;
-      }
-      if (monthlyChips > 0n) {
-        chipBalance = await applyPokerChipDelta(client, addr, monthlyChips, 'vip_monthly_bonus', {
-          type: 'vip_claim',
-          id: null,
-        });
-        credited = true;
-      }
 
       // Pay this player's referrer their cut of the rakeback (house-funded, on
       // top of the player's reward). Runs in the same txn so it commits — or
@@ -523,27 +434,15 @@ export class VipService {
       }
 
       // Advance the rakeback cursor and the highest-paid tier; bump lifetime totals.
-      // The weekly/monthly cadence cursors only advance when that cashback was
-      // actually paid this claim (ready AND non-zero), so an early claim doesn't
-      // burn the cycle.
       await client.query(
         `UPDATE player_vip_state
          SET last_rakeback_claim_at  = NOW(),
              highest_tier_awarded    = GREATEST(highest_tier_awarded, $2),
              lifetime_rakeback_chips = lifetime_rakeback_chips + $3::NUMERIC,
              lifetime_bonus_chips    = lifetime_bonus_chips + $4::NUMERIC,
-             last_weekly_claim_at    = CASE WHEN $5 THEN NOW() ELSE last_weekly_claim_at END,
-             last_monthly_claim_at   = CASE WHEN $6 THEN NOW() ELSE last_monthly_claim_at END,
              updated_at              = NOW()
          WHERE wallet_address = $1`,
-        [
-          addr,
-          currentTier.tierLevel,
-          rakebackChips.toString(),
-          bonusChips.toString(),
-          weeklyChips > 0n,
-          monthlyChips > 0n,
-        ],
+        [addr, currentTier.tierLevel, rakebackChips.toString(), bonusChips.toString()],
       );
 
       await client.query('COMMIT');
@@ -561,17 +460,13 @@ export class VipService {
         addr,
         rakeback: rakebackChips.toString(),
         bonus: bonusChips.toString(),
-        weekly: weeklyChips.toString(),
-        monthly: monthlyChips.toString(),
         tier: currentTier.tierLevel,
       });
 
       return {
         rakebackCredited: rakebackChips.toString(),
         bonusCredited: bonusChips.toString(),
-        weeklyCredited: weeklyChips.toString(),
-        monthlyCredited: monthlyChips.toString(),
-        totalCredited: (rakebackChips + bonusChips + weeklyChips + monthlyChips).toString(),
+        totalCredited: (rakebackChips + bonusChips).toString(),
         chipBalance: chipBalance.toString(),
         newTier: currentTier,
       };
