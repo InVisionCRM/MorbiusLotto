@@ -650,6 +650,8 @@ const DEFAULT_WINNERS: WeeklyDropWinner[] = [
 ];
 
 export interface WeeklyDropProps {
+  /** Small line under the unit row, e.g. '+142 fed by bets this week'. */
+  accruedNote?: string | null;
   pot?: number;
   entries?: number;
   progress?: number;
@@ -697,6 +699,7 @@ export function WeeklyDrop({
   potLive = false,
   totalEntrants = null,
   onViewEntrants,
+  accruedNote = null,
 }: WeeklyDropProps) {
   const [potVal, setPotVal] = useState(pot);
   useEffect(() => {
@@ -747,6 +750,11 @@ export function WeeklyDrop({
         {potVal.toLocaleString('en-US')}
       </div>
       <div className="jp-unit">MORBIUS · TOP 3 WIN EVERY SUNDAY · 8PM</div>
+      {accruedNote && (
+        <div style={{ fontSize: 10, color: 'var(--text2)', marginTop: -12, marginBottom: 16, position: 'relative', zIndex: 1 }}>
+          {accruedNote}
+        </div>
+      )}
 
       <div className="jp-count" id="jpCount">
         <div className="cb">

@@ -231,6 +231,7 @@ export interface CurrentDrop {
     closesAt: string;        // ISO
     potChips: string;        // whole chips, floor max(pot, guaranteed_min) applied
     guaranteedMin: string;   // whole chips
+    accruedChips: string;    // whole chips actually fed by bets so far (pre-floor)
     status: string;
   };
   you: {
@@ -595,6 +596,7 @@ export class WeeklyDropService {
         closesAt: new Date(d.closes_at).toISOString(),
         potChips: potShown.toString(),
         guaranteedMin: guaranteed.toString(),
+        accruedChips: potAccrued.toString(),
         status: d.status,
       },
       you,

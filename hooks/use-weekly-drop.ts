@@ -7,7 +7,9 @@ export interface WeeklyDropDraw {
   id: string | number
   closesAt: string
   potChips: string
-  guaranteedMin: string
+  guaranteedMin: string;
+  /** Whole chips actually fed by bets so far (pre-floor). */
+  accruedChips?: string
   status: string
 }
 
