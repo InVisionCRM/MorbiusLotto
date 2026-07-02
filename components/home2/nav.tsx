@@ -146,7 +146,7 @@ export function HomeSidebar({
   return (
     <aside className="sidebar">
       <div className="sb-brand">
-        <div className="sb-logo">M</div>
+        <div className="sb-logo"><img src="/morbius/MorbiusLogo (3).png" alt="MORBIUS" /></div>
         <b>
           MORBIUS<i>.IO</i>
         </b>
@@ -344,7 +344,7 @@ export function ChipDock({
       </button>
       <div className="chip-slot">
         <button type="button" className="chip-btn" onClick={onChip}>
-          <b>M</b>
+          <img src="/morbius/MorbiusLogo (3).png" alt="MORBIUS" />
         </button>
         <div className="chip-lbl">{balance}</div>
       </div>
@@ -449,7 +449,7 @@ export interface MobileTopBarProps {
 export function MobileTopBar({ mode, onConnect, avatar }: MobileTopBarProps) {
   return (
     <div className="mob-bar">
-      <div className="sb-logo">M</div>
+      <div className="sb-logo"><img src="/morbius/MorbiusLogo (3).png" alt="MORBIUS" /></div>
       <span className="mtitle">
         MORBIUS<i>.IO</i>
       </span>

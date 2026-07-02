@@ -514,7 +514,7 @@ const NavContent = React.memo(function NavContent(props: NavContentProps) {
       {/* Logo / Brand — md+ only; mobile uses drawer header in sidebar.tsx + mobileDrawerBrandingExtra for balance */}
       <div className="hidden md:block shrink-0 py-4">
         <Link href="/" className="sidebar-item flex items-center group/sidebar" aria-label="MORBIUS.IO Home">
-          <span className="gn2-logo" aria-hidden>M</span>
+          <span className="gn2-logo" aria-hidden><img src="/morbius/MorbiusLogo (3).png" alt="" /></span>
           <span className="sidebar-label gn2-brand-text">
             MORBIUS<i>.IO</i>
           </span>
