@@ -74,7 +74,7 @@ export type PokerChipLedgerReason =
   | 'migration'            // one-time players.balance (wei) → chip ledger move
   | 'holder_reward'     // MORBIUS holder epoch credit (1.25% slice → chips)
   | 'lp_holder_reward'  // LP holder epoch credit (1.5% slice → chips)
-  | 'vip_rakeback'      // VIP loyalty: % of wager turnover returned since last claim
+  | 'vip_rakeback'      // VIP loyalty: % of NET LOSS (bets − payouts) since last claim (owner decision 2026-07-02)
   | 'vip_tier_bonus'    // VIP loyalty: one-time chip bonus on reaching a new tier
   | 'vip_weekly_bonus'  // VIP loyalty: weekly cashback on rolling 7-day wager
   | 'vip_monthly_bonus' // VIP loyalty: monthly cashback on rolling 30-day wager
