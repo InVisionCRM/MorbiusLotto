@@ -48,7 +48,7 @@ import { WebSocketService } from './services/websocket.service';
 import { PokerGameService } from './services/poker-game.service';
 import { PokerTournamentService } from './services/poker-tournament.service';
 import { chipsToWei } from './lib/poker-chip-scale';
-import { applyPokerChipDelta, getPokerChipBalance, setWeeklyDropWagerHook } from './services/poker-chip-wallet';
+import { applyPokerChipDelta, getPokerChipBalance, setWeeklyDropWagerHook, setWeeklyDropRefundHook } from './services/poker-chip-wallet';
 import { WeeklyDropService } from './services/weekly-drop.service';
 import { registerDropRoutes } from './routes/drop.routes';
 import { BlackjackMultiGameService } from './services/blackjack-multi-game.service';
@@ -450,6 +450,11 @@ async function initializeServices() {
     const weeklyDropService = new WeeklyDropService(dbService.getPool());
     setWeeklyDropWagerHook((client, addr, wagerChips, gameKey) =>
       weeklyDropService.accrueFromWager(client, addr, wagerChips, gameKey),
+    );
+    // Refund counterpart: unwind accrual when a bet / tournament buy-in is
+    // returned to the player, so refund loops can't farm raffle tickets.
+    setWeeklyDropRefundHook((client, addr, wagerChips, gameKey) =>
+      weeklyDropService.reverseWagerAccrual(client, addr, wagerChips, gameKey),
     );
     weeklyDropService.start();
 

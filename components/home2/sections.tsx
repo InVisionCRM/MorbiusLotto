@@ -667,6 +667,14 @@ export interface WeeklyDropProps {
   countdownTo?: Date;
   /** When true, the pot is real: skip the fake drip interval and just show `pot`. */
   potLive?: boolean;
+  /**
+   * Players holding ≥ 1 entry in the open draw. When set (backend live), a
+   * "N players entered · View entrants" line shows under the jp-you card in
+   * both player and visitor modes; omit to hide the line entirely.
+   */
+  totalEntrants?: number | null;
+  /** Opens the entrants modal (rendered by the page, e.g. Home2Client). */
+  onViewEntrants?: () => void;
 }
 
 /* port of the lab's nextDrop() — next Sunday 20:00 */
@@ -693,6 +701,8 @@ export function WeeklyDrop({
   statusPill = '🎟 LIGHTING SOON',
   countdownTo,
   potLive = false,
+  totalEntrants = null,
+  onViewEntrants,
 }: WeeklyDropProps) {
   const [potVal, setPotVal] = useState(pot);
   useEffect(() => {
@@ -779,6 +789,16 @@ export function WeeklyDrop({
           day just for signing in. Connect to start earning.
         </div>
       </div>
+
+      {/* live entrant count — hidden entirely when the backend/draw is absent */}
+      {totalEntrants != null && (
+        <div className="jp-entrants">
+          🎟 <b>{totalEntrants.toLocaleString('en-US')}</b> {totalEntrants === 1 ? 'player' : 'players'} entered ·{' '}
+          <button type="button" onClick={onViewEntrants}>
+            View entrants
+          </button>
+        </div>
+      )}
 
       {winners.length > 0 && (
         <>

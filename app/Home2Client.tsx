@@ -23,6 +23,7 @@ import {
 import { HomeSidebar, ChipDock, DepositSheet, MobileTopBar } from '@/components/home2/nav'
 import { PriceChartBg } from '@/components/home2/price-chart-bg'
 import { ChartModal } from '@/components/home2/chart-modal'
+import { EntrantsModal } from '@/components/home2/entrants-modal'
 import { formatWholeMorbius } from '@/components/shared/NavBalanceDisplay'
 import { useProfile } from '@/hooks/use-player-profile'
 import { useVipTier } from '@/hooks/use-vip-tier'
@@ -73,6 +74,7 @@ export default function Home2Client() {
   const [sheetOpen, setSheetOpen] = useState(false)
   const [walletModalOpen, setWalletModalOpen] = useState(false)
   const [chartOpen, setChartOpen] = useState(false)
+  const [entrantsOpen, setEntrantsOpen] = useState(false)
 
   const { profileDisplayName } = useProfile()
   const vipTier = useVipTier(address)
@@ -173,6 +175,8 @@ export default function Home2Client() {
       statusPill: `🎟 DROP #${drop.draw.id} · LIVE`,
       countdownTo: new Date(drop.draw.closesAt),
       entries: you?.entries ?? 0,
+      // Older backends omit totalEntrants — null hides the entrants line.
+      totalEntrants: drop.totalEntrants ?? null,
       progress,
       entriesSub: (
         <>

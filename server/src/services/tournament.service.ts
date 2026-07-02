@@ -2,7 +2,8 @@ import { Pool, PoolClient } from 'pg';
 import { formatEther } from 'viem';
 import { logger } from '../utils/logger';
 import { toBigIntSafe } from '../utils/safe-bigint';
-import { applyPokerChipDelta, getPlatformFeeWalletLower } from './poker-chip-wallet';
+import { applyPokerChipDelta, getPlatformFeeWalletLower, runWeeklyDropAccrual, runWeeklyDropReversal } from './poker-chip-wallet';
+import { POKER_CHIP_WEI } from '../lib/poker-chip-scale';
 import {
   applyWheelSpinDelta,
   getWheelRule,
@@ -556,6 +557,12 @@ export class TournamentService {
         `UPDATE players SET balance = balance - $1::NUMERIC WHERE LOWER(wallet_address) = LOWER($2)`,
         [tournament.buy_in_amount.toString(), normalizedAddress]
       );
+
+      // Weekly Drop: legacy MORBIUS tournaments debit wei-scale players.balance
+      // directly (no `*_bet` chip-ledger row), so the raffle accrues here — buy-in
+      // converted to whole chips (1 chip = 10^18 wei). Fail-safe; reversed on
+      // unregister/cancel refunds so refund loops can't farm entries.
+      await runWeeklyDropAccrual(client, normalizedAddress, tournament.buy_in_amount / POKER_CHIP_WEI, 'tournament');
 
       // Add to prize pool only for platform (non–custom token) tournaments
       if (!tournament.prize_token_address) {
@@ -2132,6 +2139,9 @@ export class TournamentService {
           `UPDATE players SET balance = balance - $1::NUMERIC WHERE LOWER(wallet_address) = LOWER($2)`,
           [tournament.buy_in_amount.toString(), normalizedAddress]
         );
+        // Weekly Drop: wei-balance buy-in bypasses the chip-ledger settlement
+        // hook — accrue here (wei → whole chips). Reversed on unregister/cancel.
+        await runWeeklyDropAccrual(client, normalizedAddress, tournament.buy_in_amount / POKER_CHIP_WEI, 'tournament');
       }
 
       // Add to DB prize_pool for prize calculation (both on-chain and off-chain platform MORBIUS)
@@ -2283,6 +2293,10 @@ export class TournamentService {
         `UPDATE players SET balance = balance + $1::NUMERIC WHERE LOWER(wallet_address) = LOWER($2)`,
         [refundAmount.toString(), normalizedAddress]
       );
+
+      // Weekly Drop: buy-in returned — unwind the raffle accrual (wei → chips)
+      // so register→unregister loops can't farm entries. Fail-safe.
+      await runWeeklyDropReversal(client, normalizedAddress, refundAmount / POKER_CHIP_WEI, 'tournament');
 
       await client.query(
         `UPDATE tournaments SET prize_pool = prize_pool - $1::NUMERIC WHERE id = $2`,
@@ -2513,6 +2527,8 @@ export class TournamentService {
               `UPDATE players SET balance = balance + $1::NUMERIC WHERE LOWER(wallet_address) = LOWER($2)`,
               [refundAmount.toString(), entry.player_address]
             );
+            // Weekly Drop: unwind the buy-in accrual (wei → chips); fail-safe.
+            await runWeeklyDropReversal(client, entry.player_address, refundAmount / POKER_CHIP_WEI, 'tournament');
             logger.info('Refunded buy-in for cancelled tournament (insufficient players)', {
               tournamentId,
               player: entry.player_address,
@@ -2782,6 +2798,8 @@ export class TournamentService {
                 `UPDATE players SET balance = balance + $1::NUMERIC WHERE LOWER(wallet_address) = LOWER($2)`,
                 [refundAmount.toString(), entry.player_address]
               );
+              // Weekly Drop: unwind the buy-in accrual (wei → chips); fail-safe.
+              await runWeeklyDropReversal(client, entry.player_address, refundAmount / POKER_CHIP_WEI, 'tournament');
               logger.info('Refunded buy-in for cancelled tournament', {
                 tournamentId,
                 player: entry.player_address,
@@ -2928,6 +2946,8 @@ export class TournamentService {
               `UPDATE players SET balance = balance + $1::NUMERIC WHERE LOWER(wallet_address) = LOWER($2)`,
               [refundAmount.toString(), entry.player_address]
             );
+            // Weekly Drop: unwind the buy-in accrual (wei → chips); fail-safe.
+            await runWeeklyDropReversal(client, entry.player_address, refundAmount / POKER_CHIP_WEI, 'tournament');
           }
         }
       }

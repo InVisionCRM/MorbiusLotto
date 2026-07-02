@@ -12,6 +12,9 @@
  *   GET  /api/drop/verify/:drawId  — public: commit-reveal fairness data
  *                                    (commitment, revealed seed, entry list
  *                                    snapshot + hash, winners, recipe).
+ *   GET  /api/drop/entrants        — public: the OPEN draw's entrant list
+ *                                    (display names, entry counts; max 500)
+ *                                    plus totalEntrants / totalEntries.
  *
  * All chip amounts are whole chips (1 chip = 1 MORBIUS), as decimal strings.
  */
@@ -69,6 +72,21 @@ export function registerDropRoutes({ app, weeklyDropService, authService }: Regi
         return res.status(status).json({ error: error.code, code: error.code });
       }
       logger.error('[Drop] daily claim failed', error);
+      res.status(500).json({ error: 'Internal server error' });
+    }
+  });
+
+  // GET /api/drop/entrants — public entrant list for the open draw:
+  //   { drawId, totalEntrants, totalEntries,
+  //     entrants: [{ address, displayName (string|null), entries }] }
+  // Sorted entries DESC then address ASC, capped at 500 rows (totals cover all).
+  app.get('/api/drop/entrants', async (_req: Request, res: Response) => {
+    try {
+      const data = await weeklyDropService.getEntrants();
+      if (!data) return res.status(503).json({ error: 'No open draw', code: 'NO_OPEN_DRAW' });
+      sendJson(res, data);
+    } catch (error) {
+      logger.error('[Drop] GET /api/drop/entrants failed', error);
       res.status(500).json({ error: 'Internal server error' });
     }
   });

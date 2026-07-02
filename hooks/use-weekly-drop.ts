@@ -29,8 +29,24 @@ export interface WeeklyDropLastWinner {
 export interface WeeklyDropResponse {
   draw: WeeklyDropDraw
   you: WeeklyDropYou | null
+  /** Players holding ≥ 1 entry in the open draw. Optional: older backends omit it. */
+  totalEntrants?: number
   lastWinners: WeeklyDropLastWinner[]
   commitment: string | null
+}
+
+/** One row of GET /api/drop/entrants. */
+export interface WeeklyDropEntrant {
+  address: string
+  displayName: string | null
+  entries: number
+}
+
+export interface WeeklyDropEntrantsResponse {
+  drawId: string
+  totalEntrants: number
+  totalEntries: number
+  entrants: WeeklyDropEntrant[]
 }
 
 /**
@@ -49,6 +65,25 @@ export function useWeeklyDrop(address?: string | null) {
     },
     staleTime: 20_000,
     refetchInterval: 30_000,
+    gcTime: 5 * 60_000,
+  })
+}
+
+/**
+ * Fetch the open draw's entrant list (GET /api/drop/entrants). Pass
+ * `enabled: false` until the entrants modal opens so the list is only
+ * fetched on demand.
+ */
+export function useWeeklyDropEntrants(enabled: boolean) {
+  return useQuery({
+    queryKey: ['weekly-drop-entrants'],
+    queryFn: async (): Promise<WeeklyDropEntrantsResponse | null> => {
+      const res = await fetch('/api/drop/entrants', { credentials: 'include' })
+      if (!res.ok) return null
+      return (await res.json()) as WeeklyDropEntrantsResponse
+    },
+    enabled,
+    staleTime: 20_000,
     gcTime: 5 * 60_000,
   })
 }
