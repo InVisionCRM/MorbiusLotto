@@ -1,5 +1,5 @@
-import HomePageClient from './HomePageClient'
+import Home2Client from './Home2Client'
 
 export default function HomePage() {
-  return <HomePageClient />
+  return <Home2Client />
 }

@@ -395,6 +395,7 @@ export interface VaultStripProps {
   gamesPlayed?: string;
   biggestWin?: string;
   price?: string;
+  priceLabel?: string;
 }
 
 export function VaultStrip({
@@ -402,6 +403,7 @@ export function VaultStrip({
   gamesPlayed = '3.4M',
   biggestWin = '148,200',
   price = '$0.00042 ▲',
+  priceLabel = 'MORBIUS / USD',
 }: VaultStripProps) {
   const [val, setVal] = useState(value);
 
@@ -453,7 +455,7 @@ export function VaultStrip({
         </div>
         <div className="s">
           <div className="n up">{price}</div>
-          <div className="l">MORBIUS / USD</div>
+          <div className="l">{priceLabel}</div>
         </div>
       </div>
     </section>
@@ -738,18 +740,22 @@ export function WeeklyDrop({
         </div>
       </div>
 
-      <div className="jp-wlbl">LAST WEEK&apos;S TOP 3</div>
-      <div className="jp-winners">
-        {winners.map((w, i) => (
-          <div key={w.name} className={`w${i === 0 ? ' first' : ''}`}>
-            <div className="av" style={{ background: w.gradient }}>
-              {w.letter}
-            </div>
-            <span>{w.name}</span>
-            <b>{w.amount}</b>
+      {winners.length > 0 && (
+        <>
+          <div className="jp-wlbl">LAST WEEK&apos;S TOP 3</div>
+          <div className="jp-winners">
+            {winners.map((w, i) => (
+              <div key={w.name} className={`w${i === 0 ? ' first' : ''}`}>
+                <div className="av" style={{ background: w.gradient }}>
+                  {w.letter}
+                </div>
+                <span>{w.name}</span>
+                <b>{w.amount}</b>
+              </div>
+            ))}
           </div>
-        ))}
-      </div>
+        </>
+      )}
 
       <p className="how">
         <b>0.5% of every bet on every game</b> feeds the pot — guaranteed <b>25,000 MORBIUS minimum</b> each week.
