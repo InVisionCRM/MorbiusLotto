@@ -63,7 +63,9 @@ cd contracts && npx hardhat test
 
 **Wagmi wallet popups**: Never call `writeContractAsync` after an `await` (e.g., `waitForTransactionReceipt`) — this loses the user-gesture context and the wallet popup won't appear. Use a two-step UI flow with separate user-initiated clicks.
 
-**Fee distribution** (applied on payouts/withdrawals, consistent across Blackjack, Plinko, Keno, Lottery): 1.25% MORBIUS holder distribution, 0.5% burn, 1.75% platform/house, 1.5% LP holders. Total: 5% fee on payouts. The old "70/10/10/5/5" split was incorrect — do not use it.
+**Economy (updated 2026-07 — per owner, overrides older docs/code)**: The 5% payout fee and its splits (holder distribution, burn, platform, LP) are **GONE**. There is **no burn** and **no holder/LP distribution** anymore — do not reference burns, "MORBIUS burned" counters, fee splits, or holder payouts in UI copy or new code (hooks like `use-morbius-burned.ts` and burn UI are legacy). Player value-back is now the **VIP tier rakeback system** (Bronze 5% → Silver 8% → Gold 12% → Platinum 16% → Diamond 20% → Obsidian 25%; config from `/api/vip/config`, user tier from `/api/vip/tier/{address}`).
+
+**Games are NOT on-chain (updated 2026-07)**: Game logic runs server-side (Express backend + PostgreSQL). Do not describe games, draws, or payouts as "on-chain" or "provably fair on-chain" in UI copy. The MORBIUS token itself lives on PulseChain (wallet connect, balances, price via DexScreener remain real); the on-chain game contracts in `contracts/` are legacy.
 
 **PulseChain / Solidity**: PLS behaves exactly like ETH. `msg.value` is in beats (= wei). No wrappers needed. Unmodified Ethereum contracts deploy and run without changes.
 
