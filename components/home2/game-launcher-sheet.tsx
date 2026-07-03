@@ -10,7 +10,7 @@
  */
 
 import Link from 'next/link';
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { FLOOR_GAMES } from './scenes';
 
 export interface GameLauncherSheetProps {
@@ -20,6 +20,20 @@ export interface GameLauncherSheetProps {
 
 export function GameLauncherSheet({ open, onClose }: GameLauncherSheetProps) {
   const [q, setQ] = useState('');
+  const panelRef = useRef<HTMLDivElement>(null);
+
+  /* owner: the game menu must not be animated — freeze the SMIL animations
+     inside every scene thumbnail (CSS can't stop <animate> elements) */
+  useEffect(() => {
+    if (!open) return;
+    panelRef.current?.querySelectorAll('svg').forEach((s) => {
+      try {
+        (s as SVGSVGElement).pauseAnimations();
+      } catch {
+        /* older engines without SMIL API — nothing to pause */
+      }
+    });
+  }, [open, q]);
 
   /* reset the filter whenever the sheet closes */
   useEffect(() => {
@@ -33,8 +47,8 @@ export function GameLauncherSheet({ open, onClose }: GameLauncherSheetProps) {
 
   return (
     <>
-      <div className={`sheet-veil${open ? ' open' : ''}`} aria-hidden={!open} onClick={onClose}></div>
-      <div className={`sheet launcher${open ? ' open' : ''}`} aria-hidden={!open}>
+      <div className={`sheet-veil gl-veil${open ? ' open' : ''}`} aria-hidden={!open} onClick={onClose}></div>
+      <div ref={panelRef} className={`sheet launcher${open ? ' open' : ''}`} aria-hidden={!open}>
         <div className="grab"></div>
         <h3>All games</h3>
         <div className="sub">{FLOOR_GAMES.length} games, one chip — tap to play</div>
