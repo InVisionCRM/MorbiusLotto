@@ -4,8 +4,9 @@ import './home2.css'
 import { useMemo, useState } from 'react'
 import dynamic from 'next/dynamic'
 import { useRouter } from 'next/navigation'
-import { useAccount } from 'wagmi'
+import { useAccount, useDisconnect } from 'wagmi'
 import { useAppKit } from '@reown/appkit/react'
+import { useQueryClient } from '@tanstack/react-query'
 import { SceneDefs } from '@/components/home2/scenes'
 import {
   HomeTicker,
@@ -20,13 +21,16 @@ import {
   type HeroPlayerDigestItem,
   type WeeklyDropWinner,
 } from '@/components/home2/sections'
-import { HomeSidebar, ChipDock, DepositSheet, MobileTopBar } from '@/components/home2/nav'
+import { HomeSidebar, ChipDock, MobileTopBar } from '@/components/home2/nav'
 import { GameLauncherSheet } from '@/components/home2/game-launcher-sheet'
 import { DropSheet } from '@/components/home2/drop-sheet'
+import { WalletSheet } from '@/components/home2/wallet-sheet'
 import { PriceChartBg } from '@/components/home2/price-chart-bg'
 import { ChartModal } from '@/components/home2/chart-modal'
 import { EntrantsModal } from '@/components/home2/entrants-modal'
 import { formatWholeMorbius } from '@/components/shared/NavBalanceDisplay'
+import { useProfileSettingsModal } from '@/components/shared/ProfileSettingsModalContext'
+import { apiFetch } from '@/lib/api-auth'
 import { useProfile } from '@/hooks/use-player-profile'
 import { useVipTier } from '@/hooks/use-vip-tier'
 import { useVipTiers } from '@/hooks/use-vip-tiers'
@@ -37,6 +41,12 @@ import { useWeeklyDrop } from '@/hooks/use-weekly-drop'
 
 const GameWalletModal = dynamic(
   () => import('@/components/shared/GameWalletModal').then((m) => m.GameWalletModal),
+  { ssr: false }
+)
+// Same lazy modal WalletMenu mounts for "Manage approvals" — reused here for
+// the WalletSheet's Revoke approvals action.
+const RevokeApprovalsModal = dynamic(
+  () => import('@/components/shared/RevokeApprovalsModal').then((m) => m.RevokeApprovalsModal),
   { ssr: false }
 )
 
@@ -74,13 +84,17 @@ export default function Home2Client() {
   const mode: 'player' | 'visitor' = isConnected ? 'player' : 'visitor'
 
   /* dock bottom sheets — single state so only one is ever open at a time */
-  const [activeSheet, setActiveSheet] = useState<'deposit' | 'games' | 'drop' | null>(null)
+  const [activeSheet, setActiveSheet] = useState<'games' | 'drop' | 'wallet' | null>(null)
+  const [revokeOpen, setRevokeOpen] = useState(false)
   const [navOpen, setNavOpen] = useState(false)
   const [walletModalOpen, setWalletModalOpen] = useState(false)
   const [chartOpen, setChartOpen] = useState(false)
   const [entrantsOpen, setEntrantsOpen] = useState(false)
 
-  const { profileDisplayName } = useProfile()
+  const { profileDisplayName, profileImageUrl, bio, xHandle, tgHandle } = useProfile()
+  const { disconnect } = useDisconnect()
+  const { openProfileSettings } = useProfileSettingsModal()
+  const queryClient = useQueryClient()
   const vipTier = useVipTier(address)
   const vipLadder = useVipTiers()
   const balanceQuery = usePlayerServerBalance(address)
@@ -302,21 +316,34 @@ export default function Home2Client() {
       <ChipDock
         balance={balanceStr}
         activeTab="home"
-        onChip={() => openSheet('deposit')}
-        onGames={() => openSheet('games')}
-        onDrop={() => openSheet('drop')}
-        onYou={() => {
+        onChip={() => {
           setActiveSheet(null)
           setNavOpen(true)
         }}
+        onGames={() => openSheet('games')}
+        onDrop={() => openSheet('drop')}
+        onWallet={() => openSheet('wallet')}
         dropBadge={dropBadge}
       />
       {navOpen && <div className="nav-veil" onClick={() => setNavOpen(false)} />}
-      <DepositSheet
-        open={activeSheet === 'deposit'}
+      <WalletSheet
+        open={activeSheet === 'wallet'}
         onClose={closeSheet}
+        mode={mode}
+        name={displayName}
+        address={address}
         balance={balanceStr}
-        subline={`${vip.tierName} tier · ${vip.rakeback} rakeback on losses`}
+        balanceSub={`${vip.tierName} tier · ${vip.rakeback} rakeback on losses`}
+        avatar={
+          profileImageUrl ? (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img src={profileImageUrl} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+          ) : undefined
+        }
+        onConnect={() => {
+          closeSheet()
+          onConnect()
+        }}
         onDeposit={() => {
           closeSheet()
           onDeposit()
@@ -325,11 +352,38 @@ export default function Home2Client() {
           closeSheet()
           onDeposit()
         }}
+        onProfile={() => {
+          closeSheet()
+          openProfileSettings({
+            displayName: profileDisplayName ?? '',
+            profileImageUrl,
+            bio,
+            xHandle,
+            tgHandle,
+            onSave: async (displayName, newImageUrl, newBio, newX, newTg) => {
+              if (!address) throw new Error('Connect your wallet to save your profile.')
+              await apiFetch('/api/player/profile', {
+                method: 'POST',
+                body: JSON.stringify({ displayName, profileImageUrl: newImageUrl, bio: newBio, xHandle: newX, tgHandle: newTg }),
+              })
+              queryClient.invalidateQueries({ queryKey: ['playerProfile', address] })
+            },
+          })
+        }}
+        onApprovals={() => {
+          closeSheet()
+          setRevokeOpen(true)
+        }}
         onDashboard={() => {
           closeSheet()
           onDashboard()
         }}
+        onDisconnect={() => {
+          closeSheet()
+          disconnect()
+        }}
       />
+      {revokeOpen && <RevokeApprovalsModal isOpen={revokeOpen} onClose={() => setRevokeOpen(false)} />}
       <GameLauncherSheet open={activeSheet === 'games'} onClose={closeSheet} />
       <DropSheet
         open={activeSheet === 'drop'}

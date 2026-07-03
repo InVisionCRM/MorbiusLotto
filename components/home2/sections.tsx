@@ -251,7 +251,7 @@ export function HeroPlayer({
         <div className="hp-side">
           <div className="chip3d">
             <div className="chip-coin">
-              <b>M</b>
+              <img src="/morbius/MorbiusLogo (3).png" alt="MORBIUS" />
             </div>
             <div className="lbl">PLAY BALANCE</div>
             <div className="amt">

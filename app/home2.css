@@ -43,10 +43,11 @@
 .home2 .sb-brand{display:flex; align-items:center; gap:10px; padding:18px 16px 14px}
 .home2 .sb-logo{
   width:34px;height:34px;border-radius:10px; display:grid;place-items:center;
-  background:radial-gradient(circle at 30% 25%,#3ee6ff,#0891b2 60%,#064e63);
+  background:radial-gradient(circle at 30% 25%,#2a1b45,#160d2c 60%,#0a0618);
   font-family:var(--display); font-size:17px; color:#03141c;
-  box-shadow:0 0 22px rgba(34,211,238,.45), inset 0 1px 0 rgba(255,255,255,.4);
+  box-shadow:0 0 22px rgba(147,51,234,.5), inset 0 1px 0 rgba(255,255,255,.12);
 }
+.home2 .sb-logo img{width:80%; height:80%; object-fit:contain; filter:drop-shadow(0 0 5px rgba(168,85,247,.7))}
 .home2 .sb-brand b{font-family:var(--display); font-weight:400; font-size:15px; letter-spacing:.04em}
 .home2 .sb-brand b i{color:var(--cyan); font-style:normal}
 
@@ -207,14 +208,15 @@
   background:radial-gradient(300px 160px at 80% -20%, rgba(251,191,36,.15), transparent 60%)}
 .home2 .chip-coin{
   width:74px; height:74px; border-radius:50%; margin-bottom:12px; position:relative;
-  background:
-    radial-gradient(circle at 32% 28%, #fde68a, #f59e0b 55%, #92580a);
-  box-shadow:0 10px 26px rgba(245,158,11,.35), inset 0 2px 3px rgba(255,255,255,.5), inset 0 -3px 5px rgba(0,0,0,.35);
+  background:radial-gradient(circle at 32% 28%, #2b1a4d, #150c2b 62%, #0a0618);
+  border:2.5px solid #d97706;
+  box-shadow:0 10px 26px rgba(147,51,234,.4), 0 0 18px rgba(245,158,11,.25), inset 0 2px 3px rgba(255,255,255,.15), inset 0 -3px 5px rgba(0,0,0,.5);
   animation:h2-coinFloat 4s ease-in-out infinite; display:grid; place-items:center;
 }
-.home2 .chip-coin::before{content:''; position:absolute; inset:7px; border-radius:50%;
-  border:2px dashed rgba(120,60,0,.5)}
-.home2 .chip-coin b{font-family:var(--display); font-size:26px; color:#5b3403; text-shadow:0 1px 0 rgba(255,255,255,.35)}
+.home2 .chip-coin img{width:64%; height:64%; object-fit:contain; filter:drop-shadow(0 0 8px rgba(168,85,247,.8))}
+.home2 .chip-coin::before{content:''; position:absolute; inset:5px; border-radius:50%;
+  border:2px dashed rgba(251,191,36,.45)}
+
 @keyframes h2-coinFloat{50%{transform:translateY(-7px) rotate(3deg)}}
 .home2 .chip3d .lbl{font-size:9px; letter-spacing:.16em; color:var(--text2); font-weight:700}
 .home2 .chip3d .amt{font-size:26px; font-weight:800; margin:2px 0 3px}
@@ -529,6 +531,47 @@
 }
 .home2 .dropsheet .ds-cta:active{transform:scale(.96)}
 
+/* ── WALLET SHEET (dock → WALLET) ─────────────────────────── */
+.home2 .walletsheet .ws-head{display:flex; align-items:center; gap:12px; margin-bottom:12px}
+.home2 .walletsheet .ws-av{
+  width:46px; height:46px; border-radius:50%; overflow:hidden; flex-shrink:0;
+  border:1px solid rgba(251,191,36,.35); background:var(--panel2);
+  box-shadow:0 0 14px rgba(251,191,36,.12);
+}
+.home2 .walletsheet .ws-av img, .home2 .walletsheet .ws-av svg{width:100%; height:100%; object-fit:cover; display:block; border-radius:50%}
+.home2 .walletsheet .ws-id{min-width:0}
+.home2 .walletsheet .ws-name{font-size:14px; font-weight:800; white-space:nowrap; overflow:hidden; text-overflow:ellipsis}
+.home2 .walletsheet .ws-addr{display:flex; align-items:center; gap:8px; margin-top:3px; font-size:10.5px; color:var(--muted); font-variant-numeric:tabular-nums}
+.home2 .walletsheet .ws-copy{
+  font-size:9px; font-weight:800; letter-spacing:.1em; color:var(--cyan);
+  border:1px solid rgba(34,211,238,.35); background:var(--cyan-dim);
+  padding:2px 9px; border-radius:99px; transition:color .2s, border-color .2s, background .2s;
+}
+.home2 .walletsheet .ws-copy.ok{color:var(--emerald); border-color:rgba(52,211,153,.4); background:rgba(52,211,153,.12)}
+.home2 .walletsheet .ws-hero{
+  text-align:center; padding:14px 12px 15px; margin-bottom:14px;
+  border-radius:16px; border:1px solid var(--line2);
+  background:linear-gradient(160deg,rgba(251,191,36,.08),transparent 70%);
+}
+.home2 .walletsheet .ws-amt{
+  font-family:var(--display); font-size:30px; line-height:1.1; color:var(--gold);
+  text-shadow:0 0 26px rgba(251,191,36,.3); font-variant-numeric:tabular-nums;
+}
+.home2 .walletsheet .ws-amt span{font-size:12px; letter-spacing:.1em}
+.home2 .walletsheet .ws-sub{font-size:10.5px; color:var(--muted); margin-top:4px}
+.home2 .walletsheet .opts button.wide{grid-column:1/-1}
+.home2 .walletsheet .opts button.rose{
+  grid-column:1/-1; flex-direction:row; justify-content:center; gap:8px; padding:13px 12px;
+  color:var(--rose); border-color:rgba(251,113,133,.4);
+  background:linear-gradient(160deg,rgba(251,113,133,.12),transparent);
+}
+.home2 .walletsheet .ws-connect{
+  width:100%; padding:13px; border-radius:13px; font-size:12.5px; font-weight:800; color:#3a2503;
+  background:linear-gradient(160deg,#fde68a,#f59e0b); box-shadow:0 6px 20px rgba(245,158,11,.35);
+  transition:transform .4s cubic-bezier(.34,1.56,.64,1);
+}
+.home2 .walletsheet .ws-connect:active{transform:scale(.96)}
+
 @media (max-width:1023px){
   .home2 .sidebar{display:none}
   /* mobile nav drawer: the chip dock's center button opens the sidebar */
@@ -599,14 +642,15 @@
   .home2 .dock .chip-btn{
     position:absolute; left:50%; top:-26px; margin-left:-31px;
     width:62px; height:62px; border-radius:50%;
-    background:radial-gradient(circle at 32% 28%, #fde68a, #f59e0b 55%, #92580a);
-    box-shadow:0 10px 28px rgba(245,158,11,.5), inset 0 2px 3px rgba(255,255,255,.55), inset 0 -3px 5px rgba(0,0,0,.4);
+    background:radial-gradient(circle at 32% 28%, #2b1a4d, #150c2b 62%, #0a0618);
+    border:2.5px solid #d97706;
+    box-shadow:0 10px 28px rgba(147,51,234,.45), 0 0 16px rgba(245,158,11,.3), inset 0 2px 3px rgba(255,255,255,.15), inset 0 -3px 5px rgba(0,0,0,.5);
     display:grid; place-items:center; animation:h2-coinFloat 4s ease-in-out infinite;
     transition:transform .4s cubic-bezier(.34,1.56,.64,1);
   }
   .home2 .dock .chip-btn:active{animation:none; transform:scale(.86) rotate(-8deg)}
-  .home2 .dock .chip-btn::before{content:''; position:absolute; inset:6px; border-radius:50%; border:2px dashed rgba(120,60,0,.5)}
-  .home2 .dock .chip-btn b{font-family:var(--display); font-size:21px; color:#5b3403; text-shadow:0 1px 0 rgba(255,255,255,.35)}
+  .home2 .dock .chip-btn::before{content:''; position:absolute; inset:6px; border-radius:50%; border:2px dashed rgba(251,191,36,.45)}
+  .home2 .dock .chip-btn img{width:62%; height:62%; object-fit:contain; filter:drop-shadow(0 0 7px rgba(168,85,247,.85))}
   .home2 .dock .chip-lbl{position:absolute; bottom:6px; left:0; right:0; text-align:center;
     font-size:8.5px; font-weight:800; color:var(--gold); letter-spacing:.04em; font-variant-numeric:tabular-nums}
 }
