@@ -7,7 +7,8 @@
  * Exports:
  *  - HomeSidebar   — the desktop <aside class="sidebar">
  *  - ChipDock      — the mobile <nav class="dock"> (chip-rail dock)
- *  - DepositSheet  — the .sheet-veil + .sheet bottom sheet (chip tap)
+ *  - DepositSheet  — the .sheet-veil + .sheet bottom sheet (legacy — the dock
+ *    now opens the nav drawer from the chip and WalletSheet from WALLET)
  *  - MobileTopBar  — the mobile .mob-bar
  *
  * All class names, emoji icons, badges and copy are kept identical to the lab.
@@ -16,7 +17,7 @@
 
 import Link from 'next/link';
 import React from 'react';
-import { IconHome, IconLayoutGrid, IconTicket, IconUserCircle } from '@tabler/icons-react';
+import { IconHome, IconLayoutGrid, IconTicket, IconWallet } from '@tabler/icons-react';
 
 /* ------------------------------------------------------------------ */
 /* shared bits                                                          */
@@ -297,19 +298,17 @@ export function HomeSidebar({
 
 export interface ChipDockProps {
   balance?: string;
-  /** Center gold chip — the money button (opens the DepositSheet). */
+  /** Center gold chip — opens the side-nav drawer (the menu). */
   onChip?: () => void;
   /** GAMES slot — opens the GameLauncherSheet. */
   onGames?: () => void;
   /** DROP slot — opens the DropSheet. */
   onDrop?: () => void;
-  /** YOU slot — opens the nav drawer. */
-  onYou?: () => void;
+  /** WALLET slot — opens the WalletSheet. */
+  onWallet?: () => void;
   /** e.g. '2d' — time until the Weekly Drop closes; null/undefined hides the badge. */
   dropBadge?: string | null;
-  /** Player avatar node for the YOU slot; falls back to IconUserCircle. */
-  avatar?: React.ReactNode;
-  activeTab?: 'home' | 'games' | 'drop' | 'you' | string;
+  activeTab?: 'home' | 'games' | 'drop' | 'wallet' | string;
 }
 
 export function ChipDock({
@@ -317,9 +316,8 @@ export function ChipDock({
   onChip,
   onGames,
   onDrop,
-  onYou,
+  onWallet,
   dropBadge = null,
-  avatar,
   activeTab = 'home',
 }: ChipDockProps) {
   const cls = (tab: string) => `di${activeTab === tab ? ' on' : ''}`;
@@ -355,11 +353,11 @@ export function ChipDock({
         <span className="lb">DROP</span>
         {dropBadge ? <span className="bdg-txt">{dropBadge}</span> : null}
       </button>
-      <button type="button" className={cls('you')} onClick={onYou}>
+      <button type="button" className={cls('wallet')} onClick={onWallet}>
         <span className="ic">
-          {avatar ? <span className="dock-av">{avatar}</span> : <IconUserCircle size={22} stroke={1.8} />}
+          <IconWallet size={22} stroke={1.8} />
         </span>
-        <span className="lb">YOU</span>
+        <span className="lb">WALLET</span>
       </button>
     </nav>
   );

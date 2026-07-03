@@ -531,6 +531,47 @@
 }
 .home2 .dropsheet .ds-cta:active{transform:scale(.96)}
 
+/* ── WALLET SHEET (dock → WALLET) ─────────────────────────── */
+.home2 .walletsheet .ws-head{display:flex; align-items:center; gap:12px; margin-bottom:12px}
+.home2 .walletsheet .ws-av{
+  width:46px; height:46px; border-radius:50%; overflow:hidden; flex-shrink:0;
+  border:1px solid rgba(251,191,36,.35); background:var(--panel2);
+  box-shadow:0 0 14px rgba(251,191,36,.12);
+}
+.home2 .walletsheet .ws-av img, .home2 .walletsheet .ws-av svg{width:100%; height:100%; object-fit:cover; display:block; border-radius:50%}
+.home2 .walletsheet .ws-id{min-width:0}
+.home2 .walletsheet .ws-name{font-size:14px; font-weight:800; white-space:nowrap; overflow:hidden; text-overflow:ellipsis}
+.home2 .walletsheet .ws-addr{display:flex; align-items:center; gap:8px; margin-top:3px; font-size:10.5px; color:var(--muted); font-variant-numeric:tabular-nums}
+.home2 .walletsheet .ws-copy{
+  font-size:9px; font-weight:800; letter-spacing:.1em; color:var(--cyan);
+  border:1px solid rgba(34,211,238,.35); background:var(--cyan-dim);
+  padding:2px 9px; border-radius:99px; transition:color .2s, border-color .2s, background .2s;
+}
+.home2 .walletsheet .ws-copy.ok{color:var(--emerald); border-color:rgba(52,211,153,.4); background:rgba(52,211,153,.12)}
+.home2 .walletsheet .ws-hero{
+  text-align:center; padding:14px 12px 15px; margin-bottom:14px;
+  border-radius:16px; border:1px solid var(--line2);
+  background:linear-gradient(160deg,rgba(251,191,36,.08),transparent 70%);
+}
+.home2 .walletsheet .ws-amt{
+  font-family:var(--display); font-size:30px; line-height:1.1; color:var(--gold);
+  text-shadow:0 0 26px rgba(251,191,36,.3); font-variant-numeric:tabular-nums;
+}
+.home2 .walletsheet .ws-amt span{font-size:12px; letter-spacing:.1em}
+.home2 .walletsheet .ws-sub{font-size:10.5px; color:var(--muted); margin-top:4px}
+.home2 .walletsheet .opts button.wide{grid-column:1/-1}
+.home2 .walletsheet .opts button.rose{
+  grid-column:1/-1; flex-direction:row; justify-content:center; gap:8px; padding:13px 12px;
+  color:var(--rose); border-color:rgba(251,113,133,.4);
+  background:linear-gradient(160deg,rgba(251,113,133,.12),transparent);
+}
+.home2 .walletsheet .ws-connect{
+  width:100%; padding:13px; border-radius:13px; font-size:12.5px; font-weight:800; color:#3a2503;
+  background:linear-gradient(160deg,#fde68a,#f59e0b); box-shadow:0 6px 20px rgba(245,158,11,.35);
+  transition:transform .4s cubic-bezier(.34,1.56,.64,1);
+}
+.home2 .walletsheet .ws-connect:active{transform:scale(.96)}
+
 @media (max-width:1023px){
   .home2 .sidebar{display:none}
   /* mobile nav drawer: the chip dock's center button opens the sidebar */
