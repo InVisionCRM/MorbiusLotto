@@ -479,7 +479,11 @@
 .home2 .sheet .opts button.gold{background:linear-gradient(160deg,rgba(251,191,36,.16),transparent); border-color:rgba(251,191,36,.4)}
 
 /* ── GAME LAUNCHER SHEET (dock → GAMES) ───────────────────── */
-.home2 .sheet.launcher{max-height:76vh; display:flex; flex-direction:column}
+.home2 .sheet.launcher{max-height:76vh; display:flex; flex-direction:column; transition:none}
+/* owner: the game menu must not be animated — instant open, static art */
+.home2 .sheet-veil.gl-veil{transition:none}
+.home2 .launcher .gl-stage svg{animation:none !important}
+.home2 .launcher .gl-stage svg *{animation:none !important; transition:none !important}
 .home2 .launcher .gl-search{
   width:100%; padding:10px 14px; border-radius:12px; margin-bottom:12px;
   background:var(--panel2); border:1px solid var(--line2); color:var(--text);
