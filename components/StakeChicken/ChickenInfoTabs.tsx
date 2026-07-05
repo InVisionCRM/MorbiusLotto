@@ -101,7 +101,7 @@ export function ChickenInfoTabs({ history, historyLoading, onVerify, info }: Chi
       <Tabs defaultValue="recent">
         <TabsList className="grid h-auto w-full grid-cols-5 gap-1 rounded-lg bg-[#081420]/70 p-1 ring-1 ring-cyan-950/70">
           <TabsTrigger value="recent" className={TRIGGER_CLASS}>Recent</TabsTrigger>
-          <TabsTrigger value="leaderboard" className={TRIGGER_CLASS}>Leaders</TabsTrigger>
+          <TabsTrigger value="leaderboard" className={TRIGGER_CLASS}><span className="sm:hidden">Leaders</span><span className="hidden sm:inline">Leaderboard</span></TabsTrigger>
           <TabsTrigger value="mine" className={TRIGGER_CLASS}>My rounds</TabsTrigger>
           <TabsTrigger value="rules" className={TRIGGER_CLASS}>Rules</TabsTrigger>
           <TabsTrigger value="faq" className={TRIGGER_CLASS}>FAQ</TabsTrigger>

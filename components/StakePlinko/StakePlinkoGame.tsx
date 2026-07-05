@@ -26,7 +26,7 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { useAccount } from 'wagmi'
-import { Volume2, VolumeX } from 'lucide-react'
+import { Volume2, VolumeX, Play, X } from 'lucide-react'
 import { Card } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -121,6 +121,10 @@ export function StakePlinkoGame() {
 
   const [fairnessOpen, setFairnessOpen] = useState(false)
   const [rulesOpen, setRulesOpen] = useState(false)
+  // A replay staged by tapping "Replay" in history — shows a centered Play
+  // prompt on the board so the drop only starts when the player hits Play
+  // (gives them a beat to start screen-recording).
+  const [pendingReplay, setPendingReplay] = useState<PlinkoHistoryRound | null>(null)
   const [verifyTarget, setVerifyTarget] = useState<string | null>(null)
   const [exchangeOpen, setExchangeOpen] = useState(false)
   const [muted, setMuted] = useState(false)
@@ -386,18 +390,29 @@ export function StakePlinkoGame() {
   }, [])
 
   /**
-   * Replay a past ball: re-drop it on the board with the SAME seed so the
-   * canvas reproduces the exact animation the player originally saw (the seed
-   * picks the pre-baked deterministic drop that lands in this bucket). Marked
-   * isReplay so handleScore leaves balance/session untouched. This is the
-   * shareable moment — the player screen-records the drop.
+   * Stage a replay: bring the board into view and show the centered Play
+   * prompt. The ball is NOT dropped yet — the player hits Play (below) when
+   * they're ready to record. Re-tapping Replay just re-arms the prompt.
    */
   const handleReplay = useCallback((round: PlinkoHistoryRound) => {
     plinkoAudio.init()
-    // Same derivation as a live drop (StakePlinkoGame → dropBall). Legacy rows
-    // without a seed hash fall back to a stable hash of the round id so the
-    // replay is still deterministic (same ball every time), just not identical
-    // to the original drop.
+    setPendingReplay(round)
+    boardRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' })
+  }, [])
+
+  /**
+   * Start the staged replay: re-drop the ball on the board with the SAME seed
+   * so the canvas reproduces the exact animation the player originally saw (the
+   * seed picks the pre-baked deterministic drop that lands in this bucket).
+   * Marked isReplay so handleScore leaves balance/session untouched.
+   */
+  const startReplay = useCallback(() => {
+    const round = pendingReplay
+    if (!round) return
+    setPendingReplay(null)
+    // Same derivation as a live drop (dropBall). Legacy rows without a seed hash
+    // fall back to a stable hash of the round id so the replay is still
+    // deterministic (same ball every time), just not identical to the original.
     const seedFromHash = round.serverSeedHash
       ? parseInt(round.serverSeedHash.slice(0, 12), 16)
       : NaN
@@ -419,8 +434,7 @@ export function StakePlinkoGame() {
       },
     })
     plinkoAudio.playDrop()
-    boardRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' })
-  }, [])
+  }, [pendingReplay])
 
   const toggleMute = () => {
     plinkoAudio.init()
@@ -655,6 +669,56 @@ export function StakePlinkoGame() {
               lastDrop={lastDrop}
               selectedRiskLevel={boardRisk}
             />
+
+            {/* Replay confirm — a centered prompt so the drop only starts on Play
+                (gives the player a beat to start their screen recording). */}
+            {pendingReplay && (
+              <div
+                className="absolute inset-0 z-20 flex items-center justify-center bg-[#050E16]/80 backdrop-blur-sm"
+                role="dialog"
+                aria-label="Replay this ball"
+                onClick={() => setPendingReplay(null)}
+              >
+                <div
+                  className="relative mx-4 w-full max-w-xs rounded-2xl border border-cyan-500/30 bg-[#07131F]/95 p-5 text-center shadow-[0_0_40px_-8px_rgba(34,211,238,0.55)]"
+                  onClick={(e) => e.stopPropagation()}
+                >
+                  <button
+                    type="button"
+                    onClick={() => setPendingReplay(null)}
+                    aria-label="Cancel replay"
+                    className="absolute right-2 top-2 rounded p-1 text-slate-500 transition-colors hover:text-slate-200"
+                  >
+                    <X size={16} />
+                  </button>
+
+                  <div className="arc-display text-xs uppercase tracking-widest text-cyan-300/70">
+                    Replay ball
+                  </div>
+                  <div className="arc-mono mt-1 text-3xl font-bold tabular-nums text-amber-300">
+                    {formatMultiplier(pendingReplay.multiplierX100)}
+                  </div>
+                  <div className="arc-mono mt-1 text-sm tabular-nums text-slate-400">
+                    {pendingReplay.payout - pendingReplay.bet > 0
+                      ? `+${(pendingReplay.payout - pendingReplay.bet).toLocaleString()}`
+                      : (pendingReplay.payout - pendingReplay.bet).toLocaleString()}{' '}
+                    MORBIUS
+                  </div>
+
+                  <button
+                    type="button"
+                    onClick={startReplay}
+                    className="arc-display mt-4 flex h-12 w-full items-center justify-center gap-2 rounded-xl bg-cyan-500 text-base font-bold uppercase tracking-widest text-[#03121B] shadow-[0_0_24px_-6px_rgba(34,211,238,0.8)] transition-colors hover:bg-cyan-400"
+                  >
+                    <Play size={18} className="fill-current" />
+                    Play
+                  </button>
+                  <p className="mt-2 text-[11px] text-slate-500">
+                    Start recording, then hit Play.
+                  </p>
+                </div>
+              </div>
+            )}
           </Card>
 
           {/* Recent results strip — newest first, amber when the ball profited. */}
