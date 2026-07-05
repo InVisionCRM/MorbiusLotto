@@ -88,6 +88,8 @@ interface BoardDrop {
     bet: number
     payout: number
     roundId: string
+    /** True when this drop is a visual replay of a past ball — no balance/session effect. */
+    isReplay?: boolean
   }
 }
 
@@ -137,6 +139,9 @@ export function StakePlinkoGame() {
   const autoTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
   const reconcileTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
   const mounted = useRef(true)
+  // The board container — a replay scrolls it into view so the drop is
+  // recordable even when the tap came from the history panel below the fold.
+  const boardRef = useRef<HTMLDivElement>(null)
 
   // Balance: public read keyed by wallet address (no sign-in popup), then kept
   // fresh from authoritative play responses and exchange completions.
@@ -333,6 +338,14 @@ export function StakePlinkoGame() {
   /** Lands feed the recent-results strip + session chart (server data rode along on the ball). */
   const handleScore = useCallback(
     (_multiplier: number, _bucketIndex: number, contractData?: BoardDrop['contractResult'] & { risk?: RiskLevel }) => {
+      // Replays are a pure re-watch of a past ball: they were never charged and
+      // never incremented `airborne`, so they must NOT touch balance, the
+      // airborne count, the recent strip, or the session chart. Just play the
+      // landing sound (nice for the screen recording) and bail.
+      if (contractData?.isReplay) {
+        plinkoAudio.playLand(contractData.payout - contractData.bet > 0)
+        return
+      }
       // Release this ball from the airborne count FIRST — even if its data is
       // malformed — so one bad land can never freeze balance reconciliation.
       airborne.current = Math.max(0, airborne.current - 1)
@@ -370,6 +383,43 @@ export function StakePlinkoGame() {
   const openVerify = useCallback((roundId: string | null) => {
     setVerifyTarget(roundId)
     setFairnessOpen(true)
+  }, [])
+
+  /**
+   * Replay a past ball: re-drop it on the board with the SAME seed so the
+   * canvas reproduces the exact animation the player originally saw (the seed
+   * picks the pre-baked deterministic drop that lands in this bucket). Marked
+   * isReplay so handleScore leaves balance/session untouched. This is the
+   * shareable moment — the player screen-records the drop.
+   */
+  const handleReplay = useCallback((round: PlinkoHistoryRound) => {
+    plinkoAudio.init()
+    // Same derivation as a live drop (StakePlinkoGame → dropBall). Legacy rows
+    // without a seed hash fall back to a stable hash of the round id so the
+    // replay is still deterministic (same ball every time), just not identical
+    // to the original drop.
+    const seedFromHash = round.serverSeedHash
+      ? parseInt(round.serverSeedHash.slice(0, 12), 16)
+      : NaN
+    const seed = Number.isFinite(seedFromHash)
+      ? seedFromHash
+      : Array.from(round.roundId).reduce((h, c) => (Math.imul(h, 31) + c.charCodeAt(0)) >>> 0, 7)
+    setLastDrop({
+      id: ++dropSeq.current,
+      risk: PLINKO_RISK_TO_BOARD[round.risk],
+      contractResult: {
+        seed,
+        bucket: round.bucket,
+        multiplier: round.multiplierX100 / 100,
+        multiplierX100: round.multiplierX100,
+        bet: round.bet,
+        payout: round.payout,
+        roundId: round.roundId,
+        isReplay: true,
+      },
+    })
+    plinkoAudio.playDrop()
+    boardRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' })
   }, [])
 
   const toggleMute = () => {
@@ -598,7 +648,7 @@ export function StakePlinkoGame() {
         </Card>
 
         {/* ───────── Board ───────── */}
-        <div className="order-1 space-y-3 lg:order-2">
+        <div ref={boardRef} className="order-1 space-y-3 lg:order-2">
           <Card className="arc-panel relative h-[420px] border-0 p-2 sm:h-[540px] sm:p-3 xl:h-[620px]">
             <PlinkoGame
               onScore={handleScore}
@@ -635,7 +685,7 @@ export function StakePlinkoGame() {
           The session chart is a draggable floating widget (FloatingPanel) on all
           sizes so it can live wherever the player parks it. */}
       <div className="mt-4 space-y-4">
-        <PlinkoInfoTabs history={history} historyLoading={historyLoading} onVerify={openVerify} />
+        <PlinkoInfoTabs history={history} historyLoading={historyLoading} onVerify={openVerify} onReplay={handleReplay} />
       </div>
       {/* Draggable mini session chart — open in a corner on mobile, full-size on desktop. */}
       <FloatingPanel title="Session" storageKey="plinko2.sessionChart.pos">

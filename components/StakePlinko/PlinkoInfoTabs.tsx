@@ -35,6 +35,8 @@ interface PlinkoInfoTabsProps {
   history: PlinkoHistoryRound[]
   historyLoading: boolean
   onVerify: (roundId: string) => void
+  /** Re-drop a past ball on the board (for screen-recording / sharing). */
+  onReplay?: (round: PlinkoHistoryRound) => void
 }
 
 const RISK_BADGE: Record<PlinkoRecentBall['risk'], string> = {
@@ -62,7 +64,7 @@ function Empty({ children }: { children: ReactNode }) {
   return <p className="py-6 text-center text-sm text-slate-500">{children}</p>
 }
 
-export function PlinkoInfoTabs({ history, historyLoading, onVerify }: PlinkoInfoTabsProps) {
+export function PlinkoInfoTabs({ history, historyLoading, onVerify, onReplay }: PlinkoInfoTabsProps) {
   const [recent, setRecent] = useState<PlinkoRecentBall[]>([])
   const [recentLoading, setRecentLoading] = useState(true)
   const [leaders, setLeaders] = useState<PlinkoLeaderboardEntry[]>([])
@@ -186,7 +188,7 @@ export function PlinkoInfoTabs({ history, historyLoading, onVerify }: PlinkoInfo
 
         {/* ── My balls (caller's history, live-prepended by the game) ── */}
         <TabsContent value="mine" className="mt-3 focus-visible:outline-none">
-          <PlinkoHistory rounds={history} loading={historyLoading} onVerify={onVerify} />
+          <PlinkoHistory rounds={history} loading={historyLoading} onVerify={onVerify} onReplay={onReplay} />
         </TabsContent>
 
         <TabsContent value="odds" className="mt-3 focus-visible:outline-none">
