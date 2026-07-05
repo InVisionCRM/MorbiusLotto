@@ -25,6 +25,7 @@ import { Volume2, VolumeX, ArrowUp, ArrowDown } from 'lucide-react';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { usePokerChipBalance } from '@/hooks/use-poker-chip-balance';
+import { useBigWin } from '@/contexts/big-win-context';
 import { formatChips } from '@/lib/format-poker-chips';
 import { GameWalletModal } from '@/components/shared/GameWalletModal';
 import { probeSiweSession } from '@/lib/api-auth';
@@ -71,6 +72,7 @@ function serverDetail(msg: string): string | null {
 
 export function StakeHiLoGame() {
   const { address } = useAccount();
+  const { reportWin } = useBigWin();
 
   const [info, setInfo] = useState<HiLoInfo | null>(null);
   const [bet, setBet] = useState<number>(100);
@@ -312,6 +314,7 @@ export function StakeHiLoGame() {
       }
       setResult({ kind: 'cashed', multiplierX100: r.multiplierX100, payout: r.payout, serverSeed: r.serverSeed });
       setPhase('cashed');
+      reportWin({ game: 'Hi-Lo', bet: betAmount, payout: r.payout });
       hiloAudio.playCashout();
       confetti({
         particleCount: 110,
@@ -325,7 +328,7 @@ export function StakeHiLoGame() {
       setPhase('active');
       handleErr(e);
     }
-  }, [round, phase, settleHistory, handleErr]);
+  }, [round, phase, settleHistory, handleErr, reportWin]);
 
   const playAgain = useCallback(() => {
     setRound(null);

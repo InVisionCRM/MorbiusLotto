@@ -30,6 +30,7 @@ import { Volume2, VolumeX, Delete } from 'lucide-react';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { usePokerChipBalance } from '@/hooks/use-poker-chip-balance';
+import { useBigWin } from '@/contexts/big-win-context';
 import { formatChips } from '@/lib/format-poker-chips';
 import { GameWalletModal } from '@/components/shared/GameWalletModal';
 import { probeSiweSession } from '@/lib/api-auth';
@@ -119,6 +120,7 @@ function Feedback({ exact, partial, slots }: { exact: number; partial: number; s
 
 export function CipherGame() {
   const { address } = useAccount();
+  const { reportWin } = useBigWin();
 
   const [info, setInfo] = useState<CipherInfo | null>(null);
   const [bet, setBet] = useState<number>(500);
@@ -412,6 +414,7 @@ export function CipherGame() {
         }
         setPhase('cracked');
         winFx();
+        reportWin({ game: 'Cipher', bet: betAmount, payout: r.payout });
         settleHistory(roundId, betAmount, diff, r.guessCount, r.bestExact, true, true, r.multiplierX100, r.payout);
         setSession((prev) => [...prev, { drop: prev.length + 1, bet: betAmount, profit: r.payout - betAmount }]);
       } else if (r.settled && !r.cracked) {
@@ -429,7 +432,7 @@ export function CipherGame() {
       setPhase('active');
       handleErr(e);
     }
-  }, [round, phase, current, codeLen, settleHistory, winFx, handleErr]);
+  }, [round, phase, current, codeLen, settleHistory, winFx, handleErr, reportWin]);
 
   const doCashout = useCallback(async () => {
     if (!round || phase !== 'active' || securedX100 <= 0) return;
@@ -449,13 +452,14 @@ export function CipherGame() {
       setPhase('banked');
       cipherAudio.playCash();
       confetti({ particleCount: 70, spread: 60, origin: { y: 0.5 }, colors: ['#F59E0B', '#FCD34D', '#ffffff'] });
+      reportWin({ game: 'Cipher', bet: betAmount, payout: r.payout });
       settleHistory(roundId, betAmount, diff, guessCount, r.bestExact, false, true, r.multiplierX100, r.payout);
       setSession((prev) => [...prev, { drop: prev.length + 1, bet: betAmount, profit: r.payout - betAmount }]);
     } catch (e) {
       setPhase('active');
       handleErr(e);
     }
-  }, [round, phase, securedX100, guessCount, settleHistory, handleErr]);
+  }, [round, phase, securedX100, guessCount, settleHistory, handleErr, reportWin]);
 
   const playAgain = useCallback(() => {
     setRound(null);

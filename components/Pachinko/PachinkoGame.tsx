@@ -25,6 +25,7 @@ import { usePokerChipBalance } from '@/hooks/use-poker-chip-balance'
 import { formatChips } from '@/lib/format-poker-chips'
 import { GameWalletModal } from '@/components/shared/GameWalletModal'
 import { probeSiweSession } from '@/lib/api-auth'
+import { useBigWin } from '@/contexts/big-win-context'
 import { SessionChart, type SessionPoint } from '@/components/arcade2/SessionChart'
 import { FloatingPanel } from '@/components/arcade2/FloatingPanel'
 import { PachinkoInfoTabs } from './PachinkoInfoTabs'
@@ -98,6 +99,7 @@ type Phase = 'idle' | 'dropping' | 'settled'
 
 export function PachinkoGame() {
   const { address } = useAccount()
+  const { reportWin } = useBigWin()
 
   const [info, setInfo] = useState<PachinkoInfo | null>(null)
   const [infoFailed, setInfoFailed] = useState(false)
@@ -406,6 +408,7 @@ export function PachinkoGame() {
               setBusy(false)
               setLastDrop(res)
               const profit = res.payout - res.bet
+              reportWin({ game: 'Pachinko', bet: res.bet, payout: res.payout })
               const jackpot = res.pocket === PACHINKO_CENTER
               if (jackpot) {
                 pachinkoAudio.playJackpot()
@@ -477,7 +480,7 @@ export function PachinkoGame() {
           })
       })
     },
-    [busy, info, bet, balance, clampBet, risk, clientSeed, animateDrop, draw],
+    [busy, info, bet, balance, clampBet, risk, clientSeed, animateDrop, draw, reportWin],
   )
 
   const stopAuto = useCallback(() => {

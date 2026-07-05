@@ -41,6 +41,7 @@ import { usePokerChipBalance } from '@/hooks/use-poker-chip-balance'
 import { formatChips } from '@/lib/format-poker-chips'
 import { GameWalletModal } from '@/components/shared/GameWalletModal'
 import { probeSiweSession } from '@/lib/api-auth'
+import { useBigWin } from '@/contexts/big-win-context'
 import { kenoAudio } from './keno-audio'
 import { KenoBoard } from './KenoBoard'
 import { KenoHotNumbers } from './KenoHotNumbers'
@@ -85,6 +86,7 @@ function randomSample(size: number): Set<number> {
 
 export function StakeKenoGame() {
   const { address } = useAccount()
+  const { reportWin } = useBigWin()
 
   const [multipliers, setMultipliers] = useState<KenoMultipliers | null>(null)
   const [multipliersFailed, setMultipliersFailed] = useState(false)
@@ -340,6 +342,7 @@ export function StakeKenoGame() {
             }
             setResultHits(res.hits)
             setPhase('idle')
+            reportWin({ game: 'Keno', bet: res.bet, payout: res.payout })
             if (res.payout > 0) kenoAudio.playWin()
             else kenoAudio.playLose()
             void refetchRecent() // refresh hot numbers + recent-wins feed
@@ -373,7 +376,7 @@ export function StakeKenoGame() {
           }
         })()
       }),
-    [picksCount, selected, risk, bet, clientSeed, clampBet, clearReveal, refetchRecent],
+    [picksCount, selected, risk, bet, clientSeed, clampBet, clearReveal, refetchRecent, reportWin],
   )
 
   const placeBet = useCallback(async () => {

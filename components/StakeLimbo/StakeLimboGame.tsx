@@ -24,6 +24,7 @@ import { usePokerChipBalance } from '@/hooks/use-poker-chip-balance'
 import { formatChips } from '@/lib/format-poker-chips'
 import { GameWalletModal } from '@/components/shared/GameWalletModal'
 import { probeSiweSession } from '@/lib/api-auth'
+import { useBigWin } from '@/contexts/big-win-context'
 import { SessionChart, type SessionPoint } from '@/components/arcade2/SessionChart'
 import { FloatingPanel } from '@/components/arcade2/FloatingPanel'
 import { LimboInfoTabs } from './LimboInfoTabs'
@@ -62,6 +63,7 @@ interface RecentRound {
 
 export function StakeLimboGame() {
   const { address } = useAccount()
+  const { reportWin } = useBigWin()
 
   const [info, setInfo] = useState<LimboInfo | null>(null)
   const [infoFailed, setInfoFailed] = useState(false)
@@ -203,6 +205,7 @@ export function StakeLimboGame() {
       })
       if (!mounted.current) return false
       const profit = res.payout - res.bet
+      reportWin({ game: 'Limbo', bet: res.bet, payout: res.payout })
       setBalance(BigInt(res.chipBalance))
       if (res.won) limboAudio.playWin()
       else limboAudio.playLose()
@@ -244,7 +247,7 @@ export function StakeLimboGame() {
     } finally {
       inFlight.current -= 1
     }
-  }, [info, bet, targetX100, clientSeed, clampBet, clampTarget])
+  }, [info, bet, targetX100, clientSeed, clampBet, clampTarget, reportWin])
 
   // Fixed-cadence auto loop — fire each round WITHOUT awaiting the round-trip
   // (same scheduler as plinko2/dice2). Errors stop the run.

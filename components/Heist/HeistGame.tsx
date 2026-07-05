@@ -29,6 +29,7 @@ import { Volume2, VolumeX } from 'lucide-react';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { usePokerChipBalance } from '@/hooks/use-poker-chip-balance';
+import { useBigWin } from '@/contexts/big-win-context';
 import { formatChips } from '@/lib/format-poker-chips';
 import { GameWalletModal } from '@/components/shared/GameWalletModal';
 import { probeSiweSession } from '@/lib/api-auth';
@@ -79,6 +80,7 @@ function serverDetail(msg: string): string | null {
 
 export function HeistGame() {
   const { address } = useAccount();
+  const { reportWin } = useBigWin();
 
   const [info, setInfo] = useState<HeistInfo | null>(null);
   const [bet, setBet] = useState<number>(100);
@@ -345,6 +347,7 @@ export function HeistGame() {
           setResult({ won: true, full: true, payout: r.payout, multiplierX100: r.multiplierX100, serverSeed: r.serverSeed });
           setPhase('cashed');
           winFx();
+          reportWin({ game: 'Heist', bet: betAmount, payout: r.payout });
           settleHistory(roundId, betAmount, diff, r.room, r.multiplierX100, true, r.payout);
           setSession((prev) => [...prev, { drop: prev.length + 1, bet: betAmount, profit: r.payout - betAmount }]);
         } else {
@@ -375,7 +378,7 @@ export function HeistGame() {
         handleErr(e);
       }
     },
-    [round, phase, settleHistory, winFx, handleErr],
+    [round, phase, settleHistory, winFx, handleErr, reportWin],
   );
 
   const doCashout = useCallback(async () => {
@@ -399,13 +402,14 @@ export function HeistGame() {
       setResult({ won: true, full: false, payout: r.payout, multiplierX100: r.multiplierX100, serverSeed: r.serverSeed });
       setPhase('cashed');
       winFx();
+      reportWin({ game: 'Heist', bet: betAmount, payout: r.payout });
       settleHistory(roundId, betAmount, diff, r.room, r.multiplierX100, true, r.payout);
       setSession((prev) => [...prev, { drop: prev.length + 1, bet: betAmount, profit: r.payout - betAmount }]);
     } catch (e) {
       setPhase('active');
       handleErr(e);
     }
-  }, [round, phase, settleHistory, winFx, handleErr]);
+  }, [round, phase, settleHistory, winFx, handleErr, reportWin]);
 
   const playAgain = useCallback(() => {
     clearTimers();

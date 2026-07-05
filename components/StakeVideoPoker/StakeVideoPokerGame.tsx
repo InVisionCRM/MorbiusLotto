@@ -26,6 +26,7 @@ import { usePokerChipBalance } from '@/hooks/use-poker-chip-balance';
 import { formatChips } from '@/lib/format-poker-chips';
 import { GameWalletModal } from '@/components/shared/GameWalletModal';
 import { probeSiweSession } from '@/lib/api-auth';
+import { useBigWin } from '@/contexts/big-win-context';
 import { SessionChart, type SessionPoint } from '@/components/arcade2/SessionChart';
 import { FloatingPanel } from '@/components/arcade2/FloatingPanel';
 import { VideoPokerCard } from './VideoPokerCard';
@@ -59,6 +60,7 @@ function serverDetail(msg: string): string | null {
 
 export function StakeVideoPokerGame() {
   const { address } = useAccount();
+  const { reportWin } = useBigWin();
 
   const [info, setInfo] = useState<VideoPokerPaytable | null>(null);
   const [bet, setBet] = useState<number>(100);
@@ -204,6 +206,7 @@ export function StakeVideoPokerGame() {
       }
       setDrawKey((k) => k + 1);
       setPhase('result');
+      reportWin({ game: 'Video Poker', bet: activeBet, payout: r.payout });
       setSession((prev) => [...prev, { drop: prev.length + 1, bet: activeBet, profit: r.payout - activeBet }]);
       setHands((prev) =>
         [
@@ -226,7 +229,7 @@ export function StakeVideoPokerGame() {
       setPhase('held');
       handleErr(e);
     }
-  }, [phase, handId, holds, activeBet, handleErr]);
+  }, [phase, handId, holds, activeBet, handleErr, reportWin]);
 
   const newHand = useCallback(() => {
     setPhase('idle');

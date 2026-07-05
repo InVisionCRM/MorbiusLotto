@@ -14,6 +14,7 @@ import { PwaInstallPromptProvider } from '@/contexts/pwa-install-prompt-context'
 import { InstallAppHelpDialogProvider } from '@/contexts/install-app-help-dialog-context'
 import { SiweProvider } from '@/contexts/siwe-context'
 import { WalletActionProvider } from '@/contexts/wallet-action-context'
+import { BigWinProvider } from '@/contexts/big-win-context'
 // Side-effect: force AppKit's All Wallets list to load every page (its lazy-load
 // IntersectionObserver doesn't fire in our runtime). See the file for details.
 import '@/lib/appkit-preload-wallets'
@@ -79,7 +80,9 @@ export function Providers({ children }: { children: React.ReactNode }) {
               <ProfileSettingsModalProvider>
                 <ProfileWsProvider>
                   <PwaInstallPromptProvider>
-                    <InstallAppHelpDialogProvider>{children}</InstallAppHelpDialogProvider>
+                    <InstallAppHelpDialogProvider>
+                      <BigWinProvider>{children}</BigWinProvider>
+                    </InstallAppHelpDialogProvider>
                   </PwaInstallPromptProvider>
                 </ProfileWsProvider>
               </ProfileSettingsModalProvider>

@@ -30,6 +30,7 @@ import { usePokerChipBalance } from '@/hooks/use-poker-chip-balance'
 import { formatChips } from '@/lib/format-poker-chips'
 import { GameWalletModal } from '@/components/shared/GameWalletModal'
 import { probeSiweSession } from '@/lib/api-auth'
+import { useBigWin } from '@/contexts/big-win-context'
 import { DragonTigerInfoTabs } from './DragonTigerInfoTabs'
 import { DragonTigerFairnessModal } from './DragonTigerFairnessModal'
 import { DragonTigerRulesModal } from './DragonTigerRulesModal'
@@ -105,6 +106,7 @@ function FeltCard({
 
 export function DragonTigerGame() {
   const { address } = useAccount()
+  const { reportWin } = useBigWin()
 
   const [info, setInfo] = useState<DragonTigerInfo | null>(null)
   const [infoFailed, setInfoFailed] = useState(false)
@@ -243,6 +245,7 @@ export function DragonTigerGame() {
     if (!mounted.current) return
     const result: DragonTigerResult = res.result
     const net = res.totalPayout - res.totalBet
+    reportWin({ game: 'Dragon Tiger', bet: res.totalBet, payout: res.totalPayout })
     setPhase('settled')
     setBusy(false)
     setFeltMsg(`Dragon ${res.dragonRank + 1} · Tiger ${res.tigerRank + 1}`)
@@ -282,7 +285,7 @@ export function DragonTigerGame() {
     const resolve = settleResolve.current
     settleResolve.current = null
     resolve?.()
-  }, [])
+  }, [reportWin])
 
   /** Pace the reveal of the server-decided round: face-down → flip D → flip T → settle. */
   const runReveal = useCallback(

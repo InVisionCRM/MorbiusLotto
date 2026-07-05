@@ -26,6 +26,7 @@ import { usePokerChipBalance } from '@/hooks/use-poker-chip-balance'
 import { formatChips } from '@/lib/format-poker-chips'
 import { GameWalletModal } from '@/components/shared/GameWalletModal'
 import { probeSiweSession } from '@/lib/api-auth'
+import { useBigWin } from '@/contexts/big-win-context'
 import { SessionChart, type SessionPoint } from '@/components/arcade2/SessionChart'
 import { FloatingPanel } from '@/components/arcade2/FloatingPanel'
 import { CascadeInfoTabs } from './CascadeInfoTabs'
@@ -115,6 +116,7 @@ function minClusterX100(
 
 export function CascadeGame() {
   const { address } = useAccount()
+  const { reportWin } = useBigWin()
 
   const [info, setInfo] = useState<CascadeInfo | null>(null)
   const [infoFailed, setInfoFailed] = useState(false)
@@ -263,6 +265,7 @@ export function CascadeGame() {
         setSettled(true)
         setBusy(false)
         const won = res.payout > 0
+        reportWin({ game: 'Cascade', bet: res.bet, payout: res.payout })
         setHud(
           res.multiplierX100,
           steps.length ? steps[steps.length - 1].comboX100 : 100,
@@ -355,7 +358,7 @@ export function CascadeGame() {
       cascadeAudio.playDrop()
       later(() => tick(0), TICK_MS)
     },
-    [later, setHud],
+    [later, setHud, reportWin],
   )
 
   const drop = useCallback(async (): Promise<'ok' | 'stop'> => {
