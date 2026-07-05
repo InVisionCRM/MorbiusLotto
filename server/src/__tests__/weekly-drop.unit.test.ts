@@ -110,18 +110,26 @@ describe('commit-reveal helpers', () => {
   });
 });
 
-describe('nextSundayCloseUTC', () => {
-  it('rolls to the coming Sunday 20:00 UTC', () => {
-    // Wed 2026-07-01 → Sun 2026-07-05 20:00 UTC
+describe('nextSundayCloseUTC — Sunday 8 PM America/New_York (DST-aware)', () => {
+  it('rolls to the coming Sunday 8 PM Eastern (EDT = 00:00 UTC)', () => {
+    // Wed 2026-07-01 (EDT) → Sun 2026-07-05 8 PM EDT = 2026-07-06T00:00Z
     const d = nextSundayCloseUTC(new Date('2026-07-01T12:00:00Z'));
-    expect(d.toISOString()).toBe('2026-07-05T20:00:00.000Z');
+    expect(d.toISOString()).toBe('2026-07-06T00:00:00.000Z');
   });
 
-  it('same Sunday qualifies if before 20:00 UTC; otherwise next week', () => {
+  it('same Sunday qualifies before 8 PM Eastern; otherwise next week', () => {
+    // Sun 3:59:59 PM EDT (19:59:59Z) → that day's 8 PM EDT
     expect(nextSundayCloseUTC(new Date('2026-07-05T19:59:59Z')).toISOString())
-      .toBe('2026-07-05T20:00:00.000Z');
-    expect(nextSundayCloseUTC(new Date('2026-07-05T20:00:00Z')).toISOString())
-      .toBe('2026-07-12T20:00:00.000Z');
+      .toBe('2026-07-06T00:00:00.000Z');
+    // 1s after the 8 PM EDT close → next Sunday
+    expect(nextSundayCloseUTC(new Date('2026-07-06T00:00:01Z')).toISOString())
+      .toBe('2026-07-13T00:00:00.000Z');
+  });
+
+  it('is DST-aware: winter close is 8 PM EST = 01:00 UTC', () => {
+    // Wed 2026-01-07 (EST) → Sun 2026-01-11 8 PM EST = 2026-01-12T01:00Z
+    expect(nextSundayCloseUTC(new Date('2026-01-07T12:00:00Z')).toISOString())
+      .toBe('2026-01-12T01:00:00.000Z');
   });
 });
 

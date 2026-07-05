@@ -9,6 +9,7 @@
 
 import React, { useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
+import { nextSundayDropUtc } from '@/lib/weekly-drop-time';
 import {
   PlinkoScene,
   CrashScene,
@@ -91,7 +92,7 @@ const DEFAULT_TICKER_ITEMS = [
   '<b class="c">👑 RANK UP</b> pTIGER hit GOLD — 12% rakeback',
   '<b class="o">🎁 RAKEBACK</b> 84,300 MORBIUS paid back to players',
   '<b class="c">🃏 TABLES</b> Blackjack #4 · 3 seats open now',
-  '<b class="g">🎟 WEEKLY DROP</b> top 3 win every Sunday 8PM',
+  '<b class="g">🎟 WEEKLY DROP</b> top 3 win every Sunday 8PM ET',
 ];
 
 export function HomeTicker({ items = DEFAULT_TICKER_ITEMS }: { items?: string[] }) {
@@ -673,15 +674,9 @@ export interface WeeklyDropProps {
   onViewEntrants?: () => void;
 }
 
-/* port of the lab's nextDrop() — next Sunday 20:00 */
-function nextDrop(): Date {
-  const n = new Date();
-  const d = new Date(n);
-  d.setDate(n.getDate() + ((7 - n.getDay()) % 7));
-  d.setHours(20, 0, 0, 0);
-  if (d <= n) d.setDate(d.getDate() + 7);
-  return d;
-}
+/* Fallback drop time: next Sunday 8 PM Eastern (DST-aware), matching the
+ * backend. Only used when the server's closesAt hasn't loaded yet. */
+const nextDrop = nextSundayDropUtc;
 
 export function WeeklyDrop({
   pot = 25000,
@@ -749,7 +744,7 @@ export function WeeklyDrop({
       <div className="jp-num" id="jpNum">
         {potVal.toLocaleString('en-US')}
       </div>
-      <div className="jp-unit">MORBIUS · TOP 3 WIN EVERY SUNDAY · 8PM</div>
+      <div className="jp-unit">MORBIUS · TOP 3 WIN EVERY SUNDAY · 8PM ET</div>
       {accruedNote && (
         <div style={{ fontSize: 10, color: 'var(--text2)', marginTop: -12, marginBottom: 16, position: 'relative', zIndex: 1 }}>
           {accruedNote}

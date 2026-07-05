@@ -49,6 +49,7 @@ import { KenoPayoutBar } from './KenoPayoutBar'
 import { KenoFairnessModal } from './KenoFairnessModal'
 import { KenoRulesModal } from './KenoRulesModal'
 import { KenoInfoTabs } from './KenoInfoTabs'
+import { ReplayConfirmOverlay } from '@/components/share/ReplayConfirmOverlay'
 import { playKenoDropReveal, type KenoRevealHandle } from './keno-ball-reveal'
 import { useKenoRecent } from '@/hooks/use-keno-recent'
 import {
@@ -114,6 +115,12 @@ export function StakeKenoGame() {
 
   const [history, setHistory] = useState<KenoHistoryRound[]>([])
   const [historyLoading, setHistoryLoading] = useState(false)
+
+  // Replay: a staged past round (confirm overlay) + the picks to show on the
+  // board while re-running its draw. Replays never touch balance/history.
+  const [pendingReplay, setPendingReplay] = useState<KenoHistoryRound | null>(null)
+  const [replayPicks, setReplayPicks] = useState<Set<number> | null>(null)
+  const [replaying, setReplaying] = useState(false)
 
   const revealTimers = useRef<ReturnType<typeof setTimeout>[]>([])
   // Ball-draw reveal (real-keno "Drop" style): overlay stage + the live handle.
@@ -199,7 +206,7 @@ export function StakeKenoGame() {
 
   const picksCount = selected.size
   const autoRunning = autoLeft > 0
-  const busy = phase !== 'idle' || autoRunning
+  const busy = phase !== 'idle' || autoRunning || replaying
 
   const clampBet = useCallback(
     (n: number) => Math.min(bounds.maxBet, Math.max(bounds.minBet, Math.floor(n || 0))),
@@ -224,6 +231,7 @@ export function StakeKenoGame() {
     setResult(null)
     setRevealed(null)
     setResultHits(null)
+    setReplayPicks(null)
   }, [])
 
   const toggleTile = useCallback(
@@ -265,6 +273,58 @@ export function StakeKenoGame() {
     setNoChips(false)
   }, [busy, clearReveal, resetRound])
 
+  // ── Replay a past round: stage the confirm overlay, then re-run the exact
+  // same ball draw (no server call, no balance/history change). ──
+  const handleReplay = useCallback(
+    (round: KenoHistoryRound) => {
+      if (busy) return
+      kenoAudio.init()
+      setPendingReplay(round)
+      boardWrapRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' })
+    },
+    [busy],
+  )
+
+  const startReplay = useCallback(() => {
+    const round = pendingReplay
+    if (!round) return
+    setPendingReplay(null)
+    clearReveal()
+    setResult(null)
+    setResultHits(null)
+    setReplaying(true)
+    setReplayPicks(new Set(round.picks))
+    setRevealed(new Set())
+    const done = () => {
+      setResultHits(round.hits)
+      setReplaying(false)
+      if (round.payout > 0) kenoAudio.playWin()
+      else kenoAudio.playLose()
+    }
+    const board = boardWrapRef.current
+    const stage = stageRef.current
+    if (board && stage) {
+      revealHandle.current = playKenoDropReveal({
+        board,
+        stage,
+        drawn: round.drawn,
+        fast: false,
+        onLand: (n) => {
+          setRevealed((prev) => {
+            const next = new Set(prev ?? [])
+            next.add(n)
+            return next
+          })
+          kenoAudio.playDraw()
+        },
+        onDone: done,
+      })
+    } else {
+      setRevealed(new Set(round.drawn))
+      done()
+    }
+  }, [pendingReplay, clearReveal])
+
   /**
    * Play a single round. `fast` (used by autoplay) collapses the cinematic ball
    * drop to an instant reveal + short pause so a batch of 10/25/50 doesn't take
@@ -283,6 +343,7 @@ export function StakeKenoGame() {
         setError(null)
         setNoChips(false)
         setPhase('betting')
+        setReplayPicks(null) // a real round exits any replay view
         void (async () => {
           let res: KenoPlayResult
           try {
@@ -667,7 +728,7 @@ export function StakeKenoGame() {
               {/* Wrapper bounds the tile grid; the ball-draw overlay sits on top. */}
               <div ref={boardWrapRef} className="relative">
                 <KenoBoard
-                  selected={selected}
+                  selected={replayPicks ?? selected}
                   drawn={revealed}
                   settled={settled}
                   disabled={busy}
@@ -691,6 +752,19 @@ export function StakeKenoGame() {
                   </div>
                 </div>
               )}
+              {pendingReplay && (
+                <ReplayConfirmOverlay
+                  title="Replay draw"
+                  headline={formatMultiplier(pendingReplay.multiplierX100)}
+                  sub={`${
+                    pendingReplay.payout - pendingReplay.bet > 0
+                      ? `+${(pendingReplay.payout - pendingReplay.bet).toLocaleString()}`
+                      : (pendingReplay.payout - pendingReplay.bet).toLocaleString()
+                  } MORBIUS`}
+                  onPlay={startReplay}
+                  onCancel={() => setPendingReplay(null)}
+                />
+              )}
             </Card>
             <KenoHotNumbers hot={recent.hotNumbers} />
           </div>
@@ -712,6 +786,7 @@ export function StakeKenoGame() {
             rounds={history}
             loading={historyLoading}
             onVerify={openVerify}
+            onReplay={handleReplay}
             recentWins={recent.wins}
             recentLoading={recentLoading}
           />

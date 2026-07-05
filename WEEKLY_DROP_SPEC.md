@@ -15,7 +15,7 @@ progressive" concept.
 |---|---|
 | Base entry rate | 1 entry per 1,000 MORBIUS wagered, any game, win or lose |
 | Entry reset | Entries reset to zero at every draw (weekly race) |
-| Draw cadence | Weekly, Sunday 8:00 PM (fixed, shown as countdown on home) |
+| Draw cadence | Weekly, Sunday 8:00 PM America/New_York (US Eastern, DST-aware; shown as countdown on home) |
 | Pot funding | 0.5% of every settled bet, all games |
 | Pot floor | House-guaranteed minimum 25,000 MORBIUS per draw |
 | Winners | 3 per draw: 60% / 25% / 15% of the pot |

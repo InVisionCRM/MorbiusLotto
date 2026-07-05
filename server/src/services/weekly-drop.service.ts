@@ -12,7 +12,7 @@
  *   - Public math: 1 entry per 1,000 MORBIUS wagered. Internally each game has
  *     an edge-proportional weight (DROP_ENTRY_RATES) so thin-edge games can't
  *     cheaply farm entries against the guaranteed pot.
- *   - Every Sunday 20:00 UTC the draw closes: commit → select 3 winners
+ *   - Every Sunday 8:00 PM Eastern the draw closes: commit → select 3 winners
  *     (seeded deterministic weighted sampling, without replacement per player)
  *     → credit chips → reveal seed → open next draw.
  *   - Prizes: 60 / 25 / 15 % of max(pot, 25,000 chips), credited to the
@@ -25,10 +25,10 @@
  * players.balance is never touched here. All amounts travel as bigint /
  * numeric strings — never floats.
  *
- * Draw time zone: "Sunday 8:00 PM" is interpreted as 20:00 UTC, fixed. UTC is
- * the platform's canonical clock (VIP windows, daily claims) and is DST-free,
- * so the countdown never jumps. If a local-time cadence is ever wanted, shift
- * DROP_CLOSE_UTC_HOUR.
+ * Draw time zone: "Sunday 8:00 PM" means 8 PM in America/New_York (US Eastern),
+ * DST-aware — so it is always 8 PM for Eastern players (20:00 EDT = 00:00 UTC in
+ * summer, 20:00 EST = 01:00 UTC in winter). We store the resolved UTC instant in
+ * drop_draws.closes_at and count down to it, so clients need no timezone logic.
  */
 
 import crypto from 'crypto';
@@ -52,8 +52,10 @@ export const DROP_GUARANTEED_MIN_CHIPS = 25000n;
 /** Prize split for ranks 1..3, in bps of max(pot, guarantee). Sums to 10000. */
 export const DROP_PRIZE_SPLIT_BPS: readonly bigint[] = [6000n, 2500n, 1500n];
 
-/** Draws close Sunday at this UTC hour (20:00 = 8 PM UTC — see header). */
-export const DROP_CLOSE_UTC_HOUR = 20;
+/** Draws close Sunday at this wall-clock hour in DROP_TZ (20 = 8 PM). */
+export const DROP_CLOSE_LOCAL_HOUR = 20;
+/** The timezone the drop's "8 PM" is fixed to (DST-aware). */
+export const DROP_TZ = 'America/New_York';
 
 /**
  * Per-game entry rates: chips wagered per 1 raffle entry, keyed by the ledger
@@ -196,20 +198,59 @@ export function selectWinners(
   return winners;
 }
 
+const WEEKDAY_INDEX: Record<string, number> = {
+  Sun: 0, Mon: 1, Tue: 2, Wed: 3, Thu: 4, Fri: 5, Sat: 6,
+};
+
+/** Minutes to ADD to UTC to get DROP_TZ local time at instant `date` (DST-aware). */
+function tzOffsetMinutes(date: Date): number {
+  const parts = new Intl.DateTimeFormat('en-US', {
+    timeZone: DROP_TZ, hourCycle: 'h23',
+    year: 'numeric', month: '2-digit', day: '2-digit',
+    hour: '2-digit', minute: '2-digit', second: '2-digit',
+  }).formatToParts(date);
+  const p: Record<string, string> = {};
+  for (const part of parts) p[part.type] = part.value;
+  const asUTC = Date.UTC(+p.year, +p.month - 1, +p.day, +p.hour, +p.minute, +p.second);
+  return (asUTC - date.getTime()) / 60000;
+}
+
+/** A DROP_TZ wall-clock (y, 0-based m, d, h) → the correct UTC instant (DST-aware). */
+function zonedWallClockToUTC(y: number, m: number, d: number, h: number): Date {
+  // Treat the wall time as UTC, then subtract the zone offset. Re-evaluate once
+  // in case the first guess landed on the wrong side of a DST transition.
+  const guessUTC = Date.UTC(y, m, d, h, 0, 0);
+  const off1 = tzOffsetMinutes(new Date(guessUTC));
+  let ts = guessUTC - off1 * 60000;
+  const off2 = tzOffsetMinutes(new Date(ts));
+  if (off2 !== off1) ts = guessUTC - off2 * 60000;
+  return new Date(ts);
+}
+
+/** The DROP_TZ calendar date + weekday for the instant `date`. */
+function zonedDateParts(date: Date): { y: number; m: number; d: number; wd: number } {
+  const parts = new Intl.DateTimeFormat('en-US', {
+    timeZone: DROP_TZ, weekday: 'short',
+    year: 'numeric', month: '2-digit', day: '2-digit',
+  }).formatToParts(date);
+  const p: Record<string, string> = {};
+  for (const part of parts) p[part.type] = part.value;
+  return { y: +p.year, m: +p.month - 1, d: +p.day, wd: WEEKDAY_INDEX[p.weekday] };
+}
+
 /**
- * Next Sunday 20:00 UTC strictly AFTER `from`. If `from` is a Sunday before
- * 20:00 UTC, that same day's 20:00 qualifies.
+ * Next Sunday 8:00 PM Eastern (DROP_TZ), as a UTC instant, strictly AFTER `from`.
+ * If `from` is a Sunday before 8 PM Eastern, that same day's 8 PM qualifies.
+ * DST-aware: the returned instant is 00:00 UTC in summer, 01:00 UTC in winter.
  */
 export function nextSundayCloseUTC(from: Date): Date {
-  const d = new Date(Date.UTC(
-    from.getUTCFullYear(), from.getUTCMonth(), from.getUTCDate(),
-    DROP_CLOSE_UTC_HOUR, 0, 0, 0,
-  ));
-  // getUTCDay(): 0 = Sunday.
-  const daysUntilSunday = (7 - d.getUTCDay()) % 7;
-  d.setUTCDate(d.getUTCDate() + daysUntilSunday);
-  if (d.getTime() <= from.getTime()) d.setUTCDate(d.getUTCDate() + 7);
-  return d;
+  const { y, m, d, wd } = zonedDateParts(from);
+  const daysUntilSunday = (7 - wd) % 7;
+  let close = zonedWallClockToUTC(y, m, d + daysUntilSunday, DROP_CLOSE_LOCAL_HOUR);
+  if (close.getTime() <= from.getTime()) {
+    close = zonedWallClockToUTC(y, m, d + daysUntilSunday + 7, DROP_CLOSE_LOCAL_HOUR);
+  }
+  return close;
 }
 
 /** Split a prize pot 60/25/15 (bps) across up to 3 ranks; rank 1 absorbs the floor remainder. */
@@ -288,7 +329,7 @@ export class WeeklyDropService {
         logger.error('[WeeklyDrop] tick crashed (will retry next minute)', err),
       );
     }, POLL_INTERVAL_MS);
-    logger.info('[WeeklyDrop] scheduler started (poll every 60s, close Sunday 20:00 UTC)');
+    logger.info('[WeeklyDrop] scheduler started (poll every 60s, close Sunday 8 PM America/New_York)');
   }
 
   stop(): void {

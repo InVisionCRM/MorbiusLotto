@@ -231,7 +231,7 @@ export function registerArcadePachinkoRoutes({
       }
       const limit = Math.max(1, Math.min(100, parseInt(String(req.query.limit ?? '25'), 10) || 25));
       const r = await pool.query(
-        `SELECT id, bet, risk, pocket, multiplier_x100, won, payout, created_at
+        `SELECT id, bet, risk, pocket, path, multiplier_x100, won, payout, created_at
            FROM arcade_pachinko_rounds
           WHERE wallet_address = $1
           ORDER BY created_at DESC
@@ -245,6 +245,7 @@ export function registerArcadePachinkoRoutes({
           bet: Number(row.bet),
           risk: row.risk,
           pocket: Number(row.pocket),
+          path: row.path,
           multiplierX100: Number(row.multiplier_x100),
           won: !!row.won,
           payout: Number(row.payout),

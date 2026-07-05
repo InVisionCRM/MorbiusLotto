@@ -63,6 +63,8 @@ export interface PachinkoHistoryRound {
   bet: number;
   risk: PachinkoRisk;
   pocket: number;
+  /** Cosmetic L/R bounce for an identical replay; may be empty for older rows. */
+  path: number[];
   multiplierX100: number;
   won: boolean;
   payout: number;

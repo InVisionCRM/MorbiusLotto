@@ -32,6 +32,7 @@ import { BaccaratTable, type BaccaratBannerInfo } from './BaccaratTable';
 import { BaccaratRoads, type RoadEntry } from './BaccaratRoads';
 import { BaccaratInfoTabs } from './BaccaratInfoTabs';
 import { BaccaratFairnessModal } from './BaccaratFairnessModal';
+import { ReplayConfirmOverlay } from '@/components/share/ReplayConfirmOverlay';
 import { baccaratAudio } from './baccarat-audio';
 import {
   fetchBaccaratInfo,
@@ -120,6 +121,12 @@ export function StakeBaccaratGame() {
   const [shownBanker, setShownBanker] = useState<number[]>([]);
   const [banner, setBanner] = useState<BaccaratBannerInfo | null>(null);
 
+  // Replay: a staged past hand (confirm overlay) + a flag while its deal
+  // re-runs. Replays are a pure re-watch — no server call, balance, history,
+  // session, reportWin, or confetti.
+  const [pendingReplay, setPendingReplay] = useState<BaccaratHistoryHand | null>(null);
+  const [replaying, setReplaying] = useState(false);
+
   const [roadEntries, setRoadEntries] = useState<RoadEntry[]>([]);
   const [session, setSession] = useState<SessionPoint[]>([]);
   const [history, setHistory] = useState<BaccaratHistoryHand[]>([]);
@@ -134,6 +141,7 @@ export function StakeBaccaratGame() {
   const [muted, setMuted] = useState(false);
 
   const timersRef = useRef<ReturnType<typeof setTimeout>[]>([]);
+  const boardWrapRef = useRef<HTMLDivElement | null>(null);
   useEffect(() => () => timersRef.current.forEach(clearTimeout), []);
 
   // Balance: public read keyed by wallet, then authoritative from play responses.
@@ -198,9 +206,12 @@ export function StakeBaccaratGame() {
   const minBet = info?.minBet ?? 10;
   const maxBet = info?.maxBet ?? 2000;
 
+  // Gates every play/bet action — a live deal OR a replay in progress.
+  const busy = dealing || replaying;
+
   const placeBet = useCallback(
     (zone: BaccaratBetKey) => {
-      if (dealing) return;
+      if (busy) return;
       setError(null);
       setNoChips(false);
       setBets((prev) => {
@@ -223,7 +234,7 @@ export function StakeBaccaratGame() {
         return { ...prev, [zone]: next };
       });
     },
-    [dealing, chipValue, minBet, maxBet, balance],
+    [busy, chipValue, minBet, maxBet, balance],
   );
 
   const undo = useCallback(() => {
@@ -281,6 +292,8 @@ export function StakeBaccaratGame() {
           handId: res.handId,
           bets: res.bets,
           totalBet: res.totalBet,
+          playerCards: res.playerCards,
+          bankerCards: res.bankerCards,
           playerTotal: res.playerTotal,
           bankerTotal: res.bankerTotal,
           result: res.result,
@@ -310,9 +323,33 @@ export function StakeBaccaratGame() {
     }
   }, [reportWin]);
 
+  // Replay finish: show the felt banner + winning-zone highlight and release the
+  // replay flag. No balance/history/session/reportWin/confetti — pure re-watch.
+  const finishReplay = useCallback((res: BaccaratPlayResult) => {
+    setPhase('settled');
+    const net = res.totalPayout - res.totalBet;
+    setBanner({
+      result: res.result,
+      net,
+      natural: baccaratIsNatural(res.playerCards, res.bankerCards, res.playerTotal, res.bankerTotal),
+      playerPair: res.playerPair,
+      bankerPair: res.bankerPair,
+    });
+    setReplaying(false);
+    if (res.result === 'tie' && net <= 0) {
+      baccaratAudio.playTie();
+    } else if (net > 0) {
+      baccaratAudio.playWin();
+    } else {
+      baccaratAudio.playLose();
+    }
+  }, []);
+
   const startReveal = useCallback(
-    (res: BaccaratPlayResult) => {
-      setLastBets(bets);
+    (res: BaccaratPlayResult, opts?: { isReplay?: boolean }) => {
+      const isReplay = opts?.isReplay ?? false;
+      // A replay must not overwrite the rebet snapshot with the current bets.
+      if (!isReplay) setLastBets(bets);
       setHandKey((k) => k + 1);
       setShownPlayer([]);
       setShownBanker([]);
@@ -339,18 +376,27 @@ export function StakeBaccaratGame() {
         t += REVEAL_GAP_MS;
       });
 
-      const settleId = setTimeout(() => settle(res), t + 160);
-      timersRef.current.push(settleId);
+      // On replay, skip settle entirely — just re-show the outcome banner.
+      const finishId = setTimeout(() => (isReplay ? finishReplay(res) : settle(res)), t + 160);
+      timersRef.current.push(finishId);
     },
-    [bets, settle],
+    [bets, settle, finishReplay],
   );
 
   const deal = useCallback(async () => {
-    if (dealing || !info) return;
+    if (busy || !info) return;
     if (totalBet <= 0) {
       setError('Place a bet on at least one zone.');
       return;
     }
+    // A real deal exits any replay view (pending prompt, in-flight cards, banner).
+    timersRef.current.forEach(clearTimeout);
+    timersRef.current = [];
+    setPendingReplay(null);
+    setReplaying(false);
+    setShownPlayer([]);
+    setShownBanker([]);
+    setBanner(null);
     setError(null);
     setNoChips(false);
     setDealing(true);
@@ -373,7 +419,47 @@ export function StakeBaccaratGame() {
         setError(serverDetail(msg) ?? 'Could not complete the hand. Try again.');
       }
     }
-  }, [dealing, info, totalBet, bets, clientSeed, startReveal]);
+  }, [busy, info, totalBet, bets, clientSeed, startReveal]);
+
+  // ── Replay a past hand: stage the confirm overlay, then re-run the exact same
+  // card deal (no server call, no balance/history/session change). ──
+  const handleReplay = useCallback(
+    (hand: BaccaratHistoryHand) => {
+      if (busy) return;
+      baccaratAudio.init();
+      setPendingReplay(hand);
+      boardWrapRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    },
+    [busy],
+  );
+
+  const startReplay = useCallback(() => {
+    const hand = pendingReplay;
+    if (!hand) return;
+    setPendingReplay(null);
+    timersRef.current.forEach(clearTimeout);
+    timersRef.current = [];
+    setReplaying(true);
+    baccaratAudio.init();
+    // Rebuild the play-result shape startReveal needs from the stored row.
+    const res: BaccaratPlayResult = {
+      handId: hand.handId,
+      bets: hand.bets,
+      totalBet: hand.totalBet,
+      playerCards: hand.playerCards,
+      bankerCards: hand.bankerCards,
+      playerTotal: hand.playerTotal,
+      bankerTotal: hand.bankerTotal,
+      result: hand.result,
+      playerPair: hand.playerPair,
+      bankerPair: hand.bankerPair,
+      payouts: hand.payouts,
+      totalPayout: hand.totalPayout,
+      serverSeedHash: '',
+      chipBalance: '',
+    };
+    startReveal(res, { isReplay: true });
+  }, [pendingReplay, startReveal]);
 
   const openVerify = useCallback((id: string | null) => {
     setVerifyTarget(id);
@@ -404,7 +490,7 @@ export function StakeBaccaratGame() {
       <button
         key={key}
         type="button"
-        disabled={dealing}
+        disabled={busy}
         onClick={() => placeBet(key)}
         aria-label={`Bet ${meta.label}`}
         className={[
@@ -468,7 +554,7 @@ export function StakeBaccaratGame() {
                 <button
                   key={v}
                   type="button"
-                  disabled={dealing}
+                  disabled={busy}
                   onClick={() => setChipValue(v)}
                   className={`flex h-11 w-11 items-center justify-center rounded-full border-[3px] border-dashed border-white/85 font-mono text-xs font-bold text-white transition-transform hover:scale-105 disabled:opacity-50 ${CHIP_STYLE[v]} ${
                     chipValue === v ? 'outline outline-2 outline-offset-2 outline-cyan-400' : ''
@@ -499,11 +585,11 @@ export function StakeBaccaratGame() {
           <div className="fixed inset-x-0 bottom-0 z-40 border-t border-cyan-950/70 bg-[#07131F]/95 p-3 backdrop-blur-sm lg:static lg:z-auto lg:border-0 lg:bg-transparent lg:p-0 lg:backdrop-blur-none">
           <Button
             type="button"
-            disabled={dealing || totalBet === 0 || !info}
+            disabled={busy || totalBet === 0 || !info}
             onClick={() => void deal()}
             className="arc-display h-12 w-full bg-cyan-500 text-base font-bold uppercase tracking-widest text-[#03121B] shadow-[0_0_24px_-6px_rgba(34,211,238,0.85)] hover:bg-cyan-400 disabled:opacity-50"
           >
-            {dealing ? 'Dealing…' : 'Deal'}
+            {dealing ? 'Dealing…' : replaying ? 'Replaying…' : 'Deal'}
           </Button>
           </div>
 
@@ -511,7 +597,7 @@ export function StakeBaccaratGame() {
             <Button
               type="button"
               variant="outline"
-              disabled={dealing || undoStack.length === 0}
+              disabled={busy || undoStack.length === 0}
               onClick={undo}
               className="border-cyan-950 bg-transparent text-xs uppercase text-slate-500 hover:bg-cyan-500/10 hover:text-slate-200"
             >
@@ -520,7 +606,7 @@ export function StakeBaccaratGame() {
             <Button
               type="button"
               variant="outline"
-              disabled={dealing || totalBet === 0}
+              disabled={busy || totalBet === 0}
               onClick={clearBets}
               className="border-cyan-950 bg-transparent text-xs uppercase text-slate-500 hover:bg-cyan-500/10 hover:text-slate-200"
             >
@@ -529,7 +615,7 @@ export function StakeBaccaratGame() {
             <Button
               type="button"
               variant="outline"
-              disabled={dealing || !lastBets}
+              disabled={busy || !lastBets}
               onClick={rebet}
               className="border-cyan-950 bg-transparent text-xs uppercase text-slate-500 hover:bg-cyan-500/10 hover:text-slate-200"
             >
@@ -563,15 +649,36 @@ export function StakeBaccaratGame() {
 
         {/* ───────── Felt + betting cloth ───────── */}
         <div className="order-1 space-y-3 lg:order-2">
-          <BaccaratTable
-            phase={phase}
-            handKey={handKey}
-            playerCards={shownPlayer}
-            bankerCards={shownBanker}
-            banner={settled ? banner : null}
-            muted={muted}
-            onToggleMute={toggleMute}
-          />
+          <div ref={boardWrapRef} className="relative">
+            <BaccaratTable
+              phase={phase}
+              handKey={handKey}
+              playerCards={shownPlayer}
+              bankerCards={shownBanker}
+              banner={settled ? banner : null}
+              muted={muted}
+              onToggleMute={toggleMute}
+            />
+            {pendingReplay && (
+              <ReplayConfirmOverlay
+                title="Replay hand"
+                headline={
+                  pendingReplay.result === 'player'
+                    ? 'Player'
+                    : pendingReplay.result === 'banker'
+                      ? 'Banker'
+                      : 'Tie'
+                }
+                sub={`${
+                  pendingReplay.totalPayout - pendingReplay.totalBet > 0
+                    ? `+${(pendingReplay.totalPayout - pendingReplay.totalBet).toLocaleString()}`
+                    : (pendingReplay.totalPayout - pendingReplay.totalBet).toLocaleString()
+                } MORBIUS`}
+                onPlay={startReplay}
+                onCancel={() => setPendingReplay(null)}
+              />
+            )}
+          </div>
 
           {/* Five-zone betting cloth */}
           <div className="space-y-2">
@@ -596,6 +703,7 @@ export function StakeBaccaratGame() {
           history={history}
           historyLoading={historyLoading}
           onVerify={(id) => openVerify(id)}
+          onReplay={handleReplay}
           info={info}
         />
       </div>

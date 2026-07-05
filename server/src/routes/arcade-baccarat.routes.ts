@@ -239,7 +239,7 @@ export function registerArcadeBaccaratRoutes({
       }
       const limit = Math.max(1, Math.min(100, parseInt(String(req.query.limit ?? '25'), 10) || 25));
       const r = await pool.query(
-        `SELECT id, bets, total_bet, player_total, banker_total, result,
+        `SELECT id, bets, total_bet, player_cards, banker_cards, player_total, banker_total, result,
                 player_pair, banker_pair, payouts, total_payout, created_at
            FROM arcade_baccarat_hands
           WHERE wallet_address = $1
@@ -253,6 +253,8 @@ export function registerArcadeBaccaratRoutes({
           handId: row.id,
           bets: row.bets,
           totalBet: Number(row.total_bet),
+          playerCards: row.player_cards,
+          bankerCards: row.banker_cards,
           playerTotal: Number(row.player_total),
           bankerTotal: Number(row.banker_total),
           result: row.result,
