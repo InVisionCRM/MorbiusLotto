@@ -24,6 +24,7 @@ import { usePokerChipBalance } from '@/hooks/use-poker-chip-balance'
 import { formatChips } from '@/lib/format-poker-chips'
 import { GameWalletModal } from '@/components/shared/GameWalletModal'
 import { probeSiweSession } from '@/lib/api-auth'
+import { useBigWin } from '@/contexts/big-win-context'
 import { SessionChart, type SessionPoint } from '@/components/arcade2/SessionChart'
 import { FloatingPanel } from '@/components/arcade2/FloatingPanel'
 import { DiceInfoTabs } from './DiceInfoTabs'
@@ -64,6 +65,7 @@ interface RecentRoll {
 
 export function StakeDiceGame() {
   const { address } = useAccount()
+  const { reportWin } = useBigWin()
 
   const [info, setInfo] = useState<DiceInfo | null>(null)
   const [infoFailed, setInfoFailed] = useState(false)
@@ -208,6 +210,7 @@ export function StakeDiceGame() {
       })
       if (!mounted.current) return false
       const profit = res.payout - res.bet
+      reportWin({ game: 'Dice', bet: res.bet, payout: res.payout })
       if (profit > 0) diceAudio.playWin()
       else diceAudio.playLose()
       setBalance(BigInt(res.chipBalance))
@@ -250,7 +253,7 @@ export function StakeDiceGame() {
     } finally {
       inFlight.current -= 1
     }
-  }, [info, bet, targetX100, clientSeed, clampBet, clampTarget])
+  }, [info, bet, targetX100, clientSeed, clampBet, clampTarget, reportWin])
 
   // Fixed-cadence auto loop — fire each roll WITHOUT awaiting the round-trip
   // (same scheduler as plinko2). Errors stop the run.

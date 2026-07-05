@@ -26,6 +26,7 @@ import { Volume2, VolumeX } from 'lucide-react';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { usePokerChipBalance } from '@/hooks/use-poker-chip-balance';
+import { useBigWin } from '@/contexts/big-win-context';
 import { formatChips } from '@/lib/format-poker-chips';
 import { GameWalletModal } from '@/components/shared/GameWalletModal';
 import { probeSiweSession } from '@/lib/api-auth';
@@ -90,6 +91,7 @@ function serverDetail(msg: string): string | null {
 
 export function GreedDiceGame() {
   const { address } = useAccount();
+  const { reportWin } = useBigWin();
 
   const [info, setInfo] = useState<GreedDiceInfo | null>(null);
   const [bet, setBet] = useState<number>(500);
@@ -385,13 +387,14 @@ export function GreedDiceGame() {
       setStatusText(null);
       setPhase('cashed');
       winFx();
+      reportWin({ game: 'Greed Dice', bet: cur.bet, payout: r.payout });
       settleHistory({ roundId: cur.roundId, bet: cur.bet, volatility: cur.volatility, diceCount: cur.diceCount, points: r.points, multiplierX100: r.multiplierX100, rolls: 0, won: true, payout: r.payout, createdAt: new Date().toISOString() });
       setSession((prev) => [...prev, { drop: prev.length + 1, bet: cur.bet, profit: r.payout - cur.bet }]);
     } catch (e) {
       setPhase('active');
       handleErr(e);
     }
-  }, [round, phase, handleErr, settleHistory, winFx]);
+  }, [round, phase, handleErr, settleHistory, winFx, reportWin]);
 
   const playAgain = useCallback(() => {
     setRound(null);

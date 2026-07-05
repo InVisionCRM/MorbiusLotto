@@ -25,6 +25,7 @@ import { usePokerChipBalance } from '@/hooks/use-poker-chip-balance'
 import { formatChips } from '@/lib/format-poker-chips'
 import { GameWalletModal } from '@/components/shared/GameWalletModal'
 import { probeSiweSession } from '@/lib/api-auth'
+import { useBigWin } from '@/contexts/big-win-context'
 import { SessionChart, type SessionPoint } from '@/components/arcade2/SessionChart'
 import { FloatingPanel } from '@/components/arcade2/FloatingPanel'
 import { DiceX2InfoTabs } from './DiceX2InfoTabs'
@@ -72,6 +73,7 @@ interface RecentRoll {
 
 export function StakeDiceX2Game() {
   const { address } = useAccount()
+  const { reportWin } = useBigWin()
 
   const [info, setInfo] = useState<DiceX2Info | null>(null)
   const [infoFailed, setInfoFailed] = useState(false)
@@ -263,6 +265,7 @@ export function StakeDiceX2Game() {
       })
       if (!mounted.current) return false
       const profit = res.payout - res.bet
+      reportWin({ game: 'Dice X2', bet: res.bet, payout: res.payout })
       if (profit > 0) dicex2Audio.playWin()
       else dicex2Audio.playLose()
       setBalance(BigInt(res.chipBalance))
@@ -306,7 +309,7 @@ export function StakeDiceX2Game() {
     } finally {
       inFlight.current -= 1
     }
-  }, [info, bet, lowX100, highX100, clientSeed, clampBet])
+  }, [info, bet, lowX100, highX100, clientSeed, clampBet, reportWin])
 
   // Fixed-cadence auto loop — fire each roll WITHOUT awaiting the round-trip
   // (same scheduler as dice2). Errors stop the run.

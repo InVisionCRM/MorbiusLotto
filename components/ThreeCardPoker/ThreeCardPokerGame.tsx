@@ -30,6 +30,7 @@ import { usePokerChipBalance } from '@/hooks/use-poker-chip-balance';
 import { formatChips } from '@/lib/format-poker-chips';
 import { GameWalletModal } from '@/components/shared/GameWalletModal';
 import { probeSiweSession } from '@/lib/api-auth';
+import { useBigWin } from '@/contexts/big-win-context';
 import { SessionChart, type SessionPoint } from '@/components/arcade2/SessionChart';
 import { FloatingPanel } from '@/components/arcade2/FloatingPanel';
 import { PlayingCard } from './PlayingCard';
@@ -63,6 +64,7 @@ function serverDetail(msg: string): string | null {
 
 export function ThreeCardPokerGame() {
   const { address } = useAccount();
+  const { reportWin } = useBigWin();
 
   const [info, setInfo] = useState<ThreeCardInfo | null>(null);
   const [ante, setAnte] = useState<number>(500);
@@ -256,6 +258,7 @@ export function ThreeCardPokerGame() {
 
         const committed = r.ante + r.play + r.pairPlus;
         const net = r.totalPayout - committed;
+        reportWin({ game: 'Three Card Poker', bet: committed, payout: r.totalPayout });
         if (net > 0) winFx();
         else if (net === 0) threeCardAudio.playPush();
         else threeCardAudio.playLose();
@@ -285,7 +288,7 @@ export function ThreeCardPokerGame() {
         handleErr(e);
       }
     },
-    [roundId, phase, winFx, handleErr],
+    [roundId, phase, winFx, handleErr, reportWin],
   );
 
   const playAgain = useCallback(() => {

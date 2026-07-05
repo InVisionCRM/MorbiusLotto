@@ -41,6 +41,7 @@ import { usePokerChipBalance } from '@/hooks/use-poker-chip-balance'
 import { formatChips } from '@/lib/format-poker-chips'
 import { GameWalletModal } from '@/components/shared/GameWalletModal'
 import { probeSiweSession } from '@/lib/api-auth'
+import { useBigWin } from '@/contexts/big-win-context'
 import PlinkoGame from '@/components/PLINKO/PlinkoGame'
 import type { RiskLevel } from '@/app/PLINKO/types'
 import { PlinkoInfoTabs } from './PlinkoInfoTabs'
@@ -101,6 +102,7 @@ interface RecentChip {
 
 export function StakePlinkoGame() {
   const { address } = useAccount()
+  const { reportWin } = useBigWin()
 
   const [multipliers, setMultipliers] = useState<PlinkoMultipliers | null>(null)
   const [bounds, setBounds] = useState({ minBet: 1, maxBet: 1_000 })
@@ -380,8 +382,10 @@ export function StakePlinkoGame() {
         ].slice(0, RECENT_LIMIT),
       )
       setSession((prev) => [...prev, { drop: prev.length + 1, bet: contractData.bet, profit }])
+      // Big-win share card fires here (on the land, with the reveal), never on a replay.
+      reportWin({ game: 'Plinko', bet: contractData.bet, payout: contractData.payout })
     },
-    [refetchBalance],
+    [refetchBalance, reportWin],
   )
 
   const openVerify = useCallback((roundId: string | null) => {

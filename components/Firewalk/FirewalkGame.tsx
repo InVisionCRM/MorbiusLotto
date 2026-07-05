@@ -28,6 +28,7 @@ import { Volume2, VolumeX } from 'lucide-react';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { usePokerChipBalance } from '@/hooks/use-poker-chip-balance';
+import { useBigWin } from '@/contexts/big-win-context';
 import { formatChips } from '@/lib/format-poker-chips';
 import { GameWalletModal } from '@/components/shared/GameWalletModal';
 import { probeSiweSession } from '@/lib/api-auth';
@@ -76,6 +77,7 @@ function serverDetail(msg: string): string | null {
 
 export function FirewalkGame() {
   const { address } = useAccount();
+  const { reportWin } = useBigWin();
 
   const [info, setInfo] = useState<FirewalkInfo | null>(null);
   const [bet, setBet] = useState<number>(100);
@@ -318,6 +320,7 @@ export function FirewalkGame() {
         }
         setPhase('cashed');
         winFx();
+        reportWin({ game: 'Firewalk', bet: betAmount, payout: r.payout });
         settleHistory(roundId, betAmount, h, r.position, r.multiplierX100, true, r.payout);
         setSession((prev) => [...prev, { drop: prev.length + 1, bet: betAmount, profit: r.payout - betAmount }]);
       } else {
@@ -335,7 +338,7 @@ export function FirewalkGame() {
       setPhase('active');
       handleErr(e);
     }
-  }, [round, phase, effectivePace, settleHistory, winFx, handleErr]);
+  }, [round, phase, effectivePace, settleHistory, winFx, handleErr, reportWin]);
 
   const doCashout = useCallback(async () => {
     if (!round || phase !== 'active' || round.position === 0) return;
@@ -357,13 +360,14 @@ export function FirewalkGame() {
       }
       setPhase('cashed');
       winFx();
+      reportWin({ game: 'Firewalk', bet: betAmount, payout: r.payout });
       settleHistory(roundId, betAmount, h, r.position, r.multiplierX100, true, r.payout);
       setSession((prev) => [...prev, { drop: prev.length + 1, bet: betAmount, profit: r.payout - betAmount }]);
     } catch (e) {
       setPhase('active');
       handleErr(e);
     }
-  }, [round, phase, settleHistory, winFx, handleErr]);
+  }, [round, phase, settleHistory, winFx, handleErr, reportWin]);
 
   const playAgain = useCallback(() => {
     setRound(null);

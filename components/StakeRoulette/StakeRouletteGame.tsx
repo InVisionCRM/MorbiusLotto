@@ -24,6 +24,7 @@ import { usePokerChipBalance } from '@/hooks/use-poker-chip-balance';
 import { formatChips } from '@/lib/format-poker-chips';
 import { GameWalletModal } from '@/components/shared/GameWalletModal';
 import { probeSiweSession } from '@/lib/api-auth';
+import { useBigWin } from '@/contexts/big-win-context';
 import { SessionChart, type SessionPoint } from '@/components/arcade2/SessionChart';
 import { FloatingPanel } from '@/components/arcade2/FloatingPanel';
 import RouletteWheel2, { WHEEL_SPIN_MS } from './RouletteWheel2';
@@ -69,6 +70,7 @@ interface ResultBanner {
 
 export function StakeRouletteGame() {
   const { address } = useAccount();
+  const { reportWin } = useBigWin();
 
   const [info, setInfo] = useState<Roulette2Info | null>(null);
   const [bets, setBets] = useState<Record<string, Roulette2Bet>>({});
@@ -280,6 +282,7 @@ export function StakeRouletteGame() {
     setRecentNumbers((prev) => [res.result, ...prev].slice(0, RECENT_NUMBERS_LIMIT));
 
     const net = res.totalPayout - res.totalBet;
+    reportWin({ game: 'Roulette', bet: res.totalBet, payout: res.totalPayout });
     setBanner({ key: Date.now(), result: res.result, net, payout: res.totalPayout });
     setSession((prev) => [...prev, { drop: prev.length + 1, bet: res.totalBet, profit: net }]);
     setHistory((prev) =>
@@ -308,7 +311,7 @@ export function StakeRouletteGame() {
         colors: ['#22D3EE', '#FBBF24', '#ffffff'],
       });
     }
-  }, [bets]);
+  }, [bets, reportWin]);
 
   // Hot / cold numbers from the recent strip.
   const { hot, cold } = useMemo(() => {

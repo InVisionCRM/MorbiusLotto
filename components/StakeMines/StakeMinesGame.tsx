@@ -29,6 +29,7 @@ import { Card } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { usePokerChipBalance } from '@/hooks/use-poker-chip-balance'
+import { useBigWin } from '@/contexts/big-win-context'
 import { formatChips } from '@/lib/format-poker-chips'
 import { GameWalletModal } from '@/components/shared/GameWalletModal'
 import { probeSiweSession } from '@/lib/api-auth'
@@ -66,6 +67,7 @@ const HIDDEN_BOARD: MinesCellState[] = Array.from({ length: MINES_TOTAL_CELLS },
 
 export function StakeMinesGame() {
   const { address } = useAccount()
+  const { reportWin } = useBigWin()
 
   const [info, setInfo] = useState<MinesInfo | null>(null)
   const [infoFailed, setInfoFailed] = useState(false)
@@ -336,6 +338,7 @@ export function StakeMinesGame() {
       setMultiplierX100(res.multiplierX100)
       setCashedPayout(res.payout)
       setBalance(BigInt(res.chipBalance))
+      reportWin({ game: 'Mines', bet: roundBet, payout: res.payout })
       minesAudio.playCashout()
       setPhase('cashed')
       setLastFinalizedId(roundId)
@@ -363,7 +366,7 @@ export function StakeMinesGame() {
         setError(serverDetail(msg) ?? 'Could not cash out. Try again.')
       }
     }
-  }, [phase, roundId, gems, roundBet, roundBombs, resync])
+  }, [phase, roundId, gems, roundBet, roundBombs, resync, reportWin])
 
   const openVerify = useCallback((id: string | null) => {
     setVerifyTarget(id)

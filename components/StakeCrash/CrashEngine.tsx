@@ -23,6 +23,7 @@
 import { useEffect, useRef } from 'react';
 import confetti from 'canvas-confetti';
 import { useCrashStore } from './useCrashStore';
+import { useBigWin } from '@/contexts/big-win-context';
 import { crashAudio } from './crash-audio';
 import { crashMultiplierAtMs } from '@/lib/crash-curve';
 import { startCrash, cashoutCrash, fetchCrashRound } from '@/lib/crash-client';
@@ -53,6 +54,7 @@ export default function CrashEngine({ clientSeed, onRoundSettled }: CrashEngineP
     isMuted,
     hasAudioInitialized,
   } = useCrashStore();
+  const { reportWin } = useBigWin();
 
   const phaseRef = useRef(phase);
   const reqRef = useRef<number>(0);
@@ -79,7 +81,9 @@ export default function CrashEngine({ clientSeed, onRoundSettled }: CrashEngineP
     phaseRef.current = phase;
   }, [phase]);
 
-  // Handle win effect (manual or auto cashout)
+  // Handle win effect (manual or auto cashout). winAmount is the gross payout;
+  // both cashout paths funnel through here while still 'flying', so it's the one
+  // spot to fire the big-win share card (bet from the live round).
   useEffect(() => {
     if (winAmount && phase === 'flying') {
       confetti({
@@ -89,8 +93,10 @@ export default function CrashEngine({ clientSeed, onRoundSettled }: CrashEngineP
         colors: ['#00ff00', '#ffff00'],
       });
       crashAudio.playCashout();
+      const s = useCrashStore.getState();
+      reportWin({ game: 'Crash', bet: s.round?.bet ?? s.betAmount, payout: winAmount });
     }
-  }, [winAmount, phase]);
+  }, [winAmount, phase, reportWin]);
 
   // ── Launch countdown: armed bet → /start ────────────────────────────────
   useEffect(() => {
