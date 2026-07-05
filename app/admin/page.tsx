@@ -24,6 +24,7 @@ import {
   Megaphone,
   Package,
   ArrowDownUp,
+  Users,
   type LucideIcon,
 } from 'lucide-react';
 import AdminPlayerLookup from '@/components/admin/AdminPlayerLookup';
@@ -44,6 +45,7 @@ const AdminBJSingleTab = dynamic(() => import('@/components/admin/AdminBJSingleT
 const AdminPendingTransfersTab = dynamic(
   () => import('@/components/admin/AdminPendingTransfersTab')
 );
+const AdminReferralsTab = dynamic(() => import('@/components/admin/AdminReferralsTab'));
 
 type AdminTabValue =
   | 'tables'
@@ -58,6 +60,7 @@ type AdminTabValue =
   | 'lp-staking'
   | 'advertising'
   | 'cosmetics'
+  | 'referrals'
   | 'bj-multi'
   | 'bj-single';
 
@@ -82,6 +85,7 @@ const ADMIN_TABS: AdminTabDefinition[] = [
   { value: 'lp-staking', label: 'LP', icon: Droplets, accentClass: 'data-[state=active]:bg-blue-600/80 data-[state=active]:text-white', Component: AdminLPStakingTab },
   { value: 'advertising', label: 'Ads', icon: Megaphone, accentClass: 'data-[state=active]:bg-amber-600/80 data-[state=active]:text-white', Component: AdminAdvertisingTab },
   { value: 'cosmetics', label: 'Items', icon: Package, accentClass: 'data-[state=active]:bg-purple-600/80 data-[state=active]:text-white', Component: AdminCosmeticsTab },
+  { value: 'referrals', label: 'Referrals', icon: Users, accentClass: 'data-[state=active]:bg-purple-600/80 data-[state=active]:text-white', Component: AdminReferralsTab },
   { value: 'bj-multi', label: 'BJ Multi', accentClass: 'data-[state=active]:bg-red-700/80 data-[state=active]:text-white', Component: AdminBJMultiTab },
   { value: 'bj-single', label: 'BJ 1P', accentClass: 'data-[state=active]:bg-rose-600/80 data-[state=active]:text-white', Component: AdminBJSingleTab },
 ];

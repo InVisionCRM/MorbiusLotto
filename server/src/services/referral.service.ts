@@ -74,6 +74,40 @@ export interface ReferralBindResult {
   chipBalance: string;
 }
 
+/** One referral binding, as seen by an admin viewing the whole program. */
+export interface AdminReferralRow {
+  /** The wallet that applied a code (lowercase). */
+  referee: string;
+  /** The wallet whose code was applied (lowercase). */
+  referrer: string;
+  /** The code that was used. */
+  code: string;
+  /** Welcome bonus the referee was paid (whole chips). */
+  welcomeBonusChips: string;
+  /** Lifetime chips this referral has earned the referrer (whole chips). */
+  totalRewardChips: string;
+  /** When the code was applied (ISO 8601). */
+  boundAt: string;
+}
+
+/** Program-wide referral view for the admin dashboard. */
+export interface AdminReferralsResult {
+  totals: {
+    /** Total number of referral bindings ever made. */
+    totalReferrals: number;
+    /** Distinct wallets that have referred at least one person. */
+    uniqueReferrers: number;
+    /** Sum of all welcome bonuses paid to referees (whole chips). */
+    totalWelcomePaidChips: string;
+    /** Sum of all rewards paid to referrers (whole chips). */
+    totalRewardPaidChips: string;
+  };
+  /** How many rows `referrals` was capped to (echoes the applied limit). */
+  limit: number;
+  /** The individual bindings, most recent first (capped at `limit`). */
+  referrals: AdminReferralRow[];
+}
+
 function normalizeAddr(addr: string): string {
   const a = addr.trim().toLowerCase();
   if (!/^0x[a-fA-F0-9]{40}$/.test(a)) throw new Error('Invalid wallet address');
@@ -236,6 +270,64 @@ export class ReferralService {
       rewardBps: config.rewardBps,
       welcomeBonusChips: config.welcomeBonusChips,
       enabled: config.enabled,
+    };
+  }
+
+  // ──────────────────────────────────────────────────────────────────
+  // Read (admin): every referral binding across the whole program.
+  // ──────────────────────────────────────────────────────────────────
+
+  async listAllReferrals(limitRaw = 500): Promise<AdminReferralsResult> {
+    const limit = Math.min(Math.max(Math.trunc(limitRaw) || 500, 1), 2000);
+
+    const [totalsRes, rowsRes] = await Promise.all([
+      this.pool.query<{
+        total_referrals: number;
+        unique_referrers: number;
+        welcome_paid: string;
+        reward_paid: string;
+      }>(
+        `SELECT COUNT(*)::int AS total_referrals,
+                COUNT(DISTINCT referrer_address)::int AS unique_referrers,
+                COALESCE(SUM(welcome_bonus_chips), 0)::text AS welcome_paid,
+                COALESCE(SUM(total_reward_chips), 0)::text AS reward_paid
+         FROM referrals`,
+      ),
+      this.pool.query<{
+        referee_address: string;
+        referrer_address: string;
+        code: string;
+        bound_at: Date | string;
+        welcome_bonus_chips: string;
+        total_reward_chips: string;
+      }>(
+        `SELECT referee_address, referrer_address, code, bound_at,
+                welcome_bonus_chips::text AS welcome_bonus_chips,
+                total_reward_chips::text AS total_reward_chips
+         FROM referrals
+         ORDER BY bound_at DESC
+         LIMIT $1`,
+        [limit],
+      ),
+    ]);
+
+    const t = totalsRes.rows[0];
+    return {
+      totals: {
+        totalReferrals: t?.total_referrals ?? 0,
+        uniqueReferrers: t?.unique_referrers ?? 0,
+        totalWelcomePaidChips: t?.welcome_paid ?? '0',
+        totalRewardPaidChips: t?.reward_paid ?? '0',
+      },
+      limit,
+      referrals: rowsRes.rows.map((r) => ({
+        referee: r.referee_address,
+        referrer: r.referrer_address,
+        code: r.code,
+        welcomeBonusChips: r.welcome_bonus_chips,
+        totalRewardChips: r.total_reward_chips,
+        boundAt: new Date(r.bound_at).toISOString(),
+      })),
     };
   }
 
