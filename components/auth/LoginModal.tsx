@@ -1,7 +1,8 @@
 import React from 'react'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
-import { Wallet, Shield, Clock } from 'lucide-react'
+import { Shield, Clock } from 'lucide-react'
+import { WalletIcon } from '@/components/shared/WalletIcon'
 
 interface LoginModalProps {
   open: boolean
@@ -36,7 +37,7 @@ export function LoginModal({ open, onOpenChange, onSignIn, isSigning, address }:
           {address && (
             <div className="bg-white/5 p-4 rounded border border-white/10">
               <div className="flex items-center gap-3">
-                <Wallet className="w-5 h-5 text-cyan-400" />
+                <WalletIcon size={20} />
                 <div>
                   <p className="text-sm text-white/70">Connected Wallet</p>
                   <p className="text-sm font-mono text-cyan-400">

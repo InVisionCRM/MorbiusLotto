@@ -3,7 +3,6 @@
 import React, { useMemo, useState } from 'react'
 import { formatEther } from 'viem'
 import {
-  Wallet,
   ArrowDownCircle,
   ArrowUpCircle,
   ChevronLeft,
@@ -11,6 +10,7 @@ import {
   Download,
   ExternalLink,
 } from 'lucide-react'
+import { WalletIcon } from '@/components/shared/WalletIcon'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import {
   Table,
@@ -104,7 +104,7 @@ export function TransactionsTab({ playerAddress }: TransactionsTabProps) {
         <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <div>
             <CardTitle className="text-lg text-white flex items-center gap-2">
-              <Wallet className="w-5 h-5 text-cyan-400" />
+              <WalletIcon size={20} />
               Transactions
             </CardTitle>
             <p className="text-xs text-white/50 mt-1">

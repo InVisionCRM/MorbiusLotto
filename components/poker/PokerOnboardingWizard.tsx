@@ -3,7 +3,8 @@
 import React, { useEffect, useMemo, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { AnimatePresence, motion } from 'framer-motion';
-import { X, ArrowRight, ArrowLeft, ExternalLink, Wallet, Coins, Check, PartyPopper } from 'lucide-react';
+import { X, ArrowRight, ArrowLeft, ExternalLink, Coins, Check, PartyPopper } from 'lucide-react';
+import { WalletIcon } from '@/components/shared/WalletIcon';
 import { MORBIUS_TOKEN_ADDRESS } from '@/lib/contracts';
 import { formatMorbiusFloor } from '@/lib/format-morbius-display';
 import { formatChips } from '@/lib/format-poker-chips';
@@ -355,7 +356,7 @@ function Step2Deposit({
         }}
       >
         <span className="inline-flex items-center gap-2">
-          <Wallet size={16} /> Open deposit
+          <WalletIcon size={16} /> Open deposit
         </span>
       </button>
 

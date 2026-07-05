@@ -10,8 +10,9 @@ import {
   Loader2, RefreshCw, Droplets, Plus, CheckCircle2, XCircle,
   ChevronDown, ChevronRight, AlertTriangle, Gift, Layers, Settings2, Trash2,
   Search, Shield, ExternalLink, Info, Settings, Zap,
-  Wallet, Coins, ArrowRight, Globe, TreePine, ShieldX, Users,
+  Coins, ArrowRight, Globe, TreePine, ShieldX, Users,
 } from 'lucide-react';
+import { WalletIcon } from '@/components/shared/WalletIcon';
 import { merkleClaimLpAbi } from '@/abi/merkle-claim-lp';
 import { ERC20_ABI } from '@/abi/erc20';
 import { MERKLE_CLAIM_LP_ADDRESS, MORBIUS_TOKEN_ADDRESS } from '@/lib/contracts';
@@ -363,7 +364,7 @@ function OnchainActions({
         {step === 'approve' && (
           <Button size="sm" onClick={handleApprove} disabled={waiting}
             className="h-8 bg-yellow-600 hover:bg-yellow-500 text-white text-xs">
-            {waiting ? <Loader2 className="w-3 h-3 mr-1 animate-spin" /> : <Wallet className="w-3 h-3 mr-1" />}
+            {waiting ? <Loader2 className="w-3 h-3 mr-1 animate-spin" /> : <WalletIcon size={12} className="mr-1" />}
             Approve MORBIUS
           </Button>
         )}

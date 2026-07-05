@@ -8,8 +8,9 @@ import { Button } from '@/components/ui/button';
 import {
   Loader2, RefreshCw, Plus, ChevronDown, ChevronRight,
   CheckCircle2, Gift, TreePine, Globe, ShieldX, Trash2, XCircle,
-  Wallet, Coins, ArrowRight, ExternalLink, Info, Settings, Zap, Layers, Users,
+  Coins, ArrowRight, ExternalLink, Info, Settings, Zap, Layers, Users,
 } from 'lucide-react';
+import { WalletIcon } from '@/components/shared/WalletIcon';
 import { merkleClaimMorbiusAbi } from '@/abi/merkle-claim-morbius';
 import { ERC20_ABI } from '@/abi/erc20';
 import {
@@ -380,7 +381,7 @@ function OnchainActions({
             disabled={waiting}
             className="h-8 bg-yellow-600 hover:bg-yellow-500 text-white text-xs"
           >
-            {waiting ? <Loader2 className="w-3 h-3 mr-1 animate-spin" /> : <Wallet className="w-3 h-3 mr-1" />}
+            {waiting ? <Loader2 className="w-3 h-3 mr-1 animate-spin" /> : <WalletIcon size={12} className="mr-1" />}
             Approve MORBIUS
           </Button>
         )}
@@ -570,7 +571,7 @@ function StandaloneDepositButton({ adminAddr }: { adminAddr: `0x${string}` }) {
             disabled={waiting}
             className="h-8 bg-yellow-600 hover:bg-yellow-500 text-white text-xs"
           >
-            {waiting ? <Loader2 className="w-3 h-3 mr-1 animate-spin" /> : <Wallet className="w-3 h-3 mr-1" />}
+            {waiting ? <Loader2 className="w-3 h-3 mr-1 animate-spin" /> : <WalletIcon size={12} className="mr-1" />}
             Step 1: Approve MORBIUS
           </Button>
         )}
@@ -731,7 +732,7 @@ function StandaloneLPTransferButton({ adminAddr }: { adminAddr: `0x${string}` })
         )}
         {step === 'approve' && (
           <Button size="sm" onClick={handleApprove} disabled={waiting} className="h-8 bg-yellow-600 hover:bg-yellow-500 text-white text-xs">
-            {waiting ? <Loader2 className="w-3 h-3 mr-1 animate-spin" /> : <Wallet className="w-3 h-3 mr-1" />}
+            {waiting ? <Loader2 className="w-3 h-3 mr-1 animate-spin" /> : <WalletIcon size={12} className="mr-1" />}
             Step 1: Approve
           </Button>
         )}
