@@ -10,6 +10,7 @@
  */
 
 import React, { useEffect, useState } from 'react';
+import { nextSundayDropUtc } from '@/lib/weekly-drop-time';
 
 export interface DropSheetProps {
   open: boolean;
@@ -23,14 +24,9 @@ export interface DropSheetProps {
 }
 
 /* same fallback as sections.tsx WeeklyDrop — next Sunday 20:00 */
-function nextDrop(): Date {
-  const n = new Date();
-  const d = new Date(n);
-  d.setDate(n.getDate() + ((7 - n.getDay()) % 7));
-  d.setHours(20, 0, 0, 0);
-  if (d <= n) d.setDate(d.getDate() + 7);
-  return d;
-}
+/* Fallback drop time: next Sunday 8 PM Eastern (DST-aware), matching the
+ * backend. Only used when the server's closesAt hasn't loaded yet. */
+const nextDrop = nextSundayDropUtc;
 
 export function DropSheet({
   open,
@@ -80,7 +76,7 @@ export function DropSheet({
         <div className="grab"></div>
         <div className="ds-pill">{statusPill}</div>
         <div className="ds-pot">{pot.toLocaleString('en-US')}</div>
-        <div className="ds-unit">MORBIUS · TOP 3 WIN EVERY SUNDAY · 8PM</div>
+        <div className="ds-unit">MORBIUS · TOP 3 WIN EVERY SUNDAY · 8PM ET</div>
         <div className="ds-count">
           <div className="cb">
             <b>{cd.d}</b>
