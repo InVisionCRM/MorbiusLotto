@@ -2,6 +2,7 @@
  * referral.routes.ts — referral program ("refer a friend").
  *
  *   GET  /api/referrals/config             — public: current terms (reward %, welcome bonus)
+ *   GET  /api/referrals/admin/all          — admin: every referral binding + program totals
  *   GET  /api/referrals/:address/summary   — auth (same wallet): your code, referrer, stats
  *   POST /api/referrals/:address/bind      — auth (same wallet): bind a referrer's code { code }
  *
@@ -15,6 +16,7 @@ import type { Express, Request, Response } from 'express';
 import type { AuthService } from '../services/auth.service';
 import type { ReferralService } from '../services/referral.service';
 import { requireAuth, requireSameAddress } from '../middleware/require-auth';
+import { isAdminWallet } from '../lib/cosmetics-catalog';
 import { sendJson } from '../http/json';
 import { logger } from '../utils/logger';
 
@@ -33,6 +35,24 @@ export function registerReferralRoutes({ app, referralService, authService }: Re
     } catch (error) {
       logger.error('[Referral] config failed', error);
       res.status(500).json({ error: 'Internal server error' });
+    }
+  });
+
+  // GET /api/referrals/admin/all — admin-only: every referral binding + totals.
+  // Registered before the `:address/summary` route so the literal `admin`
+  // segment can never be captured as an :address param.
+  app.get('/api/referrals/admin/all', async (req: Request, res: Response) => {
+    try {
+      const wallet = (req.headers['x-admin-wallet'] as string | undefined)?.trim();
+      if (!wallet || !isAdminWallet(wallet)) {
+        return res.status(403).json({ error: 'Admin access required' });
+      }
+      const limit = parseInt(String(req.query.limit ?? ''), 10);
+      const data = await referralService.listAllReferrals(Number.isFinite(limit) ? limit : 500);
+      return sendJson(res, data);
+    } catch (error) {
+      logger.error('[Referral] admin list failed', error);
+      return res.status(500).json({ error: 'Internal server error' });
     }
   });
 
