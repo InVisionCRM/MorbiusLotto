@@ -7,11 +7,11 @@ import { useProfile } from '@/hooks/use-player-profile'
 import Image from 'next/image'
 import { AvatarView } from '@/components/avatar'
 import { DEFAULT_AVATAR_CONFIG } from '@/components/avatar'
+import { WalletIcon } from '@/components/shared/WalletIcon'
 import { TelegramAlerts } from '@/components/telegram/TelegramAlerts'
 import {
   IconUser,
   IconChevronDown,
-  IconWallet,
   IconArrowsExchange,
   IconPencil,
   IconLogout,
@@ -209,7 +209,7 @@ export function WalletMenu({
             >
               <div className="p-2">
                 <div className={`flex items-center gap-2 text-xs uppercase tracking-wider px-3 py-1 ${variant === 'sidebar' ? 'text-white/80' : 'text-cyan-300/60'}`}>
-                  <IconWallet size={16} aria-hidden />
+                  <WalletIcon size={16} />
                   Wallet
                 </div>
                 <button
@@ -291,7 +291,7 @@ export function WalletMenu({
           }
           style={variant !== 'sidebar' ? { background: 'linear-gradient(145deg,rgba(28, 28, 45, 0),rgba(0, 0, 0, 0))' } : undefined}
         >
-          <IconWallet size={20} className="text-cyan-400 shrink-0" aria-hidden />
+          <WalletIcon size={20} />
           {variant === 'sidebar' ? (
             <span className="sidebar-label text-cyan-400">
               Connect

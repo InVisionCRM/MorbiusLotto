@@ -2,7 +2,8 @@
 
 import React, { useState } from 'react'
 import { formatEther } from 'viem'
-import { BarChart3, History, TrendingUp, TrendingDown, Activity as ActivityIcon, Spade, Wallet, Trophy, Star, Zap, Coins } from 'lucide-react'
+import { BarChart3, History, TrendingUp, TrendingDown, Activity as ActivityIcon, Spade, Trophy, Star, Zap, Coins } from 'lucide-react'
+import { WalletIcon } from '@/components/shared/WalletIcon'
 import {
   Area,
   AreaChart,
@@ -111,7 +112,7 @@ export function AllStatsDashboard({ playerAddress }: AllStatsDashboardProps) {
               : 'text-white/60 hover:text-white'
           }`}
         >
-          <Wallet className="w-4 h-4" />
+          <WalletIcon size={16} />
           Transactions
         </button>
       </div>

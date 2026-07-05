@@ -17,7 +17,8 @@
 
 import Link from 'next/link';
 import React from 'react';
-import { IconHome, IconLayoutGrid, IconTicket, IconWallet } from '@tabler/icons-react';
+import { IconHome, IconLayoutGrid, IconTicket } from '@tabler/icons-react';
+import { WalletIcon } from '@/components/shared/WalletIcon';
 
 /* ------------------------------------------------------------------ */
 /* shared bits                                                          */
@@ -355,7 +356,7 @@ export function ChipDock({
       </button>
       <button type="button" className={cls('wallet')} onClick={onWallet}>
         <span className="ic">
-          <IconWallet size={22} stroke={1.8} />
+          <WalletIcon size={22} />
         </span>
         <span className="lb">WALLET</span>
       </button>

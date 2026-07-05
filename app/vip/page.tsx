@@ -5,8 +5,9 @@ import { useAccount } from 'wagmi'
 import Link from 'next/link'
 import { toast } from 'sonner'
 import { motion } from 'framer-motion'
-import { Crown, Gift, Sparkles, Loader2, Coins, Wallet, Percent, TrendingUp } from 'lucide-react'
+import { Crown, Gift, Sparkles, Loader2, Coins, Percent, TrendingUp } from 'lucide-react'
 import GlobalMainNav from '@/components/shared/GlobalMainNav'
+import { WalletIcon } from '@/components/shared/WalletIcon'
 import { useSiwe } from '@/contexts/siwe-context'
 import { useVipStatus, type VipTier } from '@/hooks/use-vip-status'
 import { VipTierBadge } from '@/components/vip/VipTierBadge'
@@ -307,7 +308,7 @@ export default function VipPage() {
                   accent={accent}
                 />
                 <StatChip
-                  icon={<Wallet className="h-3.5 w-3.5" />}
+                  icon={<WalletIcon size={14} />}
                   label="Rakeback rate"
                   value={`${(status.currentTier.rakebackBps / 100).toFixed(2)}%`}
                 />
