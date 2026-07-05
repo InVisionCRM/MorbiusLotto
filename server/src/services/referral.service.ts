@@ -35,6 +35,18 @@ export interface ReferralConfig {
   enabled: boolean;
 }
 
+/** One friend who has used this wallet's referral code. */
+export interface ReferralReferee {
+  /** The referee's wallet address (lowercase). */
+  address: string;
+  /** When they applied the code (ISO 8601). */
+  boundAt: string;
+  /** Welcome bonus the referee received (whole chips). */
+  welcomeBonusChips: string;
+  /** Lifetime chips this referral has earned the referrer so far (whole chips). */
+  totalRewardChips: string;
+}
+
 export interface ReferralSummary {
   address: string;
   /** This wallet's own shareable code. */
@@ -46,6 +58,8 @@ export interface ReferralSummary {
   /** People this wallet has referred, and lifetime chips earned from them. */
   refereeCount: number;
   totalEarnedChips: string;
+  /** The individual referrals (most recent first) — who used the code and when. */
+  referees: ReferralReferee[];
   /** Whether this wallet may still bind a code (new, unbound, program enabled). */
   canBind: boolean;
   /** Echoed config so the UI can explain the current terms. */
@@ -185,6 +199,28 @@ export class ReferralService {
       [addr],
     );
 
+    // The individual referrals, newest first — powers the "code used" activity list.
+    const refereeRows = await this.pool.query<{
+      referee_address: string;
+      bound_at: Date | string;
+      welcome_bonus_chips: string;
+      total_reward_chips: string;
+    }>(
+      `SELECT referee_address, bound_at,
+              welcome_bonus_chips::text AS welcome_bonus_chips,
+              total_reward_chips::text AS total_reward_chips
+       FROM referrals WHERE referrer_address = $1
+       ORDER BY bound_at DESC
+       LIMIT 100`,
+      [addr],
+    );
+    const referees: ReferralReferee[] = refereeRows.rows.map((r) => ({
+      address: r.referee_address,
+      boundAt: new Date(r.bound_at).toISOString(),
+      welcomeBonusChips: r.welcome_bonus_chips,
+      totalRewardChips: r.total_reward_chips,
+    }));
+
     const lifetime = await this.lifetimeWager(this.pool, addr);
     const canBind = config.enabled && referrer === null && lifetime <= BigInt(config.maxBindWagerChips);
 
@@ -195,6 +231,7 @@ export class ReferralService {
       welcomeBonusReceivedChips: welcomeReceived,
       refereeCount: agg.rows[0]?.cnt ?? 0,
       totalEarnedChips: agg.rows[0]?.earned ?? '0',
+      referees,
       canBind,
       rewardBps: config.rewardBps,
       welcomeBonusChips: config.welcomeBonusChips,

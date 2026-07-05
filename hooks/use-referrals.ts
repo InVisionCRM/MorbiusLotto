@@ -9,6 +9,17 @@ export interface ReferralConfig {
   enabled: boolean
 }
 
+export interface ReferralReferee {
+  /** The referee's wallet address (lowercase). */
+  address: string
+  /** When they applied the code (ISO 8601). */
+  boundAt: string
+  /** Welcome bonus the referee received (whole chips). */
+  welcomeBonusChips: string
+  /** Lifetime chips this referral has earned you so far (whole chips). */
+  totalRewardChips: string
+}
+
 export interface ReferralSummary {
   address: string
   code: string
@@ -16,6 +27,8 @@ export interface ReferralSummary {
   welcomeBonusReceivedChips: string
   refereeCount: number
   totalEarnedChips: string
+  /** Individual referrals (most recent first) — who used your code and when. */
+  referees: ReferralReferee[]
   canBind: boolean
   rewardBps: number
   welcomeBonusChips: string

@@ -5,7 +5,7 @@ import { useAccount } from 'wagmi'
 import Link from 'next/link'
 import { toast } from 'sonner'
 import { motion } from 'framer-motion'
-import { Users, Gift, Sparkles, Loader2, Coins, Copy, Check, Share2, UserPlus } from 'lucide-react'
+import { Users, Gift, Sparkles, Loader2, Coins, Copy, Check, Share2, UserPlus, Clock } from 'lucide-react'
 import GlobalMainNav from '@/components/shared/GlobalMainNav'
 import { useSiwe } from '@/contexts/siwe-context'
 import { useReferrals } from '@/hooks/use-referrals'
@@ -24,6 +24,19 @@ function fmtChips(v: string | number | undefined): string {
 
 function shortAddr(a: string): string {
   return a.length > 12 ? `${a.slice(0, 6)}…${a.slice(-4)}` : a
+}
+
+/** ISO timestamp → "Jul 5, 2026, 3:42 PM" style; falls back to the raw string. */
+function fmtDate(iso: string): string {
+  const d = new Date(iso)
+  if (Number.isNaN(d.getTime())) return iso
+  return d.toLocaleDateString('en-US', {
+    month: 'short',
+    day: 'numeric',
+    year: 'numeric',
+    hour: 'numeric',
+    minute: '2-digit',
+  })
 }
 
 function StatCard({
@@ -98,7 +111,7 @@ export default function ReferralsPage() {
       try {
         await (navigator as Navigator & { share: (d: ShareData) => Promise<void> }).share({
           title: 'Join me on MORBlotto',
-          text: 'Play MORBlotto with my referral link and grab a welcome bonus.',
+          text: 'Play Morbius with my referral link and grab a welcome bonus.',
           url: shareLink,
         })
         return
@@ -330,6 +343,51 @@ export default function ReferralsPage() {
                 <div className="mt-4 rounded-2xl border border-white/10 bg-white/[0.03] p-4 text-sm text-white/50">
                   Referral codes can only be applied by new players — but you can still invite friends with your
                   own link above and earn from every one of them.
+                </div>
+              )}
+
+              {/* REFERRAL ACTIVITY — who used your code and when */}
+              {summary.referees.length > 0 && (
+                <div className="mt-8">
+                  <div className="flex items-center gap-2">
+                    <h2 className="text-lg font-bold text-white">Referral activity</h2>
+                    <span className="rounded-full bg-white/10 px-2 py-0.5 text-xs font-semibold text-white/60">
+                      {summary.refereeCount.toLocaleString('en-US')}
+                    </span>
+                  </div>
+                  <p className="mt-1 text-sm text-white/45">Friends who’ve used your code.</p>
+                  <div className="mt-3 overflow-hidden rounded-2xl border border-white/10 bg-white/[0.03]">
+                    {summary.referees.map((r, i) => (
+                      <div
+                        key={r.address}
+                        className={`flex items-center gap-3 px-4 py-3 ${
+                          i > 0 ? 'border-t border-white/[0.06]' : ''
+                        }`}
+                      >
+                        <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-purple-500/10 ring-1 ring-purple-400/25">
+                          <UserPlus className="h-4 w-4 text-purple-300" />
+                        </div>
+                        <div className="min-w-0 flex-1">
+                          <div className="font-mono text-sm text-white">{shortAddr(r.address)}</div>
+                          <div className="mt-0.5 flex items-center gap-1 text-[11px] text-white/40">
+                            <Clock className="h-3 w-3" />
+                            Used {fmtDate(r.boundAt)}
+                          </div>
+                        </div>
+                        <div className="shrink-0 text-right">
+                          <div className="text-sm font-semibold tabular-nums" style={{ color: ACCENT }}>
+                            +{fmtChips(r.totalRewardChips)}
+                          </div>
+                          <div className="text-[11px] text-white/40">MORBIUS earned</div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                  {summary.refereeCount > summary.referees.length && (
+                    <p className="mt-2 text-xs text-white/35">
+                      Showing your {summary.referees.length} most recent referrals.
+                    </p>
+                  )}
                 </div>
               )}
 
