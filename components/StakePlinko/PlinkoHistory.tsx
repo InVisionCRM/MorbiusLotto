@@ -5,10 +5,13 @@
  * prepended live as balls settle so it never waits on a refetch).
  *
  * Each row: when, risk, bet, bucket, multiplier, profit (amber when the ball
- * paid more than the bet) and a one-tap Verify that opens the fairness modal
- * pre-filled with the round id.
+ * paid more than the bet), a one-tap Verify that opens the fairness modal
+ * pre-filled with the round id, and (when onReplay is supplied) a Replay that
+ * re-drops the exact same ball on the board so the player can screen-record
+ * and share the win.
  */
 
+import { Play } from 'lucide-react'
 import {
   formatMultiplier,
   PLINKO_RISK_LABELS,
@@ -19,6 +22,8 @@ interface PlinkoHistoryProps {
   rounds: PlinkoHistoryRound[]
   loading: boolean
   onVerify: (roundId: string) => void
+  /** When provided, each row gets a Replay button that re-drops that ball. */
+  onReplay?: (round: PlinkoHistoryRound) => void
 }
 
 const RISK_BADGE: Record<PlinkoHistoryRound['risk'], string> = {
@@ -33,7 +38,7 @@ function timeLabel(iso: string): string {
   return d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
 }
 
-export function PlinkoHistory({ rounds, loading, onVerify }: PlinkoHistoryProps) {
+export function PlinkoHistory({ rounds, loading, onVerify, onReplay }: PlinkoHistoryProps) {
   // Rendered inside PlinkoInfoTabs' "My balls" tab — the tab supplies the
   // panel chrome and label, so this is just the list.
   return (
@@ -45,6 +50,13 @@ export function PlinkoHistory({ rounds, loading, onVerify }: PlinkoHistoryProps)
           No balls yet — set a bet and drop your first one.
         </p>
       ) : (
+        <>
+          {onReplay && (
+            <p className="pb-2 text-center text-[11px] text-slate-500">
+              Tap <span className="text-cyan-300">Replay</span> to re-drop a ball on the board —
+              screen-record it to share your win.
+            </p>
+          )}
         <ul className="divide-y divide-cyan-950/60">
           {rounds.map((r) => {
             const profit = r.payout - r.bet
@@ -81,6 +93,17 @@ export function PlinkoHistory({ rounds, loading, onVerify }: PlinkoHistoryProps)
                 >
                   {profit > 0 ? `+${profit.toLocaleString()}` : profit.toLocaleString()}
                 </span>
+                {onReplay && (
+                  <button
+                    type="button"
+                    onClick={() => onReplay(r)}
+                    title="Replay this ball on the board"
+                    className="flex shrink-0 items-center gap-1 rounded px-1.5 py-0.5 text-[11px] font-semibold text-cyan-300 transition-colors hover:bg-cyan-500/15"
+                  >
+                    <Play size={11} className="fill-current" />
+                    Replay
+                  </button>
+                )}
                 <button
                   type="button"
                   onClick={() => onVerify(r.roundId)}
@@ -92,6 +115,7 @@ export function PlinkoHistory({ rounds, loading, onVerify }: PlinkoHistoryProps)
             )
           })}
         </ul>
+        </>
       )}
     </section>
   )
