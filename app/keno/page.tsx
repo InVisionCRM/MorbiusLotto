@@ -315,7 +315,7 @@ export default function KenoPage() {
                   value="leaderboard"
                   className="font-jost font-bold text-[14px] text-white/80 data-[state=active]:text-white data-[state=active]:bg-gradient-to-r data-[state=active]:from-cyan-600 data-[state=active]:to-blue-600 rounded-lg transition-all"
                 >
-                  Leaderboard
+                  <span className="sm:hidden">Leaders</span><span className="hidden sm:inline">Leaderboard</span>
                 </TabsTrigger>
               </TabsList>
 

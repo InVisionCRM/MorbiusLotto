@@ -202,7 +202,7 @@ export default function BlackjackSidebar({
                     value="leaderboard"
                     className="font-jost min-w-0 truncate rounded-md px-0.5 py-1.5 text-center text-[10px] font-bold leading-tight text-white/80 transition-all data-[state=active]:bg-gradient-to-r data-[state=active]:from-cyan-600 data-[state=active]:to-blue-600 data-[state=active]:text-white sm:text-[11px]"
                   >
-                    Leaderboard
+                    <span className="sm:hidden">Leaders</span><span className="hidden sm:inline">Leaderboard</span>
                   </TabsTrigger>
                 </TabsList>
                 <TabsContent value="recent-games" className="mt-3 min-h-[160px] focus-visible:outline-none">

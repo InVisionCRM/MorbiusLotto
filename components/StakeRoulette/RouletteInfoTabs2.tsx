@@ -104,7 +104,7 @@ export function RouletteInfoTabs2({
             Recent
           </TabsTrigger>
           <TabsTrigger value="leaderboard" className={TRIGGER_CLASS}>
-            Leaderboard
+            <span className="sm:hidden">Leaders</span><span className="hidden sm:inline">Leaderboard</span>
           </TabsTrigger>
           <TabsTrigger value="mine" className={TRIGGER_CLASS}>
             My spins
