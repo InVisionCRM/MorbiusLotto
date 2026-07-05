@@ -32,6 +32,7 @@ import RouletteBoard2, { zoneKey } from './RouletteBoard2';
 import { RouletteFairnessModal2 } from './RouletteFairnessModal2';
 import { RouletteRulesModal } from './RouletteRulesModal';
 import { RouletteInfoTabs2 } from './RouletteInfoTabs2';
+import { ReplayConfirmOverlay } from '@/components/share/ReplayConfirmOverlay';
 import { roulette2Audio } from './roulette2-audio';
 import {
   fetchRoulette2Info,
@@ -84,6 +85,11 @@ export function StakeRouletteGame() {
   const [lastResult, setLastResult] = useState<number | null>(null);
   const [banner, setBanner] = useState<ResultBanner | null>(null);
   const pendingRef = useRef<Roulette2SpinResult | null>(null);
+  // Replay: a staged past spin (confirm overlay). replayingRef tells onLanded to
+  // skip settlement (no balance/history/session) — it's a pure re-watch.
+  const [pendingReplay, setPendingReplay] = useState<Roulette2HistorySpin | null>(null);
+  const replayingRef = useRef(false);
+  const wheelRef = useRef<HTMLDivElement | null>(null);
 
   const [recentNumbers, setRecentNumbers] = useState<number[]>([]);
   const [session, setSession] = useState<SessionPoint[]>([]);
@@ -272,6 +278,13 @@ export function StakeRouletteGame() {
   }, [spinning, zoneCount, info, bets, clientSeed]);
 
   const onLanded = useCallback(() => {
+    // Replay landing: just play the sound and unlock — no settlement.
+    if (replayingRef.current) {
+      replayingRef.current = false;
+      roulette2Audio.playLand();
+      setSpinning(false);
+      return;
+    }
     const res = pendingRef.current;
     if (!res) return;
     pendingRef.current = null;
@@ -312,6 +325,31 @@ export function StakeRouletteGame() {
       });
     }
   }, [bets, reportWin]);
+
+  // ── Replay a past spin: stage the confirm overlay, then re-spin the wheel to
+  // the same result (no server call, no balance/history change). ──
+  const handleReplay = useCallback(
+    (spin: Roulette2HistorySpin) => {
+      if (spinning) return;
+      roulette2Audio.init();
+      setPendingReplay(spin);
+      wheelRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    },
+    [spinning],
+  );
+
+  const startReplay = useCallback(() => {
+    const spin = pendingReplay;
+    if (!spin || spinning) return;
+    setPendingReplay(null);
+    replayingRef.current = true;
+    setSpinning(true);
+    setBanner(null);
+    roulette2Audio.playSpinStart();
+    roulette2Audio.startTicks(WHEEL_SPIN_MS);
+    setWheelResult(spin.result);
+    setSpinSeq((s) => s + 1);
+  }, [pendingReplay, spinning]);
 
   // Hot / cold numbers from the recent strip.
   const { hot, cold } = useMemo(() => {
@@ -471,7 +509,7 @@ export function StakeRouletteGame() {
 
         {/* ───────── Wheel + felt ───────── */}
         <div className="order-1 space-y-3 lg:order-2">
-          <Card className="arc-panel relative border-0 p-4 sm:p-5">
+          <Card ref={wheelRef} className="arc-panel relative border-0 p-4 sm:p-5">
             <div className="flex flex-col items-center gap-4 sm:flex-row sm:items-center">
               <div className="w-[190px] shrink-0 sm:w-[220px]">
                 <RouletteWheel2
@@ -562,6 +600,19 @@ export function StakeRouletteGame() {
                 </span>
               </div>
             )}
+            {pendingReplay && (
+              <ReplayConfirmOverlay
+                title="Replay spin"
+                headline={`#${pendingReplay.result}`}
+                sub={`${
+                  pendingReplay.totalPayout - pendingReplay.totalBet > 0
+                    ? `+${(pendingReplay.totalPayout - pendingReplay.totalBet).toLocaleString()}`
+                    : (pendingReplay.totalPayout - pendingReplay.totalBet).toLocaleString()
+                } MORBIUS`}
+                onPlay={startReplay}
+                onCancel={() => setPendingReplay(null)}
+              />
+            )}
           </Card>
 
           <Card className="arc-panel border-0 p-3 sm:p-4">
@@ -582,6 +633,7 @@ export function StakeRouletteGame() {
           history={history}
           historyLoading={historyLoading}
           onVerify={openVerify}
+          onReplay={handleReplay}
           refreshKey={refreshKey}
         />
       </div>

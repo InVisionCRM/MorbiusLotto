@@ -21,11 +21,12 @@ interface KenoInfoTabsProps {
   rounds: KenoHistoryRound[];
   loading: boolean;
   onVerify: (roundId: string) => void;
+  onReplay?: (round: KenoHistoryRound) => void;
   recentWins: KenoRecentWin[];
   recentLoading: boolean;
 }
 
-export function KenoInfoTabs({ rounds, loading, onVerify, recentWins, recentLoading }: KenoInfoTabsProps) {
+export function KenoInfoTabs({ rounds, loading, onVerify, onReplay, recentWins, recentLoading }: KenoInfoTabsProps) {
   return (
     <section aria-label="Keno information" className="arc-panel rounded-xl p-3 sm:p-4">
       <Tabs defaultValue="mine">
@@ -36,7 +37,7 @@ export function KenoInfoTabs({ rounds, loading, onVerify, recentWins, recentLoad
           <TabsTrigger value="faq" className={TRIGGER_CLASS}>FAQ</TabsTrigger>
         </TabsList>
         <TabsContent value="mine" className="mt-3 focus-visible:outline-none">
-          <KenoHistory rounds={rounds} loading={loading} onVerify={onVerify} />
+          <KenoHistory rounds={rounds} loading={loading} onVerify={onVerify} onReplay={onReplay} />
         </TabsContent>
         <TabsContent value="wins" className="mt-3 focus-visible:outline-none">
           <KenoRecentWins wins={recentWins} loading={recentLoading} />

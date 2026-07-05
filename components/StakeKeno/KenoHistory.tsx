@@ -9,12 +9,15 @@
  * fairness modal pre-filled with the round id.
  */
 
+import { Play } from 'lucide-react'
 import { formatMultiplier, KENO_RISK_LABELS, type KenoHistoryRound } from '@/lib/keno-client'
 
 interface KenoHistoryProps {
   rounds: KenoHistoryRound[]
   loading: boolean
   onVerify: (roundId: string) => void
+  /** When provided, each row gets a Replay button that re-runs the draw. */
+  onReplay?: (round: KenoHistoryRound) => void
 }
 
 const RISK_BADGE: Record<KenoHistoryRound['risk'], string> = {
@@ -30,7 +33,7 @@ function timeLabel(iso: string): string {
   return d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
 }
 
-export function KenoHistory({ rounds, loading, onVerify }: KenoHistoryProps) {
+export function KenoHistory({ rounds, loading, onVerify, onReplay }: KenoHistoryProps) {
   return (
     <section aria-label="Recent rounds" className="arc-panel rounded-xl p-3 sm:p-4">
       <div className="mb-2 flex items-baseline justify-between">
@@ -82,6 +85,17 @@ export function KenoHistory({ rounds, loading, onVerify }: KenoHistoryProps) {
                 >
                   {profit > 0 ? `+${profit.toLocaleString()}` : profit.toLocaleString()}
                 </span>
+                {onReplay && (
+                  <button
+                    type="button"
+                    onClick={() => onReplay(r)}
+                    title="Replay this draw on the board"
+                    className="flex shrink-0 items-center gap-1 rounded px-1.5 py-0.5 text-[11px] font-semibold text-cyan-300 transition-colors hover:bg-cyan-500/15"
+                  >
+                    <Play size={11} className="fill-current" />
+                    Replay
+                  </button>
+                )}
                 <button
                   type="button"
                   onClick={() => onVerify(r.roundId)}

@@ -24,6 +24,7 @@ interface RouletteInfoTabs2Props {
   history: Roulette2HistorySpin[];
   historyLoading: boolean;
   onVerify: (spinId: string) => void;
+  onReplay?: (spin: Roulette2HistorySpin) => void;
   refreshKey: number;
 }
 
@@ -63,6 +64,7 @@ export function RouletteInfoTabs2({
   history,
   historyLoading,
   onVerify,
+  onReplay,
   refreshKey,
 }: RouletteInfoTabs2Props) {
   const [recent, setRecent] = useState<Roulette2RecentSpin[]>([]);
@@ -225,6 +227,16 @@ export function RouletteInfoTabs2({
                     >
                       {net > 0 ? `+${net.toLocaleString()}` : net.toLocaleString()}
                     </span>
+                    {onReplay && (
+                      <button
+                        type="button"
+                        onClick={() => onReplay(r)}
+                        title="Replay this spin on the wheel"
+                        className="shrink-0 rounded border border-cyan-500/40 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-cyan-300 transition-colors hover:bg-cyan-500/15"
+                      >
+                        Replay
+                      </button>
+                    )}
                     <button
                       type="button"
                       onClick={() => onVerify(r.spinId)}
