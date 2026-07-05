@@ -32,6 +32,7 @@ interface PachinkoInfoTabsProps {
   history: PachinkoHistoryRound[]
   historyLoading: boolean
   onVerify: (roundId: string) => void
+  onReplay?: (round: PachinkoHistoryRound) => void
 }
 
 const TRIGGER_CLASS =
@@ -53,7 +54,7 @@ function Empty({ children }: { children: ReactNode }) {
   return <p className="py-6 text-center text-sm text-slate-500">{children}</p>
 }
 
-export function PachinkoInfoTabs({ history, historyLoading, onVerify }: PachinkoInfoTabsProps) {
+export function PachinkoInfoTabs({ history, historyLoading, onVerify, onReplay }: PachinkoInfoTabsProps) {
   const [recent, setRecent] = useState<PachinkoRecentDrop[]>([])
   const [recentLoading, setRecentLoading] = useState(true)
   const [leaders, setLeaders] = useState<PachinkoLeaderboardEntry[]>([])
@@ -170,7 +171,7 @@ export function PachinkoInfoTabs({ history, historyLoading, onVerify }: Pachinko
         </TabsContent>
 
         <TabsContent value="mine" className="mt-3 focus-visible:outline-none">
-          <PachinkoHistory rounds={history} loading={historyLoading} onVerify={onVerify} />
+          <PachinkoHistory rounds={history} loading={historyLoading} onVerify={onVerify} onReplay={onReplay} />
         </TabsContent>
 
         <TabsContent value="odds" className="mt-3 focus-visible:outline-none">

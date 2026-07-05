@@ -28,6 +28,7 @@ import { probeSiweSession } from '@/lib/api-auth'
 import { useBigWin } from '@/contexts/big-win-context'
 import { SessionChart, type SessionPoint } from '@/components/arcade2/SessionChart'
 import { FloatingPanel } from '@/components/arcade2/FloatingPanel'
+import { ReplayConfirmOverlay } from '@/components/share/ReplayConfirmOverlay'
 import { PachinkoInfoTabs } from './PachinkoInfoTabs'
 import { PachinkoFairnessModal } from './PachinkoFairnessModal'
 import { PachinkoRulesModal } from './PachinkoRulesModal'
@@ -132,8 +133,14 @@ export function PachinkoGame() {
   const [history, setHistory] = useState<PachinkoHistoryRound[]>([])
   const [historyLoading, setHistoryLoading] = useState(false)
 
+  // Replay: a staged past round (confirm overlay) + a flag while re-watching.
+  // Replays never touch balance/history/session — they only re-run the drop.
+  const [pendingReplay, setPendingReplay] = useState<PachinkoHistoryRound | null>(null)
+  const [replaying, setReplaying] = useState(false)
+
   const dropSeq = useRef(0)
   const mounted = useRef(true)
+  const arenaRef = useRef<HTMLDivElement | null>(null)
   const canvasRef = useRef<HTMLCanvasElement | null>(null)
   const rafRef = useRef<number | null>(null)
   const ballRef = useRef<{ x: number; y: number } | null>(null)
@@ -364,7 +371,7 @@ export function PachinkoGame() {
   const dropOnce = useCallback(
     (stakeArg?: number, riskArg?: PachinkoRisk): Promise<'ok' | 'stop'> => {
       return new Promise<'ok' | 'stop'>((resolve) => {
-        if (busy || !info) {
+        if (busy || replaying || !info) {
           resolve('stop')
           return
         }
@@ -376,6 +383,8 @@ export function PachinkoGame() {
           resolve('stop')
           return
         }
+        // A real drop exits any replay view (staged overlay + settled highlight).
+        setPendingReplay(null)
         setBet(stake)
         setError(null)
         setNoChips(false)
@@ -446,6 +455,7 @@ export function PachinkoGame() {
                     bet: res.bet,
                     risk: res.risk,
                     pocket: res.pocket,
+                    path: res.path,
                     multiplierX100: res.multiplierX100,
                     won: res.won,
                     payout: res.payout,
@@ -480,7 +490,7 @@ export function PachinkoGame() {
           })
       })
     },
-    [busy, info, bet, balance, clampBet, risk, clientSeed, animateDrop, draw, reportWin],
+    [busy, replaying, info, bet, balance, clampBet, risk, clientSeed, animateDrop, draw, reportWin],
   )
 
   const stopAuto = useCallback(() => {
@@ -545,15 +555,73 @@ export function PachinkoGame() {
 
   const changeRisk = useCallback(
     (r: PachinkoRisk) => {
-      if (busy) return
+      if (busy || replaying) return
       setRisk(r)
       setPhase('idle')
       setBanner(null)
       settledPocketRef.current = -1
       ballRef.current = null
     },
-    [busy],
+    [busy, replaying],
   )
+
+  // ── Replay a past drop: stage the confirm overlay, then re-run the exact same
+  // ball drop (no server call, no balance/history/session change). ──
+  const handleReplay = useCallback(
+    (round: PachinkoHistoryRound) => {
+      if (busy || replaying) return
+      pachinkoAudio.init()
+      setPendingReplay(round)
+      arenaRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' })
+    },
+    [busy, replaying],
+  )
+
+  const startReplay = useCallback(() => {
+    const round = pendingReplay
+    if (!round) return
+    setPendingReplay(null)
+    if (rafRef.current) cancelAnimationFrame(rafRef.current)
+    setError(null)
+    setNoChips(false)
+    setBanner(null)
+    settledPocketRef.current = -1
+    setReplaying(true)
+    pachinkoAudio.init()
+    // Animate into the recorded pocket, replaying its cosmetic path. onDone is a
+    // pure re-watch: it only highlights the pocket + shows the banner — it never
+    // touches balance, reportWin, recent, session, history or lastDrop.
+    animateDrop(round.pocket, round.path ?? [], () => {
+      if (!mounted.current) return
+      settledPocketRef.current = round.pocket
+      draw()
+      setReplaying(false)
+      const profit = round.payout - round.bet
+      const jackpot = round.pocket === PACHINKO_CENTER
+      if (jackpot) {
+        pachinkoAudio.playJackpot()
+        setBanner({
+          kind: 'win',
+          head: `★ Jackpot gate · ${formatMultiplier(round.multiplierX100)}`,
+          sub: `+${profit.toLocaleString()} MORBIUS`,
+        })
+      } else if (profit > 0) {
+        pachinkoAudio.playWin()
+        setBanner({
+          kind: 'win',
+          head: `${formatMultiplier(round.multiplierX100)} pocket`,
+          sub: `+${profit.toLocaleString()} MORBIUS`,
+        })
+      } else {
+        pachinkoAudio.playLose()
+        setBanner({
+          kind: 'loss',
+          head: `${formatMultiplier(round.multiplierX100)} pocket`,
+          sub: `${profit.toLocaleString()} MORBIUS`,
+        })
+      }
+    })
+  }, [pendingReplay, animateDrop, draw])
 
   const winPayout = Math.floor((clampBet(bet) * (multX100[0] ?? 0)) / 100)
   const jackpotPayout = Math.floor((clampBet(bet) * (multX100[PACHINKO_CENTER] ?? 0)) / 100)
@@ -836,6 +904,7 @@ export function PachinkoGame() {
 
             {/* Arena */}
             <div
+              ref={arenaRef}
               className="relative"
               style={{ background: 'linear-gradient(180deg,#071521,#040d15)' }}
             >
@@ -867,6 +936,19 @@ export function PachinkoGame() {
                   </div>
                 </div>
               )}
+              {pendingReplay && (
+                <ReplayConfirmOverlay
+                  title="Replay drop"
+                  headline={formatMultiplier(pendingReplay.multiplierX100)}
+                  sub={`${
+                    pendingReplay.payout - pendingReplay.bet > 0
+                      ? `+${(pendingReplay.payout - pendingReplay.bet).toLocaleString()}`
+                      : (pendingReplay.payout - pendingReplay.bet).toLocaleString()
+                  } MORBIUS`}
+                  onPlay={startReplay}
+                  onCancel={() => setPendingReplay(null)}
+                />
+              )}
             </div>
           </Card>
 
@@ -897,7 +979,7 @@ export function PachinkoGame() {
 
       {/* ───────── Session chart + info tabs ───────── */}
       <div className="mt-4 space-y-4">
-        <PachinkoInfoTabs history={history} historyLoading={historyLoading} onVerify={openVerify} />
+        <PachinkoInfoTabs history={history} historyLoading={historyLoading} onVerify={openVerify} onReplay={handleReplay} />
       </div>
       {/* Draggable mini session chart — open in a corner on mobile, full-size on desktop. */}
       <FloatingPanel title="Session" storageKey="pachinko.sessionChart.pos">

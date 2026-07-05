@@ -10,6 +10,7 @@
  */
 
 import { useEffect, useState, type ReactNode } from 'react'
+import { Play } from 'lucide-react'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import {
   fetchBaccaratRecent,
@@ -29,6 +30,8 @@ interface BaccaratInfoTabsProps {
   history: BaccaratHistoryHand[]
   historyLoading: boolean
   onVerify: (handId: string) => void
+  /** When provided, each "My hands" row gets a Replay button that re-runs the deal. */
+  onReplay?: (hand: BaccaratHistoryHand) => void
   /** Live bounds + payout table from /info — falls back to the client mirror. */
   info: BaccaratInfo | null
 }
@@ -74,7 +77,7 @@ function oddsLabel(x100: number): string {
   return `${Number.isInteger(odds) ? odds : odds.toFixed(2).replace(/0+$/, '')}:1`
 }
 
-export function BaccaratInfoTabs({ history, historyLoading, onVerify, info }: BaccaratInfoTabsProps) {
+export function BaccaratInfoTabs({ history, historyLoading, onVerify, onReplay, info }: BaccaratInfoTabsProps) {
   const [recent, setRecent] = useState<BaccaratRecentHand[]>([])
   const [recentLoading, setRecentLoading] = useState(true)
   const [leaders, setLeaders] = useState<BaccaratLeaderboardEntry[]>([])
@@ -226,6 +229,17 @@ export function BaccaratInfoTabs({ history, historyLoading, onVerify, info }: Ba
                     >
                       {net > 0 ? `+${net.toLocaleString()}` : net.toLocaleString()}
                     </span>
+                    {onReplay && (
+                      <button
+                        type="button"
+                        onClick={() => onReplay(h)}
+                        title="Replay this hand on the felt"
+                        className="flex shrink-0 items-center gap-1 rounded px-1.5 py-0.5 text-[11px] font-semibold text-cyan-300 transition-colors hover:bg-cyan-500/15"
+                      >
+                        <Play size={11} className="fill-current" />
+                        Replay
+                      </button>
+                    )}
                     <button
                       type="button"
                       onClick={() => onVerify(h.handId)}

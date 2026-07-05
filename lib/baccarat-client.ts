@@ -58,6 +58,8 @@ export interface BaccaratHistoryHand {
   handId: string;
   bets: BaccaratBets;
   totalBet: number;
+  playerCards: number[];
+  bankerCards: number[];
   playerTotal: number;
   bankerTotal: number;
   result: BaccaratResult;
