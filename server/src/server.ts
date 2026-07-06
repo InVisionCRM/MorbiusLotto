@@ -76,7 +76,7 @@ import { blackjackAbi } from './abi/blackjack';
 import { createWalletClient, http, decodeEventLog, getAddress } from 'viem';
 import { pulsechain } from 'viem/chains';
 import { privateKeyToAccount } from 'viem/accounts';
-import { PLINKO_ADDRESS, KENO_ADDRESS, LOTTERY_INSTANT_ADDRESS, BLACKJACK_ADDRESS, MORBIUS_TOKEN_ADDRESS, getAllBlackjackContracts } from './config/contracts';
+import { PLINKO_ADDRESS, KENO_ADDRESS, LOTTERY_INSTANT_ADDRESS, BLACKJACK_ADDRESS, MORBIUS_VAULT_ADDRESS, MORBIUS_TOKEN_ADDRESS, getAllBlackjackContracts } from './config/contracts';
 
 const ERC20_BALANCE_OF_ABI = [
   { inputs: [{ name: 'account', type: 'address' }], name: 'balanceOf', outputs: [{ internalType: 'uint256', name: '', type: 'uint256' }], stateMutability: 'view', type: 'function' },
@@ -3681,7 +3681,8 @@ async function initializeServices() {
         const confirmationsRequired = Number(process.env.DEPOSIT_CONFIRMATIONS_REQUIRED || '3');
         const publicClient = getPublicClient();
         const hash = txHash as `0x${string}`;
-        const blackjackAddr = getAddress(BLACKJACK_ADDRESS);
+        // Deposits route to the MorbiusVault; V7 stays accepted for in-flight txs during migration.
+        const depositTargetsLower = new Set([MORBIUS_VAULT_ADDRESS, BLACKJACK_ADDRESS].map((a) => a.toLowerCase()));
 
         let receipt: Awaited<ReturnType<typeof publicClient.getTransactionReceipt>>;
         try {
@@ -3703,8 +3704,8 @@ async function initializeServices() {
         } catch {
           return res.status(400).json({ error: 'Could not load transaction' });
         }
-        if (txTo !== blackjackAddr) {
-          return res.status(400).json({ error: 'Transaction not sent to the Blackjack contract' });
+        if (!depositTargetsLower.has(txTo.toLowerCase())) {
+          return res.status(400).json({ error: 'Transaction not sent to the deposit contract' });
         }
 
         const blockNum = receipt.blockNumber;
@@ -3712,7 +3713,7 @@ async function initializeServices() {
         let amountBigInt: bigint | null = null;
 
         for (const log of receipt.logs) {
-          if (log.address?.toLowerCase() !== BLACKJACK_ADDRESS.toLowerCase()) continue;
+          if (!log.address || !depositTargetsLower.has(log.address.toLowerCase())) continue;
           try {
             const decoded = decodeEventLog({
               abi: DEPOSIT_MORBIUS_ABI,
