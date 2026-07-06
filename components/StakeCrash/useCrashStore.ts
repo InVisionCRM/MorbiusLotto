@@ -50,6 +50,18 @@ interface CrashState {
   // Live server round
   round: LiveCrashRound | null;
 
+  // ── Replay (cinematic re-watch of a past round) ──
+  // Fully separate from the live phase machine: the real `phase` stays
+  // 'betting' during a replay, so the server flight effect never fires and no
+  // chips move. The canvas/multiplier display read these when `replaying`.
+  replaying: boolean;
+  replayPhase: 'flying' | 'crashed';
+  replayMultiplier: number;
+  replayCrashX100: number | null;
+  replayCashoutX100: number | null;
+  replayBet: number;
+  replayPayout: number;
+
   // Launch countdown (after Place Bet, before /start)
   countingDown: boolean;
   countdownLeft: number;
@@ -86,6 +98,15 @@ interface CrashState {
   recordCashout: (payout: number, balance: bigint | null) => void;
   endGame: (crashPoint: number) => void;
   startBettingPhase: () => void;
+  beginReplay: (args: {
+    crashX100: number;
+    cashoutX100: number | null;
+    bet: number;
+    payout: number;
+  }) => void;
+  setReplayMultiplier: (val: number) => void;
+  crashReplay: () => void;
+  endReplay: () => void;
   setError: (error: string | null, noChips?: boolean) => void;
   addSessionRound: (net: number) => void;
 
@@ -107,6 +128,14 @@ export const useCrashStore = create<CrashState>((set) => ({
   winAmount: null,
 
   round: null,
+
+  replaying: false,
+  replayPhase: 'flying',
+  replayMultiplier: 1.0,
+  replayCrashX100: null,
+  replayCashoutX100: null,
+  replayBet: 0,
+  replayPayout: 0,
 
   countingDown: false,
   countdownLeft: 0,
@@ -182,6 +211,36 @@ export const useCrashStore = create<CrashState>((set) => ({
       countingDown: false,
       countdownLeft: 0,
       cashoutRequested: false,
+    }),
+
+  // ── Replay actions — visual only, no chips/history/session touched. ──
+  beginReplay: ({ crashX100, cashoutX100, bet, payout }) =>
+    set({
+      replaying: true,
+      replayPhase: 'flying',
+      replayMultiplier: 1.0,
+      replayCrashX100: crashX100,
+      replayCashoutX100: cashoutX100,
+      replayBet: bet,
+      replayPayout: payout,
+      error: null,
+    }),
+  setReplayMultiplier: (val) => set({ replayMultiplier: val }),
+  crashReplay: () =>
+    set((state) => ({
+      replayPhase: 'crashed',
+      replayMultiplier:
+        state.replayCrashX100 != null ? state.replayCrashX100 / 100 : state.replayMultiplier,
+    })),
+  endReplay: () =>
+    set({
+      replaying: false,
+      replayPhase: 'flying',
+      replayMultiplier: 1.0,
+      replayCrashX100: null,
+      replayCashoutX100: null,
+      replayBet: 0,
+      replayPayout: 0,
     }),
 
   setError: (error, noChips = false) => set({ error, noChips }),

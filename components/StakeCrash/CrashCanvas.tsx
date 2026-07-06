@@ -22,7 +22,19 @@ export default function CrashCanvas() {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
 
-  const { phase, multiplier, countingDown, countdownLeft } = useCrashStore();
+  const {
+    phase: livePhase,
+    multiplier: liveMultiplier,
+    countingDown,
+    countdownLeft,
+    replaying,
+    replayPhase,
+    replayMultiplier,
+  } = useCrashStore();
+  // During a replay the real phase stays 'betting'; feed the canvas the replay
+  // phase/multiplier so the exact same flight visuals re-run for the re-watch.
+  const phase = replaying ? replayPhase : livePhase;
+  const multiplier = replaying ? replayMultiplier : liveMultiplier;
   const phaseRef = useRef(phase);
   const multRef = useRef(multiplier);
   const countdownRef = useRef<number | null>(null);

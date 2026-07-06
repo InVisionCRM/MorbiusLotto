@@ -29,6 +29,8 @@ interface ThreeCardInfoTabsProps {
   history: ThreeCardHistoryRound[];
   historyLoading: boolean;
   onVerify: (roundId: string) => void;
+  /** When provided, each "My hands" row gets a Replay button that re-runs the reveal. */
+  onReplay?: (round: ThreeCardHistoryRound) => void;
 }
 
 const TRIGGER_CLASS =
@@ -50,7 +52,7 @@ function Empty({ children }: { children: ReactNode }) {
   return <p className="py-6 text-center text-sm text-slate-500">{children}</p>;
 }
 
-export function ThreeCardInfoTabs({ history, historyLoading, onVerify }: ThreeCardInfoTabsProps) {
+export function ThreeCardInfoTabs({ history, historyLoading, onVerify, onReplay }: ThreeCardInfoTabsProps) {
   const [recent, setRecent] = useState<ThreeCardRecentHand[]>([]);
   const [recentLoading, setRecentLoading] = useState(true);
   const [leaders, setLeaders] = useState<ThreeCardLeaderboardEntry[]>([]);
@@ -187,7 +189,7 @@ export function ThreeCardInfoTabs({ history, historyLoading, onVerify }: ThreeCa
         </TabsContent>
 
         <TabsContent value="mine" className="mt-3 focus-visible:outline-none">
-          <ThreeCardHistory rounds={history} loading={historyLoading} onVerify={onVerify} />
+          <ThreeCardHistory rounds={history} loading={historyLoading} onVerify={onVerify} onReplay={onReplay} />
         </TabsContent>
 
         <TabsContent value="odds" className="mt-3 focus-visible:outline-none">

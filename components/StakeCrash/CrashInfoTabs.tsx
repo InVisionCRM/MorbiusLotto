@@ -27,6 +27,8 @@ interface CrashInfoTabsProps {
   history: CrashHistoryRound[];
   historyLoading: boolean;
   onVerify: (roundId: string) => void;
+  /** Re-watch a past round's curve (no bet). Omit to hide the Replay button. */
+  onReplay?: (round: CrashHistoryRound) => void;
   /** Bump to refetch the public tabs (a round just settled). */
   refreshKey: number;
 }
@@ -56,7 +58,7 @@ function Empty({ children }: { children: ReactNode }) {
   return <p className="py-6 text-center text-sm text-[#848ca1]">{children}</p>;
 }
 
-export function CrashInfoTabs({ history, historyLoading, onVerify, refreshKey }: CrashInfoTabsProps) {
+export function CrashInfoTabs({ history, historyLoading, onVerify, onReplay, refreshKey }: CrashInfoTabsProps) {
   const [recent, setRecent] = useState<CrashRecentRound[]>([]);
   const [recentLoading, setRecentLoading] = useState(true);
   const [leaders, setLeaders] = useState<CrashLeaderboardEntry[]>([]);
@@ -242,6 +244,15 @@ export function CrashInfoTabs({ history, historyLoading, onVerify, refreshKey }:
                     >
                       {profit > 0 ? `+${profit.toLocaleString()}` : profit.toLocaleString()}
                     </span>
+                    {onReplay && (
+                      <button
+                        type="button"
+                        onClick={() => onReplay(r)}
+                        className="shrink-0 rounded border border-white/10 px-2 py-0.5 text-[10px] uppercase tracking-wide text-[#848ca1] transition-colors hover:border-[#00ffa3]/50 hover:text-[#00ffa3]"
+                      >
+                        Replay
+                      </button>
+                    )}
                     <button
                       type="button"
                       onClick={() => onVerify(r.roundId)}

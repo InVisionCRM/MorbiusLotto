@@ -41,6 +41,7 @@ export default function CrashBettingPanel({
     multiplier,
     error,
     noChips,
+    replaying,
     setBetAmount,
     setAutoCashout,
     armBet,
@@ -64,6 +65,7 @@ export default function CrashBettingPanel({
   const canBet =
     phase === 'betting' &&
     !hasBet &&
+    !replaying && // a replay is a pure re-watch — real betting is paused
     info != null &&
     balance != null &&
     balanceNum >= betAmount &&

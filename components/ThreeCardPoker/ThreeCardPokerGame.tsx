@@ -19,7 +19,7 @@
  * message, player seat, settle banner) with the two-phase action buttons below.
  */
 
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { useAccount } from 'wagmi';
 import confetti from 'canvas-confetti';
 import { Volume2, VolumeX } from 'lucide-react';
@@ -36,6 +36,7 @@ import { FloatingPanel } from '@/components/arcade2/FloatingPanel';
 import { PlayingCard } from './PlayingCard';
 import { ThreeCardInfoTabs } from './ThreeCardInfoTabs';
 import { ThreeCardFairnessModal } from './ThreeCardFairnessModal';
+import { ReplayConfirmOverlay } from '@/components/share/ReplayConfirmOverlay';
 import { threeCardAudio } from './three-card-audio';
 import {
   fetchThreeCardInfo,
@@ -46,6 +47,7 @@ import {
   evaluate3,
   handName3,
   dealerQualifies,
+  resultLabel,
   type ThreeCardInfo,
   type ThreeCardActiveHand,
   type ThreeCardDecisionResult,
@@ -54,6 +56,9 @@ import {
 
 const HISTORY_LIMIT = 25;
 const CHIP_STEPS = [100, 500, 1000] as const;
+/** Replay reveal pacing — deal player hand, flip the dealer, then the banner. */
+const REPLAY_REVEAL_MS = 520;
+const REPLAY_SETTLE_MS = 620;
 
 type Phase = 'idle' | 'dealing' | 'decision' | 'revealing' | 'settled';
 
@@ -83,6 +88,15 @@ export function ThreeCardPokerGame() {
   const [session, setSession] = useState<SessionPoint[]>([]);
   const [history, setHistory] = useState<ThreeCardHistoryRound[]>([]);
   const [historyLoading, setHistoryLoading] = useState(false);
+
+  // Replay: a staged past round (confirm overlay) + a flag while its reveal
+  // re-runs. Replays are a pure re-watch — no server call, balance, session,
+  // history, reportWin, or confetti.
+  const [pendingReplay, setPendingReplay] = useState<ThreeCardHistoryRound | null>(null);
+  const [replaying, setReplaying] = useState(false);
+  const timersRef = useRef<ReturnType<typeof setTimeout>[]>([]);
+  const boardRef = useRef<HTMLDivElement | null>(null);
+  useEffect(() => () => timersRef.current.forEach(clearTimeout), []);
 
   const [clientSeed, setClientSeed] = useState('');
   const [fairnessOpen, setFairnessOpen] = useState(false);
@@ -202,6 +216,11 @@ export function ThreeCardPokerGame() {
       setNoChips(true);
       return;
     }
+    // A real deal exits any replay view (pending prompt, in-flight reveal).
+    timersRef.current.forEach(clearTimeout);
+    timersRef.current = [];
+    setPendingReplay(null);
+    setReplaying(false);
     setError(null);
     setNoChips(false);
     setSettlement(null);
@@ -292,6 +311,10 @@ export function ThreeCardPokerGame() {
   );
 
   const playAgain = useCallback(() => {
+    timersRef.current.forEach(clearTimeout);
+    timersRef.current = [];
+    setPendingReplay(null);
+    setReplaying(false);
     setRoundId(null);
     setPlayerCards([]);
     setDealerCards([]);
@@ -300,6 +323,91 @@ export function ThreeCardPokerGame() {
     setError(null);
     setPhase('idle');
   }, []);
+
+  // Replay finish: drop the rebuilt settlement + banner and release the replay
+  // flag. No reportWin / balance / history / session / confetti — pure re-watch.
+  const finishReplay = useCallback((res: ThreeCardDecisionResult) => {
+    setSettlement(res);
+    setDealerRevealed(true);
+    setPhase('settled');
+    const committed = res.ante + res.play + res.pairPlus;
+    const net = res.totalPayout - committed;
+    if (net > 0) threeCardAudio.playWin();
+    else if (net === 0) threeCardAudio.playPush();
+    else threeCardAudio.playLose();
+    setReplaying(false);
+  }, []);
+
+  // Pace the replay reveal: deal the player hand → flip the dealer → banner.
+  const runReplayReveal = useCallback(
+    (res: ThreeCardDecisionResult) => {
+      setSettlement(null);
+      setDealerCards([]);
+      setDealerRevealed(false);
+      setHandAnte(res.ante);
+      setHandPairPlus(res.pairPlus);
+      setPlayerCards(res.playerCards);
+      setPhase('dealing');
+      threeCardAudio.playDeal();
+      const t1 = setTimeout(() => {
+        setPhase('revealing');
+        setDealerCards(res.dealerCards);
+        setDealerRevealed(true);
+        threeCardAudio.playFlip();
+        const t2 = setTimeout(() => finishReplay(res), REPLAY_SETTLE_MS);
+        timersRef.current.push(t2);
+      }, REPLAY_REVEAL_MS);
+      timersRef.current.push(t1);
+    },
+    [finishReplay],
+  );
+
+  // ── Replay a past round: stage the confirm overlay, then re-run the exact same
+  // reveal (no server call, no balance/history/session change). ──
+  const handleReplay = useCallback(
+    (round: ThreeCardHistoryRound) => {
+      if (replaying || (phase !== 'idle' && phase !== 'settled')) return;
+      threeCardAudio.init();
+      setPendingReplay(round);
+      boardRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    },
+    [replaying, phase],
+  );
+
+  const startReplay = useCallback(() => {
+    const round = pendingReplay;
+    if (!round) return;
+    setPendingReplay(null);
+    timersRef.current.forEach(clearTimeout);
+    timersRef.current = [];
+    setReplaying(true);
+    threeCardAudio.init();
+    // Rebuild the decision-result shape the reveal needs from the stored row.
+    const played = round.result !== 'fold';
+    const dq = dealerQualifies(evaluate3(round.dealerCards));
+    let winSide: 'player' | 'dealer' | null = null;
+    if (round.result === 'play_win' || round.result === 'dealer_no_qualify') winSide = 'player';
+    else if (round.result === 'play_loss') winSide = 'dealer';
+    const res: ThreeCardDecisionResult = {
+      roundId: round.roundId,
+      action: played ? 'play' : 'fold',
+      played,
+      ante: round.ante,
+      pairPlus: round.pairPlus,
+      play: round.play,
+      playerCards: round.playerCards,
+      dealerCards: round.dealerCards,
+      dealerQualifies: dq,
+      result: round.result,
+      antePayout: round.antePayout,
+      pairPlusPayout: round.pairPlusPayout,
+      totalPayout: round.totalPayout,
+      won: round.won,
+      winSide,
+      serverSeed: '',
+    };
+    runReplayReveal(res);
+  }, [pendingReplay, runReplayReveal]);
 
   const openVerify = useCallback((id: string | null) => {
     setVerifyTarget(id);
@@ -544,6 +652,7 @@ export function ThreeCardPokerGame() {
 
         {/* ───────── Board ───────── */}
         <div className="order-1 space-y-3 lg:order-2">
+          <div ref={boardRef} className="relative">
           <Card className="overflow-hidden border-0 bg-[#07131F] p-0 ring-1 ring-inset ring-cyan-950/70">
             {/* HUD */}
             <div className="grid grid-cols-3 gap-px bg-cyan-500/10">
@@ -654,6 +763,21 @@ export function ThreeCardPokerGame() {
               )}
             </div>
           </Card>
+          {pendingReplay && (
+            <ReplayConfirmOverlay
+              title="Replay hand"
+              headline={resultLabel(pendingReplay.result)}
+              sub={(() => {
+                const net =
+                  pendingReplay.totalPayout -
+                  (pendingReplay.ante + pendingReplay.play + pendingReplay.pairPlus);
+                return `${net > 0 ? `+${net.toLocaleString()}` : net.toLocaleString()} MORBIUS`;
+              })()}
+              onPlay={startReplay}
+              onCancel={() => setPendingReplay(null)}
+            />
+          )}
+          </div>
 
           {/* Actions: pinned to a fixed bottom bar on mobile (deal / play / fold always
               reachable without scrolling); back in-flow under the board on desktop. */}
@@ -706,6 +830,7 @@ export function ThreeCardPokerGame() {
           history={history}
           historyLoading={historyLoading}
           onVerify={(id) => openVerify(id)}
+          onReplay={handleReplay}
         />
       </div>
       {/* Draggable mini session chart — open in a corner on mobile, full-size on desktop. */}

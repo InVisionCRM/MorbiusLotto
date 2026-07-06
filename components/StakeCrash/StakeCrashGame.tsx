@@ -36,6 +36,7 @@ import { CrashRulesModal } from './CrashRulesModal';
 import { CrashInfoTabs } from './CrashInfoTabs';
 import { usePokerChipBalance } from '@/hooks/use-poker-chip-balance';
 import { GameWalletModal } from '@/components/shared/GameWalletModal';
+import { ReplayConfirmOverlay } from '@/components/share/ReplayConfirmOverlay';
 import { probeSiweSession } from '@/lib/api-auth';
 import {
   fetchCrashInfo,
@@ -68,9 +69,26 @@ function HeaderControls() {
   );
 }
 
+/** "241" (×100) → "2.41×" */
+function fmtX(x100: number): string {
+  return `${(x100 / 100).toFixed(2)}×`;
+}
+
 export function StakeCrashGame() {
   const { address } = useAccount();
-  const { phase, hasBet, hasCashedOut, setBalance, setHistory } = useCrashStore();
+  const {
+    phase,
+    hasBet,
+    hasCashedOut,
+    countingDown,
+    setBalance,
+    setHistory,
+    replaying,
+    replayCashoutX100,
+    replayBet,
+    replayPayout,
+    beginReplay,
+  } = useCrashStore();
 
   const [info, setInfo] = useState<CrashInfo | null>(null);
   const [clientSeed, setClientSeed] = useState('');
@@ -82,8 +100,14 @@ export function StakeCrashGame() {
   const [historyLoading, setHistoryLoading] = useState(false);
   const [refreshKey, setRefreshKey] = useState(0);
 
+  // Replay: a staged past round (confirm overlay). Starting it kicks off a
+  // self-contained curve re-run in CrashEngine — no bet, no server call, no
+  // balance/history/session change.
+  const [pendingReplay, setPendingReplay] = useState<CrashHistoryRound | null>(null);
+
   const bettingPanelRef = useRef<PanelImperativeHandle>(null);
   const canvasPanelRef = useRef<PanelImperativeHandle>(null);
+  const gameRef = useRef<HTMLElement>(null);
 
   // Drawer logic: Collapse the betting panel into a thin slice when flying and actively playing
   const isDrawerCollapsed = phase === 'flying' && hasBet && !hasCashedOut;
@@ -165,6 +189,32 @@ export function StakeCrashGame() {
     setFairnessOpen(true);
   }, []);
 
+  // ── Replay a past round: stage the confirm overlay, then re-fly the stored
+  // curve. Bails if a real round is in flight/armed. ──
+  const handleReplay = useCallback(
+    (round: CrashHistoryRound) => {
+      if (phase !== 'betting' || hasBet || countingDown || replaying) return;
+      setPendingReplay(round);
+      gameRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    },
+    [phase, hasBet, countingDown, replaying],
+  );
+
+  const startReplay = useCallback(() => {
+    const round = pendingReplay;
+    if (!round) return;
+    setPendingReplay(null);
+    crashAudio.init();
+    beginReplay({
+      crashX100: round.crashX100,
+      cashoutX100: round.cashoutX100,
+      bet: round.bet,
+      payout: round.payout,
+    });
+  }, [pendingReplay, beginReplay]);
+
+  const replayProfit = replayPayout - replayBet;
+
   return (
     <>
       <CrashEngine clientSeed={clientSeed} onRoundSettled={onRoundSettled} />
@@ -180,7 +230,10 @@ export function StakeCrashGame() {
         </div>
       </div>
 
-      <main className="portrait:hidden landscape:flex h-[100dvh] bg-[#06070a] text-white w-full flex-row overflow-hidden">
+      <main
+        ref={gameRef}
+        className="portrait:hidden landscape:flex h-[100dvh] bg-[#06070a] text-white w-full flex-row overflow-hidden"
+      >
         <Group orientation="horizontal">
           {/* Left Panel: Dynamic Game Canvas */}
           <Panel
@@ -217,6 +270,55 @@ export function StakeCrashGame() {
                 <CrashHistoryStrip />
               </div>
             </div>
+
+            {/* Replay result badge — where the player cashed out + their result,
+                shown while the stored curve re-flies. Cosmetic only. */}
+            {replaying && (
+              <div className="absolute top-14 lg:top-20 left-1/2 z-[55] -translate-x-1/2 pointer-events-none">
+                <div className="rounded-[12px] border border-[#00ffa3]/30 bg-black/60 px-4 py-2 text-center backdrop-blur-md shadow-[0_0_24px_-8px_rgba(0,255,163,0.5)]">
+                  <div className="text-[10px] font-bold uppercase tracking-[2px] text-[#00ffa3]/80">
+                    Replay
+                  </div>
+                  <div className="mt-0.5 font-mono text-[13px] tabular-nums text-white">
+                    {replayCashoutX100 != null
+                      ? `Cashed @ ${fmtX(replayCashoutX100)}`
+                      : 'Busted'}
+                  </div>
+                  <div
+                    className={`font-mono text-[12px] tabular-nums ${
+                      replayProfit > 0 ? 'text-[#00ffa3]' : 'text-[#848ca1]'
+                    }`}
+                  >
+                    {replayProfit > 0
+                      ? `+${replayProfit.toLocaleString()}`
+                      : replayProfit.toLocaleString()}{' '}
+                    MORBIUS
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* Replay confirm prompt — sits above the multiplier display so the
+                player can start a screen recording before the re-run begins. */}
+            {pendingReplay && (
+              <div className="absolute inset-0 z-[60]">
+                <ReplayConfirmOverlay
+                  title="Replay round"
+                  headline={fmtX(
+                    pendingReplay.cashoutX100 != null
+                      ? pendingReplay.cashoutX100
+                      : pendingReplay.crashX100,
+                  )}
+                  sub={`${
+                    pendingReplay.payout - pendingReplay.bet > 0
+                      ? `+${(pendingReplay.payout - pendingReplay.bet).toLocaleString()}`
+                      : (pendingReplay.payout - pendingReplay.bet).toLocaleString()
+                  } MORBIUS`}
+                  onPlay={startReplay}
+                  onCancel={() => setPendingReplay(null)}
+                />
+              </div>
+            )}
           </Panel>
 
           {/* Draggable Divider Handle */}
@@ -258,6 +360,7 @@ export function StakeCrashGame() {
             history={history}
             historyLoading={historyLoading}
             onVerify={openVerify}
+            onReplay={handleReplay}
             refreshKey={refreshKey}
           />
         </div>
