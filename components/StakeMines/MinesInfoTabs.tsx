@@ -20,9 +20,10 @@ interface MinesInfoTabsProps {
   rounds: MinesHistoryRound[];
   loading: boolean;
   onVerify: (roundId: string) => void;
+  onReplay?: (round: MinesHistoryRound) => void;
 }
 
-export function MinesInfoTabs({ rounds, loading, onVerify }: MinesInfoTabsProps) {
+export function MinesInfoTabs({ rounds, loading, onVerify, onReplay }: MinesInfoTabsProps) {
   return (
     <section aria-label="Mines information" className="arc-panel rounded-xl p-3 sm:p-4">
       <Tabs defaultValue="mine">
@@ -32,7 +33,7 @@ export function MinesInfoTabs({ rounds, loading, onVerify }: MinesInfoTabsProps)
           <TabsTrigger value="faq" className={TRIGGER_CLASS}>FAQ</TabsTrigger>
         </TabsList>
         <TabsContent value="mine" className="mt-3 focus-visible:outline-none">
-          <MinesHistory rounds={rounds} loading={loading} onVerify={onVerify} />
+          <MinesHistory rounds={rounds} loading={loading} onVerify={onVerify} onReplay={onReplay} />
         </TabsContent>
         <TabsContent value="odds" className="mt-3 focus-visible:outline-none">
           <ArcadeOddsTab odds={minesOdds} />

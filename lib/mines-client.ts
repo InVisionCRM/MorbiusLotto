@@ -87,6 +87,10 @@ export interface MinesHistoryRound {
   bet: number;
   bombs: number;
   gems: number;
+  /** Safe cells revealed this round (on a bust the tail is the hit bomb). */
+  picks: number[];
+  /** The full bomb layout — drives the replay board reveal. */
+  bombsGrid: number[];
   multiplierX100: number;
   payout: number;
   status: 'busted' | 'cashed_out';

@@ -35,6 +35,7 @@ import { HiLoCard } from './HiLoCard';
 import { HiLoLadder } from './HiLoLadder';
 import { HiLoInfoTabs } from './HiLoInfoTabs';
 import { HiLoFairnessModal } from './HiLoFairnessModal';
+import { ReplayConfirmOverlay } from '@/components/share/ReplayConfirmOverlay';
 import { hiloAudio } from './hilo-audio';
 import {
   fetchHiLoInfo,
@@ -49,6 +50,7 @@ import {
   hiLoPayoutPreview,
   formatMultiplier,
   type HiLoActiveRound,
+  type HiLoCard as HiLoCardData,
   type HiLoDirection,
   type HiLoInfo,
   type HiLoHistoryRound,
@@ -83,6 +85,13 @@ export function StakeHiLoGame() {
   const [session, setSession] = useState<SessionPoint[]>([]);
   const [history, setHistory] = useState<HiLoHistoryRound[]>([]);
   const [historyLoading, setHistoryLoading] = useState(false);
+
+  // Replay: a staged past cashout (confirm overlay) + a flag while re-watching.
+  // A replay only re-renders the round's final card trail — no server call, no
+  // balance/history/session/reportWin change.
+  const [pendingReplay, setPendingReplay] = useState<HiLoHistoryRound | null>(null);
+  const [replaying, setReplaying] = useState(false);
+  const boardRef = useRef<HTMLDivElement | null>(null);
 
   const [clientSeed, setClientSeed] = useState('');
   const [fairnessOpen, setFairnessOpen] = useState(false);
@@ -167,7 +176,7 @@ export function StakeHiLoGame() {
   );
 
   const betting = phase === 'idle' || phase === 'busted' || phase === 'cashed';
-  const canPick = phase === 'active' && picksRemaining > 0;
+  const canPick = phase === 'active' && picksRemaining > 0 && !replaying;
   const canCash = phase === 'active' && picks.length > 0;
   const cashoutValue = round ? hiLoPayoutPreview(round.bet, multiplierX100) : 0;
 
@@ -202,6 +211,9 @@ export function StakeHiLoGame() {
     setError(null);
     setNoChips(false);
     setResult(null);
+    // A real round exits any replay view.
+    setReplaying(false);
+    setPendingReplay(null);
     setPhase('starting');
     hiloAudio.init();
     try {
@@ -239,6 +251,8 @@ export function StakeHiLoGame() {
       pickCount: number,
       multX100: number,
       payout: number,
+      cards: HiLoCardData[],
+      guesses: HiLoDirection[],
     ) => {
       setHistory((prev) =>
         [
@@ -247,6 +261,8 @@ export function StakeHiLoGame() {
             bet: betAmount,
             picks: pickCount,
             wins: status === 'cashed_out' ? pickCount : Math.max(0, pickCount - 1),
+            cards,
+            guesses,
             multiplierX100: multX100,
             payout,
             status,
@@ -285,7 +301,7 @@ export function StakeHiLoGame() {
           hiloAudio.playBust();
           setResult({ kind: 'busted', multiplierX100: multAtPick, payout: 0, serverSeed: r.serverSeed });
           setPhase('busted');
-          settleHistory('busted', roundId, betAmount, r.picks.length, multAtPick, 0);
+          settleHistory('busted', roundId, betAmount, r.picks.length, multAtPick, 0, r.cards, r.picks);
           setSession((prev) => [...prev, { drop: prev.length + 1, bet: betAmount, profit: -betAmount }]);
         }
       } catch (e) {
@@ -322,7 +338,7 @@ export function StakeHiLoGame() {
         origin: { y: 0.5 },
         colors: ['#22D3EE', '#FCD34D', '#ffffff'],
       });
-      settleHistory('cashed_out', roundId, betAmount, r.picks.length, r.multiplierX100, r.payout);
+      settleHistory('cashed_out', roundId, betAmount, r.picks.length, r.multiplierX100, r.payout, r.cards, r.picks);
       setSession((prev) => [...prev, { drop: prev.length + 1, bet: betAmount, profit: r.payout - betAmount }]);
     } catch (e) {
       setPhase('active');
@@ -334,8 +350,54 @@ export function StakeHiLoGame() {
     setRound(null);
     setResult(null);
     setError(null);
+    setReplaying(false);
+    setPendingReplay(null);
     setPhase('idle');
   }, []);
+
+  // ── Replay a past cashout: stage the confirm overlay, then re-render that
+  // round's final card trail (all cards + guesses) with its cashout multiplier.
+  // Pure re-watch — no server call, no balance/history/session/reportWin. ──
+  const handleReplay = useCallback(
+    (r: HiLoHistoryRound) => {
+      if (!betting) return;
+      hiloAudio.init();
+      setPendingReplay(r);
+      boardRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    },
+    [betting],
+  );
+
+  const startReplay = useCallback(() => {
+    const r = pendingReplay;
+    if (!r) return;
+    setPendingReplay(null);
+    setError(null);
+    setNoChips(false);
+    hiloAudio.init();
+    setReplaying(true);
+    setRound({
+      roundId: r.roundId,
+      bet: r.bet,
+      cards: r.cards,
+      picks: r.guesses,
+      multiplierX100: r.multiplierX100,
+      serverSeedHash: '',
+      clientSeed: '',
+      nonce: 0,
+      houseEdgeBp: info?.houseEdgeBp ?? 100,
+      maxPicks: info?.maxPicks ?? r.cards.length,
+    });
+    setResult({ kind: 'cashed', multiplierX100: r.multiplierX100, payout: r.payout, serverSeed: '' });
+    setPhase('cashed');
+    hiloAudio.playCashout();
+    confetti({
+      particleCount: 110,
+      spread: 75,
+      origin: { y: 0.5 },
+      colors: ['#22D3EE', '#FCD34D', '#ffffff'],
+    });
+  }, [pendingReplay, info]);
 
   const openVerify = useCallback((id: string | null) => {
     setVerifyTarget(id);
@@ -484,7 +546,7 @@ export function StakeHiLoGame() {
           {betting ? (
             <Button
               type="button"
-              disabled={phase === 'starting' || !info}
+              disabled={phase === 'starting' || !info || pendingReplay !== null}
               onClick={() => void startRound()}
               className="arc-display h-12 w-full bg-cyan-500 text-base font-bold uppercase tracking-widest text-[#03121B] shadow-[0_0_24px_-6px_rgba(34,211,238,0.85)] hover:bg-cyan-400 disabled:opacity-50"
             >
@@ -528,7 +590,7 @@ export function StakeHiLoGame() {
 
         {/* ───────── Stage ───────── */}
         <div className="order-1 space-y-4 lg:order-2">
-          <Card className="relative flex flex-col items-center gap-5 border-0 bg-[#07131F] p-5 ring-1 ring-inset ring-cyan-950/70 sm:p-7">
+          <Card ref={boardRef} className="relative flex flex-col items-center gap-5 border-0 bg-[#07131F] p-5 ring-1 ring-inset ring-cyan-950/70 sm:p-7">
             <div className="flex flex-col items-center gap-2">
               <HiLoCard
                 key={`${round?.roundId ?? 'idle'}-${cards.length}`}
@@ -589,6 +651,20 @@ export function StakeHiLoGame() {
                 <HiLoLadder cards={cards} picks={picks} multWalkX100={multWalk} busted={phase === 'busted'} />
               </div>
             )}
+
+            {pendingReplay && (
+              <ReplayConfirmOverlay
+                title="Replay round"
+                headline={formatMultiplier(pendingReplay.multiplierX100)}
+                sub={`${
+                  pendingReplay.payout - pendingReplay.bet > 0
+                    ? `+${(pendingReplay.payout - pendingReplay.bet).toLocaleString()}`
+                    : (pendingReplay.payout - pendingReplay.bet).toLocaleString()
+                } MORBIUS`}
+                onPlay={startReplay}
+                onCancel={() => setPendingReplay(null)}
+              />
+            )}
           </Card>
 
         </div>
@@ -600,6 +676,7 @@ export function StakeHiLoGame() {
           history={history}
           historyLoading={historyLoading}
           onVerify={(id) => openVerify(id)}
+          onReplay={handleReplay}
           info={info}
         />
       </div>

@@ -94,6 +94,10 @@ export interface HiLoHistoryRound {
   bet: number;
   picks: number;
   wins: number;
+  /** The full card sequence (base card first) — drives the replay reveal. */
+  cards: HiLoCard[];
+  /** The hi/lo guess for each pick — drives the replay reveal. */
+  guesses: HiLoDirection[];
   multiplierX100: number;
   payout: number;
   status: 'busted' | 'cashed_out';

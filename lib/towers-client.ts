@@ -125,6 +125,10 @@ export interface TowersHistoryRound {
   bet: number;
   difficulty: TowersDifficulty;
   floor: number;
+  /** picks[f] = the tile chosen on completed floor f — drives the replay reveal. */
+  picks: number[];
+  /** bombPositions[f] = the bomb tile on floor f — drives the replay reveal. */
+  bombPositions: number[];
   multiplierX100: number;
   won: boolean;
   payout: number;

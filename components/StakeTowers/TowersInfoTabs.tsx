@@ -29,6 +29,8 @@ interface TowersInfoTabsProps {
   history: TowersHistoryRound[];
   historyLoading: boolean;
   onVerify: (roundId: string) => void;
+  /** Re-watch a past win on the board (no wager) — won rounds only. */
+  onReplay?: (round: TowersHistoryRound) => void;
   info: TowersInfo | null;
 }
 
@@ -63,7 +65,7 @@ function ResultBadge({ won }: { won: boolean }) {
   );
 }
 
-export function TowersInfoTabs({ history, historyLoading, onVerify, info }: TowersInfoTabsProps) {
+export function TowersInfoTabs({ history, historyLoading, onVerify, onReplay, info }: TowersInfoTabsProps) {
   const [recent, setRecent] = useState<TowersRecentRound[]>([]);
   const [recentLoading, setRecentLoading] = useState(true);
   const [leaders, setLeaders] = useState<TowersLeaderboardEntry[]>([]);
@@ -179,6 +181,15 @@ export function TowersInfoTabs({ history, historyLoading, onVerify, info }: Towe
                     <span className={`arc-mono ml-auto shrink-0 tabular-nums font-semibold ${net > 0 ? 'text-amber-300' : 'text-rose-400'}`}>
                       {net > 0 ? `+${net.toLocaleString()}` : net.toLocaleString()}
                     </span>
+                    {onReplay && h.won && (
+                      <button
+                        type="button"
+                        onClick={() => onReplay(h)}
+                        className="shrink-0 rounded px-1.5 py-0.5 text-[11px] font-medium text-amber-400/80 transition-colors hover:bg-amber-500/10 hover:text-amber-300"
+                      >
+                        Replay
+                      </button>
+                    )}
                     <button
                       type="button"
                       onClick={() => onVerify(h.roundId)}
