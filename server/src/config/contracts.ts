@@ -23,15 +23,15 @@ export const BLACKJACK_ADDRESS = (process.env.BLACKJACK_ADDRESS || process.env.B
 
 /**
  * MorbiusVault — stateless deposit router (successor to the V7 reserve contract for DEPOSITS only).
- * Deposits are verified/credited against this address; withdrawals are unchanged. Defaults to
- * BLACKJACK_ADDRESS until the vault is deployed and MORBIUS_VAULT_ADDRESS is set, so this is a no-op
- * until then. Accepts the NEXT_PUBLIC_ form too, to share one value with the frontend config.
+ * Deposits are verified/credited against this address; withdrawals are unchanged. Deployed on
+ * PulseChain 2026-07 (owner 0x7044…95e5, forwards MORBIUS to the hot wallet). Any of the env vars
+ * below override the deployed default if ever redeployed.
  */
 export const MORBIUS_VAULT_ADDRESS = (
   process.env.MORBIUS_VAULT_ADDRESS ||
   process.env.MORBIUS_VAULT_CONTRACT_ADDRESS ||
   process.env.NEXT_PUBLIC_MORBIUS_VAULT_CONTRACT_ADDRESS ||
-  BLACKJACK_ADDRESS
+  '0x4A5a82f644A7CB20A2c8Bf0Cf4369DC641E8CeD2'
 ) as `0x${string}`;
 
 /** Legacy Blackjack contracts (for admin health). Accept BLACKJACK_LEGACY_CONTRACT_ADDRESS* or NEXT_PUBLIC_BLACKJACK_LEGACY_CONTRACT_ADDRESS*. */

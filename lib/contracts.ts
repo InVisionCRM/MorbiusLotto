@@ -42,12 +42,12 @@ export const BLACKJACK_ADDRESS = '0xc2Ae080dE01108b5C9C0f2C5C86051CFd3D18C00' as
 // MorbiusVault — stateless deposit router. Deposits (depositMORBIUS / deposit) route HERE;
 // withdrawals are unchanged (server/hot-wallet flow). The V7 reserve contract (BLACKJACK_ADDRESS)
 // is a custody-reserve contract that permanently traps its balance, so new deposits must not land
-// there. Defaults to BLACKJACK_ADDRESS until NEXT_PUBLIC_MORBIUS_VAULT_CONTRACT_ADDRESS is set to
-// the deployed vault, so this is a no-op until the vault is live.
+// there. Deployed on PulseChain 2026-07 (owner 0x7044…95e5, forwards MORBIUS to the hot wallet).
+// NEXT_PUBLIC_MORBIUS_VAULT_CONTRACT_ADDRESS overrides the deployed default if ever redeployed.
 export const MORBIUS_VAULT_ADDRESS = (
   typeof process !== 'undefined' && process.env.NEXT_PUBLIC_MORBIUS_VAULT_CONTRACT_ADDRESS
     ? process.env.NEXT_PUBLIC_MORBIUS_VAULT_CONTRACT_ADDRESS
-    : BLACKJACK_ADDRESS
+    : '0x4A5a82f644A7CB20A2c8Bf0Cf4369DC641E8CeD2'
 ) as `0x${string}`
 
 // Previous Blackjack contracts (if upgraded: players with balance here can withdraw from them)
