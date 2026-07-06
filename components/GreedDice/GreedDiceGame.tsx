@@ -809,6 +809,7 @@ export function GreedDiceGame() {
       {/* Draggable mini session chart — open in a corner on mobile, full-size on desktop. */}
       <FloatingPanel title="Session" storageKey="greedDice.sessionChart.pos">
         <SessionChart
+          gameName="Greed Dice"
           points={session}
           unitLabel="Rounds"
           bare

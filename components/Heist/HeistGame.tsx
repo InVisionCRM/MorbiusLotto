@@ -764,6 +764,7 @@ export function HeistGame() {
       {/* Draggable mini session chart — open in a corner on mobile, full-size on desktop. */}
       <FloatingPanel title="Session" storageKey="heist.sessionChart.pos">
         <SessionChart
+          gameName="Heist"
           points={session}
           unitLabel="Jobs"
           bare

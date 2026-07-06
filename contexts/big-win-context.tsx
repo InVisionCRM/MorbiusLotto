@@ -32,9 +32,20 @@ interface BigWin {
   multiplier: number
 }
 
+interface ShareCardArgs {
+  game: string
+  /** Return on bet as a whole percent (may be negative for a down session). */
+  roiPct: number
+  /** Optional ×-multiple for the modal caption; derived from ROI when omitted. */
+  multiplier?: number
+}
+
 interface BigWinContextValue {
-  /** Report a settled round. Fires the share card when payout ≥ 10× bet. */
+  /** Report a settled round. Fires the "Quick Share" toast when payout ≥ 10× bet. */
   reportWin: (args: ReportWinArgs) => void
+  /** Open the full share card immediately for an arbitrary game + ROI (e.g. a
+   *  session summary from the session chart's Share button). Skips the toast. */
+  shareCard: (args: ShareCardArgs) => void
 }
 
 const BigWinContext = createContext<BigWinContextValue | null>(null)
@@ -58,13 +69,19 @@ export function BigWinProvider({ children }: { children: React.ReactNode }) {
     setWin({ game, multiplier, roiPct: roiPctFromBet(bet, payout) })
   }, [])
 
+  const shareCard = useCallback(({ game, roiPct, multiplier }: ShareCardArgs) => {
+    showingRef.current = true
+    setExpanded(true) // open the full card directly — no toast for a manual share
+    setWin({ game, roiPct, multiplier: multiplier ?? 1 + roiPct / 100 })
+  }, [])
+
   const dismiss = useCallback(() => {
     showingRef.current = false
     setExpanded(false)
     setWin(null)
   }, [])
 
-  const value = useMemo<BigWinContextValue>(() => ({ reportWin }), [reportWin])
+  const value = useMemo<BigWinContextValue>(() => ({ reportWin, shareCard }), [reportWin, shareCard])
 
   return (
     <BigWinContext.Provider value={value}>
@@ -93,4 +110,4 @@ export function useBigWin(): BigWinContextValue {
   return ctx ?? NOOP
 }
 
-const NOOP: BigWinContextValue = { reportWin: () => {} }
+const NOOP: BigWinContextValue = { reportWin: () => {}, shareCard: () => {} }

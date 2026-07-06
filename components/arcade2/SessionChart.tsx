@@ -11,6 +11,7 @@
  */
 
 import { useCallback, useMemo, useState } from 'react'
+import { Share2 } from 'lucide-react'
 import {
   AreaChart,
   Area,
@@ -20,6 +21,7 @@ import {
   ReferenceLine,
   ResponsiveContainer,
 } from 'recharts'
+import { useBigWin } from '@/contexts/big-win-context'
 
 export interface SessionPoint {
   /** 1-based settle order. */
@@ -37,6 +39,9 @@ interface SessionChartProps {
   bare?: boolean
   /** When set, shows a Session / All-Time toggle; called once when All-Time is first opened. */
   allTimeLoader?: () => Promise<SessionPoint[]>
+  /** Game display name (e.g. "Plinko"). When set, a Share button appears that
+   *  opens the share card with the current view's ROI. */
+  gameName?: string
 }
 
 /**
@@ -71,7 +76,8 @@ function StatTile({ label, value, accent }: { label: string; value: string; acce
   )
 }
 
-export function SessionChart({ points, unitLabel, bare = false, allTimeLoader }: SessionChartProps) {
+export function SessionChart({ points, unitLabel, bare = false, allTimeLoader, gameName }: SessionChartProps) {
+  const { shareCard } = useBigWin()
   const [view, setView] = useState<'session' | 'allTime'>('session')
   const [allTimePoints, setAllTimePoints] = useState<SessionPoint[] | null>(null)
   const [loading, setLoading] = useState(false)
@@ -129,7 +135,7 @@ export function SessionChart({ points, unitLabel, bare = false, allTimeLoader }:
   const positive = stats.net >= 0
 
   const toggle = allTimeLoader ? (
-    <div className="mb-2 inline-flex rounded-md border border-cyan-950 p-0.5 text-[11px]">
+    <div className="inline-flex rounded-md border border-cyan-950 p-0.5 text-[11px]">
       <button
         type="button"
         onClick={() => setView('session')}
@@ -157,9 +163,32 @@ export function SessionChart({ points, unitLabel, bare = false, allTimeLoader }:
       : 'No settled rounds yet.'
     : 'The P/L curve appears after your first bet settles.'
 
+  const canShare = !!gameName && stats.count > 0
+  const handleShare = () => {
+    if (!gameName) return
+    const multiplier = stats.wagered > 0 ? (stats.wagered + stats.net) / stats.wagered : undefined
+    shareCard({ game: gameName, roiPct: stats.roi, multiplier })
+  }
+
+  const shareBtn = canShare ? (
+    <button
+      type="button"
+      onClick={handleShare}
+      title="Share your session"
+      className="flex shrink-0 items-center gap-1 rounded-md border border-cyan-500/40 px-2 py-0.5 text-[11px] font-semibold uppercase tracking-wide text-cyan-300 transition-colors hover:bg-cyan-500/15"
+    >
+      <Share2 size={12} /> Share
+    </button>
+  ) : null
+
   const body = (
     <>
-      {toggle}
+      {(toggle || shareBtn) && (
+        <div className="mb-2 flex items-center justify-between gap-2">
+          <div>{toggle}</div>
+          {shareBtn}
+        </div>
+      )}
       {/* 2-up on phones (wide enough to read), 4-up once there's room. */}
       <div className="mb-3 grid grid-cols-2 gap-1.5 sm:grid-cols-4">
         <StatTile label={unitLabel} value={fmtCompact(stats.count)} />

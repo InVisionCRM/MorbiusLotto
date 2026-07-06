@@ -648,6 +648,7 @@ export function StakeChickenGame() {
       {/* Draggable mini session chart — open in a corner on mobile, full-size on desktop. */}
       <FloatingPanel title="Session" storageKey="chicken.sessionChart.pos">
         <SessionChart
+          gameName="Chicken"
           points={session}
           unitLabel="Rounds"
           bare

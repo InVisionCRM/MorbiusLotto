@@ -758,6 +758,7 @@ export function StakePlinkoGame() {
       {/* Draggable mini session chart — open in a corner on mobile, full-size on desktop. */}
       <FloatingPanel title="Session" storageKey="plinko2.sessionChart.pos">
         <SessionChart
+          gameName="Plinko"
           points={session}
           unitLabel="Balls"
           bare

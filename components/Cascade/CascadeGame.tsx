@@ -906,6 +906,7 @@ export function CascadeGame() {
       {/* Draggable mini session chart — open in a corner on mobile, full-size on desktop. */}
       <FloatingPanel title="Session" storageKey="cascade.sessionChart.pos">
         <SessionChart
+          gameName="Cascade"
           points={session}
           unitLabel="Drops"
           bare

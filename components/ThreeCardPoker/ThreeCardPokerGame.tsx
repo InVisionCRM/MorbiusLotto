@@ -836,6 +836,7 @@ export function ThreeCardPokerGame() {
       {/* Draggable mini session chart — open in a corner on mobile, full-size on desktop. */}
       <FloatingPanel title="Session" storageKey="threeCardPoker.sessionChart.pos">
         <SessionChart
+          gameName="Three Card Poker"
           points={session}
           unitLabel="Hands"
           bare

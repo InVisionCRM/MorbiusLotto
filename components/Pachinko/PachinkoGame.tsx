@@ -984,6 +984,7 @@ export function PachinkoGame() {
       {/* Draggable mini session chart — open in a corner on mobile, full-size on desktop. */}
       <FloatingPanel title="Session" storageKey="pachinko.sessionChart.pos">
         <SessionChart
+          gameName="Pachinko"
           points={session}
           unitLabel="Drops"
           bare

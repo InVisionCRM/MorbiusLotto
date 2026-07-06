@@ -687,6 +687,7 @@ export function StakeLimboGame() {
       {/* Draggable mini session chart — open in a corner on mobile, full-size on desktop. */}
       <FloatingPanel title="Session" storageKey="limbo2.sessionChart.pos">
         <SessionChart
+          gameName="Limbo"
           points={session}
           unitLabel="Rounds"
           bare

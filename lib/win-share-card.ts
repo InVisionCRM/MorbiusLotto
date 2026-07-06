@@ -192,7 +192,8 @@ export function drawWinCard(
   // ── ROI (big amber, with % smaller) ──
   // Auto-fit: shrink the number until the whole "+N,NNN%" fits the card width,
   // so a huge multiplier can't push the % off the edge.
-  const roiMain = `+${Math.round(data.roiPct).toLocaleString('en-US')}`
+  const roiRounded = Math.round(data.roiPct)
+  const roiMain = `${roiRounded < 0 ? '−' : '+'}${Math.abs(roiRounded).toLocaleString('en-US')}`
   const gap = 16
   const avail = REF_W - padX * 2
   let roiFont = 250

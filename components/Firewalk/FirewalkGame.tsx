@@ -743,6 +743,7 @@ export function FirewalkGame() {
       {/* Draggable mini session chart — open in a corner on mobile, full-size on desktop. */}
       <FloatingPanel title="Session" storageKey="firewalk.sessionChart.pos">
         <SessionChart
+          gameName="Firewalk"
           points={session}
           unitLabel="Rounds"
           bare
