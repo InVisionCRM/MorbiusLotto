@@ -7,6 +7,7 @@ import {
   LOTTERY_INSTANT_ADDRESS,
   BIGWHEEL_ADDRESS,
   BLACKJACK_ADDRESS,
+  MORBIUS_VAULT_ADDRESS,
   PLINKO_GET_GLOBAL_STATS_ABI,
   KENO_GET_GLOBAL_STATS_ABI,
   KENO_GET_CONTRACT_RESERVE_ABI,
@@ -18,6 +19,21 @@ import {
 const DEPOSIT_EVENT = parseAbiItem('event Deposit(address indexed player, uint256 morbiusAmount, uint256 plsAmount)');
 const DEPOSIT_MORBIUS_EVENT = parseAbiItem('event DepositMORBIUS(address indexed player, uint256 amount)');
 const WITHDRAWAL_EVENT = parseAbiItem('event Withdrawal(address indexed player, uint256 amount)');
+
+/**
+ * Addresses to scan for deposit events: the MorbiusVault (where deposits land now) plus the V7
+ * reserve contract (for historical deposit totals). Deduped case-insensitively so that if the two
+ * are ever configured to the same address we don't double-count via getLogs.
+ */
+const DEPOSIT_SCAN_ADDRESSES: `0x${string}`[] = (() => {
+  const seen = new Set<string>();
+  const out: `0x${string}`[] = [];
+  for (const a of [MORBIUS_VAULT_ADDRESS, BLACKJACK_ADDRESS]) {
+    const key = a.toLowerCase();
+    if (!seen.has(key)) { seen.add(key); out.push(a); }
+  }
+  return out;
+})();
 const INSTANT_LOTTERY_RESULT_EVENT = parseAbiItem(
   'event InstantLotteryResult(address indexed player, uint8[6] playerNumbers, uint8[6] winningNumbers, uint8 matchCount, uint256 wager, uint256 grossPayout, uint256 netPayout)'
 );
@@ -448,8 +464,8 @@ export class ChainAnalyticsService {
       while (fromBlock <= toBlock) {
         const end = fromBlock + BigInt(CHUNK_SIZE) > toBlock ? toBlock : fromBlock + BigInt(CHUNK_SIZE);
         const [depositLogs, depositMorbiusLogs, withdrawalLogs] = await Promise.all([
-          client.getLogs({ address: BLACKJACK_ADDRESS, event: DEPOSIT_EVENT, fromBlock, toBlock: end }),
-          client.getLogs({ address: BLACKJACK_ADDRESS, event: DEPOSIT_MORBIUS_EVENT, fromBlock, toBlock: end }),
+          client.getLogs({ address: DEPOSIT_SCAN_ADDRESSES, event: DEPOSIT_EVENT, fromBlock, toBlock: end }),
+          client.getLogs({ address: DEPOSIT_SCAN_ADDRESSES, event: DEPOSIT_MORBIUS_EVENT, fromBlock, toBlock: end }),
           client.getLogs({ address: BLACKJACK_ADDRESS, event: WITHDRAWAL_EVENT, fromBlock, toBlock: end }),
         ]);
         for (const log of depositLogs) {
@@ -492,8 +508,8 @@ export class ChainAnalyticsService {
       while (fromBlock <= toBlock) {
         const end = fromBlock + BigInt(CHUNK_SIZE) > toBlock ? toBlock : fromBlock + BigInt(CHUNK_SIZE);
         const [depositLogs, depositMorbiusLogs] = await Promise.all([
-          client.getLogs({ address: BLACKJACK_ADDRESS, event: DEPOSIT_EVENT, fromBlock, toBlock: end }),
-          client.getLogs({ address: BLACKJACK_ADDRESS, event: DEPOSIT_MORBIUS_EVENT, fromBlock, toBlock: end }),
+          client.getLogs({ address: DEPOSIT_SCAN_ADDRESSES, event: DEPOSIT_EVENT, fromBlock, toBlock: end }),
+          client.getLogs({ address: DEPOSIT_SCAN_ADDRESSES, event: DEPOSIT_MORBIUS_EVENT, fromBlock, toBlock: end }),
         ]);
         for (const log of depositLogs) {
           if (log.args && 'morbiusAmount' in log.args) newDeposited += (log.args as { morbiusAmount: bigint }).morbiusAmount;

@@ -220,7 +220,7 @@ export function useRevealServerSeed() {
  */
 export function useWatchDeposits(onDeposit?: (player: string, morbiusAmount: bigint, plsAmount: bigint) => void) {
   return useWatchContractEvent({
-    address: BLACKJACK_ADDRESS,
+    address: MORBIUS_VAULT_ADDRESS, // live deposits now land on the vault (V7 gets none)
     abi: blackjackAbi,
     eventName: 'Deposit',
     onLogs(logs) {
@@ -239,7 +239,7 @@ export function useWatchDeposits(onDeposit?: (player: string, morbiusAmount: big
  */
 export function useWatchDepositsMORBIUS(onDeposit?: (player: string, amount: bigint) => void) {
   return useWatchContractEvent({
-    address: BLACKJACK_ADDRESS,
+    address: MORBIUS_VAULT_ADDRESS, // live deposits now land on the vault (V7 gets none)
     abi: blackjackAbi,
     eventName: 'DepositMORBIUS',
     onLogs(logs) {
