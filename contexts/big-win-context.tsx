@@ -1,16 +1,18 @@
 'use client'
 
 /**
- * BigWinProvider — one app-wide place that watches for big wins and pops the
+ * BigWinProvider — one app-wide place that watches for big wins and offers a
  * shareable "Nice win!" card. Any game calls `reportWin({ game, bet, payout })`
- * when a round settles; if the payout is a big multiple of the bet, the share
- * modal appears. Centralising it here means each game needs only a one-line
- * call and the threshold / card live in a single place.
+ * when a round settles; if the payout is a big multiple of the bet, a small
+ * non-blocking "Quick Share" toast appears. Tapping Share on the toast opens
+ * the full share-card modal. Centralising it here means each game needs only a
+ * one-line call and the threshold / card live in a single place.
  */
 
 import { createContext, useCallback, useContext, useMemo, useRef, useState } from 'react'
 import { roiPctFromBet } from '@/lib/win-share-card'
 import { BigWinModal } from '@/components/share/BigWinModal'
+import { BigWinToast } from '@/components/share/BigWinToast'
 
 /** A win pays at least this multiple of the bet to trigger the share card. */
 export const BIG_WIN_MULTIPLIER = 10
@@ -39,8 +41,11 @@ const BigWinContext = createContext<BigWinContextValue | null>(null)
 
 export function BigWinProvider({ children }: { children: React.ReactNode }) {
   const [win, setWin] = useState<BigWin | null>(null)
-  // While a card is showing we ignore further wins so an auto-bet streak can't
-  // stack popups; the current one must be dismissed first.
+  // Whether the full share-card modal is open. A big win first shows the small
+  // "Quick Share" toast; the modal opens only when the player taps Share.
+  const [expanded, setExpanded] = useState(false)
+  // While a toast/card is showing we ignore further wins so an auto-bet streak
+  // can't stack prompts; the current one must be dismissed first.
   const showingRef = useRef(false)
 
   const reportWin = useCallback(({ game, bet, payout }: ReportWinArgs) => {
@@ -49,11 +54,13 @@ export function BigWinProvider({ children }: { children: React.ReactNode }) {
     const multiplier = payout / bet
     if (multiplier < BIG_WIN_MULTIPLIER) return
     showingRef.current = true
+    setExpanded(false)
     setWin({ game, multiplier, roiPct: roiPctFromBet(bet, payout) })
   }, [])
 
   const dismiss = useCallback(() => {
     showingRef.current = false
+    setExpanded(false)
     setWin(null)
   }, [])
 
@@ -62,7 +69,15 @@ export function BigWinProvider({ children }: { children: React.ReactNode }) {
   return (
     <BigWinContext.Provider value={value}>
       {children}
-      {win && (
+      {win && !expanded && (
+        <BigWinToast
+          game={win.game}
+          multiplier={win.multiplier}
+          onShare={() => setExpanded(true)}
+          onClose={dismiss}
+        />
+      )}
+      {win && expanded && (
         <BigWinModal game={win.game} roiPct={win.roiPct} multiplier={win.multiplier} onClose={dismiss} />
       )}
     </BigWinContext.Provider>
