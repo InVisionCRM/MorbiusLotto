@@ -5,6 +5,7 @@
   "main": "dist/server.js",
   "scripts": {
     "build": "tsc",
+    "prestart": "npm run build || true",
     "start": "node -r dotenv/config dist/server.js",
     "dev": "ts-node -r dotenv/config src/server.ts",
     "watch": "nodemon --exec 'ts-node -r dotenv/config src/server.ts'",
