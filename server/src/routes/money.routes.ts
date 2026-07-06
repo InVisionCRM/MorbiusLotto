@@ -15,7 +15,7 @@ function statusForMoneyError(message: string): number {
   if (message.includes('No credited deposit found')) return 404;
   if (message.includes('temporarily unavailable') || message.includes('temporarily limited') || message.includes('Could not load transaction')) return 503;
   if (message.includes('Insufficient balance')) return 400;
-  if (message.includes('not found or not yet mined') || message.includes('reverted on-chain') || message.includes('Could not verify deposit amount') || message.includes('not sent to the Blackjack contract')) return 400;
+  if (message.includes('not found or not yet mined') || message.includes('reverted on-chain') || message.includes('Could not verify deposit amount') || message.includes('not sent to the deposit contract')) return 400;
   return 500;
 }
 
