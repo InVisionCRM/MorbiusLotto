@@ -39,6 +39,17 @@ export const ROULETTE_ADDRESS = '0x5e51EcFa38C4254dD100e565620Ac6E511723d27' as 
 // V7: 0xc2Ae080dE01108b5C9C0f2C5C86051CFd3D18C00 — on-chain withdrawal deadline (expiryTimestamp in signed withdraw)
 export const BLACKJACK_ADDRESS = '0xc2Ae080dE01108b5C9C0f2C5C86051CFd3D18C00' as const
 
+// MorbiusVault — stateless deposit router. Deposits (depositMORBIUS / deposit) route HERE;
+// withdrawals are unchanged (server/hot-wallet flow). The V7 reserve contract (BLACKJACK_ADDRESS)
+// is a custody-reserve contract that permanently traps its balance, so new deposits must not land
+// there. Defaults to BLACKJACK_ADDRESS until NEXT_PUBLIC_MORBIUS_VAULT_CONTRACT_ADDRESS is set to
+// the deployed vault, so this is a no-op until the vault is live.
+export const MORBIUS_VAULT_ADDRESS = (
+  typeof process !== 'undefined' && process.env.NEXT_PUBLIC_MORBIUS_VAULT_CONTRACT_ADDRESS
+    ? process.env.NEXT_PUBLIC_MORBIUS_VAULT_CONTRACT_ADDRESS
+    : BLACKJACK_ADDRESS
+) as `0x${string}`
+
 // Previous Blackjack contracts (if upgraded: players with balance here can withdraw from them)
 export const BLACKJACK_LEGACY_ADDRESS = (
   typeof process !== 'undefined' && process.env.NEXT_PUBLIC_BLACKJACK_LEGACY_CONTRACT_ADDRESS
