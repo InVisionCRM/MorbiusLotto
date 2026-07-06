@@ -18,7 +18,7 @@ import { useTokenBalance } from '@/hooks/use-token';
 import { useNativeBalance } from '@/hooks/use-native-balance';
 import { usePlsQuote } from '@/hooks/use-pls-quote';
 import {
-  BLACKJACK_ADDRESS,
+  MORBIUS_VAULT_ADDRESS,
   BLACKJACK_LEGACY_ADDRESS,
   BLACKJACK_LEGACY_ADDRESS_2,
   BLACKJACK_LEGACY_ADDRESS_3,
@@ -394,7 +394,7 @@ export function GameWalletModal({
   const { needsApproval, approve, isApproving, isLoadingAllowance, isApprovalSuccess } =
     useTokenApproval({
       tokenAddress: MORBIUS_TOKEN_ADDRESS as `0x${string}`,
-      spenderAddress: BLACKJACK_ADDRESS as `0x${string}`,
+      spenderAddress: MORBIUS_VAULT_ADDRESS as `0x${string}`, // approve the vault (deposit target), not V7
       requiredAmount: requiredMorbiusAmount,
       userAddress: address,
       enabled: tab === 'deposit' && depositMethod === 'morbius' && !!depositAmount && !!address,

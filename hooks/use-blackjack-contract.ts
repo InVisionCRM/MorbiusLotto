@@ -1,6 +1,6 @@
 import { useReadContract, useWriteContract, useWatchContractEvent } from 'wagmi'
 import { blackjackAbi } from '../abi/blackjack'
-import { BLACKJACK_ADDRESS, BLACKJACK_LEGACY_ADDRESS, BLACKJACK_LEGACY_ADDRESS_2, BLACKJACK_LEGACY_ADDRESS_3, LEGACY_BLACKJACK_ADDRESSES } from '../lib/contracts'
+import { BLACKJACK_ADDRESS, MORBIUS_VAULT_ADDRESS, BLACKJACK_LEGACY_ADDRESS, BLACKJACK_LEGACY_ADDRESS_2, BLACKJACK_LEGACY_ADDRESS_3, LEGACY_BLACKJACK_ADDRESSES } from '../lib/contracts'
 import { useAccount } from 'wagmi'
 import { useGasParams } from '../lib/tx-gas'
 
@@ -345,7 +345,7 @@ export function useBlackjackContract() {
     if (!address) throw new Error('Wallet not connected')
 
     return depositContract.writeContractAsync({
-      address: BLACKJACK_ADDRESS,
+      address: MORBIUS_VAULT_ADDRESS, // deposits route to the vault, not the V7 reserve contract
       abi: blackjackAbi,
       functionName: 'deposit',
       value: plsAmount, // Send PLS to deposit function
@@ -357,7 +357,7 @@ export function useBlackjackContract() {
     if (!address) throw new Error('Wallet not connected')
 
     return depositMORBIUSContract.writeContractAsync({
-      address: BLACKJACK_ADDRESS,
+      address: MORBIUS_VAULT_ADDRESS, // deposits route to the vault, not the V7 reserve contract
       abi: blackjackAbi,
       functionName: 'depositMORBIUS',
       args: [amount],

@@ -2,7 +2,7 @@ import { createWalletClient, decodeEventLog, getAddress } from 'viem';
 import { privateKeyToAccount } from 'viem/accounts';
 import { pulsechain } from 'viem/chains';
 import { blackjackAbi } from '../abi/blackjack';
-import { BLACKJACK_ADDRESS, MORBIUS_TOKEN_ADDRESS } from '../config/contracts';
+import { BLACKJACK_ADDRESS, MORBIUS_VAULT_ADDRESS, MORBIUS_TOKEN_ADDRESS } from '../config/contracts';
 import type {
   MoneyDatabasePort,
   PendingDepositAdminRow,
@@ -53,6 +53,14 @@ interface FeeRecipients {
 export class MoneyService {
   private readonly publicClient = getPublicClient();
   private readonly blackjackContractAddress = BLACKJACK_ADDRESS;
+  /**
+   * Addresses a deposit tx may be sent to and still be credited: the current vault plus the V7
+   * reserve contract (so in-flight deposits during migration still credit). Deduped — when the
+   * vault env is unset, MORBIUS_VAULT_ADDRESS === BLACKJACK_ADDRESS and this is a single address.
+   */
+  private readonly depositTargetAddressesLower: ReadonlySet<string> = new Set(
+    [MORBIUS_VAULT_ADDRESS, BLACKJACK_ADDRESS].map((a) => a.toLowerCase())
+  );
   private feeRecipientsCache: { value: FeeRecipients; cachedAt: number } | null = null;
 
   constructor(private readonly dbService: MoneyDatabasePort) {}
@@ -233,7 +241,6 @@ export class MoneyService {
 
     const confirmationsRequired = resolveDepositConfirmationsRequired(process.env.DEPOSIT_CONFIRMATIONS_REQUIRED);
     const hash = txHash as `0x${string}`;
-    const blackjackAddr = getAddress(this.blackjackContractAddress);
     const walletLower = walletAddress.toLowerCase();
 
     let receipt: Awaited<ReturnType<typeof this.publicClient.getTransactionReceipt>>;
@@ -261,13 +268,13 @@ export class MoneyService {
       throw new Error('Could not load transaction');
     }
 
-    if (txTo !== blackjackAddr) {
-      throw new Error('Transaction not sent to the Blackjack contract');
+    if (!this.depositTargetAddressesLower.has(txTo.toLowerCase())) {
+      throw new Error('Transaction not sent to the deposit contract');
     }
 
     let amountBigInt: bigint | null = null;
     for (const log of receipt.logs) {
-      if (log.address?.toLowerCase() !== this.blackjackContractAddress.toLowerCase()) continue;
+      if (!log.address || !this.depositTargetAddressesLower.has(log.address.toLowerCase())) continue;
 
       try {
         const decoded = decodeEventLog({

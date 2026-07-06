@@ -21,6 +21,19 @@ export const BIGWHEEL_ADDRESS = (process.env.BIGWHEEL_ADDRESS || '0x53331B63ef24
 /** Blackjack V2. Set BLACKJACK_ADDRESS in .env (BLACKJACK_CONTRACT_ADDRESS also accepted). */
 export const BLACKJACK_ADDRESS = (process.env.BLACKJACK_ADDRESS || process.env.BLACKJACK_CONTRACT_ADDRESS || '0xc2Ae080dE01108b5C9C0f2C5C86051CFd3D18C00') as `0x${string}`;
 
+/**
+ * MorbiusVault — stateless deposit router (successor to the V7 reserve contract for DEPOSITS only).
+ * Deposits are verified/credited against this address; withdrawals are unchanged. Defaults to
+ * BLACKJACK_ADDRESS until the vault is deployed and MORBIUS_VAULT_ADDRESS is set, so this is a no-op
+ * until then. Accepts the NEXT_PUBLIC_ form too, to share one value with the frontend config.
+ */
+export const MORBIUS_VAULT_ADDRESS = (
+  process.env.MORBIUS_VAULT_ADDRESS ||
+  process.env.MORBIUS_VAULT_CONTRACT_ADDRESS ||
+  process.env.NEXT_PUBLIC_MORBIUS_VAULT_CONTRACT_ADDRESS ||
+  BLACKJACK_ADDRESS
+) as `0x${string}`;
+
 /** Legacy Blackjack contracts (for admin health). Accept BLACKJACK_LEGACY_CONTRACT_ADDRESS* or NEXT_PUBLIC_BLACKJACK_LEGACY_CONTRACT_ADDRESS*. */
 export const BLACKJACK_LEGACY_ADDRESS = (process.env.BLACKJACK_LEGACY_CONTRACT_ADDRESS || process.env.NEXT_PUBLIC_BLACKJACK_LEGACY_CONTRACT_ADDRESS || '') as `0x${string}`;
 export const BLACKJACK_LEGACY_ADDRESS_2 = (process.env.BLACKJACK_LEGACY_CONTRACT_ADDRESS_2 || process.env.NEXT_PUBLIC_BLACKJACK_LEGACY_CONTRACT_ADDRESS_2 || '') as `0x${string}`;
