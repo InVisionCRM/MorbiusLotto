@@ -152,7 +152,7 @@ const InstantBallDraw: React.FC<InstantBallDrawProps> = ({
         >
           <div className="absolute inset-0 animate-[spin_30s_linear_infinite] pointer-events-none opacity-40">
             <span
-              className="absolute inset-0 bg-[url('/MORBIUS/MORBIUSLogo%20(3).png')] bg-center bg-no-repeat bg-[length:140px_140px]"
+              className="absolute inset-0 bg-[url('/morbius/MorbiusLogo%20(3).png')] bg-center bg-no-repeat bg-[length:140px_140px]"
               style={{ backgroundSize: `${Math.min(clampedSize * 0.5, 140)}px` }}
             />
           </div>
