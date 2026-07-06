@@ -263,7 +263,8 @@ export function registerArcadeCascadeRoutes({
       }
       const limit = Math.max(1, Math.min(100, parseInt(String(req.query.limit ?? '25'), 10) || 25));
       const r = await pool.query(
-        `SELECT id, bet, volatility, multiplier_x100, clusters, won, payout, created_at
+        `SELECT id, bet, volatility, multiplier_x100, clusters, won, payout,
+                server_seed, client_seed, nonce, created_at
            FROM arcade_cascade_rounds
           WHERE wallet_address = $1
           ORDER BY created_at DESC
@@ -272,16 +273,29 @@ export function registerArcadeCascadeRoutes({
       );
       return res.json({
         ok: true,
-        rounds: r.rows.map((row) => ({
-          roundId: row.id,
-          bet: Number(row.bet),
-          volatility: row.volatility,
-          multiplierX100: Number(row.multiplier_x100),
-          clusters: Number(row.clusters),
-          won: !!row.won,
-          payout: Number(row.payout),
-          createdAt: row.created_at,
-        })),
+        rounds: r.rows.map((row) => {
+          const volatility = row.volatility as CascadeVolatility;
+          // The board isn't stored — re-derive the settled grid from the
+          // published seeds (same engine as verify) so the client can re-show
+          // the final board for a replay without another round.
+          const finalBoard = isCascadeVolatility(volatility)
+            ? resolveCascade(
+                volatility,
+                cascadeFloatStream(row.server_seed, row.client_seed, Number(row.nonce)),
+              ).finalBoard
+            : null;
+          return {
+            roundId: row.id,
+            bet: Number(row.bet),
+            volatility,
+            multiplierX100: Number(row.multiplier_x100),
+            clusters: Number(row.clusters),
+            won: !!row.won,
+            payout: Number(row.payout),
+            finalBoard,
+            createdAt: row.created_at,
+          };
+        }),
       });
     } catch (err) {
       logger.error('[arcade-cascade] history failed', { error: (err as Error)?.message });

@@ -16,7 +16,7 @@
  * provably fair) · the five-card hand + result banner · the live paytable.
  */
 
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { useAccount } from 'wagmi';
 import confetti from 'canvas-confetti';
 import { Volume2, VolumeX } from 'lucide-react';
@@ -33,6 +33,7 @@ import { VideoPokerCard } from './VideoPokerCard';
 import { videoPokerAudio } from './video-poker-audio';
 import { VideoPokerInfoTabs, type VideoPokerSessionHand } from './VideoPokerInfoTabs';
 import { VideoPokerFairnessModal } from './VideoPokerFairnessModal';
+import { ReplayConfirmOverlay } from '@/components/share/ReplayConfirmOverlay';
 import {
   fetchVideoPokerPaytable,
   dealVideoPoker,
@@ -75,6 +76,15 @@ export function StakeVideoPokerGame() {
 
   const [session, setSession] = useState<SessionPoint[]>([]);
   const [hands, setHands] = useState<VideoPokerSessionHand[]>([]);
+
+  // Replay: a staged past hand (confirm overlay) + a flag while its reveal
+  // re-runs. Replays are a pure re-watch — no server call, balance, session,
+  // history, reportWin, or confetti.
+  const [pendingReplay, setPendingReplay] = useState<VideoPokerSessionHand | null>(null);
+  const [replaying, setReplaying] = useState(false);
+  const timersRef = useRef<ReturnType<typeof setTimeout>[]>([]);
+  const boardWrapRef = useRef<HTMLDivElement | null>(null);
+  useEffect(() => () => timersRef.current.forEach(clearTimeout), []);
 
   const [clientSeed, setClientSeed] = useState('');
   const [fairnessOpen, setFairnessOpen] = useState(false);
@@ -145,6 +155,11 @@ export function StakeVideoPokerGame() {
       setNoChips(true);
       return;
     }
+    // A real deal exits any replay view (pending prompt, in-flight reveal).
+    timersRef.current.forEach(clearTimeout);
+    timersRef.current = [];
+    setPendingReplay(null);
+    setReplaying(false);
     setError(null);
     setNoChips(false);
     setResult(null);
@@ -210,7 +225,7 @@ export function StakeVideoPokerGame() {
       setSession((prev) => [...prev, { drop: prev.length + 1, bet: activeBet, profit: r.payout - activeBet }]);
       setHands((prev) =>
         [
-          { handId: r.handId, bet: activeBet, categoryName: r.categoryName, payout: r.payout, finalHand: r.finalHand },
+          { handId: r.handId, bet: activeBet, category: r.category, categoryName: r.categoryName, payout: r.payout, finalHand: r.finalHand },
           ...prev,
         ].slice(0, HISTORY_LIMIT),
       );
@@ -232,6 +247,10 @@ export function StakeVideoPokerGame() {
   }, [phase, handId, holds, activeBet, handleErr, reportWin]);
 
   const newHand = useCallback(() => {
+    timersRef.current.forEach(clearTimeout);
+    timersRef.current = [];
+    setPendingReplay(null);
+    setReplaying(false);
     setPhase('idle');
     setHandId(null);
     setDealtHand([]);
@@ -240,6 +259,56 @@ export function StakeVideoPokerGame() {
     setResult(null);
     setError(null);
   }, []);
+
+  // ── Replay a past hand: stage the confirm overlay, then re-show the exact same
+  // final five-card hand + result (no server call, no balance/session/history
+  // change). Only re-shows the payout hand — never an interactive hold step. ──
+  const handleReplay = useCallback(
+    (hand: VideoPokerSessionHand) => {
+      if (phase === 'dealing' || phase === 'drawing' || replaying) return;
+      videoPokerAudio.init();
+      setPendingReplay(hand);
+      boardWrapRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    },
+    [phase, replaying],
+  );
+
+  const startReplay = useCallback(() => {
+    const hand = pendingReplay;
+    if (!hand) return;
+    setPendingReplay(null);
+    timersRef.current.forEach(clearTimeout);
+    timersRef.current = [];
+    setReplaying(true);
+    videoPokerAudio.init();
+    // Reset the felt to a clean pre-reveal state, then flip the final hand in.
+    setResult(null);
+    setFinalHand(null);
+    setDealtHand([]);
+    setHolds([false, false, false, false, false]);
+    setActiveBet(hand.bet);
+    setPhase('dealing');
+    const id = setTimeout(() => {
+      setDealtHand(hand.finalHand);
+      setFinalHand(hand.finalHand);
+      setDrawKey((k) => k + 1);
+      videoPokerAudio.playDraw();
+      hand.finalHand.forEach((_, i) => videoPokerAudio.playCardFlip(i * 80));
+      setResult({
+        category: hand.category,
+        categoryName: hand.categoryName,
+        multiplier: hand.bet > 0 ? hand.payout / hand.bet : 0,
+        payout: hand.payout,
+        serverSeed: '',
+      });
+      setPhase('result');
+      // Banner sound only — no confetti / balance / session on a replay.
+      if (hand.payout > 0) videoPokerAudio.playWin();
+      else videoPokerAudio.playLose();
+      setReplaying(false);
+    }, 220);
+    timersRef.current.push(id);
+  }, [pendingReplay]);
 
   const openVerify = useCallback((id: string | null) => {
     setVerifyTarget(id);
@@ -256,8 +325,9 @@ export function StakeVideoPokerGame() {
   const showPlaceholders = dealtHand.length === 0;
   const win = phase === 'result' && (result?.payout ?? 0) > 0;
 
-  const primaryLabel =
-    phase === 'idle'
+  const primaryLabel = replaying
+    ? 'Replaying…'
+    : phase === 'idle'
       ? 'Deal'
       : phase === 'dealing'
         ? 'Dealing…'
@@ -376,7 +446,7 @@ export function StakeVideoPokerGame() {
         </Card>
 
         {/* ───────── Hand ───────── */}
-        <div className="order-1 space-y-4 lg:order-2">
+        <div ref={boardWrapRef} className="order-1 space-y-4 lg:order-2">
           <Card className="relative flex flex-col items-center gap-5 border-0 bg-[#07131F] p-5 ring-1 ring-inset ring-cyan-950/70 sm:p-7">
             <div className="flex items-end justify-center gap-2 sm:gap-3">
               {Array.from({ length: 5 }).map((_, i) => {
@@ -440,6 +510,19 @@ export function StakeVideoPokerGame() {
               ) : null}
             </div>
 
+            {pendingReplay && (
+              <ReplayConfirmOverlay
+                title="Replay hand"
+                headline={pendingReplay.categoryName}
+                sub={`${
+                  pendingReplay.payout - pendingReplay.bet > 0
+                    ? `+${(pendingReplay.payout - pendingReplay.bet).toLocaleString()}`
+                    : (pendingReplay.payout - pendingReplay.bet).toLocaleString()
+                } MORBIUS`}
+                onPlay={startReplay}
+                onCancel={() => setPendingReplay(null)}
+              />
+            )}
           </Card>
         </div>
       </div>
@@ -450,6 +533,7 @@ export function StakeVideoPokerGame() {
           info={info}
           hands={hands}
           onVerify={(id) => openVerify(id)}
+          onReplay={handleReplay}
           currentCategory={phase === 'result' ? result?.category ?? null : null}
         />
       </div>

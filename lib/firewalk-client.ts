@@ -139,6 +139,8 @@ export interface FirewalkHistoryRound {
   bet: number;
   heat: FirewalkHeat;
   position: number;
+  /** Revealed crumbling stones (1-based) — lets a settled round be re-watched. */
+  crumbleStones: number[];
   multiplierX100: number;
   won: boolean;
   payout: number;

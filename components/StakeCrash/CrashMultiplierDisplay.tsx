@@ -10,7 +10,19 @@ import { useCrashStore } from './useCrashStore';
 import { motion, AnimatePresence } from 'motion/react';
 
 export default function CrashMultiplierDisplay() {
-  const { multiplier, phase, hasBet, countingDown } = useCrashStore();
+  const {
+    multiplier: liveMultiplier,
+    phase: livePhase,
+    hasBet,
+    countingDown,
+    replaying,
+    replayPhase,
+    replayMultiplier,
+  } = useCrashStore();
+
+  // Mirror the replay curve while a past round is being re-watched.
+  const phase = replaying ? replayPhase : livePhase;
+  const multiplier = replaying ? replayMultiplier : liveMultiplier;
 
   const isCrashed = phase === 'crashed';
   const isBetting = phase === 'betting';

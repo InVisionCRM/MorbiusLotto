@@ -30,6 +30,7 @@ interface DiceX2InfoTabsProps {
   history: DiceX2HistoryRound[]
   historyLoading: boolean
   onVerify: (roundId: string) => void
+  onReplay?: (round: DiceX2HistoryRound) => void
 }
 
 const TRIGGER_CLASS =
@@ -51,7 +52,7 @@ function Empty({ children }: { children: ReactNode }) {
   return <p className="py-6 text-center text-sm text-slate-500">{children}</p>
 }
 
-export function DiceX2InfoTabs({ history, historyLoading, onVerify }: DiceX2InfoTabsProps) {
+export function DiceX2InfoTabs({ history, historyLoading, onVerify, onReplay }: DiceX2InfoTabsProps) {
   const [recent, setRecent] = useState<DiceX2RecentRoll[]>([])
   const [recentLoading, setRecentLoading] = useState(true)
   const [leaders, setLeaders] = useState<DiceX2LeaderboardEntry[]>([])
@@ -167,7 +168,7 @@ export function DiceX2InfoTabs({ history, historyLoading, onVerify }: DiceX2Info
         </TabsContent>
 
         <TabsContent value="mine" className="mt-3 focus-visible:outline-none">
-          <DiceX2History rounds={history} loading={historyLoading} onVerify={onVerify} />
+          <DiceX2History rounds={history} loading={historyLoading} onVerify={onVerify} onReplay={onReplay} />
         </TabsContent>
 
         <TabsContent value="odds" className="mt-3 focus-visible:outline-none">

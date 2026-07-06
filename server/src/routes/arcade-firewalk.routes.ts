@@ -541,7 +541,7 @@ export function registerArcadeFirewalkRoutes({
       }
       const limit = Math.max(1, Math.min(100, parseInt(String(req.query.limit ?? '25'), 10) || 25));
       const r = await pool.query(
-        `SELECT id, bet, heat, position, multiplier_x100, won, payout, created_at
+        `SELECT id, bet, heat, position, crumble_stones, multiplier_x100, won, payout, created_at
            FROM arcade_firewalk_rounds
           WHERE wallet_address = $1 AND status = 'settled'
           ORDER BY created_at DESC
@@ -555,6 +555,8 @@ export function registerArcadeFirewalkRoutes({
           bet: Number(row.bet),
           heat: row.heat,
           position: Number(row.position),
+          // Revealed crumble layout so a settled round can be re-watched (replay).
+          crumbleStones: Array.isArray(row.crumble_stones) ? row.crumble_stones : [],
           multiplierX100: Number(row.multiplier_x100),
           won: !!row.won,
           payout: Number(row.payout),

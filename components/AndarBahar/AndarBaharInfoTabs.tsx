@@ -33,6 +33,8 @@ interface AndarBaharInfoTabsProps {
   history: AndarBaharHistoryRound[]
   historyLoading: boolean
   onVerify: (roundId: string) => void
+  /** When provided, each "My rounds" row gets a Replay button that re-runs the deal. */
+  onReplay?: (round: AndarBaharHistoryRound) => void
 }
 
 const TRIGGER_CLASS =
@@ -54,7 +56,7 @@ function Empty({ children }: { children: ReactNode }) {
   return <p className="py-6 text-center text-sm text-slate-500">{children}</p>
 }
 
-export function AndarBaharInfoTabs({ history, historyLoading, onVerify }: AndarBaharInfoTabsProps) {
+export function AndarBaharInfoTabs({ history, historyLoading, onVerify, onReplay }: AndarBaharInfoTabsProps) {
   const [recent, setRecent] = useState<AndarBaharRecentRound[]>([])
   const [recentLoading, setRecentLoading] = useState(true)
   const [leaders, setLeaders] = useState<AndarBaharLeaderboardEntry[]>([])
@@ -170,7 +172,7 @@ export function AndarBaharInfoTabs({ history, historyLoading, onVerify }: AndarB
         </TabsContent>
 
         <TabsContent value="mine" className="mt-3 focus-visible:outline-none">
-          <AndarBaharHistory rounds={history} loading={historyLoading} onVerify={onVerify} />
+          <AndarBaharHistory rounds={history} loading={historyLoading} onVerify={onVerify} onReplay={onReplay} />
         </TabsContent>
 
         <TabsContent value="odds" className="mt-3 focus-visible:outline-none">

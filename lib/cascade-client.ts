@@ -87,6 +87,8 @@ export interface CascadeHistoryRound {
   clusters: number;
   won: boolean;
   payout: number;
+  /** Settled 6×6 grid (re-derived from seeds) for re-showing the board on replay. */
+  finalBoard: Array<Array<number | null>> | null;
   createdAt: string;
 }
 

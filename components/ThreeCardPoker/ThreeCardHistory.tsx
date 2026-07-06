@@ -6,12 +6,15 @@
  * live-prepended by the game as hands settle.
  */
 
+import { Play } from 'lucide-react';
 import { resultLabel, type ThreeCardHistoryRound } from '@/lib/three-card-poker-client';
 
 interface ThreeCardHistoryProps {
   rounds: ThreeCardHistoryRound[];
   loading: boolean;
   onVerify: (roundId: string) => void;
+  /** When provided, each row gets a Replay button that re-runs the reveal on the felt. */
+  onReplay?: (round: ThreeCardHistoryRound) => void;
 }
 
 function timeLabel(iso: string): string {
@@ -20,7 +23,7 @@ function timeLabel(iso: string): string {
   return d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
 }
 
-export function ThreeCardHistory({ rounds, loading, onVerify }: ThreeCardHistoryProps) {
+export function ThreeCardHistory({ rounds, loading, onVerify, onReplay }: ThreeCardHistoryProps) {
   return (
     <section aria-label="Recent hands">
       {loading && rounds.length === 0 ? (
@@ -58,6 +61,17 @@ export function ThreeCardHistory({ rounds, loading, onVerify }: ThreeCardHistory
                 >
                   {net > 0 ? `+${net.toLocaleString()}` : net.toLocaleString()}
                 </span>
+                {onReplay && (
+                  <button
+                    type="button"
+                    onClick={() => onReplay(r)}
+                    title="Replay this hand on the felt"
+                    className="flex shrink-0 items-center gap-1 rounded px-2 py-0.5 text-[11px] font-semibold text-cyan-300 transition-colors hover:bg-cyan-500/15"
+                  >
+                    <Play size={11} className="fill-current" />
+                    Replay
+                  </button>
+                )}
                 <button
                   type="button"
                   onClick={() => onVerify(r.roundId)}

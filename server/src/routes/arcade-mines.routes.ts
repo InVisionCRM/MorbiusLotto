@@ -493,7 +493,7 @@ export function registerArcadeMinesRoutes({
       }
       const limit = Math.max(1, Math.min(100, parseInt(String(req.query.limit ?? '25'), 10) || 25));
       const r = await pool.query(
-        `SELECT id, bet, bombs, picks, multiplier_x100, payout, status, created_at
+        `SELECT id, bet, bombs, bombs_grid, picks, multiplier_x100, payout, status, created_at
            FROM arcade_mines_rounds
           WHERE wallet_address = $1 AND status <> 'active'
           ORDER BY created_at DESC
@@ -504,6 +504,7 @@ export function registerArcadeMinesRoutes({
         ok: true,
         rounds: r.rows.map((row) => {
           const picks: number[] = Array.isArray(row.picks) ? row.picks : [];
+          const bombsGrid: number[] = Array.isArray(row.bombs_grid) ? row.bombs_grid : [];
           // On a bust the picks tail includes the bomb cell — don't count it as a gem.
           const gems = row.status === 'busted' ? Math.max(0, picks.length - 1) : picks.length;
           return {
@@ -511,6 +512,9 @@ export function registerArcadeMinesRoutes({
             bet: Number(row.bet),
             bombs: Number(row.bombs),
             gems,
+            // Full reveal for the client-side replay (finalized rounds only).
+            picks,
+            bombsGrid,
             multiplierX100: Number(row.multiplier_x100),
             payout: Number(row.payout),
             status: row.status as 'busted' | 'cashed_out',

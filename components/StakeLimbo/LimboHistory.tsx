@@ -6,12 +6,15 @@
  * by the game as rounds settle.
  */
 
+import { Play } from 'lucide-react'
 import { formatMultiplier, type LimboHistoryRound } from '@/lib/limbo-client'
 
 interface LimboHistoryProps {
   rounds: LimboHistoryRound[]
   loading: boolean
   onVerify: (roundId: string) => void
+  /** When provided, each row gets a Replay button that re-shows the result. */
+  onReplay?: (round: LimboHistoryRound) => void
 }
 
 function timeLabel(iso: string): string {
@@ -20,7 +23,7 @@ function timeLabel(iso: string): string {
   return d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
 }
 
-export function LimboHistory({ rounds, loading, onVerify }: LimboHistoryProps) {
+export function LimboHistory({ rounds, loading, onVerify, onReplay }: LimboHistoryProps) {
   return (
     <section aria-label="Recent rounds">
       {loading && rounds.length === 0 ? (
@@ -61,6 +64,17 @@ export function LimboHistory({ rounds, loading, onVerify }: LimboHistoryProps) {
                 >
                   {profit > 0 ? `+${profit.toLocaleString()}` : profit.toLocaleString()}
                 </span>
+                {onReplay && (
+                  <button
+                    type="button"
+                    onClick={() => onReplay(r)}
+                    title="Replay this result on the board"
+                    className="flex shrink-0 items-center gap-1 rounded px-1.5 py-0.5 text-[11px] font-semibold text-cyan-300 transition-colors hover:bg-cyan-500/15"
+                  >
+                    <Play size={11} className="fill-current" />
+                    Replay
+                  </button>
+                )}
                 <button
                   type="button"
                   onClick={() => onVerify(r.roundId)}

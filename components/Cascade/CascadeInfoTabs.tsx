@@ -31,6 +31,8 @@ interface CascadeInfoTabsProps {
   history: CascadeHistoryRound[]
   historyLoading: boolean
   onVerify: (roundId: string) => void
+  /** When provided, each My-drops row gets a Replay button. */
+  onReplay?: (round: CascadeHistoryRound) => void
 }
 
 const TRIGGER_CLASS =
@@ -58,7 +60,7 @@ function Empty({ children }: { children: ReactNode }) {
   return <p className="py-6 text-center text-sm text-slate-500">{children}</p>
 }
 
-export function CascadeInfoTabs({ history, historyLoading, onVerify }: CascadeInfoTabsProps) {
+export function CascadeInfoTabs({ history, historyLoading, onVerify, onReplay }: CascadeInfoTabsProps) {
   const [recent, setRecent] = useState<CascadeRecentRound[]>([])
   const [recentLoading, setRecentLoading] = useState(true)
   const [leaders, setLeaders] = useState<CascadeLeaderboardEntry[]>([])
@@ -174,7 +176,7 @@ export function CascadeInfoTabs({ history, historyLoading, onVerify }: CascadeIn
         </TabsContent>
 
         <TabsContent value="mine" className="mt-3 focus-visible:outline-none">
-          <CascadeHistory rounds={history} loading={historyLoading} onVerify={onVerify} />
+          <CascadeHistory rounds={history} loading={historyLoading} onVerify={onVerify} onReplay={onReplay} />
         </TabsContent>
 
         <TabsContent value="odds" className="mt-3 focus-visible:outline-none">

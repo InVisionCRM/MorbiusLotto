@@ -26,6 +26,8 @@ interface HiLoInfoTabsProps {
   history: HiLoHistoryRound[];
   historyLoading: boolean;
   onVerify: (roundId: string) => void;
+  /** Re-watch a past cashout on the board (no wager) — cashed-out rounds only. */
+  onReplay?: (round: HiLoHistoryRound) => void;
   info: HiLoInfo | null;
 }
 
@@ -63,7 +65,7 @@ function StatusBadge({ status }: { status: 'busted' | 'cashed_out' }) {
   );
 }
 
-export function HiLoInfoTabs({ history, historyLoading, onVerify, info }: HiLoInfoTabsProps) {
+export function HiLoInfoTabs({ history, historyLoading, onVerify, onReplay, info }: HiLoInfoTabsProps) {
   const [recent, setRecent] = useState<HiLoRecentRound[]>([]);
   const [recentLoading, setRecentLoading] = useState(true);
   const [leaders, setLeaders] = useState<HiLoLeaderboardEntry[]>([]);
@@ -195,6 +197,15 @@ export function HiLoInfoTabs({ history, historyLoading, onVerify, info }: HiLoIn
                     >
                       {net > 0 ? `+${net.toLocaleString()}` : net.toLocaleString()}
                     </span>
+                    {onReplay && h.status === 'cashed_out' && h.cards.length > 0 && (
+                      <button
+                        type="button"
+                        onClick={() => onReplay(h)}
+                        className="shrink-0 rounded px-1.5 py-0.5 text-[11px] font-medium text-amber-400/80 transition-colors hover:bg-amber-500/10 hover:text-amber-300"
+                      >
+                        Replay
+                      </button>
+                    )}
                     <button
                       type="button"
                       onClick={() => onVerify(h.roundId)}

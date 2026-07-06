@@ -557,6 +557,8 @@ export function registerArcadeGreedDiceRoutes({
           points: Number(row.points),
           multiplierX100: Number(row.multiplier_x100),
           rolls: Array.isArray(row.roll_log) ? row.roll_log.length : 0,
+          // Full roll log so a settled turn can be re-watched (replay).
+          rollLog: Array.isArray(row.roll_log) ? row.roll_log : [],
           won: !!row.won,
           payout: Number(row.payout),
           createdAt: row.created_at,

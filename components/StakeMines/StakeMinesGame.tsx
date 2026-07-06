@@ -22,7 +22,7 @@
  *     double-spend.
  */
 
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useAccount } from 'wagmi'
 import { Volume2, VolumeX } from 'lucide-react'
 import { Card } from '@/components/ui/card'
@@ -37,6 +37,7 @@ import { MinesBoard, type MinesCellState } from './MinesBoard'
 import { MinesInfoTabs } from './MinesInfoTabs'
 import { MinesFairnessModal } from './MinesFairnessModal'
 import { MinesRulesModal } from './MinesRulesModal'
+import { ReplayConfirmOverlay } from '@/components/share/ReplayConfirmOverlay'
 import { minesAudio } from './mines-audio'
 import {
   fetchMinesInfo,
@@ -98,6 +99,13 @@ export function StakeMinesGame() {
 
   const [history, setHistory] = useState<MinesHistoryRound[]>([])
   const [historyLoading, setHistoryLoading] = useState(false)
+
+  // Replay: a staged past cashout (confirm overlay) + a flag while re-watching.
+  // Replays only re-render the round's final board — no server call, no balance,
+  // reportWin, history, session or seed changes.
+  const [pendingReplay, setPendingReplay] = useState<MinesHistoryRound | null>(null)
+  const [replaying, setReplaying] = useState(false)
+  const boardWrapRef = useRef<HTMLDivElement | null>(null)
 
   // Balance: public read keyed by wallet address (no sign-in popup), then kept
   // fresh from authoritative start/cashout responses and exchange completions.
@@ -229,6 +237,9 @@ export function StakeMinesGame() {
     setError(null)
     setNoChips(false)
     setCashedPayout(null)
+    // A real round exits any replay view.
+    setReplaying(false)
+    setPendingReplay(null)
     setPhase('starting')
     minesAudio.init()
     try {
@@ -300,6 +311,8 @@ export function StakeMinesGame() {
                 bet: roundBet,
                 bombs: roundBombs,
                 gems: res.picks.length - 1,
+                picks: res.picks,
+                bombsGrid: res.bombs,
                 multiplierX100: 0,
                 payout: 0,
                 status: 'busted' as const,
@@ -349,6 +362,8 @@ export function StakeMinesGame() {
             bet: roundBet,
             bombs: roundBombs,
             gems: res.picks.length,
+            picks: res.picks,
+            bombsGrid: res.bombs,
             multiplierX100: res.multiplierX100,
             payout: res.payout,
             status: 'cashed_out' as const,
@@ -367,6 +382,39 @@ export function StakeMinesGame() {
       }
     }
   }, [phase, roundId, gems, roundBet, roundBombs, resync, reportWin])
+
+  // ── Replay a past cashout: stage the confirm overlay, then re-render that
+  // round's final revealed board (gems + bombs) with its cashout multiplier.
+  // Pure re-watch — no server call, no balance/history/session/reportWin. ──
+  const handleReplay = useCallback(
+    (round: MinesHistoryRound) => {
+      if (inRound || phase === 'starting') return
+      minesAudio.init()
+      setPendingReplay(round)
+      boardWrapRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' })
+    },
+    [inRound, phase],
+  )
+
+  const startReplay = useCallback(() => {
+    const round = pendingReplay
+    if (!round) return
+    setPendingReplay(null)
+    setError(null)
+    setNoChips(false)
+    // Rebuild the final board: each safe pick a gem, every sealed bomb revealed.
+    const board = [...HIDDEN_BOARD]
+    for (const p of round.picks) if (board[p] === 'hidden') board[p] = 'gem'
+    for (const b of round.bombsGrid) if (board[b] === 'hidden') board[b] = 'bomb-other'
+    setReplaying(true)
+    setCells(board)
+    setRoundBet(round.bet)
+    setRoundBombs(round.bombs)
+    setMultiplierX100(round.multiplierX100)
+    setCashedPayout(round.payout)
+    setPhase('cashed')
+    minesAudio.playCashout()
+  }, [pendingReplay])
 
   const openVerify = useCallback((id: string | null) => {
     setVerifyTarget(id)
@@ -507,7 +555,7 @@ export function StakeMinesGame() {
           {canStart ? (
             <Button
               type="button"
-              disabled={phase === 'starting' || !info}
+              disabled={phase === 'starting' || !info || pendingReplay !== null}
               onClick={onStart}
               className="arc-display h-12 w-full bg-cyan-500 text-base font-bold uppercase tracking-widest text-[#03121B] shadow-[0_0_24px_-6px_rgba(34,211,238,0.8)] hover:bg-cyan-400 disabled:opacity-50"
             >
@@ -586,11 +634,11 @@ export function StakeMinesGame() {
 
         {/* ───────── Board + ladder strip ───────── */}
         <div className="order-1 space-y-4 lg:order-2">
-          <Card className="arc-panel relative border-0 p-3 sm:p-5">
+          <Card ref={boardWrapRef} className="arc-panel relative border-0 p-3 sm:p-5">
             <MinesBoard
               cells={cells}
               pendingCell={pendingCell}
-              interactive={phase === 'active'}
+              interactive={phase === 'active' && !replaying}
               onPick={onPick}
             />
             {showWinBanner && (
@@ -604,6 +652,19 @@ export function StakeMinesGame() {
                   </div>
                 </div>
               </div>
+            )}
+            {pendingReplay && (
+              <ReplayConfirmOverlay
+                title="Replay round"
+                headline={formatMultiplier(pendingReplay.multiplierX100)}
+                sub={`${
+                  pendingReplay.payout - pendingReplay.bet > 0
+                    ? `+${(pendingReplay.payout - pendingReplay.bet).toLocaleString()}`
+                    : (pendingReplay.payout - pendingReplay.bet).toLocaleString()
+                } MORBIUS`}
+                onPlay={startReplay}
+                onCancel={() => setPendingReplay(null)}
+              />
             )}
           </Card>
 
@@ -641,7 +702,7 @@ export function StakeMinesGame() {
       {/* ───────── History ───────── */}
       {address && (
         <div className="mt-4">
-          <MinesInfoTabs rounds={history} loading={historyLoading} onVerify={openVerify} />
+          <MinesInfoTabs rounds={history} loading={historyLoading} onVerify={openVerify} onReplay={handleReplay} />
         </div>
       )}
 

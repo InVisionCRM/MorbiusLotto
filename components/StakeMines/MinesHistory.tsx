@@ -16,6 +16,8 @@ interface MinesHistoryProps {
   rounds: MinesHistoryRound[]
   loading: boolean
   onVerify: (roundId: string) => void
+  /** Re-watch a past cashout on the board (no wager) — cashed-out rounds only. */
+  onReplay?: (round: MinesHistoryRound) => void
 }
 
 function timeLabel(iso: string): string {
@@ -24,7 +26,7 @@ function timeLabel(iso: string): string {
   return d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
 }
 
-export function MinesHistory({ rounds, loading, onVerify }: MinesHistoryProps) {
+export function MinesHistory({ rounds, loading, onVerify, onReplay }: MinesHistoryProps) {
   return (
     <section aria-label="Recent rounds" className="arc-panel rounded-xl p-3 sm:p-4">
       <div className="mb-2 flex items-baseline justify-between">
@@ -78,6 +80,15 @@ export function MinesHistory({ rounds, loading, onVerify }: MinesHistoryProps) {
                 >
                   {profit > 0 ? `+${profit.toLocaleString()}` : profit.toLocaleString()}
                 </span>
+                {onReplay && !busted && (
+                  <button
+                    type="button"
+                    onClick={() => onReplay(r)}
+                    className="shrink-0 rounded px-1.5 py-0.5 text-[11px] font-medium text-amber-400/80 transition-colors hover:bg-amber-500/10 hover:text-amber-300"
+                  >
+                    Replay
+                  </button>
+                )}
                 <button
                   type="button"
                   onClick={() => onVerify(r.roundId)}

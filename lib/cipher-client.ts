@@ -158,6 +158,9 @@ export interface CipherHistoryRound {
   roundId: string;
   bet: number;
   difficulty: CipherDifficulty;
+  /** Revealed secret code + full guess history for re-rendering the board on replay. */
+  code: number[];
+  guesses: CipherGuessRecord[];
   guessCount: number;
   bestExact: number;
   cracked: boolean;

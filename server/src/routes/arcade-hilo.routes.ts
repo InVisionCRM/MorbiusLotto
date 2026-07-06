@@ -535,6 +535,7 @@ export function registerArcadeHiLoRoutes({
         ok: true,
         rounds: r.rows.map((row) => {
           const picks = Array.isArray(row.picks) ? (row.picks as HiLoDirection[]) : [];
+          const cards = Array.isArray(row.cards) ? (row.cards as number[]) : [];
           // On a bust the picks tail is the losing guess — don't count it as a win.
           const wins = row.status === 'busted' ? Math.max(0, picks.length - 1) : picks.length;
           return {
@@ -542,6 +543,9 @@ export function registerArcadeHiLoRoutes({
             bet: Number(row.bet),
             picks: picks.length,
             wins,
+            // Full reveal for the client-side replay (finalized rounds only).
+            cards: cards.map(cardJson),
+            guesses: picks,
             multiplierX100: Number(row.multiplier_x100),
             payout: Number(row.payout),
             status: row.status as 'busted' | 'cashed_out',

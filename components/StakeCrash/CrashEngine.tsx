@@ -53,6 +53,7 @@ export default function CrashEngine({ clientSeed, onRoundSettled }: CrashEngineP
     winAmount,
     isMuted,
     hasAudioInitialized,
+    replaying,
   } = useCrashStore();
   const { reportWin } = useBigWin();
 
@@ -281,6 +282,75 @@ export default function CrashEngine({ clientSeed, onRoundSettled }: CrashEngineP
       }
     };
   }, [phase]);
+
+  // ── Replay: self-contained cinematic re-run of a past round ──────────────
+  // Drives the SAME curve formula up to the stored crash point and marks the
+  // player's cashout, purely for watching. It never calls startCrash /
+  // cashoutCrash / recordCashout / setBalance / reportWin / pushHistory /
+  // addSessionRound, and the real `phase` stays 'betting' the whole time, so
+  // the live flight effect above never fires. No balance/history/session moves.
+  useEffect(() => {
+    if (!replaying) return;
+
+    const s0 = useCrashStore.getState();
+    const target = s0.replayCrashX100;
+    if (target == null) {
+      s0.endReplay();
+      return;
+    }
+    const cashoutX100 = s0.replayCashoutX100;
+
+    let raf = 0;
+    let endTimer: ReturnType<typeof setTimeout> | undefined;
+    let cashoutFired = false;
+    const anchor = performance.now();
+
+    crashAudio.playLaunch();
+    crashAudio.startDrone();
+
+    const tick = () => {
+      if (!useCrashStore.getState().replaying) return;
+      const elapsedMs = performance.now() - anchor;
+      const mult = crashMultiplierAtMs(elapsedMs);
+      const multX100 = Math.floor(mult * 100);
+
+      // Reached the stored crash point — explode exactly there, hold, then end.
+      if (multX100 >= target) {
+        const st = useCrashStore.getState();
+        st.setReplayMultiplier(target / 100);
+        st.crashReplay();
+        crashAudio.stopDrone();
+        crashAudio.playCrash();
+        endTimer = setTimeout(() => {
+          useCrashStore.getState().endReplay();
+        }, CRASHED_DURATION_MS);
+        return;
+      }
+
+      // Mark the cashout point as the curve crosses it (cosmetic only).
+      if (cashoutX100 != null && !cashoutFired && multX100 >= cashoutX100) {
+        cashoutFired = true;
+        crashAudio.playCashout();
+        confetti({
+          particleCount: 100,
+          spread: 70,
+          origin: { y: 0.6 },
+          colors: ['#00ff00', '#ffff00'],
+        });
+      }
+
+      useCrashStore.getState().setReplayMultiplier(mult);
+      crashAudio.updateDrone(mult);
+      raf = requestAnimationFrame(tick);
+    };
+    raf = requestAnimationFrame(tick);
+
+    return () => {
+      if (raf) cancelAnimationFrame(raf);
+      if (endTimer) clearTimeout(endTimer);
+      crashAudio.stopDrone();
+    };
+  }, [replaying]);
 
   return null; // Invisible component
 }

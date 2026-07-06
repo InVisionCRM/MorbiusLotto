@@ -29,6 +29,7 @@ import { probeSiweSession } from '@/lib/api-auth'
 import { useBigWin } from '@/contexts/big-win-context'
 import { SessionChart, type SessionPoint } from '@/components/arcade2/SessionChart'
 import { FloatingPanel } from '@/components/arcade2/FloatingPanel'
+import { ReplayConfirmOverlay } from '@/components/share/ReplayConfirmOverlay'
 import { CascadeInfoTabs } from './CascadeInfoTabs'
 import { CascadeFairnessModal } from './CascadeFairnessModal'
 import { CascadeRulesModal } from './CascadeRulesModal'
@@ -152,6 +153,12 @@ export function CascadeGame() {
 
   const [history, setHistory] = useState<CascadeHistoryRound[]>([])
   const [historyLoading, setHistoryLoading] = useState(false)
+
+  // Replay: a staged past drop (confirm overlay). A replay just re-shows that
+  // drop's settled board + multiplier banner — no server call, no balance /
+  // reportWin / history / session change.
+  const [pendingReplay, setPendingReplay] = useState<CascadeHistoryRound | null>(null)
+  const boardRef = useRef<HTMLDivElement | null>(null)
 
   const mounted = useRef(true)
   const timers = useRef<Array<ReturnType<typeof setTimeout>>>([])
@@ -297,6 +304,7 @@ export function CascadeGame() {
               clusters: res.clusters,
               won,
               payout: res.payout,
+              finalBoard: res.finalBoard,
               createdAt: new Date().toISOString(),
             },
             ...prev,
@@ -374,6 +382,7 @@ export function CascadeGame() {
     setNoChips(false)
     setBanner(null)
     setSettled(false)
+    setPendingReplay(null) // a real drop exits any replay view
     setBusy(true)
     setHud(0, 100, null)
     clearTimers()
@@ -471,11 +480,54 @@ export function CascadeGame() {
   const onPickVolatility = useCallback(
     (v: CascadeVolatility) => {
       if (busy) return
+      setPendingReplay(null)
       setVolatility(v)
       resetBoardForVolatility()
     },
     [busy, resetBoardForVolatility],
   )
+
+  // ── Replay a past drop: stage the confirm overlay, then re-show the settled
+  // board + multiplier banner. A pure re-watch — no server call, no balance /
+  // reportWin / history / session. The board layout isn't stored, so history
+  // carries the re-derived finalBoard; we show that final grid + the total
+  // multiplier (we don't re-animate each chain link). ──
+  const handleReplay = useCallback(
+    (round: CascadeHistoryRound) => {
+      if (busy || !round.finalBoard) return
+      cascadeAudio.init()
+      setPendingReplay(round)
+      boardRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' })
+    },
+    [busy],
+  )
+
+  const startReplay = useCallback(() => {
+    const round = pendingReplay
+    if (!round || !round.finalBoard) return
+    setPendingReplay(null)
+    clearTimers()
+    setError(null)
+    setNoChips(false)
+    setSettled(true)
+    setTiles(boardToTiles(round.finalBoard))
+    const won = round.payout > 0
+    // Combo is a per-chain-link artifact we don't reconstruct here; the total
+    // multiplier + win are the honest re-show of the final state.
+    setHud(round.multiplierX100, 100, won ? round.payout : null)
+    cascadeAudio.init()
+    if (won) {
+      cascadeAudio.playWin()
+      setBanner({
+        kind: 'win',
+        k: `${round.clusters}-chain · ${formatMultiplierX100(round.multiplierX100)}`,
+        v: `+${round.payout.toLocaleString()} MORBIUS`,
+      })
+    } else {
+      cascadeAudio.playNoWin()
+      setBanner({ kind: 'loss', k: 'No cluster ignited', v: `−${round.bet.toLocaleString()} MORBIUS` })
+    }
+  }, [pendingReplay, clearTimers, setHud])
 
   const hudMultStr = `${(hudMultX100 / 100).toFixed(2)}×`
   const winPreview = Math.floor((clampBet(bet) * hudMultX100) / 100)
@@ -746,6 +798,7 @@ export function CascadeGame() {
 
             {/* Arena */}
             <div
+              ref={boardRef}
               className="relative p-2"
               style={{ background: 'linear-gradient(180deg,#071521,#040d15)' }}
             >
@@ -787,6 +840,20 @@ export function CascadeGame() {
                     </div>
                   </div>
                 </div>
+              )}
+
+              {pendingReplay && (
+                <ReplayConfirmOverlay
+                  title="Replay drop"
+                  headline={formatMultiplierX100(pendingReplay.multiplierX100)}
+                  sub={`${
+                    pendingReplay.payout - pendingReplay.bet > 0
+                      ? `+${(pendingReplay.payout - pendingReplay.bet).toLocaleString()}`
+                      : (pendingReplay.payout - pendingReplay.bet).toLocaleString()
+                  } MORBIUS`}
+                  onPlay={startReplay}
+                  onCancel={() => setPendingReplay(null)}
+                />
               )}
             </div>
           </Card>
@@ -834,7 +901,7 @@ export function CascadeGame() {
 
       {/* ───────── Session chart + info tabs ───────── */}
       <div className="mt-4 space-y-4">
-        <CascadeInfoTabs history={history} historyLoading={historyLoading} onVerify={openVerify} />
+        <CascadeInfoTabs history={history} historyLoading={historyLoading} onVerify={openVerify} onReplay={handleReplay} />
       </div>
       {/* Draggable mini session chart — open in a corner on mobile, full-size on desktop. */}
       <FloatingPanel title="Session" storageKey="cascade.sessionChart.pos">

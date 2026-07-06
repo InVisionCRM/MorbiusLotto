@@ -9,6 +9,7 @@
  */
 
 import { type ReactNode } from 'react';
+import { Play } from 'lucide-react';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import {
   vpRankLabel,
@@ -23,6 +24,7 @@ import { videoPokerOdds } from './videoPokerOdds';
 export interface VideoPokerSessionHand {
   handId: string;
   bet: number;
+  category: VideoPokerCategory;
   categoryName: string;
   payout: number;
   finalHand: number[];
@@ -32,6 +34,8 @@ interface VideoPokerInfoTabsProps {
   info: VideoPokerPaytable | null;
   hands: VideoPokerSessionHand[];
   onVerify: (handId: string) => void;
+  /** When provided, each "My hands" row gets a Replay button that re-shows the hand. */
+  onReplay?: (hand: VideoPokerSessionHand) => void;
   currentCategory: VideoPokerCategory | null;
 }
 
@@ -60,7 +64,7 @@ function HandChips({ cards }: { cards: number[] }) {
   );
 }
 
-export function VideoPokerInfoTabs({ info, hands, onVerify, currentCategory }: VideoPokerInfoTabsProps) {
+export function VideoPokerInfoTabs({ info, hands, onVerify, onReplay, currentCategory }: VideoPokerInfoTabsProps) {
   const order = info?.order ?? [];
 
   return (
@@ -122,6 +126,17 @@ export function VideoPokerInfoTabs({ info, hands, onVerify, currentCategory }: V
                     >
                       {net > 0 ? `+${net.toLocaleString()}` : net.toLocaleString()}
                     </span>
+                    {onReplay && (
+                      <button
+                        type="button"
+                        onClick={() => onReplay(h)}
+                        title="Replay this hand on the felt"
+                        className="flex shrink-0 items-center gap-1 rounded px-1.5 py-0.5 text-[11px] font-semibold text-cyan-300 transition-colors hover:bg-cyan-500/15"
+                      >
+                        <Play size={11} className="fill-current" />
+                        Replay
+                      </button>
+                    )}
                     <button
                       type="button"
                       onClick={() => onVerify(h.handId)}

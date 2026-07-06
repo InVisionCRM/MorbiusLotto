@@ -30,6 +30,7 @@ import { FloatingPanel } from '@/components/arcade2/FloatingPanel'
 import { LimboInfoTabs } from './LimboInfoTabs'
 import { LimboFairnessModal } from './LimboFairnessModal'
 import { LimboRulesModal } from './LimboRulesModal'
+import { ReplayConfirmOverlay } from '@/components/share/ReplayConfirmOverlay'
 import { limboAudio } from './limbo-audio'
 import {
   fetchLimboInfo,
@@ -92,10 +93,17 @@ export function StakeLimboGame() {
   const [history, setHistory] = useState<LimboHistoryRound[]>([])
   const [historyLoading, setHistoryLoading] = useState(false)
 
+  // Replay: a staged past round (confirm overlay) + a flag while its stored
+  // result is re-shown. Replays never touch balance/history/session/recent.
+  const [pendingReplay, setPendingReplay] = useState<LimboHistoryRound | null>(null)
+  const [replaying, setReplaying] = useState(false)
+
   const roundSeq = useRef(0)
   const inFlight = useRef(0)
   const autoLeftRef = useRef<number | null>(null)
   const autoTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const replayTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const boardRef = useRef<HTMLDivElement | null>(null)
   const mounted = useRef(true)
 
   // Balance: public read keyed by wallet address (no sign-in popup), then kept
@@ -131,6 +139,7 @@ export function StakeLimboGame() {
     return () => {
       mounted.current = false
       if (autoTimer.current) clearTimeout(autoTimer.current)
+      if (replayTimer.current) clearTimeout(replayTimer.current)
     }
   }, [loadInfo])
 
@@ -194,6 +203,13 @@ export function StakeLimboGame() {
     setTargetX100(target)
     setError(null)
     setNoChips(false)
+    // A real round exits any replay view.
+    setPendingReplay(null)
+    setReplaying(false)
+    if (replayTimer.current) {
+      clearTimeout(replayTimer.current)
+      replayTimer.current = null
+    }
     inFlight.current += 1
     limboAudio.init()
     limboAudio.playLaunch()
@@ -290,6 +306,50 @@ export function StakeLimboGame() {
   }
 
   const autoRunning = autoLeft != null
+  const busy = autoRunning || replaying
+
+  // ── Replay a past round: stage the confirm overlay, then re-show the exact
+  // stored result (no server call, no balance/history/session/recent change). ──
+  const handleReplay = useCallback(
+    (round: LimboHistoryRound) => {
+      if (busy) return
+      limboAudio.init()
+      setPendingReplay(round)
+      boardRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' })
+    },
+    [busy],
+  )
+
+  const startReplay = useCallback(() => {
+    const round = pendingReplay
+    if (!round) return
+    setPendingReplay(null)
+    setError(null)
+    setNoChips(false)
+    setReplaying(true)
+    // Align the odds strip target with the replayed round.
+    setTargetX100(round.targetX100)
+    limboAudio.init()
+    limboAudio.playLaunch()
+    // Re-show the stored result through the SAME reveal path (lastRound) — no
+    // settle: no balance, no history/session/recent, no reportWin.
+    setLastRound({
+      roundId: round.roundId,
+      bet: round.bet,
+      targetX100: round.targetX100,
+      resultX100: round.resultX100,
+      won: round.won,
+      payout: round.payout,
+      serverSeedHash: '',
+      chipBalance: '',
+    })
+    if (round.won) limboAudio.playWin()
+    else limboAudio.playLose()
+    if (replayTimer.current) clearTimeout(replayTimer.current)
+    replayTimer.current = setTimeout(() => {
+      if (mounted.current) setReplaying(false)
+    }, 600)
+  }, [pendingReplay])
 
   return (
     <div className="mx-auto w-full max-w-6xl pb-28 lg:pb-0">
@@ -459,7 +519,7 @@ export function StakeLimboGame() {
           {mode === 'manual' ? (
             <Button
               type="button"
-              disabled={!info}
+              disabled={!info || replaying}
               onClick={() => void playOnce()}
               className="arc-display h-12 w-full bg-cyan-500 text-base font-bold uppercase tracking-widest text-[#03121B] shadow-[0_0_24px_-6px_rgba(34,211,238,0.8)] hover:bg-cyan-400 disabled:opacity-50"
             >
@@ -476,7 +536,7 @@ export function StakeLimboGame() {
           ) : (
             <Button
               type="button"
-              disabled={!info}
+              disabled={!info || replaying}
               onClick={startAuto}
               className="arc-display h-12 w-full bg-cyan-500 text-base font-bold uppercase tracking-widest text-[#03121B] shadow-[0_0_24px_-6px_rgba(34,211,238,0.8)] hover:bg-cyan-400 disabled:opacity-50"
             >
@@ -526,7 +586,7 @@ export function StakeLimboGame() {
 
         {/* ───────── Result display ───────── */}
         <div className="order-1 space-y-3 lg:order-2">
-          <Card className="arc-panel border-0 p-4 sm:p-6">
+          <Card ref={boardRef} className="arc-panel relative border-0 p-4 sm:p-6">
             <div className="flex min-h-[160px] items-center justify-center sm:min-h-[220px]" aria-live="polite">
               {lastRound ? (
                 <div key={lastRound.roundId} className="arc-banner-in text-center">
@@ -581,6 +641,20 @@ export function StakeLimboGame() {
                 </div>
               </div>
             </div>
+
+            {pendingReplay && (
+              <ReplayConfirmOverlay
+                title="Replay round"
+                headline={formatMultiplier(pendingReplay.resultX100)}
+                sub={`${
+                  pendingReplay.payout - pendingReplay.bet > 0
+                    ? `+${(pendingReplay.payout - pendingReplay.bet).toLocaleString()}`
+                    : (pendingReplay.payout - pendingReplay.bet).toLocaleString()
+                } MORBIUS`}
+                onPlay={startReplay}
+                onCancel={() => setPendingReplay(null)}
+              />
+            )}
           </Card>
 
           {/* Recent results strip — newest first. */}
@@ -608,7 +682,7 @@ export function StakeLimboGame() {
 
       {/* ───────── Session chart + info tabs ───────── */}
       <div className="mt-4 space-y-4">
-        <LimboInfoTabs history={history} historyLoading={historyLoading} onVerify={openVerify} />
+        <LimboInfoTabs history={history} historyLoading={historyLoading} onVerify={openVerify} onReplay={handleReplay} />
       </div>
       {/* Draggable mini session chart — open in a corner on mobile, full-size on desktop. */}
       <FloatingPanel title="Session" storageKey="limbo2.sessionChart.pos">

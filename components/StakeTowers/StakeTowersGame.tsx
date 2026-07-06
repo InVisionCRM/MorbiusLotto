@@ -16,7 +16,7 @@
  * Cash out, provably fair) · the tower board with its per-floor multipliers.
  */
 
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { useAccount } from 'wagmi';
 import confetti from 'canvas-confetti';
 import { Volume2, VolumeX } from 'lucide-react';
@@ -32,6 +32,7 @@ import { FloatingPanel } from '@/components/arcade2/FloatingPanel';
 import { TowersBoard } from './TowersBoard';
 import { TowersInfoTabs } from './TowersInfoTabs';
 import { TowersFairnessModal } from './TowersFairnessModal';
+import { ReplayConfirmOverlay } from '@/components/share/ReplayConfirmOverlay';
 import { towersAudio } from './towers-audio';
 import {
   fetchTowersInfo,
@@ -84,6 +85,13 @@ export function StakeTowersGame() {
   const [session, setSession] = useState<SessionPoint[]>([]);
   const [history, setHistory] = useState<TowersHistoryRound[]>([]);
   const [historyLoading, setHistoryLoading] = useState(false);
+
+  // Replay: a staged past win (confirm overlay) + a flag while re-watching. A
+  // replay only re-renders the round's final revealed tower — no server call,
+  // no balance/history/session/reportWin change.
+  const [pendingReplay, setPendingReplay] = useState<TowersHistoryRound | null>(null);
+  const [replaying, setReplaying] = useState(false);
+  const boardRef = useRef<HTMLDivElement | null>(null);
 
   const [clientSeed, setClientSeed] = useState('');
   const [fairnessOpen, setFairnessOpen] = useState(false);
@@ -190,7 +198,17 @@ export function StakeTowersGame() {
   }, []);
 
   const settleHistory = useCallback(
-    (roundId: string, betAmount: number, diff: TowersDifficulty, floor: number, multX100: number, won: boolean, payout: number) => {
+    (
+      roundId: string,
+      betAmount: number,
+      diff: TowersDifficulty,
+      floor: number,
+      multX100: number,
+      won: boolean,
+      payout: number,
+      picks: number[],
+      bombPositions: number[],
+    ) => {
       setHistory((prev) =>
         [
           {
@@ -198,6 +216,8 @@ export function StakeTowersGame() {
             bet: betAmount,
             difficulty: diff,
             floor,
+            picks,
+            bombPositions,
             multiplierX100: multX100,
             won,
             payout,
@@ -233,6 +253,9 @@ export function StakeTowersGame() {
     setResult(null);
     setBombPositions(null);
     setBustFloor(null);
+    // A real round exits any replay view.
+    setReplaying(false);
+    setPendingReplay(null);
     setPhase('starting');
     towersAudio.init();
     try {
@@ -294,7 +317,7 @@ export function StakeTowersGame() {
           setPhase('cashed');
           winFx();
           reportWin({ game: 'Towers', bet: betAmount, payout: r.payout });
-          settleHistory(roundId, betAmount, diff, TOWERS_FLOORS, r.multiplierX100, true, r.payout);
+          settleHistory(roundId, betAmount, diff, TOWERS_FLOORS, r.multiplierX100, true, r.payout, r.picks, r.bombPositions);
           setSession((prev) => [...prev, { drop: prev.length + 1, bet: betAmount, profit: r.payout - betAmount }]);
         } else {
           // Bomb.
@@ -304,7 +327,7 @@ export function StakeTowersGame() {
           setResult({ won: false, payout: 0, multiplierX100: round.multiplierX100, serverSeed: r.serverSeed });
           setPhase('busted');
           towersAudio.playBust();
-          settleHistory(roundId, betAmount, diff, r.floor, round.multiplierX100, false, 0);
+          settleHistory(roundId, betAmount, diff, r.floor, round.multiplierX100, false, 0, r.picks, r.bombPositions);
           setSession((prev) => [...prev, { drop: prev.length + 1, bet: betAmount, profit: -betAmount }]);
         }
       } catch (e) {
@@ -338,7 +361,7 @@ export function StakeTowersGame() {
       setPhase('cashed');
       winFx();
       reportWin({ game: 'Towers', bet: betAmount, payout: r.payout });
-      settleHistory(roundId, betAmount, diff, r.floor, r.multiplierX100, true, r.payout);
+      settleHistory(roundId, betAmount, diff, r.floor, r.multiplierX100, true, r.payout, r.picks, r.bombPositions);
       setSession((prev) => [...prev, { drop: prev.length + 1, bet: betAmount, profit: r.payout - betAmount }]);
     } catch (e) {
       setPhase('active');
@@ -352,8 +375,50 @@ export function StakeTowersGame() {
     setBombPositions(null);
     setBustFloor(null);
     setError(null);
+    setReplaying(false);
+    setPendingReplay(null);
     setPhase('idle');
   }, []);
+
+  // ── Replay a past win: stage the confirm overlay, then re-render that round's
+  // final revealed tower (safe picks + all bombs) with its cashout multiplier.
+  // Pure re-watch — no server call, no balance/history/session/reportWin. ──
+  const handleReplay = useCallback(
+    (r: TowersHistoryRound) => {
+      if (!betting) return;
+      towersAudio.init();
+      setPendingReplay(r);
+      boardRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    },
+    [betting],
+  );
+
+  const startReplay = useCallback(() => {
+    const r = pendingReplay;
+    if (!r) return;
+    setPendingReplay(null);
+    setError(null);
+    setNoChips(false);
+    towersAudio.init();
+    const replayLadder = info?.difficulties[r.difficulty]?.ladder ?? FLAT_LADDER;
+    setDifficulty(r.difficulty);
+    setReplaying(true);
+    setRound({
+      roundId: r.roundId,
+      bet: r.bet,
+      difficulty: r.difficulty,
+      floor: r.floor,
+      picks: r.picks,
+      multiplierX100: r.multiplierX100,
+      serverSeedHash: '',
+      ladder: replayLadder,
+    });
+    setBombPositions(r.bombPositions);
+    setBustFloor(null);
+    setResult({ won: true, payout: r.payout, multiplierX100: r.multiplierX100, serverSeed: '' });
+    setPhase('cashed');
+    winFx();
+  }, [pendingReplay, info, winFx]);
 
   const openVerify = useCallback((id: string | null) => {
     setVerifyTarget(id);
@@ -468,7 +533,7 @@ export function StakeTowersGame() {
           {betting ? (
             <Button
               type="button"
-              disabled={phase === 'starting' || !info}
+              disabled={phase === 'starting' || !info || pendingReplay !== null}
               onClick={() => void startRound()}
               className="arc-display h-12 w-full bg-cyan-500 text-base font-bold uppercase tracking-widest text-[#03121B] shadow-[0_0_24px_-6px_rgba(34,211,238,0.85)] hover:bg-cyan-400 disabled:opacity-50"
             >
@@ -508,7 +573,7 @@ export function StakeTowersGame() {
 
         {/* ───────── Tower ───────── */}
         <div className="order-1 space-y-4 lg:order-2">
-          <Card className="relative border-0 bg-[#07131F] p-4 ring-1 ring-inset ring-cyan-950/70 sm:p-6">
+          <Card ref={boardRef} className="relative border-0 bg-[#07131F] p-4 ring-1 ring-inset ring-cyan-950/70 sm:p-6">
             <TowersBoard
               tiles={tiles}
               floors={TOWERS_FLOORS}
@@ -517,7 +582,7 @@ export function StakeTowersGame() {
               ladder={ladder}
               bombPositions={bombPositions}
               bustFloor={bustFloor}
-              disabled={phase !== 'active'}
+              disabled={phase !== 'active' || replaying}
               onPick={(tile) => void doPick(tile)}
             />
 
@@ -556,6 +621,19 @@ export function StakeTowersGame() {
                 </p>
               )}
             </div>
+            {pendingReplay && (
+              <ReplayConfirmOverlay
+                title="Replay round"
+                headline={formatMultiplier(pendingReplay.multiplierX100)}
+                sub={`${
+                  pendingReplay.payout - pendingReplay.bet > 0
+                    ? `+${(pendingReplay.payout - pendingReplay.bet).toLocaleString()}`
+                    : (pendingReplay.payout - pendingReplay.bet).toLocaleString()
+                } MORBIUS`}
+                onPlay={startReplay}
+                onCancel={() => setPendingReplay(null)}
+              />
+            )}
           </Card>
 
         </div>
@@ -567,6 +645,7 @@ export function StakeTowersGame() {
           history={history}
           historyLoading={historyLoading}
           onVerify={(id) => openVerify(id)}
+          onReplay={handleReplay}
           info={info}
         />
       </div>

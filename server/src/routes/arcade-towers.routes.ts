@@ -551,7 +551,7 @@ export function registerArcadeTowersRoutes({
       }
       const limit = Math.max(1, Math.min(100, parseInt(String(req.query.limit ?? '25'), 10) || 25));
       const r = await pool.query(
-        `SELECT id, bet, difficulty, floor, multiplier_x100, won, payout, created_at
+        `SELECT id, bet, difficulty, floor, bomb_positions, picks, multiplier_x100, won, payout, created_at
            FROM arcade_towers_rounds
           WHERE wallet_address = $1 AND status = 'settled'
           ORDER BY created_at DESC
@@ -565,6 +565,9 @@ export function registerArcadeTowersRoutes({
           bet: Number(row.bet),
           difficulty: row.difficulty,
           floor: Number(row.floor),
+          // Full reveal for the client-side replay (settled rounds only).
+          picks: Array.isArray(row.picks) ? row.picks : [],
+          bombPositions: Array.isArray(row.bomb_positions) ? row.bomb_positions : [],
           multiplierX100: Number(row.multiplier_x100),
           won: !!row.won,
           payout: Number(row.payout),

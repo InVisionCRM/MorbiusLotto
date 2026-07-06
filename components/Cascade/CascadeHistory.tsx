@@ -6,6 +6,7 @@
  * the game as drops settle.
  */
 
+import { Play } from 'lucide-react'
 import {
   formatMultiplierX100,
   type CascadeHistoryRound,
@@ -16,6 +17,8 @@ interface CascadeHistoryProps {
   rounds: CascadeHistoryRound[]
   loading: boolean
   onVerify: (roundId: string) => void
+  /** When provided, each row gets a Replay button that re-shows that drop's final board. */
+  onReplay?: (round: CascadeHistoryRound) => void
 }
 
 const VOL_LABEL: Record<CascadeVolatility, string> = {
@@ -30,7 +33,7 @@ function timeLabel(iso: string): string {
   return d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
 }
 
-export function CascadeHistory({ rounds, loading, onVerify }: CascadeHistoryProps) {
+export function CascadeHistory({ rounds, loading, onVerify, onReplay }: CascadeHistoryProps) {
   return (
     <section aria-label="Recent drops">
       {loading && rounds.length === 0 ? (
@@ -74,6 +77,17 @@ export function CascadeHistory({ rounds, loading, onVerify }: CascadeHistoryProp
                 >
                   {profit > 0 ? `+${profit.toLocaleString()}` : profit.toLocaleString()}
                 </span>
+                {onReplay && r.won && r.finalBoard && (
+                  <button
+                    type="button"
+                    onClick={() => onReplay(r)}
+                    title="Replay this drop on the board"
+                    className="flex shrink-0 items-center gap-1 rounded px-1.5 py-0.5 text-[11px] font-semibold text-cyan-300 transition-colors hover:bg-cyan-500/15"
+                  >
+                    <Play size={11} className="fill-current" />
+                    Replay
+                  </button>
+                )}
                 <button
                   type="button"
                   onClick={() => onVerify(r.roundId)}
