@@ -10,7 +10,7 @@
 
 import { useEffect, useRef, useState } from 'react'
 import { Share2, Download, X, Check } from 'lucide-react'
-import { drawWinCard, renderWinCardBlob, WIN_CARD_ASPECT } from '@/lib/win-share-card'
+import { drawWinCard, renderWinCardBlob, loadPulseLogo, WIN_CARD_ASPECT } from '@/lib/win-share-card'
 
 interface BigWinModalProps {
   game: string
@@ -27,7 +27,9 @@ export function BigWinModal({ game, roiPct, multiplier, onClose }: BigWinModalPr
   const [saved, setSaved] = useState(false)
 
   // Draw the preview at device resolution so it's crisp on retina screens.
+  // Draw once immediately, then redraw with the PulseChain logo once it loads.
   useEffect(() => {
+    let cancelled = false
     const canvas = canvasRef.current
     if (!canvas) return
     const dpr = Math.min(window.devicePixelRatio || 1, 3)
@@ -37,11 +39,18 @@ export function BigWinModal({ game, roiPct, multiplier, onClose }: BigWinModalPr
     canvas.style.width = `${PREVIEW_W}px`
     canvas.style.height = `${h}px`
     const ctx = canvas.getContext('2d')
-    if (ctx) drawWinCard(ctx, canvas.width, canvas.height, { game, roiPct })
+    if (!ctx) return
+    drawWinCard(ctx, canvas.width, canvas.height, { game, roiPct })
+    void loadPulseLogo().then((logo) => {
+      if (!cancelled && logo) drawWinCard(ctx, canvas.width, canvas.height, { game, roiPct }, logo)
+    })
+    return () => {
+      cancelled = true
+    }
   }, [game, roiPct])
 
   const filename = `morbius-${game.toLowerCase().replace(/[^a-z0-9]+/g, '-')}-win.png`
-  const shareText = `Nice win on ${game} at Morbius.io — +${Math.round(roiPct).toLocaleString('en-US')}% ROI! 🌎`
+  const shareText = `Nice win on ${game} at Morbius.io — +${Math.round(roiPct).toLocaleString('en-US')}% ROI! 🌎 #pulsechain`
 
   async function handleShare() {
     setBusy(true)
