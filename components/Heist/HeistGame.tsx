@@ -428,7 +428,7 @@ export function HeistGame() {
       setPhase('cashed');
       winFx();
       reportWin({ game: 'Heist', bet: betAmount, payout: r.payout });
-      settleHistory(roundId, betAmount, diff, r.room, r.multiplierX100, true, r.payout);
+      settleHistory(roundId, betAmount, diff, r.room, r.multiplierX100, true, r.payout, r.alarmDoors, r.picks);
       setSession((prev) => [...prev, { drop: prev.length + 1, bet: betAmount, profit: r.payout - betAmount }]);
     } catch (e) {
       setPhase('active');
