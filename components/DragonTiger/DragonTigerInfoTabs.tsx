@@ -30,6 +30,8 @@ interface DragonTigerInfoTabsProps {
   history: DragonTigerHistoryRound[]
   historyLoading: boolean
   onVerify: (roundId: string) => void
+  /** When provided, each "My rounds" row gets a Replay button that re-runs the deal. */
+  onReplay?: (round: DragonTigerHistoryRound) => void
 }
 
 const TRIGGER_CLASS =
@@ -55,7 +57,7 @@ function Empty({ children }: { children: ReactNode }) {
   return <p className="py-6 text-center text-sm text-slate-500">{children}</p>
 }
 
-export function DragonTigerInfoTabs({ history, historyLoading, onVerify }: DragonTigerInfoTabsProps) {
+export function DragonTigerInfoTabs({ history, historyLoading, onVerify, onReplay }: DragonTigerInfoTabsProps) {
   const [recent, setRecent] = useState<DragonTigerRecentRound[]>([])
   const [recentLoading, setRecentLoading] = useState(true)
   const [leaders, setLeaders] = useState<DragonTigerLeaderboardEntry[]>([])
@@ -170,7 +172,7 @@ export function DragonTigerInfoTabs({ history, historyLoading, onVerify }: Drago
         </TabsContent>
 
         <TabsContent value="mine" className="mt-3 focus-visible:outline-none">
-          <DragonTigerHistory rounds={history} loading={historyLoading} onVerify={onVerify} />
+          <DragonTigerHistory rounds={history} loading={historyLoading} onVerify={onVerify} onReplay={onReplay} />
         </TabsContent>
 
         <TabsContent value="odds" className="mt-3 focus-visible:outline-none">

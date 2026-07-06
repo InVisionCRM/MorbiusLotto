@@ -6,12 +6,15 @@
  * and live-prepended by the game as rounds settle.
  */
 
+import { Play } from 'lucide-react'
 import { cardRank, type DragonTigerHistoryRound } from '@/lib/dragon-tiger-client'
 
 interface DragonTigerHistoryProps {
   rounds: DragonTigerHistoryRound[]
   loading: boolean
   onVerify: (roundId: string) => void
+  /** When provided, each row gets a Replay button that re-runs the deal on the felt. */
+  onReplay?: (round: DragonTigerHistoryRound) => void
 }
 
 function timeLabel(iso: string): string {
@@ -31,7 +34,7 @@ function ResultPill({ result }: { result: DragonTigerHistoryRound['result'] }) {
   )
 }
 
-export function DragonTigerHistory({ rounds, loading, onVerify }: DragonTigerHistoryProps) {
+export function DragonTigerHistory({ rounds, loading, onVerify, onReplay }: DragonTigerHistoryProps) {
   return (
     <section aria-label="Recent rounds">
       {loading && rounds.length === 0 ? (
@@ -66,6 +69,17 @@ export function DragonTigerHistory({ rounds, loading, onVerify }: DragonTigerHis
                 >
                   {profit > 0 ? `+${profit.toLocaleString()}` : profit.toLocaleString()}
                 </span>
+                {onReplay && (
+                  <button
+                    type="button"
+                    onClick={() => onReplay(r)}
+                    title="Replay this round on the felt"
+                    className="flex shrink-0 items-center gap-1 rounded px-1.5 py-0.5 text-[11px] font-semibold text-cyan-300 transition-colors hover:bg-cyan-500/15"
+                  >
+                    <Play size={11} className="fill-current" />
+                    Replay
+                  </button>
+                )}
                 <button
                   type="button"
                   onClick={() => onVerify(r.roundId)}

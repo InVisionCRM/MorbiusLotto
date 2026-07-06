@@ -7,6 +7,7 @@
  * My-rounds list (time · side badge · bet · joker rank + card count · winner · net).
  */
 
+import { Play } from 'lucide-react'
 import {
   cardRankLabel,
   sideLabel,
@@ -17,6 +18,8 @@ interface AndarBaharHistoryProps {
   rounds: AndarBaharHistoryRound[]
   loading: boolean
   onVerify: (roundId: string) => void
+  /** When provided, each row gets a Replay button that re-runs the deal on the felt. */
+  onReplay?: (round: AndarBaharHistoryRound) => void
 }
 
 function timeLabel(iso: string): string {
@@ -25,7 +28,7 @@ function timeLabel(iso: string): string {
   return d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
 }
 
-export function AndarBaharHistory({ rounds, loading, onVerify }: AndarBaharHistoryProps) {
+export function AndarBaharHistory({ rounds, loading, onVerify, onReplay }: AndarBaharHistoryProps) {
   return (
     <section aria-label="Recent rounds">
       {loading && rounds.length === 0 ? (
@@ -70,6 +73,17 @@ export function AndarBaharHistory({ rounds, loading, onVerify }: AndarBaharHisto
                 >
                   {profit > 0 ? `+${profit.toLocaleString()}` : profit.toLocaleString()}
                 </span>
+                {onReplay && (
+                  <button
+                    type="button"
+                    onClick={() => onReplay(r)}
+                    title="Replay this round on the felt"
+                    className="flex shrink-0 items-center gap-1 rounded px-1.5 py-0.5 text-[11px] font-semibold text-cyan-300 transition-colors hover:bg-cyan-500/15"
+                  >
+                    <Play size={11} className="fill-current" />
+                    Replay
+                  </button>
+                )}
                 <button
                   type="button"
                   onClick={() => onVerify(r.roundId)}

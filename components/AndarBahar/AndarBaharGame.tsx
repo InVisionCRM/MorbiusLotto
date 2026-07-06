@@ -29,6 +29,7 @@ import { useBigWin } from '@/contexts/big-win-context'
 import { AndarBaharInfoTabs } from './AndarBaharInfoTabs'
 import { AndarBaharRulesModal } from './AndarBaharRulesModal'
 import { AndarBaharFairnessModal } from './AndarBaharFairnessModal'
+import { ReplayConfirmOverlay } from '@/components/share/ReplayConfirmOverlay'
 import { andarBaharAudio } from './andar-bahar-audio'
 import {
   fetchAndarBaharInfo,
@@ -124,6 +125,12 @@ export function AndarBaharGame() {
   const [lastResult, setLastResult] = useState<AndarBaharPlayResult | null>(null)
   const [banner, setBanner] = useState<{ kind: 'win' | 'loss'; label: string; value: string } | null>(null)
 
+  // Replay: a staged past round (confirm overlay) + a flag while its deal
+  // re-runs. Replays are a pure re-watch — no server call, balance, history,
+  // session, or reportWin.
+  const [pendingReplay, setPendingReplay] = useState<AndarBaharHistoryRound | null>(null)
+  const [replaying, setReplaying] = useState(false)
+
   const [error, setError] = useState<string | null>(null)
   const [noChips, setNoChips] = useState(false)
 
@@ -138,6 +145,7 @@ export function AndarBaharGame() {
 
   const mounted = useRef(true)
   const timers = useRef<ReturnType<typeof setTimeout>[]>([])
+  const boardRef = useRef<HTMLDivElement | null>(null)
   // Auto loop bookkeeping. autoActiveRef gates the run; autoTimer holds the
   // inter-round pause; settleResolve releases the loop once a deal finishes.
   const autoActiveRef = useRef(false)
@@ -219,9 +227,15 @@ export function AndarBaharGame() {
 
   const payLabel = (s: AndarBaharSide) => (s === 'andar' ? '0.9:1' : '1:1')
 
-  /** Replay the server's deal as the alternating reveal, then settle. */
+  /**
+   * Replay the server's deal as the alternating reveal, then settle. Reused for
+   * the user-facing "Replay" of a past round: with `isReplay`, the settlement
+   * step is a pure re-watch — banner + felt only, no reportWin / balance /
+   * history (those already happened when the round was first played).
+   */
   const replayDeal = useCallback(
-    (res: AndarBaharPlayResult) => {
+    (res: AndarBaharPlayResult, opts?: { isReplay?: boolean }) => {
+      const isReplay = opts?.isReplay ?? false
       const jr = cardRank0(res.joker)
       // Flatten the two piles back into alternating deal order so the reveal
       // matches how the cards actually came off the deck (Andar, Bahar, …).
@@ -266,7 +280,7 @@ export function AndarBaharGame() {
             setTimeout(() => {
               if (!mounted.current) return
               const net = res.payout - res.bet
-              reportWin({ game: 'Andar Bahar', bet: res.bet, payout: res.payout })
+              if (!isReplay) reportWin({ game: 'Andar Bahar', bet: res.bet, payout: res.payout })
               if (net > 0) {
                 andarBaharAudio.playWin()
                 setBanner({
@@ -288,11 +302,15 @@ export function AndarBaharGame() {
                 }.`,
               )
               setPhase('settled')
-              setBusy(false)
-              // Deal fully settled — release any awaiting serialized-auto loop.
-              const resolve = settleResolve.current
-              settleResolve.current = null
-              resolve?.()
+              if (isReplay) {
+                setReplaying(false)
+              } else {
+                setBusy(false)
+                // Deal fully settled — release any awaiting serialized-auto loop.
+                const resolve = settleResolve.current
+                settleResolve.current = null
+                resolve?.()
+              }
             }, sequence.length * DEAL_STEP_MS + SETTLE_MS),
           )
           void jr
@@ -303,11 +321,14 @@ export function AndarBaharGame() {
   )
 
   const deal = useCallback(async (): Promise<'ok' | 'stop'> => {
-    if (busy || !info) return 'stop'
+    if (busy || replaying || !info) return 'stop'
     const stake = clampBet(bet)
     setBet(stake)
     setError(null)
     setNoChips(false)
+    // A real deal exits any replay view (pending prompt + in-flight reveal).
+    setPendingReplay(null)
+    setReplaying(false)
     setBusy(true)
     setPhase('dealing')
 
@@ -373,7 +394,52 @@ export function AndarBaharGame() {
       setFeltMsg('Pick a side and deal')
       return 'stop'
     }
-  }, [busy, info, bet, side, clientSeed, clampBet, replayDeal])
+  }, [busy, replaying, info, bet, side, clientSeed, clampBet, replayDeal])
+
+  // ── Replay a past round: stage the confirm overlay, then re-run the exact
+  // same alternating deal (no server call, no balance/history change). ──
+  const handleReplay = useCallback(
+    (round: AndarBaharHistoryRound) => {
+      if (busy || replaying) return
+      andarBaharAudio.init()
+      setPendingReplay(round)
+      boardRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' })
+    },
+    [busy, replaying],
+  )
+
+  const startReplay = useCallback(() => {
+    const round = pendingReplay
+    if (!round) return
+    setPendingReplay(null)
+    timers.current.forEach(clearTimeout)
+    timers.current = []
+    setReplaying(true)
+    // Reset the felt so the reveal re-runs from scratch.
+    setJoker(null)
+    setAndar([])
+    setBahar([])
+    setBanner(null)
+    setPhase('dealing')
+    andarBaharAudio.init()
+    // Rebuild the play-result shape replayDeal needs from the stored row.
+    const res: AndarBaharPlayResult = {
+      roundId: round.roundId,
+      side: round.side,
+      bet: round.bet,
+      joker: round.joker,
+      andarCards: round.andarCards,
+      baharCards: round.baharCards,
+      winningSide: round.winningSide,
+      matchIndex: round.matchIndex,
+      won: round.won,
+      payout: round.payout,
+      serverSeedHash: '',
+      chipBalance: '',
+    }
+    setLastResult(res)
+    replayDeal(res, { isReplay: true })
+  }, [pendingReplay, replayDeal])
 
   const stopAuto = useCallback(() => {
     autoActiveRef.current = false
@@ -417,9 +483,9 @@ export function AndarBaharGame() {
   }, [autoCount, deal, stopAuto])
 
   const startAuto = useCallback(() => {
-    if (autoActiveRef.current || busy) return
+    if (autoActiveRef.current || busy || replaying) return
     void runAuto()
-  }, [busy, runAuto])
+  }, [busy, replaying, runAuto])
 
   const autoRunning = autoLeft != null
 
@@ -661,6 +727,7 @@ export function AndarBaharGame() {
 
         {/* ───────── Board ───────── */}
         <div className="order-1 space-y-3 lg:order-2">
+          <div ref={boardRef} className="relative">
           <div className="overflow-hidden rounded-2xl bg-[linear-gradient(rgba(255,255,255,0.025),rgba(255,255,255,0)_16%),rgba(6,16,25,0.72)] ring-1 ring-cyan-500/15 shadow-[0_24px_50px_-30px_rgba(0,0,0,0.95)]">
             {/* HUD */}
             <div className="grid grid-cols-3 gap-px bg-cyan-500/10">
@@ -722,6 +789,20 @@ export function AndarBaharGame() {
               )}
             </div>
           </div>
+          {pendingReplay && (
+            <ReplayConfirmOverlay
+              title="Replay round"
+              headline={sideLabel(pendingReplay.winningSide)}
+              sub={`${
+                pendingReplay.payout - pendingReplay.bet > 0
+                  ? `+${(pendingReplay.payout - pendingReplay.bet).toLocaleString()}`
+                  : (pendingReplay.payout - pendingReplay.bet).toLocaleString()
+              } MORBIUS`}
+              onPlay={startReplay}
+              onCancel={() => setPendingReplay(null)}
+            />
+          )}
+          </div>
 
           {/* Deal / Auto button — pinned to a fixed bottom bar on mobile (always
               reachable without scrolling); in-flow on desktop. */}
@@ -729,11 +810,11 @@ export function AndarBaharGame() {
           {mode === 'manual' ? (
             <Button
               type="button"
-              disabled={!info || busy}
+              disabled={!info || busy || replaying}
               onClick={() => void deal()}
               className="arc-display h-14 w-full bg-gradient-to-b from-[#3ee0f5] via-cyan-400 to-[#0fb6d4] text-base font-bold uppercase tracking-widest text-[#04141b] shadow-[0_0_24px_-6px_rgba(34,211,238,0.68)] hover:brightness-105 disabled:opacity-50"
             >
-              {busy ? 'Dealing…' : phase === 'settled' ? 'Deal again' : 'Place bet & deal'}
+              {replaying ? 'Replaying…' : busy ? 'Dealing…' : phase === 'settled' ? 'Deal again' : 'Place bet & deal'}
             </Button>
           ) : autoRunning ? (
             <Button
@@ -746,7 +827,7 @@ export function AndarBaharGame() {
           ) : (
             <Button
               type="button"
-              disabled={!info || busy}
+              disabled={!info || busy || replaying}
               onClick={startAuto}
               className="arc-display h-14 w-full bg-gradient-to-b from-[#3ee0f5] via-cyan-400 to-[#0fb6d4] text-base font-bold uppercase tracking-widest text-[#04141b] shadow-[0_0_24px_-6px_rgba(34,211,238,0.68)] hover:brightness-105 disabled:opacity-50"
             >
@@ -783,7 +864,7 @@ export function AndarBaharGame() {
 
       {/* ───────── Info tabs ───────── */}
       <div className="mt-4">
-        <AndarBaharInfoTabs history={history} historyLoading={historyLoading} onVerify={openVerify} />
+        <AndarBaharInfoTabs history={history} historyLoading={historyLoading} onVerify={openVerify} onReplay={handleReplay} />
       </div>
 
       <AndarBaharRulesModal open={rulesOpen} onOpenChange={setRulesOpen} />

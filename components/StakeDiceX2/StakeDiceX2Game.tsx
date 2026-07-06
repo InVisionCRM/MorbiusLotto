@@ -31,6 +31,7 @@ import { FloatingPanel } from '@/components/arcade2/FloatingPanel'
 import { DiceX2InfoTabs } from './DiceX2InfoTabs'
 import { DiceX2FairnessModal } from './DiceX2FairnessModal'
 import { DiceX2RulesModal } from './DiceX2RulesModal'
+import { ReplayConfirmOverlay } from '@/components/share/ReplayConfirmOverlay'
 import { dicex2Audio } from './dicex2-audio'
 import {
   fetchDiceX2Info,
@@ -103,10 +104,17 @@ export function StakeDiceX2Game() {
   const [history, setHistory] = useState<DiceX2HistoryRound[]>([])
   const [historyLoading, setHistoryLoading] = useState(false)
 
+  // Replay: a staged past round (confirm overlay) + a flag while its stored
+  // roll is re-shown. Replays never touch balance/history/session/recent.
+  const [pendingReplay, setPendingReplay] = useState<DiceX2HistoryRound | null>(null)
+  const [replaying, setReplaying] = useState(false)
+
   const rollSeq = useRef(0)
   const inFlight = useRef(0)
   const autoLeftRef = useRef<number | null>(null)
   const autoTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const replayTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const boardRef = useRef<HTMLDivElement | null>(null)
   const mounted = useRef(true)
 
   // Balance: public read keyed by wallet address (no sign-in popup), then kept
@@ -141,6 +149,7 @@ export function StakeDiceX2Game() {
     return () => {
       mounted.current = false
       if (autoTimer.current) clearTimeout(autoTimer.current)
+      if (replayTimer.current) clearTimeout(replayTimer.current)
     }
   }, [loadInfo])
 
@@ -253,6 +262,13 @@ export function StakeDiceX2Game() {
     setBet(stake)
     setError(null)
     setNoChips(false)
+    // A real roll exits any replay view.
+    setPendingReplay(null)
+    setReplaying(false)
+    if (replayTimer.current) {
+      clearTimeout(replayTimer.current)
+      replayTimer.current = null
+    }
     inFlight.current += 1
     dicex2Audio.init()
     dicex2Audio.playRoll()
@@ -354,8 +370,56 @@ export function StakeDiceX2Game() {
   }, [])
 
   const autoRunning = autoLeft != null
+  const busy = autoRunning || replaying
   const lowPct = lowX100 / 100
   const highPct = highX100 / 100
+
+  // ── Replay a past roll: stage the confirm overlay, then re-show the exact
+  // stored roll (no server call, no balance/history/session/recent change). ──
+  const handleReplay = useCallback(
+    (round: DiceX2HistoryRound) => {
+      if (busy) return
+      dicex2Audio.init()
+      setPendingReplay(round)
+      boardRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' })
+    },
+    [busy],
+  )
+
+  const startReplay = useCallback(() => {
+    const round = pendingReplay
+    if (!round) return
+    setPendingReplay(null)
+    setError(null)
+    setNoChips(false)
+    setReplaying(true)
+    // Align the win-zone band/markers with the replayed round.
+    setLowX100(round.lowX100)
+    setHighX100(round.highX100)
+    dicex2Audio.init()
+    dicex2Audio.playRoll()
+    // Re-show the stored roll through the SAME reveal path (lastRoll) — no
+    // settle: no balance, no history/session/recent, no reportWin.
+    setLastRoll({
+      roundId: round.roundId,
+      bet: round.bet,
+      lowX100: round.lowX100,
+      highX100: round.highX100,
+      widthX100: round.highX100 - round.lowX100,
+      rollX100: round.rollX100,
+      multiplierX100: round.multiplierX100,
+      won: round.won,
+      payout: round.payout,
+      serverSeedHash: '',
+      chipBalance: '',
+    })
+    if (round.won) dicex2Audio.playWin()
+    else dicex2Audio.playLose()
+    if (replayTimer.current) clearTimeout(replayTimer.current)
+    replayTimer.current = setTimeout(() => {
+      if (mounted.current) setReplaying(false)
+    }, 600)
+  }, [pendingReplay])
 
   return (
     <div className="mx-auto w-full max-w-6xl pb-28 lg:pb-0">
@@ -485,7 +549,7 @@ export function StakeDiceX2Game() {
           {mode === 'manual' ? (
             <Button
               type="button"
-              disabled={!info}
+              disabled={!info || replaying}
               onClick={() => void rollOnce()}
               className="arc-display h-12 w-full bg-cyan-500 text-base font-bold uppercase tracking-widest text-[#03121B] shadow-[0_0_24px_-6px_rgba(34,211,238,0.8)] hover:bg-cyan-400 disabled:opacity-50"
             >
@@ -502,7 +566,7 @@ export function StakeDiceX2Game() {
           ) : (
             <Button
               type="button"
-              disabled={!info}
+              disabled={!info || replaying}
               onClick={startAuto}
               className="arc-display h-12 w-full bg-cyan-500 text-base font-bold uppercase tracking-widest text-[#03121B] shadow-[0_0_24px_-6px_rgba(34,211,238,0.8)] hover:bg-cyan-400 disabled:opacity-50"
             >
@@ -552,7 +616,7 @@ export function StakeDiceX2Game() {
 
         {/* ───────── Roll display + band ───────── */}
         <div className="order-1 space-y-3 lg:order-2">
-          <Card className="arc-panel border-0 p-4 sm:p-6">
+          <Card ref={boardRef} className="arc-panel relative border-0 p-4 sm:p-6">
             {/* Last roll readout */}
             <div className="flex min-h-[96px] items-center justify-center" aria-live="polite">
               {lastRoll ? (
@@ -687,6 +751,20 @@ export function StakeDiceX2Game() {
                 </div>
               </div>
             </div>
+
+            {pendingReplay && (
+              <ReplayConfirmOverlay
+                title="Replay roll"
+                headline={formatMultiplier(pendingReplay.multiplierX100)}
+                sub={`${
+                  pendingReplay.payout - pendingReplay.bet > 0
+                    ? `+${(pendingReplay.payout - pendingReplay.bet).toLocaleString()}`
+                    : (pendingReplay.payout - pendingReplay.bet).toLocaleString()
+                } MORBIUS`}
+                onPlay={startReplay}
+                onCancel={() => setPendingReplay(null)}
+              />
+            )}
           </Card>
 
           {/* Recent rolls strip — newest first. */}
@@ -715,7 +793,7 @@ export function StakeDiceX2Game() {
 
       {/* ───────── Session chart + info tabs ───────── */}
       <div className="mt-4 space-y-4">
-        <DiceX2InfoTabs history={history} historyLoading={historyLoading} onVerify={openVerify} />
+        <DiceX2InfoTabs history={history} historyLoading={historyLoading} onVerify={openVerify} onReplay={handleReplay} />
       </div>
       {/* Draggable mini session chart — open in a corner on mobile, full-size on desktop. */}
       <FloatingPanel title="Session" storageKey="dicex2.sessionChart.pos">

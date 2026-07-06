@@ -34,6 +34,7 @@ import { useBigWin } from '@/contexts/big-win-context'
 import { DragonTigerInfoTabs } from './DragonTigerInfoTabs'
 import { DragonTigerFairnessModal } from './DragonTigerFairnessModal'
 import { DragonTigerRulesModal } from './DragonTigerRulesModal'
+import { ReplayConfirmOverlay } from '@/components/share/ReplayConfirmOverlay'
 import { dragonTigerAudio } from './dragon-tiger-audio'
 import {
   fetchDragonTigerInfo,
@@ -132,6 +133,12 @@ export function DragonTigerGame() {
   const [error, setError] = useState<string | null>(null)
   const [noChips, setNoChips] = useState(false)
 
+  // Replay: a staged past round (confirm overlay) + a flag while its deal
+  // re-runs. Replays are a pure re-watch — no server call, balance, history,
+  // session, or reportWin.
+  const [pendingReplay, setPendingReplay] = useState<DragonTigerHistoryRound | null>(null)
+  const [replaying, setReplaying] = useState(false)
+
   const [fairnessOpen, setFairnessOpen] = useState(false)
   const [rulesOpen, setRulesOpen] = useState(false)
   const [verifyTarget, setVerifyTarget] = useState<string | null>(null)
@@ -143,6 +150,7 @@ export function DragonTigerGame() {
 
   const mounted = useRef(true)
   const timers = useRef<ReturnType<typeof setTimeout>[]>([])
+  const boardRef = useRef<HTMLDivElement | null>(null)
   const autoLeftRef = useRef<number | null>(null)
   const autoTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
   // Resolver fired once a round fully settles, so the serialized auto loop can
@@ -287,9 +295,33 @@ export function DragonTigerGame() {
     resolve?.()
   }, [reportWin])
 
+  /**
+   * Replay finish: show the banner + HUD readout and release the replay flag.
+   * No reportWin / balance / history — pure re-watch.
+   */
+  const finishReplay = useCallback((res: DragonTigerPlayResult) => {
+    if (!mounted.current) return
+    const net = res.totalPayout - res.totalBet
+    setPhase('settled')
+    setReplaying(false)
+    setFeltMsg(`Dragon ${res.dragonRank + 1} · Tiger ${res.tigerRank + 1}`)
+    const label = resultLabel(res.result)
+    if (net > 0) {
+      dragonTigerAudio.playWin()
+      setBanner({ kind: 'win', k: label, v: `+${fmt(net)} MORBIUS` })
+    } else if (net === 0) {
+      dragonTigerAudio.playPush()
+      setBanner({ kind: 'push', k: label, v: '±0 MORBIUS' })
+    } else {
+      dragonTigerAudio.playLose()
+      setBanner({ kind: 'loss', k: label, v: `−${fmt(-net)} MORBIUS` })
+    }
+  }, [])
+
   /** Pace the reveal of the server-decided round: face-down → flip D → flip T → settle. */
   const runReveal = useCallback(
-    (res: DragonTigerPlayResult) => {
+    (res: DragonTigerPlayResult, opts?: { isReplay?: boolean }) => {
+      const isReplay = opts?.isReplay ?? false
       setDragonCard(res.dragonCard)
       setTigerCard(res.tigerCard)
       setDragonShown(false)
@@ -302,11 +334,12 @@ export function DragonTigerGame() {
         after(FLIP_GAP_MS, () => {
           setTigerShown(true)
           dragonTigerAudio.playDeal()
-          after(SETTLE_DELAY_MS, () => settle(res))
+          // On replay, skip settle entirely — just re-show the outcome banner.
+          after(SETTLE_DELAY_MS, () => (isReplay ? finishReplay(res) : settle(res)))
         })
       })
     },
-    [after, settle],
+    [after, settle, finishReplay],
   )
 
   /**
@@ -316,11 +349,16 @@ export function DragonTigerGame() {
    * uses that to decide whether to continue.
    */
   const playRound = useCallback(async (): Promise<boolean> => {
-    if (busy || !info) return false
+    if (busy || replaying || !info) return false
     const stake = clampBet(bet)
     setBet(stake)
     setError(null)
     setNoChips(false)
+    // A real deal exits any replay view (pending prompt + in-flight cards/banner).
+    timers.current.forEach((t) => clearTimeout(t))
+    timers.current = []
+    setPendingReplay(null)
+    setReplaying(false)
     setBusy(true)
     setPhase('dealing')
     setBanner(null)
@@ -365,11 +403,52 @@ export function DragonTigerGame() {
       }
       return false
     }
-  }, [busy, info, bet, pick, clientSeed, clampBet, runReveal])
+  }, [busy, replaying, info, bet, pick, clientSeed, clampBet, runReveal])
 
   const deal = useCallback(() => {
     void playRound()
   }, [playRound])
+
+  // ── Replay a past round: stage the confirm overlay, then re-run the exact
+  // same card reveal (no server call, no balance/history change). ──
+  const handleReplay = useCallback(
+    (round: DragonTigerHistoryRound) => {
+      if (busy || replaying) return
+      dragonTigerAudio.init()
+      setPendingReplay(round)
+      boardRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' })
+    },
+    [busy, replaying],
+  )
+
+  const startReplay = useCallback(() => {
+    const round = pendingReplay
+    if (!round) return
+    setPendingReplay(null)
+    timers.current.forEach((t) => clearTimeout(t))
+    timers.current = []
+    setReplaying(true)
+    setBanner(null)
+    dragonTigerAudio.init()
+    // Rebuild the play-result shape runReveal needs from the stored row.
+    const res: DragonTigerPlayResult = {
+      roundId: round.roundId,
+      bets: round.bets,
+      totalBet: round.totalBet,
+      dragonCard: round.dragonCard,
+      tigerCard: round.tigerCard,
+      dragonRank: cardRank(round.dragonCard),
+      tigerRank: cardRank(round.tigerCard),
+      result: round.result,
+      payouts: round.payouts,
+      totalPayout: round.totalPayout,
+      won: round.won,
+      serverSeedHash: '',
+      chipBalance: '',
+    }
+    setLastRound(res)
+    runReveal(res, { isReplay: true })
+  }, [pendingReplay, runReveal])
 
   const stopAuto = useCallback(() => {
     autoLeftRef.current = null
@@ -411,11 +490,11 @@ export function DragonTigerGame() {
   }, [playRound, stopAuto])
 
   const startAuto = useCallback(() => {
-    if (autoLeftRef.current != null || busy) return
+    if (autoLeftRef.current != null || busy || replaying) return
     autoLeftRef.current = autoCount
     setAutoLeft(autoCount)
     void runAuto()
-  }, [autoCount, busy, runAuto])
+  }, [autoCount, busy, replaying, runAuto])
 
   const autoRunning = autoLeft != null
 
@@ -671,6 +750,7 @@ export function DragonTigerGame() {
 
         {/* ───────── Board ───────── */}
         <div className="order-1 space-y-3 lg:order-2">
+          <div ref={boardRef} className="relative">
           <div className="dt-board-shell">
             {/* HUD */}
             <div className="dt-hud">
@@ -735,6 +815,26 @@ export function DragonTigerGame() {
               )}
             </div>
           </div>
+          {pendingReplay && (
+            <ReplayConfirmOverlay
+              title="Replay round"
+              headline={
+                pendingReplay.result === 'dragon'
+                  ? 'Dragon'
+                  : pendingReplay.result === 'tiger'
+                    ? 'Tiger'
+                    : 'Tie'
+              }
+              sub={`${
+                pendingReplay.totalPayout - pendingReplay.totalBet > 0
+                  ? `+${(pendingReplay.totalPayout - pendingReplay.totalBet).toLocaleString()}`
+                  : (pendingReplay.totalPayout - pendingReplay.totalBet).toLocaleString()
+              } MORBIUS`}
+              onPlay={startReplay}
+              onCancel={() => setPendingReplay(null)}
+            />
+          )}
+          </div>
 
           {/* Deal / Auto button — pinned to a fixed bottom bar on mobile (always
               reachable without scrolling); in-flow on desktop. */}
@@ -742,11 +842,11 @@ export function DragonTigerGame() {
           {mode === 'manual' ? (
             <Button
               type="button"
-              disabled={!info || busy}
+              disabled={!info || busy || replaying}
               onClick={() => void deal()}
               className="arc-display h-14 w-full bg-cyan-500 text-base font-bold uppercase tracking-widest text-[#03121B] shadow-[0_0_24px_-6px_rgba(34,211,238,0.8)] hover:bg-cyan-400 disabled:opacity-50"
             >
-              {phase === 'settled' ? 'Deal again' : 'Place bet & deal'}
+              {replaying ? 'Replaying…' : phase === 'settled' ? 'Deal again' : 'Place bet & deal'}
             </Button>
           ) : autoRunning ? (
             <Button
@@ -759,7 +859,7 @@ export function DragonTigerGame() {
           ) : (
             <Button
               type="button"
-              disabled={!info || busy}
+              disabled={!info || busy || replaying}
               onClick={startAuto}
               className="arc-display h-14 w-full bg-cyan-500 text-base font-bold uppercase tracking-widest text-[#03121B] shadow-[0_0_24px_-6px_rgba(34,211,238,0.8)] hover:bg-cyan-400 disabled:opacity-50"
             >
@@ -772,7 +872,7 @@ export function DragonTigerGame() {
 
       {/* ───────── Info tabs ───────── */}
       <div className="mt-4">
-        <DragonTigerInfoTabs history={history} historyLoading={historyLoading} onVerify={openVerify} />
+        <DragonTigerInfoTabs history={history} historyLoading={historyLoading} onVerify={openVerify} onReplay={handleReplay} />
       </div>
 
       <DragonTigerRulesModal open={rulesOpen} onOpenChange={setRulesOpen} />

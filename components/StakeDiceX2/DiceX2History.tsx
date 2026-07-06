@@ -6,12 +6,15 @@
  * by the game as rolls settle.
  */
 
+import { Play } from 'lucide-react'
 import { formatMultiplier, formatBand, formatX100, type DiceX2HistoryRound } from '@/lib/dicex2-client'
 
 interface DiceX2HistoryProps {
   rounds: DiceX2HistoryRound[]
   loading: boolean
   onVerify: (roundId: string) => void
+  /** When provided, each row gets a Replay button that re-shows the roll. */
+  onReplay?: (round: DiceX2HistoryRound) => void
 }
 
 function timeLabel(iso: string): string {
@@ -20,7 +23,7 @@ function timeLabel(iso: string): string {
   return d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
 }
 
-export function DiceX2History({ rounds, loading, onVerify }: DiceX2HistoryProps) {
+export function DiceX2History({ rounds, loading, onVerify, onReplay }: DiceX2HistoryProps) {
   return (
     <section aria-label="Recent rolls">
       {loading && rounds.length === 0 ? (
@@ -64,6 +67,17 @@ export function DiceX2History({ rounds, loading, onVerify }: DiceX2HistoryProps)
                 >
                   {profit > 0 ? `+${profit.toLocaleString()}` : profit.toLocaleString()}
                 </span>
+                {onReplay && (
+                  <button
+                    type="button"
+                    onClick={() => onReplay(r)}
+                    title="Replay this roll on the board"
+                    className="flex shrink-0 items-center gap-1 rounded px-1.5 py-0.5 text-[11px] font-semibold text-cyan-300 transition-colors hover:bg-cyan-500/15"
+                  >
+                    <Play size={11} className="fill-current" />
+                    Replay
+                  </button>
+                )}
                 <button
                   type="button"
                   onClick={() => onVerify(r.roundId)}
