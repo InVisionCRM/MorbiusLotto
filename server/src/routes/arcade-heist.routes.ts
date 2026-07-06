@@ -553,7 +553,7 @@ export function registerArcadeHeistRoutes({
       }
       const limit = Math.max(1, Math.min(100, parseInt(String(req.query.limit ?? '25'), 10) || 25));
       const r = await pool.query(
-        `SELECT id, bet, difficulty, room, multiplier_x100, won, payout, created_at
+        `SELECT id, bet, difficulty, room, alarm_doors, picks, multiplier_x100, won, payout, created_at
            FROM arcade_heist_rounds
           WHERE wallet_address = $1 AND status = 'settled'
           ORDER BY created_at DESC
@@ -567,6 +567,10 @@ export function registerArcadeHeistRoutes({
           bet: Number(row.bet),
           difficulty: row.difficulty,
           room: Number(row.room),
+          // Revealed vault layout + the player's door picks so a settled round
+          // can be re-watched (replay).
+          alarmDoors: Array.isArray(row.alarm_doors) ? row.alarm_doors : [],
+          picks: Array.isArray(row.picks) ? row.picks : [],
           multiplierX100: Number(row.multiplier_x100),
           won: !!row.won,
           payout: Number(row.payout),

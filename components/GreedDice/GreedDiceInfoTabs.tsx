@@ -32,6 +32,8 @@ interface GreedDiceInfoTabsProps {
   history: GreedDiceHistoryRound[];
   historyLoading: boolean;
   onVerify: (roundId: string) => void;
+  /** Re-watch a past turn on the board (no settlement). */
+  onReplay?: (round: GreedDiceHistoryRound) => void;
   info: GreedDiceInfo | null;
 }
 
@@ -75,7 +77,7 @@ function ResultBadge({ won }: { won: boolean }) {
   );
 }
 
-export function GreedDiceInfoTabs({ history, historyLoading, onVerify, info }: GreedDiceInfoTabsProps) {
+export function GreedDiceInfoTabs({ history, historyLoading, onVerify, onReplay, info }: GreedDiceInfoTabsProps) {
   const [recent, setRecent] = useState<GreedDiceRecentRound[]>([]);
   const [recentLoading, setRecentLoading] = useState(true);
   const [leaders, setLeaders] = useState<GreedDiceLeaderboardEntry[]>([]);
@@ -197,6 +199,15 @@ export function GreedDiceInfoTabs({ history, historyLoading, onVerify, info }: G
                     <span className={`arc-mono ml-auto shrink-0 tabular-nums font-semibold ${net > 0 ? 'text-amber-300' : 'text-rose-400'}`}>
                       {net > 0 ? `+${net.toLocaleString()}` : net.toLocaleString()}
                     </span>
+                    {onReplay && (
+                      <button
+                        type="button"
+                        onClick={() => onReplay(h)}
+                        className="shrink-0 rounded px-1.5 py-0.5 text-[11px] font-medium text-slate-500 transition-colors hover:bg-cyan-500/10 hover:text-cyan-300"
+                      >
+                        Replay
+                      </button>
+                    )}
                     <button
                       type="button"
                       onClick={() => onVerify(h.roundId)}

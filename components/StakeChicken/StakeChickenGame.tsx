@@ -17,7 +17,7 @@
  * road's next lane is the clickable surface — tap it to step.
  */
 
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { useAccount } from 'wagmi';
 import confetti from 'canvas-confetti';
 import { Volume2, VolumeX } from 'lucide-react';
@@ -30,6 +30,7 @@ import { GameWalletModal } from '@/components/shared/GameWalletModal';
 import { probeSiweSession } from '@/lib/api-auth';
 import { SessionChart, type SessionPoint } from '@/components/arcade2/SessionChart';
 import { FloatingPanel } from '@/components/arcade2/FloatingPanel';
+import { ReplayConfirmOverlay } from '@/components/share/ReplayConfirmOverlay';
 import { ChickenRoad } from './ChickenRoad';
 import { ChickenInfoTabs } from './ChickenInfoTabs';
 import { ChickenFairnessModal } from './ChickenFairnessModal';
@@ -84,6 +85,13 @@ export function StakeChickenGame() {
   const [session, setSession] = useState<SessionPoint[]>([]);
   const [history, setHistory] = useState<ChickenHistoryRound[]>([]);
   const [historyLoading, setHistoryLoading] = useState(false);
+
+  // Replay: a staged past round (confirm overlay) + the round currently being
+  // re-watched. A replay is a pure re-render of the settled road — it never
+  // calls the server, moves the balance, reports a win, or writes history.
+  const [pendingReplay, setPendingReplay] = useState<ChickenHistoryRound | null>(null);
+  const [replayRound, setReplayRound] = useState<ChickenHistoryRound | null>(null);
+  const boardRef = useRef<HTMLDivElement | null>(null);
 
   const [clientSeed, setClientSeed] = useState('');
   const [fairnessOpen, setFairnessOpen] = useState(false);
@@ -158,12 +166,15 @@ export function StakeChickenGame() {
   }, [address]);
 
   const betting = phase === 'idle' || phase === 'busted' || phase === 'cashed';
-  const boardDifficulty = round?.difficulty ?? difficulty;
+  // While a replay is showing there is no active `round`; the board reads from
+  // `replayRound` instead so it re-renders that settled crossing.
+  const boardDifficulty = round?.difficulty ?? replayRound?.difficulty ?? difficulty;
   const diffInfo = info?.difficulties[boardDifficulty] ?? null;
   const lanesTotal = round?.lanes ?? diffInfo?.lanes ?? 20;
   const ladder = round?.ladder ?? diffInfo?.ladder ?? FLAT_LADDER;
-  const currentLane = round?.lane ?? 0;
-  const multiplierX100 = round?.multiplierX100 ?? 100;
+  const currentLane = round?.lane ?? replayRound?.lane ?? 0;
+  const multiplierX100 = round?.multiplierX100 ?? replayRound?.multiplierX100 ?? 100;
+  const resultBet = round?.bet ?? replayRound?.bet ?? 0;
   const lanesRemaining = lanesTotal - currentLane;
   const cashoutValue = round ? Math.floor((round.bet * multiplierX100) / 100) : 0;
   const canCash = phase === 'active' && currentLane > 0;
@@ -197,6 +208,7 @@ export function StakeChickenGame() {
       multX100: number,
       won: boolean,
       payout: number,
+      bumperLanes: number[],
     ) => {
       setHistory((prev) =>
         [
@@ -205,6 +217,7 @@ export function StakeChickenGame() {
             bet: betAmount,
             difficulty: diff,
             lane,
+            bumperLanes,
             multiplierX100: multX100,
             won,
             payout,
@@ -238,6 +251,8 @@ export function StakeChickenGame() {
     setError(null);
     setNoChips(false);
     setResult(null);
+    setReplayRound(null);
+    setPendingReplay(null);
     setBumperLanes(null);
     setBustLane(null);
     setPhase('starting');
@@ -296,7 +311,7 @@ export function StakeChickenGame() {
         setPhase('cashed');
         winFx();
         reportWin({ game: 'Chicken', bet: betAmount, payout: r.payout });
-        settleHistory(roundId, betAmount, diff, r.lane, r.multiplierX100, true, r.payout);
+        settleHistory(roundId, betAmount, diff, r.lane, r.multiplierX100, true, r.payout, r.bumperLanes);
         setSession((prev) => [...prev, { drop: prev.length + 1, bet: betAmount, profit: r.payout - betAmount }]);
       } else {
         // Bumper — bust.
@@ -305,7 +320,7 @@ export function StakeChickenGame() {
         setResult({ won: false, payout: 0, multiplierX100: round.multiplierX100, serverSeed: r.serverSeed });
         setPhase('busted');
         chickenAudio.playBust();
-        settleHistory(roundId, betAmount, diff, r.lane, round.multiplierX100, false, 0);
+        settleHistory(roundId, betAmount, diff, r.lane, round.multiplierX100, false, 0, r.bumperLanes);
         setSession((prev) => [...prev, { drop: prev.length + 1, bet: betAmount, profit: -betAmount }]);
       }
     } catch (e) {
@@ -335,7 +350,7 @@ export function StakeChickenGame() {
       setPhase('cashed');
       winFx();
       reportWin({ game: 'Chicken', bet: betAmount, payout: r.payout });
-      settleHistory(roundId, betAmount, diff, r.lane, r.multiplierX100, true, r.payout);
+      settleHistory(roundId, betAmount, diff, r.lane, r.multiplierX100, true, r.payout, r.bumperLanes);
       setSession((prev) => [...prev, { drop: prev.length + 1, bet: betAmount, profit: r.payout - betAmount }]);
     } catch (e) {
       setPhase('active');
@@ -346,11 +361,49 @@ export function StakeChickenGame() {
   const playAgain = useCallback(() => {
     setRound(null);
     setResult(null);
+    setReplayRound(null);
     setBumperLanes(null);
     setBustLane(null);
     setError(null);
     setPhase('idle');
   }, []);
+
+  // ── Replay a past crossing: stage the confirm overlay, then re-render the
+  // settled road (bumpers revealed, chicken parked at the cashed lane). A pure
+  // re-watch — no server call, no balance / reportWin / history / session. ──
+  const handleReplay = useCallback(
+    (r: ChickenHistoryRound) => {
+      if (!betting) return; // never interrupt a live crossing
+      chickenAudio.init();
+      setPendingReplay(r);
+      boardRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    },
+    [betting],
+  );
+
+  const startReplay = useCallback(() => {
+    const r = pendingReplay;
+    if (!r) return;
+    setPendingReplay(null);
+    setError(null);
+    setNoChips(false);
+    setRound(null);
+    setDifficulty(r.difficulty);
+    const crossedAll = r.won && r.lane >= (info?.difficulties[r.difficulty]?.lanes ?? r.lane);
+    setBumperLanes(r.bumperLanes ?? []);
+    // A cashout parks the chicken at the cashed lane (no splat); a full crossing
+    // sends it to the finish. Only a bust sets bustLane.
+    setBustLane(r.won ? null : r.lane);
+    setReplayRound(r);
+    setResult({ won: r.won, payout: r.payout, multiplierX100: r.multiplierX100, serverSeed: '' });
+    setPhase(r.won ? 'cashed' : 'busted');
+    if (r.won) {
+      if (crossedAll) winFx();
+      else chickenAudio.playWin();
+    } else {
+      chickenAudio.playBust();
+    }
+  }, [pendingReplay, info, winFx]);
 
   const openVerify = useCallback((id: string | null) => {
     setVerifyTarget(id);
@@ -518,7 +571,7 @@ export function StakeChickenGame() {
 
         {/* ───────── Road ───────── */}
         <div className="order-1 space-y-4 lg:order-2">
-          <Card className="relative border-0 bg-[#07131F] p-4 ring-1 ring-inset ring-cyan-950/70 sm:p-6">
+          <Card ref={boardRef} className="relative border-0 bg-[#07131F] p-4 ring-1 ring-inset ring-cyan-950/70 sm:p-6">
             <ChickenRoad
               lanes={lanesTotal}
               currentLane={currentLane}
@@ -538,12 +591,12 @@ export function StakeChickenGame() {
                         {currentLane >= lanesTotal ? 'Crossed' : 'Cashed out'} {formatMultiplier(result.multiplierX100)}
                       </div>
                       <div className="arc-mono mt-1 text-sm tabular-nums text-amber-300">
-                        +{(result.payout - (round?.bet ?? 0)).toLocaleString()} MORBIUS
+                        +{(result.payout - resultBet).toLocaleString()} MORBIUS
                       </div>
                     </>
                   ) : (
                     <div className="arc-display text-2xl font-bold uppercase tracking-[0.1em] text-rose-400 drop-shadow-[0_0_20px_rgba(244,63,94,0.5)] sm:text-3xl">
-                      Splat · −{(round?.bet ?? 0).toLocaleString()} MORBIUS
+                      Splat · −{resultBet.toLocaleString()} MORBIUS
                     </div>
                   )}
                   <Button
@@ -564,6 +617,20 @@ export function StakeChickenGame() {
                 </p>
               )}
             </div>
+
+            {pendingReplay && (
+              <ReplayConfirmOverlay
+                title="Replay crossing"
+                headline={formatMultiplier(pendingReplay.multiplierX100)}
+                sub={`${
+                  pendingReplay.payout - pendingReplay.bet > 0
+                    ? `+${(pendingReplay.payout - pendingReplay.bet).toLocaleString()}`
+                    : (pendingReplay.payout - pendingReplay.bet).toLocaleString()
+                } MORBIUS`}
+                onPlay={startReplay}
+                onCancel={() => setPendingReplay(null)}
+              />
+            )}
           </Card>
         </div>
       </div>
@@ -574,6 +641,7 @@ export function StakeChickenGame() {
           history={history}
           historyLoading={historyLoading}
           onVerify={(id) => openVerify(id)}
+          onReplay={handleReplay}
           info={info}
         />
       </div>

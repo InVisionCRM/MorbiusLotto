@@ -116,6 +116,8 @@ export interface ChickenHistoryRound {
   bet: number;
   difficulty: ChickenDifficulty;
   lane: number;
+  /** Revealed bumper lanes (0-based) for re-rendering the settled road on replay. */
+  bumperLanes: number[];
   multiplierX100: number;
   won: boolean;
   payout: number;

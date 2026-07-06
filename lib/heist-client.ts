@@ -130,6 +130,10 @@ export interface HeistHistoryRound {
   bet: number;
   difficulty: HeistDifficulty;
   room: number;
+  /** Revealed alarm doors per room — lets a settled round be re-watched. */
+  alarmDoors: number[][];
+  /** The player's door picks (one per cleared/attempted room). */
+  picks: number[];
   multiplierX100: number;
   won: boolean;
   payout: number;

@@ -21,7 +21,7 @@
  * board. The next stone is the clickable surface — tap it to step.
  */
 
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { useAccount } from 'wagmi';
 import confetti from 'canvas-confetti';
 import { Volume2, VolumeX } from 'lucide-react';
@@ -34,6 +34,7 @@ import { GameWalletModal } from '@/components/shared/GameWalletModal';
 import { probeSiweSession } from '@/lib/api-auth';
 import { SessionChart, type SessionPoint } from '@/components/arcade2/SessionChart';
 import { FloatingPanel } from '@/components/arcade2/FloatingPanel';
+import { ReplayConfirmOverlay } from '@/components/share/ReplayConfirmOverlay';
 import { FirewalkRoad } from './FirewalkRoad';
 import { FirewalkInfoTabs } from './FirewalkInfoTabs';
 import { FirewalkFairnessModal } from './FirewalkFairnessModal';
@@ -92,6 +93,14 @@ export function FirewalkGame() {
   const [session, setSession] = useState<SessionPoint[]>([]);
   const [history, setHistory] = useState<FirewalkHistoryRound[]>([]);
   const [historyLoading, setHistoryLoading] = useState(false);
+
+  // Replay: a staged past round (confirm overlay) + a flag while re-showing it.
+  // A replay is a pure re-watch — it re-renders the round's final revealed lane
+  // and cashout banner and NEVER settles (no server call, balance, reportWin,
+  // history, or session write).
+  const [pendingReplay, setPendingReplay] = useState<FirewalkHistoryRound | null>(null);
+  const [replaying, setReplaying] = useState(false);
+  const boardRef = useRef<HTMLDivElement | null>(null);
 
   const [clientSeed, setClientSeed] = useState('');
   const [fairnessOpen, setFairnessOpen] = useState(false);
@@ -218,6 +227,7 @@ export function FirewalkGame() {
       multX100: number,
       won: boolean,
       payout: number,
+      crumbleStones: number[],
     ) => {
       setHistory((prev) =>
         [
@@ -226,6 +236,7 @@ export function FirewalkGame() {
             bet: betAmount,
             heat: h,
             position,
+            crumbleStones,
             multiplierX100: multX100,
             won,
             payout,
@@ -261,6 +272,8 @@ export function FirewalkGame() {
     setResult(null);
     setCrumbleStones(null);
     setBustStone(null);
+    setPendingReplay(null);
+    setReplaying(false);
     setPace(1);
     setPhase('starting');
     firewalkAudio.init();
@@ -321,7 +334,7 @@ export function FirewalkGame() {
         setPhase('cashed');
         winFx();
         reportWin({ game: 'Firewalk', bet: betAmount, payout: r.payout });
-        settleHistory(roundId, betAmount, h, r.position, r.multiplierX100, true, r.payout);
+        settleHistory(roundId, betAmount, h, r.position, r.multiplierX100, true, r.payout, r.crumbleStones);
         setSession((prev) => [...prev, { drop: prev.length + 1, bet: betAmount, profit: r.payout - betAmount }]);
       } else {
         // Crumble — bust. r.position is the stone that gave way; the walker keeps
@@ -331,7 +344,7 @@ export function FirewalkGame() {
         setResult({ won: false, payout: 0, multiplierX100: priorMult, serverSeed: r.serverSeed });
         setPhase('busted');
         firewalkAudio.playBurn();
-        settleHistory(roundId, betAmount, h, r.position, priorMult, false, 0);
+        settleHistory(roundId, betAmount, h, r.position, priorMult, false, 0, r.crumbleStones);
         setSession((prev) => [...prev, { drop: prev.length + 1, bet: betAmount, profit: -betAmount }]);
       }
     } catch (e) {
@@ -361,7 +374,7 @@ export function FirewalkGame() {
       setPhase('cashed');
       winFx();
       reportWin({ game: 'Firewalk', bet: betAmount, payout: r.payout });
-      settleHistory(roundId, betAmount, h, r.position, r.multiplierX100, true, r.payout);
+      settleHistory(roundId, betAmount, h, r.position, r.multiplierX100, true, r.payout, r.crumbleStones);
       setSession((prev) => [...prev, { drop: prev.length + 1, bet: betAmount, profit: r.payout - betAmount }]);
     } catch (e) {
       setPhase('active');
@@ -376,8 +389,56 @@ export function FirewalkGame() {
     setBustStone(null);
     setError(null);
     setPace(1);
+    setReplaying(false);
+    setPendingReplay(null);
     setPhase('idle');
   }, []);
+
+  // ── Replay a past crossing: stage the confirm overlay, then re-render the
+  // round's final revealed lane (crumble layout + walker at its final stone) and
+  // the cashout/bust banner. Pure re-watch — no server call, no balance / history
+  // / session / reportWin. A real new round (startRound) clears the replay view.
+  const handleReplay = useCallback(
+    (r: FirewalkHistoryRound) => {
+      // Bail if a crossing is live (only allow from a settled/idle board).
+      if (!betting || replaying) return;
+      firewalkAudio.init();
+      setPendingReplay(r);
+      boardRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    },
+    [betting, replaying],
+  );
+
+  const startReplay = useCallback(() => {
+    const r = pendingReplay;
+    if (!r) return;
+    setPendingReplay(null);
+    setReplaying(true);
+    setError(null);
+    setNoChips(false);
+    firewalkAudio.init();
+    const heatInfoR = info?.heats[r.heat] ?? null;
+    const ladderR = heatInfoR?.ladder ?? FLAT_LADDER;
+    const stonesR = heatInfoR?.stones ?? info?.stones ?? 14;
+    // Synthesize a display-only round so the board/HUD render the final state.
+    setRound({
+      roundId: r.roundId,
+      bet: r.bet,
+      heat: r.heat,
+      position: r.position,
+      multiplierX100: r.multiplierX100,
+      serverSeedHash: '',
+      stones: stonesR,
+      ladder: ladderR,
+    });
+    setCrumbleStones(r.crumbleStones ?? []);
+    setBustStone(r.won ? null : r.position);
+    setResult({ won: r.won, payout: r.payout, multiplierX100: r.multiplierX100, serverSeed: '' });
+    setPhase(r.won ? 'cashed' : 'busted');
+    if (r.won) firewalkAudio.playWin();
+    else firewalkAudio.playBurn();
+    setReplaying(false);
+  }, [pendingReplay, info]);
 
   const openVerify = useCallback((id: string | null) => {
     setVerifyTarget(id);
@@ -582,7 +643,7 @@ export function FirewalkGame() {
 
         {/* ───────── Coals board ───────── */}
         <div className="order-1 space-y-4 lg:order-2">
-          <Card className="relative border-0 bg-[#07131F] p-4 ring-1 ring-inset ring-cyan-950/70 sm:p-6">
+          <Card ref={boardRef} className="relative border-0 bg-[#07131F] p-4 ring-1 ring-inset ring-cyan-950/70 sm:p-6">
             {/* HUD strip */}
             <div className="mb-3 grid grid-cols-3 overflow-hidden rounded-lg ring-1 ring-inset ring-cyan-950/70">
               <div className="bg-[#040C13] px-3 py-2.5 text-center">
@@ -651,6 +712,20 @@ export function FirewalkGame() {
                 </p>
               )}
             </div>
+
+            {pendingReplay && (
+              <ReplayConfirmOverlay
+                title="Replay walk"
+                headline={formatMultiplier(pendingReplay.multiplierX100)}
+                sub={`${
+                  pendingReplay.payout - pendingReplay.bet > 0
+                    ? `+${(pendingReplay.payout - pendingReplay.bet).toLocaleString()}`
+                    : (pendingReplay.payout - pendingReplay.bet).toLocaleString()
+                } MORBIUS`}
+                onPlay={startReplay}
+                onCancel={() => setPendingReplay(null)}
+              />
+            )}
           </Card>
         </div>
       </div>
@@ -661,6 +736,7 @@ export function FirewalkGame() {
           history={history}
           historyLoading={historyLoading}
           onVerify={(id) => openVerify(id)}
+          onReplay={handleReplay}
           info={info}
         />
       </div>

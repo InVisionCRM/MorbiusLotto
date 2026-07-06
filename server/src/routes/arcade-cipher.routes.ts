@@ -594,7 +594,7 @@ export function registerArcadeCipherRoutes({
       }
       const limit = Math.max(1, Math.min(100, parseInt(String(req.query.limit ?? '25'), 10) || 25));
       const r = await pool.query(
-        `SELECT id, bet, difficulty, guess_count, best_exact, cracked,
+        `SELECT id, bet, difficulty, code, guesses, guess_count, best_exact, cracked,
                 multiplier_x100, won, payout, created_at
            FROM arcade_cipher_rounds
           WHERE wallet_address = $1 AND status = 'settled'
@@ -608,6 +608,10 @@ export function registerArcadeCipherRoutes({
           roundId: row.id,
           bet: Number(row.bet),
           difficulty: row.difficulty,
+          // Revealed code + full guess history so the client can re-render the
+          // settled board (replay) without another round.
+          code: Array.isArray(row.code) ? row.code : [],
+          guesses: Array.isArray(row.guesses) ? row.guesses : [],
           guessCount: Number(row.guess_count),
           bestExact: Number(row.best_exact),
           cracked: !!row.cracked,

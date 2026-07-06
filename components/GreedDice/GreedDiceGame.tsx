@@ -32,6 +32,7 @@ import { GameWalletModal } from '@/components/shared/GameWalletModal';
 import { probeSiweSession } from '@/lib/api-auth';
 import { SessionChart, type SessionPoint } from '@/components/arcade2/SessionChart';
 import { FloatingPanel } from '@/components/arcade2/FloatingPanel';
+import { ReplayConfirmOverlay } from '@/components/share/ReplayConfirmOverlay';
 import { GreedDie, type GreedDieState } from './GreedDie';
 import { GreedDiceInfoTabs } from './GreedDiceInfoTabs';
 import { GreedDiceFairnessModal } from './GreedDiceFairnessModal';
@@ -51,6 +52,7 @@ import {
   type GreedDiceVolatility,
   type GreedDiceInfo,
   type GreedDiceHistoryRound,
+  type GreedDiceRollLogEntry,
 } from '@/lib/greed-dice-client';
 
 const HISTORY_LIMIT = 25;
@@ -109,6 +111,18 @@ export function GreedDiceGame() {
   const [session, setSession] = useState<SessionPoint[]>([]);
   const [history, setHistory] = useState<GreedDiceHistoryRound[]>([]);
   const [historyLoading, setHistoryLoading] = useState(false);
+
+  // Accumulated roll log for the current turn, so a freshly-played round can be
+  // pushed into in-memory history carrying its full sequence (for replay).
+  const rollLogRef = useRef<GreedDiceRollLogEntry[]>([]);
+
+  // Replay: a staged past round (confirm overlay) + a flag while re-showing it.
+  // A replay is a pure re-watch — it flickers, then re-renders the round's final
+  // roll + bank/farkle banner, and NEVER settles (no server call, balance,
+  // reportWin, history, or session write). A real new round clears the view.
+  const [pendingReplay, setPendingReplay] = useState<GreedDiceHistoryRound | null>(null);
+  const [replaying, setReplaying] = useState(false);
+  const boardRef = useRef<HTMLDivElement | null>(null);
 
   const [clientSeed, setClientSeed] = useState('');
   const [fairnessOpen, setFairnessOpen] = useState(false);
@@ -186,6 +200,11 @@ export function GreedDiceGame() {
         setKeptCount(active.diceCount - active.remaining);
         if (active.lastRoll) {
           setBoard({ dice: active.lastRoll.dice, kept: active.lastRoll.kept });
+          // Seed the roll log with the last roll so a turn finished after a
+          // refresh still carries a final board for replay.
+          rollLogRef.current = [active.lastRoll];
+        } else {
+          rollLogRef.current = [];
         }
         setStatusText({
           text: `${active.remaining} dice left · roll or bank`,
@@ -287,6 +306,8 @@ export function GreedDiceGame() {
     setBoard(null);
     setKeptCount(0);
     setStatusText(null);
+    setPendingReplay(null);
+    setReplaying(false);
     setPhase('starting');
     greedDiceAudio.init();
     const startCount = info.volatilities[volatility]?.n ?? DEFAULT_DICE_COUNT[volatility];
@@ -298,6 +319,8 @@ export function GreedDiceGame() {
         /* keep last known */
       }
       greedDiceAudio.playRoll();
+      // Seed this turn's roll log with the opening roll (for replay).
+      rollLogRef.current = [{ dice: r.dice, kept: r.kept, points: r.rollPoints, hot: r.hot }];
       flickerThenReveal(startCount, () => {
         setBoard({ dice: r.dice, kept: r.kept });
         if (r.farkle) {
@@ -306,7 +329,7 @@ export function GreedDiceGame() {
           setRound({ roundId: r.roundId, bet: r.bet, volatility: r.volatility, diceCount: r.diceCount, points: 0, multiplierX100: 0, remaining: 0 });
           setResult({ won: false, payout: 0, multiplierX100: 0, points: 0 });
           setPhase('busted');
-          settleHistory({ roundId: r.roundId, bet: r.bet, volatility: r.volatility, diceCount: r.diceCount, points: 0, multiplierX100: 0, rolls: 1, won: false, payout: 0, createdAt: new Date().toISOString() });
+          settleHistory({ roundId: r.roundId, bet: r.bet, volatility: r.volatility, diceCount: r.diceCount, points: 0, multiplierX100: 0, rolls: 1, rollLog: [...rollLogRef.current], won: false, payout: 0, createdAt: new Date().toISOString() });
           setSession((prev) => [...prev, { drop: prev.length + 1, bet: r.bet, profit: -r.bet }]);
           return;
         }
@@ -345,12 +368,14 @@ export function GreedDiceGame() {
           greedDiceAudio.playBust();
           setResult({ won: false, payout: 0, multiplierX100: cur.multiplierX100, points: cur.points });
           setPhase('busted');
-          settleHistory({ roundId: cur.roundId, bet: cur.bet, volatility: cur.volatility, diceCount: cur.diceCount, points: 0, multiplierX100: 0, rolls: 0, won: false, payout: 0, createdAt: new Date().toISOString() });
+          rollLogRef.current = [...rollLogRef.current, { dice: r.dice, kept: [], points: 0, hot: false }];
+          settleHistory({ roundId: cur.roundId, bet: cur.bet, volatility: cur.volatility, diceCount: cur.diceCount, points: 0, multiplierX100: 0, rolls: 0, rollLog: [...rollLogRef.current], won: false, payout: 0, createdAt: new Date().toISOString() });
           setSession((prev) => [...prev, { drop: prev.length + 1, bet: cur.bet, profit: -cur.bet }]);
           return;
         }
         const ok = r; // narrowed: scored, turn continues
         setBoard({ dice: ok.dice, kept: ok.kept });
+        rollLogRef.current = [...rollLogRef.current, { dice: ok.dice, kept: ok.kept, points: ok.rollPoints, hot: ok.hot }];
         greedDiceAudio.playScore(ok.rollPoints);
         if (ok.hot) {
           greedDiceAudio.playHot();
@@ -388,7 +413,7 @@ export function GreedDiceGame() {
       setPhase('cashed');
       winFx();
       reportWin({ game: 'Greed Dice', bet: cur.bet, payout: r.payout });
-      settleHistory({ roundId: cur.roundId, bet: cur.bet, volatility: cur.volatility, diceCount: cur.diceCount, points: r.points, multiplierX100: r.multiplierX100, rolls: 0, won: true, payout: r.payout, createdAt: new Date().toISOString() });
+      settleHistory({ roundId: cur.roundId, bet: cur.bet, volatility: cur.volatility, diceCount: cur.diceCount, points: r.points, multiplierX100: r.multiplierX100, rolls: rollLogRef.current.length, rollLog: [...rollLogRef.current], won: true, payout: r.payout, createdAt: new Date().toISOString() });
       setSession((prev) => [...prev, { drop: prev.length + 1, bet: cur.bet, profit: r.payout - cur.bet }]);
     } catch (e) {
       setPhase('active');
@@ -397,6 +422,9 @@ export function GreedDiceGame() {
   }, [round, phase, handleErr, settleHistory, winFx, reportWin]);
 
   const playAgain = useCallback(() => {
+    if (flickerRef.current) clearInterval(flickerRef.current);
+    setReplaying(false);
+    setPendingReplay(null);
     setRound(null);
     setResult(null);
     setBoard(null);
@@ -406,6 +434,64 @@ export function GreedDiceGame() {
     setError(null);
     setPhase('idle');
   }, []);
+
+  // ── Replay a past turn: stage the confirm overlay, then flicker + reveal the
+  // round's final roll (scored dice cyan) and its bank/farkle banner. Pure
+  // re-watch — no server call, no balance / history / session / reportWin. ──
+  const handleReplay = useCallback(
+    (r: GreedDiceHistoryRound) => {
+      // Bail if a turn is live (only allow from a settled/idle board).
+      if (!betting || replaying) return;
+      greedDiceAudio.init();
+      setPendingReplay(r);
+      boardRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    },
+    [betting, replaying],
+  );
+
+  const startReplay = useCallback(() => {
+    const r = pendingReplay;
+    if (!r) return;
+    if (flickerRef.current) clearInterval(flickerRef.current);
+    setPendingReplay(null);
+    setError(null);
+    setNoChips(false);
+    setResult(null);
+    setStatusText(null);
+    setBoard(null);
+    setKeptCount(0);
+    setReplaying(true);
+    setPhase('starting');
+    greedDiceAudio.init();
+    const log = r.rollLog ?? [];
+    const lastRoll = log[log.length - 1] ?? null;
+    const finalDice = lastRoll?.dice ?? [];
+    const finalKept = r.won ? (lastRoll?.kept ?? []) : [];
+    greedDiceAudio.playRoll();
+    flickerThenReveal(finalDice.length || r.diceCount, () => {
+      setBoard({ dice: finalDice, kept: finalKept });
+      setRound({
+        roundId: r.roundId,
+        bet: r.bet,
+        volatility: r.volatility,
+        diceCount: r.diceCount,
+        points: r.won ? r.points : 0,
+        multiplierX100: r.won ? r.multiplierX100 : 0,
+        remaining: 0,
+      });
+      if (r.won) {
+        setResult({ won: true, payout: r.payout, multiplierX100: r.multiplierX100, points: r.points });
+        setStatusText(null);
+        greedDiceAudio.playBank();
+      } else {
+        setResult({ won: false, payout: 0, multiplierX100: 0, points: 0 });
+        setStatusText({ text: 'Farkle — no scoring dice', kind: 'bust' });
+        greedDiceAudio.playBust();
+      }
+      setReplaying(false);
+      setPhase(r.won ? 'cashed' : 'busted');
+    });
+  }, [pendingReplay, flickerThenReveal]);
 
   const openVerify = useCallback((id: string | null) => {
     setVerifyTarget(id);
@@ -598,7 +684,7 @@ export function GreedDiceGame() {
 
         {/* ───────── Board ───────── */}
         <div className="order-1 space-y-4 lg:order-2">
-          <Card className="relative overflow-hidden border-0 bg-[#06101a] p-0 ring-1 ring-inset ring-cyan-950/70">
+          <Card ref={boardRef} className="relative overflow-hidden border-0 bg-[#06101a] p-0 ring-1 ring-inset ring-cyan-950/70">
             {/* HUD */}
             <div className="grid grid-cols-3 gap-px bg-cyan-500/10">
               <div className="bg-[#040c13]/85 px-3 py-2.5 text-center">
@@ -686,6 +772,20 @@ export function GreedDiceGame() {
                 </div>
               )}
             </div>
+
+            {pendingReplay && (
+              <ReplayConfirmOverlay
+                title="Replay turn"
+                headline={formatMultiplier(pendingReplay.multiplierX100)}
+                sub={`${
+                  pendingReplay.payout - pendingReplay.bet > 0
+                    ? `+${(pendingReplay.payout - pendingReplay.bet).toLocaleString()}`
+                    : (pendingReplay.payout - pendingReplay.bet).toLocaleString()
+                } MORBIUS`}
+                onPlay={startReplay}
+                onCancel={() => setPendingReplay(null)}
+              />
+            )}
           </Card>
 
           {!betting && !result && (
@@ -702,6 +802,7 @@ export function GreedDiceGame() {
           history={history}
           historyLoading={historyLoading}
           onVerify={(id) => openVerify(id)}
+          onReplay={handleReplay}
           info={info}
         />
       </div>

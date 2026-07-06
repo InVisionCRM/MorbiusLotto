@@ -138,6 +138,8 @@ export interface GreedDiceHistoryRound {
   points: number;
   multiplierX100: number;
   rolls: number;
+  /** Full roll log (dice + kept per roll) — lets a settled turn be re-watched. */
+  rollLog: GreedDiceRollLogEntry[];
   won: boolean;
   payout: number;
   createdAt: string;

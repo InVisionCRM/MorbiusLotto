@@ -518,7 +518,7 @@ export function registerArcadeChickenRoutes({
       }
       const limit = Math.max(1, Math.min(100, parseInt(String(req.query.limit ?? '25'), 10) || 25));
       const r = await pool.query(
-        `SELECT id, bet, difficulty, lane, multiplier_x100, won, payout, created_at
+        `SELECT id, bet, difficulty, lane, bumper_lanes, multiplier_x100, won, payout, created_at
            FROM arcade_chicken_rounds
           WHERE wallet_address = $1 AND status = 'settled'
           ORDER BY created_at DESC
@@ -532,6 +532,9 @@ export function registerArcadeChickenRoutes({
           bet: Number(row.bet),
           difficulty: row.difficulty,
           lane: Number(row.lane),
+          // Revealed bumper lanes so the client can re-render the settled road
+          // (replay) without another round.
+          bumperLanes: Array.isArray(row.bumper_lanes) ? row.bumper_lanes : [],
           multiplierX100: Number(row.multiplier_x100),
           won: !!row.won,
           payout: Number(row.payout),

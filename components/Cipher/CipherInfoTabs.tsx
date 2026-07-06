@@ -10,6 +10,7 @@
  */
 
 import { useEffect, useState, type ReactNode } from 'react';
+import { Play } from 'lucide-react';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { ArcadeFAQ } from '@/components/arcade2/ArcadeFAQ';
 import { ArcadeOddsTab } from '@/components/arcade2/ArcadeOddsTab';
@@ -30,6 +31,8 @@ interface CipherInfoTabsProps {
   history: CipherHistoryRound[];
   historyLoading: boolean;
   onVerify: (roundId: string) => void;
+  /** When provided, each row gets a Replay button that re-renders that round. */
+  onReplay?: (round: CipherHistoryRound) => void;
   info: CipherInfo | null;
 }
 
@@ -72,7 +75,7 @@ function ResultBadge({ won }: { won: boolean }) {
   );
 }
 
-export function CipherInfoTabs({ history, historyLoading, onVerify, info }: CipherInfoTabsProps) {
+export function CipherInfoTabs({ history, historyLoading, onVerify, onReplay, info }: CipherInfoTabsProps) {
   const [recent, setRecent] = useState<CipherRecentRound[]>([]);
   const [recentLoading, setRecentLoading] = useState(true);
   const [leaders, setLeaders] = useState<CipherLeaderboardEntry[]>([]);
@@ -195,6 +198,17 @@ export function CipherInfoTabs({ history, historyLoading, onVerify, info }: Ciph
                     <span className={`arc-mono ml-auto shrink-0 tabular-nums font-semibold ${net > 0 ? 'text-amber-300' : 'text-rose-400'}`}>
                       {net > 0 ? `+${net.toLocaleString()}` : net.toLocaleString()}
                     </span>
+                    {onReplay && h.won && (
+                      <button
+                        type="button"
+                        onClick={() => onReplay(h)}
+                        title="Replay this round on the board"
+                        className="flex shrink-0 items-center gap-1 rounded px-1.5 py-0.5 text-[11px] font-semibold text-cyan-300 transition-colors hover:bg-cyan-500/15"
+                      >
+                        <Play size={11} className="fill-current" />
+                        Replay
+                      </button>
+                    )}
                     <button
                       type="button"
                       onClick={() => onVerify(h.roundId)}

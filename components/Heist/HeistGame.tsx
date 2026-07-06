@@ -35,6 +35,7 @@ import { GameWalletModal } from '@/components/shared/GameWalletModal';
 import { probeSiweSession } from '@/lib/api-auth';
 import { SessionChart, type SessionPoint } from '@/components/arcade2/SessionChart';
 import { FloatingPanel } from '@/components/arcade2/FloatingPanel';
+import { ReplayConfirmOverlay } from '@/components/share/ReplayConfirmOverlay';
 import { HeistVault, type DoorState } from './HeistVault';
 import { HeistInfoTabs } from './HeistInfoTabs';
 import { HeistFairnessModal } from './HeistFairnessModal';
@@ -96,6 +97,15 @@ export function HeistGame() {
   const [session, setSession] = useState<SessionPoint[]>([]);
   const [history, setHistory] = useState<HeistHistoryRound[]>([]);
   const [historyLoading, setHistoryLoading] = useState(false);
+
+  // Replay: a staged past round (confirm overlay) + a flag while re-showing it.
+  // A replay is a pure re-watch — it re-renders the round's final revealed vault
+  // + escape banner and NEVER settles (no server call, balance, reportWin,
+  // history, or session write). `replaying` also suppresses the idle-door reset
+  // effect so a bust's alarm strobe survives on the board.
+  const [pendingReplay, setPendingReplay] = useState<HeistHistoryRound | null>(null);
+  const [replaying, setReplaying] = useState(false);
+  const boardRef = useRef<HTMLDivElement | null>(null);
 
   const [clientSeed, setClientSeed] = useState('');
   const [fairnessOpen, setFairnessOpen] = useState(false);
@@ -193,12 +203,13 @@ export function HeistGame() {
   const loot = round && currentRoom > 0 ? cashoutValue : round ? round.bet : 0;
   const canCash = phase === 'active' && currentRoom > 0;
 
-  // Keep the door grid sized to the active difficulty while idle.
+  // Keep the door grid sized to the active difficulty while idle. Skipped during
+  // a replay so a re-watched bust keeps its revealed alarm strobe on the board.
   useEffect(() => {
-    if (betting) {
+    if (betting && !replaying) {
       setDoorStates(Array.from({ length: doors }, () => ({ kind: 'idle' as const })));
     }
-  }, [betting, doors]);
+  }, [betting, doors, replaying]);
 
   const clampBet = useCallback(
     (v: number) => {
@@ -221,7 +232,17 @@ export function HeistGame() {
   }, []);
 
   const settleHistory = useCallback(
-    (roundId: string, betAmount: number, diff: HeistDifficulty, room: number, multX100: number, won: boolean, payout: number) => {
+    (
+      roundId: string,
+      betAmount: number,
+      diff: HeistDifficulty,
+      room: number,
+      multX100: number,
+      won: boolean,
+      payout: number,
+      alarmDoors: number[][],
+      picks: number[],
+    ) => {
       setHistory((prev) =>
         [
           {
@@ -229,6 +250,8 @@ export function HeistGame() {
             bet: betAmount,
             difficulty: diff,
             room,
+            alarmDoors,
+            picks,
             multiplierX100: multX100,
             won,
             payout,
@@ -263,6 +286,8 @@ export function HeistGame() {
     setError(null);
     setNoChips(false);
     setResult(null);
+    setPendingReplay(null);
+    setReplaying(false);
     setPhase('starting');
     heistAudio.init();
     try {
@@ -323,7 +348,7 @@ export function HeistGame() {
             setRound((prev) => (prev ? { ...prev, picks: r.picks } : prev));
             setResult({ won: false, full: false, payout: 0, multiplierX100: round.multiplierX100, serverSeed: r.serverSeed });
             setPhase('busted');
-            settleHistory(roundId, betAmount, diff, r.room, round.multiplierX100, false, 0);
+            settleHistory(roundId, betAmount, diff, r.room, round.multiplierX100, false, 0, r.alarmDoors, r.picks);
             setSession((prev) => [...prev, { drop: prev.length + 1, bet: betAmount, profit: -betAmount }]);
           }, ALARM_REVEAL_MS);
           timers.current.push(t);
@@ -348,7 +373,7 @@ export function HeistGame() {
           setPhase('cashed');
           winFx();
           reportWin({ game: 'Heist', bet: betAmount, payout: r.payout });
-          settleHistory(roundId, betAmount, diff, r.room, r.multiplierX100, true, r.payout);
+          settleHistory(roundId, betAmount, diff, r.room, r.multiplierX100, true, r.payout, r.alarmDoors, r.picks);
           setSession((prev) => [...prev, { drop: prev.length + 1, bet: betAmount, profit: r.payout - betAmount }]);
         } else {
           // Safe crack — glow the chosen door amber with the gained loot, dim the
@@ -413,6 +438,8 @@ export function HeistGame() {
 
   const playAgain = useCallback(() => {
     clearTimers();
+    setReplaying(false);
+    setPendingReplay(null);
     setRound(null);
     setResult(null);
     setDoorStates(Array.from({ length: doors }, () => ({ kind: 'idle' as const })));
@@ -420,6 +447,71 @@ export function HeistGame() {
     setError(null);
     setPhase('idle');
   }, [clearTimers, doors]);
+
+  // ── Replay a past heist: stage the confirm overlay, then re-render the round's
+  // final revealed vault (a bust strobes the caught room's alarm doors; an escape
+  // rests on the vault with its banner) + the escape multiplier. Pure re-watch —
+  // no server call, no balance / history / session / reportWin. A real new round
+  // clears the replay view. ──
+  const handleReplay = useCallback(
+    (r: HeistHistoryRound) => {
+      // Bail if a heist is live (only allow from a settled/idle board).
+      if (!betting || replaying) return;
+      heistAudio.init();
+      setPendingReplay(r);
+      boardRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    },
+    [betting, replaying],
+  );
+
+  const startReplay = useCallback(() => {
+    const r = pendingReplay;
+    if (!r) return;
+    clearTimers();
+    setPendingReplay(null);
+    setError(null);
+    setNoChips(false);
+    setReplaying(true);
+    heistAudio.init();
+    const di = info?.difficulties[r.difficulty] ?? null;
+    const doorsR = di?.doors ?? DEFAULT_DOORS[r.difficulty];
+    const alarmsR = di?.alarms ?? 1;
+    const roomsR = di?.rooms ?? DEFAULT_ROOMS[r.difficulty];
+    const ladderR = di?.ladder ?? [];
+    const full = r.won && r.room >= roomsR;
+    // Display-only round so the HUD (multiplier / room / escape value) renders.
+    setRound({
+      roundId: r.roundId,
+      bet: r.bet,
+      difficulty: r.difficulty,
+      room: r.room,
+      picks: r.picks ?? [],
+      multiplierX100: r.multiplierX100,
+      serverSeedHash: '',
+      rooms: roomsR,
+      doors: doorsR,
+      alarms: alarmsR,
+      ladder: ladderR,
+    });
+    if (r.won) {
+      setDoorStates(Array.from({ length: doorsR }, () => ({ kind: 'idle' as const })));
+      setVaultMid(
+        full ? 'You emptied the whole vault.' : `Escaped with ${formatMultiplier(r.multiplierX100)}.`,
+      );
+      heistAudio.playWin();
+    } else {
+      const roomAlarms = r.alarmDoors?.[r.room] ?? [];
+      setDoorStates(
+        Array.from({ length: doorsR }, (_, i) =>
+          roomAlarms.includes(i) ? { kind: 'alarm' as const } : { kind: 'dim' as const },
+        ),
+      );
+      setVaultMid(`Caught in room ${r.room + 1}.`);
+      heistAudio.playBust();
+    }
+    setResult({ won: r.won, full, payout: r.payout, multiplierX100: r.multiplierX100, serverSeed: '' });
+    setPhase(r.won ? 'cashed' : 'busted');
+  }, [pendingReplay, info, clearTimers]);
 
   const openVerify = useCallback((id: string | null) => {
     setVerifyTarget(id);
@@ -597,7 +689,7 @@ export function HeistGame() {
 
         {/* ───────── Vault ───────── */}
         <div className="order-1 space-y-4 lg:order-2">
-          <Card className="relative border-0 bg-[#07131F] p-3 ring-1 ring-inset ring-cyan-950/70 sm:p-4">
+          <Card ref={boardRef} className="relative border-0 bg-[#07131F] p-3 ring-1 ring-inset ring-cyan-950/70 sm:p-4">
             {/* HUD */}
             <div className="mb-3 grid grid-cols-3 overflow-hidden rounded-lg ring-1 ring-cyan-950/70">
               <div className="bg-[#040C13]/85 px-3 py-2.5 text-center">
@@ -641,6 +733,20 @@ export function HeistGame() {
                 </Button>
               </div>
             )}
+
+            {pendingReplay && (
+              <ReplayConfirmOverlay
+                title="Replay heist"
+                headline={formatMultiplier(pendingReplay.multiplierX100)}
+                sub={`${
+                  pendingReplay.payout - pendingReplay.bet > 0
+                    ? `+${(pendingReplay.payout - pendingReplay.bet).toLocaleString()}`
+                    : (pendingReplay.payout - pendingReplay.bet).toLocaleString()
+                } MORBIUS`}
+                onPlay={startReplay}
+                onCancel={() => setPendingReplay(null)}
+              />
+            )}
           </Card>
         </div>
       </div>
@@ -651,6 +757,7 @@ export function HeistGame() {
           history={history}
           historyLoading={historyLoading}
           onVerify={(id) => openVerify(id)}
+          onReplay={handleReplay}
           info={info}
         />
       </div>

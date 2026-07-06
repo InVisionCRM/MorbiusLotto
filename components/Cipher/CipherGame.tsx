@@ -23,7 +23,7 @@
  * bet + ½/2×/Max, Deal / Submit + Cash out, provably fair) beside the code board.
  */
 
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useAccount } from 'wagmi';
 import confetti from 'canvas-confetti';
 import { Volume2, VolumeX, Delete } from 'lucide-react';
@@ -36,6 +36,7 @@ import { GameWalletModal } from '@/components/shared/GameWalletModal';
 import { probeSiweSession } from '@/lib/api-auth';
 import { SessionChart, type SessionPoint } from '@/components/arcade2/SessionChart';
 import { FloatingPanel } from '@/components/arcade2/FloatingPanel';
+import { ReplayConfirmOverlay } from '@/components/share/ReplayConfirmOverlay';
 import { CipherInfoTabs } from './CipherInfoTabs';
 import { CipherFairnessModal } from './CipherFairnessModal';
 import { cipherAudio } from './cipher-audio';
@@ -136,6 +137,13 @@ export function CipherGame() {
   const [history, setHistory] = useState<CipherHistoryRound[]>([]);
   const [historyLoading, setHistoryLoading] = useState(false);
 
+  // Replay: a staged past round (confirm overlay) + the round being re-watched.
+  // A replay re-renders that settled board (guess rows + revealed code) — no
+  // server call, no balance / reportWin / history / session change.
+  const [pendingReplay, setPendingReplay] = useState<CipherHistoryRound | null>(null);
+  const [replayRound, setReplayRound] = useState<CipherHistoryRound | null>(null);
+  const boardRef = useRef<HTMLDivElement | null>(null);
+
   const [clientSeed, setClientSeed] = useState('');
   const [fairnessOpen, setFairnessOpen] = useState(false);
   const [verifyTarget, setVerifyTarget] = useState<string | null>(null);
@@ -216,8 +224,9 @@ export function CipherGame() {
   const phaseValue: Phase = phase;
   const betting = phase === 'idle' || phase === 'busted' || phase === 'cracked' || phase === 'banked';
 
-  // Board config: from the active round while playing, else the selected difficulty.
-  const boardDifficulty = round?.difficulty ?? difficulty;
+  // Board config: from the active round while playing, the replayed round while
+  // re-watching, else the selected difficulty.
+  const boardDifficulty = round?.difficulty ?? replayRound?.difficulty ?? difficulty;
   const diffInfo = info?.difficulties[boardDifficulty] ?? null;
   const codeLen = round?.codeLen ?? diffInfo?.codeLen ?? 4;
   const symbols = round?.symbols ?? diffInfo?.symbols ?? 5;
@@ -230,6 +239,8 @@ export function CipherGame() {
   const crackNextX100 = isPlaying && guessCount < maxGuesses ? crackLadder[guessCount + 1] ?? 0 : 0;
   const securedX100 = isPlaying && bestExact >= 1 ? secureLadder[bestExact] ?? 0 : 0;
   const cashoutValue = round && securedX100 ? Math.floor((round.bet * securedX100) / 100) : 0;
+  // Bet backing the result banner — from the active round, or the replayed round.
+  const resultBet = round?.bet ?? replayRound?.bet ?? 0;
   const canCash = phase === 'active' && securedX100 > 0;
   const currentFull = current.length === codeLen && current.every((v) => v != null);
 
@@ -264,6 +275,8 @@ export function CipherGame() {
       won: boolean,
       multX100: number,
       payout: number,
+      code: number[],
+      guessList: CipherGuessRecord[],
     ) => {
       setHistory((prev) =>
         [
@@ -271,6 +284,8 @@ export function CipherGame() {
             roundId,
             bet: betAmount,
             difficulty: diff,
+            code,
+            guesses: guessList,
             guessCount: gCount,
             bestExact: best,
             cracked,
@@ -307,6 +322,8 @@ export function CipherGame() {
     setError(null);
     setNoChips(false);
     setResult(null);
+    setReplayRound(null);
+    setPendingReplay(null);
     setGuesses([]);
     setBestExact(0);
     setPhase('starting');
@@ -401,7 +418,8 @@ export function CipherGame() {
     try {
       const r = await guessCipher(roundId, guess);
       const record: CipherGuessRecord = { guess, exact: r.exact, partial: r.partial };
-      setGuesses((prev) => [...prev, record]);
+      const allGuesses = [...guesses, record];
+      setGuesses(allGuesses);
       setBestExact(r.bestExact);
       setCurrent(new Array(codeLen).fill(null));
 
@@ -415,14 +433,14 @@ export function CipherGame() {
         setPhase('cracked');
         winFx();
         reportWin({ game: 'Cipher', bet: betAmount, payout: r.payout });
-        settleHistory(roundId, betAmount, diff, r.guessCount, r.bestExact, true, true, r.multiplierX100, r.payout);
+        settleHistory(roundId, betAmount, diff, r.guessCount, r.bestExact, true, true, r.multiplierX100, r.payout, r.code, allGuesses);
         setSession((prev) => [...prev, { drop: prev.length + 1, bet: betAmount, profit: r.payout - betAmount }]);
       } else if (r.settled && !r.cracked) {
         // Bust on the last guess.
         setResult({ kind: 'bust', multiplierX100: 0, payout: 0, code: r.code });
         setPhase('busted');
         cipherAudio.playBust();
-        settleHistory(roundId, betAmount, diff, r.guessCount, r.bestExact, false, false, 0, 0);
+        settleHistory(roundId, betAmount, diff, r.guessCount, r.bestExact, false, false, 0, 0, r.code, allGuesses);
         setSession((prev) => [...prev, { drop: prev.length + 1, bet: betAmount, profit: -betAmount }]);
       } else {
         cipherAudio.playExact(r.exact);
@@ -432,7 +450,7 @@ export function CipherGame() {
       setPhase('active');
       handleErr(e);
     }
-  }, [round, phase, current, codeLen, settleHistory, winFx, handleErr, reportWin]);
+  }, [round, phase, current, codeLen, guesses, settleHistory, winFx, handleErr, reportWin]);
 
   const doCashout = useCallback(async () => {
     if (!round || phase !== 'active' || securedX100 <= 0) return;
@@ -453,23 +471,59 @@ export function CipherGame() {
       cipherAudio.playCash();
       confetti({ particleCount: 70, spread: 60, origin: { y: 0.5 }, colors: ['#F59E0B', '#FCD34D', '#ffffff'] });
       reportWin({ game: 'Cipher', bet: betAmount, payout: r.payout });
-      settleHistory(roundId, betAmount, diff, guessCount, r.bestExact, false, true, r.multiplierX100, r.payout);
+      settleHistory(roundId, betAmount, diff, guessCount, r.bestExact, false, true, r.multiplierX100, r.payout, r.code, guesses);
       setSession((prev) => [...prev, { drop: prev.length + 1, bet: betAmount, profit: r.payout - betAmount }]);
     } catch (e) {
       setPhase('active');
       handleErr(e);
     }
-  }, [round, phase, securedX100, guessCount, settleHistory, handleErr, reportWin]);
+  }, [round, phase, securedX100, guessCount, guesses, settleHistory, handleErr, reportWin]);
 
   const playAgain = useCallback(() => {
     setRound(null);
     setResult(null);
+    setReplayRound(null);
+    setPendingReplay(null);
     setGuesses([]);
     setBestExact(0);
     setCurrent([]);
     setError(null);
     setPhase('idle');
   }, []);
+
+  // ── Replay a past round: stage the confirm overlay, then re-render the settled
+  // board — the guess rows and the revealed code — with the result banner. A
+  // pure re-watch: no server call, no balance / reportWin / history / session. ──
+  const handleReplay = useCallback(
+    (r: CipherHistoryRound) => {
+      if (!betting) return; // never interrupt a live round
+      cipherAudio.init();
+      setPendingReplay(r);
+      boardRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    },
+    [betting],
+  );
+
+  const startReplay = useCallback(() => {
+    const r = pendingReplay;
+    if (!r) return;
+    setPendingReplay(null);
+    setError(null);
+    setNoChips(false);
+    setRound(null);
+    setDifficulty(r.difficulty);
+    setGuesses(r.guesses);
+    setBestExact(r.bestExact);
+    setCurrent([]);
+    setReplayRound(r);
+    const kind: RoundResult['kind'] = r.cracked ? 'crack' : r.won ? 'bank' : 'bust';
+    setResult({ kind, multiplierX100: r.multiplierX100, payout: r.payout, code: r.code });
+    setPhase(kind === 'crack' ? 'cracked' : kind === 'bank' ? 'banked' : 'busted');
+    cipherAudio.init();
+    if (kind === 'crack') cipherAudio.playCrack();
+    else if (kind === 'bank') cipherAudio.playCash();
+    else cipherAudio.playBust();
+  }, [pendingReplay]);
 
   const openVerify = useCallback((id: string | null) => {
     setVerifyTarget(id);
@@ -672,7 +726,7 @@ export function CipherGame() {
 
         {/* ───────── Code board ───────── */}
         <div className="order-1 space-y-4 lg:order-2">
-          <Card className="relative overflow-hidden border-0 bg-[#07131F] p-0 ring-1 ring-inset ring-cyan-950/70">
+          <Card ref={boardRef} className="relative overflow-hidden border-0 bg-[#07131F] p-0 ring-1 ring-inset ring-cyan-950/70">
             {/* HUD strip */}
             <div className="grid grid-cols-3 gap-px bg-cyan-500/10">
               <div className="bg-[#040c13]/90 px-3 py-3 text-center">
@@ -824,14 +878,28 @@ export function CipherGame() {
                     </div>
                     <div className="arc-mono mt-1 text-3xl font-bold text-white sm:text-4xl">
                       {result.kind === 'bust'
-                        ? `−${(round?.bet ?? 0).toLocaleString()}`
-                        : `+${(result.payout - (round?.bet ?? 0)).toLocaleString()}`}{' '}
+                        ? `−${resultBet.toLocaleString()}`
+                        : `+${(result.payout - resultBet).toLocaleString()}`}{' '}
                       <span className="text-base text-slate-400">MORBIUS</span>
                     </div>
                   </div>
                 </div>
               )}
             </div>
+
+            {pendingReplay && (
+              <ReplayConfirmOverlay
+                title="Replay round"
+                headline={formatMultiplier(pendingReplay.multiplierX100)}
+                sub={`${
+                  pendingReplay.payout - pendingReplay.bet > 0
+                    ? `+${(pendingReplay.payout - pendingReplay.bet).toLocaleString()}`
+                    : (pendingReplay.payout - pendingReplay.bet).toLocaleString()
+                } MORBIUS`}
+                onPlay={startReplay}
+                onCancel={() => setPendingReplay(null)}
+              />
+            )}
           </Card>
 
           {result && (
@@ -862,6 +930,7 @@ export function CipherGame() {
           history={history}
           historyLoading={historyLoading}
           onVerify={(id) => openVerify(id)}
+          onReplay={handleReplay}
           info={info}
         />
       </div>

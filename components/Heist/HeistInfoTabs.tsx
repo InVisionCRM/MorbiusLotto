@@ -31,6 +31,8 @@ interface HeistInfoTabsProps {
   history: HeistHistoryRound[];
   historyLoading: boolean;
   onVerify: (roundId: string) => void;
+  /** Re-watch a past round on the board (no settlement). */
+  onReplay?: (round: HeistHistoryRound) => void;
   info: HeistInfo | null;
 }
 
@@ -65,7 +67,7 @@ function ResultBadge({ won }: { won: boolean }) {
   );
 }
 
-export function HeistInfoTabs({ history, historyLoading, onVerify, info }: HeistInfoTabsProps) {
+export function HeistInfoTabs({ history, historyLoading, onVerify, onReplay, info }: HeistInfoTabsProps) {
   const [recent, setRecent] = useState<HeistRecentRound[]>([]);
   const [recentLoading, setRecentLoading] = useState(true);
   const [leaders, setLeaders] = useState<HeistLeaderboardEntry[]>([]);
@@ -182,6 +184,15 @@ export function HeistInfoTabs({ history, historyLoading, onVerify, info }: Heist
                     <span className={`arc-mono ml-auto shrink-0 tabular-nums font-semibold ${net > 0 ? 'text-amber-300' : 'text-rose-400'}`}>
                       {net > 0 ? `+${net.toLocaleString()}` : net.toLocaleString()}
                     </span>
+                    {onReplay && (
+                      <button
+                        type="button"
+                        onClick={() => onReplay(h)}
+                        className="shrink-0 rounded px-1.5 py-0.5 text-[11px] font-medium text-slate-500 transition-colors hover:bg-cyan-500/10 hover:text-cyan-300"
+                      >
+                        Replay
+                      </button>
+                    )}
                     <button
                       type="button"
                       onClick={() => onVerify(h.roundId)}
