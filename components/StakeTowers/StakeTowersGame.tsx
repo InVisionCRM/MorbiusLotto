@@ -652,6 +652,7 @@ export function StakeTowersGame() {
       {/* Draggable mini session chart — open in a corner on mobile, full-size on desktop. */}
       <FloatingPanel title="Session" storageKey="towers.sessionChart.pos">
         <SessionChart
+          gameName="Towers"
           points={session}
           unitLabel="Rounds"
           bare

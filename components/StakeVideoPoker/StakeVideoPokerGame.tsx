@@ -541,7 +541,7 @@ export function StakeVideoPokerGame() {
           Session-only: the Video Poker backend keeps no per-hand history, so there is no
           all-time data source to wire an allTimeLoader to. */}
       <FloatingPanel title="Session" storageKey="videopoker.sessionChart.pos">
-        <SessionChart points={session} unitLabel="Hands" bare />
+        <SessionChart gameName="Video Poker" points={session} unitLabel="Hands" bare />
       </FloatingPanel>
 
       <VideoPokerFairnessModal

@@ -937,6 +937,7 @@ export function CipherGame() {
       {/* Draggable mini session chart — open in a corner on mobile, full-size on desktop. */}
       <FloatingPanel title="Session" storageKey="cipher.sessionChart.pos">
         <SessionChart
+          gameName="Cipher"
           points={session}
           unitLabel="Rounds"
           bare

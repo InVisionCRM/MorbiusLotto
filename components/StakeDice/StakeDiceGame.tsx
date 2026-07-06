@@ -717,6 +717,7 @@ export function StakeDiceGame() {
       {/* Draggable mini session chart — open in a corner on mobile, full-size on desktop. */}
       <FloatingPanel title="Session" storageKey="dice2.sessionChart.pos">
         <SessionChart
+          gameName="Dice"
           points={session}
           unitLabel="Rolls"
           bare

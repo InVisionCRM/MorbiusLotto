@@ -683,6 +683,7 @@ export function StakeHiLoGame() {
       {/* Draggable mini session chart — open in a corner on mobile, full-size on desktop. */}
       <FloatingPanel title="Session" storageKey="hilo.sessionChart.pos">
         <SessionChart
+          gameName="Hi-Lo"
           points={session}
           unitLabel="Rounds"
           bare

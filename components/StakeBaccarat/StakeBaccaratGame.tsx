@@ -710,6 +710,7 @@ export function StakeBaccaratGame() {
       {/* Draggable mini session chart — open in a corner on mobile, full-size on desktop. */}
       <FloatingPanel title="Session" storageKey="baccarat.sessionChart.pos">
         <SessionChart
+          gameName="Baccarat"
           points={session}
           unitLabel="Hands"
           bare
