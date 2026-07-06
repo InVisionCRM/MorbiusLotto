@@ -39,11 +39,32 @@ interface SessionChartProps {
   allTimeLoader?: () => Promise<SessionPoint[]>
 }
 
+/**
+ * Compact number for the tight mobile tiles / Y-axis: 1,240 → "1.2k",
+ * 3,400,000 → "3.4M". Keeps the sign, drops trailing ".0", and leaves values
+ * under 1,000 grouped. This is what stops any 3+ digit number from truncating
+ * to "xx…" in a 270px-wide panel.
+ */
+function fmtCompact(n: number): string {
+  if (!Number.isFinite(n)) return '0'
+  const a = Math.abs(n)
+  if (a >= 1_000_000) {
+    const v = a >= 10_000_000 ? Math.round(n / 1_000_000) : +(n / 1_000_000).toFixed(1)
+    return `${v}M`
+  }
+  if (a >= 1_000) {
+    const v = a >= 10_000 ? Math.round(n / 1_000) : +(n / 1_000).toFixed(1)
+    // Rounding can push e.g. 999,999 to 1000k — promote it to 1M.
+    return Math.abs(v) >= 1_000 ? `${v / 1_000}M` : `${v}k`
+  }
+  return Math.round(n).toLocaleString('en-US')
+}
+
 function StatTile({ label, value, accent }: { label: string; value: string; accent?: string }) {
   return (
     <div className="min-w-0 rounded-lg bg-[#081420]/70 px-2 py-1.5 text-center ring-1 ring-cyan-950/70">
       <div className="text-[9px] uppercase tracking-wider text-slate-500">{label}</div>
-      <div className="arc-mono truncate text-sm font-bold tabular-nums" style={{ color: accent ?? '#E2E8F0' }}>
+      <div className="arc-mono text-sm font-bold tabular-nums" style={{ color: accent ?? '#E2E8F0' }}>
         {value}
       </div>
     </div>
@@ -139,29 +160,32 @@ export function SessionChart({ points, unitLabel, bare = false, allTimeLoader }:
   const body = (
     <>
       {toggle}
-      <div className="mb-3 grid grid-cols-4 gap-1.5">
-        <StatTile label={unitLabel} value={stats.count.toLocaleString()} />
-        <StatTile label="Wagered" value={stats.wagered.toLocaleString()} />
+      {/* 2-up on phones (wide enough to read), 4-up once there's room. */}
+      <div className="mb-3 grid grid-cols-2 gap-1.5 sm:grid-cols-4">
+        <StatTile label={unitLabel} value={fmtCompact(stats.count)} />
+        <StatTile label="Wagered" value={fmtCompact(stats.wagered)} />
         <StatTile
           label="Net P/L"
-          value={`${stats.net >= 0 ? '+' : ''}${stats.net.toLocaleString()}`}
+          value={`${stats.net >= 0 ? '+' : ''}${fmtCompact(stats.net)}`}
           accent={positive ? '#F59E0B' : '#FB7185'}
         />
         <StatTile
           label="ROI"
-          value={`${stats.roi >= 0 ? '+' : ''}${stats.roi.toFixed(1)}%`}
+          value={`${stats.roi >= 0 ? '+' : ''}${
+            Math.abs(stats.roi) >= 100 ? Math.round(stats.roi).toLocaleString('en-US') : stats.roi.toFixed(1)
+          }%`}
           accent={positive ? '#F59E0B' : '#FB7185'}
         />
       </div>
 
       {loading && showAllTime ? (
-        <div className="flex h-40 items-center justify-center text-sm text-slate-500">Loading all-time…</div>
+        <div className="flex h-32 items-center justify-center text-sm text-slate-500 sm:h-48">Loading all-time…</div>
       ) : data.length === 0 ? (
-        <div className="flex h-40 items-center justify-center px-3 text-center text-sm text-slate-500">
+        <div className="flex h-32 items-center justify-center px-3 text-center text-sm text-slate-500 sm:h-48">
           {emptyMessage}
         </div>
       ) : (
-        <div className="h-40 w-full sm:h-48">
+        <div className="h-32 w-full sm:h-48">
           <ResponsiveContainer width="100%" height="100%">
             <AreaChart data={data} margin={{ top: 8, right: 8, left: 0, bottom: 0 }}>
               <defs>
@@ -183,7 +207,8 @@ export function SessionChart({ points, unitLabel, bare = false, allTimeLoader }:
                 domain={domain}
                 stroke="rgba(148,163,184,0.4)"
                 fontSize={10}
-                width={42}
+                width={34}
+                tickFormatter={fmtCompact}
                 tick={{ fill: 'rgba(148,163,184,0.55)' }}
                 axisLine={{ stroke: 'rgba(34,211,238,0.15)' }}
                 tickLine={{ stroke: 'rgba(34,211,238,0.15)' }}
