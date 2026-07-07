@@ -166,6 +166,8 @@
 
   // ---------- balls (kinematic, path-driven) ----------
   const balls=[];
+  const pegFlash={}; // "x,y" -> intensity, lit briefly when a ball strikes that peg
+  function easeOutBack(t,s){ s=(s==null?1.7:s); return 1+(s+1)*Math.pow(t-1,3)+s*Math.pow(t-1,2); }
   function pathColumns(path){ // net cumulative in half-steps; C[0]=0 top, C[k]=net after row k-1
     const C=[0]; let net=0;
     for(let i=0;i<path.length;i++){ net+=2*path[i]-1; C.push(net); }
@@ -192,23 +194,28 @@
 
   function step(dt){
     const N=rows, g=9.5*speed;
+    for(const k in pegFlash){ pegFlash[k]-=dt*3.2; if(pegFlash[k]<=0) delete pegFlash[k]; }
     for(const b of balls){
       if(b.done){ b.flash=Math.max(0,(b.flash||0)-dt*1.6); continue; }
       b.vr += g*dt*0.5;
-      b.r += b.vr*dt*speed;
-      const fr=Math.floor(Math.min(b.r,N));
-      if(fr>b.lastRow && fr<=N){ b.lastRow=fr; b.squash=1; }
-      b.squash=Math.max(0,b.squash-dt*6);
+      b.r += b.vr*dt*speed*0.85;
       const rr=Math.min(b.r,N);
       const i=Math.floor(rr), f=rr-i;
-      const colB=b.C[Math.min(i,N)], colA=b.C[Math.min(i+1,N)];
-      const fe=f<0.5? 2*f*f : 1-Math.pow(-2*f+2,2)/2; // easeInOutQuad
-      const col=colB+(colA-colB)*fe;
-      // bounce = sideways wobble toward the chosen side while crossing a row
-      const dir=(b.path[i]||0)?1:-1;
-      b.cx=500+col*HALF + Math.sin(f*Math.PI)*bounce*7*dir;
-      if(b.r<N){ b.cy=STARTY+rr*SY; }
-      else {
+      // strike a peg the instant we enter a new row segment
+      if(i>b.lastRow && i<N){
+        b.lastRow=i; b.squash=1;
+        const px=500+b.C[Math.min(i,N)]*HALF, py=STARTY+i*SY;
+        pegFlash[`${Math.round(px)},${Math.round(py)}`]=1;
+      }
+      b.squash=Math.max(0,b.squash-dt*7);
+      if(b.r<N){
+        const cxA=500+b.C[Math.min(i,N)]*HALF, cxB=500+b.C[Math.min(i+1,N)]*HALF;
+        // x: kick off the peg with a little overshoot (settles into the gap)
+        b.cx=cxA+(cxB-cxA)*easeOutBack(f, 0.9+bounce*1.8);
+        // y: ballistic hop — pop up off the peg, then fall onto the next
+        const hop=SY*(0.10+bounce*0.55);
+        b.cy=STARTY+i*SY + SY*f - hop*Math.sin(Math.PI*f);
+      } else {
         const by=bucketY(N);
         b.cy += (by - b.cy)*Math.min(1,dt*10);
         b.cx += (bucketCenter(N,b.target)-b.cx)*Math.min(1,dt*10);
@@ -223,9 +230,13 @@
   function draw(){
     const N=rows;
     ctx.clearRect(0,0,cv.width,cv.height);
-    ctx.fillStyle="rgba(180,235,248,.85)";
+    const basePR=Math.max(1.5,PEG_R*VS);
     for(let r=0;r<N;r++) for(let c=0;c<r+3;c++){ const p=pegXY(N,r,c);
-      ctx.beginPath(); ctx.arc(tx(p.x),ty(p.y),Math.max(1.5,PEG_R*VS),0,7); ctx.fill(); }
+      const fl=pegFlash[`${Math.round(p.x)},${Math.round(p.y)}`]||0;
+      if(fl>0){ ctx.shadowColor=`rgba(120,230,250,${fl})`; ctx.shadowBlur=12*fl; ctx.fillStyle=`rgba(224,250,255,${0.85+0.15*fl})`; }
+      else { ctx.shadowBlur=0; ctx.fillStyle="rgba(180,235,248,.85)"; }
+      ctx.beginPath(); ctx.arc(tx(p.x),ty(p.y),basePR*(1+fl*0.7),0,7); ctx.fill(); }
+    ctx.shadowBlur=0;
     const by=bucketY(N), tbl=TABLES[N][risk];
     ctx.textAlign="center"; ctx.textBaseline="middle";
     for(let i=0;i<=N;i++){ const cx=bucketCenter(N,i), m=tbl[i], col=multColor(m);
