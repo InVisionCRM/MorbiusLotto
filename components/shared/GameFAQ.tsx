@@ -42,31 +42,31 @@ const GAME_FAQS: Record<GameFAQProps['game'], { q: string; a: React.ReactNode }[
   plinko: [
     {
       q: 'How does Plinko work?',
-      a: 'You choose a wager and risk level (Green, Yellow, or Red). Balls are dropped from the top and bounce off pegs into buckets. Each bucket has a multiplier—higher risk means higher possible payouts and higher variance. Results are provably fair and recorded on-chain.',
+      a: 'You choose a wager and a risk level (Green, Yellow, or Red). A ball drops from the top and bounces through the pegs into a multiplier slot at the bottom; your payout is your wager × that slot. Higher risk means bigger top multipliers and higher variance. Every drop is provably fair — the outcome comes from a server seed you can verify afterward.',
     },
     {
       q: 'What are the risk levels?',
-      a: 'Green is lower variance with smaller multipliers. Yellow is medium. Red offers the highest multipliers and highest variance. Your payout is (wager × bucket multiplier) minus the fee.',
+      a: 'Green is lower variance with smaller multipliers. Yellow is medium. Red offers the highest multipliers and highest variance. Your payout is wager × the slot\'s multiplier.',
     },
     {
-      q: 'What are the fees?',
-      a: 'A fee is taken on each wager (e.g. 5% total: distribution, burn, platform, LP). Your payout is paid out in the same transaction—no separate claim.',
+      q: 'Are there any fees?',
+      a: 'No. There\'s no per-bet or per-payout fee. Like any casino, each game keeps a small built-in house edge (around 1%). Losing bets also earn VIP rakeback based on your tier.',
     },
     {
-      q: 'What token do I need?',
-      a: 'You can play with MORBIUS or WPLS (wrapped PLS). Approve the contract once, then buy balls and drop. Winnings are paid in the same token you wagered.',
+      q: 'What do I play with?',
+      a: 'MORBIUS, the in-game currency. Top it up from your connected wallet, then bet and drop. Winnings are credited back to your MORBIUS balance.',
     },
     {
-      q: 'How is the RNG calculated?',
-      a: 'The contract builds a random seed from on-chain data: previous block hash, block timestamp, your address, a global drop counter, gas price, and a per-ball nonce. That seed is hashed (keccak256) and mapped to a bucket via fixed weighted thresholds. The seed is emitted in the BallDropped event so anyone can verify the result.',
+      q: 'How is the result decided?',
+      a: 'Each drop is provably fair. Before you bet, the server shows a hash of its secret seed; the slot is then derived from that server seed plus your client seed and a nonce (HMAC-SHA256). After the round the server seed is revealed, so you can re-run the math and confirm the drop wasn\'t changed.',
     },
     {
       q: 'Do I need to claim my winnings?',
-      a: 'No. Payouts are sent automatically in the same transaction when the ball lands. Nothing to claim.',
+      a: 'No. Winnings are credited to your balance automatically — nothing to claim.',
     },
     {
-      q: 'My transaction is stuck. What can I do?',
-      a: 'Try sending 1 PLS to yourself (your own wallet address) from the same wallet. This can clear stuck nonces and help the network process pending transactions.',
+      q: 'A deposit or withdrawal is stuck. What can I do?',
+      a: 'Bets themselves aren\'t wallet transactions, but topping up or cashing out is. If one is stuck, try sending 1 PLS to yourself from the same wallet — this can clear a stuck nonce and nudge pending transactions through.',
     },
     {
       q: 'Who do I contact if there\'s an issue?',
@@ -87,8 +87,8 @@ const GAME_FAQS: Record<GameFAQProps['game'], { q: string; a: React.ReactNode }[
       a: 'Use the Deposit/Withdraw button to move MORBIUS between your wallet and the table. You need a small amount of PLS for gas.',
     },
     {
-      q: 'What are the fees?',
-      a: 'Blackjack applies a 5% fee on withdrawals only (moving MORBIUS from your table balance back to your wallet). The 5% is split: 0.5% burn, 1.25% holders, 1.5% LP providers, 1.75% platform. Amounts are enforced by the contract and reflected in the UI when you withdraw.',
+      q: 'Are there any fees?',
+      a: 'No. There\'s no fee on your bets, winnings, or withdrawals. Blackjack keeps only the standard small house edge from the rules, and losing bets earn VIP rakeback based on your tier.',
     },
     {
       q: 'How is the RNG calculated?',
@@ -114,23 +114,23 @@ const GAME_FAQS: Record<GameFAQProps['game'], { q: string; a: React.ReactNode }[
   keno: [
     {
       q: 'How does Keno work?',
-      a: 'Pick 1–10 numbers from 1–80. Choose your wager and click Play. The contract draws 20 winning numbers in the same transaction. You are paid based on how many of your picks match (see the paytable).',
+      a: 'Pick 1–10 numbers from 1–80, choose your wager, and click Play. 20 winning numbers are drawn and you\'re paid based on how many of your picks match (see the paytable).',
     },
     {
       q: 'What are the payouts?',
       a: 'Payouts depend on spot size (how many numbers you picked) and how many hits you get. The paytable is shown on the ticket. More hits mean higher multipliers up to the max for that spot size.',
     },
     {
-      q: 'What are the fees?',
-      a: 'A fee is taken on each wager. Your payout is sent in the same transaction—no separate claim.',
+      q: 'Are there any fees?',
+      a: 'No per-bet or per-payout fee — just a small built-in house edge. Losing bets earn VIP rakeback based on your tier.',
     },
     {
-      q: 'How is the RNG calculated?',
-      a: 'The contract builds a seed from on-chain data: previous block hash, block timestamp, your address, a global ticket counter, and gas price. That seed is hashed (keccak256). The 20 winning numbers are drawn from 1–80 using a deterministic algorithm (Fisher–Yates style) from that seed, so the result is reproducible and verifiable on-chain.',
+      q: 'How is the draw decided?',
+      a: 'Each draw is provably fair. The server commits to a hashed seed before you play; the 20 numbers are drawn from that server seed together with your client seed and a nonce (HMAC-SHA256, Fisher–Yates). The seed is revealed afterward so you can reproduce and verify the draw.',
     },
     {
       q: 'Do I need to claim my winnings?',
-      a: 'No. Payouts are sent automatically in the same transaction when the draw completes. Nothing to claim.',
+      a: 'No. Payouts are credited to your balance automatically — nothing to claim.',
     },
     {
       q: 'My transaction is stuck. What can I do?',
@@ -148,19 +148,19 @@ const GAME_FAQS: Record<GameFAQProps['game'], { q: string; a: React.ReactNode }[
   lottery: [
     {
       q: 'How does the Instant Lottery work?',
-      a: 'Pick 6 numbers from 1–55. Submit a wager in MORBIUS. The contract draws 6 winning numbers and pays out instantly based on how many match. No waiting for rounds—each play is a single transaction.',
+      a: 'Pick 6 numbers from 1–55 and submit a wager in MORBIUS. 6 winning numbers are drawn and you\'re paid instantly based on how many match — no waiting for rounds.',
     },
     {
-      q: 'What are the fees?',
-      a: 'A fee is taken on each wager. Your payout is sent in the same transaction—no separate claim.',
+      q: 'Are there any fees?',
+      a: 'No per-bet or per-payout fee — just a small built-in house edge. Losing bets earn VIP rakeback based on your tier.',
     },
     {
-      q: 'How is the RNG calculated?',
-      a: 'Instant lottery uses the same provably fair system as Blackjack. The server generates a server seed (you get its hash before the draw), and combines it with your client seed and a nonce. The 6 winning numbers are produced with HMAC-SHA256 and a Fisher–Yates draw from 1–55. The server then submits that result on-chain via the operator; after the game you can verify any play on the Lottery Verify page using the revealed server seed, client seed, and nonce.',
+      q: 'How is the draw decided?',
+      a: 'The Instant Lottery is provably fair. The server commits to a hashed server seed; combined with your client seed and a nonce it produces the 6 winning numbers (HMAC-SHA256, Fisher–Yates from 1–55). After the draw you can verify any play on the Lottery Verify page using the revealed server seed, client seed, and nonce.',
     },
     {
       q: 'Do I need to claim my winnings?',
-      a: 'No. Payouts are sent automatically in the same transaction. Nothing to claim.',
+      a: 'No. Payouts are credited to your balance automatically — nothing to claim.',
     },
     {
       q: 'My transaction is stuck. What can I do?',
@@ -224,11 +224,11 @@ const GAME_FAQS: Record<GameFAQProps['game'], { q: string; a: React.ReactNode }[
     },
     {
       q: 'How does the result work?',
-      a: 'The result is determined on-chain in the same transaction using blockhash randomness. Payout is instant — no waiting.',
+      a: 'Each spin is provably fair. The winning number is derived from a server seed (committed as a hash before you bet) plus your client seed and a nonce; the seed is revealed afterward so you can verify it. Payouts are instant — no waiting.',
     },
     {
-      q: 'What are the fees?',
-      a: '5% total on wagers: 1.25% MORBIUS holder distribution, 1.75% platform/house, 1.5% LP holders, 0.5% burn.',
+      q: 'Are there any fees?',
+      a: 'No per-bet or per-payout fee — just the single-zero house edge built into the wheel. Losing bets earn VIP rakeback based on your tier.',
     },
     {
       q: 'Where are the contract addresses?',

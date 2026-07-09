@@ -14,6 +14,8 @@ import { Play } from 'lucide-react';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { ArcadeFAQ } from '@/components/arcade2/ArcadeFAQ';
 import { ArcadeOddsTab } from '@/components/arcade2/ArcadeOddsTab';
+import { GameHowTo } from '@/components/shared/GameHowTo';
+import { HOWTO } from '@/lib/how-to-content';
 import { cipherOdds } from './cipherOdds';
 import {
   fetchCipherRecent,
@@ -111,10 +113,11 @@ export function CipherInfoTabs({ history, historyLoading, onVerify, onReplay, in
   return (
     <section aria-label="Cipher information" className="arc-panel rounded-xl p-3 sm:p-4">
       <Tabs defaultValue="recent">
-        <TabsList className="grid h-auto w-full grid-cols-6 gap-1 rounded-lg bg-[#081420]/70 p-1 ring-1 ring-cyan-950/70">
+        <TabsList className="grid h-auto w-full grid-cols-7 gap-1 rounded-lg bg-[#081420]/70 p-1 ring-1 ring-cyan-950/70">
           <TabsTrigger value="recent" className={TRIGGER_CLASS}>Recent</TabsTrigger>
           <TabsTrigger value="leaderboard" className={TRIGGER_CLASS}><span className="sm:hidden">Leaders</span><span className="hidden sm:inline">Leaderboard</span></TabsTrigger>
           <TabsTrigger value="mine" className={TRIGGER_CLASS}>My rounds</TabsTrigger>
+          <TabsTrigger value="how" className={TRIGGER_CLASS}>How to play</TabsTrigger>
           <TabsTrigger value="odds" className={TRIGGER_CLASS}>Odds</TabsTrigger>
           <TabsTrigger value="rules" className={TRIGGER_CLASS}>Rules</TabsTrigger>
           <TabsTrigger value="faq" className={TRIGGER_CLASS}>FAQ</TabsTrigger>
@@ -221,6 +224,10 @@ export function CipherInfoTabs({ history, historyLoading, onVerify, onReplay, in
               })}
             </ul>
           )}
+        </TabsContent>
+
+        <TabsContent value="how" className="mt-3 focus-visible:outline-none">
+          <GameHowTo {...HOWTO.cipher} />
         </TabsContent>
 
         <TabsContent value="odds" className="mt-3 focus-visible:outline-none">

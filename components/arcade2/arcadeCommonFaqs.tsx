@@ -141,7 +141,7 @@ export function commonFaqs(accent: string): FaqItem[] {
             edge). Depositing and withdrawing MORBIUS is free.
           </p>
           <p className="text-slate-500">
-            (The on-chain games and poker differ — poker takes a rake, and on-chain payouts carry a 5% token fee.)
+            (Poker is the one exception — it takes a small rake from each pot, the standard way poker works.)
           </p>
         </>
       ),
