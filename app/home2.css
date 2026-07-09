@@ -660,7 +660,16 @@
 }
 @media (max-width:560px){
   .home2 .hv h1{font-size:29px}
-  .home2 .floor-grid{grid-template-columns:repeat(2,1fr)}
+  /* Compact 4-across game floor on phones */
+  .home2 .floor-grid{grid-template-columns:repeat(4,1fr); gap:7px}
+  .home2 .floor-grid .scene-card{border-radius:11px}
+  .home2 .floor-grid .scene-card .stage{min-height:58px; padding:6px 4px 0}
+  .home2 .floor-grid .scene-card .stage svg{width:min(90%,104px)}
+  .home2 .floor-grid .scene-card .meta{padding:5px 5px 6px}
+  .home2 .floor-grid .scene-card .meta .name{font-size:9px!important; letter-spacing:.01em; line-height:1.1;
+    display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; overflow:hidden}
+  .home2 .floor-grid .scene-card .meta .row{display:none}
+  .home2 .floor-grid .scene-card .badge{top:5px; left:5px; font-size:6px; letter-spacing:.05em; padding:2px 5px}
   .home2 .spot-grid{grid-template-columns:1fr}
   .home2 .furn-stats{margin-left:0}
   .home2 .vip-strip{grid-template-columns:repeat(2,1fr)}
