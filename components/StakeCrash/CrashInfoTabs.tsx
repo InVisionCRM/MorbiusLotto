@@ -20,6 +20,8 @@ import {
 } from '@/lib/crash-client';
 import { ArcadeFAQ } from '@/components/arcade2/ArcadeFAQ';
 import { ArcadeOddsTab } from '@/components/arcade2/ArcadeOddsTab';
+import { GameHowTo } from '@/components/shared/GameHowTo';
+import { HOWTO } from '@/lib/how-to-content';
 import { crashFaqs } from './crashFaqs';
 import { crashOdds } from './crashOdds';
 
@@ -268,28 +270,7 @@ export function CrashInfoTabs({ history, historyLoading, onVerify, onReplay, ref
         </TabsContent>
 
         <TabsContent value="how" className="mt-3 focus-visible:outline-none">
-          <div className="space-y-3 px-1 py-2 text-sm leading-relaxed text-slate-300">
-            <p>
-              Place a bet and the rocket launches. The multiplier climbs from 1.00x along the same
-              curve for everyone — slowly at first, then accelerating. Cash out any time while the
-              rocket is flying to lock in <span className="text-[#00ffa3]">bet × multiplier</span>.
-              If the rocket crashes before you cash out, the bet is lost.
-            </p>
-            <p>
-              <span className="font-bold text-white">Auto cashout</span> fires for you the instant
-              the curve reaches your target — it also protects you if you disconnect mid-flight:
-              the server settles your round at the target on its own. Maximum cashout is{' '}
-              <span className="font-mono text-[#ff9d00]">100.00x</span>; if the rocket flies past
-              it with no cashout, your win is banked at 100.00x automatically.
-            </p>
-            <p>
-              <span className="font-bold text-white">Provably fair:</span> the crash point is
-              derived from a hashed server seed (committed before your bet), your client seed, and
-              a nonce — <span className="font-mono">crash = 0.99 / r</span>, so 99% of value is
-              returned to players over time (1% house edge). Every settled round can be
-              independently re-derived in your browser from the Verify button.
-            </p>
-          </div>
+          <GameHowTo {...HOWTO.crash} />
         </TabsContent>
 
         <TabsContent value="odds" className="mt-3 focus-visible:outline-none">
