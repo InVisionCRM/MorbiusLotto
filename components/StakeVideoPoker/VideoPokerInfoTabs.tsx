@@ -19,6 +19,8 @@ import {
   type VideoPokerPaytable,
 } from '@/lib/video-poker-client';
 import { ArcadeOddsTab } from '@/components/arcade2/ArcadeOddsTab';
+import { GameHowTo } from '@/components/shared/GameHowTo';
+import { HOWTO } from '@/lib/how-to-content';
 import { videoPokerOdds } from './videoPokerOdds';
 
 export interface VideoPokerSessionHand {
@@ -70,9 +72,10 @@ export function VideoPokerInfoTabs({ info, hands, onVerify, onReplay, currentCat
   return (
     <section aria-label="Video poker information" className="arc-panel rounded-xl p-3 sm:p-4">
       <Tabs defaultValue="paytable">
-        <TabsList className="grid h-auto w-full grid-cols-4 gap-1 rounded-lg bg-[#081420]/70 p-1 ring-1 ring-cyan-950/70">
+        <TabsList className="grid h-auto w-full grid-cols-5 gap-1 rounded-lg bg-[#081420]/70 p-1 ring-1 ring-cyan-950/70">
           <TabsTrigger value="paytable" className={TRIGGER_CLASS}>Paytable</TabsTrigger>
           <TabsTrigger value="mine" className={TRIGGER_CLASS}>My hands</TabsTrigger>
+          <TabsTrigger value="how" className={TRIGGER_CLASS}>How to play</TabsTrigger>
           <TabsTrigger value="odds" className={TRIGGER_CLASS}>Odds</TabsTrigger>
           <TabsTrigger value="rules" className={TRIGGER_CLASS}>Rules</TabsTrigger>
         </TabsList>
@@ -149,6 +152,10 @@ export function VideoPokerInfoTabs({ info, hands, onVerify, onReplay, currentCat
               })}
             </ul>
           )}
+        </TabsContent>
+
+        <TabsContent value="how" className="mt-3 focus-visible:outline-none">
+          <GameHowTo {...HOWTO.videopoker} />
         </TabsContent>
 
         <TabsContent value="odds" className="mt-3 focus-visible:outline-none">

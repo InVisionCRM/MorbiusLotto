@@ -14,6 +14,8 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { ThreeCardHistory } from './ThreeCardHistory';
 import { ArcadeFAQ } from '@/components/arcade2/ArcadeFAQ';
 import { ArcadeOddsTab } from '@/components/arcade2/ArcadeOddsTab';
+import { GameHowTo } from '@/components/shared/GameHowTo';
+import { HOWTO } from '@/lib/how-to-content';
 import { threeCardFaqs } from './threeCardFaqs';
 import { threeCardOdds } from './threeCardOdds';
 import {
@@ -88,7 +90,7 @@ export function ThreeCardInfoTabs({ history, historyLoading, onVerify, onReplay 
   return (
     <section aria-label="Three Card Poker information" className="arc-panel rounded-xl p-3 sm:p-4">
       <Tabs defaultValue="recent">
-        <TabsList className="grid h-auto w-full grid-cols-5 gap-1 rounded-lg bg-[#081420]/70 p-1 ring-1 ring-cyan-950/70">
+        <TabsList className="grid h-auto w-full grid-cols-6 gap-1 rounded-lg bg-[#081420]/70 p-1 ring-1 ring-cyan-950/70">
           <TabsTrigger value="recent" className={TRIGGER_CLASS}>
             Recent
           </TabsTrigger>
@@ -98,6 +100,7 @@ export function ThreeCardInfoTabs({ history, historyLoading, onVerify, onReplay 
           <TabsTrigger value="mine" className={TRIGGER_CLASS}>
             My hands
           </TabsTrigger>
+          <TabsTrigger value="how" className={TRIGGER_CLASS}>How to play</TabsTrigger>
           <TabsTrigger value="odds" className={TRIGGER_CLASS}>
             Odds
           </TabsTrigger>
@@ -190,6 +193,10 @@ export function ThreeCardInfoTabs({ history, historyLoading, onVerify, onReplay 
 
         <TabsContent value="mine" className="mt-3 focus-visible:outline-none">
           <ThreeCardHistory rounds={history} loading={historyLoading} onVerify={onVerify} onReplay={onReplay} />
+        </TabsContent>
+
+        <TabsContent value="how" className="mt-3 focus-visible:outline-none">
+          <GameHowTo {...HOWTO.threecard} />
         </TabsContent>
 
         <TabsContent value="odds" className="mt-3 focus-visible:outline-none">
