@@ -48,6 +48,10 @@ export interface GameHowToProps {
   steps: HowToStep[]
   payouts?: { heading?: string; rows: HowToPayoutRow[] }
   notes?: HowToNote[]
+  /** Extra uniform sections (use the gh-sec / gh-h3 / gh-note classes) rendered
+   *  after payouts and before the notes — for game-specific content like poker
+   *  hand rankings. */
+  children?: React.ReactNode
   className?: string
 }
 
@@ -62,6 +66,7 @@ export function GameHowTo({
   steps,
   payouts,
   notes = [],
+  children,
   className = '',
 }: GameHowToProps) {
   const a = accent
@@ -148,6 +153,8 @@ export function GameHowTo({
             ))}
           </section>
         )}
+
+        {children}
 
         {notes.length > 0 && (
           <section className="gh-sec">
