@@ -37,7 +37,7 @@ export default function FAQModal({ open, onOpenChange }: FAQModalProps) {
     },
     {
       question: "What is Morbius.io?",
-      answer: "Morbius.io is a gaming platform offering various games including Lottery, KENO, Baccarat, BlackJack, Poker, and Plinko, all built on PulseChain."
+      answer: "Morbius.io is a gaming platform offering various games including Lottery, KENO, Baccarat, BlackJack, Poker, and Plinko. It runs on PulseChain, where the MORBIUS token lives."
     },
     {
       question: "What is PulseChain?",
@@ -45,7 +45,7 @@ export default function FAQModal({ open, onOpenChange }: FAQModalProps) {
     },
     {
       question: "Is this game fair?",
-      answer: "Yes. Drops are settled on-chain: the contract builds a verifiable seed from block data and your play, maps it to a bucket, and emits it in the BallDropped event. The full FAQ on the Plinko page explains fees, RNG, and how to verify results."
+      answer: "Yes. Every drop is provably fair: the server commits to a hashed seed before you bet, then the slot is derived from that server seed plus your client seed and a nonce. The seed is revealed afterward so you can re-run the math and verify the result. The full FAQ on the Plinko page explains the odds and how to verify."
     }
   ];
 
