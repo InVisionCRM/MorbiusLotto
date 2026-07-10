@@ -115,8 +115,32 @@ export function registerTelegramRoutes({
 
       // Parse the command. Handles "/link@MyBot CODE" group-style mentions too.
       const parts = text.split(/\s+/);
-      const command = parts[0].toLowerCase().split('@')[0];
+      const rawFirst = parts[0];
+      const command = rawFirst.toLowerCase().split('@')[0];
       const arg = parts[1] ? parts[1].trim() : '';
+
+      const isPrivate = chatType === 'private';
+      const isCommand = rawFirst.startsWith('/');
+
+      // In a group the bot must stay silent unless it is *explicitly addressed*.
+      // With Telegram Group Privacy enabled the bot only receives commands,
+      // @mentions and replies to itself — but that setting can be off (and only
+      // applies from the moment the bot joins), so we guard here regardless:
+      //   • ignore ordinary chatter (anything not starting with "/"), and
+      //   • ignore commands aimed at a different bot, e.g. "/start@OtherBot".
+      // Unrecognized commands then fall through to the catch-all, which is
+      // itself gated to private chats / explicit /help so a group never gets an
+      // unsolicited help reply. This is what stops the bot answering every message.
+      if (!isPrivate) {
+        if (!isCommand) {
+          return res.json({ ok: true });
+        }
+        const mention = rawFirst.includes('@') ? rawFirst.split('@')[1].toLowerCase() : null;
+        const botUsername = getBotUsername();
+        if (mention && botUsername && mention !== botUsername.toLowerCase()) {
+          return res.json({ ok: true });
+        }
+      }
 
       if (command === '/start' || command === '/link') {
         if (!arg) {
@@ -476,21 +500,26 @@ export function registerTelegramRoutes({
         return res.json({ ok: true });
       }
 
-      // /help and everything else.
-      await sendTelegramMessage(
-        chatId,
-        'MORBIUS bot commands:\n\n' +
-          '/app — open the MORBIUS app (hub, stats, wallet, profile)\n' +
-          '/balance — your MORBIUS + poker chip balance\n' +
-          '/stats — your poker stats\n' +
-          '/recent — your last 5 poker hands (with verify link)\n' +
-          '/lobby — tournaments open right now\n' +
-          '/top [chips|pot|hands] — top players leaderboard\n' +
-          '/link <code> — connect your wallet (code from the website: Settings → Notifications)\n' +
-          '/unlink — disconnect and stop notifications\n' +
-          '/chatid — show the chat ID (for group setup)\n' +
-          '/help — show this message',
-      );
+      // /help — and, in private chats only, a friendly fallback for anything
+      // unrecognized. In a group we answer only an explicit /help (bare or
+      // /help@ThisBot, both allowed through the guard above) and stay silent on
+      // any other unrecognized command, so the bot never replies to stray text.
+      if (command === '/help' || isPrivate) {
+        await sendTelegramMessage(
+          chatId,
+          'MORBIUS bot commands:\n\n' +
+            '/app — open the MORBIUS app (hub, stats, wallet, profile)\n' +
+            '/balance — your MORBIUS + poker chip balance\n' +
+            '/stats — your poker stats\n' +
+            '/recent — your last 5 poker hands (with verify link)\n' +
+            '/lobby — tournaments open right now\n' +
+            '/top [chips|pot|hands] — top players leaderboard\n' +
+            '/link <code> — connect your wallet (code from the website: Settings → Notifications)\n' +
+            '/unlink — disconnect and stop notifications\n' +
+            '/chatid — show the chat ID (for group setup)\n' +
+            '/help — show this message',
+        );
+      }
       return res.json({ ok: true });
     } catch (err) {
       logger.error('[telegram] webhook handler error', { error: (err as Error).message });
