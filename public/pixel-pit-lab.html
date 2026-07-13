@@ -395,7 +395,7 @@ h1 .title-glyph{height:.92em;width:auto;vertical-align:-0.1em;margin-left:.18em;
 <body>
 <div class="wrap">
   <header>
-    <h1 class="title">Pixel Pit<span class="glyph"> 👾</span></h1>
+    <h1 class="title">Pixel Pit<img class="title-glyph pix" src="Logos/PTGC.png" alt="" draggable="false"/></h1>
     <p class="tagline">5×3 reels · 20 lines · Claw Machine bonus · Respin Rush free spins · progressive jackpots at 5/7/9 wilds · provably fair · played in MORBIUS</p>
   </header>
 
@@ -434,10 +434,10 @@ h1 .title-glyph{height:.92em;width:auto;vertical-align:-0.1em;margin-left:.18em;
       <div class="panel">
         <p class="panel-label">Top pays · per line bet</p>
         <div class="score-tbl">
-          <div class="sr"><span class="tg">🕹️</span><span>Joystick wild ×5</span><span class="sv">450</span></div>
-          <div class="sr"><img src="avatars/pigtails-pixel-girl.png" alt="Pixel Girl" /><span>Pixel Girl ×5</span><span class="sv">270</span></div>
-          <div class="sr"><span class="tg">👾</span><span>Invader ×5</span><span class="sv">178</span></div>
-          <div class="sr"><span class="tg">🪙</span><span>Token ×3+</span><span class="sv hl">Respin Rush</span></div>
+          <div class="sr"><img src="morbius/MorbiusChip.png" alt="MORB Chip wild" /><span>MORB Chip wild ×5</span><span class="sv">450</span></div>
+          <div class="sr"><img class="pix" src="avatars/pigtails-pixel-girl.png" alt="Pixel Girl" /><span>Pixel Girl ×5</span><span class="sv">270</span></div>
+          <div class="sr"><img class="pix" src="Logos/PTGC.png" alt="Gold Invader" /><span>Gold Invader ×5</span><span class="sv">178</span></div>
+          <div class="sr"><img src="Pulse%20Branding/Logo/favicon128.png" alt="Arcade Token" /><span>Arcade Token ×3+</span><span class="sv hl">Respin Rush</span></div>
         </div>
         <button class="pt-open" id="ptBtn">Full paytable &amp; features</button>
       </div>
@@ -566,17 +566,18 @@ h1 .title-glyph{height:.92em;width:auto;vertical-align:-0.1em;margin-left:.18em;
     hiscore:{seed:10000000,rate:0.001,need:9,label:'HI-SCORE'}
   };
 
+  // real-art symbol set — .pix marks genuine pixel-art (nearest-neighbour render)
   var SYMS={
-    W:{name:'Joystick Wild',frame:'wild',kind:'joy'},
-    S:{name:'Arcade Token',frame:'scat',kind:'token'},
-    B:{name:'Claw',frame:'bon',kind:'clawsym'},
-    H1:{name:'Pixel Girl',art:'avatars/pigtails-pixel-girl.png',kind:'img'},
-    H2:{name:'Invader',kind:'em',em:'👾'},
-    H3:{name:'Pixel Heart',kind:'heart'},
-    H4:{name:'Power Shroom',kind:'em',em:'🍄'},
-    L1:{name:'Pixel Cherry',kind:'cherry'},
-    L2:{name:'Save Disk',kind:'em',em:'💾'},
-    L3:{name:'Pixel Star',kind:'star'}
+    W:{name:'MORB Chip',art:'morbius/MorbiusChip.png',frame:'wild',kind:'img'},
+    S:{name:'Arcade Token',art:'Pulse%20Branding/Logo/favicon128.png',frame:'scat',kind:'img'},
+    B:{name:'Bonus Rocket',art:'crash/rocket.webp',frame:'bon',kind:'img'},
+    H1:{name:'Pixel Girl',art:'avatars/pigtails-pixel-girl.png',kind:'img',pix:true},
+    H2:{name:'Gold Invader',art:'Logos/PTGC.png',kind:'img',pix:true},
+    H3:{name:'Arcade Coin',art:'Logos/TIME.png',kind:'img'},
+    H4:{name:'Power Hex',art:'Logos/INC.png',kind:'img'},
+    L1:{name:'Red Token',art:'PokerChips/redpokerchip015.png',kind:'img'},
+    L2:{name:'Blue Token',art:'PokerChips/bluepokerchip010.png',kind:'img'},
+    L3:{name:'Green Token',art:'PokerChips/greenpokerchip005.png',kind:'img'}
   };
   // pays per LINE BET (bet ÷ 20) — Monte-Carlo tuned with all features (see head comment)
   var PAYS={
@@ -606,9 +607,11 @@ h1 .title-glyph{height:.92em;width:auto;vertical-align:-0.1em;margin-left:.18em;
   ];
   // claw-machine display cabinet (presentation only — value must exist in CLAW_TABLE)
   var PRIZES=[
-    {m:2,em:'🍭'},{m:8,em:'🐙'},{m:1,em:'🧦',dud:true},{m:4,em:'👾'},
-    {m:40,img:'morbius/MorbiusChip.png',gold:true},{m:6,em:'🍄'},
-    {m:3,em:'🧸'},{m:15,em:'💎'},{m:10,em:'🤖'}
+    {m:2,img:'PokerChips/redpokerchip015.png'},{m:8,img:'Logos/PTGC.png',pix:true},
+    {m:1,img:'PokerChips/cyanpokerchip020.png',dud:true},{m:4,img:'Logos/INC.png'},
+    {m:40,img:'vip-badges/gold.png',gold:true},{m:6,img:'Logos/PLSXT.png',pix:true},
+    {m:3,img:'PokerChips/bluepokerchip010.png'},{m:15,img:'vip-badges/diamond.png'},
+    {m:10,img:'crash/rocket.webp'}
   ];
 
   var S={ balance:10000, speed:'normal', bet:200, phase:'idle', busy:false, sound:true,
@@ -898,14 +901,7 @@ h1 .title-glyph{height:.92em;width:auto;vertical-align:-0.1em;margin-left:.18em;
   /* ── rendering ── */
   function symInner(id){
     var s=SYMS[id];
-    if(s.kind==='img')return '<img src="'+s.art+'" alt="'+s.name+'" draggable="false"/>';
-    if(s.kind==='joy')return '<span class="em joy">🕹️</span>';
-    if(s.kind==='token')return '<div class="pxart art-token tokenglow"></div>';
-    if(s.kind==='clawsym')return '<div class="pxart art-clawsym clawglow"></div>';
-    if(s.kind==='heart')return '<div class="pxart art-heart"></div>';
-    if(s.kind==='star')return '<div class="pxart art-star"></div>';
-    if(s.kind==='cherry')return '<div class="pxart art-cherry"></div>';
-    return '<span class="em">'+s.em+'</span>';
+    return '<img'+(s.pix?' class="pix"':'')+' src="'+s.art+'" alt="'+s.name+'" draggable="false"/>';
   }
   function symHtml(id,mult){
     var s=SYMS[id];
@@ -1051,7 +1047,8 @@ h1 .title-glyph{height:.92em;width:auto;vertical-align:-0.1em;margin-left:.18em;
   function setRigX(p){CLAW.x=p;clawRig.style.left=p+'%';}
   function setCable(px){clawCable.style.height=px+'px';}
   function prizeHtml(p){
-    return p.img?'<img src="'+p.img+'" alt="MORB plushie"/>':p.em;
+    var cls=(p.pix?'pix':'')+(p.gold?(p.pix?' ':'')+'gold':'');
+    return '<img'+(cls?' class="'+cls+'"':'')+' src="'+p.img+'" alt="'+(p.dud?'dud prize':p.m+'x prize')+'"/>';
   }
   function renderPrizeRow(){
     prizeRow.innerHTML=PRIZES.map(function(p,i){

@@ -1068,9 +1068,12 @@ h1 .title-chip{height:.74em;width:auto;vertical-align:-.05em;margin-left:.16em;b
   /* ── DEALER DUEL stage — every card pre-shuffled; the table just deals them ── */
   var RANK_TXT={11:'J',12:'Q',13:'K',14:'A'};
   var SUIT_TXT=['♠','♥','♦','♣'];
+  var SUIT_CHR=['S','H','D','C'],SUIT_NAME=['Spades','Hearts','Diamonds','Clubs'];
   function rankTxt(r){return RANK_TXT[r]||String(r);}
   function suitCol(s){return (s===1||s===2)?'red':'blk';}
-  function cardFaceHtml(c){return '<div><div class="dr">'+rankTxt(c.r)+'</div><div class="ds">'+SUIT_TXT[c.s]+'</div></div>';}
+  // real card art — the seeded duel draw already carries rank AND suit; we just show its PNG
+  function cardImgPath(c){return 'BlackJack/Cards/PNG/'+rankTxt(c.r)+SUIT_CHR[c.s]+'.png';}
+  function cardFaceHtml(c){return '<img src="'+cardImgPath(c)+'" alt="'+rankTxt(c.r)+' of '+SUIT_NAME[c.s]+'" draggable="false"/>';}
   function duelTimer(fn,ms){var t=setTimeout(fn,ms);S.duelTimers.push(t);return t;}
   function clearDuelTimers(){S.duelTimers.forEach(clearTimeout);S.duelTimers=[];}
   function renderPotLadder(potX){
@@ -1191,6 +1194,8 @@ h1 .title-chip{height:.74em;width:auto;vertical-align:-.05em;margin-left:.16em;b
     if(ev.bonusHit){
       var deck=drawDuelDeck(S.rng);
       duel=playDuelCalc(deck);
+      // warm the duel's card art while the reels animate (display-only, no RNG use)
+      duel.hands.forEach(function(h){[h.p,h.d].forEach(function(c){var im=new Image();im.src=cardImgPath(c);});});
     }
     var gmApplied=isFree?S.gm:1;
     var sp=spd();
@@ -1439,8 +1444,8 @@ h1 .title-chip{height:.74em;width:auto;vertical-align:-.05em;margin-left:.16em;b
     histBody.innerHTML='<ul class="hist-list">'+S.history.map(function(r){
       var profit=r.win-r.bet,multX100=Math.round(r.win/r.bet*100);
       var badge=r.fs>0?'<span class="badge fsb">'+r.fs+' FS '+fmtGm(r.topGm)+'</span>':'<span class="badge">base</span>';
-      var dus=r.duels>0?'<span class="badge dub">🂠'+r.duels+'</span>':'';
-      var jps=r.jackpots.map(function(j){return '<span class="badge jpb">💰'+JP[j.tier].label+'</span>';}).join('');
+      var dus=r.duels>0?'<span class="badge dub"><img src="Logos/pCOCK.png" alt=""/>'+r.duels+' duel'+(r.duels===1?'':'s')+'</span>':'';
+      var jps=r.jackpots.map(function(j){return '<span class="badge jpb"><img src="vip-badges/gold.png" alt=""/>'+JP[j.tier].label+'</span>';}).join('');
       var xcell=r.win>0?'<span class="x win">'+(multX100/100).toFixed(2)+'×</span>':'<span class="x bust">0.00×</span>';
       var pcell='<span class="p '+(profit>0?'up':(profit<0?'down':'flat'))+'">'+(profit>0?'+':'')+fmt(profit)+'</span>';
       return '<li class="hist-row"><span class="t">'+timeLabel(r.at)+'</span>'+badge+dus+jps
