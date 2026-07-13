@@ -193,6 +193,8 @@ h1 .title-chip{height:.74em;width:auto;vertical-align:-.05em;margin-left:.16em;b
   0%,100%{filter:drop-shadow(0 0 5px rgba(240,201,106,.55)) drop-shadow(0 3px 6px rgba(0,0,0,.6));transform:scale(1)}
   50%{filter:drop-shadow(0 0 16px rgba(240,201,106,.95)) drop-shadow(0 3px 6px rgba(0,0,0,.6));transform:scale(1.06)}
 }
+/* dice chip — warm gold tint so it never reads as the black chip */
+.sym img.dice,.pt-tbl td img.dice,.score-tbl .sr img.dice{filter:sepia(1) saturate(2.4) hue-rotate(-14deg) brightness(1.5) drop-shadow(0 3px 6px rgba(0,0,0,.65))}
 /* BONUS — golden Duel Crest emblem */
 .sym.bon img{width:calc(var(--cell)*.86);height:calc(var(--cell)*.86);
   filter:drop-shadow(0 0 9px rgba(232,196,124,.55)) drop-shadow(0 3px 6px rgba(0,0,0,.65))}
@@ -608,7 +610,7 @@ h1 .title-chip{height:.74em;width:auto;vertical-align:-.05em;margin-left:.16em;b
     C3:{name:'Red Chip',art:'PokerChips/redpokerchip015.png',kind:'img'},
     C4:{name:'Blue Chip',art:'PokerChips/bluepokerchip010.png',kind:'img'},
     C5:{name:'Green Chip',art:'PokerChips/greenpokerchip005.png',kind:'img'},
-    D:{name:'Dice Chip',art:'PokerChips/tablepokerchip001-ezgif.com-gif-maker.png',kind:'img'},
+    D:{name:'Dice Chip',art:'PokerChips/tablepokerchip001-ezgif.com-gif-maker.png',kind:'img',cls:'dice'},
     A:{name:'Ace of Spades',kind:'img',art:'BlackJack/Cards/PNG/AS.png',cls:'cardart'},
     K:{name:'King of Hearts',kind:'img',art:'BlackJack/Cards/PNG/KH.png',cls:'cardart'},
     Q:{name:'Queen of Diamonds',kind:'img',art:'BlackJack/Cards/PNG/QD.png',cls:'cardart'},
